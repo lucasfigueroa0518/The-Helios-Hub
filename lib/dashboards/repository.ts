@@ -185,6 +185,7 @@ export type CreateProjectInput = {
   status: ProjectStatus;
   startDate: Date;
   targetEndDate: Date;
+  completedAt?: Date | null;
   accessToken: string;
   githubRepo: string;
   githubBranch: string;
@@ -195,9 +196,9 @@ export async function createProject(input: CreateProjectInput): Promise<ProjectR
   const id = newDashboardsId();
   const { rows } = await dbQuery<ProjectRow>(
     `INSERT INTO dashboards.projects (
-       id, client_id, name, status, start_date, target_end_date, access_token,
+       id, client_id, name, status, start_date, target_end_date, completed_at, access_token,
        github_repo, github_branch, mvp_delivered
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
      RETURNING *`,
     [
       id,
@@ -206,6 +207,7 @@ export async function createProject(input: CreateProjectInput): Promise<ProjectR
       input.status,
       input.startDate,
       input.targetEndDate,
+      input.completedAt ?? (input.status === 'COMPLETE' ? new Date() : null),
       input.accessToken,
       input.githubRepo,
       input.githubBranch,

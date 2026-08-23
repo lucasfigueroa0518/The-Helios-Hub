@@ -1,14 +1,18 @@
 import { Suspense } from 'react';
 
+import { HubHome } from '@/components/hub-home/HubHome';
 import { LoginForm } from '@/app/login-form';
-import { ProductChooser } from '@/app/product-chooser';
+import { loadHome } from '@/lib/home/loadHome';
 import { getSession } from '@/lib/session';
+
+export const dynamic = 'force-dynamic';
 
 export default async function HomePage() {
   const session = await getSession();
 
   if (session) {
-    return <ProductChooser email={session.email} />;
+    const data = await loadHome(session.userId, session.email);
+    return <HubHome data={data} />;
   }
 
   return (

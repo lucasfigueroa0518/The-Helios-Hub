@@ -166,7 +166,7 @@ export async function getMetricDrilldown(input: AnalyticsDrilldownInput): Promis
        send_daily AS (
          SELECT date_trunc('day', i.updated_at)::date AS day,
                 count(*) FILTER (WHERE i.delivery_snapshot ? 'sentAt' OR i.delivery_snapshot ? 'gmailMessageId' OR s.status = 'sent') AS sent_count,
-                count(*) FILTER (WHERE s.delivered_at IS NOT NULL) AS delivered_count,
+                count(*) FILTER (WHERE s.status = 'sent' AND s.bounced_at IS NULL) AS delivered_count,
                 count(*) FILTER (WHERE s.opened_at IS NOT NULL) AS opened_count,
                 count(*) FILTER (WHERE s.clicked_at IS NOT NULL) AS clicked_count,
                 count(*) FILTER (WHERE s.replied_at IS NOT NULL) AS replied_count
@@ -227,7 +227,7 @@ export async function getMetricDrilldown(input: AnalyticsDrilldownInput): Promis
               c.name AS campaign_name,
               coalesce((SELECT count(DISTINCT cl.lead_id)::text FROM outreach.campaign_leads cl WHERE cl.campaign_id = c.id), '0') AS lead_count,
               coalesce(sum(CASE WHEN i.delivery_snapshot ? 'sentAt' OR i.delivery_snapshot ? 'gmailMessageId' OR s.status = 'sent' THEN 1 ELSE 0 END), 0)::text AS emails_sent,
-              coalesce(sum(CASE WHEN s.delivered_at IS NOT NULL THEN 1 ELSE 0 END), 0)::text AS emails_delivered,
+              coalesce(sum(CASE WHEN s.status = 'sent' AND s.bounced_at IS NULL THEN 1 ELSE 0 END), 0)::text AS emails_delivered,
               coalesce(sum(CASE WHEN s.opened_at IS NOT NULL THEN 1 ELSE 0 END), 0)::text AS emails_opened,
               coalesce(sum(CASE WHEN s.clicked_at IS NOT NULL THEN 1 ELSE 0 END), 0)::text AS emails_clicked,
               coalesce(sum(CASE WHEN s.replied_at IS NOT NULL THEN 1 ELSE 0 END), 0)::text AS emails_replied
@@ -311,25 +311,25 @@ export async function getMetricDrilldown(input: AnalyticsDrilldownInput): Promis
       title = 'Email Delivery Rate';
       unit = 'percent';
       val = sent > 0 ? deliv / sent : 0;
-      fmt = formatPct(val);
+      fmt = sent > 0 ? formatPct(deliv / sent) : '—';
     } else if (metricKey === 'open_rate') {
       title = 'Email Open Rate';
       unit = 'percent';
       const baseDenom = deliv > 0 ? deliv : sent;
       val = baseDenom > 0 ? opened / baseDenom : 0;
-      fmt = formatPct(val);
+      fmt = baseDenom > 0 ? formatPct(opened / baseDenom) : '—';
     } else if (metricKey === 'click_rate') {
       title = 'Email Click Rate';
       unit = 'percent';
       const baseDenom = deliv > 0 ? deliv : sent;
       val = baseDenom > 0 ? clicked / baseDenom : 0;
-      fmt = formatPct(val);
+      fmt = baseDenom > 0 ? formatPct(clicked / baseDenom) : '—';
     } else if (metricKey === 'reply_rate') {
       title = 'Email Reply Rate';
       unit = 'percent';
       const baseDenom = deliv > 0 ? deliv : sent;
       val = baseDenom > 0 ? replied / baseDenom : 0;
-      fmt = formatPct(val);
+      fmt = baseDenom > 0 ? formatPct(replied / baseDenom) : '—';
     } else if (metricKey === 'emails_sent') {
       title = 'Emails Sent Volume';
       unit = 'count';

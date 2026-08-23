@@ -1,0 +1,146 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+    /* Helios DS canonical decel curve. Mirrored in tailwind.config.ts `expo`. */
+    --ease-helios: cubic-bezier(0.16, 1, 0.3, 1);
+    /* Body typeface. Bundled locally via @fontsource/roboto — see app/layout.tsx. */
+    --font-roboto: "Roboto", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+
+  .trello-root {
+    height: 100%;
+    background: #ffffff;
+    color: #171717;
+    font-family: var(--font-roboto), "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-weight: 300;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .trello-root * {
+    border-color: #e5e5e5;
+  }
+
+  /* Dialogs and popovers portal onto document.body, outside `.trello-root`, so
+     they miss the body weight above. Declared in the base layer so Tailwind
+     font-weight utilities inside them still win. */
+  .surface-modal {
+    font-weight: 300;
+  }
+
+  .trello-root ::selection {
+    background: #ff5e1a;
+    color: #ffffff;
+  }
+
+  /* Display type — Pragmatica Extended Bold, Helios brand headline face. */
+  .font-display {
+    font-family: var(--font-pragmatica), "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  /* DS scrollbars — quiet, neutral on white. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #e5e5e5;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #d4d4d4;
+  }
+}
+
+@layer utilities {
+  /* List surface — quiet neutral bg for board lists. Dark variant
+     is a translucent panel above the canvas so the picked canvas
+     color still glows through, but the container is clearly visible.
+     Cards then sit as slightly-lighter raised chips inside that panel
+     (Trello-style relationship). */
+  .surface-list {
+    background: #fafafa;
+    border: 1px solid #e5e5e5;
+  }
+  .dark .surface-list {
+    /* Solid dark tones so lists + cards stay legible regardless of the
+       picked canvas color — a translucent white panel disappears
+       against a white canvas (dark theme on a white canvas is a valid
+       user choice, even if unusual). Canvas color still shows in the
+       gutters between lists. */
+    background: #1a1f2a;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  /* Card surface — white with a subtle border. */
+  .surface-card {
+    background: #ffffff;
+    border: 1px solid #e5e5e5;
+  }
+  .dark .surface-card {
+    background: #232a38;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  }
+
+  .surface-modal {
+    background: #ffffff;
+    border: 1px solid #e5e5e5;
+  }
+
+  /* ── Dark-mode chrome remap ──────────────────────────────────
+     Sidebar / Topbar / composer surfaces are built from `text-ink-*`
+     and `bg-neutral-{50,100}` — remapping the utility classes inside
+     `.dark` avoids sprinkling `dark:` variants across ~40 elements
+     and keeps the shell coherent with the board when a dark theme is
+     active. Popovers, modals, and the sign-in page portal outside
+     the .dark root, so they stay light. */
+  .dark .text-ink-hi { color: #f4f4f5; }
+  .dark .text-ink-mid { color: #d4d4d8; }
+  .dark .text-ink-low { color: #a1a1aa; }
+  .dark .text-ink-mute { color: #71717a; }
+  .dark .text-ink-faint { color: #52525b; }
+  .dark .hover\:text-ink-hi:hover { color: #f4f4f5; }
+  .dark .hover\:text-ink-mid:hover { color: #d4d4d8; }
+
+  .dark .bg-neutral-50 { background-color: rgba(255, 255, 255, 0.04); }
+  .dark .bg-neutral-100 { background-color: rgba(255, 255, 255, 0.08); }
+  .dark .hover\:bg-neutral-50:hover { background-color: rgba(255, 255, 255, 0.05); }
+  .dark .hover\:bg-neutral-100:hover { background-color: rgba(255, 255, 255, 0.1); }
+
+  .dark .border-neutral-200 { border-color: rgba(255, 255, 255, 0.1); }
+  .dark .border-neutral-100 { border-color: rgba(255, 255, 255, 0.06); }
+
+  .hairline {
+    border-color: #e5e5e5;
+  }
+
+  /* Eyebrow label — Helios DS content pattern beat 1 of 4.
+     Roboto Bold, 13px, uppercase, wide tracking. Green is DS default;
+     .eyebrow-orange for CTA-side labels, .eyebrow-ink for headings. */
+  .eyebrow {
+    font-family: var(--font-roboto), "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    line-height: 1;
+    color: #138510; /* --helios-green — DS default eyebrow */
+  }
+  .eyebrow-orange {
+    color: #ff5e1a;
+  }
+  .eyebrow-ink {
+    color: #171717;
+  }
+}
+

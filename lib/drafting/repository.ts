@@ -1406,7 +1406,7 @@ export async function getWorkspaceSnapshot(
   }>(
     `SELECT
        count(*) FILTER (WHERE s.status = 'sent')::int AS sent,
-       count(*) FILTER (WHERE s.delivered_at IS NOT NULL)::int AS delivered,
+       count(*) FILTER (WHERE s.status = 'sent' AND s.bounced_at IS NULL)::int AS delivered,
        count(*) FILTER (WHERE s.opened_at IS NOT NULL)::int AS opened,
        count(*) FILTER (WHERE s.replied_at IS NOT NULL)::int AS replied,
        count(*) FILTER (WHERE s.bounced_at IS NOT NULL)::int AS bounced,

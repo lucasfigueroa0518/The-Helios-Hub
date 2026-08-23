@@ -34,7 +34,9 @@ function isProtectedPage(pathname: string): boolean {
     || pathname.startsWith('/hub/')
     || pathname.startsWith('/campaigns/')
     || pathname === '/dashboards'
-    || (pathname.startsWith('/dashboards/') && !pathname.startsWith('/dashboards/d/'));
+    || (pathname.startsWith('/dashboards/') && !pathname.startsWith('/dashboards/d/'))
+    || pathname === '/trello'
+    || pathname.startsWith('/trello/');
 }
 
 export default auth((req) => {
@@ -68,6 +70,8 @@ export const config = {
     '/campaigns/:path*',
     '/dashboards',
     '/dashboards/:path*',
+    '/trello',
+    '/trello/:path*',
     '/d/:path*',
     '/api/:path*',
   ],

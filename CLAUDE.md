@@ -1,6 +1,6 @@
 # CLAUDE.md — read every session, obey without exception
 
-Project: **Outreach Hub** — a lead-enrichment engine for Embark. Full plan in
+Project: **The Helios Hub** — umbrella app for Helios Outreach Hub (`/hub`), Project Dashboards, and Trello. Outreach planning lives in
 `planning/` (start at `planning/README.md`, then `planning/11-execution-checklist.md`).
 
 ## 🔴 TWO HARD RULES (permanent — these override convenience, speed, or any spec)

@@ -1,15 +1,9 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from 'react';
 
 import { HUB_TAB_PREFETCH, prefetchHubJson } from '@/app/hub/hub-data';
+import { SegmentedNav, type SegmentedTab } from '@/components/hub-shell/SegmentedNav';
 
 const TABS = [
   { id: 'campaigns', label: 'Campaigns', href: '/hub' },
@@ -27,103 +21,27 @@ function tabIdFromPath(pathname: string): TabId {
   return 'campaigns';
 }
 
-function prefetchTab(tab: (typeof TABS)[number], router: ReturnType<typeof useRouter>) {
-  router.prefetch(tab.href);
-  for (const url of HUB_TAB_PREFETCH[tab.id] ?? []) {
-    prefetchHubJson(url);
-  }
-}
-
 export function HubNav() {
   const pathname = usePathname() || '/hub';
   const router = useRouter();
-  const routeTab = tabIdFromPath(pathname);
-  const [activeId, setActiveId] = useState<TabId>(routeTab);
-  const trackRef = useRef<HTMLDivElement>(null);
-  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const [thumb, setThumb] = useState({ left: 0, width: 0, ready: false });
 
-  useEffect(() => {
-    setActiveId(routeTab);
-  }, [routeTab]);
-
-  // Prefetch RSC routes only on mount — do NOT fan out all hub API calls
-  // (that was exhausting Supabase session pool_size ≈ 15).
-  useEffect(() => {
-    for (const tab of TABS) router.prefetch(tab.href);
-  }, [router]);
-
-  const measure = useCallback(() => {
-    const track = trackRef.current;
-    const index = TABS.findIndex((tab) => tab.id === activeId);
-    const item = itemRefs.current[index];
-    if (!track || !item) return;
-    const trackRect = track.getBoundingClientRect();
-    const itemRect = item.getBoundingClientRect();
-    setThumb({
-      left: itemRect.left - trackRect.left,
-      width: itemRect.width,
-      ready: true,
-    });
-  }, [activeId]);
-
-  useLayoutEffect(() => {
-    measure();
-  }, [measure]);
-
-  useEffect(() => {
-    const track = trackRef.current;
-    if (!track) return;
-    const observer = new ResizeObserver(() => measure());
-    observer.observe(track);
-    for (const item of itemRefs.current) {
-      if (item) observer.observe(item);
+  function prefetchTab(tab: SegmentedTab) {
+    const match = TABS.find((item) => item.id === tab.id);
+    if (!match) return;
+    router.prefetch(match.href);
+    for (const url of HUB_TAB_PREFETCH[match.id] ?? []) {
+      prefetchHubJson(url);
     }
-    window.addEventListener('resize', measure);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', measure);
-    };
-  }, [measure]);
-
-  function goTo(tab: (typeof TABS)[number]) {
-    if (tab.id === activeId && tab.href === pathname) return;
-    setActiveId(tab.id);
-    router.push(tab.href);
   }
 
   return (
     <nav className="hub-nav-row" aria-label="Outreach Hub sections">
-      <div ref={trackRef} className="segmented hub-nav" role="tablist">
-        <span
-          className={`hub-nav__thumb${thumb.ready ? ' hub-nav__thumb--ready' : ''}`}
-          aria-hidden="true"
-          style={{
-            width: thumb.width,
-            transform: `translateX(${thumb.left}px)`,
-          }}
-        />
-        {TABS.map((tab, index) => {
-          const selected = tab.id === activeId;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              className={`hub-nav__item${selected ? ' hub-nav__item--active' : ''}`}
-              ref={(node) => {
-                itemRefs.current[index] = node;
-              }}
-              onMouseEnter={() => prefetchTab(tab, router)}
-              onFocus={() => prefetchTab(tab, router)}
-              onClick={() => goTo(tab)}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+      <SegmentedNav
+        tabs={TABS}
+        activeId={tabIdFromPath(pathname)}
+        ariaLabel="Outreach Hub sections"
+        onPrefetch={prefetchTab}
+      />
     </nav>
   );
 }

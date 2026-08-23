@@ -69,7 +69,7 @@ export function LoginForm() {
 
       <section className="login-page__stage" aria-label="Sign in">
         <h1 className="login-page__brand">
-          <span className="login-page__brand-line">Helios</span>
+          <span className="login-page__brand-line">The Helios Hub</span>
         </h1>
 
         {error ? <p className="login-page__error" role="alert">{error}</p> : null}

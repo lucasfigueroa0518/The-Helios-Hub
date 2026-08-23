@@ -146,6 +146,7 @@ export async function createProject(
     status: status as ProjectStatus,
     startDate,
     targetEndDate,
+    completedAt: status === 'COMPLETE' ? new Date() : null,
     accessToken,
     githubRepo: repoSlug ?? '',
     githubBranch,
@@ -153,6 +154,7 @@ export async function createProject(
   });
 
   revalidatePath('/dashboards');
+  revalidatePath('/');
   redirect(`/dashboards/projects/${project.id}`);
 }
 
@@ -197,7 +199,11 @@ export async function updateProject(
   }
 
   const completedAt =
-    status === 'COMPLETE' && completedAtStr ? new Date(completedAtStr) : null;
+    status === 'COMPLETE'
+      ? completedAtStr
+        ? new Date(completedAtStr)
+        : new Date()
+      : null;
 
   await updateProjectRow(id, {
     name,
@@ -214,6 +220,7 @@ export async function updateProject(
 
   revalidatePath(`/dashboards/projects/${id}`);
   revalidatePath('/dashboards');
+  revalidatePath('/');
   return {};
 }
 

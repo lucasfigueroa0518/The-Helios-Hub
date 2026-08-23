@@ -60,10 +60,10 @@ export default async function ClientDashboardPage({
           </p>
         </div>
       )}
-      {project.status === 'COMPLETE' && project.completedAt && (
+      {project.status === 'COMPLETE' && (
         <div className="bg-[#F0FAF0] border-b border-[#A8D9A7] px-6 py-3 text-center">
           <p className="text-sm font-medium text-[#138510]">
-            This project completed on {format(project.completedAt, 'MMMM d, yyyy')}. Final summary below.
+            This project completed{project.completedAt ? ` on ${format(project.completedAt, 'MMMM d, yyyy')}` : ''}. Final summary below.
           </p>
         </div>
       )}
@@ -164,6 +164,7 @@ export default async function ClientDashboardPage({
               startDate={project.startDate}
               targetEndDate={project.targetEndDate}
               mvpDelivered={project.mvpDelivered}
+              status={project.status}
             />
           </div>
         </div>

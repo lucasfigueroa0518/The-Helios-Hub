@@ -801,9 +801,6 @@
   margin: 0 auto;
   padding: 0 1.5rem;
 }
-body.has-site-product-menu .dashboards-root .dashboards-admin-header__inner {
-  padding-left: 7.25rem;
-}
 .dashboards-root .dashboards-admin-header__left {
   display: flex;
   align-items: center;

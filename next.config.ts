@@ -4,9 +4,8 @@ import type { NextConfig } from 'next';
 const hubRoot = __dirname;
 
 const nextConfig: NextConfig = {
-  // lucas-outreach-hub lives inside embark-eva (separate lockfile). Without this,
-  // Next infers the monorepo root and resolves deps like @opentelemetry/api from
-  // embark-eva/node_modules, which is not installed for this app.
+  // The Helios Hub can sit next to other repos with their own lockfiles.
+  // Pin tracing to this root so Next does not pick a parent node_modules.
   outputFileTracingRoot: hubRoot,
   serverExternalPackages: [
     'tesseract.js',

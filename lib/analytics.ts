@@ -474,7 +474,7 @@ export async function getAnalyticsSummary(input: {
        count(*) FILTER (
          WHERE i.delivery_snapshot ? 'sentAt' OR i.delivery_snapshot ? 'gmailMessageId' OR s.status = 'sent'
        )::text AS emails_sent,
-       count(*) FILTER (WHERE s.delivered_at IS NOT NULL)::text AS emails_delivered,
+       count(*) FILTER (WHERE s.status = 'sent' AND s.bounced_at IS NULL)::text AS emails_delivered,
        count(*) FILTER (WHERE s.bounced_at IS NOT NULL OR s.status = 'bounced')::text AS emails_bounced,
        count(*) FILTER (WHERE s.opened_at IS NOT NULL)::text AS emails_opened,
        count(*) FILTER (WHERE s.clicked_at IS NOT NULL)::text AS emails_clicked,

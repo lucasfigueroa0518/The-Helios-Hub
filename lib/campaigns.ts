@@ -28,6 +28,7 @@ export type Campaign = {
   id: string;
   name: string;
   status: 'active' | 'archived';
+  owner_id: string;
   merged_into_id: string | null;
   needs_enrichment: boolean;
   kind: CampaignKind;
@@ -42,6 +43,7 @@ export type Campaign = {
   next_cycle_at: string | null;
   last_cycle_at: string | null;
   sent_count: number;
+  delivered_count: number;
   created_at: string;
   updated_at: string;
   lead_count: number;
@@ -122,6 +124,7 @@ function mapCampaignRow(row: CampaignQueryRow): Campaign {
     next_cycle_at: campaign.next_cycle_at ?? null,
     last_cycle_at: campaign.last_cycle_at ?? null,
     sent_count: Number(campaign.sent_count ?? 0) || 0,
+    delivered_count: Number(campaign.delivered_count ?? 0) || 0,
     lead_attributes: parseLeadAttributes(lead_attributes),
     ...mapCampaignDraftingActivity(drafting_activity),
   };
@@ -129,7 +132,7 @@ function mapCampaignRow(row: CampaignQueryRow): Campaign {
 
 const campaignSelect = `
   SELECT
-    c.id, c.name, c.status, c.merged_into_id, c.needs_enrichment,
+    c.id, c.name, c.status, c.owner_id, c.merged_into_id, c.needs_enrichment,
     COALESCE(c.kind, 'manual') AS kind,
     c.auto_status, c.auto_error, c.emails_per_day, c.follow_up_enabled,
     c.sender_identity_slug,
@@ -141,6 +144,16 @@ const campaignSelect = `
       SELECT count(*)::int FROM outreach.email_send_queue q
        WHERE q.campaign_id = c.id AND q.status = 'sent'
     ) AS sent_count,
+    (
+      SELECT GREATEST(0, (
+        (SELECT count(*)::int FROM outreach.email_send_queue q WHERE q.campaign_id = c.id AND q.status = 'sent') -
+        (SELECT count(*)::int
+           FROM outreach.email_sends s
+           JOIN outreach.drafting_items i ON i.id = s.drafting_item_id
+           JOIN outreach.drafting_workspaces w ON w.id = i.workspace_id
+          WHERE w.campaign_id = c.id AND (s.status = 'bounced' OR s.bounced_at IS NOT NULL))
+      ))
+    ) AS delivered_count,
     max(r.started_at) AS last_run_at,
     COALESCE(
       (SELECT array_agg(ct.tag ORDER BY ct.tag)

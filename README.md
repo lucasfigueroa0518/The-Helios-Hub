@@ -1,4 +1,12 @@
-# Lucas Outreach Hub (reference app)
+# The Helios Hub
+
+Umbrella Next.js app for Helios products:
+
+- **Helios Outreach Hub** (`/hub`, `/campaigns`) — lead enrichment and send
+- **Project Dashboards** (`/dashboards`)
+- **Trello** (`/trello`) — boards
+
+This repo root is **The Helios Hub**. The Outreach app inside it remains **helios-outreach-hub**.
 
 Standalone Next.js reference for Eva Outreach Hub. Behavioral changes here must
 be dual-ported to Eva in the same session (see `.cursor/rules/outreach-eva-port.mdc`).

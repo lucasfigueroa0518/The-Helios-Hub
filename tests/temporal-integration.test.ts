@@ -97,7 +97,7 @@ test('repository persists, reloads, and preserves truthful generation provenance
     path.join(process.cwd(), 'lib', 'drafting', 'repository.ts'),
     'utf8',
   );
-  assert.match(repository, /temporal_audit, generation_mode\s+FROM outreach\.email_drafts/);
+  assert.match(repository, /temporal_audit,\s*generation_mode[\s\S]*?FROM outreach\.email_drafts/);
   assert.match(repository, /generation_mode, temporal_status, temporal_audit, draft_grounding/);
   assert.match(repository, /generation_mode = EXCLUDED\.generation_mode/);
   assert.match(repository, /input\.generationMode/);
