@@ -12,7 +12,7 @@ import { requestJson } from '@/lib/client-request';
 import { AnalyticsSummary } from '@/lib/analytics';
 import { AnalyticsDrilldownDrawer } from '@/app/hub/analytics-drilldown-drawer';
 
-type Period = 'week' | 'month' | 'custom';
+type Period = 'week' | 'month' | 'all' | 'custom';
 type ViewMode = 'campaigns' | 'per_sender';
 
 type RunRow = {
@@ -314,6 +314,7 @@ export function AnalyticsHub() {
                   {([
                     ['week', '1 week'],
                     ['month', '1 month'],
+                    ['all', 'All time'],
                     ['custom', 'Custom'],
                   ] as const).map(([value, label]) => (
                     <button

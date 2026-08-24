@@ -9,7 +9,7 @@ import {
   loadDraftingSpendDenominators,
 } from '@/lib/analytics-attributed-cost';
 import { dbQuery } from '@/lib/db';
-import { resolveAnalyticsWindow } from '@/lib/analytics';
+import { resolveAnalyticsQueryWindow } from '@/lib/analytics';
 
 export type DailyTrendPoint = {
   date: string;
@@ -115,7 +115,7 @@ function attributedDayTotal(row: {
 }
 
 export async function getMetricDrilldown(input: AnalyticsDrilldownInput): Promise<AnalyticsDrilldownData> {
-  const window = resolveAnalyticsWindow(input);
+  const window = await resolveAnalyticsQueryWindow(input);
   const excludedRunIds = await loadExcludedRunIds();
   const excludedLeads = await loadExcludedLeadIds(excludedRunIds);
 

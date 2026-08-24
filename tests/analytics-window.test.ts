@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { completeUtcDaysInWindow } from '@/lib/analytics-attributed-cost';
-import { resolveAnalyticsWindow } from '@/lib/analytics';
+import {
+  ANALYTICS_ALL_TIME_START,
+  isAllTimePeriod,
+  resolveAnalyticsWindow,
+} from '@/lib/analytics';
 
 test('resolveAnalyticsWindow defaults to week', () => {
   const now = new Date('2026-07-28T15:00:00.000Z');
@@ -16,6 +20,22 @@ test('resolveAnalyticsWindow custom requires bounds', () => {
     () => resolveAnalyticsWindow({ period: 'custom' }),
     /from and to/i,
   );
+});
+
+test('resolveAnalyticsWindow all time uses a bounded start, not epoch', () => {
+  const now = new Date('2026-08-24T15:00:00.000Z');
+  const window = resolveAnalyticsWindow({ now, period: 'all' });
+  assert.equal(window.period, 'all');
+  assert.equal(window.from, ANALYTICS_ALL_TIME_START);
+  assert.equal(window.to, '2026-08-24T23:59:59.999Z');
+});
+
+test('isAllTimePeriod accepts all-time aliases', () => {
+  assert.equal(isAllTimePeriod('all'), true);
+  assert.equal(isAllTimePeriod('all_time'), true);
+  assert.equal(isAllTimePeriod('all-time'), true);
+  assert.equal(isAllTimePeriod('All Time'), true);
+  assert.equal(isAllTimePeriod('week'), false);
 });
 
 test('completeUtcDaysInWindow excludes today', () => {

@@ -10,7 +10,15 @@ import {
 import { getCloudWorkerSpendState } from '@/lib/billing-guard';
 import { dbQuery } from '@/lib/db';
 
-export type AnalyticsPeriod = 'week' | 'month' | 'custom';
+export type AnalyticsPeriod = 'week' | 'month' | 'all' | 'custom';
+
+/** Inclusive lower bound when no earlier campaign/run/send exists. */
+export const ANALYTICS_ALL_TIME_START = '2020-01-01T00:00:00.000Z';
+
+export function isAllTimePeriod(period?: string | null): boolean {
+  const raw = (period ?? '').trim().toLowerCase().replace(/[_-\s]/g, '');
+  return raw === 'all' || raw === 'alltime';
+}
 
 export type AnalyticsWindow = {
   period: AnalyticsPeriod;
@@ -319,6 +327,9 @@ export function resolveAnalyticsWindow(input: {
     if (from.getTime() > to.getTime()) throw new Error('from must be on or before to');
     return { period: 'custom', from: toIsoDayStart(from), to: toIsoDayEnd(to) };
   }
+  if (isAllTimePeriod(periodRaw)) {
+    return { period: 'all', from: ANALYTICS_ALL_TIME_START, to: toIsoDayEnd(now) };
+  }
   if (periodRaw === 'month') {
     const from = new Date(now);
     from.setUTCDate(from.getUTCDate() - 29);
@@ -327,6 +338,34 @@ export function resolveAnalyticsWindow(input: {
   const from = new Date(now);
   from.setUTCDate(from.getUTCDate() - 6);
   return { period: 'week', from: toIsoDayStart(from), to: toIsoDayEnd(now) };
+}
+
+async function loadAllTimeFromBound(now: Date): Promise<string> {
+  const { rows } = await dbQuery<{ earliest: Date | string | null }>(
+    `SELECT least(
+       (SELECT min(created_at) FROM outreach.campaigns),
+       (SELECT min(created_at) FROM outreach.runs),
+       (SELECT min(created_at) FROM outreach.email_sends),
+       (SELECT min(created_at) FROM outreach.drafting_job_cost_events)
+     ) AS earliest`,
+  );
+  const earliest = rows[0]?.earliest;
+  if (!earliest) return toIsoDayStart(now);
+  const parsed = earliest instanceof Date ? earliest : new Date(earliest);
+  if (Number.isNaN(parsed.getTime())) return toIsoDayStart(now);
+  return toIsoDayStart(parsed);
+}
+
+/** Same as resolveAnalyticsWindow, but all-time starts at the earliest real row. */
+export async function resolveAnalyticsQueryWindow(input: {
+  period?: string | null;
+  from?: string | null;
+  to?: string | null;
+  now?: Date;
+}): Promise<AnalyticsWindow> {
+  const window = resolveAnalyticsWindow(input);
+  if (window.period !== 'all') return window;
+  return { ...window, from: await loadAllTimeFromBound(input.now ?? new Date()) };
 }
 
 async function loadExcludedRunIds(): Promise<string[]> {
@@ -378,7 +417,7 @@ export async function getAnalyticsSummary(input: {
   identitySlug?: string | null;
   fromEmail?: string | null;
 }): Promise<AnalyticsSummary> {
-  const window = resolveAnalyticsWindow(input);
+  const window = await resolveAnalyticsQueryWindow(input);
   const excludedRunIds = await loadExcludedRunIds();
   const excludedLeadList = await loadExcludedLeadIds(excludedRunIds);
 
