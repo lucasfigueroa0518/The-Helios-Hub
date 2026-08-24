@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight, Download, Pencil, RotateCcw, Send, X } from 
 
 import type { DraftingItemRow, SenderProfile } from '@/app/campaigns/[id]/draft/types';
 import { MessageComposer } from '@/app/components/message-composer';
-import { buildSignatureHtml, resolveEmailSignature } from '@/lib/drafting/email-signature';
+import { SENDER_IDENTITY_LABELS, type SenderIdentitySlug } from '@/lib/agentmail-inboxes';
 import {
   composerHtmlToTemplate,
   filledHtmlToComposerHtml,
@@ -94,6 +94,7 @@ export function EmailReview({
   focus = null,
   currentItemId,
   sender,
+  senderIdentitySlug = null,
   sends,
   onSelectItem,
   onRefresh,
@@ -113,6 +114,7 @@ export function EmailReview({
   focus?: OutreachCarouselFocus | null;
   currentItemId: string | null;
   sender: SenderProfile | null;
+  senderIdentitySlug?: SenderIdentitySlug | null;
   sends: {
     configured: boolean;
     available: boolean;
@@ -974,9 +976,11 @@ export function EmailReview({
         <div className="drafting-email-line">
           <span className="drafting-email-line__label">From</span>
           <span>
-            {sender
-              ? `${sender.display_name} · inbox assigned at send`
-              : 'Sender profile loading…'}
+            {senderIdentitySlug
+              ? `${SENDER_IDENTITY_LABELS[senderIdentitySlug]} · inbox assigned at send`
+              : sender
+                ? `${sender.display_name} · inbox assigned at send`
+                : 'Sender profile loading…'}
           </span>
         </div>
         <div className="drafting-email-line">
@@ -1013,7 +1017,7 @@ export function EmailReview({
             mode="filled"
             subject={subject}
             body={body}
-            includeSignature={current.draft.include_signature !== false}
+            includeSignature={false}
             onSubjectChange={(next) => {
               setSubject(next);
               scheduleSave(next, body);
@@ -1022,19 +1026,6 @@ export function EmailReview({
               setBody(next);
               scheduleSave(subject, next);
             }}
-            signatureHtml={
-              current.draft.include_signature !== false && sender
-                ? buildSignatureHtml(resolveEmailSignature({
-                  workEmail: sender.work_email,
-                  displayName: sender.display_name,
-                  title: sender.title,
-                  companyName: sender.company_name,
-                  profileId: sender.id,
-                  headshotStoragePath: sender.headshot_storage_path,
-                  allowRemoteHeadshot: true,
-                }))
-                : undefined
-            }
           />
         ) : editing ? (
           <textarea
@@ -1051,19 +1042,7 @@ export function EmailReview({
           <div
             className="drafting-email-body drafting-email-body--html"
             dangerouslySetInnerHTML={{
-              __html: `${current.draft.body_html}${
-                current.draft.include_signature !== false && sender
-                  ? buildSignatureHtml(resolveEmailSignature({
-                    workEmail: sender.work_email,
-                    displayName: sender.display_name,
-                    title: sender.title,
-                    companyName: sender.company_name,
-                    profileId: sender.id,
-                    headshotStoragePath: sender.headshot_storage_path,
-                    allowRemoteHeadshot: true,
-                  }))
-                  : ''
-              }`,
+              __html: current.draft.body_html,
             }}
           />
         ) : (

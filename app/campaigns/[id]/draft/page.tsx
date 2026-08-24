@@ -62,6 +62,7 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
             nextCycleAt={campaign.next_cycle_at}
             autoError={campaign.auto_error}
             expansionStep={campaign.expansion_step}
+            senderIdentitySlug={campaign.sender_identity_slug}
           />
         </div>
       </section>

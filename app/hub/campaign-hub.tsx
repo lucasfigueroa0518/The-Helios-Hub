@@ -22,7 +22,7 @@ import { TagBadge } from '@/app/components/tag-badge';
 import { TagInputPopover } from '@/app/components/tag-input-popover';
 import type { TagWithColor } from '@/lib/campaigns';
 import { MessageComposer } from '@/app/components/message-composer';
-import { buildSignatureHtml, LUCAS_SIGNATURE_DEFAULTS } from '@/lib/drafting/email-signature';
+import { buildSignatureHtml, resolveEmailSignature } from '@/lib/drafting/email-signature';
 import { parseMessageTemplate, parseSubjectTemplate } from '@/lib/drafting/message-template';
 import { isLiveAutoCampaign } from '@/lib/auto-campaigns/status';
 
@@ -94,13 +94,12 @@ export function CampaignHub({ email }: { email: string }) {
     return subject.errors.length === 0 && body.errors.length === 0 && Boolean(subject.canonical.trim() && body.canonical.trim());
   }, [messageMode, subjectTemplate, bodyTemplate]);
   const signaturePreviewHtml = useMemo(
-    () => buildSignatureHtml({
-      displayName: LUCAS_SIGNATURE_DEFAULTS.displayName,
-      title: LUCAS_SIGNATURE_DEFAULTS.title,
-      companyName: LUCAS_SIGNATURE_DEFAULTS.companyName,
-      headshotUrl: null,
-    }),
-    [],
+    () => buildSignatureHtml(resolveEmailSignature({
+      workEmail: '',
+      identitySlug: senderIdentity,
+      allowRemoteHeadshot: true,
+    })),
+    [senderIdentity],
   );
 
   async function loadCampaigns(force = false) {

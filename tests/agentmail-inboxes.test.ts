@@ -15,6 +15,7 @@ import {
   OUTREACH_INBOX_EMAILS,
   parseSenderIdentitySlug,
   campaignSenderIdentity,
+  resolveSendIdentitySlug,
   personalForwardEmailForInbox,
   resolveConfiguredVerifyInbox,
 } from '@/lib/agentmail-inboxes';
@@ -77,6 +78,40 @@ test('identity slug is inferred from snapshot fields', () => {
   assert.equal(inferIdentitySlug({ workEmail: 'lucas@heliosgroup.ai' }), 'lucas');
   assert.equal(inferIdentitySlug({ displayName: 'Thomas Pozo' }), 'tommy');
   assert.equal(inferIdentitySlug({ displayName: 'Lucas Figueroa' }), 'lucas');
+});
+
+test('campaign sending profile wins over a Lucas snapshot or work email', () => {
+  assert.equal(
+    resolveSendIdentitySlug({
+      campaignIdentitySlug: 'tommy',
+      snapshotIdentitySlug: 'lucas',
+      workEmail: 'lucas@heliosgroup.ai',
+      displayName: 'Lucas Figueroa',
+    }),
+    'tommy',
+  );
+  assert.equal(
+    resolveSendIdentitySlug({
+      campaignIdentitySlug: 'lucas',
+      snapshotIdentitySlug: 'tommy',
+      workEmail: 'thomas@heliosgroup.email',
+    }),
+    'lucas',
+  );
+  assert.equal(
+    resolveSendIdentitySlug({
+      snapshotIdentitySlug: 'tommy',
+      workEmail: 'lucas@heliosgroup.ai',
+    }),
+    'tommy',
+  );
+  assert.equal(
+    resolveSendIdentitySlug({
+      workEmail: 'lucas@heliosgroup.ai',
+      displayName: 'Lucas Figueroa',
+    }),
+    'lucas',
+  );
 });
 
 test('campaign sender identity parses lucas/tommy and defaults legacy null to lucas', () => {

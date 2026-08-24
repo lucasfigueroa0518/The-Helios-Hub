@@ -16,6 +16,7 @@ import { ExportPanel, type ExportPulse } from '@/app/campaigns/[id]/draft/export
 import { LeadsTable } from '@/app/campaigns/[id]/draft/leads-table';
 import type { DraftingSnapshot, SenderProfile } from '@/app/campaigns/[id]/draft/types';
 import { MessageComposer } from '@/app/components/message-composer';
+import { inferIdentitySlug, type SenderIdentitySlug } from '@/lib/agentmail-inboxes';
 import { buildSignatureHtml, resolveEmailSignature } from '@/lib/drafting/email-signature';
 import { parseMessageTemplate, parseSubjectTemplate } from '@/lib/drafting/message-template';
 import {
@@ -87,6 +88,7 @@ export function DraftWorkspace({
   nextCycleAt = null,
   autoError = null,
   expansionStep = 0,
+  senderIdentitySlug = null,
 }: {
   campaignId: string;
   autoMode?: boolean;
@@ -95,6 +97,7 @@ export function DraftWorkspace({
   nextCycleAt?: string | null;
   autoError?: string | null;
   expansionStep?: number;
+  senderIdentitySlug?: SenderIdentitySlug | null;
 }) {
   const [snapshot, setSnapshot] = useState<DraftingSnapshot | null>(null);
   const [launching, setLaunching] = useState(() => readDraftingLaunch(campaignId));
@@ -558,10 +561,16 @@ export function DraftWorkspace({
       .then((response) => response.json())
       .then((data) => {
         const profiles = data.profiles as SenderProfile[] | undefined;
-        setSender(profiles?.find((profile) => profile.is_default) ?? profiles?.[0] ?? null);
+        const matched = senderIdentitySlug
+          ? profiles?.find((profile) => inferIdentitySlug({
+            workEmail: profile.work_email,
+            displayName: profile.display_name,
+          }) === senderIdentitySlug)
+          : null;
+        setSender(matched ?? profiles?.find((profile) => profile.is_default) ?? profiles?.[0] ?? null);
       })
       .catch(() => undefined);
-  }, []);
+  }, [senderIdentitySlug]);
 
   const rewriteWatchCount = Object.keys(rewriteWatches).length;
   const hasWorkspace = Boolean(snapshot?.workspace?.id);
@@ -726,14 +735,19 @@ export function DraftWorkspace({
   }
 
   const signaturePreviewHtml = useMemo(() => {
-    if (!sender) {
-      return buildSignatureHtml({
-        displayName: 'Lucas Figueroa',
-        title: 'President',
-        companyName: 'Helios Group',
-        headshotUrl: null,
-      });
+    if (senderIdentitySlug) {
+      return buildSignatureHtml(resolveEmailSignature({
+        workEmail: sender?.work_email || '',
+        identitySlug: senderIdentitySlug,
+        displayName: sender?.display_name,
+        title: sender?.title,
+        companyName: sender?.company_name,
+        profileId: sender?.id,
+        headshotStoragePath: sender?.headshot_storage_path,
+        allowRemoteHeadshot: true,
+      }));
     }
+    if (!sender) return undefined;
     return buildSignatureHtml(resolveEmailSignature({
       workEmail: sender.work_email,
       displayName: sender.display_name,
@@ -743,7 +757,7 @@ export function DraftWorkspace({
       headshotStoragePath: sender.headshot_storage_path,
       allowRemoteHeadshot: true,
     }));
-  }, [sender]);
+  }, [sender, senderIdentitySlug]);
 
   if (showLaunchShell) {
     if (autoMode) {
@@ -982,6 +996,7 @@ export function DraftWorkspace({
             focus={outreachFocus}
             currentItemId={currentItemId}
             sender={sender}
+            senderIdentitySlug={senderIdentitySlug}
             sends={snapshot.sends}
             customMode={snapshot.campaign_message?.mode === 'custom'}
             onSelectItem={setCurrentItemId}

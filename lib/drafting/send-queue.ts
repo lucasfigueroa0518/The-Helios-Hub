@@ -14,7 +14,7 @@ import {
   DraftingValidationError,
 } from '@/lib/drafting/errors';
 import type { SenderIdentitySlug } from '@/lib/agentmail-inboxes';
-import { inferIdentitySlug } from '@/lib/agentmail-inboxes';
+import { resolveSendIdentitySlug, SENDER_IDENTITY_DEFAULTS } from '@/lib/agentmail-inboxes';
 import { extractFirstName } from '@/lib/drafting/normalize';
 import { rewriteHrefsInMarkup } from '@/lib/drafting/message-template';
 import {
@@ -371,6 +371,7 @@ async function resolveItemIdentity(itemId: string): Promise<{
   headshotStoragePath: string | null;
 }> {
   const { rows } = await dbQuery<{
+    campaign_identity_slug: string | null;
     identity_slug: string | null;
     work_email: string | null;
     display_name: string | null;
@@ -378,18 +379,22 @@ async function resolveItemIdentity(itemId: string): Promise<{
     company_name: string | null;
     headshot_storage_path: string | null;
   }>(
-    `SELECT nullif(trim(i.input_snapshot #>> '{sender,identitySlug}'), '') AS identity_slug,
+    `SELECT c.sender_identity_slug AS campaign_identity_slug,
+            nullif(trim(i.input_snapshot #>> '{sender,identitySlug}'), '') AS identity_slug,
             nullif(trim(i.input_snapshot #>> '{sender,workEmail}'), '') AS work_email,
             nullif(trim(i.input_snapshot #>> '{sender,displayName}'), '') AS display_name,
             nullif(trim(i.input_snapshot #>> '{sender,title}'), '') AS title,
             nullif(trim(i.input_snapshot #>> '{sender,companyName}'), '') AS company_name,
             nullif(trim(i.input_snapshot #>> '{sender,headshotStoragePath}'), '') AS headshot_storage_path
        FROM outreach.drafting_items i
+       JOIN outreach.drafting_workspaces w ON w.id = i.workspace_id
+       JOIN outreach.campaigns c ON c.id = w.campaign_id
       WHERE i.id = $1`,
     [itemId],
   );
-  const slug = inferIdentitySlug({
-    identitySlug: rows[0]?.identity_slug,
+  const slug = resolveSendIdentitySlug({
+    campaignIdentitySlug: rows[0]?.campaign_identity_slug,
+    snapshotIdentitySlug: rows[0]?.identity_slug,
     workEmail: rows[0]?.work_email,
     displayName: rows[0]?.display_name,
   });
@@ -397,13 +402,14 @@ async function resolveItemIdentity(itemId: string): Promise<{
   if (!identity) throw new Error(`Sender identity ${slug} is not configured`);
   const inboxes = await listSenderInboxes({ identitySlug: slug });
   if (inboxes.length === 0) throw new Error(`No outreach inboxes configured for ${slug}`);
+  const defaults = SENDER_IDENTITY_DEFAULTS[slug];
   return {
     slug,
     identityId: identity.id,
     inboxes,
-    displayName: rows[0]?.display_name || identity.display_name,
-    title: rows[0]?.title || identity.title,
-    companyName: rows[0]?.company_name || identity.company_name,
+    displayName: identity.display_name || defaults.displayName,
+    title: identity.title || defaults.title,
+    companyName: identity.company_name || defaults.companyName,
     headshotStoragePath: rows[0]?.headshot_storage_path ?? null,
   };
 }
@@ -1613,13 +1619,12 @@ async function loadLatestSendablePayload(itemId: string): Promise<SendableDraftP
   if (!row) return null;
   if (!row.to_email || !row.subject || !row.body_text) return null;
   const identity = await resolveItemIdentity(row.item_id);
-  const fromEmail = row.from_email && !row.from_email.endsWith('@heliosgroup.ai')
-    ? row.from_email
-    : identity.inboxes[0]!.email;
+  const matchingInbox = identity.inboxes.find((inbox) => inbox.email === row.from_email);
+  const fromEmail = matchingInbox?.email ?? identity.inboxes[0]!.email;
   return {
     itemId: row.item_id,
     campaignId: row.campaign_id,
-    fromName: row.from_name || identity.displayName,
+    fromName: identity.displayName,
     fromEmail,
     toEmail: resolveSendToEmail(row.campaign_id, row.to_email),
     subject: row.subject,
@@ -1627,11 +1632,11 @@ async function loadLatestSendablePayload(itemId: string): Promise<SendableDraftP
     bodyHtml: row.body_html ? rewriteHrefsInMarkup(row.body_html) : row.body_html,
     includeSignature: row.include_signature !== false,
     recipientName: row.recipient_name || row.to_email,
-    title: row.title || identity.title,
-    companyName: row.company_name || identity.companyName,
+    title: identity.title,
+    companyName: identity.companyName,
     senderProfileId: row.sender_profile_id,
-    headshotStoragePath: row.headshot_storage_path || identity.headshotStoragePath,
-    senderInboxId: row.sender_inbox_id || identity.inboxes.find((inbox) => inbox.email === fromEmail)?.id || identity.inboxes[0]!.id,
+    headshotStoragePath: identity.headshotStoragePath || row.headshot_storage_path,
+    senderInboxId: matchingInbox?.id || identity.inboxes[0]!.id,
     identitySlug: identity.slug,
   };
 }
