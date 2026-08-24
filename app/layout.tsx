@@ -26,6 +26,11 @@ const pragmatica = localFont({
 export const metadata = {
   title: 'The Helios Hub',
   description: 'The Helios Hub — Outreach, Dashboards, and Trello',
+  icons: {
+    icon: '/icon.png',
+    shortcut: '/favicon.ico',
+    apple: '/icon.png',
+  },
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

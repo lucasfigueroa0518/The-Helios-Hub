@@ -5,7 +5,7 @@ import './dashboards.css';
 export const metadata: Metadata = {
   title: 'Helios Dashboards',
   robots: { index: false, follow: false },
-  icons: { icon: '/dashboards/favicon.png' },
+  icons: { icon: '/icon.png', apple: '/icon.png' },
 };
 
 export default function DashboardsRootLayout({
