@@ -130,6 +130,11 @@ function mapCampaignRow(row: CampaignQueryRow): Campaign {
   };
 }
 
+/** Own campaigns, plus every live auto campaign. Parentheses are required so
+ *  `AND c.id = $2` in getCampaign cannot bind only to the auto branch and return
+ *  an unrelated owned campaign (Campaign #15 opening as Campaign #2). */
+export const CAMPAIGN_VISIBILITY_WHERE = `(c.owner_id = $1 OR (COALESCE(c.kind, 'manual') = 'auto' AND c.status = 'active'))`;
+
 const campaignSelect = `
   SELECT
     c.id, c.name, c.status, c.owner_id, c.merged_into_id, c.needs_enrichment,
@@ -171,8 +176,7 @@ const campaignSelect = `
   FROM outreach.campaigns c
   LEFT JOIN outreach.campaign_leads cl ON cl.campaign_id = c.id
   LEFT JOIN outreach.runs r ON r.campaign_id = c.id
-  WHERE c.owner_id = $1
-     OR (COALESCE(c.kind, 'manual') = 'auto' AND c.status = 'active')`;
+  WHERE ${CAMPAIGN_VISIBILITY_WHERE}`;
 
 export async function listCampaigns(ownerId: string): Promise<Campaign[]> {
   const { rows } = await dbQuery<CampaignQueryRow>(
@@ -192,7 +196,8 @@ export async function getCampaign(ownerId: string, campaignId: string): Promise<
     `${campaignSelect} AND c.id = $2 GROUP BY c.id`,
     [ownerId, campaignId],
   );
-  return rows[0] ? mapCampaignRow(rows[0]) : null;
+  const row = rows.find((candidate) => candidate.id === campaignId);
+  return row ? mapCampaignRow(row) : null;
 }
 
 export type CreateCampaignInput = {
