@@ -2,11 +2,15 @@
  * Outreach Analytics Hub engine with multi-filtering and spend + conversion metrics.
  */
 
-import { SENDER_IDENTITY_DEFAULTS } from '@/lib/agentmail-inboxes';
+import { SENDER_IDENTITY_DEFAULTS, inferIdentitySlug } from '@/lib/agentmail-inboxes';
 import {
-  loadAttributedCostRows,
-  loadDraftingSpendDenominators,
-} from '@/lib/analytics-attributed-cost';
+  applyWorkerShare,
+  classifySpendIdentity,
+  loadLeadCampaignFacts,
+  loadUnallocatedSpend,
+  prorateGcpWorkerUsd,
+  uniqueLeadFacts,
+} from '@/lib/analytics-lead-facts';
 import { getCloudWorkerSpendState } from '@/lib/billing-guard';
 import { dbQuery } from '@/lib/db';
 
@@ -41,6 +45,8 @@ export type AnalyticsMetricBlock = {
   reply_rate: number | null;
   campaigns_count: number;
   total_leads: number;
+  outreached_leads: number;
+  wasted_lead_rate: number | null;
 
   // Review & Edit stats
   drafts_reviewed: number;
@@ -50,14 +56,20 @@ export type AnalyticsMetricBlock = {
   drafts_revised: number;
   edit_rate: number | null;
 
-  // Spend & Costs (work-row UNION; not lead_cost_events)
+  // Bottom-up spend (per-lead stack, then classified)
   enrichment_cost_usd: number;
   drafting_cost_usd: number;
   reply_cost_usd: number;
   extraction_cost_usd: number;
+  apollo_cost_usd: number;
+  worker_cost_usd: number;
+  agentmail_cost_usd: number;
   dashboard_cost_usd: number;
   unattributed_cost_usd: number;
+  outreach_spend_usd: number;
+  wasted_spend_usd: number;
   total_spend_usd: number;
+  spend_per_outreach_usd: number | null;
   spend_per_lead_usd: number | null;
   cost_per_email_usd: number | null;
   cost_per_enrichment_usd: number | null;
@@ -99,6 +111,7 @@ export type AnalyticsCampaignRow = {
   tags: string[];
   tag_details?: { tag: string; color: string | null }[];
   lead_count: number;
+  outreached_leads: number;
   emails_sent: number;
   emails_delivered: number;
   emails_bounced: number;
@@ -110,11 +123,18 @@ export type AnalyticsCampaignRow = {
   open_rate: number | null;
   click_rate: number | null;
   reply_rate: number | null;
+  wasted_lead_rate: number | null;
   enrichment_cost_usd: number;
   drafting_cost_usd: number;
   reply_cost_usd: number;
   extraction_cost_usd: number;
+  worker_cost_usd: number;
+  agentmail_cost_usd: number;
+  apollo_cost_usd: number;
+  outreach_spend_usd: number;
+  wasted_spend_usd: number;
   total_spend_usd: number;
+  spend_per_outreach_usd: number | null;
   spend_per_lead_usd: number | null;
   created_at: string;
 };
@@ -192,6 +212,8 @@ function emptyMetrics(): AnalyticsMetricBlock {
     reply_rate: null,
     campaigns_count: 0,
     total_leads: 0,
+    outreached_leads: 0,
+    wasted_lead_rate: null,
     drafts_reviewed: 0,
     drafts_approved: 0,
     drafts_denied: 0,
@@ -202,9 +224,15 @@ function emptyMetrics(): AnalyticsMetricBlock {
     drafting_cost_usd: 0,
     reply_cost_usd: 0,
     extraction_cost_usd: 0,
+    apollo_cost_usd: 0,
+    worker_cost_usd: 0,
+    agentmail_cost_usd: 0,
     dashboard_cost_usd: 0,
     unattributed_cost_usd: 0,
+    outreach_spend_usd: 0,
+    wasted_spend_usd: 0,
     total_spend_usd: 0,
+    spend_per_outreach_usd: null,
     spend_per_lead_usd: null,
     cost_per_email_usd: null,
     cost_per_enrichment_usd: null,
@@ -229,69 +257,60 @@ function perUnit(total: number, count: number): number | null {
   return total / count;
 }
 
-function attributedSpendUsd(m: Pick<
-  AnalyticsMetricBlock,
-  | 'drafting_cost_usd'
-  | 'enrichment_cost_usd'
-  | 'reply_cost_usd'
-  | 'extraction_cost_usd'
-  | 'dashboard_cost_usd'
->): number {
-  return (
-    m.drafting_cost_usd
-    + m.enrichment_cost_usd
-    + m.reply_cost_usd
-    + m.extraction_cost_usd
-    + m.dashboard_cost_usd
-  );
-}
-
-export function computeSpendUnitCosts(m: {
+function applySpendIdentity<T extends AnalyticsMetricBlock>(m: T, identity: {
+  total_leads: number;
+  outreached_leads: number;
+  outreach_spend_usd: number;
+  wasted_spend_usd: number;
   total_spend_usd: number;
-  drafting_cost_usd: number;
-  unattributed_cost_usd: number;
+  spend_per_outreach_usd: number | null;
+  wasted_lead_rate: number | null;
   enrichment_cost_usd: number;
-  drafted_leads: number;
-  drafting_jobs: number;
-  enrichment_jobs: number;
-}): {
-  spend_per_lead_usd: number | null;
-  cost_per_drafting_usd: number | null;
-  cost_per_enrichment_usd: number | null;
-} {
-  const attributedDrafting = Math.max(0, m.drafting_cost_usd - m.unattributed_cost_usd);
-  return {
-    spend_per_lead_usd: perUnit(m.total_spend_usd, m.drafted_leads),
-    cost_per_drafting_usd: perUnit(attributedDrafting, m.drafting_jobs),
-    cost_per_enrichment_usd: perUnit(m.enrichment_cost_usd, m.enrichment_jobs),
-  };
+  drafting_cost_usd: number;
+  worker_cost_usd: number;
+  agentmail_cost_usd: number;
+  apollo_cost_usd: number;
+  extraction_cost_usd: number;
+  reply_cost_usd: number;
+}): T {
+  m.total_leads = identity.total_leads;
+  m.outreached_leads = identity.outreached_leads;
+  m.wasted_lead_rate = identity.wasted_lead_rate;
+  m.outreach_spend_usd = identity.outreach_spend_usd;
+  m.wasted_spend_usd = identity.wasted_spend_usd;
+  m.total_spend_usd = identity.total_spend_usd;
+  m.spend_per_outreach_usd = identity.spend_per_outreach_usd;
+  m.spend_per_lead_usd = identity.spend_per_outreach_usd;
+  m.cost_per_email_usd = identity.spend_per_outreach_usd;
+  m.enrichment_cost_usd = identity.enrichment_cost_usd;
+  m.drafting_cost_usd = identity.drafting_cost_usd;
+  m.worker_cost_usd = identity.worker_cost_usd;
+  m.agentmail_cost_usd = identity.agentmail_cost_usd;
+  m.apollo_cost_usd = identity.apollo_cost_usd;
+  m.extraction_cost_usd = identity.extraction_cost_usd;
+  m.reply_cost_usd = identity.reply_cost_usd;
+  m.drafted_leads = identity.outreached_leads;
+  return m;
 }
 
 function finalizeMetrics<T extends AnalyticsMetricBlock>(m: T): T {
-  const total_spend = attributedSpendUsd(m);
   const baseDenominator = m.emails_delivered > 0 ? m.emails_delivered : m.emails_sent;
-  const units = computeSpendUnitCosts({
-    total_spend_usd: total_spend,
-    drafting_cost_usd: m.drafting_cost_usd,
-    unattributed_cost_usd: m.unattributed_cost_usd,
-    enrichment_cost_usd: m.enrichment_cost_usd,
-    drafted_leads: m.drafted_leads,
-    drafting_jobs: m.drafting_jobs,
-    enrichment_jobs: m.enrichment_lead_events,
-  });
+  const total_spend_usd = m.outreach_spend_usd + m.wasted_spend_usd;
+  const spend_per_outreach_usd = m.spend_per_outreach_usd
+    ?? perUnit(m.outreach_spend_usd, m.emails_sent);
   return {
     ...m,
-    total_spend_usd: total_spend,
+    total_spend_usd,
     delivery_rate: rate(m.emails_delivered, m.emails_sent),
     bounce_rate: rate(m.emails_bounced, m.emails_sent),
     open_rate: rate(m.emails_opened, baseDenominator),
     click_rate: rate(m.emails_clicked, baseDenominator),
     reply_rate: rate(m.emails_replied, baseDenominator),
-    spend_per_lead_usd: units.spend_per_lead_usd,
+    spend_per_outreach_usd,
+    spend_per_lead_usd: spend_per_outreach_usd,
     approval_rate: rate(m.drafts_approved, m.drafts_reviewed),
-    cost_per_email_usd: perUnit(total_spend, m.emails_sent),
-    cost_per_enrichment_usd: units.cost_per_enrichment_usd,
-    cost_per_drafting_usd: units.cost_per_drafting_usd,
+    cost_per_email_usd: spend_per_outreach_usd,
+    wasted_lead_rate: rate(m.total_leads - m.outreached_leads, m.total_leads),
     retry_rate: rate(m.orch_jobs_retried, m.orch_jobs_total),
     edit_rate: rate(m.drafts_revised, Math.max(m.drafts_reviewed, m.drafts_revised)),
   };
@@ -548,22 +567,35 @@ export async function getAnalyticsSummary(input: {
     ],
   );
 
-  // 4. Cost Statistics from work-row UNION (not lead_cost_events)
+  // 4. Per-lead spend facts (work-row actuals allocated to leads)
   const safeCampaignIds = matchedCampaignIds.length
     ? matchedCampaignIds
     : ['00000000-0000-0000-0000-000000000000'];
-  const costRows = await loadAttributedCostRows({
-    from: window.from,
-    to: window.to,
-    campaignIds: safeCampaignIds,
-    excludedLeadIds: excludedLeadList,
-    excludedRunIds: excludedRunIds,
+  const [rawLeadFacts, unallocated, workerSpend] = await Promise.all([
+    loadLeadCampaignFacts({
+      from: window.from,
+      to: window.to,
+      campaignIds: safeCampaignIds,
+      excludedLeadIds: excludedLeadList,
+      excludedRunIds: excludedRunIds,
+    }),
+    loadUnallocatedSpend({
+      from: window.from,
+      to: window.to,
+      campaignIds: safeCampaignIds,
+    }),
+    getCloudWorkerSpendState(),
+  ]);
+  const workerWindowUsd = prorateGcpWorkerUsd({
+    monthToDateUsd: workerSpend.cost_amount,
+    windowFrom: new Date(window.from),
+    windowTo: new Date(window.to),
   });
-  const draftingDenominators = await loadDraftingSpendDenominators({
-    from: window.from,
-    to: window.to,
-    campaignIds: safeCampaignIds,
-    excludedLeadIds: excludedLeadList,
+  const leadFacts = applyWorkerShare(rawLeadFacts, workerWindowUsd);
+  const orgLeadFacts = uniqueLeadFacts(leadFacts);
+  const orgIdentity = classifySpendIdentity({
+    facts: orgLeadFacts,
+    unallocatedWastedUsd: unallocated.total_usd,
   });
 
   // 5. Orchestration Job Statistics
@@ -604,12 +636,6 @@ export async function getAnalyticsSummary(input: {
     emails_opened: number;
     emails_clicked: number;
     emails_replied: number;
-    enrichment_cost_usd: number;
-    drafting_cost_usd: number;
-    reply_cost_usd: number;
-    extraction_cost_usd: number;
-    drafted_leads: number;
-    drafting_jobs: number;
   }>();
 
   function emptyCampaignMetrics() {
@@ -620,12 +646,6 @@ export async function getAnalyticsSummary(input: {
       emails_opened: 0,
       emails_clicked: 0,
       emails_replied: 0,
-      enrichment_cost_usd: 0,
-      drafting_cost_usd: 0,
-      reply_cost_usd: 0,
-      extraction_cost_usd: 0,
-      drafted_leads: 0,
-      drafting_jobs: 0,
     };
   }
 
@@ -656,12 +676,8 @@ export async function getAnalyticsSummary(input: {
 
   const aggregate = emptyMetrics();
   aggregate.campaigns_count = matchingCampaigns.length;
-
-  // Process Lead Counts
-  for (const camp of matchingCampaigns) {
-    const lCount = Number(camp.lead_count);
-    aggregate.total_leads += lCount;
-  }
+  aggregate.dashboard_cost_usd = unallocated.dashboard_usd;
+  aggregate.unattributed_cost_usd = unallocated.opening_balance_usd;
 
   for (const row of draftRows) {
     const user = ensureUser(byUser, row.user_id, row.user_email, row.user_name);
@@ -720,79 +736,54 @@ export async function getAnalyticsSummary(input: {
     campaignMetrics.set(row.campaign_id, cm);
   }
 
-  const seenOrgEnrichment = new Set<string>();
-  const seenUserEnrichment = new Map<string, Set<string>>();
+  applySpendIdentity(aggregate, orgIdentity);
+  aggregate.drafted_leads = orgIdentity.outreached_leads;
 
-  for (const row of costRows) {
-    const cost = Number(row.cost_usd);
-    const unattributedCost = Number(row.unattributed_cost_usd);
-    const user = row.user_id ? ensureUser(byUser, row.user_id) : null;
-    const cm = row.campaign_id
-      ? (campaignMetrics.get(row.campaign_id) ?? emptyCampaignMetrics())
-      : null;
-
-    if (row.phase === 'enrichment') {
-      const jobKey = row.source_id ?? `${row.campaign_id}:${row.user_id}`;
-      if (cm && row.campaign_id) {
-        cm.enrichment_cost_usd += cost;
-        campaignMetrics.set(row.campaign_id, cm);
-      }
-      if (user) {
-        const userSeen = seenUserEnrichment.get(user.user_id) ?? new Set<string>();
-        if (!userSeen.has(jobKey)) {
-          user.enrichment_cost_usd += cost;
-          user.enrichment_lead_events += 1;
-          userSeen.add(jobKey);
-          seenUserEnrichment.set(user.user_id, userSeen);
-        }
-      }
-      if (!seenOrgEnrichment.has(jobKey)) {
-        aggregate.enrichment_cost_usd += cost;
-        aggregate.enrichment_lead_events += 1;
-        seenOrgEnrichment.add(jobKey);
-      }
-      continue;
-    }
-
-    if (row.phase === 'dashboards') {
-      aggregate.dashboard_cost_usd += cost;
-      continue;
-    }
-
-    if (!user || !cm || !row.campaign_id) continue;
-
-    if (row.phase === 'replies') {
-      user.reply_cost_usd += cost;
-      aggregate.reply_cost_usd += cost;
-      cm.reply_cost_usd += cost;
-    } else if (row.phase === 'extraction') {
-      user.extraction_cost_usd += cost;
-      aggregate.extraction_cost_usd += cost;
-      cm.extraction_cost_usd += cost;
-    } else {
-      user.drafting_cost_usd += cost;
-      user.unattributed_cost_usd += unattributedCost;
-      aggregate.drafting_cost_usd += cost;
-      aggregate.unattributed_cost_usd += unattributedCost;
-      cm.drafting_cost_usd += cost;
-    }
-    campaignMetrics.set(row.campaign_id, cm);
+  const factsByOwner = new Map<string, typeof leadFacts>();
+  const factsByCampaign = new Map<string, typeof leadFacts>();
+  for (const fact of leadFacts) {
+    const ownerFacts = factsByOwner.get(fact.owner_id) ?? [];
+    ownerFacts.push(fact);
+    factsByOwner.set(fact.owner_id, ownerFacts);
+    const campFacts = factsByCampaign.get(fact.campaign_id) ?? [];
+    campFacts.push(fact);
+    factsByCampaign.set(fact.campaign_id, campFacts);
   }
 
-  for (const row of draftingDenominators) {
-    const jobs = Number(row.drafting_jobs);
-    const leads = Number(row.drafted_leads);
-    const user = ensureUser(byUser, row.user_id);
-    const cm = campaignMetrics.get(row.campaign_id) ?? emptyCampaignMetrics();
-    user.drafting_jobs += jobs;
-    user.drafting_lead_events += jobs;
-    user.drafted_leads += leads;
-    aggregate.drafting_jobs += jobs;
-    aggregate.drafting_lead_events += jobs;
-    aggregate.drafted_leads += leads;
-    cm.drafting_jobs += jobs;
-    cm.drafted_leads += leads;
-    campaignMetrics.set(row.campaign_id, cm);
+  for (const [ownerId, facts] of factsByOwner) {
+    const user = ensureUser(byUser, ownerId);
+    applySpendIdentity(user, classifySpendIdentity({ facts }));
+  }
+
+  const uniqueOutreached = uniqueLeadFacts(leadFacts.filter((fact) => fact.is_outreached));
+  for (const fact of uniqueOutreached) {
+    if (!fact.from_email && !fact.identity_slug) continue;
+    const slug = inferIdentitySlug({
+      identitySlug: fact.identity_slug,
+      workEmail: fact.from_email,
+    });
+    const identity = ensureIdentity(slug);
+    const inbox = fact.from_email ? ensureInbox(identity, fact.from_email) : null;
+    identity.outreach_spend_usd += fact.stack_usd;
+    identity.total_spend_usd += fact.stack_usd;
+    identity.enrichment_cost_usd += fact.enrichment_usd;
+    identity.drafting_cost_usd += fact.drafting_usd;
+    identity.worker_cost_usd += fact.worker_usd;
+    identity.agentmail_cost_usd += fact.agentmail_usd;
+    identity.apollo_cost_usd += fact.apollo_usd;
+    identity.outreached_leads += 1;
+    identity.total_leads += 1;
+    if (inbox) {
+      inbox.outreach_spend_usd += fact.stack_usd;
+      inbox.total_spend_usd += fact.stack_usd;
+      inbox.enrichment_cost_usd += fact.enrichment_usd;
+      inbox.drafting_cost_usd += fact.drafting_usd;
+      inbox.worker_cost_usd += fact.worker_usd;
+      inbox.agentmail_cost_usd += fact.agentmail_usd;
+      inbox.apollo_cost_usd += fact.apollo_usd;
+      inbox.outreached_leads += 1;
+      inbox.total_leads += 1;
+    }
   }
 
   for (const row of jobRows) {
@@ -805,19 +796,10 @@ export async function getAnalyticsSummary(input: {
     aggregate.orch_jobs_retried += retried;
   }
 
-  // Calculate user total leads
-  for (const camp of matchingCampaigns) {
-    const user = byUser.get(camp.owner_id);
-    if (user) {
-      user.total_leads += Number(camp.lead_count);
-    }
-  }
-
   const by_campaign: AnalyticsCampaignRow[] = matchingCampaigns.map((camp) => {
     const cm = campaignMetrics.get(camp.id) ?? emptyCampaignMetrics();
-    const leadCount = Number(camp.lead_count);
-    const totalSpend =
-      cm.enrichment_cost_usd + cm.drafting_cost_usd + cm.reply_cost_usd + cm.extraction_cost_usd;
+    const campFacts = factsByCampaign.get(camp.id) ?? [];
+    const identity = classifySpendIdentity({ facts: campFacts });
     const baseDenominator = cm.emails_delivered > 0 ? cm.emails_delivered : cm.emails_sent;
 
     return {
@@ -828,7 +810,8 @@ export async function getAnalyticsSummary(input: {
       owner_email: camp.owner_email,
       tags: camp.tags,
       tag_details: camp.tag_details,
-      lead_count: leadCount,
+      lead_count: identity.total_leads,
+      outreached_leads: identity.outreached_leads,
       emails_sent: cm.emails_sent,
       emails_delivered: cm.emails_delivered,
       emails_bounced: cm.emails_bounced,
@@ -840,17 +823,23 @@ export async function getAnalyticsSummary(input: {
       open_rate: rate(cm.emails_opened, baseDenominator),
       click_rate: rate(cm.emails_clicked, baseDenominator),
       reply_rate: rate(cm.emails_replied, baseDenominator),
-      enrichment_cost_usd: cm.enrichment_cost_usd,
-      drafting_cost_usd: cm.drafting_cost_usd,
-      reply_cost_usd: cm.reply_cost_usd,
-      extraction_cost_usd: cm.extraction_cost_usd,
-      total_spend_usd: totalSpend,
-      spend_per_lead_usd: perUnit(totalSpend, cm.drafted_leads),
+      wasted_lead_rate: identity.wasted_lead_rate,
+      enrichment_cost_usd: identity.enrichment_cost_usd,
+      drafting_cost_usd: identity.drafting_cost_usd,
+      reply_cost_usd: identity.reply_cost_usd,
+      extraction_cost_usd: identity.extraction_cost_usd,
+      worker_cost_usd: identity.worker_cost_usd,
+      agentmail_cost_usd: identity.agentmail_cost_usd,
+      apollo_cost_usd: identity.apollo_cost_usd,
+      outreach_spend_usd: identity.outreach_spend_usd,
+      wasted_spend_usd: identity.wasted_spend_usd,
+      total_spend_usd: identity.total_spend_usd,
+      spend_per_outreach_usd: identity.spend_per_outreach_usd,
+      spend_per_lead_usd: identity.spend_per_outreach_usd,
       created_at: camp.created_at ? new Date(camp.created_at).toISOString() : new Date().toISOString(),
     };
   });
 
-  const workerSpend = await getCloudWorkerSpendState();
   const cloud_worker_spend: CloudWorkerSpendSummary = {
     cost_usd: workerSpend.cost_amount,
     currency_code: workerSpend.currency_code,
@@ -902,18 +891,21 @@ export async function getAnalyticsSummary(input: {
     available_users,
     excluded_run_ids: excludedRunIds,
     notes: [
-      'Edit rate uses email_drafts.manually_edited.',
+      'Total Hub Spend = Outreach Spend + Wasted Spend. Every dollar is classified on a lead first, then rolled up.',
+      'Outreach spend is the four-leg stack (enrichment + drafting + worker + AgentMail) on leads with a sent email in this window.',
+      'Wasted spend is that same stack on leads with no sent email, plus unallocated dashboard summaries and leftover drafting opening balances.',
+      'Spend per lead outreach = outreach spend / emails sent.',
+      'Wasted lead rate = (leads in this window − outreached leads) / leads in this window.',
+      'Enrichment = Claude company research + Apollo enrich credits ($59 / 2,500) + extraction. People search is free.',
+      'Drafting includes researching/writing the email and reply Claude spend.',
+      'Worker spend is GCP VM month-to-date prorated into this window and split across leads. Local worker is unmetered ($0).',
+      'AgentMail is $20 / 10,000 emails ($0.002 per send). Unused monthly quota is not allocated.',
       'Sent count uses drafting_items.delivery_snapshot and email_sends (sent status).',
-      'Denied proxy = rewrite-path drafting item states (queued_rewrite / rewriting / failed_rewrite).',
       'Excluded runs drop leads via campaign_leads.run_id and leads.source_run_id.',
-      'Hub spend is recorded Claude usage on drafting jobs, company research, replies, extraction, and dashboard summaries.',
-      'Spend per lead divides hub spend by distinct leads that had a paid drafting job in this window — not the full campaign roster.',
-      'Avg drafting job divides paid drafting events (excluding leftover run opening balances) by distinct drafting_jobs.',
-      'Shared company research jobs count once in org total and under every intersecting campaign when filtered.',
-      'Cloud worker (GCP) is project billable spend from budget notifications — infra cost, not attributed per campaign/lead.',
     ],
   };
 }
+
 
 export async function listAnalyticsRuns(): Promise<AnalyticsRunRow[]> {
   const { rows } = await dbQuery<{

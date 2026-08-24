@@ -474,70 +474,70 @@ export function AnalyticsHub() {
 
                 <div className="analytics-hub__stats" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
                   <DrillableTile
-                    label="Hub spend"
+                    label="Total Hub Spend"
                     value={formatUsd(metrics.total_spend_usd)}
-                    sub="Recorded Claude on Hub work"
-                    metricKey="hub_spend"
-                    onClick={() => setDrilldownMetricKey('hub_spend')}
+                    sub="Outreach + wasted"
+                    metricKey="total_hub_spend"
+                    onClick={() => setDrilldownMetricKey('total_hub_spend')}
                   />
                   <DrillableTile
-                    label="Spend per lead"
-                    value={formatUsd(metrics.spend_per_lead_usd)}
-                    sub={`${metrics.drafted_leads} drafted leads`}
-                    metricKey="spend_per_lead"
-                    onClick={() => setDrilldownMetricKey('spend_per_lead')}
+                    label="Outreach Spend"
+                    value={formatUsd(metrics.outreach_spend_usd)}
+                    sub={`${metrics.outreached_leads} outreached leads`}
+                    metricKey="outreach_spend"
+                    onClick={() => setDrilldownMetricKey('outreach_spend')}
                   />
                   <DrillableTile
-                    label="Avg drafting job"
-                    value={formatUsd(metrics.cost_per_drafting_usd)}
-                    sub={`${metrics.drafting_jobs} paid jobs`}
-                    metricKey="cost_per_drafting"
-                    onClick={() => setDrilldownMetricKey('cost_per_drafting')}
+                    label="Wasted Spend"
+                    value={formatUsd(metrics.wasted_spend_usd)}
+                    sub="Leads with no sent email"
+                    metricKey="wasted_spend"
+                    onClick={() => setDrilldownMetricKey('wasted_spend')}
                   />
                   <DrillableTile
-                    label="Per enrichment"
-                    value={formatUsd(metrics.cost_per_enrichment_usd)}
-                    sub={`${metrics.enrichment_lead_events} research jobs`}
-                    metricKey="cost_per_enrichment"
-                    onClick={() => setDrilldownMetricKey('cost_per_enrichment')}
+                    label="Spend per lead outreach"
+                    value={formatUsd(metrics.spend_per_outreach_usd)}
+                    sub={`${metrics.emails_sent} sent emails`}
+                    metricKey="spend_per_outreach"
+                    onClick={() => setDrilldownMetricKey('spend_per_outreach')}
                   />
                   <DrillableTile
-                    label="Drafting total"
-                    value={formatUsd(metrics.drafting_cost_usd)}
-                    sub="All paid drafting jobs"
-                    metricKey="aggregated_drafting"
-                    onClick={() => setDrilldownMetricKey('aggregated_drafting')}
+                    label="Wasted lead rate"
+                    value={formatPct(metrics.wasted_lead_rate)}
+                    sub={`${metrics.total_leads - metrics.outreached_leads} of ${metrics.total_leads} leads`}
+                    metricKey="wasted_lead_rate"
+                    onClick={() => setDrilldownMetricKey('wasted_lead_rate')}
                   />
+                </div>
+                <div className="analytics-hub__stats" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginTop: 'var(--space-3)' }}>
                   <DrillableTile
-                    label="Enrichment total"
+                    label="Enrichment"
                     value={formatUsd(metrics.enrichment_cost_usd)}
-                    sub="Company research jobs"
-                    metricKey="aggregated_enrichment"
-                    onClick={() => setDrilldownMetricKey('aggregated_enrichment')}
+                    sub="Claude research + Apollo + extraction"
+                    metricKey="enrichment"
+                    onClick={() => setDrilldownMetricKey('enrichment')}
                   />
-                  <div className="analytics-stat">
-                    <span className="analytics-stat__label">Cloud worker (GCP)</span>
-                    <strong className="analytics-stat__value" style={{ fontSize: 'var(--font-size-xl)' }}>
-                      {formatUsd(summary?.cloud_worker_spend.cost_usd)}
-                    </strong>
-                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-subtle)' }}>
-                      {summary?.cloud_worker_spend.updated_at
-                        ? `Updated ${new Date(summary.cloud_worker_spend.updated_at).toLocaleString()}`
-                        : 'Awaiting first budget notification'}
-                      {summary?.cloud_worker_spend.console_url ? (
-                        <>
-                          {' · '}
-                          <a
-                            href={summary.cloud_worker_spend.console_url}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            GCP billing
-                          </a>
-                        </>
-                      ) : null}
-                    </span>
-                  </div>
+                  <DrillableTile
+                    label="Drafting"
+                    value={formatUsd(metrics.drafting_cost_usd)}
+                    sub="Research/write + replies"
+                    metricKey="drafting"
+                    onClick={() => setDrilldownMetricKey('drafting')}
+                  />
+                  <DrillableTile
+                    label="Worker"
+                    value={formatUsd(metrics.worker_cost_usd)}
+                    sub="GCP VM allocated · local $0"
+                    metricKey="worker"
+                    onClick={() => setDrilldownMetricKey('worker')}
+                  />
+                  <DrillableTile
+                    label="AgentMail"
+                    value={formatUsd(metrics.agentmail_cost_usd)}
+                    sub="$0.002 per sent email"
+                    metricKey="agentmail"
+                    onClick={() => setDrilldownMetricKey('agentmail')}
+                  />
                 </div>
               </section>
 
@@ -614,18 +614,21 @@ export function AnalyticsHub() {
                           <th>Owner</th>
                           <th>Tags</th>
                           <th>Leads</th>
+                          <th>Outreached</th>
+                          <th>Wasted rate</th>
                           <th>Sent</th>
                           <th>Delivery %</th>
-                          <th>Bounce %</th>
                           <th>Reply %</th>
-                          <th>Spend / Lead</th>
-                          <th>Total Spend</th>
+                          <th>Outreach $</th>
+                          <th>Wasted $</th>
+                          <th>Total $</th>
+                          <th>Spend/outreach</th>
                         </tr>
                       </thead>
                       <tbody>
                         {summary.by_campaign.length === 0 && (
                           <tr>
-                            <td colSpan={10} className="text-muted">No campaigns matched current filter criteria.</td>
+                            <td colSpan={13} className="text-muted">No campaigns matched current filter criteria.</td>
                           </tr>
                         )}
                         {summary.by_campaign.map((row) => (
@@ -677,12 +680,15 @@ export function AnalyticsHub() {
                               </div>
                             </td>
                             <td>{row.lead_count}</td>
+                            <td>{row.outreached_leads}</td>
+                            <td>{formatPct(row.wasted_lead_rate)}</td>
                             <td>{row.emails_sent}</td>
                             <td>{formatPct(row.delivery_rate)}</td>
-                            <td>{formatPct(row.bounce_rate)}</td>
                             <td>{formatPct(row.reply_rate)}</td>
-                            <td>{formatUsd(row.spend_per_lead_usd)}</td>
+                            <td>{formatUsd(row.outreach_spend_usd)}</td>
+                            <td>{formatUsd(row.wasted_spend_usd)}</td>
                             <td style={{ fontWeight: 'bold' }}>{formatUsd(row.total_spend_usd)}</td>
+                            <td>{formatUsd(row.spend_per_outreach_usd)}</td>
                           </tr>
                         ))}
                       </tbody>

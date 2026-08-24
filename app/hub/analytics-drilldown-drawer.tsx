@@ -220,13 +220,14 @@ export function AnalyticsDrilldownDrawer({
                         <th>Company</th>
                         <th>Campaign</th>
                         <th>Status</th>
+                        <th>Spend</th>
                         <th>Date</th>
                       </tr>
                     </thead>
                     <tbody>
                       {data.items.length === 0 && (
                         <tr>
-                          <td colSpan={5} className="text-muted">No detailed lead rows recorded for this statistic.</td>
+                          <td colSpan={6} className="text-muted">No detailed lead rows recorded for this statistic.</td>
                         </tr>
                       )}
                       {data.items.map((item) => (
@@ -247,6 +248,9 @@ export function AnalyticsDrilldownDrawer({
                             <span className="pill" style={{ background: 'var(--color-surface-2)', fontSize: '11px' }}>
                               {item.status_or_event}
                             </span>
+                          </td>
+                          <td title={item.details ?? undefined}>
+                            {item.cost_usd == null ? '—' : `$${item.cost_usd.toFixed(2)}`}
                           </td>
                           <td style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-subtle)' }}>
                             {new Date(item.occurred_at).toLocaleDateString()}
