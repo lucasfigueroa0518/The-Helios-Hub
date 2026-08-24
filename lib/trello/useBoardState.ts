@@ -11,6 +11,7 @@ import type {
   User,
 } from "@/lib/trello/types";
 import { type UserProfile } from "@/lib/trello/types";
+import { cardAssociatedWithUser, cardMatchesUserFilter } from "@/lib/trello/card-filter";
 
 /**
  * Patch shape accepted by useBoardState.updateProfile. Widens
@@ -37,6 +38,7 @@ import {
   deleteWorkspace as deleteWorkspaceAction,
 } from "@/app/trello/actions/workspaces";
 import {
+  addWorkspaceMember as addWorkspaceMemberAction,
   removeWorkspaceMember as removeWorkspaceMemberAction,
   setWorkspaceMemberRole as setWorkspaceMemberRoleAction,
 } from "@/app/trello/actions/workspaceMembers";
@@ -60,17 +62,6 @@ function persist(name: string, p: Promise<unknown>) {
 }
 
 /** UUID string, browser + modern Node compatible. */
-/** Same deterministic hue algo as loadWorkspace's hueFromString — keep
- *  in sync so an optimistically-added user's avatar color matches what
- *  the next full reload will show. */
-function hueFromEmail(email: string): number {
-  let h = 0;
-  for (let i = 0; i < email.length; i++) {
-    h = (h * 31 + email.charCodeAt(i)) >>> 0;
-  }
-  return h % 360;
-}
-
 function uid() {
   return crypto.randomUUID();
 }
@@ -238,7 +229,7 @@ export function useBoardState(initial: LoadedWorkspace) {
     let week = 0;
     for (const c of cards) {
       if (c.complete) continue;
-      const isMine = c.assigneeIds.includes(currentUserId);
+      const isMine = cardAssociatedWithUser(c, currentUserId);
       if (isMine) mine++;
       if (c.due) {
         const t = new Date(c.due).getTime();
@@ -247,7 +238,7 @@ export function useBoardState(initial: LoadedWorkspace) {
     }
     // Activity is a stream — a numeric badge would flap; leave it 0.
     return { sv_mine: mine, sv_week: week, sv_activity: 0 };
-  }, [cards]);
+  }, [cards, currentUserId]);
 
   const moveCard = useCallback(
     (cardId: CardId, toListId: ListId, toIndex: number) => {
@@ -355,6 +346,29 @@ export function useBoardState(initial: LoadedWorkspace) {
       setActiveView("home");
     },
     [boards, workspaces],
+  );
+
+  const addWorkspaceMember = useCallback(
+    async (workspaceId: string, userId: string): Promise<void> => {
+      const result = await addWorkspaceMemberAction(workspaceId, userId);
+      if (result.alreadyMember) return;
+      setWorkspaceMembers((prev) => {
+        if (prev.some((wm) => wm.workspaceId === workspaceId && wm.userId === userId)) {
+          return prev;
+        }
+        return [
+          ...prev,
+          {
+            id: uid(),
+            workspaceId,
+            userId,
+            role: "member",
+            joinedAt: new Date().toISOString(),
+          },
+        ];
+      });
+    },
+    [],
   );
 
   const removeWorkspaceMember = useCallback(
@@ -610,26 +624,28 @@ export function useBoardState(initial: LoadedWorkspace) {
   );
 
   const shareBoard = useCallback(
-    async (boardId: string, email: string, firstName: string, lastName: string) => {
-      const result = await shareBoardAction({ boardId, email, firstName, lastName });
-      setUsers((prev) => {
-        if (prev.some((u) => u.id === result.userId)) return prev;
+    async (boardId: string, userId: string) => {
+      const board = boards.find((b) => b.id === boardId);
+      const result = await shareBoardAction({ boardId, userId });
+      const workspaceId = result.workspaceId || board?.workspaceId;
+      if (!workspaceId || result.alreadyMember) return;
+      setWorkspaceMembers((prev) => {
+        if (prev.some((wm) => wm.workspaceId === workspaceId && wm.userId === userId)) {
+          return prev;
+        }
         return [
           ...prev,
           {
-            id: result.userId,
-            firstName: result.firstName,
-            lastName: result.lastName,
-            name: `${result.firstName} ${result.lastName}`.trim(),
-            role: "",
-            // hueFromString stays consistent with loadWorkspace's hue derivation
-            // for users who haven't picked a swatch yet.
-            hue: hueFromEmail(email),
+            id: uid(),
+            workspaceId,
+            userId,
+            role: "member",
+            joinedAt: new Date().toISOString(),
           },
         ];
       });
     },
-    [],
+    [boards],
   );
 
   const addList = useCallback((boardId: string, name: string) => {
@@ -712,7 +728,7 @@ export function useBoardState(initial: LoadedWorkspace) {
         title,
         description: "",
         labelIds: [],
-        assigneeIds: [],
+        assigneeIds: [me.id],
         trackerIds: [],
         due: null,
         fieldValues: {},
@@ -1018,6 +1034,9 @@ export function useBoardState(initial: LoadedWorkspace) {
       ...src,
       id: newId,
       title: `${src.title} (copy)`,
+      assigneeIds: src.assigneeIds.includes(me.id)
+        ? src.assigneeIds
+        : [...src.assigneeIds, me.id],
       comments: [],
       activity: [
         {
@@ -1029,6 +1048,7 @@ export function useBoardState(initial: LoadedWorkspace) {
         },
       ],
       createdAt: now,
+      createdById: me.id,
     };
     setCards((prev) => {
       // Insert directly after the source card in the same list.
@@ -1206,9 +1226,7 @@ export function useBoardState(initial: LoadedWorkspace) {
     const q = search.trim().toLowerCase();
     return cards.filter((c) => {
       if (c.boardId !== activeBoardId) return false;
-      if (filterAssignees.length > 0) {
-        if (!c.assigneeIds.some((a) => filterAssignees.includes(a))) return false;
-      }
+      if (!cardMatchesUserFilter(c, filterAssignees)) return false;
       if (q) {
         const hay = `${c.title} ${c.description ?? ""}`.toLowerCase();
         if (!hay.includes(q)) return false;
@@ -1289,6 +1307,7 @@ export function useBoardState(initial: LoadedWorkspace) {
     setWorkspaceAccent,
     deleteWorkspace,
     removeWorkspaceMember,
+    addWorkspaceMember,
     setWorkspaceMemberRole,
     deleteUser,
     addBoard,

@@ -6,6 +6,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Check, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/trello/utils";
 import { Avatar } from "@/components/trello/ui/Avatar";
+import { UserLookup } from "@/components/trello/shell/UserLookup";
+import { usersNotInWorkspace } from "@/lib/trello/workspace-access";
 import type { User } from "@/lib/trello/types";
 import type { Workspace, WorkspaceMember } from "@/lib/trello/types";
 
@@ -32,6 +34,7 @@ type Props = {
   onRename: (name: string) => void;
   onSetAccent: (accent: string) => void;
   onDelete: () => Promise<void>;
+  onAddMember: (userId: string) => Promise<void>;
   onRemoveMember: (userId: string) => Promise<void>;
   onSetMemberRole: (userId: string, role: Role) => Promise<void>;
   onDeleteUser: (userId: string) => Promise<void>;
@@ -47,6 +50,7 @@ export function WorkspaceSettingsDialog({
   onRename,
   onSetAccent,
   onDelete,
+  onAddMember,
   onRemoveMember,
   onSetMemberRole,
   onDeleteUser,
@@ -151,17 +155,23 @@ export function WorkspaceSettingsDialog({
   // member of this workspace. That's where the test accounts Tommy
   // signed in as end up, since they're their own workspace's owners
   // but not members of anyone else's. Owner-only surface.
-  const workspaceMemberIds = useMemo(
-    () => new Set(workspaceMembers.map((m) => m.userId)),
-    [workspaceMembers],
+  const addableUsers = useMemo(
+    () => usersNotInWorkspace(users, members, workspace.id, meId),
+    [users, members, workspace.id, meId],
   );
-  const otherUsers = useMemo(
-    () =>
-      users
-        .filter((u) => u.id !== meId && !workspaceMemberIds.has(u.id))
-        .sort((a, b) => a.name.localeCompare(b.name)),
-    [users, workspaceMemberIds, meId],
-  );
+
+  async function handleAdd(userId: string) {
+    if (busyUserId) return;
+    setError(null);
+    setBusyUserId(userId);
+    try {
+      await onAddMember(userId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't add that person.");
+    } finally {
+      setBusyUserId(null);
+    }
+  }
 
   const [confirmDeleteUserId, setConfirmDeleteUserId] = useState<string | null>(null);
 
@@ -384,20 +394,35 @@ export function WorkspaceSettingsDialog({
                         );
                       })}
                     </ul>
+                    {canManageMembers && (
+                      <div className="mt-3 rounded-[8px] border border-neutral-100 p-2.5">
+                        <div className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-mute">
+                          Add people
+                        </div>
+                        <UserLookup
+                          users={addableUsers}
+                          busy={!!busyUserId}
+                          autoFocus={false}
+                          placeholder="Search Helios Hub users"
+                          emptyLabel="Everyone on Helios Hub is already in this workspace."
+                          onSelect={(user) => void handleAdd(user.id)}
+                        />
+                      </div>
+                    )}
                   </section>
 
                   {/* Other accounts — owner-only cleanup surface for
                       users who aren't in this workspace (leftover
                       test-signin accounts, etc). Nukes the whole
                       account server-side. */}
-                  {myRole === "owner" && otherUsers.length > 0 && (
+                  {myRole === "owner" && addableUsers.length > 0 && (
                     <section className="mt-6">
                       <div className="mb-2 flex items-center justify-between">
                         <span className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-mute">
                           Other accounts
                         </span>
                         <span className="text-[11px] tabular-nums text-ink-mute">
-                          {otherUsers.length}
+                          {addableUsers.length}
                         </span>
                       </div>
                       <p className="mb-3 text-[11.5px] leading-[1.45] text-ink-mute">
@@ -406,7 +431,7 @@ export function WorkspaceSettingsDialog({
                         own — permanent.
                       </p>
                       <ul className="flex flex-col gap-1">
-                        {otherUsers.map((u) => {
+                        {addableUsers.map((u) => {
                           const confirming = confirmDeleteUserId === u.id;
                           const busy = busyUserId === u.id;
                           return (

@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { CardRow } from "./CardRow";
 import { ViewShell } from "./ViewShell";
 import type { Board, Card, List, User } from "@/lib/trello/types";
+import { cardAssociatedWithUser } from "@/lib/trello/card-filter";
 
 const groupEnter = (i: number) => ({
   initial: { opacity: 0, y: 8 },
@@ -53,7 +54,7 @@ export function MyCardsView({
   );
 
   const mine = useMemo(
-    () => cards.filter((c) => c.assigneeIds.includes(me.id)),
+    () => cards.filter((c) => cardAssociatedWithUser(c, me.id)),
     [cards, me.id]
   );
 

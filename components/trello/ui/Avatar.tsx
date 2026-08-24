@@ -14,6 +14,8 @@ type Props = {
    *  the Avatar itself (one element) so the ring can't drift out of
    *  alignment with the colored fill. */
   stacked?: boolean;
+  /** Hover label. Defaults on so filter chips and card stacks show the name. */
+  tooltip?: boolean;
 };
 
 const sizes = {
@@ -31,30 +33,41 @@ export function Avatar({
   active,
   dim,
   stacked,
+  tooltip = true,
 }: Props) {
   const bg = `hsl(${hue} 55% 45%)`;
   return (
-    <span
-      className={cn(
-        // leading-none guarantees the initials sit visually centered
-        // instead of drifting because a parent inherited line-height
-        // pushes them off the flex cross-axis. Roboto's ascent/descent
-        // asymmetry makes this show up worst on smaller avatars.
-        "inline-flex items-center justify-center rounded-full font-body font-semibold leading-none text-white",
-        active && "ring-2 ring-helios-500 ring-offset-2 ring-offset-surface-base",
-        // Stack ring lives ON the avatar (not on a wrapper) so it
-        // cannot drift out of alignment. Dark-adapts to the card
-        // surface it lives on so it doesn't glow as a bright halo
-        // in dark mode.
-        stacked && "ring-2 ring-white dark:ring-[#232a38]",
-        dim && "opacity-35 saturate-50",
-        sizes[size],
-        className
-      )}
-      style={{ background: bg }}
-      title={name}
-    >
-      {initials(name)}
+    <span className="group/avatar relative inline-flex">
+      <span
+        className={cn(
+          // leading-none guarantees the initials sit visually centered
+          // instead of drifting because a parent inherited line-height
+          // pushes them off the flex cross-axis. Roboto's ascent/descent
+          // asymmetry makes this show up worst on smaller avatars.
+          "inline-flex items-center justify-center rounded-full font-body font-semibold leading-none text-white",
+          active && "ring-2 ring-helios-500 ring-offset-2 ring-offset-surface-base",
+          // Stack ring lives ON the avatar (not on a wrapper) so it
+          // cannot drift out of alignment. Dark-adapts to the card
+          // surface it lives on so it doesn't glow as a bright halo
+          // in dark mode.
+          stacked && "ring-2 ring-white dark:ring-[#232a38]",
+          dim && "opacity-35 saturate-50",
+          sizes[size],
+          className
+        )}
+        style={{ background: bg }}
+        title={name}
+      >
+        {initials(name)}
+      </span>
+      {tooltip && name ? (
+        <span
+          role="tooltip"
+          className="pointer-events-none absolute left-1/2 top-full z-30 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-[6px] bg-neutral-900 px-1.5 py-0.5 text-[11px] font-medium text-white opacity-0 shadow-sm transition-opacity delay-75 group-hover/avatar:opacity-100"
+        >
+          {name}
+        </span>
+      ) : null}
     </span>
   );
 }

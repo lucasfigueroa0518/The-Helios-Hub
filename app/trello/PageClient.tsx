@@ -15,6 +15,7 @@ import { ProfileView } from "@/components/trello/views/ProfileView";
 import { HomeView } from "@/components/trello/views/HomeView";
 import { useBoardState } from "@/lib/trello/useBoardState";
 import { parseTrelloSearch, trelloHref } from "@/lib/trello/viewUrl";
+import { usersInWorkspace, usersNotInWorkspace } from "@/lib/trello/workspace-access";
 import type { LoadedWorkspace } from "@/app/trello/actions/loadWorkspace";
 
 const paneEnter = {
@@ -51,6 +52,12 @@ export default function PageClient({ initial }: { initial: LoadedWorkspace }) {
     s.activeView === "board"
       ? s.boards.find((b) => b.id === s.activeBoardId)
       : null;
+  const boardFilterUsers = activeBoard
+    ? usersInWorkspace(s.users, s.workspaceMembers, activeBoard.workspaceId)
+    : [];
+  const boardShareCandidates = activeBoard
+    ? usersNotInWorkspace(s.users, s.workspaceMembers, activeBoard.workspaceId, me.id)
+    : [];
   const rootThemeClass = activeBoard?.theme === "dark" ? "dark" : "";
 
   return (
@@ -87,9 +94,9 @@ export default function PageClient({ initial }: { initial: LoadedWorkspace }) {
           onSetBoardCanvas={(canvas) => s.setBoardCanvas(s.activeBoardId, canvas)}
           onArchiveBoard={() => s.archiveBoard(s.activeBoardId)}
           onDeleteBoard={() => s.deleteBoard(s.activeBoardId)}
-          onShareBoard={(email, firstName, lastName) =>
-            s.shareBoard(s.activeBoardId, email, firstName, lastName)
-          }
+          onShareBoard={(userId) => s.shareBoard(s.activeBoardId, userId)}
+          filterUsers={boardFilterUsers}
+          shareCandidates={boardShareCandidates}
         />
 
         <div className="relative flex min-h-0 flex-1 flex-col">
@@ -98,9 +105,7 @@ export default function PageClient({ initial }: { initial: LoadedWorkspace }) {
               key={
                 s.activeView === "board"
                   ? `board:${s.activeBoardId}`
-                  : s.activeView === "home"
-                    ? `home:${s.activeWorkspaceId}`
-                    : s.activeView
+                  : s.activeView
               }
               {...paneEnter}
               className="flex min-h-0 flex-1 flex-col"
@@ -109,9 +114,6 @@ export default function PageClient({ initial }: { initial: LoadedWorkspace }) {
                 <HomeView
                   me={me}
                   profile={s.profile}
-                  workspace={
-                    s.workspaces.find((w) => w.id === s.activeWorkspaceId)!
-                  }
                   workspaces={s.workspaces}
                   members={s.workspaceMembers}
                   boards={s.boards}
@@ -123,7 +125,6 @@ export default function PageClient({ initial }: { initial: LoadedWorkspace }) {
                     router.push(trelloHref("board", id));
                   }}
                   onOpenCard={s.setActiveCardId}
-                  onSelectWorkspace={(id) => s.setActiveWorkspaceId(id)}
                   onSelectView={(v) => router.push(trelloHref(v))}
                   onNewBoardInWorkspace={(workspaceId) => {
                     setNewBoardWorkspaceId(workspaceId);
@@ -134,6 +135,7 @@ export default function PageClient({ initial }: { initial: LoadedWorkspace }) {
                   onRenameWorkspace={s.renameWorkspace}
                   onSetWorkspaceAccent={s.setWorkspaceAccent}
                   onDeleteWorkspace={s.deleteWorkspace}
+                  onAddWorkspaceMember={s.addWorkspaceMember}
                   onRemoveWorkspaceMember={s.removeWorkspaceMember}
                   onSetWorkspaceMemberRole={s.setWorkspaceMemberRole}
                   onDeleteUser={s.deleteUser}

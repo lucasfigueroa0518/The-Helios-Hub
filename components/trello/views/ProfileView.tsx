@@ -8,6 +8,7 @@ import { Button } from "@/components/trello/ui/Button";
 import { cn, initials } from "@/lib/trello/utils";
 import { HUE_PRESETS, type Availability, type UserProfile } from "@/lib/trello/types";
 import type { Board, Card, List, User } from "@/lib/trello/types";
+import { cardAssociatedWithUser } from "@/lib/trello/card-filter";
 import type { ProfileEditPatch } from "@/lib/trello/useBoardState";
 import {
   Bell,
@@ -78,7 +79,7 @@ export function ProfileView({
 }: Props) {
   const stats = useStats(cards, me.id);
   const touched = useMemo(() => {
-    const set = new Set(cards.filter((c) => c.assigneeIds.includes(me.id)).map((c) => c.boardId));
+    const set = new Set(cards.filter((c) => cardAssociatedWithUser(c, me.id)).map((c) => c.boardId));
     return boards.filter((b) => set.has(b.id));
   }, [cards, boards, me.id]);
   const recent = useRecentActivity(cards, me.id, 10);
@@ -111,7 +112,7 @@ export function ProfileView({
                     cardCount={
                       cards.filter(
                         (c) =>
-                          c.boardId === b.id && c.assigneeIds.includes(me.id)
+                          c.boardId === b.id && cardAssociatedWithUser(c, me.id)
                       ).length
                     }
                     onToggle={() => onToggleFavoriteBoard(b.id)}
@@ -771,7 +772,7 @@ function useStats(cards: Card[], userId: string) {
     let overdue = 0;
 
     for (const c of cards) {
-      const mine = c.assigneeIds.includes(userId);
+      const mine = cardAssociatedWithUser(c, userId);
       if (mine && !c.complete) open++;
       if (mine && c.complete) {
         // Best-effort: use most recent "checked" activity by this user

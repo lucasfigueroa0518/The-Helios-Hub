@@ -36,7 +36,9 @@ type Props = {
   onSetBoardCanvas: (canvas: string | null) => void;
   onArchiveBoard: () => void;
   onDeleteBoard: () => void;
-  onShareBoard: (email: string, firstName: string, lastName: string) => Promise<void>;
+  onShareBoard: (userId: string) => Promise<void>;
+  filterUsers: User[];
+  shareCandidates: User[];
 };
 
 export function Topbar({
@@ -61,6 +63,8 @@ export function Topbar({
   onArchiveBoard,
   onDeleteBoard,
   onShareBoard,
+  filterUsers,
+  shareCandidates,
 }: Props) {
   const searchRef = useRef<HTMLInputElement>(null);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -89,7 +93,7 @@ export function Topbar({
   }, []);
 
   return (
-    <header className="relative flex items-center gap-2 border-b border-neutral-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-neutral-950 sm:gap-3 sm:px-6 sm:py-3">
+    <header className="relative flex items-center gap-2 overflow-visible border-b border-neutral-200 bg-white px-3 py-2 dark:border-white/10 dark:bg-neutral-950 sm:gap-3 sm:px-6 sm:py-3">
       {/* Burger menu button on mobile */}
       <button
         type="button"
@@ -121,6 +125,7 @@ export function Topbar({
           {activeView === "board" && (
             <BoardMenu
               board={board}
+              shareCandidates={shareCandidates}
               onRename={onRenameBoard}
               onSetAccent={onSetBoardAccent}
               onSetTheme={onSetBoardTheme}
@@ -215,10 +220,10 @@ export function Topbar({
         </button>
       )}
 
-      {/* Assignee filter — desktop multi-user */}
-      {!isHome && users.length > 1 && (
-        <div className="hidden items-center gap-1 md:flex">
-          {users.map((u) => {
+      {/* Assignee filter — people in this board's workspace */}
+      {activeView === "board" && filterUsers.length > 0 && (
+        <div className="hidden items-center gap-1 overflow-visible md:flex">
+          {filterUsers.map((u) => {
             const active = filterAssignees.includes(u.id);
             const dim = filterAssignees.length > 0 && !active;
             return (
@@ -226,10 +231,11 @@ export function Topbar({
                 key={u.id}
                 onClick={() => onToggleAssignee(u.id)}
                 aria-label={`Filter by ${u.name}`}
+                title={u.name}
                 whileHover={{ y: -1, scale: 1.04 }}
                 whileTap={{ scale: 0.9 }}
                 transition={tapSpring}
-                className="outline-none focus-visible:ring-2 focus-visible:ring-helios-500/60 rounded-full"
+                className="group outline-none focus-visible:ring-2 focus-visible:ring-helios-500/60 rounded-full"
               >
                 <Avatar name={u.name} hue={u.hue} size="md" active={active} dim={dim} />
               </motion.button>

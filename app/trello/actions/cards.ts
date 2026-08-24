@@ -38,6 +38,12 @@ export async function createCard(args: CreateCardArgs) {
       [args.id, args.boardId, args.listId, args.title, (max.rows[0]?.max ?? 0) + POS_STEP, session.userId],
     );
     await client.query(
+      `INSERT INTO boards.card_members (card_id, user_id)
+       VALUES ($1, $2)
+       ON CONFLICT (card_id, user_id) DO NOTHING`,
+      [args.id, session.userId],
+    );
+    await client.query(
       `INSERT INTO boards.activity (id, user_id, card_id, board_id, action_type, data)
        VALUES ($1, $2, $3, $4, 'created', $5::jsonb)`,
       [args.activityId, session.userId, args.id, args.boardId, JSON.stringify({ detail: 'created this card' })],
@@ -212,6 +218,12 @@ export async function copyCard(args: CopyCardArgs) {
        SELECT $1, user_id FROM boards.card_members WHERE card_id = $2
        ON CONFLICT (card_id, user_id) DO NOTHING`,
       [args.newId, args.srcId],
+    );
+    await client.query(
+      `INSERT INTO boards.card_members (card_id, user_id)
+       VALUES ($1, $2)
+       ON CONFLICT (card_id, user_id) DO NOTHING`,
+      [args.newId, session.userId],
     );
     await client.query(
       `INSERT INTO boards.activity (id, user_id, card_id, board_id, action_type, data)

@@ -2,8 +2,43 @@
 
 import { dbQuery, dbTransaction } from '@/lib/db';
 import { workspaceRole } from '@/lib/trello/access';
+import { ensureTrelloProfile } from '@/lib/trello/ensure-profile';
 import { requireTrelloSession } from '@/lib/trello/session';
 import type { WorkspaceRole } from '@/lib/trello/types';
+
+export async function addWorkspaceMember(
+  workspaceId: string,
+  targetUserId: string,
+): Promise<{ alreadyMember: boolean }> {
+  const session = await requireTrelloSession();
+  const meId = session.userId;
+  if (meId === targetUserId) throw new Error("You're already in this workspace.");
+
+  const callerRole = await workspaceRole(workspaceId, meId);
+  if (!callerRole) throw new Error("You don't have access to this workspace.");
+
+  const existing = await dbQuery<{ id: string }>(
+    'SELECT id FROM boards.workspace_members WHERE workspace_id = $1 AND user_id = $2 LIMIT 1',
+    [workspaceId, targetUserId],
+  );
+  if (existing.rows[0]) return { alreadyMember: true };
+
+  const user = await dbQuery<{ id: string; email: string }>(
+    'SELECT id, email FROM outreach.users WHERE id = $1 LIMIT 1',
+    [targetUserId],
+  );
+  if (!user.rows[0]) throw new Error("That person isn't on Helios Hub.");
+
+  await ensureTrelloProfile(user.rows[0].id, user.rows[0].email);
+
+  await dbQuery(
+    `INSERT INTO boards.workspace_members (workspace_id, user_id, role)
+     VALUES ($1, $2, 'member')
+     ON CONFLICT (workspace_id, user_id) DO NOTHING`,
+    [workspaceId, targetUserId],
+  );
+  return { alreadyMember: false };
+}
 
 export async function removeWorkspaceMember(
   workspaceId: string,

@@ -61,9 +61,7 @@ export async function loadWorkspace(): Promise<LoadedWorkspace> {
             p.first_name, p.last_name, p.role, p.hue
        FROM outreach.users u
        LEFT JOIN boards.user_profiles p ON p.user_id = u.id
-      WHERE EXISTS (SELECT 1 FROM boards.user_profiles x WHERE x.user_id = u.id)
-         OR EXISTS (SELECT 1 FROM boards.workspace_members wm WHERE wm.user_id = u.id)
-         OR EXISTS (SELECT 1 FROM boards.board_members bm WHERE bm.user_id = u.id)`,
+      ORDER BY u.display_name ASC, u.email ASC`,
   );
 
   const workspaceMembersRows = await dbQuery<{
@@ -222,6 +220,7 @@ export async function loadWorkspace(): Promise<LoadedWorkspace> {
     const last = u.last_name ?? u.display_name.split(' ').slice(1).join(' ');
     return {
       id: u.id,
+      email: u.email,
       firstName: first,
       lastName: last,
       name: `${first} ${last}`.trim() || u.display_name,
@@ -231,6 +230,7 @@ export async function loadWorkspace(): Promise<LoadedWorkspace> {
   });
   const me = users.find((u) => u.id === meId) ?? {
     id: meId,
+    email: session.email,
     firstName: session.email.split('@')[0] ?? 'You',
     lastName: '',
     name: session.email,

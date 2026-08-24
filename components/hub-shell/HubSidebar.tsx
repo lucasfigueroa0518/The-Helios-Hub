@@ -97,24 +97,24 @@ export function HubSidebar({ email }: { email: string }) {
       {/* Desktop Sidebar (hidden on mobile via CSS @media) */}
       <aside className={`hub-sidebar${collapsed ? ' is-collapsed' : ''}`}>
         <div className="hub-sidebar__header">
-          <Link href="/" className="hub-sidebar__brand" aria-label="The Helios Hub">
-            <div className="hub-sidebar__logo-wrap">
-              <Image
-                src="/trello/helios-logo-sm.png"
-                alt=""
-                width={22}
-                height={22}
-                className="hub-sidebar__logo"
-                priority
-              />
-            </div>
-            {!collapsed && (
+          {!collapsed && (
+            <Link href="/" className="hub-sidebar__brand" aria-label="The Helios Hub">
+              <div className="hub-sidebar__logo-wrap">
+                <Image
+                  src="/trello/helios-logo-sm.png"
+                  alt=""
+                  width={22}
+                  height={22}
+                  className="hub-sidebar__logo"
+                  priority
+                />
+              </div>
               <span className="hub-sidebar__brand-copy">
                 <span className="hub-sidebar__brand-title">Helios Hub</span>
                 <span className="hub-sidebar__brand-sub">Workspace</span>
               </span>
-            )}
-          </Link>
+            </Link>
+          )}
           <button
             type="button"
             className="hub-sidebar__collapse"

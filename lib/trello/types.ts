@@ -7,6 +7,7 @@ export type FieldId = string;
 
 export type User = {
   id: UserId;
+  email?: string;
   firstName: string;
   lastName: string;
   name: string;

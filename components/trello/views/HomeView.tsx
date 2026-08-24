@@ -40,7 +40,6 @@ import { WorkspaceSettingsDialog } from "@/components/trello/shell/WorkspaceSett
 type Props = {
   me: User;
   profile: UserProfile;
-  workspace: Workspace;
   workspaces: Workspace[];
   members: WorkspaceMember[];
   boards: Board[];
@@ -50,7 +49,6 @@ type Props = {
   favoriteBoardIds: string[];
   onEnterBoard: (boardId: string) => void;
   onOpenCard: (cardId: string) => void;
-  onSelectWorkspace: (workspaceId: string) => void;
   onSelectView: (v: "sv_mine" | "sv_week" | "sv_activity") => void;
   /** Open the New Board dialog with a specific workspace pre-selected. */
   onNewBoardInWorkspace: (workspaceId: string) => void;
@@ -60,6 +58,7 @@ type Props = {
   onRenameWorkspace: (id: string, name: string) => void;
   onSetWorkspaceAccent: (id: string, accent: string) => void;
   onDeleteWorkspace: (id: string) => Promise<void>;
+  onAddWorkspaceMember: (workspaceId: string, userId: string) => Promise<void>;
   onRemoveWorkspaceMember: (workspaceId: string, userId: string) => Promise<void>;
   onSetWorkspaceMemberRole: (
     workspaceId: string,
@@ -71,14 +70,12 @@ type Props = {
 
 export function HomeView({
   me,
-  workspace,
   workspaces,
   members,
   boards,
   cards,
   favoriteBoardIds,
   onEnterBoard,
-  onSelectWorkspace,
   onNewBoardInWorkspace,
   onMoveBoardToWorkspace,
   users,
@@ -86,6 +83,7 @@ export function HomeView({
   onRenameWorkspace,
   onSetWorkspaceAccent,
   onDeleteWorkspace,
+  onAddWorkspaceMember,
   onRemoveWorkspaceMember,
   onSetWorkspaceMemberRole,
   onDeleteUser,
@@ -246,12 +244,10 @@ export function HomeView({
                     workspace={ws}
                     boards={wsBoards}
                     favoriteBoardIds={favoriteBoardIds}
-                    isCurrent={ws.id === workspace.id}
                     isDropEnabled={owned}
                     isDragActive={draggingBoardId !== null}
                     canManage={myRole === "owner" || myRole === "admin"}
                     onEnterBoard={onEnterBoard}
-                    onSelectWorkspace={onSelectWorkspace}
                     onNewBoard={() => onNewBoardInWorkspace(ws.id)}
                     onOpenSettings={() => setSettingsForWorkspaceId(ws.id)}
                   />
@@ -307,6 +303,7 @@ export function HomeView({
           onRename={(name) => onRenameWorkspace(settingsWorkspace.id, name)}
           onSetAccent={(accent) => onSetWorkspaceAccent(settingsWorkspace.id, accent)}
           onDelete={() => onDeleteWorkspace(settingsWorkspace.id)}
+          onAddMember={(userId) => onAddWorkspaceMember(settingsWorkspace.id, userId)}
           onRemoveMember={(userId) => onRemoveWorkspaceMember(settingsWorkspace.id, userId)}
           onSetMemberRole={(userId, role) =>
             onSetWorkspaceMemberRole(settingsWorkspace.id, userId, role)
@@ -326,24 +323,20 @@ function WorkspaceGroup({
   workspace,
   boards,
   favoriteBoardIds,
-  isCurrent,
   isDropEnabled,
   isDragActive,
   canManage,
   onEnterBoard,
-  onSelectWorkspace,
   onNewBoard,
   onOpenSettings,
 }: {
   workspace: Workspace;
   boards: Board[];
   favoriteBoardIds: string[];
-  isCurrent: boolean;
   isDropEnabled: boolean;
   isDragActive: boolean;
   canManage: boolean;
   onEnterBoard: (id: string) => void;
-  onSelectWorkspace: (id: string) => void;
   onNewBoard: () => void;
   onOpenSettings: () => void;
 }) {
@@ -354,16 +347,7 @@ function WorkspaceGroup({
   return (
     <div>
       <div className="mb-4 flex items-center gap-1">
-      <button
-        type="button"
-        onClick={() => onSelectWorkspace(workspace.id)}
-        className={cn(
-          "inline-flex items-center gap-3 rounded-full px-2 py-1 -mx-2 outline-none",
-          "text-ink-hi transition-colors hover:bg-neutral-50",
-          "focus-visible:ring-2 focus-visible:ring-helios-500/50",
-        )}
-        aria-label={`Switch to ${workspace.name}`}
-      >
+      <div className="inline-flex items-center gap-3 px-2 py-1 -mx-2 text-ink-hi">
         <span
           className="grid h-8 w-8 place-items-center rounded-[8px] text-[13px] font-display text-white shadow-sm"
           style={{
@@ -375,12 +359,7 @@ function WorkspaceGroup({
         <span className="font-display text-[16px] tracking-[-0.01em]">
           {workspace.name}
         </span>
-        {isCurrent && (
-          <span className="rounded-full bg-heliosGreen-600/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-heliosGreen-600">
-            Current
-          </span>
-        )}
-      </button>
+      </div>
       {canManage && (
         <button
           type="button"

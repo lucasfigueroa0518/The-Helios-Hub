@@ -425,6 +425,7 @@ export function Sidebar({
             onSetWorkspaceAccent(settingsWorkspace.id, accent)
           }
           onDelete={() => onDeleteWorkspace(settingsWorkspace.id)}
+          onAddMember={async () => {}}
           onRemoveMember={(userId) =>
             onRemoveWorkspaceMember(settingsWorkspace.id, userId)
           }

@@ -157,7 +157,7 @@ body:has(.trello-root) .hub-app__main,
 
 .hub-sidebar.is-collapsed .hub-sidebar__header {
   justify-content: center;
-  padding: 1.15rem 0.6rem 1rem;
+  padding: 0.9rem 0.6rem;
 }
 
 .hub-sidebar__brand {

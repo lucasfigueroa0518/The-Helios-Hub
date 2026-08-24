@@ -5,7 +5,8 @@ import * as Popover from "@radix-ui/react-popover";
 import { HexColorPicker } from "react-colorful";
 import { MoreHorizontal, Pencil, Palette, Archive, Trash2, Check, UserPlus, Paintbrush, Sun, Moon, Pipette, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/trello/utils";
-import type { Board } from "@/lib/trello/types";
+import type { Board, User } from "@/lib/trello/types";
+import { UserLookup } from "@/components/trello/shell/UserLookup";
 
 /**
  * Same tight palette as NewBoardDialog — keeps boards visually
@@ -21,13 +22,14 @@ const ACCENTS = [
 
 type Props = {
   board: Board;
+  shareCandidates: User[];
   onRename: (name: string) => void;
   onSetAccent: (accent: string) => void;
   onSetTheme: (theme: "light" | "dark") => void;
   onSetCanvas: (canvas: string | null) => void;
   onArchive: () => void;
   onDelete: () => void;
-  onShare: (email: string, firstName: string, lastName: string) => Promise<void>;
+  onShare: (userId: string) => Promise<void>;
 };
 
 type Mode = "root" | "rename" | "accent" | "canvas" | "share" | "confirm-delete";
@@ -71,25 +73,18 @@ const CANVAS_GRADIENTS = [
   { value: "linear-gradient(135deg, #4A1C15 0%, #7B2E1E 100%)",              label: "Wine" },
 ] as const;
 
-export function BoardMenu({ board, onRename, onSetAccent, onSetTheme, onSetCanvas, onArchive, onDelete, onShare }: Props) {
+export function BoardMenu({ board, shareCandidates, onRename, onSetAccent, onSetTheme, onSetCanvas, onArchive, onDelete, onShare }: Props) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("root");
   const [renameDraft, setRenameDraft] = useState(board.name);
   const renameRef = useRef<HTMLInputElement>(null);
-  const [shareEmail, setShareEmail] = useState("");
-  const [shareFirst, setShareFirst] = useState("");
-  const [shareLast, setShareLast] = useState("");
   const [shareBusy, setShareBusy] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
-  const shareEmailRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) {
       setMode("root");
       setRenameDraft(board.name);
-      setShareEmail("");
-      setShareFirst("");
-      setShareLast("");
       setShareError(null);
     }
   }, [open, board.name]);
@@ -100,9 +95,6 @@ export function BoardMenu({ board, onRename, onSetAccent, onSetTheme, onSetCanva
         renameRef.current?.focus();
         renameRef.current?.select();
       });
-    }
-    if (mode === "share") {
-      requestAnimationFrame(() => shareEmailRef.current?.focus());
     }
   }, [mode]);
 
@@ -122,12 +114,12 @@ export function BoardMenu({ board, onRename, onSetAccent, onSetTheme, onSetCanva
     setOpen(false);
   }
 
-  async function submitShare() {
+  async function submitShare(userId: string) {
     if (shareBusy) return;
     setShareError(null);
     setShareBusy(true);
     try {
-      await onShare(shareEmail, shareFirst, shareLast);
+      await onShare(userId);
       setOpen(false);
     } catch (err) {
       setShareError(
@@ -153,7 +145,7 @@ export function BoardMenu({ board, onRename, onSetAccent, onSetTheme, onSetCanva
           side="bottom"
           align="start"
           sideOffset={6}
-          className="z-[60] w-60 rounded-[10px] surface-modal p-1.5 shadow-modal"
+          className="z-[60] w-72 rounded-[10px] surface-modal p-1.5 shadow-modal"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           {mode === "root" && (
@@ -204,75 +196,27 @@ export function BoardMenu({ board, onRename, onSetAccent, onSetTheme, onSetCanva
               <div className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-mute">
                 Share board
               </div>
-              <div className="mb-2 space-y-1.5">
-                <input
-                  ref={shareEmailRef}
-                  type="email"
-                  value={shareEmail}
-                  onChange={(e) => setShareEmail(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      submitShare();
-                    }
-                    if (e.key === "Escape") setMode("root");
-                  }}
-                  placeholder="Email"
-                  className="w-full rounded-[6px] border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-[13px] text-ink-hi outline-none focus:border-helios-500/60"
-                />
-                <div className="flex gap-1.5">
-                  <input
-                    value={shareFirst}
-                    onChange={(e) => setShareFirst(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        submitShare();
-                      }
-                      if (e.key === "Escape") setMode("root");
-                    }}
-                    placeholder="First name"
-                    className="w-1/2 rounded-[6px] border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-[13px] text-ink-hi outline-none focus:border-helios-500/60"
-                  />
-                  <input
-                    value={shareLast}
-                    onChange={(e) => setShareLast(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        submitShare();
-                      }
-                      if (e.key === "Escape") setMode("root");
-                    }}
-                    placeholder="Last name"
-                    className="w-1/2 rounded-[6px] border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-[13px] text-ink-hi outline-none focus:border-helios-500/60"
-                  />
-                </div>
-              </div>
+              <p className="mb-2.5 text-[11px] leading-[1.4] text-ink-mute">
+                Add someone from Helios Hub. They’ll get every board in this workspace.
+              </p>
+              <UserLookup
+                users={shareCandidates}
+                busy={shareBusy}
+                placeholder="Search people"
+                emptyLabel="Everyone on Helios Hub already has this workspace."
+                onSelect={(user) => void submitShare(user.id)}
+              />
               {shareError && (
-                <div className="mb-2 text-[11.5px] text-danger">
+                <div className="mt-2 text-[11.5px] text-danger">
                   {shareError}
                 </div>
               )}
-              <p className="mb-2.5 text-[11px] leading-[1.4] text-ink-mute">
-                If this email is new, we&apos;ll pre-create the account so
-                they see the board when they sign in.
-              </p>
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setMode("root")}
-                  className="flex-1 rounded-[6px] px-2 py-1.5 text-[12.5px] text-ink-mid hover:bg-neutral-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={submitShare}
-                  disabled={shareBusy || !shareEmail.trim() || !shareFirst.trim()}
-                  className="flex-1 rounded-[6px] bg-helios-500 px-2 py-1.5 text-[12.5px] font-medium text-white hover:bg-helios-600 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {shareBusy ? "Sharing…" : "Share"}
-                </button>
-              </div>
+              <button
+                onClick={() => setMode("root")}
+                className="mt-2 w-full rounded-[6px] px-2 py-1.5 text-[12.5px] text-ink-mid hover:bg-neutral-50"
+              >
+                Back
+              </button>
             </div>
           )}
 
