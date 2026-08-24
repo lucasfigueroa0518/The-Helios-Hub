@@ -108,6 +108,14 @@ const US_NEIGHBORS: Record<string, string[]> = {
   Wyoming: ['Colorado', 'Idaho', 'Montana', 'Nebraska', 'South Dakota', 'Utah'],
 };
 
+export const US_STATE_NEIGHBORS: Record<string, readonly string[]> = US_NEIGHBORS;
+
+export function formatUsStateAliasCatalog(): string {
+  return Object.entries(US_STATE_BY_ALIAS)
+    .map(([alias, name]) => `${alias} = ${name}`)
+    .join('\n');
+}
+
 const COUNTRY_ALIASES: Array<{ needles: string[]; country: string; widen: string[] }> = [
   { needles: ['united states', 'usa', 'u.s.', 'u.s.a', 'america'], country: 'United States', widen: ['United States'] },
   {
@@ -123,6 +131,18 @@ const COUNTRY_ALIASES: Array<{ needles: string[]; country: string; widen: string
 function normalizeKey(value: string): string {
   return value.trim().toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ');
 }
+
+export const US_STATE_NAMES = [
+  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado',
+  'Connecticut', 'Delaware', 'District of Columbia', 'Florida', 'Georgia',
+  'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky',
+  'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota',
+  'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire',
+  'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota',
+  'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina',
+  'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia',
+  'Washington', 'West Virginia', 'Wisconsin', 'Wyoming',
+] as const;
 
 export function resolveUsState(location: string): string | null {
   const key = normalizeKey(location);

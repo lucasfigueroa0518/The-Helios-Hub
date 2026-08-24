@@ -78,6 +78,7 @@ import {
   fillMessageTemplates,
   MISSING_TEMPLATE_FIELDS_ERROR,
   parseMessageMode,
+  rewriteHrefsInMarkup,
   type MessageMode,
 } from '@/lib/drafting/message-template';
 import { campaignRampDelayMs } from '@/lib/drafting/provider-admission';
@@ -265,8 +266,8 @@ async function loadCampaignMessageSettings(campaignId: string): Promise<Campaign
   const row = rows[0];
   return {
     messageMode: parseMessageMode(row?.message_mode),
-    subjectTemplate: row?.message_subject_template ?? '',
-    bodyTemplate: row?.message_body_template ?? '',
+    subjectTemplate: rewriteHrefsInMarkup(row?.message_subject_template ?? ''),
+    bodyTemplate: rewriteHrefsInMarkup(row?.message_body_template ?? ''),
     includeSignature: row?.include_signature !== false,
   };
 }

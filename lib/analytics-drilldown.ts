@@ -427,7 +427,11 @@ export async function getMetricDrilldown(input: AnalyticsDrilldownInput): Promis
       lead_company: r.company_name,
       lead_email: r.email_primary,
       campaign_name: r.campaign_name,
-      status_or_event: fact?.is_outreached ? (status === r.state ? 'Outreached' : status) : (status === r.state ? 'Wasted' : status),
+      status_or_event: fact?.is_outreached
+        ? (status === r.state ? 'Outreached' : status)
+        : fact?.is_auto_inflight
+          ? (status === r.state ? 'Queued' : status)
+          : (status === r.state ? 'Wasted' : status),
       cost_usd: fact?.stack_usd ?? null,
       occurred_at: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
       subject: r.subject,
@@ -447,7 +451,7 @@ export async function getMetricDrilldown(input: AnalyticsDrilldownInput): Promis
     items,
     notes: [
       'Total Hub Spend = Outreach Spend + Wasted Spend.',
-      'Each lead carries enrichment + drafting + worker + AgentMail. Unsent leads are wasted.',
+      'Each lead carries enrichment + drafting + worker + AgentMail. Unsent manual leads are wasted. Unsent auto-campaign leads are still queued.',
       'AgentMail is $0.002 per send. Apollo enrich is $59 / 2,500 credits. GCP worker is month-to-date prorated into this window.',
       'Dashboard summaries and leftover drafting opening balances are unallocated wasted spend.',
     ],

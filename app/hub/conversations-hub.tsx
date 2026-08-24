@@ -4,6 +4,12 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { X } from 'lucide-react';
+import {
+  ChoiceList,
+  FilterAccordion,
+  MobileFilterBar,
+  MobileFilterMenu,
+} from '@/app/components/mobile-filter-menu';
 
 import { hubGetJson } from '@/app/hub/hub-data';
 import { HubLoadingSpinner } from '@/app/hub/hub-loading';
@@ -74,6 +80,8 @@ export function ConversationsHub() {
   const [loading, setLoading] = useState(true);
   const [detailId, setDetailId] = useState<string | null>(threadParam);
   const [thread, setThread] = useState<ConversationThread | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [openSection, setOpenSection] = useState<'status' | 'campaign' | null>(null);
   const hasDataRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -158,7 +166,16 @@ export function ConversationsHub() {
           </div>
         </div>
         <div className="card__body">
-          <div className="stat-tile-row" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+          <MobileFilterBar
+            title="Filters"
+            summary={[
+              filters.find((entry) => entry.key === filter)?.label ?? 'Conversations',
+              campaignId ? (campaigns.find((c) => c.id === campaignId)?.name ?? 'Campaign') : 'All campaigns',
+            ].join(' · ')}
+            onOpen={() => setMenuOpen(true)}
+          />
+
+          <div className="stat-tile-row conversations-stats hub-desktop-toolbar" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
             {filters.map((entry) => (
               <button
                 key={entry.key}
@@ -173,7 +190,7 @@ export function ConversationsHub() {
             ))}
           </div>
 
-          <div className="send-queue-toolbar" style={{ marginBottom: '1rem' }}>
+          <div className="send-queue-toolbar hub-desktop-toolbar" style={{ marginBottom: '1rem' }}>
             <label className="send-queue-filter">
               <span>Campaign</span>
               <select
@@ -198,7 +215,8 @@ export function ConversationsHub() {
           ) : null}
 
           {data && data.items.length > 0 ? (
-            <div className="table-wrap">
+            <>
+            <div className="table-wrap conversations-table">
               <table className="data-table">
                 <thead>
                   <tr>
@@ -237,9 +255,70 @@ export function ConversationsHub() {
                 </tbody>
               </table>
             </div>
+            <div className="conversation-cards">
+              {data.items.map((item) => (
+                <button
+                  key={item.email_send_id}
+                  type="button"
+                  className="conversation-card"
+                  onClick={() => setDetailId(item.email_send_id)}
+                >
+                  <strong>{item.lead_name || item.lead_email}</strong>
+                  <span className="conversation-card__meta">
+                    {item.campaign_name}
+                    {item.lead_company ? ` · ${item.lead_company}` : ''}
+                  </span>
+                  <span className="conversation-card__meta">
+                    {item.last_inbound_preview || item.outbound_subject}
+                  </span>
+                  <span className={replyChipClass(item.reply_status)}>
+                    {replyStatusLabel(item.reply_status)} · {formatWhen(item.last_inbound_at)}
+                  </span>
+                </button>
+              ))}
+            </div>
+            </>
           ) : null}
         </div>
       </section>
+
+      <MobileFilterMenu
+        title="Conversation filters"
+        subtitle="Status and campaign."
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+      >
+        <FilterAccordion
+          label="Status"
+          value={filters.find((entry) => entry.key === filter)?.label ?? 'Conversations'}
+          open={openSection === 'status'}
+          onToggle={() => setOpenSection((current) => (current === 'status' ? null : 'status'))}
+        >
+          <ChoiceList
+            options={filters.map((entry) => ({
+              id: entry.key,
+              label: `${entry.label} · ${entry.value}`,
+            }))}
+            value={filter}
+            onChange={(id) => setFilter(id as ConversationFilter)}
+          />
+        </FilterAccordion>
+        <FilterAccordion
+          label="Campaign"
+          value={campaignId ? (campaigns.find((c) => c.id === campaignId)?.name ?? 'Campaign') : 'All campaigns'}
+          open={openSection === 'campaign'}
+          onToggle={() => setOpenSection((current) => (current === 'campaign' ? null : 'campaign'))}
+        >
+          <ChoiceList
+            options={[
+              { id: '', label: 'All campaigns' },
+              ...campaigns.map((campaign) => ({ id: campaign.id, label: campaign.name })),
+            ]}
+            value={campaignId}
+            onChange={setCampaignId}
+          />
+        </FilterAccordion>
+      </MobileFilterMenu>
 
       {detailId && thread ? (
         <div className="drawer-overlay" role="presentation" onClick={() => setDetailId(null)}>

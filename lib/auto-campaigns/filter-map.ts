@@ -8,39 +8,18 @@ import {
   type LeadAttributes,
   type PeopleSearchParams,
 } from '@/lib/auto-campaigns/types';
+import {
+  EASTERN_US_LOCATIONS,
+  isApolloEmployeeRange,
+  parseLocations,
+  parseTargeting,
+  type TargetingParse,
+} from '@/lib/auto-campaigns/targeting-parse';
+import { buildMappingSystemPrompt } from '@/lib/auto-campaigns/mapping-prompt';
 
 const SENIORITY_SET = new Set<string>(APOLLO_SENIORITIES);
 
-const SENIORITY_ALIASES: Array<{ needles: string[]; value: string; titles?: string[] }> = [
-  { needles: ['ceo', 'chief executive', 'c-suite', 'c suite', 'founder', 'co-founder', 'owner'], value: 'c_suite', titles: ['CEO', 'Founder', 'Co-Founder', 'Owner'] },
-  { needles: ['cto', 'chief technology', 'vp engineering', 'vice president'], value: 'vp', titles: ['CTO', 'VP Engineering', 'VP'] },
-  { needles: ['director', 'head of'], value: 'director', titles: ['Director', 'Head'] },
-  { needles: ['partner'], value: 'partner', titles: ['Partner'] },
-  { needles: ['manager'], value: 'manager' },
-  { needles: ['senior'], value: 'senior' },
-];
-
-const SIZE_RANGES: Array<{ needles: string[]; range: string }> = [
-  { needles: ['1-10', '1–10', 'micro', 'tiny'], range: '1,10' },
-  { needles: ['11-50', '11–50', 'small'], range: '11,50' },
-  { needles: ['51-200', '51–200', 'smb'], range: '51,200' },
-  { needles: ['201-500', '201–500'], range: '201,500' },
-  { needles: ['501-1000', '501–1,000', '501-1,000'], range: '501,1000' },
-  { needles: ['1000', '1,000+', 'enterprise', 'large'], range: '1001,10000' },
-  { needles: ['brokerage', 'boutique'], range: '11,50' },
-];
-
-const NORTHEAST = ['Maine', 'New Hampshire', 'Vermont', 'Massachusetts', 'Rhode Island', 'Connecticut', 'New York', 'New Jersey', 'Pennsylvania'];
-const MID_ATLANTIC = ['Delaware', 'Maryland', 'District of Columbia', 'Virginia', 'West Virginia'];
-const SOUTHEAST = ['North Carolina', 'South Carolina', 'Georgia', 'Florida', 'Alabama', 'Tennessee'];
-export const EASTERN_US_LOCATIONS = [...NORTHEAST, ...MID_ATLANTIC, ...SOUTHEAST];
-
-const GEO_PRESETS: Array<{ needles: string[]; locations: string[] }> = [
-  { needles: ['eastern united states', 'eastern us', 'east coast', 'eastern u.s'], locations: EASTERN_US_LOCATIONS },
-  { needles: ['northeast', 'new england'], locations: NORTHEAST },
-  { needles: ['mid-atlantic', 'mid atlantic'], locations: MID_ATLANTIC },
-  { needles: ['southeast', 'south east'], locations: SOUTHEAST },
-];
+export { EASTERN_US_LOCATIONS };
 
 type IndustryPreset = {
   needles: string[];
@@ -50,6 +29,7 @@ type IndustryPreset = {
   relatedKeywords: string[];
 };
 
+/** Offline title/keyword boost only. Never sent to Haiku. */
 const INDUSTRY_PRESETS: IndustryPreset[] = [
   {
     needles: ['janitor', 'cleaning', 'custodial', 'custodian', 'building services'],
@@ -88,21 +68,6 @@ const INDUSTRY_PRESETS: IndustryPreset[] = [
     relatedKeywords: ['it services', 'it consulting'],
   },
 ];
-
-const MAP_SYSTEM = `You map Autocampaign free-text targeting onto Apollo people-search filters.
-Apollo people search is free and does NOT accept organization industry IDs. Industry must be expressed as:
-1. person_titles — 4 to 10 job titles that people at those companies actually hold. Prefer titles that imply the industry (Janitorial Manager, Facilities Manager) over generic ones (Consultant, Professor, President) unless the user asked for that role.
-2. industry_keywords — 2 to 4 SHORT phrases (1-3 words) associated with those companies, e.g. "janitorial", "commercial cleaning". Never paste the user's full sentence. Never include company size, geography, or seniority in a keyword.
-3. related_person_titles and related_industry_keywords — adjacent on-industry alternatives, ordered nearest to furthest. Example: janitorial → facilities services, then building maintenance. Never widen to "any company". Later hops loosen titles but keep industry keywords.
-
-Also return:
-- person_seniorities: ONLY from owner,founder,c_suite,partner,vp,head,director,manager,senior,entry,intern. "Senior" → senior, manager, director (add owner/founder when company size is small).
-- person_locations AND organization_locations: Apollo understands cities, US states, and countries. Use state names like "New York", "Florida". Never use region labels like "United States - Northeast", "Eastern United States", or "East Coast" — expand those to the constituent states.
-- related_person_locations: hop-1 neighbors in the SAME country. Eastern US → adjacent inland US states (Ohio, Kentucky, Michigan…), never the UK/Australia. New York → NJ/CT/PA. London → rest of the United Kingdom. Never other countries. Never omit country by returning an empty list.
-- organization_num_employees_ranges: strings like "11,50".
-- q_keywords: copy industry_keywords[0].
-
-Return ONLY a JSON object. Never invent emails. Never call tools. Do not include organization_ids.`;
 
 function uniqueTrimmed(values: Array<string | undefined>, cap: number): string[] | undefined {
   const seen = new Set<string>();
@@ -143,21 +108,12 @@ function matchPreset<T extends { needles: string[] }>(text: string, presets: T[]
 }
 
 export function mapGeographyToApolloLocations(geography: string): string[] | undefined {
-  const preset = matchPreset(geography, GEO_PRESETS);
-  if (preset) return [...preset.locations];
-  const trimmed = geography.trim();
-  return trimmed ? [trimmed] : undefined;
+  const locations = parseLocations(geography);
+  return locations.length ? locations : undefined;
 }
 
 function industryPresetFor(industry: string): IndustryPreset | undefined {
   return matchPreset(industry, INDUSTRY_PRESETS);
-}
-
-function shortIndustryKeyword(industry: string): string | undefined {
-  const trimmed = industry.trim().replace(/[\\/|,]+/g, ' ').replace(/\s+/g, ' ');
-  if (!trimmed) return undefined;
-  const words = trimmed.split(' ').filter((word) => !/^(companies|company|industry|the|and)$/i.test(word));
-  return words.slice(0, 3).join(' ') || undefined;
 }
 
 export function hasIndustrySignal(params: PeopleSearchParams): boolean {
@@ -216,38 +172,21 @@ function assembleParams(input: {
 }
 
 export function mapAttributesHeuristic(attrs: LeadAttributes): PeopleSearchParams {
-  const seniorityText = attrs.seniority.toLowerCase();
-  const sizeText = attrs.business_size.toLowerCase();
-  const titles = new Set<string>();
-  const seniorities = new Set<string>();
-  for (const alias of SENIORITY_ALIASES) {
-    if (alias.needles.some((needle) => seniorityText.includes(needle))) {
-      seniorities.add(alias.value);
-      for (const title of alias.titles ?? []) titles.add(title);
-    }
-  }
-  if (sizeText.includes('11-50') || sizeText.includes('11–50') || sizeText.includes('1-10') || sizeText.includes('small')) {
-    seniorities.add('owner');
-    seniorities.add('founder');
-  }
+  const parsed = parseTargeting(attrs);
   const preset = industryPresetFor(attrs.industry);
-  if (preset) {
-    for (const title of preset.titles) titles.add(title);
-  } else if (titles.size === 0 && attrs.seniority.trim()) {
-    titles.add(attrs.seniority.trim());
-  }
-  const ranges = SIZE_RANGES
-    .filter((entry) => entry.needles.some((needle) => sizeText.includes(needle)))
-    .map((entry) => entry.range);
-  const keywords = preset?.keywords ?? (shortIndustryKeyword(attrs.industry) ? [shortIndustryKeyword(attrs.industry)!] : []);
+  const titles = [
+    ...parsed.seniority_titles,
+    ...(preset?.titles ?? []),
+  ];
+  const keywords = preset?.keywords ?? parsed.industry_tokens;
   return assembleParams({
-    titles: [...titles],
+    titles,
     relatedTitles: preset?.relatedTitles,
-    seniorities: [...seniorities],
-    locations: mapGeographyToApolloLocations(attrs.geography),
+    seniorities: parsed.seniority_tokens,
+    locations: parsed.locations,
     keywords,
     relatedKeywords: preset?.relatedKeywords,
-    ranges,
+    ranges: parsed.size_ranges,
   });
 }
 
@@ -262,6 +201,8 @@ function parseMappedJson(text: string): PeopleSearchParams | null {
       : industry_keywords?.[0];
     const locations = asStringArray(parsed.person_locations, 25)
       ?? asStringArray(parsed.organization_locations, 25);
+    const ranges = (asStringArray(parsed.organization_num_employees_ranges, 4) ?? [])
+      .filter((range) => isApolloEmployeeRange(range));
     return {
       person_titles: asStringArray(parsed.person_titles, 10),
       related_person_titles: asStringArray(parsed.related_person_titles, 10),
@@ -273,30 +214,42 @@ function parseMappedJson(text: string): PeopleSearchParams | null {
       q_keywords,
       industry_keywords,
       related_industry_keywords: asStringArray(parsed.related_industry_keywords, 4),
-      organization_num_employees_ranges: asStringArray(parsed.organization_num_employees_ranges, 4),
+      organization_num_employees_ranges: ranges.length ? ranges : undefined,
     };
   } catch {
     return null;
   }
 }
 
-function mergeWithFallback(mapped: PeopleSearchParams, fallback: PeopleSearchParams): PeopleSearchParams {
+function mergeWithFallback(
+  mapped: PeopleSearchParams,
+  fallback: PeopleSearchParams,
+  parsed: TargetingParse,
+): PeopleSearchParams {
   const industry_keywords = [
+    ...parsed.industry_tokens,
     ...(mapped.industry_keywords ?? []),
     ...(mapped.q_keywords ? [mapped.q_keywords] : []),
     ...(fallback.industry_keywords ?? []),
   ];
-  const presetLocations = (fallback.person_locations?.length ?? 0) > 1
-    ? fallback.person_locations
-    : undefined;
+  const locations = parsed.locations.length
+    ? parsed.locations
+    : mapped.person_locations
+      ?? mapped.organization_locations
+      ?? fallback.person_locations;
+  const ranges = parsed.size_ranges.length
+    ? parsed.size_ranges
+    : mapped.organization_num_employees_ranges
+      ?? fallback.organization_num_employees_ranges;
   return assembleParams({
     titles: [...(mapped.person_titles ?? []), ...(fallback.person_titles ?? [])],
     relatedTitles: [...(mapped.related_person_titles ?? []), ...(fallback.related_person_titles ?? [])],
-    seniorities: mapped.person_seniorities ?? fallback.person_seniorities,
-    locations: presetLocations
-      ?? mapped.person_locations
-      ?? mapped.organization_locations
-      ?? fallback.person_locations,
+    seniorities: [
+      ...(mapped.person_seniorities ?? []),
+      ...parsed.seniority_tokens,
+      ...(fallback.person_seniorities ?? []),
+    ],
+    locations,
     relatedLocations: [
       ...(mapped.related_person_locations ?? []),
       ...(mapped.related_organization_locations ?? []),
@@ -307,13 +260,14 @@ function mergeWithFallback(mapped: PeopleSearchParams, fallback: PeopleSearchPar
       ...(mapped.related_industry_keywords ?? []),
       ...(fallback.related_industry_keywords ?? []),
     ],
-    ranges: mapped.organization_num_employees_ranges ?? fallback.organization_num_employees_ranges,
+    ranges,
   });
 }
 
 export async function mapAttributesToSearchParams(
   attrs: LeadAttributes,
 ): Promise<{ params: PeopleSearchParams; usage?: ReturnType<typeof priceAnthropicMessages> }> {
+  const parsed = parseTargeting(attrs);
   const fallback = mapAttributesHeuristic(attrs);
   if (!process.env.ANTHROPIC_API_KEY?.trim() || process.env.DRAFTING_MODE !== 'live') {
     return { params: fallback };
@@ -323,7 +277,7 @@ export async function mapAttributesToSearchParams(
   const message = await client.messages.create({
     model: MAPPING_MODEL,
     max_tokens: 800,
-    system: cachedSystemText(MAP_SYSTEM, ttl),
+    system: cachedSystemText(buildMappingSystemPrompt(), ttl),
     messages: [{
       role: 'user',
       content: JSON.stringify({
@@ -331,6 +285,10 @@ export async function mapAttributesToSearchParams(
         seniority: attrs.seniority,
         geography: attrs.geography,
         business_size: attrs.business_size,
+        industry_tokens: parsed.industry_tokens,
+        seniority_tokens: parsed.seniority_tokens,
+        locations: parsed.locations,
+        size_ranges: parsed.size_ranges,
       }),
     }],
   });
@@ -339,7 +297,7 @@ export async function mapAttributesToSearchParams(
     .join('\n');
   const mapped = parseMappedJson(text);
   return {
-    params: mapped ? mergeWithFallback(mapped, fallback) : fallback,
+    params: mapped ? mergeWithFallback(mapped, fallback, parsed) : fallback,
     usage: priceAnthropicMessages([message], {
       modelId: MAPPING_MODEL,
       fallbackCacheTtl: ttl,

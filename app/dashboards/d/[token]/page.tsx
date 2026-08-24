@@ -52,7 +52,7 @@ export default async function ClientDashboardPage({
   const daysRemaining = differenceInCalendarDays(project.targetEndDate, today);
 
   return (
-    <div className="min-h-screen bg-bg-page font-body">
+    <div className="dashboards-client-page min-h-screen bg-bg-page font-body">
       {project.status === 'PAUSED' && (
         <div className="bg-[#FFF8F5] border-b border-[#FFCFB8] px-6 py-3 text-center">
           <p className="text-sm font-medium text-[#C94C00]">
@@ -170,7 +170,7 @@ export default async function ClientDashboardPage({
         </div>
       </section>
 
-      <section className="bg-bg-alt py-16">
+      <section className={`bg-bg-alt py-16${project.deckPdfUrl || project.deckStoragePath ? '' : ' dashboards-client-empty'}`}>
         <div className="mx-auto max-w-[1280px] px-6">
           <div className="animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
             <Eyebrow color="orange" className="mb-3">About This Project</Eyebrow>
@@ -206,7 +206,7 @@ export default async function ClientDashboardPage({
         </div>
       </section>
 
-      <section className="bg-bg-alt py-16">
+      <section className={`bg-bg-alt py-16${!project.githubRepo || recentEvents.length === 0 ? ' dashboards-client-empty' : ''}`}>
         <div className="mx-auto max-w-[1280px] px-6">
           <div className="animate-fade-in-up mb-8" style={{ animationDelay: '0.1s' }}>
             <Eyebrow color="ink" className="mb-3">Recent Activity</Eyebrow>

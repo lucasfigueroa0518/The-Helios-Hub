@@ -16,6 +16,7 @@ import {
 import type { SenderIdentitySlug } from '@/lib/agentmail-inboxes';
 import { inferIdentitySlug } from '@/lib/agentmail-inboxes';
 import { extractFirstName } from '@/lib/drafting/normalize';
+import { rewriteHrefsInMarkup } from '@/lib/drafting/message-template';
 import {
   isEmailSendConfigured,
   resolveSendToEmail,
@@ -1622,8 +1623,8 @@ async function loadLatestSendablePayload(itemId: string): Promise<SendableDraftP
     fromEmail,
     toEmail: resolveSendToEmail(row.campaign_id, row.to_email),
     subject: row.subject,
-    bodyText: row.body_text,
-    bodyHtml: row.body_html,
+    bodyText: rewriteHrefsInMarkup(row.body_text),
+    bodyHtml: row.body_html ? rewriteHrefsInMarkup(row.body_html) : row.body_html,
     includeSignature: row.include_signature !== false,
     recipientName: row.recipient_name || row.to_email,
     title: row.title || identity.title,

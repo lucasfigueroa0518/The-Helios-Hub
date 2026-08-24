@@ -3,6 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import { useIsMobile } from '@/app/components/mobile-filter-menu';
+
 type CreatedMeta = {
   id: string;
   githubHandle: string;
@@ -15,6 +17,7 @@ export default function AddTokenForm({
   prefillHandle?: string;
 }) {
   const router = useRouter();
+  const isMobile = useIsMobile();
   const [handle, setHandle] = useState(prefillHandle);
   const [token, setToken] = useState('');
   const [neverExpires, setNeverExpires] = useState(true);
@@ -64,6 +67,8 @@ export default function AddTokenForm({
   }
 
   return (
+    <details className="dashboards-mobile-acc" open={!isMobile}>
+      <summary>Add GitHub PAT</summary>
     <form
       onSubmit={onSubmit}
       className="space-y-4 rounded-xl border border-border bg-white p-5"
@@ -180,5 +185,6 @@ export default function AddTokenForm({
         {pending ? 'Saving…' : 'Save token'}
       </button>
     </form>
+    </details>
   );
 }

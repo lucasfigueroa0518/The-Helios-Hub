@@ -11,9 +11,16 @@ import { HubLoadingSpinner } from '@/app/hub/hub-loading';
 import { requestJson } from '@/lib/client-request';
 import { AnalyticsSummary } from '@/lib/analytics';
 import { AnalyticsDrilldownDrawer } from '@/app/hub/analytics-drilldown-drawer';
+import {
+  ChoiceList,
+  FilterAccordion,
+  MobileFilterBar,
+  MobileFilterMenu,
+} from '@/app/components/mobile-filter-menu';
 
 type Period = 'week' | 'month' | 'all' | 'custom';
 type ViewMode = 'campaigns' | 'per_sender';
+type AnalyticsMenuSection = 'period' | 'content' | 'sender' | 'address' | 'campaigns' | 'tags';
 
 type RunRow = {
   id: string;
@@ -65,6 +72,8 @@ export function AnalyticsHub() {
   const [editingTagCampaignId, setEditingTagCampaignId] = useState<string | null>(null);
   const [campaignMenuOpen, setCampaignMenuOpen] = useState(false);
   const campaignFilterRef = useRef<HTMLDivElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [openSection, setOpenSection] = useState<AnalyticsMenuSection | null>(null);
 
   const summaryEnabled = period !== 'custom' || (Boolean(customFrom) && Boolean(customTo));
 
@@ -282,9 +291,19 @@ export function AnalyticsHub() {
         <div className="card__body analytics-hub">
           {error && <p className="field__error">{error}</p>}
 
+          <MobileFilterBar
+            title="Filters"
+            summary={[
+              period === 'week' ? '1 week' : period === 'month' ? '1 month' : period === 'all' ? 'All time' : 'Custom',
+              selectedMessageMode === 'all' ? 'All content' : selectedMessageMode === 'ai' ? 'AI-generated' : 'Custom message',
+              campaignTriggerLabel,
+            ].join(' · ')}
+            onOpen={() => setMenuOpen(true)}
+          />
+
           {/* ──────────────── 1. Top Filter Toolbar ──────────────── */}
           <section
-            className="analytics-toolbar card"
+            className="analytics-toolbar hub-desktop-toolbar card"
             style={{
               padding: 'var(--space-4)',
               marginBottom: 'var(--space-6)',
@@ -516,7 +535,7 @@ export function AnalyticsHub() {
                   <DrillableTile
                     label="Wasted Spend"
                     value={formatUsd(metrics.wasted_spend_usd)}
-                    sub="Leads with no sent email"
+                    sub="Unsent manual leads"
                     metricKey="wasted_spend"
                     onClick={() => setDrilldownMetricKey('wasted_spend')}
                   />
@@ -530,7 +549,7 @@ export function AnalyticsHub() {
                   <DrillableTile
                     label="Wasted lead rate"
                     value={formatPct(metrics.wasted_lead_rate)}
-                    sub={`${metrics.total_leads - metrics.outreached_leads} of ${metrics.total_leads} leads`}
+                    sub={`${metrics.wasted_leads} of ${metrics.total_leads} leads`}
                     metricKey="wasted_lead_rate"
                     onClick={() => setDrilldownMetricKey('wasted_lead_rate')}
                   />
@@ -608,7 +627,7 @@ export function AnalyticsHub() {
               </section>
 
               {/* ──────────────── 4. Campaign Matrix or Per-User View ──────────────── */}
-              <section style={{ marginBottom: 'var(--space-6)' }}>
+              <section className="analytics-hub__matrix" style={{ marginBottom: 'var(--space-6)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
                   <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 'bold', margin: 0 }}>
                     {viewMode === 'campaigns' ? 'Campaign Performance Matrix' : 'Sender Performance'}
@@ -852,6 +871,131 @@ export function AnalyticsHub() {
           ) : null}
         </div>
       </section>
+
+      <MobileFilterMenu
+        title="Analytics filters"
+        subtitle="Date range, content, sender, and campaigns."
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+      >
+        <FilterAccordion
+          label="Date range"
+          value={period === 'week' ? '1 week' : period === 'month' ? '1 month' : period === 'all' ? 'All time' : 'Custom'}
+          open={openSection === 'period'}
+          onToggle={() => setOpenSection((current) => (current === 'period' ? null : 'period'))}
+        >
+          <ChoiceList
+            options={[
+              { id: 'week', label: '1 week' },
+              { id: 'month', label: '1 month' },
+              { id: 'all', label: 'All time' },
+              { id: 'custom', label: 'Custom' },
+            ]}
+            value={period}
+            onChange={(id) => setPeriod(id as Period)}
+          />
+          {period === 'custom' ? (
+            <div className="analytics-hub__dates" style={{ marginTop: 'var(--space-3)' }}>
+              <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
+              <span>to</span>
+              <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
+            </div>
+          ) : null}
+        </FilterAccordion>
+        <FilterAccordion
+          label="Content"
+          value={selectedMessageMode === 'all' ? 'All' : selectedMessageMode === 'ai' ? 'AI-generated' : 'Custom message'}
+          open={openSection === 'content'}
+          onToggle={() => setOpenSection((current) => (current === 'content' ? null : 'content'))}
+        >
+          <ChoiceList
+            options={[
+              { id: 'all', label: 'All' },
+              { id: 'ai', label: 'AI-generated' },
+              { id: 'custom', label: 'Custom message' },
+            ]}
+            value={selectedMessageMode}
+            onChange={(id) => setSelectedMessageMode(id as 'all' | 'ai' | 'custom')}
+          />
+        </FilterAccordion>
+        <FilterAccordion
+          label="Sender profile"
+          value={selectedIdentitySlug === 'lucas' ? 'Lucas Figueroa' : selectedIdentitySlug === 'tommy' ? 'Thomas Pozo' : 'All profiles'}
+          open={openSection === 'sender'}
+          onToggle={() => setOpenSection((current) => (current === 'sender' ? null : 'sender'))}
+        >
+          <ChoiceList
+            options={[
+              { id: '', label: 'All profiles' },
+              { id: 'lucas', label: 'Lucas Figueroa' },
+              { id: 'tommy', label: 'Thomas Pozo' },
+            ]}
+            value={selectedIdentitySlug}
+            onChange={(id) => {
+              setSelectedIdentitySlug(id);
+              setSelectedFromEmail('');
+            }}
+          />
+        </FilterAccordion>
+        <FilterAccordion
+          label="From address"
+          value={selectedFromEmail || 'All addresses'}
+          open={openSection === 'address'}
+          onToggle={() => setOpenSection((current) => (current === 'address' ? null : 'address'))}
+        >
+          <ChoiceList
+            options={[
+              { id: '', label: 'All addresses' },
+              ...(summary?.available_inboxes ?? [])
+                .filter((inbox) => !selectedIdentitySlug || inbox.identity_slug === selectedIdentitySlug)
+                .map((inbox) => ({ id: inbox.email, label: inbox.email })),
+            ]}
+            value={selectedFromEmail}
+            onChange={setSelectedFromEmail}
+          />
+        </FilterAccordion>
+        {(summary?.available_campaigns?.length ?? 0) > 0 ? (
+          <FilterAccordion
+            label="Campaigns"
+            value={campaignTriggerLabel}
+            open={openSection === 'campaigns'}
+            onToggle={() => setOpenSection((current) => (current === 'campaigns' ? null : 'campaigns'))}
+          >
+            <ChoiceList
+              multi
+              options={[
+                { id: '', label: 'All campaigns' },
+                ...(summary?.available_campaigns ?? []).map((campaign) => ({ id: campaign.id, label: campaign.name })),
+              ]}
+              value={selectedCampaignIds.length ? selectedCampaignIds : ['']}
+              onChange={(id) => {
+                if (!id) setSelectedCampaignIds([]);
+                else toggleCampaignFilter(id);
+              }}
+            />
+          </FilterAccordion>
+        ) : null}
+        {(summary?.available_tags?.length ?? 0) > 0 ? (
+          <FilterAccordion
+            label="Tags"
+            value={selectedTags.length ? `${selectedTags.length} selected` : 'All tags'}
+            open={openSection === 'tags'}
+            onToggle={() => setOpenSection((current) => (current === 'tags' ? null : 'tags'))}
+          >
+            <ChoiceList
+              multi
+              options={(summary?.available_tags ?? []).map((tag) => ({ id: tag, label: tag }))}
+              value={selectedTags}
+              onChange={toggleTagFilter}
+            />
+          </FilterAccordion>
+        ) : null}
+        {activeFilterCount > 0 ? (
+          <div className="hub-mobile-actions" style={{ paddingTop: 'var(--space-4)' }}>
+            <button type="button" className="btn" onClick={resetFilters}>Clear all filters</button>
+          </div>
+        ) : null}
+      </MobileFilterMenu>
 
       {/* Slide-Over Drill-down Drawer */}
       {drilldownMetricKey && (

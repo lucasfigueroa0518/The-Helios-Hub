@@ -2,7 +2,13 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from 'react';
-import { Send, SquareSplitVertical, Trash2, RotateCcw, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Send, SquareSplitVertical, Trash2, RotateCcw, X } from 'lucide-react';
+import {
+  ChoiceList,
+  FilterAccordion,
+  MobileFilterBar,
+  MobileFilterMenu,
+} from '@/app/components/mobile-filter-menu';
 
 import { hubGetJson, invalidateHubCache } from '@/app/hub/hub-data';
 import { HubLoadingSpinner } from '@/app/hub/hub-loading';
@@ -50,6 +56,7 @@ type QueueDetailResponse = {
 
 type CampaignOption = { id: string; name: string };
 type UserOption = { id: string; email: string; display_name: string };
+type QueueMenuSection = 'sender' | 'cap' | 'address' | 'campaign' | 'actions';
 
 function formatNyDateTime(iso: string): string {
   return new Intl.DateTimeFormat('en-US', {
@@ -131,6 +138,9 @@ export function SendQueueHub({
   const [shareOpen, setShareOpen] = useState(false);
   const [shareTargets, setShareTargets] = useState<ShareTargetUser[] | null>(null);
   const [shareLoading, setShareLoading] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [openSection, setOpenSection] = useState<QueueMenuSection | null>(null);
+  const [dayIndex, setDayIndex] = useState(0);
   const shareMenuRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const alignedTodayRef = useRef(false);
@@ -165,6 +175,12 @@ export function SendQueueHub({
   useEffect(() => {
     alignedTodayRef.current = false;
   }, [campaignId, identitySlug, inboxEmail]);
+
+  useEffect(() => {
+    if (!data) return;
+    const todayIdx = data.days.findIndex((day) => day.schedule_date === data.today);
+    setDayIndex(todayIdx >= 0 ? todayIdx : 0);
+  }, [data?.today, campaignId, identitySlug, inboxEmail]);
 
   useLayoutEffect(() => {
     if (!data || alignedTodayRef.current) return;
@@ -422,7 +438,17 @@ export function SendQueueHub({
           </div>
         </div>
         <div className="card__body">
-          <div className="send-queue-toolbar">
+          <MobileFilterBar
+            title="Filters & actions"
+            summary={[
+              identitySlug ? (identitySlug === 'lucas' ? 'Lucas' : 'Tommy') : 'All senders',
+              inboxEmail || 'All addresses',
+              campaignId ? (campaigns.find((c) => c.id === campaignId)?.name ?? 'Campaign') : 'All campaigns',
+            ].join(' · ')}
+            onOpen={() => setMenuOpen(true)}
+          />
+
+          <div className="hub-desktop-toolbar send-queue-toolbar">
             <div className="send-queue-toolbar__stats">
               <QueueMetric
                 label="Sent today"
@@ -640,6 +666,41 @@ export function SendQueueHub({
           {error && <p className="field__error">{error}</p>}
           {message && <p className="field__notice">{message}</p>}
 
+          {data && data.days.length > 0 ? (
+            <div className="send-queue-day-pager">
+              <button
+                type="button"
+                className="btn"
+                disabled={dayIndex <= 0}
+                onClick={() => setDayIndex((index) => Math.max(0, index - 1))}
+                aria-label="Previous day"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <div className="send-queue-day-pager__label">
+                <strong>
+                  {data.days[Math.min(dayIndex, data.days.length - 1)]?.schedule_date === data.today
+                    ? 'Today'
+                    : formatNyDateLabel(data.days[Math.min(dayIndex, data.days.length - 1)]?.schedule_date ?? data.today)}
+                </strong>
+                <span>
+                  {formatNyWeekday(data.days[Math.min(dayIndex, data.days.length - 1)]?.schedule_date ?? data.today)}
+                  {' · '}
+                  {Math.min(dayIndex, data.days.length - 1) + 1} of {data.days.length}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="btn"
+                disabled={dayIndex >= data.days.length - 1}
+                onClick={() => setDayIndex((index) => Math.min(data.days.length - 1, index + 1))}
+                aria-label="Next day"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          ) : null}
+
           {!loading && data && backlogCount === 0 && data.days.every((d) => d.items.length === 0 && (d.reservations ?? []).length === 0) ? (
             <p className="send-queue-empty">
               No queued emails. Open slots today send immediately; overflow lands here.
@@ -647,7 +708,7 @@ export function SendQueueHub({
           ) : null}
 
           <div className="send-queue-board" ref={boardRef}>
-            {data?.days.map((day) => {
+            {data?.days.map((day, index) => {
               const isPast = day.schedule_date < data.today;
               const weekend = isNyCalendarWeekend(day.schedule_date);
               const weekday = formatNyWeekday(day.schedule_date);
@@ -668,7 +729,7 @@ export function SendQueueHub({
               return (
               <div
                 key={day.schedule_date}
-                className={`send-queue-day${day.schedule_date === data.today ? ' send-queue-day--today' : ''}${isPast ? ' send-queue-day--past' : ''}${weekend ? ' send-queue-day--weekend' : ''}`}
+                className={`send-queue-day${day.schedule_date === data.today ? ' send-queue-day--today' : ''}${isPast ? ' send-queue-day--past' : ''}${weekend ? ' send-queue-day--weekend' : ''}${index === Math.min(dayIndex, data.days.length - 1) ? ' is-mobile-active' : ''}`}
                 onDragOver={isPast ? undefined : (e) => {
                   e.preventDefault();
                   e.dataTransfer.dropEffect = 'move';
@@ -805,6 +866,188 @@ export function SendQueueHub({
           </div>
         </div>
       </section>
+
+      <MobileFilterMenu
+        title="Queue controls"
+        subtitle={`Sent today ${todayBucket?.sent_count ?? 0} · Waiting ${backlogCount} · Open ${data?.today_remaining ?? '—'}`}
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+      >
+        <FilterAccordion
+          label="Sender"
+          value={identitySlug === 'lucas' ? 'Lucas' : identitySlug === 'tommy' ? 'Tommy' : 'All senders'}
+          open={openSection === 'sender'}
+          onToggle={() => setOpenSection((current) => (current === 'sender' ? null : 'sender'))}
+        >
+          <ChoiceList
+            options={[
+              { id: '', label: 'All senders' },
+              { id: 'lucas', label: 'Lucas' },
+              { id: 'tommy', label: 'Tommy' },
+            ]}
+            value={identitySlug}
+            onChange={(id) => {
+              setIdentitySlug(id);
+              setInboxEmail('');
+            }}
+          />
+        </FilterAccordion>
+        <FilterAccordion
+          label="Daily cap"
+          value={`${data?.daily_inbox_cap ?? 10} / inbox`}
+          open={openSection === 'cap'}
+          onToggle={() => setOpenSection((current) => (current === 'cap' ? null : 'cap'))}
+        >
+          <ChoiceList
+            options={[
+              { id: '10', label: '10 per inbox' },
+              { id: '20', label: '20 per inbox' },
+            ]}
+            value={String(data?.daily_inbox_cap ?? 10)}
+            onChange={(id) => void runAction(async () => {
+              await requestJson('/api/send-queue/settings', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ daily_inbox_cap: Number(id) }),
+              });
+              setMessage(`Daily inbox cap set to ${id}`);
+            })}
+          />
+        </FilterAccordion>
+        <FilterAccordion
+          label="Address"
+          value={inboxEmail || 'All addresses'}
+          open={openSection === 'address'}
+          onToggle={() => setOpenSection((current) => (current === 'address' ? null : 'address'))}
+        >
+          <ChoiceList
+            options={[
+              { id: '', label: 'All addresses' },
+              ...(data?.inboxes ?? [])
+                .filter((inbox) => !identitySlug || inbox.identity_slug === identitySlug)
+                .map((inbox) => ({
+                  id: inbox.email,
+                  label: `${inbox.email} · ${inbox.today_used}/${data?.daily_inbox_cap ?? 10} today`,
+                })),
+            ]}
+            value={inboxEmail}
+            onChange={setInboxEmail}
+          />
+        </FilterAccordion>
+        <FilterAccordion
+          label="Campaign"
+          value={campaignId ? (campaigns.find((c) => c.id === campaignId)?.name ?? 'Campaign') : 'All campaigns'}
+          open={openSection === 'campaign'}
+          onToggle={() => setOpenSection((current) => (current === 'campaign' ? null : 'campaign'))}
+        >
+          <ChoiceList
+            options={[
+              { id: '', label: 'All campaigns' },
+              ...campaigns.map((campaign) => ({ id: campaign.id, label: campaign.name })),
+            ]}
+            value={campaignId}
+            onChange={setCampaignId}
+          />
+        </FilterAccordion>
+        <FilterAccordion
+          label="Actions"
+          value={selected.size ? `${selected.size} selected` : 'Send, retry, cancel'}
+          open={openSection === 'actions'}
+          onToggle={() => setOpenSection((current) => (current === 'actions' ? null : 'actions'))}
+        >
+          <div className="hub-mobile-actions">
+            <button
+              type="button"
+              className="btn btn--secondary"
+              disabled={busy || backlogCount === 0}
+              onClick={() => void openShareMenu()}
+            >
+              <SquareSplitVertical size={14} aria-hidden="true" /> Push to
+            </button>
+            {shareOpen ? (
+              <div className="send-queue-share__menu" role="menu">
+                {shareLoading || !shareTargets ? (
+                  <p className="send-queue-share__empty">Loading sender profiles…</p>
+                ) : shareTargets.length === 0 ? (
+                  <p className="send-queue-share__empty">No other sender profile found.</p>
+                ) : (
+                  shareTargets.map((user) => (
+                    <button
+                      key={user.id}
+                      type="button"
+                      role="menuitem"
+                      className="send-queue-share__option"
+                      disabled={busy || user.backlog_count >= backlogCount}
+                      onClick={() => void shareWithUser(user)}
+                    >
+                      {user.display_name || user.email}
+                    </button>
+                  ))
+                )}
+              </div>
+            ) : null}
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={!canSendNow || busy}
+              onClick={() => void runAction(async () => {
+                const result = await requestJson<{ sent: number; queued?: number; failed?: number }>(
+                  '/api/send-queue/send-now',
+                  {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids: [...selected], ...ownerPayload }),
+                  },
+                );
+                const parts = [
+                  result.sent ? `Sent ${result.sent} now` : null,
+                  result.queued ? `Queued ${result.queued} — retrying when Agent Mail is back` : null,
+                  result.failed ? `${result.failed} failed` : null,
+                ].filter(Boolean);
+                setMessage(parts.length > 0 ? parts.join(' · ') : 'Nothing sent');
+                setMenuOpen(false);
+              })}
+            >
+              <Send size={14} /> Send now
+            </button>
+            <button
+              type="button"
+              className="btn btn--secondary"
+              disabled={!canRetry || busy}
+              onClick={() => void runAction(async () => {
+                const result = await requestJson<{ sent_now: number; requeued: number }>(
+                  '/api/send-queue/retry',
+                  {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids: [...selected], ...ownerPayload }),
+                  },
+                );
+                setMessage(`Retry: ${result.sent_now} sent · ${result.requeued} requeued`);
+                setMenuOpen(false);
+              })}
+            >
+              <RotateCcw size={14} /> Retry
+            </button>
+            <button
+              type="button"
+              className="btn btn--secondary"
+              disabled={!canCancel || busy}
+              onClick={() => void runAction(async () => {
+                const result = await requestJson<{ cancelled: number }>('/api/send-queue', {
+                  method: 'DELETE',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ ids: [...selected], ...ownerPayload }),
+                });
+                setMessage(`Cancelled ${result.cancelled}`);
+                setMenuOpen(false);
+              })}
+            >
+              <Trash2 size={14} /> Cancel
+            </button>
+          </div>
+        </FilterAccordion>
+      </MobileFilterMenu>
 
       {detailId && detail ? (
         <div className="drawer-overlay" role="presentation" onClick={() => setDetailId(null)}>

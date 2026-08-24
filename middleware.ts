@@ -33,6 +33,8 @@ function isProtectedPage(pathname: string): boolean {
   return pathname === '/hub'
     || pathname.startsWith('/hub/')
     || pathname.startsWith('/campaigns/')
+    || pathname === '/events'
+    || pathname.startsWith('/events/')
     || pathname === '/dashboards'
     || (pathname.startsWith('/dashboards/') && !pathname.startsWith('/dashboards/d/'))
     || pathname === '/trello'
@@ -68,6 +70,8 @@ export const config = {
     '/',
     '/hub/:path*',
     '/campaigns/:path*',
+    '/events',
+    '/events/:path*',
     '/dashboards',
     '/dashboards/:path*',
     '/trello',

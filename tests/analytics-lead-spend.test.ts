@@ -16,6 +16,7 @@ import {
 
 function fact(partial: Partial<LeadCampaignFact> & Pick<LeadCampaignFact, 'lead_id' | 'campaign_id'>): LeadCampaignFact {
   const emails_sent = partial.emails_sent ?? 0;
+  const campaign_kind = partial.campaign_kind ?? 'manual';
   const claude_enrichment_usd = partial.claude_enrichment_usd ?? 0;
   const apollo_usd = partial.apollo_usd ?? 0;
   const extraction_usd = partial.extraction_usd ?? 0;
@@ -30,7 +31,9 @@ function fact(partial: Partial<LeadCampaignFact> & Pick<LeadCampaignFact, 'lead_
     from_email: partial.from_email ?? null,
     identity_slug: partial.identity_slug ?? null,
     emails_sent,
+    campaign_kind,
     is_outreached: emails_sent > 0,
+    is_auto_inflight: campaign_kind === 'auto' && emails_sent === 0,
     claude_enrichment_usd,
     apollo_usd,
     extraction_usd,
@@ -94,6 +97,26 @@ test('outreach + wasted always equals total hub spend', () => {
   );
   assert.equal(identity.spend_per_outreach_usd, identity.outreach_spend_usd / 2);
   assert.equal(identity.wasted_spend_usd > identity.worker_cost_usd / 2, true);
+  assert.equal(identity.wasted_leads, 1);
+});
+
+test('unsent auto-campaign leads are queued, not wasted', () => {
+  const facts = applyWorkerShare([
+    fact({ lead_id: 'sent', campaign_id: 'manual', emails_sent: 1, drafting_usd: 4 }),
+    fact({ lead_id: 'queued', campaign_id: 'auto', campaign_kind: 'auto', emails_sent: 0, drafting_usd: 3 }),
+    fact({ lead_id: 'idle', campaign_id: 'manual', emails_sent: 0, drafting_usd: 2 }),
+  ], 0);
+  const identity = classifySpendIdentity({ facts });
+  assert.equal(identity.total_leads, 3);
+  assert.equal(identity.outreached_leads, 1);
+  assert.equal(identity.wasted_leads, 1);
+  assert.equal(identity.wasted_lead_rate, 1 / 3);
+  const queued = facts.find((row) => row.lead_id === 'queued');
+  const idle = facts.find((row) => row.lead_id === 'idle');
+  assert.equal(queued?.is_auto_inflight, true);
+  assert.equal(identity.outreach_spend_usd, (queued?.stack_usd ?? 0) + (facts.find((row) => row.lead_id === 'sent')?.stack_usd ?? 0));
+  assert.equal(identity.wasted_spend_usd, idle?.stack_usd ?? 0);
+  assert.equal(identity.spend_per_outreach_usd, facts.find((row) => row.lead_id === 'sent')?.stack_usd ?? 0);
 });
 
 test('shared research jobs do not double-count at org when split across campaigns', () => {

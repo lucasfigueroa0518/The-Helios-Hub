@@ -4,6 +4,8 @@ import { formatDistanceToNow } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import { RowActions } from '@/components/dashboards/admin/RowActions';
+
 export type TokenListItem = {
   id: string;
   githubHandle: string;
@@ -51,13 +53,27 @@ export default function TokenList({ tokens }: { tokens: TokenListItem[] }) {
     );
   }
 
+  function deleteButton(id: string) {
+    return (
+      <button
+        type="button"
+        onClick={() => void onDelete(id)}
+        disabled={deletingId === id}
+        className="rounded-md border border-red-300 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+      >
+        {deletingId === id ? 'Deleting…' : 'Delete'}
+      </button>
+    );
+  }
+
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-white">
+    <div>
       {error && (
-        <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700">
+        <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-xs text-red-700">
           {error}
         </div>
       )}
+      <div className="dashboards-desktop-table overflow-hidden rounded-xl border border-border bg-white">
       <table className="w-full text-left text-sm">
         <thead>
           <tr className="border-b border-border bg-bg-alt">
@@ -105,19 +121,42 @@ export default function TokenList({ tokens }: { tokens: TokenListItem[] }) {
                   : 'Never'}
               </td>
               <td className="px-4 py-3">
-                <button
-                  type="button"
-                  onClick={() => void onDelete(t.id)}
-                  disabled={deletingId === t.id}
-                  className="rounded-md border border-red-300 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
-                >
-                  {deletingId === t.id ? 'Deleting…' : 'Delete'}
-                </button>
+                {deleteButton(t.id)}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+      </div>
+      <div className="dashboards-mobile-list">
+        {tokens.map((t) => (
+          <article key={t.id} className="dashboards-mobile-card">
+            <div className="dashboards-mobile-card__top">
+              <a
+                href={`https://github.com/${t.githubHandle}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                @{t.githubHandle}
+              </a>
+              <RowActions>
+                {deleteButton(t.id)}
+              </RowActions>
+            </div>
+            <p className="dashboards-mobile-card__meta dashboards-mobile-card__meta--mono">
+              github_pat_••••{t.tokenSuffix}
+            </p>
+            <p className="dashboards-mobile-card__meta">
+              {t.lastUsedAt
+                ? `Used ${formatDistanceToNow(new Date(t.lastUsedAt), { addSuffix: true })}`
+                : 'Never used'}
+              {t.expiresAt
+                ? ` · expires ${formatDistanceToNow(new Date(t.expiresAt), { addSuffix: true })}`
+                : ''}
+            </p>
+          </article>
+        ))}
+      </div>
     </div>
   );
 }

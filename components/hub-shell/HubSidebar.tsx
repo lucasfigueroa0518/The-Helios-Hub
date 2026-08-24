@@ -7,6 +7,7 @@ import { signOut } from 'next-auth/react';
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
+  CalendarDays,
   Home,
   Kanban,
   LayoutDashboard,
@@ -26,6 +27,7 @@ const STORAGE_KEY = 'helios-hub-sidebar-collapsed';
 const ICONS: Record<HubNavItem['id'], typeof Home> = {
   home: Home,
   outreach: Mail,
+  events: CalendarDays,
   dashboards: LayoutDashboard,
   trello: Kanban,
 };

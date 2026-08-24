@@ -992,3 +992,141 @@
 .dashboards-root .bg-transparent { background-color: transparent; }
 .dashboards-root .transition { transition-property: color, background-color, border-color, transform, opacity, box-shadow; transition-duration: 150ms; }
 .dashboards-root .border-red-400 { border-color: #f87171; }
+
+.dashboards-mobile-list { display: none; }
+.dashboards-row-actions__more { display: none; }
+.dashboards-mobile-acc > summary { display: none; list-style: none; }
+.dashboards-mobile-acc > summary::-webkit-details-marker { display: none; }
+
+@media (max-width: 767px) {
+  .dashboards-admin .card__header { display: none; }
+  .dashboards-admin .card__body { padding-top: var(--space-4); }
+
+  .dashboards-page-head {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 1rem;
+    margin-bottom: 1.75rem !important;
+  }
+  .dashboards-page-head h1 { font-size: 1.25rem !important; }
+  .dashboards-page-head .dashboards-page-head__cta {
+    width: 100%;
+    text-align: center;
+  }
+
+  .dashboards-desktop-table { display: none; }
+  .dashboards-mobile-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .dashboards-mobile-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.35rem 0.5rem;
+    padding: 1rem 1.05rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--neutral-0);
+  }
+  .dashboards-mobile-card__top,
+  .dashboards-row-actions { display: contents; }
+  .dashboards-mobile-card__top a {
+    min-width: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--fg-1);
+    text-decoration: none;
+  }
+  .dashboards-mobile-card__meta {
+    grid-column: 1 / -1;
+    margin: 0;
+    font-size: 0.75rem;
+    color: var(--fg-3);
+  }
+  .dashboards-mobile-card__meta--mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.7rem;
+  }
+
+  .dashboards-row-actions__menu { grid-column: 1 / -1; }
+  .dashboards-row-actions__more {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    margin: -6px -8px 0 0;
+    border: none;
+    border-radius: 8px;
+    background: none;
+    color: var(--fg-3);
+    cursor: pointer;
+  }
+  .dashboards-row-actions__menu {
+    display: none;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+    padding-top: 0.65rem;
+    margin-top: 0.35rem;
+    border-top: 1px solid var(--border);
+  }
+  .dashboards-row-actions.is-open .dashboards-row-actions__menu { display: flex; }
+  .dashboards-row-actions__menu .btn,
+  .dashboards-row-actions__menu a,
+  .dashboards-row-actions__menu button {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .dashboards-mobile-acc {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--neutral-0);
+    padding: 0 1rem;
+  }
+  .dashboards-mobile-acc > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 52px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--fg-1);
+    cursor: pointer;
+  }
+  .dashboards-mobile-acc > summary::after {
+    content: "";
+    width: 0.45rem;
+    height: 0.45rem;
+    border-right: 1.5px solid var(--fg-3);
+    border-bottom: 1.5px solid var(--fg-3);
+    transform: rotate(45deg);
+    transition: transform 160ms ease;
+  }
+  .dashboards-mobile-acc[open] > summary::after { transform: rotate(225deg); }
+  .dashboards-mobile-acc[open] > summary {
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0.85rem;
+  }
+  .dashboards-mobile-acc > :not(summary) {
+    margin-bottom: 1rem;
+  }
+  .dashboards-mobile-acc form {
+    border: none !important;
+    padding: 0 !important;
+    box-shadow: none;
+    background: transparent !important;
+  }
+
+  .dashboards-date-grid { grid-template-columns: 1fr !important; }
+  .dashboards-client-empty { display: none; }
+
+  .dashboards-root .min-h-screen header { height: auto; }
+  .dashboards-client-page section { padding-top: 2.5rem; padding-bottom: 2.5rem; }
+  .dashboards-client-page .px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+  .dashboards-client-page h2 { font-size: 1.25rem !important; }
+}

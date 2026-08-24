@@ -2,6 +2,7 @@ import { format } from 'date-fns';
 import Link from 'next/link';
 
 import CopyUrlButton from '@/app/dashboards/(admin)/CopyUrlButton';
+import { RowActions } from '@/components/dashboards/admin/RowActions';
 import { getAdminProjects } from '@/lib/dashboards/admin-data';
 
 export const dynamic = 'force-dynamic';
@@ -18,7 +19,7 @@ export default async function AdminProjectsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="dashboards-page-head mb-6 flex items-center justify-between">
         <div>
           <h1 className="font-heading text-2xl font-bold tracking-tight text-fg-1">
             Projects
@@ -29,7 +30,7 @@ export default async function AdminProjectsPage() {
         </div>
         <Link
           href="/dashboards/projects/new"
-          className="rounded-pill bg-[#FF5E1A] px-4 py-2 text-sm font-semibold text-white shadow-cta-glow hover:bg-[#E54E0F] transition-colors"
+          className="dashboards-page-head__cta rounded-pill bg-[#FF5E1A] px-4 py-2 text-sm font-semibold text-white shadow-cta-glow hover:bg-[#E54E0F] transition-colors"
         >
           + New project
         </Link>
@@ -46,7 +47,8 @@ export default async function AdminProjectsPage() {
           </Link>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-border bg-white">
+        <>
+        <div className="dashboards-desktop-table overflow-hidden rounded-xl border border-border bg-white">
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-border bg-bg-alt">
@@ -122,6 +124,41 @@ export default async function AdminProjectsPage() {
             </tbody>
           </table>
         </div>
+        <div className="dashboards-mobile-list">
+          {projects.map((p) => {
+            const daysLabel = p.status === 'COMPLETE'
+              ? 'Complete'
+              : p.daysRemaining > 0
+                ? `${p.daysRemaining}d left`
+                : `${Math.abs(p.daysRemaining)}d overdue`;
+            return (
+              <article key={p.id} className="dashboards-mobile-card">
+                <div className="dashboards-mobile-card__top">
+                  <Link href={`/dashboards/projects/${p.id}`}>
+                    {p.name}
+                    {!p.deckPdfUrl && !p.deckStoragePath ? ' · No deck' : ''}
+                  </Link>
+                  <RowActions>
+                    <CopyUrlButton token={p.accessToken} />
+                    <Link
+                      href={`/dashboards/projects/${p.id}`}
+                      className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-fg-2"
+                    >
+                      Edit
+                    </Link>
+                  </RowActions>
+                </div>
+                <p className="dashboards-mobile-card__meta">
+                  {p.client.name} · {p.status} · {daysLabel}
+                </p>
+                <p className="dashboards-mobile-card__meta dashboards-mobile-card__meta--mono">
+                  {p.githubRepo}
+                </p>
+              </article>
+            );
+          })}
+        </div>
+        </>
       )}
     </div>
   );

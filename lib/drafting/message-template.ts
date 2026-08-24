@@ -113,18 +113,78 @@ export function parseMessageMode(value: unknown): MessageMode {
   return value === 'custom' ? 'custom' : 'ai';
 }
 
-/** Allow http(s) URLs only. Returns the normalized href or null. */
+const DANGEROUS_HREF_SCHEME_RE = /^(javascript|data|vbscript|file|about|blob):/i;
+const PROTOCOL_PREFIX_RE = /^(https?:\/{0,3}|https?\/{1,3})/i;
+const BARE_URL_RE = /https?:\/\/[^\s<>"']+/gi;
+
+function stripRepeatedProtocols(value: string): string {
+  let rest = value.trim();
+  for (let i = 0; i < 8; i += 1) {
+    if (!PROTOCOL_PREFIX_RE.test(rest)) break;
+    const next = rest.replace(PROTOCOL_PREFIX_RE, '');
+    if (!next || next === rest) break;
+    rest = next;
+  }
+  return rest.replace(/^\/+/, '');
+}
+
+function looksLikeMessyHref(value: string): boolean {
+  return /https?:\/+https/i.test(value)
+    || /https?\/{2,}/i.test(value)
+    || !/^[a-z][a-z0-9+.-]*:/i.test(value.trim());
+}
+
+/**
+ * Collapse pasted/prefixed protocol junk (`https://https//calendly.com/...`,
+ * `calendly.com/...`) into a single http(s) URL. Returns null if the result
+ * is not a safe web link.
+ */
 export function sanitizeHref(raw: string): string | null {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
+  const trimmed = unescapeHtml(raw).trim();
+  if (!trimmed || DANGEROUS_HREF_SCHEME_RE.test(trimmed)) return null;
+
+  const wantHttp = /^http:\/\//i.test(trimmed) && !/https:\/\//i.test(trimmed);
+  const rest = stripRepeatedProtocols(trimmed);
+  if (!rest) return null;
+
   try {
-    const parsed = new URL(trimmed);
+    const parsed = new URL(`${wantHttp ? 'http' : 'https'}://${rest}`);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
     if (parsed.username || parsed.password) return null;
+    const host = parsed.hostname.replace(/\.$/, '').toLowerCase();
+    if (!host || host === 'http' || host === 'https' || !host.includes('.')) return null;
     return parsed.toString();
   } catch {
     return null;
   }
+}
+
+/** Show a corrected URL in the link field as soon as the input is parseable. */
+export function adaptHrefInput(value: string): string {
+  const sanitized = sanitizeHref(value);
+  if (!sanitized) return value;
+  if (looksLikeMessyHref(value)) return sanitized;
+  return value;
+}
+
+/** Rewrite href="..." and bare http(s) URLs in stored templates or draft bodies. */
+export function rewriteHrefsInMarkup(value: string): string {
+  if (!value) return value;
+  const hrefFixed = value.replace(
+    /href\s*=\s*(?:"([^"]*)"|'([^']*)')/gi,
+    (full, doubleQuoted: string | undefined, singleQuoted: string | undefined) => {
+      const href = sanitizeHref(doubleQuoted ?? singleQuoted ?? '');
+      if (!href) return full;
+      const quote = doubleQuoted != null ? '"' : "'";
+      return `href=${quote}${escapeHtml(href)}${quote}`;
+    },
+  );
+  return hrefFixed.replace(BARE_URL_RE, (raw) => {
+    const cleaned = raw.replace(/[).,;:]+$/, '');
+    const trailing = raw.slice(cleaned.length);
+    const href = sanitizeHref(cleaned);
+    return href ? `${href}${trailing}` : raw;
+  });
 }
 
 function escapeHtml(value: string): string {

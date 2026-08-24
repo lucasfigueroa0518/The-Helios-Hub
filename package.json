@@ -16,6 +16,7 @@
     "db:analytics": "node scripts/apply_analytics_schema.js",
     "db:dashboards": "node scripts/apply_dashboards_schema.js",
     "db:dashboards:migrate-data": "node scripts/migrate_dashboards_data.js",
+    "db:networking": "node scripts/apply_networking_schema.js",
     "db:trello": "node scripts/apply_trello_schema.js",
     "db:trello:migrate-data": "node scripts/migrate_trello_data.js",
     "db:setup": "node scripts/db_setup.js",

@@ -15,6 +15,10 @@ export const APOLLO_MONTHLY_USD = 59;
 export const APOLLO_INCLUDED_CREDITS = 2_500;
 export const APOLLO_USD_PER_CREDIT = APOLLO_MONTHLY_USD / APOLLO_INCLUDED_CREDITS;
 
+export function isAutoInflightLead(campaignKind: string | null | undefined, emailsSent: number): boolean {
+  return campaignKind === 'auto' && !(emailsSent > 0);
+}
+
 export type LeadCampaignFact = {
   lead_id: string;
   campaign_id: string;
@@ -22,7 +26,9 @@ export type LeadCampaignFact = {
   from_email: string | null;
   identity_slug: string | null;
   emails_sent: number;
+  campaign_kind: 'auto' | 'manual';
   is_outreached: boolean;
+  is_auto_inflight: boolean;
   claude_enrichment_usd: number;
   apollo_usd: number;
   extraction_usd: number;
@@ -43,6 +49,7 @@ export type UnallocatedSpend = {
 export type SpendIdentity = {
   total_leads: number;
   outreached_leads: number;
+  wasted_leads: number;
   emails_sent: number;
   outreach_spend_usd: number;
   wasted_spend_usd: number;
@@ -127,6 +134,8 @@ export function uniqueLeadFacts(rows: LeadCampaignFact[]): LeadCampaignFact[] {
     }
     existing.emails_sent += row.emails_sent;
     existing.is_outreached = existing.is_outreached || row.is_outreached;
+    existing.is_auto_inflight = (existing.is_auto_inflight || row.is_auto_inflight) && !existing.is_outreached;
+    if (row.campaign_kind === 'auto') existing.campaign_kind = 'auto';
     existing.claude_enrichment_usd += row.claude_enrichment_usd;
     existing.apollo_usd += row.apollo_usd;
     existing.extraction_usd += row.extraction_usd;
@@ -147,6 +156,7 @@ export function classifySpendIdentity(input: {
     lead_id: string;
     emails_sent: number;
     is_outreached: boolean;
+    is_auto_inflight?: boolean;
     enrichment_usd: number;
     drafting_usd: number;
     worker_usd: number;
@@ -167,6 +177,7 @@ export function classifySpendIdentity(input: {
     }
     existing.emails_sent += fact.emails_sent;
     existing.is_outreached = existing.is_outreached || fact.is_outreached;
+    existing.is_auto_inflight = Boolean(existing.is_auto_inflight || fact.is_auto_inflight);
     existing.enrichment_usd += fact.enrichment_usd;
     existing.drafting_usd += fact.drafting_usd;
     existing.worker_usd += fact.worker_usd;
@@ -177,12 +188,17 @@ export function classifySpendIdentity(input: {
     existing.reply_usd = (existing.reply_usd ?? 0) + (fact.reply_usd ?? 0);
   }
 
-  const facts = [...unique.values()];
+  const facts = [...unique.values()].map((fact) => ({
+    ...fact,
+    is_auto_inflight: Boolean(fact.is_auto_inflight) && !fact.is_outreached,
+  }));
   const unallocated = Math.max(0, input.unallocatedWastedUsd ?? 0);
   let emails_sent = 0;
   let outreach_spend_usd = 0;
+  let sent_outreach_spend_usd = 0;
   let lead_wasted_usd = 0;
   let outreached_leads = 0;
+  let wasted_leads = 0;
   let enrichment_cost_usd = 0;
   let drafting_cost_usd = 0;
   let worker_cost_usd = 0;
@@ -206,7 +222,12 @@ export function classifySpendIdentity(input: {
     if (fact.is_outreached) {
       outreached_leads += 1;
       outreach_spend_usd += stack;
+      sent_outreach_spend_usd += stack;
+    } else if (fact.is_auto_inflight) {
+      // Auto queue: pulled and waiting to send. Still committed spend, not waste.
+      outreach_spend_usd += stack;
     } else {
+      wasted_leads += 1;
       lead_wasted_usd += stack;
     }
   }
@@ -218,12 +239,13 @@ export function classifySpendIdentity(input: {
   return {
     total_leads,
     outreached_leads,
+    wasted_leads,
     emails_sent,
     outreach_spend_usd,
     wasted_spend_usd,
     total_spend_usd,
-    spend_per_outreach_usd: emails_sent > 0 ? outreach_spend_usd / emails_sent : null,
-    wasted_lead_rate: total_leads > 0 ? (total_leads - outreached_leads) / total_leads : null,
+    spend_per_outreach_usd: emails_sent > 0 ? sent_outreach_spend_usd / emails_sent : null,
+    wasted_lead_rate: total_leads > 0 ? wasted_leads / total_leads : null,
     enrichment_cost_usd,
     drafting_cost_usd,
     worker_cost_usd,
@@ -263,6 +285,7 @@ export function applyWorkerShare(
       agentmail_usd,
       stack_usd,
       is_outreached: row.emails_sent > 0,
+      is_auto_inflight: isAutoInflightLead(row.campaign_kind, row.emails_sent),
     };
   });
 }
@@ -273,6 +296,7 @@ type LeadFactRow = {
   owner_id: string;
   from_email: string | null;
   identity_slug: string | null;
+  campaign_kind: string;
   emails_sent: string;
   claude_enrichment_usd: string;
   apollo_usd: string;
@@ -299,7 +323,7 @@ export async function loadLeadCampaignFacts(input: {
        SELECT $1::timestamptz AS win_from, $2::timestamptz AS win_to
      ),
      filtered_campaigns AS (
-       SELECT c.id, c.owner_id
+       SELECT c.id, c.owner_id, coalesce(c.kind, 'manual') AS kind
          FROM outreach.campaigns c
         WHERE c.id = ANY($3::uuid[])
      ),
@@ -499,6 +523,7 @@ export async function loadLeadCampaignFacts(input: {
             u.owner_id::text AS owner_id,
             s.from_email,
             s.identity_slug,
+            coalesce(fc.kind, 'manual') AS campaign_kind,
             coalesce(s.emails_sent, 0)::text AS emails_sent,
             coalesce(ce.claude_enrichment_usd, 0)::text AS claude_enrichment_usd,
             coalesce(ap.apollo_usd, 0)::text AS apollo_usd,
@@ -506,6 +531,7 @@ export async function loadLeadCampaignFacts(input: {
             (coalesce(d.drafting_usd, 0) + coalesce(rp.reply_usd, 0))::text AS drafting_usd,
             coalesce(rp.reply_usd, 0)::text AS reply_usd
        FROM universe u
+  LEFT JOIN filtered_campaigns fc ON fc.id = u.campaign_id
   LEFT JOIN claude_enrichment ce
          ON ce.lead_id = u.lead_id AND ce.campaign_id = u.campaign_id
   LEFT JOIN extraction ex
@@ -523,6 +549,7 @@ export async function loadLeadCampaignFacts(input: {
 
   return rows.map((row) => {
     const emails_sent = asNumber(row.emails_sent);
+    const campaign_kind = row.campaign_kind === 'auto' ? 'auto' : 'manual';
     const claude_enrichment_usd = asNumber(row.claude_enrichment_usd);
     const apollo_usd = asNumber(row.apollo_usd);
     const extraction_usd = asNumber(row.extraction_usd);
@@ -537,7 +564,9 @@ export async function loadLeadCampaignFacts(input: {
       from_email: row.from_email,
       identity_slug: row.identity_slug,
       emails_sent,
+      campaign_kind,
       is_outreached: emails_sent > 0,
+      is_auto_inflight: isAutoInflightLead(campaign_kind, emails_sent),
       claude_enrichment_usd,
       apollo_usd,
       extraction_usd,

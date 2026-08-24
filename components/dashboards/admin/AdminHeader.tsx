@@ -35,7 +35,7 @@ export default function AdminHeader({
         />
       </nav>
       <main className="app-shell">
-        <section className="card">
+        <section className="card dashboards-admin">
           <div className="card__header">
             <div>
               <div className="card__title">Client Dashboards</div>
