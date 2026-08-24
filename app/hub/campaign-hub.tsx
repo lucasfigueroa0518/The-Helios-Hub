@@ -24,6 +24,7 @@ import type { TagWithColor } from '@/lib/campaigns';
 import { MessageComposer } from '@/app/components/message-composer';
 import { buildSignatureHtml, LUCAS_SIGNATURE_DEFAULTS } from '@/lib/drafting/email-signature';
 import { parseMessageTemplate, parseSubjectTemplate } from '@/lib/drafting/message-template';
+import { isLiveAutoCampaign } from '@/lib/auto-campaigns/status';
 
 const DRAFTING_POLL_MS = 5_000;
 
@@ -636,7 +637,8 @@ function CampaignRow({
     ? `Drafting · ${draftingGenerated} of ${draftingTotal}`
     : 'Drafting';
   const isAuto = campaign.kind === 'auto';
-  const isLive = isAuto && campaign.auto_status === 'live';
+  const isLive = isLiveAutoCampaign(campaign);
+  const isPaused = isAuto && campaign.auto_status === 'paused';
   const href = campaignHref(campaign);
   const meta = isAuto
     ? `${SENDER_IDENTITY_LABELS[campaign.sender_identity_slug ?? 'lucas']} · ${campaign.sent_count ?? 0} sent all-time · ${campaign.lead_count} pulled · ${(campaign.auto_status ?? 'pending_sender').replace(/_/g, ' ')}`
@@ -652,6 +654,7 @@ function CampaignRow({
         >
           <span className="campaign-row__heading">
             {isLive ? <LivePulse live label="Live" /> : null}
+            {isPaused ? <span className="campaign-row__paused">Paused</span> : null}
             <span className="campaign-row__name">{campaign.name}</span>
             {draftingActive ? (
               <span className="campaign-row__drafting" role="status" aria-live="polite">
