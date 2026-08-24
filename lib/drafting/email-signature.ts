@@ -248,18 +248,30 @@ export function buildSignatureHtml(signature: EmailSignatureFields): string {
 export function buildOutreachEmailHtml(
   bodyText: string,
   signature: EmailSignatureFields,
-  options: { bodyToHtml?: (text: string) => string } = {},
+  options: { bodyToHtml?: (text: string) => string; includeSignature?: boolean } = {},
 ): string {
-  const cleaned = stripTrailingTextSignature(bodyText, signature);
+  const includeSignature = options.includeSignature !== false;
+  const cleaned = includeSignature ? stripTrailingTextSignature(bodyText, signature) : bodyText.replace(/\r\n/g, '\n').trim();
   const toHtml = options.bodyToHtml ?? plainTextBodyToHtml;
   const bodyHtml = toHtml(cleaned);
-  const signatureHtml = buildSignatureHtml(signature);
+  const signatureHtml = includeSignature ? buildSignatureHtml(signature) : '';
+  return wrapOutreachHtml(`${bodyHtml}${signatureHtml ? `\n    ${signatureHtml}` : ''}`);
+}
+
+export function buildOutreachEmailHtmlFromBodyHtml(
+  bodyHtml: string,
+  signature: EmailSignatureFields | null,
+): string {
+  const signatureHtml = signature ? buildSignatureHtml(signature) : '';
+  return wrapOutreachHtml(`${bodyHtml}${signatureHtml ? `\n    ${signatureHtml}` : ''}`);
+}
+
+function wrapOutreachHtml(inner: string): string {
   return `<!DOCTYPE html>
 <html>
 <body style="margin:0;padding:0;background:#ffffff;">
   <div style="max-width:640px;margin:0;padding:0;">
-    ${bodyHtml}
-    ${signatureHtml}
+    ${inner}
   </div>
 </body>
 </html>`;

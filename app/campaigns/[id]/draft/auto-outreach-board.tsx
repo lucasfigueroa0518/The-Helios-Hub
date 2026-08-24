@@ -11,7 +11,7 @@ import {
   sentTileSub,
   type OutreachCarouselFocus,
 } from '@/lib/auto-campaigns/outreach-insight';
-import { EXPANSION_LABELS } from '@/lib/auto-campaigns/types';
+import { expansionLabel as describeExpansion } from '@/lib/auto-campaigns/expansion';
 import { requestJson } from '@/lib/client-request';
 import { formatNyDate, formatNyDateLabel } from '@/lib/drafting/send-queue-schedule';
 
@@ -192,7 +192,7 @@ export function AutoOutreachBoard({
   const days = useMemo(() => (stats?.by_day ?? []).slice(-7), [stats?.by_day]);
   const today = formatNyDate();
   const maxDaySent = Math.max(1, ...days.map((row) => row.sent), quota > 0 ? Math.ceil(quota / 4) : 1);
-  const expansionLabel = EXPANSION_LABELS[Math.min(EXPANSION_LABELS.length - 1, Math.max(0, step))] ?? null;
+  const matchLabel = describeExpansion(step);
 
   function toggleFocus(next: OutreachCarouselFocus) {
     onSelectFocus(focus === next ? null : next);
@@ -227,7 +227,7 @@ export function AutoOutreachBoard({
               ) : (
                 <span>{status?.replace(/_/g, ' ') ?? 'Auto'}</span>
               )}
-              {expansionLabel && step > 0 ? <span> · {expansionLabel}</span> : null}
+              {matchLabel && step > 0 ? <span> · {matchLabel}</span> : null}
               {quota > 0 ? <span> · {quota}/day</span> : null}
             </p>
           </div>

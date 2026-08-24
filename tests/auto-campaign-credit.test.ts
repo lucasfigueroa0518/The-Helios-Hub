@@ -8,10 +8,12 @@ import {
   organizationSearchAllowed,
   selectIdsToEnrich,
 } from '@/lib/auto-campaigns/credit-pipeline';
-import { applyExpansion, shouldAdvanceExpansion } from '@/lib/auto-campaigns/expansion';
+import { applyExpansion, expansionLabel, expansionRungsAt, shouldAdvanceExpansion } from '@/lib/auto-campaigns/expansion';
 import { mapAttributesHeuristic } from '@/lib/auto-campaigns/filter-map';
+import { constrainToSameCountry, locationsAtHop, nearbySameCountryLocations } from '@/lib/auto-campaigns/geography';
 import { runPeopleSearchProspecting } from '@/lib/auto-campaigns/prospect';
 import { computeAutoReservations } from '@/lib/auto-campaigns/reservations';
+import { pickQueueColor, uniqueCampaignColors } from '@/lib/auto-campaigns/queue-colors';
 import {
   nextAutoCycleAfterCompletion,
   nextAutoCycleAt,
@@ -122,6 +124,37 @@ test('prospecting never enriches stored IDs and stops once emails_per_day verifi
   assert.equal(result.stats.enrich_attempted, 3);
   assert.equal(result.stats.skipped_known, 90);
   assert.equal(result.pageEnd, 1);
+});
+
+test('people search retries the next industry keyword before treating inventory as exhausted', async () => {
+  const seen: Array<string | undefined> = [];
+  const client: ApolloPeopleClient & { enrichCalls: string[][] } = {
+    enrichCalls: [],
+    async searchPeople(params) {
+      seen.push(params.q_keywords);
+      if (params.q_keywords === 'janitorial') return [];
+      return [hit('fit-1'), hit('fit-2')];
+    },
+    async enrichPeople(ids) {
+      client.enrichCalls.push([...ids]);
+      return ids.map((id) => person(id, `${id}@x.com`));
+    },
+  };
+  const result = await runPeopleSearchProspecting(client, {
+    emailsPerDay: 2,
+    page: 1,
+    searchParams: {
+      industry_keywords: ['janitorial', 'commercial cleaning'],
+      q_keywords: 'janitorial',
+    },
+    expansionStep: 0,
+    knownApolloIds: new Set(),
+    knownLinkedinUrls: new Set(),
+  });
+  assert.deepEqual(seen, ['janitorial', 'commercial cleaning']);
+  assert.equal(result.attached.length, 2);
+  assert.equal(result.filled, true);
+  assert.equal(result.inventoryExhausted, false);
 });
 
 test('unverified enrich does not consume the daily lead quota; search continues until verified count is met', async () => {
@@ -247,6 +280,27 @@ test('a second cycle resumes the persisted page and does not restart at page 1',
   assert.equal(second.pageEnd, 3);
 });
 
+test('geography hops stay in the same country and move to adjacent rings', () => {
+  const nearby = nearbySameCountryLocations(['New York', 'New Jersey', 'Pennsylvania']);
+  assert.ok(nearby.includes('Ohio') || nearby.includes('Connecticut') || nearby.includes('Delaware'));
+  assert.ok(!nearby.includes('United Kingdom'));
+  assert.ok(!nearby.includes('Australia'));
+  const dropped = constrainToSameCountry(
+    ['New York', 'Florida'],
+    ['Ohio', 'London', 'Auckland', 'Sydney'],
+  );
+  assert.deepEqual(dropped, ['Ohio']);
+  const nyc = nearbySameCountryLocations(['NYC']);
+  assert.ok(nyc.includes('New Jersey') || nyc.includes('Connecticut'));
+  assert.ok(!nyc.includes('United Kingdom'));
+  const hop2 = locationsAtHop(['New York'], 2);
+  assert.ok(hop2.includes('Ohio') || hop2.includes('Rhode Island') || hop2.includes('Maryland'));
+  assert.ok(!hop2.includes('New York'));
+  assert.ok(!hop2.includes('United Kingdom'));
+  const hop4 = locationsAtHop(['New York'], 4);
+  assert.deepEqual(hop4, ['United States']);
+});
+
 test('filter mapping is heuristic JSON only — no organization ids', () => {
   const mapped = mapAttributesHeuristic({
     industry: 'CRE brokerage',
@@ -257,20 +311,95 @@ test('filter mapping is heuristic JSON only — no organization ids', () => {
   assert.ok(!('organization_ids' in mapped));
   assert.deepEqual(mapped.person_locations, ['New York']);
   assert.ok(mapped.organization_num_employees_ranges?.includes('11,50'));
+  assert.equal(mapped.q_keywords, 'commercial real estate');
+  assert.ok(mapped.person_titles?.includes('Broker'));
 });
 
-test('expansion ladder drops geo, then size, then industry, then widens seniority', () => {
+test('open-text industry maps to titles and short keywords, not the raw sentence', () => {
+  const mapped = mapAttributesHeuristic({
+    industry: 'Commercial cleaning/janitorial management companies',
+    seniority: 'Senior',
+    geography: 'Eastern United States',
+    business_size: '11-50',
+  });
+  assert.equal(mapped.q_keywords, 'janitorial');
+  assert.deepEqual(mapped.industry_keywords, ['janitorial', 'commercial cleaning']);
+  assert.ok(mapped.person_titles?.includes('Facilities Manager'));
+  assert.ok(mapped.person_locations?.includes('New York'));
+  assert.ok(mapped.person_locations?.includes('Florida'));
+  assert.ok(!mapped.person_locations?.some((location) => location.includes('Northeast')));
+  assert.ok(!mapped.q_keywords?.includes('11-50'));
+  assert.ok(mapped.related_industry_keywords?.includes('facilities services'));
+  assert.ok(mapped.related_person_locations?.includes('Ohio'));
+  assert.ok(!mapped.related_person_locations?.includes('United Kingdom'));
+});
+
+test('expansion infers nearby same-country places when related geo is missing', () => {
   const exact: PeopleSearchParams = {
-    person_locations: ['NYC'],
+    person_locations: ['New York', 'New Jersey', 'Pennsylvania'],
+    q_keywords: 'janitorial',
+  };
+  const widened = applyExpansion(exact, 1).person_locations ?? [];
+  assert.ok(widened.includes('Ohio') || widened.includes('Connecticut') || widened.includes('Delaware'));
+  assert.ok(!widened.includes('United Kingdom'));
+  assert.ok(!widened.includes('Australia'));
+});
+
+test('expansion does three adjacent widenings per parameter before mixing rungs', () => {
+  const exact: PeopleSearchParams = {
+    person_locations: ['New York'],
+    organization_locations: ['New York'],
+    related_person_locations: ['New Jersey', 'Connecticut', 'Pennsylvania'],
     organization_num_employees_ranges: ['11,50'],
-    q_keywords: 'CRE',
+    q_keywords: 'janitorial',
+    industry_keywords: ['janitorial', 'commercial cleaning'],
+    related_industry_keywords: ['facilities services', 'building maintenance'],
+    related_person_titles: ['Facilities Director'],
+    person_titles: ['Janitorial Manager'],
     person_seniorities: ['partner'],
   };
-  assert.deepEqual(applyExpansion(exact, 0).person_locations, ['NYC']);
-  assert.equal(applyExpansion(exact, 1).person_locations, undefined);
-  assert.equal(applyExpansion(exact, 2).organization_num_employees_ranges, undefined);
-  assert.equal(applyExpansion(exact, 3).q_keywords, undefined);
-  assert.ok(applyExpansion(exact, 4).person_seniorities?.includes('c_suite'));
+
+  assert.deepEqual(expansionRungsAt(0), { geography: 0, size: 0, industry: 0, seniority: 0 });
+  assert.deepEqual(expansionRungsAt(1), { geography: 1, size: 0, industry: 0, seniority: 0 });
+  assert.deepEqual(expansionRungsAt(3), { geography: 3, size: 0, industry: 0, seniority: 0 });
+  assert.deepEqual(expansionRungsAt(4), { geography: 0, size: 1, industry: 0, seniority: 0 });
+  assert.deepEqual(expansionRungsAt(7), { geography: 0, size: 0, industry: 1, seniority: 0 });
+  assert.deepEqual(expansionRungsAt(10), { geography: 0, size: 0, industry: 0, seniority: 1 });
+  assert.deepEqual(expansionRungsAt(13), { geography: 2, size: 2, industry: 0, seniority: 0 });
+  assert.equal(expansionLabel(0), 'Exact profile');
+  assert.equal(expansionLabel(1), 'Nearby geography');
+  assert.equal(expansionLabel(4), 'Adjacent size');
+  assert.equal(expansionLabel(13), 'Geography +2 · Size +2');
+
+  assert.deepEqual(applyExpansion(exact, 0).person_locations, ['New York']);
+  assert.deepEqual(applyExpansion(exact, 1).person_locations, ['New Jersey', 'Connecticut', 'Pennsylvania']);
+  assert.deepEqual(applyExpansion(exact, 1).organization_num_employees_ranges, ['11,50']);
+  assert.ok(!applyExpansion(exact, 1).person_locations?.includes('United Kingdom'));
+
+  const geoTwo = applyExpansion(exact, 2);
+  assert.ok((geoTwo.person_locations ?? []).includes('Ohio') || (geoTwo.person_locations ?? []).includes('Rhode Island'));
+  assert.deepEqual(geoTwo.organization_num_employees_ranges, ['11,50']);
+  assert.equal(geoTwo.q_keywords, 'janitorial');
+  assert.ok(!geoTwo.person_locations?.includes('United Kingdom'));
+
+  const sizeOne = applyExpansion(exact, 4);
+  assert.deepEqual(sizeOne.person_locations, ['New York']);
+  assert.deepEqual(sizeOne.organization_num_employees_ranges, ['1,10', '51,200']);
+  assert.equal(sizeOne.q_keywords, 'janitorial');
+  assert.deepEqual(sizeOne.person_titles, ['Janitorial Manager']);
+
+  const industryOne = applyExpansion(exact, 7);
+  assert.deepEqual(industryOne.person_locations, ['New York']);
+  assert.deepEqual(industryOne.organization_num_employees_ranges, ['11,50']);
+  assert.equal(industryOne.q_keywords, 'facilities services');
+  assert.deepEqual(industryOne.person_titles, ['Facilities Director']);
+
+  const combo = applyExpansion(exact, 13);
+  assert.ok((combo.person_locations ?? []).includes('Ohio') || (combo.person_locations ?? []).includes('Rhode Island'));
+  assert.deepEqual(combo.organization_num_employees_ranges, ['201,500']);
+  assert.equal(combo.q_keywords, 'janitorial');
+  assert.deepEqual(combo.person_seniorities, ['partner']);
+
   assert.deepEqual(shouldAdvanceExpansion({ attached: 10, emailsPerDay: 10, currentStep: 0 }), {
     nextStep: 0,
     resetCursor: false,
@@ -307,6 +436,19 @@ test('queue reservations subtract already slotted sends and skip weekends', () =
   assert.equal(byDate['2026-08-22'], undefined);
   assert.equal(byDate['2026-08-23'], undefined);
   assert.equal(byDate['2026-08-24'], 10);
+});
+
+test('queue colors stay unique across campaigns and skip colliding greens', () => {
+  assert.deepEqual(
+    [...uniqueCampaignColors([
+      { campaignId: 'a', queueColor: 'chart-1' },
+      { campaignId: 'b', queueColor: 'chart-1' },
+      { campaignId: 'c', queueColor: 'chart-3' },
+    ]).values()],
+    ['chart-1', 'chart-2', 'chart-3'],
+  );
+  assert.equal(pickQueueColor(['chart-1', 'chart-2']), 'chart-3');
+  assert.equal(pickQueueColor([...Array.from({ length: 10 }, (_, i) => `chart-${i + 1}`)]), 'chart-1');
 });
 
 test('weekday cycles stagger inside 2–6am ET and skip Saturday/Sunday', () => {

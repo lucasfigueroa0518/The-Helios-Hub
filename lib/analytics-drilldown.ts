@@ -7,7 +7,7 @@ import {
   loadAttributedCostDaily,
 } from '@/lib/analytics-attributed-cost';
 import { dbQuery } from '@/lib/db';
-import { resolveAnalyticsQueryWindow } from '@/lib/analytics';
+import { parseAnalyticsMessageMode, resolveAnalyticsQueryWindow } from '@/lib/analytics';
 import {
   AGENTMAIL_USD_PER_SEND,
   applyWorkerShare,
@@ -67,6 +67,7 @@ export type AnalyticsDrilldownInput = {
   campaignIds?: string[] | null;
   tags?: string[] | null;
   userId?: string | null;
+  messageMode?: string | null;
 };
 
 function formatUsd(num: number | null | undefined): string {
@@ -130,6 +131,7 @@ export async function getMetricDrilldown(input: AnalyticsDrilldownInput): Promis
   const cleanCampaignIds = input.campaignIds?.filter(Boolean) ?? [];
   const cleanTags = input.tags?.map((t) => t.trim().toLowerCase()).filter(Boolean) ?? [];
   const cleanUserId = input.userId?.trim() || null;
+  const cleanMessageMode = parseAnalyticsMessageMode(input.messageMode);
 
   const { rows: matchingCampaigns } = await dbQuery<{ id: string; name: string }>(
     `SELECT c.id::text AS id, c.name
@@ -138,8 +140,14 @@ export async function getMetricDrilldown(input: AnalyticsDrilldownInput): Promis
         AND ($2::uuid[] IS NULL OR cardinality($2::uuid[]) = 0 OR c.id = ANY($2::uuid[]))
         AND ($3::text[] IS NULL OR cardinality($3::text[]) = 0 OR c.id IN (
           SELECT ct.campaign_id FROM outreach.campaign_tags ct WHERE lower(ct.tag) = ANY($3::text[])
-        ))`,
-    [cleanUserId, cleanCampaignIds.length ? cleanCampaignIds : null, cleanTags.length ? cleanTags : null],
+        ))
+        AND ($4::text IS NULL OR COALESCE(c.message_mode, 'ai') = $4)`,
+    [
+      cleanUserId,
+      cleanCampaignIds.length ? cleanCampaignIds : null,
+      cleanTags.length ? cleanTags : null,
+      cleanMessageMode === 'all' ? null : cleanMessageMode,
+    ],
   );
 
   const campaignIds = matchingCampaigns.map((c) => c.id);

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
 import { AutoOutreachBoard, type OutreachCarouselFocus } from '@/app/campaigns/[id]/draft/auto-outreach-board';
 import { DraftingActivityPanel } from '@/app/campaigns/[id]/draft/drafting-activity-panel';
@@ -15,6 +15,9 @@ import { EmailReview } from '@/app/campaigns/[id]/draft/email-review';
 import { ExportPanel, type ExportPulse } from '@/app/campaigns/[id]/draft/export-panel';
 import { LeadsTable } from '@/app/campaigns/[id]/draft/leads-table';
 import type { DraftingSnapshot, SenderProfile } from '@/app/campaigns/[id]/draft/types';
+import { MessageComposer } from '@/app/components/message-composer';
+import { buildSignatureHtml, resolveEmailSignature } from '@/lib/drafting/email-signature';
+import { parseMessageTemplate, parseSubjectTemplate } from '@/lib/drafting/message-template';
 import {
   draftNeedsReview,
   sortDraftRows,
@@ -110,6 +113,12 @@ export function DraftWorkspace({
   const [resumeBusy, setResumeBusy] = useState(false);
   const [cancelRunBusy, setCancelRunBusy] = useState(false);
   const [pauseNotice, setPauseNotice] = useState<string | null>(null);
+  const [messageDialog, setMessageDialog] = useState(false);
+  const [editSubject, setEditSubject] = useState('');
+  const [editBody, setEditBody] = useState('');
+  const [editIncludeSignature, setEditIncludeSignature] = useState(true);
+  const [messageSaving, setMessageSaving] = useState(false);
+  const [messageError, setMessageError] = useState<string | null>(null);
   const pollFailures = useRef(0);
   const requestSequence = useRef(0);
   const loadInFlight = useRef(false);
@@ -674,6 +683,68 @@ export function DraftWorkspace({
     />
   ) : null;
 
+  function openMessageDialog() {
+    const msg = snapshot?.campaign_message;
+    setEditSubject(msg?.subject_template ?? '');
+    setEditBody(msg?.body_template ?? '');
+    setEditIncludeSignature(msg?.include_signature !== false);
+    setMessageError(null);
+    setMessageDialog(true);
+  }
+
+  async function saveCampaignMessage(event: FormEvent) {
+    event.preventDefault();
+    const subject = parseSubjectTemplate(editSubject);
+    const body = parseMessageTemplate(editBody);
+    if (subject.errors[0] || body.errors[0] || !subject.canonical.trim() || !body.canonical.trim()) {
+      setMessageError(subject.errors[0]?.message ?? body.errors[0]?.message ?? 'Subject and body are required');
+      return;
+    }
+    setMessageSaving(true);
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message_subject_template: subject.canonical,
+          message_body_template: body.canonical,
+          include_signature: editIncludeSignature,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessageError(typeof data.error === 'string' ? data.error : 'Could not save message');
+        return;
+      }
+      setMessageDialog(false);
+      await loadSnapshot();
+    } catch (error) {
+      setMessageError(error instanceof Error ? error.message : 'Could not save message');
+    } finally {
+      setMessageSaving(false);
+    }
+  }
+
+  const signaturePreviewHtml = useMemo(() => {
+    if (!sender) {
+      return buildSignatureHtml({
+        displayName: 'Lucas Figueroa',
+        title: 'President',
+        companyName: 'Helios Group',
+        headshotUrl: null,
+      });
+    }
+    return buildSignatureHtml(resolveEmailSignature({
+      workEmail: sender.work_email,
+      displayName: sender.display_name,
+      title: sender.title,
+      companyName: sender.company_name,
+      profileId: sender.id,
+      headshotStoragePath: sender.headshot_storage_path,
+      allowRemoteHeadshot: true,
+    }));
+  }, [sender]);
+
   if (showLaunchShell) {
     if (autoMode) {
       return (
@@ -885,6 +956,15 @@ export function DraftWorkspace({
             </button>
           </div>
         ) : null}
+        {snapshot.campaign_message?.mode === 'custom' ? (
+          <button
+            type="button"
+            className="btn btn--quiet"
+            onClick={openMessageDialog}
+          >
+            Edit campaign message
+          </button>
+        ) : null}
         {mode === 'email' && leadsAttention > 0 ? (
           <p className="drafting-leads-helper" role="status">
             Leads require mailbox verification before drafting
@@ -903,6 +983,7 @@ export function DraftWorkspace({
             currentItemId={currentItemId}
             sender={sender}
             sends={snapshot.sends}
+            customMode={snapshot.campaign_message?.mode === 'custom'}
             onSelectItem={setCurrentItemId}
             onRefresh={() => void loadSnapshot()}
             onOptimisticApprove={applyOptimisticApprove}
@@ -937,6 +1018,38 @@ export function DraftWorkspace({
 
       {!autoMode && (!snapshot.workspace.generation_complete || snapshot.activity.items.length > 0 || snapshot.counts.running > 0) ? (
         <DraftingActivityPanel snapshot={snapshot} />
+      ) : null}
+
+      {messageDialog ? (
+        <div className="dialog-overlay" role="presentation" onMouseDown={() => !messageSaving && setMessageDialog(false)}>
+          <section className="card dialog dialog--wide" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="card__header">
+              <div className="card__title">Edit campaign message</div>
+              <button type="button" className="dialog__close" onClick={() => setMessageDialog(false)} aria-label="Close dialog">×</button>
+            </div>
+            <div className="card__body">
+              <form className="login-form" onSubmit={(event) => void saveCampaignMessage(event)}>
+                <p className="field__hint" style={{ margin: 0 }}>
+                  Unsent, unedited drafts refill from this template. Sent mail and per-lead edits are kept.
+                </p>
+                <MessageComposer
+                  subject={editSubject}
+                  body={editBody}
+                  includeSignature={editIncludeSignature}
+                  onSubjectChange={setEditSubject}
+                  onBodyChange={setEditBody}
+                  onIncludeSignatureChange={setEditIncludeSignature}
+                  signatureHtml={signaturePreviewHtml}
+                  disabled={messageSaving}
+                />
+                {messageError ? <p className="drafting-action-error" role="alert">{messageError}</p> : null}
+                <button className="btn btn--primary" type="submit" disabled={messageSaving}>
+                  {messageSaving ? 'Saving…' : 'Save message'}
+                </button>
+              </form>
+            </div>
+          </section>
+        </div>
       ) : null}
     </div>
   );

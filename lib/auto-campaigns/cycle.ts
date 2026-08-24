@@ -1,6 +1,6 @@
 import { createApolloRestClient } from '@/lib/auto-campaigns/apollo';
 import { persistEnrichedApolloPeople } from '@/lib/auto-campaigns/ingest';
-import { mapAttributesToSearchParams } from '@/lib/auto-campaigns/filter-map';
+import { mapAttributesToSearchParams, industryKeywordQueue } from '@/lib/auto-campaigns/filter-map';
 import { runPeopleSearchProspecting } from '@/lib/auto-campaigns/prospect';
 import {
   appendProspectLog,
@@ -14,7 +14,8 @@ import {
   saveProspectRunStats,
   updateAutoCursor,
 } from '@/lib/auto-campaigns/repository';
-import { MAX_EXPANSION_STEP, type AutoStatus } from '@/lib/auto-campaigns/types';
+import { expansionLabel, MAX_EXPANSION_STEP } from '@/lib/auto-campaigns/expansion';
+import { type AutoStatus } from '@/lib/auto-campaigns/types';
 import {
   nextAutoCycleAfterCompletion,
   THIN_DAYS_BEFORE_EXHAUST,
@@ -143,7 +144,9 @@ export async function runAutoCampaignCycle(campaignId: string): Promise<{
     if (!searchParams) {
       const mapped = await mapAttributesToSearchParams(campaign.lead_attributes);
       searchParams = mapped.params;
-      opening.push(logNow('map', 'Filters ready. Starting free people search.'));
+      const titles = (searchParams.person_titles ?? []).slice(0, 4).join(', ') || 'none';
+      const keywords = industryKeywordQueue(searchParams).join(', ') || 'none';
+      opening.push(logNow('map', `Mapped industry to titles [${titles}] and keywords [${keywords}]. Starting free people search.`));
       await appendProspectLog(runId, stubStats(campaign, opening));
       await updateAutoCursor({ campaignId, page: campaign.apollo_search_page, searchParams });
     } else {
@@ -246,7 +249,7 @@ export async function runAutoCampaignCycle(campaignId: string): Promise<{
         page = 1;
         combined.log.push(logNow(
           'expand',
-          `Still short ${remaining} verified leads. Widening search (step ${expansionStep}) and continuing today.`,
+          `Still short ${remaining} verified leads. Widening search (${expansionLabel(expansionStep)}) and continuing today.`,
           { count: expansionStep },
         ));
         combined.expansion_step = expansionStep;

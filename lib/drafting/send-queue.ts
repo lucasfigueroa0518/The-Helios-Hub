@@ -77,6 +77,7 @@ export type EmailSendQueueRow = {
 
 export type QueueListItem = EmailSendQueueRow & {
   campaign_name: string;
+  queue_color: string | null;
   overdue: boolean;
   identity_slug: SenderIdentitySlug | null;
   inbox_email: string | null;
@@ -753,6 +754,8 @@ export async function executeImmediateResend(input: {
   toEmail: string;
   subject: string;
   bodyText: string;
+  bodyHtml?: string | null;
+  includeSignature?: boolean;
   title?: string | null;
   companyName?: string | null;
   senderProfileId?: string | null;
@@ -781,6 +784,8 @@ export async function executeImmediateResend(input: {
       toEmail,
       subject: input.subject,
       bodyText: input.bodyText,
+      bodyHtml: input.bodyHtml,
+      includeSignature: input.includeSignature,
       itemId: input.itemId,
       campaignId: input.campaignId,
       title: input.title,
@@ -915,6 +920,7 @@ export async function listSendQueue(input: {
             q.error_message, q.sender_identity_id::text, q.sender_inbox_id::text,
             q.from_email, q.created_at::text, q.updated_at::text,
             c.name AS campaign_name,
+            c.queue_color,
             (q.status = 'queued' AND q.scheduled_for < now()) AS overdue,
             si.slug AS identity_slug,
             lower(coalesce(q.from_email, ib.email)) AS inbox_email,
@@ -1102,6 +1108,7 @@ export async function getSendQueueDetail(
             q.error_message, q.sender_identity_id::text, q.sender_inbox_id::text,
             q.from_email, q.created_at::text, q.updated_at::text,
             c.name AS campaign_name,
+            c.queue_color,
             (q.status = 'queued' AND q.scheduled_for < now()) AS overdue,
             si.slug AS identity_slug,
             lower(coalesce(q.from_email, ib.email)) AS inbox_email,
@@ -1499,6 +1506,8 @@ type SendableDraftPayload = {
   toEmail: string;
   subject: string;
   bodyText: string;
+  bodyHtml: string | null;
+  includeSignature: boolean;
   recipientName: string;
   title: string | null;
   companyName: string | null;
@@ -1515,6 +1524,8 @@ async function loadLatestSendablePayload(itemId: string): Promise<SendableDraftP
     to_email: string;
     subject: string;
     body_text: string;
+    body_html: string | null;
+    include_signature: boolean;
     from_name: string;
     from_email: string;
     recipient_name: string | null;
@@ -1535,6 +1546,8 @@ async function loadLatestSendablePayload(itemId: string): Promise<SendableDraftP
             ) AS to_email,
             d.subject,
             d.body_text,
+            d.body_html,
+            d.include_signature,
             coalesce(nullif(trim(i.input_snapshot #>> '{sender,displayName}'), ''), '') AS from_name,
             coalesce(
               q.from_email,
@@ -1585,7 +1598,7 @@ async function loadLatestSendablePayload(itemId: string): Promise<SendableDraftP
           LIMIT 1
        ) sp ON true
        JOIN LATERAL (
-         SELECT subject, body_text
+         SELECT subject, body_text, body_html, include_signature
            FROM outreach.email_drafts ed
           WHERE ed.drafting_item_id = i.id
           ORDER BY ed.content_revision DESC
@@ -1610,6 +1623,8 @@ async function loadLatestSendablePayload(itemId: string): Promise<SendableDraftP
     toEmail: resolveSendToEmail(row.campaign_id, row.to_email),
     subject: row.subject,
     bodyText: row.body_text,
+    bodyHtml: row.body_html,
+    includeSignature: row.include_signature !== false,
     recipientName: row.recipient_name || row.to_email,
     title: row.title || identity.title,
     companyName: row.company_name || identity.companyName,

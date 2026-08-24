@@ -26,6 +26,8 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     subject?: string;
     body_text?: string;
     bodyText?: string;
+    body_html?: string | null;
+    bodyHtml?: string | null;
   };
 
   try {
@@ -45,6 +47,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       expectedInputFingerprint: body.expectedInputFingerprint ?? body.expected_input_fingerprint,
       subject: body.subject,
       bodyText: body.bodyText ?? body.body_text,
+      bodyHtml: body.bodyHtml ?? body.body_html,
     });
     return draftingJson(result);
   } catch (error) {

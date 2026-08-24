@@ -170,6 +170,8 @@ const STRANDED_IDLE_MAP: Record<string, DraftingItemState> = {
   queued_rewrite: 'failed_rewrite',
   rewriting: 'failed_rewrite',
   verifying_mailbox: 'needs_lead_review',
+  queued_template_fill: 'failed_template_fill',
+  filling_template: 'failed_template_fill',
 };
 
 /**

@@ -305,16 +305,22 @@ BEGIN
           'failed_research',
           'failed_write',
           'failed_rewrite',
+          'queued_template_fill',
+          'filling_template',
+          'failed_template_fill',
           'cancelled'
         )) NOT VALID;
     END IF;
     -- Upgrade existing DBs that already have drafting_items_state_check without
-    -- waiting_company_research (ADD CONSTRAINT IF NOT EXISTS is a no-op there).
+    -- waiting_company_research / template-fill states (ADD CONSTRAINT IF NOT EXISTS is a no-op there).
     IF EXISTS (
       SELECT 1 FROM pg_constraint
       WHERE conname = 'drafting_items_state_check'
         AND conrelid = 'outreach.drafting_items'::regclass
-        AND pg_get_constraintdef(oid) NOT LIKE '%waiting_company_research%'
+        AND (
+          pg_get_constraintdef(oid) NOT LIKE '%waiting_company_research%'
+          OR pg_get_constraintdef(oid) NOT LIKE '%queued_template_fill%'
+        )
     ) THEN
       ALTER TABLE outreach.drafting_items DROP CONSTRAINT drafting_items_state_check;
       ALTER TABLE outreach.drafting_items
@@ -338,6 +344,9 @@ BEGIN
           'failed_research',
           'failed_write',
           'failed_rewrite',
+          'queued_template_fill',
+          'filling_template',
+          'failed_template_fill',
           'cancelled'
         )) NOT VALID;
     END IF;
@@ -396,7 +405,9 @@ CREATE INDEX idx_drafting_items_workspace_active_state
       'repairing',
       'ready_for_review',
       'queued_rewrite',
-      'rewriting'
+      'rewriting',
+      'queued_template_fill',
+      'filling_template'
     );
 CREATE INDEX IF NOT EXISTS idx_drafting_items_lead
     ON outreach.drafting_items (lead_id);
@@ -537,6 +548,10 @@ CREATE TABLE IF NOT EXISTS outreach.email_drafts (
 
 ALTER TABLE outreach.email_drafts
     ADD COLUMN IF NOT EXISTS generation_mode text NOT NULL DEFAULT 'legacy';
+ALTER TABLE outreach.email_drafts
+    ADD COLUMN IF NOT EXISTS body_html text;
+ALTER TABLE outreach.email_drafts
+    ADD COLUMN IF NOT EXISTS include_signature boolean NOT NULL DEFAULT true;
 
 DO $$
 BEGIN
@@ -560,7 +575,18 @@ BEGIN
     ) THEN
       ALTER TABLE outreach.email_drafts
         ADD CONSTRAINT email_drafts_generation_mode_check
-        CHECK (generation_mode IN ('live', 'stub', 'legacy')) NOT VALID;
+        CHECK (generation_mode IN ('live', 'stub', 'legacy', 'template')) NOT VALID;
+    END IF;
+    IF EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conname = 'email_drafts_generation_mode_check'
+        AND conrelid = 'outreach.email_drafts'::regclass
+        AND pg_get_constraintdef(oid) NOT LIKE '%template%'
+    ) THEN
+      ALTER TABLE outreach.email_drafts DROP CONSTRAINT email_drafts_generation_mode_check;
+      ALTER TABLE outreach.email_drafts
+        ADD CONSTRAINT email_drafts_generation_mode_check
+        CHECK (generation_mode IN ('live', 'stub', 'legacy', 'template')) NOT VALID;
     END IF;
 END $$;
 
@@ -670,7 +696,20 @@ BEGIN
       ALTER TABLE outreach.drafting_jobs
         ADD CONSTRAINT drafting_jobs_kind_check
         CHECK (kind IN (
-          'verify_mailbox', 'research', 'write', 'repair', 'rewrite'
+          'verify_mailbox', 'research', 'write', 'repair', 'rewrite', 'template_fill'
+        )) NOT VALID;
+    END IF;
+    IF EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conname = 'drafting_jobs_kind_check'
+        AND conrelid = 'outreach.drafting_jobs'::regclass
+        AND pg_get_constraintdef(oid) NOT LIKE '%template_fill%'
+    ) THEN
+      ALTER TABLE outreach.drafting_jobs DROP CONSTRAINT drafting_jobs_kind_check;
+      ALTER TABLE outreach.drafting_jobs
+        ADD CONSTRAINT drafting_jobs_kind_check
+        CHECK (kind IN (
+          'verify_mailbox', 'research', 'write', 'repair', 'rewrite', 'template_fill'
         )) NOT VALID;
     END IF;
     IF NOT EXISTS (

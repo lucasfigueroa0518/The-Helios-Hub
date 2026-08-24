@@ -11,6 +11,7 @@ import { HubLoadingSpinner } from '@/app/hub/hub-loading';
 import { LeadListTutorial } from '@/app/hub/lead-list-tutorial';
 
 import { requestJson } from '@/lib/client-request';
+import { campaignHref } from '@/lib/home/campaignHref';
 import {
   inboxCountForIdentity,
   SENDER_IDENTITY_LABELS,
@@ -20,6 +21,9 @@ import { LivePulse } from '@/app/components/live-pulse';
 import { TagBadge } from '@/app/components/tag-badge';
 import { TagInputPopover } from '@/app/components/tag-input-popover';
 import type { TagWithColor } from '@/lib/campaigns';
+import { MessageComposer } from '@/app/components/message-composer';
+import { buildSignatureHtml, LUCAS_SIGNATURE_DEFAULTS } from '@/lib/drafting/email-signature';
+import { parseMessageTemplate, parseSubjectTemplate } from '@/lib/drafting/message-template';
 
 const DRAFTING_POLL_MS = 5_000;
 
@@ -71,12 +75,31 @@ export function CampaignHub({ email }: { email: string }) {
   const [senderIdentity, setSenderIdentity] = useState<SenderIdentitySlug>('lucas');
   const [sourceId, setSourceId] = useState('');
   const [saving, setSaving] = useState(false);
+  const [messageMode, setMessageMode] = useState<'ai' | 'custom'>('ai');
+  const [subjectTemplate, setSubjectTemplate] = useState('');
+  const [bodyTemplate, setBodyTemplate] = useState('');
+  const [includeSignature, setIncludeSignature] = useState(true);
 
   const active = useMemo(() => campaigns.filter((campaign) => campaign.status === 'active'), [campaigns]);
   const archived = useMemo(() => campaigns.filter((campaign) => campaign.status === 'archived'), [campaigns]);
   const anyDrafting = useMemo(
     () => campaigns.some((campaign) => campaign.drafting_active),
     [campaigns],
+  );
+  const customTemplateValid = useMemo(() => {
+    if (messageMode !== 'custom') return true;
+    const subject = parseSubjectTemplate(subjectTemplate);
+    const body = parseMessageTemplate(bodyTemplate);
+    return subject.errors.length === 0 && body.errors.length === 0 && Boolean(subject.canonical.trim() && body.canonical.trim());
+  }, [messageMode, subjectTemplate, bodyTemplate]);
+  const signaturePreviewHtml = useMemo(
+    () => buildSignatureHtml({
+      displayName: LUCAS_SIGNATURE_DEFAULTS.displayName,
+      title: LUCAS_SIGNATURE_DEFAULTS.title,
+      companyName: LUCAS_SIGNATURE_DEFAULTS.companyName,
+      headshotUrl: null,
+    }),
+    [],
   );
 
   async function loadCampaigns(force = false) {
@@ -118,6 +141,10 @@ export function CampaignHub({ email }: { email: string }) {
     setBusinessSize('');
     setEmailsPerDay('10');
     setSenderIdentity('lucas');
+    setMessageMode('ai');
+    setSubjectTemplate('');
+    setBodyTemplate('');
+    setIncludeSignature(true);
     setSelected(null);
     setDialog('create');
   }
@@ -142,21 +169,31 @@ export function CampaignHub({ email }: { email: string }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(
-          kind === 'auto'
-            ? {
-              name,
-              kind: 'auto',
-              needs_enrichment: false,
-              emails_per_day: Number.parseInt(emailsPerDay.replace(/[^\d]/g, ''), 10),
-              sender_identity_slug: senderIdentity,
-              lead_attributes: {
-                industry,
-                seniority,
-                geography,
-                business_size: businessSize,
-              },
-            }
-            : { name, needs_enrichment: needsEnrichment },
+          {
+            ...(kind === 'auto'
+              ? {
+                name,
+                kind: 'auto' as const,
+                needs_enrichment: false,
+                emails_per_day: Number.parseInt(emailsPerDay.replace(/[^\d]/g, ''), 10),
+                sender_identity_slug: senderIdentity,
+                lead_attributes: {
+                  industry,
+                  seniority,
+                  geography,
+                  business_size: businessSize,
+                },
+              }
+              : { name, needs_enrichment: needsEnrichment }),
+            message_mode: messageMode,
+            ...(messageMode === 'custom'
+              ? {
+                message_subject_template: subjectTemplate,
+                message_body_template: bodyTemplate,
+                include_signature: includeSignature,
+              }
+              : {}),
+          },
         ),
       });
       invalidateHubCache('/api/campaigns');
@@ -324,7 +361,7 @@ export function CampaignHub({ email }: { email: string }) {
 
       {dialog && (
         <div className="dialog-overlay" role="presentation" onMouseDown={() => !saving && setDialog(null)}>
-          <section className="card dialog" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+          <section className={`card dialog${dialog === 'create' && messageMode === 'custom' ? ' dialog--wide' : ''}`} role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
             <div className="card__header">
               <div className="card__title">
                 {dialog === 'create' && 'New Campaign'}
@@ -366,6 +403,33 @@ export function CampaignHub({ email }: { email: string }) {
                       required
                     />
                   </label>
+                  <div className="field">
+                    <span className="field__label">Message</span>
+                    <div className="segmented" style={{ width: 'fit-content' }}>
+                      <button
+                        type="button"
+                        className={`segmented__item${messageMode === 'ai' ? ' segmented__item--active' : ''}`}
+                        onClick={() => setMessageMode('ai')}
+                      >
+                        AI-generated
+                      </button>
+                      <button
+                        type="button"
+                        className={`segmented__item${messageMode === 'custom' ? ' segmented__item--active' : ''}`}
+                        onClick={() => {
+                          setMessageMode('custom');
+                          setNeedsEnrichment(false);
+                        }}
+                      >
+                        Custom message
+                      </button>
+                    </div>
+                    <p className="field__hint" style={{ margin: 0, marginTop: 'var(--space-1)' }}>
+                      {messageMode === 'custom'
+                        ? 'One template for every lead. Merge fields fill from the list — no Claude drafting cost.'
+                        : 'Research plus write. Claude drafts a unique email per lead.'}
+                    </p>
+                  </div>
                   {kind === 'manual' ? (
                     <div className="field" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 'var(--space-2)' }}>
                       <span className="field__label" id="needs-enrichment-label">Needs Enrichment?</span>
@@ -387,7 +451,9 @@ export function CampaignHub({ email }: { email: string }) {
                       </div>
                       <p className="field__hint" style={{ margin: 0, marginTop: 'var(--space-1)' }}>
                         {needsEnrichment
-                          ? 'Upload → Enrich → Review → Draft. Use for lists that still need email and profile research.'
+                          ? (messageMode === 'custom'
+                            ? 'Enrich still costs Claude and is usually unnecessary for a custom template. Continue only if the list is missing emails or profile fields.'
+                            : 'Upload → Enrich → Review → Draft. Use for lists that still need email and profile research.')
                           : 'Upload → Draft. Use for lists that are already enriched with validated emails.'}
                       </p>
                     </div>
@@ -440,12 +506,24 @@ export function CampaignHub({ email }: { email: string }) {
                       </label>
                     </>
                   )}
+                  {messageMode === 'custom' ? (
+                    <MessageComposer
+                      subject={subjectTemplate}
+                      body={bodyTemplate}
+                      includeSignature={includeSignature}
+                      onSubjectChange={setSubjectTemplate}
+                      onBodyChange={setBodyTemplate}
+                      onIncludeSignatureChange={setIncludeSignature}
+                      signatureHtml={signaturePreviewHtml}
+                    />
+                  ) : null}
                   <button
                     className="btn btn--primary"
                     type="submit"
                     disabled={
                       saving
                       || !name.trim()
+                      || !customTemplateValid
                       || (kind === 'auto' && (!industry.trim() || !seniority.trim() || !geography.trim() || !businessSize.trim() || !Number.parseInt(emailsPerDay.replace(/[^\d]/g, ''), 10)))
                     }
                   >
@@ -558,11 +636,7 @@ function CampaignRow({
     : 'Drafting';
   const isAuto = campaign.kind === 'auto';
   const isLive = isAuto && campaign.auto_status === 'live';
-  const href = isAuto
-    ? `/campaigns/${campaign.id}/prospect`
-    : draftingActive
-      ? `/campaigns/${campaign.id}/draft`
-      : `/campaigns/${campaign.id}`;
+  const href = campaignHref(campaign);
   const meta = isAuto
     ? `${SENDER_IDENTITY_LABELS[campaign.sender_identity_slug ?? 'lucas']} · ${campaign.sent_count ?? 0} sent all-time · ${campaign.lead_count} pulled · ${(campaign.auto_status ?? 'pending_sender').replace(/_/g, ' ')}`
     : `${campaign.lead_count} ${campaign.lead_count === 1 ? 'lead' : 'leads'} · ${formatDate(campaign.last_run_at)}`;
@@ -572,6 +646,7 @@ function CampaignRow({
       <Link
         className="campaign-row__main"
         href={href}
+        prefetch={false}
       >
         <span className="campaign-row__heading">
           {isLive ? <LivePulse live label="Live" /> : null}

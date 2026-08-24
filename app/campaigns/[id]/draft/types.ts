@@ -32,6 +32,9 @@ export type DraftingItemRow = {
     lint_warnings: number;
     retry_suggested: boolean;
     lint_hard_codes: string[];
+    generation_mode?: 'live' | 'stub' | 'legacy' | 'template';
+    body_html?: string | null;
+    include_signature?: boolean;
     generated_at: string | null;
     temporal_status: 'verified' | 'context_only' | 'blocked' | 'unknown';
     export_quality_ready: boolean;
@@ -61,7 +64,7 @@ export type DraftingItemRow = {
   } | null;
 };
 
-export type WorkspaceActivityPhase = 'verify' | 'research' | 'writing' | 'repair' | 'rewrite';
+export type WorkspaceActivityPhase = 'verify' | 'research' | 'writing' | 'repair' | 'rewrite' | 'template';
 
 export type WorkspaceActivityItem = {
   item_id: string;
@@ -89,6 +92,12 @@ export type DraftingSnapshot = {
     review_complete: boolean;
     paused: boolean;
     paused_at: string | null;
+  };
+  campaign_message: {
+    mode: 'ai' | 'custom';
+    subject_template: string | null;
+    body_template: string | null;
+    include_signature: boolean;
   };
   activity: WorkspaceActivity;
   counts: {

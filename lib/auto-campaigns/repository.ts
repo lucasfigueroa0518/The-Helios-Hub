@@ -4,8 +4,6 @@ import { isSenderProfileSignatureReady } from '@/lib/drafting/email-signature';
 import { isNyWeekday } from '@/lib/auto-campaigns/schedule';
 import { formatNyDate } from '@/lib/drafting/send-queue-schedule';
 import {
-  AUTO_QUEUE_COLORS,
-  type AutoQueueColor,
   type AutoStatus,
   type CampaignKind,
   type LeadAttributes,
@@ -15,6 +13,8 @@ import {
 import { normalizeLinkedinUrl } from '@/lib/auto-campaigns/credit-pipeline';
 import type { CampaignSheetViewRow } from '@/lib/campaign-sheet';
 import { toCampaignSheetViewRows, type CampaignSheetRow } from '@/lib/campaign-sheet';
+
+export { pickQueueColor } from '@/lib/auto-campaigns/queue-colors';
 
 export type AutoCampaignRow = {
   id: string;
@@ -87,15 +87,9 @@ export async function ownerHasReadySender(
 export async function listUsedQueueColors(_ownerId?: string): Promise<string[]> {
   const { rows } = await dbQuery<{ queue_color: string | null }>(
     `SELECT queue_color FROM outreach.campaigns
-      WHERE kind = 'auto' AND status = 'active' AND queue_color IS NOT NULL`,
+      WHERE status = 'active' AND queue_color IS NOT NULL`,
   );
   return rows.flatMap((row) => row.queue_color ? [row.queue_color] : []);
-}
-
-export function pickQueueColor(used: string[]): AutoQueueColor {
-  const taken = new Set(used);
-  const free = AUTO_QUEUE_COLORS.find((color) => !taken.has(color));
-  return free ?? AUTO_QUEUE_COLORS[used.length % AUTO_QUEUE_COLORS.length]!;
 }
 
 export async function loadKnownApolloIds(): Promise<Set<string>> {

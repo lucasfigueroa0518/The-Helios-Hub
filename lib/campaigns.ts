@@ -18,6 +18,11 @@ import {
   parseSenderIdentitySlug,
   type SenderIdentitySlug,
 } from '@/lib/agentmail-inboxes';
+import {
+  assertCustomMessageTemplates,
+  parseMessageMode,
+  type MessageMode,
+} from '@/lib/drafting/message-template';
 
 export type TagWithColor = {
   tag: string;
@@ -37,6 +42,10 @@ export type Campaign = {
   emails_per_day: number | null;
   follow_up_enabled: boolean;
   sender_identity_slug: SenderIdentitySlug | null;
+  message_mode: MessageMode;
+  message_subject_template: string | null;
+  message_body_template: string | null;
+  include_signature: boolean;
   lead_attributes: LeadAttributes;
   expansion_step: number;
   queue_color: string | null;
@@ -119,6 +128,10 @@ function mapCampaignRow(row: CampaignQueryRow): Campaign {
     sender_identity_slug: campaign.kind === 'auto'
       ? campaignSenderIdentity(campaign.sender_identity_slug)
       : parseSenderIdentitySlug(campaign.sender_identity_slug),
+    message_mode: parseMessageMode(campaign.message_mode),
+    message_subject_template: campaign.message_subject_template ?? null,
+    message_body_template: campaign.message_body_template ?? null,
+    include_signature: campaign.include_signature !== false,
     expansion_step: Number(campaign.expansion_step ?? 0) || 0,
     queue_color: campaign.queue_color ?? null,
     next_cycle_at: campaign.next_cycle_at ?? null,
@@ -130,12 +143,21 @@ function mapCampaignRow(row: CampaignQueryRow): Campaign {
   };
 }
 
+/** Own campaigns, plus every live auto campaign. Parentheses are required so
+ *  `AND c.id = $2` in getCampaign cannot bind only to the auto branch and return
+ *  an unrelated owned campaign (Campaign #15 opening as Campaign #2). */
+export const CAMPAIGN_VISIBILITY_WHERE = `(c.owner_id = $1 OR (COALESCE(c.kind, 'manual') = 'auto' AND c.status = 'active'))`;
+
 const campaignSelect = `
   SELECT
     c.id, c.name, c.status, c.owner_id, c.merged_into_id, c.needs_enrichment,
     COALESCE(c.kind, 'manual') AS kind,
     c.auto_status, c.auto_error, c.emails_per_day, c.follow_up_enabled,
     c.sender_identity_slug,
+    COALESCE(c.message_mode, 'ai') AS message_mode,
+    c.message_subject_template,
+    c.message_body_template,
+    COALESCE(c.include_signature, true) AS include_signature,
     c.lead_attributes, COALESCE(c.expansion_step, 0) AS expansion_step,
     c.queue_color, c.next_cycle_at, c.last_cycle_at,
     c.created_at, c.updated_at,
@@ -171,8 +193,7 @@ const campaignSelect = `
   FROM outreach.campaigns c
   LEFT JOIN outreach.campaign_leads cl ON cl.campaign_id = c.id
   LEFT JOIN outreach.runs r ON r.campaign_id = c.id
-  WHERE c.owner_id = $1
-     OR (COALESCE(c.kind, 'manual') = 'auto' AND c.status = 'active')`;
+  WHERE ${CAMPAIGN_VISIBILITY_WHERE}`;
 
 export async function listCampaigns(ownerId: string): Promise<Campaign[]> {
   const { rows } = await dbQuery<CampaignQueryRow>(
@@ -203,6 +224,10 @@ export type CreateCampaignInput = {
   followUpEnabled?: boolean;
   senderIdentitySlug?: SenderIdentitySlug;
   leadAttributes?: LeadAttributes;
+  messageMode?: MessageMode;
+  messageSubjectTemplate?: string;
+  messageBodyTemplate?: string;
+  includeSignature?: boolean;
 };
 
 function normalizeLeadAttributes(input?: LeadAttributes): LeadAttributes {
@@ -247,14 +272,17 @@ export async function createCampaign(
     const defaultName = `Campaign #${count.rows[0].count + 1}`;
     const name = input?.name?.trim() || defaultName;
     const kind: CampaignKind = input?.kind === 'auto' ? 'auto' : 'manual';
-    const needsEnrichment = kind === 'auto' ? false : (input?.needsEnrichment ?? false);
+    const messageMode: MessageMode = input?.messageMode === 'custom' ? 'custom' : 'ai';
+    const needsEnrichment = kind === 'auto'
+      ? false
+      : (input?.needsEnrichment ?? (messageMode === 'custom' ? false : false));
     const autoCreate = kind === 'auto' ? assertAutoCreateInput(input ?? {}) : null;
     const attrs = autoCreate ? autoCreate.attrs : normalizeLeadAttributes();
     const senderIdentity = autoCreate?.senderIdentity ?? null;
     const emailsPerDay = kind === 'auto' ? Math.floor(Number(input?.emailsPerDay)) : null;
     const followUp = kind === 'auto' ? Boolean(input?.followUpEnabled) : false;
     const usedColors = await listUsedQueueColors(ownerId);
-    const queueColor = kind === 'auto' ? pickQueueColor(usedColors) : null;
+    const queueColor = pickQueueColor(usedColors);
     const senderReady = kind === 'auto'
       ? await ownerHasReadySender(ownerId, senderIdentity)
       : false;
@@ -264,11 +292,24 @@ export async function createCampaign(
       ? (firstNow ? new Date() : nextAutoCycleAt(crypto.randomUUID()))
       : null;
 
+    let subjectTemplate: string | null = null;
+    let bodyTemplate: string | null = null;
+    const includeSignature = input?.includeSignature !== false;
+    if (messageMode === 'custom') {
+      const parsed = assertCustomMessageTemplates({
+        subject: input?.messageSubjectTemplate,
+        body: input?.messageBodyTemplate,
+      });
+      subjectTemplate = parsed.subject;
+      bodyTemplate = parsed.body;
+    }
+
     const created = await client.query<{ id: string }>(
       `INSERT INTO outreach.campaigns (
          owner_id, name, needs_enrichment, kind, auto_status, emails_per_day,
-         follow_up_enabled, sender_identity_slug, lead_attributes, expansion_step, queue_color, next_cycle_at
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,0,$10,$11)
+         follow_up_enabled, sender_identity_slug, lead_attributes, expansion_step, queue_color, next_cycle_at,
+         message_mode, message_subject_template, message_body_template, include_signature
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,0,$10,$11,$12,$13,$14,$15)
        RETURNING id`,
       [
         ownerId,
@@ -282,6 +323,10 @@ export async function createCampaign(
         JSON.stringify(attrs),
         queueColor,
         nextCycle?.toISOString() ?? null,
+        messageMode,
+        subjectTemplate,
+        bodyTemplate,
+        includeSignature,
       ],
     );
     const id = created.rows[0]!.id;
@@ -327,6 +372,38 @@ export async function updateCampaign(
     [campaignId, ownerId, name ?? null, values.status ?? null],
   );
   if (!rowCount) return null;
+  return getCampaign(ownerId, campaignId);
+}
+
+export async function updateCampaignMessageTemplate(
+  ownerId: string,
+  campaignId: string,
+  values: {
+    subjectTemplate: string;
+    bodyTemplate: string;
+    includeSignature?: boolean;
+  },
+): Promise<Campaign | null> {
+  const existing = await getCampaign(ownerId, campaignId);
+  if (!existing) return null;
+  if (existing.message_mode !== 'custom') {
+    throw new Error('Only custom message campaigns can edit a campaign template');
+  }
+  const parsed = assertCustomMessageTemplates({
+    subject: values.subjectTemplate,
+    body: values.bodyTemplate,
+  });
+  const includeSignature = values.includeSignature ?? existing.include_signature;
+  await dbQuery(
+    `UPDATE outreach.campaigns
+        SET message_subject_template = $3,
+            message_body_template = $4,
+            include_signature = $5,
+            updated_at = now()
+      WHERE id = $1
+        AND (owner_id = $2 OR COALESCE(kind, 'manual') = 'auto')`,
+    [campaignId, ownerId, parsed.subject, parsed.body, includeSignature],
+  );
   return getCampaign(ownerId, campaignId);
 }
 
@@ -457,8 +534,8 @@ export async function mergeCampaigns(
   if (targetId === sourceId) throw new Error('Choose a different campaign to merge');
 
   await dbTransaction(async (client) => {
-    const campaigns = await client.query<{ id: string; status: string; kind: string }>(
-      `SELECT id, status, kind FROM outreach.campaigns
+    const campaigns = await client.query<{ id: string; status: string; kind: string; message_mode: string }>(
+      `SELECT id, status, kind, COALESCE(message_mode, 'ai') AS message_mode FROM outreach.campaigns
        WHERE owner_id = $1 AND id = ANY($2::uuid[])
        FOR UPDATE`,
       [ownerId, [targetId, sourceId]],
@@ -469,6 +546,10 @@ export async function mergeCampaigns(
     }
     if (campaigns.rows.some((campaign) => campaign.kind === 'auto')) {
       throw new Error('Auto campaigns cannot be merged');
+    }
+    const modes = new Set(campaigns.rows.map((campaign) => parseMessageMode(campaign.message_mode)));
+    if (modes.size > 1) {
+      throw new Error('AI-generated and custom message campaigns cannot be merged');
     }
 
     await mergeDuplicateSourceLeads(client, sourceId, targetId);

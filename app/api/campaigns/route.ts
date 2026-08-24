@@ -35,6 +35,10 @@ export async function POST(request: NextRequest) {
       geography?: string;
       business_size?: string;
     };
+    message_mode?: 'ai' | 'custom';
+    message_subject_template?: string;
+    message_body_template?: string;
+    include_signature?: boolean;
   } = {};
   try {
     body = await request.json();
@@ -58,6 +62,10 @@ export async function POST(request: NextRequest) {
           business_size: body.lead_attributes.business_size ?? '',
         }
         : undefined,
+      messageMode: body.message_mode === 'custom' ? 'custom' : 'ai',
+      messageSubjectTemplate: body.message_subject_template,
+      messageBodyTemplate: body.message_body_template,
+      includeSignature: typeof body.include_signature === 'boolean' ? body.include_signature : true,
     });
     if (campaign.kind === 'auto' && campaign.auto_status === 'live') {
       const { enqueueAutoCycleJob } = await import('@/lib/auto-campaigns/enqueue');

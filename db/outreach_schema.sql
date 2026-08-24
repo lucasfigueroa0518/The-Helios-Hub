@@ -84,6 +84,14 @@ ALTER TABLE outreach.campaigns
     ADD COLUMN IF NOT EXISTS thin_days int NOT NULL DEFAULT 0;
 ALTER TABLE outreach.campaigns
     ADD COLUMN IF NOT EXISTS sender_identity_slug text;
+ALTER TABLE outreach.campaigns
+    ADD COLUMN IF NOT EXISTS message_mode text NOT NULL DEFAULT 'ai';
+ALTER TABLE outreach.campaigns
+    ADD COLUMN IF NOT EXISTS message_subject_template text;
+ALTER TABLE outreach.campaigns
+    ADD COLUMN IF NOT EXISTS message_body_template text;
+ALTER TABLE outreach.campaigns
+    ADD COLUMN IF NOT EXISTS include_signature boolean NOT NULL DEFAULT true;
 
 DO $$
 BEGIN
@@ -114,6 +122,15 @@ BEGIN
     END IF;
     IF NOT EXISTS (
       SELECT 1 FROM pg_constraint
+      WHERE conname = 'campaigns_message_mode_check'
+        AND conrelid = 'outreach.campaigns'::regclass
+    ) THEN
+      ALTER TABLE outreach.campaigns
+        ADD CONSTRAINT campaigns_message_mode_check
+        CHECK (message_mode IN ('ai', 'custom')) NOT VALID;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint
       WHERE conname = 'campaigns_auto_status_check'
         AND conrelid = 'outreach.campaigns'::regclass
     ) THEN
@@ -132,7 +149,7 @@ BEGIN
     ) THEN
       ALTER TABLE outreach.campaigns
         ADD CONSTRAINT campaigns_expansion_step_check
-        CHECK (expansion_step >= 0 AND expansion_step <= 4) NOT VALID;
+        CHECK (expansion_step >= 0 AND expansion_step <= 1024) NOT VALID;
     END IF;
     IF NOT EXISTS (
       SELECT 1 FROM pg_constraint
@@ -143,6 +160,14 @@ BEGIN
         ADD CONSTRAINT campaigns_apollo_search_page_check
         CHECK (apollo_search_page >= 1) NOT VALID;
     END IF;
+END $$;
+
+DO $$
+BEGIN
+    ALTER TABLE outreach.campaigns DROP CONSTRAINT IF EXISTS campaigns_expansion_step_check;
+    ALTER TABLE outreach.campaigns
+      ADD CONSTRAINT campaigns_expansion_step_check
+      CHECK (expansion_step >= 0 AND expansion_step <= 1024) NOT VALID;
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_campaigns_owner ON outreach.campaigns (owner_id);

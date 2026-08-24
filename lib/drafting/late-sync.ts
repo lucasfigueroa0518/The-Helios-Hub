@@ -8,11 +8,12 @@ export const IDLE_STATES_PROMOTABLE_ON_SYNC = [
   'failed_research',
   'failed_write',
   'failed_rewrite',
+  'failed_template_fill',
 ] as const satisfies readonly DraftingItemState[];
 
 /**
  * Mirrors the ON CONFLICT state CASE in syncCampaignLeadsIntoDraftingWorkspace:
- * never clobber in-flight / already-generated states; only promote idle → queued_research.
+ * never clobber in-flight / already-generated states; only promote idle → queued_research/template_fill.
  */
 export function resolveItemStateAfterLeadSync(
   existingState: DraftingItemState | null,
@@ -21,7 +22,7 @@ export function resolveItemStateAfterLeadSync(
   if (!existingState) return desiredState;
   if (
     (IDLE_STATES_PROMOTABLE_ON_SYNC as readonly string[]).includes(existingState)
-    && desiredState === 'queued_research'
+    && (desiredState === 'queued_research' || desiredState === 'queued_template_fill')
   ) {
     return desiredState;
   }

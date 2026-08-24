@@ -9,6 +9,8 @@ import { campaignHasDraftingWorkspace, campaignHasReviewableData } from '@/lib/c
 import { getCampaign } from '@/lib/campaigns';
 import { getSession } from '@/lib/session';
 
+export const dynamic = 'force-dynamic';
+
 export default async function DraftPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
   if (!session) redirect('/');
@@ -24,7 +26,7 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
   ]);
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" key={id}>
       <section className="card">
         <div className="card__header">
           <div>
@@ -43,6 +45,7 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
         </div>
         <div className="card__body">
           <CampaignTabs
+            key={`tabs-${id}`}
             campaignId={id}
             active="draft"
             showReview={showReview}
@@ -51,6 +54,7 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
             mode={campaign.kind === 'auto' ? 'auto' : 'manual'}
           />
           <DraftWorkspace
+            key={id}
             campaignId={id}
             autoMode={campaign.kind === 'auto'}
             autoStatus={campaign.auto_status}

@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   appendPlainTextSignature,
   buildOutreachEmailHtml,
+  buildOutreachEmailHtmlFromBodyHtml,
   buildSignatureHtml,
   isSenderProfileSignatureReady,
   LUCAS_SIGNATURE_DEFAULTS,
@@ -112,6 +113,26 @@ test('isSenderProfileSignatureReady requires headshot except for Lucas', () => {
     }),
     true,
   );
+});
+
+test('buildOutreachEmailHtmlFromBodyHtml keeps anchors and can omit the signature', () => {
+  const sig = resolveEmailSignature({
+    workEmail: 'lucas@heliosgroup.ai',
+    title: 'President',
+  });
+  const withSig = buildOutreachEmailHtmlFromBodyHtml(
+    '<p>See <a href="https://heliosgroup.ai/">deck</a>.</p>',
+    sig,
+  );
+  assert.match(withSig, /<a href="https:\/\/heliosgroup.ai\/">deck<\/a>/);
+  assert.match(withSig, /Lucas Figueroa/);
+
+  const noSig = buildOutreachEmailHtmlFromBodyHtml(
+    '<p>See <a href="https://heliosgroup.ai/">deck</a>.</p>',
+    null,
+  );
+  assert.match(noSig, /<a href="https:\/\/heliosgroup.ai\/">deck<\/a>/);
+  assert.doesNotMatch(noSig, /Lucas Figueroa/);
 });
 
 test('plainTextBodyToHtml keeps the greeting on its own paragraph', () => {

@@ -68,6 +68,10 @@ test('live v2 delivery mode remains eligible', () => {
   assert.doesNotThrow(() => assertDraftGenerationMode('live'));
 });
 
+test('template generation mode is sendable', () => {
+  assert.doesNotThrow(() => assertDraftGenerationMode('template'));
+});
+
 test('db setup durably migrates generation mode after drafting schema', () => {
   const root = process.cwd();
   const setup = fs.readFileSync(path.join(root, 'scripts', 'db_setup.js'), 'utf8');
@@ -89,7 +93,7 @@ test('db setup durably migrates generation mode after drafting schema', () => {
   assert.match(schema, /generation_mode\s+text NOT NULL DEFAULT 'legacy'/);
   assert.match(migration, /ADD COLUMN IF NOT EXISTS generation_mode text/);
   assert.match(migration, /SET generation_mode = 'legacy'/);
-  assert.match(migration, /generation_mode IN \('live', 'stub', 'legacy'\)/);
+  assert.match(migration, /generation_mode IN \('live', 'stub', 'legacy', 'template'\)/);
 });
 
 test('repository persists, reloads, and preserves truthful generation provenance', () => {
@@ -103,7 +107,7 @@ test('repository persists, reloads, and preserves truthful generation provenance
   assert.match(repository, /input\.generationMode/);
   assert.match(
     repository,
-    /generation_mode, grounding_status, manually_edited, edited_by, edited_at[\s\S]*?'legacy', 'manual_override'/,
+    /generation_mode, grounding_status, manually_edited, edited_by, edited_at[\s\S]*?\$16, 'manual_override'/,
   );
   assert.doesNotMatch(
     repository,

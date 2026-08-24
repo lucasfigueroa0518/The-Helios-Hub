@@ -19,6 +19,9 @@ export const DRAFTING_ITEM_STATES = [
   'failed_research',
   'failed_write',
   'failed_rewrite',
+  'queued_template_fill',
+  'filling_template',
+  'failed_template_fill',
   'cancelled',
 ] as const;
 
@@ -30,6 +33,7 @@ export const DRAFTING_JOB_KINDS = [
   'write',
   'repair',
   'rewrite',
+  'template_fill',
 ] as const;
 
 export type DraftingJobKind = (typeof DRAFTING_JOB_KINDS)[number];
@@ -477,7 +481,7 @@ export type DraftClaimLedgerEntry = {
     | 'timeless';
 };
 
-export type DraftGenerationMode = 'live' | 'stub' | 'legacy';
+export type DraftGenerationMode = 'live' | 'stub' | 'legacy' | 'template';
 
 export type DraftOutputChecks = {
   reasonClearInFirstThreeSentences: boolean;
