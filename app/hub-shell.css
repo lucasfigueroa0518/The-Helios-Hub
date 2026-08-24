@@ -865,42 +865,89 @@ a.hub-home__eyebrow:hover {
 
 @media (max-width: 767px) {
   .hub-home__inner {
-    padding: 1.5rem 1rem 3.5rem;
+    padding: 2.75rem 1.75rem 6rem;
   }
 
   .hub-home__welcome {
-    margin-bottom: 2rem;
+    margin-bottom: 3rem;
+  }
+
+  .hub-home__welcome-kicker {
+    margin-bottom: 0.85rem;
+    font-size: 11px;
+    letter-spacing: 0.2em;
   }
 
   .hub-home__welcome-title {
-    font-size: clamp(1.75rem, 6vw, 2.5rem);
+    font-size: clamp(1.35rem, 6vw, 1.75rem);
+  }
+
+  .hub-home__welcome-subtitle {
+    margin-top: 0.85rem;
+    font-size: 12px;
   }
 
   .hub-home__section + .hub-home__section {
-    margin-top: 2.25rem;
+    margin-top: 3.25rem;
+  }
+
+  .hub-home__section--empty {
+    display: none;
+  }
+
+  .hub-home__section-head {
+    margin-bottom: 1.35rem;
+  }
+
+  .hub-home__eyebrow {
+    font-size: 11px;
+  }
+
+  .hub-home__action {
+    font-size: 11px;
   }
 
   .hub-home__carousel {
     scroll-snap-type: x mandatory;
-    gap: 0.75rem;
+    gap: 1rem;
   }
 
   .hub-home-tile {
     scroll-snap-align: start;
-    flex: 0 0 180px;
-    width: 180px;
-    height: 110px;
-    padding: 0.75rem;
+    flex: 0 0 156px;
+    width: 156px;
+    height: 96px;
+    padding: 0.7rem;
+  }
+
+  .hub-home-tile__name {
+    font-size: 12px;
   }
 
   .hub-home-outreach-bar {
-    padding: 1rem;
+    padding: 1.25rem 1.15rem;
+    gap: 1.15rem;
   }
 
   .hub-home-outreach-bar__stats {
     flex-direction: column;
     align-items: flex-start;
-    gap: 1rem;
+    gap: 1.25rem;
+  }
+
+  .hub-home-outreach-stat__label {
+    font-size: 10px;
+  }
+
+  .hub-home-outreach-stat__value {
+    font-size: 18px;
+  }
+
+  .hub-home-outreach-stat__subtext,
+  .hub-home-outreach-stat__badge,
+  .hub-home-outreach-bar__action-label,
+  .hub-home-outreach-pill {
+    font-size: 10px;
   }
 
   .hub-home-outreach-stat__divider {

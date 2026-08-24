@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { MoreHorizontal, X } from 'lucide-react';
 import { HubPlaneFlight } from '@/app/components/plane-flight';
 import { hubGetJson, invalidateHubCache } from '@/app/hub/hub-data';
 import { HubLoadingSpinner } from '@/app/hub/hub-loading';
@@ -598,6 +598,7 @@ function CampaignRow({
   onReload: () => void;
 }) {
   const [editingTag, setEditingTag] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   async function handleAddTag(tagName: string, colorId: string) {
     try {
@@ -642,64 +643,74 @@ function CampaignRow({
     : `${campaign.lead_count} ${campaign.lead_count === 1 ? 'lead' : 'leads'} · ${formatDate(campaign.last_run_at)}`;
 
   return (
-    <div className={`campaign-row${draftingActive ? ' campaign-row--drafting' : ''}${isLive ? ' campaign-row--live' : ''}`}>
-      <Link
-        className="campaign-row__main"
-        href={href}
-        prefetch={false}
-      >
-        <span className="campaign-row__heading">
-          {isLive ? <LivePulse live label="Live" /> : null}
-          <span className="campaign-row__name">{campaign.name}</span>
-          {draftingActive ? (
-            <span className="campaign-row__drafting" role="status" aria-live="polite">
-              <span className="loading-spinner campaign-row__drafting-spinner" aria-hidden="true" />
-              {draftingLabel}
-            </span>
-          ) : null}
-        </span>
-        <span className="campaign-row__meta">{meta}</span>
-      </Link>
+    <div className={`campaign-row${draftingActive ? ' campaign-row--drafting' : ''}${isLive ? ' campaign-row--live' : ''}${menuOpen ? ' campaign-row--menu-open' : ''}`}>
+      <div className="campaign-row__top">
+        <Link
+          className="campaign-row__main"
+          href={href}
+          prefetch={false}
+        >
+          <span className="campaign-row__heading">
+            {isLive ? <LivePulse live label="Live" /> : null}
+            <span className="campaign-row__name">{campaign.name}</span>
+            {draftingActive ? (
+              <span className="campaign-row__drafting" role="status" aria-live="polite">
+                <span className="loading-spinner campaign-row__drafting-spinner" aria-hidden="true" />
+                {draftingLabel}
+              </span>
+            ) : null}
+          </span>
+          <span className="campaign-row__meta">{meta}</span>
+        </Link>
+        <button
+          type="button"
+          className="campaign-row__more"
+          aria-expanded={menuOpen}
+          aria-label={menuOpen ? 'Hide campaign actions' : 'Show campaign actions'}
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          <MoreHorizontal size={18} />
+        </button>
+      </div>
 
-      <div className="campaign-row__actions" style={{ gap: '6px' }}>
-        {/* Right-aligned tags section */}
-        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px', marginRight: '6px' }}>
-          {tagItems.map((item) => (
-            <TagBadge
-              key={item.tag}
-              tag={item.tag}
-              color={item.color}
-              onRemove={() => void handleRemoveTag(item.tag)}
-              size="sm"
-            />
-          ))}
+      <div className="campaign-row__tags">
+        {tagItems.map((item) => (
+          <TagBadge
+            key={item.tag}
+            tag={item.tag}
+            color={item.color}
+            onRemove={() => void handleRemoveTag(item.tag)}
+            size="sm"
+          />
+        ))}
 
-          {editingTag ? (
-            <TagInputPopover
-              onAddTag={handleAddTag}
-              onCancel={() => setEditingTag(false)}
-              excludeTags={tagItems.map((item) => item.tag)}
-            />
-          ) : (
-            <button
-              type="button"
-              onClick={() => setEditingTag(true)}
-              style={{
-                border: '1px dashed var(--color-border)',
-                background: 'transparent',
-                borderRadius: 'var(--radius-pill)',
-                padding: '2px 8px',
-                fontSize: '11px',
-                color: 'var(--color-text-subtle)',
-                cursor: 'pointer',
-                fontWeight: '500',
-              }}
-            >
-              + Tag
-            </button>
-          )}
-        </div>
+        {editingTag ? (
+          <TagInputPopover
+            onAddTag={handleAddTag}
+            onCancel={() => setEditingTag(false)}
+            excludeTags={tagItems.map((item) => item.tag)}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEditingTag(true)}
+            style={{
+              border: '1px dashed var(--color-border)',
+              background: 'transparent',
+              borderRadius: 'var(--radius-pill)',
+              padding: '2px 8px',
+              fontSize: '11px',
+              color: 'var(--color-text-subtle)',
+              cursor: 'pointer',
+              fontWeight: '500',
+            }}
+          >
+            + Tag
+          </button>
+        )}
+      </div>
 
+      <div className="campaign-row__actions">
         {campaign.status === 'active' && canMerge && <button className="btn btn--quiet" onClick={onMerge}>Merge in</button>}
         <button className="btn btn--quiet" onClick={onRename}>Rename</button>
         {campaign.status === 'active' && <button className="btn btn--quiet" onClick={onArchive}>Archive</button>}

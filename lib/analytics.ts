@@ -46,6 +46,7 @@ export type AnalyticsMetricBlock = {
   campaigns_count: number;
   total_leads: number;
   outreached_leads: number;
+  wasted_leads: number;
   wasted_lead_rate: number | null;
 
   // Review & Edit stats
@@ -219,6 +220,7 @@ function emptyMetrics(): AnalyticsMetricBlock {
     campaigns_count: 0,
     total_leads: 0,
     outreached_leads: 0,
+    wasted_leads: 0,
     wasted_lead_rate: null,
     drafts_reviewed: 0,
     drafts_approved: 0,
@@ -266,6 +268,7 @@ function perUnit(total: number, count: number): number | null {
 function applySpendIdentity<T extends AnalyticsMetricBlock>(m: T, identity: {
   total_leads: number;
   outreached_leads: number;
+  wasted_leads: number;
   outreach_spend_usd: number;
   wasted_spend_usd: number;
   total_spend_usd: number;
@@ -281,6 +284,7 @@ function applySpendIdentity<T extends AnalyticsMetricBlock>(m: T, identity: {
 }): T {
   m.total_leads = identity.total_leads;
   m.outreached_leads = identity.outreached_leads;
+  m.wasted_leads = identity.wasted_leads;
   m.wasted_lead_rate = identity.wasted_lead_rate;
   m.outreach_spend_usd = identity.outreach_spend_usd;
   m.wasted_spend_usd = identity.wasted_spend_usd;
@@ -316,7 +320,7 @@ function finalizeMetrics<T extends AnalyticsMetricBlock>(m: T): T {
     spend_per_lead_usd: spend_per_outreach_usd,
     approval_rate: rate(m.drafts_approved, m.drafts_reviewed),
     cost_per_email_usd: spend_per_outreach_usd,
-    wasted_lead_rate: rate(m.total_leads - m.outreached_leads, m.total_leads),
+    wasted_lead_rate: m.wasted_lead_rate ?? rate(m.wasted_leads, m.total_leads),
     retry_rate: rate(m.orch_jobs_retried, m.orch_jobs_total),
     edit_rate: rate(m.drafts_revised, Math.max(m.drafts_reviewed, m.drafts_revised)),
   };
@@ -904,9 +908,9 @@ export async function getAnalyticsSummary(input: {
     notes: [
       'Total Hub Spend = Outreach Spend + Wasted Spend. Every dollar is classified on a lead first, then rolled up.',
       'Outreach spend is the four-leg stack (enrichment + drafting + worker + AgentMail) on leads with a sent email in this window.',
-      'Wasted spend is that same stack on leads with no sent email, plus unallocated dashboard summaries and leftover drafting opening balances.',
-      'Spend per lead outreach = outreach spend / emails sent.',
-      'Wasted lead rate = (leads in this window − outreached leads) / leads in this window.',
+      'Wasted spend is that same stack on unsent manual leads, plus unallocated dashboard summaries and leftover drafting opening balances. Unsent auto-campaign leads are still in the send queue and are not wasted.',
+      'Spend per lead outreach = sent-lead outreach spend / emails sent.',
+      'Wasted lead rate = wasted leads / leads in this window. Auto-campaign leads waiting to send are excluded from waste.',
       'Enrichment = Claude company research + Apollo enrich credits ($59 / 2,500) + extraction. People search is free.',
       'Drafting includes researching/writing the email and reply Claude spend. Custom message campaigns record $0.00 drafting cost.',
       'Worker spend is GCP VM month-to-date prorated into this window and split across leads. Local worker is unmetered ($0).',

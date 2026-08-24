@@ -23,6 +23,7 @@ export const WORK_KINDS = [
   'dashboards.daily_update',
   'anthropic.cost_sync',
   'auto.cycle',
+  'networking.weekly_ingest',
   'system.reconcile',
 ] as const;
 
@@ -95,6 +96,7 @@ export type WorkPayloadMap = {
   'dashboards.daily_update': { reason?: string };
   'anthropic.cost_sync': { reason?: string };
   'auto.cycle': { campaignId: string; ownerId: string };
+  'networking.weekly_ingest': { reason?: string };
   'system.reconcile': { reason?: string };
 };
 

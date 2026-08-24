@@ -21,6 +21,7 @@ import {
 import {
   assertCustomMessageTemplates,
   parseMessageMode,
+  rewriteHrefsInMarkup,
   type MessageMode,
 } from '@/lib/drafting/message-template';
 
@@ -129,8 +130,12 @@ function mapCampaignRow(row: CampaignQueryRow): Campaign {
       ? campaignSenderIdentity(campaign.sender_identity_slug)
       : parseSenderIdentitySlug(campaign.sender_identity_slug),
     message_mode: parseMessageMode(campaign.message_mode),
-    message_subject_template: campaign.message_subject_template ?? null,
-    message_body_template: campaign.message_body_template ?? null,
+    message_subject_template: campaign.message_subject_template
+      ? rewriteHrefsInMarkup(campaign.message_subject_template)
+      : null,
+    message_body_template: campaign.message_body_template
+      ? rewriteHrefsInMarkup(campaign.message_body_template)
+      : null,
     include_signature: campaign.include_signature !== false,
     expansion_step: Number(campaign.expansion_step ?? 0) || 0,
     queue_color: campaign.queue_color ?? null,

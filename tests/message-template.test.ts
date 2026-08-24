@@ -4,6 +4,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import {
+  adaptHrefInput,
   assertCustomMessageTemplates,
   composerHtmlToTemplate,
   fillMessageTemplates,
@@ -15,6 +16,7 @@ import {
   parseSubjectTemplate,
   previewMessageTemplates,
   resolveTemplateToken,
+  rewriteHrefsInMarkup,
   SAMPLE_TEMPLATE_FIELDS,
   sanitizeHref,
   templateToChipText,
@@ -50,6 +52,57 @@ test('javascript links are rejected', () => {
   assert.equal(sanitizeHref('https://heliosgroup.ai/deck'), 'https://heliosgroup.ai/deck');
   const parsed = parseMessageTemplate('See [deck](javascript:alert(1))');
   assert.equal(parsed.errors.some((error) => error.code === 'invalid_link'), true);
+});
+
+test('href sanitizer collapses doubled protocols, missing colons, and bare hosts', () => {
+  assert.equal(
+    sanitizeHref('https://https//calendly.com/lucas-heliosgroup/30min'),
+    'https://calendly.com/lucas-heliosgroup/30min',
+  );
+  assert.equal(
+    sanitizeHref('https://https://calendly.com/lucas-heliosgroup/30min'),
+    'https://calendly.com/lucas-heliosgroup/30min',
+  );
+  assert.equal(
+    sanitizeHref('https//calendly.com/lucas-heliosgroup/30min'),
+    'https://calendly.com/lucas-heliosgroup/30min',
+  );
+  assert.equal(
+    sanitizeHref('calendly.com/lucas-heliosgroup/30min'),
+    'https://calendly.com/lucas-heliosgroup/30min',
+  );
+  assert.equal(sanitizeHref('http://example.com/path'), 'http://example.com/path');
+  assert.equal(sanitizeHref('https://'), null);
+  assert.equal(sanitizeHref('https://https'), null);
+});
+
+test('adaptHrefInput rewrites messy link-field entries as the user types', () => {
+  assert.equal(
+    adaptHrefInput('https://https//calendly.com/lucas-heliosgroup/30min'),
+    'https://calendly.com/lucas-heliosgroup/30min',
+  );
+  assert.equal(
+    adaptHrefInput('calendly.com/lucas-heliosgroup/30min'),
+    'https://calendly.com/lucas-heliosgroup/30min',
+  );
+  assert.equal(adaptHrefInput('https://'), 'https://');
+  assert.equal(adaptHrefInput('cal'), 'cal');
+});
+
+test('rewriteHrefsInMarkup repairs stored templates and draft bodies', () => {
+  const template = parseMessageTemplate(
+    'Talk <a href="https://https//calendly.com/lucas-heliosgroup/30min">here</a>',
+  );
+  assert.equal(template.errors.length, 0);
+  assert.match(template.canonical, /href="https:\/\/calendly.com\/lucas-heliosgroup\/30min"/);
+
+  const rewritten = rewriteHrefsInMarkup(
+    'start the conversation here (https://https//calendly.com/lucas-heliosgroup/30min).',
+  );
+  assert.equal(
+    rewritten,
+    'start the conversation here (https://calendly.com/lucas-heliosgroup/30min).',
+  );
 });
 
 test('fill blocks missing merge fields and succeeds when present', () => {

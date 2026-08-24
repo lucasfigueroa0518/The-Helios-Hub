@@ -24,6 +24,10 @@ export function formatWelcomeDateTime(date: Date): string {
 
 export function HubHome({ data }: { data: HomePayload }) {
   const [dateTimeText, setDateTimeText] = useState<string>('');
+  const boardsEmpty = data.boards.length === 0;
+  const dashboardsEmpty = data.projects.length === 0;
+  const outreachEmpty = (data.outreachStats?.liveCampaignsCount ?? 0) === 0
+    && (data.outreachStats?.totalSent ?? 0) === 0;
 
   useEffect(() => {
     setDateTimeText(formatWelcomeDateTime(new Date()));
@@ -46,12 +50,12 @@ export function HubHome({ data }: { data: HomePayload }) {
           )}
         </header>
 
-        <section className="hub-home__section">
+        <section className={`hub-home__section${boardsEmpty ? ' hub-home__section--empty' : ''}`}>
           <div className="hub-home__section-head">
             <div className="hub-home__eyebrow">My Boards</div>
             <Link href="/trello" className="hub-home__action">Open Trello</Link>
           </div>
-          {data.boards.length === 0 ? (
+          {boardsEmpty ? (
             <p className="hub-home__empty">No boards yet</p>
           ) : (
             <div className="hub-home__carousel">
@@ -69,12 +73,12 @@ export function HubHome({ data }: { data: HomePayload }) {
           )}
         </section>
 
-        <section className="hub-home__section">
+        <section className={`hub-home__section${dashboardsEmpty ? ' hub-home__section--empty' : ''}`}>
           <div className="hub-home__section-head">
             <Link href="/dashboards" className="hub-home__eyebrow">My Client Dashboards</Link>
             <Link href="/dashboards" className="hub-home__action">Open dashboards</Link>
           </div>
-          {data.projects.length === 0 ? (
+          {dashboardsEmpty ? (
             <p className="hub-home__empty">No Active Dashboards</p>
           ) : (
             <div className="hub-home__carousel">
@@ -96,12 +100,12 @@ export function HubHome({ data }: { data: HomePayload }) {
           )}
         </section>
 
-        <section className="hub-home__section">
+        <section className={`hub-home__section${outreachEmpty ? ' hub-home__section--empty' : ''}`}>
           <div className="hub-home__section-head">
             <Link href="/hub" className="hub-home__eyebrow">My Outreach</Link>
             <Link href="/hub" className="hub-home__action">Outreach Hub</Link>
           </div>
-          {data.outreachStats?.liveCampaignsCount === 0 && data.outreachStats?.totalSent === 0 ? (
+          {outreachEmpty ? (
             <p className="hub-home__empty">No active campaigns</p>
           ) : (
             <Link href="/hub" className="hub-home-outreach-bar">

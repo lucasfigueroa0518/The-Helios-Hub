@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent }
 import { Link as LinkIcon } from 'lucide-react';
 
 import {
+  adaptHrefInput,
   composerHtmlToTemplate,
   filterTemplateTokenSuggestions,
   MESSAGE_TEMPLATE_TOKEN_LIST,
@@ -237,7 +238,7 @@ export function MessageComposer({
       : below;
     setLinkDraft({
       text: (anchor?.textContent ?? range.toString()).trim(),
-      href: anchor?.getAttribute('href') || 'https://',
+      href: sanitizeHref(anchor?.getAttribute('href') || '') || '',
       top,
       left,
       collapsed: range.collapsed && !anchor,
@@ -453,12 +454,19 @@ export function MessageComposer({
                   ref={linkUrlRef}
                   className="field__input"
                   value={linkDraft.href}
-                  placeholder="https://"
+                  placeholder="calendly.com/… or https://"
                   inputMode="url"
                   autoComplete="off"
+                  onPaste={(event) => {
+                    const pasted = event.clipboardData.getData('text').trim();
+                    if (!pasted) return;
+                    event.preventDefault();
+                    setLinkError(null);
+                    setLinkDraft({ ...linkDraft, href: adaptHrefInput(pasted) || pasted });
+                  }}
                   onChange={(event) => {
                     setLinkError(null);
-                    setLinkDraft({ ...linkDraft, href: event.target.value });
+                    setLinkDraft({ ...linkDraft, href: adaptHrefInput(event.target.value) });
                   }}
                   onKeyDown={onLinkFieldKeyDown}
                 />

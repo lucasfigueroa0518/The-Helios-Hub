@@ -30,19 +30,24 @@ export default async function EditProjectPage({
         <p className="mt-1 text-sm font-light text-fg-3">{project.client.name}</p>
       </div>
       <div className="space-y-6">
-        <GenerateUpdateButton projectId={project.id} />
-        {project.lastSyncError && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            <span className="font-semibold">⚠ Last sync failed.</span>{' '}
-            {project.lastSyncError}
+        <details className="dashboards-mobile-acc" open>
+          <summary>Project actions</summary>
+          <div className="space-y-4">
+            <GenerateUpdateButton projectId={project.id} />
+            {project.lastSyncError && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <span className="font-semibold">⚠ Last sync failed.</span>{' '}
+                {project.lastSyncError}
+              </div>
+            )}
+            <SyncButton
+              projectId={project.id}
+              lastSyncAt={project.githubLastSyncAt}
+            />
+            <DeleteProjectButton projectId={project.id} projectName={project.name} />
           </div>
-        )}
-        <SyncButton
-          projectId={project.id}
-          lastSyncAt={project.githubLastSyncAt}
-        />
+        </details>
         <EditProjectForm project={project} clients={clients} />
-        <DeleteProjectButton projectId={project.id} projectName={project.name} />
       </div>
     </div>
   );

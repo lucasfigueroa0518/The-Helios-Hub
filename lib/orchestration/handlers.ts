@@ -828,6 +828,24 @@ async function handleReconcile(
     // Keep reconcile resilient.
   }
 
+  let networkingWeeklyEnqueued = 0;
+  try {
+    const { isoWeekKey } = await import('@/lib/networking/ingest');
+    const weekKey = isoWeekKey(new Date());
+    await enqueueWorkBatch([
+      child(
+        'networking.weekly_ingest',
+        { reason: 'scheduled' },
+        weekKey,
+        'networking',
+        { maxAttempts: 2, priority: -6 },
+      ),
+    ]);
+    networkingWeeklyEnqueued = 1;
+  } catch {
+    // Keep reconcile resilient.
+  }
+
   return {
     children,
     result: {
@@ -848,6 +866,7 @@ async function handleReconcile(
       anthropicCostSyncEnqueued,
       autoCyclesEnqueued,
       autoDraftsQueued,
+      networkingWeeklyEnqueued,
       staleWorkersRemoved,
     },
   };
@@ -899,6 +918,19 @@ async function handleAutoCycle(
   return { result };
 }
 
+async function handleNetworkingWeeklyIngest(
+  job: OrchestrationJob<'networking.weekly_ingest'>,
+): Promise<WorkHandlerResult> {
+  const { runWeeklyIngest } = await import('@/lib/networking/ingest');
+  const result = await runWeeklyIngest();
+  return {
+    result: {
+      reason: job.payload.reason ?? null,
+      ...result,
+    },
+  };
+}
+
 type Handler = (job: OrchestrationJob) => Promise<WorkHandlerResult>;
 
 const HANDLERS: Record<WorkKind, Handler> = {
@@ -926,6 +958,7 @@ const HANDLERS: Record<WorkKind, Handler> = {
   'dashboards.daily_update': handleDashboardsDailyUpdate as Handler,
   'anthropic.cost_sync': handleAnthropicCostSync as Handler,
   'auto.cycle': handleAutoCycle as Handler,
+  'networking.weekly_ingest': handleNetworkingWeeklyIngest as Handler,
   'system.reconcile': handleReconcile as Handler,
 };
 

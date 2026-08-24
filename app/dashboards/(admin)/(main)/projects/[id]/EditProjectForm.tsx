@@ -206,7 +206,7 @@ export default function EditProjectForm({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="dashboards-date-grid grid grid-cols-2 gap-4">
           <div>
             <label className="mb-1.5 block text-sm font-medium text-fg-1">
               Start date <span className="text-red-400">*</span>

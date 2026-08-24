@@ -38,6 +38,7 @@ export const KIND_CONFIG: Record<WorkKind, KindConfig> = {
   'dashboards.daily_update': { lane: 'dashboards', defaultMaxAttempts: 2, priority: -5 },
   'anthropic.cost_sync': { lane: 'maintenance', defaultMaxAttempts: 2, priority: -8 },
   'auto.cycle': { lane: 'auto_campaign', defaultMaxAttempts: 2, priority: 15 },
+  'networking.weekly_ingest': { lane: 'maintenance', defaultMaxAttempts: 2, priority: -6 },
   'system.reconcile': { lane: 'maintenance', defaultMaxAttempts: 3, priority: -10 },
 };
 
