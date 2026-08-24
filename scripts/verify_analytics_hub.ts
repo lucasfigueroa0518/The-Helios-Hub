@@ -17,10 +17,13 @@ if (fs.existsSync(envPath)) {
 async function main() {
   const { getAnalyticsSummary, listAnalyticsRuns } = await import('../lib/analytics');
   const summary = await getAnalyticsSummary({ period: 'week' });
+  const allTime = await getAnalyticsSummary({ period: 'all' });
   const runs = await listAnalyticsRuns();
   console.log(JSON.stringify({
     ok: true,
     window: summary.window,
+    allTimeWindow: allTime.window,
+    allTimeSpend: allTime.aggregate.total_spend_usd,
     aggregate: summary.aggregate,
     userCount: summary.by_user.length,
     runCount: runs.length,

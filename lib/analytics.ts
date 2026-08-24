@@ -363,7 +363,7 @@ async function loadAllTimeFromBound(now: Date): Promise<string> {
   const { rows } = await dbQuery<{ earliest: Date | string | null }>(
     `SELECT least(
        (SELECT min(created_at) FROM outreach.campaigns),
-       (SELECT min(created_at) FROM outreach.runs),
+       (SELECT min(started_at) FROM outreach.runs),
        (SELECT min(created_at) FROM outreach.email_sends),
        (SELECT min(created_at) FROM outreach.drafting_job_cost_events)
      ) AS earliest`,

@@ -30,6 +30,13 @@ test('resolveAnalyticsWindow all time uses a bounded start, not epoch', () => {
   assert.equal(window.to, '2026-08-24T23:59:59.999Z');
 });
 
+test('all-time earliest bound uses runs.started_at, not created_at', async () => {
+  const fs = await import('node:fs/promises');
+  const source = await fs.readFile(new URL('../lib/analytics.ts', import.meta.url), 'utf8');
+  assert.match(source, /min\(started_at\) FROM outreach\.runs/);
+  assert.equal(/min\(created_at\) FROM outreach\.runs/.test(source), false);
+});
+
 test('isAllTimePeriod accepts all-time aliases', () => {
   assert.equal(isAllTimePeriod('all'), true);
   assert.equal(isAllTimePeriod('all_time'), true);
