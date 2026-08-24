@@ -10,15 +10,6 @@ export const AUTO_STATUSES = [
 ] as const;
 export type AutoStatus = (typeof AUTO_STATUSES)[number];
 
-export const MAX_EXPANSION_STEP = 4;
-export const EXPANSION_LABELS = [
-  'Exact profile',
-  'Widened geography',
-  'Widened company size',
-  'Widened industry',
-  'Widened seniority',
-] as const;
-
 export const AUTO_QUEUE_COLORS = [
   'chart-1',
   'chart-2',
@@ -28,6 +19,8 @@ export const AUTO_QUEUE_COLORS = [
   'chart-6',
   'chart-7',
   'chart-8',
+  'chart-9',
+  'chart-10',
 ] as const;
 export type AutoQueueColor = (typeof AUTO_QUEUE_COLORS)[number];
 
@@ -38,11 +31,33 @@ export type LeadAttributes = {
   business_size: string;
 };
 
+export const APOLLO_SENIORITIES = [
+  'owner',
+  'founder',
+  'c_suite',
+  'partner',
+  'vp',
+  'head',
+  'director',
+  'manager',
+  'senior',
+  'entry',
+  'intern',
+] as const;
+export type ApolloSeniority = (typeof APOLLO_SENIORITIES)[number];
+
 export type PeopleSearchParams = {
   person_titles?: string[];
   person_seniorities?: string[];
   person_locations?: string[];
+  organization_locations?: string[];
   q_keywords?: string;
+  /** Short industry phrases tried one-at-a-time as `q_keywords`. Not sent as an Apollo array. */
+  industry_keywords?: string[];
+  related_person_titles?: string[];
+  related_industry_keywords?: string[];
+  related_person_locations?: string[];
+  related_organization_locations?: string[];
   organization_num_employees_ranges?: string[];
 };
 

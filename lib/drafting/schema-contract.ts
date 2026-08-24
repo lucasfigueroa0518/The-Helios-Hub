@@ -163,6 +163,36 @@ export const DRAFTING_REQUIRED_COLUMNS: DraftingSchemaColumn[] = [
     column: 'usage',
     reason: 'Anthropic token buckets for dashboard summaries',
   },
+  {
+    table: 'outreach.email_drafts',
+    column: 'body_html',
+    reason: 'Custom-message hyperlink HTML at send time',
+  },
+  {
+    table: 'outreach.email_drafts',
+    column: 'include_signature',
+    reason: 'Per-draft signature toggle snapshot for custom messages',
+  },
+  {
+    table: 'outreach.campaigns',
+    column: 'message_mode',
+    reason: 'AI vs custom campaign message mode',
+  },
+  {
+    table: 'outreach.campaigns',
+    column: 'message_subject_template',
+    reason: 'Custom-message subject merge template',
+  },
+  {
+    table: 'outreach.campaigns',
+    column: 'message_body_template',
+    reason: 'Custom-message body merge template',
+  },
+  {
+    table: 'outreach.campaigns',
+    column: 'include_signature',
+    reason: 'Custom-message campaign signature toggle',
+  },
 ];
 
 export const DRAFTING_REQUIRED_FUNCTIONS: DraftingSchemaFunction[] = [

@@ -295,20 +295,40 @@ export async function loadDraftingSpendDenominators(input: {
   excludedLeadIds: string[];
 }): Promise<DraftingSpendDenominatorRow[]> {
   const { rows } = await dbQuery<DraftingSpendDenominatorRow>(
-    `SELECT c.id::text AS campaign_id,
-            c.owner_id::text AS user_id,
-            count(DISTINCT event.drafting_job_id)::text AS drafting_jobs,
-            count(DISTINCT item.lead_id)::text AS drafted_leads
-       FROM outreach.drafting_job_cost_events event
-       JOIN outreach.drafting_items item ON item.id = event.drafting_item_id
-       JOIN outreach.drafting_workspaces workspace ON workspace.id = item.workspace_id
-       JOIN outreach.campaigns c ON c.id = workspace.campaign_id
-      WHERE event.created_at >= $1::timestamptz
-        AND event.created_at <= $2::timestamptz
-        AND event.actual_cost_usd > 0
-        AND c.id = ANY($3::uuid[])
-        AND ($4::uuid[] IS NULL OR cardinality($4::uuid[]) = 0 OR item.lead_id <> ALL($4::uuid[]))
-      GROUP BY c.id, c.owner_id`,
+    `SELECT campaign_id,
+            user_id,
+            count(DISTINCT drafting_job_id)::text AS drafting_jobs,
+            count(DISTINCT lead_id)::text AS drafted_leads
+       FROM (
+         SELECT c.id::text AS campaign_id,
+                c.owner_id::text AS user_id,
+                event.drafting_job_id,
+                item.lead_id
+           FROM outreach.drafting_job_cost_events event
+           JOIN outreach.drafting_items item ON item.id = event.drafting_item_id
+           JOIN outreach.drafting_workspaces workspace ON workspace.id = item.workspace_id
+           JOIN outreach.campaigns c ON c.id = workspace.campaign_id
+          WHERE event.created_at >= $1::timestamptz
+            AND event.created_at <= $2::timestamptz
+            AND event.actual_cost_usd > 0
+            AND c.id = ANY($3::uuid[])
+            AND ($4::uuid[] IS NULL OR cardinality($4::uuid[]) = 0 OR item.lead_id <> ALL($4::uuid[]))
+         UNION
+         SELECT c.id::text AS campaign_id,
+                c.owner_id::text AS user_id,
+                d.drafting_item_id AS drafting_job_id,
+                item.lead_id
+           FROM outreach.email_drafts d
+           JOIN outreach.drafting_items item ON item.id = d.drafting_item_id
+           JOIN outreach.drafting_workspaces workspace ON workspace.id = item.workspace_id
+           JOIN outreach.campaigns c ON c.id = workspace.campaign_id
+          WHERE d.generation_mode = 'template'
+            AND coalesce(d.generated_at, d.edited_at, now()) >= $1::timestamptz
+            AND coalesce(d.generated_at, d.edited_at, now()) <= $2::timestamptz
+            AND c.id = ANY($3::uuid[])
+            AND ($4::uuid[] IS NULL OR cardinality($4::uuid[]) = 0 OR item.lead_id <> ALL($4::uuid[]))
+       ) drafted
+      GROUP BY campaign_id, user_id`,
     [
       input.from,
       input.to,

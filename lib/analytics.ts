@@ -145,7 +145,12 @@ export type AnalyticsSummaryFilters = {
   userId?: string | null;
   identitySlug?: string | null;
   fromEmail?: string | null;
+  messageMode?: 'all' | 'ai' | 'custom' | null;
 };
+
+export function parseAnalyticsMessageMode(value?: string | null): 'all' | 'ai' | 'custom' {
+  return value === 'ai' || value === 'custom' ? value : 'all';
+}
 
 export type CloudWorkerSpendSummary = {
   cost_usd: number | null;
@@ -163,6 +168,7 @@ export type AnalyticsSummary = {
     userId: string | null;
     identitySlug: string | null;
     fromEmail: string | null;
+    messageMode: 'all' | 'ai' | 'custom';
   };
   available_identities: { slug: string; name: string }[];
   available_inboxes: { email: string; identity_slug: string }[];
@@ -435,6 +441,7 @@ export async function getAnalyticsSummary(input: {
   userId?: string | null;
   identitySlug?: string | null;
   fromEmail?: string | null;
+  messageMode?: string | null;
 }): Promise<AnalyticsSummary> {
   const window = await resolveAnalyticsQueryWindow(input);
   const excludedRunIds = await loadExcludedRunIds();
@@ -445,6 +452,7 @@ export async function getAnalyticsSummary(input: {
   const cleanUserId = input.userId?.trim() || null;
   const cleanIdentitySlug = input.identitySlug?.trim().toLowerCase() || null;
   const cleanFromEmail = input.fromEmail?.trim().toLowerCase() || null;
+  const cleanMessageMode = parseAnalyticsMessageMode(input.messageMode);
 
   // 1. Fetch available filter options (tags, active campaigns, users)
   const [tagsRes, campaignsRes, usersRes] = await Promise.all([
@@ -494,11 +502,13 @@ export async function getAnalyticsSummary(input: {
        AND ($3::text[] IS NULL OR cardinality($3::text[]) = 0 OR c.id IN (
          SELECT ct.campaign_id FROM outreach.campaign_tags ct WHERE lower(ct.tag) = ANY($3::text[])
        ))
+       AND ($4::text IS NULL OR COALESCE(c.message_mode, 'ai') = $4)
      ORDER BY c.updated_at DESC`,
     [
       cleanUserId,
       cleanCampaignIds.length ? cleanCampaignIds : null,
       cleanTags.length ? cleanTags : null,
+      cleanMessageMode === 'all' ? null : cleanMessageMode,
     ],
   );
 
@@ -858,6 +868,7 @@ export async function getAnalyticsSummary(input: {
       userId: cleanUserId,
       identitySlug: cleanIdentitySlug,
       fromEmail: cleanFromEmail,
+      messageMode: cleanMessageMode,
     },
     available_identities: [
       { slug: 'lucas', name: 'Lucas Figueroa' },
@@ -897,7 +908,7 @@ export async function getAnalyticsSummary(input: {
       'Spend per lead outreach = outreach spend / emails sent.',
       'Wasted lead rate = (leads in this window − outreached leads) / leads in this window.',
       'Enrichment = Claude company research + Apollo enrich credits ($59 / 2,500) + extraction. People search is free.',
-      'Drafting includes researching/writing the email and reply Claude spend.',
+      'Drafting includes researching/writing the email and reply Claude spend. Custom message campaigns record $0.00 drafting cost.',
       'Worker spend is GCP VM month-to-date prorated into this window and split across leads. Local worker is unmetered ($0).',
       'AgentMail is $20 / 10,000 emails ($0.002 per send). Unused monthly quota is not allocated.',
       'Sent count uses drafting_items.delivery_snapshot and email_sends (sent status).',

@@ -94,6 +94,7 @@ function searchBody(params: PeopleSearchParams, page: number, perPage: number): 
   if (params.person_titles?.length) body.person_titles = params.person_titles;
   if (params.person_seniorities?.length) body.person_seniorities = params.person_seniorities;
   if (params.person_locations?.length) body.person_locations = params.person_locations;
+  if (params.organization_locations?.length) body.organization_locations = params.organization_locations;
   if (params.q_keywords?.trim()) body.q_keywords = params.q_keywords.trim();
   if (params.organization_num_employees_ranges?.length) {
     body.organization_num_employees_ranges = params.organization_num_employees_ranges;

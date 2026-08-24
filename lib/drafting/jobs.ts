@@ -49,6 +49,7 @@ import {
 import { DRAFTING_RESEARCH_PROMPT_VERSION } from '@/lib/drafting/research-prompt';
 import { runDraftingResearch } from '@/lib/drafting/research-provider';
 import {
+  persistTemplateFill,
   applyItemScopedMailboxResult,
   claimDraftingItemExecution,
   clearEmptyBriefErrorAfterUsableResearch,
@@ -1558,12 +1559,61 @@ async function handleRewrite(jobId: string): Promise<ProcessDraftingJobResult> {
   });
 }
 
+async function handleTemplateFill(jobId: string): Promise<ProcessDraftingJobResult> {
+  const context = await loadDraftingJobContext(jobId);
+  if (!context) return { jobId, status: 'skipped', nextJobIds: [] };
+  const { job, item } = context;
+  if (job.status !== 'in_flight') return { jobId, status: 'skipped', nextJobIds: [] };
+
+  try {
+    await dbTransaction(async (client) => {
+      if (item.state === 'queued_template_fill' || item.state === 'needs_lead_review' || item.state === 'failed_template_fill') {
+        await transitionItemState(client, item.id, item.state === 'queued_template_fill' ? 'filling_template' : 'queued_template_fill', true);
+        if (item.state !== 'queued_template_fill') {
+          await transitionItemState(client, item.id, 'filling_template', true);
+        }
+      } else if (item.state !== 'filling_template') {
+        await transitionItemState(client, item.id, 'queued_template_fill', true);
+        await transitionItemState(client, item.id, 'filling_template', true);
+      }
+      const workspace = await client.query<{ campaign_id: string }>(
+        `SELECT campaign_id FROM outreach.drafting_workspaces WHERE id = $1`,
+        [item.workspace_id],
+      );
+      const campaignId = workspace.rows[0]?.campaign_id;
+      if (!campaignId) throw new Error('Workspace campaign missing');
+      await persistTemplateFill(client, item, campaignId);
+      await refreshCompletionTimestamps(client, item.workspace_id);
+    });
+    await finishDraftingJob({ jobId, status: 'done', actualCostUsd: '0.0000' });
+    return { jobId, status: 'done', nextJobIds: [] };
+  } catch (error) {
+    if (error instanceof TransitionConflictError) {
+      await finishDraftingJob({ jobId, status: 'superseded' });
+      return { jobId, status: 'superseded', nextJobIds: [] };
+    }
+    await dbTransaction(async (client) => {
+      try {
+        await transitionItemState(client, item.id, 'failed_template_fill', false);
+      } catch {
+        // already left filling
+      }
+    });
+    return markJobFailed(
+      jobId,
+      'template_fill_failed',
+      error instanceof Error ? error.message : 'Template fill failed',
+    );
+  }
+}
+
 const HANDLERS: Record<DraftingJobKind, (jobId: string) => Promise<ProcessDraftingJobResult>> = {
   verify_mailbox: handleVerifyMailbox,
   research: handleResearch,
   write: handleWrite,
   repair: handleRepair,
   rewrite: handleRewrite,
+  template_fill: handleTemplateFill,
 };
 
 /** Claim and process one drafting job. Never calls live Anthropic unless DRAFTING_MODE=live. */

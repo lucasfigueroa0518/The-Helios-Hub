@@ -184,7 +184,7 @@ test('research call budget cannot be configured above three calls', () => {
 
 test('singleflight heartbeat renews during work and stops afterward', async () => {
   let heartbeats = 0;
-  let scheduledHeartbeat: (() => void) | null = null;
+  const captured: { tick?: () => void } = {};
   let timerCleared = false;
   let finishOperation: (() => void) | undefined;
   const running = runWithLeaseHeartbeat({
@@ -197,20 +197,20 @@ test('singleflight heartbeat renews during work and stops afterward', async () =
     },
     intervalMs: 10,
     scheduler: {
-      setInterval: (callback) => {
-        scheduledHeartbeat = callback;
-        return 1 as unknown as ReturnType<typeof setInterval>;
+      setInterval: (callback: () => void, _intervalMs: number) => {
+        captured.tick = callback;
+        return 0 as unknown as ReturnType<typeof setInterval>;
       },
-      clearInterval: () => {
+      clearInterval: (_timer: ReturnType<typeof setInterval>) => {
         timerCleared = true;
-        scheduledHeartbeat = null;
+        captured.tick = undefined;
       },
     },
   });
   await Promise.resolve();
   assert.equal(heartbeats, 1);
   for (let index = 0; index < 3; index += 1) {
-    const tick = scheduledHeartbeat;
+    const tick = captured.tick;
     if (!tick) throw new Error('Expected scheduled heartbeat');
     tick();
     await Promise.resolve();
@@ -221,7 +221,7 @@ test('singleflight heartbeat renews during work and stops afterward', async () =
   assert.equal(heartbeats, 4);
   assert.equal(timerCleared, true);
   const completedHeartbeats = heartbeats;
-  assert.equal(scheduledHeartbeat, null);
+  assert.equal(captured.tick, undefined);
   assert.equal(heartbeats, completedHeartbeats);
 });
 

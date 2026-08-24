@@ -6,7 +6,7 @@ import { CampaignTabs } from '@/app/campaigns/[id]/campaign-tabs';
 import { ReviewTable } from '@/app/campaigns/[id]/review/review-table';
 import { SenderSetupModal } from '@/app/campaigns/[id]/draft/sender-setup-modal';
 import { LivePulse } from '@/app/components/live-pulse';
-import { EXPANSION_LABELS } from '@/lib/auto-campaigns/types';
+import { expansionLabel } from '@/lib/auto-campaigns/expansion';
 import { requestJson } from '@/lib/client-request';
 import type { Campaign } from '@/lib/campaigns';
 import type { CampaignSheetViewRow } from '@/lib/campaign-sheet';
@@ -209,7 +209,7 @@ export function ProspectWorkspace({
         <div className="stat-tile">
           <span className="stat-tile__label">Profile match</span>
           <span className="stat-tile__value">
-            {EXPANSION_LABELS[campaign?.expansion_step ?? 0]}
+            {expansionLabel(campaign?.expansion_step ?? 0)}
           </span>
         </div>
       </div>

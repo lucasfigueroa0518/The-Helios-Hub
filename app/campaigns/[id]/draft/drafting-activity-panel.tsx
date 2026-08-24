@@ -16,6 +16,9 @@ function phaseLabel(phase: WorkspaceActivityPhase, state: string): string {
   if (phase === 'rewrite') {
     return state === 'rewriting' ? 'Rewriting' : 'Queued to rewrite';
   }
+  if (phase === 'template') {
+    return state === 'filling_template' ? 'Filling message' : 'Queued to fill';
+  }
   return state === 'verifying_mailbox' ? 'Verifying mailbox' : 'Queued to verify';
 }
 
@@ -76,11 +79,13 @@ export function DraftingActivityPanel({ snapshot }: { snapshot: DraftingSnapshot
                     <blockquote className="drafting-activity-item__snippet">
                       {item.snippet}
                     </blockquote>
-                  ) : item.phase === 'research' || item.phase === 'writing' ? (
+                  ) : item.phase === 'research' || item.phase === 'writing' || item.phase === 'template' ? (
                     <p className="drafting-activity-item__waiting">
                       {item.phase === 'research'
                         ? 'Gathering prospect and company context…'
-                        : 'Turning research into a personalized draft…'}
+                        : item.phase === 'template'
+                          ? 'Filling the campaign message…'
+                          : 'Turning research into a personalized draft…'}
                     </p>
                   ) : null}
                 </li>

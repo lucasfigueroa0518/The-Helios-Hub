@@ -48,3 +48,8 @@ test('linkedin relationship header detection is conservative', () => {
   assert.equal(isLinkedinRelationshipHeader('Priority'), false);
   assert.equal(isLinkedinRelationshipHeader('Account'), false);
 });
+
+test('drafting snapshot builder imports the LinkedIn relationship label', () => {
+  const src = require('node:fs').readFileSync('lib/drafting/repository.ts', 'utf8');
+  assert.match(src, /import \{ LINKEDIN_RELATIONSHIP_LABEL \} from '@\/lib\/models'/);
+});

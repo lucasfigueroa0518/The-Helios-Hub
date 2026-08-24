@@ -13,6 +13,7 @@ export function AnalyticsDrilldownDrawer({
   campaignIds,
   tags,
   userId,
+  messageMode,
   onClose,
 }: {
   metricKey: string;
@@ -22,6 +23,7 @@ export function AnalyticsDrilldownDrawer({
   campaignIds?: string[];
   tags?: string[];
   userId?: string | null;
+  messageMode?: 'all' | 'ai' | 'custom';
   onClose: () => void;
 }) {
   const [data, setData] = useState<AnalyticsDrilldownData | null>(null);
@@ -41,6 +43,7 @@ export function AnalyticsDrilldownDrawer({
         if (campaignIds?.length) params.set('campaignIds', campaignIds.join(','));
         if (tags?.length) params.set('tags', tags.join(','));
         if (userId) params.set('userId', userId);
+        if (messageMode && messageMode !== 'all') params.set('messageMode', messageMode);
 
         const result = await requestJson<AnalyticsDrilldownData>(`/api/analytics/drilldown?${params.toString()}`);
 
@@ -60,7 +63,7 @@ export function AnalyticsDrilldownDrawer({
     return () => {
       cancelled = true;
     };
-  }, [metricKey, period, from, to, campaignIds, tags, userId]);
+  }, [metricKey, period, from, to, campaignIds, tags, userId, messageMode]);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {

@@ -28,28 +28,32 @@ const ALLOWED_TRANSITIONS: Record<TransitionFrom, readonly DraftingItemState[]> 
     'needs_lead_review',
     'verifying_mailbox',
     'queued_research',
+    'queued_template_fill',
     'budget_paused',
   ],
   waiting_for_enrichment: [
     'needs_lead_review',
     'verifying_mailbox',
     'queued_research',
+    'queued_template_fill',
     'budget_paused',
     'removed',
   ],
   needs_lead_review: [
     'verifying_mailbox',
     'queued_research',
+    'queued_template_fill',
     'budget_paused',
     'removed',
   ],
   verifying_mailbox: [
     'needs_lead_review',
     'queued_research',
+    'queued_template_fill',
     'budget_paused',
     'removed',
   ],
-  budget_paused: ['queued_research', 'removed'],
+  budget_paused: ['queued_research', 'queued_template_fill', 'removed'],
   queued_research: ['researching', 'waiting_company_research', 'removed', 'cancelled'],
   waiting_company_research: [
     'queued_research',
@@ -80,6 +84,7 @@ const ALLOWED_TRANSITIONS: Record<TransitionFrom, readonly DraftingItemState[]> 
   ready_for_review: [
     'approved',
     'queued_rewrite',
+    'queued_template_fill',
     'needs_lead_review',
     'removed',
   ],
@@ -108,6 +113,19 @@ const ALLOWED_TRANSITIONS: Record<TransitionFrom, readonly DraftingItemState[]> 
     'needs_lead_review',
     'removed',
   ],
+  queued_template_fill: ['filling_template', 'removed', 'cancelled'],
+  filling_template: [
+    'ready_for_review',
+    'needs_lead_review',
+    'failed_template_fill',
+    'removed',
+    'cancelled',
+  ],
+  failed_template_fill: [
+    'queued_template_fill',
+    'needs_lead_review',
+    'removed',
+  ],
   removed: [],
   cancelled: [],
 };
@@ -122,6 +140,8 @@ export const MAILBOX_RECHECK_TARGET_STATES = new Set<DraftingItemState>([
   'approved',
   'queued_rewrite',
   'rewriting',
+  'queued_template_fill',
+  'filling_template',
 ]);
 
 export function syncReviewStatus(state: DraftingItemState): ReviewStatus {

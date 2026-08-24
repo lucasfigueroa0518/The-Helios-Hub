@@ -7,6 +7,8 @@ import { ProspectWorkspace } from '@/app/campaigns/[id]/prospect/prospect-worksp
 import { getCampaign } from '@/lib/campaigns';
 import { displayNameFromEmail, getSession } from '@/lib/session';
 
+export const dynamic = 'force-dynamic';
+
 export default async function ProspectPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
   if (!session) redirect('/');
@@ -17,7 +19,7 @@ export default async function ProspectPage({ params }: { params: Promise<{ id: s
   if (campaign.kind !== 'auto') redirect(`/campaigns/${id}`);
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" key={id}>
       <section className="card">
         <div className="card__header">
           <div>
@@ -32,6 +34,7 @@ export default async function ProspectPage({ params }: { params: Promise<{ id: s
         </div>
         <div className="card__body">
           <ProspectWorkspace
+            key={id}
             campaignId={id}
             defaultDisplayName={displayNameFromEmail(session.email)}
             defaultWorkEmail={session.email}

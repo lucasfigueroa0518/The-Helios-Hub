@@ -372,20 +372,40 @@ export async function loadLeadCampaignFacts(input: {
         GROUP BY cl.lead_id, r.campaign_id, fc.owner_id
      ),
      drafting AS (
-       SELECT item.lead_id,
-              w.campaign_id,
-              fc.owner_id,
-              sum(event.actual_cost_usd) AS drafting_usd
-         FROM outreach.drafting_job_cost_events event
-         JOIN outreach.drafting_items item ON item.id = event.drafting_item_id
-         JOIN outreach.drafting_workspaces w ON w.id = item.workspace_id
-         JOIN filtered_campaigns fc ON fc.id = w.campaign_id
-         CROSS JOIN params p
-        WHERE event.created_at >= p.win_from
-          AND event.created_at <= p.win_to
-          AND event.actual_cost_usd > 0
-          AND ($4::uuid[] IS NULL OR cardinality($4::uuid[]) = 0 OR item.lead_id <> ALL($4::uuid[]))
-        GROUP BY item.lead_id, w.campaign_id, fc.owner_id
+       SELECT x.lead_id,
+              x.campaign_id,
+              x.owner_id,
+              sum(x.drafting_usd) AS drafting_usd
+         FROM (
+           SELECT item.lead_id,
+                  w.campaign_id,
+                  fc.owner_id,
+                  event.actual_cost_usd AS drafting_usd
+             FROM outreach.drafting_job_cost_events event
+             JOIN outreach.drafting_items item ON item.id = event.drafting_item_id
+             JOIN outreach.drafting_workspaces w ON w.id = item.workspace_id
+             JOIN filtered_campaigns fc ON fc.id = w.campaign_id
+             CROSS JOIN params p
+            WHERE event.created_at >= p.win_from
+              AND event.created_at <= p.win_to
+              AND event.actual_cost_usd > 0
+              AND ($4::uuid[] IS NULL OR cardinality($4::uuid[]) = 0 OR item.lead_id <> ALL($4::uuid[]))
+           UNION ALL
+           SELECT item.lead_id,
+                  w.campaign_id,
+                  fc.owner_id,
+                  0::numeric AS drafting_usd
+             FROM outreach.email_drafts d
+             JOIN outreach.drafting_items item ON item.id = d.drafting_item_id
+             JOIN outreach.drafting_workspaces w ON w.id = item.workspace_id
+             JOIN filtered_campaigns fc ON fc.id = w.campaign_id
+             CROSS JOIN params p
+            WHERE d.generation_mode = 'template'
+              AND coalesce(d.generated_at, d.edited_at, now()) >= p.win_from
+              AND coalesce(d.generated_at, d.edited_at, now()) <= p.win_to
+              AND ($4::uuid[] IS NULL OR cardinality($4::uuid[]) = 0 OR item.lead_id <> ALL($4::uuid[]))
+         ) x
+        GROUP BY x.lead_id, x.campaign_id, x.owner_id
      ),
      replies AS (
        SELECT item.lead_id,

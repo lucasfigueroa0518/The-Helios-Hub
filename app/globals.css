@@ -69,19 +69,19 @@
   --color-forecast: #a3a3a3;
   --color-forecast-soft: #f5f5f5;
 
-  /* ---- Color: categorical chart palette (fixed order = stable assignment) */
-  /* Not currently rendered anywhere in the app; left mapped to the new brand
-     hues for whenever a chart is added, so no component needs to change. */
-  --chart-1: #ff5e1a;
-  --chart-2: #00b74f;
-  --chart-3: #138510;
-  --chart-4: #8b5cf6;
-  --chart-5: #e0529c;
-  --chart-6: #14b8c4;
-  --chart-7: #f9423a;
-  --chart-8: #737373;
-  --chart-9: #6a9a3a;
-  --chart-10: #b4690e;
+  /* ---- Color: categorical chart / queue campaign palette ----------------- */
+  /* Trello label hues mixed with Helios secondary accents so adjacent
+     campaigns stay distinguishable even as 16% pastel fills. */
+  --chart-1: #ff5e1a; /* Helios orange */
+  --chart-2: #0079bf; /* Trello blue */
+  --chart-3: #138510; /* Helios / Trello green */
+  --chart-4: #c377e0; /* Trello purple */
+  --chart-5: #e0529c; /* pink */
+  --chart-6: #14b8c4; /* teal */
+  --chart-7: #eb5a46; /* Trello rose */
+  --chart-8: #f0a64a; /* Trello / warning amber */
+  --chart-9: #5b7185; /* Trello slate */
+  --chart-10: #b4690e; /* gold */
   --chart-grid: #f0f0f0;
   --chart-axis: #a3a3a3;
 

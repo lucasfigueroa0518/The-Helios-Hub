@@ -17,7 +17,12 @@ import {
   explainTakenSlots,
   explainWaiting,
 } from '@/lib/drafting/send-queue-metrics';
+import { uniqueCampaignColors } from '@/lib/auto-campaigns/queue-colors';
 import type { QueueDayBucket, QueueListItem, ShareTargetUser } from '@/lib/drafting/send-queue';
+
+function campaignTint(color: string | undefined): CSSProperties {
+  return { '--lock-color': `var(--${color || 'chart-1'})` } as CSSProperties;
+}
 
 type QueueListResponse = {
   days: QueueDayBucket[];
@@ -330,6 +335,18 @@ export function SendQueueHub({
   const inboxCount = data?.inboxes?.length ?? 0;
   const capPerInbox = data?.daily_inbox_cap ?? 10;
   const slotCapacity = capPerInbox * Math.max(1, inboxCount);
+  const campaignColors = useMemo(() => {
+    const entries: Array<{ campaignId: string; queueColor?: string | null }> = [];
+    for (const day of data?.days ?? []) {
+      for (const lock of day.reservations ?? []) {
+        entries.push({ campaignId: lock.campaign_id, queueColor: lock.queue_color });
+      }
+      for (const item of day.items) {
+        entries.push({ campaignId: item.campaign_id, queueColor: item.queue_color });
+      }
+    }
+    return uniqueCampaignColors(entries);
+  }, [data]);
 
   async function openShareMenu() {
     if (shareOpen) {
@@ -718,8 +735,8 @@ export function SendQueueHub({
                     <li key={`lock-${lock.campaign_id}-${day.schedule_date}`}>
                       <button
                         type="button"
-                        className="send-queue-card send-queue-card--lock"
-                        style={{ '--lock-color': `var(--${lock.queue_color})` } as CSSProperties}
+                        className="send-queue-card send-queue-card--lock send-queue-card--campaign"
+                        style={campaignTint(campaignColors.get(lock.campaign_id))}
                         title={explainHeldSlots(lock.reserved, lock.emails_per_day, lock.already_slotted)}
                         onClick={() => {
                           setDetailId(null);
@@ -743,7 +760,8 @@ export function SendQueueHub({
                   {day.items.map((item) => (
                     <li
                       key={item.id}
-                      className={`send-queue-card${selected.has(item.id) ? ' send-queue-card--selected' : ''}${item.overdue ? ' send-queue-card--overdue' : ''}${item.status === 'sent' ? ' send-queue-card--sent' : ''}`}
+                      className={`send-queue-card send-queue-card--campaign${selected.has(item.id) ? ' send-queue-card--selected' : ''}${item.overdue ? ' send-queue-card--overdue' : ''}${item.status === 'sent' ? ' send-queue-card--sent' : ''}`}
+                      style={campaignTint(campaignColors.get(item.campaign_id))}
                       draggable={item.status === 'queued' || item.status === 'failed'}
                       onDragStart={(e) => onDragStart(item, e)}
                       onDragEnd={() => setDragIds(null)}

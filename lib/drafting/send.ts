@@ -16,6 +16,7 @@ import { dbQuery } from '@/lib/db';
 import {
   appendPlainTextSignature,
   buildOutreachEmailHtml,
+  buildOutreachEmailHtmlFromBodyHtml,
   identitySlugFromSender,
   LUCAS_SIGNATURE_DEFAULTS,
   resolveEmailSignature,
@@ -39,6 +40,8 @@ export type SendEmailInput = {
   toEmail: string;
   subject: string;
   bodyText: string;
+  bodyHtml?: string | null;
+  includeSignature?: boolean;
   itemId?: string;
   campaignId?: string;
   title?: string | null;
@@ -177,12 +180,16 @@ export async function sendOutreachEmail(input: SendEmailInput): Promise<SendEmai
   }
 
   const subject = normalizeDraftText(input.subject).replace(/\n/g, ' ').trim();
-  const bodyText = normalizeDraftBody(input.bodyText, input.firstName);
+  const skipNormalize = Boolean(input.bodyHtml);
+  const bodyText = skipNormalize
+    ? input.bodyText.replace(/\r\n/g, '\n').trim()
+    : normalizeDraftBody(input.bodyText, input.firstName);
   if (!subject || !bodyText) {
     throw new EmailSendProviderError('Subject and body are required to send');
   }
 
-  const headshot = await loadInlineHeadshot(input);
+  const includeSignature = input.includeSignature !== false;
+  const headshot = includeSignature ? await loadInlineHeadshot(input) : null;
   const signature = resolveSendSignature(
     input,
     headshot ? `cid:${headshot.contentId}` : null,
@@ -190,12 +197,13 @@ export async function sendOutreachEmail(input: SendEmailInput): Promise<SendEmai
   if (signature.headshotUrl && !signature.headshotUrl.startsWith('cid:')) {
     signature.headshotUrl = null;
   }
-  const text = appendPlainTextSignature(bodyText, signature);
-  const html = buildOutreachEmailHtml(
-    bodyText,
-    signature,
-    input.linkifyReplyBody ? { bodyToHtml: replyPlainTextBodyToHtml } : undefined,
-  );
+  const text = includeSignature ? appendPlainTextSignature(bodyText, signature) : bodyText;
+  const html = input.bodyHtml
+    ? buildOutreachEmailHtmlFromBodyHtml(input.bodyHtml, includeSignature ? signature : null)
+    : buildOutreachEmailHtml(bodyText, signature, {
+      ...(input.linkifyReplyBody ? { bodyToHtml: replyPlainTextBodyToHtml } : {}),
+      includeSignature,
+    });
 
   const labels = ['helios-outreach'];
   if (input.itemId?.trim()) labels.push(`item-${input.itemId.trim().slice(0, 8)}`);

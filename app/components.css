@@ -1828,7 +1828,181 @@ a.segmented__item { text-decoration: none; }
   padding: var(--space-5);
   background: rgba(23, 23, 23, 0.32);
 }
-.dialog { width: min(440px, 100%); }
+.dialog {
+  width: min(440px, 100%);
+  max-height: min(calc(100dvh - 2 * var(--space-5)), 40rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.dialog .card__header {
+  flex-shrink: 0;
+}
+.dialog .card__body {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.dialog--wide {
+  width: min(720px, 100%);
+  max-height: min(calc(100dvh - 2 * var(--space-5)), 52rem);
+}
+
+.message-composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  position: relative;
+}
+.message-composer--compact { gap: var(--space-2); }
+.message-composer__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.message-composer__vars {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+.message-composer__toolbar-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-semibold);
+  margin-right: var(--space-1);
+}
+.message-var-btn,
+.message-var {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 22%, var(--color-border));
+  white-space: nowrap;
+}
+.message-var-btn { cursor: pointer; background: var(--color-surface); }
+.message-var-btn:hover { background: var(--color-primary-soft); }
+.message-composer__link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.message-composer__link-btn--active {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+.message-composer__body-wrap {
+  position: relative;
+}
+.message-composer__link-pop {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(360px, calc(100% - 16px));
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+.message-composer__link-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.message-composer__link-pop .field__input {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+}
+.message-composer__link-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+.message-composer__link-apply {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-xs);
+}
+.message-composer__body {
+  min-height: 160px;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow: auto;
+}
+.message-composer__body:focus {
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+  outline-offset: 1px;
+}
+.message-composer__body:empty::before {
+  content: attr(data-placeholder);
+  color: var(--color-text-subtle);
+}
+.message-composer__body a {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+.message-composer__suggest {
+  position: absolute;
+  z-index: 4;
+  list-style: none;
+  margin: 0;
+  padding: var(--space-1);
+  min-width: 180px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+.message-composer__suggest button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+}
+.message-composer__suggest button:hover {
+  background: var(--color-surface-hover);
+}
+.message-composer__preview {
+  padding: var(--space-3);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+}
+.message-composer__preview-subject {
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-2);
+}
+.message-composer__preview-body,
+.message-composer__signature,
+.drafting-email-body--html {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text);
+}
+.drafting-email-body--html a,
+.message-composer__preview-body a {
+  color: #1155cc;
+}
 .dialog__close {
   display: inline-flex;
   align-items: center;
@@ -2774,6 +2948,10 @@ a.segmented__item { text-decoration: none; }
 .drafting-activity-item__phase--rewrite {
   background: color-mix(in srgb, #d97706 14%, var(--color-surface));
   color: #b45309;
+}
+.drafting-activity-item__phase--template {
+  background: color-mix(in srgb, #0f766e 14%, var(--color-surface));
+  color: #0f766e;
 }
 .drafting-activity-item__snippet {
   margin: 0;
@@ -4125,13 +4303,11 @@ a.segmented__item { text-decoration: none; }
   border-color: var(--color-warning);
 }
 .send-queue-card--sent {
-  background: var(--color-positive-soft);
-  border-color: color-mix(in srgb, var(--color-positive) 40%, var(--color-border));
   cursor: default;
 }
 .send-queue-card--sent .send-queue-card__subject,
 .send-queue-card--sent .send-queue-card__meta {
-  color: color-mix(in srgb, var(--color-positive) 55%, var(--color-text-muted));
+  color: var(--color-text-muted);
 }
 .send-queue-card__check { margin-top: 2px; }
 .send-queue-card__body {
@@ -4611,14 +4787,21 @@ button.stat-tile {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+.send-queue-card--campaign {
+  --lock-color: var(--chart-1);
+  border-color: color-mix(in srgb, var(--lock-color) 32%, var(--color-border));
+  border-left: var(--space-1) solid var(--lock-color);
+  background: color-mix(in srgb, var(--lock-color) 16%, var(--color-surface));
+}
+.send-queue-card--campaign.send-queue-card--sent {
+  background: color-mix(in srgb, var(--lock-color) 10%, var(--color-surface));
+}
 .send-queue-card--lock {
   --lock-color: var(--chart-1);
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
   width: 100%;
-  border-left: var(--space-1) solid var(--lock-color);
-  background: color-mix(in srgb, var(--lock-color) 10%, var(--color-surface));
   cursor: pointer;
   text-align: left;
   font: inherit;

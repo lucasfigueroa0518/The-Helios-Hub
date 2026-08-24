@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCampaign, updateAutoCampaign, updateCampaign } from '@/lib/campaigns';
+import { getCampaign, updateAutoCampaign, updateCampaign, updateCampaignMessageTemplate } from '@/lib/campaigns';
 import { getSession } from '@/lib/session';
 
 export const runtime = 'nodejs';
@@ -41,6 +41,9 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       geography?: string;
       business_size?: string;
     };
+    message_subject_template?: string;
+    message_body_template?: string;
+    include_signature?: boolean;
   };
   try {
     body = await request.json();
@@ -51,6 +54,25 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
     const existing = await getCampaign(session.userId, id);
     if (!existing) return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
+
+    if (
+      body.message_subject_template != null
+      || body.message_body_template != null
+      || body.include_signature != null
+    ) {
+      const campaign = await updateCampaignMessageTemplate(session.userId, id, {
+        subjectTemplate: body.message_subject_template ?? existing.message_subject_template ?? '',
+        bodyTemplate: body.message_body_template ?? existing.message_body_template ?? '',
+        includeSignature: body.include_signature,
+      });
+      if (!campaign) return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
+      const { refillCustomCampaignUnsentDrafts } = await import('@/lib/drafting/repository');
+      await refillCustomCampaignUnsentDrafts(campaign.id, session.userId).catch(() => undefined);
+      if (body.name || body.status) {
+        await updateCampaign(session.userId, id, { name: body.name, status: body.status });
+      }
+      return NextResponse.json({ campaign: await getCampaign(session.userId, id) });
+    }
 
     if (
       existing.kind === 'auto'

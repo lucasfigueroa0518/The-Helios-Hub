@@ -20,7 +20,7 @@ import { getSession, displayNameFromEmail } from '@/lib/session';
 
 import { syncCampaignSheet } from '@/lib/sheet-sync';
 
-
+export const dynamic = 'force-dynamic';
 
 export default async function ReviewPage({ params }: { params: Promise<{ id: string }> }) {
 
@@ -57,7 +57,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
 
   return (
 
-    <main className="app-shell">
+    <main className="app-shell" key={id}>
 
       <section className="card">
 
@@ -78,6 +78,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
         <div className="card__body">
 
           <CampaignTabs
+            key={`tabs-${id}`}
             campaignId={id}
             active="review"
             reviewEnabled={reviewEnabled}
@@ -115,6 +116,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
           )}
 
           <ReviewTable
+            key={id}
             campaignId={id}
             initialRows={initialRows}
             pollWhileEnriching={activeRuns > 0}

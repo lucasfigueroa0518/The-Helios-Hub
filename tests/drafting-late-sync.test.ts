@@ -36,8 +36,16 @@ test('sync promotes idle items to queued_research without clobbering drafts', ()
     'queued_research',
   );
   assert.equal(
-    resolveItemStateAfterLeadSync('failed_research', 'queued_research'),
-    'queued_research',
+    resolveItemStateAfterLeadSync('needs_lead_review', 'queued_template_fill'),
+    'queued_template_fill',
+  );
+  assert.equal(
+    resolveItemStateAfterLeadSync('failed_template_fill', 'queued_template_fill'),
+    'queued_template_fill',
+  );
+  assert.equal(
+    resolveItemStateAfterLeadSync('ready_for_review', 'queued_template_fill'),
+    'ready_for_review',
   );
 
   // Finished / in-flight drafts stay put.
@@ -72,6 +80,7 @@ test('promotable idle set covers the sync SQL CASE states', () => {
     'failed_research',
     'failed_write',
     'failed_rewrite',
+    'failed_template_fill',
   ] as const) {
     assert.ok(
       (IDLE_STATES_PROMOTABLE_ON_SYNC as readonly string[]).includes(state),

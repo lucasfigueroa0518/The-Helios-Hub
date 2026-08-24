@@ -171,6 +171,30 @@ test('waiting_for_enrichment can auto-queue once draftable', () => {
   }), 'research');
 });
 
+test('custom campaigns enqueue template_fill instead of research', () => {
+  assert.equal(resolveDraftingEnqueueAction({
+    state: 'needs_lead_review',
+    snapshot: snapshot(),
+    delivery: delivery('valid'),
+    mode: 'auto',
+    messageMode: 'custom',
+  }), 'template_fill');
+  assert.equal(resolveDraftingEnqueueAction({
+    state: 'failed_template_fill',
+    snapshot: snapshot(),
+    delivery: delivery('valid'),
+    mode: 'auto',
+    messageMode: 'custom',
+  }), 'template_fill');
+  assert.equal(resolveDraftingEnqueueAction({
+    state: 'needs_lead_review',
+    snapshot: snapshot(),
+    delivery: delivery('pending'),
+    mode: 'human',
+    messageMode: 'custom',
+  }), 'verify_mailbox');
+});
+
 test('canApproveIdleDraftingItem allows draftable stranded leads', () => {
   assert.equal(canApproveIdleDraftingItem({
     state: 'needs_lead_review',

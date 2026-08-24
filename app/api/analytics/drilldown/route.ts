@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
     const campaignIdsRaw = searchParams.get('campaignIds');
     const tagsRaw = searchParams.get('tags');
     const userId = searchParams.get('userId');
+    const messageMode = searchParams.get('messageMode');
 
     const campaignIds = campaignIdsRaw ? campaignIdsRaw.split(',').map((s) => s.trim()).filter(Boolean) : null;
     const tags = tagsRaw ? tagsRaw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean) : null;
@@ -30,6 +31,7 @@ export async function GET(request: NextRequest) {
       campaignIds,
       tags,
       userId,
+      messageMode,
     });
 
     return NextResponse.json(data);

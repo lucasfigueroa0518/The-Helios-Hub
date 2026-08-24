@@ -12,6 +12,7 @@ import {
 import { assertCampaignOwner, sqlCampaignAccessible } from '@/lib/auth';
 import { formatEmailStatus } from '@/lib/campaign-sheet';
 import { dbQuery, dbTransaction } from '@/lib/db';
+import { LINKEDIN_RELATIONSHIP_LABEL } from '@/lib/models';
 import { loadDraftingAssets } from '@/lib/drafting/assets';
 import { resolveCompanyResearchKey } from '@/lib/drafting/company-research-key';
 import { estimateResearchCost, worstCaseResearchReservationUsd } from '@/lib/drafting/cost';
@@ -71,8 +72,16 @@ import {
   isEmailSendConfigured,
 } from '@/lib/drafting/send';
 import { dispatchDraftingRunStarted, dispatchDraftingJobs } from '@/lib/drafting/transport';
+import {
+  emptyLintResult,
+  filledTemplateToHtml,
+  fillMessageTemplates,
+  MISSING_TEMPLATE_FIELDS_ERROR,
+  parseMessageMode,
+  type MessageMode,
+} from '@/lib/drafting/message-template';
 import { campaignRampDelayMs } from '@/lib/drafting/provider-admission';
-import { shouldDispatchJobsAfterLeadSync } from '@/lib/drafting/late-sync';
+import { assertTransition, syncReviewStatus } from '@/lib/drafting/state';
 import type { DraftingRescueAssessment } from '@/lib/drafting/rescue';
 import { isReadyForBulkSend } from '@/lib/drafting/draft-review-order';
 import {
@@ -104,11 +113,15 @@ import {
   assessResearchTimeliness,
   findDraftTimelinessFailures,
   reconcileManualDraftGrounding,
+  TEMPORAL_POLICY_VERSION,
   type DraftTemporalGrounding,
   type ResearchTimelinessAudit,
 } from '@/lib/drafting/temporal-policy';
-import { syncReviewStatus, assertTransition } from '@/lib/drafting/state';
-import { LINKEDIN_RELATIONSHIP_LABEL } from '@/lib/models';
+import {
+  IDLE_STATES_PROMOTABLE_ON_SYNC,
+  resolveItemStateAfterLeadSync,
+  shouldDispatchJobsAfterLeadSync,
+} from '@/lib/drafting/late-sync';
 import type {
   DeliverySnapshot,
   DraftGenerationMode,
@@ -183,6 +196,8 @@ type DbDraftRow = {
   drafting_item_id: string;
   subject: string;
   body_text: string;
+  body_html: string | null;
+  include_signature: boolean;
   content_revision: number;
   input_fingerprint: string;
   research_packet_sha256: string;
@@ -208,9 +223,52 @@ export function assertDraftGenerationMode(
   mode: DraftGenerationMode,
   options: { allowStubReview?: boolean } = {},
 ): void {
-  if (mode === 'live') return;
+  if (mode === 'live' || mode === 'template') return;
   if (mode === 'stub' && options.allowStubReview) return;
   throw new DraftingTimelinessError(['NON_LIVE_DRAFT_DELIVERY_BLOCKED']);
+}
+
+const TEMPLATE_TEMPORAL_AUDIT: ResearchTimelinessAudit = {
+  policyVersion: TEMPORAL_POLICY_VERSION,
+  auditedAt: '1970-01-01T00:00:00.000Z',
+  packetAsOf: '1970-01-01T00:00:00.000Z',
+  status: 'verified',
+  packetAgeMs: null,
+  currentTriggerFactIds: [],
+  blockedFactIds: [],
+  codes: [],
+  facts: [],
+};
+
+type CampaignMessageSettings = {
+  messageMode: MessageMode;
+  subjectTemplate: string;
+  bodyTemplate: string;
+  includeSignature: boolean;
+};
+
+async function loadCampaignMessageSettings(campaignId: string): Promise<CampaignMessageSettings> {
+  const { rows } = await dbQuery<{
+    message_mode: string | null;
+    message_subject_template: string | null;
+    message_body_template: string | null;
+    include_signature: boolean | null;
+  }>(
+    `SELECT COALESCE(message_mode, 'ai') AS message_mode,
+            message_subject_template,
+            message_body_template,
+            COALESCE(include_signature, true) AS include_signature
+       FROM outreach.campaigns
+      WHERE id = $1`,
+    [campaignId],
+  );
+  const row = rows[0];
+  return {
+    messageMode: parseMessageMode(row?.message_mode),
+    subjectTemplate: row?.message_subject_template ?? '',
+    bodyTemplate: row?.message_body_template ?? '',
+    includeSignature: row?.include_signature !== false,
+  };
 }
 
 export function resolvePersistedDraftGrounding(
@@ -247,6 +305,9 @@ export type DraftingItemSummary = {
     /** Soft quality issues remain (e.g. overloaded sentence) — show Retry suggested. */
     retry_suggested: boolean;
     lint_hard_codes: string[];
+    generation_mode: DraftGenerationMode;
+    body_html: string | null;
+    include_signature: boolean;
     /** When the draft content was last generated (for recency sort). */
     generated_at: string | null;
     /** Cached research temporal audit status (warmed on snapshot / reconcile). */
@@ -270,7 +331,7 @@ export type DraftingItemSummary = {
   } | null;
 };
 
-export type WorkspaceActivityPhase = 'verify' | 'research' | 'writing' | 'repair' | 'rewrite';
+export type WorkspaceActivityPhase = 'verify' | 'research' | 'writing' | 'repair' | 'rewrite' | 'template';
 
 export type WorkspaceActivityItem = {
   item_id: string;
@@ -298,6 +359,12 @@ export type WorkspaceSnapshot = {
     review_complete: boolean;
     paused: boolean;
     paused_at: string | null;
+  };
+  campaign_message: {
+    mode: MessageMode;
+    subject_template: string | null;
+    body_template: string | null;
+    include_signature: boolean;
   };
   activity: WorkspaceActivity;
   counts: {
@@ -540,7 +607,7 @@ function summarizeItem(
   const temporalStatus = draft?.temporal_status ?? 'unknown';
   const exportQualityReady = Boolean(
     draft
-    && draft.generation_mode === 'live'
+    && (draft.generation_mode === 'live' || draft.generation_mode === 'template')
     && temporalStatus !== 'blocked'
     && !hasBlockingHardLintFailures(lint),
   );
@@ -564,12 +631,17 @@ function summarizeItem(
     draft: draft
       ? {
           subject: draft.subject,
-          body_text: normalizeDraftBody(draft.body_text, effective.firstName),
+          body_text: draft.generation_mode === 'template'
+            ? draft.body_text
+            : normalizeDraftBody(draft.body_text, effective.firstName),
           content_revision: Number(draft.content_revision),
           lint_hard: lint.hard.length,
           lint_warnings: lint.warnings.length,
-          retry_suggested: hasRetrySuggestedLint(lint),
+          retry_suggested: draft.generation_mode === 'template' ? false : hasRetrySuggestedLint(lint),
           lint_hard_codes: lint.hard.map((finding) => finding.code),
+          generation_mode: draft.generation_mode,
+          body_html: draft.body_html ?? null,
+          include_signature: draft.include_signature !== false,
           generated_at: draft.generated_at ?? null,
           temporal_status: temporalStatus === 'verified'
             || temporalStatus === 'context_only'
@@ -802,7 +874,7 @@ async function loadDraftsForItems(itemIds: string[]): Promise<Map<string, DbDraf
   const drafts = new Map<string, DbDraftRow>();
   if (itemIds.length === 0) return drafts;
   const { rows } = await dbQuery<DbDraftRow>(
-    `SELECT drafting_item_id, subject, body_text, content_revision, input_fingerprint,
+    `SELECT drafting_item_id, subject, body_text, body_html, include_signature, content_revision, input_fingerprint,
             research_packet_sha256, grounding_status, lint_result, used_fact_ids,
             claim_ledger, draft_grounding, temporal_status, temporal_audit, generation_mode,
             generated_at::text
@@ -825,7 +897,7 @@ async function assertDraftTimelyNow(
   options: { allowStubReview?: boolean } = {},
 ): Promise<void> {
   assertDraftGenerationMode(draft.generation_mode, options);
-  if (draft.generation_mode === 'stub') return;
+  if (draft.generation_mode === 'stub' || draft.generation_mode === 'template') return;
   const { rows } = await dbQuery<{ packet: DraftingResearchPacket }>(
     `SELECT packet
        FROM outreach.draft_research_packets
@@ -1143,6 +1215,7 @@ function activityPhaseForState(state: DraftingItemState): WorkspaceActivityPhase
   if (state === 'queued_write' || state === 'writing') return 'writing';
   if (state === 'repairing') return 'repair';
   if (state === 'queued_rewrite' || state === 'rewriting') return 'rewrite';
+  if (state === 'queued_template_fill' || state === 'filling_template') return 'template';
   return null;
 }
 
@@ -1264,6 +1337,12 @@ export async function getWorkspaceSnapshot(
         review_complete: false,
         paused: false,
         paused_at: null,
+      },
+      campaign_message: {
+        mode: 'ai',
+        subject_template: null,
+        body_template: null,
+        include_signature: true,
       },
       activity: emptyWorkspaceActivity(),
       counts: {
@@ -1506,6 +1585,7 @@ export async function getWorkspaceSnapshot(
     && !nonLiveSendable
     && pendingSendCount > 0;
 
+  const messageSettings = await loadCampaignMessageSettings(campaignId);
   const activity = await loadWorkspaceActivity(workspace.id, counters.running);
   // Dynamic import avoids a runtime cycle (rescue → reconcileDraftingWorkspaceQueue).
   const { resolveRescueForUi } = await import('@/lib/drafting/rescue');
@@ -1521,6 +1601,12 @@ export async function getWorkspaceSnapshot(
       review_complete: reviewComplete,
       paused: workspace.status === 'paused',
       paused_at: workspace.paused_at,
+    },
+    campaign_message: {
+      mode: messageSettings.messageMode,
+      subject_template: messageSettings.subjectTemplate || null,
+      body_template: messageSettings.bodyTemplate || null,
+      include_signature: messageSettings.includeSignature,
     },
     activity,
     counts: {
@@ -1600,8 +1686,12 @@ export async function syncCampaignLeadsIntoDraftingWorkspace(
     input.senderProfileId ?? workspace.sender_profile_id ?? undefined,
   );
   const assets = await loadDraftingAssets();
+  const messageSettings = await loadCampaignMessageSettings(campaignId);
+  const customMessage = messageSettings.messageMode === 'custom';
   const budgetLimit = input.budgetCapUsd ?? process.env.DRAFTING_DEFAULT_BATCH_BUDGET_USD ?? '50.0000';
-  const projected = estimateResearchCost();
+  const projected = customMessage
+    ? { lowUsd: '0.0000', highUsd: '0.0000' }
+    : estimateResearchCost();
   const workspacePaused = !shouldDispatchJobsAfterLeadSync(workspace.status);
 
   const result = await dbTransaction(async (client) => {
@@ -1707,7 +1797,7 @@ export async function syncCampaignLeadsIntoDraftingWorkspace(
         state = 'needs_lead_review';
         leadsAttention += 1;
       } else if (mailboxDraftable) {
-        state = 'queued_research';
+        state = customMessage ? 'queued_template_fill' : 'queued_research';
       }
       if (mailboxDraftable) mailboxValidTotal += 1;
 
@@ -1727,8 +1817,8 @@ export async function syncCampaignLeadsIntoDraftingWorkspace(
                state = CASE
                  WHEN outreach.drafting_items.state IN (
                    'needs_lead_review', 'waiting_for_enrichment', 'budget_paused',
-                   'failed_research', 'failed_write', 'failed_rewrite'
-                 ) AND EXCLUDED.state = 'queued_research'
+                   'failed_research', 'failed_write', 'failed_rewrite', 'failed_template_fill'
+                 ) AND EXCLUDED.state IN ('queued_research', 'queued_template_fill')
                    THEN EXCLUDED.state
                  ELSE outreach.drafting_items.state
                END,
@@ -1757,8 +1847,9 @@ export async function syncCampaignLeadsIntoDraftingWorkspace(
         [draftingRunId, itemId, lead.latest_run_id],
       );
 
-      // Paused workspaces still upsert items but do not enqueue research jobs.
-      if (!workspacePaused && persistedState === 'queued_research') {
+      // Paused workspaces still upsert items but do not enqueue research/template jobs.
+      if (!workspacePaused && (persistedState === 'queued_research' || persistedState === 'queued_template_fill')) {
+        const jobKind = persistedState === 'queued_template_fill' ? 'template_fill' : 'research';
         const active = await client.query<{ id: string }>(
           `SELECT id FROM outreach.drafting_jobs
             WHERE drafting_item_id = $1
@@ -1772,9 +1863,10 @@ export async function syncCampaignLeadsIntoDraftingWorkspace(
             `INSERT INTO outreach.drafting_jobs (
                drafting_run_id, drafting_item_id, kind, idempotency_key,
                expected_input_fingerprint, status, next_attempt_at
-             ) VALUES ($1, $2, 'research', $3, $4, 'pending', now() + make_interval(secs => $5::double precision))
+             ) VALUES ($1, $2, $3, $4, $5, 'pending', now() + make_interval(secs => $6::double precision))
              ON CONFLICT (idempotency_key) DO UPDATE SET
                drafting_run_id = EXCLUDED.drafting_run_id,
+               kind = EXCLUDED.kind,
                expected_input_fingerprint = EXCLUDED.expected_input_fingerprint,
                status = CASE
                  WHEN outreach.drafting_jobs.status IN ('failed', 'cancelled', 'superseded', 'done')
@@ -1803,14 +1895,15 @@ export async function syncCampaignLeadsIntoDraftingWorkspace(
                END,
                next_attempt_at = CASE
                  WHEN outreach.drafting_jobs.status IN ('failed', 'cancelled', 'superseded', 'done')
-                   THEN now() + make_interval(secs => $5::double precision)
+                   THEN now() + make_interval(secs => $6::double precision)
                  ELSE outreach.drafting_jobs.next_attempt_at
                END
              RETURNING id, kind, attempt_count`,
             [
               draftingRunId,
               itemId,
-              `research:${itemId}:${fingerprint}`,
+              jobKind,
+              `${jobKind}:${itemId}:${fingerprint}`,
               fingerprint,
               rampSeconds,
             ],
@@ -2043,7 +2136,7 @@ export async function updateDraftingItemInput(
   item: DraftingItemSummary;
   can_approve_for_drafting: boolean;
 }> {
-  const { item } = await getOwnedItemContext(itemId, ownerId);
+  const { item, campaignId } = await getOwnedItemContext(itemId, ownerId);
   if (Number(item.input_revision) !== input.expectedRevision) {
     throw new DraftingConflictError('Input revision conflict', 'revision_conflict');
   }
@@ -2119,8 +2212,23 @@ export async function updateDraftingItemInput(
   );
 
   const updated = rows[0];
+  const settings = await loadCampaignMessageSettings(campaignId);
+  if (
+    settings.messageMode === 'custom'
+    && ['needs_lead_review', 'ready_for_review', 'failed_template_fill'].includes(updated.state)
+  ) {
+    await refillCustomCampaignUnsentDrafts(campaignId, ownerId, [itemId]);
+  }
+  const latest = await dbQuery<DbDraftingItemRow>(
+    `SELECT id, workspace_id, lead_id, ordinal, state, input_snapshot, input_overrides,
+            missing_fields, input_fingerprint, input_revision, delivery_snapshot,
+            review_status, removed_at, last_error_code, empty_brief_attempts,
+            empty_brief_input_fingerprint, empty_brief_last_at
+       FROM outreach.drafting_items WHERE id = $1`,
+    [itemId],
+  );
   const draft = await loadDraftForItem(itemId);
-  const summary = summarizeItem(updated, draft);
+  const summary = summarizeItem(latest.rows[0] ?? updated, draft);
   return {
     item: summary,
     can_approve_for_drafting: canApproveIdleDraftingItem({
@@ -2185,7 +2293,7 @@ export async function approveDraftingLead(
   verification_state: 'pending' | 'valid';
   job_id?: string;
 }> {
-  const { item } = await getOwnedItemContext(itemId, ownerId);
+  const { item, campaignId } = await getOwnedItemContext(itemId, ownerId);
   if (Number(item.input_revision) !== input.expectedRevision) {
     throw new DraftingConflictError('Input revision conflict', 'revision_conflict');
   }
@@ -2209,9 +2317,13 @@ export async function approveDraftingLead(
     },
     item.input_fingerprint ?? '',
   );
-  const jobKind: DraftingJobKind = mailboxDraftable ? 'research' : 'verify_mailbox';
+  const settings = await loadCampaignMessageSettings(campaignId);
+  const customMessage = settings.messageMode === 'custom';
+  const jobKind: DraftingJobKind = mailboxDraftable
+    ? (customMessage ? 'template_fill' : 'research')
+    : 'verify_mailbox';
   const jobIdempotencyKey = mailboxDraftable
-    ? `approve-research:${itemId}:${idempotencyKey}`
+    ? `approve-${jobKind}:${itemId}:${idempotencyKey}`
     : `approve-verify:${itemId}:${idempotencyKey}`;
 
   const result = await dbTransaction(async (client) => {
@@ -2321,7 +2433,9 @@ export async function approveDraftingLead(
        WHERE id = $1`,
       [
         itemId,
-        mailboxDraftable ? 'queued_research' : 'verifying_mailbox',
+        mailboxDraftable
+          ? (customMessage ? 'queued_template_fill' : 'queued_research')
+          : 'verifying_mailbox',
         manualEmptyBriefRetry,
         ownerId,
         item.empty_brief_input_fingerprint,
@@ -2358,6 +2472,7 @@ export async function saveDraft(
     expectedInputFingerprint?: string;
     subject?: string;
     bodyText?: string;
+    bodyHtml?: string | null;
   },
 ): Promise<{
   content_revision: number;
@@ -2375,15 +2490,21 @@ export async function saveDraft(
 
   const existing = await loadDraftForItem(draftId);
   const subject = input.subject ?? existing?.subject ?? '';
+  const templateOrigin = existing?.generation_mode === 'template';
   const sender = item.input_snapshot.sender;
-  const bodyText = stripTrailingTextSignature(
-    normalizeDraftBody(input.bodyText ?? existing?.body_text ?? '', buildEffectiveLeadFields(item.input_snapshot, item.input_overrides).firstName),
-    {
-      displayName: sender.displayName,
-      title: sender.title,
-      companyName: sender.companyName?.trim() || 'Helios Group',
-    },
-  );
+  const bodyText = templateOrigin
+    ? (input.bodyText ?? existing?.body_text ?? '')
+    : stripTrailingTextSignature(
+      normalizeDraftBody(input.bodyText ?? existing?.body_text ?? '', buildEffectiveLeadFields(item.input_snapshot, item.input_overrides).firstName),
+      {
+        displayName: sender.displayName,
+        title: sender.title,
+        companyName: sender.companyName?.trim() || 'Helios Group',
+      },
+    );
+  const bodyHtml = templateOrigin
+    ? (input.bodyHtml ?? existing?.body_html ?? filledTemplateToHtml(bodyText))
+    : null;
   const currentRevision = Number(existing?.content_revision ?? 0);
 
   if (existing && currentRevision !== input.expectedContentRevision) {
@@ -2402,48 +2523,54 @@ export async function saveDraft(
       WHERE drafting_item_id = $1`,
     [draftId],
   );
-  const temporalAudit = packetRows[0]?.packet
-    ? assessResearchTimeliness(packetRows[0].packet)
-    : null;
-  const baseLint = lintDraft(subject, bodyText);
-  const combined = `${subject}\n${bodyText}`;
-  const temporalLint = temporalAudit
-    ? findDraftTimelinessFailures(subject, bodyText, temporalAudit, grounding).map((finding) => {
-      const start = finding.matchedText ? combined.indexOf(finding.matchedText) : 0;
-      return {
-        code: finding.code,
-        message: finding.message,
-        field: 'combined' as const,
-        span: {
-          start: Math.max(0, start),
-          end: Math.max(0, start) + finding.matchedText.length,
-          text: finding.matchedText,
-        },
-      };
-    })
-    : [];
-  const lint: LintResult = {
-    hard: [...baseLint.hard, ...temporalLint],
-    warnings: baseLint.warnings,
-  };
+  const temporalAudit = templateOrigin
+    ? TEMPLATE_TEMPORAL_AUDIT
+    : packetRows[0]?.packet
+      ? assessResearchTimeliness(packetRows[0].packet)
+      : null;
+  const lint: LintResult = templateOrigin
+    ? emptyLintResult()
+    : (() => {
+      const baseLint = lintDraft(subject, bodyText);
+      const combined = `${subject}\n${bodyText}`;
+      const temporalLint = temporalAudit
+        ? findDraftTimelinessFailures(subject, bodyText, temporalAudit, grounding).map((finding) => {
+          const start = finding.matchedText ? combined.indexOf(finding.matchedText) : 0;
+          return {
+            code: finding.code,
+            message: finding.message,
+            field: 'combined' as const,
+            span: {
+              start: Math.max(0, start),
+              end: Math.max(0, start) + finding.matchedText.length,
+              text: finding.matchedText,
+            },
+          };
+        })
+        : [];
+      return { hard: [...baseLint.hard, ...temporalLint], warnings: baseLint.warnings };
+    })();
   const nextRevision = currentRevision + 1;
   const fingerprint = item.input_fingerprint ?? inputFingerprint(item.input_snapshot, item.input_overrides);
-  const canMarkReady = !hasBlockingHardLintFailures(lint);
+  const canMarkReady = templateOrigin || !hasBlockingHardLintFailures(lint);
+  const generationMode = templateOrigin ? 'template' : 'legacy';
 
   await dbTransaction(async (client) => {
     await client.query(
       `INSERT INTO outreach.email_drafts (
          drafting_item_id, input_fingerprint, research_packet_sha256, content_revision,
-         subject, body_text, lint_result, used_fact_ids, claim_ledger, draft_grounding,
+         subject, body_text, body_html, include_signature, lint_result, used_fact_ids, claim_ledger, draft_grounding,
          temporal_status, temporal_audit,
          generation_mode, grounding_status, manually_edited, edited_by, edited_at
        ) VALUES (
-         $1, $2, coalesce($3, ''), $4, $5, $6, $7::jsonb, $8, $9::jsonb, $10::jsonb,
-         $11, $12::jsonb, 'legacy', 'manual_override', true, $13, now()
+         $1, $2, coalesce($3, ''), $4, $5, $6, $14, $15, $7::jsonb, $8, $9::jsonb, $10::jsonb,
+         $11, $12::jsonb, $16, 'manual_override', true, $13, now()
        )
        ON CONFLICT (drafting_item_id) DO UPDATE
          SET subject = EXCLUDED.subject,
              body_text = EXCLUDED.body_text,
+             body_html = EXCLUDED.body_html,
+             include_signature = EXCLUDED.include_signature,
              content_revision = EXCLUDED.content_revision,
              lint_result = EXCLUDED.lint_result,
              used_fact_ids = EXCLUDED.used_fact_ids,
@@ -2451,6 +2578,7 @@ export async function saveDraft(
              draft_grounding = EXCLUDED.draft_grounding,
              temporal_status = EXCLUDED.temporal_status,
              temporal_audit = EXCLUDED.temporal_audit,
+             generation_mode = EXCLUDED.generation_mode,
              grounding_status = 'manual_override',
              manually_edited = true,
              edited_by = EXCLUDED.edited_by,
@@ -2471,6 +2599,9 @@ export async function saveDraft(
         temporalAudit?.status ?? existing?.temporal_status ?? 'blocked',
         JSON.stringify(temporalAudit ?? existing?.temporal_audit ?? {}),
         ownerId,
+        bodyHtml,
+        existing?.include_signature !== false,
+        generationMode,
       ],
     );
     // Issue C: never promote (or keep promoting) hard-lint drafts to ready via save.
@@ -2568,6 +2699,9 @@ export async function requestDraftRewrite(
   const { item } = await getOwnedItemContext(draftId, ownerId);
   const draft = await loadDraftForItem(draftId);
   if (!draft) throw new DraftingNotFoundError('Draft not found');
+  if (draft.generation_mode === 'template') {
+    throw new DraftingValidationError('Custom message campaigns cannot be rewritten by AI');
+  }
   if (Number(draft.content_revision) !== input.expectedContentRevision) {
     throw new DraftingConflictError('Content revision conflict', 'revision_conflict');
   }
@@ -4168,16 +4302,19 @@ export async function reconcileDraftingWorkspaceQueue(input: {
 }): Promise<ReconcileDraftingQueueResult> {
   const mode = input.trigger === 'lead_approval' ? 'human' : 'auto';
   const idleStatesSql = mode === 'human'
-    ? '{needs_lead_review,waiting_for_enrichment,budget_paused,failed_research,failed_write,failed_rewrite}'
-    : '{needs_lead_review,waiting_for_enrichment,budget_paused,failed_research}';
+    ? '{needs_lead_review,waiting_for_enrichment,budget_paused,failed_research,failed_write,failed_rewrite,failed_template_fill}'
+    : '{needs_lead_review,waiting_for_enrichment,budget_paused,failed_research,failed_template_fill}';
 
-  const paused = await dbQuery<{ status: string }>(
-    `SELECT status FROM outreach.drafting_workspaces WHERE id = $1`,
+  const paused = await dbQuery<{ status: string; campaign_id: string }>(
+    `SELECT status, campaign_id FROM outreach.drafting_workspaces WHERE id = $1`,
     [input.workspaceId],
   );
   if (paused.rows[0]?.status === 'paused') {
     return { drafting_run_id: '', examined: 0, queued: 0, skipped: 0, jobs: [] };
   }
+  const messageModeForReconcile = paused.rows[0]?.campaign_id
+    ? (await loadCampaignMessageSettings(paused.rows[0].campaign_id)).messageMode
+    : 'ai';
 
   const result = await dbTransaction(async (client) => {
     const itemFilter = input.itemIds && input.itemIds.length > 0
@@ -4265,6 +4402,7 @@ export async function reconcileDraftingWorkspaceQueue(input: {
         overrides: row.input_overrides,
         mode,
         lastErrorCode: row.last_error_code,
+        messageMode: messageModeForReconcile,
       });
       if (!action) {
         skipped += 1;
@@ -4283,10 +4421,16 @@ export async function reconcileDraftingWorkspaceQueue(input: {
         continue;
       }
 
-      const kind: DraftingJobKind = action === 'research' ? 'research' : 'verify_mailbox';
+      const kind: DraftingJobKind = action === 'research'
+        ? 'research'
+        : action === 'template_fill'
+          ? 'template_fill'
+          : 'verify_mailbox';
       const nextState: DraftingItemState = action === 'research'
         ? 'queued_research'
-        : 'verifying_mailbox';
+        : action === 'template_fill'
+          ? 'queued_template_fill'
+          : 'verifying_mailbox';
       const reservation = action === 'research' ? worstCaseResearchReservationUsd() : '0.0000';
       const reservationNum = Number(reservation);
 
@@ -4646,10 +4790,38 @@ export async function promoteVerifiedItem(
   const delivery = parseDeliverySnapshot(row.delivery_snapshot);
   if (!isMailboxDraftable(delivery)) return null;
 
-  // Verify → research must pass through queued_research (verifying_mailbox
-  // cannot jump straight to researching).
+  const workspace = await client.query<{ campaign_id: string }>(
+    `SELECT campaign_id FROM outreach.drafting_workspaces WHERE id = $1`,
+    [row.workspace_id],
+  );
+  const campaignId = workspace.rows[0]?.campaign_id;
+  const campaign = campaignId
+    ? await client.query<{ message_mode: string | null }>(
+      `SELECT COALESCE(message_mode, 'ai') AS message_mode FROM outreach.campaigns WHERE id = $1`,
+      [campaignId],
+    )
+    : { rows: [] as Array<{ message_mode: string | null }> };
+  const customMessage = parseMessageMode(campaign.rows[0]?.message_mode) === 'custom';
+
   if (row.state === 'verifying_mailbox' || row.state === 'needs_lead_review') {
-    await transitionItemState(client, row.id, 'queued_research', true);
+    await transitionItemState(
+      client,
+      row.id,
+      customMessage ? 'queued_template_fill' : 'queued_research',
+      true,
+    );
+  }
+
+  if (customMessage) {
+    return queueJob(client, {
+      runId: input.runId,
+      itemId: row.id,
+      kind: 'template_fill',
+      idempotencyKey: `promote-template:${row.id}:${row.input_fingerprint}`,
+      expectedInputFingerprint: row.input_fingerprint,
+      reservedCostUsd: '0.0000',
+      priority: 2,
+    });
   }
 
   const reservation = worstCaseResearchReservationUsd();
@@ -4748,16 +4920,18 @@ export async function saveEmailDraft(
     usage?: Record<string, unknown>;
     temporalAudit: ResearchTimelinessAudit;
     grounding: DraftTemporalGrounding;
+    bodyHtml?: string | null;
+    includeSignature?: boolean;
   },
 ): Promise<void> {
   await client.query(
     `INSERT INTO outreach.email_drafts (
        drafting_item_id, input_fingerprint, research_packet_sha256, generation_number,
-       content_revision, subject, body_text, resolution_used, used_fact_ids, claim_ledger,
+       content_revision, subject, body_text, body_html, include_signature, resolution_used, used_fact_ids, claim_ledger,
        ask_form, lint_result, model_id, prompt_version, provider_request_id, usage,
        generation_mode, temporal_status, temporal_audit, draft_grounding,
        generated_at
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12::jsonb, $13, $14, $15, $16::jsonb, $17, $18, $19::jsonb, $20::jsonb, now())
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $21, $22, $8, $9, $10::jsonb, $11, $12::jsonb, $13, $14, $15, $16::jsonb, $17, $18, $19::jsonb, $20::jsonb, now())
      ON CONFLICT (drafting_item_id) DO UPDATE
        SET input_fingerprint = EXCLUDED.input_fingerprint,
            research_packet_sha256 = EXCLUDED.research_packet_sha256,
@@ -4765,6 +4939,8 @@ export async function saveEmailDraft(
            content_revision = email_drafts.content_revision + 1,
            subject = EXCLUDED.subject,
            body_text = EXCLUDED.body_text,
+           body_html = EXCLUDED.body_html,
+           include_signature = EXCLUDED.include_signature,
            resolution_used = EXCLUDED.resolution_used,
            used_fact_ids = EXCLUDED.used_fact_ids,
            claim_ledger = EXCLUDED.claim_ledger,
@@ -4803,6 +4979,8 @@ export async function saveEmailDraft(
       input.temporalAudit.status,
       JSON.stringify(input.temporalAudit),
       JSON.stringify(input.grounding),
+      input.bodyHtml ?? null,
+      input.includeSignature !== false,
     ],
   );
   await client.query(
@@ -4811,6 +4989,144 @@ export async function saveEmailDraft(
      WHERE id = $1`,
     [item.id],
   );
+}
+
+export async function persistTemplateFill(
+  client: PoolClient,
+  item: DraftingItemRow,
+  campaignId: string,
+): Promise<'ready_for_review' | 'needs_lead_review'> {
+  const campaign = await client.query<{
+    message_subject_template: string | null;
+    message_body_template: string | null;
+    include_signature: boolean | null;
+    message_mode: string | null;
+  }>(
+    `SELECT message_subject_template, message_body_template,
+            COALESCE(include_signature, true) AS include_signature,
+            COALESCE(message_mode, 'ai') AS message_mode
+       FROM outreach.campaigns WHERE id = $1`,
+    [campaignId],
+  );
+  const settings: CampaignMessageSettings = {
+    messageMode: parseMessageMode(campaign.rows[0]?.message_mode),
+    subjectTemplate: campaign.rows[0]?.message_subject_template ?? '',
+    bodyTemplate: campaign.rows[0]?.message_body_template ?? '',
+    includeSignature: campaign.rows[0]?.include_signature !== false,
+  };
+  if (settings.messageMode !== 'custom') {
+    throw new DraftingValidationError('Campaign is not a custom message campaign');
+  }
+  const fields = buildEffectiveLeadFields(item.input_snapshot, item.input_overrides);
+  const filled = fillMessageTemplates({
+    subjectTemplate: settings.subjectTemplate,
+    bodyTemplate: settings.bodyTemplate,
+    fields,
+  });
+  if (!filled.ok) {
+    await client.query(
+      `UPDATE outreach.drafting_items
+          SET last_error_code = $2,
+              missing_fields = $3,
+              updated_at = now()
+        WHERE id = $1`,
+      [item.id, MISSING_TEMPLATE_FIELDS_ERROR, filled.missingTokens],
+    );
+    await transitionItemState(client, item.id, 'needs_lead_review', false);
+    return 'needs_lead_review';
+  }
+
+  await saveEmailDraft(client, item, {
+    subject: filled.subject,
+    bodyText: filled.bodyText,
+    bodyHtml: filled.bodyHtml,
+    includeSignature: settings.includeSignature,
+    packetSha256: 'template',
+    generationNumber: 1,
+    lintResult: emptyLintResult(),
+    generationMode: 'template',
+    temporalAudit: TEMPLATE_TEMPORAL_AUDIT,
+    grounding: { usedFactIds: [], claimLedger: [] },
+    modelId: 'template',
+    promptVersion: 'custom-message-v1',
+  });
+  await client.query(
+    `UPDATE outreach.drafting_items
+        SET last_error_code = NULL,
+            updated_at = now()
+      WHERE id = $1`,
+    [item.id],
+  );
+  await transitionItemState(client, item.id, 'ready_for_review', true);
+  return 'ready_for_review';
+}
+
+export async function refillCustomCampaignUnsentDrafts(
+  campaignId: string,
+  ownerId: string,
+  itemIds?: string[],
+): Promise<{ refilled: number; blocked: number }> {
+  await assertCampaignOwned(campaignId, ownerId);
+  const settings = await loadCampaignMessageSettings(campaignId);
+  if (settings.messageMode !== 'custom') return { refilled: 0, blocked: 0 };
+
+  const { rows } = await dbQuery<{
+    id: string;
+    workspace_id: string;
+    lead_id: string;
+    ordinal: number;
+    state: DraftingItemState;
+    input_snapshot: InputSnapshot;
+    input_overrides: InputOverrides;
+    missing_fields: string[];
+    input_fingerprint: string | null;
+    input_revision: number;
+    delivery_snapshot: DeliverySnapshot | null;
+    review_status: string;
+    removed_at: string | null;
+    research_revision: number;
+    draft_revision: number;
+    last_error_code: string | null;
+    empty_brief_attempts: number;
+    empty_brief_input_fingerprint: string | null;
+    empty_brief_last_at: string | null;
+  }>(
+    `SELECT i.id, i.workspace_id, i.lead_id, i.ordinal, i.state, i.input_snapshot, i.input_overrides,
+            i.missing_fields, i.input_fingerprint, i.input_revision, i.delivery_snapshot,
+            i.review_status, i.removed_at, i.research_revision, i.draft_revision,
+            i.last_error_code, i.empty_brief_attempts,
+            i.empty_brief_input_fingerprint, i.empty_brief_last_at
+       FROM outreach.drafting_items i
+       JOIN outreach.drafting_workspaces w ON w.id = i.workspace_id
+       LEFT JOIN outreach.email_drafts d ON d.drafting_item_id = i.id
+       LEFT JOIN outreach.email_send_queue q
+         ON q.drafting_item_id = i.id AND q.status IN ('queued', 'sending', 'sent')
+       LEFT JOIN outreach.email_sends s
+         ON s.drafting_item_id = i.id AND s.status = 'sent'
+      WHERE w.campaign_id = $1
+        AND i.removed_at IS NULL
+        AND i.state IN ('ready_for_review', 'needs_lead_review', 'failed_template_fill')
+        AND q.id IS NULL
+        AND s.id IS NULL
+        AND coalesce(d.manually_edited, false) = false
+        AND ($2::uuid[] IS NULL OR cardinality($2::uuid[]) = 0 OR i.id = ANY($2::uuid[]))`,
+    [campaignId, itemIds?.length ? itemIds : null],
+  );
+
+  let refilled = 0;
+  let blocked = 0;
+  for (const row of rows) {
+    await dbTransaction(async (client) => {
+      if (row.state !== 'queued_template_fill' && row.state !== 'filling_template') {
+        await transitionItemState(client, row.id, 'queued_template_fill', true);
+      }
+      await transitionItemState(client, row.id, 'filling_template', true);
+      const result = await persistTemplateFill(client, row as DraftingItemRow, campaignId);
+      if (result === 'ready_for_review') refilled += 1;
+      else blocked += 1;
+    });
+  }
+  return { refilled, blocked };
 }
 
 export type CancelDraftingCampaignResult = {

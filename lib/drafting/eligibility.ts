@@ -25,12 +25,15 @@ export const RUNNING_STATES = [
   'queued_rewrite',
   'rewriting',
   'verifying_mailbox',
+  'queued_template_fill',
+  'filling_template',
 ] as const satisfies readonly DraftingItemState[];
 
 export const FAILED_STATES = [
   'failed_research',
   'failed_write',
   'failed_rewrite',
+  'failed_template_fill',
 ] as const satisfies readonly DraftingItemState[];
 
 export const LEADS_ATTENTION_STATES = [

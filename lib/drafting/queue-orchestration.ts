@@ -21,6 +21,7 @@ export const AUTO_QUEUE_IDLE_STATES = [
   'waiting_for_enrichment',
   'budget_paused',
   'failed_research',
+  'failed_template_fill',
 ] as const satisfies readonly DraftingItemState[];
 
 /** States a human Approve (single/bulk) may re-enter from. */
@@ -49,7 +50,7 @@ export function isAutoQueueIdleState(state: string): state is AutoQueueIdleState
   return (AUTO_QUEUE_IDLE_STATES as readonly string[]).includes(state);
 }
 
-export type DraftingEnqueueAction = 'research' | 'verify_mailbox';
+export type DraftingEnqueueAction = 'research' | 'verify_mailbox' | 'template_fill';
 
 /**
  * Decide whether an idle item should leave Leads mode.
@@ -65,6 +66,7 @@ export function resolveDraftingEnqueueAction(input: {
   /** system / go_to_drafting / retry vs human lead_approval */
   mode: 'auto' | 'human';
   lastErrorCode?: string | null;
+  messageMode?: 'ai' | 'custom';
 }): DraftingEnqueueAction | null {
   const idleOk = input.mode === 'human'
     ? isQueueableIdleState(input.state)
@@ -80,8 +82,10 @@ export function resolveDraftingEnqueueAction(input: {
     return null;
   }
 
+  const custom = input.messageMode === 'custom';
+
   if (canQueueResearch(input.snapshot, input.delivery, input.overrides)) {
-    return 'research';
+    return custom ? 'template_fill' : 'research';
   }
 
   // Pending / unknown / inferred — queue AgentMail verify when fields are complete.
@@ -119,7 +123,8 @@ export function shouldAutoQueueDraftingItem(input: {
   overrides?: InputOverrides;
   lastErrorCode?: string | null;
 }): boolean {
-  return resolveDraftingEnqueueAction({ ...input, mode: 'auto' }) === 'research';
+  return resolveDraftingEnqueueAction({ ...input, mode: 'auto' }) === 'research'
+    || resolveDraftingEnqueueAction({ ...input, mode: 'auto' }) === 'template_fill';
 }
 
 /** Approve-for-drafting is allowed whenever the row is idle in Leads mode. */

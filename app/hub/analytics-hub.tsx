@@ -47,6 +47,7 @@ export function AnalyticsHub() {
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [selectedIdentitySlug, setSelectedIdentitySlug] = useState<string>('');
   const [selectedFromEmail, setSelectedFromEmail] = useState<string>('');
+  const [selectedMessageMode, setSelectedMessageMode] = useState<'all' | 'ai' | 'custom'>('all');
 
   const [viewMode, setViewMode] = useState<ViewMode>('campaigns');
   const [expandedIdentity, setExpandedIdentity] = useState<string | null>(null);
@@ -73,6 +74,7 @@ export function AnalyticsHub() {
     (selectedUserId ? 1 : 0) +
     (selectedIdentitySlug ? 1 : 0) +
     (selectedFromEmail ? 1 : 0) +
+    (selectedMessageMode !== 'all' ? 1 : 0) +
     (period === 'custom' ? 1 : 0);
 
   async function loadSummary() {
@@ -95,6 +97,7 @@ export function AnalyticsHub() {
       }
       if (selectedIdentitySlug) params.set('identitySlug', selectedIdentitySlug);
       if (selectedFromEmail) params.set('fromEmail', selectedFromEmail);
+      if (selectedMessageMode !== 'all') params.set('messageMode', selectedMessageMode);
 
       const summaryData = await hubGetJson<AnalyticsSummary>(
         `/api/analytics/summary?${params.toString()}`,
@@ -111,7 +114,7 @@ export function AnalyticsHub() {
   useEffect(() => {
     void loadSummary();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [period, customFrom, customTo, selectedCampaignIds, selectedTags, selectedUserId, selectedIdentitySlug, selectedFromEmail]);
+  }, [period, customFrom, customTo, selectedCampaignIds, selectedTags, selectedUserId, selectedIdentitySlug, selectedFromEmail, selectedMessageMode]);
 
   // Load runs after the summary settles so we don't open two heavy queries
   // at once against the session pooler.
@@ -207,6 +210,9 @@ export function AnalyticsHub() {
     setSelectedCampaignIds([]);
     setSelectedTags([]);
     setSelectedUserId('');
+    setSelectedIdentitySlug('');
+    setSelectedFromEmail('');
+    setSelectedMessageMode('all');
   }
 
   function toggleTagFilter(tag: string) {
@@ -322,6 +328,26 @@ export function AnalyticsHub() {
                       type="button"
                       className={period === value ? 'segmented__item segmented__item--active' : 'segmented__item'}
                       onClick={() => setPeriod(value)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-subtle)', fontWeight: 'bold' }}>Content</span>
+                <div className="segmented">
+                  {([
+                    ['all', 'All'],
+                    ['ai', 'AI-generated'],
+                    ['custom', 'Custom message'],
+                  ] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={selectedMessageMode === value ? 'segmented__item segmented__item--active' : 'segmented__item'}
+                      onClick={() => setSelectedMessageMode(value)}
                     >
                       {label}
                     </button>
@@ -837,6 +863,7 @@ export function AnalyticsHub() {
           campaignIds={selectedCampaignIds}
           tags={selectedTags}
           userId={selectedUserId}
+          messageMode={selectedMessageMode}
           onClose={() => setDrilldownMetricKey(null)}
         />
       )}

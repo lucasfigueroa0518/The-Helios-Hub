@@ -5,6 +5,14 @@ import { startTransition, useCallback, useEffect, useId, useRef, useState } from
 import { ChevronLeft, ChevronRight, Download, Pencil, RotateCcw, Send, X } from 'lucide-react';
 
 import type { DraftingItemRow, SenderProfile } from '@/app/campaigns/[id]/draft/types';
+import { MessageComposer } from '@/app/components/message-composer';
+import { buildSignatureHtml, resolveEmailSignature } from '@/lib/drafting/email-signature';
+import {
+  composerHtmlToTemplate,
+  filledHtmlToComposerHtml,
+  filledTemplateToHtml,
+  filledTemplateToPlainText,
+} from '@/lib/drafting/message-template';
 import {
   sortDraftRows,
   type DraftSortMode,
@@ -63,6 +71,17 @@ function isDraftSendable(state: DraftingItemRow['state']): boolean {
   return state === 'ready_for_review' || state === 'approved';
 }
 
+function isTemplateDraft(row: DraftingItemRow | null): boolean {
+  return row?.draft?.generation_mode === 'template';
+}
+
+function canonicalBodyFromDraft(row: DraftingItemRow): string {
+  if (row.draft?.body_html) {
+    return composerHtmlToTemplate(filledHtmlToComposerHtml(row.draft.body_html));
+  }
+  return row.draft?.body_text ?? '';
+}
+
 /** Swap to the next email at the green flash peak; comedown finishes over the next card. */
 const APPROVE_PEAK_MS = 180;
 const APPROVE_TOTAL_MS = 360;
@@ -85,6 +104,7 @@ export function EmailReview({
   onRewriteFailed,
   onRewriteQueued,
   onDecision,
+  customMode = false,
 }: {
   campaignId: string;
   autoMode?: boolean;
@@ -111,6 +131,7 @@ export function EmailReview({
   onRewriteFailed: (itemId: string) => void;
   onRewriteQueued: (itemId: string) => void;
   onDecision: () => void;
+  customMode?: boolean;
 }) {
   const reviewable = sortDraftRows(
     rows.filter((row) => rowMatchesOutreachFocus(row, focus)),
@@ -149,7 +170,7 @@ export function EmailReview({
   useEffect(() => {
     if (!current?.draft) return;
     setSubject(current.draft.subject);
-    setBody(current.draft.body_text);
+    setBody(isTemplateDraft(current) ? canonicalBodyFromDraft(current) : current.draft.body_text);
     setContentRevision(current.draft.content_revision);
     setEditing(false);
     setSaveState('idle');
@@ -184,7 +205,7 @@ export function EmailReview({
     onEndRewriteWatch(watched.itemId);
     if (current?.id === watched.itemId) {
       setSubject(row.draft.subject);
-      setBody(row.draft.body_text);
+      setBody(isTemplateDraft(row) ? canonicalBodyFromDraft(row) : row.draft.body_text);
       setContentRevision(row.draft.content_revision);
       setEditing(false);
       setRewriteJustLanded(true);
@@ -220,7 +241,9 @@ export function EmailReview({
   const flushSave = useCallback(async () => {
     if (!current?.draft || !editing) return true;
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (subject === current.draft.subject && body === current.draft.body_text) return true;
+    const template = isTemplateDraft(current);
+    const baselineBody = template ? canonicalBodyFromDraft(current) : current.draft.body_text;
+    if (subject === current.draft.subject && body === baselineBody) return true;
     setSaveState('saving');
     const response = await fetch(`/api/drafts/${current.id}`, {
       method: 'PATCH',
@@ -229,7 +252,8 @@ export function EmailReview({
         expected_content_revision: contentRevision,
         expected_input_fingerprint: current.input_fingerprint,
         subject,
-        body_text: body,
+        body_text: template ? filledTemplateToPlainText(body) : body,
+        body_html: template ? filledTemplateToHtml(body) : undefined,
       }),
     });
     const data = await response.json();
@@ -249,6 +273,7 @@ export function EmailReview({
       void (async () => {
         if (!current?.draft) return;
         setSaveState('saving');
+        const template = current.draft.generation_mode === 'template';
         const response = await fetch(`/api/drafts/${current.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -256,7 +281,8 @@ export function EmailReview({
             expected_content_revision: contentRevision,
             expected_input_fingerprint: current.input_fingerprint,
             subject: nextSubject,
-            body_text: nextBody,
+            body_text: template ? filledTemplateToPlainText(nextBody) : nextBody,
+            body_html: template ? filledTemplateToHtml(nextBody) : undefined,
           }),
         });
         const data = await response.json();
@@ -354,6 +380,7 @@ export function EmailReview({
     nextBody: string;
     baselineSubject: string;
     baselineBody: string;
+    template?: boolean;
   }): Promise<number | null> {
     if (
       options.nextSubject === options.baselineSubject
@@ -368,7 +395,10 @@ export function EmailReview({
         expected_content_revision: options.revision,
         expected_input_fingerprint: options.fingerprint,
         subject: options.nextSubject,
-        body_text: options.nextBody,
+        body_text: options.template
+          ? filledTemplateToPlainText(options.nextBody)
+          : options.nextBody,
+        body_html: options.template ? filledTemplateToHtml(options.nextBody) : undefined,
       }),
     });
     const data = await response.json().catch(() => ({}));
@@ -560,7 +590,7 @@ export function EmailReview({
     const nextSubject = subject;
     const nextBody = body;
     const baselineSubject = current.draft.subject;
-    const baselineBody = current.draft.body_text;
+    const baselineBody = isTemplateDraft(current) ? canonicalBodyFromDraft(current) : current.draft.body_text;
     const recipientLabel = current.effective_fields.fullName
       ?? current.effective_fields.email
       ?? 'Draft';
@@ -585,6 +615,7 @@ export function EmailReview({
           nextBody,
           baselineSubject,
           baselineBody,
+          template: isTemplateDraft(current),
         });
         if (savedRevision === null) {
           setActionError('Could not save edits before download');
@@ -624,7 +655,7 @@ export function EmailReview({
     const nextSubject = subject;
     const nextBody = body;
     const baselineSubject = current.draft.subject;
-    const baselineBody = current.draft.body_text;
+    const baselineBody = isTemplateDraft(current) ? canonicalBodyFromDraft(current) : current.draft.body_text;
 
     inFlightRef.current.add(itemId);
     setActionError(null);
@@ -644,6 +675,7 @@ export function EmailReview({
           nextBody,
           baselineSubject,
           baselineBody,
+          template: isTemplateDraft(current),
         });
         if (savedRevision === null) {
           onRewriteFailed(itemId);
@@ -703,7 +735,7 @@ export function EmailReview({
     function onKeyDown(event: KeyboardEvent) {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const target = event.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
         if (event.key === 'Escape' && showFeedback) {
           event.preventDefault();
           setShowFeedback(false);
@@ -729,9 +761,11 @@ export function EmailReview({
         event.preventDefault();
         approve();
       } else if (event.key === 'r' || event.key === 'R') {
+        if (customMode || isTemplateDraft(current)) return;
         event.preventDefault();
         denyRewrite();
       } else if (event.key === 'f' || event.key === 'F') {
+        if (customMode || isTemplateDraft(current)) return;
         event.preventDefault();
         setShowFeedback((value) => !value);
       }
@@ -751,7 +785,7 @@ export function EmailReview({
         <span>
           {focus
             ? 'Click the tile again to show every draft.'
-            : 'Researching leads. The first draft will appear here as soon as it is ready.'}
+            : 'Filling your campaign message. The first draft will appear here as soon as it is ready.'}
         </span>
       </div>
     );
@@ -766,6 +800,7 @@ export function EmailReview({
   const sendDisabledReasonId = 'drafting-send-disabled-reason';
   const retrySuggested = Boolean(current.draft.retry_suggested);
   const rewriting = current.state === 'queued_rewrite' || current.state === 'rewriting';
+  const templateOrigin = customMode || isTemplateDraft(current);
   const decidable = canDecideOnDraft(current) && !approveFlash && !sendFlash && !rewriting;
   const alreadySent = current.draft.send_status === 'sent';
   const isQueued = current.draft.send_status === 'queued'
@@ -953,6 +988,7 @@ export function EmailReview({
             {verificationChipLabel}
           </span>
         </div>
+        {editing && templateOrigin ? null : (
         <div className="drafting-email-line drafting-email-line--subject">
           <span className="drafting-email-line__label">Subject</span>
           {editing ? (
@@ -970,7 +1006,37 @@ export function EmailReview({
             <span className="drafting-email-subject-display">{subject}</span>
           )}
         </div>
-        {editing ? (
+        )}
+        {editing && templateOrigin ? (
+          <MessageComposer
+            compact
+            mode="filled"
+            subject={subject}
+            body={body}
+            includeSignature={current.draft.include_signature !== false}
+            onSubjectChange={(next) => {
+              setSubject(next);
+              scheduleSave(next, body);
+            }}
+            onBodyChange={(next) => {
+              setBody(next);
+              scheduleSave(subject, next);
+            }}
+            signatureHtml={
+              current.draft.include_signature !== false && sender
+                ? buildSignatureHtml(resolveEmailSignature({
+                  workEmail: sender.work_email,
+                  displayName: sender.display_name,
+                  title: sender.title,
+                  companyName: sender.company_name,
+                  profileId: sender.id,
+                  headshotStoragePath: sender.headshot_storage_path,
+                  allowRemoteHeadshot: true,
+                }))
+                : undefined
+            }
+          />
+        ) : editing ? (
           <textarea
             className="drafting-email-body drafting-email-body--editable"
             value={body}
@@ -980,6 +1046,25 @@ export function EmailReview({
             }}
             onBlur={() => void flushSave()}
             rows={12}
+          />
+        ) : templateOrigin && current.draft.body_html ? (
+          <div
+            className="drafting-email-body drafting-email-body--html"
+            dangerouslySetInnerHTML={{
+              __html: `${current.draft.body_html}${
+                current.draft.include_signature !== false && sender
+                  ? buildSignatureHtml(resolveEmailSignature({
+                    workEmail: sender.work_email,
+                    displayName: sender.display_name,
+                    title: sender.title,
+                    companyName: sender.company_name,
+                    profileId: sender.id,
+                    headshotStoragePath: sender.headshot_storage_path,
+                    allowRemoteHeadshot: true,
+                  }))
+                  : ''
+              }`,
+            }}
           />
         ) : (
           <pre className="drafting-email-body">{body}</pre>
@@ -1029,6 +1114,7 @@ export function EmailReview({
             >
               <Download size={16} />
             </button>
+            {templateOrigin ? null : (
             <button
               type="button"
               className="drafting-icon-btn drafting-icon-btn--deny"
@@ -1039,6 +1125,7 @@ export function EmailReview({
             >
               <RotateCcw size={16} />
             </button>
+            )}
             {isQueued && current.draft.send_status === 'queued' ? (
               <>
                 <button
@@ -1115,7 +1202,7 @@ export function EmailReview({
           </div>
           )}
         </div>
-        {showFeedback ? (
+        {showFeedback && !templateOrigin ? (
           <div
             id={directionPanelId}
             className="drafting-direction-panel"

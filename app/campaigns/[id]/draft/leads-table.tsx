@@ -52,6 +52,18 @@ function rowStatusText(row: DraftingItemRow) {
   if (row.state === 'failed_write' || row.state === 'failed_rewrite') {
     return 'Drafting failed — approve again to retry';
   }
+  if (row.state === 'failed_template_fill' || row.last_error_code === 'missing_template_fields') {
+    const labels = row.missing_fields.map((field) => {
+      if (field === 'fullName') return 'name';
+      if (field === 'firstName') return 'first name';
+      if (field === 'workLocation') return 'location';
+      if (field === 'title') return 'position';
+      return field;
+    });
+    return labels.length
+      ? `Missing ${labels.join(' and ')} for the campaign message`
+      : 'Missing merge fields for the campaign message';
+  }
   if (row.state === 'budget_paused') return 'Paused — budget limit hit';
   const verification = row.delivery_snapshot?.emailVerification;
   if (verification === 'rate_limited') {

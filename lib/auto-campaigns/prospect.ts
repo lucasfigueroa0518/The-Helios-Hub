@@ -7,7 +7,8 @@ import {
   selectIdsToEnrich,
 } from '@/lib/auto-campaigns/credit-pipeline';
 import type { ApolloPeopleClient } from '@/lib/auto-campaigns/apollo';
-import { applyExpansion } from '@/lib/auto-campaigns/expansion';
+import { applyExpansion, expansionLabel } from '@/lib/auto-campaigns/expansion';
+import { industryKeywordQueue } from '@/lib/auto-campaigns/filter-map';
 import type {
   EnrichedPerson,
   PeopleSearchParams,
@@ -66,7 +67,9 @@ export async function runPeopleSearchProspecting(
   const now = input.now ?? new Date();
   const quota = Math.max(0, Math.floor(input.emailsPerDay) || 0);
   const entries: ProspectLogEntry[] = [];
-  const params = applyExpansion(input.searchParams, input.expansionStep);
+  const expanded = applyExpansion(input.searchParams, input.expansionStep);
+  const keywords = industryKeywordQueue(expanded);
+  let keywordIndex = 0;
   const knownIds = new Set(input.knownApolloIds);
   const knownLinkedin = new Set(
     [...input.knownLinkedinUrls].flatMap((url) => {
@@ -82,13 +85,19 @@ export async function runPeopleSearchProspecting(
   const storedWithoutEmail: EnrichedPerson[] = [];
   let inventoryExhausted = quota === 0;
 
-  log(entries, 'expand', `Search at expansion step ${input.expansionStep}`, { count: input.expansionStep }, now);
+  const currentParams = (): PeopleSearchParams => ({
+    ...expanded,
+    q_keywords: keywords[keywordIndex] || expanded.q_keywords,
+  });
+
+  log(entries, 'expand', `Search at ${expansionLabel(input.expansionStep)}`, { count: input.expansionStep }, now);
   log(entries, 'cursor', `Resume people-search at page ${page}`, { page }, now);
 
   for (let i = 0; i < APOLLO_MAX_SEARCH_PAGES_PER_CYCLE; i += 1) {
     const remaining = quota - attached.length;
     if (remaining <= 0) break;
 
+    const params = currentParams();
     const hits = await client.searchPeople(params, page, APOLLO_SEARCH_PER_PAGE);
     searches += 1;
     log(entries, 'search', `People search page ${page} returned ${hits.length}`, {
@@ -97,6 +106,15 @@ export async function runPeopleSearchProspecting(
     }, now);
 
     if (hits.length === 0) {
+      if (keywordIndex < keywords.length - 1) {
+        const previous = keywords[keywordIndex];
+        keywordIndex += 1;
+        page = 1;
+        log(entries, 'map', `No hits for “${previous}”; trying industry keyword “${keywords[keywordIndex]}”`, {
+          page: 1,
+        }, now);
+        continue;
+      }
       log(entries, 'cursor', `Empty page ${page}; inventory thin`, { page }, now);
       inventoryExhausted = true;
       break;
