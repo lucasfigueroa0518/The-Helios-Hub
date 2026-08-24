@@ -81,6 +81,7 @@ import {
   type MessageMode,
 } from '@/lib/drafting/message-template';
 import { campaignRampDelayMs } from '@/lib/drafting/provider-admission';
+import { assertTransition, syncReviewStatus } from '@/lib/drafting/state';
 import type { DraftingRescueAssessment } from '@/lib/drafting/rescue';
 import { isReadyForBulkSend } from '@/lib/drafting/draft-review-order';
 import {

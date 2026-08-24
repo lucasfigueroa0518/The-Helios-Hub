@@ -21,7 +21,7 @@ import { uniqueCampaignColors } from '@/lib/auto-campaigns/queue-colors';
 import type { QueueDayBucket, QueueListItem, ShareTargetUser } from '@/lib/drafting/send-queue';
 
 function campaignTint(color: string | undefined): CSSProperties {
-  return { '--lock-color': `var(--${color || 'chart-1'})` };
+  return { '--lock-color': `var(--${color || 'chart-1'})` } as CSSProperties;
 }
 
 type QueueListResponse = {

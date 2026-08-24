@@ -200,12 +200,10 @@ export async function sendOutreachEmail(input: SendEmailInput): Promise<SendEmai
   const text = includeSignature ? appendPlainTextSignature(bodyText, signature) : bodyText;
   const html = input.bodyHtml
     ? buildOutreachEmailHtmlFromBodyHtml(input.bodyHtml, includeSignature ? signature : null)
-    : buildOutreachEmailHtml(
-      bodyText,
-      signature,
-      input.linkifyReplyBody ? { bodyToHtml: replyPlainTextBodyToHtml } : undefined,
-      { includeSignature },
-    );
+    : buildOutreachEmailHtml(bodyText, signature, {
+      ...(input.linkifyReplyBody ? { bodyToHtml: replyPlainTextBodyToHtml } : {}),
+      includeSignature,
+    });
 
   const labels = ['helios-outreach'];
   if (input.itemId?.trim()) labels.push(`item-${input.itemId.trim().slice(0, 8)}`);
