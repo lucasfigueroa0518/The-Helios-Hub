@@ -61,10 +61,10 @@ export function CardRow({
       whileTap={{ scale: 0.995, y: 0 }}
       transition={rowSpring}
       className={cn(
-        "group flex w-full items-center gap-3 rounded-[8px] border border-neutral-200",
-        "bg-neutral-50 px-3 py-2.5 text-left",
+        "group flex w-full min-h-[44px] items-center gap-2.5 rounded-[8px] border border-neutral-200",
+        "bg-neutral-50 px-3 py-2.5 text-left touch-manipulation",
         "transition-colors duration-150 ease-smooth",
-        "hover:border-neutral-300 hover:bg-neutral-50",
+        "hover:border-neutral-300 hover:bg-neutral-50 active:bg-neutral-100",
         "hover:shadow-[0_6px_16px_-8px_rgba(0,0,0,0.55)]"
       )}
     >

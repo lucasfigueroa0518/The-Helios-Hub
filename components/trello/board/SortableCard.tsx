@@ -11,12 +11,16 @@ export function SortableCard({
   users,
   meId,
   onOpen,
+  onArchive,
+  onToggleComplete,
 }: {
   card: Card;
   board: Board;
   users: User[];
   meId?: string;
   onOpen: () => void;
+  onArchive?: () => void;
+  onToggleComplete?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({
@@ -44,6 +48,8 @@ export function SortableCard({
         users={users}
         meId={meId}
         onOpen={onOpen}
+        onArchive={onArchive}
+        onToggleComplete={onToggleComplete}
         isDragging={isDragging}
       />
     </div>

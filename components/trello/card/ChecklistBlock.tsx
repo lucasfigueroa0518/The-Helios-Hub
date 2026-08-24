@@ -95,7 +95,7 @@ export function ChecklistBlock({ checklist, onToggle, onAdd, onDelete }: Props) 
               </span>
               <button
                 onClick={() => onDelete(it.id)}
-                className="rounded p-1 text-ink-mute opacity-0 transition-opacity hover:bg-neutral-100 hover:text-ink-hi group-hover:opacity-100"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded p-1 text-ink-mute opacity-100 sm:opacity-0 transition-opacity hover:bg-neutral-100 hover:text-ink-hi group-hover:opacity-100"
                 aria-label="Delete item"
               >
                 <X className="h-3 w-3" />
@@ -122,7 +122,7 @@ export function ChecklistBlock({ checklist, onToggle, onAdd, onDelete }: Props) 
               }
             }}
             placeholder="Add an item"
-            className="h-8 rounded-[6px] border border-neutral-200 bg-white px-2 text-[13px] text-ink-hi placeholder:text-ink-mute outline-none focus:border-helios-500/60"
+            className="h-9 rounded-[6px] border border-neutral-200 bg-white px-2.5 text-[16px] sm:text-[13px] text-ink-hi placeholder:text-ink-mute outline-none focus:border-helios-500/60"
           />
           <div className="flex gap-2">
             <button

@@ -10,6 +10,9 @@ import {
   Check,
   AlignLeft,
   Eye,
+  Trash2,
+  CheckCircle2,
+  Circle,
 } from "lucide-react";
 import { cn, dueState, formatCurrency, formatDate } from "@/lib/trello/utils";
 import { AvatarStack } from "@/components/trello/ui/Avatar";
@@ -21,12 +24,14 @@ type Props = {
   users: User[];
   meId?: string;
   onOpen: () => void;
+  onArchive?: () => void;
+  onToggleComplete?: () => void;
   isDragging?: boolean;
   isOverlay?: boolean;
 };
 
 export const CardFace = forwardRef<HTMLDivElement, Props>(function CardFace(
-  { card, board, users, meId, onOpen, isDragging, isOverlay },
+  { card, board, users, meId, onOpen, onArchive, onToggleComplete, isDragging, isOverlay },
   ref
 ) {
   const isTracking = meId ? card.trackerIds.includes(meId) : false;
@@ -51,10 +56,11 @@ export const CardFace = forwardRef<HTMLDivElement, Props>(function CardFace(
       ref={ref}
       layout={!isOverlay}
       onClick={onOpen}
+      whileTap={{ scale: 0.985 }}
       transition={{ type: "spring", stiffness: 500, damping: 40, mass: 0.5 }}
       className={cn(
-        "surface-card cursor-pointer select-none rounded-[8px] p-3",
-        "shadow-card hover:border-neutral-200 transition-[opacity,transform,box-shadow,border-color] duration-150",
+        "group relative surface-card cursor-pointer select-none rounded-[8px] p-3 touch-manipulation",
+        "shadow-card hover:border-neutral-200 active:bg-neutral-100/50 dark:active:bg-neutral-800/50 transition-[opacity,transform,box-shadow,border-color] duration-150",
         // Completed cards fade back so the eye reads "done, moved on"
         // without needing loud iconography or a colored side-stripe.
         // Hover restores full opacity so the card is fully readable
@@ -64,9 +70,59 @@ export const CardFace = forwardRef<HTMLDivElement, Props>(function CardFace(
         isOverlay && "shadow-card-lift rotate-[2deg]",
       )}
     >
+      {/* Top right quick actions (complete toggle & archive) */}
+      {!isOverlay && (onToggleComplete || onArchive) && (
+        <div
+          className="absolute right-2 top-2 z-10 flex items-center gap-0.5 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          {onToggleComplete && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleComplete();
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              aria-label={card.complete ? "Mark incomplete" : "Mark complete"}
+              title={card.complete ? "Mark incomplete" : "Mark complete"}
+              className={cn(
+                "grid h-6 w-6 place-items-center rounded-md transition-all",
+                card.complete
+                  ? "text-heliosGreen-500 hover:bg-heliosGreen-500/10 dark:text-heliosGreen-400"
+                  : "text-ink-mute hover:bg-neutral-100 hover:text-heliosGreen-500 dark:hover:bg-neutral-800"
+              )}
+            >
+              {card.complete ? (
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              ) : (
+                <Circle className="h-3.5 w-3.5" />
+              )}
+            </button>
+          )}
+
+          {onArchive && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onArchive();
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              aria-label="Archive card"
+              title="Archive card"
+              className="grid h-6 w-6 place-items-center rounded-md text-ink-mute transition-all hover:bg-red-500/10 hover:text-red-500 dark:hover:bg-red-500/20 dark:hover:text-red-400"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Labels — Trello-style small pills with names */}
       {labels.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-1">
+        <div className="mb-2 flex flex-wrap gap-1 pr-14">
           {labels.map((l) => (
             <span
               key={l.id}
@@ -83,6 +139,7 @@ export const CardFace = forwardRef<HTMLDivElement, Props>(function CardFace(
       <h3
         className={cn(
           "text-[14px] leading-[1.4] text-ink-hi dark:text-neutral-100",
+          (onArchive || onToggleComplete) && labels.length === 0 && "pr-14",
           // Softer strikethrough — inherits the current text color at
           // low opacity instead of a bright helios-green line. Pairs
           // with the card-level opacity fade above so the "completed"

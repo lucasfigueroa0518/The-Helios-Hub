@@ -28,14 +28,14 @@ export function ViewShell({
 }: Props) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex items-start justify-between gap-6 px-8 pb-8 pt-10">
+      <header className="flex items-start justify-between gap-4 px-4 pb-4 pt-5 sm:gap-6 sm:px-8 sm:pb-8 sm:pt-10">
         <div className="min-w-0">
           <div className="eyebrow eyebrow-ink">{eyebrow}</div>
-          <h1 className="mt-3 font-display text-[36px] leading-[1] text-ink-hi">
+          <h1 className="mt-2 font-display text-[26px] sm:text-[36px] leading-[1] text-ink-hi">
             {title}
           </h1>
           {description && (
-            <p className="mt-3 max-w-[52ch] text-[15px] leading-relaxed text-ink-low">
+            <p className="mt-2 max-w-[52ch] text-[13.5px] sm:text-[15px] leading-relaxed text-ink-low">
               {description}
             </p>
           )}
@@ -43,7 +43,7 @@ export function ViewShell({
         {actions && <div className="flex items-center gap-2">{actions}</div>}
       </header>
 
-      <div className={cn("min-h-0 flex-1 overflow-y-auto px-8 pb-10")}>
+      <div className={cn("min-h-0 flex-1 overflow-y-auto px-4 pb-8 sm:px-8 sm:pb-10")}>
         {empty ? (
           <div className="grid min-h-[40vh] place-items-center">
             {emptyState ?? <DefaultEmpty />}

@@ -148,6 +148,8 @@ export default function PageClient({ initial }: { initial: LoadedWorkspace }) {
                   users={s.users}
                   meId={me.id}
                   onOpenCard={s.setActiveCardId}
+                  onArchiveCard={s.archiveCard}
+                  onToggleCompleteCard={s.toggleCardComplete}
                   onAddCard={s.addCard}
                   onAddList={s.addList}
                   onMoveCard={s.moveCard}

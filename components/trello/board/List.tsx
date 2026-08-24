@@ -29,6 +29,8 @@ type Props = {
   users: User[];
   meId?: string;
   onOpenCard: (id: string) => void;
+  onArchiveCard?: (id: string) => void;
+  onToggleCompleteCard?: (id: string) => void;
   onAddCard: (listId: string, title: string) => void;
   onRenameList: (listId: string, name: string) => void;
   onDeleteList: (listId: string) => void;
@@ -44,6 +46,8 @@ export function List({
   users,
   meId,
   onOpenCard,
+  onArchiveCard,
+  onToggleCompleteCard,
   onAddCard,
   onRenameList,
   onDeleteList,
@@ -113,7 +117,7 @@ export function List({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex w-[288px] shrink-0 flex-col rounded-[10px] surface-list transition-colors duration-100",
+        "flex w-[85vw] max-w-[320px] sm:w-[288px] shrink-0 snap-start snap-always flex-col rounded-[10px] surface-list transition-colors duration-100",
         "max-h-full",
         isOver && "bg-neutral-100",
         isDragging && "opacity-40"
@@ -192,6 +196,8 @@ export function List({
                     users={users}
                     meId={meId}
                     onOpen={() => onOpenCard(card.id)}
+                    onArchive={() => onArchiveCard?.(card.id)}
+                    onToggleComplete={() => onToggleCompleteCard?.(card.id)}
                   />
                 </motion.li>
               ))}

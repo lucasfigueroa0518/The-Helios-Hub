@@ -248,7 +248,7 @@ function HeroCard({
         </button>
       )}
 
-      <div className="relative flex items-center gap-6 p-7">
+      <div className="relative flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6 p-5 sm:p-7 text-center sm:text-left">
         <LargeAvatar name={me.name} hue={me.hue} />
         <div className="min-w-0 flex-1">
           {editing ? (

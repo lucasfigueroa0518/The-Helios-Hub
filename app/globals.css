@@ -153,7 +153,10 @@
 }
 
 /* ---- Base reset & app shell ---------------------------------------------- */
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
 
 html, body {
   margin: 0;

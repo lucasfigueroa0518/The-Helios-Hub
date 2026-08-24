@@ -124,9 +124,8 @@ export function CardDetail({
           >
             <Dialog.Title className="sr-only">{card.title}</Dialog.Title>
 
-            {/* Top strip — eyebrow (board › list) → title → labels → close.
-                Follows the DS content-pattern beats. */}
-            <div className="flex items-start justify-between gap-4 px-5 pt-5 pb-3 sm:px-8 sm:pt-7">
+            {/* Top strip — eyebrow (board › list) → title → labels → close. */}
+            <div className="sticky top-0 z-20 flex items-start justify-between gap-4 border-b border-neutral-100 bg-white px-4 py-3 dark:border-white/10 dark:bg-neutral-950 sm:static sm:border-0 sm:bg-transparent sm:px-8 sm:pb-3 sm:pt-7">
               <div className="min-w-0 flex-1">
                 <div className="eyebrow eyebrow-ink flex items-center gap-2 opacity-70">
                   <span
@@ -167,10 +166,10 @@ export function CardDetail({
               </div>
               <Dialog.Close asChild>
                 <button
-                  className="rounded-full p-1.5 text-ink-mid hover:bg-neutral-100 hover:text-ink-hi transition-colors"
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-ink-mid transition-colors hover:bg-neutral-100 hover:text-ink-hi dark:hover:bg-neutral-800"
                   aria-label="Close"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-5 w-5" />
                 </button>
               </Dialog.Close>
             </div>
@@ -552,7 +551,7 @@ function DescriptionEditor({
           }}
           rows={6}
           placeholder="Add a more detailed description…"
-          className="w-full resize-y rounded-[8px] border border-neutral-200 bg-neutral-50 p-3 text-[13.5px] leading-[1.55] text-ink-hi placeholder:text-ink-mute outline-none focus:border-helios-500/60"
+          className="w-full resize-y rounded-[8px] border border-neutral-200 bg-neutral-50 p-3 text-[16px] sm:text-[13.5px] leading-[1.55] text-ink-hi placeholder:text-ink-mute outline-none focus:border-helios-500/60"
         />
         <div className="flex gap-2">
           <button
@@ -755,7 +754,7 @@ function CommentComposer({ onSubmit }: { onSubmit: (body: string) => void }) {
         }}
         rows={2}
         placeholder="Write a comment…"
-        className="w-full resize-none rounded-[8px] border border-neutral-200 bg-neutral-50 p-3 text-[13.5px] leading-[1.5] text-ink-hi placeholder:text-ink-mute outline-none focus:border-neutral-200 focus:bg-neutral-50"
+        className="w-full resize-none rounded-[8px] border border-neutral-200 bg-neutral-50 p-3 text-[16px] sm:text-[13.5px] leading-[1.5] text-ink-hi placeholder:text-ink-mute outline-none focus:border-neutral-200 focus:bg-neutral-50"
       />
       <div className="flex items-center gap-2">
         <button

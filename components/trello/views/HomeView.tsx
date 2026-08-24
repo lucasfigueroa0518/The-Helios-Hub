@@ -194,7 +194,7 @@ export function HomeView({
 
   return (
     <div className="h-full min-h-0 flex-1 overflow-y-auto bg-white">
-      <div className="mx-auto max-w-[1180px] px-8 pb-24 pt-14">
+      <div className="mx-auto max-w-[1180px] px-4 pb-16 pt-6 sm:px-8 sm:pb-24 sm:pt-14">
         <DndContext
           id="trello-home"
           sensors={sensors}
@@ -403,7 +403,7 @@ function WorkspaceGroup({
           isDragActive && isDropEnabled && !isOver && "-m-2 p-2",
         )}
       >
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 xs:grid-cols-2 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
           {boards.map((b) => (
             <DraggableBoardTile
               key={b.id}

@@ -31,6 +31,8 @@ type Props = {
   users: User[];
   meId?: string;
   onOpenCard: (id: string) => void;
+  onArchiveCard?: (id: string) => void;
+  onToggleCompleteCard?: (id: string) => void;
   onAddCard: (listId: string, title: string) => void;
   onAddList: (boardId: string, name: string) => void;
   onMoveCard: (cardId: string, toListId: string, toIndex: number) => void;
@@ -49,6 +51,8 @@ export function Board({
   users,
   meId,
   onOpenCard,
+  onArchiveCard,
+  onToggleCompleteCard,
   onAddCard,
   onAddList,
   onMoveCard,
@@ -232,7 +236,7 @@ export function Board({
       )}
       <div
         ref={scrollRef}
-        className="relative z-10 flex-1 overflow-x-auto overflow-y-hidden"
+        className="relative z-10 flex-1 overflow-x-auto overflow-y-hidden snap-x snap-mandatory scroll-smooth"
       >
       <DndContext
         id="trello-board"
@@ -283,7 +287,7 @@ export function Board({
           setActiveType(null);
         }}
       >
-        <div className="flex h-full items-start gap-3 px-5 pb-5 pt-4">
+        <div className="flex h-full items-start gap-3 px-3 pb-4 pt-3 sm:px-5 sm:pb-5 sm:pt-4">
           <SortableContext
             items={boardLists.map((l) => l.id)}
             strategy={horizontalListSortingStrategy}
@@ -297,6 +301,8 @@ export function Board({
                 users={users}
                 meId={meId}
                 onOpenCard={onOpenCard}
+                onArchiveCard={onArchiveCard}
+                onToggleCompleteCard={onToggleCompleteCard}
                 onAddCard={onAddCard}
                 onRenameList={onRenameList}
                 onDeleteList={onDeleteList}
