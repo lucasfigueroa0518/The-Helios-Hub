@@ -4526,6 +4526,13 @@ button.stat-tile {
 .campaign-row--live {
   border-color: color-mix(in srgb, var(--color-positive) 40%, var(--color-border));
 }
+.campaign-row__paused {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 .live-pulse {
   display: inline-flex;
   align-items: center;

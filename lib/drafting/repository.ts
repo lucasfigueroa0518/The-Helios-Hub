@@ -5,7 +5,9 @@ import type { PoolClient } from 'pg';
 import {
   campaignSenderIdentity,
   inferIdentitySlug,
+  parseSenderIdentitySlug,
   primaryInboxEmailForIdentity,
+  resolveSendIdentitySlug,
   SENDER_IDENTITY_DEFAULTS,
   type SenderIdentitySlug,
 } from '@/lib/agentmail-inboxes';
@@ -707,6 +709,7 @@ function buildInputSnapshotFromLead(input: {
   extra_fields?: Record<string, string> | null;
   source_run_id: string | null;
   sender: SenderProfileRow;
+  identitySlug?: SenderIdentitySlug | null;
   assetVersions: InputSnapshot['assets'];
 }): InputSnapshot {
   const fullName = normalizeRequiredField(
@@ -766,7 +769,8 @@ function buildInputSnapshotFromLead(input: {
     sender: {
       profileId: input.sender.id,
       profileRevision: Number(input.sender.revision),
-      identitySlug: inferIdentitySlug({
+      identitySlug: resolveSendIdentitySlug({
+        campaignIdentitySlug: input.identitySlug,
         workEmail: input.sender.work_email,
         displayName: input.sender.display_name,
       }),
@@ -1151,7 +1155,7 @@ async function resolveSenderForCampaign(
   userId: string,
   campaignId: string,
   senderProfileId?: string,
-): Promise<SenderProfileRow> {
+): Promise<{ sender: SenderProfileRow; identitySlug: SenderIdentitySlug | null }> {
   const { rows } = await dbQuery<{ kind: string; sender_identity_slug: string | null }>(
     `SELECT COALESCE(kind, 'manual') AS kind, sender_identity_slug
        FROM outreach.campaigns
@@ -1160,9 +1164,16 @@ async function resolveSenderForCampaign(
   );
   if (!rows[0]) throw new DraftingNotFoundError('Campaign not found');
   if (rows[0].kind === 'auto') {
-    return ensureSenderProfileForIdentity(userId, campaignSenderIdentity(rows[0].sender_identity_slug));
+    const identitySlug = campaignSenderIdentity(rows[0].sender_identity_slug);
+    return {
+      sender: await ensureSenderProfileForIdentity(userId, identitySlug),
+      identitySlug,
+    };
   }
-  return resolveSenderProfile(userId, senderProfileId);
+  return {
+    sender: await resolveSenderProfile(userId, senderProfileId),
+    identitySlug: parseSenderIdentitySlug(rows[0].sender_identity_slug),
+  };
 }
 
 async function resolveSenderProfile(
@@ -1681,7 +1692,7 @@ export async function syncCampaignLeadsIntoDraftingWorkspace(
   }
 
   const trigger: SyncDraftingLeadsTrigger = input.trigger ?? 'retry';
-  const sender = await resolveSenderForCampaign(
+  const { sender, identitySlug } = await resolveSenderForCampaign(
     ownerId,
     campaignId,
     input.senderProfileId ?? workspace.sender_profile_id ?? undefined,
@@ -1770,6 +1781,7 @@ export async function syncCampaignLeadsIntoDraftingWorkspace(
         extra_fields: lead.extra_fields,
         source_run_id: lead.latest_run_id,
         sender,
+        identitySlug,
         assetVersions: {
           skillVersion: assets.versions.skillVersion,
           skillSha256: assets.versions.skillSha256,
@@ -2051,7 +2063,7 @@ export async function startDraftingWorkspace(
     }
   }
 
-  const sender = await resolveSenderForCampaign(ownerId, campaignId, input.senderProfileId);
+  const { sender } = await resolveSenderForCampaign(ownerId, campaignId, input.senderProfileId);
   const assets = await loadDraftingAssets();
   const idempotencyKey = input.idempotencyKey ?? randomUUID();
   const budgetLimit = input.budgetCapUsd ?? process.env.DRAFTING_DEFAULT_BATCH_BUDGET_USD ?? '50.0000';

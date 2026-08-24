@@ -3,7 +3,19 @@ import { dbQuery } from '@/lib/db';
 import { getAdminProjects } from '@/lib/dashboards/admin-data';
 import type { Campaign } from '@/lib/campaigns';
 import type { AdminProject } from '@/lib/dashboards/types';
+import { formatNyDate } from '@/lib/drafting/send-queue-schedule';
 import { displayNameFromEmail } from '@/lib/login-policy';
+import {
+  computeOutreachStats,
+  getCurrentWeekBounds,
+  heldSeatsThisWeek,
+  reconcileWeekEmails,
+  relevantOutreachCampaigns,
+  reservationSourcesFromCampaigns,
+  type WeekEmailTotals,
+} from '@/lib/home/outreach-stats';
+
+export { getCurrentWeekBounds, computeOutreachStats } from '@/lib/home/outreach-stats';
 
 export type HomeBoard = {
   id: string;
@@ -33,115 +45,102 @@ export type HomePayload = {
   outreachStats: OutreachHomeStats;
 };
 
-export function getCurrentWeekBounds(now: Date = new Date()): {
-  weekStartStr: string;
-  weekEndStr: string;
-  weekStartTs: string;
-  weekEndTs: string;
-} {
-  const d = new Date(now);
-  const day = d.getDay(); // 0 = Sunday, 1 = Monday, ... 6 = Saturday
-  const weekStart = new Date(d);
-  weekStart.setDate(d.getDate() - day);
-  weekStart.setHours(0, 0, 0, 0);
-
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 6);
-  weekEnd.setHours(23, 59, 59, 999);
-
-  const yearS = weekStart.getFullYear();
-  const monthS = String(weekStart.getMonth() + 1).padStart(2, '0');
-  const dayS = String(weekStart.getDate()).padStart(2, '0');
-  const weekStartStr = `${yearS}-${monthS}-${dayS}`;
-
-  const yearE = weekEnd.getFullYear();
-  const monthE = String(weekEnd.getMonth() + 1).padStart(2, '0');
-  const dayE = String(weekEnd.getDate()).padStart(2, '0');
-  const weekEndStr = `${yearE}-${monthE}-${dayE}`;
-
-  return {
-    weekStartStr,
-    weekEndStr,
-    weekStartTs: weekStart.toISOString(),
-    weekEndTs: weekEnd.toISOString(),
-  };
-}
-
-async function loadWeekStats(targetCampaigns: Campaign[]): Promise<{
-  emailsThisWeek: number;
-  sentThisWeek: number;
-  upcomingThisWeek: number;
-}> {
+async function loadWeekStats(targetCampaigns: Campaign[]): Promise<WeekEmailTotals> {
   if (targetCampaigns.length === 0) {
     return { emailsThisWeek: 0, sentThisWeek: 0, upcomingThisWeek: 0 };
   }
-  const campaignIds = targetCampaigns.map((c) => c.id);
+  const campaignIds = targetCampaigns.map((campaign) => campaign.id);
+  const { weekStartStr, weekEndStr } = getCurrentWeekBounds();
+  const today = formatNyDate();
   try {
-    const { weekStartStr, weekEndStr, weekStartTs, weekEndTs } = getCurrentWeekBounds();
     const [queueRes, sendsRes] = await Promise.all([
-      dbQuery<{ campaign_id: string; queue_sent: string; queue_upcoming: string }>(
+      dbQuery<{ campaign_id: string; schedule_date: string; queue_sent: string; queue_upcoming: string }>(
         `SELECT
-          q.campaign_id,
-          count(*) FILTER (WHERE q.status = 'sent' AND q.schedule_date >= $2::date AND q.schedule_date <= $3::date)::text AS queue_sent,
-          count(*) FILTER (WHERE q.status IN ('queued', 'sending', 'held') AND q.schedule_date >= $2::date AND q.schedule_date <= $3::date)::text AS queue_upcoming
+          q.campaign_id::text AS campaign_id,
+          coalesce((timezone('America/New_York', es.sent_at))::date, q.schedule_date)::text AS schedule_date,
+          count(*) FILTER (WHERE q.status = 'sent')::text AS queue_sent,
+          count(*) FILTER (WHERE q.status IN ('queued', 'sending'))::text AS queue_upcoming
         FROM outreach.email_send_queue q
+        LEFT JOIN LATERAL (
+          SELECT sent_at
+            FROM outreach.email_sends es
+           WHERE es.drafting_item_id = q.drafting_item_id
+             AND es.status = 'sent'
+             AND es.sent_at IS NOT NULL
+           ORDER BY es.sent_at DESC
+           LIMIT 1
+        ) es ON true
         WHERE q.campaign_id = ANY($1::uuid[])
-        GROUP BY q.campaign_id`,
+          AND (
+            (
+              q.status IN ('queued', 'sending')
+              AND q.schedule_date >= $2::date
+              AND q.schedule_date <= $3::date
+            )
+            OR (
+              q.status = 'sent'
+              AND coalesce((timezone('America/New_York', es.sent_at))::date, q.schedule_date) >= $2::date
+              AND coalesce((timezone('America/New_York', es.sent_at))::date, q.schedule_date) <= $3::date
+            )
+          )
+        GROUP BY 1, 2`,
         [campaignIds, weekStartStr, weekEndStr],
       ),
       dbQuery<{ campaign_id: string; sends_sent: string }>(
         `SELECT
-          w.campaign_id,
-          count(*) FILTER (WHERE s.status = 'sent' AND s.sent_at >= $2::timestamptz AND s.sent_at <= $3::timestamptz)::text AS sends_sent
+          w.campaign_id::text AS campaign_id,
+          count(*) FILTER (
+            WHERE s.status = 'sent'
+              AND (timezone('America/New_York', s.sent_at))::date >= $2::date
+              AND (timezone('America/New_York', s.sent_at))::date <= $3::date
+          )::text AS sends_sent
         FROM outreach.email_sends s
         JOIN outreach.drafting_items i ON i.id = s.drafting_item_id
         JOIN outreach.drafting_workspaces w ON w.id = i.workspace_id
         WHERE w.campaign_id = ANY($1::uuid[])
         GROUP BY w.campaign_id`,
-        [campaignIds, weekStartTs, weekEndTs],
+        [campaignIds, weekStartStr, weekEndStr],
       ),
     ]);
 
-    const qSentMap = new Map(queueRes.rows.map((r) => [r.campaign_id, Number(r.queue_sent || 0)]));
-    const qUpcomingMap = new Map(queueRes.rows.map((r) => [r.campaign_id, Number(r.queue_upcoming || 0)]));
-    const sSentMap = new Map(sendsRes.rows.map((r) => [r.campaign_id, Number(r.sends_sent || 0)]));
-
-    let totalSentThisWeek = 0;
-    let totalUpcomingThisWeek = 0;
-    let totalEmailsThisWeek = 0;
-
-    for (const c of targetCampaigns) {
-      const qSent = qSentMap.get(c.id) ?? 0;
-      const sSent = sSentMap.get(c.id) ?? 0;
-      const sent = Math.max(qSent, sSent);
-      const upcoming = qUpcomingMap.get(c.id) ?? 0;
-      const actualThisWeek = sent + upcoming;
-
-      const autoWeeklyTarget = c.kind === 'auto' ? Math.max(0, (c.emails_per_day ?? 0) * 5) : 0;
-      const campaignTotal = Math.max(actualThisWeek, autoWeeklyTarget);
-
-      totalSentThisWeek += sent;
-      totalUpcomingThisWeek += upcoming;
-      totalEmailsThisWeek += campaignTotal;
+    const sentByCampaign = new Map<string, number>();
+    const queuedByCampaign = new Map<string, number>();
+    const slottedByDate = new Map<string, Record<string, number>>();
+    for (const row of queueRes.rows) {
+      const sent = Number(row.queue_sent || 0);
+      const queued = Number(row.queue_upcoming || 0);
+      sentByCampaign.set(row.campaign_id, (sentByCampaign.get(row.campaign_id) ?? 0) + sent);
+      queuedByCampaign.set(row.campaign_id, (queuedByCampaign.get(row.campaign_id) ?? 0) + queued);
+      const byDate = slottedByDate.get(row.campaign_id) ?? {};
+      byDate[row.schedule_date] = (byDate[row.schedule_date] ?? 0) + sent + queued;
+      slottedByDate.set(row.campaign_id, byDate);
+    }
+    for (const row of sendsRes.rows) {
+      const sendsSent = Number(row.sends_sent || 0);
+      sentByCampaign.set(row.campaign_id, Math.max(sentByCampaign.get(row.campaign_id) ?? 0, sendsSent));
     }
 
-    return {
-      emailsThisWeek: totalEmailsThisWeek,
-      sentThisWeek: totalSentThisWeek,
-      upcomingThisWeek: totalUpcomingThisWeek,
-    };
+    let sent = 0;
+    let queued = 0;
+    for (const campaign of targetCampaigns) {
+      sent += sentByCampaign.get(campaign.id) ?? 0;
+      queued += queuedByCampaign.get(campaign.id) ?? 0;
+    }
+    const held = heldSeatsThisWeek({
+      today,
+      weekStart: weekStartStr,
+      weekEnd: weekEndStr,
+      sources: reservationSourcesFromCampaigns(targetCampaigns, slottedByDate),
+    });
+    return reconcileWeekEmails({ sent, queued, held });
   } catch {
-    let fallbackEmailsThisWeek = 0;
-    for (const c of targetCampaigns) {
-      if (c.kind === 'auto') {
-        fallbackEmailsThisWeek += Math.max(0, (c.emails_per_day ?? 0) * 5);
-      }
-    }
-    return {
-      emailsThisWeek: fallbackEmailsThisWeek,
-      sentThisWeek: 0,
-      upcomingThisWeek: 0,
-    };
+    const held = heldSeatsThisWeek({
+      today,
+      weekStart: weekStartStr,
+      weekEnd: weekEndStr,
+      sources: reservationSourcesFromCampaigns(targetCampaigns, new Map()),
+    });
+    return reconcileWeekEmails({ sent: 0, queued: 0, held });
   }
 }
 
@@ -154,14 +153,7 @@ export async function loadHome(userId: string, email: string): Promise<HomePaylo
   ]);
 
   const activeCampaigns = campaigns.filter((campaign) => campaign.status === 'active');
-  const userSlug = email.toLowerCase().startsWith('tommy') ? 'tommy' : 'lucas';
-  const relevant = activeCampaigns.filter((c) => {
-    const isOwner = c.owner_id === userId;
-    const effectiveSlug = c.sender_identity_slug ?? 'lucas';
-    const isSender = effectiveSlug === userSlug;
-    return isOwner || isSender;
-  });
-  const targetCampaigns = relevant.length > 0 ? relevant : activeCampaigns;
+  const targetCampaigns = relevantOutreachCampaigns(activeCampaigns, userId, email);
 
   const weekStats = await loadWeekStats(targetCampaigns);
   const outreachStats = computeOutreachStats(activeCampaigns, userId, email, weekStats);
@@ -172,55 +164,6 @@ export async function loadHome(userId: string, email: string): Promise<HomePaylo
     projects: projects.filter((project) => project.status === 'ACTIVE'),
     campaigns: activeCampaigns,
     outreachStats,
-  };
-}
-
-function computeOutreachStats(
-  activeCampaigns: Campaign[],
-  userId: string,
-  email: string,
-  weekStats: { emailsThisWeek: number; sentThisWeek: number; upcomingThisWeek: number },
-): OutreachHomeStats {
-  const userSlug = email.toLowerCase().startsWith('tommy') ? 'tommy' : 'lucas';
-
-  // Relevant campaigns: created by user OR sender identity matches user (or legacy fallback for lucas)
-  const targetCampaigns = activeCampaigns.filter((c) => {
-    const isOwner = c.owner_id === userId;
-    const effectiveSlug = c.sender_identity_slug ?? 'lucas';
-    const isSender = effectiveSlug === userSlug;
-    return isOwner || isSender;
-  });
-
-  // "live campaigns" is specifically Auto campaigns
-  const autoCampaigns = targetCampaigns.filter((c) => c.kind === 'auto');
-
-  const takingAction = autoCampaigns.filter(
-    (c) => c.drafting_active || (c.auto_status as string) === 'live' || (c.auto_status as string) === 'active'
-  );
-
-  const totalSent = targetCampaigns.reduce((sum, c) => sum + (c.sent_count || 0), 0);
-  const totalDelivered = targetCampaigns.reduce((sum, c) => sum + (c.delivered_count || 0), 0);
-
-  // Delivery rate: (Total Sent - Total Bounced) / Total Sent
-  const deliveryRate = totalSent > 0 ? totalDelivered / totalSent : null;
-
-  const totalInReviewOrDrafting = targetCampaigns.reduce(
-    (sum, c) => sum + (c.drafting_generated || 0),
-    0
-  );
-
-  return {
-    totalCampaigns: autoCampaigns.length,
-    liveCampaignsCount: autoCampaigns.length,
-    takingActionCampaignsCount: takingAction.length,
-    activeCampaignNames: takingAction.map((c) => c.name),
-    totalSent,
-    totalDelivered,
-    deliveryRate,
-    totalInReviewOrDrafting,
-    emailsThisWeek: weekStats.emailsThisWeek,
-    sentThisWeek: weekStats.sentThisWeek,
-    upcomingThisWeek: weekStats.upcomingThisWeek,
   };
 }
 

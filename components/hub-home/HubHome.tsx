@@ -153,7 +153,7 @@ export function HubHome({ data }: { data: HomePayload }) {
                     <span className="hub-home-outreach-stat__value">
                       {(data.outreachStats?.emailsThisWeek ?? 0).toLocaleString()}
                     </span>
-                    <span className="hub-home-outreach-stat__subtext">Sent + Upcoming</span>
+                    <span className="hub-home-outreach-stat__subtext">Sent + queued + held</span>
                   </div>
                 </div>
               </div>

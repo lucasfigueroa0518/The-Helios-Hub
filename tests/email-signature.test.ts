@@ -12,8 +12,26 @@ import {
   resolveEmailSignature,
   SIGNATURE_HEADSHOT_CID,
   stripTrailingTextSignature,
+  TOMMY_SIGNATURE_DEFAULTS,
   plainTextBodyToHtml,
 } from '@/lib/drafting/email-signature';
+
+test('resolveEmailSignature uses the campaign sending profile, not the logged-in work email', () => {
+  const tommy = resolveEmailSignature({
+    workEmail: 'lucas@heliosgroup.ai',
+    identitySlug: 'tommy',
+    displayName: 'Lucas Figueroa',
+  });
+  assert.equal(tommy.displayName, TOMMY_SIGNATURE_DEFAULTS.displayName);
+  assert.equal(tommy.title, TOMMY_SIGNATURE_DEFAULTS.title);
+  assert.equal(tommy.companyName, TOMMY_SIGNATURE_DEFAULTS.companyName);
+
+  const lucas = resolveEmailSignature({
+    workEmail: 'thomas@heliosgroup.email',
+    identitySlug: 'lucas',
+  });
+  assert.equal(lucas.displayName, LUCAS_SIGNATURE_DEFAULTS.displayName);
+});
 
 test('resolveEmailSignature hardcodes Lucas identity and requires cid for headshot on send', () => {
   const sig = resolveEmailSignature({

@@ -76,6 +76,25 @@ export function campaignSenderIdentity(value: unknown): SenderIdentitySlug {
   return parseSenderIdentitySlug(value) ?? 'lucas';
 }
 
+/**
+ * Sending-profile identity for a campaign. The campaign column wins over a
+ * stale drafting snapshot or the logged-in user's work email.
+ */
+export function resolveSendIdentitySlug(input: {
+  campaignIdentitySlug?: string | null;
+  snapshotIdentitySlug?: string | null;
+  workEmail?: string | null;
+  displayName?: string | null;
+}): SenderIdentitySlug {
+  const campaign = parseSenderIdentitySlug(input.campaignIdentitySlug);
+  if (campaign) return campaign;
+  return inferIdentitySlug({
+    identitySlug: input.snapshotIdentitySlug,
+    workEmail: input.workEmail,
+    displayName: input.displayName,
+  });
+}
+
 export const SENDER_IDENTITY_LABELS: Record<SenderIdentitySlug, string> = {
   lucas: 'Lucas',
   tommy: 'Tommy',

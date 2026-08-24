@@ -6,20 +6,27 @@ import { parseTrelloSearch, trelloHref } from '@/lib/trello/viewUrl';
 import { formatWelcomeDateTime } from '@/components/hub-home/HubHome';
 
 import { getCurrentWeekBounds } from '@/lib/home/loadHome';
+import { isLiveAutoCampaign } from '@/lib/auto-campaigns/status';
+import {
+  computeOutreachStats,
+  heldSeatsThisWeek,
+  reconcileWeekEmails,
+  reservationSourcesFromCampaigns,
+} from '@/lib/home/outreach-stats';
 
 describe('hub home week bounds', () => {
-  it('calculates Sunday to Saturday interval for a given date', () => {
-    // Aug 23, 2026 is Sunday
-    const sunday = new Date('2026-08-23T12:00:00');
+  it('uses the America/New_York Monday–Sunday week', () => {
+    // Sunday Aug 23, 2026 16:00 UTC is still Sunday afternoon in NY
+    const sunday = new Date('2026-08-23T16:00:00Z');
     const bounds = getCurrentWeekBounds(sunday);
-    assert.equal(bounds.weekStartStr, '2026-08-23');
-    assert.equal(bounds.weekEndStr, '2026-08-29');
+    assert.equal(bounds.weekStartStr, '2026-08-17');
+    assert.equal(bounds.weekEndStr, '2026-08-23');
 
-    // Aug 26, 2026 is Wednesday
-    const wednesday = new Date('2026-08-26T12:00:00');
+    // Wednesday Aug 26, 2026
+    const wednesday = new Date('2026-08-26T16:00:00Z');
     const wedBounds = getCurrentWeekBounds(wednesday);
-    assert.equal(wedBounds.weekStartStr, '2026-08-23');
-    assert.equal(wedBounds.weekEndStr, '2026-08-29');
+    assert.equal(wedBounds.weekStartStr, '2026-08-24');
+    assert.equal(wedBounds.weekEndStr, '2026-08-30');
   });
 });
 
@@ -141,35 +148,95 @@ describe('outreach home stats calculation', () => {
     );
   });
 
-  it('calculates weekly email volume correctly for lucas (250) and tommy (100)', () => {
-    const lucasUserId = 'user-lucas-123';
+  it('does not treat a paused auto campaign as live', () => {
+    assert.equal(isLiveAutoCampaign({ kind: 'auto', status: 'active', auto_status: 'live' }), true);
+    assert.equal(isLiveAutoCampaign({ kind: 'auto', status: 'active', auto_status: 'paused' }), false);
+    assert.equal(isLiveAutoCampaign({ kind: 'auto', status: 'active', auto_status: 'error' }), false);
+    assert.equal(isLiveAutoCampaign({ kind: 'manual', status: 'active', auto_status: null }), false);
+
+    const stats = computeOutreachStats(
+      [
+        {
+          id: 'live-1',
+          name: 'Boston Industry Agnostic',
+          kind: 'auto',
+          status: 'active',
+          auto_status: 'live',
+          owner_id: 'user-lucas-123',
+          sender_identity_slug: 'lucas',
+          emails_per_day: 40,
+          sent_count: 0,
+          delivered_count: 0,
+        },
+        {
+          id: 'paused-1',
+          name: 'Law',
+          kind: 'auto',
+          status: 'active',
+          auto_status: 'paused',
+          owner_id: 'user-lucas-123',
+          sender_identity_slug: 'lucas',
+          emails_per_day: 40,
+          sent_count: 200,
+          delivered_count: 200,
+        },
+      ],
+      'user-lucas-123',
+      'lucas@heliosgroup.ai',
+      { emailsThisWeek: 103, sentThisWeek: 43, upcomingThisWeek: 60 },
+    );
+    assert.equal(stats.liveCampaignsCount, 1);
+    assert.equal(stats.takingActionCampaignsCount, 1);
+    assert.deepEqual(stats.activeCampaignNames, ['Boston Industry Agnostic']);
+    assert.equal(stats.totalCampaigns, 2);
+  });
+
+  it('reconciles emails this week with sent + queued + live held seats', () => {
     const campaigns = [
       {
-        id: 'c13',
-        name: 'Campaign #13',
-        kind: 'auto' as const,
-        emails_per_day: 30,
-        owner_id: lucasUserId,
-        sender_identity_slug: null,
+        id: 'boston',
+        name: 'Boston Industry Agnostic',
+        kind: 'auto',
+        status: 'active' as const,
+        auto_status: 'live',
+        owner_id: 'user-lucas-123',
+        emails_per_day: 40,
       },
       {
-        id: 'c14',
-        name: 'Campaign #14',
-        kind: 'auto' as const,
+        id: 'manual',
+        name: 'Manual Message',
+        kind: 'auto',
+        status: 'active' as const,
+        auto_status: 'live',
+        owner_id: 'user-lucas-123',
         emails_per_day: 20,
-        owner_id: lucasUserId,
-        sender_identity_slug: 'tommy' as const,
+      },
+      {
+        id: 'paused',
+        name: 'Paused Law',
+        kind: 'auto',
+        status: 'active' as const,
+        auto_status: 'paused',
+        owner_id: 'user-lucas-123',
+        emails_per_day: 40,
       },
     ];
-
-    const calcWeekly = (list: typeof campaigns) =>
-      list.reduce((sum, c) => sum + (c.emails_per_day ?? 0) * 5, 0);
-
-    const lucasCampaigns = campaigns.filter((c) => c.owner_id === lucasUserId || (c.sender_identity_slug ?? 'lucas') === 'lucas');
-    const tommyCampaigns = campaigns.filter((c) => c.sender_identity_slug === 'tommy');
-
-    assert.equal(calcWeekly(lucasCampaigns), 250);
-    assert.equal(calcWeekly(tommyCampaigns), 100);
+    const slotted = new Map<string, Record<string, number>>([
+      ['boston', { '2026-08-25': 40 }],
+      ['manual', { '2026-08-25': 20 }],
+    ]);
+    const held = heldSeatsThisWeek({
+      today: '2026-08-24',
+      weekStart: '2026-08-24',
+      weekEnd: '2026-08-30',
+      sources: reservationSourcesFromCampaigns(campaigns, slotted),
+    });
+    // Live 40+20 held Mon/Wed/Thu/Fri; Tuesday already filled. Paused quota is ignored.
+    assert.equal(held, 240);
+    const week = reconcileWeekEmails({ sent: 43, queued: 60, held });
+    assert.equal(week.sentThisWeek, 43);
+    assert.equal(week.upcomingThisWeek, 300);
+    assert.equal(week.emailsThisWeek, 343);
   });
 
   it('calculates exact delivery rate when emails have been sent', () => {
