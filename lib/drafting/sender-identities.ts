@@ -123,3 +123,58 @@ export function resolveIdentityFromSnapshot(sender: {
 }): SenderIdentitySlug {
   return inferIdentitySlug(sender);
 }
+
+export type HeadshotProfileRow = {
+  user_id?: string | null;
+  work_email?: string | null;
+  display_name?: string | null;
+  headshot_storage_path?: string | null;
+};
+
+/** Prefer the campaign owner's uploaded headshot for this sending profile. */
+export function pickIdentityHeadshotPath(
+  profiles: HeadshotProfileRow[],
+  slug: SenderIdentitySlug,
+  ownerId?: string | null,
+): string | null {
+  const matches = profiles.filter((row) => {
+    if (!row.headshot_storage_path?.trim()) return false;
+    return inferIdentitySlug({
+      workEmail: row.work_email,
+      displayName: row.display_name,
+    }) === slug;
+  });
+  const owned = ownerId
+    ? matches.filter((row) => row.user_id === ownerId)
+    : [];
+  return (owned[0] ?? matches[0])?.headshot_storage_path?.trim() || null;
+}
+
+export async function resolveIdentityHeadshotStoragePath(input: {
+  identitySlug: SenderIdentitySlug;
+  ownerId?: string | null;
+  campaignId?: string | null;
+}): Promise<string | null> {
+  let ownerId = input.ownerId?.trim() || null;
+  if (!ownerId && input.campaignId?.trim()) {
+    const { rows } = await dbQuery<{ owner_id: string }>(
+      `SELECT owner_id::text FROM outreach.campaigns WHERE id = $1`,
+      [input.campaignId],
+    );
+    ownerId = rows[0]?.owner_id ?? null;
+  }
+
+  const { rows } = await dbQuery<{
+    user_id: string;
+    work_email: string;
+    display_name: string;
+    headshot_storage_path: string | null;
+  }>(
+    `SELECT user_id::text, work_email, display_name, headshot_storage_path
+       FROM outreach.sender_profiles
+      WHERE headshot_storage_path IS NOT NULL
+        AND length(trim(headshot_storage_path)) > 0
+      ORDER BY updated_at DESC`,
+  );
+  return pickIdentityHeadshotPath(rows, input.identitySlug, ownerId);
+}

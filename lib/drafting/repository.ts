@@ -59,6 +59,7 @@ import {
   preflightFinalDraftExport,
   preflightFinalDraftSend,
 } from '@/lib/drafting/exports';
+import { resolveIdentityHeadshotStoragePath } from '@/lib/drafting/sender-identities';
 import {
   DAILY_SEND_CAP,
   enqueueOverflowSend,
@@ -1075,8 +1076,18 @@ export async function getSenderProfileHeadshotPath(
 export async function resolveSenderHeadshotStoragePath(input: {
   profileId?: string | null;
   workEmail?: string | null;
+  identitySlug?: SenderIdentitySlug | null;
+  campaignId?: string | null;
   headshotStoragePath?: string | null;
 }): Promise<string | null> {
+  if (input.identitySlug) {
+    const fromIdentity = await resolveIdentityHeadshotStoragePath({
+      identitySlug: input.identitySlug,
+      campaignId: input.campaignId,
+    });
+    if (fromIdentity) return fromIdentity;
+  }
+
   const direct = input.headshotStoragePath?.trim();
   if (direct) return direct;
 

@@ -15,6 +15,32 @@ import {
   TOMMY_SIGNATURE_DEFAULTS,
   plainTextBodyToHtml,
 } from '@/lib/drafting/email-signature';
+import { pickIdentityHeadshotPath } from '@/lib/drafting/sender-identities';
+
+test('pickIdentityHeadshotPath uses the campaign owner Tommy upload, not Lucas', () => {
+  const owner = 'c7c8004a-aba8-470b-8784-78247c7a8b20';
+  const path = pickIdentityHeadshotPath([
+    {
+      user_id: owner,
+      work_email: 'lucas@heliosgroup.ai',
+      display_name: 'Lucas',
+      headshot_storage_path: null,
+    },
+    {
+      user_id: owner,
+      work_email: 'thomas@heliosgroup.email',
+      display_name: 'Thomas Pozo',
+      headshot_storage_path: 'sender-headshots/tommy.png',
+    },
+    {
+      user_id: 'other-user',
+      work_email: 'tommy@heliosgroup.ai',
+      display_name: 'Thomas Pozo',
+      headshot_storage_path: 'sender-headshots/other.png',
+    },
+  ], 'tommy', owner);
+  assert.equal(path, 'sender-headshots/tommy.png');
+});
 
 test('resolveEmailSignature uses the campaign sending profile, not the logged-in work email', () => {
   const tommy = resolveEmailSignature({
