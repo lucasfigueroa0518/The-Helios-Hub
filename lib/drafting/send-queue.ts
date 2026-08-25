@@ -26,6 +26,7 @@ import {
   getDailyInboxCap,
   getSenderIdentityBySlug,
   listSenderInboxes,
+  resolveIdentityHeadshotStoragePath,
   type SenderInboxRow,
 } from '@/lib/drafting/sender-identities';
 import {
@@ -371,6 +372,7 @@ async function resolveItemIdentity(itemId: string): Promise<{
   headshotStoragePath: string | null;
 }> {
   const { rows } = await dbQuery<{
+    campaign_id: string;
     campaign_identity_slug: string | null;
     identity_slug: string | null;
     work_email: string | null;
@@ -379,7 +381,8 @@ async function resolveItemIdentity(itemId: string): Promise<{
     company_name: string | null;
     headshot_storage_path: string | null;
   }>(
-    `SELECT c.sender_identity_slug AS campaign_identity_slug,
+    `SELECT c.id::text AS campaign_id,
+            c.sender_identity_slug AS campaign_identity_slug,
             nullif(trim(i.input_snapshot #>> '{sender,identitySlug}'), '') AS identity_slug,
             nullif(trim(i.input_snapshot #>> '{sender,workEmail}'), '') AS work_email,
             nullif(trim(i.input_snapshot #>> '{sender,displayName}'), '') AS display_name,
@@ -403,6 +406,10 @@ async function resolveItemIdentity(itemId: string): Promise<{
   const inboxes = await listSenderInboxes({ identitySlug: slug });
   if (inboxes.length === 0) throw new Error(`No outreach inboxes configured for ${slug}`);
   const defaults = SENDER_IDENTITY_DEFAULTS[slug];
+  const uploadedHeadshot = await resolveIdentityHeadshotStoragePath({
+    identitySlug: slug,
+    campaignId: rows[0]?.campaign_id,
+  });
   return {
     slug,
     identityId: identity.id,
@@ -410,7 +417,7 @@ async function resolveItemIdentity(itemId: string): Promise<{
     displayName: identity.display_name || defaults.displayName,
     title: identity.title || defaults.title,
     companyName: identity.company_name || defaults.companyName,
-    headshotStoragePath: rows[0]?.headshot_storage_path ?? null,
+    headshotStoragePath: uploadedHeadshot ?? rows[0]?.headshot_storage_path ?? null,
   };
 }
 

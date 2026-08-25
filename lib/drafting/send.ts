@@ -12,7 +12,6 @@ import {
   isBlockedOutreachFrom,
   type SenderIdentitySlug,
 } from '@/lib/agentmail-inboxes';
-import { dbQuery } from '@/lib/db';
 import {
   appendPlainTextSignature,
   buildOutreachEmailHtml,
@@ -30,6 +29,7 @@ import {
   EmailSendProviderError,
 } from '@/lib/drafting/errors';
 import { normalizeDraftBody, normalizeDraftText } from '@/lib/drafting/normalize';
+import { resolveIdentityHeadshotStoragePath } from '@/lib/drafting/sender-identities';
 import { downloadStoredObject } from '@/lib/storage';
 
 export { EmailSendConfigurationError, EmailSendProviderError } from '@/lib/drafting/errors';
@@ -81,24 +81,6 @@ type InlineHeadshot = {
   contentId: string;
 };
 
-async function resolveHeadshotStoragePath(input: SendEmailInput): Promise<string | null> {
-  const direct = input.headshotStoragePath?.trim();
-  if (direct) return direct;
-
-  const profileId = input.senderProfileId?.trim();
-  if (profileId && /^[0-9a-f-]{36}$/i.test(profileId)) {
-    const { rows } = await dbQuery<{ headshot_storage_path: string | null }>(
-      `SELECT headshot_storage_path
-         FROM outreach.sender_profiles
-        WHERE id = $1`,
-      [profileId],
-    );
-    const fromId = rows[0]?.headshot_storage_path?.trim();
-    if (fromId) return fromId;
-  }
-  return null;
-}
-
 async function loadInlineHeadshot(input: SendEmailInput): Promise<InlineHeadshot | null> {
   const slug = identitySlugFromSender({
     identitySlug: input.identitySlug,
@@ -106,25 +88,32 @@ async function loadInlineHeadshot(input: SendEmailInput): Promise<InlineHeadshot
     displayName: input.fromName,
   });
   const defaults = slug === 'tommy' ? TOMMY_SIGNATURE_DEFAULTS : LUCAS_SIGNATURE_DEFAULTS;
-  try {
-    const filePath = path.join(
-      process.cwd(),
-      'public',
-      defaults.headshotPublicPath.replace(/^\//, ''),
-    );
-    const content = await readFile(filePath);
-    return {
-      content,
-      filename: path.basename(defaults.headshotPublicPath),
-      contentType: defaults.headshotPublicPath.endsWith('.png') ? 'image/png' : 'image/jpeg',
-      contentId: SIGNATURE_HEADSHOT_CID,
-    };
-  } catch {
-    // Fall through to uploaded storage headshot.
+
+  // Lucas ships a bundled public asset. Tommy's photo is the uploaded sender profile.
+  if (slug === 'lucas') {
+    try {
+      const filePath = path.join(
+        process.cwd(),
+        'public',
+        defaults.headshotPublicPath.replace(/^\//, ''),
+      );
+      const content = await readFile(filePath);
+      return {
+        content,
+        filename: path.basename(defaults.headshotPublicPath),
+        contentType: defaults.headshotPublicPath.endsWith('.png') ? 'image/png' : 'image/jpeg',
+        contentId: SIGNATURE_HEADSHOT_CID,
+      };
+    } catch {
+      // Fall through to uploaded storage.
+    }
   }
 
   try {
-    const storagePath = await resolveHeadshotStoragePath(input);
+    const storagePath = await resolveIdentityHeadshotStoragePath({
+      identitySlug: slug,
+      campaignId: input.campaignId,
+    }) || input.headshotStoragePath?.trim() || null;
     if (!storagePath) return null;
     const content = await downloadStoredObject(storagePath);
     const isPng = storagePath.toLowerCase().endsWith('.png');
@@ -141,6 +130,7 @@ async function loadInlineHeadshot(input: SendEmailInput): Promise<InlineHeadshot
       component: 'email-signature',
       message: 'headshot_inline_load_failed',
       fromEmail: input.fromEmail,
+      identitySlug: slug,
       error: error instanceof Error ? error.message : String(error),
     }));
     return null;
