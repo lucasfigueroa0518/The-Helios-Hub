@@ -19,7 +19,7 @@ async function fetchLegacyBlob(url: string): Promise<Buffer | null> {
 }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ token: string }> },
 ) {
   const { token } = await params;
@@ -42,10 +42,16 @@ export async function GET(
       return new Response('Not found', { status: 404 });
     }
 
+    const download = req.nextUrl.searchParams.get('download') === '1';
+    const safeName = project.name.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-|-$/g, '') || 'project-deck';
+    const disposition = download
+      ? `attachment; filename="${safeName}.pdf"`
+      : 'inline';
+
     return new Response(new Uint8Array(bytes), {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': 'inline',
+        'Content-Disposition': disposition,
         'Cache-Control': 'private, max-age=3600',
       },
     });

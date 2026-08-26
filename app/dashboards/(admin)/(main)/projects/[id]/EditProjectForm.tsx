@@ -24,6 +24,7 @@ type Project = {
   accessToken: string;
   githubRepo: string;
   githubBranch: string;
+  aboutText: string | null;
   deckPdfUrl: string | null;
   cronEnabled: boolean;
   mvpDelivered: boolean;
@@ -130,7 +131,10 @@ export default function EditProjectForm({
       </div>
 
       <div className="rounded-xl border border-border bg-white p-5">
-        <h2 className="mb-3 text-sm font-semibold text-fg-1">Project deck (PDF)</h2>
+        <h2 className="mb-1 text-sm font-semibold text-fg-1">Project deck (PDF)</h2>
+        <p className="mb-3 text-xs text-fg-3">
+          Optional. If uploaded, clients can download the original proposal from About this project.
+        </p>
         <DeckUploadZone projectId={project.id} currentUrl={project.deckPdfUrl} />
       </div>
 
@@ -163,6 +167,27 @@ export default function EditProjectForm({
             className={inputCls(fe.name)}
           />
           {fe.name && <p className="mt-1 text-xs text-red-500">{fe.name}</p>}
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-fg-1">
+            About this project <span className="text-red-400">*</span>
+          </label>
+          <textarea
+            name="aboutText"
+            required
+            rows={5}
+            defaultValue={project.aboutText ?? ''}
+            placeholder="What we're building, in a couple of paragraphs the client can read on their dashboard."
+            className={inputCls(fe.aboutText)}
+          />
+          {fe.aboutText ? (
+            <p className="mt-1 text-xs text-red-500">{fe.aboutText}</p>
+          ) : (
+            <p className="mt-1 text-xs text-fg-muted">
+              Shown under About this project on the client dashboard.
+            </p>
+          )}
         </div>
 
         <div>

@@ -141,6 +141,7 @@ export async function getDashboardData(
       targetEndDate: project.targetEndDate,
       completedAt: project.completedAt,
       accessToken: project.accessToken,
+      aboutText: project.aboutText,
       deckPdfUrl: deckApiUrl,
       deckStoragePath: project.deckStoragePath,
       githubRepo: project.githubRepo,

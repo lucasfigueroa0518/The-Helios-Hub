@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS dashboards.projects (
     last_sync_error      text,
     readme_markdown      text,
     readme_fetched_at    timestamptz,
+    about_text           text,
     deck_pdf_url         text,
     deck_storage_path    text,
     cron_enabled         boolean NOT NULL DEFAULT true,
@@ -74,6 +75,12 @@ CREATE INDEX IF NOT EXISTS idx_dashboards_projects_access_token
     ON dashboards.projects (access_token);
 CREATE INDEX IF NOT EXISTS idx_dashboards_projects_status
     ON dashboards.projects (status);
+
+ALTER TABLE dashboards.projects
+    ADD COLUMN IF NOT EXISTS about_text text;
+
+COMMENT ON COLUMN dashboards.projects.about_text IS
+    'Client-facing project description entered at create time; shown in About this project.';
 
 -- ── Repo events ─────────────────────────────────────────────────────────────
 

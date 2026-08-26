@@ -1,12 +1,13 @@
 import { notFound } from 'next/navigation';
 
+import BackgroundHealth from '@/app/dashboards/(admin)/(main)/projects/[id]/BackgroundHealth';
 import DeleteProjectButton from '@/app/dashboards/(admin)/(main)/projects/[id]/DeleteProjectButton';
 import EditProjectForm from '@/app/dashboards/(admin)/(main)/projects/[id]/EditProjectForm';
-import GenerateUpdateButton from '@/app/dashboards/(admin)/(main)/projects/[id]/GenerateUpdateButton';
-import SyncButton from '@/app/dashboards/(admin)/(main)/projects/[id]/SyncButton';
 import { getAdminProject, getAllClients } from '@/lib/dashboards/admin-data';
+import { latestUpdateGeneratedAt } from '@/lib/dashboards/repository';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 export default async function EditProjectPage({
   params,
@@ -21,6 +22,8 @@ export default async function EditProjectPage({
 
   if (!project) notFound();
 
+  const lastUpdateAt = await latestUpdateGeneratedAt(project.id);
+
   return (
     <div className="max-w-2xl">
       <div className="mb-6">
@@ -31,18 +34,15 @@ export default async function EditProjectPage({
       </div>
       <div className="space-y-6">
         <details className="dashboards-mobile-acc" open>
-          <summary>Project actions</summary>
+          <summary>Background updates</summary>
           <div className="space-y-4">
-            <GenerateUpdateButton projectId={project.id} />
-            {project.lastSyncError && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                <span className="font-semibold">⚠ Last sync failed.</span>{' '}
-                {project.lastSyncError}
-              </div>
-            )}
-            <SyncButton
-              projectId={project.id}
-              lastSyncAt={project.githubLastSyncAt}
+            <BackgroundHealth
+              githubRepo={project.githubRepo}
+              githubLastSyncAt={project.githubLastSyncAt}
+              lastSyncError={project.lastSyncError}
+              cronEnabled={project.cronEnabled}
+              cronStatus={project.cronStatus}
+              lastUpdateAt={lastUpdateAt}
             />
             <DeleteProjectButton projectId={project.id} projectName={project.name} />
           </div>

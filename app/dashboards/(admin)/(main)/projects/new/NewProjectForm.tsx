@@ -52,6 +52,27 @@ export default function NewProjectForm({ clients }: { clients: Client[] }) {
           Client <span className="text-red-400">*</span>
         </label>
         <ClientCombobox clients={clients} error={fe.clientId} />
+        {fe.clientId && <p className="mt-1 text-xs text-red-500">{fe.clientId}</p>}
+      </div>
+
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-fg-1">
+          About this project <span className="text-red-400">*</span>
+        </label>
+        <textarea
+          name="aboutText"
+          required
+          rows={5}
+          placeholder="What we're building, in a couple of paragraphs the client can read on their dashboard."
+          className={inputCls(fe.aboutText)}
+        />
+        {fe.aboutText ? (
+          <p className="mt-1 text-xs text-red-500">{fe.aboutText}</p>
+        ) : (
+          <p className="mt-1 text-xs text-fg-muted">
+            Shown under About this project. A PDF deck can be added later if you want them to download the original proposal.
+          </p>
+        )}
       </div>
 
       <div>
@@ -68,7 +89,7 @@ export default function NewProjectForm({ clients }: { clients: Client[] }) {
           <p className="mt-1 text-xs text-red-500">{fe.githubRepo}</p>
         ) : (
           <p className="mt-1 text-xs text-fg-muted">
-            Sync uses the encrypted PAT for the repo owner under Tokens.
+            The cloud worker syncs this repo daily. Store a PAT for the owner under Tokens.
           </p>
         )}
       </div>
@@ -147,7 +168,7 @@ export default function NewProjectForm({ clients }: { clients: Client[] }) {
           disabled={isPending}
           className="rounded-pill bg-[#FF5E1A] px-5 py-2.5 text-sm font-semibold text-white shadow-cta-glow hover:bg-[#E54E0F] disabled:opacity-60 transition-colors"
         >
-          {isPending ? 'Creating…' : 'Create project'}
+          {isPending ? 'Syncing GitHub and writing the first update…' : 'Create project'}
         </button>
         <Link
           href="/dashboards"
@@ -156,6 +177,11 @@ export default function NewProjectForm({ clients }: { clients: Client[] }) {
           Cancel
         </Link>
       </div>
+      {isPending && (
+        <p className="text-xs text-fg-muted">
+          First GitHub sync and AI summary run now so the client dashboard is not empty.
+        </p>
+      )}
     </form>
   );
 }

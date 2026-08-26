@@ -170,7 +170,8 @@ export default async function ClientDashboardPage({
         </div>
       </section>
 
-      <section className={`bg-bg-alt py-16${project.deckPdfUrl || project.deckStoragePath ? '' : ' dashboards-client-empty'}`}>
+      {(project.aboutText || project.deckPdfUrl || project.deckStoragePath) && (
+      <section className="bg-bg-alt py-16">
         <div className="mx-auto max-w-[1280px] px-6">
           <div className="animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
             <Eyebrow color="orange" className="mb-3">About This Project</Eyebrow>
@@ -179,32 +180,24 @@ export default async function ClientDashboardPage({
             </h2>
           </div>
 
-          {project.deckPdfUrl || project.deckStoragePath ? (
-            <div
-              className="animate-fade-in-up overflow-hidden rounded-card-lg border border-border-soft shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
-              style={{ animationDelay: '0.3s' }}
-            >
-              <a
-                href={deckSrc}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 bg-white p-4 text-sm font-medium text-accent hover:underline md:hidden"
-              >
-                Open project deck ↗
-              </a>
-              <iframe
-                src={`${deckSrc}#toolbar=0&navpanes=0&view=FitH`}
-                title="Project deck"
-                className="hidden h-[70vh] min-h-[480px] w-full md:block"
-              />
-            </div>
-          ) : (
-            <p className="text-body-sm font-light text-fg-muted">
-              About this project — coming soon. Reach out to your project lead in the meantime.
+          {project.aboutText ? (
+            <p className="animate-fade-in-up max-w-3xl whitespace-pre-wrap text-body font-light leading-relaxed text-fg-2">
+              {project.aboutText}
             </p>
-          )}
+          ) : null}
+
+          {(project.deckPdfUrl || project.deckStoragePath) ? (
+            <a
+              href={`${deckSrc}?download=1`}
+              className="mt-8 inline-flex items-center gap-2 text-sm font-medium text-accent hover:underline"
+            >
+              Download project deck
+              <span aria-hidden="true">↗</span>
+            </a>
+          ) : null}
         </div>
       </section>
+      )}
 
       <section className={`bg-bg-alt py-16${!project.githubRepo || recentEvents.length === 0 ? ' dashboards-client-empty' : ''}`}>
         <div className="mx-auto max-w-[1280px] px-6">

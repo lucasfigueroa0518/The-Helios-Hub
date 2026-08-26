@@ -28,6 +28,7 @@ export async function getAdminProjects(): Promise<AdminProject[]> {
     github_last_sync_at: Date | null;
     last_sync_error: string | null;
     readme_markdown: string | null;
+    about_text: string | null;
     deck_pdf_url: string | null;
     deck_storage_path: string | null;
     cron_enabled: boolean;
@@ -70,6 +71,7 @@ export async function getAdminProjects(): Promise<AdminProject[]> {
     githubLastSyncAt: p.github_last_sync_at,
     lastSyncError: p.last_sync_error,
     readmeMarkdown: p.readme_markdown,
+    aboutText: p.about_text,
     deckPdfUrl: p.deck_pdf_url ?? (p.deck_storage_path ? `/api/dashboards/deck/${p.access_token}` : null),
     deckStoragePath: p.deck_storage_path,
     cronEnabled: p.cron_enabled,
