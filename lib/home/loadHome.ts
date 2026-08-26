@@ -3,17 +3,14 @@ import { dbQuery } from '@/lib/db';
 import { getAdminProjects } from '@/lib/dashboards/admin-data';
 import type { Campaign } from '@/lib/campaigns';
 import type { AdminProject } from '@/lib/dashboards/types';
-import { formatNyDate } from '@/lib/drafting/send-queue-schedule';
 import { displayNameFromEmail } from '@/lib/login-policy';
 import {
   computeOutreachStats,
   getCurrentWeekBounds,
-  heldSeatsThisWeek,
-  reconcileWeekEmails,
-  relevantOutreachCampaigns,
-  reservationSourcesFromCampaigns,
+  reconcileWeekEmailsFromQueueDays,
   type WeekEmailTotals,
 } from '@/lib/home/outreach-stats';
+import { listSendQueue } from '@/lib/drafting/send-queue';
 
 export { getCurrentWeekBounds, computeOutreachStats } from '@/lib/home/outreach-stats';
 
@@ -45,102 +42,24 @@ export type HomePayload = {
   outreachStats: OutreachHomeStats;
 };
 
-async function loadWeekStats(targetCampaigns: Campaign[]): Promise<WeekEmailTotals> {
-  if (targetCampaigns.length === 0) {
-    return { emailsThisWeek: 0, sentThisWeek: 0, upcomingThisWeek: 0 };
-  }
-  const campaignIds = targetCampaigns.map((campaign) => campaign.id);
+async function loadWeekStats(email: string): Promise<WeekEmailTotals> {
   const { weekStartStr, weekEndStr } = getCurrentWeekBounds();
-  const today = formatNyDate();
   try {
-    const [queueRes, sendsRes] = await Promise.all([
-      dbQuery<{ campaign_id: string; schedule_date: string; queue_sent: string; queue_upcoming: string }>(
-        `SELECT
-          q.campaign_id::text AS campaign_id,
-          coalesce((timezone('America/New_York', es.sent_at))::date, q.schedule_date)::text AS schedule_date,
-          count(*) FILTER (WHERE q.status = 'sent')::text AS queue_sent,
-          count(*) FILTER (WHERE q.status IN ('queued', 'sending'))::text AS queue_upcoming
-        FROM outreach.email_send_queue q
-        LEFT JOIN LATERAL (
-          SELECT sent_at
-            FROM outreach.email_sends es
-           WHERE es.drafting_item_id = q.drafting_item_id
-             AND es.status = 'sent'
-             AND es.sent_at IS NOT NULL
-           ORDER BY es.sent_at DESC
-           LIMIT 1
-        ) es ON true
-        WHERE q.campaign_id = ANY($1::uuid[])
-          AND (
-            (
-              q.status IN ('queued', 'sending')
-              AND q.schedule_date >= $2::date
-              AND q.schedule_date <= $3::date
-            )
-            OR (
-              q.status = 'sent'
-              AND coalesce((timezone('America/New_York', es.sent_at))::date, q.schedule_date) >= $2::date
-              AND coalesce((timezone('America/New_York', es.sent_at))::date, q.schedule_date) <= $3::date
-            )
-          )
-        GROUP BY 1, 2`,
-        [campaignIds, weekStartStr, weekEndStr],
-      ),
-      dbQuery<{ campaign_id: string; sends_sent: string }>(
-        `SELECT
-          w.campaign_id::text AS campaign_id,
-          count(*) FILTER (
-            WHERE s.status = 'sent'
-              AND (timezone('America/New_York', s.sent_at))::date >= $2::date
-              AND (timezone('America/New_York', s.sent_at))::date <= $3::date
-          )::text AS sends_sent
-        FROM outreach.email_sends s
-        JOIN outreach.drafting_items i ON i.id = s.drafting_item_id
-        JOIN outreach.drafting_workspaces w ON w.id = i.workspace_id
-        WHERE w.campaign_id = ANY($1::uuid[])
-        GROUP BY w.campaign_id`,
-        [campaignIds, weekStartStr, weekEndStr],
-      ),
-    ]);
-
-    const sentByCampaign = new Map<string, number>();
-    const queuedByCampaign = new Map<string, number>();
-    const slottedByDate = new Map<string, Record<string, number>>();
-    for (const row of queueRes.rows) {
-      const sent = Number(row.queue_sent || 0);
-      const queued = Number(row.queue_upcoming || 0);
-      sentByCampaign.set(row.campaign_id, (sentByCampaign.get(row.campaign_id) ?? 0) + sent);
-      queuedByCampaign.set(row.campaign_id, (queuedByCampaign.get(row.campaign_id) ?? 0) + queued);
-      const byDate = slottedByDate.get(row.campaign_id) ?? {};
-      byDate[row.schedule_date] = (byDate[row.schedule_date] ?? 0) + sent + queued;
-      slottedByDate.set(row.campaign_id, byDate);
-    }
-    for (const row of sendsRes.rows) {
-      const sendsSent = Number(row.sends_sent || 0);
-      sentByCampaign.set(row.campaign_id, Math.max(sentByCampaign.get(row.campaign_id) ?? 0, sendsSent));
-    }
-
-    let sent = 0;
-    let queued = 0;
-    for (const campaign of targetCampaigns) {
-      sent += sentByCampaign.get(campaign.id) ?? 0;
-      queued += queuedByCampaign.get(campaign.id) ?? 0;
-    }
-    const held = heldSeatsThisWeek({
-      today,
-      weekStart: weekStartStr,
-      weekEnd: weekEndStr,
-      sources: reservationSourcesFromCampaigns(targetCampaigns, slottedByDate),
+    const identitySlug = email.toLowerCase().startsWith('tommy') ? 'tommy' : undefined;
+    const { days } = await listSendQueue({
+      from: weekStartStr,
+      to: weekEndStr,
+      identitySlug,
     });
-    return reconcileWeekEmails({ sent, queued, held });
+    return reconcileWeekEmailsFromQueueDays(days.map((day) => ({
+      used: day.used,
+      sentCount: day.sent_count,
+      queuedCount: day.queued_count,
+      reserved: day.reserved,
+      capacity: day.capacity,
+    })));
   } catch {
-    const held = heldSeatsThisWeek({
-      today,
-      weekStart: weekStartStr,
-      weekEnd: weekEndStr,
-      sources: reservationSourcesFromCampaigns(targetCampaigns, new Map()),
-    });
-    return reconcileWeekEmails({ sent: 0, queued: 0, held });
+    return { emailsThisWeek: 0, sentThisWeek: 0, upcomingThisWeek: 0 };
   }
 }
 
@@ -153,9 +72,7 @@ export async function loadHome(userId: string, email: string): Promise<HomePaylo
   ]);
 
   const activeCampaigns = campaigns.filter((campaign) => campaign.status === 'active');
-  const targetCampaigns = relevantOutreachCampaigns(activeCampaigns, userId, email);
-
-  const weekStats = await loadWeekStats(targetCampaigns);
+  const weekStats = await loadWeekStats(email);
   const outreachStats = computeOutreachStats(activeCampaigns, userId, email, weekStats);
 
   return {

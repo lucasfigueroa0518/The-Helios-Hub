@@ -11,6 +11,7 @@ import {
   computeOutreachStats,
   heldSeatsThisWeek,
   reconcileWeekEmails,
+  reconcileWeekEmailsFromQueueDays,
   reservationSourcesFromCampaigns,
 } from '@/lib/home/outreach-stats';
 
@@ -189,6 +190,19 @@ describe('outreach home stats calculation', () => {
     assert.equal(stats.takingActionCampaignsCount, 1);
     assert.deepEqual(stats.activeCampaignNames, ['Boston Industry Agnostic']);
     assert.equal(stats.totalCampaigns, 2);
+  });
+
+  it('counts taken inbox slots plus held, not open capacity', () => {
+    const week = reconcileWeekEmailsFromQueueDays([
+      { used: 43, sentCount: 0, queuedCount: 0, reserved: 0, capacity: 140 },
+      { used: 140, sentCount: 140, queuedCount: 0, reserved: 0, capacity: 140 },
+      { used: 139, sentCount: 132, queuedCount: 7, reserved: 0, capacity: 140 },
+      { used: 20, sentCount: 0, queuedCount: 20, reserved: 80, capacity: 140 },
+      { used: 0, sentCount: 0, queuedCount: 0, reserved: 100, capacity: 140 },
+    ]);
+    assert.equal(week.sentThisWeek, 315);
+    assert.equal(week.upcomingThisWeek, 207);
+    assert.equal(week.emailsThisWeek, 522);
   });
 
   it('reconciles emails this week with sent + queued + live held seats', () => {

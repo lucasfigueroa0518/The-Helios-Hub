@@ -1,6 +1,11 @@
 import { computeAutoReservations, type LiveAutoReservationSource } from '@/lib/auto-campaigns/reservations';
 import { isLiveAutoCampaign } from '@/lib/auto-campaigns/status';
-import { addCalendarDays, formatNyDate, nyWallTimeToUtc } from '@/lib/drafting/send-queue-schedule';
+import {
+  addCalendarDays,
+  formatNyDate,
+  nyWallTimeToUtc,
+  remainingCapacity,
+} from '@/lib/drafting/send-queue-schedule';
 import { nyWeekdayIndex } from '@/lib/auto-campaigns/schedule';
 
 export { isLiveAutoCampaign } from '@/lib/auto-campaigns/status';
@@ -67,6 +72,47 @@ export function reconcileWeekEmails(input: {
     upcomingThisWeek,
     emailsThisWeek: sentThisWeek + upcomingThisWeek,
   };
+}
+
+export type QueueDayEmailSlice = {
+  used: number;
+  sentCount: number;
+  queuedCount: number;
+  reserved: number;
+  capacity: number;
+};
+
+/** Inbox seats that will send this day: taken (used) + held, never open leftover. */
+export function committedEmailsOnDay(day: QueueDayEmailSlice): number {
+  const used = Math.max(0, day.used);
+  const reserved = Math.max(0, day.reserved);
+  const capacity = Math.max(0, day.capacity);
+  if (capacity <= 0) return used + reserved;
+  return capacity - remainingCapacity(used + reserved, capacity);
+}
+
+/**
+ * Homepage week total from the same day buckets as /hub/queue.
+ * Counts unlisted taken slots (Monday's 43) as sent. Does not count open inbox seats.
+ */
+export function reconcileWeekEmailsFromQueueDays(days: QueueDayEmailSlice[]): WeekEmailTotals {
+  let sentThisWeek = 0;
+  let upcomingThisWeek = 0;
+  let emailsThisWeek = 0;
+  for (const day of days) {
+    const used = Math.max(0, day.used);
+    const queued = Math.max(0, day.queuedCount);
+    const listedSent = Math.max(0, day.sentCount);
+    const committed = committedEmailsOnDay(day);
+    const unlistedTaken = Math.max(0, used - listedSent - queued);
+    const sent = listedSent + unlistedTaken;
+    const heldFit = Math.max(0, committed - used);
+    const queuedFit = Math.max(0, Math.min(queued, Math.max(0, committed - sent)));
+    sentThisWeek += sent;
+    upcomingThisWeek += queuedFit + heldFit;
+    emailsThisWeek += committed;
+  }
+  return { sentThisWeek, upcomingThisWeek, emailsThisWeek };
 }
 
 export function reservationSourcesFromCampaigns(
