@@ -1,5 +1,3 @@
-import { subDays } from 'date-fns';
-
 import { dbQuery } from '@/lib/db';
 import { findProjectByAccessToken } from '@/lib/dashboards/repository';
 import type {
@@ -9,12 +7,7 @@ import type {
   RepoEvent,
 } from '@/lib/dashboards/types';
 
-const JUNK_COMMIT_RE =
-  /^(merge|wip|fixup!|squashed|revert "merge|chore: bump version|update readme$|^\.+$)/i;
-
-function isJunk(title: string) {
-  return JUNK_COMMIT_RE.test(title) || title.trim().length < 5;
-}
+const RECENT_COMMIT_LIMIT = 10;
 
 type EventRow = {
   id: string;
@@ -59,10 +52,7 @@ export async function getDashboardData(
   const client = clientRows[0];
   if (!client) return null;
 
-  const now = new Date();
-  const fourteenDaysAgo = subDays(now, 14);
-
-  const [latestUpdateResult, recentEventsResult] = await Promise.all([
+  const [latestUpdateResult, recentCommitsResult] = await Promise.all([
     dbQuery<{
       id: string;
       project_id: string;
@@ -84,18 +74,15 @@ export async function getDashboardData(
               author_login, author_avatar_url, url, occurred_at
        FROM dashboards.repo_events
        WHERE project_id = $1
-         AND occurred_at >= $2
-         AND type IN ('COMMIT', 'PR_MERGED', 'ISSUE_CLOSED')
+         AND type = 'COMMIT'
        ORDER BY occurred_at DESC
-       LIMIT 30`,
-      [project.id, fourteenDaysAgo],
+       LIMIT $2`,
+      [project.id, RECENT_COMMIT_LIMIT],
     ),
   ]);
 
   const latestUpdate = latestUpdateResult.rows[0] ?? null;
-  const recentEvents = recentEventsResult.rows
-    .filter((e) => e.type !== 'COMMIT' || !isJunk(e.title))
-    .map(toRepoEvent);
+  const recentCommits = recentCommitsResult.rows.map(toRepoEvent);
 
   const citedIds = new Set<string>();
   if (latestUpdate) {
@@ -105,7 +92,7 @@ export async function getDashboardData(
     }
   }
 
-  const recentIds = new Set(recentEvents.map((e) => e.id));
+  const recentIds = new Set(recentCommits.map((e) => e.id));
   const missingIds = [...citedIds].filter((id) => !recentIds.has(id));
 
   const sourceEvents =
@@ -122,7 +109,7 @@ export async function getDashboardData(
       : [];
 
   const eventsById: Record<string, RepoEvent> = {};
-  for (const e of [...recentEvents, ...sourceEvents]) {
+  for (const e of [...recentCommits, ...sourceEvents]) {
     eventsById[e.id] = e;
   }
 
@@ -161,7 +148,7 @@ export async function getDashboardData(
           generatedBy: latestUpdate.generated_by,
         }
       : null,
-    recentEvents,
+    recentCommits,
     eventsById,
   };
 }

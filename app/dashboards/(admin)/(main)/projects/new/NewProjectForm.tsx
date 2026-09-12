@@ -55,24 +55,28 @@ export default function NewProjectForm({ clients }: { clients: Client[] }) {
         {fe.clientId && <p className="mt-1 text-xs text-red-500">{fe.clientId}</p>}
       </div>
 
-      <div>
-        <label className="mb-1.5 block text-sm font-medium text-fg-1">
+      <div className="dashboards-about-card">
+        <h2>
           About this project <span className="text-red-400">*</span>
+        </h2>
+        <p>
+          Write the client-facing description. It appears under About This Project
+          on their dashboard. A PDF deck can be added after create.
+        </p>
+        <label className="sr-only" htmlFor="aboutText">
+          About this project
         </label>
         <textarea
+          id="aboutText"
           name="aboutText"
           required
-          rows={5}
-          placeholder="What we're building, in a couple of paragraphs the client can read on their dashboard."
-          className={inputCls(fe.aboutText)}
+          rows={8}
+          placeholder="What we're building, who it's for, and what success looks like."
+          className={`${inputCls(fe.aboutText)} dashboards-about-field`}
         />
         {fe.aboutText ? (
           <p className="mt-1 text-xs text-red-500">{fe.aboutText}</p>
-        ) : (
-          <p className="mt-1 text-xs text-fg-muted">
-            Shown under About this project. A PDF deck can be added later if you want them to download the original proposal.
-          </p>
-        )}
+        ) : null}
       </div>
 
       <div>

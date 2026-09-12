@@ -1,26 +1,22 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
-import { differenceInCalendarDays, format, formatDistanceToNow } from 'date-fns';
-import { CircleCheck, GitCommit, GitPullRequest } from 'lucide-react';
+import { differenceInCalendarDays, format } from 'date-fns';
+import { GitCommit } from 'lucide-react';
 
 import DaysProgressBar from '@/components/dashboards/dashboard/DaysProgressBar';
 import GitHubEmptyState from '@/components/dashboards/dashboard/GitHubEmptyState';
 import Eyebrow from '@/components/dashboards/Eyebrow';
 import SourceChip from '@/components/dashboards/SourceChip';
 import { getDashboardData } from '@/lib/dashboards/data';
-import type { RepoEvent } from '@/lib/dashboards/types';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-function EventTypeIcon({ type }: { type: RepoEvent['type'] }) {
-  const cls = 'h-4 w-4 shrink-0';
-  if (type === 'COMMIT') return <GitCommit className={`${cls} text-fg-muted`} />;
-  if (type === 'PR_MERGED') return <GitPullRequest className={`${cls} text-[#138510]`} />;
-  return <CircleCheck className={`${cls} text-[#FF5E1A]`} />;
+function CommitIcon() {
+  return <GitCommit className="h-4 w-4 shrink-0 text-fg-muted" />;
 }
 
 export default async function ClientDashboardPage({
@@ -32,7 +28,7 @@ export default async function ClientDashboardPage({
   const data = await getDashboardData(token);
   if (!data) notFound();
 
-  const { project, latestUpdate, recentEvents, eventsById } = data;
+  const { project, latestUpdate, recentCommits, eventsById } = data;
   const deckSrc = `/api/dashboards/deck/${project.accessToken}`;
 
   if (project.status === 'ARCHIVED') {
@@ -85,11 +81,53 @@ export default async function ClientDashboardPage({
         </div>
       </header>
 
+      {(project.aboutText || project.deckPdfUrl || project.deckStoragePath) && (
+      <section className="bg-bg-alt py-16">
+        <div className="mx-auto max-w-[1280px] px-6">
+          <div className="animate-fade-in-up" style={{ animationDelay: '0s' }}>
+            <Eyebrow color="orange" className="mb-3">About This Project</Eyebrow>
+            <h2 className="font-heading mb-8 text-[clamp(24px,2.4vw,36px)] font-bold tracking-tight text-fg-1">
+              {project.name} — {project.client.name}
+            </h2>
+          </div>
+
+          {project.aboutText ? (
+            <p className="animate-fade-in-up max-w-3xl whitespace-pre-wrap text-body font-light leading-relaxed text-fg-2">
+              {project.aboutText}
+            </p>
+          ) : null}
+
+          {(project.deckPdfUrl || project.deckStoragePath) ? (
+            <a
+              href={`${deckSrc}?download=1`}
+              className="mt-8 inline-flex items-center gap-2 text-sm font-medium text-accent hover:underline"
+            >
+              Download project deck
+              <span aria-hidden="true">↗</span>
+            </a>
+          ) : null}
+        </div>
+      </section>
+      )}
+
+      <section className="py-12">
+        <div className="mx-auto max-w-[1280px] px-6">
+          <div className="animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+            <DaysProgressBar
+              startDate={project.startDate}
+              targetEndDate={project.targetEndDate}
+              mvpDelivered={project.mvpDelivered}
+              status={project.status}
+            />
+          </div>
+        </div>
+      </section>
+
       <section className="py-16">
         <div className="mx-auto max-w-[1280px] px-6">
           <div
             className="rounded-card-lg border border-border-soft bg-white p-8 shadow-[0_1px_3px_rgba(0,0,0,0.04)] animate-fade-in-up md:p-12"
-            style={{ animationDelay: '0s' }}
+            style={{ animationDelay: '0.15s' }}
           >
             <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-3">
@@ -124,7 +162,7 @@ export default async function ClientDashboardPage({
                     <li
                       key={i}
                       className="animate-fade-in-up"
-                      style={{ animationDelay: `${0.1 + i * 0.1}s` }}
+                      style={{ animationDelay: `${0.2 + i * 0.1}s` }}
                     >
                       <div className="flex gap-3">
                         <span className="mt-[10px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#138510]" />
@@ -157,73 +195,31 @@ export default async function ClientDashboardPage({
         </div>
       </section>
 
-      <section className="py-12">
-        <div className="mx-auto max-w-[1280px] px-6">
-          <div className="animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-            <DaysProgressBar
-              startDate={project.startDate}
-              targetEndDate={project.targetEndDate}
-              mvpDelivered={project.mvpDelivered}
-              status={project.status}
-            />
-          </div>
-        </div>
-      </section>
-
-      {(project.aboutText || project.deckPdfUrl || project.deckStoragePath) && (
-      <section className="bg-bg-alt py-16">
-        <div className="mx-auto max-w-[1280px] px-6">
-          <div className="animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-            <Eyebrow color="orange" className="mb-3">About This Project</Eyebrow>
-            <h2 className="font-heading mb-8 text-[clamp(24px,2.4vw,36px)] font-bold tracking-tight text-fg-1">
-              {project.name} — {project.client.name}
-            </h2>
-          </div>
-
-          {project.aboutText ? (
-            <p className="animate-fade-in-up max-w-3xl whitespace-pre-wrap text-body font-light leading-relaxed text-fg-2">
-              {project.aboutText}
-            </p>
-          ) : null}
-
-          {(project.deckPdfUrl || project.deckStoragePath) ? (
-            <a
-              href={`${deckSrc}?download=1`}
-              className="mt-8 inline-flex items-center gap-2 text-sm font-medium text-accent hover:underline"
-            >
-              Download project deck
-              <span aria-hidden="true">↗</span>
-            </a>
-          ) : null}
-        </div>
-      </section>
-      )}
-
-      <section className={`bg-bg-alt py-16${!project.githubRepo || recentEvents.length === 0 ? ' dashboards-client-empty' : ''}`}>
+      <section className={`bg-bg-alt py-16${!project.githubRepo || recentCommits.length === 0 ? ' dashboards-client-empty' : ''}`}>
         <div className="mx-auto max-w-[1280px] px-6">
           <div className="animate-fade-in-up mb-8" style={{ animationDelay: '0.1s' }}>
-            <Eyebrow color="ink" className="mb-3">Recent Activity</Eyebrow>
+            <Eyebrow color="ink" className="mb-3">Recent Commits</Eyebrow>
             <h2 className="font-heading text-[clamp(24px,2.4vw,36px)] font-bold tracking-tight text-fg-1">
-              Last 14 Days
+              Last 10 Commits
             </h2>
           </div>
 
           {!project.githubRepo ? (
             <GitHubEmptyState />
-          ) : recentEvents.length === 0 ? (
+          ) : recentCommits.length === 0 ? (
             <p className="text-body-sm font-light text-fg-muted">
-              No recent activity in the project repo.
+              No commits in the project repo yet.
             </p>
           ) : (
             <ul className="divide-y divide-border-soft">
-              {recentEvents.map((event, i) => (
+              {recentCommits.map((event, i) => (
                 <li
                   key={event.id}
                   className="animate-fade-in-up flex items-start gap-4 py-4"
                   style={{ animationDelay: `${0.1 + i * 0.05}s` }}
                 >
                   <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
-                    <EventTypeIcon type={event.type} />
+                    <CommitIcon />
                   </div>
                   <div className="min-w-0 flex-1">
                     <a
@@ -246,7 +242,11 @@ export default async function ClientDashboardPage({
                       <span className="text-xs font-light text-fg-3">{event.authorName}</span>
                       <span className="text-xs font-light text-fg-muted">·</span>
                       <span className="text-xs font-light text-fg-muted">
-                        {formatDistanceToNow(event.occurredAt, { addSuffix: true })}
+                        {format(event.occurredAt, 'MMM d, yyyy')}
+                      </span>
+                      <span className="text-xs font-light text-fg-muted">·</span>
+                      <span className="text-xs font-light text-fg-muted">
+                        {format(event.occurredAt, 'h:mm a')}
                       </span>
                     </div>
                   </div>
