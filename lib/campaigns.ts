@@ -501,6 +501,22 @@ export async function updateAutoCampaign(
       nextCycle?.toISOString() ?? null,
     ],
   );
+
+  if (autoStatus === 'paused') {
+    const { pauseDraftingWorkspace } = await import('@/lib/drafting/repository');
+    await pauseDraftingWorkspace(campaignId, ownerId).catch(() => undefined);
+    await dbQuery(
+      `UPDATE outreach.reply_sends
+          SET status = 'cancelled',
+              cancelled_at = COALESCE(cancelled_at, now()),
+              cancel_reason = 'campaign_paused',
+              updated_at = now()
+        WHERE campaign_id = $1
+          AND status IN ('queued', 'scheduled')`,
+      [campaignId],
+    ).catch(() => undefined);
+  }
+
   return getCampaign(ownerId, campaignId);
 }
 
