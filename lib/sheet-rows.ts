@@ -36,7 +36,8 @@ function rowRecord(row: ExcelJS.Row, headers: string[]): Record<string, string> 
 /** Parse an .xlsx workbook into header-keyed row objects (first row = headers). */
 export async function rowsFromXlsx(bytes: Buffer | ArrayBuffer): Promise<SheetTable[]> {
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(bytes);
+  const buffer = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
+  await workbook.xlsx.load(buffer as any);
   const sheets: SheetTable[] = [];
   workbook.eachSheet((worksheet) => {
     const headerRow = worksheet.getRow(1);
