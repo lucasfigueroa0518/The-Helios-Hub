@@ -44,6 +44,7 @@ const files = [
   'db/analytics_schema.sql',
   'db/dashboards_schema.sql',
   'db/networking_schema.sql',
+  'db/seo_schema.sql',
   'db/trello_schema.sql',
 ];
 for (const file of files) {

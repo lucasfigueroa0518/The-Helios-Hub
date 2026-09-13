@@ -846,6 +846,26 @@ async function handleReconcile(
     // Keep reconcile resilient.
   }
 
+  let seoDailyEnqueued = 0;
+  try {
+    const now = new Date();
+    if (now.getUTCHours() >= 9) {
+      const dayKey = now.toISOString().slice(0, 10);
+      await enqueueWorkBatch([
+        child(
+          'seo.gsc_daily_sync',
+          { reason: 'scheduled' },
+          dayKey,
+          'seo',
+          { maxAttempts: 2, priority: -5 },
+        ),
+      ]);
+      seoDailyEnqueued = 1;
+    }
+  } catch {
+    // Keep reconcile resilient.
+  }
+
   return {
     children,
     result: {
@@ -867,6 +887,7 @@ async function handleReconcile(
       autoCyclesEnqueued,
       autoDraftsQueued,
       networkingWeeklyEnqueued,
+      seoDailyEnqueued,
       staleWorkersRemoved,
     },
   };
@@ -931,6 +952,19 @@ async function handleNetworkingWeeklyIngest(
   };
 }
 
+async function handleSeoGscDailySync(
+  job: OrchestrationJob<'seo.gsc_daily_sync'>,
+): Promise<WorkHandlerResult> {
+  const { runGscDailySync } = await import('@/lib/seo/sync');
+  const result = await runGscDailySync();
+  return {
+    result: {
+      reason: job.payload.reason ?? null,
+      ...result,
+    },
+  };
+}
+
 type Handler = (job: OrchestrationJob) => Promise<WorkHandlerResult>;
 
 const HANDLERS: Record<WorkKind, Handler> = {
@@ -959,6 +993,7 @@ const HANDLERS: Record<WorkKind, Handler> = {
   'anthropic.cost_sync': handleAnthropicCostSync as Handler,
   'auto.cycle': handleAutoCycle as Handler,
   'networking.weekly_ingest': handleNetworkingWeeklyIngest as Handler,
+  'seo.gsc_daily_sync': handleSeoGscDailySync as Handler,
   'system.reconcile': handleReconcile as Handler,
 };
 

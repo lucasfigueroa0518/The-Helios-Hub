@@ -4823,10 +4823,16 @@ button.stat-tile {
 
 /* ---- Networking calendar --------------------------------------------------- */
 .networking-page {
-  --networking-tech: var(--chart-2);
-  --networking-tech-soft: color-mix(in srgb, var(--chart-2) 16%, var(--color-surface));
-  --networking-vertical: var(--color-negative);
-  --networking-vertical-soft: var(--color-negative-soft);
+  --networking-blue-core: #4169E1; /* Royal Blue */
+  --networking-red-core: #FF0000;  /* Pure Red */
+  --networking-green-core: #138510;
+  --networking-orange-core: #ff5e1a;
+  --networking-yellow-core: #ffb347;
+
+  --networking-tech: var(--networking-blue-core);
+  --networking-tech-soft: color-mix(in srgb, var(--networking-blue-core) 10%, #ffffff);
+  --networking-vertical: var(--networking-red-core);
+  --networking-vertical-soft: color-mix(in srgb, var(--networking-red-core) 10%, #ffffff);
 }
 .networking-page__body { display: flex; flex-direction: column; gap: var(--space-4); }
 .networking-desktop-controls { display: flex; flex-direction: column; gap: var(--space-4); }
@@ -4839,11 +4845,12 @@ button.stat-tile {
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  background: var(--color-surface-2);
+  background: var(--color-surface);
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
+  box-shadow: var(--shadow-sm);
 }
 .networking-mobile-bar__copy {
   display: flex;
@@ -4863,6 +4870,108 @@ button.stat-tile {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--space-3);
 }
+
+/* ---- Stat Tiles (Top Controls) ------------------------------------------- */
+
+.networking-stats .stat-tile {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  position: relative;
+  overflow: hidden;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+
+.networking-stats .stat-tile__value {
+  color: #171717; /* All numbers on cards are black */
+}
+
+/* 1. Upcoming Tile (Helios Orange top-left corner glow - punchy & tight) */
+.networking-stat--upcoming {
+  background: radial-gradient(110px circle at 0 0, rgba(255, 94, 26, 0.42) 0%, rgba(255, 94, 26, 0.10) 35%, transparent 70%), #ffffff;
+  border: 1px solid rgba(255, 94, 26, 0.20);
+  box-shadow: var(--shadow-sm);
+}
+.networking-stat--upcoming:hover {
+  border-color: rgba(255, 94, 26, 0.40);
+  box-shadow: 0 6px 20px -4px rgba(255, 94, 26, 0.18);
+  transform: translateY(-1px);
+}
+.networking-stat--upcoming.stat-tile--active {
+  border-color: var(--networking-orange-core);
+  background: radial-gradient(130px circle at 0 0, rgba(255, 94, 26, 0.55) 0%, rgba(255, 94, 26, 0.15) 35%, transparent 70%), #ffffff;
+  box-shadow: 0 0 16px -4px rgba(255, 94, 26, 0.30), var(--shadow-sm);
+}
+
+/* 2. Boston Tile (Helios Green #138510 top-left corner glow - punchy & tight) */
+.networking-stat--boston {
+  background: radial-gradient(110px circle at 0 0, rgba(19, 133, 16, 0.42) 0%, rgba(19, 133, 16, 0.10) 35%, transparent 70%), #ffffff;
+  border: 1px solid rgba(19, 133, 16, 0.20);
+  box-shadow: var(--shadow-sm);
+}
+.networking-stat--boston:hover {
+  border-color: rgba(19, 133, 16, 0.40);
+  box-shadow: 0 6px 20px -4px rgba(19, 133, 16, 0.18);
+  transform: translateY(-1px);
+}
+.networking-stat--boston.stat-tile--active {
+  border-color: var(--networking-green-core);
+  background: radial-gradient(130px circle at 0 0, rgba(19, 133, 16, 0.55) 0%, rgba(19, 133, 16, 0.15) 35%, transparent 70%), #ffffff;
+  box-shadow: 0 0 16px -4px rgba(19, 133, 16, 0.30), var(--shadow-sm);
+}
+
+/* 3. Miami Tile (Helios Orange #ff5e1a to Yellow #ffb347 top-left corner glow - punchy & tight) */
+.networking-stat--miami {
+  background: radial-gradient(120px circle at 0 0, rgba(255, 94, 26, 0.45) 0%, rgba(255, 179, 71, 0.18) 35%, transparent 70%), #ffffff;
+  border: 1px solid rgba(255, 94, 26, 0.20);
+  box-shadow: var(--shadow-sm);
+}
+.networking-stat--miami:hover {
+  border-color: rgba(255, 94, 26, 0.40);
+  box-shadow: 0 6px 20px -4px rgba(255, 94, 26, 0.18);
+  transform: translateY(-1px);
+}
+.networking-stat--miami.stat-tile--active {
+  border-color: var(--networking-orange-core);
+  background: radial-gradient(140px circle at 0 0, rgba(255, 94, 26, 0.58) 0%, rgba(255, 179, 71, 0.22) 35%, transparent 70%), #ffffff;
+  box-shadow: 0 0 16px -4px rgba(255, 94, 26, 0.30), var(--shadow-sm);
+}
+
+/* 4. Tech Rooms Tile (Royal Blue top-left corner glow - punchy & tight) */
+.networking-stat--tech {
+  background: radial-gradient(110px circle at 0 0, rgba(65, 105, 225, 0.42) 0%, rgba(65, 105, 225, 0.10) 35%, transparent 70%), #ffffff;
+  border: 1px solid rgba(65, 105, 225, 0.20);
+  box-shadow: var(--shadow-sm);
+}
+.networking-stat--tech:hover {
+  border-color: rgba(65, 105, 225, 0.40);
+  box-shadow: 0 6px 20px -4px rgba(65, 105, 225, 0.18);
+  transform: translateY(-1px);
+}
+.networking-stat--tech.stat-tile--active {
+  border-color: var(--networking-blue-core);
+  background: radial-gradient(130px circle at 0 0, rgba(65, 105, 225, 0.55) 0%, rgba(65, 105, 225, 0.15) 35%, transparent 70%), #ffffff;
+  box-shadow: 0 0 16px -4px rgba(65, 105, 225, 0.30), var(--shadow-sm);
+}
+
+/* 5. Vertical Rooms Tile (Red #FF0000 top-left corner glow - punchy & tight) */
+.networking-stat--vertical {
+  background: radial-gradient(110px circle at 0 0, rgba(255, 0, 0, 0.42) 0%, rgba(255, 0, 0, 0.10) 35%, transparent 70%), #ffffff;
+  border: 1px solid rgba(255, 0, 0, 0.20);
+  box-shadow: var(--shadow-sm);
+}
+.networking-stat--vertical:hover {
+  border-color: rgba(255, 0, 0, 0.40);
+  box-shadow: 0 6px 20px -4px rgba(255, 0, 0, 0.18);
+  transform: translateY(-1px);
+}
+.networking-stat--vertical.stat-tile--active {
+  border-color: var(--networking-red-core);
+  background: radial-gradient(130px circle at 0 0, rgba(255, 0, 0, 0.55) 0%, rgba(255, 0, 0, 0.15) 35%, transparent 70%), #ffffff;
+  box-shadow: 0 0 16px -4px rgba(255, 0, 0, 0.30), var(--shadow-sm);
+}
+
 .networking-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -5001,15 +5110,22 @@ button.stat-tile {
   min-height: 8px;
 }
 .networking-calendar__dot {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   border-radius: var(--radius-pill);
   background: var(--networking-tech);
 }
-.networking-calendar__dot--tech { background: var(--networking-tech); }
-.networking-calendar__dot--vertical { background: var(--networking-vertical); }
+.networking-calendar__dot--tech {
+  background: var(--networking-blue-core);
+  box-shadow: 0 0 6px rgba(65, 105, 225, 0.4);
+}
+.networking-calendar__dot--vertical {
+  background: var(--networking-red-core);
+  box-shadow: 0 0 6px rgba(255, 0, 0, 0.4);
+}
 .networking-calendar__dot--both {
-  background: linear-gradient(90deg, var(--networking-tech) 50%, var(--networking-vertical) 50%);
+  background: linear-gradient(90deg, var(--networking-blue-core) 50%, var(--networking-red-core) 50%);
+  box-shadow: 0 0 6px rgba(65, 105, 225, 0.4);
 }
 .networking-calendar__dot-more {
   width: 3px;
@@ -5018,23 +5134,67 @@ button.stat-tile {
   background: var(--color-text-subtle);
   align-self: center;
 }
+
+/* ---- Month Calendar Grid Event Block Cards ------------------------------- */
+
 .networking-calendar__event {
   display: block;
   width: 100%;
-  margin-bottom: 2px;
-  padding: 2px 6px;
-  border: none;
+  margin-bottom: 3px;
+  padding: 3px 6px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: var(--radius-sm);
-  background: var(--networking-tech-soft);
+  background-color: #ffffff;
   color: var(--color-text);
   font: inherit;
   font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
   text-align: left;
   cursor: pointer;
+  position: relative;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
 }
+
+.networking-calendar__event.networking-event--tech {
+  background-image: radial-gradient(55px circle at 0 0, rgba(65, 105, 225, 0.45) 0%, rgba(65, 105, 225, 0.10) 40%, transparent 75%);
+  border-color: rgba(65, 105, 225, 0.22);
+  box-shadow: none;
+}
+.networking-calendar__event.networking-event--tech:hover {
+  background-image: radial-gradient(65px circle at 0 0, rgba(65, 105, 225, 0.60) 0%, rgba(65, 105, 225, 0.15) 40%, transparent 75%);
+  border-color: rgba(65, 105, 225, 0.40);
+  box-shadow: 0 2px 8px rgba(65, 105, 225, 0.18);
+}
+
+.networking-calendar__event.networking-event--vertical {
+  background-image: radial-gradient(55px circle at 0 0, rgba(255, 0, 0, 0.45) 0%, rgba(255, 0, 0, 0.10) 40%, transparent 75%);
+  border-color: rgba(255, 0, 0, 0.22);
+  box-shadow: none;
+}
+.networking-calendar__event.networking-event--vertical:hover {
+  background-image: radial-gradient(65px circle at 0 0, rgba(255, 0, 0, 0.60) 0%, rgba(255, 0, 0, 0.15) 40%, transparent 75%);
+  border-color: rgba(255, 0, 0, 0.40);
+  box-shadow: 0 2px 8px rgba(255, 0, 0, 0.18);
+}
+
+.networking-calendar__event.networking-event--both {
+  background-image:
+    radial-gradient(45px circle at 0 0, rgba(65, 105, 225, 0.42) 0%, transparent 75%),
+    radial-gradient(45px circle at 100% 0, rgba(255, 0, 0, 0.42) 0%, transparent 75%);
+  border-color: rgba(65, 105, 225, 0.22);
+  box-shadow: none;
+}
+.networking-calendar__event.networking-event--both:hover {
+  background-image:
+    radial-gradient(55px circle at 0 0, rgba(65, 105, 225, 0.58) 0%, transparent 75%),
+    radial-gradient(55px circle at 100% 0, rgba(255, 0, 0, 0.58) 0%, transparent 75%);
+  border-color: rgba(65, 105, 225, 0.38);
+  box-shadow: 0 2px 8px rgba(65, 105, 225, 0.18);
+}
+
 .networking-calendar__more {
   display: block;
   width: 100%;
@@ -5071,56 +5231,75 @@ button.stat-tile {
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
 }
-.networking-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.networking-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+
+/* ---- Listed Event Row Cards (Desktop & Mobile) --------------------------- */
+
 .networking-agenda-row {
   display: grid;
   grid-template-columns: 72px minmax(0, 1fr) auto;
   gap: var(--space-3);
-  align-items: start;
+  align-items: center;
   width: 100%;
-  padding: var(--space-3);
-  border: none;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: var(--radius-md);
-  background: transparent;
+  background-color: #ffffff;
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
 }
-.networking-agenda-row:hover { background: var(--color-surface-hover); }
+
+/* 1. Tech Event Row (Royal Blue corner glow - tight & vibrant) */
+.networking-event--tech {
+  background-color: #ffffff;
+  background-image: radial-gradient(130px circle at 0 0, rgba(65, 105, 225, 0.42) 0%, rgba(65, 105, 225, 0.10) 35%, transparent 70%);
+  border-color: rgba(65, 105, 225, 0.20);
+  box-shadow: var(--shadow-sm);
+}
 .networking-agenda-row.networking-event--tech:hover {
-  background: color-mix(in srgb, var(--networking-tech) 22%, var(--color-surface));
+  background-image: radial-gradient(150px circle at 0 0, rgba(65, 105, 225, 0.55) 0%, rgba(65, 105, 225, 0.15) 35%, transparent 70%);
+  border-color: rgba(65, 105, 225, 0.40);
+  box-shadow: 0 6px 20px -4px rgba(65, 105, 225, 0.20);
+  transform: translateY(-1px);
+}
+
+/* 2. Vertical Event Row (Red #FF0000 corner glow - tight & vibrant) */
+.networking-event--vertical {
+  background-color: #ffffff;
+  background-image: radial-gradient(130px circle at 0 0, rgba(255, 0, 0, 0.42) 0%, rgba(255, 0, 0, 0.10) 35%, transparent 70%);
+  border-color: rgba(255, 0, 0, 0.20);
+  box-shadow: var(--shadow-sm);
 }
 .networking-agenda-row.networking-event--vertical:hover {
-  background: color-mix(in srgb, var(--networking-vertical) 18%, var(--color-surface));
+  background-image: radial-gradient(150px circle at 0 0, rgba(255, 0, 0, 0.55) 0%, rgba(255, 0, 0, 0.15) 35%, transparent 70%);
+  border-color: rgba(255, 0, 0, 0.40);
+  box-shadow: 0 6px 20px -4px rgba(255, 0, 0, 0.20);
+  transform: translateY(-1px);
+}
+
+/* 3. Both Event Row (Royal Blue TOP-LEFT, Red TOP-RIGHT - tight & vibrant) */
+.networking-event--both {
+  background-color: #ffffff;
+  background-image:
+    radial-gradient(110px circle at 0 0, rgba(65, 105, 225, 0.38) 0%, rgba(65, 105, 225, 0.08) 35%, transparent 70%),
+    radial-gradient(110px circle at 100% 0, rgba(255, 0, 0, 0.38) 0%, rgba(255, 0, 0, 0.08) 35%, transparent 70%);
+  border-color: rgba(65, 105, 225, 0.20);
+  box-shadow: var(--shadow-sm);
 }
 .networking-agenda-row.networking-event--both:hover {
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--networking-tech) 22%, var(--color-surface)) 50%,
-    color-mix(in srgb, var(--networking-vertical) 18%, var(--color-surface)) 50%
-  );
+  background-image:
+    radial-gradient(130px circle at 0 0, rgba(65, 105, 225, 0.50) 0%, rgba(65, 105, 225, 0.12) 35%, transparent 70%),
+    radial-gradient(130px circle at 100% 0, rgba(255, 0, 0, 0.50) 0%, rgba(255, 0, 0, 0.12) 35%, transparent 70%);
+  border-color: rgba(65, 105, 225, 0.38);
+  box-shadow: 0 6px 20px -4px rgba(65, 105, 225, 0.18);
+  transform: translateY(-1px);
 }
-.networking-event--tech {
-  background: var(--networking-tech-soft);
-  box-shadow: inset 3px 0 0 var(--networking-tech);
-}
-.networking-event--vertical {
-  background: var(--networking-vertical-soft);
-  box-shadow: inset 3px 0 0 var(--networking-vertical);
-}
-.networking-event--both {
-  background: linear-gradient(90deg, var(--networking-tech-soft) 50%, var(--networking-vertical-soft) 50%);
-  box-shadow: none;
-}
-.networking-calendar__event.networking-event--tech,
-.networking-calendar__event.networking-event--vertical,
-.networking-calendar__event.networking-event--both {
-  box-shadow: none;
-}
-.networking-calendar__event.networking-event--both {
-  background: linear-gradient(90deg, var(--networking-tech-soft) 50%, var(--networking-vertical-soft) 50%);
-}
+
 .networking-agenda-row__time {
   display: flex;
   flex-direction: column;
@@ -5145,11 +5324,31 @@ button.stat-tile {
 }
 .list-row__title { font-weight: var(--font-weight-semibold); color: var(--color-text); }
 .list-row__meta { font-size: var(--font-size-sm); color: var(--color-text-muted); }
-.chip--tech { background: var(--networking-tech-soft); color: var(--networking-tech); }
-.chip--vertical { background: var(--networking-vertical-soft); color: var(--networking-vertical); }
+
+/* ---- Category Badges / Pills --------------------------------------------- */
+
+.chip--tech {
+  background: #ffffff;
+  border: 1px solid rgba(65, 105, 225, 0.25);
+  color: var(--networking-blue-core);
+  font-weight: var(--font-weight-semibold);
+  box-shadow: 0 0 8px -2px rgba(65, 105, 225, 0.15);
+}
+
+.chip--vertical {
+  background: #ffffff;
+  border: 1px solid rgba(255, 0, 0, 0.25);
+  color: var(--networking-red-core);
+  font-weight: var(--font-weight-semibold);
+  box-shadow: 0 0 8px -2px rgba(255, 0, 0, 0.15);
+}
+
 .chip--both {
-  background: linear-gradient(90deg, var(--networking-tech-soft) 50%, var(--networking-vertical-soft) 50%);
+  background: #ffffff;
+  border: 1px solid var(--color-border);
   color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+  box-shadow: var(--shadow-sm);
 }
 .networking-stat--tech { --tile-fg: var(--networking-tech); --tile-bg: var(--networking-tech-soft); }
 .networking-stat--vertical { --tile-fg: var(--networking-vertical); --tile-bg: var(--networking-vertical-soft); }
@@ -5450,12 +5649,7 @@ button.stat-tile {
   }
   .networking-agenda-row {
     grid-template-columns: 56px minmax(0, 1fr);
-    padding: var(--space-3) var(--space-2);
-  }
-  .networking-agenda-row.networking-event--tech,
-  .networking-agenda-row.networking-event--vertical,
-  .networking-agenda-row.networking-event--both {
-    box-shadow: none;
+    padding: var(--space-3) var(--space-3);
   }
   .networking-agenda-row .chip {
     display: none;

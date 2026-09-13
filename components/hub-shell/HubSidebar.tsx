@@ -11,6 +11,7 @@ import {
   Home,
   Kanban,
   LayoutDashboard,
+  LineChart,
   LogOut,
   Mail,
   Menu,
@@ -30,6 +31,7 @@ const ICONS: Record<HubNavItem['id'], typeof Home> = {
   events: CalendarDays,
   dashboards: LayoutDashboard,
   trello: Kanban,
+  seo: LineChart,
 };
 
 export function HubSidebar({ email }: { email: string }) {

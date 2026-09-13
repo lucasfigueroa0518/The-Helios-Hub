@@ -1,0 +1,26 @@
+---
+description: Ban browser-default selects and other user-agent form chrome in Helios UI
+alwaysApply: true
+---
+
+# No native form chrome
+
+Never ship **user-agent** (browser-default) form controls in Helios UI. That includes unstyled or system-looking `<select>` dropdowns, default search boxes, and invisible overlay `<select>` hacks (`opacity: 0` + `position: absolute; inset: 0`). Those open a native picker (often a bar at the top of the page) and break Helios visual language.
+
+Use Helios controls instead:
+
+- Closed option lists: `HeliosMenu` (`app/components/helios-menu.tsx`) or the Analytics `analytics-filter` button + menu (not a raw `<select>`)
+- Exclusive choices: `.segmented` / `.segmented__item`
+- Text: `.helios-field-input` or existing Hub field classes
+
+```tsx
+// BAD — native picker, can overlay the page
+<select value={type} onChange={(e) => setType(e.target.value)}>
+  <option value="web">Web</option>
+</select>
+
+// GOOD
+<HeliosMenu label="Search type" value={type} options={options} onChange={setType} />
+```
+
+Do not reuse `.analytics-filter__select` unless it sits inside a sized `.analytics-filter__shell` with a visible value label. Prefer `HeliosMenu` for new work.

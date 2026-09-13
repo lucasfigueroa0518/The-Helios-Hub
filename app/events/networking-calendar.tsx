@@ -28,6 +28,7 @@ import {
   X,
 } from 'lucide-react';
 
+import { HeliosMenu } from '@/app/components/helios-menu';
 import { HubLoadingSpinner } from '@/app/hub/hub-loading';
 import { requestJson } from '@/lib/client-request';
 import { INDUSTRIES } from '@/lib/networking/taxonomy';
@@ -222,6 +223,24 @@ export function NetworkingCalendar() {
     return eachDayOfInterval({ start, end });
   }, [month]);
 
+  const accessOptions = useMemo(
+    () => [
+      { value: '', label: 'All access' },
+      { value: 'open', label: 'Open' },
+      { value: 'paid', label: 'Paid' },
+      { value: 'invite_only', label: 'Invite-only' },
+    ],
+    []
+  );
+
+  const industryOptions = useMemo(
+    () => [
+      { value: '', label: 'All industries' },
+      ...INDUSTRIES.map((item) => ({ value: item.slug, label: item.label })),
+    ],
+    []
+  );
+
   const listEvents = data?.events ?? [];
   const pageCount = Math.max(1, Math.ceil(listEvents.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
@@ -315,15 +334,15 @@ export function NetworkingCalendar() {
         <div className="card__body networking-page__body">
           <div className="networking-desktop-controls">
             <div className="networking-stats">
-              <button type="button" className={`stat-tile${metro === 'all' ? ' stat-tile--active' : ''}`} onClick={() => setMetro('all')}>
+              <button type="button" className={`stat-tile networking-stat--upcoming${metro === 'all' ? ' stat-tile--active' : ''}`} onClick={() => setMetro('all')}>
                 <span className="stat-tile__label">Upcoming</span>
                 <span className="stat-tile__value">{counts?.total ?? 0}</span>
               </button>
-              <button type="button" className={`stat-tile${metro === 'boston' ? ' stat-tile--active' : ''}`} onClick={() => setMetro(metro === 'boston' ? 'all' : 'boston')}>
+              <button type="button" className={`stat-tile networking-stat--boston${metro === 'boston' ? ' stat-tile--active' : ''}`} onClick={() => setMetro(metro === 'boston' ? 'all' : 'boston')}>
                 <span className="stat-tile__label">Boston</span>
                 <span className="stat-tile__value">{counts?.boston ?? 0}</span>
               </button>
-              <button type="button" className={`stat-tile stat-tile--positive${metro === 'miami' ? ' stat-tile--active' : ''}`} onClick={() => setMetro(metro === 'miami' ? 'all' : 'miami')}>
+              <button type="button" className={`stat-tile networking-stat--miami${metro === 'miami' ? ' stat-tile--active' : ''}`} onClick={() => setMetro(metro === 'miami' ? 'all' : 'miami')}>
                 <span className="stat-tile__label">Miami</span>
                 <span className="stat-tile__value">{counts?.miami ?? 0}</span>
               </button>
@@ -370,24 +389,18 @@ export function NetworkingCalendar() {
                   <List size={14} /> List
                 </button>
               </div>
-              <label className="networking-select">
-                <span>Access</span>
-                <select value={access} onChange={(e) => setAccess(e.target.value as '' | AccessType)}>
-                  <option value="">All</option>
-                  <option value="open">Open</option>
-                  <option value="paid">Paid</option>
-                  <option value="invite_only">Invite-only</option>
-                </select>
-              </label>
-              <label className="networking-select">
-                <span>Industry</span>
-                <select value={industry} onChange={(e) => setIndustry(e.target.value)}>
-                  <option value="">All</option>
-                  {INDUSTRIES.map((item) => (
-                    <option key={item.slug} value={item.slug}>{item.label}</option>
-                  ))}
-                </select>
-              </label>
+              <HeliosMenu
+                label="Access"
+                value={access}
+                options={accessOptions}
+                onChange={(val) => setAccess(val as '' | AccessType)}
+              />
+              <HeliosMenu
+                label="Industry"
+                value={industry}
+                options={industryOptions}
+                onChange={(val) => setIndustry(val)}
+              />
             </div>
 
             {importForm}
