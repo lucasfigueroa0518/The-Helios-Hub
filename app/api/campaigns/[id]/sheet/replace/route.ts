@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
+import { rowsFromXlsx } from '@/lib/sheet-rows';
 import { dbTransaction } from '@/lib/db';
 import { isLinkedinRelationshipHeader, LINKEDIN_RELATIONSHIP_LABEL } from '@/lib/models';
 import { getSession } from '@/lib/session';
@@ -34,18 +34,16 @@ function collectExtraFields(row: SheetInput): Record<string, string> {
   return extra;
 }
 
-function parseFile(file: File): Promise<SheetInput[]> {
-  return file.arrayBuffer().then((bytes) => {
-    if (file.name.toLowerCase().endsWith('.csv')) {
-      const parsed = Papa.parse<SheetInput>(new TextDecoder().decode(bytes), { header: true, skipEmptyLines: true });
-      if (parsed.errors.length) throw new Error(`Could not read CSV: ${parsed.errors[0].message}`);
-      return parsed.data;
-    }
-    const workbook = XLSX.read(bytes, { type: 'array' });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    if (!sheet) throw new Error('The workbook has no worksheet');
-    return XLSX.utils.sheet_to_json<SheetInput>(sheet, { defval: '' });
-  });
+async function parseFile(file: File): Promise<SheetInput[]> {
+  const bytes = await file.arrayBuffer();
+  if (file.name.toLowerCase().endsWith('.csv')) {
+    const parsed = Papa.parse<SheetInput>(new TextDecoder().decode(bytes), { header: true, skipEmptyLines: true });
+    if (parsed.errors.length) throw new Error(`Could not read CSV: ${parsed.errors[0].message}`);
+    return parsed.data;
+  }
+  const sheets = await rowsFromXlsx(Buffer.from(bytes));
+  if (!sheets.length) throw new Error('The workbook has no worksheet');
+  return sheets[0].rows;
 }
 
 export async function POST(request: NextRequest, { params }: RouteContext) {

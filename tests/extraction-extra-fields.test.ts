@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import ExcelJS from 'exceljs';
 import { extractUpload } from '@/lib/extraction';
 import { isLinkedinRelationshipHeader, LINKEDIN_RELATIONSHIP_LABEL } from '@/lib/models';
 
@@ -29,6 +30,19 @@ test('csv extraction captures non-canonical columns as extra fields', async () =
   // Canonical headers are not duplicated into extra.
   assert.equal(person.extra?.Company, undefined);
   assert.equal(person.extra?.Email, undefined);
+});
+
+test('xlsx extraction maps headers and extra columns', async () => {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Leads');
+  sheet.addRow(['Name', 'Email', 'Priority']);
+  sheet.addRow(['Jane Doe', 'jane@acme.com', 'High']);
+  const bytes = Buffer.from(await workbook.xlsx.writeBuffer());
+  const result = await extractUpload(bytes, 'leads.xlsx', 'upload-xlsx');
+  assert.equal(result.people.length, 1);
+  assert.equal(result.people[0].full_name, 'Jane Doe');
+  assert.equal(result.people[0].email, 'jane@acme.com');
+  assert.equal(result.people[0].extra?.Priority, 'High');
 });
 
 test('csv with only canonical columns yields no extra fields', async () => {
