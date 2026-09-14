@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Download, RefreshCw } from 'lucide-react';
+import { ArrowUp, ChevronLeft, ChevronRight, Download, ExternalLink, RefreshCw, Search, X } from 'lucide-react';
 
 import { HeliosMenu } from '@/app/components/helios-menu';
 import { HubLoadingSpinner } from '@/app/hub/hub-loading';
@@ -15,6 +15,7 @@ import {
 } from '@/lib/seo/format';
 import type {
   SeoBreakdownTab,
+  SeoMetrics,
   SeoPeriod,
   SeoRowsResponse,
   SeoSearchType,
@@ -22,7 +23,7 @@ import type {
 } from '@/lib/seo/types';
 import { SEO_SEARCH_TYPES } from '@/lib/seo/types';
 
-import { SeoChart, type ChartMetric } from './seo-chart';
+import { CHART_METRICS, SeoChart, type ChartMetric } from './seo-chart';
 
 const PERIODS: Array<[SeoPeriod, string]> = [
   ['24h', '24 hours'],
@@ -46,14 +47,6 @@ const SEARCH_TYPE_OPTIONS = SEO_SEARCH_TYPES.map((type) => ({
   label: type === 'googleNews' ? 'Google News' : type[0].toUpperCase() + type.slice(1),
 }));
 
-const FILTER_OPTIONS = [
-  { value: '', label: 'None' },
-  { value: 'query', label: 'Query' },
-  { value: 'page', label: 'Page' },
-  { value: 'country', label: 'Country' },
-  { value: 'device', label: 'Device' },
-];
-
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100].map((size) => ({
   value: String(size),
   label: String(size),
@@ -68,14 +61,62 @@ const TAB_LABEL: Record<SeoBreakdownTab, string> = {
   date: 'Day',
 };
 
+const FILTER_PLACEHOLDER: Record<SeoBreakdownTab, string> = {
+  query: 'Filter queries…',
+  page: 'Filter pages…',
+  country: 'Filter countries…',
+  device: 'Filter devices…',
+  search_appearance: 'Filter appearance types…',
+  date: 'Days cannot be filtered',
+};
+
+const METRIC_TILES: Array<{ metric: ChartMetric; label: string }> = [
+  { metric: 'clicks', label: 'Total clicks' },
+  { metric: 'impressions', label: 'Total impressions' },
+  { metric: 'ctr', label: 'Average CTR' },
+  { metric: 'position', label: 'Average position' },
+];
+
+type SortColumn = 'clicks' | 'impressions' | 'ctr' | 'position' | 'key';
+
 function relativeTime(iso: string | null | undefined): string {
   if (!iso) return 'Never synced';
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return 'Never synced';
   const hours = Math.max(0, Math.round((Date.now() - then) / 36e5));
-  if (hours < 1) return 'Last update: just now';
-  if (hours === 1) return 'Last update: 1 hour ago';
-  return `Last update: ${hours} hours ago`;
+  if (hours < 1) return 'Updated just now';
+  if (hours === 1) return 'Updated 1 hour ago';
+  if (hours < 48) return `Updated ${hours} hours ago`;
+  return `Updated ${Math.round(hours / 24)} days ago`;
+}
+
+function formatRange(range: { from: string; to: string } | undefined): string | null {
+  if (!range) return null;
+  const from = new Date(`${range.from}T00:00:00.000Z`);
+  const to = new Date(`${range.to}T00:00:00.000Z`);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return null;
+  const base = { month: 'short', day: 'numeric', timeZone: 'UTC' } as const;
+  const sameYear = from.getUTCFullYear() === to.getUTCFullYear();
+  const left = from.toLocaleDateString('en-US', sameYear ? base : { ...base, year: 'numeric' });
+  const right = to.toLocaleDateString('en-US', { ...base, year: 'numeric' });
+  const days = Math.round((to.getTime() - from.getTime()) / 864e5) + 1;
+  if (days === 1) return right;
+  return `${left} – ${right} · ${days} days`;
+}
+
+function formatTotal(metric: ChartMetric, totals: SeoMetrics): string {
+  if (metric === 'ctr') return formatCtr(totals.ctr);
+  if (metric === 'position') return formatPosition(totals.position);
+  return formatCompactNumber(totals[metric]);
+}
+
+function prettyPath(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.pathname}${parsed.search}` || '/';
+  } catch {
+    return url;
+  }
 }
 
 export function SeoPerformance() {
@@ -91,15 +132,16 @@ export function SeoPerformance() {
     ctr: false,
     position: false,
   });
-  const [filterDimension, setFilterDimension] = useState<'query' | 'page' | 'country' | 'device' | ''>('');
+  const [filterInput, setFilterInput] = useState('');
   const [filterValue, setFilterValue] = useState('');
-  const [sort, setSort] = useState<'clicks' | 'impressions' | 'ctr' | 'position' | 'key'>('clicks');
+  const [sort, setSort] = useState<SortColumn>('clicks');
   const [dir, setDir] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
   const [summary, setSummary] = useState<SeoSummaryResponse | null>(null);
   const [rows, setRows] = useState<SeoRowsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
 
@@ -114,6 +156,11 @@ export function SeoPerformance() {
     }
     return params;
   }, [customFrom, customTo, period, property, searchType]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setFilterValue(filterInput.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [filterInput]);
 
   useEffect(() => {
     if (!rangeReady) return;
@@ -145,9 +192,9 @@ export function SeoPerformance() {
     params.set('dir', tab === 'date' && sort === 'clicks' ? 'desc' : dir);
     params.set('limit', String(pageSize));
     params.set('offset', String(page * pageSize));
-    if (filterDimension && filterValue.trim()) {
-      params.set('filterDimension', filterDimension);
-      params.set('filter', filterValue.trim());
+    if (tab !== 'date' && filterValue) {
+      params.set('filterDimension', tab);
+      params.set('filter', filterValue);
     }
     let cancelled = false;
     void requestJson<SeoRowsResponse>(`/api/seo/rows?${params.toString()}`)
@@ -160,7 +207,7 @@ export function SeoPerformance() {
     return () => {
       cancelled = true;
     };
-  }, [dir, filterDimension, filterValue, page, pageSize, query, rangeReady, sort, tab]);
+  }, [dir, filterValue, page, pageSize, query, rangeReady, sort, tab]);
 
   useEffect(() => {
     setPage(0);
@@ -171,11 +218,12 @@ export function SeoPerformance() {
       setSort('clicks');
       setDir('desc');
     }
-  }, [tab, period, searchType, property, filterDimension, filterValue]);
+  }, [tab, period, searchType, property, filterValue]);
 
   async function syncNow() {
     setSyncing(true);
     setError(null);
+    setNotice(null);
     try {
       const queued = await requestJson<{ jobId?: string }>('/api/seo/sync', { method: 'POST' });
       const jobId = queued.jobId;
@@ -191,18 +239,19 @@ export function SeoPerformance() {
         setSummary(summaryData);
         if (!property && summaryData.property) setProperty(summaryData.property.site_url);
         if (status.progress?.daysStored) {
-          setError(`Pulling history… ${status.progress.daysStored} days stored${status.progress.newestDate ? ` through ${status.progress.newestDate}` : ''}`);
+          setNotice(`Pulling history… ${status.progress.daysStored} days stored${status.progress.newestDate ? ` through ${status.progress.newestDate}` : ''}`);
         }
         if (status.job?.status === 'failed') {
           throw new Error(status.job.last_error_message || status.sync?.error || 'Search Console sync failed');
         }
         if (status.job?.status === 'done' || (!jobId && status.sync?.status === 'succeeded')) {
-          setError(null);
+          setNotice(null);
           return;
         }
       }
       throw new Error('Sync is still running on the worker. Refresh in a minute.');
     } catch (err) {
+      setNotice(null);
       setError(err instanceof Error ? err.message : 'Unable to sync Search Console');
     } finally {
       setSyncing(false);
@@ -212,19 +261,18 @@ export function SeoPerformance() {
   function toggleMetric(metric: ChartMetric) {
     setEnabled((current) => {
       const next = { ...current, [metric]: !current[metric] };
-      if (!next.clicks && !next.impressions && !next.ctr && !next.position) {
-        return current;
-      }
+      if (!CHART_METRICS.some((key) => next[key])) return current;
       return next;
     });
   }
 
-  function toggleSort(column: 'clicks' | 'impressions' | 'ctr' | 'position' | 'key') {
+  function toggleSort(column: SortColumn) {
     if (sort === column) setDir((current) => (current === 'asc' ? 'desc' : 'asc'));
     else {
       setSort(column);
       setDir(column === 'key' ? 'asc' : 'desc');
     }
+    setPage(0);
   }
 
   function exportCsv() {
@@ -248,12 +296,33 @@ export function SeoPerformance() {
     URL.revokeObjectURL(url);
   }
 
+  function sortHeader(column: SortColumn, label: string) {
+    const active = sort === column;
+    return (
+      <button
+        type="button"
+        className={`seo-sort${active ? ' seo-sort--active' : ''}`}
+        aria-label={`Sort by ${label}`}
+        onClick={() => toggleSort(column)}
+      >
+        {label}
+        <ArrowUp
+          size={11}
+          aria-hidden="true"
+          className={`seo-sort__caret${active && dir === 'desc' ? ' seo-sort__caret--down' : ''}`}
+        />
+      </button>
+    );
+  }
+
   if (loading && !summary) {
     return <HubLoadingSpinner label="Loading SEO Performance" />;
   }
 
   const totals = summary?.totals ?? { clicks: 0, impressions: 0, ctr: 0, position: 0 };
   const pageCount = Math.max(1, Math.ceil((rows?.total ?? 0) / pageSize));
+  const rangeLabel = formatRange(summary?.range);
+  const visibleRows = rows?.rows ?? [];
 
   return (
     <main className="app-shell">
@@ -277,13 +346,16 @@ export function SeoPerformance() {
             </div>
           </div>
           <div className="seo-hub__meta">
-            <span className="seo-hub__sync">{relativeTime(summary?.lastSyncedAt ?? summary?.sync?.finished_at)}</span>
-            <button type="button" className="btn btn--quiet" onClick={() => void syncNow()} disabled={syncing}>
-              <RefreshCw size={14} />
-              {syncing ? 'Syncing…' : 'Sync now'}
+            <span className="seo-hub__sync">
+              <i className={`seo-hub__sync-dot${syncing ? ' seo-hub__sync-dot--live' : ''}`} aria-hidden="true" />
+              {syncing ? 'Syncing…' : relativeTime(summary?.lastSyncedAt ?? summary?.sync?.finished_at)}
+            </span>
+            <button type="button" className="seo-hub__action" onClick={() => void syncNow()} disabled={syncing}>
+              <RefreshCw size={13} className={syncing ? 'seo-hub__action-spin' : undefined} />
+              Sync now
             </button>
-            <button type="button" className="btn btn--quiet" onClick={exportCsv} disabled={!rows?.rows.length}>
-              <Download size={14} />
+            <button type="button" className="seo-hub__action" onClick={exportCsv} disabled={!visibleRows.length}>
+              <Download size={13} />
               Export
             </button>
           </div>
@@ -291,6 +363,7 @@ export function SeoPerformance() {
 
         <div className="card__body seo-hub">
           {error && <p className="field__error">{error}</p>}
+          {notice && <p className="field__notice">{notice}</p>}
           {summary?.sync?.status === 'failed' && summary.sync.error && (
             <p className="field__error">Last sync failed: {summary.sync.error}</p>
           )}
@@ -321,7 +394,7 @@ export function SeoPerformance() {
             {period === 'custom' && (
               <div className="seo-hub__field">
                 <span>Custom bounds</span>
-                <div className="analytics-hub__dates">
+                <div className="seo-hub__dates">
                   <input className="helios-field-input" type="date" value={customFrom} onChange={(event) => setCustomFrom(event.target.value)} />
                   <span>to</span>
                   <input className="helios-field-input" type="date" value={customTo} onChange={(event) => setCustomTo(event.target.value)} />
@@ -336,139 +409,101 @@ export function SeoPerformance() {
               onChange={(next) => setSearchType(next as SeoSearchType)}
             />
 
-            <div className="seo-hub__filter">
-              <HeliosMenu
-                label="Filter"
-                value={filterDimension}
-                options={FILTER_OPTIONS}
-                onChange={(next) => setFilterDimension(next as typeof filterDimension)}
-              />
-              <label className="seo-hub__field seo-hub__field--grow">
-                <span>Contains</span>
-                <input
-                  className="helios-field-input"
-                  type="text"
-                  placeholder="Contains…"
-                  value={filterValue}
-                  disabled={!filterDimension}
-                  onChange={(event) => setFilterValue(event.target.value)}
-                />
-              </label>
-            </div>
+            {rangeLabel && <span className="seo-hub__range">{rangeLabel}</span>}
           </div>
 
           <div className="seo-hub__kpis">
-            <button
-              type="button"
-              className={`stat-tile${enabled.clicks ? ' stat-tile--active' : ' stat-tile--off'}`}
-              aria-pressed={enabled.clicks}
-              onClick={() => toggleMetric('clicks')}
-            >
-              <span className="stat-tile__label">Total clicks</span>
-              <span className="stat-tile__value">{formatCompactNumber(totals.clicks)}</span>
-            </button>
-            <button
-              type="button"
-              className={`stat-tile stat-tile--warning${enabled.impressions ? ' stat-tile--active' : ' stat-tile--off'}`}
-              aria-pressed={enabled.impressions}
-              onClick={() => toggleMetric('impressions')}
-            >
-              <span className="stat-tile__label">Total impressions</span>
-              <span className="stat-tile__value">{formatCompactNumber(totals.impressions)}</span>
-            </button>
-            <button
-              type="button"
-              className={`stat-tile stat-tile--positive${enabled.ctr ? ' stat-tile--active' : ' stat-tile--off'}`}
-              aria-pressed={enabled.ctr}
-              onClick={() => toggleMetric('ctr')}
-            >
-              <span className="stat-tile__label">Average CTR</span>
-              <span className="stat-tile__value">{formatCtr(totals.ctr)}</span>
-            </button>
-            <button
-              type="button"
-              className={`stat-tile${enabled.position ? ' stat-tile--active' : ' stat-tile--off'}`}
-              aria-pressed={enabled.position}
-              onClick={() => toggleMetric('position')}
-            >
-              <span className="stat-tile__label">Average position</span>
-              <span className="stat-tile__value">{formatPosition(totals.position)}</span>
-            </button>
-          </div>
-
-          <SeoChart series={summary?.series ?? []} enabled={enabled} />
-
-          <div className="seo-tabs" role="tablist">
-            {TABS.map(([value, label]) => (
+            {METRIC_TILES.map(({ metric, label }) => (
               <button
-                key={value}
+                key={metric}
                 type="button"
-                role="tab"
-                aria-selected={tab === value}
-                className={tab === value ? 'is-active' : undefined}
-                onClick={() => setTab(value)}
+                className={`stat-tile seo-metric-tile seo-metric-tile--${metric}${enabled[metric] ? '' : ' seo-metric-tile--off'}`}
+                aria-pressed={enabled[metric]}
+                onClick={() => toggleMetric(metric)}
               >
-                {label}
+                <span className="seo-metric-tile__head">
+                  <i className="seo-metric-tile__dot" aria-hidden="true" />
+                  <span className="stat-tile__label">{label}</span>
+                </span>
+                <span className="stat-tile__value">{formatTotal(metric, totals)}</span>
               </button>
             ))}
           </div>
 
-          <div className="table-wrap">
-            <table className="data-table">
+          <SeoChart series={summary?.series ?? []} enabled={enabled} />
+
+          <div className="seo-hub__breakdown">
+            <div className="seo-tabs" role="tablist">
+              {TABS.map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === value}
+                  className={tab === value ? 'is-active' : undefined}
+                  onClick={() => setTab(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className={`seo-search${filterInput ? ' seo-search--filled' : ''}`}>
+              <Search size={13} aria-hidden="true" />
+              <input
+                type="text"
+                aria-label={`Filter ${TAB_LABEL[tab].toLowerCase()}`}
+                placeholder={FILTER_PLACEHOLDER[tab]}
+                value={filterInput}
+                disabled={tab === 'date'}
+                onChange={(event) => setFilterInput(event.target.value)}
+              />
+              {filterInput && (
+                <button type="button" aria-label="Clear filter" onClick={() => setFilterInput('')}>
+                  <X size={13} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="seo-hub__table-wrap">
+            <table className="data-table seo-table">
               <thead>
                 <tr>
-                  <th>
-                    <button type="button" className="btn btn--quiet" onClick={() => toggleSort('key')}>
-                      {TAB_LABEL[tab]}
-                    </button>
-                  </th>
-                  <th className="data-table__num">
-                    <button type="button" className="btn btn--quiet" onClick={() => toggleSort('clicks')}>
-                      Clicks
-                    </button>
-                  </th>
-                  <th className="data-table__num">
-                    <button type="button" className="btn btn--quiet" onClick={() => toggleSort('impressions')}>
-                      Impressions
-                    </button>
-                  </th>
-                  {(enabled.ctr || enabled.position) && (
-                    <th className="data-table__num">
-                      <button type="button" className="btn btn--quiet" onClick={() => toggleSort('ctr')}>
-                        CTR
-                      </button>
-                    </th>
-                  )}
-                  {(enabled.ctr || enabled.position) && (
-                    <th className="data-table__num">
-                      <button type="button" className="btn btn--quiet" onClick={() => toggleSort('position')}>
-                        Position
-                      </button>
-                    </th>
-                  )}
+                  <th>{sortHeader('key', TAB_LABEL[tab])}</th>
+                  <th className="data-table__num">{sortHeader('clicks', 'Clicks')}</th>
+                  <th className="data-table__num">{sortHeader('impressions', 'Impressions')}</th>
+                  <th className="data-table__num">{sortHeader('ctr', 'CTR')}</th>
+                  <th className="data-table__num">{sortHeader('position', 'Position')}</th>
                 </tr>
               </thead>
               <tbody>
-                {(rows?.rows ?? []).map((row) => (
+                {visibleRows.map((row) => (
                   <tr key={row.key} className="data-table__row">
-                    <td>{row.label}</td>
+                    <td>
+                      {tab === 'page' ? (
+                        <a className="seo-table__link" href={row.key} target="_blank" rel="noreferrer" title={row.key}>
+                          {prettyPath(row.key)}
+                          <ExternalLink size={11} aria-hidden="true" />
+                        </a>
+                      ) : (
+                        row.label
+                      )}
+                    </td>
                     <td className="data-table__num">{Math.round(row.clicks)}</td>
                     <td className="data-table__num">{Math.round(row.impressions)}</td>
-                    {(enabled.ctr || enabled.position) && (
-                      <td className="data-table__num">{formatCtr(row.ctr)}</td>
-                    )}
-                    {(enabled.ctr || enabled.position) && (
-                      <td className="data-table__num">{formatPosition(row.position)}</td>
-                    )}
+                    <td className="data-table__num">{formatCtr(row.ctr)}</td>
+                    <td className="data-table__num">{formatPosition(row.position)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {!rows?.rows.length && (
+            {!visibleRows.length && (
               <p className="seo-empty">
-                {tab === 'search_appearance'
-                  ? 'No search appearance types in this range.'
-                  : 'No rows for this breakdown yet.'}
+                {filterValue
+                  ? `No ${TAB_LABEL[tab].toLowerCase()} match “${filterValue}”.`
+                  : tab === 'search_appearance'
+                    ? 'No search appearance types in this range.'
+                    : 'No rows for this breakdown yet.'}
               </p>
             )}
           </div>
@@ -480,14 +515,16 @@ export function SeoPerformance() {
               options={PAGE_SIZE_OPTIONS}
               onChange={(next) => { setPageSize(Number(next)); setPage(0); }}
             />
-            <span>
-              {rows?.total ? `${page * pageSize + 1}–${Math.min((page + 1) * pageSize, rows.total)} of ${rows.total}` : '0'}
+            <span className="seo-pager__count">
+              {rows?.total
+                ? `${page * pageSize + 1}–${Math.min((page + 1) * pageSize, rows.total)} of ${rows.total}`
+                : 'No rows'}
             </span>
-            <button type="button" className="btn btn--quiet" disabled={page <= 0} onClick={() => setPage((current) => current - 1)}>
-              Prev
+            <button type="button" className="seo-pager__step" aria-label="Previous page" disabled={page <= 0} onClick={() => setPage((current) => current - 1)}>
+              <ChevronLeft size={14} aria-hidden="true" />
             </button>
-            <button type="button" className="btn btn--quiet" disabled={page + 1 >= pageCount} onClick={() => setPage((current) => current + 1)}>
-              Next
+            <button type="button" className="seo-pager__step" aria-label="Next page" disabled={page + 1 >= pageCount} onClick={() => setPage((current) => current + 1)}>
+              <ChevronRight size={14} aria-hidden="true" />
             </button>
           </div>
         </div>

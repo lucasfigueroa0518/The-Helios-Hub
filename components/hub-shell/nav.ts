@@ -5,7 +5,7 @@ export type HubSubItem = {
 };
 
 export type HubNavItem = {
-  id: 'home' | 'outreach' | 'events' | 'dashboards' | 'trello' | 'seo';
+  id: 'home' | 'outreach' | 'events' | 'dashboards' | 'trello' | 'website';
   href: string;
   label: string;
   match: (path: string) => boolean;
@@ -36,32 +36,6 @@ export const HUB_NAV: HubNavItem[] = [
     href: '/trello',
     label: 'Trello',
     match: (path) => path.startsWith('/trello'),
-    children: [
-      {
-        href: '/trello',
-        label: 'My boards',
-        match: (path, search) => {
-          if (!path.startsWith('/trello')) return false;
-          const params = new URLSearchParams(search);
-          return !params.get('view') && !params.get('board');
-        },
-      },
-      {
-        href: '/trello?view=week',
-        label: 'Due this week',
-        match: (path, search) => path.startsWith('/trello') && new URLSearchParams(search).get('view') === 'week',
-      },
-      {
-        href: '/trello?view=activity',
-        label: 'Activity',
-        match: (path, search) => path.startsWith('/trello') && new URLSearchParams(search).get('view') === 'activity',
-      },
-      {
-        href: '/trello?view=archive',
-        label: 'Archived',
-        match: (path, search) => path.startsWith('/trello') && new URLSearchParams(search).get('view') === 'archive',
-      },
-    ],
   },
   {
     id: 'events',
@@ -70,9 +44,21 @@ export const HUB_NAV: HubNavItem[] = [
     match: (path) => path.startsWith('/events'),
   },
   {
-    id: 'seo',
+    id: 'website',
     href: '/seo',
-    label: 'SEO Performance',
-    match: (path) => path.startsWith('/seo'),
+    label: 'Website Hub',
+    match: (path) => path.startsWith('/seo') || path.startsWith('/traffic'),
+    children: [
+      {
+        href: '/seo',
+        label: 'SEO Performance',
+        match: (path) => path.startsWith('/seo'),
+      },
+      {
+        href: '/traffic',
+        label: 'Traffic',
+        match: (path) => path.startsWith('/traffic'),
+      },
+    ],
   },
 ];

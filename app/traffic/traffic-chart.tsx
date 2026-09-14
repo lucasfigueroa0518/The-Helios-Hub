@@ -7,31 +7,24 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from 'react';
 
-import { formatCompactNumber, formatCtr, formatPosition } from '@/lib/seo/format';
-import type { SeoDailyPoint } from '@/lib/seo/types';
+import { formatCompactNumber } from '@/lib/traffic/format';
+import type { TrafficDailyPoint } from '@/lib/traffic/types';
 
-export const CHART_METRICS = ['clicks', 'impressions', 'ctr', 'position'] as const;
+export const CHART_METRICS = ['visitors', 'pageviews'] as const;
 export type ChartMetric = (typeof CHART_METRICS)[number];
 
 type MetricMeta = {
   label: string;
-  /** Volume metrics get an area wash; rate metrics stay as bare lines. */
-  area: boolean;
-  /** Position 1 is the best result, so that axis runs best-at-top. */
-  invert: boolean;
   format: (value: number) => string;
 };
 
 const METRICS: Record<ChartMetric, MetricMeta> = {
-  clicks: { label: 'Clicks', area: true, invert: false, format: formatCompactNumber },
-  impressions: { label: 'Impressions', area: true, invert: false, format: formatCompactNumber },
-  ctr: { label: 'Avg. CTR', area: false, invert: false, format: formatCtr },
-  position: { label: 'Avg. position', area: false, invert: true, format: formatPosition },
+  visitors: { label: 'Visitors', format: formatCompactNumber },
+  pageviews: { label: 'Page views', format: formatCompactNumber },
 };
 
 const GRID_FRACTIONS = [0, 0.25, 0.5, 0.75, 1];
 
-/** Eased falloff — a plain two-stop wash bands visibly across this much height. */
 const AREA_STOPS: Array<[string, number]> = [
   ['0%', 0.2],
   ['22%', 0.115],
@@ -40,7 +33,7 @@ const AREA_STOPS: Array<[string, number]> = [
   ['100%', 0],
 ];
 
-type Domain = { lo: number; hi: number; invert: boolean };
+type Domain = { lo: number; hi: number };
 
 function niceCeil(value: number): number {
   if (!Number.isFinite(value) || value <= 0) return 1;
@@ -50,40 +43,24 @@ function niceCeil(value: number): number {
   return step * base;
 }
 
-function domainFor(metric: ChartMetric, values: number[]): Domain {
-  if (metric === 'position') {
-    const ranked = values.filter((value) => value > 0);
-    const best = ranked.length ? Math.min(...ranked) : 1;
-    const worst = ranked.length ? Math.max(...ranked) : 10;
-    const lo = Math.max(0, Math.floor(best) - 1);
-    return { lo, hi: Math.max(lo + 4, Math.ceil(worst) + 1), invert: true };
-  }
-  if (metric === 'ctr') {
-    return { lo: 0, hi: niceCeil(Math.max(...values, 0.005) * 1.1), invert: false };
-  }
-  return { lo: 0, hi: niceCeil(Math.max(...values, 1)), invert: false };
+function domainFor(values: number[]): Domain {
+  return { lo: 0, hi: niceCeil(Math.max(...values, 1)) };
 }
 
 function valueAt(domain: Domain, fraction: number): number {
-  const span = domain.hi - domain.lo;
-  return domain.invert ? domain.hi - fraction * span : domain.lo + fraction * span;
+  return domain.lo + fraction * (domain.hi - domain.lo);
 }
 
 function yFor(value: number, domain: Domain, top: number, innerH: number): number {
   const span = domain.hi - domain.lo;
   const fraction = span <= 0 ? 0.5 : Math.min(1, Math.max(0, (value - domain.lo) / span));
-  return domain.invert ? top + fraction * innerH : top + innerH - fraction * innerH;
+  return top + innerH - fraction * innerH;
 }
 
 function round(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
-/**
- * Monotone cubic (Fritsch–Carlson) interpolation. Straight polylines read as
- * wireframe, but a naive spline overshoots between points and would invent
- * clicks on days that had none — these tangents cannot overshoot the samples.
- */
 function curvePath(xs: number[], ys: number[]): string {
   const count = xs.length;
   if (count === 0) return '';
@@ -140,11 +117,11 @@ function longDate(iso: string): string {
     : iso;
 }
 
-export function SeoChart({
+export function TrafficChart({
   series,
   enabled,
 }: {
-  series: SeoDailyPoint[];
+  series: TrafficDailyPoint[];
   enabled: Record<ChartMetric, boolean>;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -152,7 +129,6 @@ export function SeoChart({
   const [hover, setHover] = useState<number | null>(null);
   const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
 
-  // Measured before paint so the SVG is never briefly wider than its column.
   useLayoutEffect(() => {
     const element = containerRef.current;
     if (!element) return;
@@ -181,7 +157,7 @@ export function SeoChart({
 
     for (const metric of CHART_METRICS) {
       const values = series.map((point) => Number(point[metric] ?? 0));
-      const domain = domainFor(metric, values);
+      const domain = domainFor(values);
       const ys = values.map((value) => yFor(value, domain, pad.top, innerH));
       const line = curvePath(xs, ys);
       const area = ys.length > 1
@@ -201,7 +177,7 @@ export function SeoChart({
 
   const { pad, innerW, innerH, baseY, xs, domains, shapes, tickIndexes } = geometry;
   const activeMetrics = CHART_METRICS.filter((metric) => enabled[metric]);
-  const leftMetric = activeMetrics[0] ?? 'clicks';
+  const leftMetric = activeMetrics[0] ?? 'visitors';
   const rightMetric = activeMetrics[1] ?? null;
   const hovered = hover === null ? null : series[hover] ?? null;
   const lastIndex = series.length - 1;
@@ -229,23 +205,21 @@ export function SeoChart({
 
   const tooltipX = hover === null ? 0 : Math.min(Math.max(xs[hover], 96), Math.max(96, width - 96));
 
-  // The container always renders so the width observer stays attached across
-  // empty ranges.
   if (series.length === 0) {
     return (
-      <div className="seo-chart" ref={containerRef}>
-        <p className="seo-chart__empty">No daily totals in this range yet.</p>
+      <div className="traffic-chart" ref={containerRef}>
+        <p className="traffic-chart__empty">No daily traffic in this range yet.</p>
       </div>
     );
   }
 
   return (
-    <div className="seo-chart" ref={containerRef}>
+    <div className="traffic-chart" ref={containerRef}>
       <div
-        className="seo-chart__plot"
+        className="traffic-chart__plot"
         tabIndex={0}
         role="group"
-        aria-label="Search performance over time. Use the left and right arrow keys to step through days."
+        aria-label="Site traffic over time. Use the left and right arrow keys to step through days."
         onKeyDown={onKeyDown}
         onBlur={() => setHover(null)}
       >
@@ -258,8 +232,6 @@ export function SeoChart({
           onMouseMove={onPointerMove}
           onMouseLeave={() => setHover(null)}
         >
-          {/* userSpaceOnUse: a flat series has a zero-height bounding box, which
-              collapses objectBoundingBox gradients to nothing. */}
           <defs>
             {CHART_METRICS.map((metric) => (
               <linearGradient
@@ -271,11 +243,11 @@ export function SeoChart({
                 x2={width - pad.right}
                 y2={0}
               >
-                <stop offset="0%" className={`seo-chart__stroke-stop--${metric}-soft`} />
-                <stop offset="100%" className={`seo-chart__stroke-stop--${metric}`} />
+                <stop offset="0%" className={`traffic-chart__stroke-stop--${metric}-soft`} />
+                <stop offset="100%" className={`traffic-chart__stroke-stop--${metric}`} />
               </linearGradient>
             ))}
-            {CHART_METRICS.filter((metric) => METRICS[metric].area).map((metric) => (
+            {CHART_METRICS.map((metric) => (
               <linearGradient
                 key={`area-${metric}`}
                 id={`${uid}-area-${metric}`}
@@ -290,7 +262,7 @@ export function SeoChart({
                     key={offset}
                     offset={offset}
                     stopOpacity={opacity}
-                    className={`seo-chart__area-stop--${metric}`}
+                    className={`traffic-chart__area-stop--${metric}`}
                   />
                 ))}
               </linearGradient>
@@ -303,9 +275,9 @@ export function SeoChart({
               x2={0}
               y2={baseY}
             >
-              <stop offset="0%" className="seo-chart__crosshair-stop" stopOpacity="0" />
-              <stop offset="22%" className="seo-chart__crosshair-stop" stopOpacity="1" />
-              <stop offset="100%" className="seo-chart__crosshair-stop" stopOpacity="1" />
+              <stop offset="0%" className="traffic-chart__crosshair-stop" stopOpacity="0" />
+              <stop offset="22%" className="traffic-chart__crosshair-stop" stopOpacity="1" />
+              <stop offset="100%" className="traffic-chart__crosshair-stop" stopOpacity="1" />
             </linearGradient>
           </defs>
 
@@ -318,12 +290,12 @@ export function SeoChart({
                   x2={width - pad.right}
                   y1={y}
                   y2={y}
-                  className={fraction === 0 ? 'seo-chart__axis' : 'seo-chart__grid'}
+                  className={fraction === 0 ? 'traffic-chart__axis' : 'traffic-chart__grid'}
                 />
                 <text
                   x={pad.left - 10}
                   y={y + 3}
-                  className={`seo-chart__tick seo-chart__tick--${leftMetric} seo-chart__tick--right`}
+                  className={`traffic-chart__tick traffic-chart__tick--${leftMetric} traffic-chart__tick--right`}
                 >
                   {METRICS[leftMetric].format(valueAt(domains[leftMetric], fraction))}
                 </text>
@@ -331,7 +303,7 @@ export function SeoChart({
                   <text
                     x={width - pad.right + 10}
                     y={y + 3}
-                    className={`seo-chart__tick seo-chart__tick--${rightMetric}`}
+                    className={`traffic-chart__tick traffic-chart__tick--${rightMetric}`}
                   >
                     {METRICS[rightMetric].format(valueAt(domains[rightMetric], fraction))}
                   </text>
@@ -345,7 +317,7 @@ export function SeoChart({
               key={series[index].date}
               x={xs[index]}
               y={height - 8}
-              className={`seo-chart__tick${order === 0 ? ' seo-chart__tick--left' : ''}${order === tickIndexes.length - 1 ? ' seo-chart__tick--right' : ''}${hover === index ? ' seo-chart__tick--current' : ''}`}
+              className={`traffic-chart__tick${order === 0 ? ' traffic-chart__tick--left' : ''}${order === tickIndexes.length - 1 ? ' traffic-chart__tick--right' : ''}${hover === index ? ' traffic-chart__tick--current' : ''}`}
             >
               {shortDate(series[index].date)}
             </text>
@@ -358,7 +330,7 @@ export function SeoChart({
               y1={pad.top}
               y2={baseY}
               stroke={`url(#${uid}-crosshair)`}
-              className="seo-chart__crosshair"
+              className="traffic-chart__crosshair"
             />
           )}
 
@@ -366,17 +338,14 @@ export function SeoChart({
             const shape = shapes[metric];
             const endX = round(xs[lastIndex]);
             const endY = round(shape.ys[lastIndex]);
-            // Drawn as a zero-length round-capped stroke rather than a circle so
-            // `non-scaling-stroke` keeps it a true circle while the group
-            // collapses on toggle.
             const endDot = `M ${endX} ${endY} L ${endX} ${endY}`;
             return (
               <g
                 key={metric}
-                className={`seo-chart__series${enabled[metric] ? '' : ' seo-chart__series--off'}`}
+                className={`traffic-chart__series${enabled[metric] ? '' : ' traffic-chart__series--off'}`}
                 style={{ transformOrigin: `0px ${baseY}px` }}
               >
-                {METRICS[metric].area && shape.area && (
+                {shape.area && (
                   <path d={shape.area} fill={`url(#${uid}-area-${metric})`} stroke="none" />
                 )}
                 <path
@@ -384,22 +353,22 @@ export function SeoChart({
                   fill="none"
                   stroke={`url(#${uid}-stroke-${metric})`}
                   vectorEffect="non-scaling-stroke"
-                  className="seo-chart__line"
+                  className="traffic-chart__line"
                 />
-                <path d={endDot} vectorEffect="non-scaling-stroke" className="seo-chart__end-halo" />
+                <path d={endDot} vectorEffect="non-scaling-stroke" className="traffic-chart__end-halo" />
                 <path
                   d={endDot}
                   vectorEffect="non-scaling-stroke"
-                  className={`seo-chart__end-dot seo-chart__end-dot--${metric}`}
+                  className={`traffic-chart__end-dot traffic-chart__end-dot--${metric}`}
                 />
               </g>
             );
           })}
 
           {hovered && activeMetrics.map((metric) => (
-            <g key={metric} className={`seo-chart__marker seo-chart__marker--${metric}`}>
-              <circle cx={xs[hover as number]} cy={shapes[metric].ys[hover as number]} r="8" className="seo-chart__marker-halo" />
-              <circle cx={xs[hover as number]} cy={shapes[metric].ys[hover as number]} r="3.5" className="seo-chart__marker-core" />
+            <g key={metric} className={`traffic-chart__marker traffic-chart__marker--${metric}`}>
+              <circle cx={xs[hover as number]} cy={shapes[metric].ys[hover as number]} r="8" className="traffic-chart__marker-halo" />
+              <circle cx={xs[hover as number]} cy={shapes[metric].ys[hover as number]} r="3.5" className="traffic-chart__marker-core" />
             </g>
           ))}
 
@@ -408,16 +377,16 @@ export function SeoChart({
             y={0}
             width={width}
             height={height}
-            className="seo-chart__hit"
+            className="traffic-chart__hit"
           />
         </svg>
 
         {hovered && (
-          <div className="seo-chart__tooltip" style={{ left: `${tooltipX}px` }} role="status">
-            <div className="seo-chart__tooltip-date">{longDate(hovered.date)}</div>
-            <dl className="seo-chart__tooltip-rows">
+          <div className="traffic-chart__tooltip" style={{ left: `${tooltipX}px` }} role="status">
+            <div className="traffic-chart__tooltip-date">{longDate(hovered.date)}</div>
+            <dl className="traffic-chart__tooltip-rows">
               {activeMetrics.map((metric) => (
-                <div key={metric} className={`seo-chart__tooltip-row seo-chart__tooltip-row--${metric}`}>
+                <div key={metric} className={`traffic-chart__tooltip-row traffic-chart__tooltip-row--${metric}`}>
                   <dt>
                     <i aria-hidden="true" />
                     {METRICS[metric].label}
