@@ -110,9 +110,9 @@ export async function runGscDailySync(options: { backfillDays?: number } = {}): 
         propertiesSynced += 1;
         continue;
       }
-      if (!newestDate || latest > newestDate) {
-        newestDate = latest;
-      }
+      // Assign in a statement, not a self-referencing ternary: the latter makes
+      // TS resolve `newestDate` circularly and narrow it to `never`.
+      if (!newestDate || latest > newestDate) newestDate = latest;
       const have = await existingTotalDates(property.id, SEARCH_TYPE);
       const windowStart = addUtcDays(latest, -(backfillDays - 1));
       const wanted = eachIsoDate(windowStart, latest);

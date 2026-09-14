@@ -34,12 +34,9 @@ export async function GET(request: NextRequest) {
     const dir = searchParams.get('dir') === 'asc' ? 'asc' : 'desc';
     const limit = Math.min(100, Math.max(1, Number(searchParams.get('limit') ?? 25) || 25));
     const offset = Math.max(0, Number(searchParams.get('offset') ?? 0) || 0);
+    // A filter only makes sense against the dimension being listed.
     const filterDimension = searchParams.get('filterDimension');
-    const filter = filterDimension && (filterDimension === dimension || (dimension === 'date' && filterDimension === 'date'))
-      ? searchParams.get('filter')
-      : dimension !== 'date' && filterDimension === dimension
-        ? searchParams.get('filter')
-        : (filterDimension == null || filterDimension === dimension ? searchParams.get('filter') : null);
+    const filter = !filterDimension || filterDimension === dimension ? searchParams.get('filter') : null;
 
     const result = await listDimensionRows({
       propertyId: property.id,
