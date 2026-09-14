@@ -131,6 +131,19 @@ function metroLabel(metro: MetroFilter): string {
   return 'Both cities';
 }
 
+function BucketDots({ bucket }: { bucket: Bucket }) {
+  return (
+    <span className="networking-bucket-dots" aria-hidden="true">
+      {bucket === 'tech' || bucket === 'both' ? (
+        <span className="networking-bucket-dot networking-bucket-dot--tech" />
+      ) : null}
+      {bucket === 'vertical' || bucket === 'both' ? (
+        <span className="networking-bucket-dot networking-bucket-dot--vertical" />
+      ) : null}
+    </span>
+  );
+}
+
 export function NetworkingCalendar() {
   const [metro, setMetro] = useState<MetroFilter>('all');
   const [bucket, setBucket] = useState<'' | Bucket>('');
@@ -470,10 +483,14 @@ export function NetworkingCalendar() {
                         <span className="networking-calendar__date">{format(day, 'd')}</span>
                         <span className="networking-calendar__dots" aria-hidden="true">
                           {dayEvents.slice(0, 3).map((item) => (
-                            <span
-                              key={item.id}
-                              className={`networking-calendar__dot networking-calendar__dot--${item.bucket}`}
-                            />
+                            <span key={item.id} className="networking-calendar__dot-cluster">
+                              {(item.bucket === 'tech' || item.bucket === 'both') && (
+                                <span className="networking-calendar__dot networking-calendar__dot--tech" />
+                              )}
+                              {(item.bucket === 'vertical' || item.bucket === 'both') && (
+                                <span className="networking-calendar__dot networking-calendar__dot--vertical" />
+                              )}
+                            </span>
                           ))}
                           {dayEvents.length > 3 ? <span className="networking-calendar__dot-more" /> : null}
                         </span>
@@ -485,6 +502,7 @@ export function NetworkingCalendar() {
                           className={`networking-calendar__event networking-event--${item.bucket}`}
                           onClick={() => setSelected(item)}
                         >
+                          <BucketDots bucket={item.bucket} />
                           {item.title}
                         </button>
                       ))}
@@ -779,6 +797,7 @@ function EventAgendaList({
               className={`networking-agenda-row networking-event--${item.bucket}`}
               onClick={() => onOpen(item)}
             >
+              <BucketDots bucket={item.bucket} />
               <time className="networking-agenda-row__time" dateTime={item.startAt}>
                 {showDate ? <span className="networking-agenda-row__day">{format(start, 'MMM d')}</span> : null}
                 {format(start, 'p')}

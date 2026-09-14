@@ -7,17 +7,22 @@ import { HeliosMenu } from '@/app/components/helios-menu';
 import { HubLoadingSpinner } from '@/app/hub/hub-loading';
 import { requestJson } from '@/lib/client-request';
 import {
+  addUtcDays,
+  earliestTrafficFrom,
   formatCompactNumber,
   formatDeltaPercent,
   formatPagesPerVisitor,
+  inclusiveDayCount,
+  isoDate,
 } from '@/lib/traffic/format';
-import type {
-  TrafficDimension,
-  TrafficDimensionRow,
-  TrafficEnvironment,
-  TrafficFilter,
-  TrafficPeriod,
-  TrafficSummaryResponse,
+import {
+  TRAFFIC_MAX_RANGE_DAYS,
+  type TrafficDimension,
+  type TrafficDimensionRow,
+  type TrafficEnvironment,
+  type TrafficFilter,
+  type TrafficPeriod,
+  type TrafficSummaryResponse,
 } from '@/lib/traffic/types';
 
 import { CHART_METRICS, TrafficChart, type ChartMetric } from './traffic-chart';
@@ -26,7 +31,7 @@ const PERIODS: Array<[TrafficPeriod, string]> = [
   ['24h', '24 hours'],
   ['7d', '7 days'],
   ['28d', '28 days'],
-  ['3m', '3 months'],
+  ['62d', '62 days'],
   ['custom', 'More'],
 ];
 
@@ -168,6 +173,45 @@ export function TrafficPerformance() {
   const [loading, setLoading] = useState(true);
 
   const rangeReady = period !== 'custom' || (Boolean(customFrom) && Boolean(customTo));
+  const today = isoDate(new Date());
+  const customToBound = customTo || today;
+  const customFromMin = earliestTrafficFrom(customToBound);
+  const customFromMax = customToBound < today ? customToBound : today;
+  const customToMin = customFrom || undefined;
+  const latestAllowedTo = customFrom ? addUtcDays(customFrom, TRAFFIC_MAX_RANGE_DAYS - 1) : today;
+  const customToMax = latestAllowedTo < today ? latestAllowedTo : today;
+
+  const setClampedCustomFrom = (next: string) => {
+    if (!next) {
+      setCustomFrom('');
+      return;
+    }
+    if (customTo && next > customTo) {
+      setCustomFrom(customTo);
+      return;
+    }
+    if (customTo && inclusiveDayCount(next, customTo) > TRAFFIC_MAX_RANGE_DAYS) {
+      setCustomFrom(earliestTrafficFrom(customTo));
+      return;
+    }
+    setCustomFrom(next);
+  };
+
+  const setClampedCustomTo = (next: string) => {
+    if (!next) {
+      setCustomTo('');
+      return;
+    }
+    const to = next > today ? today : next;
+    setCustomTo(to);
+    if (customFrom && customFrom > to) {
+      setCustomFrom(to);
+      return;
+    }
+    if (customFrom && inclusiveDayCount(customFrom, to) > TRAFFIC_MAX_RANGE_DAYS) {
+      setCustomFrom(earliestTrafficFrom(to));
+    }
+  };
 
   const query = useMemo(() => {
     const params = new URLSearchParams({ period, environment });
@@ -280,9 +324,23 @@ export function TrafficPerformance() {
               <div className="traffic-hub__field">
                 <span>Custom bounds</span>
                 <div className="traffic-hub__dates">
-                  <input className="helios-field-input" type="date" value={customFrom} onChange={(event) => setCustomFrom(event.target.value)} />
+                  <input
+                    className="helios-field-input"
+                    type="date"
+                    min={customFromMin}
+                    max={customFromMax}
+                    value={customFrom}
+                    onChange={(event) => setClampedCustomFrom(event.target.value)}
+                  />
                   <span>to</span>
-                  <input className="helios-field-input" type="date" value={customTo} onChange={(event) => setCustomTo(event.target.value)} />
+                  <input
+                    className="helios-field-input"
+                    type="date"
+                    min={customToMin}
+                    max={customToMax}
+                    value={customTo}
+                    onChange={(event) => setClampedCustomTo(event.target.value)}
+                  />
                 </div>
               </div>
             )}

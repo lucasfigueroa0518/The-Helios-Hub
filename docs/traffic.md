@@ -48,14 +48,18 @@ same length.
 
 - **Bounce rate** is dashboard-only. Traffic shows **Pages / visitor** instead.
 - **Hostnames** cannot be grouped or filtered on the public API.
+- **Daily queries are capped at 62 days** by Vercel (`by=day`). Traffic
+  presets and custom ranges never exceed that. Period-over-period deltas
+  still issue a second query of the same length immediately before.
 - Aggregate queries only cover the plan reporting window (12 months on Pro,
-  24 months with Web Analytics Plus).
+  24 months with Web Analytics Plus), but a single daily query cannot span
+  more than 62 days.
 
 ## Route
 
 Session-gated `GET /api/traffic/summary` fans out the Vercel calls in
 parallel and caches the payload for 60 seconds.
 
-Query params: `period` (`24h`|`7d`|`28d`|`3m`|`custom`), `from`/`to`,
+Query params: `period` (`24h`|`7d`|`28d`|`62d`|`custom`), `from`/`to`,
 `environment` (`production` default), `filters` (JSON array of
 `{ dimension, value }` for click-to-filter).

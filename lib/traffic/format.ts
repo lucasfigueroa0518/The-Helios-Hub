@@ -1,6 +1,7 @@
 import {
   TRAFFIC_DIMENSIONS,
   TRAFFIC_ENVIRONMENTS,
+  TRAFFIC_MAX_RANGE_DAYS,
   TRAFFIC_PERIODS,
   type TrafficDimension,
   type TrafficEnvironment,
@@ -13,6 +14,7 @@ export function isTrafficPeriod(value: string | null | undefined): value is Traf
 }
 
 export function parsePeriod(value: string | null | undefined): TrafficPeriod {
+  if (value === '3m') return '62d';
   return isTrafficPeriod(value) ? value : '7d';
 }
 
@@ -44,6 +46,16 @@ export function inclusiveDayCount(from: string, to: string): number {
   return Math.round((end - start) / 864e5) + 1;
 }
 
+export function earliestTrafficFrom(to: string): string {
+  return addUtcDays(to, -(TRAFFIC_MAX_RANGE_DAYS - 1));
+}
+
+export function clampTrafficRange(range: { from: string; to: string }): { from: string; to: string } {
+  if (range.from > range.to) throw new Error('from must be on or before to');
+  if (inclusiveDayCount(range.from, range.to) <= TRAFFIC_MAX_RANGE_DAYS) return range;
+  return { from: earliestTrafficFrom(range.to), to: range.to };
+}
+
 export function resolveTrafficRange(input: {
   period: TrafficPeriod;
   from?: string | null;
@@ -57,14 +69,13 @@ export function resolveTrafficRange(input: {
   if (input.period === 'custom') {
     const from = input.from && /^\d{4}-\d{2}-\d{2}$/.test(input.from) ? input.from : addUtcDays(latest, -6);
     const to = input.to && /^\d{4}-\d{2}-\d{2}$/.test(input.to) ? input.to : latest;
-    if (from > to) throw new Error('from must be on or before to');
-    return { from, to };
+    return clampTrafficRange({ from, to });
   }
 
   if (input.period === '24h') return { from: latest, to: latest };
   if (input.period === '7d') return { from: addUtcDays(latest, -6), to: latest };
   if (input.period === '28d') return { from: addUtcDays(latest, -27), to: latest };
-  return { from: addUtcDays(latest, -89), to: latest };
+  return { from: earliestTrafficFrom(latest), to: latest };
 }
 
 export function previousRange(range: { from: string; to: string }): { from: string; to: string } {

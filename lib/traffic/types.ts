@@ -1,4 +1,6 @@
-export const TRAFFIC_PERIODS = ['24h', '7d', '28d', '3m', 'custom'] as const;
+export const TRAFFIC_PERIODS = ['24h', '7d', '28d', '62d', 'custom'] as const;
+/** Daily-granularity Vercel Web Analytics queries cannot span more than this. */
+export const TRAFFIC_MAX_RANGE_DAYS = 62;
 export type TrafficPeriod = (typeof TRAFFIC_PERIODS)[number];
 
 export const TRAFFIC_ENVIRONMENTS = ['production', 'preview', 'all'] as const;

@@ -29,14 +29,25 @@ test('resolveTrafficRange uses today as the window end', () => {
     { from: '2026-09-08', to: '2026-09-14' },
   );
   assert.deepEqual(
-    resolveTrafficRange({ period: '3m', latestAvailable: '2026-09-14' }),
-    { from: addUtcDays('2026-09-14', -89), to: '2026-09-14' },
+    resolveTrafficRange({ period: '62d', latestAvailable: '2026-09-14' }),
+    { from: addUtcDays('2026-09-14', -61), to: '2026-09-14' },
+  );
+  assert.deepEqual(
+    resolveTrafficRange({
+      period: 'custom',
+      from: '2026-01-01',
+      to: '2026-09-14',
+      latestAvailable: '2026-09-14',
+    }),
+    { from: addUtcDays('2026-09-14', -61), to: '2026-09-14' },
   );
 });
 
 test('parse helpers default to 7 days and production', () => {
   assert.equal(parsePeriod(null), '7d');
   assert.equal(parsePeriod('28d'), '28d');
+  assert.equal(parsePeriod('62d'), '62d');
+  assert.equal(parsePeriod('3m'), '62d');
   assert.equal(parseEnvironment(null), 'production');
   assert.equal(parseEnvironment('preview'), 'preview');
 });
