@@ -20,12 +20,29 @@ export class VercelTrafficError extends Error {
   }
 }
 
-export function getVercelTrafficConfig(): VercelTrafficConfig | null {
-  const token = process.env.VERCEL_TOKEN?.trim() || '';
-  const projectId = process.env.VERCEL_PROJECT_ID?.trim() || '';
-  const teamId = process.env.VERCEL_ORG_ID?.trim() || null;
+/**
+ * Vercel injects `VERCEL_PROJECT_ID` / `VERCEL_ORG_ID` for *this* Hub project.
+ * Traffic must query `heliosmarketingwebsite`, so those reserved names are
+ * never used on the Vercel platform. Dedicated `VERCEL_ANALYTICS_*` keys win.
+ */
+export function resolveVercelTrafficConfig(
+  env: Record<string, string | undefined> = process.env,
+): VercelTrafficConfig | null {
+  const onVercel = env.VERCEL === '1' || env.VERCEL_ENV === 'production' || env.VERCEL_ENV === 'preview';
+  const token = env.VERCEL_ANALYTICS_TOKEN?.trim() || env.VERCEL_TOKEN?.trim() || '';
+  const projectId = env.VERCEL_ANALYTICS_PROJECT_ID?.trim()
+    || (!onVercel ? env.VERCEL_PROJECT_ID?.trim() : '')
+    || '';
+  const teamId = env.VERCEL_ANALYTICS_TEAM_ID?.trim()
+    || env.VERCEL_ANALYTICS_ORG_ID?.trim()
+    || (!onVercel ? env.VERCEL_ORG_ID?.trim() : '')
+    || null;
   if (!token || !projectId) return null;
-  return { token, teamId, projectId };
+  return { token, teamId: teamId || null, projectId };
+}
+
+export function getVercelTrafficConfig(): VercelTrafficConfig | null {
+  return resolveVercelTrafficConfig(process.env);
 }
 
 type AggregateRow = Record<string, unknown> & {

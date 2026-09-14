@@ -10,17 +10,25 @@ team-scoped access token can query the marketing project by `projectId`.
 ## Credentials
 
 Create a token at [vercel.com/account/tokens](https://vercel.com/account/tokens)
-on the Helios team that owns `heliosmarketingwebsite`. Then set, on **Hub**
+on the Helios team that owns `heliosmarketingwebsite`. Then set these on **Hub**
 Vercel Production and in `.env.local` (not on the GCP worker):
 
 ```
-VERCEL_TOKEN=
-VERCEL_ORG_ID=          # Helios team id (team_…)
-VERCEL_PROJECT_ID=      # heliosmarketingwebsite project id (prj_…)
+VERCEL_ANALYTICS_TOKEN=
+VERCEL_ANALYTICS_TEAM_ID=       # Helios team id (team_…)
+VERCEL_ANALYTICS_PROJECT_ID=    # heliosmarketingwebsite project id (prj_…)
 ```
 
-`VERCEL_ORG_ID` is the team id, not a personal account id. Find both ids in
-the Vercel project Settings → General.
+Do **not** use `VERCEL_PROJECT_ID` or `VERCEL_ORG_ID` for this. Vercel
+reserves those names for the Hub deployment itself, so production would
+query `the-helios-hub` analytics instead of the marketing site.
+
+Local `.env.local` may still fall back to `VERCEL_TOKEN` / `VERCEL_ORG_ID` /
+`VERCEL_PROJECT_ID` because those system vars are not injected by `next
+dev`. On Vercel, only the `VERCEL_ANALYTICS_*` keys are read.
+
+Find the marketing-site ids in that project's Settings → General (not the
+Hub project's).
 
 ## What the API can return
 

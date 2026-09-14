@@ -253,8 +253,9 @@ export function TrafficPerformance() {
           {error && <p className="field__error">{error}</p>}
           {summary && !summary.configured && (
             <p className="traffic-empty">
-              Add a Vercel team token in VERCEL_TOKEN, VERCEL_ORG_ID, and VERCEL_PROJECT_ID to load
-              marketing-site traffic.
+              Add VERCEL_ANALYTICS_TOKEN, VERCEL_ANALYTICS_TEAM_ID, and
+              VERCEL_ANALYTICS_PROJECT_ID for heliosmarketingwebsite. Do not reuse
+              Vercel’s reserved VERCEL_PROJECT_ID / VERCEL_ORG_ID — those are this Hub.
             </p>
           )}
 

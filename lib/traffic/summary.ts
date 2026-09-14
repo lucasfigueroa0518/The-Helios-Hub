@@ -188,7 +188,7 @@ export async function loadTrafficSummary(input: {
     return emptyTrafficSummary({
       ...input,
       configured: false,
-      error: 'Vercel Analytics is not configured. Add VERCEL_TOKEN, VERCEL_ORG_ID, and VERCEL_PROJECT_ID.',
+      error: 'Vercel Analytics is not configured. Add VERCEL_ANALYTICS_TOKEN, VERCEL_ANALYTICS_TEAM_ID, and VERCEL_ANALYTICS_PROJECT_ID (the marketing site, not this Hub project).',
     });
   }
 
@@ -205,7 +205,7 @@ export async function loadTrafficSummary(input: {
       return emptyTrafficSummary({
         ...input,
         configured: true,
-        error: 'Vercel rejected the analytics token. Check VERCEL_TOKEN, team, and project access.',
+        error: 'Vercel rejected the analytics token. Check VERCEL_ANALYTICS_TOKEN and that the team/project ids are heliosmarketingwebsite, not the Hub.',
       });
     }
     throw error;
