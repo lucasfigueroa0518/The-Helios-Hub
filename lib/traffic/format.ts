@@ -147,7 +147,7 @@ export function parseFiltersParam(value: string | null | undefined): TrafficFilt
       if (!item || typeof item !== 'object') continue;
       const dimension = (item as { dimension?: unknown }).dimension;
       const key = (item as { value?: unknown }).value;
-      if (!isTrafficDimension(typeof dimension === 'string' ? dimension : null)) continue;
+      if (typeof dimension !== 'string' || !isTrafficDimension(dimension)) continue;
       if (typeof key !== 'string' || !key.trim() || key === 'Others') continue;
       filters.push({ dimension, value: key.trim() });
     }
