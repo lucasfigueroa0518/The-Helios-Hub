@@ -1,0 +1,370 @@
+{
+  "generated_at": "2026-09-16T19:32:36.539Z",
+  "base": "https://server.smartlead.ai/api/v1",
+  "probes": [
+    {
+      "name": "email-accounts",
+      "endpoint": "https://server.smartlead.ai/api/v1/email-accounts/?offset=0&limit=100",
+      "question": "§8.1 paging, from_email, cap, warmup sub-object, status; §8.11 OAuth provider fields",
+      "status": 200,
+      "ok": true,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-ratelimit-limit": "200",
+        "x-ratelimit-remaining": "199",
+        "x-ratelimit-reset": "1789587212"
+      },
+      "top_level_keys": [
+        "id",
+        "created_at",
+        "expires_at",
+        "updated_at",
+        "user_id",
+        "from_name",
+        "from_email",
+        "minTimeToWaitInMins",
+        "username",
+        "password",
+        "smtp_host",
+        "smtp_port",
+        "smtp_port_type",
+        "message_per_day",
+        "different_reply_to_address",
+        "is_different_imap_account",
+        "imap_username",
+        "imap_password",
+        "imap_host",
+        "imap_port",
+        "imap_port_type",
+        "signature",
+        "custom_tracking_domain",
+        "bcc_email",
+        "is_smtp_success",
+        "is_imap_success",
+        "smtp_failure_error",
+        "imap_failure_error",
+        "type",
+        "daily_sent_count",
+        "client_id",
+        "campaign_count",
+        "is_connected_to_campaign",
+        "tags",
+        "warmup_details"
+      ]
+    },
+    {
+      "name": "email-account-detail",
+      "endpoint": "https://server.smartlead.ai/api/v1/email-accounts/23398188/",
+      "question": "§8.1 single-account field shape",
+      "status": 200,
+      "ok": true,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-ratelimit-limit": "200",
+        "x-ratelimit-remaining": "198",
+        "x-ratelimit-reset": "1789587212"
+      },
+      "top_level_keys": [
+        "id",
+        "created_at",
+        "updated_at",
+        "user_id",
+        "from_name",
+        "from_email",
+        "username",
+        "password",
+        "smtp_host",
+        "smtp_port",
+        "smtp_port_type",
+        "message_per_day",
+        "different_reply_to_address",
+        "is_different_imap_account",
+        "imap_username",
+        "is_suspended",
+        "imap_password",
+        "imap_host",
+        "imap_port",
+        "imap_port_type",
+        "signature",
+        "custom_tracking_domain",
+        "bcc_email",
+        "is_smtp_success",
+        "is_imap_success",
+        "smtp_failure_error",
+        "imap_failure_error",
+        "type",
+        "daily_sent_count",
+        "client_id",
+        "use_whitelabel_credentials",
+        "warmup_details"
+      ]
+    },
+    {
+      "name": "warmup-stats",
+      "endpoint": "https://server.smartlead.ai/api/v1/email-accounts/23398188/warmup-stats",
+      "question": "§8.1 warmup sent/inbox/spam shape for inbox_health_daily",
+      "status": 200,
+      "ok": true,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-ratelimit-limit": "200",
+        "x-ratelimit-remaining": "197",
+        "x-ratelimit-reset": "1789587212"
+      },
+      "top_level_keys": [
+        "id",
+        "sent_count",
+        "spam_count",
+        "warmup_email_received_count",
+        "inbox_count",
+        "stats_by_date"
+      ]
+    },
+    {
+      "name": "campaigns",
+      "endpoint": "https://server.smartlead.ai/api/v1/campaigns/",
+      "question": "§8.6 campaign list shape, status values",
+      "status": 200,
+      "ok": true,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-ratelimit-limit": "200",
+        "x-ratelimit-remaining": "196",
+        "x-ratelimit-reset": "1789587212"
+      },
+      "top_level_keys": [
+        "id",
+        "user_id",
+        "created_at",
+        "updated_at",
+        "status",
+        "name",
+        "track_settings",
+        "scheduler_cron_value",
+        "min_time_btwn_emails",
+        "max_leads_per_day",
+        "stop_lead_settings",
+        "schedule_start_time",
+        "enable_ai_esp_matching",
+        "send_as_plain_text",
+        "follow_up_percentage",
+        "unsubscribe_text",
+        "parent_campaign_id",
+        "client_id",
+        "campaign_activity_logs"
+      ]
+    },
+    {
+      "name": "campaign-detail",
+      "endpoint": "https://server.smartlead.ai/api/v1/campaigns/3948549",
+      "question": "§8.6 settings/schedule keys: tracking, stop-on-reply, max_new_leads_per_day",
+      "status": 200,
+      "ok": true,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-ratelimit-limit": "200",
+        "x-ratelimit-remaining": "195",
+        "x-ratelimit-reset": "1789587212"
+      },
+      "top_level_keys": [
+        "id",
+        "user_id",
+        "created_at",
+        "updated_at",
+        "status",
+        "name",
+        "track_settings",
+        "scheduler_cron_value",
+        "min_time_btwn_emails",
+        "max_leads_per_day",
+        "stop_lead_settings",
+        "schedule_start_time",
+        "enable_ai_esp_matching",
+        "send_as_plain_text",
+        "follow_up_percentage",
+        "unsubscribe_text",
+        "parent_campaign_id",
+        "client_id"
+      ]
+    },
+    {
+      "name": "campaign-sequences",
+      "endpoint": "https://server.smartlead.ai/api/v1/campaigns/3948549/sequences",
+      "question": "§8.2 custom-variable rendering; sequence step shape",
+      "status": 200,
+      "ok": true,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-ratelimit-limit": "200",
+        "x-ratelimit-remaining": "194",
+        "x-ratelimit-reset": "1789587212"
+      },
+      "top_level_keys": []
+    },
+    {
+      "name": "campaign-statistics",
+      "endpoint": "https://server.smartlead.ai/api/v1/campaigns/3948549/statistics?offset=0&limit=20",
+      "question": "§8.3 per-send rows for the statistics backfill (sequence_number, email_account_id)",
+      "status": 200,
+      "ok": true,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-ratelimit-limit": "200",
+        "x-ratelimit-remaining": "193",
+        "x-ratelimit-reset": "1789587212"
+      },
+      "top_level_keys": [
+        "total_stats",
+        "data",
+        "offset",
+        "limit"
+      ]
+    },
+    {
+      "name": "campaign-analytics-by-date",
+      "endpoint": "https://server.smartlead.ai/api/v1/campaigns/3948549/analytics-by-date?start_date=2026-08-17&end_date=2026-09-16",
+      "question": "§8.1 daily aggregates",
+      "status": 200,
+      "ok": true,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-ratelimit-limit": "200",
+        "x-ratelimit-remaining": "192",
+        "x-ratelimit-reset": "1789587212"
+      },
+      "top_level_keys": [
+        "id",
+        "user_id",
+        "created_at",
+        "status",
+        "name",
+        "start_date",
+        "end_date",
+        "sent_count",
+        "unique_sent_count",
+        "open_count",
+        "unique_open_count",
+        "click_count",
+        "unique_click_count",
+        "reply_count",
+        "block_count",
+        "total_count",
+        "drafted_count",
+        "bounce_count",
+        "unsubscribed_count",
+        "total_reply_count",
+        "non_ooo_reply_count"
+      ]
+    },
+    {
+      "name": "campaign-email-accounts",
+      "endpoint": "https://server.smartlead.ai/api/v1/campaigns/3948549/email-accounts",
+      "question": "§5E step 5 attach/detach shape",
+      "status": 200,
+      "ok": true,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-ratelimit-limit": "200",
+        "x-ratelimit-remaining": "191",
+        "x-ratelimit-reset": "1789587212"
+      },
+      "top_level_keys": []
+    },
+    {
+      "name": "campaign-leads",
+      "endpoint": "https://server.smartlead.ai/api/v1/campaigns/3948549/leads?offset=0&limit=5",
+      "question": "§8.1 per-lead ids; §8.2 custom field echo",
+      "status": 200,
+      "ok": true,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-ratelimit-limit": "200",
+        "x-ratelimit-remaining": "190",
+        "x-ratelimit-reset": "1789587212"
+      },
+      "top_level_keys": [
+        "total_leads",
+        "data",
+        "offset",
+        "limit"
+      ]
+    },
+    {
+      "name": "campaign-webhooks",
+      "endpoint": "https://server.smartlead.ai/api/v1/campaigns/3948549/webhooks",
+      "question": "§8.3 webhook registration shape and auth mode",
+      "status": 200,
+      "ok": true,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-ratelimit-limit": "200",
+        "x-ratelimit-remaining": "189",
+        "x-ratelimit-reset": "1789587212"
+      },
+      "top_level_keys": []
+    },
+    {
+      "name": "webhooks-user-level",
+      "endpoint": "https://server.smartlead.ai/api/v1/webhooks",
+      "question": "§8.3 user-level webhook registration vs per-campaign",
+      "status": 404,
+      "ok": false,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "x-ratelimit-limit": "200",
+        "x-ratelimit-remaining": "188",
+        "x-ratelimit-reset": "1789587212"
+      },
+      "top_level_keys": [
+        "_unparseable"
+      ]
+    },
+    {
+      "name": "lead-by-email",
+      "endpoint": "https://server.smartlead.ai/api/v1/leads/?email=discovery-probe%40example.invalid",
+      "question": "§8.1 lead-by-email lookup for smartlead_lead_id resolution",
+      "status": 200,
+      "ok": true,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-ratelimit-limit": "200",
+        "x-ratelimit-remaining": "187",
+        "x-ratelimit-reset": "1789587212"
+      },
+      "top_level_keys": []
+    },
+    {
+      "name": "lead-by-email-alt",
+      "endpoint": "https://server.smartlead.ai/api/v1/leads/by-email?email=discovery-probe%40example.invalid",
+      "question": "§8.1 alternate lead-by-email path documented in llms.txt",
+      "status": 400,
+      "ok": false,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-ratelimit-limit": "200",
+        "x-ratelimit-remaining": "186",
+        "x-ratelimit-reset": "1789587212"
+      },
+      "top_level_keys": [
+        "statusCode",
+        "error",
+        "message",
+        "validation"
+      ]
+    },
+    {
+      "name": "client-list",
+      "endpoint": "https://server.smartlead.ai/api/v1/client/",
+      "question": "§8.4 plan/whitelabel context",
+      "status": 200,
+      "ok": true,
+      "headers": {
+        "content-type": "application/json; charset=utf-8",
+        "x-ratelimit-limit": "200",
+        "x-ratelimit-remaining": "185",
+        "x-ratelimit-reset": "1789587212"
+      },
+      "top_level_keys": []
+    }
+  ]
+}

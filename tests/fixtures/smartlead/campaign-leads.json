@@ -1,0 +1,20 @@
+{
+  "name": "campaign-leads",
+  "endpoint": "https://server.smartlead.ai/api/v1/campaigns/3948549/leads?offset=0&limit=5",
+  "question": "§8.1 per-lead ids; §8.2 custom field echo",
+  "status": 200,
+  "ok": true,
+  "headers": {
+    "content-type": "application/json; charset=utf-8",
+    "x-ratelimit-limit": "200",
+    "x-ratelimit-remaining": "190",
+    "x-ratelimit-reset": "1789587212"
+  },
+  "durationMs": 254,
+  "body": {
+    "total_leads": "0",
+    "data": [],
+    "offset": 0,
+    "limit": 5
+  }
+}

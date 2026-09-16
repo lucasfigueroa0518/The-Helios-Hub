@@ -1,0 +1,15 @@
+{
+  "name": "campaign-webhooks",
+  "endpoint": "https://server.smartlead.ai/api/v1/campaigns/3948549/webhooks",
+  "question": "§8.3 webhook registration shape and auth mode",
+  "status": 200,
+  "ok": true,
+  "headers": {
+    "content-type": "application/json; charset=utf-8",
+    "x-ratelimit-limit": "200",
+    "x-ratelimit-remaining": "189",
+    "x-ratelimit-reset": "1789587212"
+  },
+  "durationMs": 396,
+  "body": []
+}

@@ -1,0 +1,17 @@
+{
+  "name": "webhooks-user-level",
+  "endpoint": "https://server.smartlead.ai/api/v1/webhooks",
+  "question": "§8.3 user-level webhook registration vs per-campaign",
+  "status": 404,
+  "ok": false,
+  "headers": {
+    "content-type": "text/html; charset=utf-8",
+    "x-ratelimit-limit": "200",
+    "x-ratelimit-remaining": "188",
+    "x-ratelimit-reset": "1789587212"
+  },
+  "durationMs": 320,
+  "body": {
+    "_unparseable": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>Error</title>\n</head>\n<body>\n<pre>Cannot GET /api/v1/webhooks</pre>\n</body>\n</html>\n"
+  }
+}

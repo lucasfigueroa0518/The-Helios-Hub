@@ -1,0 +1,15 @@
+{
+  "name": "campaign-email-accounts",
+  "endpoint": "https://server.smartlead.ai/api/v1/campaigns/3948549/email-accounts",
+  "question": "§5E step 5 attach/detach shape",
+  "status": 200,
+  "ok": true,
+  "headers": {
+    "content-type": "application/json; charset=utf-8",
+    "x-ratelimit-limit": "200",
+    "x-ratelimit-remaining": "191",
+    "x-ratelimit-reset": "1789587212"
+  },
+  "durationMs": 612,
+  "body": []
+}
