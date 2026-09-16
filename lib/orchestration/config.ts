@@ -32,7 +32,6 @@ export const KIND_CONFIG: Record<WorkKind, KindConfig> = {
   // separate lane so long Sonnet research cannot head-of-line-block the queue.
   'drafting.job.process': { lane: 'drafting', defaultMaxAttempts: 3, priority: 20 },
   'drafting.job.write': { lane: 'drafting_write', defaultMaxAttempts: 3, priority: 40 },
-  'email.send': { lane: 'email_send', defaultMaxAttempts: 3, priority: 25 },
   'reply.respond': { lane: 'email_send', defaultMaxAttempts: 3, priority: 35 },
   'reply.followup': { lane: 'email_send', defaultMaxAttempts: 3, priority: 30 },
   'dashboards.daily_update': { lane: 'dashboards', defaultMaxAttempts: 2, priority: -5 },

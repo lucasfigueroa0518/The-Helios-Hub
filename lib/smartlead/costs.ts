@@ -16,7 +16,11 @@ import { cycleStartFor } from '@/lib/smartlead/reconcile';
 
 export type DeliveryPricing = {
   smartleadPerMonthUsd: number;
+  /** Smartlead Pro bills on the 16th. */
+  smartleadBillingDay: number;
   m365SeatPerMonthUsd: number;
+  /** Microsoft 365 seats bill on the 15th — a day earlier than Smartlead. */
+  m365BillingDay: number;
   verifierPerCheckUsd: number;
 };
 
@@ -25,13 +29,25 @@ export type DeliveryPricing = {
 export const LEGACY_AGENTMAIL_USD_PER_SEND = 0.004;
 
 export async function loadDeliveryPricing(): Promise<DeliveryPricing> {
-  const settings = await getOrgSettings(['smartlead.pricing', 'm365.pricing', 'verifier.pricing']);
+  const settings = await getOrgSettings([
+    'smartlead.pricing',
+    'smartlead.billing_day',
+    'm365.pricing',
+    'verifier.pricing',
+  ]);
   const smartlead = settings.get('smartlead.pricing') as { subscription_usd_per_month?: number } | undefined;
-  const m365 = settings.get('m365.pricing') as { seat_usd_per_month?: number } | undefined;
+  const m365 = settings.get('m365.pricing') as
+    | { seat_usd_per_month?: number; billing_day?: number }
+    | undefined;
   const verifier = settings.get('verifier.pricing') as { usd_per_check?: number } | undefined;
+  const smartleadBillingDay = Number(settings.get('smartlead.billing_day') ?? 1);
+
   return {
     smartleadPerMonthUsd: Number(smartlead?.subscription_usd_per_month ?? 0),
+    smartleadBillingDay,
     m365SeatPerMonthUsd: Number(m365?.seat_usd_per_month ?? 0),
+    // Absent an M365 billing day, follow Smartlead's rather than inventing one.
+    m365BillingDay: Number(m365?.billing_day ?? smartleadBillingDay),
     verifierPerCheckUsd: Number(verifier?.usd_per_check ?? 0),
   };
 }
@@ -45,24 +61,28 @@ export function cycleTag(day: string, billingDay: number): string {
  * Writes this cycle's fixed fees if they are not already there. Idempotent via
  * the `(phase, source_kind, source_id, lead_id)` unique index, so calling it on
  * every reconcile tick costs one conflicting insert and nothing else.
+ *
+ * Each vendor is tagged with its **own** billing cycle. The two anchors are a
+ * day apart, so on the 15th of a month the seats have rolled into the new cycle
+ * while the Smartlead fee is still in the old one — which is exactly what the
+ * invoices say.
  */
 export async function recordCycleFixedCosts(day: string): Promise<number> {
-  const settings = await getOrgSettings(['smartlead.billing_day']);
-  const billingDay = Number(settings.get('smartlead.billing_day') ?? 1);
-  const cycle = cycleTag(day, billingDay);
   const pricing = await loadDeliveryPricing();
   let written = 0;
 
   if (pricing.smartleadPerMonthUsd > 0) {
+    const cycle = cycleTag(day, pricing.smartleadBillingDay);
     written += await insertSubscriptionRow({
       sourceKind: 'smartlead_subscription',
       sourceId: cycle,
       amountUsd: pricing.smartleadPerMonthUsd,
-      usage: { cycle, kind: 'smartlead_plan' },
+      usage: { cycle, kind: 'smartlead_plan', billing_day: pricing.smartleadBillingDay },
     });
   }
 
   if (pricing.m365SeatPerMonthUsd > 0) {
+    const cycle = cycleTag(day, pricing.m365BillingDay);
     const { rows } = await dbQuery<{ id: string; email: string }>(
       `SELECT id::text, email FROM outreach.sender_inboxes WHERE lifecycle_stage <> 'retired'`,
     );
@@ -71,7 +91,12 @@ export async function recordCycleFixedCosts(day: string): Promise<number> {
         sourceKind: 'm365_seat',
         sourceId: `${inbox.id}:${cycle}`,
         amountUsd: pricing.m365SeatPerMonthUsd,
-        usage: { cycle, kind: 'm365_seat', mailbox: inbox.email },
+        usage: {
+          cycle,
+          kind: 'm365_seat',
+          mailbox: inbox.email,
+          billing_day: pricing.m365BillingDay,
+        },
       });
     }
   }
@@ -137,8 +162,9 @@ export async function loadCycleAmortization(
   from: string,
   to: string,
 ): Promise<Map<string, CycleAmortization>> {
-  const settings = await getOrgSettings(['smartlead.billing_day']);
-  const billingDay = Number(settings.get('smartlead.billing_day') ?? 1);
+  // Sends are the denominator, so the reporting cycle follows the send
+  // platform's anchor. Seat rows tagged to the same month join that cycle.
+  const billingDay = (await loadDeliveryPricing()).smartleadBillingDay;
 
   const { rows: fixedRows } = await dbQuery<{ cycle: string; total: string }>(
     `SELECT CASE

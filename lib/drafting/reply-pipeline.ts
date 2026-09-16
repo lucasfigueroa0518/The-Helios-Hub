@@ -4,11 +4,6 @@
 
 import { dbQuery } from '@/lib/db';
 import { enqueueWork } from '@/lib/orchestration/repository';
-import {
-  AGENTMAIL_ACCOUNT_PAUSE_RETRY_MS,
-  isAgentMailAccountSendingPausedError,
-  nextAgentMailPauseRetryAt,
-} from '@/lib/drafting/agentmail-send-errors';
 import { extractFirstName, normalizeDraftBody } from '@/lib/drafting/normalize';
 import {
   deferUntilToScheduledFor,
@@ -21,7 +16,8 @@ import {
   countImmediateSentReplies,
   loadReplyThread,
 } from '@/lib/drafting/reply-thread';
-import { sendOutreachEmail } from '@/lib/drafting/send';
+import { SmartleadRateLimitError, SmartleadServerError } from '@/lib/smartlead/client';
+import { sendReplyViaSmartlead } from '@/lib/drafting/reply-transport';
 
 type ReplySendRow = {
   id: string;
@@ -62,6 +58,13 @@ async function claimReplySend(
   return rows[0] ?? null;
 }
 
+/** Milliseconds to wait before retrying, or null when the failure is permanent. */
+function smartleadRetryDelayMs(error: unknown): number | null {
+  if (error instanceof SmartleadRateLimitError) return Math.max(error.retryAfterMs, 15_000);
+  if (error instanceof SmartleadServerError) return 30_000;
+  return null;
+}
+
 async function markFailed(replySendId: string, message: string): Promise<void> {
   await dbQuery(
     `UPDATE outreach.reply_sends
@@ -73,12 +76,17 @@ async function markFailed(replySendId: string, message: string): Promise<void> {
   );
 }
 
-async function parkReplyForAgentMailPause(
+/**
+ * Smartlead rate limits and transient failures are retried by the orchestration
+ * lane, not parked here. The row goes back to its pre-claim state so the retry
+ * can claim it again.
+ */
+async function requeueForRetry(
   replySendId: string,
   message: string,
   resumeStatus: 'queued' | 'scheduled',
+  retryAt: Date,
 ): Promise<void> {
-  const retryAt = nextAgentMailPauseRetryAt();
   await dbQuery(
     `UPDATE outreach.reply_sends
         SET status = $2,
@@ -167,7 +175,7 @@ async function sendAndRecord(input: {
     headers.References = `<${rfc}>`;
   }
 
-  const sendResult = await sendOutreachEmail({
+  const sendResult = await sendReplyViaSmartlead({
     fromName: input.ctx.from_name || 'Helios',
     fromEmail: input.ctx.from_email,
     toEmail: input.ctx.to_email,
@@ -430,7 +438,9 @@ export async function processReplyRespond(replySendId: string): Promise<{
   followupId?: string;
   retryDelayMs?: number;
 }> {
-  const claimed = await claimReplySend(replySendId, ['queued']);
+  // 'awaiting_human' is the five-minute window. The claim is the atomic
+  // handover: a row a human cancelled first can never be claimed here.
+  const claimed = await claimReplySend(replySendId, ['awaiting_human', 'queued']);
   if (!claimed) {
     const { rows } = await dbQuery<{ status: string; scheduled_for: string }>(
       `SELECT status, scheduled_for::text FROM outreach.reply_sends WHERE id = $1`,
@@ -439,9 +449,13 @@ export async function processReplyRespond(replySendId: string): Promise<{
     const row = rows[0];
     if (!row) return { status: 'skipped', error: 'reply_send_missing' };
     if (row.status === 'sent') return { status: 'sent' };
-    if (row.status === 'queued' && new Date(row.scheduled_for).getTime() > Date.now()) {
+    if (
+      (row.status === 'awaiting_human' || row.status === 'queued')
+      && new Date(row.scheduled_for).getTime() > Date.now()
+    ) {
       return { status: 'not_ready' };
     }
+    if (row.status === 'cancelled') return { status: 'skipped', error: 'human_replied' };
     return { status: 'skipped', error: `status_${row.status}` };
   }
 
@@ -449,13 +463,15 @@ export async function processReplyRespond(replySendId: string): Promise<{
     return await processClaimedReply(claimed, 'immediate');
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (isAgentMailAccountSendingPausedError(message)) {
-      await parkReplyForAgentMailPause(claimed.id, message, 'queued');
-      return {
-        status: 'provider_paused',
-        error: message,
-        retryDelayMs: AGENTMAIL_ACCOUNT_PAUSE_RETRY_MS,
-      };
+    const retryAfterMs = smartleadRetryDelayMs(error);
+    if (retryAfterMs !== null) {
+      await requeueForRetry(
+        claimed.id,
+        message,
+        'queued',
+        new Date(Date.now() + retryAfterMs),
+      );
+      return { status: 'provider_paused', error: message, retryDelayMs: retryAfterMs };
     }
     await markFailed(claimed.id, message);
     return { status: 'failed', error: message };
@@ -530,13 +546,15 @@ export async function processReplyFollowup(replySendId: string): Promise<{
     return result;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (isAgentMailAccountSendingPausedError(message)) {
-      await parkReplyForAgentMailPause(claimed.id, message, 'scheduled');
-      return {
-        status: 'provider_paused',
-        error: message,
-        retryDelayMs: AGENTMAIL_ACCOUNT_PAUSE_RETRY_MS,
-      };
+    const retryAfterMs = smartleadRetryDelayMs(error);
+    if (retryAfterMs !== null) {
+      await requeueForRetry(
+        claimed.id,
+        message,
+        'scheduled',
+        new Date(Date.now() + retryAfterMs),
+      );
+      return { status: 'provider_paused', error: message, retryDelayMs: retryAfterMs };
     }
     await markFailed(claimed.id, message);
     return { status: 'failed', error: message };
@@ -575,7 +593,6 @@ export async function reconcilePausedReplySends(limit = 50): Promise<number> {
 
   let revived = 0;
   for (const row of rows) {
-    if (!isAgentMailAccountSendingPausedError(row.error_message ?? '')) continue;
     const kind = row.kind === 'followup' ? 'reply.followup' : 'reply.respond';
     const availableAt = new Date(row.scheduled_for);
     const jobId = await enqueueWork({

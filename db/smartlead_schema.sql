@@ -369,11 +369,14 @@ CREATE INDEX IF NOT EXISTS idx_inbox_health_daily_scope_source_day
 --
 -- Seeded only when absent, so re-running never clobbers a tuned value.
 
+-- Smartlead Pro bills on the 16th; the Microsoft 365 seats bill on the 15th.
+-- Each fee is recorded against its own cycle, so the one-day offset lands each
+-- vendor's charge in the cycle it actually belongs to.
 INSERT INTO outreach.org_settings (key, value) VALUES
-  ('smartlead.plan_limits', '{"emails_per_month": 150000, "active_leads": 30000}'::jsonb),
+  ('smartlead.plan_limits', '{"emails_per_month": 90000, "active_leads": 30000}'::jsonb),
   ('smartlead.billing_day', '16'::jsonb),
   ('smartlead.pricing', '{"subscription_usd_per_month": 94}'::jsonb),
-  ('m365.pricing', '{"seat_usd_per_month": 6}'::jsonb),
+  ('m365.pricing', '{"seat_usd_per_month": 4.8, "billing_day": 15}'::jsonb),
   ('verifier.pricing', '{"usd_per_check": 0}'::jsonb),
   ('smartlead.webhook', '{"mode": "path_token"}'::jsonb),
   ('smartlead.usage_cache', '{}'::jsonb),

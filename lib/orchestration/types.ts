@@ -19,7 +19,6 @@ export const WORK_KINDS = [
   'drafting.job.verify_mailbox',
   'drafting.job.process',
   'drafting.job.write',
-  'email.send',
   'reply.respond',
   'reply.followup',
   'dashboards.daily_update',
@@ -102,7 +101,6 @@ export type WorkPayloadMap = {
   'drafting.job.verify_mailbox': { jobId: string };
   'drafting.job.process': { jobId: string };
   'drafting.job.write': { jobId: string };
-  'email.send': { queueId: string };
   'reply.respond': { replySendId: string };
   'reply.followup': { replySendId: string };
   'dashboards.daily_update': { reason?: string };
