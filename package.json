@@ -20,6 +20,7 @@
     "db:seo": "node scripts/apply_seo_schema.js",
     "db:trello": "node scripts/apply_trello_schema.js",
     "db:trello:migrate-data": "node scripts/migrate_trello_data.js",
+    "db:helios-social": "node scripts/apply_helios_social_schema.js",
     "db:setup": "node scripts/db_setup.js",
     "db:gen-bootstrap": "node scripts/gen_bootstrap.js",
     "worker": "tsx scripts/orchestration_worker.ts",
