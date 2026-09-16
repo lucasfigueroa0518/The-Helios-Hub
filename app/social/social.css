@@ -1,0 +1,259 @@
+/* Helios Social — /social route styles.
+   Uses tokens defined in app/globals.css (--color-*, --font-*, --s-*).
+   Motion follows the brand library: opacity 0->1 + y 20->0 over 600ms
+   ease-out with idx*0.1s stagger on list items. */
+
+.social-shell {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 48px 24px 96px;
+}
+
+.social-hero {
+  margin-bottom: 64px;
+  animation: social-in 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.social-eyebrow {
+  font-family: var(--font-roboto);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--color-primary);
+  margin-bottom: 12px;
+}
+
+.social-title {
+  font-family: var(--font-pragmatica);
+  font-size: clamp(40px, 5vw, 60px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: var(--color-text);
+  margin: 0 0 16px;
+}
+
+.social-subtitle {
+  font-family: var(--font-roboto);
+  font-size: 18px;
+  font-weight: 300;
+  line-height: 1.6;
+  color: var(--color-text-muted);
+  max-width: 640px;
+  margin: 0;
+}
+
+.social-section-title {
+  font-family: var(--font-pragmatica);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+  margin: 0 0 24px;
+}
+
+/* ── Add form ─────────────────────────────────────────────────────────── */
+
+.social-add {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 64px;
+  animation: social-in 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 100ms;
+}
+
+.social-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.social-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.social-form label > span {
+  font-family: var(--font-roboto);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.social-form input,
+.social-form textarea {
+  font-family: var(--font-roboto);
+  font-size: 16px;
+  font-weight: 300;
+  color: var(--color-text);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.social-form input:focus,
+.social-form textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  background: var(--color-surface);
+}
+
+.social-form textarea {
+  min-height: 160px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.social-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
+  background: var(--color-primary);
+  color: #ffffff;
+  border: none;
+  border-radius: 9999px;
+  padding: 12px 24px;
+  font-family: var(--font-roboto);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 0 40px -10px var(--color-primary);
+  transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1), background 150ms ease;
+}
+
+.social-cta:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+  transform: translateY(-1px);
+}
+
+.social-cta:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.social-error {
+  color: var(--color-negative);
+  font-family: var(--font-roboto);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* ── Queue ────────────────────────────────────────────────────────────── */
+
+.social-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 96px 0;
+  color: var(--color-text-subtle);
+  text-align: center;
+  animation: social-in 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 200ms;
+}
+
+.social-empty p {
+  font-family: var(--font-roboto);
+  font-size: 16px;
+  font-weight: 300;
+  margin: 0;
+}
+
+.social-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 16px;
+}
+
+.social-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  padding: 24px;
+  animation: social-in 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 300ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.social-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.18);
+}
+
+.social-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.social-card-source {
+  font-family: var(--font-roboto);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--color-accent-2);
+}
+
+.social-card-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-subtle);
+  transition: color 150ms ease, transform 150ms ease;
+}
+
+.social-card-link:hover {
+  color: var(--color-primary);
+  transform: translate(1px, -1px);
+}
+
+.social-card-headline {
+  font-family: var(--font-pragmatica);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--color-text);
+  margin: 0 0 12px;
+}
+
+.social-card-body {
+  font-family: var(--font-roboto);
+  font-size: 15px;
+  font-weight: 300;
+  line-height: 1.6;
+  color: var(--color-text-muted);
+  margin: 0 0 16px;
+}
+
+.social-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-roboto);
+  font-size: 12px;
+  color: var(--color-text-subtle);
+}
+
+.social-card-time {
+  margin-left: auto;
+}
+
+@keyframes social-in {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

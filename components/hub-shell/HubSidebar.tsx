@@ -18,6 +18,7 @@ import {
   Menu,
   PanelLeft,
   PanelLeftClose,
+  Share2,
   X,
 } from 'lucide-react';
 
@@ -33,6 +34,7 @@ const ICONS: Record<HubNavItem['id'], typeof Home> = {
   dashboards: LayoutDashboard,
   trello: Kanban,
   website: Globe,
+  social: Share2,
 };
 
 export function HubSidebar({ email }: { email: string }) {
