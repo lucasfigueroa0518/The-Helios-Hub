@@ -21,6 +21,8 @@
     "db:trello": "node scripts/apply_trello_schema.js",
     "db:trello:migrate-data": "node scripts/migrate_trello_data.js",
     "db:helios-social": "node scripts/apply_helios_social_schema.js",
+    "db:helios-social:migrate": "node scripts/apply_helios_social_ingest_migration.js",
+    "helios-social:ingest": "tsx scripts/social_ingest.ts",
     "db:setup": "node scripts/db_setup.js",
     "db:gen-bootstrap": "node scripts/gen_bootstrap.js",
     "worker": "tsx scripts/orchestration_worker.ts",
@@ -69,6 +71,7 @@
     "react-colorful": "^5.8.0",
     "react-dom": "^19.0.0",
     "resend": "^6.18.1",
+    "rss-parser": "^3.13.0",
     "tailwind-merge": "^2.6.0",
     "tesseract.js": "^7.0.0"
   },

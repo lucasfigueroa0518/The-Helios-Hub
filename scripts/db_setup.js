@@ -47,6 +47,7 @@ const files = [
   'db/seo_schema.sql',
   'db/trello_schema.sql',
   'db/helios_social_schema.sql',
+  'db/helios_social_ingest_migration.sql',
 ];
 for (const file of files) {
   console.log(`\n── ${file} ──`);
