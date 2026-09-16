@@ -40,6 +40,15 @@ export const KIND_CONFIG: Record<WorkKind, KindConfig> = {
   'auto.cycle': { lane: 'auto_campaign', defaultMaxAttempts: 2, priority: 15 },
   'networking.weekly_ingest': { lane: 'maintenance', defaultMaxAttempts: 2, priority: -6 },
   'system.reconcile': { lane: 'maintenance', defaultMaxAttempts: 3, priority: -10 },
+  // Lane creation outranks handoff: a handoff into a half-built lane is wasted.
+  'smartlead.lane_ensure': { lane: 'smartlead_api', defaultMaxAttempts: 5, priority: 30 },
+  'smartlead.handoff': { lane: 'smartlead_api', defaultMaxAttempts: 3, priority: 25 },
+  'smartlead.lead_op': { lane: 'smartlead_api', defaultMaxAttempts: 3, priority: 25 },
+  'smartlead.reconcile': { lane: 'smartlead_api', defaultMaxAttempts: 2, priority: -5 },
+  'inbox.lifecycle_daily': { lane: 'smartlead_api', defaultMaxAttempts: 3, priority: 0 },
+  'inbox.health_snapshot': { lane: 'smartlead_api', defaultMaxAttempts: 2, priority: -3 },
+  // Google, not Smartlead — it belongs on maintenance, off the Smartlead lane.
+  'postmaster.daily': { lane: 'maintenance', defaultMaxAttempts: 2, priority: -6 },
 };
 
 function positiveInt(name: string, fallback: number, maximum = 100): number {
@@ -82,6 +91,11 @@ export function laneLimit(lane: WorkLane): number {
       return 1;
     case 'auto_campaign':
       return 1;
+    case 'smartlead_api':
+      // Smartlead rate-limits per API key across all endpoints. One worker is
+      // enough for this volume and keeps lane creation ordered ahead of the
+      // handoffs that depend on it.
+      return positiveInt('ORG_SMARTLEAD_CONCURRENCY', 1, 3);
   }
 }
 

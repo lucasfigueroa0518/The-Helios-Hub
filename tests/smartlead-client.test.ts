@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import test, { afterEach, beforeEach } from 'node:test';
 
 import {
+  SmartleadError,
   SmartleadRateLimitError,
   SmartleadRequestError,
   SmartleadServerError,
@@ -80,7 +81,7 @@ test('redactApiKey removes the key from a URL and from a bare occurrence', () =>
 });
 
 test('no thrown error carries the API key, for any status class', async () => {
-  const cases: Array<[ResponseInit, unknown]> = [
+  const cases: Array<[ResponseInit, new (...args: never[]) => SmartleadError]> = [
     [{ status: 429, headers: { 'retry-after': '30' } }, SmartleadRateLimitError],
     [{ status: 503 }, SmartleadServerError],
     [{ status: 400 }, SmartleadRequestError],
@@ -88,8 +89,8 @@ test('no thrown error carries the API key, for any status class', async () => {
 
   for (const [init, kind] of cases) {
     stubFetch(() => new Response(`boom ${TEST_KEY}`, init));
-    const error = await smartleadRequest('/campaigns/').catch((caught) => caught);
-    assert.ok(error instanceof (kind as new () => Error), `expected ${String(kind)}`);
+    const error = await smartleadRequest('/campaigns/').catch((caught: unknown) => caught);
+    assert.ok(error instanceof kind, `expected ${kind.name}`);
 
     const serialized = `${error.message} ${error.url} ${error.body} ${error.stack ?? ''}`;
     assert.ok(!serialized.includes(TEST_KEY), 'error text leaked the API key');
@@ -102,8 +103,9 @@ test('no thrown error carries the API key, for any status class', async () => {
 
 test('the key is attached only to the outgoing request, never to the error url', async () => {
   stubFetch(() => new Response('nope', { status: 404 }));
-  const error = await smartleadRequest('/campaigns/999').catch((caught) => caught);
+  const error = await smartleadRequest('/campaigns/999').catch((caught: unknown) => caught);
   assert.ok(calls[0].url.includes(`api_key=${TEST_KEY}`), 'the real request must be authenticated');
+  assert.ok(error instanceof SmartleadError);
   assert.ok(!error.url.includes(TEST_KEY));
 });
 
@@ -111,14 +113,14 @@ test('the key is attached only to the outgoing request, never to the error url',
 
 test('429 becomes SmartleadRateLimitError carrying Retry-After in milliseconds', async () => {
   stubFetch(() => new Response('slow down', { status: 429, headers: { 'retry-after': '30' } }));
-  const error = await smartleadRequest('/campaigns/').catch((caught) => caught);
+  const error = await smartleadRequest('/campaigns/').catch((caught: unknown) => caught);
   assert.ok(error instanceof SmartleadRateLimitError);
   assert.equal(error.retryAfterMs, 30_000);
 });
 
 test('a 429 with no Retry-After reports 0 so the caller applies its own backoff', async () => {
   stubFetch(() => new Response('slow down', { status: 429 }));
-  const error = await smartleadRequest('/campaigns/').catch((caught) => caught);
+  const error = await smartleadRequest('/campaigns/').catch((caught: unknown) => caught);
   assert.equal((error as SmartleadRateLimitError).retryAfterMs, 0);
 });
 
@@ -126,14 +128,14 @@ test('a transport failure maps to SmartleadServerError with a null status', asyn
   globalThis.fetch = (async () => {
     throw new TypeError('fetch failed');
   }) as typeof globalThis.fetch;
-  const error = await smartleadRequest('/campaigns/').catch((caught) => caught);
+  const error = await smartleadRequest('/campaigns/').catch((caught: unknown) => caught);
   assert.ok(error instanceof SmartleadServerError);
   assert.equal(error.status, null);
 });
 
 test('unparseable JSON is a server error, not a crash', async () => {
   stubFetch(() => new Response('<html>maintenance</html>', { status: 200 }));
-  const error = await smartleadRequest('/campaigns/').catch((caught) => caught);
+  const error = await smartleadRequest('/campaigns/').catch((caught: unknown) => caught);
   assert.ok(error instanceof SmartleadServerError);
   assert.match(error.body, /unparseable JSON/);
 });

@@ -69,14 +69,33 @@ export function isAutomaticReply(headers: Record<string, string>, fromEmail: str
 }
 
 /** Only bounce/daemon mail skips the Calendly auto-response. OOO still gets one. */
+/** Subject lines that mean nobody read the email. */
+const OUT_OF_OFFICE_SUBJECT =
+  /\b(out\s*of\s*(the\s*)?office|ooo|automatic reply|auto[-\s]?reply|autoreply|on (vacation|holiday|leave|parental leave)|away from (my|the) (desk|office)|maternity leave|paternity leave)\b/i;
+
+/** Headers an RFC-compliant auto-responder sets. */
+function isAutoResponderHeader(headers: Record<string, string>): boolean {
+  const autoSubmitted = headers['auto-submitted']?.toLowerCase() ?? '';
+  if (autoSubmitted && autoSubmitted !== 'no') return true;
+  if (headers['x-autoreply'] || headers['x-autorespond']) return true;
+  return /^(vacation|auto[-_]?replied|auto[-_]?generated|auto[-_]?notified)$/i.test(
+    headers['x-auto-response-suppress'] ?? headers['precedence'] ?? '',
+  );
+}
+
 export function autoReplySkipReason(
   headers: Record<string, string>,
   fromEmail: string,
 ): string | null {
-  if (/^(mailer-daemon|postmaster)@/i.test(fromEmail)) return 'mailer_daemon';
+  if (/^(mailer-daemon|postmaster|no-?reply|donotreply)@/i.test(fromEmail)) return 'mailer_daemon';
   const subject = headers.subject?.toLowerCase() ?? '';
   if (/\b(undeliverable|delivery status notification|mail delivery failed)\b/i.test(subject)) {
     return 'bounce_subject';
+  }
+  // Out-of-office gets no fallback: Smartlead reschedules the sequence itself,
+  // and replying to a vacation responder starts a loop with a robot.
+  if (OUT_OF_OFFICE_SUBJECT.test(subject) || isAutoResponderHeader(headers)) {
+    return 'out_of_office';
   }
   return null;
 }
@@ -263,22 +282,17 @@ export async function processInboundLeadReply(input: {
   const inboundId = inboundRows[0]?.id;
   if (!inboundId) return { skipped: 'inbound_insert_failed' };
 
-  let forwarded = Boolean(inboundRows[0]?.forwarded_to_sender_at);
-  if (!forwarded) {
-    forwarded = await forwardInboundToSender(outbound, inbound);
-    if (forwarded) {
-      await dbQuery(
-        `UPDATE outreach.inbound_emails
-            SET forwarded_to_sender_at = coalesce(forwarded_to_sender_at, now()),
-                updated_at = now()
-          WHERE id = $1`,
-        [inboundId],
-      );
-    }
-  }
+  // Inbound no longer forwards to @heliosgroup.ai; Conversations is where
+  // replies are read, and forwarding through an outreach inbox hurt placement.
+  const forwarded = false;
 
   if (autoSkip) {
     return { inboundId, skipped: autoSkip, forwarded };
+  }
+
+  // A campaign can opt out of the automated fallback entirely.
+  if (await replyFallbackIsHumanOnly(outbound.campaign_id)) {
+    return { inboundId, skipped: 'human_only', forwarded };
   }
 
   // New human inbound supersedes any queued deferred follow-up.
@@ -320,10 +334,12 @@ export async function processInboundLeadReply(input: {
   let replySend: { id: string; status: string } | undefined;
   try {
     const { rows: replyRows } = await dbQuery<{ id: string; status: string }>(
+      // 'awaiting_human' is the five-minute window: the worker may only claim
+      // the row once it expires, and a human reply cancels it before then.
       `INSERT INTO outreach.reply_sends (
          owner_id, campaign_id, inbound_email_id, drafting_item_id, email_send_id,
          status, kind, scheduled_for
-       ) VALUES ($1,$2,$3,$4,$5,'queued','immediate',$6::timestamptz)
+       ) VALUES ($1,$2,$3,$4,$5,'awaiting_human','immediate',$6::timestamptz)
        RETURNING id, status`,
       [
         outbound.owner_id,
@@ -365,4 +381,14 @@ export async function processInboundLeadReply(input: {
   );
 
   return { inboundId, replySendId: replySend.id, forwarded };
+}
+
+/** Campaigns set to `human_only` never get an automated fallback. */
+async function replyFallbackIsHumanOnly(campaignId: string): Promise<boolean> {
+  const { rows } = await dbQuery<{ delivery_settings: unknown }>(
+    'SELECT delivery_settings FROM outreach.campaigns WHERE id = $1',
+    [campaignId],
+  );
+  const { resolveDeliverySettings } = await import('@/lib/smartlead/delivery-settings');
+  return resolveDeliverySettings(rows[0]?.delivery_settings).reply_fallback === 'human_only';
 }

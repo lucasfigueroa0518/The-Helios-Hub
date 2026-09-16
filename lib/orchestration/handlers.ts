@@ -1,4 +1,13 @@
 import { dbQuery } from '@/lib/db';
+import {
+  handleInboxHealthSnapshot,
+  handleInboxLifecycleDaily,
+  handlePostmasterDaily,
+  handleSmartleadHandoff,
+  handleSmartleadLaneEnsure,
+  handleSmartleadLeadOp,
+  handleSmartleadReconcile,
+} from '@/lib/orchestration/smartlead-handlers';
 import { AGENTMAIL_ACCOUNT_PAUSE_RETRY_MS } from '@/lib/drafting/agentmail-send-errors';
 import { listPendingJobsForRun } from '@/lib/drafting/transport';
 import { extractOneUpload } from '@/lib/run-extraction';
@@ -960,6 +969,13 @@ const HANDLERS: Record<WorkKind, Handler> = {
   'auto.cycle': handleAutoCycle as Handler,
   'networking.weekly_ingest': handleNetworkingWeeklyIngest as Handler,
   'system.reconcile': handleReconcile as Handler,
+  'smartlead.lane_ensure': handleSmartleadLaneEnsure as Handler,
+  'smartlead.handoff': handleSmartleadHandoff as Handler,
+  'smartlead.lead_op': handleSmartleadLeadOp as Handler,
+  'smartlead.reconcile': handleSmartleadReconcile as Handler,
+  'inbox.lifecycle_daily': handleInboxLifecycleDaily as Handler,
+  'inbox.health_snapshot': handleInboxHealthSnapshot as Handler,
+  'postmaster.daily': handlePostmasterDaily as Handler,
 };
 
 export async function handleWork(job: OrchestrationJob): Promise<WorkHandlerResult> {

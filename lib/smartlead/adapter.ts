@@ -264,7 +264,7 @@ export const findLeadByEmail = op('findLeadByEmail', async (email: string) => {
 
 export const listCampaignLeads = op(
   'listCampaignLeads',
-  async (campaignId: number, offset = 0, limit = 100) =>
+  async (campaignId: number, offset: number = 0, limit: number = 100) =>
     smartleadRequest<SmartleadCampaignLeadsPage>(`/campaigns/${campaignId}/leads`, {
       query: { offset, limit },
     }),
@@ -282,7 +282,7 @@ export const pauseLead = op('pauseLead', async (campaignId: number, leadId: numb
 
 export const resumeLead = op(
   'resumeLead',
-  async (campaignId: number, leadId: number, delayDays = 0) =>
+  async (campaignId: number, leadId: number, delayDays: number = 0) =>
     smartleadRequest<{ ok?: boolean }>(`/campaigns/${campaignId}/leads/${leadId}/resume`, {
       method: 'POST',
       body: { resume_lead_with_delay_days: delayDays },
@@ -341,7 +341,7 @@ export const messageHistory = op(
 
 export const campaignStatistics = op(
   'campaignStatistics',
-  async (campaignId: number, offset = 0, limit = 100) =>
+  async (campaignId: number, offset: number = 0, limit: number = 100) =>
     smartleadRequest<SmartleadCampaignStatistics>(`/campaigns/${campaignId}/statistics`, {
       query: { offset, limit },
     }),
