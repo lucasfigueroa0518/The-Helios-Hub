@@ -5,7 +5,7 @@ export type HubSubItem = {
 };
 
 export type HubNavItem = {
-  id: 'home' | 'outreach' | 'events' | 'dashboards' | 'trello' | 'website';
+  id: 'home' | 'outreach' | 'events' | 'dashboards' | 'trello' | 'website' | 'social';
   href: string;
   label: string;
   match: (path: string) => boolean;
@@ -36,6 +36,12 @@ export const HUB_NAV: HubNavItem[] = [
     href: '/trello',
     label: 'Trello',
     match: (path) => path.startsWith('/trello'),
+  },
+  {
+    id: 'social',
+    href: '/social',
+    label: 'Social',
+    match: (path) => path.startsWith('/social'),
   },
   {
     id: 'events',
