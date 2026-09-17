@@ -46,6 +46,7 @@ export function invalidateHubCache(prefix?: string): void {
 export const HUB_TAB_PREFETCH: Record<string, string[]> = {
   campaigns: ['/api/campaigns'],
   queue: ['/api/send-queue'],
+  inboxes: ['/api/inboxes'],
   analytics: ['/api/analytics/summary?period=week'],
   conversations: ['/api/conversations'],
 };

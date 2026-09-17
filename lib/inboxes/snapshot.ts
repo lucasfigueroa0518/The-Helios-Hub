@@ -5,6 +5,9 @@
  * Two sources, two shapes, one table:
  *   `smartlead_warmup` fills the metric columns from Smartlead's counters;
  *   `forecast` leaves them NULL and puts the model's numbers in `detail`.
+ *
+ * Needs the API key, not the send kill switch — warmup counters should land
+ * even while campaign sending is held off.
  */
 import { dbQuery } from '@/lib/db';
 import { formatNyDate } from '@/lib/drafting/send-queue-schedule';
@@ -15,11 +18,11 @@ import { listInboxes } from '@/lib/inboxes/repository';
 import { DEFAULT_STAGE_PLAN } from '@/lib/inboxes/stage-plan';
 import { getOrgSetting } from '@/lib/org-settings';
 import { smartleadAdapter, type SmartleadAdapter } from '@/lib/smartlead/adapter';
-import { isSmartleadEnabled } from '@/lib/smartlead/enabled';
+import { hasSmartleadApiKey } from '@/lib/smartlead/enabled';
 import { toNumber } from '@/lib/smartlead/types';
 
 export type HealthSnapshotReport = {
-  skipped?: 'smartlead_disabled';
+  skipped?: 'smartlead_unconfigured';
   day: string;
   warmupRows: number;
   forecastRows: number;
@@ -32,8 +35,8 @@ export async function runHealthSnapshot(
   options: { adapter?: SmartleadAdapter } = {},
 ): Promise<HealthSnapshotReport> {
   const day = dayKey ?? formatNyDate();
-  if (!isSmartleadEnabled()) {
-    return { skipped: 'smartlead_disabled', day, warmupRows: 0, forecastRows: 0, flagged: [], errors: [] };
+  if (!hasSmartleadApiKey()) {
+    return { skipped: 'smartlead_unconfigured', day, warmupRows: 0, forecastRows: 0, flagged: [], errors: [] };
   }
 
   const adapter = options.adapter ?? smartleadAdapter;

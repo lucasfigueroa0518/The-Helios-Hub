@@ -1,29 +1,42 @@
 import { draftingErrorResponse, draftingJson } from '@/lib/drafting/api';
 import { formatNyDate } from '@/lib/drafting/send-queue-schedule';
+import { detectAndLinkSmartleadAccounts } from '@/lib/inboxes/lifecycle';
 import { enqueueWork } from '@/lib/orchestration/repository';
 import { getSession } from '@/lib/session';
-import { isSmartleadEnabled } from '@/lib/smartlead/enabled';
+import { hasSmartleadApiKey, isSmartleadEnabled } from '@/lib/smartlead/enabled';
 
 export const runtime = 'nodejs';
 
 /**
- * "Sync now" on the Inboxes tab. Queues a reconcile and an immediate lifecycle
- * pass on the worker rather than calling Smartlead from the request — Vercel
- * does not run the worker, and the Smartlead lane is where writes are
- * serialized.
- *
- * `reviveTerminal` re-runs today's job even if it already finished, which is
- * the whole point of a manual sync.
+ * "Sync now" on the Inboxes tab. Always matches hub mailboxes to Smartlead
+ * accounts by email (API key is enough). When campaign sending is on, also
+ * queues reconcile + lifecycle on the worker.
  */
 export async function POST() {
   const session = await getSession();
   if (!session) return draftingJson({ error: 'Unauthorized' }, 401);
 
-  if (!isSmartleadEnabled()) {
+  if (!hasSmartleadApiKey()) {
     return draftingJson(
-      { error: 'Smartlead delivery is turned off (SMARTLEAD_ENABLED)', code: 'smartlead_disabled' },
+      { error: 'Smartlead API key is missing', code: 'smartlead_unconfigured' },
       503,
     );
+  }
+
+  let detection: Awaited<ReturnType<typeof detectAndLinkSmartleadAccounts>>;
+  try {
+    detection = await detectAndLinkSmartleadAccounts({ force: true });
+  } catch (error) {
+    return draftingErrorResponse(error);
+  }
+
+  if (!isSmartleadEnabled()) {
+    return draftingJson({
+      queued: false,
+      linked: detection.linked,
+      matched: detection.matched,
+      unassigned: detection.unassigned,
+    });
   }
 
   const dayKey = formatNyDate();
@@ -44,7 +57,14 @@ export async function POST() {
         reviveTerminal: true,
       }),
     ]);
-    return draftingJson({ queued: true, reconcile_job_id: reconcileJobId, lifecycle_job_id: lifecycleJobId });
+    return draftingJson({
+      queued: true,
+      reconcile_job_id: reconcileJobId,
+      lifecycle_job_id: lifecycleJobId,
+      linked: detection.linked,
+      matched: detection.matched,
+      unassigned: detection.unassigned,
+    });
   } catch (error) {
     return draftingErrorResponse(error);
   }

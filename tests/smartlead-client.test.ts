@@ -15,7 +15,7 @@ import {
   smartleadRequest,
   truncateBody,
 } from '@/lib/smartlead/client';
-import { SmartleadDisabledError, isSmartleadEnabled } from '@/lib/smartlead/enabled';
+import { SmartleadDisabledError, SmartleadUnconfiguredError, isSmartleadEnabled } from '@/lib/smartlead/enabled';
 import {
   CustomFieldTooLongError,
   MAX_CUSTOM_FIELD_CHARS,
@@ -31,6 +31,7 @@ import {
   listEmailAccounts,
   registerWebhook,
   setStatus,
+  setWarmup,
 } from '@/lib/smartlead/adapter';
 import { SMARTLEAD_MAX_LEADS_PER_REQUEST } from '@/lib/smartlead/types';
 
@@ -171,15 +172,36 @@ test('pagination stops at maxPages so a broken endpoint cannot loop forever', as
 
 // ── Kill switch ─────────────────────────────────────────────────────────────
 
-test('SMARTLEAD_ENABLED unset makes the adapter refuse to call', async () => {
+test('SMARTLEAD_ENABLED unset blocks campaign sending, not account listing', async () => {
   delete process.env.SMARTLEAD_ENABLED;
   stubFetch(() => json([]));
 
   assert.equal(isSmartleadEnabled(), false);
-  await assert.rejects(listEmailAccounts(), SmartleadDisabledError);
+  await listEmailAccounts();
+  assert.equal(calls.length, 1, 'account listing may run with an API key while sending is off');
   await assert.rejects(setStatus(1, 'START'), SmartleadDisabledError);
   await assert.rejects(handoffLeads(1, [{ email: 'a@b.co' }]), SmartleadDisabledError);
-  assert.equal(calls.length, 0, 'a disabled adapter must not touch the network');
+  assert.equal(calls.length, 1, 'a disabled send path must not touch the network');
+});
+
+test('account ops refuse when there is no API key', async () => {
+  delete process.env.SMARTLEAD_API_KEY;
+  stubFetch(() => json([]));
+  await assert.rejects(listEmailAccounts(), SmartleadUnconfiguredError);
+  assert.equal(calls.length, 0);
+});
+
+test('setWarmup raises daily_rampup to Smartlead\'s minimum of 5', async () => {
+  stubFetch(() => json({ ok: true }));
+  await setWarmup(9, {
+    warmup_enabled: true,
+    total_warmup_per_day: 30,
+    daily_rampup: 2,
+    reply_rate_percentage: 32,
+  });
+  const body = JSON.parse(String(calls[0].init.body));
+  assert.equal(body.daily_rampup, 5);
+  assert.equal(body.is_rampup_enabled, true);
 });
 
 test('only the exact string "true" enables Smartlead', () => {

@@ -39,7 +39,7 @@ export const DEFAULT_STAGE_PLAN: StagePlan = {
   warming: {
     days: 14,
     warmup_start: 5,
-    warmup_rampup: 2,
+    warmup_rampup: 5,
     warmup_target: 30,
     reply_rate_pct: 32,
     exit: { inbox_rate_min: 0.92, window_days: 7 },

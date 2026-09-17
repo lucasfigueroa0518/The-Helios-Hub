@@ -1,13 +1,10 @@
 /**
- * Inbound reply ingest: store body, forward to sender, enqueue delayed auto-response.
+ * Inbound reply ingest: store body, enqueue delayed auto-response.
  */
 
-import { agentMailSendOutreach } from '@/lib/agentmail';
 import {
   extractEmailAddress,
-  INBOUND_FORWARD_LABEL,
   isOutreachInbox,
-  personalForwardEmailForInbox,
 } from '@/lib/agentmail-inboxes';
 import { dbQuery } from '@/lib/db';
 import { enqueueWork } from '@/lib/orchestration/repository';
@@ -42,12 +39,6 @@ export type ReceivedEmailContent = {
   headers: Record<string, string>;
   receivedAt: string;
 };
-
-function stripHtml(html: string | null | undefined): string | null {
-  if (!html?.trim()) return null;
-  const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  return text || null;
-}
 
 /** OOO / bulk headers — stored for display, but we still auto-respond. */
 export function isAutomaticReply(headers: Record<string, string>, fromEmail: string): string | null {
@@ -100,33 +91,6 @@ export function autoReplySkipReason(
   return null;
 }
 
-export function buildInboundForwardPayload(
-  outbound: Pick<OutboundSendContext, 'from_email' | 'to_email' | 'subject'>,
-  inbound: ReceivedEmailContent,
-): { to: string; subject: string; text: string } | null {
-  const inbox = extractEmailAddress(outbound.from_email) ?? outbound.from_email.toLowerCase();
-  if (!isOutreachInbox(inbox)) return null;
-  const to = personalForwardEmailForInbox(inbox);
-  const from = extractEmailAddress(inbound.fromEmail) ?? inbound.fromEmail.toLowerCase();
-  if (from === to) return null;
-  if (isOutreachInbox(from)) return null;
-  const originalSubject = inbound.subject?.trim() || outbound.subject?.trim() || `reply from ${from}`;
-  const subject = /^fwd:/i.test(originalSubject) ? originalSubject : `Fwd: ${originalSubject}`;
-  const body = inbound.textBody?.trim()
-    || stripHtml(inbound.htmlBody)
-    || '(no text body)';
-  const text = [
-    'Forwarded lead reply to your Helios outreach.',
-    `From: ${inbound.fromEmail}`,
-    `To: ${(inbound.toEmails.length ? inbound.toEmails : [outbound.from_email]).join(', ')}`,
-    `Original To: ${outbound.to_email}`,
-    `Subject: ${originalSubject}`,
-    '',
-    body,
-  ].join('\n');
-  return { to, subject, text };
-}
-
 export async function loadOutboundSendContext(emailSendId: string): Promise<OutboundSendContext | null> {
   const { rows } = await dbQuery<OutboundSendContext>(
     `SELECT s.id,
@@ -155,33 +119,8 @@ export async function fetchReceivedEmailContent(
   return null;
 }
 
-async function forwardInboundToSender(
-  outbound: OutboundSendContext,
-  inbound: ReceivedEmailContent,
-): Promise<boolean> {
-  const payload = buildInboundForwardPayload(outbound, inbound);
-  if (!payload) return false;
-  const inboxId = extractEmailAddress(outbound.from_email) ?? outbound.from_email;
-  try {
-    await agentMailSendOutreach({
-      inboxId,
-      to: payload.to,
-      subject: payload.subject,
-      text: payload.text,
-      labels: [INBOUND_FORWARD_LABEL, 'helios-outreach-forward'],
-    });
-    return true;
-  } catch (error) {
-    console.warn(
-      `[inbound-forward] failed ${inboxId} → ${payload.to}:`,
-      error instanceof Error ? error.message : error,
-    );
-    return false;
-  }
-}
-
 /**
- * Persist inbound, forward to sender, and enqueue reply.respond (+60s) when allowed.
+ * Persist inbound and enqueue reply.respond (+300s) when allowed.
  */
 export async function processInboundLeadReply(input: {
   emailSendId: string;

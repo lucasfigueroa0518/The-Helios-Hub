@@ -13,6 +13,7 @@
 import type { IdentitySlug, LaneStatus } from '@/lib/delivery-states';
 import { dbQuery } from '@/lib/db';
 import { listSendingInboxes } from '@/lib/inboxes/repository';
+import type { DispatchWork } from '@/lib/orchestration/types';
 import { smartleadAdapter, type SmartleadAdapter } from '@/lib/smartlead/adapter';
 import { toCustomBodyHtml } from '@/lib/smartlead/body';
 import { redactApiKey } from '@/lib/smartlead/client';
@@ -95,6 +96,20 @@ export async function listUnfinishedLanes(): Promise<CampaignLane[]> {
     `${SELECT_LANE} WHERE status IN ('creating', 'error') ORDER BY updated_at ASC LIMIT 50`,
   );
   return rows;
+}
+
+/** Job that builds or repairs one lane. `reviveTerminal` so a skipped-while-disabled run retries. */
+export function laneEnsureWork(
+  campaignId: string,
+  identitySlug: IdentitySlug,
+): DispatchWork<'smartlead.lane_ensure'> {
+  return {
+    kind: 'smartlead.lane_ensure',
+    payload: { campaignId, identitySlug },
+    dedupeKey: `lane:${campaignId}:${identitySlug}`,
+    scopeKey: campaignId,
+    reviveTerminal: true,
+  };
 }
 
 /** Creates the lane row first, so every later step has somewhere to write. */

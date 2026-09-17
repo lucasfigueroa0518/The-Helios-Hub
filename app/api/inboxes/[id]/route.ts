@@ -9,6 +9,8 @@ import {
   updateInbox,
 } from '@/lib/inboxes/repository';
 import { getSession } from '@/lib/session';
+import { smartleadAdapter } from '@/lib/smartlead/adapter';
+import { hasSmartleadApiKey } from '@/lib/smartlead/enabled';
 
 export const runtime = 'nodejs';
 
@@ -83,6 +85,24 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       stagePlan: body.stage_plan,
       enabled: body.enabled,
     });
+    const accountId = inbox?.smartlead_email_account_id
+      ?? (body.smartlead_email_account_id !== undefined
+        ? Number(body.smartlead_email_account_id)
+        : existing.smartlead_email_account_id);
+    if (
+      accountId
+      && hasSmartleadApiKey()
+      && (body.from_name !== undefined || body.signature_html !== undefined)
+    ) {
+      try {
+        await smartleadAdapter.updateEmailAccount(accountId, {
+          ...(body.from_name !== undefined ? { from_name: body.from_name ?? '' } : {}),
+          ...(body.signature_html !== undefined ? { signature: body.signature_html ?? '' } : {}),
+        });
+      } catch {
+        // Hub row is saved; the next lifecycle pass retries the Smartlead write.
+      }
+    }
     return draftingJson({ inbox });
   } catch (error) {
     return draftingErrorResponse(error);

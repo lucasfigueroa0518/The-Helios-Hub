@@ -287,3 +287,13 @@ export function appendPlainTextSignature(
     .filter(Boolean);
   return `${cleaned}\n\n${lines.join('\n')}`;
 }
+
+/** The same headshot signature used in campaign sender setup and outbound HTML. */
+export function heliosIdentitySignatureHtml(slug: SenderIdentitySlug): string {
+  const seed = slug === 'lucas' ? 'lucas@heliosgroup.email' : 'thomas@heliosgroup.email';
+  return buildSignatureHtml(resolveEmailSignature({
+    workEmail: seed,
+    identitySlug: slug,
+    allowRemoteHeadshot: true,
+  }));
+}

@@ -1,1141 +1,588 @@
 'use client';
 
-import Link from 'next/link';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from 'react';
-import { ChevronLeft, ChevronRight, Send, SquareSplitVertical, Trash2, RotateCcw, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import { ChevronLeft, ChevronRight, RotateCcw, Send, Trash2, X } from 'lucide-react';
+
 import {
   ChoiceList,
   FilterAccordion,
   MobileFilterBar,
   MobileFilterMenu,
 } from '@/app/components/mobile-filter-menu';
-
 import { hubGetJson, invalidateHubCache } from '@/app/hub/hub-data';
 import { HubLoadingSpinner } from '@/app/hub/hub-loading';
 import { requestJson } from '@/lib/client-request';
-import { isAgentMailAccountSendingPausedError } from '@/lib/drafting/agentmail-send-errors';
-import { formatNyDateLabel, formatNyWeekday, isNyCalendarWeekend } from '@/lib/drafting/send-queue-schedule';
 import {
-  explainHeldSlots,
-  explainOpenSlots,
-  explainSentOnDay,
-  explainSentToday,
-  explainTakenSlots,
-  explainWaiting,
-} from '@/lib/drafting/send-queue-metrics';
-import { uniqueCampaignColors } from '@/lib/auto-campaigns/queue-colors';
-import type { QueueDayBucket, QueueListItem, ShareTargetUser } from '@/lib/drafting/send-queue';
-
-function campaignTint(color: string | undefined): CSSProperties {
-  return { '--lock-color': `var(--${color || 'chart-1'})` } as CSSProperties;
-}
-
-type QueueListResponse = {
-  days: QueueDayBucket[];
-  today: string;
-  from?: string;
-  to?: string;
-  today_remaining: number;
-  daily_inbox_cap?: number;
-  identities?: Array<{ slug: 'lucas' | 'tommy'; display_name: string }>;
-  inboxes?: Array<{
-    id: string;
-    email: string;
-    identity_slug: 'lucas' | 'tommy';
-    is_primary: boolean;
-    today_used: number;
-    today_remaining: number;
-  }>;
-};
-
-type QueueDetailResponse = {
-  item: QueueListItem;
-  body_text: string | null;
-  campaign_href: string;
-};
+  formatNyDateLabel,
+  formatNyWeekday,
+  isNyCalendarWeekend,
+} from '@/lib/drafting/send-queue-schedule';
+import type {
+  QueueCampaignDayStat,
+  QueueDayBucket,
+  QueueListItem,
+  QueueMailboxDayStat,
+  SendQueueBoard,
+} from '@/lib/drafting/send-queue';
 
 type CampaignOption = { id: string; name: string };
-type UserOption = { id: string; email: string; display_name: string };
-type QueueMenuSection = 'sender' | 'cap' | 'address' | 'campaign' | 'actions';
-
-function formatNyDateTime(iso: string): string {
-  return new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(iso));
-}
-
-function queueCardStatus(item: QueueListItem): string {
-  if (item.status === 'queued' && isAgentMailAccountSendingPausedError(item.error_message ?? '')) {
-    return `waiting on Agent Mail · retry ${formatNyDateTime(item.scheduled_for)}`;
-  }
-  return item.status;
-}
 
 function QueueMetric({
   label,
   value,
   tip,
-  compact = false,
 }: {
   label: string;
   value: number | string;
   tip: string;
-  compact?: boolean;
 }) {
-  const body = compact ? (
-    <>
-      <strong className="queue-metric__value">{value}</strong>
-      <span className="queue-metric__label">{label}</span>
-    </>
-  ) : (
-    <>
-      <span className="queue-metric__label">{label}</span>
-      <strong className="queue-metric__value">{value}</strong>
-    </>
-  );
-  if (compact) {
-    return (
-      <span className="queue-metric queue-metric--compact" title={tip} tabIndex={0}>
-        {body}
-      </span>
-    );
-  }
   return (
     <span className="queue-metric" tabIndex={0}>
-      {body}
+      <span className="queue-metric__label">{label}</span>
+      <strong className="queue-metric__value">{value}</strong>
       <span className="queue-metric__tip" role="tooltip">{tip}</span>
     </span>
   );
 }
 
-export function SendQueueHub({
-  sessionUserId,
-  sessionEmail,
-}: {
-  sessionUserId: string;
-  sessionEmail: string;
-}) {
-  const [data, setData] = useState<QueueListResponse | null>(null);
-  const [users, setUsers] = useState<UserOption[]>([]);
-  const [viewUserId, setViewUserId] = useState('');
-  const [identitySlug, setIdentitySlug] = useState('');
-  const [inboxEmail, setInboxEmail] = useState('');
+const DELIVERY_LABELS: Record<QueueListItem['delivery_status'], string> = {
+  waiting: 'Waiting',
+  scheduled: 'Scheduled',
+  handing_off: 'Handing off',
+  with_smartlead: 'With Smartlead',
+  sent: 'Sent',
+  bounced: 'Bounced',
+  replied: 'Replied',
+  cancelled: 'Cancelled',
+  failed: 'Failed',
+};
+
+const WAITING_LABELS: Record<string, string> = {
+  no_capacity: 'No mailbox capacity in the next two weeks',
+  lane_not_ready: 'Smartlead campaign not ready yet',
+  monthly_ceiling: 'Held back by the monthly Smartlead allowance',
+};
+
+function deliveryChipClass(status: QueueListItem['delivery_status']): string {
+  if (status === 'sent' || status === 'replied') return 'drafting-status-chip drafting-status-chip--approved';
+  if (status === 'bounced' || status === 'failed') return 'drafting-status-chip drafting-status-chip--failed';
+  if (status === 'cancelled') return 'drafting-status-chip drafting-status-chip--failed';
+  if (status === 'waiting') return 'drafting-status-chip drafting-status-chip--attention';
+  return 'drafting-status-chip drafting-status-chip--queued';
+}
+
+export function SendQueueHub() {
+  const [board, setBoard] = useState<SendQueueBoard | null>(null);
   const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
   const [campaignId, setCampaignId] = useState('');
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [identity, setIdentity] = useState('');
+  const [inboxEmail, setInboxEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [dragIds, setDragIds] = useState<string[] | null>(null);
-  const [detailId, setDetailId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<QueueDetailResponse | null>(null);
-  const [reservationDetail, setReservationDetail] = useState<QueueDayBucket['reservations'][number] | null>(null);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [shareTargets, setShareTargets] = useState<ShareTargetUser[] | null>(null);
-  const [shareLoading, setShareLoading] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [detail, setDetail] = useState<QueueListItem | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [openSection, setOpenSection] = useState<QueueMenuSection | null>(null);
-  const [dayIndex, setDayIndex] = useState(0);
-  const shareMenuRef = useRef<HTMLDivElement>(null);
-  const boardRef = useRef<HTMLDivElement>(null);
-  const alignedTodayRef = useRef(false);
+  const [openSection, setOpenSection] = useState<'campaign' | 'identity' | 'inbox' | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
   const hasDataRef = useRef(false);
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
 
-  const ownerPayload = useMemo(() => ({}), []);
-
-  const load = useCallback(async (force = false) => {
+  const load = useCallback(async () => {
     if (!hasDataRef.current) setLoading(true);
     try {
       const params = new URLSearchParams();
       if (campaignId) params.set('campaign_id', campaignId);
-      if (identitySlug) params.set('identity', identitySlug);
+      if (identity) params.set('identity', identity);
       if (inboxEmail) params.set('inbox', inboxEmail);
       const qs = params.toString();
-      const url = `/api/send-queue${qs ? `?${qs}` : ''}`;
-      const result = await hubGetJson<QueueListResponse>(url, { force });
-      setData(result);
+      setBoard(await hubGetJson<SendQueueBoard>(`/api/send-queue${qs ? `?${qs}` : ''}`));
       hasDataRef.current = true;
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to load send queue');
+      setError(err instanceof Error ? err.message : 'Unable to load the queue');
     } finally {
       setLoading(false);
     }
-  }, [campaignId, identitySlug, inboxEmail]);
+  }, [campaignId, identity, inboxEmail]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   useEffect(() => {
-    alignedTodayRef.current = false;
-  }, [campaignId, identitySlug, inboxEmail]);
-
-  useEffect(() => {
-    if (!data) return;
-    const todayIdx = data.days.findIndex((day) => day.schedule_date === data.today);
-    setDayIndex(todayIdx >= 0 ? todayIdx : 0);
-  }, [data?.today, campaignId, identitySlug, inboxEmail]);
-
-  useLayoutEffect(() => {
-    if (!data || alignedTodayRef.current) return;
-    const board = boardRef.current;
-    const todayCol = board?.querySelector<HTMLElement>('.send-queue-day--today');
-    if (!board || !todayCol) return;
-    board.scrollLeft = todayCol.offsetLeft - board.offsetLeft;
-    alignedTodayRef.current = true;
-  }, [data]);
-
-  useEffect(() => {
-    void hubGetJson<{ users: UserOption[] }>('/api/users')
-      .then((res) => setUsers(res.users))
-      .catch(() => setUsers([]));
-  }, []);
-
-  useEffect(() => {
-    const params = new URLSearchParams();
-    if (viewUserId) params.set('user_id', viewUserId);
-    const qs = params.toString();
-    void hubGetJson<{ campaigns: CampaignOption[] }>(`/api/campaigns${qs ? `?${qs}` : ''}`, {
-      force: true,
-    })
+    void hubGetJson<{ campaigns: CampaignOption[] }>('/api/campaigns')
       .then((res) => setCampaigns(res.campaigns.map((c) => ({ id: c.id, name: c.name }))))
       .catch(() => setCampaigns([]));
-  }, [viewUserId]);
+  }, []);
 
-  useEffect(() => {
-    if (!shareOpen) return;
-    function onPointerDown(event: MouseEvent) {
-      if (!shareMenuRef.current?.contains(event.target as Node)) {
-        setShareOpen(false);
-      }
-    }
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setShareOpen(false);
-    }
-    window.addEventListener('mousedown', onPointerDown);
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      window.removeEventListener('mousedown', onPointerDown);
-      window.removeEventListener('keydown', onKeyDown);
-    };
-  }, [shareOpen]);
-
-  useEffect(() => {
-    if (!detailId) {
-      setDetail(null);
-      return;
-    }
-    let cancelled = false;
-    const params = new URLSearchParams();
-    if (viewUserId) params.set('user_id', viewUserId);
-    const qs = params.toString();
-    void requestJson<QueueDetailResponse>(`/api/send-queue/${detailId}${qs ? `?${qs}` : ''}`)
-      .then((res) => {
-        if (!cancelled) setDetail(res);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Unable to load detail');
-          setDetailId(null);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [detailId, viewUserId]);
-
-  const selectedItems = useMemo(() => {
-    if (!data) return [];
-    return data.days.flatMap((day) => day.items).filter((item) => selected.has(item.id));
-  }, [data, selected]);
-
-  const canSendNow = selectedItems.length > 0
-    && selectedItems.every((i) => i.status === 'queued' || i.status === 'failed')
-    && (data?.today_remaining ?? 0) >= selectedItems.length;
-
-  const canCancel = selectedItems.length > 0
-    && selectedItems.every((i) => i.status === 'queued' || i.status === 'failed');
-
-  const canRetry = selectedItems.length > 0
-    && selectedItems.every((i) => i.status === 'failed');
-
-  const otherUsers = useMemo(
-    () => users.filter((user) => user.id !== sessionUserId),
-    [users, sessionUserId],
-  );
-
-  const viewingUser = useMemo(
-    () => (viewUserId ? users.find((user) => user.id === viewUserId) ?? null : null),
-    [users, viewUserId],
-  );
-
-  function toggleSelect(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  function selectAllDay(day: QueueDayBucket) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      const ids = day.items
-        .filter((item) => item.status === 'queued' || item.status === 'failed')
-        .map((i) => i.id);
-      if (ids.length === 0) return next;
-      const allSelected = ids.every((id) => next.has(id));
-      if (allSelected) {
-        for (const id of ids) next.delete(id);
-      } else {
-        for (const id of ids) next.add(id);
-      }
-      return next;
-    });
-  }
-
-  async function runAction(action: () => Promise<void>) {
+  const act = useCallback(async (
+    run: () => Promise<unknown>,
+    message: string,
+  ) => {
     setBusy(true);
-    setMessage(null);
     setError(null);
     try {
-      await action();
+      await run();
+      setNotice(message);
       setSelected(new Set());
-      invalidateHubCache('/api/send-queue');
-      await load(true);
+      invalidateHubCache();
+      await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Action failed');
     } finally {
       setBusy(false);
     }
+  }, [load]);
+
+  const ids = useMemo(() => [...selected], [selected]);
+
+  const sendNow = () => act(
+    () => requestJson('/api/send-queue/send-now', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
+    `Handing ${ids.length} ${ids.length === 1 ? 'draft' : 'drafts'} to Smartlead now.`,
+  );
+
+  const cancel = () => act(
+    () => requestJson('/api/send-queue', {
+      method: 'DELETE',
+      body: JSON.stringify({ ids }),
+    }),
+    `Cancelled ${ids.length} ${ids.length === 1 ? 'draft' : 'drafts'}.`,
+  );
+
+  const retry = () => act(
+    () => requestJson('/api/send-queue/retry', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
+    `Retrying ${ids.length} failed ${ids.length === 1 ? 'handoff' : 'handoffs'}.`,
+  );
+
+  const moveTo = (targetDate: string, moveIds: string[]) => act(
+    () => requestJson('/api/send-queue', {
+      method: 'PATCH',
+      body: JSON.stringify({ ids: moveIds, target_date: targetDate }),
+    }),
+    `Moved to ${formatNyDateLabel(targetDate)}.`,
+  );
+
+  const toggle = (id: string) => setSelected((current) => {
+    const next = new Set(current);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  });
+
+  const scrollBy = (direction: -1 | 1) => {
+    scrollerRef.current?.scrollBy({ left: direction * 360, behavior: 'smooth' });
+  };
+
+  if (loading && !board) return <HubLoadingSpinner label="Loading queue" />;
+  if (!board) {
+    return (
+      <main className="app-shell send-queue-page">
+        <section className="card"><div className="card__body">
+          <p className="field__error">{error ?? 'Unable to load the queue'}</p>
+        </div></section>
+      </main>
+    );
   }
 
-  function onDragStart(item: QueueListItem, event: DragEvent) {
-    const ids = selected.has(item.id)
-      ? [...selected]
-      : [item.id];
-    setDragIds(ids);
-    event.dataTransfer.setData('text/plain', ids.join(','));
-    event.dataTransfer.effectAllowed = 'move';
-  }
-
-  async function onDropDay(targetDate: string, event: DragEvent) {
-    event.preventDefault();
-    const raw = event.dataTransfer.getData('text/plain');
-    const ids = dragIds ?? (raw ? raw.split(',').filter(Boolean) : []);
-    setDragIds(null);
-    if (ids.length === 0) return;
-    await runAction(async () => {
-      await requestJson('/api/send-queue', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids, target_date: targetDate, ...ownerPayload }),
-      });
-      setMessage(`Moved ${ids.length} to ${formatNyDateLabel(targetDate)}`);
-    });
-  }
-
-  const waitingItems = data?.days.flatMap((day) => day.items) ?? [];
-  const waitingQueued = waitingItems.filter((item) => item.status === 'queued').length;
-  const waitingSending = waitingItems.filter((item) => item.status === 'sending').length;
-  const waitingFailed = waitingItems.filter((item) => item.status === 'failed').length;
-  const backlogCount = waitingQueued + waitingSending + waitingFailed;
-  const todayBucket = data?.days.find((day) => day.schedule_date === data.today) ?? null;
-  const inboxCount = data?.inboxes?.length ?? 0;
-  const capPerInbox = data?.daily_inbox_cap ?? 10;
-  const slotCapacity = capPerInbox * Math.max(1, inboxCount);
-  const campaignColors = useMemo(() => {
-    const entries: Array<{ campaignId: string; queueColor?: string | null }> = [];
-    for (const day of data?.days ?? []) {
-      for (const lock of day.reservations ?? []) {
-        entries.push({ campaignId: lock.campaign_id, queueColor: lock.queue_color });
-      }
-      for (const item of day.items) {
-        entries.push({ campaignId: item.campaign_id, queueColor: item.queue_color });
-      }
-    }
-    return uniqueCampaignColors(entries);
-  }, [data]);
-
-  async function openShareMenu() {
-    if (shareOpen) {
-      setShareOpen(false);
-      return;
-    }
-    setShareOpen(true);
-    setShareLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.set('identity', identitySlug === 'tommy' ? 'tommy' : 'lucas');
-      const result = await requestJson<{ users: ShareTargetUser[] }>(
-        `/api/send-queue/share-targets?${params.toString()}`,
-      );
-      setShareTargets(result.users);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to load teammates');
-      setShareOpen(false);
-    } finally {
-      setShareLoading(false);
-    }
-  }
-
-  async function shareWithUser(target: ShareTargetUser) {
-    setShareOpen(false);
-    await runAction(async () => {
-      const result = await requestJson<{
-        transferred: number;
-        sharer_backlog: number;
-        recipient_backlog: number;
-      }>('/api/send-queue/share', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from_identity: identitySlug === 'tommy' ? 'tommy' : 'lucas',
-          target_identity: target.id,
-          ...ownerPayload,
-        }),
-      });
-      setShareTargets(null);
-      setMessage(
-        `Moved ${result.transferred} to ${target.display_name} · remaining ${result.sharer_backlog} · ${target.display_name} ${result.recipient_backlog}`,
-      );
-    });
-  }
-
-  function onViewUserChange(nextUserId: string) {
-    setViewUserId(nextUserId);
-    setCampaignId('');
-    setSelected(new Set());
-    setDetailId(null);
-    setShareOpen(false);
-    setShareTargets(null);
-    setMessage(null);
-    hasDataRef.current = false;
-  }
-
-  if (loading && !data) {
-    return <HubLoadingSpinner label="Loading queue" />;
-  }
+  const unassigned = board.days[0]?.totals.queued_unassigned ?? 0;
+  const todayBucket = board.days.find((day) => day.date === board.today) ?? null;
+  const sendingToday = todayBucket?.totals.planned ?? 0;
+  const activeInboxes = board.inboxes.filter(
+    (inbox) => inbox.stage === 'ramping' || inbox.stage === 'production',
+  );
+  const activeCapacity = todayBucket?.capacity ?? 0;
 
   return (
-    <main className="app-shell">
+    <main className="app-shell send-queue-page">
       <section className="card">
         <div className="card__header">
           <div>
             <div className="card__title">Send queue</div>
             <div className="card__subtitle">
-              {capPerInbox}/day per inbox
-              {inboxCount > 0 ? ` · ${inboxCount} inbox${inboxCount === 1 ? '' : 'es'} = ${slotCapacity} slots on weekdays` : ''}
-              {' · America/New_York · drag to move by day'}
+              America/New_York · drag to move by day
             </div>
           </div>
         </div>
+
         <div className="card__body">
           <MobileFilterBar
-            title="Filters & actions"
+            title="Filters"
             summary={[
-              identitySlug ? (identitySlug === 'lucas' ? 'Lucas' : 'Tommy') : 'All senders',
-              inboxEmail || 'All addresses',
               campaignId ? (campaigns.find((c) => c.id === campaignId)?.name ?? 'Campaign') : 'All campaigns',
+              identity || 'Both identities',
             ].join(' · ')}
             onOpen={() => setMenuOpen(true)}
           />
 
-          <div className="hub-desktop-toolbar send-queue-toolbar">
+          <div className="send-queue-layout">
+          <div className="send-queue-toolbar hub-desktop-toolbar">
             <div className="send-queue-toolbar__stats">
               <QueueMetric
-                label="Sent today"
-                value={todayBucket?.sent_count ?? 0}
-                tip={explainSentToday(todayBucket?.sent_count ?? 0)}
+                label="Sending today"
+                value={sendingToday}
+                tip="Drafts on today’s handoff day — the volume leaving the hub today."
               />
               <QueueMetric
-                label="Waiting"
-                value={backlogCount}
-                tip={explainWaiting({
-                  queued: waitingQueued,
-                  sending: waitingSending,
-                  failed: waitingFailed,
-                })}
-              />
-              <QueueMetric
-                label="Open today"
-                value={data?.today_remaining ?? '—'}
-                tip={todayBucket
-                  ? explainOpenSlots({
-                    inboxCount: Math.max(1, inboxCount),
-                    capPerInbox,
-                    taken: todayBucket.used,
-                    held: todayBucket.reserved,
-                    open: todayBucket.remaining,
-                    capacity: todayBucket.capacity,
-                  })
-                  : 'Free inbox slots today after sent, queued, and auto holds. Hover a day column for the same math.'}
+                label="Active inbox capacity"
+                value={activeCapacity}
+                tip={activeInboxes.length
+                  ? `${activeInboxes.length} ramping or production ${activeInboxes.length === 1 ? 'mailbox' : 'mailboxes'} can send this many campaign emails today.`
+                  : 'No mailboxes are in ramping or production, so campaign capacity is 0.'}
               />
             </div>
-            <div className="send-queue-filter">
-              <span>Sender</span>
-              <div className="segmented" role="tablist">
-                {[['','All'],['lucas','Lucas'],['tommy','Tommy']].map(([value, label]) => (
-                  <button
-                    key={value || 'all'}
-                    type="button"
-                    className={identitySlug === value ? 'segmented__item segmented__item--active' : 'segmented__item'}
-                    onClick={() => {
-                      setIdentitySlug(value);
-                      setInboxEmail('');
-                    }}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="send-queue-filter">
-              <span>Daily cap</span>
-              <div className="segmented" role="group">
-                {[10, 20].map((cap) => (
-                  <button
-                    key={cap}
-                    type="button"
-                    className={(data?.daily_inbox_cap ?? 10) === cap ? 'segmented__item segmented__item--active' : 'segmented__item'}
-                    disabled={busy}
-                    onClick={() => void runAction(async () => {
-                      await requestJson('/api/send-queue/settings', {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ daily_inbox_cap: cap }),
-                      });
-                      setMessage(`Daily inbox cap set to ${cap}`);
-                    })}
-                  >
-                    {cap}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <label className="send-queue-filter">
-              <span>Address</span>
-              <select
-                value={inboxEmail}
-                onChange={(e) => setInboxEmail(e.target.value)}
-                className="field__input"
-              >
-                <option value="">All addresses</option>
-                {(data?.inboxes ?? [])
-                  .filter((inbox) => !identitySlug || inbox.identity_slug === identitySlug)
-                  .map((inbox) => (
-                    <option key={inbox.id} value={inbox.email}>
-                      {inbox.email} · {inbox.today_used}/{data?.daily_inbox_cap ?? 10} today
-                    </option>
-                  ))}
-              </select>
-            </label>
             <label className="send-queue-filter">
               <span>Campaign</span>
-              <select
-                value={campaignId}
-                onChange={(e) => setCampaignId(e.target.value)}
-                className="field__input"
-              >
+              <select className="field__input" value={campaignId} onChange={(e) => setCampaignId(e.target.value)}>
                 <option value="">All campaigns</option>
-                {campaigns.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                {campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </label>
+            <label className="send-queue-filter">
+              <span>Identity</span>
+              <select className="field__input" value={identity} onChange={(e) => setIdentity(e.target.value)}>
+                <option value="">Both</option>
+                {board.identities.map((slug) => (
+                  <option key={slug} value={slug}>{slug === 'lucas' ? 'Lucas' : 'Tommy'}</option>
                 ))}
               </select>
             </label>
-            <div className="send-queue-toolbar__actions">
-              <div className="send-queue-share" ref={shareMenuRef}>
-                <button
-                  type="button"
-                  className="btn btn--secondary"
-                  disabled={busy || backlogCount === 0}
-                  aria-expanded={shareOpen}
-                  aria-haspopup="menu"
-                  onClick={() => void openShareMenu()}
-                >
-                  <SquareSplitVertical size={14} aria-hidden="true" /> Push to
-                </button>
-                {shareOpen ? (
-                  <div className="send-queue-share__menu" role="menu">
-                    <div className="send-queue-share__hint">
-                      Move backlog to the other sender profile. That identity’s inboxes are packed to the earliest open days.
-                    </div>
-                    {shareLoading || !shareTargets ? (
-                      <p className="send-queue-share__empty">Loading sender profiles…</p>
-                    ) : shareTargets.length === 0 ? (
-                      <p className="send-queue-share__empty">No other sender profile found.</p>
-                    ) : (
-                      shareTargets.map((user) => (
-                        <button
-                          key={user.id}
-                          type="button"
-                          role="menuitem"
-                          className="send-queue-share__option"
-                          disabled={busy || user.backlog_count >= backlogCount}
-                          onClick={() => void shareWithUser(user)}
-                        >
-                          <span className="send-queue-share__identity">
-                            <span className="send-queue-share__email">{user.email}</span>
-                            {user.display_name && user.display_name !== user.email ? (
-                              <span className="send-queue-share__name">{user.display_name}</span>
-                            ) : null}
-                          </span>
-                          <span
-                            className="send-queue-share__days"
-                            aria-label={`Next five days: ${user.day_occupancy.filter(Boolean).length} occupied`}
-                          >
-                            {user.day_occupancy.map((occupied, index) => (
-                              <span
-                                key={index}
-                                className={`send-queue-share__day${occupied ? ' send-queue-share__day--full' : ''}`}
-                              />
-                            ))}
-                          </span>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                className="btn btn--primary"
-                disabled={!canSendNow || busy}
-                onClick={() => void runAction(async () => {
-                  const result = await requestJson<{ sent: number; queued?: number; failed?: number }>(
-                    '/api/send-queue/send-now',
-                    {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ ids: [...selected], ...ownerPayload }),
-                    },
-                  );
-                  const parts = [
-                    result.sent ? `Sent ${result.sent} now` : null,
-                    result.queued ? `Queued ${result.queued} — retrying when Agent Mail is back` : null,
-                    result.failed ? `${result.failed} failed` : null,
-                  ].filter(Boolean);
-                  setMessage(parts.length > 0 ? parts.join(' · ') : 'Nothing sent');
-                })}
-              >
-                <Send size={14} /> Send now
-              </button>
-              <button
-                type="button"
-                className="btn btn--secondary"
-                disabled={!canRetry || busy}
-                onClick={() => void runAction(async () => {
-                  const result = await requestJson<{ sent_now: number; requeued: number }>(
-                    '/api/send-queue/retry',
-                    {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ ids: [...selected], ...ownerPayload }),
-                    },
-                  );
-                  setMessage(`Retry: ${result.sent_now} sent · ${result.requeued} requeued`);
-                })}
-              >
-                <RotateCcw size={14} /> Retry
-              </button>
-              <button
-                type="button"
-                className="btn btn--secondary"
-                disabled={!canCancel || busy}
-                onClick={() => void runAction(async () => {
-                  const result = await requestJson<{ cancelled: number }>('/api/send-queue', {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ids: [...selected], ...ownerPayload }),
-                  });
-                  setMessage(`Cancelled ${result.cancelled}`);
-                })}
-              >
-                <Trash2 size={14} /> Cancel
-              </button>
-            </div>
+            <label className="send-queue-filter">
+              <span>Mailbox</span>
+              <select className="field__input" value={inboxEmail} onChange={(e) => setInboxEmail(e.target.value)}>
+                <option value="">All mailboxes</option>
+                {board.inboxes.map((inbox) => (
+                  <option key={inbox.id} value={inbox.email}>{inbox.email}</option>
+                ))}
+              </select>
+            </label>
           </div>
 
-          {error && <p className="field__error">{error}</p>}
-          {message && <p className="field__notice">{message}</p>}
+          {error ? <p className="field__error">{error}</p> : null}
+          {notice ? <p className="muted">{notice}</p> : null}
 
-          {data && data.days.length > 0 ? (
-            <div className="send-queue-day-pager">
-              <button
-                type="button"
-                className="btn"
-                disabled={dayIndex <= 0}
-                onClick={() => setDayIndex((index) => Math.max(0, index - 1))}
-                aria-label="Previous day"
-              >
-                <ChevronLeft size={18} />
-              </button>
-              <div className="send-queue-day-pager__label">
-                <strong>
-                  {data.days[Math.min(dayIndex, data.days.length - 1)]?.schedule_date === data.today
-                    ? 'Today'
-                    : formatNyDateLabel(data.days[Math.min(dayIndex, data.days.length - 1)]?.schedule_date ?? data.today)}
-                </strong>
-                <span>
-                  {formatNyWeekday(data.days[Math.min(dayIndex, data.days.length - 1)]?.schedule_date ?? data.today)}
-                  {' · '}
-                  {Math.min(dayIndex, data.days.length - 1) + 1} of {data.days.length}
-                </span>
-              </div>
-              <button
-                type="button"
-                className="btn"
-                disabled={dayIndex >= data.days.length - 1}
-                onClick={() => setDayIndex((index) => Math.min(data.days.length - 1, index + 1))}
-                aria-label="Next day"
-              >
-                <ChevronRight size={18} />
-              </button>
-            </div>
-          ) : null}
-
-          {!loading && data && backlogCount === 0 && data.days.every((d) => d.items.length === 0 && (d.reservations ?? []).length === 0) ? (
-            <p className="send-queue-empty">
-              No queued emails. Open slots today send immediately; overflow lands here.
+          {unassigned > 0 ? (
+            <p className="muted" style={{ marginTop: 0 }}>
+              {unassigned} approved {unassigned === 1 ? 'draft has' : 'drafts have'} no handoff day
+              yet. Check the lane status and mailbox capacity below.
             </p>
           ) : null}
 
-          <div className="send-queue-board" ref={boardRef}>
-            {data?.days.map((day, index) => {
-              const isPast = day.schedule_date < data.today;
-              const weekend = isNyCalendarWeekend(day.schedule_date);
-              const weekday = formatNyWeekday(day.schedule_date);
-              const selectable = day.items.filter((item) => item.status === 'queued' || item.status === 'failed');
-              const takenTip = explainTakenSlots({
-                sent: day.sent_count,
-                queued: day.queued_count,
-                taken: day.used,
-              });
-              const openTip = explainOpenSlots({
-                inboxCount: Math.max(1, Math.round(day.capacity / capPerInbox) || inboxCount),
-                capPerInbox,
-                taken: day.used,
-                held: day.reserved,
-                open: day.remaining,
-                capacity: day.capacity,
-              });
-              return (
-              <div
-                key={day.schedule_date}
-                className={`send-queue-day${day.schedule_date === data.today ? ' send-queue-day--today' : ''}${isPast ? ' send-queue-day--past' : ''}${weekend ? ' send-queue-day--weekend' : ''}${index === Math.min(dayIndex, data.days.length - 1) ? ' is-mobile-active' : ''}`}
-                onDragOver={isPast ? undefined : (e) => {
-                  e.preventDefault();
-                  e.dataTransfer.dropEffect = 'move';
-                }}
-                onDrop={isPast ? undefined : (e) => void onDropDay(day.schedule_date, e)}
-              >
-                <div className="send-queue-day__head">
-                  <div>
-                    <strong>
-                      {day.schedule_date === data.today ? 'Today' : formatNyDateLabel(day.schedule_date)}
-                      <span className="send-queue-day__weekday"> · {weekday}</span>
-                    </strong>
-                    {weekend ? (
-                      <span className="send-queue-day__weekend-tag">Weekend</span>
-                    ) : (
-                      <span className="send-queue-day__date">{day.schedule_date}</span>
-                    )}
-                  </div>
-                  {weekend && day.used === 0 && day.reserved === 0 ? (
-                    <div className="send-queue-day__cap">Auto skips Sat/Sun</div>
-                  ) : (
-                    <div className="send-queue-day__cap">
-                      <div
-                        className="queue-slot-bar"
-                        aria-hidden="true"
-                        title={openTip}
-                      >
-                        <span className="queue-slot-bar__sent" style={{ flexGrow: Math.max(day.sent_count, 0) }} />
-                        <span className="queue-slot-bar__queued" style={{ flexGrow: Math.max(day.queued_count, 0) }} />
-                        <span className="queue-slot-bar__held" style={{ flexGrow: Math.max(day.reserved, 0) }} />
-                        <span className="queue-slot-bar__open" style={{ flexGrow: Math.max(day.remaining, 0.5) }} />
-                      </div>
-                      <div className="send-queue-day__metrics">
-                        <QueueMetric compact label="sent" value={day.sent_count} tip={explainSentOnDay(day.sent_count, day.schedule_date === data.today)} />
-                        <QueueMetric compact label="queued" value={day.queued_count} tip={takenTip} />
-                        {day.reserved > 0 ? (
-                          <QueueMetric compact label="held" value={day.reserved} tip={explainHeldSlots(day.reserved)} />
-                        ) : null}
-                        <QueueMetric compact label={`open / ${day.capacity}`} value={day.remaining} tip={openTip} />
-                        {day.over_cap ? <span className="send-queue-day__over">Over cap</span> : null}
-                      </div>
-                    </div>
-                  )}
-                </div>
-                {selectable.length > 0 ? (
-                  <button
-                    type="button"
-                    className="send-queue-day__select-all"
-                    onClick={() => selectAllDay(day)}
-                  >
-                    Select all
-                  </button>
-                ) : day.items.length === 0 && (day.reservations ?? []).length === 0 ? (
-                  <p className="send-queue-day__empty">
-                    {isPast
-                      ? (weekend ? 'Weekend · no sends' : 'No sends')
-                      : weekend
-                        ? 'Weekend — auto campaigns skip these days'
-                        : 'Drop here'}
-                  </p>
-                ) : null}
-                <ul className="send-queue-cards">
-                  {(day.reservations ?? []).map((lock) => (
-                    <li key={`lock-${lock.campaign_id}-${day.schedule_date}`}>
-                      <button
-                        type="button"
-                        className="send-queue-card send-queue-card--lock send-queue-card--campaign"
-                        style={campaignTint(campaignColors.get(lock.campaign_id))}
-                        title={explainHeldSlots(lock.reserved, lock.emails_per_day, lock.already_slotted)}
-                        onClick={() => {
-                          setDetailId(null);
-                          setReservationDetail(lock);
-                        }}
-                      >
-                        <span className="send-queue-card__name">{lock.campaign_name}</span>
-                        <span className="send-queue-card__subject">
-                          {lock.already_slotted > 0
-                            ? `Holding ${lock.reserved} of ${lock.emails_per_day}/day`
-                            : `${lock.emails_per_day}/day upcoming`}
-                        </span>
-                        <span className="send-queue-card__meta">
-                          {lock.already_slotted > 0
-                            ? `${lock.already_slotted} on this day (sent + queued)`
-                            : 'No emails yet — seats held so other campaigns cannot take them'}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                  {day.items.map((item) => (
-                    <li
-                      key={item.id}
-                      className={`send-queue-card send-queue-card--campaign${selected.has(item.id) ? ' send-queue-card--selected' : ''}${item.overdue ? ' send-queue-card--overdue' : ''}${item.status === 'sent' ? ' send-queue-card--sent' : ''}`}
-                      style={campaignTint(campaignColors.get(item.campaign_id))}
-                      draggable={item.status === 'queued' || item.status === 'failed'}
-                      onDragStart={(e) => onDragStart(item, e)}
-                      onDragEnd={() => setDragIds(null)}
-                    >
-                      {item.status !== 'sent' ? (
-                      <label className="send-queue-card__check">
-                        <input
-                          type="checkbox"
-                          checked={selected.has(item.id)}
-                          onChange={() => toggleSelect(item.id)}
-                        />
-                      </label>
-                      ) : null}
-                      <button
-                        type="button"
-                        className="send-queue-card__body"
-                        onClick={() => {
-                          setReservationDetail(null);
-                          setDetailId(item.id);
-                        }}
-                      >
-                        <span className="send-queue-card__name">
-                          {item.recipient_name || item.to_email}
-                        </span>
-                        <span className="send-queue-card__subject">{item.subject}</span>
-                        <span className="send-queue-card__meta">
-                          {item.from_email || item.inbox_email || ''}
-                          {item.from_email || item.inbox_email ? ' · ' : ''}
-                          {item.campaign_name}
-                          {' · '}
-                          {queueCardStatus(item)}
-                          {item.overdue ? ' · overdue' : ''}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              );
-            })}
+          {ids.length > 0 ? (
+            <div className="send-queue-selection">
+              <strong>{ids.length} selected</strong>
+              <button type="button" className="button" disabled={busy} onClick={() => void sendNow()}>
+                <Send size={14} /> Send now
+              </button>
+              <button type="button" className="button button--ghost" disabled={busy} onClick={() => void retry()}>
+                <RotateCcw size={14} /> Retry failed
+              </button>
+              <button type="button" className="button button--ghost" disabled={busy} onClick={() => void cancel()}>
+                <Trash2 size={14} /> Cancel
+              </button>
+              <button type="button" className="button button--ghost" onClick={() => setSelected(new Set())}>
+                Clear
+              </button>
+            </div>
+          ) : null}
+
+          <div className="send-queue-board-wrap">
+            <button type="button" className="send-queue-board-wrap__nav" aria-label="Scroll left" onClick={() => scrollBy(-1)}>
+              <ChevronLeft size={16} />
+            </button>
+            <div className="send-queue-board-scroller" ref={scrollerRef}>
+              {board.days.map((day) => (
+                <DayColumn
+                  key={day.date}
+                  day={day}
+                  today={board.today}
+                  selected={selected}
+                  dragId={dragId}
+                  onToggle={toggle}
+                  onOpen={setDetail}
+                  onDragStart={setDragId}
+                  onDrop={(date) => {
+                    const moving = dragId ? [dragId] : ids;
+                    setDragId(null);
+                    if (moving.length) void moveTo(date, moving);
+                  }}
+                />
+              ))}
+            </div>
+            <button type="button" className="send-queue-board-wrap__nav" aria-label="Scroll right" onClick={() => scrollBy(1)}>
+              <ChevronRight size={16} />
+            </button>
           </div>
+          </div>
+
+          <p className="muted" style={{ marginTop: '0.75rem', fontSize: '0.85rem' }}>
+            {board.forecast_note}
+          </p>
         </div>
       </section>
 
       <MobileFilterMenu
-        title="Queue controls"
-        subtitle={`Sent today ${todayBucket?.sent_count ?? 0} · Waiting ${backlogCount} · Open ${data?.today_remaining ?? '—'}`}
+        title="Queue filters"
+        subtitle="Campaign, identity and mailbox."
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
       >
         <FilterAccordion
-          label="Sender"
-          value={identitySlug === 'lucas' ? 'Lucas' : identitySlug === 'tommy' ? 'Tommy' : 'All senders'}
-          open={openSection === 'sender'}
-          onToggle={() => setOpenSection((current) => (current === 'sender' ? null : 'sender'))}
-        >
-          <ChoiceList
-            options={[
-              { id: '', label: 'All senders' },
-              { id: 'lucas', label: 'Lucas' },
-              { id: 'tommy', label: 'Tommy' },
-            ]}
-            value={identitySlug}
-            onChange={(id) => {
-              setIdentitySlug(id);
-              setInboxEmail('');
-            }}
-          />
-        </FilterAccordion>
-        <FilterAccordion
-          label="Daily cap"
-          value={`${data?.daily_inbox_cap ?? 10} / inbox`}
-          open={openSection === 'cap'}
-          onToggle={() => setOpenSection((current) => (current === 'cap' ? null : 'cap'))}
-        >
-          <ChoiceList
-            options={[
-              { id: '10', label: '10 per inbox' },
-              { id: '20', label: '20 per inbox' },
-            ]}
-            value={String(data?.daily_inbox_cap ?? 10)}
-            onChange={(id) => void runAction(async () => {
-              await requestJson('/api/send-queue/settings', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ daily_inbox_cap: Number(id) }),
-              });
-              setMessage(`Daily inbox cap set to ${id}`);
-            })}
-          />
-        </FilterAccordion>
-        <FilterAccordion
-          label="Address"
-          value={inboxEmail || 'All addresses'}
-          open={openSection === 'address'}
-          onToggle={() => setOpenSection((current) => (current === 'address' ? null : 'address'))}
-        >
-          <ChoiceList
-            options={[
-              { id: '', label: 'All addresses' },
-              ...(data?.inboxes ?? [])
-                .filter((inbox) => !identitySlug || inbox.identity_slug === identitySlug)
-                .map((inbox) => ({
-                  id: inbox.email,
-                  label: `${inbox.email} · ${inbox.today_used}/${data?.daily_inbox_cap ?? 10} today`,
-                })),
-            ]}
-            value={inboxEmail}
-            onChange={setInboxEmail}
-          />
-        </FilterAccordion>
-        <FilterAccordion
           label="Campaign"
           value={campaignId ? (campaigns.find((c) => c.id === campaignId)?.name ?? 'Campaign') : 'All campaigns'}
           open={openSection === 'campaign'}
-          onToggle={() => setOpenSection((current) => (current === 'campaign' ? null : 'campaign'))}
+          onToggle={() => setOpenSection((s) => (s === 'campaign' ? null : 'campaign'))}
         >
           <ChoiceList
-            options={[
-              { id: '', label: 'All campaigns' },
-              ...campaigns.map((campaign) => ({ id: campaign.id, label: campaign.name })),
-            ]}
+            options={[{ id: '', label: 'All campaigns' }, ...campaigns.map((c) => ({ id: c.id, label: c.name }))]}
             value={campaignId}
             onChange={setCampaignId}
           />
         </FilterAccordion>
         <FilterAccordion
-          label="Actions"
-          value={selected.size ? `${selected.size} selected` : 'Send, retry, cancel'}
-          open={openSection === 'actions'}
-          onToggle={() => setOpenSection((current) => (current === 'actions' ? null : 'actions'))}
+          label="Identity"
+          value={identity || 'Both identities'}
+          open={openSection === 'identity'}
+          onToggle={() => setOpenSection((s) => (s === 'identity' ? null : 'identity'))}
         >
-          <div className="hub-mobile-actions">
-            <button
-              type="button"
-              className="btn btn--secondary"
-              disabled={busy || backlogCount === 0}
-              onClick={() => void openShareMenu()}
-            >
-              <SquareSplitVertical size={14} aria-hidden="true" /> Push to
-            </button>
-            {shareOpen ? (
-              <div className="send-queue-share__menu" role="menu">
-                {shareLoading || !shareTargets ? (
-                  <p className="send-queue-share__empty">Loading sender profiles…</p>
-                ) : shareTargets.length === 0 ? (
-                  <p className="send-queue-share__empty">No other sender profile found.</p>
-                ) : (
-                  shareTargets.map((user) => (
-                    <button
-                      key={user.id}
-                      type="button"
-                      role="menuitem"
-                      className="send-queue-share__option"
-                      disabled={busy || user.backlog_count >= backlogCount}
-                      onClick={() => void shareWithUser(user)}
-                    >
-                      {user.display_name || user.email}
-                    </button>
-                  ))
-                )}
-              </div>
-            ) : null}
-            <button
-              type="button"
-              className="btn btn--primary"
-              disabled={!canSendNow || busy}
-              onClick={() => void runAction(async () => {
-                const result = await requestJson<{ sent: number; queued?: number; failed?: number }>(
-                  '/api/send-queue/send-now',
-                  {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ids: [...selected], ...ownerPayload }),
-                  },
-                );
-                const parts = [
-                  result.sent ? `Sent ${result.sent} now` : null,
-                  result.queued ? `Queued ${result.queued} — retrying when Agent Mail is back` : null,
-                  result.failed ? `${result.failed} failed` : null,
-                ].filter(Boolean);
-                setMessage(parts.length > 0 ? parts.join(' · ') : 'Nothing sent');
-                setMenuOpen(false);
-              })}
-            >
-              <Send size={14} /> Send now
-            </button>
-            <button
-              type="button"
-              className="btn btn--secondary"
-              disabled={!canRetry || busy}
-              onClick={() => void runAction(async () => {
-                const result = await requestJson<{ sent_now: number; requeued: number }>(
-                  '/api/send-queue/retry',
-                  {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ids: [...selected], ...ownerPayload }),
-                  },
-                );
-                setMessage(`Retry: ${result.sent_now} sent · ${result.requeued} requeued`);
-                setMenuOpen(false);
-              })}
-            >
-              <RotateCcw size={14} /> Retry
-            </button>
-            <button
-              type="button"
-              className="btn btn--secondary"
-              disabled={!canCancel || busy}
-              onClick={() => void runAction(async () => {
-                const result = await requestJson<{ cancelled: number }>('/api/send-queue', {
-                  method: 'DELETE',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ ids: [...selected], ...ownerPayload }),
-                });
-                setMessage(`Cancelled ${result.cancelled}`);
-                setMenuOpen(false);
-              })}
-            >
-              <Trash2 size={14} /> Cancel
-            </button>
-          </div>
+          <ChoiceList
+            options={[
+              { id: '', label: 'Both identities' },
+              ...board.identities.map((slug) => ({ id: slug, label: slug === 'lucas' ? 'Lucas' : 'Tommy' })),
+            ]}
+            value={identity}
+            onChange={setIdentity}
+          />
+        </FilterAccordion>
+        <FilterAccordion
+          label="Mailbox"
+          value={inboxEmail || 'All mailboxes'}
+          open={openSection === 'inbox'}
+          onToggle={() => setOpenSection((s) => (s === 'inbox' ? null : 'inbox'))}
+        >
+          <ChoiceList
+            options={[
+              { id: '', label: 'All mailboxes' },
+              ...board.inboxes.map((inbox) => ({ id: inbox.email, label: inbox.email })),
+            ]}
+            value={inboxEmail}
+            onChange={setInboxEmail}
+          />
         </FilterAccordion>
       </MobileFilterMenu>
 
-      {detailId && detail ? (
-        <div className="drawer-overlay" role="presentation" onClick={() => setDetailId(null)}>
-          <div
-            className="drawer"
-            role="dialog"
-            aria-label="Queued email detail"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="drawer__header">
-              <div>
-                <div className="card__title">
-                  {detail.item.recipient_name || detail.item.to_email}
-                </div>
-                <div className="card__subtitle">
-                  {formatNyDateLabel(detail.item.schedule_date)} · {detail.item.status}
-                </div>
-              </div>
-              <button
-                type="button"
-                className="drawer__close"
-                aria-label="Close"
-                onClick={() => setDetailId(null)}
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <div className="drawer__body send-queue-detail">
-              <p><strong>To:</strong> {detail.item.to_email}</p>
-              <p><strong>Subject:</strong> {detail.item.subject}</p>
-              <p>
-                <strong>Campaign:</strong>{' '}
-                <Link href={detail.campaign_href}>{detail.item.campaign_name}</Link>
-              </p>
-              {detail.item.error_message && isAgentMailAccountSendingPausedError(detail.item.error_message) ? (
-                <p className="field__error">
-                  Agent Mail sending is paused. This stays queued and retries every 4 hours
-                  (next try {formatNyDateTime(detail.item.scheduled_for)}).
-                </p>
-              ) : detail.item.error_message ? (
-                <p className="field__error">{detail.item.error_message}</p>
-              ) : null}
-              <pre className="send-queue-detail__body">{detail.body_text ?? '(no draft body)'}</pre>
-            </div>
-          </div>
-        </div>
-      ) : null}
-      {reservationDetail ? (
-        <div className="drawer-overlay" role="presentation" onClick={() => setReservationDetail(null)}>
-          <div
-            className="drawer"
-            role="dialog"
-            aria-label="Auto campaign reservation"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="drawer__header">
-              <div>
-                <div className="card__title">{reservationDetail.campaign_name}</div>
-                <div className="card__subtitle">Held inbox seats for this auto campaign</div>
-              </div>
-              <button
-                type="button"
-                className="drawer__close"
-                aria-label="Close"
-                onClick={() => setReservationDetail(null)}
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <div className="drawer__body send-queue-detail">
-              <p title={explainHeldSlots(reservationDetail.reserved, reservationDetail.emails_per_day, reservationDetail.already_slotted)}>
-                <strong>Held:</strong> {reservationDetail.reserved} seats still to fill of {reservationDetail.emails_per_day}/day
-              </p>
-              <p>
-                <strong>On this day:</strong> {reservationDetail.already_slotted} already queued or sent
-                {' '}(this is not “sent today” — queued mail counts here too)
-              </p>
-              <p><strong>Industry:</strong> {reservationDetail.lead_attributes.industry || '—'}</p>
-              <p><strong>Seniority:</strong> {reservationDetail.lead_attributes.seniority || '—'}</p>
-              <p><strong>Geography:</strong> {reservationDetail.lead_attributes.geography || '—'}</p>
-              <p><strong>Business size:</strong> {reservationDetail.lead_attributes.business_size || '—'}</p>
-              <p>
-                <Link href={`/campaigns/${reservationDetail.campaign_id}/prospect`}>Open Prospect</Link>
-              </p>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {detail ? <QueueDetailDrawer item={detail} onClose={() => setDetail(null)} /> : null}
     </main>
+  );
+}
+
+function DayColumn(props: {
+  day: QueueDayBucket;
+  today: string;
+  selected: Set<string>;
+  dragId: string | null;
+  onToggle: (id: string) => void;
+  onOpen: (item: QueueListItem) => void;
+  onDragStart: (id: string) => void;
+  onDrop: (date: string) => void;
+}) {
+  const { day, today } = props;
+  const isToday = day.date === today;
+  const isPast = day.date < today;
+  const weekend = isNyCalendarWeekend(day.date);
+
+  return (
+    <div
+      className="send-queue-day-panel"
+      onDragOver={(event: DragEvent) => event.preventDefault()}
+      onDrop={() => props.onDrop(day.date)}
+      style={{
+        border: `1px solid ${isToday ? 'var(--color-accent, #2f6feb)' : 'var(--color-border, #d8dee8)'}`,
+        borderRadius: '10px',
+        padding: '0.75rem',
+        background: weekend ? 'var(--color-surface-muted, #f5f7fa)' : 'var(--color-surface, #fff)',
+        opacity: isPast ? 0.75 : 1,
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <strong>{formatNyDateLabel(day.date)}</strong>
+        <span className="muted">{formatNyWeekday(day.date)}{isToday ? ' · today' : ''}</span>
+      </div>
+
+      <div className="muted" style={{ fontSize: '0.8rem', margin: '0.35rem 0 0.6rem' }}>
+        {day.totals.planned} planned · {day.totals.actual} sent · capacity {day.totals.capacity}
+        {day.totals.followups > 0 ? ` · ${day.totals.followups} follow-ups` : ''}
+        <br />
+        <span title="Estimate. Smartlead decides the sender and the minute.">
+          forecast {day.totals.forecast}
+        </span>
+      </div>
+
+      {day.campaigns.length > 0 ? (
+        <div style={{ marginBottom: '0.6rem' }}>
+          {day.campaigns.map((campaign) => (
+            <CampaignRow key={campaign.campaign_id} campaign={campaign} />
+          ))}
+        </div>
+      ) : null}
+
+      {day.mailboxes.some((mailbox) => mailbox.cap > 0 || mailbox.actual > 0) ? (
+        <details style={{ marginBottom: '0.6rem' }}>
+          <summary className="muted" style={{ fontSize: '0.8rem', cursor: 'pointer' }}>
+            Mailboxes
+          </summary>
+          {day.mailboxes
+            .filter((mailbox) => mailbox.cap > 0 || mailbox.actual > 0)
+            .map((mailbox) => <MailboxRow key={mailbox.inbox_id} mailbox={mailbox} />)}
+        </details>
+      ) : null}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+        {day.items.length === 0 ? (
+          <span className="muted" style={{ fontSize: '0.8rem' }}>Nothing scheduled.</span>
+        ) : null}
+        {day.items.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            draggable={item.status === 'queued' || item.status === 'handed_off'}
+            onDragStart={() => props.onDragStart(item.id)}
+            onClick={(event) => {
+              if (event.metaKey || event.ctrlKey || event.shiftKey) props.onToggle(item.id);
+              else props.onOpen(item);
+            }}
+            style={{
+              textAlign: 'left',
+              border: `1px solid ${props.selected.has(item.id) ? 'var(--color-accent, #2f6feb)' : 'var(--color-border, #e3e8ef)'}`,
+              borderLeft: `4px solid ${item.queue_color ?? 'var(--color-border, #e3e8ef)'}`,
+              borderRadius: '6px',
+              padding: '0.4rem 0.55rem',
+              background: 'var(--color-surface, #fff)',
+              cursor: 'pointer',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
+              <span style={{ fontWeight: 500 }}>{item.recipient_name || item.to_email}</span>
+              <span className={deliveryChipClass(item.delivery_status)}>
+                {DELIVERY_LABELS[item.delivery_status]}
+              </span>
+            </div>
+            <div className="muted" style={{ fontSize: '0.78rem' }}>{item.campaign_name}</div>
+            {item.waiting_reason ? (
+              <div className="muted" style={{ fontSize: '0.75rem' }}>
+                {WAITING_LABELS[item.waiting_reason] ?? item.waiting_reason}
+              </div>
+            ) : null}
+            {item.overdue ? (
+              <div className="muted" style={{ fontSize: '0.75rem' }}>Past its handoff day.</div>
+            ) : null}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CampaignRow({ campaign }: { campaign: QueueCampaignDayStat }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', fontSize: '0.8rem' }}>
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span
+          aria-hidden
+          style={{
+            display: 'inline-block',
+            width: '0.5rem',
+            height: '0.5rem',
+            borderRadius: '50%',
+            marginRight: '0.35rem',
+            background: campaign.queue_color ?? 'var(--color-border, #d8dee8)',
+          }}
+        />
+        {campaign.name}
+        {campaign.lane_status && campaign.lane_status !== 'ready' ? (
+          <span className="muted"> · lane {campaign.lane_status}</span>
+        ) : null}
+      </span>
+      <span className="muted" title="Planned / forecast / actual. Forecast is an estimate.">
+        {campaign.planned}/{campaign.forecast}/{campaign.actual}
+      </span>
+    </div>
+  );
+}
+
+function MailboxRow({ mailbox }: { mailbox: QueueMailboxDayStat }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', fontSize: '0.78rem' }}>
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {mailbox.email}
+        <span className="muted"> · {mailbox.stage}</span>
+        {mailbox.variance_flag ? <span className="muted"> · under plan</span> : null}
+      </span>
+      <span className="muted" title="Estimated share / actual / cap">
+        {mailbox.planned}/{mailbox.actual}/{mailbox.cap}
+      </span>
+    </div>
+  );
+}
+
+function QueueDetailDrawer({ item, onClose }: { item: QueueListItem; onClose: () => void }) {
+  return (
+    <div className="drawer-overlay" role="presentation" onClick={onClose}>
+      <div className="drawer" role="dialog" aria-label="Queued draft" onClick={(e) => e.stopPropagation()}>
+        <div className="drawer__header">
+          <div>
+            <div className="card__title">{item.recipient_name || item.to_email}</div>
+            <div className="card__subtitle">{item.campaign_name}</div>
+          </div>
+          <button type="button" className="drawer__close" aria-label="Close" onClick={onClose}>
+            <X size={16} />
+          </button>
+        </div>
+        <div className="drawer__body" style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+          <Field label="To">{item.to_email}</Field>
+          <Field label="Subject">{item.subject}</Field>
+          <Field label="Status">{DELIVERY_LABELS[item.delivery_status]}</Field>
+          <Field label="Handoff day">
+            {item.handoff_date ? formatNyDateLabel(item.handoff_date) : 'Not scheduled yet'}
+          </Field>
+          {item.handed_off_at ? (
+            <Field label="Handed to Smartlead">{new Date(item.handed_off_at).toLocaleString()}</Field>
+          ) : null}
+          {item.sent_date ? <Field label="Sent">{formatNyDateLabel(item.sent_date)}</Field> : null}
+          {item.inbox_email ? <Field label="Mailbox">{item.inbox_email}</Field> : null}
+          {item.smartlead_lead_id ? (
+            <Field label="Smartlead lead">{item.smartlead_lead_id}</Field>
+          ) : null}
+          {item.waiting_reason ? (
+            <Field label="Waiting because">
+              {WAITING_LABELS[item.waiting_reason] ?? item.waiting_reason}
+            </Field>
+          ) : null}
+          {item.error_message ? <Field label="Error">{item.error_message}</Field> : null}
+          <p className="muted" style={{ fontSize: '0.8rem', margin: 0 }}>
+            Smartlead chooses the sending mailbox and the exact minute inside the campaign
+            schedule. The hub controls only which day this is handed over.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="muted" style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+        {label}
+      </div>
+      <div>{children}</div>
+    </div>
   );
 }

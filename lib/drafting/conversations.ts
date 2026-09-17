@@ -72,9 +72,7 @@ export type ConversationThread = {
 
 export type ConversationStats = {
   conversations: number;
-  awaiting: number;
-  sent: number;
-  failed: number;
+  replied: number;
 };
 
 /** Statuses that mean the thread is still waiting on somebody. */
@@ -105,17 +103,16 @@ export async function listConversationStats(
   }
   const { rows } = await dbQuery<{
     conversations: string;
-    awaiting: string;
-    sent: string;
-    failed: string;
+    replied: string;
   }>(
     `WITH threads AS (
        SELECT DISTINCT ON (ib.drafting_item_id)
               ib.drafting_item_id,
-              rs.status AS reply_status
+              rs.status AS reply_status,
+              rs.sent_at AS reply_sent_at
          FROM outreach.inbound_emails ib
          LEFT JOIN LATERAL (
-           SELECT status
+           SELECT status, sent_at
              FROM outreach.reply_sends
             WHERE drafting_item_id = ib.drafting_item_id
               AND status <> 'cancelled'
@@ -128,19 +125,15 @@ export async function listConversationStats(
      )
      SELECT count(*)::text AS conversations,
             count(*) FILTER (
-              WHERE reply_status IN ${AWAITING_STATUSES} OR reply_status IS NULL
-            )::text AS awaiting,
-            count(*) FILTER (WHERE reply_status = 'sent')::text AS sent,
-            count(*) FILTER (WHERE reply_status IN ('failed', 'skipped'))::text AS failed
+              WHERE reply_status = 'sent' OR reply_sent_at IS NOT NULL
+            )::text AS replied
        FROM threads`,
     params,
   );
   const row = rows[0];
   return {
     conversations: Number(row?.conversations ?? 0),
-    awaiting: Number(row?.awaiting ?? 0),
-    sent: Number(row?.sent ?? 0),
-    failed: Number(row?.failed ?? 0),
+    replied: Number(row?.replied ?? 0),
   };
 }
 
@@ -241,7 +234,11 @@ export async function listConversations(input: {
        ) rs ON true
       WHERE true
         ${having}
-      ORDER BY latest.received_at DESC
+      ORDER BY CASE
+                 WHEN rs.status = 'awaiting_human' AND rs.scheduled_for > now() THEN 0
+                 ELSE 1
+               END,
+               latest.received_at DESC
       LIMIT $${limitIdx}`,
     params,
   );

@@ -25,7 +25,7 @@ import {
 } from '@/lib/smartlead/handoff';
 import { listUnfinishedLanes } from '@/lib/smartlead/lanes';
 import { toNumber } from '@/lib/smartlead/types';
-import { recordCycleFixedCosts } from '@/lib/smartlead/costs';
+import { cycleStartFor, recordCycleFixedCosts } from '@/lib/smartlead/costs';
 
 export type ReconcileReport = {
   skipped?: 'smartlead_disabled';
@@ -282,15 +282,7 @@ async function refreshUsageCache(
   return usage;
 }
 
-/** First day of the billing cycle containing `day`. */
-export function cycleStartFor(day: string, billingDay: number): string {
-  const [year, month, date] = day.split('-').map(Number);
-  const anchor = Math.min(Math.max(1, billingDay), 28);
-  const start = date >= anchor
-    ? new Date(Date.UTC(year, month - 1, anchor))
-    : new Date(Date.UTC(year, month - 2, anchor));
-  return start.toISOString().slice(0, 10);
-}
+export { cycleStartFor } from '@/lib/smartlead/costs';
 
 /** Queues today's and tomorrow's handoff jobs for every lane with demand. */
 async function enqueueDueHandoffs(day: string, now: Date): Promise<number> {

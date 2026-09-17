@@ -14,6 +14,7 @@ import {
   stripTrailingTextSignature,
   TOMMY_SIGNATURE_DEFAULTS,
   plainTextBodyToHtml,
+  heliosIdentitySignatureHtml,
 } from '@/lib/drafting/email-signature';
 import { pickIdentityHeadshotPath } from '@/lib/drafting/sender-identities';
 
@@ -199,6 +200,13 @@ test('buildOutreachEmailHtml includes cid photo table signature', () => {
   assert.match(html, /Helios Group/);
   const text = appendPlainTextSignature('Hi Sam,\n\nQuick note.', sig);
   assert.match(text, /Lucas Figueroa\nPresident\nHelios Group/);
+});
+
+test('heliosIdentitySignatureHtml is the shared headshot signature for hub and Smartlead', () => {
+  const html = heliosIdentitySignatureHtml('lucas');
+  assert.match(html, /Lucas Figueroa/);
+  assert.match(html, /<img /);
+  assert.match(html, /signatures\//);
 });
 
 test('publicAppOrigin ignores localhost AUTH_URL and defaults to production', () => {

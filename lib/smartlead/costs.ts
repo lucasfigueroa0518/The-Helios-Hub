@@ -1,18 +1,21 @@
 /**
  * Delivery costs (§5H).
  *
- * The Smartlead subscription and the Microsoft 365 seats are fixed monthly
- * fees, so they are written **once per billing cycle** as `phase='subscription'`
- * rows with no `lead_id`, and divided at read time by that cycle's actual
- * step-1 sends. Writing a per-send row would charge the same fee twice: once in
- * the subscription row and again per email.
- *
- * The only per-event delivery cost is a verifier check.
+ * Smartlead is a $94/month subscription clocked on its own Analytics line:
+ * a monthly (or longer) view takes the full month once per calendar month
+ * covered; a shorter view prorates `price × (days in range / days in month)`.
+ * Used send capacity (sends / prorated plan emails) is outreach; the unused
+ * remainder stays wasted. Microsoft 365 seats stay as overlapping billing-cycle
+ * lumps. The only per-event delivery cost is a verifier check. Historical
+ * AgentMail sends keep $0.002 each.
  */
 import { dbQuery } from '@/lib/db';
-import { countBillableSeats } from '@/lib/inboxes/repository';
-import { getOrgSettings } from '@/lib/org-settings';
-import { cycleStartFor } from '@/lib/smartlead/reconcile';
+import {
+  DEFAULT_PLAN_LIMITS,
+  getOrgSetting,
+  getOrgSettings,
+  type PlanLimits,
+} from '@/lib/org-settings';
 
 export type DeliveryPricing = {
   smartleadPerMonthUsd: number;
@@ -26,7 +29,7 @@ export type DeliveryPricing = {
 
 /** Historical AgentMail sends keep their original per-send price so old
  * analytics totals still reconcile. */
-export const LEGACY_AGENTMAIL_USD_PER_SEND = 0.004;
+export const LEGACY_AGENTMAIL_USD_PER_SEND = 0.002;
 
 export async function loadDeliveryPricing(): Promise<DeliveryPricing> {
   const settings = await getOrgSettings([
@@ -52,9 +55,137 @@ export async function loadDeliveryPricing(): Promise<DeliveryPricing> {
   };
 }
 
+/** `YYYY-MM-DD` start of the billing cycle that contains `day`. */
+export function cycleStartFor(day: string, billingDay: number): string {
+  const [year, month, date] = day.split('-').map(Number);
+  const anchor = Math.min(Math.max(1, billingDay), 28);
+  const start = date >= anchor
+    ? new Date(Date.UTC(year, month - 1, anchor))
+    : new Date(Date.UTC(year, month - 2, anchor));
+  return start.toISOString().slice(0, 10);
+}
+
 /** `YYYY-MM` tag for the cycle that contains `day`. */
 export function cycleTag(day: string, billingDay: number): string {
   return cycleStartFor(day, billingDay).slice(0, 7);
+}
+
+/** Inclusive start and exclusive end of the billing cycle tagged `YYYY-MM`. */
+export function cycleBounds(cycle: string, billingDay: number): { start: string; endExclusive: string } {
+  const [year, month] = cycle.split('-').map(Number);
+  const day = Math.min(Math.max(1, billingDay), 28);
+  const start = new Date(Date.UTC(year, month - 1, day));
+  const end = new Date(Date.UTC(year, month, day));
+  return {
+    start: start.toISOString().slice(0, 10),
+    endExclusive: end.toISOString().slice(0, 10),
+  };
+}
+
+/** True when the billing cycle and the reporting window share at least one day. */
+export function cycleOverlapsWindow(
+  cycle: string,
+  billingDay: number,
+  from: string,
+  to: string,
+): boolean {
+  const { start, endExclusive } = cycleBounds(cycle, billingDay);
+  return from < endExclusive && to >= start;
+}
+
+const MS_PER_DAY = 86_400_000;
+/** Inclusive day count at which a window is treated as a full month, not prorated. */
+const SMARTLEAD_FULL_MONTH_DAYS = 28;
+
+function utcDayStart(day: string): Date {
+  return new Date(`${day.slice(0, 10)}T00:00:00.000Z`);
+}
+
+/** Inclusive UTC calendar days from `from` through `to`. */
+export function inclusiveUtcDays(from: string, to: string): number {
+  const start = utcDayStart(from).getTime();
+  const end = utcDayStart(to).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return 0;
+  return Math.floor((end - start) / MS_PER_DAY) + 1;
+}
+
+type CalendarMonth = { year: number; month: number; days: number };
+
+function utcCalendarMonthsOverlapping(from: string, to: string): CalendarMonth[] {
+  const start = utcDayStart(from);
+  const end = utcDayStart(to);
+  if (end < start) return [];
+  const out: CalendarMonth[] = [];
+  let year = start.getUTCFullYear();
+  let month = start.getUTCMonth();
+  const endYear = end.getUTCFullYear();
+  const endMonth = end.getUTCMonth();
+  while (year < endYear || (year === endYear && month <= endMonth)) {
+    const days = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    out.push({ year, month, days });
+    month += 1;
+    if (month > 11) {
+      month = 0;
+      year += 1;
+    }
+  }
+  return out;
+}
+
+/**
+ * Clock the Smartlead subscription against a reporting window.
+ *
+ * Monthly views and longer ranges (28+ days) take the full list price once
+ * per calendar month covered — a ~30-day "month" view that straddles two
+ * months still counts as one month. Shorter views prorate
+ * `price × (overlap days / days in that month)` for each calendar month
+ * the range touches.
+ */
+export function clockSmartleadUsd(monthlyUsd: number, from: string, to: string): number {
+  if (!(monthlyUsd > 0)) return 0;
+  const months = utcCalendarMonthsOverlapping(from, to);
+  if (months.length === 0) return 0;
+  const days = inclusiveUtcDays(from, to);
+  if (days >= SMARTLEAD_FULL_MONTH_DAYS) {
+    if (days <= 31) return monthlyUsd;
+    return monthlyUsd * months.length;
+  }
+
+  const start = utcDayStart(from);
+  const end = utcDayStart(to);
+  let total = 0;
+  for (const month of months) {
+    const monthStart = new Date(Date.UTC(month.year, month.month, 1));
+    const monthEnd = new Date(Date.UTC(month.year, month.month + 1, 0));
+    const overlapFrom = start > monthStart ? start : monthStart;
+    const overlapTo = end < monthEnd ? end : monthEnd;
+    const overlapDays = Math.floor((overlapTo.getTime() - overlapFrom.getTime()) / MS_PER_DAY) + 1;
+    if (overlapDays > 0) total += monthlyUsd * (overlapDays / month.days);
+  }
+  return total;
+}
+
+/**
+ * Split a clocked Smartlead fee by used send capacity.
+ * `usedSends / capacitySends` is outreach; the rest is unused (wasted).
+ */
+export function allocateSmartleadByCapacity(input: {
+  clockedUsd: number;
+  usedSends: number;
+  capacitySends: number;
+}): { usedUsd: number; unusedUsd: number; usedRatio: number } {
+  const clocked = Math.max(0, input.clockedUsd);
+  if (!(clocked > 0)) return { usedUsd: 0, unusedUsd: 0, usedRatio: 0 };
+  const usedSends = Math.max(0, input.usedSends);
+  const capacity = Math.max(0, input.capacitySends);
+  if (capacity <= 0) {
+    return usedSends > 0
+      ? { usedUsd: clocked, unusedUsd: 0, usedRatio: 1 }
+      : { usedUsd: 0, unusedUsd: clocked, usedRatio: 0 };
+  }
+  const usedRatio = Math.min(1, usedSends / capacity);
+  const usedUsd = clocked * usedRatio;
+  return { usedUsd, unusedUsd: clocked - usedUsd, usedRatio };
 }
 
 /**
@@ -146,34 +277,28 @@ export type CycleAmortization = {
   cycle: string;
   fixedUsd: number;
   step1Sends: number;
-  /** Fixed cost attributable to one step-1 send in this cycle. */
+  /** Always 0. The month is clocked as a lump, not a per-send slice. */
   perSendUsd: number;
 };
 
 /**
- * Divides each cycle's fixed fees by that cycle's actual step-1 sends.
- *
- * A cycle with no sends has `perSendUsd = 0` and keeps its whole fixed cost
- * unallocated, which is truthful: the money was spent and no lead caused it.
- * Because the fee is stored once and divided here, per-lead figures and the
- * monthly total always reconcile.
+ * Loads Microsoft 365 seat lumps for overlapping billing cycles.
+ * Smartlead is clocked separately via `clockSmartleadUsd` so it is not
+ * mixed into this map.
  */
 export async function loadCycleAmortization(
   from: string,
   to: string,
 ): Promise<Map<string, CycleAmortization>> {
-  // Sends are the denominator, so the reporting cycle follows the send
-  // platform's anchor. Seat rows tagged to the same month join that cycle.
-  const billingDay = (await loadDeliveryPricing()).smartleadBillingDay;
+  const pricing = await loadDeliveryPricing();
+  const billingDay = pricing.m365BillingDay;
 
   const { rows: fixedRows } = await dbQuery<{ cycle: string; total: string }>(
-    `SELECT CASE
-              WHEN source_kind = 'smartlead_subscription' THEN source_id
-              ELSE split_part(source_id, ':', 2)
-            END AS cycle,
+    `SELECT split_part(source_id, ':', 2) AS cycle,
             sum(actual_cost_usd)::text AS total
        FROM outreach.lead_cost_events
       WHERE phase = 'subscription'
+        AND source_kind = 'm365_seat'
       GROUP BY 1`,
   );
 
@@ -198,6 +323,7 @@ export async function loadCycleAmortization(
   const out = new Map<string, CycleAmortization>();
   const cycles = new Set([...fixedRows.map((row) => row.cycle), ...sendsByCycle.keys()]);
   for (const cycle of cycles) {
+    if (!cycle || !cycleOverlapsWindow(cycle, billingDay, from, to)) continue;
     const fixedUsd = fixedRows
       .filter((row) => row.cycle === cycle)
       .reduce((sum, row) => sum + Number(row.total), 0);
@@ -206,21 +332,35 @@ export async function loadCycleAmortization(
       cycle,
       fixedUsd,
       step1Sends,
-      perSendUsd: step1Sends > 0 ? fixedUsd / step1Sends : 0,
+      perSendUsd: 0,
     });
   }
+
   return out;
 }
 
 export type DeliveryCostSummary = {
-  /** Subscription rows in the window, shown as fixed lines. */
+  /** Microsoft 365 seat rows overlapping the window. */
   fixedUsd: number;
+  /** Smartlead subscription clocked for this window (full or prorated). */
+  smartleadUsd: number;
+  /** `full` when the window is a month or longer; otherwise prorated. */
+  smartleadClock: 'full' | 'prorated';
+  /** Plan emails available in this window (same day-proration as the fee). */
+  smartleadCapacity: number;
+  /** Smartlead campaign sends in the window (every sequence step). */
+  smartleadSends: number;
+  /** `smartleadUsd × min(1, sends / capacity)` — outreach, not wasted. */
+  smartleadUsedUsd: number;
+  /** Remainder of the clocked fee — unused capacity. */
+  smartleadUnusedUsd: number;
+  smartleadUsedRatio: number;
   /** Verifier checks in the window. */
   perEventUsd: number;
   /** Legacy AgentMail sends, priced by the old constant. */
   legacyUsd: number;
   step1Sends: number;
-  /** Fixed spend from cycles with no sends, attributed to nothing. */
+  /** Unused. Fixed fees land in org totals as a lump, not a leftover. */
   unallocatedUsd: number;
   cycles: CycleAmortization[];
 };
@@ -229,7 +369,31 @@ export async function loadDeliveryCostSummary(
   from: string,
   to: string,
 ): Promise<DeliveryCostSummary> {
-  const cycles = [...(await loadCycleAmortization(from, to)).values()];
+  const [cycles, pricing, limits, sendCount] = await Promise.all([
+    loadCycleAmortization(from, to).then((map) => [...map.values()]),
+    loadDeliveryPricing(),
+    getOrgSetting<PlanLimits>('smartlead.plan_limits', DEFAULT_PLAN_LIMITS),
+    dbQuery<{ n: string }>(
+      `SELECT count(*)::text AS n
+         FROM outreach.email_sends
+        WHERE status = 'sent'
+          AND provider = 'smartlead'
+          AND sent_at >= $1::date
+          AND sent_at < ($2::date + interval '1 day')`,
+      [from, to],
+    ),
+  ]);
+  const smartleadUsd = clockSmartleadUsd(pricing.smartleadPerMonthUsd, from, to);
+  const smartleadClock = inclusiveUtcDays(from, to) >= SMARTLEAD_FULL_MONTH_DAYS
+    ? 'full'
+    : 'prorated';
+  const smartleadSends = Number(sendCount.rows[0]?.n ?? 0);
+  const smartleadCapacity = clockSmartleadUsd(limits.emails_per_month ?? 0, from, to);
+  const allocated = allocateSmartleadByCapacity({
+    clockedUsd: smartleadUsd,
+    usedSends: smartleadSends,
+    capacitySends: smartleadCapacity,
+  });
 
   const { rows: verifier } = await dbQuery<{ total: string }>(
     `SELECT coalesce(sum(actual_cost_usd), 0)::text AS total
@@ -252,22 +416,26 @@ export async function loadDeliveryCostSummary(
 
   return {
     fixedUsd: cycles.reduce((sum, cycle) => sum + cycle.fixedUsd, 0),
+    smartleadUsd,
+    smartleadClock,
+    smartleadCapacity,
+    smartleadSends,
+    smartleadUsedUsd: allocated.usedUsd,
+    smartleadUnusedUsd: allocated.unusedUsd,
+    smartleadUsedRatio: allocated.usedRatio,
     perEventUsd: Number(verifier[0]?.total ?? 0),
     legacyUsd: Number(legacy[0]?.n ?? 0) * LEGACY_AGENTMAIL_USD_PER_SEND,
     step1Sends: cycles.reduce((sum, cycle) => sum + cycle.step1Sends, 0),
-    unallocatedUsd: cycles
-      .filter((cycle) => cycle.step1Sends === 0)
-      .reduce((sum, cycle) => sum + cycle.fixedUsd, 0),
+    unallocatedUsd: 0,
     cycles,
   };
 }
 
-/** Per-lead delivery cost: its cycle's amortized share plus its own verifier rows. */
+/** Per-lead delivery cost: verifier (and legacy AgentMail). The Smartlead month is clocked once at org level. */
 export function leadDeliveryCostUsd(
-  cycles: Map<string, CycleAmortization>,
+  _cycles: Map<string, CycleAmortization>,
   input: { sentCycle: string | null; verifierUsd: number; provider: string },
 ): number {
   if (input.provider === 'agentmail') return LEGACY_AGENTMAIL_USD_PER_SEND + input.verifierUsd;
-  const amortized = input.sentCycle ? cycles.get(input.sentCycle)?.perSendUsd ?? 0 : 0;
-  return amortized + input.verifierUsd;
+  return input.verifierUsd;
 }

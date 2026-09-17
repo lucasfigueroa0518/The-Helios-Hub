@@ -3,12 +3,12 @@
  * tests stub `fetch` once and nothing else needs to know the wire format.
  *
  * Two invariants hold for every function below:
- *   - the kill switch is checked first, so a disabled deploy cannot reach
- *     Smartlead even if a handler forgets its own guard;
+ *   - campaign send ops check the kill switch first;
+ *   - account + warmup ops need an API key, even while sending is off;
  *   - endpoints and payload shapes are the ones recorded in
  *     docs/smartlead-s0-findings.md, not the ones the build plan guessed.
  */
-import { assertSmartleadEnabled } from '@/lib/smartlead/enabled';
+import { assertSmartleadApiKey, assertSmartleadEnabled } from '@/lib/smartlead/enabled';
 import { smartleadPaginate, smartleadRequest } from '@/lib/smartlead/client';
 import {
   SMARTLEAD_MAX_LEADS_PER_REQUEST,
@@ -44,6 +44,14 @@ function op<A extends unknown[], R>(name: string, fn: (...args: A) => Promise<R>
   };
 }
 
+/** Account + warmup: allowed with an API key even while campaign sending is off. */
+function opAccount<A extends unknown[], R>(name: string, fn: (...args: A) => Promise<R>) {
+  return async (...args: A): Promise<R> => {
+    assertSmartleadApiKey(name);
+    return fn(...args);
+  };
+}
+
 export function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let at = 0; at < items.length; at += size) out.push(items.slice(at, at + size));
@@ -54,15 +62,15 @@ export function chunk<T>(items: T[], size: number): T[][] {
 // Email accounts
 // ---------------------------------------------------------------------------
 
-export const listEmailAccounts = op('listEmailAccounts', async (): Promise<
+export const listEmailAccounts = opAccount('listEmailAccounts', async (): Promise<
   SmartleadEmailAccountListItem[]
 > => smartleadPaginate<SmartleadEmailAccountListItem>('/email-accounts/', { limit: 100 }));
 
-export const getEmailAccount = op('getEmailAccount', async (accountId: number) =>
+export const getEmailAccount = opAccount('getEmailAccount', async (accountId: number) =>
   smartleadRequest<SmartleadEmailAccount>(`/email-accounts/${accountId}/`));
 
 /** POST, not PATCH — Smartlead's account update endpoint is a POST. */
-export const updateEmailAccount = op(
+export const updateEmailAccount = opAccount(
   'updateEmailAccount',
   async (accountId: number, patch: SmartleadEmailAccountUpdate) =>
     smartleadRequest<{ ok?: boolean }>(`/email-accounts/${accountId}`, {
@@ -80,13 +88,28 @@ export type WarmupSettings = {
   is_rampup_enabled?: boolean;
 };
 
-export const setWarmup = op('setWarmup', async (accountId: number, settings: WarmupSettings) =>
+/** Smartlead 400s below 5 and above 20 (`"daily_rampup" must be larger than or equal to 5`). */
+const WARMUP_RAMPUP_MIN = 5;
+const WARMUP_RAMPUP_MAX = 20;
+
+function clampWarmupRampup(value: number | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return WARMUP_RAMPUP_MIN;
+  return Math.min(WARMUP_RAMPUP_MAX, Math.max(WARMUP_RAMPUP_MIN, n));
+}
+
+export const setWarmup = opAccount('setWarmup', async (accountId: number, settings: WarmupSettings) =>
   smartleadRequest<{ ok?: boolean }>(`/email-accounts/${accountId}/warmup`, {
     method: 'POST',
-    body: settings,
+    body: {
+      ...settings,
+      daily_rampup: clampWarmupRampup(settings.daily_rampup),
+      is_rampup_enabled: settings.is_rampup_enabled ?? settings.warmup_enabled,
+    },
   }));
 
-export const warmupStats = op('warmupStats', async (accountId: number) =>
+export const warmupStats = opAccount('warmupStats', async (accountId: number) =>
   smartleadRequest<SmartleadWarmupStats>(`/email-accounts/${accountId}/warmup-stats`));
 
 // ---------------------------------------------------------------------------

@@ -23,8 +23,11 @@ import {
 import {
   autoDerateReason,
   desiredSmartleadState,
+  domainRestCampaignNotice,
   evaluateTransition,
   isManualTransitionAllowed,
+  matchSmartleadAccount,
+  resolveSmartleadLink,
   restartWarmupTarget,
   shouldRetireOnRest,
   smartleadStateMatches,
@@ -35,6 +38,7 @@ import {
   mergeStagePlan,
   resolveStagePlan,
 } from '@/lib/inboxes/stage-plan';
+import { stringFromRaw } from '@/lib/inboxes/roster';
 import { domainRestSatisfied, type DomainRestClock } from '@/lib/org-settings';
 import type { LifecycleStage } from '@/lib/delivery-states';
 
@@ -351,13 +355,9 @@ test('resting and retired never move on their own', () => {
   assert.equal(evaluateTransition(machine('retired'), DEFAULT_STAGE_PLAN, signals()).next, null);
 });
 
-test('restart warmup routes by whether a Smartlead account exists', () => {
+test('restart warmup always targets warming; linking happens on the click', () => {
   assert.equal(restartWarmupTarget(true), 'warming');
-  assert.equal(
-    restartWarmupTarget(false),
-    'provisioning',
-    'a legacy row with no Smartlead account must be re-created and re-connected first',
-  );
+  assert.equal(restartWarmupTarget(false), 'warming');
 });
 
 test('a third rest retires the mailbox instead', () => {
@@ -389,6 +389,13 @@ test('a burned domain stays closed until rested_since plus min_rest_days', () =>
 
   assert.equal(domainRestSatisfied(clock, 'heliosgroup.email', '2026-11-09').ok, true);
   assert.equal(domainRestSatisfied(clock, 'heliosgroup.email', '2026-12-01').ok, true);
+});
+
+test('domain rest copy pauses campaign sending, not warmup', () => {
+  assert.equal(
+    domainRestCampaignNotice('heliosgroup.me', '2026-09-27'),
+    'heliosgroup.me campaign sending is paused until 2026-09-27. Warmup can run now.',
+  );
 });
 
 test('a domain that has never rested, and one we have never seen, are both open', () => {
@@ -474,4 +481,48 @@ test('an array override replaces rather than appends, so derating can be disable
 test('junk in the settings column falls back to the default plan', () => {
   assert.deepEqual(resolveStagePlan(null, undefined), DEFAULT_STAGE_PLAN);
   assert.deepEqual(resolveStagePlan('nonsense', 42), DEFAULT_STAGE_PLAN);
+});
+
+test('stringFromRaw reads Smartlead mirror strings and skips redacted empties', () => {
+  assert.equal(stringFromRaw({ from_name: 'Lucas Figueroa' }, 'from_name'), 'Lucas Figueroa');
+  assert.equal(stringFromRaw({ signature: '  ' }, 'signature'), null);
+  assert.equal(stringFromRaw({ signature: '[redacted]' }, 'signature'), null);
+  assert.equal(stringFromRaw(null, 'signature'), null);
+});
+
+test('matchSmartleadAccount pairs by from_email, case-insensitive', () => {
+  const accounts = [
+    { id: 1, from_email: 'thomas@heliosgroup.me', username: 'thomas@heliosgroup.me' },
+    { id: 2, from_email: 'lucas@heliosgroup.me', username: 'lucas@heliosgroup.me' },
+  ];
+  assert.equal(matchSmartleadAccount('Lucas@HeliosGroup.me', accounts)?.id, 2);
+  assert.equal(matchSmartleadAccount('missing@heliosgroup.me', accounts), null);
+});
+
+test('matchSmartleadAccount falls back to username when from_email differs', () => {
+  const accounts = [
+    { id: 9, from_email: 'alias@heliosgroup.me', username: 'lucas@heliosgroup.me' },
+  ];
+  assert.equal(matchSmartleadAccount('lucas@heliosgroup.me', accounts)?.id, 9);
+});
+
+test('resolveSmartleadLink reuses an existing FK without matching', () => {
+  const decision = resolveSmartleadLink('lucas@heliosgroup.me', 42, [], true);
+  assert.deepEqual(decision, { status: 'already_linked', accountId: 42 });
+});
+
+test('resolveSmartleadLink matches an unlinked mailbox by email', () => {
+  const accounts = [{ id: 7, from_email: 'lucas@heliosgroup.me', username: 'lucas@heliosgroup.me' }];
+  assert.deepEqual(
+    resolveSmartleadLink('lucas@heliosgroup.me', null, accounts, true),
+    { status: 'matched', accountId: 7 },
+  );
+});
+
+test('resolveSmartleadLink refuses an unlinked mailbox that is not in Smartlead', () => {
+  assert.equal(resolveSmartleadLink('ghost@heliosgroup.email', null, [], true).status, 'unmatched');
+  assert.equal(
+    resolveSmartleadLink('ghost@heliosgroup.email', null, [], false).status,
+    'unconfigured',
+  );
 });

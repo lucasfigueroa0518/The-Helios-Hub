@@ -13,6 +13,7 @@ import {
 } from '@/lib/inboxes/health';
 import {
   collectSignals,
+  detectAndLinkSmartleadAccounts,
   evaluateTransition,
   toCapacityInbox,
 } from '@/lib/inboxes/lifecycle';
@@ -53,6 +54,8 @@ export type RosterInbox = {
     warmup_reply_rate: number | null;
     warmup_reputation: number | null;
     synced_at: string | null;
+    from_name: string | null;
+    signature_html: string | null;
   };
   warmup_7d: {
     days: number;
@@ -97,6 +100,12 @@ const HEALTH_WINDOW_DAYS = 7;
 const CAPACITY_HORIZON_DAYS = 7;
 
 export async function buildInboxRoster(today = formatNyDate()): Promise<InboxRoster> {
+  try {
+    await detectAndLinkSmartleadAccounts();
+  } catch {
+    // Listing Smartlead is best-effort; the roster still renders from hub rows.
+  }
+
   const settings = await getOrgSettings([
     'stage_plan.default',
     'smartlead.plan_limits',
@@ -174,6 +183,8 @@ export async function buildInboxRoster(today = formatNyDate()): Promise<InboxRos
         warmup_reply_rate: inbox.sl_warmup_reply_rate,
         warmup_reputation: inbox.sl_warmup_reputation,
         synced_at: inbox.sl_synced_at,
+        from_name: stringFromRaw(inbox.sl_raw, 'from_name'),
+        signature_html: stringFromRaw(inbox.sl_raw, 'signature'),
       },
       warmup_7d: {
         days: warmup.days,
@@ -235,3 +246,12 @@ export function buildMonthlyGauge(limits: PlanLimits, usage: UsageCache): Monthl
 }
 
 export type { InboxRow };
+
+/** Reads a string field off Smartlead's mirrored account payload. */
+export function stringFromRaw(raw: Record<string, unknown> | null | undefined, key: string): string | null {
+  const value = raw?.[key];
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === '[redacted]') return null;
+  return trimmed;
+}

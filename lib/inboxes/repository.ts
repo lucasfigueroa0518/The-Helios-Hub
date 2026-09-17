@@ -7,6 +7,7 @@
  */
 import type { IdentitySlug, LifecycleStage } from '@/lib/delivery-states';
 import { dbQuery } from '@/lib/db';
+import { DEFAULT_STAGE_PLAN, mergeStagePlan } from '@/lib/inboxes/stage-plan';
 
 export type InboxRow = {
   id: string;
@@ -193,6 +194,16 @@ export async function updateInbox(id: string, patch: InboxPatch): Promise<InboxR
     params,
   );
   return getInboxById(id);
+}
+
+/** Deep-merges a stage-plan patch onto every mailbox so a fleet-wide edit sticks. */
+export async function applyStagePlanPatchToAll(patch: unknown): Promise<number> {
+  const inboxes = await listInboxes();
+  for (const inbox of inboxes) {
+    const next = mergeStagePlan(DEFAULT_STAGE_PLAN, inbox.stage_plan, patch);
+    await updateInbox(inbox.id, { stagePlan: next as unknown as Record<string, unknown> });
+  }
+  return inboxes.length;
 }
 
 /** Writes the stage transition. Lifecycle owns the decision; this owns the row. */

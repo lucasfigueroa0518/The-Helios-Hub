@@ -72,7 +72,6 @@ import { isSmartleadConfigured } from '@/lib/smartlead/enabled';
 import {
   EmailSendConfigurationError,
   EmailSendProviderError,
-  isEmailSendConfigured,
 } from '@/lib/drafting/send';
 import { dispatchDraftingRunStarted, dispatchDraftingJobs } from '@/lib/drafting/transport';
 import {
@@ -88,6 +87,7 @@ import { campaignRampDelayMs } from '@/lib/drafting/provider-admission';
 import { assertTransition, syncReviewStatus } from '@/lib/drafting/state';
 import type { DraftingRescueAssessment } from '@/lib/drafting/rescue';
 import { isReadyForBulkSend } from '@/lib/drafting/draft-review-order';
+import { approvalRequired, resolveDeliverySettings } from '@/lib/smartlead/delivery-settings';
 import {
   hasBlockingHardLintFailures,
   hasRetrySuggestedLint,
@@ -1398,7 +1398,7 @@ export async function getWorkspaceSnapshot(
       attention_rows: [],
       exports: { available: false, blocking_reasons: ['Workspace has not been started'] },
       sends: {
-        configured: isEmailSendConfigured(),
+        configured: isSmartleadConfigured(),
         available: false,
         blocking_reasons: ['Workspace has not been started'],
         pending: 0,
@@ -1581,7 +1581,7 @@ export async function getWorkspaceSnapshot(
   const openedCount = sendAgg[0]?.opened ?? 0;
   const repliedCount = sendAgg[0]?.replied ?? 0;
   const bouncedCount = sendAgg[0]?.bounced ?? 0;
-  const sendConfigured = isEmailSendConfigured();
+  const sendConfigured = isSmartleadConfigured();
   const pendingSendCount = sendAgg[0]?.pending_send ?? 0;
   const nonLiveApproved = (sendAgg[0]?.non_live_approved ?? 0) > 0;
   const nonLiveSendable = (sendAgg[0]?.non_live_sendable ?? 0) > 0;
@@ -3161,10 +3161,16 @@ export async function sendCampaignApprovedDrafts(
   }
 
   const { rows: allRows } = await loadSendableDraftRows(campaignId, ownerId);
-  // Send All Ready: only drafts without retry-suggested soft lint.
+  const { rows: settingsRows } = await dbQuery<{ delivery_settings: unknown }>(
+    'SELECT delivery_settings FROM outreach.campaigns WHERE id = $1',
+    [campaignId],
+  );
+  const requireApproval = approvalRequired(resolveDeliverySettings(settingsRows[0]?.delivery_settings));
   const rows = allRows.filter((row) => isReadyForBulkSend({
     state: row.state,
     retrySuggested: row.retrySuggested,
+    reviewStatus: row.reviewStatus,
+    requireApproval,
   }));
   const sendStatuses = await loadLatestEmailSendStatuses(rows.map((row) => row.itemId));
   const activeQueue = await loadActiveQueueByItemIds(rows.map((row) => row.itemId));

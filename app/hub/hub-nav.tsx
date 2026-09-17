@@ -8,6 +8,7 @@ import { SegmentedNav, type SegmentedTab } from '@/components/hub-shell/Segmente
 const TABS = [
   { id: 'campaigns', label: 'Campaigns', href: '/hub' },
   { id: 'queue', label: 'Queue', href: '/hub/queue' },
+  { id: 'inboxes', label: 'Inboxes', href: '/hub/inboxes' },
   { id: 'analytics', label: 'Analytics', href: '/hub/analytics' },
   { id: 'conversations', label: 'Conversations', href: '/hub/conversations' },
 ] as const;
@@ -16,6 +17,7 @@ type TabId = (typeof TABS)[number]['id'];
 
 function tabIdFromPath(pathname: string): TabId {
   if (pathname.startsWith('/hub/queue')) return 'queue';
+  if (pathname.startsWith('/hub/inboxes')) return 'inboxes';
   if (pathname.startsWith('/hub/analytics')) return 'analytics';
   if (pathname.startsWith('/hub/conversations')) return 'conversations';
   return 'campaigns';

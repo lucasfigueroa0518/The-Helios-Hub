@@ -388,7 +388,7 @@ ON CONFLICT (key) DO NOTHING;
 INSERT INTO outreach.org_settings (key, value) VALUES (
   'stage_plan.default',
   '{
-     "warming":     {"days": 14, "warmup_start": 5, "warmup_rampup": 2, "warmup_target": 30,
+     "warming":     {"days": 14, "warmup_start": 5, "warmup_rampup": 5, "warmup_target": 30,
                      "reply_rate_pct": 32, "exit": {"inbox_rate_min": 0.92, "window_days": 7}},
      "ramping":     {"days": 14, "cap_start": 3, "cap_step": 1, "weekdays_only": true,
                      "warmup_hold": 30, "exit": {"bounce_rate_max": 0.02}},

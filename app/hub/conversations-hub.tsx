@@ -15,7 +15,6 @@ import { hubGetJson } from '@/app/hub/hub-data';
 import { HubLoadingSpinner } from '@/app/hub/hub-loading';
 import { RequestError, requestJson } from '@/lib/client-request';
 import type {
-  ConversationFilter,
   ConversationListItem,
   ConversationStats,
   ConversationThread,
@@ -38,7 +37,8 @@ function formatWhen(value: string | null | undefined): string {
   }).format(new Date(value));
 }
 
-function replyStatusLabel(status: string | null): string {
+function replyStatusLabel(status: string | null, waitingSeconds?: number | null): string {
+  if (waitingSeconds != null) return `Reply in ${formatCountdown(waitingSeconds)}`;
   if (!status) return 'No auto-reply';
   if (status === 'awaiting_human') return 'Your window';
   if (status === 'queued') return 'Queued';
@@ -51,7 +51,8 @@ function replyStatusLabel(status: string | null): string {
   return status;
 }
 
-function replyChipClass(status: string | null): string {
+function replyChipClass(status: string | null, waiting?: boolean): string {
+  if (waiting) return 'drafting-status-chip conversation-wait-chip';
   if (status === 'sent') return 'drafting-status-chip drafting-status-chip--approved';
   if (
     status === 'awaiting_human'
@@ -100,13 +101,12 @@ export function ConversationsHub() {
   const [data, setData] = useState<ListResponse | null>(null);
   const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
   const [campaignId, setCampaignId] = useState('');
-  const [filter, setFilter] = useState<ConversationFilter>('all');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailId, setDetailId] = useState<string | null>(threadParam);
   const [thread, setThread] = useState<ConversationThread | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [openSection, setOpenSection] = useState<'status' | 'campaign' | null>(null);
+  const [openSection, setOpenSection] = useState<'campaign' | null>(null);
   const hasDataRef = useRef(false);
 
   const [replyText, setReplyText] = useState('');
@@ -116,20 +116,11 @@ export function ConversationsHub() {
   const [duplicateWarning, setDuplicateWarning] = useState<'sent' | 'in_flight' | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
-  // Ticks only while a countdown is on screen.
-  const countdownActive = Boolean(thread?.human_window_expires_at);
-  useEffect(() => {
-    if (!countdownActive) return;
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [countdownActive]);
-
   const load = useCallback(async () => {
     if (!hasDataRef.current) setLoading(true);
     try {
       const params = new URLSearchParams();
       if (campaignId) params.set('campaign_id', campaignId);
-      if (filter !== 'all') params.set('filter', filter);
       const qs = params.toString();
       const result = await hubGetJson<ListResponse>(
         `/api/conversations${qs ? `?${qs}` : ''}`,
@@ -142,7 +133,7 @@ export function ConversationsHub() {
     } finally {
       setLoading(false);
     }
-  }, [campaignId, filter]);
+  }, [campaignId]);
 
   useEffect(() => {
     void load();
@@ -213,15 +204,32 @@ export function ConversationsHub() {
   }, [detailId]);
 
   const stats = data?.stats;
-  const filters = useMemo(
-    () => [
-      { key: 'all' as const, label: 'Conversations', value: stats?.conversations ?? 0 },
-      { key: 'awaiting' as const, label: 'Awaiting auto-reply', value: stats?.awaiting ?? 0 },
-      { key: 'sent' as const, label: 'Auto-replied', value: stats?.sent ?? 0 },
-      { key: 'failed' as const, label: 'Failed / skipped', value: stats?.failed ?? 0 },
-    ],
-    [stats],
+  const threadWaiting = secondsRemaining(thread?.human_window_expires_at ?? null, now) !== null;
+  const waitingActive = Boolean(
+    data?.items.some((item) => secondsRemaining(item.human_window_expires_at, now) !== null)
+    || threadWaiting,
   );
+  useEffect(() => {
+    if (!waitingActive) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [waitingActive]);
+
+  const items = useMemo(() => {
+    const list = [...(data?.items ?? [])];
+    list.sort((a, b) => {
+      const aWait = secondsRemaining(a.human_window_expires_at, now) !== null ? 0 : 1;
+      const bWait = secondsRemaining(b.human_window_expires_at, now) !== null ? 0 : 1;
+      return aWait - bWait;
+    });
+    return list;
+  }, [data, now]);
+
+  useEffect(() => {
+    if (!waitingActive) return;
+    const timer = setInterval(() => void load(), 15_000);
+    return () => clearInterval(timer);
+  }, [waitingActive, load]);
 
   if (loading && !data) {
     return <HubLoadingSpinner label="Loading conversations" />;
@@ -234,33 +242,26 @@ export function ConversationsHub() {
           <div>
             <div className="card__title">Conversations</div>
             <div className="card__subtitle">
-              Lead replies and auto-responses · newest first
+              Lead replies · a thread waiting for you sits at the top for five minutes
             </div>
           </div>
         </div>
         <div className="card__body">
           <MobileFilterBar
             title="Filters"
-            summary={[
-              filters.find((entry) => entry.key === filter)?.label ?? 'Conversations',
-              campaignId ? (campaigns.find((c) => c.id === campaignId)?.name ?? 'Campaign') : 'All campaigns',
-            ].join(' · ')}
+            summary={campaignId ? (campaigns.find((c) => c.id === campaignId)?.name ?? 'Campaign') : 'All campaigns'}
             onOpen={() => setMenuOpen(true)}
           />
 
-          <div className="stat-tile-row conversations-stats hub-desktop-toolbar" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-            {filters.map((entry) => (
-              <button
-                key={entry.key}
-                type="button"
-                className={`stat-tile${filter === entry.key ? ' stat-tile--active' : ''}`}
-                onClick={() => setFilter(entry.key)}
-                style={{ textAlign: 'left', cursor: 'pointer', minWidth: '8.5rem' }}
-              >
-                <div className="stat-tile__label">{entry.label}</div>
-                <div className="stat-tile__value">{entry.value}</div>
-              </button>
-            ))}
+          <div className="stat-tile-row conversations-stats">
+            <div className="stat-tile">
+              <div className="stat-tile__label">Conversations</div>
+              <div className="stat-tile__value">{stats?.conversations ?? 0}</div>
+            </div>
+            <div className="stat-tile stat-tile--positive">
+              <div className="stat-tile__label">Replied</div>
+              <div className="stat-tile__value">{stats?.replied ?? 0}</div>
+            </div>
           </div>
 
           <div className="send-queue-toolbar hub-desktop-toolbar" style={{ marginBottom: '1rem' }}>
@@ -281,13 +282,13 @@ export function ConversationsHub() {
 
           {error && <p className="field__error">{error}</p>}
 
-          {!loading && data && data.items.length === 0 ? (
+          {!loading && items.length === 0 ? (
             <p className="send-queue-empty">
               No conversations yet. When a lead replies to outreach, the thread shows up here.
             </p>
           ) : null}
 
-          {data && data.items.length > 0 ? (
+          {items.length > 0 ? (
             <>
             <div className="table-wrap conversations-table">
               <table className="data-table">
@@ -301,9 +302,12 @@ export function ConversationsHub() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.items.map((item) => (
+                  {items.map((item) => {
+                    const waiting = secondsRemaining(item.human_window_expires_at, now);
+                    return (
                     <tr
                       key={item.drafting_item_id}
+                      className={waiting != null ? 'conversation-row--waiting' : undefined}
                       style={{ cursor: 'pointer' }}
                       onClick={() => setDetailId(item.drafting_item_id)}
                     >
@@ -318,22 +322,25 @@ export function ConversationsHub() {
                         {item.last_inbound_preview || item.outbound_subject}
                       </td>
                       <td>
-                        <span className={replyChipClass(item.reply_status)}>
-                          {replyStatusLabel(item.reply_status)}
+                        <span className={replyChipClass(item.reply_status, waiting != null)}>
+                          {replyStatusLabel(item.reply_status, waiting)}
                         </span>
                       </td>
                       <td>{formatWhen(item.last_inbound_at)}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
             <div className="conversation-cards">
-              {data.items.map((item) => (
+              {items.map((item) => {
+                const waiting = secondsRemaining(item.human_window_expires_at, now);
+                return (
                 <button
                   key={item.drafting_item_id}
                   type="button"
-                  className="conversation-card"
+                  className={`conversation-card${waiting != null ? ' conversation-card--waiting' : ''}`}
                   onClick={() => setDetailId(item.drafting_item_id)}
                 >
                   <strong>{item.lead_name || item.lead_email}</strong>
@@ -344,11 +351,12 @@ export function ConversationsHub() {
                   <span className="conversation-card__meta">
                     {item.last_inbound_preview || item.outbound_subject}
                   </span>
-                  <span className={replyChipClass(item.reply_status)}>
-                    {replyStatusLabel(item.reply_status)} · {formatWhen(item.last_inbound_at)}
+                  <span className={replyChipClass(item.reply_status, waiting != null)}>
+                    {replyStatusLabel(item.reply_status, waiting)} · {formatWhen(item.last_inbound_at)}
                   </span>
                 </button>
-              ))}
+                );
+              })}
             </div>
             </>
           ) : null}
@@ -357,25 +365,10 @@ export function ConversationsHub() {
 
       <MobileFilterMenu
         title="Conversation filters"
-        subtitle="Status and campaign."
+        subtitle="Filter by campaign."
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
       >
-        <FilterAccordion
-          label="Status"
-          value={filters.find((entry) => entry.key === filter)?.label ?? 'Conversations'}
-          open={openSection === 'status'}
-          onToggle={() => setOpenSection((current) => (current === 'status' ? null : 'status'))}
-        >
-          <ChoiceList
-            options={filters.map((entry) => ({
-              id: entry.key,
-              label: `${entry.label} · ${entry.value}`,
-            }))}
-            value={filter}
-            onChange={(id) => setFilter(id as ConversationFilter)}
-          />
-        </FilterAccordion>
         <FilterAccordion
           label="Campaign"
           value={campaignId ? (campaigns.find((c) => c.id === campaignId)?.name ?? 'Campaign') : 'All campaigns'}

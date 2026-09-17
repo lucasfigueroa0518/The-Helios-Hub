@@ -42,13 +42,14 @@ import {
   getInboxById,
   listInboxes,
   linkSmartleadAccount,
+  updateInbox,
   writeSmartleadMirror,
   writeStage,
   type InboxRow,
 } from '@/lib/inboxes/repository';
-import { isSmartleadEnabled } from '@/lib/smartlead/enabled';
+import { hasSmartleadApiKey, isSmartleadEnabled } from '@/lib/smartlead/enabled';
 import { smartleadAdapter, type SmartleadAdapter } from '@/lib/smartlead/adapter';
-import { normalizeWarmupDetails, toNumber } from '@/lib/smartlead/types';
+import { normalizeWarmupDetails, toNumber, type SmartleadWarmupDetails } from '@/lib/smartlead/types';
 
 /** Everything the state machine is allowed to look at. */
 export type LifecycleSignals = {
@@ -174,9 +175,15 @@ export function autoDerateReason(plan: StagePlan, signals: LifecycleSignals): st
   return null;
 }
 
-/** Where "restart warmup" sends a resting mailbox. */
-export function restartWarmupTarget(hasSmartleadAccount: boolean): LifecycleStage {
-  return hasSmartleadAccount ? 'warming' : 'provisioning';
+/**
+ * Where "restart warmup" sends a resting mailbox.
+ *
+ * Always warming. If the Smartlead account is missing, `requestStage` lists
+ * accounts, links by email, or fails closed — it does not fall back to
+ * provisioning and leave the hub ahead of the provider.
+ */
+export function restartWarmupTarget(_hasSmartleadAccount?: boolean): LifecycleStage {
+  return 'warming';
 }
 
 /** Two rest cycles is enough; the third retires the mailbox. */
@@ -281,6 +288,18 @@ export class ExitCriteriaUnmetError extends Error {
   }
 }
 
+/** Operator stage change could not be applied in Smartlead, so the hub stage did not move. */
+export class SmartleadStageError extends Error {
+  constructor(
+    readonly code: 'smartlead_unlinked' | 'smartlead_unconfigured' | 'smartlead_apply_failed',
+    message: string,
+    options?: { cause?: unknown },
+  ) {
+    super(message, options);
+    this.name = 'SmartleadStageError';
+  }
+}
+
 /** Manual moves the Inboxes tab offers, beyond what the machine does itself. */
 const MANUAL_TRANSITIONS: Record<LifecycleStage, LifecycleStage[]> = {
   provisioning: ['warming', 'retired'],
@@ -371,40 +390,45 @@ export type StageChangeResult = {
   from: LifecycleStage;
   to: LifecycleStage;
   warnings: string[];
+  /** What happened when we pushed this mailbox's desired state to Smartlead. */
+  smartlead: 'applied' | 'already_matching';
 };
 
 /**
  * Manual stage change from the Inboxes tab.
  *
- * Refuses a move the machine would never make, refuses a promotion whose exit
- * criteria are unmet unless forced, and refuses `→ warming` while the domain
- * is still resting — that last one is not forceable by accident, only by an
- * explicit `force`, because it is the rule that keeps a burned domain burned.
+ * Refuses a move the machine would never make, and refuses a promotion whose
+ * exit criteria are unmet unless forced. Starting warmup is always allowed,
+ * even while the domain is resting — campaign sending stays paused; warmup
+ * is the point of the rest.
+ *
+ * Fail-closed on Smartlead: if the mailbox is unlinked we list accounts, match
+ * by email, and write the FK before any hub stage write. If that (or the
+ * warmup/cap push) fails, the hub stage does not move.
  */
-export async function requestStage(request: StageChangeRequest): Promise<StageChangeResult> {
+export async function requestStage(
+  request: StageChangeRequest,
+  adapter: SmartleadAdapter = smartleadAdapter,
+): Promise<StageChangeResult> {
   const inbox = await getInboxById(request.inboxId);
   if (!inbox) throw new Error(`No such inbox: ${request.inboxId}`);
 
   const from = inbox.lifecycle_stage;
   const to = request.stage;
-  if (from === to) return { inbox, from, to, warnings: [] };
-  if (!isManualTransitionAllowed(from, to)) throw new InvalidTransitionError(from, to);
-
   const warnings: string[] = [];
-  const orgPlan = await getOrgSetting('stage_plan.default', DEFAULT_STAGE_PLAN);
-  const plan = resolveStagePlan(orgPlan, inbox.stage_plan);
   const today = formatNyDate();
 
-  if (to === 'warming') {
-    const clock = await getDomainRestClock();
-    const rest = domainRestSatisfied(clock, inbox.domain, today);
-    if (!rest.ok && !request.force) {
-      throw new DomainRestingError(inbox.domain, rest.restedSince, rest.availableOn);
-    }
-    if (!rest.ok) warnings.push(`domain_resting_until_${rest.availableOn}`);
+  if (from !== to && !isManualTransitionAllowed(from, to)) {
+    throw new InvalidTransitionError(from, to);
   }
 
-  if (to === 'ramping' || to === 'production') {
+  const orgPlan = await getOrgSetting('stage_plan.default', DEFAULT_STAGE_PLAN);
+  const plan = resolveStagePlan(orgPlan, inbox.stage_plan);
+
+  const accountId = await ensureSmartleadLinked(inbox, adapter);
+  const linked: InboxRow = { ...inbox, smartlead_email_account_id: accountId };
+
+  if (from !== to && (to === 'ramping' || to === 'production')) {
     const health = await listHealth({
       scopeKeys: [inbox.id],
       since: addDays(today, -plan.warming.exit.window_days),
@@ -414,12 +438,12 @@ export async function requestStage(request: StageChangeRequest): Promise<StageCh
       sources: ['postmaster'],
       since: addDays(today, -30),
     });
-    const signals = await collectSignals(inbox, health, domainHealth, today);
+    const signals = await collectSignals(linked, health, domainHealth, today);
     const decision = evaluateTransition(
       {
         stage: from,
-        restCycles: inbox.rest_cycles,
-        hasSmartleadAccount: inbox.smartlead_email_account_id !== null,
+        restCycles: linked.rest_cycles,
+        hasSmartleadAccount: true,
       },
       plan,
       signals,
@@ -430,18 +454,257 @@ export async function requestStage(request: StageChangeRequest): Promise<StageCh
     }
   }
 
-  const retireInstead = to === 'resting' && shouldRetireOnRest(inbox.rest_cycles);
+  const retireInstead = to === 'resting' && shouldRetireOnRest(linked.rest_cycles);
   const finalStage = retireInstead ? 'retired' : to;
   if (retireInstead) warnings.push('retired_after_two_rest_cycles');
 
-  await writeStage(inbox.id, finalStage, {
-    restReason: finalStage === 'resting' ? request.reason ?? 'manual' : null,
-    incrementRestCycles: finalStage === 'resting',
-  });
-  await syncDomainRestClock(inbox.domain, finalStage, today);
+  const pending: InboxRow = { ...linked, lifecycle_stage: finalStage };
+  const smartlead = await applySmartleadDesiredState(pending, adapter);
 
-  const updated = await getInboxById(inbox.id);
-  return { inbox: updated!, from, to: finalStage, warnings };
+  if (from !== finalStage) {
+    await writeStage(inbox.id, finalStage, {
+      restReason: finalStage === 'resting' ? request.reason ?? 'manual' : null,
+      incrementRestCycles: finalStage === 'resting',
+    });
+    await syncDomainRestClock(inbox.domain, finalStage, today);
+  }
+
+  const updated = (await getInboxById(inbox.id))!;
+  return { inbox: updated, from, to: finalStage, warnings, smartlead };
+}
+
+export type SmartleadAccountMatch = {
+  id: number;
+  from_email: string;
+  username?: string | null;
+};
+
+/** Match a hub mailbox to a Smartlead account by from-address, then username. */
+export function matchSmartleadAccount<T extends SmartleadAccountMatch>(
+  inboxEmail: string,
+  accounts: T[],
+): T | null {
+  const needle = inboxEmail.trim().toLowerCase();
+  if (!needle) return null;
+  return accounts.find((account) => {
+    if (account.from_email.trim().toLowerCase() === needle) return true;
+    const username = account.username?.trim().toLowerCase();
+    return Boolean(username && username === needle);
+  }) ?? null;
+}
+
+export type SmartleadLinkResolution =
+  | { status: 'already_linked'; accountId: number }
+  | { status: 'matched'; accountId: number }
+  | { status: 'unconfigured' }
+  | { status: 'unmatched' };
+
+/**
+ * Pure decision for a user-triggered stage change: reuse the FK, match by
+ * email, or refuse. Listing the provider is the caller's job.
+ */
+export function resolveSmartleadLink(
+  inboxEmail: string,
+  existingAccountId: number | null,
+  accounts: SmartleadAccountMatch[],
+  hasApiKey: boolean,
+): SmartleadLinkResolution {
+  if (existingAccountId !== null) {
+    return { status: 'already_linked', accountId: existingAccountId };
+  }
+  if (!hasApiKey) return { status: 'unconfigured' };
+  const match = matchSmartleadAccount(inboxEmail, accounts);
+  if (!match) return { status: 'unmatched' };
+  return { status: 'matched', accountId: match.id };
+}
+
+async function writeMirrorFromListedAccount(
+  inboxId: string,
+  account: {
+    is_smtp_success: boolean;
+    is_imap_success: boolean;
+    message_per_day: number;
+    warmup_details: SmartleadWarmupDetails | null;
+    from_name?: string;
+    signature?: string | null;
+  },
+): Promise<void> {
+  const warmup = normalizeWarmupDetails(account.warmup_details);
+  await writeSmartleadMirror(inboxId, {
+    status: account.is_smtp_success && account.is_imap_success ? 'ok' : 'error',
+    maxEmailPerDay: toNumber(account.message_per_day, 0),
+    warmupEnabled: warmup ? warmup.status === 'ACTIVE' : false,
+    warmupTotalPerDay: warmup?.maxPerDay ?? null,
+    warmupReplyRate: warmup?.replyRatePct ?? null,
+    warmupReputation: warmup?.reputationPct ?? null,
+    raw: account,
+  });
+}
+
+/**
+ * If this mailbox has no Smartlead FK, list accounts and link by email.
+ * Throws instead of returning empty so a stage change can fail closed.
+ */
+export async function ensureSmartleadLinked(
+  inbox: InboxRow,
+  adapter: SmartleadAdapter = smartleadAdapter,
+): Promise<number> {
+  if (inbox.smartlead_email_account_id !== null) return inbox.smartlead_email_account_id;
+  if (!hasSmartleadApiKey()) {
+    throw new SmartleadStageError(
+      'smartlead_unconfigured',
+      `Cannot move ${inbox.email}: Smartlead is not configured.`,
+    );
+  }
+
+  let accounts;
+  try {
+    accounts = await adapter.listEmailAccounts();
+  } catch (error) {
+    throw new SmartleadStageError(
+      'smartlead_apply_failed',
+      error instanceof Error ? error.message : String(error),
+      { cause: error },
+    );
+  }
+
+  const decision = resolveSmartleadLink(inbox.email, inbox.smartlead_email_account_id, accounts, true);
+  if (decision.status !== 'matched') {
+    throw new SmartleadStageError(
+      'smartlead_unlinked',
+      `${inbox.email} is not in Smartlead. Add it there, then try again.`,
+    );
+  }
+
+  await linkSmartleadAccount(inbox.id, decision.accountId);
+  const account = accounts.find((row) => row.id === decision.accountId);
+  if (account) await writeMirrorFromListedAccount(inbox.id, account);
+  return decision.accountId;
+}
+
+export type SmartleadDetectResult = {
+  linked: number;
+  matched: number;
+  unassigned: number;
+};
+
+/**
+ * Pair hub mailboxes to Smartlead accounts by email. Needs the API key, not
+ * the send kill switch — otherwise the Inboxes tab stays "not in Smartlead"
+ * for accounts that already exist there.
+ */
+export async function detectAndLinkSmartleadAccounts(
+  options: { adapter?: SmartleadAdapter; force?: boolean } = {},
+): Promise<SmartleadDetectResult> {
+  if (!hasSmartleadApiKey()) return { linked: 0, matched: 0, unassigned: 0 };
+
+  const inboxes = await listInboxes();
+  if (!options.force && !inboxes.some((row) => row.smartlead_email_account_id === null)) {
+    return {
+      linked: 0,
+      matched: inboxes.filter((row) => row.smartlead_email_account_id !== null).length,
+      unassigned: 0,
+    };
+  }
+
+  const adapter = options.adapter ?? smartleadAdapter;
+  const accounts = await adapter.listEmailAccounts();
+  let linked = 0;
+  let matched = 0;
+  const matchedIds = new Set<number>();
+
+  for (const inbox of inboxes) {
+    const account = matchSmartleadAccount(inbox.email, accounts);
+    if (!account) continue;
+    matched += 1;
+    matchedIds.add(account.id);
+    if (inbox.smartlead_email_account_id === null) {
+      await linkSmartleadAccount(inbox.id, account.id);
+      linked += 1;
+    }
+    await writeMirrorFromListedAccount(inbox.id, account);
+  }
+
+  const unassigned = accounts
+    .filter((account) => !matchedIds.has(account.id))
+    .map((account) => ({
+      id: account.id,
+      from_email: account.from_email,
+      from_name: account.from_name ?? null,
+    }));
+  await setOrgSetting('smartlead.accounts_cache', {
+    fetched_at: new Date().toISOString(),
+    unassigned,
+  } satisfies AccountsCache);
+
+  return { linked, matched, unassigned: unassigned.length };
+}
+
+/**
+ * Push this mailbox's desired caps and warmup to Smartlead right now.
+ * Used when an operator starts warmup so it does not wait for the daily tick.
+ *
+ * Unlinked mailboxes are matched and linked first. Missing accounts, a missing
+ * API key, or a Smartlead write error throw — they do not return a soft miss.
+ */
+export async function applySmartleadDesiredState(
+  inbox: InboxRow,
+  adapter: SmartleadAdapter = smartleadAdapter,
+): Promise<'applied' | 'already_matching'> {
+  if (!hasSmartleadApiKey()) {
+    throw new SmartleadStageError(
+      'smartlead_unconfigured',
+      `Cannot update ${inbox.email} in Smartlead: Smartlead is not configured.`,
+    );
+  }
+
+  const accountId = await ensureSmartleadLinked(inbox, adapter);
+
+  const orgPlan = await getOrgSetting('stage_plan.default', DEFAULT_STAGE_PLAN);
+  const plan = resolveStagePlan(orgPlan, inbox.stage_plan);
+  const day = formatNyDate();
+  const capacityInbox = await toCapacityInbox(inbox, orgPlan);
+  const desired = desiredSmartleadState(
+    capacityInbox,
+    plan,
+    day,
+    inbox.sl_max_email_per_day,
+  );
+  if (smartleadStateMatches(inbox, desired)) return 'already_matching';
+
+  try {
+    await adapter.updateEmailAccount(accountId, {
+      max_email_per_day: desired.maxEmailPerDay,
+      ...(inbox.from_name ? { from_name: inbox.from_name } : {}),
+      ...(inbox.signature_html ? { signature: inbox.signature_html } : {}),
+    });
+    await adapter.setWarmup(accountId, desired.warmup);
+  } catch (error) {
+    throw new SmartleadStageError(
+      'smartlead_apply_failed',
+      error instanceof Error ? error.message : String(error),
+      { cause: error },
+    );
+  }
+
+  await writeSmartleadMirror(inbox.id, {
+    status: inbox.sl_status,
+    maxEmailPerDay: desired.maxEmailPerDay,
+    warmupEnabled: desired.warmup.warmup_enabled,
+    warmupTotalPerDay: desired.warmup.total_warmup_per_day,
+    warmupReplyRate: desired.warmup.reply_rate_percentage,
+    warmupReputation: inbox.sl_warmup_reputation,
+    raw: inbox.sl_raw,
+  });
+  return 'applied';
+}
+
+/** Copy for the drawer: domain rest pauses campaign mail, not warmup. */
+export function domainRestCampaignNotice(
+  domain: string,
+  availableOn: string,
+): string {
+  return `${domain} campaign sending is paused until ${availableOn}. Warmup can run now.`;
 }
 
 /**
@@ -519,7 +782,6 @@ export async function runLifecycleDaily(
   const orgPlan = await getOrgSetting('stage_plan.default', DEFAULT_STAGE_PLAN);
   const clock = await getDomainRestClock();
   const accounts = await adapter.listEmailAccounts();
-  const byEmail = new Map(accounts.map((account) => [account.from_email.toLowerCase(), account]));
 
   const inboxes = await listInboxes();
   const matchedAccountIds = new Set<number>();
@@ -528,7 +790,7 @@ export async function runLifecycleDaily(
   for (const inbox of inboxes) {
     report.examined += 1;
     try {
-      const account = byEmail.get(inbox.email);
+      const account = matchSmartleadAccount(inbox.email, accounts);
       if (account) matchedAccountIds.add(account.id);
 
       // Detection: link first, so a crash mid-loop does not lose the pairing.
@@ -551,6 +813,12 @@ export async function runLifecycleDaily(
           warmupReputation: warmup?.reputationPct ?? null,
           raw: account,
         });
+        if (!current.from_name || !current.signature_html) {
+          await updateInbox(current.id, {
+            fromName: current.from_name ?? account.from_name ?? null,
+            signatureHtml: current.signature_html ?? account.signature ?? null,
+          });
+        }
       }
 
       const refreshed = (await getInboxById(inbox.id))!;

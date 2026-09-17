@@ -56,25 +56,14 @@ export function isMailboxValid(
 }
 
 /**
- * Fail-open for AgentMail rate limits: address may proceed to drafting, but
- * review UI must still show it was not validated.
+ * Only a verified mailbox is draftable. Rate-limited checks fail closed —
+ * the verifier will retry, and we will not send to an address we have not
+ * confirmed.
  */
 export function isMailboxDraftable(
   delivery: DeliverySnapshot | null | undefined,
 ): delivery is DeliverySnapshot {
-  if (delivery == null) return false;
-  if (
-    typeof delivery.effectiveEmail !== 'string'
-    || delivery.effectiveEmail.length === 0
-    || typeof delivery.effectiveEmailFingerprint !== 'string'
-    || delivery.effectiveEmailFingerprint.length === 0
-  ) {
-    return false;
-  }
-  return (
-    delivery.emailVerification === 'valid'
-    || delivery.emailVerification === 'rate_limited'
-  );
+  return isMailboxValid(delivery);
 }
 
 export function isMailboxUnvalidated(delivery: DeliverySnapshot | null | undefined): boolean {

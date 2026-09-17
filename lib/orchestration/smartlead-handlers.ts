@@ -146,13 +146,19 @@ async function buildLaneResyncChildren(identities: string[]) {
   }));
 }
 
+/**
+ * Warmup counters need the API key, not the send kill switch — same split as
+ * listing accounts. `runHealthSnapshot` no-ops without a key.
+ */
 export async function handleInboxHealthSnapshot(
   job: OrchestrationJob<'inbox.health_snapshot'>,
 ): Promise<WorkHandlerResult> {
-  return guarded(job, async () => {
+  try {
     const { runHealthSnapshot } = await import('@/lib/inboxes/snapshot');
     return { result: { ...(await runHealthSnapshot(job.payload.dayKey)) } };
-  });
+  } catch (error) {
+    rethrowSmartlead(error, job.attempt_count);
+  }
 }
 
 /**

@@ -31,6 +31,32 @@ import { enqueueReadyAutoCampaignDrafts } from '@/lib/auto-campaigns/auto-send';
 import { formatNyDate } from '@/lib/drafting/send-queue-schedule';
 import { normalizeLinkedinUrl } from '@/lib/auto-campaigns/credit-pipeline';
 import type { EnrichedPerson, ProspectCycleStats, ProspectLogEntry } from '@/lib/auto-campaigns/types';
+import type { SenderIdentitySlug } from '@/lib/agentmail-inboxes';
+
+async function autoLaneCapacityToday(
+  identitySlug: SenderIdentitySlug | null,
+  requested: number,
+): Promise<number> {
+  try {
+    const { listInboxes } = await import('@/lib/inboxes/repository');
+    const { toCapacityInbox } = await import('@/lib/inboxes/lifecycle');
+    const { identityCapacity } = await import('@/lib/inboxes/capacity');
+    const { getOrgSetting } = await import('@/lib/org-settings');
+    const { DEFAULT_STAGE_PLAN } = await import('@/lib/inboxes/stage-plan');
+    const today = formatNyDate();
+    const inboxes = await listInboxes({
+      identitySlug: identitySlug ?? 'lucas',
+      enabledOnly: true,
+    });
+    const plan = await getOrgSetting('stage_plan.default', DEFAULT_STAGE_PLAN);
+    const capInboxes = [];
+    for (const inbox of inboxes) capInboxes.push(await toCapacityInbox(inbox, plan));
+    const pool = identityCapacity({ inboxes: capInboxes, followupsDue: 0 }, today);
+    return Math.max(0, Math.min(requested, pool));
+  } catch {
+    return requested;
+  }
+}
 
 function stubStats(
   campaign: { apollo_search_page: number; expansion_step: number },
@@ -116,7 +142,8 @@ export async function runAutoCampaignCycle(campaignId: string): Promise<{
     return { attached: 0, runId: '', status: 'pending_sender' };
   }
 
-  const emailsPerDay = Math.max(0, Math.floor(campaign.emails_per_day ?? 0));
+  const requested = Math.max(0, Math.floor(campaign.emails_per_day ?? 0));
+  const emailsPerDay = Math.min(requested, await autoLaneCapacityToday(campaign.sender_identity_slug, requested));
   const today = formatNyDate();
   const attachedAtStart = await loadAttachedOnNyDate(campaignId, today);
   if (emailsPerDay > 0 && attachedAtStart >= emailsPerDay) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCampaign, updateAutoCampaign, updateCampaign, updateCampaignMessageTemplate } from '@/lib/campaigns';
+import { getCampaign, updateAutoCampaign, updateCampaign, updateCampaignDelivery, updateCampaignMessageTemplate } from '@/lib/campaigns';
 import { getSession } from '@/lib/session';
+import { resolveDeliverySettings } from '@/lib/smartlead/delivery-settings';
 
 export const runtime = 'nodejs';
 
@@ -44,6 +45,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     message_subject_template?: string;
     message_body_template?: string;
     include_signature?: boolean;
+    delivery_settings?: Record<string, unknown>;
   };
   try {
     body = await request.json();
@@ -72,6 +74,34 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
         await updateCampaign(session.userId, id, { name: body.name, status: body.status });
       }
       return NextResponse.json({ campaign: await getCampaign(session.userId, id) });
+    }
+
+    if (body.delivery_settings) {
+      const campaign = await updateCampaignDelivery(session.userId, id, {
+        senderIdentitySlug: existing.kind === 'auto' ? undefined : body.sender_identity_slug,
+        deliverySettings: resolveDeliverySettings({
+          ...existing.delivery_settings,
+          ...body.delivery_settings,
+          require_approval_until: body.delivery_settings.require_approval_until
+            ?? existing.delivery_settings.require_approval_until,
+        }),
+      });
+      if (!campaign) return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
+      if (body.name || body.status) {
+        await updateCampaign(session.userId, id, { name: body.name, status: body.status });
+      }
+      if (
+        existing.kind !== 'auto'
+        || !(
+          body.auto_status
+          || body.emails_per_day != null
+          || body.follow_up_enabled != null
+          || body.sender_identity_slug
+          || body.lead_attributes
+        )
+      ) {
+        return NextResponse.json({ campaign: await getCampaign(session.userId, id) });
+      }
     }
 
     if (

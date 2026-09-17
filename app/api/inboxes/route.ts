@@ -2,9 +2,10 @@ import { NextRequest } from 'next/server';
 
 import { IDENTITY_SLUGS, type IdentitySlug } from '@/lib/delivery-states';
 import { draftingErrorResponse, draftingJson } from '@/lib/drafting/api';
-import { createInbox, getInboxByEmail } from '@/lib/inboxes/repository';
+import { applyStagePlanPatchToAll, createInbox, getInboxByEmail } from '@/lib/inboxes/repository';
 import { buildInboxRoster } from '@/lib/inboxes/roster';
-import { setOrgSetting } from '@/lib/org-settings';
+import { DEFAULT_STAGE_PLAN, mergeStagePlan } from '@/lib/inboxes/stage-plan';
+import { getOrgSetting, setOrgSetting } from '@/lib/org-settings';
 import { getSession } from '@/lib/session';
 
 export const runtime = 'nodejs';
@@ -25,9 +26,8 @@ export async function GET() {
 }
 
 /**
- * Adds a mailbox at `provisioning`. The Smartlead account is matched by the
- * next reconcile rather than supplied here, so the detection path is the only
- * way a mailbox gets linked.
+ * Adds a mailbox at `provisioning`. The Smartlead account is matched by email
+ * on the next Inboxes load (or Sync), not supplied here.
  */
 export async function POST(request: NextRequest) {
   const session = await getSession();
@@ -75,7 +75,7 @@ export async function PATCH(request: NextRequest) {
   const session = await getSession();
   if (!session) return draftingJson({ error: 'Unauthorized' }, 401);
 
-  let body: { stage_plan_default?: unknown };
+  let body: { stage_plan_default?: unknown; apply_to_all_inboxes?: boolean };
   try {
     body = await request.json();
   } catch {
@@ -86,8 +86,13 @@ export async function PATCH(request: NextRequest) {
   }
 
   try {
-    await setOrgSetting('stage_plan.default', body.stage_plan_default);
-    return draftingJson(await buildInboxRoster());
+    const current = await getOrgSetting('stage_plan.default', DEFAULT_STAGE_PLAN);
+    const next = mergeStagePlan(DEFAULT_STAGE_PLAN, current, body.stage_plan_default);
+    await setOrgSetting('stage_plan.default', next);
+    const applied = body.apply_to_all_inboxes
+      ? await applyStagePlanPatchToAll(body.stage_plan_default)
+      : 0;
+    return draftingJson({ ...(await buildInboxRoster()), applied_to: applied });
   } catch (error) {
     return draftingErrorResponse(error);
   }
