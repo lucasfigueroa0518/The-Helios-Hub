@@ -3,17 +3,21 @@ import {
   HELIOS_SOCIAL_FEEDS,
   HELIOS_SOCIAL_RELEVANCE_THRESHOLD,
 } from '@/lib/social/feeds';
+import { extractPacket } from '@/lib/social/ingest/extract-packet';
 import { fetchAllFeeds } from '@/lib/social/ingest/fetch-feeds';
-import { scoreRelevance } from '@/lib/social/ingest/score-relevance';
+import { judgeRelevance } from '@/lib/social/ingest/judge-relevance';
 
 export type IngestSummary = {
   feedsQueried: number;
   articlesFetched: number;
   duplicatesSkipped: number;
   articlesInserted: number;
-  articlesScored: number;
+  articlesJudged: number;
   articlesApproved: number;
   articlesRejected: number;
+  articlesExtracted: number;
+  approxJevCostUsd: number;
+  approxHaikuCostUsd: number;
   approxCostUsd: number;
   errors: string[];
 };
@@ -28,15 +32,21 @@ type InsertedArticle = {
 };
 
 /**
- * Full ingest cycle:
+ * Full ingest cycle — cascade of Jev (cheap gate) and Haiku (rich extraction):
+ *
  *   1. Fetch every configured RSS feed in parallel.
  *   2. Filter to entries published in the last N hours (freshness gate).
  *   3. INSERT each new article. UNIQUE(source_url) silently no-ops on dupes.
- *   4. Score + extract every newly-inserted article via one Haiku call.
- *   5. UPDATE each row with the extraction packet + workflow status.
+ *   4. For each new article, call Jev to judge relevance (one Noul).
+ *      - If noul < threshold: reject. Article marked 'rejected'. No Haiku call.
+ *      - If noul >= threshold: continue to step 5.
+ *   5. For approved articles only, call Haiku to extract the full packet
+ *      (reason, people, companies, products, topics, notable_number, bullets).
+ *   6. UPDATE the row with the score + extraction packet + status.
  *
- * Per-article failures do not abort the run — they land in `errors`. Return
- * value is safe to console.log or store in a job telemetry field.
+ * Per-article failures do not abort the run — they land in `errors`. The
+ * summary tracks Jev cost and Haiku cost separately so cost regressions
+ * show up in the diagnostics.
  */
 export async function runIngest(): Promise<IngestSummary> {
   const summary: IngestSummary = {
@@ -44,9 +54,12 @@ export async function runIngest(): Promise<IngestSummary> {
     articlesFetched: 0,
     duplicatesSkipped: 0,
     articlesInserted: 0,
-    articlesScored: 0,
+    articlesJudged: 0,
     articlesApproved: 0,
     articlesRejected: 0,
+    articlesExtracted: 0,
+    approxJevCostUsd: 0,
+    approxHaikuCostUsd: 0,
     approxCostUsd: 0,
     errors: [],
   };
@@ -55,7 +68,9 @@ export async function runIngest(): Promise<IngestSummary> {
   console.error(`[helios-social] fetching ${HELIOS_SOCIAL_FEEDS.length} feeds in parallel…`);
   const articles = await fetchAllFeeds(HELIOS_SOCIAL_FEEDS);
   summary.articlesFetched = articles.length;
-  console.error(`[helios-social] fetch phase done: ${articles.length} fresh articles across all feeds`);
+  console.error(
+    `[helios-social] fetch phase done: ${articles.length} fresh articles across all feeds`,
+  );
 
   // 3. Insert. RETURNING gives back only new rows; conflicts return 0 rows.
   const inserted: InsertedArticle[] = [];
@@ -88,48 +103,79 @@ export async function runIngest(): Promise<IngestSummary> {
   console.error(
     `[helios-social] insert phase done: ${summary.articlesInserted} new / ${summary.duplicatesSkipped} dupes`,
   );
-  console.error(`[helios-social] scoring ${inserted.length} new articles with Haiku…`);
+  console.error(
+    `[helios-social] judging ${inserted.length} new articles with Jev (cheap gate)…`,
+  );
 
-  // 4–5. Score + extract + update. Serial keeps the prompt cache warm —
-  // parallelizing would burn cache_creation on multiple in-flight requests.
+  // 4–6. Cascade. Serial keeps prompt caches warm on the Haiku side and
+  // stays under the Jev rate limits without extra bookkeeping.
   let idx = 0;
   for (const article of inserted) {
     idx += 1;
     try {
-      const { packet, usage } = await scoreRelevance({
+      // 4. Jev gate.
+      const judgment = await judgeRelevance({
         headline: article.headline,
         source: article.source,
         byline: article.byline,
         body: article.body,
       });
-      summary.approxCostUsd += usage.approxCostUsd;
-      summary.articlesScored += 1;
+      summary.approxJevCostUsd += judgment.approxCostUsd;
+      summary.articlesJudged += 1;
 
-      const passes = packet.score >= HELIOS_SOCIAL_RELEVANCE_THRESHOLD;
+      const passes = judgment.noul >= HELIOS_SOCIAL_RELEVANCE_THRESHOLD;
+
+      if (!passes) {
+        // Rejected — no Haiku call, no packet, just record the score + reason.
+        summary.articlesRejected += 1;
+        console.error(
+          `[helios-social] judge ${idx}/${inserted.length} ✗ ${judgment.noul.toFixed(2)} — ${article.source}: ${article.headline.slice(0, 60)}`,
+        );
+        await dbQuery(
+          `UPDATE helios_social.article_queue
+              SET ingest_status    = 'rejected',
+                  relevance_score  = $1,
+                  rejected_reason  = $2
+            WHERE id = $3`,
+          [
+            judgment.noul,
+            `Below Helios relevance threshold (Jev noul: ${judgment.noul.toFixed(2)})`,
+            article.id,
+          ],
+        );
+        continue;
+      }
+
+      // 5. Approved — escalate to Haiku for the full extraction packet.
+      summary.articlesApproved += 1;
+      const { packet, usage } = await extractPacket({
+        headline: article.headline,
+        source: article.source,
+        byline: article.byline,
+        body: article.body,
+      });
+      summary.approxHaikuCostUsd += usage.approxCostUsd;
+      summary.articlesExtracted += 1;
       console.error(
-        `[helios-social] score ${idx}/${inserted.length} ${passes ? '✓' : '✗'} ${packet.score.toFixed(2)} — ${article.source}: ${article.headline.slice(0, 60)}`,
+        `[helios-social] extract ${idx}/${inserted.length} ✓ ${judgment.noul.toFixed(2)} — ${article.source}: ${article.headline.slice(0, 60)}`,
       );
-      if (passes) summary.articlesApproved += 1;
-      else summary.articlesRejected += 1;
 
+      // 6. Persist the packet.
       await dbQuery(
         `UPDATE helios_social.article_queue
-            SET ingest_status    = $1,
-                relevance_score  = $2,
-                relevance_reason = $3,
-                rejected_reason  = $4,
-                people           = $5::jsonb,
-                companies        = $6::jsonb,
-                products         = $7::jsonb,
-                topics           = $8::jsonb,
-                notable_number   = $9,
-                bullets          = $10::jsonb
-          WHERE id = $11`,
+            SET ingest_status    = 'approved_for_draft',
+                relevance_score  = $1,
+                relevance_reason = $2,
+                people           = $3::jsonb,
+                companies        = $4::jsonb,
+                products         = $5::jsonb,
+                topics           = $6::jsonb,
+                notable_number   = $7,
+                bullets          = $8::jsonb
+          WHERE id = $9`,
         [
-          passes ? 'approved_for_draft' : 'rejected',
-          packet.score,
+          judgment.noul,
           packet.reason,
-          passes ? null : packet.reason,
           JSON.stringify(packet.people),
           JSON.stringify(packet.companies),
           JSON.stringify(packet.products),
@@ -141,10 +187,14 @@ export async function runIngest(): Promise<IngestSummary> {
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      summary.errors.push(`score failed for ${article.source_url}: ${msg}`);
+      summary.errors.push(`article ${article.source_url}: ${msg}`);
     }
   }
 
-  summary.approxCostUsd = Number(summary.approxCostUsd.toFixed(6));
+  summary.approxJevCostUsd = Number(summary.approxJevCostUsd.toFixed(6));
+  summary.approxHaikuCostUsd = Number(summary.approxHaikuCostUsd.toFixed(6));
+  summary.approxCostUsd = Number(
+    (summary.approxJevCostUsd + summary.approxHaikuCostUsd).toFixed(6),
+  );
   return summary;
 }
