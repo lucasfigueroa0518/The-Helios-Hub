@@ -6,6 +6,11 @@ import {
 import { extractPacket } from '@/lib/social/ingest/extract-packet';
 import { fetchAllFeeds } from '@/lib/social/ingest/fetch-feeds';
 import { judgeRelevance } from '@/lib/social/ingest/judge-relevance';
+import {
+  shadowHaikuJudge,
+  shadowEnabled,
+  shadowSampleRate,
+} from '@/lib/social/ingest/shadow-haiku-judge';
 
 export type IngestSummary = {
   feedsQueried: number;
@@ -18,6 +23,10 @@ export type IngestSummary = {
   articlesExtracted: number;
   approxJevCostUsd: number;
   approxHaikuCostUsd: number;
+  // Shadow (research mode). Zero when HELIOS_SOCIAL_SHADOW_HAIKU_JUDGE is off.
+  shadowRunsAttempted: number;
+  shadowRunsSucceeded: number;
+  approxShadowCostUsd: number;
   approxCostUsd: number;
   errors: string[];
 };
@@ -40,13 +49,16 @@ type InsertedArticle = {
  *   4. For each new article, call Jev to judge relevance (one Noul).
  *      - If noul < threshold: reject. Article marked 'rejected'. No Haiku call.
  *      - If noul >= threshold: continue to step 5.
+ *   4b. (Optional shadow — HELIOS_SOCIAL_SHADOW_HAIKU_JUDGE=1) Haiku is
+ *       invoked with the same rubric. Verdict lands in judge_shadow_ledger
+ *       for offline A/B comparison. Never affects production decisions.
  *   5. For approved articles only, call Haiku to extract the full packet
  *      (reason, people, companies, products, topics, notable_number, bullets).
  *   6. UPDATE the row with the score + extraction packet + status.
  *
  * Per-article failures do not abort the run — they land in `errors`. The
- * summary tracks Jev cost and Haiku cost separately so cost regressions
- * show up in the diagnostics.
+ * summary tracks Jev cost, Haiku extract cost, and Haiku shadow cost
+ * separately so cost regressions in any stage show up in the diagnostics.
  */
 export async function runIngest(): Promise<IngestSummary> {
   const summary: IngestSummary = {
@@ -60,9 +72,21 @@ export async function runIngest(): Promise<IngestSummary> {
     articlesExtracted: 0,
     approxJevCostUsd: 0,
     approxHaikuCostUsd: 0,
+    shadowRunsAttempted: 0,
+    shadowRunsSucceeded: 0,
+    approxShadowCostUsd: 0,
     approxCostUsd: 0,
     errors: [],
   };
+
+  // Shadow harness — resolved once per run so mid-run env flips do not race.
+  const shadowOn = shadowEnabled();
+  const shadowRate = shadowSampleRate();
+  if (shadowOn) {
+    console.error(
+      `[helios-social] shadow ON — Haiku judge will run alongside Jev at sample rate ${shadowRate}`,
+    );
+  }
 
   // 1–2. Fetch + freshness filter (both inside fetchAllFeeds).
   console.error(`[helios-social] fetching ${HELIOS_SOCIAL_FEEDS.length} feeds in parallel…`);
@@ -113,7 +137,7 @@ export async function runIngest(): Promise<IngestSummary> {
   for (const article of inserted) {
     idx += 1;
     try {
-      // 4. Jev gate.
+      // 4. Jev gate (production).
       const judgment = await judgeRelevance({
         headline: article.headline,
         source: article.source,
@@ -124,6 +148,52 @@ export async function runIngest(): Promise<IngestSummary> {
       summary.articlesJudged += 1;
 
       const passes = judgment.noul >= HELIOS_SOCIAL_RELEVANCE_THRESHOLD;
+
+      // 4b. Optional Haiku shadow (research mode). Runs BEFORE the reject
+      //     short-circuit so we shadow both approved and rejected articles —
+      //     the disagreement pattern is what Lucas actually needs to see.
+      //     Fully wrapped: shadow failure never affects the cascade.
+      if (shadowOn && Math.random() < shadowRate) {
+        summary.shadowRunsAttempted += 1;
+        try {
+          const shadow = await shadowHaikuJudge({
+            headline: article.headline,
+            source: article.source,
+            byline: article.byline,
+            body: article.body,
+          });
+          summary.approxShadowCostUsd += shadow.approxCostUsd;
+          summary.shadowRunsSucceeded += 1;
+
+          const shadowWouldApprove =
+            shadow.score >= HELIOS_SOCIAL_RELEVANCE_THRESHOLD;
+          const agrees = shadowWouldApprove === passes;
+
+          await dbQuery(
+            `INSERT INTO helios_social.judge_shadow_ledger
+               (article_id, shadow_model, shadow_score, shadow_reason,
+                shadow_would_approve, production_score, production_approved,
+                agrees_with_production, shadow_cost_usd,
+                shadow_input_tokens, shadow_output_tokens)
+             VALUES ($1, 'haiku', $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+            [
+              article.id,
+              shadow.score,
+              shadow.reason,
+              shadowWouldApprove,
+              judgment.noul,
+              passes,
+              agrees,
+              shadow.approxCostUsd,
+              shadow.inputTokens,
+              shadow.outputTokens,
+            ],
+          );
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          summary.errors.push(`shadow failed for ${article.source_url}: ${msg}`);
+        }
+      }
 
       if (!passes) {
         // Rejected — no Haiku call, no packet, just record the score + reason.
@@ -193,8 +263,9 @@ export async function runIngest(): Promise<IngestSummary> {
 
   summary.approxJevCostUsd = Number(summary.approxJevCostUsd.toFixed(6));
   summary.approxHaikuCostUsd = Number(summary.approxHaikuCostUsd.toFixed(6));
+  summary.approxShadowCostUsd = Number(summary.approxShadowCostUsd.toFixed(6));
   summary.approxCostUsd = Number(
-    (summary.approxJevCostUsd + summary.approxHaikuCostUsd).toFixed(6),
+    (summary.approxJevCostUsd + summary.approxHaikuCostUsd + summary.approxShadowCostUsd).toFixed(6),
   );
   return summary;
 }
