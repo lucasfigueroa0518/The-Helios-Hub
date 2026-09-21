@@ -1,11 +1,16 @@
 /* Helios Social — slide preview.
    Deliberately isolated from Hub's globals.css: all brand tokens declared
    inside `.helios-slide` so the same component works when embedded elsewhere
-   (Vercel Sandbox, standalone HTML, headless Playwright). */
+   (Vercel Sandbox, standalone HTML, headless Playwright).
+
+   Dark canvas is the default. Light-canvas "Helios White" variant is opt-in
+   via .helios-slide--light on 0-or-1 slide per carousel. */
+
+/* ── Preview shell (dev-only wrapper, not exported) ───────────────────── */
 
 .preview-shell {
   min-height: 100vh;
-  background: #f5f5f5;
+  background: #1a1a1a;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -14,39 +19,39 @@
 }
 
 .preview-shell__meta {
-  font-family: 'Roboto', 'Helvetica Neue', sans-serif;
-  font-size: 13px;
+  font-family: var(--font-roboto-mono), 'Roboto Mono', ui-monospace, Menlo, monospace;
+  font-size: 12px;
   font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: #737373;
+  letter-spacing: 0.24em;
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .preview-shell__stage {
-  /* Wrapper takes the SCALED slide's visual size so the page lays out
-     naturally. `--slide-scale` is set inline on the wrapper. */
   width: calc(1080px * var(--slide-scale, 0.55));
   height: var(--slide-height, calc(1350px * var(--slide-scale, 0.55)));
   position: relative;
 }
 
-/* The slide itself renders at its true canvas dimensions. `transform: scale()`
-   handles the visual fit. This means the rendered PNG (Phase 3a.2) will be
-   pixel-exact 1080x1350 regardless of the browser preview size. */
+/* ── Slide base (brand tokens live here) ──────────────────────────────── */
+
 .helios-slide {
-  /* Brand tokens — isolated. Do not reference Hub's --color-* here. */
   --brand-orange:      #FF5E1A;
   --brand-orange-soft: rgba(255, 94, 26, 0.10);
   --brand-green:       #138510;
-  --brand-ink:         #171717;
-  --brand-muted-ink:   #525252;
-  --brand-subtle-ink:  #737373;
-  --brand-canvas:      #FFFFFF;
+
+  /* Dark canvas is the default. */
+  --brand-canvas:      #0A0A0A;
+  --brand-narrative:   #FFFFFF;
+  --brand-narrative-muted: rgba(255, 255, 255, 0.72);
+  --brand-narrative-quiet: rgba(255, 255, 255, 0.55);
+
   --font-heading:      var(--font-pragmatica), 'Pragmatica Extended', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   --font-body:         var(--font-roboto), 'Roboto', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-mono:         var(--font-roboto-mono), 'Roboto Mono', ui-monospace, Menlo, monospace;
 
   background: var(--brand-canvas);
-  color: var(--brand-ink);
+  color: var(--brand-narrative);
 
   position: absolute;
   top: 0;
@@ -56,189 +61,432 @@
 
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   box-sizing: border-box;
 
-  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.55);
 }
 
-/* Carousel: 1080x1350 (4:5 portrait) */
+/* Helios White light-canvas variant — one slide per carousel, opt-in.
+   Only orange + green stay; narrative flips to near-black. */
+.helios-slide--light {
+  --brand-canvas:      #FAFAFA;
+  --brand-narrative:   #171717;
+  --brand-narrative-muted: rgba(23, 23, 23, 0.72);
+  --brand-narrative-quiet: rgba(23, 23, 23, 0.55);
+}
+
+/* Canvas dimensions. Inner padding is generous — 88px inset all around. */
 .helios-slide--carousel {
   width: 1080px;
   height: 1350px;
-  padding: 88px 88px 72px;
+  padding: 88px;
 }
 
-/* Story: 1080x1920 (9:16 portrait). 250px safe zones top + bottom. */
 .helios-slide--story {
   width: 1080px;
   height: 1920px;
-  padding: 340px 88px 320px;
+  padding: 240px 88px 240px;
 }
 
-/* ── Shared type stack ────────────────────────────────────────────────── */
-
-.helios-slide__stack {
+.helios-slide__well {
+  position: relative;
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 32px;
-  max-width: 100%;
+  min-height: 0;
+  /* Leave room below the category label (top-left) and above the wordmark
+     (bottom-right) so archetype content never collides with chrome. */
+  padding-top: 56px;
+  padding-bottom: 56px;
 }
 
-.helios-slide__eyebrow {
-  font-family: var(--font-body);
-  font-size: 26px;
-  font-weight: 700;
+/* Cover manages its own top layout (category is baked into the archetype
+   because it visually pairs with the headline), so undo the well's padding. */
+.helios-slide--cover .helios-slide__well {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* ── Chrome: category label + HELIOS wordmark. Nothing else. ──────────── */
+
+.helios-chrome__category {
+  position: absolute;
+  top: 88px;
+  left: 88px;
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
   text-transform: uppercase;
-  letter-spacing: 0.18em;
   color: var(--brand-green);
+  z-index: 2;
+}
+
+.helios-chrome__mark {
+  position: absolute;
+  bottom: 88px;
+  right: 88px;
+  font-family: var(--font-body);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: var(--brand-narrative);
+  z-index: 2;
+}
+
+/* Photo-bleed cover: the pill IS the brand cue, and the chevron sits where
+   the wordmark would. Hide the wordmark to avoid collision. */
+.helios-slide--cover:has(.helios-cover--bleed) .helios-chrome__mark {
+  display: none;
+}
+
+/* ── Three-role color-emphasis spans ──────────────────────────────────── */
+
+.helios-span { color: inherit; }
+.helios-span--narrative { color: var(--brand-narrative); }
+.helios-span--hook      { color: var(--brand-orange); }
+.helios-span--pivot     { color: var(--brand-green); }
+
+/* ── Cover archetype ──────────────────────────────────────────────────── */
+
+/* Cover — two modes.
+   Photo-bleed (default when photoUrl is present): full-canvas portrait as
+   background, scrim across the bottom half, category pill + big headline
+   + chevron overlay the photo. Reads like a magazine cover.
+   Text-only (no photo): headline flush-left at the bottom of the dark canvas.
+*/
+.helios-cover {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+/* ── Photo-bleed variant ──────────────────────────────────────────────── */
+
+/* Photo-bleed fills the full 1080×1350 slide with pinned dimensions —
+   avoiding the flex-child height ambiguity. Two hard zones: photo top
+   750px, dark text canvas bottom 600px. */
+.helios-cover--bleed {
+  position: absolute;
+  top: -88px;
+  left: -88px;
+  width: 1080px;
+  height: 1350px;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  background: var(--brand-canvas);
+}
+
+.helios-cover__bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1080px;
+  height: 750px;
+  object-fit: cover;
+  object-position: center 8%;
+  display: block;
+  z-index: 0;
+}
+
+/* Subtle top-fade behind the pill only. Photo hard-stops at 750px. */
+.helios-cover__scrim {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1080px;
+  height: 200px;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(180deg,
+    rgba(10, 10, 10, 0.30) 0%,
+    rgba(10, 10, 10, 0.00) 100%
+  );
+}
+
+.helios-cover--bleed .helios-cover__foreground {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: block;
+}
+
+.helios-cover--bleed .helios-cover__pill {
+  position: absolute;
+  top: 60px;
+  left: 60px;
+}
+
+.helios-cover--bleed .helios-cover__headline {
+  position: absolute;
+  left: 60px;
+  right: 60px;
+  bottom: 40px;
+  font-size: 84px;
+  line-height: 0.96;
+  letter-spacing: -0.03em;
+  margin: 0;
+}
+
+.helios-cover--bleed .helios-cover__arrow {
+  right: 60px;
+  bottom: 60px;
+}
+
+.helios-cover__foreground {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  height: 100%;
+}
+
+.helios-cover__pill {
+  align-self: flex-start;
+  padding: 10px 22px 12px;
+  border-radius: 999px;
+  background: var(--brand-orange);
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--brand-narrative);
   line-height: 1;
 }
 
-.helios-slide__eyebrow--ink {
-  color: var(--brand-ink);
-}
-
-/* ── Cover headline ───────────────────────────────────────────────────── */
-
-.helios-slide__headline {
+.helios-cover__headline {
   font-family: var(--font-heading);
   font-size: 108px;
   font-weight: 700;
-  line-height: 0.95;
-  letter-spacing: -0.03em;
-  color: var(--brand-ink);
+  line-height: 0.92;
+  letter-spacing: -0.035em;
+  color: var(--brand-narrative);
   margin: 0;
+  margin-top: auto;
   text-transform: uppercase;
+  overflow-wrap: break-word;
+  max-width: 100%;
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
 }
 
-.helios-slide__keyphrase {
-  display: inline-block;
-  align-self: flex-start;
+.helios-cover__arrow {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 72px;
+  height: 72px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-family: var(--font-body);
-  font-size: 34px;
+  font-size: 36px;
   font-weight: 700;
-  color: var(--brand-orange);
-  padding: 6px 20px 8px;
-  background: var(--brand-orange-soft);
-  border-radius: 8px;
-}
-
-.helios-slide__body {
-  font-family: var(--font-body);
-  font-size: 34px;
-  font-weight: 300;
-  line-height: 1.35;
-  color: var(--brand-muted-ink);
-  max-width: 760px;
-  margin: 0;
-}
-
-.helios-slide__body--large {
-  font-size: 40px;
-  line-height: 1.3;
-}
-
-/* ── Quote variant ────────────────────────────────────────────────────── */
-
-.helios-slide__quote-mark {
-  font-family: var(--font-heading);
-  font-size: 240px;
-  font-weight: 700;
-  line-height: 0.5;
-  color: var(--brand-orange);
-  margin-top: -20px;
-}
-
-.helios-slide__quote {
-  font-family: var(--font-heading);
-  font-size: 68px;
-  font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
-  color: var(--brand-ink);
-  margin: 0;
-}
-
-.helios-slide__attribution {
-  font-family: var(--font-body);
-  font-size: 26px;
-  font-weight: 500;
-  color: var(--brand-subtle-ink);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-/* ── Data change variant ──────────────────────────────────────────────── */
-
-.helios-slide__data-figure {
-  font-family: var(--font-heading);
-  font-size: 200px;
-  font-weight: 700;
-  line-height: 0.85;
-  letter-spacing: -0.04em;
-  color: var(--brand-orange);
-}
-
-.helios-slide__data-label {
-  font-family: var(--font-heading);
-  font-size: 56px;
-  font-weight: 700;
-  line-height: 1.05;
-  letter-spacing: -0.02em;
-  color: var(--brand-ink);
-  margin: 0;
-  text-transform: uppercase;
-}
-
-/* ── Context variant ──────────────────────────────────────────────────── */
-
-.helios-slide__context-head {
-  font-family: var(--font-heading);
-  font-size: 84px;
-  font-weight: 700;
+  color: var(--brand-narrative);
   line-height: 1;
-  letter-spacing: -0.03em;
-  color: var(--brand-ink);
-  margin: 0;
-  text-transform: uppercase;
 }
 
-/* ── Source CTA variant ───────────────────────────────────────────────── */
+/* ── Text-only variant (no photo) ─────────────────────────────────────── */
 
-.helios-slide__source-head {
+.helios-cover:not(.helios-cover--bleed) .helios-cover__pill {
+  background: transparent;
+  padding: 0;
+  color: var(--brand-green);
+  font-weight: 500;
+}
+
+.helios-cover:not(.helios-cover--bleed) .helios-cover__arrow {
+  display: none;
+}
+
+/* ── Story-beat archetype (photo-forward, @metav3rse-style) ───────────── */
+
+/* Beat structure: headline at top, body-top paragraph, big photo block in
+   the middle with baked caption, body-bottom paragraph, arrow bottom-right.
+   The photo is the visual centerpiece — same pattern @metav3rse uses. */
+.helios-beat {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding-bottom: 16px;
+}
+
+.helios-beat__title {
   font-family: var(--font-heading);
   font-size: 88px;
   font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.03em;
-  color: var(--brand-ink);
-  margin: 0;
+  line-height: 0.92;
+  letter-spacing: -0.035em;
+  color: var(--brand-orange);
   text-transform: uppercase;
+  margin: 0;
+  overflow-wrap: break-word;
 }
 
-.helios-slide__source-outlet {
+.helios-beat__body {
   font-family: var(--font-body);
   font-size: 32px;
-  font-weight: 700;
-  color: var(--brand-orange);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  font-weight: 300;
+  line-height: 1.32;
+  color: var(--brand-narrative);
+  margin: 0;
+  max-width: 100%;
 }
 
-/* ── Helios brand mark (bottom-right, protected clear space) ─────────── */
+.helios-beat__figure {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  margin: 4px 0;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+}
 
-.helios-slide__mark {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
+.helios-beat__photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.helios-beat__caption {
+  position: absolute;
+  left: 24px;
+  bottom: 20px;
+  padding: 8px 14px;
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--brand-narrative);
+  background: rgba(10, 10, 10, 0.75);
+  backdrop-filter: blur(4px);
+}
+
+.helios-beat__arrow {
+  align-self: flex-end;
+  font-family: var(--font-body);
+  font-size: 44px;
+  font-weight: 700;
+  color: var(--brand-narrative);
+  opacity: 0.85;
+  line-height: 1;
   margin-top: auto;
 }
 
-.helios-slide__wordmark {
-  font-family: var(--font-body);
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: 0.32em;
-  color: var(--brand-ink);
+/* ── Source archetype ─────────────────────────────────────────────────── */
+
+.helios-source {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding-top: 8px;
 }
+
+.helios-source__label {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--brand-green);
+}
+
+.helios-source__outlet {
+  font-family: var(--font-heading);
+  font-size: 96px;
+  font-weight: 700;
+  line-height: 0.94;
+  letter-spacing: -0.03em;
+  color: var(--brand-narrative);
+  margin: 0;
+  text-transform: uppercase;
+  max-width: 440px;
+  position: relative;
+  z-index: 2;
+}
+
+.helios-source__teaser {
+  font-family: var(--font-body);
+  font-size: 28px;
+  font-weight: 300;
+  line-height: 1.32;
+  color: var(--brand-narrative-muted);
+  max-width: 440px;
+  margin: 0;
+  position: relative;
+  z-index: 2;
+}
+
+.helios-source__cta {
+  margin-top: auto;
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--brand-orange);
+}
+
+.helios-source__photo {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 440px;
+  height: 520px;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+
+/* ── Follow archetype (styled in step 6) ──────────────────────────────── */
+
+.helios-slide__stack--follow {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 48px;
+}
+
+.helios-slide__follow-wordmark {
+  font-family: var(--font-body);
+  font-size: 128px;
+  font-weight: 700;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: var(--brand-narrative);
+}
+
+.helios-slide__follow-handle-text {
+  font-family: var(--font-mono);
+  font-size: 40px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--brand-orange);
+}
+
+.helios-slide__follow-tagline {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--brand-green);
+  margin-top: auto;
+}
+

@@ -1,6 +1,7 @@
 'use client';
 
-import type { Post, SlideCopy } from '@/lib/social/render/types';
+import type { Post, SlideCopy, SpanRun } from '@/lib/social/render/types';
+import { CATEGORY_LABELS } from '@/lib/social/render/types';
 
 export type SlideTemplateProps = {
   post: Post;
@@ -13,8 +14,10 @@ export type SlideTemplateProps = {
  * the slide's CSS (see preview.css) so the component is portable to any
  * rendering context (Hub route, Vercel Sandbox, standalone HTML).
  *
- * Each layout variant is a separate sub-component so we can add cover /
- * quote / data / context / source-cta shapes without one mega switch.
+ * Each of the six archetypes from the helios-social-design spec is its own
+ * sub-component. Publication chrome (category label + HELIOS wordmark) is
+ * inline — two absolutely-positioned marks are not a component worth its
+ * own file.
  */
 export function SlideTemplate({ post, position }: SlideTemplateProps) {
   const slide = post.slides[position];
@@ -29,104 +32,163 @@ export function SlideTemplate({ post, position }: SlideTemplateProps) {
     );
   }
 
-  const commonProps = { post, slide };
+  const lightMod = slide.lightCanvas ? ' helios-slide--light' : '';
+  const category = CATEGORY_LABELS[post.storyType] ?? 'TECH';
+  const showCategory = slide.layoutVariant !== 'cover' && slide.layoutVariant !== 'follow';
+  const showWordmark = slide.layoutVariant !== 'follow';
 
   return (
     <div
-      className={`helios-slide helios-slide--${post.format} helios-slide--${slide.layoutVariant}`}
+      className={
+        `helios-slide helios-slide--${post.format}`
+        + ` helios-slide--${slide.layoutVariant}${lightMod}`
+      }
       data-slide-ready="true"
       role="img"
       aria-label={slide.altText}
     >
-      {slide.layoutVariant === 'cover_headline' && <CoverHeadline {...commonProps} />}
-      {slide.layoutVariant === 'quote' && <QuoteSlide {...commonProps} />}
-      {slide.layoutVariant === 'data_change' && <DataChangeSlide {...commonProps} />}
-      {slide.layoutVariant === 'context' && <ContextSlide {...commonProps} />}
-      {slide.layoutVariant === 'source_cta' && <SourceCta {...commonProps} />}
-      <HeliosMark />
-    </div>
-  );
-}
-
-/* ── Variants ─────────────────────────────────────────────────────────── */
-
-function CoverHeadline({ slide }: { post: Post; slide: SlideCopy }) {
-  return (
-    <div className="helios-slide__stack">
-      {slide.eyebrow && (
-        <div className="helios-slide__eyebrow">{slide.eyebrow}</div>
+      {showCategory && (
+        <div className="helios-chrome__category" aria-hidden="true">{category}</div>
       )}
-      <h1 className="helios-slide__headline">{slide.headline}</h1>
-      {slide.keyPhrase && (
-        <div className="helios-slide__keyphrase">{slide.keyPhrase}</div>
+      {showWordmark && (
+        <div className="helios-chrome__mark" aria-hidden="true">HELIOS</div>
       )}
-      {slide.body && <p className="helios-slide__body">{slide.body}</p>}
-    </div>
-  );
-}
-
-function QuoteSlide({ slide }: { post: Post; slide: SlideCopy }) {
-  return (
-    <div className="helios-slide__stack">
-      <div className="helios-slide__quote-mark" aria-hidden="true">
-        &ldquo;
+      <div className="helios-slide__well">
+        {slide.layoutVariant === 'cover' && <CoverSlide post={post} slide={slide} />}
+        {slide.layoutVariant === 'story_beat' && <StoryBeatSlide post={post} slide={slide} />}
+        {slide.layoutVariant === 'source' && <SourceSlide post={post} slide={slide} />}
+        {slide.layoutVariant === 'follow' && <FollowSlide post={post} slide={slide} />}
       </div>
-      <p className="helios-slide__quote">{slide.headline}</p>
-      {slide.attribution && (
-        <div className="helios-slide__attribution">— {slide.attribution}</div>
+    </div>
+  );
+}
+
+/* ── Span rendering ───────────────────────────────────────────────────── */
+
+function SpanRunView({ run }: { run: SpanRun | undefined }) {
+  if (!run) return null;
+  return (
+    <>
+      {run.map((span, i) => (
+        <span key={i} className={`helios-span helios-span--${span.role}`}>
+          {span.text}
+        </span>
+      ))}
+    </>
+  );
+}
+
+/* ── Cover (archetype 1) ──────────────────────────────────────────────── */
+
+function CoverSlide({ post, slide }: { post: Post; slide: SlideCopy }) {
+  const category = CATEGORY_LABELS[post.storyType] ?? 'TECH';
+  const photoBleed = Boolean(slide.photoUrl);
+  return (
+    <div className={`helios-cover${photoBleed ? ' helios-cover--bleed' : ''}`}>
+      {photoBleed && (
+        <>
+          <img
+            className="helios-cover__bg"
+            src={slide.photoUrl}
+            alt=""
+            aria-hidden="true"
+          />
+          <div className="helios-cover__scrim" aria-hidden="true" />
+        </>
+      )}
+      <div className="helios-cover__foreground">
+        <div className="helios-cover__pill">{category}</div>
+        <h1 className="helios-cover__headline">
+          <SpanRunView run={slide.headline} />
+        </h1>
+        <div className="helios-cover__arrow" aria-hidden="true">→</div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Story-beat (archetype 2) ─────────────────────────────────────────── */
+
+function StoryBeatSlide({ slide }: { post: Post; slide: SlideCopy }) {
+  return (
+    <div className="helios-beat">
+      {slide.title && (
+        <h2 className="helios-beat__title">
+          <SpanRunView run={slide.title} />
+        </h2>
+      )}
+      {slide.body && (
+        <p className="helios-beat__body helios-beat__body--top">
+          <SpanRunView run={slide.body} />
+        </p>
+      )}
+      {slide.photoUrl && (
+        <figure className="helios-beat__figure">
+          <img
+            className="helios-beat__photo"
+            src={slide.photoUrl}
+            alt=""
+            aria-hidden="true"
+          />
+          {slide.photoCaption && (
+            <figcaption className="helios-beat__caption">
+              {slide.photoCaption}
+            </figcaption>
+          )}
+        </figure>
+      )}
+      {slide.bodyBottom && (
+        <p className="helios-beat__body helios-beat__body--bottom">
+          <SpanRunView run={slide.bodyBottom} />
+        </p>
+      )}
+      <div className="helios-beat__arrow" aria-hidden="true">→</div>
+    </div>
+  );
+}
+
+/* ── Source (archetype 5) ─────────────────────────────────────────────── */
+
+function SourceSlide({ post, slide }: { post: Post; slide: SlideCopy }) {
+  return (
+    <div className="helios-source">
+      <div className="helios-source__label">THE SOURCE</div>
+      <h2 className="helios-source__outlet">{post.source}.</h2>
+      {slide.body && (
+        <p className="helios-source__teaser">
+          <SpanRunView run={slide.body} />
+        </p>
+      )}
+      <div className="helios-source__cta">
+        FULL STORY IN BIO <span aria-hidden="true">→</span>
+      </div>
+      {slide.photoUrl && (
+        <img
+          className="helios-source__photo"
+          src={slide.photoUrl}
+          alt=""
+          aria-hidden="true"
+        />
       )}
     </div>
   );
 }
 
-function DataChangeSlide({ slide }: { post: Post; slide: SlideCopy }) {
-  return (
-    <div className="helios-slide__stack">
-      {slide.eyebrow && (
-        <div className="helios-slide__eyebrow">{slide.eyebrow}</div>
-      )}
-      {slide.keyPhrase && (
-        <div className="helios-slide__data-figure">{slide.keyPhrase}</div>
-      )}
-      <h2 className="helios-slide__data-label">{slide.headline}</h2>
-      {slide.body && <p className="helios-slide__body">{slide.body}</p>}
-    </div>
-  );
-}
+/* ── Follow (archetype 6) ─────────────────────────────────────────────── */
 
-function ContextSlide({ slide }: { post: Post; slide: SlideCopy }) {
+function FollowSlide(_props: { post: Post; slide: SlideCopy }) {
   return (
-    <div className="helios-slide__stack">
-      {slide.eyebrow && (
-        <div className="helios-slide__eyebrow">{slide.eyebrow}</div>
-      )}
-      <h2 className="helios-slide__context-head">{slide.headline}</h2>
-      {slide.body && <p className="helios-slide__body helios-slide__body--large">{slide.body}</p>}
-    </div>
-  );
-}
-
-function SourceCta({ post, slide }: { post: Post; slide: SlideCopy }) {
-  return (
-    <div className="helios-slide__stack">
-      {slide.eyebrow && (
-        <div className="helios-slide__eyebrow helios-slide__eyebrow--ink">
-          {slide.eyebrow}
-        </div>
-      )}
-      <h2 className="helios-slide__source-head">Read the full story</h2>
-      <div className="helios-slide__source-outlet">{post.source}</div>
-      {slide.body && <p className="helios-slide__body">{slide.body}</p>}
-    </div>
-  );
-}
-
-/* ── Brand mark (protected, whole, unmodified) ────────────────────────── */
-
-function HeliosMark() {
-  return (
-    <div className="helios-slide__mark" aria-hidden="true">
-      <span className="helios-slide__wordmark">HELIOS</span>
+    <div className="helios-slide__stack helios-slide__stack--follow">
+      <div className="helios-slide__follow-lockup">
+        <span className="helios-slide__follow-rule" aria-hidden="true" />
+        <span className="helios-slide__follow-wordmark">HELIOS</span>
+        <span className="helios-slide__follow-rule" aria-hidden="true" />
+      </div>
+      <div className="helios-slide__follow-handle">
+        <span className="helios-slide__follow-plus" aria-hidden="true">+</span>
+        <span className="helios-slide__follow-handle-text">@heliosgroup.ai</span>
+      </div>
+      <div className="helios-slide__follow-tagline">AI NEWS · DECODED · DAILY</div>
     </div>
   );
 }

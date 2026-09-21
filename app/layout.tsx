@@ -1,4 +1,4 @@
-import { Roboto } from 'next/font/google';
+import { Roboto, Roboto_Mono } from 'next/font/google';
 import localFont from 'next/font/local';
 
 import { HubChrome } from '@/components/hub-shell/HubChrome';
@@ -12,6 +12,13 @@ const roboto = Roboto({
   subsets: ['latin'],
   weight: ['300', '400', '500', '700'],
   variable: '--font-roboto',
+  display: 'swap',
+});
+
+const robotoMono = Roboto_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '700'],
+  variable: '--font-roboto-mono',
   display: 'swap',
 });
 
