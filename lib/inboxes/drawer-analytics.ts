@@ -2,6 +2,8 @@
  * Pure shapes for the inbox drawer Analytics pane.
  * Counts come from Smartlead warmup-stats, email_sends, and Postmaster rows.
  */
+import { addCalendarDays } from '@/lib/drafting/send-queue-schedule';
+import { toNumber } from '@/lib/smartlead/types';
 
 export type Campaign7d = {
   sent: number;
@@ -17,14 +19,24 @@ export type Campaign7d = {
   complaint_rate: number | null;
 };
 
+export type WarmupDay = {
+  date: string;
+  sent: number;
+  replies: number;
+  spam: number;
+  inbox: number;
+};
+
 export type WarmupWindow = {
   days: number;
   sent: number;
   replies: number;
   spam: number;
   inbox: number;
+  received: number;
   inbox_rate: number | null;
   spam_rate: number | null;
+  by_date: WarmupDay[];
 };
 
 export type WarmupProgram = {
@@ -38,6 +50,7 @@ export type WarmupProgram = {
   daily_rampup: number;
   reply_rate_pct: number | null;
   reputation: number | null;
+  started_at: string | null;
 };
 
 export type MailboxConnection = {
@@ -48,6 +61,12 @@ export type MailboxConnection = {
   imap_error: string | null;
   suspended: boolean | null;
   status: string | null;
+};
+
+export type WarmupGrade = {
+  label: string;
+  tone: 'good' | 'watch' | 'poor' | 'unknown';
+  copy: string;
 };
 
 export function campaignRates(counts: {
@@ -74,26 +93,157 @@ export function campaignRates(counts: {
   };
 }
 
+export function normalizeWarmupDayDate(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const match = value.trim().match(/^(\d{4}-\d{2}-\d{2})/);
+  return match?.[1] ?? null;
+}
+
+export function warmupDayFromStatsRow(row: {
+  date?: unknown;
+  sent_count?: unknown;
+  sent?: unknown;
+  reply_count?: unknown;
+  replies?: unknown;
+  save_from_spam_count?: unknown;
+  spam?: unknown;
+}): WarmupDay | null {
+  const date = normalizeWarmupDayDate(row.date);
+  if (!date) return null;
+  const sent = Math.max(0, toNumber(row.sent_count ?? row.sent, 0));
+  const replies = Math.max(0, toNumber(row.reply_count ?? row.replies, 0));
+  const spam = Math.max(0, toNumber(row.save_from_spam_count ?? row.spam, 0));
+  return {
+    date,
+    sent,
+    replies,
+    spam,
+    inbox: Math.max(0, sent - spam),
+  };
+}
+
+export function warmupDaysFromStats(
+  rows: Array<{
+    date?: unknown;
+    sent_count?: unknown;
+    sent?: unknown;
+    reply_count?: unknown;
+    replies?: unknown;
+    save_from_spam_count?: unknown;
+    spam?: unknown;
+  }>,
+): WarmupDay[] {
+  const byDate = new Map<string, WarmupDay>();
+  for (const row of rows) {
+    const day = warmupDayFromStatsRow(row);
+    if (!day) continue;
+    byDate.set(day.date, day);
+  }
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
 export function warmupWindowFromStats(
-  rows: Array<{ sent_count?: number; reply_count?: number; save_from_spam_count?: number }>,
+  rows: Array<{
+    date?: unknown;
+    sent_count?: unknown;
+    sent?: unknown;
+    reply_count?: unknown;
+    replies?: unknown;
+    save_from_spam_count?: unknown;
+    spam?: unknown;
+  }>,
+  options: { until?: string; days?: number; received?: number } = {},
 ): WarmupWindow {
+  const days = options.days ?? 7;
+  const all = warmupDaysFromStats(rows);
+  const until = options.until ?? all.at(-1)?.date ?? null;
+  const since = until ? addCalendarDays(until, -(days - 1)) : null;
+  const windowDays = since
+    ? all.filter((row) => row.date >= since && row.date <= (until as string))
+    : all;
+
   let sent = 0;
   let replies = 0;
   let spam = 0;
-  for (const row of rows) {
-    sent += Number(row.sent_count ?? 0);
-    replies += Number(row.reply_count ?? 0);
-    spam += Number(row.save_from_spam_count ?? 0);
+  let inbox = 0;
+  for (const row of windowDays) {
+    sent += row.sent;
+    replies += row.replies;
+    spam += row.spam;
+    inbox += row.inbox;
   }
-  const inbox = Math.max(0, sent - spam);
   return {
-    days: rows.length,
+    days: windowDays.length,
     sent,
     replies,
     spam,
     inbox,
+    received: Math.max(0, options.received ?? 0),
     inbox_rate: sent > 0 ? inbox / sent : null,
     spam_rate: sent > 0 ? spam / sent : null,
+    by_date: windowDays,
+  };
+}
+
+export function warmupWindowFromHealthRows(
+  rows: Array<{
+    day: string;
+    sent: number | null;
+    inbox: number | null;
+    spam: number | null;
+    replied: number | null;
+    status: string;
+  }>,
+  options: { until: string; days?: number; received?: number } = { until: '' },
+): WarmupWindow {
+  return warmupWindowFromStats(
+    rows
+      .filter((row) => row.status === 'ok')
+      .map((row) => ({
+        date: row.day,
+        sent_count: row.sent ?? 0,
+        reply_count: row.replied ?? 0,
+        save_from_spam_count: row.spam ?? 0,
+      })),
+    options,
+  );
+}
+
+/** Smartlead's overview grade: Super when nearly everything lands in inbox. */
+export function warmupPerformance(inboxRate: number | null, sent: number): WarmupGrade {
+  if (sent <= 0 || inboxRate === null) {
+    return {
+      label: '—',
+      tone: 'unknown',
+      copy: 'No warmup mail in this window yet.',
+    };
+  }
+  const pct = Math.round(inboxRate * 100);
+  if (inboxRate >= 0.98) {
+    return {
+      label: 'Super',
+      tone: 'good',
+      copy: `${pct}% of warmup emails landed in inbox`,
+    };
+  }
+  if (inboxRate >= 0.92) {
+    return {
+      label: 'Strong',
+      tone: 'good',
+      copy: `${pct}% of warmup emails landed in inbox`,
+    };
+  }
+  if (inboxRate >= 0.8) {
+    return {
+      label: 'Watch',
+      tone: 'watch',
+      copy: `${pct}% of warmup emails landed in inbox`,
+    };
+  }
+  return {
+    label: 'Needs work',
+    tone: 'poor',
+    copy: `${pct}% of warmup emails landed in inbox`,
   };
 }
 

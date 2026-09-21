@@ -8,11 +8,13 @@ import { HubLoadingSpinner } from '@/app/hub/hub-loading';
 import { heliosIdentitySignatureHtml } from '@/lib/drafting/email-signature';
 import { RequestError, requestJson } from '@/lib/client-request';
 import { inboxStatusHeadline, stageActionsFor } from '@/lib/inboxes/drawer-status';
-import type {
-  Campaign7d,
-  MailboxConnection,
-  WarmupProgram,
-  WarmupWindow,
+import {
+  warmupPerformance,
+  type Campaign7d,
+  type MailboxConnection,
+  type WarmupDay,
+  type WarmupProgram,
+  type WarmupWindow,
 } from '@/lib/inboxes/drawer-analytics';
 import { scoreInboxHealth } from '@/lib/inboxes/health-score';
 import type { InboxRoster, RosterInbox } from '@/lib/inboxes/roster';
@@ -87,19 +89,10 @@ function healthFor(inbox: RosterInbox) {
   });
 }
 
-function postmasterFact(inbox: RosterInbox): string {
-  if (inbox.postmaster_reputation) return inbox.postmaster_reputation;
-  if (inbox.postmaster_status === 'error') return 'error';
-  return 'quiet';
-}
-
 function formatRate(rate: number | null, digits: number): string {
   if (rate === null) return '—';
   return `${(rate * 100).toFixed(digits)}%`;
 }
-
-type HealthFact = { label: string; value: string; hint: string };
-type StatRow = { label: string; value: string; explain: string };
 
 type InboxHealthPayload = {
   series?: SendSeriesDay[];
@@ -122,19 +115,14 @@ type InboxHealthPayload = {
   forecast?: Array<{ detail?: { planned?: number; actual?: number; variance_flag?: boolean } }>;
 };
 
-function inboxHealthLine(inbox: RosterInbox): string {
-  return `Warmup inbox placement ${formatRate(inbox.warmup_7d.inbox_rate, 0)} · Bounce ${formatRate(inbox.bounce_rate_7d, 1)} · ${postmasterFact(inbox)}`;
-}
-
-function InboxHealthPill({ inbox }: { inbox: RosterInbox }) {
+function InboxHealthNumber({ inbox }: { inbox: RosterInbox }) {
   const health = healthFor(inbox);
-  const text = health.score === null ? health.label : `${health.label} ${health.score}`;
   return (
     <span
-      className={`inbox-health-pill inbox-health-pill--${health.tone}`}
+      className={`inbox-health-num inbox-health-num--${health.tone}`}
       title={health.detail}
     >
-      {text}
+      {health.score ?? '—'}
     </span>
   );
 }
@@ -376,8 +364,7 @@ export function InboxesHub() {
                       <div className="muted">{inbox.days_in_stage}d</div>
                     </td>
                     <td>
-                      <InboxHealthPill inbox={inbox} />
-                      <div className="muted">{inboxHealthLine(inbox)}</div>
+                      <InboxHealthNumber inbox={inbox} />
                     </td>
                     <td style={{ maxWidth: '16rem' }}>
                       {inbox.exit_unmet.length === 0 ? (
@@ -567,7 +554,7 @@ function InboxDrawer(props: {
   const [rampingDays, setRampingDays] = useState(plan.ramping.days);
   const [productionCap, setProductionCap] = useState(plan.production.cap);
   const [restingDays, setRestingDays] = useState(plan.resting.days);
-  const [pane, setPane] = useState<'actions' | 'analytics'>('actions');
+  const [pane, setPane] = useState<'actions' | 'analytics'>('analytics');
   const [health, setHealth] = useState<InboxHealthPayload | null>(null);
   const [seriesLoading, setSeriesLoading] = useState(true);
 
@@ -580,7 +567,7 @@ function InboxDrawer(props: {
   });
 
   useEffect(() => {
-    setPane('actions');
+    setPane('analytics');
   }, [inbox.id]);
 
   useEffect(() => {
@@ -620,7 +607,7 @@ function InboxDrawer(props: {
                   {status}
                 </span>
               ) : null}
-              <InboxHealthPill inbox={inbox} />
+              <InboxHealthNumber inbox={inbox} />
               {inbox.days_in_stage} days in this stage
               {inbox.rest_reason ? ` · resting: ${inbox.rest_reason}` : ''}
             </div>
@@ -635,20 +622,20 @@ function InboxDrawer(props: {
             <button
               type="button"
               role="tab"
-              aria-selected={pane === 'actions'}
-              className={`segmented__item${pane === 'actions' ? ' segmented__item--active' : ''}`}
-              onClick={() => setPane('actions')}
-            >
-              Actions
-            </button>
-            <button
-              type="button"
-              role="tab"
               aria-selected={pane === 'analytics'}
               className={`segmented__item${pane === 'analytics' ? ' segmented__item--active' : ''}`}
               onClick={() => setPane('analytics')}
             >
               Analytics
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={pane === 'actions'}
+              className={`segmented__item${pane === 'actions' ? ' segmented__item--active' : ''}`}
+              onClick={() => setPane('actions')}
+            >
+              Actions
             </button>
           </div>
         </div>
@@ -981,267 +968,192 @@ function InboxAnalyticsPane(props: {
   loading: boolean;
 }) {
   const { inbox, health } = props;
+  const warmup = health?.warmup_7d ?? {
+    days: inbox.warmup_7d.days,
+    sent: inbox.warmup_7d.sent,
+    replies: inbox.warmup_7d.replies ?? 0,
+    spam: inbox.warmup_7d.spam,
+    inbox: inbox.warmup_7d.inbox,
+    received: inbox.warmup_7d.received ?? 0,
+    inbox_rate: inbox.warmup_7d.inbox_rate,
+    spam_rate: inbox.warmup_7d.spam_rate,
+    by_date: [],
+  };
   const campaign = health?.campaign_7d;
+  const program = health?.warmup_program;
   const postmaster = health?.postmaster_latest;
   const connection = health?.connection;
-  const forecast = health?.forecast?.[0]?.detail;
-  const rows = warmupStatRows(inbox, health);
+  const grade = warmupPerformance(warmup.inbox_rate, warmup.sent);
+  const campaignSent = campaign?.sent ?? 0;
+  const outboundTotal = warmup.sent + campaignSent;
+  const warmupShare = outboundTotal > 0 ? warmup.sent / outboundTotal : 0;
+  const enabledLabel = formatWarmupStarted(program?.started_at ?? inbox.stage_entered_at);
+
+  if (props.loading && !health) {
+    return <p className="inbox-drawer__copy">Loading Smartlead warmup…</p>;
+  }
 
   return (
     <>
       <section className="inbox-drawer__section">
-        <h3 className="inbox-drawer__heading">Warmup</h3>
-        <StatList rows={rows} />
+        <h3 className="inbox-drawer__heading">Warmup overview</h3>
+        <p className="inbox-drawer__copy">Last 7 days · healthbound mail only</p>
+        <div className="inbox-kpi-grid">
+          <KpiTile tone="default" label="Warmup emails sent" value={formatCount(warmup.sent)} />
+          <KpiTile tone="good" label="Landed in inbox" value={formatCount(warmup.inbox)} />
+          <KpiTile tone="poor" label="Saved from spam" value={formatCount(warmup.spam)} />
+          <KpiTile tone="warning" label="Emails received" value={formatCount(warmup.received)} />
+        </div>
       </section>
 
-      <section className="inbox-drawer__section">
-        <h3 className="inbox-drawer__heading">Volumes</h3>
-        <SendSeriesChart
-          days={health?.series ?? null}
-          totals={health?.series_totals ?? null}
-          loading={props.loading}
-        />
-      </section>
+      <div className="inbox-overview-split">
+        <section className={`inbox-perf inbox-perf--${grade.tone}`}>
+          <h3 className="inbox-drawer__heading">Email performance</h3>
+          <p className="inbox-perf__grade">{grade.label}</p>
+          <p className="inbox-perf__copy">{grade.copy}</p>
+        </section>
+        <section className="inbox-outbound">
+          <h3 className="inbox-drawer__heading">Outbound mix</h3>
+          <div className="inbox-outbound__track" role="img" aria-label="Warmup versus campaign volume">
+            <span className="inbox-outbound__warmup" style={{ width: `${Math.round(warmupShare * 100)}%` }} />
+          </div>
+          <div className="inbox-outbound__legend">
+            <span>Warmup {formatCount(warmup.sent)}</span>
+            <span>Campaign {formatCount(campaignSent)}</span>
+          </div>
+          <p className="inbox-drawer__copy">
+            {program?.enabled ? `Warmup on · ${enabledLabel}` : `Warmup off · ${enabledLabel}`}
+          </p>
+        </section>
+      </div>
+
+      <div className="inbox-overview-split inbox-overview-split--charts">
+        <InboxSpamDonut inbox={warmup.inbox} spam={warmup.spam} sent={warmup.sent} />
+        <WarmupBarChart days={warmup.by_date} />
+      </div>
 
       <section className="inbox-drawer__section">
         <h3 className="inbox-drawer__heading">Campaign 7d</h3>
+        <p className="inbox-drawer__copy">Real outbound, not warmup. Empty while this mailbox is still warming.</p>
         <div className="inbox-health-facts">
-          {campaignFacts(campaign).map((fact) => (
+          {campaignTiles(campaign).map((fact) => (
             <div key={fact.label} className="inbox-health-fact" title={fact.hint}>
               <span className="inbox-health-fact__label">{fact.label}</span>
               <span className="inbox-health-fact__value">{fact.value}</span>
             </div>
           ))}
         </div>
-        {forecast && (forecast.planned || forecast.actual) ? (
-          <p className="inbox-drawer__copy">
-            Hub model {forecast.planned ?? 0} planned vs {forecast.actual ?? 0} actual
-            {forecast.variance_flag ? ' · variance flagged' : ''}.
-          </p>
-        ) : null}
       </section>
 
-      <section className="inbox-drawer__section">
-        <h3 className="inbox-drawer__heading">Postmaster</h3>
-        {postmaster?.status === 'ok' && postmaster.reputation ? (
-          <>
-            <p className="inbox-drawer__copy">
-              {inbox.domain} reputation {postmaster.reputation} on {postmaster.day}.
-            </p>
-            <dl className="inbox-analytics-dl">
-              <div>
-                <dt>User spam</dt>
-                <dd>{formatStoredRatio(postmaster.spam_rate)}</dd>
-              </div>
-              <div>
-                <dt>SPF</dt>
-                <dd>{formatStoredRatio(postmaster.spf_ratio)}</dd>
-              </div>
-              <div>
-                <dt>DKIM</dt>
-                <dd>{formatStoredRatio(postmaster.dkim_ratio)}</dd>
-              </div>
-              <div>
-                <dt>DMARC</dt>
-                <dd>{formatStoredRatio(postmaster.dmarc_ratio)}</dd>
-              </div>
-            </dl>
-          </>
-        ) : (
-          <p className="inbox-drawer__copy">
-            Quiet. Google publishes nothing below its Gmail-volume threshold; this is expected at this scale.
-          </p>
-        )}
-        {inbox.domain_rest.available_on ? (
-          <p className="inbox-drawer__copy">
-            Domain rest until {inbox.domain_rest.available_on} — campaign capacity stays 0.
-          </p>
-        ) : null}
-      </section>
-
-      <section className="inbox-drawer__section">
-        <h3 className="inbox-drawer__heading">Connection</h3>
-        {connection && !connection.healthy ? (
-          <p className="inbox-drawer__copy">
-            {connection.suspended ? 'Account suspended. ' : ''}
-            {connection.smtp_ok === false ? `SMTP: ${connection.smtp_error ?? 'error'}. ` : ''}
-            {connection.imap_ok === false ? `IMAP: ${connection.imap_error ?? 'error'}.` : ''}
-            {!connection.suspended && connection.smtp_ok !== false && connection.imap_ok !== false
-              ? (connection.status ?? 'Connection error')
-              : ''}
-          </p>
-        ) : (
-          <p className="inbox-drawer__copy">Connected.</p>
-        )}
-      </section>
+      <p className="inbox-drawer__copy">
+        {connection && !connection.healthy
+          ? [
+              connection.suspended ? 'Account suspended.' : null,
+              connection.smtp_ok === false ? `SMTP: ${connection.smtp_error ?? 'error'}.` : null,
+              connection.imap_ok === false ? `IMAP: ${connection.imap_error ?? 'error'}.` : null,
+            ].filter(Boolean).join(' ') || (connection.status ?? 'Connection error')
+          : 'Mailbox connected.'}
+        {' · '}
+        {postmaster?.status === 'ok' && postmaster.reputation
+          ? `Postmaster ${postmaster.reputation} on ${postmaster.day}.`
+          : 'Postmaster quiet at this volume.'}
+      </p>
     </>
   );
 }
 
-function warmupStatRows(inbox: RosterInbox, health: InboxHealthPayload | null): StatRow[] {
-  const program = health?.warmup_program;
-  const live = health?.warmup_7d;
-  const sent = live?.sent ?? inbox.warmup_7d.sent;
-  const inboxCount = live?.inbox ?? inbox.warmup_7d.inbox;
-  const days = live?.days ?? inbox.warmup_7d.days;
-  const inboxRate = live?.inbox_rate ?? inbox.warmup_7d.inbox_rate;
-  const replies = live?.replies ?? 0;
-  const lifetime = health?.warmup_lifetime;
-  const campaign = health?.campaign_7d;
-  const postmaster = health?.postmaster_latest;
-  const rows: StatRow[] = [];
-
-  const programOn = Boolean(program?.enabled);
-  rows.push({
-    label: 'Program',
-    value: program
-      ? `${programOn ? 'On' : 'Off'}${program.status ? ` · ${program.status}` : ''}`
-      : '—',
-    explain: programOn
-      ? 'Smartlead is sending warmup mail to build this address’s reputation.'
-      : program
-        ? 'Warmup is off. This mailbox is not sending those practice emails.'
-        : 'No warmup program reported by Smartlead yet.',
-  });
-
-  if (program?.blocked || program?.blocked_reason) {
-    rows.push({
-      label: 'Blocked',
-      value: 'Yes',
-      explain: program.blocked_reason
-        ? `Smartlead paused warmup: ${program.blocked_reason}.`
-        : 'Smartlead has paused this warmup program.',
-    });
-  }
-
-  rows.push({
-    label: 'Inbox placement',
-    value: formatRate(inboxRate, 0),
-    explain: sent > 0
-      ? `${inboxCount} of ${sent} warmup emails arrived in the inbox over the last ${days} days.`
-      : 'Share of warmup emails that landed in the inbox, not spam. None sent in the last 7 days.',
-  });
-
-  const today = program?.current_daily;
-  const floor = program?.min_per_day;
-  const ceiling = program?.max_per_day;
-  rows.push({
-    label: 'Today’s volume',
-    value: today != null ? `${today} / day` : '—',
-    explain: todayVolumeExplain(floor, today, ceiling),
-  });
-
-  rows.push({
-    label: 'Daily increase',
-    value: programOn && program ? `+${program.daily_rampup} / day` : '—',
-    explain: !programOn
-      ? 'Volume only increases while warmup is on.'
-      : today != null && ceiling != null && today >= ceiling
-        ? 'Warmup is already at the daily ceiling, so volume is not increasing further.'
-        : 'Extra warmup emails added each day until today’s volume hits the ceiling.',
-  });
-
-  rows.push({
-    label: 'Reply target',
-    value: program?.reply_rate_pct == null ? '—' : `${Math.round(program.reply_rate_pct)}%`,
-    explain: 'Share of warmup threads Smartlead tries to get a reply on. Replies help reputation.',
-  });
-
-  const reputation = program?.reputation;
-  rows.push({
-    label: 'Reputation',
-    value: reputation != null ? String(Math.round(reputation)) : '—',
-    explain: reputation != null
-      ? 'Smartlead’s 0–100 score for how this mailbox looks to email providers.'
-      : 'Not enough warmup yet for a Smartlead score.',
-  });
-
-  rows.push({
-    label: 'Last 7 days',
-    value: sent > 0 ? `${sent} sent` : 'None',
-    explain: sent > 0
-      ? `${inboxCount} landed in the inbox; ${replies} ${replies === 1 ? 'reply' : 'replies'}.`
-      : 'No warmup emails sent this week.',
-  });
-
-  if (lifetime && lifetime.sent > 0) {
-    rows.push({
-      label: 'Lifetime',
-      value: `${lifetime.sent} sent`,
-      explain: `Total warmup emails this mailbox has sent. ${lifetime.inbox} landed in the inbox.`,
-    });
-  }
-
-  const bounce = campaign && campaign.sent > 0 ? campaign.bounce_rate : inbox.bounce_rate_7d;
-  rows.push({
-    label: 'Bounce 7d',
-    value: formatRate(bounce, 1),
-    explain: 'Share of campaign mail from this mailbox that bounced in the last 7 days.',
-  });
-
-  const postmasterValue = postmaster?.reputation || postmasterFact(inbox);
-  rows.push({
-    label: 'Postmaster',
-    value: postmasterValue,
-    explain: postmasterValue !== 'quiet' && postmasterValue !== 'error' && postmasterValue !== '—'
-      ? 'Gmail’s published reputation for this domain.'
-      : 'Gmail’s domain reputation. Quiet means Google hasn’t published a score yet — expected at this volume.',
-  });
-
-  return rows;
-}
-
-function todayVolumeExplain(
-  floor: number | null | undefined,
-  today: number | null | undefined,
-  ceiling: number | null | undefined,
-): string {
-  if (today == null) return 'How many warmup emails Smartlead will send from this mailbox today.';
-  if (floor != null && ceiling != null && floor !== ceiling) {
-    if (today >= ceiling) {
-      return `Warmup emails Smartlead will send from this mailbox today. Started at ${floor}/day; now at the ${ceiling}/day ceiling.`;
-    }
-    return `Warmup emails Smartlead will send from this mailbox today. Started at ${floor}/day; climbing toward ${ceiling}/day.`;
-  }
-  if (ceiling != null && today >= ceiling) {
-    return `Warmup emails Smartlead will send from this mailbox today, already at the ${ceiling}/day ceiling.`;
-  }
-  return 'Warmup emails Smartlead will send from this mailbox today.';
-}
-
-function StatList({ rows }: { rows: StatRow[] }) {
+function KpiTile(props: { tone: 'default' | 'good' | 'poor' | 'warning'; label: string; value: string }) {
   return (
-    <ul className="inbox-stat-list">
-      {rows.map((row) => (
-        <li key={row.label} className="inbox-stat-list__row">
-          <div className="inbox-stat-list__head">
-            <span className="inbox-stat-list__label">{row.label}</span>
-            <span className="inbox-stat-list__value">{row.value}</span>
-          </div>
-          <p className="inbox-stat-list__explain">{row.explain}</p>
-        </li>
-      ))}
-    </ul>
+    <div className={`inbox-kpi inbox-kpi--${props.tone}`}>
+      <span className="inbox-kpi__value">{props.value}</span>
+      <span className="inbox-kpi__label">{props.label}</span>
+    </div>
   );
 }
 
-function formatStoredRatio(value: string | null | undefined): string {
-  if (value == null || value === '') return '—';
-  const n = Number(value);
-  if (!Number.isFinite(n)) return '—';
-  return `${(n * 100).toFixed(1)}%`;
+function InboxSpamDonut(props: { inbox: number; spam: number; sent: number }) {
+  const inboxPct = props.sent > 0 ? props.inbox / props.sent : 0;
+  const spamPct = props.sent > 0 ? props.spam / props.sent : 0;
+  const r = 36;
+  const c = 2 * Math.PI * r;
+  const inboxLen = inboxPct * c;
+  const spamLen = spamPct * c;
+  return (
+    <section className="inbox-drawer__section">
+      <h3 className="inbox-drawer__heading">Inbox vs spam</h3>
+      <div className="inbox-donut">
+        <svg viewBox="0 0 96 96" className="inbox-donut__svg" role="img" aria-label="Inbox versus spam">
+          <circle cx="48" cy="48" r={r} className="inbox-donut__track" />
+          <circle
+            cx="48"
+            cy="48"
+            r={r}
+            className="inbox-donut__inbox"
+            strokeDasharray={`${inboxLen} ${c - inboxLen}`}
+            strokeDashoffset={c / 4}
+          />
+          <circle
+            cx="48"
+            cy="48"
+            r={r}
+            className="inbox-donut__spam"
+            strokeDasharray={`${spamLen} ${c - spamLen}`}
+            strokeDashoffset={c / 4 - inboxLen}
+          />
+        </svg>
+        <ul className="inbox-donut__legend">
+          <li><span className="inbox-swatch inbox-swatch--inbox" /> {Math.round(inboxPct * 100)}% inbox ({formatCount(props.inbox)})</li>
+          <li><span className="inbox-swatch inbox-swatch--spam" /> {Math.round(spamPct * 100)}% spam ({formatCount(props.spam)})</li>
+        </ul>
+      </div>
+    </section>
+  );
 }
 
-function campaignFacts(campaign: Campaign7d | undefined): HealthFact[] {
+function WarmupBarChart({ days }: { days: WarmupDay[] }) {
+  if (!days.length) {
+    return (
+      <section className="inbox-drawer__section">
+        <h3 className="inbox-drawer__heading">Warmup email sent</h3>
+        <p className="inbox-drawer__copy">No daily warmup counts yet.</p>
+      </section>
+    );
+  }
+  const max = Math.max(1, ...days.map((day) => day.sent + day.replies));
+  return (
+    <section className="inbox-drawer__section">
+      <h3 className="inbox-drawer__heading">Warmup email sent</h3>
+      <div className="inbox-bars__legend">
+        <span><i className="inbox-swatch inbox-swatch--sent" /> Sent</span>
+        <span><i className="inbox-swatch inbox-swatch--replied" /> Replied</span>
+        <span><i className="inbox-swatch inbox-swatch--spam" /> Saved from spam</span>
+      </div>
+      <div className="inbox-bars" role="img" aria-label="Warmup sent, replies, and spam by day">
+        {days.map((day) => (
+          <div key={day.date} className="inbox-bars__col" title={`${shortSeriesDate(day.date)} · sent ${day.sent} · replies ${day.replies} · spam ${day.spam}`}>
+            <div className="inbox-bars__stack" style={{ height: `${((day.sent + day.replies) / max) * 100}%` }}>
+              {day.sent > 0 ? <span className="inbox-bars__sent" style={{ flexGrow: day.sent }} /> : null}
+              {day.replies > 0 ? <span className="inbox-bars__replied" style={{ flexGrow: day.replies }} /> : null}
+              {day.spam > 0 ? <span className="inbox-bars__spam" style={{ flexGrow: day.spam }} /> : null}
+            </div>
+            <span className="inbox-bars__label">{shortSeriesDay(day.date)}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function campaignTiles(campaign: Campaign7d | undefined): Array<{ label: string; value: string; hint: string }> {
   const empty = campaign ?? {
     sent: 0, bounced: 0, opened: 0, clicked: 0, replied: 0, complained: 0,
     bounce_rate: null, open_rate: null, click_rate: null, reply_rate: null, complaint_rate: null,
   };
   const countRate = (count: number, rate: number | null) => (
-    empty.sent > 0 ? `${count} · ${formatRate(rate, 1)}` : '—'
+    empty.sent > 0 ? `${count} · ${formatRate(rate, 1)}` : '0'
   );
   return [
-    { label: 'Sent', value: empty.sent > 0 ? String(empty.sent) : '—', hint: 'Campaign emails sent from this mailbox in 7 days' },
+    { label: 'Sent', value: String(empty.sent), hint: 'Campaign emails sent from this mailbox in 7 days' },
     { label: 'Bounced', value: countRate(empty.bounced, empty.bounce_rate), hint: 'Bounce count and rate' },
     { label: 'Opened', value: countRate(empty.opened, empty.open_rate), hint: 'Open count and rate' },
     { label: 'Clicked', value: countRate(empty.clicked, empty.click_rate), hint: 'Click count and rate' },
@@ -1250,89 +1162,29 @@ function campaignFacts(campaign: Campaign7d | undefined): HealthFact[] {
   ];
 }
 
-function SendSeriesChart(props: {
-  days: SendSeriesDay[] | null;
-  totals: { warmup: number; campaign: number } | null;
-  loading: boolean;
-}) {
-  const [hover, setHover] = useState<number | null>(null);
-  const days = props.days ?? [];
-  if (props.loading) {
-    return <p className="inbox-series__caption">Loading send series…</p>;
-  }
-  if (days.length === 0) return null;
+function formatCount(value: number): string {
+  return String(Math.max(0, Math.round(value)));
+}
 
-  const width = 460;
-  const height = 92;
-  const padL = 8;
-  const padR = 8;
-  const padT = 10;
-  const padB = 20;
-  const innerW = width - padL - padR;
-  const innerH = height - padT - padB;
-  const yMax = Math.max(1, ...days.flatMap((day) => [day.warmup, day.campaign]));
-  const xAt = (index: number) => padL + (index / Math.max(1, days.length - 1)) * innerW;
-  const yAt = (value: number) => padT + innerH - (value / yMax) * innerH;
-  const toPoints = (key: 'warmup' | 'campaign', from: number, to: number) =>
-    days.slice(from, to + 1).map((day, offset) => `${xAt(from + offset)},${yAt(day[key])}`).join(' ');
-  const todayIndex = days.findIndex((day) => day.kind === 'today');
-  const hovered = hover !== null ? days[hover] : null;
-
-  return (
-    <div className="inbox-series">
-      <div className="inbox-series__legend">
-        <span className="inbox-series__key inbox-series__key--warmup">Warmup</span>
-        <span className="inbox-series__key inbox-series__key--campaign">Campaign</span>
-        <span className="inbox-series__hint">Solid actual · dashed planned</span>
-      </div>
-      <svg
-        className="inbox-series__svg"
-        viewBox={`0 0 ${width} ${height}`}
-        role="img"
-        aria-label="Warmup and campaign sends, 7 days past through 7 days ahead"
-        onMouseLeave={() => setHover(null)}
-      >
-        {todayIndex >= 0 ? (
-          <line
-            className="inbox-series__today"
-            x1={xAt(todayIndex)}
-            x2={xAt(todayIndex)}
-            y1={padT}
-            y2={padT + innerH}
-          />
-        ) : null}
-        <polyline className="inbox-series__line inbox-series__line--warmup" points={toPoints('warmup', 0, todayIndex)} fill="none" />
-        <polyline className="inbox-series__line inbox-series__line--campaign" points={toPoints('campaign', 0, todayIndex)} fill="none" />
-        <polyline className="inbox-series__line inbox-series__line--warmup inbox-series__line--future" points={toPoints('warmup', todayIndex, days.length - 1)} fill="none" />
-        <polyline className="inbox-series__line inbox-series__line--campaign inbox-series__line--future" points={toPoints('campaign', todayIndex, days.length - 1)} fill="none" />
-        {days.map((day, index) => (
-          <rect
-            key={day.date}
-            x={xAt(index) - innerW / days.length / 2}
-            y={padT}
-            width={innerW / days.length}
-            height={innerH}
-            fill="transparent"
-            onMouseEnter={() => setHover(index)}
-          />
-        ))}
-        {todayIndex >= 0 ? (
-          <text className="inbox-series__label" x={xAt(todayIndex)} y={height - 4} textAnchor="middle">Today</text>
-        ) : null}
-      </svg>
-      <p className="inbox-series__caption">
-        {hovered
-          ? `${shortSeriesDate(hovered.date)} · Warmup ${hovered.warmup} · Campaign ${hovered.campaign}${hovered.kind === 'future' ? ' planned' : ''}`
-          : `Warmup 7d sent ${props.totals?.warmup ?? 0} · Campaign 7d sent ${props.totals?.campaign ?? 0}`}
-      </p>
-    </div>
-  );
+function formatWarmupStarted(iso: string | null | undefined): string {
+  if (!iso) return 'start date unknown';
+  const date = iso.length <= 10 ? new Date(`${iso}T12:00:00Z`) : new Date(iso);
+  if (Number.isNaN(date.getTime())) return 'start date unknown';
+  return `enabled ${date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}`;
 }
 
 function shortSeriesDate(iso: string): string {
   const [year, month, day] = iso.split('-').map(Number);
   return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString('en-US', {
     month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+function shortSeriesDay(iso: string): string {
+  const [year, month, day] = iso.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString('en-US', {
     day: 'numeric',
     timeZone: 'UTC',
   });

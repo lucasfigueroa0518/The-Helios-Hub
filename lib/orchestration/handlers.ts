@@ -830,6 +830,27 @@ async function handleReconcile(
     // Keep reconcile resilient.
   }
 
+  // Warmup counters need the API key, not the Smartlead send flag. They used
+  // to be queued only from smartlead.reconcile, which no-ops while sending is
+  // held off — so inbox_health_daily stayed empty.
+  let inboxHealthSnapshotEnqueued = 0;
+  try {
+    const { formatNyDate } = await import('@/lib/drafting/send-queue-schedule');
+    const dayKey = formatNyDate();
+    await enqueueWorkBatch([
+      child(
+        'inbox.health_snapshot',
+        { dayKey },
+        dayKey,
+        'inboxes',
+        { maxAttempts: 2, priority: -3 },
+      ),
+    ]);
+    inboxHealthSnapshotEnqueued = 1;
+  } catch {
+    // Keep reconcile resilient.
+  }
+
   return {
     children,
     result: {
@@ -851,6 +872,7 @@ async function handleReconcile(
       autoCyclesEnqueued,
       autoDraftsQueued,
       networkingWeeklyEnqueued,
+      inboxHealthSnapshotEnqueued,
       staleWorkersRemoved,
     },
   };

@@ -13,13 +13,13 @@ import { dbQuery } from '@/lib/db';
 import { formatNyDate } from '@/lib/drafting/send-queue-schedule';
 import { plannedPerMailbox, varianceFlag, type CapacityInbox } from '@/lib/inboxes/capacity';
 import { listHealth, writeHealth } from '@/lib/inboxes/health';
+import { ingestedFromStats, persistWarmupDays } from '@/lib/inboxes/warmup-sync';
 import { toCapacityInbox } from '@/lib/inboxes/lifecycle';
 import { listInboxes } from '@/lib/inboxes/repository';
 import { DEFAULT_STAGE_PLAN } from '@/lib/inboxes/stage-plan';
 import { getOrgSetting } from '@/lib/org-settings';
 import { smartleadAdapter, type SmartleadAdapter } from '@/lib/smartlead/adapter';
 import { hasSmartleadApiKey } from '@/lib/smartlead/enabled';
-import { toNumber } from '@/lib/smartlead/types';
 
 export type HealthSnapshotReport = {
   skipped?: 'smartlead_unconfigured';
@@ -57,37 +57,11 @@ export async function runHealthSnapshot(
   for (const inbox of inboxes) {
     try {
       if (inbox.smartlead_email_account_id !== null) {
-        const stats = await adapter.warmupStats(inbox.smartlead_email_account_id);
-        const today = stats.stats_by_date?.find((row) => row.date === day);
-
-        // Smartlead reports per-day sent/reply/save_from_spam but only
-        // account-lifetime inbox/spam totals. `save_from_spam_count` is the
-        // per-day spam signal — mail that landed in spam and was rescued — so
-        // the day's inbox count is what was sent and did not need rescuing.
-        const sent = toNumber(today?.sent_count, 0);
-        const spam = toNumber(today?.save_from_spam_count, 0);
-        const inboxed = Math.max(0, sent - spam);
-
-        await writeHealth({
+        const ingested = ingestedFromStats(
+          await adapter.warmupStats(inbox.smartlead_email_account_id),
           day,
-          scope: 'inbox',
-          scopeKey: inbox.id,
-          source: 'smartlead_warmup',
-          sent,
-          inbox: inboxed,
-          spam,
-          replied: toNumber(today?.reply_count, 0),
-          inboxRate: sent > 0 ? inboxed / sent : null,
-          spamRate: sent > 0 ? spam / sent : null,
-          status: today ? 'ok' : 'no_data',
-          detail: {
-            lifetime_sent: toNumber(stats.sent_count, 0),
-            lifetime_inbox: toNumber(stats.inbox_count, 0),
-            lifetime_spam: toNumber(stats.spam_count, 0),
-            warmup_received: toNumber(stats.warmup_email_received_count, 0),
-          },
-        });
-        report.warmupRows += 1;
+        );
+        report.warmupRows += await persistWarmupDays(inbox.id, ingested);
       }
 
       const plannedToday = planned.get(inbox.id) ?? 0;

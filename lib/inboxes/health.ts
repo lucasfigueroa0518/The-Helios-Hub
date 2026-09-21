@@ -162,6 +162,7 @@ export type HealthWindow = {
   sent: number;
   inbox: number;
   spam: number;
+  replied: number;
   bounced: number;
   /** null when the window holds no data at all — not the same as a zero rate. */
   inboxRate: number | null;
@@ -178,6 +179,7 @@ export function summarizeWindow(rows: HealthRow[], source: HealthSource): Health
   const sent = sum((row) => row.sent);
   const inbox = sum((row) => row.inbox);
   const spam = sum((row) => row.spam);
+  const replied = sum((row) => row.replied);
   const bounced = sum((row) => row.bounced);
 
   return {
@@ -185,6 +187,7 @@ export function summarizeWindow(rows: HealthRow[], source: HealthSource): Health
     sent,
     inbox,
     spam,
+    replied,
     bounced,
     inboxRate: sent > 0 ? inbox / sent : null,
     spamRate: sent > 0 ? spam / sent : null,

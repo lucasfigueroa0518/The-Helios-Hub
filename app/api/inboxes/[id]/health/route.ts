@@ -7,6 +7,7 @@ import { stageCap } from '@/lib/inboxes/capacity';
 import {
   campaignRates,
   connectionFromAccount,
+  warmupWindowFromHealthRows,
   warmupWindowFromStats,
   type Campaign7d,
   type MailboxConnection,
@@ -19,12 +20,12 @@ import { getInboxById } from '@/lib/inboxes/repository';
 import {
   actualTotals,
   buildSendSeries,
-  countsByDate,
   SEND_SERIES_FUTURE_DAYS,
   SEND_SERIES_PAST_DAYS,
   type WarmupRamp,
 } from '@/lib/inboxes/send-series';
 import { DEFAULT_STAGE_PLAN, resolveStagePlan } from '@/lib/inboxes/stage-plan';
+import { ingestedFromStats, persistWarmupDays } from '@/lib/inboxes/warmup-sync';
 import { getOrgSetting } from '@/lib/org-settings';
 import { getSession } from '@/lib/session';
 import { getEmailAccount, warmupStats } from '@/lib/smartlead/adapter';
@@ -72,7 +73,12 @@ export async function GET(request: NextRequest, { params }: Params) {
         addCalendarDays(today, -6),
         today,
       ),
-      loadLiveWarmup(inbox.smartlead_email_account_id, plan.warming.warmup_rampup),
+      loadLiveWarmup(
+        inbox.id,
+        inbox.smartlead_email_account_id,
+        plan.warming.warmup_rampup,
+        today,
+      ),
     ]);
 
     const capacityInbox = await toCapacityInbox(inbox, orgPlan);
@@ -91,9 +97,21 @@ export async function GET(request: NextRequest, { params }: Params) {
       dailyRampup: plan.warming.warmup_rampup,
     };
 
+    const storedWarmup = rows.filter((row) => row.source === 'smartlead_warmup');
+    const liveWindow = liveWarmup.window.sent > 0
+      ? liveWarmup.window
+      : warmupWindowFromHealthRows(storedWarmup, {
+        until: today,
+        days: 7,
+        received: liveWarmup.lifetime?.received ?? 0,
+      });
+    const liveByDate = Object.keys(liveWarmup.byDate).length
+      ? liveWarmup.byDate
+      : Object.fromEntries(storedWarmup.map((row) => [row.day, Number(row.sent ?? 0)]));
+
     const series = buildSendSeries({
       today,
-      warmupByDate: liveWarmup.byDate,
+      warmupByDate: liveByDate,
       warmupRamp,
       campaignByDate,
       campaignCapacityByDate,
@@ -107,7 +125,7 @@ export async function GET(request: NextRequest, { params }: Params) {
       email: inbox.email,
       domain: inbox.domain,
       days,
-      warmup: rows.filter((row) => row.source === 'smartlead_warmup'),
+      warmup: storedWarmup,
       postmaster: postmasterRows,
       postmaster_latest: postmasterLatest,
       forecast: rows.filter((row) => row.source === 'forecast'),
@@ -123,7 +141,7 @@ export async function GET(request: NextRequest, { params }: Params) {
             reply_rate_pct: inbox.sl_warmup_reply_rate,
             reputation: inbox.sl_warmup_reputation,
           },
-      warmup_7d: liveWarmup.window,
+      warmup_7d: liveWindow,
       warmup_lifetime: liveWarmup.lifetime,
       connection: liveWarmup.connection ?? connectionFromAccount(inbox.sl_raw, inbox.sl_status),
     });
@@ -193,7 +211,12 @@ async function campaignEngagement7d(
   });
 }
 
-async function loadLiveWarmup(accountId: number | null, dailyRampup: number): Promise<{
+async function loadLiveWarmup(
+  inboxId: string,
+  accountId: number | null,
+  dailyRampup: number,
+  today: string,
+): Promise<{
   byDate: Record<string, number>;
   program: WarmupProgram;
   window: WarmupWindow;
@@ -211,11 +234,12 @@ async function loadLiveWarmup(accountId: number | null, dailyRampup: number): Pr
     daily_rampup: dailyRampup,
     reply_rate_pct: null,
     reputation: null,
+    started_at: null,
   };
   const empty = {
     byDate: {},
     program: emptyProgram,
-    window: warmupWindowFromStats([]),
+    window: warmupWindowFromStats([], { until: today }),
     lifetime: null as { sent: number; inbox: number; spam: number; received: number } | null,
     connection: null as MailboxConnection | null,
   };
@@ -227,16 +251,16 @@ async function loadLiveWarmup(accountId: number | null, dailyRampup: number): Pr
   ]);
 
   const stats = statsResult.status === 'fulfilled' ? statsResult.value : null;
-  const byDate = stats ? countsByDate(stats.stats_by_date ?? []) : {};
-  const window = warmupWindowFromStats(stats?.stats_by_date ?? []);
-  const lifetime = stats
-    ? {
-        sent: Number(stats.sent_count ?? 0),
-        inbox: Number(stats.inbox_count ?? 0),
-        spam: Number(stats.spam_count ?? 0),
-        received: Number(stats.warmup_email_received_count ?? 0),
-      }
-    : null;
+  let byDate: Record<string, number> = {};
+  let window = empty.window;
+  let lifetime = empty.lifetime;
+  if (stats) {
+    const ingested = ingestedFromStats(stats, today);
+    byDate = ingested.byDate;
+    window = ingested.window;
+    lifetime = ingested.lifetime;
+    await persistWarmupDays(inboxId, ingested).catch(() => 0);
+  }
 
   if (accountResult.status !== 'fulfilled') {
     return { ...empty, byDate, window, lifetime };
@@ -257,13 +281,14 @@ async function loadLiveWarmup(accountId: number | null, dailyRampup: number): Pr
     daily_rampup: dailyRampup,
     reply_rate_pct: details?.replyRatePct ?? null,
     reputation: details?.reputationPct ?? null,
+    started_at: details?.createdAt ?? null,
   };
 
   return {
     byDate,
-    program,
     window,
     lifetime,
+    program,
     connection: connectionFromAccount(
       account as unknown as Record<string, unknown>,
       account.is_smtp_success && account.is_imap_success ? 'ok' : 'error',
