@@ -122,11 +122,11 @@ export default function DeckUploadZone({ projectId, currentUrl }: DeckUploadZone
             </button>
           </div>
         </div>
-      ) : (
-        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
-          ⚠ No deck uploaded — the dashboard will show a placeholder.
-        </p>
-      )}
+        ) : (
+          <p className="text-xs text-fg-muted">
+            No deck uploaded. Clients will still see the written About this project copy.
+          </p>
+        )}
 
       <div
         onDragOver={onDragOver}

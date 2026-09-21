@@ -151,3 +151,38 @@ test('lead-facts loader allocates work-row actuals, not lead_cost_events', () =>
   assert.equal(typeof uniqueLeadFacts, 'function');
   assert.equal(typeof applyWorkerShare, 'function');
 });
+
+test('Smartlead month is clocked in full at org level, not sliced onto leads', () => {
+  const facts = applyWorkerShare([
+    fact({ lead_id: 'sent', campaign_id: 'c1', emails_sent: 2, drafting_usd: 1 }),
+  ], 0);
+  const identity = classifySpendIdentity({ facts, smartleadUsd: 94, smartleadUsedUsd: 94 });
+  assert.equal(identity.smartlead_cost_usd, 94);
+  assert.equal(identity.agentmail_cost_usd, facts[0]?.agentmail_usd ?? 0);
+  assert.equal(identity.outreach_spend_usd, (facts[0]?.stack_usd ?? 0) + 94);
+  assert.equal(identity.total_spend_usd, identity.outreach_spend_usd);
+  assert.equal(identity.spend_per_outreach_usd, (facts[0]?.stack_usd ?? 0) / 2);
+});
+
+test('an unused Smartlead month lands in wasted spend, still $94', () => {
+  const identity = classifySpendIdentity({ facts: [], smartleadUsd: 94 });
+  assert.equal(identity.smartlead_cost_usd, 94);
+  assert.equal(identity.outreach_spend_usd, 0);
+  assert.equal(identity.wasted_spend_usd, 94);
+  assert.equal(identity.total_spend_usd, 94);
+});
+
+test('used Smartlead capacity is outreach; unused capacity stays wasted', () => {
+  const facts = applyWorkerShare([
+    fact({ lead_id: 'sent', campaign_id: 'c1', emails_sent: 2, drafting_usd: 1 }),
+  ], 0);
+  const identity = classifySpendIdentity({
+    facts,
+    smartleadUsd: 94,
+    smartleadUsedUsd: 18.8,
+  });
+  assert.equal(identity.outreach_spend_usd, (facts[0]?.stack_usd ?? 0) + 18.8);
+  assert.equal(identity.wasted_spend_usd, 75.2);
+  assert.equal(identity.total_spend_usd, identity.outreach_spend_usd + identity.wasted_spend_usd);
+  assert.equal(identity.smartlead_cost_usd, 94);
+});

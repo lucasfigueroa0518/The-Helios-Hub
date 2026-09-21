@@ -1,0 +1,37 @@
+{
+  "name": "campaigns",
+  "endpoint": "https://server.smartlead.ai/api/v1/campaigns/",
+  "question": "§8.6 campaign list shape, status values",
+  "status": 200,
+  "ok": true,
+  "headers": {
+    "content-type": "application/json; charset=utf-8",
+    "x-ratelimit-limit": "200",
+    "x-ratelimit-remaining": "196",
+    "x-ratelimit-reset": "1789587212"
+  },
+  "durationMs": 308,
+  "body": [
+    {
+      "id": 3948549,
+      "user_id": 650369,
+      "created_at": "2026-09-13T18:47:45.337Z",
+      "updated_at": "2026-09-13T18:47:45.337Z",
+      "status": "DRAFTED",
+      "name": "Boston Truckers",
+      "track_settings": [],
+      "scheduler_cron_value": null,
+      "min_time_btwn_emails": 20,
+      "max_leads_per_day": 100,
+      "stop_lead_settings": "REPLY_TO_AN_EMAIL",
+      "schedule_start_time": null,
+      "enable_ai_esp_matching": false,
+      "send_as_plain_text": false,
+      "follow_up_percentage": 100,
+      "unsubscribe_text": null,
+      "parent_campaign_id": null,
+      "client_id": null,
+      "campaign_activity_logs": {}
+    }
+  ]
+}

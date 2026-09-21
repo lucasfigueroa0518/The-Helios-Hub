@@ -31,6 +31,7 @@ type ProjectRow = {
   last_sync_error: string | null;
   readme_markdown: string | null;
   readme_fetched_at: Date | null;
+  about_text: string | null;
   deck_pdf_url: string | null;
   deck_storage_path: string | null;
   cron_enabled: boolean;
@@ -69,6 +70,7 @@ export type ProjectRecord = {
   githubLastSyncAt: Date | null;
   lastSyncError: string | null;
   readmeMarkdown: string | null;
+  aboutText: string | null;
   deckPdfUrl: string | null;
   deckStoragePath: string | null;
   cronEnabled: boolean;
@@ -102,6 +104,7 @@ function mapProject(row: ProjectRow): ProjectRecord {
     githubLastSyncAt: row.github_last_sync_at,
     lastSyncError: row.last_sync_error,
     readmeMarkdown: row.readme_markdown,
+    aboutText: row.about_text,
     deckPdfUrl: row.deck_pdf_url,
     deckStoragePath: row.deck_storage_path,
     cronEnabled: row.cron_enabled,
@@ -189,6 +192,7 @@ export type CreateProjectInput = {
   accessToken: string;
   githubRepo: string;
   githubBranch: string;
+  aboutText: string;
   mvpDelivered: boolean;
 };
 
@@ -197,8 +201,8 @@ export async function createProject(input: CreateProjectInput): Promise<ProjectR
   const { rows } = await dbQuery<ProjectRow>(
     `INSERT INTO dashboards.projects (
        id, client_id, name, status, start_date, target_end_date, completed_at, access_token,
-       github_repo, github_branch, mvp_delivered
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       github_repo, github_branch, about_text, mvp_delivered
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
      RETURNING *`,
     [
       id,
@@ -211,6 +215,7 @@ export async function createProject(input: CreateProjectInput): Promise<ProjectR
       input.accessToken,
       input.githubRepo,
       input.githubBranch,
+      input.aboutText,
       input.mvpDelivered,
     ],
   );
@@ -226,6 +231,7 @@ export type UpdateProjectInput = {
   completedAt: Date | null;
   githubRepo: string;
   githubBranch: string;
+  aboutText: string;
   cronEnabled: boolean;
   mvpDelivered: boolean;
 };
@@ -244,8 +250,9 @@ export async function updateProject(
        completed_at = $7,
        github_repo = $8,
        github_branch = $9,
-       cron_enabled = $10,
-       mvp_delivered = $11,
+       about_text = $10,
+       cron_enabled = $11,
+       mvp_delivered = $12,
        updated_at = now()
      WHERE id = $1`,
     [
@@ -258,6 +265,7 @@ export async function updateProject(
       input.completedAt,
       input.githubRepo,
       input.githubBranch,
+      input.aboutText,
       input.cronEnabled,
       input.mvpDelivered,
     ],

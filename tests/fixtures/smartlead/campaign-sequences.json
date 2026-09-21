@@ -1,0 +1,15 @@
+{
+  "name": "campaign-sequences",
+  "endpoint": "https://server.smartlead.ai/api/v1/campaigns/3948549/sequences",
+  "question": "§8.2 custom-variable rendering; sequence step shape",
+  "status": 200,
+  "ok": true,
+  "headers": {
+    "content-type": "application/json; charset=utf-8",
+    "x-ratelimit-limit": "200",
+    "x-ratelimit-remaining": "194",
+    "x-ratelimit-reset": "1789587212"
+  },
+  "durationMs": 318,
+  "body": []
+}

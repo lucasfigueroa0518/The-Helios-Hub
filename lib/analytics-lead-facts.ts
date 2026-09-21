@@ -6,6 +6,13 @@
  */
 
 import { dbQuery } from '@/lib/db';
+import {
+  LEGACY_AGENTMAIL_USD_PER_SEND,
+  cycleTag,
+  leadDeliveryCostUsd,
+  loadCycleAmortization,
+  loadDeliveryPricing,
+} from '@/lib/smartlead/costs';
 
 export const AGENTMAIL_MONTHLY_USD = 20;
 export const AGENTMAIL_INCLUDED_SENDS = 10_000;
@@ -60,6 +67,7 @@ export type SpendIdentity = {
   drafting_cost_usd: number;
   worker_cost_usd: number;
   agentmail_cost_usd: number;
+  smartlead_cost_usd: number;
   apollo_cost_usd: number;
   claude_enrichment_usd: number;
   extraction_cost_usd: number;
@@ -167,6 +175,12 @@ export function classifySpendIdentity(input: {
     reply_usd?: number;
   }>;
   unallocatedWastedUsd?: number;
+  /** Microsoft 365 seats overlapping the window — not per-send. */
+  fixedDeliveryUsd?: number;
+  /** Smartlead subscription clocked for the window (full month or prorated). */
+  smartleadUsd?: number;
+  /** Used send-capacity share of `smartleadUsd`. The rest is unused (wasted). */
+  smartleadUsedUsd?: number;
 }): SpendIdentity {
   const unique = new Map<string, (typeof input.facts)[number]>();
   for (const fact of input.facts) {
@@ -193,6 +207,10 @@ export function classifySpendIdentity(input: {
     is_auto_inflight: Boolean(fact.is_auto_inflight) && !fact.is_outreached,
   }));
   const unallocated = Math.max(0, input.unallocatedWastedUsd ?? 0);
+  const fixedDelivery = Math.max(0, input.fixedDeliveryUsd ?? 0);
+  const smartlead = Math.max(0, input.smartleadUsd ?? 0);
+  const smartleadUsed = Math.max(0, Math.min(smartlead, input.smartleadUsedUsd ?? 0));
+  const smartleadUnused = smartlead - smartleadUsed;
   let emails_sent = 0;
   let outreach_spend_usd = 0;
   let sent_outreach_spend_usd = 0;
@@ -233,8 +251,13 @@ export function classifySpendIdentity(input: {
   }
 
   const total_leads = facts.length;
-  const wasted_spend_usd = lead_wasted_usd + unallocated;
+  const hasOutreach = outreached_leads > 0 || emails_sent > 0;
+  if (hasOutreach) outreach_spend_usd += fixedDelivery;
+  outreach_spend_usd += smartleadUsed;
+  const wasted_spend_usd = lead_wasted_usd + unallocated + smartleadUnused
+    + (hasOutreach ? 0 : fixedDelivery);
   const total_spend_usd = outreach_spend_usd + wasted_spend_usd;
+  agentmail_cost_usd += fixedDelivery;
 
   return {
     total_leads,
@@ -250,6 +273,7 @@ export function classifySpendIdentity(input: {
     drafting_cost_usd,
     worker_cost_usd,
     agentmail_cost_usd,
+    smartlead_cost_usd: smartlead,
     apollo_cost_usd,
     claude_enrichment_usd,
     extraction_cost_usd,
@@ -271,7 +295,7 @@ export function applyWorkerShare(
     const camps = campaignsByLead.get(row.lead_id) ?? 1;
     const worker_usd = perLead / camps;
     const enrichment_usd = row.claude_enrichment_usd + row.apollo_usd + row.extraction_usd;
-    const agentmail_usd = agentMailSpendUsd(row.emails_sent);
+    const agentmail_usd = row.agentmail_usd;
     const stack_usd = leadStackUsd({
       enrichment_usd,
       drafting_usd: row.drafting_usd,
@@ -547,7 +571,7 @@ export async function loadLeadCampaignFacts(input: {
     [input.from, input.to, campaignIds, excludedLeads, excludedRuns],
   );
 
-  return rows.map((row) => {
+  const facts: LeadCampaignFact[] = rows.map((row) => {
     const emails_sent = asNumber(row.emails_sent);
     const campaign_kind = row.campaign_kind === 'auto' ? 'auto' : 'manual';
     const claude_enrichment_usd = asNumber(row.claude_enrichment_usd);
@@ -556,7 +580,7 @@ export async function loadLeadCampaignFacts(input: {
     const drafting_usd = asNumber(row.drafting_usd);
     const reply_usd = asNumber(row.reply_usd);
     const enrichment_usd = claude_enrichment_usd + apollo_usd + extraction_usd;
-    const agentmail_usd = agentMailSpendUsd(emails_sent);
+    const agentmail_usd = 0;
     return {
       lead_id: row.lead_id,
       campaign_id: row.campaign_id,
@@ -579,6 +603,78 @@ export async function loadLeadCampaignFacts(input: {
         enrichment_usd,
         drafting_usd,
         worker_usd: 0,
+        agentmail_usd,
+      }),
+    };
+  });
+
+  return applyDeliveryCosts(facts, input.from, input.to);
+}
+
+async function applyDeliveryCosts(
+  facts: LeadCampaignFact[],
+  from: string,
+  to: string,
+): Promise<LeadCampaignFact[]> {
+  if (!facts.length) return facts;
+  const fromDay = from.slice(0, 10);
+  const toDay = to.slice(0, 10);
+  const [cycles, pricing, sendMeta, verifier] = await Promise.all([
+    loadCycleAmortization(fromDay, toDay),
+    loadDeliveryPricing(),
+    dbQuery<{ lead_id: string; campaign_id: string; provider: string; day: string }>(
+      `SELECT i.lead_id::text,
+              w.campaign_id::text,
+              coalesce(s.provider, 'agentmail') AS provider,
+              (s.sent_at AT TIME ZONE 'America/New_York')::date::text AS day
+         FROM outreach.email_sends s
+         JOIN outreach.drafting_items i ON i.id = s.drafting_item_id
+         JOIN outreach.drafting_workspaces w ON w.id = i.workspace_id
+        WHERE s.status = 'sent'
+          AND coalesce(s.sequence_number, 1) = 1
+          AND s.sent_at >= $1::timestamptz
+          AND s.sent_at <= $2::timestamptz`,
+      [from, to],
+    ),
+    dbQuery<{ lead_id: string; campaign_id: string; total: string }>(
+      `SELECT lead_id::text, coalesce(campaign_id::text, '') AS campaign_id,
+              sum(actual_cost_usd)::text AS total
+         FROM outreach.lead_cost_events
+        WHERE phase = 'delivery'
+          AND source_kind = 'verifier_check'
+          AND created_at >= $1::timestamptz
+          AND created_at <= $2::timestamptz
+        GROUP BY 1, 2`,
+      [from, to],
+    ),
+  ]);
+
+  const sendByLead = new Map<string, { provider: string; day: string }>();
+  for (const row of sendMeta.rows) {
+    sendByLead.set(`${row.lead_id}:${row.campaign_id}`, { provider: row.provider, day: row.day });
+  }
+  const verifierByLead = new Map<string, number>();
+  for (const row of verifier.rows) {
+    verifierByLead.set(`${row.lead_id}:${row.campaign_id}`, Number(row.total));
+  }
+
+  return facts.map((fact) => {
+    const key = `${fact.lead_id}:${fact.campaign_id}`;
+    const send = sendByLead.get(key);
+    const verifierUsd = verifierByLead.get(key) ?? 0;
+    if (!send && verifierUsd === 0) return fact;
+    const provider = send?.provider ?? (fact.emails_sent > 0 ? 'agentmail' : 'smartlead');
+    const sentCycle = send ? cycleTag(send.day, pricing.smartleadBillingDay) : null;
+    const agentmail_usd = provider === 'agentmail' && !send
+      ? fact.emails_sent * LEGACY_AGENTMAIL_USD_PER_SEND + verifierUsd
+      : leadDeliveryCostUsd(cycles, { sentCycle, verifierUsd, provider });
+    return {
+      ...fact,
+      agentmail_usd,
+      stack_usd: leadStackUsd({
+        enrichment_usd: fact.enrichment_usd,
+        drafting_usd: fact.drafting_usd,
+        worker_usd: fact.worker_usd,
         agentmail_usd,
       }),
     };

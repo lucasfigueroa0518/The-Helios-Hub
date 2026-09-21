@@ -6,9 +6,9 @@ import { Octokit } from '@octokit/rest';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
-import { generateUpdate } from '@/lib/dashboards/ai';
+import { bootstrapProjectFromGithub } from '@/lib/dashboards/bootstrap';
 import { deckApiPath, removeDeckObject, uploadDeckObject } from '@/lib/dashboards/deck-storage';
-import { syncProject } from '@/lib/dashboards/github-sync';
+import { enqueueDashboardRefresh } from '@/lib/dashboards/enqueue-refresh';
 import {
   createClient,
   createProject as createProjectRow,
@@ -23,6 +23,8 @@ import { scrubError } from '@/lib/dashboards/scrub-logs';
 import { getTokenForRepo } from '@/lib/dashboards/tokens';
 import type { ProjectStatus } from '@/lib/dashboards/types';
 import { getSession } from '@/lib/session';
+
+const ABOUT_MAX_CHARS = 8_000;
 
 async function assertAdmin(): Promise<{ userId: string; email: string }> {
   const session = await getSession();
@@ -99,6 +101,7 @@ export async function createProject(
   await assertAdmin();
 
   const name = (formData.get('name') as string)?.trim();
+  const aboutText = (formData.get('aboutText') as string)?.trim() ?? '';
   const clientId = (formData.get('clientId') as string) || null;
   const clientName = (formData.get('clientName') as string) || null;
   const githubRepoRaw = (formData.get('githubRepo') as string)?.trim();
@@ -109,6 +112,16 @@ export async function createProject(
   const mvpDelivered = formData.get('mvpDelivered') === 'on';
 
   if (!name) return { fieldErrors: { name: 'Project name is required.' } };
+  if (!aboutText) {
+    return { fieldErrors: { aboutText: 'About this project is required.' } };
+  }
+  if (aboutText.length > ABOUT_MAX_CHARS) {
+    return {
+      fieldErrors: {
+        aboutText: `Keep this under ${ABOUT_MAX_CHARS.toLocaleString()} characters.`,
+      },
+    };
+  }
   if (!startDateStr) return { fieldErrors: { startDate: 'Start date is required.' } };
   if (!targetEndDateStr) {
     return { fieldErrors: { targetEndDate: 'Target end date is required.' } };
@@ -150,11 +163,22 @@ export async function createProject(
     accessToken,
     githubRepo: repoSlug ?? '',
     githubBranch,
+    aboutText,
     mvpDelivered,
   });
 
+  if (repoSlug) {
+    try {
+      await bootstrapProjectFromGithub(project.id);
+    } catch (error) {
+      console.error('[createProject] initial sync/generate failed:', scrubError(error));
+      await enqueueDashboardRefresh(project.id, 'project_created_fallback');
+    }
+  }
+
   revalidatePath('/dashboards');
   revalidatePath('/');
+  revalidatePath(`/dashboards/d/${project.accessToken}`);
   redirect(`/dashboards/projects/${project.id}`);
 }
 
@@ -165,7 +189,11 @@ export async function updateProject(
 ): Promise<ActionState> {
   await assertAdmin();
 
+  const existing = await findProjectById(id);
+  if (!existing) return { error: 'Project not found.' };
+
   const name = (formData.get('name') as string)?.trim();
+  const aboutText = (formData.get('aboutText') as string)?.trim() ?? '';
   const clientId = (formData.get('clientId') as string) || null;
   const clientName = (formData.get('clientName') as string) || null;
   const githubRepoRaw = (formData.get('githubRepo') as string)?.trim();
@@ -178,6 +206,16 @@ export async function updateProject(
   const mvpDelivered = formData.get('mvpDelivered') === 'on';
 
   if (!name) return { fieldErrors: { name: 'Project name is required.' } };
+  if (!aboutText) {
+    return { fieldErrors: { aboutText: 'About this project is required.' } };
+  }
+  if (aboutText.length > ABOUT_MAX_CHARS) {
+    return {
+      fieldErrors: {
+        aboutText: `Keep this under ${ABOUT_MAX_CHARS.toLocaleString()} characters.`,
+      },
+    };
+  }
 
   let repoSlug: string | null = null;
   if (githubRepoRaw) {
@@ -214,9 +252,19 @@ export async function updateProject(
     completedAt,
     githubRepo: repoSlug ?? '',
     githubBranch,
+    aboutText,
     cronEnabled,
     mvpDelivered,
   });
+
+  if (repoSlug && repoSlug !== existing.githubRepo) {
+    try {
+      await bootstrapProjectFromGithub(id);
+    } catch (error) {
+      console.error('[updateProject] repo sync/generate failed:', scrubError(error));
+      await enqueueDashboardRefresh(id, 'repo_changed_fallback');
+    }
+  }
 
   revalidatePath(`/dashboards/projects/${id}`);
   revalidatePath('/dashboards');
@@ -308,19 +356,6 @@ export async function removeDeck(
   revalidatePath('/dashboards');
 }
 
-export async function triggerSync(
-  id: string,
-): Promise<{ synced: number; skipped: number; error?: string }> {
-  await assertAdmin();
-  try {
-    const result = await syncProject(id);
-    revalidatePath(`/dashboards/projects/${id}`);
-    return result;
-  } catch (e: unknown) {
-    return { synced: 0, skipped: 0, error: scrubError(e) };
-  }
-}
-
 export async function deleteProject(
   id: string,
 ): Promise<{ error: string } | void> {
@@ -345,24 +380,4 @@ export async function deleteProject(
 
   revalidatePath('/dashboards');
   redirect('/dashboards');
-}
-
-export async function generateUpdateAction(id: string): Promise<{
-  generated: boolean;
-  source?: 'ai' | 'fallback';
-  aiError?: string;
-  hasPriorUpdate?: boolean;
-  error?: string;
-}> {
-  await assertAdmin();
-  try {
-    const outcome = await generateUpdate(id, { manual: true });
-    if (outcome.status === 'generated') {
-      revalidatePath(`/dashboards/projects/${id}`);
-      return { generated: true, source: outcome.source, aiError: outcome.aiError };
-    }
-    return { generated: false, hasPriorUpdate: outcome.hasPriorUpdate };
-  } catch (e: unknown) {
-    return { generated: false, error: scrubError(e) };
-  }
 }

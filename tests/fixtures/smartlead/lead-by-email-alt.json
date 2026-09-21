@@ -1,0 +1,25 @@
+{
+  "name": "lead-by-email-alt",
+  "endpoint": "https://server.smartlead.ai/api/v1/leads/by-email?email=discovery-probe%40example.invalid",
+  "question": "§8.1 alternate lead-by-email path documented in llms.txt",
+  "status": 400,
+  "ok": false,
+  "headers": {
+    "content-type": "application/json; charset=utf-8",
+    "x-ratelimit-limit": "200",
+    "x-ratelimit-remaining": "186",
+    "x-ratelimit-reset": "1789587212"
+  },
+  "durationMs": 331,
+  "body": {
+    "statusCode": 400,
+    "error": "Bad Request",
+    "message": "\"leadId\" must be a number",
+    "validation": {
+      "source": "params",
+      "keys": [
+        "leadId"
+      ]
+    }
+  }
+}

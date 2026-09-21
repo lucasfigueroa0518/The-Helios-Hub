@@ -577,13 +577,41 @@ export function AnalyticsHub() {
                     onClick={() => setDrilldownMetricKey('worker')}
                   />
                   <DrillableTile
-                    label="AgentMail"
+                    label="Smartlead"
+                    value={formatUsd(metrics.smartlead_cost_usd)}
+                    sub={
+                      summary?.delivery
+                        ? `Used ${formatPct(summary.delivery.smartleadUsedRatio)} of send capacity`
+                        : 'Monthly subscription'
+                    }
+                    metricKey="smartlead"
+                    onClick={() => setDrilldownMetricKey('smartlead')}
+                  />
+                  <DrillableTile
+                    label="Delivery"
                     value={formatUsd(metrics.agentmail_cost_usd)}
-                    sub="$0.002 per sent email"
+                    sub="M365 seats + verifier + AgentMail"
                     metricKey="agentmail"
                     onClick={() => setDrilldownMetricKey('agentmail')}
                   />
                 </div>
+                {summary?.delivery ? (
+                  <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)', marginTop: 'var(--space-2)' }}>
+                    Fixed M365 {formatUsd(summary.delivery.fixedUsd)}
+                    {' · '}Smartlead {formatUsd(summary.delivery.smartleadUsd)}
+                    {summary.delivery.smartleadClock === 'prorated' ? ' (prorated)' : ''}
+                    {' · '}used {formatUsd(summary.delivery.smartleadUsedUsd)}
+                    {' · '}unused {formatUsd(summary.delivery.smartleadUnusedUsd)}
+                    {' · '}verifier {formatUsd(summary.delivery.perEventUsd)}
+                    {' · '}legacy AgentMail {formatUsd(summary.delivery.legacyUsd)}
+                    {summary.delivery.unallocatedUsd > 0
+                      ? ` · unallocated ${formatUsd(summary.delivery.unallocatedUsd)}`
+                      : ''}
+                    {summary.delivery.monthly_used != null
+                      ? ` · ${summary.delivery.monthly_used} Smartlead sends this cycle`
+                      : ''}
+                  </p>
+                ) : null}
               </section>
 
               {/* ──────────────── 3. Conversion Analytics Section ──────────────── */}
@@ -598,7 +626,7 @@ export function AnalyticsHub() {
                   <DrillableTile
                     label="Emails sent"
                     value={String(metrics.emails_sent)}
-                    sub="Agent Mail outreach"
+                    sub="Smartlead outreach"
                     metricKey="emails_sent"
                     onClick={() => setDrilldownMetricKey('emails_sent')}
                   />

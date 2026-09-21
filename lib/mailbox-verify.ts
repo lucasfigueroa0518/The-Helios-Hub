@@ -9,6 +9,7 @@ import {
 import { assertVerifyInbox } from '@/lib/agentmail-inboxes';
 import { isAgentMailAccountSendingPausedError } from '@/lib/drafting/agentmail-send-errors';
 import { dbQuery } from '@/lib/db';
+import { recordVerifierCheck } from '@/lib/smartlead/costs';
 import {
   buildDisambiguation,
   researchJobKey,
@@ -16,6 +17,25 @@ import {
 } from '@/lib/research-types';
 
 export type MailboxVerificationStatus = 'valid' | 'invalid' | 'unknown' | 'rate_limited';
+
+async function recordVerifierCheckQuietly(leadId: string, runId: string, email: string): Promise<void> {
+  try {
+    const { rows } = await dbQuery<{ campaign_id: string }>(
+      'SELECT campaign_id::text FROM outreach.runs WHERE id = $1',
+      [runId],
+    );
+    await recordVerifierCheck({
+      leadId,
+      campaignId: rows[0]?.campaign_id ?? null,
+      checkId: `${runId}:${leadId}:${email.trim().toLowerCase()}`,
+    });
+  } catch (error) {
+    console.warn(
+      '[mailbox-verify] cost row skipped',
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
 
 export function isAgentMailRateLimitError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
@@ -635,6 +655,7 @@ export async function runMailboxVerificationCascadeForLead(
     attempts.push({ email, status: probe.status });
     if (probe.status === 'valid') {
       await promoteVerifiedMailboxEmail(leadId, email, runId, lead.email_status);
+      await recordVerifierCheckQuietly(leadId, runId, email);
       return {
         status: 'valid' as const,
         verified_email: email.trim().toLowerCase(),
@@ -646,6 +667,7 @@ export async function runMailboxVerificationCascadeForLead(
   }
 
   await finalizeAllCandidatesInvalid(leadId, runId, lead);
+  await recordVerifierCheckQuietly(leadId, runId, lead.emails[0] ?? leadId);
   return {
     status: 'invalid' as const,
     attempts,

@@ -13,6 +13,8 @@ import {
 } from '@/lib/analytics-lead-facts';
 import { getCloudWorkerSpendState } from '@/lib/billing-guard';
 import { dbQuery } from '@/lib/db';
+import { getOrgSetting, type UsageCache } from '@/lib/org-settings';
+import { loadDeliveryCostSummary, type DeliveryCostSummary } from '@/lib/smartlead/costs';
 
 export type AnalyticsPeriod = 'week' | 'month' | 'all' | 'custom';
 
@@ -65,6 +67,7 @@ export type AnalyticsMetricBlock = {
   apollo_cost_usd: number;
   worker_cost_usd: number;
   agentmail_cost_usd: number;
+  smartlead_cost_usd: number;
   dashboard_cost_usd: number;
   unattributed_cost_usd: number;
   outreach_spend_usd: number;
@@ -131,6 +134,7 @@ export type AnalyticsCampaignRow = {
   extraction_cost_usd: number;
   worker_cost_usd: number;
   agentmail_cost_usd: number;
+  smartlead_cost_usd: number;
   apollo_cost_usd: number;
   outreach_spend_usd: number;
   wasted_spend_usd: number;
@@ -183,6 +187,11 @@ export type AnalyticsSummary = {
   available_users: { id: string; name: string; email: string }[];
   excluded_run_ids: string[];
   notes: string[];
+  delivery: DeliveryCostSummary & {
+    monthly_limit: number | null;
+    monthly_used: number | null;
+    monthly_warmup_used: number | null;
+  };
 };
 
 export type AnalyticsRunRow = {
@@ -235,6 +244,7 @@ function emptyMetrics(): AnalyticsMetricBlock {
     apollo_cost_usd: 0,
     worker_cost_usd: 0,
     agentmail_cost_usd: 0,
+    smartlead_cost_usd: 0,
     dashboard_cost_usd: 0,
     unattributed_cost_usd: 0,
     outreach_spend_usd: 0,
@@ -278,6 +288,7 @@ function applySpendIdentity<T extends AnalyticsMetricBlock>(m: T, identity: {
   drafting_cost_usd: number;
   worker_cost_usd: number;
   agentmail_cost_usd: number;
+  smartlead_cost_usd: number;
   apollo_cost_usd: number;
   extraction_cost_usd: number;
   reply_cost_usd: number;
@@ -296,6 +307,7 @@ function applySpendIdentity<T extends AnalyticsMetricBlock>(m: T, identity: {
   m.drafting_cost_usd = identity.drafting_cost_usd;
   m.worker_cost_usd = identity.worker_cost_usd;
   m.agentmail_cost_usd = identity.agentmail_cost_usd;
+  m.smartlead_cost_usd = identity.smartlead_cost_usd;
   m.apollo_cost_usd = identity.apollo_cost_usd;
   m.extraction_cost_usd = identity.extraction_cost_usd;
   m.reply_cost_usd = identity.reply_cost_usd;
@@ -585,7 +597,7 @@ export async function getAnalyticsSummary(input: {
   const safeCampaignIds = matchedCampaignIds.length
     ? matchedCampaignIds
     : ['00000000-0000-0000-0000-000000000000'];
-  const [rawLeadFacts, unallocated, workerSpend] = await Promise.all([
+  const [rawLeadFacts, unallocated, workerSpend, deliveryCosts, usageCache] = await Promise.all([
     loadLeadCampaignFacts({
       from: window.from,
       to: window.to,
@@ -599,6 +611,8 @@ export async function getAnalyticsSummary(input: {
       campaignIds: safeCampaignIds,
     }),
     getCloudWorkerSpendState(),
+    loadDeliveryCostSummary(window.from.slice(0, 10), window.to.slice(0, 10)),
+    getOrgSetting<UsageCache>('smartlead.usage_cache', {}),
   ]);
   const workerWindowUsd = prorateGcpWorkerUsd({
     monthToDateUsd: workerSpend.cost_amount,
@@ -610,6 +624,9 @@ export async function getAnalyticsSummary(input: {
   const orgIdentity = classifySpendIdentity({
     facts: orgLeadFacts,
     unallocatedWastedUsd: unallocated.total_usd,
+    fixedDeliveryUsd: deliveryCosts.fixedUsd,
+    smartleadUsd: deliveryCosts.smartleadUsd,
+    smartleadUsedUsd: deliveryCosts.smartleadUsedUsd,
   });
 
   // 5. Orchestration Job Statistics
@@ -844,6 +861,7 @@ export async function getAnalyticsSummary(input: {
       extraction_cost_usd: identity.extraction_cost_usd,
       worker_cost_usd: identity.worker_cost_usd,
       agentmail_cost_usd: identity.agentmail_cost_usd,
+      smartlead_cost_usd: identity.smartlead_cost_usd,
       apollo_cost_usd: identity.apollo_cost_usd,
       outreach_spend_usd: identity.outreach_spend_usd,
       wasted_spend_usd: identity.wasted_spend_usd,
@@ -905,16 +923,22 @@ export async function getAnalyticsSummary(input: {
     available_campaigns,
     available_users,
     excluded_run_ids: excludedRunIds,
+    delivery: {
+      ...deliveryCosts,
+      monthly_limit: null,
+      monthly_used: usageCache.sent ?? null,
+      monthly_warmup_used: usageCache.warmup_sent ?? null,
+    },
     notes: [
       'Total Hub Spend = Outreach Spend + Wasted Spend. Every dollar is classified on a lead first, then rolled up.',
-      'Outreach spend is the four-leg stack (enrichment + drafting + worker + AgentMail) on leads with a sent email in this window.',
+      'Outreach spend is the four-leg stack (enrichment + drafting + worker + delivery) on leads with a sent email in this window.',
       'Wasted spend is that same stack on unsent manual leads, plus unallocated dashboard summaries and leftover drafting opening balances. Unsent auto-campaign leads are still in the send queue and are not wasted.',
       'Spend per lead outreach = sent-lead outreach spend / emails sent.',
       'Wasted lead rate = wasted leads / leads in this window. Auto-campaign leads waiting to send are excluded from waste.',
       'Enrichment = Claude company research + Apollo enrich credits ($59 / 2,500) + extraction. People search is free.',
       'Drafting includes researching/writing the email and reply Claude spend. Custom message campaigns record $0.00 drafting cost.',
       'Worker spend is GCP VM month-to-date prorated into this window and split across leads. Local worker is unmetered ($0).',
-      'AgentMail is $20 / 10,000 emails ($0.002 per send). Unused monthly quota is not allocated.',
+      'Smartlead is its own line: a monthly (or longer) view takes the full $94 once per month covered; a week or other short range prorates $94 × (days in range / days in that month). Used send capacity (sends / prorated plan emails) is outreach spend; unused capacity stays wasted. Microsoft 365 seats stay as overlapping billing-cycle lumps. Delivery is M365 + verifier checks + historical AgentMail at $0.002 each.',
       'Sent count uses drafting_items.delivery_snapshot and email_sends (sent status).',
       'Excluded runs drop leads via campaign_leads.run_id and leads.source_run_id.',
     ],

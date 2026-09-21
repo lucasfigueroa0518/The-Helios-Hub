@@ -1,0 +1,79 @@
+{
+  "name": "warmup-stats",
+  "endpoint": "https://server.smartlead.ai/api/v1/email-accounts/23398188/warmup-stats",
+  "question": "§8.1 warmup sent/inbox/spam shape for inbox_health_daily",
+  "status": 200,
+  "ok": true,
+  "headers": {
+    "content-type": "application/json; charset=utf-8",
+    "x-ratelimit-limit": "200",
+    "x-ratelimit-remaining": "197",
+    "x-ratelimit-reset": "1789587212"
+  },
+  "durationMs": 327,
+  "body": {
+    "id": 23398188,
+    "sent_count": "2",
+    "spam_count": "0",
+    "warmup_email_received_count": "0",
+    "inbox_count": "2",
+    "stats_by_date": [
+      {
+        "date": "2026-09-09",
+        "sent_count": 0,
+        "reply_count": 0,
+        "save_from_spam_count": 0,
+        "id": 1
+      },
+      {
+        "date": "2026-09-10",
+        "sent_count": 0,
+        "reply_count": 0,
+        "save_from_spam_count": 0,
+        "id": 2
+      },
+      {
+        "date": "2026-09-11",
+        "sent_count": 0,
+        "reply_count": 0,
+        "save_from_spam_count": 0,
+        "id": 3
+      },
+      {
+        "date": "2026-09-12",
+        "sent_count": 0,
+        "reply_count": 0,
+        "save_from_spam_count": 0,
+        "id": 4
+      },
+      {
+        "date": "2026-09-13",
+        "sent_count": 0,
+        "reply_count": 0,
+        "save_from_spam_count": 0,
+        "id": 5
+      },
+      {
+        "date": "2026-09-14",
+        "sent_count": 0,
+        "reply_count": 0,
+        "save_from_spam_count": 0,
+        "id": 6
+      },
+      {
+        "date": "2026-09-15",
+        "sent_count": 0,
+        "reply_count": 0,
+        "save_from_spam_count": 0,
+        "id": 7
+      },
+      {
+        "date": "2026-09-16",
+        "sent_count": 2,
+        "reply_count": 0,
+        "save_from_spam_count": 0,
+        "id": 8
+      }
+    ]
+  }
+}

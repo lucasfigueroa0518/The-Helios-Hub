@@ -1,0 +1,20 @@
+{
+  "name": "campaign-statistics",
+  "endpoint": "https://server.smartlead.ai/api/v1/campaigns/3948549/statistics?offset=0&limit=20",
+  "question": "§8.3 per-send rows for the statistics backfill (sequence_number, email_account_id)",
+  "status": 200,
+  "ok": true,
+  "headers": {
+    "content-type": "application/json; charset=utf-8",
+    "x-ratelimit-limit": "200",
+    "x-ratelimit-remaining": "193",
+    "x-ratelimit-reset": "1789587212"
+  },
+  "durationMs": 370,
+  "body": {
+    "total_stats": "0",
+    "data": [],
+    "offset": 0,
+    "limit": 20
+  }
+}

@@ -75,14 +75,6 @@ export default async function AdminProjectsPage() {
                       >
                         {p.name}
                       </Link>
-                      {!p.deckPdfUrl && !p.deckStoragePath && (
-                        <span
-                          title="No deck uploaded"
-                          className="rounded-pill bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
-                        >
-                          ⚠ No deck
-                        </span>
-                      )}
                     </div>
                     <p className="mt-0.5 text-xs text-fg-muted font-mono">
                       {p.githubRepo}
@@ -136,7 +128,6 @@ export default async function AdminProjectsPage() {
                 <div className="dashboards-mobile-card__top">
                   <Link href={`/dashboards/projects/${p.id}`}>
                     {p.name}
-                    {!p.deckPdfUrl && !p.deckStoragePath ? ' · No deck' : ''}
                   </Link>
                   <RowActions>
                     <CopyUrlButton token={p.accessToken} />

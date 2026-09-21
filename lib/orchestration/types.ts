@@ -1,3 +1,5 @@
+import type { IdentitySlug } from '@/lib/delivery-states';
+
 export const WORK_KINDS = [
   'run.process',
   'upload.extract',
@@ -17,7 +19,6 @@ export const WORK_KINDS = [
   'drafting.job.verify_mailbox',
   'drafting.job.process',
   'drafting.job.write',
-  'email.send',
   'reply.respond',
   'reply.followup',
   'dashboards.daily_update',
@@ -26,6 +27,13 @@ export const WORK_KINDS = [
   'networking.weekly_ingest',
   'seo.gsc_daily_sync',
   'system.reconcile',
+  'smartlead.lane_ensure',
+  'smartlead.handoff',
+  'smartlead.lead_op',
+  'smartlead.reconcile',
+  'inbox.lifecycle_daily',
+  'inbox.health_snapshot',
+  'postmaster.daily',
 ] as const;
 
 export type WorkKind = typeof WORK_KINDS[number];
@@ -45,6 +53,9 @@ export const WORK_LANES = [
   'dashboards',
   'maintenance',
   'auto_campaign',
+  // Serializes every Smartlead write so one lane cannot burn the shared
+  // per-API-key rate limit or reorder handoffs against lane creation.
+  'smartlead_api',
 ] as const;
 
 export type WorkLane = typeof WORK_LANES[number];
@@ -91,7 +102,6 @@ export type WorkPayloadMap = {
   'drafting.job.verify_mailbox': { jobId: string };
   'drafting.job.process': { jobId: string };
   'drafting.job.write': { jobId: string };
-  'email.send': { queueId: string };
   'reply.respond': { replySendId: string };
   'reply.followup': { replySendId: string };
   'dashboards.daily_update': { reason?: string };
@@ -100,7 +110,24 @@ export type WorkPayloadMap = {
   'networking.weekly_ingest': { reason?: string };
   'seo.gsc_daily_sync': { reason?: string };
   'system.reconcile': { reason?: string };
+  'smartlead.lane_ensure': { campaignId: string; identitySlug: IdentitySlug };
+  'smartlead.handoff': {
+    campaignId: string;
+    identitySlug: IdentitySlug;
+    /** Absent for a "send now" batch, which carries explicit queue ids instead. */
+    handoffDate?: string;
+    queueIds?: string[];
+  };
+  'smartlead.lead_op': { op: SmartleadLeadOp; queueId: string };
+  'smartlead.reconcile': { reason?: string };
+  'inbox.lifecycle_daily': { dayKey: string };
+  'inbox.health_snapshot': { dayKey: string };
+  'postmaster.daily': { dayKey: string };
 };
+
+/** Per-lead corrections the hub pushes to Smartlead after a handoff. */
+export const SMARTLEAD_LEAD_OPS = ['delete', 'pause', 'resume', 'block'] as const;
+export type SmartleadLeadOp = typeof SMARTLEAD_LEAD_OPS[number];
 
 export type DispatchWork<K extends WorkKind = WorkKind> = {
   kind: K;

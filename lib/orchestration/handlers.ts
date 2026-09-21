@@ -1,5 +1,13 @@
 import { dbQuery } from '@/lib/db';
-import { AGENTMAIL_ACCOUNT_PAUSE_RETRY_MS } from '@/lib/drafting/agentmail-send-errors';
+import {
+  handleInboxHealthSnapshot,
+  handleInboxLifecycleDaily,
+  handlePostmasterDaily,
+  handleSmartleadHandoff,
+  handleSmartleadLaneEnsure,
+  handleSmartleadLeadOp,
+  handleSmartleadReconcile,
+} from '@/lib/orchestration/smartlead-handlers';
 import { listPendingJobsForRun } from '@/lib/drafting/transport';
 import { extractOneUpload } from '@/lib/run-extraction';
 import type {
@@ -509,9 +517,9 @@ async function handleReplyRespond(
   const result = await processReplyRespond(job.payload.replySendId);
   if (result.status === 'provider_paused') {
     throw new RetryableWorkError(
-      result.error ?? 'Agent Mail sending paused',
-      Math.max(5_000, result.retryDelayMs ?? AGENTMAIL_ACCOUNT_PAUSE_RETRY_MS),
-      'agentmail_account_paused',
+      result.error ?? 'Smartlead reply deferred',
+      Math.max(5_000, result.retryDelayMs ?? 30_000),
+      'smartlead_transient',
     );
   }
   if (result.status === 'not_ready') {
@@ -530,9 +538,9 @@ async function handleReplyFollowup(
   const result = await processReplyFollowup(job.payload.replySendId);
   if (result.status === 'provider_paused') {
     throw new RetryableWorkError(
-      result.error ?? 'Agent Mail sending paused',
-      Math.max(5_000, result.retryDelayMs ?? AGENTMAIL_ACCOUNT_PAUSE_RETRY_MS),
-      'agentmail_account_paused',
+      result.error ?? 'Smartlead reply deferred',
+      Math.max(5_000, result.retryDelayMs ?? 30_000),
+      'smartlead_transient',
     );
   }
   if (result.status === 'not_ready') {
@@ -542,30 +550,6 @@ async function handleReplyFollowup(
     return { result: { ...result, ok: false } };
   }
   return { result: { ...result, ok: true } };
-}
-
-async function handleEmailSend(
-  job: OrchestrationJob<'email.send'>,
-): Promise<WorkHandlerResult> {
-  const { processQueuedEmailSend } = await import('@/lib/drafting/send-queue');
-  const result = await processQueuedEmailSend(job.payload.queueId);
-  if (result.status === 'transient' || result.status === 'provider_paused') {
-    throw new RetryableWorkError(
-      result.error ?? (result.status === 'provider_paused'
-        ? 'Agent Mail sending paused'
-        : 'Transient send failure'),
-      Math.max(5_000, result.retryDelayMs ?? 15_000),
-      result.status === 'provider_paused' ? 'agentmail_account_paused' : 'agentmail_transient',
-    );
-  }
-  // Permanent send failures stay on the queue row for user Retry; do not
-  // burn orch retries on non-transient draft/config errors.
-  return {
-    result: {
-      status: result.status,
-      error: result.error,
-    },
-  };
 }
 
 async function handleReconcile(
@@ -866,6 +850,27 @@ async function handleReconcile(
     // Keep reconcile resilient.
   }
 
+  // Warmup counters need the API key, not the Smartlead send flag. They used
+  // to be queued only from smartlead.reconcile, which no-ops while sending is
+  // held off — so inbox_health_daily stayed empty.
+  let inboxHealthSnapshotEnqueued = 0;
+  try {
+    const { formatNyDate } = await import('@/lib/drafting/send-queue-schedule');
+    const dayKey = formatNyDate();
+    await enqueueWorkBatch([
+      child(
+        'inbox.health_snapshot',
+        { dayKey },
+        dayKey,
+        'inboxes',
+        { maxAttempts: 2, priority: -3 },
+      ),
+    ]);
+    inboxHealthSnapshotEnqueued = 1;
+  } catch {
+    // Keep reconcile resilient.
+  }
+
   return {
     children,
     result: {
@@ -888,6 +893,7 @@ async function handleReconcile(
       autoDraftsQueued,
       networkingWeeklyEnqueued,
       seoDailyEnqueued,
+      inboxHealthSnapshotEnqueued,
       staleWorkersRemoved,
     },
   };
@@ -986,7 +992,6 @@ const HANDLERS: Record<WorkKind, Handler> = {
   'drafting.job.verify_mailbox': handleDraftingJob as Handler,
   'drafting.job.process': handleDraftingJob as Handler,
   'drafting.job.write': handleDraftingJob as Handler,
-  'email.send': handleEmailSend as Handler,
   'reply.respond': handleReplyRespond as Handler,
   'reply.followup': handleReplyFollowup as Handler,
   'dashboards.daily_update': handleDashboardsDailyUpdate as Handler,
@@ -995,6 +1000,13 @@ const HANDLERS: Record<WorkKind, Handler> = {
   'networking.weekly_ingest': handleNetworkingWeeklyIngest as Handler,
   'seo.gsc_daily_sync': handleSeoGscDailySync as Handler,
   'system.reconcile': handleReconcile as Handler,
+  'smartlead.lane_ensure': handleSmartleadLaneEnsure as Handler,
+  'smartlead.handoff': handleSmartleadHandoff as Handler,
+  'smartlead.lead_op': handleSmartleadLeadOp as Handler,
+  'smartlead.reconcile': handleSmartleadReconcile as Handler,
+  'inbox.lifecycle_daily': handleInboxLifecycleDaily as Handler,
+  'inbox.health_snapshot': handleInboxHealthSnapshot as Handler,
+  'postmaster.daily': handlePostmasterDaily as Handler,
 };
 
 export async function handleWork(job: OrchestrationJob): Promise<WorkHandlerResult> {

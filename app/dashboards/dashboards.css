@@ -774,6 +774,28 @@
 .dashboards-root input, .dashboards-root select, .dashboards-root textarea {
   font-family: inherit;
 }
+.dashboards-root .dashboards-about-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 0.75rem);
+  background: #fff;
+  padding: 1.25rem 1.5rem;
+}
+.dashboards-root .dashboards-about-card h2 {
+  margin: 0 0 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--fg-1);
+}
+.dashboards-root .dashboards-about-card > p {
+  margin: 0 0 0.75rem;
+  font-size: 0.75rem;
+  color: var(--fg-3);
+}
+.dashboards-root textarea.dashboards-about-field {
+  min-height: 10.5rem;
+  resize: vertical;
+  line-height: 1.55;
+}
 .dashboards-root .eyebrow {
   font-family: var(--font-body);
   font-size: 13px;

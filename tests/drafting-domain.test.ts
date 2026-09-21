@@ -187,14 +187,14 @@ test('isMailboxValid requires exact valid status and fingerprint', () => {
   assert.equal(isMailboxValid(null), false);
 });
 
-test('rate_limited mailboxes are draftable but unvalidated', () => {
+test('rate_limited mailboxes are not draftable', () => {
   const rateLimited = { ...validDelivery(), emailVerification: 'rate_limited' as const };
   assert.equal(isMailboxValid(rateLimited), false);
-  assert.equal(isMailboxDraftable(rateLimited), true);
+  assert.equal(isMailboxDraftable(rateLimited), false);
   assert.equal(isMailboxUnvalidated(rateLimited), true);
-  assert.equal(isLeadsModeRow(baseSnapshot(), rateLimited), false);
-  assert.equal(canQueueResearch(baseSnapshot(), rateLimited), true);
-  assert.equal(canQueueWrite(baseSnapshot(), rateLimited), true);
+  assert.equal(isLeadsModeRow(baseSnapshot(), rateLimited), true);
+  assert.equal(canQueueResearch(baseSnapshot(), rateLimited), false);
+  assert.equal(canQueueWrite(baseSnapshot(), rateLimited), false);
 });
 
 test('isLeadsModeRow stays true until mailbox draftable and profile complete', () => {
@@ -225,15 +225,15 @@ test('counter helpers use mailbox_valid_total as generation denominator', () => 
     { state: 'removed', deliverySnapshot: validDelivery('d@example.com'), removedAt: '2026-07-16T00:00:00.000Z' },
   ];
 
-  assert.equal(countMailboxValidTotal(items), 4);
+  assert.equal(countMailboxValidTotal(items), 3);
   assert.equal(countDrafted(items), 2);
-  assert.equal(isGenerationComplete(4, 2), false);
-  assert.equal(isGenerationComplete(4, 4), true);
-  assert.equal(isReviewComplete(4, 2), false);
-  assert.equal(isReviewComplete(4, 4), true);
+  assert.equal(isGenerationComplete(3, 2), false);
+  assert.equal(isGenerationComplete(3, 3), true);
+  assert.equal(isReviewComplete(3, 2), false);
+  assert.equal(isReviewComplete(3, 3), true);
 
   const counters = computeDraftingCounters(items);
-  assert.equal(counters.mailboxValidTotal, 4);
+  assert.equal(counters.mailboxValidTotal, 3);
   assert.equal(counters.drafted, 2);
   assert.equal(counters.generated, 2);
   assert.equal(counters.approved, 1);

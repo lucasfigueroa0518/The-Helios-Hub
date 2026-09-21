@@ -61,6 +61,7 @@ export type DashboardProject = {
   targetEndDate: Date;
   completedAt: Date | null;
   accessToken: string;
+  aboutText: string | null;
   deckPdfUrl: string | null;
   deckStoragePath: string | null;
   githubRepo: string;
@@ -73,7 +74,7 @@ export type DashboardProject = {
 export type DashboardPageData = {
   project: DashboardProject;
   latestUpdate: ContextUpdate | null;
-  recentEvents: RepoEvent[];
+  recentCommits: RepoEvent[];
   eventsById: Record<string, RepoEvent>;
 };
 
@@ -98,6 +99,7 @@ export type AdminProject = {
   githubLastSyncAt: Date | null;
   lastSyncError: string | null;
   readmeMarkdown: string | null;
+  aboutText: string | null;
   deckPdfUrl: string | null;
   deckStoragePath: string | null;
   cronEnabled: boolean;

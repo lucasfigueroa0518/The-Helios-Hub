@@ -24,6 +24,14 @@ import {
   rewriteHrefsInMarkup,
   type MessageMode,
 } from '@/lib/drafting/message-template';
+import type { LaneStatus } from '@/lib/delivery-states';
+import { enqueueWork, enqueueWorkInTransaction } from '@/lib/orchestration/repository';
+import {
+  initialDeliverySettings,
+  resolveDeliverySettings,
+  type DeliverySettings,
+} from '@/lib/smartlead/delivery-settings';
+import { laneEnsureWork, listLanesForCampaign, pauseLane } from '@/lib/smartlead/lanes';
 
 export type TagWithColor = {
   tag: string;
@@ -63,6 +71,9 @@ export type Campaign = {
   drafting_active: boolean;
   drafting_generated: number;
   drafting_total: number;
+  delivery_settings: DeliverySettings;
+  lane_status: LaneStatus | null;
+  tomorrow_forecast: number;
 };
 
 export function sqlLiteralTextArray(values: readonly string[]): string {
@@ -111,14 +122,15 @@ const campaignDraftingActivitySelect = `
 
 type CampaignQueryRow = Omit<
   Campaign,
-  'drafting_active' | 'drafting_generated' | 'drafting_total' | 'lead_attributes'
+  'drafting_active' | 'drafting_generated' | 'drafting_total' | 'lead_attributes' | 'delivery_settings'
 > & {
   drafting_activity?: unknown;
   lead_attributes?: unknown;
+  delivery_settings?: unknown;
 };
 
 function mapCampaignRow(row: CampaignQueryRow): Campaign {
-  const { drafting_activity, lead_attributes, ...campaign } = row;
+  const { drafting_activity, lead_attributes, delivery_settings, ...campaign } = row;
   return {
     ...campaign,
     kind: campaign.kind === 'auto' ? 'auto' : 'manual',
@@ -137,6 +149,9 @@ function mapCampaignRow(row: CampaignQueryRow): Campaign {
       ? rewriteHrefsInMarkup(campaign.message_body_template)
       : null,
     include_signature: campaign.include_signature !== false,
+    delivery_settings: resolveDeliverySettings(delivery_settings),
+    lane_status: (campaign.lane_status as LaneStatus | null) ?? null,
+    tomorrow_forecast: Number(campaign.tomorrow_forecast ?? 0) || 0,
     expansion_step: Number(campaign.expansion_step ?? 0) || 0,
     queue_color: campaign.queue_color ?? null,
     next_cycle_at: campaign.next_cycle_at ?? null,
@@ -159,6 +174,21 @@ const campaignSelect = `
     COALESCE(c.kind, 'manual') AS kind,
     c.auto_status, c.auto_error, c.emails_per_day, c.follow_up_enabled,
     c.sender_identity_slug,
+    c.delivery_settings,
+    (
+      SELECT l.status
+        FROM outreach.campaign_lanes l
+       WHERE l.campaign_id = c.id
+       ORDER BY CASE WHEN l.identity_slug = c.sender_identity_slug THEN 0 ELSE 1 END, l.updated_at DESC
+       LIMIT 1
+    ) AS lane_status,
+    (
+      SELECT count(*)::int
+        FROM outreach.email_send_queue q
+       WHERE q.campaign_id = c.id
+         AND q.status IN ('queued', 'handing_off', 'handed_off')
+         AND q.handoff_date = ((now() AT TIME ZONE 'America/New_York')::date + 1)
+    ) AS tomorrow_forecast,
     COALESCE(c.message_mode, 'ai') AS message_mode,
     c.message_subject_template,
     c.message_body_template,
@@ -234,6 +264,7 @@ export type CreateCampaignInput = {
   messageSubjectTemplate?: string;
   messageBodyTemplate?: string;
   includeSignature?: boolean;
+  deliverySettings?: Partial<DeliverySettings>;
 };
 
 function normalizeLeadAttributes(input?: LeadAttributes): LeadAttributes {
@@ -284,9 +315,25 @@ export async function createCampaign(
       : (input?.needsEnrichment ?? (messageMode === 'custom' ? false : false));
     const autoCreate = kind === 'auto' ? assertAutoCreateInput(input ?? {}) : null;
     const attrs = autoCreate ? autoCreate.attrs : normalizeLeadAttributes();
-    const senderIdentity = autoCreate?.senderIdentity ?? null;
+    const senderIdentity = autoCreate?.senderIdentity
+      ?? parseSenderIdentitySlug(input?.senderIdentitySlug)
+      ?? 'lucas';
     const emailsPerDay = kind === 'auto' ? Math.floor(Number(input?.emailsPerDay)) : null;
-    const followUp = kind === 'auto' ? Boolean(input?.followUpEnabled) : false;
+    const seeded = initialDeliverySettings();
+    const incoming = input?.deliverySettings;
+    const delivery = {
+      ...seeded,
+      ...incoming,
+      // The create dialog sends a partial payload. Keep the 30-day approval
+      // lock unless the caller set a date explicitly.
+      require_approval_until: incoming?.require_approval_until ?? seeded.require_approval_until,
+      follow_ups: incoming?.follow_ups ?? seeded.follow_ups,
+      schedule: {
+        ...seeded.schedule,
+        ...incoming?.schedule,
+      },
+    };
+    const followUp = Boolean(input?.followUpEnabled) || delivery.follow_ups.length > 0;
     const usedColors = await listUsedQueueColors(ownerId);
     const queueColor = pickQueueColor(usedColors);
     const senderReady = kind === 'auto'
@@ -314,8 +361,9 @@ export async function createCampaign(
       `INSERT INTO outreach.campaigns (
          owner_id, name, needs_enrichment, kind, auto_status, emails_per_day,
          follow_up_enabled, sender_identity_slug, lead_attributes, expansion_step, queue_color, next_cycle_at,
-         message_mode, message_subject_template, message_body_template, include_signature
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,0,$10,$11,$12,$13,$14,$15)
+         message_mode, message_subject_template, message_body_template, include_signature,
+         delivery_settings
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,0,$10,$11,$12,$13,$14,$15,$16::jsonb)
        RETURNING id`,
       [
         ownerId,
@@ -333,9 +381,17 @@ export async function createCampaign(
         subjectTemplate,
         bodyTemplate,
         includeSignature,
+        JSON.stringify(delivery),
       ],
     );
     const id = created.rows[0]!.id;
+    await client.query(
+      `INSERT INTO outreach.campaign_lanes (campaign_id, identity_slug, status)
+       VALUES ($1, $2, 'creating')
+       ON CONFLICT (campaign_id, identity_slug) DO NOTHING`,
+      [id, senderIdentity],
+    );
+    await enqueueWorkInTransaction(client, laneEnsureWork(id, senderIdentity));
     if (kind === 'auto' && autoStatus === 'live' && !firstNow) {
       await client.query(
         `UPDATE outreach.campaigns SET next_cycle_at = $2 WHERE id = $1`,
@@ -501,7 +557,6 @@ export async function updateAutoCampaign(
       nextCycle?.toISOString() ?? null,
     ],
   );
-
   if (autoStatus === 'paused') {
     const { pauseDraftingWorkspace } = await import('@/lib/drafting/repository');
     await pauseDraftingWorkspace(campaignId, ownerId).catch(() => undefined);
@@ -517,7 +572,88 @@ export async function updateAutoCampaign(
     ).catch(() => undefined);
   }
 
+  if (existing.sender_identity_slug && senderIdentity !== existing.sender_identity_slug) {
+    await relaneCampaign(campaignId, existing.sender_identity_slug, senderIdentity);
+  }
   return getCampaign(ownerId, campaignId);
+}
+
+/**
+ * Persists delivery_settings and, when the identity lane changes, pauses the
+ * old Smartlead campaign and starts a new one. Drafts stay in the original
+ * voice — they are not re-laned.
+ */
+export async function updateCampaignDelivery(
+  ownerId: string,
+  campaignId: string,
+  values: {
+    senderIdentitySlug?: SenderIdentitySlug;
+    deliverySettings?: Partial<DeliverySettings>;
+  },
+): Promise<Campaign | null> {
+  const existing = await getCampaign(ownerId, campaignId);
+  if (!existing) return null;
+
+  const nextIdentity = values.senderIdentitySlug
+    ? parseSenderIdentitySlug(values.senderIdentitySlug)
+    : existing.sender_identity_slug;
+  if (values.senderIdentitySlug && !nextIdentity) {
+    throw new Error('Sender must be Lucas or Tommy');
+  }
+  const identity = nextIdentity ?? 'lucas';
+  const merged: DeliverySettings = values.deliverySettings
+    ? {
+      ...existing.delivery_settings,
+      ...values.deliverySettings,
+      schedule: {
+        ...existing.delivery_settings.schedule,
+        ...values.deliverySettings.schedule,
+      },
+      follow_ups: values.deliverySettings.follow_ups ?? existing.delivery_settings.follow_ups,
+    }
+    : existing.delivery_settings;
+
+  await dbQuery(
+    `UPDATE outreach.campaigns
+        SET sender_identity_slug = $3,
+            delivery_settings = $4::jsonb,
+            follow_up_enabled = $5,
+            updated_at = now()
+      WHERE id = $1
+        AND (owner_id = $2 OR COALESCE(kind, 'manual') = 'auto')`,
+    [
+      campaignId,
+      ownerId,
+      identity,
+      JSON.stringify(merged),
+      merged.follow_ups.length > 0,
+    ],
+  );
+
+  if (existing.sender_identity_slug && identity !== existing.sender_identity_slug) {
+    await relaneCampaign(campaignId, existing.sender_identity_slug, identity);
+  } else {
+    await enqueueWork(laneEnsureWork(campaignId, identity));
+  }
+  return getCampaign(ownerId, campaignId);
+}
+
+async function relaneCampaign(
+  campaignId: string,
+  fromSlug: SenderIdentitySlug,
+  toSlug: SenderIdentitySlug,
+): Promise<void> {
+  const lanes = await listLanesForCampaign(campaignId);
+  for (const lane of lanes.filter((row) => row.identity_slug === fromSlug && row.status === 'ready')) {
+    await pauseLane(lane.id).catch(() => undefined);
+  }
+  await dbQuery(
+    `INSERT INTO outreach.campaign_lanes (campaign_id, identity_slug, status)
+     VALUES ($1, $2, 'creating')
+     ON CONFLICT (campaign_id, identity_slug) DO NOTHING`,
+    [campaignId, toSlug],
+  );
+  await enqueueWork(laneEnsureWork(campaignId, toSlug));
 }
 
 function mergeDuplicateSourceLeads(client: PoolClient, sourceId: string, targetId: string) {

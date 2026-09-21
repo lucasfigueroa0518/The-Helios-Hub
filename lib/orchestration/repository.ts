@@ -238,19 +238,27 @@ export async function cancelScope(scopeKey: string): Promise<number> {
   return rowCount ?? 0;
 }
 
-export async function cancelWorkByIds(jobIds: string[]): Promise<number> {
+/**
+ * Pass a `client` to cancel inside a caller-owned transaction. The human reply
+ * path needs the fallback row and its job to be cancelled in the same commit,
+ * so the worker can never claim a job whose row is already gone.
+ */
+export async function cancelWorkByIds(
+  jobIds: string[],
+  client?: PoolClient,
+): Promise<number> {
   if (jobIds.length === 0) return 0;
-  const { rowCount } = await dbQuery(
-    `UPDATE outreach.orchestration_jobs
+  const sql = `UPDATE outreach.orchestration_jobs
         SET status = 'cancelled',
             lease_owner = NULL,
             lease_expires_at = NULL,
             heartbeat_at = NULL,
             finished_at = now(),
             updated_at = now()
-      WHERE id = ANY($1::uuid[]) AND status = 'pending'`,
-    [jobIds],
-  );
+      WHERE id = ANY($1::uuid[]) AND status = 'pending'`;
+  const { rowCount } = client
+    ? await client.query(sql, [jobIds])
+    : await dbQuery(sql, [jobIds]);
   return rowCount ?? 0;
 }
 

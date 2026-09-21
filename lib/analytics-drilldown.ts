@@ -18,6 +18,7 @@ import {
   uniqueLeadFacts,
 } from '@/lib/analytics-lead-facts';
 import { getCloudWorkerSpendState } from '@/lib/billing-guard';
+import { loadDeliveryCostSummary } from '@/lib/smartlead/costs';
 
 export type DailyTrendPoint = {
   date: string;
@@ -167,7 +168,7 @@ export async function getMetricDrilldown(input: AnalyticsDrilldownInput): Promis
   let unit: 'usd' | 'percent' | 'count' = 'usd';
   let totalFormatted = '—';
 
-  const [dailyCost, sendDaily, rawLeadFacts, unallocated, workerSpend] = await Promise.all([
+  const [dailyCost, sendDaily, rawLeadFacts, unallocated, workerSpend, deliveryCosts] = await Promise.all([
     loadAttributedCostDaily({
       from: window.from,
       to: window.to,
@@ -225,6 +226,7 @@ export async function getMetricDrilldown(input: AnalyticsDrilldownInput): Promis
       campaignIds: safeCampaignIds,
     }),
     getCloudWorkerSpendState(),
+    loadDeliveryCostSummary(window.from.slice(0, 10), window.to.slice(0, 10)),
   ]);
 
   const workerWindowUsd = prorateGcpWorkerUsd({
@@ -236,6 +238,9 @@ export async function getMetricDrilldown(input: AnalyticsDrilldownInput): Promis
   const orgIdentity = classifySpendIdentity({
     facts: uniqueLeadFacts(leadFacts),
     unallocatedWastedUsd: unallocated.total_usd,
+    fixedDeliveryUsd: deliveryCosts.fixedUsd,
+    smartleadUsd: deliveryCosts.smartleadUsd,
+    smartleadUsedUsd: deliveryCosts.smartleadUsedUsd,
   });
   const workerPerDay = dailyCost.length > 0 ? workerWindowUsd / dailyCost.length : 0;
 
@@ -252,6 +257,7 @@ export async function getMetricDrilldown(input: AnalyticsDrilldownInput): Promis
     else if (metricKey === 'drafting') val = draftC;
     else if (metricKey === 'enrichment') val = enrichC;
     else if (metricKey === 'worker') val = workerPerDay;
+    else if (metricKey === 'smartlead') val = dailyCost.length > 0 ? deliveryCosts.smartleadUsd / dailyCost.length : 0;
     else if (metricKey === 'agentmail') val = sent * AGENTMAIL_USD_PER_SEND;
     else if (metricKey === 'delivery_rate') val = sent > 0 ? deliv / sent : 0;
     else if (metricKey === 'open_rate') val = deliv > 0 ? Number(send?.opened_count ?? 0) / deliv : 0;
@@ -319,7 +325,9 @@ export async function getMetricDrilldown(input: AnalyticsDrilldownInput): Promis
       case 'worker':
         return { title: 'Worker Spend', unit: 'usd' as const, val: identity.worker_cost_usd, fmt: formatUsd(identity.worker_cost_usd) };
       case 'agentmail':
-        return { title: 'AgentMail Spend', unit: 'usd' as const, val: identity.agentmail_cost_usd, fmt: formatUsd(identity.agentmail_cost_usd) };
+        return { title: 'Delivery Spend', unit: 'usd' as const, val: identity.agentmail_cost_usd, fmt: formatUsd(identity.agentmail_cost_usd) };
+      case 'smartlead':
+        return { title: 'Smartlead Subscription', unit: 'usd' as const, val: identity.smartlead_cost_usd, fmt: formatUsd(identity.smartlead_cost_usd) };
       case 'delivery_rate':
         return { title: 'Email Delivery Rate', unit: 'percent' as const, val: sent > 0 ? deliv / sent : 0, fmt: sent > 0 ? formatPct(deliv / sent) : '—' };
       case 'open_rate':
@@ -436,7 +444,7 @@ export async function getMetricDrilldown(input: AnalyticsDrilldownInput): Promis
       occurred_at: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString(),
       subject: r.subject,
       details: fact
-        ? `Enrich ${formatUsd(fact.enrichment_usd)} · Draft ${formatUsd(fact.drafting_usd)} · Worker ${formatUsd(fact.worker_usd)} · AgentMail ${formatUsd(fact.agentmail_usd)}`
+        ? `Enrich ${formatUsd(fact.enrichment_usd)} · Draft ${formatUsd(fact.drafting_usd)} · Worker ${formatUsd(fact.worker_usd)} · Delivery ${formatUsd(fact.agentmail_usd)}`
         : null,
     };
   });
@@ -452,7 +460,7 @@ export async function getMetricDrilldown(input: AnalyticsDrilldownInput): Promis
     notes: [
       'Total Hub Spend = Outreach Spend + Wasted Spend.',
       'Each lead carries enrichment + drafting + worker + AgentMail. Unsent manual leads are wasted. Unsent auto-campaign leads are still queued.',
-      'AgentMail is $0.002 per send. Apollo enrich is $59 / 2,500 credits. GCP worker is month-to-date prorated into this window.',
+      'AgentMail is $0.002 per send. Smartlead is the full $94 month for each overlapping billing cycle, not a per-send slice. Apollo enrich is $59 / 2,500 credits. GCP worker is month-to-date prorated into this window.',
       'Dashboard summaries and leftover drafting opening balances are unallocated wasted spend.',
     ],
   };

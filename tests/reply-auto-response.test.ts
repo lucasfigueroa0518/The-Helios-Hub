@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { REPLY_CALENDLY_URL, REPLY_WEBSITE_VISIBLE } from '@/lib/drafting/reply-constants';
 import { resolveDeferUntil, formatDateOnly } from '@/lib/drafting/reply-defer';
-import { isAutomaticReply, autoReplySkipReason, buildInboundForwardPayload } from '@/lib/drafting/reply-inbound';
+import { isAutomaticReply, autoReplySkipReason } from '@/lib/drafting/reply-inbound';
 import { linkifyReplyPlainFragment, replyPlainTextBodyToHtml } from '@/lib/drafting/reply-linkify';
 import { lintReplyBody } from '@/lib/drafting/reply-lint';
 
@@ -81,10 +81,10 @@ test('isAutomaticReply detects OOO / bulk headers', () => {
   );
 });
 
-test('OOO still gets an auto-response; only bounces are skipped', () => {
+test('OOO and auto-responders skip the fallback; only genuine replies enqueue', () => {
   assert.equal(
     autoReplySkipReason({ 'auto-submitted': 'auto-replied' }, 'lead@example.com'),
-    null,
+    'out_of_office',
   );
   assert.equal(autoReplySkipReason({ precedence: 'bulk' }, 'lead@example.com'), null);
   assert.equal(autoReplySkipReason({}, 'mailer-daemon@keanmiller.com'), 'mailer_daemon');
@@ -94,48 +94,15 @@ test('OOO still gets an auto-response; only bounces are skipped', () => {
   );
 });
 
-test('inbound forward payload goes to Lucas or Tommy personal mail', () => {
-  const lucas = buildInboundForwardPayload(
-    {
-      from_email: 'lucas@heliosgroup.email',
-      to_email: 'blane.clark@keanmiller.com',
-      subject: 'Contract review workflow at Kean Miller',
-    },
-    {
-      providerEmailId: 'msg-1',
-      fromEmail: 'Blane Clark <blane.clark@keanmiller.com>',
-      toEmails: ['lucas@heliosgroup.email'],
-      subject: 'Out of Office: Contract review workflow at Kean Miller',
-      textBody: 'I am out of the office until Monday.',
-      htmlBody: null,
-      headers: { 'auto-submitted': 'auto-replied' },
-      receivedAt: '2026-08-20T15:00:00.000Z',
-    },
+test('out-of-office subjects skip the Claude fallback', () => {
+  assert.equal(
+    autoReplySkipReason({ subject: 'Out of Office: Contract review' }, 'lead@example.com'),
+    'out_of_office',
   );
-  assert.ok(lucas);
-  assert.equal(lucas.to, 'lucas@heliosgroup.ai');
-  assert.match(lucas.subject, /^Fwd:/);
-  assert.match(lucas.text, /I am out of the office until Monday/);
-  assert.match(lucas.text, /blane\.clark@keanmiller\.com/);
-
-  const tommy = buildInboundForwardPayload(
-    {
-      from_email: 'thomas@heliosgroup.email',
-      to_email: 'lead@example.com',
-      subject: 'Hello',
-    },
-    {
-      providerEmailId: 'msg-2',
-      fromEmail: 'lead@example.com',
-      toEmails: ['thomas@heliosgroup.email'],
-      subject: 'Re: Hello',
-      textBody: 'Thanks',
-      htmlBody: null,
-      headers: {},
-      receivedAt: '2026-08-20T15:00:00.000Z',
-    },
+  assert.equal(
+    autoReplySkipReason({ 'auto-submitted': 'auto-replied', subject: 'Automatic reply' }, 'lead@example.com'),
+    'out_of_office',
   );
-  assert.equal(tommy?.to, 'tommy@heliosgroup.ai');
 });
 
 test('resolveDeferUntil parses common phrases', () => {

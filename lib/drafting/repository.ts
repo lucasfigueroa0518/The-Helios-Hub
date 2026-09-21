@@ -61,7 +61,6 @@ import {
 } from '@/lib/drafting/exports';
 import { resolveIdentityHeadshotStoragePath } from '@/lib/drafting/sender-identities';
 import {
-  DAILY_SEND_CAP,
   enqueueOverflowSend,
   formatNyDate,
   loadActiveQueueByItemIds,
@@ -69,10 +68,10 @@ import {
   todayRemaining,
   type ActiveQueueInfo,
 } from '@/lib/drafting/send-queue';
+import { isSmartleadConfigured } from '@/lib/smartlead/enabled';
 import {
   EmailSendConfigurationError,
   EmailSendProviderError,
-  isEmailSendConfigured,
 } from '@/lib/drafting/send';
 import { dispatchDraftingRunStarted, dispatchDraftingJobs } from '@/lib/drafting/transport';
 import {
@@ -88,6 +87,7 @@ import { campaignRampDelayMs } from '@/lib/drafting/provider-admission';
 import { assertTransition, syncReviewStatus } from '@/lib/drafting/state';
 import type { DraftingRescueAssessment } from '@/lib/drafting/rescue';
 import { isReadyForBulkSend } from '@/lib/drafting/draft-review-order';
+import { approvalRequired, resolveDeliverySettings } from '@/lib/smartlead/delivery-settings';
 import {
   hasBlockingHardLintFailures,
   hasRetrySuggestedLint,
@@ -663,7 +663,7 @@ function summarizeItem(
                   ? 'failed'
                   : 'unsent',
           queue_id: queueInfo?.queue_id ?? null,
-          schedule_date: queueInfo?.schedule_date ?? null,
+          schedule_date: queueInfo?.handoff_date ?? null,
           email_send_id: sendStatus?.id ?? null,
           sent_at: sendStatus?.sent_at ?? null,
           send_error: sendStatus?.error_message ?? null,
@@ -1398,11 +1398,11 @@ export async function getWorkspaceSnapshot(
       attention_rows: [],
       exports: { available: false, blocking_reasons: ['Workspace has not been started'] },
       sends: {
-        configured: isEmailSendConfigured(),
+        configured: isSmartleadConfigured(),
         available: false,
         blocking_reasons: ['Workspace has not been started'],
         pending: 0,
-        today_remaining: DAILY_SEND_CAP,
+        today_remaining: 0,
         queued_count: 0,
         next_schedule_date: null,
       },
@@ -1581,7 +1581,7 @@ export async function getWorkspaceSnapshot(
   const openedCount = sendAgg[0]?.opened ?? 0;
   const repliedCount = sendAgg[0]?.replied ?? 0;
   const bouncedCount = sendAgg[0]?.bounced ?? 0;
-  const sendConfigured = isEmailSendConfigured();
+  const sendConfigured = isSmartleadConfigured();
   const pendingSendCount = sendAgg[0]?.pending_send ?? 0;
   const nonLiveApproved = (sendAgg[0]?.non_live_approved ?? 0) > 0;
   const nonLiveSendable = (sendAgg[0]?.non_live_sendable ?? 0) > 0;
@@ -3088,66 +3088,38 @@ async function dispatchDraftSend(
       recipient,
       status: 'queued',
       queue_id: existing.queue_id,
-      schedule_date: existing.schedule_date,
+      schedule_date: existing.handoff_date ?? undefined,
     };
   }
 
+  // Approval only queues. The handoff planner picks the day and the Smartlead
+  // lane sends it — nothing leaves the building from this call, so approving a
+  // batch can never turn into an unplanned send burst.
   const queued = await enqueueOverflowSend({
     ownerId,
-    itemId: row.itemId,
+    draftingItemId: row.itemId,
     campaignId,
     toEmail: row.toEmail,
     subject: row.subject,
     recipientName: recipient,
   });
-  if (queued.schedule_date === formatNyDate() && queued.from_email) {
-    const { sendNowQueueItems } = await import('@/lib/drafting/send-queue');
-    try {
-      const nowResult = await sendNowQueueItems({ ownerId, ids: [queued.id] });
-      const sent = nowResult.results[0];
-      if (sent?.status === 'sent') {
-        return {
-          item_id: row.itemId,
-          recipient,
-          status: 'sent',
-          queue_id: queued.id,
-          schedule_date: queued.schedule_date,
-        };
-      }
-      if (sent?.status === 'queued') {
-        return {
-          item_id: row.itemId,
-          recipient,
-          status: 'queued',
-          queue_id: queued.id,
-          schedule_date: sent.schedule_date ?? queued.schedule_date,
-        };
-      }
-      if (sent?.status === 'failed') {
-        return {
-          item_id: row.itemId,
-          recipient,
-          status: 'failed',
-          error: sent.error,
-          queue_id: queued.id,
-        };
-      }
-    } catch {
-      // Capacity or send-now refusal — leave queued for the scheduled slot.
-    }
+  if (!queued) {
+    return { item_id: row.itemId, recipient, status: 'skipped', error: 'Already queued' };
   }
   return {
     item_id: row.itemId,
     recipient,
     status: 'queued',
     queue_id: queued.id,
-    schedule_date: queued.schedule_date,
+    schedule_date: queued.handoff_date ?? undefined,
   };
 }
 
 export async function sendApprovedDraft(itemId: string, ownerId: string): Promise<DraftSendResult> {
-  if (!isEmailSendConfigured()) {
-    throw new EmailSendConfigurationError('AGENT_MAIL_API is not configured');
+  if (!isSmartleadConfigured()) {
+    throw new EmailSendConfigurationError(
+      'Smartlead delivery is not configured (SMARTLEAD_ENABLED / SMARTLEAD_API_KEY)',
+    );
   }
 
   const { campaignId } = await getOwnedItemContext(itemId, ownerId);
@@ -3182,15 +3154,23 @@ export async function sendCampaignApprovedDrafts(
   queued: number;
   results: DraftSendResult[];
 }> {
-  if (!isEmailSendConfigured()) {
-    throw new EmailSendConfigurationError('AGENT_MAIL_API is not configured');
+  if (!isSmartleadConfigured()) {
+    throw new EmailSendConfigurationError(
+      'Smartlead delivery is not configured (SMARTLEAD_ENABLED / SMARTLEAD_API_KEY)',
+    );
   }
 
   const { rows: allRows } = await loadSendableDraftRows(campaignId, ownerId);
-  // Send All Ready: only drafts without retry-suggested soft lint.
+  const { rows: settingsRows } = await dbQuery<{ delivery_settings: unknown }>(
+    'SELECT delivery_settings FROM outreach.campaigns WHERE id = $1',
+    [campaignId],
+  );
+  const requireApproval = approvalRequired(resolveDeliverySettings(settingsRows[0]?.delivery_settings));
   const rows = allRows.filter((row) => isReadyForBulkSend({
     state: row.state,
     retrySuggested: row.retrySuggested,
+    reviewStatus: row.reviewStatus,
+    requireApproval,
   }));
   const sendStatuses = await loadLatestEmailSendStatuses(rows.map((row) => row.itemId));
   const activeQueue = await loadActiveQueueByItemIds(rows.map((row) => row.itemId));
@@ -3224,17 +3204,19 @@ export async function sendCampaignApprovedDrafts(
       recipient: row.toFullName || row.toEmail,
       status: 'queued',
       queue_id: existing.queue_id,
-      schedule_date: existing.schedule_date,
+      schedule_date: existing.handoff_date ?? undefined,
     });
   }
 
   if (unsentRows.length > 0) {
-    const { enqueueOverflowBatch, sendNowQueueItems } = await import('@/lib/drafting/send-queue');
+    // Approval queues and the planner dates it. There is deliberately no
+    // "send today's rows now" branch any more: a bulk approval must never turn
+    // into an unplanned burst that ignores the day's capacity.
+    const { enqueueOverflowBatch } = await import('@/lib/drafting/send-queue');
     const queuedRows = await enqueueOverflowBatch(
-      ownerId,
       unsentRows.map((row) => ({
         ownerId,
-        itemId: row.itemId,
+        draftingItemId: row.itemId,
         campaignId,
         toEmail: row.toEmail,
         subject: row.subject,
@@ -3242,50 +3224,15 @@ export async function sendCampaignApprovedDrafts(
       })),
     );
     const byItem = new Map(queuedRows.map((row) => [row.drafting_item_id, row]));
-    const today = formatNyDate();
-    const todayIds = queuedRows
-      .filter((row) => row.schedule_date === today && row.from_email)
-      .map((row) => row.id);
-    const sendByQueue = new Map<string, { status: 'sent' | 'failed' | 'queued'; error?: string; schedule_date?: string }>();
-    if (todayIds.length > 0) {
-      try {
-        const nowResult = await sendNowQueueItems({ ownerId, ids: todayIds });
-        for (const result of nowResult.results) {
-          sendByQueue.set(result.queue_id, result);
-        }
-      } catch {
-        // Capacity or send-now refusal — leave queued for the scheduled slot.
-      }
-    }
+
     for (const row of unsentRows) {
       const queued = byItem.get(row.itemId);
-      const sent = queued ? sendByQueue.get(queued.id) : undefined;
-      if (sent?.status === 'sent') {
-        results.push({
-          item_id: row.itemId,
-          recipient: row.toFullName || row.toEmail,
-          status: 'sent',
-          queue_id: queued?.id,
-          schedule_date: queued?.schedule_date,
-        });
-        continue;
-      }
-      if (sent?.status === 'failed') {
-        results.push({
-          item_id: row.itemId,
-          recipient: row.toFullName || row.toEmail,
-          status: 'failed',
-          error: sent.error,
-          queue_id: queued?.id,
-        });
-        continue;
-      }
       results.push({
         item_id: row.itemId,
         recipient: row.toFullName || row.toEmail,
         status: 'queued',
         queue_id: queued?.id,
-        schedule_date: sent?.schedule_date ?? queued?.schedule_date,
+        schedule_date: queued?.handoff_date ?? undefined,
       });
     }
   }

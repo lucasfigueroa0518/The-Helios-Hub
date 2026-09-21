@@ -1,13 +1,10 @@
 /**
- * Inbound reply ingest: store body, forward to sender, enqueue delayed auto-response.
+ * Inbound reply ingest: store body, enqueue delayed auto-response.
  */
 
-import { agentMailSendOutreach } from '@/lib/agentmail';
 import {
   extractEmailAddress,
-  INBOUND_FORWARD_LABEL,
   isOutreachInbox,
-  personalForwardEmailForInbox,
 } from '@/lib/agentmail-inboxes';
 import { dbQuery } from '@/lib/db';
 import { enqueueWork } from '@/lib/orchestration/repository';
@@ -43,12 +40,6 @@ export type ReceivedEmailContent = {
   receivedAt: string;
 };
 
-function stripHtml(html: string | null | undefined): string | null {
-  if (!html?.trim()) return null;
-  const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  return text || null;
-}
-
 /** OOO / bulk headers — stored for display, but we still auto-respond. */
 export function isAutomaticReply(headers: Record<string, string>, fromEmail: string): string | null {
   const autoSubmitted = headers['auto-submitted']?.toLowerCase() ?? '';
@@ -69,43 +60,35 @@ export function isAutomaticReply(headers: Record<string, string>, fromEmail: str
 }
 
 /** Only bounce/daemon mail skips the Calendly auto-response. OOO still gets one. */
+/** Subject lines that mean nobody read the email. */
+const OUT_OF_OFFICE_SUBJECT =
+  /\b(out\s*of\s*(the\s*)?office|ooo|automatic reply|auto[-\s]?reply|autoreply|on (vacation|holiday|leave|parental leave)|away from (my|the) (desk|office)|maternity leave|paternity leave)\b/i;
+
+/** Headers an RFC-compliant auto-responder sets. */
+function isAutoResponderHeader(headers: Record<string, string>): boolean {
+  const autoSubmitted = headers['auto-submitted']?.toLowerCase() ?? '';
+  if (autoSubmitted && autoSubmitted !== 'no') return true;
+  if (headers['x-autoreply'] || headers['x-autorespond']) return true;
+  return /^(vacation|auto[-_]?replied|auto[-_]?generated|auto[-_]?notified)$/i.test(
+    headers['x-auto-response-suppress'] ?? headers['precedence'] ?? '',
+  );
+}
+
 export function autoReplySkipReason(
   headers: Record<string, string>,
   fromEmail: string,
 ): string | null {
-  if (/^(mailer-daemon|postmaster)@/i.test(fromEmail)) return 'mailer_daemon';
+  if (/^(mailer-daemon|postmaster|no-?reply|donotreply)@/i.test(fromEmail)) return 'mailer_daemon';
   const subject = headers.subject?.toLowerCase() ?? '';
   if (/\b(undeliverable|delivery status notification|mail delivery failed)\b/i.test(subject)) {
     return 'bounce_subject';
   }
+  // Out-of-office gets no fallback: Smartlead reschedules the sequence itself,
+  // and replying to a vacation responder starts a loop with a robot.
+  if (OUT_OF_OFFICE_SUBJECT.test(subject) || isAutoResponderHeader(headers)) {
+    return 'out_of_office';
+  }
   return null;
-}
-
-export function buildInboundForwardPayload(
-  outbound: Pick<OutboundSendContext, 'from_email' | 'to_email' | 'subject'>,
-  inbound: ReceivedEmailContent,
-): { to: string; subject: string; text: string } | null {
-  const inbox = extractEmailAddress(outbound.from_email) ?? outbound.from_email.toLowerCase();
-  if (!isOutreachInbox(inbox)) return null;
-  const to = personalForwardEmailForInbox(inbox);
-  const from = extractEmailAddress(inbound.fromEmail) ?? inbound.fromEmail.toLowerCase();
-  if (from === to) return null;
-  if (isOutreachInbox(from)) return null;
-  const originalSubject = inbound.subject?.trim() || outbound.subject?.trim() || `reply from ${from}`;
-  const subject = /^fwd:/i.test(originalSubject) ? originalSubject : `Fwd: ${originalSubject}`;
-  const body = inbound.textBody?.trim()
-    || stripHtml(inbound.htmlBody)
-    || '(no text body)';
-  const text = [
-    'Forwarded lead reply to your Helios outreach.',
-    `From: ${inbound.fromEmail}`,
-    `To: ${(inbound.toEmails.length ? inbound.toEmails : [outbound.from_email]).join(', ')}`,
-    `Original To: ${outbound.to_email}`,
-    `Subject: ${originalSubject}`,
-    '',
-    body,
-  ].join('\n');
-  return { to, subject, text };
 }
 
 export async function loadOutboundSendContext(emailSendId: string): Promise<OutboundSendContext | null> {
@@ -136,33 +119,8 @@ export async function fetchReceivedEmailContent(
   return null;
 }
 
-async function forwardInboundToSender(
-  outbound: OutboundSendContext,
-  inbound: ReceivedEmailContent,
-): Promise<boolean> {
-  const payload = buildInboundForwardPayload(outbound, inbound);
-  if (!payload) return false;
-  const inboxId = extractEmailAddress(outbound.from_email) ?? outbound.from_email;
-  try {
-    await agentMailSendOutreach({
-      inboxId,
-      to: payload.to,
-      subject: payload.subject,
-      text: payload.text,
-      labels: [INBOUND_FORWARD_LABEL, 'helios-outreach-forward'],
-    });
-    return true;
-  } catch (error) {
-    console.warn(
-      `[inbound-forward] failed ${inboxId} → ${payload.to}:`,
-      error instanceof Error ? error.message : error,
-    );
-    return false;
-  }
-}
-
 /**
- * Persist inbound, forward to sender, and enqueue reply.respond (+60s) when allowed.
+ * Persist inbound and enqueue reply.respond (+300s) when allowed.
  */
 export async function processInboundLeadReply(input: {
   emailSendId: string;
@@ -263,22 +221,17 @@ export async function processInboundLeadReply(input: {
   const inboundId = inboundRows[0]?.id;
   if (!inboundId) return { skipped: 'inbound_insert_failed' };
 
-  let forwarded = Boolean(inboundRows[0]?.forwarded_to_sender_at);
-  if (!forwarded) {
-    forwarded = await forwardInboundToSender(outbound, inbound);
-    if (forwarded) {
-      await dbQuery(
-        `UPDATE outreach.inbound_emails
-            SET forwarded_to_sender_at = coalesce(forwarded_to_sender_at, now()),
-                updated_at = now()
-          WHERE id = $1`,
-        [inboundId],
-      );
-    }
-  }
+  // Inbound no longer forwards to @heliosgroup.ai; Conversations is where
+  // replies are read, and forwarding through an outreach inbox hurt placement.
+  const forwarded = false;
 
   if (autoSkip) {
     return { inboundId, skipped: autoSkip, forwarded };
+  }
+
+  // A campaign can opt out of the automated fallback entirely.
+  if (await replyFallbackIsHumanOnly(outbound.campaign_id)) {
+    return { inboundId, skipped: 'human_only', forwarded };
   }
 
   // New human inbound supersedes any queued deferred follow-up.
@@ -320,10 +273,12 @@ export async function processInboundLeadReply(input: {
   let replySend: { id: string; status: string } | undefined;
   try {
     const { rows: replyRows } = await dbQuery<{ id: string; status: string }>(
+      // 'awaiting_human' is the five-minute window: the worker may only claim
+      // the row once it expires, and a human reply cancels it before then.
       `INSERT INTO outreach.reply_sends (
          owner_id, campaign_id, inbound_email_id, drafting_item_id, email_send_id,
          status, kind, scheduled_for
-       ) VALUES ($1,$2,$3,$4,$5,'queued','immediate',$6::timestamptz)
+       ) VALUES ($1,$2,$3,$4,$5,'awaiting_human','immediate',$6::timestamptz)
        RETURNING id, status`,
       [
         outbound.owner_id,
@@ -365,4 +320,14 @@ export async function processInboundLeadReply(input: {
   );
 
   return { inboundId, replySendId: replySend.id, forwarded };
+}
+
+/** Campaigns set to `human_only` never get an automated fallback. */
+async function replyFallbackIsHumanOnly(campaignId: string): Promise<boolean> {
+  const { rows } = await dbQuery<{ delivery_settings: unknown }>(
+    'SELECT delivery_settings FROM outreach.campaigns WHERE id = $1',
+    [campaignId],
+  );
+  const { resolveDeliverySettings } = await import('@/lib/smartlead/delivery-settings');
+  return resolveDeliverySettings(rows[0]?.delivery_settings).reply_fallback === 'human_only';
 }

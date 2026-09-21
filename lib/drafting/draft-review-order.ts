@@ -57,11 +57,20 @@ export function sortDraftRows<T extends SortableDraftRow>(
   return [...rows].sort((a, b) => compareDraftsForSort(a, b, mode));
 }
 
-/** Bulk Send All Ready: drafted, unsent, no retry suggested. */
+/**
+ * Bulk Send All Ready: drafted, unsent, no retry suggested — and, while the
+ * campaign requires approval, reviewed by a human.
+ *
+ * `requireApproval` is read from `campaigns.delivery_settings` and checked
+ * again at handoff time, not only when the draft was queued, so switching
+ * approval on mid-campaign holds rows that are already waiting.
+ */
 export function isReadyForBulkSend(row: {
   state: string;
   retrySuggested: boolean;
   sendStatus?: 'unsent' | 'queued' | 'sending' | 'sent' | 'failed' | null;
+  reviewStatus?: string | null;
+  requireApproval?: boolean;
 }): boolean {
   if (row.state !== 'ready_for_review' && row.state !== 'approved') return false;
   if (row.retrySuggested) return false;
@@ -72,5 +81,6 @@ export function isReadyForBulkSend(row: {
   ) {
     return false;
   }
+  if (row.requireApproval && row.reviewStatus !== 'approved') return false;
   return true;
 }

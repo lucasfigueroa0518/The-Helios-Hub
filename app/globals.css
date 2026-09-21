@@ -59,6 +59,21 @@
   --color-neutral: #737373;
   --color-neutral-soft: #f5f5f5;
 
+  /* Inbox lifecycle — Helios orange/green plus Networking blue/red and
+     Website Hub purple so every stage has a distinct, already-used hue. */
+  --inbox-production: var(--color-positive);
+  --inbox-production-soft: var(--color-positive-soft);
+  --inbox-ramping: var(--color-primary);
+  --inbox-ramping-soft: var(--color-primary-soft);
+  --inbox-warming: var(--chart-2);
+  --inbox-warming-soft: color-mix(in srgb, var(--chart-2) 16%, var(--color-surface));
+  --inbox-provisioning: var(--color-data-missing);
+  --inbox-provisioning-soft: var(--color-data-missing-soft);
+  --inbox-resting: var(--color-negative);
+  --inbox-resting-soft: var(--color-negative-soft);
+  --inbox-retired: var(--color-neutral);
+  --inbox-retired-soft: var(--color-neutral-soft);
+
   /* ---- Color: extra flow/movement series (adapt names to your domain) --- */
   --flow-primary-in: #ff5e1a;
   --flow-secondary-in: #14b8c4;

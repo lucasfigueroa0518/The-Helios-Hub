@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createCampaign, listCampaigns } from '@/lib/campaigns';
 import { getSession } from '@/lib/session';
+import { resolveDeliverySettings } from '@/lib/smartlead/delivery-settings';
 
 export const runtime = 'nodejs';
 
@@ -39,6 +40,7 @@ export async function POST(request: NextRequest) {
     message_subject_template?: string;
     message_body_template?: string;
     include_signature?: boolean;
+    delivery_settings?: Record<string, unknown>;
   } = {};
   try {
     body = await request.json();
@@ -66,6 +68,9 @@ export async function POST(request: NextRequest) {
       messageSubjectTemplate: body.message_subject_template,
       messageBodyTemplate: body.message_body_template,
       includeSignature: typeof body.include_signature === 'boolean' ? body.include_signature : true,
+      deliverySettings: body.delivery_settings
+        ? resolveDeliverySettings(body.delivery_settings)
+        : undefined,
     });
     if (campaign.kind === 'auto' && campaign.auto_status === 'live') {
       const { enqueueAutoCycleJob } = await import('@/lib/auto-campaigns/enqueue');

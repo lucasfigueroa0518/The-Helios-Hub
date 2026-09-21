@@ -4,6 +4,11 @@ import {
   type SenderIdentitySlug,
 } from '@/lib/agentmail-inboxes';
 import { dbQuery } from '@/lib/db';
+import {
+  getInboxByEmail,
+  listInboxes,
+  type InboxRow,
+} from '@/lib/inboxes/repository';
 
 export type SenderIdentityRow = {
   id: string;
@@ -73,43 +78,37 @@ export async function getSenderIdentityBySlug(
   return rows[0] ?? null;
 }
 
+/**
+ * Roster reads now live in `lib/inboxes/repository.ts`, which also owns the
+ * lifecycle and Smartlead mirror columns. These two keep the old narrow shape
+ * so existing drafting callers need no change.
+ */
 export async function listSenderInboxes(input: {
   identitySlug?: SenderIdentitySlug | null;
   enabledOnly?: boolean;
 } = {}): Promise<SenderInboxRow[]> {
-  const params: unknown[] = [];
-  const clauses: string[] = [];
-  if (input.identitySlug) {
-    params.push(input.identitySlug);
-    clauses.push(`i.slug = $${params.length}`);
-  }
-  if (input.enabledOnly !== false) {
-    clauses.push('ib.enabled = true');
-  }
-  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
-  const { rows } = await dbQuery<SenderInboxRow>(
-    `SELECT ib.id::text, ib.identity_id::text, i.slug AS identity_slug,
-            lower(ib.email) AS email, ib.sort_order, ib.is_primary, ib.enabled
-       FROM outreach.sender_inboxes ib
-       JOIN outreach.sender_identities i ON i.id = ib.identity_id
-      ${where}
-      ORDER BY CASE i.slug WHEN 'lucas' THEN 0 ELSE 1 END, ib.sort_order ASC`,
-    params,
-  );
-  return rows;
+  const rows = await listInboxes({
+    identitySlug: input.identitySlug ?? null,
+    enabledOnly: input.enabledOnly !== false,
+  });
+  return rows.map(toNarrowRow);
 }
 
 export async function getSenderInboxByEmail(email: string): Promise<SenderInboxRow | null> {
-  const { rows } = await dbQuery<SenderInboxRow>(
-    `SELECT ib.id::text, ib.identity_id::text, i.slug AS identity_slug,
-            lower(ib.email) AS email, ib.sort_order, ib.is_primary, ib.enabled
-       FROM outreach.sender_inboxes ib
-       JOIN outreach.sender_identities i ON i.id = ib.identity_id
-      WHERE lower(ib.email) = lower($1)
-        AND ib.enabled = true`,
-    [email],
-  );
-  return rows[0] ?? null;
+  const row = await getInboxByEmail(email);
+  return row?.enabled ? toNarrowRow(row) : null;
+}
+
+function toNarrowRow(row: InboxRow): SenderInboxRow {
+  return {
+    id: row.id,
+    identity_id: row.identity_id,
+    identity_slug: row.identity_slug,
+    email: row.email,
+    sort_order: row.sort_order,
+    is_primary: row.is_primary,
+    enabled: row.enabled,
+  };
 }
 
 export function identityDefaults(slug: SenderIdentitySlug) {

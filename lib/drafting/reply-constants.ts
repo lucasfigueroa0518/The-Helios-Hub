@@ -6,8 +6,12 @@ export const REPLY_WEBSITE_VISIBLE = 'heliosgroup.ai';
 
 export const REPLY_WEBSITE_HREF = 'https://heliosgroup.ai';
 
-/** Delay before the worker drafts and sends an immediate auto-response. */
-export const REPLY_AUTO_DELAY_MS = 60_000;
+/**
+ * The human window. A new reply sits in Conversations for five minutes so a
+ * person can answer it themselves; only after that does the Claude fallback
+ * draft and send.
+ */
+export const REPLY_AUTO_DELAY_MS = 300_000;
 
 /** Max immediate auto-replies per original outbound thread. */
 export const REPLY_MAX_IMMEDIATE_TURNS = 4;
@@ -15,4 +19,4 @@ export const REPLY_MAX_IMMEDIATE_TURNS = 4;
 export const REPLY_PROMPT_VERSION = 'reply-writer-v2-multiturn';
 
 export type ReplyDisposition = 'reply_now' | 'defer' | 'suppress';
-export type ReplySendKind = 'immediate' | 'followup';
+export type ReplySendKind = 'immediate' | 'followup' | 'human';

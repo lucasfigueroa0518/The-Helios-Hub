@@ -13,7 +13,6 @@ import { LeadListTutorial } from '@/app/hub/lead-list-tutorial';
 import { requestJson } from '@/lib/client-request';
 import { campaignHref } from '@/lib/home/campaignHref';
 import {
-  inboxCountForIdentity,
   SENDER_IDENTITY_LABELS,
   type SenderIdentitySlug,
 } from '@/lib/agentmail-inboxes';
@@ -25,6 +24,7 @@ import { MessageComposer } from '@/app/components/message-composer';
 import { buildSignatureHtml, resolveEmailSignature } from '@/lib/drafting/email-signature';
 import { parseMessageTemplate, parseSubjectTemplate } from '@/lib/drafting/message-template';
 import { isLiveAutoCampaign } from '@/lib/auto-campaigns/status';
+import { approvalLockExpired, DEFAULT_DELIVERY_SETTINGS } from '@/lib/smartlead/delivery-settings';
 
 const DRAFTING_POLL_MS = 5_000;
 
@@ -49,6 +49,17 @@ type Campaign = {
   drafting_active?: boolean;
   drafting_generated?: number;
   drafting_total?: number;
+  lane_status?: string | null;
+  tomorrow_forecast?: number;
+  delivery_settings?: {
+    tracking: boolean;
+    reply_fallback: 'claude' | 'human_only';
+    max_new_leads_per_day: number | null;
+    require_approval: boolean;
+    require_approval_until: string | null;
+    schedule: { start: string; end: string };
+    follow_ups: Array<{ step: number; delay_days: number; body_template: string }>;
+  };
 };
 
 function formatDate(value: string | null) {
@@ -63,7 +74,7 @@ export function CampaignHub({ email }: { email: string }) {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [dialog, setDialog] = useState<'create' | 'rename' | 'merge' | null>(null);
+  const [dialog, setDialog] = useState<'create' | 'rename' | 'merge' | 'delivery' | null>(null);
   const [selected, setSelected] = useState<Campaign | null>(null);
   const [name, setName] = useState('');
   const [needsEnrichment, setNeedsEnrichment] = useState(false);
@@ -80,6 +91,15 @@ export function CampaignHub({ email }: { email: string }) {
   const [subjectTemplate, setSubjectTemplate] = useState('');
   const [bodyTemplate, setBodyTemplate] = useState('');
   const [includeSignature, setIncludeSignature] = useState(true);
+  const [tracking, setTracking] = useState(false);
+  const [followUpDelay, setFollowUpDelay] = useState('3');
+  const [followUpBody, setFollowUpBody] = useState('');
+  const [maxNewLeads, setMaxNewLeads] = useState('');
+  const [replyFallback, setReplyFallback] = useState<'claude' | 'human_only'>('claude');
+  const [scheduleStart, setScheduleStart] = useState('09:00');
+  const [scheduleEnd, setScheduleEnd] = useState('17:00');
+  const [requireApproval, setRequireApproval] = useState(true);
+  const [requireApprovalUntil, setRequireApprovalUntil] = useState<string | null>(null);
 
   const active = useMemo(() => campaigns.filter((campaign) => campaign.status === 'active'), [campaigns]);
   const archived = useMemo(() => campaigns.filter((campaign) => campaign.status === 'archived'), [campaigns]);
@@ -145,8 +165,53 @@ export function CampaignHub({ email }: { email: string }) {
     setSubjectTemplate('');
     setBodyTemplate('');
     setIncludeSignature(true);
+    setTracking(false);
+    setFollowUpDelay('3');
+    setFollowUpBody('');
+    setMaxNewLeads('');
+    setReplyFallback('claude');
+    setScheduleStart('09:00');
+    setScheduleEnd('17:00');
+    setRequireApproval(true);
+    setRequireApprovalUntil(null);
+    setSenderIdentity('lucas');
     setSelected(null);
     setDialog('create');
+  }
+
+  function applyDeliveryFrom(campaign: Campaign) {
+    const settings = campaign.delivery_settings;
+    const follow = settings?.follow_ups[0];
+    setSenderIdentity(campaign.sender_identity_slug ?? 'lucas');
+    setTracking(settings?.tracking ?? false);
+    setReplyFallback(settings?.reply_fallback ?? 'claude');
+    setMaxNewLeads(settings?.max_new_leads_per_day ? String(settings.max_new_leads_per_day) : '');
+    setFollowUpDelay(follow ? String(follow.delay_days) : '3');
+    setFollowUpBody(follow?.body_template ?? '');
+    setScheduleStart(settings?.schedule.start ?? '09:00');
+    setScheduleEnd(settings?.schedule.end ?? '17:00');
+    setRequireApproval(settings?.require_approval ?? true);
+    setRequireApprovalUntil(settings?.require_approval_until ?? null);
+  }
+
+  function deliveryPayload() {
+    return {
+      tracking,
+      reply_fallback: replyFallback,
+      max_new_leads_per_day: maxNewLeads.trim()
+        ? Number.parseInt(maxNewLeads.replace(/[^\d]/g, ''), 10)
+        : null,
+      follow_ups: followUpBody.trim()
+        ? [{ step: 2, delay_days: Number.parseInt(followUpDelay, 10) || 3, body_template: followUpBody }]
+        : [],
+      schedule: { start: scheduleStart, end: scheduleEnd },
+    };
+  }
+
+  function openDelivery(campaign: Campaign) {
+    setSelected(campaign);
+    applyDeliveryFrom(campaign);
+    setDialog('delivery');
   }
 
   function openRename(campaign: Campaign) {
@@ -184,8 +249,9 @@ export function CampaignHub({ email }: { email: string }) {
                   business_size: businessSize,
                 },
               }
-              : { name, needs_enrichment: needsEnrichment }),
+              : { name, needs_enrichment: needsEnrichment, sender_identity_slug: senderIdentity }),
             message_mode: messageMode,
+            delivery_settings: deliveryPayload(),
             ...(messageMode === 'custom'
               ? {
                 message_subject_template: subjectTemplate,
@@ -225,6 +291,32 @@ export function CampaignHub({ email }: { email: string }) {
       await loadCampaigns(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to rename campaign');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveDelivery(event: FormEvent) {
+    event.preventDefault();
+    if (!selected) return;
+    setSaving(true);
+    try {
+      await requestJson(`/api/campaigns/${selected.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sender_identity_slug: senderIdentity,
+          delivery_settings: {
+            ...deliveryPayload(),
+            require_approval: requireApproval,
+          },
+        }),
+      });
+      invalidateHubCache('/api/campaigns');
+      setDialog(null);
+      await loadCampaigns(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to update delivery');
     } finally {
       setSaving(false);
     }
@@ -329,6 +421,7 @@ export function CampaignHub({ email }: { email: string }) {
                     campaign={campaign}
                     canMerge={active.length > 1 && campaign.kind !== 'auto'}
                     onRename={() => openRename(campaign)}
+                    onDelivery={() => openDelivery(campaign)}
                     onMerge={() => openMerge(campaign)}
                     onArchive={() => void archiveCampaign(campaign)}
                     onReload={() => void loadCampaigns(true)}
@@ -348,6 +441,7 @@ export function CampaignHub({ email }: { email: string }) {
                     campaign={campaign}
                     canMerge={false}
                     onRename={() => openRename(campaign)}
+                    onDelivery={() => openDelivery(campaign)}
                     onMerge={() => undefined}
                     onArchive={() => undefined}
                     onReload={() => void loadCampaigns(true)}
@@ -367,6 +461,7 @@ export function CampaignHub({ email }: { email: string }) {
                 {dialog === 'create' && 'New Campaign'}
                 {dialog === 'rename' && 'Rename Campaign'}
                 {dialog === 'merge' && `Merge into “${selected?.name}”`}
+                {dialog === 'delivery' && `Delivery · ${selected?.name}`}
               </div>
               <button className="dialog__close" onClick={() => setDialog(null)} aria-label="Close dialog"><X size={18} /></button>
             </div>
@@ -475,25 +570,6 @@ export function CampaignHub({ email }: { email: string }) {
                         <span className="field__label">Business size</span>
                         <input className="field__input" value={businessSize} onChange={(event) => setBusinessSize(event.target.value)} placeholder="11–50" required />
                       </label>
-                      <div className="field">
-                        <span className="field__label">Sender</span>
-                        <div className="segmented" style={{ width: 'fit-content' }}>
-                          {(['lucas', 'tommy'] as const).map((slug) => (
-                            <button
-                              key={slug}
-                              type="button"
-                              className={`segmented__item${senderIdentity === slug ? ' segmented__item--active' : ''}`}
-                              onClick={() => setSenderIdentity(slug)}
-                            >
-                              {SENDER_IDENTITY_LABELS[slug]}
-                            </button>
-                          ))}
-                        </div>
-                        <p className="field__hint" style={{ margin: 0, marginTop: 'var(--space-1)' }}>
-                          {SENDER_IDENTITY_LABELS[senderIdentity]} has {inboxCountForIdentity(senderIdentity)} inboxes
-                          {' '}({inboxCountForIdentity(senderIdentity) * 10}/day at the 10-per-inbox cap). Packs only onto that sender.
-                        </p>
-                      </div>
                       <label className="field">
                         <span className="field__label">Emails per day</span>
                         <input
@@ -506,6 +582,102 @@ export function CampaignHub({ email }: { email: string }) {
                       </label>
                     </>
                   )}
+                  <div className="field" style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-3)' }}>
+                    <span className="field__label">Delivery</span>
+                    <p className="field__hint" style={{ margin: 0, marginBottom: 'var(--space-2)' }}>
+                      Smartlead sends from this identity&apos;s mailboxes. Follow-ups and tracking are optional.
+                    </p>
+                    <span className="field__label">Sender</span>
+                    <div className="segmented" style={{ width: 'fit-content', marginBottom: 'var(--space-2)' }}>
+                      {(['lucas', 'tommy'] as const).map((slug) => (
+                        <button
+                          key={slug}
+                          type="button"
+                          className={`segmented__item${senderIdentity === slug ? ' segmented__item--active' : ''}`}
+                          onClick={() => setSenderIdentity(slug)}
+                        >
+                          {SENDER_IDENTITY_LABELS[slug]}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="segmented" style={{ width: 'fit-content', marginBottom: 'var(--space-2)' }}>
+                      <button
+                        type="button"
+                        className={`segmented__item${!tracking ? ' segmented__item--active' : ''}`}
+                        onClick={() => setTracking(false)}
+                      >
+                        Tracking off
+                      </button>
+                      <button
+                        type="button"
+                        className={`segmented__item${tracking ? ' segmented__item--active' : ''}`}
+                        onClick={() => setTracking(true)}
+                      >
+                        Opens &amp; clicks
+                      </button>
+                    </div>
+                    <div className="segmented" style={{ width: 'fit-content', marginBottom: 'var(--space-2)' }}>
+                      <button
+                        type="button"
+                        className={`segmented__item${replyFallback === 'claude' ? ' segmented__item--active' : ''}`}
+                        onClick={() => setReplyFallback('claude')}
+                      >
+                        Claude fallback
+                      </button>
+                      <button
+                        type="button"
+                        className={`segmented__item${replyFallback === 'human_only' ? ' segmented__item--active' : ''}`}
+                        onClick={() => setReplyFallback('human_only')}
+                      >
+                        Human only
+                      </button>
+                    </div>
+                    <label className="field">
+                      <span className="field__label">Max new leads / day</span>
+                      <input
+                        className="field__input"
+                        value={maxNewLeads}
+                        onChange={(event) => setMaxNewLeads(event.target.value)}
+                        placeholder="Leave blank for mailbox capacity"
+                      />
+                    </label>
+                    <label className="field">
+                      <span className="field__label">Follow-up delay (days)</span>
+                      <input
+                        className="field__input"
+                        value={followUpDelay}
+                        onChange={(event) => setFollowUpDelay(event.target.value)}
+                        placeholder="3"
+                      />
+                    </label>
+                    <label className="field">
+                      <span className="field__label">Send window (America/New_York, weekdays)</span>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <input
+                          className="field__input"
+                          type="time"
+                          value={scheduleStart}
+                          onChange={(event) => setScheduleStart(event.target.value)}
+                        />
+                        <input
+                          className="field__input"
+                          type="time"
+                          value={scheduleEnd}
+                          onChange={(event) => setScheduleEnd(event.target.value)}
+                        />
+                      </div>
+                    </label>
+                    <label className="field">
+                      <span className="field__label">Follow-up body (optional)</span>
+                      <textarea
+                        className="field__input"
+                        rows={4}
+                        value={followUpBody}
+                        onChange={(event) => setFollowUpBody(event.target.value)}
+                        placeholder="Leave blank for no follow-up. Step 1 is the per-lead draft."
+                      />
+                    </label>
+                  </div>
                   {messageMode === 'custom' ? (
                     <MessageComposer
                       subject={subjectTemplate}
@@ -534,6 +706,65 @@ export function CampaignHub({ email }: { email: string }) {
               {dialog === 'rename' && (
                 <CampaignNameForm name={name} setName={setName} saving={saving} submitLabel="Save Name" onSubmit={renameCampaign} />
               )}
+              {dialog === 'delivery' && selected && (
+                <form className="login-form" onSubmit={(event) => void saveDelivery(event)}>
+                  <DeliveryFields
+                    senderIdentity={senderIdentity}
+                    setSenderIdentity={setSenderIdentity}
+                    tracking={tracking}
+                    setTracking={setTracking}
+                    replyFallback={replyFallback}
+                    setReplyFallback={setReplyFallback}
+                    maxNewLeads={maxNewLeads}
+                    setMaxNewLeads={setMaxNewLeads}
+                    followUpDelay={followUpDelay}
+                    setFollowUpDelay={setFollowUpDelay}
+                    followUpBody={followUpBody}
+                    setFollowUpBody={setFollowUpBody}
+                    scheduleStart={scheduleStart}
+                    setScheduleStart={setScheduleStart}
+                    scheduleEnd={scheduleEnd}
+                    setScheduleEnd={setScheduleEnd}
+                    identityLocked={selected.kind === 'auto'}
+                  />
+                  <div className="field">
+                    <span className="field__label">Approve before handoff</span>
+                    <div className="segmented" style={{ width: 'fit-content' }}>
+                      <button
+                        type="button"
+                        className={`segmented__item${requireApproval ? ' segmented__item--active' : ''}`}
+                        onClick={() => setRequireApproval(true)}
+                      >
+                        Required
+                      </button>
+                      <button
+                        type="button"
+                        className={`segmented__item${!requireApproval ? ' segmented__item--active' : ''}`}
+                        disabled={!approvalLockExpired({
+                          ...DEFAULT_DELIVERY_SETTINGS,
+                          require_approval: requireApproval,
+                          require_approval_until: requireApprovalUntil,
+                        })}
+                        onClick={() => setRequireApproval(false)}
+                      >
+                        Off
+                      </button>
+                    </div>
+                    <p className="field__hint" style={{ margin: 0, marginTop: 'var(--space-1)' }}>
+                      {requireApprovalUntil && !approvalLockExpired({
+                        ...DEFAULT_DELIVERY_SETTINGS,
+                        require_approval: requireApproval,
+                        require_approval_until: requireApprovalUntil,
+                      })
+                        ? `Stays on until ${requireApprovalUntil}. After that you can turn it off.`
+                        : 'Drafts wait for approval before Smartlead gets them.'}
+                    </p>
+                  </div>
+                  <button className="btn btn--primary" type="submit" disabled={saving}>
+                    {saving ? 'Saving…' : 'Save delivery'}
+                  </button>
+                </form>
+              )}
               {dialog === 'merge' && selected && (
                 <form className="login-form" onSubmit={mergeCampaign}>
                   <p className="text-muted">The selected campaign will keep its name. Leads from the campaign below will be added and high-confidence duplicates collapsed.</p>
@@ -555,6 +786,104 @@ export function CampaignHub({ email }: { email: string }) {
         </div>
       )}
     </main>
+  );
+}
+
+function DeliveryFields({
+  senderIdentity,
+  setSenderIdentity,
+  tracking,
+  setTracking,
+  replyFallback,
+  setReplyFallback,
+  maxNewLeads,
+  setMaxNewLeads,
+  followUpDelay,
+  setFollowUpDelay,
+  followUpBody,
+  setFollowUpBody,
+  scheduleStart,
+  setScheduleStart,
+  scheduleEnd,
+  setScheduleEnd,
+  identityLocked,
+}: {
+  senderIdentity: SenderIdentitySlug;
+  setSenderIdentity: (value: SenderIdentitySlug) => void;
+  tracking: boolean;
+  setTracking: (value: boolean) => void;
+  replyFallback: 'claude' | 'human_only';
+  setReplyFallback: (value: 'claude' | 'human_only') => void;
+  maxNewLeads: string;
+  setMaxNewLeads: (value: string) => void;
+  followUpDelay: string;
+  setFollowUpDelay: (value: string) => void;
+  followUpBody: string;
+  setFollowUpBody: (value: string) => void;
+  scheduleStart: string;
+  setScheduleStart: (value: string) => void;
+  scheduleEnd: string;
+  setScheduleEnd: (value: string) => void;
+  identityLocked?: boolean;
+}) {
+  return (
+    <>
+      <span className="field__label">Sender</span>
+      <div className="segmented" style={{ width: 'fit-content', marginBottom: 'var(--space-2)' }}>
+        {(['lucas', 'tommy'] as const).map((slug) => (
+          <button
+            key={slug}
+            type="button"
+            className={`segmented__item${senderIdentity === slug ? ' segmented__item--active' : ''}`}
+            disabled={identityLocked}
+            onClick={() => setSenderIdentity(slug)}
+          >
+            {SENDER_IDENTITY_LABELS[slug]}
+          </button>
+        ))}
+      </div>
+      <div className="segmented" style={{ width: 'fit-content', marginBottom: 'var(--space-2)' }}>
+        <button type="button" className={`segmented__item${!tracking ? ' segmented__item--active' : ''}`} onClick={() => setTracking(false)}>
+          Tracking off
+        </button>
+        <button type="button" className={`segmented__item${tracking ? ' segmented__item--active' : ''}`} onClick={() => setTracking(true)}>
+          Opens &amp; clicks
+        </button>
+      </div>
+      <div className="segmented" style={{ width: 'fit-content', marginBottom: 'var(--space-2)' }}>
+        <button type="button" className={`segmented__item${replyFallback === 'claude' ? ' segmented__item--active' : ''}`} onClick={() => setReplyFallback('claude')}>
+          Claude fallback
+        </button>
+        <button type="button" className={`segmented__item${replyFallback === 'human_only' ? ' segmented__item--active' : ''}`} onClick={() => setReplyFallback('human_only')}>
+          Human only
+        </button>
+      </div>
+      <label className="field">
+        <span className="field__label">Max new leads / day</span>
+        <input className="field__input" value={maxNewLeads} onChange={(event) => setMaxNewLeads(event.target.value)} placeholder="Leave blank for mailbox capacity" />
+      </label>
+      <label className="field">
+        <span className="field__label">Follow-up delay (days)</span>
+        <input className="field__input" value={followUpDelay} onChange={(event) => setFollowUpDelay(event.target.value)} placeholder="3" />
+      </label>
+      <label className="field">
+        <span className="field__label">Send window (America/New_York, weekdays)</span>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <input className="field__input" type="time" value={scheduleStart} onChange={(event) => setScheduleStart(event.target.value)} />
+          <input className="field__input" type="time" value={scheduleEnd} onChange={(event) => setScheduleEnd(event.target.value)} />
+        </div>
+      </label>
+      <label className="field">
+        <span className="field__label">Follow-up body (optional)</span>
+        <textarea
+          className="field__input"
+          rows={4}
+          value={followUpBody}
+          onChange={(event) => setFollowUpBody(event.target.value)}
+          placeholder="Leave blank for no follow-up. Step 1 is the per-lead draft."
+        />
+      </label>
+    </>
   );
 }
 
@@ -588,11 +917,12 @@ function CampaignNameForm({
 }
 
 function CampaignRow({
-  campaign, canMerge, onRename, onMerge, onArchive, onReload,
+  campaign, canMerge, onRename, onDelivery, onMerge, onArchive, onReload,
 }: {
   campaign: Campaign;
   canMerge: boolean;
   onRename: () => void;
+  onDelivery: () => void;
   onMerge: () => void;
   onArchive: () => void;
   onReload: () => void;
@@ -639,9 +969,13 @@ function CampaignRow({
   const isLive = isLiveAutoCampaign(campaign);
   const isPaused = isAuto && campaign.auto_status === 'paused';
   const href = campaignHref(campaign);
+  const laneLabel = campaign.lane_status ? `lane ${campaign.lane_status}` : 'lane pending';
+  const forecastLabel = campaign.tomorrow_forecast
+    ? `${campaign.tomorrow_forecast} planned tomorrow`
+    : 'no handoffs tomorrow';
   const meta = isAuto
-    ? `${SENDER_IDENTITY_LABELS[campaign.sender_identity_slug ?? 'lucas']} · ${campaign.sent_count ?? 0} sent all-time · ${campaign.lead_count} pulled · ${(campaign.auto_status ?? 'pending_sender').replace(/_/g, ' ')}`
-    : `${campaign.lead_count} ${campaign.lead_count === 1 ? 'lead' : 'leads'} · ${formatDate(campaign.last_run_at)}`;
+    ? `${SENDER_IDENTITY_LABELS[campaign.sender_identity_slug ?? 'lucas']} · ${laneLabel} · ${forecastLabel} · ${campaign.sent_count ?? 0} sent · ${campaign.lead_count} pulled · ${(campaign.auto_status ?? 'pending_sender').replace(/_/g, ' ')}`
+    : `${SENDER_IDENTITY_LABELS[campaign.sender_identity_slug ?? 'lucas']} · ${laneLabel} · ${forecastLabel} · ${campaign.lead_count} ${campaign.lead_count === 1 ? 'lead' : 'leads'} · ${formatDate(campaign.last_run_at)}`;
 
   return (
     <div className={`campaign-row${draftingActive ? ' campaign-row--drafting' : ''}${isLive ? ' campaign-row--live' : ''}${menuOpen ? ' campaign-row--menu-open' : ''}`}>
@@ -715,6 +1049,7 @@ function CampaignRow({
       <div className="campaign-row__actions">
         {campaign.status === 'active' && canMerge && <button className="btn btn--quiet" onClick={onMerge}>Merge in</button>}
         <button className="btn btn--quiet" onClick={onRename}>Rename</button>
+        {campaign.status === 'active' && <button className="btn btn--quiet" onClick={onDelivery}>Delivery</button>}
         {campaign.status === 'active' && <button className="btn btn--quiet" onClick={onArchive}>Archive</button>}
       </div>
     </div>
