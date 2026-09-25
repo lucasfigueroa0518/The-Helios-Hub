@@ -1,0 +1,6 @@
+GRADE: ORANGE
+This clip is flooded with flat, vivid orange: about 80% of the frame is the orange grade, with one near-black subject. White text with a black stroke sits in the band, so the band stays flat, even orange on every frame: no dark shape, no white hotspot, and no hard edge.
+
+This grade has no glow and no haze. The orange is a grade, not a light, so it never brightens, dims, flickers, or shifts in color.
+- The near-black subject sits above or below the band and stays there. Its movement is the story beat, and it carries the polarity.
+- The ambient detail is small and dark: a thin dark line or a loose part of the subject moving slightly. The orange field itself holds still.

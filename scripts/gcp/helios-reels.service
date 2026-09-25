@@ -1,0 +1,22 @@
+[Unit]
+Description=Helios Trial Reels worker (nightly ingest and reel frames)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/helios-worker/app
+EnvironmentFile=/opt/helios-worker/worker.env
+ExecStart=/usr/bin/npm run reels:worker
+Restart=always
+RestartSec=15
+KillSignal=SIGTERM
+TimeoutStopSec=300
+# Sized to leave the outreach worker its share of the e2-standard-2 (8 GB).
+MemoryMax=1500M
+MemoryHigh=1200M
+# Nice above helios-worker (5) so a nightly scrape never starves drafting.
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

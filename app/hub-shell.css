@@ -323,6 +323,9 @@ body:has(.trello-root) .hub-app__main,
 }
 
 .hub-nav-item__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
   flex: 1;
   overflow: hidden;
@@ -340,6 +343,18 @@ body:has(.trello-root) .hub-app__main,
 .hub-nav-item.is-open .hub-nav-item__caret {
   transform: rotate(180deg);
   color: #e4e4e7;
+}
+
+.hub-nav-item__badge {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(255, 94, 26, 0.16);
+  color: #ffb088;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .hub-nav-item__sub {

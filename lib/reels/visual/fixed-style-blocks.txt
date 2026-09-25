@@ -1,0 +1,58 @@
+[STYLE — FIXED, DO NOT ALTER]
+One photoreal scene, as if photographed in a real place with a real camera. 
+Physically based materials. Low-key lighting with deep crushed blacks. Matte 
+black environment with light-absorbing, soft-touch and powder-coated surfaces. 
+Roughly 85% of the frame in shadow. Single motivated key light plus subtle rim 
+light. Clean, noise-free, 85mm lens, shallow depth of field, crisp micro-detail 
+on the subject. The whole frame is that one place.
+
+[COLOR SYSTEM — FIXED]
+Monochrome matte-black and charcoal base with exactly two isolated accent colors:
+- PRIMARY accent: vivid molten orange (#FF5E1A). Used for the key light, the single 
+  hero glow, and the main focal point. One orange focal point per frame.
+- SECONDARY accent: deep saturated emissive emerald-green (#138510). Used only for rim 
+  light, faint background glow, and small UI details. Always subordinate to orange.
+No other hues. The grade stays two-tone. Glows are soft, controlled, and precise, 
+never blown out.
+
+[DESIGN LANGUAGE — FIXED]
+Minimalist industrial design in the spirit of Dieter Rams: precise geometry, 
+clean edges, no clutter. Tech elements appear as thin-line dark-mode interface 
+graphics, subtle holographic data, node networks, or minimal hardware. 
+Restrained neo-noir atmosphere with light volumetric haze for depth.
+
+[PEOPLE — FIXED, WHEN PRESENT]
+Humans appear only as silhouettes or partial figures (hands, shoulders, profiles, 
+backs). Faces always in shadow and never fully lit or identifiable. Figures are 
+rim-lit in green or edge-lit in orange. They belong to the same real scene as 
+the room around them.
+
+[COMPOSITION — FIXED]
+Vertical 9:16 frame. One continuous scene, one place, one camera. Do not 
+divide the picture into a top scene, a dark middle band, and a bottom scene. 
+Subject, light, and space run through the frame as one picture.
+
+The vertical middle, where white text will sit, stays in low exposure. That 
+darkness is shadow inside this same scene: dark forms, deep shade, no light 
+source, no bright highlight, no orange, no high-contrast detail. It is not 
+an empty stripe and not a separate panel. The subject and the room may 
+continue through the middle when that part is in shadow.
+
+Place the single orange focal point and the brightest part of the subject 
+off that middle, so the text has a dark ground. Do not park one object above 
+a black gap and another object below it. The top and bottom edges stay dark 
+and quiet. The image overall stays predominantly dark so the text reads.
+
+[SCENE — VARIABLE]
+{insert scene description here}
+
+[AVOID]
+Rainbow or multicolor neon, cyberpunk city clutter, blue or purple tones, glossy 
+reflective black, overexposure, blown highlights, grain, noise, lens flares, 
+busy backgrounds, stock-photo look, cartoon or illustration style, visible text 
+or logos generated in the image, a frame split into separate top and bottom 
+scenes, an empty black band across the middle, two unrelated subjects stacked 
+above and below the text, light source in the center of the frame, bright or 
+orange elements in the middle of the frame, high-contrast detail behind the 
+center, a bright glow crossing the middle of the frame, bright top or bottom 
+edges

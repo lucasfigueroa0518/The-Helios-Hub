@@ -10,6 +10,7 @@ out/
 .env.local
 .env.*.local
 scripts/gcp/worker.env
+scripts/gcp/higgsfield-session.json
 scripts/gcp/.deploy-env
 SUPABASE.txt
 
@@ -29,8 +30,8 @@ __MACOSX/
 .vscode/
 .idea/
 
-# misc
-*.tsbuildinfo
+# Local Python env for the reel text engine (Pillow + NumPy). Rebuilt on the VM.
+helios_text_engine/.venv/
 .orchestration-worker.lock
 tmp/
 

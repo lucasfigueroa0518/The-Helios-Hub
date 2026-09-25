@@ -47,7 +47,7 @@ function sleep(ms: number): Promise<void> {
 
 function getPool(): Pool {
   if (!globalPool.__outreachHubPool) {
-    globalPool.__outreachHubPool = new Pool({
+    const pool = new Pool({
       connectionString: connectionString(),
       ssl: process.platform === 'win32' ? false : { rejectUnauthorized: false },
       max: poolMax(),
@@ -55,6 +55,17 @@ function getPool(): Pool {
       connectionTimeoutMillis: 15_000,
       allowExitOnIdle: true,
     });
+    // Idle clients can drop on network blips; without this handler Node treats it as fatal.
+    pool.on('error', (error) => {
+      console.error(JSON.stringify({
+        ts: new Date().toISOString(),
+        level: 'error',
+        component: 'db-pool',
+        message: 'idle_client_error',
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    });
+    globalPool.__outreachHubPool = pool;
   }
   return globalPool.__outreachHubPool;
 }

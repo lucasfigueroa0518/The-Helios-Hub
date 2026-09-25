@@ -9,6 +9,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   CalendarDays,
   ChevronDown,
+  Clapperboard,
   Globe,
   Home,
   Kanban,
@@ -29,6 +30,7 @@ const STORAGE_KEY = 'helios-hub-sidebar-collapsed';
 const ICONS: Record<HubNavItem['id'], typeof Home> = {
   home: Home,
   outreach: Mail,
+  reels: Clapperboard,
   events: CalendarDays,
   dashboards: LayoutDashboard,
   trello: Kanban,
@@ -152,7 +154,12 @@ export function HubSidebar({ email }: { email: string }) {
                   <span className="hub-nav-item__icon">
                     <Icon size={16} aria-hidden="true" />
                   </span>
-                  {!collapsed && <span className="hub-nav-item__label">{item.label}</span>}
+                  {!collapsed && (
+                    <span className="hub-nav-item__label">
+                      {item.label}
+                      {item.badge ? <span className="hub-nav-item__badge">{item.badge}</span> : null}
+                    </span>
+                  )}
                   {item.children && !collapsed && (
                     <ChevronDown size={12} className="hub-nav-item__caret" aria-hidden="true" />
                   )}
@@ -282,7 +289,10 @@ export function HubSidebar({ email }: { email: string }) {
                         <span className="hub-nav-item__icon">
                           <Icon size={18} aria-hidden="true" />
                         </span>
-                        <span className="hub-nav-item__label">{item.label}</span>
+                        <span className="hub-nav-item__label">
+                          {item.label}
+                          {item.badge ? <span className="hub-nav-item__badge">{item.badge}</span> : null}
+                        </span>
                         {item.children && (
                           <ChevronDown size={14} className="hub-nav-item__caret" aria-hidden="true" />
                         )}

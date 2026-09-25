@@ -1,0 +1,52 @@
+[STYLE — FIXED, DO NOT ALTER]
+High-end 3D render, Octane/Redshift quality, physically based materials. Low-key 
+dark-studio lighting with deep crushed blacks. Matte black environment with 
+light-absorbing, soft-touch and powder-coated surfaces. Roughly 85% of the frame 
+in shadow. Single motivated key light plus subtle rim light. Clean, noise-free 
+render, virtual 85mm lens, shallow depth of field, crisp micro-detail on the subject.
+
+[COLOR SYSTEM — FIXED]
+Monochrome matte-black and charcoal base with exactly two isolated accent colors:
+- PRIMARY accent: vivid molten orange (#FF5E1A). Used for the key light, the single 
+  hero glow, and the main focal point. One orange focal point per frame.
+- SECONDARY accent: deep saturated emissive emerald-green (#138510). Used only for rim 
+  light, faint background glow, and small UI details. Always subordinate to orange.
+No other hues. Two-tone split grade. Glows are soft, controlled, and precise, 
+never blown out.
+
+[DESIGN LANGUAGE — FIXED]
+Minimalist industrial design in the spirit of Dieter Rams: precise geometry, 
+clean edges, no clutter. Tech elements appear as thin-line dark-mode interface 
+graphics, subtle holographic data, node networks, or minimal hardware. 
+Restrained neo-noir atmosphere with light volumetric haze for depth.
+
+[PEOPLE — FIXED, WHEN PRESENT]
+Humans appear only as silhouettes or partial figures (hands, shoulders, profiles, 
+backs). Faces always in shadow and never fully lit or identifiable. Figures are 
+rim-lit in green or edge-lit in orange. Rendered with the same stylized 3D realism 
+as the environment, not photographic skin.
+
+[COMPOSITION — FIXED]
+Vertical 9:16 frame. The central horizontal band of the frame, from roughly 
+30% to 62% of the frame height and spanning the full width, is a dark quiet 
+zone reserved for text overlay. This band must be predominantly deep black: 
+no light sources, no bright highlights, no orange elements, no high-contrast 
+detail, no busy texture. Only dark forms, deep shadow, and at most a faint, 
+dim green haze may pass through it. Place the subject and the single orange 
+focal point in the upper portion of the frame (roughly 12%–30% of height) 
+or the lower-middle portion (roughly 62%–78% of height), or frame the 
+center from the edges. Never center the subject. The top and bottom edges 
+of the frame stay dark and low detail. Overall image remains predominantly 
+dark so white text reads cleanly anywhere in the center.
+
+[SCENE — VARIABLE]
+{insert scene description here}
+
+[AVOID]
+Rainbow or multicolor neon, cyberpunk city clutter, blue or purple tones, glossy 
+reflective black, overexposure, blown highlights, grain, noise, lens flares, 
+busy backgrounds, stock-photo look, cartoon or illustration style, visible text 
+or logos generated in the image, centered subject, light source in the center 
+of the frame, bright or orange elements in the middle of the frame, high-contrast 
+detail behind the center, glow crossing the center of the frame, bright top or 
+bottom edges

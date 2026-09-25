@@ -22,7 +22,9 @@ function loadEnvLocal() {
   }
 }
 
-function spawnLogged(label, command, args, extraEnv = {}) {
+const WORKER_RESTART_DELAY_MS = 3_000;
+
+function spawnLogged(label, command, args, extraEnv = {}, onExit) {
   const child = spawn(command, args, {
     cwd: root,
     env: { ...process.env, ...extraEnv },
@@ -34,9 +36,27 @@ function spawnLogged(label, command, args, extraEnv = {}) {
     if (shutdownPromise) return;
     const detail = signal ? `signal ${signal}` : `code ${code ?? 0}`;
     console.error(`[dev] ${label} exited (${detail})`);
+    if (onExit) {
+      onExit(child, code, signal);
+      return;
+    }
     void shutdown(typeof code === 'number' ? code : 1);
   });
   return child;
+}
+
+function spawnWorkerChild() {
+  return spawnLogged('worker', npmCmd, ['run', 'worker:dev'], {
+    ORCHESTRATION_WORKER_REPLACE: '1',
+    ORCHESTRATION_WORKER_OWNER_PID: String(process.pid),
+  }, (_child, code, signal) => {
+    if (shutdownPromise) return;
+    console.warn(`[dev] orchestration worker stopped (${signal ? `signal ${signal}` : `code ${code ?? 0}`}); restarting in ${WORKER_RESTART_DELAY_MS / 1000}s…`);
+    setTimeout(() => {
+      if (shutdownPromise) return;
+      children[0] = spawnWorkerChild();
+    }, WORKER_RESTART_DELAY_MS);
+  });
 }
 
 loadEnvLocal();
@@ -146,8 +166,5 @@ process.on('SIGINT', () => void shutdown(0));
 process.on('SIGTERM', () => void shutdown(0));
 
 console.log('[dev] Starting orchestration worker + Next.js (Ctrl+C stops both)…');
-children.push(spawnLogged('worker', npmCmd, ['run', 'worker:dev'], {
-  ORCHESTRATION_WORKER_REPLACE: '1',
-  ORCHESTRATION_WORKER_OWNER_PID: String(process.pid),
-}));
+children.push(spawnWorkerChild());
 children.push(spawnLogged('web', npmCmd, ['run', 'dev:web']));

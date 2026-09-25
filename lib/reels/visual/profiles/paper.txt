@@ -1,0 +1,52 @@
+[STYLE — FIXED, DO NOT ALTER]
+One photoreal scene, as if photographed in a real place with a real camera.
+Physically based materials. High-key lighting. Matte white and warm off-white
+surfaces, soft and powdery, with no shine. Roughly 85% of the frame is white
+or near-white. One soft, even wash of light. No hard shadow. Clean, noise-free,
+85mm lens, shallow depth of field, crisp micro-detail on the subject. The
+whole frame is that one place.
+
+[COLOR SYSTEM — FIXED]
+White dominates. The field is white, ivory, and pale warm gray. Exactly one
+accent, and it is small: charcoal (#1A1A1A), used for one object or one edge
+that is not in the vertical middle. No orange. No green. No second hue. The
+grade stays white. Nothing is blown into a featureless hole, and nothing is
+pushed back toward a dark room.
+
+[DESIGN LANGUAGE — FIXED]
+Minimalist industrial design in the spirit of Dieter Rams: precise geometry,
+clean edges, no clutter. Tech elements appear as thin charcoal lines on the
+white field, a faint diagram, or one piece of matte hardware. The air is clear.
+No haze, no glow.
+
+[PEOPLE — FIXED, WHEN PRESENT]
+Humans appear only as pale silhouettes or partial figures (hands, shoulders,
+profiles, backs). Faces stay unidentifiable. Figures are the same white world
+as the room, edged in soft gray. They are not dark cutouts.
+
+[COMPOSITION — FIXED]
+Vertical 9:16 frame. One continuous scene, one place, one camera. Do not
+divide the picture into a top scene, a white middle band, and a bottom scene.
+Subject, light, and space run through the frame as one picture.
+
+The vertical middle, where black text will sit, stays bright and quiet. That
+brightness is the same white field: pale forms, no charcoal, no hard edge, no
+shadow, no high-contrast detail. It is not an empty stripe and not a separate
+panel. The subject and the room may continue through the middle when that
+part stays pale.
+
+Place the single charcoal accent and the darkest part of the subject off that
+middle, so the text has a white ground. The top and bottom edges stay white
+and quiet. The image overall stays predominantly white so the black text reads.
+
+[SCENE — VARIABLE]
+{insert scene description here}
+
+[AVOID]
+Orange, green, blue, or any hue besides white and charcoal, a dark room, crushed
+blacks, heavy shadow, neon, glossy surfaces, grain, noise, lens flares, busy
+backgrounds, stock-photo look, cartoon or illustration style, visible text or
+logos generated in the image, a frame split into separate top and bottom scenes,
+an empty band across the middle, two unrelated subjects stacked above and below
+the text, a dark object in the center of the frame, charcoal in the middle of
+the frame, a shadow crossing the middle, dark top or bottom edges
