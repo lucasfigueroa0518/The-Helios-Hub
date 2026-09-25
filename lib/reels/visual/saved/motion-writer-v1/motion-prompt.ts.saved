@@ -1,0 +1,117 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { KLING_CLIP_SECONDS } from '@/lib/reels/config';
+import type { Hook } from '@/lib/reels/visual/hook';
+
+const PROMPT_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'motion-writer-prompt.txt');
+
+/** Identical on every motion-writer call. This is the cached system prefix. */
+export function motionWriterInstructions(): string {
+  return readFileSync(PROMPT_PATH, 'utf8').trim();
+}
+
+export type MotionSpan = {
+  start: number;
+  end: number;
+  action: string;
+};
+
+export type MotionPrompt = {
+  /** The block Kling receives. The hook and ON_SCREEN_COPY are not in here. */
+  text: string;
+  camera: 'in' | 'out';
+  spans: MotionSpan[];
+};
+
+const SPAN = /^(\d+(?:\.\d+)?)\s*[-\u2013]\s*(\d+(?:\.\d+)?)s:\s*(\S.*)$/i;
+const CAMERA = /^Camera:\s*(slow dolly in|slow dolly out)\b/i;
+const HOOK = /^Hook:/i;
+
+/** What `video_jobs.motion_prompt` stores: the hook Jev picked, then the block Kling received. */
+export function motionRecord(hook: Hook, prompt: MotionPrompt): string {
+  return `Hook: ${hook}\n${prompt.text}`;
+}
+
+function seconds(value: string): number {
+  return Number(value);
+}
+
+function formatSeconds(value: number): string {
+  return value.toFixed(1);
+}
+
+/**
+ * The writer may shift boundaries after 0.5s. It may not gap, overlap, or
+ * drop the hook window. The spans must meet and cover 0.0 through the clip length.
+ */
+export function parseMotionPrompt(raw: string): MotionPrompt {
+  let text = raw.trim();
+  const fenced = text.match(/^```[a-z]*\n([\s\S]*?)\n```$/i);
+  if (fenced?.[1]) text = fenced[1].trim();
+
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const spans: MotionSpan[] = [];
+  let camera: 'in' | 'out' | null = null;
+
+  for (const line of lines) {
+    if (HOOK.test(line)) continue;
+    const cameraMatch = line.match(CAMERA);
+    if (cameraMatch) {
+      if (camera) throw new Error('Motion prompt has more than one camera line.');
+      camera = /out/i.test(cameraMatch[1] ?? '') ? 'out' : 'in';
+      continue;
+    }
+    const span = line.match(SPAN);
+    if (!span?.[1] || !span[2] || !span[3]) {
+      throw new Error(`Motion prompt has a line that is not a timestamp or the camera: ${line}`);
+    }
+    spans.push({ start: seconds(span[1]), end: seconds(span[2]), action: span[3].trim() });
+  }
+
+  if (!camera) throw new Error('Motion prompt is missing the camera line.');
+  if (spans.length === 0) throw new Error('Motion prompt has no timed spans.');
+
+  const first = spans[0];
+  if (!first || first.start !== 0 || first.end !== 0.5) {
+    throw new Error('The first span must be exactly 0.0-0.5s.');
+  }
+
+  for (let index = 0; index < spans.length; index += 1) {
+    const span = spans[index];
+    if (!span || !(span.end > span.start)) throw new Error('A span ends before it starts.');
+    if (index > 0) {
+      const previous = spans[index - 1];
+      if (!previous || Math.abs(span.start - previous.end) > 0.001) {
+        throw new Error('Timed spans must meet with no gap and no overlap.');
+      }
+    }
+  }
+
+  const last = spans[spans.length - 1];
+  if (!last || Math.abs(last.end - KLING_CLIP_SECONDS) > 0.001) {
+    throw new Error(`Timed spans must cover through ${KLING_CLIP_SECONDS.toFixed(1)}s.`);
+  }
+
+  const canonical = [
+    ...spans.map((span) => `${formatSeconds(span.start)}-${formatSeconds(span.end)}s: ${span.action}`),
+    `Camera: slow dolly ${camera}, one move, the full ${KLING_CLIP_SECONDS} seconds.`,
+  ].join('\n');
+
+  return { text: canonical, camera, spans };
+}
+
+/** User turn after the background PNG. ON_SCREEN_COPY stays with the writer. */
+export function buildMotionUser(input: { scene: string; story: string; onScreenCopy: string }): string {
+  return [
+    'SCENE',
+    input.scene.trim(),
+    '',
+    'STORY',
+    input.story.trim(),
+    '',
+    'ON_SCREEN_COPY',
+    input.onScreenCopy.trim(),
+  ].join('\n');
+}

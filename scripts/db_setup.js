@@ -45,6 +45,7 @@ const files = [
   'db/dashboards_schema.sql',
   'db/networking_schema.sql',
   'db/trello_schema.sql',
+  'db/reels_schema.sql',
 ];
 for (const file of files) {
   console.log(`\n── ${file} ──`);

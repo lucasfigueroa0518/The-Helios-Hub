@@ -5,9 +5,10 @@ export type HubSubItem = {
 };
 
 export type HubNavItem = {
-  id: 'home' | 'outreach' | 'events' | 'dashboards' | 'trello';
+  id: 'home' | 'outreach' | 'reels' | 'events' | 'dashboards' | 'trello';
   href: string;
   label: string;
+  badge?: string;
   match: (path: string) => boolean;
   children?: HubSubItem[];
 };
@@ -24,6 +25,13 @@ export const HUB_NAV: HubNavItem[] = [
     href: '/hub',
     label: 'Outreach Hub',
     match: (path) => path.startsWith('/hub') || path.startsWith('/campaigns'),
+  },
+  {
+    id: 'reels',
+    href: '/reels',
+    label: 'Trial Reels',
+    badge: 'Beta',
+    match: (path) => path.startsWith('/reels'),
   },
   {
     id: 'dashboards',

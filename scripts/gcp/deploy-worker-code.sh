@@ -79,6 +79,7 @@ tar -czf "${ARCHIVE}" \
   --exclude='./.env.local' \
   --exclude='./scripts/gcp/worker.env' \
   --exclude='./.cursor' \
+  --exclude='./helios_text_engine/.venv' \
   .
 
 gcloud compute scp --zone="${ZONE}" --project="${PROJECT}" \
@@ -90,6 +91,8 @@ gcloud compute scp --zone="${ZONE}" --project="${PROJECT}" \
 if [[ -f "${ENV_FILE}" ]]; then
   gcloud compute scp --zone="${ZONE}" --project="${PROJECT}" \
     "${ENV_FILE}" "${INSTANCE}:/tmp/worker.env"
+  gcloud compute scp --zone="${ZONE}" --project="${PROJECT}" \
+    scripts/gcp/merge-higgsfield-env.py "${INSTANCE}:/tmp/merge-higgsfield-env.py"
 fi
 
 gcloud compute ssh "${INSTANCE}" --zone="${ZONE}" --project="${PROJECT}" --command="
@@ -97,6 +100,9 @@ gcloud compute ssh "${INSTANCE}" --zone="${ZONE}" --project="${PROJECT}" --comma
   sudo rm -rf /opt/helios-worker/app
   sudo mkdir -p /opt/helios-worker/app
   sudo tar -xzf /tmp/helios-app.tgz -C /opt/helios-worker/app
+  if [[ -f /tmp/merge-higgsfield-env.py && -f /tmp/worker.env && -f /opt/helios-worker/worker.env ]]; then
+    sudo python3 /tmp/merge-higgsfield-env.py /opt/helios-worker/worker.env /tmp/worker.env
+  fi
   if [[ -f /tmp/worker.env ]]; then
     sudo mv /tmp/worker.env /opt/helios-worker/worker.env
     sudo chmod 600 /opt/helios-worker/worker.env
@@ -104,9 +110,25 @@ gcloud compute ssh "${INSTANCE}" --zone="${ZONE}" --project="${PROJECT}" --comma
   sudo cp /tmp/helios-worker.service /etc/systemd/system/helios-worker.service
   sudo systemctl daemon-reload
   cd /opt/helios-worker/app
+  # --help succeeds even when ensurepip is missing, so try the real create.
+  if ! sudo python3 -m venv helios_text_engine/.venv; then
+    sudo apt-get update -qq
+    sudo apt-get install -y python3-venv
+    sudo rm -rf helios_text_engine/.venv
+    sudo python3 -m venv helios_text_engine/.venv
+  fi
+  sudo helios_text_engine/.venv/bin/pip install -q pillow numpy
+  if ! command -v ffmpeg >/dev/null 2>&1; then
+    sudo apt-get update -qq
+    sudo apt-get install -y ffmpeg
+  fi
   sudo npm ci
   sudo systemctl restart helios-worker
   sudo systemctl --no-pager --full status helios-worker || true
+  if [[ -f /etc/systemd/system/helios-reels.service ]]; then
+    sudo systemctl restart helios-reels
+    sudo systemctl --no-pager --full status helios-reels || true
+  fi
 "
 
 echo "Deployed to ${INSTANCE}."

@@ -1,0 +1,111 @@
+import type Anthropic from '@anthropic-ai/sdk';
+
+import { cachedSystemText, withToolCache } from '@/lib/anthropic-cache';
+import { MOTION_MAX_TOKENS, MOTION_MODEL } from '@/lib/reels/config';
+import {
+  buildMotionUser,
+  motionWriterInstructions,
+  parseMotionPrompt,
+  type MotionPrompt,
+} from '@/lib/reels/visual/motion-prompt';
+
+export type MotionClient = {
+  messages: {
+    create(
+      params: Anthropic.MessageCreateParamsNonStreaming,
+      options?: { signal?: AbortSignal },
+    ): Promise<Anthropic.Message>;
+  };
+};
+
+export type MotionWriteResult = {
+  prompt: MotionPrompt | null;
+  message: Anthropic.Message | null;
+  error: string | null;
+};
+
+/** The only tool Claude is offered. The worker calls Higgsfield with the pinned args. */
+export const SUBMIT_MOTION_TOOL = 'submit_motion_prompt';
+
+const submitMotionTool: Anthropic.Tool = {
+  name: SUBMIT_MOTION_TOOL,
+  description:
+    'Submit the one Kling 3.0 image-to-video prompt for this still. Call once. The prompt is motion only, timestamped from 0.0 through 8.0.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      prompt: {
+        type: 'string',
+        description: 'The timestamped motion block, and nothing else.',
+      },
+    },
+    required: ['prompt'],
+  },
+};
+
+function promptFromMessage(message: Anthropic.Message): string {
+  for (const block of message.content) {
+    if (block.type === 'tool_use' && block.name === SUBMIT_MOTION_TOOL) {
+      const input = block.input as { prompt?: unknown };
+      if (typeof input.prompt === 'string' && input.prompt.trim()) return input.prompt;
+    }
+  }
+  return message.content
+    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n')
+    .trim();
+}
+
+export async function writeMotion(
+  client: MotionClient,
+  input: { png: Buffer; scene: string; story: string; onScreenCopy: string },
+  signal?: AbortSignal,
+): Promise<MotionWriteResult> {
+  let message: Anthropic.Message;
+  try {
+    message = await client.messages.create(
+      {
+        model: MOTION_MODEL,
+        max_tokens: MOTION_MAX_TOKENS,
+        system: cachedSystemText(motionWriterInstructions(), '5m'),
+        tools: [withToolCache(submitMotionTool, '5m')],
+        tool_choice: { type: 'tool', name: SUBMIT_MOTION_TOOL },
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: 'image/png',
+                  data: input.png.toString('base64'),
+                },
+              },
+              { type: 'text', text: buildMotionUser(input) },
+            ],
+          },
+        ],
+      },
+      { signal },
+    );
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    return { prompt: null, message: null, error: `Motion request failed: ${detail}` };
+  }
+
+  const raw = promptFromMessage(message);
+  if (!raw) {
+    return { prompt: null, message, error: 'Motion writer returned no prompt.' };
+  }
+  try {
+    return { prompt: parseMotionPrompt(raw), message, error: null };
+  } catch (error) {
+    return {
+      prompt: null,
+      message,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}

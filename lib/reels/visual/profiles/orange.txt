@@ -1,0 +1,53 @@
+[STYLE — FIXED, DO NOT ALTER]
+One scene, photographed and then graded. The grade is the look, and it does
+not have to be a natural light. Roughly 80% of the frame is flat vivid orange.
+Surfaces, walls, air, and floor all take that orange. Clean, noise-free, 85mm
+lens, shallow depth of field, crisp micro-detail on the subject. The whole
+frame is that one place.
+
+[COLOR SYSTEM — FIXED]
+Orange is the picture, not an accent. About 80% of every frame is vivid molten
+orange (#FF5E1A), laid on as a grade. The orange is even and saturated. It is
+not a small glow, not a lamp, and not a sunset on an otherwise dark room.
+The remaining fraction is near-black (#141414), used for one subject so the
+shape reads against the orange. No green. No white field. No blue. No second
+hue. Do not correct the orange back toward a natural color.
+
+[DESIGN LANGUAGE — FIXED]
+Minimalist industrial design in the spirit of Dieter Rams: precise geometry,
+clean edges, no clutter. Tech elements appear as dark shapes inside the orange
+field, a thin dark line, or one piece of hardware. No glow, no haze, no neon
+edge. The orange is flat enough that white text with a black stroke can sit
+on it.
+
+[PEOPLE — FIXED, WHEN PRESENT]
+Humans appear only as near-black silhouettes or partial figures (hands,
+shoulders, profiles, backs). Faces stay unidentifiable. Figures are dark
+shapes in the orange field. They are not orange themselves, and they are not
+lit by a separate color.
+
+[COMPOSITION — FIXED]
+Vertical 9:16 frame. One continuous scene, one place, one camera. Do not
+divide the picture into a top scene, an orange middle band, and a bottom scene.
+Subject and space run through the frame as one picture, all inside the orange.
+
+The vertical middle, where white text will sit, stays even orange. No black
+shape, no white hotspot, no hard edge, no high-contrast detail. It is not an
+empty stripe and not a separate panel. The subject may continue through the
+middle only as orange.
+
+Place the single dark subject off that middle, so the text has a flat orange
+ground. The top and bottom edges stay orange. The frame stays mostly orange
+so the white text reads.
+
+[SCENE — VARIABLE]
+{insert scene description here}
+
+[AVOID]
+A dark room with a small orange light, a natural sunset, a white or gray field,
+green, blue, purple, neon, a glow, haze, grain, noise, lens flares, busy
+backgrounds, stock-photo look, cartoon or illustration style, visible text or
+logos generated in the image, a frame split into separate top and bottom scenes,
+an empty band across the middle, two unrelated subjects stacked above and below
+the text, a dark or white object in the center, a black band behind the text,
+the orange reduced to one object, color correction that removes the orange
