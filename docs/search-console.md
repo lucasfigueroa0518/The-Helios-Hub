@@ -16,9 +16,12 @@ GSC_IMPERSONATE_SERVICE_ACCOUNT=helios-gsc-sync@helios-influencer-network.iam.gs
 Auth resolution in `lib/seo/gsc-client.ts`:
 
 1. `GSC_SERVICE_ACCOUNT_JSON` — raw service-account JSON (Vercel / local writes)
-2. `GOOGLE_APPLICATION_CREDENTIALS` — path to a JSON key file
-3. Application Default Credentials on the GCP VM, impersonating
-   `GSC_IMPERSONATE_SERVICE_ACCOUNT` when that email is set
+2. The GCE metadata server at 169.254.169.254. Asked by IP because the client
+   library's detector can decide the VM is not on GCE.
+3. `GOOGLE_APPLICATION_CREDENTIALS` or Application Default Credentials.
+
+When `GSC_IMPERSONATE_SERVICE_ACCOUNT` is set, the token from step 2 or 3
+impersonates that email.
 
 Scope: `https://www.googleapis.com/auth/webmasters` (read + sitemap write).
 

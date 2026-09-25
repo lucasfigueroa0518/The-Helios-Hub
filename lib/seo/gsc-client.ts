@@ -17,8 +17,8 @@ export type SearchAnalyticsQuery = {
   dataState?: 'final' | 'all';
 };
 
-function parseServiceAccountJson(): Record<string, unknown> | null {
-  const raw = process.env.GSC_SERVICE_ACCOUNT_JSON?.trim();
+function parseServiceAccountJsonFrom(env: NodeJS.ProcessEnv = process.env): Record<string, unknown> | null {
+  const raw = env.GSC_SERVICE_ACCOUNT_JSON?.trim();
   if (!raw) return null;
   try {
     return JSON.parse(raw) as Record<string, unknown>;
@@ -27,10 +27,80 @@ function parseServiceAccountJson(): Record<string, unknown> | null {
   }
 }
 
-async function getAccessToken(): Promise<string> {
-  const impersonate = process.env.GSC_IMPERSONATE_SERVICE_ACCOUNT?.trim() || '';
-  const json = parseServiceAccountJson();
-  const keyFile = process.env.GOOGLE_APPLICATION_CREDENTIALS?.trim();
+const METADATA_TOKEN_URL =
+  'http://169.254.169.254/computeMetadata/v1/instance/service-accounts/default/token';
+
+type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
+
+/**
+ * The auth library races 169.254.169.254 against metadata.google.internal and
+ * treats the first failure as "not on GCE". On the worker that DNS failure
+ * wins, so Application Default Credentials never loads. Ask the link-local
+ * metadata server directly. A miss is remembered for five minutes.
+ */
+let metadataUnavailableUntil = 0;
+
+/** Tests only. The probe result is cached briefly so a laptop does not wait on every call. */
+export function resetSearchConsoleMetadataCache(): void {
+  metadataUnavailableUntil = 0;
+}
+
+async function tokenFromMetadata(scopes: string[], fetchImpl: FetchLike): Promise<string | null> {
+  if (Date.now() < metadataUnavailableUntil) return null;
+  const url = `${METADATA_TOKEN_URL}?scopes=${encodeURIComponent(scopes.join(','))}`;
+  try {
+    const response = await fetchImpl(url, {
+      headers: { 'Metadata-Flavor': 'Google' },
+      signal: AbortSignal.timeout(1500),
+    });
+    if (!response.ok) {
+      metadataUnavailableUntil = Date.now() + 5 * 60 * 1000;
+      return null;
+    }
+    const body = (await response.json()) as { access_token?: string };
+    if (!body.access_token) {
+      metadataUnavailableUntil = Date.now() + 5 * 60 * 1000;
+      return null;
+    }
+    return body.access_token;
+  } catch {
+    metadataUnavailableUntil = Date.now() + 5 * 60 * 1000;
+    return null;
+  }
+}
+
+async function impersonateAccessToken(
+  sourceToken: string,
+  target: string,
+  fetchImpl: FetchLike,
+): Promise<string> {
+  const response = await fetchImpl(
+    `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${encodeURIComponent(target)}:generateAccessToken`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${sourceToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ scope: [WEBMASTERS_SCOPE], lifetime: '3600s' }),
+    },
+  );
+  const raw = await response.text();
+  if (!response.ok) {
+    throw new Error(`Could not impersonate ${target}: ${response.status} ${raw.slice(0, 300)}`);
+  }
+  const parsed = JSON.parse(raw) as { accessToken?: string };
+  if (!parsed.accessToken) throw new Error(`Could not impersonate ${target}`);
+  return parsed.accessToken;
+}
+
+export async function getSearchConsoleAccessToken(
+  env: NodeJS.ProcessEnv = process.env,
+  fetchImpl: FetchLike = fetch,
+): Promise<string> {
+  const impersonate = env.GSC_IMPERSONATE_SERVICE_ACCOUNT?.trim() || '';
+  const json = parseServiceAccountJsonFrom(env);
+  const keyFile = env.GOOGLE_APPLICATION_CREDENTIALS?.trim();
 
   if (json) {
     const email = typeof json.client_email === 'string' ? json.client_email : '';
@@ -57,6 +127,15 @@ async function getAccessToken(): Promise<string> {
     const token = await jwt.getAccessToken();
     if (!token.token) throw new Error('Failed to mint Search Console access token');
     return token.token;
+  }
+
+  const metadataToken = await tokenFromMetadata(
+    impersonate ? ['https://www.googleapis.com/auth/cloud-platform'] : [WEBMASTERS_SCOPE],
+    fetchImpl,
+  );
+  if (metadataToken) {
+    if (!impersonate) return metadataToken;
+    return impersonateAccessToken(metadataToken, impersonate, fetchImpl);
   }
 
   const auth = new GoogleAuth({
@@ -88,7 +167,7 @@ async function gscFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
   const maxAttempts = 5;
   let lastError: Error | null = null;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const token = await getAccessToken();
+    const token = await getSearchConsoleAccessToken();
     const response = await fetch(url, {
       ...init,
       headers: {
