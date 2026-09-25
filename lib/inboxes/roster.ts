@@ -62,6 +62,8 @@ export type RosterInbox = {
     sent: number;
     inbox: number;
     spam: number;
+    replies: number;
+    received: number;
     inbox_rate: number | null;
     spam_rate: number | null;
   };
@@ -119,6 +121,12 @@ export async function buildInboxRoster(today = formatNyDate()): Promise<InboxRos
   const restClock = await getDomainRestClock();
 
   const inboxes = await listInboxes();
+  try {
+    const { syncWarmupHealthIfStale } = await import('@/lib/inboxes/warmup-sync');
+    await syncWarmupHealthIfStale(inboxes);
+  } catch {
+    // Live warmup refresh is best-effort; roster still renders from stored rows.
+  }
   const since = addCalendarDays(today, -30);
   const scopeKeys = [
     ...inboxes.map((row) => row.id),
@@ -191,6 +199,8 @@ export async function buildInboxRoster(today = formatNyDate()): Promise<InboxRos
         sent: warmup.sent,
         inbox: warmup.inbox,
         spam: warmup.spam,
+        replies: warmup.replied,
+        received: 0,
         inbox_rate: warmup.inboxRate,
         spam_rate: warmup.spamRate,
       },

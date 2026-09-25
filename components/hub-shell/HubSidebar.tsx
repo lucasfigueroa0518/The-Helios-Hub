@@ -8,7 +8,9 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   CalendarDays,
+  ChevronDown,
   Clapperboard,
+  Globe,
   Home,
   Kanban,
   LayoutDashboard,
@@ -32,6 +34,7 @@ const ICONS: Record<HubNavItem['id'], typeof Home> = {
   events: CalendarDays,
   dashboards: LayoutDashboard,
   trello: Kanban,
+  website: Globe,
 };
 
 export function HubSidebar({ email }: { email: string }) {
@@ -40,6 +43,7 @@ export function HubSidebar({ email }: { email: string }) {
   const search = searchParams?.toString() ? `?${searchParams.toString()}` : '';
   const [collapsed, setCollapsed] = useState(false);
   const [hoverId, setHoverId] = useState<string | null>(null);
+  const [mobileExpandedId, setMobileExpandedId] = useState<string | null>(null);
 
   const { isOpen, openMobileNav, closeMobileNav } = useMobileNav();
 
@@ -53,6 +57,10 @@ export function HubSidebar({ email }: { email: string }) {
       // ignore
     }
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) setMobileExpandedId(null);
+  }, [isOpen]);
 
   function toggleCollapsed() {
     setCollapsed((prev) => {
@@ -134,7 +142,7 @@ export function HubSidebar({ email }: { email: string }) {
           {HUB_NAV.map((item) => {
             const Icon = ICONS[item.id];
             const active = item.match(pathname);
-            const open = Boolean(item.children?.length) && (hoverId === item.id || (active && !collapsed));
+            const open = Boolean(item.children?.length) && hoverId === item.id;
             return (
               <div
                 key={item.id}
@@ -151,6 +159,9 @@ export function HubSidebar({ email }: { email: string }) {
                       {item.label}
                       {item.badge ? <span className="hub-nav-item__badge">{item.badge}</span> : null}
                     </span>
+                  )}
+                  {item.children && !collapsed && (
+                    <ChevronDown size={12} className="hub-nav-item__caret" aria-hidden="true" />
                   )}
                 </Link>
                 {item.children && !collapsed && (
@@ -256,12 +267,24 @@ export function HubSidebar({ email }: { email: string }) {
                 {HUB_NAV.map((item) => {
                   const Icon = ICONS[item.id];
                   const active = item.match(pathname);
+                  const open = Boolean(item.children?.length) && mobileExpandedId === item.id;
                   return (
-                    <div key={item.id} className={`hub-nav-item${active ? ' is-active' : ''} is-open`}>
+                    <div
+                      key={item.id}
+                      className={`hub-nav-item${active ? ' is-active' : ''}${open ? ' is-open' : ''}${item.children ? ' has-children' : ''}`}
+                    >
                       <Link
                         href={item.href}
                         className="hub-nav-item__row"
-                        onClick={closeMobileNav}
+                        aria-expanded={item.children ? open : undefined}
+                        onClick={(event) => {
+                          if (!item.children) {
+                            closeMobileNav();
+                            return;
+                          }
+                          event.preventDefault();
+                          setMobileExpandedId((current) => (current === item.id ? null : item.id));
+                        }}
                       >
                         <span className="hub-nav-item__icon">
                           <Icon size={18} aria-hidden="true" />
@@ -270,16 +293,12 @@ export function HubSidebar({ email }: { email: string }) {
                           {item.label}
                           {item.badge ? <span className="hub-nav-item__badge">{item.badge}</span> : null}
                         </span>
+                        {item.children && (
+                          <ChevronDown size={14} className="hub-nav-item__caret" aria-hidden="true" />
+                        )}
                       </Link>
                       {item.children && (
-                        <div
-                          className="hub-nav-item__sub"
-                          style={{
-                            gridTemplateRows: '1fr',
-                            opacity: 1,
-                            padding: '0.25rem 0 0.45rem 0.6rem',
-                          }}
-                        >
+                        <div className="hub-nav-item__sub">
                           <div className="hub-nav-item__sub-inner">
                             {item.children.map((child) => (
                               <Link

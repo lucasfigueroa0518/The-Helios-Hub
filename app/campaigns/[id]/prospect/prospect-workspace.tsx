@@ -180,7 +180,7 @@ export function ProspectWorkspace({
               Complete sender setup
             </button>
           ) : null}
-          {live ? (
+          {live || health === 'error' ? (
             <button type="button" className="btn btn--secondary" disabled={saving} onClick={() => void patch({ auto_status: 'paused' })}>
               Pause
             </button>

@@ -248,7 +248,8 @@ export async function getCampaign(ownerId: string, campaignId: string): Promise<
     `${campaignSelect} AND c.id = $2 GROUP BY c.id`,
     [ownerId, campaignId],
   );
-  return rows[0] ? mapCampaignRow(rows[0]) : null;
+  const row = rows.find((candidate) => candidate.id === campaignId);
+  return row ? mapCampaignRow(row) : null;
 }
 
 export type CreateCampaignInput = {
@@ -556,6 +557,21 @@ export async function updateAutoCampaign(
       nextCycle?.toISOString() ?? null,
     ],
   );
+  if (autoStatus === 'paused') {
+    const { pauseDraftingWorkspace } = await import('@/lib/drafting/repository');
+    await pauseDraftingWorkspace(campaignId, ownerId).catch(() => undefined);
+    await dbQuery(
+      `UPDATE outreach.reply_sends
+          SET status = 'cancelled',
+              cancelled_at = COALESCE(cancelled_at, now()),
+              cancel_reason = 'campaign_paused',
+              updated_at = now()
+        WHERE campaign_id = $1
+          AND status IN ('queued', 'scheduled')`,
+      [campaignId],
+    ).catch(() => undefined);
+  }
+
   if (existing.sender_identity_slug && senderIdentity !== existing.sender_identity_slug) {
     await relaneCampaign(campaignId, existing.sender_identity_slug, senderIdentity);
   }

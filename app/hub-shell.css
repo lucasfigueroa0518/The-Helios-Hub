@@ -345,6 +345,18 @@ body:has(.trello-root) .hub-app__main,
   text-transform: uppercase;
 }
 
+.hub-nav-item__caret {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: #71717a;
+  transition: transform 180ms ease, color 180ms ease;
+}
+
+.hub-nav-item.is-open .hub-nav-item__caret {
+  transform: rotate(180deg);
+  color: #e4e4e7;
+}
+
 .hub-nav-item__sub {
   display: grid;
   grid-template-rows: 0fr;
@@ -364,7 +376,8 @@ body:has(.trello-root) .hub-app__main,
   gap: 0.15rem;
 }
 
-.hub-sidebar:not(.is-collapsed) .hub-nav-item.is-open .hub-nav-item__sub {
+.hub-sidebar:not(.is-collapsed) .hub-nav-item.is-open .hub-nav-item__sub,
+.hub-mobile-drawer-panel .hub-nav-item.is-open .hub-nav-item__sub {
   grid-template-rows: 1fr;
   opacity: 1;
   padding: 0.25rem 0 0.45rem 0.6rem;

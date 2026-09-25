@@ -4900,10 +4900,16 @@ button.stat-tile {
 
 /* ---- Networking calendar --------------------------------------------------- */
 .networking-page {
-  --networking-tech: var(--chart-2);
-  --networking-tech-soft: color-mix(in srgb, var(--chart-2) 16%, var(--color-surface));
-  --networking-vertical: var(--color-negative);
-  --networking-vertical-soft: var(--color-negative-soft);
+  --networking-blue-core: #4169E1; /* Royal Blue */
+  --networking-red-core: #FF0000;  /* Pure Red */
+  --networking-green-core: #138510;
+  --networking-orange-core: #ff5e1a;
+  --networking-yellow-core: #ffb347;
+
+  --networking-tech: var(--networking-blue-core);
+  --networking-tech-soft: color-mix(in srgb, var(--networking-blue-core) 10%, #ffffff);
+  --networking-vertical: var(--networking-red-core);
+  --networking-vertical-soft: color-mix(in srgb, var(--networking-red-core) 10%, #ffffff);
 }
 .networking-page__body { display: flex; flex-direction: column; gap: var(--space-4); }
 .networking-desktop-controls { display: flex; flex-direction: column; gap: var(--space-4); }
@@ -4916,11 +4922,12 @@ button.stat-tile {
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  background: var(--color-surface-2);
+  background: var(--color-surface);
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
+  box-shadow: var(--shadow-sm);
 }
 .networking-mobile-bar__copy {
   display: flex;
@@ -4940,6 +4947,108 @@ button.stat-tile {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--space-3);
 }
+
+/* ---- Stat Tiles (Top Controls) ------------------------------------------- */
+
+.networking-stats .stat-tile {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  position: relative;
+  overflow: hidden;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+
+.networking-stats .stat-tile__value {
+  color: #171717; /* All numbers on cards are black */
+}
+
+/* 1. Upcoming Tile (Helios Orange top-left corner glow - punchy & tight) */
+.networking-stat--upcoming {
+  background: radial-gradient(110px circle at 0 0, rgba(255, 94, 26, 0.42) 0%, rgba(255, 94, 26, 0.10) 35%, transparent 70%), #ffffff;
+  border: 1px solid rgba(255, 94, 26, 0.20);
+  box-shadow: var(--shadow-sm);
+}
+.networking-stat--upcoming:hover {
+  border-color: rgba(255, 94, 26, 0.40);
+  box-shadow: 0 6px 20px -4px rgba(255, 94, 26, 0.18);
+  transform: translateY(-1px);
+}
+.networking-stat--upcoming.stat-tile--active {
+  border-color: var(--networking-orange-core);
+  background: radial-gradient(130px circle at 0 0, rgba(255, 94, 26, 0.55) 0%, rgba(255, 94, 26, 0.15) 35%, transparent 70%), #ffffff;
+  box-shadow: 0 0 16px -4px rgba(255, 94, 26, 0.30), var(--shadow-sm);
+}
+
+/* 2. Boston Tile (Helios Green #138510 top-left corner glow - punchy & tight) */
+.networking-stat--boston {
+  background: radial-gradient(110px circle at 0 0, rgba(19, 133, 16, 0.42) 0%, rgba(19, 133, 16, 0.10) 35%, transparent 70%), #ffffff;
+  border: 1px solid rgba(19, 133, 16, 0.20);
+  box-shadow: var(--shadow-sm);
+}
+.networking-stat--boston:hover {
+  border-color: rgba(19, 133, 16, 0.40);
+  box-shadow: 0 6px 20px -4px rgba(19, 133, 16, 0.18);
+  transform: translateY(-1px);
+}
+.networking-stat--boston.stat-tile--active {
+  border-color: var(--networking-green-core);
+  background: radial-gradient(130px circle at 0 0, rgba(19, 133, 16, 0.55) 0%, rgba(19, 133, 16, 0.15) 35%, transparent 70%), #ffffff;
+  box-shadow: 0 0 16px -4px rgba(19, 133, 16, 0.30), var(--shadow-sm);
+}
+
+/* 3. Miami Tile (Helios Orange #ff5e1a to Yellow #ffb347 top-left corner glow - punchy & tight) */
+.networking-stat--miami {
+  background: radial-gradient(120px circle at 0 0, rgba(255, 94, 26, 0.45) 0%, rgba(255, 179, 71, 0.18) 35%, transparent 70%), #ffffff;
+  border: 1px solid rgba(255, 94, 26, 0.20);
+  box-shadow: var(--shadow-sm);
+}
+.networking-stat--miami:hover {
+  border-color: rgba(255, 94, 26, 0.40);
+  box-shadow: 0 6px 20px -4px rgba(255, 94, 26, 0.18);
+  transform: translateY(-1px);
+}
+.networking-stat--miami.stat-tile--active {
+  border-color: var(--networking-orange-core);
+  background: radial-gradient(140px circle at 0 0, rgba(255, 94, 26, 0.58) 0%, rgba(255, 179, 71, 0.22) 35%, transparent 70%), #ffffff;
+  box-shadow: 0 0 16px -4px rgba(255, 94, 26, 0.30), var(--shadow-sm);
+}
+
+/* 4. Tech Rooms Tile (Royal Blue top-left corner glow - punchy & tight) */
+.networking-stat--tech {
+  background: radial-gradient(110px circle at 0 0, rgba(65, 105, 225, 0.42) 0%, rgba(65, 105, 225, 0.10) 35%, transparent 70%), #ffffff;
+  border: 1px solid rgba(65, 105, 225, 0.20);
+  box-shadow: var(--shadow-sm);
+}
+.networking-stat--tech:hover {
+  border-color: rgba(65, 105, 225, 0.40);
+  box-shadow: 0 6px 20px -4px rgba(65, 105, 225, 0.18);
+  transform: translateY(-1px);
+}
+.networking-stat--tech.stat-tile--active {
+  border-color: var(--networking-blue-core);
+  background: radial-gradient(130px circle at 0 0, rgba(65, 105, 225, 0.55) 0%, rgba(65, 105, 225, 0.15) 35%, transparent 70%), #ffffff;
+  box-shadow: 0 0 16px -4px rgba(65, 105, 225, 0.30), var(--shadow-sm);
+}
+
+/* 5. Vertical Rooms Tile (Red #FF0000 top-left corner glow - punchy & tight) */
+.networking-stat--vertical {
+  background: radial-gradient(110px circle at 0 0, rgba(255, 0, 0, 0.42) 0%, rgba(255, 0, 0, 0.10) 35%, transparent 70%), #ffffff;
+  border: 1px solid rgba(255, 0, 0, 0.20);
+  box-shadow: var(--shadow-sm);
+}
+.networking-stat--vertical:hover {
+  border-color: rgba(255, 0, 0, 0.40);
+  box-shadow: 0 6px 20px -4px rgba(255, 0, 0, 0.18);
+  transform: translateY(-1px);
+}
+.networking-stat--vertical.stat-tile--active {
+  border-color: var(--networking-red-core);
+  background: radial-gradient(130px circle at 0 0, rgba(255, 0, 0, 0.55) 0%, rgba(255, 0, 0, 0.15) 35%, transparent 70%), #ffffff;
+  box-shadow: 0 0 16px -4px rgba(255, 0, 0, 0.30), var(--shadow-sm);
+}
+
 .networking-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -5073,20 +5182,26 @@ button.stat-tile {
 }
 .networking-calendar__dots {
   display: none;
-  gap: 3px;
+  gap: 4px;
   justify-content: center;
   min-height: 8px;
 }
+.networking-calendar__dot-cluster {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+}
 .networking-calendar__dot {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   border-radius: var(--radius-pill);
   background: var(--networking-tech);
 }
-.networking-calendar__dot--tech { background: var(--networking-tech); }
-.networking-calendar__dot--vertical { background: var(--networking-vertical); }
-.networking-calendar__dot--both {
-  background: linear-gradient(90deg, var(--networking-tech) 50%, var(--networking-vertical) 50%);
+.networking-calendar__dot--tech {
+  background: var(--networking-blue-core);
+}
+.networking-calendar__dot--vertical {
+  background: var(--networking-red-core);
 }
 .networking-calendar__dot-more {
   width: 3px;
@@ -5095,23 +5210,69 @@ button.stat-tile {
   background: var(--color-text-subtle);
   align-self: center;
 }
+
+.networking-bucket-dots {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  pointer-events: none;
+}
+.networking-bucket-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.networking-bucket-dot--tech {
+  background: var(--networking-blue-core);
+}
+.networking-bucket-dot--vertical {
+  background: var(--networking-red-core);
+}
+
+/* ---- Month Calendar Grid Event Block Cards ------------------------------- */
+
 .networking-calendar__event {
   display: block;
   width: 100%;
-  margin-bottom: 2px;
-  padding: 2px 6px;
-  border: none;
+  margin-bottom: 3px;
+  padding: 4px 6px 4px 16px;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--networking-tech-soft);
+  background: var(--color-surface);
   color: var(--color-text);
   font: inherit;
   font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
   text-align: left;
   cursor: pointer;
+  position: relative;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
 }
+.networking-calendar__event.networking-event--both {
+  padding-left: 22px;
+}
+.networking-calendar__event .networking-bucket-dots {
+  top: 6px;
+  left: 4px;
+  gap: 2px;
+}
+.networking-calendar__event .networking-bucket-dot {
+  width: 6px;
+  height: 6px;
+}
+.networking-calendar__event:hover {
+  border-color: var(--color-border-strong);
+  box-shadow: var(--shadow-sm);
+}
+
 .networking-calendar__more {
   display: block;
   width: 100%;
@@ -5148,56 +5309,35 @@ button.stat-tile {
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
 }
-.networking-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.networking-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+
+/* ---- Listed Event Row Cards (Desktop & Mobile) --------------------------- */
+
 .networking-agenda-row {
   display: grid;
   grid-template-columns: 72px minmax(0, 1fr) auto;
   gap: var(--space-3);
-  align-items: start;
+  align-items: center;
   width: 100%;
-  padding: var(--space-3);
-  border: none;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  background: transparent;
+  background: var(--color-surface);
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
 }
-.networking-agenda-row:hover { background: var(--color-surface-hover); }
-.networking-agenda-row.networking-event--tech:hover {
-  background: color-mix(in srgb, var(--networking-tech) 22%, var(--color-surface));
+.networking-agenda-row:hover {
+  border-color: var(--color-border-strong);
+  box-shadow: 0 6px 20px -4px rgba(0, 0, 0, 0.10);
+  transform: translateY(-1px);
 }
-.networking-agenda-row.networking-event--vertical:hover {
-  background: color-mix(in srgb, var(--networking-vertical) 18%, var(--color-surface));
-}
-.networking-agenda-row.networking-event--both:hover {
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--networking-tech) 22%, var(--color-surface)) 50%,
-    color-mix(in srgb, var(--networking-vertical) 18%, var(--color-surface)) 50%
-  );
-}
-.networking-event--tech {
-  background: var(--networking-tech-soft);
-  box-shadow: inset 3px 0 0 var(--networking-tech);
-}
-.networking-event--vertical {
-  background: var(--networking-vertical-soft);
-  box-shadow: inset 3px 0 0 var(--networking-vertical);
-}
-.networking-event--both {
-  background: linear-gradient(90deg, var(--networking-tech-soft) 50%, var(--networking-vertical-soft) 50%);
-  box-shadow: none;
-}
-.networking-calendar__event.networking-event--tech,
-.networking-calendar__event.networking-event--vertical,
-.networking-calendar__event.networking-event--both {
-  box-shadow: none;
-}
-.networking-calendar__event.networking-event--both {
-  background: linear-gradient(90deg, var(--networking-tech-soft) 50%, var(--networking-vertical-soft) 50%);
-}
+
 .networking-agenda-row__time {
   display: flex;
   flex-direction: column;
@@ -5222,11 +5362,31 @@ button.stat-tile {
 }
 .list-row__title { font-weight: var(--font-weight-semibold); color: var(--color-text); }
 .list-row__meta { font-size: var(--font-size-sm); color: var(--color-text-muted); }
-.chip--tech { background: var(--networking-tech-soft); color: var(--networking-tech); }
-.chip--vertical { background: var(--networking-vertical-soft); color: var(--networking-vertical); }
+
+/* ---- Category Badges / Pills --------------------------------------------- */
+
+.chip--tech {
+  background: #ffffff;
+  border: 1px solid rgba(65, 105, 225, 0.25);
+  color: var(--networking-blue-core);
+  font-weight: var(--font-weight-semibold);
+  box-shadow: 0 0 8px -2px rgba(65, 105, 225, 0.15);
+}
+
+.chip--vertical {
+  background: #ffffff;
+  border: 1px solid rgba(255, 0, 0, 0.25);
+  color: var(--networking-red-core);
+  font-weight: var(--font-weight-semibold);
+  box-shadow: 0 0 8px -2px rgba(255, 0, 0, 0.15);
+}
+
 .chip--both {
-  background: linear-gradient(90deg, var(--networking-tech-soft) 50%, var(--networking-vertical-soft) 50%);
+  background: #ffffff;
+  border: 1px solid var(--color-border);
   color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+  box-shadow: var(--shadow-sm);
 }
 .networking-stat--tech { --tile-fg: var(--networking-tech); --tile-bg: var(--networking-tech-soft); }
 .networking-stat--vertical { --tile-fg: var(--networking-vertical); --tile-bg: var(--networking-vertical-soft); }
@@ -5527,12 +5687,7 @@ button.stat-tile {
   }
   .networking-agenda-row {
     grid-template-columns: 56px minmax(0, 1fr);
-    padding: var(--space-3) var(--space-2);
-  }
-  .networking-agenda-row.networking-event--tech,
-  .networking-agenda-row.networking-event--vertical,
-  .networking-agenda-row.networking-event--both {
-    box-shadow: none;
+    padding: var(--space-3) var(--space-3);
   }
   .networking-agenda-row .chip {
     display: none;
@@ -6014,26 +6169,15 @@ button.stat-tile {
 .inbox-stage-pill--retired,
 .inbox-stage-action--retired { --stage: var(--inbox-retired); --stage-soft: var(--inbox-retired-soft); }
 
-.inbox-health-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border: 1px solid color-mix(in srgb, var(--health) 28%, var(--color-border));
-  border-radius: var(--radius-pill);
-  background: var(--health-soft);
-  color: var(--health);
-  font-size: var(--font-size-xs);
+.inbox-health-num {
+  font-variant-numeric: tabular-nums;
   font-weight: var(--font-weight-semibold);
-  letter-spacing: 0.01em;
-  white-space: nowrap;
+  color: var(--health, var(--color-text));
 }
-.inbox-health-pill--good { --health: var(--color-positive); --health-soft: var(--color-positive-soft); }
-.inbox-health-pill--watch { --health: var(--color-warning); --health-soft: var(--color-warning-soft); }
-.inbox-health-pill--poor { --health: var(--color-negative); --health-soft: var(--color-negative-soft); }
-.inbox-health-pill--unknown {
-  --health: var(--color-text-muted);
-  --health-soft: var(--color-surface-2);
-}
+.inbox-health-num--good { --health: var(--color-positive); }
+.inbox-health-num--watch { --health: var(--color-warning); }
+.inbox-health-num--poor { --health: var(--color-negative); }
+.inbox-health-num--unknown { --health: var(--color-text-muted); }
 
 .inbox-health-facts {
   display: grid;
@@ -6103,43 +6247,176 @@ button.stat-tile {
   font-weight: var(--font-weight-semibold);
   color: var(--color-text);
 }
-.inbox-stat-list {
+.inbox-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+.inbox-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  border: 1px solid transparent;
+}
+.inbox-kpi__value {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+  color: var(--kpi-fg, var(--color-text));
+}
+.inbox-kpi__label {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-label);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+.inbox-kpi--good { --kpi-fg: var(--color-positive); background: var(--color-positive-soft); }
+.inbox-kpi--poor { --kpi-fg: var(--color-negative); background: var(--color-negative-soft); }
+.inbox-kpi--warning { --kpi-fg: var(--color-warning); background: var(--color-warning-soft); }
+.inbox-overview-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-3);
+}
+.inbox-overview-split--charts { align-items: start; }
+.inbox-perf,
+.inbox-outbound {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+}
+.inbox-perf--good { background: var(--color-positive-soft); }
+.inbox-perf--watch { background: var(--color-warning-soft); }
+.inbox-perf--poor { background: var(--color-negative-soft); }
+.inbox-perf__grade {
+  margin: 0;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.1;
+  color: var(--color-text);
+}
+.inbox-perf__copy {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+.inbox-outbound__track {
+  display: flex;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  background: var(--color-border);
+}
+.inbox-outbound__warmup {
+  display: block;
+  height: 100%;
+  background: var(--chart-2);
+}
+.inbox-outbound__legend {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+.inbox-donut {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.inbox-donut__svg {
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+}
+.inbox-donut__track {
+  fill: none;
+  stroke: var(--color-border);
+  stroke-width: 10;
+}
+.inbox-donut__inbox,
+.inbox-donut__spam {
+  fill: none;
+  stroke-width: 10;
+  stroke-linecap: butt;
+  transform-origin: 48px 48px;
+}
+.inbox-donut__inbox { stroke: var(--color-positive); }
+.inbox-donut__spam { stroke: var(--color-negative); }
+.inbox-donut__legend {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  border-top: 1px solid var(--color-border);
+  gap: 4px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text);
 }
-.inbox-stat-list__row {
+.inbox-swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.inbox-swatch--inbox,
+.inbox-swatch--sent { background: var(--chart-2); }
+.inbox-swatch--replied { background: var(--chart-5); }
+.inbox-swatch--spam { background: var(--color-negative); }
+.inbox-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 92px;
+}
+.inbox-bars__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+.inbox-bars__col {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--color-border);
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
 }
-.inbox-stat-list__head {
+.inbox-bars__stack {
+  width: 100%;
+  max-width: 22px;
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-3);
+  flex-direction: column-reverse;
+  border-radius: 3px 3px 0 0;
+  overflow: hidden;
+  min-height: 2px;
 }
-.inbox-stat-list__label {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text);
+.inbox-bars__sent,
+.inbox-bars__replied,
+.inbox-bars__spam {
+  display: block;
+  width: 100%;
+  min-height: 2px;
 }
-.inbox-stat-list__value {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text);
-  white-space: nowrap;
-}
-.inbox-stat-list__explain {
-  margin: 0;
-  font-size: var(--font-size-xs);
-  line-height: 1.4;
-  color: var(--color-text-muted);
+.inbox-bars__sent { background: var(--chart-2); }
+.inbox-bars__replied { background: var(--chart-5); }
+.inbox-bars__spam { background: var(--color-negative); }
+.inbox-bars__label {
+  font-size: 10px;
+  color: var(--color-text-subtle);
 }
 .inbox-drawer__status {
   font-size: var(--font-size-sm);

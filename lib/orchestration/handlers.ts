@@ -830,6 +830,47 @@ async function handleReconcile(
     // Keep reconcile resilient.
   }
 
+  let seoDailyEnqueued = 0;
+  try {
+    const now = new Date();
+    if (now.getUTCHours() >= 9) {
+      const dayKey = now.toISOString().slice(0, 10);
+      await enqueueWorkBatch([
+        child(
+          'seo.gsc_daily_sync',
+          { reason: 'scheduled' },
+          dayKey,
+          'seo',
+          { maxAttempts: 2, priority: -5 },
+        ),
+      ]);
+      seoDailyEnqueued = 1;
+    }
+  } catch {
+    // Keep reconcile resilient.
+  }
+
+  // Warmup counters need the API key, not the Smartlead send flag. They used
+  // to be queued only from smartlead.reconcile, which no-ops while sending is
+  // held off — so inbox_health_daily stayed empty.
+  let inboxHealthSnapshotEnqueued = 0;
+  try {
+    const { formatNyDate } = await import('@/lib/drafting/send-queue-schedule');
+    const dayKey = formatNyDate();
+    await enqueueWorkBatch([
+      child(
+        'inbox.health_snapshot',
+        { dayKey },
+        dayKey,
+        'inboxes',
+        { maxAttempts: 2, priority: -3 },
+      ),
+    ]);
+    inboxHealthSnapshotEnqueued = 1;
+  } catch {
+    // Keep reconcile resilient.
+  }
+
   return {
     children,
     result: {
@@ -851,6 +892,8 @@ async function handleReconcile(
       autoCyclesEnqueued,
       autoDraftsQueued,
       networkingWeeklyEnqueued,
+      seoDailyEnqueued,
+      inboxHealthSnapshotEnqueued,
       staleWorkersRemoved,
     },
   };
@@ -915,6 +958,19 @@ async function handleNetworkingWeeklyIngest(
   };
 }
 
+async function handleSeoGscDailySync(
+  job: OrchestrationJob<'seo.gsc_daily_sync'>,
+): Promise<WorkHandlerResult> {
+  const { runGscDailySync } = await import('@/lib/seo/sync');
+  const result = await runGscDailySync();
+  return {
+    result: {
+      reason: job.payload.reason ?? null,
+      ...result,
+    },
+  };
+}
+
 type Handler = (job: OrchestrationJob) => Promise<WorkHandlerResult>;
 
 const HANDLERS: Record<WorkKind, Handler> = {
@@ -942,6 +998,7 @@ const HANDLERS: Record<WorkKind, Handler> = {
   'anthropic.cost_sync': handleAnthropicCostSync as Handler,
   'auto.cycle': handleAutoCycle as Handler,
   'networking.weekly_ingest': handleNetworkingWeeklyIngest as Handler,
+  'seo.gsc_daily_sync': handleSeoGscDailySync as Handler,
   'system.reconcile': handleReconcile as Handler,
   'smartlead.lane_ensure': handleSmartleadLaneEnsure as Handler,
   'smartlead.handoff': handleSmartleadHandoff as Handler,

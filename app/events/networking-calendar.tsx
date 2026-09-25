@@ -28,6 +28,7 @@ import {
   X,
 } from 'lucide-react';
 
+import { HeliosMenu } from '@/app/components/helios-menu';
 import { HubLoadingSpinner } from '@/app/hub/hub-loading';
 import { requestJson } from '@/lib/client-request';
 import { INDUSTRIES } from '@/lib/networking/taxonomy';
@@ -130,6 +131,19 @@ function metroLabel(metro: MetroFilter): string {
   return 'Both cities';
 }
 
+function BucketDots({ bucket }: { bucket: Bucket }) {
+  return (
+    <span className="networking-bucket-dots" aria-hidden="true">
+      {bucket === 'tech' || bucket === 'both' ? (
+        <span className="networking-bucket-dot networking-bucket-dot--tech" />
+      ) : null}
+      {bucket === 'vertical' || bucket === 'both' ? (
+        <span className="networking-bucket-dot networking-bucket-dot--vertical" />
+      ) : null}
+    </span>
+  );
+}
+
 export function NetworkingCalendar() {
   const [metro, setMetro] = useState<MetroFilter>('all');
   const [bucket, setBucket] = useState<'' | Bucket>('');
@@ -221,6 +235,24 @@ export function NetworkingCalendar() {
     const end = endOfWeek(endOfMonth(month), { weekStartsOn: 0 });
     return eachDayOfInterval({ start, end });
   }, [month]);
+
+  const accessOptions = useMemo(
+    () => [
+      { value: '', label: 'All access' },
+      { value: 'open', label: 'Open' },
+      { value: 'paid', label: 'Paid' },
+      { value: 'invite_only', label: 'Invite-only' },
+    ],
+    []
+  );
+
+  const industryOptions = useMemo(
+    () => [
+      { value: '', label: 'All industries' },
+      ...INDUSTRIES.map((item) => ({ value: item.slug, label: item.label })),
+    ],
+    []
+  );
 
   const listEvents = data?.events ?? [];
   const pageCount = Math.max(1, Math.ceil(listEvents.length / PAGE_SIZE));
@@ -315,15 +347,15 @@ export function NetworkingCalendar() {
         <div className="card__body networking-page__body">
           <div className="networking-desktop-controls">
             <div className="networking-stats">
-              <button type="button" className={`stat-tile${metro === 'all' ? ' stat-tile--active' : ''}`} onClick={() => setMetro('all')}>
+              <button type="button" className={`stat-tile networking-stat--upcoming${metro === 'all' ? ' stat-tile--active' : ''}`} onClick={() => setMetro('all')}>
                 <span className="stat-tile__label">Upcoming</span>
                 <span className="stat-tile__value">{counts?.total ?? 0}</span>
               </button>
-              <button type="button" className={`stat-tile${metro === 'boston' ? ' stat-tile--active' : ''}`} onClick={() => setMetro(metro === 'boston' ? 'all' : 'boston')}>
+              <button type="button" className={`stat-tile networking-stat--boston${metro === 'boston' ? ' stat-tile--active' : ''}`} onClick={() => setMetro(metro === 'boston' ? 'all' : 'boston')}>
                 <span className="stat-tile__label">Boston</span>
                 <span className="stat-tile__value">{counts?.boston ?? 0}</span>
               </button>
-              <button type="button" className={`stat-tile stat-tile--positive${metro === 'miami' ? ' stat-tile--active' : ''}`} onClick={() => setMetro(metro === 'miami' ? 'all' : 'miami')}>
+              <button type="button" className={`stat-tile networking-stat--miami${metro === 'miami' ? ' stat-tile--active' : ''}`} onClick={() => setMetro(metro === 'miami' ? 'all' : 'miami')}>
                 <span className="stat-tile__label">Miami</span>
                 <span className="stat-tile__value">{counts?.miami ?? 0}</span>
               </button>
@@ -370,24 +402,18 @@ export function NetworkingCalendar() {
                   <List size={14} /> List
                 </button>
               </div>
-              <label className="networking-select">
-                <span>Access</span>
-                <select value={access} onChange={(e) => setAccess(e.target.value as '' | AccessType)}>
-                  <option value="">All</option>
-                  <option value="open">Open</option>
-                  <option value="paid">Paid</option>
-                  <option value="invite_only">Invite-only</option>
-                </select>
-              </label>
-              <label className="networking-select">
-                <span>Industry</span>
-                <select value={industry} onChange={(e) => setIndustry(e.target.value)}>
-                  <option value="">All</option>
-                  {INDUSTRIES.map((item) => (
-                    <option key={item.slug} value={item.slug}>{item.label}</option>
-                  ))}
-                </select>
-              </label>
+              <HeliosMenu
+                label="Access"
+                value={access}
+                options={accessOptions}
+                onChange={(val) => setAccess(val as '' | AccessType)}
+              />
+              <HeliosMenu
+                label="Industry"
+                value={industry}
+                options={industryOptions}
+                onChange={(val) => setIndustry(val)}
+              />
             </div>
 
             {importForm}
@@ -457,10 +483,14 @@ export function NetworkingCalendar() {
                         <span className="networking-calendar__date">{format(day, 'd')}</span>
                         <span className="networking-calendar__dots" aria-hidden="true">
                           {dayEvents.slice(0, 3).map((item) => (
-                            <span
-                              key={item.id}
-                              className={`networking-calendar__dot networking-calendar__dot--${item.bucket}`}
-                            />
+                            <span key={item.id} className="networking-calendar__dot-cluster">
+                              {(item.bucket === 'tech' || item.bucket === 'both') && (
+                                <span className="networking-calendar__dot networking-calendar__dot--tech" />
+                              )}
+                              {(item.bucket === 'vertical' || item.bucket === 'both') && (
+                                <span className="networking-calendar__dot networking-calendar__dot--vertical" />
+                              )}
+                            </span>
                           ))}
                           {dayEvents.length > 3 ? <span className="networking-calendar__dot-more" /> : null}
                         </span>
@@ -472,6 +502,7 @@ export function NetworkingCalendar() {
                           className={`networking-calendar__event networking-event--${item.bucket}`}
                           onClick={() => setSelected(item)}
                         >
+                          <BucketDots bucket={item.bucket} />
                           {item.title}
                         </button>
                       ))}
@@ -766,6 +797,7 @@ function EventAgendaList({
               className={`networking-agenda-row networking-event--${item.bucket}`}
               onClick={() => onOpen(item)}
             >
+              <BucketDots bucket={item.bucket} />
               <time className="networking-agenda-row__time" dateTime={item.startAt}>
                 {showDate ? <span className="networking-agenda-row__day">{format(start, 'MMM d')}</span> : null}
                 {format(start, 'p')}

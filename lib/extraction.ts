@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 import mammoth from 'mammoth';
 import Papa from 'papaparse';
 import { PDFDocument } from 'pdf-lib';
-import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
+import { rowsFromXlsx } from '@/lib/sheet-rows';
 import {
   assertLiveExtractionAllowed,
   isLinkedinRelationshipHeader,
@@ -147,11 +147,10 @@ function parseDelimited(bytes: Buffer, uploadId: string, prefix: 'csv' | 'tsv'):
   return result;
 }
 
-function parseXlsx(bytes: Buffer, uploadId: string): ExtractionResult {
-  const workbook = XLSX.read(bytes, { type: 'buffer' });
+async function parseXlsx(bytes: Buffer, uploadId: string): Promise<ExtractionResult> {
   const combined: ExtractionResult = { people: [], counted: null, warnings: [] };
-  for (const sheetName of workbook.SheetNames) {
-    const rows = XLSX.utils.sheet_to_json<Record<string, string>>(workbook.Sheets[sheetName], { defval: '' });
+  const sheets = await rowsFromXlsx(bytes);
+  for (const { sheetName, rows } of sheets) {
     const headers = rows.length ? Object.keys(rows[0]) : [];
     if (rows.length < 1 || !headers.length) continue;
     const result = tabularResult(rows, headers, uploadId, `xlsx:${sheetName}`);

@@ -40,7 +40,11 @@ function isProtectedPage(pathname: string): boolean {
     || pathname === '/trello'
     || pathname.startsWith('/trello/')
     || pathname === '/reels'
-    || pathname.startsWith('/reels/');
+    || pathname.startsWith('/reels/')
+    || pathname === '/seo'
+    || pathname.startsWith('/seo/')
+    || pathname === '/traffic'
+    || pathname.startsWith('/traffic/');
 }
 
 export default auth((req) => {
@@ -80,6 +84,10 @@ export const config = {
     '/trello/:path*',
     '/reels',
     '/reels/:path*',
+    '/seo',
+    '/seo/:path*',
+    '/traffic',
+    '/traffic/:path*',
     '/d/:path*',
     '/api/:path*',
   ],
