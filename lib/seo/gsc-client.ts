@@ -1,3 +1,6 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { GoogleAuth, Impersonated, JWT } from 'google-auth-library';
 
 import type { GscAnalyticsRow, GscSitemap, GscSite, SeoSearchType } from '@/lib/seo/types';
@@ -36,37 +39,70 @@ type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
  * The auth library races 169.254.169.254 against metadata.google.internal and
  * treats the first failure as "not on GCE". On the worker that DNS failure
  * wins, so Application Default Credentials never loads. Ask the link-local
- * metadata server directly. A miss is remembered for five minutes.
+ * metadata server directly. A minted token is reused until it is near expiry.
+ * A miss is not remembered on the VM: the next call tries the metadata server
+ * again. The library fallback runs only when this machine has its own key.
  */
-let metadataUnavailableUntil = 0;
+let cachedAccessToken: { value: string; expiresAt: number } | null = null;
+let skipMetadataUntil = 0;
 
-/** Tests only. The probe result is cached briefly so a laptop does not wait on every call. */
+const TOKEN_SKEW_MS = 5 * 60 * 1000;
+
+/** Tests only. */
 export function resetSearchConsoleMetadataCache(): void {
-  metadataUnavailableUntil = 0;
+  cachedAccessToken = null;
+  skipMetadataUntil = 0;
 }
 
-async function tokenFromMetadata(scopes: string[], fetchImpl: FetchLike): Promise<string | null> {
-  if (Date.now() < metadataUnavailableUntil) return null;
+function hasLocalCredentials(env: NodeJS.ProcessEnv): boolean {
+  if (env.GOOGLE_APPLICATION_CREDENTIALS?.trim()) return true;
+  const home = env.HOME?.trim() || env.USERPROFILE?.trim();
+  if (!home) return false;
+  return existsSync(join(home, '.config', 'gcloud', 'application_default_credentials.json'));
+}
+
+function rememberToken(token: string, expiresInSeconds: number): string {
+  const lifetimeMs = Math.max(60, expiresInSeconds) * 1000;
+  cachedAccessToken = { value: token, expiresAt: Date.now() + lifetimeMs };
+  return token;
+}
+
+function reusableToken(): string | null {
+  if (!cachedAccessToken) return null;
+  if (Date.now() >= cachedAccessToken.expiresAt - TOKEN_SKEW_MS) return null;
+  return cachedAccessToken.value;
+}
+
+async function tokenFromMetadata(
+  scopes: string[],
+  fetchImpl: FetchLike,
+  timeoutMs: number,
+): Promise<{ token: string; expiresIn: number } | null> {
   const url = `${METADATA_TOKEN_URL}?scopes=${encodeURIComponent(scopes.join(','))}`;
   try {
     const response = await fetchImpl(url, {
       headers: { 'Metadata-Flavor': 'Google' },
-      signal: AbortSignal.timeout(1500),
+      signal: AbortSignal.timeout(timeoutMs),
     });
-    if (!response.ok) {
-      metadataUnavailableUntil = Date.now() + 5 * 60 * 1000;
-      return null;
-    }
-    const body = (await response.json()) as { access_token?: string };
-    if (!body.access_token) {
-      metadataUnavailableUntil = Date.now() + 5 * 60 * 1000;
-      return null;
-    }
-    return body.access_token;
+    if (!response.ok) return null;
+    const body = (await response.json()) as { access_token?: string; expires_in?: number };
+    if (!body.access_token) return null;
+    return { token: body.access_token, expiresIn: body.expires_in ?? 3600 };
   } catch {
-    metadataUnavailableUntil = Date.now() + 5 * 60 * 1000;
     return null;
   }
+}
+
+async function metadataTokenWithRetries(
+  scopes: string[],
+  fetchImpl: FetchLike,
+): Promise<{ token: string; expiresIn: number } | null> {
+  if (Date.now() < skipMetadataUntil) return null;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const minted = await tokenFromMetadata(scopes, fetchImpl, 3000);
+    if (minted) return minted;
+  }
+  return null;
 }
 
 async function impersonateAccessToken(
@@ -89,9 +125,10 @@ async function impersonateAccessToken(
   if (!response.ok) {
     throw new Error(`Could not impersonate ${target}: ${response.status} ${raw.slice(0, 300)}`);
   }
-  const parsed = JSON.parse(raw) as { accessToken?: string };
+  const parsed = JSON.parse(raw) as { accessToken?: string; expireTime?: string };
   if (!parsed.accessToken) throw new Error(`Could not impersonate ${target}`);
-  return parsed.accessToken;
+  const expireMs = parsed.expireTime ? Date.parse(parsed.expireTime) - Date.now() : 3600 * 1000;
+  return rememberToken(parsed.accessToken, Math.max(60, Math.floor(expireMs / 1000)));
 }
 
 export async function getSearchConsoleAccessToken(
@@ -129,14 +166,22 @@ export async function getSearchConsoleAccessToken(
     return token.token;
   }
 
-  const metadataToken = await tokenFromMetadata(
-    impersonate ? ['https://www.googleapis.com/auth/cloud-platform'] : [WEBMASTERS_SCOPE],
-    fetchImpl,
-  );
-  if (metadataToken) {
-    if (!impersonate) return metadataToken;
-    return impersonateAccessToken(metadataToken, impersonate, fetchImpl);
+  const reused = reusableToken();
+  if (reused) return reused;
+
+  const scopes = impersonate ? ['https://www.googleapis.com/auth/cloud-platform'] : [WEBMASTERS_SCOPE];
+  const metadata = await metadataTokenWithRetries(scopes, fetchImpl);
+  if (metadata) {
+    if (!impersonate) return rememberToken(metadata.token, metadata.expiresIn);
+    return impersonateAccessToken(metadata.token, impersonate, fetchImpl);
   }
+
+  if (!hasLocalCredentials(env)) {
+    throw new Error(
+      'Search Console metadata server did not respond. The worker has no local Google credentials to fall back on.',
+    );
+  }
+  skipMetadataUntil = Date.now() + 5 * 60 * 1000;
 
   const auth = new GoogleAuth({
     keyFile: keyFile || undefined,

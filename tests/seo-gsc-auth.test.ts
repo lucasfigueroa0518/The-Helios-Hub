@@ -53,3 +53,41 @@ test('a service account JSON key is used without asking the metadata server', as
   );
   assert.equal(fetched, false);
 });
+
+test('a minted token is reused and a metadata miss is tried again', async () => {
+  resetSearchConsoleMetadataCache();
+  let metadataCalls = 0;
+  const fetchImpl = async (url: string) => {
+    metadataCalls += 1;
+    if (url.startsWith('http://169.254.169.254/')) {
+      if (metadataCalls < 3) throw new Error('timeout');
+      return jsonResponse({ access_token: 'vm-token', expires_in: 3600 });
+    }
+    return jsonResponse({ accessToken: 'impersonated-token', expireTime: new Date(Date.now() + 3600_000).toISOString() });
+  };
+  const env = { GSC_IMPERSONATE_SERVICE_ACCOUNT: 'helios-gsc-sync@example.iam.gserviceaccount.com' };
+
+  const first = await getSearchConsoleAccessToken(env, fetchImpl);
+  const second = await getSearchConsoleAccessToken(env, fetchImpl);
+
+  assert.equal(first, 'impersonated-token');
+  assert.equal(second, 'impersonated-token');
+  assert.equal(metadataCalls, 4);
+});
+
+test('the worker does not fall back to Google ADC when the metadata server is down', async () => {
+  resetSearchConsoleMetadataCache();
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls += 1;
+    throw new Error('timeout');
+  };
+  await assert.rejects(
+    () => getSearchConsoleAccessToken(
+      { GSC_IMPERSONATE_SERVICE_ACCOUNT: 'helios-gsc-sync@example.iam.gserviceaccount.com' },
+      fetchImpl,
+    ),
+    /metadata server did not respond/,
+  );
+  assert.equal(calls, 3);
+});
