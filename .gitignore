@@ -32,6 +32,9 @@ __MACOSX/
 
 # Local Python env for the reel text engine (Pillow + NumPy). Rebuilt on the VM.
 helios_text_engine/.venv/
+__pycache__/
+*.pyc
+tsconfig.tsbuildinfo
 .orchestration-worker.lock
 tmp/
 
