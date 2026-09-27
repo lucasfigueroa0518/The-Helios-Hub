@@ -113,6 +113,16 @@ function SpanRunView({ run }: { run: SpanRun | undefined }) {
 
 function CoverSlide({ post, slide }: { post: Post; slide: SlideCopy }) {
   const photoBleed = Boolean(slide.photoUrl) && !isPlaceholderPhoto(slide.photoUrl);
+  // Character-count buckets so long headlines don't wrap into a 12-line
+  // pile. CSS scales font-size per bucket (see .helios-cover__headline
+  // rules). Buckets, not raw chars, so headline shape stays consistent
+  // across posts of similar length instead of jittering per character.
+  const chars = (slide.headline ?? []).reduce((n, s) => n + s.text.length, 0);
+  const lengthBucket = chars <= 40 ? 'xs'
+    : chars <= 70 ? 'sm'
+    : chars <= 100 ? 'md'
+    : chars <= 140 ? 'lg'
+    : 'xl';
   return (
     <div className={`helios-cover${photoBleed ? ' helios-cover--bleed' : ''}`}>
       {photoBleed && (
@@ -128,7 +138,10 @@ function CoverSlide({ post, slide }: { post: Post; slide: SlideCopy }) {
         </>
       )}
       <div className="helios-cover__foreground">
-        <h1 className="helios-cover__headline">
+        <h1
+          className="helios-cover__headline"
+          data-length={lengthBucket}
+        >
           <SpanRunView run={slide.headline} />
         </h1>
         <div className="helios-cover__chevron" aria-hidden="true">→</div>
@@ -174,12 +187,18 @@ function StoryBeatSlide({ slide }: { post: Post; slide: SlideCopy }) {
         </h2>
       )}
       {isB5 && slide.headline && (
-        <h2 className="helios-beat__landing">
+        <h2
+          className="helios-beat__landing"
+          data-length={bodyLengthBucket(slide.headline)}
+        >
           <SpanRunView run={slide.headline} />
         </h2>
       )}
       {slide.body && !isB5 && (
-        <p className="helios-beat__body helios-beat__body--top">
+        <p
+          className="helios-beat__body helios-beat__body--top"
+          data-length={bodyLengthBucket(slide.body)}
+        >
           <SpanRunView run={slide.body} />
         </p>
       )}
@@ -205,13 +224,32 @@ function StoryBeatSlide({ slide }: { post: Post; slide: SlideCopy }) {
         </figure>
       )}
       {slide.bodyBottom && !isB5 && (
-        <p className="helios-beat__body helios-beat__body--bottom">
+        <p
+          className="helios-beat__body helios-beat__body--bottom"
+          data-length={bodyLengthBucket(slide.bodyBottom)}
+        >
           <SpanRunView run={slide.bodyBottom} />
         </p>
       )}
       {/* On-slide photo credit killed — attribution moves to caption. */}
     </div>
   );
+}
+
+/**
+ * Character-count bucket for body copy. Same pattern the cover uses to
+ * scale hero type. Templates listen to `data-length` and pick a size
+ * that keeps the copy inside the frame. Prevents the "text runs off the
+ * page" regression that copy-regen can't fix — this is a design
+ * guardrail, not a content fix.
+ */
+function bodyLengthBucket(spans: SpanRun): 'xs' | 'sm' | 'md' | 'lg' | 'xl' {
+  const chars = spans.reduce((n, s) => n + s.text.length, 0);
+  if (chars <= 90) return 'xs';
+  if (chars <= 150) return 'sm';
+  if (chars <= 220) return 'md';
+  if (chars <= 300) return 'lg';
+  return 'xl';
 }
 
 /**
@@ -289,7 +327,10 @@ function DataBlockSlide({ post, slide }: { post: Post; slide: SlideCopy }) {
       )}
       <div className="helios-data__rule" aria-hidden="true" />
       {slide.headline && (
-        <h2 className="helios-data__label">
+        <h2
+          className="helios-data__label"
+          data-length={bodyLengthBucket(slide.headline)}
+        >
           <SpanRunView run={slide.headline} />
         </h2>
       )}

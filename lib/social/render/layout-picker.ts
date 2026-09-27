@@ -71,19 +71,23 @@ const PICK_TABLE: Record<Beat, { first: Variant; alt: Variant[] }> = {
  * mentions a person's name from `players`.
  */
 function hasPortrait(factSheet: FactSheet): boolean {
-  const namedHumans = factSheet.players
-    .filter((p) => /[A-Z]\w+\s[A-Z]\w+/.test(p.name))
-    .map((p) => p.name.toLowerCase());
-  if (namedHumans.length === 0) return false;
-  return factSheet.assets.some((a) => {
-    if (a.kind !== 'photo') return false;
-    const subject = a.subject.toLowerCase();
-    return namedHumans.some((name) => subject.includes(name));
-  });
+  // If the story names a human, a portrait is available — either from
+  // the article's own og:image (extractArticleImage) or from a subject
+  // search in the photo assigner. Requiring fact_sheet.assets to include
+  // a matching photo entry was too strict (Sonnet only fills that field
+  // when the article body cites a specific image), which forced almost
+  // every cover to fall through to C3 text-only. Loosen: any named
+  // human → C1.
+  return factSheet.players.some((p) => /[A-Z]\w+\s[A-Z]\w+/.test(p.name));
 }
 
 function hasMetaphorPhoto(factSheet: FactSheet): boolean {
-  return factSheet.assets.some((a) => a.kind === 'photo');
+  // Metaphor covers (C2) are for stories with no named human but a
+  // visual anchor available — the article's own og:image serves. We
+  // always attempt fetch in the photo assigner; return true so the
+  // picker considers C2 before falling to C4/C3.
+  return factSheet.assets.some((a) => a.kind === 'photo')
+    || factSheet.assets.some((a) => a.kind === 'headline');
 }
 
 function pickCoverVariant(factSheet: FactSheet, chosenNumbersMatter: boolean): Variant {

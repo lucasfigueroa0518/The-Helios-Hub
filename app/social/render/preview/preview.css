@@ -437,6 +437,15 @@
   max-width: 100%;
 }
 
+/* Length-scaled cover headline. The template counts characters in the
+   headline spans and stamps a bucket onto data-length. Longer copy
+   scales down so we never render a 12-line wrap of hero type. */
+.helios-cover__headline[data-length="xs"] { font-size: 132px; line-height: 0.9;  letter-spacing: -0.04em;  }
+.helios-cover__headline[data-length="sm"] { font-size: 108px; line-height: 0.92; letter-spacing: -0.035em; }
+.helios-cover__headline[data-length="md"] { font-size: 88px;  line-height: 0.94; letter-spacing: -0.03em;  }
+.helios-cover__headline[data-length="lg"] { font-size: 72px;  line-height: 0.96; letter-spacing: -0.025em; }
+.helios-cover__headline[data-length="xl"] { font-size: 60px;  line-height: 1;    letter-spacing: -0.02em;  }
+
 .helios-cover--bleed .helios-cover__headline {
   text-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
 }
@@ -587,6 +596,17 @@
   margin: 0;
   max-width: 100%;
 }
+
+/* Story-beat body auto-shrink — same character-bucket pattern as cover
+   and thesis. Prevents overflow on beats where the copy stage produces
+   an unusually long body block. NOTE: thesis-scoped selectors above
+   override these (bigger fonts) because thesis is Pragmatica hero type
+   while normal beats stay in Roboto Light. */
+.helios-beat__body[data-length="xs"] { font-size: 40px; line-height: 1.28; }
+.helios-beat__body[data-length="sm"] { font-size: 34px; line-height: 1.32; }
+.helios-beat__body[data-length="md"] { font-size: 30px; line-height: 1.36; }
+.helios-beat__body[data-length="lg"] { font-size: 26px; line-height: 1.4;  }
+.helios-beat__body[data-length="xl"] { font-size: 22px; line-height: 1.44; }
 
 .helios-beat__figure {
   position: relative;
@@ -810,6 +830,13 @@
   text-transform: uppercase;
   margin: 0;
 }
+
+/* D1 SCALE label auto-shrink — same character-bucket pattern. */
+.helios-data__label[data-length="xs"] { font-size: 96px; }
+.helios-data__label[data-length="sm"] { font-size: 84px; }
+.helios-data__label[data-length="md"] { font-size: 68px; }
+.helios-data__label[data-length="lg"] { font-size: 54px; }
+.helios-data__label[data-length="xl"] { font-size: 42px; line-height: 1.1; }
 
 .helios-data__context {
   font-family: var(--font-body);
@@ -1358,12 +1385,14 @@
   color: var(--brand-orange);
   text-transform: uppercase;
 }
-/* Cap font-size on longer landing lines so they still fit — CSS-only
-   scaling ladder based on estimated character count via character-based
-   selector (each 10 chars past 40 = one step smaller). */
-.helios-beat__landing {
-  font-size: clamp(64px, calc(180px - 1.4vw), 108px);
-}
+/* B5 landing auto-shrink per character-bucket. Same pattern as cover
+   and thesis — landing text always fits inside the frame regardless of
+   how long the copy grows. */
+.helios-beat__landing[data-length="xs"] { font-size: 148px; line-height: 0.9;  letter-spacing: -0.04em;  }
+.helios-beat__landing[data-length="sm"] { font-size: 128px; line-height: 0.92; letter-spacing: -0.038em; }
+.helios-beat__landing[data-length="md"] { font-size: 96px;  line-height: 0.96; letter-spacing: -0.03em;  }
+.helios-beat__landing[data-length="lg"] { font-size: 72px;  line-height: 1;    letter-spacing: -0.025em; }
+.helios-beat__landing[data-length="xl"] { font-size: 56px;  line-height: 1.08; letter-spacing: -0.02em;  }
 
 /* B2 — photo-overlay beat. Full-bleed photo, headline overlaid on the
    lower half. MVP: promotes the beat's photo to full-bleed and repositions
@@ -1385,3 +1414,12 @@
   letter-spacing: -0.03em;
   color: var(--brand-orange);
 }
+
+/* T1 thesis auto-shrink — same character-bucket pattern as the cover.
+   Long copy no longer overflows the frame. Design-side guardrail so
+   copy-side regen never inherits an overflow bug. */
+.helios-slide--thesis .helios-beat__body[data-length="xs"] { font-size: 104px; line-height: 0.98; letter-spacing: -0.035em; }
+.helios-slide--thesis .helios-beat__body[data-length="sm"] { font-size: 88px;  line-height: 1.02; letter-spacing: -0.03em;  }
+.helios-slide--thesis .helios-beat__body[data-length="md"] { font-size: 68px;  line-height: 1.06; letter-spacing: -0.025em; }
+.helios-slide--thesis .helios-beat__body[data-length="lg"] { font-size: 54px;  line-height: 1.12; letter-spacing: -0.02em;  }
+.helios-slide--thesis .helios-beat__body[data-length="xl"] { font-size: 44px;  line-height: 1.2;  letter-spacing: -0.015em; }
