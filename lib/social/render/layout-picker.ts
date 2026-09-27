@@ -142,6 +142,20 @@ function spansToText(run: BeatCopy['body']): string {
 }
 
 /**
+ * Returns true when a slide has body copy but no title, bodyBottom, sides, or
+ * photo-eligible asset_needs. Used by the body-only promotion pass to decide
+ * whether to promote a story_beat slide to B5 (landing composition).
+ */
+function isBodyOnly(slide: BeatCopy): boolean {
+  const hasBody = (slide.body?.length ?? 0) > 0;
+  const hasTitle = (slide.title?.length ?? 0) > 0;
+  const hasBottom = (slide.bodyBottom?.length ?? 0) > 0;
+  const hasSides = (slide.sides?.length ?? 0) > 0;
+  const wantsPhoto = slide.asset_needs.some((n) => /photo|image|shot/i.test(n));
+  return hasBody && !hasTitle && !hasBottom && !hasSides && !wantsPhoto;
+}
+
+/**
  * Convert one editorial slide into a render SlideCopy, tagged with its
  * chosen family + variant + carried semantic fields.
  */
@@ -161,6 +175,14 @@ function convertSlide(
     bodyBottom: editorial.bodyBottom ?? undefined,
     title: editorial.title ?? undefined,
   };
+
+  // B5 renders headline (hero landing type), not body. When the picker promoted
+  // a body-only slide to B5 and no headline was written, hoist body → headline
+  // so the paragraph renders as large hero type instead of a small block.
+  if (variant === 'B5' && !base.headline && editorial.body) {
+    base.headline = editorial.body;
+    base.body = undefined;
+  }
 
   // Layout-specific field promotion.
   if (editorial.beat === 'FOLLOW' && variant === 'F1') {
@@ -215,6 +237,24 @@ export function pickLayouts(input: LayoutPickerInput): Post {
   for (let i = 0; i < initialPicks.length; i += 1) {
     const prev = i > 0 ? finalPicks[i - 1]! : null;
     finalPicks.push(enforceRhythm(editorialPost.slides[i]!.beat, initialPicks[i]!, prev));
+  }
+
+  // Body-only promotion pass — promotes story_beat slides that carry only a
+  // body paragraph (no title, bodyBottom, sides, or photo need) to variant B5
+  // (landing composition) so the text renders as hero landing type instead of
+  // a small paragraph above an 80% empty black canvas.
+  //
+  // Skip beats that already receive a hero treatment through their own variant:
+  // HOOK → cover family, THESIS → T1, DEBATE → T2, FOLLOW → F1,
+  // QUOTE → Q1/Q2, PROOF → P1.
+  const SKIP_BEATS = new Set(['HOOK', 'THESIS', 'DEBATE', 'FOLLOW', 'QUOTE', 'PROOF']);
+  for (let i = 0; i < finalPicks.length; i += 1) {
+    const editorial = editorialPost.slides[i]!;
+    const chosen = finalPicks[i]!;
+    const family = FAMILY_BY_VARIANT[chosen];
+    if (family === 'story_beat' && !SKIP_BEATS.has(editorial.beat) && isBodyOnly(editorial)) {
+      finalPicks[i] = 'B5';
+    }
   }
 
   const slides: SlideCopy[] = editorialPost.slides.map((editorial, i) =>
