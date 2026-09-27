@@ -546,35 +546,6 @@
   padding-bottom: 16px;
 }
 
-/* Chapter mark — the signature of the story-beat archetype. Giant orange
-   Pragmatica Bold zero-padded slide number, top-left. Sits below the
-   masthead (48px above content flow) and anchors the entire slide
-   visually. Per the design skill: this is what turns "next beat" into
-   "next chapter." */
-.helios-beat__chapter {
-  position: absolute;
-  top: -32px;
-  left: 0;
-  font-family: var(--font-heading);
-  font-size: 180px;
-  font-weight: 700;
-  line-height: 0.85;
-  letter-spacing: -0.045em;
-  color: var(--brand-orange);
-  z-index: 1;
-  pointer-events: none;
-}
-
-/* Push the story-beat body/title down so the chapter mark doesn't collide
-   with the first content element. Only applies when the chapter mark is
-   present (story_beat + not B5 — matches the TSX gate). */
-.helios-slide--story_beat:not([data-variant="B5"]) .helios-beat > *:not(.helios-beat__chapter) {
-  margin-top: 0;
-}
-.helios-slide--story_beat:not([data-variant="B5"]) .helios-beat {
-  padding-top: 160px;
-}
-
 .helios-beat__title {
   font-family: var(--font-heading);
   font-size: 88px;

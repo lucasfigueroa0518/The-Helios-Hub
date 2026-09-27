@@ -161,19 +161,8 @@ function StoryBeatSlide({ slide }: { post: Post; slide: SlideCopy }) {
   // so the CSS's giant-Pragmatica landing treatment doesn't blow up
   // sentence-length body copy across the whole frame.
   const isB5 = slide.variant === 'B5';
-  // Chapter mark — giant orange zero-padded slide position, top-left below
-  // masthead. Per skill spec: this is what turns "next slide" into "next
-  // chapter" — the signature that anchors the reader in the swipe. Only
-  // fires on true story-beats (B1/B3/B4/B6/B7); suppressed on B5 (landing
-  // composition owns the frame) and on proof/thesis (different identities
-  // that happen to reuse StoryBeatSlide's rendering shell).
-  const showChapter = slide.layoutVariant === 'story_beat' && !isB5;
-  const chapterNumber = String(slide.position).padStart(2, '0');
   return (
     <div className={`helios-beat${isBottomFade ? ' helios-beat--bottom-fade' : ''}`}>
-      {showChapter && (
-        <div className="helios-beat__chapter" aria-hidden="true">{chapterNumber}</div>
-      )}
       {isBottomFade && hasRealPhoto && !isB5 && (
         <div
           className="helios-beat__bottom-fade"
