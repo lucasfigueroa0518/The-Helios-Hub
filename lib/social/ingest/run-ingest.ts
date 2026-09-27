@@ -3,6 +3,7 @@ import {
   HELIOS_SOCIAL_FEEDS,
   HELIOS_SOCIAL_RELEVANCE_THRESHOLD,
 } from '@/lib/social/feeds';
+import { extractArticleBody } from '@/lib/social/ingest/extract-article-body';
 import { extractPacket } from '@/lib/social/ingest/extract-packet';
 import { fetchAllFeeds } from '@/lib/social/ingest/fetch-feeds';
 import { judgeRelevance } from '@/lib/social/ingest/judge-relevance';
@@ -11,6 +12,17 @@ import {
   shadowEnabled,
   shadowSampleRate,
 } from '@/lib/social/ingest/shadow-haiku-judge';
+
+/**
+ * Minimum useful body length. Below this, the RSS gave us a summary blurb —
+ * an outlet like Axios or NYT that truncates content in the feed. The full
+ * article is fetched via extract-article-body before Haiku's extract-packet
+ * so downstream stages (fact-sheet, hook-mining) see real text.
+ *
+ * Kept as a module constant not a config export to avoid coupling ingest to
+ * the editorial config. Same value in both places today; drift is fine.
+ */
+const INGEST_MIN_BODY_CHARS = 500;
 
 export type IngestSummary = {
   feedsQueried: number;
@@ -21,6 +33,8 @@ export type IngestSummary = {
   articlesApproved: number;
   articlesRejected: number;
   articlesExtracted: number;
+  bodiesUpgraded: number;
+  bodiesUpgradeFailed: number;
   approxJevCostUsd: number;
   approxHaikuCostUsd: number;
   // Shadow (research mode). Zero when HELIOS_SOCIAL_SHADOW_HAIKU_JUDGE is off.
@@ -70,6 +84,8 @@ export async function runIngest(): Promise<IngestSummary> {
     articlesApproved: 0,
     articlesRejected: 0,
     articlesExtracted: 0,
+    bodiesUpgraded: 0,
+    bodiesUpgradeFailed: 0,
     approxJevCostUsd: 0,
     approxHaikuCostUsd: 0,
     shadowRunsAttempted: 0,
@@ -216,13 +232,41 @@ export async function runIngest(): Promise<IngestSummary> {
         continue;
       }
 
-      // 5. Approved — escalate to Haiku for the full extraction packet.
+      // 5. Approved — first upgrade the body when the RSS gave us a summary,
+      //    then hand the fuller text to Haiku for extraction.
       summary.articlesApproved += 1;
+
+      let workingBody = article.body;
+      if (article.body.length < INGEST_MIN_BODY_CHARS) {
+        try {
+          const extracted = await extractArticleBody(article.source_url, {
+            minTextLength: INGEST_MIN_BODY_CHARS,
+          });
+          if (extracted && extracted.length > article.body.length) {
+            workingBody = extracted.text;
+            summary.bodiesUpgraded += 1;
+            await dbQuery(
+              `UPDATE helios_social.article_queue
+                  SET body = $1
+                WHERE id = $2`,
+              [extracted.text, article.id],
+            );
+          } else {
+            summary.bodiesUpgradeFailed += 1;
+          }
+        } catch (err) {
+          summary.bodiesUpgradeFailed += 1;
+          summary.errors.push(
+            `body-upgrade failed for ${article.source_url}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
+
       const { packet, usage } = await extractPacket({
         headline: article.headline,
         source: article.source,
         byline: article.byline,
-        body: article.body,
+        body: workingBody,
       });
       summary.approxHaikuCostUsd += usage.approxCostUsd;
       summary.articlesExtracted += 1;

@@ -9,9 +9,16 @@ out/
 .env
 .env.local
 .env.*.local
+.env.local.bak*
 scripts/gcp/worker.env
 scripts/gcp/.deploy-env
 SUPABASE.txt
+
+# Impeccable local tool state (per-machine, not shared)
+.impeccable/
+
+# Generated render output — DB is source of truth; local mirror only
+exports/
 
 # vercel
 .vercel

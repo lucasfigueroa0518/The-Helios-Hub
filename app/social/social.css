@@ -444,6 +444,116 @@
   box-shadow: none;
 }
 
+/* Generate panel — pipeline trigger + status */
+.social-generate {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 24px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+}
+
+.social-generate-lead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--font-roboto);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.social-generate-lead .social-spin {
+  animation: social-spin 1s linear infinite;
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.social-generate-ok {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.social-generate-error {
+  color: #ef4444;
+}
+
+@keyframes social-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Regenerate/adjust critique panel */
+.social-critique {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.social-critique-label {
+  font-family: var(--font-roboto);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-strong);
+  letter-spacing: 0.02em;
+}
+
+.social-critique-input {
+  padding: 12px 14px;
+  font-family: var(--font-roboto);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-strong);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  resize: vertical;
+  min-height: 72px;
+}
+
+.social-critique-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(255, 94, 26, 0.15);
+}
+
+.social-critique-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.social-critique-chip {
+  padding: 6px 10px;
+  font-family: var(--font-roboto);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: border-color 150ms ease, color 150ms ease;
+}
+
+.social-critique-chip:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.social-critique-hint {
+  margin: 4px 0 0;
+  font-family: var(--font-roboto);
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
 /* ── Motion ───────────────────────────────────────────────────────────── */
 
 @keyframes social-in {

@@ -43,8 +43,53 @@ export type Format = 'carousel' | 'story';
 export type LayoutVariant =
   | 'cover'
   | 'story_beat'
+  | 'data_block'
+  | 'quote'
   | 'source'
-  | 'follow';
+  | 'follow'
+  | 'proof'
+  | 'thesis'
+  | 'debate';
+
+/**
+ * Specific compositional variant from the helios-social-skill design library.
+ * The renderer uses this as a CSS modifier class so a single layout family
+ * (e.g. `story_beat`) can express multiple compositions (B1 chapter-mark stack,
+ * B2 photo-overlay, B3 pull-quote, etc.) without a distinct React component
+ * per variant. Optional — when absent, the layout renders in its family's
+ * default variant.
+ */
+export type Variant =
+  | 'C1' | 'C2' | 'C3' | 'C4'
+  | 'B1' | 'B2' | 'B3' | 'B4' | 'B5' | 'B6' | 'B7'
+  | 'D1' | 'D2' | 'D3'
+  | 'Q1' | 'Q2'
+  | 'P1'
+  | 'T1' | 'T2'
+  | 'F1';
+
+/**
+ * Editorial beat carried over from the story plan. The renderer doesn't
+ * switch on `beat` (that's the layoutVariant's job), but the beat is kept
+ * on the SlideCopy so downstream tools (analytics, previews, debugging)
+ * can trace a rendered slide back to its editorial intent.
+ */
+export type Beat =
+  | 'HOOK'
+  | 'GROUND'
+  | 'SCALE'
+  | 'CONTEXT'
+  | 'TURN'
+  | 'PROOF'
+  | 'SCENARIO'
+  | 'MECHANISM'
+  | 'ANALOGY'
+  | 'QUOTE'
+  | 'STAKES'
+  | 'TWIST'
+  | 'THESIS'
+  | 'DEBATE'
+  | 'FOLLOW';
 
 /**
  * One phrase inside a headline or body sentence. The three-role color-emphasis
@@ -122,6 +167,92 @@ export type SlideCopy = {
    * screenshot. Empty → renders spec's hairline-grid placeholder.
    */
   photoUrl?: string;
+
+  /**
+   * On-slide attribution rendered as small green Roboto Mono, bottom edge of
+   * the photo area. Required whenever `photoUrl` is set — CC-licensed and
+   * press photos need credit by license terms. Short form: source and
+   * license, e.g. `WIKIMEDIA COMMONS · CC BY-SA 4.0`.
+   */
+  photoCredit?: string;
+
+  /**
+   * Story-beat photo treatment. `card` (default) is the 16:10 landscape
+   * card slotted between body and body-bottom. `bottom-fade` anchors the
+   * photo to the slide's bottom half and dissolves upward via a linear
+   * mask, so the copy at the top sits over pure canvas. Useful when the
+   * source photo is already used elsewhere in the carousel — the fade
+   * yields a visually distinct composition from the same file, keeping
+   * the no-duplicates rule intact in spirit.
+   */
+  photoTreatment?: 'card' | 'bottom-fade';
+
+  /**
+   * Design-skill variant code from the helios-social-skill layout library.
+   * Sits alongside `layoutVariant` (the family) as a CSS modifier so a
+   * single family can express multiple compositions. Optional — the family
+   * renders in its default composition when absent.
+   */
+  variant?: Variant;
+
+  /**
+   * The editorial beat this slide carries. Kept for tracing/analytics; the
+   * renderer picks visuals from `layoutVariant` + `variant`, not from beat.
+   */
+  beat?: Beat;
+
+  /**
+   * DEBATE-layout body: the two-sides framing. Each entry is a labeled
+   * position ("COPING?", "RIGHT?", "SIDE A", "SIDE B"). Rendered as two
+   * green-labeled lines under the question in the T2 variant.
+   */
+  sides?: Array<{ label: string; text: string }>;
+
+  /**
+   * F1 Follow layout's story-specific line above the hero — the account
+   * promise tied to THIS story, per the editorial FOLLOW beat. When absent,
+   * F1 falls back to the generic "Follow for more." hero without a lede.
+   */
+  storySpecificLine?: string;
+
+  /**
+   * P1 Proof clipping: reference to the artifact being shown. The renderer
+   * displays the artifact as a clean card + attribution. `kind` picks the
+   * card treatment; `sourceLine` renders as a green mono line beneath.
+   */
+  artifact?: {
+    kind: 'headline' | 'tweet' | 'paper_figure' | 'filing_excerpt';
+    /** For "headline" and "filing_excerpt": the raw text set in card typography. */
+    text?: string;
+    /** For "tweet" and "paper_figure": image URL of the actual artifact. */
+    imageUrl?: string;
+    /** Author / handle attribution for the artifact. */
+    attribution?: string;
+    /** Green mono source line under the card, e.g. `SOURCE · REDFIN · SEPT 2026`. */
+    sourceLine?: string;
+  };
+
+  /**
+   * D3 chart/diagram data. When present, the renderer uses SVG-in-JSX to
+   * render the chart rather than an image. Numbers come straight from the
+   * fact sheet so values stay exact.
+   */
+  chartData?: {
+    kind: 'bar_comparison' | 'trend_curve' | 'flywheel' | 'before_after';
+    /** Chart title above the visualization. */
+    title?: string;
+    /** Points: label + value pairs; interpretation depends on `kind`. */
+    points: Array<{ label: string; value: number; role?: 'subject' | 'comparison' }>;
+    /** Green mono source line under the chart. */
+    sourceLine?: string;
+  };
+
+  /**
+   * B6 panorama half-marker. When present, this slide is one half of a
+   * two-slide panorama; the export pipeline knows to render the pair at
+   * 2160×1350 and crop into two 1080×1350 PNGs.
+   */
+  panoramaSide?: 'left' | 'right';
 };
 
 export type Post = {
@@ -139,6 +270,13 @@ export type Post = {
   issueNumber: number;
   slides: SlideCopy[];
   caption: string;
+  /**
+   * Full-form attribution block appended to the Instagram caption body.
+   * Lists every photo used in the post with source, author, and license.
+   * Rendered by the publish pipeline, not on-slide (the on-slide
+   * `photoCredit` is a shorter chrome line).
+   */
+  attributionBlock?: string;
 };
 
 /**

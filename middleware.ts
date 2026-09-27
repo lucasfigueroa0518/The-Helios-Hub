@@ -25,6 +25,9 @@ function isPublicPath(pathname: string): boolean {
   if (pathname === '/api/webhooks/agentmail') return true;
   if (pathname === '/api/webhooks/gcp-billing') return true;
   if (pathname.startsWith('/api/public/sender-headshots/')) return true;
+  // Helios Social dev tooling — reads git-ignored exports/social/generated/*.json.
+  // The route file itself notes "the API is unauth'd" (dev-only preview loader).
+  if (pathname.startsWith('/api/social/generated')) return true;
   return false;
 }
 
