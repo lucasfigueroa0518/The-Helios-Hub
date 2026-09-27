@@ -2,6 +2,7 @@
 
 import type { Post, SlideCopy, SpanRun } from '@/lib/social/render/types';
 import { CATEGORY_LABELS } from '@/lib/social/render/types';
+import { cleanOutletName } from '@/lib/social/render/outlet-name';
 
 export type SlideTemplateProps = {
   post: Post;
@@ -572,7 +573,7 @@ function FollowSlide({ slide }: { post: Post; slide: SlideCopy }) {
  * to a real publication so the reader knows this isn't rumor.
  */
 function ProofSlide({ post, slide }: { post: Post; slide: SlideCopy }) {
-  const outletName = post.source.replace(/^AI\s*\|\s*/i, '').trim();
+  const outletName = cleanOutletName(post.source);
   return (
     <div className="helios-proof">
       <div className="helios-proof__label">▸ THE SOURCE</div>
