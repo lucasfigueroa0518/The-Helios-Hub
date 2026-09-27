@@ -295,7 +295,7 @@ test('static positioning and capability catalog sit behind the cache breakpoint'
     }],
     cacheTtl: '1h',
   });
-  assert.match(system.map((block) => block.text).join('\n'), /Five readings research must serve/);
+  assert.match(system.map((block) => block.text).join('\n'), /Readings research must serve/);
   assert.doesNotMatch(system.map((block) => block.text).join('\n'), /skill body/);
   assert.match(system.at(-1)?.text ?? '', /positioning body/);
   assert.match(system.at(-1)?.text ?? '', /Reporting support/);
@@ -449,7 +449,9 @@ test('company QA cache requires exact evidence, model, prompt, and fresh timesta
 
 test('Haiku adversarial usage is priced below Sonnet usage', () => {
   const haiku = computeHaikuTokenCostUsd(100_000, 10_000);
-  const sonnet = computeTokenCostUsd(100_000, 10_000);
+  const sonnetBefore = computeTokenCostUsd(100_000, 10_000, new Date('2026-08-31T12:00:00.000Z'));
+  const sonnetAfter = computeTokenCostUsd(100_000, 10_000, new Date('2026-09-01T00:00:00.000Z'));
   assert.equal(haiku.toFixed(2), '0.15');
-  assert.equal(sonnet.toFixed(2), '0.30');
+  assert.equal(sonnetBefore.toFixed(2), '0.30');
+  assert.equal(sonnetAfter.toFixed(2), '0.45');
 });

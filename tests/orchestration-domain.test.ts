@@ -34,7 +34,7 @@ test('lane limits are positive and bounded', () => {
   assert.equal(laneLimit('auto_campaign'), 1);
 });
 
-test('drafting defaults double without changing enrichment or mailbox lanes', () => {
+test('drafting lane defaults derive from the Anthropic in-flight budget without changing enrichment or mailbox lanes', () => {
   const keys = [
     'ORG_DRAFT_RESEARCH_CONCURRENCY',
     'ORG_DRAFT_WRITE_CONCURRENCY',
@@ -44,12 +44,14 @@ test('drafting defaults double without changing enrichment or mailbox lanes', ()
   const prior = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
   for (const key of keys) delete process.env[key];
   try {
-    assert.equal(laneLimit('drafting'), 8);
-    assert.equal(laneLimit('drafting_write'), 8);
-    assert.equal(workerMaxConcurrency(), 16);
+    // Budget 8 in flight: research takes 8 / 2 calls per pipeline = 4 slots,
+    // write gets the remainder (never below 1), and the worker adds 2 headroom.
+    assert.equal(laneLimit('drafting'), 4);
+    assert.equal(laneLimit('drafting_write'), 1);
+    assert.equal(workerMaxConcurrency(), 7);
     assert.equal(
       workerMaxConcurrency(),
-      laneLimit('drafting') + laneLimit('drafting_write'),
+      laneLimit('drafting') + laneLimit('drafting_write') + 2,
     );
     assert.equal(laneLimit('research'), 2);
     assert.equal(laneLimit('mailbox_verify'), 3);

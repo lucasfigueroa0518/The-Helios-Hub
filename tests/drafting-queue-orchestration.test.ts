@@ -100,7 +100,7 @@ test('shouldAutoQueueDraftingItem requires idle + draftable + complete', () => {
     state: 'needs_lead_review',
     snapshot: snapshot(),
     delivery: delivery('rate_limited'),
-  }), true);
+  }), false);
   assert.equal(shouldAutoQueueDraftingItem({
     state: 'needs_lead_review',
     snapshot: snapshot({ title: null }),
