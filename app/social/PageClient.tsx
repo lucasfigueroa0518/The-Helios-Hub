@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { ArrowUpRight, Building2, Loader2, Newspaper, RefreshCw, Sparkles, User } from 'lucide-react';
 
 import type { Article } from '@/lib/social/types';
@@ -98,8 +99,28 @@ function ArticleRow({
       {primaryEntities.length > 0 && (
         <div className="social-row-entities">{primaryEntities.join(' · ')}</div>
       )}
+      <ReviewBadge article={a} />
     </button>
   );
+}
+
+function ReviewBadge({ article: a }: { article: Article }) {
+  if (a.reviewStatus === 'approved') {
+    return <span className="social-review-badge social-review-badge--approved">✓ Approved</span>;
+  }
+  if (a.reviewStatus === 'needs_revision') {
+    return <span className="social-review-badge social-review-badge--revision">↻ Needs revision</span>;
+  }
+  if (a.reviewStatus === 'rejected') {
+    return <span className="social-review-badge social-review-badge--rejected">✕ Rejected</span>;
+  }
+  if (a.reviewStatus === 'published') {
+    return <span className="social-review-badge social-review-badge--published">Published</span>;
+  }
+  if (a.hasGeneratedPost) {
+    return <span className="social-review-badge social-review-badge--pending">◐ Ready to review</span>;
+  }
+  return <span className="social-review-badge social-review-badge--empty">Not generated</span>;
 }
 
 function ArticleDetail({ article: a }: { article: Article }) {
@@ -168,7 +189,173 @@ function ArticleDetail({ article: a }: { article: Article }) {
       )}
 
       <GeneratePanel article={a} />
+      <ReviewPanel article={a} />
     </div>
+  );
+}
+
+type ReviewDecision = 'approved' | 'needs_revision' | 'rejected';
+type NoteMode = 'revise' | 'reject' | null;
+
+function ReviewPanel({ article }: { article: Article }) {
+  const router = useRouter();
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'done' | 'error'>('idle');
+  const [error, setError] = useState<string | null>(null);
+  const [noteMode, setNoteMode] = useState<NoteMode>(null);
+  const [note, setNote] = useState('');
+
+  const current = article.reviewStatus
+    ? { status: article.reviewStatus, note: article.reviewNote, reviewer: article.reviewedBy }
+    : null;
+
+  if (!article.hasGeneratedPost) {
+    return (
+      <section className="social-detail-section">
+        <h3 className="social-section-label">Review</h3>
+        <p className="social-review-empty">
+          Generate slides first — nothing to review until there&rsquo;s a draft.
+        </p>
+      </section>
+    );
+  }
+
+  async function submit(decision: ReviewDecision, maybeNote?: string) {
+    if (decision === 'needs_revision' && !maybeNote) {
+      setStatus('error');
+      setError('Add a note describing what to change before requesting a revision.');
+      return;
+    }
+    setStatus('submitting');
+    setError(null);
+    try {
+      const res = await fetch(`/api/social/review/${article.id}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ status: decision, note: maybeNote ?? undefined }),
+      });
+      const data = (await res.json()) as { status?: string; note?: string | null; reviewedBy?: string; error?: string };
+      if (!res.ok) {
+        setStatus('error');
+        setError(data.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      setStatus('done');
+      setNoteMode(null);
+      setNote('');
+      // Server component reads reviewStatus/reviewNote from the DB — refresh
+      // so the badge, current-status line, and GeneratePanel's revision-mode
+      // all reflect the just-saved decision without a manual reload.
+      router.refresh();
+    } catch (e) {
+      setStatus('error');
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  const isReviseMode = noteMode === 'revise';
+
+  return (
+    <section className="social-detail-section">
+      <h3 className="social-section-label">Review</h3>
+      <div className="social-review">
+        {current && (
+          <p className="social-review-current">
+            <span className={`social-review-current-status is-${current.status}`}>
+              {current.status === 'approved' && '✓ Approved'}
+              {current.status === 'needs_revision' && '↻ Revision requested'}
+              {current.status === 'rejected' && '✕ Rejected'}
+              {current.status === 'unreviewed' && 'Unreviewed'}
+              {current.status === 'published' && 'Published'}
+            </span>
+            {current.reviewer && <span className="social-review-reviewer"> by {current.reviewer}</span>}
+            {current.note && <span className="social-review-note"> — {current.note}</span>}
+          </p>
+        )}
+        {!current && (
+          <p className="social-review-lead">
+            Approve to ship. Request a revision if the copy needs a rework — the author regenerates against your note.
+            Reject only if the story shouldn&rsquo;t run at all.
+          </p>
+        )}
+        {status !== 'submitting' && noteMode === null && (
+          <div className="social-actions">
+            <button
+              type="button"
+              className="social-btn social-btn--primary"
+              onClick={() => submit('approved')}
+              disabled={current?.status === 'approved'}
+            >
+              {current?.status === 'approved' ? '✓ Approved' : 'Approve'}
+            </button>
+            <button
+              type="button"
+              className="social-btn social-btn--secondary"
+              onClick={() => { setNoteMode('revise'); setNote(current?.note ?? ''); }}
+              disabled={current?.status === 'needs_revision'}
+            >
+              {current?.status === 'needs_revision' ? '↻ Revision requested' : 'Request revision'}
+            </button>
+            <button
+              type="button"
+              className="social-btn social-btn--ghost"
+              onClick={() => { setNoteMode('reject'); setNote(''); }}
+              disabled={current?.status === 'rejected'}
+            >
+              {current?.status === 'rejected' ? '✕ Rejected' : 'Reject'}
+            </button>
+          </div>
+        )}
+        {noteMode !== null && (
+          <div className="social-review-reject">
+            <label className="social-critique-label" htmlFor="social-review-note">
+              {isReviseMode
+                ? 'What should the author change? — the author will regenerate against this'
+                : 'Reason for rejecting (optional) — helps the next reviewer'}
+            </label>
+            <textarea
+              id="social-review-note"
+              className="social-critique-input"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder={
+                isReviseMode
+                  ? 'e.g. Cover misreads the story — the actor is Nvidia, not the White House. Tighten the CONTEXT beat.'
+                  : 'e.g. Story doesn’t clear the bar. Not worth running.'
+              }
+              rows={isReviseMode ? 3 : 2}
+              autoFocus
+            />
+            <div className="social-actions">
+              <button
+                type="button"
+                className="social-btn social-btn--primary"
+                onClick={() =>
+                  isReviseMode
+                    ? submit('needs_revision', note.trim() || undefined)
+                    : submit('rejected', note.trim() || undefined)
+                }
+                disabled={isReviseMode && note.trim().length === 0}
+              >
+                {isReviseMode ? 'Send back for revision' : 'Confirm reject'}
+              </button>
+              <button
+                type="button"
+                className="social-btn social-btn--secondary"
+                onClick={() => { setNoteMode(null); setNote(''); }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+        {status === 'submitting' && (
+          <p className="social-review-lead">
+            <Loader2 size={14} className="social-spin" strokeWidth={2.2} /> Saving review…
+          </p>
+        )}
+        {status === 'error' && <p className="social-generate-error">Failed: {error}</p>}
+      </div>
+    </section>
   );
 }
 
@@ -186,11 +373,14 @@ const CRITIQUE_SUGGESTIONS = [
 ];
 
 function GeneratePanel({ article }: { article: Article }) {
+  const router = useRouter();
+  const revisionRequested = article.reviewStatus === 'needs_revision' && !!article.reviewNote;
+
   const [status, setStatus] = useState<'idle' | 'generating' | 'done' | 'error'>('idle');
   const [result, setResult] = useState<GenerateResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [critiqueOpen, setCritiqueOpen] = useState(false);
-  const [critique, setCritique] = useState('');
+  const [critique, setCritique] = useState(revisionRequested ? (article.reviewNote ?? '') : '');
 
   async function trigger(payload: { force?: boolean; critique?: string }) {
     setStatus('generating');
@@ -211,6 +401,10 @@ function GeneratePanel({ article }: { article: Article }) {
       setStatus('done');
       setCritiqueOpen(false);
       setCritique('');
+      // Regenerate clears review state server-side; refresh so ReviewPanel
+      // and the badge reflect the reset instead of showing stale "approved"
+      // or "needs revision" for copy that no longer exists.
+      router.refresh();
     } catch (e) {
       setStatus('error');
       setError(e instanceof Error ? e.message : String(e));
@@ -226,7 +420,43 @@ function GeneratePanel({ article }: { article: Article }) {
   return (
     <section className="social-detail-section">
       <h3 className="social-section-label">Generated post</h3>
-      {status === 'idle' && (
+      {status === 'idle' && revisionRequested && (
+        <div className="social-generate">
+          <p className="social-generate-lead">
+            <span className="social-generate-revision-tag">↻ Revision requested</span>
+            {article.reviewedBy ? ` by ${article.reviewedBy}` : ''}
+          </p>
+          <blockquote className="social-generate-critique-quote">
+            &ldquo;{article.reviewNote}&rdquo;
+          </blockquote>
+          <label className="social-critique-label" htmlFor="social-revision-critique">
+            Edit the critique before regenerating (or send as-is):
+          </label>
+          <textarea
+            id="social-revision-critique"
+            className="social-critique-input"
+            value={critique}
+            onChange={(e) => setCritique(e.target.value)}
+            rows={3}
+          />
+          <div className="social-actions">
+            <button
+              type="button"
+              className="social-btn social-btn--primary"
+              onClick={submitCritique}
+              disabled={critique.trim().length === 0}
+            >
+              <Sparkles size={14} strokeWidth={2.2} />
+              Regenerate with this critique
+            </button>
+          </div>
+          <p className="social-critique-hint">
+            Adjust mode: reads the existing copy + this critique and reshapes just what was called out.
+            Facts stay verified. ~$0.08.
+          </p>
+        </div>
+      )}
+      {status === 'idle' && !revisionRequested && (
         <div className="social-generate">
           <p className="social-generate-lead">
             Runs the full editorial + render pipeline. Skips any stages that

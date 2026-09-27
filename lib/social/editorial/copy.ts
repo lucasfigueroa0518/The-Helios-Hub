@@ -160,7 +160,45 @@ Field guidance by beat (which fields to fill):
 - FOLLOW: body (the story-specific line, 8-12 words)
 
 For SlideCopy fields that aren't relevant to the beat, emit null (not an
-empty array, not an empty string). altText is mandatory on every slide.`;
+empty array, not an empty string). altText is mandatory on every slide.
+
+## HARD LENGTH CAPS (SKILL-LEVEL, ENFORCED IN NORMALIZE)
+
+Templates are calibrated for these lengths. Copy that exceeds them will be
+truncated at the last sentence boundary before the cap, which usually reads
+worse than aiming inside the cap in the first place. Aim comfortably under.
+
+Character caps (total characters across all spans, ignoring role):
+
+- HOOK          headline ≤ 100    (cover hero, punchy)
+- GROUND        body ≤ 240, bodyBottom ≤ 180
+- CONTEXT       body ≤ 240, bodyBottom ≤ 180
+- SCALE         title ≤ 12  (the giant number, e.g. "26%", "$21B", "2 MONTHS")
+                headline ≤ 60  (uppercase Pragmatica label)
+                body ≤ 200
+- MECHANISM     title ≤ 40  (short eyebrow like "THE LOOP.")
+                headline ≤ 60  (uppercase label)
+                body ≤ 240, bodyBottom ≤ 180
+- CONTEXT       body ≤ 240, bodyBottom ≤ 180
+- TURN          headline ≤ 60 (landing line, no body)
+- PROOF         headline ≤ 40 (short label like "On the record.")
+                body ≤ 240
+- SCENARIO      body ≤ 240, bodyBottom ≤ 180
+- STAKES        body ≤ 240
+- QUOTE         body ≤ 200  (a real spoken sentence, not a paragraph)
+                headline ≤ 60 (attribution)
+- ANALOGY       body ≤ 240
+- TWIST         body ≤ 240
+- THESIS        body ≤ 220  (single landing sentence; longer overflows the
+                             hero-type composition and looks fragmentary)
+- DEBATE        headline ≤ 120 (question ending in ?)
+                each side.text ≤ 120
+                each side.label ≤ 12 (short uppercase tag)
+- FOLLOW        body ≤ 100 (story-specific one-liner)
+
+Design intent: caps are about what LANDS visually on the slide, not editorial
+completeness. Any elaboration that doesn't fit belongs in the CAPTION, which
+has its own 500-900 char budget.`;
 
 export type BeatCopy = {
   position: number;
@@ -545,9 +583,78 @@ function normalize(raw: unknown, plan: StoryPlan, factSheet: FactSheet, articleP
     title: stripHedgesFromRun(slide.title),
   }));
   const dateInjected = injectDateIntoGround(hedgeStripped, factSheet, articlePublishedAt);
+  const lengthCapped = dateInjected.map((slide) => enforceLengthCaps(slide));
   const captionHedgeStripped = stripHedges(cappedCaption);
 
-  return { slides: dateInjected, caption: captionHedgeStripped };
+  return { slides: lengthCapped, caption: captionHedgeStripped };
+}
+
+/**
+ * Skill-level enforcement of the per-beat character caps published in the
+ * system prompt. When Sonnet exceeds a cap, truncate at the last sentence
+ * boundary that fits — beats reading half a thought is worse than a clean
+ * short sentence. This is the design guardrail; template auto-shrink is
+ * the last line of defense but the copy shouldn't need it in the first
+ * place.
+ */
+const BEAT_CAPS: Partial<Record<Beat, { headline?: number; body?: number; bodyBottom?: number; title?: number }>> = {
+  HOOK:      { headline: 100 },
+  GROUND:    { body: 240, bodyBottom: 180 },
+  CONTEXT:   { body: 240, bodyBottom: 180 },
+  SCALE:     { title: 12,  headline: 60, body: 200 },
+  MECHANISM: { title: 40,  headline: 60, body: 240, bodyBottom: 180 },
+  TURN:      { headline: 60 },
+  PROOF:     { headline: 40, body: 240 },
+  SCENARIO:  { body: 240, bodyBottom: 180 },
+  STAKES:    { body: 240 },
+  QUOTE:     { body: 200, headline: 60 },
+  ANALOGY:   { body: 240 },
+  TWIST:     { body: 240 },
+  THESIS:    { body: 220 },
+  DEBATE:    { headline: 120 },
+  FOLLOW:    { body: 100 },
+};
+
+function enforceLengthCaps(slide: BeatCopy): BeatCopy {
+  const caps = BEAT_CAPS[slide.beat];
+  if (!caps) return slide;
+  return {
+    ...slide,
+    headline: caps.headline != null ? truncateSpanRun(slide.headline, caps.headline) : slide.headline,
+    body: caps.body != null ? truncateSpanRun(slide.body, caps.body) : slide.body,
+    bodyBottom: caps.bodyBottom != null ? truncateSpanRun(slide.bodyBottom, caps.bodyBottom) : slide.bodyBottom,
+    title: caps.title != null ? truncateSpanRun(slide.title, caps.title) : slide.title,
+  };
+}
+
+function truncateSpanRun(run: SpanRun | null, maxChars: number): SpanRun | null {
+  if (!run || run.length === 0) return run;
+  const total = run.reduce((n, s) => n + s.text.length, 0);
+  if (total <= maxChars) return run;
+  // Rebuild spans up to the max, snapping to the last sentence boundary
+  // (period, question mark, exclamation) or, failing that, the last word
+  // boundary that fits.
+  const joined = run.map((s) => s.text).join('');
+  const window = joined.slice(0, maxChars);
+  const lastSentence = Math.max(window.lastIndexOf('. '), window.lastIndexOf('? '), window.lastIndexOf('! '));
+  const cutIdx = lastSentence > maxChars * 0.5
+    ? lastSentence + 1
+    : window.lastIndexOf(' ') > 0 ? window.lastIndexOf(' ') : maxChars;
+  // Walk the spans and keep whichever prefix fits inside cutIdx.
+  const kept: SpanRun = [];
+  let taken = 0;
+  for (const span of run) {
+    if (taken >= cutIdx) break;
+    const remaining = cutIdx - taken;
+    if (span.text.length <= remaining) {
+      kept.push(span);
+      taken += span.text.length;
+    } else {
+      kept.push({ ...span, text: span.text.slice(0, remaining).trimEnd() });
+      break;
+    }
+  }
+  return kept;
 }
 
 export type CopyInput = {

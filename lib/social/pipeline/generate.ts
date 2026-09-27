@@ -237,7 +237,9 @@ export async function generatePostForArticle(
     await dbQuery(
       `UPDATE helios_social.article_queue
           SET copy_json = $1::jsonb, qa_result = $2::jsonb,
-              qa_pass = $3, qa_passed_at = CASE WHEN $3 THEN now() ELSE NULL END
+              qa_pass = $3, qa_passed_at = CASE WHEN $3 THEN now() ELSE NULL END,
+              review_status = NULL, review_note = NULL,
+              reviewed_at = NULL, reviewed_by = NULL
         WHERE id = $4`,
       [JSON.stringify(finalPost), JSON.stringify(qa), qa.pass, articleId],
     );
@@ -468,7 +470,9 @@ Output STRICT JSON matching the CURRENT COPY shape. No prose, no code fences, no
   await dbQuery(
     `UPDATE helios_social.article_queue
         SET copy_json = $1::jsonb, qa_result = $2::jsonb,
-            qa_pass = $3, qa_passed_at = CASE WHEN $3 THEN now() ELSE NULL END
+            qa_pass = $3, qa_passed_at = CASE WHEN $3 THEN now() ELSE NULL END,
+            review_status = NULL, review_note = NULL,
+            reviewed_at = NULL, reviewed_by = NULL
       WHERE id = $4`,
     [JSON.stringify(finalPost), JSON.stringify(qa), qa.pass, articleId],
   );

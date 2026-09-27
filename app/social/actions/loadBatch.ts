@@ -3,7 +3,7 @@
 import { dbQuery } from '@/lib/db';
 import { HELIOS_SOCIAL_BATCH_CAP, clusterKey } from '@/lib/social/dedup';
 import { requireSocialSession } from '@/lib/social/session';
-import type { Article, IngestStatus } from '@/lib/social/types';
+import type { Article, IngestStatus, ReviewStatus } from '@/lib/social/types';
 
 type BatchRow = {
   id: string;
@@ -25,6 +25,12 @@ type BatchRow = {
   topics: string[] | null;
   notable_number: string | null;
   bullets: string[] | null;
+  has_generated_post: boolean;
+  render_slug: string | null;
+  review_status: ReviewStatus | null;
+  review_note: string | null;
+  reviewed_at: Date | string | null;
+  reviewed_by: string | null;
 };
 
 function iso(value: Date | string | null | undefined): string | null {
@@ -58,6 +64,12 @@ function rowToArticle(r: BatchRow): Article {
     topics: asArray(r.topics),
     notableNumber: r.notable_number,
     bullets: asArray(r.bullets),
+    hasGeneratedPost: Boolean(r.has_generated_post),
+    renderSlug: r.render_slug,
+    reviewStatus: r.review_status,
+    reviewNote: r.review_note,
+    reviewedAt: iso(r.reviewed_at),
+    reviewedBy: r.reviewed_by,
   };
 }
 
@@ -77,7 +89,10 @@ export async function loadBatch(): Promise<Article[]> {
             feed_slug, published_at, added_at, ingest_status,
             relevance_score, relevance_reason, rejected_reason,
             people, companies, products, topics,
-            notable_number, bullets
+            notable_number, bullets,
+            (copy_json IS NOT NULL) AS has_generated_post,
+            render_slug, review_status, review_note,
+            reviewed_at, reviewed_by
        FROM helios_social.article_queue
       WHERE ingest_status IN ('approved_for_draft','drafted')
       ORDER BY relevance_score DESC NULLS LAST,

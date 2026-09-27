@@ -438,6 +438,17 @@
   color: var(--color-primary);
 }
 
+.social-btn--ghost {
+  background: transparent;
+  color: var(--color-text-subtle);
+  border: 1px solid var(--color-border);
+}
+
+.social-btn--ghost:hover:not(:disabled) {
+  color: #f87171;
+  border-color: #f87171;
+}
+
 .social-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -479,6 +490,22 @@
 
 .social-generate-error {
   color: #ef4444;
+}
+
+.social-generate-revision-tag {
+  color: #facc15;
+  font-weight: 600;
+}
+
+.social-generate-critique-quote {
+  margin: 0;
+  padding: 12px 14px;
+  font-family: var(--font-roboto);
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--color-text-strong);
+  background: rgba(250, 204, 21, 0.06);
+  border-radius: 8px;
 }
 
 @keyframes social-spin {
@@ -552,6 +579,117 @@
   font-size: 12px;
   color: var(--color-text-muted);
   font-style: italic;
+}
+
+/* ── Review workflow ──────────────────────────────────────────────────── */
+
+.social-review-badge {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  margin-top: 8px;
+  padding: 3px 8px;
+  font-family: var(--font-roboto);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 4px;
+  line-height: 1.4;
+}
+
+.social-review-badge--approved {
+  background: rgba(19, 133, 16, 0.18);
+  color: #4ade80;
+}
+
+.social-review-badge--rejected {
+  background: rgba(239, 68, 68, 0.18);
+  color: #f87171;
+}
+
+.social-review-badge--pending {
+  background: rgba(255, 94, 26, 0.18);
+  color: var(--color-primary);
+}
+
+.social-review-badge--revision {
+  background: rgba(250, 204, 21, 0.18);
+  color: #facc15;
+}
+
+.social-review-badge--published {
+  background: rgba(59, 130, 246, 0.18);
+  color: #60a5fa;
+}
+
+.social-review-badge--empty {
+  background: transparent;
+  color: var(--color-text-muted);
+  padding-left: 0;
+}
+
+.social-review {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 24px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+}
+
+.social-review-empty,
+.social-review-lead {
+  margin: 0;
+  font-family: var(--font-roboto);
+  font-size: 14px;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.social-review-current {
+  margin: 0;
+  font-family: var(--font-roboto);
+  font-size: 14px;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.social-review-current-status {
+  font-weight: 600;
+}
+
+.social-review-current-status.is-approved {
+  color: #4ade80;
+}
+
+.social-review-current-status.is-rejected {
+  color: #f87171;
+}
+
+.social-review-current-status.is-needs_revision {
+  color: #facc15;
+}
+
+.social-review-current-status.is-published {
+  color: #60a5fa;
+}
+
+.social-review-reviewer {
+  color: var(--color-text-strong);
+}
+
+.social-review-note {
+  font-style: italic;
+}
+
+.social-review-reject {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
 }
 
 /* ── Motion ───────────────────────────────────────────────────────────── */

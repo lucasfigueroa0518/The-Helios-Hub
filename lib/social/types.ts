@@ -33,4 +33,19 @@ export type Article = {
   topics: string[];
   notableNumber: string | null;
   bullets: string[];
+
+  // Generation + review state
+  hasGeneratedPost: boolean;
+  renderSlug: string | null;
+  reviewStatus: ReviewStatus | null;
+  reviewNote: string | null;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
 };
+
+export type ReviewStatus =
+  | 'unreviewed'
+  | 'approved'
+  | 'needs_revision'
+  | 'rejected'
+  | 'published';
