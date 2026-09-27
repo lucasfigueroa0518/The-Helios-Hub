@@ -68,13 +68,21 @@ const SECOND_MOVE =
 /** The pipeline appends this itself, so a copy from the writer is dropped. */
 const CONTINUITY = /[\s,;.]*(?:in )?(?:one|a single) continuous (?:shot|take)[\s.]*$/i;
 /** Lines the writer may echo that Kling must never receive. */
-const NOT_FOR_KLING = /^(?:Hook(?: timing)?|Polarity):/i;
+const NOT_FOR_KLING = /^(?:Hook(?: timing| SFX)?|Routed hook|Polarity):/i;
 
-/** What `video_jobs.motion_prompt` stores: the hook, the version and grade, the polarity plan, then the block Kling received. */
-export function motionRecord(hook: Hook, prompt: MotionPrompt, timing?: HookTiming): string {
+/** What the render actually did with the hook (D-122): the router's pick, and the SFX file attached, if any. */
+export type HookRender = { routedHook: Hook; sfx: string | null };
+
+/**
+ * What `video_jobs.motion_prompt` stores: the hook, the version and grade, the polarity plan, then the block Kling received.
+ * With `render`, `hook` is the hook actually stamped (null when none was), and the routed hook is noted when it differs.
+ */
+export function motionRecord(hook: Hook | null, prompt: MotionPrompt, timing?: HookTiming, render?: HookRender): string {
   return [
-    `Hook: ${hook}`,
+    `Hook: ${hook ?? 'none'}`,
+    ...(render && render.routedHook !== hook ? [`Routed hook: ${render.routedHook}`] : []),
     ...(timing ? [`Hook timing: ${timing}`] : []),
+    ...(render ? [`Hook SFX: ${render.sfx ?? 'none'}`] : []),
     `Motion: ${MOTION_PROMPT_VERSION}, ${prompt.profile}`,
     ...(prompt.polarity ? [`Polarity: ${prompt.polarity}`] : []),
     ...prompt.warnings.map((warning) => `Warning: ${warning}`),

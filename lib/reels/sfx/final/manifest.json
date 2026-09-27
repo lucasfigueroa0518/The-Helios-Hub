@@ -1,0 +1,444 @@
+{
+  "version": "hook-sfx-v1",
+  "fps": 24,
+  "sampleRate": 48000,
+  "settings": {
+    "edgeFadeMs": 3,
+    "cushionFrames": 2,
+    "targetRmsDb": -20,
+    "peakCeilingDb": -1,
+    "offsetStepMs": 5,
+    "limiter": {
+      "lookaheadMs": 1.5,
+      "releaseMs": 40
+    }
+  },
+  "files": {
+    "glitch-double.wav": {
+      "hook": "glitch",
+      "timing": "double",
+      "source": "Double Glitch.wav",
+      "manipulations": {
+        "trimStartMs": 255,
+        "tempo": 1,
+        "gainDb": 6.8,
+        "limiterMaxReductionDb": 3.8,
+        "edgeFadeMs": 3,
+        "cushionFrames": 2
+      },
+      "measured": {
+        "onRmsDb": -20,
+        "spanRmsDb": [
+          -21.2,
+          -19.1
+        ],
+        "truePeakDb": -1.3
+      },
+      "samples": 28000,
+      "sha256": "ea87c184b98a154d896da6f24537836d57c6e0b3b77efa20e7a1785d64fddaad"
+    },
+    "glitch-strobe.wav": {
+      "hook": "glitch",
+      "timing": "strobe",
+      "source": "Double Glitch.wav",
+      "manipulations": {
+        "trimStartMs": 810,
+        "tempo": 1,
+        "gainDb": 5.9,
+        "limiterMaxReductionDb": 0,
+        "edgeFadeMs": 3,
+        "cushionFrames": 2
+      },
+      "measured": {
+        "onRmsDb": -20,
+        "spanRmsDb": [
+          -17.9,
+          -21.5,
+          -21.6
+        ],
+        "truePeakDb": -6.4
+      },
+      "samples": 28000,
+      "sha256": "f3fc62edbfe6d3a72d82c05e0d7562165ff44219a4b76ddb29808f09a7e0908a"
+    },
+    "glitch-tail.wav": {
+      "hook": "glitch",
+      "timing": "tail",
+      "source": "Double Glitch.wav",
+      "manipulations": {
+        "trimStartMs": 780,
+        "tempo": 1,
+        "gainDb": 3.5,
+        "limiterMaxReductionDb": 0,
+        "edgeFadeMs": 3,
+        "cushionFrames": 2
+      },
+      "measured": {
+        "onRmsDb": -20,
+        "spanRmsDb": [
+          -15.4,
+          -24.2,
+          -24.4
+        ],
+        "truePeakDb": -4.6
+      },
+      "samples": 32000,
+      "sha256": "e240235d64c2f60ef969e217213b4554263f3ca71817ccccf9433e618bf33d9b"
+    },
+    "color_bars-double.wav": {
+      "hook": "color_bars",
+      "timing": "double",
+      "source": "TV Noise.wav",
+      "manipulations": {
+        "trimStartMs": 1565,
+        "tempo": 1,
+        "gainDb": 8.8,
+        "limiterMaxReductionDb": 0,
+        "edgeFadeMs": 3,
+        "cushionFrames": 2
+      },
+      "measured": {
+        "onRmsDb": -20,
+        "spanRmsDb": [
+          -20.1,
+          -19.9
+        ],
+        "truePeakDb": -8.4
+      },
+      "samples": 28000,
+      "sha256": "4d8a9657d71b9021c498c539589592fd04fb8ce11cb99b39f881d6ad98b712ff"
+    },
+    "color_bars-strobe.wav": {
+      "hook": "color_bars",
+      "timing": "strobe",
+      "source": "TV Noise.wav",
+      "manipulations": {
+        "trimStartMs": 1580,
+        "tempo": 1,
+        "gainDb": 8.9,
+        "limiterMaxReductionDb": 0,
+        "edgeFadeMs": 3,
+        "cushionFrames": 2
+      },
+      "measured": {
+        "onRmsDb": -20,
+        "spanRmsDb": [
+          -20,
+          -20,
+          -20
+        ],
+        "truePeakDb": -9.3
+      },
+      "samples": 28000,
+      "sha256": "796863f65320f90dc5f691f768af8f6c905342c75b2d2f82b36ccaa79b444ead"
+    },
+    "color_bars-tail.wav": {
+      "hook": "color_bars",
+      "timing": "tail",
+      "source": "TV Noise.wav",
+      "manipulations": {
+        "trimStartMs": 1550,
+        "tempo": 1,
+        "gainDb": 8.9,
+        "limiterMaxReductionDb": 0,
+        "edgeFadeMs": 3,
+        "cushionFrames": 2
+      },
+      "measured": {
+        "onRmsDb": -20,
+        "spanRmsDb": [
+          -20,
+          -20.2,
+          -19.9
+        ],
+        "truePeakDb": -9.2
+      },
+      "samples": 32000,
+      "sha256": "82266251b09e8fd93d3ff43fb08b24cd82b02bca12aa4cc02bdfb591151ddc1a"
+    },
+    "invert-double.wav": {
+      "hook": "invert",
+      "timing": "double",
+      "source": "Whoosh Glitch.wav",
+      "manipulations": {
+        "trimStartMs": 40,
+        "tempo": 1,
+        "gainDb": 3.8,
+        "limiterMaxReductionDb": 5.2,
+        "edgeFadeMs": 3,
+        "cushionFrames": 2
+      },
+      "measured": {
+        "onRmsDb": -20,
+        "spanRmsDb": [
+          -19.9,
+          -20.1
+        ],
+        "truePeakDb": -1
+      },
+      "samples": 28000,
+      "sha256": "2cbeac6eec6fc165c717349a475642bd7e2ace0ee2fbff1996941766c9c4ccb8"
+    },
+    "invert-strobe.wav": {
+      "hook": "invert",
+      "timing": "strobe",
+      "source": "Whoosh Glitch.wav",
+      "manipulations": {
+        "trimStartMs": 60,
+        "tempo": 1,
+        "gainDb": 7.2,
+        "limiterMaxReductionDb": 1.8,
+        "edgeFadeMs": 3,
+        "cushionFrames": 2
+      },
+      "measured": {
+        "onRmsDb": -20,
+        "spanRmsDb": [
+          -22.8,
+          -17.3,
+          -22.1
+        ],
+        "truePeakDb": -1.3
+      },
+      "samples": 28000,
+      "sha256": "b1ab890c1d103e74aef25a41aff1ba0fc97827e5e2e696e7df3930b4e64c0bfb"
+    },
+    "invert-tail.wav": {
+      "hook": "invert",
+      "timing": "tail",
+      "source": "Whoosh Glitch.wav",
+      "manipulations": {
+        "trimStartMs": 40,
+        "tempo": 0.945,
+        "gainDb": 6.1,
+        "limiterMaxReductionDb": 0.4,
+        "edgeFadeMs": 3,
+        "cushionFrames": 2
+      },
+      "measured": {
+        "onRmsDb": -20,
+        "spanRmsDb": [
+          -23.9,
+          -17,
+          -21
+        ],
+        "truePeakDb": -1.3
+      },
+      "samples": 32000,
+      "sha256": "7a688ebbfa2890ea1122cacdf67f99beb64e992cbc4923c2c6f1f704b0cd6b76"
+    },
+    "vhs-double.wav": {
+      "hook": "vhs",
+      "timing": "double",
+      "source": "VHS Smooth Glitch.wav",
+      "manipulations": {
+        "trimStartMs": 50,
+        "tempo": 0.857,
+        "gainDb": -0.4,
+        "limiterMaxReductionDb": 0,
+        "edgeFadeMs": 3,
+        "cushionFrames": 2
+      },
+      "measured": {
+        "onRmsDb": -20,
+        "spanRmsDb": [
+          -20.7,
+          -19.4
+        ],
+        "truePeakDb": -8
+      },
+      "samples": 28000,
+      "sha256": "15ca367cd0a69c3614556cbf55b796323df0f921bc2b4e9203b632928db4e243"
+    },
+    "vhs-strobe.wav": {
+      "hook": "vhs",
+      "timing": "strobe",
+      "source": "VHS Smooth Glitch.wav",
+      "manipulations": {
+        "trimStartMs": 50,
+        "tempo": 0.857,
+        "gainDb": -0.3,
+        "limiterMaxReductionDb": 0,
+        "edgeFadeMs": 3,
+        "cushionFrames": 2
+      },
+      "measured": {
+        "onRmsDb": -20,
+        "spanRmsDb": [
+          -22.6,
+          -19.2,
+          -19.1
+        ],
+        "truePeakDb": -8.8
+      },
+      "samples": 28000,
+      "sha256": "633b1d1b90e9da17426f8e0b682f7df24d190e207f8607ca2e36ae55e773a184"
+    },
+    "vhs-tail.wav": {
+      "hook": "vhs",
+      "timing": "tail",
+      "source": "VHS Smooth Glitch.wav",
+      "manipulations": {
+        "trimStartMs": 50,
+        "tempo": 0.75,
+        "gainDb": -0.3,
+        "limiterMaxReductionDb": 0,
+        "edgeFadeMs": 3,
+        "cushionFrames": 2
+      },
+      "measured": {
+        "onRmsDb": -20,
+        "spanRmsDb": [
+          -23.7,
+          -19.6,
+          -19.1
+        ],
+        "truePeakDb": -8.7
+      },
+      "samples": 32000,
+      "sha256": "a5d7385e728bb497b0a5e0e49f84f07489cc4534c2d258dc3152ec899a2de2c1"
+    },
+    "thermal-double.wav": {
+      "hook": "thermal",
+      "timing": "double",
+      "source": "Pulse Glitch.wav",
+      "manipulations": {
+        "trimStartMs": 270,
+        "tempo": 1,
+        "gainDb": -1.9,
+        "limiterMaxReductionDb": 0,
+        "edgeFadeMs": 3,
+        "cushionFrames": 2
+      },
+      "measured": {
+        "onRmsDb": -20,
+        "spanRmsDb": [
+          -18.1,
+          -23.3
+        ],
+        "truePeakDb": -1.4
+      },
+      "samples": 28000,
+      "sha256": "1f816f8c1ce1c2a473a4a872e07258d7f617af80fa62e3f257b986ff98921538"
+    },
+    "thermal-strobe.wav": {
+      "hook": "thermal",
+      "timing": "strobe",
+      "source": "Pulse Glitch.wav",
+      "manipulations": {
+        "trimStartMs": 335,
+        "tempo": 1,
+        "gainDb": -1.6,
+        "limiterMaxReductionDb": 0,
+        "edgeFadeMs": 3,
+        "cushionFrames": 2
+      },
+      "measured": {
+        "onRmsDb": -20,
+        "spanRmsDb": [
+          -17.1,
+          -21.1,
+          -25.5
+        ],
+        "truePeakDb": -1.1
+      },
+      "samples": 28000,
+      "sha256": "2968152abe9d3fc62170f46763ad4d8cd14f967dada873c788c790284e23f67d"
+    },
+    "thermal-tail.wav": {
+      "hook": "thermal",
+      "timing": "tail",
+      "source": "Pulse Glitch.wav",
+      "manipulations": {
+        "trimStartMs": 270,
+        "tempo": 0.975,
+        "gainDb": 1.4,
+        "limiterMaxReductionDb": 4,
+        "edgeFadeMs": 3,
+        "cushionFrames": 2
+      },
+      "measured": {
+        "onRmsDb": -20,
+        "spanRmsDb": [
+          -19.2,
+          -18.1,
+          -22.2
+        ],
+        "truePeakDb": -1
+      },
+      "samples": 32000,
+      "sha256": "d4bc0310e5c5761184a70fc1753c73984869b884b37223d5f31cee26d6294937"
+    },
+    "blue_screen-double.wav": {
+      "hook": "blue_screen",
+      "timing": "double",
+      "source": "Crackle Glitch.wav",
+      "manipulations": {
+        "trimStartMs": 115,
+        "tempo": 0.822,
+        "gainDb": 0,
+        "limiterMaxReductionDb": 1.1,
+        "edgeFadeMs": 3,
+        "cushionFrames": 2
+      },
+      "measured": {
+        "onRmsDb": -20,
+        "spanRmsDb": [
+          -19.8,
+          -20.2
+        ],
+        "truePeakDb": -1.3
+      },
+      "samples": 28000,
+      "sha256": "4169763871603dfd66225935639752a73e0060ff9c85784b3a0755f8aed9ac33"
+    },
+    "blue_screen-strobe.wav": {
+      "hook": "blue_screen",
+      "timing": "strobe",
+      "source": "Crackle Glitch.wav",
+      "manipulations": {
+        "trimStartMs": 110,
+        "tempo": 0.822,
+        "gainDb": 3.3,
+        "limiterMaxReductionDb": 4.1,
+        "edgeFadeMs": 3,
+        "cushionFrames": 2
+      },
+      "measured": {
+        "onRmsDb": -20.1,
+        "spanRmsDb": [
+          -19.7,
+          -20.6,
+          -19.9
+        ],
+        "truePeakDb": -1
+      },
+      "samples": 28000,
+      "sha256": "f07a270a28af47d57c7dd785c48ad509459a1a6402dd255854aa586782db1a08"
+    },
+    "blue_screen-tail.wav": {
+      "hook": "blue_screen",
+      "timing": "tail",
+      "source": "Crackle Glitch.wav",
+      "manipulations": {
+        "trimStartMs": 130,
+        "tempo": 0.72,
+        "gainDb": 0.1,
+        "limiterMaxReductionDb": 0,
+        "edgeFadeMs": 3,
+        "cushionFrames": 2
+      },
+      "measured": {
+        "onRmsDb": -20,
+        "spanRmsDb": [
+          -22.8,
+          -18.4,
+          -19.9
+        ],
+        "truePeakDb": -1.1
+      },
+      "samples": 32000,
+      "sha256": "dc83242cf7fd18840c258f22078708438cd55591849c260d84f8cb2282de4cb0"
+    }
+  }
+}

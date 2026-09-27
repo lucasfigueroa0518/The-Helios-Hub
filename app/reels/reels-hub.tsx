@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Activity,
@@ -11,9 +12,10 @@ import {
   Loader2,
   Play,
   Sparkles,
-  X,
+  Volume2,
 } from 'lucide-react';
 
+import { Drawer, ReelVideo, Section } from '@/app/reels/ui';
 import { requestJson } from '@/lib/client-request';
 import type { StoredCopyJob } from '@/lib/reels/copy/jobs';
 import type { StoredCopy } from '@/lib/reels/copy/store';
@@ -356,6 +358,9 @@ export function ReelsHub({ initial }: { initial: ReelsOverview }) {
             <button type="button" className="rh-btn rh-btn--quiet" disabled title="Advanced analytics on posted reels. Coming later.">
               <BarChart3 size={15} /> Post analytics <span className="rh-soon">Soon</span>
             </button>
+            <Link href="/reels/sfx" className="rh-btn">
+              <Volume2 size={15} /> Hook sounds
+            </Link>
             <button type="button" className="rh-btn" onClick={() => setInsightsOpen(true)} aria-haspopup="dialog">
               <span className={`rh-dot rh-dot--${health.tone}`} aria-hidden="true" />
               <Activity size={15} /> Insights
@@ -492,30 +497,6 @@ export function healthOf(data: ReelsOverview): Health {
 
 /* ----------------------------------------------------------------- media */
 
-function ReelVideo({ id, poster, playing, controls }: { id: string; poster: string | null; playing: boolean; controls?: boolean }) {
-  const ref = useRef<HTMLVideoElement>(null);
-  useEffect(() => {
-    const video = ref.current;
-    if (!video || controls) return;
-    if (playing) void video.play().catch(() => undefined);
-    else video.pause();
-  }, [playing, controls]);
-  return (
-    <video
-      ref={ref}
-      className="rh-media__fill"
-      src={`/api/reels/video/${id}`}
-      poster={poster ?? undefined}
-      muted
-      loop
-      playsInline
-      controls={controls}
-      autoPlay={controls}
-      preload="metadata"
-    />
-  );
-}
-
 function Pills({ score }: { score: StoredScore }) {
   return (
     <>
@@ -555,7 +536,7 @@ function ReelCard({ reel, onOpen, onGenerate }: { reel: Reel; onOpen: () => void
         onMouseLeave={() => setHover(false)}
       >
         {reel.phase === 'ready' && reel.video ? (
-          <ReelVideo id={reel.video.id} poster={reel.poster} playing={hover} />
+          <ReelVideo src={`/api/reels/video/${reel.video.id}`} poster={reel.poster} playing={hover} />
         ) : reel.still ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img className="rh-media__fill" src={reel.still} alt="" loading="lazy" />
@@ -635,53 +616,6 @@ function RestRow({ reel, onOpen }: { reel: Reel; onOpen: () => void }) {
 
 /* ---------------------------------------------------------------- drawer */
 
-function Drawer({
-  label,
-  onClose,
-  wide,
-  children,
-}: {
-  label: string;
-  onClose: () => void;
-  wide?: boolean;
-  children: ReactNode;
-}) {
-  const panel = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    panel.current?.focus();
-  }, []);
-  return (
-    <div className="rh-drawer" role="presentation">
-      <button type="button" className="rh-drawer__scrim" aria-label="Close" onClick={onClose} />
-      <div
-        ref={panel}
-        className={`rh-drawer__panel${wide ? ' rh-drawer__panel--wide' : ''}`}
-        role="dialog"
-        aria-modal="true"
-        aria-label={label}
-        tabIndex={-1}
-      >
-        <button type="button" className="rh-drawer__close" onClick={onClose} aria-label="Close">
-          <X size={18} />
-        </button>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function Section({ title, open, children, count }: { title: string; open?: boolean; count?: number; children: ReactNode }) {
-  return (
-    <details className="rh-section" open={open}>
-      <summary>
-        {title}
-        {count != null && count > 0 && <span className="rh-section__count">{count}</span>}
-      </summary>
-      <div className="rh-section__body">{children}</div>
-    </details>
-  );
-}
-
 function CopyButton({ text }: { text: string }) {
   const [done, setDone] = useState(false);
   return (
@@ -728,7 +662,7 @@ export function ReelDetail({ reel, onGenerate }: { reel: Reel; onGenerate: () =>
 
       <div className="rh-detail__media">
         {reel.phase === 'ready' && reel.video ? (
-          <ReelVideo id={reel.video.id} poster={reel.poster} playing controls />
+          <ReelVideo src={`/api/reels/video/${reel.video.id}`} poster={reel.poster} playing controls sound />
         ) : reel.still ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img className="rh-media__fill" src={reel.still} alt="Reel still" />

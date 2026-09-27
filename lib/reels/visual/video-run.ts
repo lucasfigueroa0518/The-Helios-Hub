@@ -7,6 +7,8 @@ import { priceAnthropicMessages } from '@/lib/anthropic-pricing';
 import { dbQuery } from '@/lib/db';
 import { MONTHLY_WATCH_USD, MOTION_MODEL, VIDEO_STALE_MINUTES } from '@/lib/reels/config';
 import { monthToDateUsd, recordCost } from '@/lib/reels/repository';
+import { SFX_FPS } from '@/lib/reels/sfx/frame-map';
+import { FINAL_DIR, hookSfxPlan } from '@/lib/reels/sfx/manifest';
 import { buildStory, type VisualMember } from '@/lib/reels/visual/scene';
 import { colorProfileOrNoir } from '@/lib/reels/visual/color';
 import { renderTextPlate } from '@/lib/reels/visual/engine';
@@ -17,7 +19,7 @@ import { pickHookTiming, type ClipShape, type Hook, type HookTiming } from '@/li
 import { routeHook } from '@/lib/reels/visual/hook-route';
 import { motionRecord } from '@/lib/reels/visual/motion-prompt';
 import { writeMotion, type MotionClient } from '@/lib/reels/visual/motion-writer';
-import { overlayPlate, probeVideo } from '@/lib/reels/visual/overlay';
+import { muxHookSfx, overlayPlate, probeVideo } from '@/lib/reels/visual/overlay';
 import { downloadFrameObject, signFrameObject, uploadFrameObject } from '@/lib/reels/visual/storage';
 import type { Bucket, MemberRole } from '@/lib/reels/types';
 
@@ -266,6 +268,9 @@ async function klingWithRetry(input: { prompt: string; imageUrl: string }, notic
   throw last;
 }
 
+/** The composed reel, and the hook actually stamped on it (null when none was). */
+type Composed = { path: string; hook: Hook | null; shape: ClipShape | null };
+
 /**
  * Hook, then text plate, over the raw clip. Fails open: if the plate or the
  * hook cannot be laid, the reel ships with what did work and a warning.
@@ -278,13 +283,13 @@ async function compose(
   hook: Hook,
   timing: HookTiming,
   notices: string[],
-): Promise<string> {
+): Promise<Composed> {
   let shape: ClipShape;
   try {
     shape = await probeVideo(rawPath);
   } catch (error) {
     notices.push(`Could not read the clip, so it ships without the hook and text: ${describe(error)}`);
-    return rawPath;
+    return { path: rawPath, hook: null, shape: null };
   }
   try {
     const plate = await renderTextPlate(target.onScreenCopy, shape.width, shape.height, target.colorProfile);
@@ -292,21 +297,47 @@ async function compose(
     notices.push(...plate.warnings);
   } catch (error) {
     notices.push(`Text plate failed, so the clip ships without on-screen text: ${describe(error)}`);
-    return rawPath;
+    return { path: rawPath, hook: null, shape };
   }
   try {
     await overlayPlate(rawPath, platePath, outPath, { hook, clip: shape, timing });
-    return outPath;
+    return { path: outPath, hook, shape };
   } catch (error) {
     notices.push(`Overlay with the ${hook} hook failed: ${describe(error)}`);
   }
   try {
     await overlayPlate(rawPath, platePath, outPath, { hook: 'invert', clip: shape, timing });
     notices.push('Used the invert hook instead.');
-    return outPath;
+    return { path: outPath, hook: 'invert', shape };
   } catch (error) {
     notices.push(`Overlay failed again, so the clip ships without the hook and text: ${describe(error)}`);
-    return rawPath;
+    return { path: rawPath, hook: null, shape };
+  }
+}
+
+/**
+ * Add the finished SFX for the hook actually stamped and its timing (SFX-07):
+ * an invert fallback gets invert's sound, no hook gets no sound. Separate from
+ * the overlay so a sound failure never costs the hook (D-121). The files are
+ * frame-exact at 24 fps only (D-123). Fails open: the reel ships silent.
+ */
+async function attachHookSfx(
+  composed: Composed,
+  timing: HookTiming,
+  outPath: string,
+  notices: string[],
+): Promise<{ path: string; sfx: string | null }> {
+  const plan = hookSfxPlan(composed.hook, composed.shape?.fps ?? null, timing, SFX_FPS);
+  if ('notice' in plan) {
+    if (plan.notice) notices.push(plan.notice);
+    return { path: composed.path, sfx: null };
+  }
+  try {
+    await muxHookSfx(composed.path, path.join(process.cwd(), FINAL_DIR, plan.file), outPath);
+    return { path: outPath, sfx: plan.file };
+  } catch (error) {
+    notices.push(`Hook sound failed, so the reel ships silent: ${describe(error)}`);
+    return { path: composed.path, sfx: null };
   }
 }
 
@@ -371,16 +402,22 @@ export async function claimAndRenderVideo(deps?: {
       const rawPath = path.join(dir, 'raw.mp4');
       const platePath = path.join(dir, 'plate.png');
       const outPath = path.join(dir, 'reel.mp4');
+      const soundPath = path.join(dir, 'reel-sfx.mp4');
       await writeFile(rawPath, clip.bytes);
       const timing = pickHookTiming();
-      const finalPath = await compose(rawPath, platePath, outPath, target, route.hook, timing, notices);
+      const composed = await compose(rawPath, platePath, outPath, target, route.hook, timing, notices);
+      const sounded = await attachHookSfx(composed, timing, soundPath, notices);
+      const finalPath = sounded.path;
       const videoPath = `${id}/reel.mp4`;
       await uploadFrameObject(videoPath, await readFile(finalPath), 'video/mp4');
       const warnings = [...notices, ...written.prompt.warnings];
       await finish(id, 'ok', {
         // Fail open: the clip ships and the warnings ride along as labels.
         error: warnings.length ? `Warning: ${warnings.join(' | ')}` : null,
-        prompt: motionRecord(route.hook, { ...written.prompt, warnings }, timing),
+        prompt: motionRecord(composed.hook, { ...written.prompt, warnings }, timing, {
+          routedHook: route.hook,
+          sfx: sounded.sfx,
+        }),
         videoPath,
         higgsfieldJobId: clip.jobId,
         usd,
