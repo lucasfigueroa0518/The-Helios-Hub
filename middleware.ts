@@ -45,7 +45,9 @@ function isProtectedPage(pathname: string): boolean {
     || pathname === '/seo'
     || pathname.startsWith('/seo/')
     || pathname === '/traffic'
-    || pathname.startsWith('/traffic/');
+    || pathname.startsWith('/traffic/')
+    || pathname === '/social'
+    || pathname.startsWith('/social/');
 }
 
 export default auth((req) => {
