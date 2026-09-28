@@ -212,9 +212,13 @@ function ReviewPanel({ article }: { article: Article }) {
     return (
       <section className="social-detail-section">
         <h3 className="social-section-label">Review</h3>
-        <p className="social-review-empty">
-          Generate slides first — nothing to review until there&rsquo;s a draft.
-        </p>
+        {article.composeStatus === 'needs_human_review' ? (
+          <PipelineDiagnostics article={article} />
+        ) : (
+          <p className="social-review-empty">
+            Generate slides first — nothing to review until there&rsquo;s a draft.
+          </p>
+        )}
       </section>
     );
   }
@@ -371,6 +375,40 @@ const CRITIQUE_SUGGESTIONS = [
   'Less formal, more conversational',
   'Simpler language — assume no domain expertise',
 ];
+
+/**
+ * Surfaces the v2 creator pipeline's reason for stopping and the last
+ * fact-check round's flags as plain text. No new buttons or layout — the
+ * existing review panel controls still apply. Renders only when the row's
+ * compose_status is `needs_human_review`; other states render nothing.
+ */
+function PipelineDiagnostics({ article }: { article: Article }) {
+  const reason = article.needsHumanReviewReason;
+  const flags = article.needsHumanReviewFlags ?? [];
+  return (
+    <div className="social-review-diagnostics">
+      <p className="social-review-empty">
+        Pipeline stopped: <strong>{reason ?? 'flagged by fact-check'}</strong>.
+        A regenerate ({article.pipelineVersion === 'creator' ? 'creator pipeline' : 'legacy pipeline'})
+        will re-run from the top; a critique note routes the writer with REVIEWER NOTES.
+      </p>
+      {flags.length > 0 && (
+        <ul className="social-review-diagnostics-flags">
+          {flags.map((f, i) => (
+            <li key={i}>
+              <span className="social-review-diagnostics-where">{f.where}</span>
+              {' — '}
+              <span className={`social-review-diagnostics-size is-${f.size.toLowerCase()}`}>{f.size}</span>
+              {': '}
+              <span className="social-review-diagnostics-problem">{f.problem}</span>
+              {f.text && <><br /><em>&ldquo;{f.text}&rdquo;</em></>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 function GeneratePanel({ article }: { article: Article }) {
   const router = useRouter();

@@ -49,15 +49,17 @@ export async function POST(
     );
   }
 
-  const { rows } = await dbQuery<{ copy_json: unknown }>(
+  // Accept both legacy (copy_json) and creator (render_post_json) rows —
+  // the presence of either means there's something to review.
+  const { rows } = await dbQuery<{ copy_json: unknown; render_post_json: unknown }>(
     `UPDATE helios_social.article_queue
         SET review_status = $1,
             review_note   = $2,
             reviewed_at   = now(),
             reviewed_by   = $3
       WHERE id = $4
-        AND copy_json IS NOT NULL
-    RETURNING copy_json`,
+        AND (copy_json IS NOT NULL OR render_post_json IS NOT NULL)
+    RETURNING copy_json, render_post_json`,
     [status, note, reviewer, id],
   );
 

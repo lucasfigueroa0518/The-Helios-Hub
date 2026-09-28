@@ -3,7 +3,14 @@
 import { dbQuery } from '@/lib/db';
 import { HELIOS_SOCIAL_BATCH_CAP, clusterKey } from '@/lib/social/dedup';
 import { requireSocialSession } from '@/lib/social/session';
-import type { Article, IngestStatus, ReviewStatus } from '@/lib/social/types';
+import type {
+  Article,
+  ComposeStatus,
+  IngestStatus,
+  PipelineFlagSummary,
+  PipelineVersion,
+  ReviewStatus,
+} from '@/lib/social/types';
 
 type BatchRow = {
   id: string;
@@ -31,6 +38,9 @@ type BatchRow = {
   review_note: string | null;
   reviewed_at: Date | string | null;
   reviewed_by: string | null;
+  pipeline_version: PipelineVersion | null;
+  compose_status: ComposeStatus | null;
+  pipeline_v2_debug: unknown;
 };
 
 function iso(value: Date | string | null | undefined): string | null {
@@ -44,6 +54,7 @@ function asArray(v: unknown): string[] {
 }
 
 function rowToArticle(r: BatchRow): Article {
+  const v2 = extractV2Summary(r.pipeline_v2_debug);
   return {
     id: r.id,
     source: r.source,
@@ -70,7 +81,33 @@ function rowToArticle(r: BatchRow): Article {
     reviewNote: r.review_note,
     reviewedAt: iso(r.reviewed_at),
     reviewedBy: r.reviewed_by,
+    pipelineVersion: r.pipeline_version ?? 'legacy',
+    composeStatus: r.compose_status,
+    needsHumanReviewReason: v2.reason,
+    needsHumanReviewFlags: v2.flags,
   };
+}
+
+/**
+ * Pull a summary out of pipeline_v2_debug for the review UI when a post is
+ * in needs_human_review. Reads only outcome.reason + the last round's flags.
+ */
+function extractV2Summary(debug: unknown): { reason: string | null; flags: PipelineFlagSummary[] } {
+  if (!debug || typeof debug !== 'object') return { reason: null, flags: [] };
+  const d = debug as {
+    outcome?: { reason?: string };
+    rounds?: Array<{ factCheck?: { flags?: Array<{ where?: string; text?: string; problem?: string; size?: string }> } }>;
+  };
+  const reason = d.outcome?.reason ?? null;
+  const lastRound = d.rounds?.[d.rounds.length - 1];
+  const rawFlags = lastRound?.factCheck?.flags ?? [];
+  const flags: PipelineFlagSummary[] = rawFlags.map((f) => ({
+    where: String(f.where ?? ''),
+    text: String(f.text ?? ''),
+    problem: String(f.problem ?? ''),
+    size: (String(f.size ?? 'SMALL').toUpperCase() === 'BIG' ? 'BIG' : 'SMALL') as 'SMALL' | 'BIG',
+  }));
+  return { reason, flags };
 }
 
 /**
@@ -90,9 +127,10 @@ export async function loadBatch(): Promise<Article[]> {
             relevance_score, relevance_reason, rejected_reason,
             people, companies, products, topics,
             notable_number, bullets,
-            (copy_json IS NOT NULL) AS has_generated_post,
+            (copy_json IS NOT NULL OR render_post_json IS NOT NULL) AS has_generated_post,
             render_slug, review_status, review_note,
-            reviewed_at, reviewed_by
+            reviewed_at, reviewed_by,
+            pipeline_version, compose_status, pipeline_v2_debug
        FROM helios_social.article_queue
       WHERE ingest_status IN ('approved_for_draft','drafted')
       ORDER BY relevance_score DESC NULLS LAST,

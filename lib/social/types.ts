@@ -41,6 +41,30 @@ export type Article = {
   reviewNote: string | null;
   reviewedAt: string | null;
   reviewedBy: string | null;
+
+  // Pipeline routing + v2 telemetry (surface-only fields for the review UI).
+  pipelineVersion: PipelineVersion;
+  composeStatus: ComposeStatus | null;
+  /** When composeStatus is 'needs_human_review', the pipeline's short reason. */
+  needsHumanReviewReason: string | null;
+  /** When composeStatus is 'needs_human_review', the last fact-check round's flags as plain text. */
+  needsHumanReviewFlags: PipelineFlagSummary[];
+};
+
+export type PipelineVersion = 'legacy' | 'creator';
+
+export type ComposeStatus =
+  | 'pending_compose'
+  | 'composing'
+  | 'composed'
+  | 'compose_failed'
+  | 'needs_human_review';
+
+export type PipelineFlagSummary = {
+  where: string;
+  text: string;
+  problem: string;
+  size: 'SMALL' | 'BIG';
 };
 
 export type ReviewStatus =

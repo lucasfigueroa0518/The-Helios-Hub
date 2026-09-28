@@ -8,11 +8,16 @@ export const maxDuration = 300;
 
 /**
  * Cron target — picks the oldest article that has cleared relevance
- * (`ingest_status = 'approved_for_draft'`) but doesn't yet have a
- * generated post (`copy_json IS NULL`), and runs the full pipeline. One
- * article per tick keeps us safely inside Vercel's 300s function budget.
+ * (`ingest_status = 'approved_for_draft'`) but doesn't yet have a generated
+ * post, and runs the full pipeline. One article per tick keeps us safely
+ * inside Vercel's 300s function budget.
  *
- * Scheduled by `vercel.ts` — typically every 15 minutes so a 15-article
+ * Legacy rows: unchanged behavior — `copy_json IS NULL` means "not yet
+ * drafted." Creator rows write `render_post_json` (not `copy_json`), so
+ * they're gated on `render_post_json IS NULL` AND a suitable
+ * `compose_status` instead.
+ *
+ * Scheduled by `vercel.json` — typically every 15 minutes so a 15-article
  * batch is fully drafted within a few hours of ingest.
  *
  * Auth: Vercel cron adds the `CRON_SECRET` bearer token (or the
@@ -33,7 +38,18 @@ export async function GET(req: Request): Promise<Response> {
        SELECT id
          FROM helios_social.article_queue
         WHERE ingest_status = 'approved_for_draft'
-          AND copy_json IS NULL
+          AND (
+            (
+              (pipeline_version IS NULL OR pipeline_version = 'legacy')
+              AND copy_json IS NULL
+            )
+            OR
+            (
+              pipeline_version = 'creator'
+              AND render_post_json IS NULL
+              AND (compose_status = 'pending_compose' OR compose_status IS NULL)
+            )
+          )
           AND (generation_started_at IS NULL
                OR generation_started_at < now() - interval '15 minutes')
         ORDER BY added_at ASC

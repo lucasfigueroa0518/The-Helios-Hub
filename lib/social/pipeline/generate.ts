@@ -22,6 +22,10 @@ import { repairPost } from '@/lib/social/editorial/repair';
 import { pickLayouts } from '@/lib/social/render/layout-picker';
 import { assignPhotos } from '@/lib/social/render/photo-assigner';
 
+// v2 creator pipeline routing.
+import { useCreatorPipeline } from '@/lib/social/flags';
+import { runCreatorPipeline } from '@/lib/social/editorial/v2/orchestrate';
+
 export type GenerateResult = {
   ok: true;
   slug: string;
@@ -32,7 +36,16 @@ export type GenerateResult = {
 
 export type GenerateFailure = {
   ok: false;
-  code: 'not_found' | 'body_too_thin' | 'hook_gate_failed';
+  code:
+    | 'not_found'
+    | 'body_too_thin'
+    | 'hook_gate_failed'
+    // Creator (v2) pipeline stopped and the post needs a human decision.
+    // `message` carries the pipeline's actual reason (round-limit exhaust,
+    // no fetchable sources, cost cap, unrecoverable code-check, etc.).
+    | 'needs_human_review'
+    // Creator pipeline hit an unexpected failure. `message` is the reason.
+    | 'creator_failed';
   message: string;
   detail?: string;
 };
@@ -69,17 +82,73 @@ export async function generatePostForArticle(
     strategy: unknown;
     story_plan: unknown;
     copy_json: unknown;
+    pipeline_version: string | null;
+    render_post_json: unknown;
+    render_slug: string | null;
+    compose_status: string | null;
   };
   const { rows } = await dbQuery<Row>(
     `SELECT id, source, source_url, headline, byline, body,
             published_at, fact_sheet, chosen_hook,
-            strategy, story_plan, copy_json
+            strategy, story_plan, copy_json,
+            pipeline_version, render_post_json, render_slug, compose_status
        FROM helios_social.article_queue
       WHERE id = $1`,
     [articleId],
   );
   const row = rows[0];
   if (!row) return { ok: false, code: 'not_found', message: 'article not found' };
+
+  // ── Route to v2 creator pipeline when the row is stamped. ─────────────
+  // Legacy rows fall through to the existing code unchanged.
+  if (useCreatorPipeline({ pipeline_version: row.pipeline_version ?? '' })) {
+    // Resume semantics for creator rows:
+    //   {} + render_post_json exists  → no-op, return existing preview.
+    //   {} + render_post_json missing → run the full v2 pipeline.
+    //   compose_status = 'needs_human_review' → 409 unless force=true.
+    if (!force && row.render_post_json && row.render_slug) {
+      return {
+        ok: true,
+        slug: row.render_slug,
+        cost_usd: 0,
+        stages_run: ['resume-noop'],
+        preview_url: `/social/render/preview?generated=${row.render_slug}&all=1`,
+      };
+    }
+    if (!force && row.compose_status === 'needs_human_review') {
+      return {
+        ok: false,
+        code: 'needs_human_review',
+        message: 'post is in human review — regenerate requires force=true or a critique',
+      };
+    }
+    if (!row.body || row.body.length < 200) {
+      return { ok: false, code: 'body_too_thin', message: 'article body too thin to generate' };
+    }
+    const result = await runCreatorPipeline({
+      id: row.id,
+      source: row.source,
+      source_url: row.source_url,
+      headline: row.headline,
+      body: row.body,
+      published_at: row.published_at,
+    });
+    if (result.ok && result.slug) {
+      return {
+        ok: true,
+        slug: result.slug,
+        cost_usd: result.costUsd,
+        stages_run: result.stagesRun,
+        preview_url: result.previewUrl ?? `/social/render/preview?generated=${result.slug}&all=1`,
+      };
+    }
+    return {
+      ok: false,
+      code: result.status === 'needs_human_review' ? 'needs_human_review' : 'creator_failed',
+      message: result.reason ?? 'creator pipeline did not ship',
+      detail: result.status,
+    };
+  }
   if (!row.body || row.body.length < 200) {
     return { ok: false, code: 'body_too_thin', message: 'article body too thin to generate' };
   }
@@ -323,32 +392,86 @@ export async function adjustPostFromCritique(
     source: string;
     source_url: string;
     headline: string;
+    body: string;
     published_at: Date | string | null;
     fact_sheet: unknown;
     chosen_hook: unknown;
     strategy: unknown;
     story_plan: unknown;
     copy_json: unknown;
+    pipeline_version: string | null;
+    pipeline_v2_debug: unknown;
   };
   const { rows } = await dbQuery<Row>(
-    `SELECT id, source, source_url, headline, published_at,
-            fact_sheet, chosen_hook, strategy, story_plan, copy_json
+    `SELECT id, source, source_url, headline, body, published_at,
+            fact_sheet, chosen_hook, strategy, story_plan, copy_json,
+            pipeline_version, pipeline_v2_debug
        FROM helios_social.article_queue
       WHERE id = $1`,
     [articleId],
   );
   const row = rows[0];
   if (!row) return { ok: false, code: 'not_found', message: 'article not found' };
+  const trimmed = critique.trim();
+  if (!trimmed) {
+    return { ok: false, code: 'not_found', message: 'critique required for adjust' };
+  }
+
+  // ── Route to v2 creator pipeline when the row is stamped. ─────────────
+  // Read the previous EDITED POST + CAPTION from pipeline_v2_debug and
+  // re-enter Writer with REVIEWER NOTES (Phase 1 plan Change 1).
+  if (useCreatorPipeline({ pipeline_version: row.pipeline_version ?? '' })) {
+    const debug = row.pipeline_v2_debug as {
+      edited?: { raw?: string };
+      caption?: { raw?: string };
+    } | null;
+    const previousEditedPostRaw = debug?.edited?.raw;
+    const previousCaptionRaw = debug?.caption?.raw;
+    if (!previousEditedPostRaw) {
+      return {
+        ok: false,
+        code: 'not_found',
+        message: 'no prior EDITED POST in pipeline_v2_debug to adjust — run Generate first',
+      };
+    }
+    const result = await runCreatorPipeline(
+      {
+        id: row.id,
+        source: row.source,
+        source_url: row.source_url,
+        headline: row.headline,
+        body: row.body,
+        published_at: row.published_at,
+      },
+      {
+        reviewerNotes: trimmed,
+        previousEditedPostRaw,
+        previousCaptionRaw,
+      },
+    );
+    if (result.ok && result.slug) {
+      return {
+        ok: true,
+        slug: result.slug,
+        cost_usd: result.costUsd,
+        stages_run: result.stagesRun,
+        preview_url: result.previewUrl ?? `/social/render/preview?generated=${result.slug}&all=1`,
+      };
+    }
+    return {
+      ok: false,
+      code: result.status === 'needs_human_review' ? 'needs_human_review' : 'creator_failed',
+      message: result.reason ?? 'creator pipeline (reviewer notes) did not ship',
+      detail: result.status,
+    };
+  }
+
   if (!row.copy_json || !row.fact_sheet || !row.story_plan) {
     return {
       ok: false,
       code: 'not_found',
       message: 'no prior generation to adjust — run Generate first',
     };
-  }
-  const trimmed = critique.trim();
-  if (!trimmed) {
-    return { ok: false, code: 'not_found', message: 'critique required for adjust' };
   }
 
   const stagesRun: string[] = [];

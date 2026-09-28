@@ -42,6 +42,8 @@ export async function POST(
   if (!result.ok) {
     const status = result.code === 'not_found' ? 404
       : result.code === 'hook_gate_failed' ? 422
+      : result.code === 'needs_human_review' ? 409
+      : result.code === 'creator_failed' ? 500
       : 400;
     return NextResponse.json({ error: result.message, detail: result.detail }, { status });
   }
