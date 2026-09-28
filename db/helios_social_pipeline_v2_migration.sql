@@ -7,9 +7,23 @@
 -- code-check failure, no-fetchable-sources, or per-run cost cap trip).
 --
 -- Additive only. Idempotent. Safe to re-run.
+--
+-- Self-sufficient: adds `compose_status` and `compose_error` columns if the
+-- upstream compose migration was never applied to this database, so the
+-- routing code in lib/social/pipeline/generate.ts and the cron predicate in
+-- app/api/social/generate/next/route.ts don't crash on a missing column.
 \set ON_ERROR_STOP on
 
--- ── 1. article_queue.pipeline_v2_debug ────────────────────────────────
+-- ── 1a. article_queue.compose_status / compose_error ─────────────────
+-- Originally defined in helios_social_compose_migration.sql. Guard against
+-- environments where that migration was never applied (production, at time
+-- of writing). Redundant `IF NOT EXISTS` on environments where it did run.
+
+ALTER TABLE helios_social.article_queue
+    ADD COLUMN IF NOT EXISTS compose_status text,
+    ADD COLUMN IF NOT EXISTS compose_error  text;
+
+-- ── 1b. article_queue.pipeline_v2_debug ───────────────────────────────
 -- Full per-run stage transcript. See lib/social/editorial/v2/log.ts for
 -- the PipelineV2Debug shape. Reader-friendly for "which stage caused this
 -- to look wrong" debugging without a re-run.
@@ -19,7 +33,8 @@ ALTER TABLE helios_social.article_queue
 
 -- ── 2. Extend compose_status CHECK with 'needs_human_review' ─────────
 -- The v2 pipeline lands here when it can't finish safely. Existing values
--- unchanged; existing legacy rows unaffected.
+-- unchanged; existing legacy rows unaffected. Also covers the case where
+-- the compose migration never ran and the constraint doesn't exist yet.
 
 DO $$
 DECLARE
