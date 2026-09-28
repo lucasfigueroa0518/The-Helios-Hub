@@ -9,6 +9,80 @@ import {
   parseFactCheck,
 } from '@/lib/social/editorial/v2/parse';
 
+describe('parseBrief — markdown decoration + dividers', () => {
+  test('strips **LABEL:** bold markers', () => {
+    const raw = `**SINGLE STORY:** yes
+
+**THE NEWS:**
+Something happened.
+
+**THE STORY:**
+Body paragraph.
+
+**TERMS:**
+- Foo: bar.
+
+**IMAGES:** None found
+
+**SOURCES:**
+- Outlet, 2026-01-01, https://x.example.com`;
+    const brief = parseBrief(raw);
+    assert.equal(brief.singleStory.yes, true);
+    assert.match(brief.news, /Something happened/);
+    assert.equal(brief.sources.length, 1);
+    assert.equal(brief.sources[0]!.outlet, 'Outlet');
+  });
+
+  test('strips ## LABEL: heading markers', () => {
+    const raw = `## SINGLE STORY: yes
+
+## THE NEWS:
+One line.
+
+## THE STORY:
+Body.
+
+## TERMS:
+
+## IMAGES:
+None found
+
+## SOURCES:
+- The Ledger, 2026-01-01, https://x.example.com`;
+    const brief = parseBrief(raw);
+    assert.equal(brief.singleStory.yes, true);
+    assert.equal(brief.sources.length, 1);
+  });
+
+  test('ignores pure "---" divider lines between sections', () => {
+    const raw = `SINGLE STORY: yes
+
+---
+
+THE NEWS:
+One line.
+
+---
+
+THE STORY:
+Body paragraph.
+
+TERMS:
+
+IMAGES: None found
+
+---
+
+SOURCES:
+- The Ledger, 2026-01-01, https://x.example.com`;
+    const brief = parseBrief(raw);
+    assert.equal(brief.sources.length, 1);
+    // Dividers must not leak into any field's value.
+    assert.doesNotMatch(brief.news, /---/);
+    assert.doesNotMatch(brief.story, /---/);
+  });
+});
+
 describe('parseBrief', () => {
   test('parses the full labeled-lines format', () => {
     const raw = `SINGLE STORY: no, Bloomberg Tech video roundup

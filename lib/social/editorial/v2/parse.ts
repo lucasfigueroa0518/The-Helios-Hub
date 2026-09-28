@@ -8,7 +8,43 @@
  *   - A value may run onto following lines until the next known label.
  *   - A line the model didn't need may be missing entirely. Treat that as
  *     empty, not as an error.
+ *
+ * Real Sonnet output often sneaks in markdown around labels ("**SOURCES:**",
+ * "## SOURCES:") and horizontal-rule divider lines ("---") between sections.
+ * `normalizeMarkdown` strips those before any downstream regex sees the text
+ * so the plain-text contract holds even when the model reaches for markdown.
  */
+
+/**
+ * Strip markdown decoration from labeled lines and drop pure-divider lines,
+ * so the label-recognition regexes downstream see the plain-text form.
+ *
+ *   "**SOURCES:**"            → "SOURCES:"
+ *   "**SOURCES:** value"      → "SOURCES: value"
+ *   "**SOURCES: value**"      → "SOURCES: value"
+ *   "## SOURCES:"             → "SOURCES:"
+ *   "### SOURCES: value"      → "SOURCES: value"
+ *   "---" (any run of 3+ dashes/equals/asterisks/underscores) → dropped
+ *
+ * Bold/italic markers inside body text (e.g. inside a STORY paragraph) are
+ * left alone. Only leading/trailing decoration is stripped.
+ */
+export function normalizeMarkdown(text: string): string {
+  return text
+    .split('\n')
+    .filter((line) => !/^\s*[-—_=*]{3,}\s*$/.test(line))
+    .map((line) => {
+      // Strip leading heading marker: "## LABEL:" or "### FOO" → "LABEL:" / "FOO"
+      let out = line.replace(/^\s*#{1,6}\s+/, '');
+      // Strip ALL bold markers on the line. This covers every shape the
+      // model might use: "**LABEL:**", "**LABEL:** value", "**LABEL: value**",
+      // and stray "**word**" inside body text. Downstream renderers don't
+      // support markdown bold anyway.
+      out = out.replace(/\*\*/g, '');
+      return out;
+    })
+    .join('\n');
+}
 
 /* ── Reporter output (BRIEF) ─────────────────────────────────────────── */
 
@@ -35,7 +71,8 @@ const BRIEF_LABELS = new Set([
 ]);
 
 export function parseBrief(text: string): Brief {
-  const sections = splitByLabels(text, BRIEF_LABELS);
+  const normalized = normalizeMarkdown(text);
+  const sections = splitByLabels(normalized, BRIEF_LABELS);
   const singleRaw = sections.get('SINGLE STORY') ?? '';
   const singleFirstLine = singleRaw.split('\n')[0] ?? '';
   const isSingle = /^\s*yes/i.test(singleFirstLine);
@@ -150,7 +187,8 @@ export function parseEditedPost(text: string): ParsedPost {
   return parsePost(text, 'edited');
 }
 
-function parsePost(text: string, kind: 'draft' | 'edited'): ParsedPost {
+function parsePost(rawText: string, kind: 'draft' | 'edited'): ParsedPost {
+  const text = normalizeMarkdown(rawText);
   // Split by "SLIDE N" boundaries first — everything before the first SLIDE
   // is the cover header block; everything after is per-slide sections.
   const slideRe = /(^|\n)SLIDE\s+(\d+)\b/g;
@@ -250,8 +288,9 @@ export function parseCaption(text: string): string {
   // The single label CAPTION: introduces the whole payload. Everything after
   // it, until end of text, is the caption body verbatim (including the
   // "Source:" line — that's part of the caption per handoff §CAPTION).
-  const match = text.match(/(^|\n)CAPTION:\s*([\s\S]*)$/);
-  if (!match) return text.trim();
+  const normalized = normalizeMarkdown(text);
+  const match = normalized.match(/(^|\n)CAPTION:\s*([\s\S]*)$/);
+  if (!match) return normalized.trim();
   return match[2]!.trim();
 }
 
@@ -271,9 +310,10 @@ export type FactCheckResult = { verdict: FactCheckVerdict; flags: FactCheckFlag[
 const FC_FLAG_LABELS = new Set(['WHERE', 'TEXT', 'PROBLEM', 'SOURCES SAY', 'SIZE']);
 
 export function parseFactCheck(text: string): FactCheckResult {
-  const verdictMatch = text.match(/VERDICT:\s*(PASS|FLAGGED)/i);
+  const normalized = normalizeMarkdown(text);
+  const verdictMatch = normalized.match(/VERDICT:\s*(PASS|FLAGGED)/i);
   const verdict = (verdictMatch?.[1]?.toUpperCase() ?? 'PASS') as FactCheckVerdict;
-  const flagsSection = text.match(/FLAGS:\s*([\s\S]*)$/i)?.[1] ?? '';
+  const flagsSection = normalized.match(/FLAGS:\s*([\s\S]*)$/i)?.[1] ?? '';
   // Split into per-flag records: each record starts at WHERE:, runs until next WHERE: or end.
   const records = flagsSection
     .split(/(?=^\s*WHERE:)/m)
