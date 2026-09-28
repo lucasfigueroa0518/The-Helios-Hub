@@ -31,6 +31,7 @@
     "db:helios-social:render-post-migration": "node scripts/apply_helios_social_render_post_migration.js",
     "db:helios-social:review-migration": "node scripts/apply_helios_social_review_migration.js",
     "db:helios-social:creator-pipeline-migration": "node scripts/apply_helios_social_creator_pipeline_migration.js",
+    "db:helios-social:pipeline-v2-migration": "node scripts/apply_helios_social_pipeline_v2_migration.js",
     "helios-social:ingest": "tsx scripts/social_ingest.ts",
     "helios-social:hook-dry-run": "tsx scripts/social_hook_dry_run.ts",
     "helios-social:plan-dry-run": "tsx scripts/social_plan_dry_run.ts",
