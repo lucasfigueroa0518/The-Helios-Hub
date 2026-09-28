@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import test, { describe } from 'node:test';
 
 import { REPORTER_PROMPT } from '@/lib/social/editorial/v2/prompts/reporter';
+import { WRITER_PROMPT } from '@/lib/social/editorial/v2/prompts/writer';
+import { EDITOR_PROMPT } from '@/lib/social/editorial/v2/prompts/editor';
+import { CAPTION_PROMPT } from '@/lib/social/editorial/v2/prompts/caption';
 import { FACT_CHECKER_PROMPT } from '@/lib/social/editorial/v2/prompts/fact-checker';
 
 /**
@@ -58,6 +61,35 @@ describe('Reporter prompt', () => {
     );
     assert.doesNotMatch(REPORTER_PROMPT, /how they're connected/);
     assert.doesNotMatch(REPORTER_PROMPT, /the context around it/);
+  });
+});
+
+describe('Writer / Editor / Caption "fix by cutting, no new details" rule (Run 6 additions)', () => {
+  test('Writer replaces the "rewrite the post" sentence with a fix-only + no-new-details rule', () => {
+    assert.match(
+      WRITER_PROMPT,
+      /Fix only what was flagged, and keep every other slide and line exactly as it was\. Return the full post in the same format\. Fix a flag by cutting the claim or using the sources' own wording\. Don't add new details, even small ones\./,
+    );
+    // The old "Rewrite the post so every flag is fixed…" sentence must be gone.
+    assert.doesNotMatch(WRITER_PROMPT, /Rewrite the post so every flag is fixed/);
+  });
+
+  test('Editor appends the "fix a flag by cutting" sentence to its when-sent-back rule', () => {
+    // Line: "When you're sent back, fix exactly what you were given, update
+    //   any highlight your fix affects, change nothing else, and return the
+    //   full post again. Fix a flag by cutting the claim or using the
+    //   sources' own wording. Don't add new details, even small ones."
+    assert.match(
+      EDITOR_PROMPT,
+      /return the full post again\. Fix a flag by cutting the claim or using the sources' own wording\. Don't add new details, even small ones\./,
+    );
+  });
+
+  test('Caption appends the same sentence to its FIX NOTES rule', () => {
+    assert.match(
+      CAPTION_PROMPT,
+      /Fix exactly those, keep everything else, and return the full caption\. Fix a flag by cutting the claim or using the sources' own wording\. Don't add new details, even small ones\./,
+    );
   });
 });
 

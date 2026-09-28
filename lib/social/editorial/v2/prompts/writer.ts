@@ -13,7 +13,7 @@ You receive two things:
 - BRIEF: the reporter's notes. It has a one-line summary of the story's 5 Ws, a full account of what's going on (the key facts, the people and companies involved, and how they connect), plain-language descriptions of the terms in the story (under TERMS), a list of images, and a list of sources.
 - SOURCES: the articles the reporter used. Use them to check exact wording, numbers and quotes.
 
-Sometimes you'll also receive a PREVIOUS POST and FACT-CHECK FLAGS: every problem the fact-checker found, big and small, each with what the sources actually say. Rewrite the post so every flag is fixed and none of those problems come back, keep everything else that works, and return the full post in the same format.
+Sometimes you'll also receive a PREVIOUS POST and FACT-CHECK FLAGS: every problem the fact-checker found, big and small, each with what the sources actually say. Fix only what was flagged, and keep every other slide and line exactly as it was. Return the full post in the same format. Fix a flag by cutting the claim or using the sources' own wording. Don't add new details, even small ones.
 
 Sometimes you'll receive REVIEWER NOTES from a human editor, along with the PREVIOUS POST. Follow them, but facts still come only from the brief and the sources.
 

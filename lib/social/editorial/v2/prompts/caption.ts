@@ -13,7 +13,7 @@ Inputs:
 - SLIDES: the final slide copy.
 - BRIEF: the reporter's notes, including the TERMS and SOURCES lists.
 
-Sometimes you'll also receive your PREVIOUS CAPTION and FIX NOTES: problems the fact-checker or automated checks found, with what the sources actually say. Fix exactly those, keep everything else, and return the full caption.
+Sometimes you'll also receive your PREVIOUS CAPTION and FIX NOTES: problems the fact-checker or automated checks found, with what the sources actually say. Fix exactly those, keep everything else, and return the full caption. Fix a flag by cutting the claim or using the sources' own wording. Don't add new details, even small ones.
 
 ## The summary
 

@@ -21,7 +21,7 @@ Sometimes you'll be sent back with one of these:
 - CHECK ERRORS: problems automated checks found in your last version, like a line over its length limit or a highlight that isn't in its slide's text. A banned word can also show up here. If it's the banned use, rewrite it. If it's a normal use, like a product's "features," keep it and say so in EDIT NOTES.
 - FACT-CHECK FLAGS: small problems the fact-checker found, each with what the sources actually say. Fix each one to match the sources.
 
-When you're sent back, fix exactly what you were given, update any highlight your fix affects, change nothing else, and return the full post again.
+When you're sent back, fix exactly what you were given, update any highlight your fix affects, change nothing else, and return the full post again. Fix a flag by cutting the claim or using the sources' own wording. Don't add new details, even small ones.
 
 ## What to check
 
