@@ -83,6 +83,68 @@ SOURCES:
   });
 });
 
+describe('parseBrief — SOURCES parsing hardening (numbered list markers + em-dash bylines)', () => {
+  test('numbered "1." list marker is fully consumed (no leading "." leak into outlet)', () => {
+    const raw = `SINGLE STORY: yes
+THE NEWS: n
+THE STORY: s
+TERMS:
+IMAGES: None found
+SOURCES:
+1. Bloomberg, 2026-09-17, https://bloomberg.example.com/x
+2. The Information, 2026-09-18, https://theinformation.example.com/y`;
+    const brief = parseBrief(raw);
+    assert.equal(brief.sources.length, 2);
+    assert.equal(brief.sources[0]!.outlet, 'Bloomberg');
+    assert.equal(brief.sources[1]!.outlet, 'The Information');
+  });
+
+  test('em-dash byline "Outlet — Reporter" strips reporter, keeps outlet', () => {
+    const raw = `SINGLE STORY: yes
+THE NEWS: n
+THE STORY: s
+TERMS:
+IMAGES: None found
+SOURCES:
+1. Shattered.io — Ryan Cole, 2026-09-17, https://shattered.example.com/piece`;
+    const brief = parseBrief(raw);
+    assert.equal(brief.sources.length, 1);
+    assert.equal(brief.sources[0]!.outlet, 'Shattered.io');
+    assert.equal(brief.sources[0]!.publishedAt, '2026-09-17');
+    assert.equal(brief.sources[0]!.url, 'https://shattered.example.com/piece');
+  });
+
+  test('outlet names with internal hyphens are preserved (Tech-Crunch, not split)', () => {
+    const raw = `SINGLE STORY: yes
+THE NEWS: n
+THE STORY: s
+TERMS:
+IMAGES: None found
+SOURCES:
+- Tech-Crunch, 2026-09-17, https://tc.example.com/x`;
+    const brief = parseBrief(raw);
+    assert.equal(brief.sources[0]!.outlet, 'Tech-Crunch');
+  });
+
+  test('numbered TERMS list also strips list marker cleanly', () => {
+    const raw = `SINGLE STORY: yes
+THE NEWS: n
+THE STORY: s
+TERMS:
+1. Anthropic: an AI safety company.
+2. Claude: Anthropic's model family.
+IMAGES: None found
+SOURCES:
+- Outlet, 2026-01-01, https://x.example.com`;
+    const brief = parseBrief(raw);
+    assert.equal(brief.terms.length, 2);
+    assert.equal(brief.terms[0]!.name, 'Anthropic');
+    assert.equal(brief.terms[1]!.name, 'Claude');
+    // Would previously be ". Anthropic" and ". Claude" due to the broken regex.
+    assert.doesNotMatch(brief.terms[0]!.name, /^\./);
+  });
+});
+
 describe('parseBrief', () => {
   test('parses the full labeled-lines format', () => {
     const raw = `SINGLE STORY: no, Bloomberg Tech video roundup

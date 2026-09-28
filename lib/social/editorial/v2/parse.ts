@@ -91,7 +91,7 @@ export function parseBrief(text: string): Brief {
 function parseTerms(text: string): BriefTerm[] {
   const out: BriefTerm[] = [];
   for (const rawLine of text.split('\n')) {
-    const line = rawLine.replace(/^\s*[-*•\d.]\s*/, '').trim();
+    const line = stripListMarker(rawLine);
     if (!line) continue;
     const match = line.match(/^([^:]+):\s*(.+)$/);
     if (match) out.push({ name: match[1]!.trim(), description: match[2]!.trim() });
@@ -125,19 +125,47 @@ function parseImages(text: string): BriefImage[] {
 function parseSources(text: string): BriefSource[] {
   const out: BriefSource[] = [];
   for (const rawLine of text.split('\n')) {
-    const line = rawLine.replace(/^\s*[-*•\d.]\s*/, '').trim();
+    let line = stripListMarker(rawLine);
     if (!line) continue;
-    // Extract URL (first http/https token).
+    // Scrub any punctuation residue left from a malformed list marker
+    // (e.g. a "1." where our stripper only ate the "1" would leave ".").
+    line = line.replace(/^[.,;\s]+/, '').trim();
+    if (!line) continue;
+
+    // 1. URL — first http(s) token, strip trailing sentence punctuation.
     const urlMatch = line.match(/(https?:\/\/\S+)/);
-    const url = urlMatch?.[1] ?? '';
-    // Strip URL and try to split "outlet, date"
-    const withoutUrl = url ? line.replace(url, '').replace(/,\s*$/, '').replace(/[,–—-]\s*$/, '').trim() : line;
-    const parts = withoutUrl.split(',').map((p) => p.trim()).filter(Boolean);
-    const outlet = parts[0] ?? '';
-    const publishedAt = parts.slice(1).join(', ');
+    const url = urlMatch?.[1]?.replace(/[.,;)\]]+$/, '') ?? '';
+
+    // 2. Date — first date-shaped token anywhere in the line.
+    const dateMatch = line.match(
+      /\b(?:\d{4}-\d{2}-\d{2}|\d{4}\/\d{2}\/\d{2}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}(?:,\s*\d{4})?)\b/i,
+    );
+    const publishedAt = dateMatch?.[0]?.trim() ?? '';
+
+    // 3. Outlet — take the line, drop URL + date, drop everything after
+    // the first em/en dash (that's a byline: "Outlet — Ryan Cole"),
+    // then take the first comma-separated segment as the outlet name.
+    let outletBlob = line;
+    if (url) outletBlob = outletBlob.replace(url, '');
+    if (publishedAt) outletBlob = outletBlob.replace(publishedAt, '');
+    outletBlob = outletBlob.split(/\s+[—–]\s+/)[0] ?? outletBlob;
+    const parts = outletBlob.split(',').map((p) => p.trim()).filter(Boolean);
+    const outlet = (parts[0] ?? '').replace(/^[.,;\s]+|[.,;\s]+$/g, '');
+
     out.push({ outlet, publishedAt, url });
   }
   return out;
+}
+
+/**
+ * Strip common list markers from the start of a line, keeping the rest
+ * intact. Handles: "- ", "* ", "• ", "1. ", "1) ", "1.  " (extra spaces),
+ * plus any leading whitespace. Multi-char digit markers like "12." are
+ * consumed fully, which the earlier `[-*•\\d.]` character class did not —
+ * that class matched only ONE character, leaving the "." behind on "1.".
+ */
+function stripListMarker(line: string): string {
+  return line.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim();
 }
 
 /* ── Writer / Editor output (DRAFT / EDITED POST) ────────────────────── */
