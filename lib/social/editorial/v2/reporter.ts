@@ -32,6 +32,14 @@ export type ReporterInput = {
 export type ReporterOutput = {
   brief: Brief;
   briefRaw: string;
+  /**
+   * briefRaw with the SINGLE STORY line collapsed to just "yes" or "no" —
+   * the source-note that describes the roundup's OTHER stories is stripped.
+   * Downstream stages (Writer, Editor, Fact-checker, Caption) receive this
+   * sanitized version so they can't accidentally weave sibling stories in.
+   * The full briefRaw stays in the debug transcript for humans to read.
+   */
+  sanitizedBriefRaw: string;
   fetchedUrls: string[];
   /** stop_reason of every messages.create response in the tool loop, in order. */
   stopReasons: string[];
@@ -139,6 +147,7 @@ export async function runReporter(input: ReporterInput): Promise<ReporterOutput>
 
   const briefRaw = joinBriefFromTurns(collectedTurns);
   const brief = parseBrief(briefRaw);
+  const sanitizedBriefRaw = sanitizeSingleStoryLine(briefRaw, brief.singleStory.yes);
   const usage: StageUsage = {
     inputTokens: totalInput,
     cacheReadTokens: totalCacheRead,
@@ -154,7 +163,21 @@ export async function runReporter(input: ReporterInput): Promise<ReporterOutput>
       })
       + (totalWebSearches * 0.01),
   };
-  return { brief, briefRaw, fetchedUrls, stopReasons, usage };
+  return { brief, briefRaw, sanitizedBriefRaw, fetchedUrls, stopReasons, usage };
+}
+
+/**
+ * Replace the SINGLE STORY line with the bare yes/no verdict, dropping
+ * the source-note. Prevents Writer/Editor/Fact-checker from ever seeing
+ * the names of the roundup's OTHER stories — the reason the first live
+ * Bloomberg run's SINGLE STORY line named all four Bloomberg Tech segments
+ * even though the handoff spec says roundup siblings should be left out.
+ *
+ * Exported for direct tests.
+ */
+export function sanitizeSingleStoryLine(briefRaw: string, isSingleStory: boolean): string {
+  const verdict = isSingleStory ? 'yes' : 'no';
+  return briefRaw.replace(/^SINGLE STORY:[^\n]*/m, `SINGLE STORY: ${verdict}`);
 }
 
 /**

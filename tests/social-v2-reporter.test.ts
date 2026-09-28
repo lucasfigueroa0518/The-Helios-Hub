@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { describe } from 'node:test';
 
-import { joinBriefFromTurns } from '@/lib/social/editorial/v2/reporter';
+import { joinBriefFromTurns, sanitizeSingleStoryLine } from '@/lib/social/editorial/v2/reporter';
 import { parseBrief } from '@/lib/social/editorial/v2/parse';
 
 /**
@@ -72,5 +72,34 @@ describe('joinBriefFromTurns — server-web_search interleaving', () => {
   test('empty response yields empty string, not a crash', () => {
     assert.equal(joinBriefFromTurns([]), '');
     assert.equal(joinBriefFromTurns([[]]), '');
+  });
+});
+
+describe('sanitizeSingleStoryLine', () => {
+  test('collapses "no, Bloomberg Tech video roundup (Crusoe CEO, FTC…)" to bare "no"', () => {
+    const raw = `SINGLE STORY: no, Bloomberg Tech video roundup covering Anthropic, Crusoe CEO on data centers, FTC technologist, SoftBank
+
+THE NEWS: One line.`;
+    const out = sanitizeSingleStoryLine(raw, false);
+    assert.match(out, /^SINGLE STORY: no\n/);
+    assert.doesNotMatch(out, /Crusoe|FTC|SoftBank/);
+  });
+
+  test('collapses "yes, [long note]" to bare "yes"', () => {
+    const raw = `SINGLE STORY: yes, The Ledger's exclusive on Norland Labs
+
+THE NEWS: x`;
+    const out = sanitizeSingleStoryLine(raw, true);
+    assert.match(out, /^SINGLE STORY: yes\n/);
+    assert.doesNotMatch(out, /Norland/);
+  });
+
+  test('leaves everything else untouched', () => {
+    const raw = `SINGLE STORY: yes
+
+THE NEWS: Something.
+THE STORY: Body text.`;
+    const out = sanitizeSingleStoryLine(raw, true);
+    assert.equal(out, raw);
   });
 });
