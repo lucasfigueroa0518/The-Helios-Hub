@@ -42,6 +42,8 @@ export type PipelineV2Debug = {
   reporter?: {
     brief: Brief;
     briefRaw: string;
+    /** stop_reason of every Reporter turn, in order (end_turn, pause_turn, tool_use, max_tokens, …). */
+    stopReasons: string[];
     usage: StageUsage;
   };
   sources?: Array<{

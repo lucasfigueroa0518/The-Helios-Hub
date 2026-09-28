@@ -33,11 +33,21 @@ export type ReporterOutput = {
   brief: Brief;
   briefRaw: string;
   fetchedUrls: string[];
+  /** stop_reason of every messages.create response in the tool loop, in order. */
+  stopReasons: string[];
   usage: StageUsage;
 };
 
 const DEFAULT_MAX_WEB_SEARCHES = Number(process.env.HELIOS_V2_REPORTER_MAX_WEB_SEARCHES ?? '5');
 const DEFAULT_MAX_ITERATIONS = Number(process.env.HELIOS_V2_REPORTER_MAX_ITERATIONS ?? '8');
+
+/**
+ * Reporter output token budget. With server-side web_search, the assistant's
+ * response weaves text between citation breakpoints and can grow large. 8k
+ * is enough headroom for a Bloomberg-scale brief with 5+ sources cited; the
+ * previous 4096 hit ~97% on the first live run.
+ */
+const REPORTER_MAX_TOKENS = 8000;
 
 export async function runReporter(input: ReporterInput): Promise<ReporterOutput> {
   const maxWebSearches = input.maxWebSearches ?? DEFAULT_MAX_WEB_SEARCHES;
@@ -60,12 +70,13 @@ export async function runReporter(input: ReporterInput): Promise<ReporterOutput>
   let totalOutput = 0;
   let totalWebSearches = 0;
   const fetchedUrls: string[] = [];
-  let finalTextBlock: Anthropic.TextBlock | null = null;
+  const stopReasons: string[] = [];
+  const collectedTurns: Anthropic.ContentBlock[][] = [];
 
   for (let iter = 0; iter < maxIterations; iter++) {
     const response = await anthropic.messages.create({
       model: EDITORIAL_MODEL,
-      max_tokens: 4096,
+      max_tokens: REPORTER_MAX_TOKENS,
       system: cachedSystemText(REPORTER_PROMPT, '1h'),
       tools,
       messages,
@@ -78,43 +89,55 @@ export async function runReporter(input: ReporterInput): Promise<ReporterOutput>
     totalOutput += Math.max(0, Number(response.usage.output_tokens ?? 0));
     const serverToolUse = (response.usage as unknown as { server_tool_use?: { web_search_requests?: number } }).server_tool_use;
     totalWebSearches += Math.max(0, Number(serverToolUse?.web_search_requests ?? 0));
+    stopReasons.push(String(response.stop_reason ?? 'unknown'));
 
-    if (response.stop_reason !== 'tool_use') {
-      finalTextBlock = response.content.find(
-        (b): b is Anthropic.TextBlock => b.type === 'text',
-      ) ?? null;
-      break;
-    }
-
-    // Assistant turn: echo the whole content array so tool_use blocks are in place.
-    messages.push({ role: 'assistant', content: response.content });
-
-    // Execute every client-side tool_use in the response.
-    const toolResults: Anthropic.ToolResultBlockParam[] = [];
-    for (const block of response.content) {
-      if (block.type !== 'tool_use') continue;
-      if (block.name !== 'fetch_page') continue; // web_search is server-side
-      const args = block.input as { url?: string };
-      const url = String(args.url ?? '');
-      const result = await fetchPage(url);
-      if (result.ok) fetchedUrls.push(result.url);
-      toolResults.push({
-        type: 'tool_result',
-        tool_use_id: block.id,
-        content: fetchResultToToolContent(result),
-        is_error: !result.ok,
-      });
-    }
-    if (toolResults.length === 0) {
-      // No client tools were called (only server web_search). The model
-      // will produce its final text on the next turn; we need to keep
-      // looping.
+    if (response.stop_reason === 'tool_use') {
+      // Client-tool round: append assistant, execute fetch_page calls,
+      // append tool_results, loop. Do NOT collect this turn's text yet —
+      // the model may continue after tool_results with more text that we
+      // want joined to it.
+      messages.push({ role: 'assistant', content: response.content });
+      const toolResults: Anthropic.ToolResultBlockParam[] = [];
+      for (const block of response.content) {
+        if (block.type !== 'tool_use') continue;
+        if (block.name !== 'fetch_page') continue; // web_search is server-side
+        const args = block.input as { url?: string };
+        const url = String(args.url ?? '');
+        const result = await fetchPage(url);
+        if (result.ok) fetchedUrls.push(result.url);
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: block.id,
+          content: fetchResultToToolContent(result),
+          is_error: !result.ok,
+        });
+      }
+      if (toolResults.length === 0) continue;
+      messages.push({ role: 'user', content: toolResults });
       continue;
     }
-    messages.push({ role: 'user', content: toolResults });
+
+    // Any non-tool_use stop: the model produced some or all of its final
+    // answer text on this turn. Collect the text blocks now — with server
+    // web_search the response is interleaved: text, server_tool_use,
+    // web_search_tool_result, text, more search, text — so we must join
+    // ALL text blocks, in order, not just the first one.
+    collectedTurns.push(response.content as Anthropic.ContentBlock[]);
+
+    if (response.stop_reason === 'pause_turn') {
+      // Model paused mid-turn (server web_search chain got long). Per the
+      // SDK contract, we continue by re-invoking with the paused assistant
+      // response appended — no user message needed. The next turn's text
+      // blocks continue where these left off.
+      messages.push({ role: 'assistant', content: response.content });
+      continue;
+    }
+
+    // end_turn, max_tokens, stop_sequence, refusal → the model is done.
+    break;
   }
 
-  const briefRaw = finalTextBlock?.text ?? '';
+  const briefRaw = joinBriefFromTurns(collectedTurns);
   const brief = parseBrief(briefRaw);
   const usage: StageUsage = {
     inputTokens: totalInput,
@@ -131,7 +154,28 @@ export async function runReporter(input: ReporterInput): Promise<ReporterOutput>
       })
       + (totalWebSearches * 0.01),
   };
-  return { brief, briefRaw, fetchedUrls, usage };
+  return { brief, briefRaw, fetchedUrls, stopReasons, usage };
+}
+
+/**
+ * Join all text blocks from every collected turn, in order. Then trim the
+ * result to start at the LAST occurrence of "SINGLE STORY:" so any
+ * preamble the model wrote before starting the brief ("I now have enough
+ * information…") gets dropped.
+ *
+ * Exported for direct testing without an SDK mock.
+ */
+export function joinBriefFromTurns(turns: Anthropic.ContentBlock[][]): string {
+  const chunks: string[] = [];
+  for (const turn of turns) {
+    for (const block of turn) {
+      if (block.type === 'text') chunks.push(block.text);
+    }
+  }
+  const joined = chunks.join('');
+  const lastSingleStoryIdx = joined.lastIndexOf('SINGLE STORY:');
+  if (lastSingleStoryIdx >= 0) return joined.slice(lastSingleStoryIdx);
+  return joined;
 }
 
 function buildUserMessage(input: ReporterInput): string {

@@ -133,7 +133,12 @@ export async function runCreatorPipeline(
   });
   addCost(reporterResult.usage);
   stagesRun.push('reporter');
-  debug.reporter = { brief: reporterResult.brief, briefRaw: reporterResult.briefRaw, usage: reporterResult.usage };
+  debug.reporter = {
+    brief: reporterResult.brief,
+    briefRaw: reporterResult.briefRaw,
+    stopReasons: reporterResult.stopReasons,
+    usage: reporterResult.usage,
+  };
 
   if (!reporterResult.briefRaw || reporterResult.brief.sources.length === 0) {
     return bailToHumanReview('reporter produced no SOURCES');
