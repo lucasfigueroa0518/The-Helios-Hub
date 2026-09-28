@@ -161,9 +161,13 @@ function reconstructPost(captured: CapturedRun | null, articlePublishedAt?: stri
 }
 
 async function isServerReachable(server: string): Promise<boolean> {
+  // Next.js dev mode compiles routes on first hit — cold-start of the
+  // preview page can easily take 10-20s. 30s ceiling here, and the fetch
+  // also does the warm-up so the subsequent Playwright navigations are
+  // fast.
   try {
     const res = await fetch(`${server}/social/render/preview?fixture=example-post&slide=0&scale=1`, {
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(30_000),
     });
     return res.ok;
   } catch {
