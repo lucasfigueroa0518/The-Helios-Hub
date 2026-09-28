@@ -30,7 +30,12 @@ import type {
 } from './parse';
 import { persistDebugAndCompose as defaultPersistDebugAndCompose } from './log';
 import type { PipelineV2Debug, StageUsage } from './log';
-import { rewriteBriefWithValidatedImages, validateBriefImages as defaultValidateBriefImages, type ValidationResult } from './validate-images';
+import {
+  rewriteBriefSources,
+  rewriteBriefWithValidatedImages,
+  validateBriefImages as defaultValidateBriefImages,
+  type ValidationResult,
+} from './validate-images';
 
 /**
  * Dependency-injection surface. Real usage takes the defaults; unit tests
@@ -104,6 +109,19 @@ const MAX_FACT_CHECK_ROUNDS = 3;
  * Sonnet often needed a second pass to actually hit the character targets.
  */
 const MAX_REPAIRS_PER_STAGE_PER_ROUND = 2;
+
+/**
+ * Minimum fetched-text length (chars) for a source to count as
+ * "substantive" — full article, not a paywall preview. Only substantive
+ * sources appear in the caption's "Source:" line so readers aren't sent
+ * to an outlet whose text we couldn't actually verify against.
+ * 1500 chars is roughly 250 words = 4-5 real paragraphs; paywall
+ * previews on Bloomberg / Forbes / WSJ typically ship 300-800 chars.
+ * Env-tunable.
+ */
+function getSubstantiveSourceMinChars(): number {
+  return Number(process.env.HELIOS_V2_MIN_SOURCE_CHARS ?? '1500');
+}
 
 export async function runCreatorPipeline(
   row: OrchestrateRow,
@@ -220,6 +238,26 @@ export async function runCreatorPipeline(
   // caption code-check.
   const creditsEstimate = estimateCreditsChars(imageValidation.valid);
 
+  // ── 2c. Filter substantive sources for the Caption's "Source:" line ──
+  // Every fetched source is fine for Writer/Editor/Fact-checker — they use
+  // the full text bodies for factual verification. But the caption's
+  // "Source:" line credits outlets to readers, and it shouldn't cite an
+  // outlet whose fetched text was just a paywall preview we couldn't
+  // actually verify against. Filter to sources whose fetched text passed
+  // getSubstantiveSourceMinChars() (default 1500 chars).
+  const substantiveMinChars = getSubstantiveSourceMinChars();
+  const substantiveUrls = new Set(
+    sourceTexts.filter((s) => s.text.length >= substantiveMinChars).map((s) => s.url),
+  );
+  const substantiveSources = finalBrief.sources.filter((s) => s.url && substantiveUrls.has(s.url));
+  const captionBriefRaw = rewriteBriefSources(finalBriefRaw, substantiveSources);
+  debug.substantiveSources = {
+    thresholdChars: substantiveMinChars,
+    keptCount: substantiveSources.length,
+    droppedCount: finalBrief.sources.length - substantiveSources.length,
+    keptUrls: substantiveSources.map((s) => s.url),
+  };
+
   // ── 3. Writer — first pass, OR reviewer-notes rerun ────────────────
   let writerRaw: string;
   let writerPost: ParsedPost;
@@ -276,7 +314,7 @@ export async function runCreatorPipeline(
   {
     const c = await deps.runCaption({
       brief: finalBrief,
-      briefRaw: finalBriefRaw,
+      briefRaw: captionBriefRaw,
       slides: editorRaw,
     });
     captionRaw = c.raw;
@@ -354,7 +392,7 @@ export async function runCreatorPipeline(
     ) {
       const cRetry = await deps.runCaption({
         brief: finalBrief,
-        briefRaw: finalBriefRaw,
+        briefRaw: captionBriefRaw,
         slides: editorRaw,
         previousCaption: captionRaw,
         checkErrors: captionErrors,
@@ -466,7 +504,7 @@ export async function runCreatorPipeline(
       if (overCap()) return bailToHumanReview(`cost cap reached during round ${round} Editor rerun`);
       const c = await deps.runCaption({
         brief: finalBrief,
-        briefRaw: finalBriefRaw,
+        briefRaw: captionBriefRaw,
         slides: editorRaw,
       });
       addCost(c.usage);
@@ -496,7 +534,7 @@ export async function runCreatorPipeline(
       if (captionFlags.length > 0) {
         const c = await deps.runCaption({
           brief: finalBrief,
-          briefRaw: finalBriefRaw,
+          briefRaw: captionBriefRaw,
           slides: editorRaw,
           previousCaption: captionRaw,
           factCheckFlags: captionFlags,
@@ -536,8 +574,10 @@ export async function runCreatorPipeline(
       );
     }
     if (finalSoft.length > 0) {
+      const roundsRan = round;
+      const roundNoun = roundsRan === 1 ? 'round' : 'rounds';
       return bailToHumanReview(
-        `char_limit / highlight_substring errors survived every repair try across all ${MAX_FACT_CHECK_ROUNDS} rounds:\n${finalSoft.map((e) => e.message).join('\n')}`,
+        `char_limit / highlight_substring errors survived every repair try across ${roundsRan} ${roundNoun}:\n${finalSoft.map((e) => e.message).join('\n')}`,
       );
     }
   }

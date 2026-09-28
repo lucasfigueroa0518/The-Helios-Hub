@@ -318,6 +318,10 @@ describe('runCreatorPipeline — soft errors continue past code checks, block at
     // Bail reason should name the surviving char_limit failure.
     assert.match(bailReason ?? '', /char_limit \/ highlight_substring errors survived/);
     assert.match(bailReason ?? '', /SLIDE 2 BODY \(292 characters, limit 220\)/);
+    // Reason must name the ACTUAL number of rounds ran, not the max. The
+    // fact-checker PASSed on round 1, so the loop exited after 1 round.
+    assert.match(bailReason ?? '', /across 1 round:/);
+    assert.doesNotMatch(bailReason ?? '', /across 3 rounds/);
   });
 
   test('hard error (banned voice) still stops before the Fact-checker', async () => {
@@ -340,6 +344,39 @@ describe('runCreatorPipeline — soft errors continue past code checks, block at
     assert.equal(result.status, 'needs_human_review');
     assert.equal(factCheckCalls, 0, 'hard error must stop the round before the Fact-checker runs');
     assert.match(result.reason ?? '', /hard code checks failed/);
+  });
+});
+
+describe('runCreatorPipeline — substantive-source filter for the Caption', () => {
+  test('Caption receives a briefRaw with only sources whose fetched text passed the threshold', async () => {
+    // Fetch returns full text for source 1, tiny preview for source 2.
+    // Threshold defaults to 1500 chars. Caption's briefRaw SOURCES section
+    // should include only source 1.
+    let captionBriefSeen = '';
+    const result = await runCreatorPipeline(
+      ROW,
+      {},
+      buildDeps({
+        fetchPage: async (url: string) => {
+          const isBloomberg = url.includes('anthropic-claude-rd');
+          const text = isBloomberg ? 'full article body '.repeat(200) : 'short preview'; // ~3400 vs 13 chars
+          return { ok: true, url, resolvedUrl: url, title: 't', byline: null, text };
+        },
+        runCaption: async (input) => {
+          captionBriefSeen = input.briefRaw;
+          return { caption: 'x'.repeat(500) + '\n\nSource: Bloomberg.', raw: 'CAPTION:\n…', stopReasons: ['end_turn'], usage: stageUsage(0.02) };
+        },
+      }),
+    );
+    // Bloomberg (the long one) must be in the SOURCES section the caption sees.
+    assert.match(captionBriefSeen, /SOURCES:[\s\S]*Bloomberg/);
+    // The Information (the short one) must be filtered out.
+    assert.doesNotMatch(captionBriefSeen, /The Information/);
+    // Pipeline should still ship (all other checks are OK in this stub).
+    // Actually the caption stage is short enough that fact-check + final
+    // gate proceed. Assert status is either shipped or needs_human_review
+    // (soft errors possible from other fixture bits) but NOT failed.
+    assert.notEqual(result.status, 'failed');
   });
 });
 
