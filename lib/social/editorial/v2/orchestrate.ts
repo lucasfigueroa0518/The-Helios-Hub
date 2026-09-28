@@ -15,7 +15,7 @@
  */
 
 import { adaptToPost } from './adapter';
-import { checkCaption, checkNumberTrace, checkPost, type CheckError } from './code-checks';
+import { checkCaption, checkNumberTrace, checkPost, partitionErrors, type CheckError } from './code-checks';
 import { runCaption as defaultRunCaption, type CaptionInput, type CaptionOutput } from './caption';
 import { runEditor as defaultRunEditor, type EditorInput, type EditorOutput } from './editor';
 import { runFactChecker as defaultRunFactChecker, type FactCheckerInput, type FactCheckerOutput } from './fact-checker';
@@ -275,17 +275,31 @@ export async function runCreatorPipeline(
   if (overCap()) return bailToHumanReview('cost cap reached after Caption');
 
   // ── 6. Loop: code checks → Fact-checker → fix routing (max 3 rounds) ─
+  //
+  // Errors are partitioned into HARD (banned voice, number trace, image ref,
+  // caption hashtag, slide count) and SOFT (char_limit, highlight_substring).
+  // Hard errors that survive the round's repair budget bail immediately.
+  // Soft errors that survive don't stop the round — the pipeline continues
+  // to the Fact-checker and, at the end, blocks shipping via a
+  // needs_human_review terminal state that lists them. Handoff §Orchestration
+  // rules.
   let round = 0;
   let lastVerdict: FactCheckResult | null = null;
+
+  // Estimate the characters of image credits the publish pipeline appends
+  // to the caption after the Caption stage runs. Over-includes any brief
+  // image (some may not end up used, in which case actual credits will be
+  // shorter — safe direction to err in).
+  const creditsEstimate = estimateCreditsChars(imageValidation.valid);
 
   while (round < MAX_FACT_CHECK_ROUNDS) {
     round++;
     if (overCap()) return bailToHumanReview(`cost cap reached during round ${round}`);
 
-    // 6a. Compute initial code-check errors, split into slide vs caption.
+    // 6a. Compute code-check errors, split into slide vs caption.
     const computeErrors = () => {
       const slideCheck = checkPost(editorPost, finalBrief);
-      const captionCheck = checkCaption(captionText);
+      const captionCheck = checkCaption(captionText, creditsEstimate);
       const numberCheck = checkNumberTrace(editorPost, captionText, sourceTexts.map((s) => s.text));
       return {
         slideErrors: [...slideCheck.errors, ...numberCheck.errors.filter((e) => e.target !== 'caption')],
@@ -348,31 +362,34 @@ export async function runCreatorPipeline(
       ({ slideErrors, captionErrors } = computeErrors());
     }
 
-    // 6a.iii Final code check: any error that survives every repair try
-    // means the round failed — bail to human review.
+    // 6a.iii Final code check after the repair budget is spent.
+    // HARD errors (banned, numbers, images, hashtags, slide count) still
+    // stop the run — the post can't safely reach fact-check with those.
+    // SOFT errors (char_limit, highlight_substring) don't block — record
+    // them and continue to the Fact-checker; the final gate at the end
+    // of the pipeline will bail to needs_human_review if any survive.
     {
-      const stillSlide = slideErrors;
-      const stillCaption = captionErrors;
-      if (stillSlide.length > 0 || stillCaption.length > 0) {
-        // Record the failed pre-fact-check state before bailing.
+      const slidePartition = partitionErrors(slideErrors);
+      const captionPartition = partitionErrors(captionErrors);
+      const hardStill = [...slidePartition.hard, ...captionPartition.hard];
+      if (hardStill.length > 0) {
         debug.rounds.push({
           round,
           post: editorPost,
           caption: captionText,
-          codeCheckErrorsBeforeFactCheck: stillSlide.filter((e) => e.kind !== 'number_trace'),
-          captionCheckErrorsBeforeFactCheck: stillCaption.filter((e) => e.kind !== 'number_trace'),
-          numberTraceErrorsBeforeFactCheck: [
-            ...stillSlide.filter((e) => e.kind === 'number_trace'),
-            ...stillCaption.filter((e) => e.kind === 'number_trace'),
-          ],
+          codeCheckErrorsBeforeFactCheck: hardStill.filter((e) => e.kind !== 'number_trace'),
+          captionCheckErrorsBeforeFactCheck: [], // now merged into codeCheckErrorsBeforeFactCheck
+          numberTraceErrorsBeforeFactCheck: hardStill.filter((e) => e.kind === 'number_trace'),
           factCheck: { verdict: 'FLAGGED', flags: [] },
-          factCheckRaw: '(skipped — persistent code-check failures)',
+          factCheckRaw: '(skipped — persistent hard code-check failures)',
           usage: emptyUsage(),
         });
         return bailToHumanReview(
-          `code checks failed after ${MAX_REPAIRS_PER_STAGE_PER_ROUND} tries per stage in round ${round}`,
+          `hard code checks failed after ${MAX_REPAIRS_PER_STAGE_PER_ROUND} tries per stage in round ${round}: ${hardStill.map((e) => e.message).join(' | ')}`,
         );
       }
+      // Soft errors don't block the round. They'll be re-checked at the
+      // final gate after the fact-check loop ends.
     }
 
     // 6b. Fact-checker.
@@ -482,6 +499,34 @@ export async function runCreatorPipeline(
     return bailToHumanReview('fact-check did not converge on PASS');
   }
 
+  // ── 6c. Final soft-error gate. char_limit / highlight_substring errors
+  // were allowed to survive the round-level bailout (§Orchestration rules
+  // — soft errors don't stop the fact-check loop). If any survive to
+  // here, the post must not ship: bail to needs_human_review with the
+  // outstanding errors listed. Hard errors shouldn't be possible here
+  // because we bail on them mid-loop, but check defensively.
+  {
+    const finalSlideCheck = checkPost(editorPost, finalBrief);
+    const finalCaptionCheck = checkCaption(captionText, creditsEstimate);
+    const finalNumberCheck = checkNumberTrace(editorPost, captionText, sourceTexts.map((s) => s.text));
+    const allErrors = [
+      ...finalSlideCheck.errors,
+      ...finalCaptionCheck.errors,
+      ...finalNumberCheck.errors,
+    ];
+    const { hard: finalHard, soft: finalSoft } = partitionErrors(allErrors);
+    if (finalHard.length > 0) {
+      return bailToHumanReview(
+        `hard code checks unexpectedly survived to final gate: ${finalHard.map((e) => e.message).join(' | ')}`,
+      );
+    }
+    if (finalSoft.length > 0) {
+      return bailToHumanReview(
+        `char_limit / highlight_substring errors survived every repair try across all ${MAX_FACT_CHECK_ROUNDS} rounds:\n${finalSoft.map((e) => e.message).join('\n')}`,
+      );
+    }
+  }
+
   // ── 7. Adapt to Post + persist ──────────────────────────────────────
   const publishedIso = toIso(row.published_at);
   const dayStamp = Math.floor(Date.now() / 86_400_000) - 20_000;
@@ -546,4 +591,17 @@ function round4(n: number): number {
 
 function emptyUsage(): StageUsage {
   return { inputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0, approxCostUsd: 0 };
+}
+
+/**
+ * Estimate the character count of the image-credit block the publish
+ * pipeline will append to the caption. Over-counts (assumes every
+ * validated brief image ends up used); safe direction to err in for
+ * a length cap. Empty list → 0.
+ */
+function estimateCreditsChars(images: Array<{ credit: string }>): number {
+  if (images.length === 0) return 0;
+  const header = '\n\nPhotos:\n'.length;
+  const body = images.reduce((sum, img) => sum + img.credit.length + 1, 0); // +1 = "\n"
+  return header + body;
 }

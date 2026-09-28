@@ -284,6 +284,61 @@ describe('runCreatorPipeline — code-check repair budget', () => {
   });
 });
 
+describe('runCreatorPipeline — soft errors continue past code checks, block at final gate', () => {
+  test('char_limit surviving all rounds → Fact-checker still runs → final gate bails as needs_human_review with the length errors listed', async () => {
+    // Editor keeps returning a post whose SLIDE 2 body is over 220. That's a
+    // SOFT error (char_limit). Round loop must not stop — Fact-checker still
+    // runs. Fact-checker returns PASS. Final gate then bails to
+    // needs_human_review with the char_limit error listed.
+    const overPost = parseEditedPost(EDITED_RAW);
+    (overPost.slides[0]!).body = 'x'.repeat(292); // 72 over the 220 limit
+    let factCheckCalls = 0;
+    let bailReason: string | undefined;
+    const result = await runCreatorPipeline(
+      ROW,
+      {},
+      buildDeps({
+        runEditor: async () => ({ post: overPost, raw: EDITED_RAW, editNotes: null, usage: stageUsage(0.05) }),
+        runFactChecker: async () => {
+          factCheckCalls++;
+          return { result: { verdict: 'PASS', flags: [] }, raw: 'VERDICT: PASS', usage: stageUsage(0.05) };
+        },
+        persistDebugAndCompose: async (_id, debug, cols) => {
+          if (cols.composeStatus === 'needs_human_review') bailReason = debug.outcome.reason;
+        },
+      }),
+    );
+    assert.equal(result.status, 'needs_human_review');
+    // Fact-checker MUST have run at least once — soft errors don't stop the round.
+    assert.ok(factCheckCalls >= 1, `expected fact-check to run despite char_limit; ran ${factCheckCalls} times`);
+    // Bail reason should name the surviving char_limit failure.
+    assert.match(bailReason ?? '', /char_limit \/ highlight_substring errors survived/);
+    assert.match(bailReason ?? '', /SLIDE 2 BODY \(292 characters, limit 220\)/);
+  });
+
+  test('hard error (banned voice) still stops before the Fact-checker', async () => {
+    // Editor returns a post with an em dash in a body. Repair tries fail.
+    // Pipeline must bail without ever calling the Fact-checker.
+    const bannedPost = parseEditedPost(EDITED_RAW);
+    (bannedPost.slides[0]!).body = 'This — has an em dash and is a hard error.';
+    let factCheckCalls = 0;
+    const result = await runCreatorPipeline(
+      ROW,
+      {},
+      buildDeps({
+        runEditor: async () => ({ post: bannedPost, raw: EDITED_RAW, editNotes: null, usage: stageUsage(0.05) }),
+        runFactChecker: async () => {
+          factCheckCalls++;
+          return { result: { verdict: 'PASS', flags: [] }, raw: 'VERDICT: PASS', usage: stageUsage(0.05) };
+        },
+      }),
+    );
+    assert.equal(result.status, 'needs_human_review');
+    assert.equal(factCheckCalls, 0, 'hard error must stop the round before the Fact-checker runs');
+    assert.match(result.reason ?? '', /hard code checks failed/);
+  });
+});
+
 describe('runCreatorPipeline — REVIEWER NOTES entry point', () => {
   test('passes REVIEWER NOTES to Writer, not FACT-CHECK FLAGS', async () => {
     let writerInputSeen: unknown = null;
