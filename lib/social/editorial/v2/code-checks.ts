@@ -54,20 +54,40 @@ export function checkPost(post: ParsedPost, brief: Brief): CheckReport {
   // cover; follow is a separate line. Total = 1 (cover) + slides.length + 1 (follow).
   const totalSlides = 1 + post.slides.length + 1;
   if (totalSlides < LIMITS.slideCountMin) {
-    errors.push({ kind: 'slide_count', target: 'slide', message: `${totalSlides} slides; need ${LIMITS.slideCountMin}-${LIMITS.slideCountMax}` });
+    const short = LIMITS.slideCountMin - totalSlides;
+    errors.push({
+      kind: 'slide_count',
+      target: 'slide',
+      message: `Slide count is ${totalSlides}. The minimum is ${LIMITS.slideCountMin}. Add at least ${short} more slide${short === 1 ? '' : 's'}.`,
+    });
   }
   if (totalSlides > LIMITS.slideCountMax) {
-    errors.push({ kind: 'slide_count', target: 'slide', message: `${totalSlides} slides; need ${LIMITS.slideCountMin}-${LIMITS.slideCountMax}` });
+    const over = totalSlides - LIMITS.slideCountMax;
+    errors.push({
+      kind: 'slide_count',
+      target: 'slide',
+      message: `Slide count is ${totalSlides}. The maximum is ${LIMITS.slideCountMax}. Cut at least ${over} slide${over === 1 ? '' : 's'}.`,
+    });
   }
 
   // ── Cover length + highlight substring + image reference
   const coverText = post.cover.text ?? '';
   if (coverText.length > LIMITS.cover) {
-    errors.push({ kind: 'char_limit', target: 'cover', field: 'TEXT', message: `${coverText.length}/${LIMITS.cover}` });
+    errors.push({
+      kind: 'char_limit',
+      target: 'cover',
+      field: 'TEXT',
+      message: makeCharLimitMessage('COVER TEXT', coverText.length, LIMITS.cover),
+    });
   }
   const coverHighlight = post.cover.highlight ?? '';
   if (coverHighlight && !coverText.includes(coverHighlight)) {
-    errors.push({ kind: 'highlight_substring', target: 'cover', field: 'HIGHLIGHT', message: `"${coverHighlight}" not in cover text` });
+    errors.push({
+      kind: 'highlight_substring',
+      target: 'cover',
+      field: 'HIGHLIGHT',
+      message: `COVER HIGHLIGHT ("${coverHighlight}") is not an exact substring of the cover text. Rewrite the highlight so it matches a phrase in the cover verbatim, or edit the cover to include the highlight phrase word-for-word.`,
+    });
   }
   const coverImageError = checkImageRef(post.cover.image ?? '', brief);
   if (coverImageError) {
@@ -78,19 +98,43 @@ export function checkPost(post: ParsedPost, brief: Brief): CheckReport {
   // ── Per-slide checks
   for (const slide of post.slides) {
     if (slide.headline && slide.headline.length > LIMITS.headline) {
-      errors.push({ kind: 'char_limit', target: 'slide', slidePosition: slide.position, field: 'HEADLINE', message: `${slide.headline.length}/${LIMITS.headline}` });
+      errors.push({
+        kind: 'char_limit',
+        target: 'slide',
+        slidePosition: slide.position,
+        field: 'HEADLINE',
+        message: makeCharLimitMessage(`SLIDE ${slide.position} HEADLINE`, slide.headline.length, LIMITS.headline),
+      });
     }
     if (slide.body && slide.body.length > LIMITS.body) {
-      errors.push({ kind: 'char_limit', target: 'slide', slidePosition: slide.position, field: 'BODY', message: `${slide.body.length}/${LIMITS.body}` });
+      errors.push({
+        kind: 'char_limit',
+        target: 'slide',
+        slidePosition: slide.position,
+        field: 'BODY',
+        message: makeCharLimitMessage(`SLIDE ${slide.position} BODY`, slide.body.length, LIMITS.body),
+      });
     }
     if (slide.bigNumber && slide.bigNumber.length > LIMITS.bigNumber) {
-      errors.push({ kind: 'char_limit', target: 'slide', slidePosition: slide.position, field: 'BIG NUMBER', message: `${slide.bigNumber.length}/${LIMITS.bigNumber}` });
+      errors.push({
+        kind: 'char_limit',
+        target: 'slide',
+        slidePosition: slide.position,
+        field: 'BIG NUMBER',
+        message: makeCharLimitMessage(`SLIDE ${slide.position} BIG NUMBER`, slide.bigNumber.length, LIMITS.bigNumber),
+      });
     }
     // HIGHLIGHT must be an exact substring of HEADLINE or BODY.
     if (slide.highlight) {
       const hay = `${slide.headline ?? ''}\n${slide.body ?? ''}`;
       if (!hay.includes(slide.highlight)) {
-        errors.push({ kind: 'highlight_substring', target: 'slide', slidePosition: slide.position, field: 'HIGHLIGHT', message: `"${slide.highlight}" not in HEADLINE/BODY` });
+        errors.push({
+          kind: 'highlight_substring',
+          target: 'slide',
+          slidePosition: slide.position,
+          field: 'HIGHLIGHT',
+          message: `SLIDE ${slide.position} HIGHLIGHT ("${slide.highlight}") is not an exact substring of the slide's HEADLINE or BODY. Rewrite the highlight so it matches a phrase in the slide verbatim, or edit the slide to include the highlight phrase word-for-word.`,
+        });
       }
     }
     if (slide.image) {
@@ -103,7 +147,12 @@ export function checkPost(post: ParsedPost, brief: Brief): CheckReport {
 
   // ── FOLLOW
   if (post.follow.length > LIMITS.follow) {
-    errors.push({ kind: 'char_limit', target: 'follow', field: 'TEXT', message: `${post.follow.length}/${LIMITS.follow}` });
+    errors.push({
+      kind: 'char_limit',
+      target: 'follow',
+      field: 'TEXT',
+      message: makeCharLimitMessage('FOLLOW TEXT', post.follow.length, LIMITS.follow),
+    });
   }
   errors.push(...scanVoiceOnText('follow', 'TEXT', post.follow, undefined));
 
@@ -116,16 +165,45 @@ export function checkCaption(caption: string): CheckReport {
   const sourceMatch = caption.match(/^(Source:.*)$/m);
   const body = sourceMatch ? caption.slice(0, sourceMatch.index).trimEnd() : caption;
   if (body.length < LIMITS.captionMin) {
-    errors.push({ kind: 'caption_length', target: 'caption', message: `${body.length}/${LIMITS.captionMin} min (ex-Source)` });
+    const short = LIMITS.captionMin - body.length;
+    errors.push({
+      kind: 'caption_length',
+      target: 'caption',
+      message: `Caption is ${body.length} characters (excluding the "Source:" line). The minimum is ${LIMITS.captionMin}. Add at least ${short} characters (about ${estimateWords(short)} words) of substantive detail.`,
+    });
   }
   if (body.length > LIMITS.captionMax) {
-    errors.push({ kind: 'caption_length', target: 'caption', message: `${body.length}/${LIMITS.captionMax} max (ex-Source)` });
+    const over = body.length - LIMITS.captionMax;
+    errors.push({
+      kind: 'caption_length',
+      target: 'caption',
+      message: `Caption is ${body.length} characters (excluding the "Source:" line). The limit is ${LIMITS.captionMax}. Cut at least ${over} characters (about ${estimateWords(over)} words).`,
+    });
   }
   if (/#\w/.test(caption)) {
-    errors.push({ kind: 'caption_hashtag', target: 'caption', message: 'caption contains a hashtag' });
+    errors.push({
+      kind: 'caption_hashtag',
+      target: 'caption',
+      message: 'Caption contains a hashtag. Remove every "#word" — Instagram hashtags are banned in Helios captions.',
+    });
   }
   errors.push(...scanVoiceOnText('caption', 'TEXT', body, undefined));
   return { ok: errors.length === 0, errors };
+}
+
+/**
+ * "SLIDE 7 BODY is 292 characters. The limit is 220. Cut at least 72
+ * characters (about 12 words)." — one shape for every char-limit error so
+ * the Editor sees an unambiguous, actionable instruction.
+ */
+function makeCharLimitMessage(field: string, actual: number, limit: number): string {
+  const over = actual - limit;
+  return `${field} is ${actual} characters. The limit is ${limit}. Cut at least ${over} characters (about ${estimateWords(over)} words).`;
+}
+
+/** ~6 chars per word including spaces. Minimum 1. */
+function estimateWords(chars: number): number {
+  return Math.max(1, Math.round(chars / 6));
 }
 
 /**
@@ -144,10 +222,23 @@ export function checkNumberTrace(
 
   const inspect = (targetText: string, target: CheckError['target'], slidePosition?: number, field?: string) => {
     for (const raw of extractNumbers(targetText)) {
+      let found = false;
       for (const candidate of numberCandidates(raw)) {
-        if (haystack.includes(candidate)) return;
+        if (haystack.includes(candidate)) { found = true; break; }
       }
-      errors.push({ kind: 'number_trace', target, slidePosition, field, message: `"${raw}" not found in fetched sources` });
+      if (found) continue;
+      const location = target === 'slide' && slidePosition !== undefined
+        ? `SLIDE ${slidePosition} ${field ?? ''}`.trim()
+        : target === 'cover' ? 'COVER TEXT'
+        : target === 'follow' ? 'FOLLOW TEXT'
+        : 'CAPTION';
+      errors.push({
+        kind: 'number_trace',
+        target,
+        slidePosition,
+        field,
+        message: `${location}: number "${raw}" does not appear in any fetched source. Either remove the number, replace it with one the sources actually state, or drop this slide.`,
+      });
     }
   };
 
@@ -174,7 +265,12 @@ function checkImageRef(ref: string, brief: Brief): string | null {
   if (!m) return null; // free-text or "type only" — legal
   const n = Number(m[1]);
   const found = brief.images.find((img) => img.number === n);
-  if (!found) return `"brief image ${n}" not in brief IMAGES list`;
+  if (!found) {
+    const available = brief.images.map((img) => img.number).join(', ');
+    return available
+      ? `IMAGE reference "brief image ${n}" is not in the brief's IMAGES list (available: ${available}). Change the reference to one of the available images, use "type only", or write a description.`
+      : `IMAGE reference "brief image ${n}" is invalid because the brief has no IMAGES. Use "type only" or write a description instead.`;
+  }
   return null;
 }
 
@@ -186,6 +282,11 @@ function scanVoiceOnText(
 ): CheckError[] {
   const out: CheckError[] = [];
   if (!text) return out;
+  const location = target === 'slide' && slidePosition !== undefined
+    ? `SLIDE ${slidePosition} ${field ?? ''}`.trim()
+    : target === 'cover' ? 'COVER TEXT'
+    : target === 'follow' ? 'FOLLOW TEXT'
+    : 'CAPTION';
   for (const rule of BANNED_ALWAYS) {
     const re = rule.kind === 'literal'
       ? new RegExp(rule.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'iu')
@@ -196,7 +297,7 @@ function scanVoiceOnText(
         target,
         slidePosition,
         field,
-        message: `banned: ${rule.label}`,
+        message: `${location}: contains banned ${rule.label}. Remove it (rewrite the phrase without it) — this construction is never allowed in Helios voice.`,
       });
     }
   }
@@ -208,7 +309,7 @@ function scanVoiceOnText(
         target,
         slidePosition,
         field,
-        message: `judgment word: "${word}" — Editor decides banned use vs normal`,
+        message: `${location}: contains the judgment word "${word}". If it's the inflated marketing use, rewrite; if it's a genuine normal use (e.g. physical "space", a product legitimately "features" X), keep it and note the reason in EDIT NOTES.`,
         word,
       });
     }

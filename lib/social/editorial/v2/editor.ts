@@ -74,14 +74,7 @@ export function buildEditorUserMessage(input: EditorInput): string {
 }
 
 export function formatCheckErrors(errors: CheckError[]): string {
-  return errors.map((e) => {
-    const loc = e.target === 'slide' && e.slidePosition !== undefined
-      ? `SLIDE ${e.slidePosition} / ${e.field ?? ''}`
-      : e.target === 'cover'
-      ? `COVER / ${e.field ?? ''}`
-      : e.target === 'follow'
-      ? `FOLLOW / ${e.field ?? ''}`
-      : 'CAPTION / TEXT';
-    return `- ${loc}: ${e.message}`;
-  }).join('\n');
+  // Messages are already fully formed in code-checks.ts (location + rule +
+  // corrective action). Just bullet them. Editor sees exactly what to fix.
+  return errors.map((e) => `- ${e.message}`).join('\n');
 }

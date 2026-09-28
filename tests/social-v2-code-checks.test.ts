@@ -86,6 +86,27 @@ describe('checkPost — char limits', () => {
     const r = checkPost(post, goodBrief);
     assert.ok(r.errors.some((e) => e.kind === 'char_limit' && e.target === 'follow'));
   });
+  test('char-limit message is explicit and actionable', () => {
+    const post = buildPost({ slides: [{ body: 'x'.repeat(292), highlight: 'x' }] });
+    const r = checkPost(post, goodBrief);
+    const err = r.errors.find((e) => e.kind === 'char_limit' && e.field === 'BODY');
+    assert.ok(err);
+    // "SLIDE 2 BODY is 292 characters. The limit is 220. Cut at least 72 characters (about 12 words)."
+    assert.match(err!.message, /SLIDE 2 BODY is 292 characters/);
+    assert.match(err!.message, /limit is 220/);
+    assert.match(err!.message, /Cut at least 72 characters/);
+    assert.match(err!.message, /about 12 words/);
+  });
+  test('caption over-length message is explicit and actionable', () => {
+    const caption = 'x'.repeat(892) + '\n\nSource: Bloomberg, 2026';
+    const r = checkCaption(caption);
+    const err = r.errors.find((e) => e.kind === 'caption_length');
+    assert.ok(err);
+    assert.match(err!.message, /Caption is 892 characters/);
+    assert.match(err!.message, /limit is 800/);
+    assert.match(err!.message, /Cut at least 92 characters/);
+    assert.match(err!.message, /about 15 words/);
+  });
 });
 
 describe('checkPost — HIGHLIGHT must be substring', () => {
@@ -113,7 +134,17 @@ describe('checkPost — banned voice', () => {
   test('flags em dash as banned_always', () => {
     const post = buildPost({ slides: [{ body: 'This is bold — dramatic and wrong.', highlight: 'bold' }] });
     const r = checkPost(post, goodBrief);
-    assert.ok(r.errors.some((e) => e.kind === 'banned_always'));
+    assert.ok(r.errors.some((e) => e.kind === 'banned_always' && /em dash/.test(e.message)));
+  });
+  test('flags en dash as banned_always', () => {
+    const post = buildPost({ slides: [{ body: 'A range – dramatic and wrong.', highlight: 'range' }] });
+    const r = checkPost(post, goodBrief);
+    assert.ok(r.errors.some((e) => e.kind === 'banned_always' && /en dash/.test(e.message)));
+  });
+  test('flags "--" (double hyphen) as banned_always', () => {
+    const post = buildPost({ slides: [{ body: 'Anthropic said -- and this is banned.', highlight: 'Anthropic said' }] });
+    const r = checkPost(post, goodBrief);
+    assert.ok(r.errors.some((e) => e.kind === 'banned_always' && /double hyphen/.test(e.message)));
   });
   test('flags "unprecedented" as banned_always (clear hype, no normal use in Helios voice)', () => {
     const post = buildPost({ slides: [{ body: 'The rise is unprecedented for the industry.', highlight: 'The rise' }] });
