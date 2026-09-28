@@ -1,5 +1,6 @@
 import { dbQuery } from '@/lib/db';
 import { COPY_STALE_MINUTES } from '@/lib/reels/config';
+import { claimNextRankedJob } from '@/lib/reels/pipeline/claim';
 import { copyPromptApproved, writeIdeaCopy } from '@/lib/reels/pipeline/copy';
 
 export type CopyJobStatus = 'requested' | 'running' | 'ok' | 'failed';
@@ -18,10 +19,6 @@ type JobRow = {
   slate_id: string;
   status: CopyJobStatus;
 };
-
-function isUniqueViolation(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && (error as { code?: string }).code === '23505';
-}
 
 export async function queueCopyJob(
   postIdeaId: string,
@@ -113,25 +110,7 @@ async function claimCopyJob(): Promise<string | null> {
         AND started_at < now() - ($1::int * interval '1 minute')`,
     [COPY_STALE_MINUTES],
   );
-  try {
-    const { rows } = await dbQuery<{ id: string }>(
-      `UPDATE reels.copy_jobs
-          SET status = 'running', started_at = now()
-        WHERE id = (
-          SELECT id FROM reels.copy_jobs
-           WHERE status = 'requested'
-             AND NOT EXISTS (SELECT 1 FROM reels.copy_jobs c WHERE c.status = 'running')
-           ORDER BY requested_at
-           FOR UPDATE SKIP LOCKED
-           LIMIT 1
-        )
-        RETURNING id`,
-    );
-    return rows[0]?.id ?? null;
-  } catch (error) {
-    if (isUniqueViolation(error)) return null;
-    throw error;
-  }
+  return claimNextRankedJob('copy_jobs');
 }
 
 /** Claim one queued copy job and write it. Returns null when the queue is empty. */

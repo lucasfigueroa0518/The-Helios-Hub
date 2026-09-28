@@ -79,3 +79,39 @@ export async function overlayPlate(
     throw new Error(result.stderr.trim().slice(-400) || `ffmpeg overlay failed (${result.code}).`);
   }
 }
+
+/**
+ * Add the hook SFX to a finished, silent reel (D-121). The picture is copied,
+ * not re-encoded, and the audio is padded with silence to the clip's length.
+ * A separate pass, so an audio failure never costs the reel its hook.
+ */
+export async function muxHookSfx(videoPath: string, sfxPath: string, outPath: string): Promise<void> {
+  const result = await run('ffmpeg', [
+    '-y',
+    '-i',
+    videoPath,
+    '-i',
+    sfxPath,
+    '-map',
+    '0:v:0',
+    '-map',
+    '1:a:0',
+    '-c:v',
+    'copy',
+    '-af',
+    'apad',
+    '-c:a',
+    'aac',
+    '-b:a',
+    '192k',
+    '-ar',
+    '48000',
+    '-shortest',
+    '-movflags',
+    '+faststart',
+    outPath,
+  ]);
+  if (result.code !== 0) {
+    throw new Error(result.stderr.trim().slice(-400) || `ffmpeg audio mux failed (${result.code}).`);
+  }
+}

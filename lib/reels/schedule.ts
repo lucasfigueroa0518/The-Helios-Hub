@@ -50,6 +50,12 @@ export function zoneDateParts(
   return { year: field('year'), month: field('month'), day: field('day') };
 }
 
+/** `YYYY-MM-DD` in the zone. Song reuse resets when this changes (D-194). */
+export function calendarDateKey(at: Date, timeZone: string = RUN_TIMEZONE): string {
+  const { year, month, day } = zoneDateParts(at, timeZone);
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
 /** The instant when the given wall-clock time occurs in the zone. */
 function instantForLocalTime(
   year: number,
@@ -57,8 +63,9 @@ function instantForLocalTime(
   day: number,
   hour: number,
   timeZone: string,
+  minute = 0,
 ): Date {
-  const naive = Date.UTC(year, month - 1, day, hour, 0, 0);
+  const naive = Date.UTC(year, month - 1, day, hour, minute, 0);
   // Offsets are themselves instant-dependent, so resolve twice: the first pass
   // lands close enough that the second uses the correct side of a DST change.
   let guess = new Date(naive - zoneOffsetMinutes(new Date(naive), timeZone) * 60_000);
@@ -66,14 +73,15 @@ function instantForLocalTime(
   return guess;
 }
 
-/** Next 1 AM in the run timezone, strictly after `from`. */
+/** Next 1 AM (or the given wall-clock time) in the run timezone, strictly after `from`. */
 export function nextRunAt(
   from: Date,
   timeZone: string = RUN_TIMEZONE,
   hour: number = RUN_HOUR_LOCAL,
+  minute = 0,
 ): Date {
   const { year, month, day } = zoneDateParts(from, timeZone);
-  const today = instantForLocalTime(year, month, day, hour, timeZone);
+  const today = instantForLocalTime(year, month, day, hour, timeZone, minute);
   if (today.getTime() > from.getTime()) return today;
 
   // Advance the local calendar date itself. Adding 24 hours to a UTC instant
@@ -85,6 +93,7 @@ export function nextRunAt(
     nextDay.getUTCDate(),
     hour,
     timeZone,
+    minute,
   );
 }
 

@@ -655,7 +655,7 @@ test('research validation flags unknown capability IDs; reconcile clears unwrita
         selectedFactIds: ['pf1', 'f1'],
       },
     }),
-    { allowedCapabilityIds: CANONICAL_CAPABILITY_IDS },
+    { allowedCapabilityIds: CANONICAL_CAPABILITY_IDS, now: new Date('2026-07-16T12:00:00.000Z') },
   );
   assert.equal(reconciled.packet.leadIdentity.classification, 'usable_at_lower_resolution');
   assert.equal(reconciled.packet.leadIdentity.conflictSummary, null);

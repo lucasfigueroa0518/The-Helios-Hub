@@ -357,6 +357,18 @@ body:has(.trello-root) .hub-app__main,
   color: #e4e4e7;
 }
 
+.hub-nav-item__badge {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(255, 94, 26, 0.16);
+  color: #ffb088;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .hub-nav-item__sub {
   display: grid;
   grid-template-rows: 0fr;

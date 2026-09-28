@@ -716,8 +716,85 @@ def _resolve_format(out: Path, spec: dict) -> str:
 # Render
 # --------------------------------------------------------------------------- #
 
+def _cue_scaled(spec: dict, image_width: int, main_font_px: int) -> Scaled:
+    """One line, always smaller than the main on-screen type."""
+    cue = spec.get("full_story") or {}
+    ratio = float(cue.get("font_size_ratio", 0.42))
+    size = max(1, round(main_font_px * ratio))
+    if size >= main_font_px:
+        size = max(1, main_font_px - 1)
+    return scale_spec(spec, image_width, size)
+
+
+def _apple_hand(spec: dict) -> Image.Image:
+    """Apple's Backhand Index Pointing Down, rendered once from Apple Color Emoji."""
+    cue = spec.get("full_story") or {}
+    rel = str(cue.get("emoji_file") or "fonts/backhand-index-pointing-down.png")
+    return Image.open(Path(spec["_base_dir"]) / rel).convert("RGBA")
+
+
+def _draw_full_story(
+    img: Image.Image,
+    draw: ImageDraw.ImageDraw,
+    spec: dict,
+    image_width: int,
+    image_height: int,
+    main_font_px: int,
+    text_bottom: int,
+    fill: tuple,
+    stroke: tuple,
+    label: str,
+) -> None:
+    """Center the cue and Apple's downward hand on the midpoint under the copy. One line."""
+    words = " ".join(label.replace("\n", " ").split())
+    if not words:
+        return
+    hand = _apple_hand(spec)
+    sc = _cue_scaled(spec, image_width, main_font_px)
+    limit = image_width * 0.9
+    while sc.font_px > 1:
+        gap = max(6, round(sc.font_px * 0.45))
+        hand_h = max(1, round(sc.font_px * 1.85))
+        hand_w = max(1, round(hand_h * hand.width / hand.height))
+        word_w = round(sc.font.getlength(words)) + 2 * sc.stroke_px
+        if word_w + gap + hand_w <= limit:
+            break
+        sc = scale_spec(spec, image_width, sc.font_px - 1)
+    stroke_px = sc.stroke_px
+    gap = max(6, round(sc.font_px * 0.45))
+    hand_h = max(1, round(sc.font_px * 1.85))
+    hand_w = max(1, round(hand_h * hand.width / hand.height))
+    word_box = draw.textbbox((0, 0), words, font=sc.font, anchor="lt", stroke_width=stroke_px)
+    word_w = word_box[2] - word_box[0]
+    word_h = word_box[3] - word_box[1]
+    total_w = word_w + gap + hand_w
+    half = max(word_h, hand_h) / 2
+    y = round((text_bottom + image_height) / 2)
+    floor_gap = max(4, round(sc.line_height_px * 0.25))
+    y = max(y, round(text_bottom + half + floor_gap))
+    y = min(y, round(image_height - half - 4))
+    top = y - half
+    start = (image_width - total_w) / 2
+    draw.text(
+        (start - word_box[0], top + (max(word_h, hand_h) - word_h) / 2 - word_box[1]),
+        words,
+        font=sc.font,
+        anchor="lt",
+        fill=fill,
+        stroke_fill=stroke,
+        stroke_width=stroke_px,
+    )
+    placed = hand.resize((hand_w, hand_h), Image.Resampling.LANCZOS)
+    img.paste(
+        placed,
+        (round(start + word_w + gap), round(top + (max(word_h, hand_h) - hand_h) / 2)),
+        placed,
+    )
+
+
 def render_text(bg_path: str | Path, copy: str, out_path: str | Path,
-                spec: dict | None = None, write_meta: bool = False) -> RenderResult:
+                spec: dict | None = None, write_meta: bool = False,
+                full_story: str | None = None) -> RenderResult:
     spec = spec or load_spec()
     out = Path(out_path)
     fmt = _resolve_format(out, spec)
@@ -744,6 +821,12 @@ def render_text(bg_path: str | Path, copy: str, out_path: str | Path,
         draw.text((w / 2, y), line, fill=tuple(typo["fill_rgb"]),
                   stroke_fill=tuple(typo["stroke_rgb"]), **kw)
         boxes.append(draw.textbbox((w / 2, y), line, **kw))
+
+    if full_story and full_story.strip():
+        _draw_full_story(
+            img, draw, spec, w, h, sc.font_px, int(round(max(b[3] for b in boxes))),
+            tuple(typo["fill_rgb"]), tuple(typo["stroke_rgb"]), full_story,
+        )
 
     bbox = [int(min(b[0] for b in boxes)), int(min(b[1] for b in boxes)),
             int(round(max(b[2] for b in boxes))), int(round(max(b[3] for b in boxes)))]
@@ -782,7 +865,7 @@ def render_text(bg_path: str | Path, copy: str, out_path: str | Path,
 
 
 def render_plate(copy: str, width: int, height: int, out_path: str | Path,
-                 spec: dict | None = None) -> dict:
+                 spec: dict | None = None, full_story: str | None = None) -> dict:
     """Draw the same layout on a transparent PNG. The video model never sees this plate."""
     spec = spec or load_spec()
     out = Path(out_path)
@@ -796,9 +879,16 @@ def render_plate(copy: str, width: int, height: int, out_path: str | Path,
     draw = ImageDraw.Draw(img)
     fill = tuple(typo["fill_rgb"]) + (255,)
     stroke = tuple(typo["stroke_rgb"]) + (255,)
+    boxes = []
     for line, y in zip(layout.lines, baselines):
-        draw.text((width / 2, y), line, font=sc.font, anchor="ms",
-                  fill=fill, stroke_fill=stroke, stroke_width=sc.stroke_px)
+        kw = dict(font=sc.font, anchor="ms", stroke_width=sc.stroke_px)
+        draw.text((width / 2, y), line, fill=fill, stroke_fill=stroke, **kw)
+        boxes.append(draw.textbbox((width / 2, y), line, **kw))
+    if full_story and full_story.strip() and boxes:
+        _draw_full_story(
+            img, draw, spec, width, height, sc.font_px, int(round(max(b[3] for b in boxes))),
+            fill, stroke, full_story,
+        )
     out.parent.mkdir(parents=True, exist_ok=True)
     img.save(out, "PNG", compress_level=6)
     return {"output": str(out), "size": [width, height], "lines": layout.lines,
@@ -868,6 +958,7 @@ def _cli(argv=None) -> int:
     r.add_argument("--out", required=True, help="Output .png or .jpg")
     r.add_argument("--meta", action="store_true", help="Write a .json sidecar")
     r.add_argument("--profile", default="noir")
+    r.add_argument("--full-story", default="", help="Cue words. A hand pointing down is drawn after them.")
 
     b = sub.add_parser("breaks", help="Dry-run line breaks for a piece of copy")
     b.add_argument("--copy", required=True)
@@ -883,6 +974,7 @@ def _cli(argv=None) -> int:
     plate.add_argument("--height", type=int, required=True)
     plate.add_argument("--out", required=True)
     plate.add_argument("--profile", default="noir")
+    plate.add_argument("--full-story", default="", help="Cue words. A hand pointing down is drawn after them.")
 
     m = sub.add_parser("batch", help="Process a manifest of renders")
     m.add_argument("manifest")
@@ -896,14 +988,16 @@ def _cli(argv=None) -> int:
 
     try:
         if a.cmd == "render":
-            res = render_text(a.bg, a.copy.replace("\\n", "\n"), a.out, spec, a.meta)
+            res = render_text(a.bg, a.copy.replace("\\n", "\n"), a.out, spec, a.meta,
+                              full_story=getattr(a, "full_story", "") or None)
             print(json.dumps({"output": res.output_path, "size": [res.width, res.height],
                               "lines": res.layout.lines, "warnings": res.warnings}, indent=2))
         elif a.cmd == "breaks":
             lay = preview_breaks(a.copy.replace("\\n", "\n"), spec, a.width)
             print(json.dumps(asdict(lay), indent=2))
         elif a.cmd == "plate":
-            res = render_plate(a.copy.replace("\\n", "\n"), a.width, a.height, a.out, spec)
+            res = render_plate(a.copy.replace("\\n", "\n"), a.width, a.height, a.out, spec,
+                               full_story=getattr(a, "full_story", "") or None)
             print(json.dumps(res, indent=2))
         elif a.cmd == "check-bg":
             res = check_background(a.bg, spec)

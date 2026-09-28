@@ -2,13 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 
 import { COPY_MAX_TOKENS, COPY_MODEL } from '@/lib/reels/config';
 import { assembleCopyPrompt, type CopyInput } from '@/lib/reels/copy/assemble';
-import {
-  REPORT_COPY_TOOL,
-  checkCopy,
-  parseCopyReport,
-  type CopyChecks,
-  type CopyReport,
-} from '@/lib/reels/copy/report';
+import { REPORT_COPY_TOOL, parseCopyReport, type CopyCall } from '@/lib/reels/copy/report';
 
 /** The one method the writer needs, so tests can stub it. */
 export type CopyClient = {
@@ -24,8 +18,8 @@ export type CopyResult = {
   version: string;
   /** Null when the request itself failed, so nothing was billed. */
   message: Anthropic.Message | null;
-  report: CopyReport | null;
-  checks: CopyChecks | null;
+  /** Two on-screen lines and one caption. Null when the call failed. */
+  call: CopyCall | null;
   error: string | null;
 };
 
@@ -50,7 +44,7 @@ export async function writeCopy(
     );
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    return { version: prompt.version, message: null, report: null, checks: null, error: `Copy request failed: ${detail}` };
+    return { version: prompt.version, message: null, call: null, error: `Copy request failed: ${detail}` };
   }
 
   const block = message.content.find(
@@ -59,24 +53,17 @@ export async function writeCopy(
   );
   if (!block) {
     const reason = message.stop_reason === 'max_tokens' ? ' The response hit max_tokens.' : '';
-    return { version: prompt.version, message, report: null, checks: null, error: `No report_copy call came back.${reason}` };
+    return { version: prompt.version, message, call: null, error: `No report_copy call came back.${reason}` };
   }
 
   try {
-    const report = parseCopyReport(block.input);
-    return {
-      version: prompt.version,
-      message,
-      report,
-      checks: checkCopy(report, input.bucket, prompt.knownUrls),
-      error: null,
-    };
+    const call = parseCopyReport(block.input);
+    return { version: prompt.version, message, call, error: null };
   } catch (error) {
     return {
       version: prompt.version,
       message,
-      report: null,
-      checks: null,
+      call: null,
       error: error instanceof Error ? error.message : String(error),
     };
   }

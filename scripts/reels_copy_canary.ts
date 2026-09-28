@@ -37,11 +37,10 @@ function log(message: string, fields: Record<string, unknown> = {}): void {
 async function main(): Promise<void> {
   const ranks = ranksArg();
   const Anthropic = (await import('@anthropic-ai/sdk')).default;
-  const { priceAnthropicMessages } = await import('@/lib/anthropic-pricing');
   const { closeDbPool, dbQuery } = await import('@/lib/db');
-  const { COPY_MODEL, MONTHLY_WATCH_USD } = await import('@/lib/reels/config');
-  const { loadCopyTargets, saveIdeaCopy } = await import('@/lib/reels/copy/store');
-  const { writeCopy } = await import('@/lib/reels/copy/writer');
+  const { MONTHLY_WATCH_USD } = await import('@/lib/reels/config');
+  const { loadCopyTargets } = await import('@/lib/reels/copy/store');
+  const { writeTargetCopy } = await import('@/lib/reels/pipeline/copy');
   const { finishRun, monthToDateUsd } = await import('@/lib/reels/repository');
   const { loadLatestSlate } = await import('@/lib/reels/scoring/store');
 
@@ -88,77 +87,26 @@ async function main(): Promise<void> {
   try {
     for (let index = 0; index < targets.length; index += 1) {
       const target = targets[index];
-      const result = await writeCopy(client, {
-        bucket: target.bucket,
-        framework: target.framework,
-        members: target.members,
-      });
-
-      let inputTokens = 0;
-      let outputTokens = 0;
-      let cost = 0;
-      if (result.message) {
-        const priced = priceAnthropicMessages([result.message], {
-          modelId: COPY_MODEL,
-          fallbackCacheTtl: '5m',
-        });
-        inputTokens =
-          priced.uncached_input_tokens +
-          priced.cache_read_input_tokens +
-          priced['cache_creation.ephemeral_5m_input_tokens'] +
-          priced['cache_creation.ephemeral_1h_input_tokens'];
-        outputTokens = priced.output_tokens;
-        cost = Number(priced.costUsd);
-        usd += cost;
-        const { recordCost } = await import('@/lib/reels/repository');
-        await recordCost({
-          runId,
-          vendor: 'anthropic',
-          component: 'copy-caption-canary',
-          inputTokens,
-          outputTokens,
-          usd: cost,
-        });
-      }
-
-      await saveIdeaCopy({
-        slateId: slate.id,
-        postIdeaId: target.postIdeaId,
-        runId,
-        promptVersion: result.version,
-        model: COPY_MODEL,
-        bucket: target.bucket,
-        framework: target.framework,
-        report: result.report,
-        checks: result.checks,
-        error: result.error,
-        inputTokens,
-        outputTokens,
-        usd: cost,
-      });
-
-      if (result.report) written += 1;
-      else failures.push(`rank ${target.rank ?? '?'}: ${result.error ?? 'unknown error'}`);
+      const outcome = await writeTargetCopy(client, runId, slate.id, target);
+      usd += outcome.usd;
+      if (outcome.ok) written += 1;
+      else failures.push(`rank ${target.rank ?? '?'}: ${outcome.error ?? 'unknown error'}`);
 
       log('wrote', {
         rank: target.rank,
         bucket: target.bucket,
         framework: target.framework,
         headline: target.members[0]?.headline ?? '',
-        usd: cost,
-        error: result.error,
-        checks: result.checks,
-        onScreenCopy: result.report?.onScreenCopy ?? null,
-        caption: result.report?.caption ?? null,
-        callToAction: result.report?.callToAction ?? null,
-        hashtags: result.report?.hashtags ?? null,
-        sources: result.report?.sources ?? null,
+        usd: outcome.usd,
+        error: outcome.error,
+        onScreenCopy: outcome.onScreenCopy,
+        caption: outcome.caption,
       });
 
       const remaining = targets.length - index - 1;
-      if (index === 0 && remaining > 0 && cost * (remaining + 1) > SPEND_CEILING_USD) {
+      if (index === 0 && remaining > 0 && outcome.usd * (remaining + 1) > SPEND_CEILING_USD) {
         throw new Error(
-          `First idea cost $${cost.toFixed(3)}. Projected $${(cost * targets.length).toFixed(2)} for ${targets.length} ideas, over the $${SPEND_CEILING_USD} ceiling. Stopped.`,
+          `First idea cost $${outcome.usd.toFixed(3)}. Projected $${(outcome.usd * targets.length).toFixed(2)} for ${targets.length} ideas, over the $${SPEND_CEILING_USD} ceiling. Stopped.`,
         );
       }
     }

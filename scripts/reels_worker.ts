@@ -4,7 +4,7 @@
  * Runs as its own systemd unit beside `helios-worker` so a long scrape can
  * never starve outreach drafting, and vice versa. Vercel does not run this.
  *
- *   npm run reels:worker        # schedule 1 AM America/New_York, then loop
+ *   npm run reels:worker        # schedule 1 AM America/New_York (songs at 12:30 AM), then loop
  *   npm run reels:run           # one run now, then exit
  */
 import fs from 'node:fs';
@@ -41,6 +41,11 @@ async function main(): Promise<void> {
   const { claimAndRenderVisual } = await import('@/lib/reels/visual/run');
   const { claimAndRenderVideo } = await import('@/lib/reels/visual/video-run');
   const { nextRunAt } = await import('@/lib/reels/schedule');
+  const { runSongIngest } = await import('@/lib/reels/music/ingest');
+  const { claimAndPickSong } = await import('@/lib/reels/music/pick');
+  const { claimAndPublish } = await import('@/lib/reels/music/publish');
+  const { SONG_INGEST_HOUR_LOCAL, SONG_INGEST_MINUTE_LOCAL, RUN_TIMEZONE } = await import('@/lib/reels/config');
+  const nextSongsAt = () => nextRunAt(new Date(), RUN_TIMEZONE, SONG_INGEST_HOUR_LOCAL, SONG_INGEST_MINUTE_LOCAL);
   const { closeDbPool } = await import('@/lib/db');
 
   let stopping = false;
@@ -60,9 +65,21 @@ async function main(): Promise<void> {
     }
 
     let scheduledFor = nextRunAt(new Date());
-    log('scheduled', { nextRunAt: scheduledFor.toISOString(), pollMs: POLL_MS });
+    let songsFor = nextSongsAt();
+    log('scheduled', { nextRunAt: scheduledFor.toISOString(), nextSongsAt: songsFor.toISOString(), pollMs: POLL_MS });
 
     while (!stopping) {
+      // 12:30 AM song ingest (D-137, D-166). Its own log, so a failure never blocks 1 AM.
+      if (Date.now() >= songsFor.getTime()) {
+        const songs = await runSongIngest('scheduled').catch((error) => ({
+          status: 'failed' as const,
+          note: error instanceof Error ? error.message : String(error),
+        }));
+        log('songs_complete', { status: songs.status, note: 'note' in songs ? songs.note : undefined });
+        songsFor = nextSongsAt();
+        continue;
+      }
+
       // Two ways in: the 1 AM schedule, and whatever the page queued.
       if (Date.now() >= scheduledFor.getTime()) {
         const outcome = await runReelsNight('scheduled');
@@ -108,6 +125,24 @@ async function main(): Promise<void> {
       if (video) {
         log('video_complete', { id: video.id, status: video.status });
         await carryOn();
+        continue;
+      }
+
+      const pick = await claimAndPickSong().catch((error) => {
+        log('song_pick_failed', { error: error instanceof Error ? error.message : String(error) });
+        return null;
+      });
+      if (pick) {
+        log('song_pick_complete', { id: pick.id, status: pick.status });
+        continue;
+      }
+
+      const published = await claimAndPublish().catch((error) => {
+        log('publish_failed', { error: error instanceof Error ? error.message : String(error) });
+        return null;
+      });
+      if (published) {
+        log('publish_complete', { id: published.id, status: published.status });
         continue;
       }
 

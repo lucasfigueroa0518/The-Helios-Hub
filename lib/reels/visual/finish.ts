@@ -1,5 +1,6 @@
 import { dbQuery } from '@/lib/db';
 import { queueCopyJob } from '@/lib/reels/copy/jobs';
+import { ideaRankOrderBy } from '@/lib/reels/pipeline/order';
 import { queueVideoJob } from '@/lib/reels/visual/video-run';
 import { queueVisualFrame } from '@/lib/reels/visual/run';
 
@@ -212,7 +213,8 @@ async function loadActive(postIdeaId?: string): Promise<ActiveFinish[]> {
             ${attemptsSql('video_jobs', 'd', "'failed'")} AS video_attempts
      FROM reels.finish_requests f
      WHERE f.status = 'active'
-       AND ($1::uuid IS NULL OR f.post_idea_id = $1::uuid)`,
+       AND ($1::uuid IS NULL OR f.post_idea_id = $1::uuid)
+     ORDER BY ${ideaRankOrderBy('f')}`,
     [postIdeaId ?? null],
   );
   return result.rows.map((row) => ({

@@ -2,6 +2,7 @@ import { derivedAdapters, primaryAdapters } from '@/lib/reels/adapters';
 import { MONTHLY_WATCH_USD } from '@/lib/reels/config';
 import type { CopyClient } from '@/lib/reels/copy/writer';
 import { writeSlateCopy } from '@/lib/reels/pipeline/copy';
+import { requestFinish } from '@/lib/reels/visual/finish';
 import { createLiveJevRunner } from '@/lib/reels/jev/client';
 import type { JevRunner } from '@/lib/reels/jev/runner';
 import { groupRun } from '@/lib/reels/pipeline/grouping';
@@ -127,8 +128,17 @@ export async function executeRun(run: RunRow, deps?: Partial<RunDeps>): Promise<
         const copy = await writeSlateCopy(run.id, scoring.slateId, {
           client: deps?.copyClient,
           signal: deps?.signal,
+          jev,
         });
         copyWritten = copy.written;
+        // One flow (D-192): each selected idea with copy goes on to its frame,
+        // video, hook SFX, and song pick. Publishing stays behind Approve.
+        // writtenIdeaIds is best-first, so rank 1 starts before the others (D-199).
+        for (const postIdeaId of copy.writtenIdeaIds ?? []) {
+          await requestFinish(postIdeaId, scoring.slateId).catch((error) => {
+            log('finish_request_failed', { postIdeaId, error: error instanceof Error ? error.message : String(error) });
+          });
+        }
         if (copy.failed > 0) {
           copyNote = `Copy failed for ${copy.failed} idea(s): ${copy.failures.join('; ')}`;
         }

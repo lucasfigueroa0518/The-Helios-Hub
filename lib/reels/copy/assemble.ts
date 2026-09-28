@@ -98,7 +98,7 @@ export function copyStrategySystem(bucket: BucketId, framework: FrameworkId): st
     '',
     '## Hard constraint',
     '',
-    `On-screen word count for this bucket: ${ON_SCREEN_WORD_RANGE[bucket].min} to ${ON_SCREEN_WORD_RANGE[bucket].max} words. Count the words in the on-screen copy. A count outside that range is a failed report. The reel is one screen. Do not split the copy across images. Return that copy with a line break at each natural pause, and with no blank line.`,
+    `On-screen word count for this bucket: ${ON_SCREEN_WORD_RANGE[bucket].min} to ${ON_SCREEN_WORD_RANGE[bucket].max} words. Count the words in each on-screen copy on its own. A count outside that range, on either copy, is a failed report. The reel is one screen. Do not split a copy across images. Return each copy with a line break at each natural pause, and with no blank line.`,
   ].join('\n');
 }
 
@@ -127,7 +127,7 @@ function sourceBlock(member: CopyMember, index: number): string {
 export function buildCopyUserPrompt(input: CopyInput): string {
   const members = [...input.members].sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role]);
   return [
-    'Write the on-screen copy and the caption for this post idea.',
+    'Write two on-screen copies and one caption for this post idea. Both copies open differently, and the one caption pays both out.',
     '',
     `Bucket: ${BUCKET_SPEC_TEXT[input.bucket].title}`,
     `Framework: ${FRAMEWORK_SPEC_TEXT[input.framework].title}`,

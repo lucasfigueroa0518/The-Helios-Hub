@@ -23,7 +23,7 @@ import {
   extractFrameworks,
   extractHumanizer,
 } from '@/lib/reels/copy/extract';
-import { checkCopy, fullCaption, parseCopyReport, CopyReportError, REPORT_COPY_TOOL } from '@/lib/reels/copy/report';
+import { checkCopy, fullCaption, parseCopyReport, publishCopy, CopyReportError, REPORT_COPY_TOOL } from '@/lib/reels/copy/report';
 import { COPY_SKILL, FRAMEWORK_WRITING_LOGIC, HUMANIZER_PREAMBLE } from '@/lib/reels/copy/skill';
 import {
   THREADS_ON_SCREEN_FIELD,
@@ -129,8 +129,9 @@ test('the word count is stated as a hard constraint for the winning bucket', () 
   assert.match(COPY_SKILL, /KernelBench/);
   assert.match(COPY_SKILL, /already contains its line breaks/);
   assert.match(COPY_SKILL, /about two dozen characters/);
+  assert.match(COPY_SKILL, /Report two on-screen copies/);
   assert.doesNotMatch(COPY_SKILL, /new screen/);
-  const tool = REPORT_COPY_TOOL.input_schema.properties.on_screen_copy.description;
+  const tool = REPORT_COPY_TOOL.input_schema.properties.on_screen_copies.description;
   assert.match(tool, /one screen/);
   assert.match(tool, /natural pause/);
   assert.match(tool, /failed report/);
@@ -245,12 +246,15 @@ test('cited URLs are shown and count as known', () => {
 
 // ── Report parsing and checks ───────────────────────────────────────────────
 
+const screen = 'Ninety five percent of pilots stall.\nThe model is rarely why.';
+const otherScreen = 'Enterprise pilots stall before launch.\nThe model is rarely why.';
+
 const goodInput = {
   hook_drafts: ['a', 'b', 'c'],
   copy_draft: 'draft',
   caption_draft: 'draft',
   remaining_patterns: [],
-  on_screen_copy: 'Ninety five percent of pilots stall.\nThe model is rarely why.',
+  on_screen_copies: [screen, otherScreen],
   caption: 'First line that fits the fold.\n\nMore detail, per TechCrunch.',
   call_to_action: 'Send this to the person who owns your AI pilot.',
   hashtags: ['#AI', 'enterprise', '#MLOps'],
@@ -258,7 +262,9 @@ const goodInput = {
 };
 
 test('a well-formed report parses and hashtags gain a #', () => {
-  const report = parseCopyReport(goodInput);
+  const call = parseCopyReport(goodInput);
+  assert.deepEqual(call.onScreenCopies, [screen, otherScreen]);
+  const report = publishCopy(call, screen);
   assert.deepEqual(report.hashtags, ['#AI', '#enterprise', '#MLOps']);
   assert.equal(
     fullCaption(report),
@@ -266,18 +272,19 @@ test('a well-formed report parses and hashtags gain a #', () => {
   );
 });
 
-test('a report without the final copy is an error', () => {
-  assert.throws(() => parseCopyReport({ ...goodInput, on_screen_copy: '' }), CopyReportError);
+test('a report without exactly two on-screen copies is an error', () => {
+  assert.throws(() => parseCopyReport({ ...goodInput, on_screen_copies: [screen] }), CopyReportError);
+  assert.throws(() => parseCopyReport({ ...goodInput, on_screen_copies: [] }), CopyReportError);
   assert.throws(() => parseCopyReport('nope'), CopyReportError);
 });
 
-test('checks measure against the bucket and flag what review should look at', () => {
-  const report = parseCopyReport({
+test('checks measure the winning line against the bucket and flag what review should look at', () => {
+  const call = parseCopyReport({
     ...goodInput,
     caption: `${'x'.repeat(130)}\n\nWe think this matters — a lot. https://example.com`,
     sources: [{ name: 'Nowhere', url: 'https://not-in-idea.com' }],
   });
-  const checks = checkCopy(report, 'the_number', ['https://techcrunch.com/a']);
+  const checks = checkCopy(publishCopy(call, screen), 'the_number', ['https://techcrunch.com/a']);
   assert.equal(checks.copyWords, 11);
   assert.equal(checks.copyInRange, true);
   assert.equal(checks.foldFits, false);
@@ -287,7 +294,7 @@ test('checks measure against the bucket and flag what review should look at', ()
   assert.deepEqual(checks.unknownSourceUrls, ['https://not-in-idea.com']);
   assert.equal(checks.hashtagsInRange, true);
 
-  const saga = checkCopy(parseCopyReport(goodInput), 'the_saga', ['https://techcrunch.com/a']);
+  const saga = checkCopy(publishCopy(parseCopyReport(goodInput), screen), 'the_saga', ['https://techcrunch.com/a']);
   assert.equal(saga.copyInRange, false);
 });
 
@@ -321,8 +328,7 @@ test('writeCopy sends the assembled prompt and reads the tool call', async () =>
   );
   const result = await writeCopy(client, { bucket: 'the_number', framework: 'arousal', members: [member()] });
   assert.equal(result.error, null);
-  assert.equal(result.report?.onScreenCopy, goodInput.on_screen_copy);
-  assert.equal(result.checks?.copyInRange, true);
+  assert.deepEqual(result.call?.onScreenCopies, [screen, otherScreen]);
   assert.equal(seen.length, 1);
   assert.equal(seen[0].model, 'claude-sonnet-5');
   assert.deepEqual(seen[0].tool_choice, { type: 'tool', name: 'report_copy' });
@@ -331,7 +337,7 @@ test('writeCopy sends the assembled prompt and reads the tool call', async () =>
 test('writeCopy reports a missing tool call as an error and keeps the billed message', async () => {
   const client = stubClient([{ type: 'text', text: 'hello', citations: null } as Anthropic.TextBlock], []);
   const result = await writeCopy(client, { bucket: 'the_number', framework: 'arousal', members: [member()] });
-  assert.equal(result.report, null);
+  assert.equal(result.call, null);
   assert.ok(result.message);
   assert.match(result.error ?? '', /No report_copy call/);
 });

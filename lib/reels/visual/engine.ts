@@ -96,6 +96,7 @@ export async function renderTextPlate(
   width: number,
   height: number,
   profile: ColorProfile = 'noir',
+  fullStoryCue: string | null = null,
 ): Promise<{ png: Buffer; lines: string[]; warnings: string[] }> {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'helios-plate-'));
   const out = path.join(dir, 'plate.png');
@@ -112,6 +113,7 @@ export async function renderTextPlate(
       out,
       '--profile',
       profile,
+      ...(fullStoryCue?.trim() ? ['--full-story', fullStoryCue.trim()] : []),
     ]);
     if (result.code !== 0) {
       throw new Error(result.stderr.trim() || result.stdout.trim() || `Text plate failed (${result.code}).`);
@@ -131,13 +133,25 @@ export async function renderTextPng(
   png: Buffer,
   copy: string,
   profile: ColorProfile = 'noir',
+  fullStoryCue: string | null = null,
 ): Promise<{ ok: true; rendered: RenderedText } | { ok: false; error: string; details: unknown }> {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'helios-frame-'));
   const bg = path.join(dir, 'bg.png');
   const out = path.join(dir, 'frame.png');
   try {
     await writeFile(bg, png);
-    const result = await runEngine(['render', '--bg', bg, '--copy', copy, '--out', out, '--profile', profile]);
+    const result = await runEngine([
+      'render',
+      '--bg',
+      bg,
+      '--copy',
+      copy,
+      '--out',
+      out,
+      '--profile',
+      profile,
+      ...(fullStoryCue?.trim() ? ['--full-story', fullStoryCue.trim()] : []),
+    ]);
     if (result.code === 2) {
       let details: unknown = null;
       let error = 'Copy does not fit the frame.';

@@ -15,6 +15,12 @@ PROJECT="${GCP_PROJECT:-$(gcloud config get-value project 2>/dev/null || true)}"
 ZONE="${GCP_ZONE:-us-west1-a}"
 INSTANCE="${GCP_INSTANCE:-helios-orch-worker}"
 ENV_FILE="${WORKER_ENV_FILE:-scripts/gcp/worker.env}"
+# GCP_SSH_IAP=1 tunnels scp/ssh through Identity-Aware Proxy (HTTPS on 443),
+# for networks that block outbound SSH on port 22.
+IAP=""
+if [[ "${GCP_SSH_IAP:-}" == "1" ]]; then
+  IAP="--tunnel-through-iap"
+fi
 
 if ! command -v gcloud >/dev/null 2>&1; then
   echo "gcloud not found. See docs/gcp-e2-micro-worker.md"
@@ -82,20 +88,20 @@ tar -czf "${ARCHIVE}" \
   --exclude='./helios_text_engine/.venv' \
   .
 
-gcloud compute scp --zone="${ZONE}" --project="${PROJECT}" \
+gcloud compute scp ${IAP} --zone="${ZONE}" --project="${PROJECT}" \
   "${ARCHIVE}" "${INSTANCE}:/tmp/helios-app.tgz"
 
-gcloud compute scp --zone="${ZONE}" --project="${PROJECT}" \
+gcloud compute scp ${IAP} --zone="${ZONE}" --project="${PROJECT}" \
   scripts/gcp/helios-worker.service "${INSTANCE}:/tmp/helios-worker.service"
 
 if [[ -f "${ENV_FILE}" ]]; then
-  gcloud compute scp --zone="${ZONE}" --project="${PROJECT}" \
+  gcloud compute scp ${IAP} --zone="${ZONE}" --project="${PROJECT}" \
     "${ENV_FILE}" "${INSTANCE}:/tmp/worker.env"
-  gcloud compute scp --zone="${ZONE}" --project="${PROJECT}" \
+  gcloud compute scp ${IAP} --zone="${ZONE}" --project="${PROJECT}" \
     scripts/gcp/merge-higgsfield-env.py "${INSTANCE}:/tmp/merge-higgsfield-env.py"
 fi
 
-gcloud compute ssh "${INSTANCE}" --zone="${ZONE}" --project="${PROJECT}" --command="
+gcloud compute ssh ${IAP} "${INSTANCE}" --zone="${ZONE}" --project="${PROJECT}" --command="
   set -euo pipefail
   sudo rm -rf /opt/helios-worker/app
   sudo mkdir -p /opt/helios-worker/app
@@ -117,7 +123,8 @@ gcloud compute ssh "${INSTANCE}" --zone="${ZONE}" --project="${PROJECT}" --comma
     sudo rm -rf helios_text_engine/.venv
     sudo python3 -m venv helios_text_engine/.venv
   fi
-  sudo helios_text_engine/.venv/bin/pip install -q pillow numpy
+  # librosa measures song BPM for the Trial Reels song pool (D-175).
+  sudo helios_text_engine/.venv/bin/pip install -q pillow numpy librosa
   if ! command -v ffmpeg >/dev/null 2>&1; then
     sudo apt-get update -qq
     sudo apt-get install -y ffmpeg

@@ -6,18 +6,22 @@ import path from 'node:path';
 import { priceAnthropicMessages } from '@/lib/anthropic-pricing';
 import { dbQuery } from '@/lib/db';
 import { MONTHLY_WATCH_USD, MOTION_MODEL, VIDEO_STALE_MINUTES } from '@/lib/reels/config';
+import { claimNextRankedJob } from '@/lib/reels/pipeline/claim';
 import { monthToDateUsd, recordCost } from '@/lib/reels/repository';
+import { SFX_FPS } from '@/lib/reels/sfx/frame-map';
+import { FINAL_DIR, hookSfxPlan } from '@/lib/reels/sfx/manifest';
 import { buildStory, type VisualMember } from '@/lib/reels/visual/scene';
 import { colorProfileOrNoir } from '@/lib/reels/visual/color';
 import { renderTextPlate } from '@/lib/reels/visual/engine';
 import { generateKlingClip } from '@/lib/reels/visual/kling/api';
 import { createLiveJevRunner } from '@/lib/reels/jev/client';
+import { queueSongPick } from '@/lib/reels/music/pick';
 import type { JevRunner } from '@/lib/reels/jev/runner';
 import { pickHookTiming, type ClipShape, type Hook, type HookTiming } from '@/lib/reels/visual/hook';
 import { routeHook } from '@/lib/reels/visual/hook-route';
 import { motionRecord } from '@/lib/reels/visual/motion-prompt';
 import { writeMotion, type MotionClient } from '@/lib/reels/visual/motion-writer';
-import { overlayPlate, probeVideo } from '@/lib/reels/visual/overlay';
+import { muxHookSfx, overlayPlate, probeVideo } from '@/lib/reels/visual/overlay';
 import { downloadFrameObject, signFrameObject, uploadFrameObject } from '@/lib/reels/visual/storage';
 import type { Bucket, MemberRole } from '@/lib/reels/types';
 
@@ -34,10 +38,6 @@ export type StoredVideo = {
   requestedAt: string;
   finishedAt: string | null;
 };
-
-function isUniqueViolation(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && (error as { code?: string }).code === '23505';
-}
 
 export async function queueVideoJob(
   postIdeaId: string,
@@ -136,25 +136,7 @@ async function claimVideoJob(): Promise<string | null> {
         AND started_at < now() - ($1::int * interval '1 minute')`,
     [VIDEO_STALE_MINUTES],
   );
-  try {
-    const { rows } = await dbQuery<{ id: string }>(
-      `UPDATE reels.video_jobs
-          SET status = 'running', started_at = now()
-        WHERE id = (
-          SELECT id FROM reels.video_jobs
-           WHERE status = 'requested'
-             AND NOT EXISTS (SELECT 1 FROM reels.video_jobs v WHERE v.status = 'running')
-           ORDER BY requested_at
-           FOR UPDATE SKIP LOCKED
-           LIMIT 1
-        )
-        RETURNING id`,
-    );
-    return rows[0]?.id ?? null;
-  } catch (error) {
-    if (isUniqueViolation(error)) return null;
-    throw error;
-  }
+  return claimNextRankedJob('video_jobs');
 }
 
 type VideoTarget = {
@@ -162,6 +144,7 @@ type VideoTarget = {
   scene: string;
   backgroundPath: string;
   onScreenCopy: string;
+  fullStoryCue: string | null;
   story: string;
   colorProfile: ReturnType<typeof colorProfileOrNoir>;
 };
@@ -172,6 +155,7 @@ async function loadVideoTarget(jobId: string): Promise<VideoTarget | null> {
     scene: string | null;
     background_storage_path: string | null;
     on_screen_copy: string | null;
+    full_story_cue: string | null;
     render: { colorProfile?: string } | null;
     caption: string | null;
     role: MemberRole;
@@ -180,7 +164,7 @@ async function loadVideoTarget(jobId: string): Promise<VideoTarget | null> {
     source_bucket: Bucket;
   }>(
     `SELECT j.post_idea_id, v.scene, v.background_storage_path, v.render,
-            c.on_screen_copy, c.caption,
+            c.on_screen_copy, c.full_story_cue, c.caption,
             m.role, src.headline, src.body, src.bucket AS source_bucket
        FROM reels.video_jobs j
        JOIN reels.visual_jobs v ON v.id = j.visual_job_id
@@ -205,6 +189,7 @@ async function loadVideoTarget(jobId: string): Promise<VideoTarget | null> {
     scene: first.scene,
     backgroundPath: first.background_storage_path,
     onScreenCopy: first.on_screen_copy,
+    fullStoryCue: first.full_story_cue?.trim() || null,
     story: buildStory(first.caption, members),
     colorProfile: colorProfileOrNoir(first.render?.colorProfile),
   };
@@ -266,6 +251,9 @@ async function klingWithRetry(input: { prompt: string; imageUrl: string }, notic
   throw last;
 }
 
+/** The composed reel, and the hook actually stamped on it (null when none was). */
+type Composed = { path: string; hook: Hook | null; shape: ClipShape | null };
+
 /**
  * Hook, then text plate, over the raw clip. Fails open: if the plate or the
  * hook cannot be laid, the reel ships with what did work and a warning.
@@ -278,35 +266,67 @@ async function compose(
   hook: Hook,
   timing: HookTiming,
   notices: string[],
-): Promise<string> {
+): Promise<Composed> {
   let shape: ClipShape;
   try {
     shape = await probeVideo(rawPath);
   } catch (error) {
     notices.push(`Could not read the clip, so it ships without the hook and text: ${describe(error)}`);
-    return rawPath;
+    return { path: rawPath, hook: null, shape: null };
   }
   try {
-    const plate = await renderTextPlate(target.onScreenCopy, shape.width, shape.height, target.colorProfile);
+    const plate = await renderTextPlate(
+      target.onScreenCopy,
+      shape.width,
+      shape.height,
+      target.colorProfile,
+      target.fullStoryCue,
+    );
     await writeFile(platePath, plate.png);
     notices.push(...plate.warnings);
   } catch (error) {
     notices.push(`Text plate failed, so the clip ships without on-screen text: ${describe(error)}`);
-    return rawPath;
+    return { path: rawPath, hook: null, shape };
   }
   try {
     await overlayPlate(rawPath, platePath, outPath, { hook, clip: shape, timing });
-    return outPath;
+    return { path: outPath, hook, shape };
   } catch (error) {
     notices.push(`Overlay with the ${hook} hook failed: ${describe(error)}`);
   }
   try {
     await overlayPlate(rawPath, platePath, outPath, { hook: 'invert', clip: shape, timing });
     notices.push('Used the invert hook instead.');
-    return outPath;
+    return { path: outPath, hook: 'invert', shape };
   } catch (error) {
     notices.push(`Overlay failed again, so the clip ships without the hook and text: ${describe(error)}`);
-    return rawPath;
+    return { path: rawPath, hook: null, shape };
+  }
+}
+
+/**
+ * Add the finished SFX for the hook actually stamped and its timing (SFX-07):
+ * an invert fallback gets invert's sound, no hook gets no sound. Separate from
+ * the overlay so a sound failure never costs the hook (D-121). The files are
+ * frame-exact at 24 fps only (D-123). Fails open: the reel ships silent.
+ */
+async function attachHookSfx(
+  composed: Composed,
+  timing: HookTiming,
+  outPath: string,
+  notices: string[],
+): Promise<{ path: string; sfx: string | null }> {
+  const plan = hookSfxPlan(composed.hook, composed.shape?.fps ?? null, timing, SFX_FPS);
+  if ('notice' in plan) {
+    if (plan.notice) notices.push(plan.notice);
+    return { path: composed.path, sfx: null };
+  }
+  try {
+    await muxHookSfx(composed.path, path.join(process.cwd(), FINAL_DIR, plan.file), outPath);
+    return { path: outPath, sfx: plan.file };
+  } catch (error) {
+    notices.push(`Hook sound failed, so the reel ships silent: ${describe(error)}`);
+    return { path: composed.path, sfx: null };
   }
 }
 
@@ -371,20 +391,28 @@ export async function claimAndRenderVideo(deps?: {
       const rawPath = path.join(dir, 'raw.mp4');
       const platePath = path.join(dir, 'plate.png');
       const outPath = path.join(dir, 'reel.mp4');
+      const soundPath = path.join(dir, 'reel-sfx.mp4');
       await writeFile(rawPath, clip.bytes);
       const timing = pickHookTiming();
-      const finalPath = await compose(rawPath, platePath, outPath, target, route.hook, timing, notices);
+      const composed = await compose(rawPath, platePath, outPath, target, route.hook, timing, notices);
+      const sounded = await attachHookSfx(composed, timing, soundPath, notices);
+      const finalPath = sounded.path;
       const videoPath = `${id}/reel.mp4`;
       await uploadFrameObject(videoPath, await readFile(finalPath), 'video/mp4');
       const warnings = [...notices, ...written.prompt.warnings];
       await finish(id, 'ok', {
         // Fail open: the clip ships and the warnings ride along as labels.
         error: warnings.length ? `Warning: ${warnings.join(' | ')}` : null,
-        prompt: motionRecord(route.hook, { ...written.prompt, warnings }, timing),
+        prompt: motionRecord(composed.hook, { ...written.prompt, warnings }, timing, {
+          routedHook: route.hook,
+          sfx: sounded.sfx,
+        }),
         videoPath,
         higgsfieldJobId: clip.jobId,
         usd,
       });
+      // The song pick is its own job, so a failed pick never costs a new clip (D-161).
+      await queueSongPick(id).catch(() => undefined);
       return { id, status: 'ok' };
     } finally {
       await rm(dir, { recursive: true, force: true });

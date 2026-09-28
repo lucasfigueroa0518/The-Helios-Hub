@@ -146,3 +146,16 @@ export async function downloadFrameObject(objectPath: string): Promise<Buffer> {
   }
   return result.body;
 }
+
+/** Hard-delete objects (D-141). Missing objects are not an error. */
+export async function deleteFrameObjects(objectPaths: string[]): Promise<void> {
+  if (objectPaths.length === 0) return;
+  const payload = JSON.stringify({ prefixes: objectPaths });
+  const result = await request('DELETE', `/storage/v1/object/${FRAME_BUCKET}`, payload, {
+    'content-type': 'application/json',
+    'content-length': String(Buffer.byteLength(payload)),
+  });
+  if (result.status < 200 || result.status >= 300) {
+    throw new Error(`Frame delete failed (${result.status}): ${result.body.toString('utf8').slice(0, 200)}`);
+  }
+}
