@@ -45,6 +45,7 @@ async function main() {
       article: { type: 'string' },
       'from-brief': { type: 'string' },
       'max-cost': { type: 'string' },
+      inject: { type: 'string' },
     },
     strict: true,
     allowPositionals: false,
@@ -53,9 +54,10 @@ async function main() {
   const articleId = values.article;
   const fromBriefPath = values['from-brief'];
   const maxCostArg = values['max-cost'];
+  const injectSentence = values.inject;
 
   if (!articleId) {
-    console.error('Usage: npm run social:v2:test -- --article <uuid> [--from-brief runs/<ts>/brief.json] [--max-cost 1.5]');
+    console.error('Usage: npm run social:v2:test -- --article <uuid> [--from-brief runs/<ts>/brief.json] [--max-cost 1.5] [--inject "<sentence>"]');
     process.exit(2);
   }
 
@@ -129,6 +131,11 @@ async function main() {
     ...(usedFromBrief ? baseDeps : {}),
   });
 
+  if (injectSentence) {
+    console.log(`Inject enabled — will append to SLIDE 3 BODY before first fact-check:`);
+    console.log(`  "${injectSentence}"`);
+  }
+
   console.log('Running pipeline...');
   const result = await runCreatorPipeline(
     {
@@ -139,7 +146,7 @@ async function main() {
       body: row.body,
       published_at: row.published_at,
     },
-    {},
+    injectSentence ? { injectSentence } : {},
     deps,
   );
   captured.result = result;
