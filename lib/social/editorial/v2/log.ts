@@ -55,6 +55,15 @@ export type PipelineV2Debug = {
     textPreview?: string;
     length?: number;
   }>;
+  /**
+   * Brief-image validation results. `kept` are the images that passed
+   * both the credit-name check and the HEAD content-type check;
+   * `dropped` are the ones filtered out before the Writer saw them.
+   */
+  imageValidation?: {
+    kept: Array<{ number: number; link: string; credit: string }>;
+    dropped: Array<{ number: number; link: string; credit: string; reason: string }>;
+  };
   draft?: {
     post: ParsedPost;
     raw: string;
