@@ -25,6 +25,10 @@
     "block_center_y_ratio": 0.46,
     "clear_space_lines": 1.0
   },
+  "full_story": {
+    "font_size_ratio": 0.42,
+    "emoji_file": "fonts/backhand-index-pointing-down.png"
+  },
   "line_breaks": {
     "max_lines": 4,
     "max_chars_per_line": 24,

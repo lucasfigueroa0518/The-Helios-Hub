@@ -22,30 +22,34 @@ export const HASHTAG_RANGE = { min: 3, max: 5 };
 
 export const REPORT_COPY_TOOL = {
   name: 'report_copy',
-  description: 'Report the final on-screen copy and caption for this post idea. Call it once.',
+  description:
+    'Report two final on-screen copies and one caption for this post idea. Both copies are doors into that one caption. Call it once.',
   input_schema: {
     type: 'object' as const,
     properties: {
       hook_drafts: {
         type: 'array',
-        description: 'At least three different opening lines you considered for the on-screen copy. Working notes, not published.',
+        description: 'At least three different opening lines you considered for the on-screen copies. Working notes, not published.',
         items: { type: 'string' },
       },
-      copy_draft: { type: 'string', description: 'Your first draft of the on-screen copy. Working notes.' },
+      copy_draft: { type: 'string', description: 'Your first drafts of the two on-screen copies. Working notes.' },
       caption_draft: { type: 'string', description: 'Your first draft of the caption. Working notes.' },
       remaining_patterns: {
         type: 'array',
         description: 'Humanizer patterns still present in the drafts, each as its number and a short quote. Empty when none.',
         items: { type: 'string' },
       },
-      on_screen_copy: {
-        type: 'string',
+      on_screen_copies: {
+        type: 'array',
+        minItems: 2,
+        maxItems: 2,
         description:
-          'The final on-screen copy for the one screen, with a line break already inserted at each natural pause. One line break between lines, and no blank line. A line break stays on this same screen. Count the words. The count must fall inside the bucket word range given in the prompt. A count outside that range is a failed report.',
+          'Exactly two final on-screen copies for the one screen. Same story, same facts, same gap, paid out by the one caption. Different first lines, and a different thing named first. A paraphrase is a failed report. Each copy has a line break already inserted at each natural pause. One line break between lines, and no blank line. A line break stays on this same screen. Count the words in each copy on its own. Each count must fall inside the bucket word range given in the prompt. A count outside that range is a failed report.',
+        items: { type: 'string' },
       },
       caption: {
         type: 'string',
-        description: 'The final caption, ending where the bucket structure ends. Leave out the call to action and the hashtags.',
+        description: 'The final caption, ending where the bucket structure ends. Leave out the call to action and the hashtags. This one caption pays out both on-screen copies.',
       },
       call_to_action: { type: 'string', description: 'The one call to action, as a single line.' },
       hashtags: {
@@ -71,7 +75,7 @@ export const REPORT_COPY_TOOL = {
       'copy_draft',
       'caption_draft',
       'remaining_patterns',
-      'on_screen_copy',
+      'on_screen_copies',
       'caption',
       'call_to_action',
       'hashtags',
@@ -80,8 +84,9 @@ export const REPORT_COPY_TOOL = {
   },
 };
 
-export type CopyReport = {
-  onScreenCopy: string;
+/** One Sonnet call: two on-screen lines, one caption package. */
+export type CopyCall = {
+  onScreenCopies: [string, string];
   caption: string;
   callToAction: string;
   hashtags: string[];
@@ -92,6 +97,16 @@ export type CopyReport = {
     captionDraft: string;
     remainingPatterns: string[];
   };
+};
+
+/** The line that will be posted, plus the caption from the call that wrote it. */
+export type CopyReport = {
+  onScreenCopy: string;
+  caption: string;
+  callToAction: string;
+  hashtags: string[];
+  sources: Array<{ name: string; url: string }>;
+  working: CopyCall['working'];
 };
 
 export class CopyReportError extends Error {
@@ -128,11 +143,19 @@ function sourceList(value: unknown): Array<{ name: string; url: string }> {
   });
 }
 
-export function parseCopyReport(input: unknown): CopyReport {
+function onScreenCopies(value: unknown): [string, string] {
+  const copies = list(value);
+  if (copies.length !== 2) {
+    throw new CopyReportError(`report_copy needs exactly two on-screen copies, got ${copies.length}.`);
+  }
+  return [copies[0], copies[1]];
+}
+
+export function parseCopyReport(input: unknown): CopyCall {
   if (!input || typeof input !== 'object') throw new CopyReportError('report_copy input is not an object.');
   const record = input as Record<string, unknown>;
   return {
-    onScreenCopy: text(record, 'on_screen_copy', true),
+    onScreenCopies: onScreenCopies(record.on_screen_copies),
     caption: text(record, 'caption', true),
     callToAction: text(record, 'call_to_action', true),
     hashtags: list(record.hashtags).map((tag) => (tag.startsWith('#') ? tag : `#${tag}`)),
@@ -143,6 +166,21 @@ export function parseCopyReport(input: unknown): CopyReport {
       captionDraft: text(record, 'caption_draft', false),
       remainingPatterns: list(record.remaining_patterns),
     },
+  };
+}
+
+/** The posted row: one of the call's on-screen lines, with that call's caption. */
+export function publishCopy(call: CopyCall, onScreenCopy: string): CopyReport {
+  if (!call.onScreenCopies.includes(onScreenCopy)) {
+    throw new CopyReportError('The winning on-screen copy is not one of the lines from its call.');
+  }
+  return {
+    onScreenCopy,
+    caption: call.caption,
+    callToAction: call.callToAction,
+    hashtags: call.hashtags,
+    sources: call.sources,
+    working: call.working,
   };
 }
 

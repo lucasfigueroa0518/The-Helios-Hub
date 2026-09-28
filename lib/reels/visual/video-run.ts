@@ -6,6 +6,7 @@ import path from 'node:path';
 import { priceAnthropicMessages } from '@/lib/anthropic-pricing';
 import { dbQuery } from '@/lib/db';
 import { MONTHLY_WATCH_USD, MOTION_MODEL, VIDEO_STALE_MINUTES } from '@/lib/reels/config';
+import { claimNextRankedJob } from '@/lib/reels/pipeline/claim';
 import { monthToDateUsd, recordCost } from '@/lib/reels/repository';
 import { SFX_FPS } from '@/lib/reels/sfx/frame-map';
 import { FINAL_DIR, hookSfxPlan } from '@/lib/reels/sfx/manifest';
@@ -14,6 +15,7 @@ import { colorProfileOrNoir } from '@/lib/reels/visual/color';
 import { renderTextPlate } from '@/lib/reels/visual/engine';
 import { generateKlingClip } from '@/lib/reels/visual/kling/api';
 import { createLiveJevRunner } from '@/lib/reels/jev/client';
+import { queueSongPick } from '@/lib/reels/music/pick';
 import type { JevRunner } from '@/lib/reels/jev/runner';
 import { pickHookTiming, type ClipShape, type Hook, type HookTiming } from '@/lib/reels/visual/hook';
 import { routeHook } from '@/lib/reels/visual/hook-route';
@@ -36,10 +38,6 @@ export type StoredVideo = {
   requestedAt: string;
   finishedAt: string | null;
 };
-
-function isUniqueViolation(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && (error as { code?: string }).code === '23505';
-}
 
 export async function queueVideoJob(
   postIdeaId: string,
@@ -138,25 +136,7 @@ async function claimVideoJob(): Promise<string | null> {
         AND started_at < now() - ($1::int * interval '1 minute')`,
     [VIDEO_STALE_MINUTES],
   );
-  try {
-    const { rows } = await dbQuery<{ id: string }>(
-      `UPDATE reels.video_jobs
-          SET status = 'running', started_at = now()
-        WHERE id = (
-          SELECT id FROM reels.video_jobs
-           WHERE status = 'requested'
-             AND NOT EXISTS (SELECT 1 FROM reels.video_jobs v WHERE v.status = 'running')
-           ORDER BY requested_at
-           FOR UPDATE SKIP LOCKED
-           LIMIT 1
-        )
-        RETURNING id`,
-    );
-    return rows[0]?.id ?? null;
-  } catch (error) {
-    if (isUniqueViolation(error)) return null;
-    throw error;
-  }
+  return claimNextRankedJob('video_jobs');
 }
 
 type VideoTarget = {
@@ -164,6 +144,7 @@ type VideoTarget = {
   scene: string;
   backgroundPath: string;
   onScreenCopy: string;
+  fullStoryCue: string | null;
   story: string;
   colorProfile: ReturnType<typeof colorProfileOrNoir>;
 };
@@ -174,6 +155,7 @@ async function loadVideoTarget(jobId: string): Promise<VideoTarget | null> {
     scene: string | null;
     background_storage_path: string | null;
     on_screen_copy: string | null;
+    full_story_cue: string | null;
     render: { colorProfile?: string } | null;
     caption: string | null;
     role: MemberRole;
@@ -182,7 +164,7 @@ async function loadVideoTarget(jobId: string): Promise<VideoTarget | null> {
     source_bucket: Bucket;
   }>(
     `SELECT j.post_idea_id, v.scene, v.background_storage_path, v.render,
-            c.on_screen_copy, c.caption,
+            c.on_screen_copy, c.full_story_cue, c.caption,
             m.role, src.headline, src.body, src.bucket AS source_bucket
        FROM reels.video_jobs j
        JOIN reels.visual_jobs v ON v.id = j.visual_job_id
@@ -207,6 +189,7 @@ async function loadVideoTarget(jobId: string): Promise<VideoTarget | null> {
     scene: first.scene,
     backgroundPath: first.background_storage_path,
     onScreenCopy: first.on_screen_copy,
+    fullStoryCue: first.full_story_cue?.trim() || null,
     story: buildStory(first.caption, members),
     colorProfile: colorProfileOrNoir(first.render?.colorProfile),
   };
@@ -292,7 +275,13 @@ async function compose(
     return { path: rawPath, hook: null, shape: null };
   }
   try {
-    const plate = await renderTextPlate(target.onScreenCopy, shape.width, shape.height, target.colorProfile);
+    const plate = await renderTextPlate(
+      target.onScreenCopy,
+      shape.width,
+      shape.height,
+      target.colorProfile,
+      target.fullStoryCue,
+    );
     await writeFile(platePath, plate.png);
     notices.push(...plate.warnings);
   } catch (error) {
@@ -422,6 +411,8 @@ export async function claimAndRenderVideo(deps?: {
         higgsfieldJobId: clip.jobId,
         usd,
       });
+      // The song pick is its own job, so a failed pick never costs a new clip (D-161).
+      await queueSongPick(id).catch(() => undefined);
       return { id, status: 'ok' };
     } finally {
       await rm(dir, { recursive: true, force: true });

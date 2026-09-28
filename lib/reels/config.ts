@@ -7,6 +7,56 @@
 export const RUN_TIMEZONE = 'America/New_York';
 export const RUN_HOUR_LOCAL = 1;
 
+/** D-137: the song ingest runs at 12:30 AM, before the 1 AM night. */
+export const SONG_INGEST_HOUR_LOCAL = 0;
+export const SONG_INGEST_MINUTE_LOCAL = 30;
+
+/** D-138: top 10 trending `music` and top 20 trending `original_sound`. */
+export const SONG_TRENDING_TOP = { music: 10, original_sound: 20 } as const;
+
+/**
+ * D-190: original sounds are ranked by our own trending score, because Meta
+ * returns no engagement metric. Each ingest samples the list this many times,
+ * this deep, and ranks tonight's sounds by nights on the list within the
+ * window, then by average position. Values confirmed in D-191.
+ */
+export const ORIGINAL_SAMPLES_PER_NIGHT = 5;
+export const ORIGINAL_SAMPLE_DEPTH = 50;
+export const ORIGINAL_TREND_WINDOW_NIGHTS = 7;
+export const SOUND_OBSERVATION_RETENTION_DAYS = 30;
+
+/** D-141: the pool never holds more than this. */
+export const SONG_POOL_CAP = 50;
+
+/** D-148: the narrowing layer hands Jev exactly this many songs. */
+export const SONG_SHORTLIST_SIZE = 12;
+
+/**
+ * Pinned rather than unversioned, which would silently follow the app's
+ * default. v26.0 shipped 2026-07-29 and is current as of 2026-09-27.
+ */
+export const META_GRAPH_VERSION = 'v26.0';
+/** Implementation brake: day one only reads past the first page for replacements. */
+export const META_TRENDING_MAX_PAGES = 5;
+/** D-157. */
+export const TRIAL_GRADUATION_STRATEGY = 'SS_PERFORMANCE';
+/** Meta cURLs the video itself, so the signed link must outlast container processing. */
+export const PUBLISH_VIDEO_URL_SECONDS = 2 * 3600;
+/** How often and how long the worker waits for a container to reach FINISHED. */
+export const PUBLISH_POLL_SECONDS = 10;
+export const PUBLISH_POLL_TIMEOUT_MINUTES = 10;
+/** A publish still mid-flight after this was abandoned by a dead worker. */
+export const PUBLISH_STALE_MINUTES = 30;
+/**
+ * D-187, replacing D-177's larger_clap_music, which collapses every input to
+ * one vector. Served by our Hugging Face Inference Endpoint.
+ */
+export const CLAP_MODEL = 'laion/larger_clap_music_and_speech';
+/** CLAP's feature extractor expects 48 kHz mono. */
+export const CLAP_SAMPLE_RATE = 48_000;
+/** A song pick still `running` after this was abandoned (cold endpoint starts take minutes). */
+export const SONG_PICK_STALE_MINUTES = 20;
+
 /** RET-01 / D-044: the clock starts at ingest time, not publish time. */
 export const RETENTION_DAYS = 21;
 
@@ -103,8 +153,8 @@ export const B6_MEMORY_NIGHTS = 7;
 export const B6_MIN_INDEPENDENT_SOURCES = 2;
 export const B6_MAX_ATTEMPTS = 2;
 
-/** FND-05 / D-023: skip starting a run once month-to-date reaches this. */
-export const MONTHLY_WATCH_USD = 50;
+/** FND-05 / D-023, raised to $100 by D-193: skip starting a run once month-to-date reaches this. */
+export const MONTHLY_WATCH_USD = 100;
 
 /**
  * A run whose process died leaves a `running` row that blocks the next night.

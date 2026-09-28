@@ -9,7 +9,8 @@ import type { FrameworkId } from '@/lib/reels/scoring/decide';
  * and the bucket word count is a hard constraint. D-099: the on-screen copy
  * comes back with natural line breaks. D-104: the noun the hook turns on
  * has to be plain to a general viewer. D-107: the on-screen copy never
- * starts with a pronoun. The pre-D-098 wording is preserved,
+ * starts with a pronoun. D-195: each call returns two on-screen copies for
+ * one caption. The pre-D-098 wording is preserved,
  * unused, in lib/reels/threads/post-engine-candidate.ts. The writer runs where
  * REELS_COPY_PROMPT_APPROVED=true. Changing any wording here, in the framework
  * logic below, or in the generated source text means a new COPY_PROMPT_VERSION
@@ -20,11 +21,11 @@ import type { FrameworkId } from '@/lib/reels/scoring/decide';
  * leaves behind (dashes, bold labels).
  */
 
-export const COPY_PROMPT_VERSION = 'copy-caption-v5';
+export const COPY_PROMPT_VERSION = 'copy-caption-v6';
 
 export const COPY_SKILL = `# Copy and caption skill
 
-You write the on-screen copy and the Instagram caption for one Helios Trial Reel. Helios is an AI consulting firm. A Trial Reel is a short vertical video with text on screen. The on-screen copy is that text. The caption is the post text under the reel.
+You write two versions of the on-screen copy and one Instagram caption for one Helios Trial Reel. Helios is an AI consulting firm. A Trial Reel is a short vertical video with text on screen. The on-screen copy is that text. The caption is the post text under the reel. Both versions are doors into that one caption.
 
 The audiences are developers at any level, founders and executives, and operators. Write for the one this story would hit hardest.
 
@@ -66,9 +67,9 @@ HARD CONSTRAINT. The on-screen copy never starts with a pronoun. Nothing comes b
 
 HARD CONSTRAINT. A person who does not work in this field has to understand the on-screen copy on one read. Expertise is an advanced idea said in ordinary words. The noun the hook turns on has to be one of those words. When that noun is shorthand only an insider knows, the viewer skips, and the copy fails. These fail: "A 5-year A100 rental keeps 80% of its price. Hopper keeps 44-60%." and "If a KernelBench pass means your CUDA kernel is correct, stop." Keep the source's figure. Replace the insider name with what the thing is: a graphics chip rented for five years, a check that is supposed to prove a program is correct. A company a general viewer already knows can stay. A product name only a specialist knows cannot be the subject of the hook.
 
-HARD CONSTRAINT. Count the words in the final on-screen copy before you report. The count must land inside the bucket's word range, including both ends. "Under 15" means 14 words at most. If the draft is over the maximum, cut it until it is inside the range. If it is under the minimum, it is not finished. Extra words do not move onto another screen. A copy outside the range is a failed report. Do not submit it.
+HARD CONSTRAINT. Count the words in each final on-screen copy before you report. Each count must land inside the bucket's word range, including both ends. "Under 15" means 14 words at most. If a draft is over the maximum, cut it until it is inside the range. If it is under the minimum, it is not finished. Extra words do not move onto another screen. A copy outside the range is a failed report. Do not submit it.
 
-The on-screen copy you report already contains its line breaks. Break where a person would pause reading it aloud: after punctuation, or before and, but, because, or with. Do not end a line on a, an, the, of, to, in, on, for, and, but, or. Do not leave the last line as one leftover word. Keep a number with the word after it. Keep each line to about two dozen characters, short enough for one glance at full size. Put one line break between lines. Leave no blank line in the on-screen copy.
+Each on-screen copy you report already contains its line breaks. Break where a person would pause reading it aloud: after punctuation, or before and, but, because, or with. Do not end a line on a, an, the, of, to, in, on, for, and, but, or. Do not leave the last line as one leftover word. Keep a number with the word after it. Keep each line to about two dozen characters, short enough for one glance at full size. Put one line break between lines. Leave no blank line in the on-screen copy.
 
 The first line is the hook. Test it with these questions before you keep it:
 
@@ -77,6 +78,10 @@ The first line is the hook. Test it with these questions before you keep it:
 3. Is the payoff implied? The viewer should sense what they get for staying, even while the specifics are held back.
 
 The post has to pay out what the hook promises. A hook that the caption and the sources cannot back up is a defect, even when it would stop the scroll.
+
+Report two on-screen copies and one caption. Both copies tell the same story, use the same facts, and open the same gap. The caption pays both of them out. They are not two posts.
+
+The two copies must open differently: different first lines, and a different thing named first. A paraphrase of the same opening is a failed report. If a line promises something the caption does not close, rewrite the line or the caption before you report.
 
 ## Caption
 
@@ -94,11 +99,12 @@ Use short paragraphs with a blank line between them. No emoji. The full caption,
 ## How to work
 
 1. Read all the source material and find the one element the post turns on. If the sources hold two stories, pick one.
-2. Draft at least three different opening lines for the copy. Keep the one that does best on the three hook questions.
-3. Draft the copy and the caption.
-4. Check both drafts against the humanizer guide and list every pattern still in them.
-5. Write the final copy and caption with those patterns fixed. Then count the words in the on-screen copy. If the count is outside the bucket's range, rewrite the copy before you report. Break that copy into lines at the natural pauses above. Check again that each fact appears in the sources, that the copy is one screen, that the word count is inside the range, that a general viewer can understand the noun the hook turns on, that the on-screen copy does not start with a pronoun, and that the reported copy contains those line breaks.
-6. Report once with the report_copy tool.
+2. Draft the caption that pays that element out.
+3. Draft at least three different opening lines. Keep two that both pass the three hook questions and that the same caption can pay out. They must not be paraphrases.
+4. Draft both copies from those openings. Adjust the caption if it still needs to cover both.
+5. Check the drafts against the humanizer guide and list every pattern still in them.
+6. Write the final two copies and the caption with those patterns fixed. Count the words in each copy. If either count is outside the bucket's range, rewrite that copy before you report. Break each copy into lines at the natural pauses above. Check again that each fact appears in the sources, that each copy is one screen, that each word count is inside the range, that a general viewer can understand the noun each hook turns on, that neither copy starts with a pronoun, and that both reported copies contain those line breaks.
+7. Report once with the report_copy tool.
 
 ## Craft notes
 

@@ -123,7 +123,8 @@ gcloud compute ssh ${IAP} "${INSTANCE}" --zone="${ZONE}" --project="${PROJECT}" 
     sudo rm -rf helios_text_engine/.venv
     sudo python3 -m venv helios_text_engine/.venv
   fi
-  sudo helios_text_engine/.venv/bin/pip install -q pillow numpy
+  # librosa measures song BPM for the Trial Reels song pool (D-175).
+  sudo helios_text_engine/.venv/bin/pip install -q pillow numpy librosa
   if ! command -v ffmpeg >/dev/null 2>&1; then
     sudo apt-get update -qq
     sudo apt-get install -y ffmpeg

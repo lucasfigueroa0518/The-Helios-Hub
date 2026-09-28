@@ -907,7 +907,7 @@ export async function insertJevLog(input: {
 
 export async function recordCost(input: {
   runId: string | null;
-  vendor: 'jev' | 'anthropic' | 'openai';
+  vendor: 'jev' | 'anthropic' | 'openai' | 'huggingface';
   component: string;
   inputTokens: number;
   outputTokens?: number;

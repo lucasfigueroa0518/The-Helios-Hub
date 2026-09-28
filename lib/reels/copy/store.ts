@@ -1,5 +1,6 @@
 import { dbQuery } from '@/lib/db';
 import type { CopyMember } from '@/lib/reels/copy/assemble';
+import type { CopyVariants } from '@/lib/reels/copy/pick';
 import type { CopyChecks, CopyReport } from '@/lib/reels/copy/report';
 import type { BucketId, FrameworkId } from '@/lib/reels/scoring/decide';
 import type { MemberRole } from '@/lib/reels/types';
@@ -91,7 +92,10 @@ export async function saveIdeaCopy(input: {
   framework: FrameworkId;
   report: CopyReport | null;
   checks: CopyChecks | null;
+  variants: CopyVariants | null;
   error: string | null;
+  fullStoryBelow?: boolean;
+  fullStoryCue?: string | null;
   inputTokens: number;
   outputTokens: number;
   usd: number;
@@ -101,11 +105,11 @@ export async function saveIdeaCopy(input: {
     `INSERT INTO reels.idea_copy (
        slate_id, post_idea_id, run_id, prompt_version, model, bucket, framework,
        status, on_screen_copy, caption, call_to_action, hashtags, sources, checks,
-       working, error, input_tokens, output_tokens, usd
+       working, variants, error, full_story_below, full_story_cue, input_tokens, output_tokens, usd
      ) VALUES (
        $1, $2, $3, $4, $5, $6, $7,
        $8, $9, $10, $11, $12, $13::jsonb, $14::jsonb,
-       $15::jsonb, $16, $17, $18, $19
+       $15::jsonb, $16::jsonb, $17, $18, $19, $20, $21, $22
      )
      ON CONFLICT (slate_id, post_idea_id) DO UPDATE SET
        run_id = EXCLUDED.run_id,
@@ -121,7 +125,10 @@ export async function saveIdeaCopy(input: {
        sources = EXCLUDED.sources,
        checks = EXCLUDED.checks,
        working = EXCLUDED.working,
+       variants = EXCLUDED.variants,
        error = EXCLUDED.error,
+       full_story_below = EXCLUDED.full_story_below,
+       full_story_cue = EXCLUDED.full_story_cue,
        input_tokens = EXCLUDED.input_tokens,
        output_tokens = EXCLUDED.output_tokens,
        usd = EXCLUDED.usd,
@@ -142,7 +149,10 @@ export async function saveIdeaCopy(input: {
       JSON.stringify(report?.sources ?? []),
       input.checks ? JSON.stringify(input.checks) : null,
       report ? JSON.stringify(report.working) : null,
+      input.variants ? JSON.stringify(input.variants) : null,
       input.error,
+      input.fullStoryBelow ?? false,
+      input.fullStoryCue ?? null,
       input.inputTokens,
       input.outputTokens,
       input.usd,

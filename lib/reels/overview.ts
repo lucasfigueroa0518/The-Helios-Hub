@@ -13,6 +13,7 @@ import {
 import { loadFramesForIdeas, visualInFlight, type StoredFrame } from '@/lib/reels/visual/run';
 import { loadFinishStatus } from '@/lib/reels/visual/finish';
 import { loadVideosForIdeas, videoInFlight, type StoredVideo } from '@/lib/reels/visual/video-run';
+import { loadMusicStatus, loadReelSongs, type MusicStatus, type ReelSong } from '@/lib/reels/music/overview';
 
 export type ReelsOverview = {
   runs: RunRow[];
@@ -35,6 +36,9 @@ export type ReelsOverview = {
   copyJobs: Record<string, StoredCopyJob>;
   /** Whole-generation walk for each post idea on the current slate. */
   finishes: Record<string, FinishStatus>;
+  /** Song and publish state of each post idea's latest video, by post idea id. */
+  songs: Record<string, ReelSong>;
+  music: MusicStatus;
   visualInFlight: boolean;
   copyInFlight: boolean;
   videoInFlight: boolean;
@@ -51,6 +55,7 @@ export type ArchivedSlate = {
   videos: Record<string, StoredVideo>;
   copyJobs: Record<string, StoredCopyJob>;
   finishes: Record<string, FinishStatus>;
+  songs: Record<string, ReelSong>;
 };
 
 export type FinishStatus = {
@@ -60,7 +65,7 @@ export type FinishStatus = {
 
 /** Everything the reels hub shows, in one round trip (REV-01/02 / D-062). */
 export async function loadReelsOverview(): Promise<ReelsOverview> {
-  const [runs, insights, slateDays, spend, framesRunning, copiesRunning, videosRunning] = await Promise.all([
+  const [runs, insights, slateDays, spend, framesRunning, copiesRunning, videosRunning, music] = await Promise.all([
     listRuns(14),
     loadReelsInsights(),
     listSlateDays(),
@@ -68,6 +73,7 @@ export async function loadReelsOverview(): Promise<ReelsOverview> {
     visualInFlight(),
     copyInFlight(),
     videoInFlight(),
+    loadMusicStatus(),
   ]);
   const [currentDay, ...pastDays] = slateDays;
   const [slate, archive] = await Promise.all([
@@ -90,6 +96,7 @@ export async function loadReelsOverview(): Promise<ReelsOverview> {
         {} as Record<string, StoredVideo>,
         {} as Record<string, FinishStatus>,
       ];
+  const songs = await songsByIdea(videos);
 
   return {
     runs,
@@ -103,6 +110,8 @@ export async function loadReelsOverview(): Promise<ReelsOverview> {
     videos,
     copyJobs,
     finishes,
+    songs,
+    music,
     visualInFlight: framesRunning,
     copyInFlight: copiesRunning,
     videoInFlight: videosRunning,
@@ -124,5 +133,15 @@ async function loadArchivedSlate(slateId: string): Promise<ArchivedSlate | null>
     loadVideosForIdeas(ideaIds),
     loadFinishStatus(ideaIds),
   ]);
-  return { slate, copy, frames, videos, copyJobs, finishes };
+  return { slate, copy, frames, videos, copyJobs, finishes, songs: await songsByIdea(videos) };
+}
+
+/** Song state is keyed by video job; the hub reads reels by post idea. */
+async function songsByIdea(videos: Record<string, StoredVideo>): Promise<Record<string, ReelSong>> {
+  const byVideo = await loadReelSongs(Object.values(videos).map((video) => video.id));
+  const out: Record<string, ReelSong> = {};
+  for (const [postIdeaId, video] of Object.entries(videos)) {
+    if (byVideo[video.id]) out[postIdeaId] = byVideo[video.id];
+  }
+  return out;
 }

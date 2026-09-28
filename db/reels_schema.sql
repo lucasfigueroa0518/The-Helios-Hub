@@ -312,6 +312,12 @@ CREATE TABLE IF NOT EXISTS reels.idea_copy (
     checks          jsonb,
     -- Hook drafts, first drafts, remaining humanizer patterns. Not shown.
     working         jsonb,
+    -- Both calls, all four lines, and the Jev scores. The columns above are the winner.
+    variants        jsonb,
+    -- Small cue under the on-screen copy. On only when the caption holds a deferred story.
+    full_story_below boolean NOT NULL DEFAULT false,
+    -- The chosen line, without the hand. Null when the cue is off.
+    full_story_cue  text,
     error           text,
     input_tokens    integer NOT NULL DEFAULT 0,
     output_tokens   integer NOT NULL DEFAULT 0,
@@ -319,6 +325,10 @@ CREATE TABLE IF NOT EXISTS reels.idea_copy (
     created_at      timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (slate_id, post_idea_id)
 );
+
+ALTER TABLE reels.idea_copy ADD COLUMN IF NOT EXISTS variants jsonb;
+ALTER TABLE reels.idea_copy ADD COLUMN IF NOT EXISTS full_story_below boolean NOT NULL DEFAULT false;
+ALTER TABLE reels.idea_copy ADD COLUMN IF NOT EXISTS full_story_cue text;
 
 -- Existing databases keep the original vendor check until this runs.
 DO $$
@@ -340,7 +350,7 @@ BEGIN
 END $$;
 ALTER TABLE reels.cost_events
   ADD CONSTRAINT cost_events_vendor_check
-  CHECK (vendor IN ('jev', 'anthropic', 'openai'));
+  CHECK (vendor IN ('jev', 'anthropic', 'openai', 'huggingface'));
 
 -- ── Reel frames (visual pipeline) ───────────────────────────────────────────
 -- One row per click of Generate frame. The page queues; the helios-reels
@@ -449,3 +459,206 @@ CREATE TABLE IF NOT EXISTS reels.finish_requests (
 CREATE INDEX IF NOT EXISTS idx_reels_finish_active
     ON reels.finish_requests (requested_at)
     WHERE status = 'active';
+
+-- ── Song pool (music plan, D-136 to D-177) ──────────────────────────────────
+-- Trending Instagram sounds, attached to reels by audio_id (D-136). At most 50
+-- rows; the oldest unattached song is hard-deleted first (D-141, D-164).
+-- Ingest stores a row untagged; tagging fills the tag columns once the
+-- vocabularies are approved, and only tagged songs are shortlisted (D-165).
+
+CREATE TABLE IF NOT EXISTS reels.songs (
+    audio_id                     text PRIMARY KEY,
+    audio_type                   text NOT NULL CHECK (audio_type IN ('music', 'original_sound')),
+    title                        text,
+    display_artist               text,
+    ig_username                  text,
+    profile_picture_url          text,
+    cover_artwork_thumbnail_uri  text,
+    on_platform_audio_preview_link text,
+    is_ads_eligible              boolean,
+    duration_in_ms               integer,
+    -- The list and rank it entered on. Reappearing never resets its age (D-141).
+    trending_list                text NOT NULL CHECK (trending_list IN ('music', 'original_sound')),
+    trending_rank                integer NOT NULL,
+    first_ingested_at            timestamptz NOT NULL DEFAULT now(),
+    last_seen_trending_at        timestamptz NOT NULL DEFAULT now(),
+    -- Cached before Meta's link expires (about 1.5 days).
+    preview_storage_path         text NOT NULL,
+    preview_duration_ms          integer,
+    -- MUS-09 tags, NULL until tagged (D-165).
+    genre                        text,
+    bpm                          double precision,
+    instruments                  text[],
+    vibes                        text[],
+    -- Every vocabulary label's CLAP score, so MUS-V1 settings can be compared
+    -- without another call.
+    tag_scores                   jsonb,
+    tag_version                  text,
+    clap_model                   text,
+    tag_text                     text,
+    tag_text_embedding           real[],
+    -- Evidence only at gate 2 (D-169).
+    audio_embedding              real[],
+    tagged_at                    timestamptz
+);
+
+CREATE INDEX IF NOT EXISTS idx_reels_songs_age
+    ON reels.songs (first_ingested_at);
+
+-- One row per ingest, scheduled at 12:30 AM or run by hand (D-166). Separate
+-- from reels.runs so an ingest never blocks or is blocked by the 1 AM night.
+CREATE TABLE IF NOT EXISTS reels.song_ingests (
+    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    trigger         text NOT NULL CHECK (trigger IN ('scheduled', 'manual')),
+    status          text NOT NULL CHECK (status IN ('running', 'ok', 'partial', 'failed')),
+    started_at      timestamptz NOT NULL DEFAULT now(),
+    finished_at     timestamptz,
+    -- The trending lists as fetched: audio_id, list, rank, whether a preview existed.
+    fetched         jsonb NOT NULL DEFAULT '[]'::jsonb,
+    added           text[] NOT NULL DEFAULT ARRAY[]::text[],
+    skipped         jsonb NOT NULL DEFAULT '[]'::jsonb,
+    -- audio_id, title, and artist of every hard-deleted song.
+    evicted         jsonb NOT NULL DEFAULT '[]'::jsonb,
+    note            text
+);
+
+CREATE INDEX IF NOT EXISTS idx_reels_song_ingests_started
+    ON reels.song_ingests (started_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reels_song_ingests_single_running
+    ON reels.song_ingests ((status)) WHERE status = 'running';
+
+-- ── Song pick per reel (D-161, D-163, D-170) ────────────────────────────────
+-- Queued when a video job finishes ok. The shortlist is a snapshot of what Jev
+-- saw, so the record survives the songs' eviction (D-163). A failed pick is
+-- retried as a new row; the latest ok row is the reel's song.
+
+CREATE TABLE IF NOT EXISTS reels.song_picks (
+    id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    video_job_id          uuid NOT NULL REFERENCES reels.video_jobs (id) ON DELETE CASCADE,
+    post_idea_id          uuid NOT NULL,
+    status                text NOT NULL CHECK (status IN ('requested', 'running', 'ok', 'failed')),
+    requested_at          timestamptz NOT NULL DEFAULT now(),
+    started_at            timestamptz,
+    finished_at           timestamptz,
+    -- On-screen copy plus caption body, as embedded (D-147).
+    copy_text             text,
+    -- 12 × {audio_id, title, artist, genre, bpm, instruments, vibes, similarity, audio_similarity}.
+    shortlist             jsonb,
+    picked_audio_id       text,
+    picked_title          text,
+    picked_artist         text,
+    probabilities         jsonb,
+    confidence            double precision,
+    question_set_version  text,
+    resolved_model        text,
+    error                 text,
+    usd                   numeric(12, 6) NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_reels_song_picks_video
+    ON reels.song_picks (video_job_id, requested_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reels_song_picks_single_running
+    ON reels.song_picks ((status)) WHERE status = 'running';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reels_song_picks_inflight_video
+    ON reels.song_picks (video_job_id) WHERE status IN ('requested', 'running');
+
+-- ── Publish attempts (D-162, D-167) ─────────────────────────────────────────
+-- One row per Approve (or per auto-publish). The worker creates the container,
+-- polls it to FINISHED, and publishes. No FK to post_ideas and the video FK
+-- nulls out, so the record of what posted outlives retention, like
+-- published_status (D-061). A success also upserts published_status.
+
+CREATE TABLE IF NOT EXISTS reels.publish_attempts (
+    id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    video_job_id      uuid REFERENCES reels.video_jobs (id) ON DELETE SET NULL,
+    post_idea_id      uuid NOT NULL,
+    song_pick_id      uuid REFERENCES reels.song_picks (id) ON DELETE SET NULL,
+    -- mix_test: the MUS-V2 test publishes, run by hand at chosen volumes.
+    trigger           text NOT NULL CHECK (trigger IN ('approve', 'auto', 'mix_test')),
+    status            text NOT NULL CHECK (status IN (
+                        'requested', 'creating', 'processing', 'publishing', 'published', 'failed'
+                      )),
+    requested_at      timestamptz NOT NULL DEFAULT now(),
+    started_at        timestamptz,
+    finished_at       timestamptz,
+    -- What was sent (D-158, D-157, D-159), snapshotted so the reel-to-song link
+    -- survives the song's hard-delete (OPEN-4).
+    audio_id          text NOT NULL,
+    song_title        text,
+    song_artist       text,
+    audio_volume      integer CHECK (audio_volume BETWEEN 0 AND 100),
+    video_volume      integer CHECK (video_volume BETWEEN 0 AND 100),
+    caption           text NOT NULL,
+    graduation_strategy text NOT NULL,
+    share_to_feed     boolean,
+    container_id      text,
+    media_id          text,
+    permalink         text,
+    status_log        jsonb NOT NULL DEFAULT '[]'::jsonb,
+    error             text
+);
+
+CREATE INDEX IF NOT EXISTS idx_reels_publish_video
+    ON reels.publish_attempts (video_job_id, requested_at DESC);
+CREATE INDEX IF NOT EXISTS idx_reels_publish_recent
+    ON reels.publish_attempts (requested_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reels_publish_inflight_video
+    ON reels.publish_attempts (video_job_id)
+    WHERE status IN ('requested', 'creating', 'processing', 'publishing');
+-- A reel posts once. Mix tests post the same reel at 2–3 mixes on purpose (MUS-V2).
+DROP INDEX IF EXISTS reels.idx_reels_publish_once;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reels_publish_once_v2
+    ON reels.publish_attempts (video_job_id) WHERE status = 'published' AND trigger <> 'mix_test';
+
+-- Databases created before mix_test existed keep the old trigger check until this runs.
+DO $$
+DECLARE
+  cons text;
+BEGIN
+  FOR cons IN
+    SELECT c.conname
+      FROM pg_constraint c
+      JOIN pg_class t ON t.oid = c.conrelid
+      JOIN pg_namespace n ON n.oid = t.relnamespace
+     WHERE n.nspname = 'reels' AND t.relname = 'publish_attempts' AND c.contype = 'c'
+       AND pg_get_constraintdef(c.oid) ILIKE '%trigger%'
+       AND pg_get_constraintdef(c.oid) NOT ILIKE '%mix_test%'
+  LOOP
+    EXECUTE format('ALTER TABLE reels.publish_attempts DROP CONSTRAINT %I', cons);
+    EXECUTE 'ALTER TABLE reels.publish_attempts ADD CONSTRAINT publish_attempts_trigger_check CHECK (trigger IN (''approve'', ''auto'', ''mix_test''))';
+  END LOOP;
+END $$;
+
+-- ── Settings the page and the worker share (D-173) ──────────────────────────
+
+CREATE TABLE IF NOT EXISTS reels.settings (
+    key         text PRIMARY KEY,
+    value       jsonb NOT NULL,
+    updated_at  timestamptz NOT NULL DEFAULT now()
+);
+
+-- MUS-21 / D-156: built now, off by default.
+INSERT INTO reels.settings (key, value)
+VALUES ('auto_publish', 'false'::jsonb)
+ON CONFLICT (key) DO NOTHING;
+
+-- ── Original-sound trending observations (D-190) ────────────────────────────
+-- Meta returns no engagement or trending metric, so the ingest samples the
+-- original_sound list several times a night and ranks by how many nights a
+-- sound has stayed on it, then by its average position. One row per sound per
+-- sample. Kept 30 days.
+
+CREATE TABLE IF NOT EXISTS reels.sound_observations (
+    id            bigserial PRIMARY KEY,
+    ingest_id     uuid REFERENCES reels.song_ingests (id) ON DELETE SET NULL,
+    observed_at   timestamptz NOT NULL DEFAULT now(),
+    ny_date       date NOT NULL,
+    audio_type    text NOT NULL CHECK (audio_type IN ('music', 'original_sound')),
+    sample_n      integer NOT NULL,
+    position      integer NOT NULL,
+    audio_id      text NOT NULL,
+    has_preview   boolean NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_reels_sound_obs_window
+    ON reels.sound_observations (audio_type, ny_date DESC, audio_id);

@@ -12,6 +12,7 @@ import {
 } from '@/lib/reels/config';
 import { createLiveJevRunner } from '@/lib/reels/jev/client';
 import type { JevRunner } from '@/lib/reels/jev/runner';
+import { claimNextRankedJob } from '@/lib/reels/pipeline/claim';
 import { monthToDateUsd, recordCost } from '@/lib/reels/repository';
 import type { BucketId } from '@/lib/reels/scoring/decide';
 import type { ColorProfile } from '@/lib/reels/visual/color';
@@ -53,10 +54,6 @@ type JobRow = {
   slate_id: string | null;
   status: VisualStatus;
 };
-
-function isUniqueViolation(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && (error as { code?: string }).code === '23505';
-}
 
 export async function requestVisualJob(postIdeaId: string, slateId: string): Promise<JobRow | null> {
   const { rows } = await dbQuery<JobRow>(
@@ -167,30 +164,13 @@ async function claimVisualJob(): Promise<string | null> {
         AND started_at < now() - ($1::int * interval '1 minute')`,
     [VISUAL_STALE_MINUTES],
   );
-  try {
-    const { rows } = await dbQuery<{ id: string }>(
-      `UPDATE reels.visual_jobs
-          SET status = 'running', started_at = now()
-        WHERE id = (
-          SELECT id FROM reels.visual_jobs
-           WHERE status = 'requested'
-             AND NOT EXISTS (SELECT 1 FROM reels.visual_jobs v WHERE v.status = 'running')
-           ORDER BY requested_at
-           FOR UPDATE SKIP LOCKED
-           LIMIT 1
-        )
-        RETURNING id`,
-    );
-    return rows[0]?.id ?? null;
-  } catch (error) {
-    if (isUniqueViolation(error)) return null;
-    throw error;
-  }
+  return claimNextRankedJob('visual_jobs');
 }
 
 type Target = {
   onScreenCopy: string;
   caption: string | null;
+  fullStoryCue: string | null;
   bucket: BucketId;
   members: VisualMember[];
 };
@@ -199,6 +179,7 @@ async function loadTarget(slateId: string, postIdeaId: string): Promise<Target |
   const { rows } = await dbQuery<{
     on_screen_copy: string | null;
     caption: string | null;
+    full_story_cue: string | null;
     bucket: BucketId;
     copy_status: string;
     role: MemberRole;
@@ -207,7 +188,7 @@ async function loadTarget(slateId: string, postIdeaId: string): Promise<Target |
     body: string;
     source_bucket: Bucket;
   }>(
-    `SELECT c.on_screen_copy, c.caption, c.bucket, c.status AS copy_status,
+    `SELECT c.on_screen_copy, c.caption, c.full_story_cue, c.bucket, c.status AS copy_status,
             m.role, src.source_name, src.headline, src.body, src.bucket AS source_bucket
        FROM reels.idea_copy c
        JOIN reels.post_idea_members m ON m.post_idea_id = c.post_idea_id
@@ -220,6 +201,7 @@ async function loadTarget(slateId: string, postIdeaId: string): Promise<Target |
   return {
     onScreenCopy: rows[0].on_screen_copy,
     caption: rows[0].caption,
+    fullStoryCue: rows[0].full_story_cue?.trim() || null,
     bucket: rows[0].bucket,
     members: rows.map((row) => ({
       role: row.role,
@@ -377,6 +359,7 @@ async function reuseBackground(
   postIdeaId: string,
   onScreenCopy: string,
   profile: ColorProfile,
+  fullStoryCue: string | null,
 ): Promise<{
   path: string;
   category: string | null;
@@ -408,7 +391,7 @@ async function reuseBackground(
 
   try {
     const png = await downloadFrameObject(prior.background_storage_path);
-    const rendered = await renderTextPng(png, onScreenCopy, profile);
+    const rendered = await renderTextPng(png, onScreenCopy, profile, fullStoryCue);
     const warnings = [
       'Background reused from a passing frame with the same on-screen copy.',
       ...(rendered.ok ? rendered.rendered.warnings : []),
@@ -507,7 +490,7 @@ async function renderClaimed(id: string, client?: SceneClient, jev?: JevRunner):
     notices.push(`Color route failed, so the frame uses noir: ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  const reused = await reuseBackground(id, job.post_idea_id, target.onScreenCopy, profile);
+  const reused = await reuseBackground(id, job.post_idea_id, target.onScreenCopy, profile, target.fullStoryCue);
   if (reused) {
     reused.result.warnings = [...notices, ...reused.result.warnings];
     return finishJob(id, reused.result, {
@@ -525,7 +508,7 @@ async function renderClaimed(id: string, client?: SceneClient, jev?: JevRunner):
       writeScene: (input) => writeScene(sceneClient, input),
       generateBackground,
       checkBackground: (png) => checkBackgroundPng(png, profile),
-      renderText: (png, copy) => renderTextPng(png, copy, profile),
+      renderText: (png, copy) => renderTextPng(png, copy, profile, target.fullStoryCue),
     },
   );
   result.warnings = [...notices, ...result.warnings];

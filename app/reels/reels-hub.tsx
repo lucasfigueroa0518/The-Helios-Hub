@@ -9,8 +9,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy as CopyIcon,
+  Check,
+  ExternalLink,
   Loader2,
+  Music2,
   Play,
+  RotateCcw,
   Sparkles,
   Volume2,
 } from 'lucide-react';
@@ -18,7 +22,9 @@ import {
 import { Drawer, ReelVideo, Section } from '@/app/reels/ui';
 import { requestJson } from '@/lib/client-request';
 import type { StoredCopyJob } from '@/lib/reels/copy/jobs';
+import { fullCaption } from '@/lib/reels/copy/report';
 import type { StoredCopy } from '@/lib/reels/copy/store';
+import type { MusicStatus, ReelSong } from '@/lib/reels/music/overview';
 import type { FinishStatus, ReelsOverview } from '@/lib/reels/overview';
 import type { StoredScore, StoredSlate } from '@/lib/reels/scoring/store';
 import type { StoredFrame } from '@/lib/reels/visual/run';
@@ -50,7 +56,14 @@ const RUN_STATUS: Record<string, string> = {
   skipped: 'Skipped',
 };
 
-const STAGE_LABEL: Record<string, string> = { copy: 'Copy', frame: 'Frame', video: 'Video' };
+const STAGE_LABEL: Record<string, string> = {
+  copy: 'Copy',
+  frame: 'Frame',
+  video: 'Video',
+  song: 'Song pick',
+  publish: 'Publish',
+  songs: 'Song ingest',
+};
 
 /* ----------------------------------------------------------------- format */
 
@@ -105,6 +118,7 @@ type DayView = {
   videos: Record<string, StoredVideo>;
   copyJobs: Record<string, StoredCopyJob>;
   finishes: Record<string, FinishStatus>;
+  songs: Record<string, ReelSong>;
 };
 
 export function dayViews(data: ReelsOverview): DayView[] {
@@ -118,6 +132,7 @@ export function dayViews(data: ReelsOverview): DayView[] {
       videos: data.videos,
       copyJobs: data.copyJobs,
       finishes: data.finishes,
+      songs: data.songs,
     });
   }
   for (const day of data.archive) views.push({ ...day, isCurrent: false });
@@ -133,6 +148,7 @@ type Reel = {
   video: StoredVideo | null;
   job: StoredCopyJob | null;
   finish: FinishStatus | null;
+  song: ReelSong | null;
   phase: ReelPhase;
   stage: string;
   canGenerate: boolean;
@@ -147,12 +163,15 @@ export function reelFor(view: DayView, score: StoredScore): Reel {
   const video = view.videos[id] ?? null;
   const job = view.copyJobs[id] ?? null;
   const finish = view.finishes[id] ?? null;
+  const song = view.songs[id] ?? null;
   const writing = job?.status === 'requested' || job?.status === 'running';
   const framing = frame?.status === 'requested' || frame?.status === 'running';
   const filming = video?.status === 'requested' || video?.status === 'running';
-  const working = finish?.status === 'active' || writing || framing || filming;
+  // The song pick is the last step of the one reel flow (D-192).
+  const picking = video?.status === 'ok' && !song?.song && (song?.pick?.status === 'requested' || song?.pick?.status === 'running');
+  const working = finish?.status === 'active' || writing || framing || filming || picking;
   const canGenerate = Boolean(score.chosenBucket && score.chosenFramework);
-  const ready = video?.status === 'ok' && video.hasVideo;
+  const ready = video?.status === 'ok' && video.hasVideo && !picking;
   const phase: ReelPhase = working
     ? 'working'
     : ready
@@ -174,8 +193,9 @@ export function reelFor(view: DayView, score: StoredScore): Reel {
     video,
     job,
     finish,
+    song,
     phase,
-    stage: writing ? 'Writing copy' : framing ? 'Making the frame' : filming ? 'Making the video' : 'Starting',
+    stage: writing ? 'Writing copy' : framing ? 'Making the frame' : filming ? 'Making the video' : picking ? 'Picking a song' : 'Starting',
     canGenerate,
     poster: still,
     still,
@@ -244,9 +264,54 @@ function statusNotes(reel: Reel): Array<{ tone: 'bad' | 'warn'; text: string }> 
   return notes;
 }
 
+/** The caption as it posts (D-158): body, call to action, hashtags. */
 function captionText(copy: StoredCopy | null): string {
-  if (!copy || copy.status !== 'ok') return '';
-  return [copy.caption, copy.callToAction, copy.hashtags.join(' ')].filter((part): part is string => Boolean(part)).join('\n\n');
+  if (!copy || copy.status !== 'ok' || !copy.caption) return '';
+  return fullCaption({ caption: copy.caption, callToAction: copy.callToAction ?? '', hashtags: copy.hashtags });
+}
+
+/* ------------------------------------------------------------ publishing */
+
+type PublishState =
+  | { kind: 'none' }
+  | { kind: 'song-working'; text: string }
+  | { kind: 'song-failed'; text: string }
+  | { kind: 'awaiting' }
+  | { kind: 'publishing' }
+  | { kind: 'published'; permalink: string | null }
+  | { kind: 'publish-failed'; text: string };
+
+/** Where a finished reel stands between its song pick and Instagram (D-155, D-170, D-171). */
+export function publishState(reel: Reel, music: MusicStatus): PublishState {
+  if (reel.phase !== 'ready' || !reel.video) return { kind: 'none' };
+  const publish = reel.song?.publish;
+  if (publish?.status === 'published') return { kind: 'published', permalink: publish.permalink };
+  if (publish && publish.status !== 'failed') return { kind: 'publishing' };
+  if (reel.song?.song) {
+    return publish?.status === 'failed' ? { kind: 'publish-failed', text: publish.error ?? 'Publish failed.' } : { kind: 'awaiting' };
+  }
+  const pick = reel.song?.pick;
+  if (pick?.status === 'failed') return { kind: 'song-failed', text: pick.error ?? 'Song pick failed.' };
+  if (!music.pickApproved) return { kind: 'song-working', text: 'Song pending: the song-pick question (P-13) is not approved yet.' };
+  if (!music.clapReady) return { kind: 'song-working', text: 'Song pending: waiting on the CLAP endpoint.' };
+  if (pick) return { kind: 'song-working', text: 'Picking a song…' };
+  return { kind: 'song-failed', text: 'No song pick queued for this reel.' };
+}
+
+const BADGE: Partial<Record<PublishState['kind'], string>> = {
+  awaiting: 'Awaiting approval',
+  publishing: 'Publishing',
+  published: 'Published',
+  'publish-failed': 'Publish failed',
+  'song-failed': 'Song pending',
+  'song-working': 'Song pending',
+};
+
+/** Why Approve cannot run yet, or null when it can. */
+function approveBlocker(music: MusicStatus): string | null {
+  if (!music.metaReady) return 'Waiting on Meta credentials.';
+  if (!music.mix) return 'The song and SFX volumes are not set yet (MUS-V2).';
+  return null;
 }
 
 /* ------------------------------------------------------------------- hub */
@@ -285,6 +350,13 @@ export function ReelsHub({ initial }: { initial: ReelsOverview }) {
     data.videoInFlight ||
     [data.finishes, ...data.archive.map((day) => day.finishes)].some((finishes) =>
       Object.values(finishes).some((finish) => finish.status === 'active'),
+    ) ||
+    [data.songs, ...data.archive.map((day) => day.songs)].some((songs) =>
+      Object.values(songs).some(
+        (song) =>
+          (song.pick?.status === 'running' || (song.pick?.status === 'requested' && data.music.pickApproved && data.music.clapReady)) ||
+          (song.publish != null && !['published', 'failed'].includes(song.publish.status)),
+      ),
     );
 
   // While a night or a reel is in flight the page follows it.
@@ -318,6 +390,42 @@ export function ReelsHub({ initial }: { initial: ReelsOverview }) {
         body: JSON.stringify({ post_idea_id: postIdeaId, slate_id: slateId }),
       });
       setMessage(result.note ?? 'Generating the reel.');
+      await refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function approve(videoJobId: string) {
+    try {
+      const result = await requestJson<{ queued: boolean; note?: string }>('/api/reels/publish', {
+        method: 'POST',
+        body: JSON.stringify({ video_job_id: videoJobId }),
+      });
+      setMessage(result.queued ? 'Approved. The worker publishes it as a trial reel.' : result.note ?? 'Not queued.');
+      await refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function retrySong(videoJobId: string) {
+    try {
+      const result = await requestJson<{ queued: boolean; note?: string }>('/api/reels/songs/pick', {
+        method: 'POST',
+        body: JSON.stringify({ video_job_id: videoJobId }),
+      });
+      setMessage(result.queued ? 'Song pick queued.' : result.note ?? 'Not queued.');
+      await refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function setAutoPublish(value: boolean) {
+    try {
+      await requestJson('/api/reels/settings', { method: 'POST', body: JSON.stringify({ auto_publish: value }) });
+      setMessage(value ? 'Auto-publish is on. Reels publish as soon as they have a song.' : 'Auto-publish is off.');
       await refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
@@ -360,6 +468,9 @@ export function ReelsHub({ initial }: { initial: ReelsOverview }) {
             </button>
             <Link href="/reels/sfx" className="rh-btn">
               <Volume2 size={15} /> Hook sounds
+            </Link>
+            <Link href="/reels/songs" className="rh-btn">
+              <Music2 size={15} /> Songs
             </Link>
             <button type="button" className="rh-btn" onClick={() => setInsightsOpen(true)} aria-haspopup="dialog">
               <span className={`rh-dot rh-dot--${health.tone}`} aria-hidden="true" />
@@ -431,6 +542,7 @@ export function ReelsHub({ initial }: { initial: ReelsOverview }) {
                   <ReelCard
                     key={reel.score.postIdeaId}
                     reel={reel}
+                    badge={BADGE[publishState(reel, data.music).kind] ?? null}
                     onOpen={() => setOpenId(reel.score.postIdeaId)}
                     onGenerate={() => void generate(reel.score.postIdeaId, view.slate.id)}
                   />
@@ -458,13 +570,25 @@ export function ReelsHub({ initial }: { initial: ReelsOverview }) {
 
       {open && view && (
         <Drawer label="Reel details" onClose={() => setOpenId(null)}>
-          <ReelDetail reel={open} onGenerate={() => void generate(open.score.postIdeaId, view.slate.id)} />
+          <ReelDetail
+            reel={open}
+            music={data.music}
+            onGenerate={() => void generate(open.score.postIdeaId, view.slate.id)}
+            onApprove={(videoJobId) => void approve(videoJobId)}
+            onRetrySong={(videoJobId) => void retrySong(videoJobId)}
+          />
         </Drawer>
       )}
 
       {insightsOpen && (
         <Drawer label="Insights" onClose={() => setInsightsOpen(false)} wide>
-          <Insights data={data} health={health} runBusy={runBusy || nightInFlight} onRunNow={() => void runNow()} />
+          <Insights
+            data={data}
+            health={health}
+            runBusy={runBusy || nightInFlight}
+            onRunNow={() => void runNow()}
+            onAutoPublish={(value) => void setAutoPublish(value)}
+          />
         </Drawer>
       )}
 
@@ -525,7 +649,17 @@ function GenerateButton({ reel, onGenerate, block }: { reel: Reel; onGenerate: (
   );
 }
 
-function ReelCard({ reel, onOpen, onGenerate }: { reel: Reel; onOpen: () => void; onGenerate: () => void }) {
+function ReelCard({
+  reel,
+  badge,
+  onOpen,
+  onGenerate,
+}: {
+  reel: Reel;
+  badge: string | null;
+  onOpen: () => void;
+  onGenerate: () => void;
+}) {
   const [hover, setHover] = useState(false);
   const { archetype, category } = labels(reel.score);
   return (
@@ -548,6 +682,7 @@ function ReelCard({ reel, onOpen, onGenerate }: { reel: Reel; onOpen: () => void
             </span>
           )}
         </button>
+        {badge && <span className={`rh-reel__badge${badge === 'Published' ? ' is-done' : ''}`}>{badge}</span>}
         {reel.phase === 'working' && (
           <div className="rh-reel__state">
             <Loader2 size={20} className="rh-spin" />
@@ -637,7 +772,109 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-export function ReelDetail({ reel, onGenerate }: { reel: Reel; onGenerate: () => void }) {
+function ApproveBlock({
+  state,
+  music,
+  videoJobId,
+  onApprove,
+  onRetrySong,
+}: {
+  state: PublishState;
+  music: MusicStatus;
+  videoJobId: string;
+  onApprove: (videoJobId: string) => void;
+  onRetrySong: (videoJobId: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const blocker = approveBlocker(music);
+  const act = (run: () => void) => {
+    setBusy(true);
+    run();
+    setTimeout(() => setBusy(false), 1500);
+  };
+  switch (state.kind) {
+    case 'published':
+      return (
+        <div className="rh-approve rh-approve--done">
+          <Check size={15} /> Published as a trial reel
+          {state.permalink && (
+            <a href={state.permalink} target="_blank" rel="noreferrer" className="rh-approve__link">
+              Open on Instagram <ExternalLink size={12} />
+            </a>
+          )}
+        </div>
+      );
+    case 'publishing':
+      return (
+        <div className="rh-approve">
+          <Loader2 size={15} className="rh-spin" /> Publishing to Instagram…
+        </div>
+      );
+    case 'song-working':
+      return (
+        <div className="rh-approve">
+          <Music2 size={15} /> {state.text}
+        </div>
+      );
+    case 'song-failed':
+      return (
+        <div className="rh-approve rh-approve--bad">
+          <span>
+            <AlertTriangle size={14} /> {state.text}
+          </span>
+          <button type="button" className="rh-btn rh-btn--xs" disabled={busy} onClick={() => act(() => onRetrySong(videoJobId))}>
+            <RotateCcw size={12} /> Retry song
+          </button>
+        </div>
+      );
+    case 'awaiting':
+    case 'publish-failed':
+      return (
+        <div className="rh-approve-wrap">
+          {state.kind === 'publish-failed' && (
+            <p className="rh-note rh-note--bad">
+              <AlertTriangle size={13} /> {state.text}
+            </p>
+          )}
+          <button
+            type="button"
+            className="rh-btn rh-btn--primary rh-btn--block"
+            disabled={busy || blocker !== null}
+            onClick={() => act(() => onApprove(videoJobId))}
+          >
+            {busy ? <Loader2 size={15} className="rh-spin" /> : <Check size={15} />} Approve
+          </button>
+          {blocker && <p className="rh-muted rh-song-note">{blocker}</p>}
+        </div>
+      );
+    default:
+      return null;
+  }
+}
+
+export function ReelDetail({
+  reel,
+  music,
+  onGenerate,
+  onApprove,
+  onRetrySong,
+}: {
+  reel: Reel;
+  music: MusicStatus;
+  onGenerate: () => void;
+  onApprove: (videoJobId: string) => void;
+  onRetrySong: (videoJobId: string) => void;
+}) {
+  const [songOpen, setSongOpen] = useState(false);
+  const song = reel.song?.song ?? null;
+  const state = publishState(reel, music);
+  const previewUrl = song?.previewUrl ?? null;
+  const songVolume = music.mix ? music.mix.audioVolume / 100 : 1;
+  const videoVolume = music.mix ? music.mix.videoVolume / 100 : 1;
+  const track = useMemo(
+    () => (previewUrl ? { src: previewUrl, songVolume, videoVolume } : null),
+    [previewUrl, songVolume, videoVolume],
+  );
   const { archetype, category } = labels(reel.score);
   const parts = netParts(reel.score);
   const notes = statusNotes(reel);
@@ -662,7 +899,15 @@ export function ReelDetail({ reel, onGenerate }: { reel: Reel; onGenerate: () =>
 
       <div className="rh-detail__media">
         {reel.phase === 'ready' && reel.video ? (
-          <ReelVideo src={`/api/reels/video/${reel.video.id}`} poster={reel.poster} playing controls sound />
+          <ReelVideo
+            key={track?.src ?? 'silent'}
+            src={`/api/reels/video/${reel.video.id}`}
+            poster={reel.poster}
+            playing
+            controls
+            sound
+            track={track}
+          />
         ) : reel.still ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img className="rh-media__fill" src={reel.still} alt="Reel still" />
@@ -671,9 +916,102 @@ export function ReelDetail({ reel, onGenerate }: { reel: Reel; onGenerate: () =>
         )}
       </div>
 
-      <GenerateButton reel={reel} onGenerate={onGenerate} block />
+      {song && (
+        <button type="button" className="rh-song-strip" onClick={() => setSongOpen((value) => !value)} aria-expanded={songOpen}>
+          {song.coverUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={song.coverUrl} alt="" className="rh-song-strip__cover" />
+          ) : (
+            <span className="rh-song-strip__cover rh-song-strip__cover--blank">
+              <Music2 size={14} />
+            </span>
+          )}
+          <span className="rh-song-strip__text">
+            <span className="rh-song-strip__title">{song.title ?? 'Untitled sound'}</span>
+            <span className="rh-song-strip__artist">{song.artist ?? 'Unknown artist'}</span>
+          </span>
+          <ChevronRight size={15} className={`rh-song-strip__chev${songOpen ? ' is-open' : ''}`} aria-hidden="true" />
+        </button>
+      )}
+      {song && (
+        <p className="rh-muted rh-song-note">
+          {previewUrl
+            ? 'The preview plays the song from 0:00. Instagram may start it at a different point.'
+            : 'This song has left the pool, so its preview is gone. Approve still attaches it by audio_id.'}
+          {!music.mix && previewUrl ? ' Volumes are not set yet, so both play at full.' : ''}
+        </p>
+      )}
+
+      {reel.phase === 'ready' && reel.video ? (
+        <ApproveBlock state={state} music={music} videoJobId={reel.video.id} onApprove={onApprove} onRetrySong={onRetrySong} />
+      ) : (
+        <GenerateButton reel={reel} onGenerate={onGenerate} block />
+      )}
 
       <div className="rh-detail__sections">
+        {song && (
+          <Section key={songOpen ? 'song-open' : 'song-closed'} title="Song" open={songOpen}>
+            <dl className="rh-parts">
+              <div>
+                <dt>Genre</dt>
+                <dd className="rh-parts__text">{song.genre ?? '—'}</dd>
+              </div>
+              <div>
+                <dt>BPM</dt>
+                <dd>{song.bpm ?? '—'}</dd>
+              </div>
+              <div>
+                <dt>Jev confidence</dt>
+                <dd>{song.confidence == null ? '—' : score2(song.confidence)}</dd>
+              </div>
+            </dl>
+            <p className="rh-song-tags">
+              <span className="rh-muted">Instruments</span> {song.instruments.join(', ') || '—'}
+            </p>
+            <p className="rh-song-tags">
+              <span className="rh-muted">Vibes</span> {song.vibes.join(', ') || '—'}
+            </p>
+            {song.shortlist.length > 0 && (
+              <>
+                <p className="rh-card__sub">Shortlist, most similar first</p>
+                <ol className="rh-shortlist">
+                  {song.shortlist.map((candidate) => (
+                    <li key={candidate.audioId} className={candidate.audioId === song.audioId ? 'is-picked' : undefined}>
+                      <span className="rh-shortlist__name">
+                        <span className="rh-shortlist__title">
+                          {candidate.audioId === song.audioId && <Check size={12} />}
+                          {candidate.title ?? candidate.audioId}
+                        </span>
+                        <small>
+                          {candidate.genre}
+                          {candidate.bpm ? ` · ${candidate.bpm} BPM` : ''} · {candidate.vibes.slice(0, 3).join(', ')}
+                        </small>
+                      </span>
+                      <span className="rh-shortlist__num" title="Tag-text similarity">{score2(candidate.similarity)}</span>
+                      <span className="rh-shortlist__num" title="Jev probability">
+                        {candidate.probability == null ? '—' : `${Math.round(candidate.probability * 100)}%`}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </>
+            )}
+            {song.audioRanking.length > 0 && (
+              <>
+                <p className="rh-card__sub">Evidence: ranked by audio instead</p>
+                <ol className="rh-shortlist rh-shortlist--quiet">
+                  {song.audioRanking.map((item) => (
+                    <li key={item.audioId}>
+                      <span className="rh-shortlist__name">{item.title ?? item.audioId}</span>
+                      <span className="rh-shortlist__num">{score2(item.similarity)}</span>
+                    </li>
+                  ))}
+                </ol>
+              </>
+            )}
+          </Section>
+        )}
+
         <Section title="Caption" open>
           {caption ? (
             <>
@@ -759,16 +1097,76 @@ export function ReelDetail({ reel, onGenerate }: { reel: Reel; onGenerate: () =>
 
 /* -------------------------------------------------------------- insights */
 
+/** D-173: the auto-publish switch, and what publishing is still waiting on. */
+function PublishingCard({ music, onAutoPublish }: { music: MusicStatus; onAutoPublish: (value: boolean) => void }) {
+  const lastIngest = music.ingests[0] ?? null;
+  const waiting = [
+    !music.metaReady && 'Meta credentials',
+    !music.clapReady && 'the CLAP endpoint',
+    !music.pickApproved && 'approval of the song-pick question (P-13)',
+    !music.mix && 'the song and SFX volumes (MUS-V2)',
+  ].filter((item): item is string => Boolean(item));
+  return (
+    <section className="rh-card">
+      <div className="rh-card__row">
+        <h3 className="rh-card__title rh-card__title--flush">Publishing</h3>
+        <label className="rh-switch">
+          <input
+            type="checkbox"
+            checked={music.autoPublish}
+            onChange={(event) => onAutoPublish(event.target.checked)}
+          />
+          <span className="rh-switch__track" aria-hidden="true" />
+          Auto-publish
+        </label>
+      </div>
+      <p className="rh-muted">
+        {music.autoPublish
+          ? 'On: a reel publishes as a trial reel as soon as it has a song, with no approval.'
+          : 'Off: a reel publishes only when you press Approve.'}
+      </p>
+      {waiting.length > 0 && (
+        <ul className="rh-notes">
+          <li className="rh-note rh-note--warn">
+            <AlertTriangle size={13} /> Waiting on {waiting.join(', ')}.
+          </li>
+        </ul>
+      )}
+      <dl className="rh-facts rh-facts--three">
+        <div>
+          <dt>Songs in pool</dt>
+          <dd>
+            {music.pool.size} <span className="rh-muted">({music.pool.tagged} tagged)</span>
+          </dd>
+        </div>
+        <div>
+          <dt>Mix (song / SFX)</dt>
+          <dd>{music.mix ? `${music.mix.audioVolume} / ${music.mix.videoVolume}` : 'Not set'}</dd>
+        </div>
+        <div>
+          <dt>Last song ingest</dt>
+          <dd>{lastIngest ? `${RUN_STATUS[lastIngest.status] ?? lastIngest.status} · ${formatTime(lastIngest.startedAt)}` : 'None yet'}</dd>
+        </div>
+      </dl>
+      <p className="rh-muted rh-stats">
+        <Link href="/reels/songs">Open the song pool</Link>
+      </p>
+    </section>
+  );
+}
+
 export function Insights({
   data,
   health,
   runBusy,
   onRunNow,
+  onAutoPublish,
 }: {
   data: ReelsOverview;
   health: Health;
   runBusy: boolean;
   onRunNow: () => void;
+  onAutoPublish: (value: boolean) => void;
 }) {
   const latest = data.latest;
   const failedSources = (latest?.source_results ?? []).filter((result) => result.status === 'failed');
@@ -825,6 +1223,8 @@ export function Insights({
           </p>
         )}
       </section>
+
+      <PublishingCard music={data.music} onAutoPublish={onAutoPublish} />
 
       <section className="rh-card">
         <h3 className="rh-card__title">Errors in the last run</h3>

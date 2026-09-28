@@ -13,7 +13,12 @@ export const KLING_USD_PER_CLIP = KLING_USD_PER_SECOND * KLING_CLIP_SECONDS;
 
 export type CostLine = { vendor: string; component: string; calls: number; usd: number };
 export type CostDay = { nyDate: string; ledgerUsd: number; klingUsd: number };
-export type JobError = { stage: 'copy' | 'frame' | 'video'; at: string; error: string; headline: string | null };
+export type JobError = {
+  stage: 'copy' | 'frame' | 'video' | 'song' | 'publish' | 'songs';
+  at: string;
+  error: string;
+  headline: string | null;
+};
 
 export type ReelsInsights = {
   costs: {
@@ -24,7 +29,7 @@ export type ReelsInsights = {
     reelsMade: number;
     days: CostDay[];
   };
-  /** Failed copy, frame, and video jobs from the last seven days, newest first. */
+  /** Failed copy, frame, video, song pick, publish, and song ingest jobs from the last seven days, newest first. */
   recentErrors: JobError[];
 };
 
@@ -81,6 +86,15 @@ export async function loadReelsInsights(now = new Date()): Promise<ReelsInsights
            UNION ALL
            SELECT 'video', finished_at, error, post_idea_id FROM reels.video_jobs
             WHERE status = 'failed' AND finished_at >= now() - interval '7 days'
+           UNION ALL
+           SELECT 'song', finished_at, error, post_idea_id FROM reels.song_picks
+            WHERE status = 'failed' AND finished_at >= now() - interval '7 days'
+           UNION ALL
+           SELECT 'publish', finished_at, error, post_idea_id FROM reels.publish_attempts
+            WHERE status = 'failed' AND finished_at >= now() - interval '7 days'
+           UNION ALL
+           SELECT 'songs', finished_at, note, NULL::uuid FROM reels.song_ingests
+            WHERE status IN ('failed', 'partial') AND finished_at >= now() - interval '7 days'
          ) e
         ORDER BY e.at DESC LIMIT 12`,
     ),
