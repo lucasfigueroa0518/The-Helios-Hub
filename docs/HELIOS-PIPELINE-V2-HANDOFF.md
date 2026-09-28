@@ -180,16 +180,20 @@ When the verdict is FLAGGED, route the flags like this:
 - **Character limits:** cover 100, headline 60, body 220, big number 12, follow line 100.
 - **Highlights:** each HIGHLIGHT is an exact substring of its slide's HEADLINE or BODY, and COVER HIGHLIGHT is an exact substring of the cover.
 - **Image references:** every "brief image N" exists in the brief's IMAGES list.
-- **Caption:** 400 to 800 characters, not counting the "Source:" line. No hashtags.
+- **Caption:** the full published caption (Caption stage output plus the image-credit block the publish pipeline appends, including the "Source:" line) is at most 2200 characters. No minimum. No hashtags.
 - **Banned phrases,** read from the shared voice block. Split them into two kinds:
   - **Always wrong:** em dashes, emoji, exclamation marks, and multi-word phrases like "at its core" or "here's the kicker."
   - **Judgment words:** single words that have normal uses, like "space," "features" or "unlock." Send these to the Editor, or the Caption step for the caption, as a check error to judge. Accept whatever it decides. The Editor notes a kept word in EDIT NOTES.
 - **Numbers trace:** every number in the slides and caption (%, $, counts, years) appears in at least one fetched source text. Normalize formatting before comparing, so "$21 billion" matches "$21B". Skip the caption's "Source:" line.
 
 **On a code-check failure:**
-- **Slide failure:** send the Editor its last version plus the errors as CHECK ERRORS.
-- **Caption failure:** rerun the Caption step with PREVIOUS CAPTION and the errors as FIX NOTES.
-- **Limit:** each gets up to two tries per round. A failure that remains after both tries goes to human review. Never fix a failure by silently truncating text.
+- **Slide failure:** send the Editor its last version plus the errors as CHECK ERRORS. Each CHECK ERRORS entry names the field with its current length, like `SLIDE 7 BODY (243 characters, limit 220): cut at least 23 characters (about 4 words).`
+- **Caption failure:** rerun the Caption step with PREVIOUS CAPTION and the errors as FIX NOTES, in the same length-inline shape.
+- **Limit:** each gets up to two tries per round.
+- **Which failures block, which flag:**
+  - **Hard failures** (banned voice phrase, number-trace miss, brief-image-N reference, caption hashtag, slide count out of range) stop the run at the code-check gate. The post goes to human review with the failures listed.
+  - **Soft failures** (`char_limit`, `highlight_substring`) do NOT stop the run. If they survive the round's repair budget, the pipeline still continues to the Fact-checker. At the end of the run, if any soft failure survives every round, the post goes to human review with those failures listed and is not rendered or shipped.
+- Never fix a failure by silently truncating text.
 
 **Shared voice block.** The Writer, Editor and Caption prompts use the same voice rules. Store them **once** and insert them into all three at build time, so the copies can't drift apart.
 - Use the Writer's "## Voice" section in the appendix as the canonical block.
@@ -261,7 +265,8 @@ Rules:
 - Copy quotes word for word, in quotation marks, with who said them.
 - Keep numbers exactly as the source gives them. "Nearly $21 billion" stays "nearly $21 billion."
 - Keep every hedge. If the source says "says," "potential" or "up to," so do you.
-- Name the source for each key fact.
+- Name the source for every fact. If a source gives analysis or opinion, attribute it to that outlet or person ("Shattered.io writes that..."). Never pass a source's take off as fact.
+- When the company has its own announcement, use it as a source. Otherwise prefer major news outlets over aggregators.
 - If sources disagree, report both versions and say which source said what.
 - Say plainly what the sources don't answer, such as how a number was measured or what happens next.
 - List each company, product and technical term in the story under TERMS, with a short plain-language description taken from your sources. The writer uses these to explain the story to readers who don't follow AI closely.
@@ -280,7 +285,7 @@ TERMS:
 Each company, product or technical term in the story, with a one-line plain-language description taken from your sources. For example (fictional): "Norland Labs: a company that makes coding software for banks."
 
 IMAGES:
-Real photos or charts you found that a slide could use, like the named person, the product, or a chart from the source. Number each one and give what it shows, who took it or owns it, and its link. For example (fictional): "IMAGE 1: Norland Labs CEO Dana Reyes at the company's office. Credit: Norland Labs press kit. Link: ..." Write "None found" if there aren't any.
+Real photos or charts you found that a slide could use, like the named person, the product, or a chart from the source. Only list an image if you have a direct link to the image itself, not a page it appears on, and you know who owns it. Number each one and give what it shows, who took it or owns it, and its link. For example (fictional): "IMAGE 1: Norland Labs CEO Dana Reyes at the company's office. Credit: Norland Labs press kit. Link: ..." Write "None found" if there aren't any.
 
 SOURCES:
 Only the sources you used for the main story, each with its outlet, publish date and link. Leave out a roundup or segment if you didn't use it for the main story.
@@ -346,7 +351,7 @@ Write the way a person talks:
 - Don't open two slides the same way.
 
 Never use:
-- Em dashes, emoji or exclamation marks.
+- Em dashes, double hyphens (--), emoji or exclamation marks.
 - "Not X, it's Y" or "not X but Y" constructions.
 - Filler that sounds deep: "at its core," "the real question is," "it's worth noting," "moving forward."
 - Announcing instead of saying: "let's dive in," "here's what you need to know," "here's the kicker," "here's why."
@@ -358,11 +363,13 @@ Never use:
 
 ## Length limits
 
-- Cover: 100 characters
-- Headline: 60 characters
-- Body: 220 characters
+These are hard limits. Aim under them.
+
+- Cover: 100 characters (about 15 words)
+- Headline: 60 characters (about 8 words)
+- Body: 220 characters (aim for about 30 words)
 - Big number: 12 characters
-- Follow line: 100 characters
+- Follow line: 100 characters (about 15 words)
 
 ## Handoff
 
@@ -432,11 +439,13 @@ You can rewrite freely, but everything has to stay true to the brief and sources
 
 ## Length limits
 
-- Cover: 100 characters
-- Headline: 60 characters
-- Body: 220 characters
+These are hard limits. Aim under them.
+
+- Cover: 100 characters (about 15 words)
+- Headline: 60 characters (about 8 words)
+- Body: 220 characters (aim for about 30 words)
 - Big number: 12 characters
-- Follow line: 100 characters
+- Follow line: 100 characters (about 15 words)
 
 Every HIGHLIGHT must be an exact phrase from its slide's text. If you change a slide's wording, update its highlight.
 
@@ -514,7 +523,7 @@ No hashtags.
 
 ## Length
 
-400 to 800 characters for the summary, the question or share prompt, and the follow line together. Source credits don't count toward the limit.
+As long as the story needs and no longer, usually one or two short paragraphs. Instagram hides everything after about the first 125 characters behind "more," so the news has to land before that.
 
 ## Output
 

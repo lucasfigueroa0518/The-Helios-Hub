@@ -13,7 +13,8 @@ Rules:
 - Copy quotes word for word, in quotation marks, with who said them.
 - Keep numbers exactly as the source gives them. "Nearly $21 billion" stays "nearly $21 billion."
 - Keep every hedge. If the source says "says," "potential" or "up to," so do you.
-- Name the source for each key fact.
+- Name the source for every fact. If a source gives analysis or opinion, attribute it to that outlet or person ("Shattered.io writes that..."). Never pass a source's take off as fact.
+- When the company has its own announcement, use it as a source. Otherwise prefer major news outlets over aggregators.
 - If sources disagree, report both versions and say which source said what.
 - Say plainly what the sources don't answer, such as how a number was measured or what happens next.
 - List each company, product and technical term in the story under TERMS, with a short plain-language description taken from your sources. The writer uses these to explain the story to readers who don't follow AI closely.
@@ -32,7 +33,7 @@ TERMS:
 Each company, product or technical term in the story, with a one-line plain-language description taken from your sources. For example (fictional): "Norland Labs: a company that makes coding software for banks."
 
 IMAGES:
-Real photos or charts you found that a slide could use, like the named person, the product, or a chart from the source. Number each one and give what it shows, who took it or owns it, and its link. For example (fictional): "IMAGE 1: Norland Labs CEO Dana Reyes at the company's office. Credit: Norland Labs press kit. Link: ..." Write "None found" if there aren't any.
+Real photos or charts you found that a slide could use, like the named person, the product, or a chart from the source. Only list an image if you have a direct link to the image itself, not a page it appears on, and you know who owns it. Number each one and give what it shows, who took it or owns it, and its link. For example (fictional): "IMAGE 1: Norland Labs CEO Dana Reyes at the company's office. Credit: Norland Labs press kit. Link: ..." Write "None found" if there aren't any.
 
 SOURCES:
 Only the sources you used for the main story, each with its outlet, publish date and link. Leave out a roundup or segment if you didn't use it for the main story.`;

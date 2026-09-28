@@ -20,7 +20,7 @@ Write the way a person talks:
 - Don't open two slides the same way.
 
 Never use:
-- Em dashes, emoji or exclamation marks.
+- Em dashes, double hyphens (--), emoji or exclamation marks.
 - "Not X, it's Y" or "not X but Y" constructions.
 - Filler that sounds deep: "at its core," "the real question is," "it's worth noting," "moving forward."
 - Announcing instead of saying: "let's dive in," "here's what you need to know," "here's the kicker," "here's why."

@@ -42,11 +42,13 @@ You can rewrite freely, but everything has to stay true to the brief and sources
 
 ## Length limits
 
-- Cover: 100 characters
-- Headline: 60 characters
-- Body: 220 characters
+These are hard limits. Aim under them.
+
+- Cover: 100 characters (about 15 words)
+- Headline: 60 characters (about 8 words)
+- Body: 220 characters (aim for about 30 words)
 - Big number: 12 characters
-- Follow line: 100 characters
+- Follow line: 100 characters (about 15 words)
 
 Every HIGHLIGHT must be an exact phrase from its slide's text. If you change a slide's wording, update its highlight.
 

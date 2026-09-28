@@ -45,7 +45,7 @@ No hashtags.
 
 ## Length
 
-400 to 800 characters for the summary, the question or share prompt, and the follow line together. Source credits don't count toward the limit.
+As long as the story needs and no longer, usually one or two short paragraphs. Instagram hides everything after about the first 125 characters behind "more," so the news has to land before that.
 
 ## Output
 

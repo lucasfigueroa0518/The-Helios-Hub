@@ -56,11 +56,13 @@ ${VOICE_BLOCK}
 
 ## Length limits
 
-- Cover: 100 characters
-- Headline: 60 characters
-- Body: 220 characters
+These are hard limits. Aim under them.
+
+- Cover: 100 characters (about 15 words)
+- Headline: 60 characters (about 8 words)
+- Body: 220 characters (aim for about 30 words)
 - Big number: 12 characters
-- Follow line: 100 characters
+- Follow line: 100 characters (about 15 words)
 
 ## Handoff
 
