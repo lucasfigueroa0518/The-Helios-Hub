@@ -170,17 +170,18 @@ describe('buildSummaryMarkdown', () => {
     draft: {
       post: parseBriefToPost('draft'),
       raw: '(raw)',
-      usage: { inputTokens: 1000, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 500, approxCostUsd: 0.05 },
+      stopReasons: ["end_turn"], usage: { inputTokens: 1000, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 500, approxCostUsd: 0.05 },
     },
     edited: {
       post: parseBriefToPost('edited'),
       raw: '(edited raw)',
       editNotes: ['Tightened cover.'],
-      usage: { inputTokens: 1000, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 500, approxCostUsd: 0.05 },
+      stopReasons: ["end_turn"], usage: { inputTokens: 1000, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 500, approxCostUsd: 0.05 },
     },
     caption: {
       caption: 'A caption body.\n\nSource: Bloomberg, 2026',
       raw: 'CAPTION:\nA caption body.\n\nSource: Bloomberg, 2026',
+      stopReasons: ['end_turn'],
       usage: { inputTokens: 500, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 200, approxCostUsd: 0.02 },
     },
     repairs: [
@@ -194,6 +195,7 @@ describe('buildSummaryMarkdown', () => {
         caption: 'final caption',
         factCheck: { verdict: 'PASS', flags: [] },
         factCheckRaw: 'VERDICT: PASS',
+        stopReasons: ['end_turn'],
         usage: { inputTokens: 500, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 100, approxCostUsd: 0.03 },
       },
     ],

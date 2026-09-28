@@ -366,6 +366,39 @@ export function partitionErrors(errors: CheckError[]): { hard: CheckError[]; sof
 }
 
 /**
+ * Render the "LENGTHS:" summary block the Editor sees at the top of every
+ * repair input. Lists every field with its current character count against
+ * its limit, marking overs. Gives the Editor an at-a-glance view of what
+ * to cut before it opens any specific CHECK ERRORS.
+ */
+export function renderLengthsBlock(
+  post: import('./parse').ParsedPost,
+  caption: string | null,
+  appendedCreditsChars = 0,
+): string {
+  const rows: string[] = ['LENGTHS:'];
+  const coverText = post.cover.text ?? '';
+  rows.push(fmtRow('COVER', coverText.length, LIMITS.cover));
+  for (const s of post.slides) {
+    if (s.headline) rows.push(fmtRow(`SLIDE ${s.position} HEADLINE`, s.headline.length, LIMITS.headline));
+    if (s.body) rows.push(fmtRow(`SLIDE ${s.position} BODY`, s.body.length, LIMITS.body));
+    if (s.bigNumber) rows.push(fmtRow(`SLIDE ${s.position} BIG NUMBER`, s.bigNumber.length, LIMITS.bigNumber));
+  }
+  rows.push(fmtRow('FOLLOW', post.follow.length, LIMITS.follow));
+  if (caption !== null) {
+    const total = caption.length + appendedCreditsChars;
+    const over = total > LIMITS.captionMax ? ' — OVER' : '';
+    rows.push(`- CAPTION: ${caption.length} characters + ${appendedCreditsChars} appended credits = ${total} total (limit ${LIMITS.captionMax})${over}`);
+  }
+  return rows.join('\n');
+}
+
+function fmtRow(label: string, actual: number, limit: number): string {
+  const over = actual > limit ? ' — OVER' : '';
+  return `- ${label}: ${actual} characters (limit ${limit})${over}`;
+}
+
+/**
  * Extract number-bearing tokens from text. Catches: percentages, currency
  * ($21B, $3.9M), plain integers, decimals, and 4-digit years. Skips numbers
  * inside "SLIDE N" labels (won't happen post-parse but safe to be defensive).

@@ -103,12 +103,13 @@ function buildDeps(override: Partial<OrchestrateDeps> = {}): OrchestrateDeps {
       stopReasons: ['end_turn'],
       usage: stageUsage(0.1),
     }),
-    runWriter: async () => ({ post: parseEditedPost(DRAFT_RAW), raw: DRAFT_RAW, usage: stageUsage(0.1) }),
-    runEditor: async () => ({ post: parseEditedPost(EDITED_RAW), raw: EDITED_RAW, editNotes: null, usage: stageUsage(0.05) }),
-    runCaption: async () => ({ caption: 'x'.repeat(500) + '\n\nSource: Bloomberg, September 17, 2026.', raw: CAPTION_RAW, usage: stageUsage(0.02) }),
+    runWriter: async () => ({ post: parseEditedPost(DRAFT_RAW), raw: DRAFT_RAW, stopReasons: ["end_turn"], usage: stageUsage(0.1) }),
+    runEditor: async () => ({ post: parseEditedPost(EDITED_RAW), raw: EDITED_RAW, editNotes: null, stopReasons: ["end_turn"], usage: stageUsage(0.05) }),
+    runCaption: async () => ({ caption: 'x'.repeat(500) + '\n\nSource: Bloomberg, September 17, 2026.', raw: CAPTION_RAW, stopReasons: ["end_turn"], usage: stageUsage(0.02) }),
     runFactChecker: async (): Promise<FactCheckerOutput> => ({
       result: { verdict: 'PASS', flags: [] },
       raw: 'VERDICT: PASS\n\nFLAGS:\n',
+      stopReasons: ["end_turn"],
       usage: stageUsage(0.05),
     }),
     fetchPage: async (url: string) => ({ ok: true, url, resolvedUrl: url, title: 'Anthropic R&D', byline: null, text: SOURCE_TEXT }),
@@ -177,7 +178,7 @@ describe('runCreatorPipeline — fact-check FLAGGED loop', () => {
       buildDeps({
         runWriter: async () => {
           writerCallCount++;
-          return { post: parseEditedPost(DRAFT_RAW), raw: DRAFT_RAW, usage: stageUsage(0.1) };
+          return { post: parseEditedPost(DRAFT_RAW), raw: DRAFT_RAW, stopReasons: ["end_turn"], usage: stageUsage(0.1) };
         },
         runFactChecker: async () => {
           factCheckCall++;
@@ -185,10 +186,11 @@ describe('runCreatorPipeline — fact-check FLAGGED loop', () => {
             return {
               result: { verdict: 'FLAGGED', flags: [{ where: 'SLIDE 3 / BODY', text: 'x', problem: 'unsupported', sourcesSay: 'Nothing', size: 'BIG' }] },
               raw: 'VERDICT: FLAGGED',
+              stopReasons: ["end_turn"],
               usage: stageUsage(0.05),
             };
           }
-          return { result: { verdict: 'PASS', flags: [] }, raw: 'VERDICT: PASS', usage: stageUsage(0.05) };
+          return { result: { verdict: 'PASS', flags: [] }, raw: 'VERDICT: PASS', stopReasons: ["end_turn"], usage: stageUsage(0.05) };
         },
       }),
     );
@@ -205,6 +207,7 @@ describe('runCreatorPipeline — fact-check FLAGGED loop', () => {
         runFactChecker: async (): Promise<FactCheckerOutput> => ({
           result: { verdict: 'FLAGGED', flags: [{ where: 'SLIDE 3 / BODY', text: 'x', problem: 'p', sourcesSay: 's', size: 'SMALL' }] },
           raw: 'VERDICT: FLAGGED',
+          stopReasons: ["end_turn"],
           usage: stageUsage(0.05),
         }),
       }),
@@ -223,11 +226,11 @@ describe('runCreatorPipeline — fact-check FLAGGED loop', () => {
       buildDeps({
         runWriter: async () => {
           writerCallCount++;
-          return { post: parseEditedPost(DRAFT_RAW), raw: DRAFT_RAW, usage: stageUsage(0.1) };
+          return { post: parseEditedPost(DRAFT_RAW), raw: DRAFT_RAW, stopReasons: ["end_turn"], usage: stageUsage(0.1) };
         },
         runCaption: async () => {
           captionCallCount++;
-          return { caption: 'x'.repeat(500) + '\n\nSource: Bloomberg.', raw: CAPTION_RAW, usage: stageUsage(0.02) };
+          return { caption: 'x'.repeat(500) + '\n\nSource: Bloomberg.', raw: CAPTION_RAW, stopReasons: ["end_turn"], usage: stageUsage(0.02) };
         },
         runFactChecker: async () => {
           fcCall++;
@@ -235,10 +238,11 @@ describe('runCreatorPipeline — fact-check FLAGGED loop', () => {
             return {
               result: { verdict: 'FLAGGED', flags: [{ where: 'CAPTION / TEXT', text: 'x', problem: 'p', sourcesSay: 's', size: 'SMALL' }] },
               raw: 'VERDICT: FLAGGED',
+              stopReasons: ["end_turn"],
               usage: stageUsage(0.05),
             };
           }
-          return { result: { verdict: 'PASS', flags: [] }, raw: 'VERDICT: PASS', usage: stageUsage(0.05) };
+          return { result: { verdict: 'PASS', flags: [] }, raw: 'VERDICT: PASS', stopReasons: ["end_turn"], usage: stageUsage(0.05) };
         },
       }),
     );
@@ -266,7 +270,7 @@ describe('runCreatorPipeline — code-check repair budget', () => {
         runEditor: async () => {
           editorCall++;
           // Every editor call returns the same over-limit post.
-          return { post: overCap, raw: EDITED_RAW, editNotes: null, usage: stageUsage(0.05) };
+          return { post: overCap, raw: EDITED_RAW, editNotes: null, stopReasons: ["end_turn"], usage: stageUsage(0.05) };
         },
         persistDebugAndCompose: async (_id, debug) => {
           capturedRepairs = debug.repairs.map((r) => ({ stage: r.stage, reason: r.reason }));
@@ -298,10 +302,10 @@ describe('runCreatorPipeline — soft errors continue past code checks, block at
       ROW,
       {},
       buildDeps({
-        runEditor: async () => ({ post: overPost, raw: EDITED_RAW, editNotes: null, usage: stageUsage(0.05) }),
+        runEditor: async () => ({ post: overPost, raw: EDITED_RAW, editNotes: null, stopReasons: ["end_turn"], usage: stageUsage(0.05) }),
         runFactChecker: async () => {
           factCheckCalls++;
-          return { result: { verdict: 'PASS', flags: [] }, raw: 'VERDICT: PASS', usage: stageUsage(0.05) };
+          return { result: { verdict: 'PASS', flags: [] }, raw: 'VERDICT: PASS', stopReasons: ["end_turn"], usage: stageUsage(0.05) };
         },
         persistDebugAndCompose: async (_id, debug, cols) => {
           if (cols.composeStatus === 'needs_human_review') bailReason = debug.outcome.reason;
@@ -326,10 +330,10 @@ describe('runCreatorPipeline — soft errors continue past code checks, block at
       ROW,
       {},
       buildDeps({
-        runEditor: async () => ({ post: bannedPost, raw: EDITED_RAW, editNotes: null, usage: stageUsage(0.05) }),
+        runEditor: async () => ({ post: bannedPost, raw: EDITED_RAW, editNotes: null, stopReasons: ["end_turn"], usage: stageUsage(0.05) }),
         runFactChecker: async () => {
           factCheckCalls++;
-          return { result: { verdict: 'PASS', flags: [] }, raw: 'VERDICT: PASS', usage: stageUsage(0.05) };
+          return { result: { verdict: 'PASS', flags: [] }, raw: 'VERDICT: PASS', stopReasons: ["end_turn"], usage: stageUsage(0.05) };
         },
       }),
     );
@@ -351,7 +355,7 @@ describe('runCreatorPipeline — REVIEWER NOTES entry point', () => {
       buildDeps({
         runWriter: async (input) => {
           writerInputSeen = input;
-          return { post: parseEditedPost(DRAFT_RAW), raw: DRAFT_RAW, usage: stageUsage(0.1) };
+          return { post: parseEditedPost(DRAFT_RAW), raw: DRAFT_RAW, stopReasons: ["end_turn"], usage: stageUsage(0.1) };
         },
       }),
     );

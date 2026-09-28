@@ -5,6 +5,7 @@ import {
   checkCaption,
   checkNumberTrace,
   checkPost,
+  renderLengthsBlock,
 } from '@/lib/social/editorial/v2/code-checks';
 import { parseBrief, parseEditedPost } from '@/lib/social/editorial/v2/parse';
 
@@ -243,5 +244,37 @@ describe('checkNumberTrace', () => {
     const sources = ['Claude wrote 26 percent of the R&D code.'];
     const r = checkNumberTrace(post, 'body. Source: X, 2026-09-01', sources);
     assert.ok(!r.errors.some((e) => e.kind === 'number_trace' && String(e.message).includes('26%')));
+  });
+});
+
+describe('renderLengthsBlock', () => {
+  test("renders a LENGTHS: header with every field's current length and marks overs", () => {
+    const post = buildPost({
+      coverText: 'x'.repeat(80),
+      coverHighlight: 'x',
+      slides: [
+        { headline: 'y'.repeat(45), body: 'z'.repeat(300), highlight: 'z' }, // body over 220
+      ],
+      followText: 'f'.repeat(90),
+    });
+    const block = renderLengthsBlock(post, 'x'.repeat(1000), 200);
+    assert.match(block, /^LENGTHS:$/m);
+    assert.match(block, /- COVER: 80 characters \(limit 100\)$/m);
+    assert.match(block, /- SLIDE 2 HEADLINE: 45 characters \(limit 60\)$/m);
+    // Body is 300 > 220 → must be flagged as OVER.
+    assert.match(block, /- SLIDE 2 BODY: 300 characters \(limit 220\) — OVER$/m);
+    assert.match(block, /- FOLLOW: 90 characters \(limit 100\)$/m);
+    // Caption 1000 + 200 credits = 1200 total, under 2200 → no OVER.
+    assert.match(block, /- CAPTION: 1000 characters \+ 200 appended credits = 1200 total \(limit 2200\)$/m);
+  });
+  test('CAPTION over cap gets — OVER', () => {
+    const post = buildPost({ slides: [{ body: 'ok', highlight: 'ok' }] });
+    const block = renderLengthsBlock(post, 'x'.repeat(2100), 200);
+    assert.match(block, /- CAPTION: 2100 characters \+ 200 appended credits = 2300 total \(limit 2200\) — OVER$/m);
+  });
+  test('omits CAPTION row when caption is null', () => {
+    const post = buildPost({ slides: [{ body: 'ok', highlight: 'ok' }] });
+    const block = renderLengthsBlock(post, null, 0);
+    assert.doesNotMatch(block, /CAPTION/);
   });
 });

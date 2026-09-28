@@ -202,6 +202,7 @@ export function buildSummaryMarkdown(captured: CapturedRun, meta: {
   // Draft
   if (debug.draft) {
     lines.push('## Writer — DRAFT');
+    lines.push(`- Stop reasons: \`${debug.draft.stopReasons.join(', ')}\``);
     lines.push(`- ${formatUsage(debug.draft.usage)}`);
     lines.push('');
     lines.push('### Slides');
@@ -212,6 +213,7 @@ export function buildSummaryMarkdown(captured: CapturedRun, meta: {
   // Edited (initial editor pass)
   if (debug.edited) {
     lines.push('## Editor — EDITED POST');
+    lines.push(`- Stop reasons: \`${debug.edited.stopReasons.join(', ')}\``);
     lines.push(`- ${formatUsage(debug.edited.usage)}`);
     if (debug.edited.editNotes && debug.edited.editNotes.length > 0) {
       lines.push('- Edit notes:');
@@ -226,6 +228,7 @@ export function buildSummaryMarkdown(captured: CapturedRun, meta: {
   // Caption
   if (debug.caption) {
     lines.push('## Caption');
+    lines.push(`- Stop reasons: \`${debug.caption.stopReasons.join(', ')}\``);
     lines.push(`- ${formatUsage(debug.caption.usage)}`);
     lines.push(`- Character count (as returned): **${debug.caption.caption.length}**`);
     lines.push('');
@@ -262,7 +265,7 @@ export function buildSummaryMarkdown(captured: CapturedRun, meta: {
         lines.push('#### Number-trace errors going into this round');
         for (const e of round.numberTraceErrorsBeforeFactCheck) lines.push(`- ${e.message}`);
       }
-      lines.push(`- Fact-checker: ${formatUsage(round.usage)}`);
+      lines.push(`- Fact-checker: stop_reasons \`${round.stopReasons.join(', ')}\`, ${formatUsage(round.usage)}`);
       if (round.factCheck.flags.length > 0) {
         lines.push('#### Flags');
         for (const f of round.factCheck.flags) {

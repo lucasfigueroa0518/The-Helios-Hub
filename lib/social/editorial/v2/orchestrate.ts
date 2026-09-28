@@ -15,7 +15,7 @@
  */
 
 import { adaptToPost } from './adapter';
-import { checkCaption, checkNumberTrace, checkPost, partitionErrors, type CheckError } from './code-checks';
+import { checkCaption, checkNumberTrace, checkPost, partitionErrors, renderLengthsBlock, type CheckError } from './code-checks';
 import { runCaption as defaultRunCaption, type CaptionInput, type CaptionOutput } from './caption';
 import { runEditor as defaultRunEditor, type EditorInput, type EditorOutput } from './editor';
 import { runFactChecker as defaultRunFactChecker, type FactCheckerInput, type FactCheckerOutput } from './fact-checker';
@@ -215,6 +215,11 @@ export async function runCreatorPipeline(
     imageValidation.valid,
   );
 
+  // Estimate the characters of image credits the publish pipeline appends to
+  // the caption. Used by both the LENGTHS block for the Editor and the
+  // caption code-check.
+  const creditsEstimate = estimateCreditsChars(imageValidation.valid);
+
   // ── 3. Writer — first pass, OR reviewer-notes rerun ────────────────
   let writerRaw: string;
   let writerPost: ParsedPost;
@@ -230,7 +235,7 @@ export async function runCreatorPipeline(
     writerPost = w.post;
     addCost(w.usage);
     stagesRun.push('writer(reviewer-notes)');
-    debug.draft = { post: w.post, raw: w.raw, usage: w.usage };
+    debug.draft = { post: w.post, raw: w.raw, stopReasons: w.stopReasons, usage: w.usage };
   } else {
     const w = await deps.runWriter({
       brief: finalBrief,
@@ -241,7 +246,7 @@ export async function runCreatorPipeline(
     writerPost = w.post;
     addCost(w.usage);
     stagesRun.push('writer');
-    debug.draft = { post: w.post, raw: w.raw, usage: w.usage };
+    debug.draft = { post: w.post, raw: w.raw, stopReasons: w.stopReasons, usage: w.usage };
   }
   if (overCap()) return bailToHumanReview('cost cap reached after Writer');
 
@@ -254,12 +259,14 @@ export async function runCreatorPipeline(
       briefRaw: finalBriefRaw,
       sourceTexts,
       post: writerRaw,
+      // Lengths from the writer's draft — no caption yet.
+      lengthsBlock: renderLengthsBlock(writerPost, null, 0),
     });
     editorRaw = e.raw;
     editorPost = e.post;
     addCost(e.usage);
     stagesRun.push('editor');
-    debug.edited = { post: e.post, raw: e.raw, editNotes: e.editNotes, usage: e.usage };
+    debug.edited = { post: e.post, raw: e.raw, editNotes: e.editNotes, stopReasons: e.stopReasons, usage: e.usage };
   }
   if (overCap()) return bailToHumanReview('cost cap reached after Editor');
 
@@ -276,7 +283,7 @@ export async function runCreatorPipeline(
     captionText = c.caption;
     addCost(c.usage);
     stagesRun.push('caption');
-    debug.caption = { caption: c.caption, raw: c.raw, usage: c.usage };
+    debug.caption = { caption: c.caption, raw: c.raw, stopReasons: c.stopReasons, usage: c.usage };
   }
   if (overCap()) return bailToHumanReview('cost cap reached after Caption');
 
@@ -292,11 +299,8 @@ export async function runCreatorPipeline(
   let round = 0;
   let lastVerdict: FactCheckResult | null = null;
 
-  // Estimate the characters of image credits the publish pipeline appends
-  // to the caption after the Caption stage runs. Over-includes any brief
-  // image (some may not end up used, in which case actual credits will be
-  // shorter — safe direction to err in).
-  const creditsEstimate = estimateCreditsChars(imageValidation.valid);
+  // (creditsEstimate was computed earlier, right after image validation, so
+  // the initial Editor call can use it too. See §2b.)
 
   while (round < MAX_FACT_CHECK_ROUNDS) {
     round++;
@@ -325,6 +329,7 @@ export async function runCreatorPipeline(
         briefRaw: finalBriefRaw,
         sourceTexts,
         post: editorRaw,
+        lengthsBlock: renderLengthsBlock(editorPost, captionText, creditsEstimate),
         checkErrors: slideErrors,
       });
       addCost(eRetry.usage);
@@ -388,6 +393,7 @@ export async function runCreatorPipeline(
           numberTraceErrorsBeforeFactCheck: hardStill.filter((e) => e.kind === 'number_trace'),
           factCheck: { verdict: 'FLAGGED', flags: [] },
           factCheckRaw: '(skipped — persistent hard code-check failures)',
+          stopReasons: [],
           usage: emptyUsage(),
         });
         return bailToHumanReview(
@@ -415,6 +421,7 @@ export async function runCreatorPipeline(
       caption: captionText,
       factCheck: fc.result,
       factCheckRaw: fc.raw,
+      stopReasons: fc.stopReasons,
       usage: fc.usage,
     });
 
@@ -450,6 +457,7 @@ export async function runCreatorPipeline(
         briefRaw: finalBriefRaw,
         sourceTexts,
         post: writerRaw,
+        lengthsBlock: renderLengthsBlock(writerPost, captionText, creditsEstimate),
       });
       addCost(e.usage);
       stagesRun.push(`editor(post-writer r${round})`);
@@ -475,6 +483,7 @@ export async function runCreatorPipeline(
           briefRaw: finalBriefRaw,
           sourceTexts,
           post: editorRaw,
+          lengthsBlock: renderLengthsBlock(editorPost, captionText, creditsEstimate),
           factCheckFlags: slideFlags,
         });
         addCost(e.usage);
