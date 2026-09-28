@@ -102,12 +102,13 @@ describe('wrapDepsForCapture', () => {
     assert.equal(captured.composeError, null);
   });
 
-  test('when baseDeps has no runReporter/fetchPage, the wrapper omits those keys so the orchestrator falls back to its defaults', () => {
+  test('when baseDeps has no runReporter/fetchPage, the wrapper still provides both — falling back to the real defaults so captured.reporterOutput / fetchedSources populate for brief.json', () => {
     const { deps } = wrapDepsForCapture({});
-    assert.equal(deps.runReporter, undefined);
-    assert.equal(deps.fetchPage, undefined);
-    // But persist is always overridden (that's the "never write to DB" contract).
-    assert.ok(deps.persistDebugAndCompose);
+    // Fix for the run-4 "brief.json was NOT written" bug: ALWAYS wrap, even
+    // when the caller didn't override, so the capture sees every real call.
+    assert.ok(deps.runReporter, 'runReporter must always be provided');
+    assert.ok(deps.fetchPage, 'fetchPage must always be provided');
+    assert.ok(deps.persistDebugAndCompose, 'persist must always be provided');
   });
 });
 

@@ -7,8 +7,8 @@
 
 import type { OrchestrateDeps, OrchestrateResult } from './orchestrate';
 import type { PipelineV2Debug, StageUsage } from './log';
-import type { ReporterOutput } from './reporter';
-import type { FetchPageResult } from './tools/fetch-page';
+import { runReporter as defaultRunReporter, type ReporterOutput } from './reporter';
+import { fetchPage as defaultFetchPage, type FetchPageResult } from './tools/fetch-page';
 import type { FetchedSource } from './writer';
 
 /* ── Captured artifacts (what the runner writes to disk) ───────────────── */
@@ -60,23 +60,32 @@ export function wrapDepsForCapture(baseDeps: Partial<OrchestrateDeps>): {
     fetchedSources: [],
   };
 
-  const wrappedReporter = baseDeps.runReporter
-    ? async (input: Parameters<NonNullable<OrchestrateDeps['runReporter']>>[0]) => {
-        const out = await baseDeps.runReporter!(input);
-        captured.reporterOutput = out;
-        return out;
-      }
-    : undefined;
+  // ALWAYS wrap runReporter + fetchPage — even when the caller passes an
+  // empty baseDeps (the "full pipeline" mode). Falling back to the real
+  // defaults means the runner captures Reporter output and every
+  // fetchPage result no matter which mode it runs in. Fix for the run-4
+  // "brief.json was NOT written" bug: previously the wrapper omitted these
+  // keys when baseDeps didn't provide them, so the orchestrator's own
+  // defaults ran unwrapped and the run couldn't be replayed with
+  // --from-brief.
+  const underlyingReporter = baseDeps.runReporter ?? defaultRunReporter;
+  const underlyingFetchPage = baseDeps.fetchPage ?? defaultFetchPage;
 
-  const wrappedFetchPage = baseDeps.fetchPage
-    ? async (url: string): Promise<FetchPageResult> => {
-        const r = await baseDeps.fetchPage!(url);
-        if (r.ok) {
-          captured.fetchedSources.push({ url: r.url, title: r.title, text: r.text });
-        }
-        return r;
-      }
-    : undefined;
+  const wrappedReporter = async (
+    input: Parameters<NonNullable<OrchestrateDeps['runReporter']>>[0],
+  ) => {
+    const out = await underlyingReporter(input);
+    captured.reporterOutput = out;
+    return out;
+  };
+
+  const wrappedFetchPage = async (url: string): Promise<FetchPageResult> => {
+    const r = await underlyingFetchPage(url);
+    if (r.ok) {
+      captured.fetchedSources.push({ url: r.url, title: r.title, text: r.text });
+    }
+    return r;
+  };
 
   const capturingPersist = async (
     _id: string,
@@ -99,8 +108,8 @@ export function wrapDepsForCapture(baseDeps: Partial<OrchestrateDeps>): {
 
   return {
     deps: {
-      ...(wrappedReporter ? { runReporter: wrappedReporter } : {}),
-      ...(wrappedFetchPage ? { fetchPage: wrappedFetchPage } : {}),
+      runReporter: wrappedReporter,
+      fetchPage: wrappedFetchPage,
       persistDebugAndCompose: capturingPersist,
     },
     captured,
@@ -182,6 +191,15 @@ export function buildSummaryMarkdown(captured: CapturedRun, meta: {
       if (s.ok) lines.push(`- ✅ ${s.url} (${s.length} chars${s.resolvedUrl && s.resolvedUrl !== s.url ? `, resolved to ${s.resolvedUrl}` : ''})`);
       else lines.push(`- ❌ ${s.url} — ${s.error}`);
     }
+    lines.push('');
+  }
+
+  // Substantive-source filter (caption citation set)
+  if (debug.substantiveSources) {
+    lines.push('## Substantive-source filter (caption "Source:" line)');
+    lines.push(`- Threshold: ≥ ${debug.substantiveSources.thresholdChars} chars of fetched text`);
+    lines.push(`- Kept: ${debug.substantiveSources.keptCount} | Dropped: ${debug.substantiveSources.droppedCount}`);
+    for (const url of debug.substantiveSources.keptUrls) lines.push(`  - ${url}`);
     lines.push('');
   }
 

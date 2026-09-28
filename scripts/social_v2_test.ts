@@ -19,9 +19,25 @@
  * in production — the runner still writes whatever was captured.
  */
 
-import { promises as fs } from 'node:fs';
+import fs from 'node:fs';
+import { promises as fsp } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
+
+// Load .env.local BEFORE any lib import that reads process.env (Anthropic
+// client, pg pool). Same pattern as scripts/social_ingest.ts and the
+// apply_*_migration.js scripts. Runs at import time so process.env is
+// populated before the dynamic imports inside main() evaluate.
+{
+  const root = path.resolve(__dirname, '..');
+  const envPath = path.join(root, '.env.local');
+  if (fs.existsSync(envPath)) {
+    for (const line of fs.readFileSync(envPath, 'utf8').split(/\r?\n/)) {
+      const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
+      if (m && !process.env[m[1]!]) process.env[m[1]!] = m[2]!.replace(/\r$/, '');
+    }
+  }
+}
 
 async function main() {
   const { values } = parseArgs({
@@ -88,7 +104,7 @@ async function main() {
   // Runs dir with ISO timestamp — safe for filesystem across OSes.
   const runId = new Date().toISOString().replace(/[:.]/g, '-');
   const runDir = path.join(process.cwd(), 'runs', runId);
-  await fs.mkdir(runDir, { recursive: true });
+  await fsp.mkdir(runDir, { recursive: true });
 
   console.log(`Article: ${row.id} — ${row.headline}`);
   console.log(`Run dir: ${runDir}`);
@@ -98,7 +114,7 @@ async function main() {
   let baseDeps: Awaited<ReturnType<typeof buildFromBriefDeps>> | Record<string, never> = {};
   let usedFromBrief = false;
   if (fromBriefPath) {
-    const cached = JSON.parse(await fs.readFile(fromBriefPath, 'utf-8'));
+    const cached = JSON.parse(await fsp.readFile(fromBriefPath, 'utf-8'));
     baseDeps = buildFromBriefDeps(cached);
     usedFromBrief = true;
     console.log(`Loaded cached brief: ${fromBriefPath}`);
@@ -129,7 +145,7 @@ async function main() {
   captured.result = result;
 
   // Write transcript.json — everything captured, plus the row we ran against.
-  await fs.writeFile(
+  await fsp.writeFile(
     path.join(runDir, 'transcript.json'),
     JSON.stringify(
       {
@@ -160,7 +176,7 @@ async function main() {
   // Write brief.json — only if we ran the Reporter live and captured a real
   // ReporterOutput. In --from-brief mode we already have the source.
   if (!usedFromBrief && captured.reporterOutput) {
-    await fs.writeFile(
+    await fsp.writeFile(
       path.join(runDir, 'brief.json'),
       JSON.stringify(
         {
@@ -181,7 +197,7 @@ async function main() {
     runId,
     usedFromBrief,
   });
-  await fs.writeFile(path.join(runDir, 'summary.md'), summary, 'utf-8');
+  await fsp.writeFile(path.join(runDir, 'summary.md'), summary, 'utf-8');
 
   console.log('');
   console.log(`Status: ${result.status}`);
