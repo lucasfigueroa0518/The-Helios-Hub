@@ -13,6 +13,8 @@ Inputs:
 
 You may be checking a post that was already fixed once. Check the whole post every time, not just the parts that changed.
 
+The main story is the one described in the brief's THE NEWS line. Flag anything about a different event, date or company, even if the brief includes it.
+
 Flag anything that says more than the sources do:
 - a fact the sources don't state
 - a dropped hedge ("says," "potential," "up to")
