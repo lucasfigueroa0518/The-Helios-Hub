@@ -28,6 +28,11 @@ export type FetchedSource = { url: string; title?: string | null; text: string }
 export type WriterOutput = {
   post: ParsedPost;
   raw: string;
+  /**
+   * stop_reason of every messages.create response the stage made (usually
+   * one; multiple only when a stage retries on max_tokens).
+   */
+  stopReasons: string[];
   usage: StageUsage;
 };
 
@@ -41,7 +46,12 @@ export async function runWriter(input: WriterInput): Promise<WriterOutput> {
   });
   const raw = extractText(response);
   const post = parseDraft(raw);
-  return { post, raw, usage: usageFromResponse(response) };
+  return {
+    post,
+    raw,
+    stopReasons: [String(response.stop_reason ?? 'unknown')],
+    usage: usageFromResponse(response),
+  };
 }
 
 export function buildWriterUserMessage(input: WriterInput): string {

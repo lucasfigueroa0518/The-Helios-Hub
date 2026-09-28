@@ -25,6 +25,7 @@ export type FactCheckerInput = {
 export type FactCheckerOutput = {
   result: FactCheckResult;
   raw: string;
+  stopReasons: string[];
   usage: StageUsage;
 };
 
@@ -38,7 +39,12 @@ export async function runFactChecker(input: FactCheckerInput): Promise<FactCheck
   });
   const raw = extractText(response);
   const result = parseFactCheck(raw);
-  return { result, raw, usage: usageFromResponse(response) };
+  return {
+    result,
+    raw,
+    stopReasons: [String(response.stop_reason ?? 'unknown')],
+    usage: usageFromResponse(response),
+  };
 }
 
 export function buildFactCheckerUserMessage(input: FactCheckerInput): string {

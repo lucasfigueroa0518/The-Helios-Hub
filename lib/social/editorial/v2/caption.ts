@@ -26,6 +26,7 @@ export type CaptionInput = {
 export type CaptionOutput = {
   caption: string;
   raw: string;
+  stopReasons: string[];
   usage: StageUsage;
 };
 
@@ -39,7 +40,12 @@ export async function runCaption(input: CaptionInput): Promise<CaptionOutput> {
   });
   const raw = extractText(response);
   const caption = parseCaption(raw);
-  return { caption, raw, usage: usageFromResponse(response) };
+  return {
+    caption,
+    raw,
+    stopReasons: [String(response.stop_reason ?? 'unknown')],
+    usage: usageFromResponse(response),
+  };
 }
 
 export function buildCaptionUserMessage(input: CaptionInput): string {

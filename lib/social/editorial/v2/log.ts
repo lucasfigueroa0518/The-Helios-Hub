@@ -31,6 +31,8 @@ export type FactCheckRound = {
   numberTraceErrorsBeforeFactCheck?: CheckError[];
   factCheck: FactCheckResult;
   factCheckRaw: string;
+  /** Fact-checker stage stop_reason(s) for this round's call. */
+  stopReasons: string[];
   usage: StageUsage;
 };
 
@@ -67,17 +69,20 @@ export type PipelineV2Debug = {
   draft?: {
     post: ParsedPost;
     raw: string;
+    stopReasons: string[];
     usage: StageUsage;
   };
   edited?: {
     post: ParsedPost;
     raw: string;
     editNotes: string[] | null;
+    stopReasons: string[];
     usage: StageUsage;
   };
   caption?: {
     caption: string;
     raw: string;
+    stopReasons: string[];
     usage: StageUsage;
   };
   rounds: FactCheckRound[];
