@@ -34,6 +34,26 @@ describe('Reporter prompt', () => {
     );
   });
 
+  test('main-story paragraph ends with the Norland Labs speech example (Run 6 addition)', () => {
+    // Concrete example bolts onto the main-story paragraph so the model
+    // has a worked case for "earlier statement about the same company =
+    // still a separate story."
+    assert.match(
+      REPORTER_PROMPT,
+      /what the company does or what a term means\. For example \(fictional\): if Norland Labs' CEO gave a speech last week and the company releases new numbers today, the speech is a separate story\. Leave it out completely, even if the articles about today's numbers mention it\./,
+    );
+  });
+
+  test('never-guess-a-link rule appears after the "Use original news reporting" rule (Run 6 addition)', () => {
+    // Anti-hallucinated-URL guardrail. Run-5 saw Sonnet synthesize an
+    // Anthropic Institute URL that 404'd — the URL wasn't in any fetched
+    // source, the model guessed it from context.
+    assert.match(
+      REPORTER_PROMPT,
+      /- Use original news reporting\. Don't use blogs or aggregators that summarize other coverage\.\n- Never list a link you didn't open\. If you can't open the original announcement, write "Original announcement: not retrieved" under SOURCES instead of guessing a link\. Only list sources that are about the main story itself\./,
+    );
+  });
+
   test('attribution example uses "The Ledger writes that..." (Run 5 edit)', () => {
     assert.match(REPORTER_PROMPT, /"The Ledger writes that\.\.\."/);
     assert.doesNotMatch(REPORTER_PROMPT, /Shattered\.io writes that/);
@@ -94,10 +114,15 @@ describe('Writer / Editor / Caption "fix by cutting, no new details" rule (Run 6
 });
 
 describe('Fact-checker prompt', () => {
-  test('main-story paragraph appears between the "check every time" and "flag anything" paragraphs (Run 5 addition)', () => {
+  test('main-story paragraph appears between the "check every time" and "flag anything" paragraphs, with the Run-6 BIG-severity extension', () => {
+    // Run 5 added the first sentence. Run 6 added the second — a slide
+    // about a separate story is BIG, even if the words are accurate. Run 5
+    // showed the Fact-checker sometimes accepted cross-story slides
+    // because every fact in them was verifiable in the sources; the new
+    // sentence makes clear that main-story scope beats per-word accuracy.
     assert.match(
       FACT_CHECKER_PROMPT,
-      /Check the whole post every time, not just the parts that changed\.\n\nThe main story is the one described in the brief's THE NEWS line\. Flag anything about a different event, date or company, even if the brief includes it\.\n\nFlag anything that says more than the sources do:/,
+      /Check the whole post every time, not just the parts that changed\.\n\nThe main story is the one described in the brief's THE NEWS line\. Flag anything about a different event, date or company, even if the brief includes it\. A slide or caption line about a separate story is BIG, even if every word of it is accurate\.\n\nFlag anything that says more than the sources do:/,
     );
   });
 });

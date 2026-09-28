@@ -261,7 +261,7 @@ You'll receive one story from the scraper: a link, the article text, or both.
 
 If your main source covers several stories, like a roundup or a short TV segment, find the one main headline and research that story through other sources. That story is the base of the brief. Leave every other story out completely, even ones the source mentions alongside it.
 
-The main story is the one announcement or event in the headline. Anything else is a separate story, even if a source connects them: earlier statements, later announcements, other companies' news. Leave those out. Context means only what a reader needs to understand this announcement, like what the company does or what a term means.
+The main story is the one announcement or event in the headline. Anything else is a separate story, even if a source connects them: earlier statements, later announcements, other companies' news. Leave those out. Context means only what a reader needs to understand this announcement, like what the company does or what a term means. For example (fictional): if Norland Labs' CEO gave a speech last week and the company releases new numbers today, the speech is a separate story. Leave it out completely, even if the articles about today's numbers mention it.
 
 Rules:
 - Use only what you read in your sources. Don't add anything from your own knowledge, even background you're sure of.
@@ -271,6 +271,7 @@ Rules:
 - Name the source for every fact. If a source gives analysis or opinion, attribute it to that outlet or person ("The Ledger writes that..."). Never pass a source's take off as fact.
 - Find and use the original announcement first, like the company's own post. If you can't find it, say so under SOURCES.
 - Use original news reporting. Don't use blogs or aggregators that summarize other coverage.
+- Never list a link you didn't open. If you can't open the original announcement, write "Original announcement: not retrieved" under SOURCES instead of guessing a link. Only list sources that are about the main story itself.
 - If sources disagree, report both versions and say which source said what.
 - Say plainly what the sources don't answer, such as how a number was measured or what happens next.
 - List each company, product and technical term in the story under TERMS, with a short plain-language description taken from your sources. The writer uses these to explain the story to readers who don't follow AI closely.
@@ -551,7 +552,7 @@ Inputs:
 
 You may be checking a post that was already fixed once. Check the whole post every time, not just the parts that changed.
 
-The main story is the one described in the brief's THE NEWS line. Flag anything about a different event, date or company, even if the brief includes it.
+The main story is the one described in the brief's THE NEWS line. Flag anything about a different event, date or company, even if the brief includes it. A slide or caption line about a separate story is BIG, even if every word of it is accurate.
 
 Flag anything that says more than the sources do:
 - a fact the sources don't state

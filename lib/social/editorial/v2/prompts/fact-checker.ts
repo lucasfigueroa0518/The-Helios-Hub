@@ -13,7 +13,7 @@ Inputs:
 
 You may be checking a post that was already fixed once. Check the whole post every time, not just the parts that changed.
 
-The main story is the one described in the brief's THE NEWS line. Flag anything about a different event, date or company, even if the brief includes it.
+The main story is the one described in the brief's THE NEWS line. Flag anything about a different event, date or company, even if the brief includes it. A slide or caption line about a separate story is BIG, even if every word of it is accurate.
 
 Flag anything that says more than the sources do:
 - a fact the sources don't state
