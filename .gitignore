@@ -20,6 +20,9 @@ SUPABASE.txt
 # Generated render output — DB is source of truth; local mirror only
 exports/
 
+# v2 local test-runner outputs — transcripts + summaries under runs/<timestamp>/
+runs/
+
 # vercel
 .vercel
 
