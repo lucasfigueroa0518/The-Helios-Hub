@@ -407,11 +407,26 @@ function parseScaleChart(title: string, headline: string, body: string): ScaleCh
 
   // ── Percentage → 5×5 pictogram grid ──────────────────────────────────
   // A grid actually shows "1 in 4" as a visual pattern instead of just
-  // restating the percentage. 25 cells, filled = round(value / 4).
+  // restating the percentage. 25 cells, filled = round(value / 4). The
+  // grid is only shown when it's honest AND fits:
+  //   1. Filled count must equal the natural round of value/4 without a
+  //      minimum-1 clamp. Values under ~2% would round to 0 and would
+  //      otherwise be clamped to 1, visually reading as "1 in 25" (4%)
+  //      when the real value is much smaller. Rule (per Run 6 review):
+  //      "Only show the grid when the filled squares match the number
+  //      to within 1 square. Otherwise show the number with no grid."
+  //   2. Body text must be short enough to fit alongside the grid in
+  //      the 1080×1350 canvas. Long body copy pushes the grid below
+  //      the fold and clips it. Rule (per Run 6 review): "It must never
+  //      clip. If it doesn't fit, drop the square grid or use a text
+  //      layout." 120 chars is roughly two Roboto-Light lines at the
+  //      D1 body size — leaves room for the grid above.
   const pct = title.match(/(\d+(?:\.\d+)?)\s*%/);
   if (pct) {
     const v = parseFloat(pct[1]!);
-    const filledCells = Math.max(1, Math.min(25, Math.round((v / 100) * 25)));
+    const filledCells = Math.min(25, Math.round((v / 100) * 25));
+    if (filledCells < 1) return null; // sub-2% — grid would inflate
+    if (body.length > 120) return null; // no room for both — text layout wins
     return {
       kind: 'grid',
       filledCells,
