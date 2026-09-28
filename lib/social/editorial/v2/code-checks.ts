@@ -41,8 +41,12 @@ export const LIMITS = {
   body: 220,
   bigNumber: 12,
   follow: 100,
-  captionMin: 400,
-  captionMax: 800,
+  /**
+   * Cap on the FULL published caption — Caption stage output PLUS the
+   * image-credit block that the publish pipeline appends. Includes the
+   * "Source:" line. No minimum.
+   */
+  captionMax: 2200,
   slideCountMin: 4,
   slideCountMax: 11,
 };
@@ -86,14 +90,14 @@ export function checkPost(post: ParsedPost, brief: Brief): CheckReport {
       kind: 'highlight_substring',
       target: 'cover',
       field: 'HIGHLIGHT',
-      message: `COVER HIGHLIGHT ("${coverHighlight}") is not an exact substring of the cover text. Rewrite the highlight so it matches a phrase in the cover verbatim, or edit the cover to include the highlight phrase word-for-word.`,
+      message: `COVER HIGHLIGHT ("${coverHighlight}") is not an exact substring of the cover text (${coverText.length} characters). Rewrite the highlight so it matches a phrase in the cover verbatim, or edit the cover to include the highlight phrase word-for-word.`,
     });
   }
   const coverImageError = checkImageRef(post.cover.image ?? '', brief);
   if (coverImageError) {
     errors.push({ kind: 'image_ref', target: 'cover', field: 'IMAGE', message: coverImageError });
   }
-  errors.push(...scanVoiceOnText('cover', 'TEXT', coverText, undefined));
+  errors.push(...scanVoiceOnText('cover', 'TEXT', coverText, undefined, LIMITS.cover));
 
   // ── Per-slide checks
   for (const slide of post.slides) {
@@ -128,12 +132,14 @@ export function checkPost(post: ParsedPost, brief: Brief): CheckReport {
     if (slide.highlight) {
       const hay = `${slide.headline ?? ''}\n${slide.body ?? ''}`;
       if (!hay.includes(slide.highlight)) {
+        const headlineLen = (slide.headline ?? '').length;
+        const bodyLen = (slide.body ?? '').length;
         errors.push({
           kind: 'highlight_substring',
           target: 'slide',
           slidePosition: slide.position,
           field: 'HIGHLIGHT',
-          message: `SLIDE ${slide.position} HIGHLIGHT ("${slide.highlight}") is not an exact substring of the slide's HEADLINE or BODY. Rewrite the highlight so it matches a phrase in the slide verbatim, or edit the slide to include the highlight phrase word-for-word.`,
+          message: `SLIDE ${slide.position} HIGHLIGHT ("${slide.highlight}") is not an exact substring of the slide's HEADLINE (${headlineLen} characters) or BODY (${bodyLen} characters). Rewrite the highlight so it matches a phrase in the slide verbatim, or edit the slide to include the highlight phrase word-for-word.`,
         });
       }
     }
@@ -141,8 +147,8 @@ export function checkPost(post: ParsedPost, brief: Brief): CheckReport {
       const err = checkImageRef(slide.image, brief);
       if (err) errors.push({ kind: 'image_ref', target: 'slide', slidePosition: slide.position, field: 'IMAGE', message: err });
     }
-    errors.push(...scanVoiceOnText('slide', 'HEADLINE', slide.headline ?? '', slide.position));
-    errors.push(...scanVoiceOnText('slide', 'BODY', slide.body ?? '', slide.position));
+    errors.push(...scanVoiceOnText('slide', 'HEADLINE', slide.headline ?? '', slide.position, LIMITS.headline));
+    errors.push(...scanVoiceOnText('slide', 'BODY', slide.body ?? '', slide.position, LIMITS.body));
   }
 
   // ── FOLLOW
@@ -154,51 +160,58 @@ export function checkPost(post: ParsedPost, brief: Brief): CheckReport {
       message: makeCharLimitMessage('FOLLOW TEXT', post.follow.length, LIMITS.follow),
     });
   }
-  errors.push(...scanVoiceOnText('follow', 'TEXT', post.follow, undefined));
+  errors.push(...scanVoiceOnText('follow', 'TEXT', post.follow, undefined, LIMITS.follow));
 
   return { ok: errors.length === 0, errors };
 }
 
-/** Caption checks — length ex-Source, no hashtags, banned phrases. */
-export function checkCaption(caption: string): CheckReport {
+/**
+ * Caption checks — single total cap on caption (Source line included) plus
+ * an estimate of the image credits the publish pipeline appends. Also:
+ * no hashtags, banned voice.
+ *
+ * @param caption The full text returned by the Caption stage, including
+ *   its "Source:" line.
+ * @param appendedCreditsChars Character count of the image-credit block
+ *   the publish pipeline will append. Estimate from the validated brief
+ *   images (over-including is safe). Pass 0 in unit tests when credits
+ *   aren't relevant.
+ */
+export function checkCaption(caption: string, appendedCreditsChars = 0): CheckReport {
   const errors: CheckError[] = [];
-  const sourceMatch = caption.match(/^(Source:.*)$/m);
-  const body = sourceMatch ? caption.slice(0, sourceMatch.index).trimEnd() : caption;
-  if (body.length < LIMITS.captionMin) {
-    const short = LIMITS.captionMin - body.length;
+  const total = caption.length + appendedCreditsChars;
+  if (total > LIMITS.captionMax) {
+    const over = total - LIMITS.captionMax;
     errors.push({
       kind: 'caption_length',
       target: 'caption',
-      message: `Caption is ${body.length} characters (excluding the "Source:" line). The minimum is ${LIMITS.captionMin}. Add at least ${short} characters (about ${estimateWords(short)} words) of substantive detail.`,
-    });
-  }
-  if (body.length > LIMITS.captionMax) {
-    const over = body.length - LIMITS.captionMax;
-    errors.push({
-      kind: 'caption_length',
-      target: 'caption',
-      message: `Caption is ${body.length} characters (excluding the "Source:" line). The limit is ${LIMITS.captionMax}. Cut at least ${over} characters (about ${estimateWords(over)} words).`,
+      message: `CAPTION (${caption.length} characters + ${appendedCreditsChars} appended image credits = ${total} total, limit ${LIMITS.captionMax}): cut at least ${over} characters (about ${estimateWords(over)} words) from the caption body.`,
     });
   }
   if (/#\w/.test(caption)) {
     errors.push({
       kind: 'caption_hashtag',
       target: 'caption',
-      message: 'Caption contains a hashtag. Remove every "#word" — Instagram hashtags are banned in Helios captions.',
+      message: `CAPTION (${caption.length} characters): contains a hashtag. Remove every "#word" — Instagram hashtags are banned in Helios captions.`,
     });
   }
-  errors.push(...scanVoiceOnText('caption', 'TEXT', body, undefined));
+  // Voice scan runs on the caption body (excluding "Source:") since the
+  // Source line is a code-inserted attribution and shouldn't trigger a
+  // false positive on outlet names or a colon.
+  const sourceMatch = caption.match(/^(Source:.*)$/m);
+  const body = sourceMatch ? caption.slice(0, sourceMatch.index).trimEnd() : caption;
+  errors.push(...scanVoiceOnText('caption', 'TEXT', body, undefined, LIMITS.captionMax));
   return { ok: errors.length === 0, errors };
 }
 
 /**
- * "SLIDE 7 BODY is 292 characters. The limit is 220. Cut at least 72
- * characters (about 12 words)." — one shape for every char-limit error so
- * the Editor sees an unambiguous, actionable instruction.
+ * "SLIDE 7 BODY (243 characters, limit 220): cut at least 23 characters
+ * (about 4 words)." — one shape for every char-limit error so the Editor
+ * sees the current length inline with the rule and a concrete cut target.
  */
 function makeCharLimitMessage(field: string, actual: number, limit: number): string {
   const over = actual - limit;
-  return `${field} is ${actual} characters. The limit is ${limit}. Cut at least ${over} characters (about ${estimateWords(over)} words).`;
+  return `${field} (${actual} characters, limit ${limit}): cut at least ${over} characters (about ${estimateWords(over)} words).`;
 }
 
 /** ~6 chars per word including spaces. Minimum 1. */
@@ -227,17 +240,14 @@ export function checkNumberTrace(
         if (haystack.includes(candidate)) { found = true; break; }
       }
       if (found) continue;
-      const location = target === 'slide' && slidePosition !== undefined
-        ? `SLIDE ${slidePosition} ${field ?? ''}`.trim()
-        : target === 'cover' ? 'COVER TEXT'
-        : target === 'follow' ? 'FOLLOW TEXT'
-        : 'CAPTION';
+      const label = labelFor(target, slidePosition, field);
+      const prefix = `${label} (${targetText.length} characters)`;
       errors.push({
         kind: 'number_trace',
         target,
         slidePosition,
         field,
-        message: `${location}: number "${raw}" does not appear in any fetched source. Either remove the number, replace it with one the sources actually state, or drop this slide.`,
+        message: `${prefix}: number "${raw}" does not appear in any fetched source. Either remove the number, replace it with one the sources actually state, or drop this slide.`,
       });
     }
   };
@@ -279,14 +289,11 @@ function scanVoiceOnText(
   field: string,
   text: string,
   slidePosition: number | undefined,
+  limit?: number,
 ): CheckError[] {
   const out: CheckError[] = [];
   if (!text) return out;
-  const location = target === 'slide' && slidePosition !== undefined
-    ? `SLIDE ${slidePosition} ${field ?? ''}`.trim()
-    : target === 'cover' ? 'COVER TEXT'
-    : target === 'follow' ? 'FOLLOW TEXT'
-    : 'CAPTION';
+  const prefix = fieldPrefix(target, slidePosition, field, text.length, limit);
   for (const rule of BANNED_ALWAYS) {
     const re = rule.kind === 'literal'
       ? new RegExp(rule.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'iu')
@@ -297,7 +304,7 @@ function scanVoiceOnText(
         target,
         slidePosition,
         field,
-        message: `${location}: contains banned ${rule.label}. Remove it (rewrite the phrase without it) — this construction is never allowed in Helios voice.`,
+        message: `${prefix}: contains banned ${rule.label}. Remove it (rewrite the phrase without it) — this construction is never allowed in Helios voice.`,
       });
     }
   }
@@ -309,12 +316,53 @@ function scanVoiceOnText(
         target,
         slidePosition,
         field,
-        message: `${location}: contains the judgment word "${word}". If it's the inflated marketing use, rewrite; if it's a genuine normal use (e.g. physical "space", a product legitimately "features" X), keep it and note the reason in EDIT NOTES.`,
+        message: `${prefix}: contains the judgment word "${word}". If it's the inflated marketing use, rewrite; if it's a genuine normal use (e.g. physical "space", a product legitimately "features" X), keep it and note the reason in EDIT NOTES.`,
         word,
       });
     }
   }
   return out;
+}
+
+/**
+ * Build the "SLIDE 7 BODY (243 characters, limit 220)" prefix that heads
+ * every field-scoped error message so the Editor sees the current length
+ * of every failing field alongside its rule violation.
+ */
+function fieldPrefix(
+  target: CheckError['target'],
+  slidePosition: number | undefined,
+  field: string | undefined,
+  actualChars: number,
+  limit?: number,
+): string {
+  const label = labelFor(target, slidePosition, field);
+  return limit !== undefined
+    ? `${label} (${actualChars} characters, limit ${limit})`
+    : `${label} (${actualChars} characters)`;
+}
+
+function labelFor(target: CheckError['target'], slidePosition?: number, field?: string): string {
+  if (target === 'slide' && slidePosition !== undefined) return `SLIDE ${slidePosition} ${field ?? ''}`.trim();
+  if (target === 'cover') return `COVER ${field ?? 'TEXT'}`.trim();
+  if (target === 'follow') return `FOLLOW ${field ?? 'TEXT'}`.trim();
+  return 'CAPTION';
+}
+
+/**
+ * Split errors into HARD (stop the run at the code-check gate) and SOFT
+ * (char_limit / highlight_substring — flag but let the pipeline continue
+ * to Fact-checker; if they survive the whole run, the post goes to human
+ * review at the end without rendering). Per handoff §Orchestration rules.
+ */
+export function partitionErrors(errors: CheckError[]): { hard: CheckError[]; soft: CheckError[] } {
+  const hard: CheckError[] = [];
+  const soft: CheckError[] = [];
+  for (const e of errors) {
+    if (e.kind === 'char_limit' || e.kind === 'highlight_substring') soft.push(e);
+    else hard.push(e);
+  }
+  return { hard, soft };
 }
 
 /**

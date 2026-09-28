@@ -86,26 +86,42 @@ describe('checkPost — char limits', () => {
     const r = checkPost(post, goodBrief);
     assert.ok(r.errors.some((e) => e.kind === 'char_limit' && e.target === 'follow'));
   });
-  test('char-limit message is explicit and actionable', () => {
+  test('char-limit message uses "SLIDE N BODY (X characters, limit Y): cut …" format', () => {
     const post = buildPost({ slides: [{ body: 'x'.repeat(292), highlight: 'x' }] });
     const r = checkPost(post, goodBrief);
     const err = r.errors.find((e) => e.kind === 'char_limit' && e.field === 'BODY');
     assert.ok(err);
-    // "SLIDE 2 BODY is 292 characters. The limit is 220. Cut at least 72 characters (about 12 words)."
-    assert.match(err!.message, /SLIDE 2 BODY is 292 characters/);
-    assert.match(err!.message, /limit is 220/);
-    assert.match(err!.message, /Cut at least 72 characters/);
+    // Exact user-facing format: SLIDE 2 BODY (292 characters, limit 220): cut at least 72 characters (about 12 words).
+    assert.match(err!.message, /^SLIDE 2 BODY \(292 characters, limit 220\)/);
+    assert.match(err!.message, /cut at least 72 characters/);
     assert.match(err!.message, /about 12 words/);
   });
-  test('caption over-length message is explicit and actionable', () => {
-    const caption = 'x'.repeat(892) + '\n\nSource: Bloomberg, 2026';
-    const r = checkCaption(caption);
+  test('caption over-length message uses length-inline format with total including credits', () => {
+    // 2100 chars caption + 200 chars credits = 2300 total > 2200 → over by 100.
+    const caption = 'x'.repeat(2100) + '\n\nSource: X';
+    const r = checkCaption(caption, 200);
     const err = r.errors.find((e) => e.kind === 'caption_length');
     assert.ok(err);
-    assert.match(err!.message, /Caption is 892 characters/);
-    assert.match(err!.message, /limit is 800/);
-    assert.match(err!.message, /Cut at least 92 characters/);
-    assert.match(err!.message, /about 15 words/);
+    assert.match(err!.message, /2111 characters \+ 200 appended image credits = 2311 total, limit 2200/);
+    assert.match(err!.message, /cut at least 111 characters/);
+  });
+  test('banned-voice errors on a slide include the field length prefix', () => {
+    // Slide with em dash — banned_always fires — message must show BODY length + limit.
+    const post = buildPost({ slides: [{ body: 'This — is banned.', highlight: 'This' }] });
+    const r = checkPost(post, goodBrief);
+    const err = r.errors.find((e) => e.kind === 'banned_always' && e.field === 'BODY');
+    assert.ok(err);
+    assert.match(err!.message, /^SLIDE 2 BODY \(\d+ characters, limit 220\)/);
+    assert.match(err!.message, /banned em dash/);
+  });
+  test('highlight_substring error shows HEADLINE and BODY lengths so the Editor can pick which to update', () => {
+    const post = buildPost({ slides: [{ headline: 'Some headline text.', body: 'Some body text of moderate length.', highlight: 'not present anywhere' }] });
+    const r = checkPost(post, goodBrief);
+    const err = r.errors.find((e) => e.kind === 'highlight_substring' && e.target === 'slide');
+    assert.ok(err);
+    assert.match(err!.message, /SLIDE 2 HIGHLIGHT/);
+    assert.match(err!.message, /HEADLINE \(19 characters\)/);
+    assert.match(err!.message, /BODY \(34 characters\)/);
   });
 });
 
@@ -146,6 +162,22 @@ describe('checkPost — banned voice', () => {
     const r = checkPost(post, goodBrief);
     assert.ok(r.errors.some((e) => e.kind === 'banned_always' && /double hyphen/.test(e.message)));
   });
+  test('does NOT flag single hyphens in normal hyphenated words', () => {
+    // Common tech-writing hyphens that must pass unchanged: compound modifiers,
+    // "AI-driven"-style constructions, ranges without an en dash, etc.
+    const post = buildPost({ slides: [{
+      body: 'The high-level architecture is AI-driven and open-source, spanning 2020-2026.',
+      highlight: 'high-level architecture',
+    }] });
+    const r = checkPost(post, goodBrief);
+    const dashErrors = r.errors.filter((e) => e.kind === 'banned_always' && /dash|hyphen/i.test(e.message));
+    assert.equal(dashErrors.length, 0, `single hyphens must never trigger a dash ban; got: ${dashErrors.map((e) => e.message).join(' | ')}`);
+  });
+  test('does NOT flag a single hyphen followed by a word (e.g., "-driven")', () => {
+    const post = buildPost({ slides: [{ body: 'The chart shows year-over-year growth.', highlight: 'year-over-year' }] });
+    const r = checkPost(post, goodBrief);
+    assert.equal(r.errors.filter((e) => e.kind === 'banned_always' && /dash|hyphen/i.test(e.message)).length, 0);
+  });
   test('flags "unprecedented" as banned_always (clear hype, no normal use in Helios voice)', () => {
     const post = buildPost({ slides: [{ body: 'The rise is unprecedented for the industry.', highlight: 'The rise' }] });
     const r = checkPost(post, goodBrief);
@@ -165,10 +197,26 @@ describe('checkPost — banned voice', () => {
 });
 
 describe('checkCaption', () => {
-  test('flags too-short caption ex-Source', () => {
+  test('no minimum: a very short caption passes the length check', () => {
     const caption = 'Short.\n\nSource: X, 2026';
     const r = checkCaption(caption);
-    assert.ok(r.errors.some((e) => e.kind === 'caption_length'));
+    // Old rule flagged this. New rule has no minimum.
+    assert.ok(!r.errors.some((e) => e.kind === 'caption_length'));
+  });
+  test('cap is 2200 total incl. Source + appended credits', () => {
+    // Caption text 2000 chars + "\n\nSource: X" (11 chars) = 2011.
+    // Credits estimate 300 → total 2311 > 2200 → over by 111.
+    const caption = 'x'.repeat(2000) + '\n\nSource: X';
+    const r = checkCaption(caption, 300);
+    const err = r.errors.find((e) => e.kind === 'caption_length');
+    assert.ok(err);
+    assert.match(err!.message, /2011 characters \+ 300 appended image credits = 2311 total, limit 2200/);
+    assert.match(err!.message, /cut at least 111 characters/);
+  });
+  test('a caption within cap passes even with credits added', () => {
+    const caption = 'x'.repeat(1800) + '\n\nSource: X';
+    const r = checkCaption(caption, 300); // total = 1811 + 300 = 2111 ≤ 2200
+    assert.ok(!r.errors.some((e) => e.kind === 'caption_length'));
   });
   test('flags hashtags', () => {
     const caption = ['Body paragraph. '.repeat(35), '#AI', 'Source: X, 2026'].join('\n');
