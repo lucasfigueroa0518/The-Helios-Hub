@@ -38,7 +38,13 @@ export type BannedRule = { kind: 'literal' | 'regex'; pattern: string; label: st
  * read as inflated marketing regardless of context.
  */
 export const BANNED_ALWAYS: BannedRule[] = [
-  { kind: 'regex', pattern: '[\\u2014\\u2013]', label: 'em/en dash' },
+  // Dash family. Split into explicit rules so error messages name the exact
+  // character. "--" (double ASCII hyphen) is included because it renders as
+  // two hyphens on Instagram and reads as an em dash the copy tried to
+  // sneak past the em-dash ban.
+  { kind: 'regex', pattern: '\\u2014', label: 'em dash (—)' },
+  { kind: 'regex', pattern: '\\u2013', label: 'en dash (–)' },
+  { kind: 'literal', pattern: '--', label: '"--" (double hyphen used as a dash)' },
   { kind: 'regex', pattern: '!', label: 'exclamation mark' },
   {
     kind: 'regex',
