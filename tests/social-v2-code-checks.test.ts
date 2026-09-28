@@ -73,6 +73,41 @@ describe('checkPost — slide count', () => {
     const r = checkPost(post, goodBrief);
     assert.ok(r.errors.some((e) => e.kind === 'slide_count'), 'should flag slide_count');
   });
+
+  test('boundary: exactly 4 slides (cover + 2 beats + follow) passes', () => {
+    const slides = [
+      { body: 'Body one.', highlight: 'Body one' },
+      { body: 'Body two.', highlight: 'Body two' },
+    ];
+    const post = buildPost({ slides });
+    // 1 cover + 2 beats + 1 follow = 4. Under limit.
+    const r = checkPost(post, goodBrief);
+    assert.ok(!r.errors.some((e) => e.kind === 'slide_count'), 'exactly 4 must pass');
+  });
+
+  test('boundary: exactly 11 slides (cover + 9 beats + follow) passes', () => {
+    const slides = Array.from({ length: 9 }).map((_, i) => ({ body: `Body ${i}.`, highlight: `Body ${i}` }));
+    const post = buildPost({ slides });
+    // 1 cover + 9 beats + 1 follow = 11. At limit.
+    const r = checkPost(post, goodBrief);
+    assert.ok(!r.errors.some((e) => e.kind === 'slide_count'), 'exactly 11 must pass');
+  });
+
+  test('boundary: 12 slides (cover + 10 beats + follow) fails', () => {
+    const slides = Array.from({ length: 10 }).map((_, i) => ({ body: `Body ${i}.`, highlight: `Body ${i}` }));
+    const post = buildPost({ slides });
+    // 1 cover + 10 beats + 1 follow = 12. Over limit.
+    const r = checkPost(post, goodBrief);
+    assert.ok(r.errors.some((e) => e.kind === 'slide_count'), 'exactly 12 must fail');
+  });
+
+  test('boundary: 3 slides (cover + 1 beat + follow) fails', () => {
+    const slides = [{ body: 'Body one.', highlight: 'Body one' }];
+    const post = buildPost({ slides });
+    // 1 cover + 1 beat + 1 follow = 3. Under min.
+    const r = checkPost(post, goodBrief);
+    assert.ok(r.errors.some((e) => e.kind === 'slide_count'), '3 must fail');
+  });
 });
 
 describe('checkPost — char limits', () => {
@@ -96,6 +131,9 @@ describe('checkPost — char limits', () => {
     assert.match(err!.message, /^SLIDE 2 BODY \(292 characters, limit 220\)/);
     assert.match(err!.message, /cut at least 72 characters/);
     assert.match(err!.message, /about 12 words/);
+    // Runs 3-4 showed the Editor was rewording sentences and inching down
+    // a few chars per pass. The message tells it to cut whole clauses.
+    assert.match(err!.message, /Cut a whole clause or sentence rather than rewording\./);
   });
   test('caption over-length message uses length-inline format with total including credits', () => {
     // 2100 chars caption + 200 chars credits = 2300 total > 2200 → over by 100.
@@ -105,6 +143,7 @@ describe('checkPost — char limits', () => {
     assert.ok(err);
     assert.match(err!.message, /2111 characters \+ 200 appended image credits = 2311 total, limit 2200/);
     assert.match(err!.message, /cut at least 111 characters/);
+    assert.match(err!.message, /Cut a whole clause or sentence rather than rewording\./);
   });
   test('banned-voice errors on a slide include the field length prefix', () => {
     // Slide with em dash — banned_always fires — message must show BODY length + limit.

@@ -185,7 +185,7 @@ export function checkCaption(caption: string, appendedCreditsChars = 0): CheckRe
     errors.push({
       kind: 'caption_length',
       target: 'caption',
-      message: `CAPTION (${caption.length} characters + ${appendedCreditsChars} appended image credits = ${total} total, limit ${LIMITS.captionMax}): cut at least ${over} characters (about ${estimateWords(over)} words) from the caption body.`,
+      message: `CAPTION (${caption.length} characters + ${appendedCreditsChars} appended image credits = ${total} total, limit ${LIMITS.captionMax}): cut at least ${over} characters (about ${estimateWords(over)} words) from the caption body. Cut a whole clause or sentence rather than rewording.`,
     });
   }
   if (/#\w/.test(caption)) {
@@ -206,12 +206,17 @@ export function checkCaption(caption: string, appendedCreditsChars = 0): CheckRe
 
 /**
  * "SLIDE 7 BODY (243 characters, limit 220): cut at least 23 characters
- * (about 4 words)." — one shape for every char-limit error so the Editor
- * sees the current length inline with the rule and a concrete cut target.
+ * (about 4 words). Cut a whole clause or sentence rather than rewording."
+ * — one shape for every char-limit error so the Editor sees the current
+ * length inline with the rule, a concrete cut target, and a strategy hint.
+ * The "cut a whole clause" instruction is there because runs 3-4 showed
+ * the Editor was rewording sentences slightly and inching down by a few
+ * characters per pass; dropping a clause outright hits the target in
+ * one pass.
  */
 function makeCharLimitMessage(field: string, actual: number, limit: number): string {
   const over = actual - limit;
-  return `${field} (${actual} characters, limit ${limit}): cut at least ${over} characters (about ${estimateWords(over)} words).`;
+  return `${field} (${actual} characters, limit ${limit}): cut at least ${over} characters (about ${estimateWords(over)} words). Cut a whole clause or sentence rather than rewording.`;
 }
 
 /** ~6 chars per word including spaces. Minimum 1. */
