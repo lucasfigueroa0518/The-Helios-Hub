@@ -23,12 +23,14 @@ import { runReporter as defaultRunReporter, type ReporterInput, type ReporterOut
 import { runWriter as defaultRunWriter, type WriterInput, type WriterOutput, type FetchedSource } from './writer';
 import { fetchPage as defaultFetchPage, type FetchPageResult } from './tools/fetch-page';
 import type {
+  Brief,
   FactCheckFlag,
   FactCheckResult,
   ParsedPost,
 } from './parse';
 import { persistDebugAndCompose as defaultPersistDebugAndCompose } from './log';
 import type { PipelineV2Debug, StageUsage } from './log';
+import { rewriteBriefWithValidatedImages, validateBriefImages as defaultValidateBriefImages, type ValidationResult } from './validate-images';
 
 /**
  * Dependency-injection surface. Real usage takes the defaults; unit tests
@@ -41,6 +43,7 @@ export type OrchestrateDeps = {
   runCaption: (input: CaptionInput) => Promise<CaptionOutput>;
   runFactChecker: (input: FactCheckerInput) => Promise<FactCheckerOutput>;
   fetchPage: (url: string) => Promise<FetchPageResult>;
+  validateBriefImages: (brief: Brief) => Promise<ValidationResult>;
   persistDebugAndCompose: typeof defaultPersistDebugAndCompose;
 };
 
@@ -51,6 +54,7 @@ const defaultDeps: OrchestrateDeps = {
   runCaption: defaultRunCaption,
   runFactChecker: defaultRunFactChecker,
   fetchPage: defaultFetchPage,
+  validateBriefImages: defaultValidateBriefImages,
   persistDebugAndCompose: defaultPersistDebugAndCompose,
 };
 
@@ -86,6 +90,14 @@ export type OrchestrateResult = {
 
 const DEFAULT_MAX_COST_USD = Number(process.env.HELIOS_V2_MAX_COST_USD ?? '1.5');
 const MAX_FACT_CHECK_ROUNDS = 3;
+/**
+ * Per-stage repair budget inside one round. Handoff §Orchestration rules
+ * — code-check failures give the Editor (for slides) and the Caption stage
+ * up to this many tries per round; still-failing = bail to human review.
+ * Doubled from the original 1 after the second live Bloomberg run showed
+ * Sonnet often needed a second pass to actually hit the character targets.
+ */
+const MAX_REPAIRS_PER_STAGE_PER_ROUND = 2;
 
 export async function runCreatorPipeline(
   row: OrchestrateRow,
@@ -167,13 +179,43 @@ export async function runCreatorPipeline(
     return bailToHumanReview('no SOURCES could be fetched');
   }
 
+  // ── 2b. Validate brief images before Writer sees them ────────────────
+  // HEAD each Link to confirm it returns an image/*; drop entries whose
+  // Credit reads as an instruction ("check the source", "TBD"). Downstream
+  // stages get a brief where dropped images are gone and, if none survive,
+  // the IMAGES section reads "None found".
+  const imageValidation = await deps.validateBriefImages(reporterResult.brief);
+  debug.imageValidation = {
+    kept: imageValidation.valid.map((img) => ({
+      number: img.number,
+      link: img.link,
+      credit: img.credit,
+    })),
+    dropped: imageValidation.dropped.map((d) => ({
+      number: d.image.number,
+      link: d.image.link,
+      credit: d.image.credit,
+      reason: d.reason,
+    })),
+  };
+
+  // finalBrief / finalBriefRaw — the ONLY brief that reaches Writer, Editor,
+  // Caption, Fact-checker. sanitizedBriefRaw has SINGLE STORY collapsed to
+  // yes/no (no sibling-story leak), and rewriteBriefWithValidatedImages
+  // renders IMAGES from the validated set (or "None found").
+  const finalBrief: Brief = { ...reporterResult.brief, images: imageValidation.valid };
+  const finalBriefRaw = rewriteBriefWithValidatedImages(
+    reporterResult.sanitizedBriefRaw,
+    imageValidation.valid,
+  );
+
   // ── 3. Writer — first pass, OR reviewer-notes rerun ────────────────
   let writerRaw: string;
   let writerPost: ParsedPost;
   if (opts.reviewerNotes && opts.previousEditedPostRaw) {
     const w = await deps.runWriter({
-      brief: reporterResult.brief,
-      briefRaw: reporterResult.briefRaw,
+      brief: finalBrief,
+      briefRaw: finalBriefRaw,
       sourceTexts,
       previousPost: opts.previousEditedPostRaw,
       reviewerNotes: opts.reviewerNotes,
@@ -185,8 +227,8 @@ export async function runCreatorPipeline(
     debug.draft = { post: w.post, raw: w.raw, usage: w.usage };
   } else {
     const w = await deps.runWriter({
-      brief: reporterResult.brief,
-      briefRaw: reporterResult.briefRaw,
+      brief: finalBrief,
+      briefRaw: finalBriefRaw,
       sourceTexts,
     });
     writerRaw = w.raw;
@@ -202,8 +244,8 @@ export async function runCreatorPipeline(
   let editorPost: ParsedPost;
   {
     const e = await deps.runEditor({
-      brief: reporterResult.brief,
-      briefRaw: reporterResult.briefRaw,
+      brief: finalBrief,
+      briefRaw: finalBriefRaw,
       sourceTexts,
       post: writerRaw,
     });
@@ -220,8 +262,8 @@ export async function runCreatorPipeline(
   let captionText: string;
   {
     const c = await deps.runCaption({
-      brief: reporterResult.brief,
-      briefRaw: reporterResult.briefRaw,
+      brief: finalBrief,
+      briefRaw: finalBriefRaw,
       slides: editorRaw,
     });
     captionRaw = c.raw;
@@ -240,54 +282,77 @@ export async function runCreatorPipeline(
     round++;
     if (overCap()) return bailToHumanReview(`cost cap reached during round ${round}`);
 
-    // 6a. Code checks on slides and caption + number-trace.
-    const slideCheck = checkPost(editorPost, reporterResult.brief);
-    const captionCheck = checkCaption(captionText);
-    const numberCheck = checkNumberTrace(editorPost, captionText, sourceTexts.map((s) => s.text));
+    // 6a. Compute initial code-check errors, split into slide vs caption.
+    const computeErrors = () => {
+      const slideCheck = checkPost(editorPost, finalBrief);
+      const captionCheck = checkCaption(captionText);
+      const numberCheck = checkNumberTrace(editorPost, captionText, sourceTexts.map((s) => s.text));
+      return {
+        slideErrors: [...slideCheck.errors, ...numberCheck.errors.filter((e) => e.target !== 'caption')],
+        captionErrors: [...captionCheck.errors, ...numberCheck.errors.filter((e) => e.target === 'caption')],
+      };
+    };
+    let { slideErrors, captionErrors } = computeErrors();
 
-    const slideErrors = [...slideCheck.errors, ...numberCheck.errors.filter((e) => e.target !== 'caption')];
-    const captionErrors = [...captionCheck.errors, ...numberCheck.errors.filter((e) => e.target === 'caption')];
-
-    // 6a.i Slide-level repair (one try per round).
-    if (slideErrors.length > 0) {
+    // 6a.i Slide-level repair — up to MAX_REPAIRS_PER_STAGE_PER_ROUND tries.
+    for (
+      let slideAttempt = 1;
+      slideErrors.length > 0 && slideAttempt <= MAX_REPAIRS_PER_STAGE_PER_ROUND;
+      slideAttempt++
+    ) {
       const eRetry = await deps.runEditor({
-        brief: reporterResult.brief,
-        briefRaw: reporterResult.briefRaw,
+        brief: finalBrief,
+        briefRaw: finalBriefRaw,
         sourceTexts,
         post: editorRaw,
         checkErrors: slideErrors,
       });
       addCost(eRetry.usage);
-      stagesRun.push(`editor(check-errors r${round})`);
-      debug.repairs.push({ round, stage: 'editor', reason: `${slideErrors.length} slide check error(s)`, usage: eRetry.usage });
+      stagesRun.push(`editor(check-errors r${round}.${slideAttempt})`);
+      debug.repairs.push({
+        round,
+        stage: 'editor',
+        reason: `${slideErrors.length} slide error(s), try ${slideAttempt}/${MAX_REPAIRS_PER_STAGE_PER_ROUND}`,
+        usage: eRetry.usage,
+      });
       editorRaw = eRetry.raw;
       editorPost = eRetry.post;
       if (overCap()) return bailToHumanReview(`cost cap reached during round ${round} slide repair`);
+      ({ slideErrors, captionErrors } = computeErrors());
     }
-    // 6a.ii Caption-level repair (one try per round).
-    if (captionErrors.length > 0) {
+
+    // 6a.ii Caption-level repair — up to MAX_REPAIRS_PER_STAGE_PER_ROUND tries.
+    for (
+      let captionAttempt = 1;
+      captionErrors.length > 0 && captionAttempt <= MAX_REPAIRS_PER_STAGE_PER_ROUND;
+      captionAttempt++
+    ) {
       const cRetry = await deps.runCaption({
-        brief: reporterResult.brief,
-        briefRaw: reporterResult.briefRaw,
+        brief: finalBrief,
+        briefRaw: finalBriefRaw,
         slides: editorRaw,
         previousCaption: captionRaw,
         checkErrors: captionErrors,
       });
       addCost(cRetry.usage);
-      stagesRun.push(`caption(fix-notes r${round})`);
-      debug.repairs.push({ round, stage: 'caption', reason: `${captionErrors.length} caption check error(s)`, usage: cRetry.usage });
+      stagesRun.push(`caption(fix-notes r${round}.${captionAttempt})`);
+      debug.repairs.push({
+        round,
+        stage: 'caption',
+        reason: `${captionErrors.length} caption error(s), try ${captionAttempt}/${MAX_REPAIRS_PER_STAGE_PER_ROUND}`,
+        usage: cRetry.usage,
+      });
       captionRaw = cRetry.raw;
       captionText = cRetry.caption;
       if (overCap()) return bailToHumanReview(`cost cap reached during round ${round} caption repair`);
+      ({ slideErrors, captionErrors } = computeErrors());
     }
-    // 6a.iii Re-run code checks after the repairs. Any error that survives
-    // means the repair try failed → this run is done, bail to human review.
-    if (slideErrors.length > 0 || captionErrors.length > 0) {
-      const slideRecheck = checkPost(editorPost, reporterResult.brief);
-      const captionRecheck = checkCaption(captionText);
-      const numberRecheck = checkNumberTrace(editorPost, captionText, sourceTexts.map((s) => s.text));
-      const stillSlide = [...slideRecheck.errors, ...numberRecheck.errors.filter((e) => e.target !== 'caption')];
-      const stillCaption = [...captionRecheck.errors, ...numberRecheck.errors.filter((e) => e.target === 'caption')];
+
+    // 6a.iii Final code check: any error that survives every repair try
+    // means the round failed — bail to human review.
+    {
+      const stillSlide = slideErrors;
+      const stillCaption = captionErrors;
       if (stillSlide.length > 0 || stillCaption.length > 0) {
         // Record the failed pre-fact-check state before bailing.
         debug.rounds.push({
@@ -304,14 +369,16 @@ export async function runCreatorPipeline(
           factCheckRaw: '(skipped — persistent code-check failures)',
           usage: emptyUsage(),
         });
-        return bailToHumanReview(`code checks failed after repair try in round ${round}`);
+        return bailToHumanReview(
+          `code checks failed after ${MAX_REPAIRS_PER_STAGE_PER_ROUND} tries per stage in round ${round}`,
+        );
       }
     }
 
     // 6b. Fact-checker.
     const fc = await deps.runFactChecker({
-      brief: reporterResult.brief,
-      briefRaw: reporterResult.briefRaw,
+      brief: finalBrief,
+      briefRaw: finalBriefRaw,
       sourceTexts,
       post: editorRaw,
       caption: captionText,
@@ -342,8 +409,8 @@ export async function runCreatorPipeline(
     if (hasBig) {
       // Any BIG → Writer with PREVIOUS POST + every flag.
       const w = await deps.runWriter({
-        brief: reporterResult.brief,
-        briefRaw: reporterResult.briefRaw,
+        brief: finalBrief,
+        briefRaw: finalBriefRaw,
         sourceTexts,
         previousPost: editorRaw,
         factCheckFlags: fc.result.flags,
@@ -356,8 +423,8 @@ export async function runCreatorPipeline(
       if (overCap()) return bailToHumanReview(`cost cap reached during round ${round} Writer rerun`);
       // Rerun Editor + Caption on the new draft.
       const e = await deps.runEditor({
-        brief: reporterResult.brief,
-        briefRaw: reporterResult.briefRaw,
+        brief: finalBrief,
+        briefRaw: finalBriefRaw,
         sourceTexts,
         post: writerRaw,
       });
@@ -367,8 +434,8 @@ export async function runCreatorPipeline(
       editorPost = e.post;
       if (overCap()) return bailToHumanReview(`cost cap reached during round ${round} Editor rerun`);
       const c = await deps.runCaption({
-        brief: reporterResult.brief,
-        briefRaw: reporterResult.briefRaw,
+        brief: finalBrief,
+        briefRaw: finalBriefRaw,
         slides: editorRaw,
       });
       addCost(c.usage);
@@ -381,8 +448,8 @@ export async function runCreatorPipeline(
       const captionFlags = fc.result.flags.filter(isCaptionFlag);
       if (slideFlags.length > 0) {
         const e = await deps.runEditor({
-          brief: reporterResult.brief,
-          briefRaw: reporterResult.briefRaw,
+          brief: finalBrief,
+          briefRaw: finalBriefRaw,
           sourceTexts,
           post: editorRaw,
           factCheckFlags: slideFlags,
@@ -396,8 +463,8 @@ export async function runCreatorPipeline(
       }
       if (captionFlags.length > 0) {
         const c = await deps.runCaption({
-          brief: reporterResult.brief,
-          briefRaw: reporterResult.briefRaw,
+          brief: finalBrief,
+          briefRaw: finalBriefRaw,
           slides: editorRaw,
           previousCaption: captionRaw,
           factCheckFlags: captionFlags,
@@ -419,7 +486,7 @@ export async function runCreatorPipeline(
   const publishedIso = toIso(row.published_at);
   const dayStamp = Math.floor(Date.now() / 86_400_000) - 20_000;
   const post = adaptToPost({
-    brief: reporterResult.brief,
+    brief: finalBrief,
     post: editorPost,
     caption: captionText,
     articlePublishedAt: publishedIso,

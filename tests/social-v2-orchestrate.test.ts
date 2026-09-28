@@ -98,6 +98,7 @@ function buildDeps(override: Partial<OrchestrateDeps> = {}): OrchestrateDeps {
     runReporter: async () => ({
       brief: parseBrief(BRIEF_RAW),
       briefRaw: BRIEF_RAW,
+      sanitizedBriefRaw: BRIEF_RAW,
       fetchedUrls: ['https://bloomberg.example.com/anthropic-claude-rd'],
       stopReasons: ['end_turn'],
       usage: stageUsage(0.1),
@@ -111,6 +112,10 @@ function buildDeps(override: Partial<OrchestrateDeps> = {}): OrchestrateDeps {
       usage: stageUsage(0.05),
     }),
     fetchPage: async (url: string) => ({ ok: true, url, resolvedUrl: url, title: 'Anthropic R&D', byline: null, text: SOURCE_TEXT }),
+    // Test stub: skip real HEAD requests. Accept every brief image as valid
+    // so the pipeline can run end-to-end offline. Individual tests can pass
+    // a validateBriefImages override to exercise the drop path.
+    validateBriefImages: async (brief) => ({ valid: brief.images, dropped: [] }),
     persistDebugAndCompose: async () => { /* no-op — never write to real DB in tests */ },
     ...override,
   };
@@ -136,6 +141,7 @@ describe('runCreatorPipeline — cost cap', () => {
         runReporter: async () => ({
           brief: parseBrief(BRIEF_RAW),
           briefRaw: BRIEF_RAW,
+          sanitizedBriefRaw: BRIEF_RAW,
           fetchedUrls: [],
           stopReasons: ['end_turn'],
           usage: stageUsage(5.0),
@@ -239,6 +245,42 @@ describe('runCreatorPipeline — fact-check FLAGGED loop', () => {
     assert.equal(result.status, 'shipped');
     assert.equal(writerCallCount, 1); // NOT rerun — only SMALL caption flag
     assert.ok(captionCallCount >= 2); // initial + fact-check rerun
+  });
+});
+
+describe('runCreatorPipeline — code-check repair budget', () => {
+  test('gives the Editor two tries per round for slide errors, then bails', async () => {
+    // First-pass Editor produces a body over 220; every retry still fails.
+    // Expect exactly two editor(check-errors r1.*) repair entries in the
+    // debug transcript before the pipeline bails to needs_human_review.
+    let editorCall = 0;
+    let capturedRepairs: Array<{ stage: string; reason: string }> = [];
+    const overCap = parseEditedPost(EDITED_RAW);
+    // Mutate the first slide to be over 220 chars so checkPost keeps failing.
+    (overCap.slides[0]!).body = 'x'.repeat(292);
+
+    const result = await runCreatorPipeline(
+      ROW,
+      {},
+      buildDeps({
+        runEditor: async () => {
+          editorCall++;
+          // Every editor call returns the same over-limit post.
+          return { post: overCap, raw: EDITED_RAW, editNotes: null, usage: stageUsage(0.05) };
+        },
+        persistDebugAndCompose: async (_id, debug) => {
+          capturedRepairs = debug.repairs.map((r) => ({ stage: r.stage, reason: r.reason }));
+        },
+      }),
+    );
+    assert.equal(result.status, 'needs_human_review');
+    // 1 initial editor + 2 repair tries = 3 total editor calls.
+    assert.equal(editorCall, 3);
+    // Two repair entries in the debug transcript, both for editor.
+    const editorRepairs = capturedRepairs.filter((r) => r.stage === 'editor');
+    assert.equal(editorRepairs.length, 2);
+    assert.match(editorRepairs[0]!.reason, /try 1\/2/);
+    assert.match(editorRepairs[1]!.reason, /try 2\/2/);
   });
 });
 

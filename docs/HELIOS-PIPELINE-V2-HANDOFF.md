@@ -189,7 +189,7 @@ When the verdict is FLAGGED, route the flags like this:
 **On a code-check failure:**
 - **Slide failure:** send the Editor its last version plus the errors as CHECK ERRORS.
 - **Caption failure:** rerun the Caption step with PREVIOUS CAPTION and the errors as FIX NOTES.
-- **Limit:** each gets one try per round. A failure that remains goes to human review. Never fix a failure by silently truncating text.
+- **Limit:** each gets up to two tries per round. A failure that remains after both tries goes to human review. Never fix a failure by silently truncating text.
 
 **Shared voice block.** The Writer, Editor and Caption prompts use the same voice rules. Store them **once** and insert them into all three at build time, so the copies can't drift apart.
 - Use the Writer's "## Voice" section in the appendix as the canonical block.
