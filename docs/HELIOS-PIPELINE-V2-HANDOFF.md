@@ -170,7 +170,7 @@ When the verdict is FLAGGED, route the flags like this:
    - **Caption flags:** rerun the Caption step with the old caption as PREVIOUS CAPTION and those flags as FIX NOTES.
    - If both kinds exist, do both. Then run code checks and the Fact-checker again.
 
-**Round limit: 3 fact-check rounds in total** (the first check plus two fix rounds). If the third round still returns FLAGGED, stop and queue the post for human review, with all flags attached.
+**Round limit: 2 fact-check rounds in total** (the first check plus one fix round). If the second round still returns FLAGGED, stop and queue the post for human review, with every open flag attached — WHERE, TEXT, PROBLEM, SOURCES SAY. Lowered from 3 → 2 after live runs showed Writer/Editor/Caption often introduce new fabrications when asked to rewrite; a shorter loop pushes those cases to human review before more drift accumulates.
 
 ## Orchestration rules
 
@@ -241,7 +241,7 @@ Run the pipeline on the story that caused this rewrite. Input: the Bloomberg Tec
 
 Also run two negative tests:
 - **Before the Fact-checker,** insert the sentence "SoftBank is betting on the same loop with $21 billion." into a slide. The Fact-checker must flag it, the fix loop must remove it, and the post must not ship with it.
-- **Force every Fact-checker round to return FLAGGED.** The post must go to human review after the third round.
+- **Force every Fact-checker round to return FLAGGED.** The post must go to human review after the second round.
 
 ## Not in scope
 
@@ -306,7 +306,7 @@ You receive two things:
 - BRIEF: the reporter's notes. It has a one-line summary of the story's 5 Ws, a full account of what's going on (the key facts, the people and companies involved, and how they connect), plain-language descriptions of the terms in the story (under TERMS), a list of images, and a list of sources.
 - SOURCES: the articles the reporter used. Use them to check exact wording, numbers and quotes.
 
-Sometimes you'll also receive a PREVIOUS POST and FACT-CHECK FLAGS: every problem the fact-checker found, big and small, each with what the sources actually say. Rewrite the post so every flag is fixed and none of those problems come back, keep everything else that works, and return the full post in the same format.
+Sometimes you'll also receive a PREVIOUS POST and FACT-CHECK FLAGS: every problem the fact-checker found, big and small, each with what the sources actually say. Fix only what was flagged, and keep every other slide and line exactly as it was. Return the full post in the same format. Fix a flag by cutting the claim or using the sources' own wording. Don't add new details, even small ones.
 
 Sometimes you'll receive REVIEWER NOTES from a human editor, along with the PREVIOUS POST. Follow them, but facts still come only from the brief and the sources.
 
@@ -417,7 +417,7 @@ Sometimes you'll be sent back with one of these:
 - CHECK ERRORS: problems automated checks found in your last version, like a line over its length limit or a highlight that isn't in its slide's text. A banned word can also show up here. If it's the banned use, rewrite it. If it's a normal use, like a product's "features," keep it and say so in EDIT NOTES.
 - FACT-CHECK FLAGS: small problems the fact-checker found, each with what the sources actually say. Fix each one to match the sources.
 
-When you're sent back, fix exactly what you were given, update any highlight your fix affects, change nothing else, and return the full post again.
+When you're sent back, fix exactly what you were given, update any highlight your fix affects, change nothing else, and return the full post again. Fix a flag by cutting the claim or using the sources' own wording. Don't add new details, even small ones.
 
 ## What to check
 
@@ -495,7 +495,7 @@ Inputs:
 - SLIDES: the final slide copy.
 - BRIEF: the reporter's notes, including the TERMS and SOURCES lists.
 
-Sometimes you'll also receive your PREVIOUS CAPTION and FIX NOTES: problems the fact-checker or automated checks found, with what the sources actually say. Fix exactly those, keep everything else, and return the full caption.
+Sometimes you'll also receive your PREVIOUS CAPTION and FIX NOTES: problems the fact-checker or automated checks found, with what the sources actually say. Fix exactly those, keep everything else, and return the full caption. Fix a flag by cutting the claim or using the sources' own wording. Don't add new details, even small ones.
 
 ## The summary
 

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { describe } from 'node:test';
 
-import { runCreatorPipeline, type OrchestrateDeps } from '@/lib/social/editorial/v2/orchestrate';
+import { injectIntoSlide3Body, runCreatorPipeline, type OrchestrateDeps } from '@/lib/social/editorial/v2/orchestrate';
 import type { FactCheckerOutput } from '@/lib/social/editorial/v2/fact-checker';
 import { parseBrief, parseEditedPost } from '@/lib/social/editorial/v2/parse';
 
@@ -199,13 +199,18 @@ describe('runCreatorPipeline — fact-check FLAGGED loop', () => {
     assert.equal(writerCallCount, 2);
   });
 
-  test('all 3 rounds FLAGGED → needs_human_review', async () => {
+  test('all rounds FLAGGED → needs_human_review, reason lists every open flag with WHERE/TEXT/PROBLEM/SOURCES SAY', async () => {
+    // Round limit is now 2 (initial check + 1 fix round). After 2, bail.
+    const openFlags = [
+      { where: 'SLIDE 3 / BODY', text: 'invented claim', problem: 'not in sources', sourcesSay: 'Nothing', size: 'SMALL' as const },
+      { where: 'CAPTION / TEXT', text: 'independent nonprofit', problem: 'descriptor not sourced', sourcesSay: 'Sources describe Epoch AI only as developer of the scale.', size: 'SMALL' as const },
+    ];
     const result = await runCreatorPipeline(
       ROW,
       {},
       buildDeps({
         runFactChecker: async (): Promise<FactCheckerOutput> => ({
-          result: { verdict: 'FLAGGED', flags: [{ where: 'SLIDE 3 / BODY', text: 'x', problem: 'p', sourcesSay: 's', size: 'SMALL' }] },
+          result: { verdict: 'FLAGGED', flags: openFlags },
           raw: 'VERDICT: FLAGGED',
           stopReasons: ["end_turn"],
           usage: stageUsage(0.05),
@@ -213,7 +218,16 @@ describe('runCreatorPipeline — fact-check FLAGGED loop', () => {
       }),
     );
     assert.equal(result.status, 'needs_human_review');
-    assert.match(result.reason ?? '', /3 rounds/);
+    // Reason names the round count correctly and enumerates every flag.
+    assert.match(result.reason ?? '', /after 2 rounds/);
+    assert.match(result.reason ?? '', /2 open flag\(s\)/);
+    // Each flag's WHERE, TEXT, PROBLEM, SOURCES SAY appears in the reason.
+    assert.match(result.reason ?? '', /SLIDE 3 \/ BODY/);
+    assert.match(result.reason ?? '', /TEXT: invented claim/);
+    assert.match(result.reason ?? '', /PROBLEM: not in sources/);
+    assert.match(result.reason ?? '', /SOURCES SAY: Nothing/);
+    assert.match(result.reason ?? '', /CAPTION \/ TEXT/);
+    assert.match(result.reason ?? '', /TEXT: independent nonprofit/);
   });
 
   test('SMALL caption flag → Caption rerun (not Writer)', async () => {
@@ -377,6 +391,87 @@ describe('runCreatorPipeline — substantive-source filter for the Caption', () 
     // gate proceed. Assert status is either shipped or needs_human_review
     // (soft errors possible from other fixture bits) but NOT failed.
     assert.notEqual(result.status, 'failed');
+  });
+});
+
+describe('injectIntoSlide3Body', () => {
+  const raw = `COVER: A cover.
+COVER HIGHLIGHT: cover
+COVER IMAGE: type only
+
+SLIDE 2
+HEADLINE: h2
+BODY: original body 2
+HIGHLIGHT: original
+IMAGE: type only
+
+SLIDE 3
+HEADLINE: h3
+BODY: original body 3.
+HIGHLIGHT: original
+IMAGE: type only
+
+SLIDE 4
+BODY: original body 4.
+
+FOLLOW: follow.
+
+EDIT NOTES:
+None`;
+
+  test('appends the sentence to SLIDE 3 BODY, leaves SLIDE 2 + SLIDE 4 untouched', () => {
+    const out = injectIntoSlide3Body(raw, 'SoftBank is betting on the same loop with $21 billion.');
+    // SLIDE 3 body must now include the injection.
+    assert.match(out, /SLIDE 3\nHEADLINE: h3\nBODY: original body 3\. SoftBank is betting on the same loop with \$21 billion\.\n/);
+    // SLIDE 2 body must stay original.
+    assert.match(out, /SLIDE 2\nHEADLINE: h2\nBODY: original body 2\n/);
+    // SLIDE 4 body must stay original.
+    assert.match(out, /SLIDE 4\nBODY: original body 4\./);
+  });
+
+  test('no-op when SLIDE 3 is missing', () => {
+    const noSlide3 = `COVER: x\nCOVER HIGHLIGHT: x\nCOVER IMAGE: type only\n\nSLIDE 2\nBODY: b.\n\nFOLLOW: f.\n\nEDIT NOTES:\nNone`;
+    assert.equal(injectIntoSlide3Body(noSlide3, 'anything'), noSlide3);
+  });
+});
+
+describe('runCreatorPipeline — --inject option', () => {
+  test('injection lands in the POST the Fact-checker sees on round 1', async () => {
+    // The canonical negative-test sentence contains "$21 billion" — a
+    // number that would trigger number_trace (a HARD code check) and bail
+    // BEFORE fact-check runs. That's actually the correct pipeline
+    // behavior for a live run (fabrications get caught either by
+    // number_trace OR the Fact-checker). For this UNIT test though we
+    // want to verify the Fact-checker sees the injection — stub sources
+    // to include "$21 billion" so number_trace passes.
+    let fcPostSeen = '';
+    await runCreatorPipeline(
+      ROW,
+      { injectSentence: 'SoftBank is betting on the same loop with $21 billion.' },
+      buildDeps({
+        fetchPage: async (url: string) => ({
+          ok: true,
+          url,
+          resolvedUrl: url,
+          title: 't',
+          byline: null,
+          // Add "$21 billion" and "SoftBank" so number_trace passes.
+          text: `${SOURCE_TEXT} Separately, SoftBank raised $21 billion this quarter.`,
+        }),
+        runEditor: async (input) => ({
+          post: parseEditedPost(input.post),
+          raw: input.post,
+          editNotes: null,
+          stopReasons: ['end_turn'],
+          usage: stageUsage(0.05),
+        }),
+        runFactChecker: async (input) => {
+          fcPostSeen = input.post;
+          return { result: { verdict: 'PASS', flags: [] }, raw: 'VERDICT: PASS', stopReasons: ['end_turn'], usage: stageUsage(0.05) };
+        },
+      }),
+    );
+    assert.match(fcPostSeen, /SLIDE 3\n[\s\S]*BODY: [\s\S]*SoftBank is betting on the same loop with \$21 billion\./);
   });
 });
 

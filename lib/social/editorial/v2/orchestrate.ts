@@ -22,11 +22,12 @@ import { runFactChecker as defaultRunFactChecker, type FactCheckerInput, type Fa
 import { runReporter as defaultRunReporter, type ReporterInput, type ReporterOutput } from './reporter';
 import { runWriter as defaultRunWriter, type WriterInput, type WriterOutput, type FetchedSource } from './writer';
 import { fetchPage as defaultFetchPage, type FetchPageResult } from './tools/fetch-page';
-import type {
-  Brief,
-  FactCheckFlag,
-  FactCheckResult,
-  ParsedPost,
+import {
+  parseEditedPost,
+  type Brief,
+  type FactCheckFlag,
+  type FactCheckResult,
+  type ParsedPost,
 } from './parse';
 import { persistDebugAndCompose as defaultPersistDebugAndCompose } from './log';
 import type { PipelineV2Debug, StageUsage } from './log';
@@ -81,6 +82,14 @@ export type OrchestrateOptions = {
   previousCaptionRaw?: string;
   /** Force a fresh Reporter run even if a brief was already stored. Not used yet. */
   force?: boolean;
+  /**
+   * TEST-ONLY: after the initial Editor pass and before the first
+   * Fact-checker round, append this sentence to SLIDE 3's BODY. Used to
+   * inject a known-bad claim (handoff §Acceptance test negative case) so
+   * a live run can verify the Fact-checker catches the fabrication.
+   * The test runner exposes this via --inject "<sentence>".
+   */
+  injectSentence?: string;
 };
 
 export type OrchestrateResult = {
@@ -100,7 +109,14 @@ export type OrchestrateResult = {
 function getMaxCostUsd(): number {
   return Number(process.env.HELIOS_V2_MAX_COST_USD ?? '1.5');
 }
-const MAX_FACT_CHECK_ROUNDS = 3;
+/**
+ * Total fact-check rounds allowed per run: the initial check + N-1 fix
+ * rounds. Lowered from 3 → 2 after Run 5 showed the Writer/Editor/Caption
+ * often introduce NEW fabrications when asked to rewrite for a flag; a
+ * shorter loop pushes those cases to human review faster instead of
+ * burning cost on progressively-worse revisions.
+ */
+const MAX_FACT_CHECK_ROUNDS = 2;
 /**
  * Per-stage repair budget inside one round. Handoff §Orchestration rules
  * — code-check failures give the Editor (for slides) and the Caption stage
@@ -325,7 +341,20 @@ export async function runCreatorPipeline(
   }
   if (overCap()) return bailToHumanReview('cost cap reached after Caption');
 
-  // ── 6. Loop: code checks → Fact-checker → fix routing (max 3 rounds) ─
+  // ── 5b. TEST-ONLY inject. When the test runner passes --inject
+  // "<sentence>", append it to SLIDE 3's BODY here — after the Editor
+  // has stabilized the post and before the first code-check + fact-check
+  // round runs. Used for the handoff §Acceptance test negative case.
+  if (opts.injectSentence) {
+    const injectedRaw = injectIntoSlide3Body(editorRaw, opts.injectSentence);
+    if (injectedRaw !== editorRaw) {
+      editorRaw = injectedRaw;
+      editorPost = parseEditedPost(editorRaw);
+      stagesRun.push('inject-slide-3');
+    }
+  }
+
+  // ── 6. Loop: code checks → Fact-checker → fix routing (max N rounds) ─
   //
   // Errors are partitioned into HARD (banned voice, number trace, image ref,
   // caption hashtag, slide count) and SOFT (char_limit, highlight_substring).
@@ -470,7 +499,15 @@ export async function runCreatorPipeline(
     // FLAGGED. Route the flags per §The fact-check loop.
     const hasBig = fc.result.flags.some((f) => f.size === 'BIG');
     if (round >= MAX_FACT_CHECK_ROUNDS) {
-      return bailToHumanReview(`fact-check FLAGGED after ${MAX_FACT_CHECK_ROUNDS} rounds`);
+      // Attach every open flag (WHERE, TEXT, PROBLEM, SOURCES SAY) to the
+      // reason so a reviewer can act on the transcript directly. Full
+      // structured flags also live in debug.rounds[last].factCheck.flags.
+      const flagLines = fc.result.flags
+        .map((f) => `  - ${f.size} ${f.where}\n    TEXT: ${f.text}\n    PROBLEM: ${f.problem}\n    SOURCES SAY: ${f.sourcesSay}`)
+        .join('\n');
+      return bailToHumanReview(
+        `fact-check FLAGGED after ${MAX_FACT_CHECK_ROUNDS} rounds — ${fc.result.flags.length} open flag(s):\n${flagLines}`,
+      );
     }
     if (overCap()) return bailToHumanReview(`cost cap reached during round ${round} routing`);
 
@@ -659,4 +696,27 @@ function estimateCreditsChars(images: Array<{ credit: string }>): number {
   const header = '\n\nPhotos:\n'.length;
   const body = images.reduce((sum, img) => sum + img.credit.length + 1, 0); // +1 = "\n"
   return header + body;
+}
+
+/**
+ * TEST-ONLY: append a sentence to SLIDE 3's BODY in the raw edited-post
+ * text. Used by the --inject option in the local test runner to plant a
+ * known-bad claim (e.g., "SoftBank is betting on the same loop with
+ * $21 billion.") before the first Fact-checker round, per handoff
+ * §Acceptance test negative case. Returns rawEditedPost unchanged if
+ * SLIDE 3 or its BODY is missing.
+ *
+ * Assumes BODY is on a single line (the handoff format's convention).
+ * If BODY wraps, appends after the first BODY line — the sentence still
+ * lands in SLIDE 3 which is what the negative test cares about.
+ *
+ * Exported for direct testing.
+ */
+export function injectIntoSlide3Body(rawEditedPost: string, sentence: string): string {
+  const re = /(\nSLIDE\s+3\b[\s\S]*?\nBODY:\s+)([^\n]+)/;
+  const m = rawEditedPost.match(re);
+  if (!m) return rawEditedPost;
+  const before = rawEditedPost.slice(0, m.index!);
+  const after = rawEditedPost.slice(m.index! + m[0].length);
+  return `${before}${m[1]}${m[2]} ${sentence}${after}`;
 }
