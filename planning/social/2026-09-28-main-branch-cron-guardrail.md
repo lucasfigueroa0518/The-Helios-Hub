@@ -1,49 +1,22 @@
-# Main-branch cron guardrail hotfix
+# Cron guardrail hotfix packet (for Lucas)
 
-**Owner:** you. I prepared this file; I do NOT push, deploy, or run the SQL.
+**Status:** ready. Local branch `hotfix/cron-skip-creator-rows` off `feature/helios-social` (NOT `main`, see below). One commit. Unpushed.
 
-## Why
+## Correction from the original plan
 
-`vercel.json` schedules `GET /api/social/generate/next` every 15 minutes on production. The deployed code on `main` doesn't know about `pipeline_version` or `useCreatorPipeline` — those live on `feature/helios-social` (unmerged). Once we start stamping rows `pipeline_version = 'creator'` (via env var during acceptance testing), the deployed cron would happily pick them up and run **legacy** stages on rows we intended to run creator on. Wasted cost, wrong output stamped into `copy_json`.
+The Phase 1 plan assumed the fix should ship on `main`. It shouldn't — the entire Helios Social feature (`app/api/social/**`, `app/social/**`, `vercel.json` with the cron) is NOT on `main`. That code lives on `feature/helios-social`, and — based on the fact that the production Supabase database is actively being written to by the cron — Vercel's production deployment must be built off `feature/helios-social` (not `main`).
 
-The two-line predicate change below teaches the deployed cron to skip creator rows.
+So the hotfix branches off `feature/helios-social` and merges back into `feature/helios-social`. Please confirm with Lucas that this is where Vercel prod deploys from before merging.
 
-## Two pre-checks (run against production Supabase yourself)
+## Prod pre-check outcome
 
-Run these before deciding whether to apply the hotfix as-is or to run the additive migration first.
+Ran earlier by you against `okslkogkokdwylmcsygz`:
 
-### Pre-check A — is `pipeline_version` column present in prod?
+- `pipeline_version` column exists (creator-pipeline migration was applied).
+- `compose_status` column does NOT exist (compose migration was never applied to prod — the v2 migration on `feature/helios-social-pipeline-v2` is now self-sufficient about this).
+- 0 rows currently stamped `pipeline_version = 'creator'`, so no legacy contamination has happened yet.
 
-```sql
-SELECT column_name, data_type, column_default
-  FROM information_schema.columns
- WHERE table_schema = 'helios_social'
-   AND table_name   = 'article_queue'
-   AND column_name  = 'pipeline_version';
-```
-
-- If one row returns → column exists, apply the hotfix as-is.
-- If zero rows return → column doesn't exist yet. The hotfix predicate would fail. Run `db/helios_social_creator_pipeline_migration.sql` on prod first (it's idempotent, additive, safe), then apply the hotfix.
-
-### Pre-check B — anything already stamped `creator` in prod?
-
-```sql
-SELECT id,
-       source,
-       headline,
-       pipeline_version,
-       copy_json IS NOT NULL AS has_copy,
-       render_post_json IS NOT NULL AS has_render
-  FROM helios_social.article_queue
- WHERE pipeline_version = 'creator'
- ORDER BY added_at DESC
- LIMIT 20;
-```
-
-- Zero rows → nothing to worry about. Apply the hotfix and proceed with acceptance.
-- Some rows → the current deployed cron may have already processed some of them through legacy stages. If any have `has_copy = true`, tell me and we'll decide whether to null out their `copy_json` so the creator run has a clean slate.
-
-## The hotfix diff (against `main`)
+## The diff (one condition added)
 
 File: `app/api/social/generate/next/route.ts`
 
@@ -57,31 +30,58 @@ File: `app/api/social/generate/next/route.ts`
 +          AND (pipeline_version IS NULL OR pipeline_version <> 'creator')
            AND (generation_started_at IS NULL
                 OR generation_started_at < now() - interval '15 minutes')
-         ORDER BY added_at ASC
-         LIMIT 1
-         FOR UPDATE SKIP LOCKED
-      )
-      UPDATE helios_social.article_queue AS q
-         SET generation_started_at = now()
-        FROM candidate
-       WHERE q.id = candidate.id
-      RETURNING q.id, q.source, q.headline`,
-   );
 ```
 
-One added condition. Preserves behavior for every row that isn't stamped `pipeline_version = 'creator'`. Any legacy row still gets picked up exactly as before.
+Legacy rows still qualify as before (their `pipeline_version` is `NULL` or `'legacy'`). Creator-stamped rows get skipped so the legacy pipeline can't overwrite the creator run's output.
 
-## Suggested deploy
+## Suggested PR description (paste into GitHub)
 
-1. Run pre-check A. If column exists, skip step 2.
-2. Only if pre-check A returned zero rows: apply `db/helios_social_creator_pipeline_migration.sql` to prod (`npm run db:helios-social:creator-pipeline-migration` with `.env.local` pointing at prod).
-3. Run pre-check B and share the result with me if any rows come back.
-4. Create a branch off `main`: `git checkout main && git pull && git checkout -b hotfix/cron-skip-creator-rows`.
-5. Apply the diff above, commit, push, open PR against `main`, merge, deploy.
-6. Verify by tailing Vercel logs — the next cron tick should still pick up legacy rows without incident.
+**Title:** `fix(social-cron): skip creator-pipeline rows in the drafting cron predicate`
 
-After this hotfix is deployed, the acceptance test in the Phase 1 plan is safe to run: any Bloomberg row I stamp `creator` in prod will be skipped by the deployed cron, so only your local `next dev` (which runs the on-branch creator code) can process it.
+**Body:**
 
-## Rollback
+```
+The /api/social/generate/next cron picks the oldest approved-for-draft
+article with copy_json IS NULL and runs the legacy pipeline on it. Once
+rows start getting stamped pipeline_version = 'creator' (via the coming
+feature/helios-social-pipeline-v2 branch), the legacy cron would happily
+pick them up too and overwrite what the creator pipeline is supposed to
+produce.
 
-Revert the PR. The predicate returns to the pre-hotfix form. Nothing else changes.
+## What this changes
+
+One-condition predicate change on the cron's SELECT:
+
+    AND (pipeline_version IS NULL OR pipeline_version <> 'creator')
+
+Legacy rows (pipeline_version NULL or 'legacy') behave exactly as before.
+Creator rows are handled by the v2 branch's own routing.
+
+## Prod pre-check
+
+Confirmed the pipeline_version column already exists in prod (added by
+db/helios_social_creator_pipeline_migration.sql). Zero rows currently
+stamped 'creator', so this change is a no-op on today's data — it starts
+mattering the moment the acceptance test flips one row to 'creator'.
+
+## Deploy sequence
+
+1. Merge this PR.
+2. Vercel builds + deploys off feature/helios-social (production branch).
+3. The next cron tick uses the new predicate.
+
+Rollback: revert this commit. Nothing else moves.
+```
+
+## Deploy sequence for Lucas
+
+1. Pull this branch or apply the one-condition diff to a fresh branch off `feature/helios-social`.
+2. Push, open PR, merge to `feature/helios-social`.
+3. Vercel redeploys automatically off that branch.
+4. Verify from a Vercel log tail: the next cron tick's SQL now contains the added condition, and rows still drain out of the queue at the same rate.
+
+## Notes
+
+- I did NOT push this branch. It's local at `dbfd151` on `hotfix/cron-skip-creator-rows`.
+- The v2 branch's `generate/next/route.ts` uses a bigger legacy-vs-creator predicate. That version will replace this hotfix's version when v2 lands — the hotfix is temporary insurance for the window between "creator rows exist in prod" and "v2 code is deployed."
+- Rollback: `git revert dbfd151`.
