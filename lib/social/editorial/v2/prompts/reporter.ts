@@ -20,7 +20,7 @@ Rules:
 
 Return plain text in this format:
 
-SINGLE STORY: yes, or no with one line on what the original source was
+SINGLE STORY: yes, or no with one line on what the original source was, without naming or describing its other stories
 
 THE NEWS:
 One line covering who, what, when, where and why.
