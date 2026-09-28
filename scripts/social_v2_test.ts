@@ -46,6 +46,9 @@ async function main() {
       'from-brief': { type: 'string' },
       'max-cost': { type: 'string' },
       inject: { type: 'string' },
+      'render-preview': { type: 'boolean' },
+      'preview-only': { type: 'string' },
+      'preview-server': { type: 'string' },
     },
     strict: true,
     allowPositionals: false,
@@ -55,9 +58,27 @@ async function main() {
   const fromBriefPath = values['from-brief'];
   const maxCostArg = values['max-cost'];
   const injectSentence = values.inject;
+  const renderPreview = values['render-preview'] === true;
+  const previewOnlyDir = values['preview-only'];
+  const previewServer = values['preview-server'];
+
+  // --preview-only mode: skip DB + pipeline entirely, just render an
+  // existing run's captured post to PNGs. Zero LLM cost, zero DB access.
+  if (previewOnlyDir) {
+    const { renderPreviewFromRunDir } = await import('@/lib/social/editorial/v2/render-preview');
+    console.log(`Preview-only mode — rendering ${previewOnlyDir}`);
+    const r = await renderPreviewFromRunDir(previewOnlyDir, previewServer);
+    if (!r.ok) {
+      console.error(`Preview render failed: ${r.reason}`);
+      process.exit(1);
+    }
+    console.log(`Wrote ${r.slideCount} slide PNG(s) to ${path.relative(process.cwd(), r.outDir)}/`);
+    process.exit(0);
+  }
 
   if (!articleId) {
-    console.error('Usage: npm run social:v2:test -- --article <uuid> [--from-brief runs/<ts>/brief.json] [--max-cost 1.5] [--inject "<sentence>"]');
+    console.error('Usage: npm run social:v2:test -- --article <uuid> [--from-brief runs/<ts>/brief.json] [--max-cost 1.5] [--inject "<sentence>"] [--render-preview]');
+    console.error('   or: npm run social:v2:test -- --preview-only runs/<ts>');
     process.exit(2);
   }
 
@@ -161,6 +182,12 @@ async function main() {
           articleId: row.id,
           articleHeadline: row.headline,
           articleSource: row.source,
+          // ISO string for the article's published date. Needed by
+          // --render-preview / --preview-only so adaptToPost can build
+          // the Post's publishedAt field without re-hitting the DB.
+          articlePublishedAt: row.published_at instanceof Date
+            ? row.published_at.toISOString()
+            : (row.published_at ?? null),
           usedFromBrief,
           fromBriefPath: fromBriefPath ?? null,
           costCap: Number(process.env.HELIOS_V2_MAX_COST_USD ?? '1.5'),
@@ -216,6 +243,32 @@ async function main() {
   console.log(`       ${path.relative(process.cwd(), path.join(runDir, 'transcript.json'))}`);
   if (!usedFromBrief && captured.reporterOutput) {
     console.log(`       ${path.relative(process.cwd(), path.join(runDir, 'brief.json'))}`);
+  }
+
+  // --render-preview: after the pipeline finishes, screenshot every slide
+  // into runs/<ts>/preview/. Zero LLM cost, zero DB writes. Uses the
+  // adapter to reconstruct a Post when the run bailed on soft errors
+  // (renderPostJson is null in that case).
+  if (renderPreview) {
+    console.log('');
+    console.log('Rendering slide previews...');
+    const { renderPreview: doRender } = await import('@/lib/social/editorial/v2/render-preview');
+    const publishedIso = row.published_at instanceof Date
+      ? row.published_at.toISOString()
+      : (typeof row.published_at === 'string' ? row.published_at : undefined);
+    const r = await doRender({
+      post: captured.renderPostJson,
+      captured,
+      runId,
+      articlePublishedAt: publishedIso,
+      outDir: path.join(runDir, 'preview'),
+      server: previewServer,
+    });
+    if (r.ok) {
+      console.log(`       ${path.relative(process.cwd(), r.outDir)}/ (${r.slideCount} slide PNG${r.slideCount === 1 ? '' : 's'})`);
+    } else {
+      console.warn(`Preview render skipped: ${r.reason}`);
+    }
   }
 
   process.exit(result.ok ? 0 : 1);
