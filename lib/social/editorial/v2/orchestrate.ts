@@ -88,7 +88,13 @@ export type OrchestrateResult = {
   previewUrl?: string;
 };
 
-const DEFAULT_MAX_COST_USD = Number(process.env.HELIOS_V2_MAX_COST_USD ?? '1.5');
+/**
+ * Read at call time (not module load) so `HELIOS_V2_MAX_COST_USD` set by the
+ * test-runner script AFTER this module is imported still takes effect.
+ */
+function getMaxCostUsd(): number {
+  return Number(process.env.HELIOS_V2_MAX_COST_USD ?? '1.5');
+}
 const MAX_FACT_CHECK_ROUNDS = 3;
 /**
  * Per-stage repair budget inside one round. Handoff §Orchestration rules
@@ -121,7 +127,7 @@ export async function runCreatorPipeline(
   const addCost = (u: StageUsage) => {
     costUsd += u.approxCostUsd;
   };
-  const overCap = () => costUsd >= DEFAULT_MAX_COST_USD;
+  const overCap = () => costUsd >= getMaxCostUsd();
 
   const bailToHumanReview = async (reason: string): Promise<OrchestrateResult> => {
     debug.finishedAt = new Date().toISOString();
