@@ -53,6 +53,36 @@ export async function validateBriefImages(brief: Brief): Promise<ValidationResul
 }
 
 /**
+ * Rewrite the SOURCES section of the raw brief text so only "substantive"
+ * sources appear — the ones whose fetched text passed a minimum-length
+ * threshold. Used by the Caption stage so the caption's "Source:" line
+ * only lists outlets we actually read in full, not paywall previews.
+ *
+ * Order is preserved from the original SOURCES section.
+ */
+export function rewriteBriefSources(
+  briefRaw: string,
+  substantiveOutlets: Array<{ outlet: string; publishedAt: string; url: string }>,
+): string {
+  const rendered = substantiveOutlets.length === 0
+    ? '(none — every source fetched was a preview under the threshold)'
+    : substantiveOutlets
+        .map((s, i) => {
+          const outlet = s.outlet || '(unknown outlet)';
+          const date = s.publishedAt ? `, ${s.publishedAt}` : '';
+          const url = s.url ? `, ${s.url}` : '';
+          return `${i + 1}. ${outlet}${date}${url}`;
+        })
+        .join('\n');
+  // Replace everything from "SOURCES:" onward. SOURCES is the last
+  // section of the brief, so no trailing label to preserve.
+  return briefRaw.replace(
+    /(^|\n)SOURCES:[\s\S]*$/,
+    `$1SOURCES:\n${rendered}`,
+  );
+}
+
+/**
  * Rewrite the brief.images list on the passed Brief and rebuild the
  * IMAGES section of the raw brief text so downstream stages see only
  * validated images (or "None found" when nothing survived).

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test, { describe } from 'node:test';
 
 import {
+  rewriteBriefSources,
   rewriteBriefWithValidatedImages,
   validateBriefImages,
 } from '@/lib/social/editorial/v2/validate-images';
@@ -131,5 +132,51 @@ SOURCES:
     const rewritten = rewriteBriefWithValidatedImages(briefRaw, []);
     assert.match(rewritten, /IMAGES:\nNone found/);
     assert.doesNotMatch(rewritten, /IMAGE 1/);
+  });
+});
+
+describe('rewriteBriefSources', () => {
+  const briefRaw = `SINGLE STORY: yes
+THE NEWS: n
+THE STORY: s
+TERMS:
+IMAGES: None found
+SOURCES:
+1. Bloomberg, 2026-09-17, https://bloomberg.example.com/x
+2. Betanews, 2026-09-18, https://betanews.example.com/y
+3. Shattered.io, 2026-09-18, https://shattered.example.com/z`;
+
+  test('replaces SOURCES section with only the kept outlets', () => {
+    const kept = [
+      { outlet: 'Bloomberg', publishedAt: '2026-09-17', url: 'https://bloomberg.example.com/x' },
+      { outlet: 'Shattered.io', publishedAt: '2026-09-18', url: 'https://shattered.example.com/z' },
+    ];
+    const rewritten = rewriteBriefSources(briefRaw, kept);
+    assert.match(rewritten, /SOURCES:\n1\. Bloomberg, 2026-09-17, https:\/\/bloomberg\.example\.com\/x\n2\. Shattered\.io, 2026-09-18, https:\/\/shattered\.example\.com\/z/);
+    // Betanews was filtered out — must not appear.
+    assert.doesNotMatch(rewritten, /Betanews/);
+    // Sections above SOURCES stay untouched.
+    assert.match(rewritten, /SINGLE STORY: yes/);
+    assert.match(rewritten, /IMAGES: None found/);
+  });
+
+  test('renders a placeholder line when NOTHING is substantive', () => {
+    const rewritten = rewriteBriefSources(briefRaw, []);
+    assert.match(rewritten, /SOURCES:\n\(none — every source fetched was a preview under the threshold\)/);
+    assert.doesNotMatch(rewritten, /Bloomberg/);
+    assert.doesNotMatch(rewritten, /Betanews/);
+    assert.doesNotMatch(rewritten, /Shattered/);
+  });
+
+  test('preserves outlet order from the kept array (renumbers)', () => {
+    const kept = [
+      { outlet: 'Shattered.io', publishedAt: '2026-09-18', url: 'https://shattered.example.com/z' },
+      { outlet: 'Bloomberg', publishedAt: '2026-09-17', url: 'https://bloomberg.example.com/x' },
+    ];
+    const rewritten = rewriteBriefSources(briefRaw, kept);
+    // Shattered.io comes first (index 1), Bloomberg second (index 2).
+    const shatteredIdx = rewritten.indexOf('1. Shattered.io');
+    const bloombergIdx = rewritten.indexOf('2. Bloomberg');
+    assert.ok(shatteredIdx > 0 && bloombergIdx > shatteredIdx);
   });
 });

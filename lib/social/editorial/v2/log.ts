@@ -66,6 +66,16 @@ export type PipelineV2Debug = {
     kept: Array<{ number: number; link: string; credit: string }>;
     dropped: Array<{ number: number; link: string; credit: string; reason: string }>;
   };
+  /**
+   * Which brief.sources entries survived the "substantive source" filter
+   * for the caption's "Source:" line. See orchestrate.ts §2c.
+   */
+  substantiveSources?: {
+    thresholdChars: number;
+    keptCount: number;
+    droppedCount: number;
+    keptUrls: string[];
+  };
   draft?: {
     post: ParsedPost;
     raw: string;

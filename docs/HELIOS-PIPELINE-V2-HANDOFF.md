@@ -181,6 +181,7 @@ When the verdict is FLAGGED, route the flags like this:
 - **Highlights:** each HIGHLIGHT is an exact substring of its slide's HEADLINE or BODY, and COVER HIGHLIGHT is an exact substring of the cover.
 - **Image references:** every "brief image N" exists in the brief's IMAGES list.
 - **Caption:** the full published caption (Caption stage output plus the image-credit block the publish pipeline appends, including the "Source:" line) is at most 2200 characters. No minimum. No hashtags.
+- **Substantive sources for the caption:** before the Caption stage runs, code filters the brief's SOURCES list to entries whose fetched source text passed a minimum length threshold (default 1500 chars, env `HELIOS_V2_MIN_SOURCE_CHARS`). Only those outlets should appear in the caption's "Source:" line. Writer/Editor/Fact-checker still see the full sources; the filter is Caption-only.
 - **Banned phrases,** read from the shared voice block. Split them into two kinds:
   - **Always wrong:** em dashes, emoji, exclamation marks, and multi-word phrases like "at its core" or "here's the kicker."
   - **Judgment words:** single words that have normal uses, like "space," "features" or "unlock." Send these to the Editor, or the Caption step for the caption, as a check error to judge. Accept whatever it decides. The Editor notes a kept word in EDIT NOTES.
