@@ -37,6 +37,15 @@ import {
   validateBriefImages as defaultValidateBriefImages,
   type ValidationResult,
 } from './validate-images';
+import {
+  runImageStep as defaultRunImageStep,
+  buildAttributionBlock as buildImageAttribution,
+  buildFactCheckerImagesBlock,
+  type ImageStepDeps,
+  type ImageStepResult,
+  type SelectedImage,
+  type SlideKey,
+} from './image-step';
 
 /**
  * Dependency-injection surface. Real usage takes the defaults; unit tests
@@ -50,6 +59,7 @@ export type OrchestrateDeps = {
   runFactChecker: (input: FactCheckerInput) => Promise<FactCheckerOutput>;
   fetchPage: (url: string) => Promise<FetchPageResult>;
   validateBriefImages: (brief: Brief) => Promise<ValidationResult>;
+  runImageStep: (post: ParsedPost, brief: Brief, deps?: ImageStepDeps) => Promise<ImageStepResult>;
   persistDebugAndCompose: typeof defaultPersistDebugAndCompose;
 };
 
@@ -61,6 +71,7 @@ const defaultDeps: OrchestrateDeps = {
   runFactChecker: defaultRunFactChecker,
   fetchPage: defaultFetchPage,
   validateBriefImages: defaultValidateBriefImages,
+  runImageStep: defaultRunImageStep,
   persistDebugAndCompose: defaultPersistDebugAndCompose,
 };
 
@@ -324,6 +335,40 @@ export async function runCreatorPipeline(
   }
   if (overCap()) return bailToHumanReview('cost cap reached after Editor');
 
+  // ── 4b. Image step — resolve subjects, pick photos, upload to Storage
+  // Runs BEFORE Caption so credits flow into the caption's "Photos:" line
+  // and the Fact-checker sees "IMAGES CHOSEN:". See
+  // docs/IMAGES-V1-HANDOFF.md.
+  let selectedImages = new Map<SlideKey, SelectedImage>();
+  let imagesBlock = 'IMAGES CHOSEN:\n(image step did not run)';
+  try {
+    const imageResult = await deps.runImageStep(editorPost, finalBrief);
+    selectedImages = imageResult.selected;
+    imagesBlock = buildFactCheckerImagesBlock(selectedImages);
+    for (const u of imageResult.visionUsage) addCost({
+      inputTokens: u.inputTokens,
+      cacheReadTokens: u.cacheReadTokens,
+      cacheWriteTokens: u.cacheWriteTokens,
+      outputTokens: 0,
+      approxCostUsd: 0, // Haiku vision priced below the noise floor for the cost cap
+    });
+    stagesRun.push('image-step');
+    debug.imageStep = {
+      selected: [...selectedImages.entries()].map(([slide, img]) => ({
+        slide, wikidataId: img.wikidataId, label: img.label,
+        commonsFile: img.commonsFile, license: img.license, author: img.author,
+        source: img.source,
+      })),
+      report: imageResult.report,
+      visionCalls: imageResult.visionCalls,
+    };
+  } catch (err) {
+    // Image step failure is non-fatal — the post ships type-only.
+    debug.imageStep = { error: err instanceof Error ? err.message : String(err) };
+    stagesRun.push('image-step(failed)');
+  }
+  if (overCap()) return bailToHumanReview('cost cap reached after image step');
+
   // ── 5. Caption — first pass ────────────────────────────────────────
   let captionRaw: string;
   let captionText: string;
@@ -483,6 +528,7 @@ export async function runCreatorPipeline(
       sourceTexts,
       post: editorRaw,
       caption: captionText,
+      imagesBlock,
     });
     addCost(fc.usage);
     stagesRun.push(`fact-checker(r${round})`);
@@ -635,7 +681,12 @@ export async function runCreatorPipeline(
     caption: captionText,
     articlePublishedAt: publishedIso,
     issueNumber: dayStamp,
+    selectedImages,
   });
+  // Override the adapter's brief-based attributionBlock with the image
+  // step's credits — spec: "Photos: [credit]; [credit]." after Source.
+  const photoLine = buildImageAttribution(selectedImages);
+  if (photoLine) post.attributionBlock = photoLine;
 
   // Guard: any slide with photoUrl but no photoCredit → don't ship.
   for (const slide of post.slides) {

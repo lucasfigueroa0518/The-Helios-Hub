@@ -20,6 +20,13 @@ export type FactCheckerInput = {
   sourceTexts: FetchedSource[];
   post: string;
   caption: string;
+  /**
+   * Optional "IMAGES CHOSEN:" block from the image step, listing the
+   * subject / Wikidata id / Commons file / license the pipeline picked
+   * for each slide. Lets the fact-checker flag a photo that doesn't fit
+   * its slide. See docs/IMAGES-V1-HANDOFF.md §Fact-checker.
+   */
+  imagesBlock?: string;
 };
 
 export type FactCheckerOutput = {
@@ -62,6 +69,10 @@ export function buildFactCheckerUserMessage(input: FactCheckerInput): string {
   parts.push('');
   parts.push('POST:');
   parts.push(input.post.trim());
+  if (input.imagesBlock) {
+    parts.push('');
+    parts.push(input.imagesBlock.trim());
+  }
   parts.push('');
   parts.push('CAPTION:');
   parts.push(input.caption.trim());

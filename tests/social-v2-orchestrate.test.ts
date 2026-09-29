@@ -123,6 +123,9 @@ function buildDeps(override: Partial<OrchestrateDeps> = {}): OrchestrateDeps {
     // so the pipeline can run end-to-end offline. Individual tests can pass
     // a validateBriefImages override to exercise the drop path.
     validateBriefImages: async (brief) => ({ valid: brief.images, dropped: [] }),
+    // Image step: default to type-only (no photos picked) — individual
+    // tests can pass an override to exercise the picked-image path.
+    runImageStep: async () => ({ selected: new Map(), report: [], visionCalls: 0, visionUsage: [] }),
     persistDebugAndCompose: async () => { /* no-op — never write to real DB in tests */ },
     ...override,
   };

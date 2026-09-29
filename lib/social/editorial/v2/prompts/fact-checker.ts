@@ -24,7 +24,7 @@ Flag anything that says more than the sources do:
 - any interpretation or opinion, even one that reads as our take
 - an explanation of a term, company or product that doesn't come from the sources
 - any mention of a story other than the main one
-- an image note that would look like evidence the sources don't have, like a chart of made-up data or a realistic "photo" of the event
+- an image that doesn't show what the slide is about, or a request for a scene or event instead of a real subject
 - a quote that isn't word for word what the sources say, or is credited to the wrong person
 
 Mark each flag SMALL or BIG:

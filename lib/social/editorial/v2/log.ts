@@ -76,6 +76,26 @@ export type PipelineV2Debug = {
     droppedCount: number;
     keptUrls: string[];
   };
+  /**
+   * Image step result. Per docs/IMAGES-V1-HANDOFF.md §Place and credit,
+   * every choice records the subject / Wikidata id / Commons file / license
+   * so a reviewer can confirm provenance in seconds. `error` is set when
+   * the whole step failed (non-fatal — the post ships type-only).
+   */
+  imageStep?: {
+    selected?: Array<{
+      slide: 'cover' | number;
+      wikidataId: string;
+      label: string;
+      commonsFile: string;
+      license: string;
+      author: string;
+      source: 'cache' | 'wikimedia';
+    }>;
+    report?: unknown[];
+    visionCalls?: number;
+    error?: string;
+  };
   draft?: {
     post: ParsedPost;
     raw: string;

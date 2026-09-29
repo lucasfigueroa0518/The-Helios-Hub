@@ -18,6 +18,7 @@
 import type { Post, SlideCopy, Span, SpanRun, StoryType, Variant } from '@/lib/social/render/types';
 
 import type { Brief, BriefImage, ParsedPost, ParsedSlide } from './parse';
+import type { SelectedImage, SlideKey } from './image-step';
 
 export type AdapterInput = {
   brief: Brief;
@@ -25,10 +26,17 @@ export type AdapterInput = {
   caption: string;
   articlePublishedAt: string;
   issueNumber: number;
+  /**
+   * Images picked by the image step, keyed by 'cover' or slide position.
+   * When present, the adapter uses these instead of the legacy brief-image
+   * lookup for the cover + each slide's photo. When absent (test-only path),
+   * the adapter falls back to `brief image N` resolution.
+   */
+  selectedImages?: Map<SlideKey, SelectedImage>;
 };
 
 export function adaptToPost(input: AdapterInput): Post {
-  const { brief, post, caption, articlePublishedAt, issueNumber } = input;
+  const { brief, post, caption, articlePublishedAt, issueNumber, selectedImages } = input;
   const primarySource = brief.sources[0];
   const source = primarySource?.outlet || 'Source';
   const sourceUrl = primarySource?.url || '';
@@ -37,12 +45,12 @@ export function adaptToPost(input: AdapterInput): Post {
   const slides: SlideCopy[] = [];
 
   // Slide 0 — cover.
-  slides.push(buildCoverSlide(post.cover.text, post.cover.highlight, post.cover.image, brief));
+  slides.push(buildCoverSlide(post.cover, brief, selectedImages?.get('cover')));
 
   // Slides 1..N-2 — beats.
   for (let i = 0; i < post.slides.length; i++) {
     const s = post.slides[i]!;
-    slides.push(buildBeatSlide(s, brief, slides.length));
+    slides.push(buildBeatSlide(s, brief, slides.length, selectedImages?.get(s.position)));
   }
 
   // Slide N-1 — follow.
@@ -63,9 +71,19 @@ export function adaptToPost(input: AdapterInput): Post {
 
 /* ── Cover ─────────────────────────────────────────────────────────── */
 
-function buildCoverSlide(text: string, highlight: string, imageRef: string, brief: Brief): SlideCopy {
-  const briefImage = resolveBriefImage(imageRef, brief);
-  const variant: Variant = pickCoverVariant(briefImage, brief);
+function buildCoverSlide(
+  cover: ParsedPost['cover'],
+  brief: Brief,
+  selected: SelectedImage | undefined,
+): SlideCopy {
+  const text = cover.text;
+  const highlight = cover.highlight;
+  // Prefer the image-step-picked image; fall back to legacy brief-image
+  // lookup for backward compat (Reporter-provided images that haven't
+  // been superseded by the new step).
+  const photo = selected ?? briefImageToPhoto(resolveBriefImage(cover.image, brief), brief);
+  const variant: Variant = !photo ? 'C3' : (photo.isPortrait ? 'C1' : 'C2');
+
   // Cover: orange highlight is allowed. Green (names) is not per spec.
   const headline = colorSpans(text, highlight, [], brief, /* allowGreen */ false);
   const slide: SlideCopy = {
@@ -75,17 +93,29 @@ function buildCoverSlide(text: string, highlight: string, imageRef: string, brie
     headline,
     altText: truncateAlt(text || 'Cover'),
   };
-  if (briefImage?.link) {
-    slide.photoUrl = briefImage.link;
-    if (briefImage.credit) slide.photoCredit = shortPhotoCredit(briefImage.credit);
+  if (photo) {
+    slide.photoUrl = photo.storageUrl;
+    slide.photoCredit = photo.credit;
   }
   return slide;
 }
 
-function pickCoverVariant(image: BriefImage | undefined, brief: Brief): Variant {
-  if (!image) return 'C3'; // type-only or free-text description
-  if (isPortraitOfNamedSubject(image, brief)) return 'C1';
-  return 'C2';
+/** Turn a legacy brief image into the same shape the image-step produces. */
+function briefImageToPhoto(image: BriefImage | undefined, brief: Brief): SelectedImage | null {
+  if (!image?.link) return null;
+  return {
+    wikidataId: `legacy:${image.number}`,
+    subject: image.description,
+    label: image.description,
+    commonsFile: '',
+    storageUrl: image.link,
+    license: '',
+    licenseUrl: null,
+    author: '',
+    credit: shortPhotoCredit(image.credit || ''),
+    isPortrait: isPortraitOfNamedSubject(image, brief),
+    source: 'wikimedia',
+  };
 }
 
 /**
@@ -104,8 +134,15 @@ function isPortraitOfNamedSubject(image: BriefImage, brief: Brief): boolean {
 
 /* ── Beat slides — field-driven type picker ───────────────────────── */
 
-function buildBeatSlide(slide: ParsedSlide, brief: Brief, position: number): SlideCopy {
-  const briefImage = resolveBriefImage(slide.image ?? '', brief);
+function buildBeatSlide(
+  slide: ParsedSlide,
+  brief: Brief,
+  position: number,
+  selected: SelectedImage | undefined,
+): SlideCopy {
+  // Prefer image-step selection; fall back to legacy brief-image for
+  // backward compat with the old "brief image N" convention.
+  const photo = selected ?? briefImageToPhoto(resolveBriefImage(slide.image ?? '', brief), brief);
   const highlight = slide.highlight ?? '';
   const altSeed = slide.headline || slide.body || slide.quote || slide.bigNumber || '';
 
@@ -134,9 +171,9 @@ function buildBeatSlide(slide: ParsedSlide, brief: Brief, position: number): Sli
     if (slide.quoteBy) out.quoteBy = slide.quoteBy.trim();
     // Optional round speaker photo — only when the brief image shows the
     // speaker. Portrait check: same rule as cover C1.
-    if (briefImage?.link && isPortraitOfNamedSubject(briefImage, brief)) {
-      out.photoUrl = briefImage.link;
-      if (briefImage.credit) out.photoCredit = shortPhotoCredit(briefImage.credit);
+    if (photo && photo.isPortrait) {
+      out.photoUrl = photo.storageUrl;
+      out.photoCredit = photo.credit;
     }
     return out;
   }
@@ -153,9 +190,9 @@ function buildBeatSlide(slide: ParsedSlide, brief: Brief, position: number): Sli
     if (slide.numberNote) out.numberNote = slide.numberNote.trim();
     out.secondNumber = slide.secondNumber.trim();
     if (slide.secondNote) out.secondNote = slide.secondNote.trim();
-    if (briefImage?.link) {
-      out.photoUrl = briefImage.link;
-      if (briefImage.credit) out.photoCredit = shortPhotoCredit(briefImage.credit);
+    if (photo) {
+      out.photoUrl = photo.storageUrl;
+      out.photoCredit = photo.credit;
     }
     return out;
   }
@@ -171,9 +208,9 @@ function buildBeatSlide(slide: ParsedSlide, brief: Brief, position: number): Sli
     if (slide.headline) out.headline = colorSpans(slide.headline, hlHeadline, [], brief, /* allowGreen */ true);
     if (slide.body) out.body = colorSpans(slide.body, hlBody, [], brief, /* allowGreen */ true);
     if (slide.numberNote) out.numberNote = slide.numberNote.trim();
-    if (briefImage?.link) {
-      out.photoUrl = briefImage.link;
-      if (briefImage.credit) out.photoCredit = shortPhotoCredit(briefImage.credit);
+    if (photo) {
+      out.photoUrl = photo.storageUrl;
+      out.photoCredit = photo.credit;
     }
     return out;
   }
@@ -183,15 +220,15 @@ function buildBeatSlide(slide: ParsedSlide, brief: Brief, position: number): Sli
   // Text slide instead (see below) — that layout keeps the copy at the top
   // and fades the photo up from the bottom half so the text area stays
   // clean.
-  if (briefImage?.link && slide.headline && !slide.body) {
+  if (photo && slide.headline && !slide.body) {
     const out: SlideCopy = {
       position,
       layoutVariant: 'image',
       headline: colorSpans(slide.headline, hlHeadline, [], brief, /* allowGreen */ true),
-      photoUrl: briefImage.link,
+      photoUrl: photo.storageUrl,
+      photoCredit: photo.credit,
       altText: truncateAlt(slide.headline),
     };
-    if (briefImage.credit) out.photoCredit = shortPhotoCredit(briefImage.credit);
     return out;
   }
 
@@ -216,9 +253,9 @@ function buildBeatSlide(slide: ParsedSlide, brief: Brief, position: number): Sli
   };
   if (slide.headline) out.headline = colorSpans(slide.headline, hlHeadline, [], brief, /* allowGreen */ true);
   if (slide.body) out.body = colorSpans(slide.body, hlBody, [], brief, /* allowGreen */ true);
-  if (briefImage?.link) {
-    out.photoUrl = briefImage.link;
-    if (briefImage.credit) out.photoCredit = shortPhotoCredit(briefImage.credit);
+  if (photo) {
+    out.photoUrl = photo.storageUrl;
+    out.photoCredit = photo.credit;
   }
   return out;
 }

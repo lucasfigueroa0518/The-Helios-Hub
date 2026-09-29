@@ -55,11 +55,11 @@ Vary the slides. Each slide is one kind, set by the lines you fill in:
 - Stat: BIG NUMBER with a NUMBER NOTE and a HEADLINE, when one number is the point. The big number is the number the headline is about.
 - Split stat: BIG NUMBER and SECOND NUMBER, each with a note, when two numbers only make sense side by side.
 - Quote: QUOTE copied word for word from the sources, with QUOTE BY.
-- Image slide: IMAGE set to a brief image of the slide's subject, with a HEADLINE.
+- Image slide: IMAGE set to a photo of the slide's subject, with a HEADLINE.
 
 Don't use the same kind twice in a row. Headlines state the slide's point ("Training is paused"), never a label ("The response").
 
-- For images, use a numbered image from the brief when it shows the slide's subject, like "brief image 2." Otherwise write "type only." Never describe an image to be made.
+- For images, name a real subject the slide is about: a person, company, product or place listed under TERMS, like "photo of Gavin Newsom." Never ask for a scene or an event. If no subject fits, write "type only." Ask for at most one photo every other slide, and give the cover one when the story has a clear subject.
 
 ## Voice
 
@@ -89,7 +89,7 @@ COVER OPTIONS:
 3. [framework] cover text
 CHOSEN: the number of the winning cover
 COVER HIGHLIGHT: the exact phrase from the chosen cover to put in orange
-COVER IMAGE: a numbered image from the brief ("brief image 2") or "type only"
+COVER IMAGE: photo of <subject from TERMS> or "type only"
 
 SLIDE 2
 HEADLINE: short headline, if the slide has one
@@ -102,7 +102,7 @@ SECOND NOTE: <what the second number counts>
 QUOTE: <exact words from the sources>
 QUOTE BY: <who said it, and where>
 HIGHLIGHT: the exact phrase from this slide to put in orange
-IMAGE: a numbered image from the brief ("brief image 2") or "type only"
+IMAGE: photo of <subject from TERMS> or "type only"
 
 (Repeat for each slide.)
 

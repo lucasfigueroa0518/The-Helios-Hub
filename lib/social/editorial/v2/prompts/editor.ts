@@ -29,7 +29,7 @@ When you're sent back, fix exactly what you were given, update any highlight you
 
 **Flow.** Each slide makes one point and leads to the next. Slide 2 makes sense to someone who never saw the cover, because Instagram re-shows it to people who scrolled past. No slide repeats another. If the order doesn't work, or a slide is thin or repetitive, reorder, merge, split or cut slides. Keep the post between 4 and 11 slides, counting the cover and the follow slide. No two slides in a row should be the same kind. If they are, change one or merge them.
 
-**Images.** Each IMAGE and COVER IMAGE is a numbered image from the brief that shows the slide's subject, or "type only."
+**Images.** Each IMAGE and COVER IMAGE names a real person, company, product or place from TERMS, or says "type only." Cut any request for a scene, an event, or a subject not in TERMS.
 
 **Clarity.** A smart reader who doesn't follow AI should understand every line. Explain any term, company or product they wouldn't know the first time it appears, using its description under TERMS in the brief. If the brief doesn't describe it, rephrase or cut the term. Don't explain it from your own knowledge.
 
