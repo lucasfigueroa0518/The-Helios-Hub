@@ -256,6 +256,7 @@ function ReviewSlide({
       return undefined;
     }
     video.volume = clip.videoVolume;
+    video.setAttribute('fetchpriority', active ? 'high' : ahead ? 'auto' : 'low');
     if (song) song.volume = clip.songVolume;
 
     let seeking = false;
@@ -394,7 +395,6 @@ function ReviewSlide({
           playsInline
           loop
           preload={active || ahead ? 'auto' : 'metadata'}
-          fetchPriority={active ? 'high' : ahead ? 'auto' : 'low'}
           disablePictureInPicture
         />
       ) : null}
