@@ -4,7 +4,7 @@ Last updated 2026-09-29 (evening). Read this first in any new session.
 
 ## What this is
 
-Helios Social turns one AI news story into an Instagram carousel for smart, busy readers who don't follow AI closely. Owner: Tommy (Helios Group). Repo: The-Helios-Hub, branch `feature/helios-social-pipeline-v2` (unpushed). Production DB: Supabase project okslkogkokdwylmcsygz.
+Helios Social turns one AI news story into an Instagram carousel for smart, busy readers who don't follow AI closely. Owner: Tommy (Helios Group). Repo: The-Helios-Hub, branch `feature/helios-social-pipeline-v2` (unpushed). Production DB: Supabase project okslkogkokdwylmcsygz. Test runs use `--no-persist` — no prod DB writes, no Storage uploads, no `article_queue` mutations.
 
 ## Source-of-truth docs (in docs/)
 
@@ -15,7 +15,7 @@ Helios Social turns one AI news story into an Instagram carousel for smart, busy
 
 ## Pipeline
 
-Reporter (web search) → Writer → Editor → image step → Caption → code checks → Fact-checker (flags only, 2 rounds max) → render. Anything unresolved goes to human review with the flags attached. Nothing posts without Tommy's review.
+Reporter (web search) → brief-integrity gate → Writer → Editor → Caption → code checks → Fact-checker (flags only, 2 rounds max) → soft-repair loop → image step → render. Anything unresolved goes to human review with the flags attached. Nothing posts without Tommy's review.
 
 ## Rules Tommy has set (don't relax these)
 
@@ -31,56 +31,52 @@ Reporter (web search) → Writer → Editor → image step → Caption → code 
 
 ## Where things stand
 
-Working: the Reporter keeps to the main story; the Fact-checker catches unsupported claims; the design with its rotating slide types and real photos; the sun-logo follow slide; the photo accuracy rules; the test runner (`npm run social:v2:test`, with `--from-brief`, `--render-preview`, `--articles`).
+Working: the Reporter, when it returns a substantive brief, keeps to the main story; the Fact-checker catches unsupported claims and paraphrase attributions; the code checks (rhythm, char limits, quote verbatim, number trace, term explained, past-statement, sequence-integrity) all fire on the FINAL post; the design with its rotating slide types; the sun-logo follow slide; the test runner (`npm run social:v2:test`, with `--from-brief`, `--render-preview`, `--articles`, `--no-persist`); source trimming (each source's paragraphs scored by keyword overlap with THE NEWS / THE STORY / TERMS, kept in original order up to the per-source cap — so a mid-essay quote survives).
 
-Open, as of the render-fix pass (post-2026-09-29 evening):
-0. **Test the render-truth + past-statement + sequence checks on a live run** — planned as a Suleyman `--no-persist --render-preview` pass. Confirm the cover renders with an orange highlight, the last three slides aren't all text, and if the pipeline still writes "earlier writing on model welfare" it now bails with a `past_statement_reference` hard error instead of shipping it.
+**Photos: UNPROVEN.** No run has actually placed a photo on a shipped slide yet. The Wikidata P18 / Commons P180 lookup + license filter + KIND-only vision check are all coded; the Suleyman `--from-brief` re-run failed photo verification on the one photo request it made ("Anthropic" on a quote slide, rejected because QUOTE BY didn't name Anthropic). Whether the accuracy rules and credit rendering actually work end-to-end will not be known until a run gets past hard code checks and a cover-slide photo lands.
 
-Open, as of the Google CC re-run from saved brief (runs/2026-09-29T03-38-05-457Z, $0.63):
-1. Sources rarely hit the 6K per-source trim cap. Google run: 3/3 sources kept, all bodies at 4.0–4.7K chars, no trims applied. Trim helps when sources are longer.
-2. **Test broadly**: run `--articles` on 5+ different stories and report cost, fact-check flags, and photos per story. One story per fix isn't enough evidence a rule generalizes.
-3. **Per-stage cost table vs the California run** ($0.882 baseline) — kept up to date across new runs so cost cuts are visible as they land.
-4. **Cover subject must be the main subject of THE NEWS, not the longest TERMS match, and no fallback to a related entity.** Current `buildPhotoRequests` sorts eligible TERMS longest-first and picks the first one in `brief.news`; that put "Google Labs" on the cover for the Google CC story instead of the actual main subject (CC itself, or Tom Shane if that's the human face of the news). Rewrite to identify the main subject of THE NEWS directly rather than by TERMS-substring match, and drop the "related entity" fallback so a story with no photographable main subject stays type-only.
-5. Add `"not X, it's Y"` framing to `BANNED_ALWAYS`. The Writer's voice block bans it in prose, but there's no code check yet; a mirror of the `Unlike X, Y` regex added on 2026-09-29 pm.
-6. **Editor scratchpad blow-up (max_tokens).** Initial Editor pass on the Google re-run emitted 45KB of chain-of-thought reasoning before writing COVER: and hit `max_tokens` twice (8K + 12K budget). Fix: instruct the Editor "write COVER: on the first line, reason after"; or add a stop-sequence at the end of EDIT NOTES; or both.
-7. **Confirm Haiku is used only for the caption and length repairs** — not for fact-check reruns, not for Writer / Editor first passes, not for BIG-flag reruns. Audit `orchestrate.ts` call sites for `mode: 'repair'` and `HELIOS_V2_CAPTION_MODEL` to prove the boundary is respected.
+## Open
 
-Recent shipped:
-- **Preview renders the FINAL post, not the initial editor pass (2026-09-29 pm).** Root cause of "cover lost its orange highlight" and "three text slides in a row before follow" on the Suleyman preview (runs/2026-09-29T06-45-36-973Z): `reconstructPost` in `render-preview.ts` was reading `debug.edited.post` (the initial editor output) whenever the pipeline bailed to human review, so previews rendered a stale post that disagreed with the FINAL post in the summary. Fix: added `debug.finalPost` + `debug.finalCaption` as the single canonical snapshot of what render sees, written at both the bail and the ship path. `reconstructPost` now prefers `debug.finalPost` → `debug.rounds[last].post` → `debug.edited.post`. Summary formatter (`formatPostWithLengths`) now also prints QUOTE / NOTE / NUMBER NOTE / SECOND NUMBER / SECOND NOTE / QUOTE BY and each slide's classified kind, so future summaries stop hiding the fields that made this bug invisible.
-- **`past_statement_reference` HARD code check (2026-09-29 pm).** Any of "earlier writing/wrote/said/argued", "has long argued", "previously said", "in an earlier essay/post/statement" fails the run. Enforces the main-story-only rule already stated in the Writer + Editor prompts. Slide 11 of the Suleyman run ("...its earlier writing on model welfare...") would have been caught.
-- **`sequence_incomplete` HARD code check (2026-09-29 pm).** Scans slide headlines / bodies / notes / quotes for `<ordinal> <noun>` patterns ("first objection", "second phase"). Flags missing beats and out-of-order sequences. Suleyman run shipped "first objection" on SLIDE 7 + "third objection" on SLIDE 9 with no "second objection" — a broken sequence the reader notices instantly. Deny-list on common false-positive nouns (time, place, half, quarter, party, etc.) so "for the first time" doesn't false-fire.
-- 3 cost cuts built (2026-09-29 pm): shared cached [BRIEF+SOURCES] / [SLIDES+BRIEF] / [SOURCES+BRIEF] prefixes on Writer/Editor/Caption/Fact-checker; per-source trim capped at 6K chars (env `HELIOS_V2_MAX_SOURCE_CHARS`) and sources capped at 4 (env `HELIOS_V2_MAX_SOURCES`); Caption stage runs on Haiku 4.5 (env `HELIOS_V2_CAPTION_MODEL`), Editor CHECK ERRORS length-repairs run on Haiku 4.5 (env `HELIOS_V2_REPAIR_EDITOR_MODEL`).
-- Code-built photo requests: `buildPhotoRequests(post, brief)` in image-step. Cover falls back to first person/org from TERMS that appears in THE NEWS; up to 3 story slides on photo-capable kinds, never two in a row, longer TERMS names win over shorter substrings. Writer's IMAGE subject is preferred when named. **(see Open #4 — this cover-subject heuristic needs a proper main-subject rewrite.)**
-- "Unlike X, Y" framing added to `BANNED_ALWAYS`. Editor / Writer / Caption fix instructions now say "If a flag says a comparison or contrast isn't supported, cut it. Don't reword it."
-- **Image step moved to run AFTER the fact-check + repair loop settles** (was before Caption). Photos now see the final, fully-repaired post; the fact-checker no longer sees "IMAGES CHOSEN:" (Wikidata P18/P180 is the identity authority, not the fact-check flag).
-- **Post-PASS soft-repair loop** added: after fact-check passes, up to `MAX_SOFT_REPAIRS = 6` more Editor / Caption passes to clear any surviving `char_limit` / `highlight_substring` / `rhythm` errors. The 220-char body gate is not loosened.
-- **`parseCaption` strips anything past the "Source:" line** (`stripAfterSourceLine`). Haiku sometimes emits internal deliberation past Source; that's now cut before code checks measure caption length.
+1. **Writer keeps inventing numbers.** Run 2026-09-29T16-40-07 (Suleyman `--from-brief`) shipped "200" as a BIG NUMBER and "16" in a body — neither appears in any fetched source. `number_trace` caught them both, but the Writer produced them from thin air on the first pass; the Editor didn't cut them; two repair rounds didn't fix them. Root cause is upstream of the checker. Options: forbid the Writer from writing any digit not already present in the brief; add a Writer-side number-source guard; or feed number_trace hits back into the Editor's CHECK ERRORS with the specific number named. Pick one.
+2. **Rhythm still fails on the FINAL post.** Same run: SLIDE 4+5, 5+6, 10+11 all text, three separate rhythm hard errors surviving to the final gate. The Editor was told to fix rhythm and couldn't within the retry budget. Either the Editor prompt needs a rhythm-specific repair recipe ("convert the middle text slide to a landing line or a quote from an existing source line"), or the Writer needs to draft with rhythm awareness so the Editor isn't fixing structural gaps after the fact.
+3. **Live Reporter bails on "thin brief".** The fresh Reporter run for Suleyman (run 2026-09-29T16-36-21) returned a brief the integrity gate cut 3 quotes from, leaving the Writer with too little substance and no slides. This means live runs on some stories will now fail before the Writer even tries. Either loosen the integrity gate (risky), have the Reporter re-fetch when its brief is thin, or add a Reporter-side check that its brief has enough sourced quotes before it hands off.
+4. **Photos unproven** (see above). Need one run that reaches render with a valid cover-slide photo request, verified against Wikidata P18 and rendered with the correct credit line, before we can claim the images pipeline works.
+5. **The site run — dev DB vs one story on prod.** Tommy's call: do we point the site at a local/dev DB seeded with a hand-picked run, or push a single passing story to prod `article_queue` behind `compose_status = 'needs_human_review'` and view it in the real review UI? Blocker for the review-screen UX work.
+6. **Cover subject must be the main subject of THE NEWS, not the longest TERMS match.** `buildPhotoRequests` still sorts eligible TERMS longest-first and picks whichever appears in `brief.news`. Rewrite to identify the main subject directly and drop the "related entity" fallback — a story with no photographable main subject stays type-only.
+7. **Broad test — 5+ different stories** with `--no-persist --render-preview` to see which failures are systemic (Writer number-invention, thin-brief bail, rhythm-on-final) vs Suleyman-specific.
+8. **Editor scratchpad blow-up (max_tokens).** Google re-run's initial Editor pass emitted 45KB of chain-of-thought before writing `COVER:`. Fix: "write COVER: on the first line, reason after", or a stop-sequence after EDIT NOTES.
+9. **Audit Haiku boundary.** Confirm Haiku 4.5 runs only for the caption + length-only editor repairs, not for Writer / Editor first passes, fact-check reruns, or BIG-flag reruns.
 
-Per-stage cost — Google re-run vs. California baseline:
+## Pre-merge (before this branch touches main)
 
-| Stage | California (2026-09-29T02) | Google (2026-09-29T03-03, pre) | Google (2026-09-29T03-38, post) |
-|---|---|---|---|
-| Reporter | $0.226 | $0.161 | $0.161 (stubbed from cache) |
-| Writer (initial) | $0.044 | $0.034 | $0.041 |
-| Editor (initial) | $0.050 | $0.041 | $0.335 (2× max_tokens scratchpad) |
-| Caption (initial) | $0.018 | $0.013 | $0.025 (Haiku, but 4.5K-char runaway) |
-| Fact-checker | $0.000 | $0.077 (2 rounds) | $0.024 (1 round, PASS) |
-| Repairs | $0.545 | $0.483 | $0.043 (Haiku CHECK ERRORS) |
-| **Total** | **$0.882** | **$0.808** | **$0.627** |
+- The guardrail (the outer safety check that stops a run from writing to prod when `--no-persist` isn't set).
+- The poison-pill cron fix (a single bad article shouldn't take down the whole daily job).
+- The review-states migration (schema change to `article_queue` for the new review UI states).
+- The per-day and per-post spend cap enforced at the DB level, not just in code.
 
-Fact-check verdict flipped from FLAGGED-after-2-rounds → PASS-on-round-1. The "Unlike X, Y" ban prevented the Writer from re-inserting the fabrication that blocked the pre-fix run.
+## Recent shipped
 
-Cost cuts working: repair cost 87% lower ($0.043 vs $0.483), fact-check cost 68% lower (fewer rounds needed). Cost cuts NOT working on this run: Editor initial ballooned to $0.335 from the scratchpad blow-up; Caption on Haiku emitted 4.5K chars of internal deliberation past the SOURCE line (parseCaption doesn't strip it, so caption code-checks flagged it as too long). Need to firm up Haiku's caption output shape.
+- **Preview renders the FINAL post, not the initial editor pass** (2026-09-29 pm). `reconstructPost` in `render-preview.ts` was reading `debug.edited.post` when the pipeline bailed to human review, so previews rendered a stale post that disagreed with the FINAL summary — the root cause of "cover lost its orange highlight" and "three text slides in a row before follow" on the Suleyman preview. Added `debug.finalPost` + `debug.finalCaption` as the single canonical snapshot, written at both bail and ship. Reconstruction prefers `finalPost` → `rounds[last].post` → `edited.post`. Summary formatter now prints QUOTE / NOTE / NUMBER NOTE / SECOND NUMBER / SECOND NOTE / QUOTE BY and each slide's classified kind, so this class of bug can't hide again.
+- **`past_statement_reference` HARD code check.** Catches "earlier writing/wrote/said/argued/warned", "has long argued", "previously said", "in an earlier essay/post/statement", "long-standing position/stance". Confirmed removed the Suleyman "earlier writing on model welfare" clause on the re-run.
+- **`sequence_incomplete` HARD code check.** Scans slides for `<ordinal> <noun>` patterns (first / second / third + noun). Flags missing beats and out-of-order sequences. Deny-list on common non-sequence nouns (time, place, half, quarter, party, floor, grade, class) prevents "for the first time in a decade" false-firing.
+- **Relevance-based source trimming.** Each source's paragraphs scored by keyword overlap with THE NEWS + THE STORY + TERMS; kept in original order up to the per-source cap (default 12K chars, env `HELIOS_V2_MAX_SOURCE_CHARS`). A quoted phrase in paragraph 40 of a 50-paragraph essay now survives.
+- **Cost cuts.** Shared cached prefixes on Writer / Editor / Caption / Fact-checker. Caption + Editor length-only repairs on Haiku 4.5 (env `HELIOS_V2_CAPTION_MODEL`, `HELIOS_V2_REPAIR_EDITOR_MODEL`).
+- **Image step moved to run AFTER the fact-check + repair loop settles.** Photos see the final, fully-repaired post; the fact-checker no longer sees `IMAGES CHOSEN:`.
+- **Post-PASS soft-repair loop** (up to 6 Editor / Caption passes to clear surviving `char_limit` / `highlight_substring` / `rhythm` errors after fact-check PASS). 220-char body gate not loosened.
+- **`parseCaption` strips anything past "Source:"** so Haiku post-Source deliberation stops inflating caption code-checks.
+- **`"Unlike X, Y"` and `"not X, it's Y"` invented-contrast framings added to `BANNED_ALWAYS`.**
+- **Editor / Writer / Caption fix instructions**: "If a flag says a comparison or contrast isn't supported, cut it. Don't reword it."
 
 ## Costs
 
-About $0.70 per post now; target $0.25–0.35 after the cost cuts plus the Batch API. A daily top-10 at about $0.50 per post is about $110 a month. The $1.50 cap per post stays.
-
-Soft-repair adds a small variable cost: each Editor / Caption pass in the post-PASS loop is Haiku (`REPAIR_EDITOR_MODEL`, `CAPTION_MODEL`), plus one targeted re-fact-check on Sonnet if any slide text changed. Track per run under `pipeline_v2_debug.softRepair.{runs, costUsd}` and `softRepair.reFactCheck.usage.approxCostUsd`; the summary writer should surface these so a run over the cap is easy to spot.
+Roughly $0.60–$0.65 per run right now — Suleyman `--from-brief` on 2026-09-29T16-40-07 cost $0.6481, fresh Reporter Suleyman on 2026-09-29T16-36-21 cost $0.5883. Target still $0.25–0.35 after the cost cuts plus the Batch API. `$1.50` cap per post stays. Soft-repair adds a small variable cost tracked in `pipeline_v2_debug.softRepair.{runs, costUsd}` and `softRepair.reFactCheck.usage.approxCostUsd`.
 
 ## Later
 
 - The daily top-10 job: Jev ranks the stories, and the Batch API runs them at half price.
-- Before merging to main: the guardrail, the poison-pill cron fix, the review-states migration, the spend cap.
 - A manual photo picker in the review screen.
-- The scraper prompt (rejecting thin stories).
+- The scraper prompt (rejecting thin stories at ingestion, before they reach the pipeline).
+
+## Next step
+
+Fix the Writer's number invention (Open #1). It's the most concrete failure blocking a shipped run: Suleyman `--from-brief` failed on "200" and "16" that no source contains, and `number_trace` catching them at the gate isn't enough because two repair rounds still didn't remove them. Trace where the Writer got those digits (prompt? memory? source paraphrase?) and either (a) forbid the Writer from emitting any digit not present in the brief's source texts, or (b) feed each `number_trace` hit back into the Editor's CHECK ERRORS with the specific missing digit named so the Editor knows exactly what to cut. Then re-run Suleyman `--from-brief --render-preview --no-persist` and confirm number_trace stays empty on the FINAL post.
