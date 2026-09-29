@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 
 import { ReelsHub } from '@/app/reels/reels-hub';
 import { loadReelsOverview } from '@/lib/reels/overview';
+import { ensureReviewToken } from '@/lib/reels/review';
 import { getSession } from '@/lib/session';
 
 import './reels.css';
@@ -37,5 +38,6 @@ export default async function ReelsPage() {
     );
   }
 
-  return <ReelsHub initial={initial} />;
+  const reviewToken = await ensureReviewToken();
+  return <ReelsHub initial={initial} reviewPath={`/watch/${reviewToken}`} />;
 }

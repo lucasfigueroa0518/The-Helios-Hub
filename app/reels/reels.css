@@ -582,6 +582,8 @@
 .rh-approve--done { justify-content: flex-start; color: var(--rh-ok); font-weight: 600; }
 .rh-approve__link { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; color: var(--rh-accent-ink); font-weight: 500; }
 .rh-approve-wrap { display: flex; flex-direction: column; gap: 6px; }
+.rh-approve-actions { display: flex; gap: 8px; }
+.rh-approve-actions .rh-btn { flex: 1; padding: 11px 14px; font-size: 14px; }
 
 .rh-parts__text { font-size: 14px !important; }
 .rh-song-tags { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 8px; margin: 8px 0 0; color: var(--rh-body); font-size: 12.5px; }

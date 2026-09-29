@@ -316,13 +316,14 @@ function approveBlocker(music: MusicStatus): string | null {
 
 /* ------------------------------------------------------------------- hub */
 
-export function ReelsHub({ initial }: { initial: ReelsOverview }) {
+export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview; reviewPath?: string }) {
   const [data, setData] = useState<ReelsOverview>(initial);
   const [dayId, setDayId] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [insightsOpen, setInsightsOpen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [runBusy, setRunBusy] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -472,6 +473,26 @@ export function ReelsHub({ initial }: { initial: ReelsOverview }) {
             <Link href="/reels/songs" className="rh-btn">
               <Music2 size={15} /> Songs
             </Link>
+            {reviewPath ? (
+              <button
+                type="button"
+                className="rh-btn"
+                title="Copy the private review link. No login."
+                onClick={() => {
+                  const url = `${window.location.origin}${reviewPath}`;
+                  void navigator.clipboard.writeText(url).then(
+                    () => {
+                      setCopiedLink(true);
+                      window.setTimeout(() => setCopiedLink(false), 1600);
+                    },
+                    (error: unknown) => setMessage(error instanceof Error ? error.message : String(error)),
+                  );
+                }}
+              >
+                {copiedLink ? <Check size={15} /> : <CopyIcon size={15} />}
+                {copiedLink ? 'Copied' : 'Review link'}
+              </button>
+            ) : null}
             <button type="button" className="rh-btn" onClick={() => setInsightsOpen(true)} aria-haspopup="dialog">
               <span className={`rh-dot rh-dot--${health.tone}`} aria-hidden="true" />
               <Activity size={15} /> Insights
@@ -776,21 +797,25 @@ function ApproveBlock({
   state,
   music,
   videoJobId,
+  canGenerate,
   onApprove,
+  onGenerate,
   onRetrySong,
 }: {
   state: PublishState;
   music: MusicStatus;
   videoJobId: string;
+  canGenerate: boolean;
   onApprove: (videoJobId: string) => void;
+  onGenerate: () => void;
   onRetrySong: (videoJobId: string) => void;
 }) {
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<'approve' | 'regenerate' | 'song' | null>(null);
   const blocker = approveBlocker(music);
-  const act = (run: () => void) => {
-    setBusy(true);
+  const act = (which: 'approve' | 'regenerate' | 'song', run: () => void) => {
+    setBusy(which);
     run();
-    setTimeout(() => setBusy(false), 1500);
+    setTimeout(() => setBusy(null), 1500);
   };
   switch (state.kind) {
     case 'published':
@@ -822,7 +847,7 @@ function ApproveBlock({
           <span>
             <AlertTriangle size={14} /> {state.text}
           </span>
-          <button type="button" className="rh-btn rh-btn--xs" disabled={busy} onClick={() => act(() => onRetrySong(videoJobId))}>
+          <button type="button" className="rh-btn rh-btn--xs" disabled={busy !== null} onClick={() => act('song', () => onRetrySong(videoJobId))}>
             <RotateCcw size={12} /> Retry song
           </button>
         </div>
@@ -836,14 +861,25 @@ function ApproveBlock({
               <AlertTriangle size={13} /> {state.text}
             </p>
           )}
-          <button
-            type="button"
-            className="rh-btn rh-btn--primary rh-btn--block"
-            disabled={busy || blocker !== null}
-            onClick={() => act(() => onApprove(videoJobId))}
-          >
-            {busy ? <Loader2 size={15} className="rh-spin" /> : <Check size={15} />} Approve
-          </button>
+          <div className="rh-approve-actions">
+            <button
+              type="button"
+              className="rh-btn"
+              disabled={busy !== null || !canGenerate}
+              title={canGenerate ? 'Make this reel again from the copy onward.' : 'No archetype and category cleared the bar, so there is nothing to write from.'}
+              onClick={() => act('regenerate', onGenerate)}
+            >
+              {busy === 'regenerate' ? <Loader2 size={15} className="rh-spin" /> : <RotateCcw size={15} />} Regenerate
+            </button>
+            <button
+              type="button"
+              className="rh-btn rh-btn--primary"
+              disabled={busy !== null || blocker !== null}
+              onClick={() => act('approve', () => onApprove(videoJobId))}
+            >
+              {busy === 'approve' ? <Loader2 size={15} className="rh-spin" /> : <Check size={15} />} Approve
+            </button>
+          </div>
           {blocker && <p className="rh-muted rh-song-note">{blocker}</p>}
         </div>
       );
@@ -943,7 +979,15 @@ export function ReelDetail({
       )}
 
       {reel.phase === 'ready' && reel.video ? (
-        <ApproveBlock state={state} music={music} videoJobId={reel.video.id} onApprove={onApprove} onRetrySong={onRetrySong} />
+        <ApproveBlock
+          state={state}
+          music={music}
+          videoJobId={reel.video.id}
+          canGenerate={reel.canGenerate}
+          onApprove={onApprove}
+          onGenerate={onGenerate}
+          onRetrySong={onRetrySong}
+        />
       ) : (
         <GenerateButton reel={reel} onGenerate={onGenerate} block />
       )}

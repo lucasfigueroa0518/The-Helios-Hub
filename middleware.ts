@@ -25,6 +25,9 @@ function isPublicPath(pathname: string): boolean {
   if (pathname === '/api/webhooks/agentmail') return true;
   if (pathname === '/api/webhooks/gcp-billing') return true;
   if (pathname.startsWith('/api/public/sender-headshots/')) return true;
+  // Private reel review. The token in the path is the gate. No Auth.js session.
+  if (pathname.startsWith('/watch/')) return true;
+  if (pathname.startsWith('/api/watch/')) return true;
   return false;
 }
 
@@ -93,6 +96,7 @@ export const config = {
     '/reels',
     '/reels/:path*',
     '/d/:path*',
+    '/watch/:path*',
     '/api/:path*',
   ],
 };
