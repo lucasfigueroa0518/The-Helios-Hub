@@ -197,6 +197,40 @@ describe('adaptToPost — design v1 field-driven mapping', () => {
   });
 });
 
+describe('adaptToPost — at most one orange span per slide (spec §Color)', () => {
+  test('HIGHLIGHT that appears in both HEADLINE and BODY paints headline only', () => {
+    const brief = makeBrief();
+    const parsed = makeEditedPost({
+      slides: [{
+        headline: 'From under 1% to 26% in six months',
+        body: 'In February it was under 1%. Now it is 26%.',
+        highlight: 'under 1%',
+      }],
+    });
+    const post = adaptToPost({ brief, post: parsed, caption: 'x'.repeat(500), articlePublishedAt: '2026-09-12', issueNumber: 1 });
+    const beat = post.slides[1]!;
+    const headlineHook = beat.headline!.find((s) => s.role === 'hook');
+    const bodyHook = beat.body!.find((s) => s.role === 'hook');
+    assert.ok(headlineHook, 'headline must carry the orange highlight');
+    assert.equal(bodyHook, undefined, 'body must NOT carry a second orange span');
+  });
+
+  test('HIGHLIGHT only in BODY paints body (headline is empty target)', () => {
+    const brief = makeBrief();
+    const parsed = makeEditedPost({
+      slides: [{
+        headline: 'Timing matters',
+        body: 'The escape is the first reported since the security overhaul.',
+        highlight: 'first reported since',
+      }],
+    });
+    const post = adaptToPost({ brief, post: parsed, caption: 'x'.repeat(500), articlePublishedAt: '2026-09-12', issueNumber: 1 });
+    const beat = post.slides[1]!;
+    assert.equal(beat.headline!.find((s) => s.role === 'hook'), undefined);
+    assert.ok(beat.body!.find((s) => s.role === 'hook'));
+  });
+});
+
 describe('shouldColorGreen — proper-name filter (design v1 §Color)', () => {
   test('OpenAI (single proper noun) → green', () => {
     assert.equal(shouldColorGreen('OpenAI', 'OpenAI'), true);

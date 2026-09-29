@@ -109,6 +109,16 @@ function buildBeatSlide(slide: ParsedSlide, brief: Brief, position: number): Sli
   const highlight = slide.highlight ?? '';
   const altSeed = slide.headline || slide.body || slide.quote || slide.bigNumber || '';
 
+  // Spec §Color: "at most one orange phrase per slide". A HIGHLIGHT that
+  // happens to appear in more than one field (e.g. "26%" in both HEADLINE
+  // and BODY) still renders orange in only one — headline first, then
+  // quote, body, note. Fields further down the preference get the
+  // highlight stripped.
+  const highlightFor = pickHighlightTarget(slide, highlight);
+  const hlHeadline = highlightFor === 'headline' ? highlight : '';
+  const hlQuote = highlightFor === 'quote' ? highlight : '';
+  const hlBody = highlightFor === 'body' ? highlight : '';
+
   // 1. QUOTE → quote slide
   if (slide.quote) {
     const out: SlideCopy = {
@@ -118,7 +128,7 @@ function buildBeatSlide(slide: ParsedSlide, brief: Brief, position: number): Sli
       // orange within QUOTE). Names inside quotes are NOT painted green
       // per the "green only on names of people/companies" rule combined
       // with the visual rule of one accent per slide.
-      quoteText: colorSpans(slide.quote, highlight, [], brief, /* allowGreen */ false),
+      quoteText: colorSpans(slide.quote, hlQuote, [], brief, /* allowGreen */ false),
       altText: truncateAlt(slide.quote),
     };
     if (slide.quoteBy) out.quoteBy = slide.quoteBy.trim();
@@ -136,10 +146,10 @@ function buildBeatSlide(slide: ParsedSlide, brief: Brief, position: number): Sli
     const out: SlideCopy = {
       position,
       layoutVariant: 'split_stat',
-      title: colorSpans(slide.bigNumber ?? '', highlight, [], brief, /* allowGreen */ false),
+      title: colorSpans(slide.bigNumber ?? '', '', [], brief, /* allowGreen */ false),
       altText: truncateAlt(slide.headline ?? slide.bigNumber ?? ''),
     };
-    if (slide.headline) out.headline = colorSpans(slide.headline, highlight, [], brief, /* allowGreen */ true);
+    if (slide.headline) out.headline = colorSpans(slide.headline, hlHeadline, [], brief, /* allowGreen */ true);
     if (slide.numberNote) out.numberNote = slide.numberNote.trim();
     out.secondNumber = slide.secondNumber.trim();
     if (slide.secondNote) out.secondNote = slide.secondNote.trim();
@@ -155,11 +165,11 @@ function buildBeatSlide(slide: ParsedSlide, brief: Brief, position: number): Sli
     const out: SlideCopy = {
       position,
       layoutVariant: 'stat',
-      title: colorSpans(slide.bigNumber, highlight, [], brief, /* allowGreen */ false),
+      title: colorSpans(slide.bigNumber, '', [], brief, /* allowGreen */ false),
       altText: truncateAlt(slide.headline ?? slide.bigNumber),
     };
-    if (slide.headline) out.headline = colorSpans(slide.headline, highlight, [], brief, /* allowGreen */ true);
-    if (slide.body) out.body = colorSpans(slide.body, highlight, [], brief, /* allowGreen */ true);
+    if (slide.headline) out.headline = colorSpans(slide.headline, hlHeadline, [], brief, /* allowGreen */ true);
+    if (slide.body) out.body = colorSpans(slide.body, hlBody, [], brief, /* allowGreen */ true);
     if (slide.numberNote) out.numberNote = slide.numberNote.trim();
     if (briefImage?.link) {
       out.photoUrl = briefImage.link;
@@ -173,12 +183,12 @@ function buildBeatSlide(slide: ParsedSlide, brief: Brief, position: number): Sli
     const out: SlideCopy = {
       position,
       layoutVariant: 'image',
-      headline: colorSpans(slide.headline, highlight, [], brief, /* allowGreen */ true),
+      headline: colorSpans(slide.headline, hlHeadline, [], brief, /* allowGreen */ true),
       photoUrl: briefImage.link,
       altText: truncateAlt(slide.headline),
     };
     if (briefImage.credit) out.photoCredit = shortPhotoCredit(briefImage.credit);
-    if (slide.body) out.body = colorSpans(slide.body, highlight, [], brief, /* allowGreen */ true);
+    if (slide.body) out.body = colorSpans(slide.body, hlBody, [], brief, /* allowGreen */ true);
     return out;
   }
 
@@ -187,7 +197,7 @@ function buildBeatSlide(slide: ParsedSlide, brief: Brief, position: number): Sli
     const out: SlideCopy = {
       position,
       layoutVariant: 'landing',
-      headline: colorSpans(slide.headline, highlight, [], brief, /* allowGreen */ true),
+      headline: colorSpans(slide.headline, hlHeadline, [], brief, /* allowGreen */ true),
       altText: truncateAlt(slide.headline),
     };
     if (slide.note) out.note = slide.note.trim();
@@ -200,13 +210,30 @@ function buildBeatSlide(slide: ParsedSlide, brief: Brief, position: number): Sli
     layoutVariant: 'text',
     altText: truncateAlt(altSeed),
   };
-  if (slide.headline) out.headline = colorSpans(slide.headline, highlight, [], brief, /* allowGreen */ true);
-  if (slide.body) out.body = colorSpans(slide.body, highlight, [], brief, /* allowGreen */ true);
+  if (slide.headline) out.headline = colorSpans(slide.headline, hlHeadline, [], brief, /* allowGreen */ true);
+  if (slide.body) out.body = colorSpans(slide.body, hlBody, [], brief, /* allowGreen */ true);
   if (briefImage?.link) {
     out.photoUrl = briefImage.link;
     if (briefImage.credit) out.photoCredit = shortPhotoCredit(briefImage.credit);
   }
   return out;
+}
+
+/**
+ * Pick which field carries the HIGHLIGHT orange span (spec §Color: "at
+ * most one per slide"). Preference: headline > quote > body > note.
+ * Returns 'none' when the highlight matches nothing on the slide.
+ */
+function pickHighlightTarget(
+  slide: ParsedSlide,
+  highlight: string,
+): 'headline' | 'quote' | 'body' | 'note' | 'none' {
+  if (!highlight) return 'none';
+  if (slide.headline && slide.headline.includes(highlight)) return 'headline';
+  if (slide.quote && slide.quote.includes(highlight)) return 'quote';
+  if (slide.body && slide.body.includes(highlight)) return 'body';
+  if (slide.note && slide.note.includes(highlight)) return 'note';
+  return 'none';
 }
 
 /* ── Follow ────────────────────────────────────────────────────────── */

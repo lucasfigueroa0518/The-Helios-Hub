@@ -37,11 +37,13 @@ const SLIDE_HEIGHT = 1350;
  * doesn't cover the design.
  */
 const PREVIEW_WATERMARK_CSS = `
+  /* Bottom-left so the design v1 top-right HELIOS wordmark and the
+     cover's bottom-right orange chevron stay visible. */
   .helios-slide::after {
     content: "PREVIEW";
     position: absolute;
-    top: 24px;
-    right: 28px;
+    bottom: 28px;
+    left: 32px;
     font: 800 24px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     letter-spacing: 0.24em;
     color: #E63946;
