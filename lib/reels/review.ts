@@ -8,11 +8,17 @@ import { signFrameObject } from '@/lib/reels/visual/storage';
 
 /**
  * Private reel review. The unguessable token in the URL is the only gate.
- * There is no Auth.js session. Each visit reads the database again: the
- * latest slate for today and yesterday in America/New_York, and for each
- * selected idea the newest finished video on that slate. A regeneration
- * replaces the clip on the next load once that video is ok.
+ * There is no Auth.js session. Each visit reads the database again.
+ *
+ * The feed is the September 29 new-scoring slate: the five highest ranks,
+ * plus Sonnet 5.5 further down the list. Those are the ideas on that slate
+ * that have a finished video. Each clip uses the newest finished video for
+ * the idea, so a regeneration replaces it on the next load.
  */
+
+/** `scoring-pass1-v2` slate for 2026-09-29. Ranks 1–5 and 11 (Sonnet 5.5) have videos. */
+const REVIEW_SCORE_SLATE_ID = '83d3b27f-5dd1-4778-823a-d95d4894dc24';
+const REVIEW_LABEL = 'Tue, Sep 29';
 
 const REVIEW_TOKEN_KEY = 'review_token';
 const SIGNED_SECONDS = 3600;
@@ -72,7 +78,6 @@ export type ReviewClip = {
 
 type ReviewRow = {
   video_id: string;
-  ny_date: string;
   rank: number | null;
   caption: string | null;
   call_to_action: string | null;
@@ -83,18 +88,31 @@ type ReviewRow = {
   preview_storage_path: string | null;
 };
 
-export async function loadReviewClips(token: string, at: Date = new Date()): Promise<ReviewClip[]> {
-  const { today, yesterday } = reviewDates(at);
+/**
+ * Newest finished video for each idea on the review slate that has one.
+ * Copy and the song come from that video, which may sit on an earlier slate
+ * for the same idea (Sonnet 5.5).
+ */
+const REVIEW_VIDEOS_SQL = `
+  SELECT DISTINCT ON (v.post_idea_id)
+         v.id AS video_id,
+         v.post_idea_id,
+         v.slate_id,
+         v.video_storage_path,
+         s.rank
+    FROM reels.idea_scores s
+    JOIN reels.video_jobs v ON v.post_idea_id = s.post_idea_id
+   WHERE s.slate_id = $1::uuid
+     AND v.status = 'ok'
+     AND v.video_storage_path IS NOT NULL
+   ORDER BY v.post_idea_id, v.finished_at DESC NULLS LAST, v.requested_at DESC
+`;
+
+export async function loadReviewClips(token: string): Promise<ReviewClip[]> {
   const { rows } = await dbQuery<ReviewRow>(
-    `WITH latest AS (
-       SELECT DISTINCT ON (ny_date) id, ny_date::text AS ny_date
-         FROM reels.score_slates
-        WHERE ny_date IN ($1::date, $2::date)
-        ORDER BY ny_date, scored_at DESC
-     )
-     SELECT v.id AS video_id,
-            latest.ny_date,
-            s.rank,
+    `WITH newest AS (${REVIEW_VIDEOS_SQL})
+     SELECT newest.video_id,
+            newest.rank,
             c.caption,
             c.call_to_action,
             c.hashtags,
@@ -102,30 +120,19 @@ export async function loadReviewClips(token: string, at: Date = new Date()): Pro
             song.picked_artist,
             song.picked_audio_id,
             song.preview_storage_path
-       FROM latest
-       JOIN reels.idea_scores s ON s.slate_id = latest.id AND s.selected
-       JOIN LATERAL (
-         SELECT id
-           FROM reels.video_jobs
-          WHERE post_idea_id = s.post_idea_id
-            AND slate_id = latest.id
-            AND status = 'ok'
-            AND video_storage_path IS NOT NULL
-          ORDER BY finished_at DESC NULLS LAST, requested_at DESC
-          LIMIT 1
-       ) v ON true
+       FROM newest
        LEFT JOIN reels.idea_copy c
-         ON c.slate_id = latest.id AND c.post_idea_id = s.post_idea_id AND c.status = 'ok'
+         ON c.slate_id = newest.slate_id AND c.post_idea_id = newest.post_idea_id AND c.status = 'ok'
        LEFT JOIN LATERAL (
          SELECT p.picked_title, p.picked_artist, p.picked_audio_id, pool.preview_storage_path
            FROM reels.song_picks p
            LEFT JOIN reels.songs pool ON pool.audio_id = p.picked_audio_id
-          WHERE p.video_job_id = v.id AND p.status = 'ok' AND p.picked_audio_id IS NOT NULL
+          WHERE p.video_job_id = newest.video_id AND p.status = 'ok' AND p.picked_audio_id IS NOT NULL
           ORDER BY p.finished_at DESC NULLS LAST
           LIMIT 1
        ) song ON true
-      ORDER BY latest.ny_date DESC, s.rank ASC NULLS LAST`,
-    [today, yesterday],
+      ORDER BY newest.rank ASC NULLS LAST`,
+    [REVIEW_SCORE_SLATE_ID],
   );
 
   const mix = await publishMix();
@@ -138,7 +145,7 @@ export async function loadReviewClips(token: string, at: Date = new Date()): Pro
     const audioId = row.preview_storage_path && row.picked_audio_id ? row.picked_audio_id : null;
     return {
       id: row.video_id,
-      label: reviewDateLabel(row.ny_date, today),
+      label: REVIEW_LABEL,
       caption: fullCaption({
         caption: row.caption ?? '',
         callToAction: row.call_to_action ?? '',
@@ -158,33 +165,27 @@ export async function loadReviewClips(token: string, at: Date = new Date()): Pro
   });
 }
 
-async function latestSlateIds(today: string, yesterday: string): Promise<string[]> {
-  const { rows } = await dbQuery<{ id: string }>(
-    `SELECT DISTINCT ON (ny_date) id
-       FROM reels.score_slates
-      WHERE ny_date IN ($1::date, $2::date)
-      ORDER BY ny_date, scored_at DESC`,
-    [today, yesterday],
+/** Ideas on the review slate, best first. Used when regenerating that same set. */
+export async function reviewIdeaTargets(): Promise<Array<{ postIdeaId: string; slateId: string; rank: number | null }>> {
+  const { rows } = await dbQuery<{ post_idea_id: string; rank: number | null }>(
+    `WITH newest AS (${REVIEW_VIDEOS_SQL})
+     SELECT post_idea_id, rank FROM newest ORDER BY rank ASC NULLS LAST`,
+    [REVIEW_SCORE_SLATE_ID],
   );
-  return rows.map((row) => row.id);
+  return rows.map((row) => ({
+    postIdeaId: row.post_idea_id,
+    slateId: REVIEW_SCORE_SLATE_ID,
+    rank: row.rank,
+  }));
 }
 
-/** Storage path for a finished selected reel on today's or yesterday's latest slate. */
+/** Storage path for one of the review reels' newest finished video. */
 export async function reviewVideoStoragePath(token: string, videoId: string): Promise<string | null> {
   if (!(await reviewTokenMatches(token))) return null;
-  const { today, yesterday } = reviewDates();
-  const slateIds = await latestSlateIds(today, yesterday);
-  if (slateIds.length === 0) return null;
   const { rows } = await dbQuery<{ video_storage_path: string }>(
-    `SELECT v.video_storage_path
-       FROM reels.video_jobs v
-       JOIN reels.idea_scores s
-         ON s.slate_id = v.slate_id AND s.post_idea_id = v.post_idea_id AND s.selected
-      WHERE v.id = $1::uuid
-        AND v.status = 'ok'
-        AND v.video_storage_path IS NOT NULL
-        AND v.slate_id = ANY($2::uuid[])`,
-    [videoId, slateIds],
+    `WITH newest AS (${REVIEW_VIDEOS_SQL})
+     SELECT video_storage_path FROM newest WHERE video_id = $2::uuid`,
+    [REVIEW_SCORE_SLATE_ID, videoId],
   );
   return rows[0]?.video_storage_path ?? null;
 }
@@ -192,24 +193,17 @@ export async function reviewVideoStoragePath(token: string, videoId: string): Pr
 /** Preview path only when that song is on one of the review reels and still in the pool. */
 export async function reviewAudioStoragePath(token: string, audioId: string): Promise<string | null> {
   if (!(await reviewTokenMatches(token))) return null;
-  const { today, yesterday } = reviewDates();
-  const slateIds = await latestSlateIds(today, yesterday);
-  if (slateIds.length === 0) return null;
   const { rows } = await dbQuery<{ preview_storage_path: string }>(
-    `SELECT pool.preview_storage_path
-       FROM reels.song_picks p
-       JOIN reels.video_jobs v ON v.id = p.video_job_id
-       JOIN reels.idea_scores s
-         ON s.slate_id = v.slate_id AND s.post_idea_id = v.post_idea_id AND s.selected
+    `WITH newest AS (${REVIEW_VIDEOS_SQL})
+     SELECT pool.preview_storage_path
+       FROM newest
+       JOIN reels.song_picks p ON p.video_job_id = newest.video_id
        JOIN reels.songs pool ON pool.audio_id = p.picked_audio_id
-      WHERE p.picked_audio_id = $1
+      WHERE p.picked_audio_id = $2
         AND p.status = 'ok'
-        AND v.status = 'ok'
-        AND v.slate_id = ANY($2::uuid[])
         AND pool.preview_storage_path IS NOT NULL
-      ORDER BY p.finished_at DESC NULLS LAST
       LIMIT 1`,
-    [audioId, slateIds],
+    [REVIEW_SCORE_SLATE_ID, audioId],
   );
   return rows[0]?.preview_storage_path ?? null;
 }

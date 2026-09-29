@@ -250,8 +250,9 @@ CREATE INDEX IF NOT EXISTS idx_reels_cost_created
     ON reels.cost_events (created_at DESC);
 
 -- ── Scoring slates (Build 2, D-079, D-080, D-085) ───────────────────────────
--- One slate per run. A later run on the same New York date replaces it as the
--- slate the page shows, because the page reads the latest scored_at.
+-- One slate per run. A later run on the same New York date does not delete the
+-- earlier slate. The page shows the latest, and can switch back to the one
+-- before it.
 
 CREATE TABLE IF NOT EXISTS reels.score_slates (
     id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -574,7 +575,7 @@ CREATE TABLE IF NOT EXISTS reels.publish_attempts (
     post_idea_id      uuid NOT NULL,
     song_pick_id      uuid REFERENCES reels.song_picks (id) ON DELETE SET NULL,
     -- mix_test: the MUS-V2 test publishes, run by hand at chosen volumes.
-    trigger           text NOT NULL CHECK (trigger IN ('approve', 'auto', 'mix_test')),
+    trigger           text NOT NULL CHECK (trigger IN ('approve', 'auto', 'mix_test', 'force')),
     status            text NOT NULL CHECK (status IN (
                         'requested', 'creating', 'processing', 'publishing', 'published', 'failed'
                       )),
@@ -625,7 +626,26 @@ BEGIN
        AND pg_get_constraintdef(c.oid) NOT ILIKE '%mix_test%'
   LOOP
     EXECUTE format('ALTER TABLE reels.publish_attempts DROP CONSTRAINT %I', cons);
-    EXECUTE 'ALTER TABLE reels.publish_attempts ADD CONSTRAINT publish_attempts_trigger_check CHECK (trigger IN (''approve'', ''auto'', ''mix_test''))';
+    EXECUTE 'ALTER TABLE reels.publish_attempts ADD CONSTRAINT publish_attempts_trigger_check CHECK (trigger IN (''approve'', ''auto'', ''mix_test'', ''force''))';
+  END LOOP;
+END $$;
+
+-- Databases created before force-post existed keep the old trigger check until this runs.
+DO $$
+DECLARE
+  cons text;
+BEGIN
+  FOR cons IN
+    SELECT c.conname
+      FROM pg_constraint c
+      JOIN pg_class t ON t.oid = c.conrelid
+      JOIN pg_namespace n ON n.oid = t.relnamespace
+     WHERE n.nspname = 'reels' AND t.relname = 'publish_attempts' AND c.contype = 'c'
+       AND pg_get_constraintdef(c.oid) ILIKE '%trigger%'
+       AND pg_get_constraintdef(c.oid) NOT ILIKE '%force%'
+  LOOP
+    EXECUTE format('ALTER TABLE reels.publish_attempts DROP CONSTRAINT %I', cons);
+    EXECUTE 'ALTER TABLE reels.publish_attempts ADD CONSTRAINT publish_attempts_trigger_check CHECK (trigger IN (''approve'', ''auto'', ''mix_test'', ''force''))';
   END LOOP;
 END $$;
 
@@ -641,6 +661,36 @@ CREATE TABLE IF NOT EXISTS reels.settings (
 INSERT INTO reels.settings (key, value)
 VALUES ('auto_publish', 'false'::jsonb)
 ON CONFLICT (key) DO NOTHING;
+
+-- Live is the nightly auto-schedule. Off until it is switched on.
+INSERT INTO reels.settings (key, value)
+VALUES ('publishing_live', 'false'::jsonb)
+ON CONFLICT (key) DO NOTHING;
+
+-- One reel per Eastern-time slot per day. Force post does not take a row.
+CREATE TABLE IF NOT EXISTS reels.posting_schedule (
+    id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    post_idea_id        uuid NOT NULL,
+    video_job_id        uuid,
+    ny_date             date NOT NULL,
+    slot                text NOT NULL CHECK (slot IN ('morning', 'midday', 'evening')),
+    publish_at          timestamptz NOT NULL,
+    status              text NOT NULL CHECK (status IN ('scheduled', 'publishing', 'published', 'cancelled', 'failed')),
+    source              text NOT NULL CHECK (source IN ('auto', 'user')),
+    publish_attempt_id  uuid,
+    error               text,
+    created_at          timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_reels_posting_schedule_due
+    ON reels.posting_schedule (publish_at)
+    WHERE status = 'scheduled';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reels_posting_schedule_slot
+    ON reels.posting_schedule (ny_date, slot)
+    WHERE status IN ('scheduled', 'publishing', 'published');
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reels_posting_schedule_idea
+    ON reels.posting_schedule (post_idea_id)
+    WHERE status IN ('scheduled', 'publishing');
 
 -- ── Original-sound trending observations (D-190) ────────────────────────────
 -- Meta returns no engagement or trending metric, so the ingest samples the

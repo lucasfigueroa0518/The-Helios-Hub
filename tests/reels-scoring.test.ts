@@ -223,6 +223,16 @@ test('every scoring question uses the same five-level scale', () => {
   assert.equal(Object.keys(SCORING_PASS_2.questions).length, 2);
 });
 
+test('scoring judges for the AI-curious viewer with a builder minority (D-206)', () => {
+  assert.equal(SCORING_PASS_1.version, 'scoring-pass1-v2');
+  assert.equal(SCORING_PASS_2.version, 'scoring-pass2-v2');
+  const wording = JSON.stringify([SCORING_PASS_1.questions, SCORING_PASS_2.questions]);
+  assert.match(wording, /curious about AI/);
+  assert.match(wording, /About one in seven builds with AI/);
+  assert.match(wording, /not at the top of the scale/);
+  assert.doesNotMatch(wording, /developer|founder|operator|hardest-hit|one of the audiences|one of those audiences|\bpeer\b/i);
+});
+
 function pass1(overrides: Partial<Pass1Answers> = {}): Pass1Answers {
   const scored = { score: 3, confidence: 0.8 };
   const no = { noul: 0.1 };

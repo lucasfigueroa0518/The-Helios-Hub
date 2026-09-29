@@ -29,6 +29,15 @@ export type ScoringSummary = {
   carryovers: number;
 };
 
+export type RescoreSummary = ScoringSummary & {
+  /** New top 3, best first. */
+  selectedIds: string[];
+  failed: number;
+};
+
+/** How many ideas score at once on a rescore. The nightly run stays one at a time. */
+const RESCORE_CONCURRENCY = 4;
+
 /** Pass 1, then pass 2 when a framework and a bucket both survive. */
 export async function scoreOneIdea(
   runId: string,
@@ -129,4 +138,111 @@ export async function scoreRun(
     selected: selected.size,
     carryovers: scores.filter((score) => score.origin === 'carryover').length,
   };
+}
+
+/**
+ * Score the ideas already on one slate again, and store the result as a new
+ * slate for the same New York date. The earlier slate is left as it is.
+ * Ideas that fail to score stay on the old slate only.
+ */
+export async function rescoreIdeas(
+  runId: string,
+  nyDate: string,
+  ideas: ReadonlyArray<{ id: string; origin: 'timely' | 'carryover' }>,
+  jev: JevRunner,
+): Promise<RescoreSummary> {
+  const material = await loadIdeaMaterial(ideas.map((idea) => idea.id));
+  const originOf = new Map(ideas.map((idea) => [idea.id, idea.origin]));
+  const interpreted = new Map<string, InterpretedScore>();
+  let failed = 0;
+  let done = 0;
+
+  await mapPool(material, RESCORE_CONCURRENCY, async (idea) => {
+    try {
+      const result = await scoreOneIdea(runId, jev, idea);
+      interpreted.set(idea.id, result);
+      done += 1;
+      console.log(
+        JSON.stringify({
+          ts: new Date().toISOString(),
+          component: 'reels-rescore',
+          message: 'scored',
+          done,
+          of: material.length,
+          net: result.net,
+          bucket: result.chosenBucket,
+          headline: idea.members[0]?.headline ?? '',
+        }),
+      );
+    } catch (error) {
+      failed += 1;
+      console.log(
+        JSON.stringify({
+          ts: new Date().toISOString(),
+          component: 'reels-rescore',
+          message: 'idea_failed',
+          postIdeaId: idea.id,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  });
+
+  const ranked: RankedIdea[] = material
+    .filter((idea) => interpreted.has(idea.id))
+    .map((idea) => {
+      const result = interpreted.get(idea.id) as InterpretedScore;
+      return {
+        id: idea.id,
+        net: result.net,
+        bucketScore: result.bucketScore ?? 0,
+        psychologyScore: result.psychologyTerm ?? 0,
+        lastJoinedMs: idea.lastJoinedMs,
+        confidence: result.bucketConfidence ?? 0,
+      };
+    });
+  const order = rankForSlate(ranked);
+  const top = selectTopThree(ranked);
+  const selected = new Set(top.map((idea) => idea.id));
+  const rankOf = new Map(order.map((idea, index) => [idea.id, index + 1]));
+
+  const scores: ScoreInsert[] = ranked.map((idea) => ({
+    postIdeaId: idea.id,
+    origin: originOf.get(idea.id) ?? 'timely',
+    interpreted: interpreted.get(idea.id) as InterpretedScore,
+    rank: rankOf.get(idea.id) ?? null,
+    selected: selected.has(idea.id),
+  }));
+  if (scores.length === 0) {
+    throw new Error('No idea scored. The earlier slate was left as it is.');
+  }
+
+  const slateId = await insertSlate({
+    runId,
+    nyDate,
+    pass1Version: SCORING_PASS_1.version,
+    pass2Version: SCORING_PASS_2.version,
+    scores,
+  });
+
+  return {
+    slateId,
+    scored: scores.length,
+    selected: selected.size,
+    carryovers: scores.filter((score) => score.origin === 'carryover').length,
+    selectedIds: top.map((idea) => idea.id),
+    failed,
+  };
+}
+
+async function mapPool<T>(items: readonly T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      await fn(items[index]);
+    }
+  });
+  await Promise.all(workers);
 }

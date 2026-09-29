@@ -14,7 +14,6 @@ export function ReviewFeed({ clips }: { clips: ReviewClip[] }) {
   const [needsGesture, setNeedsGesture] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const unlock = useCallback(() => setNeedsGesture(false), []);
-  const block = useCallback(() => setNeedsGesture(true), []);
   const toggleSound = useCallback(() => {
     setSoundOn((on) => !on);
     setNeedsGesture(false);
@@ -25,6 +24,17 @@ export function ReviewFeed({ clips }: { clips: ReviewClip[] }) {
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = previous;
+    };
+  }, []);
+
+  /** Review links should open with sound; retry once the browser allows playback. */
+  useEffect(() => {
+    const unlockFromGesture = () => setNeedsGesture(false);
+    window.addEventListener('pointerdown', unlockFromGesture, { once: true, capture: true });
+    window.addEventListener('keydown', unlockFromGesture, { once: true, capture: true });
+    return () => {
+      window.removeEventListener('pointerdown', unlockFromGesture, { capture: true });
+      window.removeEventListener('keydown', unlockFromGesture, { capture: true });
     };
   }, []);
 
@@ -58,17 +68,7 @@ export function ReviewFeed({ clips }: { clips: ReviewClip[] }) {
           setSoundOn(true);
           setNeedsGesture(false);
           const slide = root.querySelector<HTMLElement>(`[data-index="${active}"]`);
-          const video = slide?.querySelector('video');
-          const song = slide?.querySelector('audio');
-          if (video) {
-            video.muted = false;
-            void video.play().catch(() => undefined);
-          }
-          if (song && video) {
-            song.muted = false;
-            song.currentTime = video.currentTime;
-            void song.play().catch(() => undefined);
-          }
+          startSlideAudible(slide);
         }
         return;
       }
@@ -83,7 +83,7 @@ export function ReviewFeed({ clips }: { clips: ReviewClip[] }) {
   if (clips.length === 0) {
     return (
       <main className="ig-missing">
-        <p>Nothing is ready to watch for today or yesterday.</p>
+        <p>Nothing is ready to watch.</p>
       </main>
     );
   }
@@ -106,7 +106,7 @@ export function ReviewFeed({ clips }: { clips: ReviewClip[] }) {
                 audible={soundOn && !needsGesture}
                 onSound={toggleSound}
                 onUnlock={unlock}
-                onBlocked={block}
+                onBlocked={() => setNeedsGesture(true)}
                 onSheet={setSheetOpen}
               />
             ))}
@@ -115,6 +115,21 @@ export function ReviewFeed({ clips }: { clips: ReviewClip[] }) {
       </div>
     </main>
   );
+}
+
+function startSlideAudible(slide: HTMLElement | null | undefined) {
+  if (!slide) return;
+  const video = slide.querySelector('video');
+  const song = slide.querySelector('audio');
+  if (!video) return;
+  video.muted = false;
+  video.currentTime = 0;
+  if (song) {
+    song.muted = false;
+    song.currentTime = 0;
+  }
+  void video.play().catch(() => undefined);
+  if (song) void song.play().catch(() => undefined);
 }
 
 function ReviewSlide({
@@ -172,13 +187,9 @@ function ReviewSlide({
     video.volume = clip.videoVolume;
     if (song) song.volume = clip.songVolume;
 
-    const align = () => {
-      if (!song) return;
-      if (Math.abs(song.currentTime - video.currentTime) > 0.25) song.currentTime = video.currentTime;
-    };
-    const playSong = () => {
-      if (!song || video.muted) return;
-      song.currentTime = video.currentTime;
+    const playSongFromStart = () => {
+      if (!song || video.muted || video.paused) return;
+      if (Math.abs(song.currentTime - video.currentTime) > 0.05) song.currentTime = video.currentTime;
       void song.play().catch(() => undefined);
     };
     const pauseSong = () => song?.pause();
@@ -186,10 +197,9 @@ function ReviewSlide({
       if (song) song.muted = video.muted;
     };
     const events: Array<[string, () => void]> = [
-      ['play', playSong],
+      ['play', playSongFromStart],
       ['pause', pauseSong],
-      ['seeked', align],
-      ['timeupdate', align],
+      ['seeked', playSongFromStart],
       ['volumechange', mute],
     ];
     for (const [name, handler] of events) video.addEventListener(name, handler);
@@ -204,19 +214,19 @@ function ReviewSlide({
       video.pause();
       pauseSong();
     } else {
-      video.muted = !audible;
-      if (song) song.muted = !audible;
-      void video.play().then(() => {
-        if (!song || video.muted || video.paused) return;
-        song.currentTime = video.currentTime;
-        void song.play().catch(() => undefined);
-      }).catch(() => {
-        if (!audible) return;
+      const wantSound = audible;
+      video.muted = !wantSound;
+      if (song) song.muted = !wantSound;
+      video.currentTime = 0;
+      if (song) song.currentTime = 0;
+      void video.play().catch(() => {
+        if (!wantSound) return;
         video.muted = true;
         if (song) song.muted = true;
         onBlocked();
         void video.play().catch(() => undefined);
       });
+      if (wantSound && song) void song.play().catch(() => undefined);
     }
 
     return () => {
@@ -236,11 +246,10 @@ function ReviewSlide({
     if (!video) return;
     video.muted = false;
     if (song) song.muted = false;
-    void video.play().then(() => {
-      if (!song || video.paused) return;
-      song.currentTime = video.currentTime;
-      void song.play().catch(() => undefined);
-    }).catch(() => undefined);
+    video.currentTime = 0;
+    if (song) song.currentTime = 0;
+    void video.play().catch(() => undefined);
+    if (song) void song.play().catch(() => undefined);
   };
 
   const onSurface = () => {
@@ -287,7 +296,7 @@ function ReviewSlide({
         loop
         preload={warm ? 'auto' : 'metadata'}
       />
-      {clip.song ? <audio ref={audioRef} src={clip.song.src} preload={warm ? 'auto' : 'none'} /> : null}
+      {clip.song ? <audio ref={audioRef} src={clip.song.src} preload={warm ? 'auto' : 'auto'} /> : null}
       <button
         type="button"
         className="ig-hit"

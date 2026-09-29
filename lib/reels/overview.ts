@@ -6,6 +6,7 @@ import { listRuns, monthToDateUsd, type RunRow } from '@/lib/reels/repository';
 import { nextRunAt } from '@/lib/reels/schedule';
 import {
   listSlateDays,
+  loadPriorSlate,
   loadSlate,
   type SlateDay,
   type StoredSlate,
@@ -14,6 +15,7 @@ import { loadFramesForIdeas, visualInFlight, type StoredFrame } from '@/lib/reel
 import { loadFinishStatus } from '@/lib/reels/visual/finish';
 import { loadVideosForIdeas, videoInFlight, type StoredVideo } from '@/lib/reels/visual/video-run';
 import { loadMusicStatus, loadReelSongs, type MusicStatus, type ReelSong } from '@/lib/reels/music/overview';
+import { loadSchedulesForIdeas, type StoredSchedule } from '@/lib/reels/publish/schedule';
 
 export type ReelsOverview = {
   runs: RunRow[];
@@ -22,8 +24,12 @@ export type ReelsOverview = {
   insights: ReelsInsights;
   /** Newest New York day first. The first day is the current pool. */
   slateDays: SlateDay[];
-  /** Full score list for the current day. */
+  /** Full score list for the current day. This is the newest slate. */
   slate: StoredSlate | null;
+  /** The slate before that one, same day, when a rescore left it in place. */
+  previousSlate: StoredSlate | null;
+  /** Copy written against the previous slate, by post idea id. */
+  previousCopy: Record<string, StoredCopy>;
   /** Earlier days, each reduced to that day's selected top 3. */
   archive: ArchivedSlate[];
   /** On-screen copy and captions for the current slate, by post idea id. */
@@ -38,6 +44,8 @@ export type ReelsOverview = {
   finishes: Record<string, FinishStatus>;
   /** Song and publish state of each post idea's latest video, by post idea id. */
   songs: Record<string, ReelSong>;
+  /** Clock time for each post idea, when one has been reserved. */
+  schedules: Record<string, StoredSchedule>;
   music: MusicStatus;
   visualInFlight: boolean;
   copyInFlight: boolean;
@@ -80,6 +88,8 @@ export async function loadReelsOverview(): Promise<ReelsOverview> {
     currentDay ? loadSlate(currentDay.id) : Promise.resolve(null),
     Promise.all(pastDays.map((day) => loadArchivedSlate(day.id))),
   ]);
+  const previousSlate = slate ? await loadPriorSlate(slate.nyDate, slate.id) : null;
+  const previousCopy = previousSlate ? await loadSlateCopy(previousSlate.id) : {};
   const ideaIds = slate ? slate.scores.map((score) => score.postIdeaId) : [];
   const [copy, frames, copyJobs, videos, finishes] = slate
     ? await Promise.all([
@@ -96,7 +106,13 @@ export async function loadReelsOverview(): Promise<ReelsOverview> {
         {} as Record<string, StoredVideo>,
         {} as Record<string, FinishStatus>,
       ];
-  const songs = await songsByIdea(videos);
+  const [songs, schedules] = await Promise.all([
+    songsByIdea(videos),
+    loadSchedulesForIdeas([
+      ...ideaIds,
+      ...archive.flatMap((day) => (day ? day.slate.scores.map((score) => score.postIdeaId) : [])),
+    ]),
+  ]);
 
   return {
     runs,
@@ -104,6 +120,8 @@ export async function loadReelsOverview(): Promise<ReelsOverview> {
     insights,
     slateDays,
     slate,
+    previousSlate,
+    previousCopy,
     archive: archive.filter((day): day is ArchivedSlate => day !== null),
     copy,
     frames,
@@ -111,6 +129,7 @@ export async function loadReelsOverview(): Promise<ReelsOverview> {
     copyJobs,
     finishes,
     songs,
+    schedules,
     music,
     visualInFlight: framesRunning,
     copyInFlight: copiesRunning,

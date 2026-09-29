@@ -13,7 +13,8 @@ import {
 
 /**
  * P-08. Psychology, bucket fit, and blockbuster (D-073 through D-075, D-077,
- * D-083, D-084). Approved 2026-09-22 (D-086) as `scoring-pass1-v1`.
+ * D-083, D-084). Approved 2026-09-22 (D-086) as `scoring-pass1-v1`; the
+ * audience moved to AI-curious viewers plus a builder minority in v2 (D-206).
  *
  * One request. The questions are independent, so a bucket score cannot see the
  * psychology scores. Code applies the 0.60 / 0.25 gate and ignores a bucket
@@ -30,7 +31,7 @@ const people = BLUE_CHIP_PEOPLE.join('; ');
 
 export const SCORING_PASS_1 = defineQuestionSet({
   id: 'scoring-pass1',
-  version: 'scoring-pass1-v1',
+  version: 'scoring-pass1-v2',
   questions: {
     curiosity: score(
       {
@@ -42,10 +43,10 @@ export const SCORING_PASS_1 = defineQuestionSet({
       },
       [
         'Absent. No element opens a gap between what a viewer knows and a specific thing they would want to know. There is no hidden cause and no result that cuts against the obvious explanation.',
-        'Thin. A gap can be gestured at, but it is vague, or the source already gives the answer away. A developer, founder, executive, or operator would not feel the need to resolve it.',
+        'Thin. A gap can be gestured at, but it is vague, or the source already gives the answer away. The viewer would not feel the need to resolve it.',
         'Workable. The source contains a concrete unknown: a cause, a method, or a result that is not the obvious one. It could become an ordinary curiosity post. The pull is mild.',
-        'Strong. A specific element withholds a high-reward answer the source actually supports. One of those audiences would want the missing piece, and getting it would be cheap once they stopped.',
-        'Unmistakable. That hidden cause or counter-intuitive result is what the source is about. The gap is specific, the source holds the resolution, and it is the reason one of those audiences would stop.',
+        'Strong. A specific element withholds a high-reward answer the source actually supports. The viewer would want the missing piece, and getting it would be cheap once they stopped.',
+        'Unmistakable. That hidden cause or counter-intuitive result is what the source is about. The gap is specific, the source holds the resolution, and it is the reason the viewer would stop.',
       ],
     ),
     arousal: score(
@@ -58,10 +59,10 @@ export const SCORING_PASS_1 = defineQuestionSet({
       },
       [
         'Absent. Nothing here would raise anger, awe, anxiety, or amusement. The material is calm, sad, or only informative.',
-        'Thin. A mild charge is present, but it is generic hype or a soft mood. It would not push one of the audiences to watch, comment, or share.',
+        'Thin. A mild charge is present, but it is generic hype or a soft mood. It would not push the viewer to watch, comment, or share.',
         'Workable. The source contains a real stake, surprise, or threat. It could become an ordinary high-arousal post. The urge to act on it is limited.',
-        'Strong. A specific fact in the source would produce awe, anxiety, anger, or amusement for a developer, founder, executive, or operator in their own work. The charge comes from that fact.',
-        'Unmistakable. The source is organized around that charge: a figure, a loss, a reversal, or a scene one of those audiences would stop for and pass on.',
+        'Strong. A specific fact in the source would produce awe, anxiety, anger, or amusement for the viewer, in their work or daily life. The charge comes from that fact.',
+        'Unmistakable. The source is organized around that charge: a figure, a loss, a reversal, or a scene the viewer would stop for and pass on.',
       ],
     ),
     identity: score(
@@ -73,11 +74,11 @@ export const SCORING_PASS_1 = defineQuestionSet({
         source: SOURCE_RULE,
       },
       [
-        'Absent. Nothing here gives a viewer a way to signal who they are. No practice, tool, or status line is at stake.',
-        'Thin. A group or a role is mentioned, but sharing a post from this would not say anything about the person who shared it.',
+        'Absent. Nothing here gives a viewer a way to signal who they are. No habit, tool, or status line is at stake.',
+        'Thin. A group is mentioned, but sharing a post from this would not say anything about the person who shared it.',
         'Workable. A real in-group line or a contrarian stance is present. It could become an ordinary identity post. The boundary is soft.',
-        'Strong. A specific element names a practice, tool, or stance that developers, founders, executives, or operators use to tell insiders from everyone else. Sharing it would signal membership or expertise.',
-        'Unmistakable. The source is organized around that boundary. The line is one those viewers already feel, and the source gives them something sharp to stand with.',
+        'Strong. A specific element names a habit, tool, or stance that AI users use to tell themselves apart. Sharing it would say what kind of user they are.',
+        'Unmistakable. The source is organized around that boundary. The line is one viewers already feel, and the source gives them something sharp to stand with.',
       ],
     ),
 
@@ -90,11 +91,11 @@ export const SCORING_PASS_1 = defineQuestionSet({
         source: SOURCE_RULE,
       },
       [
-        'Absent. No tool, repo, or concrete cost in the source could be the payoff of a list a developer or operator would save.',
+        'Absent. No tool, app, repo, or concrete cost in the source could be the payoff of a list the viewer would save.',
         'Thin. A tool or a cost is mentioned, but it is generic or already obvious. Holding the specifics back would not create a reason to stop.',
-        'Workable. The source has real tools, repos, or a concrete cost. It could become an ordinary payoff post. The reward for stopping is modest.',
-        'Strong. A specific payoff is in the source: named tools or repos, or a concrete cost, that one of the audiences could act on. The hook can name the outcome and hold the list back.',
-        'Unmistakable. That payoff is what the source is about. The items are specific, the gain or the savings is concrete, and a developer or operator would stop to get the list.',
+        'Workable. The source has real tools, apps, repos, or a concrete cost. It could become an ordinary payoff post. The reward for stopping is modest.',
+        'Strong. A specific payoff is in the source: named tools, apps, or repos, or a concrete cost, that the viewer could act on. The hook can name the outcome and hold the list back.',
+        'Unmistakable. That payoff is what the source is about. The items are specific, the gain or the savings is concrete, and the viewer would stop to get the list.',
       ],
     ),
     theNumber: score(
@@ -108,9 +109,9 @@ export const SCORING_PASS_1 = defineQuestionSet({
       [
         'Absent. The source has no hard figure that could carry a post on its own.',
         'Thin. It has a number, but the number is expected, decorative, or too vague to change what a viewer believes.',
-        'Workable. A real figure is in the source and it pushes against what a developer, founder, executive, or operator would assume. It could become an ordinary stat post. The implication is soft.',
-        'Strong. One figure in the source contradicts the expectation, and the consequence for one of those audiences is clear from the source. The stat can be the whole post.',
-        'Unmistakable. That figure is the center of the source. It is specific, it is surprising to one of those audiences, and the implication is already in the material.',
+        'Workable. A real figure is in the source and it pushes against what the viewer would assume. It could become an ordinary stat post. The implication is soft.',
+        'Strong. One figure in the source contradicts the expectation, and the consequence for the viewer is clear from the source. The stat can be the whole post.',
+        'Unmistakable. That figure is the center of the source. It is specific, it is surprising to the viewer, and the implication is already in the material.',
       ],
     ),
     theSaga: score(
@@ -125,7 +126,7 @@ export const SCORING_PASS_1 = defineQuestionSet({
         'Absent. There is no sequence of events. Nothing here has a tense moment and a before and after.',
         'Thin. Events are mentioned, but there is no peak to open on and no chain a viewer would follow. A company announcement with no story sits here.',
         'Workable. The source has a real sequence and a moment of tension. It could become an ordinary narrative post. The stakes barely move.',
-        'Strong. A specific moment in the source is the tense open, and the material holds the chronology that leads there. One of the audiences would follow it to see how it resolved.',
+        'Strong. A specific moment in the source is the tense open, and the material holds the chronology that leads there. The viewer would follow it to see how it resolved.',
         'Unmistakable. The source is that story. The peak is concrete, the beats escalate, and the resolution is in the material.',
       ],
     ),
@@ -141,7 +142,7 @@ export const SCORING_PASS_1 = defineQuestionSet({
         'Absent. No person is the subject. A product or a company, even with a named executive in passing, is not a profile.',
         'Thin. A person is present, but the source offers a résumé rather than a turn. Two facts do not collide, and nothing improbable becomes inevitable.',
         'Workable. One person is the subject and the source has a turn: two facts that sit oddly together, or a path that changed. It could become an ordinary profile. The gap is small.',
-        'Strong. The person is the subject, and the source holds a real collision or a real turn that one of the audiences would want resolved. The facts are specific and they are in the source.',
+        'Strong. The person is the subject, and the source holds a real collision or a real turn that the viewer would want resolved. The facts are specific and they are in the source.',
         'Unmistakable. The source is that person\'s turn. The unlikely facts are concrete, the change is in the material, and the profile is the reason to stop.',
       ],
     ),
@@ -156,11 +157,11 @@ export const SCORING_PASS_1 = defineQuestionSet({
           'Levels Strong and Unmistakable require a concrete cost the source itself states, in money, time, or a measured failure, and the mechanism behind that cost. "Inefficient" or "risky" is not a cost. A warning that only works if a number is invented stays at Thin.',
       },
       [
-        'Absent. No behavior in the source is costing one of the audiences money, time, or a result they already have. A general worry is not a warning.',
+        'Absent. No behavior in the source is costing the viewer money, time, or a result they already have. A general worry is not a warning.',
         'Thin. A risk is mentioned, but the cost is vague or it is not supported by the source. Making it sting would require inventing a number.',
-        'Workable. The source states a real cost, but the mechanism is thin, or the cost is not one a developer, founder, executive, or operator is currently paying. It could become an ordinary warning.',
-        'Strong. The source itself states a concrete cost, and it contains the mechanism behind that cost. One of the audiences could be doing the thing. A later fix would not have to invent the harm.',
-        'Unmistakable. That cost and its mechanism are what the source is about. The harm is specific, sourced, and aimed at a behavior one of those audiences recognizes.',
+        'Workable. The source states a real cost, but the mechanism is thin, or the cost is not one the viewer is currently paying. It could become an ordinary warning.',
+        'Strong. The source itself states a concrete cost, and it contains the mechanism behind that cost. The viewer could be doing the thing. A later fix would not have to invent the harm.',
+        'Unmistakable. That cost and its mechanism are what the source is about. The harm is specific, sourced, and aimed at a behavior the viewer recognizes.',
       ],
     ),
     theCallout: score(
@@ -171,14 +172,14 @@ export const SCORING_PASS_1 = defineQuestionSet({
         audiences: AUDIENCE_RULE,
         source: SOURCE_RULE,
         guardrail:
-          'Levels Strong and Unmistakable require a line aimed at a practice, a tool, or a vendor. If the only sharp line attacks who the viewer is (founders, executives, operators, or developers as people who do not understand, are behind, or are not serious), the score stays at Thin, however hot the tone is. The voice has to be able to read as a peer raising a standard.',
+          'Levels Strong and Unmistakable require a line aimed at a practice, a tool, or a vendor. If the only sharp line attacks who the viewer is (someone who does not understand AI, is behind, or is not serious), the score stays at Thin, however hot the tone is. The voice has to be able to read as a fellow user raising a standard.',
       },
       [
-        'Absent. No stance in the source draws a line around a practice, a tool, or a vendor. There is nothing a peer could challenge.',
+        'Absent. No stance in the source draws a line around a practice, a tool, or a vendor. There is nothing a fellow user could challenge.',
         'Thin. The only sharp line attacks who the viewer is, or the stance is too vague to land. A practice-or-vendor line the source supports is not here.',
         'Workable. A real stance about a practice, tool, or vendor is present. It could become an ordinary callout. The line is hedged, or it could be read as scolding from outside the group.',
-        'Strong. The source supports a clear position aimed at a practice, tool, or vendor. A developer, founder, executive, or operator can cross the line by changing what they do. The position can land without a hedge that lets everyone off.',
-        'Unmistakable. That line is what the source is about. The target is a practice or a vendor, the position is specific, and one of those audiences would share it to mark which side they are on.',
+        'Strong. The source supports a clear position aimed at a practice, tool, or vendor. The viewer can cross the line by changing what they do. The position can land without a hedge that lets everyone off.',
+        'Unmistakable. That line is what the source is about. The target is a practice or a vendor, the position is specific, and the viewer would share it to mark which side they are on.',
       ],
     ),
 

@@ -7,6 +7,7 @@ import {
   planIngest,
   rankByTrend,
   reelMatchText,
+  audioIdsBlockedForAssignment,
   audioIdsHeldByOtherIdeas,
   claimsForAssignment,
   excludeUsedToday,
@@ -204,6 +205,8 @@ describe('song shortlist', () => {
     assert.equal(songHeldByIdea(tuesday, 'idea-a'), null);
     assert.deepEqual([...audioIdsHeldByOtherIdeas(tuesday, 'idea-a')], ['song-b']);
     assert.deepEqual([...audioIdsHeldByOtherIdeas(monday, 'idea-b')], ['song-a']);
+    assert.deepEqual([...audioIdsBlockedForAssignment(picks, '2026-09-29', 'idea-c')].sort(), ['song-a', 'song-b']);
+    assert.deepEqual([...audioIdsBlockedForAssignment(picks, '2026-09-28', 'idea-b')], ['song-a']);
   });
 
   it('refuses embeddings of different sizes', () => {

@@ -7,15 +7,15 @@ import { jevUsd, type JevRunner } from '@/lib/reels/jev/runner';
 import { recordCost } from '@/lib/reels/repository';
 import { clapConfigured, createLiveClapClient, type ClapClient } from '@/lib/reels/music/clap';
 import {
-  audioIdsHeldByOtherIdeas,
-  claimsForAssignment,
+  assignmentLockDates,
+  audioIdsBlockedForAssignment,
   cosine,
   excludeUsedToday,
   reelMatchText,
   shortlistSongs,
   songHeldByIdea,
 } from '@/lib/reels/music/pool';
-import { autoPublishOn, okPicksForAssignment, taggedSongs, type OkPickToday, type TaggedSong } from '@/lib/reels/music/store';
+import { okPicksForAssignments, taggedSongs, type OkPickToday, type TaggedSong } from '@/lib/reels/music/store';
 
 /**
  * Stage 4 (D-147 to D-151, D-161, D-163, D-169, D-170, D-184, D-185, D-194).
@@ -114,6 +114,27 @@ async function loadPickTarget(
   };
 }
 
+/** Another idea already claimed this audio on this slate day or the prior one. */
+async function songPickConflict(
+  assignmentDate: string,
+  audioId: string,
+  postIdeaId: string,
+): Promise<boolean> {
+  const { rows } = await dbQuery<{ one: number }>(
+    `SELECT 1 AS one
+       FROM reels.song_picks p
+       JOIN reels.video_jobs v ON v.id = p.video_job_id
+       JOIN reels.score_slates sl ON sl.id = v.slate_id
+      WHERE p.status = 'ok'
+        AND p.picked_audio_id = $1
+        AND p.post_idea_id <> $2::uuid
+        AND sl.ny_date = ANY($3::date[])
+      LIMIT 1`,
+    [audioId, postIdeaId, assignmentLockDates(assignmentDate)],
+  );
+  return rows.length > 0;
+}
+
 async function finishPick(id: string, status: 'ok' | 'failed', fields: Record<string, unknown>): Promise<void> {
   await dbQuery(
     `UPDATE reels.song_picks
@@ -190,14 +211,9 @@ async function reuseHeldSong(id: string, copyText: string, held: OkPickToday, us
 }
 
 async function publishPicked(deps: PickDeps, videoJobId: string): Promise<void> {
-  if (deps.onPicked) {
-    await deps.onPicked(videoJobId);
-    return;
-  }
-  if (await autoPublishOn()) {
-    const { queuePublish } = await import('@/lib/reels/music/publish');
-    await queuePublish(videoJobId, 'auto');
-  }
+  // A finished song does not post by itself. Live scheduling and Force post
+  // own publishing, and both of those stay trial reels.
+  if (deps.onPicked) await deps.onPicked(videoJobId);
 }
 
 /** Claim one queued pick. Leaves the queue alone until P-13 is approved and CLAP is configured. */
@@ -218,9 +234,17 @@ export async function claimAndPickSong(deps: PickDeps = {}): Promise<{ id: strin
       return { id, status: 'failed' };
     }
     const copyText = reelMatchText(target.onScreenCopy, target.caption);
-    const assigned = claimsForAssignment(await okPicksForAssignment(target.assignmentDate), target.assignmentDate);
-    const held = songHeldByIdea(assigned, target.postIdeaId);
-    if (held) {
+    const sameDayPicks = await okPicksForAssignments([target.assignmentDate]);
+    const lockPicks = await okPicksForAssignments(assignmentLockDates(target.assignmentDate));
+    const blocked = audioIdsBlockedForAssignment(lockPicks, target.assignmentDate, target.postIdeaId);
+    const held = songHeldByIdea(sameDayPicks, target.postIdeaId);
+    if (held && !blocked.has(held.audioId)) {
+      if (await songPickConflict(target.assignmentDate, held.audioId, target.postIdeaId)) {
+        await finishPick(id, 'failed', {
+          error: `Song ${held.audioId} is already assigned to another reel on ${target.assignmentDate} or the prior slate day.`,
+        });
+        return { id, status: 'failed' };
+      }
       await reuseHeldSong(id, copyText, held, usd);
       await publishPicked(deps, target.videoJobId);
       return { id, status: 'ok' };
@@ -230,13 +254,12 @@ export async function claimAndPickSong(deps: PickDeps = {}): Promise<{ id: strin
     const [copyEmbedding] = await clap.embedTexts([copyText]);
     await recordCost({ runId: null, vendor: 'huggingface', component: 'song-narrow', inputTokens: 0, usd: 0 });
 
-    const heldByOthers = audioIdsHeldByOtherIdeas(assigned, target.postIdeaId);
-    const open = excludeUsedToday(await taggedSongs(), heldByOthers);
+    const open = excludeUsedToday(await taggedSongs(), blocked);
     const shortlist = buildShortlist(copyEmbedding, open);
     if ('tagged' in shortlist) {
       const available =
-        heldByOthers.size > 0
-          ? `${shortlist.tagged} tagged song(s) still free on ${target.assignmentDate} (${heldByOthers.size} already used)`
+        blocked.size > 0
+          ? `${shortlist.tagged} tagged song(s) still free on ${target.assignmentDate} (${blocked.size} already used)`
           : `only ${shortlist.tagged} tagged song(s) in the pool`;
       await finishPick(id, 'failed', {
         copyText,
@@ -259,6 +282,14 @@ export async function claimAndPickSong(deps: PickDeps = {}): Promise<{ id: strin
     const answer = result.answers.song;
     const picked = shortlist.candidates.find((candidate) => candidate.label === answer.choice);
     if (!picked) throw new Error(`Jev returned an unknown option: ${String(answer.choice)}`);
+    if (await songPickConflict(target.assignmentDate, picked.audioId, target.postIdeaId)) {
+      await finishPick(id, 'failed', {
+        copyText,
+        shortlist,
+        error: `Jev picked ${picked.audioId}, which is already assigned to another reel on this slate day or the prior one.`,
+      });
+      return { id, status: 'failed' };
+    }
     const probabilities = answer.probabilities as Record<string, number>;
     for (const candidate of shortlist.candidates) candidate.probability = probabilities[candidate.label] ?? null;
 

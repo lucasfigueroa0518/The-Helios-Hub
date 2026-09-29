@@ -26,6 +26,7 @@ import { fullCaption } from '@/lib/reels/copy/report';
 import type { StoredCopy } from '@/lib/reels/copy/store';
 import type { MusicStatus, ReelSong } from '@/lib/reels/music/overview';
 import type { FinishStatus, ReelsOverview } from '@/lib/reels/overview';
+import type { StoredSchedule } from '@/lib/reels/publish/schedule';
 import type { StoredScore, StoredSlate } from '@/lib/reels/scoring/store';
 import type { StoredFrame } from '@/lib/reels/visual/run';
 import type { StoredVideo } from '@/lib/reels/visual/video-run';
@@ -119,6 +120,7 @@ type DayView = {
   copyJobs: Record<string, StoredCopyJob>;
   finishes: Record<string, FinishStatus>;
   songs: Record<string, ReelSong>;
+  schedules: Record<string, StoredSchedule>;
 };
 
 export function dayViews(data: ReelsOverview): DayView[] {
@@ -133,9 +135,10 @@ export function dayViews(data: ReelsOverview): DayView[] {
       copyJobs: data.copyJobs,
       finishes: data.finishes,
       songs: data.songs,
+      schedules: data.schedules,
     });
   }
-  for (const day of data.archive) views.push({ ...day, isCurrent: false });
+  for (const day of data.archive) views.push({ ...day, isCurrent: false, schedules: data.schedules });
   return views;
 }
 
@@ -149,6 +152,7 @@ type Reel = {
   job: StoredCopyJob | null;
   finish: FinishStatus | null;
   song: ReelSong | null;
+  schedule: StoredSchedule | null;
   phase: ReelPhase;
   stage: string;
   canGenerate: boolean;
@@ -164,6 +168,7 @@ export function reelFor(view: DayView, score: StoredScore): Reel {
   const job = view.copyJobs[id] ?? null;
   const finish = view.finishes[id] ?? null;
   const song = view.songs[id] ?? null;
+  const schedule = view.schedules[id] ?? null;
   const writing = job?.status === 'requested' || job?.status === 'running';
   const framing = frame?.status === 'requested' || frame?.status === 'running';
   const filming = video?.status === 'requested' || video?.status === 'running';
@@ -194,6 +199,7 @@ export function reelFor(view: DayView, score: StoredScore): Reel {
     job,
     finish,
     song,
+    schedule,
     phase,
     stage: writing ? 'Writing copy' : framing ? 'Making the frame' : filming ? 'Making the video' : picking ? 'Picking a song' : 'Starting',
     canGenerate,
@@ -277,9 +283,20 @@ type PublishState =
   | { kind: 'song-working'; text: string }
   | { kind: 'song-failed'; text: string }
   | { kind: 'awaiting' }
+  | { kind: 'scheduled'; publishAt: string }
   | { kind: 'publishing' }
   | { kind: 'published'; permalink: string | null }
   | { kind: 'publish-failed'; text: string };
+
+function formatSlotTime(iso: string): string {
+  const when = new Date(iso).toLocaleString('en-US', {
+    timeZone: 'America/New_York',
+    weekday: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  return `${when} ET`;
+}
 
 /** Where a finished reel stands between its song pick and Instagram (D-155, D-170, D-171). */
 export function publishState(reel: Reel, music: MusicStatus): PublishState {
@@ -287,6 +304,8 @@ export function publishState(reel: Reel, music: MusicStatus): PublishState {
   const publish = reel.song?.publish;
   if (publish?.status === 'published') return { kind: 'published', permalink: publish.permalink };
   if (publish && publish.status !== 'failed') return { kind: 'publishing' };
+  if (reel.schedule?.status === 'publishing') return { kind: 'publishing' };
+  if (reel.schedule?.status === 'scheduled') return { kind: 'scheduled', publishAt: reel.schedule.publishAt };
   if (reel.song?.song) {
     return publish?.status === 'failed' ? { kind: 'publish-failed', text: publish.error ?? 'Publish failed.' } : { kind: 'awaiting' };
   }
@@ -300,6 +319,7 @@ export function publishState(reel: Reel, music: MusicStatus): PublishState {
 
 const BADGE: Partial<Record<PublishState['kind'], string>> = {
   awaiting: 'Awaiting approval',
+  scheduled: 'Scheduled',
   publishing: 'Publishing',
   published: 'Published',
   'publish-failed': 'Publish failed',
@@ -319,6 +339,7 @@ function approveBlocker(music: MusicStatus): string | null {
 export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview; reviewPath?: string }) {
   const [data, setData] = useState<ReelsOverview>(initial);
   const [dayId, setDayId] = useState<string | null>(null);
+  const [scoreEra, setScoreEra] = useState<'new' | 'old'>('new');
   const [openId, setOpenId] = useState<string | null>(null);
   const [insightsOpen, setInsightsOpen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -343,6 +364,11 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
   }, [views.length]);
   const view = views.find((item) => item.slate.id === dayId) ?? views[0] ?? null;
   const viewIndex = view ? views.indexOf(view) : -1;
+  const canCompare = Boolean(view?.isCurrent && data.previousSlate);
+  const display: DayView | null =
+    view && canCompare && scoreEra === 'old' && data.previousSlate
+      ? { ...view, slate: data.previousSlate, copy: data.previousCopy }
+      : view;
 
   const nightInFlight = data.latest?.status === 'running' || data.latest?.status === 'requested';
   const reelInFlight =
@@ -358,7 +384,13 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
           (song.pick?.status === 'running' || (song.pick?.status === 'requested' && data.music.pickApproved && data.music.clapReady)) ||
           (song.publish != null && !['published', 'failed'].includes(song.publish.status)),
       ),
-    );
+    ) ||
+    Object.values(data.schedules).some((item) => {
+      if (item.status === 'publishing') return true;
+      if (item.status !== 'scheduled') return false;
+      const at = new Date(item.publishAt).getTime();
+      return Number.isFinite(at) && at - Date.now() < 60_000;
+    });
 
   // While a night or a reel is in flight the page follows it.
   useEffect(() => {
@@ -397,13 +429,15 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
     }
   }
 
-  async function approve(videoJobId: string) {
+  async function publishReel(videoJobId: string, mode: 'schedule' | 'force') {
     try {
       const result = await requestJson<{ queued: boolean; note?: string }>('/api/reels/publish', {
         method: 'POST',
-        body: JSON.stringify({ video_job_id: videoJobId }),
+        body: JSON.stringify({ video_job_id: videoJobId, mode }),
       });
-      setMessage(result.queued ? 'Approved. The worker publishes it as a trial reel.' : result.note ?? 'Not queued.');
+      setMessage(
+        result.note ?? (mode === 'force' ? 'Posting to Instagram now as a trial reel.' : 'Scheduled as a trial reel.'),
+      );
       await refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
@@ -423,10 +457,20 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
     }
   }
 
-  async function setAutoPublish(value: boolean) {
+  async function setLive(value: boolean) {
     try {
-      await requestJson('/api/reels/settings', { method: 'POST', body: JSON.stringify({ auto_publish: value }) });
-      setMessage(value ? 'Auto-publish is on. Reels publish as soon as they have a song.' : 'Auto-publish is off.');
+      const result = await requestJson<{ publishingLive: boolean; scheduled?: number }>('/api/reels/settings', {
+        method: 'POST',
+        body: JSON.stringify({ publishing_live: value }),
+      });
+      const placed = result.scheduled ?? 0;
+      setMessage(
+        value
+          ? placed > 0
+            ? `Live is on. ${placed} of today's reels are on the clock.`
+            : "Live is on. Tonight's three reels will be scheduled into the day's slots."
+          : 'Live is off. Reels already on the clock still post.',
+      );
       await refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
@@ -447,11 +491,11 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
   }
 
   const health = healthOf(data);
-  const reels = view ? view.slate.scores.map((score) => reelFor(view, score)) : [];
+  const reels = display ? display.slate.scores.map((score) => reelFor(display, score)) : [];
   const top = reels
     .filter((reel) => reel.score.selected)
     .sort((a, b) => (a.score.rank ?? 99) - (b.score.rank ?? 99));
-  const rest = view?.isCurrent ? reels.filter((reel) => !reel.score.selected) : [];
+  const rest = display?.isCurrent ? reels.filter((reel) => !reel.score.selected) : [];
   const open = reels.find((reel) => reel.score.postIdeaId === openId) ?? null;
   const today = todayInNewYork();
 
@@ -493,6 +537,15 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
                 {copiedLink ? 'Copied' : 'Review link'}
               </button>
             ) : null}
+            <label className="rh-switch" title="When Live is on, each night's three reels are scheduled into the day's posting slots and posted as trial reels.">
+              <input
+                type="checkbox"
+                checked={data.music.publishingLive}
+                onChange={(event) => void setLive(event.target.checked)}
+              />
+              <span className="rh-switch__track" aria-hidden="true" />
+              Live
+            </label>
             <button type="button" className="rh-btn" onClick={() => setInsightsOpen(true)} aria-haspopup="dialog">
               <span className={`rh-dot rh-dot--${health.tone}`} aria-hidden="true" />
               <Activity size={15} /> Insights
@@ -500,7 +553,7 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
           </div>
         </header>
 
-        {views.length === 0 || !view ? (
+        {views.length === 0 || !view || !display ? (
           <p className="rh-empty">No scored days yet. The next run ranks the timely post ideas and picks the top three.</p>
         ) : (
           <>
@@ -525,6 +578,7 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
                       aria-current={active ? 'date' : undefined}
                       onClick={() => {
                         setDayId(item.slate.id);
+                        setScoreEra('new');
                         setOpenId(null);
                       }}
                     >
@@ -548,11 +602,42 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
             </nav>
 
             <section className="rh-day-head">
-              <h2>{formatNyDate(view.slate.nyDate, 'long')}</h2>
-              <p>
-                Scored {formatTime(view.slate.scoredAt)}
-                {view.isCurrent ? ` · ${view.slate.scores.length} ideas in the pool` : ''}
-              </p>
+              <div>
+                <h2>{formatNyDate(display.slate.nyDate, 'long')}</h2>
+                <p>
+                  Scored {formatTime(display.slate.scoredAt)}
+                  {display.isCurrent ? ` · ${display.slate.scores.length} ideas in the pool` : ''}
+                  {canCompare ? (scoreEra === 'old' ? ' · previous scoring' : ' · new scoring') : ''}
+                </p>
+              </div>
+              {canCompare ? (
+                <div className="segmented" role="tablist" aria-label="Score set">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={scoreEra === 'old'}
+                    className={`segmented__item${scoreEra === 'old' ? ' segmented__item--active' : ''}`}
+                    onClick={() => {
+                      setScoreEra('old');
+                      setOpenId(null);
+                    }}
+                  >
+                    Old scores
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={scoreEra === 'new'}
+                    className={`segmented__item${scoreEra === 'new' ? ' segmented__item--active' : ''}`}
+                    onClick={() => {
+                      setScoreEra('new');
+                      setOpenId(null);
+                    }}
+                  >
+                    New scores
+                  </button>
+                </div>
+              ) : null}
             </section>
 
             {top.length === 0 ? (
@@ -565,7 +650,7 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
                     reel={reel}
                     badge={BADGE[publishState(reel, data.music).kind] ?? null}
                     onOpen={() => setOpenId(reel.score.postIdeaId)}
-                    onGenerate={() => void generate(reel.score.postIdeaId, view.slate.id)}
+                    onGenerate={() => void generate(reel.score.postIdeaId, display.slate.id)}
                   />
                 ))}
               </div>
@@ -589,13 +674,14 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
         )}
       </div>
 
-      {open && view && (
+      {open && display && (
         <Drawer label="Reel details" onClose={() => setOpenId(null)}>
           <ReelDetail
             reel={open}
             music={data.music}
-            onGenerate={() => void generate(open.score.postIdeaId, view.slate.id)}
-            onApprove={(videoJobId) => void approve(videoJobId)}
+            onGenerate={() => void generate(open.score.postIdeaId, display.slate.id)}
+            onSchedule={(videoJobId) => void publishReel(videoJobId, 'schedule')}
+            onForce={(videoJobId) => void publishReel(videoJobId, 'force')}
             onRetrySong={(videoJobId) => void retrySong(videoJobId)}
           />
         </Drawer>
@@ -608,7 +694,7 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
             health={health}
             runBusy={runBusy || nightInFlight}
             onRunNow={() => void runNow()}
-            onAutoPublish={(value) => void setAutoPublish(value)}
+            onLive={(value) => void setLive(value)}
           />
         </Drawer>
       )}
@@ -734,6 +820,9 @@ function ReelCard({
         <span className="rh-reel__pills">
           <Pills score={reel.score} />
         </span>
+        {reel.schedule?.status === 'scheduled' && (
+          <span className="rh-reel__when">{formatSlotTime(reel.schedule.publishAt)}</span>
+        )}
       </button>
     </article>
   );
@@ -798,7 +887,8 @@ function ApproveBlock({
   music,
   videoJobId,
   canGenerate,
-  onApprove,
+  onSchedule,
+  onForce,
   onGenerate,
   onRetrySong,
 }: {
@@ -806,13 +896,14 @@ function ApproveBlock({
   music: MusicStatus;
   videoJobId: string;
   canGenerate: boolean;
-  onApprove: (videoJobId: string) => void;
+  onSchedule: (videoJobId: string) => void;
+  onForce: (videoJobId: string) => void;
   onGenerate: () => void;
   onRetrySong: (videoJobId: string) => void;
 }) {
-  const [busy, setBusy] = useState<'approve' | 'regenerate' | 'song' | null>(null);
+  const [busy, setBusy] = useState<'schedule' | 'force' | 'regenerate' | 'song' | null>(null);
   const blocker = approveBlocker(music);
-  const act = (which: 'approve' | 'regenerate' | 'song', run: () => void) => {
+  const act = (which: 'schedule' | 'force' | 'regenerate' | 'song', run: () => void) => {
     setBusy(which);
     run();
     setTimeout(() => setBusy(null), 1500);
@@ -852,6 +943,25 @@ function ApproveBlock({
           </button>
         </div>
       );
+    case 'scheduled':
+      return (
+        <div className="rh-approve-wrap">
+          <div className="rh-approve">
+            <Check size={15} /> Scheduled for {formatSlotTime(state.publishAt)} as a trial reel
+          </div>
+          <div className="rh-approve-actions">
+            <button
+              type="button"
+              className="rh-btn rh-btn--primary"
+              disabled={busy !== null || blocker !== null}
+              onClick={() => act('force', () => onForce(videoJobId))}
+            >
+              {busy === 'force' ? <Loader2 size={15} className="rh-spin" /> : <Play size={15} />} Force post
+            </button>
+          </div>
+          {blocker && <p className="rh-muted rh-song-note">{blocker}</p>}
+        </div>
+      );
     case 'awaiting':
     case 'publish-failed':
       return (
@@ -873,11 +983,19 @@ function ApproveBlock({
             </button>
             <button
               type="button"
+              className="rh-btn"
+              disabled={busy !== null || blocker !== null}
+              onClick={() => act('force', () => onForce(videoJobId))}
+            >
+              {busy === 'force' ? <Loader2 size={15} className="rh-spin" /> : <Play size={15} />} Force post
+            </button>
+            <button
+              type="button"
               className="rh-btn rh-btn--primary"
               disabled={busy !== null || blocker !== null}
-              onClick={() => act('approve', () => onApprove(videoJobId))}
+              onClick={() => act('schedule', () => onSchedule(videoJobId))}
             >
-              {busy === 'approve' ? <Loader2 size={15} className="rh-spin" /> : <Check size={15} />} Approve
+              {busy === 'schedule' ? <Loader2 size={15} className="rh-spin" /> : <Check size={15} />} Schedule
             </button>
           </div>
           {blocker && <p className="rh-muted rh-song-note">{blocker}</p>}
@@ -892,13 +1010,15 @@ export function ReelDetail({
   reel,
   music,
   onGenerate,
-  onApprove,
+  onSchedule,
+  onForce,
   onRetrySong,
 }: {
   reel: Reel;
   music: MusicStatus;
   onGenerate: () => void;
-  onApprove: (videoJobId: string) => void;
+  onSchedule: (videoJobId: string) => void;
+  onForce: (videoJobId: string) => void;
   onRetrySong: (videoJobId: string) => void;
 }) {
   const [songOpen, setSongOpen] = useState(false);
@@ -973,7 +1093,7 @@ export function ReelDetail({
         <p className="rh-muted rh-song-note">
           {previewUrl
             ? 'The preview plays the song from 0:00. Instagram may start it at a different point.'
-            : 'This song has left the pool, so its preview is gone. Approve still attaches it by audio_id.'}
+            : 'This song has left the pool, so its preview is gone. Schedule and Force post still attach it by audio_id.'}
           {!music.mix && previewUrl ? ' Volumes are not set yet, so both play at full.' : ''}
         </p>
       )}
@@ -984,7 +1104,8 @@ export function ReelDetail({
           music={music}
           videoJobId={reel.video.id}
           canGenerate={reel.canGenerate}
-          onApprove={onApprove}
+          onSchedule={onSchedule}
+          onForce={onForce}
           onGenerate={onGenerate}
           onRetrySong={onRetrySong}
         />
@@ -1142,7 +1263,7 @@ export function ReelDetail({
 /* -------------------------------------------------------------- insights */
 
 /** D-173: the auto-publish switch, and what publishing is still waiting on. */
-function PublishingCard({ music, onAutoPublish }: { music: MusicStatus; onAutoPublish: (value: boolean) => void }) {
+function PublishingCard({ music, onLive }: { music: MusicStatus; onLive: (value: boolean) => void }) {
   const lastIngest = music.ingests[0] ?? null;
   const waiting = [
     !music.metaReady && 'Meta credentials',
@@ -1157,17 +1278,20 @@ function PublishingCard({ music, onAutoPublish }: { music: MusicStatus; onAutoPu
         <label className="rh-switch">
           <input
             type="checkbox"
-            checked={music.autoPublish}
-            onChange={(event) => onAutoPublish(event.target.checked)}
+            checked={music.publishingLive}
+            onChange={(event) => onLive(event.target.checked)}
           />
           <span className="rh-switch__track" aria-hidden="true" />
-          Auto-publish
+          Live
         </label>
       </div>
       <p className="rh-muted">
-        {music.autoPublish
-          ? 'On: a reel publishes as a trial reel as soon as it has a song, with no approval.'
-          : 'Off: a reel publishes only when you press Approve.'}
+        {music.publishingLive
+          ? "On: each night's three reels are scheduled into the day's slots and posted as trial reels."
+          : 'Off: the night does not schedule anything. Schedule and Force post still work. Reels already on the clock still post.'}
+      </p>
+      <p className="rh-muted">
+        Slots, Eastern time, one reel each: 8:45–10:00 AM, 11:15 AM–12:30 PM, and 6:00–9:00 PM. The minute inside a slot is random.
       </p>
       {waiting.length > 0 && (
         <ul className="rh-notes">
@@ -1204,13 +1328,13 @@ export function Insights({
   health,
   runBusy,
   onRunNow,
-  onAutoPublish,
+  onLive,
 }: {
   data: ReelsOverview;
   health: Health;
   runBusy: boolean;
   onRunNow: () => void;
-  onAutoPublish: (value: boolean) => void;
+  onLive: (value: boolean) => void;
 }) {
   const latest = data.latest;
   const failedSources = (latest?.source_results ?? []).filter((result) => result.status === 'failed');
@@ -1268,7 +1392,7 @@ export function Insights({
         )}
       </section>
 
-      <PublishingCard music={data.music} onAutoPublish={onAutoPublish} />
+      <PublishingCard music={data.music} onLive={onLive} />
 
       <section className="rh-card">
         <h3 className="rh-card__title">Errors in the last run</h3>

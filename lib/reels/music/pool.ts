@@ -177,7 +177,19 @@ export type DaySongClaim = {
   postIdeaId: string;
   audioId: string;
   finishedAt: string;
+  assignmentDate?: string;
 };
+
+/** The slate date before this assignment (`YYYY-MM-DD`, UTC calendar math). */
+export function previousAssignmentDate(date: string): string {
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day - 1)).toISOString().slice(0, 10);
+}
+
+/** Ok picks on these slate dates block the same audio for other ideas (D-194, review window). */
+export function assignmentLockDates(assignmentDate: string): string[] {
+  return [assignmentDate, previousAssignmentDate(assignmentDate)];
+}
 
 /**
  * Picks whose reel is assigned to this calendar day. A pick generated on
@@ -201,6 +213,28 @@ export function songHeldByIdea<T extends DaySongClaim>(picks: readonly T[], post
 /** Songs claimed for this assigned day by any other post idea. This idea's own song is not a block. */
 export function audioIdsHeldByOtherIdeas(picks: readonly DaySongClaim[], postIdeaId: string): Set<string> {
   return new Set(picks.filter((pick) => pick.postIdeaId !== postIdeaId && pick.audioId).map((pick) => pick.audioId));
+}
+
+/**
+ * Audio ids another idea already claimed on this assignment date or the prior
+ * slate day. Regenerating keeps this idea's song only when it does not collide.
+ */
+export function audioIdsBlockedForAssignment(
+  picks: readonly DaySongClaim[],
+  assignmentDate: string,
+  postIdeaId: string,
+): Set<string> {
+  const lockDates = new Set(assignmentLockDates(assignmentDate));
+  return new Set(
+    picks
+      .filter(
+        (pick) =>
+          pick.postIdeaId !== postIdeaId &&
+          pick.audioId &&
+          (pick.assignmentDate ? lockDates.has(pick.assignmentDate) : lockDates.has(assignmentDate)),
+      )
+      .map((pick) => pick.audioId),
+  );
 }
 
 /**

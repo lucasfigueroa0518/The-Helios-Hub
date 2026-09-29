@@ -123,6 +123,12 @@ export async function executeRun(run: RunRow, deps?: Partial<RunDeps>): Promise<
       scored = scoring.scored;
       selected = scoring.selected;
       log('run_scored', scoring);
+      const { scheduleSelectedSlate } = await import('@/lib/reels/publish/schedule');
+      const scheduled = await scheduleSelectedSlate(scoring.slateId).catch((error) => {
+        log('schedule_failed', { error: error instanceof Error ? error.message : String(error) });
+        return { scheduled: 0 };
+      });
+      if (scheduled.scheduled > 0) log('run_scheduled', scheduled);
 
       try {
         const copy = await writeSlateCopy(run.id, scoring.slateId, {

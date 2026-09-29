@@ -44,6 +44,7 @@ async function main(): Promise<void> {
   const { runSongIngest } = await import('@/lib/reels/music/ingest');
   const { claimAndPickSong } = await import('@/lib/reels/music/pick');
   const { claimAndPublish } = await import('@/lib/reels/music/publish');
+  const { releaseDueSchedules } = await import('@/lib/reels/publish/schedule');
   const { SONG_INGEST_HOUR_LOCAL, SONG_INGEST_MINUTE_LOCAL, RUN_TIMEZONE } = await import('@/lib/reels/config');
   const nextSongsAt = () => nextRunAt(new Date(), RUN_TIMEZONE, SONG_INGEST_HOUR_LOCAL, SONG_INGEST_MINUTE_LOCAL);
   const { closeDbPool } = await import('@/lib/db');
@@ -136,6 +137,12 @@ async function main(): Promise<void> {
         log('song_pick_complete', { id: pick.id, status: pick.status });
         continue;
       }
+
+      const due = await releaseDueSchedules().catch((error) => {
+        log('schedule_release_failed', { error: error instanceof Error ? error.message : String(error) });
+        return 0;
+      });
+      if (due > 0) log('schedule_due', { released: due });
 
       const published = await claimAndPublish().catch((error) => {
         log('publish_failed', { error: error instanceof Error ? error.message : String(error) });

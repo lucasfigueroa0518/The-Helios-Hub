@@ -36,6 +36,8 @@ export type StoredSlate = {
   runId: string;
   nyDate: string;
   scoredAt: string;
+  pass1Version: string;
+  pass2Version: string;
   scores: StoredScore[];
 };
 
@@ -48,7 +50,14 @@ export type SlateDay = {
   selectedCount: number;
 };
 
-type SlateRow = { id: string; run_id: string; ny_date: string; scored_at: string };
+type SlateRow = {
+  id: string;
+  run_id: string;
+  ny_date: string;
+  scored_at: string;
+  pass1_version: string;
+  pass2_version: string;
+};
 
 export async function listTimelyIdeas(): Promise<TimelyIdea[]> {
   const { rows } = await dbQuery<{ id: string; last_joined: string }>(
@@ -205,6 +214,49 @@ export async function insertSlate(input: {
   });
 }
 
+/** The newest slate for one New York date, or null when that day was not scored. */
+export async function latestSlateForDate(nyDate: string): Promise<StoredSlate | null> {
+  const { rows } = await dbQuery<{ id: string }>(
+    `SELECT id FROM reels.score_slates
+      WHERE ny_date = $1::date
+      ORDER BY scored_at DESC
+      LIMIT 1`,
+    [nyDate],
+  );
+  const id = rows[0]?.id;
+  if (!id) return null;
+  return loadSlate(id);
+}
+
+/**
+ * The slate just before `latestId` on the same New York date. A rescore keeps
+ * this one, and the page switches back to it.
+ */
+export async function loadPriorSlate(nyDate: string, latestId: string): Promise<StoredSlate | null> {
+  const { rows } = await dbQuery<{ id: string }>(
+    `SELECT id FROM reels.score_slates
+      WHERE ny_date = $1::date
+        AND id <> $2::uuid
+      ORDER BY scored_at DESC
+      LIMIT 1`,
+    [nyDate, latestId],
+  );
+  const id = rows[0]?.id;
+  if (!id) return null;
+  return loadSlate(id);
+}
+
+/** Every idea on a slate, with the origin it was scored under. */
+export async function loadSlateOrigins(
+  slateId: string,
+): Promise<Array<{ id: string; origin: 'timely' | 'carryover' }>> {
+  const { rows } = await dbQuery<{ post_idea_id: string; origin: 'timely' | 'carryover' }>(
+    `SELECT post_idea_id, origin FROM reels.idea_scores WHERE slate_id = $1`,
+    [slateId],
+  );
+  return rows.map((row) => ({ id: row.post_idea_id, origin: row.origin }));
+}
+
 /** Latest slate per New York date, newest day first. */
 export async function listSlateDays(): Promise<SlateDay[]> {
   const { rows } = await dbQuery<{
@@ -247,7 +299,7 @@ export async function loadSlate(
   options?: { selectedOnly?: boolean },
 ): Promise<StoredSlate | null> {
   const { rows } = await dbQuery<SlateRow>(
-    `SELECT id, run_id, ny_date::text AS ny_date, scored_at
+    `SELECT id, run_id, ny_date::text AS ny_date, scored_at, pass1_version, pass2_version
        FROM reels.score_slates
       WHERE id = $1`,
     [slateId],
@@ -294,6 +346,8 @@ export async function loadSlate(
     runId: slate.run_id,
     nyDate: slate.ny_date,
     scoredAt: slate.scored_at,
+    pass1Version: slate.pass1_version,
+    pass2Version: slate.pass2_version,
     scores: scores.map((row) => ({
       postIdeaId: row.post_idea_id,
       origin: row.origin,

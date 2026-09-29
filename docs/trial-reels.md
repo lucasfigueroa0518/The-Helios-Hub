@@ -238,9 +238,15 @@ created on deploy). Frames are PNGs in the private Supabase bucket
    around one event. A second pass proposes idea pairs in code (headline
    similarity across their members) and asks Jev whether to fuse them,
    repeating while anything still merges.
-7. **Score and write.** Jev scores and ranks the timely ideas, the top three
-   are selected, and, if P-10 is approved, the writer produces their copy and
-   captions.
+7. **Score and write.** Jev scores and ranks the timely ideas
+   (`scoring-pass1-v2`, `scoring-pass2-v2`), the top three are selected, and,
+   if P-10 is approved, the writer produces their copy and captions. Scoring
+   judges for the AI-curious viewer first and counts the builder minority as
+   a bonus; a builder-only story cannot reach the top of the scale (D-206).
+   When Live is on, those three are scheduled into the day's Eastern-time
+   slots (8:45–10:00 AM, 11:15 AM–12:30 PM, 6:00–9:00 PM), one each, at a
+   random minute, and the worker posts them then as trial reels (D-207).
+   Force post sends one immediately, still as a trial reel.
 8. **Retain.** Sources older than 3 weeks are hard-deleted. Fingerprints,
    published-status rows, and Jev logs outlive them.
 

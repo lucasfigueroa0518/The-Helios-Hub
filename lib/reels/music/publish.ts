@@ -19,7 +19,7 @@ import { signFrameObject } from '@/lib/reels/visual/storage';
  * Success also marks the post idea published (D-005, D-061).
  */
 
-export type PublishTrigger = 'approve' | 'auto' | 'mix_test';
+export type PublishTrigger = 'approve' | 'auto' | 'mix_test' | 'force';
 export type PublishStatus = 'requested' | 'creating' | 'processing' | 'publishing' | 'published' | 'failed';
 
 type Queued = { queued: true; id: string } | { queued: false; status: number; note: string };
@@ -34,11 +34,21 @@ async function shareToFeed(): Promise<boolean | null> {
   return typeof value === 'boolean' ? value : null;
 }
 
-export async function queuePublish(
+type PublishReel = {
+  postIdeaId: string;
+  pickId: string;
+  audioId: string;
+  title: string | null;
+  artist: string | null;
+  caption: string;
+  mix: MixSetting;
+};
+
+export async function publishReadiness(
   videoJobId: string,
-  trigger: PublishTrigger,
-  mixOverride?: MixSetting,
-): Promise<Queued> {
+  options?: { trigger?: PublishTrigger; mixOverride?: MixSetting },
+): Promise<{ ok: true; postIdeaId: string; reel: PublishReel } | { ok: false; status: number; note: string }> {
+  const trigger = options?.trigger ?? 'approve';
   const { rows } = await dbQuery<{
     post_idea_id: string;
     status: string;
@@ -67,24 +77,48 @@ export async function queuePublish(
   );
   const reel = rows[0];
   if (!reel || reel.status !== 'ok' || !reel.video_storage_path) {
-    return { queued: false, status: 400, note: 'This reel has no finished video.' };
+    return { ok: false, status: 400, note: 'This reel has no finished video.' };
   }
   if (!reel.pick_id || !reel.picked_audio_id) {
-    return { queued: false, status: 409, note: 'Song pending: this reel has no song yet (D-170).' };
+    return { ok: false, status: 409, note: 'Song pending: this reel has no song yet (D-170).' };
   }
   if (trigger !== 'mix_test' && reel.published) {
-    return { queued: false, status: 409, note: 'This reel is already published.' };
+    return { ok: false, status: 409, note: 'This reel is already published.' };
   }
-  if (!reel.caption) return { queued: false, status: 409, note: 'This reel has no caption.' };
-  const mix = mixOverride ?? (await publishMix());
+  if (!reel.caption) return { ok: false, status: 409, note: 'This reel has no caption.' };
+  const mix = options?.mixOverride ?? (await publishMix());
   if (!mix) {
-    return { queued: false, status: 409, note: 'The song and SFX volumes are not set yet (MUS-V2).' };
+    return { ok: false, status: 409, note: 'The song and SFX volumes are not set yet (MUS-V2).' };
   }
-  const caption = fullCaption({
-    caption: reel.caption,
-    callToAction: reel.call_to_action ?? '',
-    hashtags: reel.hashtags ?? [],
-  });
+  return {
+    ok: true,
+    postIdeaId: reel.post_idea_id,
+    reel: {
+      postIdeaId: reel.post_idea_id,
+      pickId: reel.pick_id,
+      audioId: reel.picked_audio_id,
+      title: reel.picked_title,
+      artist: reel.picked_artist,
+      caption: fullCaption({
+        caption: reel.caption,
+        callToAction: reel.call_to_action ?? '',
+        hashtags: reel.hashtags ?? [],
+      }),
+      mix,
+    },
+  };
+}
+
+export async function queuePublish(
+  videoJobId: string,
+  trigger: PublishTrigger,
+  mixOverride?: MixSetting,
+): Promise<Queued> {
+  const ready = await publishReadiness(videoJobId, { trigger, mixOverride });
+  if (!ready.ok) return { queued: false, status: ready.status, note: ready.note };
+  const reel = ready.reel;
+  const caption = reel.caption;
+  const mix = reel.mix;
   try {
     const inserted = await dbQuery<{ id: string }>(
       `INSERT INTO reels.publish_attempts (
@@ -94,12 +128,12 @@ export async function queuePublish(
        RETURNING id`,
       [
         videoJobId,
-        reel.post_idea_id,
-        reel.pick_id,
+        reel.postIdeaId,
+        reel.pickId,
         trigger,
-        reel.picked_audio_id,
-        reel.picked_title,
-        reel.picked_artist,
+        reel.audioId,
+        reel.title,
+        reel.artist,
         mix.audioVolume,
         mix.videoVolume,
         caption,
@@ -224,14 +258,19 @@ export async function claimAndPublish(deps: PublishDeps = {}): Promise<{ id: str
       status_log: JSON.stringify(statusLog),
     });
     await setPublished(attempt.post_idea_id, true);
+    const { markScheduleForAttempt } = await import('@/lib/reels/publish/schedule');
+    await markScheduleForAttempt(id, 'published', null).catch(() => undefined);
     return { id, status: 'published' };
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     await update(id, {
       status: 'failed',
-      error: error instanceof Error ? error.message : String(error),
+      error: message,
       finished_at: new Date(now()).toISOString(),
       status_log: JSON.stringify(statusLog),
     }).catch(() => undefined);
+    const { markScheduleForAttempt } = await import('@/lib/reels/publish/schedule');
+    await markScheduleForAttempt(id, 'failed', message).catch(() => undefined);
     return { id, status: 'failed' };
   }
 }

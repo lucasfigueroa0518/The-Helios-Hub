@@ -57,6 +57,18 @@ export function calendarDateKey(at: Date, timeZone: string = RUN_TIMEZONE): stri
 }
 
 /** The instant when the given wall-clock time occurs in the zone. */
+export function zonedTime(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute = 0,
+  timeZone: string = RUN_TIMEZONE,
+): Date {
+  return instantForLocalTime(year, month, day, hour, timeZone, minute);
+}
+
+/** The instant when the given wall-clock time occurs in the zone. */
 function instantForLocalTime(
   year: number,
   month: number,
@@ -81,24 +93,17 @@ export function nextRunAt(
   minute = 0,
 ): Date {
   const { year, month, day } = zoneDateParts(from, timeZone);
-  const today = instantForLocalTime(year, month, day, hour, timeZone, minute);
+  const today = zonedTime(year, month, day, hour, minute, timeZone);
   if (today.getTime() > from.getTime()) return today;
 
   // Advance the local calendar date itself. Adding 24 hours to a UTC instant
   // would land on the previous local day for any zone behind UTC.
   const nextDay = new Date(Date.UTC(year, month - 1, day + 1));
-  return instantForLocalTime(
-    nextDay.getUTCFullYear(),
-    nextDay.getUTCMonth() + 1,
-    nextDay.getUTCDate(),
-    hour,
-    timeZone,
-    minute,
-  );
+  return zonedTime(nextDay.getUTCFullYear(), nextDay.getUTCMonth() + 1, nextDay.getUTCDate(), hour, minute, timeZone);
 }
 
 /** First instant of the current month in the run timezone (for the spend watch). */
 export function monthStart(at: Date, timeZone: string = RUN_TIMEZONE): Date {
   const { year, month } = zoneDateParts(at, timeZone);
-  return instantForLocalTime(year, month, 1, 0, timeZone);
+  return zonedTime(year, month, 1, 0, 0, timeZone);
 }

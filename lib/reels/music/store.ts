@@ -282,7 +282,8 @@ export type OkPickToday = {
  * finished. A failed pick does not count. The caller keeps a post idea's own
  * song and blocks every other idea's.
  */
-export async function okPicksForAssignment(day: string): Promise<OkPickToday[]> {
+export async function okPicksForAssignments(days: readonly string[]): Promise<OkPickToday[]> {
+  if (days.length === 0) return [];
   const { rows } = await dbQuery<{
     post_idea_id: string;
     picked_audio_id: string;
@@ -305,8 +306,8 @@ export async function okPicksForAssignment(day: string): Promise<OkPickToday[]> 
        JOIN reels.score_slates sl ON sl.id = v.slate_id
       WHERE p.status = 'ok'
         AND p.picked_audio_id IS NOT NULL
-        AND sl.ny_date = $1::date`,
-    [day],
+        AND sl.ny_date = ANY($1::date[])`,
+    [days],
   );
   return rows.map((row) => ({
     postIdeaId: row.post_idea_id,
@@ -322,6 +323,10 @@ export async function okPicksForAssignment(day: string): Promise<OkPickToday[]> 
     questionSetVersion: row.question_set_version,
     resolvedModel: row.resolved_model,
   }));
+}
+
+export async function okPicksForAssignment(day: string): Promise<OkPickToday[]> {
+  return okPicksForAssignments([day]);
 }
 
 export async function songPreviewPath(audioId: string): Promise<string | null> {
