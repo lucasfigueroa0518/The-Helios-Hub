@@ -6,7 +6,9 @@ import type { ReactNode } from 'react';
 import { HubShell } from '@/components/hub-shell/HubShell';
 
 function isPublicClientDashboard(pathname: string) {
-  return pathname.startsWith('/d/') || pathname.startsWith('/dashboards/d/');
+  return pathname.startsWith('/d/')
+    || pathname.startsWith('/dashboards/d/')
+    || pathname.startsWith('/watch');
 }
 
 export function HubChrome({ children, email }: { children: ReactNode; email: string }) {

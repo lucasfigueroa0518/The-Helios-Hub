@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { reviewDateLabel, reviewDates, reviewTokenShape, tokensMatch } from '@/lib/reels/review';
+import { reviewSlideIndex } from '@/lib/reels/review-scroll';
 
 describe('reel review link', () => {
   it('uses the New York calendar day, and the day before it', () => {
@@ -23,5 +24,17 @@ describe('reel review link', () => {
     assert.equal(tokensMatch(token, 'b'.repeat(43)), false);
     assert.equal(tokensMatch(token, 'short'), false);
     assert.equal(tokensMatch(null, token), false);
+  });
+
+  it('keeps a small drag on the current reel and follows a flick that lands further down', () => {
+    const height = 800;
+    assert.equal(reviewSlideIndex(0, height, 6, 0), 0);
+    assert.equal(reviewSlideIndex(height * 0.3, height, 6, 0), 0);
+    assert.equal(reviewSlideIndex(height * 0.43, height, 6, 0), 1);
+    assert.equal(reviewSlideIndex(height * 3.2, height, 6, 0), 3);
+    assert.equal(reviewSlideIndex(height * 0.9, height, 6, 1), 1);
+    assert.equal(reviewSlideIndex(height * 0.57, height, 6, 1), 0);
+    assert.equal(reviewSlideIndex(100, 0, 6, 2), 0);
+    assert.equal(reviewSlideIndex(100, height, 1, 0), 0);
   });
 });

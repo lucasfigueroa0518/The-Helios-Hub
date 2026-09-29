@@ -7,7 +7,7 @@
   background: #000;
   color: #fff;
   font-family: var(--font-roboto), system-ui, sans-serif;
-  touch-action: manipulation;
+  touch-action: pan-y;
 }
 
 .ig-stage {
@@ -32,6 +32,7 @@
   scrollbar-width: none;
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
 .ig-scroller.is-locked { overflow: hidden; }
@@ -43,6 +44,7 @@
   height: 100dvh;
   scroll-snap-align: start;
   scroll-snap-stop: always;
+  overflow: hidden;
   background: #000;
 }
 
@@ -53,6 +55,14 @@
   height: 100%;
   object-fit: cover;
   background: #000;
+  opacity: 0;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.ig-video.is-ready {
+  opacity: 1;
+  transition: opacity 160ms linear;
 }
 
 .ig-hit {
@@ -63,6 +73,7 @@
   padding: 0;
   background: transparent;
   cursor: pointer;
+  touch-action: pan-y;
 }
 
 .ig-topshade,
@@ -183,6 +194,7 @@
 
 .ig-cap--open {
   display: block;
+  min-height: 0;
   max-height: min(46dvh, 420px);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -246,6 +258,25 @@
   background: rgba(255, 255, 255, 0.22);
 }
 
+.ig-wait {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  top: 46%;
+  width: 36px;
+  height: 36px;
+  margin: -18px 0 0 -18px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  border-top-color: #fff;
+  animation: ig-spin 0.7s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes ig-spin {
+  to { transform: rotate(360deg); }
+}
+
 .ig-play {
   position: absolute;
   z-index: 3;
@@ -294,4 +325,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .ig-scroller { scroll-behavior: auto; }
+  .ig-video.is-ready { transition: none; }
+  .ig-wait { animation: none; }
 }

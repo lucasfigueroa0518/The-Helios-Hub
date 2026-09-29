@@ -78,6 +78,7 @@ export type ReviewClip = {
 
 type ReviewRow = {
   video_id: string;
+  video_storage_path: string | null;
   rank: number | null;
   caption: string | null;
   call_to_action: string | null;
@@ -87,6 +88,22 @@ type ReviewRow = {
   picked_audio_id: string | null;
   preview_storage_path: string | null;
 };
+
+function signOrFallback(objectPath: string, fallback: string): Promise<string> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), 2500);
+    signedReviewUrl(objectPath).then(
+      (url) => {
+        clearTimeout(timer);
+        resolve(url);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(fallback);
+      },
+    );
+  });
+}
 
 /**
  * Newest finished video for each idea on the review slate that has one.
@@ -112,6 +129,7 @@ export async function loadReviewClips(token: string): Promise<ReviewClip[]> {
   const { rows } = await dbQuery<ReviewRow>(
     `WITH newest AS (${REVIEW_VIDEOS_SQL})
      SELECT newest.video_id,
+            newest.video_storage_path,
             newest.rank,
             c.caption,
             c.call_to_action,
@@ -140,9 +158,21 @@ export async function loadReviewClips(token: string): Promise<ReviewClip[]> {
   const videoVolume = mix ? mix.videoVolume / 100 : 1;
   const encoded = encodeURIComponent(token);
 
-  return rows.map((row) => {
+  // Sign here so the player requests storage directly. A redirect in front of
+  // every byte range is what makes the first frame and the next swipe wait.
+  return Promise.all(rows.map(async (row) => {
     const tags = Array.isArray(row.hashtags) ? row.hashtags : [];
     const audioId = row.preview_storage_path && row.picked_audio_id ? row.picked_audio_id : null;
+    const videoFallback = `/api/watch/${encoded}/video/${row.video_id}`;
+    const videoSrc = row.video_storage_path
+      ? await signOrFallback(row.video_storage_path, videoFallback)
+      : videoFallback;
+    const songSrc = audioId && row.preview_storage_path
+      ? await signOrFallback(
+          row.preview_storage_path,
+          `/api/watch/${encoded}/audio/${encodeURIComponent(audioId)}`,
+        )
+      : null;
     return {
       id: row.video_id,
       label: REVIEW_LABEL,
@@ -151,18 +181,18 @@ export async function loadReviewClips(token: string): Promise<ReviewClip[]> {
         callToAction: row.call_to_action ?? '',
         hashtags: tags,
       }),
-      videoSrc: `/api/watch/${encoded}/video/${row.video_id}`,
-      song: audioId
+      videoSrc,
+      song: audioId && songSrc
         ? {
             title: row.picked_title?.trim() || 'Original audio',
             artist: row.picked_artist?.trim() || '',
-            src: `/api/watch/${encoded}/audio/${encodeURIComponent(audioId)}`,
+            src: songSrc,
           }
         : null,
       songVolume,
       videoVolume,
     };
-  });
+  }));
 }
 
 /** Ideas on the review slate, best first. Used when regenerating that same set. */
