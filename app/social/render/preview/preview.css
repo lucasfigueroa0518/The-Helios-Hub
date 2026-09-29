@@ -725,47 +725,64 @@
   background: var(--brand-canvas);
 }
 
+/* Follow slide (design v1.1): sun-mark logo top, story line middle,
+   @handle bottom. Centered horizontally. The 96px slide padding is
+   removed for follow (see .helios-slide__well rule) so the layout
+   uses the full 1080×1350 canvas. */
 .helios-follow {
   position: relative;
   height: 100%;
   width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 120px 96px;
-  gap: 40px;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0;
   box-sizing: border-box;
 }
 
-.helios-follow__wordmark {
-  font-family: var(--font-body);
-  font-size: 148px;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--brand-narrative);
-  line-height: 0.9;
-  padding-left: 0.22em;
+/* Sun-mark logo: 420px, centered in the upper half. The 140px top
+   margin equals the mark's "H" height (~140px in a 420px logo), giving
+   the spec's minimum-one-H clear space above. */
+.helios-follow__mark {
+  width: 420px;
+  height: 420px;
+  margin-top: 140px;
+  object-fit: contain;
+  display: block;
 }
 
-.helios-follow__handle {
-  font-family: var(--font-mono);
-  font-size: 44px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
+/* Story-tied line. Pragmatica Extended Bold uppercase, 64px, white,
+   with "Follow Helios" in orange via .helios-follow__cta. Sits ~"H"
+   height below the mark (140px margin-top matches the mark's "H"). */
+.helios-follow__story-line {
+  margin: 140px 96px 0;
+  max-width: 888px;
+  font-family: var(--font-heading);
+  font-size: 64px;
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--brand-narrative);
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.helios-follow__cta {
   color: var(--brand-orange);
+}
+
+/* @handle: Roboto 40px, white at 70%. Sits below the story line with
+   modest margin — the H-height clear space rule applies to the LOGO,
+   not to intra-text spacing. */
+.helios-follow__handle {
+  margin: 32px 0 0;
+  font-family: var(--font-body);
+  font-size: 40px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.7);
   line-height: 1;
   text-transform: lowercase;
-}
-
-.helios-follow__story-line {
-  max-width: 780px;
-  font-family: var(--font-body);
-  font-size: 38px;
-  font-weight: 400;
-  line-height: 1.32;
-  letter-spacing: -0.005em;
-  color: var(--brand-narrative);
-  margin: 8px 0 0;
+  text-align: center;
 }

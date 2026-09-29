@@ -77,39 +77,38 @@ describe('checkPost — slide count', () => {
     assert.ok(r.errors.some((e) => e.kind === 'slide_count'), 'should flag slide_count');
   });
 
-  test('boundary: exactly 4 slides (cover + 2 beats + follow) passes', () => {
-    const slides = [
-      { body: 'Body one.', highlight: 'Body one' },
-      { body: 'Body two.', highlight: 'Body two' },
-    ];
+  test('boundary: exactly 5 story slides passes (min)', () => {
+    const slides = Array.from({ length: 5 }).map((_, i) => ({ body: `Body ${i}.`, highlight: `Body ${i}` }));
     const post = buildPost({ slides });
-    // 1 cover + 2 beats + 1 follow = 4. Under limit.
+    // Cover + 5 story slides + follow = 7 total, 5 story = at min.
     const r = checkPost(post, goodBrief);
-    assert.ok(!r.errors.some((e) => e.kind === 'slide_count'), 'exactly 4 must pass');
+    assert.ok(!r.errors.some((e) => e.kind === 'slide_count'), '5 story slides must pass');
   });
 
-  test('boundary: exactly 11 slides (cover + 9 beats + follow) passes', () => {
-    const slides = Array.from({ length: 9 }).map((_, i) => ({ body: `Body ${i}.`, highlight: `Body ${i}` }));
-    const post = buildPost({ slides });
-    // 1 cover + 9 beats + 1 follow = 11. At limit.
-    const r = checkPost(post, goodBrief);
-    assert.ok(!r.errors.some((e) => e.kind === 'slide_count'), 'exactly 11 must pass');
-  });
-
-  test('boundary: 12 slides (cover + 10 beats + follow) fails', () => {
+  test('boundary: exactly 10 story slides passes (max)', () => {
     const slides = Array.from({ length: 10 }).map((_, i) => ({ body: `Body ${i}.`, highlight: `Body ${i}` }));
     const post = buildPost({ slides });
-    // 1 cover + 10 beats + 1 follow = 12. Over limit.
+    // Cover + 10 story slides + follow = 12 total, 10 story = at max.
     const r = checkPost(post, goodBrief);
-    assert.ok(r.errors.some((e) => e.kind === 'slide_count'), 'exactly 12 must fail');
+    assert.ok(!r.errors.some((e) => e.kind === 'slide_count'), '10 story slides must pass');
   });
 
-  test('boundary: 3 slides (cover + 1 beat + follow) fails', () => {
-    const slides = [{ body: 'Body one.', highlight: 'Body one' }];
+  test('boundary: 4 story slides fails (under min)', () => {
+    const slides = Array.from({ length: 4 }).map((_, i) => ({ body: `Body ${i}.`, highlight: `Body ${i}` }));
     const post = buildPost({ slides });
-    // 1 cover + 1 beat + 1 follow = 3. Under min.
     const r = checkPost(post, goodBrief);
-    assert.ok(r.errors.some((e) => e.kind === 'slide_count'), '3 must fail');
+    const err = r.errors.find((e) => e.kind === 'slide_count');
+    assert.ok(err, '4 story slides must fail');
+    assert.match(err!.message, /minimum is 5/);
+  });
+
+  test('boundary: 11 story slides fails (over max)', () => {
+    const slides = Array.from({ length: 11 }).map((_, i) => ({ body: `Body ${i}.`, highlight: `Body ${i}` }));
+    const post = buildPost({ slides });
+    const r = checkPost(post, goodBrief);
+    const err = r.errors.find((e) => e.kind === 'slide_count');
+    assert.ok(err, '11 story slides must fail');
+    assert.match(err!.message, /maximum is 10/);
   });
 });
 
@@ -550,6 +549,119 @@ FOLLOW: Follow.`;
     const post = parseEditedPost(raw);
     const report = checkPost(post, goodBrief);
     assert.equal(report.errors.filter((e) => e.kind === 'variety').length, 0);
+  });
+});
+
+describe('checkPost — cover_photo soft check (type-only cover when person is central)', () => {
+  const briefWithGovernor = parseBrief(`SINGLE STORY: yes
+THE NEWS: California Governor Gavin Newsom signed an executive order on AI.
+THE STORY: Newsom signed on 2026-09-18.
+TERMS:
+- Gavin Newsom: Governor of California
+IMAGES: None found
+SOURCES:
+- CalMatters, 2026-09-18, https://calmatters.example/x
+`);
+  const briefNoPerson = parseBrief(`SINGLE STORY: yes
+THE NEWS: A generic tech event happened last week.
+THE STORY: Details of the event.
+TERMS:
+IMAGES: None found
+SOURCES:
+- Outlet, 2026-01-01, https://x.example.com
+`);
+  test('type-only cover + person in THE NEWS → cover_photo soft error', () => {
+    const raw = `COVER: Newsom signs the order.
+COVER HIGHLIGHT: Newsom
+COVER IMAGE: type only
+
+SLIDE 2
+HEADLINE: A
+BODY: One.
+IMAGE: type only
+
+FOLLOW: Follow.`;
+    const post = parseEditedPost(raw);
+    const report = checkPost(post, briefWithGovernor);
+    const errs = report.errors.filter((e) => e.kind === 'cover_photo');
+    assert.equal(errs.length, 1);
+    assert.match(errs[0]!.message, /Gavin Newsom/);
+  });
+  test('photo cover + person in THE NEWS → no cover_photo error', () => {
+    const raw = `COVER: Newsom signs the order.
+COVER HIGHLIGHT: Newsom
+COVER IMAGE: photo of Gavin Newsom
+
+SLIDE 2
+HEADLINE: A
+BODY: One.
+IMAGE: type only
+
+FOLLOW: Follow.`;
+    const post = parseEditedPost(raw);
+    const report = checkPost(post, briefWithGovernor);
+    assert.equal(report.errors.filter((e) => e.kind === 'cover_photo').length, 0);
+  });
+  test('type-only cover + no person in THE NEWS → no cover_photo error', () => {
+    const raw = `COVER: A generic tech event happened.
+COVER HIGHLIGHT: tech event
+COVER IMAGE: type only
+
+SLIDE 2
+HEADLINE: A
+BODY: One.
+IMAGE: type only
+
+FOLLOW: Follow.`;
+    const post = parseEditedPost(raw);
+    const report = checkPost(post, briefNoPerson);
+    assert.equal(report.errors.filter((e) => e.kind === 'cover_photo').length, 0);
+  });
+  test('cover_photo partitions as soft (Editor gets it, does not block ship at cap)', () => {
+    const raw = `COVER: Newsom signs.
+COVER HIGHLIGHT: Newsom
+COVER IMAGE: type only
+
+SLIDE 2
+HEADLINE: A
+BODY: One.
+IMAGE: type only
+
+FOLLOW: Follow.`;
+    const post = parseEditedPost(raw);
+    const { errors } = checkPost(post, briefWithGovernor);
+    const { soft, hard } = partitionErrors(errors);
+    assert.ok(soft.some((e) => e.kind === 'cover_photo'));
+    assert.equal(hard.filter((e) => e.kind === 'cover_photo').length, 0);
+  });
+});
+
+describe('checkQuotes — trailing-punctuation tolerance (Harms quote from California run)', () => {
+  // The California AI executive-order article (e045bc07) blocked at the
+  // quote_verbatim gate because the source ends the sentence with a
+  // comma inside the quote marks ("…serve a customer in Colorado,")
+  // while the Writer quoted it with a period ("…serve a customer in
+  // Colorado."). The words are identical; only the terminal punctuation
+  // differs. This should pass.
+  const source = [
+    'A related concern is jurisdictional overreach. As Ted Harms of Stanford Law told the SF Standard,',
+    '"California has only a limited capacity to control what a company incorporated in Delaware does with a data center in Oregon to serve a customer in Colorado," and that comma matters for follow-up litigation.',
+  ].join('\n');
+
+  test('period-vs-comma at the very end of the quote passes', () => {
+    const raw = `COVER: X.
+COVER HIGHLIGHT: X
+COVER IMAGE: type only
+
+SLIDE 2
+QUOTE: California has only a limited capacity to control what a company incorporated in Delaware does with a data center in Oregon to serve a customer in Colorado.
+QUOTE BY: Ted Harms, Stanford Law
+IMAGE: type only
+
+FOLLOW: Follow.`;
+    const post = parseEditedPost(raw);
+    const report = checkQuotes(post, [source]);
+    assert.equal(report.ok, true);
   });
 });
 

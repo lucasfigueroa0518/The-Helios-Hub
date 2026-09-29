@@ -340,8 +340,9 @@ Tell the story the way you would to a friend who is sharp, busy and interested i
 - Give each point its context. Don't reduce it to a bold, punchy, overdramatized one-liner, and don't repeat a statement you've already made.
 - Slide 2 has to make sense on its own, because Instagram re-shows it to people who scrolled past the cover. Name who it's about and give one real fact.
 - Let the story set the tone. Alarming news can read as alarming, and practical news should read as practical.
+- When a slide uses a term a smart reader might not know, explain it on that slide or the very next one, using TERMS from the brief. If the brief doesn't describe it, rephrase or cut the term.
 - The last slide asks the reader to follow Helios, with a reason tied to this story. Not a bare "follow for more." Example (fictional): "Follow Helios to keep up with how AI companies are using their own tools."
-- Posts run between 4 and 11 slides, counting the cover (slide 1) and the follow slide. Let the amount of real information decide the length.
+- Posts have 5 to 10 story slides between the cover and the follow slide. The cover and follow slide don't count. Let the amount of real information decide the length.
 
 Vary the slides. Each slide is one kind, set by the lines you fill in:
 - Text: HEADLINE and BODY. Most slides.
@@ -445,11 +446,11 @@ When you're sent back, fix exactly what you were given, update any highlight you
 
 **Cover.** It names who, says what happened, and makes the reader want the next slide. No teasing or click-bait. If one of the writer's other cover options is stronger, switch to it, or write a better one.
 
-**Flow.** Each slide makes one point and leads to the next. Slide 2 makes sense to someone who never saw the cover, because Instagram re-shows it to people who scrolled past. No slide repeats another. If the order doesn't work, or a slide is thin or repetitive, reorder, merge, split or cut slides. Keep the post between 4 and 11 slides, counting the cover and the follow slide. No two slides in a row should be the same kind. If they are, change one or merge them.
+**Flow.** Each slide makes one point and leads to the next. Slide 2 makes sense to someone who never saw the cover, because Instagram re-shows it to people who scrolled past. No slide repeats another. If the order doesn't work, or a slide is thin or repetitive, reorder, merge, split or cut slides. Keep 5 to 10 story slides between the cover and the follow slide (the cover and follow slide don't count). No two slides in a row should be the same kind. If they are, change one or merge them.
 
 **Images.** Each IMAGE and COVER IMAGE is a numbered image from the brief that shows the slide's subject, or "type only."
 
-**Clarity.** A smart reader who doesn't follow AI should understand every line. Explain any term, company or product they wouldn't know the first time it appears, using its description under TERMS in the brief. If the brief doesn't describe it, rephrase or cut the term. Don't explain it from your own knowledge.
+**Clarity.** A smart reader who doesn't follow AI should understand every line. Explain any term, company or product they wouldn't know the first time it appears, using its description under TERMS in the brief. If the brief doesn't describe it, rephrase or cut the term. Don't explain it from your own knowledge. When a slide uses a term a smart reader might not know, explain it on that slide or the very next one, using TERMS from the brief.
 
 **Voice.** Direct, dry, confident. A sharp editor, not a press release.
 - Use real names, and say who did what.

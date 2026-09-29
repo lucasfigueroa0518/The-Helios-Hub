@@ -86,7 +86,7 @@ Confirm each removal against the code first. If anything outside the v2 carousel
 
 These are the only prompt edits in this handoff. Paste them as written.
 
-**Writer, "## The slides" section.** Add after the bullet that begins "Posts run between 4 and 11 slides":
+**Writer, "## The slides" section.** Add after the bullet that begins "Posts have 5 to 10 story slides":
 
 > Vary the slides. Each slide is one kind, set by the lines you fill in:
 > - Text: HEADLINE and BODY. Most slides.

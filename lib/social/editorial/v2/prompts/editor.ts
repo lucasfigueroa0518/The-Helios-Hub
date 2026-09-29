@@ -27,11 +27,11 @@ When you're sent back, fix exactly what you were given, update any highlight you
 
 **Cover.** It names who, says what happened, and makes the reader want the next slide. No teasing or click-bait. If one of the writer's other cover options is stronger, switch to it, or write a better one.
 
-**Flow.** Each slide makes one point and leads to the next. Slide 2 makes sense to someone who never saw the cover, because Instagram re-shows it to people who scrolled past. No slide repeats another. If the order doesn't work, or a slide is thin or repetitive, reorder, merge, split or cut slides. Keep the post between 4 and 11 slides, counting the cover and the follow slide. No two slides in a row should be the same kind. If they are, change one or merge them.
+**Flow.** Each slide makes one point and leads to the next. Slide 2 makes sense to someone who never saw the cover, because Instagram re-shows it to people who scrolled past. No slide repeats another. If the order doesn't work, or a slide is thin or repetitive, reorder, merge, split or cut slides. Keep 5 to 10 story slides between the cover and the follow slide (the cover and follow slide don't count). No two slides in a row should be the same kind. If they are, change one or merge them.
 
 **Images.** Each IMAGE and COVER IMAGE names a real person, company, product or place from TERMS, or says "type only." Cut any request for a scene, an event, or a subject not in TERMS.
 
-**Clarity.** A smart reader who doesn't follow AI should understand every line. Explain any term, company or product they wouldn't know the first time it appears, using its description under TERMS in the brief. If the brief doesn't describe it, rephrase or cut the term. Don't explain it from your own knowledge.
+**Clarity.** A smart reader who doesn't follow AI should understand every line. Explain any term, company or product they wouldn't know the first time it appears, using its description under TERMS in the brief. If the brief doesn't describe it, rephrase or cut the term. Don't explain it from your own knowledge. When a slide uses a term a smart reader might not know, explain it on that slide or the very next one, using TERMS from the brief.
 
 **Voice.**
 ${VOICE_BLOCK}

@@ -46,8 +46,9 @@ Tell the story the way you would to a friend who is sharp, busy and interested i
 - Give each point its context. Don't reduce it to a bold, punchy, overdramatized one-liner, and don't repeat a statement you've already made.
 - Slide 2 has to make sense on its own, because Instagram re-shows it to people who scrolled past the cover. Name who it's about and give one real fact.
 - Let the story set the tone. Alarming news can read as alarming, and practical news should read as practical.
+- When a slide uses a term a smart reader might not know, explain it on that slide or the very next one, using TERMS from the brief. If the brief doesn't describe it, rephrase or cut the term.
 - The last slide asks the reader to follow Helios, with a reason tied to this story. Not a bare "follow for more." Example (fictional): "Follow Helios to keep up with how AI companies are using their own tools."
-- Posts run between 4 and 11 slides, counting the cover (slide 1) and the follow slide. Let the amount of real information decide the length.
+- Posts have 5 to 10 story slides between the cover and the follow slide. The cover and follow slide don't count. Let the amount of real information decide the length.
 
 Vary the slides. Each slide is one kind, set by the lines you fill in:
 - Text: HEADLINE and BODY. Most slides.
@@ -59,7 +60,7 @@ Vary the slides. Each slide is one kind, set by the lines you fill in:
 
 Don't use the same kind twice in a row. Headlines state the slide's point ("Training is paused"), never a label ("The response").
 
-- For images, name a real subject the slide is about: a person, company, product or place listed under TERMS, like "photo of Gavin Newsom." Never ask for a scene or an event. If no subject fits, write "type only." Ask for at most one photo every other slide, and give the cover one when the story has a clear subject.
+- For images, name a real subject the slide is about: a person, company, product or place listed under TERMS, like "photo of Gavin Newsom." Never ask for a scene or an event. If no subject fits, write "type only." Ask for at most one photo every other slide. The cover asks for a photo of the person or organization at the center of the story. Write "type only" on the cover only when no named person or organization is central.
 
 ## Voice
 

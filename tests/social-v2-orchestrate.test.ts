@@ -50,6 +50,19 @@ BODY: The company said it measured the share by tracking which pull requests wer
 HIGHLIGHT: pull requests were opened by Claude
 IMAGE: type only
 
+SLIDE 4
+HEADLINE: The rollout continues across research teams.
+IMAGE: type only
+
+SLIDE 5
+HEADLINE: The change lands inside the model's own tooling.
+BODY: Claude Code is now the primary way researchers ship changes to the codebase.
+IMAGE: type only
+
+SLIDE 6
+HEADLINE: What the numbers do not say.
+IMAGE: type only
+
 FOLLOW: Follow Helios to keep up with how AI companies are actually using their own tools.`;
 
 const EDITED_RAW = `COVER: Anthropic says its own AI writes 26% of its R&D code.
@@ -68,6 +81,19 @@ SLIDE 3
 HEADLINE: Measured by Claude's own pull requests
 BODY: The company said it measured the share by tracking which pull requests were opened by Claude vs. human engineers.
 HIGHLIGHT: pull requests were opened by Claude
+IMAGE: type only
+
+SLIDE 4
+HEADLINE: The rollout continues across research teams.
+IMAGE: type only
+
+SLIDE 5
+HEADLINE: The change lands inside the model's own tooling.
+BODY: Claude Code is now the primary way researchers ship changes to the codebase.
+IMAGE: type only
+
+SLIDE 6
+HEADLINE: What the numbers do not say.
 IMAGE: type only
 
 FOLLOW: Follow Helios to keep up with how AI companies are actually using their own tools.

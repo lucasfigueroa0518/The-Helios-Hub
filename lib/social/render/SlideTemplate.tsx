@@ -1,5 +1,7 @@
 'use client';
 
+import type { ReactNode } from 'react';
+
 import type { Post, SlideCopy, SpanRun } from '@/lib/social/render/types';
 
 export type SlideTemplateProps = {
@@ -338,17 +340,51 @@ function ImageSlide({ slide }: { slide: SlideCopy }) {
   );
 }
 
-/* ── Follow (unchanged) ───────────────────────────────────────────── */
+/* ── Follow (redesigned) ──────────────────────────────────────────── */
 
+/**
+ * Follow slide layout (design v1.1):
+ *   - Helios sun-mark logo centered in the upper half, ~420px across,
+ *     with clear space at least the height of its "H" on every side.
+ *   - Story-tied line in Pragmatica Extended Bold uppercase, ~64px,
+ *     white — with "Follow Helios" in orange.
+ *   - @heliosgroup.ai in Roboto, ~40px, white 70%.
+ */
 function FollowSlide({ slide }: { slide: SlideCopy }) {
-  const storyLine = slide.storySpecificLine?.trim();
+  const storyLine = slide.storySpecificLine?.trim() ?? '';
   return (
     <div className="helios-follow">
-      <div className="helios-follow__wordmark">HELIOS</div>
-      <div className="helios-follow__handle">@heliosgroup.ai</div>
+      <img
+        className="helios-follow__mark"
+        src="/social/helios-mark.png"
+        alt="Helios"
+      />
       {storyLine && (
-        <div className="helios-follow__story-line">{storyLine}</div>
+        <div className="helios-follow__story-line">
+          {renderFollowLine(storyLine)}
+        </div>
       )}
+      <div className="helios-follow__handle">@heliosgroup.ai</div>
     </div>
+  );
+}
+
+/**
+ * Split a follow line so any "Follow Helios" substring renders orange.
+ * Case-insensitive match. Falls back to plain text if the phrase isn't
+ * in the string (older story lines).
+ */
+function renderFollowLine(line: string): ReactNode {
+  const idx = line.toLowerCase().indexOf('follow helios');
+  if (idx < 0) return line;
+  const before = line.slice(0, idx);
+  const match = line.slice(idx, idx + 'follow helios'.length);
+  const after = line.slice(idx + 'follow helios'.length);
+  return (
+    <>
+      {before}
+      <span className="helios-follow__cta">{match}</span>
+      {after}
+    </>
   );
 }

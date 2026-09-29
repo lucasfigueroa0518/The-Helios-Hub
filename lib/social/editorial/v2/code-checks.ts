@@ -23,6 +23,7 @@ export type CheckErrorKind =
   | 'number_trace'
   | 'rhythm'
   | 'variety'
+  | 'cover_photo'
   | 'quote_verbatim';
 
 export type CheckError = {
@@ -56,30 +57,37 @@ export const LIMITS = {
    * "Source:" line. No minimum.
    */
   captionMax: 2200,
-  slideCountMin: 4,
-  slideCountMax: 11,
+  /**
+   * STORY slides between the cover and the follow slide. Cover + follow
+   * are anchors and don't count. A post has 5 to 10 story slides,
+   * meaning `post.slides.length` (which excludes cover + follow) is
+   * between 5 and 10 inclusive. Total published slides run 7–12.
+   */
+  storySlidesMin: 5,
+  storySlidesMax: 10,
 };
 
 export function checkPost(post: ParsedPost, brief: Brief): CheckReport {
   const errors: CheckError[] = [];
 
-  // ── Slide count (cover + follow + slides). "slides" in post excludes the
-  // cover; follow is a separate line. Total = 1 (cover) + slides.length + 1 (follow).
-  const totalSlides = 1 + post.slides.length + 1;
-  if (totalSlides < LIMITS.slideCountMin) {
-    const short = LIMITS.slideCountMin - totalSlides;
+  // ── Story-slide count. Cover + follow are anchors and don't count.
+  // A post has 5–10 story slides (post.slides.length in the parser
+  // excludes cover + follow, so we check it directly).
+  const storySlides = post.slides.length;
+  if (storySlides < LIMITS.storySlidesMin) {
+    const short = LIMITS.storySlidesMin - storySlides;
     errors.push({
       kind: 'slide_count',
       target: 'slide',
-      message: `Slide count is ${totalSlides}. The minimum is ${LIMITS.slideCountMin}. Add at least ${short} more slide${short === 1 ? '' : 's'}.`,
+      message: `Story-slide count is ${storySlides} (cover + follow don't count). The minimum is ${LIMITS.storySlidesMin}. Add at least ${short} more slide${short === 1 ? '' : 's'} between the cover and the follow slide.`,
     });
   }
-  if (totalSlides > LIMITS.slideCountMax) {
-    const over = totalSlides - LIMITS.slideCountMax;
+  if (storySlides > LIMITS.storySlidesMax) {
+    const over = storySlides - LIMITS.storySlidesMax;
     errors.push({
       kind: 'slide_count',
       target: 'slide',
-      message: `Slide count is ${totalSlides}. The maximum is ${LIMITS.slideCountMax}. Cut at least ${over} slide${over === 1 ? '' : 's'}.`,
+      message: `Story-slide count is ${storySlides} (cover + follow don't count). The maximum is ${LIMITS.storySlidesMax}. Cut at least ${over} slide${over === 1 ? '' : 's'} between the cover and the follow slide.`,
     });
   }
 
@@ -105,6 +113,19 @@ export function checkPost(post: ParsedPost, brief: Brief): CheckReport {
   const coverImageError = checkImageRef(post.cover.image ?? '', brief);
   if (coverImageError) {
     errors.push({ kind: 'image_ref', target: 'cover', field: 'IMAGE', message: coverImageError });
+  }
+  // Cover-photo soft check: if THE NEWS names a person and the writer
+  // put "type only" on the cover, send it back to the Editor. Per
+  // spec: "The cover asks for a photo of the person or organization at
+  // the center of the story."
+  const coverImage = (post.cover.image ?? '').trim().toLowerCase();
+  if (coverImage === 'type only' && briefNewsNamesAPerson(brief)) {
+    errors.push({
+      kind: 'cover_photo',
+      target: 'cover',
+      field: 'IMAGE',
+      message: `COVER IMAGE is "type only" but THE NEWS names a person (${describePersonInNews(brief) ?? 'see brief'}). Change COVER IMAGE to "photo of <that person or organization>" — the cover should show whoever is at the center of the story.`,
+    });
   }
   errors.push(...scanVoiceOnText('cover', 'TEXT', coverText, undefined, LIMITS.cover));
 
@@ -457,10 +478,42 @@ export function partitionErrors(errors: CheckError[]): { hard: CheckError[]; sof
       || e.kind === 'highlight_substring'
       || e.kind === 'rhythm'
       || e.kind === 'variety'
+      || e.kind === 'cover_photo'
     ) soft.push(e);
     else hard.push(e);
   }
   return { hard, soft };
+}
+
+/**
+ * Does the brief's THE NEWS line name a person? A TERMS entry counts as
+ * "a person" when its description matches one of the role keywords the
+ * image step uses to detect people (governor, CEO, president, etc.).
+ * Detection is intentionally conservative: only fires when the TERMS
+ * entry's name string appears literally in THE NEWS.
+ */
+export function briefNewsNamesAPerson(brief: import('./parse').Brief): boolean {
+  const news = (brief.news ?? '').toLowerCase();
+  if (!news) return false;
+  for (const t of brief.terms) {
+    if (!isPersonTerm(t)) continue;
+    if (news.includes(t.name.toLowerCase())) return true;
+  }
+  return false;
+}
+
+function describePersonInNews(brief: import('./parse').Brief): string | null {
+  const news = (brief.news ?? '').toLowerCase();
+  for (const t of brief.terms) {
+    if (!isPersonTerm(t)) continue;
+    if (news.includes(t.name.toLowerCase())) return t.name;
+  }
+  return null;
+}
+
+function isPersonTerm(term: { description?: string }): boolean {
+  const d = (term.description ?? '').toLowerCase();
+  return /\b(ceo|cto|cfo|coo|president|governor|senator|secretary|minister|director|founder|chair|chief|editor|reporter|prime minister|attorney|judge|mayor|congressman|congresswoman)\b/.test(d);
 }
 
 /**
@@ -495,7 +548,12 @@ export function checkQuotes(
 
 /**
  * Normalize a quote so a curly-quoted / double-spaced / newline-broken
- * source text still matches the writer's paraphrase-free copy.
+ * source text still matches the writer's paraphrase-free copy. Also
+ * ignores trailing punctuation just inside the quote marks — a source
+ * might write "…serve a customer in Colorado," while the writer
+ * quotes it as "…serve a customer in Colorado." The words are identical,
+ * only the terminal punctuation differs. Same substring after the
+ * transform.
  */
 function normalizeQuoteText(s: string): string {
   return s
@@ -503,6 +561,12 @@ function normalizeQuoteText(s: string): string {
     .replace(/[“”‟″]/g, '"')
     .replace(/[–—]/g, '-')
     .replace(/\s+/g, ' ')
+    // Strip trailing sentence-ending punctuation that would otherwise
+    // cause a "period vs comma" mismatch on an otherwise word-for-word
+    // quote. Run twice so a trailing `."` becomes ` ` after both
+    // characters are stripped.
+    .replace(/[.,;:!?]+(?=$|["'])/g, '')
+    .replace(/[.,;:!?]+$/g, '')
     .trim()
     .toLowerCase();
 }

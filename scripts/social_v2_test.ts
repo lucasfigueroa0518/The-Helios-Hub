@@ -43,6 +43,10 @@ async function main() {
   const { values } = parseArgs({
     options: {
       article: { type: 'string' },
+      // Comma-separated list of article ids. When set, the runner loops
+      // over each id, runs the full pipeline, and writes a batch
+      // scorecard.md under runs/batch-<ts>/.
+      articles: { type: 'string' },
       'from-brief': { type: 'string' },
       'max-cost': { type: 'string' },
       inject: { type: 'string' },
@@ -55,6 +59,7 @@ async function main() {
   });
 
   const articleId = values.article;
+  const articlesCsv = values.articles;
   const fromBriefPath = values['from-brief'];
   const maxCostArg = values['max-cost'];
   const injectSentence = values.inject;
@@ -79,8 +84,9 @@ async function main() {
     process.exit(0);
   }
 
-  if (!articleId) {
+  if (!articleId && !articlesCsv) {
     console.error('Usage: npm run social:v2:test -- --article <uuid> [--from-brief runs/<ts>/brief.json] [--max-cost 1.5] [--inject "<sentence>"] [--render-preview]');
+    console.error('   or: npm run social:v2:test -- --articles <uuid>,<uuid>,... [--max-cost 1.5] [--render-preview]');
     console.error('   or: npm run social:v2:test -- --preview-only runs/<ts>');
     process.exit(2);
   }
@@ -101,7 +107,98 @@ async function main() {
     buildSummaryMarkdown,
     wrapDepsForCapture,
   } = await import('@/lib/social/editorial/v2/test-runner-support');
+  const { partitionErrors, checkPost, checkQuotes, checkNumberTrace, classifySlideType } = await import('@/lib/social/editorial/v2/code-checks');
 
+  // ── Batch mode: --articles <id>,<id>,... ─────────────────────────────
+  if (articlesCsv) {
+    const ids = articlesCsv.split(',').map((s) => s.trim()).filter(Boolean);
+    if (ids.length === 0) {
+      console.error('No article ids parsed from --articles');
+      process.exit(2);
+    }
+    const batchId = `batch-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+    const batchDir = path.join(process.cwd(), 'runs', batchId);
+    await fsp.mkdir(batchDir, { recursive: true });
+    console.log(`Batch mode — ${ids.length} article${ids.length === 1 ? '' : 's'} → ${path.relative(process.cwd(), batchDir)}/`);
+    console.log(`Cost cap per article: $${maxCostArg ?? '1.5'}`);
+    console.log('');
+
+    type Score = Awaited<ReturnType<typeof runOne>> | { error: string; articleId: string };
+    const scores: Score[] = [];
+    for (const id of ids) {
+      console.log(`── ${id} ─────────────────────────────`);
+      try {
+        const s = await runOne(id, {
+          batchDir, previewServer, renderPreview,
+          fromBriefPath: undefined, injectSentence: undefined,
+          runCreatorPipeline, dbQuery,
+          buildFromBriefDeps, buildSummaryMarkdown, wrapDepsForCapture,
+          partitionErrors, checkPost, checkQuotes, checkNumberTrace, classifySlideType,
+        });
+        scores.push(s);
+      } catch (err) {
+        console.error(`  ✖ ${err instanceof Error ? err.message : String(err)}`);
+        scores.push({ error: err instanceof Error ? err.message : String(err), articleId: id });
+      }
+      console.log('');
+    }
+
+    const scorecard = buildBatchScorecard(scores, batchId);
+    await fsp.writeFile(path.join(batchDir, 'scorecard.md'), scorecard, 'utf-8');
+    console.log(`Scorecard → ${path.relative(process.cwd(), path.join(batchDir, 'scorecard.md'))}`);
+    process.exit(0);
+  }
+
+  // ── Single-article mode ──────────────────────────────────────────────
+  await runOne(articleId!, {
+    batchDir: undefined,
+    previewServer, renderPreview,
+    fromBriefPath, injectSentence,
+    runCreatorPipeline, dbQuery,
+    buildFromBriefDeps, buildSummaryMarkdown, wrapDepsForCapture,
+    partitionErrors, checkPost, checkQuotes, checkNumberTrace, classifySlideType,
+  });
+  process.exit(0);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Deps = any;
+
+type RunOneOptions = {
+  batchDir?: string | undefined;
+  previewServer: string | undefined;
+  renderPreview: boolean;
+  fromBriefPath: string | undefined;
+  injectSentence: string | undefined;
+  runCreatorPipeline: Deps;
+  dbQuery: Deps;
+  buildFromBriefDeps: Deps;
+  buildSummaryMarkdown: Deps;
+  wrapDepsForCapture: Deps;
+  partitionErrors: Deps;
+  checkPost: Deps;
+  checkQuotes: Deps;
+  checkNumberTrace: Deps;
+  classifySlideType: Deps;
+};
+
+type BatchScore = {
+  articleId: string;
+  source: string;
+  headline: string;
+  status: string;
+  reason?: string;
+  costUsd: number;
+  storySlideCount: number;
+  slideKinds: string[];
+  photos: Array<{ slide: string; subject: string; wikidataId: string; commonsFile: string; license: string }>;
+  otherStoryFlags: Array<{ where: string; text: string; sourcesSay: string }>;
+  lengthErrors: string[];
+  quoteCheck: 'ok' | 'failed' | 'no-quotes';
+  factCheckVerdict: string | null;
+};
+
+async function runOne(articleId: string, o: RunOneOptions): Promise<BatchScore> {
   // Load article (SELECT only — no writes).
   type Row = {
     id: string;
@@ -111,30 +208,39 @@ async function main() {
     body: string;
     published_at: Date | string | null;
   };
-  const { rows } = await dbQuery<Row>(
+  const { rows } = await o.dbQuery(
     `SELECT id, source, source_url, headline, body, published_at
        FROM helios_social.article_queue
       WHERE id = $1`,
     [articleId],
   );
-  const row = rows[0];
-  if (!row) {
-    console.error(`Article ${articleId} not found`);
-    process.exit(1);
-  }
+  const row = rows[0] as Row | undefined;
+  if (!row) throw new Error(`Article ${articleId} not found`);
   if (!row.body || row.body.length < 200) {
-    console.error(`Article ${articleId} body too thin (${row.body?.length ?? 0} chars, need ≥ 200)`);
-    process.exit(1);
+    throw new Error(`Article ${articleId} body too thin (${row.body?.length ?? 0} chars, need ≥ 200)`);
   }
 
-  // Runs dir with ISO timestamp — safe for filesystem across OSes.
+  // Runs dir with ISO timestamp — safe for filesystem across OSes. In
+  // batch mode each per-article run lives inside runs/batch-<ts>/<runId>/.
   const runId = new Date().toISOString().replace(/[:.]/g, '-');
-  const runDir = path.join(process.cwd(), 'runs', runId);
+  const runDir = o.batchDir
+    ? path.join(o.batchDir, runId)
+    : path.join(process.cwd(), 'runs', runId);
   await fsp.mkdir(runDir, { recursive: true });
+
+  const fromBriefPath = o.fromBriefPath;
+  const injectSentence = o.injectSentence;
+  const previewServer = o.previewServer;
+  const renderPreview = o.renderPreview;
+  const {
+    runCreatorPipeline, buildFromBriefDeps, buildSummaryMarkdown,
+    wrapDepsForCapture, partitionErrors, checkPost, checkQuotes,
+    checkNumberTrace, classifySlideType,
+  } = o;
 
   console.log(`Article: ${row.id} — ${row.headline}`);
   console.log(`Run dir: ${runDir}`);
-  console.log(`Cost cap: $${maxCostArg ?? '1.5'}`);
+  console.log(`Cost cap: $${process.env.HELIOS_V2_MAX_COST_USD ?? '1.5'}`);
 
   // If --from-brief, load the cached brief and stub Reporter+fetchPage.
   let baseDeps: Awaited<ReturnType<typeof buildFromBriefDeps>> | Record<string, never> = {};
@@ -277,7 +383,163 @@ async function main() {
     }
   }
 
-  process.exit(result.ok ? 0 : 1);
+  return summarizeRun(row, captured, {
+    partitionErrors, checkPost, checkQuotes, checkNumberTrace, classifySlideType,
+  });
+}
+
+/**
+ * Build a per-post BatchScore from a captured run. Reads everything the
+ * scorecard needs off `captured.debug` — the final Editor post for slide
+ * kinds + length errors, the image step's chosen photos, the last
+ * fact-check round's flags, and the run result for status + cost.
+ */
+function summarizeRun(
+  row: { id: string; source: string; headline: string },
+  captured: Deps,
+  helpers: {
+    partitionErrors: Deps; checkPost: Deps; checkQuotes: Deps;
+    checkNumberTrace: Deps; classifySlideType: Deps;
+  },
+): BatchScore {
+  const result = captured.result ?? { status: 'unknown', costUsd: 0 };
+  const debug = captured.debug ?? {};
+  const editedPost = debug.edited?.post;
+  const brief = debug.reporter?.brief;
+
+  let storySlideCount = 0;
+  let slideKinds: string[] = [];
+  let lengthErrors: string[] = [];
+  let quoteCheck: BatchScore['quoteCheck'] = 'no-quotes';
+
+  if (editedPost && brief) {
+    storySlideCount = editedPost.slides?.length ?? 0;
+    slideKinds = [...new Set((editedPost.slides ?? []).map((s: Deps) => helpers.classifySlideType(s)))] as string[];
+    const finalCheck = helpers.checkPost(editedPost, brief);
+    const { soft } = helpers.partitionErrors(finalCheck.errors);
+    lengthErrors = soft
+      .filter((e: Deps) => e.kind === 'char_limit')
+      .map((e: Deps) => e.message);
+    const anyQuote = (editedPost.slides ?? []).some((s: Deps) => s.quote);
+    if (anyQuote) {
+      const sourceTexts = (debug.sources ?? []).map((s: Deps) => s.textPreview ?? '');
+      const qc = helpers.checkQuotes(editedPost, sourceTexts);
+      quoteCheck = qc.ok ? 'ok' : 'failed';
+    }
+  }
+
+  const photos = ((debug.imageStep?.selected ?? []) as Deps[]).map((s: Deps) => ({
+    slide: s.slide === 'cover' ? 'cover' : `slide ${s.slide}`,
+    subject: s.label ?? s.subject ?? '(unknown)',
+    wikidataId: s.wikidataId ?? '',
+    commonsFile: s.commonsFile ?? '',
+    license: s.license ?? '',
+  }));
+
+  const lastRound = (debug.rounds ?? []).slice(-1)[0];
+  const lastFlags = (lastRound?.factCheck?.flags ?? []) as Deps[];
+  const otherStoryFlags = lastFlags
+    .filter((f: Deps) => /different (story|event|company)|not (in|from) (the )?main|separate story|cross-story/i.test(String(f.problem ?? '')))
+    .map((f: Deps) => ({
+      where: String(f.where ?? ''),
+      text: String(f.text ?? ''),
+      sourcesSay: String(f.sourcesSay ?? ''),
+    }));
+
+  return {
+    articleId: row.id,
+    source: row.source,
+    headline: row.headline,
+    status: String(result.status ?? 'unknown'),
+    reason: result.reason,
+    costUsd: Number(result.costUsd ?? 0),
+    storySlideCount,
+    slideKinds,
+    photos,
+    otherStoryFlags,
+    lengthErrors,
+    quoteCheck,
+    factCheckVerdict: lastRound?.factCheck?.verdict ?? null,
+  };
+}
+
+/**
+ * Compose the batch scorecard.md. One row per post + a totals row that
+ * shows which problems repeat across the batch.
+ */
+function buildBatchScorecard(scores: Array<BatchScore | { error: string; articleId: string }>, batchId: string): string {
+  const parts: string[] = [];
+  parts.push(`# Batch scorecard — ${batchId}`);
+  parts.push('');
+  parts.push(`${scores.length} article${scores.length === 1 ? '' : 's'} run through the full v2 pipeline.`);
+  parts.push('');
+
+  let totalCost = 0;
+  const problems: Record<string, number> = {};
+
+  for (const s of scores) {
+    if ('error' in s) {
+      parts.push(`## ${s.articleId} — FAILED TO RUN`);
+      parts.push('');
+      parts.push(`\`${s.error}\``);
+      parts.push('');
+      problems.pipeline_failure = (problems.pipeline_failure ?? 0) + 1;
+      continue;
+    }
+    totalCost += s.costUsd;
+    parts.push(`## ${s.articleId} — ${s.source}: ${s.headline}`);
+    parts.push('');
+    parts.push(`- **Status:** ${s.status}${s.reason ? ` — ${s.reason}` : ''}`);
+    parts.push(`- **Cost:** $${s.costUsd.toFixed(4)}`);
+    parts.push(`- **Story slides:** ${s.storySlideCount}`);
+    parts.push(`- **Slide kinds:** ${s.slideKinds.length > 0 ? s.slideKinds.join(', ') : '(none)'}`);
+    if (s.photos.length > 0) {
+      parts.push(`- **Photos placed (${s.photos.length}):**`);
+      for (const p of s.photos) {
+        parts.push(`    - ${p.slide}: ${p.subject} (Wikidata ${p.wikidataId}) — ${p.commonsFile} — ${p.license}`);
+      }
+    } else {
+      parts.push(`- **Photos placed:** none`);
+    }
+    if (s.otherStoryFlags.length > 0) {
+      parts.push(`- **Fact-checker other-story flags (${s.otherStoryFlags.length}):**`);
+      for (const f of s.otherStoryFlags) {
+        parts.push(`    - ${f.where}: "${f.text.slice(0, 80)}${f.text.length > 80 ? '…' : ''}" — sources say: ${f.sourcesSay.slice(0, 80)}${f.sourcesSay.length > 80 ? '…' : ''}`);
+      }
+      problems.other_story = (problems.other_story ?? 0) + 1;
+    } else {
+      parts.push(`- **Fact-checker other-story flags:** none`);
+    }
+    if (s.lengthErrors.length > 0) {
+      parts.push(`- **Length errors remaining (${s.lengthErrors.length}):**`);
+      for (const e of s.lengthErrors) parts.push(`    - ${e}`);
+      problems.length_errors = (problems.length_errors ?? 0) + 1;
+    } else {
+      parts.push(`- **Length errors remaining:** none`);
+    }
+    parts.push(`- **Quote check:** ${s.quoteCheck}`);
+    if (s.quoteCheck === 'failed') problems.quote_verbatim = (problems.quote_verbatim ?? 0) + 1;
+    parts.push(`- **Fact-check verdict:** ${s.factCheckVerdict ?? '(not run)'}`);
+    if (s.factCheckVerdict === 'FLAGGED') problems.flagged_at_fact_check = (problems.flagged_at_fact_check ?? 0) + 1;
+    if (s.status === 'needs_human_review') problems.needs_human_review = (problems.needs_human_review ?? 0) + 1;
+    if (s.status === 'shipped') problems.shipped = (problems.shipped ?? 0) + 1;
+    parts.push('');
+  }
+
+  parts.push('---');
+  parts.push('');
+  parts.push('## Totals');
+  parts.push('');
+  parts.push(`- **Total cost:** $${totalCost.toFixed(4)}`);
+  const problemKeys = Object.keys(problems).sort();
+  if (problemKeys.length === 0) {
+    parts.push(`- **No repeat problems recorded.**`);
+  } else {
+    parts.push(`- **Repeat problems across posts:**`);
+    for (const k of problemKeys) parts.push(`    - ${k}: ${problems[k]}`);
+  }
+
+  return parts.join('\n');
 }
 
 main().catch((err) => {
