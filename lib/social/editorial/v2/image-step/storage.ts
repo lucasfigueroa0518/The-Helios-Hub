@@ -41,7 +41,12 @@ export type UploadResult = {
  */
 export async function downloadAndStore(input: UploadInput): Promise<UploadResult> {
   const http = input.http ?? fetch;
-  const client = input.client ?? supabaseAdmin();
+
+  // Test-run safety: --no-persist sets HELIOS_V2_NO_STORAGE_UPLOAD=1 in
+  // the test runner. When set, skip the upload to the production Supabase
+  // bucket entirely and return the Commons hotlink URL. Reviewers still
+  // see a working preview; production bytes stay untouched.
+  const noStorageUpload = process.env.HELIOS_V2_NO_STORAGE_UPLOAD === '1';
 
   const res = await http(input.sourceUrl, {
     headers: {
@@ -55,6 +60,16 @@ export async function downloadAndStore(input: UploadInput): Promise<UploadResult
   const ext = input.mime === 'image/png' ? 'png' : 'jpg';
   const sha = createHash('sha1').update(bytes).digest('hex').slice(0, 8);
   const storagePath = `wikidata/${input.wikidataId}/${sha}.${ext}`;
+
+  if (noStorageUpload) {
+    return {
+      storagePath: `no-upload:${storagePath}`,
+      storageUrl: input.sourceUrl,
+      bytes: bytes.length,
+    };
+  }
+
+  const client = input.client ?? supabaseAdmin();
 
   const { error: uploadError } = await client.storage
     .from(BUCKET)

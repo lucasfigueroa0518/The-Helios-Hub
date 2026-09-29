@@ -52,6 +52,17 @@ export const EDITORIAL_MODEL = envString('HELIOS_EDITORIAL_MODEL', 'claude-sonne
 export const HUMANIZER_MODEL = envString('HELIOS_HUMANIZER_MODEL', 'claude-haiku-4-5-20251001');
 
 /**
+ * v2 cost cuts (docs/PROJECT-STATUS.md §Costs):
+ * - Caption stage runs on Haiku (short summary, low judgment).
+ * - Editor's length-repair reruns (CHECK ERRORS = char_limit /
+ *   highlight_substring) run on Haiku — they're mechanical trims, not
+ *   editorial rewrites. Fact-check flag reruns still run on Sonnet
+ *   because they require judgment about what the sources say.
+ */
+export const CAPTION_MODEL = envString('HELIOS_V2_CAPTION_MODEL', 'claude-haiku-4-5-20251001');
+export const REPAIR_EDITOR_MODEL = envString('HELIOS_V2_REPAIR_EDITOR_MODEL', 'claude-haiku-4-5-20251001');
+
+/**
  * Sonnet 4.6 pricing (per Anthropic pricing page as of 2026-09):
  * $3/Mtok input, $15/Mtok output, cache reads $0.30/Mtok, cache writes $3.75/Mtok.
  * Kept alongside the model constant so cost math travels with the model choice.
@@ -119,4 +130,37 @@ export function sonnetCostUsd(usage: {
       + usage.outputTokens * SONNET_OUTPUT_USD_PER_MTOK)
     / 1_000_000
   );
+}
+
+/** Haiku 4.5 pricing: $1/Mtok in, $5/Mtok out, cache-read $0.10, cache-write $1.25. */
+export const HAIKU_INPUT_USD_PER_MTOK = 1.0;
+export const HAIKU_OUTPUT_USD_PER_MTOK = 5.0;
+export const HAIKU_CACHE_READ_USD_PER_MTOK = 0.10;
+export const HAIKU_CACHE_WRITE_USD_PER_MTOK = 1.25;
+
+export function haikuCostUsd(usage: {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+}): number {
+  const cacheRead = usage.cacheReadTokens ?? 0;
+  const cacheWrite = usage.cacheWriteTokens ?? 0;
+  return (
+    (usage.inputTokens * HAIKU_INPUT_USD_PER_MTOK
+      + cacheRead * HAIKU_CACHE_READ_USD_PER_MTOK
+      + cacheWrite * HAIKU_CACHE_WRITE_USD_PER_MTOK
+      + usage.outputTokens * HAIKU_OUTPUT_USD_PER_MTOK)
+    / 1_000_000
+  );
+}
+
+/** Dispatch to the right pricing table by model ID. */
+export function costUsdForModel(model: string, usage: {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+}): number {
+  return /haiku/i.test(model) ? haikuCostUsd(usage) : sonnetCostUsd(usage);
 }

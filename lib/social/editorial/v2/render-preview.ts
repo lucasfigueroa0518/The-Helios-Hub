@@ -238,14 +238,29 @@ export async function renderPreview(input: PreviewInput): Promise<PreviewResult>
  * Rebuild a Post from a captured debug transcript when the run bailed
  * before writing renderPostJson (soft-error case). Runs the same adapter
  * the real pipeline would have run — deterministic, no LLM.
+ *
+ * Prefers debug.finalPost (2026-09-29: added; captures the post the pipeline
+ * actually settled on, including every fact-check-round and soft-repair
+ * mutation). Falls back to the last fact-check round's post for pre-2026-09-29
+ * runs, then to the initial editor pass — the older paths render the earliest
+ * post they can find, which is why bail previews used to disagree with the
+ * summary.
  */
-function reconstructPost(captured: CapturedRun | null, articlePublishedAt?: string): unknown | null {
+export function reconstructPost(captured: CapturedRun | null, articlePublishedAt?: string): unknown | null {
   if (!captured?.debug?.reporter || !captured.debug.edited || !captured.debug.caption) return null;
   const dayStamp = Math.floor(Date.now() / 86_400_000) - 20_000;
+  const rounds = (captured.debug as { rounds?: Array<{ post?: unknown; caption?: string }> }).rounds ?? [];
+  const lastRound = rounds.length > 0 ? rounds[rounds.length - 1] : undefined;
+  const finalPost = (captured.debug as { finalPost?: unknown }).finalPost
+    ?? lastRound?.post
+    ?? captured.debug.edited.post;
+  const finalCaption = (captured.debug as { finalCaption?: string }).finalCaption
+    ?? lastRound?.caption
+    ?? captured.debug.caption.caption;
   return adaptToPost({
     brief: captured.debug.reporter.brief,
-    post: captured.debug.edited.post,
-    caption: captured.debug.caption.caption,
+    post: finalPost as import('./parse').ParsedPost,
+    caption: finalCaption,
     articlePublishedAt: articlePublishedAt ?? new Date().toISOString(),
     issueNumber: dayStamp,
   });

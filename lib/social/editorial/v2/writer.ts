@@ -37,12 +37,12 @@ export type WriterOutput = {
 };
 
 export async function runWriter(input: WriterInput): Promise<WriterOutput> {
-  const userText = buildWriterUserMessage(input);
+  const messages = buildWriterMessages(input);
   const response = await anthropic.messages.create({
     model: EDITORIAL_MODEL,
     max_tokens: 3500,
     system: cachedSystemText(WRITER_PROMPT, '1h'),
-    messages: [{ role: 'user', content: userText }],
+    messages,
   });
   const raw = extractText(response);
   const post = parseDraft(raw);
@@ -54,34 +54,51 @@ export async function runWriter(input: WriterInput): Promise<WriterOutput> {
   };
 }
 
-export function buildWriterUserMessage(input: WriterInput): string {
-  const parts: string[] = [];
-  parts.push('BRIEF:');
-  parts.push(input.briefRaw.trim());
-  parts.push('');
-  parts.push('SOURCES:');
+/**
+ * Cost-cut #1: split user message into [BRIEF + SOURCES] prefix (cached) and
+ * [PREVIOUS POST + FACT-CHECK FLAGS / REVIEWER NOTES] suffix (varies per
+ * rerun). Fact-check reruns of the Writer within one pipeline run share the
+ * cached prefix.
+ */
+export function buildWriterMessages(input: WriterInput): Anthropic.MessageParam[] {
+  const prefixParts: string[] = ['BRIEF:', input.briefRaw.trim(), '', 'SOURCES:'];
   for (const src of input.sourceTexts) {
-    parts.push(`[URL] ${src.url}`);
-    if (src.title) parts.push(`[TITLE] ${src.title}`);
-    parts.push(src.text);
-    parts.push('---');
+    prefixParts.push(`[URL] ${src.url}`);
+    if (src.title) prefixParts.push(`[TITLE] ${src.title}`);
+    prefixParts.push(src.text);
+    prefixParts.push('---');
   }
+
+  const suffixParts: string[] = [];
   if (input.previousPost) {
-    parts.push('');
-    parts.push('PREVIOUS POST:');
-    parts.push(input.previousPost);
+    suffixParts.push('PREVIOUS POST:');
+    suffixParts.push(input.previousPost);
   }
   if (input.factCheckFlags && input.factCheckFlags.length > 0) {
-    parts.push('');
-    parts.push('FACT-CHECK FLAGS:');
-    parts.push(formatFactCheckFlags(input.factCheckFlags));
+    if (suffixParts.length > 0) suffixParts.push('');
+    suffixParts.push('FACT-CHECK FLAGS:');
+    suffixParts.push(formatFactCheckFlags(input.factCheckFlags));
   }
   if (input.reviewerNotes) {
-    parts.push('');
-    parts.push('REVIEWER NOTES:');
-    parts.push(input.reviewerNotes.trim());
+    if (suffixParts.length > 0) suffixParts.push('');
+    suffixParts.push('REVIEWER NOTES:');
+    suffixParts.push(input.reviewerNotes.trim());
   }
-  return parts.join('\n');
+
+  const content: Anthropic.TextBlockParam[] = [
+    { type: 'text', text: prefixParts.join('\n'), cache_control: { type: 'ephemeral', ttl: '1h' } },
+  ];
+  if (suffixParts.length > 0) {
+    content.push({ type: 'text', text: suffixParts.join('\n') });
+  }
+  return [{ role: 'user', content }];
+}
+
+/** Legacy string form kept for tests that inspect the assembled prompt. */
+export function buildWriterUserMessage(input: WriterInput): string {
+  const [{ content }] = buildWriterMessages(input);
+  if (typeof content === 'string') return content;
+  return content.map((b) => (b.type === 'text' ? b.text : '')).join('\n');
 }
 
 export function formatFactCheckFlags(flags: FactCheckFlag[]): string {

@@ -274,7 +274,66 @@ function parsePost(rawText: string, kind: 'draft' | 'edited'): ParsedPost {
       : editNotesRaw.split('\n').map((l) => l.replace(/^\s*[-*•]\s*/, '').trim()).filter(Boolean))
     : null;
 
-  return { cover, slides, follow, editNotes };
+  return {
+    cover: swapCoverPunctuation(cover),
+    slides: slides.map(swapSlidePunctuation),
+    follow: swapBannedPunctuation(follow) ?? '',
+    editNotes,
+  };
+}
+
+/**
+ * Deterministic banned-punctuation swap. Runs after parse so every
+ * downstream stage (code checks, adapter, renderer) sees the compliant
+ * form. Sonnet self-deceives on em-dash rewrites (2026-09-29 batch
+ * story 1: EDIT NOTES claimed "replaced with a comma" but returned the
+ * em-dash form; 2 Haiku CHECK ERRORS retries also failed). Solve
+ * mechanically instead of prompt-wrestling.
+ *
+ * NOT applied to QUOTE / QUOTE BY — those stay verbatim per the "quotes
+ * word for word" rule; a fact-check quote-verbatim miss is a legitimate
+ * flag if the source itself uses an em dash.
+ */
+export function swapBannedPunctuation(text: string | undefined): string | undefined {
+  if (text === undefined) return undefined;
+  return text
+    // Spaced em dash → clean comma (" — " → ", "), bare em dash → comma
+    .replace(/\s*—\s*/g, ', ')
+    // Spaced en dash → clean hyphen (" – " → " - "), bare en dash → hyphen
+    .replace(/\s*–\s*/g, ' - ')
+    // Spaced double hyphen (" -- ") → clean comma. Leaves "AI-driven".
+    .replace(/\s+--\s+/g, ', ');
+}
+
+function swapSlidePunctuation(s: ParsedSlide): ParsedSlide {
+  return {
+    ...s,
+    headline: swapBannedPunctuation(s.headline),
+    body: swapBannedPunctuation(s.body),
+    note: swapBannedPunctuation(s.note),
+    bigNumber: swapBannedPunctuation(s.bigNumber),
+    numberNote: swapBannedPunctuation(s.numberNote),
+    secondNumber: swapBannedPunctuation(s.secondNumber),
+    secondNote: swapBannedPunctuation(s.secondNote),
+    // quote + quoteBy intentionally NOT swapped — verbatim rule.
+    highlight: swapBannedPunctuation(s.highlight),
+  };
+}
+
+function swapCoverPunctuation(cover: ParsedCover): ParsedCover {
+  if (cover.kind === 'draft') {
+    return {
+      ...cover,
+      text: swapBannedPunctuation(cover.text) ?? '',
+      highlight: swapBannedPunctuation(cover.highlight) ?? '',
+      options: cover.options.map((o) => ({ ...o, text: swapBannedPunctuation(o.text) ?? '' })),
+    };
+  }
+  return {
+    ...cover,
+    text: swapBannedPunctuation(cover.text) ?? '',
+    highlight: swapBannedPunctuation(cover.highlight) ?? '',
+  };
 }
 
 function parseDraftCover(block: string): ParsedCover {
@@ -332,12 +391,31 @@ function parseSlideChunk(position: number, chunk: string): ParsedSlide {
 
 export function parseCaption(text: string): string {
   // The single label CAPTION: introduces the whole payload. Everything after
-  // it, until end of text, is the caption body verbatim (including the
-  // "Source:" line — that's part of the caption per handoff §CAPTION).
+  // it is the caption body verbatim, up to and INCLUDING the "Source:"
+  // line — that's part of the caption per handoff §CAPTION. Anything after
+  // the Source line (Haiku sometimes emits internal deliberation past it,
+  // see 2026-09-29 pm Google re-run) gets stripped.
   const normalized = normalizeMarkdown(text);
   const match = normalized.match(/(^|\n)CAPTION:\s*([\s\S]*)$/);
-  if (!match) return normalized.trim();
-  return match[2]!.trim();
+  const body = match ? match[2]! : normalized;
+  return swapBannedPunctuation(stripAfterSourceLine(body).trim()) ?? '';
+}
+
+/**
+ * Cut anything after the "Source:" line — the caption ends there per the
+ * handoff format. Case-insensitive, tolerates leading whitespace. If no
+ * Source line exists, return the input unchanged.
+ *
+ * Exported for direct testing.
+ */
+export function stripAfterSourceLine(text: string): string {
+  const lines = text.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (/^\s*Source:/i.test(lines[i]!)) {
+      return lines.slice(0, i + 1).join('\n');
+    }
+  }
+  return text;
 }
 
 /* ── Fact-checker output ─────────────────────────────────────────────── */

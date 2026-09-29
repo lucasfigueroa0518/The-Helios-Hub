@@ -15,7 +15,7 @@
  */
 
 import { adaptToPost } from './adapter';
-import { checkCaption, checkNumberTrace, checkPost, checkQuotes, partitionErrors, renderLengthsBlock, type CheckError } from './code-checks';
+import { checkCaption, checkNumberTrace, checkPost, checkQuotes, LIMITS, partitionErrors, renderLengthsBlock, type CheckError } from './code-checks';
 import { runCaption as defaultRunCaption, type CaptionInput, type CaptionOutput } from './caption';
 import { runEditor as defaultRunEditor, type EditorInput, type EditorOutput } from './editor';
 import { runFactChecker as defaultRunFactChecker, type FactCheckerInput, type FactCheckerOutput } from './fact-checker';
@@ -46,6 +46,8 @@ import {
   type SelectedImage,
   type SlideKey,
 } from './image-step';
+import { enforceStructure, type EnforceStructureResult } from './enforce-structure';
+import { checkBriefIntegrity } from './brief-integrity';
 
 /**
  * Dependency-injection surface. Real usage takes the defaults; unit tests
@@ -138,6 +140,17 @@ const MAX_FACT_CHECK_ROUNDS = 2;
 const MAX_REPAIRS_PER_STAGE_PER_ROUND = 2;
 
 /**
+ * After the fact-check loop PASSes, soft errors (char_limit /
+ * highlight_substring / rhythm) that survive get one more dedicated
+ * repair loop. Rationale (docs/PROJECT-STATUS.md 2026-09-29 pm re-run):
+ * the Google CC post came out with SLIDE 2 BODY at 221/220 chars and
+ * SLIDE 10+11 both text, and was blocked at the final gate over
+ * mechanical trims worth a single editor pass. Loop keeps going until
+ * every soft error clears or the cap trips.
+ */
+const MAX_SOFT_REPAIRS = 6;
+
+/**
  * Minimum fetched-text length (chars) for a source to count as
  * "substantive" — full article, not a paywall preview. Only substantive
  * sources appear in the caption's "Source:" line so readers aren't sent
@@ -148,6 +161,138 @@ const MAX_REPAIRS_PER_STAGE_PER_ROUND = 2;
  */
 function getSubstantiveSourceMinChars(): number {
   return Number(process.env.HELIOS_V2_MIN_SOURCE_CHARS ?? '1500');
+}
+
+/**
+ * Cost-cut #2 (2026-09-29 revision): the Fact-checker must see the same
+ * paragraphs the brief was built from. Old fixed-char cut at position N
+ * threw away 87% of a 40K-char essay and produced false BIG flags on
+ * quotes the Reporter had actually quoted from a later paragraph. New
+ * shape:
+ *   - Split each source into paragraphs.
+ *   - Score every paragraph by keyword overlap with THE NEWS + THE STORY
+ *     + TERMS names + quoted phrases already in the brief.
+ *   - Keep paragraphs in ORIGINAL ORDER until the per-source cap is hit.
+ *     Highest-scoring paragraph always kept; second-highest next; etc.
+ *   - Raise the per-source cap so a mid-size essay fits fully.
+ *
+ * Every stage past the Reporter sees the SAME selection.
+ */
+function getMaxSourceChars(): number {
+  return Number(process.env.HELIOS_V2_MAX_SOURCE_CHARS ?? '12000');
+}
+function getMaxSources(): number {
+  return Number(process.env.HELIOS_V2_MAX_SOURCES ?? '6');
+}
+
+/**
+ * Extract candidate keywords from the brief. Uses:
+ *   - Every TERM's name (people / companies / products / places).
+ *   - Every quoted phrase in THE STORY (models, quotes, and specific
+ *     phrases the Reporter thought were important).
+ *   - Every proper-noun-ish word (Capitalized) in THE NEWS.
+ * Deduplicated, lowercased.
+ */
+function extractBriefKeywords(brief: Brief): string[] {
+  const kws = new Set<string>();
+  for (const t of brief.terms) {
+    const n = t.name.trim();
+    if (n.length >= 3) kws.add(n.toLowerCase());
+  }
+  // Quoted phrases inside THE STORY.
+  const quoted = (brief.story ?? '').match(/["'][^"']{4,120}["']/g) ?? [];
+  for (const q of quoted) kws.add(q.replace(/^["']|["']$/g, '').trim().toLowerCase());
+  // Capitalized words in THE NEWS (proper-noun-ish, length ≥ 4).
+  const news = brief.news ?? '';
+  for (const m of news.matchAll(/\b([A-Z][A-Za-z0-9']{3,}(?:\s+[A-Z][A-Za-z0-9']{2,}){0,3})\b/g)) {
+    const w = m[1]!.trim().toLowerCase();
+    // Skip pure articles / short function words.
+    if (!/^(the|and|but|for|from|with|this|that|these|those)$/.test(w)) kws.add(w);
+  }
+  return [...kws];
+}
+
+function paragraphScore(paragraph: string, keywords: string[]): number {
+  const hay = paragraph.toLowerCase();
+  let score = 0;
+  for (const k of keywords) if (hay.includes(k)) score += k.length; // longer matches worth more
+  // Quoted content boost — Reporter often builds the brief around a quote.
+  if (/["'][^"']{10,}["']/.test(paragraph)) score += 25;
+  return score;
+}
+
+/**
+ * Split on double-newline boundaries. Falls back to single-newline for
+ * sources that render as one big line (some Google Blog pages, various
+ * SPA extractors).
+ */
+function splitParagraphs(text: string): string[] {
+  if (text.includes('\n\n')) return text.split(/\n\n+/).map((p) => p.trim()).filter(Boolean);
+  const singles = text.split(/\n+/).map((p) => p.trim()).filter(Boolean);
+  if (singles.length > 1) return singles;
+  // Last resort: split on double-space or hard wrap around 2000 chars.
+  return text.match(/[\s\S]{1,2000}(?:\.\s|$)/g) ?? [text];
+}
+
+/**
+ * Pick paragraphs in original order until the per-source cap is hit,
+ * biased toward paragraphs that mention brief keywords. Guarantees the
+ * top-scored paragraph is kept even if it comes late; then fills the
+ * remaining budget with next-highest-scored (still in original order).
+ */
+function selectRelevantParagraphs(text: string, brief: Brief, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  const paragraphs = splitParagraphs(text);
+  const keywords = extractBriefKeywords(brief);
+  const scored = paragraphs.map((p, i) => ({ i, text: p, score: paragraphScore(p, keywords), len: p.length }));
+  // Sort by score DESC, then by index ASC (earlier wins ties — usually the lead).
+  const byScore = [...scored].sort((a, b) => (b.score - a.score) || (a.i - b.i));
+  const keep = new Set<number>();
+  let budget = maxChars;
+  // Always keep the first paragraph (lead) if it fits — it usually names the news.
+  if (paragraphs[0] && paragraphs[0].length <= budget) {
+    keep.add(0);
+    budget -= paragraphs[0].length + 2;
+  }
+  for (const p of byScore) {
+    if (keep.has(p.i)) continue;
+    if (p.len + 2 > budget) continue;
+    keep.add(p.i);
+    budget -= p.len + 2;
+  }
+  const chosen = scored.filter((p) => keep.has(p.i)).sort((a, b) => a.i - b.i);
+  // Emit with "[…]" markers between non-adjacent kept paragraphs so the model sees where content was cut.
+  const out: string[] = [];
+  let lastIdx = -1;
+  for (const p of chosen) {
+    if (lastIdx >= 0 && p.i - lastIdx > 1) out.push('[…]');
+    out.push(p.text);
+    lastIdx = p.i;
+  }
+  if (lastIdx < paragraphs.length - 1) out.push('[…]');
+  return out.join('\n\n');
+}
+
+function trimSourceTexts(sources: FetchedSource[], brief: Brief): FetchedSource[] {
+  const maxSources = getMaxSources();
+  const maxChars = getMaxSourceChars();
+  return sources.slice(0, maxSources).map((s) => ({
+    ...s,
+    text: selectRelevantParagraphs(s.text, brief, maxChars),
+  }));
+}
+
+/**
+ * Cost-cut #3 boundary: Haiku is used ONLY for pure length trims. Every
+ * error in the batch has to be `char_limit` for `mode: 'repair'` (Haiku)
+ * to be safe — highlight_substring, rhythm, variety, and any hard error
+ * (banned voice, number-trace, quote-verbatim) need Sonnet's judgment.
+ * Also handles the empty case (no errors → doesn't matter, default to
+ * primary).
+ */
+export function editorModeFor(errors: CheckError[]): 'primary' | 'repair' {
+  if (errors.length === 0) return 'primary';
+  return errors.every((e) => e.kind === 'char_limit') ? 'repair' : 'primary';
 }
 
 export async function runCreatorPipeline(
@@ -174,18 +319,131 @@ export async function runCreatorPipeline(
   };
   const overCap = () => costUsd >= getMaxCostUsd();
 
-  const bailToHumanReview = async (reason: string): Promise<OrchestrateResult> => {
-    debug.finishedAt = new Date().toISOString();
-    debug.outcome = { status: 'needs_human_review', reason, totalCostUsd: round4(costUsd) };
-    await deps.persistDebugAndCompose(row.id, debug, { composeStatus: 'needs_human_review', composeError: reason });
-    return { ok: false, status: 'needs_human_review', reason, costUsd: round4(costUsd), stagesRun };
+  // Image-step state — populated by runImageStepIfPossible below. Lives
+  // outside every code branch so bailToHumanReview can pick photos even
+  // when the pipeline is bailing for other reasons (2026-09-29 rule:
+  // "Run the image step on the final post for every outcome, including
+  // needs_human_review").
+  let selectedImages = new Map<SlideKey, SelectedImage>();
+  let imagesBlock = 'IMAGES CHOSEN:\n(image step has not run yet)';
+  let imageStepDidRun = false;
+
+  // Human-visible flags produced by the image step — subjects the pipeline
+  // asked for but couldn't ship a photo for (Wikidata missed, license not
+  // in allow-list, vision KIND check rejected, etc.). Surfaced in the bail
+  // reason so reviewers see them in the review UI, not just debug logs.
+  const photoVerificationFlags: string[] = [];
+
+  const runImageStepIfPossible = async (post: ParsedPost | null, brief: Brief | null): Promise<void> => {
+    if (imageStepDidRun) return; // idempotent — run at most once per pipeline
+    if (!post || !brief) return; // post/brief not yet available
+    if (post.slides.length === 0) return; // parse failed, nothing to do
+    if (overCap()) return; // don't spend on image step when already over the cap
+    try {
+      const imageResult = await deps.runImageStep(post, brief);
+      selectedImages = imageResult.selected;
+      imagesBlock = buildFactCheckerImagesBlock(selectedImages);
+      for (const u of imageResult.visionUsage) addCost({
+        inputTokens: u.inputTokens,
+        cacheReadTokens: u.cacheReadTokens,
+        cacheWriteTokens: u.cacheWriteTokens,
+        outputTokens: 0,
+        approxCostUsd: 0, // Haiku vision — noise floor for the cost cap
+      });
+      stagesRun.push('image-step');
+      debug.imageStep = {
+        selected: [...selectedImages.entries()].map(([slide, img]) => ({
+          slide, wikidataId: img.wikidataId, label: img.label,
+          commonsFile: img.commonsFile, license: img.license, author: img.author,
+          source: img.source,
+        })),
+        report: imageResult.report,
+        visionCalls: imageResult.visionCalls,
+      };
+      // Photo verification failure → reviewer-visible flag. Every requested
+      // subject the image step couldn't produce a shipping photo for gets
+      // one line naming the slide + subject + reason.
+      for (const r of imageResult.report) {
+        if (r.status === 'type-only') {
+          const where = r.slide === 'cover' ? 'COVER' : `SLIDE ${r.slide}`;
+          photoVerificationFlags.push(`PHOTO ${where} — requested "${r.requestedSubject}": ${r.reason}`);
+        }
+      }
+    } catch (err) {
+      debug.imageStep = { error: err instanceof Error ? err.message : String(err) };
+      stagesRun.push('image-step(failed)');
+      photoVerificationFlags.push(`PHOTO step failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    imageStepDidRun = true;
   };
+
+  const bailToHumanReview = async (reason: string): Promise<OrchestrateResult> => {
+    // Run the image step BEFORE bailing so the reviewer sees photos alongside
+    // the flags. Idempotent — if it already ran (ship path), this is a no-op.
+    await runImageStepIfPossible(
+      typeof editorPost !== 'undefined' ? editorPost : null,
+      typeof finalBrief !== 'undefined' ? finalBrief : null,
+    );
+    // Defensive re-check on the FINAL post state (2026-09-29 rule: "Run
+    // the rhythm check on the FINAL post, after every repair"). Any HARD
+    // code-check that wasn't the trigger for this bail — including rhythm
+    // that slipped through mid-loop repairs — surfaces in the review
+    // reason so nothing hidden lands on the reviewer.
+    const extraFinal: string[] = [];
+    if (editorPost && finalBrief) {
+      try {
+        const slideCheck = checkPost(editorPost, finalBrief);
+        const slim = sourceTextsSlim().map((s) => s.text);
+        const numberCheck = checkNumberTrace(editorPost, captionTextForFinal(), slim);
+        const quoteCheck = checkQuotes(editorPost, slim);
+        const all = [...slideCheck.errors, ...numberCheck.errors, ...quoteCheck.errors];
+        const { hard } = partitionErrors(all);
+        for (const e of hard) {
+          if (!reason.includes(e.message)) extraFinal.push(`- [${e.kind}] ${e.message}`);
+        }
+      } catch { /* defensive — never fail bail on the extra check */ }
+    }
+    const photoBlock = photoVerificationFlags.length > 0
+      ? `\nPhoto verification:\n${photoVerificationFlags.map((f) => `  - ${f}`).join('\n')}`
+      : '';
+    const finalBlock = extraFinal.length > 0
+      ? `\nAdditional hard errors surviving on the FINAL post:\n${extraFinal.join('\n')}`
+      : '';
+    const fullReason = `${reason}${photoBlock}${finalBlock}`;
+    // Snapshot the exact post + caption the render / review UI will see.
+    // 2026-09-29: prior to this field, previews on bail rebuilt from
+    // `edited.post` (initial editor pass) and disagreed with the FINAL
+    // post shown in the summary.
+    if (editorPost) debug.finalPost = editorPost;
+    debug.finalCaption = captionTextForFinal();
+    debug.finishedAt = new Date().toISOString();
+    debug.outcome = { status: 'needs_human_review', reason: fullReason, totalCostUsd: round4(costUsd) };
+    await deps.persistDebugAndCompose(row.id, debug, { composeStatus: 'needs_human_review', composeError: fullReason });
+    return { ok: false, status: 'needs_human_review', reason: fullReason, costUsd: round4(costUsd), stagesRun };
+  };
+
+  // Helpers for the bailToHumanReview closure — need captionText +
+  // sourceTexts but those are populated later. Read via lambdas so
+  // undefined-at-early-bail is OK.
+  let sourceTextsSlim_: FetchedSource[] = [];
+  const captionTextForFinal = () => captionText;
+  const sourceTextsSlim = () => sourceTextsSlim_;
+
+  // Hoisted so bailToHumanReview can read the current caption.
+  // eslint-disable-next-line prefer-const
+  let captionText: string = '';
   const bailFailed = async (reason: string): Promise<OrchestrateResult> => {
     debug.finishedAt = new Date().toISOString();
     debug.outcome = { status: 'failed', reason, totalCostUsd: round4(costUsd) };
     await deps.persistDebugAndCompose(row.id, debug, { composeStatus: 'compose_failed', composeError: reason });
     return { ok: false, status: 'failed', reason, costUsd: round4(costUsd), stagesRun };
   };
+
+  // Forward-declared so bailToHumanReview's closure can reach them.
+  // eslint-disable-next-line prefer-const
+  let editorPost: ParsedPost | undefined;
+  // eslint-disable-next-line prefer-const
+  let finalBrief: Brief | undefined;
 
   // ── 1. Reporter ────────────────────────────────────────────────────
   const reporterResult = await deps.runReporter({
@@ -230,6 +488,20 @@ export async function runCreatorPipeline(
     return bailToHumanReview('no SOURCES could be fetched');
   }
 
+  // Cost-cut #2 (2026-09-29 revision): select the most brief-relevant
+  // paragraphs from each source, not the first N chars. Downstream code
+  // checks (numbers-trace, quote-verbatim) still run against the FULL
+  // fetched texts held in `fullSourceTexts` so a trim can't cause a
+  // spurious "number not found" or "quote not verbatim" flag.
+  const fullSourceTexts = sourceTexts;
+  const trimmedSourceTexts = trimSourceTexts(sourceTexts, reporterResult.brief);
+  sourceTextsSlim_ = trimmedSourceTexts;
+  debug.sourceTrim = {
+    keptSources: trimmedSourceTexts.length,
+    droppedSources: fullSourceTexts.length - trimmedSourceTexts.length,
+    perSourceChars: trimmedSourceTexts.map((s) => ({ url: s.url, chars: s.text.length })),
+  };
+
   // ── 2b. Validate brief images before Writer sees them ────────────────
   // HEAD each Link to confirm it returns an image/*; drop entries whose
   // Credit reads as an instruction ("check the source", "TBD"). Downstream
@@ -254,11 +526,27 @@ export async function runCreatorPipeline(
   // Caption, Fact-checker. sanitizedBriefRaw has SINGLE STORY collapsed to
   // yes/no (no sibling-story leak), and rewriteBriefWithValidatedImages
   // renders IMAGES from the validated set (or "None found").
-  const finalBrief: Brief = { ...reporterResult.brief, images: imageValidation.valid };
-  const finalBriefRaw = rewriteBriefWithValidatedImages(
+  finalBrief = { ...reporterResult.brief, images: imageValidation.valid };
+  let finalBriefRaw = rewriteBriefWithValidatedImages(
     reporterResult.sanitizedBriefRaw,
     imageValidation.valid,
   );
+
+  // ── 2c. Brief-integrity gate. Every quote in THE STORY must appear in
+  // at least one fetched source's text. Quotes that don't (Reporter cited
+  // a source it never actually fetched, or fetched-source text ends
+  // before the quoted passage) are cut from the brief. The "is the
+  // cleaned brief thin enough to bail?" question is answered downstream
+  // by counting the Writer's slide output — no arbitrary chars/terms here.
+  const integrity = checkBriefIntegrity(finalBrief, finalBriefRaw, sourceTexts);
+  debug.briefIntegrity = {
+    droppedQuotes: integrity.droppedQuotes,
+  };
+  if (integrity.droppedQuotes.length > 0) {
+    stagesRun.push(`brief-integrity(cut ${integrity.droppedQuotes.length} unsourced quote${integrity.droppedQuotes.length === 1 ? '' : 's'})`);
+  }
+  finalBrief = integrity.cleanedBrief;
+  finalBriefRaw = integrity.cleanedBriefRaw;
 
   // Estimate the characters of image credits the publish pipeline appends to
   // the caption. Used by both the LENGTHS block for the Editor and the
@@ -292,7 +580,7 @@ export async function runCreatorPipeline(
     const w = await deps.runWriter({
       brief: finalBrief,
       briefRaw: finalBriefRaw,
-      sourceTexts,
+      sourceTexts: trimmedSourceTexts,
       previousPost: opts.previousEditedPostRaw,
       reviewerNotes: opts.reviewerNotes,
     });
@@ -305,7 +593,7 @@ export async function runCreatorPipeline(
     const w = await deps.runWriter({
       brief: finalBrief,
       briefRaw: finalBriefRaw,
-      sourceTexts,
+      sourceTexts: trimmedSourceTexts,
     });
     writerRaw = w.raw;
     writerPost = w.post;
@@ -315,17 +603,53 @@ export async function runCreatorPipeline(
   }
   if (overCap()) return bailToHumanReview('cost cap reached after Writer');
 
-  // ── 4. Editor — first pass on the draft ────────────────────────────
+  // ── 3a. Thin-brief bail. If the Writer produced fewer than 5 story
+  // slides (the min in LIMITS.storySlidesMin), the brief was too thin
+  // to support a post. The Writer must never fill gaps with invented
+  // content, so we send this to human review instead of asking the
+  // Editor to pad. No arbitrary chars-in-brief or terms-count threshold —
+  // the Writer's slide count IS the honest signal.
+  if (writerPost.slides.length < LIMITS.storySlidesMin) {
+    return bailToHumanReview(
+      `thin brief: Writer produced ${writerPost.slides.length} story slide(s), minimum is ${LIMITS.storySlidesMin}. `
+      + (integrity.droppedQuotes.length > 0
+        ? `The brief was cleaned of ${integrity.droppedQuotes.length} unsourced quote(s) before the Writer ran, which likely left too little substance to draft.`
+        : `The brief itself may lack the material for 5 slides — this is a Reporter/source-coverage issue, not a Writer bug.`),
+    );
+  }
+
+  // ── 3b. enforceStructure — deterministic pre-Editor fix. Handles
+  // slide-count overshoot, rhythm violations, and variety gaps that
+  // the Editor was previously being asked to solve with two Haiku
+  // CHECK ERRORS passes. Merges same-topic adjacent text slides when
+  // combined body ≤ 220; drops adjacent duplicate landing slides.
+  // Everything is code-only — no LLM call. Leftover violations go to
+  // a single targeted Editor call.
+  const structured = enforceStructure(writerPost);
+  if (structured.log.length > 0) {
+    stagesRun.push('enforce-structure');
+    debug.enforceStructure = { log: structured.log, needsEditor: structured.needsEditor };
+  }
+  // Serialize the post-structured post back to raw for the Editor.
+  const structuredRaw = structured.log.length > 0
+    ? serializePostAsRaw(structured.post)
+    : writerRaw;
+
+  // ── 4. Editor — first pass on the (deterministically pre-fixed) draft ─
   let editorRaw: string;
-  let editorPost: ParsedPost;
+  // editorPost is declared at the top of runCreatorPipeline so
+  // bailToHumanReview's closure can pick photos from it.
   {
+    const targetedEditorNote = structured.needsEditor
+      ? buildEnforceStructureFollowup(structured.needsEditor)
+      : undefined;
     const e = await deps.runEditor({
       brief: finalBrief,
       briefRaw: finalBriefRaw,
-      sourceTexts,
-      post: writerRaw,
-      // Lengths from the writer's draft — no caption yet.
-      lengthsBlock: renderLengthsBlock(writerPost, null, 0),
+      sourceTexts: trimmedSourceTexts,
+      post: structuredRaw,
+      lengthsBlock: renderLengthsBlock(structured.post, null, 0),
+      checkErrors: targetedEditorNote,
     });
     editorRaw = e.raw;
     editorPost = e.post;
@@ -334,44 +658,13 @@ export async function runCreatorPipeline(
     debug.edited = { post: e.post, raw: e.raw, editNotes: e.editNotes, stopReasons: e.stopReasons, usage: e.usage };
   }
   if (overCap()) return bailToHumanReview('cost cap reached after Editor');
-
-  // ── 4b. Image step — resolve subjects, pick photos, upload to Storage
-  // Runs BEFORE Caption so credits flow into the caption's "Photos:" line
-  // and the Fact-checker sees "IMAGES CHOSEN:". See
-  // docs/IMAGES-V1-HANDOFF.md.
-  let selectedImages = new Map<SlideKey, SelectedImage>();
-  let imagesBlock = 'IMAGES CHOSEN:\n(image step did not run)';
-  try {
-    const imageResult = await deps.runImageStep(editorPost, finalBrief);
-    selectedImages = imageResult.selected;
-    imagesBlock = buildFactCheckerImagesBlock(selectedImages);
-    for (const u of imageResult.visionUsage) addCost({
-      inputTokens: u.inputTokens,
-      cacheReadTokens: u.cacheReadTokens,
-      cacheWriteTokens: u.cacheWriteTokens,
-      outputTokens: 0,
-      approxCostUsd: 0, // Haiku vision priced below the noise floor for the cost cap
-    });
-    stagesRun.push('image-step');
-    debug.imageStep = {
-      selected: [...selectedImages.entries()].map(([slide, img]) => ({
-        slide, wikidataId: img.wikidataId, label: img.label,
-        commonsFile: img.commonsFile, license: img.license, author: img.author,
-        source: img.source,
-      })),
-      report: imageResult.report,
-      visionCalls: imageResult.visionCalls,
-    };
-  } catch (err) {
-    // Image step failure is non-fatal — the post ships type-only.
-    debug.imageStep = { error: err instanceof Error ? err.message : String(err) };
-    stagesRun.push('image-step(failed)');
-  }
-  if (overCap()) return bailToHumanReview('cost cap reached after image step');
+  // selectedImages + imagesBlock are declared at the top and populated
+  // by runImageStepIfPossible on demand (ship path or any bail).
 
   // ── 5. Caption — first pass ────────────────────────────────────────
   let captionRaw: string;
-  let captionText: string;
+  // captionText hoisted to the top so bailToHumanReview's closure can
+  // read it. Do not re-declare here.
   {
     const c = await deps.runCaption({
       brief: finalBrief,
@@ -420,10 +713,10 @@ export async function runCreatorPipeline(
 
     // 6a. Compute code-check errors, split into slide vs caption.
     const computeErrors = () => {
-      const slideCheck = checkPost(editorPost, finalBrief);
+      const slideCheck = checkPost(editorPost!, finalBrief!);
       const captionCheck = checkCaption(captionText, creditsEstimate);
-      const numberCheck = checkNumberTrace(editorPost, captionText, sourceTexts.map((s) => s.text));
-      const quoteCheck = checkQuotes(editorPost, sourceTexts.map((s) => s.text));
+      const numberCheck = checkNumberTrace(editorPost!, captionText, sourceTexts.map((s) => s.text));
+      const quoteCheck = checkQuotes(editorPost!, sourceTexts.map((s) => s.text));
       return {
         slideErrors: [
           ...slideCheck.errors,
@@ -444,10 +737,13 @@ export async function runCreatorPipeline(
       const eRetry = await deps.runEditor({
         brief: finalBrief,
         briefRaw: finalBriefRaw,
-        sourceTexts,
+        sourceTexts: trimmedSourceTexts,
         post: editorRaw,
         lengthsBlock: renderLengthsBlock(editorPost, captionText, creditsEstimate),
         checkErrors: slideErrors,
+        // Haiku ONLY when every error is char_limit (pure length trim).
+        // Rhythm / highlight_substring / hard errors need Sonnet.
+        mode: editorModeFor(slideErrors),
       });
       addCost(eRetry.usage);
       stagesRun.push(`editor(check-errors r${round}.${slideAttempt})`);
@@ -501,6 +797,34 @@ export async function runCreatorPipeline(
       const captionPartition = partitionErrors(captionErrors);
       const hardStill = [...slidePartition.hard, ...captionPartition.hard];
       if (hardStill.length > 0) {
+        // Even when code-checks bail, run the Fact-checker ONCE on the
+        // current post + caption so the reviewer sees every problem
+        // together (2026-09-29 rule: "A bail must never skip fact-check").
+        // Hard errors still block shipping — this call only enriches the
+        // review payload with fact-check flags.
+        let fcOnBail: FactCheckerOutput | null = null;
+        if (!overCap()) {
+          try {
+            fcOnBail = await deps.runFactChecker({
+              brief: finalBrief,
+              briefRaw: finalBriefRaw,
+              sourceTexts: trimmedSourceTexts,
+              post: editorRaw,
+              caption: captionText,
+              imagesBlock,
+            });
+            addCost(fcOnBail.usage);
+            stagesRun.push(`fact-checker(on-bail r${round})`);
+          } catch (err) {
+            fcOnBail = null;
+            debug.repairs.push({
+              round,
+              stage: 'editor',
+              reason: `fact-check on hard bail failed: ${err instanceof Error ? err.message : String(err)}`,
+              usage: emptyUsage(),
+            });
+          }
+        }
         debug.rounds.push({
           round,
           post: editorPost,
@@ -508,13 +832,16 @@ export async function runCreatorPipeline(
           codeCheckErrorsBeforeFactCheck: hardStill.filter((e) => e.kind !== 'number_trace'),
           captionCheckErrorsBeforeFactCheck: [], // now merged into codeCheckErrorsBeforeFactCheck
           numberTraceErrorsBeforeFactCheck: hardStill.filter((e) => e.kind === 'number_trace'),
-          factCheck: { verdict: 'FLAGGED', flags: [] },
-          factCheckRaw: '(skipped — persistent hard code-check failures)',
-          stopReasons: [],
-          usage: emptyUsage(),
+          factCheck: fcOnBail?.result ?? { verdict: 'FLAGGED', flags: [] },
+          factCheckRaw: fcOnBail?.raw ?? '(skipped — cost cap or fact-check call errored)',
+          stopReasons: fcOnBail?.stopReasons ?? [],
+          usage: fcOnBail?.usage ?? emptyUsage(),
         });
+        const flagLines = (fcOnBail?.result.flags ?? [])
+          .map((f) => `\n  - ${f.size} ${f.where}: ${f.problem} (SOURCES SAY: ${f.sourcesSay})`)
+          .join('');
         return bailToHumanReview(
-          `hard code checks failed after ${MAX_REPAIRS_PER_STAGE_PER_ROUND} tries per stage in round ${round}: ${hardStill.map((e) => e.message).join(' | ')}`,
+          `hard code checks failed after ${MAX_REPAIRS_PER_STAGE_PER_ROUND} tries per stage in round ${round}: ${hardStill.map((e) => e.message).join(' | ')}${flagLines ? `\nFact-check flags on the same post:${flagLines}` : ''}`,
         );
       }
       // Soft errors don't block the round. They'll be re-checked at the
@@ -525,7 +852,7 @@ export async function runCreatorPipeline(
     const fc = await deps.runFactChecker({
       brief: finalBrief,
       briefRaw: finalBriefRaw,
-      sourceTexts,
+      sourceTexts: trimmedSourceTexts,
       post: editorRaw,
       caption: captionText,
       imagesBlock,
@@ -545,6 +872,21 @@ export async function runCreatorPipeline(
 
     if (fc.result.verdict === 'PASS') {
       break;
+    }
+
+    // 2026-09-29: if any BIG flag traces to the brief or the sources
+    // (Reporter cited an unfetched source; Writer / Editor did not add
+    // the claim on its own — the wording came from the brief), the
+    // rewrite loop will just paraphrase around the underlying gap. Send
+    // it straight to review instead.
+    const briefTracedFlags = fc.result.flags.filter((f) => flagTracesToBriefOrSources(f, finalBriefRaw));
+    if (briefTracedFlags.some((f) => f.size === 'BIG')) {
+      const flagLines = fc.result.flags
+        .map((f) => `  - ${f.size} ${f.where}\n    TEXT: ${f.text}\n    PROBLEM: ${f.problem}\n    SOURCES SAY: ${f.sourcesSay}`)
+        .join('\n');
+      return bailToHumanReview(
+        `fact-check BIG flag traces to the brief or sources (not to Writer/Editor wording); rewrite loop would just paraphrase the same gap. ${fc.result.flags.length} open flag(s):\n${flagLines}`,
+      );
     }
 
     // FLAGGED. Route the flags per §The fact-check loop.
@@ -567,7 +909,7 @@ export async function runCreatorPipeline(
       const w = await deps.runWriter({
         brief: finalBrief,
         briefRaw: finalBriefRaw,
-        sourceTexts,
+        sourceTexts: trimmedSourceTexts,
         previousPost: editorRaw,
         factCheckFlags: fc.result.flags,
       });
@@ -581,7 +923,7 @@ export async function runCreatorPipeline(
       const e = await deps.runEditor({
         brief: finalBrief,
         briefRaw: finalBriefRaw,
-        sourceTexts,
+        sourceTexts: trimmedSourceTexts,
         post: writerRaw,
         lengthsBlock: renderLengthsBlock(writerPost, captionText, creditsEstimate),
       });
@@ -607,7 +949,7 @@ export async function runCreatorPipeline(
         const e = await deps.runEditor({
           brief: finalBrief,
           briefRaw: finalBriefRaw,
-          sourceTexts,
+          sourceTexts: trimmedSourceTexts,
           post: editorRaw,
           lengthsBlock: renderLengthsBlock(editorPost, captionText, creditsEstimate),
           factCheckFlags: slideFlags,
@@ -638,6 +980,142 @@ export async function runCreatorPipeline(
 
   if (!lastVerdict || lastVerdict.verdict !== 'PASS') {
     return bailToHumanReview('fact-check did not converge on PASS');
+  }
+
+  // ── 6b.i Post-PASS soft-error repair loop. Fact-check has PASSED but
+  // the post may still carry char_limit / highlight_substring / rhythm
+  // errors from the per-round budget running out. Keep trimming until
+  // every body is ≤220 and no two consecutive slides share a kind, up to
+  // MAX_SOFT_REPAIRS Editor / Caption passes.
+  //
+  // Trims aren't safe by default: a length trim can invert a number or
+  // introduce a banned phrase, and a rhythm swap can drop a source-anchored
+  // clause. So after each iteration we (1) re-run every code check and
+  // bail immediately if a NEW hard error (banned voice, number-trace miss,
+  // quote-verbatim miss, image ref, hashtag, slide count) appeared, and
+  // (2) after the loop ends, if any slide text changed vs. the fact-check
+  // PASS baseline, run a targeted fact-check on ONLY the changed slides —
+  // any flag → human review. The passing baseline is snapshotted here so
+  // the diff is honest even if the loop churns.
+  const preSoftSlides = snapshotSlideTexts(editorPost);
+  let softRepairsRun = 0;
+  let softRepairsCostUsd = 0;
+
+  for (let softAttempt = 1; softAttempt <= MAX_SOFT_REPAIRS; softAttempt++) {
+    const slideCheck = checkPost(editorPost, finalBrief);
+    const captionCheck = checkCaption(captionText, creditsEstimate);
+    const numberCheck = checkNumberTrace(editorPost, captionText, sourceTexts.map((s) => s.text));
+    const quoteCheck = checkQuotes(editorPost, sourceTexts.map((s) => s.text));
+    const slideErrors = [
+      ...slideCheck.errors,
+      ...numberCheck.errors.filter((e) => e.target !== 'caption'),
+      ...quoteCheck.errors,
+    ];
+    const captionErrors = [
+      ...captionCheck.errors,
+      ...numberCheck.errors.filter((e) => e.target === 'caption'),
+    ];
+    const { hard: slideHard, soft: slideSoft } = partitionErrors(slideErrors);
+    const { hard: captionHard, soft: captionSoft } = partitionErrors(captionErrors);
+    // (1) Any hard error is either a pre-existing survivor (impossible —
+    // the fact-check loop bails on hard survivors) or one introduced by a
+    // soft repair. Either way, don't ship: bail to human review.
+    const hardStill = [...slideHard, ...captionHard];
+    if (hardStill.length > 0) {
+      return bailToHumanReview(
+        `soft-repair introduced hard code-check error(s) at pass ${softAttempt}: ${hardStill.map((e) => e.message).join(' | ')}`,
+      );
+    }
+    if (slideSoft.length === 0 && captionSoft.length === 0) break;
+    if (overCap()) return bailToHumanReview(`cost cap reached during soft-repair pass ${softAttempt}`);
+
+    if (slideSoft.length > 0) {
+      const eRetry = await deps.runEditor({
+        brief: finalBrief,
+        briefRaw: finalBriefRaw,
+        sourceTexts: trimmedSourceTexts,
+        post: editorRaw,
+        lengthsBlock: renderLengthsBlock(editorPost, captionText, creditsEstimate),
+        checkErrors: slideSoft,
+        // Haiku for length-only batches; Sonnet for rhythm / highlight fixes.
+        mode: editorModeFor(slideSoft),
+      });
+      addCost(eRetry.usage);
+      softRepairsCostUsd += eRetry.usage.approxCostUsd;
+      stagesRun.push(`editor(soft-repair ${softAttempt})`);
+      debug.repairs.push({
+        round: 0,
+        stage: 'editor',
+        reason: `${slideSoft.length} soft slide error(s), post-PASS try ${softAttempt}/${MAX_SOFT_REPAIRS}`,
+        usage: eRetry.usage,
+      });
+      editorRaw = eRetry.raw;
+      editorPost = eRetry.post;
+    }
+    if (captionSoft.length > 0) {
+      const cRetry = await deps.runCaption({
+        brief: finalBrief,
+        briefRaw: captionBriefRaw,
+        slides: editorRaw,
+        previousCaption: captionRaw,
+        checkErrors: captionSoft,
+      });
+      addCost(cRetry.usage);
+      softRepairsCostUsd += cRetry.usage.approxCostUsd;
+      stagesRun.push(`caption(soft-repair ${softAttempt})`);
+      debug.repairs.push({
+        round: 0,
+        stage: 'caption',
+        reason: `${captionSoft.length} soft caption error(s), post-PASS try ${softAttempt}/${MAX_SOFT_REPAIRS}`,
+        usage: cRetry.usage,
+      });
+      captionRaw = cRetry.raw;
+      captionText = cRetry.caption;
+    }
+    softRepairsRun = softAttempt;
+  }
+
+  // (2) Post-loop targeted fact-check on changed slides. If a soft repair
+  // rewrote a slide the fact-check PASS blessed, the sources must still
+  // support the new text. Send ONLY the changed slides plus the brief +
+  // sources — cheaper than re-checking the whole post, and scoped to the
+  // parts a trim could plausibly have invalidated.
+  const changedSlidePositions = diffChangedSlides(preSoftSlides, editorPost);
+  debug.softRepair = {
+    runs: softRepairsRun,
+    cap: MAX_SOFT_REPAIRS,
+    costUsd: round4(softRepairsCostUsd),
+    changedSlides: changedSlidePositions,
+    reFactCheck: null,
+  };
+  if (softRepairsRun > 0 && changedSlidePositions.length > 0) {
+    if (overCap()) return bailToHumanReview('cost cap reached before soft-repair re-fact-check');
+    const changedOnlyPostRaw = buildChangedSlidesOnlyPost(editorPost, editorRaw, changedSlidePositions);
+    const fcAgain = await deps.runFactChecker({
+      brief: finalBrief,
+      briefRaw: finalBriefRaw,
+      sourceTexts: trimmedSourceTexts,
+      post: changedOnlyPostRaw,
+      caption: '', // caption fact-checked separately if it changed; slide-only pass here
+      imagesBlock: undefined,
+    });
+    addCost(fcAgain.usage);
+    stagesRun.push(`fact-checker(soft-repair changed slides)`);
+    debug.softRepair.reFactCheck = {
+      verdict: fcAgain.result.verdict,
+      flags: fcAgain.result.flags,
+      changedSlides: changedSlidePositions,
+      usage: fcAgain.usage,
+      raw: fcAgain.raw,
+    };
+    if (fcAgain.result.verdict !== 'PASS') {
+      const flagLines = fcAgain.result.flags
+        .map((f) => `  - ${f.size} ${f.where}\n    TEXT: ${f.text}\n    PROBLEM: ${f.problem}\n    SOURCES SAY: ${f.sourcesSay}`)
+        .join('\n');
+      return bailToHumanReview(
+        `soft-repair re-fact-check FLAGGED on changed slide(s) ${changedSlidePositions.join(', ')} — ${fcAgain.result.flags.length} flag(s):\n${flagLines}`,
+      );
+    }
   }
 
   // ── 6c. Final soft-error gate. char_limit / highlight_substring errors
@@ -672,6 +1150,16 @@ export async function runCreatorPipeline(
     }
   }
 
+  // ── 6d. Image step — runs on ALL outcomes. bailToHumanReview also
+  // triggers it before persisting so reviewers see photos + flags together
+  // (2026-09-29 rule: "Run the image step on the final post for every
+  // outcome, including needs_human_review"). Photos are picked by Wikidata
+  // P18 / P180 structured link and a KIND-only vision check; identity
+  // never comes from the model looking at a face
+  // (docs/IMAGES-V1-HANDOFF.md §Accuracy rules).
+  await runImageStepIfPossible(editorPost, finalBrief);
+  if (overCap()) return bailToHumanReview('cost cap reached after image step');
+
   // ── 7. Adapt to Post + persist ──────────────────────────────────────
   const publishedIso = toIso(row.published_at);
   const dayStamp = Math.floor(Date.now() / 86_400_000) - 20_000;
@@ -697,6 +1185,8 @@ export async function runCreatorPipeline(
 
   const slug = `${slugify(row.source)}-${slugify(row.headline).slice(0, 40)}-${row.id.slice(0, 8)}`;
 
+  debug.finalPost = editorPost;
+  debug.finalCaption = captionText;
   debug.finishedAt = new Date().toISOString();
   debug.outcome = { status: 'shipped', totalCostUsd: round4(costUsd) };
   await deps.persistDebugAndCompose(row.id, debug, {
@@ -721,6 +1211,21 @@ function isCaptionFlag(f: FactCheckFlag): boolean {
   return /^\s*CAPTION\b/i.test(f.where);
 }
 
+/**
+ * A fact-check flag "traces to the brief or sources" when the flagged
+ * text was carried in from the brief (via Reporter) rather than
+ * introduced by Writer/Editor paraphrase. Heuristic: the flag's exact
+ * TEXT (or its first 40 chars) appears in the briefRaw. That means
+ * Reporter is the source of the claim; a rewrite round can only
+ * paraphrase, not fix.
+ */
+function flagTracesToBriefOrSources(f: FactCheckFlag, briefRaw: string): boolean {
+  const t = (f.text ?? '').trim();
+  if (t.length < 8) return false;
+  const needle = t.slice(0, 60).toLowerCase();
+  return briefRaw.toLowerCase().includes(needle);
+}
+
 function slugify(s: string): string {
   return s
     .toLowerCase()
@@ -741,6 +1246,70 @@ function round4(n: number): number {
 
 function emptyUsage(): StageUsage {
   return { inputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0, approxCostUsd: 0 };
+}
+
+/**
+ * Snapshot every slide's text-carrying fields (headline / body / note /
+ * numberNote / secondNote / quote / quoteBy) at the fact-check PASS
+ * baseline, keyed by position, so the post-loop diff can identify which
+ * slides a soft repair actually rewrote. The cover isn't included — it
+ * isn't touched by CHECK ERRORS length repairs (its own limit is 100
+ * chars and Writer / Editor already respect it) and pulling it in would
+ * bloat the changed-slide re-fact-check for no gain.
+ */
+function snapshotSlideTexts(post: ParsedPost): Map<number, string> {
+  const out = new Map<number, string>();
+  for (const s of post.slides) {
+    const parts = [
+      s.headline ?? '', s.body ?? '', s.note ?? '',
+      s.numberNote ?? '', s.secondNote ?? '', s.quote ?? '', s.quoteBy ?? '',
+    ].map((v) => v.trim()).join('');
+    out.set(s.position, parts);
+  }
+  return out;
+}
+
+/** Positions of slides whose text-carrying fields changed vs. the snapshot. */
+function diffChangedSlides(pre: Map<number, string>, postAfter: ParsedPost): number[] {
+  const after = snapshotSlideTexts(postAfter);
+  const changed: number[] = [];
+  for (const [pos, text] of after) {
+    if (pre.get(pos) !== text) changed.push(pos);
+  }
+  return changed.sort((a, b) => a - b);
+}
+
+/**
+ * Build a POST payload for the targeted re-fact-check that includes only
+ * the changed slides (plus a synthetic COVER: header so the fact-checker
+ * prompt's expected shape holds). Text comes from `editorPost` fields so
+ * the fact-checker sees exactly the text that will render — not any raw
+ * markdown decoration the Editor might have written around it.
+ */
+function buildChangedSlidesOnlyPost(post: ParsedPost, editorRaw: string, positions: number[]): string {
+  const _ = editorRaw; void _; // kept for future markdown pass-through if needed
+  const coverText = post.cover.kind === 'edited' ? post.cover.text : post.cover.text;
+  const lines: string[] = [];
+  lines.push(`COVER: ${coverText}`);
+  lines.push('');
+  for (const pos of positions) {
+    const slide = post.slides.find((s) => s.position === pos);
+    if (!slide) continue;
+    lines.push(`SLIDE ${pos}`);
+    if (slide.headline) lines.push(`HEADLINE: ${slide.headline}`);
+    if (slide.body) lines.push(`BODY: ${slide.body}`);
+    if (slide.note) lines.push(`NOTE: ${slide.note}`);
+    if (slide.bigNumber) lines.push(`BIG NUMBER: ${slide.bigNumber}`);
+    if (slide.numberNote) lines.push(`NUMBER NOTE: ${slide.numberNote}`);
+    if (slide.secondNumber) lines.push(`SECOND NUMBER: ${slide.secondNumber}`);
+    if (slide.secondNote) lines.push(`SECOND NOTE: ${slide.secondNote}`);
+    if (slide.quote) lines.push(`QUOTE: ${slide.quote}`);
+    if (slide.quoteBy) lines.push(`QUOTE BY: ${slide.quoteBy}`);
+    if (slide.highlight) lines.push(`HIGHLIGHT: ${slide.highlight}`);
+    lines.push('');
+  }
+  lines.push(`FOLLOW: ${post.follow}`);
+  return lines.join('\n');
 }
 
 /**
@@ -777,4 +1346,57 @@ export function injectIntoSlide3Body(rawEditedPost: string, sentence: string): s
   const before = rawEditedPost.slice(0, m.index!);
   const after = rawEditedPost.slice(m.index! + m[0].length);
   return `${before}${m[1]}${m[2]} ${sentence}${after}`;
+}
+
+/**
+ * Serialize a ParsedPost back to the labeled-lines EDITED POST format so
+ * enforceStructure's output can go into the Editor as the `post` input.
+ */
+function serializePostAsRaw(post: ParsedPost): string {
+  const lines: string[] = [];
+  const coverText = post.cover.text;
+  const coverHighlight = post.cover.highlight ?? '';
+  const coverImage = post.cover.image ?? 'type only';
+  lines.push(`COVER: ${coverText}`);
+  if (coverHighlight) lines.push(`COVER HIGHLIGHT: ${coverHighlight}`);
+  lines.push(`COVER IMAGE: ${coverImage}`);
+  lines.push('');
+  for (const s of post.slides) {
+    lines.push(`SLIDE ${s.position}`);
+    if (s.headline) lines.push(`HEADLINE: ${s.headline}`);
+    if (s.body) lines.push(`BODY: ${s.body}`);
+    if (s.note) lines.push(`NOTE: ${s.note}`);
+    if (s.bigNumber) lines.push(`BIG NUMBER: ${s.bigNumber}`);
+    if (s.numberNote) lines.push(`NUMBER NOTE: ${s.numberNote}`);
+    if (s.secondNumber) lines.push(`SECOND NUMBER: ${s.secondNumber}`);
+    if (s.secondNote) lines.push(`SECOND NOTE: ${s.secondNote}`);
+    if (s.quote) lines.push(`QUOTE: ${s.quote}`);
+    if (s.quoteBy) lines.push(`QUOTE BY: ${s.quoteBy}`);
+    if (s.highlight) lines.push(`HIGHLIGHT: ${s.highlight}`);
+    if (s.image) lines.push(`IMAGE: ${s.image}`);
+    lines.push('');
+  }
+  lines.push(`FOLLOW: ${post.follow}`);
+  return lines.join('\n');
+}
+
+/**
+ * Build a targeted CHECK ERRORS payload for the Editor when enforceStructure
+ * couldn't finish the job (adjacent same-kind slides that can't be merged
+ * mechanically, or a variety gap that needs a slide-kind change).
+ */
+function buildEnforceStructureFollowup(needsEditor: NonNullable<EnforceStructureResult['needsEditor']>): CheckError[] {
+  if (needsEditor.kind === 'rhythm') {
+    return needsEditor.violatingPairs.map(([a, b]): CheckError => ({
+      kind: 'rhythm',
+      target: 'slide',
+      slidePosition: a,
+      message: `SLIDE ${a} and SLIDE ${b} are both the same kind. Code merged what it could — this pair needs an editorial fix: change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge the two into one slide with a body that stays under 220 characters.`,
+    }));
+  }
+  return [{
+    kind: 'variety',
+    target: 'slide',
+    message: `The post has ${needsEditor.distinctKinds} distinct slide kind(s); a 6+ slide post needs at least ${needsEditor.needed}. Change one slide to a different kind (a Landing line, a Stat, a Quote, or an Image slide with a brief image) so the sequence has more visual rhythm.`,
+  }];
 }

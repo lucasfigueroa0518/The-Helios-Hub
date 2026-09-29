@@ -53,6 +53,13 @@ async function main() {
       'render-preview': { type: 'boolean' },
       'preview-only': { type: 'string' },
       'preview-server': { type: 'string' },
+      // Safety guard (2026-09-29): explicit acknowledgement that the run
+      // must not write to any DB. The test runner already suppresses
+      // persistDebugAndCompose via wrapDepsForCapture, but the flag makes
+      // it visible in every invocation. Required for --article / --articles
+      // runs; if omitted, the runner exits with a warning listing the
+      // suppressed columns.
+      'no-persist': { type: 'boolean' },
     },
     strict: true,
     allowPositionals: false,
@@ -66,6 +73,7 @@ async function main() {
   const renderPreview = values['render-preview'] === true;
   const previewOnlyDir = values['preview-only'];
   const previewServer = values['preview-server'];
+  const noPersist = values['no-persist'] === true;
 
   // --preview-only mode: skip DB + pipeline entirely, just render an
   // existing run's captured post to PNGs. Zero LLM cost, zero DB access.
@@ -85,10 +93,38 @@ async function main() {
   }
 
   if (!articleId && !articlesCsv) {
-    console.error('Usage: npm run social:v2:test -- --article <uuid> [--from-brief runs/<ts>/brief.json] [--max-cost 1.5] [--inject "<sentence>"] [--render-preview]');
-    console.error('   or: npm run social:v2:test -- --articles <uuid>,<uuid>,... [--max-cost 1.5] [--render-preview]');
+    console.error('Usage: npm run social:v2:test -- --article <uuid> [--from-brief runs/<ts>/brief.json] [--max-cost 1.5] [--inject "<sentence>"] [--render-preview] --no-persist');
+    console.error('   or: npm run social:v2:test -- --articles <uuid>,<uuid>,... [--max-cost 1.5] [--render-preview] --no-persist');
     console.error('   or: npm run social:v2:test -- --preview-only runs/<ts>');
     process.exit(2);
+  }
+
+  // Safety: refuse to start a pipeline run without an explicit --no-persist
+  // acknowledgement. Test runs must not touch any DB (the current dev
+  // .env.local points at production Supabase, so an accidental write would
+  // land on prod). The runner still suppresses writes via
+  // wrapDepsForCapture — this guard forces the operator to say so.
+  //
+  // --no-persist also blocks the image step's Supabase Storage upload and
+  // helios_social.image_cache DB write (via HELIOS_V2_NO_STORAGE_UPLOAD=1)
+  // — storage.ts and cache.ts check this env var. Set it BEFORE the
+  // dynamic imports so downstream modules see it.
+  if (noPersist) {
+    process.env.HELIOS_V2_NO_STORAGE_UPLOAD = '1';
+  }
+  if (!noPersist) {
+    console.error('ABORT: pipeline runs must be invoked with --no-persist.');
+    console.error('Test runs never write to any database. Every column the pipeline');
+    console.error("would set on helios_social.article_queue (pipeline_v2_debug,");
+    console.error('render_post_json, render_slug, compose_status, compose_error,');
+    console.error('review_status, review_note, reviewed_at, reviewed_by) stays local:');
+    console.error('the persistDebugAndCompose call is intercepted and its inputs are');
+    console.error('written to runs/<ts>/transcript.json instead.');
+    console.error('');
+    console.error('If you want writes to land in a DB, set up a dev Supabase project,');
+    console.error('point DATABASE_URL / DIRECT_DATABASE_URL at it, and run the');
+    console.error('production ingest / review UI flow directly — not this test runner.');
+    process.exit(3);
   }
 
   // Set cost cap BEFORE importing orchestrate — its getMaxCostUsd() reads
@@ -241,6 +277,7 @@ async function runOne(articleId: string, o: RunOneOptions): Promise<BatchScore> 
   console.log(`Article: ${row.id} — ${row.headline}`);
   console.log(`Run dir: ${runDir}`);
   console.log(`Cost cap: $${process.env.HELIOS_V2_MAX_COST_USD ?? '1.5'}`);
+  console.log(`--no-persist: ON (DB writes suppressed)`);
 
   // If --from-brief, load the cached brief and stub Reporter+fetchPage.
   let baseDeps: Awaited<ReturnType<typeof buildFromBriefDeps>> | Record<string, never> = {};

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 import test, { describe } from 'node:test';
 
-import { renderPreview, renderPreviewFromRunDir } from '@/lib/social/editorial/v2/render-preview';
+import { reconstructPost, renderPreview, renderPreviewFromRunDir } from '@/lib/social/editorial/v2/render-preview';
 import { parseBrief, parseEditedPost } from '@/lib/social/editorial/v2/parse';
 import type { CapturedRun } from '@/lib/social/editorial/v2/test-runner-support';
 import type { PipelineV2Debug } from '@/lib/social/editorial/v2/log';
@@ -172,6 +172,87 @@ describe('renderPreviewFromRunDir — reads transcript.json', () => {
       assert.equal(r.ok, false);
       if (!r.ok) assert.match(r.reason, /Dev server not reachable/);
     } finally { await fsp.rm(tmp, { recursive: true, force: true }); }
+  });
+
+  test('reconstructPost prefers debug.finalPost over rounds[last].post over edited.post', () => {
+    // A captured run whose initial editor pass, last round, and finalPost
+    // all carry a different cover TEXT so we can tell which one won.
+    const editedRaw = `COVER: EDITED PASS COVER
+COVER HIGHLIGHT: EDITED
+COVER IMAGE: type only
+
+SLIDE 2
+BODY: Edited body.
+HIGHLIGHT: Edited
+IMAGE: type only
+
+FOLLOW: Follow Helios.
+
+EDIT NOTES:
+None`;
+    const roundRaw = `COVER: ROUND LAST COVER
+COVER HIGHLIGHT: ROUND
+COVER IMAGE: type only
+
+SLIDE 2
+BODY: Round body.
+HIGHLIGHT: Round
+IMAGE: type only
+
+FOLLOW: Follow Helios.
+
+EDIT NOTES:
+None`;
+    const finalRaw = `COVER: FINAL POST COVER
+COVER HIGHLIGHT: FINAL
+COVER IMAGE: type only
+
+SLIDE 2
+BODY: Final body.
+HIGHLIGHT: Final
+IMAGE: type only
+
+FOLLOW: Follow Helios.
+
+EDIT NOTES:
+None`;
+    const brief = parseBrief(BRIEF_RAW);
+    const editedPost = parseEditedPost(editedRaw);
+    const roundPost = parseEditedPost(roundRaw);
+    const finalPost = parseEditedPost(finalRaw);
+    const stageUsage = { inputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 1, approxCostUsd: 0 };
+
+    const captured = (finalPostOverride: typeof finalPost | undefined, roundPostOverride: typeof roundPost | undefined): CapturedRun => ({
+      result: { ok: false, status: 'needs_human_review', costUsd: 0, stagesRun: [] },
+      debug: {
+        version: 2, articleId: 'x', startedAt: '', rounds: roundPostOverride ? [{ round: 1, post: roundPostOverride, caption: 'r', factCheck: { verdict: 'PASS', flags: [] }, factCheckRaw: '', stopReasons: [], usage: stageUsage }] : [],
+        repairs: [], reporter: { brief, briefRaw: BRIEF_RAW, stopReasons: [], usage: stageUsage },
+        edited: { post: editedPost, raw: editedRaw, editNotes: null, stopReasons: [], usage: stageUsage },
+        caption: { caption: 'x', raw: 'CAPTION:\nx', stopReasons: [], usage: stageUsage },
+        outcome: { status: 'needs_human_review', totalCostUsd: 0 },
+        finalPost: finalPostOverride,
+      },
+      composeStatus: 'needs_human_review', composeError: null, renderPostJson: null, renderSlug: null, reporterOutput: null, fetchedSources: [],
+    });
+
+    // 1. finalPost present → wins over roundPost and editedPost.
+    const p1 = reconstructPost(captured(finalPost, roundPost)) as { cover?: { headline?: unknown } };
+    // adaptToPost places cover in slides[0]; look at the returned shape's slides[0].headline runs
+    const slides1 = (p1 as { slides?: Array<{ headline?: Array<{ text: string }> }> }).slides ?? [];
+    const cover1Text = (slides1[0]?.headline ?? []).map((s) => s.text).join('');
+    assert.match(cover1Text, /FINAL POST COVER/);
+
+    // 2. no finalPost, rounds present → rounds[last].post wins.
+    const p2 = reconstructPost(captured(undefined, roundPost));
+    const slides2 = (p2 as { slides?: Array<{ headline?: Array<{ text: string }> }> }).slides ?? [];
+    const cover2Text = (slides2[0]?.headline ?? []).map((s) => s.text).join('');
+    assert.match(cover2Text, /ROUND LAST COVER/);
+
+    // 3. neither finalPost nor rounds → falls back to edited.post.
+    const p3 = reconstructPost(captured(undefined, undefined));
+    const slides3 = (p3 as { slides?: Array<{ headline?: Array<{ text: string }> }> }).slides ?? [];
+    const cover3Text = (slides3[0]?.headline ?? []).map((s) => s.text).join('');
+    assert.match(cover3Text, /EDITED PASS COVER/);
   });
 
   test('reconstructs Post via adapter when transcript has debug but no renderPostJson', async () => {

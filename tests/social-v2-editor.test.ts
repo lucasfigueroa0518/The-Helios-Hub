@@ -77,9 +77,12 @@ COVER IMAGE: type only`;
 });
 
 /**
- * The LENGTHS block from renderLengthsBlock must appear at the very top of
- * the Editor's user message when provided, so the model sees the field
- * lengths before any POST content — one glance and it knows what to cut.
+ * Message layout after cost-cut #1: the stable prefix (BRIEF + SOURCES)
+ * comes first so reruns within one pipeline run share it at the cache-read
+ * rate; the volatile suffix (LENGTHS + POST + CHECK ERRORS + FLAGS) comes
+ * after the cache breakpoint. Within the suffix, LENGTHS still appears
+ * immediately above POST so the model sees the field lengths right before
+ * the copy it's asked to cut.
  */
 describe('buildEditorUserMessage', () => {
   const brief = {
@@ -88,28 +91,31 @@ describe('buildEditorUserMessage', () => {
     post: 'COVER: x\nSLIDE 2\nBODY: y\nFOLLOW: z',
   };
 
-  test('when lengthsBlock is provided, it appears BEFORE the POST section', () => {
+  test('stable BRIEF + SOURCES prefix comes before the volatile POST suffix', () => {
     const msg = buildEditorUserMessage({
       brief: {} as never,
       briefRaw: brief.briefRaw,
       sourceTexts: brief.sourceTexts,
       post: brief.post,
-      lengthsBlock: 'LENGTHS:\n- COVER: 5 characters (limit 100)',
+    });
+    assert.ok(msg.startsWith('BRIEF:'));
+    const briefIdx = msg.indexOf('BRIEF:');
+    const sourcesIdx = msg.indexOf('SOURCES:');
+    const postIdx = msg.indexOf('POST:');
+    assert.ok(briefIdx < sourcesIdx, 'BRIEF must come before SOURCES');
+    assert.ok(sourcesIdx < postIdx, 'SOURCES must come before POST');
+  });
+
+  test('when lengthsBlock is provided, LENGTHS appears immediately before POST inside the suffix', () => {
+    const msg = buildEditorUserMessage({
+      brief: {} as never,
+      briefRaw: brief.briefRaw,
+      sourceTexts: brief.sourceTexts,
+      post: brief.post,
+      lengthsBlock: 'LENGTHS:\n- COVER: 5 characters (limit 90)',
     });
     const lengthsIdx = msg.indexOf('LENGTHS:');
     const postIdx = msg.indexOf('POST:');
-    assert.ok(lengthsIdx >= 0, 'LENGTHS block must appear');
-    assert.ok(postIdx >= 0, 'POST section must appear');
-    assert.ok(lengthsIdx < postIdx, 'LENGTHS must come before POST');
-  });
-
-  test('when lengthsBlock is omitted, the message starts with POST as before', () => {
-    const msg = buildEditorUserMessage({
-      brief: {} as never,
-      briefRaw: brief.briefRaw,
-      sourceTexts: brief.sourceTexts,
-      post: brief.post,
-    });
-    assert.ok(msg.startsWith('POST:'));
+    assert.ok(lengthsIdx >= 0 && postIdx > lengthsIdx, 'LENGTHS must come immediately before POST');
   });
 });

@@ -52,9 +52,26 @@ export const BANNED_ALWAYS: BannedRule[] = [
       '[\\u{1F300}-\\u{1F6FF}\\u{1F900}-\\u{1F9FF}\\u{1FA70}-\\u{1FAFF}\\u{2600}-\\u{27BF}]',
     label: 'emoji',
   },
-  // Multi-word constructions.
+  // Multi-word invented-contrast constructions. The voice block bans "not
+  // X, it's Y" and "not X but Y" in prose; this section catches every
+  // shape a model reaches for when it wants to insert a false-choice
+  // contrast the sources don't make (Google CC re-run 2026-09-29).
   { kind: 'regex', pattern: '\\bnot\\s+[^,\\.]{1,40},\\s*it\'s\\s+', label: '"not X, it\'s Y"' },
   { kind: 'regex', pattern: '\\bnot\\s+[^,\\.]{1,40}\\s+but\\s+', label: '"not X but Y"' },
+  { kind: 'regex', pattern: '\\bnot\\s+just\\s+[^,\\.]{1,40},\\s+', label: '"not just X, Y"' },
+  { kind: 'regex', pattern: '\\bnot\\s+just\\s+[^,\\.]{1,40}\\s+but\\s+', label: '"not just X but Y"' },
+  { kind: 'regex', pattern: '\\bnot\\s+merely\\s+[^,\\.]{1,40}[,\\s]', label: '"not merely X"' },
+  { kind: 'regex', pattern: '\\bnot\\s+simply\\s+[^,\\.]{1,40}[,\\s]', label: '"not simply X"' },
+  // Mirror form: "X, not Y" ("designed in, not discovered"). Same invented
+  // contrast framing, just with the negation on the second half.
+  { kind: 'regex', pattern: '\\b[a-z]{4,}(?:ed|ing|s)?\\s+in,\\s+not\\s+[a-z]', label: '"X, not Y" invented contrast' },
+  { kind: 'regex', pattern: '[a-z]{4,}[,;]\\s+not\\s+[a-z]{4,}', label: '"X, not Y" invented contrast' },
+  // "Unlike X, Y" — invented-contrast framing (Google CC run flagged
+  // "Unlike an AI that just answers questions, CC takes actions on your
+  // behalf" — the "just answers questions" contrast came from the model,
+  // not the sources). Catches "Unlike an AI...", "Unlike other agents...",
+  // "Unlike traditional chatbots...", etc.
+  { kind: 'regex', pattern: '(?:^|[\\s,;.:!?"])[Uu]nlike\\b[^,\\.]{1,60},', label: '"Unlike X, Y" invented contrast' },
   { kind: 'literal', pattern: 'at its core', label: '"at its core"' },
   { kind: 'literal', pattern: 'the real question is', label: '"the real question is"' },
   { kind: 'literal', pattern: "it's worth noting", label: '"it\'s worth noting"' },

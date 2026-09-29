@@ -24,7 +24,11 @@ export type CheckErrorKind =
   | 'rhythm'
   | 'variety'
   | 'cover_photo'
-  | 'quote_verbatim';
+  | 'quote_verbatim'
+  | 'term_unexplained'
+  | 'stat_missing_note'
+  | 'past_statement_reference'
+  | 'sequence_incomplete';
 
 export type CheckError = {
   kind: CheckErrorKind;
@@ -40,7 +44,12 @@ export type CheckReport = { ok: boolean; errors: CheckError[] };
 
 /** Character budgets from §Orchestration rules + design v1. */
 export const LIMITS = {
-  cover: 100,
+  // Cover tightened 100 → 90 (2026-09-29). The template is fixed by
+  // design v1 and can't be restyled; at 100 chars the headline drops to
+  // xl=60px and collides with the fixed-position orange arrow bottom-
+  // right on the Suleyman preview. 90 chars gives the headline the lg
+  // (72px) step or better and clears the arrow.
+  cover: 90,
   headline: 60,
   body: 220,
   bigNumber: 12,
@@ -49,7 +58,13 @@ export const LIMITS = {
   numberNote: 60,
   secondNumber: 12,
   secondNote: 60,
-  quote: 200,
+  // Quote cap tightened from 200 → 140 (2026-09-29). At 69px Pragmatica
+  // on 888px inner width, 200 chars overflowed the canvas and pushed
+  // the attribution off the bottom on the Suleyman preview (slide 5).
+  // 140 chars = ~3 lines at that face + size, leaving room for the
+  // orange glyph, the round speaker photo, and the attribution above
+  // the 1350px slide bottom.
+  quote: 140,
   quoteBy: 60,
   /**
    * Cap on the FULL published caption — Caption stage output PLUS the
@@ -249,7 +264,259 @@ export function checkPost(post: ParsedPost, brief: Brief): CheckReport {
     }
   }
 
+  // Terms explained: every TERM used in a slide must be explained on that
+  // slide or the very next one, using its description from the brief's
+  // TERMS list. "Explained" = the TERM's description appears in either
+  // the same slide's text or the next slide's text (fuzzy substring).
+  for (const err of checkTermsExplained(post, brief)) errors.push(err);
+
+  // Main-story-only: cite-of-prior-statement patterns. Rule (docs/
+  // HELIOS-PIPELINE-V2-HANDOFF.md): "Earlier statements, later
+  // announcements and other companies' news are separate stories, even
+  // when sources connect them." A slide that leans on "its earlier
+  // writing", "the CEO previously argued", "in an earlier essay", etc.,
+  // is pulling in a separate story to fill space. Cut it or replace it
+  // with content about the actual news. Runs on cover, every slide, and
+  // the follow line.
+  for (const err of checkNoPastStatement('cover', 'TEXT', coverText, undefined)) errors.push(err);
+  for (const slide of post.slides) {
+    for (const err of checkNoPastStatement('slide', 'HEADLINE', slide.headline ?? '', slide.position)) errors.push(err);
+    for (const err of checkNoPastStatement('slide', 'BODY', slide.body ?? '', slide.position)) errors.push(err);
+    for (const err of checkNoPastStatement('slide', 'NOTE', slide.note ?? '', slide.position)) errors.push(err);
+    for (const err of checkNoPastStatement('slide', 'QUOTE', slide.quote ?? '', slide.position)) errors.push(err);
+  }
+  for (const err of checkNoPastStatement('follow', 'TEXT', post.follow, undefined)) errors.push(err);
+
+  // Numbered-sequence integrity. Rule: if the post labels beats with
+  // ordinals ("first objection", "second phase", "third round"), every
+  // ordinal up to the highest used must be present AND they must appear
+  // in slide-position order. Run 2026-09-29T06-45-36 shipped
+  // "first objection" on SLIDE 7 and "third objection" on SLIDE 9 with
+  // no "second objection" anywhere — a broken sequence the reader
+  // notices instantly.
+  for (const err of checkSequenceIntegrity(post)) errors.push(err);
+
+  // Stat slides must be self-explanatory. A slide with BIG NUMBER but no
+  // NUMBER NOTE (or no HEADLINE) is a floating number with nothing anchoring
+  // it to the story. Same for SECOND NUMBER + SECOND NOTE on split stats.
+  for (const slide of post.slides) {
+    if (slide.bigNumber && !slide.numberNote) {
+      errors.push({
+        kind: 'stat_missing_note',
+        target: 'slide',
+        slidePosition: slide.position,
+        field: 'NUMBER NOTE',
+        message: `SLIDE ${slide.position} has BIG NUMBER "${slide.bigNumber}" but no NUMBER NOTE. A stat slide must say what its number is about on the same slide. Add a NUMBER NOTE (≤60 chars) that anchors the number to the story, or cut the slide / convert it to a Text slide.`,
+      });
+    }
+    if (slide.bigNumber && !slide.headline) {
+      errors.push({
+        kind: 'stat_missing_note',
+        target: 'slide',
+        slidePosition: slide.position,
+        field: 'HEADLINE',
+        message: `SLIDE ${slide.position} has BIG NUMBER "${slide.bigNumber}" but no HEADLINE. A stat slide needs a headline that tells the reader what claim the number supports.`,
+      });
+    }
+    if (slide.secondNumber && !slide.secondNote) {
+      errors.push({
+        kind: 'stat_missing_note',
+        target: 'slide',
+        slidePosition: slide.position,
+        field: 'SECOND NOTE',
+        message: `SLIDE ${slide.position} has SECOND NUMBER "${slide.secondNumber}" but no SECOND NOTE. A split-stat slide must label each number.`,
+      });
+    }
+  }
+
   return { ok: errors.length === 0, errors };
+}
+
+/**
+ * Cite-of-prior-statement patterns. Each pattern names the exact clause
+ * shape the model reaches for when it wants to lean on a *separate*
+ * prior story to fill a slide. Deliberately narrow — bare words like
+ * "earlier" or "before" have too many legitimate uses.
+ *
+ * Kept as an exported array so the Editor prompt can reference the same
+ * shapes and so the check + prompt can't drift.
+ */
+export const PAST_STATEMENT_PATTERNS: Array<{ pattern: string; label: string }> = [
+  { pattern: '\\bearlier\\s+writ(?:e|es|ing|ings|ten)\\b', label: '"earlier writing/writings/written"' },
+  { pattern: '\\bearlier\\s+(?:said|wrote|argued|warned|claimed|noted|maintained|stated|held|posted|published)\\b', label: '"earlier said/wrote/argued/warned/…"' },
+  { pattern: '\\b(?:has|had|have)\\s+long\\s+(?:argued|said|maintained|warned|claimed|held|written|wrote|contended|insisted)\\b', label: '"has long argued/said/maintained/…"' },
+  { pattern: '\\bpreviously\\s+(?:said|argued|written|wrote|warned|claimed|noted|stated|held|maintained|posted|published|contended)\\b', label: '"previously said/argued/written/…"' },
+  { pattern: '\\bin\\s+(?:an|a|its|his|her|their)\\s+earlier\\s+(?:essay|post|statement|paper|interview|blog|piece|letter|memo|thread|response|writing)\\b', label: '"in an earlier essay/post/statement/…"' },
+  { pattern: '\\blong[- ]?standing\\s+(?:position|stance|view|argument|claim)\\b', label: '"long-standing position/stance/view"' },
+];
+
+/**
+ * Check one field for cite-of-prior-statement patterns. Returns one
+ * error per matched pattern; the message names the exact clause so the
+ * Editor knows which words to cut without hunting.
+ */
+function checkNoPastStatement(
+  target: CheckError['target'],
+  field: string,
+  text: string,
+  slidePosition: number | undefined,
+): CheckError[] {
+  const out: CheckError[] = [];
+  if (!text) return out;
+  const label = labelFor(target, slidePosition, field);
+  for (const { pattern, label: what } of PAST_STATEMENT_PATTERNS) {
+    const re = new RegExp(pattern, 'iu');
+    const m = re.exec(text);
+    if (m) {
+      out.push({
+        kind: 'past_statement_reference',
+        target,
+        slidePosition,
+        field,
+        message: `${label}: contains ${what} ("${m[0]}"). Earlier statements are a separate story from the main news, even when sources link them. Cut the clause and either drop the slide, replace it with content about the actual news, or, if the point is essential, restate it without citing the prior statement.`,
+      });
+    }
+  }
+  return out;
+}
+
+const ORDINAL_WORDS: Record<string, number> = {
+  first: 1, second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6, seventh: 7, eighth: 8,
+};
+
+/**
+ * Scan every slide's text for `<ordinal> <noun>` patterns (e.g. "first
+ * objection", "second question", "third phase"). Group by noun. For each
+ * group, flag if any ordinal in [1..max(used)] is missing, or if the
+ * ordinals don't appear in ascending slide-position order.
+ *
+ * Deliberately naive: matches `(first|second|…|eighth) <lowercase-word>`
+ * case-insensitively, so "his First Objection" and "First objection"
+ * both count as first-objection references.
+ */
+function checkSequenceIntegrity(post: ParsedPost): CheckError[] {
+  const errors: CheckError[] = [];
+  // { noun: [{ position, ord }] }
+  const groups = new Map<string, Array<{ position: number; ord: number; match: string }>>();
+  const re = new RegExp(`\\b(${Object.keys(ORDINAL_WORDS).join('|')})\\s+([a-z]{4,20})\\b`, 'giu');
+  const scan = (position: number, text: string | undefined) => {
+    if (!text) return;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      const ord = ORDINAL_WORDS[m[1]!.toLowerCase()]!;
+      const noun = m[2]!.toLowerCase();
+      // Skip a small deny-list of nouns that are almost never used as a
+      // sequence marker: "time" (first time), "place" (first place),
+      // "person" (first person), "half" (first half), "party" (third
+      // party), "quarter" (fourth quarter). "Time" is the most common
+      // false-positive by far.
+      if (['time', 'place', 'person', 'half', 'quarter', 'party', 'floor', 'grade', 'class', 'time'].includes(noun)) continue;
+      const arr = groups.get(noun) ?? [];
+      arr.push({ position, ord, match: m[0] });
+      groups.set(noun, arr);
+    }
+  };
+  for (const s of post.slides) {
+    scan(s.position, s.headline);
+    scan(s.position, s.body);
+    scan(s.position, s.note);
+    scan(s.position, s.quote);
+  }
+  for (const [noun, occurrences] of groups) {
+    if (occurrences.length < 2) continue;
+    const ordsSeen = [...new Set(occurrences.map((o) => o.ord))].sort((a, b) => a - b);
+    const maxOrd = ordsSeen[ordsSeen.length - 1]!;
+    const missing: number[] = [];
+    for (let i = 1; i < maxOrd; i++) {
+      if (!ordsSeen.includes(i)) missing.push(i);
+    }
+    const nameOf = (n: number): string => Object.keys(ORDINAL_WORDS).find((k) => ORDINAL_WORDS[k] === n) ?? String(n);
+    if (missing.length > 0) {
+      const firstUse = occurrences[0]!;
+      errors.push({
+        kind: 'sequence_incomplete',
+        target: 'slide',
+        slidePosition: firstUse.position,
+        message: `Numbered sequence "<ordinal> ${noun}" is incomplete: found ${ordsSeen.map(nameOf).join(', ')} but missing ${missing.map(nameOf).join(', ')}. Either add the missing beat as its own slide, or drop the ordinal labels entirely and rewrite the beats without numbering.`,
+      });
+      continue;
+    }
+    // Order check: the first occurrence of each ordinal must appear in
+    // ascending slide-position order.
+    const firstPerOrd = new Map<number, number>();
+    for (const o of occurrences) {
+      if (!firstPerOrd.has(o.ord)) firstPerOrd.set(o.ord, o.position);
+    }
+    const positionsInOrder = ordsSeen.map((o) => firstPerOrd.get(o)!);
+    for (let i = 1; i < positionsInOrder.length; i++) {
+      if (positionsInOrder[i]! < positionsInOrder[i - 1]!) {
+        errors.push({
+          kind: 'sequence_incomplete',
+          target: 'slide',
+          slidePosition: positionsInOrder[i],
+          message: `Numbered sequence "<ordinal> ${noun}" is out of order: ${ordsSeen.map(nameOf).join(', ')} appears on slides ${positionsInOrder.join(', ')}. Reorder the slides so ${nameOf(ordsSeen[0]!)} comes before ${nameOf(ordsSeen[1]!)} and so on, or relabel the beats without ordinals.`,
+        });
+        break;
+      }
+    }
+  }
+  return errors;
+}
+
+/**
+ * A TERM is "explained" on the slide (or next slide) where it first
+ * appears, if that slide's or the next slide's text contains any
+ * substantive fragment (≥ 8 chars) from the TERM's description.
+ *
+ * Terms whose name IS the description (e.g., "OpenAI: an AI company")
+ * are considered self-explanatory when the reader can infer them from
+ * the surrounding text; we still require a real gloss for jargon-y
+ * ones. The "≥ 8-char fragment" heuristic catches "moral consideration"
+ * or "training data" but not tiny words like "AI" alone.
+ */
+function checkTermsExplained(post: import('./parse').ParsedPost, brief: import('./parse').Brief): CheckError[] {
+  const errors: CheckError[] = [];
+  const slides = post.slides;
+  const slideText = (i: number): string => {
+    const s = slides[i];
+    if (!s) return '';
+    return [s.headline, s.body, s.note, s.numberNote, s.secondNote, s.quote].filter(Boolean).join(' ').toLowerCase();
+  };
+  for (const term of brief.terms) {
+    const termName = term.name.trim();
+    const termDesc = (term.description ?? '').trim().toLowerCase();
+    if (!termName || termName.length < 3) continue;
+    if (termDesc.length < 15) continue; // too short to require a gloss
+    const needleName = termName.toLowerCase();
+    // First-appearance slide index (in slides[], excluding cover / follow).
+    let firstIdx = -1;
+    for (let i = 0; i < slides.length; i++) {
+      if (slideText(i).includes(needleName)) { firstIdx = i; break; }
+    }
+    if (firstIdx < 0) continue; // term not used in slides at all — OK
+    // Pull ≥ 9-char content fragments from the description. 9 is chosen
+    // so common gloss words like "internal", "external", "software" don't
+    // false-positive-match other terms (2026-09-29 test case: Antigravity's
+    // gloss contained "internal", which also appears in Google Labs's
+    // gloss, so an "internal team" mention on a Google Labs slide would
+    // erroneously satisfy the Antigravity check).
+    const descFragments = termDesc
+      .replace(/[^a-z0-9 ]/g, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length >= 9);
+    if (descFragments.length === 0) continue;
+    const thisAndNext = slideText(firstIdx) + ' ' + slideText(firstIdx + 1);
+    const anyMatch = descFragments.some((f) => thisAndNext.includes(f));
+    if (!anyMatch) {
+      errors.push({
+        kind: 'term_unexplained',
+        target: 'slide',
+        slidePosition: slides[firstIdx]!.position,
+        message: `TERM "${termName}" first appears on SLIDE ${slides[firstIdx]!.position} but neither that slide nor SLIDE ${slides[firstIdx + 1]?.position ?? 'N/A'} explains it using the brief's TERMS description ("${term.description}"). Add a plain-language gloss on one of the two slides, or drop the term.`,
+      });
+    }
+  }
+  return errors;
 }
 
 /**
@@ -473,12 +740,16 @@ export function partitionErrors(errors: CheckError[]): { hard: CheckError[]; sof
   const hard: CheckError[] = [];
   const soft: CheckError[] = [];
   for (const e of errors) {
+    // rhythm promoted to HARD 2026-09-29: story 1 shipped with Editor
+    // knowingly leaving two consecutive text slides after saying in
+    // EDIT NOTES "these cannot be merged without losing clarity". Soft
+    // means the pipeline moves on; HARD forces a resolved rhythm.
     if (
       e.kind === 'char_limit'
       || e.kind === 'highlight_substring'
-      || e.kind === 'rhythm'
       || e.kind === 'variety'
       || e.kind === 'cover_photo'
+      || e.kind === 'term_unexplained'
     ) soft.push(e);
     else hard.push(e);
   }

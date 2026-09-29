@@ -247,8 +247,8 @@ describe('buildSummaryMarkdown', () => {
 
   test('renders each slide with per-field character count', () => {
     const md = buildSummaryMarkdown(captured, { articleId: 'x', articleHeadline: 'h', runId: 'r', usedFromBrief: false });
-    // COVER (X chars, limit 100) — X depends on fixture
-    assert.match(md, /\*\*COVER\*\* \(\d+ chars, limit 100\)/);
+    // COVER (X chars, limit 90) — cover limit tightened 100 → 90 (2026-09-29)
+    assert.match(md, /\*\*COVER\*\* \(\d+ chars, limit 90\)/);
     // FOLLOW (X chars, limit 100)
     assert.match(md, /\*\*FOLLOW\*\* \(\d+ chars, limit 100\)/);
   });

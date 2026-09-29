@@ -338,6 +338,36 @@ Source: Bloomberg, September 17, 2026. Additional reporting: The Information.`;
     assert.match(caption, /AI: powered dev tools have finally arrived/);
     assert.match(caption, /Source: Bloomberg/);
   });
+
+  test('strips model deliberation past the Source line', () => {
+    // Haiku emits internal notes past the Source line (see 2026-09-29 pm
+    // Google re-run summary). parseCaption cuts at Source so caption code
+    // checks see only the real caption.
+    const raw = `CAPTION:
+Google Labs shipped CC as a family AI agent.
+
+Follow Helios for AI news.
+
+Source: Google Blog, September 17, 2026.
+
+
+Wait—let me check:
+- The em dash is banned. Remove it.
+- Recount for length.
+
+Revised: [long deliberation paragraph...]`;
+    const caption = parseCaption(raw);
+    assert.match(caption, /Source: Google Blog/);
+    assert.doesNotMatch(caption, /Wait—let me check/);
+    assert.doesNotMatch(caption, /Revised/);
+  });
+
+  test('strip is a no-op when no Source line is present', () => {
+    const raw = `CAPTION:
+Very short caption with no Source line for some reason.`;
+    const caption = parseCaption(raw);
+    assert.match(caption, /Very short caption/);
+  });
 });
 
 describe('parseFactCheck', () => {

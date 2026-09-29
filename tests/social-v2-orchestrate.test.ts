@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test, { describe } from 'node:test';
 
-import { injectIntoSlide3Body, runCreatorPipeline, type OrchestrateDeps } from '@/lib/social/editorial/v2/orchestrate';
+import { editorModeFor, injectIntoSlide3Body, runCreatorPipeline, type OrchestrateDeps } from '@/lib/social/editorial/v2/orchestrate';
+import type { CheckError } from '@/lib/social/editorial/v2/code-checks';
 import type { FactCheckerOutput } from '@/lib/social/editorial/v2/fact-checker';
 import { parseBrief, parseEditedPost } from '@/lib/social/editorial/v2/parse';
 
@@ -302,10 +303,11 @@ describe('runCreatorPipeline — fact-check FLAGGED loop', () => {
 });
 
 describe('runCreatorPipeline — code-check repair budget', () => {
-  test('gives the Editor two tries per round for slide errors, then bails', async () => {
+  test('in-round tries + post-PASS soft-repair loop; then bails when both run out', async () => {
     // First-pass Editor produces a body over 220; every retry still fails.
-    // Expect exactly two editor(check-errors r1.*) repair entries in the
-    // debug transcript before the pipeline bails to needs_human_review.
+    // With char_limit being SOFT, the round doesn't bail — it hits fact-check
+    // (default PASS) and then the post-PASS soft-repair loop keeps trying
+    // for MAX_SOFT_REPAIRS = 6 more Editor passes.
     let editorCall = 0;
     let capturedRepairs: Array<{ stage: string; reason: string }> = [];
     const overCap = parseEditedPost(EDITED_RAW);
@@ -318,7 +320,6 @@ describe('runCreatorPipeline — code-check repair budget', () => {
       buildDeps({
         runEditor: async () => {
           editorCall++;
-          // Every editor call returns the same over-limit post.
           return { post: overCap, raw: EDITED_RAW, editNotes: null, stopReasons: ["end_turn"], usage: stageUsage(0.05) };
         },
         persistDebugAndCompose: async (_id, debug) => {
@@ -327,13 +328,15 @@ describe('runCreatorPipeline — code-check repair budget', () => {
       }),
     );
     assert.equal(result.status, 'needs_human_review');
-    // 1 initial editor + 2 repair tries = 3 total editor calls.
-    assert.equal(editorCall, 3);
-    // Two repair entries in the debug transcript, both for editor.
+    // 1 initial editor + 2 in-round repair tries + 6 post-PASS soft-repair
+    // tries = 9 total.
+    assert.equal(editorCall, 9);
     const editorRepairs = capturedRepairs.filter((r) => r.stage === 'editor');
-    assert.equal(editorRepairs.length, 2);
+    assert.equal(editorRepairs.length, 8);
     assert.match(editorRepairs[0]!.reason, /try 1\/2/);
     assert.match(editorRepairs[1]!.reason, /try 2\/2/);
+    assert.match(editorRepairs[2]!.reason, /post-PASS try 1\/6/);
+    assert.match(editorRepairs[7]!.reason, /post-PASS try 6\/6/);
   });
 });
 
@@ -373,11 +376,17 @@ describe('runCreatorPipeline — soft errors continue past code checks, block at
     assert.doesNotMatch(bailReason ?? '', /across 3 rounds/);
   });
 
-  test('hard error (banned voice) still stops before the Fact-checker', async () => {
-    // Editor returns a post with an em dash in a body. Repair tries fail.
-    // Pipeline must bail without ever calling the Fact-checker.
+  test('hard error stops the run, and the Fact-checker runs ONCE for review context', async () => {
+    // Editor returns a post with a banned voice phrase ("moving forward").
+    // Repair tries fail (Editor keeps returning the same post). Pipeline
+    // bails to needs_human_review — AND runs the Fact-checker once on
+    // the bail post so the reviewer sees every problem together
+    // (2026-09-29 rule: "A bail must never skip fact-check").
+    //
+    // Em/en dashes can't be used to test this any more — they're swapped
+    // to compliant punctuation at parse-time (see swapBannedPunctuation).
     const bannedPost = parseEditedPost(EDITED_RAW);
-    (bannedPost.slides[0]!).body = 'This — has an em dash and is a hard error.';
+    (bannedPost.slides[0]!).body = 'Moving forward, the company will ship this feature.';
     let factCheckCalls = 0;
     const result = await runCreatorPipeline(
       ROW,
@@ -391,7 +400,7 @@ describe('runCreatorPipeline — soft errors continue past code checks, block at
       }),
     );
     assert.equal(result.status, 'needs_human_review');
-    assert.equal(factCheckCalls, 0, 'hard error must stop the round before the Fact-checker runs');
+    assert.equal(factCheckCalls, 1, 'hard bail must invoke the Fact-checker exactly once for review context');
     assert.match(result.reason ?? '', /hard code checks failed/);
   });
 });
@@ -531,5 +540,242 @@ describe('runCreatorPipeline — REVIEWER NOTES entry point', () => {
     assert.equal(w.reviewerNotes, 'Make the cover tighter and add the CEO name.');
     assert.ok(w.previousPost);
     assert.equal(w.factCheckFlags, undefined, 'reviewer entry must not send fact-check flags');
+  });
+});
+
+/**
+ * Post-PASS soft-repair loop safety. Trims aren't safe by default —
+ * length repairs can invert numbers or introduce banned phrases, and
+ * rhythm swaps can drop source-anchored clauses. The loop must:
+ *   1. Re-run code checks after each pass and bail on any NEW hard error.
+ *   2. After the loop ends, if any slide text changed vs. pre-loop,
+ *      fact-check only the changed slides once.
+ *   3. Any flag from that re-fact-check → human review.
+ * The gap that motivated these tests: prior to 2026-09-29, soft-repair
+ * output went straight to render unverified.
+ */
+describe('runCreatorPipeline — soft-repair verification', () => {
+  /**
+   * Editor call ordering in these tests:
+   *   call 1     = initial Editor pass
+   *   calls 2-3  = in-round CHECK ERRORS repair (MAX_REPAIRS_PER_STAGE_PER_ROUND = 2)
+   *   call 4+    = post-PASS soft-repair loop
+   * To exercise the SOFT-REPAIR path specifically, calls 1-3 must return
+   * an over-limit-but-otherwise-clean post so char_limit survives the
+   * in-round budget and reaches the soft-repair loop; then call 4 (soft
+   * repair pass 1) returns the "repaired" post whose new text is what
+   * we're testing verification against.
+   */
+  function makeOverPost() {
+    const p = parseEditedPost(EDITED_RAW);
+    (p.slides[0]!).body = 'x'.repeat(292);
+    return p;
+  }
+
+  test('soft-repair introducing a banned phrase bails immediately', async () => {
+    const overPost = makeOverPost();
+    // Soft-repair returns a body with the banned "moving forward" phrase.
+    const badRepairPost = parseEditedPost(EDITED_RAW);
+    (badRepairPost.slides[0]!).body = 'Moving forward, Anthropic told reporters Claude writes the code its researchers ship.';
+    let editorCall = 0;
+    let bailReason: string | undefined;
+    const result = await runCreatorPipeline(
+      ROW,
+      {},
+      buildDeps({
+        runEditor: async () => {
+          editorCall++;
+          const post = editorCall <= 3 ? overPost : badRepairPost;
+          return { post, raw: EDITED_RAW, editNotes: null, stopReasons: ["end_turn"], usage: stageUsage(0.05) };
+        },
+        persistDebugAndCompose: async (_id, debug) => {
+          bailReason = debug.outcome.reason;
+        },
+      }),
+    );
+    assert.equal(result.status, 'needs_human_review');
+    assert.match(bailReason ?? '', /soft-repair introduced hard code-check error/);
+    assert.match(bailReason ?? '', /moving forward/i);
+  });
+
+  test('soft-repair introducing a number-trace miss bails immediately', async () => {
+    const overPost = makeOverPost();
+    const badRepairPost = parseEditedPost(EDITED_RAW);
+    (badRepairPost.slides[0]!).body = 'Anthropic told reporters Claude now writes 52% of the code its researchers ship.';
+    let editorCall = 0;
+    let bailReason: string | undefined;
+    const result = await runCreatorPipeline(
+      ROW,
+      {},
+      buildDeps({
+        runEditor: async () => {
+          editorCall++;
+          const post = editorCall <= 3 ? overPost : badRepairPost;
+          return { post, raw: EDITED_RAW, editNotes: null, stopReasons: ["end_turn"], usage: stageUsage(0.05) };
+        },
+        persistDebugAndCompose: async (_id, debug) => {
+          bailReason = debug.outcome.reason;
+        },
+      }),
+    );
+    assert.equal(result.status, 'needs_human_review');
+    assert.match(bailReason ?? '', /soft-repair introduced hard code-check error/);
+    assert.match(bailReason ?? '', /52%/);
+  });
+
+  test('soft-repair that rewrites a slide triggers a targeted fact-check on only that slide', async () => {
+    const overPost = makeOverPost();
+    const goodRepairPost = parseEditedPost(EDITED_RAW);
+    (goodRepairPost.slides[0]!).body = 'Anthropic told reporters Claude now writes 26% of the code its researchers ship, up from 1% in March.';
+    let editorCall = 0;
+    const capturedFactCheckPosts: string[] = [];
+    let capturedSoftRepair: unknown = null;
+    const result = await runCreatorPipeline(
+      ROW,
+      {},
+      buildDeps({
+        runEditor: async () => {
+          editorCall++;
+          const post = editorCall <= 3 ? overPost : goodRepairPost;
+          return { post, raw: EDITED_RAW, editNotes: null, stopReasons: ["end_turn"], usage: stageUsage(0.05) };
+        },
+        runFactChecker: async (input): Promise<FactCheckerOutput> => {
+          capturedFactCheckPosts.push(input.post);
+          return {
+            result: { verdict: 'PASS', flags: [] },
+            raw: 'VERDICT: PASS\n\nFLAGS:\n',
+            stopReasons: ["end_turn"],
+            usage: stageUsage(0.03),
+          };
+        },
+        persistDebugAndCompose: async (_id, debug) => {
+          capturedSoftRepair = debug.softRepair;
+        },
+      }),
+    );
+    assert.equal(result.status, 'shipped');
+    // Two fact-check calls: the initial round + the targeted re-check.
+    assert.equal(capturedFactCheckPosts.length, 2);
+    // The re-check POST contains only SLIDE 2 (the changed one).
+    const rePost = capturedFactCheckPosts[1]!;
+    assert.match(rePost, /SLIDE 2/);
+    assert.doesNotMatch(rePost, /SLIDE 3\b/);
+    assert.doesNotMatch(rePost, /SLIDE 4\b/);
+    const sr = capturedSoftRepair as { runs: number; costUsd: number; changedSlides: number[]; reFactCheck: unknown };
+    assert.ok(sr.runs >= 1);
+    assert.ok(sr.costUsd > 0);
+    assert.deepEqual(sr.changedSlides, [2]);
+    assert.ok(sr.reFactCheck);
+  });
+
+  test('targeted re-fact-check FLAGGED → human review', async () => {
+    const overPost = makeOverPost();
+    const goodRepairPost = parseEditedPost(EDITED_RAW);
+    (goodRepairPost.slides[0]!).body = 'Anthropic told reporters Claude now writes 26% of the code its researchers ship.';
+    let editorCall = 0;
+    let fcCall = 0;
+    let bailReason: string | undefined;
+    const result = await runCreatorPipeline(
+      ROW,
+      {},
+      buildDeps({
+        runEditor: async () => {
+          editorCall++;
+          const post = editorCall <= 3 ? overPost : goodRepairPost;
+          return { post, raw: EDITED_RAW, editNotes: null, stopReasons: ["end_turn"], usage: stageUsage(0.05) };
+        },
+        runFactChecker: async (): Promise<FactCheckerOutput> => {
+          fcCall++;
+          if (fcCall === 1) {
+            return {
+              result: { verdict: 'PASS', flags: [] },
+              raw: 'VERDICT: PASS\n\nFLAGS:\n',
+              stopReasons: ["end_turn"],
+              usage: stageUsage(0.03),
+            };
+          }
+          return {
+            result: {
+              verdict: 'FLAGGED',
+              flags: [{
+                where: 'SLIDE 2 / BODY',
+                text: 'Anthropic told reporters...',
+                problem: 'Dropped hedge — soft repair cut "says"',
+                sourcesSay: 'Anthropic SAYS Claude writes 26% ...',
+                size: 'SMALL',
+              }],
+            },
+            raw: 'VERDICT: FLAGGED\n\nFLAGS:\nWHERE: SLIDE 2 / BODY\n',
+            stopReasons: ["end_turn"],
+            usage: stageUsage(0.03),
+          };
+        },
+        persistDebugAndCompose: async (_id, debug) => {
+          bailReason = debug.outcome.reason;
+        },
+      }),
+    );
+    assert.equal(result.status, 'needs_human_review');
+    assert.match(bailReason ?? '', /soft-repair re-fact-check FLAGGED/);
+    assert.match(bailReason ?? '', /Dropped hedge/);
+  });
+
+  test('when soft-repair changes nothing (loop exits on iteration 1), no re-fact-check runs', async () => {
+    // Editor initial returns a clean post; soft-repair loop exits immediately.
+    let fcCall = 0;
+    const result = await runCreatorPipeline(
+      ROW,
+      {},
+      buildDeps({
+        runFactChecker: async (): Promise<FactCheckerOutput> => {
+          fcCall++;
+          return {
+            result: { verdict: 'PASS', flags: [] },
+            raw: 'VERDICT: PASS\n\nFLAGS:\n',
+            stopReasons: ["end_turn"],
+            usage: stageUsage(0.03),
+          };
+        },
+      }),
+    );
+    assert.equal(result.status, 'shipped');
+    // Exactly one fact-check: the initial. No targeted re-check needed
+    // because no soft repair ran.
+    assert.equal(fcCall, 1);
+  });
+});
+
+/**
+ * Haiku boundary (docs/PROJECT-STATUS.md 2026-09-29 pm): the repair-mode
+ * (Haiku) is safe ONLY for pure length trims. Every other class of
+ * repair — rhythm, highlight_substring, any hard error — needs Sonnet.
+ */
+describe('editorModeFor — Haiku only for length-only batches', () => {
+  const mk = (kind: CheckError['kind'], msg = 'x'): CheckError => ({ kind, target: 'slide', message: msg });
+
+  test('empty errors → primary (Sonnet) by default', () => {
+    assert.equal(editorModeFor([]), 'primary');
+  });
+
+  test('char_limit only → repair (Haiku)', () => {
+    assert.equal(editorModeFor([mk('char_limit'), mk('char_limit')]), 'repair');
+  });
+
+  test('char_limit + rhythm → primary (Sonnet)', () => {
+    assert.equal(editorModeFor([mk('char_limit'), mk('rhythm')]), 'primary');
+  });
+
+  test('char_limit + highlight_substring → primary (Sonnet)', () => {
+    assert.equal(editorModeFor([mk('char_limit'), mk('highlight_substring')]), 'primary');
+  });
+
+  test('any hard error → primary (Sonnet)', () => {
+    assert.equal(editorModeFor([mk('banned_always')]), 'primary');
+    assert.equal(editorModeFor([mk('number_trace')]), 'primary');
+    assert.equal(editorModeFor([mk('quote_verbatim')]), 'primary');
+  });
+
+  test('rhythm only → primary (Sonnet — needs judgment about slide kinds)', () => {
+    assert.equal(editorModeFor([mk('rhythm')]), 'primary');
   });
 });

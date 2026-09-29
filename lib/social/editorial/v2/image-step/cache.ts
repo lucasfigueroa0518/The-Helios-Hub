@@ -87,6 +87,10 @@ export async function getCachedImage(wikidataId: string): Promise<ImageCacheRow 
  * succeeded so the cached URL is always valid.
  */
 export async function putCachedImage(row: Omit<ImageCacheRow, 'chosenAt'>): Promise<void> {
+  // Test-run safety: --no-persist sets HELIOS_V2_NO_STORAGE_UPLOAD=1 in
+  // the test runner. When set, skip the DB write to helios_social.image_cache
+  // — same reason as storage.ts: test runs must not touch the prod DB.
+  if (process.env.HELIOS_V2_NO_STORAGE_UPLOAD === '1') return;
   await dbQuery(
     `INSERT INTO helios_social.image_cache
        (wikidata_id, subject, commons_file, storage_path, storage_url,

@@ -148,13 +148,15 @@ describe('checkPost — char limits', () => {
     assert.match(err!.message, /Cut a whole clause or sentence rather than rewording\./);
   });
   test('banned-voice errors on a slide include the field length prefix', () => {
-    // Slide with em dash — banned_always fires — message must show BODY length + limit.
-    const post = buildPost({ slides: [{ body: 'This — is banned.', highlight: 'This' }] });
+    // Slide with "moving forward" — banned_always fires — message must show BODY length + limit.
+    // (Was em dash, but em/en dashes are now mechanically swapped at parse
+    //  so never reach the code check.)
+    const post = buildPost({ slides: [{ body: 'Moving forward, this is banned.', highlight: 'this' }] });
     const r = checkPost(post, goodBrief);
     const err = r.errors.find((e) => e.kind === 'banned_always' && e.field === 'BODY');
     assert.ok(err);
     assert.match(err!.message, /^SLIDE 2 BODY \(\d+ characters, limit 220\)/);
-    assert.match(err!.message, /banned em dash/);
+    assert.match(err!.message, /moving forward/);
   });
   test('highlight_substring error shows HEADLINE and BODY lengths so the Editor can pick which to update', () => {
     const post = buildPost({ slides: [{ headline: 'Some headline text.', body: 'Some body text of moderate length.', highlight: 'not present anywhere' }] });
@@ -189,20 +191,29 @@ describe('checkPost — image refs', () => {
 });
 
 describe('checkPost — banned voice', () => {
-  test('flags em dash as banned_always', () => {
+  // Em/en dashes and " -- " are mechanically swapped in parse.ts (see
+  // swapBannedPunctuation) so they never reach the code check. These
+  // three tests assert the SWAP happens — the check finds no dash error
+  // and the parsed text has the compliant form.
+  test('em dash is swapped to comma at parse (never reaches the check)', () => {
     const post = buildPost({ slides: [{ body: 'This is bold — dramatic and wrong.', highlight: 'bold' }] });
     const r = checkPost(post, goodBrief);
-    assert.ok(r.errors.some((e) => e.kind === 'banned_always' && /em dash/.test(e.message)));
+    assert.equal(r.errors.filter((e) => e.kind === 'banned_always' && /em dash/.test(e.message)).length, 0);
+    assert.doesNotMatch(post.slides[0]!.body ?? '', /—/);
+    assert.match(post.slides[0]!.body ?? '', /bold, dramatic/);
   });
-  test('flags en dash as banned_always', () => {
+  test('en dash is swapped to hyphen at parse (never reaches the check)', () => {
     const post = buildPost({ slides: [{ body: 'A range – dramatic and wrong.', highlight: 'range' }] });
     const r = checkPost(post, goodBrief);
-    assert.ok(r.errors.some((e) => e.kind === 'banned_always' && /en dash/.test(e.message)));
+    assert.equal(r.errors.filter((e) => e.kind === 'banned_always' && /en dash/.test(e.message)).length, 0);
+    assert.doesNotMatch(post.slides[0]!.body ?? '', /–/);
   });
-  test('flags "--" (double hyphen) as banned_always', () => {
+  test('spaced " -- " is swapped to comma at parse (never reaches the check)', () => {
     const post = buildPost({ slides: [{ body: 'Anthropic said -- and this is banned.', highlight: 'Anthropic said' }] });
     const r = checkPost(post, goodBrief);
-    assert.ok(r.errors.some((e) => e.kind === 'banned_always' && /double hyphen/.test(e.message)));
+    assert.equal(r.errors.filter((e) => e.kind === 'banned_always' && /double hyphen/.test(e.message)).length, 0);
+    assert.doesNotMatch(post.slides[0]!.body ?? '', /\s--\s/);
+    assert.match(post.slides[0]!.body ?? '', /said, and/);
   });
   test('does NOT flag single hyphens in normal hyphenated words', () => {
     // Common tech-writing hyphens that must pass unchanged: compound modifiers,
@@ -235,6 +246,68 @@ describe('checkPost — banned voice', () => {
     const post = buildPost({ slides: [{ body: 'The API serves as a bridge between services.', highlight: 'bridge between services' }] });
     const r = checkPost(post, goodBrief);
     assert.ok(r.errors.some((e) => e.kind === 'banned_always' && e.message.includes('serves as')));
+  });
+  test('flags "not X, it\'s Y" invented-contrast framing', () => {
+    const post = buildPost({ slides: [{
+      body: "This is not a chatbot, it's an AI agent that takes action.",
+      highlight: 'takes action',
+    }] });
+    const r = checkPost(post, goodBrief);
+    assert.ok(r.errors.some((e) => e.kind === 'banned_always' && /not X, it's Y/.test(e.message)));
+  });
+
+  test('flags "not X but Y" invented-contrast framing', () => {
+    const post = buildPost({ slides: [{
+      body: 'CC does not just organize but acts on the family\'s behalf.',
+      highlight: 'acts on',
+    }] });
+    const r = checkPost(post, goodBrief);
+    assert.ok(r.errors.some((e) => e.kind === 'banned_always' && /"not just X but Y"/.test(e.message)));
+  });
+
+  test('flags "not just X, Y" invented-contrast framing', () => {
+    const post = buildPost({ slides: [{
+      body: 'CC is not just a chatbot, it acts on your family\'s behalf.',
+      highlight: 'acts on your',
+    }] });
+    const r = checkPost(post, goodBrief);
+    assert.ok(
+      r.errors.some((e) => e.kind === 'banned_always' && /not just X/.test(e.message)),
+      `expected a "not just X" ban; got: ${r.errors.map((e) => e.message).join(' | ')}`,
+    );
+  });
+
+  test('flags "X, not Y" mirror-form invented contrast ("designed in, not discovered")', () => {
+    const post = buildPost({ slides: [{
+      body: 'The ambiguity was designed in, not discovered.',
+      highlight: 'ambiguity was designed',
+    }] });
+    const r = checkPost(post, goodBrief);
+    assert.ok(
+      r.errors.some((e) => e.kind === 'banned_always' && /"X, not Y"/.test(e.message)),
+      `expected an "X, not Y" ban; got: ${r.errors.map((e) => e.message).join(' | ')}`,
+    );
+  });
+
+  test('flags "Unlike X, Y" invented-contrast framing', () => {
+    // The exact fabrication that survived the Google CC run's fact-check loop.
+    const post = buildPost({ slides: [{
+      body: 'Unlike an AI that just answers questions, CC takes actions on your behalf.',
+      highlight: 'takes actions on your behalf',
+    }] });
+    const r = checkPost(post, goodBrief);
+    assert.ok(
+      r.errors.some((e) => e.kind === 'banned_always' && /Unlike X, Y/.test(e.message)),
+      `expected an "Unlike X, Y" banned_always error; got: ${r.errors.map((e) => e.message).join(' | ')}`,
+    );
+  });
+  test('does NOT flag "unlike" mid-sentence without a following comma', () => {
+    // "unlike" appears legitimately in comparative descriptions that don't
+    // set up an invented contrast (e.g., "prices moved unlike anything else"
+    // — no contrast, no banned framing).
+    const post = buildPost({ slides: [{ body: 'It moved unlike anything before it.', highlight: 'unlike anything' }] });
+    const r = checkPost(post, goodBrief);
+    assert.equal(r.errors.filter((e) => e.kind === 'banned_always' && /Unlike/.test(e.message)).length, 0);
   });
 });
 
@@ -300,7 +373,7 @@ describe('renderLengthsBlock', () => {
     });
     const block = renderLengthsBlock(post, 'x'.repeat(1000), 200);
     assert.match(block, /^LENGTHS:$/m);
-    assert.match(block, /- COVER: 80 characters \(limit 100\)$/m);
+    assert.match(block, /- COVER: 80 characters \(limit 90\)$/m);
     assert.match(block, /- SLIDE 2 HEADLINE: 45 characters \(limit 60\)$/m);
     // Body is 300 > 220 → must be flagged as OVER.
     assert.match(block, /- SLIDE 2 BODY: 300 characters \(limit 220\) — OVER$/m);
@@ -344,7 +417,7 @@ describe('classifySlideType — design v1 field-driven types', () => {
   });
 });
 
-describe('checkPost — rhythm soft check (no two consecutive same-type)', () => {
+describe('checkPost — rhythm HARD check (no two consecutive same-type)', () => {
   test('two text slides in a row emits a rhythm error', () => {
     const raw = `COVER: Cover text ok.
 COVER HIGHLIGHT: Cover
@@ -396,7 +469,9 @@ FOLLOW: Follow Helios.`;
     assert.equal(report.errors.filter((e) => e.kind === 'rhythm').length, 0);
   });
 
-  test('rhythm errors partition as soft (do not block fact-checker)', () => {
+  test('rhythm errors partition as HARD (block the run at the code-check gate)', () => {
+    // Promoted to HARD 2026-09-29: story 1 shipped with Editor knowingly
+    // leaving two consecutive text slides. Soft meant it slid through.
     const raw = `COVER: Cover.
 COVER HIGHLIGHT: Cover
 COVER IMAGE: type only
@@ -415,8 +490,8 @@ FOLLOW: Follow.`;
     const post = parseEditedPost(raw);
     const { errors } = checkPost(post, goodBrief);
     const { soft, hard } = partitionErrors(errors);
-    assert.ok(soft.some((e) => e.kind === 'rhythm'));
-    assert.equal(hard.filter((e) => e.kind === 'rhythm').length, 0);
+    assert.ok(hard.some((e) => e.kind === 'rhythm'));
+    assert.equal(soft.filter((e) => e.kind === 'rhythm').length, 0);
   });
 });
 
@@ -744,13 +819,13 @@ FOLLOW: Follow.`;
     assert.equal(overs.length, 1);
   });
 
-  test('QUOTE over 200 chars → char_limit', () => {
+  test('QUOTE over 140 chars → char_limit (tightened from 200 for render fit)', () => {
     const raw = `COVER: Cover.
 COVER HIGHLIGHT: Cover
 COVER IMAGE: type only
 
 SLIDE 2
-QUOTE: ${'q'.repeat(220)}
+QUOTE: ${'q'.repeat(160)}
 QUOTE BY: CEO
 IMAGE: type only
 
@@ -759,6 +834,40 @@ FOLLOW: Follow.`;
     const report = checkPost(post, goodBrief);
     const overs = report.errors.filter((e) => e.kind === 'char_limit' && e.field === 'QUOTE');
     assert.equal(overs.length, 1);
+  });
+
+  test('BIG NUMBER without NUMBER NOTE → stat_missing_note HARD', () => {
+    const raw = `COVER: Cover.
+COVER HIGHLIGHT: Cover
+COVER IMAGE: type only
+
+SLIDE 2
+HEADLINE: The scale of it
+BIG NUMBER: 1,200
+IMAGE: type only
+
+FOLLOW: Follow.`;
+    const post = parseEditedPost(raw);
+    const report = checkPost(post, goodBrief);
+    const errs = report.errors.filter((e) => e.kind === 'stat_missing_note' && e.field === 'NUMBER NOTE');
+    assert.equal(errs.length, 1);
+  });
+
+  test('BIG NUMBER without HEADLINE → stat_missing_note HARD', () => {
+    const raw = `COVER: Cover.
+COVER HIGHLIGHT: Cover
+COVER IMAGE: type only
+
+SLIDE 2
+BIG NUMBER: 1,200
+NUMBER NOTE: agents in the incident
+IMAGE: type only
+
+FOLLOW: Follow.`;
+    const post = parseEditedPost(raw);
+    const report = checkPost(post, goodBrief);
+    const errs = report.errors.filter((e) => e.kind === 'stat_missing_note' && e.field === 'HEADLINE');
+    assert.equal(errs.length, 1);
   });
 
   test('SECOND NUMBER over 12 chars → char_limit', () => {
@@ -815,5 +924,243 @@ FOLLOW: Follow.`;
     const report = checkPost(post, goodBrief);
     const bad = report.errors.filter((e) => e.kind === 'highlight_substring');
     assert.equal(bad.length, 0);
+  });
+});
+
+describe('checkPost — terms explained (any TERM used must be glossed on that slide or next)', () => {
+  const briefWithJargon = parseBrief(`SINGLE STORY: yes
+THE NEWS: A company shipped Antigravity.
+THE STORY: They shipped it on 2026-09-01.
+TERMS:
+- Antigravity: an internal agentic-harness framework that runs Google Labs models in a sandboxed container.
+- Google Labs: Google's internal team for early-stage experimental products.
+IMAGES:
+None found
+SOURCES:
+- Ledger, 2026-09-01, https://ledger.example.com/x
+`);
+
+  test('slide uses "Antigravity" but neither that slide nor next explains it → term_unexplained', () => {
+    const raw = `COVER: Google Labs shipped Antigravity.
+COVER HIGHLIGHT: Antigravity
+COVER IMAGE: type only
+
+SLIDE 2
+HEADLINE: Google Labs shipped Antigravity today
+BODY: Google Labs, Google's internal team for early-stage experimental products, unveiled it Tuesday.
+HIGHLIGHT: Google Labs
+IMAGE: type only
+
+SLIDE 3
+HEADLINE: Users react
+BODY: Reviewers are testing the new release across enterprise workloads.
+HIGHLIGHT: testing
+IMAGE: type only
+
+SLIDE 4
+HEADLINE: Free launch
+BODY: The launch is available at no charge.
+HIGHLIGHT: no charge
+IMAGE: type only
+
+SLIDE 5
+HEADLINE: Bigger picture
+BODY: This is part of an ongoing wave of releases.
+HIGHLIGHT: ongoing wave
+IMAGE: type only
+
+SLIDE 6
+HEADLINE: Wrapping up
+BODY: Watch this space for more updates coming soon.
+HIGHLIGHT: this space
+IMAGE: type only
+
+FOLLOW: Follow Helios.`;
+    const post = parseEditedPost(raw);
+    const report = checkPost(post, briefWithJargon);
+    const unexplained = report.errors.filter((e) => e.kind === 'term_unexplained');
+    assert.ok(unexplained.some((e) => /Antigravity/.test(e.message)));
+  });
+
+  test('slide uses "Antigravity" and next slide explains it → no error', () => {
+    const raw = `COVER: Google Labs shipped Antigravity.
+COVER HIGHLIGHT: Antigravity
+COVER IMAGE: type only
+
+SLIDE 2
+HEADLINE: Google Labs shipped Antigravity today
+BODY: The company unveiled the release on Tuesday.
+HIGHLIGHT: Google Labs
+IMAGE: type only
+
+SLIDE 3
+HEADLINE: What Antigravity is
+BODY: Antigravity is Google's internal agentic-harness framework that runs Google Labs models in a sandboxed container.
+HIGHLIGHT: framework
+IMAGE: type only
+
+SLIDE 4
+HEADLINE: Users react
+BODY: Reviewers are testing the new release across enterprise workloads.
+HIGHLIGHT: testing
+IMAGE: type only
+
+SLIDE 5
+HEADLINE: Free launch
+BODY: The launch is available at no charge for now.
+HIGHLIGHT: no charge
+IMAGE: type only
+
+SLIDE 6
+HEADLINE: Bigger picture
+BODY: This is part of an ongoing wave of releases.
+HIGHLIGHT: ongoing wave
+IMAGE: type only
+
+FOLLOW: Follow Helios.`;
+    const post = parseEditedPost(raw);
+    const report = checkPost(post, briefWithJargon);
+    const unexplained = report.errors.filter((e) => e.kind === 'term_unexplained' && /Antigravity/.test(e.message));
+    assert.equal(unexplained.length, 0);
+  });
+});
+
+describe('checkPost — past-statement references (main-story-only rule)', () => {
+  test('flags "earlier writing" clause in a slide body', () => {
+    const post = buildPost({
+      slides: [
+        { headline: 'Anthropic has not responded', body: 'Its public position is Claude\'s constitution and its earlier writing on model welfare.', highlight: 'earlier writing' },
+        { body: 'Neutral filler body.', highlight: 'filler' },
+      ],
+    });
+    const report = checkPost(post, goodBrief);
+    const past = report.errors.filter((e) => e.kind === 'past_statement_reference');
+    assert.ok(past.length >= 1, 'expected past_statement_reference');
+    assert.match(past[0]!.message, /earlier writing/i);
+  });
+
+  test('flags "has long argued" in a slide body', () => {
+    const post = buildPost({
+      slides: [
+        { headline: 'On safety', body: 'Newsom has long argued that state action beats waiting for Washington.', highlight: 'state action' },
+        { body: 'Second slide.', highlight: 'Second slide' },
+      ],
+    });
+    const report = checkPost(post, goodBrief);
+    assert.ok(report.errors.some((e) => e.kind === 'past_statement_reference'));
+  });
+
+  test('flags "in an earlier essay" in the cover text', () => {
+    const post = buildPost({
+      coverText: 'Suleyman, in an earlier essay, warned about model welfare.',
+      coverHighlight: 'model welfare',
+    });
+    const report = checkPost(post, goodBrief);
+    assert.ok(report.errors.some((e) => e.kind === 'past_statement_reference' && e.target === 'cover'));
+  });
+
+  test('does NOT flag "earlier" used with a non-citation noun', () => {
+    const post = buildPost({
+      slides: [
+        { headline: 'A first look', body: 'An earlier version of the draft included stricter thresholds.', highlight: 'stricter thresholds' },
+        { body: 'Second slide.', highlight: 'Second slide' },
+      ],
+    });
+    const report = checkPost(post, goodBrief);
+    assert.equal(report.errors.filter((e) => e.kind === 'past_statement_reference').length, 0);
+  });
+
+  test('past_statement_reference is HARD (not soft)', () => {
+    const post = buildPost({
+      slides: [
+        { body: 'The company previously warned about the pace of releases.', highlight: 'pace of releases' },
+        { body: 'Second slide filler.', highlight: 'filler' },
+      ],
+    });
+    const report = checkPost(post, goodBrief);
+    const past = report.errors.find((e) => e.kind === 'past_statement_reference');
+    assert.ok(past);
+    const { hard, soft } = partitionErrors([past!]);
+    assert.equal(hard.length, 1, 'past_statement_reference must be HARD');
+    assert.equal(soft.length, 0);
+  });
+});
+
+describe('checkPost — numbered-sequence integrity', () => {
+  test('flags first + third with no second', () => {
+    const post = buildPost({
+      slides: [
+        { headline: 'His first objection: circular reasoning', body: 'Circular body content.', highlight: 'circular' },
+        { body: 'Just a middle slide with no ordinal.', highlight: 'middle' },
+        { headline: 'His third objection: biological', body: 'Biological body content.', highlight: 'biological' },
+      ],
+    });
+    const report = checkPost(post, goodBrief);
+    const seq = report.errors.find((e) => e.kind === 'sequence_incomplete' && /objection/i.test(e.message));
+    assert.ok(seq, 'expected sequence_incomplete on objection');
+    assert.match(seq!.message, /missing second/i);
+  });
+
+  test('flags out-of-order sequence (second appears after third)', () => {
+    const post = buildPost({
+      slides: [
+        { headline: 'His first objection: A', body: 'a body content.', highlight: 'A body' },
+        { headline: 'His third objection: C', body: 'c body content.', highlight: 'C body' },
+        { headline: 'His second objection: B', body: 'b body content.', highlight: 'B body' },
+      ],
+    });
+    const report = checkPost(post, goodBrief);
+    const seq = report.errors.find((e) => e.kind === 'sequence_incomplete' && /out of order/i.test(e.message));
+    assert.ok(seq, 'expected out-of-order sequence_incomplete');
+  });
+
+  test('passes when first + second + third are all present in order', () => {
+    const post = buildPost({
+      slides: [
+        { headline: 'His first objection: A', body: 'a body.', highlight: 'A body' },
+        { headline: 'His second objection: B', body: 'b body.', highlight: 'B body' },
+        { headline: 'His third objection: C', body: 'c body.', highlight: 'C body' },
+      ],
+    });
+    const report = checkPost(post, goodBrief);
+    assert.equal(report.errors.filter((e) => e.kind === 'sequence_incomplete').length, 0);
+  });
+
+  test('single ordinal mention is not a sequence', () => {
+    const post = buildPost({
+      slides: [
+        { body: 'The first sentence of the paper explains the goal.', highlight: 'first sentence' },
+        { body: 'A follow-up slide.', highlight: 'follow-up' },
+      ],
+    });
+    const report = checkPost(post, goodBrief);
+    assert.equal(report.errors.filter((e) => e.kind === 'sequence_incomplete').length, 0);
+  });
+
+  test('ignores common non-sequence nouns (time, place, half)', () => {
+    const post = buildPost({
+      slides: [
+        { body: 'For the first time in a decade, the company posted a profit.', highlight: 'first time' },
+        { body: 'It reached second place in the market rankings this quarter.', highlight: 'second place' },
+      ],
+    });
+    const report = checkPost(post, goodBrief);
+    assert.equal(report.errors.filter((e) => e.kind === 'sequence_incomplete').length, 0);
+  });
+
+  test('sequence_incomplete is HARD (not soft)', () => {
+    const post = buildPost({
+      slides: [
+        { headline: 'His first objection: A', body: 'a body.', highlight: 'A body' },
+        { body: 'middle', highlight: 'middle' },
+        { headline: 'His third objection: C', body: 'c body.', highlight: 'C body' },
+      ],
+    });
+    const report = checkPost(post, goodBrief);
+    const seq = report.errors.find((e) => e.kind === 'sequence_incomplete');
+    assert.ok(seq);
+    const { hard, soft } = partitionErrors([seq!]);
+    assert.equal(hard.length, 1, 'sequence_incomplete must be HARD');
+    assert.equal(soft.length, 0);
   });
 });

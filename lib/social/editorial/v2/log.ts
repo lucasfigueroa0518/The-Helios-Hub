@@ -77,6 +77,55 @@ export type PipelineV2Debug = {
     keptUrls: string[];
   };
   /**
+   * Cost-cut #2: how the source payload sent to LLM stages was capped.
+   * Number-trace and quote checks still run against the full fetched texts.
+   */
+  sourceTrim?: {
+    keptSources: number;
+    droppedSources: number;
+    perSourceChars: Array<{ url: string; chars: number }>;
+  };
+  /**
+   * enforceStructure — deterministic pre-Editor pass. Records every
+   * merge / drop / renumber so the reviewer can see what code did
+   * before the model saw the draft.
+   */
+  enforceStructure?: {
+    log: string[];
+    needsEditor:
+      | { kind: 'rhythm'; violatingPairs: Array<[number, number]> }
+      | { kind: 'variety'; distinctKinds: number; needed: number }
+      | null;
+  };
+  /**
+   * Brief-integrity gate — quotes cut from THE STORY because they didn't
+   * appear in any fetched source's text. Thin-brief judgment happens
+   * downstream by counting the Writer's slide output.
+   */
+  briefIntegrity?: {
+    droppedQuotes: Array<{ quote: string; reason: string }>;
+  };
+  /**
+   * Post-PASS soft-repair loop: how many Editor / Caption trim passes ran
+   * to clear char_limit / highlight_substring / rhythm errors after
+   * fact-check PASS, the total $ they cost, which slides they rewrote,
+   * and the verdict of the targeted re-fact-check that re-verifies
+   * changed slides against the sources.
+   */
+  softRepair?: {
+    runs: number;
+    cap: number;
+    costUsd: number;
+    changedSlides: number[];
+    reFactCheck: {
+      verdict: FactCheckResult['verdict'];
+      flags: FactCheckResult['flags'];
+      changedSlides: number[];
+      usage: StageUsage;
+      raw: string;
+    } | null;
+  };
+  /**
    * Image step result. Per docs/IMAGES-V1-HANDOFF.md §Place and credit,
    * every choice records the subject / Wikidata id / Commons file / license
    * so a reviewer can confirm provenance in seconds. `error` is set when
@@ -115,6 +164,18 @@ export type PipelineV2Debug = {
     stopReasons: string[];
     usage: StageUsage;
   };
+  /**
+   * The exact post + caption the pipeline handed off to the renderer or
+   * to the human-review UI. Written at both terminal paths (bail + ship)
+   * so summaries and preview renders agree on "what render sees". Prior
+   * to 2026-09-29 the render fell back to `edited.post` (initial editor
+   * pass) whenever the pipeline bailed to human review, which produced
+   * previews that disagreed with the FINAL post in the summary — three
+   * text slides in a row on the Suleyman run when the FINAL post had
+   * alternating text/quote. This field is the single source of truth.
+   */
+  finalPost?: ParsedPost;
+  finalCaption?: string;
   rounds: FactCheckRound[];
   /** Fired when we entered a repair sub-round (CHECK ERRORS or FIX NOTES). */
   repairs: Array<{

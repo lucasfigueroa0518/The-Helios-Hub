@@ -648,7 +648,11 @@
   text-transform: uppercase;
   color: var(--brand-narrative-muted);
   line-height: 1.4;
-  margin-top: auto;
+  /* Sit directly under the quote text (no auto push to bottom). Design v2
+     2026-09-29: pinning attribution to the slide bottom read as
+     disconnected — reviewers had to jump their eyes back up to the quote
+     to match speaker to words. */
+  margin-top: 24px;
 }
 
 /* ── Image slide (cover-style full-bleed mid-carousel) ────────────────── */
@@ -725,10 +729,13 @@
   background: var(--brand-canvas);
 }
 
-/* Follow slide (design v1.1): sun-mark logo top, story line middle,
-   @handle bottom. Centered horizontally. The 96px slide padding is
-   removed for follow (see .helios-slide__well rule) so the layout
-   uses the full 1080×1350 canvas. */
+/* Follow slide (design v1.2, 2026-09-29): logo + text group vertically
+   centered as a unit. Previous v1.1 (logo pinned near the top, story
+   line pushed down, handle at the bottom) left the logo floating high
+   and the handle crowding the canvas bottom. New rule: logo, story line,
+   and handle form ONE group centered on the slide, with even space
+   above and below. Centered horizontally. The 96px slide padding is
+   removed for follow (see .helios-slide__well rule). */
 .helios-follow {
   position: relative;
   height: 100%;
@@ -736,27 +743,26 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   padding: 0;
   box-sizing: border-box;
 }
 
-/* Sun-mark logo: 420px, centered in the upper half. The 140px top
-   margin equals the mark's "H" height (~140px in a 420px logo), giving
-   the spec's minimum-one-H clear space above. */
+/* Sun-mark logo: 420px. No top-margin — parent's justify-content:center
+   handles vertical placement of the whole group. */
 .helios-follow__mark {
   width: 420px;
   height: 420px;
-  margin-top: 140px;
+  margin: 0;
   object-fit: contain;
   display: block;
 }
 
 /* Story-tied line. Pragmatica Extended Bold uppercase, 64px, white,
-   with "Follow Helios" in orange via .helios-follow__cta. Sits ~"H"
-   height below the mark (140px margin-top matches the mark's "H"). */
+   with "Follow Helios" in orange via .helios-follow__cta. Compact
+   gap-below-logo so the group reads as one unit. */
 .helios-follow__story-line {
-  margin: 140px 96px 0;
+  margin: 64px 96px 0;
   max-width: 888px;
   font-family: var(--font-heading);
   font-size: 64px;
@@ -772,11 +778,10 @@
   color: var(--brand-orange);
 }
 
-/* @handle: Roboto 40px, white at 70%. Sits below the story line with
-   modest margin — the H-height clear space rule applies to the LOGO,
-   not to intra-text spacing. */
+/* @handle: Roboto 40px, white at 70%. Sits below the story line as
+   part of the same centered group — no auto push to slide bottom. */
 .helios-follow__handle {
-  margin: 32px 0 0;
+  margin: 40px 0 0;
   font-family: var(--font-body);
   font-size: 40px;
   font-weight: 400;

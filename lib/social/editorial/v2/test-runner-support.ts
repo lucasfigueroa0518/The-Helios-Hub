@@ -228,9 +228,40 @@ export function buildSummaryMarkdown(captured: CapturedRun, meta: {
     lines.push('');
   }
 
-  // Edited (initial editor pass)
+  // enforceStructure — deterministic pre-Editor merges / drops. Log every
+  // mutation so the reviewer sees what code changed before the model.
+  if (debug.enforceStructure) {
+    lines.push('## enforceStructure (pre-Editor, deterministic)');
+    if (debug.enforceStructure.log.length === 0) {
+      lines.push('- No mutations — draft was structurally valid.');
+    } else {
+      for (const l of debug.enforceStructure.log) lines.push(`- ${l}`);
+    }
+    if (debug.enforceStructure.needsEditor) {
+      const ne = debug.enforceStructure.needsEditor;
+      if (ne.kind === 'rhythm') {
+        lines.push(`- Left for the Editor: ${ne.violatingPairs.length} unresolved rhythm pair(s) — ${ne.violatingPairs.map(([a, b]) => `SLIDE ${a}+${b}`).join(', ')}`);
+      } else {
+        lines.push(`- Left for the Editor: variety gap (${ne.distinctKinds} distinct kind(s); needs ≥${ne.needed})`);
+      }
+    }
+    lines.push('');
+  }
+
+  // Brief-integrity — unsourced quotes cut from THE STORY before Writer.
+  if (debug.briefIntegrity && debug.briefIntegrity.droppedQuotes.length > 0) {
+    lines.push('## Brief-integrity (unsourced quotes cut before Writer)');
+    for (const d of debug.briefIntegrity.droppedQuotes) {
+      lines.push(`- "${d.quote}" — ${d.reason}`);
+    }
+    lines.push('');
+  }
+
+  // Edited (initial editor pass) — kept so reviewers can see what the
+  // first pass produced, but the FINAL post lives in the last round's
+  // snapshot below, not here.
   if (debug.edited) {
-    lines.push('## Editor — EDITED POST');
+    lines.push('## Editor — INITIAL EDITED POST');
     lines.push(`- Stop reasons: \`${debug.edited.stopReasons.join(', ')}\``);
     lines.push(`- ${formatUsage(debug.edited.usage)}`);
     if (debug.edited.editNotes && debug.edited.editNotes.length > 0) {
@@ -238,14 +269,39 @@ export function buildSummaryMarkdown(captured: CapturedRun, meta: {
       for (const n of debug.edited.editNotes) lines.push(`  - ${n}`);
     }
     lines.push('');
-    lines.push('### Slides (post-editor)');
+    lines.push('### Slides (initial editor pass — repairs may follow below)');
     lines.push(formatPostWithLengths(debug.edited.post));
     lines.push('');
   }
 
-  // Caption
+  // FINAL post — the settled post after every repair (in-round + post-PASS
+  // soft-repair). This is what render sees and what the reviewer should
+  // audit against the rules. Prefers debug.finalPost (single source of
+  // truth added 2026-09-29); falls back to rounds[last] then edited.post
+  // for older transcripts.
+  {
+    const lastRound = debug.rounds.length > 0 ? debug.rounds[debug.rounds.length - 1] : undefined;
+    const finalPost = debug.finalPost ?? lastRound?.post ?? debug.edited?.post;
+    const finalCaption = debug.finalCaption ?? lastRound?.caption ?? debug.caption?.caption ?? '';
+    if (finalPost) {
+      lines.push('## FINAL post (after all repairs — what render sees)');
+      lines.push(formatPostWithLengths(finalPost));
+      lines.push('');
+      if (finalCaption) {
+        lines.push('### FINAL caption');
+        lines.push(`- Character count: **${finalCaption.length}**`);
+        lines.push('');
+        lines.push('```');
+        lines.push(finalCaption.trim());
+        lines.push('```');
+        lines.push('');
+      }
+    }
+  }
+
+  // Caption (initial pass, kept for cost + repair transparency)
   if (debug.caption) {
-    lines.push('## Caption');
+    lines.push('## Caption — INITIAL PASS');
     lines.push(`- Stop reasons: \`${debug.caption.stopReasons.join(', ')}\``);
     lines.push(`- ${formatUsage(debug.caption.usage)}`);
     lines.push(`- Character count (as returned): **${debug.caption.caption.length}**`);
@@ -297,6 +353,61 @@ export function buildSummaryMarkdown(captured: CapturedRun, meta: {
     lines.push('');
   }
 
+  // Image step — per-subject result (entity, QID, source, license, size,
+  // verified or why removed). Runs on every outcome now (2026-09-29 rule),
+  // including needs_human_review, so reviewers see photos + flags together.
+  if (debug.imageStep) {
+    lines.push('## Image step');
+    if ('error' in debug.imageStep && debug.imageStep.error) {
+      lines.push(`- Errored: ${debug.imageStep.error}`);
+    } else {
+      const selected = debug.imageStep.selected ?? [];
+      const report = (debug.imageStep.report ?? []) as Array<{
+        slide: 'cover' | number;
+        requestedSubject: string;
+        status: 'picked' | 'type-only';
+        reason: string;
+        picked?: {
+          wikidataId: string;
+          label: string;
+          commonsFile: string;
+          commonsUrl: string;
+          license: string;
+          author: string;
+          storageUrl: string;
+          isPortrait: boolean;
+          cacheHit: boolean;
+        };
+      }>;
+      lines.push(`- Vision calls: ${debug.imageStep.visionCalls ?? 0}`);
+      lines.push(`- Photos placed: ${selected.length}`);
+      lines.push('');
+      if (report.length === 0) {
+        lines.push('- (no photo requests — every slide was type-only from the start)');
+      } else {
+        for (const r of report) {
+          const slideLabel = r.slide === 'cover' ? 'COVER' : `SLIDE ${r.slide}`;
+          lines.push(`### ${slideLabel} — requested "${r.requestedSubject}"`);
+          if (r.status === 'picked' && r.picked) {
+            lines.push(`- Entity: ${r.picked.label} (Wikidata ${r.picked.wikidataId})`);
+            lines.push(`- Commons file: ${r.picked.commonsFile}`);
+            lines.push(`- Commons page: ${r.picked.commonsUrl}`);
+            lines.push(`- License: ${r.picked.license}`);
+            lines.push(`- Author: ${r.picked.author}`);
+            lines.push(`- Storage URL: ${r.picked.storageUrl}`);
+            lines.push(`- Cache hit: ${r.picked.cacheHit ? 'yes' : 'no'}`);
+            lines.push(`- Verified: yes — resolved via ${r.picked.commonsFile.startsWith('File:') ? 'Wikidata P18 or Commons P180 (structured)' : 'Wikidata'} → license in allow-list → vision KIND check passed → ${r.picked.storageUrl.startsWith('no-upload:') ? 'test-run URL (no prod upload)' : 'Supabase Storage'}`);
+          } else {
+            lines.push(`- Status: type-only`);
+            lines.push(`- Reason: ${r.reason}`);
+          }
+          lines.push('');
+        }
+      }
+    }
+    lines.push('');
+  }
+
   // Final render (would-have-shipped)
   if (captured.renderPostJson) {
     lines.push('## Final Post JSON (would have shipped — NOT persisted)');
@@ -332,20 +443,27 @@ function formatUsage(u: StageUsage): string {
  * can spot every over-limit field at a glance.
  */
 function formatPostWithLengths(post: import('./parse').ParsedPost): string {
+  const { LIMITS, classifySlideType } = require('./code-checks') as typeof import('./code-checks');
   const out: string[] = [];
   const coverText = post.cover.text ?? '';
-  out.push(`- **COVER** (${coverText.length} chars, limit 100)`);
+  out.push(`- **COVER** (${coverText.length} chars, limit ${LIMITS.cover})`);
   out.push(`  - TEXT: ${coverText}`);
   out.push(`  - HIGHLIGHT: ${post.cover.highlight || '(none)'}`);
   out.push(`  - IMAGE: ${post.cover.image || '(none)'}`);
   for (const s of post.slides) {
-    out.push(`- **SLIDE ${s.position}**`);
-    if (s.headline) out.push(`  - HEADLINE (${s.headline.length} chars, limit 60): ${s.headline}`);
-    if (s.body) out.push(`  - BODY (${s.body.length} chars, limit 220): ${s.body}`);
-    if (s.bigNumber) out.push(`  - BIG NUMBER (${s.bigNumber.length} chars, limit 12): ${s.bigNumber}`);
+    out.push(`- **SLIDE ${s.position}** [${classifySlideType(s)}]`);
+    if (s.headline) out.push(`  - HEADLINE (${s.headline.length} chars, limit ${LIMITS.headline}): ${s.headline}`);
+    if (s.body) out.push(`  - BODY (${s.body.length} chars, limit ${LIMITS.body}): ${s.body}`);
+    if (s.bigNumber) out.push(`  - BIG NUMBER (${s.bigNumber.length} chars, limit ${LIMITS.bigNumber}): ${s.bigNumber}`);
+    if (s.numberNote) out.push(`  - NUMBER NOTE (${s.numberNote.length} chars, limit ${LIMITS.numberNote}): ${s.numberNote}`);
+    if (s.secondNumber) out.push(`  - SECOND NUMBER (${s.secondNumber.length} chars, limit ${LIMITS.secondNumber}): ${s.secondNumber}`);
+    if (s.secondNote) out.push(`  - SECOND NOTE (${s.secondNote.length} chars, limit ${LIMITS.secondNote}): ${s.secondNote}`);
+    if (s.quote) out.push(`  - QUOTE (${s.quote.length} chars, limit ${LIMITS.quote}): ${s.quote}`);
+    if (s.quoteBy) out.push(`  - QUOTE BY (${s.quoteBy.length} chars, limit ${LIMITS.quoteBy}): ${s.quoteBy}`);
+    if (s.note) out.push(`  - NOTE (${s.note.length} chars, limit ${LIMITS.note}): ${s.note}`);
     if (s.highlight) out.push(`  - HIGHLIGHT: ${s.highlight}`);
     if (s.image) out.push(`  - IMAGE: ${s.image}`);
   }
-  out.push(`- **FOLLOW** (${post.follow.length} chars, limit 100): ${post.follow}`);
+  out.push(`- **FOLLOW** (${post.follow.length} chars, limit ${LIMITS.follow}): ${post.follow}`);
   return out.join('\n');
 }
