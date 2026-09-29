@@ -122,6 +122,8 @@
   left: 0;
   right: 0;
   bottom: 0;
+  max-height: 46%;
+  overflow: hidden;
   padding: 0 calc(16px + env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
 }
 
@@ -129,6 +131,7 @@
   max-height: min(78dvh, 680px);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   background: rgba(0, 0, 0, 0.94);
   border-radius: 18px 18px 0 0;
   padding-top: 16px;
@@ -186,16 +189,19 @@
 }
 
 .ig-cap--clamp {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  /* Safari drops -webkit-line-clamp when white-space is pre-wrap, then the
+     whole caption paints over the reel. A fixed height clips it everywhere. */
+  display: block;
+  max-height: 2.8em;
   overflow: hidden;
 }
 
 .ig-cap--open {
   display: block;
+  flex: 1 1 auto;
   min-height: 0;
   max-height: min(46dvh, 420px);
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
