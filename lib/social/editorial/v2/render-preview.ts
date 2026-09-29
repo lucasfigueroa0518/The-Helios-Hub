@@ -54,6 +54,44 @@ const PREVIEW_WATERMARK_CSS = `
     pointer-events: none;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   }
+
+  /* Hide the Next.js dev-mode badge ("N" bottom-left) per design v1 spec.
+     The badge is a portal Next injects outside the app root, so the
+     selectors below cover every shape it has taken across recent versions. */
+  #__next-build-watcher,
+  nextjs-portal,
+  [data-nextjs-toast],
+  [data-nextjs-dev-tools],
+  [data-nextjs-dev-tools-button],
+  button[data-nextjs-dev-tools-button] {
+    display: none !important;
+    visibility: hidden !important;
+  }
+`;
+
+/**
+ * Red OVERFLOW badge stamped on any slide whose body extends past the safe
+ * area. Same rotation/pop as PREVIEW but corner-swapped so both badges are
+ * visible on a failing render.
+ */
+const OVERFLOW_BADGE_CSS = `
+  .helios-slide[data-render-failed="true"]::before {
+    content: "OVERFLOW — HUMAN REVIEW";
+    position: absolute;
+    top: 24px;
+    left: 28px;
+    font: 800 22px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    letter-spacing: 0.18em;
+    color: #FFFFFF;
+    background: #E63946;
+    padding: 10px 16px;
+    border: 3px solid #FFFFFF;
+    border-radius: 6px;
+    transform: rotate(-3deg);
+    z-index: 9999;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  }
 `;
 
 export type PreviewInput = {
@@ -74,7 +112,19 @@ export type PreviewInput = {
 };
 
 export type PreviewResult =
-  | { ok: true; slideCount: number; outDir: string; slug: string }
+  | {
+      ok: true;
+      slideCount: number;
+      outDir: string;
+      slug: string;
+      /**
+       * Positions of slides whose body overflowed the safe area at render
+       * time. Empty when no slide failed. Design v1 §Type: "If a body still
+       * overflows, that is a failed render: log it and send the post to
+       * human review. Do not shrink or cut it."
+       */
+      overflowSlides: number[];
+    }
   | { ok: false; reason: string };
 
 export async function renderPreview(input: PreviewInput): Promise<PreviewResult> {
@@ -119,6 +169,7 @@ export async function renderPreview(input: PreviewInput): Promise<PreviewResult>
       reason: 'Playwright not installed. Run: npm i -D playwright && npx playwright install chromium',
     };
   }
+  const overflowSlides: number[] = [];
   const browser = await playwright.chromium.launch();
   try {
     const context = await browser.newContext({ viewport: { width: SLIDE_WIDTH, height: SLIDE_HEIGHT } });
@@ -128,8 +179,38 @@ export async function renderPreview(input: PreviewInput): Promise<PreviewResult>
       await page.goto(url, { waitUntil: 'networkidle' });
       await page.waitForSelector('.helios-slide[data-slide-ready="true"]', { timeout: 15_000 });
       await page.addStyleTag({ content: PREVIEW_WATERMARK_CSS });
-      // Small settling delay for the watermark to render before screenshot.
+      await page.addStyleTag({ content: OVERFLOW_BADGE_CSS });
+      // Small settling delay for the watermark to render.
       await page.waitForTimeout(100);
+
+      // Body-overflow post-check. Measure any body element's rendered
+      // bounding box against the slide's inner content well. If body
+      // extends past the well, mark the slide render_failed. Design v1
+      // §Type mandates human review over silent shrink/clip.
+      const overflow = await page.evaluate(() => {
+        const slideEl = document.querySelector('.helios-slide[data-slide-ready="true"]');
+        if (!slideEl) return false;
+        const slideBox = slideEl.getBoundingClientRect();
+        const bodies = slideEl.querySelectorAll<HTMLElement>(
+          '.helios-text__body, .helios-stat__body, .helios-image__body',
+        );
+        for (const el of Array.from(bodies)) {
+          const box = el.getBoundingClientRect();
+          // 8px tolerance for sub-pixel rounding.
+          if (box.bottom > slideBox.bottom - 8) return true;
+          if (el.scrollHeight > el.clientHeight + 4) return true;
+        }
+        return false;
+      });
+      if (overflow) {
+        overflowSlides.push(i);
+        await page.evaluate(() => {
+          const el = document.querySelector('.helios-slide[data-slide-ready="true"]');
+          if (el) el.setAttribute('data-render-failed', 'true');
+        });
+        await page.waitForTimeout(50);
+      }
+
       const slideEl = await page.$('.helios-slide[data-slide-ready="true"]');
       if (!slideEl) throw new Error(`slide ${i}: .helios-slide[data-slide-ready="true"] not found`);
       const outFile = path.join(input.outDir, `slide-${String(i).padStart(2, '0')}.png`);
@@ -140,7 +221,13 @@ export async function renderPreview(input: PreviewInput): Promise<PreviewResult>
     await browser.close();
   }
 
-  return { ok: true, slideCount: slides.length, outDir: input.outDir, slug };
+  return {
+    ok: true,
+    slideCount: slides.length,
+    outDir: input.outDir,
+    slug,
+    overflowSlides,
+  };
 }
 
 /**

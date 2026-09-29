@@ -25,6 +25,7 @@ Flag anything that says more than the sources do:
 - an explanation of a term, company or product that doesn't come from the sources
 - any mention of a story other than the main one
 - an image note that would look like evidence the sources don't have, like a chart of made-up data or a realistic "photo" of the event
+- a quote that isn't word for word what the sources say, or is credited to the wrong person
 
 Mark each flag SMALL or BIG:
 - SMALL: a wording problem that can be fixed in place, like a dropped hedge, a stronger verb, or an unsupported clause.

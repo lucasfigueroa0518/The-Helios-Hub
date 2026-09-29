@@ -22,14 +22,15 @@ const SpanRunSchema = z.array(SpanSchema).min(1);
 
 const LayoutVariantSchema = z.enum([
   'cover',
+  'text',
+  'landing',
+  'stat',
+  'split_stat',
+  'quote',
+  'image',
+  'follow',
   'story_beat',
   'data_block',
-  'quote',
-  'source',
-  'follow',
-  'proof',
-  'thesis',
-  'debate',
 ]);
 
 const VariantSchema = z.enum([
@@ -75,6 +76,12 @@ export const SlideCopySchema = z.object({
   body: SpanRunSchema.optional(),
   bodyBottom: SpanRunSchema.optional(),
   title: SpanRunSchema.optional(),
+  note: z.string().optional(),
+  numberNote: z.string().optional(),
+  secondNumber: z.string().optional(),
+  secondNote: z.string().optional(),
+  quoteText: SpanRunSchema.optional(),
+  quoteBy: z.string().optional(),
   photoCaption: z.string().optional(),
   altText: z.string().min(1, 'altText is required for accessibility'),
   lightCanvas: z.boolean().optional(),

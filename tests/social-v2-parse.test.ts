@@ -260,6 +260,45 @@ FOLLOW: Follow Helios to keep up with how AI companies are actually using their 
     assert.equal(p.editNotes, null);
   });
 
+  test('parses NOTE, NUMBER NOTE, SECOND NUMBER, SECOND NOTE, QUOTE, QUOTE BY (design v1 fields)', () => {
+    const raw = `COVER: Some cover.
+COVER HIGHLIGHT: cover
+COVER IMAGE: type only
+
+SLIDE 2
+HEADLINE: Landing statement
+NOTE: One-line term explainer
+IMAGE: type only
+
+SLIDE 3
+HEADLINE: Two numbers
+BIG NUMBER: $2B
+NUMBER NOTE: raised to date
+SECOND NUMBER: $500M
+SECOND NOTE: earmarked for chips
+IMAGE: type only
+
+SLIDE 4
+QUOTE: Training is paused until further notice.
+QUOTE BY: Dario Amodei, Bloomberg
+IMAGE: type only
+
+FOLLOW: Follow Helios.`;
+    const p = parseEditedPost(raw);
+    assert.equal(p.slides.length, 3);
+    // Landing (slide 2)
+    assert.equal(p.slides[0]!.headline, 'Landing statement');
+    assert.equal(p.slides[0]!.note, 'One-line term explainer');
+    // Split stat (slide 3)
+    assert.equal(p.slides[1]!.bigNumber, '$2B');
+    assert.equal(p.slides[1]!.numberNote, 'raised to date');
+    assert.equal(p.slides[1]!.secondNumber, '$500M');
+    assert.equal(p.slides[1]!.secondNote, 'earmarked for chips');
+    // Quote (slide 4) — QUOTE BY must not collide with QUOTE
+    assert.equal(p.slides[2]!.quote, 'Training is paused until further notice.');
+    assert.equal(p.slides[2]!.quoteBy, 'Dario Amodei, Bloomberg');
+  });
+
   test('parses EDIT NOTES on edited post', () => {
     const editedRaw = `COVER: Anthropic says its own AI writes 26% of R&D code.
 COVER HIGHLIGHT: 26% of R&D code

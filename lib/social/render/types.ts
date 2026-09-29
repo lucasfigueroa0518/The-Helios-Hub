@@ -28,36 +28,38 @@ export type StoryType =
 export type Format = 'carousel' | 'story';
 
 /**
- * Archetypes currently implemented. Every slide is one of these; the
- * SlideTemplate component picks the right renderer per variant.
+ * Design v1 slide types. Field-driven — the adapter picks the type from the
+ * Writer's labels (see docs/DESIGN-V1-HANDOFF.md §Adapter).
  *
- *   cover       — position 0, the thumb-stop
- *   story_beat  — positions 1..N−2, one narrative beat each
- *   source      — outlet credit, only in 5+ slide carousels
- *   follow      — always the last slide of every carousel
+ *   cover       — position 0, unchanged from prior render
+ *   text        — HEADLINE + BODY, top-anchored
+ *   landing     — HEADLINE only (optional NOTE), centered
+ *   stat        — BIG NUMBER + NUMBER NOTE + HEADLINE + optional BODY
+ *   split_stat  — two numbers side by side, second orange
+ *   quote       — QUOTE + QUOTE BY, orange opening mark
+ *   image       — brief-image IMAGE + HEADLINE, cover-style full-bleed
+ *   follow      — closing slide, unchanged
  *
- * Aspirational archetypes from the spec (data_block, quote) are not
- * implemented and are excluded from the union until they ship. Add them
- * back when the layout and copy are actually designed.
+ * `story_beat` and `data_block` are kept as legacy aliases so pre-design-v1
+ * fixtures and rows still render. The renderer routes them to `text` and
+ * `stat` respectively. New adapter output never emits them.
  */
 export type LayoutVariant =
   | 'cover'
-  | 'story_beat'
-  | 'data_block'
+  | 'text'
+  | 'landing'
+  | 'stat'
+  | 'split_stat'
   | 'quote'
-  | 'source'
+  | 'image'
   | 'follow'
-  | 'proof'
-  | 'thesis'
-  | 'debate';
+  | 'story_beat'
+  | 'data_block';
 
 /**
- * Specific compositional variant from the helios-social-skill design library.
- * The renderer uses this as a CSS modifier class so a single layout family
- * (e.g. `story_beat`) can express multiple compositions (B1 chapter-mark stack,
- * B2 photo-overlay, B3 pull-quote, etc.) without a distinct React component
- * per variant. Optional — when absent, the layout renders in its family's
- * default variant.
+ * Design v1 keeps only cover composition codes (C1/C2/C3) and F1 as active.
+ * The rest are retained in the union so pre-v1 fixtures + the legacy pipeline
+ * still type-check; the renderer no longer branches on them.
  */
 export type Variant =
   | 'C1' | 'C2' | 'C3' | 'C4'
@@ -138,11 +140,43 @@ export type SlideCopy = {
   bodyBottom?: SpanRun;
 
   /**
-   * Story-beat's slide title — big orange Pragmatica type that anchors the
-   * top of the slide. Semantically the beat's own topic label; not the same
-   * as the Post's overall headline (which lives on the Cover slide).
+   * Legacy: story-beat's slide title. Kept so old fixtures + legacy render
+   * paths still work. Design v1 slides do not use it.
    */
   title?: SpanRun;
+
+  /**
+   * Landing slide's optional muted single-line explainer under the headline.
+   */
+  note?: string;
+
+  /**
+   * Stat / split-stat: what the BIG NUMBER counts. Rendered as small muted
+   * text directly under the number.
+   */
+  numberNote?: string;
+
+  /**
+   * Split-stat: the second number (orange).
+   */
+  secondNumber?: string;
+
+  /**
+   * Split-stat: what the second number counts.
+   */
+  secondNote?: string;
+
+  /**
+   * Quote slide: the quotation itself. Set as SpanRun so a single hook can
+   * paint one phrase orange within the quote (rare — usually one color).
+   */
+  quoteText?: SpanRun;
+
+  /**
+   * Quote slide: attribution line (name + outlet). Rendered small mono caps
+   * under the quote with an em-dash prefix.
+   */
+  quoteBy?: string;
 
   /**
    * Optional overlay caption baked onto the photo (subject name + role, e.g.

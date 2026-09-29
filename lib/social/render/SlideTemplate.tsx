@@ -1,8 +1,6 @@
 'use client';
 
 import type { Post, SlideCopy, SpanRun } from '@/lib/social/render/types';
-import { CATEGORY_LABELS } from '@/lib/social/render/types';
-import { cleanOutletName } from '@/lib/social/render/outlet-name';
 
 export type SlideTemplateProps = {
   post: Post;
@@ -10,15 +8,22 @@ export type SlideTemplateProps = {
 };
 
 /**
- * Renders one slide of a Post. Same component drives the Hub preview pane
- * and the Playwright headless renderer — brand tokens are declared inside
- * the slide's CSS (see preview.css) so the component is portable to any
- * rendering context (Hub route, Vercel Sandbox, standalone HTML).
+ * Renders one slide of a Post per docs/DESIGN-V1-HANDOFF.md.
  *
- * Each of the six archetypes from the helios-social-skill spec is its own
- * sub-component. Publication chrome (category label + HELIOS wordmark) is
- * inline — two absolutely-positioned marks are not a component worth its
- * own file.
+ * Design v1 slide types (field-driven by the adapter):
+ *   cover        — unchanged CoverSlide
+ *   text         — HEADLINE (top, uppercase Pragmatica) + BODY (44px fixed)
+ *   landing      — HEADLINE only, centered, giant Pragmatica; optional NOTE
+ *   stat         — HEADLINE top, BIG NUMBER + NUMBER NOTE bottom, optional photo
+ *   split_stat   — HEADLINE top, two numbers side-by-side above hairline
+ *   quote        — orange opening mark + quote + attribution, optional round photo
+ *   image        — cover-style full-bleed photo, headline + body bottom-anchored
+ *   follow       — unchanged FollowSlide
+ *
+ * Legacy aliases (renderer routes them to the closest v1 component so
+ * pre-v1 fixtures + the legacy pipeline still render):
+ *   story_beat   → TextSlide
+ *   data_block   → StatSlide
  */
 export function SlideTemplate({ post, position }: SlideTemplateProps) {
   const slide = post.slides[position];
@@ -33,41 +38,26 @@ export function SlideTemplate({ post, position }: SlideTemplateProps) {
     );
   }
 
-  // F1 follow slide is dark-canvas per the design skill spec — the wordmark
-  // IS the follow-invitation, rendered on the same near-black field as the
-  // rest of the carousel so the closing beat reads as an anchor, not a
-  // marketing card. lightCanvas can still opt individual mid-carousel beats
-  // into a light "Helios White" pause per the skill's variant.
   const isFollow = slide.layoutVariant === 'follow';
   const isCover = slide.layoutVariant === 'cover';
-  const isLight = Boolean(slide.lightCanvas);
-  const lightMod = isLight ? ' helios-slide--light' : '';
-  const category = CATEGORY_LABELS[post.storyType] ?? 'TECH';
-  // Category label is carried in the masthead ticker on all beats; showing
-  // an in-body ▸ POLICY tag was duplicating the same word. Cover handles
-  // its own category internally. Kill the redundant outer chrome tag.
-  const showCategory = false;
-  // Cover has its own byline chrome (outlet · date) + SWIPE → text; the
-  // universal HELIOS wordmark would collide with them at bottom-right.
-  // Also suppress on beats since the masthead already carries HELIOS at
-  // top-left — otherwise we double-mark and the beat has two wordmarks.
-  const showWordmark = false;
-  // Minimal chrome: single HELIOS wordmark top-left on beats. Killed the
-  // volume/issue ticker, category label, and slide index — all read as
-  // editorial-magazine LARP on a 6" phone screen. Cover has its own
-  // bespoke chrome; Follow is the wordmark lockup itself.
-  const showTopWordmark = !isCover && !isFollow;
-  void category;
+  // Full-bleed image slides share the cover's chrome-suppression rule (the
+  // photo bleeds to the edges; wordmark would collide with it).
+  const isImageBleed = slide.layoutVariant === 'image' && Boolean(slide.photoUrl);
+  const showTopWordmark = !isCover && !isFollow && !isImageBleed;
+
+  // Route legacy aliases to design-v1 components.
+  const kind = slide.layoutVariant === 'story_beat' ? 'text'
+    : slide.layoutVariant === 'data_block' ? 'stat'
+    : slide.layoutVariant;
 
   return (
     <div
       className={
         `helios-slide helios-slide--${post.format}`
-        + ` helios-slide--${slide.layoutVariant}${lightMod}`
+        + ` helios-slide--${kind}`
       }
       data-slide-ready="true"
       data-variant={slide.variant ?? undefined}
-      data-beat={slide.beat ?? undefined}
       role="img"
       aria-label={slide.altText}
     >
@@ -77,25 +67,20 @@ export function SlideTemplate({ post, position }: SlideTemplateProps) {
         </div>
       )}
       <div className="helios-slide__well">
-        {slide.layoutVariant === 'cover' && <CoverSlide post={post} slide={slide} />}
-        {slide.layoutVariant === 'story_beat' && <StoryBeatSlide post={post} slide={slide} />}
-        {slide.layoutVariant === 'data_block' && <DataBlockSlide post={post} slide={slide} />}
-        {slide.layoutVariant === 'quote' && <QuoteSlide post={post} slide={slide} />}
-        {slide.layoutVariant === 'source' && <SourceSlide post={post} slide={slide} />}
-        {/* New families from the design skill. MVP renderings piggyback on
-            the closest existing family so any editorial-produced post
-            renders end-to-end; each gets a distinct CSS scope via
-            layoutVariant + data-variant for future custom styling. */}
-        {slide.layoutVariant === 'proof' && <ProofSlide post={post} slide={slide} />}
-        {slide.layoutVariant === 'thesis' && <StoryBeatSlide post={post} slide={slide} />}
-        {slide.layoutVariant === 'debate' && <DebateSlide post={post} slide={slide} />}
-        {slide.layoutVariant === 'follow' && <FollowSlide post={post} slide={slide} />}
+        {kind === 'cover' && <CoverSlide post={post} slide={slide} />}
+        {kind === 'text' && <TextSlide slide={slide} />}
+        {kind === 'landing' && <LandingSlide slide={slide} />}
+        {kind === 'stat' && <StatSlide slide={slide} />}
+        {kind === 'split_stat' && <SplitStatSlide slide={slide} />}
+        {kind === 'quote' && <QuoteSlide slide={slide} />}
+        {kind === 'image' && <ImageSlide slide={slide} />}
+        {kind === 'follow' && <FollowSlide slide={slide} />}
       </div>
     </div>
   );
 }
 
-/* ── Span rendering ───────────────────────────────────────────────────── */
+/* ── Spans ────────────────────────────────────────────────────────── */
 
 function SpanRunView({ run }: { run: SpanRun | undefined }) {
   if (!run) return null;
@@ -110,14 +95,11 @@ function SpanRunView({ run }: { run: SpanRun | undefined }) {
   );
 }
 
-/* ── Cover (archetype 1) ──────────────────────────────────────────────── */
+/* ── Cover (unchanged from prior render) ──────────────────────────── */
 
 function CoverSlide({ post, slide }: { post: Post; slide: SlideCopy }) {
-  const photoBleed = Boolean(slide.photoUrl) && !isPlaceholderPhoto(slide.photoUrl);
-  // Character-count buckets so long headlines don't wrap into a 12-line
-  // pile. CSS scales font-size per bucket (see .helios-cover__headline
-  // rules). Buckets, not raw chars, so headline shape stays consistent
-  // across posts of similar length instead of jittering per character.
+  void post;
+  const photoBleed = Boolean(slide.photoUrl);
   const chars = (slide.headline ?? []).reduce((n, s) => n + s.text.length, 0);
   const lengthBucket = chars <= 40 ? 'xs'
     : chars <= 70 ? 'sm'
@@ -151,424 +133,203 @@ function CoverSlide({ post, slide }: { post: Post; slide: SlideCopy }) {
   );
 }
 
-/* ── Story-beat (archetype 2) ─────────────────────────────────────────── */
+/* ── Text (HEADLINE + BODY, top-anchored) ─────────────────────────── */
 
-function StoryBeatSlide({ slide }: { post: Post; slide: SlideCopy }) {
-  const treatment = slide.photoTreatment ?? 'card';
-  const hasRealPhoto = Boolean(slide.photoUrl) && !isPlaceholderPhoto(slide.photoUrl);
-  const isBottomFade = treatment === 'bottom-fade' && hasRealPhoto;
-  // B5 is a type-only landing composition — only the headline is the copy.
-  // Suppress body/bodyBottom/title/photo even if the copy stage emitted them
-  // so the CSS's giant-Pragmatica landing treatment doesn't blow up
-  // sentence-length body copy across the whole frame.
-  const isB5 = slide.variant === 'B5';
+function TextSlide({ slide }: { slide: SlideCopy }) {
+  const headlineChars = (slide.headline ?? slide.title ?? []).reduce((n, s) => n + s.text.length, 0);
+  const headlineBucket = headlineChars <= 30 ? 'xs'
+    : headlineChars <= 45 ? 'sm'
+    : headlineChars <= 60 ? 'md'
+    : 'lg';
+  // Prefer `headline`; fall back to legacy `title` so old fixtures render.
+  const headlineRun = slide.headline ?? slide.title;
+  const bodyRun = slide.body ?? slide.bodyBottom;
   return (
-    <div className={`helios-beat${isBottomFade ? ' helios-beat--bottom-fade' : ''}`}>
-      {isBottomFade && hasRealPhoto && !isB5 && (
-        <div
-          className="helios-beat__bottom-fade"
-          style={{ backgroundImage: `url(${slide.photoUrl})` }}
-          aria-hidden="true"
-        />
-      )}
-      {slide.title && !isB5 && (
-        <h2 className="helios-beat__title">
-          <SpanRunView run={slide.title} />
+    <div className="helios-text">
+      {headlineRun && (
+        <h2 className="helios-text__headline" data-length={headlineBucket}>
+          <SpanRunView run={headlineRun} />
         </h2>
       )}
-      {isB5 && slide.headline && (
-        <h2
-          className="helios-beat__landing"
-          data-length={bodyLengthBucket(slide.headline)}
-        >
-          <SpanRunView run={slide.headline} />
-        </h2>
-      )}
-      {slide.body && !isB5 && (
-        <p
-          className="helios-beat__body helios-beat__body--top"
-          data-length={bodyLengthBucket(slide.body)}
-        >
-          <SpanRunView run={slide.body} />
+      {bodyRun && (
+        <p className="helios-text__body">
+          <SpanRunView run={bodyRun} />
         </p>
       )}
-      {!isBottomFade && hasRealPhoto && !isB5 && (
-        <figure className="helios-beat__figure">
-          <img
-            className="helios-beat__photo"
-            src={slide.photoUrl}
-            alt=""
-            aria-hidden="true"
-          />
-          {slide.photoCaption && (
-            <figcaption className="helios-beat__caption">
-              {slide.photoCaption}
-            </figcaption>
-          )}
-          {/* News-style attribution beneath the photo. Small, subtle,
-              editorial. Only real credits (with an outlet or photographer)
-              — placeholders like "PHOTO · ARTICLE HERO" stay suppressed. */}
-          {slide.photoCredit && !isPlaceholderCredit(slide.photoCredit) && (
-            <div className="helios-beat__credit">{slide.photoCredit}</div>
-          )}
-        </figure>
-      )}
-      {slide.bodyBottom && !isB5 && (
-        <p
-          className="helios-beat__body helios-beat__body--bottom"
-          data-length={bodyLengthBucket(slide.bodyBottom)}
-        >
-          <SpanRunView run={slide.bodyBottom} />
-        </p>
-      )}
-      {/* On-slide photo credit killed — attribution moves to caption. */}
     </div>
   );
 }
 
-/**
- * Character-count bucket for body copy. Same pattern the cover uses to
- * scale hero type. Templates listen to `data-length` and pick a size
- * that keeps the copy inside the frame. Prevents the "text runs off the
- * page" regression that copy-regen can't fix — this is a design
- * guardrail, not a content fix.
- */
-function bodyLengthBucket(spans: SpanRun): 'xs' | 'sm' | 'md' | 'lg' | 'xl' {
-  const chars = spans.reduce((n, s) => n + s.text.length, 0);
-  if (chars <= 90) return 'xs';
-  if (chars <= 150) return 'sm';
-  if (chars <= 220) return 'md';
-  if (chars <= 300) return 'lg';
-  return 'xl';
-}
+/* ── Landing (HEADLINE only, centered) ────────────────────────────── */
 
-/**
- * Photo credits ship as one of two things: a real photographer/outlet
- * credit ("PHOTO: JASON GOODMAN · UNSPLASH") or a placeholder string the
- * photo pipeline emits when nothing better is known ("PHOTO · ARTICLE
- * HERO"). Show real credits, hide placeholders — putting "ARTICLE HERO"
- * in front of a reader is meaningless.
- */
-function isPlaceholderCredit(credit: string | undefined | null): boolean {
-  if (!credit) return true;
-  const t = credit.trim().toUpperCase();
-  if (!t) return true;
-  if (t.includes('ARTICLE HERO')) return true;
-  if (t === 'PHOTO' || t === 'PHOTO ·' || t === 'PHOTO·') return true;
-  return false;
-}
-
-/**
- * A slide with empty space reads worse than a slide with an imperfect
- * atmosphere photo. Bring Unsplash photos back — the news-style caption
- * beneath the image credits them properly. Only truly empty/null URLs are
- * still suppressed.
- */
-function isPlaceholderPhoto(url: string | undefined | null): boolean {
-  if (!url) return true;
-  return false;
-}
-
-/* ── Data-block (archetype 3) ─────────────────────────────────────────── */
-
-/**
- * Number-forward mid-carousel break. `title` carries the giant orange
- * number (e.g. `$2B`), `headline` carries the uppercase Pragmatica label
- * that names what the number measures (e.g. `FIVE-YEAR COMMITMENT.`),
- * and `body` is the one-sentence context that lands underneath.
- *
- * No photo, no photo caption, no photo credit — the number IS the visual.
- * Used to break the rhythm when three photo-forward beats in a row would
- * otherwise read samey.
- */
-function DataBlockSlide({ post, slide }: { post: Post; slide: SlideCopy }) {
-  const hasPhoto = Boolean(slide.photoUrl) && !isPlaceholderPhoto(slide.photoUrl);
-  // D3 (MECHANISM archetype) carries a text kicker in `title` (e.g.
-  // "Two obligations on the table."), not a number. The giant orange
-  // Pragmatica treatment overflows past the content well on any string
-  // longer than ~12 chars, so route D3's title to the small green eyebrow
-  // and let `headline` carry the big label. D1/D2 keep the number treatment.
-  const isD3 = slide.variant === 'D3';
-  const titleLen = slide.title?.reduce((n, s) => n + s.text.length, 0) ?? 0;
-
-  // Comparison bar chart — parse title + headline + body for a numeric
-  // value and a baseline. When we find both, render a two-bar chart that
-  // gives the reader visual scale, not just the number as text. Falls back
-  // to the existing text-only layout when no comparison is parseable.
-  const titleText = (slide.title ?? []).map((s) => s.text).join(' ');
-  const headlineText = (slide.headline ?? []).map((s) => s.text).join(' ');
-  const bodyText = (slide.body ?? []).map((s) => s.text).join(' ');
-  const chart = !isD3 ? parseScaleChart(titleText, headlineText, bodyText) : null;
-
+function LandingSlide({ slide }: { slide: SlideCopy }) {
+  const chars = (slide.headline ?? []).reduce((n, s) => n + s.text.length, 0);
+  const bucket = chars <= 30 ? 'xs'
+    : chars <= 50 ? 'sm'
+    : 'md';
   return (
-    <div className="helios-data">
-      {slide.title && isD3 && (
-        <div className="helios-data__eyebrow">
-          <SpanRunView run={slide.title} />
-        </div>
-      )}
-      {slide.title && !isD3 && (
-        <div
-          className="helios-data__number"
-          data-length={titleLen}
-        >
-          <SpanRunView run={slide.title} />
-        </div>
-      )}
-      <div className="helios-data__rule" aria-hidden="true" />
+    <div className="helios-landing">
       {slide.headline && (
-        <h2
-          className="helios-data__label"
-          data-length={bodyLengthBucket(slide.headline)}
-        >
+        <h2 className="helios-landing__line" data-length={bucket}>
           <SpanRunView run={slide.headline} />
         </h2>
       )}
-      {chart?.kind === 'grid' && (
-        <div className="helios-data__grid" aria-hidden="true">
-          {Array.from({ length: 25 }).map((_, i) => (
-            <span
-              key={i}
-              className={
-                i < chart.filledCells
-                  ? 'helios-data__grid-cell helios-data__grid-cell--on'
-                  : 'helios-data__grid-cell'
-              }
-            />
-          ))}
-        </div>
+      {slide.note && (
+        <div className="helios-landing__note">{slide.note}</div>
       )}
-      {chart?.kind === 'bar' && (
-        <div className="helios-data__chart" aria-hidden="true">
-          <div className="helios-data__chart-row">
-            <div
-              className="helios-data__chart-bar helios-data__chart-bar--value"
-              style={{ width: `${Math.max(4, chart.valuePct)}%` }}
-            />
-            <div className="helios-data__chart-label helios-data__chart-label--value">
-              {chart.valueLabel}
-            </div>
-          </div>
-          <div className="helios-data__chart-row">
-            <div className="helios-data__chart-bar helios-data__chart-bar--baseline" style={{ width: '100%' }} />
-            <div className="helios-data__chart-label helios-data__chart-label--baseline">
-              {chart.baselineLabel}
-            </div>
-          </div>
-        </div>
+    </div>
+  );
+}
+
+/* ── Stat (headline top, big number + note bottom) ────────────────── */
+
+function StatSlide({ slide }: { slide: SlideCopy }) {
+  const number = slide.title;
+  const numberLen = number?.reduce((n, s) => n + s.text.length, 0) ?? 0;
+  const hasPhoto = Boolean(slide.photoUrl);
+  return (
+    <div className="helios-stat">
+      {slide.headline && (
+        <h2 className="helios-stat__headline">
+          <SpanRunView run={slide.headline} />
+        </h2>
       )}
       {slide.body && (
-        <p className="helios-data__context">
+        <p className="helios-stat__body">
           <SpanRunView run={slide.body} />
-        </p>
-      )}
-      {slide.bodyBottom && (
-        <p className="helios-data__kicker">
-          <SpanRunView run={slide.bodyBottom} />
         </p>
       )}
       {hasPhoto && (
-        <figure className="helios-data__figure">
-          <img
-            className="helios-data__photo"
-            src={slide.photoUrl}
-            alt=""
-            aria-hidden="true"
-          />
-          {slide.photoCaption && (
-            <figcaption className="helios-data__caption">
-              {slide.photoCaption}
-            </figcaption>
-          )}
-          {/* On-slide photo credit killed — attribution moves to caption. */}
-        </figure>
+        <img className="helios-stat__photo" src={slide.photoUrl} alt="" aria-hidden="true" />
       )}
+      <div className="helios-stat__number-block">
+        {number && (
+          <div className="helios-stat__number" data-length={numberLen}>
+            <SpanRunView run={number} />
+          </div>
+        )}
+        {slide.numberNote && (
+          <div className="helios-stat__number-note">{slide.numberNote}</div>
+        )}
+      </div>
     </div>
   );
 }
 
-/**
- * Parse a SCALE slide's title/headline/body for a numeric value + baseline
- * we can render as a two-bar comparison chart. Returns null when we can't
- * confidently pull both numbers — in which case the slide falls back to
- * the text-only D1 layout.
- *
- * Cases handled:
- *   - Percentage in title ("26%") → baseline auto = 100%
- *   - Time in title ("2 MONTHS") + "X to Y unit" or "up to Y unit" in body
- *   - Currency in title ("$21B") + explicit "$XB" baseline in body
- */
-type ScaleChart =
-  | { kind: 'grid'; filledCells: number; valueLabel: string; baselineLabel: string }
-  | { kind: 'bar'; valuePct: number; valueLabel: string; baselineLabel: string };
+/* ── Split stat (two numbers side-by-side above hairline) ─────────── */
 
-function parseScaleChart(title: string, headline: string, body: string): ScaleChart | null {
-  const scan = `${headline} ${body}`;
-
-  // ── Percentage → 5×5 pictogram grid ──────────────────────────────────
-  // A grid actually shows "1 in 4" as a visual pattern instead of just
-  // restating the percentage. 25 cells, filled = round(value / 4). The
-  // grid is only shown when it's honest AND fits:
-  //   1. Filled count must equal the natural round of value/4 without a
-  //      minimum-1 clamp. Values under ~2% would round to 0 and would
-  //      otherwise be clamped to 1, visually reading as "1 in 25" (4%)
-  //      when the real value is much smaller. Rule (per Run 6 review):
-  //      "Only show the grid when the filled squares match the number
-  //      to within 1 square. Otherwise show the number with no grid."
-  //   2. Body text must be short enough to fit alongside the grid in
-  //      the 1080×1350 canvas. Long body copy pushes the grid below
-  //      the fold and clips it. Rule (per Run 6 review): "It must never
-  //      clip. If it doesn't fit, drop the square grid or use a text
-  //      layout." 120 chars is roughly two Roboto-Light lines at the
-  //      D1 body size — leaves room for the grid above.
-  const pct = title.match(/(\d+(?:\.\d+)?)\s*%/);
-  if (pct) {
-    const v = parseFloat(pct[1]!);
-    const filledCells = Math.min(25, Math.round((v / 100) * 25));
-    if (filledCells < 1) return null; // sub-2% — grid would inflate
-    if (body.length > 120) return null; // no room for both — text layout wins
-    return {
-      kind: 'grid',
-      filledCells,
-      valueLabel: `${pct[1]}%`,
-      baselineLabel: '100% TOTAL',
-    };
-  }
-
-  // ── Time (months / weeks / days / years) ─────────────────────────────
-  const timeUnits = ['months?', 'weeks?', 'days?', 'years?', 'hours?'];
-  for (const unitRe of timeUnits) {
-    const t = title.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${unitRe})`, 'i'));
-    if (t) {
-      const val = parseFloat(t[1]!);
-      const unit = t[2]!.toUpperCase();
-      // "6 to 18 months" / "6-18 months" / "6–18 months"
-      const range = scan.match(new RegExp(`(\\d+)\\s*(?:to|-|–)\\s*(\\d+)\\s*${unitRe}`, 'i'));
-      if (range) {
-        const baseline = parseFloat(range[2]!);
-        return {
-          kind: 'bar',
-          valuePct: Math.min(100, (val / baseline) * 100),
-          valueLabel: `${val} ${unit}`,
-          baselineLabel: `${range[1]}–${range[2]} ${unit} TYPICAL`,
-        };
-      }
-      // "up to N months" or "N months typical"
-      const singular = scan.match(new RegExp(`(?:up to\\s+)?(\\d+)\\s*${unitRe}\\s+(?:typical|standard|normal|average)`, 'i'));
-      if (singular) {
-        const baseline = parseFloat(singular[1]!);
-        return {
-          kind: 'bar',
-          valuePct: Math.min(100, (val / baseline) * 100),
-          valueLabel: `${val} ${unit}`,
-          baselineLabel: `${singular[1]} ${unit} TYPICAL`,
-        };
-      }
-      return null;
-    }
-  }
-
-  // ── Currency ($21B, $3.9B) ───────────────────────────────────────────
-  const cur = title.match(/\$\s*(\d+(?:\.\d+)?)\s*([BMK])/i);
-  if (cur) {
-    const val = parseFloat(cur[1]!);
-    const unit = cur[2]!.toUpperCase();
-    const baseMatch = scan.match(new RegExp(`\\$\\s*(\\d+(?:\\.\\d+)?)\\s*${unit}`, 'i'));
-    if (baseMatch) {
-      const baseline = parseFloat(baseMatch[1]!);
-      // Skip if we matched the same number back.
-      if (baseline !== val) {
-        return {
-          kind: 'bar',
-          valuePct: Math.min(100, (val / baseline) * 100),
-          valueLabel: `$${val}${unit}`,
-          baselineLabel: `$${baseline}${unit} REFERENCE`,
-        };
-      }
-    }
-  }
-
-  return null;
+function SplitStatSlide({ slide }: { slide: SlideCopy }) {
+  const leftNumber = slide.title;
+  const leftLen = leftNumber?.reduce((n, s) => n + s.text.length, 0) ?? 0;
+  const rightLen = (slide.secondNumber ?? '').length;
+  const hasPhoto = Boolean(slide.photoUrl);
+  return (
+    <div className="helios-split-stat">
+      {slide.headline && (
+        <h2 className="helios-split-stat__headline">
+          <SpanRunView run={slide.headline} />
+        </h2>
+      )}
+      {hasPhoto && (
+        <img className="helios-split-stat__photo" src={slide.photoUrl} alt="" aria-hidden="true" />
+      )}
+      <div className="helios-split-stat__pair">
+        <div className="helios-split-stat__col">
+          {leftNumber && (
+            <div className="helios-split-stat__number helios-split-stat__number--left" data-length={leftLen}>
+              <SpanRunView run={leftNumber} />
+            </div>
+          )}
+          {slide.numberNote && (
+            <div className="helios-split-stat__note">{slide.numberNote}</div>
+          )}
+        </div>
+        <div className="helios-split-stat__rule" aria-hidden="true" />
+        <div className="helios-split-stat__col">
+          {slide.secondNumber && (
+            <div className="helios-split-stat__number helios-split-stat__number--right" data-length={rightLen}>
+              {slide.secondNumber}
+            </div>
+          )}
+          {slide.secondNote && (
+            <div className="helios-split-stat__note">{slide.secondNote}</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function formatShortDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const month = d.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' }).toUpperCase();
-  const day = String(d.getUTCDate()).padStart(2, '0');
-  return `${month} ${day}`;
-}
+/* ── Quote (orange opening mark + quote + attribution) ────────────── */
 
-function formatMastheadDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const dd = String(d.getUTCDate()).padStart(2, '0');
-  const yy = String(d.getUTCFullYear()).slice(-2);
-  return `${mm}.${dd}.${yy}`;
-}
-
-/* ── Quote (archetype 4) ──────────────────────────────────────────────── */
-
-/**
- * Editorial pause — a real speaker's real words. Sentence case, not
- * uppercase (a person spoke, they didn't shout). `body` holds the quote
- * text (SpanRun so we can paint one orange hook inside), `headline` holds
- * the attribution line (rendered as green mono with em-dash prefix).
- */
-function QuoteSlide({ slide }: { post: Post; slide: SlideCopy }) {
+function QuoteSlide({ slide }: { slide: SlideCopy }) {
+  const quoteRun = slide.quoteText ?? slide.body;
+  const showSpeakerPhoto = Boolean(slide.photoUrl);
   return (
     <div className="helios-quote">
+      {showSpeakerPhoto && (
+        <img className="helios-quote__speaker" src={slide.photoUrl} alt="" aria-hidden="true" />
+      )}
       <div className="helios-quote__glyph" aria-hidden="true">&ldquo;</div>
-      {slide.body && (
+      {quoteRun && (
         <blockquote className="helios-quote__text">
-          <SpanRunView run={slide.body} />
+          <SpanRunView run={quoteRun} />
         </blockquote>
       )}
-      {slide.headline && (
+      {slide.quoteBy && (
         <div className="helios-quote__attribution">
           <span aria-hidden="true">— </span>
-          <SpanRunView run={slide.headline} />
+          {slide.quoteBy}
         </div>
       )}
     </div>
   );
 }
 
-/* ── Source (archetype 5) ─────────────────────────────────────────────── */
+/* ── Image (cover-style full-bleed mid-carousel) ──────────────────── */
 
-function SourceSlide({ post, slide }: { post: Post; slide: SlideCopy }) {
+/**
+ * Reuses the cover's full-bleed photo treatment: photo fills the slide,
+ * darkened by the scrim, headline anchored bottom. Shares the CSS
+ * `.helios-cover__bg / __scrim / __scrim--bottom` classes so the
+ * treatment stays visually consistent with the cover. Optional body
+ * sits under the headline. Cover's own component/output are untouched.
+ */
+function ImageSlide({ slide }: { slide: SlideCopy }) {
+  const hasPhoto = Boolean(slide.photoUrl);
   return (
-    <div className="helios-source">
-      <div className="helios-source__label">REPORTING</div>
-      <h2 className="helios-source__outlet">{post.source}.</h2>
-      {slide.body && (
-        <p className="helios-source__teaser">
-          <SpanRunView run={slide.body} />
-        </p>
+    <div className={`helios-image${hasPhoto ? ' helios-image--bleed' : ''}`}>
+      {hasPhoto && (
+        <>
+          <img
+            className="helios-cover__bg"
+            src={slide.photoUrl}
+            alt=""
+            aria-hidden="true"
+          />
+          <div className="helios-cover__scrim" aria-hidden="true" />
+          <div className="helios-cover__scrim--bottom" aria-hidden="true" />
+        </>
       )}
-      {slide.photoUrl && !isPlaceholderPhoto(slide.photoUrl) && (
-        <img
-          className="helios-source__photo"
-          src={slide.photoUrl}
-          alt=""
-          aria-hidden="true"
-        />
-      )}
+      <div className="helios-image__foreground">
+        {slide.headline && (
+          <h2 className="helios-image__headline">
+            <SpanRunView run={slide.headline} />
+          </h2>
+        )}
+        {slide.body && (
+          <p className="helios-image__body">
+            <SpanRunView run={slide.body} />
+          </p>
+        )}
+      </div>
     </div>
   );
 }
 
-/* ── Follow (F1 — dark canvas, wordmark lockup) ───────────────────────────
- *
- * Per the design skill: kill the shouted 132px "FOLLOW FOR MORE" — the
- * wordmark IS the follow-invitation. Masthead-style HELIOS lockup flanked
- * by hairline rules extending to the outer padding. Story-specific line
- * above, handle + green tagline below. Near-black canvas so the closing
- * beat lands as an anchor, not a marketing card.
- */
+/* ── Follow (unchanged) ───────────────────────────────────────────── */
 
-function FollowSlide({ slide }: { post: Post; slide: SlideCopy }) {
+function FollowSlide({ slide }: { slide: SlideCopy }) {
   const storyLine = slide.storySpecificLine?.trim();
   return (
     <div className="helios-follow">
@@ -576,82 +337,6 @@ function FollowSlide({ slide }: { post: Post; slide: SlideCopy }) {
       <div className="helios-follow__handle">@heliosgroup.ai</div>
       {storyLine && (
         <div className="helios-follow__story-line">{storyLine}</div>
-      )}
-    </div>
-  );
-}
-
-/* ── Proof (P1) — source-card treatment ──────────────────────────────────
- *
- * Per skill spec: ▸ THE SOURCE label + big outlet name (Pragmatica Bold)
- * + article-headline body + hairline + optional photo. Anchors the story
- * to a real publication so the reader knows this isn't rumor.
- */
-function ProofSlide({ post, slide }: { post: Post; slide: SlideCopy }) {
-  const outletName = cleanOutletName(post.source);
-  return (
-    <div className="helios-proof">
-      <div className="helios-proof__label">▸ THE SOURCE</div>
-      <h2 className="helios-proof__outlet">{outletName}.</h2>
-      <div className="helios-proof__rule" aria-hidden="true" />
-      {slide.body && (
-        <p className="helios-proof__body">
-          <SpanRunView run={slide.body} />
-        </p>
-      )}
-      {slide.photoUrl && !isPlaceholderPhoto(slide.photoUrl) && (
-        <figure className="helios-proof__figure">
-          <img
-            className="helios-proof__photo"
-            src={slide.photoUrl}
-            alt=""
-            aria-hidden="true"
-          />
-          {slide.photoCredit && !isPlaceholderCredit(slide.photoCredit) && (
-            <div className="helios-proof__credit">{slide.photoCredit}</div>
-          )}
-        </figure>
-      )}
-    </div>
-  );
-}
-
-/* ── Debate (T2) — question + two labeled sides ───────────────────────── */
-
-function DebateSlide({ slide }: { post: Post; slide: SlideCopy }) {
-  return (
-    <div className="helios-debate">
-      {slide.headline && (
-        <h2 className="helios-debate__question">
-          <SpanRunView run={slide.headline} />
-        </h2>
-      )}
-      {slide.sides && slide.sides.length > 0 ? (
-        <ul className="helios-debate__sides">
-          {slide.sides.map((side, i) => (
-            <li key={i} className="helios-debate__side">
-              <span className="helios-debate__side-label">{side.label}</span>
-              <span className="helios-debate__side-text">{side.text}</span>
-            </li>
-          ))}
-        </ul>
-      ) : slide.body ? (
-        <p className="helios-debate__body">
-          <SpanRunView run={slide.body} />
-        </p>
-      ) : null}
-      {slide.photoUrl && !isPlaceholderPhoto(slide.photoUrl) && (
-        <figure className="helios-debate__figure">
-          <img
-            className="helios-debate__photo"
-            src={slide.photoUrl}
-            alt=""
-            aria-hidden="true"
-          />
-          {slide.photoCredit && !isPlaceholderCredit(slide.photoCredit) && (
-            <div className="helios-debate__credit">{slide.photoCredit}</div>
-          )}
-        </figure>
       )}
     </div>
   );

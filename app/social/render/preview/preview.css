@@ -1,10 +1,9 @@
-/* Helios Social — slide preview.
+/* Helios Social — slide preview (design v1).
    Deliberately isolated from Hub's globals.css: all brand tokens declared
    inside `.helios-slide` so the same component works when embedded elsewhere
    (Vercel Sandbox, standalone HTML, headless Playwright).
 
-   Dark canvas is the default. Light-canvas "Helios White" variant is opt-in
-   via .helios-slide--light on 0-or-1 slide per carousel. */
+   Dark canvas is the default. Cover stays untouched from the pre-v1 render. */
 
 /* ── Preview shell (dev-only wrapper, not exported) ───────────────────── */
 
@@ -93,13 +92,14 @@
 .helios-slide {
   --brand-orange:      #FF5E1A;
   --brand-orange-soft: rgba(255, 94, 26, 0.10);
-  --brand-green:       #138510;
+  /* Design v1 green: brighter than prior #138510. */
+  --brand-green:       #1BBF17;
 
   /* Dark canvas is the default. */
   --brand-canvas:      #0A0A0A;
   --brand-narrative:   #FFFFFF;
-  --brand-narrative-muted: rgba(255, 255, 255, 0.72);
-  --brand-narrative-quiet: rgba(255, 255, 255, 0.55);
+  --brand-narrative-muted: rgba(255, 255, 255, 0.66);
+  --brand-narrative-quiet: rgba(255, 255, 255, 0.45);
 
   --font-heading:      var(--font-pragmatica), 'Pragmatica Extended', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   --font-body:         var(--font-roboto), 'Roboto', 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -121,26 +121,18 @@
   box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.55);
 }
 
-/* Helios White light-canvas variant — one slide per carousel, opt-in.
-   Only orange + green stay; narrative flips to near-black. */
-.helios-slide--light {
-  --brand-canvas:      #FAFAFA;
-  --brand-narrative:   #171717;
-  --brand-narrative-muted: rgba(23, 23, 23, 0.72);
-  --brand-narrative-quiet: rgba(23, 23, 23, 0.55);
-}
-
-/* Canvas dimensions. Inner padding is generous — 88px inset all around. */
+/* Canvas dimensions. Inner padding 96px per design v1 §Type ("Margins stay
+   at 96px left and right"). */
 .helios-slide--carousel {
   width: 1080px;
   height: 1350px;
-  padding: 88px;
+  padding: 96px;
 }
 
 .helios-slide--story {
   width: 1080px;
   height: 1920px;
-  padding: 240px 88px 240px;
+  padding: 240px 96px 240px;
 }
 
 .helios-slide__well {
@@ -149,70 +141,24 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  /* Leave room below the category label (top-left) and above the wordmark
-     (bottom-right) so archetype content never collides with chrome. */
-  padding-top: 56px;
-  padding-bottom: 56px;
 }
 
-/* Cover manages its own top layout (category is baked into the archetype
-   because it visually pairs with the headline), so undo the well's padding. */
-.helios-slide--cover .helios-slide__well {
-  padding-top: 0;
-  padding-bottom: 0;
+/* Cover manages its own layout (full-bleed / bottom-anchored), so undo the
+   well's padding. Same for image slides (they reuse the cover treatment). */
+.helios-slide--cover .helios-slide__well,
+.helios-slide--image .helios-slide__well,
+.helios-slide--follow .helios-slide__well {
+  padding: 0;
 }
 
-/* ── Chrome: category label + HELIOS wordmark. Nothing else. ──────────── */
+/* ── Chrome: top-right HELIOS wordmark on non-cover / non-follow / non-image ── */
 
-.helios-chrome__category {
-  position: absolute;
-  top: 128px;
-  left: 88px;
-  font-family: var(--font-mono);
-  font-size: 18px;
-  font-weight: 500;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--brand-green);
-  z-index: 2;
-}
-
-.helios-chrome__category::before {
-  content: '▸ ';
-}
-
-.helios-chrome__mark {
-  position: absolute;
-  bottom: 88px;
-  right: 88px;
-  font-family: var(--font-body);
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: 0.42em;
-  text-transform: uppercase;
-  color: var(--brand-narrative);
-  z-index: 2;
-}
-
-/* Minimal masthead — single HELIOS wordmark top-right on beats so the
-   chapter mark (giant orange 01, 04) owns the top-left corner without
-   collision. Editorial ticker killed per user feedback. */
 .helios-masthead {
   position: absolute;
-  top: 88px;
-  right: 88px;
+  top: 48px;
+  right: 96px;
   z-index: 3;
   text-align: right;
-}
-
-.helios-masthead--minimal {
-  border-bottom: none;
-  padding: 0;
-  height: auto;
-}
-
-.helios-slide--light .helios-masthead {
-  border-bottom-color: rgba(23, 23, 23, 0.18);
 }
 
 .helios-masthead__wordmark {
@@ -224,41 +170,6 @@
   color: var(--brand-narrative);
 }
 
-.helios-masthead__ticker {
-  font-family: var(--font-mono);
-  font-size: 18px;
-  font-weight: 500;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--brand-green);
-}
-
-/* Slide index — bottom-right sequence marker, `03 / 10`. Persistent on
-   every beat between the cover and the follow so the reader always knows
-   where they are in the swipe. */
-.helios-chrome__index {
-  position: absolute;
-  bottom: 60px;
-  right: 88px;
-  font-family: var(--font-mono);
-  font-size: 15px;
-  font-weight: 500;
-  letter-spacing: 0.28em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.55);
-  z-index: 2;
-}
-
-.helios-slide--light .helios-chrome__index {
-  color: rgba(23, 23, 23, 0.55);
-}
-
-/* Photo-bleed cover: the pill IS the brand cue, and the chevron sits where
-   the wordmark would. Hide the wordmark to avoid collision. */
-.helios-slide--cover:has(.helios-cover--bleed) .helios-chrome__mark {
-  display: none;
-}
-
 /* ── Three-role color-emphasis spans ──────────────────────────────────── */
 
 .helios-span { color: inherit; }
@@ -266,14 +177,8 @@
 .helios-span--hook      { color: var(--brand-orange); }
 .helios-span--pivot     { color: var(--brand-green); }
 
-/* ── Cover archetype ──────────────────────────────────────────────────── */
+/* ── Cover — FROZEN from pre-v1 per design v1 §Read this first ────────── */
 
-/* Cover — two modes.
-   Photo-bleed (default when photoUrl is present): full-canvas portrait as
-   background, scrim across the bottom half, category pill + big headline
-   + chevron overlay the photo. Reads like a magazine cover.
-   Text-only (no photo): headline flush-left at the bottom of the dark canvas.
-*/
 .helios-cover {
   position: relative;
   flex: 1;
@@ -282,16 +187,11 @@
   justify-content: flex-end;
 }
 
-/* ── Photo-bleed variant ──────────────────────────────────────────────── */
-
-/* Photo-bleed fills the full 1080×1350 slide with pinned dimensions —
-   avoiding the flex-child height ambiguity. Two hard zones: photo top
-   830px, dark text canvas bottom 520px. Photo zone extends past the
-   shoulders so the hard cut lands on shirt/collar, not on the face. */
+/* Photo-bleed fills the full 1080×1350 slide. */
 .helios-cover--bleed {
   position: absolute;
-  top: -88px;
-  left: -88px;
+  top: 0;
+  left: 0;
   width: 1080px;
   height: 1350px;
   padding: 0;
@@ -312,8 +212,6 @@
   z-index: 0;
 }
 
-/* Subtle top-fade so the SAFETY pill reads against any photo — the photo
-   itself is full-bleed; the scrim just gives the pill a darker landing. */
 .helios-cover__scrim {
   position: absolute;
   top: 0;
@@ -328,12 +226,6 @@
   );
 }
 
-/* Bottom-fade scrim for headline landing zone. Portraits (Altman, Dario,
-   Suleyman) already have naturally-dark blazers at the bottom — this
-   scrim adds subtle reinforcement. Metaphor photos with bright bottoms
-   (newspaper stacks, laptops) rely on this scrim to make the headline
-   readable at all. Kept at 45% height + 0.85 max opacity so it doesn't
-   dominate the photo. */
 .helios-cover__scrim--bottom {
   position: absolute;
   bottom: 0;
@@ -356,12 +248,6 @@
   display: block;
 }
 
-.helios-cover--bleed .helios-cover__pill {
-  position: absolute;
-  top: 60px;
-  left: 60px;
-}
-
 .helios-cover--bleed .helios-cover__headline {
   position: absolute;
   left: 60px;
@@ -373,29 +259,6 @@
   margin: 0;
 }
 
-.helios-cover--bleed .helios-cover__arrow {
-  right: 60px;
-  bottom: 60px;
-}
-
-/* On-slide photo credit — small green Roboto Mono, sits just above the
-   headline stack so it never touches the type but stays legible against
-   the photo's natural dark backdrop. Required by CC-license terms. */
-.helios-cover--bleed .helios-cover__credit {
-  position: absolute;
-  left: 60px;
-  bottom: 320px;
-  font-family: var(--font-mono);
-  font-size: 16px;
-  font-weight: 500;
-  letter-spacing: 0.20em;
-  text-transform: uppercase;
-  color: var(--brand-green);
-  line-height: 1;
-  z-index: 3;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
-}
-
 .helios-cover__foreground {
   position: relative;
   z-index: 2;
@@ -403,24 +266,6 @@
   flex-direction: column;
   gap: 32px;
   height: 100%;
-}
-
-/* Green triangle-prefixed category label — top-left below the corner mark.
-   Replaces the older orange pill. Green because chrome is green; the
-   composition holds the hook color. */
-.helios-cover__category {
-  align-self: flex-start;
-  font-family: var(--font-mono);
-  font-size: 18px;
-  font-weight: 500;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--brand-green);
-  line-height: 1;
-}
-
-.helios-cover__category-glyph {
-  color: var(--brand-green);
 }
 
 .helios-cover__headline {
@@ -437,9 +282,6 @@
   max-width: 100%;
 }
 
-/* Length-scaled cover headline. The template counts characters in the
-   headline spans and stamps a bucket onto data-length. Longer copy
-   scales down so we never render a 12-line wrap of hero type. */
 .helios-cover__headline[data-length="xs"] { font-size: 132px; line-height: 0.9;  letter-spacing: -0.04em;  }
 .helios-cover__headline[data-length="sm"] { font-size: 108px; line-height: 0.92; letter-spacing: -0.035em; }
 .helios-cover__headline[data-length="md"] { font-size: 88px;  line-height: 0.94; letter-spacing: -0.03em;  }
@@ -450,506 +292,280 @@
   text-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
 }
 
-/* Byline row — outlet + date in Roboto Mono under the headline. Green
-   outlet name, near-white 60% date, separated by a middle-dot. Editorial
-   masthead cue. */
-.helios-cover__byline {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.24);
-}
-
-.helios-cover__byline-outlet {
-  font-family: var(--font-mono);
-  font-size: 20px;
-  font-weight: 500;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--brand-green);
-}
-
-.helios-cover__byline-sep {
-  font-family: var(--font-mono);
-  color: rgba(255, 255, 255, 0.4);
-}
-
-.helios-cover__byline-date {
-  font-family: var(--font-mono);
-  font-size: 18px;
-  font-weight: 500;
-  letter-spacing: 0.20em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-/* Cover chevron bottom-right — arrow alone, no "SWIPE" text. */
+/* Cover chevron bottom-right — orange arrow. */
 .helios-cover__chevron {
   position: absolute;
-  right: 0;
-  bottom: 0;
+  right: 96px;
+  bottom: 60px;
   font-family: var(--font-body);
-  font-size: 44px;
+  font-size: 60px;
   font-weight: 700;
   color: var(--brand-orange);
   line-height: 1;
-}
-
-/* Corner registration marks — L-brackets at the four inner corners of the
-   content well. Design-magazine cue that signals "designed frame," not
-   "type on a background." Cover only. */
-.helios-cover__corner {
-  position: absolute;
-  width: 56px;
-  height: 56px;
   z-index: 3;
-  pointer-events: none;
 }
 
-.helios-cover__corner--tl {
-  top: 0;
-  left: 0;
-  border-top: 2px solid rgba(255, 255, 255, 0.28);
-  border-left: 2px solid rgba(255, 255, 255, 0.28);
-}
-.helios-cover__corner--tr {
-  top: 0;
-  right: 0;
-  border-top: 2px solid rgba(255, 255, 255, 0.28);
-  border-right: 2px solid rgba(255, 255, 255, 0.28);
-}
-.helios-cover__corner--bl {
-  bottom: 0;
-  left: 0;
-  border-bottom: 2px solid rgba(255, 255, 255, 0.28);
-  border-left: 2px solid rgba(255, 255, 255, 0.28);
-}
-.helios-cover__corner--br {
-  bottom: 0;
-  right: 0;
-  border-bottom: 2px solid rgba(255, 255, 255, 0.28);
-  border-right: 2px solid rgba(255, 255, 255, 0.28);
-}
+/* ── Text slide (HEADLINE + BODY, top-anchored) ───────────────────────── */
 
-/* ── Story-beat archetype (photo-forward, @metav3rse-style) ───────────── */
-
-/* Beat structure: headline at top, body-top paragraph, big photo block in
-   the middle with baked caption, body-bottom paragraph, arrow bottom-right.
-   The photo is the visual centerpiece — same pattern @metav3rse uses. */
-.helios-beat {
+.helios-text {
   position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  padding-bottom: 16px;
+  gap: 40px;
+  padding-top: 96px;
 }
 
-.helios-beat__title {
+.helios-text__headline {
   font-family: var(--font-heading);
-  font-size: 88px;
+  font-size: 100px;
   font-weight: 700;
-  line-height: 0.92;
-  letter-spacing: -0.035em;
-  color: var(--brand-orange);
+  line-height: 0.94;
+  letter-spacing: -0.03em;
+  color: var(--brand-narrative);
   text-transform: uppercase;
   margin: 0;
   overflow-wrap: break-word;
 }
 
-.helios-beat__body {
+.helios-text__headline[data-length="xs"] { font-size: 100px; }
+.helios-text__headline[data-length="sm"] { font-size: 100px; }
+.helios-text__headline[data-length="md"] { font-size: 84px; }
+.helios-text__headline[data-length="lg"] { font-size: 72px; }
+
+/* Body is fixed at 44px. NEVER scales. NEVER clips. If it overflows,
+   the render is a failure — human review handles it. See
+   docs/DESIGN-V1-HANDOFF.md §Type. */
+.helios-text__body {
   font-family: var(--font-body);
-  font-size: 32px;
-  font-weight: 300;
+  font-size: 44px;
+  font-weight: 400;
   line-height: 1.32;
   color: var(--brand-narrative);
   margin: 0;
   max-width: 100%;
+  overflow: visible;
 }
 
-/* Story-beat body auto-shrink — same character-bucket pattern as cover
-   and thesis. Prevents overflow on beats where the copy stage produces
-   an unusually long body block. NOTE: thesis-scoped selectors above
-   override these (bigger fonts) because thesis is Pragmatica hero type
-   while normal beats stay in Roboto Light. */
-.helios-beat__body[data-length="xs"] { font-size: 40px; line-height: 1.28; }
-.helios-beat__body[data-length="sm"] { font-size: 34px; line-height: 1.32; }
-.helios-beat__body[data-length="md"] { font-size: 30px; line-height: 1.36; }
-.helios-beat__body[data-length="lg"] { font-size: 26px; line-height: 1.4;  }
-.helios-beat__body[data-length="xl"] { font-size: 22px; line-height: 1.44; }
+/* ── Landing slide (HEADLINE only, centered) ──────────────────────────── */
 
-.helios-beat__figure {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 10;
-  margin: 4px 0;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.helios-beat__photo {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.helios-beat__caption {
-  position: absolute;
-  left: 24px;
-  bottom: 20px;
-  padding: 8px 14px;
-  font-family: var(--font-mono);
-  font-size: 20px;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--brand-narrative);
-  background: rgba(10, 10, 10, 0.75);
-  backdrop-filter: blur(4px);
-}
-
-/* Photo credit — news-article style, small grey mono caption BELOW the
-   image (outside the frame), right-aligned. Editorial, quiet, doesn't
-   compete with the photo. */
-.helios-beat__credit {
-  margin-top: 12px;
-  font-family: var(--font-mono);
-  font-size: 15px;
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.42);
-  line-height: 1.2;
-  text-align: right;
-}
-
-.helios-beat__arrow {
-  align-self: flex-end;
-  font-family: var(--font-body);
-  font-size: 44px;
-  font-weight: 700;
-  color: var(--brand-narrative);
-  opacity: 0.85;
-  line-height: 1;
-  margin-top: auto;
-}
-
-/* Bottom-fade photo treatment — the photo is anchored to the bottom half
-   of the slide and dissolves upward into the canvas via a linear mask.
-   Copy at the top sits over pure canvas (no photo interference). Used
-   when a source photo appears elsewhere in the carousel — the fade
-   yields a visually distinct composition from the same file. */
-.helios-beat--bottom-fade {
-  padding-bottom: 16px;
-}
-
-.helios-beat__bottom-fade {
-  position: absolute;
-  left: -56px;
-  right: -56px;
-  bottom: -56px;
-  height: 55%;
-  background-repeat: no-repeat;
-  background-size: cover;
-  background-position: center 92%;
-  -webkit-mask-image: linear-gradient(to top, #000 0%, #000 20%, transparent 95%);
-  mask-image: linear-gradient(to top, #000 0%, #000 20%, transparent 95%);
-  z-index: 0;
-  pointer-events: none;
-}
-
-.helios-beat--bottom-fade > *:not(.helios-beat__bottom-fade) {
-  position: relative;
-  z-index: 1;
-}
-
-.helios-beat__credit--bottom-fade {
-  right: 0;
-  bottom: 96px;
-  background: transparent;
-  backdrop-filter: none;
-  padding: 0;
-  color: var(--brand-green);
-}
-
-/* ── Data-block archetype (mid-carousel rhythm break) ─────────────────── */
-
-/* Data-block leans on the number itself as the visual. Left-anchored,
-   editorial-magazine layout — big orange number reads first, hairline
-   rule handoff, uppercase label, one context sentence, done. No photo. */
-.helios-data {
+.helios-landing {
   position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding-top: 8px;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 32px;
 }
 
-.helios-data__number {
+.helios-landing__line {
+  font-family: var(--font-heading);
+  font-size: 125px;
+  font-weight: 700;
+  line-height: 0.94;
+  letter-spacing: -0.035em;
+  color: var(--brand-narrative);
+  text-transform: uppercase;
+  margin: 0;
+  overflow-wrap: break-word;
+}
+
+.helios-landing__line[data-length="xs"] { font-size: 125px; }
+.helios-landing__line[data-length="sm"] { font-size: 104px; }
+.helios-landing__line[data-length="md"] { font-size: 88px; }
+
+.helios-landing__note {
+  font-family: var(--font-body);
+  font-size: 38px;
+  font-weight: 400;
+  line-height: 1.32;
+  color: var(--brand-narrative-muted);
+  margin: 0;
+}
+
+/* ── Stat slide (headline top, big number + note bottom) ──────────────── */
+
+.helios-stat {
+  position: relative;
+  flex: 1;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  row-gap: 32px;
+  padding-top: 96px;
+  padding-bottom: 16px;
+}
+
+.helios-stat__headline {
+  font-family: var(--font-heading);
+  font-size: 72px;
+  font-weight: 700;
+  line-height: 0.98;
+  letter-spacing: -0.025em;
+  color: var(--brand-narrative);
+  text-transform: uppercase;
+  margin: 0;
+  overflow-wrap: break-word;
+}
+
+.helios-stat__body {
+  font-family: var(--font-body);
+  font-size: 44px;
+  font-weight: 400;
+  line-height: 1.32;
+  color: var(--brand-narrative);
+  margin: 0;
+  overflow: visible;
+}
+
+.helios-stat__photo {
+  width: 100%;
+  max-height: 400px;
+  object-fit: cover;
+  display: block;
+}
+
+.helios-stat__number-block {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: auto;
+}
+
+.helios-stat__number {
   font-family: var(--font-heading);
   font-size: 260px;
   font-weight: 700;
-  line-height: 0.85;
+  line-height: 0.88;
   letter-spacing: -0.045em;
-  color: var(--brand-orange);
-  text-transform: uppercase;
+  color: var(--brand-narrative);
   margin: 0;
   white-space: nowrap;
-  /* Safety belt if a longer-than-catalogued string sneaks through — clip
-     inside the container rather than overflow onto the right padding. */
-  max-width: 100%;
   overflow: hidden;
 }
 
-/* Char-count ladder — Pragmatica Extended Bold at 260px overflows the 904px
-   inner content width past 4 chars. Shrink at each additional character so
-   the giant element sits inside the slide's inner padding regardless of
-   whether it's a $ number (short) or a punchy word (longer). */
-.helios-data__number[data-length="5"] { font-size: 232px; }
-.helios-data__number[data-length="6"] { font-size: 208px; }
-.helios-data__number[data-length="7"] { font-size: 184px; }
-.helios-data__number[data-length="8"] { font-size: 168px; }
-.helios-data__number[data-length="9"],
-.helios-data__number[data-length="10"],
-.helios-data__number[data-length="11"],
-.helios-data__number[data-length="12"] { font-size: 152px; }
+/* Character-count scaler for the big number — same ladder as pre-v1
+   preserves fit. */
+.helios-stat__number[data-length="5"]  { font-size: 232px; }
+.helios-stat__number[data-length="6"]  { font-size: 208px; }
+.helios-stat__number[data-length="7"]  { font-size: 184px; }
+.helios-stat__number[data-length="8"]  { font-size: 168px; }
+.helios-stat__number[data-length="9"],
+.helios-stat__number[data-length="10"],
+.helios-stat__number[data-length="11"],
+.helios-stat__number[data-length="12"] { font-size: 152px; }
 
-.helios-data__rule {
-  height: 1px;
-  background: rgba(255, 255, 255, 0.24);
-  margin: 8px 0;
+.helios-stat__number-note {
+  font-family: var(--font-body);
+  font-size: 38px;
+  font-weight: 400;
+  line-height: 1.32;
+  color: var(--brand-narrative-muted);
+  margin: 0;
 }
 
-/* Pictogram grid — 5×5 = 25 cells for percentage stats. Filled cells
-   visualize "1 in N" as a pattern the eye reads instantly. Beats a bar
-   chart because it shows the ratio, not the number restated. */
-.helios-data__grid {
+/* ── Split-stat slide ─────────────────────────────────────────────────── */
+
+.helios-split-stat {
+  position: relative;
+  flex: 1;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 12px;
-  margin: 32px 0 8px;
-  max-width: 480px;
+  grid-template-rows: auto 1fr auto;
+  row-gap: 32px;
+  padding-top: 96px;
+  padding-bottom: 16px;
 }
 
-.helios-data__grid-cell {
-  aspect-ratio: 1;
-  background: rgba(255, 255, 255, 0.10);
-  border-radius: 4px;
-}
-
-.helios-data__grid-cell--on {
-  background: var(--brand-orange);
-}
-
-/* Comparison bar chart — two horizontal bars showing the story's value
-   against a baseline. Reader sees the scale instantly, not "26%" as
-   text they have to compute against 100. */
-.helios-data__chart {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  margin: 32px 0 8px;
-}
-
-.helios-data__chart-row {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.helios-data__chart-bar {
-  height: 36px;
-  border-radius: 2px;
-  transition: none;
-}
-
-.helios-data__chart-bar--value {
-  background: var(--brand-orange);
-}
-
-.helios-data__chart-bar--baseline {
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.helios-data__chart-label {
-  font-family: var(--font-mono);
-  font-size: 20px;
-  font-weight: 500;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  line-height: 1;
-}
-
-.helios-data__chart-label--value {
-  color: var(--brand-orange);
-}
-
-.helios-data__chart-label--baseline {
-  color: rgba(255, 255, 255, 0.55);
-}
-
-.helios-data__label {
+.helios-split-stat__headline {
   font-family: var(--font-heading);
-  font-size: 84px;
+  font-size: 72px;
   font-weight: 700;
-  line-height: 1;
+  line-height: 0.98;
   letter-spacing: -0.025em;
   color: var(--brand-narrative);
   text-transform: uppercase;
   margin: 0;
 }
 
-/* D1 SCALE label auto-shrink — same character-bucket pattern. */
-.helios-data__label[data-length="xs"] { font-size: 96px; }
-.helios-data__label[data-length="sm"] { font-size: 84px; }
-.helios-data__label[data-length="md"] { font-size: 68px; }
-.helios-data__label[data-length="lg"] { font-size: 54px; }
-.helios-data__label[data-length="xl"] { font-size: 42px; line-height: 1.1; }
-
-.helios-data__context {
-  font-family: var(--font-body);
-  font-size: 34px;
-  font-weight: 300;
-  line-height: 1.32;
-  color: rgba(255, 255, 255, 0.72);
-  margin: 0;
-  max-width: 900px;
-}
-
-/* D3 eyebrow — small green mono kicker at the TOP of the block (D3
-   carries a text kicker in `title`, not a giant number). */
-.helios-data__eyebrow {
-  font-family: var(--font-mono);
-  font-size: 20px;
-  font-weight: 500;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--brand-green);
-  line-height: 1.4;
-  margin: 0;
-  max-width: 900px;
-}
-
-/* Editorial kicker — small green mono tag that closes the data block. */
-.helios-data__kicker {
-  font-family: var(--font-mono);
-  font-size: 22px;
-  font-weight: 500;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--brand-green);
-  line-height: 1.4;
-  margin: 40px 0 0;
-  max-width: 900px;
-}
-
-/* Bottom-anchored photo band — fills the natural whitespace under the
-   big-number lockup with a visual anchor (announcement card, product
-   shot, subject portrait). Mirrors the story-beat figure treatment for
-   consistency in caption + credit placement. */
-.helios-data__figure {
-  position: relative;
+.helios-split-stat__photo {
   width: 100%;
-  aspect-ratio: 21 / 9;
-  /* Explicit left/right zero — browser UA stylesheet applies `margin: 1em
-     40px` to <figure> elements, which would offset the band 40px right of
-     the parent's inner edge. */
-  margin: auto 0 72px 0;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.helios-data__photo {
-  width: 100%;
-  height: 100%;
+  max-height: 320px;
   object-fit: cover;
-  object-position: center center;
   display: block;
 }
 
-.helios-data__caption {
-  position: absolute;
-  left: 24px;
-  bottom: 20px;
-  padding: 8px 14px;
-  font-family: var(--font-mono);
-  font-size: 20px;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--brand-narrative);
-  background: rgba(10, 10, 10, 0.75);
-  backdrop-filter: blur(4px);
-}
-
-.helios-data__credit {
-  position: absolute;
-  right: 20px;
-  bottom: 20px;
-  padding: 6px 10px;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--brand-green);
-  background: rgba(10, 10, 10, 0.75);
-  backdrop-filter: blur(4px);
-  line-height: 1;
-}
-
-.helios-data__arrow {
-  align-self: flex-end;
-  font-family: var(--font-body);
-  font-size: 44px;
-  font-weight: 700;
-  color: var(--brand-narrative);
-  opacity: 0.85;
-  line-height: 1;
+.helios-split-stat__pair {
+  display: flex;
+  align-items: flex-end;
+  gap: 48px;
   margin-top: auto;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.24);
 }
 
-/* Type-only data-block source tag. Green mono chrome flush with the
-   bottom-left inner padding line, same register as the cover's
-   category label. Fills the lower-half negative space with post
-   metadata (date + outlet) rather than fabricated copy. */
-.helios-data__source-tag {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  font-family: var(--font-mono);
-  font-size: 20px;
-  font-weight: 500;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--brand-green);
-  line-height: 1;
+.helios-split-stat__col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-/* When the data block carries a photo band at the bottom, hide the arrow —
-   the photo is the visual anchor, the HELIOS wordmark handles chrome, and
-   two competing bottom-right marks would crowd the composition. */
-.helios-data:has(.helios-data__figure) .helios-data__arrow {
-  display: none;
+.helios-split-stat__rule {
+  width: 1px;
+  align-self: stretch;
+  background: rgba(255, 255, 255, 0.24);
 }
 
-/* ── Quote archetype ──────────────────────────────────────────────────── */
+.helios-split-stat__number {
+  font-family: var(--font-heading);
+  font-size: 146px;
+  font-weight: 700;
+  line-height: 0.9;
+  letter-spacing: -0.04em;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
 
-/* Editorial pause. Oversized orange curly glyph anchors top-left. Quote
-   text sits in the mid-frame in Pragmatica Bold, sentence case (a person
-   speaking, not shouting). Attribution in green mono, em-dash prefix,
-   flush left below the quote. Reference chrome and category label render
-   from the universal chrome layer above. */
+.helios-split-stat__number--left  { color: var(--brand-narrative); }
+.helios-split-stat__number--right { color: var(--brand-orange); }
+
+.helios-split-stat__number[data-length="6"]  { font-size: 132px; }
+.helios-split-stat__number[data-length="7"]  { font-size: 120px; }
+.helios-split-stat__number[data-length="8"]  { font-size: 108px; }
+.helios-split-stat__number[data-length="9"],
+.helios-split-stat__number[data-length="10"],
+.helios-split-stat__number[data-length="11"],
+.helios-split-stat__number[data-length="12"] { font-size: 96px; }
+
+.helios-split-stat__note {
+  font-family: var(--font-body);
+  font-size: 38px;
+  font-weight: 400;
+  line-height: 1.28;
+  color: var(--brand-narrative-muted);
+  margin: 0;
+}
+
+/* ── Quote slide ──────────────────────────────────────────────────────── */
+
 .helios-quote {
   position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 32px;
+  padding-top: 96px;
   padding-bottom: 16px;
+}
+
+.helios-quote__speaker {
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  margin: 0;
 }
 
 .helios-quote__glyph {
@@ -963,14 +579,14 @@
   padding: 0;
   position: relative;
   top: -16px;
-  height: 180px;
+  height: 150px;
 }
 
 .helios-quote__text {
   font-family: var(--font-heading);
-  font-size: 72px;
+  font-size: 69px;
   font-weight: 700;
-  line-height: 1.06;
+  line-height: 1.08;
   letter-spacing: -0.02em;
   color: var(--brand-narrative);
   margin: 0;
@@ -980,107 +596,86 @@
 
 .helios-quote__attribution {
   font-family: var(--font-mono);
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--brand-green);
+  color: var(--brand-narrative-muted);
   line-height: 1.4;
   margin-top: auto;
 }
 
-.helios-quote__arrow {
-  align-self: flex-end;
-  font-family: var(--font-body);
-  font-size: 44px;
-  font-weight: 700;
-  color: var(--brand-narrative);
-  opacity: 0.85;
-  line-height: 1;
-  position: absolute;
-  right: 0;
-  bottom: 16px;
-}
+/* ── Image slide (cover-style full-bleed mid-carousel) ────────────────── */
 
-/* ── Source archetype ─────────────────────────────────────────────────── */
-
-.helios-source {
+.helios-image {
   position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 28px;
-  padding-top: 8px;
+  justify-content: flex-end;
 }
 
-.helios-source__label {
-  font-family: var(--font-mono);
-  font-size: 20px;
-  font-weight: 500;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: var(--brand-green);
-}
-
-.helios-source__outlet {
-  font-family: var(--font-heading);
-  font-size: 96px;
-  font-weight: 700;
-  line-height: 0.94;
-  letter-spacing: -0.03em;
-  color: var(--brand-narrative);
-  margin: 0;
-  text-transform: uppercase;
-  max-width: 440px;
-  position: relative;
-  z-index: 2;
-}
-
-.helios-source__teaser {
-  font-family: var(--font-body);
-  font-size: 28px;
-  font-weight: 300;
-  line-height: 1.32;
-  color: var(--brand-narrative-muted);
-  max-width: 440px;
-  margin: 0;
-  position: relative;
-  z-index: 2;
-}
-
-.helios-source__cta {
-  margin-top: auto;
-  font-family: var(--font-mono);
-  font-size: 22px;
-  font-weight: 500;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: var(--brand-orange);
-}
-
-.helios-source__photo {
+/* Full-bleed image slide reuses the cover's photo/scrim structure. Same
+   photo-fills-slide + darkened-under-text pattern as the cover; only the
+   text block below carries an optional body sentence in addition to the
+   headline. Cover's own CSS remains unchanged. */
+.helios-image--bleed {
   position: absolute;
   top: 0;
-  right: 0;
-  width: 440px;
-  height: 520px;
-  object-fit: cover;
-  object-position: center;
-  display: block;
-}
-
-/* ── Follow archetype — white canvas ──────────────────────────────────── */
-
-/* F1 Follow — dark canvas, wordmark lockup. Per the design skill: the
-   wordmark IS the follow-invitation. No shouted "Follow for more." headline.
-   Near-black canvas so the closing beat reads as an anchor beat, matching
-   the rest of the carousel visually. */
-.helios-slide--follow {
+  left: 0;
+  width: 1080px;
+  height: 1350px;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
   background: var(--brand-canvas);
 }
 
-.helios-slide--follow .helios-slide__well {
-  padding: 0;
+.helios-image__foreground {
+  position: absolute;
+  left: 60px;
+  right: 60px;
+  bottom: 60px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.helios-image__headline {
+  font-family: var(--font-heading);
+  font-size: 84px;
+  font-weight: 700;
+  line-height: 0.96;
+  letter-spacing: -0.03em;
+  color: var(--brand-narrative);
+  text-transform: uppercase;
+  margin: 0;
+  overflow-wrap: break-word;
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+}
+
+.helios-image__body {
+  font-family: var(--font-body);
+  font-size: 44px;
+  font-weight: 400;
+  line-height: 1.32;
+  color: var(--brand-narrative);
+  margin: 0;
+  overflow: visible;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
+}
+
+/* Full-bleed image slides suppress the top-right HELIOS wordmark to keep
+   the photo edge clean (same rule as cover-with-bleed). */
+.helios-slide--image:has(.helios-image--bleed) .helios-masthead {
+  display: none;
+}
+
+/* ── Follow (unchanged) ──────────────────────────────────────────────── */
+
+.helios-slide--follow {
+  background: var(--brand-canvas);
 }
 
 .helios-follow {
@@ -1091,13 +686,11 @@
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-  padding: 120px 88px;
+  padding: 120px 96px;
   gap: 40px;
   box-sizing: border-box;
 }
 
-/* HELIOS wordmark — hero of the slide. Left-aligned like a magazine
-   masthead. Kept large but not crushing at Instagram size. */
 .helios-follow__wordmark {
   font-family: var(--font-body);
   font-size: 148px;
@@ -1109,7 +702,6 @@
   padding-left: 0.22em;
 }
 
-/* Handle — orange, mono, lowercase. The single call to action. */
 .helios-follow__handle {
   font-family: var(--font-mono);
   font-size: 48px;
@@ -1120,83 +712,6 @@
   text-transform: lowercase;
 }
 
-/* P1 Proof — source-card treatment. Section label + big outlet name +
-   hairline + article body + optional photo. Editorial masthead-style
-   composition that anchors the story to a real publication. */
-.helios-proof {
-  position: relative;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  padding-top: 24px;
-}
-
-.helios-proof__label {
-  font-family: var(--font-mono);
-  font-size: 20px;
-  font-weight: 500;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--brand-green);
-  line-height: 1;
-  margin: 0;
-}
-
-.helios-proof__outlet {
-  font-family: var(--font-heading);
-  font-size: 108px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  text-transform: uppercase;
-  color: var(--brand-narrative);
-  line-height: 0.94;
-  margin: 0;
-}
-
-.helios-proof__rule {
-  height: 1px;
-  background: rgba(255, 255, 255, 0.24);
-  margin: 8px 0 4px;
-}
-
-.helios-proof__body {
-  font-family: var(--font-body);
-  font-size: 32px;
-  font-weight: 300;
-  line-height: 1.32;
-  color: var(--brand-narrative);
-  margin: 0;
-  max-width: 100%;
-}
-
-.helios-proof__figure {
-  margin: auto 0 0;
-  padding: 0;
-}
-
-.helios-proof__photo {
-  width: 100%;
-  height: auto;
-  display: block;
-  border-radius: 2px;
-}
-
-.helios-proof__credit {
-  margin-top: 12px;
-  font-family: var(--font-mono);
-  font-size: 15px;
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.42);
-  text-align: right;
-  line-height: 1.2;
-}
-
-/* Story-specific line — the follow reason, tied to THIS story. Small,
-   sits below the handle. White at reduced alpha so the handle carries
-   the visual emphasis. */
 .helios-follow__story-line {
   max-width: 780px;
   font-family: var(--font-body);
@@ -1207,190 +722,3 @@
   color: rgba(255, 255, 255, 0.72);
   margin: 8px 0 0;
 }
-
-/* ── New layout families (MVP shells) ─────────────────────────────────────
-   `proof`, `thesis`, `debate` come from the design skill's expanded layout
-   library. MVP: they piggyback on story_beat rendering with distinct root
-   classes so future custom styling has a scope. */
-.helios-slide--proof,
-.helios-slide--thesis {
-  background: var(--brand-canvas);
-}
-
-/* ── T2 debate slide ────────────────────────────────────────────────────── */
-.helios-slide--debate {
-  background: var(--brand-canvas);
-}
-
-.helios-debate {
-  padding: 40px 0 40px 0;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 48px;
-  box-sizing: border-box;
-}
-
-/* Question is the headline of the slide — sits flush left up top, doesn't
-   waste 120px of vertical space above. 68px keeps it as one tight block
-   instead of 7-line wrap. */
-.helios-debate__question {
-  margin: 0;
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 68px;
-  line-height: 1.04;
-  letter-spacing: -0.025em;
-  color: #FFFFFF;
-}
-
-/* Sides — clear differentiation between the two arguments. A vertical
-   green rule on the left of each block anchors it as a "side" and the
-   labels sit inside the same block, not floating above. */
-.helios-debate__sides {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 32px;
-}
-
-.helios-debate__side {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding-left: 24px;
-  border-left: 2px solid var(--brand-green);
-}
-
-.helios-debate__side-label {
-  font-family: var(--font-mono);
-  font-size: 22px;
-  font-weight: 500;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: var(--brand-green);
-  line-height: 1;
-}
-
-.helios-debate__side-text {
-  font-family: var(--font-body);
-  font-weight: 300;
-  font-size: 32px;
-  line-height: 1.32;
-  color: #FFFFFF;
-  margin: 0;
-}
-
-.helios-debate__body {
-  margin: 0;
-  font-family: var(--font-body);
-  font-weight: 300;
-  font-size: 36px;
-  line-height: 1.28;
-  color: #FFFFFF;
-}
-
-.helios-debate__figure {
-  margin: auto 0 0;
-  padding: 0;
-}
-
-.helios-debate__photo {
-  width: 100%;
-  height: auto;
-  display: block;
-  border-radius: 2px;
-}
-
-.helios-debate__credit {
-  margin-top: 12px;
-  font-family: var(--font-mono);
-  font-size: 15px;
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.42);
-  text-align: right;
-}
-
-.helios-debate__prompt {
-  margin-top: auto;
-  font-family: var(--font-body);
-  font-size: 22px;
-  color: rgba(255,255,255,0.6);
-  font-style: italic;
-}
-
-/* ── Variant modifier hooks ─────────────────────────────────────────────
-   The design skill defines 14+ specific compositional variants (C1..T2, F1).
-   The renderer routes them through their layoutVariant family; these CSS
-   selectors let per-variant styling live here without new React components. */
-
-/* C4 — big-number cover. Uses the .helios-cover shell; the `title` slot
-   carries the giant orange number and the `body` slot carries the short
-   context line. */
-.helios-slide--cover[data-variant="C4"] .helios-cover__headline {
-  display: none;
-}
-
-/* B5 — type-only landing beat. Only the headline renders as a giant
-   Pragmatica sentence. The renderer suppresses body/title/photo on B5 so
-   long body copy can't accidentally hijack the landing treatment. */
-.helios-slide--story_beat[data-variant="B5"] .helios-beat {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 96px 88px 120px;
-  height: 100%;
-  box-sizing: border-box;
-}
-.helios-beat__landing {
-  margin: 0;
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 108px;
-  line-height: 0.94;
-  letter-spacing: -0.035em;
-  color: var(--brand-orange);
-  text-transform: uppercase;
-}
-/* B5 landing auto-shrink per character-bucket. Same pattern as cover
-   and thesis — landing text always fits inside the frame regardless of
-   how long the copy grows. */
-.helios-beat__landing[data-length="xs"] { font-size: 148px; line-height: 0.9;  letter-spacing: -0.04em;  }
-.helios-beat__landing[data-length="sm"] { font-size: 128px; line-height: 0.92; letter-spacing: -0.038em; }
-.helios-beat__landing[data-length="md"] { font-size: 96px;  line-height: 0.96; letter-spacing: -0.03em;  }
-.helios-beat__landing[data-length="lg"] { font-size: 72px;  line-height: 1;    letter-spacing: -0.025em; }
-.helios-beat__landing[data-length="xl"] { font-size: 56px;  line-height: 1.08; letter-spacing: -0.02em;  }
-
-/* B2 — photo-overlay beat. Full-bleed photo, headline overlaid on the
-   lower half. MVP: promotes the beat's photo to full-bleed and repositions
-   the copy block over a bottom scrim. Full styling deferred. */
-.helios-slide--story_beat[data-variant="B2"] .helios-beat__title {
-  display: none;
-}
-
-/* T1 — thesis. Editor's landing sentence. Uses the story_beat shell with
-   the body promoted to landing-line register. */
-.helios-slide--thesis .helios-beat__title {
-  display: none;
-}
-.helios-slide--thesis .helios-beat__body {
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 88px;
-  line-height: 1.02;
-  letter-spacing: -0.03em;
-  color: var(--brand-orange);
-}
-
-/* T1 thesis auto-shrink — same character-bucket pattern as the cover.
-   Long copy no longer overflows the frame. Design-side guardrail so
-   copy-side regen never inherits an overflow bug. */
-.helios-slide--thesis .helios-beat__body[data-length="xs"] { font-size: 104px; line-height: 0.98; letter-spacing: -0.035em; }
-.helios-slide--thesis .helios-beat__body[data-length="sm"] { font-size: 88px;  line-height: 1.02; letter-spacing: -0.03em;  }
-.helios-slide--thesis .helios-beat__body[data-length="md"] { font-size: 68px;  line-height: 1.06; letter-spacing: -0.025em; }
-.helios-slide--thesis .helios-beat__body[data-length="lg"] { font-size: 54px;  line-height: 1.12; letter-spacing: -0.02em;  }
-.helios-slide--thesis .helios-beat__body[data-length="xl"] { font-size: 44px;  line-height: 1.2;  letter-spacing: -0.015em; }

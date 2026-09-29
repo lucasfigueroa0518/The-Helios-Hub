@@ -20,7 +20,9 @@ export type CheckErrorKind =
   | 'caption_hashtag'
   | 'banned_always'
   | 'banned_judgment'
-  | 'number_trace';
+  | 'number_trace'
+  | 'rhythm'
+  | 'quote_verbatim';
 
 export type CheckError = {
   kind: CheckErrorKind;
@@ -34,13 +36,19 @@ export type CheckError = {
 
 export type CheckReport = { ok: boolean; errors: CheckError[] };
 
-/** Character budgets from §Orchestration rules. */
+/** Character budgets from §Orchestration rules + design v1. */
 export const LIMITS = {
   cover: 100,
   headline: 60,
   body: 220,
   bigNumber: 12,
   follow: 100,
+  note: 60,
+  numberNote: 60,
+  secondNumber: 12,
+  secondNote: 60,
+  quote: 200,
+  quoteBy: 60,
   /**
    * Cap on the FULL published caption — Caption stage output PLUS the
    * image-credit block that the publish pipeline appends. Includes the
@@ -128,18 +136,38 @@ export function checkPost(post: ParsedPost, brief: Brief): CheckReport {
         message: makeCharLimitMessage(`SLIDE ${slide.position} BIG NUMBER`, slide.bigNumber.length, LIMITS.bigNumber),
       });
     }
-    // HIGHLIGHT must be an exact substring of HEADLINE or BODY.
+    // Design v1 length limits
+    const perFieldLimit = (name: string, val: string | undefined, limit: number) => {
+      if (val && val.length > limit) {
+        errors.push({
+          kind: 'char_limit',
+          target: 'slide',
+          slidePosition: slide.position,
+          field: name,
+          message: makeCharLimitMessage(`SLIDE ${slide.position} ${name}`, val.length, limit),
+        });
+      }
+    };
+    perFieldLimit('NOTE', slide.note, LIMITS.note);
+    perFieldLimit('NUMBER NOTE', slide.numberNote, LIMITS.numberNote);
+    perFieldLimit('SECOND NUMBER', slide.secondNumber, LIMITS.secondNumber);
+    perFieldLimit('SECOND NOTE', slide.secondNote, LIMITS.secondNote);
+    perFieldLimit('QUOTE', slide.quote, LIMITS.quote);
+    perFieldLimit('QUOTE BY', slide.quoteBy, LIMITS.quoteBy);
+    // HIGHLIGHT must be an exact substring of HEADLINE, BODY, QUOTE, or NOTE.
     if (slide.highlight) {
-      const hay = `${slide.headline ?? ''}\n${slide.body ?? ''}`;
+      const hay = [slide.headline, slide.body, slide.quote, slide.note].filter(Boolean).join('\n');
       if (!hay.includes(slide.highlight)) {
         const headlineLen = (slide.headline ?? '').length;
         const bodyLen = (slide.body ?? '').length;
+        const quoteLen = (slide.quote ?? '').length;
+        const noteLen = (slide.note ?? '').length;
         errors.push({
           kind: 'highlight_substring',
           target: 'slide',
           slidePosition: slide.position,
           field: 'HIGHLIGHT',
-          message: `SLIDE ${slide.position} HIGHLIGHT ("${slide.highlight}") is not an exact substring of the slide's HEADLINE (${headlineLen} characters) or BODY (${bodyLen} characters). Rewrite the highlight so it matches a phrase in the slide verbatim, or edit the slide to include the highlight phrase word-for-word.`,
+          message: `SLIDE ${slide.position} HIGHLIGHT ("${slide.highlight}") is not an exact substring of the slide's HEADLINE (${headlineLen} characters), BODY (${bodyLen} characters), QUOTE (${quoteLen} characters), or NOTE (${noteLen} characters). Rewrite the highlight so it matches a phrase in the slide verbatim, or edit the slide to include the highlight phrase word-for-word.`,
         });
       }
     }
@@ -162,7 +190,40 @@ export function checkPost(post: ParsedPost, brief: Brief): CheckReport {
   }
   errors.push(...scanVoiceOnText('follow', 'TEXT', post.follow, undefined, LIMITS.follow));
 
+  // ── Rhythm: no two consecutive slides share a type (soft). Cover +
+  // follow don't participate. Only compares the middle N slides.
+  const typeOf = classifySlideType;
+  for (let i = 1; i < post.slides.length; i++) {
+    const prev = post.slides[i - 1]!;
+    const cur = post.slides[i]!;
+    const prevType = typeOf(prev);
+    const curType = typeOf(cur);
+    if (prevType === curType) {
+      errors.push({
+        kind: 'rhythm',
+        target: 'slide',
+        slidePosition: cur.position,
+        field: 'TYPE',
+        message: `SLIDE ${cur.position} and SLIDE ${prev.position} are both "${curType}" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them.`,
+      });
+    }
+  }
+
   return { ok: errors.length === 0, errors };
+}
+
+/**
+ * Classify a parsed slide as one of the design-v1 kinds so the rhythm
+ * check can compare consecutive slides. Same first-match order as the
+ * adapter uses to pick a layoutVariant.
+ */
+export function classifySlideType(slide: import('./parse').ParsedSlide): string {
+  if (slide.quote) return 'quote';
+  if (slide.secondNumber) return 'split_stat';
+  if (slide.bigNumber) return 'stat';
+  if (slide.image && /^brief image\s+\d+/i.test(slide.image) && slide.headline) return 'image';
+  if (slide.headline && !slide.body) return 'landing';
+  return 'text';
 }
 
 /**
@@ -262,6 +323,10 @@ export function checkNumberTrace(
     inspect(slide.headline ?? '', 'slide', slide.position, 'HEADLINE');
     inspect(slide.body ?? '', 'slide', slide.position, 'BODY');
     inspect(slide.bigNumber ?? '', 'slide', slide.position, 'BIG NUMBER');
+    inspect(slide.numberNote ?? '', 'slide', slide.position, 'NUMBER NOTE');
+    inspect(slide.secondNumber ?? '', 'slide', slide.position, 'SECOND NUMBER');
+    inspect(slide.secondNote ?? '', 'slide', slide.position, 'SECOND NOTE');
+    inspect(slide.note ?? '', 'slide', slide.position, 'NOTE');
   }
   inspect(post.follow, 'follow', undefined, 'TEXT');
 
@@ -356,18 +421,63 @@ function labelFor(target: CheckError['target'], slidePosition?: number, field?: 
 
 /**
  * Split errors into HARD (stop the run at the code-check gate) and SOFT
- * (char_limit / highlight_substring — flag but let the pipeline continue
- * to Fact-checker; if they survive the whole run, the post goes to human
- * review at the end without rendering). Per handoff §Orchestration rules.
+ * (char_limit / highlight_substring / rhythm — flag but let the pipeline
+ * continue to Fact-checker; if they survive the whole run, the post goes
+ * to human review at the end without rendering). Per handoff §Orchestration
+ * rules + design v1 §Rhythm ("code checks it", soft).
  */
 export function partitionErrors(errors: CheckError[]): { hard: CheckError[]; soft: CheckError[] } {
   const hard: CheckError[] = [];
   const soft: CheckError[] = [];
   for (const e of errors) {
-    if (e.kind === 'char_limit' || e.kind === 'highlight_substring') soft.push(e);
+    if (e.kind === 'char_limit' || e.kind === 'highlight_substring' || e.kind === 'rhythm') soft.push(e);
     else hard.push(e);
   }
   return { hard, soft };
+}
+
+/**
+ * QUOTE hard check: every QUOTE line must appear word-for-word in at least
+ * one fetched source text, after normalizing curly quotes and whitespace.
+ * Design v1 §Adapter and code checks: "This is a hard check."
+ *
+ * Fed the same `sourceTexts[]` that `checkNumberTrace` uses.
+ */
+export function checkQuotes(
+  post: import('./parse').ParsedPost,
+  sourceTexts: string[],
+): CheckReport {
+  const errors: CheckError[] = [];
+  const haystack = sourceTexts.map(normalizeQuoteText).join('\n');
+  for (const slide of post.slides) {
+    if (!slide.quote) continue;
+    const needle = normalizeQuoteText(slide.quote);
+    if (!needle) continue;
+    if (!haystack.includes(needle)) {
+      errors.push({
+        kind: 'quote_verbatim',
+        target: 'slide',
+        slidePosition: slide.position,
+        field: 'QUOTE',
+        message: `SLIDE ${slide.position} QUOTE ("${slide.quote}") does not appear word-for-word in any fetched source (after normalizing curly quotes and whitespace). Either paste the exact sentence from a source or drop the QUOTE from this slide.`,
+      });
+    }
+  }
+  return { ok: errors.length === 0, errors };
+}
+
+/**
+ * Normalize a quote so a curly-quoted / double-spaced / newline-broken
+ * source text still matches the writer's paraphrase-free copy.
+ */
+function normalizeQuoteText(s: string): string {
+  return s
+    .replace(/[‘’‛′]/g, "'")
+    .replace(/[“”‟″]/g, '"')
+    .replace(/[–—]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
 }
 
 /**
@@ -387,7 +497,13 @@ export function renderLengthsBlock(
   for (const s of post.slides) {
     if (s.headline) rows.push(fmtRow(`SLIDE ${s.position} HEADLINE`, s.headline.length, LIMITS.headline));
     if (s.body) rows.push(fmtRow(`SLIDE ${s.position} BODY`, s.body.length, LIMITS.body));
+    if (s.note) rows.push(fmtRow(`SLIDE ${s.position} NOTE`, s.note.length, LIMITS.note));
     if (s.bigNumber) rows.push(fmtRow(`SLIDE ${s.position} BIG NUMBER`, s.bigNumber.length, LIMITS.bigNumber));
+    if (s.numberNote) rows.push(fmtRow(`SLIDE ${s.position} NUMBER NOTE`, s.numberNote.length, LIMITS.numberNote));
+    if (s.secondNumber) rows.push(fmtRow(`SLIDE ${s.position} SECOND NUMBER`, s.secondNumber.length, LIMITS.secondNumber));
+    if (s.secondNote) rows.push(fmtRow(`SLIDE ${s.position} SECOND NOTE`, s.secondNote.length, LIMITS.secondNote));
+    if (s.quote) rows.push(fmtRow(`SLIDE ${s.position} QUOTE`, s.quote.length, LIMITS.quote));
+    if (s.quoteBy) rows.push(fmtRow(`SLIDE ${s.position} QUOTE BY`, s.quoteBy.length, LIMITS.quoteBy));
   }
   rows.push(fmtRow('FOLLOW', post.follow.length, LIMITS.follow));
   if (caption !== null) {

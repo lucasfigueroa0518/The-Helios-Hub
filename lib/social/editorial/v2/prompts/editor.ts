@@ -27,9 +27,9 @@ When you're sent back, fix exactly what you were given, update any highlight you
 
 **Cover.** It names who, says what happened, and makes the reader want the next slide. No teasing or click-bait. If one of the writer's other cover options is stronger, switch to it, or write a better one.
 
-**Flow.** Each slide makes one point and leads to the next. Slide 2 makes sense to someone who never saw the cover, because Instagram re-shows it to people who scrolled past. No slide repeats another. If the order doesn't work, or a slide is thin or repetitive, reorder, merge, split or cut slides. Keep the post between 4 and 11 slides, counting the cover and the follow slide.
+**Flow.** Each slide makes one point and leads to the next. Slide 2 makes sense to someone who never saw the cover, because Instagram re-shows it to people who scrolled past. No slide repeats another. If the order doesn't work, or a slide is thin or repetitive, reorder, merge, split or cut slides. Keep the post between 4 and 11 slides, counting the cover and the follow slide. No two slides in a row should be the same kind. If they are, change one or merge them.
 
-**Images.** Each IMAGE and COVER IMAGE is a numbered image from the brief, a description, or "type only." Never let one describe an image that would pass as evidence the sources don't have, like a chart of made-up numbers or a realistic photo of the event.
+**Images.** Each IMAGE and COVER IMAGE is a numbered image from the brief that shows the slide's subject, or "type only."
 
 **Clarity.** A smart reader who doesn't follow AI should understand every line. Explain any term, company or product they wouldn't know the first time it appears, using its description under TERMS in the brief. If the brief doesn't describe it, rephrase or cut the term. Don't explain it from your own knowledge.
 
@@ -57,7 +57,7 @@ Every HIGHLIGHT must be an exact phrase from its slide's text. If you change a s
 Return the finished post as plain text, in this order:
 
 1. The cover. The writer gave you three options and a pick. Return only the one cover you're going with, on a line that starts with COVER:. Below it, give the cover's COVER HIGHLIGHT: and COVER IMAGE: lines, updated if you changed the cover.
-2. Every slide, in its final order, numbered from 2. Use the same labels the writer used (HEADLINE, BODY, BIG NUMBER, HIGHLIGHT, IMAGE), and leave out any label a slide doesn't need.
+2. Every slide, in its final order, numbered from 2. Use the same labels the writer used (HEADLINE, BODY, NOTE, BIG NUMBER, NUMBER NOTE, SECOND NUMBER, SECOND NOTE, QUOTE, QUOTE BY, HIGHLIGHT, IMAGE), and leave out any label a slide doesn't need.
 3. The follow line, on a line that starts with FOLLOW:.
 4. Your notes, under EDIT NOTES: with one line per change saying what you changed and why. Write "None" if you changed nothing.
 

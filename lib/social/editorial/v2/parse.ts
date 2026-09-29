@@ -187,7 +187,13 @@ export type ParsedSlide = {
   position: number;
   headline?: string;
   body?: string;
+  note?: string;
   bigNumber?: string;
+  numberNote?: string;
+  secondNumber?: string;
+  secondNote?: string;
+  quote?: string;
+  quoteBy?: string;
   highlight?: string;
   image?: string;
 };
@@ -200,7 +206,13 @@ const POST_LABELS = new Set([
   'COVER IMAGE',
   'HEADLINE',
   'BODY',
+  'NOTE',
   'BIG NUMBER',
+  'NUMBER NOTE',
+  'SECOND NUMBER',
+  'SECOND NOTE',
+  'QUOTE',
+  'QUOTE BY',
   'HIGHLIGHT',
   'IMAGE',
   'FOLLOW',
@@ -304,7 +316,13 @@ function parseSlideChunk(position: number, chunk: string): ParsedSlide {
     position,
     headline: extractLabel(chunk, 'HEADLINE'),
     body: extractLabel(chunk, 'BODY'),
+    note: extractLabel(chunk, 'NOTE'),
     bigNumber: extractLabel(chunk, 'BIG NUMBER'),
+    numberNote: extractLabel(chunk, 'NUMBER NOTE'),
+    secondNumber: extractLabel(chunk, 'SECOND NUMBER'),
+    secondNote: extractLabel(chunk, 'SECOND NOTE'),
+    quote: extractLabel(chunk, 'QUOTE'),
+    quoteBy: extractLabel(chunk, 'QUOTE BY'),
     highlight: extractLabel(chunk, 'HIGHLIGHT'),
     image: extractLabel(chunk, 'IMAGE'),
   };

@@ -73,6 +73,9 @@ async function main() {
       process.exit(1);
     }
     console.log(`Wrote ${r.slideCount} slide PNG(s) to ${path.relative(process.cwd(), r.outDir)}/`);
+    if (r.overflowSlides.length > 0) {
+      console.log(`  ⚠ Body overflowed on ${r.overflowSlides.length} slide(s): ${r.overflowSlides.map((n) => n + 1).join(', ')} — those PNGs carry a red OVERFLOW badge and need human review.`);
+    }
     process.exit(0);
   }
 
@@ -266,6 +269,9 @@ async function main() {
     });
     if (r.ok) {
       console.log(`       ${path.relative(process.cwd(), r.outDir)}/ (${r.slideCount} slide PNG${r.slideCount === 1 ? '' : 's'})`);
+      if (r.overflowSlides.length > 0) {
+        console.log(`       ⚠ Body overflowed on ${r.overflowSlides.length} slide(s): ${r.overflowSlides.map((n) => n + 1).join(', ')} — those PNGs carry a red OVERFLOW badge and need human review.`);
+      }
     } else {
       console.warn(`Preview render skipped: ${r.reason}`);
     }

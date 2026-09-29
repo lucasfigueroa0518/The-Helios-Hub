@@ -5,6 +5,9 @@ import {
   checkCaption,
   checkNumberTrace,
   checkPost,
+  checkQuotes,
+  classifySlideType,
+  partitionErrors,
   renderLengthsBlock,
 } from '@/lib/social/editorial/v2/code-checks';
 import { parseBrief, parseEditedPost } from '@/lib/social/editorial/v2/parse';
@@ -315,5 +318,255 @@ describe('renderLengthsBlock', () => {
     const post = buildPost({ slides: [{ body: 'ok', highlight: 'ok' }] });
     const block = renderLengthsBlock(post, null, 0);
     assert.doesNotMatch(block, /CAPTION/);
+  });
+});
+
+describe('classifySlideType — design v1 field-driven types', () => {
+  test('QUOTE wins first', () => {
+    assert.equal(classifySlideType({ position: 2, quote: 'X', bigNumber: '$1' }), 'quote');
+  });
+  test('SECOND NUMBER → split_stat', () => {
+    assert.equal(classifySlideType({ position: 2, bigNumber: '$1', secondNumber: '$2' }), 'split_stat');
+  });
+  test('BIG NUMBER alone → stat', () => {
+    assert.equal(classifySlideType({ position: 2, bigNumber: '$1' }), 'stat');
+  });
+  test('brief-image IMAGE + HEADLINE (no numbers/quote) → image', () => {
+    assert.equal(classifySlideType({ position: 2, headline: 'H', image: 'brief image 2' }), 'image');
+  });
+  test('HEADLINE only (no BODY) → landing', () => {
+    assert.equal(classifySlideType({ position: 2, headline: 'H' }), 'landing');
+  });
+  test('HEADLINE + BODY → text', () => {
+    assert.equal(classifySlideType({ position: 2, headline: 'H', body: 'B' }), 'text');
+  });
+});
+
+describe('checkPost — rhythm soft check (no two consecutive same-type)', () => {
+  test('two text slides in a row emits a rhythm error', () => {
+    const raw = `COVER: Cover text ok.
+COVER HIGHLIGHT: Cover
+COVER IMAGE: type only
+
+SLIDE 2
+HEADLINE: Chapter one
+BODY: Body one.
+HIGHLIGHT: Chapter one
+IMAGE: type only
+
+SLIDE 3
+HEADLINE: Chapter two
+BODY: Body two.
+HIGHLIGHT: Chapter two
+IMAGE: type only
+
+FOLLOW: Follow Helios.`;
+    const post = parseEditedPost(raw);
+    const report = checkPost(post, goodBrief);
+    const rhythm = report.errors.filter((e) => e.kind === 'rhythm');
+    assert.equal(rhythm.length, 1);
+    assert.match(rhythm[0]!.message, /SLIDE 3 and SLIDE 2 are both "text"/);
+  });
+
+  test('mixed types in a row do not trigger rhythm', () => {
+    const raw = `COVER: Cover.
+COVER HIGHLIGHT: Cover
+COVER IMAGE: type only
+
+SLIDE 2
+HEADLINE: Chapter
+BODY: Body one.
+IMAGE: type only
+
+SLIDE 3
+HEADLINE: Landing statement
+IMAGE: type only
+
+SLIDE 4
+HEADLINE: The number
+BIG NUMBER: $100M
+NUMBER NOTE: raised so far
+IMAGE: type only
+
+FOLLOW: Follow Helios.`;
+    const post = parseEditedPost(raw);
+    const report = checkPost(post, goodBrief);
+    assert.equal(report.errors.filter((e) => e.kind === 'rhythm').length, 0);
+  });
+
+  test('rhythm errors partition as soft (do not block fact-checker)', () => {
+    const raw = `COVER: Cover.
+COVER HIGHLIGHT: Cover
+COVER IMAGE: type only
+
+SLIDE 2
+HEADLINE: A
+BODY: One.
+IMAGE: type only
+
+SLIDE 3
+HEADLINE: B
+BODY: Two.
+IMAGE: type only
+
+FOLLOW: Follow.`;
+    const post = parseEditedPost(raw);
+    const { errors } = checkPost(post, goodBrief);
+    const { soft, hard } = partitionErrors(errors);
+    assert.ok(soft.some((e) => e.kind === 'rhythm'));
+    assert.equal(hard.filter((e) => e.kind === 'rhythm').length, 0);
+  });
+});
+
+describe('checkQuotes — hard check that QUOTE appears in a fetched source', () => {
+  const sourceTexts = [
+    'The company published a statement. The CEO said: "Training is paused until further notice." More text follows.',
+  ];
+
+  test('exact quote match passes', () => {
+    const raw = `COVER: X.
+COVER HIGHLIGHT: X
+COVER IMAGE: type only
+
+SLIDE 2
+QUOTE: Training is paused until further notice.
+QUOTE BY: CEO, The Ledger
+IMAGE: type only
+
+FOLLOW: Follow.`;
+    const post = parseEditedPost(raw);
+    const report = checkQuotes(post, sourceTexts);
+    assert.equal(report.ok, true);
+  });
+
+  test('curly-quote / whitespace normalization still matches', () => {
+    const raw = `COVER: X.
+COVER HIGHLIGHT: X
+COVER IMAGE: type only
+
+SLIDE 2
+QUOTE: "Training is  paused until further notice."
+QUOTE BY: CEO
+IMAGE: type only
+
+FOLLOW: Follow.`;
+    const post = parseEditedPost(raw);
+    const report = checkQuotes(post, sourceTexts);
+    // Straight → curly, double space → single; normalization should
+    // still find the substring.
+    assert.equal(report.ok, true);
+  });
+
+  test('fabricated quote (not in any source) → hard error', () => {
+    const raw = `COVER: X.
+COVER HIGHLIGHT: X
+COVER IMAGE: type only
+
+SLIDE 2
+QUOTE: We plan to double revenue by 2028.
+QUOTE BY: CEO
+IMAGE: type only
+
+FOLLOW: Follow.`;
+    const post = parseEditedPost(raw);
+    const report = checkQuotes(post, sourceTexts);
+    assert.equal(report.ok, false);
+    const err = report.errors[0]!;
+    assert.equal(err.kind, 'quote_verbatim');
+    // quote_verbatim is a HARD error per partitionErrors.
+    const { hard } = partitionErrors(report.errors);
+    assert.equal(hard.length, 1);
+  });
+});
+
+describe('checkPost — design v1 length limits (per new fields)', () => {
+  test('NOTE over 60 chars → char_limit', () => {
+    const raw = `COVER: Cover text.
+COVER HIGHLIGHT: Cover
+COVER IMAGE: type only
+
+SLIDE 2
+HEADLINE: Landing
+NOTE: ${'x'.repeat(80)}
+IMAGE: type only
+
+FOLLOW: Follow.`;
+    const post = parseEditedPost(raw);
+    const report = checkPost(post, goodBrief);
+    const overs = report.errors.filter((e) => e.kind === 'char_limit' && e.field === 'NOTE');
+    assert.equal(overs.length, 1);
+  });
+
+  test('QUOTE over 200 chars → char_limit', () => {
+    const raw = `COVER: Cover.
+COVER HIGHLIGHT: Cover
+COVER IMAGE: type only
+
+SLIDE 2
+QUOTE: ${'q'.repeat(220)}
+QUOTE BY: CEO
+IMAGE: type only
+
+FOLLOW: Follow.`;
+    const post = parseEditedPost(raw);
+    const report = checkPost(post, goodBrief);
+    const overs = report.errors.filter((e) => e.kind === 'char_limit' && e.field === 'QUOTE');
+    assert.equal(overs.length, 1);
+  });
+
+  test('SECOND NUMBER over 12 chars → char_limit', () => {
+    const raw = `COVER: Cover.
+COVER HIGHLIGHT: Cover
+COVER IMAGE: type only
+
+SLIDE 2
+HEADLINE: Split
+BIG NUMBER: $100M
+NUMBER NOTE: from A
+SECOND NUMBER: ${'x'.repeat(20)}
+SECOND NOTE: from B
+IMAGE: type only
+
+FOLLOW: Follow.`;
+    const post = parseEditedPost(raw);
+    const report = checkPost(post, goodBrief);
+    const overs = report.errors.filter((e) => e.kind === 'char_limit' && e.field === 'SECOND NUMBER');
+    assert.equal(overs.length, 1);
+  });
+
+  test('HIGHLIGHT accepts phrases from QUOTE', () => {
+    const raw = `COVER: Cover.
+COVER HIGHLIGHT: Cover
+COVER IMAGE: type only
+
+SLIDE 2
+QUOTE: The training is paused until further notice.
+QUOTE BY: CEO
+HIGHLIGHT: training is paused
+IMAGE: type only
+
+FOLLOW: Follow.`;
+    const post = parseEditedPost(raw);
+    const report = checkPost(post, goodBrief);
+    const bad = report.errors.filter((e) => e.kind === 'highlight_substring');
+    assert.equal(bad.length, 0);
+  });
+
+  test('HIGHLIGHT accepts phrases from NOTE', () => {
+    const raw = `COVER: Cover.
+COVER HIGHLIGHT: Cover
+COVER IMAGE: type only
+
+SLIDE 2
+HEADLINE: Landing
+NOTE: The context sits here.
+HIGHLIGHT: context sits
+IMAGE: type only
+
+FOLLOW: Follow.`;
+    const post = parseEditedPost(raw);
+    const report = checkPost(post, goodBrief);
+    const bad = report.errors.filter((e) => e.kind === 'highlight_substring');
+    assert.equal(bad.length, 0);
   });
 });

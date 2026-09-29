@@ -34,9 +34,12 @@ const FAMILY_BY_VARIANT: Record<Variant, LayoutVariant> = {
   B5: 'story_beat', B6: 'story_beat', B7: 'story_beat',
   D1: 'data_block', D2: 'data_block', D3: 'data_block',
   Q1: 'quote', Q2: 'quote',
-  P1: 'proof',
-  T1: 'thesis',
-  T2: 'debate',
+  // Design v1 removed proof/thesis/debate layouts. Legacy variant codes now
+  // route to the closest remaining family so the legacy pipeline still emits
+  // something renderable.
+  P1: 'story_beat',
+  T1: 'text',
+  T2: 'text',
   F1: 'follow',
 };
 

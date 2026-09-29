@@ -1,24 +1,18 @@
 /**
- * Plain-text v2 output → renderer `Post` shape.
+ * Plain-text v2 output → renderer `Post` shape (design v1).
  *
- * The renderer (`lib/social/render/SlideTemplate.tsx`) and its Zod validator
- * (`lib/social/compose/postSchema.ts`) are unchanged. This adapter is the
- * one-way translator: parsed EDITED POST + parsed CAPTION + BRIEF → a Post
- * that satisfies `PostSchema` and renders correctly under the existing
- * layouts.
+ * Field-driven mapping per docs/DESIGN-V1-HANDOFF.md §Adapter:
  *
- * Layout / variant mapping is from the approved Phase 1 plan, derived by
- * reading SlideTemplate.tsx and ~/.claude/skills/helios-social-skill/SKILL.md
- * against what each variant actually renders:
+ *   QUOTE present                                       → quote
+ *   SECOND NUMBER present                               → split_stat
+ *   BIG NUMBER present                                  → stat
+ *   IMAGE = "brief image N" (validated), no numbers/quote → image
+ *   HEADLINE only (no body/numbers/quote/brief image)   → landing
+ *   HEADLINE + BODY                                     → text
+ *   BODY only (fallback, writer drift)                  → text (headline blank)
  *
- *   Cover with brief-image, portrait subject → cover / C1
- *   Cover with brief-image, non-portrait     → cover / C2
- *   Cover with type-only or free-text image  → cover / C3
- *   BIG NUMBER present on a beat             → data_block / D1
- *   HEADLINE only                            → story_beat / B5 (landing mode)
- *   BODY only                                → story_beat / B1 (default: body-top only)
- *   HEADLINE + BODY                          → story_beat / B1 (title + body chapter-mark)
- *   FOLLOW                                   → follow / F1
+ * Cover keeps its C1/C2/C3 codes (renderer branches on them). Non-cover
+ * slides carry no `variant`.
  */
 
 import type { Post, SlideCopy, Span, SpanRun, StoryType, Variant } from '@/lib/social/render/types';
@@ -72,7 +66,8 @@ export function adaptToPost(input: AdapterInput): Post {
 function buildCoverSlide(text: string, highlight: string, imageRef: string, brief: Brief): SlideCopy {
   const briefImage = resolveBriefImage(imageRef, brief);
   const variant: Variant = pickCoverVariant(briefImage, brief);
-  const headline = colorSpans(text, highlight, [], []);
+  // Cover: orange highlight is allowed. Green (names) is not per spec.
+  const headline = colorSpans(text, highlight, [], brief, /* allowGreen */ false);
   const slide: SlideCopy = {
     position: 0,
     layoutVariant: 'cover',
@@ -107,27 +102,47 @@ function isPortraitOfNamedSubject(image: BriefImage, brief: Brief): boolean {
   return false;
 }
 
-/* ── Beat slides ───────────────────────────────────────────────────── */
+/* ── Beat slides — field-driven type picker ───────────────────────── */
 
 function buildBeatSlide(slide: ParsedSlide, brief: Brief, position: number): SlideCopy {
   const briefImage = resolveBriefImage(slide.image ?? '', brief);
-  const highlightPhrase = slide.highlight ?? '';
-  const pivotWords = collectPivotCandidates(brief);
+  const highlight = slide.highlight ?? '';
+  const altSeed = slide.headline || slide.body || slide.quote || slide.bigNumber || '';
 
-  // BIG NUMBER present → data_block / D1
-  if (slide.bigNumber) {
-    const title = colorSpans(slide.bigNumber, highlightPhrase, [], []);
-    const headline = slide.headline ? colorSpans(slide.headline, highlightPhrase, pivotWords, []) : undefined;
-    const body = slide.body ? colorSpans(slide.body, highlightPhrase, pivotWords, []) : undefined;
+  // 1. QUOTE → quote slide
+  if (slide.quote) {
     const out: SlideCopy = {
       position,
-      layoutVariant: 'data_block',
-      variant: 'D1',
-      title,
-      altText: truncateAlt(slide.bigNumber),
+      layoutVariant: 'quote',
+      // The quote text can carry the highlight span (rare — spec allows
+      // orange within QUOTE). Names inside quotes are NOT painted green
+      // per the "green only on names of people/companies" rule combined
+      // with the visual rule of one accent per slide.
+      quoteText: colorSpans(slide.quote, highlight, [], brief, /* allowGreen */ false),
+      altText: truncateAlt(slide.quote),
     };
-    if (headline) out.headline = headline;
-    if (body) out.body = body;
+    if (slide.quoteBy) out.quoteBy = slide.quoteBy.trim();
+    // Optional round speaker photo — only when the brief image shows the
+    // speaker. Portrait check: same rule as cover C1.
+    if (briefImage?.link && isPortraitOfNamedSubject(briefImage, brief)) {
+      out.photoUrl = briefImage.link;
+      if (briefImage.credit) out.photoCredit = shortPhotoCredit(briefImage.credit);
+    }
+    return out;
+  }
+
+  // 2. SECOND NUMBER → split_stat slide
+  if (slide.secondNumber) {
+    const out: SlideCopy = {
+      position,
+      layoutVariant: 'split_stat',
+      title: colorSpans(slide.bigNumber ?? '', highlight, [], brief, /* allowGreen */ false),
+      altText: truncateAlt(slide.headline ?? slide.bigNumber ?? ''),
+    };
+    if (slide.headline) out.headline = colorSpans(slide.headline, highlight, [], brief, /* allowGreen */ true);
+    if (slide.numberNote) out.numberNote = slide.numberNote.trim();
+    out.secondNumber = slide.secondNumber.trim();
+    if (slide.secondNote) out.secondNote = slide.secondNote.trim();
     if (briefImage?.link) {
       out.photoUrl = briefImage.link;
       if (briefImage.credit) out.photoCredit = shortPhotoCredit(briefImage.credit);
@@ -135,46 +150,60 @@ function buildBeatSlide(slide: ParsedSlide, brief: Brief, position: number): Sli
     return out;
   }
 
-  // HEADLINE only → story_beat / B5 landing (headline is the landing line)
-  if (slide.headline && !slide.body) {
-    return {
+  // 3. BIG NUMBER → stat slide
+  if (slide.bigNumber) {
+    const out: SlideCopy = {
       position,
-      layoutVariant: 'story_beat',
-      variant: 'B5',
-      headline: colorSpans(slide.headline, highlightPhrase, [], []),
+      layoutVariant: 'stat',
+      title: colorSpans(slide.bigNumber, highlight, [], brief, /* allowGreen */ false),
+      altText: truncateAlt(slide.headline ?? slide.bigNumber),
+    };
+    if (slide.headline) out.headline = colorSpans(slide.headline, highlight, [], brief, /* allowGreen */ true);
+    if (slide.body) out.body = colorSpans(slide.body, highlight, [], brief, /* allowGreen */ true);
+    if (slide.numberNote) out.numberNote = slide.numberNote.trim();
+    if (briefImage?.link) {
+      out.photoUrl = briefImage.link;
+      if (briefImage.credit) out.photoCredit = shortPhotoCredit(briefImage.credit);
+    }
+    return out;
+  }
+
+  // 4. IMAGE = brief image N (no numbers/quote above) → image slide
+  if (briefImage?.link && slide.headline) {
+    const out: SlideCopy = {
+      position,
+      layoutVariant: 'image',
+      headline: colorSpans(slide.headline, highlight, [], brief, /* allowGreen */ true),
+      photoUrl: briefImage.link,
       altText: truncateAlt(slide.headline),
     };
-  }
-
-  // BODY only → story_beat / B1 default (body-top only, no title)
-  if (slide.body && !slide.headline) {
-    const out: SlideCopy = {
-      position,
-      layoutVariant: 'story_beat',
-      variant: 'B1',
-      body: colorSpans(slide.body, highlightPhrase, pivotWords, []),
-      altText: truncateAlt(slide.body),
-    };
-    if (briefImage?.link) {
-      out.photoUrl = briefImage.link;
-      out.photoTreatment = 'card';
-      if (briefImage.credit) out.photoCredit = shortPhotoCredit(briefImage.credit);
-    }
+    if (briefImage.credit) out.photoCredit = shortPhotoCredit(briefImage.credit);
+    if (slide.body) out.body = colorSpans(slide.body, highlight, [], brief, /* allowGreen */ true);
     return out;
   }
 
-  // HEADLINE + BODY → story_beat / B1 chapter-mark stack (title + body)
+  // 5. HEADLINE only (no body / no numbers / no quote / no brief image) → landing
+  if (slide.headline && !slide.body) {
+    const out: SlideCopy = {
+      position,
+      layoutVariant: 'landing',
+      headline: colorSpans(slide.headline, highlight, [], brief, /* allowGreen */ true),
+      altText: truncateAlt(slide.headline),
+    };
+    if (slide.note) out.note = slide.note.trim();
+    return out;
+  }
+
+  // 6. HEADLINE + BODY → text slide (also handles BODY-only fallback)
   const out: SlideCopy = {
     position,
-    layoutVariant: 'story_beat',
-    variant: 'B1',
-    title: colorSpans(slide.headline ?? '', highlightPhrase, [], []),
-    body: colorSpans(slide.body ?? '', highlightPhrase, pivotWords, []),
-    altText: truncateAlt(slide.headline ?? slide.body ?? ''),
+    layoutVariant: 'text',
+    altText: truncateAlt(altSeed),
   };
+  if (slide.headline) out.headline = colorSpans(slide.headline, highlight, [], brief, /* allowGreen */ true);
+  if (slide.body) out.body = colorSpans(slide.body, highlight, [], brief, /* allowGreen */ true);
   if (briefImage?.link) {
     out.photoUrl = briefImage.link;
-    out.photoTreatment = 'card';
     if (briefImage.credit) out.photoCredit = shortPhotoCredit(briefImage.credit);
   }
   return out;
@@ -192,18 +221,70 @@ function buildFollowSlide(followText: string, position: number): SlideCopy {
   };
 }
 
+/* ── Green-name rule ───────────────────────────────────────────────── */
+
+/**
+ * Technical / generic-noun deny list. A TERMS entry that matches one of
+ * these — even if the writer capitalized it at the start of a sentence —
+ * stays white. Words are matched lowercase, whole-token, so "sandbox"
+ * blocks "Sandbox" too.
+ */
+const TECHNICAL_TERMS = new Set([
+  'sandbox', 'inference', 'container', 'kernel', 'api', 'sdk', 'gpu', 'cpu',
+  'latency', 'throughput', 'dns', 'resolver', 'tls', 'ssl', 'http', 'https',
+  'json', 'yaml', 'sql', 'cache', 'queue', 'worker', 'daemon', 'thread',
+  'process', 'runtime', 'kernel', 'compiler', 'agent', 'model', 'weights',
+  'token', 'tokens', 'embedding', 'benchmark', 'dataset', 'pipeline',
+  'framework', 'protocol', 'endpoint', 'schema', 'payload', 'firmware',
+]);
+
+const NAME_STOPWORDS = new Set(['of', 'and', 'the', 'for', 'de', 'la', 'von', 'van']);
+
+/**
+ * Should the term get a green (pivot) span on the slide?
+ *
+ * Rules (all three must hold):
+ *   1. The match at the given position in the slide text starts with A–Z.
+ *   2. If multi-word, every non-stopword token ≥ 3 chars starts with A–Z.
+ *   3. The term (lowercased) is not in TECHNICAL_TERMS.
+ *
+ * Tests: OpenAI → green, Hugging Face → green, sandbox → white,
+ * inference → white, DNS resolver → white, "openai" (lowercase in text) →
+ * white, "Sandbox" at sentence start → white (deny-list wins).
+ */
+export function shouldColorGreen(termName: string, matchedText: string): boolean {
+  if (!termName || !matchedText) return false;
+  if (TECHNICAL_TERMS.has(termName.toLowerCase())) return false;
+  // Rule 1: first char capital
+  const firstChar = matchedText.charCodeAt(0);
+  if (firstChar < 65 || firstChar > 90) return false;
+  // Rule 2: every substantive word capitalized
+  const words = matchedText.split(/\s+/);
+  for (const w of words) {
+    if (w.length < 3) continue;
+    if (NAME_STOPWORDS.has(w.toLowerCase())) continue;
+    const c = w.charCodeAt(0);
+    if (c < 65 || c > 90) return false;
+  }
+  return true;
+}
+
 /* ── SpanRun construction ──────────────────────────────────────────── */
 
 /**
  * Build a SpanRun from text: default `narrative`, mark `highlightPhrase`
- * as `hook`, and mark any pivot word (from `pivotWords` + date regex) as
- * `pivot`. Non-overlapping — highlight wins where they collide.
+ * as `hook` (orange), and mark green pivots only where the green-name
+ * rule permits. `extraPivotPhrases` bypasses the rule (used for the
+ * date regex).
+ *
+ * Non-overlapping — highlight wins where they collide.
  */
 export function colorSpans(
   text: string,
   highlightPhrase: string,
-  pivotWords: string[],
   extraPivotPhrases: string[],
+  brief: Brief | null,
+  allowGreen: boolean,
 ): SpanRun {
   if (!text) return [{ text: '', role: 'narrative' }];
 
@@ -219,20 +300,31 @@ export function colorSpans(
     if (idx >= 0) pushMarker(idx, idx + highlightPhrase.length, 'hook');
   }
 
-  // Pivot words — case-insensitive, whole-word.
-  for (const word of [...pivotWords, ...extraPivotPhrases]) {
-    if (!word || word.length < 2) continue;
-    const re = new RegExp(`\\b${escapeRegExp(word)}\\b`, 'gi');
+  // Green name pivots — only when allowed on this slide type.
+  if (allowGreen && brief) {
+    for (const term of brief.terms) {
+      const name = term.name.trim();
+      if (name.length < 2) continue;
+      const re = new RegExp(`\\b${escapeRegExp(name)}\\b`, 'g');
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(text)) !== null) {
+        if (shouldColorGreen(name, m[0])) {
+          pushMarker(m.index, m.index + m[0].length, 'pivot');
+        }
+      }
+    }
+  }
+
+  // Extra pivot phrases (used sparingly; ignored under the green-name rule
+  // to keep dates + terms white per spec).
+  for (const phrase of extraPivotPhrases) {
+    if (!phrase || phrase.length < 2) continue;
+    const re = new RegExp(`\\b${escapeRegExp(phrase)}\\b`, 'gi');
     let m: RegExpExecArray | null;
     while ((m = re.exec(text)) !== null) {
       pushMarker(m.index, m.index + m[0].length, 'pivot');
     }
   }
-
-  // Dates — simple ISO and month-day patterns.
-  const dateRe = /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}(?:,\s*\d{4})?\b|\b(?:19|20)\d{2}\b/g;
-  let dm: RegExpExecArray | null;
-  while ((dm = dateRe.exec(text)) !== null) pushMarker(dm.index, dm.index + dm[0].length, 'pivot');
 
   // Resolve overlaps: sort by start; when overlapping, hook wins over pivot.
   const sorted = markers.slice().sort((a, b) => a.start - b.start);
@@ -243,15 +335,12 @@ export function colorSpans(
       resolved.push(marker);
       continue;
     }
-    // Overlap: hook wins.
     if (marker.role === 'hook' && last.role !== 'hook') {
       resolved.pop();
       resolved.push(marker);
     } else if (last.role === 'hook' && marker.role !== 'hook') {
-      // Keep last.
       continue;
     } else {
-      // Same role or hook/hook — keep the wider one.
       if (marker.end - marker.start > last.end - last.start) {
         resolved.pop();
         resolved.push(marker);
@@ -276,14 +365,7 @@ export function colorSpans(
   return spans;
 }
 
-function collectPivotCandidates(brief: Brief): string[] {
-  return brief.terms
-    .map((t) => t.name.trim())
-    .filter((n) => n.length >= 2)
-    .slice(0, 40);
-}
-
-/* ── storyType classifier (pure code) ──────────────────────────────── */
+/* ── storyType classifier (pure code, kept for schema compliance) ──── */
 
 const STORY_TYPE_KEYWORDS: Array<{ type: StoryType; words: string[] }> = [
   { type: 'ai_funding', words: ['raises', 'raised', 'funding', 'valuation', 'series a', 'series b', 'series c', 'series d', 'series e', 'seed round'] },

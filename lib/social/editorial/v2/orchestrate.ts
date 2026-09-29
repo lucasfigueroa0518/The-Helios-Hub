@@ -15,7 +15,7 @@
  */
 
 import { adaptToPost } from './adapter';
-import { checkCaption, checkNumberTrace, checkPost, partitionErrors, renderLengthsBlock, type CheckError } from './code-checks';
+import { checkCaption, checkNumberTrace, checkPost, checkQuotes, partitionErrors, renderLengthsBlock, type CheckError } from './code-checks';
 import { runCaption as defaultRunCaption, type CaptionInput, type CaptionOutput } from './caption';
 import { runEditor as defaultRunEditor, type EditorInput, type EditorOutput } from './editor';
 import { runFactChecker as defaultRunFactChecker, type FactCheckerInput, type FactCheckerOutput } from './fact-checker';
@@ -378,8 +378,13 @@ export async function runCreatorPipeline(
       const slideCheck = checkPost(editorPost, finalBrief);
       const captionCheck = checkCaption(captionText, creditsEstimate);
       const numberCheck = checkNumberTrace(editorPost, captionText, sourceTexts.map((s) => s.text));
+      const quoteCheck = checkQuotes(editorPost, sourceTexts.map((s) => s.text));
       return {
-        slideErrors: [...slideCheck.errors, ...numberCheck.errors.filter((e) => e.target !== 'caption')],
+        slideErrors: [
+          ...slideCheck.errors,
+          ...numberCheck.errors.filter((e) => e.target !== 'caption'),
+          ...quoteCheck.errors,
+        ],
         captionErrors: [...captionCheck.errors, ...numberCheck.errors.filter((e) => e.target === 'caption')],
       };
     };
@@ -599,10 +604,12 @@ export async function runCreatorPipeline(
     const finalSlideCheck = checkPost(editorPost, finalBrief);
     const finalCaptionCheck = checkCaption(captionText, creditsEstimate);
     const finalNumberCheck = checkNumberTrace(editorPost, captionText, sourceTexts.map((s) => s.text));
+    const finalQuoteCheck = checkQuotes(editorPost, sourceTexts.map((s) => s.text));
     const allErrors = [
       ...finalSlideCheck.errors,
       ...finalCaptionCheck.errors,
       ...finalNumberCheck.errors,
+      ...finalQuoteCheck.errors,
     ];
     const { hard: finalHard, soft: finalSoft } = partitionErrors(allErrors);
     if (finalHard.length > 0) {

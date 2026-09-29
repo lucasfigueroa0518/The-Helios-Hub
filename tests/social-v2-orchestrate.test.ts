@@ -37,12 +37,15 @@ COVER HIGHLIGHT: 26% of its R&D code
 COVER IMAGE: brief image 1
 
 SLIDE 2
-HEADLINE: Anthropic says the number went from 1% to 26% in six months
+HEADLINE: From 1% to 26% in six months, Anthropic says
 BODY: Anthropic told reporters on September 17 that Claude now writes 26% of the code its researchers ship.
+BIG NUMBER: 26%
+NUMBER NOTE: of R&D code, per Anthropic
 HIGHLIGHT: 26% of the code its researchers ship
 IMAGE: type only
 
 SLIDE 3
+HEADLINE: Measured by Claude's own pull requests
 BODY: The company said it measured the share by tracking which pull requests were opened by Claude vs. human engineers.
 HIGHLIGHT: pull requests were opened by Claude
 IMAGE: type only
@@ -56,11 +59,14 @@ COVER IMAGE: brief image 1
 SLIDE 2
 HEADLINE: 1% to 26% in six months
 BODY: Anthropic told reporters on September 17 that Claude now writes 26% of the code its researchers ship.
+BIG NUMBER: 26%
+NUMBER NOTE: of R&D code, per Anthropic
 HIGHLIGHT: 26% of the code
 IMAGE: type only
 
 SLIDE 3
-BODY: The company measured the share by tracking which pull requests were opened by Claude vs. human engineers.
+HEADLINE: Measured by Claude's own pull requests
+BODY: The company said it measured the share by tracking which pull requests were opened by Claude vs. human engineers.
 HIGHLIGHT: pull requests were opened by Claude
 IMAGE: type only
 
