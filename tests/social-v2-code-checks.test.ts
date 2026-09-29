@@ -421,6 +421,138 @@ FOLLOW: Follow.`;
   });
 });
 
+describe('checkPost — variety soft check (6+ middle slides need 3+ kinds)', () => {
+  // Six text slides in a row: violates variety, also violates rhythm.
+  const sixTextRaw = `COVER: Cover.
+COVER HIGHLIGHT: Cover
+COVER IMAGE: type only
+
+SLIDE 2
+HEADLINE: A
+BODY: One.
+IMAGE: type only
+
+SLIDE 3
+HEADLINE: B
+BODY: Two.
+IMAGE: type only
+
+SLIDE 4
+HEADLINE: C
+BODY: Three.
+IMAGE: type only
+
+SLIDE 5
+HEADLINE: D
+BODY: Four.
+IMAGE: type only
+
+SLIDE 6
+HEADLINE: E
+BODY: Five.
+IMAGE: type only
+
+SLIDE 7
+HEADLINE: F
+BODY: Six.
+IMAGE: type only
+
+FOLLOW: Follow.`;
+
+  test('6 middle text slides → variety error', () => {
+    const post = parseEditedPost(sixTextRaw);
+    const report = checkPost(post, goodBrief);
+    const variety = report.errors.filter((e) => e.kind === 'variety');
+    assert.equal(variety.length, 1);
+    assert.match(variety[0]!.message, /only 1 distinct kind/);
+    assert.match(variety[0]!.message, /at least 3 different kinds/);
+  });
+
+  test('variety error partitions as soft', () => {
+    const post = parseEditedPost(sixTextRaw);
+    const { errors } = checkPost(post, goodBrief);
+    const { soft, hard } = partitionErrors(errors);
+    assert.ok(soft.some((e) => e.kind === 'variety'));
+    assert.equal(hard.filter((e) => e.kind === 'variety').length, 0);
+  });
+
+  test('under 6 middle slides skips the variety check', () => {
+    const raw = `COVER: Cover.
+COVER HIGHLIGHT: Cover
+COVER IMAGE: type only
+
+SLIDE 2
+HEADLINE: A
+BODY: One.
+IMAGE: type only
+
+SLIDE 3
+HEADLINE: B
+BODY: Two.
+IMAGE: type only
+
+SLIDE 4
+HEADLINE: C
+BODY: Three.
+IMAGE: type only
+
+SLIDE 5
+HEADLINE: D
+BODY: Four.
+IMAGE: type only
+
+SLIDE 6
+HEADLINE: E
+BODY: Five.
+IMAGE: type only
+
+FOLLOW: Follow.`;
+    const post = parseEditedPost(raw);
+    const report = checkPost(post, goodBrief);
+    assert.equal(report.errors.filter((e) => e.kind === 'variety').length, 0);
+  });
+
+  test('6 middle slides with 3 kinds passes variety', () => {
+    const raw = `COVER: Cover.
+COVER HIGHLIGHT: Cover
+COVER IMAGE: type only
+
+SLIDE 2
+HEADLINE: A
+BODY: One.
+IMAGE: type only
+
+SLIDE 3
+HEADLINE: Landing
+IMAGE: type only
+
+SLIDE 4
+HEADLINE: Stat
+BIG NUMBER: 26%
+NUMBER NOTE: of X
+IMAGE: type only
+
+SLIDE 5
+HEADLINE: B
+BODY: Two.
+IMAGE: type only
+
+SLIDE 6
+HEADLINE: Another landing
+IMAGE: type only
+
+SLIDE 7
+HEADLINE: C
+BODY: Three.
+IMAGE: type only
+
+FOLLOW: Follow.`;
+    const post = parseEditedPost(raw);
+    const report = checkPost(post, goodBrief);
+    assert.equal(report.errors.filter((e) => e.kind === 'variety').length, 0);
+  });
+});
+
 describe('checkQuotes — hard check that QUOTE appears in a fetched source', () => {
   const sourceTexts = [
     'The company published a statement. The CEO said: "Training is paused until further notice." More text follows.',

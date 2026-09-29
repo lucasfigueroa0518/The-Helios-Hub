@@ -22,6 +22,7 @@ export type CheckErrorKind =
   | 'banned_judgment'
   | 'number_trace'
   | 'rhythm'
+  | 'variety'
   | 'quote_verbatim';
 
 export type CheckError = {
@@ -205,6 +206,24 @@ export function checkPost(post: ParsedPost, brief: Brief): CheckReport {
         slidePosition: cur.position,
         field: 'TYPE',
         message: `SLIDE ${cur.position} and SLIDE ${prev.position} are both "${curType}" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them.`,
+      });
+    }
+  }
+
+  // ── Variety (soft): a post with 6+ slides between the cover and the
+  // follow slide must use at least 3 different slide kinds — otherwise
+  // the whole carousel reads as one long note. Under 6 middle slides
+  // there isn't enough space for 3 kinds to matter; skip the check.
+  const middleSlides = post.slides; // post.slides is already just the middle beats (cover + follow are separate)
+  if (middleSlides.length >= 6) {
+    const kinds = new Set(middleSlides.map(typeOf));
+    if (kinds.size < 3) {
+      const kindList = [...kinds].join(', ');
+      errors.push({
+        kind: 'variety',
+        target: 'slide',
+        field: 'TYPES',
+        message: `This post has ${middleSlides.length} slides between the cover and the follow slide but only ${kinds.size} distinct kind${kinds.size === 1 ? '' : 's'} (${kindList}). A long post needs at least 3 different kinds — mix in a Landing line, Stat, Split stat, Quote or Image slide so the carousel doesn't read as one long note.`,
       });
     }
   }
@@ -433,7 +452,12 @@ export function partitionErrors(errors: CheckError[]): { hard: CheckError[]; sof
   const hard: CheckError[] = [];
   const soft: CheckError[] = [];
   for (const e of errors) {
-    if (e.kind === 'char_limit' || e.kind === 'highlight_substring' || e.kind === 'rhythm') soft.push(e);
+    if (
+      e.kind === 'char_limit'
+      || e.kind === 'highlight_substring'
+      || e.kind === 'rhythm'
+      || e.kind === 'variety'
+    ) soft.push(e);
     else hard.push(e);
   }
   return { hard, soft };

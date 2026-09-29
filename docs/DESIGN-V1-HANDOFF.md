@@ -141,7 +141,7 @@ QUOTE BY: <who said it, and where>
 - Parse the new labels: NOTE, NUMBER NOTE, SECOND NUMBER, SECOND NOTE, QUOTE, QUOTE BY.
 - Map fields to types exactly as in the table above. A slide with QUOTE is a Quote slide; with SECOND NUMBER, a Split stat; with BIG NUMBER, a Stat; with a brief-image IMAGE and HEADLINE only (no BODY, no numbers, no quote), an Image slide; HEADLINE only (no image), a Landing line; HEADLINE and BODY, a Text slide (the Text slide carries the optional bottom-half fade photo when IMAGE is a brief image).
 - The HIGHLIGHT substring check also accepts phrases from QUOTE and NOTE.
-- New code checks (soft, like the existing length checks): the limits above, and "no two consecutive slides share a type".
+- New code checks (soft, like the existing length checks): the limits above, "no two consecutive slides share a type", and "a post with 6 or more slides between the cover and the follow slide must use at least 3 different slide kinds" — otherwise the Editor gets it back with a note to mix in a Landing / Stat / Split stat / Quote / Image slide.
 - The numbers-trace check covers NUMBER NOTE, SECOND NUMBER and SECOND NOTE.
 - A QUOTE must appear word for word in a fetched source text (after normalizing curly quotes and whitespace). This is a hard check.
 
@@ -161,6 +161,33 @@ Free re-renders only, no new pipeline runs:
 6. Mocked tests cover the new field parsing, the type mapping, the rhythm check and the quote check.
 
 Then one live run (about $0.60, ask first) on a new article, so the Writer uses the new slide kinds, with `--render-preview`.
+
+## Target look — the reference post
+
+The approved fixture at
+`runs/design-v1-fixture-with-photos/preview/` is the canonical rendering
+of design v1. Every post the pipeline ships should match its look, per
+slide type. The Post JSON is at
+`runs/design-v1-fixture-with-photos/post.json`; re-render with
+`npx tsx scripts/social_v2_fixture.ts`.
+
+Nine slides, one demo per photo layout:
+
+| Slide | Type | Demonstrates |
+|---|---|---|
+| `slide-00.png` | Cover (photo-bleed) | Full-bleed photo + uppercase Pragmatica headline bottom-left + orange highlight + orange arrow bottom-right |
+| `slide-01.png` | Text (with photo) | Headline + body top-anchored, photo fades in from the bottom half |
+| `slide-02.png` | Landing | Centered giant Pragmatica headline + muted NOTE explainer |
+| `slide-03.png` | Split stat (with photo) | 100/84/72 headline ladder, mid-slide photo, two numbers side-by-side above hairline, second orange |
+| `slide-04.png` | Quote (with speaker photo) | 260px round speaker portrait, orange opening quote glyph, sentence-case Pragmatica quote, mono attribution |
+| `slide-05.png` | Image slide | Full-bleed photo, headline only anchored bottom-left (no body — a Text slide with body + image takes the bottom-fade layout instead) |
+| `slide-06.png` | Stat (with photo) | Headline top, supporting photo mid, 260px big number bottom + muted note |
+| `slide-07.png` | Text (with photo) | Second text-with-photo example; green pivot on the proper name (`OpenAI`), orange highlight on the HIGHLIGHT phrase |
+| `slide-08.png` | Follow | HELIOS lockup + @heliosgroup.ai 44px orange + story-specific line 38px full-white |
+
+The type-only fixture at `runs/design-v1-fixture-no-photos/preview/`
+covers the same eight slides (no image slide, no photos) as the reference
+for posts that don't have brief images.
 
 ## Not in scope
 
