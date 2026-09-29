@@ -276,9 +276,19 @@ export async function findCandidates(
 }
 
 /**
- * Build the caption credit line for a Commons candidate. Format per spec:
- *   Wikimedia: "Photo: <Author> / Wikimedia Commons, <License>."
+ * Compact per-image credit fragment used when joining multiple photos
+ * into one "Photos: …" line. Format:
+ *
+ *   PD tier    → "<Author> (public domain)"    (or "(CC0)" for CC0)
+ *   CC BY / SA → "<Author>, <License>"         (e.g. "Andre m, CC BY-SA 3.0")
+ *
+ * No trailing period, no "Via Wikimedia Commons" — those live at the
+ * whole-line level. See buildAttributionBlock in ./index.ts.
  */
-export function buildCredit(cand: CommonsCandidate): string {
-  return `Photo: ${cand.author} / Wikimedia Commons, ${cand.license}.`;
+export function buildCredit(cand: Pick<CommonsCandidate, 'author' | 'license' | 'tier'>): string {
+  if (cand.tier === 'PD/CC0') {
+    const licenseText = /public domain/i.test(cand.license) ? 'public domain' : cand.license;
+    return `${cand.author} (${licenseText})`;
+  }
+  return `${cand.author}, ${cand.license}`;
 }

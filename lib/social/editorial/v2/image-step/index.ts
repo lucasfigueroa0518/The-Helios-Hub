@@ -22,7 +22,7 @@ import Anthropic from '@anthropic-ai/sdk';
 
 import type { Brief, ParsedPost } from '../parse';
 import { getCachedImage, putCachedImage } from './cache';
-import { buildCredit, findCandidates, type CommonsCandidate } from './commons';
+import { buildCredit, classifyLicense, findCandidates, type CommonsCandidate } from './commons';
 import { downloadAndStore, downloadBytes } from './storage';
 import { visionKindCheck, type VisionUsage } from './vision';
 import { resolveSubject, type ResolveResult, type WikidataCandidate } from './wikidata';
@@ -336,13 +336,28 @@ export async function runImageStep(
 
 /**
  * Compose the Post.attributionBlock string the publish pipeline appends
- * to the caption after "Source:". One credit per unique picked image.
+ * to the caption after "Source:". Format:
+ *
+ *   Photos: <credit1>; <credit2>. Via Wikimedia Commons.
+ *
+ * where each <credit> is the compact per-image form built by
+ * commons.buildCredit ("<Author> (public domain)" or "<Author>, <License>").
+ * One "Via Wikimedia Commons." at the end covers every listed photo.
+ *
+ * Credits are computed here from author + license on each SelectedImage,
+ * NOT from the stored `credit` field. This keeps cached rows (which may
+ * carry an older `credit` format) rendering to the current format
+ * without a cache migration.
  */
 export function buildAttributionBlock(selected: Map<SlideKey, SelectedImage>): string | undefined {
-  const credits = [...selected.values()].map((s) => s.credit);
+  const credits: string[] = [];
+  for (const img of selected.values()) {
+    const tier = classifyLicense(img.license) ?? 'CC BY-SA';
+    credits.push(buildCredit({ author: img.author, license: img.license, tier }));
+  }
   if (credits.length === 0) return undefined;
   const dedup = [...new Set(credits)];
-  return `Photos: ${dedup.join('; ')}`;
+  return `Photos: ${dedup.join('; ')}. Via Wikimedia Commons.`;
 }
 
 /**

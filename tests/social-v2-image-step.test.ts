@@ -114,14 +114,34 @@ describe('toCandidate — filters', () => {
   });
 });
 
-describe('buildCredit — Wikimedia credit line format', () => {
-  test('formats "Photo: <author> / Wikimedia Commons, <license>."', () => {
-    const cand = {
-      file: 'File:X.jpg', url: 'https://x', width: 2000, height: 3000, mime: 'image/jpeg',
-      author: 'Gage Skidmore', license: 'CC BY-SA 2.0',
-      licenseUrl: null, tier: 'CC BY-SA' as const, source: 'P18' as const,
-    };
-    assert.equal(buildCredit(cand), 'Photo: Gage Skidmore / Wikimedia Commons, CC BY-SA 2.0.');
+describe('buildCredit — per-image credit fragment', () => {
+  test('CC BY-SA → "<Author>, <License>"', () => {
+    assert.equal(
+      buildCredit({ author: 'Andre m', license: 'CC BY-SA 3.0', tier: 'CC BY-SA' }),
+      'Andre m, CC BY-SA 3.0',
+    );
+  });
+  test('CC BY → "<Author>, <License>"', () => {
+    assert.equal(
+      buildCredit({ author: 'Jane Doe', license: 'CC BY 4.0', tier: 'CC BY' }),
+      'Jane Doe, CC BY 4.0',
+    );
+  });
+  test('Public domain → "<Author> (public domain)" lowercase', () => {
+    assert.equal(
+      buildCredit({
+        author: 'Office of the Lieutenant Governor of California',
+        license: 'Public domain',
+        tier: 'PD/CC0',
+      }),
+      'Office of the Lieutenant Governor of California (public domain)',
+    );
+  });
+  test('CC0 → "<Author> (CC0 1.0)" — parens for PD tier, but CC0 keeps its caps', () => {
+    assert.equal(
+      buildCredit({ author: 'Foo', license: 'CC0 1.0', tier: 'PD/CC0' }),
+      'Foo (CC0 1.0)',
+    );
   });
 });
 
@@ -356,30 +376,46 @@ describe('runImageStep — cache hit skips search + vision', () => {
 describe('buildAttributionBlock + buildFactCheckerImagesBlock', () => {
   const selected = new Map<SlideKey, SelectedImage>([
     ['cover', {
-      wikidataId: 'Q19837', subject: 'Gavin Newsom', label: 'Gavin Newsom',
-      commonsFile: 'File:Gavin_Newsom.jpg', storageUrl: 'https://x',
-      license: 'CC BY-SA 2.0', licenseUrl: null, author: 'Gage Skidmore',
-      credit: 'Photo: Gage Skidmore / Wikimedia Commons, CC BY-SA 2.0.',
+      wikidataId: 'Q461391', subject: 'Gavin Newsom', label: 'Gavin Newsom',
+      commonsFile: 'File:Gavin_Newsom_official_photo.jpg', storageUrl: 'https://x',
+      license: 'Public domain', licenseUrl: null,
+      author: 'Office of the Lieutenant Governor of California',
+      credit: 'Office of the Lieutenant Governor of California (public domain)',
       isPortrait: true, source: 'wikimedia',
     }],
     [3, {
-      wikidataId: 'Q1076566', subject: 'California State Capitol', label: 'California State Capitol',
+      wikidataId: 'Q1026860', subject: 'California State Capitol', label: 'California State Capitol',
       commonsFile: 'File:California_State_Capitol.jpg', storageUrl: 'https://y',
-      license: 'CC0', licenseUrl: null, author: 'Jane Doe',
-      credit: 'Photo: Jane Doe / Wikimedia Commons, CC0.',
+      license: 'CC BY-SA 3.0', licenseUrl: null, author: 'Andre m',
+      credit: 'Andre m, CC BY-SA 3.0',
       isPortrait: false, source: 'wikimedia',
     }],
   ]);
-  test('attribution block joins unique credits with "; "', () => {
-    const line = buildAttributionBlock(selected);
-    assert.match(line!, /^Photos: Photo: Gage Skidmore/);
-    assert.match(line!, /; Photo: Jane Doe/);
+  test('attribution block matches the exact spec format', () => {
+    // Per user spec: "Photos: Office of the Lieutenant Governor of California
+    // (public domain); Andre m, CC BY-SA 3.0. Via Wikimedia Commons."
+    assert.equal(
+      buildAttributionBlock(selected),
+      'Photos: Office of the Lieutenant Governor of California (public domain); Andre m, CC BY-SA 3.0. Via Wikimedia Commons.',
+    );
+  });
+  test('attribution block dedups repeat credits', () => {
+    const same = new Map<SlideKey, SelectedImage>([
+      ['cover', { ...selected.get('cover')! }],
+      [3, { ...selected.get('cover')!, wikidataId: 'Q461391b' }],
+    ]);
+    const line = buildAttributionBlock(same);
+    // Only one credit before the "; " (which isn't present because dedup=1).
+    assert.equal(
+      line,
+      'Photos: Office of the Lieutenant Governor of California (public domain). Via Wikimedia Commons.',
+    );
   });
   test('fact-checker block lists subject + Wikidata id + Commons file + license per slide', () => {
     const block = buildFactCheckerImagesBlock(selected);
     assert.match(block, /^IMAGES CHOSEN:/);
-    assert.match(block, /- COVER: photo of Gavin Newsom \(Wikidata Q19837\) — File:Gavin_Newsom\.jpg — CC BY-SA 2\.0/);
-    assert.match(block, /- SLIDE 3: photo of California State Capitol \(Wikidata Q1076566\) — File:California_State_Capitol\.jpg — CC0/);
+    assert.match(block, /- COVER: photo of Gavin Newsom \(Wikidata Q461391\) — File:Gavin_Newsom_official_photo\.jpg — Public domain/);
+    assert.match(block, /- SLIDE 3: photo of California State Capitol \(Wikidata Q1026860\) — File:California_State_Capitol\.jpg — CC BY-SA 3\.0/);
   });
   test('empty map → "(none — every slide is type-only)"', () => {
     assert.match(buildFactCheckerImagesBlock(new Map()), /none — every slide is type-only/);
