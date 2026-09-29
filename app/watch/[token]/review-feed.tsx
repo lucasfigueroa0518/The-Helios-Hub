@@ -101,7 +101,7 @@ export function ReviewFeed({ clips }: { clips: ReviewClip[] }) {
                 index={index}
                 count={clips.length}
                 active={index === active}
-                warm={index === active || index === active + 1}
+                near={Math.abs(index - active) <= 1}
                 soundOn={soundOn}
                 audible={soundOn && !needsGesture}
                 onSound={toggleSound}
@@ -137,7 +137,7 @@ function ReviewSlide({
   index,
   count,
   active,
-  warm,
+  near,
   soundOn,
   audible,
   onSound,
@@ -149,7 +149,7 @@ function ReviewSlide({
   index: number;
   count: number;
   active: boolean;
-  warm: boolean;
+  near: boolean;
   soundOn: boolean;
   audible: boolean;
   onSound: () => void;
@@ -159,8 +159,10 @@ function ReviewSlide({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const captionRef = useRef<HTMLParagraphElement>(null);
+  const captionRef = useRef<HTMLButtonElement>(null);
   const wasActive = useRef(false);
+  const onBlockedRef = useRef(onBlocked);
+  onBlockedRef.current = onBlocked;
   const [paused, setPaused] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [clamped, setClamped] = useState(false);
@@ -183,61 +185,89 @@ function ReviewSlide({
   useEffect(() => {
     const video = videoRef.current;
     const song = audioRef.current;
-    if (!video) return undefined;
+    if (!video) {
+      wasActive.current = false;
+      return undefined;
+    }
     video.volume = clip.videoVolume;
     if (song) song.volume = clip.songVolume;
 
-    const playSongFromStart = () => {
+    let seeking = false;
+    const syncSong = (force: boolean) => {
       if (!song || video.muted || video.paused) return;
-      if (Math.abs(song.currentTime - video.currentTime) > 0.05) song.currentTime = video.currentTime;
-      void song.play().catch(() => undefined);
+      const drift = song.readyState >= 1 ? Math.abs(song.currentTime - video.currentTime) : 0;
+      if (!seeking && song.readyState >= 1 && (force || drift > 0.35)) {
+        seeking = true;
+        try {
+          song.currentTime = video.currentTime;
+        } catch {
+          // Not seekable yet. loadedmetadata tries once more.
+        }
+        window.setTimeout(() => {
+          seeking = false;
+        }, 500);
+      }
+      const pending = song.play();
+      if (!pending) return;
+      pending.catch((error: unknown) => {
+        const name = error instanceof DOMException ? error.name : '';
+        if (name === 'NotAllowedError') onBlockedRef.current();
+      });
     };
+    const onPlay = () => syncSong(false);
+    const onTime = () => syncSong(false);
+    const onSongReady = () => syncSong(true);
     const pauseSong = () => song?.pause();
-    const mute = () => {
-      if (song) song.muted = video.muted;
-    };
-    const events: Array<[string, () => void]> = [
-      ['play', playSongFromStart],
-      ['pause', pauseSong],
-      ['seeked', playSongFromStart],
-      ['volumechange', mute],
-    ];
-    for (const [name, handler] of events) video.addEventListener(name, handler);
+    video.addEventListener('play', onPlay);
+    video.addEventListener('timeupdate', onTime);
+    song?.addEventListener('loadedmetadata', onSongReady);
 
-    if (active && !wasActive.current) {
-      video.currentTime = 0;
-      if (song) song.currentTime = 0;
-    }
+    const becameActive = active && !wasActive.current;
     wasActive.current = active;
 
     if (!active || paused) {
       video.pause();
       pauseSong();
     } else {
+      if (becameActive) {
+        try {
+          video.currentTime = 0;
+          if (song) song.currentTime = 0;
+        } catch {
+          // The file is still opening. Playback starts at the beginning anyway.
+        }
+      }
       const wantSound = audible;
       video.muted = !wantSound;
       if (song) song.muted = !wantSound;
-      video.currentTime = 0;
-      if (song) song.currentTime = 0;
-      void video.play().catch(() => {
+      // Call both in this turn so one tap can start the video and the song.
+      const videoStart = video.play();
+      if (wantSound) syncSong(true);
+      void videoStart?.catch(() => {
         if (!wantSound) return;
         video.muted = true;
         if (song) song.muted = true;
-        onBlocked();
+        onBlockedRef.current();
         void video.play().catch(() => undefined);
       });
-      if (wantSound && song) void song.play().catch(() => undefined);
     }
 
     return () => {
-      for (const [name, handler] of events) video.removeEventListener(name, handler);
+      video.removeEventListener('play', onPlay);
+      video.removeEventListener('timeupdate', onTime);
+      song?.removeEventListener('loadedmetadata', onSongReady);
       pauseSong();
     };
-  }, [active, paused, audible, onBlocked, clip.videoVolume, clip.songVolume, clip.song]);
+  }, [active, paused, audible, near, clip.videoVolume, clip.songVolume, clip.song, clip.videoSrc]);
 
   const closeCaption = () => {
     setExpanded(false);
     onSheet(false);
+  };
+
+  const openCaption = () => {
+    setExpanded(true);
+    onSheet(true);
   };
 
   const startAudible = () => {
@@ -287,16 +317,18 @@ function ReviewSlide({
 
   return (
     <article className="ig-slide" data-index={index} aria-label={`${clip.label}, reel ${index + 1} of ${count}`}>
-      <video
-        ref={videoRef}
-        className="ig-video"
-        src={clip.videoSrc}
-        muted={!audible}
-        playsInline
-        loop
-        preload={warm ? 'auto' : 'metadata'}
-      />
-      {clip.song ? <audio ref={audioRef} src={clip.song.src} preload={warm ? 'auto' : 'auto'} /> : null}
+      {near ? (
+        <video
+          ref={videoRef}
+          className="ig-video"
+          src={clip.videoSrc}
+          muted={!audible}
+          playsInline
+          loop
+          preload={active ? 'auto' : 'metadata'}
+        />
+      ) : null}
+      {active && clip.song ? <audio ref={audioRef} src={clip.song.src} preload="auto" /> : null}
       <button
         type="button"
         className="ig-hit"
@@ -320,20 +352,28 @@ function ReviewSlide({
           <span className="ig-handle">helios</span>
           <button
             type="button"
-            className={`ig-sound${soundOn ? '' : ' is-waiting'}`}
-            aria-pressed={soundOn}
-            aria-label={soundOn ? 'Mute' : 'Play with sound'}
+            className={`ig-sound${audible ? '' : ' is-waiting'}`}
+            aria-pressed={audible}
+            aria-label={audible ? 'Mute' : 'Play with sound'}
             onClick={onSoundClick}
           >
-            {soundOn ? <Volume2 size={18} /> : <VolumeX size={18} />}
-            {soundOn ? null : <span>Sound</span>}
+            {audible ? <Volume2 size={18} /> : <VolumeX size={18} />}
+            {audible ? null : <span>Sound</span>}
           </button>
         </div>
         {clip.caption ? (
           <>
-            <p ref={captionRef} className={expanded ? 'ig-cap ig-cap--open' : 'ig-cap ig-cap--clamp'}>
+            <button
+              type="button"
+              ref={captionRef}
+              className={expanded ? 'ig-cap ig-cap--open' : 'ig-cap ig-cap--clamp'}
+              aria-expanded={expanded}
+              onClick={() => {
+                if (!expanded) openCaption();
+              }}
+            >
               {clip.caption}
-            </p>
+            </button>
             {clamped || expanded ? (
               <button
                 type="button"
