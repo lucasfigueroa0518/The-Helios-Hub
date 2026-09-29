@@ -187,11 +187,13 @@
   justify-content: flex-end;
 }
 
-/* Photo-bleed fills the full 1080×1350 slide. */
+/* Photo-bleed fills the full 1080×1350 slide. Negative offsets escape the
+   slide's 96px padding — the well sits inset by 96px, so the bleed needs
+   to start at the slide edge, not the well edge. */
 .helios-cover--bleed {
   position: absolute;
-  top: 0;
-  left: 0;
+  top: -96px;
+  left: -96px;
   width: 1080px;
   height: 1350px;
   padding: 0;
@@ -485,6 +487,8 @@
   color: var(--brand-narrative);
   text-transform: uppercase;
   margin: 0;
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 
 .helios-split-stat__photo {
@@ -497,7 +501,7 @@
 .helios-split-stat__pair {
   display: flex;
   align-items: flex-end;
-  gap: 48px;
+  gap: 40px;
   margin-top: auto;
   padding-top: 24px;
   border-top: 1px solid rgba(255, 255, 255, 0.24);
@@ -505,6 +509,7 @@
 
 .helios-split-stat__col {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -530,13 +535,14 @@
 .helios-split-stat__number--left  { color: var(--brand-narrative); }
 .helios-split-stat__number--right { color: var(--brand-orange); }
 
-.helios-split-stat__number[data-length="6"]  { font-size: 132px; }
-.helios-split-stat__number[data-length="7"]  { font-size: 120px; }
-.helios-split-stat__number[data-length="8"]  { font-size: 108px; }
+.helios-split-stat__number[data-length="5"]  { font-size: 130px; }
+.helios-split-stat__number[data-length="6"]  { font-size: 108px; }
+.helios-split-stat__number[data-length="7"]  { font-size: 92px; }
+.helios-split-stat__number[data-length="8"]  { font-size: 84px; }
 .helios-split-stat__number[data-length="9"],
 .helios-split-stat__number[data-length="10"],
 .helios-split-stat__number[data-length="11"],
-.helios-split-stat__number[data-length="12"] { font-size: 96px; }
+.helios-split-stat__number[data-length="12"] { font-size: 72px; }
 
 .helios-split-stat__note {
   font-family: var(--font-body);
@@ -618,11 +624,12 @@
 /* Full-bleed image slide reuses the cover's photo/scrim structure. Same
    photo-fills-slide + darkened-under-text pattern as the cover; only the
    text block below carries an optional body sentence in addition to the
-   headline. Cover's own CSS remains unchanged. */
+   headline. Cover's own CSS remains unchanged. Negative offsets escape
+   the slide's 96px padding, same as the cover. */
 .helios-image--bleed {
   position: absolute;
-  top: 0;
-  left: 0;
+  top: -96px;
+  left: -96px;
   width: 1080px;
   height: 1350px;
   padding: 0;
