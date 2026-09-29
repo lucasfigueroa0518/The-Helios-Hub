@@ -90,6 +90,7 @@
 .ig-count {
   position: absolute;
   z-index: 3;
+  pointer-events: none;
   top: calc(14px + env(safe-area-inset-top));
   font-size: 13px;
   font-weight: 600;
@@ -120,6 +121,14 @@
   background: rgba(0, 0, 0, 0.94);
   border-radius: 18px 18px 0 0;
   padding-top: 16px;
+  pointer-events: none;
+}
+
+.ig-meta--open .ig-user,
+.ig-meta--open .ig-cap,
+.ig-meta--open .ig-more,
+.ig-meta--open .ig-audio {
+  pointer-events: auto;
 }
 
 .ig-user {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Play, Volume2, VolumeX } from 'lucide-react';
 
 import type { ReviewClip } from '@/lib/reels/review';
@@ -10,8 +10,15 @@ import '../review.css';
 export function ReviewFeed({ clips }: { clips: ReviewClip[] }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
-  const [soundOn, setSoundOn] = useState(false);
+  const [soundOn, setSoundOn] = useState(true);
+  const [needsGesture, setNeedsGesture] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const unlock = useCallback(() => setNeedsGesture(false), []);
+  const block = useCallback(() => setNeedsGesture(true), []);
+  const toggleSound = useCallback(() => {
+    setSoundOn((on) => !on);
+    setNeedsGesture(false);
+  }, []);
 
   useEffect(() => {
     const previous = document.body.style.overflow;
@@ -46,9 +53,22 @@ export function ReviewFeed({ clips }: { clips: ReviewClip[] }) {
       if (!root) return;
       if (event.target instanceof HTMLElement && event.target.closest('button, a, input, textarea')) return;
       if (event.key === ' ') {
-        if (!soundOn) {
+        if (!soundOn || needsGesture) {
           event.preventDefault();
           setSoundOn(true);
+          setNeedsGesture(false);
+          const slide = root.querySelector<HTMLElement>(`[data-index="${active}"]`);
+          const video = slide?.querySelector('video');
+          const song = slide?.querySelector('audio');
+          if (video) {
+            video.muted = false;
+            void video.play().catch(() => undefined);
+          }
+          if (song && video) {
+            song.muted = false;
+            song.currentTime = video.currentTime;
+            void song.play().catch(() => undefined);
+          }
         }
         return;
       }
@@ -58,7 +78,7 @@ export function ReviewFeed({ clips }: { clips: ReviewClip[] }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [soundOn]);
+  }, [soundOn, needsGesture, active]);
 
   if (clips.length === 0) {
     return (
@@ -83,8 +103,10 @@ export function ReviewFeed({ clips }: { clips: ReviewClip[] }) {
                 active={index === active}
                 warm={index === active || index === active + 1}
                 soundOn={soundOn}
-                onSound={() => setSoundOn((on) => !on)}
-                onNeedSound={() => setSoundOn(true)}
+                audible={soundOn && !needsGesture}
+                onSound={toggleSound}
+                onUnlock={unlock}
+                onBlocked={block}
                 onSheet={setSheetOpen}
               />
             ))}
@@ -102,8 +124,10 @@ function ReviewSlide({
   active,
   warm,
   soundOn,
+  audible,
   onSound,
-  onNeedSound,
+  onUnlock,
+  onBlocked,
   onSheet,
 }: {
   clip: ReviewClip;
@@ -112,8 +136,10 @@ function ReviewSlide({
   active: boolean;
   warm: boolean;
   soundOn: boolean;
+  audible: boolean;
   onSound: () => void;
-  onNeedSound: () => void;
+  onUnlock: () => void;
+  onBlocked: () => void;
   onSheet: (open: boolean) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -178,28 +204,70 @@ function ReviewSlide({
       video.pause();
       pauseSong();
     } else {
-      video.muted = !soundOn;
-      if (song) song.muted = !soundOn;
+      video.muted = !audible;
+      if (song) song.muted = !audible;
       void video.play().then(() => {
         if (!song || video.muted || video.paused) return;
         song.currentTime = video.currentTime;
         void song.play().catch(() => undefined);
-      }).catch(() => undefined);
+      }).catch(() => {
+        if (!audible) return;
+        video.muted = true;
+        if (song) song.muted = true;
+        onBlocked();
+        void video.play().catch(() => undefined);
+      });
     }
 
     return () => {
       for (const [name, handler] of events) video.removeEventListener(name, handler);
       pauseSong();
     };
-  }, [active, paused, soundOn, clip.videoVolume, clip.songVolume, clip.song]);
+  }, [active, paused, audible, onBlocked, clip.videoVolume, clip.songVolume, clip.song]);
+
+  const closeCaption = () => {
+    setExpanded(false);
+    onSheet(false);
+  };
+
+  const startAudible = () => {
+    const video = videoRef.current;
+    const song = audioRef.current;
+    if (!video) return;
+    video.muted = false;
+    if (song) song.muted = false;
+    void video.play().then(() => {
+      if (!song || video.paused) return;
+      song.currentTime = video.currentTime;
+      void song.play().catch(() => undefined);
+    }).catch(() => undefined);
+  };
 
   const onSurface = () => {
-    if (!soundOn) {
-      onNeedSound();
+    const unlocking = soundOn && !audible;
+    if (unlocking) {
+      startAudible();
+      onUnlock();
+    }
+    if (expanded) {
+      closeCaption();
+      return;
+    }
+    if (unlocking) {
       setPaused(false);
       return;
     }
     setPaused((value) => !value);
+  };
+
+  const onSoundClick = () => {
+    if (soundOn && !audible) {
+      startAudible();
+      onUnlock();
+      return;
+    }
+    if (!soundOn) startAudible();
+    onSound();
   };
 
   const audioLabel = clip.song
@@ -214,13 +282,18 @@ function ReviewSlide({
         ref={videoRef}
         className="ig-video"
         src={clip.videoSrc}
-        muted={!soundOn}
+        muted={!audible}
         playsInline
         loop
         preload={warm ? 'auto' : 'metadata'}
       />
       {clip.song ? <audio ref={audioRef} src={clip.song.src} preload={warm ? 'auto' : 'none'} /> : null}
-      <button type="button" className="ig-hit" aria-label={paused ? 'Play' : 'Pause'} onClick={onSurface} />
+      <button
+        type="button"
+        className="ig-hit"
+        aria-label={expanded ? 'Close caption' : paused ? 'Play' : 'Pause'}
+        onClick={onSurface}
+      />
       <div className="ig-topshade" />
       <div className="ig-shade" />
       <p className="ig-day">{clip.label}</p>
@@ -241,7 +314,7 @@ function ReviewSlide({
             className={`ig-sound${soundOn ? '' : ' is-waiting'}`}
             aria-pressed={soundOn}
             aria-label={soundOn ? 'Mute' : 'Play with sound'}
-            onClick={onSound}
+            onClick={onSoundClick}
           >
             {soundOn ? <Volume2 size={18} /> : <VolumeX size={18} />}
             {soundOn ? null : <span>Sound</span>}

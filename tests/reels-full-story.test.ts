@@ -24,14 +24,14 @@ test('the caption preview is the first line, cut at the fold', () => {
 });
 
 test('a caption that does not hold a deferred story never gets the cue', () => {
-  assert.equal(showFullStoryBelow({ storyDeferred: 0.79, previewMiss: 1, incomplete: 1 }), false);
+  assert.equal(showFullStoryBelow({ storyDeferred: 0.69, previewMiss: 1, incomplete: 1 }), false);
   assert.equal(showFullStoryBelow({ storyDeferred: 0, previewMiss: 1, incomplete: 1 }), false);
 });
 
-test('the cue needs the deferred story and one reason to point', () => {
-  assert.equal(showFullStoryBelow({ storyDeferred: 0.8, previewMiss: 0.8, incomplete: 0 }), true);
-  assert.equal(showFullStoryBelow({ storyDeferred: 0.8, previewMiss: 0, incomplete: 0.8 }), true);
-  assert.equal(showFullStoryBelow({ storyDeferred: 1, previewMiss: 0.79, incomplete: 0.79 }), false);
+test('the cue needs the deferred story at 0.7 and one pointer at 0.26', () => {
+  assert.equal(showFullStoryBelow({ storyDeferred: 0.7, previewMiss: 0.26, incomplete: 0 }), true);
+  assert.equal(showFullStoryBelow({ storyDeferred: 0.7, previewMiss: 0, incomplete: 0.26 }), true);
+  assert.equal(showFullStoryBelow({ storyDeferred: 1, previewMiss: 0.25, incomplete: 0.25 }), false);
 });
 
 test('Jev sees the winning line, the preview, and the caption', async () => {

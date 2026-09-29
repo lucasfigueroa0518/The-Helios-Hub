@@ -12,24 +12,24 @@ import { defineQuestionSet } from '@/lib/reels/jev/question-set';
  */
 
 const VIEWER =
-  'An average person scrolling Instagram Reels with the sound off, who does not work in this field, has never seen this story, and has not opened the caption. `on_screen_copy` is the only text they see. The first line is what they get in the first second. Later lines count only when they add a stake, a figure, or the missing piece. A restatement does not.';
+  'An average person scrolling Instagram Reels with the sound off. They are curious about AI and may use it at work or at home. They do not work in the field, do not know its jargon, and read at about a sixth-grade level. They have never seen this story and have not opened the caption. `on_screen_copy` is the only text they see, and all of it is the hook. The first words have to stop them, and every later line has to add a stake, a figure, or the missing piece that pulls them toward the caption. A restatement adds nothing.';
 
 export const COPY_PICK = defineQuestionSet({
   id: 'copy-pick',
-  version: 'copy-pick-v1',
+  version: 'copy-pick-v2',
   questions: {
     plain: score(
       {
-        question: 'From the first line, with no context beforehand, can this person say what happened and to whom?',
+        question: 'After one read of the whole text, with no context beforehand, can this person say what happened and to whom?',
         viewer: VIEWER,
         not_this: 'Do not score whether they care or what they would get. That is a separate question.',
       },
       [
-        'The first line does not say what this is. It opens on a pronoun that points at nothing, a greeting, "here\'s the thing," or a name only an insider knows.',
+        'The text does not say what this is. It opens on a pronoun that points at nothing, a greeting, or "here\'s the thing," or it turns on a name only an insider knows.',
         'A viewer can tell this is about technology or a company, and not what happened.',
         'The subject is nameable, but one beat still needs knowledge the words do not give.',
-        'On one read, a person who does not work in this field can say what happened and to whom. The first line does that work.',
-        'The reading is immediate. The first line names the thing in ordinary words, and nothing later asks the viewer to supply context.',
+        'On one read, this person can say what happened and to whom.',
+        'The reading is immediate. The text names the thing in ordinary words from its first words, and no line asks the viewer to supply context.',
       ],
     ),
     loop: score(
@@ -43,7 +43,7 @@ export const COPY_PICK = defineQuestionSet({
         'Nothing is unfinished. The text is a summary, a poster line, or an equation a viewer can nod at and keep scrolling.',
         'Something is vaguely unfinished, such as "you won\'t believe this," with no specific missing piece.',
         'A concrete piece is held back, but a viewer could shrug. Or the next line only repeats the first.',
-        'The first line leaves a specific question, and the words make that question obvious. Later lines add a new stake instead of restating.',
+        'The text leaves a specific question, and the words make that question obvious. Each line adds to the pull instead of restating.',
         'The unfinished piece is the point of the text. Stopping feels like leaving a gap the viewer could close. A self-contained stat still counts when the implication or the fix is what stays open.',
       ],
     ),

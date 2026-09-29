@@ -197,6 +197,8 @@ export const VISUAL_IMAGE_QUALITY = 'high';
 export const VISUAL_RECENT_SCENES = 10;
 /** A frame that is still `running` after this was abandoned by a dead worker. */
 export const VISUAL_STALE_MINUTES = 10;
+/** D-202. The caption cue is off. The bars and the line picker stay in place. */
+export const FULL_STORY_CUE_ENABLED = false;
 /** Motion writer. Same Claude model as the scene writer. The system prompt is cached. */
 export const MOTION_MODEL = 'claude-sonnet-5';
 /** One timestamped 8-second prompt. Enough room to finish, not enough for a second draft. */

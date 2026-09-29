@@ -17,13 +17,18 @@ export type KlingClip = {
  * more and invents speech, so it is forced off. multi_prompt is omitted so
  * the clip stays one shot.
  */
-export function falKlingBody(input: { prompt: string; imageUrl: string }): Record<string, unknown> {
+/** D-203. Orange stills and clips must not grow a hand. */
+export const ORANGE_HAND_NEGATIVE =
+  'hands, fists, fingers, a black hand, a dark hand, a silhouette hand, skin, wrists, forearms';
+
+export function falKlingBody(input: { prompt: string; imageUrl: string; negativePrompt?: string }): Record<string, unknown> {
   return {
     prompt: input.prompt,
     start_image_url: input.imageUrl,
     duration: String(KLING_CLIP_SECONDS),
     generate_audio: false,
     cfg_scale: 0.5,
+    ...(input.negativePrompt ? { negative_prompt: input.negativePrompt } : {}),
   };
 }
 
@@ -84,7 +89,11 @@ async function falFetch(url: string, init?: RequestInit): Promise<Response> {
  * One Kling 3.0 Standard image-to-video call through Fal. The motion prompt
  * is the only free text. The background PNG URL is the start frame.
  */
-export async function generateKlingClip(input: { prompt: string; imageUrl: string }): Promise<KlingClip> {
+export async function generateKlingClip(input: {
+  prompt: string;
+  imageUrl: string;
+  negativePrompt?: string;
+}): Promise<KlingClip> {
   const submitted = await falFetch(`${QUEUE_BASE}/${FAL_KLING_I2V}`, {
     method: 'POST',
     body: JSON.stringify(falKlingBody(input)),

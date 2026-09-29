@@ -128,7 +128,7 @@ test('Jev scores one line from the on-screen text alone', async () => {
   assert.deepEqual(Object.keys(seen[0]?.state ?? {}), ['on_screen_copy']);
   assert.deepEqual(seen[0]?.sets, [COPY_PICK]);
   assert.deepEqual(Object.keys(COPY_PICK.questions), ['plain', 'loop', 'care', 'reward']);
-  assert.equal(COPY_PICK.version, 'copy-pick-v1');
+  assert.equal(COPY_PICK.version, 'copy-pick-v2');
   assert.equal(seen[0]?.postIdeaId, 'idea-1');
   assert.equal(seen[0]?.runId, 'run-1');
 });

@@ -71,7 +71,7 @@ Below are the Key Psychological Frameworks for Attention & Virality
    - Core Theory: Social Identity Theory (Tajfel & Turner) and Status-Signaling Frameworks. People share content to project a specific identity, signal expertise, or defend an in-group boundary.
    - Mechanism: If your hook explicitly names a specific identity, it activates self-relevance processing in the brain's Medial Prefrontal Cortex.
    - Codified Hook Formulas:
-     - In-Group Callout: "If you're a designer who still uses [Tool], we need to talk."
+     - In-Group Callout: "If you still use [Tool] for [everyday task], we need to talk."
      - Contrarian Stance: "Unpopular opinion: [Commonly accepted practice] is actually ruining your results."
 
 ### Second, content bucket score
@@ -87,9 +87,9 @@ Second, content bucket score: how well would this fit into one of our content bu
 - Live hook formulas: Counter-Intuitive Truth, In-Group Callout.
 - Resolution: Deferred. The caption carries the payload.
 - Copy: Names an outcome, a cost, or an identity. Never the tools. 8–14 words.
-- Caption: 3–7 items. Name, one line on what it replaces or unlocks, link. Close on a line that establishes Helios as the finder.
+- Caption: 3–7 items. Name, one plain line on what it replaces or what it lets you do, link. Close on a line that establishes Helios as the finder.
 - Feeds from: GitHub Trending, Awesome-lists, Hugging face
-- Example copy: "The four repos that killed our $2,400/mo tooling bill."
+- Example copy: "Four free AI tools that do what you're paying $20 a month for."
 
 #### 2. The Number
 
@@ -98,9 +98,9 @@ Second, content bucket score: how well would this fit into one of our content bu
 - Live hook formulas: Anxiety / Loss Aversion, Counter-Intuitive Truth.
 - Resolution: Self-contained. The stat is the payload.
 - Copy: One statistic, one implication. Under 15 words. No preamble.
-- Caption: Source, methodology caveat, business translation. Can be told like a story with a plot.
+- Caption: Source, methodology caveat, then what it means for the viewer's work or life. Can be told like a story with a plot.
 - Feeds from: All
-- Example copy: "95% of enterprise AI pilots never reach production. The failure is almost never the model."
+- Example copy: "95% of company AI projects stall in testing. The AI is rarely why."
 
 #### 3. The Saga
 
@@ -129,10 +129,10 @@ Second, content bucket score: how well would this fit into one of our content bu
 - Why it works: Loss aversion addressed in the second person. Tversky and Kahneman's asymmetry means the threat of losing something already held produces more arousal than the promise of gaining something equivalent, and a direct address converts that arousal into the physiological urge to act rather than to keep scrolling. The gap opens on "why," which the caption closes.
 - Live hook formulas: Anxiety / Loss Aversion, Hidden Mechanism.
 - Resolution: Self-contained on the threat, deferred on the fix. The viewer learns what to stop on screen and what to do instead in the caption.
-- Copy: Name the behavior, issue the stop, state the cost. 15–25 words. The cost has to be concrete. "It's inefficient" doesn't arouse; "it's costing you 40% of your token spend" does.
+- Copy: Name the behavior, issue the stop, state the cost. 15–25 words. The cost has to be concrete. "It's inefficient" doesn't arouse; "it's costing you $240 a year" does.
 - Caption: The mechanism behind the cost, then the replacement behavior. The replacement is mandatory. A warning without a fix reads as fear-farming and gets punished in comments.
 - Feeds from: Vendor changelogs and deprecations, incident post-mortems, security disclosures, benchmark results, SEC filings, regulatory texts.
-- Example copy: "If you're still paying per-seat for AI tools, stop. You're funding your vendor's margin on usage you never touch."
+- Example copy: "If you're pasting work documents into a free chatbot, stop. Your files can end up training the next model."
 - Guardrail: Every claim needs a source in the caption. This bucket makes falsifiable assertions about things people are actively doing, and being wrong here is more damaging than being wrong anywhere else in the system.
 
 #### 6. The Callout
@@ -144,9 +144,9 @@ Second, content bucket score: how well would this fit into one of our content bu
 - Copy: Name the group, name the behavior, state the position. 12–22 words. No hedging, and no qualifier that lets everyone off the hook, since the boundary is the entire mechanism.
 - Caption: The argument. This is the only bucket where the caption's job is to be defensible under attack, because the comment section will test it. Anticipate the strongest objection and answer it in the caption rather than in replies.
 - Feeds from: HN and Reddit contrarian threads, industry surveys, benchmark results, your own delivery experience.
-- Example copy: "Unpopular opinion: if your AI strategy starts with choosing a model, you've already lost the project."
+- Example copy: "Unpopular opinion: if you only use ChatGPT to rewrite emails, you're skipping the part that saves real time."
 
-Two rules on this one, because it's the highest-variance bucket you have. Aim the boundary at practices and vendors, never at the identity of your buyer. "Designers who still use X" works because the fix is available and the viewer can cross the line by changing a tool. "Executives who don't understand AI" doesn't, because the viewer can't cross it and you've converted a prospect into an opponent. Second, you must be on the side of the group you're addressing. The in-group callout works when it reads as a peer raising the standard, and fails when it reads as an outsider scolding.
+Two rules on this one, because it's the highest-variance bucket you have. Aim the boundary at habits and tools, never at who the viewer is. "People who still use X for Y" works because the fix is available and the viewer can cross the line by changing a habit or a tool. "People who don't understand AI" doesn't, because the viewer can't cross it and you've turned a follower into an opponent. Second, you must be on the side of the group you're addressing. The in-group callout works when it reads as a fellow user raising the standard, and fails when it reads as an expert scolding.
 
 ### Third: Value score
 

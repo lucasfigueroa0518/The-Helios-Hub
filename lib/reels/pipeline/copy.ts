@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 
 import { priceAnthropicMessages } from '@/lib/anthropic-pricing';
-import { COPY_MODEL } from '@/lib/reels/config';
+import { COPY_MODEL, FULL_STORY_CUE_ENABLED } from '@/lib/reels/config';
 import {
   COPY_CALLS_PER_IDEA,
   buildCopyVariants,
@@ -226,24 +226,26 @@ export async function writeTargetCopy(
 
   const report = publishCopy(winner.call, winner.onScreenCopy);
   let fullStoryCue: string | null = null;
-  try {
-    const show = await decideFullStory(jev, {
-      onScreenCopy: report.onScreenCopy,
-      caption: report.caption,
-      postIdeaId: target.postIdeaId,
-      runId,
-    });
-    if (show) {
-      fullStoryCue = await chooseFullStoryLine(jev, {
-        bucket: target.bucket,
+  if (FULL_STORY_CUE_ENABLED) {
+    try {
+      const show = await decideFullStory(jev, {
         onScreenCopy: report.onScreenCopy,
         caption: report.caption,
         postIdeaId: target.postIdeaId,
         runId,
       });
+      if (show) {
+        fullStoryCue = await chooseFullStoryLine(jev, {
+          bucket: target.bucket,
+          onScreenCopy: report.onScreenCopy,
+          caption: report.caption,
+          postIdeaId: target.postIdeaId,
+          runId,
+        });
+      }
+    } catch {
+      fullStoryCue = null;
     }
-  } catch {
-    fullStoryCue = null;
   }
   await saveIdeaCopy({
     ...base,

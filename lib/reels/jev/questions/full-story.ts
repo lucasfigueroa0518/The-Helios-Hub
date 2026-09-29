@@ -6,9 +6,9 @@ import { defineQuestionSet } from '@/lib/reels/jev/question-set';
  * P-16. After a winning on-screen line and its caption are chosen, three
  * yes/no judgments decide a small "Full Story Below" cue (D-196).
  *
- * Code enforces the essential gate: the cue is off unless `storyDeferred`
- * clears the bar. A caption that does not hold a deferred story never gets
- * the words "Full story below," no matter how the other two land.
+ * Code enforces the essential gate (D-201): `storyDeferred` must be at least
+ * 0.70, and at least one of the other two must be at least 0.26. A caption
+ * that does not hold a deferred story never gets the cue.
  *
  * `caption_preview` is the first line of the caption, cut at the Instagram
  * fold when that line is longer. It is the words a viewer sees before they

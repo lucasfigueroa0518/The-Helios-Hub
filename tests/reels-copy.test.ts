@@ -138,6 +138,15 @@ test('the word count is stated as a hard constraint for the winning bucket', () 
   assert.match(text, /line break at each natural pause/);
 });
 
+test('the skill writes for an AI-curious general reader and treats the whole copy as the hook', () => {
+  assert.doesNotMatch(COPY_SKILL, /developers at any level/);
+  assert.doesNotMatch(COPY_SKILL, /peer who works in AI/);
+  assert.doesNotMatch(COPY_SKILL, /The first line is the hook/);
+  assert.match(COPY_SKILL, /curious about AI/);
+  assert.match(COPY_SKILL, /whole on-screen copy is the hook/);
+  assert.doesNotMatch(FRAMEWORK_WRITING_LOGIC.identity.onScreen, /developer, founder, or operator/);
+});
+
 test('the pre-limit writer is preserved as a Threads candidate and stays off the reel path', () => {
   assert.equal(THREADS_POST_ENGINE_CANDIDATE_VERSION, 'copy-caption-v1');
   assert.match(THREADS_POST_ENGINE_CANDIDATE_SKILL, /Put a line break wherever you want a new screen/);

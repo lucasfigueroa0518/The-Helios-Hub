@@ -719,7 +719,7 @@ def _resolve_format(out: Path, spec: dict) -> str:
 def _cue_scaled(spec: dict, image_width: int, main_font_px: int) -> Scaled:
     """One line, always smaller than the main on-screen type."""
     cue = spec.get("full_story") or {}
-    ratio = float(cue.get("font_size_ratio", 0.42))
+    ratio = float(cue.get("font_size_ratio", 0.68))
     size = max(1, round(main_font_px * ratio))
     if size >= main_font_px:
         size = max(1, main_font_px - 1)

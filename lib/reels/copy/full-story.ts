@@ -1,6 +1,6 @@
+import { FULL_STORY_CUE_ENABLED } from '@/lib/reels/config';
 import { fullStoryLines } from '@/lib/reels/copy/full-story-lines';
 import { CAPTION_FOLD_CHARS } from '@/lib/reels/copy/report';
-import { HIGH_CONFIDENCE } from '@/lib/reels/config';
 import { FULL_STORY_CUE, fullStoryState } from '@/lib/reels/jev/questions/full-story';
 import { fullStoryLineIndex, fullStoryLineSet, fullStoryLineState } from '@/lib/reels/jev/questions/full-story-line';
 import type { JevRunner } from '@/lib/reels/jev/runner';
@@ -10,12 +10,20 @@ import type { BucketId } from '@/lib/reels/scoring/decide';
  * The cue is a pointer, not a second headline. It is on only when the caption
  * is where a story was deferred, and the viewer still needs the pointer:
  * the preview does not continue the line, or the on-screen line cannot stand
- * as its own thought. A Noul in the middle stays off.
+ * as its own thought. The deferred-story score has its own bar (D-201).
  */
-export const FULL_STORY_BAR = HIGH_CONFIDENCE;
+export const FULL_STORY_DEFERRED_BAR = 0.7;
+export const FULL_STORY_POINTER_BAR = 0.26;
 
 /** Drawn after the chosen line. The words themselves do not include it. */
 export const FULL_STORY_HAND = '👇';
+
+/** Stored cues stay off the frame while the feature is disabled (D-202). */
+export function cueToDraw(stored: string | null | undefined): string | null {
+  if (!FULL_STORY_CUE_ENABLED) return null;
+  const cue = stored?.trim();
+  return cue || null;
+}
 
 export type FullStoryAnswers = {
   storyDeferred: number;
@@ -32,9 +40,15 @@ export function captionPreview(caption: string, fold = CAPTION_FOLD_CHARS): stri
   return (space > 40 ? cut.slice(0, space) : cut).trim();
 }
 
-export function showFullStoryBelow(answers: FullStoryAnswers, bar = FULL_STORY_BAR): boolean {
-  if (answers.storyDeferred < bar) return false;
-  return answers.previewMiss >= bar || answers.incomplete >= bar;
+export function showFullStoryBelow(
+  answers: FullStoryAnswers,
+  bars: { deferred: number; pointer: number } = {
+    deferred: FULL_STORY_DEFERRED_BAR,
+    pointer: FULL_STORY_POINTER_BAR,
+  },
+): boolean {
+  if (answers.storyDeferred < bars.deferred) return false;
+  return answers.previewMiss >= bars.pointer || answers.incomplete >= bars.pointer;
 }
 
 /**

@@ -8,7 +8,7 @@ import path from 'node:path';
 import type Anthropic from '@anthropic-ai/sdk';
 
 import { extractJobId, extractVideoUrl } from '@/lib/reels/visual/higgsfield/client';
-import { falErrorText, falKlingBody } from '@/lib/reels/visual/kling/api';
+import { falErrorText, falKlingBody, ORANGE_HAND_NEGATIVE } from '@/lib/reels/visual/kling/api';
 import { klingArguments, pickKlingTool, type McpTool } from '@/lib/reels/visual/higgsfield/kling';
 import { newestLogin, storeLogin, usableAccessToken } from '@/lib/reels/visual/higgsfield/session';
 import type { Questions, SystemOneResult } from '@typesafe-ai/sdk';
@@ -266,7 +266,7 @@ describe('Jev color route', () => {
     assert.equal(route.profile, 'orange');
     assert.deepEqual(seen[0]?.state, { on_screen_copy: 'The chip lost half its value.' });
     assert.deepEqual(seen[0]?.sets, [COLOR_ROUTE]);
-    assert.equal(COLOR_ROUTE.version, 'color-route-v2');
+    assert.equal(COLOR_ROUTE.version, 'color-route-v3');
     assert.match(JSON.stringify(COLOR_ROUTE), /keeps going after the person looks away/);
   });
 });
@@ -402,6 +402,13 @@ describe('Fal Kling image-to-video body', () => {
     assert.equal(body.start_image_url, 'https://example.com/bg.png');
     assert.equal('multi_prompt' in body, false);
     assert.equal('ON_SCREEN_COPY' in body, false);
+    assert.equal('negative_prompt' in body, false);
+    const orange = falKlingBody({
+      prompt: '0.0-0.5s: flicker',
+      imageUrl: 'https://example.com/bg.png',
+      negativePrompt: ORANGE_HAND_NEGATIVE,
+    });
+    assert.match(String(orange.negative_prompt), /black hand/);
   });
 
   it('reads a Fal download error instead of printing the object', () => {

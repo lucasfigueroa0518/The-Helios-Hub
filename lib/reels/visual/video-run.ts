@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import { priceAnthropicMessages } from '@/lib/anthropic-pricing';
 import { dbQuery } from '@/lib/db';
+import { cueToDraw } from '@/lib/reels/copy/full-story';
 import { MONTHLY_WATCH_USD, MOTION_MODEL, VIDEO_STALE_MINUTES } from '@/lib/reels/config';
 import { claimNextRankedJob } from '@/lib/reels/pipeline/claim';
 import { monthToDateUsd, recordCost } from '@/lib/reels/repository';
@@ -13,7 +14,7 @@ import { FINAL_DIR, hookSfxPlan } from '@/lib/reels/sfx/manifest';
 import { buildStory, type VisualMember } from '@/lib/reels/visual/scene';
 import { colorProfileOrNoir } from '@/lib/reels/visual/color';
 import { renderTextPlate } from '@/lib/reels/visual/engine';
-import { generateKlingClip } from '@/lib/reels/visual/kling/api';
+import { generateKlingClip, ORANGE_HAND_NEGATIVE } from '@/lib/reels/visual/kling/api';
 import { createLiveJevRunner } from '@/lib/reels/jev/client';
 import { queueSongPick } from '@/lib/reels/music/pick';
 import type { JevRunner } from '@/lib/reels/jev/runner';
@@ -189,7 +190,7 @@ async function loadVideoTarget(jobId: string): Promise<VideoTarget | null> {
     scene: first.scene,
     backgroundPath: first.background_storage_path,
     onScreenCopy: first.on_screen_copy,
-    fullStoryCue: first.full_story_cue?.trim() || null,
+    fullStoryCue: cueToDraw(first.full_story_cue),
     story: buildStory(first.caption, members),
     colorProfile: colorProfileOrNoir(first.render?.colorProfile),
   };
@@ -238,7 +239,10 @@ function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-async function klingWithRetry(input: { prompt: string; imageUrl: string }, notices: string[]) {
+async function klingWithRetry(
+  input: { prompt: string; imageUrl: string; negativePrompt?: string },
+  notices: string[],
+) {
   let last: unknown;
   for (let attempt = 1; attempt <= KLING_ATTEMPTS; attempt += 1) {
     try {
@@ -385,7 +389,14 @@ export async function claimAndRenderVideo(deps?: {
       return { id, status: 'failed' };
     }
     const imageUrl = await signFrameObject(target.backgroundPath);
-    const clip = await klingWithRetry({ prompt: written.prompt.text, imageUrl }, notices);
+    const clip = await klingWithRetry(
+      {
+        prompt: written.prompt.text,
+        imageUrl,
+        negativePrompt: target.colorProfile === 'orange' ? ORANGE_HAND_NEGATIVE : undefined,
+      },
+      notices,
+    );
     const dir = await mkdtemp(path.join(os.tmpdir(), 'helios-reel-'));
     try {
       const rawPath = path.join(dir, 'raw.mp4');

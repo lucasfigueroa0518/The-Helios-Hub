@@ -29,7 +29,7 @@ export const REPORT_COPY_TOOL = {
     properties: {
       hook_drafts: {
         type: 'array',
-        description: 'At least three different opening lines you considered for the on-screen copies. Working notes, not published.',
+        description: 'At least three different hooks you considered, each a complete on-screen copy. Working notes, not published.',
         items: { type: 'string' },
       },
       copy_draft: { type: 'string', description: 'Your first drafts of the two on-screen copies. Working notes.' },
@@ -44,7 +44,7 @@ export const REPORT_COPY_TOOL = {
         minItems: 2,
         maxItems: 2,
         description:
-          'Exactly two final on-screen copies for the one screen. Same story, same facts, same gap, paid out by the one caption. Different first lines, and a different thing named first. A paraphrase is a failed report. Each copy has a line break already inserted at each natural pause. One line break between lines, and no blank line. A line break stays on this same screen. Count the words in each copy on its own. Each count must fall inside the bucket word range given in the prompt. A count outside that range is a failed report.',
+          'Exactly two final on-screen copies for the one screen. Same story, same facts, same gap, paid out by the one caption. Each whole copy is a hook, and the two are different hooks, with a different first line and a different thing named first. A paraphrase is a failed report. Each copy has a line break already inserted at each natural pause. One line break between lines, and no blank line. A line break stays on this same screen. Count the words in each copy on its own. Each count must fall inside the bucket word range given in the prompt. A count outside that range is a failed report.',
         items: { type: 'string' },
       },
       caption: {

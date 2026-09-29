@@ -34,14 +34,14 @@ const criteria = {
 
 export const COLOR_ROUTE = defineQuestionSet({
   id: 'color-route',
-  version: 'color-route-v2',
+  version: 'color-route-v3',
   questions: {
     color: choice(
       {
         question: 'Which color grade should a short vertical video use behind this on-screen text?',
         state: '`on_screen_copy` is the exact text the viewer reads over the picture.',
         judge:
-          'Match the feeling of the first line. A price, a loss, or a warning is orange. A clean stated fact is paper. Anything hidden, broken, heavy, or still going after the person looks away is noir.',
+          'Match the feeling of the copy as a whole. A price, a loss, or a warning is orange. A clean stated fact is paper. Anything hidden, broken, heavy, or still going after the person looks away is noir.',
       },
       criteria,
     ),

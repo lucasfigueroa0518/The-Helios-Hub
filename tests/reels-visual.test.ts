@@ -85,6 +85,8 @@ test('the three-zone prompt is saved, and the live prompt asks for one scene', (
   assert.match(sceneWriterInstructions('orange'), /80% of the frame is flat vivid orange/);
   assert.match(assembleImagePrompt('A desk.', 'orange'), /A desk\./);
   assert.match(assembleImagePrompt('A desk.', 'orange'), /#FF5E1A/);
+  assert.match(assembleImagePrompt('A desk.', 'orange'), /No hands/);
+  assert.match(assembleImagePrompt('A desk.', 'orange'), /Black hands are not allowed/);
 });
 
 test('category follows the content bucket, then the primary source bucket', () => {

@@ -21,8 +21,8 @@ edge. The orange is flat enough that white text with a black stroke can sit
 on it.
 
 [PEOPLE — FIXED, WHEN PRESENT]
-Humans appear only as near-black silhouettes or partial figures (hands,
-shoulders, profiles, backs). Faces stay unidentifiable. Figures are dark
+Humans appear only as near-black silhouettes or partial figures (shoulders,
+profiles, backs). No hands. Faces stay unidentifiable. Figures are dark
 shapes in the orange field. They are not orange themselves, and they are not
 lit by a separate color.
 
@@ -50,4 +50,6 @@ backgrounds, stock-photo look, cartoon or illustration style, visible text or
 logos generated in the image, a frame split into separate top and bottom scenes,
 an empty band across the middle, two unrelated subjects stacked above and below
 the text, a dark or white object in the center, a black band behind the text,
-the orange reduced to one object, color correction that removes the orange
+the orange reduced to one object, color correction that removes the orange,
+hands, fists, fingers, a black hand, a dark hand, a silhouette hand, skin,
+wrists, forearms. Black hands are not allowed. Do not draw hands at all.

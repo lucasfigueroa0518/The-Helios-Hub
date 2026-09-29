@@ -10,6 +10,7 @@ import {
   VISUAL_SCENE_MODEL,
   VISUAL_STALE_MINUTES,
 } from '@/lib/reels/config';
+import { cueToDraw } from '@/lib/reels/copy/full-story';
 import { createLiveJevRunner } from '@/lib/reels/jev/client';
 import type { JevRunner } from '@/lib/reels/jev/runner';
 import { claimNextRankedJob } from '@/lib/reels/pipeline/claim';
@@ -201,7 +202,7 @@ async function loadTarget(slateId: string, postIdeaId: string): Promise<Target |
   return {
     onScreenCopy: rows[0].on_screen_copy,
     caption: rows[0].caption,
-    fullStoryCue: rows[0].full_story_cue?.trim() || null,
+    fullStoryCue: cueToDraw(rows[0].full_story_cue),
     bucket: rows[0].bucket,
     members: rows.map((row) => ({
       role: row.role,

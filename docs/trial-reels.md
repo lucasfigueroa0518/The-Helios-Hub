@@ -8,7 +8,7 @@ Build 1 is sources and post ideas. Build 2 scores those ideas at the end of the
 same nightly run and shows the leaderboard on `/reels`. Build 2 is signed off
 (D-089). Copy and captions are Build 3. A scored idea with on-screen copy can
 be sent to the visual pipeline from the Scores tab. A Jev call (P-12,
-`color-route-v2`) picks a grade from the on-screen copy: `noir` (the dark
+`color-route-v3`) picks a grade from the on-screen copy: `noir` (the dark
 room), `paper` (white field, black type), or `orange` (about 80% of the frame
 in #FF5E1A, white type with a black stroke). That produces one 9:16 still. **Generate video** appears beside Generate frame once that still is
 ready. The click only queues a row. The worker writes a Kling 3.0 motion
@@ -157,8 +157,12 @@ old records have to keep meaning what they said.
 ## The copy writer gate (Build 3)
 
 After scoring, the run writes one on-screen copy and one caption for each of
-the three selected ideas (P-10, `copy-caption-v5`, `claude-sonnet-5`, one cached
-call each). Lucas approved that prompt on 2026-09-23. It makes no call anywhere
+the three selected ideas (P-10, `copy-caption-v8`, `claude-sonnet-5`). Each idea
+gets two cached calls, and each call returns two on-screen copies and one
+caption. Jev (P-15, `copy-pick-v2`) scores the four copies, and the reel keeps
+the winner with its call's caption. The copy is written for anyone curious
+about AI, and the whole on-screen copy is the hook (D-204, D-205). Lucas approved the
+current wording on 2026-09-28. It makes no call anywhere
 `REELS_COPY_PROMPT_APPROVED=true` is not set, and the page says so.
 
 On the Scores tab, **Generate Copy + Captions** queues that same writer for
