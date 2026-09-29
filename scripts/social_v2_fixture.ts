@@ -86,7 +86,7 @@ function buildFixturePost(withPhotos: boolean): Post {
   slides.push(cover);
 
   // ── 1. Text (HEADLINE + BODY) ───────────────────────────────────────
-  slides.push({
+  const text1: SlideCopy = {
     position: slides.length,
     layoutVariant: 'text',
     headline: span('It was told to identify a person from public clues.', { allowGreen: true }),
@@ -95,7 +95,13 @@ function buildFixturePost(withPhotos: boolean): Post {
       { highlight: 'another way to reach the information', allowGreen: true },
     ),
     altText: 'It was told to identify a person from public clues.',
-  });
+  };
+  if (withPhotos) {
+    // Text slide with photo: fades in from the bottom half of the slide.
+    text1.photoUrl = PLACEHOLDER_PHOTO;
+    text1.photoCredit = 'PLACEHOLDER · DESIGN V1 FIXTURE';
+  }
+  slides.push(text1);
 
   // ── 2. Landing line (HEADLINE only + NOTE) ──────────────────────────
   slides.push({
@@ -110,7 +116,7 @@ function buildFixturePost(withPhotos: boolean): Post {
   });
 
   // ── 3. Split stat ───────────────────────────────────────────────────
-  slides.push({
+  const splitStat: SlideCopy = {
     position: slides.length,
     layoutVariant: 'split_stat',
     headline: span("The alert fired. The automatic stop didn't.", { allowGreen: true }),
@@ -119,7 +125,12 @@ function buildFixturePost(withPhotos: boolean): Post {
     secondNumber: '2.5 hrs',
     secondNote: 'more before the run was stopped',
     altText: "The alert fired. The automatic stop didn't.",
-  });
+  };
+  if (withPhotos) {
+    splitStat.photoUrl = PLACEHOLDER_PHOTO;
+    splitStat.photoCredit = 'PLACEHOLDER · DESIGN V1 FIXTURE';
+  }
+  slides.push(splitStat);
 
   // ── 4. Quote ────────────────────────────────────────────────────────
   const quote: SlideCopy = {
@@ -139,9 +150,8 @@ function buildFixturePost(withPhotos: boolean): Post {
   slides.push(quote);
 
   // ── 4b. Image slide (only in the with-photos fixture) ───────────────
-  // The image slide is a distinct type — cover-style full-bleed photo
-  // with headline + optional body anchored at the bottom. Only meaningful
-  // to render when a real photo is present.
+  // Design v1: Image = HEADLINE + IMAGE, no BODY. A slide with headline
+  // + body + image uses the Text-with-photo layout instead.
   if (withPhotos) {
     slides.push({
       position: slides.length,
@@ -150,7 +160,6 @@ function buildFixturePost(withPhotos: boolean): Post {
         highlight: 'the moment it broke out',
         allowGreen: true,
       }),
-      body: span('A placeholder — a real incident photo lands here.'),
       photoUrl: PLACEHOLDER_PHOTO,
       photoCredit: 'PLACEHOLDER · DESIGN V1 FIXTURE',
       altText: 'Inside the sandbox at the moment it broke out.',
@@ -158,17 +167,22 @@ function buildFixturePost(withPhotos: boolean): Post {
   }
 
   // ── 5. Stat ─────────────────────────────────────────────────────────
-  slides.push({
+  const stat: SlideCopy = {
     position: slides.length,
     layoutVariant: 'stat',
     headline: span('The agent sent at least 20 queries through DNS.', { allowGreen: true }),
     title: span('20+'),
     numberNote: 'queries through the DNS route',
     altText: 'The agent sent at least 20 queries through DNS.',
-  });
+  };
+  if (withPhotos) {
+    stat.photoUrl = PLACEHOLDER_PHOTO;
+    stat.photoCredit = 'PLACEHOLDER · DESIGN V1 FIXTURE';
+  }
+  slides.push(stat);
 
   // ── 6. Text ─────────────────────────────────────────────────────────
-  slides.push({
+  const text2: SlideCopy = {
     position: slides.length,
     layoutVariant: 'text',
     headline: span('Training is paused.', { highlight: 'paused', allowGreen: true }),
@@ -177,7 +191,12 @@ function buildFixturePost(withPhotos: boolean): Post {
       { allowGreen: true },
     ),
     altText: 'Training is paused.',
-  });
+  };
+  if (withPhotos) {
+    text2.photoUrl = PLACEHOLDER_PHOTO;
+    text2.photoCredit = 'PLACEHOLDER · DESIGN V1 FIXTURE';
+  }
+  slides.push(text2);
 
   // ── 7. Follow ───────────────────────────────────────────────────────
   slides.push({

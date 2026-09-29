@@ -331,8 +331,11 @@ describe('classifySlideType — design v1 field-driven types', () => {
   test('BIG NUMBER alone → stat', () => {
     assert.equal(classifySlideType({ position: 2, bigNumber: '$1' }), 'stat');
   });
-  test('brief-image IMAGE + HEADLINE (no numbers/quote) → image', () => {
+  test('brief-image IMAGE + HEADLINE only (no body) → image', () => {
     assert.equal(classifySlideType({ position: 2, headline: 'H', image: 'brief image 2' }), 'image');
+  });
+  test('brief-image IMAGE + HEADLINE + BODY → text (text-with-photo layout)', () => {
+    assert.equal(classifySlideType({ position: 2, headline: 'H', body: 'B', image: 'brief image 2' }), 'text');
   });
   test('HEADLINE only (no BODY) → landing', () => {
     assert.equal(classifySlideType({ position: 2, headline: 'H' }), 'landing');

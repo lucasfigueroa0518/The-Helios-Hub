@@ -221,7 +221,10 @@ export function classifySlideType(slide: import('./parse').ParsedSlide): string 
   if (slide.quote) return 'quote';
   if (slide.secondNumber) return 'split_stat';
   if (slide.bigNumber) return 'stat';
-  if (slide.image && /^brief image\s+\d+/i.test(slide.image) && slide.headline) return 'image';
+  // Image slide only fires when there is a brief image + headline AND no
+  // body — a text slide with body + image uses the text layout with a
+  // bottom-half fade photo instead.
+  if (slide.image && /^brief image\s+\d+/i.test(slide.image) && slide.headline && !slide.body) return 'image';
   if (slide.headline && !slide.body) return 'landing';
   return 'text';
 }

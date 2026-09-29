@@ -28,12 +28,12 @@ Seven types plus the follow slide. The Writer's fields decide the type; the adap
 | Type | Writer fields | Layout |
 |---|---|---|
 | **Cover** | COVER, COVER HIGHLIGHT, COVER IMAGE | Unchanged template. With a brief image: the photo fills the whole slide, darkened under the headline (the template's existing bleed mode). Without one: dark canvas, as today. |
-| **Text** | HEADLINE + BODY | Top-anchored. Headline states the slide's point. Body under it. |
+| **Text** | HEADLINE + BODY (+ optional IMAGE) | Top-anchored. Headline states the slide's point. Body under it. If IMAGE is a brief image, the photo occupies the bottom half of the slide, full width, fading upward into the canvas so the text area stays clean. |
 | **Landing line** | HEADLINE only | One statement, vertically centered, very large. An optional short NOTE line under it in small muted text. |
 | **Stat** | BIG NUMBER + NUMBER NOTE, HEADLINE, optional BODY | Headline at the top. Big number near the bottom with its note under it. Optional supporting photo between headline and number. |
 | **Split stat** | BIG NUMBER + NUMBER NOTE, SECOND NUMBER + SECOND NOTE, HEADLINE | Headline at the top. Two numbers side by side near the bottom above a hairline, each with its note. The second number is orange. Optional supporting photo between. |
 | **Quote** | QUOTE + QUOTE BY | Orange opening quote mark, the quote set large in Pragmatica, attribution in small mono caps. Optional round speaker photo above, only when a brief image shows that speaker. |
-| **Image slide** | IMAGE: brief image N, HEADLINE, optional BODY | The cover layout mid-carousel: photo in the top half fading into the canvas, headline and body anchored at the bottom. |
+| **Image slide** | IMAGE: brief image N + HEADLINE only (no BODY) | Cover-style full-bleed treatment mid-carousel: photo fills the slide, headline anchored at the bottom. A slide with headline **and** body plus an IMAGE uses the Text slide's bottom-half fade layout instead. |
 | **Follow** | FOLLOW | Unchanged. |
 
 Rules:
@@ -139,7 +139,7 @@ QUOTE BY: <who said it, and where>
 ## Adapter and code checks
 
 - Parse the new labels: NOTE, NUMBER NOTE, SECOND NUMBER, SECOND NOTE, QUOTE, QUOTE BY.
-- Map fields to types exactly as in the table above. A slide with QUOTE is a Quote slide; with SECOND NUMBER, a Split stat; with BIG NUMBER, a Stat; with a brief-image IMAGE and no numbers or quote, an Image slide; HEADLINE only, a Landing line; HEADLINE and BODY, a Text slide.
+- Map fields to types exactly as in the table above. A slide with QUOTE is a Quote slide; with SECOND NUMBER, a Split stat; with BIG NUMBER, a Stat; with a brief-image IMAGE and HEADLINE only (no BODY, no numbers, no quote), an Image slide; HEADLINE only (no image), a Landing line; HEADLINE and BODY, a Text slide (the Text slide carries the optional bottom-half fade photo when IMAGE is a brief image).
 - The HIGHLIGHT substring check also accepts phrases from QUOTE and NOTE.
 - New code checks (soft, like the existing length checks): the limits above, and "no two consecutive slides share a type".
 - The numbers-trace check covers NUMBER NOTE, SECOND NUMBER and SECOND NOTE.

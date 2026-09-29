@@ -347,6 +347,39 @@
   margin: 0;
   max-width: 100%;
   overflow: visible;
+  position: relative;
+  z-index: 2;
+}
+
+/* Text slide with a supporting photo — headline + body stay at the top;
+   the photo occupies the bottom half of the canvas, full width, fading
+   upward into the canvas so the text area stays clean. Negative offsets
+   escape the slide's 96px padding so the photo reaches the true edge. */
+.helios-text--with-photo .helios-text__headline,
+.helios-text--with-photo .helios-text__body {
+  position: relative;
+  z-index: 2;
+}
+
+.helios-text__photo-frame {
+  position: absolute;
+  left: -96px;
+  right: -96px;
+  bottom: -96px;
+  height: 58%;
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to top, #000 0%, #000 40%, transparent 100%);
+  mask-image: linear-gradient(to top, #000 0%, #000 40%, transparent 100%);
+}
+
+.helios-text__photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+  display: block;
 }
 
 /* ── Landing slide (HEADLINE only, centered) ──────────────────────────── */
@@ -480,16 +513,23 @@
 
 .helios-split-stat__headline {
   font-family: var(--font-heading);
-  font-size: 72px;
+  font-size: 100px;
   font-weight: 700;
-  line-height: 0.98;
-  letter-spacing: -0.025em;
+  line-height: 0.94;
+  letter-spacing: -0.03em;
   color: var(--brand-narrative);
   text-transform: uppercase;
   margin: 0;
   overflow-wrap: break-word;
   hyphens: auto;
 }
+
+/* Same 100 / 84 / 72 ladder the Text slide uses so both types share
+   headline scale. */
+.helios-split-stat__headline[data-length="xs"] { font-size: 100px; }
+.helios-split-stat__headline[data-length="sm"] { font-size: 100px; }
+.helios-split-stat__headline[data-length="md"] { font-size: 84px; }
+.helios-split-stat__headline[data-length="lg"] { font-size: 72px; }
 
 .helios-split-stat__photo {
   width: 100%;
@@ -566,8 +606,8 @@
 }
 
 .helios-quote__speaker {
-  width: 180px;
-  height: 180px;
+  width: 260px;
+  height: 260px;
   border-radius: 50%;
   object-fit: cover;
   display: block;
@@ -711,7 +751,7 @@
 
 .helios-follow__handle {
   font-family: var(--font-mono);
-  font-size: 48px;
+  font-size: 44px;
   font-weight: 500;
   letter-spacing: 0.08em;
   color: var(--brand-orange);
@@ -722,10 +762,10 @@
 .helios-follow__story-line {
   max-width: 780px;
   font-family: var(--font-body);
-  font-size: 30px;
+  font-size: 38px;
   font-weight: 400;
   line-height: 1.32;
   letter-spacing: -0.005em;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--brand-narrative);
   margin: 8px 0 0;
 }

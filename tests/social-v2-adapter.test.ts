@@ -144,7 +144,7 @@ describe('adaptToPost — design v1 field-driven mapping', () => {
     assert.equal(beat.numberNote, 'from Sequoia');
   });
 
-  test('IMAGE = brief image N (no numbers/quote) + HEADLINE → image', () => {
+  test('IMAGE = brief image N + HEADLINE only (no body) → image (full-bleed)', () => {
     const brief = makeBrief('IMAGES:\nIMAGE 1: The office at night. Credit: Norland Press. Link: https://x.example.com/office.jpg\n\n');
     const parsed = makeEditedPost({
       slides: [{ headline: 'The office at night', image: 'brief image 1', highlight: 'office' }],
@@ -153,6 +153,25 @@ describe('adaptToPost — design v1 field-driven mapping', () => {
     const beat = post.slides[1]!;
     assert.equal(beat.layoutVariant, 'image');
     assert.equal(beat.photoUrl, 'https://x.example.com/office.jpg');
+    assert.equal(beat.body, undefined);
+  });
+
+  test('IMAGE = brief image N + HEADLINE + BODY → text with photoUrl (bottom-half fade)', () => {
+    const brief = makeBrief('IMAGES:\nIMAGE 1: The office at night. Credit: Norland Press. Link: https://x.example.com/office.jpg\n\n');
+    const parsed = makeEditedPost({
+      slides: [{
+        headline: 'The office at night',
+        body: 'Empty desks, one door open.',
+        image: 'brief image 1',
+        highlight: 'office',
+      }],
+    });
+    const post = adaptToPost({ brief, post: parsed, caption: 'x'.repeat(500), articlePublishedAt: '2026-09-12', issueNumber: 1 });
+    const beat = post.slides[1]!;
+    assert.equal(beat.layoutVariant, 'text');
+    assert.equal(beat.photoUrl, 'https://x.example.com/office.jpg');
+    assert.ok(beat.headline);
+    assert.ok(beat.body);
   });
 
   test('HEADLINE only (no BODY, no IMAGE) → landing', () => {

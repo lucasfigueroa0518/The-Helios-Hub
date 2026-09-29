@@ -144,8 +144,9 @@ function TextSlide({ slide }: { slide: SlideCopy }) {
   // Prefer `headline`; fall back to legacy `title` so old fixtures render.
   const headlineRun = slide.headline ?? slide.title;
   const bodyRun = slide.body ?? slide.bodyBottom;
+  const hasPhoto = Boolean(slide.photoUrl);
   return (
-    <div className="helios-text">
+    <div className={`helios-text${hasPhoto ? ' helios-text--with-photo' : ''}`}>
       {headlineRun && (
         <h2 className="helios-text__headline" data-length={headlineBucket}>
           <SpanRunView run={headlineRun} />
@@ -155,6 +156,11 @@ function TextSlide({ slide }: { slide: SlideCopy }) {
         <p className="helios-text__body">
           <SpanRunView run={bodyRun} />
         </p>
+      )}
+      {hasPhoto && (
+        <div className="helios-text__photo-frame" aria-hidden="true">
+          <img className="helios-text__photo" src={slide.photoUrl} alt="" />
+        </div>
       )}
     </div>
   );
@@ -223,10 +229,15 @@ function SplitStatSlide({ slide }: { slide: SlideCopy }) {
   const leftLen = leftNumber?.reduce((n, s) => n + s.text.length, 0) ?? 0;
   const rightLen = (slide.secondNumber ?? '').length;
   const hasPhoto = Boolean(slide.photoUrl);
+  const headlineChars = (slide.headline ?? []).reduce((n, s) => n + s.text.length, 0);
+  const headlineBucket = headlineChars <= 30 ? 'xs'
+    : headlineChars <= 45 ? 'sm'
+    : headlineChars <= 60 ? 'md'
+    : 'lg';
   return (
     <div className="helios-split-stat">
       {slide.headline && (
-        <h2 className="helios-split-stat__headline">
+        <h2 className="helios-split-stat__headline" data-length={headlineBucket}>
           <SpanRunView run={slide.headline} />
         </h2>
       )}

@@ -178,8 +178,12 @@ function buildBeatSlide(slide: ParsedSlide, brief: Brief, position: number): Sli
     return out;
   }
 
-  // 4. IMAGE = brief image N (no numbers/quote above) → image slide
-  if (briefImage?.link && slide.headline) {
+  // 4. IMAGE = brief image N + HEADLINE, NO BODY → image slide (full-bleed
+  // cover-style hero). A slide with headline + body + image is routed to
+  // Text slide instead (see below) — that layout keeps the copy at the top
+  // and fades the photo up from the bottom half so the text area stays
+  // clean.
+  if (briefImage?.link && slide.headline && !slide.body) {
     const out: SlideCopy = {
       position,
       layoutVariant: 'image',
@@ -188,7 +192,6 @@ function buildBeatSlide(slide: ParsedSlide, brief: Brief, position: number): Sli
       altText: truncateAlt(slide.headline),
     };
     if (briefImage.credit) out.photoCredit = shortPhotoCredit(briefImage.credit);
-    if (slide.body) out.body = colorSpans(slide.body, hlBody, [], brief, /* allowGreen */ true);
     return out;
   }
 
@@ -204,7 +207,8 @@ function buildBeatSlide(slide: ParsedSlide, brief: Brief, position: number): Sli
     return out;
   }
 
-  // 6. HEADLINE + BODY → text slide (also handles BODY-only fallback)
+  // 6. HEADLINE + BODY → text slide (with optional bottom-half fade photo
+  // when IMAGE = brief image N). Also handles BODY-only fallback.
   const out: SlideCopy = {
     position,
     layoutVariant: 'text',

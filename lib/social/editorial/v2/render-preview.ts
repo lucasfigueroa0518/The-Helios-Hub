@@ -37,12 +37,14 @@ const SLIDE_HEIGHT = 1350;
  * doesn't cover the design.
  */
 const PREVIEW_WATERMARK_CSS = `
-  /* Bottom-left so the design v1 top-right HELIOS wordmark and the
-     cover's bottom-right orange chevron stay visible. */
+  /* Top-left: safe on every slide type because text sits either
+     bottom-anchored (cover / image / follow) or below padding-top:96px
+     (text / stat / split_stat / quote / landing). The design v1 HELIOS
+     wordmark lives top-right so no chrome collision here either. */
   .helios-slide::after {
     content: "PREVIEW";
     position: absolute;
-    bottom: 28px;
+    top: 28px;
     left: 32px;
     font: 800 24px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     letter-spacing: 0.24em;
