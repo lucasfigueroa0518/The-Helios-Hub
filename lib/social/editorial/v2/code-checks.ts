@@ -79,12 +79,14 @@ export const LIMITS = {
   captionMax: 2200,
   /**
    * STORY slides between the cover and the follow slide. Cover + follow
-   * are anchors and don't count. A post has 5 to 10 story slides,
+   * are anchors and don't count. A post has 5 to 8 story slides,
    * meaning `post.slides.length` (which excludes cover + follow) is
-   * between 5 and 10 inclusive. Total published slides run 7–12.
+   * between 5 and 8 inclusive. Total published slides run 7–10 — inside
+   * Instagram's 10-item carousel cap. Max lowered from 10 on 2026-09-29
+   * per docs/RULE-CONFLICTS-2026-09-29.md item 3.
    */
   storySlidesMin: 5,
-  storySlidesMax: 10,
+  storySlidesMax: 8,
 };
 
 /**

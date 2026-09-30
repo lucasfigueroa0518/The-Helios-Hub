@@ -1,5 +1,9 @@
 # Helios Social carousel design v1: handoff spec
 
+> **Editorial rules moved (2026-09-29).** The priority ladder, context policy, story slide count (now 5–8), photo tiers and glossing rule live in `lib/social/editorial/v2/rules-block.ts` — the canonical source, imported by every stage prompt. Rules in this doc's **Prompt changes**, **Rhythm** and **Slide types** sections are the design-v1 intent but are no longer authoritative: where they disagree with the block, the block wins. When a rule changes, edit the block, not this doc.
+>
+> Layout, color, typography, cover template and CSS still live here — those are the design contract, not editorial rules.
+
 ## Read this first
 
 This spec replaces the look of the v2 carousel slides. It was written from `docs/design-inventory.md` and a reviewed mockup (the "Helios Carousel Redesign" artifact, version 8). The inventory's file paths are real; treat everything else here as the intended behavior and map it onto the code as it is.

@@ -89,12 +89,12 @@ describe('checkPost — slide count', () => {
     assert.ok(!r.errors.some((e) => e.kind === 'slide_count'), '5 story slides must pass');
   });
 
-  test('boundary: exactly 10 story slides passes (max)', () => {
-    const slides = Array.from({ length: 10 }).map((_, i) => ({ body: `Body ${i}.`, highlight: `Body ${i}` }));
+  test('boundary: exactly 8 story slides passes (max)', () => {
+    const slides = Array.from({ length: 8 }).map((_, i) => ({ body: `Body ${i}.`, highlight: `Body ${i}` }));
     const post = buildPost({ slides });
-    // Cover + 10 story slides + follow = 12 total, 10 story = at max.
+    // Cover + 8 story slides + follow = 10 total, 8 story = at max.
     const r = checkPost(post, goodBrief);
-    assert.ok(!r.errors.some((e) => e.kind === 'slide_count'), '10 story slides must pass');
+    assert.ok(!r.errors.some((e) => e.kind === 'slide_count'), '8 story slides must pass');
   });
 
   test('boundary: 4 story slides fails (under min)', () => {
@@ -106,13 +106,13 @@ describe('checkPost — slide count', () => {
     assert.match(err!.message, /minimum is 5/);
   });
 
-  test('boundary: 11 story slides fails (over max)', () => {
-    const slides = Array.from({ length: 11 }).map((_, i) => ({ body: `Body ${i}.`, highlight: `Body ${i}` }));
+  test('boundary: 9 story slides fails (over max)', () => {
+    const slides = Array.from({ length: 9 }).map((_, i) => ({ body: `Body ${i}.`, highlight: `Body ${i}` }));
     const post = buildPost({ slides });
     const r = checkPost(post, goodBrief);
     const err = r.errors.find((e) => e.kind === 'slide_count');
-    assert.ok(err, '11 story slides must fail');
-    assert.match(err!.message, /maximum is 10/);
+    assert.ok(err, '9 story slides must fail');
+    assert.match(err!.message, /maximum is 8/);
   });
 });
 
@@ -198,9 +198,10 @@ describe('checkPost — char limits', () => {
     assert.match(err!.message, /^SLIDE 2 BODY \(292 characters, limit 220\)/);
     assert.match(err!.message, /cut at least 72 characters/);
     assert.match(err!.message, /about 12 words/);
-    // Runs 3-4 showed the Editor was rewording sentences and inching down
-    // a few chars per pass. The message tells it to cut whole clauses.
-    assert.match(err!.message, /Cut a whole clause or sentence rather than rewording\./);
+    // 2026-09-30: message now points at kinds of words to remove first —
+    // filler, glosses already made elsewhere, restated context. If a fact
+    // must go, it goes into EDIT NOTES so the Fact-checker sees the trade.
+    assert.match(err!.message, /Cut words, not facts: remove filler, glosses already explained elsewhere, and restated context first\. If a fact must go, say which one in EDIT NOTES\./);
   });
   test('caption over-length message uses length-inline format with total including credits', () => {
     // 2100 chars caption + 200 chars credits = 2300 total > 2200 → over by 100.
@@ -210,7 +211,7 @@ describe('checkPost — char limits', () => {
     assert.ok(err);
     assert.match(err!.message, /2111 characters \+ 200 appended image credits = 2311 total, limit 2200/);
     assert.match(err!.message, /cut at least 111 characters/);
-    assert.match(err!.message, /Cut a whole clause or sentence rather than rewording\./);
+    assert.match(err!.message, /Cut words, not facts: remove filler, glosses already explained on a slide, and restated context first\. If a fact must go, say which one in EDIT NOTES\./);
   });
   test('banned-voice errors on a slide include the field length prefix', () => {
     // Slide with "moving forward" — banned_always fires — message must show BODY length + limit.
@@ -548,9 +549,13 @@ FOLLOW: Follow Helios.`;
     assert.equal(report.errors.filter((e) => e.kind === 'rhythm').length, 0);
   });
 
-  test('rhythm errors partition as HARD (block the run at the code-check gate)', () => {
-    // Promoted to HARD 2026-09-29: story 1 shipped with Editor knowingly
-    // leaving two consecutive text slides. Soft meant it slid through.
+  test('rhythm errors partition as SOFT (flag but let the pipeline continue past the code-check gate)', () => {
+    // Demoted back to SOFT 2026-09-30 (copy-audit rec-set): a rhythm
+    // violation on two distinct-beat slides is preferable to a clean
+    // rhythm bought with a repeated fact. slide_repeats +
+    // cover_claim_uniqueness now carry the "no repetition" load rhythm
+    // used to proxy for. The final gate can still surface it, but rhythm
+    // no longer hard-blocks the run at the code-check gate.
     const raw = `COVER: Cover.
 COVER HIGHLIGHT: Cover
 COVER IMAGE: type only
@@ -569,8 +574,8 @@ FOLLOW: Follow.`;
     const post = parseEditedPost(raw);
     const { errors } = checkPost(post, goodBrief);
     const { soft, hard } = partitionErrors(errors);
-    assert.ok(hard.some((e) => e.kind === 'rhythm'));
-    assert.equal(soft.filter((e) => e.kind === 'rhythm').length, 0);
+    assert.ok(soft.some((e) => e.kind === 'rhythm'));
+    assert.equal(hard.filter((e) => e.kind === 'rhythm').length, 0);
   });
 });
 

@@ -23,20 +23,26 @@ Helios Social turns one AI news story into an Instagram carousel for smart, busy
 
 Reporter (web search) → SINGLE STORY: yes gate → Reporter narrow-to-one retry if "no" → brief-integrity gate → Writer emits OUTLINE first → code validates OUTLINE (retry Writer once if bad) → Writer writes prose → enforceStructure → Editor → Caption → code checks → Fact-checker on FULL sources (rounds 1–2) → soft-repair loop → image step → render (via `debug.finalPost` + rebuilt `selectedImages` map). Anything unresolved goes to human review with the flags attached. Nothing posts without Tommy's review.
 
-## Rules Tommy has set (don't relax these)
+## Rules Tommy has set
 
-- **Main story only.** Earlier statements, later announcements and other companies' news are separate stories, even when sources connect them. Strict: not even a passing clause.
-- **Nothing the sources don't say.** No invented comparisons, framings, descriptors or quotes. "Unlike X, Y" and "not X, it's Y" are banned.
+The **canonical rules block** is `lib/social/editorial/v2/rules-block.ts`. All five stage prompts import it; a consistency test fails if any of them drifts. This section points to that block instead of restating it — when the rule changes, edit the block, not this doc.
+
+The block covers:
+
+- **Priority ladder** (five levels — resolves any conflict between the rules below).
+- **Context policy** — one sourced clause anywhere, plus at most ONE "why now" or "what stands in the way" slide per post. Not the old "not even a passing clause" — the Fact-checker and Caption follow this same policy. TERMS explanations count as sourced.
+- **Story slide count: 5 to 8** between cover and follow (was "5 to 10"; lowered so cover + story + follow fits inside Instagram's 10-item carousel cap).
+- **Slide kinds** are a preference, not a quota. Kinds follow content — no padding to justify a different kind, no kind-lock after outline approval.
+- **Photos (two tiers).** Real people/places/orgs go through Wikidata P18/P180. Concept slides may use licensed stock (Unsplash / Pexels) first, AI illustration as last resort (labelled). Photos are placed by the image step and only where the rendered text leaves room — the Writer never shortens copy to make room for an image.
+- **Glossing is advisory,** not required. A term needs a gloss only when the slide doesn't make sense without it; long glosses move to the caption.
+
+Other rules that stay outside the block (still Tommy's, but narrower):
+
+- **Nothing the sources don't say.** No invented comparisons, framings, descriptors or quotes. "Unlike X, Y" and "not X, it's Y" are banned (voice-block.ts). TERMS gloss is the exception.
 - **Quotes word for word** from a fetched source (trailing punctuation is ignored).
-- **Photos must be accurate — two tiers (2026-09-29 late, Tommy's decision).**
-  - **Real people, places, organizations:** identity comes only from Wikidata P18 or a Commons P180 link to the exact entity, never from a model looking at a face. Wikimedia (public domain, CC0, CC BY, then CC BY-SA) and U.S. federal images only. A wrong identifying photo is worse than none.
-  - **Concept slides only** (no photographable named entity — abstract ideas, mechanisms, "what a kill switch is"): illustrative images allowed. First try licensed stock (Unsplash / Pexels API, free license, photographer credit appended to the caption). If nothing fits, an AI-generated image is allowed as a last resort.
-  - **Guardrails for stock and AI on concept slides:** no faces or identifiable people, no logos or brand marks, no text baked into the image, nothing that could be read as documentary evidence of a real event or person. AI-generated images are credited "Illustration: AI-generated" in the caption and tagged so the Instagram post applies Meta's AI-content label.
-  - **Layout rule unchanged:** never two photo slides in a row (cover photo counts).
-- **Terms explained** on the slide where they appear or the next one.
-- **Length:** 5 to 10 story slides between the cover and the follow slide. Body text is 220 characters, fixed at 44px, never shrinks.
-- **Design:** the cover template is untouched. Slide kinds rotate (text, landing line, stat, split stat, quote, image slide), never the same kind twice in a row, and at least 3 kinds in a 6+ slide post. Photos on the cover and up to 3 slides. The follow slide uses the Helios sun-mark logo.
-- **Quality over targets.** Tommy dislikes arbitrary numeric goals; limits exist only where the layout needs them.
+- **Body text is 220 characters,** fixed at 44px, never shrinks.
+- **Cover template is untouched.** Follow slide uses the Helios sun-mark logo.
+- **Quality over targets.** Limits exist only where the layout needs them.
 - **Test broadly, not by re-running one story.** Every fix must be a general rule.
 
 ## Where things stand

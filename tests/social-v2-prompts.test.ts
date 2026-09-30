@@ -25,23 +25,38 @@ describe('Reporter prompt', () => {
     assert.doesNotMatch(REPORTER_PROMPT, /You report what happened and how it connects/);
   });
 
-  test('main-story paragraph appears after the roundup rule (Run 5 addition)', () => {
-    // Anti-cross-story-contamination paragraph inserted right after the
-    // "Leave every other story out completely" paragraph.
+  test('shared RULES_BLOCK Context policy replaces the old inline main-story paragraph (2026-09-30 rewrite)', () => {
+    // The old Run-5 "main story is the one announcement or event in the
+    // headline. Anything else is a separate story..." paragraph has been
+    // retired. Reporter/Writer/Editor/Caption/Fact-checker all import a
+    // shared RULES_BLOCK from ../rules-block.ts with a single canonical
+    // Context policy, so context rules can't drift across prompts.
+    assert.match(REPORTER_PROMPT, /## Context policy/);
     assert.match(
       REPORTER_PROMPT,
-      /Leave every other story out completely, even ones the source mentions alongside it\.\n\nThe main story is the one announcement or event in the headline\. Anything else is a separate story, even if a source connects them: earlier statements, later announcements, other companies' news\. Leave those out\. Context means only what a reader needs to understand this announcement, like what the company does or what a term means\./,
+      /Stay on this one event\. Earlier events, other companies or other people appear in TWO shapes only:/,
     );
+    // Old inline phrasings must be gone.
+    assert.doesNotMatch(REPORTER_PROMPT, /The main story is the one announcement or event in the headline/);
+    assert.doesNotMatch(REPORTER_PROMPT, /not even a passing clause/);
   });
 
-  test('main-story paragraph ends with the Norland Labs speech example (Run 6 addition)', () => {
-    // Concrete example bolts onto the main-story paragraph so the model
-    // has a worked case for "earlier statement about the same company =
-    // still a separate story."
+  test('RULES_BLOCK Context policy names the TWO allowed shapes (2026-09-30 rewrite)', () => {
+    // Two shapes: (1) one sourced clause, (2) at most one full "why now"
+    // or "what stands in the way" slide per post. Reporter and Fact-checker
+    // both cite these numbered shapes when explaining what context is
+    // allowed. Retires the Run-6 Norland-Labs speech example.
     assert.match(
       REPORTER_PROMPT,
-      /what the company does or what a term means\. For example \(fictional\): if Norland Labs' CEO gave a speech last week and the company releases new numbers today, the speech is a separate story\. Leave it out completely, even if the articles about today's numbers mention it\./,
+      /1\. \*\*One sourced clause\*\*, embedded in a slide that is otherwise about the main event/,
     );
+    assert.match(
+      REPORTER_PROMPT,
+      /2\. \*\*At most ONE full slide per post\*\* on "why now"/,
+    );
+    // Old Norland-Labs speech example must be gone (retired with the
+    // inline main-story paragraph).
+    assert.doesNotMatch(REPORTER_PROMPT, /Norland Labs' CEO gave a speech last week/);
   });
 
   test('never-guess-a-link rule appears after the "Use original news reporting" rule (Run 6 addition)', () => {
@@ -69,39 +84,49 @@ describe('Reporter prompt', () => {
     assert.doesNotMatch(REPORTER_PROMPT, /Otherwise prefer major news outlets over aggregators\./);
   });
 
-  test('THE STORY instruction trimmed (Run 5 edit)', () => {
-    // Before: "Tell the writer the full story: what's going on, the key
-    // facts, the people and companies involved, and how they're
-    // connected. Write as much as the story needs, so the writer fully
-    // understands both the story and the context around it."
-    // After: shorter — no "how they're connected" and no "context around it."
+  test('THE STORY instruction opens with the trimmed "full story" language and ends with "so the writer fully understands the story"', () => {
+    // Before (Run 4): "…the people and companies involved, and how they're
+    //   connected. Write as much as the story needs, so the writer fully
+    //   understands both the story and the context around it."
+    // After Run 5: no "how they're connected" and no "context around it."
+    // 2026-09-30 addition: the paragraph now also names the two Context
+    // policy shapes the writer may use ("one clause worth of…", "a single
+    // 'why now' or 'what stands in the way' beat…"). Those still frame
+    // the shorter opener and closer these assertions pin.
     assert.match(
       REPORTER_PROMPT,
-      /Tell the writer the full story: what's going on, the key facts, and the people and companies involved\. Write as much as the story needs, so the writer fully understands the story\./,
+      /Tell the writer the full story: what's going on, the key facts, and the people and companies involved\./,
     );
+    assert.match(REPORTER_PROMPT, /so the writer fully understands the story\./);
     assert.doesNotMatch(REPORTER_PROMPT, /how they're connected/);
     assert.doesNotMatch(REPORTER_PROMPT, /the context around it/);
   });
 });
 
 describe('Writer / Editor / Caption "fix by cutting, no new details" rule (Run 6 additions)', () => {
-  test('Writer replaces the "rewrite the post" sentence with a fix-only + no-new-details rule', () => {
+  test('Writer fact-check-rerun rule says "fix what was flagged and change nothing else" and lists the allowed fix moves', () => {
+    // The old "Rewrite the post so every flag is fixed…" sentence has
+    // been retired. Current rule lives in the "PREVIOUS POST + FACT-CHECK
+    // FLAGS" paragraph and enumerates the three allowed fixes (cut, use
+    // the sources' own wording, or substitute a different supported fact
+    // from the brief). It also forbids inventing details.
     assert.match(
       WRITER_PROMPT,
-      /Fix only what was flagged, and keep every other slide and line exactly as it was\. Return the full post in the same format\. Fix a flag by cutting the claim or using the sources' own wording\. Don't add new details, even small ones\./,
+      /On a fact-check rerun, fix what was flagged and change nothing else\. Fix by cutting, by using the sources' own wording, or by replacing the cut claim with a different supported fact from the brief\. Don't invent details\./,
     );
-    // The old "Rewrite the post so every flag is fixed…" sentence must be gone.
+    // Old sentence must be gone.
     assert.doesNotMatch(WRITER_PROMPT, /Rewrite the post so every flag is fixed/);
   });
 
-  test('Editor appends the "fix a flag by cutting" sentence to its when-sent-back rule', () => {
-    // Line: "When you're sent back, fix exactly what you were given, update
-    //   any highlight your fix affects, change nothing else, and return the
-    //   full post again. Fix a flag by cutting the claim or using the
-    //   sources' own wording. Don't add new details, even small ones."
+  test('Editor repair-mode rule says "Fix ONLY what the CHECK ERRORS and FACT-CHECK FLAGS list" and forbids reinventing anything else', () => {
+    // The 2026-09-30 Editor rewrite reorganized the repair-mode section
+    // around a shared "Cut words, not facts" bullet + "Substitute, don't
+    // just subtract" bullet. The one-line invariant these tests pin is
+    // that the Editor is scoped strictly to the flagged fields and must
+    // return the whole post again.
     assert.match(
       EDITOR_PROMPT,
-      /return the full post again\. Fix a flag by cutting the claim or using the sources' own wording\. Don't add new details, even small ones\./,
+      /Fix ONLY what the CHECK ERRORS and FACT-CHECK FLAGS list\. Update any highlight your fix affects\. Change nothing else\. Return the full post again\./,
     );
   });
 
@@ -114,15 +139,29 @@ describe('Writer / Editor / Caption "fix by cutting, no new details" rule (Run 6
 });
 
 describe('Fact-checker prompt', () => {
-  test('main-story paragraph appears between the "check every time" and "flag anything" paragraphs, with the Run-6 BIG-severity extension', () => {
-    // Run 5 added the first sentence. Run 6 added the second — a slide
-    // about a separate story is BIG, even if the words are accurate. Run 5
-    // showed the Fact-checker sometimes accepted cross-story slides
-    // because every fact in them was verifiable in the sources; the new
-    // sentence makes clear that main-story scope beats per-word accuracy.
+  test('Fact-checker delegates context judgment to the shared Context policy in RULES_BLOCK (2026-09-30 rewrite)', () => {
+    // The old Run-5/Run-6 inline "Flag anything about a different event,
+    // date or company, even if the brief includes it. A slide or caption
+    // line about a separate story is BIG…" absolutist rule has been
+    // retired. It over-flagged: it made even the ONE sourced clause or
+    // "why now" slide the Context policy explicitly allows read as a BIG
+    // violation. Current Fact-checker cites the shared Context policy
+    // (imported via RULES_BLOCK) and only flags context that goes beyond
+    // the allowance — multiple outside-event slides, a market-context
+    // paragraph, or recycling a subject's earlier statements as new.
+    assert.match(FACT_CHECKER_PROMPT, /## Context policy/);
     assert.match(
       FACT_CHECKER_PROMPT,
-      /Check the whole post every time, not just the parts that changed\.\n\nThe main story is the one described in the brief's THE NEWS line\. Flag anything about a different event, date or company, even if the brief includes it\. A slide or caption line about a separate story is BIG, even if every word of it is accurate\.\n\nFlag anything that says more than the sources do:/,
+      /Apply the shared Context policy: a slide or caption clause about an earlier event that fits shape \(1\) — one sourced clause — or shape \(2\) — the single "why now" or "what stands in the way" slot — is NOT a flag\. Only flag context that goes beyond the allowance \(multiple outside-event slides, a market-context paragraph, recycling a subject's earlier statements as new\)\./,
+    );
+    // Old absolutist sentence must be gone.
+    assert.doesNotMatch(
+      FACT_CHECKER_PROMPT,
+      /Flag anything about a different event, date or company, even if the brief includes it\./,
+    );
+    assert.doesNotMatch(
+      FACT_CHECKER_PROMPT,
+      /A slide or caption line about a separate story is BIG, even if every word of it is accurate\./,
     );
   });
 });
