@@ -27,6 +27,19 @@ export type ReporterInput = {
   maxWebSearches?: number;
   /** Cap on iterations (tool_use → tool_result cycles). */
   maxIterations?: number;
+  /**
+   * Narrow-to-one re-call: when a prior Reporter pass returned
+   * "SINGLE STORY: No", the orchestrator can send the same source back
+   * with `narrow` set. The Reporter must extract ONE main event, drop
+   * the rest, and return a new brief with "SINGLE STORY: yes". If it
+   * still can't isolate a single event, it may return "no" again and
+   * the orchestrator bails to human review. 2026-09-29 late: replaces
+   * the hard bail on first "no".
+   */
+  narrow?: {
+    previousBriefRaw: string;
+    reason: string;
+  };
 };
 
 export type ReporterOutput = {
@@ -211,7 +224,19 @@ function buildUserMessage(input: ReporterInput): string {
     parts.push('Article text:');
     parts.push(input.articleText.slice(0, 16000));
   }
-  parts.push('');
-  parts.push('Research this story. Use web_search to find other coverage, and fetch_page to read a source in full before citing it. Return the BRIEF in the required format.');
+  if (input.narrow) {
+    parts.push('');
+    parts.push('NARROW-TO-ONE PASS.');
+    parts.push('Your previous brief for this source came back as SINGLE STORY: No. Reason:');
+    parts.push(input.narrow.reason);
+    parts.push('');
+    parts.push('Rewrite the brief so it covers EXACTLY ONE main news event. Pick the single event that is (a) most concrete, (b) has the earliest fetched-source coverage, and (c) is the news peg for this ingest. Drop every other topic — treat it as a separate story. Return SINGLE STORY: yes on the new brief. If you truly cannot isolate one event (very rare: e.g. two events are structurally inseparable and both are the news), return SINGLE STORY: no with one line explaining why — the run will bail to human review.');
+    parts.push('');
+    parts.push('PREVIOUS BRIEF (for reference — do not repeat verbatim, rewrite from source):');
+    parts.push(input.narrow.previousBriefRaw);
+  } else {
+    parts.push('');
+    parts.push('Research this story. Use web_search to find other coverage, and fetch_page to read a source in full before citing it. Return the BRIEF in the required format.');
+  }
   return parts.join('\n');
 }

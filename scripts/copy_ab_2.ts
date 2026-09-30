@@ -166,6 +166,27 @@ async function main() {
   }
 }
 
+/** Read the current commit hash + best matching prompt tag from git. */
+function readProvenance(): { commit: string; tag: string } {
+  try {
+    const { execSync } = require('node:child_process') as typeof import('node:child_process');
+    const commit = execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim();
+    // Prefer a tag containing "prompts" for this stamp; fall back to any tag.
+    let tag = '';
+    try {
+      tag = execSync('git tag --points-at HEAD', { encoding: 'utf-8' }).trim().split('\n').find((t: string) => t.startsWith('prompts-')) ?? '';
+    } catch { /* no tag */ }
+    if (!tag) {
+      try {
+        tag = execSync('git describe --tags --abbrev=0 --match "prompts-*"', { encoding: 'utf-8' }).trim();
+      } catch { tag = '(no prompts- tag)'; }
+    }
+    return { commit, tag };
+  } catch {
+    return { commit: '(unknown)', tag: '(unknown)' };
+  }
+}
+
 function buildSummary(spec: RunSpec, result: unknown, captured: { debug: Record<string, unknown> | null }): string {
   const r = result as { status: string; reason?: string; costUsd: number; stagesRun: string[] };
   const debug = captured.debug as {
@@ -179,7 +200,11 @@ function buildSummary(spec: RunSpec, result: unknown, captured: { debug: Record<
     reporter?: { brief?: { news?: string; terms?: unknown[] } };
   } | null;
 
+  const prov = readProvenance();
   const out: string[] = [];
+  out.push(`PROMPTS: ${prov.tag} (commit ${prov.commit})`);
+  out.push(`HARNESS: scripts/copy_ab_2.ts`);
+  out.push('');
   out.push(`# ${spec.slug}`);
   out.push('');
   out.push(`STATUS: ${r.status}`);
