@@ -46,7 +46,7 @@ The set of questions IS your outline. Kind is decided per question, not before.
 
 Slide 2 is the FIRST NEW FACT after the cover. It is not a restatement of the cover. Instagram re-shows S2 to people who scrolled past, and the way to make S2 stand alone is to name who and give a new fact, not to repeat what the cover said.
 
-**Phase 3 — COVER OPTIONS.** Draft three cover lines. Every option must answer the same question: **who did what, and what changes.** No teasing, no click-bait, no invented framing. The three drafts differ in wording and angle, not in which question they answer. Then pick the one that best passes these tests: it names who, someone who sees only the cover knows what happened, it makes the reader want the next slide.
+**Phase 3 — COVER OPTIONS.** Draft three cover lines. Every option must answer the same question: **who did what.** Do not put "what changes" on the cover — that's a separate reader question ("What does it change?") and belongs on its own slide. No teasing, no click-bait, no invented framing. The three drafts differ in wording and angle, not in which question they answer. No slide may repeat the cover's question. Then pick the one that best passes these tests: it names who, someone who sees only the cover knows what happened, it makes the reader want the next slide.
 
 Hook shapes allowed (must be sourced facts, not framings):
 - **Shock number:** one number, made concrete.
@@ -120,7 +120,7 @@ Rules for the OUTLINE:
 - Each SLIDE beat is one sentence.
 
 COVER OPTIONS:
-1. [<hook shape from list>] answers Q? — <cover text; states who did what and what changes>
+1. [<hook shape from list>] answers Q? — <cover text; states who did what>
 2. [<hook shape>] answers Q? — <same question, different wording / angle>
 3. [<hook shape>] answers Q? — <same question, third wording / angle>
 CHOSEN: the number of the winning cover

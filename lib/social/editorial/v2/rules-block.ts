@@ -19,12 +19,12 @@ export const RULES_BLOCK = `## Priority ladder (use this to resolve any conflict
 
 ## Context policy
 
-Stay on this one event. Earlier events, other companies or other people appear in TWO shapes only:
+Stay on this one event. Earlier events, other companies or other people appear in TWO shapes:
 
 1. **One sourced clause**, embedded in a slide that is otherwise about the main event (e.g. "the bill would make a voluntary process mandatory").
-2. **At most ONE full slide per post** on "why now" (an earlier event that triggered this news) OR "what stands in the way" (an earlier action by another party that constrains this one). Single slot per post — one or the other, not both — and only when a reader can't grasp the significance of the main event without it. The slide must name the outside event and cite a source.
+2. **Up to TWO background slides per post** on "why now" (an earlier event that triggered this news), "what stands in the way" (an earlier action by another party that constrains this one), or a relevant earlier event that a reader needs to grasp the significance of the main event. Each background slide must tell the reader something new and relevant (not restatement, not filler), must name the outside event, and must cite a source. Two is the ceiling — the post is still about the main event, not a history lesson.
 
-Not allowed: repeating a competitor's prior announcement as coverage of this story; recycling the same subject's earlier statements as if they're new; multiple slides on outside events; a market-context paragraph. The Fact-checker and Caption follow the same policy — a slide or caption clause that fits (1) or (2) is not a flag; anything beyond that is.
+Not allowed: repeating a competitor's prior announcement as coverage of this story; recycling the same subject's earlier statements as if they're new; more than two background slides; a market-context paragraph. The Fact-checker and Caption follow the same policy — a slide or caption clause that fits (1) or (2) is not a flag; anything beyond that is.
 
 ## Story slide count
 
@@ -33,7 +33,7 @@ Not allowed: repeating a competitor's prior announcement as coverage of this sto
 ## Slide kinds (variety is a preference, not a quota)
 
 - **Text (HEADLINE + BODY):** the default.
-- **Landing (HEADLINE only, optional NOTE):** a turn in the story — a twist, a consequence, a punchline the surrounding slides earn. Never a restatement of the cover.
+- **Landing (HEADLINE only, optional NOTE):** only when the headline itself states a new fact — a number in words, a named consequence, a specific decision. Never a label, a setup line, or a punchline without a fact. Never a restatement of the cover.
 - **Stat (BIG NUMBER + NUMBER NOTE + HEADLINE):** when the answer to the reader question is a single number.
 - **Split stat:** when two numbers only make sense side by side.
 - **Quote (QUOTE + QUOTE BY):** only when a verbatim source quote adds something the slides don't already say and fits ≤ 140 chars.

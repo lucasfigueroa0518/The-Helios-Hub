@@ -1,0 +1,54 @@
+{
+  "p01": {
+    "source": "google-cc-ab1",
+    "story": "Google CC"
+  },
+  "p02": {
+    "source": "newsom-ab1",
+    "story": "Newsom"
+  },
+  "p03": {
+    "source": "cc-old",
+    "story": "Google CC"
+  },
+  "p04": {
+    "source": "newsom-final",
+    "story": "Newsom"
+  },
+  "p05": {
+    "source": "new-old",
+    "story": "Newsom"
+  },
+  "p06": {
+    "source": "sul-old",
+    "story": "Suleyman"
+  },
+  "p07": {
+    "source": "gottheimer-ab2",
+    "story": "Gottheimer"
+  },
+  "p08": {
+    "source": "google-cc-ab2",
+    "story": "Google CC"
+  },
+  "p09": {
+    "source": "gottheimer-final",
+    "story": "Gottheimer"
+  },
+  "p10": {
+    "source": "suleyman-ab1",
+    "story": "Suleyman"
+  },
+  "p11": {
+    "source": "suleyman-final",
+    "story": "Suleyman"
+  },
+  "p12": {
+    "source": "gott-old",
+    "story": "Gottheimer"
+  },
+  "p13": {
+    "source": "gottheimer-ab1",
+    "story": "Gottheimer"
+  }
+}
