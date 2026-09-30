@@ -52,17 +52,15 @@ export const EDITORIAL_MODEL = envString('HELIOS_EDITORIAL_MODEL', 'claude-sonne
 export const HUMANIZER_MODEL = envString('HELIOS_HUMANIZER_MODEL', 'claude-haiku-4-5-20251001');
 
 /**
- * v2 model routing (post copy-audit 2026-09-30):
+ * v2 cost cuts (docs/PROJECT-STATUS.md §Costs):
  * - Caption stage runs on Haiku (short summary, low judgment).
- * - Length + highlight repairs go back to Sonnet (was Haiku). Choosing WHICH
- *   words to cut is editorial, not mechanical — Haiku's cheap trims kept
- *   restoring cut clauses or picking the wrong sentence to drop, and the
- *   copy-ab review found 6 fields still over-limit after one Haiku round.
- *   Repairs are now field-scoped (see runFieldRepair), so the per-call
- *   token count is small even on Sonnet.
+ * - Editor's length-repair reruns (CHECK ERRORS = char_limit /
+ *   highlight_substring) run on Haiku — they're mechanical trims, not
+ *   editorial rewrites. Fact-check flag reruns still run on Sonnet
+ *   because they require judgment about what the sources say.
  */
 export const CAPTION_MODEL = envString('HELIOS_V2_CAPTION_MODEL', 'claude-haiku-4-5-20251001');
-export const REPAIR_EDITOR_MODEL = envString('HELIOS_V2_REPAIR_EDITOR_MODEL', 'claude-sonnet-4-6');
+export const REPAIR_EDITOR_MODEL = envString('HELIOS_V2_REPAIR_EDITOR_MODEL', 'claude-haiku-4-5-20251001');
 
 /**
  * Sonnet 4.6 pricing (per Anthropic pricing page as of 2026-09):

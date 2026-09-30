@@ -21,15 +21,6 @@ import { runEditor as defaultRunEditor, type EditorInput, type EditorOutput } fr
 import { runFactChecker as defaultRunFactChecker, type FactCheckerInput, type FactCheckerOutput } from './fact-checker';
 import { runReporter as defaultRunReporter, type ReporterInput, type ReporterOutput } from './reporter';
 import { runWriter as defaultRunWriter, type WriterInput, type WriterOutput, type FetchedSource } from './writer';
-import {
-  runFieldRepair,
-  inferFieldFromMessage,
-  extractLimitFromMessage,
-  extractFieldText,
-  applyFieldTo,
-  summarizeAdjacent,
-  pickSourceExcerpt,
-} from './field-repair';
 import { fetchPage as defaultFetchPage, type FetchPageResult } from './tools/fetch-page';
 import {
   parseEditedPost,
@@ -352,16 +343,6 @@ export async function runCreatorPipeline(
     if (!post || !brief) return; // post/brief not yet available
     if (post.slides.length === 0) return; // parse failed, nothing to do
     if (overCap()) return; // don't spend on image step when already over the cap
-    // Copy-only validation runs skip the image step entirely (Wikidata
-    // lookup + vision + storage upload). Set HELIOS_V2_SKIP_IMAGE_STEP=1
-    // to exercise Reporter → Writer → Editor → Fact-checker without paying
-    // for the image path. Used by the copy-ab validation harness.
-    if (process.env.HELIOS_V2_SKIP_IMAGE_STEP === '1') {
-      imageStepDidRun = true;
-      stagesRun.push('image-step-skipped');
-      debug.imageStep = { skipped: 'HELIOS_V2_SKIP_IMAGE_STEP=1' } as unknown as PipelineV2Debug['imageStep'];
-      return;
-    }
     try {
       const imageResult = await deps.runImageStep(post, brief);
       selectedImages = imageResult.selected;
@@ -856,81 +837,32 @@ export async function runCreatorPipeline(
     let { slideErrors, captionErrors } = computeErrors();
 
     // 6a.i Slide-level repair — up to MAX_REPAIRS_PER_STAGE_PER_ROUND tries.
-    // char_limit errors go through field-scoped Sonnet repair (runFieldRepair):
-    // one small call per failing field, ≤ 400 output tokens, returns only the
-    // rewritten field. Everything else (rhythm, highlight_substring, quote,
-    // number, outline_kind_mismatch, hard errors) goes through the full
-    // Editor. Full-post repair used to enlarge quotes it was trying to fix
-    // (2026-09-30 copy-audit A/B: Haiku "repaired" a 94-char quote to 319
-    // chars). Field-scoped calls can't drift outside the field they were
-    // handed.
     for (
       let slideAttempt = 1;
       slideErrors.length > 0 && slideAttempt <= MAX_REPAIRS_PER_STAGE_PER_ROUND;
       slideAttempt++
     ) {
-      const charLimitErrors = slideErrors.filter((e) => e.kind === 'char_limit');
-      const nonLengthErrors = slideErrors.filter((e) => e.kind !== 'char_limit');
-
-      // ── 6a.i.a Field-scoped repairs for char_limit errors ──────────────
-      if (charLimitErrors.length > 0) {
-        for (const err of charLimitErrors) {
-          const field = err.field ?? inferFieldFromMessage(err.message);
-          const limit = extractLimitFromMessage(err.message);
-          const currentText = extractFieldText(editorPost, err.target, err.slidePosition, field);
-          if (!currentText) continue;
-          const label = err.target === 'cover' ? 'COVER TEXT'
-            : err.target === 'follow' ? 'FOLLOW'
-            : `SLIDE ${err.slidePosition ?? '?'} ${field}`;
-          const adjacent = err.target === 'slide' && err.slidePosition !== undefined
-            ? summarizeAdjacent(editorPost, err.slidePosition, field)
-            : undefined;
-          const src = pickSourceExcerpt(currentText, sourceTexts, 800);
-          const fr = await runFieldRepair({
-            fieldLabel: label,
-            currentText,
-            limit,
-            sourceExcerpt: src,
-            adjacentSummary: adjacent,
-          });
-          addCost(fr.usage);
-          applyFieldTo(editorPost, err.target, err.slidePosition, field, fr.newText);
-          stagesRun.push(`field-repair(${label}) r${round}.${slideAttempt}`);
-          debug.repairs.push({
-            round,
-            stage: 'editor',
-            reason: `field-repair ${label}: ${currentText.length}→${fr.newText.length} chars (limit ${limit})`,
-            usage: fr.usage,
-          });
-          if (overCap()) return bailToHumanReview(`cost cap reached during round ${round} field repair`);
-        }
-        editorRaw = serializePostAsRaw(editorPost);
-      }
-
-      // ── 6a.i.b Full-Editor pass for non-length errors ──────────────────
-      if (nonLengthErrors.length > 0) {
-        const eRetry = await deps.runEditor({
-          brief: finalBrief,
-          briefRaw: finalBriefRaw,
-          sourceTexts: trimmedSourceTexts,
-          post: editorRaw,
-          lengthsBlock: renderLengthsBlock(editorPost, captionText, creditsEstimate),
-          checkErrors: nonLengthErrors,
-          // Non-length errors always need editorial judgment; force 'primary'.
-          mode: 'primary',
-        });
-        addCost(eRetry.usage);
-        stagesRun.push(`editor(check-errors r${round}.${slideAttempt})`);
-        debug.repairs.push({
-          round,
-          stage: 'editor',
-          reason: `${nonLengthErrors.length} non-length slide error(s), try ${slideAttempt}/${MAX_REPAIRS_PER_STAGE_PER_ROUND}`,
-          usage: eRetry.usage,
-        });
-        editorRaw = eRetry.raw;
-        editorPost = eRetry.post;
-      }
-
+      const eRetry = await deps.runEditor({
+        brief: finalBrief,
+        briefRaw: finalBriefRaw,
+        sourceTexts: trimmedSourceTexts,
+        post: editorRaw,
+        lengthsBlock: renderLengthsBlock(editorPost, captionText, creditsEstimate),
+        checkErrors: slideErrors,
+        // Haiku ONLY when every error is char_limit (pure length trim).
+        // Rhythm / highlight_substring / hard errors need Sonnet.
+        mode: editorModeFor(slideErrors),
+      });
+      addCost(eRetry.usage);
+      stagesRun.push(`editor(check-errors r${round}.${slideAttempt})`);
+      debug.repairs.push({
+        round,
+        stage: 'editor',
+        reason: `${slideErrors.length} slide error(s), try ${slideAttempt}/${MAX_REPAIRS_PER_STAGE_PER_ROUND}`,
+        usage: eRetry.usage,
+      });
+      editorRaw = eRetry.raw;
+      editorPost = eRetry.post;
       if (overCap()) return bailToHumanReview(`cost cap reached during round ${round} slide repair`);
       ({ slideErrors, captionErrors } = computeErrors());
     }

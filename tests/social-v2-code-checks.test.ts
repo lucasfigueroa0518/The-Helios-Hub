@@ -3,12 +3,16 @@ import test, { describe } from 'node:test';
 
 import {
   checkCaption,
+  checkCoverNamesPicturedPerson,
   checkNumberTrace,
+  checkOutlineMatch,
   checkPost,
   checkQuotes,
   classifySlideType,
+  countCoverChars,
   partitionErrors,
   renderLengthsBlock,
+  validateOutline,
 } from '@/lib/social/editorial/v2/code-checks';
 import { parseBrief, parseEditedPost } from '@/lib/social/editorial/v2/parse';
 
@@ -112,12 +116,73 @@ describe('checkPost — slide count', () => {
   });
 });
 
+describe('countCoverChars — canonical single counter for the cover', () => {
+  // 2026-09-29 late: the "cover length" figure drifted across three
+  // reports (summary 90, replay 108 which was a visual guess, and an
+  // off-the-cuff 118 that was the DIFFERENT Suleyman run). One counter,
+  // one number. This test locks it in with the actual FINAL cover from
+  // runs/2026-09-29T16-40-07-763Z so future edits can't drift.
+  const SULEYMAN_16_40_07_COVER = "Suleyman says Anthropic's AI consciousness training could make advanced AI uncontrollable.";
+
+  test('Suleyman 16-40-07 FINAL cover counts to 90 chars, passes the HARD 90-char limit', () => {
+    const post = buildPost({ coverText: SULEYMAN_16_40_07_COVER, coverHighlight: 'could make advanced AI uncontrollable' });
+    // Canonical counter.
+    assert.equal(countCoverChars(post.cover), 90);
+    // 90 is exactly at the limit; check must NOT flag it (`> 90`).
+    const r = checkPost(post, goodBrief);
+    const cover = r.errors.find((e) => e.kind === 'char_limit' && e.target === 'cover');
+    assert.equal(cover, undefined, 'exact-90-char cover must pass the char_limit check');
+  });
+
+  test('91 chars fails (strict > LIMITS.cover)', () => {
+    const post = buildPost({ coverText: `${SULEYMAN_16_40_07_COVER}x`, coverHighlight: 'x' });
+    assert.equal(countCoverChars(post.cover), 91);
+    const r = checkPost(post, goodBrief);
+    const cover = r.errors.find((e) => e.kind === 'char_limit' && e.target === 'cover');
+    assert.ok(cover, '91-char cover must fail');
+  });
+
+  test('counter is a pure function of cover.text — no markup or highlight tags counted', () => {
+    // Highlight is a separate field; it does NOT inflate the count.
+    const post = buildPost({ coverText: 'A short cover.', coverHighlight: 'short' });
+    assert.equal(countCoverChars(post.cover), 'A short cover.'.length);
+  });
+});
+
 describe('checkPost — char limits', () => {
   test('flags cover over 100 chars', () => {
     const post = buildPost({ coverText: 'x'.repeat(101), coverHighlight: 'xxxxx' });
     const r = checkPost(post, goodBrief);
     const err = r.errors.find((e) => e.kind === 'char_limit' && e.target === 'cover');
     assert.ok(err, 'should flag cover length');
+  });
+
+  test('cover char_limit is HARD (2026-09-29 late: no soft-repair on cover overflow)', () => {
+    // A very long single word ("SUPERCALIFRAGILISTICEXPIALIDOCIOUSNESS") — 39
+    // chars, plus surrounding sentence — pushes the cover past 90 chars. The
+    // check must fire AND the error must partition as HARD so the pipeline
+    // rejects it at the code-check gate, not soft-repair.
+    const longWord = 'SUPERCALIFRAGILISTICEXPIALIDOCIOUSNESS'; // 38 chars
+    const post = buildPost({
+      coverText: `Norland Labs announced ${longWord} — its new AI framework, launching in October.`,
+      coverHighlight: longWord,
+    });
+    const r = checkPost(post, goodBrief);
+    const err = r.errors.find((e) => e.kind === 'char_limit' && e.target === 'cover');
+    assert.ok(err);
+    const { hard, soft } = partitionErrors([err!]);
+    assert.equal(hard.length, 1, 'cover char_limit must be HARD');
+    assert.equal(soft.length, 0);
+  });
+
+  test('non-cover char_limit stays SOFT (existing behavior)', () => {
+    const post = buildPost({ slides: [{ body: 'x'.repeat(292), highlight: 'x' }] });
+    const r = checkPost(post, goodBrief);
+    const err = r.errors.find((e) => e.kind === 'char_limit' && e.target === 'slide');
+    assert.ok(err);
+    const { hard, soft } = partitionErrors([err!]);
+    assert.equal(hard.length, 0);
+    assert.equal(soft.length, 1);
   });
   test('flags follow over 100 chars', () => {
     const post = buildPost({ followText: 'x'.repeat(101) });
@@ -158,14 +223,28 @@ describe('checkPost — char limits', () => {
     assert.match(err!.message, /^SLIDE 2 BODY \(\d+ characters, limit 220\)/);
     assert.match(err!.message, /moving forward/);
   });
-  test('highlight_substring error shows HEADLINE and BODY lengths so the Editor can pick which to update', () => {
+  test('highlight_substring error lists the non-empty visible fields with their lengths', () => {
+    // Message format updated 2026-09-29 late to include BIG NUMBER / NUMBER NOTE
+    // fields for stat slides (Suleyman SLIDE 9 had HIGHLIGHT="~1,200" matching
+    // its BIG NUMBER — the old check only scanned HEADLINE/BODY/QUOTE/NOTE
+    // and false-flagged it).
     const post = buildPost({ slides: [{ headline: 'Some headline text.', body: 'Some body text of moderate length.', highlight: 'not present anywhere' }] });
     const r = checkPost(post, goodBrief);
     const err = r.errors.find((e) => e.kind === 'highlight_substring' && e.target === 'slide');
     assert.ok(err);
     assert.match(err!.message, /SLIDE 2 HIGHLIGHT/);
-    assert.match(err!.message, /HEADLINE \(19 characters\)/);
-    assert.match(err!.message, /BODY \(34 characters\)/);
+    assert.match(err!.message, /HEADLINE \(19 chars\)/);
+    assert.match(err!.message, /BODY \(34 chars\)/);
+  });
+
+  test('stat slide: HIGHLIGHT matches BIG NUMBER → no error (2026-09-29 fix)', () => {
+    const post = buildPost({ slides: [
+      { headline: 'A headline for the stat.', bigNumber: '~1,200', highlight: '~1,200' },
+      { body: 'A second slide.', highlight: 'second' },
+    ] });
+    const r = checkPost(post, goodBrief);
+    const hl = r.errors.filter((e) => e.kind === 'highlight_substring' && e.slidePosition === 2);
+    assert.equal(hl.length, 0);
   });
 });
 
@@ -711,6 +790,48 @@ FOLLOW: Follow.`;
   });
 });
 
+describe('checkQuotes — slide QUOTE must keep exact source punctuation (dash/comma NOT equivalent)', () => {
+  // 2026-09-29 late: brief-integrity (STORY-time) keeps dash/comma
+  // equivalence for the reporter-vs-essay match. checkQuotes (slide-time)
+  // does NOT. If the essay writes "believes X - that Y" (spaced hyphens)
+  // and the slide writes "believes X, that Y", the check must fail so
+  // the Writer restores the exact source punctuation.
+  const essaySource = 'He wrote: "controlling something that believes it may be conscious - that it\'s entitled to our welfare and has rights of its own - may well be impossible" in his warning.';
+
+  test('slide with COMMAS where source has SPACED HYPHENS fails (no equivalence normalization)', () => {
+    const raw = `COVER: X.
+COVER HIGHLIGHT: X
+COVER IMAGE: type only
+
+SLIDE 2
+QUOTE: controlling something that believes it may be conscious, that it's entitled to our welfare and has rights of its own, may well be impossible
+QUOTE BY: Suleyman
+IMAGE: type only
+
+FOLLOW: Follow.`;
+    const post = parseEditedPost(raw);
+    const report = checkQuotes(post, [essaySource]);
+    assert.equal(report.ok, false);
+    assert.match(report.errors[0]!.message, /does not appear word-for-word/);
+  });
+
+  test('slide with EXACT spaced hyphens passes', () => {
+    const raw = `COVER: X.
+COVER HIGHLIGHT: X
+COVER IMAGE: type only
+
+SLIDE 2
+QUOTE: controlling something that believes it may be conscious - that it's entitled to our welfare and has rights of its own - may well be impossible
+QUOTE BY: Suleyman
+IMAGE: type only
+
+FOLLOW: Follow.`;
+    const post = parseEditedPost(raw);
+    const report = checkQuotes(post, [essaySource]);
+    assert.equal(report.ok, true);
+  });
+});
+
 describe('checkQuotes — trailing-punctuation tolerance (Harms quote from California run)', () => {
   // The California AI executive-order article (e045bc07) blocked at the
   // quote_verbatim gate because the source ends the sentence with a
@@ -1025,6 +1146,99 @@ FOLLOW: Follow Helios.`;
   });
 });
 
+describe('checkNumberTrace — parser handles commas, ~, dates', () => {
+  test('preserves comma-grouped thousands (1,200 stays whole, not split into "200")', () => {
+    const post = buildPost({
+      coverText: 'Norland Labs shipped a feature.',
+      coverHighlight: 'shipped a feature',
+      slides: [
+        { headline: 'Agents involved', body: 'Roughly 1,200 agents were scored by the benchmark.', highlight: '1,200 agents' },
+        { body: 'a second slide with no numbers.', highlight: 'no numbers' },
+      ],
+      followText: 'Follow Helios.',
+    });
+    const sourceTexts = ['The paper reports that roughly 1,200 AI agents were counted in the run.'];
+    const report = checkNumberTrace(post, 'A caption with no numbers.\n\nSource: X, 2026', sourceTexts);
+    // Old parser split "1,200" into "1" and "200"; both would miss the source
+    // and the check emitted "200" as a false positive. Correct behavior: no
+    // number_trace on this post.
+    const badNums = report.errors.filter((e) => e.kind === 'number_trace');
+    assert.equal(badNums.length, 0, `expected no number_trace, got: ${badNums.map((e) => e.message).join('; ')}`);
+  });
+
+  test('checks dates as dates (flags "September 16" when sources say "September 14")', () => {
+    const post = buildPost({
+      slides: [
+        { body: 'On September 16, Suleyman published his essay.', highlight: 'September 16' },
+        { body: 'A second slide with no dates.', highlight: 'second slide' },
+      ],
+    });
+    // 2026-09-29 late: dates are matched as dates, not skipped. Sources
+    // mention "September 14" but NOT "September 16" — the Writer invented
+    // the date, and number_trace flags it.
+    const sourceTexts = ['The essay was published on September 14, 2026.'];
+    const report = checkNumberTrace(post, 'Caption.\n\nSource: X', sourceTexts);
+    const dateFlag = report.errors.find((e) => e.kind === 'number_trace' && /September 16/.test(e.message));
+    assert.ok(dateFlag, `expected number_trace on "September 16"; got: ${JSON.stringify(report.errors.map((e) => e.message))}`);
+  });
+
+  test('date passes when source has the same date verbatim', () => {
+    const post = buildPost({
+      coverText: 'Norland Labs shipped a feature.',
+      coverHighlight: 'shipped a feature',
+      slides: [
+        { body: 'On September 14, the company shipped it.', highlight: 'September 14' },
+        { body: 'a second slide with no dates.', highlight: 'no dates' },
+      ],
+      followText: 'Follow Helios.',
+    });
+    const sourceTexts = ['The company published its release on September 14, 2026, per the official page.'];
+    const report = checkNumberTrace(post, 'Caption with no numbers.\n\nSource: X', sourceTexts);
+    const dateFlag = report.errors.find((e) => e.kind === 'number_trace' && /September 14/.test(e.message));
+    assert.equal(dateFlag, undefined, 'date matching the source must pass');
+  });
+
+  test('still catches a real invented number', () => {
+    const post = buildPost({
+      slides: [
+        { body: 'The company sampled 4,721 users in the trial.', highlight: '4,721 users' },
+        { body: 'a second slide.', highlight: 'second slide' },
+      ],
+    });
+    // Source doesn't mention 4,721 anywhere.
+    const sourceTexts = ['The company ran a trial. It had users.'];
+    const report = checkNumberTrace(post, 'Caption.\n\nSource: X', sourceTexts);
+    const invented = report.errors.filter((e) => e.kind === 'number_trace' && /4,721/.test(e.message));
+    assert.equal(invented.length, 1, 'expected number_trace to flag 4,721 as unsourced');
+  });
+
+  test('preserves "$21 billion" and matches "$21B" (existing behavior)', () => {
+    const post = buildPost({
+      slides: [
+        { body: 'The round raised $21 billion in fresh capital.', highlight: '$21 billion' },
+        { body: 'a second slide.', highlight: 'second slide' },
+      ],
+    });
+    const sourceTexts = ['The round was worth $21B in total.'];
+    const report = checkNumberTrace(post, 'Caption.\n\nSource: X', sourceTexts);
+    const nums = report.errors.filter((e) => e.kind === 'number_trace' && /\$21/.test(e.message));
+    assert.equal(nums.length, 0, 'expected currency normalization to hold');
+  });
+
+  test('day of "16 September" (day-before-month) also skipped', () => {
+    const post = buildPost({
+      slides: [
+        { body: 'On 16 September the paper appeared.', highlight: '16 September' },
+        { body: 'a second slide.', highlight: 'second slide' },
+      ],
+    });
+    const sourceTexts = ['The paper was published in autumn.'];
+    const report = checkNumberTrace(post, 'Caption.\n\nSource: X', sourceTexts);
+    const badNums = report.errors.filter((e) => e.kind === 'number_trace' && e.message.includes('"16"'));
+    assert.equal(badNums.length, 0);
+  });
+});
+
 describe('checkPost — past-statement references (main-story-only rule)', () => {
   test('flags "earlier writing" clause in a slide body', () => {
     const post = buildPost({
@@ -1068,6 +1282,22 @@ describe('checkPost — past-statement references (main-story-only rule)', () =>
     });
     const report = checkPost(post, goodBrief);
     assert.equal(report.errors.filter((e) => e.kind === 'past_statement_reference').length, 0);
+  });
+
+  // 2026-09-29 late: 3 additional regexes for reworded prior-work refs
+  // ("its public position is X", "its constitution says Y") were reverted.
+  // The fact-checker (LLM, full sources) handles reworded prior-work as a
+  // main-story violation without the false-positive risk regex has.
+  test('does NOT flag "Its public position is X" via regex (fact-checker handles it)', () => {
+    const post = buildPost({
+      slides: [
+        { headline: 'Anthropic has not responded', body: 'Its public position is Claude\'s constitution.', highlight: 'has not responded' },
+        { body: 'A second slide.', highlight: 'Second slide' },
+      ],
+    });
+    const report = checkPost(post, goodBrief);
+    const past = report.errors.filter((e) => e.kind === 'past_statement_reference' && /public position/.test(e.message));
+    assert.equal(past.length, 0, 'reverted pattern must not fire');
   });
 
   test('past_statement_reference is HARD (not soft)', () => {
@@ -1148,6 +1378,32 @@ describe('checkPost — numbered-sequence integrity', () => {
     assert.equal(report.errors.filter((e) => e.kind === 'sequence_incomplete').length, 0);
   });
 
+  test('flags "Objection one" + "Objection three" — cardinal-after-noun form (Suleyman)', () => {
+    const post = buildPost({
+      slides: [
+        { headline: 'Objection one: circular reasoning', body: 'A body about the first objection here.', highlight: 'circular reasoning' },
+        { body: 'A middle slide with no ordinal.', highlight: 'middle slide' },
+        { headline: 'Objection three: biological', body: 'A body about the third objection here.', highlight: 'biological' },
+      ],
+    });
+    const report = checkPost(post, goodBrief);
+    const seq = report.errors.find((e) => e.kind === 'sequence_incomplete' && /objection/i.test(e.message));
+    assert.ok(seq, `expected sequence_incomplete on "objection" (cardinal form); got: ${JSON.stringify(report.errors.map((e) => e.message))}`);
+    assert.match(seq!.message, /missing second/i);
+  });
+
+  test('flags "phase 1" + "phase 3" — noun-then-digit form', () => {
+    const post = buildPost({
+      slides: [
+        { headline: 'Phase 1', body: 'Body about phase 1.', highlight: 'phase 1' },
+        { body: 'middle', highlight: 'middle' },
+        { headline: 'Phase 3', body: 'Body about phase 3.', highlight: 'phase 3' },
+      ],
+    });
+    const report = checkPost(post, goodBrief);
+    assert.ok(report.errors.some((e) => e.kind === 'sequence_incomplete' && /phase/i.test(e.message)));
+  });
+
   test('sequence_incomplete is HARD (not soft)', () => {
     const post = buildPost({
       slides: [
@@ -1161,6 +1417,210 @@ describe('checkPost — numbered-sequence integrity', () => {
     assert.ok(seq);
     const { hard, soft } = partitionErrors([seq!]);
     assert.equal(hard.length, 1, 'sequence_incomplete must be HARD');
+    assert.equal(soft.length, 0);
+  });
+});
+
+
+describe('checkOutlineMatch — flag Editor kind changes from the approved outline', () => {
+  test('kind swap (text → stat) on a surviving position → outline_kind_mismatch', () => {
+    // Approved: two text slides. Final: slide 3 is a stat (BIG NUMBER).
+    const post = buildPost({
+      slides: [
+        { headline: 'H2', body: 'a body sentence.', highlight: 'body' },
+        { headline: 'H3', bigNumber: '42', highlight: '42' },
+      ],
+    });
+    const approved = [
+      { position: 2, kind: 'text' },
+      { position: 3, kind: 'text' },
+    ];
+    const r = checkOutlineMatch(post, approved);
+    const mismatch = r.errors.find((e) => e.kind === 'outline_kind_mismatch' && e.slidePosition === 3);
+    assert.ok(mismatch, `expected outline_kind_mismatch on SLIDE 3; got ${JSON.stringify(r.errors.map((e) => e.message))}`);
+    assert.match(mismatch!.message, /from "text".*to "stat"/);
+  });
+
+  test('same kinds on every surviving position → no error', () => {
+    const post = buildPost({
+      slides: [
+        { headline: 'H2', body: 'a body sentence.', highlight: 'body' },
+        { headline: 'H3', body: 'another body sentence.', highlight: 'body' },
+      ],
+    });
+    const approved = [
+      { position: 2, kind: 'text' },
+      { position: 3, kind: 'text' },
+    ];
+    const r = checkOutlineMatch(post, approved);
+    assert.equal(r.errors.length, 0);
+  });
+
+  test('slide count changed → outline_kind_mismatch with COUNT field', () => {
+    const post = buildPost({
+      slides: [
+        { headline: 'H2', body: 'a body.', highlight: 'body' },
+        { headline: 'H3', body: 'another body.', highlight: 'body' },
+      ],
+    });
+    const approved = [
+      { position: 2, kind: 'text' },
+      { position: 3, kind: 'text' },
+      { position: 4, kind: 'text' },
+    ];
+    const r = checkOutlineMatch(post, approved);
+    const count = r.errors.find((e) => e.kind === 'outline_kind_mismatch' && e.field === 'COUNT');
+    assert.ok(count);
+    assert.match(count!.message, /3.*2|2.*3/);
+  });
+
+  test('undefined approved outline → no errors (older transcripts)', () => {
+    const post = buildPost({
+      slides: [{ headline: 'H2', body: 'a body.', highlight: 'body' }, { headline: 'H3', body: 'b.', highlight: 'b' }],
+    });
+    assert.equal(checkOutlineMatch(post, undefined).errors.length, 0);
+  });
+
+  test('outline_kind_mismatch is HARD (2026-09-29 late second pass: kind lock)', () => {
+    // Once the Writer's OUTLINE is approved, no stage may change a
+    // slide's kind. Length errors on prose are fixed by cutting words,
+    // never by demoting the kind. Prior version was soft — the Editor
+    // silently converted landings to text to fit, breaking rhythm.
+    const post = buildPost({
+      slides: [
+        { headline: 'H2', body: 'a body.', highlight: 'body' },
+        { headline: 'H3', bigNumber: '99', highlight: '99' },
+      ],
+    });
+    const approved = [{ position: 2, kind: 'text' }, { position: 3, kind: 'text' }];
+    const r = checkOutlineMatch(post, approved);
+    const mismatch = r.errors.find((e) => e.kind === 'outline_kind_mismatch');
+    assert.ok(mismatch);
+    const { hard, soft } = partitionErrors([mismatch!]);
+    assert.equal(hard.length, 1, 'outline_kind_mismatch must now be HARD');
+    assert.equal(soft.length, 0);
+  });
+});
+
+
+describe('validateOutline — content-aware fit (2026-09-29 late second pass)', () => {
+  test('landing NOTE over 60 chars fails validation (Gottheimer regression)', () => {
+    // Gottheimer run: three landings had NOTE fields at 97, 119, 97 chars.
+    // Editor converted them to text to fit, breaking rhythm. Now the
+    // OUTLINE itself fails; Writer must cut or pick a different kind.
+    const outline = [
+      { position: 2, kind: 'landing', beat: 'x', headline: 'Bipartisan bills would set NSA-led safety review before release.', note: 'The proposal comes as safety experts warn AI is advancing faster than oversight can catch up with any of it' },
+      { position: 3, kind: 'text', beat: 'x'.repeat(10) },
+      { position: 4, kind: 'landing', beat: 'y', headline: 'Focus on the most powerful frontier models only' },
+      { position: 5, kind: 'text', beat: 'y'.repeat(10) },
+      { position: 6, kind: 'landing', beat: 'z', headline: 'Debate could shape future rules for the whole industry.' },
+    ];
+    const r = validateOutline(outline);
+    const noteErr = r.errors.find((e) => /SLIDE 2.*NOTE is \d+ chars, limit 60/.test(e.message));
+    assert.ok(noteErr, `expected NOTE overflow flag on SLIDE 2; got ${JSON.stringify(r.errors.map((e) => e.message))}`);
+  });
+
+  test('quote over 140 chars fails validation', () => {
+    const outline = [
+      { position: 2, kind: 'text', beat: 'x'.repeat(10) },
+      { position: 3, kind: 'quote', beat: 'x', quote: 'x'.repeat(200), quoteBy: 'Somebody' },
+      { position: 4, kind: 'text', beat: 'y'.repeat(10) },
+      { position: 5, kind: 'landing', beat: 'z', headline: 'Some landing headline that fits' },
+      { position: 6, kind: 'text', beat: 'w'.repeat(10) },
+    ];
+    const r = validateOutline(outline);
+    assert.ok(r.errors.some((e) => /SLIDE 3 OUTLINE quote QUOTE is 200 chars, limit 140/.test(e.message)));
+  });
+
+  test('stat missing NOTE fails validation', () => {
+    const outline = [
+      { position: 2, kind: 'text', beat: 'x'.repeat(10) },
+      { position: 3, kind: 'stat', beat: 'x', headline: 'Bill introduced', bigNumber: '30 days' },
+      { position: 4, kind: 'text', beat: 'y'.repeat(10) },
+      { position: 5, kind: 'landing', beat: 'z', headline: 'A landing' },
+      { position: 6, kind: 'text', beat: 'w'.repeat(10) },
+    ];
+    const r = validateOutline(outline);
+    assert.ok(r.errors.some((e) => /SLIDE 3 OUTLINE stat is missing required NOTE/.test(e.message)));
+  });
+
+  test('valid content-aware OUTLINE passes', () => {
+    const outline = [
+      { position: 2, kind: 'text', beat: 'x'.repeat(10) },
+      { position: 3, kind: 'landing', beat: 'x', headline: 'A short landing headline' },
+      { position: 4, kind: 'quote', beat: 'x', quote: 'A short verbatim quote from a source.', quoteBy: 'Somebody' },
+      { position: 5, kind: 'stat', beat: 'x', headline: 'Bill introduced Friday', bigNumber: '30 days', numberNote: 'review window per bill' },
+      { position: 6, kind: 'text', beat: 'z'.repeat(10) },
+    ];
+    const r = validateOutline(outline);
+    assert.equal(r.ok, true, `expected ok; got ${JSON.stringify(r.errors.map((e) => e.message))}`);
+  });
+});
+
+
+describe('checkCoverNamesPicturedPerson — cover must name the pictured person (2026-09-29 late second pass)', () => {
+  function coverFrom(text: string) {
+    return { kind: 'edited' as const, text, highlight: '', image: '' };
+  }
+
+  test('Gottheimer cover WITHOUT his name fails', () => {
+    const r = checkCoverNamesPicturedPerson(
+      coverFrom('No law requires testing AI before release. Two new bills would change that.'),
+      'Josh Gottheimer',
+    );
+    assert.equal(r.ok, false);
+    assert.match(r.errors[0]!.message, /does not name the pictured person/);
+    assert.match(r.errors[0]!.message, /Gottheimer/);
+  });
+
+  test('"Rep. Josh Gottheimer wants the NSA to test AI before it\'s released" passes', () => {
+    const r = checkCoverNamesPicturedPerson(
+      coverFrom("Rep. Josh Gottheimer wants the NSA to test AI before it's released"),
+      'Josh Gottheimer',
+    );
+    assert.equal(r.ok, true);
+  });
+
+  test('surname alone in the cover text passes ("Gottheimer wants…")', () => {
+    const r = checkCoverNamesPicturedPerson(
+      coverFrom('Gottheimer wants NSA reviews of the most powerful AI models before release.'),
+      'Josh Gottheimer',
+    );
+    assert.equal(r.ok, true);
+  });
+
+  test('no picked cover subject → no check', () => {
+    const r = checkCoverNamesPicturedPerson(
+      coverFrom('An unrelated cover text with no person.'),
+      undefined,
+    );
+    assert.equal(r.ok, true);
+  });
+
+  test('single-token subject → no check (org-like)', () => {
+    const r = checkCoverNamesPicturedPerson(
+      coverFrom('An unrelated cover text.'),
+      'Anthropic',
+    );
+    assert.equal(r.ok, true);
+  });
+
+  test('surname of a titled name is extracted correctly ("Dr. Fei-Fei Li")', () => {
+    const r = checkCoverNamesPicturedPerson(
+      coverFrom("Li's group says its new model beats every prior benchmark."),
+      'Dr. Fei-Fei Li',
+    );
+    assert.equal(r.ok, true);
+  });
+
+  test('cover_photo_unnamed partitions as HARD', () => {
+    const r = checkCoverNamesPicturedPerson(
+      coverFrom('No person named here.'),
+      'Sam Altman',
+    );
+    assert.ok(!r.ok);
+    const { hard, soft } = partitionErrors(r.errors);
+    assert.equal(hard.length, 1);
     assert.equal(soft.length, 0);
   });
 });

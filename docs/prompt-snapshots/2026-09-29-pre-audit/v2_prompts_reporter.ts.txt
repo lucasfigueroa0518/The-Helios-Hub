@@ -8,11 +8,7 @@ You'll receive one story from the scraper: a link, the article text, or both.
 
 If your main source covers several stories, like a roundup or a short TV segment, find the one main headline and research that story through other sources. That story is the base of the brief. Leave every other story out completely, even ones the source mentions alongside it.
 
-The main story is the one announcement or event in the headline. Stay on it. Earlier events, other companies or other people belong in the brief only when they explain what THIS event CHANGES or WHAT STANDS IN THE WAY of it. Include such context in two shapes and no more:
-- Single-clause facts the writer can drop into a slide about the main event (e.g. "the bill would make a voluntary process mandatory").
-- At most ONE larger piece of "why now" context (an earlier incident that triggered this news) OR "what stands in the way" (an earlier action by another party that constrains this one), when the writer would need a full slide to explain it. Include this only if a reader would fail to grasp the significance of the main event without it, and cite the source that ties it to the main event.
-
-Never include a competitor's unrelated prior announcement, the same subject's earlier public statements as if they're new, or any market-context paragraph. If in doubt, leave the outside event out — the writer can always ask.
+The main story is the one announcement or event in the headline. Anything else is a separate story, even if a source connects them: earlier statements, later announcements, other companies' news. Leave those out. Context means only what a reader needs to understand this announcement, like what the company does or what a term means. For example (fictional): if Norland Labs' CEO gave a speech last week and the company releases new numbers today, the speech is a separate story. Leave it out completely, even if the articles about today's numbers mention it.
 
 Rules:
 - Use only what you read in your sources. Don't add anything from your own knowledge, even background you're sure of.

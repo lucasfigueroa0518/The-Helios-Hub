@@ -31,9 +31,7 @@ export type CheckErrorKind =
   | 'stat_missing_note'
   | 'past_statement_reference'
   | 'sequence_incomplete'
-  | 'outline_kind_mismatch'
-  | 'slide_repeats'
-  | 'cover_claim_uniqueness';
+  | 'outline_kind_mismatch';
 
 export type CheckError = {
   kind: CheckErrorKind;
@@ -871,7 +869,7 @@ export function checkCaption(caption: string, appendedCreditsChars = 0): CheckRe
     errors.push({
       kind: 'caption_length',
       target: 'caption',
-      message: `CAPTION (${caption.length} characters + ${appendedCreditsChars} appended image credits = ${total} total, limit ${LIMITS.captionMax}): cut at least ${over} characters (about ${estimateWords(over)} words) from the caption body. Cut words, not facts: remove filler, glosses already explained on a slide, and restated context first. If a fact must go, say which one in EDIT NOTES.`,
+      message: `CAPTION (${caption.length} characters + ${appendedCreditsChars} appended image credits = ${total} total, limit ${LIMITS.captionMax}): cut at least ${over} characters (about ${estimateWords(over)} words) from the caption body. Cut a whole clause or sentence rather than rewording.`,
     });
   }
   if (/#\w/.test(caption)) {
@@ -891,18 +889,18 @@ export function checkCaption(caption: string, appendedCreditsChars = 0): CheckRe
 }
 
 /**
- * "SLIDE 7 BODY (243 characters, limit 220): cut at least 23 characters.
- * Cut words, not facts — remove filler, glosses already made elsewhere,
- * and restated context first. If a fact must go, name it in EDIT NOTES."
- * — one shape for every char-limit error. Prior wording ("cut a whole
- * clause or sentence rather than rewording") systematically removed
- * specifics; specifics are longer so they win the coin toss and the slide
- * gets vaguer with every repair. The new wording prioritises tightening
- * before facts.
+ * "SLIDE 7 BODY (243 characters, limit 220): cut at least 23 characters
+ * (about 4 words). Cut a whole clause or sentence rather than rewording."
+ * — one shape for every char-limit error so the Editor sees the current
+ * length inline with the rule, a concrete cut target, and a strategy hint.
+ * The "cut a whole clause" instruction is there because runs 3-4 showed
+ * the Editor was rewording sentences slightly and inching down by a few
+ * characters per pass; dropping a clause outright hits the target in
+ * one pass.
  */
 function makeCharLimitMessage(field: string, actual: number, limit: number): string {
   const over = actual - limit;
-  return `${field} (${actual} characters, limit ${limit}): cut at least ${over} characters (about ${estimateWords(over)} words). Cut words, not facts: remove filler, glosses already explained elsewhere, and restated context first. If a fact must go, say which one in EDIT NOTES.`;
+  return `${field} (${actual} characters, limit ${limit}): cut at least ${over} characters (about ${estimateWords(over)} words). Cut a whole clause or sentence rather than rewording.`;
 }
 
 /** ~6 chars per word including spaces. Minimum 1. */
@@ -1072,20 +1070,16 @@ export function partitionErrors(errors: CheckError[]): { hard: CheckError[]; sof
       hard.push(e);
       continue;
     }
-    // rhythm demoted back to SOFT (2026-09-30, copy-audit rec-set).
-    // A rhythm violation on two distinct-beat slides is preferable to a
-    // clean rhythm bought with a repeated fact. See slide_repeats +
-    // cover_claim_uniqueness below — those SOFT checks now carry the
-    // "no repetition" load rhythm used to proxy for.
+    // rhythm promoted to HARD 2026-09-29: story 1 shipped with Editor
+    // knowingly leaving two consecutive text slides after saying in
+    // EDIT NOTES "these cannot be merged without losing clarity". Soft
+    // means the pipeline moves on; HARD forces a resolved rhythm.
     if (
       e.kind === 'char_limit'
       || e.kind === 'highlight_substring'
       || e.kind === 'variety'
       || e.kind === 'cover_photo'
       || e.kind === 'term_unexplained'
-      || e.kind === 'rhythm'
-      || e.kind === 'slide_repeats'
-      || e.kind === 'cover_claim_uniqueness'
     ) soft.push(e);
     else hard.push(e);
   }
@@ -1341,181 +1335,3 @@ function normalizeNumeric(s: string): string {
     .replace(/\s+/g, '')
     .toLowerCase();
 }
-
-/**
- * Repetition checks (2026-09-30, copy-audit recs 1 + 9).
- *
- * `slide_repeats`: flag any story slide whose main-claim tokens overlap
- * with the cover or any earlier story slide by ≥ REPETITION_THRESHOLD
- * non-entity content tokens.
- *
- * `cover_claim_uniqueness`: flag when the cover's main claim overlaps
- * (same metric) with more than one story slide. The cover summarises
- * the change of the whole post; it may echo up to one story slide,
- * but restating multiple slides is a sign the whole post is one beat.
- *
- * Both are SOFT and both exclude the story's key entities from the
- * overlap set — TERMS names, the cover subject, any person / company
- * that the story is about. Entity mentions are expected to recur; the
- * check catches SHARED CONCEPTUAL PAYLOAD, not shared subjects.
- */
-const REPETITION_THRESHOLD = 3;
-
-const REPETITION_STOPWORDS = new Set([
-  'about', 'after', 'again', 'against', 'along', 'already', 'also', 'always',
-  'among', 'and', 'another', 'any', 'anyone', 'anything', 'are', 'around',
-  'because', 'been', 'before', 'being', 'below', 'between', 'both', 'but',
-  'came', 'can', 'come', 'could', 'did', 'does', 'doing', 'done', 'down',
-  'during', 'each', 'every', 'few', 'for', 'from', 'get', 'gets', 'give',
-  'going', 'good', 'got', 'had', 'has', 'have', 'having', 'her', 'here',
-  'him', 'his', 'how', 'however', 'into', 'its', 'just', 'know', 'less',
-  'like', 'long', 'made', 'make', 'makes', 'making', 'many', 'may', 'might',
-  'more', 'most', 'much', 'must', 'need', 'never', 'new', 'next', 'now',
-  'off', 'often', 'once', 'one', 'only', 'other', 'others', 'our', 'out',
-  'over', 'own', 'past', 'per', 'ready', 'rest', 'said', 'says', 'same',
-  'seem', 'seems', 'set', 'sets', 'she', 'should', 'since', 'some', 'still',
-  'such', 'take', 'takes', 'than', 'that', 'the', 'their', 'them', 'then',
-  'there', 'these', 'they', 'thing', 'things', 'this', 'those', 'through',
-  'today', 'together', 'too', 'toward', 'under', 'until', 'upon', 'use',
-  'uses', 'using', 'very', 'want', 'was', 'way', 'ways', 'were', 'what',
-  'when', 'where', 'which', 'while', 'who', 'whose', 'why', 'will', 'with',
-  'without', 'would', 'yet', 'you', 'your', 'yours',
-  // Rendering markers the model often adds
-  'slide', 'cover', 'text', 'headline', 'body', 'note', 'quote', 'image',
-  'highlight', 'follow',
-]);
-
-/**
- * Extract entity tokens to EXCLUDE from the overlap set. These are the
- * proper-noun subjects the story is legitimately about — TERMS entries
- * (broken into their individual words) plus common role tokens.
- * "Newsom" appearing on 3 slides is fine; "kill switch" appearing on
- * 3 slides is a repeat.
- */
-function repetitionEntitySet(brief: Brief): Set<string> {
-  const out = new Set<string>();
-  const push = (raw: string) => {
-    const norm = raw.toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (norm.length >= 3) out.add(norm);
-  };
-  for (const term of brief.terms) {
-    // Whole TERMS name, plus each word inside it (so "Rep. Josh Gottheimer"
-    // excludes "rep", "josh", "gottheimer").
-    push(term.name.replace(/[^a-z0-9]+/gi, ''));
-    for (const w of term.name.split(/[^A-Za-z0-9]+/)) push(w);
-  }
-  // Common role words the story might use to refer to a TERMS person.
-  for (const w of [
-    'gov', 'governor', 'rep', 'representative', 'sen', 'senator',
-    'president', 'ceo', 'cto', 'cfo', 'director', 'chair', 'chief',
-    'secretary', 'minister', 'mayor', 'congressman', 'congresswoman',
-    'act', 'bill', 'company', 'agency', 'model', 'models',
-  ]) out.add(w);
-  return out;
-}
-
-/**
- * Break a text into content tokens: lowercased, word-only, length ≥ 4,
- * not a stopword, not an entity token from the brief. This is the token
- * set used for repetition overlap.
- */
-function repetitionTokens(text: string, entities: Set<string>): Set<string> {
-  const out = new Set<string>();
-  if (!text) return out;
-  for (const raw of text.toLowerCase().split(/[^a-z0-9']+/)) {
-    const w = raw.replace(/^['\-]+|['\-]+$/g, '');
-    if (w.length < 4) continue;
-    if (REPETITION_STOPWORDS.has(w)) continue;
-    if (entities.has(w)) continue;
-    // Simple singular normalisation: strip trailing "s" so "checks"
-    // and "check" collide.
-    const stem = w.length > 4 && w.endsWith('s') ? w.slice(0, -1) : w;
-    out.add(stem);
-  }
-  return out;
-}
-
-/**
- * All the text on a slide that matters for repetition — headline + body
- * + note + quote + numberNote + secondNote + highlight. BIG NUMBER on its
- * own is a value, not a claim, so it's excluded (a repeated number is
- * fine).
- */
-function slidePayloadText(slide: import('./parse').ParsedSlide): string {
-  return [
-    slide.headline, slide.body, slide.note, slide.quote,
-    slide.numberNote, slide.secondNote, slide.highlight,
-  ].filter(Boolean).join(' ');
-}
-
-/** Overlap count between two token sets. */
-function overlap(a: Set<string>, b: Set<string>): string[] {
-  const out: string[] = [];
-  for (const t of a) if (b.has(t)) out.push(t);
-  return out.sort();
-}
-
-export function checkSlideRepeats(post: ParsedPost, brief: Brief): CheckReport {
-  const errors: CheckError[] = [];
-  const entities = repetitionEntitySet(brief);
-  const coverTokens = repetitionTokens(post.cover?.text ?? '', entities);
-  // Slide index → tokens, in order.
-  const slideTokens: Array<{ position: number; tokens: Set<string> }> = post.slides.map((s) => ({
-    position: s.position,
-    tokens: repetitionTokens(slidePayloadText(s), entities),
-  }));
-  for (let i = 0; i < slideTokens.length; i += 1) {
-    const { position, tokens } = slideTokens[i]!;
-    // Compare against cover.
-    const vsCover = overlap(tokens, coverTokens);
-    if (vsCover.length >= REPETITION_THRESHOLD) {
-      errors.push({
-        kind: 'slide_repeats',
-        target: 'slide',
-        slidePosition: position,
-        message: `SLIDE ${position} shares ${vsCover.length} content tokens with COVER (${vsCover.slice(0, 5).map((t) => `"${t}"`).join(', ')}${vsCover.length > 5 ? '…' : ''}). This slide is restating the cover — either rewrite it around a different reader question or pull a fact from UNUSED BRIEF FACTS.`,
-      });
-    }
-    // Compare against every earlier slide.
-    for (let j = 0; j < i; j += 1) {
-      const prior = slideTokens[j]!;
-      const vs = overlap(tokens, prior.tokens);
-      if (vs.length >= REPETITION_THRESHOLD) {
-        errors.push({
-          kind: 'slide_repeats',
-          target: 'slide',
-          slidePosition: position,
-          message: `SLIDE ${position} shares ${vs.length} content tokens with SLIDE ${prior.position} (${vs.slice(0, 5).map((t) => `"${t}"`).join(', ')}${vs.length > 5 ? '…' : ''}). One of these two slides is a repeat — rewrite one around a different reader question or pull a fact from UNUSED BRIEF FACTS.`,
-        });
-      }
-    }
-  }
-  return { ok: errors.length === 0, errors };
-}
-
-export function checkCoverClaimUniqueness(post: ParsedPost, brief: Brief): CheckReport {
-  const errors: CheckError[] = [];
-  const entities = repetitionEntitySet(brief);
-  const coverTokens = repetitionTokens(post.cover?.text ?? '', entities);
-  if (coverTokens.size === 0) return { ok: true, errors };
-  const overlapping: Array<{ position: number; tokens: string[] }> = [];
-  for (const s of post.slides) {
-    const tokens = repetitionTokens(slidePayloadText(s), entities);
-    const vs = overlap(coverTokens, tokens);
-    if (vs.length >= REPETITION_THRESHOLD) {
-      overlapping.push({ position: s.position, tokens: vs });
-    }
-  }
-  if (overlapping.length > 1) {
-    const summary = overlapping
-      .map((o) => `SLIDE ${o.position} (${o.tokens.slice(0, 3).map((t) => `"${t}"`).join(', ')}${o.tokens.length > 3 ? '…' : ''})`)
-      .join(', ');
-    errors.push({
-      kind: 'cover_claim_uniqueness',
-      target: 'cover',
-      message: `COVER claim overlaps with ${overlapping.length} story slides: ${summary}. The cover should summarize the change of the whole post, not restate multiple slides. Either broaden the cover to a higher-level frame or rewrite the affected slides around different reader questions.`,
-    });
-  }
-  return { ok: errors.length === 0, errors };
-}
-

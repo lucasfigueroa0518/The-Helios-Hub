@@ -175,6 +175,30 @@ export type ParsedPost = {
   slides: ParsedSlide[];
   follow: string;
   editNotes: string[] | null;
+  /**
+   * Optional OUTLINE the Writer emitted before its slides (2026-09-29
+   * late; expanded to content-aware 2026-09-29 late second pass). One
+   * entry per story slide, in order, with the kind PLUS the actual
+   * short content that will render on that slide. Content-aware fields
+   * exist so `validateOutline` can reject an outline whose non-text
+   * kinds carry content that already busts a limit (a landing NOTE
+   * over 60 chars, a quote over 140, a BIG NUMBER over 12). Prior
+   * behavior approved a kind on judgment and then the Editor was
+   * forced to convert it to text to fit — breaking rhythm.
+   */
+  outline?: Array<{
+    position: number;
+    kind: string;
+    beat: string;
+    headline?: string;
+    note?: string;
+    bigNumber?: string;
+    numberNote?: string;
+    secondNumber?: string;
+    secondNote?: string;
+    quote?: string;
+    quoteBy?: string;
+  }>;
 };
 
 export type ParsedCover =
@@ -227,11 +251,113 @@ export function parseEditedPost(text: string): ParsedPost {
   return parsePost(text, 'edited');
 }
 
+/**
+ * Parse the OUTLINE: block the Writer emits before its slides (content-
+ * aware, 2026-09-29 late second pass). One line per slide; kind + the
+ * actual short content that will render on that slide as named fields:
+ *
+ *   SLIDE 2: text — <beat sentence>
+ *   SLIDE 3: landing — HEADLINE: <≤60> | NOTE: <≤60>
+ *   SLIDE 4: quote — QUOTE: "<verbatim ≤140>" | BY: <who ≤60>
+ *   SLIDE 5: stat — HEADLINE: <≤60> | BIG: <≤12> | NOTE: <≤60>
+ *   SLIDE 6: split_stat — HEADLINE: <≤60> | BIG: <≤12> | NOTE: <≤60> | SECOND: <≤12> | SECOND NOTE: <≤60>
+ *   SLIDE 7: image — <beat>
+ *
+ * The named fields use `KEY: value | KEY: value` — pipe-separated so
+ * a value can contain hyphens or em dashes without collision. Trailing
+ * quotes on QUOTE are stripped.
+ */
+function parseOutlineBlock(text: string): NonNullable<ParsedPost['outline']> | undefined {
+  // Pick the LAST OUTLINE: block. The Writer sometimes drafts an initial
+  // outline, self-reviews it in prose, and emits a revised OUTLINE block
+  // after. Only the final revision counts. Prompt asks for one block; the
+  // parser has to tolerate stragglers.
+  const allMatches = [...text.matchAll(/(^|\n)OUTLINE:\s*\n([\s\S]*?)(?=\n(?:COVER OPTIONS|COVER):|$)/g)];
+  const m = allMatches.length > 0 ? allMatches[allMatches.length - 1]! : null;
+  if (!m) return undefined;
+  const block = m[2] ?? '';
+  const entries: NonNullable<ParsedPost['outline']> = [];
+  const lineRe = /^\s*SLIDE\s+(\d+)\s*:\s*([a-z_]+)\s*[-—–:]\s*(.+?)\s*$/gmi;
+  let mm: RegExpExecArray | null;
+  while ((mm = lineRe.exec(block)) !== null) {
+    const position = Number(mm[1]);
+    const kind = mm[2]!.toLowerCase();
+    let rest = mm[3]!.trim();
+    // Strip the fact-first `answers Q?` annotation the Writer adds
+    // between the kind and the content: "SLIDE 3: landing — answers Q4 —
+    // HEADLINE: …". Everything up to and including the second em/en-dash
+    // (or " — ") when it starts with `answers Q\d+` is annotation, not
+    // content.
+    const annotationRe = /^answers\s+Q\d+\s*[-—–]\s*/i;
+    if (annotationRe.test(rest)) rest = rest.replace(annotationRe, '').trim();
+    const entry: NonNullable<ParsedPost['outline']>[number] = { position, kind, beat: '' };
+    if (kind === 'text' || kind === 'image') {
+      entry.beat = rest;
+    } else {
+      // Named-field format. The Writer sometimes emits a short prose
+      // "beat sentence" between the kind separator and the first KEY:
+      // pair ("SLIDE 3: stat — <beat>. HEADLINE: X | BIG: Y | NOTE: Z").
+      // Scan for known keys and use their positions as split boundaries,
+      // rather than a naive `|` split that would treat the beat text as
+      // part of the first "key".
+      const KNOWN_KEYS = [
+        'headline', 'body', 'note', 'number\\s+note', 'quote', 'quote\\s+by', 'by',
+        'big', 'big\\s+number', 'second', 'second\\s+number', 'second\\s+note',
+        'image',
+      ];
+      const keyRe = new RegExp(`\\b(${KNOWN_KEYS.join('|')})\\s*:\\s*`, 'gi');
+      const fields = new Map<string, string>();
+      const matches = [...rest.matchAll(keyRe)];
+      for (let mi = 0; mi < matches.length; mi += 1) {
+        const mk = matches[mi]!;
+        const key = mk[1]!.toLowerCase().replace(/\s+/g, ' ').trim();
+        const start = (mk.index ?? 0) + mk[0].length;
+        const end = mi + 1 < matches.length ? (matches[mi + 1]!.index ?? rest.length) : rest.length;
+        let value = rest.slice(start, end).trim().replace(/\|\s*$/, '').trim();
+        // Strip surrounding quotes (curly or straight) from the value.
+        value = value.replace(/^[“”"'](.*)[“”"']$/u, '$1').trim();
+        fields.set(key, value);
+      }
+      const g = (k: string): string | undefined => fields.get(k) || undefined;
+      entry.headline = g('headline');
+      entry.note = g('note');
+      entry.bigNumber = g('big') ?? g('big number');
+      entry.numberNote = g('number note') ?? g('note');
+      entry.secondNumber = g('second') ?? g('second number');
+      entry.secondNote = g('second note');
+      entry.quote = g('quote');
+      entry.quoteBy = g('by') ?? g('quote by');
+      // beat is a synthesized description for logging; use headline or quote.
+      entry.beat = entry.headline ?? entry.quote ?? rest;
+    }
+    entries.push(entry);
+  }
+  return entries.length > 0 ? entries : undefined;
+}
+
 function parsePost(rawText: string, kind: 'draft' | 'edited'): ParsedPost {
-  const text = normalizeMarkdown(rawText);
+  const rawNormalized = normalizeMarkdown(rawText);
+  // Extract the OUTLINE block (Writer only; Editor doesn't emit one) and
+  // remove it from the text before scanning for SLIDE / FOLLOW boundaries
+  // — otherwise the OUTLINE's "FOLLOW:" line would be matched as the post's
+  // real FOLLOW, truncating the last slide's chunk to nothing.
+  const outline = parseOutlineBlock(rawNormalized);
+  // Strip every OUTLINE: block (last-wins semantics for parsing content
+  // already covered above; here we just need every OUTLINE removed from
+  // the text so SLIDE-lines inside those blocks aren't treated as real
+  // slide sections).
+  const outlineMatches = [...rawNormalized.matchAll(/(^|\n)OUTLINE:\s*\n([\s\S]*?)(?=\n(?:COVER OPTIONS|COVER):|$)/g)];
+  let text = rawNormalized;
+  for (let i = outlineMatches.length - 1; i >= 0; i -= 1) {
+    const om = outlineMatches[i]!;
+    const start = om.index ?? 0;
+    text = text.slice(0, start) + text.slice(start + om[0].length);
+  }
   // Split by "SLIDE N" boundaries first — everything before the first SLIDE
   // is the cover header block; everything after is per-slide sections.
-  const slideRe = /(^|\n)SLIDE\s+(\d+)\b/g;
+  // Skip "SLIDE 2:" (outline syntax, "SLIDE 2: <kind> — <beat>") — real
+  // slide boundaries start their own line without a colon after the number.
+  const slideRe = /(^|\n)SLIDE\s+(\d+)\b(?!\s*:)/g;
   const boundaries: Array<{ position: number; textStart: number }> = [];
   let m: RegExpExecArray | null;
   while ((m = slideRe.exec(text)) !== null) {
@@ -274,11 +400,15 @@ function parsePost(rawText: string, kind: 'draft' | 'edited'): ParsedPost {
       : editNotesRaw.split('\n').map((l) => l.replace(/^\s*[-*•]\s*/, '').trim()).filter(Boolean))
     : null;
 
+  // (Outline was already extracted above and removed from `text` so
+  // downstream slide/follow scanning isn't fooled by OUTLINE's FOLLOW: line.)
+
   return {
     cover: swapCoverPunctuation(cover),
     slides: slides.map(swapSlidePunctuation),
     follow: swapBannedPunctuation(follow) ?? '',
     editNotes,
+    outline,
   };
 }
 

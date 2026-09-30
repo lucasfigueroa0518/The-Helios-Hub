@@ -84,4 +84,25 @@ describe('checkBriefIntegrity — unsourced quotes are cut from THE STORY', () =
     assert.equal(r.droppedQuotes.length, 0);
     assert.equal(r.cleanedBrief.story, brief.story);
   });
+
+  test('trailing period on quote does not fail a match (Suleyman "hall of mirrors.")', () => {
+    // Reporter's brief ended the quote with a period; essay text has no
+    // period right after "mirrors". Before the trailing-punct strip
+    // (2026-09-29) this was cut as unsourced.
+    const story = `${BASELINE_STORY_600} Suleyman called it "an epistemic hall of mirrors." in the essay.`;
+    const { brief, briefRaw } = makeBrief(story);
+    const r = checkBriefIntegrity(brief, briefRaw, [
+      { url: 'https://x.example.com/one', title: null as string | null, text: 'The authors have created an epistemic hall of mirrors in which the loop reflects itself.' },
+    ]);
+    assert.equal(r.droppedQuotes.length, 0, `trailing period should not break match; got: ${JSON.stringify(r.droppedQuotes)}`);
+  });
+
+  test('essay comma-vs-hyphen substitution normalizes (essay " - ", reporter ", ")', () => {
+    const story = `${BASELINE_STORY_600} He wrote that "controlling something that believes it may be conscious, that it's entitled to our welfare and has rights of its own, may well be impossible" in his warning.`;
+    const { brief, briefRaw } = makeBrief(story);
+    const r = checkBriefIntegrity(brief, briefRaw, [
+      { url: 'https://x.example.com/one', title: null as string | null, text: `Controlling something more capable is already hard. But controlling something that believes it may be conscious - that it's entitled to our welfare and has rights of its own - may well be impossible.` },
+    ]);
+    assert.equal(r.droppedQuotes.length, 0, `hyphen-vs-comma should normalize; got: ${JSON.stringify(r.droppedQuotes)}`);
+  });
 });

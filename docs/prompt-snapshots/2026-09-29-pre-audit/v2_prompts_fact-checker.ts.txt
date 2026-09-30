@@ -26,7 +26,6 @@ Flag anything that says more than the sources do:
 - any mention of a story other than the main one
 - an image that doesn't show what the slide is about, or a request for a scene or event instead of a real subject
 - a quote that isn't word for word what the sources say, or is credited to the wrong person
-- a slide (SMALL) that tells the reader nothing the cover or an earlier slide didn't. Flag repetition even when every word is accurate: a slide whose main claim is a paraphrase of the cover or an earlier slide doesn't earn its place.
 
 Mark each flag SMALL or BIG:
 - SMALL: a wording problem that can be fixed in place, like a dropped hedge, a stronger verb, or an unsupported clause.

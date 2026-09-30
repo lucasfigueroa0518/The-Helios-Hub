@@ -280,7 +280,15 @@
   margin: 0;
   margin-top: auto;
   text-transform: uppercase;
-  overflow-wrap: break-word;
+  /* Never break inside a word (2026-09-29 late: prior value was
+   * `break-word` which split "UNCONTROLLABLE" as "UNCONTROLLABL/E" on
+   * the Suleyman cover). Long words wrap to a new line intact instead.
+   * Arrow-overlap is now enforced by the pre-render code-check gate
+   * (renders the cover alone via Playwright and HARD-fails the run if
+   * text collides with the chevron), not by narrowing the column. */
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
   max-width: 100%;
 }
 
@@ -294,7 +302,11 @@
   text-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
 }
 
-/* Cover chevron bottom-right — orange arrow. */
+/* Cover chevron bottom-right — orange arrow.
+ * 2026-09-29 late second pass: LOCKED from design-v1 reference fixtures
+ * (runs/design-v1-fixture-{no,with}-photos/preview/slide-00.png). These
+ * exact coordinates are covered by a test that fails if they move. Don't
+ * change without renewing both fixtures. */
 .helios-cover__chevron {
   position: absolute;
   right: 96px;
@@ -306,6 +318,17 @@
   line-height: 1;
   z-index: 3;
 }
+
+/* Arrow-box reserve attempt reverted 2026-09-29 late second pass:
+ * float+shape-outside on ::after reserved horizontal space on EVERY
+ * line, not just the arrow's row (the design-v1 no-photos fixture
+ * regressed from a wide layout to a narrow column). CSS can't reliably
+ * "reserve only the bottom lines" without either a fixed-line-count
+ * layout or manipulating the DOM per render. Enforcement stays in the
+ * cover-fit HARD gate: at code-check time, Playwright measures the
+ * rendered cover; any word that would collide with the arrow fails the
+ * gate and the Editor rewrites shorter. Cover template unchanged from
+ * the design-v1 reference fixtures. */
 
 /* ── Text slide (HEADLINE + BODY, top-anchored) ───────────────────────── */
 

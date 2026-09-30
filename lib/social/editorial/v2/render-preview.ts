@@ -25,6 +25,7 @@ import { promises as fsp } from 'node:fs';
 import path from 'node:path';
 
 import { adaptToPost } from './adapter';
+import { REFLOW_COVER_JS } from './cover-reflow';
 import type { CapturedRun } from './test-runner-support';
 
 const DEFAULT_SERVER = 'http://localhost:3001';
@@ -113,6 +114,20 @@ export type PreviewInput = {
   outDir: string;
   /** Dev server URL. Defaults to http://localhost:3001. */
   server?: string;
+  /**
+   * Drop the PREVIEW watermark from the rendered PNGs. Used for
+   * hand-finished shareable posts written by a human reviewer. Off by
+   * default so pipeline previews stay clearly stamped.
+   */
+  noWatermark?: boolean;
+  /**
+   * Extra CSS injected on every rendered slide before screenshot. Used by
+   * the hand-finished finalizer to nudge per-post details (e.g. shifting
+   * a cover photo's object-position when the pipeline face-clear check
+   * missed a headline overlap). Applied AFTER noWatermark's built-in
+   * overlay-hide rules so post-specific overrides always win.
+   */
+  extraCss?: string;
 };
 
 export type PreviewResult =
@@ -146,6 +161,23 @@ export async function renderPreview(input: PreviewInput): Promise<PreviewResult>
   const slides = (post as { slides?: unknown[] }).slides;
   if (!Array.isArray(slides) || slides.length === 0) {
     return { ok: false, reason: 'Post has no slides.' };
+  }
+
+  // 1a. Photo-placement guard. If the image step logged one or more
+  // placed photos but the reconstructed Post has no slide carrying a
+  // photoUrl, the pipeline lost a photo between selection and render —
+  // exactly the 2026-09-29 Suleyman bug where imageStep placed the
+  // Suleyman cover (Q16847797) and reconstructPost dropped it. Fail
+  // loud rather than shipping a preview that hides the loss.
+  const placedCount = (input.captured?.debug as { imageStep?: { selected?: unknown[] } } | undefined)?.imageStep?.selected?.length ?? 0;
+  if (placedCount > 0) {
+    const rendered = (slides as Array<{ photoUrl?: string }>).filter((s) => Boolean(s.photoUrl)).length;
+    if (rendered === 0) {
+      return {
+        ok: false,
+        reason: `Image step placed ${placedCount} photo(s), but the reconstructed Post has none. A photo was lost between image-step and render. Check that debug.imageStep.selected carries storageUrl + credit + isPortrait (persisted since 2026-09-29 pm) and that reconstructPost passes selectedImages to adaptToPost.`,
+      };
+    }
   }
 
   // 2. Check the dev server is reachable — the preview route needs it.
@@ -182,16 +214,47 @@ export async function renderPreview(input: PreviewInput): Promise<PreviewResult>
       const url = `${server}/social/render/preview?generated=${slug}&slide=${i}&scale=1`;
       await page.goto(url, { waitUntil: 'networkidle' });
       await page.waitForSelector('.helios-slide[data-slide-ready="true"]', { timeout: 15_000 });
-      await page.addStyleTag({ content: PREVIEW_WATERMARK_CSS });
-      await page.addStyleTag({ content: OVERFLOW_BADGE_CSS });
+      if (!input.noWatermark) {
+        await page.addStyleTag({ content: PREVIEW_WATERMARK_CSS });
+        await page.addStyleTag({ content: OVERFLOW_BADGE_CSS });
+      } else {
+        // Hide Next.js dev-mode overlays (the small "N" badge in the
+        // bottom-left corner of every screenshot) — they aren't part of
+        // the rendered slide and shouldn't ship with shareable exports.
+        await page.addStyleTag({ content: `
+          #nextjs-portal, [data-nextjs-toast], [data-nextjs-scroll-focus-boundary],
+          nextjs-portal, [data-nextjs-dialog-overlay], [data-nextjs-error-overlay] { display: none !important; }
+        `.trim() });
+      }
+      if (input.extraCss) {
+        await page.addStyleTag({ content: input.extraCss });
+      }
       // Small settling delay for the watermark to render.
       await page.waitForTimeout(100);
 
-      // Body-overflow post-check. Measure any body element's rendered
-      // bounding box against the slide's inner content well. If body
-      // extends past the well, mark the slide render_failed. Design v1
-      // §Type mandates human review over silent shrink/clip.
-      const overflow = await page.evaluate(() => {
+      // Cover slide: reflow around the arrow BEFORE screenshot. If a word
+      // in the headline would overlap the fixed-position chevron, insert
+      // a <br> before it and re-measure. Same deterministic reflow the
+      // pre-render `checkCoverFit` gate uses — so what the check
+      // approves is exactly what the reader sees. Only a still-overlap,
+      // too-tall, or single-word-wider-than-safe outcome trips the
+      // HUMAN REVIEW badge.
+      let coverStillFails = false;
+      if (i === 0) {
+        const reflow = await page.evaluate(REFLOW_COVER_JS) as {
+          inserted: number;
+          stillOverlaps: boolean;
+          tooTall: boolean;
+          singleWordOverflow: boolean;
+          textOverFace: boolean;
+        };
+        coverStillFails = reflow.stillOverlaps || reflow.tooTall || reflow.singleWordOverflow || reflow.textOverFace;
+      }
+
+      // Body-overflow post-check for non-cover slides. Measure any body
+      // element's rendered bounding box against the slide's inner
+      // content well. Body extending past the well = render_failed.
+      const overflow = coverStillFails || await page.evaluate(() => {
         const slideEl = document.querySelector('.helios-slide[data-slide-ready="true"]');
         if (!slideEl) return false;
         const slideBox = slideEl.getBoundingClientRect();
@@ -200,7 +263,6 @@ export async function renderPreview(input: PreviewInput): Promise<PreviewResult>
         );
         for (const el of Array.from(bodies)) {
           const box = el.getBoundingClientRect();
-          // 8px tolerance for sub-pixel rounding.
           if (box.bottom > slideBox.bottom - 8) return true;
           if (el.scrollHeight > el.clientHeight + 4) return true;
         }
@@ -257,12 +319,61 @@ export function reconstructPost(captured: CapturedRun | null, articlePublishedAt
   const finalCaption = (captured.debug as { finalCaption?: string }).finalCaption
     ?? lastRound?.caption
     ?? captured.debug.caption.caption;
+
+  // Rebuild the SelectedImage Map from debug.imageStep.selected so bail-path
+  // previews attach the photos the image step actually picked. Prior to
+  // 2026-09-29 this Map wasn't passed and reconstructPost silently dropped
+  // every placed photo, including the Suleyman cover (Q16847797, CC BY 2.0)
+  // — the reviewer saw an unphotoed cover even though imageStep logged
+  // "Photos placed: 1".
+  const selected = (captured.debug as { imageStep?: { selected?: Array<{
+    slide: 'cover' | number;
+    wikidataId: string;
+    subject?: string;
+    label: string;
+    commonsFile: string;
+    storageUrl?: string;
+    license: string;
+    licenseUrl?: string | null;
+    author: string;
+    credit?: string;
+    isPortrait?: boolean;
+    source: 'cache' | 'wikimedia';
+  }> } }).imageStep?.selected ?? [];
+  const selectedImages: Map<import('./image-step').SlideKey, import('./image-step').SelectedImage> = new Map();
+  for (const s of selected) {
+    // Only rebuild an entry if the persisted debug entry has enough to render.
+    // Older transcripts written before the field expansion (2026-09-29 pm)
+    // won't have storageUrl or credit — those entries can't be rehydrated
+    // and we skip them rather than crash the render. The photo-placement
+    // guard below will then fail loud, prompting a rerun.
+    if (!s.storageUrl || s.credit === undefined) continue;
+    selectedImages.set(s.slide, {
+      wikidataId: s.wikidataId,
+      subject: s.subject ?? s.label,
+      label: s.label,
+      commonsFile: s.commonsFile,
+      storageUrl: s.storageUrl,
+      license: s.license,
+      licenseUrl: s.licenseUrl ?? null,
+      author: s.author,
+      credit: s.credit,
+      isPortrait: s.isPortrait ?? true,
+      source: s.source,
+    });
+  }
+
+  const { buildAttributionBlock: buildImageAttribution } = require('./image-step') as typeof import('./image-step');
+  const photoLine = selectedImages.size > 0 ? buildImageAttribution(selectedImages) : '';
+
   return adaptToPost({
     brief: captured.debug.reporter.brief,
     post: finalPost as import('./parse').ParsedPost,
     caption: finalCaption,
+    attributionBlockOverride: photoLine || undefined,
     articlePublishedAt: articlePublishedAt ?? new Date().toISOString(),
     issueNumber: dayStamp,
+    selectedImages: selectedImages.size > 0 ? selectedImages : undefined,
   });
 }
 

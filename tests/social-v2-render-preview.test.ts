@@ -174,6 +174,79 @@ describe('renderPreviewFromRunDir — reads transcript.json', () => {
     } finally { await fsp.rm(tmp, { recursive: true, force: true }); }
   });
 
+  test('reconstructPost rebuilds selectedImages Map from debug.imageStep.selected', () => {
+    const brief = parseBrief(BRIEF_RAW);
+    const post = parseEditedPost(EDITED_RAW);
+    const stageUsage = { inputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 1, approxCostUsd: 0 };
+    const captured: CapturedRun = {
+      result: { ok: false, status: 'needs_human_review', costUsd: 0, stagesRun: [] },
+      debug: {
+        version: 2, articleId: 'x', startedAt: '', rounds: [], repairs: [],
+        reporter: { brief, briefRaw: BRIEF_RAW, stopReasons: [], usage: stageUsage },
+        edited: { post, raw: EDITED_RAW, editNotes: null, stopReasons: [], usage: stageUsage },
+        caption: { caption: 'x', raw: 'CAPTION:\nx', stopReasons: [], usage: stageUsage },
+        outcome: { status: 'needs_human_review', totalCostUsd: 0 },
+        imageStep: {
+          selected: [{
+            slide: 'cover',
+            wikidataId: 'Q16847797',
+            subject: 'Mustafa Suleyman',
+            label: 'Mustafa Suleyman',
+            commonsFile: 'File:Mustafa Suleyman.jpg',
+            storageUrl: 'https://commons.example/Mustafa.jpg',
+            license: 'CC BY 2.0',
+            licenseUrl: null,
+            author: 'Joi Ito',
+            credit: 'Joi Ito. Via Wikimedia Commons.',
+            isPortrait: true,
+            source: 'wikimedia',
+          }],
+        },
+      },
+      composeStatus: 'needs_human_review', composeError: null, renderPostJson: null, renderSlug: null, reporterOutput: null, fetchedSources: [],
+    };
+    const p = reconstructPost(captured) as { slides?: Array<{ photoUrl?: string; photoCredit?: string }> };
+    assert.ok(p?.slides && p.slides.length > 0, 'expected reconstructed Post with slides');
+    // Cover is slides[0]. The Suleyman photo must be attached.
+    assert.equal(p!.slides![0]!.photoUrl, 'https://commons.example/Mustafa.jpg');
+    assert.match(p!.slides![0]!.photoCredit ?? '', /Joi Ito/);
+  });
+
+  test('renderPreview refuses when image step placed photos but reconstructed Post has none', async () => {
+    const brief = parseBrief(BRIEF_RAW);
+    const post = parseEditedPost(EDITED_RAW);
+    const stageUsage = { inputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 1, approxCostUsd: 0 };
+    // Simulate a run with the OLD debug shape (no storageUrl/credit) — the
+    // photo cannot be rehydrated, so no slide gets photoUrl, and the guard
+    // must fire.
+    const captured: CapturedRun = {
+      result: { ok: false, status: 'needs_human_review', costUsd: 0, stagesRun: [] },
+      debug: {
+        version: 2, articleId: 'x', startedAt: '', rounds: [], repairs: [],
+        reporter: { brief, briefRaw: BRIEF_RAW, stopReasons: [], usage: stageUsage },
+        edited: { post, raw: EDITED_RAW, editNotes: null, stopReasons: [], usage: stageUsage },
+        caption: { caption: 'x', raw: 'CAPTION:\nx', stopReasons: [], usage: stageUsage },
+        outcome: { status: 'needs_human_review', totalCostUsd: 0 },
+        // Old-shape entry: no storageUrl / credit. Simulates a
+        // pre-2026-09-29 transcript.
+        imageStep: { selected: [{ slide: 'cover' } as never] },
+      },
+      composeStatus: 'needs_human_review', composeError: null, renderPostJson: null, renderSlug: null, reporterOutput: null, fetchedSources: [],
+    };
+    const tmp = await fsp.mkdtemp(path.join(tmpdir(), 'social-v2-preview-test-'));
+    try {
+      const r = await renderPreview({
+        post: null,
+        captured,
+        runId: 'test-run',
+        outDir: path.join(tmp, 'preview'),
+        server: 'http://127.0.0.1:1',
+      });
+      assert.equal(r.ok, false);
+      if (!r.ok) assert.match(r.reason, /Image step placed 1 photo\(s\)/);
+    } finally { await fsp.rm(tmp, { recursive: true, force: true }); }
+  });
+
   test('reconstructPost prefers debug.finalPost over rounds[last].post over edited.post', () => {
     // A captured run whose initial editor pass, last round, and finalPost
     // all carry a different cover TEXT so we can tell which one won.

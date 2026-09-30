@@ -35,6 +35,14 @@ export type VisionVerdict = {
   onePersonVisible: boolean | null;
   /** null when subjectIsPerson=false. */
   faceClear: boolean | null;
+  /**
+   * Bounding box of the face, normalized to [0, 1] in the ORIGINAL image
+   * coordinates (before crop/cover). Location only, never identity —
+   * the render uses this to keep the headline clear of the face. Null
+   * when the subject is not a person or the model can't find one face.
+   * 2026-09-29 late second pass.
+   */
+  faceBox: { top: number; left: number; bottom: number; right: number } | null;
 };
 
 export type VisionCheckResult = {
@@ -50,6 +58,7 @@ const SYSTEM_PROMPT = `You classify the KIND of image, not the identity of anyth
 - clean: true if the image is free of large overlaid text, watermarks, and other companies' branding. Small captions or a photographer's mark in a corner are fine.
 - onePersonVisible: true iff exactly one human is clearly visible in the frame. False for group photos, empty scenes, or images where the person is a small figure. Set to null if the subject is not a person.
 - faceClear: true if that one person's face is fully visible and not cropped, blurred, or heavily obscured by a mask, hands, or angle. Set to null if the subject is not a person.
+- faceBox: bounding box of the face, normalized to [0, 1] in the ORIGINAL image coordinates. This is LOCATION only, not identity. The render uses this to keep the headline clear of the face. Set to null if the subject is not a person or if you can't find exactly one face.
 
 You do not name the person. You do not decide if they are the right person. Both of those come from other sources.`;
 
@@ -63,8 +72,24 @@ const VERDICT_TOOL = withToolCache({
       clean: { type: 'boolean' },
       onePersonVisible: { type: ['boolean', 'null'] },
       faceClear: { type: ['boolean', 'null'] },
+      faceBox: {
+        anyOf: [
+          {
+            type: 'object',
+            properties: {
+              top: { type: 'number', minimum: 0, maximum: 1 },
+              left: { type: 'number', minimum: 0, maximum: 1 },
+              bottom: { type: 'number', minimum: 0, maximum: 1 },
+              right: { type: 'number', minimum: 0, maximum: 1 },
+            },
+            required: ['top', 'left', 'bottom', 'right'],
+            additionalProperties: false,
+          },
+          { type: 'null' },
+        ],
+      },
     },
-    required: ['isPhoto', 'clean', 'onePersonVisible', 'faceClear'],
+    required: ['isPhoto', 'clean', 'onePersonVisible', 'faceClear', 'faceBox'],
     additionalProperties: false,
   },
 });
@@ -119,6 +144,7 @@ export async function visionKindCheck(input: VisionCheckInput): Promise<VisionCh
     clean: Boolean(raw.clean),
     onePersonVisible: raw.onePersonVisible ?? null,
     faceClear: raw.faceClear ?? null,
+    faceBox: (raw as { faceBox?: VisionVerdict['faceBox'] }).faceBox ?? null,
   };
 
   const fails: string[] = [];

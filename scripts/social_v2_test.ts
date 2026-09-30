@@ -383,7 +383,16 @@ async function runOne(articleId: string, o: RunOneOptions): Promise<BatchScore> 
   console.log(`Status: ${result.status}`);
   if (result.reason) console.log(`Reason: ${result.reason}`);
   console.log(`Stages: ${result.stagesRun.join(' → ') || '(none)'}`);
-  console.log(`Total cost: $${result.costUsd.toFixed(4)}`);
+  // Show stubbed Reporter cost separately in --from-brief mode so the
+  // reviewer isn't misled by the cached Reporter's usage rolled into this
+  // run's total.
+  if (usedFromBrief && captured.debug?.reporter) {
+    const stubbed = captured.debug.reporter.usage.approxCostUsd;
+    const live = result.costUsd - stubbed;
+    console.log(`Total cost: $${live.toFixed(4)} live + $${stubbed.toFixed(4)} stubbed (from cached brief.json) = $${result.costUsd.toFixed(4)}`);
+  } else {
+    console.log(`Total cost: $${result.costUsd.toFixed(4)}`);
+  }
   console.log('');
   console.log(`Wrote: ${path.relative(process.cwd(), path.join(runDir, 'summary.md'))}`);
   console.log(`       ${path.relative(process.cwd(), path.join(runDir, 'transcript.json'))}`);

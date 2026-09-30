@@ -159,9 +159,36 @@ export function buildSummaryMarkdown(captured: CapturedRun, meta: {
   lines.push(`- From-brief mode: ${meta.usedFromBrief ? 'yes (Reporter + fetchPage stubbed from cached brief.json)' : 'no (full pipeline)'}`);
   lines.push(`- Status: **${captured.result.status}**`);
   if (captured.result.reason) lines.push(`- Reason: ${captured.result.reason}`);
-  lines.push(`- Total cost: **$${captured.result.costUsd.toFixed(4)}**`);
+  // Cost display. On --from-brief runs the Reporter usage carried in from
+  // brief.json still shows up as debug.reporter.usage — it should NOT
+  // count toward this run's live spend. Split the total so the reviewer
+  // sees "$X live + $Y stubbed" instead of one inflated number. Before
+  // 2026-09-29 pm the from-brief Suleyman run reported $0.648 total,
+  // $0.306 of which was the cached Reporter's cost from the original
+  // brief.json — that made the run look 2× more expensive than it was.
+  if (meta.usedFromBrief && debug?.reporter) {
+    const stubbed = debug.reporter.usage.approxCostUsd;
+    const live = captured.result.costUsd - stubbed;
+    lines.push(`- Total cost: **$${live.toFixed(4)} live + $${stubbed.toFixed(4)} stubbed (from cached brief.json) = $${captured.result.costUsd.toFixed(4)}**`);
+  } else {
+    lines.push(`- Total cost: **$${captured.result.costUsd.toFixed(4)}**`);
+  }
   if (captured.renderSlug) lines.push(`- Render slug (NOT persisted): \`${captured.renderSlug}\``);
   lines.push(`- Stages run: ${captured.result.stagesRun.join(' → ') || '(none)'}`);
+  // Cover-fit result (2026-09-29 late second pass). Says plainly whether
+  // the Playwright cover-fit gate ran and what it returned. If the check
+  // was skipped (env var not set or pipeline bailed before reaching it),
+  // that's noted too — no silent gap.
+  {
+    const cf = debug?.coverFit;
+    if (!cf || !cf.ran) {
+      lines.push('- Cover-fit check: **skipped** (HELIOS_V2_COVER_FIT not set, or pipeline bailed before reaching the gate)');
+    } else if (cf.ok) {
+      lines.push('- Cover-fit check: **ran, OK** (cover fits inside the safe area, no arrow collision)');
+    } else {
+      lines.push(`- Cover-fit check: **ran, FAILED** — ${cf.reason ?? 'unknown reason'}`);
+    }
+  }
   lines.push('');
 
   if (!debug) {

@@ -140,8 +140,25 @@ function termIsOrganization(term: { description?: string }): boolean {
   return /\b(company|firm|corporation|corp|inc\.|ltd|group|agency|bureau|department|government|labs|team|organization|foundation|institute|university|startup|nonprofit|coalition|association|council|committee|division|unit|studio|newsroom|publisher|magazine|regulator|regulatory)\b/.test(d);
 }
 function termIsPerson(term: { description?: string }): boolean {
-  const d = (term.description ?? '').toLowerCase();
-  return /\b(ceo|cto|cfo|coo|president|governor|senator|secretary|minister|director|founder|chair|chief|editor|reporter|prime minister|attorney|judge|mayor|congressman|congresswoman)\b/.test(d);
+  const d = (term.description ?? '').toLowerCase().trim();
+  // The role word must appear within the first ~30 chars of the
+  // description — the "who they are" phrase. 2026-09-29 late second pass:
+  // the strict "starts with role" test rejected "U.S. Congressman from
+  // New Jersey" because "U.S." came first. Widening to "role within the
+  // first 30 chars" catches "u.s. congressman", "the british prime
+  // minister", "california governor" while still rejecting bare mentions
+  // in a longer description ("a directive signed by a governor or
+  // president…" — "governor" appears at char ~25, but check the
+  // context: if it's not adjacent to a role-linking preposition, skip).
+  // The 30-char window with a role match is a good middle ground.
+  const roleRe = /\b(ceo|cto|cfo|coo|president|governor|senator|secretary|minister|director|founder|chair|chief|editor|reporter|prime minister|attorney|judge|mayor|congressman|congresswoman)\b/;
+  const head = d.slice(0, 30);
+  if (!roleRe.test(head)) return false;
+  // Reject when the role is preceded by a "signed by / issued by /
+  // authored by" preposition — that means the role names the person
+  // WHO ACTED on this thing, not the thing itself.
+  if (/\b(?:by|from|for|of|about|between)\s+(?:a|an|the)?\s*(?:former\s+)?(?:ceo|cto|cfo|coo|president|governor|senator|secretary|minister|director|founder|chair|chief|editor|reporter|prime minister|attorney|judge|mayor|congressman|congresswoman)\b/.test(head)) return false;
+  return true;
 }
 
 /**
@@ -151,12 +168,18 @@ function termIsPerson(term: { description?: string }): boolean {
  * when both start at the same index). Used for story-slide subject
  * scanning where any named entity is a valid photo target.
  */
-function findPersonOrOrgInText(text: string, brief: Brief): string | null {
+/**
+ * Return the first TERMS PERSON named in `text`, by earliest position.
+ * Used for story-slide photo picking — story slides get only person
+ * photos as of 2026-09-29 late second pass. No orgs, no bills, no
+ * products.
+ */
+function findFirstPersonInText(text: string, brief: Brief): string | null {
   if (!text) return null;
   const hay = text.toLowerCase();
-  const eligibleTerms = brief.terms.filter((t) => termIsPerson(t) || termIsOrganization(t));
   const hits: Array<{ name: string; idx: number }> = [];
-  for (const t of eligibleTerms) {
+  for (const t of brief.terms) {
+    if (!termIsPerson(t)) continue;
     const idx = hay.indexOf(t.name.toLowerCase());
     if (idx >= 0) hits.push({ name: t.name, idx });
   }
@@ -166,45 +189,59 @@ function findPersonOrOrgInText(text: string, brief: Brief): string | null {
 }
 
 /**
- * Pick the COVER subject: the main subject of THE NEWS. Rules:
- *   - Only the FIRST sentence of THE NEWS is scanned (the news line's
- *     grammatical subject lives there — anything later is context).
- *   - First preference: a person/org in TERMS. First-appearance wins.
- *   - Fallback: the FIRST proper-noun phrase in the first sentence,
- *     even if Reporter forgot to list it in TERMS. Wikidata will decide
- *     whether that name resolves to a real entity — the cover shouldn't
- *     be silent just because the Reporter didn't cross-list every
- *     person named in THE NEWS.
- *   - No fallback to a related entity. If Wikidata can't resolve the
- *     picked name, the cover stays type-only.
+ * True when `name` matches a TERMS person entry (used to gate
+ * writer-supplied IMAGE lines through the people-only story-slide rule).
  */
-function pickCoverSubject(brief: Brief): string | null {
+function isPersonInTerms(name: string, brief: Brief): boolean {
+  const target = name.trim().toLowerCase();
+  return brief.terms.some((t) => termIsPerson(t) && t.name.toLowerCase() === target);
+}
+
+/**
+ * Cover-only variant: return a named PERSON when one is in the first
+ * sentence, else null. Orgs never make it onto the cover as of 2026-09-29
+ * late — Tommy's stricter rule: "If the cover pick is an org, go type-only
+ * (no logos, no HQ photos) unless a named person is the face of THE NEWS."
+ * A logo or HQ photo is worse than none.
+ */
+function findPersonThenOrgInText(text: string, brief: Brief): string | null {
+  if (!text) return null;
+  const hay = text.toLowerCase();
+  const persons: Array<{ name: string; idx: number }> = [];
+  for (const t of brief.terms) {
+    if (!termIsPerson(t)) continue;
+    const idx = hay.indexOf(t.name.toLowerCase());
+    if (idx >= 0) persons.push({ name: t.name, idx });
+  }
+  if (persons.length === 0) return null;
+  persons.sort((a, b) => (a.idx - b.idx) || (b.name.length - a.name.length));
+  return persons[0]!.name;
+}
+
+/**
+ * Pick the COVER subject: the main subject of THE NEWS.
+ *
+ * Strict per Tommy's rule (updated 2026-09-29 late second pass):
+ *   - Scan ALL of THE NEWS for the first TERMS PERSON (was: first sentence
+ *     only, which broke on abbreviations like "U.S. Rep." — the Gottheimer
+ *     run's cover stayed type-only because "Josh Gottheimer" fell outside
+ *     the detected "first sentence" cut short by "U.S."). THE NEWS is a
+ *     one-line summary; there's no risk of picking a person from a later
+ *     paragraph because there aren't any.
+ *   - Only TERMS PERSONS win the cover. No logos / HQ / lobby photos.
+ *   - No abbreviation list, no proper-noun fallback outside TERMS, no
+ *     writer-override, no longest-TERMS heuristic.
+ *   - If no TERMS person is named in THE NEWS, cover stays type-only.
+ */
+export function pickCoverSubject(brief: Brief): string | null {
   const news = brief.news ?? '';
   if (!news) return null;
-  const firstSentenceEnd = firstOf(news, ['. ', '.\n', '\n']);
-  const firstSentence = firstSentenceEnd >= 0 ? news.slice(0, firstSentenceEnd) : news;
-  // Preference 1: TERMS entry named in first sentence.
-  const termHit = findPersonOrOrgInText(firstSentence, brief);
-  if (termHit) return termHit;
-  // Preference 2: first proper-noun phrase in the first sentence. A
-  // proper-noun phrase is one or more consecutive Capitalized words of
-  // length ≥ 3, allowing a middle initial ("Mustafa Suleyman", "Sam
-  // Altman", "Mary R. Barra"). Skip sentence-start THE / MICROSOFT-AI
-  // hyphenated tokens by requiring the phrase not be the first word.
-  // Take the FIRST such phrase encountered by position.
-  const properNounRe = /\b([A-Z][a-z][a-z']+(?:\s+(?:[A-Z]\.\s+)?[A-Z][a-z][a-z']+){0,3})\b/g;
-  let m: RegExpExecArray | null;
-  const hits: Array<{ name: string; idx: number }> = [];
-  while ((m = properNounRe.exec(firstSentence)) !== null) {
-    const name = m[1]!.trim();
-    // Skip lone month names, weekdays, generic-role words.
-    if (/^(January|February|March|April|May|June|July|August|September|October|November|December|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)$/i.test(name)) continue;
-    // Skip standalone role words that shouldn't drive Wikidata resolution.
-    if (/^(CEO|CTO|CFO|COO|President|Governor|Senator|Secretary|Minister|Director|Founder|Chair|Chief|Editor|Reporter|Mayor|Congressman|Congresswoman)$/i.test(name)) continue;
-    hits.push({ name, idx: m.index });
-  }
-  hits.sort((a, b) => a.idx - b.idx);
-  return hits[0]?.name ?? null;
+  const raw = findPersonThenOrgInText(news, brief);
+  // Strip a parenthetical suffix like "Josh Gottheimer (D-NJ-5)" — the
+  // Wikidata resolver doesn't match names with a district / role in
+  // parens, and the parenthetical isn't part of the person's identity.
+  // 2026-09-29 late second pass.
+  return raw ? raw.replace(/\s*\([^)]*\)\s*$/, '').trim() : null;
 }
 
 function firstOf(haystack: string, needles: string[]): number {
@@ -232,12 +269,15 @@ export function buildPhotoRequests(post: ParsedPost, brief: Brief): SubjectReque
   const out: SubjectRequest[] = [];
 
   // ── Cover ────────────────────────────────────────────────────────────
-  // The Writer's own IMAGE subject wins when it named one. Otherwise use
-  // pickCoverSubject — the main subject of THE NEWS's first sentence only,
-  // never a longest-TERMS-match fallback. If neither yields a subject or
-  // the Wikidata resolver later fails, the cover stays type-only.
-  const writerCover = parseImageSubject(post.cover.image);
-  const coverSubject = writerCover ?? pickCoverSubject(brief);
+  // Code, not the Writer, picks the cover subject. `pickCoverSubject`
+  // reads THE NEWS directly (TERMS person/org in the first sentence,
+  // first-position wins). No writer-override, no longest-TERMS heuristic,
+  // no proper-noun fallback outside TERMS. The Writer's IMAGE line is
+  // still allowed to name a subject for the Reporter/reviewer's benefit,
+  // but the picked cover subject is always code-derived so a drifting
+  // Writer can't put an off-topic face on the cover. Type-only when THE
+  // NEWS doesn't name a photographable subject in its first sentence.
+  const coverSubject = pickCoverSubject(brief);
   if (coverSubject) {
     out.push({ slide: 'cover', subject: coverSubject, imageLine: post.cover.image ?? '' });
   }
@@ -256,10 +296,17 @@ export function buildPhotoRequests(post: ParsedPost, brief: Brief): SubjectReque
     if (!slideIsPhotoCapable(slide)) continue;
     if (slide.position - lastPlacedPosition <= 1) continue; // never two in a row
 
-    const writerSubject = parseImageSubject(slide.image);
+    // Story-slide photos are PEOPLE-ONLY (2026-09-29 late second pass).
+    // Prior version passed any TERMS name through — the Gottheimer run
+    // asked Wikidata for "China FIREWALL Act" (a bill, not a photo
+    // subject). Restrict to TERMS people so orgs, bills, laws, products
+    // never trigger a photo request. Writer's IMAGE line only wins when
+    // it also names a TERMS person.
     const slideText = [slide.headline, slide.body, slide.quote, slide.note].filter(Boolean).join(' ');
-    const codeSubject = findPersonOrOrgInText(slideText, brief);
-    const subject = writerSubject ?? codeSubject;
+    const codeSubject = findFirstPersonInText(slideText, brief);
+    const writerSubject = parseImageSubject(slide.image);
+    const writerNamesPerson = writerSubject && isPersonInTerms(writerSubject, brief) ? writerSubject : null;
+    const subject = writerNamesPerson ?? codeSubject;
     if (!subject) continue;
     if (usedSubjects.has(subject.toLowerCase())) continue;
 

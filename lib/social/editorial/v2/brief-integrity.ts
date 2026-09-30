@@ -41,9 +41,15 @@ export type BriefIntegrityResult = {
  * Normalize text for quote comparison. Handles the drift ways a Reporter's
  * brief and a fetched source diverge on the same quote:
  *   - Curly quotes → straight quotes.
- *   - Em / en dashes → regular hyphens.
+ *   - Em / en dashes → regular hyphens (essays often use ` - ` as an
+ *     em-dash substitute where a Reporter's paraphrase uses `, `).
  *   - Unicode ellipsis / triple-period → space.
  *   - Non-breaking / thin spaces → regular space.
+ *   - Strip trailing sentence punctuation and commas (`hall of mirrors.`
+ *     vs `hall of mirrors ` — the trailing period would otherwise miss
+ *     the essay).
+ *   - Collapse comma-space and hyphen-space to a single space so the
+ *     same sentence in either punctuation style matches.
  *   - Collapse whitespace runs.
  *   - Lowercase for case-insensitive match.
  */
@@ -54,6 +60,8 @@ function normalizeForMatch(s: string): string {
     .replace(/[—–]/g, '-')
     .replace(/ | | | | /g, ' ') // non-breaking + narrow spaces
     .replace(/…|\.\.\./g, ' ')                            // ellipsis marks
+    .replace(/[.,;:!?]+$/g, '')
+    .replace(/\s*[,\-]\s+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();

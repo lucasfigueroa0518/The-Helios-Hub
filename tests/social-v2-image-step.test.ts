@@ -314,13 +314,20 @@ describe('runImageStep — one image per post (dedup by Q-id)', () => {
     // both photo-capable and non-consecutive per buildPhotoRequests's
     // "never two in a row" rule. Both requests reach the resolver; the second
     // gets dedup'd by Wikidata Q-id.
+    // Both Writer IMAGE subjects are TERMS people (post-2026-09-29 late
+    // second-pass rule: story-slide photo subjects must be TERMS persons).
+    // The two names resolve to the same Wikidata Q42 via the stub
+    // resolver — that's the dedup we're testing.
     const { post, brief } = fixture({
       slides: [
-        { position: 2, headline: 'H1', body: 'B1', image: 'photo of Sam Altman' },
+        { position: 2, headline: 'H1', body: 'B1 Sam Altman', image: 'photo of Sam Altman' },
         { position: 3, headline: 'Landing line only' },
-        { position: 4, headline: 'H2', body: 'B2', image: 'photo of Samuel H. Altman' },
+        { position: 4, headline: 'H2', body: 'B2 Samuel H. Altman', image: 'photo of Samuel H. Altman' },
       ],
-      terms: [{ name: 'Sam Altman', description: 'OpenAI CEO' }],
+      terms: [
+        { name: 'Sam Altman', description: 'OpenAI CEO' },
+        { name: 'Samuel H. Altman', description: 'OpenAI CEO (alt spelling)' },
+      ],
     });
     let cacheGetCalls = 0;
     const result = await runImageStep(post, brief, {
@@ -443,7 +450,7 @@ describe('buildPhotoRequests — cover from THE NEWS + up to 3 story slides', ()
     assert.equal(reqs[0]!.subject, 'Gavin Newsom');
   });
 
-  test('cover falls back to an organization named in THE NEWS', () => {
+  test('cover stays type-only when only an ORG is in THE NEWS first sentence (2026-09-29 late)', () => {
     const { post, brief } = fixture({
       coverImage: 'type only',
       slides: [],
@@ -451,15 +458,21 @@ describe('buildPhotoRequests — cover from THE NEWS + up to 3 story slides', ()
     });
     brief.news = 'Google Labs updated its experimental AI agent CC.';
     const reqs = buildPhotoRequests(post, brief);
-    assert.equal(reqs[0]!.subject, 'Google Labs');
+    const cover = reqs.find((r) => r.slide === 'cover');
+    assert.equal(cover, undefined);
   });
 
-  test('Writer subject wins over code-derived subject on the cover', () => {
+  test('cover prefers a named PERSON over an ORG even when the org appears first (2026-09-29 late: no logos on covers)', () => {
+    // Writer's IMAGE line names Sundar Pichai; THE NEWS first sentence
+    // names Google Labs before Sundar Pichai. Prior code picked whoever
+    // came first (Google Labs) → cover would render a logo / lobby.
+    // Post-2026-09-29-late rule: person beats org regardless of position.
+    // Sundar Pichai is the face; Google Labs would have to yield.
     const { post, brief } = fixture({
       coverImage: 'photo of Sundar Pichai',
       slides: [],
       terms: [
-        { name: 'Sundar Pichai', description: 'Google CEO' },
+        { name: 'Sundar Pichai', description: 'CEO of Google' },
         { name: 'Google Labs', description: 'Google team' },
       ],
     });
@@ -468,40 +481,82 @@ describe('buildPhotoRequests — cover from THE NEWS + up to 3 story slides', ()
     assert.equal(reqs[0]!.subject, 'Sundar Pichai');
   });
 
-  test('story photos: never two in a row + max 3 + skip landing slides', () => {
+  test('cover stays type-only when only an ORG (no person) is named in the first sentence (2026-09-29 late)', () => {
+    // Tommy's stricter rule: no logos, no HQ photos on the cover. If no
+    // person is the face of THE NEWS, cover is type-only. An org like
+    // "Google Labs" would resolve to a logo or lobby photo on Wikidata,
+    // both of which are visually bland and often off-topic.
+    const { post, brief } = fixture({
+      coverImage: 'type only',
+      slides: [],
+      terms: [
+        { name: 'Sundar Pichai', description: 'CEO of Google' },
+        { name: 'Google Labs', description: 'Google team' },
+      ],
+    });
+    brief.news = 'Google Labs launched a new experimental agent this week.';
+    const reqs = buildPhotoRequests(post, brief);
+    const cover = reqs.find((r) => r.slide === 'cover');
+    assert.equal(cover, undefined);
+  });
+
+  test('story photos: PEOPLE ONLY, never two in a row + max 3 + skip landing (2026-09-29 late second pass)', () => {
+    // Story slides get person photos only — no orgs, no bills, no products.
+    // Prior version passed any TERMS name and requested Wikidata pictures
+    // for "China FIREWALL Act" (a bill). Restricted to TERMS persons.
     const { post, brief } = fixture({
       coverImage: 'type only',
       slides: [
         { position: 2, headline: 'Newsom signed it', body: 'Governor Gavin Newsom signed the order.' },
         { position: 3, headline: 'The bill matters', body: 'The California legislature debated for months.' },
         { position: 4, headline: 'What the CPPA says' }, // landing — skipped
-        { position: 5, headline: 'Big Tech reacts', body: 'OpenAI pushed back on Friday.' },
-        { position: 6, headline: 'Anthropic response', body: 'Anthropic said it would comply.' },
+        { position: 5, headline: 'Sam Altman weighs in', body: 'Sam Altman said the tech industry needs clear rules.' },
+        { position: 6, headline: 'Dario Amodei response', body: 'Dario Amodei said Anthropic would comply.' },
       ],
       terms: [
         { name: 'Gavin Newsom', description: 'Governor of California' },
         { name: 'California legislature', description: 'The state government body' },
+        { name: 'Sam Altman', description: 'CEO of OpenAI' },
+        { name: 'Dario Amodei', description: 'CEO of Anthropic' },
         { name: 'OpenAI', description: 'AI company' },
         { name: 'Anthropic', description: 'AI company' },
       ],
     });
     brief.news = 'Gavin Newsom signed an AI executive order.';
     const reqs = buildPhotoRequests(post, brief);
-    // Cover: Gavin Newsom (from THE NEWS). Story: not slide 2 (already
-    // covered by cover subject), then slide 3 (California legislature),
-    // slide 4 skipped (landing), slide 5 (OpenAI). Slide 6 would be
-    // consecutive to slide 5 → rejected. Result: 3 requests total (cover
-    // + 2 story), well under the max.
-    assert.equal(reqs.length, 3);
+    // Cover: Gavin Newsom. Story: slide 2 skipped (subject already on cover),
+    // slide 3's "California legislature" is an org → skipped, slide 4 is a
+    // landing → skipped, slide 5 = Sam Altman (person) → picked, slide 6
+    // is consecutive → skipped. Result: cover + 1 story.
+    assert.equal(reqs.length, 2);
     assert.equal(reqs[0]!.slide, 'cover');
     assert.equal(reqs[0]!.subject, 'Gavin Newsom');
-    assert.equal(reqs[1]!.slide, 3);
-    assert.equal(reqs[1]!.subject, 'California legislature');
-    assert.equal(reqs[2]!.slide, 5);
-    assert.equal(reqs[2]!.subject, 'OpenAI');
+    assert.equal(reqs[1]!.slide, 5);
+    assert.equal(reqs[1]!.subject, 'Sam Altman');
   });
 
-  test('longer TERMS names win over shorter substrings (Google Labs > Google)', () => {
+  test('story photos: bill named in a slide is NOT requested (Gottheimer regression)', () => {
+    const { post, brief } = fixture({
+      coverImage: 'type only',
+      slides: [
+        { position: 2, headline: 'The China FIREWALL Act', body: 'A new bill would ban Chinese-developed AI models.' },
+      ],
+      terms: [
+        { name: 'Josh Gottheimer', description: 'U.S. Congressman' },
+        { name: 'China FIREWALL Act', description: 'Proposed legislation' },
+      ],
+    });
+    brief.news = 'Josh Gottheimer introduced the China FIREWALL Act.';
+    const reqs = buildPhotoRequests(post, brief);
+    // Cover picks Gottheimer (person). Slide 2 mentions the bill only — no
+    // TERMS person on the slide, so no story-slide photo request. The old
+    // code would have requested a Wikidata entity for "China FIREWALL Act".
+    assert.equal(reqs.length, 1);
+    assert.equal(reqs[0]!.slide, 'cover');
+    assert.equal(reqs[0]!.subject, 'Josh Gottheimer');
+  });
+
+  test('all-orgs first sentence → cover type-only (no logos, no HQ) (2026-09-29 late)', () => {
     const { post, brief } = fixture({
       coverImage: 'type only',
       slides: [],
@@ -512,13 +567,10 @@ describe('buildPhotoRequests — cover from THE NEWS + up to 3 story slides', ()
     });
     brief.news = 'Google Labs announced an update.';
     const reqs = buildPhotoRequests(post, brief);
-    assert.equal(reqs[0]!.subject, 'Google Labs');
+    assert.equal(reqs.find((r) => r.slide === 'cover'), undefined);
   });
 
-  test('cover uses FIRST-appearance-in-THE-NEWS, not longest TERMS name', () => {
-    // If "Anthropic" appears first in THE NEWS and "California legislature"
-    // (longer name) appears later, cover picks Anthropic — the main subject
-    // of the news line, not the longest TERMS match.
+  test('all-orgs first sentence, even with two orgs, → cover type-only', () => {
     const { post, brief } = fixture({
       coverImage: 'type only',
       slides: [],
@@ -529,11 +581,15 @@ describe('buildPhotoRequests — cover from THE NEWS + up to 3 story slides', ()
     });
     brief.news = 'Anthropic sued the California legislature over SB-2026.';
     const reqs = buildPhotoRequests(post, brief);
-    assert.equal(reqs[0]!.subject, 'Anthropic');
+    assert.equal(reqs.find((r) => r.slide === 'cover'), undefined);
   });
 
-  test('cover only scans first sentence of THE NEWS; ignores TERMS in later sentences', () => {
-    // Second-sentence-only entities never become the cover subject.
+  test('cover scans ALL of THE NEWS for a person (updated 2026-09-29 late second pass)', () => {
+    // Prior version limited scan to the first sentence, which broke on
+    // abbreviations like "U.S. Rep. Josh Gottheimer" — the "U.S." period
+    // truncated the "first sentence" and the person fell outside. Fix:
+    // scan all of THE NEWS. THE NEWS is a one-line summary, so no risk
+    // of picking a person from a stray later paragraph.
     const { post, brief } = fixture({
       coverImage: 'type only',
       slides: [],
@@ -544,9 +600,23 @@ describe('buildPhotoRequests — cover from THE NEWS + up to 3 story slides', ()
     });
     brief.news = 'Anthropic released a new model. Gavin Newsom mentioned it in passing.';
     const reqs = buildPhotoRequests(post, brief);
-    assert.equal(reqs[0]!.subject, 'Anthropic');
-    // Newsom is in the second sentence — the cover subject picker doesn't
-    // reach him.
+    // Newsom (person) wins over Anthropic (org). Person-preferred rule holds.
+    assert.equal(reqs[0]!.slide, 'cover');
+    assert.equal(reqs[0]!.subject, 'Gavin Newsom');
+  });
+
+  test('cover: abbreviations in THE NEWS ("U.S. Rep. …") do not hide the person (Gottheimer regression)', () => {
+    const { post, brief } = fixture({
+      coverImage: 'type only',
+      slides: [],
+      terms: [
+        { name: 'Josh Gottheimer', description: 'U.S. Congressman from New Jersey' },
+      ],
+    });
+    brief.news = 'On Friday, September 18, 2026, U.S. Rep. Josh Gottheimer (D-NJ-5) introduced two bipartisan AI security bills.';
+    const reqs = buildPhotoRequests(post, brief);
+    assert.equal(reqs[0]!.slide, 'cover');
+    assert.equal(reqs[0]!.subject, 'Josh Gottheimer');
   });
 
   test('no valid cover subject in first sentence → NO cover photo request, no fallback', () => {
@@ -580,14 +650,19 @@ describe('buildPhotoRequests — cover from THE NEWS + up to 3 story slides', ()
     });
     brief.news = 'Microsoft AI CEO Mustafa Suleyman published an essay arguing that Anthropic makes AI harder to control.';
     const reqs = buildPhotoRequests(post, brief);
-    assert.equal(reqs[0]!.slide, 'cover');
-    // "Microsoft AI" is in TERMS and appears first — but the FIRST proper-
-    // noun phrase after the TERMS check would be "Mustafa Suleyman".
-    // TERMS check wins here because Microsoft AI is a TERM.
-    assert.equal(reqs[0]!.subject, 'Microsoft AI');
+    // 2026-09-29 late: orgs never make it onto the cover. Microsoft AI +
+    // Anthropic are TERMS orgs, and Suleyman isn't listed as a TERM. No
+    // photographable PERSON in the first sentence → cover stays type-only.
+    const cover = reqs.find((r) => r.slide === 'cover');
+    assert.equal(cover, undefined);
   });
 
-  test('cover picks bare proper-noun name when NO TERM matches', () => {
+  test('NO TERM matches in first sentence → cover has NO photo request (2026-09-29: no proper-noun fallback)', () => {
+    // Old behavior fell back to the first Capitalized proper-noun phrase
+    // even if it wasn't in TERMS. Post-2026-09-29-late that fallback is a
+    // "related entity" risk — a wrong photo is worse than none. When the
+    // Reporter didn't cross-list the main subject in TERMS, the cover
+    // stays type-only.
     const { post, brief } = fixture({
       coverImage: 'type only',
       slides: [],
@@ -595,7 +670,9 @@ describe('buildPhotoRequests — cover from THE NEWS + up to 3 story slides', ()
     });
     brief.news = 'Mustafa Suleyman published an essay about AI consciousness.';
     const reqs = buildPhotoRequests(post, brief);
-    assert.equal(reqs[0]!.subject, 'Mustafa Suleyman');
+    // Suleyman isn't in TERMS on this fixture → no cover photo.
+    const cover = reqs.find((r) => r.slide === 'cover');
+    assert.equal(cover, undefined);
   });
 
   test('no TERMS person or org named anywhere → cover has no photo request', () => {

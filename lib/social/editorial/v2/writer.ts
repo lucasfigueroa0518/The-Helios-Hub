@@ -21,6 +21,15 @@ export type WriterInput = {
   previousPost?: string;
   factCheckFlags?: FactCheckFlag[];
   reviewerNotes?: string;
+  /**
+   * OUTLINE retry: the previous draft's OUTLINE failed validation.
+   * Writer is called again with the outline errors as CHECK ERRORS so
+   * it can rewrite the OUTLINE cleanly before writing prose again.
+   * 2026-09-29 late.
+   */
+  outlineCheckErrors?: Array<{ message: string }>;
+  /** Prior draft raw text — Writer references it on OUTLINE retry. */
+  previousDraftRaw?: string;
 };
 
 export type FetchedSource = { url: string; title?: string | null; text: string };
@@ -83,6 +92,16 @@ export function buildWriterMessages(input: WriterInput): Anthropic.MessageParam[
     if (suffixParts.length > 0) suffixParts.push('');
     suffixParts.push('REVIEWER NOTES:');
     suffixParts.push(input.reviewerNotes.trim());
+  }
+  if (input.outlineCheckErrors && input.outlineCheckErrors.length > 0) {
+    if (suffixParts.length > 0) suffixParts.push('');
+    suffixParts.push('OUTLINE CHECK ERRORS (fix the OUTLINE block and rewrite the whole draft):');
+    for (const e of input.outlineCheckErrors) suffixParts.push(`- ${e.message}`);
+    if (input.previousDraftRaw) {
+      suffixParts.push('');
+      suffixParts.push('PREVIOUS DRAFT (for reference — do not repeat verbatim, restart from OUTLINE):');
+      suffixParts.push(input.previousDraftRaw);
+    }
   }
 
   const content: Anthropic.TextBlockParam[] = [

@@ -12,7 +12,7 @@ import { parseBrief, parseEditedPost } from '@/lib/social/editorial/v2/parse';
  * never gets written to any real table.
  */
 
-const BRIEF_RAW = `SINGLE STORY: no, Bloomberg Tech video roundup
+const BRIEF_RAW = `SINGLE STORY: yes
 
 THE NEWS: Anthropic says Claude writes 26% of its own R&D code as of September 2026.
 
@@ -29,7 +29,15 @@ SOURCES:
 - Bloomberg, 2026-09-17, https://bloomberg.example.com/anthropic-claude-rd
 - The Information, 2026-09-18, https://theinformation.example.com/anthropic-follow-up`;
 
-const DRAFT_RAW = `COVER OPTIONS:
+const DRAFT_RAW = `OUTLINE:
+SLIDE 2: stat — HEADLINE: 1% to 26% in six months, Anthropic says | BIG: 26% | NOTE: of R&D code, per Anthropic
+SLIDE 3: text — Measured by which pull requests Claude opened.
+SLIDE 4: landing — HEADLINE: The rollout continues across research teams.
+SLIDE 5: text — Claude Code is now the primary way researchers ship changes.
+SLIDE 6: landing — HEADLINE: What the numbers do not say.
+FOLLOW: A call to follow Helios for AI tool usage.
+
+COVER OPTIONS:
 1. [Shock number] Anthropic says its own AI writes 26% of its R&D code.
 2. [Frame shift] Anthropic went from 1% AI-written code in March to 26% now.
 3. [Authority vs. hype] Anthropic's own numbers say AI does a quarter of research work.
@@ -166,6 +174,86 @@ describe('runCreatorPipeline — happy path', () => {
     assert.ok(result.slug);
     assert.ok(result.previewUrl?.includes(result.slug!));
   });
+
+  test('ship path: image step\'s cover photo lands on the persisted Post as photoUrl + photoCredit', async () => {
+    // 2026-09-29 late: the reconstructPost bail-path fix has a mirror
+    // requirement on the ship path — the adapter must receive the
+    // selectedImages Map and attach photos to the composed Post. This
+    // test proves it end-to-end: the image-step stub returns a Suleyman
+    // cover selection, and we verify the persisted Post carries it.
+    let persistedPost: unknown = null;
+    const result = await runCreatorPipeline(
+      ROW,
+      {},
+      buildDeps({
+        runImageStep: async () => ({
+          selected: new Map([['cover', {
+            // Anthropic (single-token subject) so the cover-name-of-pictured-
+            // person check doesn't fire on this attachment test. Cover text
+            // in EDITED_RAW says "Anthropic says its own AI writes 26%...".
+            wikidataId: 'Q4574171',
+            subject: 'Anthropic',
+            label: 'Anthropic',
+            commonsFile: 'File:Anthropic HQ.jpg',
+            storageUrl: 'https://commons.example/Mustafa.jpg',
+            license: 'CC BY 2.0',
+            licenseUrl: null,
+            author: 'Joi Ito',
+            credit: 'Joi Ito. Via Wikimedia Commons.',
+            isPortrait: true,
+            source: 'wikimedia',
+          }]]),
+          report: [],
+          visionCalls: 1,
+          visionUsage: [],
+        }),
+        persistDebugAndCompose: async (_id, _debug, cols) => { persistedPost = cols.renderPostJson; },
+      }),
+    );
+    assert.equal(result.status, 'shipped');
+    const p = persistedPost as { slides?: Array<{ photoUrl?: string; photoCredit?: string }> } | null;
+    assert.ok(p?.slides && p.slides.length > 0, 'expected persisted Post with slides');
+    // Cover is slides[0]. The Suleyman photo must be attached with its credit.
+    assert.equal(p!.slides![0]!.photoUrl, 'https://commons.example/Mustafa.jpg');
+    assert.match(p!.slides![0]!.photoCredit ?? '', /Joi Ito/);
+  });
+
+  test('ship path: image step placed a photo but adapter dropped it → bail (not silent ship)', async () => {
+    // Simulates a regression where the adapter ignores selectedImages.
+    // We stub the image step to return a non-empty Map, then stub adaptToPost
+    // indirectly by making the "Writer draft has no cover.image" while
+    // ALSO passing a selected image — the real adapter would still attach
+    // it. To force the guard to fire we make the runImageStep return an
+    // entry keyed by a slide position that doesn't exist in the Post, so
+    // the adapter can't attach it anywhere.
+    const result = await runCreatorPipeline(
+      ROW,
+      {},
+      buildDeps({
+        runImageStep: async () => ({
+          // Key '99' — no slide at position 99, so adapter attaches nothing.
+          selected: new Map([[99 as never, {
+            wikidataId: 'Q1',
+            subject: 'Nobody',
+            label: 'Nobody',
+            commonsFile: 'File:Nobody.jpg',
+            storageUrl: 'https://commons.example/Nobody.jpg',
+            license: 'CC0',
+            licenseUrl: null,
+            author: 'A',
+            credit: 'A. Via Wikimedia Commons.',
+            isPortrait: true,
+            source: 'wikimedia',
+          }]]),
+          report: [],
+          visionCalls: 0,
+          visionUsage: [],
+        }),
+      }),
+    );
+    assert.equal(result.status, 'needs_human_review');
+    assert.match(result.reason ?? '', /image step placed 1 photo/);
+  });
 });
 
 describe('runCreatorPipeline — cost cap', () => {
@@ -187,6 +275,73 @@ describe('runCreatorPipeline — cost cap', () => {
     );
     assert.equal(result.status, 'needs_human_review');
     assert.match(result.reason ?? '', /cost cap/i);
+  });
+});
+
+describe('runCreatorPipeline — SINGLE STORY: No triggers Reporter narrow-to-one retry (2026-09-29 late)', () => {
+  test('first pass "no" → Reporter re-called with narrow input; second pass "yes" continues pipeline', async () => {
+    const briefRawNo = BRIEF_RAW.replace('SINGLE STORY: yes', 'SINGLE STORY: no, podcast interview covering multiple topics');
+    let reporterCalls = 0;
+    const narrowReceived: string[] = [];
+    const result = await runCreatorPipeline(
+      ROW,
+      {},
+      buildDeps({
+        runReporter: async (input) => {
+          reporterCalls += 1;
+          if (input.narrow) {
+            narrowReceived.push(input.narrow.reason);
+            // Second pass returns a proper single-story brief.
+            return {
+              brief: parseBrief(BRIEF_RAW),
+              briefRaw: BRIEF_RAW,
+              sanitizedBriefRaw: BRIEF_RAW,
+              fetchedUrls: ['https://bloomberg.example.com/anthropic-claude-rd'],
+              stopReasons: ['end_turn'],
+              usage: stageUsage(0.05),
+            };
+          }
+          // First pass returns "no".
+          return {
+            brief: parseBrief(briefRawNo),
+            briefRaw: briefRawNo,
+            sanitizedBriefRaw: briefRawNo,
+            fetchedUrls: ['https://bloomberg.example.com/anthropic-claude-rd'],
+            stopReasons: ['end_turn'],
+            usage: stageUsage(0.1),
+          };
+        },
+      }),
+    );
+    assert.equal(reporterCalls, 2, 'Reporter must be called twice: initial + narrow-to-one');
+    assert.match(narrowReceived[0]!, /podcast interview/);
+    // Pipeline continues past the gate (may still bail later for other reasons, but not on SINGLE STORY).
+    assert.doesNotMatch(result.reason ?? '', /SINGLE STORY: No after narrow/);
+  });
+
+  test('second pass still "no" → bail to human review', async () => {
+    const briefRawNo = BRIEF_RAW.replace('SINGLE STORY: yes', 'SINGLE STORY: no, source has no single main event');
+    let reporterCalls = 0;
+    const result = await runCreatorPipeline(
+      ROW,
+      {},
+      buildDeps({
+        runReporter: async () => {
+          reporterCalls += 1;
+          return {
+            brief: parseBrief(briefRawNo),
+            briefRaw: briefRawNo,
+            sanitizedBriefRaw: briefRawNo,
+            fetchedUrls: ['https://bloomberg.example.com/anthropic-claude-rd'],
+            stopReasons: ['end_turn'],
+            usage: stageUsage(0.1),
+          };
+        },
+      }),
+    );
+    assert.equal(reporterCalls, 2);
+    assert.equal(result.status, 'needs_human_review');
+    assert.match(result.reason ?? '', /SINGLE STORY: No after narrow-to-one retry/);
   });
 });
 

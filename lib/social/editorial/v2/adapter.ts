@@ -33,10 +33,16 @@ export type AdapterInput = {
    * the adapter falls back to `brief image N` resolution.
    */
   selectedImages?: Map<SlideKey, SelectedImage>;
+  /**
+   * Overrides the brief-derived `attributionBlock` with the image step's
+   * built one (2026-09-29 late). Passed through into the caption so the
+   * CC BY credit lands in the caption text every consumer sees.
+   */
+  attributionBlockOverride?: string;
 };
 
 export function adaptToPost(input: AdapterInput): Post {
-  const { brief, post, caption, articlePublishedAt, issueNumber, selectedImages } = input;
+  const { brief, post, caption, articlePublishedAt, issueNumber, selectedImages, attributionBlockOverride } = input;
   const primarySource = brief.sources[0];
   const source = primarySource?.outlet || 'Source';
   const sourceUrl = primarySource?.url || '';
@@ -56,6 +62,16 @@ export function adaptToPost(input: AdapterInput): Post {
   // Slide N-1 — follow.
   slides.push(buildFollowSlide(post.follow, slides.length));
 
+  // Photo credit lives in the caption so CC BY attribution is always
+  // visible with the post (2026-09-29 late: prior version stored
+  // `attributionBlock` as a separate field but nothing appended it, so
+  // the credit disappeared between the image step and every downstream
+  // consumer). Append it after the Source: line.
+  const attributionBlock = attributionBlockOverride ?? buildAttributionBlock(brief, slides);
+  const captionWithCredit = attributionBlock && !caption.includes(attributionBlock)
+    ? `${caption.trimEnd()}\n\n${attributionBlock}`
+    : caption;
+
   return {
     format: 'carousel',
     storyType: pickStoryType(brief),
@@ -64,8 +80,8 @@ export function adaptToPost(input: AdapterInput): Post {
     publishedAt,
     issueNumber,
     slides,
-    caption,
-    attributionBlock: buildAttributionBlock(brief, slides),
+    caption: captionWithCredit,
+    attributionBlock,
   };
 }
 

@@ -135,10 +135,15 @@ export type PipelineV2Debug = {
     selected?: Array<{
       slide: 'cover' | number;
       wikidataId: string;
+      subject: string;
       label: string;
       commonsFile: string;
+      storageUrl: string;
       license: string;
+      licenseUrl: string | null;
       author: string;
+      credit: string;
+      isPortrait: boolean;
       source: 'cache' | 'wikimedia';
     }>;
     report?: unknown[];
@@ -176,6 +181,28 @@ export type PipelineV2Debug = {
    */
   finalPost?: ParsedPost;
   finalCaption?: string;
+  /**
+   * Snapshot of the "approved outline" — the sequence of slide kinds
+   * from the post the Editor first saw (Writer draft after
+   * enforce-structure's deterministic pre-fix). Used by the
+   * outline_kind_mismatch check at the final gate to catch cases where
+   * the Editor silently restructured the post (e.g., changed a stat
+   * slide to a text slide during a repair round). Kinds only — not
+   * copy — so the reviewer can see structural drift at a glance.
+   */
+  approvedOutline?: Array<{ position: number; kind: string }>;
+  /**
+   * Cover-fit gate result (2026-09-29 late second pass). Records whether
+   * the pre-render Playwright cover-fit check ran on this run and what
+   * it returned, so the summary can say plainly "cover-fit: ran, ok" /
+   * "cover-fit: ran, failed — <reason>" / "cover-fit: skipped
+   * (HELIOS_V2_COVER_FIT not set)".
+   */
+  coverFit?: {
+    ran: boolean;
+    ok?: boolean;
+    reason?: string;
+  };
   rounds: FactCheckRound[];
   /** Fired when we entered a repair sub-round (CHECK ERRORS or FIX NOTES). */
   repairs: Array<{

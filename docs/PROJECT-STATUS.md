@@ -1,10 +1,16 @@
 # Helios Social: project status
 
-Last updated 2026-09-29 (evening). Read this first in any new session.
+Last updated 2026-09-29 (late evening, second pass). Read this first in any new session.
 
 ## What this is
 
 Helios Social turns one AI news story into an Instagram carousel for smart, busy readers who don't follow AI closely. Owner: Tommy (Helios Group). Repo: The-Helios-Hub, branch `feature/helios-social-pipeline-v2` (unpushed). Production DB: Supabase project okslkogkokdwylmcsygz. Test runs use `--no-persist` — no prod DB writes, no Storage uploads, no `article_queue` mutations.
+
+## Testing budget (2026-09-29 late)
+
+- **Offline-only fixes.** Iterations that don't need a live model must run offline (unit tests, replay, image-step-only using cached photos). Assume every fix stays offline unless we're specifically proving a live model behavior.
+- **$5 live cap until launch.** Agent-driven live spend accumulates against a $5 ceiling until Tommy calls launch. Any live run over that ceiling requires explicit in-the-moment approval from Tommy — the ~$1.50 per-post cap and Rule 1 in `CLAUDE.md` still apply.
+- **Running spend tally** lives in `## Costs` below and is updated after any live run. Ingest bails (article body too thin) and cache-hit image steps count $0.
 
 ## Source-of-truth docs (in docs/)
 
@@ -15,14 +21,18 @@ Helios Social turns one AI news story into an Instagram carousel for smart, busy
 
 ## Pipeline
 
-Reporter (web search) → brief-integrity gate → Writer → Editor → Caption → code checks → Fact-checker (flags only, 2 rounds max) → soft-repair loop → image step → render. Anything unresolved goes to human review with the flags attached. Nothing posts without Tommy's review.
+Reporter (web search) → SINGLE STORY: yes gate → Reporter narrow-to-one retry if "no" → brief-integrity gate → Writer emits OUTLINE first → code validates OUTLINE (retry Writer once if bad) → Writer writes prose → enforceStructure → Editor → Caption → code checks → Fact-checker on FULL sources (rounds 1–2) → soft-repair loop → image step → render (via `debug.finalPost` + rebuilt `selectedImages` map). Anything unresolved goes to human review with the flags attached. Nothing posts without Tommy's review.
 
 ## Rules Tommy has set (don't relax these)
 
 - **Main story only.** Earlier statements, later announcements and other companies' news are separate stories, even when sources connect them. Strict: not even a passing clause.
 - **Nothing the sources don't say.** No invented comparisons, framings, descriptors or quotes. "Unlike X, Y" and "not X, it's Y" are banned.
 - **Quotes word for word** from a fetched source (trailing punctuation is ignored).
-- **Photos must be accurate.** Identity comes only from Wikidata P18 or a Commons P180 link to the exact entity, never from a model looking at a face. Wikimedia (public domain, CC0, CC BY, then CC BY-SA) and U.S. federal images only. No AI images, drawn shapes, stock, or news-article photos. A wrong photo is worse than none.
+- **Photos must be accurate — two tiers (2026-09-29 late, Tommy's decision).**
+  - **Real people, places, organizations:** identity comes only from Wikidata P18 or a Commons P180 link to the exact entity, never from a model looking at a face. Wikimedia (public domain, CC0, CC BY, then CC BY-SA) and U.S. federal images only. A wrong identifying photo is worse than none.
+  - **Concept slides only** (no photographable named entity — abstract ideas, mechanisms, "what a kill switch is"): illustrative images allowed. First try licensed stock (Unsplash / Pexels API, free license, photographer credit appended to the caption). If nothing fits, an AI-generated image is allowed as a last resort.
+  - **Guardrails for stock and AI on concept slides:** no faces or identifiable people, no logos or brand marks, no text baked into the image, nothing that could be read as documentary evidence of a real event or person. AI-generated images are credited "Illustration: AI-generated" in the caption and tagged so the Instagram post applies Meta's AI-content label.
+  - **Layout rule unchanged:** never two photo slides in a row (cover photo counts).
 - **Terms explained** on the slide where they appear or the next one.
 - **Length:** 5 to 10 story slides between the cover and the follow slide. Body text is 220 characters, fixed at 44px, never shrinks.
 - **Design:** the cover template is untouched. Slide kinds rotate (text, landing line, stat, split stat, quote, image slide), never the same kind twice in a row, and at least 3 kinds in a 6+ slide post. Photos on the cover and up to 3 slides. The follow slide uses the Helios sun-mark logo.
@@ -31,52 +41,74 @@ Reporter (web search) → brief-integrity gate → Writer → Editor → Caption
 
 ## Where things stand
 
-Working: the Reporter, when it returns a substantive brief, keeps to the main story; the Fact-checker catches unsupported claims and paraphrase attributions; the code checks (rhythm, char limits, quote verbatim, number trace, term explained, past-statement, sequence-integrity) all fire on the FINAL post; the design with its rotating slide types; the sun-logo follow slide; the test runner (`npm run social:v2:test`, with `--from-brief`, `--render-preview`, `--articles`, `--no-persist`); source trimming (each source's paragraphs scored by keyword overlap with THE NEWS / THE STORY / TERMS, kept in original order up to the per-source cap — so a mid-essay quote survives).
+Working: outline-before-prose (Writer emits an OUTLINE block first, code validates rhythm / kind / count on the OUTLINE alone, one Writer retry with outline errors if invalid); Reporter narrow-to-one retry on SINGLE STORY: No (bails only if second pass still can't isolate one event); fact-check verification uses FULL fetched text (prompt-input trimming is separate); brief-integrity comma / hyphen / trailing-punctuation normalization; `number_trace` matches dates as verifiable tokens ("September 16" checked against sources, not skipped); `checkQuotes` requires exact source punctuation (comma / dash equivalence lives in brief-integrity only, not on slide QUOTE lines); `past_statement_reference` limited to explicit-temporal cues (fact-checker handles reworded prior-work references); cover-subject picker prefers a named PERSON over an ORG regardless of position (companies won't produce logos / HQ / lobby photos on covers); ship-path + render-path photo guards; `debug.finalPost` + `debug.approvedOutline` snapshots; cover text never breaks mid-word.
 
-**Photos: UNPROVEN.** No run has actually placed a photo on a shipped slide yet. The Wikidata P18 / Commons P180 lookup + license filter + KIND-only vision check are all coded; the Suleyman `--from-brief` re-run failed photo verification on the one photo request it made ("Anthropic" on a quote slide, rejected because QUOTE BY didn't name Anthropic). Whether the accuracy rules and credit rendering actually work end-to-end will not be known until a run gets past hard code checks and a cover-slide photo lands.
+**Photos: PROVEN via image-step-only run.** `runs/2026-09-29T16-40-07-763Z/image-step-only/slide-00.png` — Mustafa Suleyman cover photo (Q16847797, CC BY 2.0, ~$0.01 for one Haiku vision call), stored at the Supabase CDN, credit "Joi Ito from Cambridge, MA, USA, CC BY 2.0. Via Wikimedia Commons." generated correctly. End-to-end path is exercised; still pending a full live pipeline run that reaches the ship path with a placed cover photo.
 
 ## Open
 
-1. **Writer keeps inventing numbers.** Run 2026-09-29T16-40-07 (Suleyman `--from-brief`) shipped "200" as a BIG NUMBER and "16" in a body — neither appears in any fetched source. `number_trace` caught them both, but the Writer produced them from thin air on the first pass; the Editor didn't cut them; two repair rounds didn't fix them. Root cause is upstream of the checker. Options: forbid the Writer from writing any digit not already present in the brief; add a Writer-side number-source guard; or feed number_trace hits back into the Editor's CHECK ERRORS with the specific number named. Pick one.
-2. **Rhythm still fails on the FINAL post.** Same run: SLIDE 4+5, 5+6, 10+11 all text, three separate rhythm hard errors surviving to the final gate. The Editor was told to fix rhythm and couldn't within the retry budget. Either the Editor prompt needs a rhythm-specific repair recipe ("convert the middle text slide to a landing line or a quote from an existing source line"), or the Writer needs to draft with rhythm awareness so the Editor isn't fixing structural gaps after the fact.
-3. **Live Reporter bails on "thin brief".** The fresh Reporter run for Suleyman (run 2026-09-29T16-36-21) returned a brief the integrity gate cut 3 quotes from, leaving the Writer with too little substance and no slides. This means live runs on some stories will now fail before the Writer even tries. Either loosen the integrity gate (risky), have the Reporter re-fetch when its brief is thin, or add a Reporter-side check that its brief has enough sourced quotes before it hands off.
-4. **Photos unproven** (see above). Need one run that reaches render with a valid cover-slide photo request, verified against Wikidata P18 and rendered with the correct credit line, before we can claim the images pipeline works.
-5. **The site run — dev DB vs one story on prod.** Tommy's call: do we point the site at a local/dev DB seeded with a hand-picked run, or push a single passing story to prod `article_queue` behind `compose_status = 'needs_human_review'` and view it in the real review UI? Blocker for the review-screen UX work.
-6. **Cover subject must be the main subject of THE NEWS, not the longest TERMS match.** `buildPhotoRequests` still sorts eligible TERMS longest-first and picks whichever appears in `brief.news`. Rewrite to identify the main subject directly and drop the "related entity" fallback — a story with no photographable main subject stays type-only.
-7. **Broad test — 5+ different stories** with `--no-persist --render-preview` to see which failures are systemic (Writer number-invention, thin-brief bail, rhythm-on-final) vs Suleyman-specific.
-8. **Editor scratchpad blow-up (max_tokens).** Google re-run's initial Editor pass emitted 45KB of chain-of-thought before writing `COVER:`. Fix: "write COVER: on the first line, reason after", or a stop-sequence after EDIT NOTES.
-9. **Audit Haiku boundary.** Confirm Haiku 4.5 runs only for the caption + length-only editor repairs, not for Writer / Editor first passes, fact-check reruns, or BIG-flag reruns.
+1. **Live run.** Every fix in this branch is verified offline or by narrow live tests; no full live pipeline run yet has (a) reached the render step with the new checks passing, (b) shipped with a rendered cover photo. Next live run must clear both.
+2. **Cover text overflow (not mid-word).** Word-break is fixed (whole-word wrap). But 108-char covers still overflow the arrow's fixed position and stretch to the bottom edge of the slide. Options: promote cover char_limit to HARD (currently soft), or add an `xxl` step below xl. Tommy's call.
+3. **Broad test.** `--articles` on 5+ different stories with `--no-persist --render-preview`. Report per story: cost, fact-check flags, HARD checks that fired, whether a photo landed.
+4. **Cover subject when only an ORG is in the first sentence.** Post-fix (2026-09-29 late) an org can still be picked when no person appears — Google Labs will win on "Google Labs announced CC". Wikidata may return a logo or HQ; those are visually bland. If Tommy wants stricter, we'd have to type-only when no person is available, which cuts photo coverage.
+5. **The site run — dev DB vs one story on prod.** Tommy's call: local/dev DB seeded with a hand-picked run, or push a single passing story to prod `article_queue` behind `compose_status = 'needs_human_review'`.
+6. **Writer main-story pruning inside a yes-verdict brief.** Even when SINGLE STORY: yes, the Writer sometimes still pulls context from other events in THE STORY. Consider flagging any month-day mention on a slide that doesn't match the news date.
+7. **Audit Haiku boundary.** Confirm Haiku 4.5 runs only for the caption + length-only editor repairs.
+8. **Cover face-clear check missed a headline overlap (2026-09-29 finalizer).** Gottheimer's cover shipped with the headline crossing his eyes and mouth — the pre-render face-zone check didn't flag it, so `object-fit: cover; object-position: center top` left the face inside the bottom-anchored headline's rectangle. Root cause is likely that the face-zone measurement doesn't intersect against the headline's actual laid-out bounding box (or trusts a face detector that missed a face in a busy background). Fix scope: measure the headline rect at render time and require the detected face to sit fully above it; if it can't, either shift `object-position` deterministically (finalizer used `center 78%`) or drop the cover photo.
+9. **No-mid-word-break / overflow checks missed 2 Suleyman headlines (2026-09-29 finalizer).** S6's "ANTHROPOMORPHISING" broke mid-word and S7's "CONSCIOUSNESS" ran past the safe right edge, neither of which the pre-render checks caught. Likely the per-word-fits-at-current-size logic runs against the wrong font size bucket (headline sizes are picked from char count, but a single long word bigger than the current bucket width isn't demoted to a smaller bucket). Fix scope: after size bucket is chosen for a headline, remeasure every word at the picked font size; if any word alone exceeds the safe inner width, drop one bucket and re-check.
 
 ## Pre-merge (before this branch touches main)
 
-- The guardrail (the outer safety check that stops a run from writing to prod when `--no-persist` isn't set).
-- The poison-pill cron fix (a single bad article shouldn't take down the whole daily job).
+- The guardrail (outer safety check that stops any run from writing to prod when `--no-persist` isn't set).
+- The poison-pill cron fix (a single bad article shouldn't take down the daily job).
 - The review-states migration (schema change to `article_queue` for the new review UI states).
 - The per-day and per-post spend cap enforced at the DB level, not just in code.
 
 ## Recent shipped
 
-- **Preview renders the FINAL post, not the initial editor pass** (2026-09-29 pm). `reconstructPost` in `render-preview.ts` was reading `debug.edited.post` when the pipeline bailed to human review, so previews rendered a stale post that disagreed with the FINAL summary — the root cause of "cover lost its orange highlight" and "three text slides in a row before follow" on the Suleyman preview. Added `debug.finalPost` + `debug.finalCaption` as the single canonical snapshot, written at both bail and ship. Reconstruction prefers `finalPost` → `rounds[last].post` → `edited.post`. Summary formatter now prints QUOTE / NOTE / NUMBER NOTE / SECOND NUMBER / SECOND NOTE / QUOTE BY and each slide's classified kind, so this class of bug can't hide again.
-- **`past_statement_reference` HARD code check.** Catches "earlier writing/wrote/said/argued/warned", "has long argued", "previously said", "in an earlier essay/post/statement", "long-standing position/stance". Confirmed removed the Suleyman "earlier writing on model welfare" clause on the re-run.
-- **`sequence_incomplete` HARD code check.** Scans slides for `<ordinal> <noun>` patterns (first / second / third + noun). Flags missing beats and out-of-order sequences. Deny-list on common non-sequence nouns (time, place, half, quarter, party, floor, grade, class) prevents "for the first time in a decade" false-firing.
-- **Relevance-based source trimming.** Each source's paragraphs scored by keyword overlap with THE NEWS + THE STORY + TERMS; kept in original order up to the per-source cap (default 12K chars, env `HELIOS_V2_MAX_SOURCE_CHARS`). A quoted phrase in paragraph 40 of a 50-paragraph essay now survives.
-- **Cost cuts.** Shared cached prefixes on Writer / Editor / Caption / Fact-checker. Caption + Editor length-only repairs on Haiku 4.5 (env `HELIOS_V2_CAPTION_MODEL`, `HELIOS_V2_REPAIR_EDITOR_MODEL`).
-- **Image step moved to run AFTER the fact-check + repair loop settles.** Photos see the final, fully-repaired post; the fact-checker no longer sees `IMAGES CHOSEN:`.
-- **Post-PASS soft-repair loop** (up to 6 Editor / Caption passes to clear surviving `char_limit` / `highlight_substring` / `rhythm` errors after fact-check PASS). 220-char body gate not loosened.
-- **`parseCaption` strips anything past "Source:"** so Haiku post-Source deliberation stops inflating caption code-checks.
-- **`"Unlike X, Y"` and `"not X, it's Y"` invented-contrast framings added to `BANNED_ALWAYS`.**
-- **Editor / Writer / Caption fix instructions**: "If a flag says a comparison or contrast isn't supported, cut it. Don't reword it."
+- **Content-aware OUTLINE + kind lock (2026-09-29 late second pass).** OUTLINE lines now carry the actual short content for non-text kinds (landing HEADLINE + NOTE, verbatim quote + speaker, stat number + note). `validateOutline` rejects any kind whose content already busts a limit (a 97-char landing NOTE fails at OUTLINE time, not later after the Editor demotes to text and breaks rhythm — the Gottheimer regression). After OUTLINE approval, `outline_kind_mismatch` is HARD both in-round (Editor sees it as a CHECK ERROR and restores the kind) and at the final gate. Length errors on prose are fixed by cutting words, never by demoting the kind.
+- **Cover subject scans ALL of THE NEWS.** Prior first-sentence-only cut broke on "U.S. Rep. Josh Gottheimer …" (the "U.S." period truncated the extracted first sentence and Gottheimer never entered the picker). No abbreviation list needed — THE NEWS is a one-line summary. Also strips parenthetical suffix ("Josh Gottheimer (D-NJ-5)" → "Josh Gottheimer") so the Wikidata resolver matches.
+- **Story-slide photos: PEOPLE ONLY.** No orgs, no bills, no products. Prior code requested Wikidata pictures for "China FIREWALL Act". `buildPhotoRequests` filters story slides to TERMS persons; Writer's IMAGE line only wins when it also names a TERMS person.
+- **`isPersonTerm` accepts country/agency-prefixed roles.** "U.S. Congressman", "British Prime Minister", "California Governor" — role appears within first 30 chars of description, and rejects "signed by/from/of a governor" so "Executive order" stays classified as a document.
+- **Fact-checker prompt: TERMS gloss allowed.** A slide's gloss that matches its TERMS entry passes fact-check — TERMS is the reporter's plain-language explanation for readers. Flag only when the gloss exceeds TERMS or contradicts the sources. Reverts the Gottheimer BIG flag on the open-weight gloss.
+- **Cover arrow position locked from design-v1 fixture** (`runs/design-v1-fixture-{no,with}-photos/preview/slide-00.png`). `.helios-cover__chevron` at `right: 96px; bottom: 60px; font-size: 60px`. `tests/social-v2-cover-arrow-lock.test.ts` fails if any of those coordinates or the position/color rules move. Cover template otherwise untouched.
+- **Cover-fit unreachable-server FAILS loudly on live runs.** Only `opts.skip = true` (unit tests) is a silent bypass. Summary now says plainly "Cover-fit check: ran, ok" / "ran, FAILED — <reason>" / "skipped (env not set or pipeline bailed early)".
+- **Cover char_limit HARD.** Covers over 90 chars block the run at the code-check gate — the Editor can't ship a cover that doesn't fit, no matter how many soft-repair passes the pipeline still has. `countCoverChars` is the canonical counter, used everywhere.
+- **Outline-before-prose (2026-09-29 latest).** Writer prompt now opens with `OUTLINE:` (one line per story slide: `SLIDE N: <kind> — <beat>`, then blank, then COVER OPTIONS + slides + FOLLOW). Parser extracts the OUTLINE. `validateOutline` checks slide count, rhythm, variety, and valid kinds. On failure the Writer is re-called once with the OUTLINE errors as CHECK ERRORS — the prose is discarded until the OUTLINE clears. Once valid, `debug.approvedOutline = writerPost.outline`. `checkOutlineMatch` at the final gate compares final prose kinds against the approved OUTLINE.
+- **Reporter narrow-to-one retry.** On SINGLE STORY: No, the Reporter is re-called with `narrow.previousBriefRaw` + `narrow.reason` and instructed to isolate one main event. Only if the second pass still can't narrow does the pipeline bail to human review. Removed `HELIOS_V2_ALLOW_MULTI_STORY`.
+- **Dates matched, not skipped in `number_trace`.** "September 16" is now extracted as its own token and verified against sources — the Suleyman run's Writer-invented date would now fail. Comma-grouped thousands ("1,200") still preserved as one token.
+- **`checkQuotes` exact-punctuation.** Dash equivalence removed from slide QUOTE matching. Comma / hyphen equivalence still lives in brief-integrity (STORY-time), not on slide-time QUOTE lines. If the essay writes "believes X - that Y" (spaced hyphens), the slide must too.
+- **`past_statement_reference` reverted to the original 6 patterns.** The 3 experimental additions ("its public position is X", "public position is …", "its constitution says Y") false-positive on legitimate current-news content ("its public position on climate is X"). Semantic prior-work detection is the fact-checker's job.
+- **Cover subject prefers named PERSON over ORG.** No writer-override, no longest-TERMS heuristic, no proper-noun fallback outside TERMS. If a person is named in the first sentence of THE NEWS, they win regardless of position. An org wins only when no person appears. Fixes the "Google Labs logo on the cover" risk.
+- **`isPersonTerm` requires the description to LEAD with the role.** Fixed Newsom-run FALSE where TERM "Executive order" ("A directive signed by a governor or president…") was classified as a person.
+- **`highlight_substring` check now scans BIG NUMBER + NUMBER NOTE + SECOND NUMBER + SECOND NOTE** as well as HEADLINE / BODY / QUOTE / NOTE. Fixes Suleyman-run FALSE on SLIDE 9 HIGHLIGHT="~1,200".
+- **Cover text never breaks mid-word.** CSS `word-break: normal; overflow-wrap: normal; hyphens: none;` on `.helios-cover__headline`. Fixes "UNCONTROLLABL/E" split. Cover template otherwise untouched.
+- **Ship-path photo guard.** Every placed image's storageUrl must appear on some `slide.photoUrl` after the adapter. If any placed image is lost, the run bails.
+- **Verification checks use FULL fetched text.** Fact-checker LLM prompt, `bailToHumanReview` defensive re-check, `checkNumberTrace`, `checkQuotes`, `checkBriefIntegrity` — all see full sources. Trimming is only for stage-input prompts.
+- **brief-integrity normalizeForMatch** strips trailing punctuation and treats comma-space as equivalent to spaced-hyphen. Fixes Suleyman "hall of mirrors." vs essay "hall of mirrors ".
+- **Preview renders the FINAL post + attaches placed photos.** `debug.finalPost` + `debug.finalCaption`; `debug.imageStep.selected` persists `storageUrl` + `credit` + `isPortrait`; `reconstructPost` rebuilds the `Map<SlideKey, SelectedImage>`. Guards fail loud if photos disappear.
+- **Editor + Writer scratchpad control.** Both prompts open with "Begin your response with COVER: / OUTLINE: on the first line — reasoning goes AFTER FOLLOW: in EDIT NOTES."
+- **Editor rhythm-repair rule.** Editor prompt forbids reordering slides for rhythm — must change kind or merge.
+- **Writer + Editor copy-quality tightening.** Argument sentences must stay attributed; no invented editorial adjectives; truncated quotes use `...` not a period; glosses only from TERMS.
+- **From-brief cost display split.** Summary + CLI show "$X live + $Y stubbed = $total".
 
 ## Costs
 
-Roughly $0.60–$0.65 per run right now — Suleyman `--from-brief` on 2026-09-29T16-40-07 cost $0.6481, fresh Reporter Suleyman on 2026-09-29T16-36-21 cost $0.5883. Target still $0.25–0.35 after the cost cuts plus the Batch API. `$1.50` cap per post stays. Soft-repair adds a small variable cost tracked in `pipeline_v2_debug.softRepair.{runs, costUsd}` and `softRepair.reFactCheck.usage.approxCostUsd`.
+**Monthly target: ~$20–40** (Tommy, 2026-09-29 late). Daily job produces 1–2 finished posts, not a top-10 batch, so per-day spend runs $0.60–$1.50 and the monthly total lands well under $50 at 30 posts/month. The $1.50 per-post cap and the ~$1.50 autonomous-work ceiling (CLAUDE.md Rule 1) stay unchanged. Per-run expected cost is $0.60–$0.85 today (Writer + Editor + fact-checker + optional field repairs); tighter prompts and cache hits should pull that to $0.40–$0.60 without a Batch API.
+
+**Batch API is optional, not planned.** At 1–2 posts/day the batch discount (~50%) doesn't matter and the extra latency (up to 24h) hurts editorial control. Revisit only if the daily volume grows beyond ~5 posts/day.
+
+**Live spend tally (2026-09-29):** $8.18 today across all runs. Agent-driven since $5 cap reset: **$0.65 / $5.00** (Gottheimer live run 18-49-26 = $0.6509; image-step-only reruns = $0.00 cache hits). Remaining under cap: **$4.35**.
 
 ## Later
 
-- The daily top-10 job: Jev ranks the stories, and the Batch API runs them at half price.
+- **Story selection (moved up 2026-09-29 late — priority above the Batch API):** Jev ranks candidate stories daily; thin-story rejection at ingest so the pipeline never spends a Writer call on a story it can't support. The 1–2/day cadence makes selection quality the biggest lever on both cost and copy quality.
+- **Grading pass:** generate 3–4 candidate stories / drafts per day, auto-grade them, surface the top 1–2 for review. Observe a few days, then tune. Complements story selection: catches drafts that came out weak even when the story was viable.
+- **The daily top-10 job (deferred):** was "Jev ranks the stories, and the Batch API runs them at half price." Not planned now; kept as an option for higher-volume days.
+- Keep the one-off 5-story test batch for regression checks after prompt / rule changes.
 - A manual photo picker in the review screen.
-- The scraper prompt (rejecting thin stories at ingestion, before they reach the pipeline).
+- The scraper prompt (rejecting thin stories at ingestion).
 
 ## Next step
 
-Fix the Writer's number invention (Open #1). It's the most concrete failure blocking a shipped run: Suleyman `--from-brief` failed on "200" and "16" that no source contains, and `number_trace` catching them at the gate isn't enough because two repair rounds still didn't remove them. Trace where the Writer got those digits (prompt? memory? source paraphrase?) and either (a) forbid the Writer from emitting any digit not present in the brief's source texts, or (b) feed each `number_trace` hit back into the Editor's CHECK ERRORS with the specific missing digit named so the Editor knows exactly what to cut. Then re-run Suleyman `--from-brief --render-preview --no-persist` and confirm number_trace stays empty on the FINAL post.
+Live single-story run to prove the branch, using article `43a705f5` (Google Gemini Live Avatar) or another product release with an official announcement page. Confirm end-to-end: OUTLINE clears validation, SINGLE STORY: yes, fact-checker sees full sources, a cover photo lands, the FINAL preview renders with the photo + credit line. Wait for Tommy's cost-estimate go-ahead before running.
