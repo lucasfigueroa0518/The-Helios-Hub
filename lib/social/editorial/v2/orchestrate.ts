@@ -22,13 +22,15 @@ import { runFactChecker as defaultRunFactChecker, type FactCheckerInput, type Fa
 import { runReporter as defaultRunReporter, type ReporterInput, type ReporterOutput } from './reporter';
 import { runWriter as defaultRunWriter, type WriterInput, type WriterOutput, type FetchedSource } from './writer';
 import {
-  runFieldRepair,
+  runFieldRepair as defaultRunFieldRepair,
   inferFieldFromMessage,
   extractLimitFromMessage,
   extractFieldText,
   applyFieldTo,
   summarizeAdjacent,
   pickSourceExcerpt,
+  type FieldRepairInput,
+  type FieldRepairOutput,
 } from './field-repair';
 import { fetchPage as defaultFetchPage, type FetchPageResult } from './tools/fetch-page';
 import {
@@ -71,6 +73,9 @@ export type OrchestrateDeps = {
   fetchPage: (url: string) => Promise<FetchPageResult>;
   validateBriefImages: (brief: Brief) => Promise<ValidationResult>;
   runImageStep: (post: ParsedPost, brief: Brief, deps?: ImageStepDeps) => Promise<ImageStepResult>;
+  /** Field-scoped Sonnet repair (see field-repair.ts). Overrideable so tests
+   * can stub char_limit repairs without a live Claude call. */
+  runFieldRepair: (input: FieldRepairInput) => Promise<FieldRepairOutput>;
   persistDebugAndCompose: typeof defaultPersistDebugAndCompose;
 };
 
@@ -83,6 +88,7 @@ const defaultDeps: OrchestrateDeps = {
   fetchPage: defaultFetchPage,
   validateBriefImages: defaultValidateBriefImages,
   runImageStep: defaultRunImageStep,
+  runFieldRepair: defaultRunFieldRepair,
   persistDebugAndCompose: defaultPersistDebugAndCompose,
 };
 
@@ -886,7 +892,7 @@ export async function runCreatorPipeline(
             ? summarizeAdjacent(editorPost, err.slidePosition, field)
             : undefined;
           const src = pickSourceExcerpt(currentText, sourceTexts, 800);
-          const fr = await runFieldRepair({
+          const fr = await deps.runFieldRepair({
             fieldLabel: label,
             currentText,
             limit,

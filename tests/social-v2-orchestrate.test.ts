@@ -4,6 +4,7 @@ import test, { describe } from 'node:test';
 import { editorModeFor, injectIntoSlide3Body, runCreatorPipeline, type OrchestrateDeps } from '@/lib/social/editorial/v2/orchestrate';
 import type { CheckError } from '@/lib/social/editorial/v2/code-checks';
 import type { FactCheckerOutput } from '@/lib/social/editorial/v2/fact-checker';
+import type { FieldRepairInput, FieldRepairOutput } from '@/lib/social/editorial/v2/field-repair';
 import { parseBrief, parseEditedPost } from '@/lib/social/editorial/v2/parse';
 
 /**
@@ -132,6 +133,48 @@ const SOURCE_TEXT = 'Full source article body about Anthropic and the 26% of R&D
 
 function stageUsage(cost = 0.05) {
   return { inputTokens: 100, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 50, approxCostUsd: cost };
+}
+
+/**
+ * Test-only field-repair tracker. Records every call the pipeline makes to
+ * runFieldRepair and lets the test decide what "newText" to hand back per
+ * call. Simulates "repair still fails" (return the same over-limit text) or
+ * "repair introduces a banned phrase" (return text with the banned literal).
+ */
+type FieldRepairStub = {
+  fn: (input: FieldRepairInput) => Promise<FieldRepairOutput>;
+  calls: FieldRepairInput[];
+};
+
+function makeFieldRepairStub(
+  pick: (input: FieldRepairInput, callIndex: number) => string,
+): FieldRepairStub {
+  const calls: FieldRepairInput[] = [];
+  const fn = async (input: FieldRepairInput): Promise<FieldRepairOutput> => {
+    const callIndex = calls.length;
+    calls.push(input);
+    const newText = pick(input, callIndex);
+    return {
+      newText,
+      stillOver: newText.length > input.limit,
+      raw: newText,
+      usage: { inputTokens: 20, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 10, approxCostUsd: 0 },
+    };
+  };
+  return { fn, calls };
+}
+
+/**
+ * Build a ParsedPost from EDITED_RAW with SLIDE 2 BODY overridden to a
+ * user-supplied string. Used to seed the char_limit path in the tests
+ * below: pass a >220 char string to trip char_limit, or a valid
+ * ≤220 string that also carries a hard-error trigger (banned phrase,
+ * unsourced number) to test soft-repair verification bails.
+ */
+function makeOverPost(bodyText: string) {
+  const p = parseEditedPost(EDITED_RAW);
+  (p.slides[0]!).body = bodyText;
+  return p;
 }
 
 function buildDeps(override: Partial<OrchestrateDeps> = {}): OrchestrateDeps {
@@ -458,34 +501,101 @@ describe('runCreatorPipeline — fact-check FLAGGED loop', () => {
 });
 
 describe('runCreatorPipeline — code-check repair budget', () => {
-  // Retired 2026-09-30: char_limit errors now route to `runFieldRepair`
-  // (field-scoped Sonnet, per-field small call), NOT through `runEditor`
-  // in repair mode. `runFieldRepair` is imported directly by orchestrate.ts
-  // and is not part of OrchestrateDeps, so it can't be stubbed from a
-  // test file. Exercising this path would require a live Claude API call,
-  // which is forbidden by the project's testing rules. The original test
-  // premise ("first-pass Editor produces a body over 220; every retry
-  // still fails; count total editor calls") no longer maps to the new
-  // wiring — the in-round retries are field-repair calls, not editor
-  // calls. Post-PASS soft-repair still uses runEditor, but exercising
-  // it in isolation requires a way past the in-round field-repair phase
-  // that no test-file-only edit can provide.
-  test.skip('in-round tries + post-PASS soft-repair loop; then bails when both run out', () => {});
+  // 2026-09-30 rewire: char_limit errors now route to `runFieldRepair`
+  // (field-scoped Sonnet, per-field small call) inside the round; the
+  // post-PASS soft-repair loop still uses `runEditor`. `runFieldRepair`
+  // is now injectable via OrchestrateDeps so this test can stub both
+  // ends without a live Claude call.
+  test('in-round tries + post-PASS soft-repair loop; then bails when both run out', async () => {
+    // First-pass Editor produces a body over 220; every field-repair try
+    // returns the SAME over-limit text (simulating a repair that can't
+    // trim enough); Fact-checker returns PASS so the post-PASS soft-repair
+    // loop runs; the Editor in soft-repair mode ALSO returns the same
+    // over-limit post 6 times. Final gate then bails to needs_human_review.
+    const overBody = 'x'.repeat(292); // 72 over the 220 body limit.
+    const overPost = makeOverPost(overBody);
+    let editorCall = 0;
+    let capturedRepairs: Array<{ stage: string; reason: string }> = [];
+    // Field-repair keeps returning the SAME over-limit newText — simulates
+    // "Sonnet can't cut enough to fit even in a field-scoped call."
+    const fr = makeFieldRepairStub(() => overBody);
+    const result = await runCreatorPipeline(
+      ROW,
+      {},
+      buildDeps({
+        runEditor: async () => {
+          editorCall++;
+          return { post: overPost, raw: EDITED_RAW, editNotes: null, stopReasons: ["end_turn"], usage: stageUsage(0.05) };
+        },
+        runFieldRepair: fr.fn,
+        persistDebugAndCompose: async (_id, debug) => {
+          capturedRepairs = debug.repairs.map((r) => ({ stage: r.stage, reason: r.reason }));
+        },
+      }),
+    );
+    assert.equal(result.status, 'needs_human_review');
+    // Editor calls: 1 initial + 2 in-round non-length repair tries
+    // (highlight_substring + term_unexplained also fire on overPost) +
+    // 6 post-PASS soft-repair tries = 9 total. (char_limit itself no
+    // longer goes through runEditor — it uses runFieldRepair.)
+    assert.equal(editorCall, 9);
+    // Field-repair calls: 2 in-round tries × 1 round (fact-check PASSes
+    // so we don't reach round 2). Total 2.
+    assert.equal(fr.calls.length, 2);
+    assert.equal(fr.calls[0]!.fieldLabel, 'SLIDE 2 BODY');
+    assert.equal(fr.calls[0]!.limit, 220);
+    assert.equal(fr.calls[0]!.currentText.length, 292);
+    // Post-PASS soft-repair tries appear in the debug repair log.
+    const softTries = capturedRepairs.filter((r) => /post-PASS try/.test(r.reason));
+    assert.equal(softTries.length, 6);
+    assert.match(softTries[0]!.reason, /post-PASS try 1\/6/);
+    assert.match(softTries[5]!.reason, /post-PASS try 6\/6/);
+    // Field-repair entries also show up.
+    const fieldTries = capturedRepairs.filter((r) => /field-repair SLIDE 2 BODY/.test(r.reason));
+    assert.equal(fieldTries.length, 2);
+    assert.match(fieldTries[0]!.reason, /292→292 chars \(limit 220\)/);
+  });
 });
 
 describe('runCreatorPipeline — soft errors continue past code checks, block at final gate', () => {
-  // Retired 2026-09-30: this test forces an over-limit BODY (char_limit)
-  // to survive to the final gate by stubbing `runEditor` to return the
-  // same over-limit post every time. Under the new wiring, char_limit
-  // errors route to `runFieldRepair` (not `runEditor`) in the in-round
-  // repair phase. `runFieldRepair` is not part of OrchestrateDeps and
-  // can't be stubbed from a test file, so exercising this path would
-  // require a live Claude API call. The behavior it verifies (soft
-  // errors don't stop the round; final gate bails to needs_human_review
-  // with the surviving errors listed) is still true, but reaching it
-  // through the pipeline requires code-under-test changes outside this
-  // test file's scope.
-  test.skip('char_limit surviving all rounds → Fact-checker still runs → final gate bails as needs_human_review with the length errors listed', () => {});
+  // 2026-09-30 rewire: char_limit routes to `runFieldRepair` in-round;
+  // the soft-repair loop still uses `runEditor`. Both are stubbed here
+  // to keep the same over-limit BODY across every try so the final gate
+  // fires with the length error listed.
+  test('char_limit surviving all rounds → Fact-checker still runs → final gate bails as needs_human_review with the length errors listed', async () => {
+    // Editor keeps returning a post whose SLIDE 2 body is over 220. That's a
+    // SOFT error (char_limit). Round loop must not stop — Fact-checker still
+    // runs. Fact-checker returns PASS. Final gate then bails to
+    // needs_human_review with the char_limit error listed.
+    const overBody = 'x'.repeat(292); // 72 over the 220 limit
+    const overPost = makeOverPost(overBody);
+    let factCheckCalls = 0;
+    let bailReason: string | undefined;
+    const fr = makeFieldRepairStub(() => overBody);
+    const result = await runCreatorPipeline(
+      ROW,
+      {},
+      buildDeps({
+        runEditor: async () => ({ post: overPost, raw: EDITED_RAW, editNotes: null, stopReasons: ["end_turn"], usage: stageUsage(0.05) }),
+        runFieldRepair: fr.fn,
+        runFactChecker: async () => {
+          factCheckCalls++;
+          return { result: { verdict: 'PASS', flags: [] }, raw: 'VERDICT: PASS', stopReasons: ["end_turn"], usage: stageUsage(0.05) };
+        },
+        persistDebugAndCompose: async (_id, debug, cols) => {
+          if (cols.composeStatus === 'needs_human_review') bailReason = debug.outcome.reason;
+        },
+      }),
+    );
+    assert.equal(result.status, 'needs_human_review');
+    // Fact-checker MUST have run at least once — soft errors don't stop the round.
+    assert.ok(factCheckCalls >= 1, `expected fact-check to run despite char_limit; ran ${factCheckCalls} times`);
+    // Field-repair MUST have been tried in-round.
+    assert.ok(fr.calls.length >= 1, `expected at least one field-repair call; ran ${fr.calls.length} times`);
+    // Bail reason should name the surviving char_limit failure.
+    assert.match(bailReason ?? '', /char_limit \/ highlight_substring errors survived/);
+    assert.match(bailReason ?? '', /SLIDE 2 BODY \(292 characters, limit 220\)/);
+  });
 
   test('hard error stops the run, and the Fact-checker runs ONCE for review context', async () => {
     // Editor returns a post with a banned voice phrase ("moving forward").
@@ -666,24 +776,180 @@ describe('runCreatorPipeline — REVIEWER NOTES entry point', () => {
  * output went straight to render unverified.
  */
 describe('runCreatorPipeline — soft-repair verification', () => {
-  // Retired 2026-09-30: the four tests below all seed the soft-repair
-  // loop by stubbing `runEditor` to return an over-limit BODY (char_limit)
-  // for calls 1-3, then a "repaired" post from call 4 on. Under the new
-  // wiring, char_limit errors route to `runFieldRepair` (field-scoped
-  // Sonnet) in the in-round phase — not `runEditor`. `runFieldRepair` is
-  // imported directly by orchestrate.ts and is not part of OrchestrateDeps,
-  // so it can't be stubbed from a test file, and letting it run would hit
-  // the live Claude API (forbidden). The soft-repair verification behavior
-  // itself (hard-error trap after each iteration, targeted re-fact-check,
-  // FLAGGED-on-re-check bail) still exists in the code, but the fixture
-  // seam these tests used to reach it has been closed.
-  test.skip('soft-repair introducing a banned phrase bails immediately', () => {});
+  // 2026-09-30 rewire: char_limit routes to `runFieldRepair` in-round,
+  // then the post-PASS soft-repair loop calls `runEditor`. Both are
+  // stubbable via OrchestrateDeps. Pattern in the four tests below:
+  //   • Editor's first pass returns an over-limit BODY (SLIDE 2, 292 chars).
+  //   • `runFieldRepair` returns the SAME over-limit text so char_limit
+  //     survives the in-round budget (2 tries × 1 round; fact-check PASSes
+  //     so we never enter round 2).
+  //   • Fact-checker returns PASS on round 1 so the pipeline enters the
+  //     post-PASS soft-repair loop with the char_limit still open.
+  //   • `runEditor` on the soft-repair pass returns the "bad" post the
+  //     test wants to verify against (banned phrase, number-trace miss,
+  //     valid trim, etc.).
+  const overBody = 'x'.repeat(292);
 
-  test.skip('soft-repair introducing a number-trace miss bails immediately', () => {});
+  // Discriminator: only the post-PASS SOFT-REPAIR Editor call passes
+  // `checkErrors` containing a `char_limit` entry. The initial pass sends
+  // `checkErrors` undefined; the in-round non-length repair sends only
+  // non-length errors (e.g. highlight_substring, term_unexplained). We
+  // key off char_limit presence so the "bad" post only gets returned
+  // once we've actually entered the soft-repair loop.
+  const isSoftRepairEditorCall = (input: { checkErrors?: readonly CheckError[] }): boolean =>
+    !!input.checkErrors?.some((e) => e.kind === 'char_limit');
 
-  test.skip('soft-repair that rewrites a slide triggers a targeted fact-check on only that slide', () => {});
+  test('soft-repair introducing a banned phrase bails immediately', async () => {
+    const overPost = makeOverPost(overBody);
+    // Soft-repair returns a body with the banned "moving forward" phrase.
+    const badRepairPost = parseEditedPost(EDITED_RAW);
+    (badRepairPost.slides[0]!).body = 'Moving forward, Anthropic told reporters Claude writes the code its researchers ship.';
+    let bailReason: string | undefined;
+    const fr = makeFieldRepairStub(() => overBody);
+    const result = await runCreatorPipeline(
+      ROW,
+      {},
+      buildDeps({
+        runEditor: async (input) => {
+          const post = isSoftRepairEditorCall(input) ? badRepairPost : overPost;
+          return { post, raw: EDITED_RAW, editNotes: null, stopReasons: ["end_turn"], usage: stageUsage(0.05) };
+        },
+        runFieldRepair: fr.fn,
+        persistDebugAndCompose: async (_id, debug) => {
+          bailReason = debug.outcome.reason;
+        },
+      }),
+    );
+    assert.equal(result.status, 'needs_human_review');
+    // Bail reason names soft-repair as the source of the introduced hard error.
+    assert.match(bailReason ?? '', /soft-repair introduced hard code-check error/);
+    // Field-repair was tried in-round before soft-repair even started.
+    assert.ok(fr.calls.length >= 1);
+  });
 
-  test.skip('targeted re-fact-check FLAGGED → human review', () => {});
+  test('soft-repair introducing a number-trace miss bails immediately', async () => {
+    const overPost = makeOverPost(overBody);
+    // Soft-repair introduces "52%" which is NOT in the fetched sources.
+    const badRepairPost = parseEditedPost(EDITED_RAW);
+    (badRepairPost.slides[0]!).body = 'Anthropic told reporters Claude now writes 52% of the code its researchers ship.';
+    let bailReason: string | undefined;
+    const fr = makeFieldRepairStub(() => overBody);
+    const result = await runCreatorPipeline(
+      ROW,
+      {},
+      buildDeps({
+        runEditor: async (input) => {
+          const post = isSoftRepairEditorCall(input) ? badRepairPost : overPost;
+          return { post, raw: EDITED_RAW, editNotes: null, stopReasons: ["end_turn"], usage: stageUsage(0.05) };
+        },
+        runFieldRepair: fr.fn,
+        persistDebugAndCompose: async (_id, debug) => {
+          bailReason = debug.outcome.reason;
+        },
+      }),
+    );
+    assert.equal(result.status, 'needs_human_review');
+    assert.match(bailReason ?? '', /soft-repair introduced hard code-check error/);
+    assert.match(bailReason ?? '', /"52%"/);
+  });
+
+  test('soft-repair that rewrites a slide triggers a targeted fact-check on only that slide', async () => {
+    const overPost = makeOverPost(overBody);
+    // Soft-repair returns a valid ≤220 char body — genuine repair.
+    const goodRepairPost = parseEditedPost(EDITED_RAW);
+    (goodRepairPost.slides[0]!).body = 'Anthropic told reporters Claude now writes 26% of the code its researchers ship, up from 1% in March.';
+    const capturedFactCheckPosts: string[] = [];
+    let capturedSoftRepair: unknown = null;
+    const fr = makeFieldRepairStub(() => overBody);
+    const result = await runCreatorPipeline(
+      ROW,
+      {},
+      buildDeps({
+        runEditor: async (input) => {
+          const post = isSoftRepairEditorCall(input) ? goodRepairPost : overPost;
+          return { post, raw: EDITED_RAW, editNotes: null, stopReasons: ["end_turn"], usage: stageUsage(0.05) };
+        },
+        runFieldRepair: fr.fn,
+        runFactChecker: async (input): Promise<FactCheckerOutput> => {
+          capturedFactCheckPosts.push(input.post);
+          return {
+            result: { verdict: 'PASS', flags: [] },
+            raw: 'VERDICT: PASS\n\nFLAGS:\n',
+            stopReasons: ["end_turn"],
+            usage: stageUsage(0.03),
+          };
+        },
+        persistDebugAndCompose: async (_id, debug) => {
+          capturedSoftRepair = debug.softRepair;
+        },
+      }),
+    );
+    assert.equal(result.status, 'shipped');
+    // Two fact-check calls: the initial round + the targeted re-check.
+    assert.equal(capturedFactCheckPosts.length, 2);
+    // The re-check POST contains only SLIDE 2 (the changed one).
+    const rePost = capturedFactCheckPosts[1]!;
+    assert.match(rePost, /SLIDE 2/);
+    assert.doesNotMatch(rePost, /SLIDE 3\b/);
+    assert.doesNotMatch(rePost, /SLIDE 4\b/);
+    const sr = capturedSoftRepair as { runs: number; costUsd: number; changedSlides: number[]; reFactCheck: unknown };
+    assert.ok(sr.runs >= 1);
+    assert.ok(sr.costUsd > 0);
+    assert.deepEqual(sr.changedSlides, [2]);
+    assert.ok(sr.reFactCheck);
+  });
+
+  test('targeted re-fact-check FLAGGED → human review', async () => {
+    const overPost = makeOverPost(overBody);
+    const goodRepairPost = parseEditedPost(EDITED_RAW);
+    (goodRepairPost.slides[0]!).body = 'Anthropic told reporters Claude now writes 26% of the code its researchers ship.';
+    let fcCall = 0;
+    let bailReason: string | undefined;
+    const fr = makeFieldRepairStub(() => overBody);
+    const result = await runCreatorPipeline(
+      ROW,
+      {},
+      buildDeps({
+        runEditor: async (input) => {
+          const post = isSoftRepairEditorCall(input) ? goodRepairPost : overPost;
+          return { post, raw: EDITED_RAW, editNotes: null, stopReasons: ["end_turn"], usage: stageUsage(0.05) };
+        },
+        runFieldRepair: fr.fn,
+        runFactChecker: async (): Promise<FactCheckerOutput> => {
+          fcCall++;
+          if (fcCall === 1) {
+            return {
+              result: { verdict: 'PASS', flags: [] },
+              raw: 'VERDICT: PASS\n\nFLAGS:\n',
+              stopReasons: ["end_turn"],
+              usage: stageUsage(0.03),
+            };
+          }
+          return {
+            result: {
+              verdict: 'FLAGGED',
+              flags: [{
+                where: 'SLIDE 2 / BODY',
+                text: 'Anthropic told reporters...',
+                problem: 'Dropped hedge — soft repair cut "says"',
+                sourcesSay: 'Anthropic SAYS Claude writes 26% ...',
+                size: 'SMALL',
+              }],
+            },
+            raw: 'VERDICT: FLAGGED\n\nFLAGS:\nWHERE: SLIDE 2 / BODY\n',
+            stopReasons: ["end_turn"],
+            usage: stageUsage(0.03),
+          };
+        },
+        persistDebugAndCompose: async (_id, debug) => {
+          bailReason = debug.outcome.reason;
+        },
+      }),
+    );
+    assert.equal(result.status, 'needs_human_review');
+    assert.match(bailReason ?? '', /soft-repair re-fact-check FLAGGED/);
+    assert.match(bailReason ?? '', /Dropped hedge/);
+  });
 
   test('when soft-repair changes nothing (loop exits on iteration 1), no re-fact-check runs', async () => {
     // Editor initial returns a clean post; soft-repair loop exits immediately.
