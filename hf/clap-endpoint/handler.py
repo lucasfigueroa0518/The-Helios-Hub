@@ -11,6 +11,10 @@ calls it with {"inputs": {...}}:
 
 Every vector is L2-normalized, so a dot product is the cosine similarity.
 
+The text tower's position table is 514. Longer captions are truncated to that.
+Without truncation the model 400s ("expanded size of the tensor (N) must match
+the existing size (514)") and the reel is left with no song.
+
 Audio longer than one window is cut into consecutive 10 s windows (the
 feature extractor's own length), each is embedded, and the mean is
 re-normalized. The stock processor would otherwise crop at random, and a
@@ -28,6 +32,8 @@ MODEL_ID = "laion/larger_clap_music_and_speech"
 SAMPLE_RATE = 48_000
 WINDOW_SECONDS = 10
 MAX_WINDOWS = 9
+# RoBERTa position embeddings on laion/larger_clap_music_and_speech.
+TEXT_POSITIONS = 514
 
 
 def _features(output) -> torch.Tensor:
@@ -45,6 +51,14 @@ def _normalize(vector: torch.Tensor) -> torch.Tensor:
     return vector / vector.norm(dim=-1, keepdim=True).clamp_min(1e-12)
 
 
+def _text_max_length(processor) -> int:
+    """Stay inside the position table. An unset tokenizer max is a huge sentinel."""
+    model_max = getattr(getattr(processor, "tokenizer", None), "model_max_length", None)
+    if isinstance(model_max, int) and 8 < model_max <= TEXT_POSITIONS:
+        return model_max
+    return TEXT_POSITIONS
+
+
 class EndpointHandler:
     def __init__(self, path: str = ""):
         # The endpoint passes its own repository path, which holds only this
@@ -57,7 +71,14 @@ class EndpointHandler:
     def __call__(self, data):
         inputs = data.get("inputs", data)
         if "texts" in inputs:
-            tokens = self.processor(text=list(inputs["texts"]), return_tensors="pt", padding=True)
+            max_length = _text_max_length(self.processor)
+            tokens = self.processor(
+                text=list(inputs["texts"]),
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+                max_length=max_length,
+            )
             features = _normalize(_features(self.model.get_text_features(**tokens)))
             return {"text_embeddings": features.tolist(), "model": MODEL_ID}
 

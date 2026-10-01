@@ -13,6 +13,10 @@ import { X } from 'lucide-react';
  * `track` plays a song alongside the video, synced from 0:00 (D-154): it
  * follows the video's play, pause, seek, and mute, at the given volumes
  * (0–1, the publish mix), so the preview sounds like the post.
+ *
+ * Seeking on every time update keeps a long preview in a seek forever, so the
+ * song looks attached and never plays. Seek only when the drift is real, and
+ * not again until that seek has had a moment to land.
  */
 export function ReelVideo({
   src,
@@ -45,29 +49,61 @@ export function ReelVideo({
     if (!video || !song || !track) return undefined;
     video.volume = track.videoVolume;
     song.volume = track.songVolume;
-    const align = () => {
-      if (Math.abs(song.currentTime - video.currentTime) > 0.25) song.currentTime = video.currentTime;
+
+    let seeking = false;
+    let seekTimer = 0;
+    const sync = (force: boolean) => {
+      if (video.paused || video.ended) {
+        song.pause();
+        return;
+      }
+      song.muted = video.muted;
+      // Setting currentTime before metadata throws and used to skip play() entirely.
+      if (song.readyState >= 1 && !seeking) {
+        const drift = Math.abs(song.currentTime - video.currentTime);
+        if (force || drift > 0.35) {
+          seeking = true;
+          try {
+            song.currentTime = video.currentTime;
+          } catch {
+            // Not seekable yet. loadedmetadata tries once more.
+          }
+          window.clearTimeout(seekTimer);
+          seekTimer = window.setTimeout(() => {
+            seeking = false;
+          }, 500);
+        }
+      }
+      if (song.paused) void song.play().catch(() => undefined);
     };
-    const play = () => {
-      song.currentTime = video.currentTime;
-      void song.play().catch(() => undefined);
-    };
-    const pause = () => song.pause();
-    const mute = () => {
+    const onPlay = () => sync(true);
+    const onPause = () => song.pause();
+    const onSeeked = () => sync(true);
+    const onTime = () => sync(false);
+    const onMute = () => {
       song.muted = video.muted;
     };
-    const events: Array<[string, () => void]> = [
-      ['play', play],
-      ['pause', pause],
-      ['ended', pause],
-      ['seeked', align],
-      ['timeupdate', align],
-      ['volumechange', mute],
-    ];
-    for (const [name, handler] of events) video.addEventListener(name, handler);
-    if (!video.paused) play();
+    const onSongReady = () => {
+      if (!video.paused && !video.ended) sync(true);
+    };
+
+    video.addEventListener('play', onPlay);
+    video.addEventListener('pause', onPause);
+    video.addEventListener('ended', onPause);
+    video.addEventListener('seeked', onSeeked);
+    video.addEventListener('timeupdate', onTime);
+    video.addEventListener('volumechange', onMute);
+    song.addEventListener('loadedmetadata', onSongReady);
+    if (!video.paused && !video.ended) sync(true);
     return () => {
-      for (const [name, handler] of events) video.removeEventListener(name, handler);
+      video.removeEventListener('play', onPlay);
+      video.removeEventListener('pause', onPause);
+      video.removeEventListener('ended', onPause);
+      video.removeEventListener('seeked', onSeeked);
+      video.removeEventListener('timeupdate', onTime);
+      video.removeEventListener('volumechange', onMute);
+      song.removeEventListener('loadedmetadata', onSongReady);
+      window.clearTimeout(seekTimer);
       song.pause();
     };
   }, [track]);
