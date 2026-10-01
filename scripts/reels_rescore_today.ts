@@ -2,10 +2,10 @@
  * Rescore the post ideas already on today's slate. Does not ingest or regroup,
  * and does not delete the slate it reads.
  *
- *   npx tsx --env-file=.env.local scripts/reels_rescore_today.ts
+ *   npx tsx --env-file=.env.local scripts/reels_rescore_today.ts [--top=6]
  *
- * When the new slate is stored, the new top 3 are queued for whole generation
- * (copy, frame, video, then the song the video job starts).
+ * When the new slate is stored, generation fills three reels that pass the
+ * copy gate. Locked reels already count. `--top=N` fills N passing reels.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -29,7 +29,7 @@ function log(message: string, fields: Record<string, unknown> = {}): void {
 
 async function main(): Promise<void> {
   const { closeDbPool, dbQuery } = await import('@/lib/db');
-  const { MONTHLY_WATCH_USD } = await import('@/lib/reels/config');
+  const { MONTHLY_WATCH_USD, PASSING_REELS_PER_NIGHT } = await import('@/lib/reels/config');
   const { createLiveJevRunner } = await import('@/lib/reels/jev/client');
   const { SCORING_PASS_1 } = await import('@/lib/reels/jev/questions/scoring-pass1');
   const { SCORING_PASS_2 } = await import('@/lib/reels/jev/questions/scoring-pass2');
@@ -37,7 +37,11 @@ async function main(): Promise<void> {
   const { finishRun, monthToDateUsd, pendingRun, runCostUsd } = await import('@/lib/reels/repository');
   const { nyDateKey } = await import('@/lib/reels/scoring/decide');
   const { latestSlateForDate, loadSlateOrigins } = await import('@/lib/reels/scoring/store');
-  const { requestFinish } = await import('@/lib/reels/visual/finish');
+  const { generatePassingReels } = await import('@/lib/reels/pipeline/slots');
+
+  const topArg = process.argv.find((arg) => arg.startsWith('--top='));
+  const top = topArg ? Number(topArg.slice('--top='.length)) : null;
+  if (top != null && (!Number.isInteger(top) || top < 1)) throw new Error(`--top needs a whole number above 0, not ${topArg}.`);
 
   const today = nyDateKey(new Date());
   const spent = await monthToDateUsd();
@@ -82,24 +86,27 @@ async function main(): Promise<void> {
   try {
     const summary = await rescoreIdeas(run.id, today, ideas, jev);
 
-    const finishes: string[] = [];
-    for (const postIdeaId of summary.selectedIds) {
-      const result = await requestFinish(postIdeaId, summary.slateId);
-      finishes.push(`${postIdeaId}: ${result.status}`);
-      log('finish_queued', { postIdeaId, slateId: summary.slateId, status: result.status, note: result.note });
-    }
+    const count = top ?? PASSING_REELS_PER_NIGHT;
+    const generation = await generatePassingReels({
+      runId: run.id,
+      slateId: summary.slateId,
+      count,
+      jev,
+    });
+    log('generation', generation);
 
     const usd = await runCostUsd(run.id);
     const note = [
       `Rescored ${summary.scored} ideas on ${SCORING_PASS_1.version} / ${SCORING_PASS_2.version}.`,
-      `Queued whole generation for ${summary.selectedIds.length} new top ideas.`,
+      `Filled ${generation.filled.length} of ${count} passing reels.`,
       summary.failed > 0 ? `${summary.failed} idea(s) failed to score and stay on the earlier slate only.` : undefined,
+      generation.failures.length > 0 ? generation.failures.join('; ') : undefined,
     ]
       .filter(Boolean)
       .join(' ');
     await finishRun(
       run.id,
-      summary.failed > 0 ? 'partial' : 'ok',
+      summary.failed > 0 || generation.filled.length < count || generation.failures.length > 0 ? 'partial' : 'ok',
       [],
       {
         scored: summary.scored,
@@ -109,7 +116,7 @@ async function main(): Promise<void> {
       },
       note,
     );
-    log('done', { ...summary, usd, finishes });
+    log('done', { ...summary, usd, filled: generation.filled });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const usd = await runCostUsd(run.id).catch(() => 0);

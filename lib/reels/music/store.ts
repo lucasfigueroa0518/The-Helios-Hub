@@ -440,11 +440,6 @@ export async function setSetting(key: string, value: unknown): Promise<void> {
   );
 }
 
-/** D-156: off unless Lucas turns it on. */
-export async function autoPublishOn(): Promise<boolean> {
-  return (await getSetting<boolean>('auto_publish')) === true;
-}
-
 /** MUS-V2 / D-159. Null until Lucas sets the mix from the test publishes. */
 export async function publishMix(): Promise<MixSetting | null> {
   const mix = await getSetting<MixSetting>('mix');

@@ -64,22 +64,53 @@ function nonNeg(value: unknown): number {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-export function anthropicFamilyFromModelId(modelId: string): 'haiku' | 'sonnet' {
-  return modelId.toLowerCase().includes('haiku') ? 'haiku' : 'sonnet';
+/** Opus 5.5 list price, 2026-09-22. Cache read is 0.05× input, not Sonnet's 0.1×. */
+export const OPUS_PRICE_SNAPSHOT = {
+  inputPerMtokUsd: 4,
+  outputPerMtokUsd: 20,
+  cacheReadMultiplier: 0.05,
+} as const;
+
+export function anthropicFamilyFromModelId(modelId: string): 'haiku' | 'sonnet' | 'opus' {
+  const id = modelId.toLowerCase();
+  if (id.includes('haiku')) return 'haiku';
+  if (id.includes('opus')) return 'opus';
+  return 'sonnet';
 }
 
 export function ratesForModel(modelId: string, asOf: Date = new Date()) {
-  if (anthropicFamilyFromModelId(modelId) === 'haiku') {
+  const family = anthropicFamilyFromModelId(modelId);
+  if (family === 'haiku') {
     return {
       inputPerMtokUsd: HAIKU_PRICE_SNAPSHOT.inputPerMtokUsd,
       outputPerMtokUsd: HAIKU_PRICE_SNAPSHOT.outputPerMtokUsd,
     };
+  }
+  if (family === 'opus') {
+    return {
+      inputPerMtokUsd: OPUS_PRICE_SNAPSHOT.inputPerMtokUsd,
+      outputPerMtokUsd: OPUS_PRICE_SNAPSHOT.outputPerMtokUsd,
+    };
+  }
+  if (modelId.toLowerCase().includes('sonnet-5-5')) {
+    return { inputPerMtokUsd: 2, outputPerMtokUsd: 10 };
   }
   const snapshot = selectPriceSnapshot(asOf);
   return {
     inputPerMtokUsd: snapshot.inputPerMtokUsd,
     outputPerMtokUsd: snapshot.outputPerMtokUsd,
   };
+}
+
+/**
+ * Cache reads are 0.1× base input. Opus 5.5 is the exception at 0.05×.
+ * Older Opus ids stay on 0.1×. Fable 5.1 and Mythos 5.1 are 0.025×, and we
+ * do not price those families here.
+ */
+function cacheReadMultiplier(modelId: string): number {
+  const id = modelId.toLowerCase();
+  if (id.includes('opus-5-5') || id.includes('opus-5.5')) return OPUS_PRICE_SNAPSHOT.cacheReadMultiplier;
+  return DRAFTING_PRICE_SNAPSHOT.cacheReadMultiplier;
 }
 
 export function emptyUsageBuckets(): AnthropicUsageBuckets {
@@ -149,7 +180,7 @@ export function priceAnthropicUsage(
   const uncached = tokenUsd(buckets.uncachedInputTokens, input);
   const cacheRead = tokenUsd(
     buckets.cacheReadInputTokens,
-    input * DRAFTING_PRICE_SNAPSHOT.cacheReadMultiplier,
+    input * cacheReadMultiplier(options.modelId),
   );
   const cache5m = tokenUsd(
     buckets.cacheCreation5mInputTokens,

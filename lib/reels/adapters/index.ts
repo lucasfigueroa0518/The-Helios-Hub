@@ -4,6 +4,7 @@ import { hackerNews } from '@/lib/reels/adapters/hacker-news';
 import { hfDailyPapers } from '@/lib/reels/adapters/hf-papers';
 import { markdownChangelogAdapter } from '@/lib/reels/adapters/markdown-changelog';
 import { rssAdapter } from '@/lib/reels/adapters/rss-feed';
+import { tldr } from '@/lib/reels/adapters/tldr';
 import { claudeWebSearch } from '@/lib/reels/adapters/web-search';
 import type { Adapter } from '@/lib/reels/types';
 
@@ -49,19 +50,14 @@ export const ADAPTERS: Adapter[] = [
     feedUrl: 'https://cursor.com/changelog/rss.xml',
   }),
   // A6 — curated dev newsletters
-  rssAdapter({
-    id: 'tldr',
-    name: 'TLDR',
-    type: 'A6',
-    bucket: 'A',
-    feedUrl: 'https://tldr.tech/api/rss/tech',
-  }),
+  tldr,
   rssAdapter({
     id: 'console-dev',
     name: 'Console.dev',
     type: 'A6',
     bucket: 'A',
     feedUrl: 'https://console.dev/rss.xml',
+    inlineBody: true,
   }),
   // B1 — tech press
   rssAdapter({

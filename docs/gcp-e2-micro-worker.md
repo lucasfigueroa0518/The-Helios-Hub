@@ -17,7 +17,7 @@ the same admission control as `npm run worker` on a laptop:
 | `ORG_DRAFT_WRITE_CONCURRENCY` | 8 (effective **1** after research reserve) |
 | `ORCHESTRATION_WORKER_MAX_CONCURRENCY` | 16 (effective **7**) |
 | `ORG_MAILBOX_VERIFY_CONCURRENCY` | 3 |
-| `PG_POOL_MAX` | 8 (worker-only process) |
+| `PG_POOL_MAX` | 8 (per process, transaction pooler) |
 
 Worker id stays `gcp-e2-micro-1` so existing leases and the laptop/cloud
 fallback fence keep working. This VM still **yields** while any laptop/dev
@@ -46,8 +46,8 @@ chmod +x scripts/gcp/resize-worker-vm.sh
 Minimum env (copy from `.env.local`, strip auth/frontend-only keys):
 
 ```bash
-DIRECT_DATABASE_URL=...          # preferred over pooler for worker
-DATABASE_URL=...                 # fallback
+DATABASE_URL=...                 # runtime: transaction pooler :6543
+DIRECT_DATABASE_URL=...          # psql / schema scripts, session :5432
 ORCHESTRATOR=postgres
 AGENT_MAIL_API=...               # outreach email.send + mailbox verify
 AGENTMAIL_INBOX_ID=abcdefg@agentmail.to  # verify-only; never an outreach inbox
@@ -196,7 +196,7 @@ and worker code. Until the app deploy lands, Pub/Sub push will get middleware `4
 
 1. Confirm swap: `free -h` should show ~2G swap.
 2. Confirm systemd `MemoryMax=7G` and machine type `e2-standard-2`.
-3. Prefer `DIRECT_DATABASE_URL`. Do not drop drafting shards back to 1 without
+3. Keep the worker on the transaction pooler (`DATABASE_URL`, port 6543). Do not drop drafting shards back to 1 without
    an explicit decision — that reintroduces serial cloud drafting.
 4. If still tight, step to `e2-standard-4` via `GCP_MACHINE_TYPE` and
    `./scripts/gcp/resize-worker-vm.sh`.

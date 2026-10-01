@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { reviewDateLabel, reviewDates, reviewTokenShape, tokensMatch } from '@/lib/reels/review';
+import { REVIEW_PAUSED_COPY, reviewDateLabel, reviewDates, reviewFeedIsOpen, reviewTokenShape, tokensMatch } from '@/lib/reels/review';
 import { reviewSlideIndex } from '@/lib/reels/review-scroll';
 
 describe('reel review link', () => {
@@ -13,6 +13,14 @@ describe('reel review link', () => {
   it('labels today and yesterday from the slate date', () => {
     assert.equal(reviewDateLabel('2026-09-28', '2026-09-28'), 'Today · Mon, Sep 28');
     assert.equal(reviewDateLabel('2026-09-27', '2026-09-28'), 'Yesterday · Sun, Sep 27');
+  });
+
+  it('keeps the review link closed until the switch stores true', () => {
+    assert.equal(reviewFeedIsOpen(true), true);
+    assert.equal(reviewFeedIsOpen(false), false);
+    assert.equal(reviewFeedIsOpen(null), false);
+    assert.equal(reviewFeedIsOpen(undefined), false);
+    assert.equal(REVIEW_PAUSED_COPY, 'New review batch coming soon.');
   });
 
   it('accepts only a full unguessable token, and only an exact match', () => {

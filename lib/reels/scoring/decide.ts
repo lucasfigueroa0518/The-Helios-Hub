@@ -2,7 +2,8 @@ import {
   BALL_KNOWLEDGE_BUMP,
   BLOCKBUSTER_BAR,
   BLOCKBUSTER_BONUS,
-  CARRYOVER_MISSES,
+  CARRYOVER_TWO_DAY_DEPTH,
+  CARRYOVER_WINDOW,
   FRAMEWORK_GAP,
   SCORE_TOP_LEVEL,
   VIABLE_FRAMEWORK,
@@ -10,7 +11,7 @@ import {
 import { zoneDateParts } from '@/lib/reels/schedule';
 
 /**
- * The scoring rules from D-074, D-075, D-076, D-077, D-079, D-080, and D-085.
+ * The scoring rules from D-074, D-075, D-076, D-077, D-079, D-080, D-085, and D-227.
  * Pure functions. They do not call Jev. Question wording lives in
  * lib/reels/jev/questions/scoring-pass1.ts and scoring-pass2.ts (approved, D-086).
  */
@@ -202,20 +203,77 @@ export function selectTopThree(ideas: readonly RankedIdea[]): RankedIdea[] {
 }
 
 /**
- * D-080 / D-085. The best misses from a previous night, excluding that night's
- * selected three. The window is 10, and every idea tied with the 10th joins it.
- * Ideas with no net are not misses and do not consume a slot.
+ * True when `net` still fits a window of `depth`, including a tie with the
+ * score already sitting on that cutoff.
+ */
+function withinDepth(kept: readonly RankedIdea[], depth: number, net: number): boolean {
+  if (kept.length < depth) return true;
+  return units(net) === units(kept[depth - 1].net ?? 0);
+}
+
+function missesFrom(
+  ideas: readonly RankedIdea[],
+  selectedIds: readonly string[],
+  skip?: ReadonlySet<string>,
+): RankedIdea[] {
+  const selected = new Set(selectedIds);
+  return ideas
+    .filter((idea) => idea.net != null && !selected.has(idea.id) && !skip?.has(idea.id))
+    .sort(compareIdeas);
+}
+
+export type CarryoverHold = {
+  id: string;
+  selected: boolean;
+  /** Null when the slate never ranked it. */
+  rank: number | null;
+  published: boolean;
+};
+
+/**
+ * Ideas that used a posting day, so they are not misses.
+ * The bench (selected, rank past 3) stays out. A top-three idea that never
+ * posted is left off this list and carries at its stored net.
+ */
+export function heldFromCarryover(ideas: readonly CarryoverHold[]): string[] {
+  return ideas
+    .filter((idea) => idea.selected && (idea.published || idea.rank == null || idea.rank > 3))
+    .map((idea) => idea.id);
+}
+
+/**
+ * D-080 / D-227. Misses brought back into tonight's pool.
+ *
+ * Yesterday's misses fill a window of 20. A miss from two days ago joins only
+ * when its stored net lands inside the first 10, including a tie with that
+ * cutoff. A tie at the 20th score joins as well. Ideas with no net are not
+ * misses and do not consume a slot. An idea already on yesterday's slate is
+ * judged by that slate alone, so a second look yesterday is not replayed from
+ * the older score.
  */
 export function carryoverMisses(
   yesterday: readonly RankedIdea[],
-  selectedIds: readonly string[],
+  selectedYesterday: readonly string[],
+  twoDaysAgo: readonly RankedIdea[] = [],
+  selectedTwoDaysAgo: readonly string[] = [],
 ): RankedIdea[] {
-  const selected = new Set(selectedIds);
-  const misses = yesterday.filter((idea) => idea.net != null && !selected.has(idea.id));
-  const ordered = [...misses].sort(compareIdeas);
-  if (ordered.length <= CARRYOVER_MISSES) return ordered;
-  const cutoff = units(ordered[CARRYOVER_MISSES - 1].net ?? 0);
-  return ordered.filter((idea, index) => index < CARRYOVER_MISSES || units(idea.net ?? 0) === cutoff);
+  const onYesterday = new Set(yesterday.map((idea) => idea.id));
+  const older = missesFrom(twoDaysAgo, selectedTwoDaysAgo, onYesterday);
+  const olderIds = new Set(older.map((idea) => idea.id));
+  const combined = [...missesFrom(yesterday, selectedYesterday), ...older].sort(compareIdeas);
+
+  const kept: RankedIdea[] = [];
+  for (const idea of combined) {
+    const net = idea.net ?? 0;
+    if (olderIds.has(idea.id)) {
+      const inFirstTen = withinDepth(kept, CARRYOVER_TWO_DAY_DEPTH, net);
+      const inWindow = withinDepth(kept, CARRYOVER_WINDOW, net);
+      if (inFirstTen && inWindow) kept.push(idea);
+      continue;
+    }
+    if (withinDepth(kept, CARRYOVER_WINDOW, net)) kept.push(idea);
+  }
+  return kept;
 }
 
 export function nyDateKey(at: Date): string {
@@ -235,9 +293,14 @@ export function isSameNyDay(a: Date, b: Date): boolean {
   return nyDateKey(a) === nyDateKey(b);
 }
 
+/** The New York calendar date `daysBack` days before `at`. */
+export function earlierNyDateKey(at: Date, daysBack: number): string {
+  return shiftDateKey(nyDateKey(at), -daysBack);
+}
+
 /** The New York calendar date before `at`. */
 export function previousNyDateKey(at: Date): string {
-  return shiftDateKey(nyDateKey(at), -1);
+  return earlierNyDateKey(at, 1);
 }
 
 /**

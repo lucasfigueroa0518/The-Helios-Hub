@@ -8,9 +8,16 @@ Build 1 is sources and post ideas. Build 2 scores those ideas at the end of the
 same nightly run and shows the leaderboard on `/reels`. Build 2 is signed off
 (D-089). Copy and captions are Build 3. A scored idea with on-screen copy can
 be sent to the visual pipeline from the Scores tab. A Jev call (P-12,
-`color-route-v3`) picks a grade from the on-screen copy: `noir` (the dark
-room), `paper` (white field, black type), or `orange` (about 80% of the frame
-in #FF5E1A, white type with a black stroke). That produces one 9:16 still. **Generate video** appears beside Generate frame once that still is
+`color-route-v6`) picks a grade from the on-screen copy: `noir` (the dark
+room), `paper` (white field, black type), `orange` (about 80% of the frame
+in #FF5E1A), or `green` (about 80% of the frame in #148C3A). Orange and green
+are flooded grades with white type and a black stroke. A release, a fix, or
+something that arrived and works is green. A price, a loss, or a warning is
+orange, and so is any cost or risk the copy states for the viewer, even when
+something is also hidden (D-219). A clean fact with no arrival is paper.
+Anything hidden, broken, or still going out of sight with no stated stake for
+the viewer is noir. When the copy fits no other look, and when the color route
+itself fails, the grade is green (D-221). That produces one 9:16 still. **Generate video** appears beside Generate frame once that still is
 ready. The click only queues a row. The worker writes a Kling 3.0 motion
 prompt from the background PNG, calls Kling 3.0 Standard on Fal for an
 8-second clip with audio off, then overlays the text plate. The video model never receives the words.
@@ -156,21 +163,53 @@ old records have to keep meaning what they said.
 
 ## The copy writer gate (Build 3)
 
-After scoring, the run writes one on-screen copy and one caption for each of
-the three selected ideas (P-10, `copy-caption-v8`, `claude-sonnet-5`). Each idea
-gets two cached calls, and each call returns two on-screen copies and one
-caption. Jev (P-15, `copy-pick-v2`) scores the four copies, and the reel keeps
-the winner with its call's caption. The copy is written for anyone curious
-about AI, and the whole on-screen copy is the hook (D-204, D-205). Lucas approved the
-current wording on 2026-09-28. It makes no call anywhere
+After scoring, the run fills three reels that clear the copy gate (P-10,
+`copy-caption-v11`). Copy calls use the latest Sonnet release on the models
+list, and `claude-sonnet-5-5` when that list cannot be read (D-222). The
+account's job is to grow an audience with AI news, stories, knowledge, and
+skills worth following, with no pitch (D-211). Each idea gets two cached calls,
+and each call returns a viewer stake (one plain sentence on why this viewer
+should care), two on-screen copies of the same story, and one caption that
+opens on that story. A caption that comes back as one block is a failed
+report, and a tool string that writes the characters backslash and n is stored
+as a real line break (D-229). The copy is written for anyone curious about AI. The whole
+on-screen copy is the hook, and its first job is to be understood, stake
+included, on one read (D-204, D-211, D-212). It makes no call anywhere
 `REELS_COPY_PROMPT_APPROVED=true` is not set, and the page says so.
+
+Jev (P-15, `copy-pick-v3`) scores each copy on plain read, stake, loop, care,
+and reward, and a second check (P-18, `copy-story-match-v1`) asks whether the
+copy and its caption's first paragraph tell the same story. A copy clears the
+gate when plain and stake are both at least 0.75, its words are inside the
+bucket's range, and the same-story check is at least 0.5; cleared copies rank
+on loop, care, and reward. When none of the four clears, one rewrite call sees
+each copy with its scores, what each level means, and the legend lines Jev
+treats as a pass (D-223). It writes two more copies and a caption.
+
+A night fills three passing reels. "Generate N" means N reels that clear the
+gate (D-225). A reel Lucas locked for that date already counts and is not
+rewritten. September 29 slots 1 and 2 are locked (D-226). The idea that opens
+a slot gets the rewrite. If both tries miss, that idea is demoted for the day
+and the next idea gets one try, with no rewrite. After four ideas miss the
+same slot, the best graded line from those four ships (D-224). The demotion
+lives in `reels.copy_day_penalties` and changes the day's rank only. Tomorrow's
+carryover reads the original net. The Scores button for one idea still ships
+its nearest miss (D-216).
+
+Cost: the two calls are about $0.12 an idea together on Sonnet 5.5; a rewrite
+adds about half of that again. A slot that needs all four ideas costs more.
+The sources block is cached, so the second call and the rewrite read it at the
+cache rate.
 
 On the Scores tab, **Generate Copy + Captions** queues that same writer for
 one post idea, including ideas that were not selected. The idea needs a
 winning bucket and framework. The `helios-reels` worker claims the job; the
-page does not call Claude itself. A second click replaces that slate's copy.
-The on-screen copy comes back with a line break at each natural pause, on
-one screen, inside the bucket's word range.
+page does not call Claude itself. A second click replaces that slate's copy
+when it succeeds. A failed attempt never replaces an ok row, and the error says
+the earlier copy stays. Every attempt, ok or failed, is appended to
+`reels.idea_copy_history` (D-220). The on-screen copy comes back with a line
+break at each natural pause, on one screen, inside the bucket's word range
+(the Saga's is 20 to 32 words, D-214).
 
 The writer from before that word-count reinforcement (`copy-caption-v1`) is
 kept, unused, at `lib/reels/threads/post-engine-candidate.ts` as a candidate
@@ -239,14 +278,19 @@ created on deploy). Frames are PNGs in the private Supabase bucket
    similarity across their members) and asks Jev whether to fuse them,
    repeating while anything still merges.
 7. **Score and write.** Jev scores and ranks the timely ideas
-   (`scoring-pass1-v2`, `scoring-pass2-v2`), the top three are selected, and,
+   (`scoring-pass1-v3`, `scoring-pass2-v3`), the top three are selected, and,
    if P-10 is approved, the writer produces their copy and captions. Scoring
    judges for the AI-curious viewer first and counts the builder minority as
    a bonus; a builder-only story cannot reach the top of the scale (D-206).
-   When Live is on, those three are scheduled into the day's Eastern-time
-   slots (8:45–10:00 AM, 11:15 AM–12:30 PM, 6:00–9:00 PM), one each, at a
-   random minute, and the worker posts them then as trial reels (D-207).
-   Force post sends one immediately, still as a trial reel.
+   Value tops out only when the reason to care fits one plain sentence with no
+   technical setup, and a known company or person adds 0.10 (D-217, D-218).
+   When Live is on, the top three by rank are scheduled into the Eastern-time
+   windows still open that day (8:45–10:00 AM, 11:15 AM–12:30 PM, 6:00–9:00 PM),
+   one each. A window that has started can still take a reel in the minutes
+   left. A reel that does not fit is not placed on the next day; it carries
+   into tomorrow's pool at its stored score. The bench, everything past rank
+   3, is not scheduled. The worker posts the ones that landed in a window
+   as trial reels (D-207). Force post sends one immediately, still as a trial reel.
 8. **Retain.** Sources older than 3 weeks are hard-deleted. Fingerprints,
    published-status rows, and Jev logs outlive them.
 

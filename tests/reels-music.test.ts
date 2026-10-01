@@ -343,7 +343,7 @@ describe('Meta client (stubbed fetch)', () => {
         audioId: '123',
         audioVolume: 100,
         videoVolume: 60,
-        graduationStrategy: 'SS_PERFORMANCE',
+        graduationStrategy: 'MANUAL',
         shareToFeed: null,
       });
       assert.equal(id, 'container-1');
@@ -351,7 +351,7 @@ describe('Meta client (stubbed fetch)', () => {
       assert.equal(calls[0].url.pathname, '/v26.0/17800000000000000/media');
       assert.equal(form.get('media_type'), 'REELS');
       assert.deepEqual(JSON.parse(form.get('audio_configuration')!), { audio_id: '123', audio_volume: 100, video_volume: 60 });
-      assert.deepEqual(JSON.parse(form.get('trial_params')!), { graduation_strategy: 'SS_PERFORMANCE' });
+      assert.deepEqual(JSON.parse(form.get('trial_params')!), { graduation_strategy: 'MANUAL' });
       assert.equal(form.has('share_to_feed'), false);
       assert.equal(form.get('caption'), 'Body\n\nCTA\n\n#ai');
     }));

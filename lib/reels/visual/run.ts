@@ -480,7 +480,7 @@ async function renderClaimed(id: string, client?: SceneClient, jev?: JevRunner):
   }
   const sceneClient: SceneClient = client ?? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-  let profile: ColorProfile = 'noir';
+  let profile: ColorProfile = 'green';
   try {
     const routed = await routeColor(jev ?? createLiveJevRunner(), {
       onScreenCopy: target.onScreenCopy,
@@ -488,7 +488,7 @@ async function renderClaimed(id: string, client?: SceneClient, jev?: JevRunner):
     });
     profile = routed.profile;
   } catch (error) {
-    notices.push(`Color route failed, so the frame uses noir: ${error instanceof Error ? error.message : String(error)}`);
+    notices.push(`Color route failed, so the frame uses green: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   const reused = await reuseBackground(id, job.post_idea_id, target.onScreenCopy, profile, target.fullStoryCue);

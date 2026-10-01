@@ -15,11 +15,12 @@ import {
  * P-08. Psychology, bucket fit, and blockbuster (D-073 through D-075, D-077,
  * D-083, D-084). Approved 2026-09-22 (D-086) as `scoring-pass1-v1`; the
  * audience moved to AI-curious viewers plus a builder minority in v2 (D-206).
+ * v3 (D-218): a Callout needs a position on something the viewer chooses.
  *
  * One request. The questions are independent, so a bucket score cannot see the
  * psychology scores. Code applies the 0.60 / 0.25 gate and ignores a bucket
  * whose frameworks all failed it. Code also turns the three Nouls into one
- * +0.25 or nothing (D-087).
+ * +0.10 or nothing (D-087, D-217).
  *
  * Every Score uses the same five levels, indexes 0 through 4. Code divides the
  * raw score by 4. On that scale, 2 is 0.50 (workable, not viable) and 3 is
@@ -31,7 +32,7 @@ const people = BLUE_CHIP_PEOPLE.join('; ');
 
 export const SCORING_PASS_1 = defineQuestionSet({
   id: 'scoring-pass1',
-  version: 'scoring-pass1-v2',
+  version: 'scoring-pass1-v3',
   questions: {
     curiosity: score(
       {
@@ -172,12 +173,12 @@ export const SCORING_PASS_1 = defineQuestionSet({
         audiences: AUDIENCE_RULE,
         source: SOURCE_RULE,
         guardrail:
-          'Levels Strong and Unmistakable require a line aimed at a practice, a tool, or a vendor. If the only sharp line attacks who the viewer is (someone who does not understand AI, is behind, or is not serious), the score stays at Thin, however hot the tone is. The voice has to be able to read as a fellow user raising a standard.',
+          'Levels Strong and Unmistakable require a position on a practice, a tool, or a vendor the viewer chooses for themselves. A position about what a company, a lab, or a government should do stays at Workable at most, however sharp it is. If the only sharp line attacks who the viewer is (someone who does not understand AI, is behind, or is not serious), the score stays at Thin, however hot the tone is. The voice has to be able to read as a fellow user raising a standard.',
       },
       [
         'Absent. No stance in the source draws a line around a practice, a tool, or a vendor. There is nothing a fellow user could challenge.',
         'Thin. The only sharp line attacks who the viewer is, or the stance is too vague to land. A practice-or-vendor line the source supports is not here.',
-        'Workable. A real stance about a practice, tool, or vendor is present. It could become an ordinary callout. The line is hedged, or it could be read as scolding from outside the group.',
+        'Workable. A real stance about a practice, tool, or vendor is present. It could become an ordinary callout. The line is hedged, it could be read as scolding from outside the group, or it is about what a company, a lab, or a government should do rather than something the viewer chooses.',
         'Strong. The source supports a clear position aimed at a practice, tool, or vendor. The viewer can cross the line by changing what they do. The position can land without a hedge that lets everyone off.',
         'Unmistakable. That line is what the source is about. The target is a practice or a vendor, the position is specific, and the viewer would share it to mark which side they are on.',
       ],

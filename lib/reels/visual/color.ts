@@ -1,4 +1,4 @@
-export const COLOR_PROFILES = ['noir', 'paper', 'orange'] as const;
+export const COLOR_PROFILES = ['noir', 'paper', 'orange', 'green'] as const;
 export type ColorProfile = (typeof COLOR_PROFILES)[number];
 
 export function isColorProfile(value: string): value is ColorProfile {

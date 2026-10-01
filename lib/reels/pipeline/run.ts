@@ -1,8 +1,6 @@
 import { derivedAdapters, primaryAdapters } from '@/lib/reels/adapters';
-import { MONTHLY_WATCH_USD } from '@/lib/reels/config';
+import { MONTHLY_WATCH_USD, PASSING_REELS_PER_NIGHT } from '@/lib/reels/config';
 import type { CopyClient } from '@/lib/reels/copy/writer';
-import { writeSlateCopy } from '@/lib/reels/pipeline/copy';
-import { requestFinish } from '@/lib/reels/visual/finish';
 import { createLiveJevRunner } from '@/lib/reels/jev/client';
 import type { JevRunner } from '@/lib/reels/jev/runner';
 import { groupRun } from '@/lib/reels/pipeline/grouping';
@@ -123,32 +121,34 @@ export async function executeRun(run: RunRow, deps?: Partial<RunDeps>): Promise<
       scored = scoring.scored;
       selected = scoring.selected;
       log('run_scored', scoring);
-      const { scheduleSelectedSlate } = await import('@/lib/reels/publish/schedule');
-      const scheduled = await scheduleSelectedSlate(scoring.slateId).catch((error) => {
-        log('schedule_failed', { error: error instanceof Error ? error.message : String(error) });
-        return { scheduled: 0 };
-      });
-      if (scheduled.scheduled > 0) log('run_scheduled', scheduled);
 
       try {
-        const copy = await writeSlateCopy(run.id, scoring.slateId, {
+        const { generatePassingReels } = await import('@/lib/reels/pipeline/slots');
+        const copy = await generatePassingReels({
+          runId: run.id,
+          slateId: scoring.slateId,
           client: deps?.copyClient,
           signal: deps?.signal,
           jev,
         });
-        copyWritten = copy.written;
-        // One flow (D-192): each selected idea with copy goes on to its frame,
-        // video, hook SFX, and song pick. Publishing stays behind Approve.
-        // writtenIdeaIds is best-first, so rank 1 starts before the others (D-199).
-        for (const postIdeaId of copy.writtenIdeaIds ?? []) {
-          await requestFinish(postIdeaId, scoring.slateId).catch((error) => {
-            log('finish_request_failed', { postIdeaId, error: error instanceof Error ? error.message : String(error) });
-          });
-        }
-        if (copy.failed > 0) {
-          copyNote = `Copy failed for ${copy.failed} idea(s): ${copy.failures.join('; ')}`;
-        }
+        copyWritten = copy.filled.filter((slot) => !slot.locked).length;
+        selected = copy.filled.length;
+        const notes = [
+          copy.filled.length < PASSING_REELS_PER_NIGHT
+            ? `Filled ${copy.filled.length} of ${PASSING_REELS_PER_NIGHT} passing reels.`
+            : undefined,
+          copy.failures.length > 0
+            ? `Copy failed for ${copy.failures.length} idea(s): ${copy.failures.join('; ')}`
+            : undefined,
+        ].filter((note): note is string => note != null);
+        if (notes.length > 0) copyNote = notes.join(' ');
         log('run_copy', copy);
+        const { scheduleSelectedSlate } = await import('@/lib/reels/publish/schedule');
+        const scheduled = await scheduleSelectedSlate(scoring.slateId).catch((error) => {
+          log('schedule_failed', { error: error instanceof Error ? error.message : String(error) });
+          return { scheduled: 0 };
+        });
+        if (scheduled.scheduled > 0) log('run_scheduled', scheduled);
       } catch (error) {
         copyNote = `Copy failed: ${error instanceof Error ? error.message : String(error)}`;
         log('copy_failed', { error: copyNote });

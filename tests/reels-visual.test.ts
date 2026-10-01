@@ -87,6 +87,13 @@ test('the three-zone prompt is saved, and the live prompt asks for one scene', (
   assert.match(assembleImagePrompt('A desk.', 'orange'), /#FF5E1A/);
   assert.match(assembleImagePrompt('A desk.', 'orange'), /No hands/);
   assert.match(assembleImagePrompt('A desk.', 'orange'), /Black hands are not allowed/);
+  assert.match(sceneWriterInstructions('green'), /80% of the frame is flat vivid green/);
+  assert.match(assembleImagePrompt('A desk.', 'green'), /A desk\./);
+  assert.match(assembleImagePrompt('A desk.', 'green'), /#148C3A/);
+  assert.match(assembleImagePrompt('A desk.', 'green'), /not a rim on an otherwise dark room/);
+  assert.match(assembleImagePrompt('A desk.', 'green'), /Black hands are not allowed/);
+  assert.match(liveWriter, /When the blocks flood the frame with green/);
+  assert.match(liveWriter, /do not add orange/);
 });
 
 test('category follows the content bucket, then the primary source bucket', () => {
@@ -222,6 +229,16 @@ Image.new('RGB', (1152, 2048), (255, 94, 26)).save(${JSON.stringify(orange)})`,
   const orangeQa = await checkBackgroundPng(readFileSync(orange), 'orange');
   assert.equal(orangeQa.pass, true);
   assert.equal((await checkBackgroundPng(darkPng, 'orange')).pass, false);
+  const green = path.join(dir, 'green.png');
+  execFileSync(python, [
+    '-c',
+    `from PIL import Image
+Image.new('RGB', (1152, 2048), (20, 140, 58)).save(${JSON.stringify(green)})`,
+  ]);
+  const greenQa = await checkBackgroundPng(readFileSync(green), 'green');
+  assert.equal(greenQa.pass, true);
+  assert.equal((await checkBackgroundPng(darkPng, 'green')).pass, false);
+  assert.equal((await checkBackgroundPng(readFileSync(orange), 'green')).pass, false);
 
   const rendered = await renderTextPng(darkPng, 'Nvidia just passed $4 trillion.');
   assert.equal(rendered.ok, true);

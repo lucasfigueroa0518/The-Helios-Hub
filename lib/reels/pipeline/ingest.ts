@@ -22,6 +22,7 @@ import {
 } from '@/lib/reels/net/http';
 import {
   findFingerprints,
+  urlsWithOnlyFailedFetches,
   getWatermark,
   insertSource,
   markWatermarkAttempt,
@@ -108,7 +109,11 @@ export async function ingestAdapter(
   const { kept, overflow } = applyCap(adapter, deduped);
   result.dropped += overflow;
 
-  const fingerprints = await findFingerprints(kept.map((item) => canonicalizeUrl(item.canonicalUrl)));
+  const urls = kept.map((item) => canonicalizeUrl(item.canonicalUrl));
+  const [fingerprints, failedFetches] = await Promise.all([
+    findFingerprints(urls),
+    urlsWithOnlyFailedFetches(urls),
+  ]);
 
   for (const item of kept) {
     const url = canonicalizeUrl(item.canonicalUrl);
@@ -118,7 +123,7 @@ export async function ingestAdapter(
       firstSeen != null &&
       options.now.getTime() - firstSeen.getTime() < RANKED_REPEAT_DAYS * 86_400_000;
 
-    if (seenBeforeTonight && withinWindow && !item.allowRepeat) {
+    if (seenBeforeTonight && withinWindow && !item.allowRepeat && !failedFetches.has(url)) {
       // A ranked item still on the list refreshes its signals; the body stays
       // as first stored (ING-02 / ING-09 / D-032).
       if (adapter.kind === 'ranked' && item.engagement) {
@@ -140,8 +145,12 @@ export async function ingestAdapter(
     const storedUrl = resolved.resolvedUrl ? canonicalizeUrl(resolved.resolvedUrl) : url;
 
     await store(adapter, item, storedUrl, resolved, dropReason, options);
-    await touchFingerprint(storedUrl, adapter.id);
-    if (storedUrl !== url) await touchFingerprint(url, adapter.id);
+    // A failed read must not block the next night (D-032). Other drops are real
+    // decisions and stay fingerprinted.
+    if (dropReason !== 'fetch_failed') {
+      await touchFingerprint(storedUrl, adapter.id);
+      if (storedUrl !== url) await touchFingerprint(url, adapter.id);
+    }
 
     if (dropReason) result.dropped += 1;
     else result.ingested += 1;

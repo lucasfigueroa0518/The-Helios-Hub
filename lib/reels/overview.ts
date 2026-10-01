@@ -6,7 +6,6 @@ import { listRuns, monthToDateUsd, type RunRow } from '@/lib/reels/repository';
 import { nextRunAt } from '@/lib/reels/schedule';
 import {
   listSlateDays,
-  loadPriorSlate,
   loadSlate,
   type SlateDay,
   type StoredSlate,
@@ -15,7 +14,8 @@ import { loadFramesForIdeas, visualInFlight, type StoredFrame } from '@/lib/reel
 import { loadFinishStatus } from '@/lib/reels/visual/finish';
 import { loadVideosForIdeas, videoInFlight, type StoredVideo } from '@/lib/reels/visual/video-run';
 import { loadMusicStatus, loadReelSongs, type MusicStatus, type ReelSong } from '@/lib/reels/music/overview';
-import { loadSchedulesForIdeas, type StoredSchedule } from '@/lib/reels/publish/schedule';
+import { loadSchedulesForIdeas, windowsStillOpen, type StoredSchedule } from '@/lib/reels/publish/schedule';
+import { reviewFeedOpen } from '@/lib/reels/review';
 
 export type ReelsOverview = {
   runs: RunRow[];
@@ -26,10 +26,6 @@ export type ReelsOverview = {
   slateDays: SlateDay[];
   /** Full score list for the current day. This is the newest slate. */
   slate: StoredSlate | null;
-  /** The slate before that one, same day, when a rescore left it in place. */
-  previousSlate: StoredSlate | null;
-  /** Copy written against the previous slate, by post idea id. */
-  previousCopy: Record<string, StoredCopy>;
   /** Earlier days, each reduced to that day's selected top 3. */
   archive: ArchivedSlate[];
   /** On-screen copy and captions for the current slate, by post idea id. */
@@ -46,7 +42,11 @@ export type ReelsOverview = {
   songs: Record<string, ReelSong>;
   /** Clock time for each post idea, when one has been reserved. */
   schedules: Record<string, StoredSchedule>;
+  /** Windows on today's Eastern date that can still take one reel. */
+  windowsOpen: number;
   music: MusicStatus;
+  /** When false, the private review link shows a coming-soon line instead of reels. */
+  reviewOpen: boolean;
   visualInFlight: boolean;
   copyInFlight: boolean;
   videoInFlight: boolean;
@@ -73,23 +73,23 @@ export type FinishStatus = {
 
 /** Everything the reels hub shows, in one round trip (REV-01/02 / D-062). */
 export async function loadReelsOverview(): Promise<ReelsOverview> {
-  const [runs, insights, slateDays, spend, framesRunning, copiesRunning, videosRunning, music] = await Promise.all([
-    listRuns(14),
-    loadReelsInsights(),
-    listSlateDays(),
-    monthToDateUsd(),
-    visualInFlight(),
-    copyInFlight(),
-    videoInFlight(),
-    loadMusicStatus(),
-  ]);
+  const [runs, insights, slateDays, spend, framesRunning, copiesRunning, videosRunning, music, reviewOpen] =
+    await Promise.all([
+      listRuns(14),
+      loadReelsInsights(),
+      listSlateDays(),
+      monthToDateUsd(),
+      visualInFlight(),
+      copyInFlight(),
+      videoInFlight(),
+      loadMusicStatus(),
+      reviewFeedOpen(),
+    ]);
   const [currentDay, ...pastDays] = slateDays;
   const [slate, archive] = await Promise.all([
     currentDay ? loadSlate(currentDay.id) : Promise.resolve(null),
     Promise.all(pastDays.map((day) => loadArchivedSlate(day.id))),
   ]);
-  const previousSlate = slate ? await loadPriorSlate(slate.nyDate, slate.id) : null;
-  const previousCopy = previousSlate ? await loadSlateCopy(previousSlate.id) : {};
   const ideaIds = slate ? slate.scores.map((score) => score.postIdeaId) : [];
   const [copy, frames, copyJobs, videos, finishes] = slate
     ? await Promise.all([
@@ -106,12 +106,13 @@ export async function loadReelsOverview(): Promise<ReelsOverview> {
         {} as Record<string, StoredVideo>,
         {} as Record<string, FinishStatus>,
       ];
-  const [songs, schedules] = await Promise.all([
+  const [songs, schedules, windowsOpen] = await Promise.all([
     songsByIdea(videos),
     loadSchedulesForIdeas([
       ...ideaIds,
       ...archive.flatMap((day) => (day ? day.slate.scores.map((score) => score.postIdeaId) : [])),
     ]),
+    windowsStillOpen(),
   ]);
 
   return {
@@ -120,8 +121,6 @@ export async function loadReelsOverview(): Promise<ReelsOverview> {
     insights,
     slateDays,
     slate,
-    previousSlate,
-    previousCopy,
     archive: archive.filter((day): day is ArchivedSlate => day !== null),
     copy,
     frames,
@@ -130,7 +129,9 @@ export async function loadReelsOverview(): Promise<ReelsOverview> {
     finishes,
     songs,
     schedules,
+    windowsOpen,
     music,
+    reviewOpen,
     visualInFlight: framesRunning,
     copyInFlight: copiesRunning,
     videoInFlight: videosRunning,

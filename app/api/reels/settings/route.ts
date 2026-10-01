@@ -11,6 +11,9 @@ export const dynamic = 'force-dynamic';
  * Live is the nightly auto-schedule. Turning it on also places today's
  * still-unpublished selected reels into open slots. Reels already on the
  * clock stay there if it is turned off.
+ *
+ * Review open is separate: it only decides whether the private review link
+ * plays reels or shows the coming-soon line.
  */
 export async function POST(request: NextRequest) {
   const session = await getSession();
@@ -18,19 +21,25 @@ export async function POST(request: NextRequest) {
 
   const body = (await request.json().catch(() => null)) as {
     publishing_live?: unknown;
-    auto_publish?: unknown;
+    review_open?: unknown;
   } | null;
-  if (typeof body?.publishing_live !== 'boolean' && typeof body?.auto_publish !== 'boolean') {
-    return NextResponse.json({ error: 'publishing_live must be true or false.' }, { status: 400 });
+  const publishingLive = typeof body?.publishing_live === 'boolean' ? body.publishing_live : null;
+  const reviewOpen = typeof body?.review_open === 'boolean' ? body.review_open : null;
+  if (publishingLive === null && reviewOpen === null) {
+    return NextResponse.json({ error: 'Expected a true or false setting.' }, { status: 400 });
   }
   try {
-    if (typeof body.auto_publish === 'boolean') await setSetting('auto_publish', body.auto_publish);
-    if (typeof body.publishing_live !== 'boolean') {
-      return NextResponse.json({ autoPublish: body.auto_publish });
+    if (reviewOpen !== null) await setSetting('review_open', reviewOpen);
+    if (publishingLive === null) {
+      return NextResponse.json({ reviewOpen });
     }
-    await setSetting('publishing_live', body.publishing_live);
-    const scheduled = body.publishing_live ? await scheduleLatestToday() : { scheduled: 0 };
-    return NextResponse.json({ publishingLive: body.publishing_live, scheduled: scheduled.scheduled });
+    await setSetting('publishing_live', publishingLive);
+    const scheduled = publishingLive ? await scheduleLatestToday() : { scheduled: 0 };
+    return NextResponse.json({
+      publishingLive,
+      scheduled: scheduled.scheduled,
+      ...(reviewOpen !== null ? { reviewOpen } : {}),
+    });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }

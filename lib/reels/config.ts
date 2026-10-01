@@ -38,8 +38,11 @@ export const SONG_SHORTLIST_SIZE = 12;
 export const META_GRAPH_VERSION = 'v26.0';
 /** Implementation brake: day one only reads past the first page for replacements. */
 export const META_TRENDING_MAX_PAGES = 5;
-/** D-157. */
-export const TRIAL_GRADUATION_STRATEGY = 'SS_PERFORMANCE';
+/**
+ * Trial reels stay on the trial until someone graduates them in the Instagram app.
+ * SS_PERFORMANCE would let Instagram put a reel on the grid by itself.
+ */
+export const TRIAL_GRADUATION_STRATEGY = 'MANUAL';
 /** Meta cURLs the video itself, so the signed link must outlast container processing. */
 export const PUBLISH_VIDEO_URL_SECONDS = 2 * 3600;
 /** How often and how long the worker waits for a container to reach FINISHED. */
@@ -118,12 +121,21 @@ export const VIABLE_FRAMEWORK = 0.6;
 export const FRAMEWORK_GAP = 0.25;
 /** D-077. Any subject Noul at or above this adds the bonus once. */
 export const BLOCKBUSTER_BAR = 0.8;
-/** D-087. One bonus, or zero. Was 0.40 under D-077. */
-export const BLOCKBUSTER_BONUS = 0.25;
+/**
+ * D-217. One bonus, or zero. Was 0.40 under D-077 and 0.25 under D-087. A Jev
+ * level is 0.25 on one component, so 0.10 breaks a near-tie without letting a
+ * known name jump a clearly better story.
+ */
+export const BLOCKBUSTER_BONUS = 0.1;
 /** Added to the net when the winning bucket is Ball Knowledge. */
 export const BALL_KNOWLEDGE_BUMP = 0.08;
-/** D-080. How many of yesterday's misses are rescored. Ties at the cutoff join them. */
-export const CARRYOVER_MISSES = 10;
+/** D-227. How many misses are rescored. Ties at this cutoff join them. */
+export const CARRYOVER_WINDOW = 20;
+/**
+ * D-227. A miss from two New York days ago can join the window only inside
+ * this depth. Ties at this cutoff join them too.
+ */
+export const CARRYOVER_TWO_DAY_DEPTH = 10;
 
 /** D-084. Primary member excerpt, in words. */
 export const PRIMARY_EXCERPT_WORDS = 1_200;
@@ -174,8 +186,15 @@ export const JEV_EXCERPT_CHARS = 1200;
 /** FND-04 / D-022. B6 is the only Claude call in Build 1 (D-065). */
 export const B6_MODEL = 'claude-sonnet-5';
 
-/** D-091. Build 3 copy and caption writer: one call per selected idea. */
-export const COPY_MODEL = 'claude-sonnet-5';
+/**
+ * Copy writer when the models list cannot be read. Sonnet 5.5, the current
+ * latest Sonnet. A generation resolves the live list and uses whichever
+ * Sonnet release is highest (D-222). Sonnet 5.5 rejects a forced tool, so the
+ * call stays tool_choice auto with a strict report_copy schema.
+ */
+export const COPY_MODEL = 'claude-sonnet-5-5';
+/** How many reels a night aims to finish. Each one has to clear the copy gate, or be the best of four ideas (D-224). */
+export const PASSING_REELS_PER_NIGHT = 3;
 /** A copy job still `running` after this was abandoned by a dead worker. */
 export const COPY_STALE_MINUTES = 5;
 
@@ -197,8 +216,8 @@ export const VISUAL_IMAGE_QUALITY = 'high';
 export const VISUAL_RECENT_SCENES = 10;
 /** A frame that is still `running` after this was abandoned by a dead worker. */
 export const VISUAL_STALE_MINUTES = 10;
-/** D-202. The caption cue is off. The bars and the line picker stay in place. */
-export const FULL_STORY_CUE_ENABLED = false;
+/** D-228. The fixed caption cue is on. Jev only withholds it when it would read badly. */
+export const FULL_STORY_CUE_ENABLED = true;
 /** Motion writer. Same Claude model as the scene writer. The system prompt is cached. */
 export const MOTION_MODEL = 'claude-sonnet-5';
 /** One timestamped 8-second prompt. Enough room to finish, not enough for a second draft. */
@@ -211,8 +230,11 @@ export const VIDEO_STALE_MINUTES = 20;
  * sound off is $0.672, at the same $0.084 per second as the old 5-second clip.
  */
 export const KLING_CLIP_SECONDS = 8;
-/** Covers the working drafts plus a 2,200-character caption with room to spare. */
-export const COPY_MAX_TOKENS = 5_000;
+/**
+ * Opus 5.5 always thinks, and thinking shares this budget with the tool call.
+ * 5,000 can finish the thinking before report_copy is written.
+ */
+export const COPY_MAX_TOKENS = 16_000;
 
 /**
  * ING-06 / D-036: below this we treat the text as a blurb rather than an

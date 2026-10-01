@@ -85,6 +85,21 @@ async function main(): Promise<void> {
       if (Date.now() >= scheduledFor.getTime()) {
         const outcome = await runReelsNight('scheduled');
         log('run_complete', { trigger: 'scheduled', status: outcome.status, runId: outcome.runId });
+        const insights = await import('@/lib/reels/media-insights/poll')
+          .then((mod) => mod.pollRecentInsights())
+          .catch((error) => {
+            log('insights_failed', { error: error instanceof Error ? error.message : String(error) });
+            return null;
+          });
+        if (insights) {
+          log('insights_complete', {
+            blocked: insights.blocked,
+            considered: insights.considered,
+            written: insights.written,
+            message: insights.message,
+            detail: insights.detail ?? undefined,
+          });
+        }
         scheduledFor = nextRunAt(new Date());
         log('scheduled', { nextRunAt: scheduledFor.toISOString() });
         continue;

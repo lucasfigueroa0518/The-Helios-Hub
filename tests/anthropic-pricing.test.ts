@@ -123,6 +123,46 @@ test('Sonnet rates jump on 2026-09-01', () => {
   assert.equal(after.costUsd, '18.0000');
 });
 
+test('Sonnet 5.5 stays $2/$10 after the September 2026 snapshot', () => {
+  const priced = priceAnthropicUsage({
+    uncachedInputTokens: 1_000_000,
+    cacheReadInputTokens: 0,
+    cacheCreation5mInputTokens: 0,
+    cacheCreation1hInputTokens: 0,
+    outputTokens: 1_000_000,
+    webSearchRequests: 0,
+  }, { modelId: 'claude-sonnet-5-5', asOf: afterChange });
+  assert.equal(priced.costUsd, '12.0000');
+});
+
+test('Opus 5.5 is $4/$20 and cache reads are 0.05× input', () => {
+  assert.equal(anthropicFamilyFromModelId('claude-opus-5-5'), 'opus');
+  assert.equal(anthropicFamilyFromModelId('claude-sonnet-5'), 'sonnet');
+  const priced = priceAnthropicUsage({
+    uncachedInputTokens: 1_000_000,
+    cacheReadInputTokens: 1_000_000,
+    cacheCreation5mInputTokens: 0,
+    cacheCreation1hInputTokens: 0,
+    outputTokens: 1_000_000,
+    webSearchRequests: 0,
+  }, { modelId: 'claude-opus-5-5', asOf: afterChange });
+  // $4 input + $4 * 0.05 cache read + $20 output
+  assert.equal(priced.costUsd, '24.2000');
+  assert.equal(priced.breakdown.cache_read_input_tokens, '0.2000');
+});
+
+test('Opus models other than 5.5 use the 0.1× cache-read multiplier', () => {
+  const priced = priceAnthropicUsage({
+    uncachedInputTokens: 0,
+    cacheReadInputTokens: 1_000_000,
+    cacheCreation5mInputTokens: 0,
+    cacheCreation1hInputTokens: 0,
+    outputTokens: 0,
+    webSearchRequests: 0,
+  }, { modelId: 'claude-opus-4-6', asOf: afterChange });
+  assert.equal(priced.breakdown.cache_read_input_tokens, '0.4000');
+});
+
 test('does not treat input_tokens as a total that includes cache buckets', () => {
   const priced = priceAnthropicMessages([
     {

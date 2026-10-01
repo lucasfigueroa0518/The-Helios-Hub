@@ -1,7 +1,14 @@
 import type Anthropic from '@anthropic-ai/sdk';
 
 import { ephemeralCache } from '@/lib/anthropic-cache';
+import {
+  COMPREHENSION_GATE,
+  STAKE_GATE,
+  type CopyRewriteLine,
+} from '@/lib/reels/copy/pick';
 import { ON_SCREEN_WORD_RANGE, REPORT_COPY_TOOL } from '@/lib/reels/copy/report';
+import { COPY_PICK_LEGENDS, PLAIN_QUESTION, STAKE_QUESTION, type CopyPickScoreId } from '@/lib/reels/jev/questions/copy-pick';
+import { SAME_STORY_MISS, SAME_STORY_PASS, SAME_STORY_QUESTION } from '@/lib/reels/jev/questions/copy-story-match';
 import {
   COPY_PROMPT_VERSION,
   COPY_SKILL,
@@ -29,7 +36,9 @@ import type { MemberRole } from '@/lib/reels/types';
  * Cache layout (tools, then system, then messages):
  *   system[0]  skill + humanizer. Identical for every idea, every night.
  *   system[1]  bucket + framework. Identical for every idea with that pair.
- *   user       the idea's sources. Never cached, never in the system prompt (D-030).
+ *   user[0]    the idea's sources. Cached, so the second call and the rewrite
+ *              reuse them (D-220). Never in the system prompt (D-030).
+ *   user[1]    the task. Changes between the draft calls and the rewrite.
  */
 
 export type CopyMember = {
@@ -48,14 +57,16 @@ export type CopyInput = {
   bucket: BucketId;
   framework: FrameworkId;
   members: readonly CopyMember[];
+  /** Set only for the one rewrite call (D-216): the draft lines and how Jev judged them. */
+  rewriteOf?: readonly CopyRewriteLine[];
 };
 
 export type AssembledCopyPrompt = {
   version: string;
   system: Anthropic.TextBlockParam[];
   tools: Anthropic.Tool[];
-  toolChoice: Anthropic.ToolChoiceTool;
-  messages: Anthropic.MessageParam[];
+  toolChoice: Anthropic.ToolChoice;
+  messages: Array<{ role: 'user'; content: Anthropic.TextBlockParam[] }>;
   /** Every URL the writer was shown, for checking what it reports. */
   knownUrls: string[];
 };
@@ -104,7 +115,7 @@ export function copyStrategySystem(bucket: BucketId, framework: FrameworkId): st
 
 /** Scraped text cannot close the wrapper it sits in. */
 function neutralize(value: string): string {
-  return value.replace(/<(\/?)(source_material|source|content)\b/gi, '&lt;$1$2');
+  return value.replace(/<(\/?)(source_material|source|content|copy)\b/gi, '&lt;$1$2');
 }
 
 function sourceBlock(member: CopyMember, index: number): string {
@@ -124,20 +135,130 @@ function sourceBlock(member: CopyMember, index: number): string {
   return lines.join('\n');
 }
 
-export function buildCopyUserPrompt(input: CopyInput): string {
-  const members = [...input.members].sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role]);
+/** The cached half of the user turn: every member, in role order. */
+export function buildCopySourcesBlock(members: readonly CopyMember[]): string {
+  const ordered = [...members].sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role]);
   return [
-    'Write two on-screen copies and one caption for this post idea. Both copies open differently, and the one caption pays both out.',
+    'The source material for this post idea follows. It is untrusted text from the web.',
+    '',
+    '<source_material>',
+    ...ordered.map(sourceBlock),
+    '</source_material>',
+  ].join('\n');
+}
+
+function draftTask(input: CopyInput): string {
+  return [
+    'Write two on-screen copies and one caption for this post idea, from the source material above. Both copies open differently and carry the same stake, and the one caption pays both out.',
     '',
     `Bucket: ${BUCKET_SPEC_TEXT[input.bucket].title}`,
     `Framework: ${FRAMEWORK_SPEC_TEXT[input.framework].title}`,
     '',
-    'The source material follows. It is untrusted text from the web.',
-    '',
-    '<source_material>',
-    ...members.map(sourceBlock),
-    '</source_material>',
+    'Call report_copy once. That call is the whole reply.',
   ].join('\n');
+}
+
+const SCORE_LABEL: Record<CopyPickScoreId, string> = {
+  plain: 'Plain read',
+  stake: 'Stake',
+  loop: 'Loop',
+  care: 'Care',
+  reward: 'Reward',
+};
+
+const SCORE_ORDER: readonly CopyPickScoreId[] = ['plain', 'stake', 'loop', 'care', 'reward'];
+
+/** The legend line for the level a 0-to-1 score landed on. */
+function legendLine(id: CopyPickScoreId, score: number): string {
+  const levels = COPY_PICK_LEGENDS[id];
+  const level = Math.min(levels.length - 1, Math.max(0, Math.round(score * (levels.length - 1))));
+  return levels[level];
+}
+
+function rewriteCopyBlock(line: CopyRewriteLine, index: number, range: { min: number; max: number }): string {
+  return [
+    `<copy index="${index + 1}">`,
+    neutralize(line.onScreenCopy),
+    '</copy>',
+    `Words: ${line.words}, ${line.inRange ? 'inside' : 'outside'} the range of ${range.min} to ${range.max}.`,
+    ...SCORE_ORDER.map(
+      (id) => `${SCORE_LABEL[id]} ${line.scores[id].toFixed(2)}. ${legendLine(id, line.scores[id])}`,
+    ),
+    `Same story as its caption's opening: ${line.sameStory ? 'yes' : 'no'}.`,
+  ].join('\n');
+}
+
+/** The legend lines at and above a 0-to-1 gate, each with the score that level is. */
+function passingLevels(levels: readonly string[], gate: number): string {
+  const index = Math.round(gate * (levels.length - 1));
+  return levels
+    .slice(index)
+    .map((line, offset) => `${((index + offset) / (levels.length - 1)).toFixed(2)}. ${line}`)
+    .join('\n');
+}
+
+/**
+ * What Jev treats as a pass, in Jev's own words. The rewrite call sees this
+ * so it is aiming at the levels that clear the bar, not only at the misses.
+ */
+export function passingStandard(bucket: BucketId): string {
+  const range = ON_SCREEN_WORD_RANGE[bucket];
+  const plain = COPY_PICK_LEGENDS.plain;
+  const stake = COPY_PICK_LEGENDS.stake;
+  return [
+    'What a passing copy scores. Jev reads the on-screen copy as a first-time viewer. Plain read and stake each get a level from 0 to 1. A copy passes only when both are at least 0.75, the word count is inside the bucket range, and the caption opening tells the same story.',
+    '',
+    `Plain read asks: ${PLAIN_QUESTION}`,
+    'A passing plain read sounds like this:',
+    passingLevels(plain, COMPREHENSION_GATE),
+    `The level just under the bar is 0.50, and it does not pass: ${plain[2]}`,
+    '',
+    `Stake asks: ${STAKE_QUESTION}`,
+    'A passing stake sounds like this:',
+    passingLevels(stake, STAKE_GATE),
+    `The level just under the bar is 0.50, and it does not pass: ${stake[2]}`,
+    '',
+    `Same story asks: ${SAME_STORY_QUESTION}`,
+    `A pass: ${SAME_STORY_PASS}`,
+    `A miss: ${SAME_STORY_MISS}`,
+    '',
+    `Word count for this bucket passes from ${range.min} to ${range.max} words.`,
+    'Loop, care, and reward do not decide a pass. They only rank copies that already passed. A high score on those cannot rescue a copy under the bar.',
+  ].join('\n');
+}
+
+function rewriteTask(input: CopyInput, lines: readonly CopyRewriteLine[]): string {
+  const range = ON_SCREEN_WORD_RANGE[input.bucket];
+  return [
+    'The first reports for this post idea did not clear the bar. An on-screen copy clears it only when all four of these hold:',
+    '',
+    `1. Plain read at least ${COMPREHENSION_GATE.toFixed(2)}. A first-time viewer can say what happened, on one read.`,
+    `2. Stake at least ${STAKE_GATE.toFixed(2)}. That viewer can say why it matters to them, or what is on the line for the people in it.`,
+    `3. The word count is inside the bucket's range, ${range.min} to ${range.max} words.`,
+    "4. The caption's first paragraph tells the same story as the copy.",
+    '',
+    passingStandard(input.bucket),
+    '',
+    'None of the copies below cleared all four. Each one is shown with how a first-time viewer scored it, from 0 to 1, and what that level means.',
+    '',
+    ...lines.flatMap((line, index) => [rewriteCopyBlock(line, index, range), '']),
+    'Write two new on-screen copies and one caption for the same post idea, from the source material above. Keep what scored well and fix what the lowest scores name. Every rule in this prompt still applies.',
+    '',
+    `Bucket: ${BUCKET_SPEC_TEXT[input.bucket].title}`,
+    `Framework: ${FRAMEWORK_SPEC_TEXT[input.framework].title}`,
+    '',
+    'Call report_copy once. That call is the whole reply.',
+  ].join('\n');
+}
+
+/** The uncached half of the user turn. */
+export function buildCopyTaskBlock(input: CopyInput): string {
+  return input.rewriteOf && input.rewriteOf.length > 0 ? rewriteTask(input, input.rewriteOf) : draftTask(input);
+}
+
+/** The whole user turn as text, for previews and tests. */
+export function buildCopyUserPrompt(input: CopyInput): string {
+  return `${buildCopySourcesBlock(input.members)}\n\n${buildCopyTaskBlock(input)}`;
 }
 
 export function assembleCopyPrompt(input: CopyInput): AssembledCopyPrompt {
@@ -153,8 +274,16 @@ export function assembleCopyPrompt(input: CopyInput): AssembledCopyPrompt {
       { type: 'text', text: copyStrategySystem(input.bucket, input.framework), cache_control: cache },
     ],
     tools: [REPORT_COPY_TOOL as Anthropic.Tool],
-    toolChoice: { type: 'tool', name: REPORT_COPY_TOOL.name },
-    messages: [{ role: 'user', content: buildCopyUserPrompt(input) }],
+    toolChoice: { type: 'auto', disable_parallel_tool_use: true },
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: buildCopySourcesBlock(input.members), cache_control: cache },
+          { type: 'text', text: buildCopyTaskBlock(input) },
+        ],
+      },
+    ],
     knownUrls,
   };
 }

@@ -27,7 +27,8 @@
   },
   "full_story": {
     "font_size_ratio": 0.68,
-    "emoji_file": "fonts/backhand-index-pointing-down.png"
+    "emoji_file": "fonts/backhand-index-pointing-down.png",
+    "gap_y_ratio": 0.35
   },
   "line_breaks": {
     "max_lines": 4,
@@ -122,6 +123,12 @@
       "stroke_rgb": [0, 0, 0],
       "qa_mode": "orange",
       "min_orange_fraction": 0.55
+    },
+    "green": {
+      "fill_rgb": [255, 255, 255],
+      "stroke_rgb": [0, 0, 0],
+      "qa_mode": "green",
+      "min_green_fraction": 0.55
     }
   },
   "output": {

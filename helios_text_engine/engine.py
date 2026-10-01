@@ -654,7 +654,7 @@ def apply_profile(spec: dict, profile: str | None) -> dict:
 
 
 def check_background(bg_path: str | Path, spec: dict | None = None) -> dict:
-    """QA gate for the reserved center band, or the whole frame on the orange grade."""
+    """QA gate for the reserved center band, or the whole frame on the orange and green grades."""
     spec = spec or load_spec()
     qa = spec["background_qa"]
     img, _ = _open_rgb(bg_path)
@@ -680,6 +680,14 @@ def check_background(bg_path: str | Path, spec: dict | None = None) -> dict:
         bright = fraction
         if fraction < qa["min_orange_fraction"]:
             reasons.append(f"orange fraction {fraction:.3%} < {qa['min_orange_fraction']:.0%}")
+    elif mode == "green":
+        rgb = np.asarray(img).astype(np.float32) / 255.0
+        red, green_ch, blue = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+        field = (green_ch > 0.35) & (green_ch > red * 1.15) & (green_ch > blue * 1.15)
+        fraction = float(field.mean())
+        bright = fraction
+        if fraction < qa["min_green_fraction"]:
+            reasons.append(f"green fraction {fraction:.3%} < {qa['min_green_fraction']:.0%}")
     else:
         if mean > qa["max_mean_luma"]:
             reasons.append(f"mean luma {mean:.3f} > {qa['max_mean_luma']}")
@@ -726,10 +734,10 @@ def _cue_scaled(spec: dict, image_width: int, main_font_px: int) -> Scaled:
     return scale_spec(spec, image_width, size)
 
 
-def _apple_hand(spec: dict) -> Image.Image:
-    """Apple's Backhand Index Pointing Down, rendered once from Apple Color Emoji."""
+def _cue_mark(spec: dict, key: str, default: str) -> Image.Image:
+    """One Apple Color Emoji, rendered once to a transparent PNG."""
     cue = spec.get("full_story") or {}
-    rel = str(cue.get("emoji_file") or "fonts/backhand-index-pointing-down.png")
+    rel = str(cue.get(key) or default)
     return Image.open(Path(spec["_base_dir"]) / rel).convert("RGBA")
 
 
@@ -745,38 +753,47 @@ def _draw_full_story(
     stroke: tuple,
     label: str,
 ) -> None:
-    """Center the cue and Apple's downward hand on the midpoint under the copy. One line."""
+    """Center the cue and Apple's downward hand in the gap under the copy."""
     words = " ".join(label.replace("\n", " ").split())
     if not words:
         return
-    hand = _apple_hand(spec)
+    marks = [
+        _cue_mark(spec, "emoji_file", "fonts/backhand-index-pointing-down.png"),
+    ]
     sc = _cue_scaled(spec, image_width, main_font_px)
     limit = image_width * 0.9
+
+    def measure(scaled: Scaled) -> tuple[int, int, list[int], int]:
+        gap = max(6, round(scaled.font_px * 0.45))
+        mark_h = max(1, round(scaled.font_px * 1.85))
+        mark_w = [max(1, round(mark_h * mark.width / mark.height)) for mark in marks]
+        word_w = round(scaled.font.getlength(words)) + 2 * scaled.stroke_px
+        return gap, mark_h, mark_w, word_w
+
     while sc.font_px > 1:
-        gap = max(6, round(sc.font_px * 0.45))
-        hand_h = max(1, round(sc.font_px * 1.85))
-        hand_w = max(1, round(hand_h * hand.width / hand.height))
-        word_w = round(sc.font.getlength(words)) + 2 * sc.stroke_px
-        if word_w + gap + hand_w <= limit:
+        gap, _mark_h, mark_w, word_w = measure(sc)
+        if word_w + gap * len(marks) + sum(mark_w) <= limit:
             break
         sc = scale_spec(spec, image_width, sc.font_px - 1)
     stroke_px = sc.stroke_px
-    gap = max(6, round(sc.font_px * 0.45))
-    hand_h = max(1, round(sc.font_px * 1.85))
-    hand_w = max(1, round(hand_h * hand.width / hand.height))
+    gap, mark_h, mark_w, _word_w = measure(sc)
     word_box = draw.textbbox((0, 0), words, font=sc.font, anchor="lt", stroke_width=stroke_px)
     word_w = word_box[2] - word_box[0]
     word_h = word_box[3] - word_box[1]
-    total_w = word_w + gap + hand_w
-    half = max(word_h, hand_h) / 2
-    y = round((text_bottom + image_height) / 2)
+    row_h = max([word_h, mark_h])
+    total_w = word_w + gap * len(marks) + sum(mark_w)
+    half = row_h / 2
+    # 0.35 of the way from the copy to the bottom of the frame. The midpoint sat
+    # in the caption band.
+    gap_ratio = float((spec.get("full_story") or {}).get("gap_y_ratio", 0.35))
+    y = round(text_bottom + (image_height - text_bottom) * gap_ratio)
     floor_gap = max(4, round(sc.line_height_px * 0.25))
     y = max(y, round(text_bottom + half + floor_gap))
     y = min(y, round(image_height - half - 4))
     top = y - half
     start = (image_width - total_w) / 2
     draw.text(
-        (start - word_box[0], top + (max(word_h, hand_h) - word_h) / 2 - word_box[1]),
+        (start - word_box[0], top + (row_h - word_h) / 2 - word_box[1]),
         words,
         font=sc.font,
         anchor="lt",
@@ -784,12 +801,12 @@ def _draw_full_story(
         stroke_fill=stroke,
         stroke_width=stroke_px,
     )
-    placed = hand.resize((hand_w, hand_h), Image.Resampling.LANCZOS)
-    img.paste(
-        placed,
-        (round(start + word_w + gap), round(top + (max(word_h, hand_h) - hand_h) / 2)),
-        placed,
-    )
+    cursor = start + word_w
+    for mark, width in zip(marks, mark_w):
+        cursor += gap
+        placed = mark.resize((width, mark_h), Image.Resampling.LANCZOS)
+        img.paste(placed, (round(cursor), round(top + (row_h - mark_h) / 2)), placed)
+        cursor += width
 
 
 def render_text(bg_path: str | Path, copy: str, out_path: str | Path,
@@ -865,8 +882,13 @@ def render_text(bg_path: str | Path, copy: str, out_path: str | Path,
 
 
 def render_plate(copy: str, width: int, height: int, out_path: str | Path,
-                 spec: dict | None = None, full_story: str | None = None) -> dict:
-    """Draw the same layout on a transparent PNG. The video model never sees this plate."""
+                 spec: dict | None = None, full_story: str | None = None,
+                 cue_only: bool = False) -> dict:
+    """Draw the same layout on a transparent PNG. The video model never sees this plate.
+
+    `cue_only` measures the on-screen copy and draws just the cue, for a reel
+    whose main line is already on the picture.
+    """
     spec = spec or load_spec()
     out = Path(out_path)
     layout, sc = layout_for_image(copy, width, height, spec)
@@ -882,7 +904,8 @@ def render_plate(copy: str, width: int, height: int, out_path: str | Path,
     boxes = []
     for line, y in zip(layout.lines, baselines):
         kw = dict(font=sc.font, anchor="ms", stroke_width=sc.stroke_px)
-        draw.text((width / 2, y), line, fill=fill, stroke_fill=stroke, **kw)
+        if not cue_only:
+            draw.text((width / 2, y), line, fill=fill, stroke_fill=stroke, **kw)
         boxes.append(draw.textbbox((width / 2, y), line, **kw))
     if full_story and full_story.strip() and boxes:
         _draw_full_story(
@@ -975,6 +998,7 @@ def _cli(argv=None) -> int:
     plate.add_argument("--out", required=True)
     plate.add_argument("--profile", default="noir")
     plate.add_argument("--full-story", default="", help="Cue words. A hand pointing down is drawn after them.")
+    plate.add_argument("--cue-only", action="store_true", help="Draw only the cue, using the copy to find its place.")
 
     m = sub.add_parser("batch", help="Process a manifest of renders")
     m.add_argument("manifest")
@@ -997,7 +1021,8 @@ def _cli(argv=None) -> int:
             print(json.dumps(asdict(lay), indent=2))
         elif a.cmd == "plate":
             res = render_plate(a.copy.replace("\\n", "\n"), a.width, a.height, a.out, spec,
-                               full_story=getattr(a, "full_story", "") or None)
+                               full_story=getattr(a, "full_story", "") or None,
+                               cue_only=bool(getattr(a, "cue_only", False)))
             print(json.dumps(res, indent=2))
         elif a.cmd == "check-bg":
             res = check_background(a.bg, spec)

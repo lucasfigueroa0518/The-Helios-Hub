@@ -31,7 +31,8 @@ async function main(): Promise<void> {
   for (const target of targets) {
     const prompt = assembleCopyPrompt(target);
     const [staticBlock, strategyBlock] = prompt.system;
-    const user = String(prompt.messages[0].content);
+    const [sourcesBlock, taskBlock] = prompt.messages[0].content;
+    const user = `${sourcesBlock.text}\n\n${taskBlock.text}`;
     const doc = [
       `<!-- ${prompt.version} · slate ${slate.nyDate} · rank ${target.rank} · ${target.bucket} · ${target.framework} -->`,
       '',
@@ -41,7 +42,7 @@ async function main(): Promise<void> {
       '<!-- SYSTEM BLOCK 2 (cached per bucket and framework) -->',
       strategyBlock.text,
       '',
-      '<!-- USER TURN (per idea, not cached) -->',
+      '<!-- USER TURN: sources (cached per idea), then the task (not cached) -->',
       user,
     ].join('\n');
 

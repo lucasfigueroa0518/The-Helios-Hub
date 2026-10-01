@@ -2,7 +2,16 @@ import { dbQuery } from '@/lib/db';
 import { queuePublish, publishReadiness, type PublishTrigger } from '@/lib/reels/music/publish';
 import { getSetting } from '@/lib/reels/music/store';
 import { calendarDateKey } from '@/lib/reels/schedule';
-import { chooseSlot, slotKey, slotLabel, type SlotId } from '@/lib/reels/publish/slots';
+import {
+  chooseSlot,
+  openMinuteRange,
+  POSTING_SLOTS,
+  POSTING_TIME_ZONE,
+  slotKey,
+  slotLabel,
+  uniformIndex,
+  type SlotId,
+} from '@/lib/reels/publish/slots';
 
 /**
  * One reel per posting slot per Eastern day. The nightly run fills the slots
@@ -99,22 +108,27 @@ async function takenSlots(fromDate: string): Promise<Set<string>> {
 }
 
 /**
- * Reserve the earliest open slot whose whole window is still ahead.
- * A reel that already has a clock time keeps it.
+ * Reserve the earliest window that has not ended. `throughDate` limits the
+ * search to that Eastern calendar day. A reel that already has a clock time
+ * keeps it.
  */
 export async function schedulePostIdea(
   postIdeaId: string,
   source: ScheduleSource,
   videoJobId: string | null,
   now = new Date(),
+  throughDate?: string,
 ): Promise<ScheduleOutcome> {
   const existing = await activeSchedule(postIdeaId);
   if (existing) return { scheduled: true, schedule: existing, note: scheduleNote(existing) };
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const choice = chooseSlot(now, await takenSlots(calendarDateKey(now)));
+    const choice = chooseSlot(now, await takenSlots(calendarDateKey(now)), uniformIndex, POSTING_TIME_ZONE, throughDate);
     if (!choice) {
-      return { scheduled: false, status: 409, note: 'No posting slot is open in the next two weeks.' };
+      const note = throughDate
+        ? 'No posting window is still open today.'
+        : 'No posting slot is open in the next two weeks.';
+      return { scheduled: false, status: 409, note };
     }
     try {
       const { rows } = await dbQuery<ScheduleRow>(
@@ -134,33 +148,85 @@ export async function schedulePostIdea(
   return { scheduled: false, status: 409, note: 'That slot was just taken. Try again.' };
 }
 
-/** A finished reel, sent by a person, takes the next open slot. */
-export async function scheduleVideo(videoJobId: string): Promise<ScheduleOutcome> {
-  const ready = await publishReadiness(videoJobId);
-  if (!ready.ok) return { scheduled: false, status: ready.status, note: ready.note };
-  return schedulePostIdea(ready.postIdeaId, 'user', videoJobId);
+export const BENCH_SCHEDULE_NOTE =
+  'Only the day’s three best reels go on the clock. The rest stay on the bench.';
+
+export const MISSED_TODAY_NOTE =
+  'This reel missed today’s windows. It carries to tomorrow at its score, instead of being scheduled late.';
+
+/** True when this rank is one of the three that can post today. */
+export function isPostingRank(rank: number | null): boolean {
+  return rank != null && rank >= 1 && rank <= 3;
+}
+
+async function rankOnDate(postIdeaId: string, nyDate: string): Promise<number | null> {
+  const { rows } = await dbQuery<{ rank: number | null }>(
+    `SELECT s.rank
+       FROM reels.idea_scores s
+       JOIN reels.score_slates sl ON sl.id = s.slate_id
+      WHERE s.post_idea_id = $1::uuid
+        AND sl.ny_date = $2::date
+      ORDER BY sl.scored_at DESC
+      LIMIT 1`,
+    [postIdeaId, nyDate],
+  );
+  return rows[0]?.rank ?? null;
+}
+
+/** How many of today's windows can still take a reel. A started window counts until it ends. */
+export async function windowsStillOpen(now = new Date()): Promise<number> {
+  const today = calendarDateKey(now);
+  const taken = await takenSlots(today);
+  return POSTING_SLOTS.filter(
+    (slot) => !taken.has(slotKey(today, slot.id)) && openMinuteRange(today, slot.id, now) != null,
+  ).length;
 }
 
 /**
- * The selected reels on a slate, best first, each into the next open slot.
- * Does nothing while publishing is not live.
+ * A person can put one of today's top three into a window still open today.
+ * The bench is not scheduled. A day with no window left is a miss, not a
+ * tomorrow slot.
  */
-export async function scheduleSelectedSlate(slateId: string): Promise<{ scheduled: number }> {
+export async function scheduleVideo(videoJobId: string, now = new Date()): Promise<ScheduleOutcome> {
+  const ready = await publishReadiness(videoJobId);
+  if (!ready.ok) return { scheduled: false, status: ready.status, note: ready.note };
+  const today = calendarDateKey(now);
+  const rank = await rankOnDate(ready.postIdeaId, today);
+  if (!isPostingRank(rank)) {
+    return { scheduled: false, status: 409, note: BENCH_SCHEDULE_NOTE };
+  }
+  const result = await schedulePostIdea(ready.postIdeaId, 'user', videoJobId, now, today);
+  if (!result.scheduled && result.note === 'No posting window is still open today.') {
+    return { scheduled: false, status: result.status, note: MISSED_TODAY_NOTE };
+  }
+  return result;
+}
+
+/**
+ * The top three by rank, best first, one per window still open on that
+ * slate's Eastern day. A later rank is not scheduled once the day has no
+ * window left. Does nothing while publishing is not live.
+ */
+export async function scheduleSelectedSlate(slateId: string, now = new Date()): Promise<{ scheduled: number }> {
   if (!(await publishingLive())) return { scheduled: 0 };
-  const { rows } = await dbQuery<{ post_idea_id: string }>(
-    `SELECT s.post_idea_id
+  const { rows } = await dbQuery<{ post_idea_id: string; ny_date: string }>(
+    `SELECT s.post_idea_id, sl.ny_date::text AS ny_date
        FROM reels.idea_scores s
-      WHERE s.slate_id = $1 AND s.selected
+       JOIN reels.score_slates sl ON sl.id = s.slate_id
+      WHERE s.slate_id = $1
+        AND s.rank IS NOT NULL
+        AND s.rank <= 3
         AND NOT EXISTS (
           SELECT 1 FROM reels.published_status p
            WHERE p.post_idea_id = s.post_idea_id AND p.published
         )
-      ORDER BY s.rank NULLS LAST`,
+      ORDER BY s.rank`,
     [slateId],
   );
+  const nyDate = rows[0]?.ny_date;
   let scheduled = 0;
   for (const row of rows) {
-    const result = await schedulePostIdea(row.post_idea_id, 'auto', null);
+    const result = await schedulePostIdea(row.post_idea_id, 'auto', null, now, nyDate);
     if (result.scheduled) scheduled += 1;
   }
   return { scheduled };
@@ -177,7 +243,7 @@ export async function scheduleLatestToday(now = new Date()): Promise<{ scheduled
   );
   const id = rows[0]?.id;
   if (!id) return { scheduled: 0 };
-  return scheduleSelectedSlate(id);
+  return scheduleSelectedSlate(id, now);
 }
 
 async function readyVideo(postIdeaId: string, videoJobId: string | null): Promise<string | null> {

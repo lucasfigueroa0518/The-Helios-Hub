@@ -1,7 +1,7 @@
 import { hostname } from 'node:os';
 import { randomUUID } from 'node:crypto';
 
-import { dbPoolSnapshot } from '@/lib/db';
+import { dbPoolSnapshot, describeDbTarget } from '@/lib/db';
 import { draftingAnthropicSnapshot } from '@/lib/drafting/anthropic-semaphore';
 import {
   jitteredBackoffMs,
@@ -131,17 +131,16 @@ export class OrchestrationWorker {
       await unregisterWorker(this.workerId).catch(() => undefined);
       return;
     }
-    const { describeDbTarget } = await import('@/lib/db');
     const dbTarget = describeDbTarget();
+    const pgPoolMax = dbPoolSnapshot().configuredMax;
     log('info', 'worker_started', {
       workerId: this.workerId,
       processConcurrency: workerMaxConcurrency(),
       leaseSeconds: workerLeaseSeconds(),
       dbMode: dbTarget.mode,
       dbHostPort: dbTarget.hostPort,
-      pgPoolMax: Number(process.env.PG_POOL_MAX ?? 2),
+      pgPoolMax,
     });
-    const pgPoolMax = Number(process.env.PG_POOL_MAX ?? 2);
     if (Number.isFinite(pgPoolMax) && workerMaxConcurrency() > Math.max(1, pgPoolMax) * 4) {
       log('warn', 'worker_concurrency_exceeds_pool_budget', {
         processConcurrency: workerMaxConcurrency(),

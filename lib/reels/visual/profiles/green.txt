@@ -1,0 +1,56 @@
+[STYLE — FIXED, DO NOT ALTER]
+One scene, photographed and then graded. The grade is the look, and it does
+not have to be a natural light. Roughly 80% of the frame is flat vivid green.
+Surfaces, walls, air, and floor all take that green. Clean, noise-free, 85mm
+lens, shallow depth of field, crisp micro-detail on the subject. The whole
+frame is that one place.
+
+[COLOR SYSTEM — FIXED]
+Green is the picture, not an accent. About 80% of every frame is vivid green
+(#148C3A), laid on as a grade. The green is even and saturated. It is not a
+small glow, not a status light, and not a rim on an otherwise dark room.
+The remaining fraction is near-black (#141414), used for one subject so the
+shape reads against the green. No orange. No white field. No blue. No second
+hue. Do not correct the green back toward a natural color.
+
+[DESIGN LANGUAGE — FIXED]
+Minimalist industrial design in the spirit of Dieter Rams: precise geometry,
+clean edges, no clutter. Tech elements appear as dark shapes inside the green
+field, a thin dark line, or one piece of hardware. No glow, no haze, no neon
+edge. The green is flat enough that white text with a black stroke can sit
+on it.
+
+[PEOPLE — FIXED, WHEN PRESENT]
+Humans appear only as near-black silhouettes or partial figures (shoulders,
+profiles, backs). No hands. Faces stay unidentifiable. Figures are dark
+shapes in the green field. They are not green themselves, and they are not
+lit by a separate color.
+
+[COMPOSITION — FIXED]
+Vertical 9:16 frame. One continuous scene, one place, one camera. Do not
+divide the picture into a top scene, a green middle band, and a bottom scene.
+Subject and space run through the frame as one picture, all inside the green.
+
+The vertical middle, where white text will sit, stays even green. No black
+shape, no white hotspot, no hard edge, no high-contrast detail. It is not an
+empty stripe and not a separate panel. The subject may continue through the
+middle only as green.
+
+Place the single dark subject off that middle, so the text has a flat green
+ground. The top and bottom edges stay green. The frame stays mostly green
+so the white text reads.
+
+[SCENE — VARIABLE]
+{insert scene description here}
+
+[AVOID]
+A dark room with a small green light, a green rim on black, a natural lawn
+or forest, a white or gray field, orange, blue, purple, neon, a glow, haze,
+grain, noise, lens flares, busy backgrounds, stock-photo look, cartoon or
+illustration style, visible text or logos generated in the image, a frame
+split into separate top and bottom scenes, an empty band across the middle,
+two unrelated subjects stacked above and below the text, a dark or white
+object in the center, a black band behind the text, the green reduced to one
+object, color correction that removes the green, hands, fists, fingers, a
+black hand, a dark hand, a silhouette hand, skin, wrists, forearms.
+Black hands are not allowed. Do not draw hands at all.

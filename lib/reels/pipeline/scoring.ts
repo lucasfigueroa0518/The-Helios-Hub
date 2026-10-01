@@ -4,6 +4,8 @@ import type { JevRunner } from '@/lib/reels/jev/runner';
 import {
   candidateOrigins,
   carryoverMisses,
+  heldFromCarryover,
+  earlierNyDateKey,
   nyDateKey,
   previousNyDateKey,
   rankForSlate,
@@ -12,6 +14,7 @@ import {
 } from '@/lib/reels/scoring/decide';
 import { applyPass2, interpretPass1, type InterpretedScore } from '@/lib/reels/scoring/interpret';
 import { buildPass1State, buildPass2State } from '@/lib/reels/scoring/state';
+import { rerankSlate } from '@/lib/reels/locks';
 import {
   insertSlate,
   listTimelyIdeas,
@@ -68,9 +71,11 @@ export async function scoreOneIdea(
 }
 
 /**
- * Score tonight's timely ideas and yesterday's misses, then keep the top 3
- * (D-080). A same-day rerun re-scores today's earlier slate instead of
- * carrying from it. Question sets P-08 and P-09 are approved.
+ * Score tonight's timely ideas and the carryover window, then keep the top 3
+ * (D-080, D-227). The window is yesterday's 20 best misses. A miss from two
+ * days ago joins when its stored net lands in the first 10. A same-day rerun
+ * re-scores today's earlier slate instead of carrying from it. Question sets
+ * P-08 and P-09 are approved.
  */
 export async function scoreRun(
   runId: string,
@@ -79,15 +84,23 @@ export async function scoreRun(
 ): Promise<ScoringSummary> {
   const today = nyDateKey(runStartedAt);
   const yesterday = previousNyDateKey(runStartedAt);
+  const twoDaysAgo = earlierNyDateKey(runStartedAt, 2);
 
-  const [timely, sameDayIds, yesterdayRanked] = await Promise.all([
+  const [timely, sameDayIds, yesterdayRanked, olderRanked] = await Promise.all([
     listTimelyIdeas(),
     slateIdeaIds(today),
     loadSlateRanked(yesterday),
+    loadSlateRanked(twoDaysAgo),
   ]);
 
-  const selectedYesterday = yesterdayRanked.filter((idea) => idea.selected).map((idea) => idea.id);
-  const misses = carryoverMisses(yesterdayRanked, selectedYesterday);
+  const selectedYesterday = heldFromCarryover(yesterdayRanked);
+  const selectedTwoDaysAgo = heldFromCarryover(olderRanked);
+  const misses = carryoverMisses(
+    yesterdayRanked,
+    selectedYesterday,
+    olderRanked,
+    selectedTwoDaysAgo,
+  );
   const origins = candidateOrigins({
     timelyIds: timely.map((idea) => idea.id),
     sameDayIds,
@@ -131,6 +144,7 @@ export async function scoreRun(
     pass2Version: SCORING_PASS_2.version,
     scores,
   });
+  await rerankSlate(slateId, today);
 
   return {
     slateId,
@@ -224,6 +238,7 @@ export async function rescoreIdeas(
     pass2Version: SCORING_PASS_2.version,
     scores,
   });
+  await rerankSlate(slateId, nyDate);
 
   return {
     slateId,

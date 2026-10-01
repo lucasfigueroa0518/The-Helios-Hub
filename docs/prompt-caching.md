@@ -12,8 +12,9 @@ Helpers live in `lib/anthropic-cache.ts`. Default TTL for static prefixes is
 Outreach Hub spends most Claude money on **repeated prefixes**: skills,
 positioning, capability catalogs, report-tool JSON schemas, and web_search
 definitions. Those are identical across leads in a campaign and across turns
-inside one research/reply session. Cache hits are **0.1×** base input; 5-minute
-writes are **1.25×**; 1-hour writes are **2×**. After the first lead (or first
+inside one research/reply session. Cache hits are **0.1×** base input
+(Opus 5.5 is **0.05×**); 5-minute writes are **1.25×**; 1-hour writes are
+**2×**. After the first lead (or first
 turn), the shared prefix should be a read, not a full input charge.
 
 ## Standing rule
@@ -22,8 +23,19 @@ turn), the shared prefix should be a read, not a full input charge.
 exists.** Do not add a new `messages.create` that sends a large system prompt,
 tool schema, skill, or positioning block without `cache_control`.
 
-The installed SDK (`@anthropic-ai/sdk` 0.65) does **not** support top-level
-automatic `cache_control`. Use **explicit breakpoints** on content blocks.
+The API accepts a top-level `cache_control` (automatic caching). It moves the
+breakpoint to the last cacheable block. Use that only for a growing
+conversation. A one-shot call whose last block is the lead, the image, or a
+timestamp must keep an **explicit** breakpoint on the stable prefix. Automatic
+caching writes that varying block and the next request never hits.
+
+The installed SDK (`@anthropic-ai/sdk` 0.65) does not type top-level
+`cache_control`. Multi-turn loops use `withConversationCache`, which marks
+only the last message block. That is the same moving breakpoint, and it can
+sit after a 1-hour tools or system breakpoint. Do not add a top-level
+breakpoint on top of one that is already on the last block with a different
+TTL (the API returns 400), and do not exceed 4 breakpoints. Automatic caching
+consumes one of those four slots.
 
 ## How it works (short)
 
@@ -34,8 +46,8 @@ automatic `cache_control`. Use **explicit breakpoints** on content blocks.
    requests you want to share. Never put it only on a timestamp, lead payload,
    or the incoming user message if that is the part that changes.
 4. Shorter than the model minimum is silently skipped (no error). Check
-   `cache_creation_input_tokens` / `cache_read_input_tokens`. Sonnet 5 minimum
-   is 1,024 tokens; Haiku 4.5 is 4,096.
+   `cache_creation_input_tokens` / `cache_read_input_tokens`. Sonnet 5.5 and
+   Opus 5.5 minimum is 512 tokens. Sonnet 5 is 1,024. Haiku 4.5 is 4,096.
 5. Up to **4** breakpoints per request. Longer TTL must appear **before**
    shorter TTL (`1h` system, then `5m` conversation).
 6. Changing tool definitions invalidates **tools + system + messages**.
@@ -108,13 +120,18 @@ await client.messages.create({
 | `lib/research-provider.ts` (enrichment) | Cached system + last tool; same tools on search and report turns | Cached |
 | `lib/vision-extraction.ts` | Static count/extract rules in system; image in user (uncached) | Cached prefix |
 | `lib/pdf-vision.ts` | Static extract rules in system; PDF bytes in user (uncached) | Cached prefix |
-| `lib/dashboards/ai.ts` | Voice/rules as cached system; events in user; retry uses conversation cache | Cached |
+| `lib/dashboards/ai.ts` | Voice/rules as cached system; first turn and JSON retry use conversation cache | Cached |
+| `lib/reels/copy/assemble.ts` | `5m` on static skill, bucket strategy, and sources; the task block stays uncached | Cached |
+| `lib/reels/visual/scene-writer.ts` | Cached system; the story and recent scenes stay in the user message | Cached prefix |
+| `lib/reels/visual/motion-writer.ts` | Shared instructions cached; the grade block and the still sit after the breakpoint | Cached prefix |
+| `lib/reels/adapters/web-search.ts` | System `1h`, last tool cached, conversation cache on each attempt including the grounding retry | Cached |
+| `lib/auto-campaigns/filter-map.ts` | Cached mapping rules; the attribute payload stays in the user message | Cached prefix |
 | `scripts/smoke_live_integrations.ts` | Probe only | Leave uncached |
 
-Vision/PDF prefixes may sit under the 1,024-token floor until tools+instructions
+Vision/PDF prefixes may sit under the token floor until tools and instructions
 grow; `cache_control` is still required so they start hitting as soon as they
-qualify. Haiku 4.5 (adversarial, profile/email rescue) needs 4,096 tokens
-before a prefix caches.
+qualify. Sonnet 5.5 qualifies at 512 tokens. Sonnet 5 qualifies at 1,024.
+Haiku 4.5 (adversarial, profile/email rescue) needs 4,096.
 
 ## Pricing snapshot (multipliers)
 
@@ -122,7 +139,8 @@ These stack with batch discounts. Confirm current rows on the official page.
 
 - 5-minute cache write: **1.25×** base input
 - 1-hour cache write: **2×** base input
-- Cache read / refresh: **0.1×** base input
+- Cache read / refresh: **0.1×** base input, except Opus 5.5 at **0.05×** and
+  Fable 5.1 / Mythos 5.1 at **0.025×**
 - Output tokens: unchanged
 
 Use the 5-minute cache when the same prefix is reused more often than every
@@ -139,8 +157,11 @@ later than five minutes (worker gaps, slow tool loops, sparse batches).
 3. **Leaving `cache_control` on every historical message** — burns the 4
    breakpoint slots. `withConversationCache` strips older message markers.
 4. **Cost using only `usage.input_tokens`** — undercounts once caching works.
-5. **Automatic top-level `cache_control`** — not in SDK 0.65; TypeScript will
-   reject it. Stay on explicit block markers until the SDK is upgraded.
+5. **Automatic caching on a one-shot call** — the breakpoint lands on the
+   varying user message, so the stable prefix is written every time and never
+   read. Keep the explicit breakpoint on the last identical block. The SDK
+   types do not include the top-level field; `withConversationCache` is the
+   moving breakpoint for a growing conversation.
 
 ## Pre-warming
 

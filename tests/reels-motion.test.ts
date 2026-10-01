@@ -70,6 +70,8 @@ describe('motion prompt', () => {
     assert.match(motionGradeInstructions('noir'), /orange light/);
     assert.match(motionGradeInstructions('paper'), /no glow and no haze/);
     assert.match(motionGradeInstructions('orange'), /no glow and no haze/);
+    assert.match(motionGradeInstructions('green'), /no glow and no haze/);
+    assert.match(motionGradeInstructions('green'), /green field itself holds still/);
   });
 
   it('accepts a prompt that covers every second and keeps the dolly curve', () => {
@@ -266,8 +268,15 @@ describe('Jev color route', () => {
     assert.equal(route.profile, 'orange');
     assert.deepEqual(seen[0]?.state, { on_screen_copy: 'The chip lost half its value.' });
     assert.deepEqual(seen[0]?.sets, [COLOR_ROUTE]);
-    assert.equal(COLOR_ROUTE.version, 'color-route-v3');
+    assert.equal(COLOR_ROUTE.version, 'color-route-v6');
+    assert.match(JSON.stringify(COLOR_ROUTE), /Copy that states a cost or a risk to the viewer \(orange\)/);
+    assert.match(JSON.stringify(COLOR_ROUTE), /with no stated stake for the viewer/);
     assert.match(JSON.stringify(COLOR_ROUTE), /keeps going after the person looks away/);
+    assert.match(JSON.stringify(COLOR_ROUTE), /arrived and works is green/);
+    assert.match(JSON.stringify(COLOR_ROUTE), /where the arrival is the point \(green\)/);
+    assert.match(JSON.stringify(COLOR_ROUTE), /A gain, a release, or a fix with no loss \(green\)/);
+    assert.match(JSON.stringify(COLOR_ROUTE), /Also the choice when the copy fits no other look/);
+    assert.match(JSON.stringify(COLOR_ROUTE), /When the copy fits no other look, the grade is green/);
   });
 });
 

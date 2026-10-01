@@ -1,5 +1,6 @@
 import { markdownToText } from '@/lib/reels/net/html';
 import { fetchText } from '@/lib/reels/net/http';
+import { parseUtcDateHeading, publishedSince } from '@/lib/reels/net/published';
 import type { Adapter, AdapterItem, Bucket, SourceType } from '@/lib/reels/types';
 
 export type MarkdownChangelogConfig = {
@@ -46,10 +47,8 @@ export function parseChangelog(markdown: string): ChangelogSection[] {
     const match = line.match(DATE_HEADING);
     if (match) {
       flush();
-      const parsed = new Date(match[1].replace(',', ''));
-      current = Number.isNaN(parsed.getTime())
-        ? null
-        : { heading: match[1], date: parsed, lines: [] };
+      const parsed = parseUtcDateHeading(match[1]);
+      current = parsed ? { heading: match[1], date: parsed, lines: [] } : null;
       continue;
     }
     current?.lines.push(line);
@@ -71,7 +70,7 @@ export function markdownChangelogAdapter(config: MarkdownChangelogConfig): Adapt
       const markdown = await fetchText(config.sourceUrl, { accept: 'text/markdown, text/plain, */*', signal });
 
       return parseChangelog(markdown)
-        .filter((section) => section.date >= since)
+        .filter((section) => publishedSince(section.date, since))
         .map((section): AdapterItem => ({
           // The anchor is what makes each dated release its own item; canonical
           // URLs keep fragments for exactly this case.

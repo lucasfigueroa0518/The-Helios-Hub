@@ -23,17 +23,35 @@ export type CopyResult = {
   error: string | null;
 };
 
+/** D-220. How much of a stray text reply the error keeps. */
+export const MISSING_CALL_TEXT_CHARS = 200;
+
+/** Names the stop reason and quotes the start of any text, so an empty reply can be told from a truncation. */
+export function missingToolCallError(message: Anthropic.Message): string {
+  const parts = ['No report_copy call came back.'];
+  if (message.stop_reason === 'max_tokens') parts.push('The response hit max_tokens.');
+  parts.push(`stop_reason: ${message.stop_reason ?? 'none'}.`);
+  const text = message.content
+    .flatMap((entry) => (entry.type === 'text' ? [entry.text] : []))
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  parts.push(text ? `Text: "${text.slice(0, MISSING_CALL_TEXT_CHARS)}"` : 'No text came back either.');
+  return parts.join(' ');
+}
+
 export async function writeCopy(
   client: CopyClient,
   input: CopyInput,
   signal?: AbortSignal,
+  model: string = COPY_MODEL,
 ): Promise<CopyResult> {
   const prompt = assembleCopyPrompt(input);
   let message: Anthropic.Message;
   try {
     message = await client.messages.create(
       {
-        model: COPY_MODEL,
+        model,
         max_tokens: COPY_MAX_TOKENS,
         system: prompt.system,
         tools: prompt.tools,
@@ -52,8 +70,7 @@ export async function writeCopy(
       entry.type === 'tool_use' && entry.name === REPORT_COPY_TOOL.name,
   );
   if (!block) {
-    const reason = message.stop_reason === 'max_tokens' ? ' The response hit max_tokens.' : '';
-    return { version: prompt.version, message, call: null, error: `No report_copy call came back.${reason}` };
+    return { version: prompt.version, message, call: null, error: missingToolCallError(message) };
   }
 
   try {

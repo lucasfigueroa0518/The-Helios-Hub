@@ -129,6 +129,45 @@ export async function renderTextPlate(
   }
 }
 
+/**
+ * Transparent plate with only the cue. The on-screen copy is measured so the
+ * line lands in the same gap a full plate would use, without drawing that copy again.
+ */
+export async function renderCuePlate(
+  copy: string,
+  width: number,
+  height: number,
+  cue: string,
+  profile: ColorProfile = 'noir',
+): Promise<Buffer> {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'helios-cue-'));
+  const out = path.join(dir, 'cue.png');
+  try {
+    const result = await runEngine([
+      'plate',
+      '--copy',
+      copy,
+      '--width',
+      String(width),
+      '--height',
+      String(height),
+      '--out',
+      out,
+      '--profile',
+      profile,
+      '--cue-only',
+      '--full-story',
+      cue,
+    ]);
+    if (result.code !== 0) {
+      throw new Error(result.stderr.trim() || result.stdout.trim() || `Cue plate failed (${result.code}).`);
+    }
+    return await readFile(out);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
 export async function renderTextPng(
   png: Buffer,
   copy: string,

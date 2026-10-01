@@ -10,7 +10,10 @@ import {
 /**
  * P-09. Knowledge and entertainment (D-076, D-081).
  * Approved 2026-09-22 (D-086) as `scoring-pass2-v1`; the audience moved to
- * AI-curious viewers plus a builder minority in v2 (D-206).
+ * AI-curious viewers plus a builder minority in v2 (D-206). v3 (D-218): both
+ * questions carry the same viewer-stake guardrail, since code keeps the
+ * higher score and a guardrail on one alone would be routed around. v3 also
+ * picks up the narrower Callout meaning from scoring-shared.ts.
  *
  * A second request, after code has chosen the framework and the bucket. The
  * state must include `winning_framework` and `winning_bucket`, each with `name`
@@ -21,9 +24,12 @@ import {
 const SHAPE =
   'The post this would become is shaped by `winning_framework` and `winning_bucket`. Use `winning_bucket.meaning` as the shape. Score the value that shape would communicate, not a different post the source could also support.';
 
+const VIEWER_STAKE =
+  'Levels Strong and Unmistakable require that the reason this matters to the viewer can be said in one plain sentence about their own life, or about what is on the line for the people in the story, with no technical setup. If the viewer would first need to learn how a system works to care, the score stays at Workable at most.';
+
 export const SCORING_PASS_2 = defineQuestionSet({
   id: 'scoring-pass2',
-  version: 'scoring-pass2-v2',
+  version: 'scoring-pass2-v3',
   questions: {
     knowledge: score(
       {
@@ -33,6 +39,7 @@ export const SCORING_PASS_2 = defineQuestionSet({
         judge: ELEMENT_RULE,
         audiences: AUDIENCE_RULE,
         source: SOURCE_RULE,
+        guardrail: VIEWER_STAKE,
         not_this: 'Do not score how gripping the story is. That is a separate question.',
       },
       [
@@ -51,6 +58,7 @@ export const SCORING_PASS_2 = defineQuestionSet({
         judge: ELEMENT_RULE,
         audiences: AUDIENCE_RULE,
         source: SOURCE_RULE,
+        guardrail: VIEWER_STAKE,
         not_this: 'Do not score the lesson or the savings. That is a separate question.',
       },
       [

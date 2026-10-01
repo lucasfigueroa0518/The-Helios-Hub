@@ -42,6 +42,10 @@ POST {"inputs": {"audio_pcm_f32_b64": "<48 kHz mono float32 LE>", "sample_rate":
 Audio longer than 10 s is embedded in consecutive 10 s windows (up to 9) and
 averaged. A trailing window under 5 s is dropped unless it is the only one.
 
+Text longer than the position table (514 tokens) is truncated. The live
+endpoint 400s on that overflow until this handler is the revision it serves.
+The Hub client shortens and retries so a long caption still gets a song.
+
 ## Updating the handler
 
 An endpoint serves the repository commit it was created from. After uploading

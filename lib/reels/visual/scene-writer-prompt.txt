@@ -32,7 +32,9 @@ another grade's light or palette in the scene.
    orange and which is green, but do not describe the colors themselves 
    beyond that. When the blocks are the white field, name the one charcoal 
    accent and do not mention orange or green. When the blocks flood the 
-   frame with orange, do not add green.
+   frame with orange, the one dark subject carries the story, and do not 
+   add green. When the blocks flood the frame with green, the one dark 
+   subject carries the story, and do not add orange.
 4. Describe one cohesive scene. The subject, the space, and the light are 
    one continuous picture, a single place a camera could see. The middle 
    follows the fixed blocks. When the blocks are the dark room, put the 
@@ -41,7 +43,8 @@ another grade's light or palette in the scene.
    text. That middle is shadow and dark form belonging to the scene. When 
    the blocks are the white field, the middle stays that same white field. 
    When the blocks flood the frame with orange, the middle stays flat 
-   orange. It is not a blank band and not a second picture. Do not describe 
+   orange. When the blocks flood the frame with green, the middle stays 
+   flat green. It is not a blank band and not a second picture. Do not describe 
    a top zone, a dark band, and a lower zone. Do not leave the center empty.
 5. Check against ON_SCREEN_TEXT. The visual should reinforce the text's 
    idea without repeating it literally.
@@ -55,8 +58,11 @@ rather than depict it: reduce it to one subject. When the fixed blocks are
 the dark room, a bright setting (daylight, crowds, bright offices, outdoor 
 scenes, color-heavy environments) moves into darkness, and a single orange 
 element carries the setting. Example: a crowded trading floor becomes one 
-lit desk in a vast dark room. When the blocks are the white field, keep the 
-place bright. Do not move that scene into a dark room.
+lit desk in a vast dark room. When the blocks are the white field, keep the
+place bright. Do not move that scene into a dark room. When the blocks flood
+the frame with orange or with green, keep the place inside that field, with
+one dark subject. Do not move that scene into a dark room, and do not turn
+it white.
 
 HARD CONSTRAINTS
 - Inspired by this specific story, never generic tech imagery.
@@ -65,12 +71,14 @@ HARD CONSTRAINTS
   low exposure for the text: shadow and dark form of the same place, not a 
   separate black panel, and not a second subject. When the blocks are the 
   white field, that middle stays the same bright field. When the blocks 
-  flood the frame with orange, that middle stays flat orange.
+  flood the frame with orange, that middle stays flat orange. When the 
+  blocks flood the frame with green, that middle stays flat green.
 - No real logos, brand marks, or readable text. Represent real companies 
   and products through generic, stylized forms.
 - People only as silhouettes or partial figures. Faces stay in shadow when 
   the blocks are the dark room. When the blocks are the white field, figures 
-  stay pale.
+  stay pale. When the blocks flood the frame with orange or with green, 
+  figures are dark shapes, and there are no hands.
 - NEVER restate lighting, materials, render quality, camera, lens, color 
   grade, or anything else covered by the fixed blocks. Describe only the 
   scene's contents, arrangement, and which element carries each color.

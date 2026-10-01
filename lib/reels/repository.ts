@@ -11,6 +11,8 @@ import {
   SHORTLIST_SIMILARITY_FLOOR,
   STALE_RUN_MINUTES,
 } from '@/lib/reels/config';
+import { defaultProdSpendSince } from '@/lib/reels/analytics/rollups';
+import { KLING_USD_PER_CLIP } from '@/lib/reels/insights';
 import { monthStart } from '@/lib/reels/schedule';
 import type {
   Bucket,
@@ -195,6 +197,23 @@ export async function findFingerprints(urls: string[]): Promise<Map<string, Date
     [urls],
   );
   return new Map(rows.map((row) => [row.canonical_url, new Date(row.first_seen)]));
+}
+
+/**
+ * A failed read is not a stored article (D-032). URLs whose every source row
+ * is `fetch_failed` are fetched again instead of sitting out the repeat window.
+ */
+export async function urlsWithOnlyFailedFetches(urls: string[]): Promise<Set<string>> {
+  if (urls.length === 0) return new Set();
+  const { rows } = await dbQuery<{ canonical_url: string }>(
+    `SELECT canonical_url
+       FROM reels.sources
+      WHERE canonical_url = ANY($1::text[])
+      GROUP BY canonical_url
+     HAVING bool_and(drop_reason = 'fetch_failed')`,
+    [urls],
+  );
+  return new Set(rows.map((row) => row.canonical_url));
 }
 
 export async function touchFingerprint(url: string, adapterId: string): Promise<void> {
@@ -927,14 +946,32 @@ export async function recordCost(input: {
   );
 }
 
-export async function monthToDateUsd(now = new Date()): Promise<number> {
-  const { rows } = await dbQuery<{ total: string | null }>(
-    `SELECT COALESCE(sum(usd), 0)::text AS total
-       FROM reels.cost_events
-      WHERE created_at >= $1`,
-    [monthStart(now).toISOString()],
+export async function productionSpendSince(): Promise<Date> {
+  const { rows } = await dbQuery<{ value: unknown }>(
+    `SELECT value FROM reels.settings WHERE key = 'prod_spend_since'`,
   );
-  return Number(rows[0]?.total ?? 0);
+  const value = rows[0]?.value;
+  if (typeof value === 'string' && !Number.isNaN(Date.parse(value))) return new Date(value);
+  return defaultProdSpendSince();
+}
+
+/** Production spend since the later of the month start and the production cutoff, plus Kling. */
+export async function monthToDateUsd(now = new Date()): Promise<number> {
+  const start = monthStart(now);
+  const cutoff = await productionSpendSince();
+  const from = start > cutoff ? start : cutoff;
+  const [ledger, kling] = await Promise.all([
+    dbQuery<{ total: string | null }>(
+      `SELECT COALESCE(sum(usd), 0)::text AS total FROM reels.cost_events WHERE created_at >= $1`,
+      [from.toISOString()],
+    ),
+    dbQuery<{ clips: number }>(
+      `SELECT count(*)::int AS clips FROM reels.video_jobs
+        WHERE higgsfield_job_id IS NOT NULL AND finished_at >= $1`,
+      [from.toISOString()],
+    ),
+  ]);
+  return Number(ledger.rows[0]?.total ?? 0) + (kling.rows[0]?.clips ?? 0) * KLING_USD_PER_CLIP;
 }
 
 export async function runCostUsd(runId: string): Promise<number> {

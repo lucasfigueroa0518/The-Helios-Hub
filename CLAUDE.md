@@ -43,7 +43,9 @@ skills, positioning, tool/report schemas, catalogs) without `cache_control`
 is a defect. Put static content first (tools → system → messages), mark the
 last identical block, keep the tools array stable across turns, and never
 put the only breakpoint on a per-request suffix (lead payload, timestamp,
-image, PDF). Helpers: `lib/anthropic-cache.ts`. Full guide:
+image, PDF). Top-level automatic caching marks that last block, so use it
+only for a growing conversation. A one-shot call keeps the breakpoint on the
+stable prefix. Helpers: `lib/anthropic-cache.ts`. Full guide:
 `docs/prompt-caching.md` (official API:
 https://platform.claude.com/docs/en/build-with-claude/prompt-caching).
 

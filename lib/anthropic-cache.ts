@@ -8,8 +8,14 @@ import type Anthropic from '@anthropic-ai/sdk';
  *
  * Prefix order is tools → system → messages. Place cache_control on the last
  * block whose prefix is identical across the requests you want to share.
- * This SDK (0.65) has no top-level automatic cache_control, so multi-turn
- * loops must mark the last message block each turn.
+ *
+ * The API also accepts top-level automatic cache_control, which moves the
+ * breakpoint to the last cacheable block. That is right for a growing
+ * conversation and wrong for a one-shot call whose last block changes every
+ * request: the write includes that block, and the next request never hits.
+ * This SDK (0.65) does not type that top-level field. Multi-turn loops mark
+ * the last message block each turn with withConversationCache instead, and
+ * keep an explicit breakpoint on the stable tools and system prefix.
  */
 export type PromptCacheTtl = '5m' | '1h';
 

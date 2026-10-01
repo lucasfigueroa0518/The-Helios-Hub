@@ -4,9 +4,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { SCORE_TOP_LEVEL } from '@/lib/reels/config';
+import {
+  BLOCKBUSTER_BONUS,
+  CARRYOVER_TWO_DAY_DEPTH,
+  CARRYOVER_WINDOW,
+  SCORE_TOP_LEVEL,
+} from '@/lib/reels/config';
 import { SCORING_PASS_1 } from '@/lib/reels/jev/questions/scoring-pass1';
 import { SCORING_PASS_2 } from '@/lib/reels/jev/questions/scoring-pass2';
+import { BUCKETS } from '@/lib/reels/jev/questions/scoring-shared';
 import {
   applyPass2,
   interpretPass1,
@@ -17,6 +23,8 @@ import {
   blockbusterBonus,
   candidateOrigins,
   carryoverMisses,
+  heldFromCarryover,
+  earlierNyDateKey,
   isPreviousNyDay,
   isSameNyDay,
   netScore,
@@ -127,12 +135,19 @@ test('bucket ties break by psychology, then confidence, then spec order', () => 
 
 test('value takes the higher score and blockbuster does not stack', () => {
   assert.equal(valueTerm(0.4, 0.7), 0.7);
-  assert.equal(blockbusterBonus({ frontierDrop: 0.8, company: 0.99, person: 0.99 }), 0.25);
+  assert.equal(blockbusterBonus({ frontierDrop: 0.8, company: 0.99, person: 0.99 }), 0.1);
   assert.equal(blockbusterBonus({ frontierDrop: 0.79, company: 0.79, person: 0.79 }), 0);
-  assert.equal(
-    netScore({ psychology: 0.8, bucket: 0.7, value: 0.6, blockbuster: 0.25 }),
-    2.35,
-  );
+  const net = netScore({ psychology: 0.8, bucket: 0.7, value: 0.6, blockbuster: 0.1 });
+  assert.ok(Math.abs(net - 2.2) < 1e-9);
+});
+
+test('a known name breaks a near-tie but cannot jump a story one level better (D-217)', () => {
+  assert.equal(BLOCKBUSTER_BONUS, 0.1);
+  const oneLevel = 1 / SCORE_TOP_LEVEL;
+  assert.ok(BLOCKBUSTER_BONUS < oneLevel / 2);
+  const known = netScore({ psychology: 0.75, bucket: 0.75, value: 0.75, blockbuster: blockbusterBonus({ frontierDrop: 0, company: 0.95, person: 0 }) });
+  const better = netScore({ psychology: 0.75 + oneLevel, bucket: 0.75, value: 0.75, blockbuster: 0 });
+  assert.ok(better > known);
 });
 
 test('the slate is the three highest nets, and confidence does not rerank them', () => {
@@ -168,12 +183,14 @@ test('equal nets break by bucket score, then psychology, then recency', () => {
   );
 });
 
-test('carryover is the ten best misses, and a tie at the cutoff is kept', () => {
+test('carryover is the twenty best misses, and a tie at the cutoff is kept', () => {
+  assert.equal(CARRYOVER_WINDOW, 20);
+  assert.equal(CARRYOVER_TWO_DAY_DEPTH, 10);
   const yesterday = [
     idea({ id: 's1', net: 3 }),
     idea({ id: 's2', net: 2.9 }),
     idea({ id: 's3', net: 2.8 }),
-    ...Array.from({ length: 9 }, (_, index) => idea({ id: `m${index}`, net: 2 - index * 0.1 })),
+    ...Array.from({ length: 19 }, (_, index) => idea({ id: `m${index}`, net: 2 - index * 0.05 })),
     idea({ id: 'cutoff-a', net: 1 }),
     idea({ id: 'cutoff-b', net: 1 }),
     idea({ id: 'below', net: 0.9 }),
@@ -186,7 +203,8 @@ test('carryover is the ten best misses, and a tie at the cutoff is kept', () => 
   assert.equal(ids.includes('below'), false);
   assert.equal(ids.includes('cutoff-a'), true);
   assert.equal(ids.includes('cutoff-b'), true);
-  assert.equal(ids.length, 11);
+  assert.equal(ids.includes('m0'), true);
+  assert.equal(ids.length, 21);
 
   // An idea tied with the winners, but not selected, is a miss and comes back.
   const tied = carryoverMisses(
@@ -194,6 +212,74 @@ test('carryover is the ten best misses, and a tie at the cutoff is kept', () => 
     ['won-a', 'won-b'],
   );
   assert.deepEqual(tied.map((item) => item.id), ['left-out']);
+});
+
+test('a miss from two days ago joins only inside the first ten (D-227)', () => {
+  const yesterday = [
+    idea({ id: 's1', net: 5 }),
+    ...Array.from({ length: 25 }, (_, index) => idea({ id: `y${index}`, net: 4 - index * 0.1 })),
+    idea({ id: 'rescored-low', net: 0.2 }),
+  ];
+  const twoDaysAgo = [
+    idea({ id: 'old-high', net: 3.95 }),
+    idea({ id: 'old-tie', net: 3.2 }),
+    idea({ id: 'old-tie-b', net: 3.2 }),
+    idea({ id: 'old-tenth', net: 3.05 }),
+    idea({ id: 'old-low', net: 2.5 }),
+    idea({ id: 'old-winner', net: 4.5 }),
+    idea({ id: 'rescored-low', net: 4.5 }),
+    idea({ id: 's1', net: 9 }),
+    idea({ id: 'old-unscored', net: null }),
+  ];
+  const ids = carryoverMisses(yesterday, ['s1'], twoDaysAgo, ['old-winner']).map((item) => item.id);
+
+  // old-high and the 3.2 tie sit in the first ten. They take seats, so the
+  // yesterday misses stop at y16 instead of y19. The older 4.5 on rescored-low
+  // does not replay: yesterday already scored it at 0.2.
+  assert.deepEqual(ids, [
+    'y0', 'old-high', 'y1', 'y2', 'y3', 'y4', 'y5', 'y6', 'y7',
+    'old-tie', 'old-tie-b', 'y8', 'y9', 'y10', 'y11', 'y12', 'y13', 'y14', 'y15', 'y16',
+  ]);
+});
+
+test('with no yesterday slate, ten misses from two days ago still carry', () => {
+  const older = [
+    ...Array.from({ length: 9 }, (_, index) => idea({ id: `d${index}`, net: 2 - index * 0.1 })),
+    idea({ id: 'cutoff-a', net: 1 }),
+    idea({ id: 'cutoff-b', net: 1 }),
+    idea({ id: 'below', net: 0.9 }),
+  ];
+  const ids = carryoverMisses([], [], older, []).map((item) => item.id);
+  assert.equal(ids.includes('below'), false);
+  assert.equal(ids.includes('cutoff-a'), true);
+  assert.equal(ids.includes('cutoff-b'), true);
+  assert.equal(ids.length, 11);
+});
+
+test('a top-three reel that never posted carries, and the bench does not', () => {
+  const held = heldFromCarryover([
+    { id: 'posted', selected: true, rank: 1, published: true },
+    { id: 'missed', selected: true, rank: 2, published: false },
+    { id: 'missed-3', selected: true, rank: 3, published: false },
+    { id: 'bench', selected: true, rank: 4, published: false },
+    { id: 'plain-miss', selected: false, rank: 5, published: false },
+  ]);
+  assert.deepEqual([...held].sort(), ['bench', 'posted']);
+  const misses = carryoverMisses(
+    [
+      idea({ id: 'posted', net: 2.6 }),
+      idea({ id: 'missed', net: 2.57 }),
+      idea({ id: 'missed-3', net: 2.46 }),
+      idea({ id: 'bench', net: 2.41 }),
+      idea({ id: 'plain-miss', net: 2.3 }),
+    ],
+    held,
+  ).map((item) => item.id);
+  assert.equal(misses.includes('posted'), false);
+  assert.equal(misses.includes('bench'), false);
+  assert.equal(misses.includes('missed'), true);
+  assert.equal(misses.includes('missed-3'), true);
+  assert.equal(misses.includes('plain-miss'), true);
 });
 
 test('carryover looks at the previous New York day, not the same day or an older one', () => {
@@ -223,9 +309,21 @@ test('every scoring question uses the same five-level scale', () => {
   assert.equal(Object.keys(SCORING_PASS_2.questions).length, 2);
 });
 
+test('value needs a viewer stake, and a Callout needs something the viewer chooses (D-218)', () => {
+  for (const id of ['knowledge', 'entertainment'] as const) {
+    const wording = JSON.stringify(SCORING_PASS_2.questions[id]);
+    assert.match(wording, /one plain sentence about their own life/, id);
+    assert.match(wording, /stays at Workable at most/, id);
+  }
+  const callout = JSON.stringify(SCORING_PASS_1.questions.theCallout);
+  assert.match(callout, /the viewer chooses for themselves/);
+  assert.match(callout, /what a company, a lab, or a government should do stays at Workable at most/);
+  assert.match(BUCKETS.theCallout.meaning, /is a weak fit/);
+});
+
 test('scoring judges for the AI-curious viewer with a builder minority (D-206)', () => {
-  assert.equal(SCORING_PASS_1.version, 'scoring-pass1-v2');
-  assert.equal(SCORING_PASS_2.version, 'scoring-pass2-v2');
+  assert.equal(SCORING_PASS_1.version, 'scoring-pass1-v3');
+  assert.equal(SCORING_PASS_2.version, 'scoring-pass2-v3');
   const wording = JSON.stringify([SCORING_PASS_1.questions, SCORING_PASS_2.questions]);
   assert.match(wording, /curious about AI/);
   assert.match(wording, /About one in seven builds with AI/);
@@ -324,6 +422,7 @@ test('same-day ideas stay today, and a timely carryover is not labeled a carryov
   assert.equal(origins.get('also-yesterday'), 'timely');
   assert.equal(origins.get('miss'), 'carryover');
   assert.equal(previousNyDateKey(new Date('2026-09-22T05:00:00Z')), '2026-09-21');
+  assert.equal(earlierNyDateKey(new Date('2026-09-22T05:00:00Z'), 2), '2026-09-20');
 });
 
 test('excerpts keep the primary long, supporting short, and duplicates headlined', () => {

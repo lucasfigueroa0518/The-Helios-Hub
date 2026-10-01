@@ -83,7 +83,9 @@ export async function slateIdeaIds(nyDate: string): Promise<string[]> {
 }
 
 /** Yesterday's scored ideas, in the shape the carryover rule ranks. */
-export async function loadSlateRanked(nyDate: string): Promise<Array<RankedIdea & { selected: boolean }>> {
+export async function loadSlateRanked(
+  nyDate: string,
+): Promise<Array<RankedIdea & { selected: boolean; rank: number | null; published: boolean }>> {
   const { rows } = await dbQuery<{
     post_idea_id: string;
     net: number | null;
@@ -91,10 +93,16 @@ export async function loadSlateRanked(nyDate: string): Promise<Array<RankedIdea 
     psychology: number | null;
     confidence: number | null;
     selected: boolean;
+    rank: number | null;
+    published: boolean;
     last_joined: string;
   }>(
-    `SELECT s.post_idea_id, s.net, s.bucket_score, s.psychology, s.confidence, s.selected,
-            i.last_joined
+    `SELECT s.post_idea_id, s.net, s.bucket_score, s.psychology, s.confidence, s.selected, s.rank,
+            i.last_joined,
+            EXISTS (
+              SELECT 1 FROM reels.published_status p
+               WHERE p.post_idea_id = s.post_idea_id AND p.published
+            ) AS published
        FROM reels.idea_scores s
        JOIN reels.post_ideas i ON i.id = s.post_idea_id
       WHERE s.slate_id = (
@@ -113,6 +121,8 @@ export async function loadSlateRanked(nyDate: string): Promise<Array<RankedIdea 
     lastJoinedMs: new Date(row.last_joined).getTime(),
     confidence: row.confidence ?? 0,
     selected: row.selected,
+    rank: row.rank,
+    published: row.published,
   }));
 }
 
@@ -222,24 +232,6 @@ export async function latestSlateForDate(nyDate: string): Promise<StoredSlate | 
       ORDER BY scored_at DESC
       LIMIT 1`,
     [nyDate],
-  );
-  const id = rows[0]?.id;
-  if (!id) return null;
-  return loadSlate(id);
-}
-
-/**
- * The slate just before `latestId` on the same New York date. A rescore keeps
- * this one, and the page switches back to it.
- */
-export async function loadPriorSlate(nyDate: string, latestId: string): Promise<StoredSlate | null> {
-  const { rows } = await dbQuery<{ id: string }>(
-    `SELECT id FROM reels.score_slates
-      WHERE ny_date = $1::date
-        AND id <> $2::uuid
-      ORDER BY scored_at DESC
-      LIMIT 1`,
-    [nyDate, latestId],
   );
   const id = rows[0]?.id;
   if (!id) return null;

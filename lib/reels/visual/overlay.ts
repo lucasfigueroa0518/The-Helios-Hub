@@ -80,6 +80,44 @@ export async function overlayPlate(
   }
 }
 
+/** Lay a transparent plate on a finished reel and keep its audio. */
+export async function overlayStillPlate(videoPath: string, platePath: string, outPath: string): Promise<void> {
+  const audio = await run('ffprobe', [
+    '-v',
+    'error',
+    '-select_streams',
+    'a',
+    '-show_entries',
+    'stream=index',
+    '-of',
+    'csv=p=0',
+    videoPath,
+  ]);
+  const hasAudio = audio.code === 0 && audio.stdout.trim().length > 0;
+  const result = await run('ffmpeg', [
+    '-y',
+    '-i',
+    videoPath,
+    '-i',
+    platePath,
+    '-filter_complex',
+    '[1:v][0:v]scale2ref[plate][base];[base][plate]overlay=0:0:format=auto[v]',
+    '-map',
+    '[v]',
+    ...(hasAudio ? ['-map', '0:a:0', '-c:a', 'copy'] : ['-an']),
+    '-c:v',
+    'libx264',
+    '-pix_fmt',
+    'yuv420p',
+    '-movflags',
+    '+faststart',
+    outPath,
+  ]);
+  if (result.code !== 0) {
+    throw new Error(result.stderr.trim().slice(-400) || `ffmpeg cue overlay failed (${result.code}).`);
+  }
+}
+
 /**
  * Add the hook SFX to a finished, silent reel (D-121). The picture is copied,
  * not re-encoded, and the audio is padded with silence to the clip's length.

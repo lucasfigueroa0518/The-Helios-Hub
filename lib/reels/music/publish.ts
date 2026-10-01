@@ -86,10 +86,10 @@ export async function publishReadiness(
     return { ok: false, status: 409, note: 'This reel is already published.' };
   }
   if (!reel.caption) return { ok: false, status: 409, note: 'This reel has no caption.' };
-  const mix = options?.mixOverride ?? (await publishMix());
-  if (!mix) {
-    return { ok: false, status: 409, note: 'The song and SFX volumes are not set yet (MUS-V2).' };
-  }
+  // The preview already plays both at full when no mix has been chosen.
+  // Posting uses that same pair so Live and Force post are not stuck waiting
+  // on a volume control the page does not have.
+  const mix = options?.mixOverride ?? (await publishMix()) ?? { audioVolume: 100, videoVolume: 100 };
   return {
     ok: true,
     postIdeaId: reel.post_idea_id,

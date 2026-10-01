@@ -1,31 +1,57 @@
 import { COPY_PICK } from '@/lib/reels/jev/questions/copy-pick';
-import { countWords, type CopyCall } from '@/lib/reels/copy/report';
-import { normalizeJevScore } from '@/lib/reels/scoring/decide';
+import { COPY_STORY_MATCH } from '@/lib/reels/jev/questions/copy-story-match';
+import { ON_SCREEN_WORD_RANGE, countWords, type CopyCall } from '@/lib/reels/copy/report';
+import { normalizeJevScore, type BucketId } from '@/lib/reels/scoring/decide';
 
 /**
- * D-195. Rank on-screen lines after Jev has scored each one alone.
- * Plain read is a gate at 0.75. Loop, care, and reward weigh equally.
- * Ties break on higher plain read, then higher reward, then earlier line.
- * When every line is under the gate, the clearest one still ships.
+ * D-195, D-216. Rank on-screen lines after Jev has judged each one alone.
+ *
+ * A line clears the gate when plain read and stake are both at least 0.75,
+ * its word count is inside the bucket range, and Jev says it tells the same
+ * story as its caption's opening. Eligible lines rank on performance: loop,
+ * care, and reward, weighed equally. Ties break on plain read, then reward,
+ * then the earlier line.
+ *
+ * When no line from the two draft calls clears the gate, the pipeline makes
+ * one rewrite call with the scores attached. When still no line clears it,
+ * the line nearest the bar is the one a single idea would ship: in-range
+ * lines first, then the higher of each line's weaker gate score (plain or
+ * stake), then performance. The weaker-score rule keeps a clear but pointless
+ * line, or a compelling but confusing one, from winning. A generation of
+ * several reels does not ship that miss until four ideas have been tried
+ * (D-224). The Scores button for one idea still ships it.
  */
 
 export const COPY_CALLS_PER_IDEA = 2;
+export const COPY_REWRITE_CALLS = 1;
 export const COMPREHENSION_GATE = 0.75;
+export const STAKE_GATE = 0.75;
+export const SAME_STORY_BAR = 0.5;
 export const COPY_PICK_WEIGHTS = { loop: 1 / 3, care: 1 / 3, reward: 1 / 3 } as const;
 
+/** Raw Jev scores for one line, 0 to 4. */
 export type CopyLineScore = {
   plain: number;
+  stake: number;
   loop: number;
   care: number;
   reward: number;
 };
 
+/** The five scores plus Jev's same-story probability, 0 to 1. */
+export type CopyLineJudgment = CopyLineScore & { sameStory: number };
+
 export type RankedCopyLine = {
   index: number;
   plain: number;
+  stake: number;
   loop: number;
   care: number;
   reward: number;
+  sameStory: number;
+  inRange: boolean;
+  /** The weaker of plain and stake: how near the line is to clearing both bars. */
+  gate: number;
   performance: number;
   eligible: boolean;
 };
@@ -34,29 +60,46 @@ export type CopyVariantLine = {
   callIndex: number;
   lineIndex: number;
   onScreenCopy: string;
+  viewerStake: string;
   caption: string;
   callToAction: string;
   hashtags: string[];
   sources: CopyCall['sources'];
   words: number;
+  inRange: boolean;
   plain: number | null;
+  stake: number | null;
   loop: number | null;
   care: number | null;
   reward: number | null;
+  sameStory: number | null;
+  gate: number | null;
   performance: number | null;
   eligible: boolean | null;
   winner: boolean;
 };
 
+export type CopyCallKind = 'draft' | 'rewrite';
+
 export type CopyVariants = {
   complete: boolean;
   questionSetVersion: string;
-  calls: Array<{ index: number; error: string | null; working: CopyCall['working'] | null }>;
+  storyQuestionSetVersion: string;
+  /** True when a rewrite call was made because no draft line cleared the gate. */
+  rewrote: boolean;
+  /** Whether the shipped line cleared the gate, or was the nearest miss. */
+  winnerEligible: boolean | null;
+  calls: Array<{
+    index: number;
+    kind: CopyCallKind;
+    error: string | null;
+    working: CopyCall['working'] | null;
+  }>;
   lines: CopyVariantLine[];
   winnerIndex: number | null;
 };
 
-export type DraftCall = { call: CopyCall | null; error: string | null };
+export type DraftCall = { call: CopyCall | null; error: string | null; kind?: CopyCallKind };
 
 export type FlattenedCopyLine = {
   index: number;
@@ -70,7 +113,9 @@ function units(score: number): number {
   return Math.round(score * 10_000);
 }
 
-const GATE_UNITS = units(COMPREHENSION_GATE);
+const PLAIN_UNITS = units(COMPREHENSION_GATE);
+const STAKE_UNITS = units(STAKE_GATE);
+const STORY_UNITS = units(SAME_STORY_BAR);
 
 export function performanceScore(line: Pick<RankedCopyLine, 'loop' | 'care' | 'reward'>): number {
   return (
@@ -78,6 +123,12 @@ export function performanceScore(line: Pick<RankedCopyLine, 'loop' | 'care' | 'r
     COPY_PICK_WEIGHTS.care * line.care +
     COPY_PICK_WEIGHTS.reward * line.reward
   );
+}
+
+export function wordsInRange(onScreenCopy: string, bucket: BucketId): boolean {
+  const range = ON_SCREEN_WORD_RANGE[bucket];
+  const words = countWords(onScreenCopy);
+  return words >= range.min && words <= range.max;
 }
 
 function byPerformance(a: RankedCopyLine, b: RankedCopyLine): number {
@@ -89,30 +140,52 @@ function byPerformance(a: RankedCopyLine, b: RankedCopyLine): number {
   );
 }
 
-function byClarity(a: RankedCopyLine, b: RankedCopyLine): number {
+function byNearestMiss(a: RankedCopyLine, b: RankedCopyLine): number {
   return (
-    units(b.plain) - units(a.plain) ||
+    Number(b.inRange) - Number(a.inRange) ||
+    units(b.gate) - units(a.gate) ||
     units(b.performance) - units(a.performance) ||
-    units(b.reward) - units(a.reward) ||
+    units(b.plain) - units(a.plain) ||
     a.index - b.index
   );
 }
 
-/** Raw Jev scores, one per line, in line order. Returns the winner's index. */
-export function rankCopyLines(raw: readonly CopyLineScore[]): { winner: number; ranked: RankedCopyLine[] } {
+/** Raw judgments, one per line, in line order. Returns the winner's index. */
+export function rankCopyLines(
+  raw: ReadonlyArray<CopyLineJudgment & { inRange: boolean }>,
+): { winner: number; eligible: boolean; ranked: RankedCopyLine[] } {
   if (raw.length === 0) throw new Error('Copy pick needs at least one on-screen line.');
   const ranked = raw.map((line, index) => {
     const plain = normalizeJevScore(line.plain);
+    const stake = normalizeJevScore(line.stake);
     const loop = normalizeJevScore(line.loop);
     const care = normalizeJevScore(line.care);
     const reward = normalizeJevScore(line.reward);
-    const scored = { index, plain, loop, care, reward, performance: 0, eligible: units(plain) >= GATE_UNITS };
+    const sameStory = Math.min(1, Math.max(0, line.sameStory));
+    const eligible =
+      units(plain) >= PLAIN_UNITS &&
+      units(stake) >= STAKE_UNITS &&
+      line.inRange &&
+      units(sameStory) >= STORY_UNITS;
+    const scored = {
+      index,
+      plain,
+      stake,
+      loop,
+      care,
+      reward,
+      sameStory,
+      inRange: line.inRange,
+      gate: Math.min(plain, stake),
+      performance: 0,
+      eligible,
+    };
     return { ...scored, performance: performanceScore(scored) };
   });
   const eligible = ranked.filter((line) => line.eligible);
-  const pool = eligible.length > 0 ? eligible : ranked;
-  const winner = [...pool].sort(eligible.length > 0 ? byPerformance : byClarity)[0];
-  return { winner: winner.index, ranked };
+  const winner =
+    eligible.length > 0 ? [...eligible].sort(byPerformance)[0] : [...ranked].sort(byNearestMiss)[0];
+  return { winner: winner.index, eligible: eligible.length > 0, ranked };
 }
 
 export function flattenCopyCalls(calls: readonly DraftCall[]): FlattenedCopyLine[] {
@@ -128,27 +201,42 @@ export function flattenCopyCalls(calls: readonly DraftCall[]): FlattenedCopyLine
 }
 
 /**
- * Build the stored decision. `rawScores` is null when Jev did not score, and
+ * Build the stored decision. `judgments` is null when Jev did not judge, and
  * then nothing is marked the winner.
  */
 export function buildCopyVariants(
   calls: readonly DraftCall[],
-  rawScores: readonly CopyLineScore[] | null,
-): { variants: CopyVariants; winner: { call: CopyCall; onScreenCopy: string } | null } {
+  judgments: readonly CopyLineJudgment[] | null,
+  bucket: BucketId,
+): {
+  variants: CopyVariants;
+  winner: { call: CopyCall; onScreenCopy: string; eligible: boolean } | null;
+} {
   const lines = flattenCopyCalls(calls);
-  const ranked = rawScores ? rankCopyLines(rawScores) : null;
-  if (ranked && ranked.ranked.length !== lines.length) {
-    throw new Error(`Copy pick scored ${ranked.ranked.length} lines and held ${lines.length}.`);
+  if (judgments && judgments.length !== lines.length) {
+    throw new Error(`Copy pick judged ${judgments.length} lines and held ${lines.length}.`);
   }
+  const inRange = lines.map((line) => wordsInRange(line.onScreenCopy, bucket));
+  const ranked = judgments
+    ? rankCopyLines(judgments.map((judgment, index) => ({ ...judgment, inRange: inRange[index] })))
+    : null;
   const picked = ranked?.winner ?? null;
+  const drafts = calls.filter((draft) => (draft.kind ?? 'draft') === 'draft');
 
   return {
-    winner: picked == null ? null : { call: lines[picked].call, onScreenCopy: lines[picked].onScreenCopy },
+    winner:
+      picked == null || !ranked
+        ? null
+        : { call: lines[picked].call, onScreenCopy: lines[picked].onScreenCopy, eligible: ranked.eligible },
     variants: {
-      complete: calls.length === COPY_CALLS_PER_IDEA && calls.every((draft) => draft.call != null),
+      complete: drafts.length === COPY_CALLS_PER_IDEA && calls.every((draft) => draft.call != null),
       questionSetVersion: COPY_PICK.version,
+      storyQuestionSetVersion: COPY_STORY_MATCH.version,
+      rewrote: calls.some((draft) => draft.kind === 'rewrite'),
+      winnerEligible: ranked ? ranked.eligible : null,
       calls: calls.map((draft, index) => ({
         index,
+        kind: draft.kind ?? 'draft',
         error: draft.error,
         working: draft.call?.working ?? null,
       })),
@@ -158,15 +246,20 @@ export function buildCopyVariants(
           callIndex: line.callIndex,
           lineIndex: line.lineIndex,
           onScreenCopy: line.onScreenCopy,
+          viewerStake: line.call.viewerStake,
           caption: line.call.caption,
           callToAction: line.call.callToAction,
           hashtags: line.call.hashtags,
           sources: line.call.sources,
           words: countWords(line.onScreenCopy),
+          inRange: inRange[line.index],
           plain: score?.plain ?? null,
+          stake: score?.stake ?? null,
           loop: score?.loop ?? null,
           care: score?.care ?? null,
           reward: score?.reward ?? null,
+          sameStory: score?.sameStory ?? null,
+          gate: score?.gate ?? null,
           performance: score?.performance ?? null,
           eligible: score?.eligible ?? null,
           winner: picked === line.index,
@@ -175,4 +268,37 @@ export function buildCopyVariants(
       winnerIndex: picked,
     },
   };
+}
+
+/** What the rewrite call is shown: each draft line with its judged scores, 0 to 1. */
+export type CopyRewriteLine = {
+  onScreenCopy: string;
+  words: number;
+  inRange: boolean;
+  scores: { plain: number; stake: number; loop: number; care: number; reward: number };
+  sameStory: boolean;
+};
+
+export function rewriteLines(lines: readonly CopyVariantLine[]): CopyRewriteLine[] {
+  return lines.flatMap((line) => {
+    if (
+      line.plain == null ||
+      line.stake == null ||
+      line.loop == null ||
+      line.care == null ||
+      line.reward == null ||
+      line.sameStory == null
+    ) {
+      return [];
+    }
+    return [
+      {
+        onScreenCopy: line.onScreenCopy,
+        words: line.words,
+        inRange: line.inRange,
+        scores: { plain: line.plain, stake: line.stake, loop: line.loop, care: line.care, reward: line.reward },
+        sameStory: units(line.sameStory) >= STORY_UNITS,
+      },
+    ];
+  });
 }

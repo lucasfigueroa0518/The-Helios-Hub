@@ -330,6 +330,60 @@ CREATE TABLE IF NOT EXISTS reels.idea_copy (
 ALTER TABLE reels.idea_copy ADD COLUMN IF NOT EXISTS variants jsonb;
 ALTER TABLE reels.idea_copy ADD COLUMN IF NOT EXISTS full_story_below boolean NOT NULL DEFAULT false;
 ALTER TABLE reels.idea_copy ADD COLUMN IF NOT EXISTS full_story_cue text;
+-- D-213. One plain sentence on why the viewer should care, from the winning call.
+ALTER TABLE reels.idea_copy ADD COLUMN IF NOT EXISTS viewer_stake text;
+
+-- D-220. Every copy attempt, ok or failed, appended in full. reels.idea_copy
+-- keeps the current row per slate and idea, and a failed attempt no longer
+-- replaces an ok one there.
+CREATE TABLE IF NOT EXISTS reels.idea_copy_history (
+    id              bigserial PRIMARY KEY,
+    slate_id        uuid NOT NULL REFERENCES reels.score_slates (id) ON DELETE CASCADE,
+    post_idea_id    uuid NOT NULL REFERENCES reels.post_ideas (id) ON DELETE CASCADE,
+    run_id          uuid REFERENCES reels.runs (id) ON DELETE SET NULL,
+    prompt_version  text NOT NULL,
+    model           text NOT NULL,
+    bucket          text NOT NULL,
+    framework       text NOT NULL,
+    status          text NOT NULL CHECK (status IN ('ok', 'failed')),
+    on_screen_copy  text,
+    viewer_stake    text,
+    caption         text,
+    call_to_action  text,
+    hashtags        text[] NOT NULL DEFAULT ARRAY[]::text[],
+    sources         jsonb NOT NULL DEFAULT '[]'::jsonb,
+    checks          jsonb,
+    working         jsonb,
+    variants        jsonb,
+    full_story_below boolean NOT NULL DEFAULT false,
+    full_story_cue  text,
+    error           text,
+    input_tokens    integer NOT NULL DEFAULT 0,
+    output_tokens   integer NOT NULL DEFAULT 0,
+    usd             numeric(12, 6) NOT NULL DEFAULT 0,
+    created_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_reels_idea_copy_history_idea
+    ON reels.idea_copy_history (slate_id, post_idea_id, created_at DESC);
+
+-- Seed the history once with the rows that already exist, so the next attempt
+-- does not leave the only copy of today's copy in a row it may replace.
+INSERT INTO reels.idea_copy_history (
+    slate_id, post_idea_id, run_id, prompt_version, model, bucket, framework, status,
+    on_screen_copy, viewer_stake, caption, call_to_action, hashtags, sources, checks,
+    working, variants, full_story_below, full_story_cue, error, input_tokens,
+    output_tokens, usd, created_at
+)
+SELECT c.slate_id, c.post_idea_id, c.run_id, c.prompt_version, c.model, c.bucket, c.framework,
+       c.status, c.on_screen_copy, c.viewer_stake, c.caption, c.call_to_action, c.hashtags,
+       c.sources, c.checks, c.working, c.variants, c.full_story_below, c.full_story_cue,
+       c.error, c.input_tokens, c.output_tokens, c.usd, c.created_at
+  FROM reels.idea_copy c
+ WHERE NOT EXISTS (
+         SELECT 1 FROM reels.idea_copy_history h
+          WHERE h.slate_id = c.slate_id AND h.post_idea_id = c.post_idea_id
+       );
 
 -- Existing databases keep the original vendor check until this runs.
 DO $$
@@ -453,6 +507,8 @@ CREATE TABLE IF NOT EXISTS reels.finish_requests (
     slate_id      uuid NOT NULL REFERENCES reels.score_slates (id) ON DELETE CASCADE,
     status        text NOT NULL CHECK (status IN ('active', 'done', 'failed')),
     error         text,
+    -- copy rewrites the line. frame and video keep the copy already stored (D-225).
+    start_stage   text NOT NULL DEFAULT 'copy' CHECK (start_stage IN ('copy', 'frame', 'video')),
     requested_at  timestamptz NOT NULL DEFAULT now(),
     updated_at    timestamptz NOT NULL DEFAULT now()
 );
@@ -460,6 +516,49 @@ CREATE TABLE IF NOT EXISTS reels.finish_requests (
 CREATE INDEX IF NOT EXISTS idx_reels_finish_active
     ON reels.finish_requests (requested_at)
     WHERE status = 'active';
+
+ALTER TABLE reels.finish_requests
+    ADD COLUMN IF NOT EXISTS start_stage text NOT NULL DEFAULT 'copy'
+    CHECK (start_stage IN ('copy', 'frame', 'video'));
+
+-- A miss on the copy gate drops an idea for this New York day only (D-224).
+-- The idea's net is unchanged, so tomorrow's carryover uses the original score.
+CREATE TABLE IF NOT EXISTS reels.copy_day_penalties (
+    ny_date       date NOT NULL,
+    post_idea_id  uuid NOT NULL REFERENCES reels.post_ideas (id) ON DELETE CASCADE,
+    penalty       double precision NOT NULL,
+    created_at    timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (ny_date, post_idea_id)
+);
+
+-- A reel Lucas wants left as generated. The slot counts toward that day's
+-- passing set, and the pipeline will not rewrite the idea (D-226).
+CREATE TABLE IF NOT EXISTS reels.reel_locks (
+    ny_date       date NOT NULL,
+    slot          integer NOT NULL CHECK (slot >= 1),
+    post_idea_id  uuid NOT NULL REFERENCES reels.post_ideas (id) ON DELETE CASCADE,
+    slate_id      uuid NOT NULL REFERENCES reels.score_slates (id) ON DELETE CASCADE,
+    note          text,
+    created_at    timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (ny_date, slot)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reels_reel_locks_idea
+    ON reels.reel_locks (ny_date, post_idea_id);
+
+INSERT INTO reels.reel_locks (ny_date, slot, post_idea_id, slate_id, note)
+SELECT v.ny_date, v.slot, v.post_idea_id, v.slate_id, v.note
+  FROM (VALUES
+    ('2026-09-29'::date, 1, 'be6dcb3a-93e0-4988-b5fa-95594fd481e7'::uuid,
+     'c0d86bac-ef23-4293-b04d-f60de37e2879'::uuid,
+     'Locked 2026-09-29. Lucas: this reel stays as generated.'),
+    ('2026-09-29'::date, 2, '394cd848-ef21-4da4-a787-1fe520a61dc1'::uuid,
+     'c0d86bac-ef23-4293-b04d-f60de37e2879'::uuid,
+     'Locked 2026-09-29. Lucas: this reel stays as generated.')
+  ) AS v(ny_date, slot, post_idea_id, slate_id, note)
+ WHERE EXISTS (SELECT 1 FROM reels.post_ideas p WHERE p.id = v.post_idea_id)
+   AND EXISTS (SELECT 1 FROM reels.score_slates s WHERE s.id = v.slate_id)
+ON CONFLICT (ny_date, slot) DO NOTHING;
 
 -- ── Song pool (music plan, D-136 to D-177) ──────────────────────────────────
 -- Trending Instagram sounds, attached to reels by audio_id (D-136). At most 50
@@ -657,14 +756,19 @@ CREATE TABLE IF NOT EXISTS reels.settings (
     updated_at  timestamptz NOT NULL DEFAULT now()
 );
 
--- MUS-21 / D-156: built now, off by default.
-INSERT INTO reels.settings (key, value)
-VALUES ('auto_publish', 'false'::jsonb)
-ON CONFLICT (key) DO NOTHING;
-
 -- Live is the nightly auto-schedule. Off until it is switched on.
 INSERT INTO reels.settings (key, value)
 VALUES ('publishing_live', 'false'::jsonb)
+ON CONFLICT (key) DO NOTHING;
+
+-- The private review link stays on the coming-soon line until the hub switch is on.
+INSERT INTO reels.settings (key, value)
+VALUES ('review_open', 'false'::jsonb)
+ON CONFLICT (key) DO NOTHING;
+
+-- Spend before this instant is development and stays off the monthly watch.
+INSERT INTO reels.settings (key, value)
+VALUES ('prod_spend_since', '"2026-09-30T04:00:00.000Z"'::jsonb)
 ON CONFLICT (key) DO NOTHING;
 
 -- One reel per Eastern-time slot per day. Force post does not take a row.
@@ -712,3 +816,32 @@ CREATE TABLE IF NOT EXISTS reels.sound_observations (
 
 CREATE INDEX IF NOT EXISTS idx_reels_sound_obs_window
     ON reels.sound_observations (audio_type, ny_date DESC, audio_id);
+
+-- ── Instagram performance snapshots ─────────────────────────────────────────
+-- Lifetime totals from the media insights edge, one row per published reel per
+-- New York day. A later poll the same day keeps a number it already stored when
+-- the new response leaves that metric blank. Mix-test publishes are not polled.
+
+CREATE TABLE IF NOT EXISTS reels.media_insights (
+    media_id             text NOT NULL,
+    ny_date              date NOT NULL,
+    publish_attempt_id   uuid REFERENCES reels.publish_attempts (id) ON DELETE CASCADE,
+    captured_at          timestamptz NOT NULL DEFAULT now(),
+    views                double precision,
+    reach                double precision,
+    likes                double precision,
+    comments             double precision,
+    saved                double precision,
+    shares               double precision,
+    reposts              double precision,
+    total_interactions   double precision,
+    avg_watch_time_ms    double precision,
+    total_watch_time_ms  double precision,
+    skip_rate            double precision,
+    is_shared_to_feed    boolean,
+    raw                  jsonb NOT NULL DEFAULT '{}'::jsonb,
+    PRIMARY KEY (media_id, ny_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_reels_media_insights_attempt
+    ON reels.media_insights (publish_attempt_id, ny_date DESC);

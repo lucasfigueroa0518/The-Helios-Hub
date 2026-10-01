@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useState, type ReactNode } from 'react';
-import { ArrowLeft } from 'lucide-react';
 
 import { ReelVideo, Section } from '@/app/reels/ui';
 import type { SfxFinalsReview, SfxReview, SfxReviewTiming } from '@/lib/reels/sfx/review';
@@ -61,8 +60,8 @@ export function SfxReviewPage({
             </h1>
           </div>
           <div className="rh__head-actions">
-            <Link href="/reels" className="rh-btn">
-              <ArrowLeft size={15} /> Back to reels
+            <Link href="/reels/audio" className="rh-btn">
+              Audio
             </Link>
           </div>
         </header>

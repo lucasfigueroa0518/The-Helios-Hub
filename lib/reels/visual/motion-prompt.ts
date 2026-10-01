@@ -13,7 +13,7 @@ const PROMPT_PATH = path.join(DIR, 'motion-writer-prompt.txt');
  * Bump when the writer prompt, a grade block, or a code-owned Kling line
  * changes. The version before this one is frozen in saved/motion-writer-v1/.
  */
-export const MOTION_PROMPT_VERSION = 'motion-writer-v2';
+export const MOTION_PROMPT_VERSION = 'motion-writer-v3';
 
 /** Identical on every motion-writer call. This is the cached system prefix. */
 export function motionWriterInstructions(): string {
@@ -34,6 +34,7 @@ export const BAND_HOLD: Record<ColorProfile, string> = {
   noir: 'The middle third of the frame stays in deep shadow from the first frame to the last. Every light stays above or below it, where it already is.',
   paper: 'The middle third of the frame stays pale, even white from the first frame to the last. Every dark shape stays above or below it, where it already is.',
   orange: 'The middle third of the frame stays flat, even orange from the first frame to the last. The dark subject stays above or below it, where it already is.',
+  green: 'The middle third of the frame stays flat, even green from the first frame to the last. The dark subject stays above or below it, where it already is.',
 };
 
 /** Kling's prompt ceiling. A block anywhere near it is overloaded anyway. */

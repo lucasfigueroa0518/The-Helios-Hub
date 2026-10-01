@@ -20,7 +20,7 @@ export type CopyTarget = {
  */
 export async function loadCopyTargets(
   slateId: string,
-  options?: { topRanks?: number; postIdeaId?: string },
+  options?: { topRanks?: number; postIdeaId?: string; all?: boolean },
 ): Promise<CopyTarget[]> {
   const { rows } = await dbQuery<{
     post_idea_id: string;
@@ -47,14 +47,20 @@ export async function loadCopyTargets(
         AND s.chosen_bucket IS NOT NULL
         AND s.chosen_framework IS NOT NULL
         AND (
-          ($2::int IS NULL AND $3::uuid IS NULL AND s.selected)
+          ($2::int IS NULL AND $3::uuid IS NULL AND $4::boolean IS NOT TRUE AND s.selected)
           OR ($2::int IS NOT NULL AND $3::uuid IS NULL AND s.rank BETWEEN 1 AND $2)
           OR ($3::uuid IS NOT NULL AND s.post_idea_id = $3)
+          OR ($4::boolean IS TRUE AND s.rank IS NOT NULL)
         )
       ORDER BY s.rank NULLS LAST, s.post_idea_id,
                CASE m.role WHEN 'primary' THEN 0 WHEN 'supporting' THEN 1 ELSE 2 END,
                m.joined_at`,
-    [slateId, options?.postIdeaId ? null : (options?.topRanks ?? null), options?.postIdeaId ?? null],
+    [
+      slateId,
+      options?.postIdeaId || options?.all ? null : (options?.topRanks ?? null),
+      options?.postIdeaId ?? null,
+      options?.all === true,
+    ],
   );
 
   const byId = new Map<string, CopyTarget>();
@@ -82,6 +88,52 @@ export async function loadCopyTargets(
   return [...byId.values()];
 }
 
+const COPY_COLUMNS = `slate_id, post_idea_id, run_id, prompt_version, model, bucket, framework,
+       status, on_screen_copy, viewer_stake, caption, call_to_action, hashtags, sources, checks,
+       working, variants, error, full_story_below, full_story_cue, input_tokens, output_tokens, usd`;
+
+const COPY_VALUES = `$1, $2, $3, $4, $5, $6, $7,
+       $8, $9, $10, $11, $12, $13, $14::jsonb, $15::jsonb,
+       $16::jsonb, $17::jsonb, $18, $19, $20, $21, $22, $23`;
+
+/**
+ * D-220. One statement: append the attempt to the history, then upsert the
+ * current row. The update is skipped when the stored row is ok and this
+ * attempt failed, so a failure never replaces good copy.
+ */
+export const SAVE_IDEA_COPY_SQL = `WITH attempt AS (
+       INSERT INTO reels.idea_copy_history (${COPY_COLUMNS})
+       VALUES (${COPY_VALUES})
+     )
+     INSERT INTO reels.idea_copy (${COPY_COLUMNS})
+     VALUES (${COPY_VALUES})
+     ON CONFLICT (slate_id, post_idea_id) DO UPDATE SET
+       run_id = EXCLUDED.run_id,
+       prompt_version = EXCLUDED.prompt_version,
+       model = EXCLUDED.model,
+       bucket = EXCLUDED.bucket,
+       framework = EXCLUDED.framework,
+       status = EXCLUDED.status,
+       on_screen_copy = EXCLUDED.on_screen_copy,
+       viewer_stake = EXCLUDED.viewer_stake,
+       caption = EXCLUDED.caption,
+       call_to_action = EXCLUDED.call_to_action,
+       hashtags = EXCLUDED.hashtags,
+       sources = EXCLUDED.sources,
+       checks = EXCLUDED.checks,
+       working = EXCLUDED.working,
+       variants = EXCLUDED.variants,
+       error = EXCLUDED.error,
+       full_story_below = EXCLUDED.full_story_below,
+       full_story_cue = EXCLUDED.full_story_cue,
+       input_tokens = EXCLUDED.input_tokens,
+       output_tokens = EXCLUDED.output_tokens,
+       usd = EXCLUDED.usd,
+       created_at = now()
+     WHERE reels.idea_copy.status <> 'ok' OR EXCLUDED.status = 'ok'
+     RETURNING status`;
+
+/** Returns false when an earlier ok row was kept in place of this failed attempt. */
 export async function saveIdeaCopy(input: {
   slateId: string;
   postIdeaId: string;
@@ -99,65 +151,34 @@ export async function saveIdeaCopy(input: {
   inputTokens: number;
   outputTokens: number;
   usd: number;
-}): Promise<void> {
+}): Promise<boolean> {
   const report = input.report;
-  await dbQuery(
-    `INSERT INTO reels.idea_copy (
-       slate_id, post_idea_id, run_id, prompt_version, model, bucket, framework,
-       status, on_screen_copy, caption, call_to_action, hashtags, sources, checks,
-       working, variants, error, full_story_below, full_story_cue, input_tokens, output_tokens, usd
-     ) VALUES (
-       $1, $2, $3, $4, $5, $6, $7,
-       $8, $9, $10, $11, $12, $13::jsonb, $14::jsonb,
-       $15::jsonb, $16::jsonb, $17, $18, $19, $20, $21, $22
-     )
-     ON CONFLICT (slate_id, post_idea_id) DO UPDATE SET
-       run_id = EXCLUDED.run_id,
-       prompt_version = EXCLUDED.prompt_version,
-       model = EXCLUDED.model,
-       bucket = EXCLUDED.bucket,
-       framework = EXCLUDED.framework,
-       status = EXCLUDED.status,
-       on_screen_copy = EXCLUDED.on_screen_copy,
-       caption = EXCLUDED.caption,
-       call_to_action = EXCLUDED.call_to_action,
-       hashtags = EXCLUDED.hashtags,
-       sources = EXCLUDED.sources,
-       checks = EXCLUDED.checks,
-       working = EXCLUDED.working,
-       variants = EXCLUDED.variants,
-       error = EXCLUDED.error,
-       full_story_below = EXCLUDED.full_story_below,
-       full_story_cue = EXCLUDED.full_story_cue,
-       input_tokens = EXCLUDED.input_tokens,
-       output_tokens = EXCLUDED.output_tokens,
-       usd = EXCLUDED.usd,
-       created_at = now()`,
-    [
-      input.slateId,
-      input.postIdeaId,
-      input.runId,
-      input.promptVersion,
-      input.model,
-      input.bucket,
-      input.framework,
-      report ? 'ok' : 'failed',
-      report?.onScreenCopy ?? null,
-      report?.caption ?? null,
-      report?.callToAction ?? null,
-      report?.hashtags ?? [],
-      JSON.stringify(report?.sources ?? []),
-      input.checks ? JSON.stringify(input.checks) : null,
-      report ? JSON.stringify(report.working) : null,
-      input.variants ? JSON.stringify(input.variants) : null,
-      input.error,
-      input.fullStoryBelow ?? false,
-      input.fullStoryCue ?? null,
-      input.inputTokens,
-      input.outputTokens,
-      input.usd,
-    ],
-  );
+  const { rows } = await dbQuery<{ status: string }>(SAVE_IDEA_COPY_SQL, [
+    input.slateId,
+    input.postIdeaId,
+    input.runId,
+    input.promptVersion,
+    input.model,
+    input.bucket,
+    input.framework,
+    report ? 'ok' : 'failed',
+    report?.onScreenCopy ?? null,
+    report?.viewerStake ?? null,
+    report?.caption ?? null,
+    report?.callToAction ?? null,
+    report?.hashtags ?? [],
+    JSON.stringify(report?.sources ?? []),
+    input.checks ? JSON.stringify(input.checks) : null,
+    report ? JSON.stringify(report.working) : null,
+    input.variants ? JSON.stringify(input.variants) : null,
+    input.error,
+    input.fullStoryBelow ?? false,
+    input.fullStoryCue ?? null,
+    input.inputTokens,
+    input.outputTokens,
+    input.usd,
+  ]);
+  return rows.length > 0;
 }
 
 export type StoredCopy = {

@@ -74,15 +74,26 @@ export type FinishStart = {
   note: string;
 };
 
-/** Record the request and queue whichever stage is still missing. */
-export async function requestFinish(postIdeaId: string, slateId: string): Promise<FinishStart> {
+/** Record the request and queue whichever stage is still missing. `start: 'frame'` skips copy. */
+export async function requestFinish(
+  postIdeaId: string,
+  slateId: string,
+  options?: { start?: FinishStage },
+): Promise<FinishStart> {
+  const { findReelLock } = await import('@/lib/reels/locks');
+  const lock = await findReelLock(slateId, postIdeaId);
+  if (lock) {
+    return { status: 'failed', note: `This reel is locked for ${lock.nyDate} and stays as it is.` };
+  }
+  const start = options?.start ?? 'copy';
   await dbQuery(
-    `INSERT INTO reels.finish_requests (post_idea_id, slate_id, status, error)
-     VALUES ($1::uuid, $2::uuid, 'active', NULL)
+    `INSERT INTO reels.finish_requests (post_idea_id, slate_id, status, error, start_stage)
+     VALUES ($1::uuid, $2::uuid, 'active', NULL, $3)
      ON CONFLICT (post_idea_id) DO UPDATE
        SET slate_id = EXCLUDED.slate_id, status = 'active', error = NULL,
+           start_stage = EXCLUDED.start_stage,
            requested_at = now(), updated_at = now()`,
-    [postIdeaId, slateId],
+    [postIdeaId, slateId, start],
   );
   const [row] = await loadActive(postIdeaId);
   if (!row) return { status: 'failed', note: 'Could not start whole generation.' };
@@ -203,8 +214,9 @@ async function loadActive(postIdeaId?: string): Promise<ActiveFinish[]> {
     copy_attempts: number;
     frame_attempts: number;
     video_attempts: number;
+    start_stage: FinishStage;
   }>(
-    `SELECT f.post_idea_id::text, f.slate_id::text,
+    `SELECT f.post_idea_id::text, f.slate_id::text, f.start_stage,
             ${stageSql('copy_jobs', 'j', "'ok'", "'failed'")} AS copy_state,
             ${stageSql('visual_jobs', 'v', "'ok'", FRAME_FAIL)} AS frame_state,
             ${stageSql('video_jobs', 'd', "'ok'", "'failed'")} AS video_state,
@@ -220,7 +232,18 @@ async function loadActive(postIdeaId?: string): Promise<ActiveFinish[]> {
   return result.rows.map((row) => ({
     postIdeaId: row.post_idea_id,
     slateId: row.slate_id,
-    progress: { copy: row.copy_state, frame: row.frame_state, video: row.video_state },
+    progress: finishProgressFromStart(row.start_stage, {
+      copy: row.copy_state,
+      frame: row.frame_state,
+      video: row.video_state,
+    }),
     attempts: { copy: row.copy_attempts, frame: row.frame_attempts, video: row.video_attempts },
   }));
+}
+
+/** A finish that starts at the frame already has its copy. */
+export function finishProgressFromStart(start: FinishStage, progress: FinishProgress): FinishProgress {
+  if (start === 'frame') return { ...progress, copy: 'ok' };
+  if (start === 'video') return { ...progress, copy: 'ok', frame: 'ok' };
+  return progress;
 }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { MAX_STAGE_ATTEMPTS, nextFinishAction, type FinishProgress } from '@/lib/reels/visual/finish';
+import { MAX_STAGE_ATTEMPTS, finishProgressFromStart, nextFinishAction, type FinishProgress } from '@/lib/reels/visual/finish';
 
 function progress(partial: Partial<FinishProgress>): FinishProgress {
   return { copy: 'missing', frame: 'missing', video: 'missing', ...partial };
@@ -26,6 +26,11 @@ test('a failed stage is retried until it runs out of attempts', () => {
   assert.equal(nextFinishAction(progress({ copy: 'ok', frame: 'ok', video: 'failed' }), tries(1)), 'video');
   assert.equal(nextFinishAction(progress({ copy: 'failed' }), tries(MAX_STAGE_ATTEMPTS)), 'failed');
   assert.equal(nextFinishAction(progress({ copy: 'ok', frame: 'ok', video: 'failed' }), tries(MAX_STAGE_ATTEMPTS)), 'failed');
+});
+
+test('a finish that starts at the frame does not rewrite copy', () => {
+  const started = finishProgressFromStart('frame', progress({ copy: 'missing', frame: 'missing' }));
+  assert.equal(nextFinishAction(started), 'frame');
 });
 
 test('a finished video ends the walk', () => {

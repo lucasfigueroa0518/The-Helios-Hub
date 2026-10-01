@@ -3,9 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  Activity,
   AlertTriangle,
-  BarChart3,
   ChevronLeft,
   ChevronRight,
   Copy as CopyIcon,
@@ -16,7 +14,6 @@ import {
   Play,
   RotateCcw,
   Sparkles,
-  Volume2,
 } from 'lucide-react';
 
 import { Drawer, ReelVideo, Section } from '@/app/reels/ui';
@@ -46,24 +43,6 @@ const CATEGORY: Record<string, string> = {
   curiosity: 'Curiosity',
   arousal: 'Arousal',
   identity: 'Identity',
-};
-
-const RUN_STATUS: Record<string, string> = {
-  requested: 'Queued',
-  running: 'Running',
-  ok: 'Healthy',
-  partial: 'Partial',
-  failed: 'Failed',
-  skipped: 'Skipped',
-};
-
-const STAGE_LABEL: Record<string, string> = {
-  copy: 'Copy',
-  frame: 'Frame',
-  video: 'Video',
-  song: 'Song pick',
-  publish: 'Publish',
-  songs: 'Song ingest',
 };
 
 /* ----------------------------------------------------------------- format */
@@ -168,7 +147,14 @@ export function reelFor(view: DayView, score: StoredScore): Reel {
   const job = view.copyJobs[id] ?? null;
   const finish = view.finishes[id] ?? null;
   const song = view.songs[id] ?? null;
-  const schedule = view.schedules[id] ?? null;
+  const rawSchedule = view.schedules[id] ?? null;
+  const schedule =
+    rawSchedule &&
+    (rawSchedule.status === 'published' ||
+      rawSchedule.status === 'publishing' ||
+      rawSchedule.nyDate === view.slate.nyDate)
+      ? rawSchedule
+      : null;
   const writing = job?.status === 'requested' || job?.status === 'running';
   const framing = frame?.status === 'requested' || frame?.status === 'running';
   const filming = video?.status === 'requested' || video?.status === 'running';
@@ -330,8 +316,18 @@ const BADGE: Partial<Record<PublishState['kind'], string>> = {
 /** Why Approve cannot run yet, or null when it can. */
 function approveBlocker(music: MusicStatus): string | null {
   if (!music.metaReady) return 'Waiting on Meta credentials.';
-  if (!music.mix) return 'The song and SFX volumes are not set yet (MUS-V2).';
   return null;
+}
+
+function badgeLabel(state: PublishState, windowsOpen: number): string | null {
+  if (state.kind === 'scheduled') return `Scheduled · ${formatSlotTime(state.publishAt)}`;
+  if (state.kind === 'awaiting' && windowsOpen === 0) return 'Carries tomorrow';
+  return BADGE[state.kind] ?? null;
+}
+
+function isPostingReel(reel: Reel): boolean {
+  const rank = reel.score.rank;
+  return rank != null && rank >= 1 && rank <= 3;
 }
 
 /* ------------------------------------------------------------------- hub */
@@ -339,12 +335,10 @@ function approveBlocker(music: MusicStatus): string | null {
 export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview; reviewPath?: string }) {
   const [data, setData] = useState<ReelsOverview>(initial);
   const [dayId, setDayId] = useState<string | null>(null);
-  const [scoreEra, setScoreEra] = useState<'new' | 'old'>('new');
   const [openId, setOpenId] = useState<string | null>(null);
-  const [insightsOpen, setInsightsOpen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [runBusy, setRunBusy] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [confirmLive, setConfirmLive] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -364,11 +358,6 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
   }, [views.length]);
   const view = views.find((item) => item.slate.id === dayId) ?? views[0] ?? null;
   const viewIndex = view ? views.indexOf(view) : -1;
-  const canCompare = Boolean(view?.isCurrent && data.previousSlate);
-  const display: DayView | null =
-    view && canCompare && scoreEra === 'old' && data.previousSlate
-      ? { ...view, slate: data.previousSlate, copy: data.previousCopy }
-      : view;
 
   const nightInFlight = data.latest?.status === 'running' || data.latest?.status === 'requested';
   const reelInFlight =
@@ -409,7 +398,7 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
     function onKey(event: KeyboardEvent) {
       if (event.key !== 'Escape') return;
       setOpenId(null);
-      setInsightsOpen(false);
+      setConfirmLive(false);
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -457,6 +446,24 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
     }
   }
 
+  async function setReviewOpen(value: boolean) {
+    try {
+      await requestJson('/api/reels/settings', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ review_open: value }),
+      });
+      setMessage(
+        value
+          ? 'The review link is showing reels.'
+          : 'The review link is paused. Visitors see that a new batch is coming.',
+      );
+      await refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   async function setLive(value: boolean) {
     try {
       const result = await requestJson<{ publishingLive: boolean; scheduled?: number }>('/api/reels/settings', {
@@ -477,25 +484,12 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
     }
   }
 
-  async function runNow() {
-    setRunBusy(true);
-    try {
-      const result = await requestJson<{ queued: boolean; note?: string }>('/api/reels/run', { method: 'POST' });
-      setMessage(result.queued ? 'Run queued. The worker picks it up within about 15 seconds.' : result.note ?? 'A run is already pending.');
-      await refresh();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error));
-    } finally {
-      setRunBusy(false);
-    }
-  }
-
   const health = healthOf(data);
-  const reels = display ? display.slate.scores.map((score) => reelFor(display, score)) : [];
-  const top = reels
-    .filter((reel) => reel.score.selected)
-    .sort((a, b) => (a.score.rank ?? 99) - (b.score.rank ?? 99));
-  const rest = display?.isCurrent ? reels.filter((reel) => !reel.score.selected) : [];
+  const reels = view ? view.slate.scores.map((score) => reelFor(view, score)) : [];
+  const ranked = [...reels].sort((a, b) => (a.score.rank ?? 999) - (b.score.rank ?? 999));
+  const top = ranked.filter((reel) => (reel.score.rank ?? 999) <= 3).slice(0, 3);
+  const posting = new Set(top.map((reel) => reel.score.postIdeaId));
+  const rest = view?.isCurrent ? ranked.filter((reel) => !posting.has(reel.score.postIdeaId)) : [];
   const open = reels.find((reel) => reel.score.postIdeaId === openId) ?? null;
   const today = todayInNewYork();
 
@@ -508,52 +502,60 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
             <h1 className="rh__title">Trial Reels <span className="rh-beta">Beta</span></h1>
           </div>
           <div className="rh__head-actions">
-            <button type="button" className="rh-btn rh-btn--quiet" disabled title="Advanced analytics on posted reels. Coming later.">
-              <BarChart3 size={15} /> Post analytics <span className="rh-soon">Soon</span>
-            </button>
-            <Link href="/reels/sfx" className="rh-btn">
-              <Volume2 size={15} /> Hook sounds
-            </Link>
-            <Link href="/reels/songs" className="rh-btn">
-              <Music2 size={15} /> Songs
-            </Link>
-            {reviewPath ? (
-              <button
-                type="button"
-                className="rh-btn"
-                title="Copy the private review link. No login."
-                onClick={() => {
-                  const url = `${window.location.origin}${reviewPath}`;
-                  void navigator.clipboard.writeText(url).then(
-                    () => {
-                      setCopiedLink(true);
-                      window.setTimeout(() => setCopiedLink(false), 1600);
-                    },
-                    (error: unknown) => setMessage(error instanceof Error ? error.message : String(error)),
-                  );
-                }}
+            <div className="rh-review-controls">
+              <label
+                className="rh-switch"
+                title="On: the review link plays the reels. Off: the link says a new review batch is coming soon."
               >
-                {copiedLink ? <Check size={15} /> : <CopyIcon size={15} />}
-                {copiedLink ? 'Copied' : 'Review link'}
-              </button>
-            ) : null}
-            <label className="rh-switch" title="When Live is on, each night's three reels are scheduled into the day's posting slots and posted as trial reels.">
-              <input
-                type="checkbox"
-                checked={data.music.publishingLive}
-                onChange={(event) => void setLive(event.target.checked)}
-              />
-              <span className="rh-switch__track" aria-hidden="true" />
+                <input
+                  type="checkbox"
+                  checked={data.reviewOpen}
+                  onChange={(event) => void setReviewOpen(event.target.checked)}
+                />
+                <span className="rh-switch__track" aria-hidden="true" />
+                Show reels
+              </label>
+              {reviewPath ? (
+                <button
+                  type="button"
+                  className="rh-btn"
+                  title="Copy the private review link. No login."
+                  onClick={() => {
+                    const url = `${window.location.origin}${reviewPath}`;
+                    void navigator.clipboard.writeText(url).then(
+                      () => {
+                        setCopiedLink(true);
+                        window.setTimeout(() => setCopiedLink(false), 1600);
+                      },
+                      (error: unknown) => setMessage(error instanceof Error ? error.message : String(error)),
+                    );
+                  }}
+                >
+                  {copiedLink ? <Check size={15} /> : <CopyIcon size={15} />}
+                  {copiedLink ? 'Copied' : 'Review link'}
+                </button>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              className={`rh-live${data.music.publishingLive ? ' is-on' : ''}`}
+              aria-pressed={data.music.publishingLive}
+              title="When Live is on, each night's three reels are scheduled into the day's posting slots and posted as trial reels."
+              onClick={() => {
+                if (data.music.publishingLive) void setLive(false);
+                else setConfirmLive(true);
+              }}
+            >
+              <span className="rh-live__lamp" aria-hidden="true" />
               Live
-            </label>
-            <button type="button" className="rh-btn" onClick={() => setInsightsOpen(true)} aria-haspopup="dialog">
-              <span className={`rh-dot rh-dot--${health.tone}`} aria-hidden="true" />
-              <Activity size={15} /> Insights
             </button>
+            <Link href="/reels/health" className="rh-health-link" title={health.label} aria-label={health.label}>
+              <span className={`rh-dot rh-dot--${health.tone}`} aria-hidden="true" />
+            </Link>
           </div>
         </header>
 
-        {views.length === 0 || !view || !display ? (
+        {views.length === 0 || !view ? (
           <p className="rh-empty">No scored days yet. The next run ranks the timely post ideas and picks the top three.</p>
         ) : (
           <>
@@ -578,7 +580,6 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
                       aria-current={active ? 'date' : undefined}
                       onClick={() => {
                         setDayId(item.slate.id);
-                        setScoreEra('new');
                         setOpenId(null);
                       }}
                     >
@@ -603,41 +604,12 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
 
             <section className="rh-day-head">
               <div>
-                <h2>{formatNyDate(display.slate.nyDate, 'long')}</h2>
+                <h2>{formatNyDate(view.slate.nyDate, 'long')}</h2>
                 <p>
-                  Scored {formatTime(display.slate.scoredAt)}
-                  {display.isCurrent ? ` · ${display.slate.scores.length} ideas in the pool` : ''}
-                  {canCompare ? (scoreEra === 'old' ? ' · previous scoring' : ' · new scoring') : ''}
+                  Scored {formatTime(view.slate.scoredAt)}
+                  {view.isCurrent ? ` · ${view.slate.scores.length} ideas in the pool` : ''}
                 </p>
               </div>
-              {canCompare ? (
-                <div className="segmented" role="tablist" aria-label="Score set">
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={scoreEra === 'old'}
-                    className={`segmented__item${scoreEra === 'old' ? ' segmented__item--active' : ''}`}
-                    onClick={() => {
-                      setScoreEra('old');
-                      setOpenId(null);
-                    }}
-                  >
-                    Old scores
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={scoreEra === 'new'}
-                    className={`segmented__item${scoreEra === 'new' ? ' segmented__item--active' : ''}`}
-                    onClick={() => {
-                      setScoreEra('new');
-                      setOpenId(null);
-                    }}
-                  >
-                    New scores
-                  </button>
-                </div>
-              ) : null}
             </section>
 
             {top.length === 0 ? (
@@ -648,19 +620,28 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
                   <ReelCard
                     key={reel.score.postIdeaId}
                     reel={reel}
-                    badge={BADGE[publishState(reel, data.music).kind] ?? null}
+                    badge={isPostingReel(reel) || publishState(reel, data.music).kind === 'published' ? badgeLabel(publishState(reel, data.music), data.windowsOpen) : null}
                     onOpen={() => setOpenId(reel.score.postIdeaId)}
-                    onGenerate={() => void generate(reel.score.postIdeaId, display.slate.id)}
+                    onGenerate={() => void generate(reel.score.postIdeaId, view.slate.id)}
                   />
                 ))}
               </div>
             )}
 
+            {top.length > 0 && (
+              <p className="rh-muted rh-posting-note">
+                These three are the only reels that can post today, one per window. A reel that misses the windows still open carries to tomorrow. It is not scheduled late.
+              </p>
+            )}
+
             {rest.length > 0 && (
               <section className="rh-rest">
                 <h3 className="rh-rest__title">
-                  The rest of the pool <span>{rest.length}</span>
+                  The bench <span>{rest.length}</span>
                 </h3>
+                <p className="rh-muted">
+                  Depth and rotation. These do not go out, and they do not get a slot.
+                </p>
                 <ul className="rh-rest__list">
                   {rest.map((reel) => (
                     <li key={reel.score.postIdeaId}>
@@ -674,29 +655,50 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
         )}
       </div>
 
-      {open && display && (
+      {open && view && (
         <Drawer label="Reel details" onClose={() => setOpenId(null)}>
           <ReelDetail
             reel={open}
             music={data.music}
-            onGenerate={() => void generate(open.score.postIdeaId, display.slate.id)}
+            onGenerate={() => void generate(open.score.postIdeaId, view.slate.id)}
             onSchedule={(videoJobId) => void publishReel(videoJobId, 'schedule')}
             onForce={(videoJobId) => void publishReel(videoJobId, 'force')}
             onRetrySong={(videoJobId) => void retrySong(videoJobId)}
+            windowsOpen={data.windowsOpen}
           />
         </Drawer>
       )}
 
-      {insightsOpen && (
-        <Drawer label="Insights" onClose={() => setInsightsOpen(false)} wide>
-          <Insights
-            data={data}
-            health={health}
-            runBusy={runBusy || nightInFlight}
-            onRunNow={() => void runNow()}
-            onLive={(value) => void setLive(value)}
-          />
-        </Drawer>
+      {confirmLive && (
+        <div className="rh-confirm" role="presentation" onClick={() => setConfirmLive(false)}>
+          <div
+            className="rh-confirm__card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="rh-live-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="rh-live-title">Go live?</h2>
+            <p>
+              Today&apos;s three best reels will be scheduled into the windows still open and posted to Instagram. The bench stays off the clock.
+            </p>
+            <div className="rh-confirm__actions">
+              <button type="button" className="rh-btn" onClick={() => setConfirmLive(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="rh-btn rh-btn--primary"
+                onClick={() => {
+                  setConfirmLive(false);
+                  void setLive(true);
+                }}
+              >
+                Go live
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {message && (
@@ -714,14 +716,11 @@ type Health = { tone: 'ok' | 'warn' | 'bad' | 'idle'; label: string };
 
 export function healthOf(data: ReelsOverview): Health {
   const latest = data.latest;
-  const dayAgo = Date.now() - 86_400_000;
-  const freshErrors = data.insights.recentErrors.filter((error) => new Date(error.at).getTime() > dayAgo).length;
   if (!latest) return { tone: 'idle', label: 'No runs yet' };
   if (latest.status === 'failed') return { tone: 'bad', label: 'Last run failed' };
   if (latest.status === 'partial' || latest.source_results.some((result) => result.status === 'failed')) {
     return { tone: 'warn', label: 'Last run had source errors' };
   }
-  if (freshErrors > 0) return { tone: 'warn', label: `${freshErrors} job error${freshErrors === 1 ? '' : 's'} in 24 hours` };
   if (latest.status === 'running' || latest.status === 'requested') return { tone: 'idle', label: 'Run in progress' };
   return { tone: 'ok', label: 'All systems healthy' };
 }
@@ -820,9 +819,6 @@ function ReelCard({
         <span className="rh-reel__pills">
           <Pills score={reel.score} />
         </span>
-        {reel.schedule?.status === 'scheduled' && (
-          <span className="rh-reel__when">{formatSlotTime(reel.schedule.publishAt)}</span>
-        )}
       </button>
     </article>
   );
@@ -847,9 +843,9 @@ function RestRow({ reel, onOpen }: { reel: Reel; onOpen: () => void }) {
           {archetype ? `${archetype} · ${category ?? '—'}` : 'No framework cleared 0.60'}
         </span>
       </span>
-      <span className="rh-row__pills">
-        <Pills score={reel.score} />
-        <span className={`rh-chip rh-chip--${reel.phase}`}>
+        <span className="rh-row__pills">
+          <Pills score={reel.score} />
+          <span className={`rh-chip rh-chip--${reel.phase}`}>
           {reel.phase === 'working' && <Loader2 size={11} className="rh-spin" />} {PHASE_CHIP[reel.phase]}
         </span>
       </span>
@@ -887,6 +883,8 @@ function ApproveBlock({
   music,
   videoJobId,
   canGenerate,
+  canSchedule,
+  scheduleNote,
   onSchedule,
   onForce,
   onGenerate,
@@ -896,6 +894,8 @@ function ApproveBlock({
   music: MusicStatus;
   videoJobId: string;
   canGenerate: boolean;
+  canSchedule: boolean;
+  scheduleNote: string | null;
   onSchedule: (videoJobId: string) => void;
   onForce: (videoJobId: string) => void;
   onGenerate: () => void;
@@ -960,6 +960,7 @@ function ApproveBlock({
             </button>
           </div>
           {blocker && <p className="rh-muted rh-song-note">{blocker}</p>}
+          {!music.mix && <p className="rh-muted rh-song-note">Song and SFX volumes are not chosen yet, so this posts at full volume.</p>}
         </div>
       );
     case 'awaiting':
@@ -989,16 +990,20 @@ function ApproveBlock({
             >
               {busy === 'force' ? <Loader2 size={15} className="rh-spin" /> : <Play size={15} />} Force post
             </button>
-            <button
-              type="button"
-              className="rh-btn rh-btn--primary"
-              disabled={busy !== null || blocker !== null}
-              onClick={() => act('schedule', () => onSchedule(videoJobId))}
-            >
-              {busy === 'schedule' ? <Loader2 size={15} className="rh-spin" /> : <Check size={15} />} Schedule
-            </button>
+            {canSchedule && (
+              <button
+                type="button"
+                className="rh-btn rh-btn--primary"
+                disabled={busy !== null || blocker !== null}
+                onClick={() => act('schedule', () => onSchedule(videoJobId))}
+              >
+                {busy === 'schedule' ? <Loader2 size={15} className="rh-spin" /> : <Check size={15} />} Schedule
+              </button>
+            )}
           </div>
+          {scheduleNote && <p className="rh-muted rh-song-note">{scheduleNote}</p>}
           {blocker && <p className="rh-muted rh-song-note">{blocker}</p>}
+          {!music.mix && <p className="rh-muted rh-song-note">Song and SFX volumes are not chosen yet, so this posts at full volume.</p>}
         </div>
       );
     default:
@@ -1013,6 +1018,7 @@ export function ReelDetail({
   onSchedule,
   onForce,
   onRetrySong,
+  windowsOpen,
 }: {
   reel: Reel;
   music: MusicStatus;
@@ -1020,6 +1026,7 @@ export function ReelDetail({
   onSchedule: (videoJobId: string) => void;
   onForce: (videoJobId: string) => void;
   onRetrySong: (videoJobId: string) => void;
+  windowsOpen: number;
 }) {
   const [songOpen, setSongOpen] = useState(false);
   const song = reel.song?.song ?? null;
@@ -1104,6 +1111,14 @@ export function ReelDetail({
           music={music}
           videoJobId={reel.video.id}
           canGenerate={reel.canGenerate}
+          canSchedule={isPostingReel(reel) && windowsOpen > 0}
+          scheduleNote={
+            !isPostingReel(reel)
+              ? 'The bench does not get a slot. Force post is the only way to send this one now.'
+              : windowsOpen === 0
+                ? 'Today’s windows are closed. This reel carries to tomorrow at its score. It is not scheduled late.'
+                : null
+          }
           onSchedule={onSchedule}
           onForce={onForce}
           onGenerate={onGenerate}
@@ -1260,268 +1275,3 @@ export function ReelDetail({
   );
 }
 
-/* -------------------------------------------------------------- insights */
-
-/** D-173: the auto-publish switch, and what publishing is still waiting on. */
-function PublishingCard({ music, onLive }: { music: MusicStatus; onLive: (value: boolean) => void }) {
-  const lastIngest = music.ingests[0] ?? null;
-  const waiting = [
-    !music.metaReady && 'Meta credentials',
-    !music.clapReady && 'the CLAP endpoint',
-    !music.pickApproved && 'approval of the song-pick question (P-13)',
-    !music.mix && 'the song and SFX volumes (MUS-V2)',
-  ].filter((item): item is string => Boolean(item));
-  return (
-    <section className="rh-card">
-      <div className="rh-card__row">
-        <h3 className="rh-card__title rh-card__title--flush">Publishing</h3>
-        <label className="rh-switch">
-          <input
-            type="checkbox"
-            checked={music.publishingLive}
-            onChange={(event) => onLive(event.target.checked)}
-          />
-          <span className="rh-switch__track" aria-hidden="true" />
-          Live
-        </label>
-      </div>
-      <p className="rh-muted">
-        {music.publishingLive
-          ? "On: each night's three reels are scheduled into the day's slots and posted as trial reels."
-          : 'Off: the night does not schedule anything. Schedule and Force post still work. Reels already on the clock still post.'}
-      </p>
-      <p className="rh-muted">
-        Slots, Eastern time, one reel each: 8:45–10:00 AM, 11:15 AM–12:30 PM, and 6:00–9:00 PM. The minute inside a slot is random.
-      </p>
-      {waiting.length > 0 && (
-        <ul className="rh-notes">
-          <li className="rh-note rh-note--warn">
-            <AlertTriangle size={13} /> Waiting on {waiting.join(', ')}.
-          </li>
-        </ul>
-      )}
-      <dl className="rh-facts rh-facts--three">
-        <div>
-          <dt>Songs in pool</dt>
-          <dd>
-            {music.pool.size} <span className="rh-muted">({music.pool.tagged} tagged)</span>
-          </dd>
-        </div>
-        <div>
-          <dt>Mix (song / SFX)</dt>
-          <dd>{music.mix ? `${music.mix.audioVolume} / ${music.mix.videoVolume}` : 'Not set'}</dd>
-        </div>
-        <div>
-          <dt>Last song ingest</dt>
-          <dd>{lastIngest ? `${RUN_STATUS[lastIngest.status] ?? lastIngest.status} · ${formatTime(lastIngest.startedAt)}` : 'None yet'}</dd>
-        </div>
-      </dl>
-      <p className="rh-muted rh-stats">
-        <Link href="/reels/songs">Open the song pool</Link>
-      </p>
-    </section>
-  );
-}
-
-export function Insights({
-  data,
-  health,
-  runBusy,
-  onRunNow,
-  onLive,
-}: {
-  data: ReelsOverview;
-  health: Health;
-  runBusy: boolean;
-  onRunNow: () => void;
-  onLive: (value: boolean) => void;
-}) {
-  const latest = data.latest;
-  const failedSources = (latest?.source_results ?? []).filter((result) => result.status === 'failed');
-  const costs = data.insights.costs;
-  const watchShare = Math.min(1, costs.monthToDateUsd / Math.max(1, data.spend.watchUsd));
-  const peak = Math.max(0.01, ...costs.days.map((day) => day.ledgerUsd + day.klingUsd));
-  const perReel = costs.reelsMade > 0 ? costs.monthToDateUsd / costs.reelsMade : null;
-  const inFlight = [
-    data.copyInFlight && 'copy',
-    data.visualInFlight && 'a frame',
-    data.videoInFlight && 'a video',
-  ].filter(Boolean);
-
-  return (
-    <div className="rh-insights">
-      <header className="rh-insights__head">
-        <p className="rh__kicker">Insights</p>
-        <h2>System health and costs</h2>
-      </header>
-
-      <section className="rh-card">
-        <div className="rh-card__row">
-          <span className={`rh-health rh-health--${health.tone}`}>
-            <span className={`rh-dot rh-dot--${health.tone}`} /> {health.label}
-          </span>
-          <button type="button" className="rh-btn rh-btn--xs" onClick={onRunNow} disabled={runBusy}>
-            {runBusy ? <Loader2 size={12} className="rh-spin" /> : <Play size={12} />} {runBusy ? 'Running' : 'Run now'}
-          </button>
-        </div>
-        <dl className="rh-facts">
-          <div>
-            <dt>Last run</dt>
-            <dd>
-              {latest ? `${RUN_STATUS[latest.status] ?? latest.status} · ${formatTime(latest.started_at ?? latest.requested_at)}` : 'None yet'}
-            </dd>
-          </div>
-          <div>
-            <dt>Finished</dt>
-            <dd>{formatTime(latest?.finished_at ?? null)}</dd>
-          </div>
-          <div>
-            <dt>Next scheduled</dt>
-            <dd>{formatTime(data.nextRunAt)}</dd>
-          </div>
-          <div>
-            <dt>In flight</dt>
-            <dd>{inFlight.length > 0 ? `Making ${inFlight.join(', ')}` : 'Idle'}</dd>
-          </div>
-        </dl>
-        {latest && (
-          <p className="rh-muted rh-stats">
-            {latest.stats.ingested ?? 0} kept · {latest.stats.dropped ?? 0} dropped · {latest.stats.scored ?? 0} scored ·{' '}
-            {latest.stats.selected ?? 0} selected · {latest.stats.jevCalls ?? 0} Jev calls · {usd(latest.stats.usd ?? 0, 3)}
-          </p>
-        )}
-      </section>
-
-      <PublishingCard music={data.music} onLive={onLive} />
-
-      <section className="rh-card">
-        <h3 className="rh-card__title">Errors in the last run</h3>
-        {!latest?.note && failedSources.length === 0 ? (
-          <p className="rh-muted">None.</p>
-        ) : (
-          <ul className="rh-notes">
-            {latest?.note && (
-              <li className={`rh-note rh-note--${latest.status === 'failed' ? 'bad' : 'warn'}`}>
-                <AlertTriangle size={13} /> {latest.note}
-              </li>
-            )}
-            {failedSources.map((result) => (
-              <li key={result.adapterId} className="rh-note rh-note--warn">
-                <AlertTriangle size={13} /> {result.name}: {result.error ?? 'failed'}
-              </li>
-            ))}
-          </ul>
-        )}
-        {!data.b6Approved && <p className="rh-muted">The nightly web-search story (B6) is off until the P-01 prompt is approved.</p>}
-        {!data.copyApproved && <p className="rh-muted">On-screen copy and captions are off until the P-10 prompt is approved.</p>}
-      </section>
-
-      <section className="rh-card">
-        <h3 className="rh-card__title">Reel job errors, last 7 days</h3>
-        {data.insights.recentErrors.length === 0 ? (
-          <p className="rh-muted">None.</p>
-        ) : (
-          <ul className="rh-errors">
-            {data.insights.recentErrors.map((error, index) => (
-              <li key={`${error.at}-${index}`}>
-                <span className="rh-errors__meta">
-                  {STAGE_LABEL[error.stage]} · {formatTime(error.at)}
-                </span>
-                {error.headline && <span className="rh-errors__idea">{error.headline}</span>}
-                <span className="rh-errors__text">{error.error}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="rh-card">
-        <h3 className="rh-card__title">Costs this month</h3>
-        <div className="rh-spend">
-          <span className="rh-spend__total">{usd(costs.monthToDateUsd)}</span>
-          <span className="rh-muted">of the {usd(data.spend.watchUsd, 0)} watch</span>
-        </div>
-        <div className="rh-meter" aria-hidden="true">
-          <span style={{ width: `${watchShare * 100}%` }} className={watchShare >= 1 ? 'is-over' : undefined} />
-        </div>
-        <dl className="rh-facts rh-facts--three">
-          <div>
-            <dt>Reels made</dt>
-            <dd>{costs.reelsMade}</dd>
-          </div>
-          <div>
-            <dt>Kling clips</dt>
-            <dd>{costs.klingClips}</dd>
-          </div>
-          <div>
-            <dt>All-in per reel</dt>
-            <dd>{perReel == null ? '—' : usd(perReel)}</dd>
-          </div>
-        </dl>
-
-        <p className="rh-card__sub">Last 14 days</p>
-        <div className="rh-bars" role="img" aria-label="Daily spend for the last 14 days">
-          {costs.days.map((day) => {
-            const total = day.ledgerUsd + day.klingUsd;
-            return (
-              <div key={day.nyDate} className="rh-bars__col" title={`${formatNyDate(day.nyDate)}: ${usd(total)}`}>
-                <div className="rh-bars__stack" style={{ height: `${(total / peak) * 100}%` }}>
-                  <span className="rh-bars__kling" style={{ flexGrow: day.klingUsd }} />
-                  <span className="rh-bars__ledger" style={{ flexGrow: day.ledgerUsd }} />
-                </div>
-                <span className="rh-bars__label">{Number(day.nyDate.slice(8))}</span>
-              </div>
-            );
-          })}
-        </div>
-        <p className="rh-legend">
-          <span className="rh-legend__kling" /> Kling video <span className="rh-legend__ledger" /> Claude, Jev, and images
-        </p>
-
-        <table className="rh-table">
-          <thead>
-            <tr>
-              <th scope="col">Component</th>
-              <th scope="col">Calls</th>
-              <th scope="col">Spend</th>
-            </tr>
-          </thead>
-          <tbody>
-            {costs.lines.length === 0 ? (
-              <tr>
-                <td colSpan={3} className="rh-muted">
-                  No spend yet this month.
-                </td>
-              </tr>
-            ) : (
-              costs.lines.map((line) => (
-                <tr key={`${line.vendor}-${line.component}`}>
-                  <th scope="row">
-                    {line.component} <span className="rh-muted">{line.vendor}</span>
-                  </th>
-                  <td>{line.calls}</td>
-                  <td>{usd(line.usd, 3)}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-        <p className="rh-muted">Kling is billed by Fal outside the cost ledger, so it is counted from clips at $0.672 each. Retries inside a job are not counted.</p>
-      </section>
-
-      <section className="rh-card">
-        <h3 className="rh-card__title">Recent runs</h3>
-        <ul className="rh-runs">
-          {data.runs.slice(0, 8).map((run) => (
-            <li key={run.id}>
-              <span className={`rh-dot rh-dot--${run.status === 'ok' ? 'ok' : run.status === 'failed' ? 'bad' : run.status === 'partial' ? 'warn' : 'idle'}`} />
-              <span>{formatTime(run.started_at ?? run.requested_at)}</span>
-              <span className="rh-muted">{RUN_STATUS[run.status] ?? run.status} · {run.trigger}</span>
-              <span className="rh-muted">{usd(run.stats.usd ?? 0, 3)}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-    </div>
-  );
-}

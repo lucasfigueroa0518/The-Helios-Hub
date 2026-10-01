@@ -2,14 +2,19 @@ import type { BucketId } from '@/lib/reels/scoring/decide';
 
 /**
  * The writer's tool, and the checks code runs on what comes back. Checks are
- * shown beside the copy for review. They do not reject or retry anything.
+ * shown beside the copy for review. They do not reject or retry anything; the
+ * word range also gates the copy pick (D-216, lib/reels/copy/pick.ts).
  */
 
-/** On-screen word counts from PRODUCT_SPEC.md. "Under 15" is at most 14. */
+/**
+ * On-screen word counts from PRODUCT_SPEC.md. "Under 15" is at most 14. The
+ * Saga is 20 to 32 on one 8-second still that loops, about 11 seconds of
+ * reading at 3 words a second (D-214).
+ */
 export const ON_SCREEN_WORD_RANGE: Record<BucketId, { min: number; max: number }> = {
   ball_knowledge: { min: 8, max: 14 },
   the_number: { min: 1, max: 14 },
-  the_saga: { min: 40, max: 70 },
+  the_saga: { min: 20, max: 32 },
   personal_profile: { min: 10, max: 18 },
   the_warning: { min: 15, max: 25 },
   the_callout: { min: 12, max: 22 },
@@ -19,42 +24,53 @@ export const ON_SCREEN_WORD_RANGE: Record<BucketId, { min: number; max: number }
 export const CAPTION_MAX_CHARS = 2_200;
 export const CAPTION_FOLD_CHARS = 125;
 export const HASHTAG_RANGE = { min: 3, max: 5 };
+export const VIEWER_STAKE_MAX_WORDS = 20;
 
 export const REPORT_COPY_TOOL = {
   name: 'report_copy',
   description:
     'Report two final on-screen copies and one caption for this post idea. Both copies are doors into that one caption. Call it once.',
+  /**
+   * Opus 5.5 rejects tool_choice type "tool". strict keeps the JSON valid
+   * while the call uses tool_choice auto.
+   */
+  strict: true,
   input_schema: {
     type: 'object' as const,
+    additionalProperties: false,
     properties: {
       hook_drafts: {
         type: 'array',
-        description: 'At least three different hooks you considered, each a complete on-screen copy. Working notes, not published.',
+        description: 'At least three alternate on-screen lines. A record of the lines, not the published pair.',
         items: { type: 'string' },
       },
-      copy_draft: { type: 'string', description: 'Your first drafts of the two on-screen copies. Working notes.' },
-      caption_draft: { type: 'string', description: 'Your first draft of the caption. Working notes.' },
+      copy_draft: { type: 'string', description: 'The two on-screen lines before the final edit.' },
+      caption_draft: { type: 'string', description: 'The caption before the final edit.' },
       remaining_patterns: {
         type: 'array',
         description: 'Humanizer patterns still present in the drafts, each as its number and a short quote. Empty when none.',
         items: { type: 'string' },
       },
+      viewer_stake: {
+        type: 'string',
+        description:
+          'One plain sentence, 20 words at most, saying why this viewer should care. Both on-screen copies carry it in their own words, and the caption\'s first paragraph pays it out.',
+      },
       on_screen_copies: {
         type: 'array',
-        minItems: 2,
-        maxItems: 2,
         description:
-          'Exactly two final on-screen copies for the one screen. Same story, same facts, same gap, paid out by the one caption. Each whole copy is a hook, and the two are different hooks, with a different first line and a different thing named first. A paraphrase is a failed report. Each copy has a line break already inserted at each natural pause. One line break between lines, and no blank line. A line break stays on this same screen. Count the words in each copy on its own. Each count must fall inside the bucket word range given in the prompt. A count outside that range is a failed report.',
+          'Exactly two final on-screen copies for the one screen. Same story about the same subject, same facts, same stake, paid out by the one caption. Each whole copy is a hook, and the two are different hooks, with a different first line and a different way in. A paraphrase is a failed report. Each copy has a line break already inserted at each natural pause. One line break between lines, and no blank line. A line break stays on this same screen. Count the words in each copy on its own. Each count must fall inside the bucket word range given in the prompt. A count outside that range is a failed report.',
         items: { type: 'string' },
       },
       caption: {
         type: 'string',
-        description: 'The final caption, ending where the bucket structure ends. Leave out the call to action and the hashtags. This one caption pays out both on-screen copies.',
+        description:
+          'The final caption, ending where the bucket structure ends. Leave out the call to action and the hashtags. This one caption pays out both on-screen copies. Short paragraphs, with a real blank line between them. A caption that is one block is a failed report.',
       },
       call_to_action: { type: 'string', description: 'The one call to action, as a single line.' },
       hashtags: {
         type: 'array',
-        description: '3 to 5 hashtags, each starting with #.',
+        description: 'Three to five hashtags, each starting with #.',
         items: { type: 'string' },
       },
       sources: {
@@ -62,6 +78,7 @@ export const REPORT_COPY_TOOL = {
         description: 'Every source the caption names, with the URL it came from in the source material.',
         items: {
           type: 'object',
+          additionalProperties: false,
           properties: {
             name: { type: 'string' },
             url: { type: 'string' },
@@ -75,6 +92,7 @@ export const REPORT_COPY_TOOL = {
       'copy_draft',
       'caption_draft',
       'remaining_patterns',
+      'viewer_stake',
       'on_screen_copies',
       'caption',
       'call_to_action',
@@ -84,9 +102,10 @@ export const REPORT_COPY_TOOL = {
   },
 };
 
-/** One Sonnet call: two on-screen lines, one caption package. */
+/** One copy call: two on-screen lines, one caption package. */
 export type CopyCall = {
   onScreenCopies: [string, string];
+  viewerStake: string;
   caption: string;
   callToAction: string;
   hashtags: string[];
@@ -102,6 +121,7 @@ export type CopyCall = {
 /** The line that will be posted, plus the caption from the call that wrote it. */
 export type CopyReport = {
   onScreenCopy: string;
+  viewerStake: string;
   caption: string;
   callToAction: string;
   hashtags: string[];
@@ -121,6 +141,29 @@ function text(input: Record<string, unknown>, key: string, required: boolean): s
   if (typeof value === 'string' && value.trim()) return value.trim();
   if (required) throw new CopyReportError(`report_copy is missing ${key}.`);
   return '';
+}
+
+/**
+ * A model sometimes writes the two characters \ and n where a newline belongs.
+ * Real newlines stay. A Windows break, real or written out, becomes one newline.
+ */
+export function restoreLineBreaks(value: string): string {
+  return value.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\r\n/g, '\n');
+}
+
+/** At least two paragraphs with a blank line between them. A single line break is not enough. */
+function captionWithBreaks(value: string): string {
+  const caption = restoreLineBreaks(value);
+  const paragraphs = caption
+    .split(/\n[ \t]*\n/)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  if (paragraphs.length < 2) {
+    throw new CopyReportError(
+      'report_copy caption is one block. Use short paragraphs with a blank line between them.',
+    );
+  }
+  return caption;
 }
 
 /** Tool input is model output. A bare string where a list was asked for still counts. */
@@ -144,7 +187,7 @@ function sourceList(value: unknown): Array<{ name: string; url: string }> {
 }
 
 function onScreenCopies(value: unknown): [string, string] {
-  const copies = list(value);
+  const copies = list(value).map(restoreLineBreaks);
   if (copies.length !== 2) {
     throw new CopyReportError(`report_copy needs exactly two on-screen copies, got ${copies.length}.`);
   }
@@ -156,8 +199,9 @@ export function parseCopyReport(input: unknown): CopyCall {
   const record = input as Record<string, unknown>;
   return {
     onScreenCopies: onScreenCopies(record.on_screen_copies),
-    caption: text(record, 'caption', true),
-    callToAction: text(record, 'call_to_action', true),
+    viewerStake: text(record, 'viewer_stake', true),
+    caption: captionWithBreaks(text(record, 'caption', true)),
+    callToAction: restoreLineBreaks(text(record, 'call_to_action', true)),
     hashtags: list(record.hashtags).map((tag) => (tag.startsWith('#') ? tag : `#${tag}`)),
     sources: sourceList(record.sources),
     working: {
@@ -176,6 +220,7 @@ export function publishCopy(call: CopyCall, onScreenCopy: string): CopyReport {
   }
   return {
     onScreenCopy,
+    viewerStake: call.viewerStake,
     caption: call.caption,
     callToAction: call.callToAction,
     hashtags: call.hashtags,
@@ -199,6 +244,8 @@ export type CopyChecks = {
   copyWords: number;
   copyWordRange: { min: number; max: number };
   copyInRange: boolean;
+  stakeWords: number;
+  stakeFits: boolean;
   captionChars: number;
   captionUnderLimit: boolean;
   foldChars: number;
@@ -224,6 +271,7 @@ export function checkCopy(
   const range = ON_SCREEN_WORD_RANGE[bucket];
   const caption = fullCaption(report);
   const copyWords = countWords(report.onScreenCopy);
+  const stakeWords = countWords(report.viewerStake);
   const foldChars = (report.caption.split('\n').find((line) => line.trim()) ?? '').trim().length;
   const published = `${report.onScreenCopy}\n${caption}`;
   const known = new Set(knownUrls.map((url) => url.trim()));
@@ -232,6 +280,8 @@ export function checkCopy(
     copyWords,
     copyWordRange: range,
     copyInRange: copyWords >= range.min && copyWords <= range.max,
+    stakeWords,
+    stakeFits: stakeWords > 0 && stakeWords <= VIEWER_STAKE_MAX_WORDS,
     captionChars: caption.length,
     captionUnderLimit: caption.length <= CAPTION_MAX_CHARS,
     foldChars,

@@ -11,6 +11,7 @@ import test from 'node:test';
 import { parseTrendingHtml } from '@/lib/reels/adapters/github';
 import { extractSection, parseListEntries } from '@/lib/reels/adapters/awesome-lists';
 import { parseChangelog, slugifyHeading } from '@/lib/reels/adapters/markdown-changelog';
+import { parseTldrStories } from '@/lib/reels/adapters/tldr';
 import {
   asUrlList,
   buildRetryTurns,
@@ -25,7 +26,8 @@ import { INGEST_FILTER } from '@/lib/reels/jev/questions/ingest-filter';
 import { PLANTED_INSTRUCTION } from '@/lib/reels/jev/questions/planted-instruction';
 import { parseFeed } from '@/lib/reels/net/feed';
 import { decodeEntities, htmlToText, markdownToText, parsePage } from '@/lib/reels/net/html';
-import { canonicalizeUrl } from '@/lib/reels/net/http';
+import { canonicalizeUrl, isCloudflareChallenge } from '@/lib/reels/net/http';
+import { publishedSince } from '@/lib/reels/net/published';
 import { resolveAction } from '@/lib/reels/pipeline/grouping';
 import { monthStart, nextRunAt, zoneOffsetMinutes } from '@/lib/reels/schedule';
 
@@ -241,10 +243,55 @@ test('parseChangelog splits a release-notes page into dated releases', () => {
 
   assert.equal(sections.length, 2);
   assert.equal(sections[0].heading, 'September 18, 2026');
-  assert.equal(sections[0].date.getFullYear(), 2026);
+  assert.equal(sections[0].date.getUTCFullYear(), 2026);
+  assert.equal(sections[0].date.getUTCMonth(), 8);
+  assert.equal(sections[0].date.getUTCDate(), 18);
+  assert.equal(sections[0].date.getUTCHours(), 0);
   assert.match(sections[0].body, /Compliance API/);
   assert.doesNotMatch(sections[0].body, /Messages API/);
   assert.equal(slugifyHeading('September 18, 2026'), 'september-18-2026');
+});
+
+test('a UTC-midnight stamp stays eligible through the end of that day', () => {
+  const published = new Date('2026-09-28T00:00:00.000Z');
+  const sameMorning = new Date('2026-09-28T05:00:00.000Z');
+  const nextMorning = new Date('2026-09-29T05:00:00.000Z');
+  assert.equal(publishedSince(published, sameMorning), true);
+  assert.equal(publishedSince(published, nextMorning), false);
+});
+
+test('a stamp with a clock time compares exactly', () => {
+  const published = new Date('2026-09-28T10:00:00.000Z');
+  assert.equal(publishedSince(published, new Date('2026-09-28T05:00:00.000Z')), true);
+  assert.equal(publishedSince(published, new Date('2026-09-28T16:00:00.000Z')), false);
+});
+
+test('parseTldrStories keeps the blurb and skips sponsors and stubs', () => {
+  const html = [
+    '<article class="mt-3">',
+    '<a class="font-bold" href="https://techcrunch.com/story?utm_source=tldrnewsletter">',
+    '<h3>Meta launches an enterprise platform (2 minute read)</h3></a>',
+    '<div class="newsletter-html">Meta appointed a new lead and said the platform will ship to companies. ',
+    'The board named an interim chief while it searches.</div>',
+    '</article>',
+    '<article><a href="https://sponsor.example/ad"><h3>Come to our conference (Sponsor)</h3></a>',
+    '<div class="newsletter-html">A long sponsor pitch that would otherwise clear the length floor ',
+    'because it keeps going and going until it is definitely long enough to store.</div></article>',
+    '<article><a href="https://example.com/stub"><h3>Tiny</h3></a>',
+    '<div class="newsletter-html">Too short.</div></article>',
+  ].join('');
+
+  const stories = parseTldrStories(html);
+  assert.equal(stories.length, 1);
+  assert.equal(stories[0].headline, 'Meta launches an enterprise platform');
+  assert.equal(stories[0].url, 'https://techcrunch.com/story?utm_source=tldrnewsletter');
+  assert.match(stories[0].blurb, /interim chief/);
+});
+
+test('a Cloudflare challenge is the 403 that carries cf-mitigated', () => {
+  assert.equal(isCloudflareChallenge(403, () => 'challenge'), true);
+  assert.equal(isCloudflareChallenge(403, () => null), false);
+  assert.equal(isCloudflareChallenge(200, () => 'challenge'), false);
 });
 
 test('markdownToText strips badges and link syntax but keeps the words', () => {
@@ -322,9 +369,39 @@ test('checkGrounding rejects two pages from one publication as one source', () =
   if (!result.ok) assert.match(result.reason, /independent source/);
 });
 
-test('checkGrounding rejects a story with no citations at all', () => {
-  const result = checkGrounding(report({ citation_urls: [] }));
+test('checkGrounding rejects a story with no citations and no claim URLs', () => {
+  const result = checkGrounding(report({ citation_urls: [], claims: [] }));
   assert.equal(result.ok, false);
+});
+
+test('checkGrounding uses claim URLs when citation_urls is empty', () => {
+  const result = checkGrounding(report({ citation_urls: [] }));
+  assert.deepEqual(result, { ok: true });
+});
+
+test('checkGrounding uses object claim URLs when citation_urls is empty', () => {
+  const result = checkGrounding(
+    report({
+      citation_urls: [],
+      claims: [
+        { claim: 'First fact.', source_url: { url: 'https://a.example.com/one' } },
+        { claim: 'Second fact.', source_url: { source_url: 'https://b.example.com/two' } },
+      ] as never,
+    }),
+  );
+  assert.deepEqual(result, { ok: true });
+});
+
+test('checkGrounding reads citation URLs sent as objects', () => {
+  const result = checkGrounding(
+    report({
+      citation_urls: [
+        { url: 'https://a.example.com/one' },
+        { source_url: 'https://b.example.com/two' },
+      ] as unknown as string[],
+    }),
+  );
+  assert.deepEqual(result, { ok: true });
 });
 
 test('checkGrounding treats a single citation sent as a bare string as a failure, not a crash', () => {

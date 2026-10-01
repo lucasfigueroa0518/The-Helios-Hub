@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft, Music2 } from 'lucide-react';
+import { Music2, Volume2 } from 'lucide-react';
 
 import { Section } from '@/app/reels/ui';
 import type { MusicStatus } from '@/lib/reels/music/overview';
@@ -97,12 +97,12 @@ export function SongPoolPage({
           <div>
             <p className="rh__kicker">Trial Reels</p>
             <h1 className="rh__title">
-              Songs <span className="rh-beta">Beta</span>
+              Audio <span className="rh-beta">Beta</span>
             </h1>
           </div>
           <div className="rh__head-actions">
-            <Link href="/reels" className="rh-btn">
-              <ArrowLeft size={15} /> Back to reels
+            <Link href="/reels/sfx" className="rh-btn">
+              <Volume2 size={15} /> Hook sounds
             </Link>
           </div>
         </header>

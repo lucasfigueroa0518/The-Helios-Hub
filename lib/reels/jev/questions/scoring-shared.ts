@@ -1,7 +1,8 @@
 /**
  * Wording shared by the two scoring passes (P-08, P-09). Approved with them
  * (D-086). A change here is a question-set change: bump the pass version too.
- * D-206 replaced the audience (D-020) for scoring only.
+ * D-206 replaced the audience (D-020) for scoring only. D-218 narrowed the
+ * Callout to a practice, tool, or vendor the viewer chooses (both passes v3).
  */
 
 export const AUDIENCE_RULE =
@@ -60,7 +61,7 @@ export const BUCKETS = {
   theCallout: {
     name: 'The Callout',
     meaning:
-      'A clear position aimed at a practice, a tool, or a vendor, in the voice of a fellow user. A line aimed at who the viewer is, such as people who do not understand AI, cannot score as a strong callout.',
+      'A clear position aimed at a practice, a tool, or a vendor the viewer chooses for themselves, in the voice of a fellow user. A position about what a company, a lab, or a government should do is a weak fit. A line aimed at who the viewer is, such as people who do not understand AI, cannot score as a strong callout.',
   },
 } as const;
 

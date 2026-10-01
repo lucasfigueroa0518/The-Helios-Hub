@@ -24,6 +24,11 @@ export async function queueCopyJob(
   postIdeaId: string,
   slateId: string,
 ): Promise<{ queued: true; id: string } | { queued: false; status: number; note: string }> {
+  const { findReelLock } = await import('@/lib/reels/locks');
+  const lock = await findReelLock(slateId, postIdeaId);
+  if (lock) {
+    return { queued: false, status: 409, note: `This reel is locked for ${lock.nyDate} and stays as it is.` };
+  }
   if (!copyPromptApproved()) {
     return {
       queued: false,

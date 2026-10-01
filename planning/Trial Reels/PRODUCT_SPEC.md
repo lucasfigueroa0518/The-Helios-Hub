@@ -108,7 +108,7 @@ Second, content bucket score: how well would this fit into one of our content bu
 - Why it works: A cold open on the highest-tension moment opens the gap immediately, and chronology is the lowest-effort possible path to closing it, which is exactly the scent-to-cost ratio foraging theory predicts people follow. Arousal comes from anxiety and awe as the stakes escalate.
 - Live hook formulas: Hidden Mechanism, Awe / High Value.
 - Resolution: Deferred. The caption carries the payload.
-- Copy: Cold open at peak tension, then chronology. 40–70 words across the runtime, materially longer than the other three.
+- Copy: Cold open at peak tension, then chronology. 20–32 words on one screen, longer than the other buckets.
 - Caption: Tell the story in an extremely captivating way. Humanizer skill used. Short attention span writing, really quick paragraphs. Use second and third hooks to keep the reader's attention. Write semi-informally, like a human.
 - Example copy: "In November 2023, the board fired Sam Altman on a Friday. By Monday, 700 of 770 employees had threatened to quit."
 

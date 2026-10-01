@@ -39,6 +39,40 @@ export function slotLabel(slot: SlotId): string {
   return SLOT_BY_ID.get(slot)?.label ?? slot;
 }
 
+const SLOT_NAME: Record<SlotId, string> = {
+  morning: 'Morning',
+  midday: 'Midday',
+  evening: 'Evening',
+};
+
+/** Which posting window contains this instant, or unscheduled when it sits outside all three. */
+export function slotForInstant(at: Date, timeZone: string = POSTING_TIME_ZONE): SlotId | 'unscheduled' {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).formatToParts(at);
+  const hour = Number(parts.find((part) => part.type === 'hour')?.value ?? '0') % 24;
+  const minute = Number(parts.find((part) => part.type === 'minute')?.value ?? '0');
+  const clock = hour * 60 + minute;
+  for (const slot of POSTING_SLOTS) {
+    if (clock >= slot.startMinute && clock <= slot.endMinute) return slot.id;
+  }
+  return 'unscheduled';
+}
+
+/** A schedule row wins. A force post with no row is placed by the clock. */
+export function resolveSlot(stored: string | null | undefined, finishedAt: Date): SlotId | 'unscheduled' {
+  if (stored === 'morning' || stored === 'midday' || stored === 'evening') return stored;
+  return slotForInstant(finishedAt);
+}
+
+export function slotCaption(slot: SlotId | 'unscheduled'): string {
+  if (slot === 'unscheduled') return 'Outside a slot';
+  return `${SLOT_NAME[slot]} · ${slotLabel(slot)}`;
+}
+
 /** `YYYY-MM-DD` plus calendar days, staying on the calendar rather than adding 24 hours. */
 export function addCalendarDays(nyDate: string, days: number): string {
   const [year, month, day] = nyDate.split('-').map(Number);
@@ -58,12 +92,40 @@ export function slotMinuteInstant(nyDate: string, slot: SlotId, offset: number, 
 }
 
 /**
- * True when every minute of the slot is still ahead of `now`. A slot that has
- * already started is not used, so the draw stays uniform over the whole window
- * instead of only the minutes that remain.
+ * True when the slot has not started yet. A slot that has started can still
+ * take one reel; see `openMinuteRange`.
  */
 export function slotFullyAhead(nyDate: string, slot: SlotId, now: Date, timeZone = POSTING_TIME_ZONE): boolean {
   return slotMinuteInstant(nyDate, slot, 0, timeZone).getTime() > now.getTime();
+}
+
+/**
+ * Minutes still strictly after `now`, including a window that has already
+ * started. Null once the last minute of the window has arrived. The draw is
+ * uniform over that remainder, so the post is never placed in the past.
+ */
+export function openMinuteRange(
+  nyDate: string,
+  slot: SlotId,
+  now: Date,
+  timeZone = POSTING_TIME_ZONE,
+): { startOffset: number; count: number } | null {
+  const total = slotMinuteCount(slot);
+  const nowMs = now.getTime();
+  if (slotMinuteInstant(nyDate, slot, total - 1, timeZone).getTime() <= nowMs) return null;
+  if (slotMinuteInstant(nyDate, slot, 0, timeZone).getTime() > nowMs) {
+    return { startOffset: 0, count: total };
+  }
+  let lo = 0;
+  let hi = total - 1;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (slotMinuteInstant(nyDate, slot, mid, timeZone).getTime() > nowMs) hi = mid - 1;
+    else lo = mid;
+  }
+  const startOffset = lo + 1;
+  if (startOffset >= total) return null;
+  return { startOffset, count: total - startOffset };
 }
 
 export function slotKey(nyDate: string, slot: SlotId): string {
@@ -77,27 +139,33 @@ export function uniformIndex(count: number): number {
 }
 
 /**
- * The earliest open slot whose whole window is still ahead. `taken` holds
- * `nyDate:slot` keys. `rng` receives the minute count and returns an index
- * into that many minutes; the default is uniform.
+ * The earliest window that has not ended. A window that has started still
+ * counts, and the minute is drawn from the minutes still ahead. `taken` holds
+ * `nyDate:slot` keys. `rng` receives how many minutes are still open and
+ * returns an index into that remainder. `throughDate` stops the search on
+ * that calendar day, so turning Live on late does not fill tomorrow.
  */
 export function chooseSlot(
   now: Date,
   taken: ReadonlySet<string>,
   rng: (count: number) => number = uniformIndex,
   timeZone = POSTING_TIME_ZONE,
+  throughDate?: string,
 ): SlotChoice | null {
   const start = calendarDateKey(now, timeZone);
+  const last = throughDate ?? addCalendarDays(start, 13);
   for (let day = 0; day < 14; day += 1) {
     const nyDate = addCalendarDays(start, day);
+    if (nyDate > last) break;
     for (const slot of POSTING_SLOTS) {
       if (taken.has(slotKey(nyDate, slot.id))) continue;
-      if (!slotFullyAhead(nyDate, slot.id, now, timeZone)) continue;
-      const count = slotMinuteCount(slot.id);
-      const offset = rng(count);
-      if (!Number.isInteger(offset) || offset < 0 || offset >= count) {
-        throw new Error(`Slot draw returned ${offset} for a window of ${count} minutes.`);
+      const open = openMinuteRange(nyDate, slot.id, now, timeZone);
+      if (!open) continue;
+      const drawn = rng(open.count);
+      if (!Number.isInteger(drawn) || drawn < 0 || drawn >= open.count) {
+        throw new Error(`Slot draw returned ${drawn} for a window of ${open.count} minutes.`);
       }
+      const offset = open.startOffset + drawn;
       return { nyDate, slot: slot.id, publishAt: slotMinuteInstant(nyDate, slot.id, offset, timeZone) };
     }
   }

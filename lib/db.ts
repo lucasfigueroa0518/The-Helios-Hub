@@ -5,35 +5,82 @@ const globalPool = globalThis as typeof globalThis & {
 };
 
 /**
- * Runtime connection selection for the reference hub.
+ * Runtime connection selection.
  *
- * Prefer DIRECT_DATABASE_URL (Supabase session pooler :5432). Transaction
- * pooler (:6543) is often unreachable from Windows/local networks and breaks
- * node-pg prepared statements unless prepareThreshold is 0.
+ * Supavisor session mode (:5432) maps one client to one Postgres connection
+ * and rejects anything past pool_size (15) with EMAXCONNSESSION. The web app,
+ * the orchestration worker, and the reels worker each keep their own node-pg
+ * pool, so session mode overflows as soon as those processes are up.
  *
- * Session mode has a hard pool_size (~15). Safety for hundreds of Enrich leads
- * comes from tiny PG_POOL_MAX + one worker lock + low orch concurrency — not
- * from opening dozens of clients. Set OUTREACH_DB_USE_TRANSACTION_POOLER=1 to
- * force DATABASE_URL (:6543) when that path is reachable.
+ * Transaction mode (:6543) multiplexes those clients onto the same server
+ * pool. That is the runtime default. DIRECT_DATABASE_URL stays on :5432 for
+ * psql and schema scripts, which need a real session. Set
+ * OUTREACH_DB_USE_SESSION_POOLER=1 to force the runtime back onto session mode.
  */
-function connectionString(): string {
-  const forceTransaction = process.env.OUTREACH_DB_USE_TRANSACTION_POOLER === '1';
-  const url = forceTransaction
-    ? (process.env.DATABASE_URL || process.env.DIRECT_DATABASE_URL)
-    : (process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL);
-  if (!url) throw new Error('DATABASE_URL or DIRECT_DATABASE_URL is not set');
-  if (process.platform === 'win32') {
-    return `${url}${url.includes('?') ? '&' : '?'}sslmode=disable`;
+export type DbConnectionChoice = {
+  mode: 'session' | 'transaction';
+  connectionString: string;
+  hostPort: string;
+};
+
+type DbEnv = Record<string, string | undefined>;
+
+function connectionMode(url: string): 'session' | 'transaction' {
+  let port = '';
+  try {
+    port = new URL(url).port;
+  } catch {
+    throw new Error('Database URL is not a valid connection string');
   }
-  return url;
+  return (port || '5432') === '6543' ? 'transaction' : 'session';
 }
 
-function poolMax(): number {
-  // Next + worker each open a pool. Default 2 so both fit under Supabase
-  // session pool_size (~15) with headroom for psql/scripts/HMR leftovers.
-  const parsed = Number(process.env.PG_POOL_MAX ?? 2);
-  if (!Number.isFinite(parsed)) return 2;
-  return Math.max(1, Math.min(8, Math.floor(parsed)));
+function hostPort(url: string): string {
+  const parsed = new URL(url);
+  return `${parsed.hostname}:${parsed.port || '5432'}`;
+}
+
+export function chooseDbConnection(env: DbEnv = process.env): DbConnectionChoice {
+  const candidates = [env.DATABASE_URL, env.DIRECT_DATABASE_URL]
+    .map((value) => value?.trim() ?? '')
+    .filter(Boolean);
+  if (candidates.length === 0) {
+    throw new Error('DATABASE_URL or DIRECT_DATABASE_URL is not set');
+  }
+
+  const transaction = candidates.find((url) => connectionMode(url) === 'transaction');
+  const session = candidates.find((url) => connectionMode(url) === 'session');
+  const forceSession = env.OUTREACH_DB_USE_SESSION_POOLER === '1';
+  const chosen = (forceSession ? session || transaction : transaction || session)!;
+
+  return {
+    mode: connectionMode(chosen),
+    connectionString: chosen,
+    hostPort: hostPort(chosen),
+  };
+}
+
+function runtimeConnectionString(choice: DbConnectionChoice): string {
+  const url = choice.connectionString;
+  if (process.platform !== 'win32' || /[?&]sslmode=/.test(url)) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}sslmode=disable`;
+}
+
+/** Session mode is clamped to 2 clients per process so several processes fit under pool_size 15. */
+export function resolvePoolMax(mode: 'session' | 'transaction', env: DbEnv = process.env): number {
+  const fallback = 2;
+  const parsed = Number(env.PG_POOL_MAX ?? fallback);
+  const requested = Number.isFinite(parsed) ? Math.floor(parsed) : fallback;
+  const cap = mode === 'session' ? 2 : 8;
+  return Math.max(1, Math.min(cap, requested));
+}
+
+function applicationName(): string {
+  if (process.env.VERCEL) return 'helios-web';
+  const argv = process.argv.join(' ');
+  if (argv.includes('reels_worker')) return 'helios-reels';
+  if (argv.includes('orchestration_worker')) return 'helios-worker';
+  return 'helios-node';
 }
 
 function isPoolExhaustedError(error: unknown): boolean {
@@ -47,10 +94,24 @@ function sleep(ms: number): Promise<void> {
 
 function getPool(): Pool {
   if (!globalPool.__outreachHubPool) {
+    const choice = chooseDbConnection();
+    const max = resolvePoolMax(choice.mode);
+    if (choice.mode === 'session') {
+      console.error(JSON.stringify({
+        ts: new Date().toISOString(),
+        level: 'warn',
+        component: 'db-pool',
+        message: 'session_pooler_selected',
+        hostPort: choice.hostPort,
+        max,
+        note: 'Session mode caps every client at pool_size. Prefer the transaction pooler on :6543.',
+      }));
+    }
     const pool = new Pool({
-      connectionString: connectionString(),
+      connectionString: runtimeConnectionString(choice),
+      application_name: applicationName(),
       ssl: process.platform === 'win32' ? false : { rejectUnauthorized: false },
-      max: poolMax(),
+      max,
       idleTimeoutMillis: 10_000,
       connectionTimeoutMillis: 15_000,
       allowExitOnIdle: true,
@@ -133,7 +194,7 @@ export function dbPoolSnapshot(): {
 } {
   const pool = globalPool.__outreachHubPool;
   return {
-    configuredMax: poolMax(),
+    configuredMax: resolvePoolMax(describeDbTarget().mode === 'transaction' ? 'transaction' : 'session'),
     total: pool?.totalCount ?? 0,
     idle: pool?.idleCount ?? 0,
     waiting: pool?.waitingCount ?? 0,
@@ -142,16 +203,9 @@ export function dbPoolSnapshot(): {
 
 /** Ops helper: which URL mode the pool will use (no secrets). */
 export function describeDbTarget(): { mode: 'session' | 'transaction' | 'unknown'; hostPort: string } {
-  const forceTransaction = process.env.OUTREACH_DB_USE_TRANSACTION_POOLER === '1';
-  const url = forceTransaction
-    ? (process.env.DATABASE_URL || process.env.DIRECT_DATABASE_URL)
-    : (process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL);
-  if (!url) return { mode: 'unknown', hostPort: '' };
   try {
-    const parsed = new URL(url);
-    const port = parsed.port || '5432';
-    const mode = port === '6543' || forceTransaction ? 'transaction' : 'session';
-    return { mode, hostPort: `${parsed.hostname}:${port}` };
+    const choice = chooseDbConnection();
+    return { mode: choice.mode, hostPort: choice.hostPort };
   } catch {
     return { mode: 'unknown', hostPort: '' };
   }

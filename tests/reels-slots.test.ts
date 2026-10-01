@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { isPostingRank } from '@/lib/reels/publish/schedule';
 import {
   addCalendarDays,
   chooseSlot,
@@ -35,7 +36,7 @@ test('a night run can land on any minute of the morning slot, and only one', () 
   assert.equal(last?.publishAt.toISOString(), '2026-09-29T14:00:00.000Z');
 });
 
-test('a taken slot is skipped, and a slot that has started is not used', () => {
+test('a taken slot is skipped, and a slot that has started still uses the minutes left', () => {
   const taken = new Set([slotKey('2026-09-29', 'morning')]);
   const next = chooseSlot(oneAm, taken, () => 0);
   assert.equal(next?.slot, 'midday');
@@ -43,12 +44,41 @@ test('a taken slot is skipped, and a slot that has started is not used', () => {
 
   const duringMorning = new Date('2026-09-29T13:30:00Z');
   const later = chooseSlot(duringMorning, new Set(), () => 0);
-  assert.equal(later?.slot, 'midday');
+  assert.equal(later?.nyDate, '2026-09-29');
+  assert.equal(later?.slot, 'morning');
+  assert.equal(later?.publishAt.toISOString(), '2026-09-29T13:31:00.000Z');
+  const lastLeft = chooseSlot(duringMorning, new Set(), (count) => count - 1);
+  assert.equal(lastLeft?.publishAt.toISOString(), '2026-09-29T14:00:00.000Z');
 
   const afterEvening = new Date('2026-09-30T02:00:00Z');
   const tomorrow = chooseSlot(afterEvening, new Set(), () => 0);
   assert.equal(tomorrow?.nyDate, '2026-09-30');
   assert.equal(tomorrow?.slot, 'morning');
+});
+
+test('late in the day only the window still open can take a reel', () => {
+  const eightTwentyOne = new Date('2026-09-30T00:21:00Z');
+  const evening = chooseSlot(eightTwentyOne, new Set(), () => 0);
+  assert.equal(evening?.nyDate, '2026-09-29');
+  assert.equal(evening?.slot, 'evening');
+  assert.equal(evening?.publishAt.toISOString(), '2026-09-30T00:22:00.000Z');
+
+  const second = chooseSlot(eightTwentyOne, new Set([slotKey('2026-09-29', 'evening')]), () => 0);
+  assert.equal(second?.nyDate, '2026-09-30');
+  assert.equal(second?.slot, 'morning');
+
+  const todayOnly = chooseSlot(eightTwentyOne, new Set([slotKey('2026-09-29', 'evening')]), () => 0, 'America/New_York', '2026-09-29');
+  assert.equal(todayOnly, null);
+
+  const afterNine = chooseSlot(new Date('2026-09-30T01:00:00Z'), new Set(), () => 0, 'America/New_York', '2026-09-29');
+  assert.equal(afterNine, null);
+});
+
+test('only ranks 1 to 3 can be put on the clock', () => {
+  assert.equal(isPostingRank(1), true);
+  assert.equal(isPostingRank(3), true);
+  assert.equal(isPostingRank(4), false);
+  assert.equal(isPostingRank(null), false);
 });
 
 test('calendar days do not drift across a 24-hour add', () => {

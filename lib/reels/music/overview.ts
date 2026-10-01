@@ -37,7 +37,6 @@ export type ReelSong = {
 };
 
 export type MusicStatus = {
-  autoPublish: boolean;
   /** Nightly slot scheduling. Off until the Live switch is on. */
   publishingLive: boolean;
   mix: MixSetting | null;
@@ -130,8 +129,7 @@ export async function loadReelSongs(videoJobIds: string[]): Promise<Record<strin
 }
 
 export async function loadMusicStatus(): Promise<MusicStatus> {
-  const [autoPublish, publishingLive, mix, shareToFeed, pool, ingests] = await Promise.all([
-    getSetting<boolean>('auto_publish'),
+  const [publishingLive, mix, shareToFeed, pool, ingests] = await Promise.all([
     getSetting<boolean>('publishing_live'),
     publishMix(),
     getSetting<boolean>('share_to_feed'),
@@ -141,7 +139,6 @@ export async function loadMusicStatus(): Promise<MusicStatus> {
     recentIngests(5),
   ]);
   return {
-    autoPublish: autoPublish === true,
     publishingLive: publishingLive === true,
     mix,
     shareToFeed: typeof shareToFeed === 'boolean' ? shareToFeed : null,

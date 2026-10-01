@@ -393,7 +393,10 @@ export async function claimAndRenderVideo(deps?: {
       {
         prompt: written.prompt.text,
         imageUrl,
-        negativePrompt: target.colorProfile === 'orange' ? ORANGE_HAND_NEGATIVE : undefined,
+        negativePrompt:
+          target.colorProfile === 'orange' || target.colorProfile === 'green'
+            ? ORANGE_HAND_NEGATIVE
+            : undefined,
       },
       notices,
     );

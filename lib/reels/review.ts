@@ -10,18 +10,27 @@ import { signFrameObject } from '@/lib/reels/visual/storage';
  * Private reel review. The unguessable token in the URL is the only gate.
  * There is no Auth.js session. Each visit reads the database again.
  *
- * The feed is the September 29 new-scoring slate: the five highest ranks,
- * plus Sonnet 5.5 further down the list. Those are the ideas on that slate
- * that have a finished video. Each clip uses the newest finished video for
- * the idea, so a regeneration replaces it on the next load.
+ * The feed is the six reels selected on the September 29 passing run: the two
+ * locked reels and the four that filled the other slots. Each clip is the
+ * newest finished video for that idea on this slate, so an earlier render
+ * does not stand in. A reel appears once its video file is stored.
  */
 
-/** `scoring-pass1-v2` slate for 2026-09-29. Ranks 1–5 and 11 (Sonnet 5.5) have videos. */
-const REVIEW_SCORE_SLATE_ID = '83d3b27f-5dd1-4778-823a-d95d4894dc24';
+/** September 29 slate `c0d86bac`. The selected rows are the six from that run. */
+const REVIEW_SCORE_SLATE_ID = 'c0d86bac-ef23-4293-b04d-f60de37e2879';
 const REVIEW_LABEL = 'Tue, Sep 29';
 
 const REVIEW_TOKEN_KEY = 'review_token';
+/** Hub switch. Missing or false keeps the public link on the coming-soon line. */
+const REVIEW_OPEN_KEY = 'review_open';
 const SIGNED_SECONDS = 3600;
+
+export const REVIEW_PAUSED_COPY = 'New review batch coming soon.';
+
+/** Closed until the hub switch stores true. A missing setting stays closed. */
+export function reviewFeedIsOpen(stored: unknown): boolean {
+  return stored === true;
+}
 
 /** 32 bytes of base64url, no padding. */
 export function reviewTokenShape(token: string): boolean {
@@ -55,6 +64,11 @@ export async function reviewTokenMatches(token: string): Promise<boolean> {
   if (!reviewTokenShape(token)) return false;
   const stored = await getSetting<string>(REVIEW_TOKEN_KEY);
   return tokensMatch(typeof stored === 'string' ? stored : null, token);
+}
+
+/** The private link plays reels only while this is on. */
+export async function reviewFeedOpen(): Promise<boolean> {
+  return reviewFeedIsOpen(await getSetting<boolean>(REVIEW_OPEN_KEY));
 }
 
 /** Create the link token once. A later call returns the same token. */
@@ -106,20 +120,21 @@ function signOrFallback(objectPath: string, fallback: string): Promise<string> {
 }
 
 /**
- * Newest finished video for each idea on the review slate that has one.
- * Copy and the song come from that video, which may sit on an earlier slate
- * for the same idea (Sonnet 5.5).
+ * Newest finished video on this slate for each selected idea.
+ * Copy is that slate's copy. The song is the one picked for that video.
  */
 const REVIEW_VIDEOS_SQL = `
   SELECT DISTINCT ON (v.post_idea_id)
          v.id AS video_id,
          v.post_idea_id,
-         v.slate_id,
          v.video_storage_path,
          s.rank
     FROM reels.idea_scores s
-    JOIN reels.video_jobs v ON v.post_idea_id = s.post_idea_id
+    JOIN reels.video_jobs v
+      ON v.post_idea_id = s.post_idea_id
+     AND v.slate_id = s.slate_id
    WHERE s.slate_id = $1::uuid
+     AND s.selected
      AND v.status = 'ok'
      AND v.video_storage_path IS NOT NULL
    ORDER BY v.post_idea_id, v.finished_at DESC NULLS LAST, v.requested_at DESC
@@ -140,7 +155,7 @@ export async function loadReviewClips(token: string): Promise<ReviewClip[]> {
             song.preview_storage_path
        FROM newest
        LEFT JOIN reels.idea_copy c
-         ON c.slate_id = newest.slate_id AND c.post_idea_id = newest.post_idea_id AND c.status = 'ok'
+         ON c.slate_id = $1::uuid AND c.post_idea_id = newest.post_idea_id AND c.status = 'ok'
        LEFT JOIN LATERAL (
          SELECT p.picked_title, p.picked_artist, p.picked_audio_id, pool.preview_storage_path
            FROM reels.song_picks p
@@ -195,6 +210,52 @@ export async function loadReviewClips(token: string): Promise<ReviewClip[]> {
   }));
 }
 
+export type ReviewCueTarget = {
+  videoId: string;
+  postIdeaId: string;
+  slateId: string;
+  rank: number | null;
+  videoPath: string;
+  onScreenCopy: string;
+  caption: string;
+  colorProfile: string | null;
+};
+
+/** The six review reels, with the copy and the finished video the cue is laid on. */
+export async function loadReviewCueTargets(): Promise<ReviewCueTarget[]> {
+  const { rows } = await dbQuery<{
+    video_id: string;
+    post_idea_id: string;
+    video_storage_path: string;
+    rank: number | null;
+    on_screen_copy: string;
+    caption: string;
+    render: { colorProfile?: string } | null;
+  }>(
+    `WITH newest AS (${REVIEW_VIDEOS_SQL})
+     SELECT newest.video_id, newest.post_idea_id, newest.video_storage_path, newest.rank,
+            c.on_screen_copy, c.caption, vis.render
+       FROM newest
+       JOIN reels.video_jobs v ON v.id = newest.video_id
+       JOIN reels.idea_copy c
+         ON c.slate_id = $1::uuid AND c.post_idea_id = newest.post_idea_id AND c.status = 'ok'
+       LEFT JOIN reels.visual_jobs vis ON vis.id = v.visual_job_id
+      WHERE c.on_screen_copy IS NOT NULL
+      ORDER BY newest.rank ASC NULLS LAST`,
+    [REVIEW_SCORE_SLATE_ID],
+  );
+  return rows.map((row) => ({
+    videoId: row.video_id,
+    postIdeaId: row.post_idea_id,
+    slateId: REVIEW_SCORE_SLATE_ID,
+    rank: row.rank,
+    videoPath: row.video_storage_path,
+    onScreenCopy: row.on_screen_copy,
+    caption: row.caption ?? '',
+    colorProfile: row.render?.colorProfile ?? null,
+  }));
+}
+
 /** Ideas on the review slate, best first. Used when regenerating that same set. */
 export async function reviewIdeaTargets(): Promise<Array<{ postIdeaId: string; slateId: string; rank: number | null }>> {
   const { rows } = await dbQuery<{ post_idea_id: string; rank: number | null }>(
@@ -211,7 +272,7 @@ export async function reviewIdeaTargets(): Promise<Array<{ postIdeaId: string; s
 
 /** Storage path for one of the review reels' newest finished video. */
 export async function reviewVideoStoragePath(token: string, videoId: string): Promise<string | null> {
-  if (!(await reviewTokenMatches(token))) return null;
+  if (!(await reviewTokenMatches(token)) || !(await reviewFeedOpen())) return null;
   const { rows } = await dbQuery<{ video_storage_path: string }>(
     `WITH newest AS (${REVIEW_VIDEOS_SQL})
      SELECT video_storage_path FROM newest WHERE video_id = $2::uuid`,
@@ -222,7 +283,7 @@ export async function reviewVideoStoragePath(token: string, videoId: string): Pr
 
 /** Preview path only when that song is on one of the review reels and still in the pool. */
 export async function reviewAudioStoragePath(token: string, audioId: string): Promise<string | null> {
-  if (!(await reviewTokenMatches(token))) return null;
+  if (!(await reviewTokenMatches(token)) || !(await reviewFeedOpen())) return null;
   const { rows } = await dbQuery<{ preview_storage_path: string }>(
     `WITH newest AS (${REVIEW_VIDEOS_SQL})
      SELECT pool.preview_storage_path
