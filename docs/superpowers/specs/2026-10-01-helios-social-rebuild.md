@@ -230,7 +230,7 @@ The worst past slips (the made-up Suleyman quote, the untraceable "1,200") came 
 **DECIDED:**
 
 - **Stock photos are allowed.**
-- **No photo is ever repeated.** Never twice in one post, and ideally never again in any post. Enforced in code with the used-photo log (`used-log.ts`).
+- **No photo is repeated within a post or within 7 days** (updated by §5.1a). Enforced in code with the used-photo log (`used-log.ts`), which also feeds the photo bank.
   `cause · code · 0 stages · 0 AI`
 
 **Source order (DECIDED):** first the article's own photos, then the backup lookup tools.
@@ -311,6 +311,30 @@ The backup tools use SUBJECTS and EVENTS for their lookups.
 - Read the Pixabay and Unsplash licence and API terms in full. Unsplash's API expects hotlinking and a specific credit format, which may not fit photos rendered into a PNG.
 - The photo coverage floor ("cover + every text slide + ≥ half of story slides"). Leaning toward dropping it, because it pushes the pipeline to grab any image. A text-only slide is a normal outcome.
 - The cause of the Openverse gap is the Writer's poetic search terms. Fix that in the Writer prompt (§4) before adding more sources.
+
+### 5.1a The Helios photo bank grows from every post (DECIDED, 2026-10-04)
+
+The photo bank isn't only a hand-picked starter set. **It grows automatically from the photos each post uses.**
+
+- **What goes in:** every photo that passed all checks and shipped in a post: allowed licence, no agency credit, identity verified for people and companies. It extends the existing used-photo log (`used-log.ts`).
+- **Tags on each entry:**
+  - **What it shows:** a person or company *with its Wikidata ID*, or scene keywords ("server room", "government building").
+  - **Type:** person, company, event, scene, or stat background.
+  - **Source, licence and exact credit line**, so credits stay correct on reuse.
+  - **Size, shape and face position**, for crop-safe reuse.
+  - **Dates:** when it was taken, and the date and post of each use.
+- **Order in the photo search:**
+  1. A fresh, specific photo.
+  2. **The bank, matched by tag.**
+  3. A broader scene search.
+  4. The hand-picked starter set (seeded from the old `photos/atmosphere.ts` themes).
+- **Reuse rules:**
+  - **Never twice in the same post, and not used in the last 7 days.** When several bank photos match, use the one used least recently. This replaces the earlier "ideally never used again".
+  - **Event photos stay with their event:** reused only for posts about that same event, never to illustrate a different one.
+  - **Person and company photos** are reused only for the same verified Wikidata ID, never matched by name.
+  - **Scenes and stat backgrounds** are reused freely by tag.
+
+`plumbing · code · 0 new stages · 0 AI`
 
 ### 5.2 Cover rendering (DECIDED)
 

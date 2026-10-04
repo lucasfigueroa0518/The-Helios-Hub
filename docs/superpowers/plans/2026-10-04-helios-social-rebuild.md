@@ -191,6 +191,7 @@ If one fails, adjust the spec before building around it.
 - **People:** 60% have at least 1 usable Commons photo, 47% have 2 or more. Well-known people are covered; lesser-known people mostly aren't.
 - **Companies:** 13% have one. Company slides depend on **press kits** and the **photo bank**, so build the press-kit lookup early in M6. The bank needs plenty of generic company scenes (offices, servers, product-in-hand).
 - **Identity check:** the subject identity check (spec §5A #5: the P31 type check plus Jev's description match) is required before any subject photo is used.
+- **Photo bank (spec §5.1a):** grows from every shipped photo. Build the tag schema, the 7-day reuse rule and the "event photos stay with their event" rule in M6, with the bank second in the search order.
 
 - **Photo chain:**
   - article photos filtered by their credit line;
