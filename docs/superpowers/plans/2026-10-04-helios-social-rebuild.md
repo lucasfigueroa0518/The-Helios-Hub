@@ -34,8 +34,8 @@ The old pipeline's errors came from its judgment layer (stages, prompts, rules, 
 - **Orchestrator, brief parser, adapter, rules block, mechanical checks, cover fit, duplicate grouping, Jev questions:** all new.
 - **The image-step entry point (`index.ts`) and the image check (`vision.ts`):** new. The old ones encode the old IMAGE-line rules.
 - **JPEG export:** new and small.
-- **All prompts:** new.
-  - Reference: the old Reporter's reporting rules and the caption instructions. The caption instructions carry over verbatim (spec §4.3).
+- **All prompts:** start from `specs/2026-10-04-helios-social-prompts.md`, not from a blank page. Tested text there (Reporter, Writer, caption) is copied, not reworded; only its "added since the test" items are new. The Editor and Fact-checker drafts there are the starting point.
+  - Reference: the old Reporter's reporting rules. The caption instructions carry over verbatim (spec §4.3) and are already in the prompts file.
 - **Review page:** keep the look; rebuild its data loading and buttons on the new post shape. The old `PageClient.tsx` and the review route are reference.
 
 **Reference only, never pulled:** `lib/social/photos/atmosphere.ts`, used to seed the photo bank's theme list.
@@ -138,6 +138,8 @@ If one fails, adjust the spec before building around it.
 
 ### M2: Reporter and raw-text page reader (spec §4, §4.2c, §5.1)
 
+- **Reporter prompt:** from the prompts file, §1.
+
 - `fetch-page` returns **raw text** plus the photos with captions and credit lines (code, no summarizing).
 - **New brief format:**
   - THE NEWS
@@ -157,7 +159,7 @@ If one fails, adjust the spec before building around it.
 
 ### M3: Writer and copy-by-ID (spec §4.1a, §4.2a, §4.3, §5.3, §5.3a)
 
-- **New Writer prompt:**
+- **Writer prompt:** from the prompts file, §2–3 (tested text plus the listed additions):
   - quotes and numbers by ID, plus exact excerpts;
   - 3 cover options;
   - role before an unknown name;
@@ -170,10 +172,10 @@ If one fails, adjust the spec before building around it.
 
 ### M4: Editor, Fact-checker, fixes and fresh drafts (spec §4.1, §4.2, §4.2b)
 
-- **Editor prompt:** line editor, the four reader checks, cut/sharpen only.
+- **Editor prompt:** from the prompts file, §4 (line editor, the four reader checks, cut/sharpen only).
 - **Fact-checker, two versions:**
   - **Jev claim checking (target):** Writer claim tags `[F3]` → code pairs each sentence with its source passage → one Jev yes/no per pair. Code also flags untagged sentences that contain a number, name or quote.
-  - **Claude Fact-checker (comparison, batch 1 only):** the single truth test and the 5 always-flag types, giving a swap from the brief or a cut.
+  - **Claude Fact-checker (comparison, batch 1 only, prompt from the prompts file §5):** the single truth test and the 5 always-flag types, giving a swap from the brief or a cut.
   - Both check all 3 cover options.
 - **Fix logic:** swap → cut → cover fallback → a fresh draft (no notes) → next story. Limits: 2 fresh drafts per story, $5/day.
 - **Accept:** stubbed flags exercise every branch, and the fresh-draft limit and cost cap are enforced.

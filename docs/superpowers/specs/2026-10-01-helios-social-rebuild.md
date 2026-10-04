@@ -115,6 +115,8 @@ That's about 6 stages from start to finish, down from 20+.
 | Editor | The reader's experience of the finished draft | Line editor, before the Fact-checker (DECIDED, §4.1). |
 | Fact-checker | Accuracy | One pass, last editorial stage. A false key claim sets the story aside. Other flags are fixed per §4.2. |
 
+**Starting prompts:** `2026-10-04-helios-social-prompts.md` holds the exact Reporter and Writer text I tested by hand, the caption instructions carried over verbatim, and first drafts of the Editor and Fact-checker. Build from it; don't rewrite prompts from these rules.
+
 `RULES_BLOCK` stays the single source of editorial rules for every prompt. The rulebook design from 2026-09-30 carries over: each stage is told the rules it will be checked against.
 
 ### 4.1 The Editor's role (DECIDED)
