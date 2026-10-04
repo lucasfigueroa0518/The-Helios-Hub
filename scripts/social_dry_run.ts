@@ -10,11 +10,11 @@
 import { createCostMeter } from '@/lib/social/pipeline/cost-meter';
 import { runDay } from '@/lib/social/pipeline/orchestrator';
 import { createInMemorySetAsideLog } from '@/lib/social/pipeline/set-aside-log';
-import { STUB_CANDIDATES, createStubStages, type StubOptions } from '@/lib/social/pipeline/stubs';
+import { STUB_ARTICLES, createStubStages, type StubOptions } from '@/lib/social/pipeline/stubs';
 
 async function dryRun(label: string, stubOpts: StubOptions) {
   const result = await runDay({
-    candidates: STUB_CANDIDATES,
+    articles: STUB_ARTICLES,
     stages: createStubStages(stubOpts),
     meter: createCostMeter(),
     log: createInMemorySetAsideLog(),

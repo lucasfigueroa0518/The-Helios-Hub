@@ -13,13 +13,9 @@
 import type { CostMeter } from './cost-meter';
 import type { SetAsideEntry, SetAsideLog } from './set-aside-log';
 import type { PipelineStages } from './stages';
-import type {
-  Candidate,
-  PostObject,
-  ScoredCandidate,
-  StageName,
-  StageResult,
-} from './types';
+import type { IngestArticle } from '@/lib/social/ingest/select/types';
+
+import type { PostObject, ScoredCandidate, StageName, StageResult } from './types';
 
 export const DEFAULT_TARGET_POSTS = 2;
 
@@ -29,7 +25,8 @@ export const DAY_SCOPE_ID = '*';
 export type StopReason = 'target-reached' | 'out-of-stories' | 'cost-cap' | 'scoring-failed';
 
 export type RunDayInput = {
-  candidates: Candidate[];
+  /** The day's fetched feed articles; selection groups and ranks them. */
+  articles: IngestArticle[];
   stages: PipelineStages;
   meter: CostMeter;
   log: SetAsideLog;
@@ -105,7 +102,7 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
   // ── Jev scoring ──────────────────────────────────────────────────────
   let ranked: ScoredCandidate[];
   try {
-    ranked = (await step(DAY_SCOPE_ID, 'jev-scoring', null, () => stages.score(input.candidates))).value;
+    ranked = (await step(DAY_SCOPE_ID, 'jev-scoring', null, () => stages.score(input.articles, now))).value;
   } catch (err) {
     if (err instanceof SetAside) {
       setAsides.push(err.entry);

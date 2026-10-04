@@ -4,6 +4,7 @@
  * M0 skeleton: the fields here are the minimum the orchestrator needs.
  * M1–M6 fill them in (brief format in M2, writer output in M3, …).
  */
+import type { GroupMember } from '@/lib/social/ingest/select/types';
 
 /** The six stages of spec §3, plus the mechanical guarantees (§6). */
 export const STAGE_ORDER = [
@@ -28,6 +29,7 @@ export type ReasonCode =
   | 'main-claim-false'
   | 'unverifiable-claim'
   | 'render-failed'
+  | 'service-error'
   | 'cost-cap';
 
 /**
@@ -40,19 +42,26 @@ export const REASON_KIND: Record<ReasonCode, SetAsideKind> = {
   'malformed-output': 'pipeline-fault',
   'over-limit': 'pipeline-fault',
   'render-failed': 'pipeline-fault',
+  'service-error': 'pipeline-fault',
   'cost-cap': 'pipeline-fault',
   'main-claim-false': 'should-not-run',
   'unverifiable-claim': 'should-not-run',
 };
 
-/** One article cluster from ingest (M1 adds outlets, freshness, …). */
+/** One story group from ingest selection (spec §5B). */
 export type Candidate = {
   id: string;
   title: string;
   url: string;
+  /** Every article in the group, for the Reporter's two-source confirmation. */
+  members: GroupMember[];
+  outlets: string[];
+  outletCount: number;
+  publishedAt: Date;
+  body: string;
 };
 
-/** Jev's ranking of a candidate (M1 adds per-question answers). */
+/** A candidate in run order: winners first, then backups. Higher score runs first. */
 export type ScoredCandidate = Candidate & { score: number };
 
 /** The Reporter's brief (M2 replaces this with the structured format). */

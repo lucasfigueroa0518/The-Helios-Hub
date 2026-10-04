@@ -4,8 +4,10 @@
  * Costs are fake but in the right ballpark (spec §4.2b: ~$0.85/attempt),
  * so cost-cap behaviour is realistic.
  */
+import type { IngestArticle } from '@/lib/social/ingest/select/types';
+
 import type { PipelineStages } from './stages';
-import type { Candidate, ReasonCode, StageName, StageResult } from './types';
+import type { ReasonCode, ScoredCandidate, StageName, StageResult } from './types';
 
 export const STUB_COST_USD: Record<StageName, number> = {
   'jev-scoring': 0.002,
@@ -32,11 +34,37 @@ export type StubOptions = {
   calls?: Array<{ stage: StageName; storyId: string }>;
 };
 
-export const STUB_CANDIDATES: Candidate[] = [
-  { id: 'story-a', title: 'Lab ships new model', url: 'https://example.com/a' },
-  { id: 'story-b', title: 'State signs AI law', url: 'https://example.com/b' },
-  { id: 'story-c', title: 'Chipmaker posts record quarter', url: 'https://example.com/c' },
+const stubArticle = (slug: string, headline: string): IngestArticle => ({
+  feedSlug: 'stub-feed',
+  feedKind: 'native',
+  source: 'Example News',
+  sourceUrl: `https://example.com/${slug}`,
+  headline,
+  byline: null,
+  body: `${headline}.`,
+  publishedAt: new Date('2026-10-04T12:00:00Z'),
+});
+
+export const STUB_ARTICLES: IngestArticle[] = [
+  stubArticle('story-a', 'Lab ships new model'),
+  stubArticle('story-b', 'State signs AI law'),
+  stubArticle('story-c', 'Chipmaker posts record quarter'),
 ];
+
+/** Stub selection: one candidate per article, in input order; id = last URL segment. */
+export function stubCandidates(articles: IngestArticle[]): ScoredCandidate[] {
+  return articles.map((a, i) => ({
+    id: a.sourceUrl.split('/').pop()!,
+    title: a.headline,
+    url: a.sourceUrl,
+    members: [{ url: a.sourceUrl, outlet: a.source, title: a.headline, publishedAt: a.publishedAt, feedSlug: a.feedSlug }],
+    outlets: [a.source],
+    outletCount: 1,
+    publishedAt: a.publishedAt,
+    body: a.body,
+    score: articles.length - i,
+  }));
+}
 
 export function createStubStages(opts: StubOptions = {}): PipelineStages {
   const cost = (stage: StageName) => opts.costUsd?.[stage] ?? STUB_COST_USD[stage];
@@ -51,11 +79,9 @@ export function createStubStages(opts: StubOptions = {}): PipelineStages {
   }
 
   return {
-    async score(candidates) {
+    async score(articles) {
       opts.calls?.push({ stage: 'jev-scoring', storyId: '*' });
-      // Earlier in the list = higher score, so rank order is predictable.
-      const scored = candidates.map((c, i) => ({ ...c, score: candidates.length - i }));
-      return { ok: true, value: scored, costUsd: cost('jev-scoring') };
+      return { ok: true, value: stubCandidates(articles), costUsd: cost('jev-scoring') };
     },
     async report(story) {
       return result('reporter', story.id, { storyId: story.id, news: `${story.title}.` });

@@ -18,7 +18,7 @@ import {
   createInMemorySetAsideLog,
   dayKey,
 } from '@/lib/social/pipeline/set-aside-log';
-import { STUB_CANDIDATES, createStubStages, type StubOptions } from '@/lib/social/pipeline/stubs';
+import { STUB_ARTICLES, createStubStages, type StubOptions } from '@/lib/social/pipeline/stubs';
 import { STAGE_ORDER, type StageName } from '@/lib/social/pipeline/types';
 
 const NOW = new Date('2026-10-04T15:00:00Z');
@@ -30,7 +30,7 @@ function day(stubOpts: StubOptions = {}, extra: { capUsd?: number; targetPosts?:
     log,
     meter,
     result: runDay({
-      candidates: STUB_CANDIDATES,
+      articles: STUB_ARTICLES,
       stages: createStubStages(stubOpts),
       meter,
       log,
@@ -110,7 +110,7 @@ test('the cost cap stops the day and logs cost-cap', async () => {
 test('cost cap before scoring logs against the day', async () => {
   const log = createInMemorySetAsideLog();
   const r = await runDay({
-    candidates: STUB_CANDIDATES,
+    articles: STUB_ARTICLES,
     stages: createStubStages(),
     meter: createCostMeter({ alreadySpentUsd: DAILY_CAP_USD }),
     log,

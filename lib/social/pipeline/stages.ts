@@ -2,18 +2,16 @@
  * Stage contract for the orchestrator. Every stage is injected, so tests
  * and the dry run use stubs and nothing here can reach a model.
  */
-import type {
-  Brief,
-  Candidate,
-  Draft,
-  PostObject,
-  ScoredCandidate,
-  StageResult,
-} from './types';
+import type { IngestArticle } from '@/lib/social/ingest/select/types';
+
+import type { Brief, Draft, PostObject, ScoredCandidate, StageResult } from './types';
 
 export type PipelineStages = {
-  /** Jev scores and ranks every candidate (spec §5A #1, §5B). */
-  score(candidates: Candidate[]): Promise<StageResult<ScoredCandidate[]>>;
+  /**
+   * Story selection (spec §5A #1, §5B): groups the day's articles, Jev
+   * scores and ranks them; returns winners then backups, in run order.
+   */
+  score(articles: IngestArticle[], now: Date): Promise<StageResult<ScoredCandidate[]>>;
   /** Research the pick into a brief (spec §4). */
   report(story: ScoredCandidate): Promise<StageResult<Brief>>;
   /** Slides + caption + slide-type plan, one pass (spec §4, §4.3). */
