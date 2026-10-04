@@ -97,6 +97,26 @@ test('25 drafts × 2 identities obey the 12/day production cap', () => {
   assert.equal(byDateIdentity.get('tommy:2026-09-16'), 1);
 });
 
+test('a campaign sends its percentage of that day’s inbox capacity', () => {
+  const plan = planHandoffs(input({
+    rows: rowsFor('lucas', 'camp-lucas', 'lane-lucas', 25),
+    lanes: [{
+      laneId: 'lane-lucas',
+      campaignId: 'camp-lucas',
+      identitySlug: 'lucas',
+      ready: true,
+      maxNewLeadsPerDay: null,
+      emailsPerDay: null,
+      capacityPct: 50,
+    }],
+    inboxesByIdentity: new Map([
+      ['lucas', [productionInbox('lucas', 'ib-lucas', 'lucas@heliosgroup.me')]],
+    ]),
+  }));
+  const today = plan.assignments.filter((row) => row.date === TODAY);
+  assert.equal(today.length, 6);
+});
+
 test('two lanes on one identity round-robin rather than drain the first', () => {
   const plan = planHandoffs(input({
     rows: [

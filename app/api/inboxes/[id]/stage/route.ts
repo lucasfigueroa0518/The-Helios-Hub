@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 
-import { LIFECYCLE_STAGES, type LifecycleStage } from '@/lib/delivery-states';
+import { LIFECYCLE_STAGES, SENDING_STAGES, type LifecycleStage } from '@/lib/delivery-states';
 import { draftingErrorResponse, draftingJson } from '@/lib/drafting/api';
 import {
   DomainRestingError,
@@ -64,11 +64,27 @@ export async function POST(request: NextRequest, { params }: Params) {
       force: body.force === true,
       reason: body.reason,
     });
+    const warnings = [...result.warnings];
+    const sending = (stage: string) => (SENDING_STAGES as readonly string[]).includes(stage);
+    if (result.from !== result.to && (sending(result.from) || sending(result.to))) {
+      try {
+        const { syncLaneAccounts } = await import('@/lib/smartlead/lanes');
+        await syncLaneAccounts(result.inbox.identity_slug);
+      } catch (error) {
+        warnings.push(error instanceof Error ? error.message : 'Could not attach the mailbox to its campaigns');
+      }
+      try {
+        const { replanHandoffs } = await import('@/lib/smartlead/handoff');
+        await replanHandoffs();
+      } catch (error) {
+        warnings.push(error instanceof Error ? error.message : 'Could not replan the send queue');
+      }
+    }
     return draftingJson({
       inbox: result.inbox,
       from: result.from,
       to: result.to,
-      warnings: result.warnings,
+      warnings,
       smartlead: result.smartlead,
     });
   } catch (error) {

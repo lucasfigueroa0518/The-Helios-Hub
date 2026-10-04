@@ -13,6 +13,7 @@ import {
 import { normalizeLinkedinUrl } from '@/lib/auto-campaigns/credit-pipeline';
 import type { CampaignSheetViewRow } from '@/lib/campaign-sheet';
 import { toCampaignSheetViewRows, type CampaignSheetRow } from '@/lib/campaign-sheet';
+import { resolveDeliverySettings, type DeliverySettings } from '@/lib/smartlead/delivery-settings';
 
 export { pickQueueColor } from '@/lib/auto-campaigns/queue-colors';
 
@@ -24,6 +25,7 @@ export type AutoCampaignRow = {
   auto_status: AutoStatus | null;
   auto_error: string | null;
   emails_per_day: number | null;
+  delivery_settings: DeliverySettings;
   follow_up_enabled: boolean;
   sender_identity_slug: SenderIdentitySlug;
   lead_attributes: LeadAttributes;
@@ -204,6 +206,17 @@ export async function loadDueLiveAutoCampaigns(now = new Date()): Promise<Array<
                  AND cl.sourced_on = $2::date
             ) < COALESCE(c.emails_per_day, 0)
           )
+          OR (
+            $3::boolean
+            AND c.emails_per_day IS NULL
+            AND COALESCE((c.delivery_settings ->> 'capacity_pct')::int, 0) > 0
+            AND (
+              SELECT count(*)::int
+                FROM outreach.campaign_leads cl
+               WHERE cl.campaign_id = c.id
+                 AND cl.sourced_on = $2::date
+            ) = 0
+          )
         )
       ORDER BY c.next_cycle_at ASC NULLS LAST`,
     [now.toISOString(), today, isNyWeekday(now)],
@@ -302,6 +315,7 @@ export async function loadAutoCampaign(campaignId: string): Promise<AutoCampaign
     auto_status: AutoStatus | null;
     auto_error: string | null;
     emails_per_day: number | null;
+    delivery_settings: unknown;
     follow_up_enabled: boolean;
     sender_identity_slug: string | null;
     lead_attributes: unknown;
@@ -314,7 +328,7 @@ export async function loadAutoCampaign(campaignId: string): Promise<AutoCampaign
     thin_days: number;
   }>(
     `SELECT id, owner_id, name, kind, auto_status, auto_error, emails_per_day,
-            follow_up_enabled, sender_identity_slug, lead_attributes, expansion_step, queue_color,
+            delivery_settings, follow_up_enabled, sender_identity_slug, lead_attributes, expansion_step, queue_color,
             next_cycle_at::text, last_cycle_at::text, apollo_search_page,
             apollo_search_params, thin_days
        FROM outreach.campaigns
@@ -326,6 +340,7 @@ export async function loadAutoCampaign(campaignId: string): Promise<AutoCampaign
   return {
     ...row,
     sender_identity_slug: campaignSenderIdentity(row.sender_identity_slug),
+    delivery_settings: resolveDeliverySettings(row.delivery_settings),
     lead_attributes: parseAttributes(row.lead_attributes),
     apollo_search_params: parseSearchParams(row.apollo_search_params),
   };

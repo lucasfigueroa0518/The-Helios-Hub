@@ -284,10 +284,6 @@ function assertAutoCreateInput(input: CreateCampaignInput): {
   if (!attrs.industry || !attrs.seniority || !attrs.geography || !attrs.business_size) {
     throw new Error('Auto campaigns need industry, seniority, geography, and business size');
   }
-  const perDay = Math.floor(Number(input.emailsPerDay));
-  if (!Number.isFinite(perDay) || perDay < 1 || perDay > 200) {
-    throw new Error('Emails per day must be between 1 and 200');
-  }
   const senderIdentity = input.senderIdentitySlug
     ? parseSenderIdentitySlug(input.senderIdentitySlug)
     : campaignSenderIdentity(null);
@@ -318,12 +314,25 @@ export async function createCampaign(
     const senderIdentity = autoCreate?.senderIdentity
       ?? parseSenderIdentitySlug(input?.senderIdentitySlug)
       ?? 'lucas';
-    const emailsPerDay = kind === 'auto' ? Math.floor(Number(input?.emailsPerDay)) : null;
     const seeded = initialDeliverySettings();
     const incoming = input?.deliverySettings;
+    const requestedPct = incoming?.capacity_pct ?? null;
+    // An auto create that still sends a fixed emails/day and no share keeps
+    // that absolute cap. Everything else takes a percentage of inbox capacity.
+    const legacyAutoCap = kind === 'auto' && requestedPct == null && input?.emailsPerDay != null;
+    const capacityPct = legacyAutoCap ? null : (requestedPct ?? 100);
+    let emailsPerDay: number | null = null;
+    if (kind === 'auto' && legacyAutoCap) {
+      const perDay = Math.floor(Number(input?.emailsPerDay));
+      if (!Number.isFinite(perDay) || perDay < 1 || perDay > 200) {
+        throw new Error('Emails per day must be between 1 and 200');
+      }
+      emailsPerDay = perDay;
+    }
     const delivery = {
       ...seeded,
       ...incoming,
+      capacity_pct: capacityPct,
       // The create dialog sends a partial payload. Keep the 30-day approval
       // lock unless the caller set a date explicitly.
       require_approval_until: incoming?.require_approval_until ?? seeded.require_approval_until,
@@ -399,10 +408,36 @@ export async function createCampaign(
       );
     }
     return id;
-  }).then((id) => getCampaign(ownerId, id).then((campaign) => {
+  }).then(async (id) => {
+    const campaign = await getCampaign(ownerId, id);
     if (!campaign) throw new Error('Campaign not found after create');
+    return snapshotAutoQuota(campaign);
+  });
+}
+
+/** Stores today's standing share on emails_per_day so boards and the catch-up query have a number. */
+async function snapshotAutoQuota<T extends {
+  id: string;
+  kind: string;
+  sender_identity_slug: SenderIdentitySlug | null;
+  delivery_settings: { capacity_pct: number | null };
+}>(campaign: T): Promise<T> {
+  if (campaign.kind !== 'auto' || campaign.delivery_settings.capacity_pct == null || !campaign.sender_identity_slug) {
     return campaign;
-  }));
+  }
+  const { campaignDailyQuota } = await import('@/lib/inboxes/send-share');
+  const quota = await campaignDailyQuota({
+    campaignId: campaign.id,
+    identitySlug: campaign.sender_identity_slug,
+    capacityPct: campaign.delivery_settings.capacity_pct,
+    standing: true,
+  });
+  if (quota <= 0) return campaign;
+  await dbQuery(
+    `UPDATE outreach.campaigns SET emails_per_day = $2, updated_at = now() WHERE id = $1`,
+    [campaign.id, quota],
+  );
+  return { ...campaign, emails_per_day: quota } as T;
 }
 
 export async function updateCampaign(
@@ -635,7 +670,8 @@ export async function updateCampaignDelivery(
   } else {
     await enqueueWork(laneEnsureWork(campaignId, identity));
   }
-  return getCampaign(ownerId, campaignId);
+  const saved = await getCampaign(ownerId, campaignId);
+  return saved ? snapshotAutoQuota(saved) : null;
 }
 
 async function relaneCampaign(

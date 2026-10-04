@@ -564,7 +564,6 @@ async function buildDays(input: {
   capacity: CapacitySnapshot;
 }): Promise<QueueDayBucket[]> {
   const actuals = await actualsByDay(input.from, input.to);
-  const followups = await followupsByDay(input.from, input.to);
   const variance = await varianceByInbox(input.from, input.to);
 
   const days: QueueDayBucket[] = [];
@@ -580,8 +579,10 @@ async function buildDays(input: {
         (item) => item.identity_slug === identitySlug && item.status !== 'cancelled',
       ).length;
       const planned = plannedPerMailbox(inboxes, date, identityPlanned);
-      const followupsForIdentity = followups.get(`${identitySlug}:${date}`) ?? 0;
-      capacityTotal += identityCapacity({ inboxes, followupsDue: followupsForIdentity }, date);
+      // Same number the Inboxes tab shows: each mailbox's campaign cap, not
+      // that cap minus follow-ups. Follow-ups still reduce what the planner
+      // may hand off; they should not make the board disagree with the roster.
+      capacityTotal += inboxes.reduce((sum, inbox) => sum + stageCap(inbox, date), 0);
 
       for (const inbox of inboxes) {
         const meta = input.capacity.meta.get(inbox.id)!;
@@ -699,39 +700,6 @@ async function actualsByDay(from: string, to: string): Promise<Map<string, numbe
     out.set(key, (out.get(key) ?? 0) + Number(row.n));
   }
   return out;
-}
-
-/** Follow-ups the model expects per identity per day. */
-async function followupsByDay(from: string, to: string): Promise<Map<string, number>> {
-  const { rows } = await dbQuery<{ identity_slug: string; due_date: string; n: string }>(
-    `WITH steps AS (
-       SELECT lane.identity_slug,
-              es.sequence_number,
-              (es.sent_at AT TIME ZONE $3)::date AS sent_on,
-              c.delivery_settings,
-              c.follow_up_enabled
-         FROM outreach.email_sends es
-         JOIN outreach.campaign_lanes lane ON lane.id = es.lane_id
-         JOIN outreach.campaigns c ON c.id = lane.campaign_id
-        WHERE es.status = 'sent'
-          AND es.replied_at IS NULL
-          AND es.bounced_at IS NULL
-          AND es.unsubscribed_at IS NULL
-          AND es.reply_suppressed_at IS NULL
-     )
-     SELECT identity_slug,
-            (sent_on + (step ->> 'delay_days')::int)::text AS due_date,
-            count(*)::text AS n
-       FROM steps
-       CROSS JOIN LATERAL jsonb_array_elements(
-              coalesce(delivery_settings -> 'follow_ups', '[]'::jsonb)) AS step
-      WHERE follow_up_enabled
-        AND (step ->> 'step')::int = sequence_number + 1
-        AND (sent_on + (step ->> 'delay_days')::int) BETWEEN $1::date AND $2::date
-      GROUP BY 1, 2`,
-    [from, to, SEND_QUEUE_TIMEZONE],
-  );
-  return new Map(rows.map((row) => [`${row.identity_slug}:${row.due_date}`, Number(row.n)]));
 }
 
 async function varianceByInbox(from: string, to: string): Promise<Map<string, boolean>> {

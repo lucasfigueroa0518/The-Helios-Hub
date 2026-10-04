@@ -13,6 +13,7 @@ import { hubGetJson, invalidateHubCache } from '@/app/hub/hub-data';
 import { HubLoadingSpinner } from '@/app/hub/hub-loading';
 import { requestJson } from '@/lib/client-request';
 import {
+  addCalendarDays,
   formatNyDateLabel,
   formatNyWeekday,
   isNyCalendarWeekend,
@@ -198,7 +199,16 @@ export function SendQueueHub() {
   const activeInboxes = board.inboxes.filter(
     (inbox) => inbox.stage === 'ramping' || inbox.stage === 'production',
   );
-  const activeCapacity = todayBucket?.capacity ?? 0;
+  const mailboxCap = (day: QueueDayBucket) => day.mailboxes.reduce((sum, mailbox) => sum + mailbox.cap, 0);
+  const todayCapacity = todayBucket ? mailboxCap(todayBucket) : 0;
+  const weekEnd = addCalendarDays(board.today, 6);
+  const weekCapacity = board.days
+    .filter((day) => day.date >= board.today && day.date <= weekEnd)
+    .reduce((sum, day) => sum + mailboxCap(day), 0);
+  const rampingOnlyWeekend = isNyCalendarWeekend(board.today)
+    && activeInboxes.some((inbox) => inbox.stage === 'ramping')
+    && todayCapacity === 0
+    && weekCapacity > 0;
 
   return (
     <main className="app-shell send-queue-page">
@@ -231,11 +241,18 @@ export function SendQueueHub() {
                 tip="Drafts on today’s handoff day — the volume leaving the hub today."
               />
               <QueueMetric
-                label="Active inbox capacity"
-                value={activeCapacity}
+                label="Today’s capacity"
+                value={todayCapacity}
                 tip={activeInboxes.length
-                  ? `${activeInboxes.length} ramping or production ${activeInboxes.length === 1 ? 'mailbox' : 'mailboxes'} can send this many campaign emails today.`
+                  ? rampingOnlyWeekend
+                    ? `${activeInboxes.length} ramping ${activeInboxes.length === 1 ? 'mailbox sends' : 'mailboxes send'} on weekdays, so today is 0. The next 7 days total ${weekCapacity}, the same count as Inboxes.`
+                    : `${activeInboxes.length} ramping or production ${activeInboxes.length === 1 ? 'mailbox' : 'mailboxes'}. This is the sum of their campaign caps, the same number as Inboxes.`
                   : 'No mailboxes are in ramping or production, so campaign capacity is 0.'}
+              />
+              <QueueMetric
+                label="Next 7 days"
+                value={weekCapacity}
+                tip="Campaign emails these mailboxes can send over the next 7 days, including today. Each ramping mailbox adds one campaign email per weekday."
               />
             </div>
             <label className="send-queue-filter">

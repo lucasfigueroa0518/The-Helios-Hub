@@ -29,6 +29,11 @@ export type DeliverySettings = {
   unsubscribe_text: string;
   schedule: DeliverySchedule;
   max_new_leads_per_day: number | null;
+  /**
+   * Share of the sender's current inbox capacity, 1–100. Null keeps the
+   * legacy absolute `max_new_leads_per_day` / `emails_per_day` cap.
+   */
+  capacity_pct: number | null;
   follow_ups: FollowUpStep[];
   reply_fallback: ReplyFallback;
   require_approval: boolean;
@@ -48,6 +53,7 @@ export const DEFAULT_DELIVERY_SETTINGS: DeliverySettings = {
     min_gap_min: 10,
   },
   max_new_leads_per_day: null,
+  capacity_pct: null,
   follow_ups: [],
   reply_fallback: 'claude',
   require_approval: true,
@@ -68,6 +74,14 @@ export function initialDeliverySettings(createdAt: Date = new Date()): DeliveryS
 
 function asBoolean(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback;
+}
+
+function asCapacityPct(value: unknown): number | null {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  const pct = Math.floor(parsed);
+  if (pct < 1 || pct > 100) return null;
+  return pct;
 }
 
 function asPositiveInt(value: unknown, fallback: number | null): number | null {
@@ -126,6 +140,7 @@ export function resolveDeliverySettings(raw: unknown): DeliverySettings {
       min_gap_min: asPositiveInt(schedule.min_gap_min, DEFAULT_DELIVERY_SETTINGS.schedule.min_gap_min)!,
     },
     max_new_leads_per_day: asPositiveInt(row.max_new_leads_per_day, null),
+    capacity_pct: asCapacityPct(row.capacity_pct),
     follow_ups: asFollowUps(row.follow_ups),
     reply_fallback: fallback,
     require_approval: asBoolean(row.require_approval, true),

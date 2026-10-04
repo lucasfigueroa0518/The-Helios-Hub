@@ -25,6 +25,8 @@ import { buildSignatureHtml, resolveEmailSignature } from '@/lib/drafting/email-
 import { parseMessageTemplate, parseSubjectTemplate } from '@/lib/drafting/message-template';
 import { isLiveAutoCampaign } from '@/lib/auto-campaigns/status';
 import { approvalLockExpired, DEFAULT_DELIVERY_SETTINGS } from '@/lib/smartlead/delivery-settings';
+import { CapacityShareField, ChoiceCards } from '@/app/hub/campaign-setup-fields';
+import type { InboxRoster } from '@/lib/inboxes/roster';
 
 const DRAFTING_POLL_MS = 5_000;
 
@@ -55,6 +57,7 @@ type Campaign = {
     tracking: boolean;
     reply_fallback: 'claude' | 'human_only';
     max_new_leads_per_day: number | null;
+    capacity_pct?: number | null;
     require_approval: boolean;
     require_approval_until: string | null;
     schedule: { start: string; end: string };
@@ -83,7 +86,8 @@ export function CampaignHub({ email }: { email: string }) {
   const [seniority, setSeniority] = useState('');
   const [geography, setGeography] = useState('');
   const [businessSize, setBusinessSize] = useState('');
-  const [emailsPerDay, setEmailsPerDay] = useState('10');
+  const [capacityPct, setCapacityPct] = useState(100);
+  const [roster, setRoster] = useState<InboxRoster | null>(null);
   const [senderIdentity, setSenderIdentity] = useState<SenderIdentitySlug>('lucas');
   const [sourceId, setSourceId] = useState('');
   const [saving, setSaving] = useState(false);
@@ -94,7 +98,6 @@ export function CampaignHub({ email }: { email: string }) {
   const [tracking, setTracking] = useState(false);
   const [followUpDelay, setFollowUpDelay] = useState('3');
   const [followUpBody, setFollowUpBody] = useState('');
-  const [maxNewLeads, setMaxNewLeads] = useState('');
   const [replyFallback, setReplyFallback] = useState<'claude' | 'human_only'>('claude');
   const [scheduleStart, setScheduleStart] = useState('09:00');
   const [scheduleEnd, setScheduleEnd] = useState('17:00');
@@ -143,6 +146,13 @@ export function CampaignHub({ email }: { email: string }) {
   }, []);
 
   useEffect(() => {
+    if (dialog !== 'create' && dialog !== 'delivery') return;
+    void hubGetJson<InboxRoster>('/api/inboxes')
+      .then(setRoster)
+      .catch(() => setRoster(null));
+  }, [dialog]);
+
+  useEffect(() => {
     if (!anyDrafting) return undefined;
     const timer = window.setInterval(() => {
       if (document.hidden) return;
@@ -159,7 +169,7 @@ export function CampaignHub({ email }: { email: string }) {
     setSeniority('');
     setGeography('');
     setBusinessSize('');
-    setEmailsPerDay('10');
+    setCapacityPct(100);
     setSenderIdentity('lucas');
     setMessageMode('ai');
     setSubjectTemplate('');
@@ -168,7 +178,6 @@ export function CampaignHub({ email }: { email: string }) {
     setTracking(false);
     setFollowUpDelay('3');
     setFollowUpBody('');
-    setMaxNewLeads('');
     setReplyFallback('claude');
     setScheduleStart('09:00');
     setScheduleEnd('17:00');
@@ -185,7 +194,7 @@ export function CampaignHub({ email }: { email: string }) {
     setSenderIdentity(campaign.sender_identity_slug ?? 'lucas');
     setTracking(settings?.tracking ?? false);
     setReplyFallback(settings?.reply_fallback ?? 'claude');
-    setMaxNewLeads(settings?.max_new_leads_per_day ? String(settings.max_new_leads_per_day) : '');
+    setCapacityPct(settings?.capacity_pct ?? 100);
     setFollowUpDelay(follow ? String(follow.delay_days) : '3');
     setFollowUpBody(follow?.body_template ?? '');
     setScheduleStart(settings?.schedule.start ?? '09:00');
@@ -198,9 +207,8 @@ export function CampaignHub({ email }: { email: string }) {
     return {
       tracking,
       reply_fallback: replyFallback,
-      max_new_leads_per_day: maxNewLeads.trim()
-        ? Number.parseInt(maxNewLeads.replace(/[^\d]/g, ''), 10)
-        : null,
+      max_new_leads_per_day: null,
+      capacity_pct: capacityPct,
       follow_ups: followUpBody.trim()
         ? [{ step: 2, delay_days: Number.parseInt(followUpDelay, 10) || 3, body_template: followUpBody }]
         : [],
@@ -240,7 +248,6 @@ export function CampaignHub({ email }: { email: string }) {
                 name,
                 kind: 'auto' as const,
                 needs_enrichment: false,
-                emails_per_day: Number.parseInt(emailsPerDay.replace(/[^\d]/g, ''), 10),
                 sender_identity_slug: senderIdentity,
                 lead_attributes: {
                   industry,
@@ -455,7 +462,7 @@ export function CampaignHub({ email }: { email: string }) {
 
       {dialog && (
         <div className="dialog-overlay" role="presentation" onMouseDown={() => !saving && setDialog(null)}>
-          <section className={`card dialog${dialog === 'create' && messageMode === 'custom' ? ' dialog--wide' : ''}`} role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+          <section className={`card dialog${dialog === 'create' || dialog === 'delivery' ? ' dialog--wide' : ''}`} role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
             <div className="card__header">
               <div className="card__title">
                 {dialog === 'create' && 'New Campaign'}
@@ -467,26 +474,7 @@ export function CampaignHub({ email }: { email: string }) {
             </div>
             <div className="card__body">
               {dialog === 'create' && (
-                <form className="login-form" onSubmit={(event) => void createCampaign(event)}>
-                  <div className="field">
-                    <span className="field__label">Campaign type</span>
-                    <div className="segmented" style={{ width: 'fit-content' }}>
-                      <button
-                        type="button"
-                        className={`segmented__item${kind === 'manual' ? ' segmented__item--active' : ''}`}
-                        onClick={() => setKind('manual')}
-                      >
-                        Manual
-                      </button>
-                      <button
-                        type="button"
-                        className={`segmented__item${kind === 'auto' ? ' segmented__item--active' : ''}`}
-                        onClick={() => setKind('auto')}
-                      >
-                        Auto
-                      </button>
-                    </div>
-                  </div>
+                <form className="setup-form" onSubmit={(event) => void createCampaign(event)}>
                   <label className="field">
                     <span className="field__label">Campaign name</span>
                     <input
@@ -498,62 +486,50 @@ export function CampaignHub({ email }: { email: string }) {
                       required
                     />
                   </label>
-                  <div className="field">
-                    <span className="field__label">Message</span>
-                    <div className="segmented" style={{ width: 'fit-content' }}>
-                      <button
-                        type="button"
-                        className={`segmented__item${messageMode === 'ai' ? ' segmented__item--active' : ''}`}
-                        onClick={() => setMessageMode('ai')}
-                      >
-                        AI-generated
-                      </button>
-                      <button
-                        type="button"
-                        className={`segmented__item${messageMode === 'custom' ? ' segmented__item--active' : ''}`}
-                        onClick={() => {
-                          setMessageMode('custom');
-                          setNeedsEnrichment(false);
-                        }}
-                      >
-                        Custom message
-                      </button>
-                    </div>
-                    <p className="field__hint" style={{ margin: 0, marginTop: 'var(--space-1)' }}>
-                      {messageMode === 'custom'
-                        ? 'One template for every lead. Merge fields fill from the list — no Claude drafting cost.'
-                        : 'Research plus write. Claude drafts a unique email per lead.'}
-                    </p>
-                  </div>
+                  <ChoiceCards
+                    legend="How leads get in"
+                    value={kind}
+                    onChange={setKind}
+                    options={[
+                      { id: 'manual', title: 'Manual', detail: 'You upload the list. Helios drafts and sends it.' },
+                      { id: 'auto', title: 'Auto', detail: 'Helios finds new people from the filters below, every day.' },
+                    ]}
+                  />
+                  <ChoiceCards
+                    legend="The email"
+                    value={messageMode}
+                    onChange={(mode) => {
+                      setMessageMode(mode);
+                      if (mode === 'custom') setNeedsEnrichment(false);
+                    }}
+                    options={[
+                      { id: 'ai', title: 'Written per lead', detail: 'Claude researches the person and writes a unique email.' },
+                      { id: 'custom', title: 'One template', detail: 'The same message for every lead. Merge fields fill the names.' },
+                    ]}
+                  />
                   {kind === 'manual' ? (
-                    <div className="field" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 'var(--space-2)' }}>
-                      <span className="field__label" id="needs-enrichment-label">Needs Enrichment?</span>
-                      <div className="segmented" style={{ width: 'fit-content' }}>
-                        <button
-                          type="button"
-                          className={`segmented__item${!needsEnrichment ? ' segmented__item--active' : ''}`}
-                          onClick={() => setNeedsEnrichment(false)}
-                        >
-                          No
-                        </button>
-                        <button
-                          type="button"
-                          className={`segmented__item${needsEnrichment ? ' segmented__item--active' : ''}`}
-                          onClick={() => setNeedsEnrichment(true)}
-                        >
-                          Yes
-                        </button>
-                      </div>
-                      <p className="field__hint" style={{ margin: 0, marginTop: 'var(--space-1)' }}>
-                        {needsEnrichment
-                          ? (messageMode === 'custom'
-                            ? 'Enrich still costs Claude and is usually unnecessary for a custom template. Continue only if the list is missing emails or profile fields.'
-                            : 'Upload → Enrich → Review → Draft. Use for lists that still need email and profile research.')
-                          : 'Upload → Draft. Use for lists that are already enriched with validated emails.'}
-                      </p>
-                    </div>
+                    <ChoiceCards
+                      legend="The list"
+                      value={needsEnrichment ? 'yes' : 'no'}
+                      onChange={(value) => setNeedsEnrichment(value === 'yes')}
+                      options={[
+                        {
+                          id: 'no',
+                          title: 'Already enriched',
+                          detail: 'Upload, then draft. Use this when the list already has validated emails.',
+                        },
+                        {
+                          id: 'yes',
+                          title: 'Needs research',
+                          detail: messageMode === 'custom'
+                            ? 'Looks up missing emails and profile fields. Costs Claude, even with a template.'
+                            : 'Upload, enrich, review, then draft. For lists that still need emails.',
+                        },
+                      ]}
+                    />
                   ) : (
-                    <>
+                    <div className="setup-section">
+                      <p className="setup-section__title">Who to find</p>
                       <label className="field">
                         <span className="field__label">Industry</span>
                         <input className="field__input" value={industry} onChange={(event) => setIndustry(event.target.value)} placeholder="Commercial real estate" required />
@@ -570,114 +546,37 @@ export function CampaignHub({ email }: { email: string }) {
                         <span className="field__label">Business size</span>
                         <input className="field__input" value={businessSize} onChange={(event) => setBusinessSize(event.target.value)} placeholder="11–50" required />
                       </label>
-                      <label className="field">
-                        <span className="field__label">Emails per day</span>
-                        <input
-                          className="field__input"
-                          value={emailsPerDay}
-                          onChange={(event) => setEmailsPerDay(event.target.value)}
-                          placeholder="50"
-                          required
-                        />
-                      </label>
-                    </>
+                    </div>
                   )}
-                  <div className="field" style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-3)' }}>
-                    <span className="field__label">Delivery</span>
-                    <p className="field__hint" style={{ margin: 0, marginBottom: 'var(--space-2)' }}>
-                      Smartlead sends from this identity&apos;s mailboxes. Follow-ups and tracking are optional.
-                    </p>
-                    <span className="field__label">Sender</span>
-                    <div className="segmented" style={{ width: 'fit-content', marginBottom: 'var(--space-2)' }}>
-                      {(['lucas', 'tommy'] as const).map((slug) => (
-                        <button
-                          key={slug}
-                          type="button"
-                          className={`segmented__item${senderIdentity === slug ? ' segmented__item--active' : ''}`}
-                          onClick={() => setSenderIdentity(slug)}
-                        >
-                          {SENDER_IDENTITY_LABELS[slug]}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="segmented" style={{ width: 'fit-content', marginBottom: 'var(--space-2)' }}>
-                      <button
-                        type="button"
-                        className={`segmented__item${!tracking ? ' segmented__item--active' : ''}`}
-                        onClick={() => setTracking(false)}
-                      >
-                        Tracking off
-                      </button>
-                      <button
-                        type="button"
-                        className={`segmented__item${tracking ? ' segmented__item--active' : ''}`}
-                        onClick={() => setTracking(true)}
-                      >
-                        Opens &amp; clicks
-                      </button>
-                    </div>
-                    <div className="segmented" style={{ width: 'fit-content', marginBottom: 'var(--space-2)' }}>
-                      <button
-                        type="button"
-                        className={`segmented__item${replyFallback === 'claude' ? ' segmented__item--active' : ''}`}
-                        onClick={() => setReplyFallback('claude')}
-                      >
-                        Claude fallback
-                      </button>
-                      <button
-                        type="button"
-                        className={`segmented__item${replyFallback === 'human_only' ? ' segmented__item--active' : ''}`}
-                        onClick={() => setReplyFallback('human_only')}
-                      >
-                        Human only
-                      </button>
-                    </div>
-                    <label className="field">
-                      <span className="field__label">Max new leads / day</span>
-                      <input
-                        className="field__input"
-                        value={maxNewLeads}
-                        onChange={(event) => setMaxNewLeads(event.target.value)}
-                        placeholder="Leave blank for mailbox capacity"
-                      />
-                    </label>
-                    <label className="field">
-                      <span className="field__label">Follow-up delay (days)</span>
-                      <input
-                        className="field__input"
-                        value={followUpDelay}
-                        onChange={(event) => setFollowUpDelay(event.target.value)}
-                        placeholder="3"
-                      />
-                    </label>
-                    <label className="field">
-                      <span className="field__label">Send window (America/New_York, weekdays)</span>
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <input
-                          className="field__input"
-                          type="time"
-                          value={scheduleStart}
-                          onChange={(event) => setScheduleStart(event.target.value)}
-                        />
-                        <input
-                          className="field__input"
-                          type="time"
-                          value={scheduleEnd}
-                          onChange={(event) => setScheduleEnd(event.target.value)}
-                        />
-                      </div>
-                    </label>
-                    <label className="field">
-                      <span className="field__label">Follow-up body (optional)</span>
-                      <textarea
-                        className="field__input"
-                        rows={4}
-                        value={followUpBody}
-                        onChange={(event) => setFollowUpBody(event.target.value)}
-                        placeholder="Leave blank for no follow-up. Step 1 is the per-lead draft."
-                      />
-                    </label>
-                  </div>
+                  <ChoiceCards
+                    legend="Who sends"
+                    value={senderIdentity}
+                    onChange={setSenderIdentity}
+                    options={(['lucas', 'tommy'] as const).map((slug) => ({
+                      id: slug,
+                      title: SENDER_IDENTITY_LABELS[slug],
+                      detail: 'Campaign mail goes out from this person’s ramping and production mailboxes.',
+                    }))}
+                  />
+                  <CapacityShareField
+                    pct={capacityPct}
+                    onChange={setCapacityPct}
+                    days={senderCapacityDays(roster, senderIdentity)}
+                  />
+                  <SendingRules
+                    tracking={tracking}
+                    setTracking={setTracking}
+                    replyFallback={replyFallback}
+                    setReplyFallback={setReplyFallback}
+                    followUpDelay={followUpDelay}
+                    setFollowUpDelay={setFollowUpDelay}
+                    followUpBody={followUpBody}
+                    setFollowUpBody={setFollowUpBody}
+                    scheduleStart={scheduleStart}
+                    setScheduleStart={setScheduleStart}
+                    scheduleEnd={scheduleEnd}
+                    setScheduleEnd={setScheduleEnd}
+                  />
                   {messageMode === 'custom' ? (
                     <MessageComposer
                       subject={subjectTemplate}
@@ -696,7 +595,9 @@ export function CampaignHub({ email }: { email: string }) {
                       saving
                       || !name.trim()
                       || !customTemplateValid
-                      || (kind === 'auto' && (!industry.trim() || !seniority.trim() || !geography.trim() || !businessSize.trim() || !Number.parseInt(emailsPerDay.replace(/[^\d]/g, ''), 10)))
+                      || capacityPct < 1
+                      || capacityPct > 100
+                      || (kind === 'auto' && (!industry.trim() || !seniority.trim() || !geography.trim() || !businessSize.trim()))
                     }
                   >
                     {saving ? 'Saving…' : 'Create Campaign'}
@@ -707,16 +608,39 @@ export function CampaignHub({ email }: { email: string }) {
                 <CampaignNameForm name={name} setName={setName} saving={saving} submitLabel="Save Name" onSubmit={renameCampaign} />
               )}
               {dialog === 'delivery' && selected && (
-                <form className="login-form" onSubmit={(event) => void saveDelivery(event)}>
-                  <DeliveryFields
-                    senderIdentity={senderIdentity}
-                    setSenderIdentity={setSenderIdentity}
+                <form className="setup-form" onSubmit={(event) => void saveDelivery(event)}>
+                  {selected.delivery_settings?.capacity_pct == null && (selected.delivery_settings?.max_new_leads_per_day || selected.emails_per_day) ? (
+                    <p className="setup-section__hint">
+                      This campaign is still on a fixed daily count
+                      {selected.delivery_settings?.max_new_leads_per_day ? ` of ${selected.delivery_settings.max_new_leads_per_day}` : selected.emails_per_day ? ` of ${selected.emails_per_day}` : ''}.
+                      Saving switches it to a share of inbox capacity, so the number moves as mailboxes ramp.
+                    </p>
+                  ) : null}
+                  <ChoiceCards
+                    legend="Who sends"
+                    value={senderIdentity}
+                    onChange={(slug) => {
+                      if (selected.kind === 'auto') return;
+                      setSenderIdentity(slug);
+                    }}
+                    options={(['lucas', 'tommy'] as const).map((slug) => ({
+                      id: slug,
+                      title: SENDER_IDENTITY_LABELS[slug],
+                      detail: selected.kind === 'auto'
+                        ? 'Auto campaigns keep the sender they were created with.'
+                        : 'Campaign mail goes out from this person’s ramping and production mailboxes.',
+                    }))}
+                  />
+                  <CapacityShareField
+                    pct={capacityPct}
+                    onChange={setCapacityPct}
+                    days={senderCapacityDays(roster, senderIdentity)}
+                  />
+                  <SendingRules
                     tracking={tracking}
                     setTracking={setTracking}
                     replyFallback={replyFallback}
                     setReplyFallback={setReplyFallback}
-                    maxNewLeads={maxNewLeads}
-                    setMaxNewLeads={setMaxNewLeads}
                     followUpDelay={followUpDelay}
                     setFollowUpDelay={setFollowUpDelay}
                     followUpBody={followUpBody}
@@ -725,7 +649,6 @@ export function CampaignHub({ email }: { email: string }) {
                     setScheduleStart={setScheduleStart}
                     scheduleEnd={scheduleEnd}
                     setScheduleEnd={setScheduleEnd}
-                    identityLocked={selected.kind === 'auto'}
                   />
                   <div className="field">
                     <span className="field__label">Approve before handoff</span>
@@ -789,15 +712,22 @@ export function CampaignHub({ email }: { email: string }) {
   );
 }
 
-function DeliveryFields({
-  senderIdentity,
-  setSenderIdentity,
+function senderCapacityDays(roster: InboxRoster | null, identity: SenderIdentitySlug) {
+  if (!roster) return undefined;
+  const mine = roster.inboxes.filter((inbox) => inbox.identity_slug === identity && inbox.enabled);
+  const horizon = mine[0]?.capacity_7d.length ?? 0;
+  if (!horizon) return [];
+  return Array.from({ length: horizon }, (_, index) => ({
+    date: mine[0]?.capacity_7d[index]?.date ?? '',
+    cap: mine.reduce((sum, inbox) => sum + (inbox.capacity_7d[index]?.cap ?? 0), 0),
+  }));
+}
+
+function SendingRules({
   tracking,
   setTracking,
   replyFallback,
   setReplyFallback,
-  maxNewLeads,
-  setMaxNewLeads,
   followUpDelay,
   setFollowUpDelay,
   followUpBody,
@@ -806,16 +736,11 @@ function DeliveryFields({
   setScheduleStart,
   scheduleEnd,
   setScheduleEnd,
-  identityLocked,
 }: {
-  senderIdentity: SenderIdentitySlug;
-  setSenderIdentity: (value: SenderIdentitySlug) => void;
   tracking: boolean;
   setTracking: (value: boolean) => void;
   replyFallback: 'claude' | 'human_only';
   setReplyFallback: (value: 'claude' | 'human_only') => void;
-  maxNewLeads: string;
-  setMaxNewLeads: (value: string) => void;
   followUpDelay: string;
   setFollowUpDelay: (value: string) => void;
   followUpBody: string;
@@ -824,44 +749,29 @@ function DeliveryFields({
   setScheduleStart: (value: string) => void;
   scheduleEnd: string;
   setScheduleEnd: (value: string) => void;
-  identityLocked?: boolean;
 }) {
   return (
-    <>
-      <span className="field__label">Sender</span>
-      <div className="segmented" style={{ width: 'fit-content', marginBottom: 'var(--space-2)' }}>
-        {(['lucas', 'tommy'] as const).map((slug) => (
-          <button
-            key={slug}
-            type="button"
-            className={`segmented__item${senderIdentity === slug ? ' segmented__item--active' : ''}`}
-            disabled={identityLocked}
-            onClick={() => setSenderIdentity(slug)}
-          >
-            {SENDER_IDENTITY_LABELS[slug]}
-          </button>
-        ))}
-      </div>
-      <div className="segmented" style={{ width: 'fit-content', marginBottom: 'var(--space-2)' }}>
-        <button type="button" className={`segmented__item${!tracking ? ' segmented__item--active' : ''}`} onClick={() => setTracking(false)}>
-          Tracking off
-        </button>
-        <button type="button" className={`segmented__item${tracking ? ' segmented__item--active' : ''}`} onClick={() => setTracking(true)}>
-          Opens &amp; clicks
-        </button>
-      </div>
-      <div className="segmented" style={{ width: 'fit-content', marginBottom: 'var(--space-2)' }}>
-        <button type="button" className={`segmented__item${replyFallback === 'claude' ? ' segmented__item--active' : ''}`} onClick={() => setReplyFallback('claude')}>
-          Claude fallback
-        </button>
-        <button type="button" className={`segmented__item${replyFallback === 'human_only' ? ' segmented__item--active' : ''}`} onClick={() => setReplyFallback('human_only')}>
-          Human only
-        </button>
-      </div>
-      <label className="field">
-        <span className="field__label">Max new leads / day</span>
-        <input className="field__input" value={maxNewLeads} onChange={(event) => setMaxNewLeads(event.target.value)} placeholder="Leave blank for mailbox capacity" />
-      </label>
+    <div className="setup-section">
+      <p className="setup-section__title">Sending rules</p>
+      <p className="setup-section__hint">Optional. The first email is still the per-lead draft.</p>
+      <ChoiceCards
+        legend="Tracking"
+        value={tracking ? 'on' : 'off'}
+        onChange={(value) => setTracking(value === 'on')}
+        options={[
+          { id: 'off', title: 'Tracking off', detail: 'No open or click pixels. Better for deliverability.' },
+          { id: 'on', title: 'Opens and clicks', detail: 'Smartlead records when someone opens or clicks.' },
+        ]}
+      />
+      <ChoiceCards
+        legend="If they reply and Claude is unsure"
+        value={replyFallback}
+        onChange={setReplyFallback}
+        options={[
+          { id: 'claude', title: 'Claude can answer', detail: 'A reply draft goes out when the model is confident.' },
+          { id: 'human_only', title: 'You answer', detail: 'Replies wait for you. Nothing sends on its own.' },
+        ]}
+      />
       <label className="field">
         <span className="field__label">Follow-up delay (days)</span>
         <input className="field__input" value={followUpDelay} onChange={(event) => setFollowUpDelay(event.target.value)} placeholder="3" />
@@ -883,7 +793,7 @@ function DeliveryFields({
           placeholder="Leave blank for no follow-up. Step 1 is the per-lead draft."
         />
       </label>
-    </>
+    </div>
   );
 }
 

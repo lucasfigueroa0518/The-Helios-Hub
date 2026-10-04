@@ -11,6 +11,13 @@ import {
   resolveDeliverySettings,
 } from '@/lib/smartlead/delivery-settings';
 
+test('capacity share is a percent from 1 to 100', () => {
+  assert.equal(resolveDeliverySettings({ capacity_pct: 40 }).capacity_pct, 40);
+  assert.equal(resolveDeliverySettings({ capacity_pct: 0 }).capacity_pct, null);
+  assert.equal(resolveDeliverySettings({ capacity_pct: 140 }).capacity_pct, null);
+  assert.equal(resolveDeliverySettings({}).capacity_pct, null);
+});
+
 test('a partial payload keeps tracking off and approval on', () => {
   const settings = resolveDeliverySettings({ tracking: true, reply_fallback: 'human_only' });
   assert.equal(settings.tracking, true);

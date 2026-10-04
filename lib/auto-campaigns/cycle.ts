@@ -29,6 +29,8 @@ import {
 } from '@/lib/drafting/repository';
 import { enqueueReadyAutoCampaignDrafts } from '@/lib/auto-campaigns/auto-send';
 import { formatNyDate } from '@/lib/drafting/send-queue-schedule';
+import { campaignDailyQuota } from '@/lib/inboxes/send-share';
+import { resolveDeliverySettings } from '@/lib/smartlead/delivery-settings';
 import { normalizeLinkedinUrl } from '@/lib/auto-campaigns/credit-pipeline';
 import type { EnrichedPerson, ProspectCycleStats, ProspectLogEntry } from '@/lib/auto-campaigns/types';
 import type { SenderIdentitySlug } from '@/lib/agentmail-inboxes';
@@ -143,7 +145,31 @@ export async function runAutoCampaignCycle(campaignId: string): Promise<{
   }
 
   const requested = Math.max(0, Math.floor(campaign.emails_per_day ?? 0));
-  const emailsPerDay = Math.min(requested, await autoLaneCapacityToday(campaign.sender_identity_slug, requested));
+  const share = campaign.delivery_settings.capacity_pct;
+  const emailsPerDay = share != null
+    ? await campaignDailyQuota({
+      campaignId,
+      identitySlug: campaign.sender_identity_slug,
+      capacityPct: share,
+    })
+    : Math.min(requested, await autoLaneCapacityToday(campaign.sender_identity_slug, requested));
+  if (share != null && emailsPerDay > 0 && emailsPerDay !== requested) {
+    await dbQuery(
+      `UPDATE outreach.campaigns SET emails_per_day = $2, updated_at = now() WHERE id = $1`,
+      [campaignId, emailsPerDay],
+    );
+  }
+  if (share != null && emailsPerDay <= 0) {
+    await updateAutoCursor({
+      campaignId,
+      page: campaign.apollo_search_page,
+      nextCycleAt: nextAutoCycleAfterCompletion(campaignId),
+      lastCycleAt: new Date(),
+      autoStatus: 'live',
+      autoError: null,
+    });
+    return { attached: 0, runId: '', status: 'live' };
+  }
   const today = formatNyDate();
   const attachedAtStart = await loadAttachedOnNyDate(campaignId, today);
   if (emailsPerDay > 0 && attachedAtStart >= emailsPerDay) {

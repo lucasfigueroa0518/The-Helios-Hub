@@ -6,7 +6,10 @@ import { CampaignTabs } from '@/app/campaigns/[id]/campaign-tabs';
 import { ReviewTable } from '@/app/campaigns/[id]/review/review-table';
 import { SenderSetupModal } from '@/app/campaigns/[id]/draft/sender-setup-modal';
 import { LivePulse } from '@/app/components/live-pulse';
+import { CapacityShareField } from '@/app/hub/campaign-setup-fields';
 import { expansionLabel } from '@/lib/auto-campaigns/expansion';
+import { hubGetJson } from '@/app/hub/hub-data';
+import type { InboxRoster } from '@/lib/inboxes/roster';
 import { requestJson } from '@/lib/client-request';
 import type { Campaign } from '@/lib/campaigns';
 import type { CampaignSheetViewRow } from '@/lib/campaign-sheet';
@@ -35,6 +38,17 @@ type ProspectPayload = {
     started_at: string;
   } | null;
 };
+
+function senderDays(roster: InboxRoster | null, identity: string) {
+  if (!roster) return undefined;
+  const mine = roster.inboxes.filter((inbox) => inbox.identity_slug === identity && inbox.enabled);
+  const horizon = mine[0]?.capacity_7d.length ?? 0;
+  if (!horizon) return [];
+  return Array.from({ length: horizon }, (_, index) => ({
+    date: mine[0]?.capacity_7d[index]?.date ?? '',
+    cap: mine.reduce((sum, inbox) => sum + (inbox.capacity_7d[index]?.cap ?? 0), 0),
+  }));
+}
 
 function prospectActivity(payload: ProspectPayload | null): { busy: boolean; message: string } {
   if (!payload) {
@@ -94,7 +108,8 @@ export function ProspectWorkspace({
   const [seniority, setSeniority] = useState('');
   const [geography, setGeography] = useState('');
   const [businessSize, setBusinessSize] = useState('');
-  const [emailsPerDay, setEmailsPerDay] = useState('10');
+  const [capacityPct, setCapacityPct] = useState(100);
+  const [roster, setRoster] = useState<InboxRoster | null>(null);
 
   const load = useCallback(async (selected?: string | null) => {
     const params = selected ? `?day=${encodeURIComponent(selected)}` : '';
@@ -105,12 +120,16 @@ export function ProspectWorkspace({
     setSeniority(payload.campaign.lead_attributes.seniority);
     setGeography(payload.campaign.lead_attributes.geography);
     setBusinessSize(payload.campaign.lead_attributes.business_size);
-    setEmailsPerDay(String(payload.campaign.emails_per_day ?? 10));
+    setCapacityPct(payload.campaign.delivery_settings.capacity_pct ?? 100);
   }, [campaignId]);
 
   useEffect(() => {
     void load(day).catch((err) => setError(err instanceof Error ? err.message : 'Unable to load prospecting'));
   }, [load, day]);
+
+  useEffect(() => {
+    void hubGetJson<InboxRoster>('/api/inboxes').then(setRoster).catch(() => setRoster(null));
+  }, []);
 
   useEffect(() => {
     const live = data?.campaign.auto_status === 'live';
@@ -203,8 +222,10 @@ export function ProspectWorkspace({
           <span className="stat-tile__value">{data?.leads.length ?? 0}</span>
         </div>
         <div className="stat-tile">
-          <span className="stat-tile__label">Emails / day</span>
-          <span className="stat-tile__value">{campaign?.emails_per_day ?? '—'}</span>
+          <span className="stat-tile__label">Capacity share</span>
+          <span className="stat-tile__value">
+            {campaign?.delivery_settings.capacity_pct != null ? `${campaign.delivery_settings.capacity_pct}%` : (campaign?.emails_per_day ?? '—')}
+          </span>
         </div>
         <div className="stat-tile">
           <span className="stat-tile__label">Profile match</span>
@@ -226,7 +247,7 @@ export function ProspectWorkspace({
             onSubmit={(event) => {
               event.preventDefault();
               void patch({
-                emails_per_day: Number.parseInt(emailsPerDay.replace(/[^\d]/g, ''), 10),
+                delivery_settings: { capacity_pct: capacityPct },
                 lead_attributes: {
                   industry,
                   seniority,
@@ -240,7 +261,11 @@ export function ProspectWorkspace({
             <label className="field"><span className="field__label">Seniority</span><input className="field__input" value={seniority} onChange={(e) => setSeniority(e.target.value)} required /></label>
             <label className="field"><span className="field__label">Geography</span><input className="field__input" value={geography} onChange={(e) => setGeography(e.target.value)} required /></label>
             <label className="field"><span className="field__label">Business size</span><input className="field__input" value={businessSize} onChange={(e) => setBusinessSize(e.target.value)} required /></label>
-            <label className="field"><span className="field__label">Emails per day</span><input className="field__input" value={emailsPerDay} onChange={(e) => setEmailsPerDay(e.target.value)} required /></label>
+            <CapacityShareField
+              pct={capacityPct}
+              onChange={setCapacityPct}
+              days={senderDays(roster, campaign?.sender_identity_slug ?? 'lucas')}
+            />
             <button className="btn btn--primary" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save targeting'}</button>
           </form>
         </details>

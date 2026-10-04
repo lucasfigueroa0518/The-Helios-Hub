@@ -10,9 +10,9 @@ import type { IdentitySlug, LifecycleStage } from '@/lib/delivery-states';
 import { dbQuery } from '@/lib/db';
 import { formatNyDate } from '@/lib/drafting/send-queue-schedule';
 import {
+  capWithinDailyLimit,
   clampGrowth,
-  stageCap,
-  totalDailyBudget,
+  nextCampaignCap,
   varianceFlag,
   type CapacityInbox,
 } from '@/lib/inboxes/capacity';
@@ -214,7 +214,13 @@ export function desiredSmartleadState(
   previousCap: number | null,
 ): DesiredSmartleadState {
   const warmupPerDay = warmupTargetForStage(inbox.stage, plan);
-  const capped = totalDailyBudget(inbox, day, warmupPerDay);
+  // Standing cap, not today's zero. A weekend ramp still has a weekday send
+  // limit; publishing 0 would leave Smartlead dark until the next daily pass.
+  const capped = capWithinDailyLimit(
+    nextCampaignCap(inbox, day),
+    warmupPerDay,
+    plan.limits.max_daily_total,
+  );
   const maxEmailPerDay = previousCap === null
     ? capped
     : clampGrowth(previousCap, capped, plan);

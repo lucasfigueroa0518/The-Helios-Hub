@@ -231,6 +231,26 @@ export type EnsureLaneOptions = {
 };
 
 /**
+ * Smartlead's daily ceiling for this lane. A capacity share is resolved
+ * against the next day the mailboxes can actually send, so a weekend sync
+ * does not publish 0 and block Monday.
+ */
+async function smartleadDailyCap(
+  campaignId: string,
+  identitySlug: IdentitySlug,
+  settings: DeliverySettings,
+): Promise<number | undefined> {
+  if (settings.capacity_pct == null) return settings.max_new_leads_per_day ?? undefined;
+  const { campaignDailyQuota } = await import('@/lib/inboxes/send-share');
+  return campaignDailyQuota({
+    campaignId,
+    identitySlug,
+    capacityPct: settings.capacity_pct,
+    standing: true,
+  });
+}
+
+/**
  * Builds or repairs one lane, one API call per step, persisting after each.
  * Re-running is safe at any point: each step checks what is already recorded.
  */
@@ -262,6 +282,7 @@ export async function ensureCampaignLane(
       lane = (await getLaneById(lane.id))!;
     }
     const smartleadCampaignId = lane.smartlead_campaign_id!;
+    const maxNewLeads = await smartleadDailyCap(campaignId, identitySlug, settings);
 
     // Step 2 — settings. Tracking is expressed as opt-outs.
     await adapter.setSettings(smartleadCampaignId, {
@@ -271,7 +292,7 @@ export async function ensureCampaignLane(
       send_as_plain_text: false,
       // Sender choice is the lifecycle's job, not an ESP-matching heuristic.
       enable_ai_esp_matching: false,
-      max_leads_per_day: settings.max_new_leads_per_day ?? undefined,
+      max_leads_per_day: maxNewLeads,
       min_time_between_emails: settings.schedule.min_gap_min,
     });
 
@@ -282,7 +303,7 @@ export async function ensureCampaignLane(
       start_hour: settings.schedule.start,
       end_hour: settings.schedule.end,
       min_time_btw_emails: settings.schedule.min_gap_min,
-      max_new_leads_per_day: settings.max_new_leads_per_day ?? undefined,
+      max_new_leads_per_day: maxNewLeads,
     });
 
     // Step 4 — sequences. Step 1 is the hub's per-lead draft; 2..N are templates.

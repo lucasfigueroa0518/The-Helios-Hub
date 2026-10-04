@@ -16,8 +16,8 @@ import {
   nyWallTimeToUtc,
 } from '@/lib/drafting/send-queue-schedule';
 import {
+  allocateCapacityShares,
   identityCapacity,
-  laneCapacity,
   monthlyCeiling,
   roundRobinAllocate,
   type CapacityInbox,
@@ -64,6 +64,8 @@ export type PlannerLane = {
   ready: boolean;
   maxNewLeadsPerDay: number | null;
   emailsPerDay: number | null;
+  /** Share of inbox capacity. Null keeps the absolute lead caps. */
+  capacityPct?: number | null;
 };
 
 export type PlanInput = {
@@ -147,10 +149,13 @@ export function planHandoffs(input: PlanInput): PlanResult {
           demand: queueByLane.get(lane.laneId)?.length ?? 0,
           maxNewLeadsPerDay: lane.maxNewLeadsPerDay,
           emailsPerDay: lane.emailsPerDay,
+          capacityPct: lane.capacityPct ?? null,
           laneReady: lane.ready,
         }));
 
-      const allocated = roundRobinAllocate(laneDemands, pool);
+      const allocated = laneDemands.some((lane) => lane.capacityPct != null)
+        ? allocateCapacityShares(laneDemands, pool)
+        : roundRobinAllocate(laneDemands, pool);
       let assignedToday = 0;
       for (const [laneId, count] of allocated) {
         const queue = queueByLane.get(laneId);
@@ -178,7 +183,7 @@ export function planHandoffs(input: PlanInput): PlanResult {
 }
 
 function laneHasNoCap(lane: PlannerLane | undefined): boolean {
-  return !lane?.maxNewLeadsPerDay && !lane?.emailsPerDay;
+  return lane?.capacityPct == null && !lane?.maxNewLeadsPerDay && !lane?.emailsPerDay;
 }
 
 function byAge(a: PendingRow, b: PendingRow): number {
@@ -312,8 +317,9 @@ async function loadPlannerLanes(): Promise<PlannerLane[]> {
       campaignId: row.campaign_id,
       identitySlug: row.identity_slug,
       ready: row.status === 'ready' && row.campaign_status === 'active',
-      maxNewLeadsPerDay: settings.max_new_leads_per_day,
-      emailsPerDay: row.kind === 'auto' ? row.emails_per_day : null,
+      maxNewLeadsPerDay: settings.capacity_pct != null ? null : settings.max_new_leads_per_day,
+      emailsPerDay: settings.capacity_pct != null || row.kind !== 'auto' ? null : row.emails_per_day,
+      capacityPct: settings.capacity_pct,
     };
   });
 }

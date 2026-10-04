@@ -37,7 +37,9 @@ export default async function DraftPage({ params }: { params: Promise<{ id: stri
             />
             <div className="card__subtitle">
               {campaign.kind === 'auto'
-                ? `${campaign.emails_per_day ?? 0} emails/day`
+                ? (campaign.delivery_settings.capacity_pct != null
+                  ? `${campaign.delivery_settings.capacity_pct}% of inbox capacity${campaign.emails_per_day ? ` · about ${campaign.emails_per_day} today` : ''}`
+                  : `${campaign.emails_per_day ?? 0} emails/day`)
                 : `${campaign.lead_count} leads`}
               {campaign.last_run_at ? ` · last run ${new Date(campaign.last_run_at).toLocaleDateString()}` : ''}
             </div>

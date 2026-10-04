@@ -11,8 +11,10 @@ import {
   clampGrowth,
   forecastForLane,
   identityCapacity,
+  allocateCapacityShares,
   laneCapacity,
   monthlyCeiling,
+  nextCampaignCap,
   plannedPerMailbox,
   roundRobinAllocate,
   stageCap,
@@ -173,6 +175,23 @@ const lane = (id: string, demand: number, extra = {}) => ({
   emailsPerDay: null,
   laneReady: true,
   ...extra,
+});
+
+test('capacity share is a slice of the pool, and overflow is scaled back to the pool', () => {
+  assert.equal(laneCapacity(lane('a', 50, { capacityPct: 25 }), 12), 3);
+  const split = allocateCapacityShares([
+    lane('a', 20, { capacityPct: 25 }),
+    lane('b', 20, { capacityPct: 75 }),
+  ], 12);
+  assert.equal(split.get('a'), 3);
+  assert.equal(split.get('b'), 9);
+  const overflow = allocateCapacityShares([
+    lane('a', 20, { capacityPct: 100 }),
+    lane('b', 20, { capacityPct: 100 }),
+  ], 12);
+  assert.equal(overflow.get('a'), 6);
+  assert.equal(overflow.get('b'), 6);
+  assert.equal([...overflow.values()].reduce((sum, n) => sum + n, 0), 12);
 });
 
 test('laneCapacity takes the tightest of pool, lane cap and auto cap', () => {
@@ -419,6 +438,14 @@ test('warmup stays on through resting and only stops for retired or unprovisione
     assert.equal(desired.warmup.warmup_enabled, false, stage);
     assert.equal(desired.maxEmailPerDay, 0);
   }
+});
+
+test('a weekend ramp publishes the next weekday cap, not zero', () => {
+  const ramping = inbox({ stage: 'ramping', stageEnteredAt: MONDAY });
+  assert.equal(stageCap(ramping, SATURDAY), 0);
+  assert.equal(nextCampaignCap(ramping, SATURDAY), stageCap(ramping, '2026-09-21'));
+  const desired = desiredSmartleadState(ramping, DEFAULT_STAGE_PLAN, SATURDAY, null);
+  assert.equal(desired.maxEmailPerDay, stageCap(ramping, '2026-09-21'));
 });
 
 test('a warming mailbox is told to send zero campaign mail at full warmup volume', () => {

@@ -66,10 +66,7 @@ export function stageCap(inbox: CapacityInbox, day: string): number {
  * runs warmup independently, so the campaign cap has to leave room for it.
  */
 export function totalDailyBudget(inbox: CapacityInbox, day: string, warmupPerDay: number): number {
-  const campaign = stageCap(inbox, day);
-  const total = campaign + Math.max(0, warmupPerDay);
-  const overBy = total - inbox.plan.limits.max_daily_total;
-  return overBy > 0 ? Math.max(0, campaign - overBy) : campaign;
+  return capWithinDailyLimit(stageCap(inbox, day), warmupPerDay, inbox.plan.limits.max_daily_total);
 }
 
 /** Caps may not more than double day over day, however the plan is edited. */
@@ -125,15 +122,101 @@ export type LaneDemand = {
   maxNewLeadsPerDay: number | null;
   /** Auto campaigns are additionally bounded by campaigns.emails_per_day. */
   emailsPerDay: number | null;
+  /**
+   * Share of today's inbox capacity, 1–100. When set, this replaces the
+   * absolute lead caps: the campaign's day is `floor(pool * pct / 100)`.
+   */
+  capacityPct?: number | null;
   laneReady: boolean;
 };
 
+function clampPct(pct: number): number {
+  if (!Number.isFinite(pct)) return 0;
+  return Math.max(0, Math.min(100, Math.floor(pct)));
+}
+
+/** `floor(pool * pct / 100)`, never negative. */
+export function shareOfCapacity(pool: number, pct: number): number {
+  if (pool <= 0) return 0;
+  return Math.floor((pool * clampPct(pct)) / 100);
+}
+
+/**
+ * Campaign cap Smartlead should hold when today itself is a zero day.
+ *
+ * Ramping is weekdays-only, so a Sunday stage change would otherwise publish
+ * `max_email_per_day = 0` and leave the mailbox dark until the next morning
+ * job. The standing cap is the next day in the coming week that can send.
+ */
+export function nextCampaignCap(inbox: CapacityInbox, day: string): number {
+  const today = stageCap(inbox, day);
+  if (today > 0) return today;
+  if (inbox.stage !== 'ramping' && inbox.stage !== 'production') return 0;
+  for (let offset = 1; offset <= 6; offset += 1) {
+    const cap = stageCap(inbox, addCalendarDays(day, offset));
+    if (cap > 0) return cap;
+  }
+  return 0;
+}
+
+/** Campaign volume after warmup is reserved inside the daily ceiling. */
+export function capWithinDailyLimit(
+  campaign: number,
+  warmupPerDay: number,
+  maxDailyTotal: number,
+): number {
+  const sends = Math.max(0, campaign);
+  const total = sends + Math.max(0, warmupPerDay);
+  const overBy = total - maxDailyTotal;
+  return overBy > 0 ? Math.max(0, sends - overBy) : sends;
+}
+
 /** Per-lane ceiling for one day, given the identity pool left to share. */
 export function laneCapacity(lane: LaneDemand, pool: number): number {
+  if (lane.capacityPct != null) return Math.min(pool, shareOfCapacity(pool, lane.capacityPct));
   const limits = [pool];
   if (lane.maxNewLeadsPerDay !== null) limits.push(Math.max(0, lane.maxNewLeadsPerDay));
   if (lane.emailsPerDay !== null) limits.push(Math.max(0, lane.emailsPerDay));
   return Math.max(0, Math.min(...limits));
+}
+
+/**
+ * Gives each ready lane its capacity share. Shares that sum past the pool are
+ * scaled down so the mailboxes are never oversubscribed. Lanes without a
+ * percentage keep their absolute cap.
+ */
+export function allocateCapacityShares(lanes: LaneDemand[], pool: number): Map<string, number> {
+  const allocated = new Map<string, number>(lanes.map((lane) => [lane.laneId, 0]));
+  if (pool <= 0) return allocated;
+
+  const claims = lanes.map((lane) => {
+    if (!lane.laneReady || lane.demand <= 0) return { id: lane.laneId, want: 0 };
+    return { id: lane.laneId, want: Math.min(lane.demand, laneCapacity(lane, pool)) };
+  });
+  const total = claims.reduce((sum, claim) => sum + claim.want, 0);
+  if (total <= 0) return allocated;
+  if (total <= pool) {
+    for (const claim of claims) allocated.set(claim.id, claim.want);
+    return allocated;
+  }
+
+  let assigned = 0;
+  const parts = claims.map((claim) => {
+    const exact = (claim.want * pool) / total;
+    const whole = Math.floor(exact);
+    assigned += whole;
+    return { id: claim.id, whole, fraction: exact - whole, cap: claim.want };
+  });
+  for (const part of parts) allocated.set(part.id, part.whole);
+  parts.sort((a, b) => b.fraction - a.fraction || a.id.localeCompare(b.id));
+  for (const part of parts) {
+    if (assigned >= pool) break;
+    const current = allocated.get(part.id) ?? 0;
+    if (current >= part.cap) continue;
+    allocated.set(part.id, current + 1);
+    assigned += 1;
+  }
+  return allocated;
 }
 
 /**
