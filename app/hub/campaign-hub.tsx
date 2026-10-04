@@ -883,9 +883,18 @@ function CampaignRow({
   const forecastLabel = campaign.tomorrow_forecast
     ? `${campaign.tomorrow_forecast} planned tomorrow`
     : 'no handoffs tomorrow';
-  const meta = isAuto
-    ? `${SENDER_IDENTITY_LABELS[campaign.sender_identity_slug ?? 'lucas']} · ${laneLabel} · ${forecastLabel} · ${campaign.sent_count ?? 0} sent · ${campaign.lead_count} pulled · ${(campaign.auto_status ?? 'pending_sender').replace(/_/g, ' ')}`
-    : `${SENDER_IDENTITY_LABELS[campaign.sender_identity_slug ?? 'lucas']} · ${laneLabel} · ${forecastLabel} · ${campaign.lead_count} ${campaign.lead_count === 1 ? 'lead' : 'leads'} · ${formatDate(campaign.last_run_at)}`;
+  const volume = campaign.delivery_settings?.capacity_pct != null
+    ? `${campaign.delivery_settings.capacity_pct}% of capacity`
+    : null;
+  const meta = [
+    SENDER_IDENTITY_LABELS[campaign.sender_identity_slug ?? 'lucas'],
+    volume,
+    laneLabel,
+    forecastLabel,
+    isAuto ? `${campaign.sent_count ?? 0} sent` : null,
+    isAuto ? `${campaign.lead_count} pulled` : `${campaign.lead_count} ${campaign.lead_count === 1 ? 'lead' : 'leads'}`,
+    isAuto ? (campaign.auto_status ?? 'pending_sender').replace(/_/g, ' ') : formatDate(campaign.last_run_at),
+  ].filter(Boolean).join(' · ');
 
   return (
     <div className={`campaign-row${draftingActive ? ' campaign-row--drafting' : ''}${isLive ? ' campaign-row--live' : ''}${menuOpen ? ' campaign-row--menu-open' : ''}`}>

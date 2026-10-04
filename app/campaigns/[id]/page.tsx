@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
+import { CampaignCapacityControl } from '@/app/campaigns/[id]/campaign-capacity';
 import { CampaignUploads } from '@/app/campaigns/[id]/campaign-uploads';
 import { CampaignTagsHeader } from '@/app/campaigns/[id]/campaign-tags-header';
 import { campaignHasDraftingWorkspace, campaignHasReviewableData } from '@/lib/campaign-review';
@@ -35,6 +36,12 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
           </div>
         </div>
         <div className="card__body">
+          <CampaignCapacityControl
+            campaignId={campaign.id}
+            senderIdentitySlug={campaign.sender_identity_slug}
+            initialPct={campaign.delivery_settings.capacity_pct}
+            legacyDailyCount={campaign.delivery_settings.max_new_leads_per_day ?? campaign.emails_per_day}
+          />
           <CampaignUploads
             key={id}
             campaignId={campaign.id}

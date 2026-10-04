@@ -3,6 +3,7 @@ import { ArrowLeft } from 'lucide-react';
 
 import { notFound, redirect } from 'next/navigation';
 
+import { CampaignCapacityControl } from '@/app/campaigns/[id]/campaign-capacity';
 import { CampaignTabs } from '@/app/campaigns/[id]/campaign-tabs';
 
 import { ReviewTable } from '@/app/campaigns/[id]/review/review-table';
@@ -76,6 +77,13 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
         </div>
 
         <div className="card__body">
+
+          <CampaignCapacityControl
+            campaignId={campaign.id}
+            senderIdentitySlug={campaign.sender_identity_slug}
+            initialPct={campaign.delivery_settings.capacity_pct}
+            legacyDailyCount={campaign.delivery_settings.max_new_leads_per_day ?? campaign.emails_per_day}
+          />
 
           <CampaignTabs
             key={`tabs-${id}`}

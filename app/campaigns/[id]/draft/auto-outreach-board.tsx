@@ -70,6 +70,7 @@ export function AutoOutreachBoard({
   campaignId,
   live,
   emailsPerDay,
+  capacityPct = null,
   nextCycleAt,
   autoStatus,
   autoError,
@@ -92,6 +93,7 @@ export function AutoOutreachBoard({
   campaignId: string;
   live: boolean;
   emailsPerDay: number;
+  capacityPct?: number | null;
   nextCycleAt: string | null;
   autoStatus: string | null;
   autoError: string | null;
@@ -228,7 +230,11 @@ export function AutoOutreachBoard({
                 <span>{status?.replace(/_/g, ' ') ?? 'Auto'}</span>
               )}
               {matchLabel && step > 0 ? <span> · {matchLabel}</span> : null}
-              {quota > 0 ? <span> · {quota}/day</span> : null}
+              {capacityPct != null ? (
+                <span> · {capacityPct}% of capacity{quota > 0 ? ` · about ${quota}/day` : ''}</span>
+              ) : quota > 0 ? (
+                <span> · {quota}/day</span>
+              ) : null}
             </p>
           </div>
         </header>
@@ -437,7 +443,9 @@ export function AutoOutreachBoard({
             <div className="card__header">
               <div>
                 <div className="card__title" id="outreach-pace-title">Daily pace</div>
-                <div className="card__subtitle">{quota}/day target · last two weeks</div>
+                <div className="card__subtitle">
+                  {capacityPct != null ? `${capacityPct}% of capacity` : `${quota}/day target`} · last two weeks
+                </div>
               </div>
               <button type="button" className="dialog__close" onClick={() => setPaceOpen(false)} aria-label="Close">×</button>
             </div>

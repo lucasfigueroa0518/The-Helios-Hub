@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
+import { CampaignCapacityControl } from '@/app/campaigns/[id]/campaign-capacity';
 import { CampaignTagsHeader } from '@/app/campaigns/[id]/campaign-tags-header';
 import { CampaignTitle } from '@/app/campaigns/[id]/campaign-title';
 import { ProspectWorkspace } from '@/app/campaigns/[id]/prospect/prospect-workspace';
@@ -33,6 +34,12 @@ export default async function ProspectPage({ params }: { params: Promise<{ id: s
           </div>
         </div>
         <div className="card__body">
+          <CampaignCapacityControl
+            campaignId={campaign.id}
+            senderIdentitySlug={campaign.sender_identity_slug}
+            initialPct={campaign.delivery_settings.capacity_pct}
+            legacyDailyCount={campaign.delivery_settings.max_new_leads_per_day ?? campaign.emails_per_day}
+          />
           <ProspectWorkspace
             key={id}
             campaignId={id}

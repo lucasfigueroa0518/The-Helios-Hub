@@ -82,7 +82,7 @@ export function CapacityShareField({
         ))}
       </div>
       <label className="field capacity-share__custom">
-        <span className="field__label">Percent of capacity</span>
+        <span className="field__label">Percent</span>
         <input
           className="field__input"
           inputMode="numeric"

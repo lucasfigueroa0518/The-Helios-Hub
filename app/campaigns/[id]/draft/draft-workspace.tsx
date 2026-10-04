@@ -85,6 +85,7 @@ export function DraftWorkspace({
   autoMode = false,
   autoStatus = null,
   emailsPerDay = 0,
+  capacityPct = null,
   nextCycleAt = null,
   autoError = null,
   expansionStep = 0,
@@ -94,6 +95,7 @@ export function DraftWorkspace({
   autoMode?: boolean;
   autoStatus?: string | null;
   emailsPerDay?: number;
+  capacityPct?: number | null;
   nextCycleAt?: string | null;
   autoError?: string | null;
   expansionStep?: number;
@@ -668,6 +670,7 @@ export function DraftWorkspace({
       campaignId={campaignId}
       live={autoStatus === 'live'}
       emailsPerDay={emailsPerDay}
+      capacityPct={capacityPct}
       nextCycleAt={nextCycleAt}
       autoStatus={autoStatus}
       autoError={autoError}
