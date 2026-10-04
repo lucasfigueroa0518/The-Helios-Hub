@@ -9,12 +9,15 @@ import {
   creationFacts,
   factorGroups,
   gridNote,
+  pageSlice,
   parseMotionFactors,
+  performanceHref,
   sortReels,
   withHistory,
   type PerformanceReel,
   type PerformanceSnapshot,
 } from '@/lib/reels/analytics/performance';
+import { insightIsDue } from '@/lib/reels/media-insights/due';
 import { createInsightsClient, InsightsPermissionError } from '@/lib/reels/media-insights/client';
 import {
   graphErrorIsPermission,
@@ -124,6 +127,67 @@ test('hook sort leads with the lower skip rate, then the longer watch', () => {
     reel('blank', {}, [snap()]),
   ], 'hook').map((item) => item.attemptId);
   assert.deepEqual(order, ['long', 'short', 'skippy', 'blank']);
+});
+
+test('a headline drill keeps the total and shows only the highest lines', () => {
+  const headlines = buildHeadlines([
+    reel('a', {}, [snap({ views: 1 })]),
+    reel('b', {}, [snap({ views: 5 })]),
+    reel('c', {}, [snap({ views: 3 })]),
+  ], 2);
+  const views = headlines.find((stat) => stat.id === 'views');
+  assert.equal(views?.value, 9);
+  assert.equal(views?.reported, 3);
+  assert.deepEqual(views?.lines.map((line) => line.id), ['b', 'c']);
+});
+
+test('pages stay inside the list', () => {
+  const window = pageSlice(['a', 'b', 'c', 'd', 'e'], 9, 2);
+  assert.equal(window.page, 3);
+  assert.equal(window.pageCount, 3);
+  assert.deepEqual(window.items, ['e']);
+});
+
+test('the performance link keeps the search and drops the defaults', () => {
+  assert.equal(performanceHref('7d'), '/reels/analytics/performance');
+  assert.equal(
+    performanceHref('30d', { sort: 'hook', query: 'lawyer', page: 2 }),
+    '/reels/analytics/performance?period=30d&sort=hook&q=lawyer&page=2',
+  );
+});
+
+test('a fresh reel is due again after 30 minutes, and an old reel stays due until its closing read', () => {
+  const now = new Date('2026-10-01T16:00:00.000Z');
+  assert.equal(insightIsDue({
+    finishedAt: new Date('2026-10-01T14:00:00.000Z'),
+    checkedAt: new Date('2026-10-01T15:20:00.000Z'),
+    now,
+  }), true);
+  assert.equal(insightIsDue({
+    finishedAt: new Date('2026-10-01T14:00:00.000Z'),
+    checkedAt: new Date('2026-10-01T15:50:00.000Z'),
+    now,
+  }), false);
+  assert.equal(insightIsDue({
+    finishedAt: new Date('2026-09-25T16:00:00.000Z'),
+    checkedAt: new Date('2026-09-30T16:00:00.000Z'),
+    now,
+  }), true);
+  assert.equal(insightIsDue({
+    finishedAt: new Date('2026-09-25T16:00:00.000Z'),
+    checkedAt: new Date('2026-10-01T12:00:00.000Z'),
+    now,
+  }), false);
+  assert.equal(insightIsDue({
+    finishedAt: new Date('2026-09-01T16:00:00.000Z'),
+    checkedAt: new Date('2026-10-01T15:59:00.000Z'),
+    now,
+  }), true);
+  assert.equal(insightIsDue({
+    finishedAt: new Date('2026-10-02T16:00:00.000Z'),
+    checkedAt: null,
+    now,
+  }), false);
 });
 
 test('the latest snapshot is the one the totals use', () => {

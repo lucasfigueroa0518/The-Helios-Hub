@@ -1,13 +1,20 @@
 import { dbQuery } from '@/lib/db';
 import {
+  PERFORMANCE_DRILL_LIMIT,
+  PERFORMANCE_PAGE_SIZE,
   buildFactors,
   buildHeadlines,
   hasPerformanceNumbers,
+  pageSlice,
   parseMotionFactors,
+  performancePageNumber,
   performancePeriod,
+  performanceQuery,
+  performanceSort,
   periodDays,
   publishedSince,
   reelTitle,
+  sortReels,
   withHistory,
   type InsightsNotice,
   type PerformancePage,
@@ -26,7 +33,6 @@ type AttemptRow = {
   video_job_id: string | null;
   finished_at: Date | string;
   permalink: string | null;
-  publish_caption: string | null;
   song_title: string | null;
   song_artist: string | null;
   motion_prompt: string | null;
@@ -41,10 +47,22 @@ type AttemptRow = {
   net: number | string | null;
   origin: string | null;
   on_screen_copy: string | null;
-  copy_caption: string | null;
   full_story_below: boolean | null;
   headline: string | null;
   graduation_strategy: string | null;
+  ny_date: string | null;
+  views: number | string | null;
+  reach: number | string | null;
+  likes: number | string | null;
+  comments: number | string | null;
+  saved: number | string | null;
+  shares: number | string | null;
+  reposts: number | string | null;
+  total_interactions: number | string | null;
+  avg_watch_time_ms: number | string | null;
+  total_watch_time_ms: number | string | null;
+  skip_rate: number | string | null;
+  is_shared_to_feed: boolean | null;
 };
 
 type InsightRow = {
@@ -99,24 +117,40 @@ function snapshot(row: InsightRow): PerformanceSnapshot {
 }
 
 export async function loadPerformancePage(
-  params: { period?: string },
+  params: { period?: string; sort?: string; q?: string; page?: string },
   now = new Date(),
 ): Promise<PerformancePage> {
   const period = performancePeriod(params.period);
+  const sort = performanceSort(params.sort);
+  const query = performanceQuery(params.q);
   const since = publishedSince(periodDays(period), now);
-  const reels = await loadPublishedReels(since, now);
+  const reels = await loadPublishedReels(since, now, query);
+  const sorted = sortReels(reels, sort);
+  const visible = pageSlice(sorted, performancePageNumber(params.page), PERFORMANCE_PAGE_SIZE);
+  const pageReels = await hydrateReelPage(visible.items);
   const poll = notice(await getSetting<InsightsPollStatus>(INSIGHTS_POLL_SETTING));
   return {
     period,
-    reels,
-    headlines: buildHeadlines(reels),
-    factors: buildFactors(reels),
-    hasNumbers: hasPerformanceNumbers(reels),
+    sort,
+    query,
+    page: visible.page,
+    pageCount: visible.pageCount,
+    pageSize: PERFORMANCE_PAGE_SIZE,
+    total: sorted.length,
+    reels: pageReels,
+    headlines: buildHeadlines(sorted, PERFORMANCE_DRILL_LIMIT),
+    factors: buildFactors(sorted),
+    hasNumbers: hasPerformanceNumbers(sorted),
     poll,
   };
 }
 
-async function loadPublishedReels(since: Date | null, now: Date): Promise<PerformanceReel[]> {
+function likePattern(query: string): string | null {
+  if (!query) return null;
+  return `%${query.replace(/[\\%_]/g, '\\$&')}%`;
+}
+
+async function loadPublishedReels(since: Date | null, now: Date, query: string): Promise<PerformanceReel[]> {
   const { rows } = await dbQuery<AttemptRow>(
     `SELECT a.id AS attempt_id,
             a.media_id,
@@ -124,11 +158,10 @@ async function loadPublishedReels(since: Date | null, now: Date): Promise<Perfor
             a.video_job_id,
             a.finished_at,
             a.permalink,
-            a.caption AS publish_caption,
             a.song_title,
             a.song_artist,
             a.graduation_strategy,
-            v.motion_prompt,
+            left(v.motion_prompt, 500) AS motion_prompt,
             v.video_storage_path,
             vis.render AS visual_render,
             song.audio_type,
@@ -140,9 +173,21 @@ async function loadPublishedReels(since: Date | null, now: Date): Promise<Perfor
             score.net,
             score.origin,
             copy.on_screen_copy,
-            copy.caption AS copy_caption,
             copy.full_story_below,
-            src.headline
+            src.headline,
+            insight.ny_date,
+            insight.views,
+            insight.reach,
+            insight.likes,
+            insight.comments,
+            insight.saved,
+            insight.shares,
+            insight.reposts,
+            insight.total_interactions,
+            insight.avg_watch_time_ms,
+            insight.total_watch_time_ms,
+            insight.skip_rate,
+            insight.is_shared_to_feed
        FROM reels.publish_attempts a
        LEFT JOIN reels.video_jobs v ON v.id = a.video_job_id
        LEFT JOIN reels.visual_jobs vis ON vis.id = v.visual_job_id
@@ -179,6 +224,15 @@ async function loadPublishedReels(since: Date | null, now: Date): Promise<Perfor
           ORDER BY CASE m.role WHEN 'primary' THEN 0 WHEN 'supporting' THEN 1 ELSE 2 END, m.joined_at
           LIMIT 1
        ) src ON true
+       LEFT JOIN LATERAL (
+         SELECT ny_date::text AS ny_date,
+                views, reach, likes, comments, saved, shares, reposts, total_interactions,
+                avg_watch_time_ms, total_watch_time_ms, skip_rate, is_shared_to_feed
+           FROM reels.media_insights i
+          WHERE i.media_id = a.media_id
+          ORDER BY i.ny_date DESC
+          LIMIT 1
+       ) insight ON true
       WHERE a.status = 'published'
         AND a.media_id IS NOT NULL
         AND btrim(a.media_id) <> ''
@@ -186,28 +240,16 @@ async function loadPublishedReels(since: Date | null, now: Date): Promise<Perfor
         AND a.finished_at IS NOT NULL
         AND ($1::timestamptz IS NULL OR a.finished_at >= $1::timestamptz)
         AND a.finished_at <= $2::timestamptz
+        AND ($3::text IS NULL
+          OR COALESCE(copy.on_screen_copy, '') ILIKE $3 ESCAPE '\\'
+          OR COALESCE(copy.caption, '') ILIKE $3 ESCAPE '\\'
+          OR COALESCE(a.caption, '') ILIKE $3 ESCAPE '\\'
+          OR COALESCE(src.headline, '') ILIKE $3 ESCAPE '\\'
+          OR COALESCE(a.song_title, '') ILIKE $3 ESCAPE '\\'
+          OR COALESCE(a.song_artist, '') ILIKE $3 ESCAPE '\\')
       ORDER BY a.finished_at DESC`,
-    [since ? since.toISOString() : null, now.toISOString()],
+    [since ? since.toISOString() : null, now.toISOString(), likePattern(query)],
   );
-
-  const mediaIds = [...new Set(rows.map((row) => row.media_id))];
-  const history = new Map<string, PerformanceSnapshot[]>();
-  if (mediaIds.length > 0) {
-    const insights = await dbQuery<InsightRow>(
-      `SELECT media_id, ny_date::text AS ny_date,
-              views, reach, likes, comments, saved, shares, reposts, total_interactions,
-              avg_watch_time_ms, total_watch_time_ms, skip_rate, is_shared_to_feed
-         FROM reels.media_insights
-        WHERE media_id = ANY($1::text[])
-        ORDER BY media_id, ny_date`,
-      [mediaIds],
-    );
-    for (const row of insights.rows) {
-      const list = history.get(row.media_id) ?? [];
-      list.push(snapshot(row));
-      history.set(row.media_id, list);
-    }
-  }
 
   return rows.map((row) => {
     const finishedAt = new Date(row.finished_at);
@@ -227,7 +269,7 @@ async function loadPublishedReels(since: Date | null, now: Date): Promise<Perfor
         title,
         subtitle: headline && headline !== title ? headline : null,
         onScreenCopy: row.on_screen_copy,
-        caption: row.publish_caption ?? row.copy_caption,
+        caption: null,
         songTitle: row.song_title,
         songArtist: row.song_artist,
         genre: row.genre,
@@ -247,7 +289,54 @@ async function loadPublishedReels(since: Date | null, now: Date): Promise<Perfor
         fullStory: row.full_story_below,
         graduationStrategy: row.graduation_strategy,
       },
-      history.get(row.media_id) ?? [],
+      row.ny_date ? [snapshot({
+        media_id: row.media_id,
+        ny_date: row.ny_date,
+        views: row.views,
+        reach: row.reach,
+        likes: row.likes,
+        comments: row.comments,
+        saved: row.saved,
+        shares: row.shares,
+        reposts: row.reposts,
+        total_interactions: row.total_interactions,
+        avg_watch_time_ms: row.avg_watch_time_ms,
+        total_watch_time_ms: row.total_watch_time_ms,
+        skip_rate: row.skip_rate,
+        is_shared_to_feed: row.is_shared_to_feed,
+      })] : [],
     );
   });
+}
+
+async function hydrateReelPage(reels: PerformanceReel[]): Promise<PerformanceReel[]> {
+  if (reels.length === 0) return reels;
+  const mediaIds = [...new Set(reels.map((reel) => reel.mediaId))];
+  const attemptIds = reels.map((reel) => reel.attemptId);
+  const [insights, captions] = await Promise.all([
+    dbQuery<InsightRow>(
+      `SELECT media_id, ny_date::text AS ny_date,
+              views, reach, likes, comments, saved, shares, reposts, total_interactions,
+              avg_watch_time_ms, total_watch_time_ms, skip_rate, is_shared_to_feed
+         FROM reels.media_insights
+        WHERE media_id = ANY($1::text[])
+        ORDER BY media_id, ny_date`,
+      [mediaIds],
+    ),
+    dbQuery<{ id: string; caption: string }>(
+      `SELECT id, caption FROM reels.publish_attempts WHERE id = ANY($1::uuid[])`,
+      [attemptIds],
+    ),
+  ]);
+  const history = new Map<string, PerformanceSnapshot[]>();
+  for (const row of insights.rows) {
+    const list = history.get(row.media_id) ?? [];
+    list.push(snapshot(row));
+    history.set(row.media_id, list);
+  }
+  const captionById = new Map(captions.rows.map((row) => [row.id, row.caption]));
+  return reels.map((reel) => withHistory(
+    { ...reel, caption: captionById.get(reel.attemptId) ?? reel.caption },
+    history.get(reel.mediaId) ?? (reel.metrics ? [reel.metrics] : []),
+  ));
 }

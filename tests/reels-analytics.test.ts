@@ -13,7 +13,7 @@ import {
   periodRange,
   type ReportFacts,
 } from '@/lib/reels/analytics/rollups';
-import { healthVerdict, sourceTone } from '@/lib/reels/health-status';
+import { healthVerdict, publishFailureLine, sourceTone } from '@/lib/reels/health-status';
 
 const cutoff = defaultProdSpendSince();
 
@@ -139,6 +139,18 @@ test('health names the first broken thing and stays quiet when the night is clea
     stuckStage: null,
     metaReady: true,
   }).sentence, 'Everything is working.');
+  assert.equal(healthVerdict({
+    runStatus: 'ok',
+    failedSourceName: null,
+    staleSource: null,
+    jobErrorsToday: { stage: 'publish', count: 1, detail: 'The caption was too long.' },
+    stuckStage: null,
+    metaReady: true,
+  }).sentence, '1 publish job failed today. The caption was too long.');
+  assert.equal(
+    publishFailureLine('Meta returned 400: The caption was too long. (code 36004/2207010, trace abc)'),
+    'The caption was too long.',
+  );
   const now = new Date('2026-09-30T16:00:00.000Z');
   assert.equal(sourceTone(null, 'failed', now), 'failed');
   assert.equal(sourceTone(null, null, now), 'never');

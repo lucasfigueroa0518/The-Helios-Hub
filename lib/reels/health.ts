@@ -8,7 +8,7 @@ import type { RunStats, SourceResult } from '@/lib/reels/types';
 import { calendarDateKey, zonedTime } from '@/lib/reels/schedule';
 import { RUN_TIMEZONE } from '@/lib/reels/config';
 import { addCalendarDays } from '@/lib/reels/analytics/rollups';
-import { healthVerdict, sourceTone, staleDays, type HealthVerdict, type SourceTone } from '@/lib/reels/health-status';
+import { healthVerdict, publishFailureLine, sourceTone, staleDays, type HealthVerdict, type SourceTone } from '@/lib/reels/health-status';
 
 export type HealthSource = {
   id: string;
@@ -16,6 +16,7 @@ export type HealthSource = {
   phase: 'primary' | 'derived';
   tone: SourceTone;
   ingested: number;
+  seen: number;
   published: number;
   lastSuccessAt: string | null;
   lastError: string | null;
@@ -70,10 +71,12 @@ export async function loadHealthPage(windowDays = 7, now = new Date()): Promise<
     dbQuery<{ adapter_id: string; last_success_at: string | null }>(
       `SELECT adapter_id, last_success_at::text FROM reels.watermarks`,
     ),
-    dbQuery<{ adapter_id: string; ingested: number }>(
-      `SELECT adapter_id, count(*)::int AS ingested
+    dbQuery<{ adapter_id: string; ingested: number; seen: number }>(
+      `SELECT adapter_id,
+              count(*) FILTER (WHERE drop_reason IS NULL)::int AS ingested,
+              count(*)::int AS seen
          FROM reels.sources
-        WHERE drop_reason IS NULL AND ingest_time >= $1
+        WHERE ingest_time >= $1
         GROUP BY adapter_id`,
       [since],
     ),
@@ -100,27 +103,38 @@ export async function loadHealthPage(windowDays = 7, now = new Date()): Promise<
        ) jobs
        GROUP BY stage`,
     ),
-    dbQuery<{ stage: string; n: number }>(
-      `SELECT stage, count(*)::int AS n FROM (
-         SELECT 'copy' AS stage FROM reels.copy_jobs j
+    dbQuery<{ stage: string; n: number; detail: string | null }>(
+      `SELECT stage, count(*)::int AS n,
+              (array_agg(detail ORDER BY finished_at DESC))[1] AS detail
+         FROM (
+         SELECT 'copy' AS stage, j.finished_at, NULL::text AS detail FROM reels.copy_jobs j
           WHERE j.status = 'failed' AND j.finished_at >= $1
             AND NOT EXISTS (
               SELECT 1 FROM reels.copy_jobs later
                WHERE later.post_idea_id = j.post_idea_id AND later.status = 'ok' AND later.finished_at >= j.finished_at
             )
          UNION ALL
-         SELECT 'frame' FROM reels.visual_jobs j
+         SELECT 'frame', j.finished_at, NULL::text FROM reels.visual_jobs j
           WHERE j.status IN ('failed', 'rejected_background', 'copy_does_not_fit') AND j.finished_at >= $1
             AND NOT EXISTS (
               SELECT 1 FROM reels.visual_jobs later
                WHERE later.post_idea_id = j.post_idea_id AND later.status = 'ok' AND later.finished_at >= j.finished_at
             )
          UNION ALL
-         SELECT 'video' FROM reels.video_jobs j
+         SELECT 'video', j.finished_at, NULL::text FROM reels.video_jobs j
           WHERE j.status = 'failed' AND j.finished_at >= $1
             AND NOT EXISTS (
               SELECT 1 FROM reels.video_jobs later
                WHERE later.post_idea_id = j.post_idea_id AND later.status = 'ok' AND later.finished_at >= j.finished_at
+            )
+         UNION ALL
+         SELECT 'publish', a.finished_at, a.error FROM reels.publish_attempts a
+          WHERE a.status = 'failed' AND a.trigger <> 'mix_test' AND a.finished_at >= $1
+            AND NOT EXISTS (
+              SELECT 1 FROM reels.publish_attempts later
+               WHERE later.video_job_id = a.video_job_id
+                 AND later.status = 'published'
+                 AND later.finished_at >= a.finished_at
             )
        ) jobs
        GROUP BY stage
@@ -135,6 +149,7 @@ export async function loadHealthPage(windowDays = 7, now = new Date()): Promise<
   const results = new Map((latest?.source_results ?? []).map((result) => [result.adapterId, result]));
   const success = new Map(marks.rows.map((row) => [row.adapter_id, row.last_success_at]));
   const ingested = new Map(volume.rows.map((row) => [row.adapter_id, row.ingested]));
+  const seen = new Map(volume.rows.map((row) => [row.adapter_id, row.seen]));
   const shipped = new Map(published.rows.map((row) => [row.adapter_id, row.published]));
 
   const sources: HealthSource[] = ADAPTERS.map((adapter) => {
@@ -147,6 +162,7 @@ export async function loadHealthPage(windowDays = 7, now = new Date()): Promise<
       phase: adapter.phase === 'derived' ? 'derived' : 'primary',
       tone,
       ingested: ingested.get(adapter.id) ?? 0,
+      seen: seen.get(adapter.id) ?? 0,
       published: shipped.get(adapter.id) ?? 0,
       lastSuccessAt,
       lastError: result?.status === 'failed' ? result.error ?? 'failed' : null,
@@ -198,7 +214,13 @@ export async function loadHealthPage(windowDays = 7, now = new Date()): Promise<
       staleSource: stale
         ? { name: stale.name, days: stale.lastSuccessAt ? staleDays(stale.lastSuccessAt, now) : 0 }
         : null,
-      jobErrorsToday: jobError ? { stage: jobError.stage, count: jobError.n } : null,
+      jobErrorsToday: jobError
+        ? {
+            stage: jobError.stage,
+            count: jobError.n,
+            detail: jobError.stage === 'publish' ? publishFailureLine(jobError.detail) : null,
+          }
+        : null,
       stuckStage: stuck,
       metaReady: metaConfigured(),
     }),

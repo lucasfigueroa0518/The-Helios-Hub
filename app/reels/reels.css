@@ -882,6 +882,15 @@
   background: var(--rh-surface);
   color: var(--rh-body);
 }
+.rh-perf-search { display: flex; gap: 8px; align-items: center; }
+.rh-perf-search .helios-field-input { width: min(280px, 100%); }
+.rh-perf-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+}
 .rh-perf-wait { margin: -6px 0 16px; }
 .rh-perf-card { margin-bottom: 16px; }
 .rh-perf-list { list-style: none; margin: 0; padding: 0; }

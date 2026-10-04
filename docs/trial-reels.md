@@ -164,7 +164,7 @@ old records have to keep meaning what they said.
 ## The copy writer gate (Build 3)
 
 After scoring, the run fills three reels that clear the copy gate (P-10,
-`copy-caption-v11`). Copy calls use the latest Sonnet release on the models
+`copy-caption-v12`). Copy calls use the latest Sonnet release on the models
 list, and `claude-sonnet-5-5` when that list cannot be read (D-222). The
 account's job is to grow an audience with AI news, stories, knowledge, and
 skills worth following, with no pitch (D-211). Each idea gets two cached calls,
@@ -172,7 +172,9 @@ and each call returns a viewer stake (one plain sentence on why this viewer
 should care), two on-screen copies of the same story, and one caption that
 opens on that story. A caption that comes back as one block is a failed
 report, and a tool string that writes the characters backslash and n is stored
-as a real line break (D-229). The copy is written for anyone curious about AI. The whole
+as a real line break (D-229). The call to action and the hashtags stay in
+their own fields. An assembled caption over 2,200 characters is shortened
+before Instagram sees it (D-230). The copy is written for anyone curious about AI. The whole
 on-screen copy is the hook, and its first job is to be understood, stake
 included, on one read (D-204, D-211, D-212). It makes no call anywhere
 `REELS_COPY_PROMPT_APPROVED=true` is not set, and the page says so.
@@ -307,6 +309,20 @@ These are the numbers most likely to be wrong, all in `lib/reels/config.ts`:
 
 Every drop stays visible on the pool tab with its reason, so an over-aggressive
 filter shows up as a pile of dropped rows rather than a quiet empty pool.
+
+## Performance numbers
+
+Lifetime Instagram metrics are stored once per reel per New York day in
+`reels.media_insights`. Opening Trial Reels asks Instagram when the last pull
+is more than 30 minutes old. That pull does not wait on the page, and a second
+open during it shares the one already running.
+
+A reel from the last two days is asked on each of those pulls. A reel from the
+last 14 days is asked once a day. After that, one closing read is stored and
+the reel is not asked again. The daily rows stay. The performance page shows
+25 reels at a time. The totals and the factor table cover every reel in the
+window, not just the page on screen. Refresh asks for a larger batch of reels
+that are still due. The nightly run drains up to 200.
 
 ## Worker sync
 

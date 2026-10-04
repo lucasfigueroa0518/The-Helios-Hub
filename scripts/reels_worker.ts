@@ -86,7 +86,7 @@ async function main(): Promise<void> {
         const outcome = await runReelsNight('scheduled');
         log('run_complete', { trigger: 'scheduled', status: outcome.status, runId: outcome.runId });
         const insights = await import('@/lib/reels/media-insights/poll')
-          .then((mod) => mod.pollRecentInsights())
+          .then((mod) => mod.pollDueInsights({ limit: mod.INSIGHTS_NIGHTLY_BATCH, force: true }))
           .catch((error) => {
             log('insights_failed', { error: error instanceof Error ? error.message : String(error) });
             return null;

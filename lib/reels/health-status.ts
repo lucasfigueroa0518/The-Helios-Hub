@@ -24,7 +24,7 @@ export type VerdictInput = {
   runStatus: string | null;
   failedSourceName: string | null;
   staleSource: { name: string; days: number } | null;
-  jobErrorsToday: { stage: string; count: number } | null;
+  jobErrorsToday: { stage: string; count: number; detail?: string | null } | null;
   stuckStage: string | null;
   metaReady: boolean;
 };
@@ -46,13 +46,22 @@ export function healthVerdict(input: VerdictInput): HealthVerdict {
     return { tone: 'warn', sentence: `${name} has not succeeded in ${days} day${days === 1 ? '' : 's'}.` };
   }
   if (input.jobErrorsToday && input.jobErrorsToday.count > 0) {
-    const { stage, count } = input.jobErrorsToday;
-    return { tone: 'warn', sentence: `${count} ${stage} job${count === 1 ? '' : 's'} failed today.` };
+    const { stage, count, detail } = input.jobErrorsToday;
+    const jobs = `${count} ${stage} job${count === 1 ? '' : 's'} failed today.`;
+    return { tone: 'warn', sentence: detail ? `${jobs} ${detail}` : jobs };
   }
   if (input.stuckStage) return { tone: 'warn', sentence: `A ${input.stuckStage} job is still running.` };
   if (!input.metaReady) return { tone: 'bad', sentence: 'Meta credentials are missing, so nothing can post.' };
   if (input.runStatus === 'running' || input.runStatus === 'requested') return { tone: 'ok', sentence: 'A night is running.' };
   return { tone: 'ok', sentence: 'Everything is working.' };
+}
+
+/** The sentence after "N publish jobs failed today." Drops the Meta code suffix. */
+export function publishFailureLine(error: string | null): string | null {
+  if (!error) return null;
+  const cleaned = error.replace(/^Meta returned \d+:\s*/, '').replace(/\s*\(code [\s\S]*$/, '').trim();
+  if (!cleaned) return null;
+  return cleaned.endsWith('.') ? cleaned : `${cleaned}.`;
 }
 
 export function formatNy(iso: string | null): string {

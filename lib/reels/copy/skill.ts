@@ -22,7 +22,9 @@ import type { FrameworkId } from '@/lib/reels/scoring/decide';
  * clarity rule judges ideas, not only words (lib/reels/copy/insider-ideas.ts).
  * D-213: a viewer stake field, and one story across both copies and the
  * caption's opening. D-229: the caption is short paragraphs with a blank
- * line between them, and a one-block caption is a failed report. The
+ * line between them, and a one-block caption is a failed report.
+ * D-230: the call to action and the hashtags stay in their own fields, and
+ * an assembled caption over 2,200 characters is a failed report. The
  * pre-D-098 wording is preserved, unused, in
  * lib/reels/threads/post-engine-candidate.ts. The writer runs where
  * REELS_COPY_PROMPT_APPROVED=true. Changing any wording here, in the framework
@@ -34,7 +36,7 @@ import type { FrameworkId } from '@/lib/reels/scoring/decide';
  * leaves behind (dashes, bold labels).
  */
 
-export const COPY_PROMPT_VERSION = 'copy-caption-v11';
+export const COPY_PROMPT_VERSION = 'copy-caption-v12';
 
 export const COPY_SKILL = `# Copy and caption skill
 
@@ -118,14 +120,15 @@ Instagram shows roughly the first 125 characters before "more". The first line h
 
 The caption's first paragraph opens on the story the on-screen copies tell and pays out the viewer stake. It never opens on a second thread from the sources.
 
-Follow the bucket's caption rules for structure and content. Once the bucket's structure is complete, end the caption with two more things, in this order:
+Follow the bucket's caption rules for structure and content. The caption ends when that structure ends. Leave the call to action and the hashtags out of the caption. They have their own fields, and the post adds them after the caption. A call to action written at the end of the caption as well is posted twice.
 
-1. One call to action on its own line, chosen by the framework's writing logic. Ask for one specific action. No engagement bait ("double tap", "comment YES", "what do you think?"), no sales pitch, and no offer of Helios services.
-2. 3 to 5 hashtags on the last line. Use one or two broad tags and make the rest specific to the tool, company, or topic of the post. Every tag needs a reason in the post.
+The call to action is one line, chosen by the framework's writing logic. Ask for one specific action. No engagement bait ("double tap", "comment YES", "what do you think?"), no sales pitch, and no offer of Helios services.
+
+Use 3 to 5 hashtags. Use one or two broad tags and make the rest specific to the tool, company, or topic of the post. Every tag needs a reason in the post.
 
 Where the bucket calls for a link or a source, name the source in words, such as "per Anthropic's release notes" or "TechCrunch reported". Do not put URLs in the caption, because Instagram does not make them clickable. List every source you named in the tool's sources field, with its URL from the source material.
 
-HARD CONSTRAINT. Use short paragraphs with a blank line between them. A caption that is one block is a failed report. Put a real line break in the caption. Do not write the two characters backslash and n in place of a line break. No emoji. The full caption, call to action and hashtags included, stays under 2,200 characters.
+HARD CONSTRAINT. Use short paragraphs with a blank line between them. A caption that is one block is a failed report. Put a real line break in the caption. Do not write the two characters backslash and n in place of a line break. No emoji. The caption, the call to action, and the hashtags together stay within 2,200 characters. Over that limit is a failed report.
 
 ## How to work
 
@@ -134,7 +137,7 @@ HARD CONSTRAINT. Use short paragraphs with a blank line between them. A caption 
 3. Draft at least three different hooks, each a complete on-screen copy that carries the stake. Keep two that both pass the three hook questions as whole copies and that the same caption can pay out. They must not be paraphrases.
 4. Tighten the two you kept. Adjust the caption if it still needs to cover both.
 5. Check the drafts against the humanizer guide and list every pattern still in them.
-6. Write the final two copies and the caption with those patterns fixed. Count the words in each copy. If either count is outside the bucket's range, rewrite that copy before you report. Break each copy into lines at the natural pauses above. Check again that each fact appears in the sources, that each copy is one screen, that each word count is inside the range, that the reader described at the top could follow every noun and every clause without knowing how a system works, that each copy carries the viewer stake, that each copy works as a hook from its first word to its last, that neither copy starts with a pronoun, and that both reported copies contain those line breaks. The caption uses short paragraphs with a blank line between them. A caption that is one block is a failed report.
+6. Write the final two copies and the caption with those patterns fixed. Count the words in each copy. If either count is outside the bucket's range, rewrite that copy before you report. Break each copy into lines at the natural pauses above. Check again that each fact appears in the sources, that each copy is one screen, that each word count is inside the range, that the reader described at the top could follow every noun and every clause without knowing how a system works, that each copy carries the viewer stake, that each copy works as a hook from its first word to its last, that neither copy starts with a pronoun, and that both reported copies contain those line breaks. The caption uses short paragraphs with a blank line between them. A caption that is one block is a failed report. Count the caption with the call to action and the hashtags. Over 2,200 characters is a failed report.
 7. Report once with the report_copy tool.
 
 ## Craft notes

@@ -6,7 +6,7 @@ import {
   PUBLISH_VIDEO_URL_SECONDS,
   TRIAL_GRADUATION_STRATEGY,
 } from '@/lib/reels/config';
-import { fullCaption } from '@/lib/reels/copy/report';
+import { CAPTION_MAX_CHARS, fullCaption, shortenAssembledCaption } from '@/lib/reels/copy/report';
 import { setPublished } from '@/lib/reels/repository';
 import { createLiveMetaClient, metaConfigured, type MetaClient } from '@/lib/reels/music/meta';
 import { getSetting, publishMix, type MixSetting } from '@/lib/reels/music/store';
@@ -22,7 +22,9 @@ import { signFrameObject } from '@/lib/reels/visual/storage';
 export type PublishTrigger = 'approve' | 'auto' | 'mix_test' | 'force';
 export type PublishStatus = 'requested' | 'creating' | 'processing' | 'publishing' | 'published' | 'failed';
 
-type Queued = { queued: true; id: string } | { queued: false; status: number; note: string };
+type Queued =
+  | { queued: true; id: string }
+  | { queued: false; status: number; note: string; terminal?: boolean; id?: string };
 
 function isUniqueViolation(error: unknown): boolean {
   return typeof error === 'object' && error !== null && (error as { code?: string }).code === '23505';
@@ -117,7 +119,7 @@ export async function queuePublish(
   const ready = await publishReadiness(videoJobId, { trigger, mixOverride });
   if (!ready.ok) return { queued: false, status: ready.status, note: ready.note };
   const reel = ready.reel;
-  const caption = reel.caption;
+  const caption = reel.caption.length > CAPTION_MAX_CHARS ? shortenAssembledCaption(reel.caption) : reel.caption;
   const mix = reel.mix;
   try {
     const inserted = await dbQuery<{ id: string }>(
@@ -217,6 +219,10 @@ export async function claimAndPublish(deps: PublishDeps = {}): Promise<{ id: str
     );
     const attempt = rows[0];
     if (!attempt?.video_storage_path) throw new Error('The video for this reel is gone.');
+    if (attempt.caption.length > CAPTION_MAX_CHARS) {
+      attempt.caption = shortenAssembledCaption(attempt.caption);
+      await update(id, { caption: attempt.caption });
+    }
     const meta = deps.meta ?? createLiveMetaClient();
     const videoUrl = await (deps.signVideo ?? ((objectPath) => signFrameObject(objectPath, PUBLISH_VIDEO_URL_SECONDS)))(
       attempt.video_storage_path,

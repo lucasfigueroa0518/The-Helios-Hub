@@ -119,7 +119,7 @@ export function HealthView({ data }: { data: HealthPage }) {
             </a>
           </div>
         </div>
-        <p className="rh-muted">Bar is items kept. The thin mark is how many of those items sit on a published post.</p>
+        <p className="rh-muted">Bar is items kept. The count is items kept out of every item stored from that source. The thin mark is how many kept items sit on a published post.</p>
         <ul className="rh-sources">
           {data.sources.map((source) => {
             const expanded = open === source.id;
@@ -133,11 +133,16 @@ export function HealthView({ data }: { data: HealthPage }) {
                   </span>
                   <span className="rh-source__track" aria-hidden="true">
                     <span className="rh-source__ingested" style={{ width: `${(source.ingested / data.peak) * 100}%` }} />
-                    <span className="rh-source__published" style={{ width: `${(source.published / data.peak) * 100}%` }} />
+                    <span
+                      className="rh-source__published"
+                      style={{
+                        width: source.published > 0 ? `max(8px, ${(source.published / data.peak) * 100}%)` : '0%',
+                      }}
+                    />
                   </span>
                   <span className="rh-source__count">
                     {source.ingested}
-                    <span className="rh-muted"> / {source.published}</span>
+                    <span className="rh-muted"> / {source.seen}</span>
                   </span>
                 </button>
                 {expanded && (

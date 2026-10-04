@@ -695,7 +695,11 @@ CREATE TABLE IF NOT EXISTS reels.publish_attempts (
     media_id          text,
     permalink         text,
     status_log        jsonb NOT NULL DEFAULT '[]'::jsonb,
-    error             text
+    error             text,
+    -- Last time Instagram was asked, and when the reel aged out of the warm window
+    -- and received its closing read. Settled reels are not asked again.
+    insights_checked_at timestamptz,
+    insights_settled_at timestamptz
 );
 
 CREATE INDEX IF NOT EXISTS idx_reels_publish_video
@@ -709,6 +713,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_reels_publish_inflight_video
 DROP INDEX IF EXISTS reels.idx_reels_publish_once;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_reels_publish_once_v2
     ON reels.publish_attempts (video_job_id) WHERE status = 'published' AND trigger <> 'mix_test';
+
+ALTER TABLE reels.publish_attempts ADD COLUMN IF NOT EXISTS insights_checked_at timestamptz;
+ALTER TABLE reels.publish_attempts ADD COLUMN IF NOT EXISTS insights_settled_at timestamptz;
+
+-- Open reels are the only ones a refresh reads. Settled history stays in media_insights.
+CREATE INDEX IF NOT EXISTS idx_reels_publish_insights_open
+    ON reels.publish_attempts (finished_at DESC)
+    WHERE status = 'published'
+      AND trigger <> 'mix_test'
+      AND insights_settled_at IS NULL
+      AND media_id IS NOT NULL;
 
 -- Databases created before mix_test existed keep the old trigger check until this runs.
 DO $$
@@ -819,8 +834,10 @@ CREATE INDEX IF NOT EXISTS idx_reels_sound_obs_window
 
 -- ── Instagram performance snapshots ─────────────────────────────────────────
 -- Lifetime totals from the media insights edge, one row per published reel per
--- New York day. A later poll the same day keeps a number it already stored when
--- the new response leaves that metric blank. Mix-test publishes are not polled.
+-- New York day we asked. A reel is asked every 30 minutes for two days, once a
+-- day through day 14, then once more. Rows are kept. A later poll the same day
+-- keeps a number it already stored when the new response leaves that metric
+-- blank. Mix-test publishes are not polled.
 
 CREATE TABLE IF NOT EXISTS reels.media_insights (
     media_id             text NOT NULL,

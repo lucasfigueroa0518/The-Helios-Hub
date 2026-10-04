@@ -316,6 +316,15 @@ export async function releaseDueSchedules(): Promise<number> {
       released += 1;
       continue;
     }
+    if (result.terminal) {
+      await dbQuery(
+        `UPDATE reels.posting_schedule
+            SET status = 'failed', error = $2, publish_attempt_id = COALESCE($3, publish_attempt_id)
+          WHERE id = $1 AND status = 'publishing'`,
+        [row.id, result.note, result.id ?? null],
+      );
+      continue;
+    }
     if (result.note.includes('already published')) {
       await dbQuery(
         `UPDATE reels.posting_schedule SET status = 'published', error = NULL WHERE id = $1`,

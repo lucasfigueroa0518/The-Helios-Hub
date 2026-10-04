@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 
 import { ReelsHub } from '@/app/reels/reels-hub';
+import { beginInsightsRefresh } from '@/lib/reels/media-insights/schedule-refresh';
 import { loadReelsOverview } from '@/lib/reels/overview';
 import { ensureReviewToken } from '@/lib/reels/review';
 import { getSession } from '@/lib/session';
@@ -17,6 +18,7 @@ export const metadata = {
 export default async function ReelsPage() {
   const session = await getSession();
   if (!session) redirect('/');
+  await beginInsightsRefresh().catch(() => undefined);
 
   const initial = await loadReelsOverview().catch((error) => ({
     error: error instanceof Error ? error.message : String(error),

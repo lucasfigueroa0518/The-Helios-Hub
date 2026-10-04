@@ -6,6 +6,9 @@
 export type PerformancePeriod = '7d' | '30d' | 'all';
 export type ReelSort = 'graduate' | 'hook';
 
+export const PERFORMANCE_PAGE_SIZE = 25;
+export const PERFORMANCE_DRILL_LIMIT = 40;
+
 export type FactorId =
   | 'psychology'
   | 'bucket'
@@ -129,6 +132,12 @@ export type InsightsNotice = {
 
 export type PerformancePage = {
   period: PerformancePeriod;
+  sort: ReelSort;
+  query: string;
+  page: number;
+  pageCount: number;
+  pageSize: number;
+  total: number;
   reels: PerformanceReel[];
   headlines: PerformanceStat[];
   factors: Record<FactorId, FactorGroup[]>;
@@ -250,6 +259,27 @@ export function performancePeriod(value: string | undefined): PerformancePeriod 
   return '7d';
 }
 
+export function performanceSort(value: string | undefined): ReelSort {
+  return value === 'hook' ? 'hook' : 'graduate';
+}
+
+export function performancePageNumber(value: string | undefined): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) return 1;
+  return parsed;
+}
+
+export function performanceQuery(value: string | undefined): string {
+  return (value ?? '').trim().slice(0, 80);
+}
+
+export function pageSlice<T>(items: readonly T[], page: number, pageSize: number): { page: number; pageCount: number; items: T[] } {
+  const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+  const safe = Math.min(Math.max(page, 1), pageCount);
+  const start = (safe - 1) * pageSize;
+  return { page: safe, pageCount, items: items.slice(start, start + pageSize) };
+}
+
 export function periodDays(period: PerformancePeriod): number | null {
   if (period === '7d') return 7;
   if (period === '30d') return 30;
@@ -262,9 +292,17 @@ export function publishedSince(days: number | null, now: Date): Date | null {
   return new Date(now.getTime() - days * 86_400_000);
 }
 
-export function performanceHref(period: PerformancePeriod): string {
-  if (period === '7d') return '/reels/analytics/performance';
-  return `/reels/analytics/performance?period=${period}`;
+export function performanceHref(
+  period: PerformancePeriod,
+  extra: { sort?: ReelSort; query?: string; page?: number } = {},
+): string {
+  const params = new URLSearchParams();
+  if (period !== '7d') params.set('period', period);
+  if (extra.sort === 'hook') params.set('sort', 'hook');
+  if (extra.query) params.set('q', extra.query);
+  if (extra.page && extra.page > 1) params.set('page', String(extra.page));
+  const search = params.toString();
+  return search ? `/reels/analytics/performance?${search}` : '/reels/analytics/performance';
 }
 
 export function reelTitle(onScreen: string | null | undefined, headline: string | null | undefined): string {
@@ -431,13 +469,14 @@ export function factorGroups(reels: readonly PerformanceReel[], factor: FactorId
   return groups;
 }
 
-export function buildHeadlines(reels: readonly PerformanceReel[]): PerformanceStat[] {
+export function buildHeadlines(reels: readonly PerformanceReel[], drillLimit = Number.POSITIVE_INFINITY): PerformanceStat[] {
   return HEADLINES.map((spec) => {
     const values = reels.map((reel) => metric(reel, spec.field));
     const reported = values.filter((value) => value != null).length;
     const lines = [...reels]
       .map((reel) => ({ id: reel.attemptId, title: reel.title, value: metric(reel, spec.field) }))
-      .sort((a, b) => descNullLast(a.value, b.value) || a.title.localeCompare(b.title));
+      .sort((a, b) => descNullLast(a.value, b.value) || a.title.localeCompare(b.title))
+      .slice(0, drillLimit);
     return {
       id: spec.id,
       label: spec.label,

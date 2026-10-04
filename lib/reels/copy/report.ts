@@ -65,7 +65,7 @@ export const REPORT_COPY_TOOL = {
       caption: {
         type: 'string',
         description:
-          'The final caption, ending where the bucket structure ends. Leave out the call to action and the hashtags. This one caption pays out both on-screen copies. Short paragraphs, with a real blank line between them. A caption that is one block is a failed report.',
+          'The final caption, ending where the bucket structure ends. Leave out the call to action and the hashtags. They are posted from their own fields, so writing them here posts them twice. This one caption pays out both on-screen copies. Short paragraphs, with a real blank line between them. A caption that is one block is a failed report. The caption, the call to action, and the hashtags together must stay within 2,200 characters.',
       },
       call_to_action: { type: 'string', description: 'The one call to action, as a single line.' },
       hashtags: {
@@ -197,7 +197,7 @@ function onScreenCopies(value: unknown): [string, string] {
 export function parseCopyReport(input: unknown): CopyCall {
   if (!input || typeof input !== 'object') throw new CopyReportError('report_copy input is not an object.');
   const record = input as Record<string, unknown>;
-  return {
+  const call: CopyCall = {
     onScreenCopies: onScreenCopies(record.on_screen_copies),
     viewerStake: text(record, 'viewer_stake', true),
     caption: captionWithBreaks(text(record, 'caption', true)),
@@ -211,6 +211,7 @@ export function parseCopyReport(input: unknown): CopyCall {
       remainingPatterns: list(record.remaining_patterns),
     },
   };
+  return call;
 }
 
 /** The posted row: one of the call's on-screen lines, with that call's caption. */
@@ -229,11 +230,83 @@ export function publishCopy(call: CopyCall, onScreenCopy: string): CopyReport {
   };
 }
 
-/** The caption as it would be posted: body, call to action, hashtags. */
+/**
+ * The caption as it would be posted: body, call to action, hashtags.
+ * A call to action or hashtag line already ending the body is not added again.
+ * Anything over Instagram's limit is shortened here, with no model call:
+ * paragraphs drop from the end, then the last remaining paragraph is cut
+ * at a sentence.
+ */
 export function fullCaption(report: Pick<CopyReport, 'caption' | 'callToAction' | 'hashtags'>): string {
-  return [report.caption, report.callToAction, report.hashtags.join(' ')]
-    .filter((part) => part.length > 0)
-    .join('\n\n');
+  const callToAction = report.callToAction.trim();
+  const hashtags = report.hashtags.join(' ').trim();
+  let body = stripTrailing(report.caption.trim(), hashtags);
+  body = stripTrailing(body, callToAction);
+  return fitCaptionParts(body, callToAction, hashtags, CAPTION_MAX_CHARS);
+}
+
+/** Cut an already assembled caption down to the limit. Keeps a trailing hashtag line. */
+export function shortenAssembledCaption(caption: string, limit = CAPTION_MAX_CHARS): string {
+  const trimmed = caption.trim();
+  if (trimmed.length <= limit) return trimmed;
+  const paragraphs = trimmed.split(/\n[ \t]*\n/).map((part) => part.trim()).filter(Boolean);
+  const hashtags = paragraphs.length > 0 && /^#\S/.test(paragraphs[paragraphs.length - 1] ?? '')
+    ? paragraphs.pop() ?? ''
+    : '';
+  return fitCaptionParts(paragraphs.join('\n\n'), '', hashtags, limit);
+}
+
+function stripTrailing(body: string, ending: string): string {
+  if (!ending || !body.endsWith(ending)) return body;
+  return body.slice(0, body.length - ending.length).trimEnd();
+}
+
+function joinParts(parts: string[]): string {
+  return parts.filter((part) => part.length > 0).join('\n\n');
+}
+
+function cutToFit(text: string, budget: number): string {
+  if (budget <= 0) return '';
+  if (text.length <= budget) return text;
+  const slice = text.slice(0, budget).trimEnd();
+  const floor = Math.min(80, Math.floor(budget / 2));
+  const paragraph = slice.lastIndexOf('\n\n');
+  if (paragraph >= floor) return slice.slice(0, paragraph).trimEnd();
+  const sentenceEnd = Math.max(
+    slice.lastIndexOf('. '),
+    slice.lastIndexOf('.\n'),
+    slice.lastIndexOf('? '),
+    slice.lastIndexOf('! '),
+  );
+  if (sentenceEnd >= floor) return slice.slice(0, sentenceEnd + 1).trimEnd();
+  const word = slice.lastIndexOf(' ');
+  if (word >= Math.min(40, floor)) return slice.slice(0, word).trimEnd();
+  return slice;
+}
+
+function fitCaptionParts(body: string, callToAction: string, hashtags: string, limit: number): string {
+  const tails = [callToAction, hashtags].filter((part) => part.length > 0);
+  const assemble = (nextBody: string, nextTails: string[]) => joinParts([nextBody, ...nextTails]);
+  if (assemble(body, tails).length <= limit) return assemble(body, tails);
+
+  const paragraphs = body.split(/\n[ \t]*\n/).map((part) => part.trim()).filter(Boolean);
+  while (paragraphs.length > 1 && assemble(paragraphs.join('\n\n'), tails).length > limit) paragraphs.pop();
+  body = paragraphs.join('\n\n');
+  if (assemble(body, tails).length <= limit) return assemble(body, tails);
+
+  const tailText = tails.join('\n\n');
+  const roomForBody = tailText ? limit - tailText.length - 2 : limit;
+  if (roomForBody > 0) {
+    const fitted = assemble(cutToFit(body, roomForBody), tails);
+    if (fitted.length <= limit) return fitted;
+  }
+
+  if (callToAction) {
+    const cta = cutToFit(callToAction, limit);
+    if (hashtags && joinParts([cta, hashtags]).length <= limit) return joinParts([cta, hashtags]);
+    return cta;
+  }
+  return cutToFit(assemble(body, tails), limit);
 }
 
 export function countWords(value: string): number {

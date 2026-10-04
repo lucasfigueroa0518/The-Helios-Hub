@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Drawer, ReelVideo } from '@/app/reels/ui';
 import { HeliosMenu } from '@/app/components/helios-menu';
@@ -10,7 +10,6 @@ import {
   creationFacts,
   gridNote,
   performanceHref,
-  sortReels,
   type FactorId,
   type PerformancePage,
   type PerformanceReel,
@@ -73,6 +72,14 @@ function shownStat(stat: PerformanceStat): string {
   return shownMetric(stat.value, stat.display);
 }
 
+function rangeLabel(data: PerformancePage): string {
+  if (data.total === 0) return data.query ? 'No matches.' : 'No reels in this window.';
+  const start = (data.page - 1) * data.pageSize + 1;
+  const end = Math.min(data.total, start + data.reels.length - 1);
+  if (data.total <= data.pageSize) return `${data.total} ${data.total === 1 ? 'reel' : 'reels'}.`;
+  return `${start}–${end} of ${data.total}.`;
+}
+
 function when(iso: string): string {
   return new Date(iso).toLocaleString('en-US', {
     timeZone: 'America/New_York',
@@ -98,18 +105,53 @@ function songLine(reel: PerformanceReel): string | null {
   return parts.length ? parts.join(' · ') : null;
 }
 
-export function PerformanceView({ data }: { data: PerformancePage }) {
+export function PerformanceView({
+  data,
+  pollPending = false,
+  pollStartedAt = null,
+}: {
+  data: PerformancePage;
+  pollPending?: boolean;
+  pollStartedAt?: string | null;
+}) {
   const router = useRouter();
-  const [sort, setSort] = useState<ReelSort>('graduate');
   const [factor, setFactor] = useState<FactorId>('psychology');
   const [openStat, setOpenStat] = useState<string | null>(null);
   const [openReel, setOpenReel] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
-  const reels = useMemo(() => sortReels(data.reels, sort), [data.reels, sort]);
+  const [draft, setDraft] = useState(data.query);
+  const reels = data.reels;
   const selectedStat = data.headlines.find((stat) => stat.id === openStat) ?? null;
   const selectedReel = data.reels.find((reel) => reel.attemptId === openReel) ?? null;
   const groups = data.factors[factor];
+  const sort = data.sort;
+
+  useEffect(() => {
+    setDraft(data.query);
+  }, [data.query]);
+
+  useEffect(() => {
+    if (!pollPending || !pollStartedAt) return undefined;
+    const started = new Date(pollStartedAt).getTime();
+    if (!Number.isFinite(started) || Date.now() - started > 45_000) return undefined;
+    const timer = setInterval(() => {
+      if (Date.now() - started > 45_000) {
+        clearInterval(timer);
+        return;
+      }
+      router.refresh();
+    }, 4_000);
+    return () => clearInterval(timer);
+  }, [pollPending, pollStartedAt, router]);
+
+  function openList(patch: { sort?: ReelSort; query?: string; page?: number; period?: PerformancePage['period'] }) {
+    router.push(performanceHref(patch.period ?? data.period, {
+      sort: patch.sort ?? data.sort,
+      query: patch.query !== undefined ? patch.query : data.query,
+      page: patch.page ?? 1,
+    }));
+  }
 
   useEffect(() => {
     if (!openStat && !openReel) return undefined;
@@ -130,7 +172,7 @@ export function PerformanceView({ data }: { data: PerformancePage }) {
       await requestJson('/api/reels/insights', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ period: data.period }),
+        body: JSON.stringify({}),
       });
       router.refresh();
     } catch (error) {
@@ -147,7 +189,7 @@ export function PerformanceView({ data }: { data: PerformancePage }) {
           {PERIODS.map((period) => (
             <a
               key={period.id}
-              href={performanceHref(period.id)}
+              href={performanceHref(period.id, { sort: data.sort, query: data.query })}
               role="tab"
               aria-selected={data.period === period.id}
               className={`segmented__item${data.period === period.id ? ' segmented__item--active' : ''}`}
@@ -156,6 +198,25 @@ export function PerformanceView({ data }: { data: PerformancePage }) {
             </a>
           ))}
         </div>
+        <form
+          className="rh-perf-search"
+          onSubmit={(event) => {
+            event.preventDefault();
+            openList({ query: draft.trim(), page: 1 });
+          }}
+        >
+          <input
+            className="helios-field-input"
+            type="text"
+            name="q"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder="Search reels"
+            aria-label="Search reels"
+            maxLength={80}
+          />
+          <button type="submit" className="rh-btn rh-btn--xs">Search</button>
+        </form>
         <button type="button" className="rh-btn rh-btn--xs" onClick={() => void refresh()} disabled={refreshing}>
           {refreshing ? 'Refreshing' : 'Refresh'}
         </button>
@@ -184,9 +245,9 @@ export function PerformanceView({ data }: { data: PerformancePage }) {
         ))}
       </div>
 
-      {data.reels.length > 0 && !data.hasNumbers ? (
+      {data.total > 0 && !data.hasNumbers ? (
         <p className="rh-muted rh-perf-wait">
-          No performance numbers yet. Instagram can take up to 48 hours to return them. Refresh checks the reels in this window. The nightly worker checks reels from the last 14 days.
+          No performance numbers yet. Instagram can take up to 48 hours to return them. Opening Trial Reels asks for reels whose numbers can still change, at most every 30 minutes.
         </p>
       ) : null}
 
@@ -195,9 +256,10 @@ export function PerformanceView({ data }: { data: PerformancePage }) {
           <div>
             <h2 className="rh-card__title">Published reels</h2>
             <p className="rh-muted">
+              {rangeLabel(data)}
               {sort === 'graduate'
-                ? 'Sorted by shares, then saves, then views.'
-                : 'Sorted by skip rate, then average watch time.'}
+                ? ' Sorted by shares, then saves, then views.'
+                : ' Sorted by skip rate, then average watch time.'}
             </p>
           </div>
           <div className="segmented" role="tablist" aria-label="Reel sort">
@@ -206,7 +268,7 @@ export function PerformanceView({ data }: { data: PerformancePage }) {
               role="tab"
               aria-selected={sort === 'graduate'}
               className={`segmented__item${sort === 'graduate' ? ' segmented__item--active' : ''}`}
-              onClick={() => setSort('graduate')}
+              onClick={() => openList({ sort: 'graduate', page: 1 })}
             >
               Graduate
             </button>
@@ -215,14 +277,14 @@ export function PerformanceView({ data }: { data: PerformancePage }) {
               role="tab"
               aria-selected={sort === 'hook'}
               className={`segmented__item${sort === 'hook' ? ' segmented__item--active' : ''}`}
-              onClick={() => setSort('hook')}
+              onClick={() => openList({ sort: 'hook', page: 1 })}
             >
               Hook
             </button>
           </div>
         </div>
         {reels.length === 0 ? (
-          <p className="rh-muted">No trial reels published in this window.</p>
+          <p className="rh-muted">{data.query ? 'No reels match that search.' : 'No trial reels published in this window.'}</p>
         ) : (
           <ul className="rh-perf-list">
             {reels.map((reel) => (
@@ -255,6 +317,27 @@ export function PerformanceView({ data }: { data: PerformancePage }) {
             ))}
           </ul>
         )}
+        {data.pageCount > 1 ? (
+          <div className="rh-perf-pager">
+            <button
+              type="button"
+              className="rh-btn rh-btn--xs"
+              disabled={data.page <= 1}
+              onClick={() => openList({ page: data.page - 1 })}
+            >
+              Previous
+            </button>
+            <span className="rh-muted">Page {data.page} of {data.pageCount}</span>
+            <button
+              type="button"
+              className="rh-btn rh-btn--xs"
+              disabled={data.page >= data.pageCount}
+              onClick={() => openList({ page: data.page + 1 })}
+            >
+              Next
+            </button>
+          </div>
+        ) : null}
       </section>
 
       <section className="rh-card rh-perf-card">
@@ -271,7 +354,7 @@ export function PerformanceView({ data }: { data: PerformancePage }) {
           />
         </div>
         {groups.length === 0 ? (
-          <p className="rh-muted">No trial reels published in this window.</p>
+          <p className="rh-muted">{data.query ? 'No reels match that search.' : 'No trial reels published in this window.'}</p>
         ) : (
           <div className="rh-factor-scroll">
             <div className="rh-factor" role="table" aria-label="Average engagement by factor">
@@ -328,6 +411,9 @@ function StatDrill({ stat }: { stat: PerformanceStat }) {
       <p className="rh-drill__result">{shownStat(stat)}</p>
       <p className="rh-muted">{stat.definition}</p>
       <p className="rh-muted">{how} {stat.reported} of {stat.total} reels reported it.</p>
+      {stat.lines.length < stat.reported ? (
+        <p className="rh-muted">Showing the highest {stat.lines.length}.</p>
+      ) : null}
       <h3 className="rh-card__sub">Reels</h3>
       {stat.lines.length === 0 ? (
         <p className="rh-muted">No reels in this window.</p>

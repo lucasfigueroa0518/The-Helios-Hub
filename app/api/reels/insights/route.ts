@@ -1,23 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { performancePeriod, periodDays, publishedSince } from '@/lib/reels/analytics/performance';
-import { pollMediaInsights } from '@/lib/reels/media-insights/poll';
+import { INSIGHTS_REFRESH_BATCH } from '@/lib/reels/media-insights/due';
+import { pollDueInsights } from '@/lib/reels/media-insights/poll';
 import { getSession } from '@/lib/session';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-/** Pull Instagram insights for the window open on Performance Analytics. Graph only, no model calls. */
+/** Pull Instagram insights for reels that are still due. Graph only, no model calls. */
 export async function POST(request: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const body = (await request.json().catch(() => null)) as { period?: unknown } | null;
-  const period = performancePeriod(typeof body?.period === 'string' ? body.period : undefined);
+  await request.json().catch(() => null);
   try {
-    const status = await pollMediaInsights({
-      since: publishedSince(periodDays(period), new Date()),
-    });
+    const status = await pollDueInsights({ limit: INSIGHTS_REFRESH_BATCH, force: true });
     return NextResponse.json({
       blocked: status.blocked,
       message: status.message,

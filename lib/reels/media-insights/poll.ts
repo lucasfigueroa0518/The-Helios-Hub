@@ -1,8 +1,15 @@
 import { dbQuery } from '@/lib/db';
 import { calendarDateKey } from '@/lib/reels/schedule';
-import { publishedSince } from '@/lib/reels/analytics/performance';
+import {
+  INSIGHTS_COOLDOWN_MS,
+  INSIGHTS_NIGHTLY_BATCH,
+  INSIGHTS_PAGE_BATCH,
+  INSIGHTS_STALE_LOCK_MS,
+  INSIGHTS_WARM_MS,
+  insightIsDue,
+} from '@/lib/reels/media-insights/due';
 import { MetaNotConfiguredError, metaConfigured } from '@/lib/reels/music/meta';
-import { setSetting } from '@/lib/reels/music/store';
+import { getSetting, setSetting } from '@/lib/reels/music/store';
 import {
   InsightsPermissionError,
   InsightsTokenError,
@@ -11,8 +18,7 @@ import {
 } from '@/lib/reels/media-insights/client';
 import { readingHasSignal, type ReelInsightReading } from '@/lib/reels/media-insights/parse';
 
-/** Nightly poll window. The page Refresh uses the window that is open instead. */
-export const INSIGHTS_LOOKBACK_DAYS = 14;
+export { INSIGHTS_NIGHTLY_BATCH, INSIGHTS_PAGE_BATCH };
 
 export const INSIGHTS_POLL_SETTING = 'insights_poll';
 
@@ -47,21 +53,100 @@ async function remember(status: InsightsPollStatus): Promise<InsightsPollStatus>
   return status;
 }
 
+export type InsightsClaim = 'claimed' | 'cooldown' | 'busy';
+
+/** One pull at a time. `force` skips the 30-minute cooldown and still waits for a live pull. */
+export async function claimInsightsPoll(now: Date, force: boolean): Promise<InsightsClaim> {
+  const startedAt = now.toISOString();
+  const staleBefore = new Date(now.getTime() - INSIGHTS_STALE_LOCK_MS).toISOString();
+  const cooldownBefore = new Date(now.getTime() - INSIGHTS_COOLDOWN_MS).toISOString();
+  const updated = await dbQuery<{ key: string }>(
+    `UPDATE reels.settings
+        SET value = jsonb_set(COALESCE(value, '{}'::jsonb), '{startedAt}', to_jsonb($2::text), true),
+            updated_at = now()
+      WHERE key = $1
+        AND (
+          COALESCE(value->>'startedAt', '') = ''
+          OR value->>'startedAt' < $3
+        )
+        AND (
+          $4::boolean
+          OR COALESCE(value->>'at', '') = ''
+          OR value->>'at' < $5
+        )
+      RETURNING key`,
+    [INSIGHTS_POLL_SETTING, startedAt, staleBefore, force, cooldownBefore],
+  );
+  if (updated.rows.length > 0) return 'claimed';
+
+  const inserted = await dbQuery<{ key: string }>(
+    `INSERT INTO reels.settings (key, value, updated_at)
+     VALUES (
+       $1,
+       jsonb_build_object('startedAt', $2::text, 'at', '', 'blocked', NULL, 'message', NULL, 'considered', 0, 'written', 0),
+       now()
+     )
+     ON CONFLICT (key) DO NOTHING
+     RETURNING key`,
+    [INSIGHTS_POLL_SETTING, startedAt],
+  );
+  if (inserted.rows.length > 0) return 'claimed';
+
+  const current = await getSetting<{ startedAt?: string }>(INSIGHTS_POLL_SETTING);
+  if (current?.startedAt && current.startedAt >= staleBefore) return 'busy';
+  return 'cooldown';
+}
+
+export async function releaseInsightsLock(startedAt: string): Promise<void> {
+  await dbQuery(
+    `UPDATE reels.settings
+        SET value = value - 'startedAt', updated_at = now()
+      WHERE key = $1 AND value->>'startedAt' = $2`,
+    [INSIGHTS_POLL_SETTING, startedAt],
+  );
+}
+
 /**
- * Pull lifetime insights for published reels with `finished_at` at or after `since`.
- * Null `since` checks every published reel. A response with no numbers is not
- * stored, so a failed day cannot hide the previous snapshot.
+ * Ask Instagram for reels that are still due. A reel from the last two days is
+ * due every 30 minutes. A reel from the last 14 days is due once each New York
+ * day. After that, one closing read is stored and the reel is left alone.
+ * Snapshots already stored stay. A response with no numbers is not stored.
  */
-export async function pollMediaInsights(input: {
-  since?: Date | null;
+export async function pollDueInsights(input: {
+  limit?: number;
   now?: Date;
+  force?: boolean;
+  alreadyClaimed?: boolean;
   client?: InsightsClient;
 } = {}): Promise<InsightsPollStatus> {
   const now = input.now ?? new Date();
-  const since = input.since === undefined ? publishedSince(INSIGHTS_LOOKBACK_DAYS, now) : input.since;
+  const limit = input.limit ?? INSIGHTS_PAGE_BATCH;
+  const startedAt = now.toISOString();
+  if (!input.alreadyClaimed) {
+    const claim = await claimInsightsPoll(now, input.force ?? false);
+    if (claim !== 'claimed') {
+      const current = await getSetting<InsightsPollStatus>(INSIGHTS_POLL_SETTING);
+      return {
+        at: current?.at ?? startedAt,
+        blocked: current?.blocked ?? null,
+        message: claim === 'busy' ? 'A refresh is already running.' : current?.message ?? null,
+        considered: 0,
+        written: 0,
+      };
+    }
+  }
+  try {
+    return await runDuePoll(now, limit, input.client);
+  } catch (error) {
+    await releaseInsightsLock(startedAt).catch(() => undefined);
+    throw error;
+  }
+}
+
+async function runDuePoll(now: Date, limit: number, clientInput?: InsightsClient): Promise<InsightsPollStatus> {
   const at = now.toISOString();
 
-  let client = input.client;
+  let client = clientInput;
   if (!client) {
     if (!metaConfigured()) {
       return remember({
@@ -88,19 +173,26 @@ export async function pollMediaInsights(input: {
     }
   }
 
-  const { rows } = await dbQuery<{ id: string; media_id: string }>(
-    `SELECT id, media_id
+  const open = await dbQuery<{ id: string; media_id: string; finished_at: Date; insights_checked_at: Date | null }>(
+    `SELECT id, media_id, finished_at, insights_checked_at
        FROM reels.publish_attempts
       WHERE status = 'published'
         AND media_id IS NOT NULL
         AND btrim(media_id) <> ''
         AND trigger <> 'mix_test'
         AND finished_at IS NOT NULL
-        AND ($1::timestamptz IS NULL OR finished_at >= $1::timestamptz)
-        AND finished_at <= $2::timestamptz
-      ORDER BY finished_at DESC`,
-    [since ? since.toISOString() : null, now.toISOString()],
+        AND finished_at <= $1::timestamptz
+        AND insights_settled_at IS NULL
+      ORDER BY (insights_checked_at IS NULL) DESC, finished_at DESC`,
+    [at],
   );
+  const rows = open.rows
+    .filter((row) => insightIsDue({
+      finishedAt: new Date(row.finished_at),
+      checkedAt: row.insights_checked_at ? new Date(row.insights_checked_at) : null,
+      now,
+    }))
+    .slice(0, limit);
 
   const nyDate = calendarDateKey(now);
   let written = 0;
@@ -128,9 +220,11 @@ export async function pollMediaInsights(input: {
       if (!detail) detail = safeMessage(error);
       continue;
     }
-    if (!readingHasSignal(reading)) continue;
-    await upsertInsight(row.id, row.media_id, nyDate, reading);
-    written += 1;
+    if (readingHasSignal(reading)) {
+      await upsertInsight(row.id, row.media_id, nyDate, reading);
+      written += 1;
+    }
+    await markInsightCheck(row.id, new Date(row.finished_at), now);
   }
 
   if (!blocked && written === 0 && rows.length > 0) {
@@ -141,8 +235,15 @@ export async function pollMediaInsights(input: {
   return remember({ at, blocked, message, considered: rows.length, written, detail });
 }
 
-export function pollRecentInsights(now = new Date()): Promise<InsightsPollStatus> {
-  return pollMediaInsights({ since: publishedSince(INSIGHTS_LOOKBACK_DAYS, now), now });
+async function markInsightCheck(attemptId: string, finishedAt: Date, now: Date): Promise<void> {
+  const settle = now.getTime() - finishedAt.getTime() > INSIGHTS_WARM_MS;
+  await dbQuery(
+    `UPDATE reels.publish_attempts
+        SET insights_checked_at = $2::timestamptz,
+            insights_settled_at = CASE WHEN $3::boolean THEN $2::timestamptz ELSE insights_settled_at END
+      WHERE id = $1`,
+    [attemptId, now.toISOString(), settle],
+  );
 }
 
 async function upsertInsight(attemptId: string, mediaId: string, nyDate: string, reading: ReelInsightReading): Promise<void> {

@@ -187,7 +187,7 @@ test('the writer states a viewer stake, and both copies and the caption tell one
   const properties = Object.keys(REPORT_COPY_TOOL.input_schema.properties);
   assert.ok(properties.indexOf('viewer_stake') < properties.indexOf('on_screen_copies'));
   assert.ok(REPORT_COPY_TOOL.input_schema.required.includes('viewer_stake'));
-  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v11');
+  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v12');
 });
 
 test('the pre-limit writer is preserved as a Threads candidate and stays off the reel path', () => {
@@ -376,6 +376,32 @@ const goodInput = {
   hashtags: ['#AI', 'enterprise', '#MLOps'],
   sources: [{ name: 'TechCrunch', url: 'https://techcrunch.com/a' }],
 };
+
+test('a call to action already at the end of the caption is posted once', () => {
+  const call = parseCopyReport({
+    ...goodInput,
+    caption: 'First line that fits the fold.\n\nSend this to the person who owns your AI pilot.',
+    call_to_action: 'Send this to the person who owns your AI pilot.',
+  });
+  const posted = fullCaption(publishCopy(call, screen));
+  assert.equal(posted.split('Send this to the person who owns your AI pilot.').length - 1, 1);
+  assert.match(posted, /#AI #enterprise #MLOps$/);
+});
+
+test('an assembled caption over 2,200 characters is shortened to the limit', () => {
+  const paragraph = 'This paragraph is long enough to cut. '.repeat(80).trim();
+  const call = parseCopyReport({
+    ...goodInput,
+    caption: [paragraph, paragraph, paragraph].join('\n\n'),
+    call_to_action: 'Send this to the person who owns your AI pilot.',
+  });
+  const posted = fullCaption(publishCopy(call, screen));
+  assert.ok(posted.length <= 2_200);
+  assert.ok(posted.length > 2_000);
+  assert.match(posted, /^This paragraph is long enough to cut\./);
+  assert.match(posted, /Send this to the person who owns your AI pilot\.\n\n#AI #enterprise #MLOps$/);
+  assert.equal(posted.includes(paragraph), false);
+});
 
 test('a well-formed report parses and hashtags gain a #', () => {
   const call = parseCopyReport(goodInput);

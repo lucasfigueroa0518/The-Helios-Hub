@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { AnalyticsShell } from '@/app/reels/analytics/analytics-shell';
 import { PerformanceView } from '@/app/reels/analytics/performance-view';
 import { loadPerformancePage } from '@/lib/reels/analytics/performance-store';
+import { beginInsightsRefresh } from '@/lib/reels/media-insights/schedule-refresh';
 import { getSession } from '@/lib/session';
 
 import '../../reels.css';
@@ -17,11 +18,12 @@ export const metadata = {
 export default async function PerformanceAnalyticsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ period?: string; sort?: string; q?: string; page?: string }>;
 }) {
   const session = await getSession();
   if (!session) redirect('/');
   const params = await searchParams;
+  const refresh = await beginInsightsRefresh().catch(() => ({ pending: false, startedAt: null }));
   const loaded = await loadPerformancePage(params).catch((error) => ({
     error: error instanceof Error ? error.message : String(error),
   }));
@@ -31,7 +33,7 @@ export default async function PerformanceAnalyticsPage({
       {'error' in loaded ? (
         <p className="rh-empty">Could not load performance: {loaded.error}</p>
       ) : (
-        <PerformanceView data={loaded} />
+        <PerformanceView data={loaded} pollPending={refresh.pending} pollStartedAt={refresh.startedAt} />
       )}
     </AnalyticsShell>
   );
