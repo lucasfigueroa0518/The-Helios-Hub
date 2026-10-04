@@ -1,6 +1,8 @@
-# Helios Social rebuild: implementation plan
+# Helios Carousels rebuild: implementation plan
 
-**Spec:** `docs/superpowers/specs/2026-10-01-helios-social-rebuild.md` (the authority; this plan only sequences it)
+> **Naming (2026-10-04):** this product is **Helios Carousels**, the daily AI-news carousel posts. "Helios Social" is the umbrella for both Carousels and Trial Reels. On the rebuild branch `feature/helios-carousels`, code lives in `lib/carousels/`, `app/carousels/` and `fixtures/carousels/`; photo lookups are in `lib/carousels/photos/`. Paths that start with `lib/social/…` or `app/social/…` refer to the **old branches** (reference or pull sources).
+
+**Spec:** `docs/superpowers/specs/2026-10-01-helios-carousels.md` (the authority; this plan only sequences it)
 **Owner:** Tommy Pozo
 **Status:** DRAFT, not started
 
@@ -43,7 +45,7 @@ The tables below are kept as the import-trace record. Where they say "pull, then
 
 ## Branch and what to pull (traced from actual imports, 2026-10-04)
 
-**Method:** new branch `feature/helios-social-rebuild`. Bring files over with `git checkout helios-social-v2/2026-10-02-root-cause-fixes -- <path>`, then run the type checker. Any import of a removed module shows up as an error, so the compiler defines the boundary.
+**Method:** new branch `feature/helios-carousels`. Bring files over with `git checkout helios-social-v2/2026-10-02-root-cause-fixes -- <path>`, then run the type checker. Any import of a removed module shows up as an error, so the compiler defines the boundary.
 
 **Pull as is** (no imports of removed code):
 
@@ -77,6 +79,18 @@ The tables below are kept as the import-trace record. Where they say "pull, then
 - **The whole older pipeline:** `pipeline/generate.ts`, `editorial/strategy*.ts`, `copy.ts`, `fact-sheet.ts`, `story-plan.ts`, `hook-mine.ts`, `archetype.ts`, `qa.ts`, `polish.ts`, `repair.ts`, and `photos/subjects.ts`, `photos/picker.ts`.
 - **Correction:** `render/layout-picker.ts` and `render/photo-assigner.ts` were first listed as "keep". They belong to the old pipeline (they import `copy.ts`, `fact-sheet.ts`, `story-plan.ts`, `photos/picker.ts`), so they're left behind. The v2 renderer doesn't use them.
 - **`lib/social/editorial/config.ts`:** used only by removed or reworked modules. Re-create only what's needed.
+
+## Relationship to Trial Reels (DECIDED)
+
+Trial Reels (`lib/reels/`) is a **separate product with different criteria**. Social never modifies Reels code, tables or workers.
+
+- **Not used:** anything in Reels' Jev setup, its question sets or its scoring criteria. Social writes its own Jev client on the `@typesafe-ai/sdk` package, and its own versioned question sets (spec §5A, §5B, §5B-1).
+- **Not used:** Reels' ingest, grouping, fetchers, copy, visual or music code.
+- **Usable: the Instagram integration (M8).** The Meta credentials/account setup and the low-level Instagram API client may be reused **read-only**.
+  - **If generic:** if the low-level pieces (token/account config, API request helper) are generic, import them as they are.
+  - **If tied to Reels:** if they're tied to Reels tables or video jobs, write Social's own client using the same Meta credentials. Don't edit Reels to make them generic.
+  - **Carousel calls are new either way:** Reels publishes video, and carousels use Instagram's carousel container flow.
+- **Social keeps its own feed and page fetching:** re-pull the old Social fetchers (`lib/social/ingest/fetch-feeds.ts`, `extract-article-body.ts`, `resolve-google-news.ts`) and their 4 packages (`rss-parser`, `jsdom`, `@mozilla/readability`, `google-news-decoder`).
 
 ## Step 0: risk tests first (first days, before the full build)
 

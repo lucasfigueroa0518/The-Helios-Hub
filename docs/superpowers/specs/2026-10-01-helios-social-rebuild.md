@@ -1,4 +1,6 @@
-# Helios Social v2 rebuild: design spec
+# Helios Carousels v2 rebuild: design spec
+
+> **Naming (2026-10-04):** this product is **Helios Carousels**, the daily AI-news carousel posts. "Helios Social" is the umbrella for both Carousels and Trial Reels. On the rebuild branch `feature/helios-carousels`, code lives in `lib/carousels/`, `app/carousels/` and `fixtures/carousels/`; photo lookups are in `lib/carousels/photos/`. Paths that start with `lib/social/…` or `app/social/…` refer to the **old branches** (reference or pull sources).
 
 **Owner:** Tommy Pozo
 **Status:** DRAFT. No code until this spec is approved.
@@ -382,7 +384,7 @@ Jev answers yes/no questions with a confidence score. It's very cheap (input onl
 | 1 | **Story scoring at ingest.** Expand today's single relevance question into a set (below). Code ranks the articles; the Reporter only works on the top picks. If Jev's picks keep getting set aside, Jev's questions get fixed. | The one relevance question (`judge-relevance.ts`) | **DECIDED in direction.** Questions PROPOSED. |
 | 2 | **Duplicate stories:** is this the same story as one recently posted, or one already in today's feed? | Nothing yet; part of ingest scoring | PROPOSED |
 | 3 | ~~Strategy decisions~~ | — | **Retired** with the old pipeline (§10) |
-| 4 | **Fact-checking claim by claim.** The Writer tags each claim with the brief fact it came from. Jev answers "does this source passage support this sentence?" A failed claim gets the brief's own wording swapped in by code (fits §4.2). Only replaces the Claude Fact-checker after matching it on a test set of past posts with known errors. | Claude Fact-checker | **Deferred** until after the first live batch (§10) |
+| 4 | **Fact-checking claim by claim.** The Writer tags each claim with the brief fact it came from. Jev answers "does this source passage support this sentence?" A failed claim gets the brief's own wording swapped in by code (fits §4.2). Only replaces the Claude Fact-checker after matching it on a test set of past posts with known errors. | Claude Fact-checker | **DECIDED: built now**, with a one-batch comparison against Claude (§10) |
 | 5 | **Identifying photo subjects:** does this Wikidata entry match the person or company in the brief? | Matching logic | PROPOSED |
 | 6 | **Pre-screening stock photos:** do the photo's title and tags fit the requested scene? Runs before the image check. | Fewer image-check calls | PROPOSED |
 
@@ -550,7 +552,7 @@ Leaning: (c) as the target, (b) until it's built.
 | # | Question | Status |
 |---|---|---|
 | Q-A | The Editor's role | **DECIDED:** line editor, before the Fact-checker (§4.1). The Fact-checker's scope and fixes are DECIDED too (§4.2). |
-| Q-B | Jev's role | **DECIDED:** scores and ranks articles; replaces Claude decisions where it can (§5A). Fact-checker use deferred (§10). |
+| Q-B | Jev's role | **DECIDED:** scores and ranks articles; replaces Claude decisions where it can (§5A). Jev fact-checking built now, compared against Claude in the first batch (§10). |
 | Q-C | The Caption | **DECIDED:** written by the Writer (§4.3). |
 | Q-D | The Planner | **CLOSED:** already removed 2026-09-30. |
 | Q1 | What counts as a failure, and what happens to it | OPEN. Draft in §7.1. |
@@ -630,7 +632,7 @@ Nobody outside is reviewing this spec, and nothing waits on anyone. The four ite
 
 | Item | Decision |
 |---|---|
-| **Jev as fact-checker** (§5A #4) | **Not now.** The Claude Fact-checker stays. After the first live batch (§5D), its real flags become the test set; Jev replaces it only if it matches those results. Revisit then. |
+| **Jev as fact-checker** (§5A #4) | **Yes, built now.** The Writer tags each factual sentence with the brief fact it came from. Code pairs each sentence with its source passage, and Jev answers "Would a reader of this sentence believe anything the passage doesn't support?" Real flags are fixed by code (swap/cut, §4.2). Untagged sentences containing a number, name or quote are flagged by code. **Switch-over:** in the first live batch (§5D) only, the Claude Fact-checker also runs and both results are logged. If Jev catches everything Claude caught, Claude is removed and Jev becomes the only fact-checker. If not, the gaps decide whether to switch. This is a one-batch comparison, written here as an exception to §2.2, not a permanent extra stage. |
 | **Jev story-scoring questions** (§5A #1) | **Use the six questions as written,** with "AI is the main subject" as the relevance wording. Relevance and substance are required, the other four add to the score, and ties are broken by outlet count. **Calibration (plan S1): Tommy labels ~20 past articles alone.** |
 | **Jev strategy scoring** (§5A #3) | **Retired** with the old pipeline. Not part of the rebuild. |
 | **Pattern threshold** (§2.3) | **3 or more of the last 10 posts** (rolling) makes a failure a fix candidate. **Exception:** anything that publishes a false fact or a wrong-person photo is fixed after a single occurrence. |
