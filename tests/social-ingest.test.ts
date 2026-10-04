@@ -124,8 +124,9 @@ const group = (over: Partial<StoryGroup> = {}): StoryGroup => ({
 
 test('scoring: skip list, already posted, and the required questions', () => {
   const base = { ai_main_subject: 0.9, substance: 0.9, number_or_quote: 0.9, why_it_matters: 0.9, sourcing: 0.9, photographable_subject: 0.9 };
-  assert.equal(judge(group(), { ...base, skip_crime_violence: 0.9 }).status, 'skipped');
-  assert.equal(judge(group(), { ...base, skip_crime_violence: 0.84 }).status, 'qualified');
+  assert.equal(Scoring.THRESHOLDS.SKIP_MIN, 0.5);
+  assert.equal(judge(group(), { ...base, skip_crime_violence: 0.5 }).status, 'skipped');
+  assert.equal(judge(group(), { ...base, skip_crime_violence: 0.49 }).status, 'qualified');
   assert.equal(judge(group(), { ...base, already_posted: 0.8 }).reason, 'already_posted');
   const nq = judge(group(), { ...base, substance: 0.5 });
   assert.equal(nq.status, 'not-qualified');

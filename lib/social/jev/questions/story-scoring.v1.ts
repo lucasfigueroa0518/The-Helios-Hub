@@ -15,8 +15,8 @@ export const THRESHOLDS = {
   REQUIRED_MIN: 0.6,
   /** Each of the four score questions passes at this. */
   BONUS_MIN: 0.5,
-  /** Any skip-list category at or above this skips the story. */
-  SKIP_MIN: 0.85,
+  /** Any skip-list category at or above this skips the story. 0.5 per Tommy (2026-10-04), pending S1. */
+  SKIP_MIN: 0.5,
   /** Already-posted at or above this skips the story. */
   POSTED_MIN: 0.7,
 } as const;
