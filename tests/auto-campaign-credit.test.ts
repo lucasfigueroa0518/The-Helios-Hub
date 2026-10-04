@@ -94,11 +94,53 @@ test('selectIdsToEnrich drops stored Apollo IDs and LinkedIn URLs before taking 
     quota: 2,
   });
   assert.deepEqual(selected.toEnrich, ['new-2', 'new-3']);
+  assert.deepEqual(selected.reuse, []);
   assert.equal(selected.skippedKnown, 2);
   assert.equal(selected.leftoverNew, 1);
   assert.equal(selected.pageExhausted, false);
   assert.equal(nextSearchPage(4, false), 4);
   assert.equal(nextSearchPage(4, true), 5);
+});
+
+test('selectIdsToEnrich attaches stored leads from other campaigns without enriching them', () => {
+  const selected = selectIdsToEnrich({
+    hits: [
+      hit('on-campaign'),
+      hit('old-1'),
+      hit('new-apollo', 'https://linkedin.com/in/old-two'),
+      hit('brand-new'),
+    ],
+    knownApolloIds: new Set(['on-campaign']),
+    knownLinkedinUrls: new Set(),
+    reusableApolloIds: new Set(['old-1']),
+    reusableLinkedinToApolloId: new Map([['linkedin.com/in/old-two', 'old-2']]),
+    quota: 3,
+  });
+  assert.deepEqual(selected.reuse.map((row) => row.apolloPersonId), ['old-1', 'old-2']);
+  assert.deepEqual(selected.toEnrich, ['brand-new']);
+  assert.equal(selected.skippedKnown, 1);
+  assert.equal(selected.pageExhausted, true);
+});
+
+test('prospecting attaches a lead from another campaign and does not enrich them again', async () => {
+  const client = fakeClient({
+    1: [hit('old-1'), hit('new-1')],
+  });
+  const result = await runPeopleSearchProspecting(client, {
+    emailsPerDay: 1,
+    page: 1,
+    searchParams: { q_keywords: 'cre' },
+    expansionStep: 0,
+    knownApolloIds: new Set(),
+    knownLinkedinUrls: new Set(),
+    reusableApolloIds: new Set(['old-1']),
+    reusablePeople: new Map([['old-1', person('old-1', 'old@example.com')]]),
+  });
+  assert.deepEqual(client.enrichCalls, []);
+  assert.equal(result.attached.length, 1);
+  assert.equal(result.attached[0]?.email, 'old@example.com');
+  assert.equal(result.pageEnd, 1);
+  assert.equal(result.filled, true);
 });
 
 test('prospecting never enriches stored IDs and stops once emails_per_day verified leads attach', async () => {

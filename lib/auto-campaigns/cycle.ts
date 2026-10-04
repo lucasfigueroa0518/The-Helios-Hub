@@ -7,8 +7,7 @@ import {
   createProspectRun,
   loadAttachedOnNyDate,
   loadAutoCampaign,
-  loadKnownApolloIds,
-  loadKnownLinkedinUrls,
+  loadProspectMemory,
   loadQueuedOrSentEmails,
   ownerHasReadySender,
   saveProspectRunStats,
@@ -207,11 +206,10 @@ export async function runAutoCampaignCycle(campaignId: string): Promise<{
       await appendProspectLog(runId, stubStats(campaign, opening));
     }
 
-    const [knownApolloIds, knownLinkedinUrls] = await Promise.all([
-      loadKnownApolloIds(),
-      loadKnownLinkedinUrls(),
-    ]);
-    const queuedOrSent = await loadQueuedOrSentEmails();
+    const memory = await loadProspectMemory(campaignId);
+    const knownApolloIds = memory.knownApolloIds;
+    const knownLinkedinUrls = memory.knownLinkedinUrls;
+    const queuedOrSent = await loadQueuedOrSentEmails(campaignId);
 
     let page = campaign.apollo_search_page;
     let expansionStep = campaign.expansion_step;
@@ -238,6 +236,9 @@ export async function runAutoCampaignCycle(campaignId: string): Promise<{
         expansionStep,
         knownApolloIds,
         knownLinkedinUrls,
+        reusableApolloIds: memory.reusableApolloIds,
+        reusableLinkedinToApolloId: memory.reusableLinkedinToApolloId,
+        reusablePeople: memory.reusablePeople,
       });
       combined.log.push(...prospected.stats.log);
       combined.searches += prospected.stats.searches;

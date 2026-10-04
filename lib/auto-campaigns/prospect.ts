@@ -23,6 +23,10 @@ export type ProspectRunInput = {
   expansionStep: number;
   knownApolloIds: Set<string>;
   knownLinkedinUrls: Set<string>;
+  /** Stored on another campaign. Attached as-is. Apollo is not called. */
+  reusableApolloIds?: Set<string>;
+  reusableLinkedinToApolloId?: Map<string, string>;
+  reusablePeople?: Map<string, EnrichedPerson>;
   now?: Date;
 };
 
@@ -124,13 +128,28 @@ export async function runPeopleSearchProspecting(
       hits,
       knownApolloIds: knownIds,
       knownLinkedinUrls: knownLinkedin,
+      reusableApolloIds: input.reusableApolloIds,
+      reusableLinkedinToApolloId: input.reusableLinkedinToApolloId,
       quota: remaining,
     });
     skippedKnown += selected.skippedKnown;
-    log(entries, 'skip', `Dropped ${selected.skippedKnown} stored Apollo/LinkedIn hits before enrich`, {
+    log(entries, 'skip', `Dropped ${selected.skippedKnown} leads already on this campaign, or stored without an email`, {
       page,
       count: selected.skippedKnown,
     }, now);
+    if (selected.reuse.length > 0) {
+      log(entries, 'skip', `Attaching ${selected.reuse.length} leads already stored on other campaigns`, {
+        page,
+        count: selected.reuse.length,
+      }, now);
+      for (const row of selected.reuse) {
+        knownIds.add(row.hitApolloPersonId);
+        const person = input.reusablePeople?.get(row.apolloPersonId);
+        if (!person?.email || !person.emailVerified) continue;
+        rememberPerson(person, knownIds, knownLinkedin);
+        attached.push(person);
+      }
+    }
 
     if (selected.toEnrich.length > 0) {
       const batches = chunkIds(selected.toEnrich);

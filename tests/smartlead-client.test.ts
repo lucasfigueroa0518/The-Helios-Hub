@@ -229,7 +229,7 @@ test('chunk splits exactly at the batch ceiling', () => {
   assert.deepEqual(chunks.map((c) => c.length), [400, 400, 50]);
 });
 
-test('handoffLeads sends the suppression-respecting defaults and asks for lead ids', async () => {
+test('handoffLeads still honors the block list and imports leads from other campaigns', async () => {
   stubFetch(() => json({ ok: true, added_count: 1 }));
   await handoffLeads(77, [{ email: 'lead@example.com', first_name: 'Lee' }]);
 
@@ -239,7 +239,7 @@ test('handoffLeads sends the suppression-respecting defaults and asks for lead i
   assert.deepEqual(body.settings, {
     ignore_global_block_list: false,
     ignore_unsubscribe_list: false,
-    ignore_duplicate_leads_in_other_campaign: false,
+    ignore_duplicate_leads_in_other_campaign: true,
     return_lead_ids: true,
   });
 });

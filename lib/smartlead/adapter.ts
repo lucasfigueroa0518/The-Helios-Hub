@@ -233,7 +233,8 @@ export const detachAccounts = op(
 export const DEFAULT_LEAD_IMPORT_SETTINGS: SmartleadLeadImportSettings = {
   ignore_global_block_list: false,
   ignore_unsubscribe_list: false,
-  ignore_duplicate_leads_in_other_campaign: false,
+  // A lead already in another campaign is still imported into this one.
+  ignore_duplicate_leads_in_other_campaign: true,
   return_lead_ids: true,
 };
 

@@ -7,6 +7,7 @@ import {
   type AutoStatus,
   type CampaignKind,
   type LeadAttributes,
+  type EnrichedPerson,
   type PeopleSearchParams,
   type ProspectCycleStats,
 } from '@/lib/auto-campaigns/types';
@@ -94,30 +95,103 @@ export async function listUsedQueueColors(_ownerId?: string): Promise<string[]> 
   return rows.flatMap((row) => row.queue_color ? [row.queue_color] : []);
 }
 
-export async function loadKnownApolloIds(): Promise<Set<string>> {
-  const { rows } = await dbQuery<{ apollo_person_id: string }>(
-    `SELECT apollo_person_id FROM outreach.leads WHERE apollo_person_id IS NOT NULL`,
-  );
-  return new Set(rows.map((row) => row.apollo_person_id));
-}
+export type ProspectMemory = {
+  /** On this campaign, suppressed, or stored with no email. Do not enrich. */
+  knownApolloIds: Set<string>;
+  knownLinkedinUrls: Set<string>;
+  /** Active leads with an email who are not on this campaign. */
+  reusableApolloIds: Set<string>;
+  reusableLinkedinToApolloId: Map<string, string>;
+  reusablePeople: Map<string, EnrichedPerson>;
+};
 
-export async function loadKnownLinkedinUrls(): Promise<Set<string>> {
-  const { rows } = await dbQuery<{ linkedin_url: string }>(
-    `SELECT linkedin_url FROM outreach.leads WHERE linkedin_url IS NOT NULL AND length(trim(linkedin_url)) > 0`,
+/**
+ * Other campaigns are not a duplicate list. A lead already emailed elsewhere
+ * can be attached here. Apollo is not called again for anyone we have stored.
+ * Bounces, unsubscribes, and complaints stay excluded.
+ */
+export async function loadProspectMemory(campaignId: string): Promise<ProspectMemory> {
+  const { rows } = await dbQuery<{
+    apollo_person_id: string | null;
+    linkedin_url: string | null;
+    full_name: string | null;
+    email_primary: string | null;
+    title: string | null;
+    company_name: string | null;
+    location: string | null;
+    contact_status: string;
+    on_campaign: boolean;
+  }>(
+    `SELECT l.apollo_person_id,
+            l.linkedin_url,
+            l.full_name,
+            l.email_primary,
+            l.title,
+            l.company_name,
+            l.location,
+            l.contact_status,
+            EXISTS (
+              SELECT 1 FROM outreach.campaign_leads cl
+               WHERE cl.lead_id = l.id AND cl.campaign_id = $1::uuid
+            ) AS on_campaign
+       FROM outreach.leads l
+      WHERE l.apollo_person_id IS NOT NULL
+         OR nullif(trim(l.linkedin_url), '') IS NOT NULL`,
+    [campaignId],
   );
-  const urls = new Set<string>();
+
+  const knownApolloIds = new Set<string>();
+  const knownLinkedinUrls = new Set<string>();
+  const reusableApolloIds = new Set<string>();
+  const reusableLinkedinToApolloId = new Map<string, string>();
+  const reusablePeople = new Map<string, EnrichedPerson>();
+
   for (const row of rows) {
-    const normalized = normalizeLinkedinUrl(row.linkedin_url);
-    if (normalized) urls.add(normalized);
+    const apolloId = row.apollo_person_id?.trim() || null;
+    const linkedin = normalizeLinkedinUrl(row.linkedin_url);
+    const email = row.email_primary?.trim() || null;
+    const reusable = Boolean(
+      apolloId
+      && email
+      && !row.on_campaign
+      && row.contact_status === 'active',
+    );
+    if (reusable && apolloId && email) {
+      reusableApolloIds.add(apolloId);
+      if (linkedin) reusableLinkedinToApolloId.set(linkedin, apolloId);
+      reusablePeople.set(apolloId, {
+        apolloPersonId: apolloId,
+        fullName: row.full_name?.trim() || 'Unknown',
+        title: row.title,
+        company: row.company_name,
+        location: row.location,
+        email,
+        linkedinUrl: row.linkedin_url,
+        emailVerified: true,
+      });
+      continue;
+    }
+    if (apolloId) knownApolloIds.add(apolloId);
+    if (linkedin) knownLinkedinUrls.add(linkedin);
   }
-  return urls;
+
+  return {
+    knownApolloIds,
+    knownLinkedinUrls,
+    reusableApolloIds,
+    reusableLinkedinToApolloId,
+    reusablePeople,
+  };
 }
 
-export async function loadQueuedOrSentEmails(): Promise<Set<string>> {
+/** Emails already queued or sent on this campaign. Other campaigns are ignored. */
+export async function loadQueuedOrSentEmails(campaignId: string): Promise<Set<string>> {
   const { rows } = await dbQuery<{ to_email: string }>(
     `SELECT DISTINCT lower(to_email) AS to_email
        FROM outreach.email_send_queue
-      WHERE status IN ('queued', 'sending', 'sent')`,
+      WHERE campaign_id = $1::uuid
+        AND status IN ('queued', 'handing_off', 'handed_off', 'sending', 'sent')`,
+    [campaignId],
   );
   return new Set(rows.map((row) => row.to_email));
 }

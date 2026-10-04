@@ -6,6 +6,8 @@
  * - drop known apollo_person_ids (and known LinkedIn URLs) BEFORE any enrich
  * - keep enriching never-seen IDs until `emails_per_day` verified emails attach
  * - never enrich someone already stored
+ * - a stored lead from another campaign can fill today's quota without a new enrich
+ * - a lead already on this campaign stays skipped
  * - organization search is opt-in paid (1 credit/page) and off by default
  * - stopping at N enrich attempts when fewer than N verified emails attached is a defect
  */
@@ -45,21 +47,37 @@ export function assertPeopleSearchTool(toolName: string): void {
   }
 }
 
+export type ReusePick = {
+  /** Lead row to attach. May differ from the search hit when LinkedIn is the match. */
+  apolloPersonId: string;
+  hitApolloPersonId: string;
+};
+
 export function selectIdsToEnrich(input: {
   hits: PeopleSearchHit[];
   knownApolloIds: Set<string>;
   knownLinkedinUrls: Set<string>;
   quota: number;
+  /** Stored on another campaign, with an email. Never enriched. */
+  reusableApolloIds?: Set<string>;
+  /** Normalized LinkedIn URL → stored Apollo id. */
+  reusableLinkedinToApolloId?: Map<string, string>;
 }): {
   toEnrich: string[];
+  reuse: ReusePick[];
   skippedKnown: number;
   leftoverNew: number;
   pageExhausted: boolean;
 } {
   const quota = Math.max(0, Math.floor(input.quota));
   const toEnrich: string[] = [];
+  const reuse: ReusePick[] = [];
+  const reuseIds = new Set<string>();
   let skippedKnown = 0;
   let leftoverNew = 0;
+  let leftoverReuse = 0;
+
+  const taken = () => toEnrich.length + reuse.length;
 
   for (const hit of input.hits) {
     const id = hit.apolloPersonId?.trim();
@@ -74,7 +92,22 @@ export function selectIdsToEnrich(input: {
       skippedKnown += 1;
       continue;
     }
-    if (toEnrich.length >= quota) {
+    const reuseId = input.reusableApolloIds?.has(id)
+      ? id
+      : linkedin
+        ? input.reusableLinkedinToApolloId?.get(linkedin) ?? null
+        : null;
+    if (reuseId) {
+      if (reuseIds.has(reuseId)) continue;
+      if (taken() >= quota) {
+        leftoverReuse += 1;
+        continue;
+      }
+      reuseIds.add(reuseId);
+      reuse.push({ apolloPersonId: reuseId, hitApolloPersonId: id });
+      continue;
+    }
+    if (taken() >= quota) {
       leftoverNew += 1;
       continue;
     }
@@ -83,9 +116,10 @@ export function selectIdsToEnrich(input: {
 
   return {
     toEnrich,
+    reuse,
     skippedKnown,
     leftoverNew,
-    pageExhausted: leftoverNew === 0,
+    pageExhausted: leftoverNew === 0 && leftoverReuse === 0,
   };
 }
 
