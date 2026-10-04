@@ -319,12 +319,31 @@ The dark overlay behind the cover headline stays (decided). It's still listed un
 The template is locked by the design-v1 contract.
 
 - **Fit:** measure that the headline actually fits and clears the orange arrow, instead of relying on the 90-character limit. `cause · code · 0 AI`
+- **Arrow moves to the top right, set lower (DECIDED, 2026-10-04 review; overrides the design-v1 "arrow bottom-right" contract).**
+  - **Why:** in the review mock-up, the cover headline ran into the bottom-right arrow.
+  - **Where:** the orange arrow now sits in the top-right corner, about 8% down from the top edge. That keeps it clear of Instagram's "1/N" slide counter, which overlays the top-right corner in the feed.
+  - **Headline:** stays anchored bottom-left and can use the full width, so the two can't collide.
+  - **Clear zone:** a fixed zone around the arrow is kept free of text.
+  - **Faces:** the face-safe crop (below) also keeps faces out of the arrow zone.
+  - `design change · renderer code · 0 AI`
 - **Face-safe crop:** a plain code library finds where the face is, never who it is, so the 4:5 crop doesn't cut it off. `cause · code · 0 AI`
 - **No usable photo:** the dark canvas. That's a normal outcome.
 
 ### 5.3 Slide variety (DECIDED)
 
 **Exact excerpts from quotes:** the Writer may use an exact excerpt of a listed quote (with "…"). Code checks that it appears word for word in the original. The same check applies to any text in quotation marks inside a body.
+
+**No more than 2 slides in a row with the same look (DECIDED, from the 2026-10-04 review).** The renderer has a small set of layouts:
+- full-bleed photo with text at the bottom;
+- photo on top, text panel below;
+- text on top, photo below;
+- stat;
+- quote;
+- spread.
+
+It assigns them so that **no 3 consecutive slides share a layout.** Code enforces this as a rule on the layout sequence. It changes only layouts, never content.
+
+`cause · renderer code · 0 AI`
 
 - **No mandatory variety.** A quota produces invented stats and padded slides.
 - **The cause is fixed at the Reporter:** the brief supplies the material for different slide types (§4).
@@ -384,7 +403,7 @@ Jev answers yes/no questions with a confidence score. It's very cheap (input onl
 | 2 | **Duplicate stories:** is this the same story as one recently posted, or one already in today's feed? | Nothing yet; part of ingest scoring | PROPOSED |
 | 3 | ~~Strategy decisions~~ | — | **Retired** with the old pipeline (§10) |
 | 4 | **Fact-checking claim by claim.** The Writer tags each claim with the brief fact it came from. Jev answers "does this source passage support this sentence?" A failed claim gets the brief's own wording swapped in by code (fits §4.2). Only replaces the Claude Fact-checker after matching it on a test set of past posts with known errors. | Claude Fact-checker | **DECIDED: built now**, with a one-batch comparison against Claude (§10) |
-| 5 | **Identifying photo subjects:** does this Wikidata entry match the person or company in the brief? | Matching logic | PROPOSED |
+| 5 | **Identifying photo subjects:** does this Wikidata entry match the person or company in the brief? | Matching logic | **DECIDED, required in M6** (S2, 2026-10-04: the old resolver matched "METR" to MGM and "Cursor" to the mouse cursor, 2 of 13 company matches. That's a measured rate, not a one-off, and a wrong subject is a must-hold failure.) **Two checks, both required before a photo is used:** (1) **Code:** the entry's "instance of" (P31) must fit the subject type (person = human; company = organization or business). (2) **Jev:** "Does this entry's description match the brief's description of this subject?" Jev also picks among the top candidates when the resolver can't decide, which recovers famous names it currently drops (Musk, Sacks, Lawler, NSA, FINRA). If either check fails, no photo of that subject; use the fallback chain. |
 | 6 | **Pre-screening stock photos:** do the photo's title and tags fit the requested scene? Runs before the image check. | Fewer image-check calls | PROPOSED |
 
 **Story-scoring questions (#1, PROPOSED):**
@@ -530,7 +549,7 @@ These came up once in hand-run tests. They become fixes only if they recur in re
 6. Output structure: all required fields are present and parse.
 7. Character limits (`LIMITS`: cover 90, headline 60, body 220, quote 140, caption 2,200 …).
 8. Image licence allowed and credit data present.
-9. Image loads, meets the minimum resolution and crops safely.
+9. Image loads, meets the minimum resolution and crops safely. **Photos are never stretched or squashed (2026-10-04 review):** the renderer only scales evenly and crops to fit the slot (face-safe crop). The check compares the rendered photo's width-to-height ratio with the source file and fails on any difference. A photo too small to fill its slot without upscaling past the resolution limit is rejected, and the next candidate is used. Spread slides need a landscape photo at least twice as wide as one slide.
 10. Every slide renders, with no text overflow or collision.
 11. Cost cap.
 

@@ -186,6 +186,12 @@ If one fails, adjust the spec before building around it.
 
 ### M6: Design and photos (spec §5.1–5.3a)
 
+**S2 results (2026-10-04) that shape M6:**
+
+- **People:** 60% have at least 1 usable Commons photo, 47% have 2 or more. Well-known people are covered; lesser-known people mostly aren't.
+- **Companies:** 13% have one. Company slides depend on **press kits** and the **photo bank**, so build the press-kit lookup early in M6. The bank needs plenty of generic company scenes (offices, servers, product-in-hand).
+- **Identity check:** the subject identity check (spec §5A #5: the P31 type check plus Jev's description match) is required before any subject photo is used.
+
 - **Photo chain:**
   - article photos filtered by their credit line;
   - official portraits and government galleries by date;
