@@ -1,0 +1,860 @@
+/* Helios Social — slide preview (design v1).
+   Deliberately isolated from Hub's globals.css: all brand tokens declared
+   inside `.helios-slide` so the same component works when embedded elsewhere
+   (Vercel Sandbox, standalone HTML, headless Playwright).
+
+   Dark canvas is the default. Cover stays untouched from the pre-v1 render. */
+
+/* ── Preview shell (dev-only wrapper, not exported) ───────────────────── */
+
+.preview-shell {
+  min-height: 100vh;
+  background: #1a1a1a;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 24px 80px;
+  gap: 20px;
+}
+
+.preview-shell__meta {
+  font-family: var(--font-roboto-mono), 'Roboto Mono', ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.24em;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.preview-shell__stage {
+  width: calc(1080px * var(--slide-scale, 0.55));
+  height: var(--slide-height, calc(1350px * var(--slide-scale, 0.55)));
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 48px;
+  border-radius: 2px;
+  outline: 1px solid rgba(255, 255, 255, 0.10);
+}
+/* Slide index label between stages so it's obvious which slide is which. */
+.preview-shell__stage::after {
+  content: attr(data-slide-number);
+  position: absolute;
+  bottom: -32px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: var(--font-roboto-mono), 'Roboto Mono', ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  color: rgba(255, 255, 255, 0.35);
+  text-transform: uppercase;
+}
+
+/* Multi-post view — one section per generated post, stacked vertically. */
+.preview-shell__section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding-top: 40px;
+  border-top: 1px solid rgba(255, 255, 255, 0.10);
+  width: 100%;
+  max-width: calc(1080px * var(--slide-scale, 0.55));
+}
+
+.preview-shell__section:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.preview-shell__section-title {
+  margin: 0;
+  font-family: var(--font-roboto-mono), 'Roboto Mono', ui-monospace, Menlo, monospace;
+  font-size: 14px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.85);
+  text-align: center;
+}
+
+.preview-shell__section-slug {
+  margin: -12px 0 12px;
+  font-family: var(--font-roboto-mono), 'Roboto Mono', ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  text-align: center;
+  word-break: break-all;
+}
+
+/* ── Slide base (brand tokens live here) ──────────────────────────────── */
+
+.helios-slide {
+  --brand-orange:      #FF5E1A;
+  --brand-orange-soft: rgba(255, 94, 26, 0.10);
+  /* Design v1 green: brighter than prior #138510. */
+  --brand-green:       #1BBF17;
+
+  /* Dark canvas is the default. */
+  --brand-canvas:      #0A0A0A;
+  --brand-narrative:   #FFFFFF;
+  --brand-narrative-muted: rgba(255, 255, 255, 0.66);
+  --brand-narrative-quiet: rgba(255, 255, 255, 0.45);
+
+  --font-heading:      var(--font-pragmatica), 'Pragmatica Extended', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-body:         var(--font-roboto), 'Roboto', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-mono:         var(--font-roboto-mono), 'Roboto Mono', ui-monospace, Menlo, monospace;
+
+  background: var(--brand-canvas);
+  color: var(--brand-narrative);
+
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+  transform: scale(var(--slide-scale, 0.55));
+
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+
+  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.55);
+}
+
+/* Canvas dimensions. Inner padding 96px per design v1 §Type ("Margins stay
+   at 96px left and right"). */
+.helios-slide--carousel {
+  width: 1080px;
+  height: 1350px;
+  padding: 96px;
+}
+
+.helios-slide--story {
+  width: 1080px;
+  height: 1920px;
+  padding: 240px 96px 240px;
+}
+
+.helios-slide__well {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Cover manages its own layout (full-bleed / bottom-anchored), so undo the
+   well's padding. Same for image slides (they reuse the cover treatment). */
+.helios-slide--cover .helios-slide__well,
+.helios-slide--image .helios-slide__well,
+.helios-slide--follow .helios-slide__well {
+  padding: 0;
+}
+
+/* ── Chrome: top-right HELIOS wordmark on non-cover / non-follow / non-image ── */
+
+.helios-masthead {
+  position: absolute;
+  top: 48px;
+  right: 96px;
+  z-index: 3;
+  text-align: right;
+}
+
+.helios-masthead__wordmark {
+  font-family: var(--font-body);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.40em;
+  text-transform: uppercase;
+  color: var(--brand-narrative);
+}
+
+/* ── Three-role color-emphasis spans ──────────────────────────────────── */
+
+.helios-span { color: inherit; }
+.helios-span--narrative { color: var(--brand-narrative); }
+.helios-span--hook      { color: var(--brand-orange); }
+.helios-span--pivot     { color: var(--brand-green); }
+
+/* ── Cover — FROZEN from pre-v1 per design v1 §Read this first ────────── */
+
+.helios-cover {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+/* Photo-bleed fills the full 1080×1350 slide. Negative offsets escape the
+   slide's 96px padding — the well sits inset by 96px, so the bleed needs
+   to start at the slide edge, not the well edge. */
+.helios-cover--bleed {
+  position: absolute;
+  top: -96px;
+  left: -96px;
+  width: 1080px;
+  height: 1350px;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  background: var(--brand-canvas);
+}
+
+.helios-cover__bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1080px;
+  height: 1350px;
+  object-fit: cover;
+  object-position: center top;
+  display: block;
+  z-index: 0;
+}
+
+.helios-cover__scrim {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1080px;
+  height: 200px;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(180deg,
+    rgba(10, 10, 10, 0.40) 0%,
+    rgba(10, 10, 10, 0.00) 100%
+  );
+}
+
+.helios-cover__scrim--bottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 1080px;
+  height: 45%;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(180deg,
+    rgba(10, 10, 10, 0.00) 0%,
+    rgba(10, 10, 10, 0.55) 55%,
+    rgba(10, 10, 10, 0.85) 100%
+  );
+}
+
+.helios-cover--bleed .helios-cover__foreground {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: block;
+}
+
+.helios-cover--bleed .helios-cover__headline {
+  position: absolute;
+  left: 60px;
+  right: 60px;
+  bottom: 60px;
+  font-size: 84px;
+  line-height: 0.96;
+  letter-spacing: -0.03em;
+  margin: 0;
+}
+
+.helios-cover__foreground {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  height: 100%;
+}
+
+.helios-cover__headline {
+  font-family: var(--font-heading);
+  font-size: 108px;
+  font-weight: 700;
+  line-height: 0.92;
+  letter-spacing: -0.035em;
+  color: var(--brand-narrative);
+  margin: 0;
+  margin-top: auto;
+  text-transform: uppercase;
+  /* Never break inside a word (2026-09-29 late: prior value was
+   * `break-word` which split "UNCONTROLLABLE" as "UNCONTROLLABL/E" on
+   * the Suleyman cover). Long words wrap to a new line intact instead.
+   * Arrow-overlap is now enforced by the pre-render code-check gate
+   * (renders the cover alone via Playwright and HARD-fails the run if
+   * text collides with the chevron), not by narrowing the column. */
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+  max-width: 100%;
+}
+
+.helios-cover__headline[data-length="xs"] { font-size: 132px; line-height: 0.9;  letter-spacing: -0.04em;  }
+.helios-cover__headline[data-length="sm"] { font-size: 108px; line-height: 0.92; letter-spacing: -0.035em; }
+.helios-cover__headline[data-length="md"] { font-size: 88px;  line-height: 0.94; letter-spacing: -0.03em;  }
+.helios-cover__headline[data-length="lg"] { font-size: 72px;  line-height: 0.96; letter-spacing: -0.025em; }
+.helios-cover__headline[data-length="xl"] { font-size: 60px;  line-height: 1;    letter-spacing: -0.02em;  }
+
+.helios-cover--bleed .helios-cover__headline {
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* Cover chevron bottom-right — orange arrow.
+ * 2026-09-29 late second pass: LOCKED from design-v1 reference fixtures
+ * (runs/design-v1-fixture-{no,with}-photos/preview/slide-00.png). These
+ * exact coordinates are covered by a test that fails if they move. Don't
+ * change without renewing both fixtures. */
+.helios-cover__chevron {
+  position: absolute;
+  right: 96px;
+  bottom: 60px;
+  font-family: var(--font-body);
+  font-size: 60px;
+  font-weight: 700;
+  color: var(--brand-orange);
+  line-height: 1;
+  z-index: 3;
+}
+
+/* Arrow-box reserve attempt reverted 2026-09-29 late second pass:
+ * float+shape-outside on ::after reserved horizontal space on EVERY
+ * line, not just the arrow's row (the design-v1 no-photos fixture
+ * regressed from a wide layout to a narrow column). CSS can't reliably
+ * "reserve only the bottom lines" without either a fixed-line-count
+ * layout or manipulating the DOM per render. Enforcement stays in the
+ * cover-fit HARD gate: at code-check time, Playwright measures the
+ * rendered cover; any word that would collide with the arrow fails the
+ * gate and the Editor rewrites shorter. Cover template unchanged from
+ * the design-v1 reference fixtures. */
+
+/* ── Text slide (HEADLINE + BODY, top-anchored) ───────────────────────── */
+
+.helios-text {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  padding-top: 96px;
+}
+
+.helios-text__headline {
+  font-family: var(--font-heading);
+  font-size: 100px;
+  font-weight: 700;
+  line-height: 0.94;
+  letter-spacing: -0.03em;
+  color: var(--brand-narrative);
+  text-transform: uppercase;
+  margin: 0;
+  overflow-wrap: break-word;
+}
+
+.helios-text__headline[data-length="xs"] { font-size: 100px; }
+.helios-text__headline[data-length="sm"] { font-size: 100px; }
+.helios-text__headline[data-length="md"] { font-size: 84px; }
+.helios-text__headline[data-length="lg"] { font-size: 72px; }
+
+/* Body is fixed at 44px. NEVER scales. NEVER clips. If it overflows,
+   the render is a failure — human review handles it. See
+   docs/DESIGN-V1-HANDOFF.md §Type. */
+.helios-text__body {
+  font-family: var(--font-body);
+  font-size: 44px;
+  font-weight: 400;
+  line-height: 1.32;
+  color: var(--brand-narrative);
+  margin: 0;
+  max-width: 100%;
+  overflow: visible;
+  position: relative;
+  z-index: 2;
+}
+
+/* Text slide with a supporting photo — headline + body stay at the top;
+   the photo occupies the bottom half of the canvas, full width, fading
+   upward into the canvas so the text area stays clean. Negative offsets
+   escape the slide's 96px padding so the photo reaches the true edge. */
+.helios-text--with-photo .helios-text__headline,
+.helios-text--with-photo .helios-text__body {
+  position: relative;
+  z-index: 2;
+}
+
+.helios-text__photo-frame {
+  position: absolute;
+  left: -96px;
+  right: -96px;
+  bottom: -96px;
+  height: 58%;
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to top, #000 0%, #000 40%, transparent 100%);
+  mask-image: linear-gradient(to top, #000 0%, #000 40%, transparent 100%);
+}
+
+.helios-text__photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+  display: block;
+}
+
+/* ── Landing slide (HEADLINE only, centered) ──────────────────────────── */
+
+.helios-landing {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 32px;
+}
+
+.helios-landing__line {
+  font-family: var(--font-heading);
+  font-size: 125px;
+  font-weight: 700;
+  line-height: 0.94;
+  letter-spacing: -0.035em;
+  color: var(--brand-narrative);
+  text-transform: uppercase;
+  margin: 0;
+  overflow-wrap: break-word;
+}
+
+.helios-landing__line[data-length="xs"] { font-size: 125px; }
+.helios-landing__line[data-length="sm"] { font-size: 104px; }
+.helios-landing__line[data-length="md"] { font-size: 88px; }
+
+.helios-landing__note {
+  font-family: var(--font-body);
+  font-size: 38px;
+  font-weight: 400;
+  line-height: 1.32;
+  color: var(--brand-narrative-muted);
+  margin: 0;
+}
+
+/* ── Stat slide (headline top, big number + note bottom) ──────────────── */
+
+.helios-stat {
+  position: relative;
+  flex: 1;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  row-gap: 32px;
+  padding-top: 96px;
+  padding-bottom: 16px;
+}
+
+.helios-stat__headline {
+  font-family: var(--font-heading);
+  font-size: 72px;
+  font-weight: 700;
+  line-height: 0.98;
+  letter-spacing: -0.025em;
+  color: var(--brand-narrative);
+  text-transform: uppercase;
+  margin: 0;
+  overflow-wrap: break-word;
+}
+
+.helios-stat__body {
+  font-family: var(--font-body);
+  font-size: 44px;
+  font-weight: 400;
+  line-height: 1.32;
+  color: var(--brand-narrative);
+  margin: 0;
+  overflow: visible;
+}
+
+.helios-stat__photo {
+  width: 100%;
+  max-height: 400px;
+  object-fit: cover;
+  display: block;
+}
+
+.helios-stat__number-block {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: auto;
+}
+
+.helios-stat__number {
+  font-family: var(--font-heading);
+  font-size: 260px;
+  font-weight: 700;
+  line-height: 0.88;
+  letter-spacing: -0.045em;
+  color: var(--brand-narrative);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* Character-count scaler for the big number — same ladder as pre-v1
+   preserves fit. */
+.helios-stat__number[data-length="5"]  { font-size: 232px; }
+.helios-stat__number[data-length="6"]  { font-size: 208px; }
+.helios-stat__number[data-length="7"]  { font-size: 184px; }
+.helios-stat__number[data-length="8"]  { font-size: 168px; }
+.helios-stat__number[data-length="9"],
+.helios-stat__number[data-length="10"],
+.helios-stat__number[data-length="11"],
+.helios-stat__number[data-length="12"] { font-size: 152px; }
+
+.helios-stat__number-note {
+  font-family: var(--font-body);
+  font-size: 38px;
+  font-weight: 400;
+  line-height: 1.32;
+  color: var(--brand-narrative-muted);
+  margin: 0;
+}
+
+/* ── Split-stat slide ─────────────────────────────────────────────────── */
+
+.helios-split-stat {
+  position: relative;
+  flex: 1;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  row-gap: 32px;
+  padding-top: 96px;
+  padding-bottom: 16px;
+}
+
+.helios-split-stat__headline {
+  font-family: var(--font-heading);
+  font-size: 100px;
+  font-weight: 700;
+  line-height: 0.94;
+  letter-spacing: -0.03em;
+  color: var(--brand-narrative);
+  text-transform: uppercase;
+  margin: 0;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+/* Same 100 / 84 / 72 ladder the Text slide uses so both types share
+   headline scale. */
+.helios-split-stat__headline[data-length="xs"] { font-size: 100px; }
+.helios-split-stat__headline[data-length="sm"] { font-size: 100px; }
+.helios-split-stat__headline[data-length="md"] { font-size: 84px; }
+.helios-split-stat__headline[data-length="lg"] { font-size: 72px; }
+
+.helios-split-stat__photo {
+  width: 100%;
+  max-height: 320px;
+  object-fit: cover;
+  display: block;
+}
+
+.helios-split-stat__pair {
+  display: flex;
+  align-items: flex-end;
+  gap: 40px;
+  margin-top: auto;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.24);
+}
+
+.helios-split-stat__col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.helios-split-stat__rule {
+  width: 1px;
+  align-self: stretch;
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.helios-split-stat__number {
+  font-family: var(--font-heading);
+  font-size: 146px;
+  font-weight: 700;
+  line-height: 0.9;
+  letter-spacing: -0.04em;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.helios-split-stat__number--left  { color: var(--brand-narrative); }
+.helios-split-stat__number--right { color: var(--brand-orange); }
+
+.helios-split-stat__number[data-length="5"]  { font-size: 130px; }
+.helios-split-stat__number[data-length="6"]  { font-size: 108px; }
+.helios-split-stat__number[data-length="7"]  { font-size: 92px; }
+.helios-split-stat__number[data-length="8"]  { font-size: 84px; }
+.helios-split-stat__number[data-length="9"],
+.helios-split-stat__number[data-length="10"],
+.helios-split-stat__number[data-length="11"],
+.helios-split-stat__number[data-length="12"] { font-size: 72px; }
+
+.helios-split-stat__note {
+  font-family: var(--font-body);
+  font-size: 38px;
+  font-weight: 400;
+  line-height: 1.28;
+  color: var(--brand-narrative-muted);
+  margin: 0;
+}
+
+/* ── Quote slide ──────────────────────────────────────────────────────── */
+
+.helios-quote {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  padding-top: 96px;
+  padding-bottom: 16px;
+}
+
+.helios-quote__speaker {
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  margin: 0;
+}
+
+/* On-slide photo credit (2026-10-01 image redesign). Small, low-weight
+ * caption placed near the photo it applies to. Three variants:
+ *  - --bleed:   full-frame cover / image slide, overlaid bottom-right
+ *  - --frame:   photo sits inside a smaller frame (text / stat), caption
+ *               tucked beneath the frame's bottom-right
+ *  - --roundel: quote speaker roundel, caption under the roundel
+ */
+.helios-photo-credit {
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.72);
+  z-index: 3;
+  pointer-events: none;
+  line-height: 1.2;
+}
+.helios-photo-credit--bleed {
+  position: absolute;
+  right: 24px;
+  bottom: 20px;
+  max-width: 620px;
+  text-align: right;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.helios-photo-credit--frame {
+  position: absolute;
+  right: 16px;
+  bottom: 8px;
+  max-width: 480px;
+  text-align: right;
+  color: rgba(20, 20, 20, 0.55);
+  background: rgba(255, 255, 255, 0.7);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.helios-photo-credit--roundel {
+  position: static;
+  color: rgba(20, 20, 20, 0.55);
+  text-align: center;
+  margin-top: -12px;
+  font-size: 14px;
+}
+
+.helios-quote__glyph {
+  font-family: var(--font-heading);
+  font-size: 260px;
+  font-weight: 700;
+  line-height: 0.75;
+  color: var(--brand-orange);
+  letter-spacing: -0.05em;
+  margin: 0;
+  padding: 0;
+  position: relative;
+  top: -16px;
+  height: 150px;
+}
+
+.helios-quote__text {
+  font-family: var(--font-heading);
+  font-size: 69px;
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--brand-narrative);
+  margin: 0;
+  max-width: 100%;
+  padding: 0;
+}
+
+.helios-quote__attribution {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--brand-narrative-muted);
+  line-height: 1.4;
+  /* Sit directly under the quote text (no auto push to bottom). Design v2
+     2026-09-29: pinning attribution to the slide bottom read as
+     disconnected — reviewers had to jump their eyes back up to the quote
+     to match speaker to words. */
+  margin-top: 24px;
+}
+
+/* ── Image slide (cover-style full-bleed mid-carousel) ────────────────── */
+
+.helios-image {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+/* Full-bleed image slide reuses the cover's photo/scrim structure. Same
+   photo-fills-slide + darkened-under-text pattern as the cover; only the
+   text block below carries an optional body sentence in addition to the
+   headline. Cover's own CSS remains unchanged. Negative offsets escape
+   the slide's 96px padding, same as the cover. */
+.helios-image--bleed {
+  position: absolute;
+  top: -96px;
+  left: -96px;
+  width: 1080px;
+  height: 1350px;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  background: var(--brand-canvas);
+}
+
+.helios-image__foreground {
+  position: absolute;
+  left: 60px;
+  right: 60px;
+  bottom: 60px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.helios-image__headline {
+  font-family: var(--font-heading);
+  font-size: 84px;
+  font-weight: 700;
+  line-height: 0.96;
+  letter-spacing: -0.03em;
+  color: var(--brand-narrative);
+  text-transform: uppercase;
+  margin: 0;
+  overflow-wrap: break-word;
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+}
+
+.helios-image__body {
+  font-family: var(--font-body);
+  font-size: 44px;
+  font-weight: 400;
+  line-height: 1.32;
+  color: var(--brand-narrative);
+  margin: 0;
+  overflow: visible;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
+}
+
+/* Full-bleed image slides suppress the top-right HELIOS wordmark to keep
+   the photo edge clean (same rule as cover-with-bleed). */
+.helios-slide--image:has(.helios-image--bleed) .helios-masthead {
+  display: none;
+}
+
+/* ── Follow (unchanged) ──────────────────────────────────────────────── */
+
+.helios-slide--follow {
+  background: var(--brand-canvas);
+}
+
+/* Follow slide (design v1.2, 2026-09-29): logo + text group vertically
+   centered as a unit. Previous v1.1 (logo pinned near the top, story
+   line pushed down, handle at the bottom) left the logo floating high
+   and the handle crowding the canvas bottom. New rule: logo, story line,
+   and handle form ONE group centered on the slide, with even space
+   above and below. Centered horizontally. The 96px slide padding is
+   removed for follow (see .helios-slide__well rule). */
+.helios-follow {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Sun-mark logo: 420px. No top-margin — parent's justify-content:center
+   handles vertical placement of the whole group. */
+.helios-follow__mark {
+  width: 420px;
+  height: 420px;
+  margin: 0;
+  object-fit: contain;
+  display: block;
+}
+
+/* Story-tied line. Pragmatica Extended Bold uppercase, 64px, white,
+   with "Follow Helios" in orange via .helios-follow__cta. Compact
+   gap-below-logo so the group reads as one unit. */
+.helios-follow__story-line {
+  margin: 64px 96px 0;
+  max-width: 888px;
+  font-family: var(--font-heading);
+  font-size: 64px;
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--brand-narrative);
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.helios-follow__cta {
+  color: var(--brand-orange);
+}
+
+/* @handle: Roboto 40px, white at 70%. Sits below the story line as
+   part of the same centered group — no auto push to slide bottom. */
+.helios-follow__handle {
+  margin: 40px 0 0;
+  font-family: var(--font-body);
+  font-size: 40px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1;
+  text-transform: lowercase;
+  text-align: center;
+}
