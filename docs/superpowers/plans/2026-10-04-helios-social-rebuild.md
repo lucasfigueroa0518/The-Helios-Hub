@@ -158,7 +158,10 @@ If one fails, adjust the spec before building around it.
 ### M4: Editor, Fact-checker, fixes and fresh drafts (spec §4.1, §4.2, §4.2b)
 
 - **Editor prompt:** line editor, the four reader checks, cut/sharpen only.
-- **Fact-checker prompt:** the single truth test and the 5 always-flag types. Output: a swap from the brief or a cut, never new prose. It checks all 3 cover options.
+- **Fact-checker, two versions:**
+  - **Jev claim checking (target):** Writer claim tags `[F3]` → code pairs each sentence with its source passage → one Jev yes/no per pair. Code also flags untagged sentences that contain a number, name or quote.
+  - **Claude Fact-checker (comparison, batch 1 only):** the single truth test and the 5 always-flag types, giving a swap from the brief or a cut.
+  - Both check all 3 cover options.
 - **Fix logic:** swap → cut → cover fallback → a fresh draft (no notes) → next story. Limits: 2 fresh drafts per story, $5/day.
 - **Accept:** stubbed flags exercise every branch, and the fresh-draft limit and cost cap are enforced.
 
@@ -204,6 +207,7 @@ If one fails, adjust the spec before building around it.
 ### M9: First live batch (spec §5D), with Tommy's explicit go-ahead
 
 - 10 stories in one sitting, about $10–17.
+- Jev and Claude fact-check side by side. Both results are logged and compared, then the pipeline switches to Jev only if Jev catches everything Claude caught (spec §10).
 - Judged on: 0 false facts, 0 wrong-person photos, 0 slides without a photo, 0 render failures, **≥ 7 of 10 approved as is**, plus the other measures.
 - **Pass:** switch on the daily schedule.
 - **Miss:** fix only what shows up in 3 or more of the 10.
