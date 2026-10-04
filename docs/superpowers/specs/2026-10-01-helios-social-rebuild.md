@@ -1,6 +1,5 @@
-# Helios Carousels v2 rebuild: design spec
+# Helios Social v2 rebuild: design spec
 
-> **Naming (2026-10-04):** this product is **Helios Carousels**, the daily AI-news carousel posts. "Helios Social" is the umbrella for both Carousels and Trial Reels. On the rebuild branch `feature/helios-carousels`, code lives in `lib/carousels/`, `app/carousels/` and `fixtures/carousels/`; photo lookups are in `lib/carousels/photos/`. Paths that start with `lib/social/…` or `app/social/…` refer to the **old branches** (reference or pull sources).
 
 **Owner:** Tommy Pozo
 **Status:** DRAFT. No code until this spec is approved.

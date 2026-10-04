@@ -1,8 +1,7 @@
-# Helios Carousels rebuild: implementation plan
+# Helios Social rebuild: implementation plan
 
-> **Naming (2026-10-04):** this product is **Helios Carousels**, the daily AI-news carousel posts. "Helios Social" is the umbrella for both Carousels and Trial Reels. On the rebuild branch `feature/helios-carousels`, code lives in `lib/carousels/`, `app/carousels/` and `fixtures/carousels/`; photo lookups are in `lib/carousels/photos/`. Paths that start with `lib/social/…` or `app/social/…` refer to the **old branches** (reference or pull sources).
 
-**Spec:** `docs/superpowers/specs/2026-10-01-helios-carousels.md` (the authority; this plan only sequences it)
+**Spec:** `docs/superpowers/specs/2026-10-01-helios-social-rebuild.md` (the authority; this plan only sequences it)
 **Owner:** Tommy Pozo
 **Status:** DRAFT, not started
 
@@ -45,7 +44,7 @@ The tables below are kept as the import-trace record. Where they say "pull, then
 
 ## Branch and what to pull (traced from actual imports, 2026-10-04)
 
-**Method:** new branch `feature/helios-carousels`. Bring files over with `git checkout helios-social-v2/2026-10-02-root-cause-fixes -- <path>`, then run the type checker. Any import of a removed module shows up as an error, so the compiler defines the boundary.
+**Method:** new branch `feature/helios-social-rebuild`. Bring files over with `git checkout helios-social-v2/2026-10-02-root-cause-fixes -- <path>`, then run the type checker. Any import of a removed module shows up as an error, so the compiler defines the boundary.
 
 **Pull as is** (no imports of removed code):
 
