@@ -418,6 +418,8 @@ type HandoffCandidate = {
   firstName: string | null;
   lastName: string | null;
   companyName: string | null;
+  title: string | null;
+  workLocation: string | null;
   subject: string;
   bodyText: string;
   bodyHtml: string | null;
@@ -523,9 +525,11 @@ function toLeadInput(
     first_name: candidate.firstName ?? undefined,
     last_name: candidate.lastName ?? undefined,
     company_name: candidate.companyName ?? undefined,
+    location: candidate.workLocation ?? undefined,
     custom_fields: {
       custom_subject: candidate.subject,
       custom_body: bodyHtml,
+      ...(candidate.title ? { position: candidate.title } : {}),
       hub_item_id: candidate.itemId,
       hub_campaign_id: payload.campaignId,
       hub_queue_id: candidate.queueId,
@@ -578,6 +582,8 @@ async function claimRows(
     state: string;
     review_status: string;
     company_name: string | null;
+    title: string | null;
+    work_location: string | null;
   }>(
     `WITH claimed AS (
        UPDATE outreach.email_send_queue q
@@ -613,7 +619,15 @@ async function claimRows(
             d.lint_result,
             i.state,
             i.review_status,
-            nullif(trim(i.input_snapshot #>> '{company,name}'), '') AS company_name
+            nullif(trim(i.input_snapshot #>> '{company,name}'), '') AS company_name,
+            coalesce(
+              nullif(trim(i.input_overrides ->> 'title'), ''),
+              nullif(trim(i.input_snapshot #>> '{lead,title}'), '')
+            ) AS title,
+            coalesce(
+              nullif(trim(i.input_overrides ->> 'workLocation'), ''),
+              nullif(trim(i.input_snapshot #>> '{lead,workLocation}'), '')
+            ) AS work_location
        FROM claimed
        JOIN outreach.drafting_items i ON i.id = claimed.drafting_item_id
        LEFT JOIN outreach.email_drafts d ON d.drafting_item_id = i.id`,
@@ -632,6 +646,8 @@ async function claimRows(
       firstName: splitName(row.recipient_name).first,
       lastName: splitName(row.recipient_name).last,
       companyName: row.company_name,
+      title: row.title,
+      workLocation: row.work_location,
       subject: row.subject,
       bodyText: row.body_text ?? '',
       bodyHtml: row.body_html,

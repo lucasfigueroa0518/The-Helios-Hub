@@ -21,6 +21,7 @@ import {
   MAX_CUSTOM_FIELD_CHARS,
   assertCustomFieldLength,
   hasBlockedMarkup,
+  followUpBodyToSmartleadHtml,
   textToCustomBodyHtml,
   toCustomBodyHtml,
 } from '@/lib/smartlead/body';
@@ -281,6 +282,13 @@ test('the sanitizer strips images, cid: references, styles and scripts', () => {
   );
   assert.equal(html, '<p>Hi Dana,</p><p>Worth a look?</p>');
   assert.equal(hasBlockedMarkup(html), false);
+});
+
+test('follow-up merge fields become Smartlead tags', () => {
+  assert.equal(
+    followUpBodyToSmartleadHtml('Hi {{firstName}} at {{company}} in {{workLocation}}.\n\nYour {{title}} stood out.'),
+    '<p>Hi {{first_name}} at {{company_name}} in {{location}}.</p><p>Your {{position}} stood out.</p>',
+  );
 });
 
 test('step 1 drops links but keeps their text; follow-ups keep the link', () => {

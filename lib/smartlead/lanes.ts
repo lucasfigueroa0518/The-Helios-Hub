@@ -15,7 +15,7 @@ import { dbQuery } from '@/lib/db';
 import { listSendingInboxes } from '@/lib/inboxes/repository';
 import type { DispatchWork } from '@/lib/orchestration/types';
 import { smartleadAdapter, type SmartleadAdapter } from '@/lib/smartlead/adapter';
-import { toCustomBodyHtml } from '@/lib/smartlead/body';
+import { followUpBodyToSmartleadHtml } from '@/lib/smartlead/body';
 import { redactApiKey } from '@/lib/smartlead/client';
 import {
   DEFAULT_DELIVERY_SETTINGS,
@@ -419,7 +419,7 @@ export function buildSequences(settings: DeliverySettings, followUpEnabled: bool
       seq_number: followUp.step,
       // An empty subject keeps the follow-up on the original thread as "Re:".
       subject: '',
-      email_body: toCustomBodyHtml(followUp.body_template, { allowLinks: true }),
+      email_body: followUpBodyToSmartleadHtml(followUp.body_template),
       seq_delay_details: { delay_in_days: Math.max(1, followUp.delay_days) },
     });
   }

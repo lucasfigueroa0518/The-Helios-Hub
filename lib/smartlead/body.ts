@@ -139,6 +139,32 @@ export function toCustomBodyHtml(input: string, options: ToHtmlOptions = {}): st
  * Plain text → Smartlead HTML. Blank lines become paragraphs, single newlines
  * become `<br>`; this is the path for drafts stored as text.
  */
+const FOLLOW_UP_MERGE_TAGS: Record<string, string> = {
+  firstName: '{{first_name}}',
+  fullName: '{{first_name}} {{last_name}}',
+  company: '{{company_name}}',
+  title: '{{position}}',
+  workLocation: '{{location}}',
+};
+
+/**
+ * Follow-up copy is one sequence for every lead, so Helios merge fields become
+ * the Smartlead tags those leads already carry.
+ */
+export function followUpBodyToSmartleadHtml(template: string): string {
+  const trimmed = template.trim();
+  if (!trimmed) return '';
+  const withBreaks = trimmed
+    .replace(/\r\n/g, '\n')
+    .split(/\n{2,}/)
+    .map((block) => `<p>${block.split('\n').join('<br>')}</p>`)
+    .join('');
+  const html = toCustomBodyHtml(withBreaks, { allowLinks: true });
+  return html.replace(/\{\{(firstName|fullName|company|title|workLocation)\}\}/g, (_match, token: string) => (
+    FOLLOW_UP_MERGE_TAGS[token] ?? ''
+  ));
+}
+
 export function textToCustomBodyHtml(text: string): string {
   const paragraphs = text
     .replace(/\r\n?/g, '\n')

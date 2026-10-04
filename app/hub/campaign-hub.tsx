@@ -568,10 +568,6 @@ export function CampaignHub({ email }: { email: string }) {
                     setTracking={setTracking}
                     replyFallback={replyFallback}
                     setReplyFallback={setReplyFallback}
-                    followUpDelay={followUpDelay}
-                    setFollowUpDelay={setFollowUpDelay}
-                    followUpBody={followUpBody}
-                    setFollowUpBody={setFollowUpBody}
                     scheduleStart={scheduleStart}
                     setScheduleStart={setScheduleStart}
                     scheduleEnd={scheduleEnd}
@@ -588,6 +584,12 @@ export function CampaignHub({ email }: { email: string }) {
                       signatureHtml={signaturePreviewHtml}
                     />
                   ) : null}
+                  <FollowUpFields
+                    delay={followUpDelay}
+                    setDelay={setFollowUpDelay}
+                    body={followUpBody}
+                    setBody={setFollowUpBody}
+                  />
                   <button
                     className="btn btn--primary"
                     type="submit"
@@ -641,10 +643,6 @@ export function CampaignHub({ email }: { email: string }) {
                     setTracking={setTracking}
                     replyFallback={replyFallback}
                     setReplyFallback={setReplyFallback}
-                    followUpDelay={followUpDelay}
-                    setFollowUpDelay={setFollowUpDelay}
-                    followUpBody={followUpBody}
-                    setFollowUpBody={setFollowUpBody}
                     scheduleStart={scheduleStart}
                     setScheduleStart={setScheduleStart}
                     scheduleEnd={scheduleEnd}
@@ -683,6 +681,12 @@ export function CampaignHub({ email }: { email: string }) {
                         : 'Drafts wait for approval before Smartlead gets them.'}
                     </p>
                   </div>
+                  <FollowUpFields
+                    delay={followUpDelay}
+                    setDelay={setFollowUpDelay}
+                    body={followUpBody}
+                    setBody={setFollowUpBody}
+                  />
                   <button className="btn btn--primary" type="submit" disabled={saving}>
                     {saving ? 'Saving…' : 'Save delivery'}
                   </button>
@@ -728,10 +732,6 @@ function SendingRules({
   setTracking,
   replyFallback,
   setReplyFallback,
-  followUpDelay,
-  setFollowUpDelay,
-  followUpBody,
-  setFollowUpBody,
   scheduleStart,
   setScheduleStart,
   scheduleEnd,
@@ -741,10 +741,6 @@ function SendingRules({
   setTracking: (value: boolean) => void;
   replyFallback: 'claude' | 'human_only';
   setReplyFallback: (value: 'claude' | 'human_only') => void;
-  followUpDelay: string;
-  setFollowUpDelay: (value: string) => void;
-  followUpBody: string;
-  setFollowUpBody: (value: string) => void;
   scheduleStart: string;
   setScheduleStart: (value: string) => void;
   scheduleEnd: string;
@@ -753,7 +749,6 @@ function SendingRules({
   return (
     <div className="setup-section">
       <p className="setup-section__title">Sending rules</p>
-      <p className="setup-section__hint">Optional. The first email is still the per-lead draft.</p>
       <ChoiceCards
         legend="Tracking"
         value={tracking ? 'on' : 'off'}
@@ -773,26 +768,45 @@ function SendingRules({
         ]}
       />
       <label className="field">
-        <span className="field__label">Follow-up delay (days)</span>
-        <input className="field__input" value={followUpDelay} onChange={(event) => setFollowUpDelay(event.target.value)} placeholder="3" />
-      </label>
-      <label className="field">
         <span className="field__label">Send window (America/New_York, weekdays)</span>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <input className="field__input" type="time" value={scheduleStart} onChange={(event) => setScheduleStart(event.target.value)} />
           <input className="field__input" type="time" value={scheduleEnd} onChange={(event) => setScheduleEnd(event.target.value)} />
         </div>
       </label>
+    </div>
+  );
+}
+
+function FollowUpFields({
+  delay,
+  setDelay,
+  body,
+  setBody,
+}: {
+  delay: string;
+  setDelay: (value: string) => void;
+  body: string;
+  setBody: (value: string) => void;
+}) {
+  return (
+    <div className="setup-section">
+      <p className="setup-section__title">Follow-up</p>
+      <p className="setup-section__hint">Optional. Sent only if they have not replied. The first email is the message above.</p>
       <label className="field">
-        <span className="field__label">Follow-up body (optional)</span>
-        <textarea
-          className="field__input"
-          rows={4}
-          value={followUpBody}
-          onChange={(event) => setFollowUpBody(event.target.value)}
-          placeholder="Leave blank for no follow-up. Step 1 is the per-lead draft."
-        />
+        <span className="field__label">Follow-up delay (days)</span>
+        <input className="field__input" value={delay} onChange={(event) => setDelay(event.target.value)} placeholder="3" />
       </label>
+      <MessageComposer
+        variant="body"
+        subject=""
+        body={body}
+        includeSignature={false}
+        onSubjectChange={() => undefined}
+        onBodyChange={setBody}
+        bodyLabel="Follow-up body"
+        bodyPlaceholder="Leave blank for no follow-up. Type [ to insert a field."
+      />
     </div>
   );
 }

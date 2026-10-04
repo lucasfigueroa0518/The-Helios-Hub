@@ -29,6 +29,10 @@ type Props = {
   onBodyChange: (canonical: string) => void;
   onIncludeSignatureChange?: (value: boolean) => void;
   mode?: ComposerMode;
+  /** `body` is a follow-up: no subject, signature, or preview. */
+  variant?: 'message' | 'body';
+  bodyPlaceholder?: string;
+  bodyLabel?: string;
   signatureHtml?: string;
   compact?: boolean;
   disabled?: boolean;
@@ -64,9 +68,18 @@ function consumeTypedOpenBracket(range: Range) {
   range.setStart(node, index);
 }
 
-function insertHtmlAtCursor(html: string, consumeOpenBracket = false) {
-  const range = currentRange();
-  if (!range) return;
+function insertHtmlAtCursor(root: HTMLElement, html: string, consumeOpenBracket = false) {
+  const selection = window.getSelection();
+  let range = currentRange();
+  if (!range || !rangeInside(root, range)) {
+    root.focus();
+    if (!(root.textContent ?? '').replace(/\u00a0/g, ' ').trim()) root.replaceChildren();
+    range = document.createRange();
+    range.selectNodeContents(root);
+    range.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  }
   if (consumeOpenBracket) consumeTypedOpenBracket(range);
   range.deleteContents();
   const fragment = range.createContextualFragment(html);
@@ -100,6 +113,9 @@ export function MessageComposer({
   onBodyChange,
   onIncludeSignatureChange,
   mode = 'template',
+  variant = 'message',
+  bodyPlaceholder,
+  bodyLabel = 'Body',
   signatureHtml,
   compact = false,
   disabled = false,
@@ -140,9 +156,11 @@ export function MessageComposer({
 
   const subjectParsed = useMemo(() => parseSubjectTemplate(subjectDisplay), [subjectDisplay]);
   const bodyParsed = useMemo(() => parseMessageTemplate(body, { allowEmpty: true }), [body]);
-  const errors = mode === 'template'
-    ? [...subjectParsed.errors, ...bodyParsed.errors]
-    : bodyParsed.errors.filter((error) => error.code === 'invalid_link');
+  const errors = variant === 'body'
+    ? bodyParsed.errors
+    : mode === 'template'
+      ? [...subjectParsed.errors, ...bodyParsed.errors]
+      : bodyParsed.errors.filter((error) => error.code === 'invalid_link');
 
   const preview = useMemo(
     () => previewMessageTemplates({ subjectTemplate: subject, bodyTemplate: body }),
@@ -186,7 +204,10 @@ export function MessageComposer({
       }, 0);
       return;
     }
+    const bodyEl = bodyRef.current;
+    if (!bodyEl) return;
     insertHtmlAtCursor(
+      bodyEl,
       `<span class="message-var" data-token="${token}" contenteditable="false">${chip}</span>&nbsp;`,
       true,
     );
@@ -381,32 +402,34 @@ export function MessageComposer({
         </button>
       </div>
 
-      <label className="field">
-        <span className="field__label">Subject</span>
-        <input
-          ref={subjectRef}
-          className="field__input"
-          value={subjectDisplay}
-          disabled={disabled}
-          placeholder={mode === 'template' ? 'e.g. Quick note for [Company Name]' : ''}
-          onFocus={() => {
-            focusedRef.current = 'subject';
-          }}
-          onBlur={() => {
-            focusedRef.current = null;
-            setTokenMenu((current) => (current?.for === 'subject' ? null : current));
-          }}
-          onChange={(event) => onSubjectInput(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key !== 'Enter') return;
-            event.preventDefault();
-            if (tokenMenu?.for === 'subject' && suggestions[0]) insertToken(suggestions[0]);
-          }}
-        />
-      </label>
+      {variant === 'message' ? (
+        <label className="field">
+          <span className="field__label">Subject</span>
+          <input
+            ref={subjectRef}
+            className="field__input"
+            value={subjectDisplay}
+            disabled={disabled}
+            placeholder={mode === 'template' ? 'e.g. Quick note for [Company Name]' : ''}
+            onFocus={() => {
+              focusedRef.current = 'subject';
+            }}
+            onBlur={() => {
+              focusedRef.current = null;
+              setTokenMenu((current) => (current?.for === 'subject' ? null : current));
+            }}
+            onChange={(event) => onSubjectInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter') return;
+              event.preventDefault();
+              if (tokenMenu?.for === 'subject' && suggestions[0]) insertToken(suggestions[0]);
+            }}
+          />
+        </label>
+      ) : null}
 
       <div className="field">
-        <span className="field__label">Body</span>
+        <span className="field__label">{bodyLabel}</span>
         <div ref={bodyWrapRef} className="message-composer__body-wrap">
           <div
             ref={bodyRef}
@@ -415,7 +438,7 @@ export function MessageComposer({
             role="textbox"
             aria-multiline="true"
             aria-label="Message body"
-            data-placeholder={mode === 'template' ? 'Write the email. Type [ to insert a field.' : 'Edit this email.'}
+            data-placeholder={bodyPlaceholder ?? (mode === 'template' ? 'Write the email. Type [ to insert a field.' : 'Edit this email.')}
             suppressContentEditableWarning
             onFocus={() => {
               focusedRef.current = 'body';
@@ -508,7 +531,7 @@ export function MessageComposer({
         <p className="field__hint" role="alert">{errors[0]!.message}</p>
       ) : null}
 
-      {onIncludeSignatureChange ? (
+      {variant === 'message' && onIncludeSignatureChange ? (
         <div className="field">
           <span className="field__label">Signature</span>
           <div className="segmented" style={{ width: 'fit-content' }}>
@@ -537,7 +560,7 @@ export function MessageComposer({
         </div>
       ) : null}
 
-      {mode === 'template' && !compact ? (
+      {variant === 'message' && mode === 'template' && !compact ? (
         <div className="message-composer__preview">
           <span className="field__label">Preview</span>
           <div className="message-composer__preview-subject">{preview.subject || 'Subject preview'}</div>
