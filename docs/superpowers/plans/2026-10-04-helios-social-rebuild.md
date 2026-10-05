@@ -136,6 +136,8 @@ If one fails, adjust the spec before building around it.
 - **Remove** the per-article Haiku extraction. Leave the shadow judge off.
 - **Accept:** fixture feeds with stubbed Jev answers give the expected shortlist, winners, skips and feed-health entries.
 
+**Order (reordered 2026-10-04 for the earliest end-to-end run):** M2 → M3 → M4 → M5 basic photos → M6 local preview render → **checkpoint: first end-to-end run**. Everything else comes after the checkpoint. Prompts come from the prompts file unchanged.
+
 ### M2: Reporter and raw-text page reader (spec §4, §4.2c, §5.1)
 
 - **Reporter prompt:** from the prompts file, §1.
@@ -146,7 +148,7 @@ If one fails, adjust the spec before building around it.
   - WHY IT MATTERS
   - F / B facts with sources
   - Q quotes (exact text, ⚠ for single-source)
-  - N numbers with a number type
+  - N numbers with a number type. **Format (approved 2026-10-04):** `N1: nearly $21 billion | money | Meta's planned AI spending this year | Reuters`. Types: money, count, percent, duration, date, other. The value is copied exactly as the source writes it.
   - TERMS
   - SUBJECTS
   - EVENTS
@@ -180,13 +182,37 @@ If one fails, adjust the spec before building around it.
 - **Fix logic:** swap → cut → cover fallback → a fresh draft (no notes) → next story. Limits: 2 fresh drafts per story, $5/day.
 - **Accept:** stubbed flags exercise every branch, and the fresh-draft limit and cost cap are enforced.
 
-### M5: Mechanical guarantees (spec §6)
+### M5: Basic photos (spec §5.1, §5A #5), before the checkpoint
+
+Only the four sources needed to put a real photo on every slide:
+
+- **Article photos**, filtered by their credit line (allowed: company, official government, Commons, open licence; rejected: wire and stock agencies and outlet staff; unknown credit means not used). The page reader already returns caption and credit (M2).
+- **Commons via Wikidata** (P18 / P180), using the pulled `wikidata.ts` and `commons.ts`.
+- **Stock** via Openverse (`openverse.ts`), for `stock:` IMAGE lines and stat slides.
+- **Identity check** before any subject photo is used: code checks the entry's P31 against the subject type, and Jev checks the description against the brief (spec §5A #5). If either fails, there's no subject photo and the slide falls back to stock.
+- **No-repeat log** (`used-log.ts`): never twice in a post.
+- **Accept:** fixture slides get a photo from the right source; a person slide never shows another person; an agency-credited article photo is rejected; a failed identity check falls back to a scene.
+
+### M6: Render to a local preview page, before the checkpoint
+
+- Render the finished post through the pulled `SlideTemplate.tsx` and `app/social/render/preview/` on a local page: slides, caption and photo credits.
+- Local only: no Storage uploads, no database, no Instagram.
+- **Accept:** a stubbed post renders every slide on the preview page with its photo and credit.
+
+### Checkpoint: first end-to-end run (with Tommy's go-ahead and a cost estimate)
+
+- Real selection → Reporter → Writer → Editor → Fact-checker → basic photos → local preview, on a small number of stories agreed beforehand.
+- Read the result and the set-aside log. Fix only patterns (spec §2.3).
+
+## After the checkpoint
+
+### M7: Mechanical guarantees (spec §6)
 
 - **Silent fixes:** punctuation, quotes, whitespace, highlight snapping, credits and Source line.
 - **Pass/fail checks:** structure, character limits (one retry), quoted-text match, background slides ≤ 2, agency-credit rejection, photo licence/resolution/crop, render, cost cap.
 - **Accept:** a unit test per guarantee.
 
-### M6: Design and photos (spec §5.1–5.3a)
+### M8: Full photo chain and design (spec §5.1–5.4)
 
 **S2 results (2026-10-04) that shape M6:**
 
@@ -206,10 +232,11 @@ If one fails, adjust the spec before building around it.
   - the Helios photo bank.
 - **Ranking:** code first, then the Jev metadata pre-screen, then the image check on the top ~5.
 - No-repeat log.
-- **Rendering:** cover fit measured on the rendered slide, face-safe crop (code library), stat-slide darkened backgrounds, layout alternation within a type.
+- **Rendering:** cover fit measured on the rendered slide, face-safe crop (code library), stat-slide darkened backgrounds (§5.3a), layout rotation (no 3 in a row, §5.3), spread slides (§5.4).
+- Article photos, Commons, stock and the identity check already exist from M5; this milestone adds the rest of the chain and the photo bank.
 - **Accept:** fixture slides always get a photo; a person slide never falls back to another person; covers pass the fit check.
 
-### M7: Persistence and review page (spec Q8)
+### M9: Persistence and review page (spec Q8)
 
 - Write finished posts to `article_queue`. Real database writes start here, with Tommy's OK.
 - Upload slide JPEGs to Storage.
@@ -220,13 +247,13 @@ If one fails, adjust the spec before building around it.
 - Show photo credits and identity proof.
 - **Accept:** a stubbed post appears on the page and each button changes its state correctly.
 
-### M8: Instagram publishing and daily schedule
+### M10: Instagram publishing and daily schedule
 
 - **Publish** posts the carousel (JPEG URLs + caption) through the existing Meta/Instagram setup, with a single confirm (PROPOSED).
 - **Daily schedule** on the GCP worker: ingest → 2 winners → pipeline → review queue. Redeploy the worker.
 - **Accept:** a dry-run publish against a test or private target, or a stubbed client.
 
-### M9: First live batch (spec §5D), with Tommy's explicit go-ahead
+### M11: First live batch (spec §5D), with Tommy's explicit go-ahead
 
 - 10 stories in one sitting, about $10–17.
 - Jev and Claude fact-check side by side. Both results are logged and compared, then the pipeline switches to Jev only if Jev catches everything Claude caught (spec §10).
@@ -234,7 +261,6 @@ If one fails, adjust the spec before building around it.
 - **Pass:** switch on the daily schedule.
 - **Miss:** fix only what shows up in 3 or more of the 10.
 
-### M10: Spread slide type (spec §5.4), after M9
 
 ## Parallel tracks (not blocking)
 

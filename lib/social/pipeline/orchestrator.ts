@@ -7,7 +7,7 @@
  * with stage + reason) and the next-ranked story takes the slot, until the
  * day's posts are done, the stories run out, or the cost cap is hit.
  *
- * Not here yet, by design: glitch retries (§7.1, M5), swap/cut fixes and
+ * Not here yet, by design: glitch retries (§7.1, M7), swap/cut fixes and
  * fresh drafts (§4.2b, M4).
  */
 import type { CostMeter } from './cost-meter';

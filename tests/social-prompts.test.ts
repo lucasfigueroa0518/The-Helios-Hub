@@ -41,6 +41,6 @@ test("RULES_BLOCK applies Tommy's review decisions (a)-(c)", () => {
   assert.ok(RULES_BLOCK.includes('## Glossing (advisory, not required)'));
 });
 
-test('renderRulesFor renders nothing until M5 builds it from real checks (f)', () => {
+test('renderRulesFor renders nothing until M7 builds it from real checks (f)', () => {
   for (const stage of ['reporter', 'writer', 'editor', 'fact-checker'] as const) assert.equal(renderRulesFor(stage), '');
 });

@@ -6,7 +6,7 @@
  * 2026-10-04 (docs/superpowers/specs/2026-10-04-helios-social-shared-blocks.md).
  * Static string: embedding it keeps the cached prompt prefix stable.
  *
- * The derived banned-phrase lists are code checks and come back in M5.
+ * The derived banned-phrase lists are code checks and come back in M7 (mechanical guarantees).
  */
 export const VOICE_BLOCK = `Direct, dry, confident. A sharp editor, not a press release.
 

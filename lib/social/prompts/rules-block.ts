@@ -47,7 +47,7 @@ export type RuleStage = 'reporter' | 'writer' | 'editor' | 'fact-checker';
 
 /**
  * Rules the automated checks enforce, per stage (decision (f)): rebuilt in
- * M5 from the mechanical checks that actually exist. Until then it renders
+ * M7 (mechanical guarantees, renumbered 2026-10-04) from the checks that actually exist. Until then it renders
  * nothing, so no prompt promises a check that doesn't run.
  */
 export function renderRulesFor(_stage: RuleStage): string {
