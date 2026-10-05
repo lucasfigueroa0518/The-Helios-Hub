@@ -21,7 +21,7 @@ export type PipelineStages = {
   /** One pass, no loop (spec §4.2). */
   factCheck(draft: Draft, brief: Brief): Promise<StageResult<Draft>>;
   /** Images, cover, layout, render (spec §5). */
-  design(draft: Draft, story: ScoredCandidate): Promise<StageResult<PostObject>>;
+  design(draft: Draft, brief: Brief, story: ScoredCandidate): Promise<StageResult<PostObject>>;
   /** Plain-code guarantees (spec §6). */
   mechanical(post: PostObject): Promise<StageResult<PostObject>>;
 };

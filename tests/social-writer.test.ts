@@ -229,5 +229,5 @@ test('runDay: the Writer stage drafts each brief; its cost lands under writer', 
   });
   assert.equal(r.posts.length, 2);
   assert.ok((meter.byStage().writer ?? 0) > 0);
-  assert.equal(r.posts[0]!.slides[0]!.headline, 'Announced on Truth Social');
+  assert.equal(r.posts[0]!.render.slides[1]!.headline?.[0]?.text, 'Announced on Truth Social');
 });

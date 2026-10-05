@@ -1,0 +1,21 @@
+/**
+ * Photos for a whole draft (plan M5): the chosen cover first, then each
+ * story slide in order, one shared post context so no photo repeats and
+ * each subject is identity-checked once.
+ */
+import type { Brief } from '@/lib/social/reporter/brief';
+import type { PageReadOk } from '@/lib/social/reporter/read-page';
+import type { FilledDraft } from '@/lib/social/writer/draft';
+
+import { findPhoto, newPhotoContext, type PhotoDeps, type PhotoTrace } from './find';
+
+export type DraftPhotos = { cover: PhotoTrace; slides: PhotoTrace[] };
+
+export async function photosForDraft(draft: FilledDraft, brief: Brief, pages: PageReadOk[], deps: PhotoDeps): Promise<DraftPhotos> {
+  const ctx = newPhotoContext(brief, pages);
+  const cover = await findPhoto(draft.cover_options[draft.chosen_cover - 1]!.image, ctx, deps);
+  const slides: PhotoTrace[] = [];
+  // In order, not in parallel: the used set decides which candidate each slide gets.
+  for (const s of draft.slides) slides.push(await findPhoto(s.image, ctx, deps));
+  return { cover, slides };
+}

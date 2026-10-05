@@ -6,7 +6,9 @@
  */
 import type { IngestArticle } from '@/lib/social/ingest/select/types';
 import type { Brief as ParsedBrief } from '@/lib/social/reporter/brief';
-import { fillDraft, type DraftSubmission } from '@/lib/social/writer/draft';
+import type { PhotoTrace } from '@/lib/social/photos/find';
+import { toRenderPost } from '@/lib/social/render/from-draft';
+import { fillDraft, type DraftSubmission, type ImageRequest } from '@/lib/social/writer/draft';
 
 import type { PipelineStages } from './stages';
 import type { ReasonCode, ScoredCandidate, StageName, StageResult } from './types';
@@ -136,12 +138,18 @@ export function createStubStages(opts: StubOptions = {}): PipelineStages {
     async factCheck(draft) {
       return result('fact-checker', draft.storyId, draft);
     },
-    async design(draft, story) {
+    async design(draft, _brief, story) {
+      const noPhoto = (request: ImageRequest): PhotoTrace => ({ request, photo: null, steps: ['stub: no photo'] });
+      const photos = [noPhoto(draft.filled.cover_options[draft.filled.chosen_cover - 1]!.image), ...draft.filled.slides.map((s) => noPhoto(s.image))];
       return result('design', draft.storyId, {
         storyId: draft.storyId,
         title: story.title,
-        slides: draft.filled.slides.map((s) => ({ headline: s.headline.text, body: s.body?.text ?? '', image: null })),
-        caption: draft.filled.caption.text,
+        render: toRenderPost(draft.filled, { cover: null, slides: draft.filled.slides.map(() => null) }, {
+          source: story.outlets[0] ?? '',
+          sourceUrl: story.url,
+          publishedAt: story.publishedAt.toISOString(),
+        }),
+        photos,
         stages: [],
         costUsd: 0,
       });

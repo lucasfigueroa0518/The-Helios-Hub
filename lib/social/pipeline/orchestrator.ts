@@ -7,8 +7,8 @@
  * with stage + reason) and the next-ranked story takes the slot, until the
  * day's posts are done, the stories run out, or the cost cap is hit.
  *
- * Not here yet, by design: glitch retries (§7.1, M7), swap/cut fixes and
- * fresh drafts (§4.2b, M4).
+ * Glitch retries (§7.1) live inside each stage (one retry on a failed
+ * code check); fresh drafts (§4.2b) loop here.
  */
 import type { CostMeter } from './cost-meter';
 import type { SetAsideEntry, SetAsideLog } from './set-aside-log';
@@ -164,7 +164,7 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
           freshDrafts.push({ storyId: story.id, attempt: attempt + 1, detail: err.message, at: now.toISOString() });
         }
       }
-      const designed = await run('design', () => stages.design(checked, story));
+      const designed = await run('design', () => stages.design(checked, brief, story));
       const final = await run('mechanical', () => stages.mechanical(designed));
       posts.push({ ...final, stages: trail, costUsd: storyCost });
     } catch (err) {

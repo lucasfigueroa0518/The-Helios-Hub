@@ -4,6 +4,8 @@
  * M0 skeleton: the fields here are the minimum the orchestrator needs.
  * M1–M6 fill them in (brief format in M2, writer output in M3, …).
  */
+import type { PhotoTrace } from '@/lib/social/photos/find';
+import type { Post as RenderPost } from '@/lib/social/render/types';
 import type { GroupMember } from '@/lib/social/ingest/select/types';
 import type { Brief as ParsedBrief } from '@/lib/social/reporter/brief';
 import type { PageReadOk } from '@/lib/social/reporter/read-page';
@@ -104,8 +106,10 @@ export type Draft = {
 export type PostObject = {
   storyId: string;
   title: string;
-  slides: Array<{ headline: string; body: string; image: string | null }>;
-  caption: string;
+  /** What the renderer draws (lib/social/render/types.ts). */
+  render: RenderPost;
+  /** How each photo was found or why there is none: cover first, then each story slide. */
+  photos: PhotoTrace[];
   /** Stages this post went through, in order. */
   stages: StageName[];
   costUsd: number;
