@@ -60,6 +60,20 @@ export function createJevTally(): JevTally {
   return { calls: 0, inputTokens: 0, costUsd: 0 };
 }
 
+/**
+ * Refuse further calls once `tally` reaches `capUsd` (an approved spend
+ * limit for a live run). Calls already in flight can finish, so the
+ * overshoot is at most one concurrent batch, a fraction of a cent.
+ */
+export function capped(ask: JevAsk, tally: JevTally, capUsd: number): JevAsk {
+  return async (request, meta) => {
+    if (tally.costUsd >= capUsd) {
+      throw new Error(`Jev spend cap $${capUsd} reached ($${tally.costUsd.toFixed(5)} spent)`);
+    }
+    return ask(request, meta);
+  };
+}
+
 /** Wrap an ask so every call is counted and priced. */
 export function tallied(ask: JevAsk, tally: JevTally): JevAsk {
   return async (request, meta) => {
