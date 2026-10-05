@@ -93,15 +93,21 @@ export type ReporterDeps = {
   readPage?: (url: string) => Promise<PageRead>;
   config?: StageModelConfig;
   /**
-   * Hard spend limit for this story (approved budget for a live run). The
-   * loop stops before a turn when spend plus PER_TURN_RESERVE_USD would
-   * pass it, so the cap is never exceeded by a turn already in flight.
+   * Hard spend limit for this story (an approved budget for a live run).
+   * Before each turn the worst case of that turn is estimated (input, all
+   * searches, output) and max_tokens is cut to what the cap still affords;
+   * when that's under MIN_TURN_OUTPUT_TOKENS the loop stops. The cap can't
+   * be passed by a turn in flight.
    */
   costCapUsd?: number;
 };
 
-/** Worst-case cost of one more turn: ~40k uncached input + 16k output + 8 searches at Sonnet 5.5 rates. */
-export const PER_TURN_RESERVE_USD = 0.33;
+/** Worst-case input price per token: Sonnet 5.5's 1h cache-write rate ($4/M), above the $2 uncached rate. */
+const WORST_INPUT_USD_PER_TOKEN = 4 / 1_000_000;
+const OUTPUT_USD_PER_TOKEN = 10 / 1_000_000;
+const SEARCH_USD = 0.01;
+/** A turn with less room than this can't write a brief; stop instead. */
+export const MIN_TURN_OUTPUT_TOKENS = 6_000;
 
 const textOf = (message: Anthropic.Message) =>
   message.content
@@ -123,14 +129,27 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
     responses.reduce((n, r) => n + (r.usage.server_tool_use?.web_search_requests ?? 0), 0);
 
   for (let turn = 1; turn <= MAX_TURNS; turn++) {
-    if (deps.costCapUsd !== undefined && cost() + PER_TURN_RESERVE_USD > deps.costCapUsd) {
-      return { ok: false, reason: 'cost-cap', detail: `stopped before turn ${turn}: $${cost().toFixed(4)} spent, cap $${deps.costCapUsd}`, raw: null, costUsd: cost(), turns: turn - 1 };
+    let maxTokens = MAX_TOKENS;
+    if (deps.costCapUsd !== undefined) {
+      // Next turn's input ≈ the whole conversation so far, ~4 chars/token.
+      // Floor: the next turn re-reads at least everything the last one read and wrote.
+      const last = responses.at(-1)?.usage;
+      const lastTokens = last
+        ? (last.input_tokens ?? 0) + (last.cache_read_input_tokens ?? 0) + (last.cache_creation_input_tokens ?? 0) + (last.output_tokens ?? 0)
+        : 0;
+      const inputTokens = Math.max(lastTokens, Math.ceil(JSON.stringify({ system, tools: REPORTER_TOOLS, messages }).length / 3.5));
+      const fixed = cost() + inputTokens * WORST_INPUT_USD_PER_TOKEN + WEB_SEARCH_MAX_USES * SEARCH_USD;
+      const affordable = Math.floor((deps.costCapUsd - fixed) / OUTPUT_USD_PER_TOKEN);
+      if (affordable < MIN_TURN_OUTPUT_TOKENS) {
+        return { ok: false, reason: 'cost-cap', detail: `stopped before turn ${turn}: $${cost().toFixed(4)} spent; next turn's worst case would pass the $${deps.costCapUsd} cap`, raw: null, costUsd: cost(), turns: turn - 1 };
+      }
+      maxTokens = Math.min(MAX_TOKENS, affordable);
     }
     let res: Anthropic.Message;
     try {
       res = await deps.create({
         model: config.model,
-        max_tokens: MAX_TOKENS,
+        max_tokens: maxTokens,
         system,
         tools: REPORTER_TOOLS,
         // Mark the newest user block for the growing conversation. After a

@@ -357,6 +357,21 @@ test('Reporter: the cost cap stops the loop before a turn that could pass it', a
   const r = await runReporter(STORY, { create, readPage: stubRead(), costCapUsd: 0.5 });
   assert.equal(r.ok, false);
   assert.equal(!r.ok && r.reason, 'cost-cap');
-  assert.equal(requests.length, 1); // after one $0.27 turn, another could pass $0.50
+  assert.equal(requests.length, 1); // after one $0.27 turn, the next turn's worst case could pass $0.50
   assert.ok(r.costUsd <= 0.5);
+});
+
+test('Reporter: under a cap, a normal-size run finishes and max_tokens shrinks to what the cap affords', async () => {
+  const normal = usage({ input_tokens: 8_000, output_tokens: 1_500, web: 2 }); // ≈ $0.05 per turn
+  const { create, requests } = scripted([
+    msg('tool_use', [toolUse('a', TC_URL)], normal),
+    msg('tool_use', [toolUse('b', TC_URL)], normal),
+    msg('end_turn', [text(BRIEF_SUPER_INTELLIGENCE_FORCE)], normal),
+  ]);
+  const r = await runReporter(STORY, { create, readPage: stubRead(), costCapUsd: 0.5 });
+  assert.ok(r.ok);
+  assert.ok(r.costUsd <= 0.5);
+  const maxes = requests.map((q) => q.max_tokens);
+  assert.ok(maxes.every((m) => m <= 16_000 && m >= 6_000));
+  assert.ok(maxes[2]! <= maxes[0]!);
 });
