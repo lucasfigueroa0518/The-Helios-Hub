@@ -187,6 +187,7 @@ If one fails, adjust the spec before building around it.
 Only the four sources needed to put a real photo on every slide:
 
 - **Article photos**, filtered by their credit line (allowed: company, official government, Commons, open licence; rejected: wire and stock agencies and outlet staff; unknown credit means not used). The page reader already returns caption and credit (M2).
+  - **The credit check reads caption + credit together as one text** (Tommy, 2026-10-05), so a credit sitting in either field is caught. The page reader sometimes files a credit-only caption ("Benjamin Fanjoy/Getty Images") as the caption; that's handled here, not in the reader.
 - **Commons via Wikidata** (P18 / P180), using the pulled `wikidata.ts` and `commons.ts`.
 - **Stock** via Openverse (`openverse.ts`), for `stock:` IMAGE lines and stat slides.
 - **Identity check** before any subject photo is used: code checks the entry's P31 against the subject type, and Jev checks the description against the brief (spec §5A #5). If either fails, there's no subject photo and the slide falls back to stock.
