@@ -59,6 +59,13 @@ export type Brief = {
   notAnswered: string[];
   sources: BriefSource[];
   fetchFailures: string[];
+  /**
+   * The Reporter's notes, kept for the Writer, never dropped:
+   *   - indented "  - …" lines under an entry, keyed by the entry's ID
+   *     ("F3", "Q2") or, in sections without IDs, by "SECTION#n" (1-based);
+   *   - loose prose lines inside an ID section, keyed by the section name.
+   */
+  notes: Record<string, string[]>;
 };
 
 export type BriefError = { section: string; message: string };
@@ -114,17 +121,49 @@ function splitSections(raw: string): Map<string, string[]> {
       out.set(current, after ? [after] : []);
       continue;
     }
-    if (current && trimmed) out.get(current)!.push(trimmed);
+    // Indented sub-bullets are notes on the entry above (live run 2026-10-05).
+    if (current && trimmed) out.get(current)!.push(/^\s{2,}[-*•]\s/.test(line) ? NOTE_MARK + trimmed : trimmed);
   }
   return out;
 }
 
 const NONE = /^(none|n\/a|-|—)\.?$/i;
+const NOTE_MARK = '\u0001';
+const stripBullet = (l: string) => l.replace(/^[-*•]\s+/, '').trim();
+
+/**
+ * Section lines → entries, with notes split off. Sub-bullets attach to the
+ * entry above. With `idRe`, only lines starting with an ID are entries and
+ * other prose lines become section notes; without it, every line is an entry.
+ */
+function entries(
+  section: string,
+  lines: string[] | undefined,
+  notes: Record<string, string[]>,
+  idRe?: RegExp,
+): string[] {
+  const out: string[] = [];
+  const keyOf = (i: number) => (idRe ? out[i]!.match(idRe)![1]! : `${section}#${i + 1}`);
+  const add = (key: string, note: string) => (notes[key] ??= []).push(note);
+  for (const raw of lines ?? []) {
+    const isNote = raw.startsWith(NOTE_MARK);
+    const line = stripBullet(raw.replace(NOTE_MARK, ''));
+    if (!line || NONE.test(line)) continue;
+    if (isNote) {
+      if (out.length > 0) add(keyOf(out.length - 1), line);
+      else add(section, line);
+      continue;
+    }
+    if (idRe && !idRe.test(line)) {
+      add(section, line);
+      continue;
+    }
+    out.push(line);
+  }
+  return out;
+}
 
 /** Section lines with bullets stripped, "none" dropped. */
-function items(lines: string[] | undefined): string[] {
-  return (lines ?? []).map((l) => l.replace(/^[-*•]\s+/, '').trim()).filter((l) => l && !NONE.test(l));
-}
 
 const ID_REF = /\b([FBQN]\d+)\b/g;
 const refs = (text: string) => [...new Set([...text.matchAll(ID_REF)].map((m) => m[1]!))];
@@ -227,13 +266,15 @@ export function parseBrief(raw: string): Brief {
   }
 
   const newsText = (s.get('THE NEWS') ?? []).join(' ').trim();
-  const whyItMatters = items(s.get('WHY IT MATTERS')).map((t) => ({ text: t, ids: refs(t) }));
-  const facts = items(s.get('FACTS')).map((l) => parseFact(l, 'F', errors, 'FACTS')).filter((f): f is BriefFact => !!f);
-  const background = items(s.get('BACKGROUND')).map((l) => parseFact(l, 'B', errors, 'BACKGROUND')).filter((f): f is BriefFact => !!f);
-  const quotes = items(s.get('QUOTES')).map((l) => parseQuote(l, errors)).filter((q): q is BriefQuote => !!q);
-  const numbers = items(s.get('NUMBERS')).map((l) => parseNumber(l, errors)).filter((n): n is BriefNumber => !!n);
-  const terms = items(s.get('TERMS')).map((l) => parseTerm(l, errors)).filter((t): t is BriefTerm => !!t);
-  const sourcesLines = items(s.get('SOURCES'));
+  const notes: Record<string, string[]> = {};
+  const list = (name: string, idRe?: RegExp) => entries(name, s.get(name), notes, idRe);
+  const whyItMatters = list('WHY IT MATTERS').map((t) => ({ text: t, ids: refs(t) }));
+  const facts = list('FACTS', /^(F\d+)\b/).map((l) => parseFact(l, 'F', errors, 'FACTS')).filter((f): f is BriefFact => !!f);
+  const background = list('BACKGROUND', /^(B\d+)\b/).map((l) => parseFact(l, 'B', errors, 'BACKGROUND')).filter((f): f is BriefFact => !!f);
+  const quotes = list('QUOTES', /^(Q\d+)\b/).map((l) => parseQuote(l, errors)).filter((q): q is BriefQuote => !!q);
+  const numbers = list('NUMBERS', /^(N\d+)\b/).map((l) => parseNumber(l, errors)).filter((n): n is BriefNumber => !!n);
+  const terms = list('TERMS').map((l) => parseTerm(l, errors)).filter((t): t is BriefTerm => !!t);
+  const sourcesLines = list('SOURCES');
 
   const brief: Brief = {
     singleStory: single.startsWith('yes'),
@@ -244,12 +285,13 @@ export function parseBrief(raw: string): Brief {
     quotes,
     numbers,
     terms,
-    subjects: items(s.get('SUBJECTS')).map(parseSubject),
-    events: items(s.get('EVENTS')),
-    articlePhotos: items(s.get('ARTICLE PHOTOS')).map(parsePhoto),
-    notAnswered: items(s.get('NOT ANSWERED')),
+    subjects: list('SUBJECTS').map(parseSubject),
+    events: list('EVENTS'),
+    articlePhotos: list('ARTICLE PHOTOS').map(parsePhoto),
+    notAnswered: list('NOT ANSWERED'),
     sources: sourcesLines.map(parseSource),
-    fetchFailures: items(s.get('FETCH FAILURES')),
+    fetchFailures: list('FETCH FAILURES'),
+    notes,
   };
 
   // ── Validation ──

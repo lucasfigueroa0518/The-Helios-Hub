@@ -3,6 +3,7 @@
  * no network, no Claude).
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -374,4 +375,36 @@ test('Reporter: under a cap, a normal-size run finishes and max_tokens shrinks t
   const maxes = requests.map((q) => q.max_tokens);
   assert.ok(maxes.every((m) => m <= 16_000 && m >= 6_000));
   assert.ok(maxes[2]! <= maxes[0]!);
+});
+
+test('brief: the live Robinson brief (2026-10-05) parses, with every note kept', () => {
+  const raw = readFileSync('fixtures/social/briefs/robinson-live-2026-10-05.txt', 'utf8');
+  const b = parseBrief(raw);
+  assert.equal(b.facts.length, 20);
+  assert.equal(b.background.length, 2);
+  assert.equal(b.quotes.length, 16);
+  assert.equal(b.numbers.length, 11);
+  assert.equal(b.sources.length, 6);
+  // Indented notes attach to the entry above, by ID.
+  assert.deepEqual(b.notes.F12, [
+    'The TechCrunch statement is attributed to spokesperson Drew Pusateri.',
+    'The Guardian attributes the statement to an unnamed spokesperson.',
+  ]);
+  assert.deepEqual(b.notes.Q2, ['TechCrunch quotes "culture is broken."']);
+  // Loose prose inside an ID section is a section note, not an error.
+  assert.deepEqual(b.notes.QUOTES, ['No quote was cut off in every source.']);
+  // Sections without IDs key notes by position.
+  assert.match(b.notes['SOURCES#6']![0]!, /secondary republication/);
+  assert.equal(b.sources[5]!.url, 'https://www.yahoo.com/news/politics/articles/another-alarm-bell-openai-safety-184349681.html');
+  // Nothing dropped: every non-empty line of the raw brief is a heading, an entry or a note.
+  const noteCount = Object.values(b.notes).flat().length;
+  const subLines = raw.split('\n').filter((l) => /^\s{2,}-\s/.test(l)).length;
+  assert.equal(noteCount, subLines + 1);
+});
+
+test('brief: an ID line that is malformed is still an error (notes don\'t hide bad entries)', () => {
+  const bad = BRIEF_SUPER_INTELLIGENCE_FORCE.replace('Q2: "develop', 'Q2: develop');
+  assert.throws(() => parseBrief(bad), /QUOTES: expected Q#/);
+  const withNote = BRIEF_SUPER_INTELLIGENCE_FORCE.replace('F2: Trump said', 'Loose remark about sourcing.\nF2: Trump said');
+  assert.deepEqual(parseBrief(withNote).notes.FACTS, ['Loose remark about sourcing.']);
 });

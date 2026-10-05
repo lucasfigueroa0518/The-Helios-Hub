@@ -84,6 +84,7 @@ export function stubBrief(news: string): ParsedBrief {
     notAnswered: [],
     sources: [{ outlet: 'Example News', date: null, url: null }],
     fetchFailures: [],
+    notes: {},
   };
 }
 
