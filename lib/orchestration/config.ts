@@ -45,7 +45,9 @@ export const KIND_CONFIG: Record<WorkKind, KindConfig> = {
   'smartlead.handoff': { lane: 'smartlead_api', defaultMaxAttempts: 3, priority: 25 },
   'smartlead.lead_op': { lane: 'smartlead_api', defaultMaxAttempts: 3, priority: 25 },
   'smartlead.reconcile': { lane: 'smartlead_api', defaultMaxAttempts: 2, priority: -5 },
-  'inbox.lifecycle_daily': { lane: 'smartlead_api', defaultMaxAttempts: 3, priority: 0 },
+  // After lane ensure (30) and before handoff (25). A ramp that still mirrors
+  // max_email_per_day 0 will accept a lead and then send nothing.
+  'inbox.lifecycle_daily': { lane: 'smartlead_api', defaultMaxAttempts: 3, priority: 28 },
   'inbox.health_snapshot': { lane: 'smartlead_api', defaultMaxAttempts: 2, priority: -3 },
   // Google, not Smartlead — it belongs on maintenance, off the Smartlead lane.
   'postmaster.daily': { lane: 'maintenance', defaultMaxAttempts: 2, priority: -6 },

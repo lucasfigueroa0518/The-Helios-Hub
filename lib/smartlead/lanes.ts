@@ -14,6 +14,7 @@ import type { IdentitySlug, LaneStatus } from '@/lib/delivery-states';
 import { dbQuery } from '@/lib/db';
 import { listSendingInboxes } from '@/lib/inboxes/repository';
 import type { DispatchWork } from '@/lib/orchestration/types';
+import { smartleadAccountId, smartleadAccountIds } from '@/lib/smartlead/account-id';
 import { smartleadAdapter, type SmartleadAdapter } from '@/lib/smartlead/adapter';
 import { followUpBodyToSmartleadHtml } from '@/lib/smartlead/body';
 import { redactApiKey } from '@/lib/smartlead/client';
@@ -44,6 +45,21 @@ const SELECT_LANE = `
          webhook_registered_at, error, created_at, updated_at
     FROM outreach.campaign_lanes`;
 
+/** node-pg hands bigint columns and bigint[] back as strings. */
+function normalizeLane(row: CampaignLane): CampaignLane {
+  const attached = Array.isArray(row.attached_account_ids) ? row.attached_account_ids : [];
+  return {
+    ...row,
+    smartlead_campaign_id: smartleadAccountId(row.smartlead_campaign_id),
+    smartlead_webhook_id: smartleadAccountId(row.smartlead_webhook_id),
+    attached_account_ids: smartleadAccountIds(attached),
+  };
+}
+
+function oneLane(rows: CampaignLane[]): CampaignLane | null {
+  return rows[0] ? normalizeLane(rows[0]) : null;
+}
+
 export async function getLane(
   campaignId: string,
   identitySlug: IdentitySlug,
@@ -52,12 +68,12 @@ export async function getLane(
     `${SELECT_LANE} WHERE campaign_id = $1 AND identity_slug = $2`,
     [campaignId, identitySlug],
   );
-  return rows[0] ?? null;
+  return oneLane(rows);
 }
 
 export async function getLaneById(laneId: string): Promise<CampaignLane | null> {
   const { rows } = await dbQuery<CampaignLane>(`${SELECT_LANE} WHERE id = $1`, [laneId]);
-  return rows[0] ?? null;
+  return oneLane(rows);
 }
 
 /** The webhook's entry point: Smartlead campaign id → hub lane, by unique index. */
@@ -68,7 +84,7 @@ export async function laneBySmartleadCampaignId(
     `${SELECT_LANE} WHERE smartlead_campaign_id = $1`,
     [smartleadCampaignId],
   );
-  return rows[0] ?? null;
+  return oneLane(rows);
 }
 
 export async function listLanesForCampaign(campaignId: string): Promise<CampaignLane[]> {
@@ -76,7 +92,7 @@ export async function listLanesForCampaign(campaignId: string): Promise<Campaign
     `${SELECT_LANE} WHERE campaign_id = $1 ORDER BY identity_slug`,
     [campaignId],
   );
-  return rows;
+  return rows.map(normalizeLane);
 }
 
 export async function listLanesForIdentities(
@@ -87,15 +103,22 @@ export async function listLanesForIdentities(
     `${SELECT_LANE} WHERE identity_slug = ANY($1::text[]) AND status <> 'error'`,
     [identities],
   );
-  return rows;
+  return rows.map(normalizeLane);
 }
 
-/** Lanes reconcile should retry: half-built or failed. */
+/**
+ * Lanes reconcile should retry: half-built, failed, or marked ready while no
+ * mailbox is attached. A ready lane with an empty set never sends.
+ */
 export async function listUnfinishedLanes(): Promise<CampaignLane[]> {
   const { rows } = await dbQuery<CampaignLane>(
-    `${SELECT_LANE} WHERE status IN ('creating', 'error') ORDER BY updated_at ASC LIMIT 50`,
+    `${SELECT_LANE}
+      WHERE status IN ('creating', 'error')
+         OR (status = 'ready' AND coalesce(cardinality(attached_account_ids), 0) = 0)
+      ORDER BY updated_at ASC
+      LIMIT 50`,
   );
-  return rows;
+  return rows.map(normalizeLane);
 }
 
 /** Job that builds or repairs one lane. `reviveTerminal` so a skipped-while-disabled run retries. */
@@ -285,6 +308,8 @@ export async function ensureCampaignLane(
     const maxNewLeads = await smartleadDailyCap(campaignId, identitySlug, settings);
 
     // Step 2 — settings. Tracking is expressed as opt-outs.
+    // Daily cap and the gap between emails belong on the schedule call.
+    // This endpoint rejects both max_leads_per_day and min_time_between_emails.
     await adapter.setSettings(smartleadCampaignId, {
       track_settings: settings.tracking ? [] : ['DONT_EMAIL_OPEN', 'DONT_LINK_CLICK'],
       stop_lead_settings: settings.stop_on_reply ? 'REPLY_TO_AN_EMAIL' : 'NEVER',
@@ -292,8 +317,6 @@ export async function ensureCampaignLane(
       send_as_plain_text: false,
       // Sender choice is the lifecycle's job, not an ESP-matching heuristic.
       enable_ai_esp_matching: false,
-      max_leads_per_day: maxNewLeads,
-      min_time_between_emails: settings.schedule.min_gap_min,
     });
 
     // Step 3 — schedule.
@@ -315,9 +338,9 @@ export async function ensureCampaignLane(
     }
 
     // Step 5 — attach exactly this identity's sending mailboxes.
-    const accountIds = (await listSendingInboxes(identitySlug))
-      .map((inbox) => inbox.smartlead_email_account_id!)
-      .filter((id): id is number => typeof id === 'number');
+    const accountIds = smartleadAccountIds(
+      (await listSendingInboxes(identitySlug)).map((inbox) => inbox.smartlead_email_account_id),
+    );
     await applyAccountDiff(adapter, smartleadCampaignId, lane, accountIds);
 
     // Step 6 — webhook, registered per campaign because that is the only
@@ -455,9 +478,9 @@ export async function syncLaneAccounts(
   options: { adapter?: SmartleadAdapter } = {},
 ): Promise<{ lanes: number; attached: number[] }> {
   const adapter = options.adapter ?? smartleadAdapter;
-  const accountIds = (await listSendingInboxes(identitySlug))
-    .map((inbox) => inbox.smartlead_email_account_id)
-    .filter((id): id is number => typeof id === 'number');
+  const accountIds = smartleadAccountIds(
+    (await listSendingInboxes(identitySlug)).map((inbox) => inbox.smartlead_email_account_id),
+  );
 
   const lanes = (await listLanesForIdentities([identitySlug]))
     .filter((lane) => lane.status === 'ready' && lane.smartlead_campaign_id !== null);

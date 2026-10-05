@@ -79,7 +79,15 @@ export async function handleSmartleadHandoff(
 ): Promise<WorkHandlerResult> {
   return guarded(job, async () => {
     const { executeHandoffBatch } = await import('@/lib/smartlead/handoff');
-    return { result: { ...(await executeHandoffBatch(job.payload)) } };
+    const outcome = await executeHandoffBatch(job.payload);
+    if (outcome.errors.includes('no_sending_accounts')) {
+      throw new RetryableWorkError(
+        'Sending mailboxes are not attached yet',
+        20_000,
+        'lane_not_ready',
+      );
+    }
+    return { result: { ...outcome } };
   });
 }
 

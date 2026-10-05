@@ -871,6 +871,34 @@ async function handleReconcile(
     // Keep reconcile resilient.
   }
 
+  // Handoff jobs are created only inside smartlead.reconcile. The 30s system
+  // tick never queued that job, so planned rows sat all day with no sender.
+  let smartleadReconcileEnqueued = 0;
+  try {
+    const { isSmartleadEnabled } = await import('@/lib/smartlead/enabled');
+    if (isSmartleadEnabled()) {
+      const { formatNyDate } = await import('@/lib/drafting/send-queue-schedule');
+      const dayKey = formatNyDate();
+      const hour = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        hour: '2-digit',
+        hourCycle: 'h23',
+      }).format(new Date());
+      await enqueueWorkBatch([
+        child(
+          'smartlead.reconcile',
+          { reason: 'periodic' },
+          `smartlead-reconcile:${dayKey}:${hour}`,
+          'smartlead',
+          { maxAttempts: 2, priority: -5 },
+        ),
+      ]);
+      smartleadReconcileEnqueued = 1;
+    }
+  } catch {
+    // Keep reconcile resilient.
+  }
+
   return {
     children,
     result: {
@@ -894,6 +922,7 @@ async function handleReconcile(
       networkingWeeklyEnqueued,
       seoDailyEnqueued,
       inboxHealthSnapshotEnqueued,
+      smartleadReconcileEnqueued,
       staleWorkersRemoved,
     },
   };

@@ -32,14 +32,14 @@ export default async function ProspectPage({ params }: { params: Promise<{ id: s
             <div className="card__subtitle">{campaign.lead_count} leads · Auto</div>
             <CampaignTagsHeader campaignId={campaign.id} initialTags={campaign.tags} initialTagDetails={campaign.tag_details} />
           </div>
-        </div>
-        <div className="card__body">
           <CampaignCapacityControl
             campaignId={campaign.id}
             senderIdentitySlug={campaign.sender_identity_slug}
             initialPct={campaign.delivery_settings.capacity_pct}
             legacyDailyCount={campaign.delivery_settings.max_new_leads_per_day ?? campaign.emails_per_day}
           />
+        </div>
+        <div className="card__body">
           <ProspectWorkspace
             key={id}
             campaignId={id}

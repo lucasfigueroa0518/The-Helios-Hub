@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { CapacityShareField } from '@/app/hub/campaign-setup-fields';
@@ -35,6 +35,9 @@ export function CampaignCapacityControl({
   onSaved?: (campaign: Campaign) => void;
 }) {
   const router = useRouter();
+  const panelId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
   const [pct, setPct] = useState(initialPct ?? 100);
   const [savedPct, setSavedPct] = useState<number | null>(initialPct);
   const [roster, setRoster] = useState<InboxRoster | null>(null);
@@ -46,6 +49,33 @@ export function CampaignCapacityControl({
   useEffect(() => {
     void hubGetJson<InboxRoster>('/api/inboxes').then(setRoster).catch(() => setRoster(null));
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    function dismiss() {
+      setPct(savedPct ?? 100);
+      setError(null);
+      setOpen(false);
+    }
+    function onPointer(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) dismiss();
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') dismiss();
+    }
+    document.addEventListener('mousedown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open, savedPct]);
+
+  function close() {
+    setPct(savedPct ?? 100);
+    setError(null);
+    setOpen(false);
+  }
 
   async function save() {
     setSaving(true);
@@ -65,6 +95,7 @@ export function CampaignCapacityControl({
       setSavedPct(next);
       setPct(next);
       onSaved?.(result.campaign);
+      setOpen(false);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to save the capacity share');
@@ -73,32 +104,46 @@ export function CampaignCapacityControl({
     }
   }
 
+  const label = savedPct == null ? 'Set capacity' : `${savedPct}% capacity`;
+
   return (
-    <section className="campaign-capacity" aria-label="Daily volume">
-      {savedPct == null ? (
-        <p className="setup-section__hint">
-          {legacyDailyCount
-            ? `This campaign still sends a fixed ${legacyDailyCount} emails a day. Saving applies this share of live inbox capacity, and the number moves as mailboxes ramp.`
-            : 'This campaign does not have a capacity share yet. Saving applies this percentage of live inbox capacity.'}
-        </p>
+    <div className="capacity-menu" ref={rootRef}>
+      <button
+        type="button"
+        className={`btn btn--secondary capacity-menu__button${open ? ' is-on' : ''}`}
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => (open ? close() : setOpen(true))}
+      >
+        {label}
+      </button>
+      {open ? (
+        <div className="capacity-menu__panel" id={panelId} role="dialog" aria-label="Daily capacity">
+          {savedPct == null ? (
+            <p className="capacity-menu__hint">
+              {legacyDailyCount
+                ? `This campaign still sends a fixed ${legacyDailyCount} emails a day. Saving applies this share of live inbox capacity, and the number moves as mailboxes ramp.`
+                : 'This campaign does not have a capacity share yet. Saving applies this percentage of live inbox capacity.'}
+            </p>
+          ) : null}
+          <CapacityShareField
+            pct={pct}
+            onChange={setPct}
+            days={senderDays(roster, identity)}
+          />
+          <div className="capacity-menu__actions">
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={!dirty || saving || pct < 1 || pct > 100}
+              onClick={() => void save()}
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            {error ? <span className="field__error">{error}</span> : null}
+          </div>
+        </div>
       ) : null}
-      <CapacityShareField
-        pct={pct}
-        onChange={setPct}
-        days={senderDays(roster, identity)}
-      />
-      <div className="campaign-capacity__actions">
-        <button
-          type="button"
-          className="btn btn--primary"
-          disabled={!dirty || saving || pct < 1 || pct > 100}
-          onClick={() => void save()}
-        >
-          {saving ? 'Saving…' : 'Save share'}
-        </button>
-        {!dirty && savedPct != null ? <span className="campaign-capacity__saved">Saved</span> : null}
-        {error ? <span className="field__error">{error}</span> : null}
-      </div>
-    </section>
+    </div>
   );
 }

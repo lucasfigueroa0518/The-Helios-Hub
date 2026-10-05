@@ -455,9 +455,13 @@ export async function executeHandoffBatch(
     return result;
   }
 
-  const settings = resolveDeliverySettings(
-    (await getCampaignDeliverySettings(payload.campaignId)) ?? {},
-  );
+  // An empty attach list is a ready-looking lane that cannot send. Leave the
+  // rows queued so the retry runs after the mailboxes are attached.
+  if (lane.attached_account_ids.length === 0) {
+    await markWaiting(payload, 'lane_not_ready');
+    result.errors.push('no_sending_accounts');
+    return result;
+  }
 
   // Claim: flip exactly the rows we intend to send, and read them back.
   const claimed = await claimRows(payload, lane.id);
@@ -472,7 +476,6 @@ export async function executeHandoffBatch(
       retrySuggested: candidate.retrySuggested,
       sendStatus: 'unsent',
       reviewStatus: candidate.reviewStatus,
-      requireApproval: settings.require_approval,
     });
     if (ready) sendable.push(candidate);
     else held.push(candidate.queueId);
@@ -719,14 +722,6 @@ async function markWaiting(payload: HandoffPayload, reason: WaitingReason): Prom
       WHERE campaign_id = $1 AND status = 'queued'${filter}`,
     params,
   );
-}
-
-async function getCampaignDeliverySettings(campaignId: string): Promise<unknown> {
-  const { rows } = await dbQuery<{ delivery_settings: unknown }>(
-    'SELECT delivery_settings FROM outreach.campaigns WHERE id = $1',
-    [campaignId],
-  );
-  return rows[0]?.delivery_settings ?? null;
 }
 
 function chunkRows<T>(rows: T[], size: number): T[][] {

@@ -74,16 +74,16 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
 
           </div>
 
-        </div>
-
-        <div className="card__body">
-
           <CampaignCapacityControl
             campaignId={campaign.id}
             senderIdentitySlug={campaign.sender_identity_slug}
             initialPct={campaign.delivery_settings.capacity_pct}
             legacyDailyCount={campaign.delivery_settings.max_new_leads_per_day ?? campaign.emails_per_day}
           />
+
+        </div>
+
+        <div className="card__body">
 
           <CampaignTabs
             key={`tabs-${id}`}
