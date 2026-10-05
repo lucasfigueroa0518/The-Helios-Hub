@@ -97,7 +97,7 @@ Test the three things most likely to surprise us, so a failure shows up in week 
 
 | Test | What | Cost / approval |
 |---|---|---|
-| **S1: Jev story scoring** | Tommy hand-labels ~20 past articles ("would we run this?"). Run the new Jev questions (6 scoring + 4 skip-list + "AI is the main subject") on them and compare. | Jev calls only, fractions of a cent. **Tommy's OK before running.** |
+| ~~S1: Jev story scoring~~ | **Dropped (2026-10-04).** No hand-labelled set. Jev thresholds are calibrated from live run reports (§2.3); every run logs Jev's raw answers per candidate for that. | — |
 | **S2: Photo coverage** | Script on Tommy's machine: for every person and company in past briefs, does Wikidata/Commons have a usable photo, and how many have two or more? Plus a sample of the other sources. | No AI. Free. |
 | **S3: Instagram publish** | Publish one test carousel (JPEGs + caption) to a private or test account through the existing Meta setup. | No AI. **Tommy's OK.** |
 

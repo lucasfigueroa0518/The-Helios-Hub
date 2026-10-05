@@ -10,7 +10,7 @@ import type { IngestArticle } from '@/lib/social/ingest/select/types';
 export const VERSION = 'same-event@1';
 
 export const THRESHOLDS = {
-  /** A pair at or above this is the same story. PROVISIONAL until calibrated. */
+  /** A pair at or above this is the same story. Calibrated from live run reports (§2.3). */
   SAME_EVENT_MIN: 0.7,
 } as const;
 

@@ -10,7 +10,7 @@ import type { StoryGroup } from '@/lib/social/ingest/select/types';
 export const VERSION = 'different-story@1';
 
 export const THRESHOLDS = {
-  /** At or above this, the candidate is the same company/topic as #1. PROVISIONAL. */
+  /** At or above this, the candidate is the same company/topic as #1. Calibrated from live run reports (§2.3). */
   SAME_TOPIC_MIN: 0.5,
 } as const;
 

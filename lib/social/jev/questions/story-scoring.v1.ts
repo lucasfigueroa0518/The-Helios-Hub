@@ -1,7 +1,7 @@
 /**
  * Story scoring, one Jev call per candidate (spec §5A #1, §5B, §5B-1, §5A #2).
  *
- * Thresholds are PROVISIONAL until S1 calibration (Tommy's ~20 labels).
+ * Thresholds are calibrated from live run reports (§2.3).
  * Changing a question's wording means a new version file, not an edit.
  */
 import { noul, type Questions } from '@typesafe-ai/sdk';
@@ -15,7 +15,7 @@ export const THRESHOLDS = {
   REQUIRED_MIN: 0.6,
   /** Each of the four score questions passes at this. */
   BONUS_MIN: 0.5,
-  /** Any skip-list category at or above this skips the story. 0.5 per Tommy (2026-10-04), pending S1. */
+  /** Any skip-list category at or above this skips the story. 0.5 per Tommy (2026-10-04); calibrated from live run reports (§2.3). */
   SKIP_MIN: 0.5,
   /** Already-posted at or above this skips the story. */
   POSTED_MIN: 0.7,

@@ -34,7 +34,7 @@ export type StoryGroup = {
 export type ScoreStatus = 'qualified' | 'not-qualified' | 'skipped';
 
 export type ScoredGroup = StoryGroup & {
-  /** Raw Jev probabilities by question id, kept for S1 calibration. */
+  /** Raw Jev probabilities by question id, kept so thresholds can be calibrated from live run reports (§2.3). */
   answers: Record<string, number>;
   status: ScoreStatus;
   /** Set when skipped or not qualified. */

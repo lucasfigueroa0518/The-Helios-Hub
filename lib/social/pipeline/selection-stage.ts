@@ -19,7 +19,7 @@ export type SelectionStageDeps = {
   posted: PostedStories;
   fetchBody: FetchBody;
   feedHealthLog: FeedHealthLog;
-  /** Receives the full selection (skips, raw answers) for logging and S1 calibration. */
+  /** Receives the full selection (skips, raw answers) for logging; thresholds are calibrated from live run reports (§2.3). */
   onSelection?: (selection: Selection) => void;
 };
 
