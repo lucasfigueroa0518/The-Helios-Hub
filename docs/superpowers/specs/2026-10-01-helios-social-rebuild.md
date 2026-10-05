@@ -543,7 +543,7 @@ These came up once in hand-run tests. They become fixes only if they recur in re
 | **Known pattern, deferred by Tommy (2026-10-05):** side material in FACTS beyond the 2 background slots (3 of 3 briefs) | Reporter prompt: keep FACTS to the main event |
 | **Known pattern, deferred by Tommy (2026-10-05):** reliance on aggregators (2 of 3 briefs: Implicator, Yahoo/BeInCrypto) despite "no aggregators" | Reporter prompt or source filtering |
 | The story one-liner came from an off-topic article (Gemini group, Times Square Chronicles headline over a Meta Muse article; 1 occurrence, 2026-10-05) | Take the one-liner from a read member whose text matches the group |
-| An aggregator was the only source for a minor fact: Firstpost for the NYC hearing's 11 AM start time (F2, N4), against the v2 aggregator rule (1 occurrence, 2026-10-05) | Tighten the aggregator rule if it repeats |
+| An aggregator was the only source for a minor fact, against the v2 aggregator rule: Firstpost for the NYC hearing's 11 AM start time (F2, N4); FourWeekMBA for Gemini's "May 17" usage-limit date (B1). 2 occurrences, 2026-10-05 | Tighten the aggregator rule if it repeats |
 
 **Process note (2026-10-04):** hand-run simulations are for illustrating the design, not for finding fixes. From here on, fixes come only from patterns in real batch logs.
 
