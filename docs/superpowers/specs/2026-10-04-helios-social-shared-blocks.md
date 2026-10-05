@@ -1,6 +1,6 @@
 # Helios Social v2: shared blocks for review (VOICE_BLOCK, RULES_BLOCK)
 
-**Status:** PROPOSED (2026-10-04). Nothing imports these yet. They become `lib/social/prompts/voice-block.ts` and `lib/social/prompts/rules-block.ts` only after Tommy approves this file.
+**Status:** DECIDED (2026-10-04). Implemented in `lib/social/prompts/voice-block.ts` and `lib/social/prompts/rules-block.ts` with the decisions in §4. The code is the source of truth from here; `tests/social-prompts.test.ts` pins it to this file and the prompts file.
 
 **Sources:**
 
@@ -107,3 +107,18 @@ The prompts file says: "Where a tested rule repeats one in RULES_BLOCK, keep one
 | 6 | `${renderRulesFor('caption')}` in the carried-over caption section | The old registry rendered code-checked rules for the caption: banned voice list, numbers verbatim, caption under 2,200 chars, no hashtags. It isn't covered by your instruction. | (a) Rebuild it in M5 from the new mechanical checks, so it only lists checks that exist. (b) Drop the placeholder from the caption section and rely on RULES_BLOCK plus VOICE_BLOCK. |
 
 **Prompt caching:** both blocks are static strings, so every prompt that embeds them keeps a stable prefix. The cache breakpoint goes after them, never on the per-story brief.
+
+---
+
+## 4. Decisions (Tommy, 2026-10-04)
+
+| # | Decision |
+|---|---|
+| 1 | **(b) Trim Context policy's count**, keep its definition of a background slide. The tested line "Max 2 background slides." carries the limit. Removed: "Up to TWO … per post", "Two is the ceiling", and "more than two background slides". Item 2 now opens "**Background slides** on …". |
+| 2 | **(b)** "The Fact-checker and Caption" → "The Fact-checker and the caption". |
+| 3 | **(b)** Em dashes swapped for periods. |
+| 4 | Noted for M4: Jev claim-checking treats TERMS glosses as sourced. |
+| 5 | Spread stays in the Writer prompt, not this block. |
+| 6 | **(a)** `renderRulesFor` is rebuilt in M5 from the real mechanical checks. Until then it renders nothing. |
+
+The §2 text above is the proposal as reviewed. The implemented block is that text with these decisions applied.
