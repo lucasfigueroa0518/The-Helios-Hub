@@ -26,6 +26,8 @@ import { readPage as readPageLive, type PageRead, type PageReadOk } from './read
 export const WEB_SEARCH_TOOL_TYPE = 'web_search_20260209';
 /** Searches per story. The prompt asks for ~12 tool calls in total. */
 export const WEB_SEARCH_MAX_USES = 8;
+/** A submission that fails the code check gets this many retries (spec §7.1: glitches get one). */
+export const MAX_SUBMIT_RETRIES = 1;
 /** Hard ceiling on read_page calls; past it, calls get an error result. */
 export const READ_PAGE_MAX_CALLS = 12;
 /** Model turns before the stage gives up (a turn can carry several tool calls). */
@@ -42,7 +44,8 @@ export const READ_PAGE_TOOL: Anthropic.Tool = {
     required: ['url'],
     additionalProperties: false,
   },
-  strict: true,
+  // Not strict: one url field gains nothing, and the API caps the combined
+  // grammar of strict tools (submit_brief is the one that needs it).
 } as Anthropic.Tool;
 
 /**
@@ -131,6 +134,7 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
   const responses: MessageUsageLike[] = [];
   const pages: PageReadOk[] = [];
   let pageReads = 0;
+  let submitRetries = 0;
   /** Characters of tool results added since the last API response. */
   let pendingToolChars = 0;
   const cost = () => Number(priceAnthropicMessages(responses, { modelId: config.model }).costUsd);
@@ -194,14 +198,26 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
     const toolUses = res.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
     const submit = toolUses.find((u) => u.name === SUBMIT_BRIEF_TOOL.name);
     if (submit) {
-      // The final step: the brief as schema-valid JSON, then the small check.
+      // The final step: the brief as JSON, then the code check.
       const raw = JSON.stringify(submit.input, null, 2);
       try {
-        const brief = validateBrief(submit.input as Brief);
+        const brief = validateBrief(submit.input);
         return { ok: true, brief, raw, pages, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads };
       } catch (err) {
         const detail = err instanceof BriefValidationError ? err.message : `brief check failed: ${String(err)}`;
-        return { ok: false, reason: 'malformed-output', detail, raw, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads };
+        // A failed check is a glitch (spec §7.1): one retry with the errors, then set aside.
+        if (submitRetries >= MAX_SUBMIT_RETRIES) {
+          return { ok: false, reason: 'malformed-output', detail, raw, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads };
+        }
+        submitRetries++;
+        const others = toolUses.filter((u) => u !== submit);
+        const content: Anthropic.ToolResultBlockParam[] = [
+          { type: 'tool_result', tool_use_id: submit.id, is_error: true, content: `The brief failed the check. Fix these and call submit_brief again:\n${detail}` },
+          ...others.map((u): Anthropic.ToolResultBlockParam => ({ type: 'tool_result', tool_use_id: u.id, is_error: true, content: 'Not run: submit_brief was called in the same turn.' })),
+        ];
+        pendingToolChars = content.reduce((n, r) => n + String(r.content).length, 0);
+        messages.push({ role: 'user', content });
+        continue;
       }
     }
     if (res.stop_reason === 'tool_use' && toolUses.length > 0) {

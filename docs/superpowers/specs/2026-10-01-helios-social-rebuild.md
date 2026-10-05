@@ -623,7 +623,7 @@ Leaning: (c) as the target, (b) until it's built.
 | What goes wrong | Example | What happens |
 |---|---|---|
 | Network or API hiccup | Timeout, server error | Automatic retry (standard connection handling, not a pipeline decision). |
-| Broken output | Missing fields, can't be parsed | One retry by the same stage, then set aside. |
+| Broken output | Missing fields, can't be parsed | One retry by the same stage, then set aside. **Reporter (2026-10-05):** the brief is submitted through the `submit_brief` tool (JSON schema mirroring the brief sections). The schema is *not* sent as `strict`, because the API caps the compiled grammar of strict tools and the full schema is over that limit. Code checks the submission against the schema plus sources, unique IDs and cited IDs. A failure returns the errors in the tool result for one retry, then the story is set aside as `malformed-output`. |
 | Over the character limit | A body slide at 260 characters | One retry by the last stage that wrote the text, given the exact overage. Then set aside. Becomes the render-fit check later (§6). |
 | Small fact-check flag | A number slightly off from the source | No retry. Code swaps in the source's wording (§4.2). |
 | Main claim false or unverifiable | The core fact doesn't hold up | Set aside right away. |

@@ -61,7 +61,7 @@ test('brief check: sources exist, IDs unique, cited IDs exist', () => {
   assert.deepEqual(errorsOf((b) => { b.the_news.ids.push('F9'); }), ["the_news: cites F9, which isn't in the brief"]);
 });
 
-test('submit_brief schema mirrors the prompt sections and is strict', () => {
+test('submit_brief schema mirrors the prompt sections; every object closed and fully required', () => {
   const schema = BRIEF_SCHEMA as { properties: Record<string, any>; required: string[]; additionalProperties: boolean };
   assert.deepEqual(Object.keys(schema.properties), [
     'single_story', 'the_news', 'why_it_matters', 'facts', 'background', 'quotes', 'numbers',
@@ -83,7 +83,8 @@ test('submit_brief schema mirrors the prompt sections and is strict', () => {
     if (node?.type === 'array') walk(node.items);
   };
   walk(schema);
-  assert.equal((SUBMIT_BRIEF_TOOL as any).strict, true);
+  // Not strict: the full schema is over the API's strict-grammar size limit; enforced in code.
+  assert.ok(!('strict' in (SUBMIT_BRIEF_TOOL as object)));
 });
 
 const URL_A = 'https://tech.example.com/2026/10/03/northwind-opens-model';
@@ -202,7 +203,7 @@ test('Reporter: model + effort from the stage config, cached tools and system, S
   assert.equal(req.tools[0].max_uses, 8);
   assert.equal(req.tools[1].name, 'read_page');
   assert.equal(req.tools[2].name, 'submit_brief');
-  assert.equal(req.tools[2].strict, true);
+  assert.ok(!req.tools[2].strict && !req.tools[1].strict, 'no strict tools (grammar size limit)');
   assert.ok(req.tools[2].cache_control, 'breakpoint on the last tool');
   assert.ok(!req.tools[1].cache_control);
   assert.ok(!('tool_choice' in req), 'no forced tool use (Sonnet 5.5)');
@@ -277,7 +278,7 @@ test('Reporter: malformed brief, refusal, truncation and API errors fail with a 
 
   const unsourced = briefSuperIntelligenceForce();
   unsourced.facts[0]!.sources = [];
-  const failed = await runReporter(STORY, { create: scripted([msg('tool_use', [submit(unsourced)])]).create });
+  const failed = await runReporter(STORY, { create: scripted([msg('tool_use', [submit(unsourced)]), msg('tool_use', [submit(unsourced)])]).create });
   assert.equal(!failed.ok && failed.reason, 'malformed-output');
   assert.match(!failed.ok ? failed.detail : '', /F1 has no source/);
 
@@ -369,3 +370,35 @@ test('Reporter: under a cap, a normal-size run finishes and max_tokens shrinks t
   assert.ok(maxes[2]! <= maxes[0]!);
 });
 
+
+
+test('brief check: the shape is checked against the schema (no strict tool use)', () => {
+  const missing = briefSuperIntelligenceForce() as any;
+  delete missing.quotes;
+  assert.throws(() => validateBrief(missing), /brief: missing quotes/);
+  const badEnum = briefSuperIntelligenceForce() as any;
+  badEnum.numbers[0].type = 'time';
+  assert.throws(() => validateBrief(badEnum), /brief\.numbers\[0\]\.type: "time" not one of money/);
+  const wrongType = briefSuperIntelligenceForce() as any;
+  wrongType.facts[0].sources = 'TechCrunch';
+  assert.throws(() => validateBrief(wrongType), /brief\.facts\[0\]\.sources: expected array, got string/);
+  const extra = briefSuperIntelligenceForce() as any;
+  extra.headline = 'x';
+  assert.throws(() => validateBrief(extra), /unexpected field headline/);
+  const nulls = briefSuperIntelligenceForce();
+  nulls.quotes[0]!.where = null;
+  assert.ok(validateBrief(nulls));
+});
+
+test('Reporter: a submission that fails the check gets one retry with the errors; a fixed one passes', async () => {
+  const bad = briefSuperIntelligenceForce();
+  bad.facts[0]!.sources = [];
+  const { create, requests } = scripted([msg('tool_use', [submit(bad)]), msg('tool_use', [submit()])]);
+  const r = await runReporter(STORY, { create });
+  assert.ok(r.ok);
+  assert.equal(requests.length, 2);
+  const result = (requests[1] as any).messages.at(-1).content[0];
+  assert.equal(result.type, 'tool_result');
+  assert.equal(result.is_error, true);
+  assert.match(result.content, /facts: F1 has no source/);
+});

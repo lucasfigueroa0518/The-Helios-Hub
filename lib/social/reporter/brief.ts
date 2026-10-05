@@ -3,9 +3,9 @@
  *
  * The Reporter ends by calling submit_brief, a strict-schema tool whose
  * fields mirror the prompt's section list (prompts file §1 OUTPUT), so the
- * brief arrives as schema-valid JSON instead of free text (Tommy,
- * 2026-10-05: replaces the free-text parser). Code then runs one small
- * check: sources exist, IDs are unique, cited IDs exist.
+ * brief arrives as JSON instead of free text (Tommy, 2026-10-05: replaces
+ * the free-text parser). Code checks it against the schema, then: sources
+ * exist, IDs are unique, cited IDs exist.
  */
 import type Anthropic from '@anthropic-ai/sdk';
 
@@ -131,11 +131,17 @@ export const BRIEF_SCHEMA = obj({
   fetch_failures: list(obj({ url: str, reason: str })),
 });
 
+/**
+ * Not `strict`: the API caps the compiled grammar of strict tools, and the
+ * full brief schema is over that limit (400 "compiled grammar is too
+ * large", 2026-10-05; any 7 of the 14 sections fit, all 14 don't). The
+ * schema is kept as designed and enforced in code instead: checkShape +
+ * validateBrief, with one retry on failure (Tommy, 2026-10-05).
+ */
 export const SUBMIT_BRIEF_TOOL = {
   name: 'submit_brief',
   description: 'Submit the finished brief. Call it once, as your final step.',
   input_schema: BRIEF_SCHEMA,
-  strict: true,
 } as unknown as Anthropic.Tool;
 
 // ── Validation: the only check after the schema ──
@@ -148,8 +154,32 @@ export class BriefValidationError extends Error {
   }
 }
 
-/** Sources exist, IDs are unique, cited IDs exist. Returns the brief or throws. */
-export function validateBrief(brief: Brief): Brief {
+/** Shape check against BRIEF_SCHEMA (types, required fields, enums, no extra fields). */
+export function checkShape(value: unknown, schema: any = BRIEF_SCHEMA, at = 'brief', errors: BriefError[] = []): BriefError[] {
+  const types: string[] = Array.isArray(schema.type) ? schema.type : [schema.type];
+  const actual = value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
+  if (!types.includes(actual)) {
+    errors.push({ section: at, message: `expected ${types.join(' or ')}, got ${actual}` });
+    return errors;
+  }
+  if (schema.enum && !schema.enum.includes(value)) errors.push({ section: at, message: `"${String(value)}" not one of ${schema.enum.join(', ')}` });
+  if (actual === 'array') (value as unknown[]).forEach((v, i) => checkShape(v, schema.items, `${at}[${i}]`, errors));
+  if (actual === 'object' && schema.properties) {
+    const obj = value as Record<string, unknown>;
+    for (const key of schema.required ?? []) if (!(key in obj)) errors.push({ section: at, message: `missing ${key}` });
+    for (const key of Object.keys(obj)) {
+      if (!(key in schema.properties)) errors.push({ section: at, message: `unexpected field ${key}` });
+      else checkShape(obj[key], schema.properties[key], `${at}.${key}`, errors);
+    }
+  }
+  return errors;
+}
+
+/** Shape, then: sources exist, IDs are unique, cited IDs exist. Returns the brief or throws. */
+export function validateBrief(input: unknown): Brief {
+  const shape = checkShape(input);
+  if (shape.length > 0) throw new BriefValidationError(shape);
+  const brief = input as Brief;
   const errors: BriefError[] = [];
   if (brief.sources.length === 0) errors.push({ section: 'sources', message: 'no sources' });
   const has = (list: string[]) => list.some((s) => s.trim());
