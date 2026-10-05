@@ -63,7 +63,7 @@ async function main() {
         );
         const n = log.length + 1;
         if (r.raw) await fsp.writeFile(path.join(runDir, `brief-${n}.json`), r.raw);
-        log.push({ n, title: story.title, startingSources: story.sources, ok: r.ok, reason: r.ok ? null : r.reason, detail: r.ok ? null : r.detail, costUsd: r.costUsd, turns: r.turns, webSearches: r.webSearches, pageReadCalls: r.pageReads, reads });
+        log.push({ n, title: story.title, startingSources: story.sources, ok: r.ok, reason: r.ok ? null : r.reason, detail: r.ok ? null : r.detail, costUsd: r.costUsd, turns: r.turns, webSearches: r.webSearches, pageReadCalls: r.pageReads, submitRetries: r.submitRetries, reads });
         if (!r.ok) return { ok: false, reasonCode: r.reason, detail: r.detail, costUsd: r.costUsd };
         return { ok: true, value: { storyId: story.id, parsed: r.brief, raw: r.raw, pages: r.pages }, costUsd: r.costUsd };
       },

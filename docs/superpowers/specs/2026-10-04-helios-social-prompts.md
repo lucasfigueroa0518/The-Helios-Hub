@@ -64,6 +64,17 @@ SOURCES: outlet, date, URL (only ones you opened); list fetch failures separatel
 - A quote that's cut off in every source is marked as cut off (the Writer is told never to use those).
 - **Structured output (Tommy, 2026-10-05):** the line `OUTPUT (plain text, exactly these sections):` becomes `When you're done, call submit_brief with these sections:`. The Reporter ends by calling `submit_brief`, a strict-schema tool that mirrors the section list. The section list itself is unchanged. This replaces the free-text brief parser. `cause · output format · 0 new stages · 0 new AI calls`. **Not strict:** the full schema is over the API's size limit for strict tools. It is enforced in code instead, with one retry that returns the errors (spec §7.1).
 
+**Reporter prompt v2 (Tommy, 2026-10-05).** These are changes to the tested text, made under §2.3 because the same failures showed up in 6 live briefs: Robinson, the 3-story run, and its rerun.
+
+| Edit | Exact wording | Reason (pattern) |
+|---|---|---|
+| Research paragraph, after "find independent coverage (…)" | "Find and open the primary source: the original essay, interview, announcement, filing or support page the story is about. Search for it if it isn't among the starting sources. If you can't open it, say why under NOT ANSWERED." | The primary source was opened in 0 of 6 briefs (Atlantic essay, Politico interview, Google support page, council hearing), and no brief said why. |
+| Research paragraph | "Prefer original reporting; no aggregators." → "Prefer original reporting." | Replaced by the aggregator rule below. |
+| New rule | "- Aggregators are outlets that summarize other outlets' reporting, including AI-generated summary sites. Use them only to find the original. Never use an aggregator as the only source for a fact or quote." | Aggregators served as sources in 3 of 6 briefs (Implicator, Yahoo/BeInCrypto, Storyboard18) despite "no aggregators". |
+| New rule | "- Stay on the main event. FACTS cover only this story. Earlier or related events go in BACKGROUND (max 2), and only if a reader needs them to understand the news. Leave everything else out." | Side material sat in FACTS in 6 of 6 briefs. |
+
+`cause · Reporter prompt v2 · 0 new stages · 0 new AI calls`
+
 ---
 
 ## 2. Writer (tested)

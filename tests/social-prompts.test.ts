@@ -63,6 +63,9 @@ test('Reporter prompt = tested text, STORY line moved to the user message, plus 
     .replace('[⚠ if single source]', '[⚠ if single source] [cut off if cut off in every source]')
     // OUTPUT (2026-10-05): structured output via submit_brief; section list unchanged.
     .replace('OUTPUT (plain text, exactly these sections):', "When you're done, call submit_brief with these sections:")
+    // v2 (2026-10-05): primary source, aggregators, stay on the main event.
+    .replace('named experts). Prefer original reporting; no aggregators.', 'named experts). Find and open the primary source: the original essay, interview, announcement, filing or support page the story is about. Search for it if it isn\'t among the starting sources. If you can\'t open it, say why under NOT ANSWERED. Prefer original reporting.')
+    .replace('copy caption and credit line exactly.\n', 'copy caption and credit line exactly.\n- Aggregators are outlets that summarize other outlets\' reporting, including AI-generated summary sites. Use them only to find the original. Never use an aggregator as the only source for a fact or quote.\n- Stay on the main event. FACTS cover only this story. Earlier or related events go in BACKGROUND (max 2), and only if a reader needs them to understand the news. Leave everything else out.\n')
     // [A2] NUMBERS with a type (format approved 2026-10-04).
     .replace('NUMBERS: N1 value | what it counts | source', 'NUMBERS: N1: value | type | what it counts | source (type is one of: money, count, percent, duration, date, other; value exactly as the source writes it)');
   assert.equal(REPORTER_SYSTEM, expected);
