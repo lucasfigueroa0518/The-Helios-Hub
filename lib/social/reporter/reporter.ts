@@ -86,7 +86,7 @@ export function pageToToolText(page: PageRead): string {
 
 export type ReporterResult =
   | { ok: true; brief: Brief; raw: string; pages: PageReadOk[]; costUsd: number; turns: number; webSearches: number; pageReads: number }
-  | { ok: false; reason: 'malformed-output' | 'service-error' | 'refused' | 'cost-cap'; detail: string; raw: string | null; costUsd: number; turns: number };
+  | { ok: false; reason: 'malformed-output' | 'service-error' | 'refused' | 'cost-cap'; detail: string; raw: string | null; costUsd: number; turns: number; webSearches: number; pageReads: number };
 
 export type ReporterDeps = {
   create: MessagesCreate;
@@ -141,7 +141,7 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
       const fixed = cost() + inputTokens * WORST_INPUT_USD_PER_TOKEN + WEB_SEARCH_MAX_USES * SEARCH_USD;
       const affordable = Math.floor((deps.costCapUsd - fixed) / OUTPUT_USD_PER_TOKEN);
       if (affordable < MIN_TURN_OUTPUT_TOKENS) {
-        return { ok: false, reason: 'cost-cap', detail: `stopped before turn ${turn}: $${cost().toFixed(4)} spent; next turn's worst case would pass the $${deps.costCapUsd} cap`, raw: null, costUsd: cost(), turns: turn - 1 };
+        return { ok: false, reason: 'cost-cap', detail: `stopped before turn ${turn}: $${cost().toFixed(4)} spent; next turn's worst case would pass the $${deps.costCapUsd} cap`, raw: null, costUsd: cost(), turns: turn - 1, webSearches: webSearches(), pageReads };
       }
       maxTokens = Math.min(MAX_TOKENS, affordable);
     }
@@ -159,16 +159,16 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
         output_config: { effort: config.effort },
       } as Anthropic.MessageCreateParamsNonStreaming);
     } catch (err) {
-      return { ok: false, reason: 'service-error', detail: `Claude call failed: ${err instanceof Error ? err.message : String(err)}`, raw: null, costUsd: cost(), turns: turn };
+      return { ok: false, reason: 'service-error', detail: `Claude call failed: ${err instanceof Error ? err.message : String(err)}`, raw: null, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads };
     }
     responses.push(res as unknown as MessageUsageLike);
 
     if (res.stop_reason === 'refusal') {
       const details = (res as unknown as { stop_details?: { category?: string | null } }).stop_details;
-      return { ok: false, reason: 'refused', detail: `refusal (${details?.category ?? 'no category'})`, raw: textOf(res) || null, costUsd: cost(), turns: turn };
+      return { ok: false, reason: 'refused', detail: `refusal (${details?.category ?? 'no category'})`, raw: textOf(res) || null, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads };
     }
     if (res.stop_reason === 'max_tokens') {
-      return { ok: false, reason: 'malformed-output', detail: 'brief cut off at max_tokens', raw: textOf(res) || null, costUsd: cost(), turns: turn };
+      return { ok: false, reason: 'malformed-output', detail: 'brief cut off at max_tokens', raw: textOf(res) || null, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads };
     }
 
     // Keep the full content (thinking, server tool blocks) so the next turn continues the same conversation.
@@ -206,8 +206,8 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
       return { ok: true, brief, raw, pages, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads };
     } catch (err) {
       const detail = err instanceof BriefParseError ? err.message : `brief parse failed: ${String(err)}`;
-      return { ok: false, reason: 'malformed-output', detail, raw, costUsd: cost(), turns: turn };
+      return { ok: false, reason: 'malformed-output', detail, raw, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads };
     }
   }
-  return { ok: false, reason: 'malformed-output', detail: `no brief after ${MAX_TURNS} turns`, raw: null, costUsd: cost(), turns: MAX_TURNS };
+  return { ok: false, reason: 'malformed-output', detail: `no brief after ${MAX_TURNS} turns`, raw: null, costUsd: cost(), turns: MAX_TURNS, webSearches: webSearches(), pageReads };
 }
