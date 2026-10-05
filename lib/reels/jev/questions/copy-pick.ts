@@ -20,15 +20,6 @@ export const PLAIN_QUESTION =
 export const STAKE_QUESTION =
   'After one read of the whole text, could this person say why this matters to them, or what is on the line for the people in it?';
 
-export const LOOP_QUESTION =
-  'After this text, how strongly is something specific left unfinished: how it happened, what to do about it, or what happens next?';
-
-export const CARE_QUESTION =
-  'How much would this person care, because the text touches their money, time, status, a practice they might be doing, or a person or company they already recognize?';
-
-export const REWARD_QUESTION =
-  'How clearly does staying offer a get they would send to one specific person or save: entertainment, time back, or money made or saved?';
-
 const VIEWER =
   'An average person scrolling Instagram Reels with the sound off. They are curious about AI and may use it at work or at home. They do not work in the field, never read tech news, do not know its jargon, and read at about a sixth-grade level. They have never seen this story and have not opened the caption. `on_screen_copy` is the only text they see, and all of it is the hook. It has two jobs, in this order: they understand what happened and why it matters on one read, and then they want the caption. The first words have to stop them, and every later line has to add the stake, a figure, or the missing piece. A restatement adds nothing.';
 
@@ -98,7 +89,8 @@ export const COPY_PICK = defineQuestionSet({
     ),
     loop: score(
       {
-        question: LOOP_QUESTION,
+        question:
+          'After this text, how strongly is something specific left unfinished: how it happened, what to do about it, or what happens next?',
         viewer: VIEWER,
         not_this: 'Do not score whether the words are plain or whether the payoff is desirable. That is a separate question.',
       },
@@ -106,7 +98,8 @@ export const COPY_PICK = defineQuestionSet({
     ),
     care: score(
       {
-        question: CARE_QUESTION,
+        question:
+          'How much would this person care, because the text touches their money, time, status, a practice they might be doing, or a person or company they already recognize?',
         viewer: VIEWER,
         not_this: 'Do not score whether the words are plain or whether a reward is implied. That is a separate question.',
       },
@@ -114,7 +107,8 @@ export const COPY_PICK = defineQuestionSet({
     ),
     reward: score(
       {
-        question: REWARD_QUESTION,
+        question:
+          'How clearly does staying offer a get they would send to one specific person or save: entertainment, time back, or money made or saved?',
         viewer: VIEWER,
         not_this: 'Do not score whether they understand the words or whether a loop is open. That is a separate question.',
       },

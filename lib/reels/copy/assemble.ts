@@ -7,19 +7,9 @@ import {
   type CopyRewriteLine,
 } from '@/lib/reels/copy/pick';
 import { ON_SCREEN_WORD_RANGE, REPORT_COPY_TOOL } from '@/lib/reels/copy/report';
-import { PAYOFF_LEGEND, PAYOFF_QUESTION } from '@/lib/reels/jev/questions/copy-payoff';
-import {
-  CARE_QUESTION,
-  COPY_PICK_LEGENDS,
-  LOOP_QUESTION,
-  PLAIN_QUESTION,
-  REWARD_QUESTION,
-  STAKE_QUESTION,
-  type CopyPickScoreId,
-} from '@/lib/reels/jev/questions/copy-pick';
+import { COPY_PICK_LEGENDS, PLAIN_QUESTION, STAKE_QUESTION, type CopyPickScoreId } from '@/lib/reels/jev/questions/copy-pick';
 import { SAME_STORY_MISS, SAME_STORY_PASS, SAME_STORY_QUESTION } from '@/lib/reels/jev/questions/copy-story-match';
 import {
-  BALL_KNOWLEDGE_SHAPE,
   COPY_PROMPT_VERSION,
   COPY_SKILL,
   FRAMEWORK_WRITING_LOGIC,
@@ -106,7 +96,6 @@ export function copyStrategySystem(bucket: BucketId, framework: FrameworkId): st
     `# Content bucket: ${bucketText.title}`,
     '',
     bucketText.body,
-    ...(bucket === 'ball_knowledge' ? ['', '## Shape of the get', '', BALL_KNOWLEDGE_SHAPE] : []),
     '',
     `# Psychological framework: ${frameworkText.title}`,
     '',
@@ -121,41 +110,7 @@ export function copyStrategySystem(bucket: BucketId, framework: FrameworkId): st
     '## Hard constraint',
     '',
     `On-screen word count for this bucket: ${ON_SCREEN_WORD_RANGE[bucket].min} to ${ON_SCREEN_WORD_RANGE[bucket].max} words. Count the words in each on-screen copy on its own. A count outside that range, on either copy, is a failed report. The reel is one screen. Do not split a copy across images. Return each copy with a line break at each natural pause, and with no blank line.`,
-    '',
-    jevScoreBrief(bucket),
   ].join('\n');
-}
-
-function scoredQuestion(label: string, question: string, top: string): string {
-  return [`${label} asks: ${question}`, `Top of the scale: ${top}`].join('\n');
-}
-
-/**
- * The questions Jev will ask about this copy, and the line that earns a 1.00
- * on each. Drafts and rewrites both see it (D-233).
- */
-export function jevScoreBrief(bucket: BucketId): string {
-  const legends = COPY_PICK_LEGENDS;
-  const shared = [
-    scoredQuestion('Stake', STAKE_QUESTION, legends.stake[4]),
-    scoredQuestion('Loop', LOOP_QUESTION, legends.loop[4]),
-    scoredQuestion('Care', CARE_QUESTION, legends.care[4]),
-    scoredQuestion('Reward', REWARD_QUESTION, legends.reward[4]),
-    [`Same story asks: ${SAME_STORY_QUESTION}`, `A yes: ${SAME_STORY_PASS}`].join('\n'),
-  ];
-  const lead =
-    bucket === 'ball_knowledge'
-      ? [
-          'Jev scores this on-screen copy. Each question is quoted below with the line that earns a 1.00. Payoff and stake clear at 0.75. Same story clears at 0.50. Loop, care, and reward rank copies that already cleared.',
-          '',
-          scoredQuestion('Payoff', PAYOFF_QUESTION, PAYOFF_LEGEND[4]),
-        ]
-      : [
-          'Jev scores this on-screen copy. Each question is quoted below with the line that earns a 1.00. Plain read and stake clear at 0.75. Same story clears at 0.50. Loop, care, and reward rank copies that already cleared.',
-          '',
-          scoredQuestion('Plain read', PLAIN_QUESTION, legends.plain[4]),
-        ];
-  return ['## How Jev scores this copy', '', ...lead, '', shared.join('\n\n')].join('\n');
 }
 
 /** Scraped text cannot close the wrapper it sits in. */
@@ -194,7 +149,7 @@ export function buildCopySourcesBlock(members: readonly CopyMember[]): string {
 
 function draftTask(input: CopyInput): string {
   return [
-    'Write two on-screen copies and one caption for this post idea, from the source material above. Both copies open differently and carry the same stake, and the one caption pays both out. Write toward the questions and the top of each scale in How Jev scores this copy.',
+    'Write two on-screen copies and one caption for this post idea, from the source material above. Both copies open differently and carry the same stake, and the one caption pays both out.',
     '',
     `Bucket: ${BUCKET_SPEC_TEXT[input.bucket].title}`,
     `Framework: ${FRAMEWORK_SPEC_TEXT[input.framework].title}`,
@@ -220,21 +175,15 @@ function legendLine(id: CopyPickScoreId, score: number): string {
   return levels[level];
 }
 
-function payoffLegendLine(value: number): string {
-  const level = Math.min(PAYOFF_LEGEND.length - 1, Math.max(0, Math.round(value * (PAYOFF_LEGEND.length - 1))));
-  return PAYOFF_LEGEND[level];
-}
-
 function rewriteCopyBlock(line: CopyRewriteLine, index: number, range: { min: number; max: number }): string {
-  const payoff = line.scores.payoff;
-  const shown = payoff == null ? SCORE_ORDER : SCORE_ORDER.filter((id) => id !== 'plain');
   return [
     `<copy index="${index + 1}">`,
     neutralize(line.onScreenCopy),
     '</copy>',
     `Words: ${line.words}, ${line.inRange ? 'inside' : 'outside'} the range of ${range.min} to ${range.max}.`,
-    ...(payoff == null ? [] : [`Payoff ${payoff.toFixed(2)}. ${payoffLegendLine(payoff)}`]),
-    ...shown.map((id) => `${SCORE_LABEL[id]} ${line.scores[id].toFixed(2)}. ${legendLine(id, line.scores[id])}`),
+    ...SCORE_ORDER.map(
+      (id) => `${SCORE_LABEL[id]} ${line.scores[id].toFixed(2)}. ${legendLine(id, line.scores[id])}`,
+    ),
     `Same story as its caption's opening: ${line.sameStory ? 'yes' : 'no'}.`,
   ].join('\n');
 }
@@ -252,18 +201,10 @@ function passingLevels(levels: readonly string[], gate: number): string {
  * What Jev treats as a pass, in Jev's own words. The rewrite call sees this
  * so it is aiming at the levels that clear the bar, not only at the misses.
  */
-function comprehensionStandard(bucket: BucketId): string[] {
-  if (bucket === 'ball_knowledge') {
-    return [
-      'What a passing copy scores. Jev reads the on-screen copy as a first-time viewer. On Ball Knowledge, payoff and stake each get a level from 0 to 1. A copy passes only when both are at least 0.75, the word count is inside the bucket range, and the caption opening tells the same story. Payoff is the score that asks what the viewer would get.',
-      '',
-      `Payoff asks: ${PAYOFF_QUESTION}`,
-      'A passing payoff sounds like this:',
-      passingLevels(PAYOFF_LEGEND, COMPREHENSION_GATE),
-      `The level just under the bar is 0.50, and it does not pass: ${PAYOFF_LEGEND[2]}`,
-    ];
-  }
+export function passingStandard(bucket: BucketId): string {
+  const range = ON_SCREEN_WORD_RANGE[bucket];
   const plain = COPY_PICK_LEGENDS.plain;
+  const stake = COPY_PICK_LEGENDS.stake;
   return [
     'What a passing copy scores. Jev reads the on-screen copy as a first-time viewer. Plain read and stake each get a level from 0 to 1. A copy passes only when both are at least 0.75, the word count is inside the bucket range, and the caption opening tells the same story.',
     '',
@@ -271,14 +212,6 @@ function comprehensionStandard(bucket: BucketId): string[] {
     'A passing plain read sounds like this:',
     passingLevels(plain, COMPREHENSION_GATE),
     `The level just under the bar is 0.50, and it does not pass: ${plain[2]}`,
-  ];
-}
-
-export function passingStandard(bucket: BucketId): string {
-  const range = ON_SCREEN_WORD_RANGE[bucket];
-  const stake = COPY_PICK_LEGENDS.stake;
-  return [
-    ...comprehensionStandard(bucket),
     '',
     `Stake asks: ${STAKE_QUESTION}`,
     'A passing stake sounds like this:',
@@ -299,9 +232,7 @@ function rewriteTask(input: CopyInput, lines: readonly CopyRewriteLine[]): strin
   return [
     'The first reports for this post idea did not clear the bar. An on-screen copy clears it only when all four of these hold:',
     '',
-    input.bucket === 'ball_knowledge'
-      ? `1. Payoff at least ${COMPREHENSION_GATE.toFixed(2)}. A first-time viewer can say what they would get, in money, time, or a job they already do, and whether it is a repo, a piece of software, or a skill, without being told the specific name.`
-      : `1. Plain read at least ${COMPREHENSION_GATE.toFixed(2)}. A first-time viewer can say what happened, on one read.`,
+    `1. Plain read at least ${COMPREHENSION_GATE.toFixed(2)}. A first-time viewer can say what happened, on one read.`,
     `2. Stake at least ${STAKE_GATE.toFixed(2)}. That viewer can say why it matters to them, or what is on the line for the people in it.`,
     `3. The word count is inside the bucket's range, ${range.min} to ${range.max} words.`,
     "4. The caption's first paragraph tells the same story as the copy.",
