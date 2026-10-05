@@ -90,8 +90,8 @@ export function pageToToolText(page: PageRead): string {
 export type TurnUsage = { turn: number; stopReason: string | null; usage: unknown; costUsd: number };
 
 export type ReporterResult =
-  | { ok: true; brief: Brief; raw: string; pages: PageReadOk[]; costUsd: number; turns: number; webSearches: number; pageReads: number; submitRetries: number; turnUsage: TurnUsage[] }
-  | { ok: false; reason: 'malformed-output' | 'service-error' | 'refused' | 'cost-cap'; detail: string; raw: string | null; costUsd: number; turns: number; webSearches: number; pageReads: number; submitRetries: number; turnUsage: TurnUsage[] };
+  | { ok: true; brief: Brief; raw: string; pages: PageReadOk[]; costUsd: number; turns: number; webSearches: number; pageReads: number; submitRetries: number; retryErrors: string[]; turnUsage: TurnUsage[] }
+  | { ok: false; reason: 'malformed-output' | 'service-error' | 'refused' | 'cost-cap'; detail: string; raw: string | null; costUsd: number; turns: number; webSearches: number; pageReads: number; submitRetries: number; retryErrors: string[]; turnUsage: TurnUsage[] };
 
 export type ReporterDeps = {
   create: MessagesCreate;
@@ -123,6 +123,8 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
   const pages: PageReadOk[] = [];
   let pageReads = 0;
   let submitRetries = 0;
+  /** The check errors that triggered each retry (logged). */
+  const retryErrors: string[] = [];
   /** Per-turn usage as the API reported it (stored in the run log). */
   const turnUsage: TurnUsage[] = [];
   const cost = () => Number(priceAnthropicMessages(responses, { modelId: config.model }).costUsd);
@@ -131,7 +133,7 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
 
   for (let turn = 1; turn <= MAX_TURNS; turn++) {
     if (deps.costCapUsd !== undefined && cost() >= deps.costCapUsd - CAP_MARGIN_USD) {
-      return { ok: false, reason: 'cost-cap', detail: `stopped before turn ${turn}: $${cost().toFixed(4)} spent, cap $${deps.costCapUsd} minus $${CAP_MARGIN_USD} margin`, raw: null, costUsd: cost(), turns: turn - 1, webSearches: webSearches(), pageReads, submitRetries, turnUsage };
+      return { ok: false, reason: 'cost-cap', detail: `stopped before turn ${turn}: $${cost().toFixed(4)} spent, cap $${deps.costCapUsd} minus $${CAP_MARGIN_USD} margin`, raw: null, costUsd: cost(), turns: turn - 1, webSearches: webSearches(), pageReads, submitRetries, retryErrors, turnUsage };
     }
     let res: Anthropic.Message;
     try {
@@ -147,7 +149,7 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
         output_config: { effort: config.effort },
       } as Anthropic.MessageCreateParamsNonStreaming);
     } catch (err) {
-      return { ok: false, reason: 'service-error', detail: `Claude call failed: ${err instanceof Error ? err.message : String(err)}`, raw: null, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries, turnUsage };
+      return { ok: false, reason: 'service-error', detail: `Claude call failed: ${err instanceof Error ? err.message : String(err)}`, raw: null, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries, retryErrors, turnUsage };
     }
     responses.push(res as unknown as MessageUsageLike);
     turnUsage.push({
@@ -159,10 +161,10 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
 
     if (res.stop_reason === 'refusal') {
       const details = (res as unknown as { stop_details?: { category?: string | null } }).stop_details;
-      return { ok: false, reason: 'refused', detail: `refusal (${details?.category ?? 'no category'})`, raw: textOf(res) || null, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries, turnUsage };
+      return { ok: false, reason: 'refused', detail: `refusal (${details?.category ?? 'no category'})`, raw: textOf(res) || null, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries, retryErrors, turnUsage };
     }
     if (res.stop_reason === 'max_tokens') {
-      return { ok: false, reason: 'malformed-output', detail: 'brief cut off at max_tokens', raw: textOf(res) || null, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries, turnUsage };
+      return { ok: false, reason: 'malformed-output', detail: 'brief cut off at max_tokens', raw: textOf(res) || null, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries, retryErrors, turnUsage };
     }
 
     // Keep the full content (thinking, server tool blocks) so the next turn continues the same conversation.
@@ -177,14 +179,15 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
       const raw = JSON.stringify(submit.input, null, 2);
       try {
         const brief = validateBrief(submit.input);
-        return { ok: true, brief, raw, pages, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries, turnUsage };
+        return { ok: true, brief, raw, pages, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries, retryErrors, turnUsage };
       } catch (err) {
         const detail = err instanceof BriefValidationError ? err.message : `brief check failed: ${String(err)}`;
         // A failed check is a glitch (spec §7.1): one retry with the errors, then set aside.
         if (submitRetries >= MAX_SUBMIT_RETRIES) {
-          return { ok: false, reason: 'malformed-output', detail, raw, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries, turnUsage };
+          return { ok: false, reason: 'malformed-output', detail, raw, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries, retryErrors, turnUsage };
         }
         submitRetries++;
+        retryErrors.push(detail);
         const others = toolUses.filter((u) => u !== submit);
         const content: Anthropic.ToolResultBlockParam[] = [
           { type: 'tool_result', tool_use_id: submit.id, is_error: true, content: `The brief failed the check. Fix these and call submit_brief again:\n${detail}` },
@@ -217,7 +220,7 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
     }
 
     // end_turn without submit_brief: no brief.
-    return { ok: false, reason: 'malformed-output', detail: 'ended without calling submit_brief', raw: textOf(res) || null, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries, turnUsage };
+    return { ok: false, reason: 'malformed-output', detail: 'ended without calling submit_brief', raw: textOf(res) || null, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries, retryErrors, turnUsage };
   }
-  return { ok: false, reason: 'malformed-output', detail: `no brief after ${MAX_TURNS} turns`, raw: null, costUsd: cost(), turns: MAX_TURNS, webSearches: webSearches(), pageReads, submitRetries, turnUsage };
+  return { ok: false, reason: 'malformed-output', detail: `no brief after ${MAX_TURNS} turns`, raw: null, costUsd: cost(), turns: MAX_TURNS, webSearches: webSearches(), pageReads, submitRetries, retryErrors, turnUsage };
 }

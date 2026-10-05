@@ -401,4 +401,6 @@ test('Reporter: a submission that fails the check gets one retry with the errors
   assert.equal(result.is_error, true);
   assert.match(result.content, /facts: F1 has no source/);
   assert.equal(r.submitRetries, 1);
+  assert.equal(r.retryErrors.length, 1);
+  assert.match(r.retryErrors[0]!, /facts: F1 has no source/);
 });

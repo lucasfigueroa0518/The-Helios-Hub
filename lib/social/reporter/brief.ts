@@ -116,7 +116,10 @@ export const BRIEF_SCHEMA = obj({
     }),
   ),
   terms: list(obj({ name: str, definition: { type: 'string', description: 'Plain-language definition taken from sources.' }, source: str })),
-  subjects: list(obj({ name: str, role: nullableStr })),
+  subjects: list(obj({
+    name: { type: 'string', description: 'One person or one organization, never combined (no "A / B"). Describe any relation in role.' },
+    role: nullableStr,
+  })),
   events: list(obj({ what: { type: 'string', description: 'Photographable event.' }, date: nullableStr, place: nullableStr })),
   article_photos: list(
     obj({

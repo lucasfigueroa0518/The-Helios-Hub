@@ -131,6 +131,11 @@ test('the check rejects made-up excerpts, missing or cut-off quotes, wrong numbe
   assert.deepEqual(errorsOf((d) => { d.cover_options.pop(); d.chosen_cover = 1; }), ['cover_options: expected 3, got 2']);
   assert.match(errorsOf((d) => { (d.slides[0] as any).image = { kind: 'photo', value: 'x' }; })[0]!, /image\.kind: "photo" not one of subject, article, stock/);
   assert.match(errorsOf((d) => { (d as any).chosen_cover = 1.5; })[0]!, /chosen_cover: expected integer/);
+  // Image subjects are single entities that exactly match a SUBJECTS name.
+  assert.deepEqual(errorsOf((d) => { d.slides[0]!.image = { kind: 'subject', value: 'Jay Clayton / Donald Trump' }; }), [
+    'slides[0].image: subject image "Jay Clayton / Donald Trump" isn\'t exactly a SUBJECTS name (one person or organization)',
+  ]);
+  assert.match(errorsOf((d) => { d.cover_options[0]!.image = { kind: 'subject', value: 'Trump' }; })[0]!, /cover_options\[0\]\.image: subject image "Trump"/);
 });
 
 // ── Stage (stubbed Claude) ─────────────────────────────────────────────
@@ -178,6 +183,8 @@ test('Writer: one retry with the check errors, then set aside', async () => {
   const fixed = await runWriter(briefSuperIntelligenceForce(), { create: scripted([msg('tool_use', [submit(bad)]), msg('tool_use', [submit(draft())])]).create, isWellKnown: notWellKnown });
   assert.ok(fixed.ok);
   assert.equal(fixed.draftRetries, 1);
+  assert.equal(fixed.retryErrors.length, 1);
+  assert.match(fixed.retryErrors[0]!, /excerpt isn't word for word from Q1/);
 
   const { create, requests } = scripted([msg('tool_use', [submit(bad)]), msg('tool_use', [submit(bad)])]);
   const failed = await runWriter(briefSuperIntelligenceForce(), { create, isWellKnown: notWellKnown });

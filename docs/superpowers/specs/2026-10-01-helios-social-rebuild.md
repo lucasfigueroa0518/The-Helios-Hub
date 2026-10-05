@@ -545,6 +545,10 @@ These came up once in hand-run tests. They become fixes only if they recur in re
 | The story one-liner came from an off-topic article (Gemini group, Times Square Chronicles headline over a Meta Muse article; 1 occurrence, 2026-10-05) | Take the one-liner from a read member whose text matches the group |
 | An aggregator was the only source for a minor fact, against the v2 aggregator rule: Firstpost for the NYC hearing's 11 AM start time (F2, N4); FourWeekMBA for Gemini's "May 17" usage-limit date (B1). 2 occurrences, 2026-10-05 | Tighten the aggregator rule if it repeats |
 | The different-story check (winner #2) judged 7 of 9 shortlisted stories "same topic as #1" (all OpenAI/AI safety), pushing the 14-outlet NYC hearing out of the winners (1 occurrence, fresh daily run 2026-10-05) | Narrow the different-story question (same company *and* topic) if it repeats |
+| Writer: a split-stat slide requested an article photo instead of a symbolic stock scene (Gemini, 1 occurrence, 2026-10-05) | Writer prompt: stat rule covers split stats |
+| Writer: a body ran 230 characters, over the 220 limit (Gemini, 1 occurrence) | M7's length check catches it; watch how often |
+| Writer: chose a ⚠ single-source quote over an unused multi-source one, and the edit notes misstated which were single-source (NYC hearing, 1 occurrence) | Writer prompt: quote-choice rule |
+| `well_known` from a Wikidata match is noisy: lesser-known people marked well known through namesakes (Logan Graham, Morgan Dwyer); combined names find no match ("Google / Google DeepMind") (2026-10-05) | Identity check (spec §5A #5) for well_known; single-entity SUBJECTS (done 2026-10-05) |
 
 **Process note (2026-10-04):** hand-run simulations are for illustrating the design, not for finding fixes. From here on, fixes come only from patterns in real batch logs.
 

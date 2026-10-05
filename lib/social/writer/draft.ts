@@ -135,6 +135,12 @@ export function checkDraft(input: unknown, brief: Brief): DraftSubmission {
   const quotes = new Map(brief.quotes.map((q) => [q.id, q]));
   const numbers = new Set(brief.numbers.map((n) => n.id));
   const known = new Set([...brief.facts, ...brief.background, ...brief.quotes, ...brief.numbers].map((x) => x.id));
+  const subjects = new Set(brief.subjects.map((s) => s.name));
+  const imageCheck = (where: string, img: ImageRequest) => {
+    if (img.kind === 'subject' && !subjects.has(img.value)) {
+      errors.push({ section: where, message: `subject image "${img.value}" isn't exactly a SUBJECTS name (one person or organization)` });
+    }
+  };
   const tagCheck = (where: string, ids: string[]) => {
     for (const id of ids) if (!known.has(id)) errors.push({ section: where, message: `claim tag ${id} isn't in the brief` });
   };
@@ -143,11 +149,15 @@ export function checkDraft(input: unknown, brief: Brief): DraftSubmission {
   if (!Number.isInteger(d.chosen_cover) || d.chosen_cover < 1 || d.chosen_cover > d.cover_options.length) {
     errors.push({ section: 'chosen_cover', message: `${d.chosen_cover} is not one of the cover options` });
   }
-  d.cover_options.forEach((c, i) => tagCheck(`cover_options[${i}]`, c.facts));
+  d.cover_options.forEach((c, i) => {
+    tagCheck(`cover_options[${i}]`, c.facts);
+    imageCheck(`cover_options[${i}].image`, c.image);
+  });
 
   d.slides.forEach((s, i) => {
     const at = `slides[${i}]`;
     tagCheck(`${at}.headline`, s.headline.facts);
+    imageCheck(`${at}.image`, s.image);
     if (s.body) tagCheck(`${at}.body`, s.body.facts);
     if (s.type === 'quote') {
       const q = s.quote_id ? quotes.get(s.quote_id) : undefined;

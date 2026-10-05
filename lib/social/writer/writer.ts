@@ -33,8 +33,8 @@ export async function briefForWriter(brief: Brief, isWellKnown: IsWellKnown) {
 }
 
 export type WriterResult =
-  | { ok: true; draft: DraftSubmission; filled: FilledDraft; raw: string; costUsd: number; turns: number; draftRetries: number; turnUsage: TurnUsage[] }
-  | { ok: false; reason: 'malformed-output' | 'service-error' | 'refused'; detail: string; raw: string | null; costUsd: number; turns: number; draftRetries: number; turnUsage: TurnUsage[] };
+  | { ok: true; draft: DraftSubmission; filled: FilledDraft; raw: string; costUsd: number; turns: number; draftRetries: number; retryErrors: string[]; turnUsage: TurnUsage[] }
+  | { ok: false; reason: 'malformed-output' | 'service-error' | 'refused'; detail: string; raw: string | null; costUsd: number; turns: number; draftRetries: number; retryErrors: string[]; turnUsage: TurnUsage[] };
 
 export type WriterDeps = {
   create: MessagesCreate;
@@ -50,9 +50,11 @@ export async function runWriter(brief: Brief, deps: WriterDeps): Promise<WriterR
   const responses: MessageUsageLike[] = [];
   const turnUsage: TurnUsage[] = [];
   let draftRetries = 0;
+  /** The check errors that triggered each retry (logged). */
+  const retryErrors: string[] = [];
   const cost = () => Number(priceAnthropicMessages(responses, { modelId: config.model }).costUsd);
   const fail = (reason: 'malformed-output' | 'service-error' | 'refused', detail: string, raw: string | null, turns: number): WriterResult =>
-    ({ ok: false, reason, detail, raw, costUsd: cost(), turns, draftRetries, turnUsage });
+    ({ ok: false, reason, detail, raw, costUsd: cost(), turns, draftRetries, retryErrors, turnUsage });
 
   for (let turn = 1; turn <= 1 + MAX_DRAFT_RETRIES; turn++) {
     let res: Anthropic.Message;
@@ -85,7 +87,7 @@ export async function runWriter(brief: Brief, deps: WriterDeps): Promise<WriterR
     if (submit) {
       try {
         const draft = checkDraft(submit.input, brief);
-        return { ok: true, draft, filled: fillDraft(draft, brief), raw: raw!, costUsd: cost(), turns: turn, draftRetries, turnUsage };
+        return { ok: true, draft, filled: fillDraft(draft, brief), raw: raw!, costUsd: cost(), turns: turn, draftRetries, retryErrors, turnUsage };
       } catch (err) {
         detail = err instanceof DraftValidationError ? err.message : `draft check failed: ${String(err)}`;
       }
@@ -94,6 +96,7 @@ export async function runWriter(brief: Brief, deps: WriterDeps): Promise<WriterR
     }
     if (draftRetries >= MAX_DRAFT_RETRIES) return fail('malformed-output', detail, raw, turn);
     draftRetries++;
+    retryErrors.push(detail);
     // One retry with the errors (glitch rule): as the tool result, or as a note when no tool was called.
     messages.push({
       role: 'user',
