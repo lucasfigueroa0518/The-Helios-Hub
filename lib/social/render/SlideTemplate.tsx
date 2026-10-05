@@ -203,6 +203,12 @@ function LandingSlide({ slide }: { slide: SlideCopy }) {
       {slide.note && (
         <div className="helios-landing__note">{slide.note}</div>
       )}
+      {slide.photoUrl && (
+        <>
+          <img className="helios-landing__photo" src={slide.photoUrl} alt="" aria-hidden="true" />
+          <PhotoCredit credit={slide.photoCredit} variant="frame" />
+        </>
+      )}
     </div>
   );
 }

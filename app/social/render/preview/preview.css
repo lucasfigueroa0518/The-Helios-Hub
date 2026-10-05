@@ -433,6 +433,15 @@
 .helios-landing__line[data-length="sm"] { font-size: 104px; }
 .helios-landing__line[data-length="md"] { font-size: 88px; }
 
+/* Landing photo (2026-10-05: every slide gets a photo): framed under the line, like the stat slide. */
+.helios-landing__photo {
+  width: 100%;
+  max-height: 520px;
+  object-fit: cover;
+  display: block;
+  margin-top: 48px;
+}
+
 .helios-landing__note {
   font-family: var(--font-body);
   font-size: 38px;

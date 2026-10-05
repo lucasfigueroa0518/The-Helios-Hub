@@ -1,15 +1,17 @@
 /**
- * Basic photos (plan M5; spec §5.1): one photo per IMAGE request, from the
- * three M5 sources. All code; the only model call is Jev's identity check.
+ * Basic photos (plan M5; spec §5.1): every slide gets a photo. All code;
+ * the only model call is Jev's identity check.
  *
- *   article: <photo URL>  → the photo the page reader found, if its credit allows it
- *   subject: <SUBJECTS name> → identity check, then Wikimedia Commons (P18 / P180)
- *   stock:   <scene>       → Openverse
- *
- * A subject that fails the identity check, or has no usable Commons photo,
- * falls back to a neutral scene (spec §5.1: fallbacks are scenes, never
- * people). No photo at all is a normal outcome in M5 (dark canvas); the
- * full chain and the photo bank come in M8.
+ * Fallback chain per slide (Tommy, 2026-10-05), first step that yields a
+ * photo wins, each step logged:
+ *   1. article: <photo URL> → the page reader's photo, if its credit allows it
+ *   2. subject  → the slide's subject: its `subject:` request, else a SUBJECTS
+ *                 name in the slide's text; identity check, then Commons (P18 / P180)
+ *   3. stock    → the slide's `stock:` scene, via Openverse
+ *   4. neutral  → neutral scenes (places and objects, never people), tried in
+ *                 order; first the one that fits the subject type
+ * Fallbacks are scenes, never people (spec §5.1): step 2 only ever shows
+ * the identity-verified subject itself.
  *
  * Never twice in one post: every pick is checked against, and added to,
  * the post's used set. Nothing is written to the durable used-photo log
@@ -38,19 +40,34 @@ export type Photo = {
   qid: string | null;
 };
 
-/** What happened for one request, for the run log. */
-export type PhotoTrace = { request: ImageRequest; photo: Photo | null; steps: string[] };
+export type ChainStep = 'article' | 'subject' | 'stock' | 'neutral';
+
+/** Identity check outcome for the run log. */
+export type IdentityNote = { subject: string; ok: boolean; detail: string };
+
+/** What happened for one slide, for the run log. */
+export type PhotoTrace = {
+  request: ImageRequest;
+  photo: Photo | null;
+  /** The chain step that supplied the photo; null only if every step failed. */
+  via: ChainStep | null;
+  identity: IdentityNote | null;
+  steps: string[];
+};
 
 /**
- * Neutral scenes for a subject whose photo can't be used: places and
- * objects only, so no one is mistaken for the subject. Provisional; the
- * photo bank replaces this in M8.
+ * Neutral scene for a subject whose photo can't be used, by subject type:
+ * places and objects only, so no one is mistaken for the subject.
+ * Provisional; the photo bank replaces this in M8.
  */
 export const FALLBACK_SCENES: Record<SubjectType | 'unknown', string> = {
   person: 'empty conference stage',
   organization: 'office building exterior',
   unknown: 'server room',
 };
+
+/** The last step's scenes, tried in order after the type-fitting one. No people. */
+export const NEUTRAL_SCENES = ['server room', 'office building exterior', 'circuit board', 'city skyline at night', 'computer keyboard', 'data center'];
 
 export type StockSearch = (query: string) => Promise<OpenverseCandidate[]>;
 
@@ -104,7 +121,7 @@ async function articlePhoto(url: string, ctx: PhotoContext, steps: string[]): Pr
   return { url, credit: (found.photo.credit ?? found.photo.caption ?? '').trim(), source: 'article', width: null, height: null, qid: null };
 }
 
-async function subjectPhoto(name: string, ctx: PhotoContext, deps: PhotoDeps, steps: string[]): Promise<{ photo: Photo | null; type: SubjectType | null }> {
+async function subjectPhoto(name: string, ctx: PhotoContext, deps: PhotoDeps, steps: string[]): Promise<{ photo: Photo | null; type: SubjectType | null; identity: IdentityNote }> {
   const subject = ctx.brief.subjects.find((s) => s.name === name) ?? { name, role: null };
   let pending = ctx.identities.get(name);
   if (!pending) {
@@ -114,19 +131,21 @@ async function subjectPhoto(name: string, ctx: PhotoContext, deps: PhotoDeps, st
   const id = await pending;
   if (!id.ok) {
     steps.push(`identity failed: ${id.reason}`);
-    return { photo: null, type: id.type };
+    return { photo: null, type: id.type, identity: { subject: name, ok: false, detail: id.reason } };
   }
   steps.push(`identity ok: ${id.qid} "${id.label}" (${id.type}, ${id.via})`);
+  const identity: IdentityNote = { subject: name, ok: true, detail: `${id.qid} "${id.label}" — ${id.description} (${id.type}, ${id.via})` };
   const cands = await findCandidates(id.qid, { http: deps.http });
   const pick = cands.find((c) => !ctx.used.has(c.url));
   if (!pick) {
     steps.push(cands.length ? 'every Commons photo already used in this post' : 'no usable Commons photo');
-    return { photo: null, type: id.type };
+    return { photo: null, type: id.type, identity };
   }
   steps.push(`commons ${pick.source}: ${pick.file}`);
   return {
     photo: { url: pick.url, credit: `${buildCredit(pick)} · Wikimedia Commons`, source: 'commons', width: pick.width, height: pick.height, qid: id.qid },
     type: id.type,
+    identity,
   };
 }
 
@@ -142,32 +161,83 @@ async function stockPhoto(query: string, ctx: PhotoContext, deps: PhotoDeps, ste
   return { url: pick.url, credit: buildStockCredit(pick), source: 'stock', width: pick.width, height: pick.height, qid: null };
 }
 
-/** One photo for one IMAGE request, or null. A source error is logged and treated as no photo. */
-export async function findPhoto(request: ImageRequest, ctx: PhotoContext, deps: PhotoDeps): Promise<PhotoTrace> {
+/** The slide's words, for finding its subject when the IMAGE line names none. */
+export type SlideText = { text: string[]; speaker: string | null };
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Where a subject is named in the text: the full name, or the last word of a multi-word name ("Clayton"). -1 if not. */
+function namedAt(name: string, text: string): number {
+  const words = name.split(/\s+/);
+  const forms = [name, ...(words.length > 1 && words.at(-1)!.length >= 4 ? [words.at(-1)!] : [])];
+  const at = forms.map((f) => new RegExp(`\\b${escapeRe(f)}\\b`, 'i').exec(text)?.index ?? -1).filter((i) => i >= 0);
+  return at.length ? Math.min(...at) : -1;
+}
+
+/** A SUBJECTS name the slide is about: the quote's speaker, else the first named in its text. */
+export function subjectInText(slide: SlideText, brief: Brief): string | null {
+  const names = brief.subjects.map((s) => s.name);
+  if (slide.speaker && names.includes(slide.speaker)) return slide.speaker;
+  const text = slide.text.join(' ');
+  const hits = names
+    .map((n) => ({ n, at: namedAt(n, text) }))
+    .filter((h) => h.at >= 0)
+    .sort((a, b) => a.at - b.at);
+  return hits[0]?.n ?? null;
+}
+
+const errText = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
+/** One photo for one slide, down the fallback chain. A source error is logged and the chain moves on. */
+export async function findPhoto(request: ImageRequest, ctx: PhotoContext, deps: PhotoDeps, slide: SlideText = { text: [], speaker: null }): Promise<PhotoTrace> {
   const steps: string[] = [];
-  let photo: Photo | null = null;
-  try {
-    if (request.kind === 'article') {
-      photo = await articlePhoto(request.value, ctx, steps);
-    } else if (request.kind === 'stock') {
-      photo = await stockPhoto(request.value, ctx, deps, steps);
-    } else {
-      const r = await subjectPhoto(request.value, ctx, deps, steps).catch((err: unknown) => {
-        steps.push(`subject error: ${err instanceof Error ? err.message : String(err)}`);
-        return { photo: null, type: null };
-      });
-      photo = r.photo;
-      if (!photo) {
-        const scene = FALLBACK_SCENES[r.type ?? 'unknown'];
-        steps.push(`fallback scene "${scene}"`);
-        photo = await stockPhoto(scene, ctx, deps, steps);
-      }
+  let identity: IdentityNote | null = null;
+  let type: SubjectType | null = null;
+  const done = (photo: Photo, via: ChainStep): PhotoTrace => {
+    ctx.used.add(photo.url);
+    return { request, photo, via, identity, steps };
+  };
+  const attempt = async (label: string, fn: () => Promise<Photo | null>): Promise<Photo | null> => {
+    try {
+      return await fn();
+    } catch (err) {
+      steps.push(`${label} error: ${errText(err)}`);
+      return null;
     }
-  } catch (err) {
-    steps.push(`error: ${err instanceof Error ? err.message : String(err)}`);
-    photo = null;
+  };
+
+  // 1. The article's own photo.
+  if (request.kind === 'article') {
+    const p = await attempt('article', () => articlePhoto(request.value, ctx, steps));
+    if (p) return done(p, 'article');
   }
-  if (photo) ctx.used.add(photo.url);
-  else steps.push('no photo');
-  return { request, photo, steps };
+
+  // 2. The slide's subject.
+  const subject = request.kind === 'subject' ? request.value : subjectInText(slide, ctx.brief);
+  if (subject) {
+    if (request.kind !== 'subject') steps.push(`subject from slide text: ${subject}`);
+    const r = await attempt('subject', async () => {
+      const out = await subjectPhoto(subject, ctx, deps, steps);
+      identity = out.identity;
+      type = out.type;
+      return out.photo;
+    });
+    if (r) return done(r, 'subject');
+  }
+
+  // 3. The slide's stock scene.
+  if (request.kind === 'stock') {
+    const p = await attempt('stock', () => stockPhoto(request.value, ctx, deps, steps));
+    if (p) return done(p, 'stock');
+  }
+
+  // 4. Neutral scenes, the type-fitting one first.
+  const scenes = [...new Set([FALLBACK_SCENES[type ?? 'unknown'], ...NEUTRAL_SCENES])];
+  for (const scene of scenes) {
+    steps.push(`neutral scene "${scene}"`);
+    const p = await attempt('neutral', () => stockPhoto(scene, ctx, deps, steps));
+    if (p) return done(p, 'neutral');
+  }
+  steps.push('no photo: every step failed');
+  return { request, photo: null, via: null, identity, steps };
 }

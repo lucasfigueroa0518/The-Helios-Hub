@@ -6,7 +6,8 @@
  * and free public APIs: Wikidata, Wikidata query service, Commons,
  * Openverse. No Claude, no database, no Storage, no Instagram.
  *
- * Saved briefs carry no page-reader data, so article photos are checked
+ * Every slide goes down the fallback chain (photos/find.ts) and logs which
+ * step supplied its photo. Saved briefs carry no page-reader data, so article photos are checked
  * against the Reporter's ARTICLE PHOTOS copy (caption + credit).
  *
  *   npx tsx scripts/social_photos_run.ts --jev-cap-usd 0.01 <name>=<edit-check.json> …
@@ -54,8 +55,10 @@ async function main() {
     await fsp.writeFile(path.join(dir, `${name}.json`), JSON.stringify({ draftFile: file, slug, photos }, null, 2));
     console.log(`\n${name} → /social/render/preview?generated=${slug}&all=1`);
     [photos.cover, ...photos.slides].forEach((t, i) => {
-      console.log(`  ${i === 0 ? 'cover' : `slide ${i + 1}`} ${t.request.kind}: ${t.request.value}`);
-      console.log(`    ${t.photo ? `${t.photo.source} · ${t.photo.credit}` : 'NO PHOTO'} | ${t.steps.join(' → ')}`);
+      console.log(`  ${i === 0 ? 'cover' : `slide ${i + 1}`} · request ${t.request.kind}: ${t.request.value}`);
+      console.log(`    via: ${t.via ?? 'NONE'}${t.via && t.via !== t.request.kind ? ' (fallback)' : ''} · ${t.photo ? `${t.photo.source} · credit: ${t.photo.credit}` : 'NO PHOTO'}`);
+      if (t.identity) console.log(`    identity ${t.identity.subject}: ${t.identity.ok ? 'ok' : 'FAILED'} — ${t.identity.detail}`);
+      console.log(`    steps: ${t.steps.join(' → ')}`);
     });
   }
   console.log(`\nJev: ${tally.calls} calls, $${tally.costUsd.toFixed(5)}. Log: ${dir}`);

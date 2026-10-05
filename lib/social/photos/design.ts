@@ -13,9 +13,13 @@ export type DraftPhotos = { cover: PhotoTrace; slides: PhotoTrace[] };
 
 export async function photosForDraft(draft: FilledDraft, brief: Brief, pages: PageReadOk[], deps: PhotoDeps): Promise<DraftPhotos> {
   const ctx = newPhotoContext(brief, pages);
-  const cover = await findPhoto(draft.cover_options[draft.chosen_cover - 1]!.image, ctx, deps);
+  const chosen = draft.cover_options[draft.chosen_cover - 1]!;
+  const cover = await findPhoto(chosen.image, ctx, deps, { text: [chosen.text], speaker: null });
   const slides: PhotoTrace[] = [];
   // In order, not in parallel: the used set decides which candidate each slide gets.
-  for (const s of draft.slides) slides.push(await findPhoto(s.image, ctx, deps));
+  for (const s of draft.slides) {
+    const text = [s.headline.text, s.body?.text ?? '', s.quote?.text ?? ''];
+    slides.push(await findPhoto(s.image, ctx, deps, { text, speaker: s.quote?.speaker ?? null }));
+  }
   return { cover, slides };
 }

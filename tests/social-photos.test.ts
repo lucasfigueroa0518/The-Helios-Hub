@@ -14,7 +14,7 @@ import { createDesignStage } from '@/lib/social/pipeline/design-stage';
 import type { Brief as PipelineBrief, Draft, ScoredCandidate } from '@/lib/social/pipeline/types';
 import { classifyCredit } from '@/lib/social/photos/credit';
 import { photosForDraft } from '@/lib/social/photos/design';
-import { FALLBACK_SCENES, findPhoto, newPhotoContext } from '@/lib/social/photos/find';
+import { FALLBACK_SCENES, findPhoto, NEUTRAL_SCENES, newPhotoContext } from '@/lib/social/photos/find';
 import { checkIdentity } from '@/lib/social/photos/identity';
 import { toRenderPost } from '@/lib/social/render/from-draft';
 import type { Brief } from '@/lib/social/reporter/brief';
@@ -156,16 +156,59 @@ test('fixture slides get a photo from the right source', async () => {
   assert.equal(p.slides[3]!.photo?.url, stockUrl('wall clock', 1));
 });
 
-test('an agency-credited article photo is rejected, including a credit-only caption', async () => {
+test('an agency-credited article photo is rejected, including a credit-only caption; the chain fills the slide', async () => {
   const { deps: d } = deps();
   const ctx = newPhotoContext(briefWith(), pages());
   const getty = await findPhoto({ kind: 'article', value: GETTY_SRC }, ctx, d);
-  assert.equal(getty.photo, null);
   assert.ok(getty.steps.some((s) => /credit rejected: agency/.test(s)));
+  assert.notEqual(getty.photo?.url, GETTY_SRC);
+  assert.equal(getty.via, 'neutral');
   const fanjoy = await findPhoto({ kind: 'article', value: FANJOY_SRC }, ctx, d);
-  assert.equal(fanjoy.photo, null);
+  assert.ok(fanjoy.steps.some((s) => /credit rejected: agency/.test(s)));
+  assert.equal(fanjoy.via, 'neutral');
   const unknown = await findPhoto({ kind: 'article', value: 'https://example.com/not-on-any-page.jpg' }, ctx, d);
-  assert.equal(unknown.photo, null);
+  assert.ok(unknown.steps.some((s) => /not found in the pages read/.test(s)));
+  assert.equal(unknown.via, 'neutral');
+});
+
+test("chain: a rejected article photo falls back to the slide's subject, identity-checked", async () => {
+  const { deps: d } = deps();
+  const ctx = newPhotoContext(briefWith(), pages());
+  const t = await findPhoto({ kind: 'article', value: GETTY_SRC }, ctx, d, { text: ['Clayton will chair it', 'Jay Clayton chairs the force.'], speaker: null });
+  assert.equal(t.via, 'subject');
+  assert.equal(t.photo?.url, commonsUrl('Jay Clayton SEC.jpg'));
+  assert.equal(t.identity?.ok, true);
+});
+
+test("chain: a quote slide's speaker is its subject", async () => {
+  const { deps: d } = deps();
+  const ctx = newPhotoContext(briefWith(), []);
+  const t = await findPhoto({ kind: 'stock', value: 'flag on a pole' }, ctx, d, { text: ['His pitch'], speaker: 'Donald Trump' });
+  assert.equal(t.via, 'subject');
+  assert.equal(t.photo?.qid, 'Q22686');
+});
+
+test('chain: a stock scene with no results falls back to a neutral scene', async () => {
+  const fake = createFakeHttp({ ...SIF_WEB, stockCount: { 'nothing here': 0, [FALLBACK_SCENES.unknown]: 0 } });
+  const ctx = newPhotoContext(briefWith(), []);
+  const t = await findPhoto({ kind: 'stock', value: 'nothing here' }, ctx, { jev: identityJev(SIF_ANSWERS), http: fake.http });
+  assert.equal(t.via, 'neutral');
+  assert.equal(t.photo?.url, stockUrl(NEUTRAL_SCENES[1]!, 1), 'type-fitting scene empty → next neutral scene');
+});
+
+test('chain: every fixture slide gets a photo, each step logged', async () => {
+  const { deps: d } = deps();
+  const sub = sifDraft();
+  sub.slides[1]!.image = { kind: 'article', value: GETTY_SRC };
+  const p = await photosForDraft(fillDraft(sub, briefWith()), briefWith(), pages(), d);
+  for (const t of [p.cover, ...p.slides]) {
+    assert.ok(t.photo, `${t.request.kind}: ${t.request.value} got a photo`);
+    assert.ok(t.via);
+  }
+  // Clayton is named on the slide, but his one Commons photo is on the slide before: no repeat → neutral scene.
+  assert.ok(p.slides[1]!.steps.includes('subject from slide text: Jay Clayton'));
+  assert.ok(p.slides[1]!.steps.includes('every Commons photo already used in this post'));
+  assert.equal(p.slides[1]!.via, 'neutral');
 });
 
 test('a failed identity check falls back to a scene, never another person', async () => {
@@ -254,7 +297,9 @@ test('preview: a stubbed post renders every slide with its photo and credit', as
   const { renderToStaticMarkup } = await import('react-dom/server');
   const { SlideTemplate } = await import('@/lib/social/render/SlideTemplate');
   const brief = briefWith();
-  const draft = fillDraft(sifDraft(), brief);
+  const sub = sifDraft();
+  sub.slides[5] = { ...sub.slides[5]!, type: 'landing', body: null };
+  const draft = fillDraft(sub, brief);
   const photo = (i: number) => ({ url: `/social/stock/p${i}.jpg`, credit: `Credit ${i}`, source: 'stock' as const, width: null, height: null, qid: null });
   const post = toRenderPost(draft, { cover: photo(0), slides: draft.slides.map((_, i) => photo(i + 1)) }, { source: 'TechCrunch', sourceUrl: TC_URL, publishedAt: '2026-10-04T12:00:00Z' });
   post.slides.forEach((s, i) => {
