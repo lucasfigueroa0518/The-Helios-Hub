@@ -32,6 +32,7 @@ export type ReasonCode =
   | 'unverifiable-claim'
   | 'render-failed'
   | 'service-error'
+  | 'refused'
   | 'cost-cap';
 
 /**
@@ -45,6 +46,9 @@ export const REASON_KIND: Record<ReasonCode, SetAsideKind> = {
   'over-limit': 'pipeline-fault',
   'render-failed': 'pipeline-fault',
   'service-error': 'pipeline-fault',
+  // Model declined the story (Tommy, 2026-10-04: no fallback model). Repeats
+  // in the log are a pattern for selection, not a pipeline fault.
+  refused: 'should-not-run',
   'cost-cap': 'pipeline-fault',
   'main-claim-false': 'should-not-run',
   'unverifiable-claim': 'should-not-run',

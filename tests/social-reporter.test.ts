@@ -283,7 +283,7 @@ test('Reporter: malformed brief, refusal, truncation and API errors fail with a 
   assert.match(!bad.ok ? bad.detail : '', /SINGLE STORY: section missing/);
 
   const refusal = await runReporter(STORY, { create: scripted([msg('refusal', [])]).create });
-  assert.equal(!refusal.ok && refusal.reason, 'service-error');
+  assert.equal(!refusal.ok && refusal.reason, 'refused');
 
   const cut = await runReporter(STORY, { create: scripted([msg('max_tokens', [text('SINGLE STORY: yes')])]).create });
   assert.equal(!cut.ok && cut.reason, 'malformed-output');
@@ -321,4 +321,42 @@ test('runDay: the Reporter stage researches each winner from its member URLs; a 
   assert.equal(r.setAsides[0]!.stage, 'reporter');
   assert.equal(r.setAsides[0]!.reasonCode, 'malformed-output');
   assert.ok((meter.byStage().reporter ?? 0) > 0);
+});
+
+test('Reporter: a refusal sets the story aside as "refused" (should-not-run) and the next backup runs', async () => {
+  const create: MessagesCreate = async (params) => {
+    const first = (params.messages[0]!.content as Array<{ text: string }>)[0]!.text;
+    return first.includes('Lab ships new model') ? msg('refusal', []) : msg('end_turn', [text(BRIEF_SUPER_INTELLIGENCE_FORCE)]);
+  };
+  const now = new Date('2026-10-04T15:00:00Z');
+  const r = await runDay({
+    articles: STUB_ARTICLES,
+    stages: { ...createStubStages(), report: createReporterStage({ create, readPage: stubRead(), now: () => now }) },
+    meter: createCostMeter(),
+    log: createInMemorySetAsideLog(),
+    now,
+  });
+  assert.deepEqual(r.posts.map((p) => p.storyId), ['story-b', 'story-c']);
+  assert.equal(r.setAsides[0]!.reasonCode, 'refused');
+  assert.equal(r.setAsides[0]!.kind, 'should-not-run');
+});
+
+test('Reporter: no fallback model is requested', async () => {
+  const { create, requests } = scripted([msg('end_turn', [text(BRIEF_SUPER_INTELLIGENCE_FORCE)])]);
+  await runReporter(STORY, { create });
+  assert.ok(!('fallbacks' in (requests[0] as object)));
+});
+
+test('Reporter: the cost cap stops the loop before a turn that could pass it', async () => {
+  const big = usage({ input_tokens: 60_000, output_tokens: 10_000, web: 5 }); // ≈ $0.27 per turn
+  const { create, requests } = scripted([
+    msg('tool_use', [toolUse('a', TC_URL)], big),
+    msg('tool_use', [toolUse('b', TC_URL)], big),
+    msg('end_turn', [text(BRIEF_SUPER_INTELLIGENCE_FORCE)], big),
+  ]);
+  const r = await runReporter(STORY, { create, readPage: stubRead(), costCapUsd: 0.5 });
+  assert.equal(r.ok, false);
+  assert.equal(!r.ok && r.reason, 'cost-cap');
+  assert.equal(requests.length, 1); // after one $0.27 turn, another could pass $0.50
+  assert.ok(r.costUsd <= 0.5);
 });

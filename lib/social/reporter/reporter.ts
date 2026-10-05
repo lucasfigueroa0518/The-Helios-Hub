@@ -61,16 +61,11 @@ export const REPORTER_TOOLS: Anthropic.ToolUnion[] = [WEB_SEARCH_TOOL, withToolC
 export type MessagesCreate = (params: Anthropic.MessageCreateParamsNonStreaming) => Promise<Anthropic.Message>;
 
 /**
- * Live client call. Adds the server-side refusal fallback ("default" form,
- * Claude API) that the Claude API guidance recommends for Sonnet 5.5; SDK
- * 0.65 doesn't type `fallbacks`, so it rides as an extra body field.
+ * Live client call. No refusal fallback (Tommy, 2026-10-04): a refusal
+ * stays on the stage's model and sets the story aside as "refused".
  */
 export function liveMessagesCreate(client: Anthropic): MessagesCreate {
-  return (params) =>
-    client.messages.create(
-      { ...params, fallbacks: 'default' } as Anthropic.MessageCreateParamsNonStreaming,
-      { headers: { 'anthropic-beta': 'server-side-fallback-2026-07-01' } },
-    );
+  return (params) => client.messages.create(params);
 }
 
 /** Tool-result text for one page read: header, photos, then the raw text. */
@@ -91,13 +86,22 @@ export function pageToToolText(page: PageRead): string {
 
 export type ReporterResult =
   | { ok: true; brief: Brief; raw: string; pages: PageReadOk[]; costUsd: number; turns: number; webSearches: number; pageReads: number }
-  | { ok: false; reason: 'malformed-output' | 'service-error'; detail: string; raw: string | null; costUsd: number; turns: number };
+  | { ok: false; reason: 'malformed-output' | 'service-error' | 'refused' | 'cost-cap'; detail: string; raw: string | null; costUsd: number; turns: number };
 
 export type ReporterDeps = {
   create: MessagesCreate;
   readPage?: (url: string) => Promise<PageRead>;
   config?: StageModelConfig;
+  /**
+   * Hard spend limit for this story (approved budget for a live run). The
+   * loop stops before a turn when spend plus PER_TURN_RESERVE_USD would
+   * pass it, so the cap is never exceeded by a turn already in flight.
+   */
+  costCapUsd?: number;
 };
+
+/** Worst-case cost of one more turn: ~40k uncached input + 16k output + 8 searches at Sonnet 5.5 rates. */
+export const PER_TURN_RESERVE_USD = 0.33;
 
 const textOf = (message: Anthropic.Message) =>
   message.content
@@ -119,6 +123,9 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
     responses.reduce((n, r) => n + (r.usage.server_tool_use?.web_search_requests ?? 0), 0);
 
   for (let turn = 1; turn <= MAX_TURNS; turn++) {
+    if (deps.costCapUsd !== undefined && cost() + PER_TURN_RESERVE_USD > deps.costCapUsd) {
+      return { ok: false, reason: 'cost-cap', detail: `stopped before turn ${turn}: $${cost().toFixed(4)} spent, cap $${deps.costCapUsd}`, raw: null, costUsd: cost(), turns: turn - 1 };
+    }
     let res: Anthropic.Message;
     try {
       res = await deps.create({
@@ -139,7 +146,7 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
 
     if (res.stop_reason === 'refusal') {
       const details = (res as unknown as { stop_details?: { category?: string | null } }).stop_details;
-      return { ok: false, reason: 'service-error', detail: `refusal (${details?.category ?? 'no category'})`, raw: textOf(res) || null, costUsd: cost(), turns: turn };
+      return { ok: false, reason: 'refused', detail: `refusal (${details?.category ?? 'no category'})`, raw: textOf(res) || null, costUsd: cost(), turns: turn };
     }
     if (res.stop_reason === 'max_tokens') {
       return { ok: false, reason: 'malformed-output', detail: 'brief cut off at max_tokens', raw: textOf(res) || null, costUsd: cost(), turns: turn };
