@@ -5,6 +5,8 @@
  * M1–M6 fill them in (brief format in M2, writer output in M3, …).
  */
 import type { GroupMember } from '@/lib/social/ingest/select/types';
+import type { Brief as ParsedBrief } from '@/lib/social/reporter/brief';
+import type { PageReadOk } from '@/lib/social/reporter/read-page';
 
 /** The six stages of spec §3, plus the mechanical guarantees (§6). */
 export const STAGE_ORDER = [
@@ -64,10 +66,14 @@ export type Candidate = {
 /** A candidate in run order: winners first, then backups. Higher score runs first. */
 export type ScoredCandidate = Candidate & { score: number };
 
-/** The Reporter's brief (M2 replaces this with the structured format). */
+/** The Reporter's output for one story (spec §4): the parsed brief plus what it rests on. */
 export type Brief = {
   storyId: string;
-  news: string;
+  parsed: ParsedBrief;
+  /** The brief exactly as the Reporter wrote it. */
+  raw: string;
+  /** Every page the Reporter read (raw text + photos), for the Writer and the claim checks (M4). */
+  pages: PageReadOk[];
 };
 
 /** Writer/Editor/Fact-checker output (M3 adds slide types, IDs, covers). */

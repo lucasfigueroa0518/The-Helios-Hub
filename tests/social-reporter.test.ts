@@ -15,6 +15,20 @@ import {
 import { BRIEF_SUPER_INTELLIGENCE_FORCE, Q1_TEXT, TC_URL } from '@/fixtures/social/briefs';
 import { BriefParseError, briefIndex, parseBrief } from '@/lib/social/reporter/brief';
 import { parseArticleHtml, readPage } from '@/lib/social/reporter/read-page';
+import type Anthropic from '@anthropic-ai/sdk';
+import { createCostMeter } from '@/lib/social/pipeline/cost-meter';
+import { STAGE_MODELS } from '@/lib/social/pipeline/models';
+import { runDay } from '@/lib/social/pipeline/orchestrator';
+import { createReporterStage, readableDate } from '@/lib/social/pipeline/reporter-stage';
+import { createInMemorySetAsideLog } from '@/lib/social/pipeline/set-aside-log';
+import { STUB_ARTICLES, createStubStages } from '@/lib/social/pipeline/stubs';
+import { REPORTER_SYSTEM } from '@/lib/social/reporter/prompt';
+import {
+  READ_PAGE_MAX_CALLS,
+  WEB_SEARCH_TOOL_TYPE,
+  runReporter,
+  type MessagesCreate,
+} from '@/lib/social/reporter/reporter';
 
 // ── Brief parser (M2 accept) ───────────────────────────────────────────
 
@@ -146,4 +160,165 @@ test('readPage: failed fetch and non-article pages fail cleanly', async () => {
   assert.equal(empty.ok, false);
   const ok = await readPage(URL_A, async () => PAGE_CREDIT_ELEMENT);
   assert.equal(ok.ok, true);
+});
+
+// ── Reporter stage (stubbed Claude: no live API) ───────────────────────
+
+
+
+const STORY = { story: 'Trump unveils his new Super Intelligence Force', startingSources: [TC_URL], today: 'October 4, 2026' };
+
+const usage = (o: Partial<Anthropic.Usage> & { web?: number } = {}) => ({
+  input_tokens: o.input_tokens ?? 1000,
+  output_tokens: o.output_tokens ?? 500,
+  cache_read_input_tokens: o.cache_read_input_tokens ?? 0,
+  cache_creation_input_tokens: o.cache_creation_input_tokens ?? 0,
+  server_tool_use: { web_search_requests: o.web ?? 0 },
+});
+
+function msg(stop: string, content: unknown[], u = usage()): Anthropic.Message {
+  return { id: `msg_${Math.random()}`, type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', stop_reason: stop, stop_sequence: null, content, usage: u } as unknown as Anthropic.Message;
+}
+const toolUse = (id: string, url: string) => ({ type: 'tool_use', id, name: 'read_page', input: { url } });
+const text = (t: string) => ({ type: 'text', text: t });
+
+/** Scripted Claude: returns the responses in order and records every request. */
+function scripted(responses: Anthropic.Message[]) {
+  const requests: Anthropic.MessageCreateParamsNonStreaming[] = [];
+  const create: MessagesCreate = async (params) => {
+    requests.push(structuredClone(params));
+    const next = responses.shift();
+    if (!next) throw new Error('script exhausted');
+    return next;
+  };
+  return { create, requests };
+}
+
+const stubRead = (calls: string[] = []) => async (url: string) => {
+  calls.push(url);
+  return url === TC_URL ? parseArticleHtml(PAGE_HERO_OUTSIDE_MAIN, url)! : { ok: false as const, url, error: 'fetch failed' };
+};
+
+test('Reporter: model + effort from the stage config, cached tools and system, STORY line in the user message', async () => {
+  const { create, requests } = scripted([msg('end_turn', [text(BRIEF_SUPER_INTELLIGENCE_FORCE)])]);
+  const r = await runReporter(STORY, { create, readPage: stubRead() });
+  assert.equal(r.ok, true);
+  const req = requests[0]! as unknown as Record<string, any>;
+  assert.equal(req.model, STAGE_MODELS.reporter.model);
+  assert.equal(req.model, 'claude-sonnet-5-5');
+  assert.deepEqual(req.output_config, { effort: 'high' });
+  assert.equal(req.system[0].text, REPORTER_SYSTEM);
+  assert.deepEqual(req.system[0].cache_control, { type: 'ephemeral', ttl: '1h' });
+  assert.equal(req.tools[0].type, WEB_SEARCH_TOOL_TYPE);
+  assert.equal(req.tools[0].max_uses, 8);
+  assert.equal(req.tools[1].name, 'read_page');
+  assert.ok(req.tools[1].cache_control, 'breakpoint on the last tool');
+  assert.equal(req.messages[0].content[0].text, `STORY: ${STORY.story}. Starting sources: ${TC_URL}. Today is October 4, 2026.`);
+  assert.ok(req.messages[0].content[0].cache_control, 'conversation breakpoint on the newest user block');
+});
+
+test('Reporter: tool loop reads pages, sends results back, parses the brief, prices every turn', async () => {
+  const reads: string[] = [];
+  const { create, requests } = scripted([
+    msg('tool_use', [text('Opening the source.'), toolUse('t1', TC_URL)], usage({ web: 2 })),
+    msg('end_turn', [text(BRIEF_SUPER_INTELLIGENCE_FORCE)], usage({ cache_read_input_tokens: 4000 })),
+  ]);
+  const r = await runReporter(STORY, { create, readPage: stubRead(reads) });
+  assert.ok(r.ok);
+  assert.deepEqual(reads, [TC_URL]);
+  assert.equal(r.pages.length, 1);
+  assert.equal(r.brief.facts.length, 6);
+  assert.equal(r.webSearches, 2);
+  assert.equal(r.turns, 2);
+  assert.ok(r.costUsd > 0.02 && r.costUsd < 0.1, `cost ${r.costUsd}`); // 2 searches ($0.02) + tokens at Sonnet 5.5 rates
+  const second = requests[1]! as unknown as Record<string, any>;
+  assert.equal(second.messages.length, 3); // user, assistant(tool_use), user(tool_result)
+  const result = second.messages[2].content[0];
+  assert.equal(result.type, 'tool_result');
+  assert.equal(result.tool_use_id, 't1');
+  assert.match(result.content, /PHOTOS \(caption \| credit \| URL\):\n- \(no caption\) \| Image Credits: Kevin Dietsch \/ Staff \/ Getty Images/);
+  assert.match(result.content, /TEXT:\nThe president announced the formation/);
+  // Only the newest block carries the conversation breakpoint.
+  assert.ok(!second.messages[0].content[0].cache_control);
+  assert.ok(result.cache_control);
+});
+
+test('Reporter: parallel tool calls come back in ONE user message; failed reads are is_error', async () => {
+  const { create, requests } = scripted([
+    msg('tool_use', [toolUse('a', TC_URL), toolUse('b', 'https://paywalled.example/x')]),
+    msg('end_turn', [text(BRIEF_SUPER_INTELLIGENCE_FORCE)]),
+  ]);
+  await runReporter(STORY, { create, readPage: stubRead() });
+  const results = (requests[1]! as unknown as Record<string, any>).messages[2].content;
+  assert.equal(results.length, 2);
+  assert.deepEqual(results.map((x: any) => [x.tool_use_id, !!x.is_error]), [['a', false], ['b', true]]);
+});
+
+test('Reporter: page-reading budget is enforced', async () => {
+  const many = Array.from({ length: READ_PAGE_MAX_CALLS + 2 }, (_, i) => toolUse(`t${i}`, TC_URL));
+  const reads: string[] = [];
+  const { create, requests } = scripted([msg('tool_use', many), msg('end_turn', [text(BRIEF_SUPER_INTELLIGENCE_FORCE)])]);
+  await runReporter(STORY, { create, readPage: stubRead(reads) });
+  assert.equal(reads.length, READ_PAGE_MAX_CALLS);
+  const results = (requests[1]! as unknown as Record<string, any>).messages[2].content;
+  assert.match(results.at(-1).content, /budget used up/);
+});
+
+test('Reporter: pause_turn continues without a conversation breakpoint on the assistant turn', async () => {
+  const { create, requests } = scripted([
+    msg('pause_turn', [{ type: 'server_tool_use', id: 's1', name: 'web_search', input: { query: 'Super Intelligence Force' } }]),
+    msg('end_turn', [text(BRIEF_SUPER_INTELLIGENCE_FORCE)]),
+  ]);
+  const r = await runReporter(STORY, { create, readPage: stubRead() });
+  assert.ok(r.ok);
+  const second = (requests[1]! as unknown as Record<string, any>).messages;
+  assert.equal(second.at(-1).role, 'assistant');
+  assert.ok(!second.at(-1).content[0].cache_control);
+});
+
+test('Reporter: malformed brief, refusal, truncation and API errors fail with a reason (no retry here)', async () => {
+  const bad = await runReporter(STORY, { create: scripted([msg('end_turn', [text('Here is the brief: …')])]).create });
+  assert.equal(bad.ok, false);
+  assert.equal(!bad.ok && bad.reason, 'malformed-output');
+  assert.match(!bad.ok ? bad.detail : '', /SINGLE STORY: section missing/);
+
+  const refusal = await runReporter(STORY, { create: scripted([msg('refusal', [])]).create });
+  assert.equal(!refusal.ok && refusal.reason, 'service-error');
+
+  const cut = await runReporter(STORY, { create: scripted([msg('max_tokens', [text('SINGLE STORY: yes')])]).create });
+  assert.equal(!cut.ok && cut.reason, 'malformed-output');
+
+  const down = await runReporter(STORY, { create: async () => { throw new Error('overloaded'); } });
+  assert.equal(!down.ok && down.reason, 'service-error');
+});
+
+test('brief: a "Fetch failures:" line inside SOURCES opens the fetch-failure list', () => {
+  const b = parseBrief(BRIEF_SUPER_INTELLIGENCE_FORCE.replace('FETCH FAILURES:\n- none', 'Fetch failures: https://www.bloomberg.com/x (paywall)'));
+  assert.deepEqual(b.sources.length, 1);
+  assert.deepEqual(b.fetchFailures, ['https://www.bloomberg.com/x (paywall)']);
+});
+
+test('runDay: the Reporter stage researches each winner from its member URLs; a bad brief sets the story aside', async () => {
+  const sent: string[] = [];
+  const create: MessagesCreate = async (params) => {
+    const first = (params.messages[0]!.content as Array<{ text: string }>)[0]!.text;
+    sent.push(first);
+    // story-a writes an unparseable brief; the others write the fixture brief.
+    return msg('end_turn', [text(first.includes('Lab ships new model') ? 'not a brief' : BRIEF_SUPER_INTELLIGENCE_FORCE)]);
+  };
+  const now = new Date('2026-10-04T15:00:00Z');
+  const meter = createCostMeter();
+  const r = await runDay({
+    articles: STUB_ARTICLES,
+    stages: { ...createStubStages(), report: createReporterStage({ create, readPage: stubRead(), now: () => now }) },
+    meter,
+    log: createInMemorySetAsideLog(),
+    now,
+  });
+  assert.equal(readableDate(now), 'October 4, 2026');
+  assert.equal(sent[0], 'STORY: Lab ships new model. Starting sources: https://example.com/story-a. Today is October 4, 2026.');
+  assert.deepEqual(r.posts.map((p) => p.storyId), ['story-b', 'story-c']);
+  assert.equal(r.setAsides[0]!.stage, 'reporter');
+  assert.equal(r.setAsides[0]!.reasonCode, 'malformed-output');
+  assert.ok((meter.byStage().reporter ?? 0) > 0);
 });

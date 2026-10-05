@@ -5,6 +5,7 @@
  * so cost-cap behaviour is realistic.
  */
 import type { IngestArticle } from '@/lib/social/ingest/select/types';
+import type { Brief as ParsedBrief } from '@/lib/social/reporter/brief';
 
 import type { PipelineStages } from './stages';
 import type { ReasonCode, ScoredCandidate, StageName, StageResult } from './types';
@@ -66,6 +67,26 @@ export function stubCandidates(articles: IngestArticle[]): ScoredCandidate[] {
   }));
 }
 
+/** Minimal parsed brief for stub runs. */
+export function stubBrief(news: string): ParsedBrief {
+  return {
+    singleStory: true,
+    news: { text: `${news}.`, ids: ['F1'] },
+    whyItMatters: [],
+    facts: [{ id: 'F1', text: `${news}.`, sources: ['Example News'], claimBy: null }],
+    background: [],
+    quotes: [],
+    numbers: [],
+    terms: [],
+    subjects: [],
+    events: [],
+    articlePhotos: [],
+    notAnswered: [],
+    sources: [{ outlet: 'Example News', date: null, url: null }],
+    fetchFailures: [],
+  };
+}
+
 export function createStubStages(opts: StubOptions = {}): PipelineStages {
   const cost = (stage: StageName) => opts.costUsd?.[stage] ?? STUB_COST_USD[stage];
 
@@ -84,16 +105,16 @@ export function createStubStages(opts: StubOptions = {}): PipelineStages {
       return { ok: true, value: stubCandidates(articles), costUsd: cost('jev-scoring') };
     },
     async report(story) {
-      return result('reporter', story.id, { storyId: story.id, news: `${story.title}.` });
+      return result('reporter', story.id, { storyId: story.id, parsed: stubBrief(story.title), raw: '', pages: [] });
     },
     async write(brief) {
       return result('writer', brief.storyId, {
         storyId: brief.storyId,
         slides: [
-          { headline: brief.news, body: 'What happened, in one line.' },
+          { headline: brief.parsed.news.text, body: 'What happened, in one line.' },
           { headline: 'Why it matters', body: 'What it means for the reader.' },
         ],
-        caption: `${brief.news} Source: example.com`,
+        caption: `${brief.parsed.news.text} Source: example.com`,
       });
     },
     async edit(draft) {

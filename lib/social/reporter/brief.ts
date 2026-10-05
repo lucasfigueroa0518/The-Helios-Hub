@@ -99,6 +99,15 @@ function splitSections(raw: string): Map<string, string[]> {
     // Headings are written in capitals ("THE NEWS:", "WHY IT MATTERS (sourced only):"),
     // so a sentence that starts with "Background…" is content, not a heading.
     const heading = trimmed.match(/^[A-Z][A-Z ]*[A-Z](\s*\([^)]*\))?\s*(:|$)\s*/);
+    // The tested prompt says "list fetch failures separately", so a
+    // "Fetch failures:" line inside SOURCES opens that list in any case.
+    const fetchFailures = trimmed.match(/^(?:[-*•]\s*)?(?:fetch failures?|failed fetches|failed to fetch)\s*(?:\([^)]*\))?\s*:\s*/i);
+    if (fetchFailures) {
+      current = 'FETCH FAILURES';
+      const after = trimmed.slice(fetchFailures[0].length);
+      out.set(current, after ? [after] : []);
+      continue;
+    }
     if (hit && heading) {
       current = hit[1];
       const after = trimmed.slice(heading[0].length);
