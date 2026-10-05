@@ -47,10 +47,9 @@ function QueueMetric({
 }
 
 const DELIVERY_LABELS: Record<QueueListItem['delivery_status'], string> = {
-  waiting: 'Waiting',
-  scheduled: 'Scheduled',
-  handing_off: 'Handing off',
-  with_smartlead: 'With Smartlead',
+  held: 'Held',
+  queued: 'Queued',
+  handed_off: 'Handed off',
   sent: 'Sent',
   bounced: 'Bounced',
   replied: 'Replied',
@@ -68,7 +67,7 @@ function deliveryChipClass(status: QueueListItem['delivery_status']): string {
   if (status === 'sent' || status === 'replied') return 'drafting-status-chip drafting-status-chip--approved';
   if (status === 'bounced' || status === 'failed') return 'drafting-status-chip drafting-status-chip--failed';
   if (status === 'cancelled') return 'drafting-status-chip drafting-status-chip--failed';
-  if (status === 'waiting') return 'drafting-status-chip drafting-status-chip--attention';
+  if (status === 'held') return 'drafting-status-chip drafting-status-chip--attention';
   return 'drafting-status-chip drafting-status-chip--queued';
 }
 
@@ -448,12 +447,7 @@ function DayColumn(props: {
       </div>
 
       <div className="muted" style={{ fontSize: '0.8rem', margin: '0.35rem 0 0.6rem' }}>
-        {day.totals.planned} planned · {day.totals.actual} sent · capacity {day.totals.capacity}
-        {day.totals.followups > 0 ? ` · ${day.totals.followups} follow-ups` : ''}
-        <br />
-        <span title="Estimate. Smartlead decides the sender and the minute.">
-          forecast {day.totals.forecast}
-        </span>
+        {daySummary(day)}
       </div>
 
       {day.campaigns.length > 0 ? (
@@ -476,7 +470,31 @@ function DayColumn(props: {
       ) : null}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-        {day.items.length === 0 ? (
+        {day.campaigns.filter((campaign) => campaign.held > 0).map((campaign) => (
+          <div
+            key={`held-${campaign.campaign_id}`}
+            style={{
+              textAlign: 'left',
+              border: '1px dashed var(--color-border, #e3e8ef)',
+              borderLeft: `4px solid ${campaign.queue_color ?? 'var(--color-border, #e3e8ef)'}`,
+              borderRadius: '6px',
+              padding: '0.4rem 0.55rem',
+              background: 'var(--color-surface, #fff)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
+              <span style={{ fontWeight: 500 }}>
+                {campaign.held} {campaign.held === 1 ? 'email' : 'emails'}
+              </span>
+              <span className={deliveryChipClass('held')}>{DELIVERY_LABELS.held}</span>
+            </div>
+            <div className="muted" style={{ fontSize: '0.78rem' }}>{campaign.name}</div>
+            <div className="muted" style={{ fontSize: '0.75rem' }}>
+              Forecast. These seats move if the day&apos;s capacity changes.
+            </div>
+          </div>
+        ))}
+        {day.items.length === 0 && day.campaigns.every((campaign) => campaign.held === 0) ? (
           <span className="muted" style={{ fontSize: '0.8rem' }}>Nothing scheduled.</span>
         ) : null}
         {day.items.map((item) => (
@@ -521,6 +539,29 @@ function DayColumn(props: {
   );
 }
 
+function daySummary(day: QueueDayBucket): string {
+  const held = day.campaigns.reduce((sum, campaign) => sum + campaign.held, 0);
+  const queued = day.items.filter((item) => item.delivery_status === 'queued').length;
+  const parts = [
+    day.totals.handed_off > 0 ? `${day.totals.handed_off} handed off` : null,
+    queued > 0 ? `${queued} queued` : null,
+    held > 0 ? `${held} held` : null,
+    `${day.totals.actual} sent`,
+    `capacity ${day.totals.capacity}`,
+  ].filter((part): part is string => Boolean(part));
+  return parts.join(' · ');
+}
+
+function campaignStateLabel(campaign: QueueCampaignDayStat): string {
+  const parts = [
+    campaign.handed_off > 0 ? `${campaign.handed_off} handed off` : null,
+    campaign.queued > 0 ? `${campaign.queued} queued` : null,
+    campaign.held > 0 ? `${campaign.held} held` : null,
+    campaign.actual > 0 ? `${campaign.actual} sent` : null,
+  ].filter((part): part is string => Boolean(part));
+  return parts.join(' · ') || '—';
+}
+
 function CampaignRow({ campaign }: { campaign: QueueCampaignDayStat }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', fontSize: '0.8rem' }}>
@@ -541,9 +582,7 @@ function CampaignRow({ campaign }: { campaign: QueueCampaignDayStat }) {
           <span className="muted"> · lane {campaign.lane_status}</span>
         ) : null}
       </span>
-      <span className="muted" title="Planned / forecast / actual. Forecast is an estimate.">
-        {campaign.planned}/{campaign.forecast}/{campaign.actual}
-      </span>
+      <span className="muted">{campaignStateLabel(campaign)}</span>
     </div>
   );
 }

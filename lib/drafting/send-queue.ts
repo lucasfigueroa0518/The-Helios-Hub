@@ -29,8 +29,13 @@ import {
   SEND_QUEUE_TIMEZONE,
 } from '@/lib/drafting/send-queue-schedule';
 import {
+  campaignDayPlan,
+  commitmentsByCampaign,
+  unfilledCommitment,
+  type CapacityClaim,
+} from '@/lib/drafting/send-queue-commitments';
+import {
   FORECAST_NOTE,
-  forecastForLane,
   identityCapacity,
   monthlyCeiling,
   plannedPerMailbox,
@@ -48,6 +53,7 @@ import {
   type PlanLimits,
   type UsageCache,
 } from '@/lib/org-settings';
+import { resolveDeliverySettings } from '@/lib/smartlead/delivery-settings';
 import { daysLeftInCycle, replanHandoffs } from '@/lib/smartlead/handoff';
 
 export {
@@ -87,10 +93,9 @@ export type EmailSendQueueRow = {
 
 /** Where a row stands with the delivery provider, for the board's status chip. */
 export type DeliveryStatus =
-  | 'waiting'
-  | 'scheduled'
-  | 'handing_off'
-  | 'with_smartlead'
+  | 'held'
+  | 'queued'
+  | 'handed_off'
   | 'sent'
   | 'bounced'
   | 'replied'
@@ -130,6 +135,13 @@ export type QueueCampaignDayStat = {
   lane_status: string | null;
   planned: number;
   handed_off: number;
+  /** Pre-handoff rows dated for this day. */
+  queued: number;
+  /**
+   * Future-day share with no email attached yet. A forecast: moving capacity
+   * changes it, and it does not reserve a mailbox.
+   */
+  held: number;
   forecast: number;
   actual: number;
   waiting_reason: WaitingReason | null;
@@ -442,26 +454,38 @@ async function loadCapacity(today: string): Promise<CapacitySnapshot> {
 // Board
 // ---------------------------------------------------------------------------
 
+function listed<T extends string>(many?: readonly T[] | null, one?: T | null): T[] {
+  const values = [...(many ?? [])];
+  if (one) values.push(one);
+  return [...new Set(values.filter(Boolean))];
+}
+
 export async function listSendQueue(input: {
   ownerId?: string;
   from: string;
   to: string;
   campaignId?: string | null;
+  campaignIds?: string[] | null;
   identitySlug?: SenderIdentitySlug | null;
+  identitySlugs?: SenderIdentitySlug[] | null;
   inboxEmail?: string | null;
+  inboxEmails?: string[] | null;
 }): Promise<SendQueueBoard> {
   const today = formatNyDate();
   const capacity = await loadCapacity(today);
+  const campaignIds = listed(input.campaignIds, input.campaignId);
+  const identitySlugs = listed(input.identitySlugs, input.identitySlug);
+  const inboxEmails = listed(input.inboxEmails, input.inboxEmail);
 
   const params: unknown[] = [input.from, input.to];
   const clauses: string[] = [];
-  if (input.campaignId) {
-    params.push(input.campaignId);
-    clauses.push(`q.campaign_id = $${params.length}::uuid`);
+  if (campaignIds.length) {
+    params.push(campaignIds);
+    clauses.push(`q.campaign_id = ANY($${params.length}::uuid[])`);
   }
-  if (input.identitySlug) {
-    params.push(input.identitySlug);
-    clauses.push(`coalesce(lane.identity_slug, c.sender_identity_slug, 'lucas') = $${params.length}`);
+  if (identitySlugs.length) {
+    params.push(identitySlugs);
+    clauses.push(`coalesce(lane.identity_slug, c.sender_identity_slug, 'lucas') = ANY($${params.length}::text[])`);
   }
   const filter = clauses.length ? ` AND ${clauses.join(' AND ')}` : '';
 
@@ -498,12 +522,14 @@ export async function listSendQueue(input: {
   );
 
   const items: QueueListItem[] = rows
-    .filter((row) => !input.inboxEmail || row.inbox_email === input.inboxEmail)
+    .filter((row) => inboxEmails.length === 0 || (row.inbox_email != null && inboxEmails.includes(row.inbox_email)))
     .map((row) => ({
       ...row,
-      delivery_status: deliveryStatusFor(row),
+      delivery_status: deliveryStatusFor(row, today),
       overdue: isOverdue(row, today),
     }));
+
+  const claims = await loadActivatedClaims();
 
   const days = await buildDays({
     from: input.from,
@@ -511,6 +537,9 @@ export async function listSendQueue(input: {
     today,
     items,
     capacity,
+    claims,
+    campaignIds,
+    identitySlugs,
   });
 
   return {
@@ -530,12 +559,17 @@ export async function listSendQueue(input: {
   };
 }
 
-function deliveryStatusFor(row: {
+/**
+ * Pre-handoff mail on a future day is Held: a forecast that moves if the day's
+ * capacity changes. Pre-handoff mail dated for today (or earlier) is Queued.
+ * Smartlead has it, but has not sent it, only once the row is handed off.
+ */
+export function deliveryStatusFor(row: {
   status: EmailSendQueueStatus;
   handoff_date: string | null;
   bounced_at?: string | null;
   replied_at?: string | null;
-}): DeliveryStatus {
+}, today: string): DeliveryStatus {
   if (row.status === 'cancelled') return 'cancelled';
   if (row.status === 'failed') return 'failed';
   if (row.status === 'sent') {
@@ -543,9 +577,9 @@ function deliveryStatusFor(row: {
     if (row.replied_at) return 'replied';
     return 'sent';
   }
-  if (row.status === 'handed_off') return 'with_smartlead';
-  if (row.status === 'handing_off') return 'handing_off';
-  return row.handoff_date ? 'scheduled' : 'waiting';
+  if (row.status === 'handed_off' || row.status === 'handing_off') return 'handed_off';
+  if (row.handoff_date && row.handoff_date <= today) return 'queued';
+  return 'held';
 }
 
 /**
@@ -562,6 +596,9 @@ async function buildDays(input: {
   today: string;
   items: QueueListItem[];
   capacity: CapacitySnapshot;
+  claims: CapacityClaim[];
+  campaignIds: string[];
+  identitySlugs: string[];
 }): Promise<QueueDayBucket[]> {
   const actuals = await actualsByDay(input.from, input.to);
   const variance = await varianceByInbox(input.from, input.to);
@@ -570,6 +607,36 @@ async function buildDays(input: {
   for (let date = input.from; date <= input.to; date = addCalendarDays(date, 1)) {
     const dayItems = input.items.filter((item) => rowBelongsToDay(item, date));
     const isToday = date === input.today;
+    const poolByIdentity = new Map<string, number>();
+    for (const [identitySlug, inboxes] of input.capacity.byIdentity) {
+      poolByIdentity.set(
+        identitySlug,
+        inboxes.reduce((sum, inbox) => sum + stageCap(inbox, date), 0),
+      );
+    }
+    // Past days stay factual. Today and later include the share a live
+    // campaign will take even when no email card exists yet.
+    const commitments = date >= input.today
+      ? commitmentsByCampaign({ claims: input.claims, poolByIdentity })
+      : new Map<string, number>();
+    const visibleClaims = input.claims.filter((claim) => {
+      if (input.campaignIds.length > 0 && !input.campaignIds.includes(claim.campaignId)) return false;
+      if (input.identitySlugs.length > 0 && !input.identitySlugs.includes(claim.identitySlug)) return false;
+      return true;
+    });
+    const slotted = (campaignId: string) => dayItems.filter(
+      (item) => item.campaign_id === campaignId && item.status !== 'cancelled',
+    ).length;
+    const unfilledFor = (identitySlug: string) => visibleClaims
+      .filter((claim) => claim.identitySlug === identitySlug)
+      .reduce(
+        (sum, claim) => sum + unfilledCommitment(commitments.get(claim.campaignId) ?? 0, slotted(claim.campaignId)),
+        0,
+      );
+    const unfilledTotal = visibleClaims.reduce(
+      (sum, claim) => sum + unfilledCommitment(commitments.get(claim.campaignId) ?? 0, slotted(claim.campaignId)),
+      0,
+    );
 
     const mailboxes: QueueMailboxDayStat[] = [];
     let capacityTotal = 0;
@@ -577,7 +644,7 @@ async function buildDays(input: {
     for (const [identitySlug, inboxes] of input.capacity.byIdentity) {
       const identityPlanned = dayItems.filter(
         (item) => item.identity_slug === identitySlug && item.status !== 'cancelled',
-      ).length;
+      ).length + unfilledFor(identitySlug);
       const planned = plannedPerMailbox(inboxes, date, identityPlanned);
       // Same number the Inboxes tab shows: each mailbox's campaign cap, not
       // that cap minus follow-ups. Follow-ups still reduce what the planner
@@ -600,12 +667,25 @@ async function buildDays(input: {
       }
     }
 
-    const campaigns = buildCampaignStats(dayItems, date, isToday, input.capacity);
+    const visibleCommitments = new Map<string, number>();
+    for (const claim of visibleClaims) {
+      const seats = commitments.get(claim.campaignId) ?? 0;
+      if (seats > 0) visibleCommitments.set(claim.campaignId, seats);
+    }
+    const campaigns = buildCampaignStats(
+      dayItems,
+      date,
+      isToday,
+      input.capacity,
+      visibleCommitments,
+      visibleClaims,
+    );
+    const itemPlanned = dayItems.filter((item) => item.status !== 'cancelled').length;
     const totals: QueueDayTotals = {
       queued_unassigned: input.items.filter(
         (item) => item.status === 'queued' && !item.handoff_date,
       ).length,
-      planned: dayItems.filter((item) => item.status !== 'cancelled').length,
+      planned: itemPlanned + unfilledTotal,
       handed_off: dayItems.filter(
         (item) => item.status === 'handed_off' || item.status === 'handing_off',
       ).length,
@@ -621,11 +701,12 @@ async function buildDays(input: {
       mailboxes,
       campaigns,
       items: dayItems,
-      // Legacy fields the homepage week roll-up reads.
-      used: totals.planned,
+      // Homepage treats `used` as mail already taken. The unfilled share
+      // belongs in `reserved`, which the week roll-up counts as upcoming.
+      used: itemPlanned,
       capacity: totals.capacity,
       remaining: Math.max(0, totals.capacity - totals.planned),
-      reserved: 0,
+      reserved: unfilledTotal,
       sent_count: totals.actual,
       queued_count: dayItems.filter((item) => item.status === 'queued').length,
       over_cap: totals.planned > totals.capacity,
@@ -644,38 +725,110 @@ function buildCampaignStats(
   date: string,
   isToday: boolean,
   capacity: CapacitySnapshot,
+  commitments: Map<string, number>,
+  claims: CapacityClaim[],
 ): QueueCampaignDayStat[] {
   const byCampaign = new Map<string, QueueListItem[]>();
   for (const item of dayItems) {
     byCampaign.set(item.campaign_id, [...(byCampaign.get(item.campaign_id) ?? []), item]);
   }
+  const claimById = new Map(claims.map((claim) => [claim.campaignId, claim]));
+  const ids = new Set<string>([...byCampaign.keys(), ...commitments.keys()]);
 
-  return [...byCampaign.entries()].map(([campaignId, items]) => {
-    const identitySlug = (items[0].identity_slug ?? 'lucas') as IdentitySlug;
+  return [...ids].flatMap((campaignId) => {
+    const items = byCampaign.get(campaignId) ?? [];
+    const claim = claimById.get(campaignId);
+    const commitment = commitments.get(campaignId) ?? 0;
+    if (items.length === 0 && commitment <= 0) return [];
+
+    const identitySlug = (items[0]?.identity_slug ?? claim?.identitySlug ?? 'lucas') as IdentitySlug;
     const inboxes = capacity.byIdentity.get(identitySlug) ?? [];
     const laneCap = inboxes.reduce((sum, inbox) => sum + stageCap(inbox, date), 0);
     const actual = items.filter((item) => item.status === 'sent').length;
-    const demand = items.filter((item) => item.status !== 'cancelled' && item.status !== 'sent').length;
+    const unsent = items.filter((item) => item.status !== 'cancelled' && item.status !== 'sent').length;
+    const itemCount = items.filter((item) => item.status !== 'cancelled').length;
+    const plan = campaignDayPlan({
+      commitment,
+      identityPool: laneCap,
+      itemCount,
+      unsent,
+      sent: actual,
+      isToday,
+    });
 
-    return {
+    return [{
       campaign_id: campaignId,
-      name: items[0].campaign_name,
-      queue_color: items[0].queue_color,
+      name: items[0]?.campaign_name ?? claim?.name ?? 'Campaign',
+      queue_color: items[0]?.queue_color ?? claim?.queueColor ?? null,
       identity_slug: identitySlug,
-      lane_status: items[0].lane_status,
-      planned: items.filter((item) => item.status !== 'cancelled').length,
+      lane_status: items[0]?.lane_status ?? claim?.laneStatus ?? null,
+      planned: plan.planned,
       handed_off: items.filter(
         (item) => item.status === 'handed_off' || item.status === 'handing_off',
       ).length,
-      forecast: forecastForLane({
-        laneCapacityToday: laneCap,
-        demand,
-        actualToday: actual,
-        isToday,
-      }),
+      queued: items.filter((item) => item.delivery_status === 'queued').length,
+      held: isToday ? 0 : unfilledCommitment(commitment, itemCount),
+      forecast: plan.forecast,
       actual,
       waiting_reason: items.find((item) => item.waiting_reason)?.waiting_reason ?? null,
-    };
+    }];
+  });
+}
+
+/** Live auto campaigns, plus ready manual campaigns with an explicit cap. */
+async function loadActivatedClaims(): Promise<CapacityClaim[]> {
+  const { rows } = await dbQuery<{
+    id: string;
+    name: string;
+    delivery_settings: unknown;
+    queue_color: string | null;
+    identity_slug: string;
+    lane_status: string | null;
+  }>(
+    `SELECT c.id::text AS id,
+            c.name,
+            c.delivery_settings,
+            c.queue_color,
+            COALESCE(c.sender_identity_slug, 'lucas') AS identity_slug,
+            (
+              SELECT l.status
+                FROM outreach.campaign_lanes l
+               WHERE l.campaign_id = c.id
+               ORDER BY CASE WHEN l.identity_slug = c.sender_identity_slug THEN 0 ELSE 1 END,
+                        l.updated_at DESC
+               LIMIT 1
+            ) AS lane_status
+       FROM outreach.campaigns c
+      WHERE c.status = 'active'
+        AND (
+          (COALESCE(c.kind, 'manual') = 'auto' AND c.auto_status = 'live')
+          OR (
+            COALESCE(c.kind, 'manual') <> 'auto'
+            AND EXISTS (
+              SELECT 1 FROM outreach.campaign_lanes l
+               WHERE l.campaign_id = c.id AND l.status = 'ready'
+            )
+            AND (
+              (c.delivery_settings->>'capacity_pct') IS NOT NULL
+              OR (c.delivery_settings->>'max_new_leads_per_day') IS NOT NULL
+            )
+          )
+        )`,
+  );
+
+  return rows.flatMap((row) => {
+    const identitySlug = row.identity_slug === 'tommy' ? 'tommy' : row.identity_slug === 'lucas' ? 'lucas' : null;
+    if (!identitySlug) return [];
+    const settings = resolveDeliverySettings(row.delivery_settings);
+    return [{
+      campaignId: row.id,
+      name: row.name,
+      identitySlug,
+      capacityPct: settings.capacity_pct,
+      maxNewLeadsPerDay: settings.max_new_leads_per_day,
+      queueColor: row.queue_color,
+      laneStatus: row.lane_status,
+    }];
   });
 }
 
@@ -919,7 +1072,7 @@ export async function getSendQueueDetail(
   if (!row) return null;
   return {
     ...row,
-    delivery_status: deliveryStatusFor(row),
+    delivery_status: deliveryStatusFor(row, formatNyDate()),
     overdue: isOverdue(row, formatNyDate()),
   };
 }
