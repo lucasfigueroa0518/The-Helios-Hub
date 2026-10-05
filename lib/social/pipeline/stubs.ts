@@ -68,24 +68,23 @@ export function stubCandidates(articles: IngestArticle[]): ScoredCandidate[] {
   }));
 }
 
-/** Minimal parsed brief for stub runs. */
+/** Minimal brief for stub runs. */
 export function stubBrief(news: string): ParsedBrief {
   return {
-    singleStory: true,
-    news: { text: `${news}.`, ids: ['F1'] },
-    whyItMatters: [],
-    facts: [{ id: 'F1', text: `${news}.`, sources: ['Example News'], claimBy: null }],
+    single_story: { yes: true, note: null },
+    the_news: { text: `${news}.`, ids: ['F1'] },
+    why_it_matters: [],
+    facts: [{ id: 'F1', text: `${news}.`, sources: ['Example News'], claim_by: null, notes: [] }],
     background: [],
     quotes: [],
     numbers: [],
     terms: [],
     subjects: [],
     events: [],
-    articlePhotos: [],
-    notAnswered: [],
-    sources: [{ outlet: 'Example News', date: null, url: null }],
-    fetchFailures: [],
-    notes: {},
+    article_photos: [],
+    not_answered: [],
+    sources: [{ outlet: 'Example News', date: null, url: 'https://example.com' }],
+    fetch_failures: [],
   };
 }
 
@@ -113,10 +112,10 @@ export function createStubStages(opts: StubOptions = {}): PipelineStages {
       return result('writer', brief.storyId, {
         storyId: brief.storyId,
         slides: [
-          { headline: brief.parsed.news.text, body: 'What happened, in one line.' },
+          { headline: brief.parsed.the_news.text, body: 'What happened, in one line.' },
           { headline: 'Why it matters', body: 'What it means for the reader.' },
         ],
-        caption: `${brief.parsed.news.text} Source: example.com`,
+        caption: `${brief.parsed.the_news.text} Source: example.com`,
       });
     },
     async edit(draft) {

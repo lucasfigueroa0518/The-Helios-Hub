@@ -3,7 +3,6 @@
  * no network, no Claude).
  */
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -13,8 +12,8 @@ import {
   PAGE_CREDIT_ELEMENT,
   PAGE_HERO_OUTSIDE_MAIN,
 } from '@/fixtures/social/pages';
-import { BRIEF_SUPER_INTELLIGENCE_FORCE, Q1_TEXT, TC_URL } from '@/fixtures/social/briefs';
-import { BriefParseError, briefIndex, parseBrief } from '@/lib/social/reporter/brief';
+import { briefSuperIntelligenceForce, Q1_TEXT, TC_URL } from '@/fixtures/social/briefs';
+import { BRIEF_SCHEMA, BriefValidationError, SUBMIT_BRIEF_TOOL, briefIndex, validateBrief, type Brief } from '@/lib/social/reporter/brief';
 import { parseArticleHtml, readPage } from '@/lib/social/reporter/read-page';
 import type Anthropic from '@anthropic-ai/sdk';
 import { createCostMeter } from '@/lib/social/pipeline/cost-meter';
@@ -31,72 +30,60 @@ import {
   type MessagesCreate,
 } from '@/lib/social/reporter/reporter';
 
-// ── Brief parser (M2 accept) ───────────────────────────────────────────
+// ── Brief: structured output + the small check ─────────────────────────
 
-test('brief: the Super Intelligence Force fixture parses completely', () => {
-  const b = parseBrief(BRIEF_SUPER_INTELLIGENCE_FORCE);
-  assert.equal(b.singleStory, true);
-  assert.deepEqual(b.news.ids, ['F1', 'F2']);
-  assert.deepEqual(b.whyItMatters.map((w) => w.ids), [['F6'], ['F4']]);
-  assert.deepEqual(b.facts.map((f) => f.id), ['F1', 'F2', 'F3', 'F4', 'F5', 'F6']);
-  assert.deepEqual(b.facts[2]!.sources, ['TechCrunch', 'The Wall Street Journal']);
-  assert.equal(b.facts[4]!.claimBy, 'Trump');
-  assert.deepEqual(b.background.map((f) => f.id), ['B1', 'B2']);
-  assert.equal(b.background[1]!.text, 'Trump signed an executive order seeking to rebrand AI as "super intelligence."');
-  assert.equal(b.quotes.length, 3);
-  assert.deepEqual(
-    { ...b.quotes[0]!, text: b.quotes[0]!.text === Q1_TEXT },
-    { id: 'Q1', text: true, speaker: 'Donald Trump', where: 'Truth Social post (via TechCrunch)', singleSource: true, cutOff: false },
-  );
-  assert.equal(b.quotes[2]!.cutOff, true);
-  assert.deepEqual(b.numbers, [
-    { id: 'N1', value: '120 days', type: 'duration', counts: 'time the task force has to report on the risks and opportunities presented by AI', source: 'TechCrunch' },
-  ]);
-  assert.equal(b.terms[0]!.name, 'Super Intelligence Force');
-  assert.deepEqual(b.subjects[1], { name: 'Jay Clayton', role: 'national intelligence director; chair of the Super Intelligence Force' });
-  assert.deepEqual(b.events, []);
-  assert.deepEqual(b.articlePhotos, [
-    { caption: null, credit: 'Image Credits:Kevin Dietsch / Staff / Getty Images', url: 'https://techcrunch.com/wp-content/uploads/2026/09/GettyImages-2297764008.jpg' },
-  ]);
-  assert.equal(b.notAnswered.length, 2);
-  assert.deepEqual(b.sources, [{ outlet: 'TechCrunch', date: 'October 4, 2026', url: TC_URL }]);
-  assert.deepEqual(b.fetchFailures, []);
-});
-
-test('brief: copy-by-ID lookups return the exact text (spec §4.2a)', () => {
-  const idx = briefIndex(parseBrief(BRIEF_SUPER_INTELLIGENCE_FORCE));
+test('brief: the fixture passes the check; copy-by-ID lookups return exact text (spec §4.2a)', () => {
+  const b = validateBrief(briefSuperIntelligenceForce());
+  const idx = briefIndex(b);
   assert.equal(idx.quote.get('Q1')!.text, Q1_TEXT);
   assert.equal(idx.number.get('N1')!.value, '120 days');
   assert.ok(idx.fact.get('B1'));
 });
 
-function errorsOf(raw: string): string[] {
+function errorsOf(edit: (b: Brief) => void): string[] {
+  const b = briefSuperIntelligenceForce();
+  edit(b);
   try {
-    parseBrief(raw);
+    validateBrief(b);
   } catch (err) {
-    assert.ok(err instanceof BriefParseError);
+    assert.ok(err instanceof BriefValidationError);
     return err.errors.map((e) => `${e.section}: ${e.message}`);
   }
   assert.fail('expected the brief to be rejected');
 }
 
-test('brief: malformed briefs fail with clear errors', () => {
-  const B = BRIEF_SUPER_INTELLIGENCE_FORCE;
-  assert.deepEqual(errorsOf(B.replace(/SOURCES:\n[\s\S]*?FETCH FAILURES:/, 'FETCH FAILURES:')), ['SOURCES: section missing']);
-  assert.deepEqual(errorsOf(B.replace('F6: The task', 'F5: The task')), ['IDS: duplicate id F5', 'WHY IT MATTERS: cites F6, which isn\'t in the brief']);
-  assert.deepEqual(errorsOf(B.replace(' presented by AI. (TechCrunch, The Wall Street Journal)', ' presented by AI.')), ['FACTS: F4 has no source']);
-  assert.deepEqual(
-    errorsOf(B.replace('| duration |', '| time |')),
-    ['NUMBERS: N1 has type "time"; allowed: money, count, percent, duration, date, other'],
-  );
-  assert.match(errorsOf(B.replace('N1: 120 days | duration | ', 'N1: 120 days | '))[0]!, /^NUMBERS: expected "N#: value \| type \| what it counts \| source"/);
-  assert.deepEqual(errorsOf(B.replace('SINGLE STORY: yes', 'SINGLE STORY: maybe')), ['SINGLE STORY: expected yes/no, got "maybe"']);
-  assert.match(errorsOf(B.replace('Q2: "develop', 'Q2: develop'))[0]!, /^QUOTES: expected Q#: "quote" — speaker/);
+test('brief check: sources exist, IDs unique, cited IDs exist', () => {
+  assert.deepEqual(errorsOf((b) => { b.facts[3]!.sources = []; }), ['facts: F4 has no source']);
+  assert.deepEqual(errorsOf((b) => { b.numbers[0]!.sources = [' ']; }), ['numbers: N1 has no source']);
+  assert.deepEqual(errorsOf((b) => { b.quotes[1]!.via = []; }), ['quotes: Q2 has no source']);
+  assert.deepEqual(errorsOf((b) => { b.sources = []; }), ['sources: no sources']);
+  assert.deepEqual(errorsOf((b) => { b.facts[5]!.id = 'F5'; }), ['ids: duplicate id F5', "why_it_matters: cites F6, which isn't in the brief"]);
+  assert.deepEqual(errorsOf((b) => { b.the_news.ids.push('F9'); }), ["the_news: cites F9, which isn't in the brief"]);
 });
 
-test('brief: a sentence starting with "Background" is content, not a heading', () => {
-  const b = parseBrief(BRIEF_SUPER_INTELLIGENCE_FORCE.replace('- The task force\'s budget and staff.', '- Background checks for task force members.'));
-  assert.equal(b.notAnswered[0], 'Background checks for task force members.');
+test('submit_brief schema mirrors the prompt sections and is strict', () => {
+  const schema = BRIEF_SCHEMA as { properties: Record<string, any>; required: string[]; additionalProperties: boolean };
+  assert.deepEqual(Object.keys(schema.properties), [
+    'single_story', 'the_news', 'why_it_matters', 'facts', 'background', 'quotes', 'numbers',
+    'terms', 'subjects', 'events', 'article_photos', 'not_answered', 'sources', 'fetch_failures',
+  ]);
+  assert.equal(schema.additionalProperties, false);
+  assert.deepEqual(schema.required, Object.keys(schema.properties));
+  assert.deepEqual(Object.keys(schema.properties.facts.items.properties), ['id', 'text', 'sources', 'claim_by', 'notes']);
+  assert.deepEqual(Object.keys(schema.properties.quotes.items.properties), ['id', 'text', 'speaker', 'where', 'via', 'single_source', 'cut_off', 'notes']);
+  assert.deepEqual(Object.keys(schema.properties.numbers.items.properties), ['id', 'value', 'type', 'counts', 'sources', 'notes']);
+  assert.deepEqual(schema.properties.numbers.items.properties.type.enum, ['money', 'count', 'percent', 'duration', 'date', 'other']);
+  // Every nested object is closed and fully required (strict tool use).
+  const walk = (node: any): void => {
+    if (node?.type === 'object') {
+      assert.equal(node.additionalProperties, false);
+      assert.deepEqual(node.required, Object.keys(node.properties));
+      Object.values(node.properties).forEach(walk);
+    }
+    if (node?.type === 'array') walk(node.items);
+  };
+  walk(schema);
+  assert.equal((SUBMIT_BRIEF_TOOL as any).strict, true);
 });
 
 const URL_A = 'https://tech.example.com/2026/10/03/northwind-opens-model';
@@ -182,6 +169,7 @@ function msg(stop: string, content: unknown[], u = usage()): Anthropic.Message {
 }
 const toolUse = (id: string, url: string) => ({ type: 'tool_use', id, name: 'read_page', input: { url } });
 const text = (t: string) => ({ type: 'text', text: t });
+const submit = (brief: unknown = briefSuperIntelligenceForce()) => ({ type: 'tool_use', id: `sub_${Math.random()}`, name: 'submit_brief', input: brief });
 
 /** Scripted Claude: returns the responses in order and records every request. */
 function scripted(responses: Anthropic.Message[]) {
@@ -201,7 +189,7 @@ const stubRead = (calls: string[] = []) => async (url: string) => {
 };
 
 test('Reporter: model + effort from the stage config, cached tools and system, STORY line in the user message', async () => {
-  const { create, requests } = scripted([msg('end_turn', [text(BRIEF_SUPER_INTELLIGENCE_FORCE)])]);
+  const { create, requests } = scripted([msg('tool_use', [submit()])]);
   const r = await runReporter(STORY, { create, readPage: stubRead() });
   assert.equal(r.ok, true);
   const req = requests[0]! as unknown as Record<string, any>;
@@ -213,7 +201,11 @@ test('Reporter: model + effort from the stage config, cached tools and system, S
   assert.equal(req.tools[0].type, WEB_SEARCH_TOOL_TYPE);
   assert.equal(req.tools[0].max_uses, 8);
   assert.equal(req.tools[1].name, 'read_page');
-  assert.ok(req.tools[1].cache_control, 'breakpoint on the last tool');
+  assert.equal(req.tools[2].name, 'submit_brief');
+  assert.equal(req.tools[2].strict, true);
+  assert.ok(req.tools[2].cache_control, 'breakpoint on the last tool');
+  assert.ok(!req.tools[1].cache_control);
+  assert.ok(!('tool_choice' in req), 'no forced tool use (Sonnet 5.5)');
   assert.equal(req.messages[0].content[0].text, `STORY: ${STORY.story}. Starting sources: ${TC_URL}. Today is October 4, 2026.`);
   assert.ok(req.messages[0].content[0].cache_control, 'conversation breakpoint on the newest user block');
 });
@@ -222,7 +214,7 @@ test('Reporter: tool loop reads pages, sends results back, parses the brief, pri
   const reads: string[] = [];
   const { create, requests } = scripted([
     msg('tool_use', [text('Opening the source.'), toolUse('t1', TC_URL)], usage({ web: 2 })),
-    msg('end_turn', [text(BRIEF_SUPER_INTELLIGENCE_FORCE)], usage({ cache_read_input_tokens: 4000 })),
+    msg('tool_use', [submit()], usage({ cache_read_input_tokens: 4000 })),
   ]);
   const r = await runReporter(STORY, { create, readPage: stubRead(reads) });
   assert.ok(r.ok);
@@ -247,7 +239,7 @@ test('Reporter: tool loop reads pages, sends results back, parses the brief, pri
 test('Reporter: parallel tool calls come back in ONE user message; failed reads are is_error', async () => {
   const { create, requests } = scripted([
     msg('tool_use', [toolUse('a', TC_URL), toolUse('b', 'https://paywalled.example/x')]),
-    msg('end_turn', [text(BRIEF_SUPER_INTELLIGENCE_FORCE)]),
+    msg('tool_use', [submit()]),
   ]);
   await runReporter(STORY, { create, readPage: stubRead() });
   const results = (requests[1]! as unknown as Record<string, any>).messages[2].content;
@@ -258,7 +250,7 @@ test('Reporter: parallel tool calls come back in ONE user message; failed reads 
 test('Reporter: page-reading budget is enforced', async () => {
   const many = Array.from({ length: READ_PAGE_MAX_CALLS + 2 }, (_, i) => toolUse(`t${i}`, TC_URL));
   const reads: string[] = [];
-  const { create, requests } = scripted([msg('tool_use', many), msg('end_turn', [text(BRIEF_SUPER_INTELLIGENCE_FORCE)])]);
+  const { create, requests } = scripted([msg('tool_use', many), msg('tool_use', [submit()])]);
   await runReporter(STORY, { create, readPage: stubRead(reads) });
   assert.equal(reads.length, READ_PAGE_MAX_CALLS);
   const results = (requests[1]! as unknown as Record<string, any>).messages[2].content;
@@ -268,7 +260,7 @@ test('Reporter: page-reading budget is enforced', async () => {
 test('Reporter: pause_turn continues without a conversation breakpoint on the assistant turn', async () => {
   const { create, requests } = scripted([
     msg('pause_turn', [{ type: 'server_tool_use', id: 's1', name: 'web_search', input: { query: 'Super Intelligence Force' } }]),
-    msg('end_turn', [text(BRIEF_SUPER_INTELLIGENCE_FORCE)]),
+    msg('tool_use', [submit()]),
   ]);
   const r = await runReporter(STORY, { create, readPage: stubRead() });
   assert.ok(r.ok);
@@ -281,7 +273,13 @@ test('Reporter: malformed brief, refusal, truncation and API errors fail with a 
   const bad = await runReporter(STORY, { create: scripted([msg('end_turn', [text('Here is the brief: …')])]).create });
   assert.equal(bad.ok, false);
   assert.equal(!bad.ok && bad.reason, 'malformed-output');
-  assert.match(!bad.ok ? bad.detail : '', /SINGLE STORY: section missing/);
+  assert.match(!bad.ok ? bad.detail : '', /ended without calling submit_brief/);
+
+  const unsourced = briefSuperIntelligenceForce();
+  unsourced.facts[0]!.sources = [];
+  const failed = await runReporter(STORY, { create: scripted([msg('tool_use', [submit(unsourced)])]).create });
+  assert.equal(!failed.ok && failed.reason, 'malformed-output');
+  assert.match(!failed.ok ? failed.detail : '', /F1 has no source/);
 
   const refusal = await runReporter(STORY, { create: scripted([msg('refusal', [])]).create });
   assert.equal(!refusal.ok && refusal.reason, 'refused');
@@ -293,19 +291,13 @@ test('Reporter: malformed brief, refusal, truncation and API errors fail with a 
   assert.equal(!down.ok && down.reason, 'service-error');
 });
 
-test('brief: a "Fetch failures:" line inside SOURCES opens the fetch-failure list', () => {
-  const b = parseBrief(BRIEF_SUPER_INTELLIGENCE_FORCE.replace('FETCH FAILURES:\n- none', 'Fetch failures: https://www.bloomberg.com/x (paywall)'));
-  assert.deepEqual(b.sources.length, 1);
-  assert.deepEqual(b.fetchFailures, ['https://www.bloomberg.com/x (paywall)']);
-});
-
 test('runDay: the Reporter stage researches each winner from its member URLs; a bad brief sets the story aside', async () => {
   const sent: string[] = [];
   const create: MessagesCreate = async (params) => {
     const first = (params.messages[0]!.content as Array<{ text: string }>)[0]!.text;
     sent.push(first);
     // story-a writes an unparseable brief; the others write the fixture brief.
-    return msg('end_turn', [text(first.includes('Lab ships new model') ? 'not a brief' : BRIEF_SUPER_INTELLIGENCE_FORCE)]);
+    return first.includes('Lab ships new model') ? msg('end_turn', [text('not a brief')]) : msg('tool_use', [submit()]);
   };
   const now = new Date('2026-10-04T15:00:00Z');
   const meter = createCostMeter();
@@ -327,7 +319,7 @@ test('runDay: the Reporter stage researches each winner from its member URLs; a 
 test('Reporter: a refusal sets the story aside as "refused" (should-not-run) and the next backup runs', async () => {
   const create: MessagesCreate = async (params) => {
     const first = (params.messages[0]!.content as Array<{ text: string }>)[0]!.text;
-    return first.includes('Lab ships new model') ? msg('refusal', []) : msg('end_turn', [text(BRIEF_SUPER_INTELLIGENCE_FORCE)]);
+    return first.includes('Lab ships new model') ? msg('refusal', []) : msg('tool_use', [submit()]);
   };
   const now = new Date('2026-10-04T15:00:00Z');
   const r = await runDay({
@@ -343,7 +335,7 @@ test('Reporter: a refusal sets the story aside as "refused" (should-not-run) and
 });
 
 test('Reporter: no fallback model is requested', async () => {
-  const { create, requests } = scripted([msg('end_turn', [text(BRIEF_SUPER_INTELLIGENCE_FORCE)])]);
+  const { create, requests } = scripted([msg('tool_use', [submit()])]);
   await runReporter(STORY, { create });
   assert.ok(!('fallbacks' in (requests[0] as object)));
 });
@@ -353,7 +345,7 @@ test('Reporter: the cost cap stops the loop before a turn that could pass it', a
   const { create, requests } = scripted([
     msg('tool_use', [toolUse('a', TC_URL)], big),
     msg('tool_use', [toolUse('b', TC_URL)], big),
-    msg('end_turn', [text(BRIEF_SUPER_INTELLIGENCE_FORCE)], big),
+    msg('tool_use', [submit()], big),
   ]);
   const r = await runReporter(STORY, { create, readPage: stubRead(), costCapUsd: 0.5 });
   assert.equal(r.ok, false);
@@ -367,7 +359,7 @@ test('Reporter: under a cap, a normal-size run finishes and max_tokens shrinks t
   const { create, requests } = scripted([
     msg('tool_use', [toolUse('a', TC_URL)], normal),
     msg('tool_use', [toolUse('b', TC_URL)], normal),
-    msg('end_turn', [text(BRIEF_SUPER_INTELLIGENCE_FORCE)], normal),
+    msg('tool_use', [submit()], normal),
   ]);
   const r = await runReporter(STORY, { create, readPage: stubRead(), costCapUsd: 0.5 });
   assert.ok(r.ok);
@@ -377,34 +369,3 @@ test('Reporter: under a cap, a normal-size run finishes and max_tokens shrinks t
   assert.ok(maxes[2]! <= maxes[0]!);
 });
 
-test('brief: the live Robinson brief (2026-10-05) parses, with every note kept', () => {
-  const raw = readFileSync('fixtures/social/briefs/robinson-live-2026-10-05.txt', 'utf8');
-  const b = parseBrief(raw);
-  assert.equal(b.facts.length, 20);
-  assert.equal(b.background.length, 2);
-  assert.equal(b.quotes.length, 16);
-  assert.equal(b.numbers.length, 11);
-  assert.equal(b.sources.length, 6);
-  // Indented notes attach to the entry above, by ID.
-  assert.deepEqual(b.notes.F12, [
-    'The TechCrunch statement is attributed to spokesperson Drew Pusateri.',
-    'The Guardian attributes the statement to an unnamed spokesperson.',
-  ]);
-  assert.deepEqual(b.notes.Q2, ['TechCrunch quotes "culture is broken."']);
-  // Loose prose inside an ID section is a section note, not an error.
-  assert.deepEqual(b.notes.QUOTES, ['No quote was cut off in every source.']);
-  // Sections without IDs key notes by position.
-  assert.match(b.notes['SOURCES#6']![0]!, /secondary republication/);
-  assert.equal(b.sources[5]!.url, 'https://www.yahoo.com/news/politics/articles/another-alarm-bell-openai-safety-184349681.html');
-  // Nothing dropped: every non-empty line of the raw brief is a heading, an entry or a note.
-  const noteCount = Object.values(b.notes).flat().length;
-  const subLines = raw.split('\n').filter((l) => /^\s{2,}-\s/.test(l)).length;
-  assert.equal(noteCount, subLines + 1);
-});
-
-test('brief: an ID line that is malformed is still an error (notes don\'t hide bad entries)', () => {
-  const bad = BRIEF_SUPER_INTELLIGENCE_FORCE.replace('Q2: "develop', 'Q2: develop');
-  assert.throws(() => parseBrief(bad), /QUOTES: expected Q#/);
-  const withNote = BRIEF_SUPER_INTELLIGENCE_FORCE.replace('F2: Trump said', 'Loose remark about sourcing.\nF2: Trump said');
-  assert.deepEqual(parseBrief(withNote).notes.FACTS, ['Loose remark about sourcing.']);
-});

@@ -62,6 +62,7 @@ SOURCES: outlet, date, URL (only ones you opened); list fetch failures separatel
 - Pages are read through the raw-text page reader (spec §4.2c), never a summarizing fetch.
 - NUMBERS entries carry a number type (plan M2).
 - A quote that's cut off in every source is marked as cut off (the Writer is told never to use those).
+- **Structured output (Tommy, 2026-10-05):** the line `OUTPUT (plain text, exactly these sections):` becomes `When you're done, call submit_brief with these sections:`. The Reporter ends by calling `submit_brief`, a strict-schema tool that mirrors the section list. The section list itself is unchanged. This replaces the free-text brief parser. `cause · output format · 0 new stages · 0 new AI calls`
 
 ---
 

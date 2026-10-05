@@ -18,7 +18,7 @@ import { cachedSystemText, withConversationCache, withToolCache } from '@/lib/an
 import { priceAnthropicMessages, type MessageUsageLike } from '@/lib/anthropic-pricing';
 import { STAGE_MODELS, type StageModelConfig } from '@/lib/social/pipeline/models';
 
-import { BriefParseError, parseBrief, type Brief } from './brief';
+import { BriefValidationError, SUBMIT_BRIEF_TOOL, validateBrief, type Brief } from './brief';
 import { REPORTER_SYSTEM, reporterUserMessage, type ReporterStoryInput } from './prompt';
 import { readPage as readPageLive, type PageRead, type PageReadOk } from './read-page';
 
@@ -56,7 +56,7 @@ const WEB_SEARCH_TOOL = {
 } as unknown as Anthropic.ToolUnion;
 
 /** Stable tool list; the cache breakpoint sits on the last tool. */
-export const REPORTER_TOOLS: Anthropic.ToolUnion[] = [WEB_SEARCH_TOOL, withToolCache(READ_PAGE_TOOL)];
+export const REPORTER_TOOLS: Anthropic.ToolUnion[] = [WEB_SEARCH_TOOL, READ_PAGE_TOOL, withToolCache(SUBMIT_BRIEF_TOOL)];
 
 export type MessagesCreate = (params: Anthropic.MessageCreateParamsNonStreaming) => Promise<Anthropic.Message>;
 
@@ -102,8 +102,15 @@ export type ReporterDeps = {
   costCapUsd?: number;
 };
 
-/** Worst-case input price per token: Sonnet 5.5's 1h cache-write rate ($4/M), above the $2 uncached rate. */
-const WORST_INPUT_USD_PER_TOKEN = 4 / 1_000_000;
+/**
+ * Worst-case input prices (Sonnet 5.5): the first turn writes the 1h
+ * tools+system cache ($4/M); later turns re-read that prefix and write
+ * the 5-minute conversation cache ($2.50/M), the most any of it can cost.
+ */
+const FIRST_TURN_INPUT_USD_PER_TOKEN = 4 / 1_000_000;
+const LATER_TURN_INPUT_USD_PER_TOKEN = 2.5 / 1_000_000;
+/** Tool results not yet seen by the API: ~4 characters per token. */
+const CHARS_PER_TOKEN = 4;
 const OUTPUT_USD_PER_TOKEN = 10 / 1_000_000;
 const SEARCH_USD = 0.01;
 /** A turn with less room than this can't write a brief; stop instead. */
@@ -124,6 +131,8 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
   const responses: MessageUsageLike[] = [];
   const pages: PageReadOk[] = [];
   let pageReads = 0;
+  /** Characters of tool results added since the last API response. */
+  let pendingToolChars = 0;
   const cost = () => Number(priceAnthropicMessages(responses, { modelId: config.model }).costUsd);
   const webSearches = () =>
     responses.reduce((n, r) => n + (r.usage.server_tool_use?.web_search_requests ?? 0), 0);
@@ -132,13 +141,18 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
     let maxTokens = MAX_TOKENS;
     if (deps.costCapUsd !== undefined) {
       // Next turn's input ≈ the whole conversation so far, ~4 chars/token.
-      // Floor: the next turn re-reads at least everything the last one read and wrote.
+      // From actual reported usage (Fix B, 2026-10-05): the next turn's input
+      // is the last turn's input + output, plus the tool results added since.
       const last = responses.at(-1)?.usage;
-      const lastTokens = last
-        ? (last.input_tokens ?? 0) + (last.cache_read_input_tokens ?? 0) + (last.cache_creation_input_tokens ?? 0) + (last.output_tokens ?? 0)
-        : 0;
-      const inputTokens = Math.max(lastTokens, Math.ceil(JSON.stringify({ system, tools: REPORTER_TOOLS, messages }).length / 3.5));
-      const fixed = cost() + inputTokens * WORST_INPUT_USD_PER_TOKEN + WEB_SEARCH_MAX_USES * SEARCH_USD;
+      let inputUsd: number;
+      if (last) {
+        const lastTokens = (last.input_tokens ?? 0) + (last.cache_read_input_tokens ?? 0) + (last.cache_creation_input_tokens ?? 0) + (last.output_tokens ?? 0);
+        const newChars = pendingToolChars;
+        inputUsd = (lastTokens + Math.ceil(newChars / CHARS_PER_TOKEN)) * LATER_TURN_INPUT_USD_PER_TOKEN;
+      } else {
+        inputUsd = Math.ceil(JSON.stringify({ system, tools: REPORTER_TOOLS, messages }).length / CHARS_PER_TOKEN) * FIRST_TURN_INPUT_USD_PER_TOKEN;
+      }
+      const fixed = cost() + inputUsd + WEB_SEARCH_MAX_USES * SEARCH_USD;
       const affordable = Math.floor((deps.costCapUsd - fixed) / OUTPUT_USD_PER_TOKEN);
       if (affordable < MIN_TURN_OUTPUT_TOKENS) {
         return { ok: false, reason: 'cost-cap', detail: `stopped before turn ${turn}: $${cost().toFixed(4)} spent; next turn's worst case would pass the $${deps.costCapUsd} cap`, raw: null, costUsd: cost(), turns: turn - 1, webSearches: webSearches(), pageReads };
@@ -162,6 +176,7 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
       return { ok: false, reason: 'service-error', detail: `Claude call failed: ${err instanceof Error ? err.message : String(err)}`, raw: null, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads };
     }
     responses.push(res as unknown as MessageUsageLike);
+    pendingToolChars = 0;
 
     if (res.stop_reason === 'refusal') {
       const details = (res as unknown as { stop_details?: { category?: string | null } }).stop_details;
@@ -177,6 +192,18 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
     if (res.stop_reason === 'pause_turn') continue; // server tool paused mid-turn: resend as is
 
     const toolUses = res.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
+    const submit = toolUses.find((u) => u.name === SUBMIT_BRIEF_TOOL.name);
+    if (submit) {
+      // The final step: the brief as schema-valid JSON, then the small check.
+      const raw = JSON.stringify(submit.input, null, 2);
+      try {
+        const brief = validateBrief(submit.input as Brief);
+        return { ok: true, brief, raw, pages, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads };
+      } catch (err) {
+        const detail = err instanceof BriefValidationError ? err.message : `brief check failed: ${String(err)}`;
+        return { ok: false, reason: 'malformed-output', detail, raw, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads };
+      }
+    }
     if (res.stop_reason === 'tool_use' && toolUses.length > 0) {
       // Every tool_result in ONE user message (parallel tool use).
       const results = await Promise.all(
@@ -195,19 +222,13 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
           return { type: 'tool_result', tool_use_id: use.id, is_error: !page.ok, content: pageToToolText(page) };
         }),
       );
+      pendingToolChars = results.reduce((n, r) => n + (typeof r.content === 'string' ? r.content.length : 0), 0);
       messages.push({ role: 'user', content: results });
       continue;
     }
 
-    // end_turn (or stop_sequence): the brief.
-    const raw = textOf(res);
-    try {
-      const brief = parseBrief(raw);
-      return { ok: true, brief, raw, pages, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads };
-    } catch (err) {
-      const detail = err instanceof BriefParseError ? err.message : `brief parse failed: ${String(err)}`;
-      return { ok: false, reason: 'malformed-output', detail, raw, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads };
-    }
+    // end_turn without submit_brief: no brief.
+    return { ok: false, reason: 'malformed-output', detail: 'ended without calling submit_brief', raw: textOf(res) || null, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads };
   }
   return { ok: false, reason: 'malformed-output', detail: `no brief after ${MAX_TURNS} turns`, raw: null, costUsd: cost(), turns: MAX_TURNS, webSearches: webSearches(), pageReads };
 }

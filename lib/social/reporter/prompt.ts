@@ -3,6 +3,10 @@
  *
  * The tested text is copied unchanged. Two kinds of edits, both marked:
  *
+ *   OUTPUT (Tommy, 2026-10-05): "OUTPUT (plain text, exactly these
+ *   sections):" became "When you're done, call submit_brief with these
+ *   sections:" (structured output). The section list is unchanged.
+ *
  *   PLACEMENT (caching, CLAUDE.md): the per-story line "STORY: … Starting
  *   sources: … Today is …" moves, word for word, from the middle of the
  *   prompt to the user message, so everything else is a stable, cached
@@ -28,7 +32,7 @@ RULES
 - Every fact gets an ID and its sources.
 - For photos found in source articles, copy caption and credit line exactly.
 
-OUTPUT (plain text, exactly these sections):
+When you're done, call submit_brief with these sections:
 SINGLE STORY: yes/no
 THE NEWS: one line (who, what, when) with fact IDs
 WHY IT MATTERS (sourced only): 1–2 bullets with IDs

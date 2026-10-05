@@ -61,6 +61,8 @@ test('Reporter prompt = tested text, STORY line moved to the user message, plus 
     // [A3] cut-off quotes.
     .replace('Mark any quote found in only ONE source with ⚠.\n', 'Mark any quote found in only ONE source with ⚠.\n- If a quote is cut off in every source, mark it [cut off].\n')
     .replace('[⚠ if single source]', '[⚠ if single source] [cut off if cut off in every source]')
+    // OUTPUT (2026-10-05): structured output via submit_brief; section list unchanged.
+    .replace('OUTPUT (plain text, exactly these sections):', "When you're done, call submit_brief with these sections:")
     // [A2] NUMBERS with a type (format approved 2026-10-04).
     .replace('NUMBERS: N1 value | what it counts | source', 'NUMBERS: N1: value | type | what it counts | source (type is one of: money, count, percent, duration, date, other; value exactly as the source writes it)');
   assert.equal(REPORTER_SYSTEM, expected);

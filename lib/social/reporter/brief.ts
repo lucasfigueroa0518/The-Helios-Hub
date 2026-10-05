@@ -1,12 +1,13 @@
 /**
- * The Reporter's brief (spec §4, §4.2a, §5.1; prompts file §1 OUTPUT):
- * plain-text sections → a typed Brief, with validation.
+ * The Reporter's brief as structured output (spec §4, §4.2a, §5.1).
  *
- * Parsing is lenient about layout (bullets, "—" vs "|" separators, blank
- * lines) and strict about what later stages rely on: unique IDs, every
- * fact sourced, NUMBERS in the approved format, quotes with a speaker,
- * and THE NEWS / WHY IT MATTERS citing IDs that exist.
+ * The Reporter ends by calling submit_brief, a strict-schema tool whose
+ * fields mirror the prompt's section list (prompts file §1 OUTPUT), so the
+ * brief arrives as schema-valid JSON instead of free text (Tommy,
+ * 2026-10-05: replaces the free-text parser). Code then runs one small
+ * check: sources exist, IDs are unique, cited IDs exist.
  */
+import type Anthropic from '@anthropic-ai/sdk';
 
 export const NUMBER_TYPES = ['money', 'count', 'percent', 'duration', 'date', 'other'] as const;
 export type NumberType = (typeof NUMBER_TYPES)[number];
@@ -15,8 +16,9 @@ export type BriefFact = {
   id: string; // F1… or B1…
   text: string;
   sources: string[];
-  /** Set when the fact is marked [CLAIM: X says] (interested-party rule). */
-  claimBy: string | null;
+  /** X when the fact is marked [CLAIM: X says]; null otherwise. */
+  claim_by: string | null;
+  notes: string[];
 };
 
 export type BriefQuote = {
@@ -24,10 +26,13 @@ export type BriefQuote = {
   /** Exact quote text, without the surrounding quotation marks. */
   text: string;
   speaker: string;
-  /** Where it was said and via which outlet, as written. */
+  /** Where it was said (interview, post, statement). */
   where: string | null;
-  singleSource: boolean;
-  cutOff: boolean;
+  /** Outlet(s) the quote was read in. */
+  via: string[];
+  single_source: boolean;
+  cut_off: boolean;
+  notes: string[];
 };
 
 export type BriefNumber = {
@@ -36,289 +41,136 @@ export type BriefNumber = {
   value: string;
   type: NumberType;
   counts: string;
-  source: string;
+  sources: string[];
+  notes: string[];
 };
 
-export type BriefPhoto = { caption: string | null; credit: string | null; url: string | null };
-export type BriefSource = { outlet: string; date: string | null; url: string | null };
-export type BriefSubject = { name: string; role: string | null };
-export type BriefTerm = { name: string; description: string };
-
 export type Brief = {
-  singleStory: boolean;
-  news: { text: string; ids: string[] };
-  whyItMatters: Array<{ text: string; ids: string[] }>;
+  single_story: { yes: boolean; note: string | null };
+  the_news: { text: string; ids: string[] };
+  why_it_matters: Array<{ text: string; ids: string[] }>;
   facts: BriefFact[];
   background: BriefFact[];
   quotes: BriefQuote[];
   numbers: BriefNumber[];
-  terms: BriefTerm[];
-  subjects: BriefSubject[];
-  events: string[];
-  articlePhotos: BriefPhoto[];
-  notAnswered: string[];
-  sources: BriefSource[];
-  fetchFailures: string[];
-  /**
-   * The Reporter's notes, kept for the Writer, never dropped:
-   *   - indented "  - …" lines under an entry, keyed by the entry's ID
-   *     ("F3", "Q2") or, in sections without IDs, by "SECTION#n" (1-based);
-   *   - loose prose lines inside an ID section, keyed by the section name.
-   */
-  notes: Record<string, string[]>;
+  terms: Array<{ name: string; definition: string; source: string }>;
+  subjects: Array<{ name: string; role: string | null }>;
+  events: Array<{ what: string; date: string | null; place: string | null }>;
+  article_photos: Array<{ caption: string | null; credit: string | null; url: string | null; page: string | null }>;
+  not_answered: string[];
+  sources: Array<{ outlet: string; date: string | null; url: string }>;
+  fetch_failures: Array<{ url: string; reason: string }>;
 };
+
+// ── JSON schema (strict tool use: every object closed, every field required) ──
+
+const str = { type: 'string' } as const;
+const nullableStr = { type: ['string', 'null'] } as const;
+const strList = { type: 'array', items: str } as const;
+const obj = (properties: Record<string, unknown>) => ({
+  type: 'object',
+  properties,
+  required: Object.keys(properties),
+  additionalProperties: false,
+});
+const list = (items: unknown) => ({ type: 'array', items });
+
+const fact = (idHint: string) =>
+  obj({
+    id: { type: 'string', description: idHint },
+    text: { type: 'string', description: 'One sentence.' },
+    sources: { ...strList, description: 'Outlets this fact comes from (only sources you opened).' },
+    claim_by: { ...nullableStr, description: 'For [CLAIM: X says]: X. Null otherwise.' },
+    notes: { ...strList, description: 'Caveats, disagreements, extra outlets. Empty if none.' },
+  });
+
+export const BRIEF_SCHEMA = obj({
+  single_story: obj({ yes: { type: 'boolean' }, note: nullableStr }),
+  the_news: obj({
+    text: { type: 'string', description: 'One line (who, what, when).' },
+    ids: { ...strList, description: 'Fact IDs it rests on.' },
+  }),
+  why_it_matters: list(obj({ text: str, ids: { ...strList, description: 'IDs it rests on (sourced only).' } })),
+  facts: list(fact('F1, F2, …')),
+  background: list(fact('B1, B2 (max 2)')),
+  quotes: list(
+    obj({
+      id: { type: 'string', description: 'Q1, Q2, …' },
+      text: { type: 'string', description: 'Exact text, word for word, without surrounding quotation marks.' },
+      speaker: str,
+      where: { ...nullableStr, description: 'Where it was said.' },
+      via: { ...strList, description: 'Outlet(s) you read it in.' },
+      single_source: { type: 'boolean', description: 'Found in only ONE source (⚠).' },
+      cut_off: { type: 'boolean', description: 'Cut off in every source.' },
+      notes: strList,
+    }),
+  ),
+  numbers: list(
+    obj({
+      id: { type: 'string', description: 'N1, N2, …' },
+      value: { type: 'string', description: 'Exactly as the source writes it.' },
+      type: { type: 'string', enum: [...NUMBER_TYPES] },
+      counts: { type: 'string', description: 'What it counts.' },
+      sources: strList,
+      notes: strList,
+    }),
+  ),
+  terms: list(obj({ name: str, definition: { type: 'string', description: 'Plain-language definition taken from sources.' }, source: str })),
+  subjects: list(obj({ name: str, role: nullableStr })),
+  events: list(obj({ what: { type: 'string', description: 'Photographable event.' }, date: nullableStr, place: nullableStr })),
+  article_photos: list(
+    obj({
+      caption: { ...nullableStr, description: 'Copied exactly; null if none.' },
+      credit: { ...nullableStr, description: 'Copied exactly; null if none.' },
+      url: nullableStr,
+      page: { ...nullableStr, description: 'URL of the article the photo is in.' },
+    }),
+  ),
+  not_answered: strList,
+  sources: list(obj({ outlet: str, date: nullableStr, url: { type: 'string', description: 'Only sources you opened.' } })),
+  fetch_failures: list(obj({ url: str, reason: str })),
+});
+
+export const SUBMIT_BRIEF_TOOL = {
+  name: 'submit_brief',
+  description: 'Submit the finished brief. Call it once, as your final step.',
+  input_schema: BRIEF_SCHEMA,
+  strict: true,
+} as unknown as Anthropic.Tool;
+
+// ── Validation: the only check after the schema ──
 
 export type BriefError = { section: string; message: string };
 
-export class BriefParseError extends Error {
+export class BriefValidationError extends Error {
   constructor(readonly errors: BriefError[]) {
     super(`brief invalid: ${errors.map((e) => `${e.section}: ${e.message}`).join('; ')}`);
   }
 }
 
-/** Section headings, as the prompt writes them, → keys. Order doesn't matter. */
-const SECTIONS: Array<[RegExp, string]> = [
-  [/^SINGLE STORY\b/i, 'SINGLE STORY'],
-  [/^THE NEWS\b/i, 'THE NEWS'],
-  [/^WHY IT MATTERS\b/i, 'WHY IT MATTERS'],
-  [/^FACTS\b/i, 'FACTS'],
-  [/^BACKGROUND\b/i, 'BACKGROUND'],
-  [/^QUOTES\b/i, 'QUOTES'],
-  [/^NUMBERS\b/i, 'NUMBERS'],
-  [/^TERMS\b/i, 'TERMS'],
-  [/^SUBJECTS\b/i, 'SUBJECTS'],
-  [/^EVENTS\b/i, 'EVENTS'],
-  [/^ARTICLE PHOTOS\b/i, 'ARTICLE PHOTOS'],
-  [/^NOT ANSWERED\b/i, 'NOT ANSWERED'],
-  [/^SOURCES\b/i, 'SOURCES'],
-  [/^FETCH FAILURES\b/i, 'FETCH FAILURES'],
-];
-
-export const REQUIRED_SECTIONS = ['SINGLE STORY', 'THE NEWS', 'FACTS', 'SOURCES'];
-
-/** Split into sections. A heading line may carry content after its colon. */
-function splitSections(raw: string): Map<string, string[]> {
-  const out = new Map<string, string[]>();
-  let current: string | null = null;
-  for (const line of raw.replace(/\r\n/g, '\n').split('\n')) {
-    const trimmed = line.trim().replace(/^#+\s*/, '').replace(/^\*\*(.+?)\*\*/, '$1');
-    const hit = SECTIONS.find(([re]) => re.test(trimmed));
-    // Headings are written in capitals ("THE NEWS:", "WHY IT MATTERS (sourced only):"),
-    // so a sentence that starts with "Background…" is content, not a heading.
-    const heading = trimmed.match(/^[A-Z][A-Z ]*[A-Z](\s*\([^)]*\))?\s*(:|$)\s*/);
-    // The tested prompt says "list fetch failures separately", so a
-    // "Fetch failures:" line inside SOURCES opens that list in any case.
-    const fetchFailures = trimmed.match(/^(?:[-*•]\s*)?(?:fetch failures?|failed fetches|failed to fetch)\s*(?:\([^)]*\))?\s*:\s*/i);
-    if (fetchFailures) {
-      current = 'FETCH FAILURES';
-      const after = trimmed.slice(fetchFailures[0].length);
-      out.set(current, after ? [after] : []);
-      continue;
-    }
-    if (hit && heading) {
-      current = hit[1];
-      const after = trimmed.slice(heading[0].length);
-      out.set(current, after ? [after] : []);
-      continue;
-    }
-    // Indented sub-bullets are notes on the entry above (live run 2026-10-05).
-    if (current && trimmed) out.get(current)!.push(/^\s{2,}[-*•]\s/.test(line) ? NOTE_MARK + trimmed : trimmed);
-  }
-  return out;
-}
-
-const NONE = /^(none|n\/a|-|—)\.?$/i;
-const NOTE_MARK = '\u0001';
-const stripBullet = (l: string) => l.replace(/^[-*•]\s+/, '').trim();
-
-/**
- * Section lines → entries, with notes split off. Sub-bullets attach to the
- * entry above. With `idRe`, only lines starting with an ID are entries and
- * other prose lines become section notes; without it, every line is an entry.
- */
-function entries(
-  section: string,
-  lines: string[] | undefined,
-  notes: Record<string, string[]>,
-  idRe?: RegExp,
-): string[] {
-  const out: string[] = [];
-  const keyOf = (i: number) => (idRe ? out[i]!.match(idRe)![1]! : `${section}#${i + 1}`);
-  const add = (key: string, note: string) => (notes[key] ??= []).push(note);
-  for (const raw of lines ?? []) {
-    const isNote = raw.startsWith(NOTE_MARK);
-    const line = stripBullet(raw.replace(NOTE_MARK, ''));
-    if (!line || NONE.test(line)) continue;
-    if (isNote) {
-      if (out.length > 0) add(keyOf(out.length - 1), line);
-      else add(section, line);
-      continue;
-    }
-    if (idRe && !idRe.test(line)) {
-      add(section, line);
-      continue;
-    }
-    out.push(line);
-  }
-  return out;
-}
-
-/** Section lines with bullets stripped, "none" dropped. */
-
-const ID_REF = /\b([FBQN]\d+)\b/g;
-const refs = (text: string) => [...new Set([...text.matchAll(ID_REF)].map((m) => m[1]!))];
-
-/** "F1: text (src, src)" or "F1. text (src)" */
-function parseFact(line: string, prefix: 'F' | 'B', errors: BriefError[], section: string): BriefFact | null {
-  const m = line.match(new RegExp(`^(${prefix}\\d+)\\s*[:.)\\-]\\s*(.+)$`));
-  if (!m) {
-    errors.push({ section, message: `line has no ${prefix}# id: "${line.slice(0, 60)}"` });
-    return null;
-  }
-  let text = m[2]!.trim();
-  let sources: string[] = [];
-  const src = text.match(/\(([^()]*)\)\s*\.?$/);
-  if (src) {
-    sources = src[1]!.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
-    text = text.slice(0, src.index).trim();
-  }
-  const claim = text.match(/\[CLAIM:\s*([^\]]+?)\s+says\]/i);
-  return { id: m[1]!, text, sources, claimBy: claim ? claim[1]!.trim() : null };
-}
-
-/** 'Q1: "exact text" — Speaker, where (via Outlet) ⚠ [cut off]' */
-function parseQuote(line: string, errors: BriefError[]): BriefQuote | null {
-  const m = line.match(/^(Q\d+)\s*[:.)\-]\s*["“](.+)["”]\s*(?:[—–-]|\|)\s*(.+)$/);
-  if (!m) {
-    errors.push({ section: 'QUOTES', message: `expected Q#: "quote" — speaker: "${line.slice(0, 60)}"` });
-    return null;
-  }
-  let rest = m[3]!.trim();
-  const singleSource = rest.includes('⚠');
-  const cutOff = /\[cut off\]/i.test(rest);
-  rest = rest.replace(/⚠/g, '').replace(/\[cut off\]/gi, '').replace(/\[\s*\]/g, '').trim().replace(/[,;]$/, '');
-  const comma = rest.indexOf(',');
-  const speaker = (comma === -1 ? rest : rest.slice(0, comma)).trim();
-  const where = comma === -1 ? null : rest.slice(comma + 1).trim() || null;
-  return { id: m[1]!, text: m[2]!, speaker, where, singleSource, cutOff };
-}
-
-/** "N1: value | type | what it counts | source" (approved 2026-10-04). */
-function parseNumber(line: string, errors: BriefError[]): BriefNumber | null {
-  const m = line.match(/^(N\d+)\s*[:.)\-]?\s*(.+)$/);
-  const parts = m ? m[2]!.split('|').map((p) => p.trim()) : [];
-  if (!m || parts.length !== 4 || parts.some((p) => !p)) {
-    errors.push({ section: 'NUMBERS', message: `expected "N#: value | type | what it counts | source": "${line.slice(0, 70)}"` });
-    return null;
-  }
-  const type = parts[1]!.toLowerCase();
-  if (!(NUMBER_TYPES as readonly string[]).includes(type)) {
-    errors.push({ section: 'NUMBERS', message: `${m[1]} has type "${parts[1]}"; allowed: ${NUMBER_TYPES.join(', ')}` });
-    return null;
-  }
-  return { id: m[1]!, value: parts[0]!, type: type as NumberType, counts: parts[2]!, source: parts[3]! };
-}
-
-const pipeOrDash = (line: string) => line.split(/\s+\|\s+|\s+[—–]\s+/).map((p) => p.trim());
-
-function parseSubject(line: string): BriefSubject {
-  const paren = line.match(/^(.+?)\s*\((.+)\)$/);
-  if (paren) return { name: paren[1]!.trim(), role: paren[2]!.trim() };
-  const [name, ...role] = pipeOrDash(line);
-  const colon = !role.length ? line.match(/^([^:]+):\s*(.+)$/) : null;
-  if (colon) return { name: colon[1]!.trim(), role: colon[2]!.trim() };
-  return { name: name!, role: role.join(' | ') || null };
-}
-
-function parseTerm(line: string, errors: BriefError[]): BriefTerm | null {
-  const m = line.match(/^([^:]+?):\s*(.+)$/) ?? line.match(/^(.+?)\s+[—–]\s+(.+)$/);
-  if (!m) {
-    errors.push({ section: 'TERMS', message: `expected "Name: description": "${line.slice(0, 60)}"` });
-    return null;
-  }
-  return { name: m[1]!.trim(), description: m[2]!.trim() };
-}
-
-const nullable = (s: string | undefined) => (s && !/^\(?(none|no caption|no credit|n\/a|unknown)\)?$/i.test(s) ? s : null);
-
-function parsePhoto(line: string): BriefPhoto {
-  const [caption, credit, url] = line.split('|').map((p) => p.trim());
-  return { caption: nullable(caption), credit: nullable(credit), url: nullable(url) };
-}
-
-function parseSource(line: string): BriefSource {
-  const url = line.match(/https?:\/\/\S+/)?.[0]?.replace(/[),.]+$/, '') ?? null;
-  const head = (url ? line.replace(url, '') : line).replace(/[,\s]+$/, '').trim();
-  const [outlet, ...rest] = head.split(',').map((p) => p.trim());
-  return { outlet: outlet ?? head, date: rest.join(', ') || null, url };
-}
-
-export function parseBrief(raw: string): Brief {
+/** Sources exist, IDs are unique, cited IDs exist. Returns the brief or throws. */
+export function validateBrief(brief: Brief): Brief {
   const errors: BriefError[] = [];
-  const s = splitSections(raw);
-  for (const name of REQUIRED_SECTIONS) {
-    if (!s.has(name)) errors.push({ section: name, message: 'section missing' });
+  if (brief.sources.length === 0) errors.push({ section: 'sources', message: 'no sources' });
+  const has = (list: string[]) => list.some((s) => s.trim());
+  for (const [section, items] of [['facts', brief.facts], ['background', brief.background], ['numbers', brief.numbers]] as const) {
+    for (const x of items) if (!has(x.sources)) errors.push({ section, message: `${x.id} has no source` });
   }
+  for (const q of brief.quotes) if (!has(q.via)) errors.push({ section: 'quotes', message: `${q.id} has no source` });
 
-  const single = (s.get('SINGLE STORY') ?? []).join(' ').trim().toLowerCase();
-  if (s.has('SINGLE STORY') && !/^(yes|no)\b/.test(single)) {
-    errors.push({ section: 'SINGLE STORY', message: `expected yes/no, got "${single}"` });
-  }
-
-  const newsText = (s.get('THE NEWS') ?? []).join(' ').trim();
-  const notes: Record<string, string[]> = {};
-  const list = (name: string, idRe?: RegExp) => entries(name, s.get(name), notes, idRe);
-  const whyItMatters = list('WHY IT MATTERS').map((t) => ({ text: t, ids: refs(t) }));
-  const facts = list('FACTS', /^(F\d+)\b/).map((l) => parseFact(l, 'F', errors, 'FACTS')).filter((f): f is BriefFact => !!f);
-  const background = list('BACKGROUND', /^(B\d+)\b/).map((l) => parseFact(l, 'B', errors, 'BACKGROUND')).filter((f): f is BriefFact => !!f);
-  const quotes = list('QUOTES', /^(Q\d+)\b/).map((l) => parseQuote(l, errors)).filter((q): q is BriefQuote => !!q);
-  const numbers = list('NUMBERS', /^(N\d+)\b/).map((l) => parseNumber(l, errors)).filter((n): n is BriefNumber => !!n);
-  const terms = list('TERMS').map((l) => parseTerm(l, errors)).filter((t): t is BriefTerm => !!t);
-  const sourcesLines = list('SOURCES');
-
-  const brief: Brief = {
-    singleStory: single.startsWith('yes'),
-    news: { text: newsText, ids: refs(newsText) },
-    whyItMatters,
-    facts,
-    background,
-    quotes,
-    numbers,
-    terms,
-    subjects: list('SUBJECTS').map(parseSubject),
-    events: list('EVENTS'),
-    articlePhotos: list('ARTICLE PHOTOS').map(parsePhoto),
-    notAnswered: list('NOT ANSWERED'),
-    sources: sourcesLines.map(parseSource),
-    fetchFailures: list('FETCH FAILURES'),
-    notes,
-  };
-
-  // ── Validation ──
-  if (s.has('THE NEWS') && !newsText) errors.push({ section: 'THE NEWS', message: 'empty' });
-  if (s.has('FACTS') && facts.length === 0) errors.push({ section: 'FACTS', message: 'no facts' });
-  if (s.has('SOURCES') && brief.sources.length === 0) errors.push({ section: 'SOURCES', message: 'no sources' });
-  if (background.length > 2) errors.push({ section: 'BACKGROUND', message: `max 2, got ${background.length}` });
-
-  const ids = [...facts, ...background, ...quotes, ...numbers].map((x) => x.id);
   const seen = new Set<string>();
-  for (const id of ids) {
-    if (seen.has(id)) errors.push({ section: 'IDS', message: `duplicate id ${id}` });
+  for (const { id } of [...brief.facts, ...brief.background, ...brief.quotes, ...brief.numbers]) {
+    if (seen.has(id)) errors.push({ section: 'ids', message: `duplicate id ${id}` });
     seen.add(id);
   }
-  for (const f of [...facts, ...background]) {
-    if (f.sources.length === 0) errors.push({ section: f.id.startsWith('B') ? 'BACKGROUND' : 'FACTS', message: `${f.id} has no source` });
+  const cited: Array<[string, string[]]> = [
+    ['the_news', brief.the_news.ids],
+    ...brief.why_it_matters.map((w): [string, string[]] => ['why_it_matters', w.ids]),
+  ];
+  for (const [section, ids] of cited) {
+    for (const id of ids) if (!seen.has(id)) errors.push({ section, message: `cites ${id}, which isn't in the brief` });
   }
-  for (const q of quotes) {
-    if (!q.speaker) errors.push({ section: 'QUOTES', message: `${q.id} has no speaker` });
-  }
-  for (const [where, list] of [['THE NEWS', brief.news.ids], ['WHY IT MATTERS', whyItMatters.flatMap((w) => w.ids)]] as const) {
-    for (const id of list) {
-      if (!seen.has(id)) errors.push({ section: where, message: `cites ${id}, which isn't in the brief` });
-    }
-  }
-
-  if (errors.length > 0) throw new BriefParseError(errors);
+  if (errors.length > 0) throw new BriefValidationError(errors);
   return brief;
 }
 
