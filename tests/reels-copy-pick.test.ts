@@ -18,7 +18,7 @@ import type { CopyCall } from '@/lib/reels/copy/report';
 import { judgeCopyLine, scoreCopyLine } from '@/lib/reels/copy/score';
 import { SAVE_IDEA_COPY_SQL, type CopyTarget, type saveIdeaCopy } from '@/lib/reels/copy/store';
 import type { CopyClient } from '@/lib/reels/copy/writer';
-import { COPY_PAYOFF } from '@/lib/reels/jev/questions/copy-payoff';
+import { COPY_PAYOFF, PAYOFF_LEGEND } from '@/lib/reels/jev/questions/copy-payoff';
 import { COPY_PICK, copyPickState } from '@/lib/reels/jev/questions/copy-pick';
 import {
   COPY_STORY_MATCH,
@@ -290,6 +290,8 @@ test('ball knowledge asks payoff in the same request as the five scores', async 
   assert.equal(seen[0]?.sets.length, 2);
   assert.equal(seen[0]?.sets[1], COPY_PAYOFF);
   assert.equal(COPY_PAYOFF.version, 'copy-payoff-v2');
+  assert.match(PAYOFF_LEGEND[3], /a repo, a piece of software, or a skill/);
+  assert.match(PAYOFF_LEGEND[4], /kind of thing/);
   assert.ok('payoff' in (seen[0]?.questions ?? {}));
   assert.equal(Object.keys(seen[0]?.state ?? {}).join(','), 'on_screen_copy');
 });

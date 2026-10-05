@@ -160,10 +160,13 @@ export const A4_LISTS_EXPANDED_PER_NIGHT = 6;
 /** On the editor's 0-3 rubric, "good" is the lowest score worth ingesting. */
 export const A4_MIN_SCORE = 2;
 
-/** WEB-05 / D-064. */
+/** WEB-05 / D-064. D-236: two stories a night, and each may miss once. */
 export const B6_MEMORY_NIGHTS = 7;
 export const B6_MIN_INDEPENDENT_SOURCES = 2;
-export const B6_MAX_ATTEMPTS = 2;
+export const B6_STORIES_PER_NIGHT = 2;
+export const B6_MAX_ATTEMPTS = 4;
+/** Searches available on one turn. A retry gets a fresh allowance. */
+export const B6_SEARCH_MAX_USES = 12;
 
 /** FND-05 / D-023, raised to $100 by D-193: skip starting a run once month-to-date reaches this. */
 export const MONTHLY_WATCH_USD = 100;

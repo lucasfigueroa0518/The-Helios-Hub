@@ -7,6 +7,8 @@ import {
   B6_MEMORY_NIGHTS,
   B6_MIN_INDEPENDENT_SOURCES,
   B6_MODEL,
+  B6_SEARCH_MAX_USES,
+  B6_STORIES_PER_NIGHT,
 } from '@/lib/reels/config';
 import {
   REPORT_STORY_TOOL,
@@ -210,15 +212,78 @@ export function checkGrounding(report: StoryReport): GroundingResult {
   return { ok: true };
 }
 
-function reportFromMessage(
+export function reportsFromMessage(
   message: Anthropic.Message,
-): { report: StoryReport; toolUseId: string } | null {
+): Array<{ report: StoryReport; toolUseId: string }> {
+  const found: Array<{ report: StoryReport; toolUseId: string }> = [];
   for (const block of message.content) {
     if (block.type === 'tool_use' && block.name === REPORT_STORY_TOOL.name) {
-      return { report: block.input as StoryReport, toolUseId: block.id };
+      found.push({ report: block.input as StoryReport, toolUseId: block.id });
     }
   }
-  return null;
+  return found;
+}
+
+function headlineKey(headline: string): string {
+  return headline.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+/**
+ * Keep the grounded stories from one turn. A repeat of a headline already
+ * kept, or a report that fails grounding, comes back as a tool error so the
+ * next turn can replace it.
+ */
+export function judgeReportedStories(
+  incoming: ReadonlyArray<{ report: StoryReport; toolUseId: string }>,
+  acceptedHeadlines: readonly string[],
+): {
+  accepted: StoryReport[];
+  feedback: Array<{ toolUseId: string; ok: boolean; message: string }>;
+  failure: string | null;
+  shape: string | null;
+} {
+  const accepted: StoryReport[] = [];
+  const feedback: Array<{ toolUseId: string; ok: boolean; message: string }> = [];
+  const seen = new Set(acceptedHeadlines.map(headlineKey));
+  let failure: string | null = null;
+  let shape: string | null = null;
+
+  for (const item of incoming) {
+    const headline = typeof item.report?.headline === 'string' ? item.report.headline : '';
+    const story = typeof item.report?.story === 'string' ? item.report.story : '';
+    if (!headline.trim() || !story.trim()) {
+      failure = 'A story needs a headline and a write-up.';
+      shape = reportShape(item.report);
+      feedback.push({ toolUseId: item.toolUseId, ok: false, message: failure });
+      continue;
+    }
+    const key = headlineKey(headline);
+    if (seen.has(key)) {
+      const message = `Already accepted: "${headline.trim()}". Report a different story.`;
+      failure = message;
+      feedback.push({ toolUseId: item.toolUseId, ok: false, message });
+      continue;
+    }
+    const grounding = checkGrounding(item.report);
+    if (!grounding.ok) {
+      failure = grounding.reason;
+      shape = reportShape(item.report);
+      feedback.push({ toolUseId: item.toolUseId, ok: false, message: grounding.reason });
+      continue;
+    }
+    seen.add(key);
+    accepted.push(item.report);
+    feedback.push({ toolUseId: item.toolUseId, ok: true, message: 'Accepted.' });
+  }
+
+  return { accepted, feedback, failure, shape };
+}
+
+/** The stored write-up ends with the URLs that passed grounding. */
+export function storyWithSources(report: StoryReport): string {
+  const urls = citationUrlsFor(report);
+  const list = urls.map((url) => `- ${url}`).join('\n');
+  return `${report.story.trim()}\n\nSources:\n${list}`;
 }
 
 /**
@@ -256,8 +321,51 @@ export function buildRetryTurns(
 }
 
 /**
- * B6 (D-008, D-064). One story a night, entering the pool as an ordinary source
- * and going through merge and link like everything else.
+ * Answers every tool_use on the turn, including a mix of accepted and rejected
+ * stories, then asks for whatever is still missing.
+ */
+export function buildStoryFollowUp(
+  content: Anthropic.ContentBlock[],
+  results: ReadonlyArray<{ toolUseId: string; ok: boolean; message: string }>,
+  instruction: string,
+): Anthropic.MessageParam[] {
+  const byId = new Map(results.map((result) => [result.toolUseId, result]));
+  const followUp: Anthropic.ContentBlockParam[] = content
+    .filter((block): block is Anthropic.ToolUseBlock => block.type === 'tool_use')
+    .map((block) => {
+      const result = byId.get(block.id);
+      if (!result) {
+        return { type: 'tool_result' as const, tool_use_id: block.id, content: 'Noted.', is_error: false };
+      }
+      return {
+        type: 'tool_result' as const,
+        tool_use_id: block.id,
+        content: result.message,
+        is_error: !result.ok,
+      };
+    });
+
+  followUp.push({ type: 'text', text: instruction });
+
+  return [
+    { role: 'assistant', content },
+    { role: 'user', content: followUp },
+  ];
+}
+
+function stillNeeded(accepted: readonly StoryReport[]): string {
+  const need = B6_STORIES_PER_NIGHT - accepted.length;
+  const have =
+    accepted.length === 0
+      ? 'None accepted yet.'
+      : `Accepted so far: ${accepted.map((story) => story.headline.trim()).join('; ')}.`;
+  const noun = need === 1 ? 'story' : 'stories';
+  return `${have} Report ${need} more ${noun}. At least one of tonight's stories must be about one person and a turn in their work or life. Each story needs at least two independent sources, and every claim needs a source URL. Name the publication in the sentence that uses its fact.`;
+}
+
+/**
+ * B6 (D-008, D-064, D-236). Two stories a night, each entering the pool as an
+ * ordinary source and going through merge and link like everything else.
  *
  * Runs after the other adapters so it can be told what tonight already covers,
  * and before grouping (WEB-07).
@@ -281,7 +389,7 @@ export const claudeWebSearch: Adapter = {
 
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const tools: Anthropic.MessageCreateParams['tools'] = [
-      { type: 'web_search_20250305', name: 'web_search', max_uses: 8 },
+      { type: 'web_search_20250305', name: 'web_search', max_uses: B6_SEARCH_MAX_USES },
       withToolCache(REPORT_STORY_TOOL as Anthropic.Tool),
     ];
 
@@ -298,6 +406,7 @@ export const claudeWebSearch: Adapter = {
     ];
 
     const billed: Anthropic.Message[] = [];
+    const accepted: StoryReport[] = [];
     let lastFailure = '';
     let lastShape = '';
 
@@ -308,7 +417,7 @@ export const claudeWebSearch: Adapter = {
           message = await client.messages.create(
             {
               model: B6_MODEL,
-              max_tokens: 4000,
+              max_tokens: 8000,
               system: cachedSystemText(WEB_SEARCH_SYSTEM),
               messages: withConversationCache(messages),
               tools,
@@ -321,34 +430,41 @@ export const claudeWebSearch: Adapter = {
           // reason that caused the retry and the run page shows only a
           // transport error.
           const detail = error instanceof Error ? error.message : String(error);
-          throw new Error(
+          const wrapped = new Error(
             lastFailure
               ? `Retry after "${lastFailure}" failed: ${detail}`
               : `Web-search request failed: ${detail}`,
           );
+          if (accepted.length > 0) {
+            lastFailure = wrapped.message;
+            break;
+          }
+          throw wrapped;
         }
         billed.push(message);
 
-        const reported = reportFromMessage(message);
-        if (reported) {
-          const grounding = checkGrounding(reported.report);
-          if (grounding.ok) return [toAdapterItem(reported.report)];
-          lastFailure = grounding.reason;
-          lastShape = reportShape(reported.report);
-        } else {
+        const reported = reportsFromMessage(message);
+        const judged = judgeReportedStories(
+          reported,
+          accepted.map((story) => story.headline),
+        );
+        accepted.push(...judged.accepted);
+        if (reported.length === 0) {
           lastFailure = 'No story was reported.';
           lastShape = reportShape(message.content);
+        } else if (judged.failure) {
+          lastFailure = judged.failure;
+          lastShape = judged.shape ?? '';
+        }
+
+        if (accepted.length >= B6_STORIES_PER_NIGHT) {
+          return accepted.slice(0, B6_STORIES_PER_NIGHT).map(toAdapterItem);
         }
 
         if (attempt === B6_MAX_ATTEMPTS) break;
-        // One retry with the specific failure, then the night goes without a
-        // B6 story rather than shipping an ungrounded one (D-064).
-        messages.push(
-          ...buildRetryTurns(
-            message.content,
-            `That did not meet the grounding requirement: ${lastFailure}`,
-          ),
-        );
+        // A story that fails grounding is not shipped (D-064). A story that
+        // passed stays, and the next turn is asked only for the gap.
+        messages.push(...buildStoryFollowUp(message.content, judged.feedback, stillNeeded(accepted)));
       }
     } finally {
       if (billed.length > 0) {
@@ -368,6 +484,8 @@ export const claudeWebSearch: Adapter = {
         });
       }
     }
+
+    if (accepted.length > 0) return accepted.map(toAdapterItem);
 
     const shape = lastShape ? ` Shape: ${lastShape}` : '';
     throw new Error(`Web-search story failed grounding: ${lastFailure}${shape}`);
@@ -394,7 +512,7 @@ function toAdapterItem(report: StoryReport): AdapterItem {
     // source (D-008).
     canonicalUrl: `https://www.heliosgroup.tech/reels/story/${storySlug(report.headline, now)}`,
     headline: report.headline,
-    body: report.story,
+    body: storyWithSources(report),
     author: null,
     byline: 'Helios research',
     publishTime: now,

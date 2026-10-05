@@ -140,9 +140,9 @@ fractions of a cent. Claude is called once per night for the B6 story, and only
 after that prompt is approved.
 
 Measured on the first nights: about **$0.02 of Jev** for a full night (roughly
-350 ingest, grouping, and editor calls) and **$0.25 to $0.35 for the single B6
-story**, which is most of the bill. Roughly $8 to $11 a month at nightly
-cadence.
+350 ingest, grouping, and editor calls) and **$0.25 to $0.35 for one B6
+story**. `web-search-v2` writes two stories a night (D-236), so that part of
+the bill is about twice the single-story nights.
 
 The spend watch is **$50/month** (D-023). It is checked once before a run
 starts: at or over the ceiling the run records `skipped` and does nothing. A run
@@ -151,9 +151,11 @@ worse than a slightly expensive one.
 
 ## The B6 gate
 
-The nightly web-search story is the one language-model prompt in Build 1. It
-was approved 2026-09-22 as `web-search-v1` (D-070), but the flag is still the
-operational switch: the source reports `skipped` and makes no Claude call
+The nightly web-search stories are the language-model prompt in Build 1.
+`web-search-v1` was approved 2026-09-22 (D-070). `web-search-v2` (D-236) asks
+for two stories, with at least one about a single person, and the stored
+write-up ends with the source URLs that passed grounding. The flag is still
+the operational switch: the source reports `skipped` and makes no Claude call
 anywhere `REELS_B6_PROMPT_APPROVED=true` is not set.
 
 Set it in `.env.local` to include B6 in local runs, and in `worker.env` when
@@ -164,7 +166,7 @@ old records have to keep meaning what they said.
 ## The copy writer gate (Build 3)
 
 After scoring, the run fills three reels that clear the copy gate (P-10,
-`copy-caption-v15`). Copy calls use the latest Sonnet release on the models
+`copy-caption-v16`). Copy calls use the latest Sonnet release on the models
 list, and `claude-sonnet-5-5` when that list cannot be read (D-222). The
 account's job is to grow an audience with AI news, stories, knowledge, and
 skills worth following, with no pitch (D-211). Each idea gets two cached calls,
@@ -174,7 +176,7 @@ opens on that story. A caption that comes back as one block is a failed
 report, and a tool string that writes the characters backslash and n is stored
 as a real line break (D-229). The call to action and the hashtags stay in
 their own fields. An assembled caption over 2,200 characters is shortened
-before Instagram sees it (D-230). Each bucket's draft sees the Jev questions for that copy and the line that earns a 1.00 on each (D-233). The copy is written for anyone curious about AI. The whole
+before Instagram sees it (D-230). The draft does not see Jev's questions. The writer wording matches `copy-caption-v12` (D-235). The copy is written for anyone curious about AI. The whole
 on-screen copy is the hook, and its first job is to be understood, stake
 included, on one read (D-204, D-211, D-212). It makes no call anywhere
 `REELS_COPY_PROMPT_APPROVED=true` is not set, and the page says so.

@@ -31,7 +31,7 @@ d. The 12 types of sources are separated into 2 buckets because there are two ty
 3. Company blogs, incident post-mortems, and model cards — OpenAI/Anthropic/DeepMind announcements, Cloudflare outage write-ups, safety cards. First-party narrative material. Open: Y | Diff: 2
 4. GH Archive (BigQuery) + GitHub issue/PR archaeology — license changes, the commit that broke a company, maintainer blowups. Fully queryable history. Open: Y | Diff: 2
 5. Oral history and archive collections — Computer History Museum interviews, Stanford AI archives, AAAI archives. The backbone for "history of AI" reels. Open: Y | Diff: 2
-6. Claude Web Search (runs daily and returns ONE story idea in the same data format as the other scrapes. It should skew towards storytelling content for saga and personal profile. It should always be grounded in truth, it should use the humanizer skill, and it should be weighted fairly against all other story ideas. Don't give the llm writing this story an upper hand by letting it know the criteria it's being graded against.
+6. Claude Web Search (runs daily and returns TWO story ideas in the same data format as the other scrapes. It should skew a little more towards personal profile, and the other story can be a saga. It should always be grounded in truth, cite the sources it used, and be weighted fairly against all other story ideas. Don't give the llm writing these stories an upper hand by letting it know the criteria it's being graded against.
 
 ---
 

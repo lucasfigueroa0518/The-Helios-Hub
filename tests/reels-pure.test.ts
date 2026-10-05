@@ -15,10 +15,14 @@ import { parseTldrStories } from '@/lib/reels/adapters/tldr';
 import {
   asUrlList,
   buildRetryTurns,
+  buildStoryFollowUp,
   checkGrounding,
+  judgeReportedStories,
   storySlug,
+  storyWithSources,
   type StoryReport,
 } from '@/lib/reels/adapters/web-search';
+import { WEB_SEARCH_PROMPT_VERSION, WEB_SEARCH_SYSTEM } from '@/lib/reels/prompts/web-search';
 import { HIGH_CONFIDENCE } from '@/lib/reels/config';
 import { excerpt } from '@/lib/reels/jev/state';
 import { mergeSets } from '@/lib/reels/jev/runner';
@@ -457,6 +461,69 @@ test('asUrlList normalizes the shapes a tool call actually returns', () => {
   assert.deepEqual(asUrlList('https://a.com'), ['https://a.com']);
   assert.deepEqual(asUrlList(['', null, 7]), []);
   assert.deepEqual(asUrlList(undefined), []);
+});
+
+test('a grounded story is stored with the sources that passed the check', () => {
+  const body = storyWithSources(report());
+  assert.match(body, /Sources:/);
+  assert.match(body, /https:\/\/a\.example\.com\/one/);
+  assert.match(body, /https:\/\/b\.example\.com\/two/);
+});
+
+test('the nightly search asks for two stories and does not show the grading rubric (D-236)', () => {
+  assert.equal(WEB_SEARCH_PROMPT_VERSION, 'web-search-v2');
+  assert.match(WEB_SEARCH_SYSTEM, /two true stories/);
+  assert.match(WEB_SEARCH_SYSTEM, /At least one of the two stories should be about a single person/);
+  assert.match(WEB_SEARCH_SYSTEM, /name the publication/i);
+  assert.doesNotMatch(WEB_SEARCH_SYSTEM, /personal profile/i);
+  assert.doesNotMatch(WEB_SEARCH_SYSTEM, /content bucket/i);
+  assert.doesNotMatch(WEB_SEARCH_SYSTEM, /scored/);
+});
+
+test('judgeReportedStories keeps a grounded story and rejects one with no citations', () => {
+  const judged = judgeReportedStories(
+    [
+      { report: report({ headline: 'Person turn' }), toolUseId: 'toolu_ok' },
+      {
+        report: report({ headline: 'Bare', citation_urls: [], claims: [] }),
+        toolUseId: 'toolu_bad',
+      },
+    ],
+    [],
+  );
+  assert.equal(judged.accepted.length, 1);
+  assert.equal(judged.accepted[0].headline, 'Person turn');
+  assert.equal(judged.feedback.find((item) => item.toolUseId === 'toolu_bad')?.ok, false);
+});
+
+test('judgeReportedStories rejects a second copy of a story already kept', () => {
+  const judged = judgeReportedStories(
+    [{ report: report({ headline: 'Person turn' }), toolUseId: 'toolu_dup' }],
+    ['Person turn'],
+  );
+  assert.equal(judged.accepted.length, 0);
+  assert.equal(judged.feedback[0].ok, false);
+  assert.match(judged.feedback[0].message, /Already accepted/);
+});
+
+test('a follow-up accepts one story and rejects the other without dropping a tool call', () => {
+  const turns = buildStoryFollowUp(
+    [
+      { type: 'tool_use', id: 'toolu_ok', name: 'report_story', input: {} },
+      { type: 'tool_use', id: 'toolu_bad', name: 'report_story', input: {} },
+    ] as never,
+    [
+      { toolUseId: 'toolu_ok', ok: true, message: 'Accepted.' },
+      { toolUseId: 'toolu_bad', ok: false, message: 'No citations were provided.' },
+    ],
+    'Report 1 more story.',
+  );
+  const followUp = turns[1].content as unknown as Array<Record<string, unknown>>;
+  assert.equal(followUp[0].tool_use_id, 'toolu_ok');
+  assert.equal(followUp[0].is_error, false);
+  assert.equal(followUp[1].tool_use_id, 'toolu_bad');
+  assert.equal(followUp[1].is_error, true);
+  assert.equal(followUp[2].type, 'text');
 });
 
 test('storySlug gives the nightly story a stable, dated identity of its own', () => {
