@@ -539,6 +539,10 @@ These came up once in hand-run tests. They become fixes only if they recur in re
 | The Reporter skipped a "[Meta says]" label on one claim whose sources all trace back to Meta | Tighten the Reporter's attribution instruction |
 | Writers used all 8 story slides and ended on a weak slide (4 of 4 hand runs, but hand runs aren't real runs) | Tighten "stop when the story is told" |
 | Trump Super Intelligence Force (8 outlets) ranked #8 on a 0.44 "why it matters" (live selection run, 2026-10-04) | If big multi-outlet stories keep sinking on one near-miss, revisit ranking weight on outlet count |
+| **Known pattern, deferred by Tommy (2026-10-05):** the Reporter didn't open the primary source (3 of 3 briefs: the Atlantic essay, the Politico interview, Google's support page) | Reporter prompt: look for and open the primary source, or say why not |
+| **Known pattern, deferred by Tommy (2026-10-05):** side material in FACTS beyond the 2 background slots (3 of 3 briefs) | Reporter prompt: keep FACTS to the main event |
+| **Known pattern, deferred by Tommy (2026-10-05):** reliance on aggregators (2 of 3 briefs: Implicator, Yahoo/BeInCrypto) despite "no aggregators" | Reporter prompt or source filtering |
+| The story one-liner came from an off-topic article (Gemini group, Times Square Chronicles headline over a Meta Muse article; 1 occurrence, 2026-10-05) | Take the one-liner from a read member whose text matches the group |
 
 **Process note (2026-10-04):** hand-run simulations are for illustrating the design, not for finding fixes. From here on, fixes come only from patterns in real batch logs.
 
