@@ -538,6 +538,7 @@ These came up once in hand-run tests. They become fixes only if they recur in re
 | The Writer used a source the Reporter had labelled weak/aggregator | Weak sources inform the brief but never appear on slides |
 | The Reporter skipped a "[Meta says]" label on one claim whose sources all trace back to Meta | Tighten the Reporter's attribution instruction |
 | Writers used all 8 story slides and ended on a weak slide (4 of 4 hand runs, but hand runs aren't real runs) | Tighten "stop when the story is told" |
+| Trump Super Intelligence Force (8 outlets) ranked #8 on a 0.44 "why it matters" (live selection run, 2026-10-04) | If big multi-outlet stories keep sinking on one near-miss, revisit ranking weight on outlet count |
 
 **Process note (2026-10-04):** hand-run simulations are for illustrating the design, not for finding fixes. From here on, fixes come only from patterns in real batch logs.
 
