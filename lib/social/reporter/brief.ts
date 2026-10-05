@@ -158,7 +158,8 @@ export class BriefValidationError extends Error {
 export function checkShape(value: unknown, schema: any = BRIEF_SCHEMA, at = 'brief', errors: BriefError[] = []): BriefError[] {
   const types: string[] = Array.isArray(schema.type) ? schema.type : [schema.type];
   const actual = value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
-  if (!types.includes(actual)) {
+  const ok = types.includes(actual) || (actual === 'number' && types.includes('integer') && Number.isInteger(value));
+  if (!ok) {
     errors.push({ section: at, message: `expected ${types.join(' or ')}, got ${actual}` });
     return errors;
   }

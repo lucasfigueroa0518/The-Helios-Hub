@@ -7,6 +7,7 @@
 import type { GroupMember } from '@/lib/social/ingest/select/types';
 import type { Brief as ParsedBrief } from '@/lib/social/reporter/brief';
 import type { PageReadOk } from '@/lib/social/reporter/read-page';
+import type { DraftSubmission, FilledDraft } from '@/lib/social/writer/draft';
 
 /** The six stages of spec §3, plus the mechanical guarantees (§6). */
 export const STAGE_ORDER = [
@@ -82,11 +83,15 @@ export type Brief = {
   pages: PageReadOk[];
 };
 
-/** Writer/Editor/Fact-checker output (M3 adds slide types, IDs, covers). */
+/**
+ * Writer/Editor/Fact-checker output: the submit_draft shape (IDs, claim
+ * tags, image requests) plus its filled version (exact quotes/numbers).
+ * One format for every later stage (Tommy, 2026-10-05).
+ */
 export type Draft = {
   storyId: string;
-  slides: Array<{ headline: string; body: string }>;
-  caption: string;
+  submission: DraftSubmission;
+  filled: FilledDraft;
 };
 
 /** A designed post, ready for the mechanical guarantees and review. */

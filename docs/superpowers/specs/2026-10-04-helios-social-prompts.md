@@ -114,6 +114,14 @@ BRIEF
 - **Spread:** "You may pair two consecutive slides that tell one continuous beat; give the pair one IMAGE line" (spec §5.4).
 - **Caption:** replace the tested one-line caption instruction with the section below (spec §4.3).
 
+**As built (M3, 2026-10-05; Tommy's decisions):**
+
+- **Structured output:** `OUTPUT` becomes `When you're done, call submit_draft with these sections:`. The section list stays word for word. `submit_draft` is not `strict` (the API's strict-grammar size limit); code checks it, with one retry that returns the errors.
+- **Schema, designed for the downstream stages:** quotes and numbers travel by ID only, and code fills in the exact text. Every cover, headline, body and caption line carries its claim tags as a list of brief IDs. IMAGE is `{kind: subject|article|stock, value}`. Cover options are a list with a 1-based chosen index. A spread is `spread_with_next`.
+- **The Editor (M4) returns the same submit_draft shape,** so every later stage reads one format.
+- **Input:** the brief is the Reporter's JSON, with each SUBJECTS entry marked `well_known` by code (a Wikidata match, spec §4.1a). `BRIEF {{brief}}` moves to the user message for caching.
+- **Rules:** the tested rule lines come from `RULES_BLOCK` (one copy), then the three additions as one terse line each (claim tags, well-known, spread), then the shared Context policy and Glossing. The caption section follows as carried over. Its `renderRulesFor('caption')` renders nothing until M7.
+
 ---
 
 ## 3. Writer's caption section (carried over verbatim)

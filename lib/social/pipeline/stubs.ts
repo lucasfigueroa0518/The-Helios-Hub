@@ -6,6 +6,7 @@
  */
 import type { IngestArticle } from '@/lib/social/ingest/select/types';
 import type { Brief as ParsedBrief } from '@/lib/social/reporter/brief';
+import { fillDraft, type DraftSubmission } from '@/lib/social/writer/draft';
 
 import type { PipelineStages } from './stages';
 import type { ReasonCode, ScoredCandidate, StageName, StageResult } from './types';
@@ -68,6 +69,23 @@ export function stubCandidates(articles: IngestArticle[]): ScoredCandidate[] {
   }));
 }
 
+/** Minimal valid draft for stub runs (passes checkDraft against stubBrief). */
+export function stubDraft(news: string): DraftSubmission {
+  const line = (text: string) => ({ text, facts: ['F1'] });
+  const stock = { kind: 'stock' as const, value: 'office building' };
+  return {
+    cover_options: [1, 2, 3].map((n) => ({ text: `${news} (${n})`, facts: ['F1'], image: stock })),
+    chosen_cover: 1,
+    slides: [
+      { type: 'text', headline: line(news), body: line('What happened, in one line.'), quote_id: null, quote_excerpt: null, number_ids: [], image: stock, spread_with_next: false },
+      { type: 'text', headline: line('Why it matters'), body: line('What it means for the reader.'), quote_id: null, quote_excerpt: null, number_ids: [], image: stock, spread_with_next: false },
+    ],
+    follow: 'Follow Helios for AI news.',
+    caption: line(`${news} Source: example.com`),
+    edit_notes: [],
+  };
+}
+
 /** Minimal brief for stub runs. */
 export function stubBrief(news: string): ParsedBrief {
   return {
@@ -109,14 +127,8 @@ export function createStubStages(opts: StubOptions = {}): PipelineStages {
       return result('reporter', story.id, { storyId: story.id, parsed: stubBrief(story.title), raw: '', pages: [] });
     },
     async write(brief) {
-      return result('writer', brief.storyId, {
-        storyId: brief.storyId,
-        slides: [
-          { headline: brief.parsed.the_news.text, body: 'What happened, in one line.' },
-          { headline: 'Why it matters', body: 'What it means for the reader.' },
-        ],
-        caption: `${brief.parsed.the_news.text} Source: example.com`,
-      });
+      const submission = stubDraft(brief.parsed.the_news.text);
+      return result('writer', brief.storyId, { storyId: brief.storyId, submission, filled: fillDraft(submission, brief.parsed) });
     },
     async edit(draft) {
       return result('editor', draft.storyId, draft);
@@ -128,8 +140,8 @@ export function createStubStages(opts: StubOptions = {}): PipelineStages {
       return result('design', draft.storyId, {
         storyId: draft.storyId,
         title: story.title,
-        slides: draft.slides.map((s) => ({ ...s, image: null })),
-        caption: draft.caption,
+        slides: draft.filled.slides.map((s) => ({ headline: s.headline.text, body: s.body?.text ?? '', image: null })),
+        caption: draft.filled.caption.text,
         stages: [],
         costUsd: 0,
       });
