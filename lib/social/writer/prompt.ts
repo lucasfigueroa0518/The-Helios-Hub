@@ -10,6 +10,9 @@
  *   submit_draft with these sections:"; the section list is unchanged.
  *   CAPTION: the tested caption section (prompts file §3) follows, as
  *   carried over; its check-rules placeholder renders empty until M7.
+ *   CAPTION WORDING (Tommy, 2026-10-05; known-wrong carry-overs): "— respect it"
+ *   → ". Respect it." (voice bans em dashes); "the final SLIDES you were
+ *   given" → "the slides you wrote" (the Writer writes both now).
  *   PLACEMENT (caching): "BRIEF\n{{brief}}" moves to the user message;
  *   the brief is the Reporter's JSON, with SUBJECTS marked well_known by code.
  */
@@ -49,7 +52,7 @@ Retell the story of the slides in fresh words, in one or two short paragraphs. D
 - Name the people, companies and key facts plainly. Captions show up in search, so say what the story is about in the words people would search for.
 - Apply the shared Glossing rule for any term a reader who doesn't follow AI wouldn't know.
 - Apply the shared Context policy: a sourced clause is allowed, and the caption may reference the background beats ("why now", "what stands in the way") the slides carry. Anything beyond that stays out of the caption.
-- **Every fact must be in either the final SLIDES you were given or the BRIEF. Nothing new.** If a detail is not on one of the slides and not in the brief, it doesn't go in the caption. No dates, numbers, names, mechanisms, or descriptors of your own. If the slides skipped a fact you want to add, that's the Writer/Editor's decision — respect it.
+- **Every fact must be in either the slides you wrote or the BRIEF. Nothing new.** If a detail is not on one of the slides and not in the brief, it doesn't go in the caption. No dates, numbers, names, mechanisms, or descriptors of your own. If the slides skipped a fact you want to add, that's the Writer/Editor's decision. Respect it.
 - No opinions, predictions or comparisons of your own. Keep every hedge ("says," "potential," "up to").
 - Describe people, organizations, products and events only with words the SLIDES or the BRIEF use. Don't add descriptors, glosses or editorial labels of your own.
 

@@ -121,6 +121,11 @@ BRIEF
 - **The Editor (M4) returns the same submit_draft shape,** so every later stage reads one format.
 - **Input:** the brief is the Reporter's JSON, with each SUBJECTS entry marked `well_known` by code (a Wikidata match, spec §4.1a). `BRIEF {{brief}}` moves to the user message for caching.
 - **Rules:** the tested rule lines come from `RULES_BLOCK` (one copy), then the three additions as one terse line each (claim tags, well-known, spread), then the shared Context policy and Glossing. The caption section follows as carried over. Its `renderRulesFor('caption')` renders nothing until M7.
+- **Caption wording fixes (Tommy, 2026-10-05).** These are known-wrong carry-overs, not reactions to a test:
+  - "that's the Writer/Editor's decision — respect it." becomes "that's the Writer/Editor's decision. Respect it." (the voice block bans em dashes);
+  - "the final SLIDES you were given" becomes "the slides you wrote" (the Writer now writes the slides and the caption together).
+
+  The §3 block below stays as originally carried over. The code applies these two edits, and a guard test checks them. `cause · Writer prompt · 0 new stages · 0 new AI calls`
 
 ---
 

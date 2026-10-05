@@ -67,7 +67,10 @@ test('Writer prompt = tested intro + RULES (tested lines + 3 additions + shared 
   const sectionList = tested.slice(tested.indexOf('\n\nOUTPUT\n') + '\n\nOUTPUT\n'.length, tested.indexOf('\n\nBRIEF\n'));
   const caption = codeBlocks('## 3. Writer')[0]!
     .replace('${VOICE_BLOCK}', VOICE_BLOCK)
-    .replace("\n\n${renderRulesFor('caption')}", '');
+    .replace("\n\n${renderRulesFor('caption')}", '')
+    // Caption wording fixes (2026-10-05).
+    .replace('the final SLIDES you were given', 'the slides you wrote')
+    .replace("that's the Writer/Editor's decision — respect it.", "that's the Writer/Editor's decision. Respect it.");
   const expected = [
     intro,
     `## Rules\n\n${TESTED_WRITER_RULES}\n${WRITER_ADDED_RULES}`,
@@ -78,6 +81,7 @@ test('Writer prompt = tested intro + RULES (tested lines + 3 additions + shared 
   assert.equal(WRITER_SYSTEM, expected);
   assert.ok(!WRITER_SYSTEM.includes('{{brief}}') && !WRITER_SYSTEM.includes('\nOUTPUT\n') && !WRITER_SYSTEM.includes('${'));
   assert.equal(WRITER_ADDED_RULES.split('\n').length, 3);
+  assert.ok(!WRITER_SYSTEM.includes('—'), 'no em dashes anywhere in the Writer prompt');
 });
 
 test('the brief goes in the user message as JSON, with SUBJECTS marked well_known by code', async () => {
