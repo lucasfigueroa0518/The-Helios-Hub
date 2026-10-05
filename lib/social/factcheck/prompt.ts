@@ -4,7 +4,7 @@
  * Jev claim checking (plan M4).
  *
  * Generated from the prompts file text (a guard test pins it). Edits:
- *   OUTPUT (same pattern as Reporter/Writer, proposed): "OUTPUT" →
+ *   OUTPUT (same pattern as Reporter/Writer; approved 2026-10-05): "OUTPUT" →
  *   "When you're done, call submit_flags with these sections:"; the
  *   section list is unchanged.
  *   PLACEMENT (caching): the edited draft (quotes and numbers filled) and

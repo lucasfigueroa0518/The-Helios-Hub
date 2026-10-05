@@ -186,6 +186,7 @@ The system handles failures on its own; nobody steps in. When the Fact-checker f
    - **if the chosen cover fails, use the Writer's next cover option.** The Writer already writes 3, and the Fact-checker checks all of them.
 2. **A fresh draft, if the free fixes would damage the post:**
    - **When:** the cuts would leave fewer than 5 story slides, or would remove the key slide, or every cover option fails.
+   - **Key slide (DECIDED, 2026-10-05):** the first story slide tagged with a THE NEWS fact ID. If no slide carries one, slide 2.
    - **How:** the system **throws the draft away and writes a new one from the same brief.** No "fix this" notes are fed back (that caused the old back-and-forth).
    - **Then:** the new draft runs through the Editor and Fact-checker once, like the first one.
    - **Why it works:** most failures are noise (§2.3), so a fresh attempt usually comes out clean.

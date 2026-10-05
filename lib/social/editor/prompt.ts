@@ -6,10 +6,10 @@
  *   shape as the Writer): "OUTPUT: the full edited draft in the Writer's format, then EDIT NOTES: one line per change."
  *   → "When you're done, call submit_draft with the full edited draft in
  *   the Writer's format, with EDIT NOTES: one line per change."
- *   SHARED BLOCKS (proposed, spec §4 "RULES_BLOCK … for every prompt"):
+ *   SHARED BLOCKS (approved by Tommy 2026-10-05; spec §4):
  *   RULES_BLOCK and VOICE_BLOCK follow, so the Editor sees the Writer's
  *   limits ("the same length limits as the Writer") and the voice it
- *   sharpens toward. Awaiting Tommy's OK with the assembled prompt.
+ *   sharpens toward.
  *   PLACEMENT (caching): the draft and the brief go in the user message.
  */
 import { RULES_BLOCK } from '@/lib/social/prompts/rules-block';

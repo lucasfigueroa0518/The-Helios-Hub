@@ -204,6 +204,7 @@ Only the four sources needed to put a real photo on every slide:
 
 - Real selection → Reporter → Writer → Editor → Fact-checker → basic photos → local preview, on a small number of stories agreed beforehand.
 - Read the result and the set-aside log. Fix only patterns (spec §2.3).
+- **Fact-checker at the checkpoint:** Claude only, the comparison version. **Jev claim checking is built after the checkpoint and before M11** (Tommy, 2026-10-05). M11 runs both side by side (spec §10).
 
 ## After the checkpoint
 
