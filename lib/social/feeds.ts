@@ -31,18 +31,24 @@ export const HELIOS_SOCIAL_FEEDS: FeedConfig[] = [
     url: 'https://feeds.arstechnica.com/arstechnica/technology-lab' },
   { slug: 'techcrunch-ai',   name: 'TechCrunch — AI',   kind: 'native',
     url: 'https://techcrunch.com/category/artificial-intelligence/feed/' },
-  { slug: 'venturebeat-ai',  name: 'VentureBeat — AI',  kind: 'native',
-    url: 'https://venturebeat.com/category/ai/feed/' },
+  // venturebeat.com answers 429 to every client we tried (bot and browser
+  // UA); its feedburner mirror is a month stale. Read it via Google News.
+  { slug: 'venturebeat-ai',  name: 'VentureBeat — AI',  kind: 'google-news',
+    url: gnewsUrl('site:venturebeat.com AI') },
   { slug: 'simon-willison',  name: 'Simon Willison',    kind: 'native',
     url: 'https://simonwillison.net/atom/everything/' },
   { slug: 'import-ai',       name: 'Import AI',         kind: 'native',
     url: 'https://importai.substack.com/feed' },
+  // The /the-batch/feed/ URL is gone (404); the Batch is now served from
+  // DeepLearning.AI's Ghost host, whose item links point at that host.
   { slug: 'the-batch',       name: 'The Batch',         kind: 'native',
-    url: 'https://www.deeplearning.ai/the-batch/feed/' },
+    url: 'https://charonhub.deeplearning.ai/rss/' },
   { slug: 'wired-ai',        name: 'Wired — AI',        kind: 'native',
     url: 'https://www.wired.com/feed/tag/ai/latest/rss' },
-  { slug: 'semafor-tech',    name: 'Semafor — Tech',    kind: 'native',
-    url: 'https://www.semafor.com/section/tech/feed' },
+  // Semafor dropped its per-section feeds (404); its only feed (rss.xml) is
+  // every section, ~190 items a day. Google News narrows it to AI.
+  { slug: 'semafor-tech',    name: 'Semafor — Tech',    kind: 'google-news',
+    url: gnewsUrl('site:semafor.com AI') },
 
   // ── Broader tech / business ──────────────────────────────────────────────
   { slug: 'bloomberg-tech',  name: 'Bloomberg Technology', kind: 'native',
@@ -51,8 +57,9 @@ export const HELIOS_SOCIAL_FEEDS: FeedConfig[] = [
     url: 'https://feeds.a.dj.com/rss/RSSWSJD.xml' },
   { slug: 'nyt-tech',        name: 'NYT — Technology',  kind: 'native',
     url: 'https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml' },
-  { slug: 'reuters-tech',    name: 'Reuters — Technology', kind: 'native',
-    url: 'https://www.reutersagency.com/feed/?best-topics=tech&post_type=best' },
+  // Reuters has no public RSS; the reutersagency.com feed now 404s.
+  { slug: 'reuters-tech',    name: 'Reuters — Technology', kind: 'google-news',
+    url: gnewsUrl('site:reuters.com "artificial intelligence" OR AI') },
 
   // ── Google News aggregated (watchlist-focused queries) ───────────────────
   { slug: 'gnews-frontier-labs', name: 'Google News — Frontier Labs', kind: 'google-news',
