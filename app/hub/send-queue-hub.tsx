@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { ChevronLeft, ChevronRight, RotateCcw, Send, Trash2, X } from 'lucide-react';
 
 import {
@@ -89,6 +89,7 @@ export function SendQueueHub() {
   const [dragId, setDragId] = useState<string | null>(null);
   const hasDataRef = useRef(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const scrolledToToday = useRef(false);
 
   const load = useCallback(async () => {
     if (!hasDataRef.current) setLoading(true);
@@ -111,6 +112,18 @@ export function SendQueueHub() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // The board includes the prior week, so scrollLeft 0 is last Monday.
+  // Land on today before paint or the live cards look missing.
+  useLayoutEffect(() => {
+    if (!board || scrolledToToday.current) return;
+    const scroller = scrollerRef.current;
+    const today = scroller?.querySelector<HTMLElement>('[data-today="true"]');
+    if (!scroller || !today) return;
+    const delta = today.getBoundingClientRect().left - scroller.getBoundingClientRect().left;
+    scroller.scrollLeft += delta;
+    scrolledToToday.current = true;
+  }, [board]);
 
   useEffect(() => {
     void hubGetJson<{ campaigns: CampaignOption[] }>('/api/campaigns')
@@ -418,6 +431,7 @@ function DayColumn(props: {
   return (
     <div
       className="send-queue-day-panel"
+      data-today={isToday ? 'true' : undefined}
       onDragOver={(event: DragEvent) => event.preventDefault()}
       onDrop={() => props.onDrop(day.date)}
       style={{
