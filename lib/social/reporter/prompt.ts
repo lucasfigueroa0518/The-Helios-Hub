@@ -46,7 +46,7 @@ SOURCES: outlet, date, URL (only ones you opened); list fetch failures separatel
 export type ReporterStoryInput = {
   /** The story one-liner from selection (the group's headline). */
   story: string;
-  /** Member article URLs from the Jev group. */
+  /** Group members enrichment actually read, most text first, max 4 (Tommy, 2026-10-05). */
   startingSources: string[];
   /** Today's date as a reader would write it ("October 4, 2026"). */
   today: string;
@@ -54,5 +54,7 @@ export type ReporterStoryInput = {
 
 /** The tested STORY line, word for word, with its placeholders filled. */
 export function reporterUserMessage(input: ReporterStoryInput): string {
-  return `STORY: ${input.story}. Starting sources: ${input.startingSources.join(', ')}. Today is ${input.today}.`;
+  // No readable member: "none", so the Reporter goes straight to finding coverage.
+  const sources = input.startingSources.length > 0 ? input.startingSources.join(', ') : 'none';
+  return `STORY: ${input.story}. Starting sources: ${sources}. Today is ${input.today}.`;
 }

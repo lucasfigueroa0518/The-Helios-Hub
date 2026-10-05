@@ -15,7 +15,7 @@ export function readableDate(now: Date): string {
 export function createReporterStage(deps: ReporterDeps & { now: () => Date }): PipelineStages['report'] {
   return async (story) => {
     const result = await runReporter(
-      { story: story.title, startingSources: story.members.map((m) => m.url), today: readableDate(deps.now()) },
+      { story: story.title, startingSources: story.sources, today: readableDate(deps.now()) },
       deps,
     );
     if (!result.ok) return { ok: false, reasonCode: result.reason, detail: result.detail, costUsd: result.costUsd };

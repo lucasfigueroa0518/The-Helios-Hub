@@ -16,7 +16,7 @@ import * as SameEvent from '@/lib/social/jev/questions/same-event.v1';
 import * as Scoring from '@/lib/social/jev/questions/story-scoring.v2';
 import { createStubJev } from '@/lib/social/jev/stub';
 import { applyCodeFilters } from '@/lib/social/ingest/select/code-filters';
-import { enrichGroup, THIN_BODY_CHARS, type FetchBody } from '@/lib/social/ingest/select/enrich';
+import { enrichGroup, startingSources, THIN_BODY_CHARS, topUpReadSources, type FetchBody } from '@/lib/social/ingest/select/enrich';
 import { createInMemoryFeedHealthLog } from '@/lib/social/ingest/select/feed-health';
 import { buildGroup, groupArticles } from '@/lib/social/ingest/select/group';
 import { outletKey, outletName } from '@/lib/social/ingest/select/outlets';
@@ -181,7 +181,7 @@ test('enrichment: a group whose RSS body already clears the bar makes no fetch',
 // ── Scoring rules ──────────────────────────────────────────────────────
 
 const group = (over: Partial<StoryGroup> = {}): StoryGroup => ({
-  id: 'g', members: [], outlets: ['X'], outletCount: 1, publishedAt: NOW, representative: A1, articles: [A1], body: A1.body, ...over,
+  id: 'g', members: [], outlets: ['X'], outletCount: 1, publishedAt: NOW, representative: A1, articles: [A1], body: A1.body, read: [], tried: [], ...over,
 });
 
 test('scoring: skip list, already posted, and the required questions', () => {
@@ -255,8 +255,8 @@ test('selection: winners, backups in order, skips logged, one scoring call per g
   assert.match(reasons[G1.sourceUrl]!, /^not-qualified: required: ai_main_subject/);
   assert.equal(reasons[F1.sourceUrl], 'listicle');
 
-  // Only the thin body was fetched, and its full text was scored.
-  assert.deepEqual(fetchCalls, [G1.sourceUrl]);
+  // Scoring pass: only the thin body is fetched. Shortlist top-up: B's thin Google News copy is tried for a starting source.
+  assert.deepEqual(fetchCalls, [G1.sourceUrl, B2.sourceUrl]);
   assert.ok(s.scored.find((g) => g.id === G1.sourceUrl)!.body.length > 1500);
 
   // Winner X carries its three member URLs for the Reporter.
@@ -376,4 +376,53 @@ test('a Jev failure during selection ends the day as scoring-failed', async () =
   assert.equal(r.stopReason, 'scoring-failed');
   assert.equal(r.setAsides[0]!.reasonCode, 'service-error');
   assert.equal(r.posts.length, 0);
+});
+
+// ── Starting sources for the Reporter (Tommy, 2026-10-05) ──────────────
+
+test('starting sources: only members actually read, most text first, one per outlet, max 4', async () => {
+  const thin = (a: typeof A1, slug: string, outlet: string) => ({ ...a, sourceUrl: `https://${slug}.example.com/x`, source: outlet, feedKind: 'google-news' as const, body: 'Teaser.' });
+  const arts = [
+    thin(A2, 'blocked', 'Reuters'), // fetch fails → never a starting source
+    thin(A2, 'paywall', 'Bloomberg'), // returns a paywall lede → not read
+    thin(A2, 'small', 'Axios'),
+    thin(A2, 'big', 'The Guardian'),
+    thin(A2, 'guardian2', 'The Guardian'), // same outlet, less text → dropped
+    thin(A2, 'mid', 'Wired'),
+    thin(A2, 'extra', 'Semafor'),
+  ];
+  const pages: Record<string, string | null> = {
+    'https://blocked.example.com/x': null,
+    'https://paywall.example.com/x': 'Subscribe to read.',
+    'https://small.example.com/x': 'a'.repeat(1600),
+    'https://big.example.com/x': 'b'.repeat(5000),
+    'https://guardian2.example.com/x': 'c'.repeat(2000),
+    'https://mid.example.com/x': 'd'.repeat(3000),
+    'https://extra.example.com/x': 'e'.repeat(1700),
+  };
+  const fetched: string[] = [];
+  const fetchBody = async (url: string) => { fetched.push(url); return pages[url] ?? null; };
+  const scored = await enrichGroup(buildGroup(arts), fetchBody);
+  // The scoring pass stops at the first member that gives enough text.
+  assert.deepEqual(scored.read.map((r) => r.url), ['https://small.example.com/x']);
+  const topped = await topUpReadSources(scored, fetchBody);
+  assert.deepEqual(startingSources(topped), [
+    'https://big.example.com/x',
+    'https://mid.example.com/x',
+    'https://extra.example.com/x',
+    'https://small.example.com/x',
+  ]);
+  assert.equal(new Set(fetched).size, fetched.length, 'no member fetched twice');
+});
+
+test('starting sources: a long RSS body counts as read without a fetch', async () => {
+  const g = await topUpReadSources(await enrichGroup(buildGroup([A1]), async () => null), async () => null);
+  assert.deepEqual(startingSources(g), [A1.sourceUrl]);
+});
+
+test('selection hands winners their read sources', async () => {
+  const s = await select();
+  const x = s.winners[0]!;
+  assert.ok(x.read.length >= 1 && x.read.length <= 4);
+  assert.ok(x.read.every((r) => x.members.some((m) => m.url === r.url)));
 });

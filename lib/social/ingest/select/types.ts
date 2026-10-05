@@ -32,7 +32,17 @@ export type StoryGroup = {
   articles: IngestArticle[];
   /** Text Jev scores: the most text any member yielded (RSS body or full page). */
   body: string;
+  /**
+   * Members whose full text enrichment actually read (an RSS body or a
+   * fetched page of at least THIN_BODY_CHARS), most text first, one per
+   * outlet. The Reporter's starting sources come from here.
+   */
+  read: ReadMember[];
+  /** Member URLs enrichment already tried to fetch (so a top-up doesn't refetch). */
+  tried: string[];
 };
+
+export type ReadMember = { url: string; outlet: string; chars: number };
 
 export type ScoreStatus = 'qualified' | 'not-qualified' | 'skipped';
 

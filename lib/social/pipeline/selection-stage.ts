@@ -7,6 +7,7 @@ import { createJevTally, type JevAsk } from '@/lib/social/jev/client';
 import type { FetchBody } from '@/lib/social/ingest/select/enrich';
 import type { FeedHealthLog } from '@/lib/social/ingest/select/feed-health';
 import type { PostedStories } from '@/lib/social/ingest/select/posted';
+import { startingSources } from '@/lib/social/ingest/select/enrich';
 import { selectStories, type Selection } from '@/lib/social/ingest/select/select';
 import type { ScoredGroup } from '@/lib/social/ingest/select/types';
 
@@ -29,6 +30,7 @@ export function toCandidate(group: ScoredGroup, score: number): ScoredCandidate 
     title: group.representative.headline,
     url: group.representative.sourceUrl,
     members: group.members,
+    sources: startingSources(group),
     outlets: group.outlets,
     outletCount: group.outletCount,
     publishedAt: group.publishedAt,

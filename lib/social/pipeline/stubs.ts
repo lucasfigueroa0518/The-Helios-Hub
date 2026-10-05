@@ -59,6 +59,7 @@ export function stubCandidates(articles: IngestArticle[]): ScoredCandidate[] {
     title: a.headline,
     url: a.sourceUrl,
     members: [{ url: a.sourceUrl, outlet: a.source, title: a.headline, publishedAt: a.publishedAt, feedSlug: a.feedSlug }],
+    sources: [a.sourceUrl],
     outlets: [a.source],
     outletCount: 1,
     publishedAt: a.publishedAt,

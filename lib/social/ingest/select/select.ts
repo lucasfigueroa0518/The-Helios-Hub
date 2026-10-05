@@ -8,12 +8,13 @@
  * If fewer than 2 qualify, the window widens to 48h and everything after
  * the window is redone once.
  */
+import { mapPool } from '@/lib/async-pool';
 import { createJevTally, tallied, type JevAsk, type JevTally } from '@/lib/social/jev/client';
 import type { FeedConfig } from '@/lib/social/feeds';
 
 import { applyCodeFilters } from './code-filters';
 import type { FetchBody } from './enrich';
-import { enrichThinBodies } from './enrich';
+import { enrichThinBodies, topUpReadSources } from './enrich';
 import { buildFeedHealth, type FeedHealthEntry } from './feed-health';
 import { groupArticles } from './group';
 import type { PostedStories } from './posted';
@@ -73,6 +74,14 @@ export async function selectStories(input: SelectInput): Promise<Selection> {
   }
 
   const picks = await pickWinners(pass.ranked, jev);
+  // Shortlist only: read more members so the Reporter gets up to 4 starting sources.
+  const topped = new Map(
+    (await mapPool(picks.shortlist, 4, (g) => topUpReadSources(g, input.fetchBody))).map((g) => [g.id, g as ScoredGroup]),
+  );
+  const top = (g: ScoredGroup) => topped.get(g.id) ?? g;
+  picks.shortlist = picks.shortlist.map(top);
+  picks.winners = picks.winners.map(top);
+  picks.backups = picks.backups.map(top);
   return {
     windowHours: pass.hours,
     widened,

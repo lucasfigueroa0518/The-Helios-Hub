@@ -110,6 +110,8 @@ export function buildGroup(articles: IngestArticle[]): StoryGroup {
     publishedAt: members[0]!.publishedAt,
     representative,
     articles: ordered,
+    read: [],
+    tried: [],
     body: representative.body,
   };
 }

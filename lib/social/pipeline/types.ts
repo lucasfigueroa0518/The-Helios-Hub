@@ -61,6 +61,8 @@ export type Candidate = {
   url: string;
   /** Every article in the group, for the Reporter's two-source confirmation. */
   members: GroupMember[];
+  /** Members enrichment actually read, most text first, max 4: the Reporter's starting sources. */
+  sources: string[];
   outlets: string[];
   outletCount: number;
   publishedAt: Date;
