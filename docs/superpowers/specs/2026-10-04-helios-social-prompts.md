@@ -206,6 +206,13 @@ Keep 5–8 story slides and the same length limits as the Writer. If the story i
 OUTPUT: the full edited draft in the Writer's format, then EDIT NOTES: one line per change.
 ```
 
+**As built (M4, 2026-10-05), pending Tommy's review before any live run:**
+
+- **OUTPUT:** "OUTPUT: the full edited draft in the Writer's format, then EDIT NOTES: one line per change." becomes "When you're done, call submit_draft with the full edited draft in the Writer's format, with EDIT NOTES: one line per change." The Editor returns the same submit_draft shape as the Writer (Tommy, 2026-10-05).
+- **Proposed addition:** RULES_BLOCK and VOICE_BLOCK follow the text. Spec §4 says RULES_BLOCK goes in every prompt, and the Editor is told to keep "the same length limits as the Writer" and to sharpen toward the voice.
+- **Code check:** the Writer's check, plus the parts of POWERS that code can see. The Editor may not use a quote, number or claim-tag ID the Writer didn't use, and may not request an image the Writer didn't request. One retry with the errors.
+- **Input:** the Writer's draft (IDs and claim tags) and the brief, in the user message.
+
 ---
 
 ## 5. Fact-checker, Claude comparison version (untested; drafted from spec §4.2)
@@ -238,3 +245,12 @@ FLAGS: one per line — where (cover n / slide n / caption) | quoted text | type
 MAIN CLAIM FALSE: yes/no
 (If nothing is false: FLAGS: none)
 ```
+
+**As built (M4, 2026-10-05), pending Tommy's review before any live run:**
+
+- **OUTPUT (proposed, same pattern as Reporter/Writer):** "OUTPUT" becomes "When you're done, call submit_flags with these sections:". The section list is unchanged.
+- **Schema:** each flag has where {part: cover|slide|caption, number}, quoted text, type 1–5, brief fact ID, and fix {swap|cut, replacement}. There is also main_claim_false. Not strict; checked in code: the quoted text must be in the named part, SWAP words must be copied from the brief, and fact IDs must exist. One retry with the errors.
+- **Code applies the fixes:** swap, then cut (a slide whose headline is cut, or whose filled quote or number is flagged, is dropped), then the next cover option.
+- **Fresh draft when:** the cuts leave fewer than 5 story slides, the key slide is cut (the first story slide tagged with a THE NEWS ID), every cover fails, or the caption is emptied. Limit 2 fresh drafts per story, each logged. A false main claim sets the story aside.
+- **Input:** the edited draft as the reader sees it (all 3 covers, quotes and numbers filled in) and the brief.
+

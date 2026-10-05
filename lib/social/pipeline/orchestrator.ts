@@ -15,9 +15,14 @@ import type { SetAsideEntry, SetAsideLog } from './set-aside-log';
 import type { PipelineStages } from './stages';
 import type { IngestArticle } from '@/lib/social/ingest/select/types';
 
-import type { PostObject, ScoredCandidate, StageName, StageResult } from './types';
+import type { Draft, PostObject, ScoredCandidate, StageName, StageResult } from './types';
 
 export const DEFAULT_TARGET_POSTS = 2;
+
+/** Spec §4.2b: at most 2 fresh drafts per story, then the next story. */
+export const MAX_FRESH_DRAFTS = 2;
+
+export type FreshDraftEntry = { storyId: string; attempt: number; detail: string; at: string };
 
 /** storyId used for log entries that concern the whole day, not one story. */
 export const DAY_SCOPE_ID = '*';
@@ -40,6 +45,8 @@ export type RunDayResult = {
   stopReason: StopReason;
   costUsd: number;
   costByStage: Partial<Record<StageName, number>>;
+  /** Every fresh draft and why it was needed (spec §4.2b: logged). */
+  freshDrafts: FreshDraftEntry[];
 };
 
 class SetAside extends Error {
@@ -50,11 +57,15 @@ class SetAside extends Error {
 
 class CostCapReached extends Error {}
 
+/** The Fact-checker asked for a fresh draft; not logged as a set-aside. */
+class FreshDraftNeeded extends Error {}
+
 export async function runDay(input: RunDayInput): Promise<RunDayResult> {
   const { stages, meter, log, now } = input;
   const target = input.targetPosts ?? DEFAULT_TARGET_POSTS;
   const posts: PostObject[] = [];
   const setAsides: SetAsideEntry[] = [];
+  const freshDrafts: FreshDraftEntry[] = [];
 
   const finish = (stopReason: StopReason): RunDayResult => ({
     posts,
@@ -62,6 +73,7 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
     stopReason,
     costUsd: meter.spent(),
     costByStage: meter.byStage(),
+    freshDrafts,
   });
 
   const logCap = async (storyId: string, stage: StageName) => {
@@ -90,6 +102,7 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
     meter.charge(stage, res.costUsd);
     trail?.push(stage);
     if (!res.ok) {
+      if (res.reasonCode === 'needs-fresh-draft') throw new FreshDraftNeeded(res.detail);
       const entry = await log.record(
         { storyId, stage, reasonCode: res.reasonCode, detail: res.detail },
         now,
@@ -130,9 +143,27 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
     };
     try {
       const brief = await run('reporter', () => stages.report(story));
-      const written = await run('writer', () => stages.write(brief));
-      const edited = await run('editor', () => stages.edit(written, brief));
-      const checked = await run('fact-checker', () => stages.factCheck(edited, brief));
+      // Writer → Editor → Fact-checker, once; up to MAX_FRESH_DRAFTS fresh drafts
+      // from the same brief, with no notes fed back (spec §4.2b).
+      let checked!: Draft;
+      for (let attempt = 0; ; attempt++) {
+        try {
+          const written = await run('writer', () => stages.write(brief));
+          const edited = await run('editor', () => stages.edit(written, brief));
+          checked = await run('fact-checker', () => stages.factCheck(edited, brief));
+          break;
+        } catch (err) {
+          if (!(err instanceof FreshDraftNeeded)) throw err;
+          if (attempt >= MAX_FRESH_DRAFTS) {
+            const entry = await log.record(
+              { storyId: story.id, stage: 'fact-checker', reasonCode: 'unfixable-draft', detail: `${MAX_FRESH_DRAFTS} fresh drafts used; last: ${err.message}` },
+              now,
+            );
+            throw new SetAside(entry);
+          }
+          freshDrafts.push({ storyId: story.id, attempt: attempt + 1, detail: err.message, at: now.toISOString() });
+        }
+      }
       const designed = await run('design', () => stages.design(checked, story));
       const final = await run('mechanical', () => stages.mechanical(designed));
       posts.push({ ...final, stages: trail, costUsd: storyCost });

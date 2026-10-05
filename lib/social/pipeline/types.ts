@@ -34,6 +34,10 @@ export type ReasonCode =
   | 'render-failed'
   | 'service-error'
   | 'refused'
+  /** Fact-checker: free fixes would damage the post (spec §4.2b); not a set-aside by itself. */
+  | 'needs-fresh-draft'
+  /** Fresh-draft limit used up (spec §4.2b: 2 per story). */
+  | 'unfixable-draft'
   | 'cost-cap';
 
 /**
@@ -50,6 +54,8 @@ export const REASON_KIND: Record<ReasonCode, SetAsideKind> = {
   // Model declined the story (Tommy, 2026-10-04: no fallback model). Repeats
   // in the log are a pattern for selection, not a pipeline fault.
   refused: 'should-not-run',
+  'needs-fresh-draft': 'pipeline-fault',
+  'unfixable-draft': 'pipeline-fault',
   'cost-cap': 'pipeline-fault',
   'main-claim-false': 'should-not-run',
   'unverifiable-claim': 'should-not-run',
