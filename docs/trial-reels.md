@@ -164,7 +164,7 @@ old records have to keep meaning what they said.
 ## The copy writer gate (Build 3)
 
 After scoring, the run fills three reels that clear the copy gate (P-10,
-`copy-caption-v12`). Copy calls use the latest Sonnet release on the models
+`copy-caption-v15`). Copy calls use the latest Sonnet release on the models
 list, and `claude-sonnet-5-5` when that list cannot be read (D-222). The
 account's job is to grow an audience with AI news, stories, knowledge, and
 skills worth following, with no pitch (D-211). Each idea gets two cached calls,
@@ -174,7 +174,7 @@ opens on that story. A caption that comes back as one block is a failed
 report, and a tool string that writes the characters backslash and n is stored
 as a real line break (D-229). The call to action and the hashtags stay in
 their own fields. An assembled caption over 2,200 characters is shortened
-before Instagram sees it (D-230). The copy is written for anyone curious about AI. The whole
+before Instagram sees it (D-230). Each bucket's draft sees the Jev questions for that copy and the line that earns a 1.00 on each (D-233). The copy is written for anyone curious about AI. The whole
 on-screen copy is the hook, and its first job is to be understood, stake
 included, on one read (D-204, D-211, D-212). It makes no call anywhere
 `REELS_COPY_PROMPT_APPROVED=true` is not set, and the page says so.
@@ -184,7 +184,12 @@ and reward, and a second check (P-18, `copy-story-match-v1`) asks whether the
 copy and its caption's first paragraph tell the same story. A copy clears the
 gate when plain and stake are both at least 0.75, its words are inside the
 bucket's range, and the same-story check is at least 0.5; cleared copies rank
-on loop, care, and reward. When none of the four clears, one rewrite call sees
+on loop, care, and reward. Ball Knowledge asks one more score in that same
+request (P-19, `copy-payoff-v2`): what the viewer would get, and the shape
+of that thing, a repo, a piece of software, or a skill, with the specific
+name still unnamed. A high grade requires the shape. That score takes plain
+read's place on the gate. Stake, the
+word range, and same story stay. When none of the four clears, one rewrite call sees
 each copy with its scores, what each level means, and the legend lines Jev
 treats as a pass (D-223). It writes two more copies and a caption.
 

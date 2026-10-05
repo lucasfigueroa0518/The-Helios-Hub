@@ -154,6 +154,7 @@ function gradedLines(idea: SlotIdea, outcome: IdeaCopyOutcome): GradedLine[] {
         care: line.care,
         reward: line.reward,
         sameStory: line.sameStory,
+        payoff: line.payoff,
         inRange: line.inRange,
       },
     ];

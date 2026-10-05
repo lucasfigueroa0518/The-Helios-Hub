@@ -33,8 +33,24 @@ import {
   REPORT_COPY_TOOL,
   VIEWER_STAKE_MAX_WORDS,
 } from '@/lib/reels/copy/report';
-import { COPY_PROMPT_VERSION, COPY_SKILL, FRAMEWORK_WRITING_LOGIC, HUMANIZER_PREAMBLE } from '@/lib/reels/copy/skill';
-import { COPY_PICK, COPY_PICK_LEGENDS } from '@/lib/reels/jev/questions/copy-pick';
+import {
+  BALL_KNOWLEDGE_SHAPE,
+  COPY_PROMPT_VERSION,
+  COPY_SKILL,
+  FRAMEWORK_WRITING_LOGIC,
+  HUMANIZER_PREAMBLE,
+} from '@/lib/reels/copy/skill';
+import { PAYOFF_LEGEND, PAYOFF_QUESTION } from '@/lib/reels/jev/questions/copy-payoff';
+import {
+  CARE_QUESTION,
+  COPY_PICK,
+  COPY_PICK_LEGENDS,
+  LOOP_QUESTION,
+  PLAIN_QUESTION,
+  REWARD_QUESTION,
+  STAKE_QUESTION,
+} from '@/lib/reels/jev/questions/copy-pick';
+import { SAME_STORY_PASS, SAME_STORY_QUESTION } from '@/lib/reels/jev/questions/copy-story-match';
 import {
   THREADS_ON_SCREEN_FIELD,
   THREADS_POST_ENGINE_CANDIDATE_SKILL,
@@ -120,6 +136,7 @@ test('seeded prompt text carries none of the tells a rewrite most often leaves',
   const seeded = [
     COPY_SKILL,
     HUMANIZER_PREAMBLE,
+    BALL_KNOWLEDGE_SHAPE,
     ...FRAMEWORK_IDS.flatMap((id) => [FRAMEWORK_WRITING_LOGIC[id].onScreen, FRAMEWORK_WRITING_LOGIC[id].caption]),
   ].join('\n');
   assert.doesNotMatch(seeded, /[\u2013\u2014]/, 'dash');
@@ -187,7 +204,7 @@ test('the writer states a viewer stake, and both copies and the caption tell one
   const properties = Object.keys(REPORT_COPY_TOOL.input_schema.properties);
   assert.ok(properties.indexOf('viewer_stake') < properties.indexOf('on_screen_copies'));
   assert.ok(REPORT_COPY_TOOL.input_schema.required.includes('viewer_stake'));
-  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v12');
+  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v15');
 });
 
 test('the pre-limit writer is preserved as a Threads candidate and stays off the reel path', () => {
@@ -301,6 +318,74 @@ test('the rewrite reuses every cached block and shows each score with its level 
   assert.match(task, /cannot rescue a copy under the bar/);
   assert.doesNotMatch(draft.messages[0].content[1].text, /did not clear the bar/);
   assert.doesNotMatch(draft.messages[0].content[1].text, /What a passing copy scores/);
+});
+
+test('every bucket sees each Jev question and the top of its scale (D-233)', () => {
+  const tops = [
+    [PLAIN_QUESTION, COPY_PICK_LEGENDS.plain[4]],
+    [STAKE_QUESTION, COPY_PICK_LEGENDS.stake[4]],
+    [LOOP_QUESTION, COPY_PICK_LEGENDS.loop[4]],
+    [CARE_QUESTION, COPY_PICK_LEGENDS.care[4]],
+    [REWARD_QUESTION, COPY_PICK_LEGENDS.reward[4]],
+    [SAME_STORY_QUESTION, SAME_STORY_PASS],
+  ] as const;
+  for (const bucket of BUCKET_IDS) {
+    const text = copyStrategySystem(bucket, FRAMEWORKS_FOR_BUCKET[bucket][0]);
+    assert.match(text, /## How Jev scores this copy/);
+    for (const [question, top] of tops) {
+      if (bucket === 'ball_knowledge' && question === PLAIN_QUESTION) continue;
+      assert.ok(text.includes(question), `${bucket} question`);
+      assert.ok(text.includes(`Top of the scale: ${top}`) || text.includes(`A yes: ${top}`), `${bucket} top`);
+    }
+  }
+  const ball = copyStrategySystem('ball_knowledge', 'curiosity');
+  assert.ok(ball.includes(PAYOFF_QUESTION));
+  assert.ok(ball.includes(`Top of the scale: ${PAYOFF_LEGEND[4]}`));
+  assert.equal(ball.includes(PLAIN_QUESTION), false);
+  assert.equal(ball.includes('Plain read'), false);
+  const number = copyStrategySystem('the_number', 'curiosity');
+  assert.equal(number.includes(PAYOFF_QUESTION), false);
+  assert.match(COPY_SKILL, /How Jev scores this copy quotes each question/);
+  const draft = assembleCopyPrompt({
+    bucket: 'the_saga',
+    framework: 'curiosity',
+    members: [member()],
+  });
+  assert.match(draft.messages[0].content[1].text, /How Jev scores this copy/);
+  assert.doesNotMatch(draft.messages[0].content[1].text, /What a passing copy scores/);
+});
+
+test('Ball Knowledge names the shape of the get, and other buckets do not get that line (D-232)', () => {
+  const ball = copyStrategySystem('ball_knowledge', 'curiosity');
+  assert.ok(ball.includes(BALL_KNOWLEDGE_SHAPE));
+  assert.match(ball, /Never the tools/);
+  assert.equal(copyStrategySystem('the_number', 'curiosity').includes('Shape of the get'), false);
+  assert.match(COPY_SKILL, /repo, software, and skill may name the shape/);
+  assert.match(PAYOFF_LEGEND[3], /a repo, a piece of software, or a skill/);
+  assert.match(PAYOFF_LEGEND[4], /kind of thing/);
+});
+
+test('a Ball Knowledge rewrite is aimed at payoff, and plain read is left off the prompt', () => {
+  const prompt = assembleCopyPrompt({
+    bucket: 'ball_knowledge',
+    framework: 'curiosity',
+    members: [member()],
+    rewriteOf: [
+      {
+        onScreenCopy: 'Four free tools do the voice work people pay $20 a month for.',
+        words: 14,
+        inRange: true,
+        scores: { plain: 0.25, stake: 0.8, loop: 0.7, care: 0.6, reward: 0.5, payoff: 0.5 },
+        sameStory: true,
+      },
+    ],
+  });
+  const shown = [...prompt.system.map((block) => block.text), prompt.messages[0].content[1].text].join('\n');
+  assert.match(shown, /Payoff at least 0\.75/);
+  assert.match(shown, /A passing payoff sounds like this/);
+  assert.ok(shown.includes(`Payoff 0.50. ${PAYOFF_LEGEND[2]}`));
+  assert.equal(shown.includes('Plain read'), false);
+  assert.match(shown, /8 to 14 words/);
 });
 
 test('a rewrite block cannot be closed by the copy it quotes', () => {

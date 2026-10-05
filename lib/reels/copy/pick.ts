@@ -1,3 +1,4 @@
+import { COPY_PAYOFF } from '@/lib/reels/jev/questions/copy-payoff';
 import { COPY_PICK } from '@/lib/reels/jev/questions/copy-pick';
 import { COPY_STORY_MATCH } from '@/lib/reels/jev/questions/copy-story-match';
 import { ON_SCREEN_WORD_RANGE, countWords, type CopyCall } from '@/lib/reels/copy/report';
@@ -8,7 +9,8 @@ import { normalizeJevScore, type BucketId } from '@/lib/reels/scoring/decide';
  *
  * A line clears the gate when plain read and stake are both at least 0.75,
  * its word count is inside the bucket range, and Jev says it tells the same
- * story as its caption's opening. Eligible lines rank on performance: loop,
+ * story as its caption's opening. On Ball Knowledge, payoff stands in for
+ * plain read (D-231). Eligible lines rank on performance: loop,
  * care, and reward, weighed equally. Ties break on plain read, then reward,
  * then the earlier line.
  *
@@ -38,8 +40,12 @@ export type CopyLineScore = {
   reward: number;
 };
 
-/** The five scores plus Jev's same-story probability, 0 to 1. */
-export type CopyLineJudgment = CopyLineScore & { sameStory: number };
+/**
+ * The five scores plus Jev's same-story probability, 0 to 1.
+ * `payoff` is set only for Ball Knowledge, raw 0 to 4 before ranking, and
+ * 0 to 1 once stored. When it is set, it replaces plain read on the gate.
+ */
+export type CopyLineJudgment = CopyLineScore & { sameStory: number; payoff?: number | null };
 
 export type RankedCopyLine = {
   index: number;
@@ -49,6 +55,8 @@ export type RankedCopyLine = {
   care: number;
   reward: number;
   sameStory: number;
+  /** Normalized 0 to 1 when this line was judged as Ball Knowledge. */
+  payoff: number | null;
   inRange: boolean;
   /** The weaker of plain and stake: how near the line is to clearing both bars. */
   gate: number;
@@ -73,6 +81,7 @@ export type CopyVariantLine = {
   care: number | null;
   reward: number | null;
   sameStory: number | null;
+  payoff: number | null;
   gate: number | null;
   performance: number | null;
   eligible: boolean | null;
@@ -85,6 +94,8 @@ export type CopyVariants = {
   complete: boolean;
   questionSetVersion: string;
   storyQuestionSetVersion: string;
+  /** Set when the lines were judged as Ball Knowledge. */
+  payoffQuestionSetVersion: string | null;
   /** True when a rewrite call was made because no draft line cleared the gate. */
   rewrote: boolean;
   /** Whether the shipped line cleared the gate, or was the nearest miss. */
@@ -134,10 +145,15 @@ export function wordsInRange(onScreenCopy: string, bucket: BucketId): boolean {
 function byPerformance(a: RankedCopyLine, b: RankedCopyLine): number {
   return (
     units(b.performance) - units(a.performance) ||
-    units(b.plain) - units(a.plain) ||
+    units(comprehensionOf(b)) - units(comprehensionOf(a)) ||
     units(b.reward) - units(a.reward) ||
     a.index - b.index
   );
+}
+
+/** Plain read, or payoff when this line was judged as Ball Knowledge. */
+function comprehensionOf(line: { plain: number; payoff: number | null }): number {
+  return line.payoff ?? line.plain;
 }
 
 function byNearestMiss(a: RankedCopyLine, b: RankedCopyLine): number {
@@ -145,7 +161,7 @@ function byNearestMiss(a: RankedCopyLine, b: RankedCopyLine): number {
     Number(b.inRange) - Number(a.inRange) ||
     units(b.gate) - units(a.gate) ||
     units(b.performance) - units(a.performance) ||
-    units(b.plain) - units(a.plain) ||
+    units(comprehensionOf(b)) - units(comprehensionOf(a)) ||
     a.index - b.index
   );
 }
@@ -162,8 +178,10 @@ export function rankCopyLines(
     const care = normalizeJevScore(line.care);
     const reward = normalizeJevScore(line.reward);
     const sameStory = Math.min(1, Math.max(0, line.sameStory));
+    const payoff = line.payoff == null ? null : normalizeJevScore(line.payoff);
+    const comprehension = payoff ?? plain;
     const eligible =
-      units(plain) >= PLAIN_UNITS &&
+      units(comprehension) >= PLAIN_UNITS &&
       units(stake) >= STAKE_UNITS &&
       line.inRange &&
       units(sameStory) >= STORY_UNITS;
@@ -175,8 +193,9 @@ export function rankCopyLines(
       care,
       reward,
       sameStory,
+      payoff,
       inRange: line.inRange,
-      gate: Math.min(plain, stake),
+      gate: Math.min(comprehension, stake),
       performance: 0,
       eligible,
     };
@@ -232,6 +251,7 @@ export function buildCopyVariants(
       complete: drafts.length === COPY_CALLS_PER_IDEA && calls.every((draft) => draft.call != null),
       questionSetVersion: COPY_PICK.version,
       storyQuestionSetVersion: COPY_STORY_MATCH.version,
+      payoffQuestionSetVersion: bucket === 'ball_knowledge' && judgments ? COPY_PAYOFF.version : null,
       rewrote: calls.some((draft) => draft.kind === 'rewrite'),
       winnerEligible: ranked ? ranked.eligible : null,
       calls: calls.map((draft, index) => ({
@@ -259,6 +279,7 @@ export function buildCopyVariants(
           care: score?.care ?? null,
           reward: score?.reward ?? null,
           sameStory: score?.sameStory ?? null,
+          payoff: score?.payoff ?? null,
           gate: score?.gate ?? null,
           performance: score?.performance ?? null,
           eligible: score?.eligible ?? null,
@@ -275,7 +296,7 @@ export type CopyRewriteLine = {
   onScreenCopy: string;
   words: number;
   inRange: boolean;
-  scores: { plain: number; stake: number; loop: number; care: number; reward: number };
+  scores: { plain: number; stake: number; loop: number; care: number; reward: number; payoff?: number | null };
   sameStory: boolean;
 };
 
@@ -296,7 +317,14 @@ export function rewriteLines(lines: readonly CopyVariantLine[]): CopyRewriteLine
         onScreenCopy: line.onScreenCopy,
         words: line.words,
         inRange: line.inRange,
-        scores: { plain: line.plain, stake: line.stake, loop: line.loop, care: line.care, reward: line.reward },
+        scores: {
+          plain: line.plain,
+          stake: line.stake,
+          loop: line.loop,
+          care: line.care,
+          reward: line.reward,
+          payoff: line.payoff,
+        },
         sameStory: units(line.sameStory) >= STORY_UNITS,
       },
     ];

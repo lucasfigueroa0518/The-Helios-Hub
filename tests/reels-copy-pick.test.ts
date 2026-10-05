@@ -18,6 +18,7 @@ import type { CopyCall } from '@/lib/reels/copy/report';
 import { judgeCopyLine, scoreCopyLine } from '@/lib/reels/copy/score';
 import { SAVE_IDEA_COPY_SQL, type CopyTarget, type saveIdeaCopy } from '@/lib/reels/copy/store';
 import type { CopyClient } from '@/lib/reels/copy/writer';
+import { COPY_PAYOFF } from '@/lib/reels/jev/questions/copy-payoff';
 import { COPY_PICK, copyPickState } from '@/lib/reels/jev/questions/copy-pick';
 import {
   COPY_STORY_MATCH,
@@ -31,7 +32,14 @@ import { writeTargetCopy } from '@/lib/reels/pipeline/copy';
 function judged(
   plain: number,
   stake: number,
-  rest: { loop?: number; care?: number; reward?: number; sameStory?: number; inRange?: boolean } = {},
+  rest: {
+    loop?: number;
+    care?: number;
+    reward?: number;
+    sameStory?: number;
+    inRange?: boolean;
+    payoff?: number | null;
+  } = {},
 ): CopyLineJudgment & { inRange: boolean } {
   return {
     plain,
@@ -41,6 +49,7 @@ function judged(
     reward: rest.reward ?? 2,
     sameStory: rest.sameStory ?? 0.9,
     inRange: rest.inRange ?? true,
+    payoff: rest.payoff ?? null,
   };
 }
 
@@ -62,6 +71,19 @@ function call(caption: string, first: string, second: string): CopyCall {
 }
 
 // ── The gate ────────────────────────────────────────────────────────────────
+
+test('ball knowledge clears on payoff, and a high plain read cannot stand in for it', () => {
+  const { ranked } = rankCopyLines([
+    { ...judged(1, 3), payoff: 3 },
+    { ...judged(4, 3), payoff: 2 },
+  ]);
+  assert.deepEqual(
+    ranked.map((line) => line.eligible),
+    [true, false],
+  );
+  assert.equal(ranked[0].payoff, 0.75);
+  assert.equal(ranked[0].gate, 0.75);
+});
 
 test('a line clears the gate only with plain, stake, range, and same story all met', () => {
   const { ranked } = rankCopyLines([
@@ -177,9 +199,27 @@ test('the rewrite is shown every judged line with scores on the 0 to 1 scale', (
   );
   const lines = rewriteLines(variants.lines);
   assert.equal(lines.length, 2);
-  assert.deepEqual(lines[0].scores, { plain: 0.5, stake: 0.25, loop: 0.5, care: 0.5, reward: 0.5 });
+  assert.deepEqual(lines[0].scores, {
+    plain: 0.5,
+    stake: 0.25,
+    loop: 0.5,
+    care: 0.5,
+    reward: 0.5,
+    payoff: null,
+  });
   assert.equal(lines[0].sameStory, false);
   assert.equal(lines[1].sameStory, true);
+});
+
+test('a Ball Knowledge pick stores the payoff score and its question version', () => {
+  const { variants } = buildCopyVariants(
+    [{ call: call('Caption', 'Four free tools replace a twenty dollar app.', 'Line two here now'), error: null }],
+    [judgment(judged(1, 3, { payoff: 3 })), judgment(judged(2, 2, { payoff: 1 }))],
+    'ball_knowledge',
+  );
+  assert.equal(variants.payoffQuestionSetVersion, 'copy-payoff-v2');
+  assert.equal(variants.lines[0]?.payoff, 0.75);
+  assert.equal(variants.winnerIndex, 0);
 });
 
 // ── Jev requests ────────────────────────────────────────────────────────────
@@ -218,8 +258,9 @@ test('Jev scores one line from the on-screen text alone, five scores in one requ
     onScreenCopy: '  Google shut the API overnight.  ',
     postIdeaId: 'idea-1',
     runId: 'run-1',
+    bucket: 'the_number',
   });
-  assert.deepEqual(scored, { plain: 3, stake: 2, loop: 2, care: 4, reward: 1 });
+  assert.deepEqual(scored, { plain: 3, stake: 2, loop: 2, care: 4, reward: 1, payoff: null });
   assert.deepEqual(seen[0]?.state, copyPickState('Google shut the API overnight.'));
   assert.deepEqual(Object.keys(seen[0]?.state ?? {}), ['on_screen_copy']);
   assert.deepEqual(seen[0]?.sets, [COPY_PICK]);
@@ -227,6 +268,30 @@ test('Jev scores one line from the on-screen text alone, five scores in one requ
   assert.equal(COPY_PICK.version, 'copy-pick-v3');
   assert.equal(seen[0]?.postIdeaId, 'idea-1');
   assert.equal(seen[0]?.runId, 'run-1');
+});
+
+test('ball knowledge asks payoff in the same request as the five scores', async () => {
+  const seen: JevRequest<Questions>[] = [];
+  const stub = stubJev(seen, () => ({
+    plain: scoreAnswer(1),
+    stake: scoreAnswer(3),
+    loop: scoreAnswer(3),
+    care: scoreAnswer(3),
+    reward: scoreAnswer(3),
+    payoff: scoreAnswer(3),
+  }));
+  const scored = await scoreCopyLine(stub, {
+    onScreenCopy: 'Four free tools do the voice work people pay $20 a month for.',
+    postIdeaId: 'idea-1',
+    runId: null,
+    bucket: 'ball_knowledge',
+  });
+  assert.equal(scored.payoff, 3);
+  assert.equal(seen[0]?.sets.length, 2);
+  assert.equal(seen[0]?.sets[1], COPY_PAYOFF);
+  assert.equal(COPY_PAYOFF.version, 'copy-payoff-v2');
+  assert.ok('payoff' in (seen[0]?.questions ?? {}));
+  assert.equal(Object.keys(seen[0]?.state ?? {}).join(','), 'on_screen_copy');
 });
 
 test('the plain read judges ideas with the same insider list the writer gets', () => {
@@ -251,6 +316,7 @@ test('the same-story check reads the line and the caption opening only', async (
     caption,
     postIdeaId: 'idea-1',
     runId: null,
+    bucket: 'the_saga',
   });
   assert.equal(result.sameStory, 0.2);
   const story = seen.find((request) => request.sets[0]?.id === 'copy-story-match');
