@@ -165,7 +165,7 @@ test('the winning line keeps the caption from the call that wrote it', () => {
 });
 
 test('the word range comes from the bucket and gates the line', () => {
-  const long = Array.from({ length: 16 }, (_, index) => `word${index}`).join(' ');
+  const long = Array.from({ length: 24 }, (_, index) => `word${index}`).join(' ');
   const { variants, winner } = buildCopyVariants(
     [{ call: call('Caption', long, 'Short line here'), error: null }],
     [judgment(judged(4, 4, { loop: 4, care: 4, reward: 4 })), judgment(judged(3, 3))],
@@ -337,6 +337,7 @@ function reportInput(lines: [string, string], caption: string) {
     caption_draft: 'draft',
     remaining_patterns: [],
     viewer_stake: 'Your passwords could be open to anyone.',
+    tension: 'A deputy chased plates and a judge threw the case out.',
     on_screen_copies: lines,
     caption,
     call_to_action: 'Send this to the friend who built an app.',

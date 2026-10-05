@@ -88,6 +88,7 @@ function reportInput(caption: string, extra: Record<string, unknown> = {}) {
     caption_draft: 'draft',
     remaining_patterns: [],
     viewer_stake: 'Your passwords could be open to anyone.',
+    tension: 'A deputy chased plates and a judge threw the case out.',
     on_screen_copies: ['Strong line one here', 'Strong line two here'],
     caption,
     call_to_action: 'Send this to the friend who built an app.',
@@ -242,13 +243,13 @@ test('earlier copies go into the uncached task block only when the idea returns'
 
 // ── D-238 to D-244, D-249: wording lives where it should ───────────────────
 
-test('copy-caption-v17 keeps the precedence order and carries the new tests', () => {
-  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v17');
+test('the v17 tests stay in copy-caption-v18 and the precedence order is unchanged', () => {
+  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v18');
   assert.match(COPY_SKILL, /2\. The bucket's other rules: its caption structure, its resolution, and any guardrail\./);
   assert.match(COPY_SKILL, /5\. Everything else in this skill\./);
   assert.doesNotMatch(COPY_SKILL, /Apply the framework's hook formulas/);
   assert.match(COPY_SKILL, /or none of them/);
-  assert.match(COPY_SKILL, /4\. In The Saga, where does the copy land\?/);
+  assert.match(COPY_SKILL, /5\. In The Saga, where does the copy land\?/);
   assert.match(COPY_SKILL, /It does not rank stories/);
   assert.match(COPY_SKILL, /A second figure, a before and after, a ranking, or a contest between two systems/);
   assert.match(COPY_SKILL, /If the same sentence would fit most posts about AI, it is not the stake yet/);
@@ -256,6 +257,7 @@ test('copy-caption-v17 keeps the precedence order and carries the new tests', ()
   assert.match(COPY_SKILL, /or the framework's writing logic sends the close to Helios/);
   assert.match(COPY_SKILL, /There is no pitch and no offer of Helios services/);
   assert.doesNotMatch(FRAMEWORK_WRITING_LOGIC.arousal.onScreen, /address the viewer and name what they stand to lose/);
+  assert.doesNotMatch(FRAMEWORK_WRITING_LOGIC.arousal.onScreen, /The fact does the work/);
   assert.match(FRAMEWORK_WRITING_LOGIC.arousal.onScreen, /Where the source reports that cost landing on someone, show it landing/);
   assert.match(FRAMEWORK_WRITING_LOGIC.arousal.caption, /could end a caption about a different story/);
   assert.match(FRAMEWORK_WRITING_LOGIC.arousal.caption, /ask to follow Helios for the next story like this one/);
@@ -268,8 +270,8 @@ test('the bucket rules carry the tests, and The Number has three example shapes'
   assert.doesNotMatch(BUCKET_SPEC_TEXT.the_number.body, /The AI is rarely why/);
   const examples = BUCKET_SPEC_TEXT.the_number.body.match(/"[^"]+"/g) ?? [];
   assert.equal(examples.length, 3);
-  for (const example of examples) assert.ok(example.split(/\s+/).length <= 14, example);
-  assert.match(copyStrategySystem('the_number', 'arousal'), /Nurses spend 2 hours a shift/);
+  for (const example of examples) assert.ok(example.split(/\s+/).length <= 22, example);
+  assert.match(copyStrategySystem('the_number', 'arousal'), /A support bot promised 2,000 customers/);
 });
 
 // ── D-245: teasers ─────────────────────────────────────────────────────────

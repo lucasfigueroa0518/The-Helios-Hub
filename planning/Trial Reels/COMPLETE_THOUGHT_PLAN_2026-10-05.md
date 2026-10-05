@@ -1,6 +1,6 @@
 # Complete-thought plan, 2026-10-05
 
-Status: approved by Lucas on 2026-10-05, with three changes: the name is "tension" (not "turn") in the plan and the code, v17 is committed only because the pre-session system stays checkpointed, and close nearest misses are picked by loop, care, and reward (D-252). Being built as `copy-caption-v18`. Decisions D-250 (22-word cap for The Number and Ball Knowledge) and D-251 (every on-screen copy is a complete thought with tension, mandatory, in the prompts, no gate change). Builds on `copy-caption-v17` (the copy-quality wave, still uncommitted). The result would be `copy-caption-v18`.
+Status: approved by Lucas on 2026-10-05, with three changes: the name is "tension" (not "turn") in the plan and the code, v17 is committed only because the pre-session system stays checkpointed, and close nearest misses are picked by loop, care, and reward (D-252). Built as `copy-caption-v18` on 2026-10-05 (offline tests: `tests/reels-copy-tension.test.ts`). Not committed or deployed until Lucas judges the eye test. Decisions D-250 (22-word cap for The Number and Ball Knowledge) and D-251 (every on-screen copy is a complete thought with tension, mandatory, in the prompts, no gate change). Builds on `copy-caption-v17` (the copy-quality wave, still uncommitted). The result would be `copy-caption-v18`.
 
 ## The goal
 

@@ -164,7 +164,7 @@ test('the skill writes for an AI-curious general reader and treats the whole cop
 test('the account grows an audience, and the copy has two jobs in order (D-211)', () => {
   assert.match(COPY_SKILL, /## The account's job/);
   assert.match(COPY_SKILL, /There is no pitch and no offer of Helios services/);
-  assert.match(COPY_SKILL, /it has two jobs, in this order/);
+  assert.match(COPY_SKILL, /it is a complete thought with tension, never a fact that stops/);
   assert.match(COPY_SKILL, /A first-time viewer understands the copy on one read/);
   assert.match(COPY_SKILL, /The stake stays on screen/);
   assert.doesNotMatch(COPY_SKILL, /across the runtime/);
@@ -188,7 +188,7 @@ test('the writer states a viewer stake, and both copies and the caption tell one
   const properties = Object.keys(REPORT_COPY_TOOL.input_schema.properties);
   assert.ok(properties.indexOf('viewer_stake') < properties.indexOf('on_screen_copies'));
   assert.ok(REPORT_COPY_TOOL.input_schema.required.includes('viewer_stake'));
-  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v17');
+  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v18');
 });
 
 test('the pre-limit writer is preserved as a Threads candidate and stays off the reel path', () => {
@@ -331,7 +331,7 @@ test('a draft does not see Jev questions, and Ball Knowledge is graded on payoff
   assert.equal(shown.includes(PAYOFF_QUESTION), false);
   assert.equal(shown.includes('How Jev scores'), false);
   assert.match(shown, /Plain read at least 0\.75/);
-  assert.match(prompt.messages[0].content[1].text, /8 to 14 words/);
+  assert.match(prompt.messages[0].content[1].text, /8 to 22 words/);
 });
 
 test('a rewrite block cannot be closed by the copy it quotes', () => {
@@ -401,6 +401,7 @@ const goodInput = {
   caption_draft: 'draft',
   remaining_patterns: [],
   viewer_stake: 'Your company may be paying for an AI pilot that never ships.',
+  tension: 'A deputy chased plates and a judge threw the case out.',
   on_screen_copies: [screen, otherScreen],
   caption: 'First line that fits the fold.\n\nMore detail, per TechCrunch.',
   call_to_action: 'Send this to the person who owns your AI pilot.',
