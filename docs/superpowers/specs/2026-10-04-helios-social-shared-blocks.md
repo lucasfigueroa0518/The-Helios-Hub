@@ -114,11 +114,11 @@ The prompts file says: "Where a tested rule repeats one in RULES_BLOCK, keep one
 
 | # | Decision |
 |---|---|
-| 1 | **(b) Trim Context policy's count**, keep its definition of a background slide. The tested line "Max 2 background slides." carries the limit. Removed: "Up to TWO … per post", "Two is the ceiling", and "more than two background slides". Item 2 now opens "**Background slides** on …". |
+| 1 | **(a) Trim Context policy's count**, keep its definition of a background slide. The tested line "Max 2 background slides." carries the limit. Removed: "Up to TWO … per post", "Two is the ceiling", and "more than two background slides". Item 2 now opens "**Background slides** on …". |
 | 2 | **(b)** "The Fact-checker and Caption" → "The Fact-checker and the caption". |
-| 3 | **(b)** Em dashes swapped for periods. |
-| 4 | Noted for M4: Jev claim-checking treats TERMS glosses as sourced. |
-| 5 | Spread stays in the Writer prompt, not this block. |
-| 6 | **(a)** `renderRulesFor` is rebuilt in M5 from the real mechanical checks. Until then it renders nothing. |
+| 3 | **(c)** Em dashes swapped for periods. |
+| 4 | **(d)** Noted for M4: Jev claim-checking treats TERMS glosses as sourced. |
+| 5 | **(e)** Spread stays in the Writer prompt, not this block. |
+| 6 | **(f)** `renderRulesFor` is rebuilt in M5 from the real mechanical checks. Until then it renders nothing. |
 
 The §2 text above is the proposal as reviewed. The implemented block is that text with these decisions applied.
