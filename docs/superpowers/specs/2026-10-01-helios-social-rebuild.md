@@ -550,6 +550,11 @@ These came up once in hand-run tests. They become fixes only if they recur in re
 | Writer: a body ran 230 characters, over the 220 limit (Gemini, 1 occurrence) | M7's length check catches it; watch how often |
 | Writer: chose a ⚠ single-source quote over an unused multi-source one, and the edit notes misstated which were single-source (NYC hearing, 1 occurrence) | Writer prompt: quote-choice rule |
 | `well_known` from a Wikidata match is noisy: lesser-known people marked well known through namesakes (Logan Graham, Morgan Dwyer); combined names find no match ("Google / Google DeepMind") (2026-10-05) | Identity check (spec §5A #5) for well_known; single-entity SUBJECTS (done 2026-10-05) |
+| Editor: bodies over the 220 limit after edits (Altman slide 8: 237; NYC slide 5: 224). 2 occurrences, 2026-10-05 | M7's length check catches it; Editor rule if it repeats |
+| Editor: turned a Reporter-note inference into slide text ("so it has a commercial interest", Zscaler; 1 occurrence) | Editor prompt: brief notes aren't facts to add |
+| Editor: attribution put in a headline ("9to5Google: AI Pro gets Deep Think"; 1 occurrence) | Editor prompt: attribution goes in the body |
+| Editor: a clumsy gloss ("Alignment is efforts to build AI…"; 1 occurrence) | Watch only |
+| Editor: inaccurate edit notes (claimed a caption change that wasn't made; slide numbering off by one; claimed a cut that wasn't made). 2 of 3 stories | Watch; notes are for review only |
 
 **Process note (2026-10-04):** hand-run simulations are for illustrating the design, not for finding fixes. From here on, fixes come only from patterns in real batch logs.
 
