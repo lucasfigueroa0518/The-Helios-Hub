@@ -13,7 +13,7 @@ import {
 import { createJevAsk, jevCostUsd, type JevAsk } from '@/lib/social/jev/client';
 import * as DifferentStory from '@/lib/social/jev/questions/different-story.v1';
 import * as SameEvent from '@/lib/social/jev/questions/same-event.v1';
-import * as Scoring from '@/lib/social/jev/questions/story-scoring.v1';
+import * as Scoring from '@/lib/social/jev/questions/story-scoring.v2';
 import { createStubJev } from '@/lib/social/jev/stub';
 import { applyCodeFilters } from '@/lib/social/ingest/select/code-filters';
 import { enrichGroup, THIN_BODY_CHARS, type FetchBody } from '@/lib/social/ingest/select/enrich';
@@ -185,7 +185,7 @@ const group = (over: Partial<StoryGroup> = {}): StoryGroup => ({
 });
 
 test('scoring: skip list, already posted, and the required questions', () => {
-  const base = { ai_main_subject: 0.9, substance: 0.9, number_or_quote: 0.9, why_it_matters: 0.9, sourcing: 0.9, photographable_subject: 0.9 };
+  const base = { ai_main_subject: 0.9, substance: 0.9, why_it_matters: 0.9, sourcing: 0.9, photographable_subject: 0.9 };
   assert.equal(Scoring.THRESHOLDS.SKIP_MIN, 0.5);
   assert.equal(judge(group(), { ...base, skip_crime_violence: 0.5 }).status, 'skipped');
   assert.equal(judge(group(), { ...base, skip_crime_violence: 0.49 }).status, 'qualified');
@@ -194,14 +194,15 @@ test('scoring: skip list, already posted, and the required questions', () => {
   assert.equal(nq.status, 'not-qualified');
   assert.match(nq.reason!, /substance/);
   const scored = judge(group(), { ...base, sourcing: 0.4 });
-  assert.equal(scored.passes, 3);
-  assert.ok(Math.abs(scored.probSum - 3.1) < 1e-9);
+  assert.equal(scored.passes, 2);
+  assert.ok(Math.abs(scored.probSum - 2.2) < 1e-9);
 });
 
 test('scoring: the already-posted question is only asked when something was posted', () => {
   assert.ok(!(Scoring.POSTED_ID in Scoring.buildQuestions([])));
   assert.ok(Scoring.POSTED_ID in Scoring.buildQuestions(['x']));
-  assert.equal(Object.keys(Scoring.buildQuestions(['x'])).length, 11);
+  assert.equal(Object.keys(Scoring.buildQuestions(['x'])).length, 10);
+  assert.ok(!('number_or_quote' in Scoring.buildQuestions(['x'])));
 });
 
 // ── Ranking ────────────────────────────────────────────────────────────
@@ -238,7 +239,7 @@ test('selection: winners, backups in order, skips logged, one scoring call per g
   assert.equal(calls[DifferentStory.VERSION]!.length, 1);
   assert.ok(calls[SameEvent.VERSION]!.length > 0);
 
-  // Rank: X (4 passes, 3 outlets) > K (4, 1) > C (3 passes, 2 outlets) > B (3, 1, higher sum).
+  // Rank: X (3 passes, 3 outlets) > K (3, 1) > C (2 passes, 2 outlets) > B (2, 1, higher sum).
   assert.deepEqual(s.shortlist.map((g) => g.id), [A1.sourceUrl, K1.sourceUrl, C1.sourceUrl, B1.sourceUrl]);
   // K is OpenAI/GPT-6 like X, so it is passed over for #2 and stays first backup.
   assert.deepEqual(s.winners.map((g) => g.id), [A1.sourceUrl, C1.sourceUrl]);

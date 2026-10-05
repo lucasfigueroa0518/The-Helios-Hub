@@ -42,9 +42,9 @@ export type ScoredGroup = StoryGroup & {
   status: ScoreStatus;
   /** Set when skipped or not qualified. */
   reason?: string;
-  /** How many of the four non-required questions pass (spec §5B scoring). */
+  /** How many of the three non-required questions pass (spec §5B scoring; story-scoring@2). */
   passes: number;
-  /** Sum of the four non-required probabilities; a late tie-break only. */
+  /** Sum of the three non-required probabilities; a late tie-break only. */
   probSum: number;
 };
 

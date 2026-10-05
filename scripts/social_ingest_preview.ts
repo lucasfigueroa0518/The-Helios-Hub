@@ -10,7 +10,7 @@ import { HELIOS_SOCIAL_FEEDS } from '@/lib/social/feeds';
 import { JEV_INPUT_USD_PER_MTOK } from '@/lib/social/jev/client';
 import * as DifferentStory from '@/lib/social/jev/questions/different-story.v1';
 import * as SameEvent from '@/lib/social/jev/questions/same-event.v1';
-import * as Scoring from '@/lib/social/jev/questions/story-scoring.v1';
+import * as Scoring from '@/lib/social/jev/questions/story-scoring.v2';
 import { applyCodeFilters } from '@/lib/social/ingest/select/code-filters';
 import { THIN_BODY_CHARS } from '@/lib/social/ingest/select/enrich';
 import { buildFeedHealth, fetchFeeds } from '@/lib/social/ingest/select/feed-health';

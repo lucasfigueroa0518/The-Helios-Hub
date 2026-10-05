@@ -3,17 +3,21 @@
  *
  * Thresholds are calibrated from live run reports (§2.3).
  * Changing a question's wording means a new version file, not an edit.
+ *
+ * @2 (2026-10-04): drops number_or_quote. In the first live run every one of
+ * the 27 qualified stories passed it (min 0.76), and its only low scores
+ * came from thin text; slide material is the Reporter's job (spec §5.3).
  */
 import { noul, type Questions } from '@typesafe-ai/sdk';
 
 import type { StoryGroup } from '@/lib/social/ingest/select/types';
 
-export const VERSION = 'story-scoring@1';
+export const VERSION = 'story-scoring@2';
 
 export const THRESHOLDS = {
   /** Relevance and substance must both reach this to qualify. */
   REQUIRED_MIN: 0.6,
-  /** Each of the four score questions passes at this. */
+  /** Each of the three score questions passes at this. */
   BONUS_MIN: 0.5,
   /** Any skip-list category at or above this skips the story. 0.5 per Tommy (2026-10-04); calibrated from live run reports (§2.3). */
   SKIP_MIN: 0.5,
@@ -22,7 +26,7 @@ export const THRESHOLDS = {
 } as const;
 
 export const REQUIRED_IDS = ['ai_main_subject', 'substance'] as const;
-export const BONUS_IDS = ['number_or_quote', 'why_it_matters', 'sourcing', 'photographable_subject'] as const;
+export const BONUS_IDS = ['why_it_matters', 'sourcing', 'photographable_subject'] as const;
 export const SKIP_IDS = ['skip_weapons_war', 'skip_death_tragedy', 'skip_crime_violence', 'skip_sexual_abuse'] as const;
 export const POSTED_ID = 'already_posted';
 
@@ -63,13 +67,6 @@ export function buildQuestions(postedHeadlines: string[]): Questions {
       {
         true: 'There is a clear event with several concrete details, context and consequences to tell.',
         false: 'It is thin: a brief announcement, a rumour with no detail, or an opinion with no news.',
-      },
-    ),
-    number_or_quote: noul(
-      'Does `story` contain a concrete number, or a direct quote from a named person?',
-      {
-        true: 'It states a specific figure (money, users, dates, percentages) or quotes a named person directly.',
-        false: 'No specific figures and no direct quotes from named people.',
       },
     ),
     why_it_matters: noul(

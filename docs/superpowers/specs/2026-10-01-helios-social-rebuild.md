@@ -436,7 +436,7 @@ Jev answers yes/no questions with a confidence score. It's very cheap (input onl
 
 - Is it real AI news for our reader?
 - Is there enough substance for 5–8 slides?
-- Is there a concrete number and/or a quote from a named person?
+- ~~Is there a concrete number and/or a quote from a named person?~~ **Dropped in story-scoring@2 (2026-10-04):** in the first live run all 27 qualified stories passed it (min 0.76) and its only low scores came from thin text, so it didn't separate stories. Slide material is the Reporter's job (§5.3).
 - Is "why it matters" clear from the article?
 - Is it from a primary source, or confirmed by several outlets?
 - Is the main subject a named person, company or product, so a photo is likely?
@@ -469,7 +469,7 @@ RSS feeds (hundreds)
 **Scoring:**
 
 - Relevance and substance are required.
-- The other four questions (number/quote, why it matters, primary or confirmed source, photographable subject) add to the score.
+- The other three questions (why it matters, primary or confirmed source, photographable subject) add to the score: the number that pass ranks first. (Number/quote was dropped in story-scoring@2.)
 - **Tie-break:** the number of outlets covering the story.
 
 **Winners must be different stories:** if #1 and #2 are about the same company or topic, the next one moves up.
@@ -677,6 +677,6 @@ Nobody outside is reviewing this spec, and nothing waits on anyone. The four ite
 | Item | Decision |
 |---|---|
 | **Jev as fact-checker** (§5A #4) | **Yes, built now.** The Writer tags each factual sentence with the brief fact it came from. Code pairs each sentence with its source passage, and Jev answers "Would a reader of this sentence believe anything the passage doesn't support?" Real flags are fixed by code (swap/cut, §4.2). Untagged sentences containing a number, name or quote are flagged by code. **Switch-over:** in the first live batch (§5D) only, the Claude Fact-checker also runs and both results are logged. If Jev catches everything Claude caught, Claude is removed and Jev becomes the only fact-checker. If not, the gaps decide whether to switch. This is a one-batch comparison, written here as an exception to §2.2, not a permanent extra stage. |
-| **Jev story-scoring questions** (§5A #1) | **Use the six questions as written,** with "AI is the main subject" as the relevance wording. Relevance and substance are required, the other four add to the score, and ties are broken by outlet count. **Calibration:** thresholds are calibrated from live run reports (§2.3); every run logs Jev's raw answers per candidate. (The hand-labelled S1 set was dropped 2026-10-04.) |
+| **Jev story-scoring questions** (§5A #1) | **Use the questions as written, minus number/quote (dropped in story-scoring@2, 2026-10-04),** with "AI is the main subject" as the relevance wording. Relevance and substance are required, the other three add to the score, and ties are broken by outlet count. **Calibration:** thresholds are calibrated from live run reports (§2.3); every run logs Jev's raw answers per candidate. (The hand-labelled S1 set was dropped 2026-10-04.) |
 | **Jev strategy scoring** (§5A #3) | **Retired** with the old pipeline. Not part of the rebuild. |
 | **Pattern threshold** (§2.3) | **3 or more of the last 10 posts** (rolling) makes a failure a fix candidate. **Exception:** anything that publishes a false fact or a wrong-person photo is fixed after a single occurrence. |

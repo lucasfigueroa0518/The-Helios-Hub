@@ -129,7 +129,7 @@ If one fails, adjust the spec before building around it.
 - Feeds, freshness filter (24h, 36h on weekends), feed-health log.
 - Duplicate grouping in code (same story, many outlets = 1 candidate, with outlet count).
 - One Jev call per candidate:
-  - the 6 scoring questions, with relevance reworded to "AI is the main subject";
+  - the scoring questions, with relevance reworded to "AI is the main subject" (5 since story-scoring@2 dropped number/quote);
   - the 4 skip-list category questions;
   - the "already posted" question.
 - Ranking, tie-break by outlet count, shortlist of up to 10, 2 winners with the different-stories rule, backups in order, widen to 48h if fewer than 2 qualify.

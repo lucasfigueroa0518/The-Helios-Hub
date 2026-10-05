@@ -1,12 +1,12 @@
 /**
- * One Jev call per candidate (story-scoring@1), then plain-code rules:
+ * One Jev call per candidate (story-scoring@2), then plain-code rules:
  *   - any skip-list category ≥ SKIP_MIN, or already posted ≥ POSTED_MIN → skipped;
  *   - relevance and substance both ≥ REQUIRED_MIN → qualified;
- *   - passes = how many of the four other questions reach BONUS_MIN.
+ *   - passes = how many of the three other questions reach BONUS_MIN.
  */
 import { mapPool } from '@/lib/async-pool';
 import type { JevAsk } from '@/lib/social/jev/client';
-import * as Scoring from '@/lib/social/jev/questions/story-scoring.v1';
+import * as Scoring from '@/lib/social/jev/questions/story-scoring.v2';
 
 import type { ScoredGroup, StoryGroup } from './types';
 

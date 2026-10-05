@@ -9,7 +9,7 @@ import type { FeedConfig } from '@/lib/social/feeds';
 import type { JevAsk } from '@/lib/social/jev/client';
 import * as DifferentStory from '@/lib/social/jev/questions/different-story.v1';
 import * as SameEvent from '@/lib/social/jev/questions/same-event.v1';
-import * as Scoring from '@/lib/social/jev/questions/story-scoring.v1';
+import * as Scoring from '@/lib/social/jev/questions/story-scoring.v2';
 import { createStubJev, stubKey, type StubTable } from '@/lib/social/jev/stub';
 import type { IngestArticle } from '@/lib/social/ingest/select/types';
 
@@ -97,28 +97,27 @@ const SAME_EVENT = [
 /** Same company/topic as winner #1 (by headline). */
 const SAME_TOPIC = new Set([K1.headline]);
 
-const ok = (bonus: [number, number, number, number], extra: Record<string, number> = {}) => ({
+const ok = (bonus: [number, number, number], extra: Record<string, number> = {}) => ({
   '*': 0.02,
   ai_main_subject: 0.92,
   substance: 0.85,
-  number_or_quote: bonus[0],
-  why_it_matters: bonus[1],
-  sourcing: bonus[2],
-  photographable_subject: bonus[3],
+  why_it_matters: bonus[0],
+  sourcing: bonus[1],
+  photographable_subject: bonus[2],
   ...extra,
 });
 
 /** Story scoring answers, keyed by group id (= representative URL). */
 export const SCORING: StubTable = {
-  [stubKey(Scoring.VERSION, A1.sourceUrl)]: ok([0.55, 0.55, 0.55, 0.55]), // passes 4, sum 2.2, 3 outlets
-  [stubKey(Scoring.VERSION, K1.sourceUrl)]: ok([0.6, 0.6, 0.6, 0.6]), // passes 4, sum 2.4, 1 outlet
-  [stubKey(Scoring.VERSION, C1.sourceUrl)]: ok([0.7, 0.7, 0.6, 0.0], { skip_weapons_war: 0.2 }), // passes 3, sum 2.0, 2 outlets
-  [stubKey(Scoring.VERSION, B1.sourceUrl)]: ok([0.95, 0.95, 0.95, 0.05]), // passes 3, sum 2.9, 1 outlet
-  [stubKey(Scoring.VERSION, D1.sourceUrl)]: ok([0.9, 0.9, 0.9, 0.9], { skip_weapons_war: 0.95 }),
-  [stubKey(Scoring.VERSION, E1.sourceUrl)]: ok([0.9, 0.9, 0.9, 0.9], { already_posted: 0.9 }),
-  [stubKey(Scoring.VERSION, G1.sourceUrl)]: ok([0.9, 0.9, 0.9, 0.9], { ai_main_subject: 0.3 }),
-  [stubKey(Scoring.VERSION, H1.sourceUrl)]: ok([0.6, 0.6, 0.6, 0.6]),
-  [stubKey(Scoring.VERSION, I1.sourceUrl)]: ok([0.6, 0.6, 0.6, 0.6], { substance: 0.4 }),
+  [stubKey(Scoring.VERSION, A1.sourceUrl)]: ok([0.55, 0.55, 0.55]), // passes 3, sum 1.65, 3 outlets
+  [stubKey(Scoring.VERSION, K1.sourceUrl)]: ok([0.6, 0.6, 0.6]), // passes 3, sum 1.8, 1 outlet
+  [stubKey(Scoring.VERSION, C1.sourceUrl)]: ok([0.7, 0.6, 0.0], { skip_weapons_war: 0.2 }), // passes 2, sum 1.3, 2 outlets
+  [stubKey(Scoring.VERSION, B1.sourceUrl)]: ok([0.95, 0.95, 0.05]), // passes 2, sum 1.95, 1 outlet
+  [stubKey(Scoring.VERSION, D1.sourceUrl)]: ok([0.9, 0.9, 0.9], { skip_weapons_war: 0.95 }),
+  [stubKey(Scoring.VERSION, E1.sourceUrl)]: ok([0.9, 0.9, 0.9], { already_posted: 0.9 }),
+  [stubKey(Scoring.VERSION, G1.sourceUrl)]: ok([0.9, 0.9, 0.9], { ai_main_subject: 0.3 }),
+  [stubKey(Scoring.VERSION, H1.sourceUrl)]: ok([0.6, 0.6, 0.6]),
+  [stubKey(Scoring.VERSION, I1.sourceUrl)]: ok([0.6, 0.6, 0.6], { substance: 0.4 }),
 };
 
 type State = { article?: { headline: string }; neighbours?: Array<{ headline: string }>; first?: { headline: string }; candidates?: Array<{ headline: string }> };
