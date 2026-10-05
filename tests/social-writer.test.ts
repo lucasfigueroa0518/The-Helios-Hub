@@ -214,6 +214,9 @@ test('runDay: the Writer stage drafts each brief; its cost lands under writer', 
           d.slides[0]!.headline.facts = ['F1'];
           d.slides[0]!.body!.facts = ['F1'];
           d.caption.facts = [];
+          // The stub brief has no SUBJECTS, so subject images would fail the check.
+          d.cover_options = d.cover_options.map((c) => ({ ...c, image: stock('city skyline') }));
+          d.slides[0]!.image = stock('city skyline');
           assert.ok(brief.the_news.text);
           return msg('tool_use', [submit(d)]);
         },
