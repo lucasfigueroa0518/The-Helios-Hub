@@ -441,11 +441,6 @@
   mask-image: linear-gradient(to bottom, #000 0%, #000 40%, transparent 100%);
 }
 
-/* Keep the credit on the solid part of the photo, below the wordmark. */
-.helios-text--photo-top .helios-photo-credit--frame {
-  top: 140px;
-  bottom: auto;
-}
 
 /* ── Landing slide (HEADLINE only, centered) ──────────────────────────── */
 
@@ -527,12 +522,6 @@
   overflow: visible;
 }
 
-.helios-stat__photo {
-  width: 100%;
-  max-height: 400px;
-  object-fit: cover;
-  display: block;
-}
 
 .helios-stat__number-block {
   display: flex;
@@ -605,12 +594,6 @@
 .helios-split-stat__headline[data-length="md"] { font-size: 84px; }
 .helios-split-stat__headline[data-length="lg"] { font-size: 72px; }
 
-.helios-split-stat__photo {
-  width: 100%;
-  max-height: 320px;
-  object-fit: cover;
-  display: block;
-}
 
 .helios-split-stat__pair {
   display: flex;
@@ -688,48 +671,53 @@
   margin: 0;
 }
 
-/* On-slide photo credit (2026-10-01 image redesign). Small, low-weight
- * caption placed near the photo it applies to. Three variants:
- *  - --bleed:   full-frame cover / image slide, overlaid bottom-right
- *  - --frame:   photo sits inside a smaller frame (text / stat), caption
- *               tucked beneath the frame's bottom-right
- *  - --roundel: quote speaker roundel, caption under the roundel
- */
+/* Photo credit: one position on every layout (2026-10-05). Bottom-right
+ * corner of the slide, white on a dark pill so it reads on any photo and
+ * never sits mid-slide. Rendered once per slide by SlideTemplate. */
 .helios-photo-credit {
-  font-family: var(--font-body);
-  font-size: 16px;
-  font-weight: 400;
-  letter-spacing: 0.01em;
-  color: rgba(255, 255, 255, 0.72);
-  z-index: 3;
-  pointer-events: none;
-  line-height: 1.2;
-}
-.helios-photo-credit--bleed {
   position: absolute;
   right: 24px;
   bottom: 20px;
-  max-width: 620px;
+  max-width: 640px;
+  z-index: 10;
+  font-family: var(--font-body);
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  color: #FFFFFF;
+  background: rgba(0, 0, 0, 0.62);
+  padding: 4px 10px;
+  border-radius: 6px;
   text-align: right;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
 }
-.helios-photo-credit--frame {
+
+/* Darkened full-bleed background (spec §5.3a): stat slides, and quote
+ * slides whose photo isn't a verified photo of the speaker. Negative
+ * offsets escape the slide's 96px padding so the photo reaches the edges. */
+.helios-backdrop__img,
+.helios-backdrop__shade {
   position: absolute;
-  right: 16px;
-  bottom: 8px;
-  max-width: 480px;
-  text-align: right;
-  color: rgba(20, 20, 20, 0.55);
-  background: rgba(255, 255, 255, 0.7);
-  padding: 2px 8px;
-  border-radius: 4px;
+  top: -96px;
+  left: -96px;
+  width: 1080px;
+  height: 1350px;
+  z-index: 0;
+  pointer-events: none;
 }
-.helios-photo-credit--roundel {
-  position: static;
-  color: rgba(20, 20, 20, 0.55);
-  text-align: center;
-  margin-top: -12px;
-  font-size: 14px;
+.helios-backdrop__img {
+  object-fit: cover;
+  display: block;
+}
+.helios-backdrop__shade {
+  background: rgba(10, 10, 10, 0.72);
+}
+.helios-stat--backdrop > :not(.helios-backdrop__img):not(.helios-backdrop__shade),
+.helios-split-stat--backdrop > :not(.helios-backdrop__img):not(.helios-backdrop__shade),
+.helios-quote--backdrop > :not(.helios-backdrop__img):not(.helios-backdrop__shade) {
+  position: relative;
+  z-index: 1;
 }
 
 .helios-quote__glyph {

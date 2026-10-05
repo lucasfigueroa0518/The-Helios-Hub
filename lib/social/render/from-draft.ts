@@ -36,7 +36,7 @@ function storySlide(s: FilledSlide, position: number, photo: Photo | null): Slid
       return { ...base, ...body, layoutVariant: 'split_stat', title: run(a!.value), numberNote: a!.counts, secondNumber: b!.value, secondNote: b!.counts };
     }
     case 'quote':
-      return { ...base, layoutVariant: 'quote', quoteText: run(s.quote!.text), quoteBy: s.quote!.speaker, altText: `${s.headline.text}: "${s.quote!.text}" (${s.quote!.speaker})` };
+      return { ...base, layoutVariant: 'quote', quoteText: run(s.quote!.text), quoteBy: s.quote!.speaker, photoIsSpeaker: !!photo?.qid && photo.subject === s.quote!.speaker, altText: `${s.headline.text}: "${s.quote!.text}" (${s.quote!.speaker})` };
     case 'landing':
       return { ...base, ...body, layoutVariant: 'landing' };
     case 'image':

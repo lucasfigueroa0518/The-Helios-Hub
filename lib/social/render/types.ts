@@ -230,6 +230,14 @@ export type SlideCopy = {
   photoPlacement?: 'below' | 'top';
 
   /**
+   * Quote slide: true only when the photo is an identity-verified photo of
+   * the quote's speaker. Only then does it fill the round speaker spot;
+   * any other photo is a darkened background, so no one is implied to be
+   * the speaker.
+   */
+  photoIsSpeaker?: boolean;
+
+  /**
    * Design-skill variant code from the helios-social-skill layout library.
    * Sits alongside `layoutVariant` (the family) as a CSS modifier so a
    * single family can express multiple compositions. Optional — the family

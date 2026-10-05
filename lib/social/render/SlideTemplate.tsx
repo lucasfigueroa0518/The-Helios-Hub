@@ -78,6 +78,7 @@ export function SlideTemplate({ post, position }: SlideTemplateProps) {
         {kind === 'image' && <ImageSlide slide={slide} />}
         {kind === 'follow' && <FollowSlide slide={slide} />}
       </div>
+      {slide.photoUrl && <PhotoCredit credit={slide.photoCredit} />}
     </div>
   );
 }
@@ -98,19 +99,27 @@ function SpanRunView({ run }: { run: SpanRun | undefined }) {
 }
 
 /**
- * Small, low-weight credit line rendered near/over the photo it applies
- * to. Added 2026-10-01 (image redesign): every photo carries an
- * on-slide credit in addition to the caption Photos: block. If the
- * slide has no photoUrl OR no photoCredit, renders nothing.
- *
- * Variant is a hint to the stylesheet ('bleed' = overlay on full-frame,
- * 'frame' = inline caption beneath a boxed image, 'roundel' = quote
- * speaker photo). The class is the same base regardless; the variant
- * modifier lets CSS position the credit correctly.
+ * Photo credit: one position on every layout (2026-10-05): bottom-right
+ * corner of the slide, white on a dark pill so it reads on any photo.
+ * Rendered once per slide by SlideTemplate, never inside a layout.
  */
-function PhotoCredit({ credit, variant }: { credit: string | undefined; variant: 'bleed' | 'frame' | 'roundel' }) {
+function PhotoCredit({ credit }: { credit: string | undefined }) {
   if (!credit) return null;
-  return <div className={`helios-photo-credit helios-photo-credit--${variant}`}>{credit}</div>;
+  return <div className="helios-photo-credit">{credit}</div>;
+}
+
+/**
+ * Darkened full-bleed photo behind a slide's content (spec §5.3a): the
+ * stat background, and the quote background when the photo isn't a
+ * verified photo of the speaker. Sets the mood; never a layout block.
+ */
+function Backdrop({ url }: { url: string }) {
+  return (
+    <>
+      <img className="helios-backdrop__img" src={url} alt="" aria-hidden="true" />
+      <div className="helios-backdrop__shade" aria-hidden="true" />
+    </>
+  );
 }
 
 /* ── Cover (unchanged from prior render) ──────────────────────────── */
@@ -136,7 +145,6 @@ function CoverSlide({ post, slide }: { post: Post; slide: SlideCopy }) {
           />
           <div className="helios-cover__scrim" aria-hidden="true" />
           <div className="helios-cover__scrim--bottom" aria-hidden="true" />
-          <PhotoCredit credit={slide.photoCredit} variant="bleed" />
         </>
       )}
       <div className="helios-cover__foreground">
@@ -179,7 +187,6 @@ function TextSlide({ slide }: { slide: SlideCopy }) {
       {hasPhoto && (
         <div className="helios-text__photo-frame" aria-hidden="true">
           <img className="helios-text__photo" src={slide.photoUrl} alt="" />
-          <PhotoCredit credit={slide.photoCredit} variant="frame" />
         </div>
       )}
     </div>
@@ -206,7 +213,6 @@ function LandingSlide({ slide }: { slide: SlideCopy }) {
       {slide.photoUrl && (
         <>
           <img className="helios-landing__photo" src={slide.photoUrl} alt="" aria-hidden="true" />
-          <PhotoCredit credit={slide.photoCredit} variant="frame" />
         </>
       )}
     </div>
@@ -220,7 +226,8 @@ function StatSlide({ slide }: { slide: SlideCopy }) {
   const numberLen = number?.reduce((n, s) => n + s.text.length, 0) ?? 0;
   const hasPhoto = Boolean(slide.photoUrl);
   return (
-    <div className="helios-stat">
+    <div className={`helios-stat${hasPhoto ? ' helios-stat--backdrop' : ''}`}>
+      {hasPhoto && <Backdrop url={slide.photoUrl!} />}
       {slide.headline && (
         <h2 className="helios-stat__headline">
           <SpanRunView run={slide.headline} />
@@ -231,12 +238,7 @@ function StatSlide({ slide }: { slide: SlideCopy }) {
           <SpanRunView run={slide.body} />
         </p>
       )}
-      {hasPhoto && (
-        <>
-          <img className="helios-stat__photo" src={slide.photoUrl} alt="" aria-hidden="true" />
-          <PhotoCredit credit={slide.photoCredit} variant="frame" />
-        </>
-      )}
+
       <div className="helios-stat__number-block">
         {number && (
           <div className="helios-stat__number" data-length={numberLen}>
@@ -264,18 +266,14 @@ function SplitStatSlide({ slide }: { slide: SlideCopy }) {
     : headlineChars <= 60 ? 'md'
     : 'lg';
   return (
-    <div className="helios-split-stat">
+    <div className={`helios-split-stat${hasPhoto ? ' helios-split-stat--backdrop' : ''}`}>
+      {hasPhoto && <Backdrop url={slide.photoUrl!} />}
       {slide.headline && (
         <h2 className="helios-split-stat__headline" data-length={headlineBucket}>
           <SpanRunView run={slide.headline} />
         </h2>
       )}
-      {hasPhoto && (
-        <>
-          <img className="helios-split-stat__photo" src={slide.photoUrl} alt="" aria-hidden="true" />
-          <PhotoCredit credit={slide.photoCredit} variant="frame" />
-        </>
-      )}
+
       <div className="helios-split-stat__pair">
         <div className="helios-split-stat__col">
           {leftNumber && (
@@ -307,14 +305,14 @@ function SplitStatSlide({ slide }: { slide: SlideCopy }) {
 
 function QuoteSlide({ slide }: { slide: SlideCopy }) {
   const quoteRun = slide.quoteText ?? slide.body;
-  const showSpeakerPhoto = Boolean(slide.photoUrl);
+  // The round spot is only for a verified photo of the speaker; any other photo is a darkened background.
+  const showSpeakerPhoto = Boolean(slide.photoUrl) && slide.photoIsSpeaker === true;
+  const backdrop = Boolean(slide.photoUrl) && !showSpeakerPhoto;
   return (
-    <div className="helios-quote">
+    <div className={`helios-quote${backdrop ? ' helios-quote--backdrop' : ''}`}>
+      {backdrop && <Backdrop url={slide.photoUrl!} />}
       {showSpeakerPhoto && (
-        <>
-          <img className="helios-quote__speaker" src={slide.photoUrl} alt="" aria-hidden="true" />
-          <PhotoCredit credit={slide.photoCredit} variant="roundel" />
-        </>
+        <img className="helios-quote__speaker" src={slide.photoUrl} alt="" aria-hidden="true" />
       )}
       <div className="helios-quote__glyph" aria-hidden="true">&ldquo;</div>
       {quoteRun && (
@@ -355,7 +353,6 @@ function ImageSlide({ slide }: { slide: SlideCopy }) {
           />
           <div className="helios-cover__scrim" aria-hidden="true" />
           <div className="helios-cover__scrim--bottom" aria-hidden="true" />
-          <PhotoCredit credit={slide.photoCredit} variant="bleed" />
         </>
       )}
       <div className="helios-image__foreground">

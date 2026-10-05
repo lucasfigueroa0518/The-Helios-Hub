@@ -36,5 +36,5 @@ export const starterUrl = (file: string) => `/social/stock/${file}`;
 /** The first starter photo not yet used in this post. */
 export function pickStarter(used: Set<string>): Photo | null {
   const s = STARTER_SET.find((p) => !used.has(starterUrl(p.file)));
-  return s ? { url: starterUrl(s.file), credit: s.credit, source: 'starter', width: s.width, height: s.height, qid: null } : null;
+  return s ? { url: starterUrl(s.file), credit: s.credit, source: 'starter', width: s.width, height: s.height, qid: null, subject: null } : null;
 }

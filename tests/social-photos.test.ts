@@ -14,7 +14,7 @@ import { createDesignStage } from '@/lib/social/pipeline/design-stage';
 import type { Brief as PipelineBrief, Draft, ScoredCandidate } from '@/lib/social/pipeline/types';
 import { classifyCredit } from '@/lib/social/photos/credit';
 import { photosForDraft } from '@/lib/social/photos/design';
-import { FALLBACK_SCENES, findPhoto, NEUTRAL_SCENES, newPhotoContext } from '@/lib/social/photos/find';
+import { FALLBACK_SCENES, findPhoto, NEUTRAL_SCENES, newPhotoContext, type Photo } from '@/lib/social/photos/find';
 import { checkIdentity } from '@/lib/social/photos/identity';
 import { MAX_PHOTOS_PER_POST, STARTER_SET, starterUrl } from '@/lib/social/photos/starter-set';
 import { layoutOf, rotateLayouts } from '@/lib/social/render/layout-rotation';
@@ -271,7 +271,7 @@ test('starter set: big enough for a full post, every file on disk, no people', a
 test('render: every slide type maps to the renderer fields, quotes and numbers exact', () => {
   const brief = briefWith();
   const draft = fillDraft(sifDraft(), brief);
-  const photo = { url: 'https://x/p.jpg', credit: 'Jane Doe, CC BY · via flickr', source: 'stock' as const, width: 1, height: 1, qid: null };
+  const photo = { url: 'https://x/p.jpg', credit: 'Jane Doe, CC BY · via flickr', source: 'stock' as const, width: 1, height: 1, qid: null, subject: null };
   const post = toRenderPost(draft, { cover: photo, slides: draft.slides.map((_, i) => (i === 3 ? photo : null)) }, { source: 'TechCrunch', sourceUrl: TC_URL, publishedAt: '2026-10-04T12:00:00Z' });
   assert.equal(post.slides.length, 1 + draft.slides.length + 1);
   assert.equal(post.slides[0]!.layoutVariant, 'cover');
@@ -300,7 +300,7 @@ test('design stage: photos + render post, Jev identity cost charged', async () =
   const draft: Draft = { storyId: 's1', submission, filled: fillDraft(submission, parsed) };
   const brief: PipelineBrief = { storyId: 's1', parsed, raw: '', pages: pages() };
   const story = { id: 's1', title: 't', url: TC_URL, outlets: ['TechCrunch'], publishedAt: new Date('2026-10-04T12:00:00Z') } as ScoredCandidate;
-  const r = await createDesignStage(d)(draft, brief, story);
+  const r = await createDesignStage({ ...d, fitCheck: async () => ({ ok: true, violations: [], problems: [] }) })(draft, brief, story);
   assert.ok(r.ok);
   assert.equal(r.value.photos.length, 1 + submission.slides.length);
   assert.equal(r.value.render.slides[0]!.photoUrl, commonsUrl('Donald Trump official portrait.jpg'));
@@ -319,7 +319,7 @@ test('preview: a stubbed post renders every slide with its photo and credit', as
   const sub = sifDraft();
   sub.slides[5] = { ...sub.slides[5]!, type: 'landing', body: null };
   const draft = fillDraft(sub, brief);
-  const photo = (i: number) => ({ url: `/social/stock/p${i}.jpg`, credit: `Credit ${i}`, source: 'stock' as const, width: null, height: null, qid: null });
+  const photo = (i: number) => ({ url: `/social/stock/p${i}.jpg`, credit: `Credit ${i}`, source: 'stock' as const, width: null, height: null, qid: null, subject: null });
   const post = toRenderPost(draft, { cover: photo(0), slides: draft.slides.map((_, i) => photo(i + 1)) }, { source: 'TechCrunch', sourceUrl: TC_URL, publishedAt: '2026-10-04T12:00:00Z' });
   post.slides.forEach((s, i) => {
     const html = renderToStaticMarkup(createElement(SlideTemplate, { post, position: i }));
@@ -366,4 +366,28 @@ test('render: a photo-on-top text slide renders', async () => {
     slides: [{ position: 0, layoutVariant: 'cover', headline: [{ text: 'X', role: 'narrative' }], altText: 'x' }, { ...textSlide(1), photoPlacement: 'top' }] } as const;
   const html = renderToStaticMarkup(React.createElement(SlideTemplate, { post: post as never, position: 1 }));
   assert.match(html, /helios-text--photo-top/);
+});
+
+test('design stage: a render that does not fit is set aside as render-failed', async () => {
+  const { deps: d } = deps();
+  const parsed = briefWith();
+  const submission: DraftSubmission = sifDraft();
+  const draft: Draft = { storyId: 's1', submission, filled: fillDraft(submission, parsed) };
+  const brief: PipelineBrief = { storyId: 's1', parsed, raw: '', pages: [] };
+  const story = { id: 's1', title: 't', url: TC_URL, outlets: ['TechCrunch'], publishedAt: new Date('2026-10-04T12:00:00Z') } as ScoredCandidate;
+  const fitCheck = async () => ({ ok: false, problems: [], violations: [{ slide: 5, element: 'div.helios-stat__number', text: '120 days', over: { left: 0, top: 0, right: 0, bottom: 140 } }] });
+  const r = await createDesignStage({ ...d, fitCheck })(draft, brief, story);
+  assert.equal(r.ok, false);
+  assert.equal((r as { reasonCode: string }).reasonCode, 'render-failed');
+  assert.match((r as { detail: string }).detail, /slide 5 div\.helios-stat__number/);
+});
+
+test('quote slide: the round speaker spot only for a verified photo of the speaker', () => {
+  const brief = briefWith();
+  const draft = fillDraft(sifDraft(), brief);
+  const at = (photo: Photo) => toRenderPost(draft, { cover: null, slides: draft.slides.map((_, i) => (i === 2 ? photo : null)) }, { source: 's', sourceUrl: TC_URL, publishedAt: 'p' }).slides.find((s) => s.layoutVariant === 'quote')!;
+  const base = { url: '/x.jpg', credit: 'c', width: 1, height: 1 };
+  assert.equal(at({ ...base, source: 'commons', qid: 'Q22686', subject: 'Donald Trump' }).photoIsSpeaker, true);
+  assert.equal(at({ ...base, source: 'commons', qid: 'Q6163829', subject: 'Jay Clayton' }).photoIsSpeaker, false, 'someone else');
+  assert.equal(at({ ...base, source: 'starter', qid: null, subject: null }).photoIsSpeaker, false, 'a scene');
 });

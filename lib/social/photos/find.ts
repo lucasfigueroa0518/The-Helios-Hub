@@ -41,6 +41,8 @@ export type Photo = {
   height: number | null;
   /** Wikidata id for subject photos (identity verified). */
   qid: string | null;
+  /** The SUBJECTS name this photo was verified to show; null for scenes and article photos. */
+  subject: string | null;
 };
 
 export type ChainStep = 'article' | 'subject' | 'stock' | 'neutral' | 'starter';
@@ -121,7 +123,7 @@ async function articlePhoto(url: string, ctx: PhotoContext, steps: string[]): Pr
     steps.push('already used in this post');
     return null;
   }
-  return { url, credit: (found.photo.credit ?? found.photo.caption ?? '').trim(), source: 'article', width: null, height: null, qid: null };
+  return { url, credit: (found.photo.credit ?? found.photo.caption ?? '').trim(), source: 'article', width: null, height: null, qid: null, subject: null };
 }
 
 async function subjectPhoto(name: string, ctx: PhotoContext, deps: PhotoDeps, steps: string[]): Promise<{ photo: Photo | null; type: SubjectType | null; identity: IdentityNote }> {
@@ -146,7 +148,7 @@ async function subjectPhoto(name: string, ctx: PhotoContext, deps: PhotoDeps, st
   }
   steps.push(`commons ${pick.source}: ${pick.file}`);
   return {
-    photo: { url: pick.url, credit: `${buildCredit(pick)} · Wikimedia Commons`, source: 'commons', width: pick.width, height: pick.height, qid: id.qid },
+    photo: { url: pick.url, credit: `${buildCredit(pick)} · Wikimedia Commons`, source: 'commons', width: pick.width, height: pick.height, qid: id.qid, subject: name },
     type: id.type,
     identity,
   };
@@ -161,7 +163,7 @@ async function stockPhoto(query: string, ctx: PhotoContext, deps: PhotoDeps, ste
     return null;
   }
   steps.push(`stock "${query}": ${pick.source}${pick.title ? ` "${pick.title}"` : ''}`);
-  return { url: pick.url, credit: buildStockCredit(pick), source: 'stock', width: pick.width, height: pick.height, qid: null };
+  return { url: pick.url, credit: buildStockCredit(pick), source: 'stock', width: pick.width, height: pick.height, qid: null, subject: null };
 }
 
 /** The slide's words, for finding its subject when the IMAGE line names none. */

@@ -556,6 +556,7 @@ These came up once in hand-run tests. They become fixes only if they recur in re
 | Editor: attribution put in a headline ("9to5Google: AI Pro gets Deep Think"; 1 occurrence) | Editor prompt: attribution goes in the body |
 | Editor: a clumsy gloss ("Alignment is efforts to build AI…"; 1 occurrence) | Watch only |
 | Editor: inaccurate edit notes (claimed a caption change that wasn't made; slide numbering off by one; claimed a cut that wasn't made). 2 of 3 stories | Watch; notes are for review only |
+| Stat slide repeats its number in the headline and the big number (NYC: "Proposed fine: $25,000 for…" over "$25,000"; 1 occurrence, 2026-10-05) | Writer prompt: on a stat slide the headline frames the number, never repeats it |
 
 **Process note (2026-10-04):** hand-run simulations are for illustrating the design, not for finding fixes. From here on, fixes come only from patterns in real batch logs.
 

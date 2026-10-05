@@ -21,6 +21,7 @@ const photo = (i: number): Photo => ({
   width: null,
   height: null,
   qid: null,
+  subject: null,
 });
 
 async function main() {

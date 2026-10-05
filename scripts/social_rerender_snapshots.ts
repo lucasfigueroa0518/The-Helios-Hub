@@ -3,7 +3,9 @@
  * No network, no models: reuses the saved drafts and photo traces. A slide
  * the live run left empty goes to the last chain step, the offline starter
  * set, exactly as the chain now does when every online step fails. Then
- * the render adapter (with layout rotation) writes the preview posts.
+ * the render adapter (with layout rotation) writes the preview posts, and
+ * the render-fit check measures every slide and writes screenshots to
+ * <run dir>/screenshots. A post that doesn't fit is reported as FAILED.
  *
  *   npx tsx scripts/social_rerender_snapshots.ts runs/photos-<ts> <name> …
  */
@@ -12,6 +14,7 @@ import path from 'node:path';
 
 import type { PhotoTrace } from '@/lib/social/photos/find';
 import { pickStarter } from '@/lib/social/photos/starter-set';
+import { checkRenderFit } from '@/lib/social/render/fit-check';
 import { draftSlides, toRenderPost } from '@/lib/social/render/from-draft';
 import { rotateLayouts } from '@/lib/social/render/layout-rotation';
 import { toSlug, writeGeneratedPost } from '@/lib/social/render/local-store';
@@ -29,6 +32,8 @@ async function main() {
     const traces = [log.photos.cover, ...log.photos.slides];
     const used = new Set(traces.flatMap((t) => (t.photo ? [t.photo.url] : [])));
     for (const t of traces) {
+      // Logs written before photos carried `subject`: take it from the identity check that verified the photo.
+      if (t.photo && t.photo.subject === undefined) t.photo.subject = t.photo.qid && t.identity?.ok ? t.identity.subject : null;
       if (t.photo) continue;
       const p = pickStarter(used);
       if (!p) continue;
@@ -50,6 +55,10 @@ async function main() {
       const t = traces[i];
       console.log(`  ${i + 1}. ${s.layoutVariant}${s.photoPlacement === 'top' ? ' (photo top)' : ''} · ${t ? `${t.via ?? 'NONE'} · ${t.photo?.credit ?? 'no photo'}` : '-'}`);
     });
+    const fit = await checkRenderFit(post, { screenshotDir: path.join(runDir, 'screenshots'), name });
+    console.log(`  render fit: ${fit.ok ? 'PASS' : 'FAILED'}`);
+    for (const p of fit.problems) console.log(`    problem: ${p}`);
+    for (const v of fit.violations) console.log(`    slide ${v.slide} ${v.element} outside by ${JSON.stringify(v.over)}: "${v.text}"`);
     console.log(`  rotation: ${rotation.changes.join('; ') || 'no changes'}${rotation.unresolved.length ? ` · UNRESOLVED: ${rotation.unresolved.join('; ')}` : ''}`);
   }
 }
