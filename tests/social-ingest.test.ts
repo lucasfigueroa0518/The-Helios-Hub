@@ -18,7 +18,8 @@ import { createStubJev } from '@/lib/social/jev/stub';
 import { applyCodeFilters } from '@/lib/social/ingest/select/code-filters';
 import type { FetchBody } from '@/lib/social/ingest/select/enrich';
 import { createInMemoryFeedHealthLog } from '@/lib/social/ingest/select/feed-health';
-import { groupArticles, outletKey } from '@/lib/social/ingest/select/group';
+import { groupArticles } from '@/lib/social/ingest/select/group';
+import { outletKey, outletName } from '@/lib/social/ingest/select/outlets';
 import { createInMemoryPosted } from '@/lib/social/ingest/select/posted';
 import { compareScored, SHORTLIST_MAX } from '@/lib/social/ingest/select/rank';
 import { judge } from '@/lib/social/ingest/select/score';
@@ -106,6 +107,20 @@ test('grouping: a pair under the threshold stays split', async () => {
   assert.equal(groups.length, 2);
   const k = groups.find((g) => g.id === K1.sourceUrl)!;
   assert.equal(k.members.length, 1);
+});
+
+test('outlet names: feed titles and Google News sources map to one outlet (live shapes, 2026-10-04)', () => {
+  const native = (source: string, url: string) => outletName({ feedKind: 'native', source, sourceUrl: url });
+  const gnews = (source: string) => outletName({ feedKind: 'google-news', source, sourceUrl: 'https://news.google.com/rss/articles/x' });
+  assert.equal(native('AI | The Verge', 'https://www.theverge.com/ai/1'), 'The Verge');
+  assert.equal(native('Feed: Artificial Intelligence Latest', 'https://www.wired.com/story/x'), 'Wired');
+  assert.equal(native('NYT > Technology', 'https://www.nytimes.com/2026/10/04/x.html'), 'The New York Times');
+  assert.equal(gnews('Bloomberg.com'), 'Bloomberg');
+  assert.equal(gnews('reuters.com'), 'Reuters');
+  assert.equal(outletKey(gnews('The Verge')), outletKey(native('AI | The Verge', 'https://www.theverge.com/a')));
+  assert.equal(outletKey(gnews('WIRED')), outletKey(native('x', 'https://www.wired.com/a')));
+  assert.equal(outletKey(gnews('The New York Times')), outletKey(native('x', 'https://www.nytimes.com/a')));
+  assert.equal(gnews('The Guardian'), 'The Guardian');
 });
 
 test('grouping: native and Google News copies of one outlet count once', async () => {

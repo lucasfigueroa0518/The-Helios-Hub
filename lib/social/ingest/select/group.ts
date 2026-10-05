@@ -9,7 +9,9 @@ import { mapPool } from '@/lib/async-pool';
 import type { JevAsk } from '@/lib/social/jev/client';
 import * as SameEvent from '@/lib/social/jev/questions/same-event.v1';
 
+import { outletKey, outletName } from './outlets';
 import type { GroupMember, IngestArticle, StoryGroup } from './types';
+
 
 export const MAX_NEIGHBOURS = 5;
 export const JEV_CONCURRENCY = 8;
@@ -71,11 +73,6 @@ export function neighbourPairs(articles: IngestArticle[]): NeighbourPair[] {
   return [...pairs].map((p) => p.split(',').map(Number) as NeighbourPair).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
 }
 
-/** Outlet names normalised so "The Verge" and "the verge" count once. */
-export function outletKey(outlet: string): string {
-  return outlet.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-}
-
 function pickRepresentative(articles: IngestArticle[]): IngestArticle {
   return [...articles].sort((a, b) => {
     const native = Number(b.feedKind === 'native') - Number(a.feedKind === 'native');
@@ -89,7 +86,7 @@ export function buildGroup(articles: IngestArticle[]): StoryGroup {
     .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime())
     .map((a) => ({
       url: a.sourceUrl,
-      outlet: a.source,
+      outlet: outletName(a),
       title: a.headline,
       publishedAt: a.publishedAt,
       feedSlug: a.feedSlug,

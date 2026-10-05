@@ -28,6 +28,16 @@ export const FEEDS: FeedConfig[] = [
   { slug: 'empty-feed', name: 'Empty Feed', url: 'https://empty.example/rss', kind: 'native' },
 ];
 
+/** Real hosts, so outlet naming works as it does on live feeds. */
+const HOST: Record<string, string> = {
+  verge: 'www.theverge.com',
+  techcrunch: 'techcrunch.com',
+  bloomberg: 'www.bloomberg.com',
+  wired: 'www.wired.com',
+  reuters: 'www.reuters.com',
+  gnews: 'news.google.com/rss/articles',
+};
+
 const art = (
   slug: string,
   feedSlug: string,
@@ -40,7 +50,7 @@ const art = (
   feedSlug,
   feedKind,
   source,
-  sourceUrl: `https://${feedSlug}.example/${slug}`,
+  sourceUrl: `https://${HOST[feedSlug]}/${slug}`,
   headline,
   byline: null,
   body,

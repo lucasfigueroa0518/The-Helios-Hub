@@ -4,6 +4,7 @@
  */
 import { noul, type Questions } from '@typesafe-ai/sdk';
 
+import { outletName } from '@/lib/social/ingest/select/outlets';
 import type { IngestArticle } from '@/lib/social/ingest/select/types';
 
 export const VERSION = 'same-event@1';
@@ -16,7 +17,7 @@ export const THRESHOLDS = {
 const LEDE_CHARS = 600;
 
 const brief = (a: IngestArticle) => ({
-  outlet: a.source,
+  outlet: outletName(a),
   headline: a.headline,
   lede: a.body.slice(0, LEDE_CHARS),
 });
