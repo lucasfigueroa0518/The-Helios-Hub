@@ -87,37 +87,25 @@ export function pageToToolText(page: PageRead): string {
   return `${header.join('\n')}\n\nPHOTOS (caption | credit | URL):\n${photos}\n\nTEXT${page.truncated ? ' (truncated)' : ''}:\n${page.text}`;
 }
 
+export type TurnUsage = { turn: number; stopReason: string | null; usage: unknown; costUsd: number };
+
 export type ReporterResult =
-  | { ok: true; brief: Brief; raw: string; pages: PageReadOk[]; costUsd: number; turns: number; webSearches: number; pageReads: number; submitRetries: number }
-  | { ok: false; reason: 'malformed-output' | 'service-error' | 'refused' | 'cost-cap'; detail: string; raw: string | null; costUsd: number; turns: number; webSearches: number; pageReads: number; submitRetries: number };
+  | { ok: true; brief: Brief; raw: string; pages: PageReadOk[]; costUsd: number; turns: number; webSearches: number; pageReads: number; submitRetries: number; turnUsage: TurnUsage[] }
+  | { ok: false; reason: 'malformed-output' | 'service-error' | 'refused' | 'cost-cap'; detail: string; raw: string | null; costUsd: number; turns: number; webSearches: number; pageReads: number; submitRetries: number; turnUsage: TurnUsage[] };
 
 export type ReporterDeps = {
   create: MessagesCreate;
   readPage?: (url: string) => Promise<PageRead>;
   config?: StageModelConfig;
-  /**
-   * Hard spend limit for this story (an approved budget for a live run).
-   * Before each turn the worst case of that turn is estimated (input, all
-   * searches, output) and max_tokens is cut to what the cap still affords;
-   * when that's under MIN_TURN_OUTPUT_TOKENS the loop stops. The cap can't
-   * be passed by a turn in flight.
-   */
+  /** Spend limit for this story; see CAP_MARGIN_USD for the rule. */
   costCapUsd?: number;
 };
 
 /**
- * Worst-case input prices (Sonnet 5.5): the first turn writes the 1h
- * tools+system cache ($4/M); later turns re-read that prefix and write
- * the 5-minute conversation cache ($2.50/M), the most any of it can cost.
+ * Cap rule (Tommy, 2026-10-05): before each turn, stop if actual spend so
+ * far ≥ cap − CAP_MARGIN_USD; otherwise run the turn. No prediction.
  */
-const FIRST_TURN_INPUT_USD_PER_TOKEN = 4 / 1_000_000;
-const LATER_TURN_INPUT_USD_PER_TOKEN = 2.5 / 1_000_000;
-/** Tool results not yet seen by the API: ~4 characters per token. */
-const CHARS_PER_TOKEN = 4;
-const OUTPUT_USD_PER_TOKEN = 10 / 1_000_000;
-const SEARCH_USD = 0.01;
-/** A turn with less room than this can't write a brief; stop instead. */
-export const MIN_TURN_OUTPUT_TOKENS = 6_000;
+export const CAP_MARGIN_USD = 0.1;
 
 const textOf = (message: Anthropic.Message) =>
   message.content
@@ -135,39 +123,21 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
   const pages: PageReadOk[] = [];
   let pageReads = 0;
   let submitRetries = 0;
-  /** Characters of tool results added since the last API response. */
-  let pendingToolChars = 0;
+  /** Per-turn usage as the API reported it (stored in the run log). */
+  const turnUsage: TurnUsage[] = [];
   const cost = () => Number(priceAnthropicMessages(responses, { modelId: config.model }).costUsd);
   const webSearches = () =>
     responses.reduce((n, r) => n + (r.usage.server_tool_use?.web_search_requests ?? 0), 0);
 
   for (let turn = 1; turn <= MAX_TURNS; turn++) {
-    let maxTokens = MAX_TOKENS;
-    if (deps.costCapUsd !== undefined) {
-      // Next turn's input ≈ the whole conversation so far, ~4 chars/token.
-      // From actual reported usage (Fix B, 2026-10-05): the next turn's input
-      // is the last turn's input + output, plus the tool results added since.
-      const last = responses.at(-1)?.usage;
-      let inputUsd: number;
-      if (last) {
-        const lastTokens = (last.input_tokens ?? 0) + (last.cache_read_input_tokens ?? 0) + (last.cache_creation_input_tokens ?? 0) + (last.output_tokens ?? 0);
-        const newChars = pendingToolChars;
-        inputUsd = (lastTokens + Math.ceil(newChars / CHARS_PER_TOKEN)) * LATER_TURN_INPUT_USD_PER_TOKEN;
-      } else {
-        inputUsd = Math.ceil(JSON.stringify({ system, tools: REPORTER_TOOLS, messages }).length / CHARS_PER_TOKEN) * FIRST_TURN_INPUT_USD_PER_TOKEN;
-      }
-      const fixed = cost() + inputUsd + WEB_SEARCH_MAX_USES * SEARCH_USD;
-      const affordable = Math.floor((deps.costCapUsd - fixed) / OUTPUT_USD_PER_TOKEN);
-      if (affordable < MIN_TURN_OUTPUT_TOKENS) {
-        return { ok: false, reason: 'cost-cap', detail: `stopped before turn ${turn}: $${cost().toFixed(4)} spent; next turn's worst case would pass the $${deps.costCapUsd} cap`, raw: null, costUsd: cost(), turns: turn - 1, webSearches: webSearches(), pageReads, submitRetries };
-      }
-      maxTokens = Math.min(MAX_TOKENS, affordable);
+    if (deps.costCapUsd !== undefined && cost() >= deps.costCapUsd - CAP_MARGIN_USD) {
+      return { ok: false, reason: 'cost-cap', detail: `stopped before turn ${turn}: $${cost().toFixed(4)} spent, cap $${deps.costCapUsd} minus $${CAP_MARGIN_USD} margin`, raw: null, costUsd: cost(), turns: turn - 1, webSearches: webSearches(), pageReads, submitRetries, turnUsage };
     }
     let res: Anthropic.Message;
     try {
       res = await deps.create({
         model: config.model,
-        max_tokens: maxTokens,
+        max_tokens: MAX_TOKENS,
         system,
         tools: REPORTER_TOOLS,
         // Mark the newest user block for the growing conversation. After a
@@ -177,17 +147,22 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
         output_config: { effort: config.effort },
       } as Anthropic.MessageCreateParamsNonStreaming);
     } catch (err) {
-      return { ok: false, reason: 'service-error', detail: `Claude call failed: ${err instanceof Error ? err.message : String(err)}`, raw: null, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries };
+      return { ok: false, reason: 'service-error', detail: `Claude call failed: ${err instanceof Error ? err.message : String(err)}`, raw: null, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries, turnUsage };
     }
     responses.push(res as unknown as MessageUsageLike);
-    pendingToolChars = 0;
+    turnUsage.push({
+      turn,
+      stopReason: res.stop_reason,
+      usage: res.usage,
+      costUsd: Number(priceAnthropicMessages([res as unknown as MessageUsageLike], { modelId: config.model }).costUsd),
+    });
 
     if (res.stop_reason === 'refusal') {
       const details = (res as unknown as { stop_details?: { category?: string | null } }).stop_details;
-      return { ok: false, reason: 'refused', detail: `refusal (${details?.category ?? 'no category'})`, raw: textOf(res) || null, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries };
+      return { ok: false, reason: 'refused', detail: `refusal (${details?.category ?? 'no category'})`, raw: textOf(res) || null, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries, turnUsage };
     }
     if (res.stop_reason === 'max_tokens') {
-      return { ok: false, reason: 'malformed-output', detail: 'brief cut off at max_tokens', raw: textOf(res) || null, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries };
+      return { ok: false, reason: 'malformed-output', detail: 'brief cut off at max_tokens', raw: textOf(res) || null, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries, turnUsage };
     }
 
     // Keep the full content (thinking, server tool blocks) so the next turn continues the same conversation.
@@ -202,12 +177,12 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
       const raw = JSON.stringify(submit.input, null, 2);
       try {
         const brief = validateBrief(submit.input);
-        return { ok: true, brief, raw, pages, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries };
+        return { ok: true, brief, raw, pages, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries, turnUsage };
       } catch (err) {
         const detail = err instanceof BriefValidationError ? err.message : `brief check failed: ${String(err)}`;
         // A failed check is a glitch (spec §7.1): one retry with the errors, then set aside.
         if (submitRetries >= MAX_SUBMIT_RETRIES) {
-          return { ok: false, reason: 'malformed-output', detail, raw, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries };
+          return { ok: false, reason: 'malformed-output', detail, raw, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries, turnUsage };
         }
         submitRetries++;
         const others = toolUses.filter((u) => u !== submit);
@@ -215,7 +190,6 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
           { type: 'tool_result', tool_use_id: submit.id, is_error: true, content: `The brief failed the check. Fix these and call submit_brief again:\n${detail}` },
           ...others.map((u): Anthropic.ToolResultBlockParam => ({ type: 'tool_result', tool_use_id: u.id, is_error: true, content: 'Not run: submit_brief was called in the same turn.' })),
         ];
-        pendingToolChars = content.reduce((n, r) => n + String(r.content).length, 0);
         messages.push({ role: 'user', content });
         continue;
       }
@@ -238,13 +212,12 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
           return { type: 'tool_result', tool_use_id: use.id, is_error: !page.ok, content: pageToToolText(page) };
         }),
       );
-      pendingToolChars = results.reduce((n, r) => n + (typeof r.content === 'string' ? r.content.length : 0), 0);
       messages.push({ role: 'user', content: results });
       continue;
     }
 
     // end_turn without submit_brief: no brief.
-    return { ok: false, reason: 'malformed-output', detail: 'ended without calling submit_brief', raw: textOf(res) || null, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries };
+    return { ok: false, reason: 'malformed-output', detail: 'ended without calling submit_brief', raw: textOf(res) || null, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries, turnUsage };
   }
-  return { ok: false, reason: 'malformed-output', detail: `no brief after ${MAX_TURNS} turns`, raw: null, costUsd: cost(), turns: MAX_TURNS, webSearches: webSearches(), pageReads, submitRetries };
+  return { ok: false, reason: 'malformed-output', detail: `no brief after ${MAX_TURNS} turns`, raw: null, costUsd: cost(), turns: MAX_TURNS, webSearches: webSearches(), pageReads, submitRetries, turnUsage };
 }

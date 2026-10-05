@@ -341,7 +341,7 @@ test('Reporter: no fallback model is requested', async () => {
   assert.ok(!('fallbacks' in (requests[0] as object)));
 });
 
-test('Reporter: the cost cap stops the loop before a turn that could pass it', async () => {
+test('Reporter: cap rule: stop before a turn once actual spend ≥ cap − $0.10', async () => {
   const big = usage({ input_tokens: 60_000, output_tokens: 10_000, web: 5 }); // ≈ $0.27 per turn
   const { create, requests } = scripted([
     msg('tool_use', [toolUse('a', TC_URL)], big),
@@ -351,12 +351,14 @@ test('Reporter: the cost cap stops the loop before a turn that could pass it', a
   const r = await runReporter(STORY, { create, readPage: stubRead(), costCapUsd: 0.5 });
   assert.equal(r.ok, false);
   assert.equal(!r.ok && r.reason, 'cost-cap');
-  assert.equal(requests.length, 1); // after one $0.27 turn, the next turn's worst case could pass $0.50
-  assert.ok(r.costUsd <= 0.5);
+  // $0.27 < $0.40 → turn 2 runs; $0.54 ≥ $0.40 → stop before turn 3.
+  assert.equal(requests.length, 2);
+  assert.equal(r.turnUsage.length, 2);
+  assert.ok(r.turnUsage.every((t) => t.costUsd > 0.2));
 });
 
-test('Reporter: under a cap, a normal-size run finishes and max_tokens shrinks to what the cap affords', async () => {
-  const normal = usage({ input_tokens: 8_000, output_tokens: 1_500, web: 2 }); // ≈ $0.05 per turn
+test('Reporter: under the cap a normal run finishes; per-turn usage is stored', async () => {
+  const normal = usage({ input_tokens: 8_000, output_tokens: 1_500, web: 2 });
   const { create, requests } = scripted([
     msg('tool_use', [toolUse('a', TC_URL)], normal),
     msg('tool_use', [toolUse('b', TC_URL)], normal),
@@ -364,14 +366,11 @@ test('Reporter: under a cap, a normal-size run finishes and max_tokens shrinks t
   ]);
   const r = await runReporter(STORY, { create, readPage: stubRead(), costCapUsd: 0.5 });
   assert.ok(r.ok);
-  assert.ok(r.costUsd <= 0.5);
-  const maxes = requests.map((q) => q.max_tokens);
-  assert.ok(maxes.every((m) => m <= 16_000 && m >= 6_000));
-  assert.ok(maxes[2]! <= maxes[0]!);
+  assert.equal(requests.length, 3);
+  assert.ok(requests.every((q) => q.max_tokens === 16_000));
+  assert.deepEqual(r.turnUsage.map((t) => t.turn), [1, 2, 3]);
+  assert.equal((r.turnUsage[0]!.usage as { input_tokens: number }).input_tokens, 8_000);
 });
-
-
-
 test('brief check: the shape is checked against the schema (no strict tool use)', () => {
   const missing = briefSuperIntelligenceForce() as any;
   delete missing.quotes;
