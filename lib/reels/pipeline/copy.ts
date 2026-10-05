@@ -241,6 +241,7 @@ export async function writeTargetCopy(
           caption: line.call.caption,
           postIdeaId: target.postIdeaId,
           runId,
+          bucket: target.bucket,
         }),
       ),
     );
