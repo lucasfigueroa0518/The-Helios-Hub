@@ -188,7 +188,7 @@ test('the writer states a viewer stake, and both copies and the caption tell one
   const properties = Object.keys(REPORT_COPY_TOOL.input_schema.properties);
   assert.ok(properties.indexOf('viewer_stake') < properties.indexOf('on_screen_copies'));
   assert.ok(REPORT_COPY_TOOL.input_schema.required.includes('viewer_stake'));
-  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v16');
+  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v17');
 });
 
 test('the pre-limit writer is preserved as a Threads candidate and stays off the reel path', () => {

@@ -1,9 +1,17 @@
+import {
+  captionBodyArtifacts,
+  repairModelText,
+  stripCaptionTail,
+  textArtifacts,
+} from '@/lib/reels/copy/clean-text';
 import type { BucketId } from '@/lib/reels/scoring/decide';
 
 /**
  * The writer's tool, and the checks code runs on what comes back. Checks are
  * shown beside the copy for review. They do not reject or retry anything; the
- * word range also gates the copy pick (D-216, lib/reels/copy/pick.ts).
+ * word range also gates the copy pick (D-216, lib/reels/copy/pick.ts). Text
+ * artifacts are the exception: a report that still carries one after repair
+ * fails, and the draft call is retried once (D-246).
  */
 
 /**
@@ -54,7 +62,7 @@ export const REPORT_COPY_TOOL = {
       viewer_stake: {
         type: 'string',
         description:
-          'One plain sentence, 20 words at most, saying why this viewer should care. Both on-screen copies carry it in their own words, and the caption\'s first paragraph pays it out.',
+          'One plain sentence, 20 words at most, saying why this viewer should care. Tested against the hook questions before either copy is drafted. It belongs to this story: a sentence that would fit most posts about AI is not a stake yet. Both on-screen copies carry it in their own words, and the caption\'s first paragraph pays it out.',
       },
       on_screen_copies: {
         type: 'array',
@@ -67,7 +75,15 @@ export const REPORT_COPY_TOOL = {
         description:
           'The final caption, ending where the bucket structure ends. Leave out the call to action and the hashtags. They are posted from their own fields, so writing them here posts them twice. This one caption pays out both on-screen copies. Short paragraphs, with a real blank line between them. A caption that is one block is a failed report. The caption, the call to action, and the hashtags together must stay within 2,200 characters.',
       },
-      call_to_action: { type: 'string', description: 'The one call to action, as a single line.' },
+      call_to_action: {
+        type: 'string',
+        description: 'The one call to action, as a single line. A person it names is described by something this story is about.',
+      },
+      outcome_note: {
+        type: 'string',
+        description:
+          'For The Saga: whether the sources report an outcome that already happened, and which beat the copy lands on. One sentence. An empty string for other buckets.',
+      },
       hashtags: {
         type: 'array',
         description: 'Three to five hashtags, each starting with #.',
@@ -96,6 +112,7 @@ export const REPORT_COPY_TOOL = {
       'on_screen_copies',
       'caption',
       'call_to_action',
+      'outcome_note',
       'hashtags',
       'sources',
     ],
@@ -115,6 +132,8 @@ export type CopyCall = {
     copyDraft: string;
     captionDraft: string;
     remainingPatterns: string[];
+    /** D-238. The Saga's note on whether an outcome already happened. Empty elsewhere; absent on rows before v17. */
+    outcomeNote?: string;
   };
 };
 
@@ -138,17 +157,26 @@ export class CopyReportError extends Error {
 
 function text(input: Record<string, unknown>, key: string, required: boolean): string {
   const value = input[key];
-  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (typeof value === 'string' && value.trim()) return repairModelText(value).trim();
   if (required) throw new CopyReportError(`report_copy is missing ${key}.`);
   return '';
 }
 
 /**
- * A model sometimes writes the two characters \ and n where a newline belongs.
- * Real newlines stay. A Windows break, real or written out, becomes one newline.
+ * A model sometimes writes the two characters \ and n where a newline belongs,
+ * or \" where a quote belongs. Real newlines stay. A Windows break, real or
+ * written out, becomes one newline. D-246 widened this to every written-out
+ * escape (lib/reels/copy/clean-text.ts).
  */
 export function restoreLineBreaks(value: string): string {
-  return value.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\r\n/g, '\n');
+  return repairModelText(value);
+}
+
+/** D-246. The prefix that marks a report failed for leftover text artifacts, so the call can be retried. */
+export const TEXT_ARTIFACT_ERROR = 'report_copy text still carries';
+
+export function isTextArtifactError(error: string | null | undefined): boolean {
+  return typeof error === 'string' && error.startsWith(TEXT_ARTIFACT_ERROR);
 }
 
 /** At least two paragraphs with a blank line between them. A single line break is not enough. */
@@ -168,10 +196,10 @@ function captionWithBreaks(value: string): string {
 
 /** Tool input is model output. A bare string where a list was asked for still counts. */
 function list(value: unknown): string[] {
-  if (typeof value === 'string') return value.trim() ? [value.trim()] : [];
+  if (typeof value === 'string') return value.trim() ? [repairModelText(value).trim()] : [];
   if (!Array.isArray(value)) return [];
   return value
-    .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+    .map((entry) => (typeof entry === 'string' ? repairModelText(entry).trim() : ''))
     .filter((entry) => entry.length > 0);
 }
 
@@ -182,7 +210,7 @@ function sourceList(value: unknown): Array<{ name: string; url: string }> {
     const name = (entry as Record<string, unknown>).name;
     const url = (entry as Record<string, unknown>).url;
     if (typeof name !== 'string' || typeof url !== 'string') return [];
-    return [{ name: name.trim(), url: url.trim() }];
+    return [{ name: repairModelText(name).trim(), url: repairModelText(url).trim() }];
   });
 }
 
@@ -197,11 +225,12 @@ function onScreenCopies(value: unknown): [string, string] {
 export function parseCopyReport(input: unknown): CopyCall {
   if (!input || typeof input !== 'object') throw new CopyReportError('report_copy input is not an object.');
   const record = input as Record<string, unknown>;
+  const callToAction = text(record, 'call_to_action', true);
   const call: CopyCall = {
     onScreenCopies: onScreenCopies(record.on_screen_copies),
     viewerStake: text(record, 'viewer_stake', true),
-    caption: captionWithBreaks(text(record, 'caption', true)),
-    callToAction: restoreLineBreaks(text(record, 'call_to_action', true)),
+    caption: captionWithBreaks(stripCaptionTail(text(record, 'caption', true), callToAction, 2)),
+    callToAction,
     hashtags: list(record.hashtags).map((tag) => (tag.startsWith('#') ? tag : `#${tag}`)),
     sources: sourceList(record.sources),
     working: {
@@ -209,9 +238,28 @@ export function parseCopyReport(input: unknown): CopyCall {
       copyDraft: text(record, 'copy_draft', false),
       captionDraft: text(record, 'caption_draft', false),
       remainingPatterns: list(record.remaining_patterns),
+      outcomeNote: text(record, 'outcome_note', false),
     },
   };
+  const leftovers = reportArtifacts(call);
+  if (leftovers.length > 0) {
+    throw new CopyReportError(`${TEXT_ARTIFACT_ERROR} ${leftovers.join('; ')}.`);
+  }
   return call;
+}
+
+/** D-246. Every artifact still in the fields that get posted or rendered, named by field. */
+export function reportArtifacts(
+  call: Pick<CopyCall, 'onScreenCopies' | 'viewerStake' | 'caption' | 'callToAction' | 'hashtags'>,
+): string[] {
+  const named = (field: string, found: string[]) => found.map((artifact) => `${artifact} in ${field}`);
+  return [
+    ...call.onScreenCopies.flatMap((copy, index) => named(`on-screen copy ${index + 1}`, textArtifacts(copy))),
+    ...named('viewer stake', textArtifacts(call.viewerStake)),
+    ...named('caption', captionBodyArtifacts(call.caption, call.callToAction)),
+    ...named('call to action', textArtifacts(call.callToAction)),
+    ...named('hashtags', textArtifacts(call.hashtags.join(' '))),
+  ];
 }
 
 /** The posted row: one of the call's on-screen lines, with that call's caption. */
@@ -242,6 +290,9 @@ export function fullCaption(report: Pick<CopyReport, 'caption' | 'callToAction' 
   const hashtags = report.hashtags.join(' ').trim();
   let body = stripTrailing(report.caption.trim(), hashtags);
   body = stripTrailing(body, callToAction);
+  // D-246: a call to action or hashtag line written with different spacing or
+  // a "CTA:" label is still posted once.
+  body = stripCaptionTail(body, callToAction, 1);
   return fitCaptionParts(body, callToAction, hashtags, CAPTION_MAX_CHARS);
 }
 
@@ -329,6 +380,8 @@ export type CopyChecks = {
   urlsInCaption: number;
   firstPersonWords: string[];
   unknownSourceUrls: string[];
+  /** D-246. Escape sequences or tool syntax still in the posted text. Empty when clean. */
+  textArtifacts: string[];
 };
 
 const DASH = /[\u2013\u2014]|\s--\s/g;
@@ -366,5 +419,6 @@ export function checkCopy(
     urlsInCaption: caption.match(URL_PATTERN)?.length ?? 0,
     firstPersonWords: [...new Set(published.match(FIRST_PERSON) ?? [])],
     unknownSourceUrls: report.sources.map((source) => source.url).filter((url) => !known.has(url)),
+    textArtifacts: [...textArtifacts(report.onScreenCopy), ...textArtifacts(caption)],
   };
 }

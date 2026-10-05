@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 
 import { COPY_MODEL, PASSING_REELS_PER_NIGHT } from '@/lib/reels/config';
 import { resolveCopyModel } from '@/lib/reels/copy/model';
+import { holdOutReasons, loadPublishedStoryKeys, type HeldOutReason } from '@/lib/reels/copy/held-out';
 import { fillSlots, type GradedLine, type SlotIdea } from '@/lib/reels/copy/slots';
 import { loadCopyTargets, type CopyTarget } from '@/lib/reels/copy/store';
 import type { CopyClient } from '@/lib/reels/copy/writer';
@@ -21,6 +22,8 @@ import { dbQuery } from '@/lib/db';
 export type PassingGeneration = {
   status: 'skipped' | 'ok' | 'partial';
   filled: Array<{ slot: number; postIdeaId: string; passed: boolean; locked: boolean }>;
+  /** D-245, D-247. Ideas kept out of the slots tonight, and why. */
+  heldOut: Array<{ postIdeaId: string; reason: HeldOutReason }>;
   usd: number;
   failures: string[];
 };
@@ -30,6 +33,8 @@ export type PassingGeneration = {
  * already fills its slot. An idea that misses its tries is demoted for the
  * day, and the next idea tries. After four misses, the best graded line from
  * that pool ships. Frames are queued only for the reels this run wrote.
+ * A story already published, or an idea built only from teasers, never takes
+ * a slot (D-245, D-247).
  */
 export async function generatePassingReels(input: {
   runId: string | null;
@@ -40,7 +45,7 @@ export async function generatePassingReels(input: {
   jev?: JevRunner;
 }): Promise<PassingGeneration> {
   const count = input.count ?? PASSING_REELS_PER_NIGHT;
-  if (!copyPromptApproved()) return { status: 'skipped', filled: [], usd: 0, failures: [] };
+  if (!copyPromptApproved()) return { status: 'skipped', filled: [], heldOut: [], usd: 0, failures: [] };
   if (!input.client && !process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not set.');
   const client: CopyClient = input.client ?? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const model = await resolveCopyModel(() => {
@@ -56,15 +61,22 @@ export async function generatePassingReels(input: {
   const nyDate = rows[0]?.ny_date;
   if (!nyDate) throw new Error('That slate does not exist.');
 
-  const [ideas, locks, penalties] = await Promise.all([
+  const [slotIdeas, locks, penalties, published] = await Promise.all([
     loadSlotIdeas(input.slateId),
     locksForSlate(input.slateId),
     loadDayPenalties(nyDate),
+    loadPublishedStoryKeys(),
   ]);
   const targets = new Map<string, CopyTarget>();
   for (const target of await loadCopyTargets(input.slateId, { all: true })) {
     targets.set(target.postIdeaId, target);
   }
+  const held = holdOutReasons(targets.values(), published);
+  const heldOut = [...held].map(([postIdeaId, reason]) => ({ postIdeaId, reason }));
+  if (heldOut.length > 0) {
+    console.info(`[reels] held out of tonight's slots: ${heldOut.map((row) => `${row.postIdeaId} (${row.reason})`).join(', ')}`);
+  }
+  const ideas = slotIdeas.filter((idea) => !held.has(idea.id));
   const outcomes = new Map<string, IdeaCopyOutcome>();
   let usd = 0;
   const failures: string[] = [];
@@ -126,6 +138,7 @@ export async function generatePassingReels(input: {
   return {
     status: failures.length === 0 && made >= count ? 'ok' : 'partial',
     filled,
+    heldOut,
     usd,
     failures,
   };

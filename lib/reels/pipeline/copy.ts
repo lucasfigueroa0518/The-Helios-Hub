@@ -14,7 +14,13 @@ import {
   type FlattenedCopyLine,
 } from '@/lib/reels/copy/pick';
 import { decideFullStory } from '@/lib/reels/copy/full-story';
-import { checkCopy, publishCopy, type CopyCall, type CopyReport } from '@/lib/reels/copy/report';
+import {
+  checkCopy,
+  isTextArtifactError,
+  publishCopy,
+  type CopyCall,
+  type CopyReport,
+} from '@/lib/reels/copy/report';
 import { judgeCopyLine } from '@/lib/reels/copy/score';
 import { loadCopyTargets, saveIdeaCopy, type CopyTarget } from '@/lib/reels/copy/store';
 import { findReelLock } from '@/lib/reels/locks';
@@ -214,7 +220,12 @@ export async function writeTargetCopy(
   let cost = 0;
   const drafts: DraftCall[] = [];
   let promptVersion = '';
-  const input: CopyInput = { bucket: target.bucket, framework: target.framework, members: target.members };
+  const input: CopyInput = {
+    bucket: target.bucket,
+    framework: target.framework,
+    members: target.members,
+    earlierLines: target.earlierLines,
+  };
 
   const account = async (result: CopyResult, component: 'copy-caption' | 'copy-rewrite') => {
     promptVersion = result.version;
@@ -246,9 +257,22 @@ export async function writeTargetCopy(
       ),
     );
 
+  /**
+   * D-246. A report that still carries escape sequences or tool syntax after
+   * repair fails, and that one call is tried once more. Both calls are billed.
+   */
+  const writeOnce = async (callInput: CopyInput, component: 'copy-caption' | 'copy-rewrite'): Promise<CopyResult> => {
+    let result = await writeCopy(client, callInput, deps?.signal, model);
+    await account(result, component);
+    if (!result.call && isTextArtifactError(result.error)) {
+      result = await writeCopy(client, callInput, deps?.signal, model);
+      await account(result, component);
+    }
+    return result;
+  };
+
   for (let index = 0; index < COPY_CALLS_PER_IDEA; index += 1) {
-    const result = await writeCopy(client, input, deps?.signal, model);
-    await account(result, 'copy-caption');
+    const result = await writeOnce(input, 'copy-caption');
     drafts.push({ kind: 'draft', call: result.call, error: result.error });
   }
 
@@ -300,13 +324,7 @@ export async function writeTargetCopy(
 
   let picked = buildCopyVariants(drafts, judgments, target.bucket);
   if (allowRewrite && picked.winner && !picked.winner.eligible) {
-    const rewrite = await writeCopy(
-      client,
-      { ...input, rewriteOf: rewriteLines(picked.variants.lines) },
-      deps?.signal,
-      model,
-    );
-    await account(rewrite, 'copy-rewrite');
+    const rewrite = await writeOnce({ ...input, rewriteOf: rewriteLines(picked.variants.lines) }, 'copy-rewrite');
     if (rewrite.call) {
       const rewriteCall = rewrite.call;
       try {

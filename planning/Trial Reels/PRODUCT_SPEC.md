@@ -97,10 +97,10 @@ Second, content bucket score: how well would this fit into one of our content bu
 - Why it works: A hard figure that contradicts expectation produces arousal through anxiety or awe, which is the transmission driver Berger and Milkman isolated. Loss aversion does the rest when the stat implies the viewer is currently losing something.
 - Live hook formulas: Anxiety / Loss Aversion, Counter-Intuitive Truth.
 - Resolution: Self-contained. The stat is the payload.
-- Copy: One statistic, one implication. Under 15 words. No preamble.
-- Caption: Source, methodology caveat, then what it means for the viewer's work or life. Can be told like a story with a plot.
+- Copy: One statistic, one implication. The implication says what the figure does to someone or lets them do. A second figure, a ranking, or a comparison is more of the statistic, not an implication. Under 15 words. No preamble.
+- Caption: Source, methodology caveat, and what it means for the viewer's work or life, each placed where the story needs it. Can be told like a story with a plot.
 - Feeds from: All
-- Example copy: "95% of company AI projects stall in testing. The AI is rarely why."
+- Example copy, three different shapes: "95% of company AI projects stall in testing. Most of that budget is gone." "Nurses spend 2 hours a shift fixing AI notes, time taken from patients." "Your AI assistant gets 1 in 8 dates wrong. The invites still go out."
 
 #### 3. The Saga
 
@@ -108,7 +108,7 @@ Second, content bucket score: how well would this fit into one of our content bu
 - Why it works: A cold open on the highest-tension moment opens the gap immediately, and chronology is the lowest-effort possible path to closing it, which is exactly the scent-to-cost ratio foraging theory predicts people follow. Arousal comes from anxiety and awe as the stakes escalate.
 - Live hook formulas: Hidden Mechanism, Awe / High Value.
 - Resolution: Deferred. The caption carries the payload.
-- Copy: Cold open at peak tension, then chronology. 20–32 words on one screen, longer than the other buckets.
+- Copy: Cold open at peak tension, then chronology. Where the sources report an outcome that already happened, the copy builds to it. Where they report none, the copy lands on the strongest true beat, and no outcome is invented. 20–32 words on one screen, longer than the other buckets.
 - Caption: Tell the story in an extremely captivating way. Humanizer skill used. Short attention span writing, really quick paragraphs. Use second and third hooks to keep the reader's attention. Write semi-informally, like a human.
 - Example copy: "In November 2023, the board fired Sam Altman on a Friday. By Monday, 700 of 770 employees had threatened to quit."
 

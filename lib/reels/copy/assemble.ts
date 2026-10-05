@@ -59,7 +59,14 @@ export type CopyInput = {
   members: readonly CopyMember[];
   /** Set only for the one rewrite call (D-216): the draft lines and how Jev judged them. */
   rewriteOf?: readonly CopyRewriteLine[];
+  /**
+   * D-242. On-screen copies this idea was given on earlier New York dates, most
+   * recent first, with their plain and stake scores. Shown to the drafts only.
+   */
+  earlierLines?: readonly EarlierCopyLine[];
 };
+
+export type EarlierCopyLine = { nyDate: string; onScreenCopy: string; plain: number; stake: number };
 
 export type AssembledCopyPrompt = {
   version: string;
@@ -147,9 +154,30 @@ export function buildCopySourcesBlock(members: readonly CopyMember[]): string {
   ].join('\n');
 }
 
+/**
+ * D-242. An idea that comes back on a later night sees what it was given before,
+ * so tonight's drafts take a different way in. It sits in the uncached task
+ * block, after the cached sources, so the prefix stays the same.
+ */
+function earlierLinesBlock(lines: readonly EarlierCopyLine[]): string[] {
+  if (lines.length === 0) return [];
+  return [
+    '',
+    'This post idea was written on an earlier night, and no copy cleared the bar. These on-screen copies were tried then. Each one is shown with how a first-time viewer scored its plain read and stake, from 0 to 1.',
+    '',
+    ...lines.map(
+      (line, index) =>
+        `Copy ${index + 1}, from ${line.nyDate}: "${line.onScreenCopy.replace(/\s*\n\s*/g, ' / ')}" Plain ${line.plain.toFixed(2)}. Stake ${line.stake.toFixed(2)}.`,
+    ),
+    '',
+    "They are here so tonight's copies take a different way in. Do not edit them or reuse their first lines. Open on a different beat, figure, or person from the sources where the sources have one, and keep the facts that matter. Every rule in this prompt still applies.",
+  ];
+}
+
 function draftTask(input: CopyInput): string {
   return [
     'Write two on-screen copies and one caption for this post idea, from the source material above. Both copies open differently and carry the same stake, and the one caption pays both out.',
+    ...earlierLinesBlock(input.earlierLines ?? []),
     '',
     `Bucket: ${BUCKET_SPEC_TEXT[input.bucket].title}`,
     `Framework: ${FRAMEWORK_SPEC_TEXT[input.framework].title}`,

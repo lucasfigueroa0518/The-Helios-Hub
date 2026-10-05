@@ -25,6 +25,8 @@ export type ReviewFlagKind = 'wrong_merge' | 'missed_link' | 'junk_source';
  */
 export type DropReason =
   | 'no_full_text'
+  /** D-245: the only text we could get was a teaser or a gated page. */
+  | 'teaser'
   | 'fetch_failed'
   | 'off_topic'
   | 'junk'

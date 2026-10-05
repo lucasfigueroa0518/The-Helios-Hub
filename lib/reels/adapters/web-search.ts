@@ -15,6 +15,7 @@ import {
   WEB_SEARCH_SYSTEM,
   buildWebSearchUserPrompt,
 } from '@/lib/reels/prompts/web-search';
+import { recentPublishedHeadlines } from '@/lib/reels/copy/held-out';
 import { listRunSources, recentB6Headlines, recordCost } from '@/lib/reels/repository';
 import type { Adapter, AdapterItem } from '@/lib/reels/types';
 
@@ -382,8 +383,10 @@ export const claudeWebSearch: Adapter = {
     if (!b6PromptApproved()) throw new B6NotApprovedError();
     if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not set.');
 
-    const [recent, tonight] = await Promise.all([
+    // D-247: stories already published as reels are on the do-not-cover list too.
+    const [recent, published, tonight] = await Promise.all([
       recentB6Headlines(B6_MEMORY_NIGHTS),
+      recentPublishedHeadlines(),
       listRunSources(runId),
     ]);
 
@@ -397,7 +400,7 @@ export const claudeWebSearch: Adapter = {
       {
         role: 'user',
         content: buildWebSearchUserPrompt({
-          recentHeadlines: recent,
+          recentHeadlines: [...new Set([...published, ...recent])],
           tonightHeadlines: tonight
             .filter((source) => source.drop_reason === null)
             .map((source) => source.headline),

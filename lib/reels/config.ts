@@ -239,12 +239,19 @@ export const KLING_CLIP_SECONDS = 8;
  */
 export const COPY_MAX_TOKENS = 16_000;
 
+/** D-242. Earlier copies a returning idea's drafts see, most recent first. */
+export const EARLIER_COPY_LINES_MAX = 8;
+
+/** D-247. How far back a published reel's URLs and headline hold a story out. */
+export const PUBLISHED_STORY_HOLD_DAYS = 30;
+
 /**
  * ING-06 / D-036: below this we treat the text as a blurb rather than an
  * article and skip the item. Papers and model cards are exempt (D-067).
  * Visible through the `no_full_text` drop reason, so it is easy to retune.
+ * Raised from 600 with the teaser check (D-245).
  */
-export const FULL_TEXT_MIN_CHARS = 600;
+export const FULL_TEXT_MIN_CHARS = 800;
 
 /**
  * When an adapter already holds the whole item (an abstract, a README, a

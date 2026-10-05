@@ -3,6 +3,7 @@ import { parseFeed } from '@/lib/reels/net/feed';
 import { htmlToText } from '@/lib/reels/net/html';
 import { canonicalizeUrl, fetchText } from '@/lib/reels/net/http';
 import { publishedSince } from '@/lib/reels/net/published';
+import { looksLikeTeaser } from '@/lib/reels/net/teaser';
 import type { Adapter, AdapterItem, Bucket, SourceType } from '@/lib/reels/types';
 
 export type RssAdapterConfig = {
@@ -49,7 +50,8 @@ export function rssAdapter(config: RssAdapterConfig): Adapter {
         .sort((a, b) => (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0))
         .map((entry): AdapterItem => {
           const inlineText = entry.contentHtml ? htmlToText(entry.contentHtml) : '';
-          const hasFullText = inlineText.length >= FULL_TEXT_MIN_CHARS;
+          // D-245: a teaser in content:encoded is a pointer, not the article.
+          const hasFullText = inlineText.length >= FULL_TEXT_MIN_CHARS && !looksLikeTeaser(inlineText);
           if (config.inlineBody) {
             return {
               canonicalUrl: canonicalizeUrl(entry.link),
@@ -65,7 +67,7 @@ export function rssAdapter(config: RssAdapterConfig): Adapter {
           return {
             canonicalUrl: canonicalizeUrl(entry.link),
             headline: entry.title,
-            body: hasFullText ? inlineText : entry.summary,
+            body: hasFullText || looksLikeTeaser(inlineText) ? inlineText : entry.summary,
             author: entry.author,
             byline: entry.author ? `${entry.author}, ${config.name}` : config.name,
             publishTime: entry.publishedAt,

@@ -10,6 +10,7 @@ import {
   PLANTED_INSTRUCTION_BAR,
   RANKED_REPEAT_DAYS,
 } from '@/lib/reels/config';
+import { looksLikeTeaser } from '@/lib/reels/net/teaser';
 import { INGEST_FILTER } from '@/lib/reels/jev/questions/ingest-filter';
 import { PLANTED_INSTRUCTION } from '@/lib/reels/jev/questions/planted-instruction';
 import { mergeSets, type JevRunner } from '@/lib/reels/jev/runner';
@@ -45,6 +46,7 @@ import type {
  */
 const VISIBLE_DROPS: ReadonlySet<DropReason> = new Set([
   'no_full_text',
+  'teaser',
   'fetch_failed',
   'off_topic',
   'junk',
@@ -219,7 +221,7 @@ type ResolvedBody = {
  * D-041). Adapters that already hold the whole item — abstracts, READMEs,
  * changelog entries — are exempt from the article floor (D-067).
  */
-async function resolveBody(
+export async function resolveBody(
   item: AdapterItem,
   deps: IngestDeps,
   signal?: AbortSignal,
@@ -251,8 +253,14 @@ async function resolveBody(
   }
 
   const page = parsePage(fetched.html);
+  // D-245: a teaser never enters the pool. When the feed only gave a teaser,
+  // or the page is one, and no full article came back, the item is dropped.
+  const feedWasTeaser = looksLikeTeaser(base.body);
+  if (looksLikeTeaser(page.text)) {
+    return { ...base, dropReason: 'teaser', resolvedUrl: fetched.finalUrl };
+  }
   if (page.paywalled || page.text.length < FULL_TEXT_MIN_CHARS) {
-    return { ...base, dropReason: 'no_full_text', resolvedUrl: fetched.finalUrl };
+    return { ...base, dropReason: feedWasTeaser ? 'teaser' : 'no_full_text', resolvedUrl: fetched.finalUrl };
   }
 
   return {

@@ -1,5 +1,6 @@
 import { dbQuery } from '@/lib/db';
-import type { CopyMember } from '@/lib/reels/copy/assemble';
+import { EARLIER_COPY_LINES_MAX } from '@/lib/reels/config';
+import type { CopyMember, EarlierCopyLine } from '@/lib/reels/copy/assemble';
 import type { CopyVariants } from '@/lib/reels/copy/pick';
 import type { CopyChecks, CopyReport } from '@/lib/reels/copy/report';
 import type { BucketId, FrameworkId } from '@/lib/reels/scoring/decide';
@@ -11,6 +12,8 @@ export type CopyTarget = {
   bucket: BucketId;
   framework: FrameworkId;
   members: CopyMember[];
+  /** D-242. Copies tried on earlier New York dates, most recent first. Empty for a new idea. */
+  earlierLines?: EarlierCopyLine[];
 };
 
 /**
@@ -71,6 +74,7 @@ export async function loadCopyTargets(
       bucket: row.chosen_bucket,
       framework: row.chosen_framework,
       members: [],
+      earlierLines: [],
     };
     target.members.push({
       role: row.role,
@@ -85,7 +89,54 @@ export async function loadCopyTargets(
     });
     byId.set(row.post_idea_id, target);
   }
+  const earlier = await loadEarlierLines(slateId, [...byId.keys()]);
+  for (const [postIdeaId, lines] of earlier) {
+    const target = byId.get(postIdeaId);
+    if (target) target.earlierLines = lines;
+  }
   return [...byId.values()];
+}
+
+/**
+ * D-242. Every judged on-screen copy each idea was given on a New York date
+ * before this slate's, most recent first. Repeats collapse to their latest
+ * appearance, and each idea keeps at most EARLIER_COPY_LINES_MAX.
+ */
+export async function loadEarlierLines(
+  slateId: string,
+  postIdeaIds: readonly string[],
+): Promise<Map<string, EarlierCopyLine[]>> {
+  const out = new Map<string, EarlierCopyLine[]>();
+  if (postIdeaIds.length === 0) return out;
+  const { rows } = await dbQuery<{
+    post_idea_id: string;
+    ny_date: string;
+    copy: string;
+    plain: number;
+    stake: number;
+  }>(
+    `SELECT h.post_idea_id, s.ny_date::text AS ny_date, line->>'onScreenCopy' AS copy,
+            (line->>'plain')::float8 AS plain, (line->>'stake')::float8 AS stake
+       FROM reels.idea_copy_history h
+       JOIN reels.score_slates s ON s.id = h.slate_id
+       CROSS JOIN LATERAL jsonb_array_elements(COALESCE(h.variants->'lines', '[]'::jsonb)) AS line
+      WHERE h.post_idea_id = ANY($2::uuid[])
+        AND s.ny_date < (SELECT ny_date FROM reels.score_slates WHERE id = $1::uuid)
+        AND line->>'onScreenCopy' IS NOT NULL
+        AND jsonb_typeof(line->'plain') = 'number'
+        AND jsonb_typeof(line->'stake') = 'number'
+      ORDER BY h.created_at DESC`,
+    [slateId, [...postIdeaIds]],
+  );
+  for (const row of rows) {
+    const lines = out.get(row.post_idea_id) ?? [];
+    const key = row.copy.replace(/\s+/g, ' ').trim().toLowerCase();
+    if (lines.length >= EARLIER_COPY_LINES_MAX) continue;
+    if (lines.some((line) => line.onScreenCopy.replace(/\s+/g, ' ').trim().toLowerCase() === key)) continue;
+    lines.push({ nyDate: row.ny_date, onScreenCopy: row.copy.trim(), plain: Number(row.plain), stake: Number(row.stake) });
+    out.set(row.post_idea_id, lines);
+  }
+  return out;
 }
 
 const COPY_COLUMNS = `slate_id, post_idea_id, run_id, prompt_version, model, bucket, framework,

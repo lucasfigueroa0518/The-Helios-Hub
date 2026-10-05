@@ -6,6 +6,7 @@ import {
   PUBLISH_VIDEO_URL_SECONDS,
   TRIAL_GRADUATION_STRATEGY,
 } from '@/lib/reels/config';
+import { postableCaption } from '@/lib/reels/copy/clean-text';
 import { CAPTION_MAX_CHARS, fullCaption, shortenAssembledCaption } from '@/lib/reels/copy/report';
 import { setPublished } from '@/lib/reels/repository';
 import { createLiveMetaClient, metaConfigured, type MetaClient } from '@/lib/reels/music/meta';
@@ -92,6 +93,22 @@ export async function publishReadiness(
   // Posting uses that same pair so Live and Force post are not stuck waiting
   // on a volume control the page does not have.
   const mix = options?.mixOverride ?? (await publishMix()) ?? { audioVolume: 100, videoVolume: 100 };
+  // D-246: the last gate before Instagram. Repairs written-out escapes, then
+  // refuses a caption that still carries one or any tool syntax.
+  const posted = postableCaption(
+    fullCaption({
+      caption: reel.caption,
+      callToAction: reel.call_to_action ?? '',
+      hashtags: reel.hashtags ?? [],
+    }),
+  );
+  if (posted.problems.length > 0) {
+    return {
+      ok: false,
+      status: 409,
+      note: `The caption still has ${posted.problems.join(' and ')} after repair. Rewrite the copy before posting.`,
+    };
+  }
   return {
     ok: true,
     postIdeaId: reel.post_idea_id,
@@ -101,11 +118,7 @@ export async function publishReadiness(
       audioId: reel.picked_audio_id,
       title: reel.picked_title,
       artist: reel.picked_artist,
-      caption: fullCaption({
-        caption: reel.caption,
-        callToAction: reel.call_to_action ?? '',
-        hashtags: reel.hashtags ?? [],
-      }),
+      caption: posted.caption,
       mix,
     },
   };
@@ -219,6 +232,15 @@ export async function claimAndPublish(deps: PublishDeps = {}): Promise<{ id: str
     );
     const attempt = rows[0];
     if (!attempt?.video_storage_path) throw new Error('The video for this reel is gone.');
+    // D-246: attempts queued before the gate existed are checked here too.
+    const posted = postableCaption(attempt.caption);
+    if (posted.problems.length > 0) {
+      throw new Error(`The caption still has ${posted.problems.join(' and ')} after repair, so it was not posted.`);
+    }
+    if (posted.caption !== attempt.caption) {
+      attempt.caption = posted.caption;
+      await update(id, { caption: attempt.caption });
+    }
     if (attempt.caption.length > CAPTION_MAX_CHARS) {
       attempt.caption = shortenAssembledCaption(attempt.caption);
       await update(id, { caption: attempt.caption });
