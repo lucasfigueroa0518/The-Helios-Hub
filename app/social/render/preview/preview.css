@@ -302,15 +302,16 @@
   text-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
 }
 
-/* Cover chevron bottom-right — orange arrow.
- * 2026-09-29 late second pass: LOCKED from design-v1 reference fixtures
- * (runs/design-v1-fixture-{no,with}-photos/preview/slide-00.png). These
- * exact coordinates are covered by a test that fails if they move. Don't
- * change without renewing both fixtures. */
+/* Cover arrow: top right, about 8% down (spec §5.2, DECIDED 2026-10-04
+ * review; overrides the design-v1 bottom-right contract). Clear of
+ * Instagram's "1/N" counter in the top-right corner, and the headline stays
+ * anchored bottom-left at full width, so the two can't collide.
+ * 8% of 1350px = 108px from the slide's top edge. */
 .helios-cover__chevron {
   position: absolute;
-  right: 96px;
-  bottom: 60px;
+  /* No-photo cover: the foreground sits inside the slide's 96px padding. */
+  top: 12px;
+  right: 0;
   font-family: var(--font-body);
   font-size: 60px;
   font-weight: 700;
@@ -318,6 +319,26 @@
   line-height: 1;
   z-index: 3;
 }
+
+/* Photo cover: the foreground fills the whole 1080×1350 slide. */
+.helios-cover--bleed .helios-cover__chevron {
+  top: 108px;
+  right: 96px;
+}
+
+/* Clear zone around the arrow: the headline never rises into the top
+ * 216px of the slide (arrow 108px down + 60px glyph + 48px margin). */
+.helios-cover__foreground {
+  padding-top: 120px; /* 216px − the slide's 96px padding */
+  box-sizing: border-box;
+}
+.helios-cover--bleed .helios-cover__foreground {
+  padding-top: 0;
+}
+/* On the photo cover the headline is absolutely positioned from the bottom,
+ * so CSS can't hold the zone without clipping words; the measured cover-fit
+ * check (spec §5.2, M8) enforces it there. A ≤90-character headline ends
+ * far below the zone. */
 
 /* Arrow-box reserve attempt reverted 2026-09-29 late second pass:
  * float+shape-outside on ::after reserved horizontal space on EVERY
@@ -403,6 +424,27 @@
   object-fit: cover;
   object-position: center center;
   display: block;
+}
+
+/* Photo on top, text below (layout rotation, spec §5.3): the same frame,
+   anchored to the top edge and fading downward into the canvas. */
+.helios-text--photo-top {
+  justify-content: flex-end;
+  padding-top: 0;
+}
+
+.helios-text--photo-top .helios-text__photo-frame {
+  top: -96px;
+  bottom: auto;
+  height: 52%;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 40%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 40%, transparent 100%);
+}
+
+/* Keep the credit on the solid part of the photo, below the wordmark. */
+.helios-text--photo-top .helios-photo-credit--frame {
+  top: 140px;
+  bottom: auto;
 }
 
 /* ── Landing slide (HEADLINE only, centered) ──────────────────────────── */

@@ -198,6 +198,10 @@ Only the four sources needed to put a real photo on every slide:
 
 - Render the finished post through the pulled `SlideTemplate.tsx` and `app/social/render/preview/` on a local page: slides, caption and photo credits.
 - Local only: no Storage uploads, no database, no Instagram.
+- **Pulled forward from M8 (Tommy, 2026-10-05):**
+  - basic layout rotation, no 3 consecutive slides with the same layout (spec §5.3; renderer only);
+  - the cover arrow at its decided spot, top right about 8% down with a clear zone (spec §5.2);
+  - the offline starter set as the last photo step, so no slide is ever empty even when every online source fails (spec §5.1a step 4).
 - **Accept:** a stubbed post renders every slide on the preview page with its photo and credit.
 
 ### Checkpoint: first end-to-end run (with Tommy's go-ahead and a cost estimate)
@@ -211,6 +215,7 @@ Only the four sources needed to put a real photo on every slide:
 ### M7: Mechanical guarantees (spec §6)
 
 - **Quotation marks (Tommy, 2026-10-05):** allowed only around code-filled quote IDs. In the planted-error test, typed quote marks ("extremely reckless") survived a SWAP. M7 flags any quotation marks in slide or caption text that aren't a filled quote.
+- **Trailing comma on displayed quotes (Tommy, 2026-10-05):** strip a trailing comma (and the space before it) from a quote as displayed on a slide, e.g. the SIF excerpt "… of all Americans,". Punctuation only; the words are unchanged, and the quoted-text match still checks the words against the brief.
 
 - **Silent fixes:** punctuation, quotes, whitespace, highlight snapping, credits and Source line.
 - **Pass/fail checks:** structure, character limits (one retry), quoted-text match, background slides ≤ 2, agency-credit rejection, photo licence/resolution/crop, render, cost cap.
@@ -236,7 +241,7 @@ Only the four sources needed to put a real photo on every slide:
   - the Helios photo bank.
 - **Ranking:** code first, then the Jev metadata pre-screen, then the image check on the top ~5.
 - No-repeat log.
-- **Rendering:** cover fit measured on the rendered slide, face-safe crop (code library), stat-slide darkened backgrounds (§5.3a), layout rotation (no 3 in a row, §5.3), spread slides (§5.4).
+- **Rendering:** cover fit measured on the rendered slide, face-safe crop (code library), stat-slide darkened backgrounds (§5.3a), spread slides (§5.4). (Basic layout rotation and the arrow move were pulled into M6.)
 - Article photos, Commons, stock and the identity check already exist from M5; this milestone adds the rest of the chain and the photo bank.
 - **Accept:** fixture slides always get a photo; a person slide never falls back to another person; covers pass the fit check.
 

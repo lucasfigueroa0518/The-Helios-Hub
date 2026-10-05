@@ -10,6 +10,8 @@
  *   3. stock    → the slide's `stock:` scene, via Openverse
  *   4. neutral  → neutral scenes (places and objects, never people), tried in
  *                 order; first the one that fits the subject type
+ *   5. starter  → the offline Helios starter set (starter-set.ts): no network,
+ *                 so this step can't come up empty
  * Fallbacks are scenes, never people (spec §5.1): step 2 only ever shows
  * the identity-verified subject itself.
  *
@@ -26,8 +28,9 @@ import type { ImageRequest } from '@/lib/social/writer/draft';
 
 import { classifyCredit } from './credit';
 import { checkIdentity, type IdentityResult, type SubjectType } from './identity';
+import { pickStarter } from './starter-set';
 
-export type PhotoSource = 'article' | 'commons' | 'stock';
+export type PhotoSource = 'article' | 'commons' | 'stock' | 'starter';
 
 export type Photo = {
   url: string;
@@ -40,7 +43,7 @@ export type Photo = {
   qid: string | null;
 };
 
-export type ChainStep = 'article' | 'subject' | 'stock' | 'neutral';
+export type ChainStep = 'article' | 'subject' | 'stock' | 'neutral' | 'starter';
 
 /** Identity check outcome for the run log. */
 export type IdentityNote = { subject: string; ok: boolean; detail: string };
@@ -238,6 +241,12 @@ export async function findPhoto(request: ImageRequest, ctx: PhotoContext, deps: 
     const p = await attempt('neutral', () => stockPhoto(scene, ctx, deps, steps));
     if (p) return done(p, 'neutral');
   }
-  steps.push('no photo: every step failed');
+  // 5. The offline starter set.
+  const starter = pickStarter(ctx.used);
+  if (starter) {
+    steps.push(`starter set: ${starter.url}`);
+    return done(starter, 'starter');
+  }
+  steps.push('no photo: every step failed, starter set used up');
   return { request, photo: null, via: null, identity, steps };
 }

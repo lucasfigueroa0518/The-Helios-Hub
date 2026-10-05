@@ -222,6 +222,14 @@ export type SlideCopy = {
   photoTreatment?: 'card' | 'bottom-fade';
 
   /**
+   * Text slide: where the photo sits. `below` (default): headline + body on
+   * top, photo fading up from the bottom. `top`: photo on top, text below.
+   * Set by the layout rotation (layout-rotation.ts, spec §5.3), never by
+   * the editorial stages.
+   */
+  photoPlacement?: 'below' | 'top';
+
+  /**
    * Design-skill variant code from the helios-social-skill layout library.
    * Sits alongside `layoutVariant` (the family) as a CSS modifier so a
    * single family can express multiple compositions. Optional — the family

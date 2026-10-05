@@ -6,12 +6,13 @@
  * Not here yet, by design:
  *   - highlight colours: the draft has no highlight field, so every span is
  *     `narrative` until M7's highlight snapping;
- *   - layout rotation, spreads, stat-photo darkening: M8;
+ *   - spreads, stat-photo darkening: M8 (layout rotation is in, spec §5.3);
  *   - story category chip: `tech` until there's a classifier for it.
  */
 import type { Photo } from '@/lib/social/photos/find';
 import type { FilledDraft, FilledSlide } from '@/lib/social/writer/draft';
 
+import { rotateLayouts } from './layout-rotation';
 import type { Post, SlideCopy, SpanRun } from './types';
 
 const run = (text: string): SpanRun => [{ text, role: 'narrative' }];
@@ -51,16 +52,20 @@ export function attributionBlock(photos: Array<Photo | null>): string | undefine
   return credits.length ? `Photos: ${credits.join('; ')}` : undefined;
 }
 
+/** The slides in draft order, before layout rotation. */
+export function draftSlides(draft: FilledDraft, photos: { cover: Photo | null; slides: Array<Photo | null> }): SlideCopy[] {
+  return [
+    { position: 0, layoutVariant: 'cover', headline: run(draft.cover), altText: draft.cover, ...photoFields(photos.cover) },
+    ...draft.slides.map((s, i) => storySlide(s, i + 1, photos.slides[i] ?? null)),
+    { position: draft.slides.length + 1, layoutVariant: 'follow', storySpecificLine: draft.follow, altText: draft.follow },
+  ];
+}
+
 export function toRenderPost(
   draft: FilledDraft,
   photos: { cover: Photo | null; slides: Array<Photo | null> },
   meta: PostMeta,
 ): Post {
-  const slides: SlideCopy[] = [
-    { position: 0, layoutVariant: 'cover', headline: run(draft.cover), altText: draft.cover, ...photoFields(photos.cover) },
-    ...draft.slides.map((s, i) => storySlide(s, i + 1, photos.slides[i] ?? null)),
-    { position: draft.slides.length + 1, layoutVariant: 'follow', storySpecificLine: draft.follow, altText: draft.follow },
-  ];
   return {
     format: 'carousel',
     storyType: 'tech',
@@ -68,7 +73,7 @@ export function toRenderPost(
     sourceUrl: meta.sourceUrl,
     publishedAt: meta.publishedAt,
     issueNumber: 0,
-    slides,
+    slides: rotateLayouts(draftSlides(draft, photos)).slides,
     caption: draft.caption.text,
     attributionBlock: attributionBlock([photos.cover, ...photos.slides]),
   };

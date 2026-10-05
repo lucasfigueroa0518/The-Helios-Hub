@@ -16,6 +16,9 @@ import { classifyCredit } from '@/lib/social/photos/credit';
 import { photosForDraft } from '@/lib/social/photos/design';
 import { FALLBACK_SCENES, findPhoto, NEUTRAL_SCENES, newPhotoContext } from '@/lib/social/photos/find';
 import { checkIdentity } from '@/lib/social/photos/identity';
+import { MAX_PHOTOS_PER_POST, STARTER_SET, starterUrl } from '@/lib/social/photos/starter-set';
+import { layoutOf, rotateLayouts } from '@/lib/social/render/layout-rotation';
+import type { SlideCopy } from '@/lib/social/render/types';
 import { toRenderPost } from '@/lib/social/render/from-draft';
 import type { Brief } from '@/lib/social/reporter/brief';
 import type { PageReadOk } from '@/lib/social/reporter/read-page';
@@ -239,12 +242,28 @@ test('no photo repeats within a post; each subject is checked once', async () =>
   assert.deepEqual(jevCalls.sort(), ['Donald Trump', 'Jay Clayton']);
 });
 
-test('a source error means no photo for that slide, not a failed post', async () => {
-  const d = { jev: identityJev(SIF_ANSWERS), http: (async () => { throw new Error('offline'); }) as unknown as typeof fetch };
-  const ctx = newPhotoContext(briefWith(), []);
-  const t = await findPhoto({ kind: 'stock', value: 'wall clock' }, ctx, d);
-  assert.equal(t.photo, null);
-  assert.ok(t.steps.some((s) => /offline/.test(s)));
+test('every online source failing: every slide still gets a photo, from the offline starter set', async () => {
+  const offline = { jev: identityJev(SIF_ANSWERS), http: (async () => { throw new Error('offline'); }) as unknown as typeof fetch };
+  const sub = sifDraft();
+  // 8 story slides + cover = the most a post can have.
+  sub.slides.push({ ...sub.slides[0]!, image: { kind: 'stock', value: 'extra one' } }, { ...sub.slides[1]!, image: { kind: 'stock', value: 'extra two' } });
+  const p = await photosForDraft(fillDraft(sub, briefWith()), briefWith(), [], offline);
+  const all = [p.cover, ...p.slides];
+  assert.equal(all.length, MAX_PHOTOS_PER_POST);
+  for (const t of all) {
+    assert.equal(t.via, 'starter', `${t.request.value}`);
+    assert.ok(t.steps.some((s) => /offline/.test(s)));
+  }
+  assert.equal(new Set(all.map((t) => t.photo!.url)).size, all.length, 'no repeats');
+});
+
+test('starter set: big enough for a full post, every file on disk, no people', async () => {
+  const { existsSync } = await import('node:fs');
+  assert.ok(STARTER_SET.length >= MAX_PHOTOS_PER_POST);
+  for (const p of STARTER_SET) {
+    assert.ok(existsSync(`public${starterUrl(p.file)}`), p.file);
+    assert.ok(!/\b(man|woman|person|people|portrait|face)\b/i.test(p.shows) || /no faces/.test(p.shows), p.file);
+  }
 });
 
 // ── Render adapter (M6) ──────────────────────────────────────────────────
@@ -309,4 +328,42 @@ test('preview: a stubbed post renders every slide with its photo and credit', as
     assert.ok(html.includes(`/social/stock/p${i}.jpg`), `slide ${i} (${s.layoutVariant}) shows its photo`);
     assert.ok(html.includes(`Credit ${i}`), `slide ${i} (${s.layoutVariant}) shows its credit`);
   });
+});
+
+// ── Layout rotation (spec §5.3) ──────────────────────────────────────────
+
+const textSlide = (n: number, photo = true): SlideCopy => ({
+  position: n, layoutVariant: 'text', headline: [{ text: `H${n}`, role: 'narrative' }], body: [{ text: `B${n}`, role: 'narrative' }],
+  altText: `H${n}`, ...(photo ? { photoUrl: `/p${n}.jpg`, photoCredit: 'c' } : {}),
+});
+
+test('rotation: no 3 consecutive slides share a layout, and no words change', () => {
+  const slides: SlideCopy[] = [{ position: 0, layoutVariant: 'cover', altText: 'c', photoUrl: '/c.jpg' }, ...[1, 2, 3, 4, 5, 6].map((n) => textSlide(n))];
+  const r = rotateLayouts(slides);
+  const layouts = r.slides.map(layoutOf);
+  for (let i = 2; i < layouts.length; i++) assert.ok(!(layouts[i] === layouts[i - 1] && layouts[i] === layouts[i - 2]), layouts.join(','));
+  assert.ok(r.changes.length > 0);
+  r.slides.forEach((s, i) => {
+    assert.deepEqual(s.headline, slides[i]!.headline);
+    assert.deepEqual(s.body, slides[i]!.body);
+    assert.equal(s.photoUrl, slides[i]!.photoUrl);
+  });
+});
+
+test('rotation: a run it cannot break (three stats) is reported, not forced', () => {
+  const stat = (n: number): SlideCopy => ({ position: n, layoutVariant: 'stat', title: [{ text: '1', role: 'narrative' }], altText: 's', photoUrl: `/s${n}.jpg` });
+  const r = rotateLayouts([stat(1), stat(2), stat(3)]);
+  assert.equal(r.changes.length, 0);
+  assert.equal(r.unresolved.length, 1);
+});
+
+test('render: a photo-on-top text slide renders', async () => {
+  const React = await import('react');
+  (globalThis as { React?: unknown }).React = React;
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const { SlideTemplate } = await import('@/lib/social/render/SlideTemplate');
+  const post = { format: 'carousel', storyType: 'tech', source: 's', sourceUrl: 'u', publishedAt: 'p', issueNumber: 0, caption: 'c',
+    slides: [{ position: 0, layoutVariant: 'cover', headline: [{ text: 'X', role: 'narrative' }], altText: 'x' }, { ...textSlide(1), photoPlacement: 'top' }] } as const;
+  const html = renderToStaticMarkup(React.createElement(SlideTemplate, { post: post as never, position: 1 }));
+  assert.match(html, /helios-text--photo-top/);
 });

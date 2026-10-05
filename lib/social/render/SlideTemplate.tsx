@@ -165,7 +165,7 @@ function TextSlide({ slide }: { slide: SlideCopy }) {
   const bodyRun = slide.body ?? slide.bodyBottom;
   const hasPhoto = Boolean(slide.photoUrl);
   return (
-    <div className={`helios-text${hasPhoto ? ' helios-text--with-photo' : ''}`}>
+    <div className={`helios-text${hasPhoto ? ' helios-text--with-photo' : ''}${hasPhoto && slide.photoPlacement === 'top' ? ' helios-text--photo-top' : ''}`}>
       {headlineRun && (
         <h2 className="helios-text__headline" data-length={headlineBucket}>
           <SpanRunView run={headlineRun} />
