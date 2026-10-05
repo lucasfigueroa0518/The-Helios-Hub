@@ -314,6 +314,9 @@ async function enqueueDueHandoffs(day: string, now: Date): Promise<number> {
       dedupeKey: `handoff:${row.campaign_id}:${row.identity_slug}:${row.handoff_date}`,
       scopeKey: row.campaign_id,
       availableAt: availableAt > now ? availableAt : now,
+      // A finished job that handed off nothing (lane was down) gets another
+      // pass. Claim only takes rows still queued, so this cannot double-send.
+      reviveTerminal: true,
     });
     enqueued += 1;
   }

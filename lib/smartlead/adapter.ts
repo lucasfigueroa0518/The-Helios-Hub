@@ -160,13 +160,26 @@ export type CampaignScheduleInput = {
   schedule_start_time?: string | null;
 };
 
-/** The body is nested under `schedule`. */
+/**
+ * The schedule fields sit on the request body. A nested `schedule` object
+ * makes Smartlead report `timezone` as missing. This call's daily cap is
+ * `max_new_leads_per_day`; the settings call rejects that key.
+ */
 export const setSchedule = op(
   'setSchedule',
   async (campaignId: number, schedule: CampaignScheduleInput) =>
     smartleadRequest<{ ok?: boolean }>(`/campaigns/${campaignId}/schedule`, {
       method: 'POST',
-      body: { schedule },
+      body: {
+        timezone: schedule.timezone,
+        days_of_the_week: schedule.days,
+        start_hour: schedule.start_hour,
+        end_hour: schedule.end_hour,
+        min_time_btw_emails: schedule.min_time_btw_emails,
+        ...(schedule.max_new_leads_per_day != null
+          ? { max_new_leads_per_day: schedule.max_new_leads_per_day }
+          : {}),
+      },
     }),
 );
 
