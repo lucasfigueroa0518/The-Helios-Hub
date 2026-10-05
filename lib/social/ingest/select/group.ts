@@ -73,15 +73,17 @@ export function neighbourPairs(articles: IngestArticle[]): NeighbourPair[] {
   return [...pairs].map((p) => p.split(',').map(Number) as NeighbourPair).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
 }
 
-function pickRepresentative(articles: IngestArticle[]): IngestArticle {
+/** Native feeds first, then the longest RSS body. */
+export function byPreference(articles: IngestArticle[]): IngestArticle[] {
   return [...articles].sort((a, b) => {
     const native = Number(b.feedKind === 'native') - Number(a.feedKind === 'native');
     return native || b.body.length - a.body.length;
-  })[0]!;
+  });
 }
 
 export function buildGroup(articles: IngestArticle[]): StoryGroup {
-  const representative = pickRepresentative(articles);
+  const ordered = byPreference(articles);
+  const representative = ordered[0]!;
   const members: GroupMember[] = [...articles]
     .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime())
     .map((a) => ({
@@ -107,6 +109,7 @@ export function buildGroup(articles: IngestArticle[]): StoryGroup {
     outletCount: outlets.length,
     publishedAt: members[0]!.publishedAt,
     representative,
+    articles: ordered,
     body: representative.body,
   };
 }

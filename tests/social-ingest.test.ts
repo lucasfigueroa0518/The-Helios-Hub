@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-  A1, A2, A4, ARTICLES, B1, B2, C1, D1, E1, F1, FEEDS, FULL_TEXT, G1, H1, I1, K1, NOW, POSTED, fixtureJev,
+  A1, A2, A4, ARTICLES, B1, B2, C1, C2, D1, E1, F1, FEEDS, FULL_TEXT, G1, H1, I1, K1, NOW, POSTED, fixtureJev,
 } from '@/fixtures/social/ingest/day';
 import { createJevAsk, jevCostUsd, type JevAsk } from '@/lib/social/jev/client';
 import * as DifferentStory from '@/lib/social/jev/questions/different-story.v1';
@@ -16,9 +16,9 @@ import * as SameEvent from '@/lib/social/jev/questions/same-event.v1';
 import * as Scoring from '@/lib/social/jev/questions/story-scoring.v1';
 import { createStubJev } from '@/lib/social/jev/stub';
 import { applyCodeFilters } from '@/lib/social/ingest/select/code-filters';
-import type { FetchBody } from '@/lib/social/ingest/select/enrich';
+import { enrichGroup, THIN_BODY_CHARS, type FetchBody } from '@/lib/social/ingest/select/enrich';
 import { createInMemoryFeedHealthLog } from '@/lib/social/ingest/select/feed-health';
-import { groupArticles } from '@/lib/social/ingest/select/group';
+import { buildGroup, groupArticles } from '@/lib/social/ingest/select/group';
 import { outletKey, outletName } from '@/lib/social/ingest/select/outlets';
 import { createInMemoryPosted } from '@/lib/social/ingest/select/posted';
 import { compareScored, SHORTLIST_MAX } from '@/lib/social/ingest/select/rank';
@@ -131,10 +131,57 @@ test('grouping: native and Google News copies of one outlet count once', async (
   assert.equal(b!.id, B1.sourceUrl); // native preferred over the Google News copy
 });
 
+// ── Enrichment (live run 2026-10-04: paywall lede scored as the story) ─
+
+test('enrichment: a paywall lede does not end the search; the member with the most text is scored', async () => {
+  const lede = 'President Donald Trump said he appointed Jay Clayton to help lead a White House task force on AI.';
+  const bbg = { ...C1, sourceUrl: 'https://www.bloomberg.com/clayton', body: lede, headline: 'Trump Taps Clayton for AI Task Force' };
+  const tc = { ...C2, sourceUrl: 'https://techcrunch.com/sif', body: 'Short RSS teaser.', headline: 'Trump unveils his new Super Intelligence Force' };
+  const gn = { ...B2, sourceUrl: 'https://news.google.com/rss/articles/gv', body: 'Teaser.', headline: 'Trump Addresses AI Safety' };
+  const group = buildGroup([gn, tc, bbg]);
+  assert.equal(group.representative.sourceUrl, bbg.sourceUrl); // native + longest RSS body
+  const calls: string[] = [];
+  const pages: Record<string, string> = {
+    [bbg.sourceUrl]: lede, // the fetch "succeeds" but returns the same paywall lede
+    [tc.sourceUrl]: 'Full TechCrunch article. '.repeat(100),
+    [gn.sourceUrl]: 'Should not be fetched. '.repeat(100),
+  };
+  const enriched = await enrichGroup(group, async (url) => {
+    calls.push(url);
+    return pages[url] ?? null;
+  });
+  assert.deepEqual(calls, [bbg.sourceUrl, tc.sourceUrl]); // stops once one clears the bar
+  assert.equal(enriched.representative.sourceUrl, tc.sourceUrl);
+  assert.ok(enriched.body.length >= THIN_BODY_CHARS);
+  assert.equal(enriched.id, group.id); // id stays stable
+});
+
+test('enrichment: all members thin → the most text found is kept, every member tried', async () => {
+  const a = { ...A2, body: 'Short.' };
+  const b = { ...A4, body: 'A slightly longer RSS teaser.' };
+  const calls: string[] = [];
+  const enriched = await enrichGroup(buildGroup([a, b]), async (url) => {
+    calls.push(url);
+    return url === a.sourceUrl ? 'A page with a bit more text than either teaser, but still thin.' : null;
+  });
+  assert.equal(calls.length, 2);
+  assert.equal(enriched.representative.sourceUrl, a.sourceUrl);
+  assert.match(enriched.body, /bit more text/);
+});
+
+test('enrichment: a group whose RSS body already clears the bar makes no fetch', async () => {
+  const calls: string[] = [];
+  await enrichGroup(buildGroup([A1]), async (url) => {
+    calls.push(url);
+    return null;
+  });
+  assert.deepEqual(calls, []);
+});
+
 // ── Scoring rules ──────────────────────────────────────────────────────
 
 const group = (over: Partial<StoryGroup> = {}): StoryGroup => ({
-  id: 'g', members: [], outlets: ['X'], outletCount: 1, publishedAt: NOW, representative: A1, body: A1.body, ...over,
+  id: 'g', members: [], outlets: ['X'], outletCount: 1, publishedAt: NOW, representative: A1, articles: [A1], body: A1.body, ...over,
 });
 
 test('scoring: skip list, already posted, and the required questions', () => {

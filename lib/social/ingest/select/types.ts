@@ -17,7 +17,7 @@ export type GroupMember = {
 
 /** Same story, many outlets = 1 candidate (spec §5B). */
 export type StoryGroup = {
-  /** The representative article's URL. */
+  /** Stable id: the first-choice representative's URL at grouping time. */
   id: string;
   /** Every article in the group, newest first. */
   members: GroupMember[];
@@ -26,8 +26,11 @@ export type StoryGroup = {
   outletCount: number;
   /** Newest member's publish time. */
   publishedAt: Date;
+  /** The member whose text Jev scores (after enrichment: the member with the most text). */
   representative: IngestArticle;
-  /** Text Jev scores: the representative's RSS body, or its full page text when that was thin. */
+  /** Every member article, native feeds first, then longest RSS body. */
+  articles: IngestArticle[];
+  /** Text Jev scores: the most text any member yielded (RSS body or full page). */
   body: string;
 };
 
