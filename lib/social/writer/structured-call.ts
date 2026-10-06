@@ -29,8 +29,8 @@ export type StructuredCall<T> = {
   system: string;
   tool: Anthropic.Tool;
   user: string;
-  /** Throws an Error whose message lists the problems; returns the checked value. */
-  check: (input: unknown) => T;
+  /** Throws an Error whose message lists the problems; returns the checked value. `attempt` is 1 for the first submission, 2 for the retry. */
+  check: (input: unknown, attempt: number) => T;
 };
 
 export async function runStructuredCall<T>(call: StructuredCall<T>): Promise<StructuredResult<T>> {
@@ -74,7 +74,7 @@ export async function runStructuredCall<T>(call: StructuredCall<T>): Promise<Str
     let detail: string;
     if (submit) {
       try {
-        const value = call.check(submit.input);
+        const value = call.check(submit.input, retries + 1);
         return { ok: true, value, raw: raw!, costUsd: cost(), turns: turn, retries, retryErrors, turnUsage };
       } catch (err) {
         detail = err instanceof Error ? err.message : String(err);

@@ -9,13 +9,13 @@
  *        F2 quote marks and apostrophes made consistent (typographic)
  *        F3 whitespace and markdown leftovers removed
  *        F4 trailing comma stripped from a displayed quote (punctuation only)
+ *        F5 the caption's "Source:" line built by code (spec §6 #5)
  *   B. Pass/fail checks (each failure carries what happens next; see
  *      FAILURE_ACTION):
  *        C1 character limits
  *        C2 quotation marks only around quote text from the brief
  *        C3 voice list (banned words, phrases, openers, "!", emoji)
- *        C4 caption: one "Source:" line naming a brief source, no links;
- *           no hashtags
+ *        C4 no hashtags in the caption (the Source line is F5, built by code)
  *        C5 at most 2 background slides
  *        C6 photo credit and licence (credit present, allowed licence, no
  *           agency credit)
@@ -33,7 +33,7 @@ import { voiceHits } from './voice-lists';
 
 // ── A. Silent fixes ───────────────────────────────────────────────────
 
-export type Fix = { id: 'F1' | 'F2' | 'F3' | 'F4'; where: string; before: string; after: string };
+export type Fix = { id: 'F1' | 'F2' | 'F3' | 'F4' | 'F5'; where: string; before: string; after: string };
 
 /** F1: em dash → comma; en dash in a range → hyphen, otherwise a comma; spaced double hyphen → comma. */
 export function fixDashes(s: string): string {
@@ -71,8 +71,50 @@ export function fixTrailingComma(s: string): string {
   return s.replace(/\s*,\s*$/, '');
 }
 
-/** Apply A to a filled draft (the stages' text only; quote words untouched). */
-export function applySilentFixes(draft: FilledDraft): { draft: FilledDraft; fixes: Fix[] } {
+/** An outlet name for display: the brief's note in parentheses dropped ("Yahoo Creators (Noël Burgess)" → "Yahoo Creators"). */
+const displayOutlet = (s: string) => s.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+const nameKey = (s: string) => displayOutlet(s).toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+/** Every brief ID the final post's claim tags rest on (chosen cover, slides, quote and number IDs, caption). */
+export function citedIds(d: FilledDraft): string[] {
+  const ids = [
+    ...d.cover_options[d.chosen_cover - 1]!.facts,
+    ...d.slides.flatMap((s) => [...s.headline.facts, ...(s.body?.facts ?? []), ...(s.quote_id ? [s.quote_id] : []), ...s.number_ids]),
+    ...d.caption.facts,
+  ];
+  return [...new Set(ids)];
+}
+
+/**
+ * F5 (Tommy, 2026-10-06; spec §6 #5): the outlets cited by the brief entries
+ * in the final post's claim tags, deduped, in the order of the brief's
+ * SOURCES list. Null when the tags cite no outlet.
+ */
+export function buildSourceLine(d: FilledDraft, brief: Brief): string | null {
+  const entries = new Map<string, string[]>([
+    ...[...brief.facts, ...brief.background].map((f) => [f.id, f.sources] as [string, string[]]),
+    ...brief.quotes.map((q) => [q.id, q.via] as [string, string[]]),
+    ...brief.numbers.map((n) => [n.id, n.sources] as [string, string[]]),
+  ]);
+  const cited = new Set(citedIds(d).flatMap((id) => entries.get(id) ?? []).map(nameKey).filter(Boolean));
+  if (cited.size === 0) return null;
+  const order = brief.sources.map((s) => displayOutlet(s.outlet));
+  const named = order.filter((o) => cited.has(nameKey(o)));
+  // Outlets cited by an entry but missing from SOURCES keep the order they were cited in.
+  for (const id of citedIds(d)) for (const o of entries.get(id) ?? []) if (!named.some((n) => nameKey(n) === nameKey(o))) named.push(displayOutlet(o));
+  const list = [...new Set(named)];
+  const joined = list.length === 1 ? list[0]! : `${list.slice(0, -1).join(', ')} and ${list.at(-1)}`;
+  return `Source: ${joined}.`;
+}
+
+/** Replace any "Source:" line the Writer wrote with the code-built one. */
+export function withSourceLine(caption: string, line: string | null): string {
+  const kept = caption.split('\n').filter((l) => !/^\s*Sources?:/i.test(l)).join('\n').replace(/\n{3,}/g, '\n\n').trimEnd();
+  return line ? `${kept}\n\n${line}` : kept;
+}
+
+/** Apply A to a filled draft (the stages' text only; quote words untouched). F5 needs the brief. */
+export function applySilentFixes(draft: FilledDraft, brief?: Brief): { draft: FilledDraft; fixes: Fix[] } {
   const d: FilledDraft = structuredClone(draft);
   const fixes: Fix[] = [];
   const fix = (where: string, before: string, fn: (s: string) => string, id: Fix['id']) => {
@@ -92,6 +134,7 @@ export function applySilentFixes(draft: FilledDraft): { draft: FilledDraft; fixe
   });
   d.follow = all('follow', d.follow);
   d.caption.text = all('caption', d.caption.text);
+  if (brief) d.caption.text = fix('caption Source line', d.caption.text, (c) => withSourceLine(c, buildSourceLine(d, brief)), 'F5');
   return { draft: d, fixes };
 }
 
@@ -171,23 +214,10 @@ export function checkVoice(d: FilledDraft): Failure[] {
   return out;
 }
 
-const outletKey = (s: string) => s.toLowerCase().replace(/\(.*?\)/g, '').replace(/[^a-z0-9]+/g, '');
-
-/** C4: one "Source:" line naming at least one brief source, no links; no hashtags anywhere in the caption. */
-export function checkCaption(d: FilledDraft, brief: Brief): Failure[] {
-  const out: Failure[] = [];
-  const lines = d.caption.text.split('\n').map((l) => l.trim());
-  const source = lines.filter((l) => /^Source:/i.test(l));
-  if (source.length !== 1) out.push({ id: 'C4', where: 'caption', detail: `${source.length} "Source:" lines (need exactly 1)` });
-  else {
-    const line = source[0]!;
-    if (/https?:\/\/|www\./i.test(line)) out.push({ id: 'C4', where: 'caption', detail: 'link in the Source line' });
-    const outlets = brief.sources.map((s) => outletKey(s.outlet)).filter((k) => k.length >= 2);
-    if (!outlets.some((k) => outletKey(line).includes(k))) out.push({ id: 'C4', where: 'caption', detail: `Source line names no outlet from the brief's SOURCES: "${line}"` });
-  }
-  const tags = d.caption.text.match(/(^|\s)#[\p{L}\p{N}_]+/gu);
-  if (tags) out.push({ id: 'C4', where: 'caption', detail: `hashtags: ${tags.map((t) => t.trim()).join(' ')}` });
-  return out;
+/** C4: no hashtags in the caption. */
+export function checkCaption(d: FilledDraft): Failure[] {
+  const tags = d.caption.text.match(/(^|\s)#[\p{L}_][\p{L}\p{N}_]*/gu);
+  return tags ? [{ id: 'C4', where: 'caption', detail: `hashtags: ${tags.map((t) => t.trim()).join(' ')}` }] : [];
 }
 
 /** C5: a background slide rests only on BACKGROUND entries (B#). At most 2. */
@@ -241,4 +271,29 @@ export function checkDroppedText(d: FilledDraft, renderedText: string[]): Failur
     }
   });
   return out;
+}
+
+// ── Where the checks run ──────────────────────────────────────────────
+
+/** C1–C5: the checks on text, run on the fixed draft. */
+export function textChecks(d: FilledDraft, brief: Brief): Failure[] {
+  return [...checkLimits(d), ...checkQuoteMarks(d, brief), ...checkVoice(d), ...checkCaption(d), ...checkBackground(d)];
+}
+
+/**
+ * Hard text checks: still failing after the retry, or after the Fact-checker,
+ * they stop the story. The rest (C3 voice, C4 hashtags, C5 background
+ * slides) are style and become warnings on the review screen (Tommy,
+ * 2026-10-06).
+ */
+export const HARD_CHECKS: ReadonlySet<CheckId> = new Set(['C1', 'C2']);
+
+/**
+ * The Writer's and Editor's code check (one retry, spec §7.1): on the first
+ * submission every C1–C5 failure goes back to the model; on the retry only
+ * the hard ones block, so style can't sink a draft.
+ */
+export function draftTextFailures(filled: FilledDraft, brief: Brief, attempt: number): Failure[] {
+  const all = textChecks(applySilentFixes(filled, brief).draft, brief);
+  return attempt <= 1 ? all : all.filter((f) => HARD_CHECKS.has(f.id));
 }

@@ -9,7 +9,9 @@ import { STAGE_MODELS, type StageModelConfig } from '@/lib/social/pipeline/model
 import type { Brief } from '@/lib/social/reporter/brief';
 import type { MessagesCreate, TurnUsage } from '@/lib/social/reporter/reporter';
 
-import { SUBMIT_DRAFT_TOOL, checkDraft, fillDraft, type DraftSubmission, type FilledDraft } from './draft';
+import { draftTextFailures } from '@/lib/social/mechanical/checks';
+
+import { DraftValidationError, SUBMIT_DRAFT_TOOL, checkDraft, fillDraft, type DraftSubmission, type FilledDraft } from './draft';
 import { WRITER_SYSTEM, writerUserMessage } from './prompt';
 import { runStructuredCall } from './structured-call';
 
@@ -35,6 +37,14 @@ export type WriterDeps = {
   config?: StageModelConfig;
 };
 
+/** checkDraft (structure and IDs), then the M7 text checks C1–C5 on the filled, fixed draft. */
+export function checkWrittenDraft(input: unknown, brief: Brief, attempt: number): DraftSubmission {
+  const d = checkDraft(input, brief);
+  const failures = draftTextFailures(fillDraft(d, brief), brief, attempt);
+  if (failures.length > 0) throw new DraftValidationError(failures.map((f) => ({ section: `${f.id} ${f.where}`, message: f.detail })));
+  return d;
+}
+
 export async function runWriter(brief: Brief, deps: WriterDeps): Promise<WriterResult> {
   const r = await runStructuredCall({
     create: deps.create,
@@ -42,7 +52,7 @@ export async function runWriter(brief: Brief, deps: WriterDeps): Promise<WriterR
     system: WRITER_SYSTEM,
     tool: SUBMIT_DRAFT_TOOL,
     user: writerUserMessage(await briefForWriter(brief, deps.isWellKnown)),
-    check: (input) => checkDraft(input, brief),
+    check: (input, attempt) => checkWrittenDraft(input, brief, attempt),
   });
   const common = { costUsd: r.costUsd, turns: r.turns, draftRetries: r.retries, retryErrors: r.retryErrors, turnUsage: r.turnUsage };
   if (!r.ok) return { ok: false, reason: r.reason, detail: r.detail, raw: r.raw, ...common };

@@ -4,8 +4,8 @@
  * 2026-10-06):
  *
  *   selection (Jev) → Reporter → Writer → Editor → Fact-checker →
- *   design (basic photos + render-fit check) → mechanical (pass-through
- *   until M7)
+ *   mechanical (text fixes + checks, M7) → design (basic photos, photo
+ *   credit check, render-fit and dropped-text checks)
  *
  * Every client is injected (Claude `create`, Jev, page reader, HTTP, the
  * fit check), so tests pass fakes and nothing here reaches a live service
@@ -33,6 +33,7 @@ import { runEditor } from '@/lib/social/editor/editor';
 
 import { createDesignStage } from './design-stage';
 import { createFactCheckStage } from './factcheck-stage';
+import { createMechanicalStage } from './mechanical-stage';
 import { readableDate } from './reporter-stage';
 import type { PipelineStages } from './stages';
 import type { PostObject, StageResult } from './types';
@@ -164,10 +165,7 @@ export function createLiveStages(deps: LiveStagesDeps): { stages: PipelineStages
       else log(draft.storyId).designFailure = r.detail;
       return r;
     },
-    // M7 (mechanical guarantees) isn't built: pass-through.
-    async mechanical(post) {
-      return { ok: true, value: post, costUsd: 0 };
-    },
+    mechanical: createMechanicalStage(),
   };
   return { stages, logs };
 }

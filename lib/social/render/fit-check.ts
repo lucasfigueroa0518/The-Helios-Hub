@@ -34,7 +34,7 @@ export type FitViolation = {
 };
 
 /** `slideText`: each rendered slide's text (cover first), for the dropped-text check (M7 C7). */
-export type FitResult = { ok: boolean; violations: FitViolation[]; problems: string[]; slideText?: string[] };
+export type FitResult = { ok: boolean; violations: FitViolation[]; problems: string[]; slideText: string[] };
 
 export type FitCheck = (post: Post, opts?: { screenshotDir?: string; name?: string }) => Promise<FitResult>;
 

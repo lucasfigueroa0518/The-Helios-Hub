@@ -8,7 +8,7 @@ import test from 'node:test';
 import { briefSuperIntelligenceForce } from '@/fixtures/social/briefs';
 import { sifDraft } from '@/fixtures/social/drafts';
 import {
-  applySilentFixes, checkBackground, checkCaption, checkDroppedText, checkLimits, checkPhotoCredit, checkQuoteMarks, checkVoice,
+  applySilentFixes, buildSourceLine, checkBackground, checkCaption, checkDroppedText, checkLimits, checkPhotoCredit, checkQuoteMarks, checkVoice,
   expectedSlideText, fixDashes, fixQuoteMarks, fixTrailingComma, fixWhitespace, LIMITS, quotedSpans,
 } from '@/lib/social/mechanical/checks';
 import { voiceHits } from '@/lib/social/mechanical/voice-lists';
@@ -93,12 +93,27 @@ test('C3 voice list: banned words, phrases, openers, "!" and emoji in the stages
   assert.deepEqual(checkVoice(own).map((f) => f.detail).sort(), ['phrase: "experts say"', 'word: "revolutionary"']);
 });
 
-test('C4 caption: exactly one Source line naming a brief source, no links, no hashtags', () => {
-  assert.deepEqual(checkCaption(draft(), brief()), []);
-  assert.match(checkCaption(draft((x) => (x.caption.text = 'Trump announced it.')), brief())[0]!.detail, /0 "Source:" lines/);
-  assert.match(checkCaption(draft((x) => (x.caption.text = 'x\n\nSource: The Ledger, March 4.')), brief())[0]!.detail, /names no outlet/);
-  assert.match(checkCaption(draft((x) => (x.caption.text = 'x\n\nSource: TechCrunch, https://techcrunch.com')), brief())[0]!.detail, /link/);
-  assert.match(checkCaption(draft((x) => (x.caption.text += '\n#AI #Trump')), brief())[0]!.detail, /hashtags: #AI #Trump/);
+test('C4 caption: no hashtags', () => {
+  assert.deepEqual(checkCaption(draft()), []);
+  assert.match(checkCaption(draft((x) => (x.caption.text += '\n#AI #Trump')))[0]!.detail, /hashtags: #AI #Trump/);
+  assert.deepEqual(checkCaption(draft((x) => (x.caption.text = 'Issue #3 is out'))), [], '"#3" is a number, not a hashtag');
+});
+
+test('F5 Source line: built from the outlets the post’s claim tags cite, deduped, in SOURCES order; replaces the Writer’s line', () => {
+  const b = brief();
+  b.sources = [{ outlet: 'TechCrunch', date: null, url: 'u1' }, { outlet: 'The Wall Street Journal (paywalled)', date: null, url: 'u2' }];
+  b.facts[0]!.sources = ['The Wall Street Journal (paywalled)', 'TechCrunch'];
+  const d = draft((x) => (x.caption.text = 'Trump announced it.\n\nSource: Somewhere Else, 2026.'));
+  assert.equal(buildSourceLine(d, b), 'Source: TechCrunch and The Wall Street Journal.');
+  const r = applySilentFixes(d, b);
+  assert.equal(r.draft.caption.text, 'Trump announced it.\n\nSource: TechCrunch and The Wall Street Journal.');
+  assert.ok(r.fixes.some((f) => f.id === 'F5'));
+  // No cited outlet → no line (the Writer's is still removed).
+  const none = brief();
+  [...none.facts, ...none.background].forEach((f) => (f.sources = []));
+  none.quotes.forEach((q) => (q.via = []));
+  none.numbers.forEach((n) => (n.sources = []));
+  assert.equal(buildSourceLine(draft(), none), null);
 });
 
 test('C5 at most 2 background slides (slides resting only on B# entries)', () => {
@@ -134,4 +149,101 @@ test('C7 dropped text: every draft field must appear on its rendered slide', () 
   const f = checkDroppedText(d, rendered);
   assert.deepEqual(ids(f), ['C7']);
   assert.match(f[0]!.detail, /His pitch/);
+});
+
+// ── Wiring (Tommy, 2026-10-06) ───────────────────────────────────────────
+
+import { readFileSync } from 'node:fs';
+import type Anthropic from '@anthropic-ai/sdk';
+
+import { createFakeHttp, SIF_WEB } from '@/fixtures/social/photo-http';
+import { fitOkFor } from '@/fixtures/social/render-text';
+import { createDesignStage } from '@/lib/social/pipeline/design-stage';
+import { createMechanicalStage } from '@/lib/social/pipeline/mechanical-stage';
+import type { Brief as PipelineBrief, Draft, ScoredCandidate } from '@/lib/social/pipeline/types';
+import { CHECKED_RULES } from '@/lib/social/prompts/rules-block';
+import type { MessagesCreate } from '@/lib/social/reporter/reporter';
+import { runWriter } from '@/lib/social/writer/writer';
+import type { DraftSubmission } from '@/lib/social/writer/draft';
+
+const usage = { input_tokens: 1000, output_tokens: 500, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+const submitMsg = (input: unknown) =>
+  ({ id: 'm', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', stop_reason: 'tool_use', stop_sequence: null, usage, content: [{ type: 'tool_use', id: `t${Math.random()}`, name: 'submit_draft', input }] }) as unknown as Anthropic.Message;
+function scripted(drafts: DraftSubmission[]): { create: MessagesCreate; requests: Anthropic.MessageCreateParamsNonStreaming[] } {
+  const requests: Anthropic.MessageCreateParamsNonStreaming[] = [];
+  return { requests, create: async (p) => { requests.push(structuredClone(p)); return submitMsg(drafts.shift()); } };
+}
+const sub = (edit: (d: DraftSubmission) => void) => { const d = sifDraft(); edit(d); return d; };
+const tooLong = 'x '.repeat(40).trim();
+
+test('Writer code check: a C1 overage goes back once with the exact problem; fixed on the retry', async () => {
+  const s = scripted([sub((d) => (d.slides[0]!.headline.text = tooLong)), sifDraft()]);
+  const r = await runWriter(brief(), { create: s.create, isWellKnown: async () => false });
+  assert.ok(r.ok);
+  assert.equal(r.draftRetries, 1);
+  assert.match(r.retryErrors[0]!, /C1 slide 2 headline: 79 chars, limit 60 \(19 over\)/);
+});
+
+test('Writer code check: style (C3) blocks only the first submission; a hard failure (C1) on the retry sets it aside', async () => {
+  const style = sub((d) => (d.slides[0]!.body!.text = 'A groundbreaking post on Truth Social.'));
+  const soft = await runWriter(brief(), { create: scripted([style, structuredClone(style)]).create, isWellKnown: async () => false });
+  assert.ok(soft.ok, 'style survives the retry as a warning for later');
+  const long = sub((d) => (d.slides[0]!.headline.text = tooLong));
+  const hard = await runWriter(brief(), { create: scripted([long, structuredClone(long)]).create, isWellKnown: async () => false });
+  assert.equal(hard.ok, false);
+});
+
+const pbrief = (): PipelineBrief => ({ storyId: 's1', parsed: brief(), raw: '', pages: [] });
+const pdraft = (edit?: (d: FilledDraft) => void): Draft => ({ storyId: 's1', submission: sifDraft(), filled: draft(edit) });
+
+test('mechanical stage: fixes applied and logged, Source line built, style failures carried as warnings', async () => {
+  const r = await createMechanicalStage()(pdraft((x) => (x.slides[0]!.body!.text = 'A groundbreaking post — on Truth Social.')), pbrief());
+  assert.ok(r.ok);
+  assert.equal(r.value.filled.slides[0]!.body!.text, 'A groundbreaking post, on Truth Social.');
+  assert.ok(r.value.filled.caption.text.endsWith('\n\nSource: TechCrunch and The Wall Street Journal.'), r.value.filled.caption.text);
+  assert.deepEqual(r.value.mechanical!.warnings.map((w) => w.id), ['C3']);
+  assert.ok(r.value.mechanical!.fixes.some((f) => f.id === 'F1') && r.value.mechanical!.fixes.some((f) => f.id === 'F5'));
+});
+
+test('mechanical stage: a hard failure after the Fact-checker sets the story aside (C1 over-limit, C2 malformed-output)', async () => {
+  const long = await createMechanicalStage()(pdraft((x) => (x.slides[1]!.headline.text = tooLong)), pbrief());
+  assert.equal(long.ok, false);
+  assert.equal((long as { reasonCode: string }).reasonCode, 'over-limit');
+  const quoted = await createMechanicalStage()(pdraft((x) => (x.slides[0]!.body!.text = 'Critics called it “extremely reckless”.')), pbrief());
+  assert.equal((quoted as { reasonCode: string }).reasonCode, 'malformed-output');
+});
+
+const story = { id: 's1', title: 't', url: 'https://techcrunch.com/x', outlets: ['TechCrunch'], publishedAt: new Date('2026-10-04T12:00:00Z') } as ScoredCandidate;
+const designDeps = (fitCheck = async (post: Parameters<typeof fitOkFor>[0]) => fitOkFor(post)) => ({
+  jev: async (req: { state: unknown; questions: Record<string, unknown> }) => ({ answers: Object.fromEntries(Object.keys(req.questions).map((k) => [k, { noul: k.startsWith('people') ? 0.05 : 0.95 }])), usage: { input_tokens: 100, output_tokens: 0 }, model: 'stub' }),
+  http: createFakeHttp(SIF_WEB).http,
+  fitCheck,
+});
+
+test('design: C7 dropped text fails the render (render-failed)', async () => {
+  const fitCheck = async (post: Parameters<typeof fitOkFor>[0]) => {
+    const r = fitOkFor(post);
+    r.slideText[3] = r.slideText[3]!.replace('His pitch', '');
+    return r;
+  };
+  const r = await createDesignStage(designDeps(fitCheck) as never)(pdraft(), pbrief(), story);
+  assert.equal(r.ok, false);
+  assert.equal((r as { reasonCode: string }).reasonCode, 'render-failed');
+  assert.match((r as { detail: string }).detail, /C7 slide 4: not on the rendered slide: "His pitch"/);
+});
+
+test('design: C6 replaces a photo whose credit fails (agency) with a starter-set photo, logged', async () => {
+  const getty = { url: 'https://s/getty.jpg', foreignLandingUrl: '', mime: 'image/jpeg', width: 2000, height: 1300, license: 'by', creator: 'Kevin Dietsch / Getty Images', source: 'flickr', title: 'wall clock', tags: [] };
+  const deps = { ...designDeps(), stock: async () => [getty] };
+  const r = await createDesignStage(deps as never)(pdraft(), pbrief(), story);
+  assert.ok(r.ok);
+  assert.ok(r.value.checks.photoReplacements.length >= 1, JSON.stringify(r.value.checks));
+  assert.match(r.value.checks.photoReplacements[0]!, /agency credit \(getty\) → \/social\/starter\//);
+  assert.ok(!r.value.render.slides.some((sl) => sl.photoUrl === getty.url), 'the Getty photo never reaches the render');
+});
+
+test('CHECKED_RULES matches the prompts file word for word', () => {
+  const prompts = readFileSync('docs/superpowers/specs/2026-10-04-helios-social-prompts.md', 'utf8');
+  const block = /\*\*Checked rules[\s\S]*?```\n([\s\S]*?)\n```/.exec(prompts)![1];
+  assert.equal(CHECKED_RULES, block);
 });

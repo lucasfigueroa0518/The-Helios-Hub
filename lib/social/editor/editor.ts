@@ -12,7 +12,8 @@
 import { STAGE_MODELS, type StageModelConfig } from '@/lib/social/pipeline/models';
 import type { Brief, BriefError } from '@/lib/social/reporter/brief';
 import type { MessagesCreate } from '@/lib/social/reporter/reporter';
-import { DraftValidationError, SUBMIT_DRAFT_TOOL, checkDraft, fillDraft, type DraftSubmission, type ImageRequest } from '@/lib/social/writer/draft';
+import { DraftValidationError, SUBMIT_DRAFT_TOOL, fillDraft, type DraftSubmission, type ImageRequest } from '@/lib/social/writer/draft';
+import { checkWrittenDraft } from '@/lib/social/writer/writer';
 import { runStructuredCall, type StructuredFailure } from '@/lib/social/writer/structured-call';
 import type { TurnUsage } from '@/lib/social/reporter/reporter';
 import type { FilledDraft } from '@/lib/social/writer/draft';
@@ -64,8 +65,8 @@ export async function runEditor(brief: Brief, writerDraft: DraftSubmission, deps
     system: EDITOR_SYSTEM,
     tool: SUBMIT_DRAFT_TOOL,
     user: editorUserMessage(writerDraft, brief),
-    check: (input) => {
-      const edited = checkDraft(input, brief);
+    check: (input, attempt) => {
+      const edited = checkWrittenDraft(input, brief, attempt);
       checkEditorPowers(writerDraft, edited);
       return edited;
     },

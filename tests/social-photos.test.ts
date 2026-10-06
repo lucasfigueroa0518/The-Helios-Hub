@@ -17,6 +17,7 @@ import { classifyCredit } from '@/lib/social/photos/credit';
 import { photosForDraft } from '@/lib/social/photos/design';
 import { findPhoto, newPhotoContext, STOCK_MIN_SHORT_SIDE, stockQueries, type Photo } from '@/lib/social/photos/find';
 import { checkIdentity } from '@/lib/social/photos/identity';
+import { fitOkFor } from '@/fixtures/social/render-text';
 import { MAX_PHOTOS_PER_POST, pickStarter, STARTER_SET, starterUrl } from '@/lib/social/photos/starter-set';
 import { layoutOf, rotateLayouts } from '@/lib/social/render/layout-rotation';
 import type { SlideCopy } from '@/lib/social/render/types';
@@ -318,7 +319,7 @@ test('design stage: photos + render post, Jev identity cost charged', async () =
   const draft: Draft = { storyId: 's1', submission, filled: fillDraft(submission, parsed) };
   const brief: PipelineBrief = { storyId: 's1', parsed, raw: '', pages: pages() };
   const story = { id: 's1', title: 't', url: TC_URL, outlets: ['TechCrunch'], publishedAt: new Date('2026-10-04T12:00:00Z') } as ScoredCandidate;
-  const r = await createDesignStage({ ...d, fitCheck: async () => ({ ok: true, violations: [], problems: [] }) })(draft, brief, story);
+  const r = await createDesignStage({ ...d, fitCheck: async (post) => fitOkFor(post) })(draft, brief, story);
   assert.ok(r.ok);
   assert.equal(r.value.photos.length, 1 + submission.slides.length);
   assert.equal(r.value.render.slides[0]!.photoUrl, commonsUrl('Donald Trump official portrait.jpg'));
@@ -393,7 +394,7 @@ test('design stage: a render that does not fit is set aside as render-failed', a
   const draft: Draft = { storyId: 's1', submission, filled: fillDraft(submission, parsed) };
   const brief: PipelineBrief = { storyId: 's1', parsed, raw: '', pages: [] };
   const story = { id: 's1', title: 't', url: TC_URL, outlets: ['TechCrunch'], publishedAt: new Date('2026-10-04T12:00:00Z') } as ScoredCandidate;
-  const fitCheck = async () => ({ ok: false, problems: [], violations: [{ slide: 5, element: 'div.helios-stat__number', text: '120 days', over: { left: 0, top: 0, right: 0, bottom: 140 } }] });
+  const fitCheck = async () => ({ ok: false, problems: [], slideText: [], violations: [{ slide: 5, element: 'div.helios-stat__number', text: '120 days', over: { left: 0, top: 0, right: 0, bottom: 140 } }] });
   const r = await createDesignStage({ ...d, fitCheck })(draft, brief, story);
   assert.equal(r.ok, false);
   assert.equal((r as { reasonCode: string }).reasonCode, 'render-failed');

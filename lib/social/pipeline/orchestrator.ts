@@ -1,7 +1,7 @@
 /**
  * Helios Social rebuild — day orchestrator (spec §3, §2.4, §5B).
  *
- *   Jev scoring → Reporter → Writer → Editor → Fact-checker → Design → mechanical
+ *   Jev scoring → Reporter → Writer → Editor → Fact-checker → mechanical → design
  *
  * Each stage runs once. A stage that fails sets the story aside (logged
  * with stage + reason) and the next-ranked story takes the slot, until the
@@ -164,9 +164,9 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
           freshDrafts.push({ storyId: story.id, attempt: attempt + 1, detail: err.message, at: now.toISOString() });
         }
       }
-      const designed = await run('design', () => stages.design(checked, brief, story));
-      const final = await run('mechanical', () => stages.mechanical(designed));
-      posts.push({ ...final, stages: trail, costUsd: storyCost });
+      const fixed = await run('mechanical', () => stages.mechanical(checked, brief));
+      const designed = await run('design', () => stages.design(fixed, brief, story));
+      posts.push({ ...designed, stages: trail, costUsd: storyCost });
     } catch (err) {
       if (err instanceof SetAside) {
         setAsides.push(err.entry);

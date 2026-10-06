@@ -150,12 +150,13 @@ export function createStubStages(opts: StubOptions = {}): PipelineStages {
           publishedAt: story.publishedAt.toISOString(),
         }),
         photos,
+        checks: { fixes: draft.mechanical?.fixes ?? [], warnings: draft.mechanical?.warnings ?? [], photoReplacements: [] },
         stages: [],
         costUsd: 0,
       });
     },
-    async mechanical(post) {
-      return result('mechanical', post.storyId, post);
+    async mechanical(draft) {
+      return result('mechanical', draft.storyId, draft);
     },
   };
 }

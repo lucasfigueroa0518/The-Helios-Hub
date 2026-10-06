@@ -19,6 +19,7 @@ import { runDay } from '@/lib/social/pipeline/orchestrator';
 import { createInMemorySetAsideLog } from '@/lib/social/pipeline/set-aside-log';
 import { STUB_ARTICLES, createStubStages } from '@/lib/social/pipeline/stubs';
 import type { FitCheck } from '@/lib/social/render/fit-check';
+import { fitOkFor } from '@/fixtures/social/render-text';
 import type { MessagesCreate } from '@/lib/social/reporter/reporter';
 
 const usage = { input_tokens: 4000, output_tokens: 3000, cache_read_input_tokens: 0, cache_creation_input_tokens: 2000 };
@@ -52,7 +53,7 @@ const identityJev: JevAsk = async (req, meta) => {
   return { answers, usage: { input_tokens: 400, output_tokens: 0 }, model: 'stub-jev' };
 };
 
-const fitOk: FitCheck = async () => ({ ok: true, violations: [], problems: [] });
+const fitOk: FitCheck = async (post) => fitOkFor(post);
 
 function setup(opts: { capUsd?: number; fitCheck?: FitCheck; flags?: unknown } = {}) {
   const calls: string[] = [];
@@ -73,12 +74,12 @@ function setup(opts: { capUsd?: number; fitCheck?: FitCheck; flags?: unknown } =
   return { calls, budget, stages, logs };
 }
 
-test('live stages: two stories run Reporter → Writer → Editor → Fact-checker → design → mechanical', async () => {
+test('live stages: two stories run Reporter → Writer → Editor → Fact-checker → mechanical → design', async () => {
   const { calls, budget, stages, logs } = setup();
   const meter = createCostMeter({ capUsd: 1.5 });
   const r = await runDay({ articles: STUB_ARTICLES, stages, meter, log: createInMemorySetAsideLog(), now: new Date('2026-10-06T15:00:00Z'), targetPosts: 2 });
   assert.equal(r.posts.length, 2);
-  assert.deepEqual(r.posts[0]!.stages, ['jev-scoring', 'reporter', 'writer', 'editor', 'fact-checker', 'design', 'mechanical']);
+  assert.deepEqual(r.posts[0]!.stages, ['jev-scoring', 'reporter', 'writer', 'editor', 'fact-checker', 'mechanical', 'design']);
   assert.deepEqual(calls, ['reporter', 'draft', 'draft', 'fact-checker', 'reporter', 'draft', 'draft', 'fact-checker']);
   const post = r.posts[0]!;
   assert.ok(post.render.slides.length > 0);
@@ -93,7 +94,7 @@ test('live stages: two stories run Reporter → Writer → Editor → Fact-check
 
 test('live stages: a render that fails the fit check is set aside and the next story fills the slot', async () => {
   let n = 0;
-  const fitCheck: FitCheck = async () => (++n === 1 ? { ok: false, problems: [], violations: [{ slide: 5, element: 'div.helios-split-stat__number', text: '$99.99', over: { left: 0, top: 0, right: 300, bottom: 0 } }] } : { ok: true, violations: [], problems: [] });
+  const fitCheck: FitCheck = async (post) => (++n === 1 ? { ok: false, problems: [], slideText: [], violations: [{ slide: 5, element: 'div.helios-split-stat__number', text: '$99.99', over: { left: 0, top: 0, right: 300, bottom: 0 } }] } : fitOkFor(post));
   const { stages } = setup({ fitCheck });
   const r = await runDay({ articles: STUB_ARTICLES, stages, meter: createCostMeter({ capUsd: 5 }), log: createInMemorySetAsideLog(), now: new Date('2026-10-06T15:00:00Z'), targetPosts: 1 });
   assert.equal(r.posts.length, 1);

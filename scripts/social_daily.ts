@@ -2,8 +2,8 @@
  * Helios Social — the daily run, end to end (checkpoint, Tommy 2026-10-06):
  *
  *   fetch feeds → selection (Jev) → Reporter → Writer → Editor →
- *   Fact-checker → design (basic photos + render-fit check) → mechanical
- *   (pass-through until M7) → local preview
+ *   Fact-checker → mechanical (text fixes + checks) → design (basic
+ *   photos, credit check, render-fit and dropped-text checks) → local preview
  *
  * LIVE: Claude (Sonnet 5.5), web search, Jev, Wikidata / Commons /
  * Openverse. Needs Tommy's OK. --cap-usd (default $2.00) is a hard total

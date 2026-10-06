@@ -4,6 +4,7 @@
  * M0 skeleton: the fields here are the minimum the orchestrator needs.
  * M1–M6 fill them in (brief format in M2, writer output in M3, …).
  */
+import type { Failure, Fix } from '@/lib/social/mechanical/checks';
 import type { PhotoTrace } from '@/lib/social/photos/find';
 import type { Post as RenderPost } from '@/lib/social/render/types';
 import type { GroupMember } from '@/lib/social/ingest/select/types';
@@ -18,8 +19,10 @@ export const STAGE_ORDER = [
   'writer',
   'editor',
   'fact-checker',
-  'design',
+  // Mechanical text fixes and checks run before design (Tommy, 2026-10-06):
+  // the render must show the fixed text. Photo and render checks run inside design.
   'mechanical',
+  'design',
 ] as const;
 
 export type StageName = (typeof STAGE_ORDER)[number];
@@ -100,6 +103,8 @@ export type Draft = {
   storyId: string;
   submission: DraftSubmission;
   filled: FilledDraft;
+  /** Set by the mechanical stage: the silent fixes applied to `filled`, and style checks that failed (warnings). */
+  mechanical?: { fixes: Fix[]; warnings: Failure[] };
 };
 
 /** A designed post, ready for the mechanical guarantees and review. */
@@ -110,6 +115,8 @@ export type PostObject = {
   render: RenderPost;
   /** How each photo was found or why there is none: cover first, then each story slide. */
   photos: PhotoTrace[];
+  /** Mechanical fixes applied and warnings for the review screen (spec §6); photo replacements by C6. */
+  checks: { fixes: Fix[]; warnings: Failure[]; photoReplacements: string[] };
   /** Stages this post went through, in order. */
   stages: StageName[];
   costUsd: number;
