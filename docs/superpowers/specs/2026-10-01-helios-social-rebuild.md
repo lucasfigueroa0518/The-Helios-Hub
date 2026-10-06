@@ -513,6 +513,9 @@ RSS feeds (hundreds)
 - 0 wrong-person photos
 - 0 slides without a photo
 - 0 slides that fail to render
+- No photo repeats within 7 days, from any source, the starter set included (Tommy, 2026-10-06)
+
+**Reported as information only:** the starter-set share of photos, after the next full run (Tommy, 2026-10-06). New photo sources are added only if that run shows a pattern.
 
 **Measures of how well it works:**
 

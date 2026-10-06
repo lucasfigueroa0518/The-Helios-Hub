@@ -224,6 +224,20 @@ Only the four sources needed to put a real photo on every slide:
 
 ### M8: Full photo chain and design (spec §5.1–5.4)
 
+**Scope as decided (Tommy, 2026-10-06). This replaces the photo-chain list below:**
+
+- **M8a, layout system:** the three rules from the freeze (text fit, contrast, faces clear), quote and landing layouts that show every draft field, measured cover fit, and spread slides. People stay in split layouts only for now; full-bleed person photos get revisited once M8b gives face boxes.
+- **M8b, framing:** a code face detector (spec §5.2). It runs in the browser (MediaPipe) inside the headless Chrome already used for the render-fit check, so there's no native dependency and no AI call. It returns face boxes for cropping and text placement.
+- **M8c, simplified:**
+  - **No new external sources:** no Flickr, Pexels, DVIDS, NASA or Congress. The photo chain is producing correct photos.
+  - **Used-photo log with the 7-day rule:** no photo is reused within 7 days, from any source, the starter set included.
+  - **Starter set:** grows from 10 to about 50 faceless CC0 or public-domain scenes, checked once by Jev's pre-screen. Tommy reviews the list before it's committed.
+  - **Photo bank:** tag schema, reuse rules and a hand-seed path, kept in a local file until M9. Tommy supplies press photos for OpenAI, Anthropic, Google, Meta, Microsoft, Nvidia, Mistral and xAI.
+- **Accept:**
+  - all tests pass;
+  - the 3 saved posts re-render offline with C7 and the render-fit check passing (no AI calls), with screenshots sent;
+  - then stop and wait for Tommy's OK before the full fresh end-to-end run.
+
 **S2 results (2026-10-04) that shape M6:**
 
 - **People:** 60% have at least 1 usable Commons photo, 47% have 2 or more. Well-known people are covered; lesser-known people mostly aren't.
