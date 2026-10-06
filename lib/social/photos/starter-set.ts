@@ -51,3 +51,9 @@ export function pickStarter(used: Set<string>): Photo | null {
   const s = STARTER_SET.find((p) => !used.has(starterUrl(p.file)));
   return s ? { url: starterUrl(s.file), credit: starterCredit(s), source: 'starter', width: s.width, height: s.height, qid: null, subject: null } : null;
 }
+
+/** The least recently used starter photo not in this post (when every one was used in the last 7 days). */
+export function pickStarterLeastRecent(usedThisPost: Set<string>, lastUsed: Map<string, string>): Photo | null {
+  const s = STARTER_SET.filter((p) => !usedThisPost.has(starterUrl(p.file))).sort((a, b) => (lastUsed.get(starterUrl(a.file)) ?? '').localeCompare(lastUsed.get(starterUrl(b.file)) ?? ''))[0];
+  return s ? { url: starterUrl(s.file), credit: starterCredit(s), source: 'starter', width: s.width, height: s.height, qid: null, subject: null } : null;
+}

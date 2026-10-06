@@ -236,7 +236,8 @@ export function checkPhotoCredit(photo: Photo, where: string, brief: Brief): Fai
   if (!photo.credit.trim()) return [{ id: 'C6', where, detail: 'photo without a credit' }];
   const agency = classifyCredit({ caption: null, credit: photo.credit, page: null, organizations: [] });
   if (agency.verdict === 'rejected') out.push({ id: 'C6', where, detail: `rejected credit: ${agency.reason}` });
-  if (photo.source === 'article') {
+  if (photo.source === 'article' || (photo.source === 'bank' && !LICENCE_RE.test(photo.credit))) {
+    // Article and press-kit photos: the credit itself must be an allowed one (company, government, Commons).
     const v = classifyCredit({ caption: null, credit: photo.credit, page: null, organizations: brief.subjects.map((s) => s.name) });
     if (v.verdict !== 'allowed') out.push({ id: 'C6', where, detail: `article photo credit not allowed: ${v.reason}` });
   } else if (!LICENCE_RE.test(photo.credit)) {

@@ -52,6 +52,10 @@ async function main() {
   const { readPage } = await import('@/lib/social/reporter/read-page');
   const { liveMessagesCreate } = await import('@/lib/social/reporter/reporter');
   const { isWellKnownLive } = await import('@/lib/social/writer/well-known');
+  const { createFileUsedPhotoLog } = await import('@/lib/social/photos/used-photos');
+  const { loadBank } = await import('@/lib/social/photos/bank');
+  const usedLog = createFileUsedPhotoLog();
+  const bank = await loadBank();
   type Selection = import('@/lib/social/ingest/select/select').Selection;
   type FitResult = import('@/lib/social/render/fit-check').FitResult;
   type PostObject = import('@/lib/social/pipeline/types').PostObject;
@@ -95,6 +99,8 @@ async function main() {
       return r;
     },
     now,
+    usedLog,
+    bank,
     reporterCapUsd: 0.45,
     maxReporterRuns: stories + 2,
   });
@@ -114,6 +120,13 @@ async function main() {
     now,
     targetPosts: stories,
   });
+
+  // 7-day rule: a photo counts as used once its post reaches the review queue (today: the preview).
+  await usedLog.record(result.posts.flatMap((p) => p.render.slides.flatMap((sl, i) => (sl.photoUrl ? [{ url: sl.photoUrl, usedAt: now.toISOString(), storyId: p.storyId, slide: i + 1 }] : []))));
+  const starterShare = (() => {
+    const all = result.posts.flatMap((p) => p.photos.filter((t) => t.photo));
+    return all.length ? all.filter((t) => t.via === 'starter').length / all.length : 0;
+  })();
 
   // ── Outputs ──────────────────────────────────────────────────────────
   const storyLogs = Object.fromEntries(logs);
@@ -143,6 +156,8 @@ async function main() {
     freshDrafts: result.freshDrafts,
     costByStage: result.costByStage,
     totalUsd: Number(budget.spent().toFixed(4)),
+    // Information only (Tommy, 2026-10-06).
+    starterShare: Number(starterShare.toFixed(3)),
     capUsd,
   }, null, 2));
 

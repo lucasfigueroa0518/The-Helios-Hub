@@ -21,7 +21,9 @@
  */
 import { priceAnthropicMessages, type MessageUsageLike } from '@/lib/anthropic-pricing';
 import type { JevAsk } from '@/lib/social/jev/client';
+import type { BankEntry } from '@/lib/social/photos/bank';
 import type { PhotoDeps } from '@/lib/social/photos/find';
+import type { UsedPhotoLog } from '@/lib/social/photos/used-photos';
 import { runFactCheck } from '@/lib/social/factcheck/factcheck';
 import type { FitCheck } from '@/lib/social/render/fit-check';
 import type { PageRead } from '@/lib/social/reporter/read-page';
@@ -95,6 +97,9 @@ export type LiveStagesDeps = {
   isWellKnown: IsWellKnown;
   fitCheck: FitCheck;
   http?: PhotoDeps['http'];
+  /** 7-day rule and the photo bank (M8c). */
+  usedLog?: UsedPhotoLog;
+  bank?: BankEntry[];
   now: Date;
   /** Per-story Reporter cap (the Reporter's own rule: stop before a turn at cap − $0.10). */
   reporterCapUsd: number;
@@ -118,7 +123,7 @@ export function createLiveStages(deps: LiveStagesDeps): { stages: PipelineStages
   let reporterRuns = 0;
 
   const factCheck = createFactCheckStage({ create, onResult: (id, r) => log(id).factCheck.push(r) });
-  const design = createDesignStage({ jev: deps.jev, http: deps.http, fitCheck: deps.fitCheck });
+  const design = createDesignStage({ jev: deps.jev, http: deps.http, fitCheck: deps.fitCheck, usedLog: deps.usedLog, bank: deps.bank, now: () => deps.now });
 
   const stages: PipelineStages = {
     score: deps.score,

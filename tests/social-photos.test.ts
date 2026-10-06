@@ -528,3 +528,81 @@ test('M8a spreads: a wide scene photo spans two slides; a subject or narrow phot
   const person = { ...wide, source: 'commons' as const };
   assert.equal(draftSlides(d, { cover: null, slides: [person, null, null, null, null, null] })[1]!.panoramaSide, undefined);
 });
+
+// ── M8c: 7-day rule, starter fallback, photo bank ────────────────────────
+
+import { bankMatches, checkBankEntry, pickFromBank, type BankEntry } from '@/lib/social/photos/bank';
+import { createInMemoryUsedPhotoLog, NO_REPEAT_DAYS } from '@/lib/social/photos/used-photos';
+
+test('used-photo log: only uses within 7 days count', async () => {
+  const log = createInMemoryUsedPhotoLog([
+    { url: '/a.jpg', usedAt: '2026-10-01T12:00:00Z', storyId: 's', slide: 1 },
+    { url: '/b.jpg', usedAt: '2026-09-28T12:00:00Z', storyId: 's', slide: 1 },
+  ]);
+  const recent = await log.recent(new Date('2026-10-06T12:00:00Z'));
+  assert.equal(NO_REPEAT_DAYS, 7);
+  assert.deepEqual([...recent], ['/a.jpg']);
+});
+
+test('7-day rule: a photo used in the last 7 days is never picked, from any source', async () => {
+  const { deps: d } = deps();
+  const recent = new Set([commonsUrl('Donald Trump official portrait.jpg'), stockUrl('wall clock', 1), starterUrl(STARTER_SET[0]!.file)]);
+  const ctx = newPhotoContext(briefWith(), [], { recent });
+  const trump = await findPhoto({ kind: 'subject', value: 'Donald Trump' }, ctx, d);
+  assert.notEqual(trump.photo?.url, commonsUrl('Donald Trump official portrait.jpg'));
+  const clock = await findPhoto({ kind: 'stock', value: 'wall clock' }, ctx, d);
+  assert.equal(clock.photo?.url, stockUrl('wall clock', 2));
+  assert.notEqual(trump.photo?.url, starterUrl(STARTER_SET[0]!.file), 'starter set included');
+});
+
+test('7-day rule: when every starter photo was used this week, the least recently used one, flagged', async () => {
+  const offline = { jev: identityJev(SIF_ANSWERS), http: (async () => { throw new Error('offline'); }) as unknown as typeof fetch };
+  const recent = new Set(STARTER_SET.map((p) => starterUrl(p.file)));
+  const lastUsed = new Map(STARTER_SET.map((p, i) => [starterUrl(p.file), `2026-10-0${(i % 5) + 1}T00:00:00Z`]));
+  const t = await findPhoto({ kind: 'stock', value: 'x' }, newPhotoContext(briefWith(), [], { recent, lastUsed }), offline);
+  assert.equal(t.via, 'starter');
+  assert.equal(lastUsed.get(t.photo!.url), '2026-10-01T00:00:00Z');
+  assert.ok(t.steps.some((s) => /7-DAY RULE BROKEN/.test(s)));
+});
+
+const entry = (e: Partial<BankEntry>): BankEntry => ({ id: 'e', url: '/social/bank/e.jpg', kind: 'scene', qid: null, event: null, tags: [], credit: 'Courtesy of OpenAI', licence: 'press kit', source: 'x', width: 2000, height: 1300, faces: false, addedAt: '2026-10-06', ...e });
+
+test('bank: person and company photos only for the same Wikidata id; company photos with faces skipped', () => {
+  const openai = entry({ id: 'o', url: '/o.jpg', kind: 'company', qid: 'Q21708200' });
+  assert.ok(bankMatches(openai, { qid: 'Q21708200' }));
+  assert.ok(!bankMatches(openai, { qid: 'Q116758847' }));
+  assert.ok(!bankMatches({ ...openai, faces: true }, { qid: 'Q21708200' }), 'company photos never show people');
+  assert.ok(!bankMatches(entry({ kind: 'scene', tags: ['openai office'] }), { qid: 'Q21708200' }), 'never by name or tag');
+  assert.ok(bankMatches(entry({ kind: 'event', event: 'nyc-hearing' }), { event: 'nyc-hearing' }));
+  assert.ok(!bankMatches(entry({ kind: 'event', event: 'nyc-hearing' }), { event: 'other' }));
+});
+
+test('bank: scenes by tag; least recently used first; never this post or the last 7 days', () => {
+  const a = entry({ id: 'a', url: '/a.jpg', tags: ['server room'] });
+  const b = entry({ id: 'b', url: '/b.jpg', tags: ['data center servers'] });
+  const lastUsed = new Map([['/a.jpg', '2026-09-20'], ['/b.jpg', '2026-09-25']]);
+  assert.equal(pickFromBank([a, b], { scene: 'server racks' }, new Set(), lastUsed)?.id, 'a');
+  assert.equal(pickFromBank([a, b], { scene: 'server racks' }, new Set(['/a.jpg']), lastUsed)?.id, 'b');
+  assert.equal(pickFromBank([a, b], { scene: 'wall clock' }, new Set(), lastUsed), null);
+});
+
+test('bank in the chain: a subject with no usable main image gets its bank photo; credit passes C6', async () => {
+  const { deps: d } = deps();
+  const b = briefWith([{ name: 'OpenAI', role: 'AI company' }]);
+  const web = { ...SIF_WEB, search: { ...SIF_WEB.search, OpenAI: ['Q21708200'] }, entities: { ...SIF_WEB.entities, Q21708200: { id: 'Q21708200', label: 'OpenAI', description: 'American artificial intelligence research organization', human: false, organization: true, files: [] } } };
+  const answers = { ...SIF_ANSWERS, OpenAI: { person: 0.02, match: () => 0.95 } };
+  const bank = [entry({ id: 'o', url: '/social/bank/openai/office.jpg', kind: 'company', qid: 'Q21708200' })];
+  const t = await findPhoto({ kind: 'subject', value: 'OpenAI' }, newPhotoContext(b, [], { bank }), { jev: identityJev(answers), http: createFakeHttp(web).http });
+  void d;
+  assert.equal(t.via, 'bank');
+  assert.equal(t.photo?.url, '/social/bank/openai/office.jpg');
+  const { checkPhotoCredit } = await import('@/lib/social/mechanical/checks');
+  assert.deepEqual(checkPhotoCredit(t.photo!, 'slide 2', b), []);
+});
+
+test('bank seed check: required fields, Wikidata ids, and no faces in company photos', () => {
+  assert.deepEqual(checkBankEntry(entry({ kind: 'company', qid: 'Q21708200' })), []);
+  assert.match(checkBankEntry(entry({ kind: 'company', qid: null })).join(), /Wikidata id/);
+  assert.match(checkBankEntry(entry({ kind: 'company', qid: 'Q1', faces: true })).join(), /shows a face/);
+  assert.match(checkBankEntry(entry({ kind: 'scene', tags: [] })).join(), /tags/);
+});

@@ -16,8 +16,14 @@ export function slotFor(type: FilledDraft['slides'][number]['type']): PhotoSlot 
 
 export type DraftPhotos = { cover: PhotoTrace; slides: PhotoTrace[] };
 
-export async function photosForDraft(draft: FilledDraft, brief: Brief, pages: PageReadOk[], deps: PhotoDeps): Promise<DraftPhotos> {
-  const ctx = newPhotoContext(brief, pages);
+export async function photosForDraft(
+  draft: FilledDraft,
+  brief: Brief,
+  pages: PageReadOk[],
+  deps: PhotoDeps,
+  history: Parameters<typeof newPhotoContext>[2] = {},
+): Promise<DraftPhotos> {
+  const ctx = newPhotoContext(brief, pages, history);
   const chosen = draft.cover_options[draft.chosen_cover - 1]!;
   const cover = await findPhoto(chosen.image, ctx, deps, { text: [chosen.text], speaker: null, slot: 'split' });
   const slides: PhotoTrace[] = [];

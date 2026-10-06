@@ -7,7 +7,9 @@
 import { createJevTally, jevCostUsd, type JevAsk } from '@/lib/social/jev/client';
 import { checkDroppedText, checkPhotoCredit } from '@/lib/social/mechanical/checks';
 import { photosForDraft } from '@/lib/social/photos/design';
+import type { BankEntry } from '@/lib/social/photos/bank';
 import { pickStarter } from '@/lib/social/photos/starter-set';
+import type { UsedPhotoLog } from '@/lib/social/photos/used-photos';
 import type { PhotoDeps } from '@/lib/social/photos/find';
 import type { FitCheck } from '@/lib/social/render/fit-check';
 import { toRenderPost } from '@/lib/social/render/from-draft';
@@ -22,7 +24,15 @@ import type { PipelineStages } from './stages';
  *      starter-set photo (logged); set aside only if the starter set runs out
  *   render fit, C7 dropped text → set aside as `render-failed`
  */
-export function createDesignStage(deps: PhotoDeps & { fitCheck: FitCheck }): PipelineStages['design'] {
+export type DesignDeps = PhotoDeps & {
+  fitCheck: FitCheck;
+  /** The used-photo log (7-day rule) and the photo bank; empty when not given (tests). */
+  usedLog?: UsedPhotoLog;
+  bank?: BankEntry[];
+  now?: () => Date;
+};
+
+export function createDesignStage(deps: DesignDeps): PipelineStages['design'] {
   return async (draft, brief, story) => {
     const tally = createJevTally();
     const jev: JevAsk = async (req, meta) => {
@@ -30,10 +40,13 @@ export function createDesignStage(deps: PhotoDeps & { fitCheck: FitCheck }): Pip
       tally.costUsd += jevCostUsd(res.usage);
       return res;
     };
-    const photos = await photosForDraft(draft.filled, brief.parsed, brief.pages, { ...deps, jev });
+    const now = deps.now?.() ?? new Date();
+    const recent = deps.usedLog ? await deps.usedLog.recent(now) : new Set<string>();
+    const lastUsed = deps.usedLog ? await deps.usedLog.lastUsed() : new Map<string, string>();
+    const photos = await photosForDraft(draft.filled, brief.parsed, brief.pages, { ...deps, jev }, { recent, bank: deps.bank ?? [], lastUsed });
     // C6: never ship a photo without an allowed, credited licence.
     const traces = [photos.cover, ...photos.slides];
-    const used = new Set(traces.flatMap((t) => (t.photo ? [t.photo.url] : [])));
+    const used = new Set([...recent, ...traces.flatMap((t) => (t.photo ? [t.photo.url] : []))]);
     const photoReplacements: string[] = [];
     for (const [i, t] of traces.entries()) {
       const failures = t.photo ? checkPhotoCredit(t.photo, i === 0 ? 'cover' : `slide ${i + 1}`, brief.parsed) : [];

@@ -20,7 +20,8 @@ const run = (text: string): SpanRun => [{ text, role: 'narrative' }];
 export type PostMeta = { source: string; sourceUrl: string; publishedAt: string };
 
 /** Article and Commons photos may show people (rule 3); stock and starter-set photos are scenes. */
-export const photoKindOf = (photo: Photo): 'subject' | 'scene' => (photo.source === 'article' || photo.source === 'commons' ? 'subject' : 'scene');
+/** Article, Commons and bank person/company photos may show people or a subject (rule 3); stock, starter and bank scenes are scenes. */
+export const photoKindOf = (photo: Photo): 'subject' | 'scene' => (photo.source === 'article' || photo.source === 'commons' || (photo.source === 'bank' && photo.qid) ? 'subject' : 'scene');
 
 function photoFields(photo: Photo | null): Pick<SlideCopy, 'photoUrl' | 'photoCredit' | 'photoKind'> {
   return photo ? { photoUrl: photo.url, photoCredit: photo.credit, photoKind: photoKindOf(photo) } : {};

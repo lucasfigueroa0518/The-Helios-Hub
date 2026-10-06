@@ -35,9 +35,10 @@ import type { ImageRequest } from '@/lib/social/writer/draft';
 
 import { classifyCredit } from './credit';
 import { checkIdentity, type IdentityResult, type SubjectType } from './identity';
-import { pickStarter } from './starter-set';
+import { bankPhoto, pickFromBank, type BankEntry, type BankNeed } from './bank';
+import { pickStarter, pickStarterLeastRecent } from './starter-set';
 
-export type PhotoSource = 'article' | 'commons' | 'stock' | 'starter';
+export type PhotoSource = 'article' | 'commons' | 'stock' | 'bank' | 'starter';
 
 export type Photo = {
   url: string;
@@ -52,7 +53,7 @@ export type Photo = {
   subject: string | null;
 };
 
-export type ChainStep = 'article' | 'subject' | 'stock' | 'starter';
+export type ChainStep = 'article' | 'subject' | 'stock' | 'bank' | 'starter';
 
 /** Identity check outcome for the run log. */
 export type IdentityNote = { subject: string; ok: boolean; detail: string; scores: import('./identity').IdentityScores | null };
@@ -90,13 +91,26 @@ export type PhotoContext = {
   pages: PageReadOk[];
   /** URLs already used in this post. Updated by findPhoto. */
   used: Set<string>;
+  /** URLs used in the last 7 days, any source (used-photos.ts). Never picked. */
+  recent: Set<string>;
+  /** The photo bank (bank.ts) and when each URL was last used, for least-recently-used picks. */
+  bank: BankEntry[];
+  lastUsed: Map<string, string>;
   /** Identity results by subject name, so one subject costs one check per post. */
   identities: Map<string, Promise<IdentityResult>>;
 };
 
-export function newPhotoContext(brief: Brief, pages: PageReadOk[]): PhotoContext {
-  return { brief, pages, used: new Set(), identities: new Map() };
+export function newPhotoContext(
+  brief: Brief,
+  pages: PageReadOk[],
+  opts: { recent?: Set<string>; bank?: BankEntry[]; lastUsed?: Map<string, string> } = {},
+): PhotoContext {
+  return { brief, pages, used: new Set(), identities: new Map(), recent: opts.recent ?? new Set(), bank: opts.bank ?? [], lastUsed: opts.lastUsed ?? new Map() };
 }
+
+/** Used in this post or in the last 7 days (spec §5D). */
+const taken = (ctx: PhotoContext, url: string) => ctx.used.has(url) || ctx.recent.has(url);
+const avoidSet = (ctx: PhotoContext) => new Set([...ctx.used, ...ctx.recent]);
 
 const urlKey = (u: string) => u.replace(/^https?:\/\//, '').replace(/[?#].*$/, '');
 
@@ -121,14 +135,14 @@ async function articlePhoto(url: string, ctx: PhotoContext, steps: string[]): Pr
   const v = classifyCredit({ caption: found.photo.caption, credit: found.photo.credit, page: found.page, organizations });
   steps.push(`credit ${v.verdict}: ${v.reason}`);
   if (v.verdict !== 'allowed') return null;
-  if (ctx.used.has(url)) {
-    steps.push('already used in this post');
+  if (taken(ctx, url)) {
+    steps.push('already used in this post or in the last 7 days');
     return null;
   }
   return { url, credit: (found.photo.credit ?? found.photo.caption ?? '').trim(), source: 'article', width: null, height: null, qid: null, subject: null };
 }
 
-async function subjectPhoto(name: string, ctx: PhotoContext, deps: PhotoDeps, steps: string[]): Promise<{ photo: Photo | null; type: SubjectType | null; identity: IdentityNote }> {
+async function subjectPhoto(name: string, ctx: PhotoContext, deps: PhotoDeps, steps: string[]): Promise<{ photo: Photo | null; type: SubjectType | null; identity: IdentityNote; qid?: string }> {
   const subject = ctx.brief.subjects.find((s) => s.name === name) ?? { name, role: null };
   let pending = ctx.identities.get(name);
   if (!pending) {
@@ -147,9 +161,9 @@ async function subjectPhoto(name: string, ctx: PhotoContext, deps: PhotoDeps, st
   const file = p18 ? `File:${p18}` : null;
   const info = file ? (await fetchImageInfo([file], { http: deps.http }))[file] : undefined;
   const pick = file && info ? toCandidate(file, info, 'P18', { minShortSide: STOCK_MIN_SHORT_SIDE }) : null;
-  if (!pick || ctx.used.has(pick.url)) {
-    steps.push(!p18 ? 'no Wikidata main image (P18)' : !pick ? 'main image (P18) not usable (licence, size or type)' : 'main image (P18) already used in this post');
-    return { photo: null, type: id.type, identity };
+  if (!pick || taken(ctx, pick.url)) {
+    steps.push(!p18 ? 'no Wikidata main image (P18)' : !pick ? 'main image (P18) not usable (licence, size or type)' : 'main image (P18) already used in this post or in the last 7 days');
+    return { photo: null, type: id.type, identity, qid: id.qid };
   }
   steps.push(`commons P18: ${pick.file}`);
   return {
@@ -185,7 +199,7 @@ async function prescreen(scene: string, cands: OpenverseCandidate[], deps: Photo
 async function stockPhoto(request: string, slot: PhotoSlot, ctx: PhotoContext, deps: PhotoDeps, steps: string[]): Promise<Photo | null> {
   const search: StockSearch = deps.stock ?? ((q, o) => searchOpenverse(q, { http: deps.http, minShortSide: o.minShortSide }));
   for (const query of stockQueries(request)) {
-    const cands = (await search(query, { minShortSide: STOCK_MIN_SHORT_SIDE })).filter((c) => !ctx.used.has(c.url));
+    const cands = (await search(query, { minShortSide: STOCK_MIN_SHORT_SIDE })).filter((c) => !taken(ctx, c.url));
     if (!cands.length) {
       steps.push(`stock "${query}" (${slot}): no unused results`);
       continue;
@@ -246,6 +260,11 @@ export async function findPhoto(request: ImageRequest, ctx: PhotoContext, deps: 
     }
   };
   const empty = !request.value.trim();
+  const fromBank = (need: BankNeed): Photo | null => {
+    const e = pickFromBank(ctx.bank, need, avoidSet(ctx), ctx.lastUsed);
+    steps.push(e ? `bank: ${e.id} (${e.kind})` : `bank: no match for ${JSON.stringify(need)}`);
+    return e ? bankPhoto(e) : null;
+  };
 
   // A subject: the request's, or (only when the request is empty) one named in the slide text.
   const subject = request.kind === 'subject' && !empty ? request.value : empty && slot === 'split' ? subjectInText(slide, ctx.brief) : null;
@@ -262,23 +281,37 @@ export async function findPhoto(request: ImageRequest, ctx: PhotoContext, deps: 
     if (slot === 'backdrop') steps.push('subject photo skipped: the stat background is a scene');
     else if (slot === 'quote' && subject !== slide.speaker) steps.push(`subject photo skipped: ${subject} isn't the speaker, and the round spot implies the speaker`);
     else {
+      let qid: string | undefined;
       const r = await attempt('subject', async () => {
         const out = await subjectPhoto(subject, ctx, deps, steps);
         identity = out.identity;
+        qid = out.qid;
         return out.photo;
       });
       if (r) return done(r, 'subject');
+      // The bank, by the verified Wikidata id only (never by name).
+      const b = qid ? fromBank({ qid }) : null;
+      if (b) return done(b, 'bank');
     }
   } else if (request.kind === 'stock' && !empty) {
     const p = await attempt('stock', () => stockPhoto(request.value, slot, ctx, deps, steps));
     if (p) return done(p, 'stock');
+    const b = fromBank({ scene: request.value });
+    if (b) return done(b, 'bank');
   }
 
   // The offline starter set.
-  const starter = pickStarter(ctx.used);
+  const starter = pickStarter(avoidSet(ctx));
   if (starter) {
     steps.push(`starter set: ${starter.url}`);
     return done(starter, 'starter');
+  }
+  // Every starter photo was used in the last 7 days: the least recently used one,
+  // never one from this post. The 7-day rule breaks here, and the trace says so.
+  const lru = pickStarterLeastRecent(ctx.used, ctx.lastUsed);
+  if (lru) {
+    steps.push(`7-DAY RULE BROKEN: every starter photo used in the last 7 days; least recently used: ${lru.url}`);
+    return done(lru, 'starter');
   }
   steps.push('no photo: every step failed, starter set used up');
   return { request, photo: null, via: null, identity, steps };
