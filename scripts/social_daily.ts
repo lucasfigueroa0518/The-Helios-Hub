@@ -158,6 +158,8 @@ async function main() {
     totalUsd: Number(budget.spent().toFixed(4)),
     // Information only (Tommy, 2026-10-06).
     starterShare: Number(starterShare.toFixed(3)),
+    // How often the 7-day rule gave way (Tommy, 2026-10-06).
+    starterPoolExhausted: result.posts.flatMap((p) => p.photos).filter((t) => t.steps.some((x) => x.startsWith('starter-pool-exhausted'))).length,
     capUsd,
   }, null, 2));
 

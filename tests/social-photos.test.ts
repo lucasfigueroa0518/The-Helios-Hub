@@ -555,14 +555,15 @@ test('7-day rule: a photo used in the last 7 days is never picked, from any sour
   assert.notEqual(trump.photo?.url, starterUrl(STARTER_SET[0]!.file), 'starter set included');
 });
 
-test('7-day rule: when every starter photo was used this week, the least recently used one, flagged', async () => {
+test('starter-pool-exhausted: when every eligible starter photo was used this week, the least recently used one, logged', async () => {
   const offline = { jev: identityJev(SIF_ANSWERS), http: (async () => { throw new Error('offline'); }) as unknown as typeof fetch };
   const recent = new Set(STARTER_SET.map((p) => starterUrl(p.file)));
   const lastUsed = new Map(STARTER_SET.map((p, i) => [starterUrl(p.file), `2026-10-0${(i % 5) + 1}T00:00:00Z`]));
+  lastUsed.set(starterUrl(STARTER_SET.find((p) => p.topic)!.file), '2026-09-01T00:00:00Z'); // story-specific: never a general fallback, however old
   const t = await findPhoto({ kind: 'stock', value: 'x' }, newPhotoContext(briefWith(), [], { recent, lastUsed }), offline);
   assert.equal(t.via, 'starter');
   assert.equal(lastUsed.get(t.photo!.url), '2026-10-01T00:00:00Z');
-  assert.ok(t.steps.some((s) => /7-DAY RULE BROKEN/.test(s)));
+  assert.ok(t.steps.some((s) => s.startsWith('starter-pool-exhausted')));
 });
 
 const entry = (e: Partial<BankEntry>): BankEntry => ({ id: 'e', url: '/social/bank/e.jpg', kind: 'scene', qid: null, event: null, tags: [], credit: 'Courtesy of OpenAI', licence: 'press kit', source: 'x', width: 2000, height: 1300, faces: false, addedAt: '2026-10-06', ...e });
@@ -605,4 +606,41 @@ test('bank seed check: required fields, Wikidata ids, and no faces in company ph
   assert.match(checkBankEntry(entry({ kind: 'company', qid: null })).join(), /Wikidata id/);
   assert.match(checkBankEntry(entry({ kind: 'company', qid: 'Q1', faces: true })).join(), /shows a face/);
   assert.match(checkBankEntry(entry({ kind: 'scene', tags: [] })).join(), /tags/);
+});
+
+// ── Starter set: story-specific photos (Tommy, 2026-10-06) ────────────────
+
+import { briefTopics, pickStarter as pickStarterFn, pickStarterLeastRecent } from '@/lib/social/photos/starter-set';
+
+test('starter set: 41 photos, 37 general + 4 story-specific (US Congress ×2, stock markets, surveillance)', () => {
+  assert.equal(STARTER_SET.length, 41);
+  assert.equal(STARTER_SET.filter((p) => !p.topic).length, 37);
+  assert.deepEqual(STARTER_SET.filter((p) => p.topic).map((p) => p.topic).sort(), ['US Congress', 'US Congress', 'stock markets', 'surveillance']);
+});
+
+test('story-specific photos: only when the brief is about the topic, never as a general fallback', () => {
+  const general = briefWith();
+  const all = new Set<string>();
+  for (let i = 0; i < STARTER_SET.length; i++) {
+    const p = pickStarterFn(all, general);
+    if (!p) break;
+    assert.ok(!STARTER_SET.find((s) => starterUrl(s.file) === p.url)!.topic, `general brief got ${p.url}`);
+    all.add(p.url);
+  }
+  const congress = briefWith();
+  congress.the_news.text = 'The U.S. Senate passed an AI bill on Tuesday.';
+  const first = pickStarterFn(new Set(), congress)!;
+  assert.equal(STARTER_SET.find((s) => starterUrl(s.file) === first.url)!.topic, 'US Congress');
+  const lru = pickStarterLeastRecent(new Set(), new Map(STARTER_SET.filter((p) => p.topic).map((p) => [starterUrl(p.file), '2020-01-01'])), general);
+  assert.ok(!STARTER_SET.find((s) => starterUrl(s.file) === lru.url)!.topic, 'exhausted pool still never falls back to a story-specific photo');
+});
+
+test('topics come from plain words in the brief; "NYC lawmakers" is not Congress', () => {
+  const b = briefWith();
+  b.the_news.text = 'NYC Council lawmakers questioned AI companies at a hearing.';
+  assert.deepEqual([...briefTopics(b)], []);
+  b.the_news.text = 'Nvidia shares fell 5% on the Nasdaq after the IPO.';
+  assert.deepEqual([...briefTopics(b)], ['stock markets']);
+  b.the_news.text = 'The city expands CCTV and facial recognition.';
+  assert.deepEqual([...briefTopics(b)], ['surveillance']);
 });

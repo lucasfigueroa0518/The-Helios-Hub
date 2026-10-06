@@ -38,6 +38,9 @@ import { checkIdentity, type IdentityResult, type SubjectType } from './identity
 import { bankPhoto, pickFromBank, type BankEntry, type BankNeed } from './bank';
 import { pickStarter, pickStarterLeastRecent } from './starter-set';
 
+/** Logged when the 7-day rule has to give way (spec §5D; counted in each run's report). */
+export const STARTER_POOL_EXHAUSTED = 'starter-pool-exhausted';
+
 export type PhotoSource = 'article' | 'commons' | 'stock' | 'bank' | 'starter';
 
 export type Photo = {
@@ -301,18 +304,14 @@ export async function findPhoto(request: ImageRequest, ctx: PhotoContext, deps: 
   }
 
   // The offline starter set.
-  const starter = pickStarter(avoidSet(ctx));
+  const starter = pickStarter(avoidSet(ctx), ctx.brief);
   if (starter) {
     steps.push(`starter set: ${starter.url}`);
     return done(starter, 'starter');
   }
-  // Every starter photo was used in the last 7 days: the least recently used one,
-  // never one from this post. The 7-day rule breaks here, and the trace says so.
-  const lru = pickStarterLeastRecent(ctx.used, ctx.lastUsed);
-  if (lru) {
-    steps.push(`7-DAY RULE BROKEN: every starter photo used in the last 7 days; least recently used: ${lru.url}`);
-    return done(lru, 'starter');
-  }
-  steps.push('no photo: every step failed, starter set used up');
-  return { request, photo: null, via: null, identity, steps };
+  // Every eligible starter photo was used in the last 7 days (Tommy, 2026-10-06):
+  // reuse the least recently used one and say so. Never returns no photo.
+  const lru = pickStarterLeastRecent(ctx.used, ctx.lastUsed, ctx.brief);
+  steps.push(`${STARTER_POOL_EXHAUSTED}: every eligible starter photo used in the last 7 days; least recently used: ${lru.url}`);
+  return done(lru, 'starter');
 }
