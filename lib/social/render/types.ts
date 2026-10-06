@@ -238,6 +238,20 @@ export type SlideCopy = {
   photoIsSpeaker?: boolean;
 
   /**
+   * What the photo may show (layout rule 3, Tommy 2026-10-06): `subject` (a
+   * person or organization photo, or an article photo that may show people)
+   * only goes in its own region; `scene` (stock, starter set) may sit full
+   * bleed under text. Unset means scene.
+   */
+  photoKind?: 'subject' | 'scene';
+
+  /**
+   * Where to centre the photo's crop, in the photo's own coordinates (0–1),
+   * from the face detector (M8b). Unset means centre.
+   */
+  photoFocus?: { x: number; y: number };
+
+  /**
    * Design-skill variant code from the helios-social-skill layout library.
    * Sits alongside `layoutVariant` (the family) as a CSS modifier so a
    * single family can express multiple compositions. Optional — the family

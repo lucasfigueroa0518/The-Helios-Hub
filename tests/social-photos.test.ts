@@ -468,3 +468,63 @@ test('pre-screen: nothing passes → the two-word search, then the starter set',
   assert.deepEqual(queries, ['student laptop campus', 'student laptop']);
   assert.equal(t.via, 'starter');
 });
+
+// ── M8a layout system ────────────────────────────────────────────────────
+
+import { draftSlides, SPREAD_MIN_ASPECT } from '@/lib/social/render/from-draft';
+
+async function renderSlideHtml(post: Parameters<typeof import('@/lib/social/render/SlideTemplate').SlideTemplate>[0]['post'], i: number) {
+  const React = await import('react');
+  (globalThis as { React?: unknown }).React = React;
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const { SlideTemplate } = await import('@/lib/social/render/SlideTemplate');
+  return renderToStaticMarkup(React.createElement(SlideTemplate, { post, position: i }));
+}
+
+const basePost = (slides: SlideCopy[]) => ({ format: 'carousel' as const, storyType: 'tech' as const, source: 's', sourceUrl: 'u', publishedAt: 'p', issueNumber: 0, caption: 'c', slides });
+const span = (text: string) => [{ text, role: 'narrative' as const }];
+
+test('M8a: the quote layout shows its headline and body; the landing layout shows its body', async () => {
+  const quote: SlideCopy = { position: 0, layoutVariant: 'quote', headline: span('His pitch'), body: span('He said it on Sunday.'), quoteText: span('we lead'), quoteBy: 'Trump', altText: 'q' };
+  const landing: SlideCopy = { position: 1, layoutVariant: 'landing', headline: span('Pro costs more'), body: span('Google gave no reason.'), altText: 'l' };
+  const post = basePost([quote, landing]);
+  const q = await renderSlideHtml(post, 0);
+  for (const t of ['His pitch', 'He said it on Sunday.', 'we lead', 'Trump']) assert.ok(q.includes(t), t);
+  const l = await renderSlideHtml(post, 1);
+  assert.ok(l.includes('Google gave no reason.'));
+  assert.ok(/data-fit-min/.test(q) && /data-fit-min/.test(l), 'every text block is a fit region');
+});
+
+test('M8a rule 3: a subject photo never goes full bleed under text; it renders in its own region', async () => {
+  const img: SlideCopy = { position: 0, layoutVariant: 'image', headline: span('H'), altText: 'a', photoUrl: '/p.jpg', photoKind: 'subject' };
+  const html = await renderSlideHtml(basePost([img]), 0);
+  assert.ok(!html.includes('helios-image'), 'not the full-bleed layout');
+  assert.ok(html.includes('helios-split__photo'));
+  const cover: SlideCopy = { position: 0, layoutVariant: 'cover', headline: span('H'), altText: 'a', photoUrl: '/p.jpg', photoKind: 'subject' };
+  assert.ok((await renderSlideHtml(basePost([cover]), 0)).includes('helios-cover--split'));
+  const scene: SlideCopy = { ...cover, photoKind: 'scene' };
+  const sceneHtml = await renderSlideHtml(basePost([scene]), 0);
+  assert.ok(sceneHtml.includes('helios-cover--bleed') && sceneHtml.includes('data-scrim="gradient"'), 'scene full bleed, on a scrim');
+});
+
+test('M8a rule 3 in rotation: a subject photo is never rotated to full bleed', () => {
+  const slides: SlideCopy[] = [1, 2, 3].map((n) => ({ ...textSlide(n), photoKind: 'subject' as const }));
+  const r = rotateLayouts(slides);
+  assert.ok(r.slides.every((s) => layoutOf(s) !== 'full-bleed'), r.changes.join('; '));
+});
+
+test('M8a spreads: a wide scene photo spans two slides; a subject or narrow photo falls back to normal slides', () => {
+  const b = briefWith();
+  const sub = sifDraft();
+  sub.slides[0]!.spread_with_next = true;
+  const d = fillDraft(sub, b);
+  const wide: Photo = { url: '/wide.jpg', credit: 'c, CC0', source: 'starter', width: 3200, height: Math.floor(3200 / SPREAD_MIN_ASPECT), qid: null, subject: null };
+  const s1 = draftSlides(d, { cover: null, slides: [wide, null, null, null, null, null] });
+  assert.equal(s1[1]!.panoramaSide, 'left');
+  assert.equal(s1[2]!.panoramaSide, 'right');
+  assert.equal(s1[2]!.photoUrl, '/wide.jpg');
+  const narrow = { ...wide, width: 1600, height: 1200 };
+  assert.equal(draftSlides(d, { cover: null, slides: [narrow, null, null, null, null, null] })[1]!.panoramaSide, undefined);
+  const person = { ...wide, source: 'commons' as const };
+  assert.equal(draftSlides(d, { cover: null, slides: [person, null, null, null, null, null] })[1]!.panoramaSide, undefined);
+});

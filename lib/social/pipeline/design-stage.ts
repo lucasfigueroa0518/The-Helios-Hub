@@ -56,6 +56,11 @@ export function createDesignStage(deps: PhotoDeps & { fitCheck: FitCheck }): Pip
       const detail = [...fit.problems, ...fit.violations.map((v) => `slide ${v.slide} ${v.element} outside the slide (${JSON.stringify(v.over)}): "${v.text}"`)].join('; ');
       return { ok: false, reasonCode: 'render-failed', detail, costUsd: tally.costUsd };
     }
+    // M8b: keep the face-centred crops the check chose, so the preview draws the same thing.
+    for (const f of fit.focus ?? []) {
+      const sl = render.slides[f.slide - 1];
+      if (f.focus && sl && sl.photoUrl === f.photo) sl.photoFocus = f.focus;
+    }
     // C7: every text field of the final draft is on its rendered slide.
     const dropped = checkDroppedText(draft.filled, fit.slideText);
     if (dropped.length > 0) {

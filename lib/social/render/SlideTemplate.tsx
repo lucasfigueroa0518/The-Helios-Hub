@@ -1,7 +1,8 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 
+import { fitText } from '@/lib/social/render/text-fit';
 import type { Post, SlideCopy, SpanRun } from '@/lib/social/render/types';
 
 export type SlideTemplateProps = {
@@ -10,80 +11,106 @@ export type SlideTemplateProps = {
 };
 
 /**
- * Renders one slide of a Post per docs/DESIGN-V1-HANDOFF.md.
+ * Renders one slide of a Post. Layout-system rules (Tommy, 2026-10-06; M8a),
+ * the same on every layout:
  *
- * Design v1 slide types (field-driven by the adapter):
- *   cover        — unchanged CoverSlide
- *   text         — HEADLINE (top, uppercase Pragmatica) + BODY (44px fixed)
- *   landing      — HEADLINE only, centered, giant Pragmatica; optional NOTE
- *   stat         — HEADLINE top, BIG NUMBER + NUMBER NOTE bottom, optional photo
- *   split_stat   — HEADLINE top, two numbers side-by-side above hairline
- *   quote        — orange opening mark + quote + attribution, optional round photo
- *   image        — cover-style full-bleed photo, headline + body bottom-anchored
- *   follow       — unchanged FollowSlide
+ *   1. Text fit: every text block is a region with a minimum font size
+ *      (`data-fit-min`; its height is the CSS max-height). It shrinks until
+ *      its longest word fits on one line and the block fits; no mid-word
+ *      breaks. Still too big at the minimum → the render fails (fit-check).
+ *   2. Contrast: text over a photo always sits on a dark scrim, either a
+ *      gradient under the text block (`data-scrim="gradient"`) or the
+ *      darkened background shade (`data-scrim="shade"`).
+ *   3. Faces stay clear: a subject photo (a person or organization, or an
+ *      article photo that may show people) only goes in its own region
+ *      (split cover, split text/landing slide, the speaker's round spot).
+ *      Full-bleed photos under text are scene or mood photos only.
  *
- * Legacy aliases (renderer routes them to the closest v1 component so
- * pre-v1 fixtures + the legacy pipeline still render):
- *   story_beat   → TextSlide
- *   data_block   → StatSlide
+ * Every text field of the draft is drawn (M7 C7 fails the render otherwise).
+ *
+ * Layouts:
+ *   cover        no photo · scene full-bleed + scrim · subject split (photo top, headline below)
+ *   text         headline + body; a photo takes its own region below or on top (split)
+ *   landing      headline + body; photo region below
+ *   stat         headline + body + big number; a scene photo is a darkened background
+ *   split_stat   two numbers; same background rule
+ *   quote        headline, the speaker's verified photo in the round spot (else a
+ *                darkened background), quote, speaker, body
+ *   image        full-bleed scene + scrim (a subject photo renders as a split text slide)
+ *   spread       one wide scene photo across two slides (panoramaSide), text on a scrim
+ *   follow       closing slide
  */
 export function SlideTemplate({ post, position }: SlideTemplateProps) {
+  const ref = useRef<HTMLDivElement>(null);
   const slide = post.slides[position];
+
+  // Rule 1 in the browser preview: fit once fonts are in. The render-fit
+  // check runs the same fitText headlessly and fails the render on misses.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let cancelled = false;
+    void document.fonts.ready.then(() => {
+      if (!cancelled) fitText(el);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [post, position]);
+
   if (!slide) {
     return (
-      <div
-        className={`helios-slide helios-slide--${post.format}`}
-        data-slide-missing="true"
-      >
+      <div className={`helios-slide helios-slide--${post.format}`} data-slide-missing="true">
         <p>Slide {position} not found in this post.</p>
       </div>
     );
   }
 
-  const isFollow = slide.layoutVariant === 'follow';
-  const isCover = slide.layoutVariant === 'cover';
-  // Full-bleed image slides share the cover's chrome-suppression rule (the
-  // photo bleeds to the edges; wordmark would collide with it).
-  const isImageBleed = slide.layoutVariant === 'image' && Boolean(slide.photoUrl);
-  const showTopWordmark = !isCover && !isFollow && !isImageBleed;
-
-  // Route legacy aliases to design-v1 components.
-  const kind = slide.layoutVariant === 'story_beat' ? 'text'
-    : slide.layoutVariant === 'data_block' ? 'stat'
-    : slide.layoutVariant;
+  // Legacy aliases → design-v1 components.
+  let kind: string = slide.layoutVariant === 'story_beat' ? 'text' : slide.layoutVariant === 'data_block' ? 'stat' : slide.layoutVariant;
+  const scenePhoto = Boolean(slide.photoUrl) && slide.photoKind !== 'subject';
+  // Rule 3: full bleed under text only for a scene photo; a spread needs one too.
+  if (slide.panoramaSide && scenePhoto && (kind === 'text' || kind === 'image' || kind === 'landing')) kind = 'spread';
+  const textFromImage = kind === 'image' && !scenePhoto;
+  if (textFromImage) kind = 'text';
+  const fullBleed = kind === 'image' || kind === 'spread' || (kind === 'cover' && scenePhoto);
+  const showWordmark = kind !== 'cover' && kind !== 'follow' && !fullBleed;
+  const textSlide = textFromImage ? { ...slide, photoPlacement: 'top' as const } : slide;
 
   return (
     <div
-      className={
-        `helios-slide helios-slide--${post.format}`
-        + ` helios-slide--${kind}`
-      }
+      ref={ref}
+      className={`helios-slide helios-slide--${post.format} helios-slide--${kind}`}
       data-slide-ready="true"
       data-variant={slide.variant ?? undefined}
       role="img"
       aria-label={slide.altText}
     >
-      {showTopWordmark && (
+      {showWordmark && (
         <div className="helios-masthead helios-masthead--minimal" aria-hidden="true">
           <div className="helios-masthead__wordmark">HELIOS</div>
         </div>
       )}
       <div className="helios-slide__well">
-        {kind === 'cover' && <CoverSlide post={post} slide={slide} />}
-        {kind === 'text' && <TextSlide slide={slide} />}
+        {kind === 'cover' && <CoverSlide slide={slide} />}
+        {kind === 'text' && <TextSlide slide={textSlide} />}
         {kind === 'landing' && <LandingSlide slide={slide} />}
         {kind === 'stat' && <StatSlide slide={slide} />}
         {kind === 'split_stat' && <SplitStatSlide slide={slide} />}
         {kind === 'quote' && <QuoteSlide slide={slide} />}
         {kind === 'image' && <ImageSlide slide={slide} />}
+        {kind === 'spread' && <ImageSlide slide={slide} spread={slide.panoramaSide} />}
         {kind === 'follow' && <FollowSlide slide={slide} />}
       </div>
-      {slide.photoUrl && <PhotoCredit credit={slide.photoCredit} />}
+      {slide.photoUrl && kind !== 'follow' && <PhotoCredit credit={slide.photoCredit} />}
     </div>
   );
 }
 
-/* ── Spans ────────────────────────────────────────────────────────── */
+/* ── Building blocks ──────────────────────────────────────────────── */
+
+/** Minimum font sizes (px) per text role: the floor for rule 1. */
+const MIN = { headline: 44, cover: 48, body: 28, number: 52, splitNumber: 40, note: 22, quote: 36, by: 18, landing: 52 } as const;
 
 function SpanRunView({ run }: { run: SpanRun | undefined }) {
   if (!run) return null;
@@ -98,289 +125,247 @@ function SpanRunView({ run }: { run: SpanRun | undefined }) {
   );
 }
 
-/**
- * Photo credit: one position on every layout (2026-10-05): bottom-right
- * corner of the slide, white on a dark pill so it reads on any photo.
- * Rendered once per slide by SlideTemplate, never inside a layout.
- */
-function PhotoCredit({ credit }: { credit: string | undefined }) {
-  if (!credit) return null;
-  return <div className="helios-photo-credit">{credit}</div>;
+/** A text region (rule 1). */
+function Fit({ as: Tag = 'div', className, min, children }: { as?: 'div' | 'h1' | 'h2' | 'p' | 'blockquote'; className: string; min: number; children: ReactNode }) {
+  return (
+    <Tag className={className} data-fit-min={min}>
+      {children}
+    </Tag>
+  );
 }
 
-/**
- * Darkened full-bleed photo behind a slide's content (spec §5.3a): the
- * stat background, and the quote background when the photo isn't a
- * verified photo of the speaker. Sets the mood; never a layout block.
- */
-function Backdrop({ url }: { url: string }) {
+/** Crop centred on the detected face (M8b), else the centre. */
+function focusStyle(slide: SlideCopy): CSSProperties | undefined {
+  const f = slide.photoFocus;
+  return f ? { objectPosition: `${Math.round(f.x * 100)}% ${Math.round(f.y * 100)}%` } : undefined;
+}
+
+/** A photo in its own region (rule 3: the only place a subject photo goes). */
+function RegionPhoto({ slide, className }: { slide: SlideCopy; className: string }) {
+  return <img className={`helios-photo ${className}`} src={slide.photoUrl} alt="" aria-hidden="true" data-photo-kind={slide.photoKind ?? 'scene'} style={focusStyle(slide)} />;
+}
+
+/** A full-bleed scene photo under a gradient-scrimmed text block (rules 2 + 3). */
+function BleedPhoto({ slide, spread }: { slide: SlideCopy; spread?: 'left' | 'right' }) {
+  const cls = spread ? `helios-bleed__photo helios-bleed__photo--spread-${spread}` : 'helios-bleed__photo';
+  return <img className={`helios-photo ${cls}`} src={slide.photoUrl} alt="" aria-hidden="true" data-photo-kind={slide.photoKind ?? 'scene'} style={spread ? undefined : focusStyle(slide)} />;
+}
+
+/** Darkened full-bleed background behind a slide's content (spec §5.3a; rule 2 via the shade). */
+function Backdrop({ slide }: { slide: SlideCopy }) {
   return (
     <>
-      <img className="helios-backdrop__img" src={url} alt="" aria-hidden="true" />
+      <img className="helios-photo helios-backdrop__img" src={slide.photoUrl} alt="" aria-hidden="true" data-photo-kind={slide.photoKind ?? 'scene'} style={focusStyle(slide)} />
       <div className="helios-backdrop__shade" aria-hidden="true" />
     </>
   );
 }
 
-/* ── Cover (unchanged from prior render) ──────────────────────────── */
+/** Photo credit: one position on every layout, bottom-right, white on a dark pill. */
+function PhotoCredit({ credit }: { credit: string | undefined }) {
+  if (!credit) return null;
+  return <div className="helios-photo-credit">{credit}</div>;
+}
 
-function CoverSlide({ post, slide }: { post: Post; slide: SlideCopy }) {
-  void post;
-  const photoBleed = Boolean(slide.photoUrl);
-  const chars = (slide.headline ?? []).reduce((n, s) => n + s.text.length, 0);
-  const lengthBucket = chars <= 40 ? 'xs'
-    : chars <= 70 ? 'sm'
-    : chars <= 100 ? 'md'
-    : chars <= 140 ? 'lg'
-    : 'xl';
+/* ── Cover ────────────────────────────────────────────────────────── */
+
+function CoverSlide({ slide }: { slide: SlideCopy }) {
+  const mode = !slide.photoUrl ? 'plain' : slide.photoKind === 'subject' ? 'split' : 'bleed';
   return (
-    <div className={`helios-cover${photoBleed ? ' helios-cover--bleed' : ''}`}>
-      {photoBleed && (
-        <>
-          <img
-            className="helios-cover__bg"
-            src={slide.photoUrl}
-            alt=""
-            aria-hidden="true"
-          />
-          <div className="helios-cover__scrim" aria-hidden="true" />
-          <div className="helios-cover__scrim--bottom" aria-hidden="true" />
-        </>
-      )}
-      <div className="helios-cover__foreground">
-        <h1
-          className="helios-cover__headline"
-          data-length={lengthBucket}
-        >
+    <div className={`helios-cover helios-cover--${mode}`}>
+      {mode === 'bleed' && <BleedPhoto slide={slide} />}
+      {mode === 'split' && <RegionPhoto slide={slide} className="helios-cover__photo" />}
+      <div className="helios-cover__text" data-scrim={mode === 'bleed' ? 'gradient' : undefined}>
+        <Fit as="h1" className="helios-cover__headline" min={MIN.cover}>
           <SpanRunView run={slide.headline} />
-        </h1>
-        <div className="helios-cover__chevron" aria-hidden="true">→</div>
+        </Fit>
       </div>
+      <div className={`helios-cover__chevron${mode === 'plain' ? '' : ' helios-cover__chevron--on-photo'}`} aria-hidden="true">→</div>
     </div>
   );
 }
 
-/* ── Text (HEADLINE + BODY, top-anchored) ─────────────────────────── */
+/* ── Text (headline + body; photo in its own region) ──────────────── */
 
 function TextSlide({ slide }: { slide: SlideCopy }) {
-  const headlineChars = (slide.headline ?? slide.title ?? []).reduce((n, s) => n + s.text.length, 0);
-  const headlineBucket = headlineChars <= 30 ? 'xs'
-    : headlineChars <= 45 ? 'sm'
-    : headlineChars <= 60 ? 'md'
-    : 'lg';
-  // Prefer `headline`; fall back to legacy `title` so old fixtures render.
-  const headlineRun = slide.headline ?? slide.title;
-  const bodyRun = slide.body ?? slide.bodyBottom;
-  const hasPhoto = Boolean(slide.photoUrl);
+  const headline = slide.headline ?? slide.title;
+  const body = slide.body ?? slide.bodyBottom;
+  const placement = !slide.photoUrl ? 'none' : slide.photoPlacement === 'top' ? 'top' : 'below';
   return (
-    <div className={`helios-text${hasPhoto ? ' helios-text--with-photo' : ''}${hasPhoto && slide.photoPlacement === 'top' ? ' helios-text--photo-top' : ''}`}>
-      {headlineRun && (
-        <h2 className="helios-text__headline" data-length={headlineBucket}>
-          <SpanRunView run={headlineRun} />
-        </h2>
-      )}
-      {bodyRun && (
-        <p className="helios-text__body">
-          <SpanRunView run={bodyRun} />
-        </p>
-      )}
-      {hasPhoto && (
-        <div className="helios-text__photo-frame" aria-hidden="true">
-          <img className="helios-text__photo" src={slide.photoUrl} alt="" />
-        </div>
-      )}
+    <div className={`helios-text helios-text--photo-${placement}`}>
+      {placement === 'top' && <RegionPhoto slide={slide} className="helios-split__photo" />}
+      <div className="helios-text__copy">
+        {headline && (
+          <Fit as="h2" className="helios-text__headline" min={MIN.headline}>
+            <SpanRunView run={headline} />
+          </Fit>
+        )}
+        {body && (
+          <Fit as="p" className="helios-text__body" min={MIN.body}>
+            <SpanRunView run={body} />
+          </Fit>
+        )}
+      </div>
+      {placement === 'below' && <RegionPhoto slide={slide} className="helios-split__photo" />}
     </div>
   );
 }
 
-/* ── Landing (HEADLINE only, centered) ────────────────────────────── */
+/* ── Landing (headline, optional body; photo region below) ────────── */
 
 function LandingSlide({ slide }: { slide: SlideCopy }) {
-  const chars = (slide.headline ?? []).reduce((n, s) => n + s.text.length, 0);
-  const bucket = chars <= 30 ? 'xs'
-    : chars <= 50 ? 'sm'
-    : 'md';
   return (
-    <div className="helios-landing">
-      {slide.headline && (
-        <h2 className="helios-landing__line" data-length={bucket}>
-          <SpanRunView run={slide.headline} />
-        </h2>
-      )}
-      {slide.note && (
-        <div className="helios-landing__note">{slide.note}</div>
-      )}
-      {slide.photoUrl && (
-        <>
-          <img className="helios-landing__photo" src={slide.photoUrl} alt="" aria-hidden="true" />
-        </>
-      )}
+    <div className={`helios-landing${slide.photoUrl ? ' helios-landing--photo' : ''}`}>
+      <div className="helios-landing__copy">
+        {slide.headline && (
+          <Fit as="h2" className="helios-landing__line" min={MIN.landing}>
+            <SpanRunView run={slide.headline} />
+          </Fit>
+        )}
+        {slide.body && (
+          <Fit as="p" className="helios-landing__body" min={MIN.body}>
+            <SpanRunView run={slide.body} />
+          </Fit>
+        )}
+        {slide.note && <Fit className="helios-landing__note" min={MIN.body}>{slide.note}</Fit>}
+      </div>
+      {slide.photoUrl && <RegionPhoto slide={slide} className="helios-split__photo" />}
     </div>
   );
 }
 
-/* ── Stat (headline top, big number + note bottom) ────────────────── */
+/* ── Stat (headline + body top, big number bottom; photo = darkened background) ── */
 
 function StatSlide({ slide }: { slide: SlideCopy }) {
-  const number = slide.title;
-  const numberLen = number?.reduce((n, s) => n + s.text.length, 0) ?? 0;
-  const hasPhoto = Boolean(slide.photoUrl);
+  const backdrop = Boolean(slide.photoUrl);
   return (
-    <div className={`helios-stat${hasPhoto ? ' helios-stat--backdrop' : ''}`}>
-      {hasPhoto && <Backdrop url={slide.photoUrl!} />}
-      {slide.headline && (
-        <h2 className="helios-stat__headline">
-          <SpanRunView run={slide.headline} />
-        </h2>
-      )}
-      {slide.body && (
-        <p className="helios-stat__body">
-          <SpanRunView run={slide.body} />
-        </p>
-      )}
-
+    <div className={`helios-stat${backdrop ? ' helios-stat--backdrop' : ''}`} data-scrim={backdrop ? 'shade' : undefined}>
+      {backdrop && <Backdrop slide={slide} />}
+      <div className="helios-stat__copy">
+        {slide.headline && (
+          <Fit as="h2" className="helios-stat__headline" min={MIN.headline}>
+            <SpanRunView run={slide.headline} />
+          </Fit>
+        )}
+        {slide.body && (
+          <Fit as="p" className="helios-stat__body" min={MIN.body}>
+            <SpanRunView run={slide.body} />
+          </Fit>
+        )}
+      </div>
       <div className="helios-stat__number-block">
-        {number && (
-          <div className="helios-stat__number" data-length={numberLen}>
-            <SpanRunView run={number} />
-          </div>
+        {slide.title && (
+          <Fit className="helios-stat__number" min={MIN.number}>
+            <SpanRunView run={slide.title} />
+          </Fit>
         )}
-        {slide.numberNote && (
-          <div className="helios-stat__number-note">{slide.numberNote}</div>
-        )}
+        {slide.numberNote && <Fit className="helios-stat__number-note" min={MIN.note}>{slide.numberNote}</Fit>}
       </div>
     </div>
   );
 }
 
-/* ── Split stat (two numbers side-by-side above hairline) ─────────── */
-
 function SplitStatSlide({ slide }: { slide: SlideCopy }) {
-  const leftNumber = slide.title;
-  const leftLen = leftNumber?.reduce((n, s) => n + s.text.length, 0) ?? 0;
-  const rightLen = (slide.secondNumber ?? '').length;
-  const hasPhoto = Boolean(slide.photoUrl);
-  const headlineChars = (slide.headline ?? []).reduce((n, s) => n + s.text.length, 0);
-  const headlineBucket = headlineChars <= 30 ? 'xs'
-    : headlineChars <= 45 ? 'sm'
-    : headlineChars <= 60 ? 'md'
-    : 'lg';
+  const backdrop = Boolean(slide.photoUrl);
   return (
-    <div className={`helios-split-stat${hasPhoto ? ' helios-split-stat--backdrop' : ''}`}>
-      {hasPhoto && <Backdrop url={slide.photoUrl!} />}
-      {slide.headline && (
-        <h2 className="helios-split-stat__headline" data-length={headlineBucket}>
-          <SpanRunView run={slide.headline} />
-        </h2>
-      )}
-
+    <div className={`helios-split-stat${backdrop ? ' helios-split-stat--backdrop' : ''}`} data-scrim={backdrop ? 'shade' : undefined}>
+      {backdrop && <Backdrop slide={slide} />}
+      <div className="helios-split-stat__copy">
+        {slide.headline && (
+          <Fit as="h2" className="helios-split-stat__headline" min={MIN.headline}>
+            <SpanRunView run={slide.headline} />
+          </Fit>
+        )}
+        {slide.body && (
+          <Fit as="p" className="helios-split-stat__body" min={MIN.body}>
+            <SpanRunView run={slide.body} />
+          </Fit>
+        )}
+      </div>
       <div className="helios-split-stat__pair">
         <div className="helios-split-stat__col">
-          {leftNumber && (
-            <div className="helios-split-stat__number helios-split-stat__number--left" data-length={leftLen}>
-              <SpanRunView run={leftNumber} />
-            </div>
+          {slide.title && (
+            <Fit className="helios-split-stat__number" min={MIN.splitNumber}>
+              <SpanRunView run={slide.title} />
+            </Fit>
           )}
-          {slide.numberNote && (
-            <div className="helios-split-stat__note">{slide.numberNote}</div>
-          )}
+          {slide.numberNote && <Fit className="helios-split-stat__note" min={MIN.note}>{slide.numberNote}</Fit>}
         </div>
         <div className="helios-split-stat__rule" aria-hidden="true" />
         <div className="helios-split-stat__col">
           {slide.secondNumber && (
-            <div className="helios-split-stat__number helios-split-stat__number--right" data-length={rightLen}>
+            <Fit className="helios-split-stat__number helios-split-stat__number--right" min={MIN.splitNumber}>
               {slide.secondNumber}
-            </div>
+            </Fit>
           )}
-          {slide.secondNote && (
-            <div className="helios-split-stat__note">{slide.secondNote}</div>
-          )}
+          {slide.secondNote && <Fit className="helios-split-stat__note" min={MIN.note}>{slide.secondNote}</Fit>}
         </div>
       </div>
     </div>
   );
 }
 
-/* ── Quote (orange opening mark + quote + attribution) ────────────── */
+/* ── Quote (headline, speaker spot or background, quote, speaker, body) ── */
 
 function QuoteSlide({ slide }: { slide: SlideCopy }) {
-  const quoteRun = slide.quoteText ?? slide.body;
   // The round spot is only for a verified photo of the speaker; any other photo is a darkened background.
-  const showSpeakerPhoto = Boolean(slide.photoUrl) && slide.photoIsSpeaker === true;
-  const backdrop = Boolean(slide.photoUrl) && !showSpeakerPhoto;
+  const speaker = Boolean(slide.photoUrl) && slide.photoIsSpeaker === true;
+  const backdrop = Boolean(slide.photoUrl) && !speaker;
+  const quote = slide.quoteText;
   return (
-    <div className={`helios-quote${backdrop ? ' helios-quote--backdrop' : ''}`}>
-      {backdrop && <Backdrop url={slide.photoUrl!} />}
-      {showSpeakerPhoto && (
-        <img className="helios-quote__speaker" src={slide.photoUrl} alt="" aria-hidden="true" />
+    <div className={`helios-quote${speaker ? ' helios-quote--speaker' : ''}${backdrop ? ' helios-quote--backdrop' : ''}`} data-scrim={backdrop ? 'shade' : undefined}>
+      {backdrop && <Backdrop slide={slide} />}
+      {speaker && <RegionPhoto slide={slide} className="helios-quote__speaker" />}
+      {slide.headline && (
+        <Fit as="h2" className="helios-quote__headline" min={MIN.headline}>
+          <SpanRunView run={slide.headline} />
+        </Fit>
       )}
       <div className="helios-quote__glyph" aria-hidden="true">&ldquo;</div>
-      {quoteRun && (
-        <blockquote className="helios-quote__text">
-          <SpanRunView run={quoteRun} />
-        </blockquote>
+      {quote && (
+        <Fit as="blockquote" className="helios-quote__text" min={MIN.quote}>
+          <SpanRunView run={quote} />
+        </Fit>
       )}
       {slide.quoteBy && (
-        <div className="helios-quote__attribution">
+        <Fit className="helios-quote__attribution" min={MIN.by}>
           <span aria-hidden="true">— </span>
           {slide.quoteBy}
-        </div>
+        </Fit>
+      )}
+      {slide.body && (
+        <Fit as="p" className="helios-quote__body" min={MIN.body}>
+          <SpanRunView run={slide.body} />
+        </Fit>
       )}
     </div>
   );
 }
 
-/* ── Image (cover-style full-bleed mid-carousel) ──────────────────── */
+/* ── Image / spread (full-bleed scene, text bottom on a scrim) ────── */
 
-/**
- * Reuses the cover's full-bleed photo treatment: photo fills the slide,
- * darkened by the scrim, headline anchored bottom. Shares the CSS
- * `.helios-cover__bg / __scrim / __scrim--bottom` classes so the
- * treatment stays visually consistent with the cover. Optional body
- * sits under the headline. Cover's own component/output are untouched.
- */
-function ImageSlide({ slide }: { slide: SlideCopy }) {
-  const hasPhoto = Boolean(slide.photoUrl);
+function ImageSlide({ slide, spread }: { slide: SlideCopy; spread?: 'left' | 'right' }) {
   return (
-    <div className={`helios-image${hasPhoto ? ' helios-image--bleed' : ''}`}>
-      {hasPhoto && (
-        <>
-          <img
-            className="helios-cover__bg"
-            src={slide.photoUrl}
-            alt=""
-            aria-hidden="true"
-          />
-          <div className="helios-cover__scrim" aria-hidden="true" />
-          <div className="helios-cover__scrim--bottom" aria-hidden="true" />
-        </>
-      )}
-      <div className="helios-image__foreground">
+    <div className={`helios-image${spread ? ` helios-image--spread-${spread}` : ''}`}>
+      <BleedPhoto slide={slide} spread={spread} />
+      <div className="helios-image__copy" data-scrim="gradient">
         {slide.headline && (
-          <h2 className="helios-image__headline">
+          <Fit as="h2" className="helios-image__headline" min={MIN.headline}>
             <SpanRunView run={slide.headline} />
-          </h2>
+          </Fit>
         )}
         {slide.body && (
-          <p className="helios-image__body">
+          <Fit as="p" className="helios-image__body" min={MIN.body}>
             <SpanRunView run={slide.body} />
-          </p>
+          </Fit>
         )}
       </div>
     </div>
   );
 }
 
-/* ── Follow (redesigned) ──────────────────────────────────────────── */
+/* ── Follow (unchanged) ───────────────────────────────────────────── */
 
-/**
- * Follow slide layout (design v1.1):
- *   - Helios sun-mark logo centered in the upper half, ~420px across,
- *     with clear space at least the height of its "H" on every side.
- *   - Story-tied line in Pragmatica Extended Bold uppercase, ~64px,
- *     white — with "Follow Helios" in orange.
- *   - @heliosgroup.ai in Roboto, ~40px, white 70%.
- */
 function FollowSlide({ slide }: { slide: SlideCopy }) {
   const storyLine = slide.storySpecificLine?.trim() ?? '';
   return (

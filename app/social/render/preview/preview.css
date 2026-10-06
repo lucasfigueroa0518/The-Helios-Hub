@@ -177,503 +177,47 @@
 .helios-span--hook      { color: var(--brand-orange); }
 .helios-span--pivot     { color: var(--brand-green); }
 
-/* ── Cover — FROZEN from pre-v1 per design v1 §Read this first ────────── */
+/* ══ Layout system (M8a, Tommy 2026-10-06) ════════════════════════════════
+   Slide 1080×1350, padding 96 → content well 888×1158 at (96, 96).
+   Three rules on every layout:
+     1. Text fit: [data-fit-min] blocks are regions; their max-height is the
+        region height. text-fit.ts shrinks the font to the minimum; still too
+        big → the render fails. No mid-word breaks.
+     2. Contrast: text over a photo sits on a scrim ([data-scrim]).
+     3. Faces clear: subject photos only in their own region; full bleed
+        under text is for scene photos.
+   ══════════════════════════════════════════════════════════════════════ */
 
-.helios-cover {
-  position: relative;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-}
-
-/* Photo-bleed fills the full 1080×1350 slide. Negative offsets escape the
-   slide's 96px padding — the well sits inset by 96px, so the bleed needs
-   to start at the slide edge, not the well edge. */
-.helios-cover--bleed {
-  position: absolute;
-  top: -96px;
-  left: -96px;
-  width: 1080px;
-  height: 1350px;
-  padding: 0;
-  margin: 0;
-  overflow: hidden;
-  background: var(--brand-canvas);
-}
-
-.helios-cover__bg {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 1080px;
-  height: 1350px;
-  object-fit: cover;
-  object-position: center top;
-  display: block;
-  z-index: 0;
-}
-
-.helios-cover__scrim {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 1080px;
-  height: 200px;
-  z-index: 1;
-  pointer-events: none;
-  background: linear-gradient(180deg,
-    rgba(10, 10, 10, 0.40) 0%,
-    rgba(10, 10, 10, 0.00) 100%
-  );
-}
-
-.helios-cover__scrim--bottom {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 1080px;
-  height: 45%;
-  z-index: 1;
-  pointer-events: none;
-  background: linear-gradient(180deg,
-    rgba(10, 10, 10, 0.00) 0%,
-    rgba(10, 10, 10, 0.55) 55%,
-    rgba(10, 10, 10, 0.85) 100%
-  );
-}
-
-.helios-cover--bleed .helios-cover__foreground {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  display: block;
-}
-
-.helios-cover--bleed .helios-cover__headline {
-  position: absolute;
-  left: 60px;
-  right: 60px;
-  bottom: 60px;
-  font-size: 84px;
-  line-height: 0.96;
-  letter-spacing: -0.03em;
-  margin: 0;
-}
-
-.helios-cover__foreground {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  gap: 32px;
-  height: 100%;
-}
-
-.helios-cover__headline {
-  font-family: var(--font-heading);
-  font-size: 108px;
-  font-weight: 700;
-  line-height: 0.92;
-  letter-spacing: -0.035em;
-  color: var(--brand-narrative);
-  margin: 0;
-  margin-top: auto;
-  text-transform: uppercase;
-  /* Never break inside a word (2026-09-29 late: prior value was
-   * `break-word` which split "UNCONTROLLABLE" as "UNCONTROLLABL/E" on
-   * the Suleyman cover). Long words wrap to a new line intact instead.
-   * Arrow-overlap is now enforced by the pre-render code-check gate
-   * (renders the cover alone via Playwright and HARD-fails the run if
-   * text collides with the chevron), not by narrowing the column. */
+.helios-slide [data-fit-min] {
   overflow-wrap: normal;
   word-break: normal;
-  hyphens: none;
-  max-width: 100%;
+  hyphens: manual;
+  margin: 0;
 }
 
-.helios-cover__headline[data-length="xs"] { font-size: 132px; line-height: 0.9;  letter-spacing: -0.04em;  }
-.helios-cover__headline[data-length="sm"] { font-size: 108px; line-height: 0.92; letter-spacing: -0.035em; }
-.helios-cover__headline[data-length="md"] { font-size: 88px;  line-height: 0.94; letter-spacing: -0.03em;  }
-.helios-cover__headline[data-length="lg"] { font-size: 72px;  line-height: 0.96; letter-spacing: -0.025em; }
-.helios-cover__headline[data-length="xl"] { font-size: 60px;  line-height: 1;    letter-spacing: -0.02em;  }
-
-.helios-cover--bleed .helios-cover__headline {
-  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+.helios-photo {
+  display: block;
+  object-fit: cover;
+  object-position: 50% 50%;
 }
 
-/* Cover arrow: top right, about 8% down (spec §5.2, DECIDED 2026-10-04
- * review; overrides the design-v1 bottom-right contract). Clear of
- * Instagram's "1/N" counter in the top-right corner, and the headline stays
- * anchored bottom-left at full width, so the two can't collide.
- * 8% of 1350px = 108px from the slide's top edge. */
-.helios-cover__chevron {
+/* Rule 2: a gradient scrim under a text block that sits on a photo. */
+[data-scrim="gradient"] {
+  isolation: isolate;
+}
+[data-scrim="gradient"]::before {
+  content: '';
   position: absolute;
-  /* No-photo cover: the foreground sits inside the slide's 96px padding. */
-  top: 12px;
+  left: 0;
   right: 0;
-  font-family: var(--font-body);
-  font-size: 60px;
-  font-weight: 700;
-  color: var(--brand-orange);
-  line-height: 1;
-  z-index: 3;
-}
-
-/* Photo cover: the foreground fills the whole 1080×1350 slide. */
-.helios-cover--bleed .helios-cover__chevron {
-  top: 108px;
-  right: 96px;
-}
-
-/* Clear zone around the arrow: the headline never rises into the top
- * 216px of the slide (arrow 108px down + 60px glyph + 48px margin). */
-.helios-cover__foreground {
-  padding-top: 120px; /* 216px − the slide's 96px padding */
-  box-sizing: border-box;
-}
-.helios-cover--bleed .helios-cover__foreground {
-  padding-top: 0;
-}
-/* On the photo cover the headline is absolutely positioned from the bottom,
- * so CSS can't hold the zone without clipping words; the measured cover-fit
- * check (spec §5.2, M8) enforces it there. A ≤90-character headline ends
- * far below the zone. */
-
-/* Arrow-box reserve attempt reverted 2026-09-29 late second pass:
- * float+shape-outside on ::after reserved horizontal space on EVERY
- * line, not just the arrow's row (the design-v1 no-photos fixture
- * regressed from a wide layout to a narrow column). CSS can't reliably
- * "reserve only the bottom lines" without either a fixed-line-count
- * layout or manipulating the DOM per render. Enforcement stays in the
- * cover-fit HARD gate: at code-check time, Playwright measures the
- * rendered cover; any word that would collide with the arrow fails the
- * gate and the Editor rewrites shorter. Cover template unchanged from
- * the design-v1 reference fixtures. */
-
-/* ── Text slide (HEADLINE + BODY, top-anchored) ───────────────────────── */
-
-.helios-text {
-  position: relative;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 40px;
-  padding-top: 96px;
-}
-
-.helios-text__headline {
-  font-family: var(--font-heading);
-  font-size: 100px;
-  font-weight: 700;
-  line-height: 0.94;
-  letter-spacing: -0.03em;
-  color: var(--brand-narrative);
-  text-transform: uppercase;
-  margin: 0;
-  overflow-wrap: break-word;
-}
-
-.helios-text__headline[data-length="xs"] { font-size: 100px; }
-.helios-text__headline[data-length="sm"] { font-size: 100px; }
-.helios-text__headline[data-length="md"] { font-size: 84px; }
-.helios-text__headline[data-length="lg"] { font-size: 72px; }
-
-/* Body is fixed at 44px. NEVER scales. NEVER clips. If it overflows,
-   the render is a failure — human review handles it. See
-   docs/DESIGN-V1-HANDOFF.md §Type. */
-.helios-text__body {
-  font-family: var(--font-body);
-  font-size: 44px;
-  font-weight: 400;
-  line-height: 1.32;
-  color: var(--brand-narrative);
-  margin: 0;
-  max-width: 100%;
-  overflow: visible;
-  position: relative;
-  z-index: 2;
-}
-
-/* Text slide with a supporting photo — headline + body stay at the top;
-   the photo occupies the bottom half of the canvas, full width, fading
-   upward into the canvas so the text area stays clean. Negative offsets
-   escape the slide's 96px padding so the photo reaches the true edge. */
-.helios-text--with-photo .helios-text__headline,
-.helios-text--with-photo .helios-text__body {
-  position: relative;
-  z-index: 2;
-}
-
-.helios-text__photo-frame {
-  position: absolute;
-  left: -96px;
-  right: -96px;
-  bottom: -96px;
-  height: 58%;
-  overflow: hidden;
-  z-index: 0;
+  top: -180px;
+  bottom: 0;
+  z-index: -1;
+  background: linear-gradient(to bottom, rgba(10, 10, 10, 0) 0, rgba(10, 10, 10, 0.82) 180px, rgba(10, 10, 10, 0.88) 100%);
   pointer-events: none;
-  -webkit-mask-image: linear-gradient(to top, #000 0%, #000 40%, transparent 100%);
-  mask-image: linear-gradient(to top, #000 0%, #000 40%, transparent 100%);
 }
 
-.helios-text__photo {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center center;
-  display: block;
-}
-
-/* Photo on top, text below (layout rotation, spec §5.3): the same frame,
-   anchored to the top edge and fading downward into the canvas. */
-.helios-text--photo-top {
-  justify-content: flex-end;
-  padding-top: 0;
-}
-
-.helios-text--photo-top .helios-text__photo-frame {
-  top: -96px;
-  bottom: auto;
-  height: 52%;
-  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 40%, transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 0%, #000 40%, transparent 100%);
-}
-
-
-/* ── Landing slide (HEADLINE only, centered) ──────────────────────────── */
-
-.helios-landing {
-  position: relative;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 32px;
-}
-
-.helios-landing__line {
-  font-family: var(--font-heading);
-  font-size: 125px;
-  font-weight: 700;
-  line-height: 0.94;
-  letter-spacing: -0.035em;
-  color: var(--brand-narrative);
-  text-transform: uppercase;
-  margin: 0;
-  overflow-wrap: break-word;
-}
-
-.helios-landing__line[data-length="xs"] { font-size: 125px; }
-.helios-landing__line[data-length="sm"] { font-size: 104px; }
-.helios-landing__line[data-length="md"] { font-size: 88px; }
-
-/* Landing photo (2026-10-05: every slide gets a photo): framed under the line, like the stat slide. */
-.helios-landing__photo {
-  width: 100%;
-  max-height: 520px;
-  object-fit: cover;
-  display: block;
-  margin-top: 48px;
-}
-
-.helios-landing__note {
-  font-family: var(--font-body);
-  font-size: 38px;
-  font-weight: 400;
-  line-height: 1.32;
-  color: var(--brand-narrative-muted);
-  margin: 0;
-}
-
-/* ── Stat slide (headline top, big number + note bottom) ──────────────── */
-
-.helios-stat {
-  position: relative;
-  flex: 1;
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  row-gap: 32px;
-  padding-top: 96px;
-  padding-bottom: 16px;
-}
-
-.helios-stat__headline {
-  font-family: var(--font-heading);
-  font-size: 72px;
-  font-weight: 700;
-  line-height: 0.98;
-  letter-spacing: -0.025em;
-  color: var(--brand-narrative);
-  text-transform: uppercase;
-  margin: 0;
-  overflow-wrap: break-word;
-}
-
-.helios-stat__body {
-  font-family: var(--font-body);
-  font-size: 44px;
-  font-weight: 400;
-  line-height: 1.32;
-  color: var(--brand-narrative);
-  margin: 0;
-  overflow: visible;
-}
-
-
-.helios-stat__number-block {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  margin-top: auto;
-}
-
-.helios-stat__number {
-  font-family: var(--font-heading);
-  font-size: 260px;
-  font-weight: 700;
-  line-height: 0.88;
-  letter-spacing: -0.045em;
-  color: var(--brand-narrative);
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-}
-
-/* Character-count scaler for the big number — same ladder as pre-v1
-   preserves fit. */
-.helios-stat__number[data-length="5"]  { font-size: 232px; }
-.helios-stat__number[data-length="6"]  { font-size: 208px; }
-.helios-stat__number[data-length="7"]  { font-size: 184px; }
-.helios-stat__number[data-length="8"]  { font-size: 168px; }
-.helios-stat__number[data-length="9"],
-.helios-stat__number[data-length="10"],
-.helios-stat__number[data-length="11"],
-.helios-stat__number[data-length="12"] { font-size: 152px; }
-
-.helios-stat__number-note {
-  font-family: var(--font-body);
-  font-size: 38px;
-  font-weight: 400;
-  line-height: 1.32;
-  color: var(--brand-narrative-muted);
-  margin: 0;
-}
-
-/* ── Split-stat slide ─────────────────────────────────────────────────── */
-
-.helios-split-stat {
-  position: relative;
-  flex: 1;
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  row-gap: 32px;
-  padding-top: 96px;
-  padding-bottom: 16px;
-}
-
-.helios-split-stat__headline {
-  font-family: var(--font-heading);
-  font-size: 100px;
-  font-weight: 700;
-  line-height: 0.94;
-  letter-spacing: -0.03em;
-  color: var(--brand-narrative);
-  text-transform: uppercase;
-  margin: 0;
-  overflow-wrap: break-word;
-  hyphens: auto;
-}
-
-/* Same 100 / 84 / 72 ladder the Text slide uses so both types share
-   headline scale. */
-.helios-split-stat__headline[data-length="xs"] { font-size: 100px; }
-.helios-split-stat__headline[data-length="sm"] { font-size: 100px; }
-.helios-split-stat__headline[data-length="md"] { font-size: 84px; }
-.helios-split-stat__headline[data-length="lg"] { font-size: 72px; }
-
-
-.helios-split-stat__pair {
-  display: flex;
-  align-items: flex-end;
-  gap: 40px;
-  margin-top: auto;
-  padding-top: 24px;
-  border-top: 1px solid rgba(255, 255, 255, 0.24);
-}
-
-.helios-split-stat__col {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.helios-split-stat__rule {
-  width: 1px;
-  align-self: stretch;
-  background: rgba(255, 255, 255, 0.24);
-}
-
-.helios-split-stat__number {
-  font-family: var(--font-heading);
-  font-size: 146px;
-  font-weight: 700;
-  line-height: 0.9;
-  letter-spacing: -0.04em;
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-}
-
-.helios-split-stat__number--left  { color: var(--brand-narrative); }
-.helios-split-stat__number--right { color: var(--brand-orange); }
-
-.helios-split-stat__number[data-length="5"]  { font-size: 130px; }
-.helios-split-stat__number[data-length="6"]  { font-size: 108px; }
-.helios-split-stat__number[data-length="7"]  { font-size: 92px; }
-.helios-split-stat__number[data-length="8"]  { font-size: 84px; }
-.helios-split-stat__number[data-length="9"],
-.helios-split-stat__number[data-length="10"],
-.helios-split-stat__number[data-length="11"],
-.helios-split-stat__number[data-length="12"] { font-size: 72px; }
-
-.helios-split-stat__note {
-  font-family: var(--font-body);
-  font-size: 38px;
-  font-weight: 400;
-  line-height: 1.28;
-  color: var(--brand-narrative-muted);
-  margin: 0;
-}
-
-/* ── Quote slide ──────────────────────────────────────────────────────── */
-
-.helios-quote {
-  position: relative;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 32px;
-  padding-top: 96px;
-  padding-bottom: 16px;
-}
-
-.helios-quote__speaker {
-  width: 260px;
-  height: 260px;
-  border-radius: 50%;
-  object-fit: cover;
-  display: block;
-  margin: 0;
-}
-
-/* Photo credit: one position on every layout (2026-10-05). Bottom-right
- * corner of the slide, white on a dark pill so it reads on any photo and
- * never sits mid-slide. Rendered once per slide by SlideTemplate. */
+/* Photo credit: one position on every layout, bottom-right, white on a dark pill. */
 .helios-photo-credit {
   position: absolute;
   right: 24px;
@@ -693,9 +237,7 @@
   pointer-events: none;
 }
 
-/* Darkened full-bleed background (spec §5.3a): stat slides, and quote
- * slides whose photo isn't a verified photo of the speaker. Negative
- * offsets escape the slide's 96px padding so the photo reaches the edges. */
+/* Darkened full-bleed background (spec §5.3a): stat and quote slides. */
 .helios-backdrop__img,
 .helios-backdrop__shade {
   position: absolute;
@@ -705,10 +247,6 @@
   height: 1350px;
   z-index: 0;
   pointer-events: none;
-}
-.helios-backdrop__img {
-  object-fit: cover;
-  display: block;
 }
 .helios-backdrop__shade {
   background: rgba(10, 10, 10, 0.72);
@@ -720,32 +258,286 @@
   z-index: 1;
 }
 
-.helios-quote__glyph {
+/* Shared type */
+.helios-text__headline,
+.helios-stat__headline,
+.helios-split-stat__headline,
+.helios-quote__headline,
+.helios-image__headline,
+.helios-landing__line,
+.helios-cover__headline {
   font-family: var(--font-heading);
-  font-size: 260px;
   font-weight: 700;
-  line-height: 0.75;
-  color: var(--brand-orange);
-  letter-spacing: -0.05em;
-  margin: 0;
-  padding: 0;
-  position: relative;
-  top: -16px;
-  height: 150px;
+  color: var(--brand-narrative);
+  text-transform: uppercase;
+  line-height: 0.94;
+  letter-spacing: -0.03em;
+}
+.helios-text__body,
+.helios-stat__body,
+.helios-split-stat__body,
+.helios-quote__body,
+.helios-image__body,
+.helios-landing__body,
+.helios-landing__note {
+  font-family: var(--font-body);
+  font-size: 44px;
+  font-weight: 400;
+  line-height: 1.32;
+  color: var(--brand-narrative);
 }
 
+/* ── Cover ───────────────────────────────────────────────────────────── */
+
+.helios-cover {
+  position: absolute;
+  top: -96px;
+  left: -96px;
+  width: 1080px;
+  height: 1350px;
+  overflow: hidden;
+  background: var(--brand-canvas);
+}
+.helios-cover__text {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0 96px 96px;
+  z-index: 2;
+}
+.helios-cover__headline {
+  font-size: 104px;
+  line-height: 0.92;
+  letter-spacing: -0.035em;
+  max-height: 900px;
+}
+.helios-cover--bleed .helios-bleed__photo {
+  position: absolute;
+  inset: 0;
+  width: 1080px;
+  height: 1350px;
+  z-index: 0;
+}
+.helios-cover--bleed .helios-cover__headline {
+  font-size: 92px;
+  max-height: 820px;
+}
+/* Subject photo: its own region on top; the headline below never covers it (rule 3). */
+.helios-cover__photo {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1080px;
+  height: 780px;
+  z-index: 0;
+}
+.helios-cover--split .helios-cover__text {
+  top: 820px;
+}
+.helios-cover--split .helios-cover__headline {
+  font-size: 84px;
+  max-height: 434px;
+}
+/* Arrow: top right, 8% down (spec §5.2). On a photo it sits on a dark disc. */
+.helios-cover__chevron {
+  position: absolute;
+  top: 108px;
+  right: 96px;
+  z-index: 3;
+  font-family: var(--font-body);
+  font-size: 60px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--brand-orange);
+}
+.helios-cover__chevron--on-photo {
+  background: rgba(10, 10, 10, 0.55);
+  border-radius: 50%;
+  width: 84px;
+  height: 84px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  top: 96px;
+  right: 84px;
+}
+
+/* ── Text ────────────────────────────────────────────────────────────── */
+
+.helios-text {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  height: 100%;
+  padding-top: 96px;
+  box-sizing: border-box;
+}
+.helios-text__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+.helios-text__headline { font-size: 96px; max-height: 420px; }
+.helios-text__body { max-height: 560px; }
+.helios-split__photo {
+  flex: none;
+  width: 888px;
+  height: 500px;
+}
+.helios-text--photo-below .helios-split__photo { margin-top: auto; }
+.helios-text--photo-below .helios-text__headline { font-size: 80px; max-height: 230px; }
+.helios-text--photo-below .helios-text__body { font-size: 40px; max-height: 250px; }
+.helios-text--photo-top { padding-top: 0; }
+.helios-text--photo-top .helios-text__headline { font-size: 80px; max-height: 260px; }
+.helios-text--photo-top .helios-text__body { font-size: 40px; max-height: 320px; }
+
+/* ── Landing ─────────────────────────────────────────────────────────── */
+
+.helios-landing {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 40px;
+  height: 100%;
+  padding-top: 96px;
+  box-sizing: border-box;
+}
+.helios-landing__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+.helios-landing__line { font-size: 120px; line-height: 0.94; max-height: 640px; }
+.helios-landing__body { max-height: 300px; }
+.helios-landing__note { color: var(--brand-narrative-muted); max-height: 160px; }
+.helios-landing--photo { justify-content: flex-start; }
+.helios-landing--photo .helios-landing__line { font-size: 92px; max-height: 300px; }
+.helios-landing--photo .helios-landing__body { font-size: 40px; max-height: 190px; }
+.helios-landing--photo .helios-split__photo { margin-top: auto; }
+
+/* ── Stat ────────────────────────────────────────────────────────────── */
+
+.helios-stat,
+.helios-split-stat {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 32px;
+  height: 100%;
+  padding-top: 96px;
+  box-sizing: border-box;
+}
+.helios-stat__copy,
+.helios-split-stat__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.helios-stat__headline { font-size: 72px; max-height: 260px; }
+.helios-stat__body { max-height: 240px; }
+.helios-stat__number-block {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.helios-stat__number {
+  font-family: var(--font-heading);
+  font-size: 220px;
+  font-weight: 700;
+  line-height: 0.9;
+  letter-spacing: -0.045em;
+  color: var(--brand-narrative);
+  max-height: 400px;
+}
+.helios-stat__number-note {
+  font-family: var(--font-body);
+  font-size: 36px;
+  line-height: 1.3;
+  color: var(--brand-narrative-muted);
+  max-height: 150px;
+}
+.helios-split-stat__headline { font-size: 84px; max-height: 300px; }
+.helios-split-stat__body { font-size: 40px; max-height: 200px; }
+.helios-split-stat__pair {
+  display: flex;
+  align-items: flex-end;
+  gap: 40px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.24);
+}
+.helios-split-stat__col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.helios-split-stat__rule {
+  width: 1px;
+  align-self: stretch;
+  background: rgba(255, 255, 255, 0.24);
+}
+.helios-split-stat__number {
+  font-family: var(--font-heading);
+  font-size: 130px;
+  font-weight: 700;
+  line-height: 0.92;
+  letter-spacing: -0.04em;
+  color: var(--brand-narrative);
+  max-height: 300px;
+}
+.helios-split-stat__number--right { color: var(--brand-orange); }
+.helios-split-stat__note {
+  font-family: var(--font-body);
+  font-size: 34px;
+  line-height: 1.28;
+  color: var(--brand-narrative-muted);
+  max-height: 180px;
+}
+
+/* ── Quote ───────────────────────────────────────────────────────────── */
+
+.helios-quote {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  height: 100%;
+  padding-top: 96px;
+  box-sizing: border-box;
+}
+.helios-quote__headline { font-size: 64px; max-height: 190px; }
+.helios-quote--speaker .helios-quote__headline { max-width: 620px; }
+/* The speaker's round spot (rule 3: its own region), top right of the copy. */
+.helios-quote__speaker {
+  position: absolute;
+  top: 96px;
+  right: 0;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+}
+.helios-quote--speaker .helios-quote__glyph { margin-top: 40px; }
+.helios-quote__glyph {
+  font-family: var(--font-heading);
+  font-size: 220px;
+  font-weight: 700;
+  line-height: 0.75;
+  height: 110px;
+  color: var(--brand-orange);
+  letter-spacing: -0.05em;
+}
 .helios-quote__text {
   font-family: var(--font-heading);
-  font-size: 69px;
+  font-size: 64px;
   font-weight: 700;
   line-height: 1.08;
   letter-spacing: -0.02em;
   color: var(--brand-narrative);
-  margin: 0;
-  max-width: 100%;
-  padding: 0;
+  max-height: 420px;
 }
-
 .helios-quote__attribution {
   font-family: var(--font-mono);
   font-size: 28px;
@@ -754,80 +546,48 @@
   text-transform: uppercase;
   color: var(--brand-narrative-muted);
   line-height: 1.4;
-  /* Sit directly under the quote text (no auto push to bottom). Design v2
-     2026-09-29: pinning attribution to the slide bottom read as
-     disconnected — reviewers had to jump their eyes back up to the quote
-     to match speaker to words. */
-  margin-top: 24px;
+  max-height: 120px;
 }
+.helios-quote__body { font-size: 38px; max-height: 210px; }
 
-/* ── Image slide (cover-style full-bleed mid-carousel) ────────────────── */
+/* ── Image and spread (full-bleed scene, text bottom on a scrim) ─────── */
 
 .helios-image {
-  position: relative;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-}
-
-/* Full-bleed image slide reuses the cover's photo/scrim structure. Same
-   photo-fills-slide + darkened-under-text pattern as the cover; only the
-   text block below carries an optional body sentence in addition to the
-   headline. Cover's own CSS remains unchanged. Negative offsets escape
-   the slide's 96px padding, same as the cover. */
-.helios-image--bleed {
   position: absolute;
   top: -96px;
   left: -96px;
   width: 1080px;
   height: 1350px;
-  padding: 0;
-  margin: 0;
   overflow: hidden;
   background: var(--brand-canvas);
 }
-
-.helios-image__foreground {
+.helios-image .helios-bleed__photo {
   position: absolute;
-  left: 60px;
-  right: 60px;
-  bottom: 60px;
-  z-index: 2;
+  top: 0;
+  left: 0;
+  width: 1080px;
+  height: 1350px;
+  z-index: 0;
+}
+/* Spread (spec §5.4): one 2160-wide photo, left half on slide N, right half on N+1. */
+.helios-image .helios-bleed__photo--spread-left,
+.helios-image .helios-bleed__photo--spread-right {
+  width: 2160px;
+}
+.helios-image .helios-bleed__photo--spread-right { left: -1080px; }
+.helios-image__copy {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0 96px 96px;
   display: flex;
   flex-direction: column;
   gap: 24px;
+  z-index: 2;
 }
-
-.helios-image__headline {
-  font-family: var(--font-heading);
-  font-size: 84px;
-  font-weight: 700;
-  line-height: 0.96;
-  letter-spacing: -0.03em;
-  color: var(--brand-narrative);
-  text-transform: uppercase;
-  margin: 0;
-  overflow-wrap: break-word;
-  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
-}
-
-.helios-image__body {
-  font-family: var(--font-body);
-  font-size: 44px;
-  font-weight: 400;
-  line-height: 1.32;
-  color: var(--brand-narrative);
-  margin: 0;
-  overflow: visible;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
-}
-
-/* Full-bleed image slides suppress the top-right HELIOS wordmark to keep
-   the photo edge clean (same rule as cover-with-bleed). */
-.helios-slide--image:has(.helios-image--bleed) .helios-masthead {
-  display: none;
-}
+.helios-image__headline { font-size: 92px; max-height: 360px; }
+.helios-image__body { max-height: 300px; }
 
 /* ── Follow (unchanged) ──────────────────────────────────────────────── */
 

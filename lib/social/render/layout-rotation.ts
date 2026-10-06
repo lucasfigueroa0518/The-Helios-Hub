@@ -4,17 +4,18 @@
  *
  * Only slides that carry headline + body + photo can change layout:
  *   photo below (text slide default) · photo on top (text slide) ·
- *   full-bleed photo with text at the bottom (image slide).
+ *   full-bleed photo with text at the bottom (image slide), scene photos only.
  * Stat, quote and landing slides keep theirs; a run of 3 the rotation
  * can't break is reported, not forced.
  */
 import type { SlideCopy } from './types';
 
-export type Layout = 'photo-below' | 'photo-top' | 'full-bleed' | 'text-only' | 'stat' | 'quote' | 'landing' | 'cover' | 'follow';
+export type Layout = 'photo-below' | 'photo-top' | 'full-bleed' | 'spread' | 'text-only' | 'stat' | 'quote' | 'landing' | 'cover' | 'follow';
 
 const SWAPPABLE: Layout[] = ['photo-below', 'photo-top', 'full-bleed'];
 
 export function layoutOf(s: SlideCopy): Layout {
+  if (s.panoramaSide) return 'spread';
   switch (s.layoutVariant) {
     case 'cover':
     case 'follow':
@@ -32,7 +33,9 @@ export function layoutOf(s: SlideCopy): Layout {
   }
 }
 
-const canSwap = (s: SlideCopy) => (s.layoutVariant === 'text' || s.layoutVariant === 'image') && Boolean(s.photoUrl);
+const canSwap = (s: SlideCopy) => (s.layoutVariant === 'text' || s.layoutVariant === 'image') && Boolean(s.photoUrl) && !s.panoramaSide;
+/** Full bleed under text is for scene photos only (layout rule 3). */
+const canBleed = (s: SlideCopy) => s.photoKind !== 'subject';
 
 function withLayout(s: SlideCopy, layout: Layout): SlideCopy {
   if (layout === 'full-bleed') return { ...s, layoutVariant: 'image', photoPlacement: undefined };
@@ -63,7 +66,8 @@ export function rotateLayouts(input: SlideCopy[]): RotationResult {
     }
     const from = layoutOf(slides[target]!);
     const neighbours = new Set([slides[target - 1], slides[target + 1]].filter(Boolean).map((s) => layoutOf(s!)));
-    const to = SWAPPABLE.find((l) => l !== from && !neighbours.has(l)) ?? SWAPPABLE.find((l) => l !== from)!;
+    const options = SWAPPABLE.filter((l) => l !== 'full-bleed' || canBleed(slides[target]!));
+    const to = options.find((l) => l !== from && !neighbours.has(l)) ?? options.find((l) => l !== from)!;
     slides[target] = withLayout(slides[target]!, to);
     changes.push(`slide ${target + 1}: ${from} → ${to}`);
   }
