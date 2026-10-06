@@ -270,7 +270,22 @@ Only the four sources needed to put a real photo on every slide:
     - scene photos must not show people: stock fallback scenes showed a soldier and Navy medics on slides naming other people;
     - stock must fit the slide: a bar for Anthropic, a 1930s building for Mistral;
     - framing: face-safe crop and placement. Altman's photos were cropped to hands and legs.
-- **Accept:** fixture slides always get a photo; a person slide never falls back to another person; covers pass the fit check.
+- **Accept:** *(superseded by the exit criteria below)* fixture slides always get a photo; a person slide never falls back to another person; covers pass the fit check.
+- **M8 exit criteria (Tommy, 2026-10-06; replaces every earlier M8 "Accept"):**
+  - **Scope:** M8 is accepted as a link in the chain, including the Writer → Design handoff, not as a component on its own.
+  - **Acceptance batch:** 2 fresh runs (4 posts) after the queued fixes.
+  - **PASS requires all four:**
+    1. **Photos correct:**
+       - zero misleading photos;
+       - every cover has a fitting photo;
+       - quote slides use the speaker's verified photo whenever one exists.
+    2. **Handoff:**
+       - the Writer's IMAGE requests use the full range (subject, article, literal stock, none);
+       - spreads appear where a beat continues, or we can explain why not;
+       - the request mix is reported per post.
+    3. **Render:** text fit, contrast, faces clear, crops not over-zoomed and rotation all pass.
+    4. **Visual quality:** Tommy and Lucas sign off that each post is publishable as-is, text-only sequences included.
+  - **On failure:** any failure gets a cause-level fix against its criterion, not a one-off patch.
 
 ### M9: Persistence and review page (spec Q8)
 
