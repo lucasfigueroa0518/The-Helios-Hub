@@ -15,7 +15,7 @@ import { runDay } from '@/lib/social/pipeline/orchestrator';
 import { createInMemorySetAsideLog } from '@/lib/social/pipeline/set-aside-log';
 import { STUB_ARTICLES, createStubStages } from '@/lib/social/pipeline/stubs';
 import { createWriterStage } from '@/lib/social/pipeline/writer-stage';
-import { RULES_BLOCK, TESTED_WRITER_RULES } from '@/lib/social/prompts/rules-block';
+import { RULES_BLOCK, TESTED_WRITER_RULES, renderRulesFor } from '@/lib/social/prompts/rules-block';
 import { VOICE_BLOCK } from '@/lib/social/prompts/voice-block';
 import type { MessagesCreate } from '@/lib/social/reporter/reporter';
 import { DraftValidationError, checkDraft, fillDraft, isExactExcerpt, type DraftSubmission } from '@/lib/social/writer/draft';
@@ -67,7 +67,7 @@ test('Writer prompt = tested intro + RULES (tested lines + 3 additions + shared 
   const sectionList = tested.slice(tested.indexOf('\n\nOUTPUT\n') + '\n\nOUTPUT\n'.length, tested.indexOf('\n\nBRIEF\n'));
   const caption = codeBlocks('## 3. Writer')[0]!
     .replace('${VOICE_BLOCK}', VOICE_BLOCK)
-    .replace("\n\n${renderRulesFor('caption')}", '')
+    .replace("${renderRulesFor('caption')}", renderRulesFor('writer'))
     // Caption wording fixes (2026-10-05).
     .replace('the final SLIDES you were given', 'the slides you wrote')
     .replace("that's the Writer/Editor's decision — respect it.", "that's the Writer/Editor's decision. Respect it.");

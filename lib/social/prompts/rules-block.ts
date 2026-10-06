@@ -46,10 +46,20 @@ A term needs a gloss only if the slide doesn't make sense without it. If a gloss
 export type RuleStage = 'reporter' | 'writer' | 'editor' | 'fact-checker';
 
 /**
- * Rules the automated checks enforce, per stage (decision (f)): rebuilt in
- * M7 (mechanical guarantees, renumbered 2026-10-04) from the checks that actually exist. Until then it renders
- * nothing, so no prompt promises a check that doesn't run.
+ * Rules the automated checks enforce, per stage (decision (f)), from the
+ * M7 checks that actually run (lib/social/mechanical/checks.ts C1–C5;
+ * approved by Tommy 2026-10-06). The Writer and the Editor are told them;
+ * the other stages aren't checked on these, so they get nothing.
  */
-export function renderRulesFor(_stage: RuleStage): string {
-  return '';
+export const CHECKED_RULES = `### Checked by code
+
+Code checks the finished draft. A failure comes back to you once, with the exact problem:
+- Length: cover ≤90 characters, headline ≤60, body ≤220, a quote on a quote slide ≤140, caption ≤2,200. Never over.
+- Quotation marks only around words that are a QUOTES entry, word for word, or an exact excerpt of one.
+- None of the voice list's banned words or phrases, no sentence opening with "Meanwhile," "Additionally," "Furthermore" or "That said," no exclamation marks, no emoji. Quoted speech is exempt.
+- No hashtags in the caption.
+- At most 2 background slides (slides resting only on BACKGROUND entries).`;
+
+export function renderRulesFor(stage: RuleStage): string {
+  return stage === 'writer' || stage === 'editor' ? CHECKED_RULES : '';
 }

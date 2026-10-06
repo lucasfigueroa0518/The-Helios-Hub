@@ -42,8 +42,12 @@ test("RULES_BLOCK applies Tommy's review decisions (a)-(c)", () => {
   assert.ok(RULES_BLOCK.includes('## Glossing (advisory, not required)'));
 });
 
-test('renderRulesFor renders nothing until M7 builds it from real checks (f)', () => {
-  for (const stage of ['reporter', 'writer', 'editor', 'fact-checker'] as const) assert.equal(renderRulesFor(stage), '');
+test('renderRulesFor: the Writer and Editor are told the M7 checks C1–C5 (f); other stages get nothing', () => {
+  for (const stage of ['writer', 'editor'] as const) {
+    const r = renderRulesFor(stage);
+    for (const s of ['headline ≤60', 'body ≤220', 'Quotation marks only', 'banned words', 'No hashtags', 'At most 2 background slides']) assert.ok(r.includes(s), `${stage}: ${s}`);
+  }
+  for (const stage of ['reporter', 'fact-checker'] as const) assert.equal(renderRulesFor(stage), '');
 });
 
 // ── Reporter prompt (prompts file §1, tested text + marked edits) ──────

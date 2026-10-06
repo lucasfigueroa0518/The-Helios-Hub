@@ -9,7 +9,8 @@
  *   OUTPUT (Tommy, 2026-10-05): "OUTPUT" → "When you're done, call
  *   submit_draft with these sections:"; the section list is unchanged.
  *   CAPTION: the tested caption section (prompts file §3) follows, as
- *   carried over; its check-rules placeholder renders empty until M7.
+ *   carried over; its check-rules placeholder renders the M7 checks
+ *   (C1–C5, renderRulesFor('writer'); Tommy, 2026-10-06).
  *   CAPTION WORDING (Tommy, 2026-10-05; known-wrong carry-overs): "— respect it"
  *   → ". Respect it." (voice bans em dashes); "the final SLIDES you were
  *   given" → "the slides you wrote" (the Writer writes both now).

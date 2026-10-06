@@ -22,7 +22,7 @@ import { STAGE_MODELS } from '@/lib/social/pipeline/models';
 import { MAX_FRESH_DRAFTS, runDay } from '@/lib/social/pipeline/orchestrator';
 import { createInMemorySetAsideLog } from '@/lib/social/pipeline/set-aside-log';
 import { STUB_ARTICLES, createStubStages } from '@/lib/social/pipeline/stubs';
-import { RULES_BLOCK } from '@/lib/social/prompts/rules-block';
+import { RULES_BLOCK, renderRulesFor } from '@/lib/social/prompts/rules-block';
 import { VOICE_BLOCK } from '@/lib/social/prompts/voice-block';
 import type { MessagesCreate } from '@/lib/social/reporter/reporter';
 import { DraftValidationError, fillDraft } from '@/lib/social/writer/draft';
@@ -41,9 +41,11 @@ test('Editor prompt = §4 text with the submit_draft OUTPUT line, then RULES_BLO
     tested.slice(0, -out.length).trimEnd(),
     "When you're done, call submit_draft with the full edited draft in the Writer's format, with EDIT NOTES: one line per change.",
     RULES_BLOCK,
+    renderRulesFor('editor'),
     `## Voice\n\n${VOICE_BLOCK}`,
   ].join('\n\n');
   assert.equal(EDITOR_SYSTEM, expected);
+  assert.ok(EDITOR_SYSTEM.includes('### Checked by code'));
 });
 
 test('Fact-checker prompt = §5 text with OUTPUT → submit_flags; section list unchanged', () => {

@@ -11,10 +11,12 @@
  *   limits ("the same length limits as the Writer") and the voice it
  *   sharpens toward.
  *   PLACEMENT (caching): the draft and the brief go in the user message.
+ *   CHECKED RULES (Tommy, 2026-10-06; M7): renderRulesFor('editor') follows
+ *   RULES_BLOCK: the C1–C5 checks the Editor's draft must pass.
  *   CHECK 2 (Tommy, 2026-10-06, with Writer prompt v2): every slide pulls to
  *   the next, not only slide 2.
  */
-import { RULES_BLOCK } from '@/lib/social/prompts/rules-block';
+import { RULES_BLOCK, renderRulesFor } from '@/lib/social/prompts/rules-block';
 import { VOICE_BLOCK } from '@/lib/social/prompts/voice-block';
 
 /** Prompts file §4, word for word up to its OUTPUT line. */
@@ -36,6 +38,7 @@ export const EDITOR_SYSTEM = [
   EDITOR_TESTED_TEXT,
   EDITOR_OUTPUT_LINE,
   RULES_BLOCK,
+  renderRulesFor('editor'),
   `## Voice\n\n${VOICE_BLOCK}`,
 ].join('\n\n');
 

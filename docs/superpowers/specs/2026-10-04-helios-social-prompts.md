@@ -228,6 +228,25 @@ OUTPUT: the full edited draft in the Writer's format, then EDIT NOTES: one line 
 - **Code check:** the Writer's check, plus the parts of POWERS that code can see. The Editor may not use a quote, number or claim-tag ID the Writer didn't use, and may not request an image the Writer didn't request. One retry with the errors.
 - **Input:** the Writer's draft (IDs and claim tags) and the brief, in the user message.
 
+
+**Checked rules (Tommy, 2026-10-06; M7, decision (f)).** `decided item · prompt · 0 new stages · 0 new AI calls`
+
+- **Writer and Editor:** both prompts now list the code checks their draft must pass (C1–C5). Each stage is told the rules it will be checked against.
+- **Writer:** the list fills the caption section's existing `renderRulesFor` slot.
+- **Editor:** the list goes right after RULES_BLOCK.
+- **The Source line:** the caption's "Source:" line is now built by code from the outlets the post's claim tags cite (M7 F5). The Writer's own line is replaced. The caption prompt is unchanged.
+
+```
+### Checked by code
+
+Code checks the finished draft. A failure comes back to you once, with the exact problem:
+- Length: cover ≤90 characters, headline ≤60, body ≤220, a quote on a quote slide ≤140, caption ≤2,200. Never over.
+- Quotation marks only around words that are a QUOTES entry, word for word, or an exact excerpt of one.
+- None of the voice list's banned words or phrases, no sentence opening with "Meanwhile," "Additionally," "Furthermore" or "That said," no exclamation marks, no emoji. Quoted speech is exempt.
+- No hashtags in the caption.
+- At most 2 background slides (slides resting only on BACKGROUND entries).
+```
+
 ---
 
 ## 5. Fact-checker, Claude comparison version (untested; drafted from spec §4.2)
