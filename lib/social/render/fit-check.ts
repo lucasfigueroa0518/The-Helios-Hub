@@ -33,7 +33,8 @@ export type FitViolation = {
   over: { left: number; top: number; right: number; bottom: number };
 };
 
-export type FitResult = { ok: boolean; violations: FitViolation[]; problems: string[] };
+/** `slideText`: each rendered slide's text (cover first), for the dropped-text check (M7 C7). */
+export type FitResult = { ok: boolean; violations: FitViolation[]; problems: string[]; slideText?: string[] };
 
 export type FitCheck = (post: Post, opts?: { screenshotDir?: string; name?: string }) => Promise<FitResult>;
 
@@ -121,7 +122,8 @@ export const checkRenderFit: FitCheck = async (post, opts = {}) => {
           }
         });
       });
-      return { problems, violations };
+      const slideText = [...document.querySelectorAll<HTMLElement>('.fit-frame .helios-slide')].map((el) => el.textContent ?? '');
+      return { problems, violations, slideText };
     }, TOLERANCE_PX);
 
     // Report the outermost offender only: its children overflow with it.
@@ -142,7 +144,7 @@ export const checkRenderFit: FitCheck = async (post, opts = {}) => {
       await page.screenshot({ path: path.join(opts.screenshotDir, `${name}-contact-sheet.png`), fullPage: true });
     }
 
-    return { ok: violations.length === 0 && measured.problems.length === 0, violations, problems: measured.problems };
+    return { ok: violations.length === 0 && measured.problems.length === 0, violations, problems: measured.problems, slideText: measured.slideText };
   } finally {
     await browser.close();
   }
