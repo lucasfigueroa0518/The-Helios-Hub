@@ -2,34 +2,28 @@
  * Basic photos (plan M5; spec §5.1): every slide gets a photo. All code;
  * the only model call is Jev's identity check.
  *
- * Fallback chain per slide (Tommy, 2026-10-05), first step that yields a
- * photo wins, each step logged:
- *   1. article: <photo URL> → the page reader's photo, if its credit allows it
- *   2. subject  → the slide's subject: its `subject:` request, else a SUBJECTS
- *                 name in the slide's text; identity check, then Commons (P18 / P180)
- *   3. stock    → the slide's `stock:` scene, via Openverse
- *   4. neutral  → neutral scenes (places and objects, never people), tried in
- *                 order; first the one that fits the subject type
- *   5. starter  → the offline Helios starter set (starter-set.ts): no network,
- *                 so this step can't come up empty
- * Fallbacks are scenes, never people (spec §5.1): step 2 only ever shows
- * the identity-verified subject itself.
+ * Chain per slide (Tommy, 2026-10-06, after the checkpoint's wrong-person
+ * photos): the Writer's IMAGE request decides; nothing is inferred from
+ * the slide's text unless the request is empty.
+ *   article: <photo URL> → the page reader's photo, if its credit allows it
+ *   subject: <SUBJECTS name> → identity check, then that entry's Wikidata
+ *            main image (P18) only. Never P180 "depicts" photos: they show
+ *            other people (stage shots, delegations).
+ *   stock:   <scene> → Openverse: the request, then its first two words
+ *   then     the offline starter set (starter-set.ts), which can't come up empty
  *
- * The chain depends on where the photo is drawn (its slot, Tommy 2026-10-06):
- *   split    (text, landing, image, cover): the full chain above
- *   backdrop (stat, split stat): a darkened background behind the number,
- *            scene or mood only, so the slide's stock scene wins and article
- *            and subject photos are skipped
- *   quote    the speaker's verified photo (the round spot), else a scene
- *            backdrop; article photos and other people are skipped
- * Stock size: only thumbnails are rejected (short side under
- * STOCK_MIN_SHORT_SIDE). Framing (face-safe crops, placement) is M8.
+ * Where the photo is drawn (its slot) limits what may go there:
+ *   split    (text, landing, image, cover): any of the above
+ *   backdrop (stat, split stat): a darkened background, scene only, so
+ *            only a stock request is searched
+ *   quote    the round spot only for the verified speaker (a subject request
+ *            naming the speaker); a stock request is a darkened background
  *
  * Never twice in one post: every pick is checked against, and added to,
  * the post's used set. Nothing is written to the durable used-photo log
  * here; that happens when a post ships (M8/M10), not on a preview.
  */
-import { buildCredit, findCandidates } from '@/lib/social/editorial/v2/image-step/commons';
+import { buildCredit, fetchEntityP18, fetchImageInfo, toCandidate } from '@/lib/social/editorial/v2/image-step/commons';
 import { buildStockCredit, searchOpenverse, type OpenverseCandidate } from '@/lib/social/editorial/v2/image-step/openverse';
 import type { JevAsk } from '@/lib/social/jev/client';
 import type { Brief } from '@/lib/social/reporter/brief';
@@ -55,7 +49,7 @@ export type Photo = {
   subject: string | null;
 };
 
-export type ChainStep = 'article' | 'subject' | 'stock' | 'neutral' | 'starter';
+export type ChainStep = 'article' | 'subject' | 'stock' | 'starter';
 
 /** Identity check outcome for the run log. */
 export type IdentityNote = { subject: string; ok: boolean; detail: string; scores: import('./identity').IdentityScores | null };
@@ -69,20 +63,6 @@ export type PhotoTrace = {
   identity: IdentityNote | null;
   steps: string[];
 };
-
-/**
- * Neutral scene for a subject whose photo can't be used, by subject type:
- * places and objects only, so no one is mistaken for the subject.
- * Provisional; the photo bank replaces this in M8.
- */
-export const FALLBACK_SCENES: Record<SubjectType | 'unknown', string> = {
-  person: 'empty conference stage',
-  organization: 'office building exterior',
-  unknown: 'server room',
-};
-
-/** The last step's scenes, tried in order after the type-fitting one. No people. */
-export const NEUTRAL_SCENES = ['server room', 'office building exterior', 'circuit board', 'city skyline at night', 'computer keyboard', 'data center'];
 
 /**
  * The only stock size rule (Tommy, 2026-10-06): reject thumbnails. The
@@ -159,13 +139,16 @@ async function subjectPhoto(name: string, ctx: PhotoContext, deps: PhotoDeps, st
   }
   steps.push(`identity ok: ${id.qid} "${id.label}" (${id.type}, ${id.via})`);
   const identity: IdentityNote = { subject: name, ok: true, detail: `${id.qid} "${id.label}" — ${id.description} (${id.type}, ${id.via})`, scores: id.scores };
-  const cands = await findCandidates(id.qid, { http: deps.http });
-  const pick = cands.find((c) => !ctx.used.has(c.url));
-  if (!pick) {
-    steps.push(cands.length ? 'every Commons photo already used in this post' : 'no usable Commons photo');
+  // Main image (P18) only, for people and organizations alike (Tommy, 2026-10-06).
+  const p18 = await fetchEntityP18(id.qid, { http: deps.http });
+  const file = p18 ? `File:${p18}` : null;
+  const info = file ? (await fetchImageInfo([file], { http: deps.http }))[file] : undefined;
+  const pick = file && info ? toCandidate(file, info, 'P18', { minShortSide: STOCK_MIN_SHORT_SIDE }) : null;
+  if (!pick || ctx.used.has(pick.url)) {
+    steps.push(!p18 ? 'no Wikidata main image (P18)' : !pick ? 'main image (P18) not usable (licence, size or type)' : 'main image (P18) already used in this post');
     return { photo: null, type: id.type, identity };
   }
-  steps.push(`commons ${pick.source}: ${pick.file}`);
+  steps.push(`commons P18: ${pick.file}`);
   return {
     photo: { url: pick.url, credit: `${buildCredit(pick)} · Wikimedia Commons`, source: 'commons', width: pick.width, height: pick.height, qid: id.qid, subject: name },
     type: id.type,
@@ -173,16 +156,25 @@ async function subjectPhoto(name: string, ctx: PhotoContext, deps: PhotoDeps, st
   };
 }
 
-async function stockPhoto(query: string, slot: PhotoSlot, ctx: PhotoContext, deps: PhotoDeps, steps: string[]): Promise<Photo | null> {
+/** Search terms for a stock request: the request, then its first two words (Tommy, 2026-10-06). */
+export function stockQueries(request: string): string[] {
+  const words = request.trim().split(/\s+/);
+  return [...new Set([words.join(' '), words.slice(0, 2).join(' ')])].filter(Boolean);
+}
+
+async function stockPhoto(request: string, slot: PhotoSlot, ctx: PhotoContext, deps: PhotoDeps, steps: string[]): Promise<Photo | null> {
   const search: StockSearch = deps.stock ?? ((q, o) => searchOpenverse(q, { http: deps.http, minShortSide: o.minShortSide }));
-  const cands = await search(query, { minShortSide: STOCK_MIN_SHORT_SIDE });
-  const pick = cands.find((c) => !ctx.used.has(c.url));
-  if (!pick) {
-    steps.push(`stock "${query}" (${slot}): ${cands.length ? 'every result already used' : 'no results'}`);
-    return null;
+  for (const query of stockQueries(request)) {
+    const cands = await search(query, { minShortSide: STOCK_MIN_SHORT_SIDE });
+    const pick = cands.find((c) => !ctx.used.has(c.url));
+    if (!pick) {
+      steps.push(`stock "${query}" (${slot}): ${cands.length ? 'every result already used' : 'no results'}`);
+      continue;
+    }
+    steps.push(`stock "${query}" (${slot}): ${pick.source} ${pick.width}×${pick.height}${pick.title ? ` "${pick.title}"` : ''}`);
+    return { url: pick.url, credit: buildStockCredit(pick), source: 'stock', width: pick.width, height: pick.height, qid: null, subject: null };
   }
-  steps.push(`stock "${query}" (${slot}): ${pick.source} ${pick.width}×${pick.height}${pick.title ? ` "${pick.title}"` : ''}`);
-  return { url: pick.url, credit: buildStockCredit(pick), source: 'stock', width: pick.width, height: pick.height, qid: null, subject: null };
+  return null;
 }
 
 /** The slide's words, for finding its subject when the IMAGE line names none, and where its photo goes. */
@@ -212,12 +204,11 @@ export function subjectInText(slide: SlideText, brief: Brief): string | null {
 
 const errText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
-/** One photo for one slide, down the fallback chain. A source error is logged and the chain moves on. */
+/** One photo for one slide, down the chain. A source error is logged and the chain moves on. */
 export async function findPhoto(request: ImageRequest, ctx: PhotoContext, deps: PhotoDeps, slide: SlideText = { text: [], speaker: null, slot: 'split' }): Promise<PhotoTrace> {
   const steps: string[] = [];
   const { slot } = slide;
   let identity: IdentityNote | null = null;
-  let type: SubjectType | null = null;
   const done = (photo: Photo, via: ChainStep): PhotoTrace => {
     ctx.used.add(photo.url);
     return { request, photo, via, identity, steps };
@@ -230,48 +221,36 @@ export async function findPhoto(request: ImageRequest, ctx: PhotoContext, deps: 
       return null;
     }
   };
+  const empty = !request.value.trim();
 
-  // 1. The article's own photo (split slots only: it may show people).
-  if (request.kind === 'article') {
+  // A subject: the request's, or (only when the request is empty) one named in the slide text.
+  const subject = request.kind === 'subject' && !empty ? request.value : empty && slot === 'split' ? subjectInText(slide, ctx.brief) : null;
+  if (empty && subject) steps.push(`empty request; subject from slide text: ${subject}`);
+
+  if (request.kind === 'article' && !empty) {
     if (slot === 'split') {
       const p = await attempt('article', () => articlePhoto(request.value, ctx, steps));
       if (p) return done(p, 'article');
     } else {
       steps.push(`article photo skipped: a ${slot} slide shows only ${slot === 'quote' ? 'the speaker or a scene' : 'a scene'}`);
     }
-  }
-
-  // 2. The slide's subject: on a quote slide only the speaker; never behind a number.
-  const subject =
-    slot === 'backdrop' ? null
-    : slot === 'quote' ? (slide.speaker && ctx.brief.subjects.some((s) => s.name === slide.speaker) ? slide.speaker : null)
-    : request.kind === 'subject' ? request.value : subjectInText(slide, ctx.brief);
-  if (slot === 'backdrop' && request.kind === 'subject') steps.push('subject photo skipped: the stat background is a scene');
-  if (subject) {
-    if (request.kind !== 'subject' || request.value !== subject) steps.push(`subject from slide: ${subject}`);
-    const r = await attempt('subject', async () => {
-      const out = await subjectPhoto(subject, ctx, deps, steps);
-      identity = out.identity;
-      type = out.type;
-      return out.photo;
-    });
-    if (r) return done(r, 'subject');
-  }
-
-  // 3. The slide's stock scene.
-  if (request.kind === 'stock') {
+  } else if (subject) {
+    if (slot === 'backdrop') steps.push('subject photo skipped: the stat background is a scene');
+    else if (slot === 'quote' && subject !== slide.speaker) steps.push(`subject photo skipped: ${subject} isn't the speaker, and the round spot implies the speaker`);
+    else {
+      const r = await attempt('subject', async () => {
+        const out = await subjectPhoto(subject, ctx, deps, steps);
+        identity = out.identity;
+        return out.photo;
+      });
+      if (r) return done(r, 'subject');
+    }
+  } else if (request.kind === 'stock' && !empty) {
     const p = await attempt('stock', () => stockPhoto(request.value, slot, ctx, deps, steps));
     if (p) return done(p, 'stock');
   }
 
-  // 4. Neutral scenes, the type-fitting one first.
-  const scenes = [...new Set([FALLBACK_SCENES[type ?? 'unknown'], ...NEUTRAL_SCENES])];
-  for (const scene of scenes) {
-    steps.push(`neutral scene "${scene}"`);
-    const p = await attempt('neutral', () => stockPhoto(scene, slot, ctx, deps, steps));
-    if (p) return done(p, 'neutral');
-  }
-  // 5. The offline starter set.
+  // The offline starter set.
   const starter = pickStarter(ctx.used);
   if (starter) {
     steps.push(`starter set: ${starter.url}`);

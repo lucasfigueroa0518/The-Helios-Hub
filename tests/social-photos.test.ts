@@ -14,7 +14,7 @@ import { createDesignStage } from '@/lib/social/pipeline/design-stage';
 import type { Brief as PipelineBrief, Draft, ScoredCandidate } from '@/lib/social/pipeline/types';
 import { classifyCredit } from '@/lib/social/photos/credit';
 import { photosForDraft } from '@/lib/social/photos/design';
-import { FALLBACK_SCENES, findPhoto, NEUTRAL_SCENES, newPhotoContext, STOCK_MIN_SHORT_SIDE, type Photo } from '@/lib/social/photos/find';
+import { findPhoto, newPhotoContext, STOCK_MIN_SHORT_SIDE, stockQueries, type Photo } from '@/lib/social/photos/find';
 import { checkIdentity } from '@/lib/social/photos/identity';
 import { MAX_PHOTOS_PER_POST, pickStarter, STARTER_SET, starterUrl } from '@/lib/social/photos/starter-set';
 import { layoutOf, rotateLayouts } from '@/lib/social/render/layout-rotation';
@@ -159,86 +159,86 @@ test('fixture slides get a photo from the right source', async () => {
   assert.equal(p.slides[3]!.photo?.url, stockUrl('wall clock', 1));
 });
 
-test('an agency-credited article photo is rejected, including a credit-only caption; the chain fills the slide', async () => {
+test('an agency-credited article photo is rejected, including a credit-only caption; the starter set fills the slide', async () => {
   const { deps: d } = deps();
   const ctx = newPhotoContext(briefWith(), pages());
-  const getty = await findPhoto({ kind: 'article', value: GETTY_SRC }, ctx, d);
-  assert.ok(getty.steps.some((s) => /credit rejected: agency/.test(s)));
-  assert.notEqual(getty.photo?.url, GETTY_SRC);
-  assert.equal(getty.via, 'neutral');
-  const fanjoy = await findPhoto({ kind: 'article', value: FANJOY_SRC }, ctx, d);
-  assert.ok(fanjoy.steps.some((s) => /credit rejected: agency/.test(s)));
-  assert.equal(fanjoy.via, 'neutral');
+  for (const src of [GETTY_SRC, FANJOY_SRC]) {
+    const t = await findPhoto({ kind: 'article', value: src }, ctx, d);
+    assert.ok(t.steps.some((s) => /credit rejected: agency/.test(s)));
+    assert.equal(t.via, 'starter');
+  }
   const unknown = await findPhoto({ kind: 'article', value: 'https://example.com/not-on-any-page.jpg' }, ctx, d);
   assert.ok(unknown.steps.some((s) => /not found in the pages read/.test(s)));
-  assert.equal(unknown.via, 'neutral');
+  assert.equal(unknown.via, 'starter');
 });
 
-test("chain: a rejected article photo falls back to the slide's subject, identity-checked", async () => {
-  const { deps: d } = deps();
-  const ctx = newPhotoContext(briefWith(), pages());
-  const t = await findPhoto({ kind: 'article', value: GETTY_SRC }, ctx, d, { text: ['Clayton will chair it', 'Jay Clayton chairs the force.'], speaker: null, slot: 'split' });
-  assert.equal(t.via, 'subject');
-  assert.equal(t.photo?.url, commonsUrl('Jay Clayton SEC.jpg'));
-  assert.equal(t.identity?.ok, true);
-});
-
-test("chain: a quote slide's speaker is its subject", async () => {
-  const { deps: d } = deps();
-  const ctx = newPhotoContext(briefWith(), []);
-  const t = await findPhoto({ kind: 'stock', value: 'flag on a pole' }, ctx, d, { text: ['His pitch'], speaker: 'Donald Trump', slot: 'quote' });
-  assert.equal(t.via, 'subject');
-  assert.equal(t.photo?.qid, 'Q22686');
-});
-
-test('chain: a stock scene with no results falls back to a neutral scene', async () => {
-  const fake = createFakeHttp({ ...SIF_WEB, stockCount: { 'nothing here': 0, [FALLBACK_SCENES.unknown]: 0 } });
-  const ctx = newPhotoContext(briefWith(), []);
-  const t = await findPhoto({ kind: 'stock', value: 'nothing here' }, ctx, { jev: identityJev(SIF_ANSWERS), http: fake.http });
-  assert.equal(t.via, 'neutral');
-  assert.equal(t.photo?.url, stockUrl(NEUTRAL_SCENES[1]!, 1), 'type-fitting scene empty → next neutral scene');
-});
-
-test('chain: every fixture slide gets a photo, each step logged', async () => {
-  const { deps: d } = deps();
-  const sub = sifDraft();
-  sub.slides[1]!.image = { kind: 'article', value: GETTY_SRC };
-  const p = await photosForDraft(fillDraft(sub, briefWith()), briefWith(), pages(), d);
-  for (const t of [p.cover, ...p.slides]) {
-    assert.ok(t.photo, `${t.request.kind}: ${t.request.value} got a photo`);
-    assert.ok(t.via);
-  }
-  // Clayton is named on the slide, but his one Commons photo is on the slide before: no repeat → neutral scene.
-  assert.ok(p.slides[1]!.steps.includes('subject from slide: Jay Clayton'));
-  assert.ok(p.slides[1]!.steps.includes('every Commons photo already used in this post'));
-  assert.equal(p.slides[1]!.via, 'neutral');
-});
-
-test('a failed identity check falls back to a scene, never another person', async () => {
-  const { deps: d, fake } = deps();
-  const brief = briefWith([{ name: 'Sam Smith', role: 'OpenAI researcher' }, { name: 'Cursor', role: 'AI coding company' }]);
-  const ctx = newPhotoContext(brief, []);
-  const smith = await findPhoto({ kind: 'subject', value: 'Sam Smith' }, ctx, d);
-  assert.equal(smith.photo?.source, 'stock');
-  assert.equal(smith.photo?.url, stockUrl(FALLBACK_SCENES.person, 1));
-  const cursor = await findPhoto({ kind: 'subject', value: 'Cursor' }, ctx, d);
-  assert.equal(cursor.photo?.url, stockUrl(FALLBACK_SCENES.organization, 1));
-  // Neither looked up a Commons photo of the namesake.
-  assert.ok(!fake.calls.some((c) => /P180%3DQ900003|P180=Q900003|P180%3DQ900002|P180=Q900002/.test(c)));
-});
-
-test('no photo repeats within a post; each subject is checked once', async () => {
+test('request first: a rejected article photo never falls back to someone named on the slide', async () => {
   const jevCalls: string[] = [];
   const { deps: d } = deps(jevCalls);
-  const sub = sifDraft();
-  sub.slides[2]!.image = { kind: 'subject', value: 'Donald Trump' };
-  sub.slides[4]!.image = { kind: 'stock', value: 'wall clock' };
-  const draft = fillDraft(sub, briefWith());
-  const p = await photosForDraft(draft, briefWith(), [], d);
-  const urls = [p.cover, ...p.slides].map((t) => t.photo?.url).filter(Boolean);
-  assert.equal(new Set(urls).size, urls.length);
-  assert.equal(p.slides[2]!.photo?.url, commonsUrl('Trump at rally.jpg'), 'second Trump slide gets the next photo');
-  assert.equal(p.slides[4]!.photo?.url, stockUrl('wall clock', 2));
+  const t = await findPhoto({ kind: 'article', value: GETTY_SRC }, newPhotoContext(briefWith(), pages()), d, { text: ['Jay Clayton chairs the force.'], speaker: null, slot: 'split' });
+  assert.equal(t.via, 'starter');
+  assert.deepEqual(jevCalls, [], 'no identity check: nobody was looked up');
+});
+
+test('empty request: the subject named in the slide text is used', async () => {
+  const { deps: d } = deps();
+  const t = await findPhoto({ kind: 'subject', value: '' }, newPhotoContext(briefWith(), []), d, { text: ['Clayton will chair it'], speaker: null, slot: 'split' });
+  assert.ok(t.steps.includes('empty request; subject from slide text: Jay Clayton'));
+  assert.equal(t.via, 'subject');
+  assert.equal(t.photo?.url, commonsUrl('Jay Clayton SEC.jpg'));
+});
+
+test('quote: the round spot only for a subject request naming the speaker; a stock request is a background', async () => {
+  const { deps: d } = deps();
+  const ctx = newPhotoContext(briefWith(), []);
+  const speaker = await findPhoto({ kind: 'subject', value: 'Donald Trump' }, ctx, d, { text: ['His pitch'], speaker: 'Donald Trump', slot: 'quote' });
+  assert.equal(speaker.via, 'subject');
+  assert.equal(speaker.photo?.subject, 'Donald Trump');
+  const scene = await findPhoto({ kind: 'stock', value: 'flag on a pole' }, ctx, d, { text: ['His pitch'], speaker: 'Donald Trump', slot: 'quote' });
+  assert.equal(scene.via, 'stock');
+});
+
+test('stock: the request, then its first two words, then the starter set (no neutral scenes)', async () => {
+  assert.deepEqual(stockQueries('laptop warning screen'), ['laptop warning screen', 'laptop warning']);
+  assert.deepEqual(stockQueries('wall clock'), ['wall clock']);
+  const fake = createFakeHttp({ ...SIF_WEB, stockCount: { 'laptop warning screen': 0 } });
+  const d = { jev: identityJev(SIF_ANSWERS), http: fake.http };
+  const two = await findPhoto({ kind: 'stock', value: 'laptop warning screen' }, newPhotoContext(briefWith(), []), d);
+  assert.equal(two.photo?.url, stockUrl('laptop warning', 1));
+  const none = createFakeHttp({ ...SIF_WEB, stockCount: { 'nothing here at all': 0, 'nothing here': 0 } });
+  const t = await findPhoto({ kind: 'stock', value: 'nothing here at all' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS), http: none.http });
+  assert.equal(t.via, 'starter');
+  assert.equal(none.calls.filter((c) => c.includes('openverse')).length, 2);
+});
+
+test('people photos: Wikidata main image (P18) only, never P180 "depicts"', async () => {
+  const { deps: d, fake } = deps();
+  const ctx = newPhotoContext(briefWith(), []);
+  const first = await findPhoto({ kind: 'subject', value: 'Donald Trump' }, ctx, d);
+  assert.equal(first.photo?.url, commonsUrl('Donald Trump official portrait.jpg'));
+  const second = await findPhoto({ kind: 'subject', value: 'Donald Trump' }, ctx, d);
+  assert.equal(second.via, 'starter', 'P18 already used; never the P180 rally photo');
+  assert.ok(!fake.calls.some((c) => /haswbstatement/.test(decodeURIComponent(c))), 'no depicts search');
+});
+
+test('a failed identity check goes to the starter set, never another person', async () => {
+  const { deps: d } = deps();
+  const brief = briefWith([{ name: 'Sam Smith', role: 'OpenAI researcher' }, { name: 'Cursor', role: 'AI coding company' }]);
+  const ctx = newPhotoContext(brief, []);
+  for (const name of ['Sam Smith', 'Cursor']) {
+    const t = await findPhoto({ kind: 'subject', value: name }, ctx, d);
+    assert.equal(t.via, 'starter', name);
+    assert.equal(t.identity?.ok, false);
+  }
+});
+
+test('every fixture slide gets a photo; each subject is checked once', async () => {
+  const jevCalls: string[] = [];
+  const { deps: d } = deps(jevCalls);
+  const p = await photosForDraft(fillDraft(sifDraft(), briefWith()), briefWith(), pages(), d);
+  const all = [p.cover, ...p.slides];
+  for (const t of all) assert.ok(t.photo && t.via, `${t.request.kind}: ${t.request.value}`);
+  assert.equal(new Set(all.map((t) => t.photo!.url)).size, all.length, 'no repeats');
   assert.deepEqual(jevCalls.sort(), ['Donald Trump', 'Jay Clayton']);
 });
 

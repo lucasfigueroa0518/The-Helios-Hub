@@ -13,7 +13,7 @@ import { createFakeHttp, SIF_WEB } from '@/fixtures/social/photo-http';
 import type { JevAsk } from '@/lib/social/jev/client';
 import * as Identity from '@/lib/social/jev/questions/subject-identity.v1';
 import { createCostMeter } from '@/lib/social/pipeline/cost-meter';
-import { BudgetExhausted, CALL_RESERVE_USD, createLiveStages, createRunBudget } from '@/lib/social/pipeline/live-stages';
+import { BudgetExhausted, createLiveStages, createRunBudget } from '@/lib/social/pipeline/live-stages';
 import { runDay } from '@/lib/social/pipeline/orchestrator';
 import { createInMemorySetAsideLog } from '@/lib/social/pipeline/set-aside-log';
 import { STUB_ARTICLES, createStubStages } from '@/lib/social/pipeline/stubs';
@@ -68,7 +68,7 @@ function setup(opts: { capUsd?: number; fitCheck?: FitCheck; flags?: unknown } =
 
 test('live stages: two stories run Reporter → Writer → Editor → Fact-checker → design → mechanical', async () => {
   const { calls, budget, stages, logs } = setup();
-  const meter = createCostMeter({ capUsd: 1.5 - CALL_RESERVE_USD });
+  const meter = createCostMeter({ capUsd: 1.5 });
   const r = await runDay({ articles: STUB_ARTICLES, stages, meter, log: createInMemorySetAsideLog(), now: new Date('2026-10-06T15:00:00Z'), targetPosts: 2 });
   assert.equal(r.posts.length, 2);
   assert.deepEqual(r.posts[0]!.stages, ['jev-scoring', 'reporter', 'writer', 'editor', 'fact-checker', 'design', 'mechanical']);
@@ -110,4 +110,17 @@ test('run budget: the guard refuses before calling when spend + reserve passes t
   const guarded = budget.guard(async () => { called++; return msg('x', {}); });
   await assert.rejects(() => guarded({ model: 'claude-sonnet-5-5', max_tokens: 10, messages: [] }), BudgetExhausted);
   assert.equal(called, 0);
+});
+
+test('cap: between stages the day stops only at the full cap, so a no-Claude stage (design) still runs near it', async () => {
+  const { stages } = setup({ capUsd: 1.5 });
+  const meter = createCostMeter({ capUsd: 1.5, alreadySpentUsd: 1.38 });
+  const designed: string[] = [];
+  const design = stages.design;
+  stages.design = async (d, b, s) => { designed.push(d.storyId); return design(d, b, s); };
+  // Reporter, Writer, Editor, Fact-checker stubbed through as zero-cost so only the meter matters here.
+  const free = createStubStages({ costUsd: Object.fromEntries(['jev-scoring', 'reporter', 'writer', 'editor', 'fact-checker'].map((k) => [k, 0])) });
+  const r = await runDay({ articles: STUB_ARTICLES, stages: { ...free, design: stages.design, mechanical: stages.mechanical }, meter, log: createInMemorySetAsideLog(), now: new Date('2026-10-06T15:00:00Z'), targetPosts: 1 });
+  assert.equal(designed.length, 1, 'design ran at $1.38 of $1.50');
+  assert.notEqual(r.stopReason, 'cost-cap');
 });

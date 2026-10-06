@@ -243,6 +243,17 @@ Only the four sources needed to put a real photo on every slide:
 - No-repeat log.
 - **Rendering:** cover fit measured on the rendered slide, face-safe crop (code library), stat-slide darkened backgrounds (§5.3a), spread slides (§5.4). (Basic layout rotation and the arrow move were pulled into M6.)
 - Article photos, Commons, stock and the identity check already exist from M5; this milestone adds the rest of the chain and the photo bank.
+- **Held for M8 (Tommy, 2026-10-06; the renderer was frozen before the checkpoint):**
+  - **Design rules from the freeze.** These are layout-system rules for every layout, not patches. The draft is in `docs/superpowers/m8-drafts/`.
+    1. **Text fit:** each text region shrinks its font until the longest word fits on one line and the block fits the region, down to a minimum size; otherwise the render fails. No mid-word breaks (Altman checkpoint: "CYBERSECURIT/Y"). This also covers long stat and split-stat numbers (Gemini slide 4; Mistral checkpoint slide 3).
+    2. **Contrast:** any text over a photo gets a dark scrim under the text area, on every layout.
+    3. **Faces stay clear:** person photos use split layouts where photo and text have separate regions. Full-bleed photos under text are only for scene and mood photos.
+  - **Spread format:** the mechanics in spec §5.4 (one wide photo across the seam of two slides; if the photo isn't wide enough, both slides render as normal text slides).
+  - **Photo-source bar** (from the 2026-10-06 checkpoint):
+    - people and organization photos come only from the Wikidata main image (P18), never from P180 "depicts" photos (already live since 2026-10-06);
+    - scene photos must not show people: stock fallback scenes showed a soldier and Navy medics on slides naming other people;
+    - stock must fit the slide: a bar for Anthropic, a 1930s building for Mistral;
+    - framing: face-safe crop and placement. Altman's photos were cropped to hands and legs.
 - **Accept:** fixture slides always get a photo; a person slide never falls back to another person; covers pass the fit check.
 
 ### M9: Persistence and review page (spec Q8)

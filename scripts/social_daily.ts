@@ -39,7 +39,7 @@ async function main() {
   const { createFileFeedHealthLog, fetchFeeds } = await import('@/lib/social/ingest/select/feed-health');
   const { createFilePosted } = await import('@/lib/social/ingest/select/posted');
   const { createCostMeter } = await import('@/lib/social/pipeline/cost-meter');
-  const { CALL_RESERVE_USD, createLiveStages, createRunBudget } = await import('@/lib/social/pipeline/live-stages');
+  const { createLiveStages, createRunBudget } = await import('@/lib/social/pipeline/live-stages');
   const { runDay } = await import('@/lib/social/pipeline/orchestrator');
   const { createSelectionStage } = await import('@/lib/social/pipeline/selection-stage');
   const { createFileSetAsideLog } = await import('@/lib/social/pipeline/set-aside-log');
@@ -104,7 +104,8 @@ async function main() {
   const result = await runDay({
     articles,
     stages,
-    meter: createCostMeter({ capUsd: capUsd - CALL_RESERVE_USD }),
+    // The meter stops the day between stages at the full cap; only the Claude-call guard keeps a per-call reserve.
+    meter: createCostMeter({ capUsd }),
     log: createFileSetAsideLog(),
     now,
     targetPosts: stories,

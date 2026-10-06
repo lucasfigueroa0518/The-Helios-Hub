@@ -14,8 +14,10 @@
  * Hard total cap: one RunBudget covers Claude (tokens + web search fees)
  * and Jev. No Claude call starts unless the spend so far plus
  * CALL_RESERVE_USD (a call's worst case) stays under the cap, so the run
- * can't pass it. The orchestrator's meter uses cap − reserve, so the day
- * stops between stages before the guard has to refuse a call.
+ * can't pass it. The orchestrator's meter uses the full cap between
+ * stages (a stage with no Claude call, like design, still runs); only this
+ * guard keeps the per-call reserve (Tommy, 2026-10-06: the checkpoint
+ * stopped one cheap design stage early at cap − reserve).
  */
 import { priceAnthropicMessages, type MessageUsageLike } from '@/lib/anthropic-pricing';
 import type { JevAsk } from '@/lib/social/jev/client';
