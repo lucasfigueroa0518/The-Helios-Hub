@@ -13,7 +13,16 @@ import {
   periodRange,
   type ReportFacts,
 } from '@/lib/reels/analytics/rollups';
-import { healthVerdict, publishFailureLine, sourceTone } from '@/lib/reels/health-status';
+import {
+  barsInView,
+  chartYMax,
+  describeRunStage,
+  healthVerdict,
+  publishFailureLine,
+  sourceTone,
+  visibleIndexRange,
+  type RunActivity,
+} from '@/lib/reels/health-status';
 
 const cutoff = defaultProdSpendSince();
 
@@ -151,9 +160,96 @@ test('health names the first broken thing and stays quiet when the night is clea
     publishFailureLine('Meta returned 400: The caption was too long. (code 36004/2207010, trace abc)'),
     'The caption was too long.',
   );
+  assert.equal(healthVerdict({
+    runStatus: 'running',
+    failedSourceName: null,
+    staleSource: null,
+    jobErrorsToday: null,
+    stuckStage: 'frame',
+    metaReady: true,
+    activity: 'Drawing the frame.',
+  }).sentence, 'Drawing the frame.');
+  assert.match(healthVerdict({
+    runStatus: 'running',
+    failedSourceName: null,
+    staleSource: { name: 'CBS News', days: 4 },
+    jobErrorsToday: null,
+    stuckStage: null,
+    metaReady: true,
+    activity: 'Scoring ideas.',
+  }).sentence, /CBS News has not succeeded in 4 days/);
   const now = new Date('2026-09-30T16:00:00.000Z');
   assert.equal(sourceTone(null, 'failed', now), 'failed');
   assert.equal(sourceTone(null, null, now), 'never');
   assert.equal(sourceTone(new Date(now.getTime() - 40 * 60 * 60 * 1000).toISOString(), 'ok', now), 'stale');
   assert.equal(sourceTone(now.toISOString(), 'ok', now), 'fresh');
+});
+
+function activity(patch: Partial<RunActivity> = {}): RunActivity {
+  return {
+    status: 'running',
+    adapterTotal: 27,
+    finishedAdapters: 0,
+    currentAdapter: null,
+    storiesKept: 0,
+    components: [],
+    scored: 0,
+    hasSlate: false,
+    copyWritten: 0,
+    frame: 0,
+    video: 0,
+    song: 0,
+    publish: 0,
+    ...patch,
+  };
+}
+
+test('a live night names the stage it is actually in', () => {
+  assert.equal(describeRunStage(activity({ status: 'requested' })), 'Queued. Waiting for the worker to start.');
+  assert.equal(describeRunStage(activity()), 'Starting the night.');
+  assert.equal(
+    describeRunStage(activity({ currentAdapter: 'The Guardian', finishedAdapters: 14, storiesKept: 96 })),
+    'Reading The Guardian. 14 of 27 sources done, 96 stories kept.',
+  );
+  assert.equal(
+    describeRunStage(activity({ finishedAdapters: 20, storiesKept: 100 })),
+    'Ingesting sources. 20 of 27 done, 100 stories kept.',
+  );
+  assert.equal(
+    describeRunStage(activity({
+      currentAdapter: 'CBS News',
+      components: ['grouping'],
+      storiesKept: 109,
+    })),
+    'Grouping 109 stories into ideas.',
+  );
+  assert.equal(
+    describeRunStage(activity({ components: ['scoring-pass1'], scored: 80 })),
+    'Scoring ideas. 80 scored so far.',
+  );
+  assert.equal(
+    describeRunStage(activity({ hasSlate: true, scored: 136 })),
+    'Scored 136 ideas. Writing copy.',
+  );
+  assert.equal(
+    describeRunStage(activity({ components: ['copy-caption'] })),
+    'Writing the on-screen copy.',
+  );
+  assert.equal(describeRunStage(activity({ copyWritten: 1, frame: 1 })), 'Drawing the frame.');
+  assert.equal(describeRunStage(activity({ status: 'ok', video: 1 })), 'Rendering the clip.');
+  assert.equal(describeRunStage(activity({ status: 'ok', song: 1 })), 'Picking a song.');
+  assert.equal(describeRunStage(activity({ status: 'ok', publish: 1 })), 'Publishing the reel.');
+  assert.equal(describeRunStage(activity({ status: 'ok' })), null);
+  assert.equal(describeRunStage(activity({ storiesKept: 1, finishedAdapters: 1 })), 'Ingesting sources. 1 of 27 done, 1 story kept.');
+});
+
+test('the source chart shows a few columns and scales to the ones in view', () => {
+  assert.equal(barsInView(0), 5);
+  assert.equal(barsInView(400), 3);
+  assert.equal(barsInView(700), 4);
+  assert.equal(barsInView(1100), 5);
+  assert.deepEqual(visibleIndexRange(10, 0, 500, 100), { start: 0, end: 5 });
+  assert.deepEqual(visibleIndexRange(10, 80, 500, 100), { start: 1, end: 6 });
+  assert.equal(chartYMax([4, 18, 9]), 18);
+  assert.equal(chartYMax([0, 0]), 1);
 });

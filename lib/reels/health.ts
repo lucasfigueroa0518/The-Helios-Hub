@@ -1,5 +1,5 @@
 import { dbQuery } from '@/lib/db';
-import { ADAPTERS } from '@/lib/reels/adapters';
+import { ADAPTERS, adapterById } from '@/lib/reels/adapters';
 import { metaConfigured } from '@/lib/reels/music/meta';
 import { songPickApproved } from '@/lib/reels/music/pick';
 import { publishMix } from '@/lib/reels/music/store';
@@ -8,7 +8,16 @@ import type { RunStats, SourceResult } from '@/lib/reels/types';
 import { calendarDateKey, zonedTime } from '@/lib/reels/schedule';
 import { RUN_TIMEZONE } from '@/lib/reels/config';
 import { addCalendarDays } from '@/lib/reels/analytics/rollups';
-import { healthVerdict, publishFailureLine, sourceTone, staleDays, type HealthVerdict, type SourceTone } from '@/lib/reels/health-status';
+import {
+  describeRunStage,
+  healthVerdict,
+  publishFailureLine,
+  sourceTone,
+  staleDays,
+  type HealthVerdict,
+  type RunActivity,
+  type SourceTone,
+} from '@/lib/reels/health-status';
 
 export type HealthSource = {
   id: string;
@@ -36,9 +45,12 @@ export type HealthPage = {
   sources: HealthSource[];
   windowDays: number;
   peak: number;
+  /** What the live night or reel is doing. Null when nothing is in progress. */
+  activity: string | null;
 };
 
 type RunHead = {
+  id: string;
   status: string;
   started_at: string | null;
   finished_at: string | null;
@@ -63,7 +75,7 @@ export async function loadHealthPage(windowDays = 7, now = new Date()): Promise<
 
   const [run, marks, volume, published, flights, errors, live, mix] = await Promise.all([
     dbQuery<RunHead>(
-      `SELECT status, started_at::text, finished_at::text, requested_at::text, source_results, stats
+      `SELECT id::text, status, started_at::text, finished_at::text, requested_at::text, source_results, stats
          FROM reels.runs
         ORDER BY requested_at DESC
         LIMIT 1`,
@@ -183,6 +195,14 @@ export async function loadHealthPage(windowDays = 7, now = new Date()): Promise<
   const stale = sources.find((source) => source.phase === 'primary' && (source.tone === 'stale' || source.tone === 'never'));
   const jobError = errors.rows[0] ?? null;
   const flight = Object.fromEntries(flights.rows.map((row) => [row.stage, row.n])) as Partial<Record<string, number>>;
+  const inFlight = {
+    copy: flight.copy ?? 0,
+    frame: flight.frame ?? 0,
+    video: flight.video ?? 0,
+    song: flight.song ?? 0,
+    publish: flight.publish ?? 0,
+  };
+  const activity = await describeLiveRun(latest, inFlight);
   const nightRunning = latest?.status === 'running' || latest?.status === 'requested';
   const stuck = !nightRunning
     ? (['copy', 'frame', 'video', 'song', 'publish'] as const).find((stage) => (flight[stage] ?? 0) > 0) ?? null
@@ -223,6 +243,7 @@ export async function loadHealthPage(windowDays = 7, now = new Date()): Promise<
         : null,
       stuckStage: stuck,
       metaReady: metaConfigured(),
+      activity,
     }),
     night: {
       status: latest?.status ?? null,
@@ -231,13 +252,7 @@ export async function loadHealthPage(windowDays = 7, now = new Date()): Promise<
       reelsFinished: reelsFinished?.rows[0]?.n ?? 0,
       reelsPublished: reelsPublished?.rows[0]?.n ?? 0,
     },
-    inFlight: {
-      copy: flight.copy ?? 0,
-      frame: flight.frame ?? 0,
-      video: flight.video ?? 0,
-      song: flight.song ?? 0,
-      publish: flight.publish ?? 0,
-    },
+    inFlight,
     publishPath: {
       live,
       meta: metaConfigured(),
@@ -247,5 +262,76 @@ export async function loadHealthPage(windowDays = 7, now = new Date()): Promise<
     sources,
     windowDays: days,
     peak: Math.max(1, ...sources.map((source) => source.ingested)),
+    activity,
   };
+}
+
+async function describeLiveRun(
+  run: RunHead | null,
+  flight: { frame: number; video: number; song: number; publish: number },
+): Promise<string | null> {
+  const blank: RunActivity = {
+    status: run?.status ?? null,
+    adapterTotal: ADAPTERS.length,
+    finishedAdapters: 0,
+    currentAdapter: null,
+    storiesKept: 0,
+    components: [],
+    scored: 0,
+    hasSlate: false,
+    copyWritten: 0,
+    frame: flight.frame,
+    video: flight.video,
+    song: flight.song,
+    publish: flight.publish,
+  };
+  const live = run?.status === 'running' || run?.status === 'requested';
+  if (!run || !live || !run.started_at) return describeRunStage(blank);
+
+  const [marks, costs, kept, slate, copy] = await Promise.all([
+    dbQuery<{ adapter_id: string; succeeded: boolean }>(
+      `SELECT adapter_id, COALESCE(last_success_at >= $1::timestamptz, false) AS succeeded
+         FROM reels.watermarks
+        WHERE last_attempt_at >= $1::timestamptz
+        ORDER BY last_attempt_at DESC`,
+      [run.started_at],
+    ),
+    dbQuery<{ component: string; n: number }>(
+      `SELECT component, count(*)::int AS n
+         FROM reels.cost_events
+        WHERE run_id = $1
+        GROUP BY component`,
+      [run.id],
+    ),
+    dbQuery<{ kept: number }>(
+      `SELECT count(*) FILTER (WHERE drop_reason IS NULL)::int AS kept
+         FROM reels.sources
+        WHERE run_id = $1`,
+      [run.id],
+    ),
+    dbQuery<{ scored: number }>(
+      `SELECT (SELECT count(*)::int FROM reels.idea_scores s WHERE s.slate_id = sl.id) AS scored
+         FROM reels.score_slates sl
+        WHERE sl.run_id = $1`,
+      [run.id],
+    ),
+    dbQuery<{ n: number }>(
+      `SELECT count(*)::int AS n FROM reels.idea_copy WHERE run_id = $1 AND status = 'ok'`,
+      [run.id],
+    ),
+  ]);
+
+  const open = marks.rows.find((row) => row.succeeded !== true);
+  const pass1 = costs.rows.find((row) => row.component === 'scoring-pass1')?.n ?? 0;
+  const slateRow = slate.rows[0];
+  return describeRunStage({
+    ...blank,
+    finishedAdapters: marks.rows.filter((row) => row.succeeded).length,
+    currentAdapter: open ? adapterById(open.adapter_id)?.name ?? open.adapter_id : null,
+    storiesKept: kept.rows[0]?.kept ?? 0,
+    components: costs.rows.map((row) => row.component),
+    scored: slateRow ? slateRow.scored : pass1,
+    hasSlate: Boolean(slateRow),
+    copyWritten: copy.rows[0]?.n ?? 0,
+  });
 }
