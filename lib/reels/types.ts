@@ -28,6 +28,8 @@ export type DropReason =
   /** D-245: the only text we could get was a teaser or a gated page. */
   | 'teaser'
   | 'fetch_failed'
+  /** A PDF, image, or other file that is not an article (D-036). */
+  | 'not_article'
   | 'off_topic'
   | 'junk'
   | 'non_english'
@@ -80,6 +82,18 @@ export type AdapterDefinition = {
   kind: AdapterKind;
   /** Per-night cap for article-style feeds (D-035). Ranked lists ingest whole. */
   cap?: number;
+  /**
+   * D-262. Ranked lists only: at most this many items new tonight, highest
+   * engagement first. Items already on file still refresh their signals and
+   * do not count. An item left out stays unseen and can make the cut later.
+   */
+  newItemCap?: number;
+  /**
+   * D-264. When this many days pass without one item kept from this source,
+   * the night is marked partial and the note names it. A feed that moved or
+   * started blocking us fails quietly otherwise.
+   */
+  quietAfterDays?: number;
 };
 
 export type AdapterContext = {
@@ -134,6 +148,8 @@ export type SourceResult = {
   dropped: number;
   refreshed: number;
   error?: string;
+  /** One item threw. The source kept going. The run records these and stays partial. */
+  itemErrors?: string[];
 };
 
 export type RunStats = {

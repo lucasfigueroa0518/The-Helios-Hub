@@ -287,17 +287,20 @@ created on deploy). Frames are PNGs in the private Supabase bucket
    similarity across their members) and asks Jev whether to fuse them,
    repeating while anything still merges.
 7. **Score and write.** Jev scores and ranks the timely ideas
-   (`scoring-pass1-v3`, `scoring-pass2-v3`), the top three are selected, and,
-   if P-10 is approved, the writer produces their copy and captions. Scoring
+   (`scoring-pass1-v4`, `scoring-pass2-v4`), the top three are selected, and,
+   if P-10 is approved, the writer produces copy for one reel per window still
+   open that day, up to three. At 12–1 AM that is three. Later in the day it
+   is however many windows have not ended. Scoring
    judges for the AI-curious viewer first and counts the builder minority as
    a bonus; a builder-only story cannot reach the top of the scale (D-206).
    Value tops out only when the reason to care fits one plain sentence with no
    technical setup, and a known company or person adds 0.10 (D-217, D-218).
-   When Live is on, the top three by rank are scheduled into the Eastern-time
+   When Live is on, the rendered reels are scheduled into the Eastern-time
    windows still open that day (8:45–10:00 AM, 11:15 AM–12:30 PM, 6:00–9:00 PM),
    one each. A window that has started can still take a reel in the minutes
    left. A reel that does not fit is not placed on the next day; it carries
-   into tomorrow's pool at its stored score. The bench, everything past rank
+   into tomorrow's pool at its stored score. An idea already scheduled or
+   publishing is not picked again. The bench, everything past rank
    3, is not scheduled. The worker posts the ones that landed in a window
    as trial reels (D-207). Force post sends one immediately, still as a trial reel.
 8. **Retain.** Sources older than 3 weeks are hard-deleted. Fingerprints,

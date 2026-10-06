@@ -13,6 +13,8 @@ export type RssAdapterConfig = {
   bucket: Bucket;
   feedUrl: string;
   cap?: number;
+  /** D-264. See AdapterDefinition.quietAfterDays. */
+  quietAfterDays?: number;
   /**
    * The description is the piece, and the link is not an article to follow.
    * Console.dev reviews are a few hundred characters and point at the product.
@@ -38,6 +40,7 @@ export function rssAdapter(config: RssAdapterConfig): Adapter {
     bucket: config.bucket,
     kind: 'dated',
     cap: config.cap ?? ARTICLE_FEED_CAP,
+    quietAfterDays: config.quietAfterDays,
 
     async fetchItems({ since, signal }) {
       const xml = await fetchText(config.feedUrl, {

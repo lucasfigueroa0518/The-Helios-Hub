@@ -165,7 +165,7 @@ test('the winning line keeps the caption from the call that wrote it', () => {
 });
 
 test('the word range comes from the bucket and gates the line', () => {
-  const long = Array.from({ length: 24 }, (_, index) => `word${index}`).join(' ');
+  const long = Array.from({ length: 28 }, (_, index) => `word${index}`).join(' ');
   const { variants, winner } = buildCopyVariants(
     [{ call: call('Caption', long, 'Short line here'), error: null }],
     [judgment(judged(4, 4, { loop: 4, care: 4, reward: 4 })), judgment(judged(3, 3))],
@@ -265,7 +265,7 @@ test('Jev scores one line from the on-screen text alone, five scores in one requ
   assert.deepEqual(Object.keys(seen[0]?.state ?? {}), ['on_screen_copy']);
   assert.deepEqual(seen[0]?.sets, [COPY_PICK]);
   assert.deepEqual(Object.keys(COPY_PICK.questions), ['plain', 'stake', 'loop', 'care', 'reward']);
-  assert.equal(COPY_PICK.version, 'copy-pick-v3');
+  assert.equal(COPY_PICK.version, 'copy-pick-v4');
   assert.equal(seen[0]?.postIdeaId, 'idea-1');
   assert.equal(seen[0]?.runId, 'run-1');
 });
@@ -427,11 +427,10 @@ test('when no draft line clears the gate, one rewrite sees the scores and the pi
   const rewriteUser = sent[2].messages[0].content as Anthropic.TextBlockParam[];
   assert.equal(firstUser[0].text, rewriteUser[0].text, 'the cached sources block is identical');
   assert.ok(rewriteUser[0].cache_control);
-  assert.match(rewriteUser[1].text, /did not clear the bar/);
+  assert.match(rewriteUser[1].text, /None of them is the one to post yet/);
   assert.match(rewriteUser[1].text, /Draft one first line/);
-  assert.match(rewriteUser[1].text, /Plain read 0\.50\. The subject is nameable/);
-  assert.match(rewriteUser[1].text, /Same story as its caption's opening: yes\./);
-  assert.doesNotMatch(firstUser[1].text, /did not clear the bar/);
+  assert.doesNotMatch(rewriteUser[1].text, /Plain read 0\.50/);
+  assert.doesNotMatch(firstUser[1].text, /None of them is the one to post yet/);
 
   assert.equal(outcome.ok, true);
   assert.equal(outcome.onScreenCopy, 'Strong rewrite line');
@@ -472,6 +471,8 @@ test('when the rewrite still misses, the nearest line across both runs ships', a
       reportInput(['Draft one first line', 'Draft one second line'], 'Caption one.\n\nMore.'),
       reportInput(['Draft two first line', 'Draft two second line'], 'Caption two.\n\nMore.'),
       reportInput(['Near rewrite line', 'Another weak line'], 'Rewrite caption.\n\nMore.'),
+      reportInput(['Another weak polish', 'Second weak polish'], 'Polish caption.\n\nMore.'),
+      reportInput(['Third weak polish', 'Fourth weak polish'], 'Polish caption two.\n\nMore.'),
     ],
     sent,
   );
@@ -484,7 +485,11 @@ test('when the rewrite still misses, the nearest line across both runs ships', a
     },
     cost: async () => {},
   });
-  assert.equal(sent.length, 3);
+  assert.equal(sent.length, 5, 'two drafts, the blind rewrite, and two blind polish passes');
+  const polishUser = sent[3].messages[0].content as Anthropic.TextBlockParam[];
+  assert.match(polishUser[1].text, /These on-screen copies are the ones to build on/);
+  assert.match(polishUser[1].text, /Near rewrite line/);
+  assert.doesNotMatch(polishUser[1].text, /Plain read|Stake/);
   assert.equal(outcome.onScreenCopy, 'Near rewrite line');
   assert.equal((variants as { winnerEligible: boolean }).winnerEligible, false);
 });
@@ -508,7 +513,7 @@ test('a generation slot keeps the judged lines and does not ship a miss', async 
     cost: async () => {},
     shipMiss: false,
   });
-  assert.equal(sent.length, 3);
+  assert.equal(sent.length, 5);
   assert.equal(outcome.ok, false);
   assert.equal(outcome.passed, false);
   assert.equal(outcome.judged, true);

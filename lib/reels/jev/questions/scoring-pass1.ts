@@ -8,6 +8,7 @@ import {
   BUCKETS,
   ELEMENT_RULE,
   FRAMEWORKS,
+  PEOPLE_RULE,
   SOURCE_RULE,
 } from '@/lib/reels/jev/questions/scoring-shared';
 
@@ -16,6 +17,8 @@ import {
  * D-083, D-084). Approved 2026-09-22 (D-086) as `scoring-pass1-v1`; the
  * audience moved to AI-curious viewers plus a builder minority in v2 (D-206).
  * v3 (D-218): a Callout needs a position on something the viewer chooses.
+ * v4 (D-257): the top two levels of every score need the charge or the
+ * consequence to land on people (PEOPLE_RULE).
  *
  * One request. The questions are independent, so a bucket score cannot see the
  * psychology scores. Code applies the 0.60 / 0.25 gate and ignores a bucket
@@ -32,7 +35,7 @@ const people = BLUE_CHIP_PEOPLE.join('; ');
 
 export const SCORING_PASS_1 = defineQuestionSet({
   id: 'scoring-pass1',
-  version: 'scoring-pass1-v3',
+  version: 'scoring-pass1-v4',
   questions: {
     curiosity: score(
       {
@@ -41,6 +44,7 @@ export const SCORING_PASS_1 = defineQuestionSet({
         judge: ELEMENT_RULE,
         audiences: AUDIENCE_RULE,
         source: SOURCE_RULE,
+        people: PEOPLE_RULE,
       },
       [
         'Absent. No element opens a gap between what a viewer knows and a specific thing they would want to know. There is no hidden cause and no result that cuts against the obvious explanation.',
@@ -57,6 +61,7 @@ export const SCORING_PASS_1 = defineQuestionSet({
         judge: ELEMENT_RULE,
         audiences: AUDIENCE_RULE,
         source: SOURCE_RULE,
+        people: PEOPLE_RULE,
       },
       [
         'Absent. Nothing here would raise anger, awe, anxiety, or amusement. The material is calm, sad, or only informative.',
@@ -73,6 +78,7 @@ export const SCORING_PASS_1 = defineQuestionSet({
         judge: ELEMENT_RULE,
         audiences: AUDIENCE_RULE,
         source: SOURCE_RULE,
+        people: PEOPLE_RULE,
       },
       [
         'Absent. Nothing here gives a viewer a way to signal who they are. No habit, tool, or status line is at stake.',
@@ -90,6 +96,7 @@ export const SCORING_PASS_1 = defineQuestionSet({
         judge: ELEMENT_RULE,
         audiences: AUDIENCE_RULE,
         source: SOURCE_RULE,
+        people: PEOPLE_RULE,
       },
       [
         'Absent. No tool, app, repo, or concrete cost in the source could be the payoff of a list the viewer would save.',
@@ -106,6 +113,7 @@ export const SCORING_PASS_1 = defineQuestionSet({
         judge: ELEMENT_RULE,
         audiences: AUDIENCE_RULE,
         source: SOURCE_RULE,
+        people: PEOPLE_RULE,
       },
       [
         'Absent. The source has no hard figure that could carry a post on its own.',
@@ -122,6 +130,7 @@ export const SCORING_PASS_1 = defineQuestionSet({
         judge: ELEMENT_RULE,
         audiences: AUDIENCE_RULE,
         source: SOURCE_RULE,
+        people: PEOPLE_RULE,
       },
       [
         'Absent. There is no sequence of events. Nothing here has a tense moment and a before and after.',
@@ -138,6 +147,7 @@ export const SCORING_PASS_1 = defineQuestionSet({
         judge: ELEMENT_RULE,
         audiences: AUDIENCE_RULE,
         source: SOURCE_RULE,
+        people: PEOPLE_RULE,
       },
       [
         'Absent. No person is the subject. A product or a company, even with a named executive in passing, is not a profile.',
@@ -154,6 +164,7 @@ export const SCORING_PASS_1 = defineQuestionSet({
         judge: ELEMENT_RULE,
         audiences: AUDIENCE_RULE,
         source: SOURCE_RULE,
+        people: PEOPLE_RULE,
         guardrail:
           'Levels Strong and Unmistakable require a concrete cost the source itself states, in money, time, or a measured failure, and the mechanism behind that cost. "Inefficient" or "risky" is not a cost. A warning that only works if a number is invented stays at Thin.',
       },
@@ -172,6 +183,7 @@ export const SCORING_PASS_1 = defineQuestionSet({
         judge: ELEMENT_RULE,
         audiences: AUDIENCE_RULE,
         source: SOURCE_RULE,
+        people: PEOPLE_RULE,
         guardrail:
           'Levels Strong and Unmistakable require a position on a practice, a tool, or a vendor the viewer chooses for themselves. A position about what a company, a lab, or a government should do stays at Workable at most, however sharp it is. If the only sharp line attacks who the viewer is (someone who does not understand AI, is behind, or is not serious), the score stays at Thin, however hot the tone is. The voice has to be able to read as a fellow user raising a standard.',
       },

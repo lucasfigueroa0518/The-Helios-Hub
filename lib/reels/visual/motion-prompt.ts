@@ -13,7 +13,7 @@ const PROMPT_PATH = path.join(DIR, 'motion-writer-prompt.txt');
  * Bump when the writer prompt, a grade block, or a code-owned Kling line
  * changes. The version before this one is frozen in saved/motion-writer-v1/.
  */
-export const MOTION_PROMPT_VERSION = 'motion-writer-v3';
+export const MOTION_PROMPT_VERSION = 'motion-writer-v4';
 
 /** Identical on every motion-writer call. This is the cached system prefix. */
 export function motionWriterInstructions(): string {

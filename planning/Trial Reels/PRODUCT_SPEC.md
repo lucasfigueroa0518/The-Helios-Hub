@@ -86,7 +86,7 @@ Second, content bucket score: how well would this fit into one of our content bu
 - Why it works: The copy names a high-reward payoff and withholds the specifics, creating the information gap. The scent is strong and the cognitive cost of resolving it is one tap to the caption. Framework 3 loads on top when the copy names the identity that should care ("if you're still paying for X").
 - Live hook formulas: Counter-Intuitive Truth, In-Group Callout.
 - Resolution: Deferred. The caption carries the payload.
-- Copy: Names an outcome, a cost, or an identity, and why the get is worth stopping for: what it replaces, what it costs today, or what it suddenly makes possible. Never the tools. 8–22 words.
+- Copy: Names an outcome, a cost, or an identity, and why the get is worth stopping for: what it replaces, what it costs today, or what it suddenly makes possible. Say what kind of thing the get is in everyday words, such as a free app, an add-on, or a download, without its name. Never the tools' names. 8–26 words.
 - Caption: 3–7 items. Name, one plain line on what it replaces or what it lets you do, link. Close on a line that establishes Helios as the finder.
 - Feeds from: GitHub Trending, Awesome-lists, Hugging face
 - Example copy: "Four free AI tools that do what you're paying $20 a month for."
@@ -97,7 +97,7 @@ Second, content bucket score: how well would this fit into one of our content bu
 - Why it works: A hard figure that contradicts expectation produces arousal through anxiety or awe, which is the transmission driver Berger and Milkman isolated. Loss aversion does the rest when the stat implies the viewer is currently losing something.
 - Live hook formulas: Anxiety / Loss Aversion, Counter-Intuitive Truth.
 - Resolution: Self-contained on the point. The figure is the premise, and the whole thought, with its tension, lands on screen. The caption carries the source, the method, and what to do.
-- Copy: One statistic, one implication, and the tension that makes it worth stopping for. The implication says what the figure does to someone or lets them do. A second figure, a ranking, or a comparison is more of the statistic, not an implication. Up to 22 words. No preamble.
+- Copy: One statistic, said plainly, then its implication, with the tension that makes it worth stopping for carried inside the implication. The implication says what the figure does to the viewer's own things, or to the people in the story, or what it lets them do. A second figure, a ranking, or a comparison is more of the statistic, not an implication. Up to 26 words. No preamble.
 - Caption: Source, methodology caveat, and what it means for the viewer's work or life, each placed where the story needs it. Can be told like a story with a plot.
 - Feeds from: All
 - Example copy, three different shapes: "An AI flagged 9 in 10 sepsis cases in a hospital trial. Doctors had already caught every one." "A support bot promised 2,000 customers refunds it had no power to give. The company paid all of them." "You spend 3 hours a week fixing AI drafts, more time than writing them yourself used to take."
@@ -108,7 +108,7 @@ Second, content bucket score: how well would this fit into one of our content bu
 - Why it works: A cold open on the highest-tension moment opens the gap immediately, and chronology is the lowest-effort possible path to closing it, which is exactly the scent-to-cost ratio foraging theory predicts people follow. Arousal comes from anxiety and awe as the stakes escalate.
 - Live hook formulas: Hidden Mechanism, Awe / High Value.
 - Resolution: Deferred. The caption carries the payload.
-- Copy: Cold open at peak tension, then chronology, with the tension carried to the last beat. Where the sources report an outcome that already happened, the copy builds to it. Where they report none, the copy lands on the strongest true beat, and no outcome is invented. 20–32 words on one screen, longer than the other buckets.
+- Copy: Two beats on one screen. First the moment at peak tension, said plainly: who did what. Then what it cost or meant, for the people in the story or for the viewer, with the tension carried to the last word. Where the sources report an outcome that already happened, the second beat lands on it. Where they report none, it lands on the strongest true beat, and no outcome is invented. The chronology belongs to the caption. 14–32 words on one screen.
 - Caption: Tell the story in an extremely captivating way. Humanizer skill used. Short attention span writing, really quick paragraphs. Use second and third hooks to keep the reader's attention. Write semi-informally, like a human.
 - Example copy: "In November 2023, the board fired Sam Altman on a Friday. By Monday, 700 of 770 employees had threatened to quit."
 
@@ -141,7 +141,7 @@ Second, content bucket score: how well would this fit into one of our content bu
 - Why it works: Naming a specific identity triggers self-relevance processing, which is the strongest attention mechanism in your framework set because it makes the viewer the subject rather than the audience. Sharing then becomes in-group signaling. The secondary arousal is anger or amusement depending on which side of the line the viewer lands.
 - Live hook formulas: In-Group Callout, Contrarian Stance.
 - Resolution: Self-contained. The stance has to land fully on screen. A deferred callout reads as cowardice and kills the sharing impulse.
-- Copy: Name the group, name the behavior, state the position. 12–22 words. No hedging, and no qualifier that lets everyone off the hook, since the boundary is the entire mechanism.
+- Copy: Name the group, name the behavior, state the position. 12–26 words. No hedging, and no qualifier that lets everyone off the hook, since the boundary is the entire mechanism.
 - Caption: The argument. This is the only bucket where the caption's job is to be defensible under attack, because the comment section will test it. Anticipate the strongest objection and answer it in the caption rather than in replies.
 - Feeds from: HN and Reddit contrarian threads, industry surveys, benchmark results, your own delivery experience.
 - Example copy: "Unpopular opinion: if you only use ChatGPT to rewrite emails, you're skipping the part that saves real time."

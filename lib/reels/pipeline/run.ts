@@ -18,6 +18,8 @@ import {
   startRun,
   type RunRow,
 } from '@/lib/reels/repository';
+import { errorText } from '@/lib/reels/pipeline/guard';
+import { loadSourceActivity, quietSources, quietSourcesNote } from '@/lib/reels/pipeline/source-health';
 import type { Adapter, RunStats, RunStatus, RunTrigger, SourceResult } from '@/lib/reels/types';
 
 export type RunOutcome = {
@@ -110,6 +112,7 @@ export async function executeRun(run: RunRow, deps?: Partial<RunDeps>): Promise<
     }
 
     const grouping = await groupRun(run.id, runStartedAt, { jev });
+    const groupingNote = failureNote('Grouping failed for', grouping.failures);
 
     let scoringNote: string | undefined;
     let copyNote: string | undefined;
@@ -120,38 +123,48 @@ export async function executeRun(run: RunRow, deps?: Partial<RunDeps>): Promise<
       const scoring = await scoreRun(run.id, runStartedAt, jev);
       scored = scoring.scored;
       selected = scoring.selected;
+      scoringNote = failureNote('Scoring failed for', scoring.failures);
       log('run_scored', scoring);
 
-      try {
-        const { generatePassingReels } = await import('@/lib/reels/pipeline/slots');
-        const copy = await generatePassingReels({
-          runId: run.id,
-          slateId: scoring.slateId,
-          client: deps?.copyClient,
-          signal: deps?.signal,
-          jev,
-        });
-        copyWritten = copy.filled.filter((slot) => !slot.locked).length;
-        selected = copy.filled.length;
-        const notes = [
-          copy.filled.length < PASSING_REELS_PER_NIGHT
-            ? `Filled ${copy.filled.length} of ${PASSING_REELS_PER_NIGHT} passing reels.`
-            : undefined,
-          copy.failures.length > 0
-            ? `Copy failed for ${copy.failures.length} idea(s): ${copy.failures.join('; ')}`
-            : undefined,
-        ].filter((note): note is string => note != null);
-        if (notes.length > 0) copyNote = notes.join(' ');
-        log('run_copy', copy);
-        const { scheduleSelectedSlate } = await import('@/lib/reels/publish/schedule');
-        const scheduled = await scheduleSelectedSlate(scoring.slateId).catch((error) => {
-          log('schedule_failed', { error: error instanceof Error ? error.message : String(error) });
-          return { scheduled: 0 };
-        });
-        if (scheduled.scheduled > 0) log('run_scheduled', scheduled);
-      } catch (error) {
-        copyNote = `Copy failed: ${error instanceof Error ? error.message : String(error)}`;
-        log('copy_failed', { error: copyNote });
+      if (scoring.slateId) {
+        try {
+          const { generatePassingReels } = await import('@/lib/reels/pipeline/slots');
+          const { scheduleSelectedSlate, windowsStillOpen } = await import('@/lib/reels/publish/schedule');
+          const { reelsForOpenWindows } = await import('@/lib/reels/publish/slots');
+          const count = reelsForOpenWindows(await windowsStillOpen(), PASSING_REELS_PER_NIGHT);
+          if (count < 1) {
+            copyNote = 'No posting window is still open today, so no reel was rendered. The ideas carry to tomorrow.';
+          } else {
+            const copy = await generatePassingReels({
+              runId: run.id,
+              slateId: scoring.slateId,
+              count,
+              client: deps?.copyClient,
+              signal: deps?.signal,
+              jev,
+            });
+            copyWritten = copy.filled.filter((slot) => !slot.locked).length;
+            selected = copy.filled.length;
+            const notes = [
+              copy.filled.length < count
+                ? `Filled ${copy.filled.length} of ${count} passing reels.`
+                : undefined,
+              copy.failures.length > 0
+                ? `Copy failed for ${copy.failures.length} idea(s): ${copy.failures.join('; ')}`
+                : undefined,
+            ].filter((note): note is string => note != null);
+            if (notes.length > 0) copyNote = notes.join(' ');
+            log('run_copy', copy);
+            const scheduled = await scheduleSelectedSlate(scoring.slateId).catch((error) => {
+              log('schedule_failed', { error: errorText(error) });
+              return { scheduled: 0 };
+            });
+            if (scheduled.scheduled > 0) log('run_scheduled', scheduled);
+          }
+        } catch (error) {
+          copyNote = `Copy failed: ${errorText(error)}`;
+          log('copy_failed', { error: copyNote });
+        }
       }
     } catch (error) {
       scoringNote = `Scoring failed: ${error instanceof Error ? error.message : String(error)}`;
@@ -179,11 +192,21 @@ export async function executeRun(run: RunRow, deps?: Partial<RunDeps>): Promise<
     };
 
     const failed = sourceResults.filter((result) => result.status === 'failed');
+    const itemErrors = sourceResults.flatMap((result) => result.itemErrors ?? []);
+    const itemNote = failureNote('Ingest failed for', itemErrors);
+    // D-264. A watched source with nothing kept for days is called out.
+    const watched = primary.filter((adapter) => adapter.quietAfterDays != null);
+    const quietNote = await loadSourceActivity(watched.map((adapter) => adapter.id))
+      .then((activity) => quietSourcesNote(quietSources(watched, activity, now)))
+      .catch((error) => `Source health check failed: ${errorText(error)}`);
     const status: RunStatus =
-      failed.length === 0 && !scoringNote && !copyNote ? 'ok' : 'partial';
+      failed.length === 0 && !scoringNote && !copyNote && !groupingNote && !itemNote && !quietNote ? 'ok' : 'partial';
     const note = [failed.length === 0
       ? undefined
       : `${failed.length} source(s) failed: ${failed.map((result) => result.name).join(', ')}.`,
+      itemNote,
+      quietNote,
+      groupingNote,
       scoringNote,
       copyNote,
     ].filter(Boolean).join(' ') || undefined;
@@ -196,6 +219,13 @@ export async function executeRun(run: RunRow, deps?: Partial<RunDeps>): Promise<
     log('run_failed', { error: note });
     return { runId: run.id, status: 'failed', note, sourceResults, stats: {} };
   }
+}
+
+function failureNote(label: string, failures: string[]): string | undefined {
+  if (failures.length === 0) return undefined;
+  const shown = failures.slice(0, 5).join('; ');
+  const more = failures.length > 5 ? ` (+${failures.length - 5} more)` : '';
+  return `${label} ${failures.length} item(s): ${shown}${more}`;
 }
 
 function isNotApproved(error: string | undefined): boolean {

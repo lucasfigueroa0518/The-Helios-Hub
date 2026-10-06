@@ -8,6 +8,8 @@ import { defineQuestionSet } from '@/lib/reels/jev/question-set';
  * Five Scores, judged alone. Code gates on plain and stake and ranks the rest.
  * v3 (D-212, D-215): the plain read judges ideas with the writer's insider
  * list, and a stake score asks whether the viewer can say why it matters.
+ * v4 (D-260): stake level 3 names health and tools, and only level 1 is about
+ * insider terms.
  *
  * State is the on-screen copy and nothing else. No source, no bucket, no
  * caption, no other versions. The viewer is an average person scrolling
@@ -37,8 +39,8 @@ export const COPY_PICK_LEGENDS = {
   stake: [
     'No reason to care is given. The text states a fact about an industry, a company, or a system and stops.',
     'A reason exists only for insiders: people who build AI, invest in it, or follow its companies.',
-    'A viewer could work out a reason with some effort, but the text does not say it, or it names the stake in terms only an insider feels.',
-    'The text says in plain words what this means for the viewer\'s money, time, safety, work, or the AI they use, or what is on the line for the people in the story.',
+    'A viewer could work out a reason with some effort, but the text does not say it.',
+    'The text says in plain words what this means for the viewer\'s money, time, safety, health, work, or the AI and tools they use, or what is on the line for the people in the story.',
     'The reason is immediate and it is theirs. In a story, what the people in it stand to lose or win is something anyone feels at once.',
   ],
   loop: [
@@ -68,7 +70,7 @@ export type CopyPickScoreId = keyof typeof COPY_PICK_LEGENDS;
 
 export const COPY_PICK = defineQuestionSet({
   id: 'copy-pick',
-  version: 'copy-pick-v3',
+  version: 'copy-pick-v4',
   questions: {
     plain: score(
       {

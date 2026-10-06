@@ -1,11 +1,16 @@
 import {
-  BALL_KNOWLEDGE_BUMP,
   BLOCKBUSTER_BAR,
   BLOCKBUSTER_BONUS,
+  BLOCKBUSTER_BONUS_HIGH_VALUE,
   CARRYOVER_TWO_DAY_DEPTH,
   CARRYOVER_WINDOW,
+  ENTERTAINMENT_BOOST,
+  ENTERTAINMENT_BOOST_BAR,
   FRAMEWORK_GAP,
+  NET_BUCKET_WEIGHT,
+  NET_VALUE_WEIGHT,
   SCORE_TOP_LEVEL,
+  VALUE_BAR,
   VIABLE_FRAMEWORK,
 } from '@/lib/reels/config';
 import { zoneDateParts } from '@/lib/reels/schedule';
@@ -136,9 +141,9 @@ export function pickBucket(
   return ranked[0].bucket;
 }
 
-/** D-076. The net uses the higher of the two value scores. */
-export function valueTerm(knowledge: number, entertainment: number): number {
-  return Math.max(knowledge, entertainment);
+/** D-076, D-255. The net uses the highest value score: useful, important to know, or entertaining. */
+export function valueTerm(...scores: number[]): number {
+  return Math.max(...scores);
 }
 
 /** D-077. One bonus if any subject question clears the bar. They do not stack. */
@@ -153,20 +158,42 @@ export function blockbusterBonus(nouls: {
   return hit ? BLOCKBUSTER_BONUS : 0;
 }
 
-/** 0.08 when this story won as Ball Knowledge, otherwise 0. */
-export function ballKnowledgeBump(bucket: BucketId | null): number {
-  return bucket === 'ball_knowledge' ? BALL_KNOWLEDGE_BUMP : 0;
+/**
+ * D-254. The blockbuster bonus once value is known: 0.20 when value clears
+ * VALUE_BAR, 0.10 when it does not, and 0 when no subject question cleared.
+ */
+export function tieredBlockbuster(baseBonus: number, value: number): number {
+  if (baseBonus <= 0) return 0;
+  return units(value) >= units(VALUE_BAR) ? BLOCKBUSTER_BONUS_HIGH_VALUE : BLOCKBUSTER_BONUS;
 }
 
-/** D-079. Straight sum. Cooldown is absent until publishing exists. */
+/**
+ * D-261. The entertainment score after the boost: ×1.2 when it is the highest
+ * of the three value scores (ties count) or above 0.70, otherwise unchanged.
+ */
+export function boostedEntertainment(useful: number, knowledge: number, entertainment: number): number {
+  const highest = units(entertainment) >= units(Math.max(useful, knowledge));
+  const strong = units(entertainment) > units(ENTERTAINMENT_BOOST_BAR);
+  return highest || strong ? entertainment * ENTERTAINMENT_BOOST : entertainment;
+}
+
+/**
+ * D-079, D-253, D-261. Psychology, half the bucket fit, twice the value, and
+ * the blockbuster bonus. The Ball Knowledge bump is gone (D-261). Cooldown is
+ * absent until publishing exists.
+ */
 export function netScore(parts: {
   psychology: number;
   bucket: number;
   value: number;
   blockbuster: number;
-  ballKnowledge?: number;
 }): number {
-  return parts.psychology + parts.bucket + parts.value + parts.blockbuster + (parts.ballKnowledge ?? 0);
+  return (
+    parts.psychology +
+    NET_BUCKET_WEIGHT * parts.bucket +
+    NET_VALUE_WEIGHT * parts.value +
+    parts.blockbuster
+  );
 }
 
 export type RankedIdea = {
@@ -228,16 +255,24 @@ export type CarryoverHold = {
   /** Null when the slate never ranked it. */
   rank: number | null;
   published: boolean;
+  /** A scheduled or publishing row. Still on the clock, so it is not a miss. */
+  onClock?: boolean;
 };
 
 /**
  * Ideas that used a posting day, so they are not misses.
  * The bench (selected, rank past 3) stays out. A top-three idea that never
- * posted is left off this list and carries at its stored net.
+ * posted is left off this list and carries at its stored net. An idea that
+ * is already on the clock stays out too, so midnight does not pick it again
+ * while its slot is about to post.
  */
 export function heldFromCarryover(ideas: readonly CarryoverHold[]): string[] {
   return ideas
-    .filter((idea) => idea.selected && (idea.published || idea.rank == null || idea.rank > 3))
+    .filter(
+      (idea) =>
+        idea.onClock === true ||
+        (idea.selected && (idea.published || idea.rank == null || idea.rank > 3)),
+    )
     .map((idea) => idea.id);
 }
 

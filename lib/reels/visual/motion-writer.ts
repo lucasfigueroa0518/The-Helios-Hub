@@ -33,7 +33,7 @@ export const SUBMIT_MOTION_TOOL = 'submit_motion_prompt';
 const submitMotionTool: Anthropic.Tool = {
   name: SUBMIT_MOTION_TOOL,
   description:
-    'Submit the one Kling 3.0 image-to-video prompt for this still. Call once. Write the polarity plan first, then the prompt: the camera line, then motion only, timestamped from 0.0 through 8.0.',
+    'Submit the one Kling 2.5 Turbo image-to-video prompt for this still. Call once. Write the polarity plan first, then the prompt: the camera line, then motion only, timestamped from 0.0 through 10.0.',
   input_schema: {
     type: 'object',
     properties: {

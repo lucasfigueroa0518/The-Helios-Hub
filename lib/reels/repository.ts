@@ -12,7 +12,8 @@ import {
   STALE_RUN_MINUTES,
 } from '@/lib/reels/config';
 import { defaultProdSpendSince } from '@/lib/reels/analytics/rollups';
-import { KLING_USD_PER_CLIP } from '@/lib/reels/insights';
+import { klingClipUsdSql } from '@/lib/reels/insights';
+import { postgresJson, postgresText } from '@/lib/reels/postgres-text';
 import { monthStart } from '@/lib/reels/schedule';
 import type {
   Bucket,
@@ -258,21 +259,21 @@ export async function insertSource(input: InsertSourceInput): Promise<string | n
      RETURNING id`,
     [
       input.runId,
-      input.canonicalUrl,
-      input.headline,
-      input.body,
-      input.author,
-      input.byline,
+      postgresText(input.canonicalUrl),
+      postgresText(input.headline),
+      postgresText(input.body),
+      input.author == null ? null : postgresText(input.author),
+      input.byline == null ? null : postgresText(input.byline),
       input.sourceName,
       input.sourceType,
       input.adapterId,
       input.bucket,
       input.publishTime?.toISOString() ?? null,
       input.language,
-      JSON.stringify(input.engagement ?? {}),
-      input.mediaUrls ?? [],
-      input.citationUrls ?? [],
-      input.rawPayload === undefined ? null : JSON.stringify(input.rawPayload),
+      postgresJson(input.engagement ?? {}),
+      (input.mediaUrls ?? []).map(postgresText),
+      (input.citationUrls ?? []).map(postgresText),
+      input.rawPayload === undefined ? null : postgresJson(input.rawPayload),
       input.dropReason,
     ],
   );
@@ -296,7 +297,7 @@ export async function refreshEngagement(
          ORDER BY ingest_time DESC
          LIMIT 1
       )`,
-    [canonicalUrl, JSON.stringify(engagement)],
+    [canonicalUrl, postgresJson(engagement)],
   );
   return (rowCount ?? 0) > 0;
 }
@@ -915,8 +916,8 @@ export async function insertJevLog(input: {
       input.questionSetId,
       input.questionSetVersion,
       input.resolvedModel,
-      JSON.stringify(input.state),
-      JSON.stringify(input.answers),
+      postgresJson(input.state),
+      postgresJson(input.answers),
       input.inputTokens,
       input.sourceId ?? null,
       input.postIdeaId ?? null,
@@ -965,13 +966,13 @@ export async function monthToDateUsd(now = new Date()): Promise<number> {
       `SELECT COALESCE(sum(usd), 0)::text AS total FROM reels.cost_events WHERE created_at >= $1`,
       [from.toISOString()],
     ),
-    dbQuery<{ clips: number }>(
-      `SELECT count(*)::int AS clips FROM reels.video_jobs
+    dbQuery<{ usd: number }>(
+      `SELECT COALESCE(sum(${klingClipUsdSql('finished_at')}), 0)::float8 AS usd FROM reels.video_jobs
         WHERE higgsfield_job_id IS NOT NULL AND finished_at >= $1`,
       [from.toISOString()],
     ),
   ]);
-  return Number(ledger.rows[0]?.total ?? 0) + (kling.rows[0]?.clips ?? 0) * KLING_USD_PER_CLIP;
+  return Number(ledger.rows[0]?.total ?? 0) + Number(kling.rows[0]?.usd ?? 0);
 }
 
 export async function runCostUsd(runId: string): Promise<number> {

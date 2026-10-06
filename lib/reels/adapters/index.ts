@@ -6,6 +6,7 @@ import { markdownChangelogAdapter } from '@/lib/reels/adapters/markdown-changelo
 import { rssAdapter } from '@/lib/reels/adapters/rss-feed';
 import { tldr } from '@/lib/reels/adapters/tldr';
 import { claudeWebSearch } from '@/lib/reels/adapters/web-search';
+import { QUIET_SOURCE_DAYS } from '@/lib/reels/config';
 import type { Adapter } from '@/lib/reels/types';
 
 /**
@@ -66,6 +67,7 @@ export const ADAPTERS: Adapter[] = [
     type: 'B1',
     bucket: 'B',
     feedUrl: 'https://techcrunch.com/category/artificial-intelligence/feed/',
+    quietAfterDays: QUIET_SOURCE_DAYS,
   }),
   rssAdapter({
     id: 'ars-technica',
@@ -73,6 +75,7 @@ export const ADAPTERS: Adapter[] = [
     type: 'B1',
     bucket: 'B',
     feedUrl: 'https://arstechnica.com/ai/feed/',
+    quietAfterDays: QUIET_SOURCE_DAYS + 1,
   }),
   rssAdapter({
     id: '404-media',
@@ -80,6 +83,104 @@ export const ADAPTERS: Adapter[] = [
     type: 'B1',
     bucket: 'B',
     feedUrl: 'https://www.404media.co/rss/',
+    quietAfterDays: QUIET_SOURCE_DAYS + 1,
+  }),
+  // B1 — story sources (D-263): AI stories with people, a plot, and consequences.
+  // Each feed was probed live on 2026-10-06 and resolved full text for every
+  // sampled article. Wired and The Verge were left out under D-050 for
+  // paywalls; both now return full article text.
+  rssAdapter({
+    id: 'futurism',
+    name: 'Futurism',
+    type: 'B1',
+    bucket: 'B',
+    feedUrl: 'https://futurism.com/categories/ai-artificial-intelligence/feed',
+    quietAfterDays: QUIET_SOURCE_DAYS,
+  }),
+  rssAdapter({
+    id: 'the-verge-ai',
+    name: 'The Verge',
+    type: 'B1',
+    bucket: 'B',
+    feedUrl: 'https://www.theverge.com/rss/ai-artificial-intelligence/index.xml',
+    quietAfterDays: QUIET_SOURCE_DAYS,
+  }),
+  rssAdapter({
+    id: 'wired-ai',
+    name: 'Wired',
+    type: 'B1',
+    bucket: 'B',
+    feedUrl: 'https://www.wired.com/feed/tag/ai/latest/rss',
+    quietAfterDays: QUIET_SOURCE_DAYS + 2,
+  }),
+  // Reports of real AI incidents, linking to the original news article.
+  rssAdapter({
+    id: 'ai-incident-db',
+    name: 'AI Incident Database',
+    type: 'B1',
+    bucket: 'B',
+    feedUrl: 'https://incidentdatabase.ai/rss.xml',
+    quietAfterDays: QUIET_SOURCE_DAYS,
+  }),
+  // B1 — mainstream press (D-263): the AI stories everyone else is hearing about.
+  rssAdapter({
+    id: 'guardian-ai',
+    name: 'The Guardian',
+    type: 'B1',
+    bucket: 'B',
+    feedUrl: 'https://www.theguardian.com/technology/artificialintelligenceai/rss',
+    quietAfterDays: QUIET_SOURCE_DAYS,
+  }),
+  // The whole technology section; the ingest screen drops what is not about AI.
+  rssAdapter({
+    id: 'bbc-tech',
+    name: 'BBC News',
+    type: 'B1',
+    bucket: 'B',
+    feedUrl: 'https://feeds.bbci.co.uk/news/technology/rss.xml',
+    quietAfterDays: QUIET_SOURCE_DAYS,
+  }),
+  // B1 — story sources (D-270). Same bar as D-263, probed live 2026-10-06.
+  rssAdapter({
+    id: 'rest-of-world',
+    name: 'Rest of World',
+    type: 'B1',
+    bucket: 'B',
+    feedUrl: 'https://restofworld.org/feed/latest/',
+    quietAfterDays: QUIET_SOURCE_DAYS,
+  }),
+  rssAdapter({
+    id: 'nbc-tech',
+    name: 'NBC News',
+    type: 'B1',
+    bucket: 'B',
+    feedUrl: 'https://feeds.nbcnews.com/nbcnews/public/tech',
+    quietAfterDays: QUIET_SOURCE_DAYS,
+  }),
+  rssAdapter({
+    id: 'conversation-ai',
+    name: 'The Conversation',
+    type: 'B1',
+    bucket: 'B',
+    feedUrl: 'https://theconversation.com/us/topics/artificial-intelligence-ai-90/articles.atom',
+    quietAfterDays: QUIET_SOURCE_DAYS,
+  }),
+  // A few times a week, so a four-day gap is normal. Five days still names a dead feed.
+  rssAdapter({
+    id: 'big-technology',
+    name: 'Big Technology',
+    type: 'B1',
+    bucket: 'B',
+    feedUrl: 'https://www.bigtechnology.com/feed',
+    quietAfterDays: QUIET_SOURCE_DAYS + 2,
+  }),
+  rssAdapter({
+    id: 'cbs-tech',
+    name: 'CBS News',
+    type: 'B1',
+    bucket: 'B',
+    feedUrl: 'https://www.cbsnews.com/latest/rss/technology',
+    quietAfterDays: QUIET_SOURCE_DAYS,
   }),
   // B3 — company blogs, post-mortems, model cards
   rssAdapter({

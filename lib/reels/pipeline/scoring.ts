@@ -15,6 +15,7 @@ import {
 import { applyPass2, interpretPass1, type InterpretedScore } from '@/lib/reels/scoring/interpret';
 import { buildPass1State, buildPass2State } from '@/lib/reels/scoring/state';
 import { rerankSlate } from '@/lib/reels/locks';
+import { errorText, guardItem } from '@/lib/reels/pipeline/guard';
 import {
   insertSlate,
   listTimelyIdeas,
@@ -26,13 +27,17 @@ import {
 } from '@/lib/reels/scoring/store';
 
 export type ScoringSummary = {
-  slateId: string;
+  slateId: string | null;
   scored: number;
   selected: number;
   carryovers: number;
+  /** One idea threw. The rest of the slate is still scored. */
+  failures: string[];
 };
 
-export type RescoreSummary = ScoringSummary & {
+export type RescoreSummary = Omit<ScoringSummary, 'slateId'> & {
+  /** A rescore that returns has a new slate. An empty score set throws instead. */
+  slateId: string;
   /** New top 3, best first. */
   selectedIds: string[];
   failed: number;
@@ -109,12 +114,22 @@ export async function scoreRun(
 
   const material = await loadIdeaMaterial([...origins.keys()]);
   const interpreted = new Map<string, InterpretedScore>();
+  const failures: string[] = [];
 
   for (const idea of material) {
-    interpreted.set(idea.id, await scoreOneIdea(runId, jev, idea));
+    const headline = idea.members[0]?.headline ?? idea.id;
+    const failure = await guardItem(headline, async () => {
+      interpreted.set(idea.id, await scoreOneIdea(runId, jev, idea));
+    });
+    if (failure) failures.push(failure);
   }
 
-  const ranked: RankedIdea[] = material.map((idea) => {
+  const scoredMaterial = material.filter((idea) => interpreted.has(idea.id));
+  if (scoredMaterial.length === 0 && failures.length > 0) {
+    return { slateId: null, scored: 0, selected: 0, carryovers: 0, failures };
+  }
+
+  const ranked: RankedIdea[] = scoredMaterial.map((idea) => {
     const result = interpreted.get(idea.id);
     return {
       id: idea.id,
@@ -129,7 +144,7 @@ export async function scoreRun(
   const selected = new Set(selectTopThree(ranked).map((idea) => idea.id));
   const rankOf = new Map(order.map((idea, index) => [idea.id, index + 1]));
 
-  const scores: ScoreInsert[] = material.map((idea) => ({
+  const scores: ScoreInsert[] = scoredMaterial.map((idea) => ({
     postIdeaId: idea.id,
     origin: origins.get(idea.id) ?? 'timely',
     interpreted: interpreted.get(idea.id) as InterpretedScore,
@@ -151,6 +166,7 @@ export async function scoreRun(
     scored: scores.length,
     selected: selected.size,
     carryovers: scores.filter((score) => score.origin === 'carryover').length,
+    failures,
   };
 }
 
@@ -168,6 +184,7 @@ export async function rescoreIdeas(
   const material = await loadIdeaMaterial(ideas.map((idea) => idea.id));
   const originOf = new Map(ideas.map((idea) => [idea.id, idea.origin]));
   const interpreted = new Map<string, InterpretedScore>();
+  const failures: string[] = [];
   let failed = 0;
   let done = 0;
 
@@ -190,6 +207,7 @@ export async function rescoreIdeas(
       );
     } catch (error) {
       failed += 1;
+      failures.push(`${idea.members[0]?.headline ?? idea.id}: ${errorText(error)}`);
       console.log(
         JSON.stringify({
           ts: new Date().toISOString(),
@@ -247,6 +265,7 @@ export async function rescoreIdeas(
     carryovers: scores.filter((score) => score.origin === 'carryover').length,
     selectedIds: top.map((idea) => idea.id),
     failed,
+    failures,
   };
 }
 

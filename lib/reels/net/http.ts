@@ -31,7 +31,7 @@ export function isCloudflareChallenge(
   return (getHeader('cf-mitigated') ?? '').toLowerCase().includes('challenge');
 }
 
-type Http1Page = { status: number; body: string; finalUrl: string };
+type Http1Page = { status: number; body: string; finalUrl: string; contentType: string | null };
 
 function fetchOverHttp1(
   url: string,
@@ -54,7 +54,7 @@ function fetchOverHttp1(
     '-H',
     `Accept-Language: ${headers['accept-language'] ?? 'en-US,en;q=0.9'}`,
     '-w',
-    `${HTTP1_MARKER}%{http_code} %{url_effective}`,
+    `${HTTP1_MARKER}%{http_code}\n%{content_type}\n%{url_effective}`,
     url,
   ];
 
@@ -73,16 +73,19 @@ function fetchOverHttp1(
           reject(new Error(`curl did not report a status for ${url}`));
           return;
         }
-        const meta = stdout.slice(at + HTTP1_MARKER.length).trim().split(/\s+/);
-        const status = Number(meta[0]);
+        const meta = stdout.slice(at + HTTP1_MARKER.length).replace(/^\n/, '');
+        const [statusLine, contentTypeLine, ...urlLines] = meta.split('\n');
+        const status = Number(statusLine?.trim());
         if (!Number.isFinite(status)) {
           reject(new Error(`curl returned no status for ${url}`));
           return;
         }
+        const contentType = contentTypeLine?.trim() || null;
         resolve({
           status,
           body: stdout.slice(0, at),
-          finalUrl: meta.slice(1).join(' ') || url,
+          finalUrl: urlLines.join('\n').trim() || url,
+          contentType,
         });
       },
     );
@@ -111,11 +114,11 @@ async function recoverChallenge(
   headers: Record<string, string>,
   timeoutMs: number,
   signal?: AbortSignal,
-): Promise<{ status: number; body: string; finalUrl: string } | null> {
+): Promise<{ status: number; body: string; finalUrl: string; contentType: string | null } | null> {
   if (!isCloudflareChallenge(response.status, (name) => response.headers.get(name))) return null;
   await response.body?.cancel().catch(() => undefined);
   const page = await fetchOverHttp1(url, headers, timeoutMs, signal);
-  return { status: page.status, body: page.body, finalUrl: page.finalUrl };
+  return { status: page.status, body: page.body, finalUrl: page.finalUrl, contentType: page.contentType };
 }
 
 export type FetchTextOptions = {
@@ -177,7 +180,7 @@ export async function fetchJson<T>(url: string, options: FetchTextOptions = {}):
   return JSON.parse(text) as T;
 }
 
-export type FetchedPage = { html: string; finalUrl: string };
+export type FetchedPage = { html: string; finalUrl: string; contentType?: string | null };
 
 /**
  * Like `fetchText`, but reports where the request actually landed.
@@ -210,7 +213,7 @@ export async function fetchPageFollowingRedirects(
       const recovered = await recoverChallenge(response, url, headers, timeoutMs, options.signal);
       if (recovered) {
         if (recovered.status >= 200 && recovered.status < 300) {
-          return { html: recovered.body, finalUrl: recovered.finalUrl };
+          return { html: recovered.body, finalUrl: recovered.finalUrl, contentType: recovered.contentType };
         }
         throw new HttpError(recovered.status, url);
       }
@@ -219,7 +222,11 @@ export async function fetchPageFollowingRedirects(
         if (response.status < 500 && response.status !== 429) throw error;
         lastError = error;
       } else {
-        return { html: await response.text(), finalUrl: response.url || url };
+        return {
+          html: await response.text(),
+          finalUrl: response.url || url,
+          contentType: response.headers.get('content-type'),
+        };
       }
     } catch (error) {
       if (error instanceof HttpError && error.status < 500 && error.status !== 429) throw error;

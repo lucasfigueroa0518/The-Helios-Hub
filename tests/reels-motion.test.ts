@@ -8,7 +8,8 @@ import path from 'node:path';
 import type Anthropic from '@anthropic-ai/sdk';
 
 import { extractJobId, extractVideoUrl } from '@/lib/reels/visual/higgsfield/client';
-import { falErrorText, falKlingBody, ORANGE_HAND_NEGATIVE } from '@/lib/reels/visual/kling/api';
+import { KLING_CLIP_SECONDS } from '@/lib/reels/config';
+import { FAL_KLING_I2V, falErrorText, falKlingBody, ORANGE_HAND_NEGATIVE } from '@/lib/reels/visual/kling/api';
 import { klingArguments, pickKlingTool, type McpTool } from '@/lib/reels/visual/higgsfield/kling';
 import { newestLogin, storeLogin, usableAccessToken } from '@/lib/reels/visual/higgsfield/session';
 import type { Questions, SystemOneResult } from '@typesafe-ai/sdk';
@@ -35,7 +36,7 @@ const CAMERA = 'Camera: slow dolly in, already moving on the first frame, easing
 const SPANS = `0.0-0.5s: The haze in the upper beam is already drifting left at an easy pace.
 0.5-2.0s: The haze keeps drifting and slowing; the orange light at the top holds low and steady.
 2.0-3.5s: The orange light dips a touch, then the lock at the top releases in one slow turn.
-3.5-8.0s: The orange light swells quickly and settles slowly to a steady glow; the haze drifts on and settles last.`;
+3.5-10.0s: The orange light swells quickly and settles slowly to a steady glow; the haze drifts on and settles last.`;
 const GOOD = `${CAMERA}\n${SPANS}`;
 
 const KLING = parseMotionPrompt(GOOD, 'noir').text;
@@ -44,7 +45,9 @@ const PLAN = 'The dolly eases in and rests; the orange light gathers into the be
 describe('motion prompt', () => {
   it('keeps the system prompt ironclad and identical', () => {
     const text = motionWriterInstructions();
-    assert.match(text, /Kling 3\.0/);
+    assert.match(text, /Kling 2\.5 Turbo/);
+    assert.match(text, /10 seconds/);
+    assert.doesNotMatch(text, /\b8 seconds|through 8\.0/);
     assert.match(text, /0\.0-0\.5s/);
     assert.match(text, /ON_SCREEN_COPY/);
     assert.match(text, /sound off/i);
@@ -79,7 +82,7 @@ describe('motion prompt', () => {
     assert.equal(parsed.camera, 'in');
     assert.equal(parsed.cameraCurve, 'already moving on the first frame, easing gradually and coming to rest by 6.0s');
     assert.equal(parsed.spans[0]?.end, 0.5);
-    assert.equal(parsed.spans.at(-1)?.end, 8);
+    assert.equal(parsed.spans.at(-1)?.end, KLING_CLIP_SECONDS);
     assert.equal(parsed.polarity, null);
   });
 
@@ -136,7 +139,7 @@ describe('motion prompt', () => {
   });
 
   it('cuts a block too long for Kling and warns', () => {
-    const bloated = `${GOOD}\n8.0-8.0s: ${'The haze drifts. '.repeat(160)}`;
+    const bloated = `${GOOD}\n10.0-10.0s: ${'The haze drifts. '.repeat(160)}`;
     const parsed = parseMotionPrompt(bloated, 'noir');
     assert.ok(parsed.text.length <= 2500);
     assert.match(parsed.warnings.join(' '), /longer than 2500/);
@@ -340,7 +343,7 @@ describe('pinned Kling tool', () => {
     assert.equal(args.sound, 'off');
     assert.equal(args.multi_shots, false);
     assert.equal(args.enhance_prompt, false);
-    assert.equal(args.duration, 8);
+    assert.equal(args.duration, KLING_CLIP_SECONDS);
     assert.equal(args.image_url, 'https://example.com/bg.png');
     assert.equal('ON_SCREEN_COPY' in args, false);
   });
@@ -404,11 +407,13 @@ describe('Higgsfield login rotation', () => {
 });
 
 describe('Fal Kling image-to-video body', () => {
-  it('pins one 8 second Kling 3 standard clip with audio off', () => {
+  it('pins one 10 second Kling 2.5 Turbo standard clip', () => {
     const body = falKlingBody({ prompt: '0.0-0.5s: flicker', imageUrl: 'https://example.com/bg.png' });
-    assert.equal(body.duration, '8');
-    assert.equal(body.generate_audio, false);
-    assert.equal(body.start_image_url, 'https://example.com/bg.png');
+    // D-266: Kling 2.5 Turbo Standard takes 5 or 10 seconds and names the start frame image_url.
+    assert.equal(body.duration, '10');
+    assert.equal(body.image_url, 'https://example.com/bg.png');
+    assert.equal(body.start_image_url, undefined);
+    assert.equal(FAL_KLING_I2V, 'fal-ai/kling-video/v2.5-turbo/standard/image-to-video');
     assert.equal('multi_prompt' in body, false);
     assert.equal('ON_SCREEN_COPY' in body, false);
     assert.equal('negative_prompt' in body, false);

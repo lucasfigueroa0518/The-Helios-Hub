@@ -12,17 +12,18 @@ import { defineQuestionSet } from '@/lib/reels/jev/question-set';
  * TechCrunch plus the release notes in another.
  *
  * Code proposes the pairs; this asks whether to fuse them. Same story rule as
- * P-02 (STY-01 / D-051): one news event or disclosure, not one company.
+ * P-02 (STY-01 / D-051): one news event or disclosure, not one company. v2
+ * (D-265): a development caused by that event is the same story.
  */
 export const IDEA_MERGE = defineQuestionSet({
   id: 'idea-merge',
-  version: 'idea-merge-v1',
+  version: 'idea-merge-v2',
   questions: {
     sameEvent: noul(
-      'Group A and group B are each a set of sources already judged to cover one story. Are both groups covering the same specific news event or disclosure?',
+      'Group A and group B are each a set of sources already judged to cover one story. Are both groups covering the same specific news event or disclosure, or is one a direct development of the other?',
       {
-        true: 'Both groups are about one event: the same launch, release, paper, outage, lawsuit, acquisition, firing, policy change, or incident. Different outlets, a first-party post, and a discussion thread about that one event all belong together.',
-        false: 'They are about different events. Sharing a company, a person, a product line, or a model family is not enough. Two separate releases from the same vendor, or a launch and an unrelated lawsuit, are two stories.',
+        true: 'Both groups are about one story: the same launch, release, paper, outage, lawsuit, acquisition, firing, policy change, or incident, or a development that traces directly to that one event, such as a response to it, an apology for it, an inquiry or hearing about it, a ruling on it, or a fix for it. Different outlets, a first-party post, and a discussion thread all belong together.',
+        false: 'They are about different events. Sharing a company, a person, a product line, a model family, or a topic is not enough. Two separate releases from the same vendor, or a launch and an unrelated lawsuit, are two stories. A new event that is only about the same subject, rather than caused by the first, is a different story.',
       },
     ),
     action: choice(

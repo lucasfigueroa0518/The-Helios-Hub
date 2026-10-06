@@ -32,7 +32,7 @@ import { parseFeed } from '@/lib/reels/net/feed';
 import { decodeEntities, htmlToText, markdownToText, parsePage } from '@/lib/reels/net/html';
 import { canonicalizeUrl, isCloudflareChallenge } from '@/lib/reels/net/http';
 import { publishedSince } from '@/lib/reels/net/published';
-import { resolveAction } from '@/lib/reels/pipeline/grouping';
+import { resolveAction, resolveIdeaMerge, storedAction } from '@/lib/reels/pipeline/grouping';
 import { monthStart, nextRunAt, zoneOffsetMinutes } from '@/lib/reels/schedule';
 
 // ── Schedule (ING-01 / D-031) ────────────────────────────────────────────────
@@ -316,12 +316,29 @@ test('resolveAction leaves the source alone when the event match is weak', () =>
   assert.equal(resolveAction(0.55, { choice: 'merge', confidence: 0.99 }), 'leave');
 });
 
-test('resolveAction leaves the source alone when the relationship is uncertain', () => {
-  assert.equal(resolveAction(0.99, { choice: 'merge', confidence: 0.6 }), 'leave');
+test('D-265: unsure between merge and link still joins the same story, as a link', () => {
+  // A Flock duplicate scored 0.98 same-event and merge at 0.30, and was left out.
+  assert.equal(resolveAction(0.98, { choice: 'merge', confidence: 0.3 }), 'link');
+  assert.equal(resolveAction(0.95, { choice: 'link', confidence: 0.76 }), 'link');
 });
 
-test('resolveAction treats the escape option as leave', () => {
+test('resolveAction treats a confident escape option as leave, and an unsure one as a link', () => {
   assert.equal(resolveAction(0.99, { choice: 'unrelated', confidence: 0.99 }), 'leave');
+  assert.equal(resolveAction(0.99, { choice: 'unrelated', confidence: 0.5 }), 'link');
+});
+
+test('D-265: an old "leave" that was only a role tie reads as a link; overrides and real noes stand', () => {
+  assert.equal(storedAction({ action: 'leave', same_event_p: 0.98, confidence: 0.3, override: false }), 'link');
+  assert.equal(storedAction({ action: 'leave', same_event_p: 0.4, confidence: 0.3, override: false }), 'leave');
+  assert.equal(storedAction({ action: 'leave', same_event_p: 0.98, confidence: 0.3, override: true }), 'leave');
+  assert.equal(storedAction({ action: 'merge', same_event_p: 1, confidence: 1, override: false }), 'merge');
+});
+
+test('D-265: two ideas on the same story merge unless Jev is sure to keep them apart', () => {
+  assert.equal(resolveIdeaMerge(0.9, { choice: 'merge', confidence: 0.5 }), true);
+  assert.equal(resolveIdeaMerge(0.9, { choice: 'keep_separate', confidence: 0.6 }), true);
+  assert.equal(resolveIdeaMerge(0.9, { choice: 'keep_separate', confidence: 0.85 }), false);
+  assert.equal(resolveIdeaMerge(0.7, { choice: 'merge', confidence: 0.99 }), false);
 });
 
 test('the confidence bar sits exactly at the configured value', () => {

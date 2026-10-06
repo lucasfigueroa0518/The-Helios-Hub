@@ -1,6 +1,6 @@
 import { dbQuery } from '@/lib/db';
 import { MONTHLY_WATCH_USD, RUN_TIMEZONE } from '@/lib/reels/config';
-import { KLING_USD_PER_CLIP } from '@/lib/reels/insights';
+import { klingClipUsdSql } from '@/lib/reels/insights';
 import { monthToDateUsd, productionSpendSince } from '@/lib/reels/repository';
 import {
   ACTIVITY_COMPONENTS,
@@ -90,9 +90,9 @@ export async function loadCostPage(
           GROUP BY 1, 2, 3`,
         values,
       ),
-      dbQuery<{ day: string; clips: number }>(
+      dbQuery<{ day: string; clips: number; usd: number }>(
         `SELECT to_char((finished_at AT TIME ZONE '${RUN_TIMEZONE}')::date, 'YYYY-MM-DD') AS day,
-                count(*)::int AS clips
+                count(*)::int AS clips, sum(${klingClipUsdSql('finished_at')})::float8 AS usd
            FROM reels.video_jobs
           WHERE higgsfield_job_id IS NOT NULL AND ${on('finished_at')}
           GROUP BY 1`,
@@ -199,8 +199,8 @@ export async function loadCostPage(
          ) jobs`,
         values,
       ),
-      count(
-        `SELECT count(*)::int AS n FROM reels.video_jobs
+      money(
+        `SELECT COALESCE(sum(${klingClipUsdSql('finished_at')}), 0)::text AS n FROM reels.video_jobs
           WHERE status = 'failed' AND higgsfield_job_id IS NOT NULL AND ${on('finished_at')}`,
         values,
       ),
@@ -249,9 +249,9 @@ export async function loadCostPage(
       ),
     ]);
 
-  const klingUsd = klingDays.rows.reduce((sum, row) => sum + row.clips * KLING_USD_PER_CLIP, 0);
+  const klingUsd = klingDays.rows.reduce((sum, row) => sum + Number(row.usd), 0);
   const publishedKling = await money(
-    `SELECT (count(*) * ${KLING_USD_PER_CLIP})::text AS n
+    `SELECT COALESCE(sum(${klingClipUsdSql('v.finished_at')}), 0)::text AS n
        FROM reels.video_jobs v
        JOIN reels.published_status p ON p.post_idea_id = v.post_idea_id AND p.published
       WHERE v.higgsfield_job_id IS NOT NULL AND ${on('v.finished_at')}`,
@@ -265,7 +265,7 @@ export async function loadCostPage(
     usd: Number(row.usd),
   }));
   for (const day of klingDays.rows) {
-    rows.push({ day: day.day, vendor: 'fal', activity: 'video', usd: day.clips * KLING_USD_PER_CLIP });
+    rows.push({ day: day.day, vendor: 'fal', activity: 'video', usd: Number(day.usd) });
   }
 
   const copyCallUsd = groups.rows
@@ -297,7 +297,7 @@ export async function loadCostPage(
     publishedWithVideo,
     ideaProductionUsd: ideaProduction + klingUsd,
     publishedIdeaProductionUsd: publishedProduction + publishedKling,
-    failedJobUsd: failedJobs + failedKling * KLING_USD_PER_CLIP,
+    failedJobUsd: failedJobs + failedKling,
     unshippedCopyUsd: unshippedCopy,
   };
 

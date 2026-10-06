@@ -1,7 +1,7 @@
 import { KLING_CLIP_SECONDS } from '@/lib/reels/config';
 
-/** Kling 3.0 Standard on Fal. Duration is KLING_CLIP_SECONDS. */
-export const FAL_KLING_I2V = 'fal-ai/kling-video/v3/standard/image-to-video';
+/** D-266. Kling 2.5 Turbo Standard on Fal, the cheaper of 2.5 Turbo and 2.1 Standard. Duration is KLING_CLIP_SECONDS. */
+export const FAL_KLING_I2V = 'fal-ai/kling-video/v2.5-turbo/standard/image-to-video';
 
 const QUEUE_BASE = 'https://queue.fal.run';
 const POLL_MS = 5_000;
@@ -13,9 +13,8 @@ export type KlingClip = {
 };
 
 /**
- * Fal's Kling 3 image-to-video call. generate_audio defaults on, which bills
- * more and invents speech, so it is forced off. multi_prompt is omitted so
- * the clip stays one shot.
+ * Fal's Kling 2.5 Turbo image-to-video call. It has no audio and no
+ * multi-prompt, so the clip is one silent shot. The start frame is image_url.
  */
 /** D-203. Orange stills and clips must not grow a hand. */
 export const ORANGE_HAND_NEGATIVE =
@@ -24,9 +23,8 @@ export const ORANGE_HAND_NEGATIVE =
 export function falKlingBody(input: { prompt: string; imageUrl: string; negativePrompt?: string }): Record<string, unknown> {
   return {
     prompt: input.prompt,
-    start_image_url: input.imageUrl,
+    image_url: input.imageUrl,
     duration: String(KLING_CLIP_SECONDS),
-    generate_audio: false,
     cfg_scale: 0.5,
     ...(input.negativePrompt ? { negative_prompt: input.negativePrompt } : {}),
   };

@@ -1,3 +1,4 @@
+import { HF_PAPERS_NEW_PER_NIGHT, QUIET_SOURCE_DAYS } from '@/lib/reels/config';
 import { canonicalizeUrl, fetchJson } from '@/lib/reels/net/http';
 import { normalizeText } from '@/lib/reels/net/html';
 import type { Adapter, AdapterItem } from '@/lib/reels/types';
@@ -23,7 +24,8 @@ type DailyPaper = {
  * The abstract plus metadata counts as full text for papers (ING-06 follow-up /
  * D-067), so these never need the destination fetched and a failed PDF parse
  * cannot drop a paper. No upvote floor: engagement ranks, it does not gate
- * (ING-05 / D-034).
+ * (ING-05 / D-034). D-262: at most HF_PAPERS_NEW_PER_NIGHT new papers a night,
+ * most upvoted first. Papers were about 40% of ideas and 1 of 18 reels.
  */
 export const hfDailyPapers: Adapter = {
   id: 'hf-daily-papers',
@@ -31,6 +33,8 @@ export const hfDailyPapers: Adapter = {
   type: 'A3',
   bucket: 'A',
   kind: 'ranked',
+  newItemCap: HF_PAPERS_NEW_PER_NIGHT,
+  quietAfterDays: QUIET_SOURCE_DAYS,
 
   async fetchItems({ signal }) {
     const papers = await fetchJson<DailyPaper[]>(

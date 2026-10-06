@@ -30,6 +30,8 @@ import { normalizeJevScore, type BucketId } from '@/lib/reels/scoring/decide';
 
 export const COPY_CALLS_PER_IDEA = 2;
 export const COPY_REWRITE_CALLS = 1;
+/** Iteration round 5: blind polish passes after the rewrite, each only while nothing has passed. */
+export const COPY_POLISH_PASSES = 2;
 export const COMPREHENSION_GATE = 0.75;
 export const STAKE_GATE = 0.75;
 /** D-252. Plain-read gap inside which nearest misses are picked on loop, care, and reward. */
@@ -318,6 +320,18 @@ export type CopyRewriteLine = {
   scores: { plain: number; stake: number; loop: number; care: number; reward: number; payoff?: number | null };
   sameStory: boolean;
 };
+
+/**
+ * Iteration round 4 (copy-caption-v22). The near misses to build on: in-range
+ * lines first, then the highest gate (the weaker of plain or payoff and stake).
+ * The writer sees the lines only, never the scores or the order's reason.
+ */
+export function polishLines(lines: readonly CopyVariantLine[], count = 4): CopyRewriteLine[] {
+  const gate = (line: CopyRewriteLine) => Math.min(line.scores.payoff ?? line.scores.plain, line.scores.stake);
+  return rewriteLines(lines)
+    .sort((a, b) => Number(b.inRange) - Number(a.inRange) || gate(b) - gate(a))
+    .slice(0, count);
+}
 
 export function rewriteLines(lines: readonly CopyVariantLine[]): CopyRewriteLine[] {
   return lines.flatMap((line) => {

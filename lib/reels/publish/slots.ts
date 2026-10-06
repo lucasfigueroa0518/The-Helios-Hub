@@ -132,6 +132,12 @@ export function slotKey(nyDate: string, slot: SlotId): string {
   return `${nyDate}:${slot}`;
 }
 
+/** One reel per window still open, and never more than the night's cap. None when the day is over. */
+export function reelsForOpenWindows(openWindows: number, cap: number): number {
+  if (openWindows < 1 || cap < 1) return 0;
+  return Math.min(cap, openWindows);
+}
+
 /** Uniform index in `0 .. count-1`. `crypto.randomInt` is the unbiased integer draw. */
 export function uniformIndex(count: number): number {
   if (count < 1) throw new Error('A slot has no minutes.');

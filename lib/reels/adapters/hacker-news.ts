@@ -1,4 +1,4 @@
-import { ARTICLE_FEED_CAP } from '@/lib/reels/config';
+import { ARTICLE_FEED_CAP, QUIET_SOURCE_DAYS } from '@/lib/reels/config';
 import { canonicalizeUrl, fetchJson } from '@/lib/reels/net/http';
 import { htmlToText } from '@/lib/reels/net/html';
 import type { Adapter, AdapterItem } from '@/lib/reels/types';
@@ -38,6 +38,7 @@ export const hackerNews: Adapter = {
   type: 'A2',
   bucket: 'A',
   kind: 'ranked',
+  quietAfterDays: QUIET_SOURCE_DAYS,
 
   async fetchItems({ signal }) {
     const [frontPage, showHn] = await Promise.all([

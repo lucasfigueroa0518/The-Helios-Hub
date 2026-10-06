@@ -9,6 +9,7 @@ import { isPostingRank } from '@/lib/reels/publish/schedule';
 import {
   addCalendarDays,
   chooseSlot,
+  reelsForOpenWindows,
   slotKey,
   slotMinuteCount,
   slotMinuteInstant,
@@ -84,4 +85,10 @@ test('only ranks 1 to 3 can be put on the clock', () => {
 test('calendar days do not drift across a 24-hour add', () => {
   assert.equal(addCalendarDays('2026-09-29', 1), '2026-09-30');
   assert.equal(addCalendarDays('2026-03-08', 1), '2026-03-09');
+});
+
+test('a night renders one reel per window still open, and none after the day is over', () => {
+  assert.equal(reelsForOpenWindows(3, 3), 3);
+  assert.equal(reelsForOpenWindows(1, 3), 1);
+  assert.equal(reelsForOpenWindows(0, 3), 0);
 });

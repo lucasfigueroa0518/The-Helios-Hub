@@ -1,7 +1,9 @@
 /**
  * Minimal readability pass. Code strips chrome; Jev makes the keep/drop
- * judgment afterwards (CLN-01 / D-047). Deliberately dependency-free.
+ * judgment afterwards (CLN-01 / D-047). No readability library.
  */
+
+import { postgresText } from '@/lib/reels/postgres-text';
 
 const NAMED_ENTITIES: Record<string, string> = {
   amp: '&',
@@ -59,15 +61,17 @@ export function htmlToText(html: string): string {
 }
 
 export function normalizeText(input: string): string {
-  return input
-    .replace(/\r\n?/g, '\n')
-    .replace(/[\t\u00a0]+/g, ' ')
-    .replace(/ {2,}/g, ' ')
-    .split('\n')
-    .map((line) => line.trim())
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+  return postgresText(
+    input
+      .replace(/\r\n?/g, '\n')
+      .replace(/[\t\u00a0]+/g, ' ')
+      .replace(/ {2,}/g, ' ')
+      .split('\n')
+      .map((line) => line.trim())
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim(),
+  );
 }
 
 /** Prefer the article container when the page marks one. */

@@ -10,6 +10,7 @@ import {
   PLANTED_INSTRUCTION_BAR,
   RANKED_REPEAT_DAYS,
 } from '@/lib/reels/config';
+import { isNonArticle } from '@/lib/reels/net/document';
 import { looksLikeTeaser } from '@/lib/reels/net/teaser';
 import { INGEST_FILTER } from '@/lib/reels/jev/questions/ingest-filter';
 import { PLANTED_INSTRUCTION } from '@/lib/reels/jev/questions/planted-instruction';
@@ -21,6 +22,7 @@ import {
   fetchPageFollowingRedirects,
   type FetchedPage,
 } from '@/lib/reels/net/http';
+import { noteItemFailure } from '@/lib/reels/pipeline/guard';
 import {
   findFingerprints,
   urlsWithOnlyFailedFetches,
@@ -48,6 +50,7 @@ const VISIBLE_DROPS: ReadonlySet<DropReason> = new Set([
   'no_full_text',
   'teaser',
   'fetch_failed',
+  'not_article',
   'off_topic',
   'junk',
   'non_english',
@@ -117,45 +120,57 @@ export async function ingestAdapter(
     urlsWithOnlyFailedFetches(urls),
   ]);
 
-  for (const item of kept) {
+  const isRepeat = (item: AdapterItem): boolean => {
     const url = canonicalizeUrl(item.canonicalUrl);
     const firstSeen = fingerprints.get(url);
     const seenBeforeTonight = firstSeen != null && firstSeen < options.runStartedAt;
     const withinWindow =
       firstSeen != null &&
       options.now.getTime() - firstSeen.getTime() < RANKED_REPEAT_DAYS * 86_400_000;
+    return seenBeforeTonight && withinWindow && !item.allowRepeat && !failedFetches.has(url);
+  };
+  const capped = capNewItems(adapter, kept, isRepeat);
+  result.dropped += capped.overflow;
 
-    if (seenBeforeTonight && withinWindow && !item.allowRepeat && !failedFetches.has(url)) {
-      // A ranked item still on the list refreshes its signals; the body stays
-      // as first stored (ING-02 / ING-09 / D-032).
-      if (adapter.kind === 'ranked' && item.engagement) {
-        const updated = await refreshEngagement(url, item.engagement);
-        if (updated) result.refreshed += 1;
-      } else {
-        result.dropped += 1;
+  for (const item of capped.kept) {
+    try {
+      const url = canonicalizeUrl(item.canonicalUrl);
+      if (isRepeat(item)) {
+        // A ranked item still on the list refreshes its signals; the body stays
+        // as first stored (ING-02 / ING-09 / D-032).
+        if (adapter.kind === 'ranked' && item.engagement) {
+          const updated = await refreshEngagement(url, item.engagement);
+          if (updated) result.refreshed += 1;
+        } else {
+          result.dropped += 1;
+        }
+        continue;
       }
-      continue;
+
+      const resolved = await resolveBody(item, deps, options.signal);
+      const dropReason =
+        resolved.dropReason ?? (await screen(item, resolved.body, deps, options));
+
+      // A tracking link is a different URL for every recipient, so the article
+      // it points at is the real identity. Fingerprint both: the destination so
+      // the item dedupes, the original so we do not re-follow it tomorrow.
+      const storedUrl = resolved.resolvedUrl ? canonicalizeUrl(resolved.resolvedUrl) : url;
+
+      await store(adapter, item, storedUrl, resolved, dropReason, options);
+      // A failed read must not block the next night (D-032). Other drops are real
+      // decisions and stay fingerprinted.
+      if (dropReason !== 'fetch_failed') {
+        await touchFingerprint(storedUrl, adapter.id);
+        if (storedUrl !== url) await touchFingerprint(url, adapter.id);
+      }
+
+      if (dropReason) result.dropped += 1;
+      else result.ingested += 1;
+    } catch (error) {
+      result.dropped += 1;
+      const failure = noteItemFailure(item.headline, error);
+      result.itemErrors = [...(result.itemErrors ?? []), failure];
     }
-
-    const resolved = await resolveBody(item, deps, options.signal);
-    const dropReason =
-      resolved.dropReason ?? (await screen(item, resolved.body, deps, options));
-
-    // A tracking link is a different URL for every recipient, so the article
-    // it points at is the real identity. Fingerprint both: the destination so
-    // the item dedupes, the original so we do not re-follow it tomorrow.
-    const storedUrl = resolved.resolvedUrl ? canonicalizeUrl(resolved.resolvedUrl) : url;
-
-    await store(adapter, item, storedUrl, resolved, dropReason, options);
-    // A failed read must not block the next night (D-032). Other drops are real
-    // decisions and stay fingerprinted.
-    if (dropReason !== 'fetch_failed') {
-      await touchFingerprint(storedUrl, adapter.id);
-      if (storedUrl !== url) await touchFingerprint(url, adapter.id);
-    }
-
-    if (dropReason) result.dropped += 1;
-    else result.ingested += 1;
   }
 
   await markWatermarkSuccess(adapter.id, options.now);
@@ -197,6 +212,30 @@ export function applyCap(
   });
 
   return { kept: ordered.slice(0, cap), overflow: ordered.length - cap };
+}
+
+/**
+ * D-262. A ranked list with a new-item cap keeps every repeat (they only
+ * refresh signals) and the `newItemCap` new items with the most engagement,
+ * the list's own order breaking ties.
+ */
+export function capNewItems(
+  adapter: Adapter,
+  items: AdapterItem[],
+  isRepeat: (item: AdapterItem) => boolean,
+): { kept: AdapterItem[]; overflow: number } {
+  const cap = adapter.newItemCap;
+  if (adapter.kind !== 'ranked' || cap == null) return { kept: items, overflow: 0 };
+  const fresh = items
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => !isRepeat(item))
+    .sort((a, b) => engagementScore(b.item) - engagementScore(a.item) || a.index - b.index);
+  if (fresh.length <= cap) return { kept: items, overflow: 0 };
+  const allowed = new Set(fresh.slice(0, cap).map(({ item }) => item));
+  return {
+    kept: items.filter((item) => isRepeat(item) || allowed.has(item)),
+    overflow: fresh.length - cap,
+  };
 }
 
 function engagementScore(item: AdapterItem): number {
@@ -243,6 +282,12 @@ export async function resolveBody(
   }
 
   const target = item.destinationUrl ?? item.canonicalUrl;
+  // A handbook PDF, an image, or an archive is not an article. Skip it before
+  // the download when the URL already says so (D-036).
+  if (isNonArticle({ url: target })) {
+    return { ...base, dropReason: 'not_article' };
+  }
+
   let fetched: FetchedPage;
   try {
     const fetchPage =
@@ -250,6 +295,10 @@ export async function resolveBody(
     fetched = await fetchPage(target, signal);
   } catch {
     return { ...base, dropReason: 'fetch_failed' };
+  }
+
+  if (isNonArticle({ contentType: fetched.contentType, url: fetched.finalUrl, body: fetched.html })) {
+    return { ...base, dropReason: 'not_article', resolvedUrl: fetched.finalUrl };
   }
 
   const page = parsePage(fetched.html);
@@ -281,7 +330,7 @@ export async function resolveBody(
  * item" is enforced by only dropping on a decisive yes. Anything in the middle
  * stays in the pool.
  */
-async function screen(
+export async function screen(
   item: AdapterItem,
   body: string,
   deps: IngestDeps,

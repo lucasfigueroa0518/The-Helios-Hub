@@ -21,6 +21,7 @@ import {
 import { buildPass1State, excerptWords } from '@/lib/reels/scoring/state';
 import {
   blockbusterBonus,
+  boostedEntertainment,
   candidateOrigins,
   carryoverMisses,
   heldFromCarryover,
@@ -28,6 +29,7 @@ import {
   isPreviousNyDay,
   isSameNyDay,
   netScore,
+  tieredBlockbuster,
   normalizeJevScore,
   openBuckets,
   pickBucket,
@@ -133,21 +135,29 @@ test('bucket ties break by psychology, then confidence, then spec order', () => 
   assert.equal(pickBucket([], frameworkScores, []), null);
 });
 
-test('value takes the higher score and blockbuster does not stack', () => {
-  assert.equal(valueTerm(0.4, 0.7), 0.7);
+test('value takes the highest of three scores and blockbuster does not stack (D-255)', () => {
+  assert.equal(valueTerm(0.4, 0.7, 0.55), 0.7);
   assert.equal(blockbusterBonus({ frontierDrop: 0.8, company: 0.99, person: 0.99 }), 0.1);
   assert.equal(blockbusterBonus({ frontierDrop: 0.79, company: 0.79, person: 0.79 }), 0);
   const net = netScore({ psychology: 0.8, bucket: 0.7, value: 0.6, blockbuster: 0.1 });
-  assert.ok(Math.abs(net - 2.2) < 1e-9);
+  assert.ok(Math.abs(net - (0.8 + 0.35 + 1.2 + 0.1)) < 1e-9, 'half the bucket, twice the value (D-253)');
+});
+
+test('the blockbuster bonus doubles only when value clears 0.70 (D-254)', () => {
+  assert.equal(tieredBlockbuster(0.1, 0.7), 0.2);
+  assert.equal(tieredBlockbuster(0.1, 0.69), 0.1);
+  assert.equal(tieredBlockbuster(0, 1), 0);
 });
 
 test('a known name breaks a near-tie but cannot jump a story one level better (D-217)', () => {
   assert.equal(BLOCKBUSTER_BONUS, 0.1);
   const oneLevel = 1 / SCORE_TOP_LEVEL;
   assert.ok(BLOCKBUSTER_BONUS < oneLevel / 2);
-  const known = netScore({ psychology: 0.75, bucket: 0.75, value: 0.75, blockbuster: blockbusterBonus({ frontierDrop: 0, company: 0.95, person: 0 }) });
-  const better = netScore({ psychology: 0.75 + oneLevel, bucket: 0.75, value: 0.75, blockbuster: 0 });
-  assert.ok(better > known);
+  const known = netScore({ psychology: 0.75, bucket: 0.75, value: 0.75, blockbuster: tieredBlockbuster(blockbusterBonus({ frontierDrop: 0, company: 0.95, person: 0 }), 0.75) });
+  assert.ok(netScore({ psychology: 0.75 + oneLevel, bucket: 0.75, value: 0.75, blockbuster: 0 }) > known, 'one psychology level');
+  assert.ok(netScore({ psychology: 0.75, bucket: 0.75, value: 0.75 + oneLevel, blockbuster: 0 }) > known, 'one value level');
+  // D-253, D-254: at half weight, one bucket-fit level (0.125) no longer outweighs the 0.20 bonus.
+  assert.ok(netScore({ psychology: 0.75, bucket: 0.75 + oneLevel, value: 0.75, blockbuster: 0 }) < known);
 });
 
 test('the slate is the three highest nets, and confidence does not rerank them', () => {
@@ -282,6 +292,14 @@ test('a top-three reel that never posted carries, and the bench does not', () =>
   assert.equal(misses.includes('plain-miss'), true);
 });
 
+test('an idea already on the clock is not a miss, even when it has not posted', () => {
+  const held = heldFromCarryover([
+    { id: 'waiting', selected: true, rank: 1, published: false, onClock: true },
+    { id: 'open', selected: true, rank: 2, published: false, onClock: false },
+  ]);
+  assert.deepEqual(held, ['waiting']);
+});
+
 test('carryover looks at the previous New York day, not the same day or an older one', () => {
   // 05:00 UTC is 1:00 AM EDT. 15:00 UTC the same date is 11:00 AM EDT.
   const night = new Date('2026-09-22T05:00:00Z');
@@ -306,13 +324,14 @@ test('every scoring question uses the same five-level scale', () => {
     assert.equal(question.criteria.length, SCORE_TOP_LEVEL + 1);
   }
   assert.equal(Object.keys(SCORING_PASS_1.questions).length, 12);
-  assert.equal(Object.keys(SCORING_PASS_2.questions).length, 2);
+  assert.equal(Object.keys(SCORING_PASS_2.questions).length, 3);
 });
 
 test('value needs a viewer stake, and a Callout needs something the viewer chooses (D-218)', () => {
-  for (const id of ['knowledge', 'entertainment'] as const) {
+  for (const id of ['useful', 'knowledge', 'entertainment'] as const) {
     const wording = JSON.stringify(SCORING_PASS_2.questions[id]);
-    assert.match(wording, /one plain sentence about their own life/, id);
+    assert.match(wording, /one plain sentence about the viewer's money, safety, health, work, or tools/, id);
+    assert.match(wording, /A model, a benchmark, or a lab test is not a person/, id);
     assert.match(wording, /stays at Workable at most/, id);
   }
   const callout = JSON.stringify(SCORING_PASS_1.questions.theCallout);
@@ -322,8 +341,8 @@ test('value needs a viewer stake, and a Callout needs something the viewer choos
 });
 
 test('scoring judges for the AI-curious viewer with a builder minority (D-206)', () => {
-  assert.equal(SCORING_PASS_1.version, 'scoring-pass1-v3');
-  assert.equal(SCORING_PASS_2.version, 'scoring-pass2-v3');
+  assert.equal(SCORING_PASS_1.version, 'scoring-pass1-v4');
+  assert.equal(SCORING_PASS_2.version, 'scoring-pass2-v4');
   const wording = JSON.stringify([SCORING_PASS_1.questions, SCORING_PASS_2.questions]);
   assert.match(wording, /curious about AI/);
   assert.match(wording, /About one in seven builds with AI/);
@@ -358,28 +377,47 @@ test('pass 1 keeps a strong curiosity fit and pass 2 adds the higher value', () 
   assert.equal(first.net, null);
 
   const second = applyPass2(first, {
-    knowledge: { score: 2, confidence: 0.7 },
-    entertainment: { score: 4, confidence: 0.7 },
+    useful: { score: 1, confidence: 0.7 },
+    knowledge: { score: 3, confidence: 0.7 },
+    entertainment: { score: 2, confidence: 0.7 },
   });
-  assert.equal(second.value, 1);
-  assert.equal(second.ballKnowledge, 0.08);
-  assert.equal(second.net, 0.75 + 0.75 + 1 + 0.08);
+  assert.equal(second.value, 0.75);
+  assert.equal(second.entertainmentBoosted, false);
+  assert.equal(second.ballKnowledge, undefined);
+  assert.equal(second.net, 0.75 + 0.5 * 0.75 + 2 * 0.75);
 });
 
-test('the ball knowledge bump is only on a ball knowledge story', () => {
-  const saga = applyPass2(
-    interpretPass1(pass1({
-      ballKnowledge: { score: 1, confidence: 0.8 },
-      theSaga: { score: 4, confidence: 0.9 },
-    })),
-    {
-      knowledge: { score: 2, confidence: 0.7 },
-      entertainment: { score: 4, confidence: 0.7 },
-    },
-  );
+test('D-261: no Ball Knowledge bump; a Ball Knowledge story and a Saga with the same scores tie', () => {
+  const answers = {
+    useful: { score: 0, confidence: 0.7 },
+    knowledge: { score: 3, confidence: 0.7 },
+    entertainment: { score: 1, confidence: 0.7 },
+  };
+  const bk = applyPass2(interpretPass1(pass1({ theSaga: { score: 1, confidence: 0.8 } })), answers);
+  const saga = applyPass2(interpretPass1(pass1({ ballKnowledge: { score: 1, confidence: 0.8 } })), answers);
+  assert.equal(bk.chosenBucket, 'ball_knowledge');
   assert.equal(saga.chosenBucket, 'the_saga');
-  assert.equal(saga.ballKnowledge, 0);
-  assert.equal(saga.net, 0.75 + 1 + 1);
+  assert.equal(bk.net, saga.net);
+});
+
+test('D-261: entertainment is boosted ×1.2 when it is the highest value score', () => {
+  const scored = applyPass2(interpretPass1(pass1()), {
+    useful: { score: 0, confidence: 0.7 },
+    knowledge: { score: 2, confidence: 0.7 },
+    entertainment: { score: 2, confidence: 0.7 },
+  });
+  assert.equal(scored.entertainment?.score, 0.5);
+  assert.equal(scored.entertainmentBoosted, true);
+  assert.ok(Math.abs((scored.value ?? 0) - 0.6) < 1e-9);
+});
+
+test('D-261: entertainment above 0.70 is boosted even when another value score is higher', () => {
+  assert.ok(Math.abs(boostedEntertainment(0.8, 0.9, 0.75) - 0.9) < 1e-9);
+  assert.ok(Math.abs(boostedEntertainment(0.2, 0.95, 0.8) - 0.96) < 1e-9);
+  assert.equal(boostedEntertainment(0.2, 0.95, 0.96 / 1.2 - 0.1), 0.96 / 1.2 - 0.1);
+  assert.equal(boostedEntertainment(0.2, 0.6, 0.5), 0.5);
+  assert.equal(boostedEntertainment(0.2, 0.8, 0.7), 0.7, "0.70 exactly is not over the bar");
+  assert.ok(Math.abs(boostedEntertainment(1, 0.5, 1) - 1.2) < 1e-9, 'value is not capped at 1');
 });
 
 test('a total miss stores psychology and does not invent a net', () => {
@@ -393,6 +431,7 @@ test('a total miss stores psychology and does not invent a net', () => {
   assert.equal(missed.chosenBucket, null);
   assert.equal(missed.net, null);
   assert.equal(applyPass2(missed, {
+    useful: { score: 4, confidence: 1 },
     knowledge: { score: 4, confidence: 1 },
     entertainment: { score: 4, confidence: 1 },
   }).net, null);
@@ -440,4 +479,28 @@ test('excerpts keep the primary long, supporting short, and duplicates headlined
   assert.equal(supporting.untrusted_content?.split(/\s+/).length, 20);
   assert.equal(duplicate.headline, 'Dup');
   assert.equal('untrusted_content' in duplicate, false);
+});
+
+test('pass 2 can win on useful, and a blue-chip story with high value gets 0.20 (D-254, D-255)', () => {
+  const first = interpretPass1(pass1({ blueChipCompany: { noul: 0.95 } }));
+  assert.equal(first.blockbuster, 0.1);
+  const high = applyPass2(first, {
+    useful: { score: 4, confidence: 0.9 },
+    knowledge: { score: 1, confidence: 0.9 },
+    entertainment: { score: 1, confidence: 0.9 },
+  });
+  assert.equal(high.value, 1);
+  assert.equal(high.blockbuster, 0.2);
+  const low = applyPass2(first, {
+    useful: { score: 2, confidence: 0.9 },
+    knowledge: { score: 2, confidence: 0.9 },
+    entertainment: { score: 2, confidence: 0.9 },
+  });
+  assert.equal(low.blockbuster, 0.1);
+});
+
+test('the top levels of every psychology and bucket score need people on the line (D-257)', () => {
+  for (const id of ['curiosity', 'arousal', 'identity', 'ballKnowledge', 'theNumber', 'theSaga', 'personalProfile', 'theWarning', 'theCallout'] as const) {
+    assert.match(JSON.stringify(SCORING_PASS_1.questions[id]), /behavior in a test or benchmark is at stake, the score stays at Workable at most/, id);
+  }
 });

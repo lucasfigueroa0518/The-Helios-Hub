@@ -1,12 +1,13 @@
 import {
-  ballKnowledgeBump,
   blockbusterBonus,
+  boostedEntertainment,
   netScore,
   normalizeJevScore,
   openBuckets,
   pickBucket,
   psychologyTerm,
   survivingFrameworks,
+  tieredBlockbuster,
   valueTerm,
   winningFramework,
   type BucketId,
@@ -34,6 +35,9 @@ export type Pass1Answers = {
 };
 
 export type Pass2Answers = {
+  /** D-255. Time or money saved or made, or something usable this week. */
+  useful: Scored;
+  /** D-255. Important to know. The key kept its name from v3. */
   knowledge: Scored;
   entertainment: Scored;
 };
@@ -56,13 +60,17 @@ export type InterpretedScore = {
   psychologyTerm: number | null;
   bucketScore: number | null;
   bucketConfidence: number | null;
+  /** Absent on rows scored before scoring-pass2-v4. */
+  useful?: Scored | null;
   knowledge: Scored | null;
   entertainment: Scored | null;
   value: number | null;
   blockbusterNouls: { frontierDrop: number; company: number; person: number };
   blockbuster: number;
-  /** 0.08 when the winning bucket is Ball Knowledge. 0 otherwise. */
-  ballKnowledge: number;
+  /** The Ball Knowledge bump, removed by D-261. Only rows scored before it carry one. */
+  ballKnowledge?: number;
+  /** D-261. True when the entertainment boost applied to value. */
+  entertainmentBoosted?: boolean;
   net: number | null;
 };
 
@@ -108,7 +116,6 @@ export function interpretPass1(answers: Pass1Answers): InterpretedScore {
     person: answers.blueChipPerson.noul,
   };
   const blockbuster = blockbusterBonus(blockbusterNouls);
-  const ballKnowledge = ballKnowledgeBump(chosenBucket);
 
   if (!chosenBucket) {
     return {
@@ -125,7 +132,6 @@ export function interpretPass1(answers: Pass1Answers): InterpretedScore {
       value: null,
       blockbusterNouls,
       blockbuster,
-      ballKnowledge,
       net: null,
     };
   }
@@ -145,7 +151,6 @@ export function interpretPass1(answers: Pass1Answers): InterpretedScore {
     value: null,
     blockbusterNouls,
     blockbuster,
-    ballKnowledge,
     net: null,
   };
 }
@@ -159,20 +164,25 @@ export function applyPass2(base: InterpretedScore, answers: Pass2Answers): Inter
   ) {
     return base;
   }
+  const useful = level(answers.useful);
   const knowledge = level(answers.knowledge);
   const entertainment = level(answers.entertainment);
-  const value = valueTerm(knowledge.score, entertainment.score);
+  const boosted = boostedEntertainment(useful.score, knowledge.score, entertainment.score);
+  const value = valueTerm(useful.score, knowledge.score, boosted);
+  const blockbuster = tieredBlockbuster(base.blockbuster, value);
   return {
     ...base,
+    useful,
     knowledge,
     entertainment,
     value,
+    entertainmentBoosted: boosted !== entertainment.score,
+    blockbuster,
     net: netScore({
       psychology: base.psychologyTerm,
       bucket: base.bucketScore,
       value,
-      blockbuster: base.blockbuster,
-      ballKnowledge: base.ballKnowledge,
+      blockbuster,
     }),
   };
 }

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+    <channel>
+        <title><![CDATA[BBC News]]></title>
+        <description><![CDATA[BBC News - Technology]]></description>
+        <link>https://www.bbc.co.uk/news/technology</link>
+        <image>
+            <url>https://news.bbcimg.co.uk/nol/shared/img/bbc_news_120x60.gif</url>
+            <title>BBC News</title>
+            <link>https://www.bbc.co.uk/news/technology</link>
+        </image>
+        <generator>RSS for Node</generator>
+        <lastBuildDate>Tue, 06 Oct 2026 14:09:08 GMT</lastBuildDate>
+        <atom:link href="https://feeds.bbci.co.uk/news/technology/rss.xml" rel="self" type="application/rss+xml"/>
+        <copyright><![CDATA[Copyright: (C) British Broadcasting Corporation, see https://www.bbc.co.uk/usingthebbc/terms-of-use/#15metadataandrssfeeds for terms and conditions of reuse.]]></copyright>
+        <language><![CDATA[en-gb]]></language>
+        <ttl>15</ttl>
+        <item>
+            <title><![CDATA[Italian PM files to trademark her voice against AI threats]]></title>
+            <description><![CDATA[Giorgia Meloni submitted a four-second audio to a EU agency in a bid to protect her voice from deepfakes.]]></description>
+            <link>https://www.bbc.co.uk/news/articles/ckly0g1ljq2yo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.co.uk/news/articles/ckly0g1ljq2yo#0</guid>
+            <pubDate>Tue, 06 Oct 2026 11:24:10 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/cc57/live/ceb63ea0-c15f-11f1-ae7b-cfc528a6c828.jpg"/>
+        </item>
+<item>
+            <title><![CDATA[ASOS app users receive push notifications apparently sent by hackers]]></title>
+            <description><![CDATA[Dozens of people appear to have received a strange message from the clothing and beauty store's app.]]></description>
+            <link>https://www.bbc.co.uk/news/articles/cj62ylzpr6d3o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.co.uk/news/articles/cj62ylzpr6d3o#0</guid>
+            <pubDate>Tue, 06 Oct 2026 10:37:50 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/384f/live/df1099d0-c169-11f1-a003-8be783290413.jpg"/>
+        </item>
+<item>
+            <title><![CDATA[Ofcom investigates Meta over Instagram Instants feature]]></title>
+            <description><![CDATA[The regulator said Instagram had not fully assessed risks posed by its Instants feature prior to launching it.]]></description>
+            <link>https://www.bbc.co.uk/news/articles/cq8jzyey8e2ro?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.co.uk/news/articles/cq8jzyey8e2ro#0</guid>
+            <pubDate>Tue, 06 Oct 2026 09:04:02 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/d1cb/live/8dbea280-c163-11f1-ae7b-cfc528a6c828.jpg"/>
+        </item>
+</channel></rss>

@@ -5,10 +5,20 @@ import {
   IDEA_MERGE_PASSES,
   SHORTLIST_LIMIT,
 } from '@/lib/reels/config';
+import {
+  contentCandidates,
+  contentIdeaPairs,
+  loadMatchPool,
+  loadPoolMembership,
+  unionCandidates,
+  unionIdeaPairs,
+  type MatchPool,
+} from '@/lib/reels/grouping/content-candidates';
 import { GROUPING } from '@/lib/reels/jev/questions/grouping';
 import { IDEA_MERGE } from '@/lib/reels/jev/questions/idea-merge';
 import type { JevRunner } from '@/lib/reels/jev/runner';
 import { excerpt } from '@/lib/reels/jev/state';
+import { errorText, guardItem } from '@/lib/reels/pipeline/guard';
 import {
   addMember,
   createPostIdea,
@@ -36,6 +46,8 @@ export type GroupingSummary = {
   comparisons: number;
   /** Whole ideas fused into another because they covered one event (D-071). */
   ideaMerges: number;
+  /** One source or pair threw. The rest of the night still groups. */
+  failures: string[];
 };
 
 export type GroupingDeps = { jev: JevRunner };
@@ -61,9 +73,16 @@ export async function groupRun(
     links: 0,
     comparisons: 0,
     ideaMerges: 0,
+    failures: [],
   };
 
   const newSources = await listUngroupedSources();
+  // D-265. One content pool per run. If it cannot load, grouping still runs
+  // on the headline shortlist alone, as it did before.
+  const pool = await loadMatchPool().catch((error) => {
+    summary.failures.push(`Content pool: ${errorText(error)}`);
+    return null;
+  });
 
   // Placing one source can pull an unplaced neighbour into an idea with it, so
   // the set is re-checked as we go rather than trusted from the first read.
@@ -71,10 +90,11 @@ export async function groupRun(
 
   for (const source of newSources) {
     if (placed.has(source.id)) continue;
-    await placeSource(source, runId, deps, summary, placed);
+    const failure = await guardItem(source.headline, () => placeSource(source, runId, deps, summary, placed, pool));
+    if (failure) summary.failures.push(failure);
   }
 
-  summary.ideaMerges = await mergeSameEventIdeas(runId, deps, summary);
+  summary.ideaMerges = await mergeSameEventIdeas(runId, deps, summary, pool);
 
   await resetTimelyFlags(runStartedAt);
   return summary;
@@ -92,36 +112,52 @@ async function mergeSameEventIdeas(
   runId: string,
   deps: GroupingDeps,
   summary: GroupingSummary,
+  pool: MatchPool | null,
 ): Promise<number> {
   let merged = 0;
 
   for (let pass = 0; pass < IDEA_MERGE_PASSES; pass += 1) {
-    const candidates = await shortlistIdeaMerges();
+    // D-265. Headline pairs plus pairs whose stories overlap in content.
+    const candidates = unionIdeaPairs(
+      await shortlistIdeaMerges(),
+      pool ? contentIdeaPairs(pool, await loadPoolMembership(pool)) : [],
+    );
     let mergedThisPass = 0;
 
     for (const candidate of candidates) {
-      const [left, right] = await Promise.all([
-        summarizeIdea(candidate.left_id),
-        summarizeIdea(candidate.right_id),
-      ]);
-      // A merge earlier in this pass may have already absorbed one of them.
-      if (!left || !right || !left.primary_url || !right.primary_url) continue;
-
-      const stored = await findDecision(left.primary_url, right.primary_url);
-      if (stored) {
-        if (stored.action === 'leave') continue;
-      } else if (!(await askIdeaMerge(left, right, runId, deps, summary))) {
+      let left: IdeaSummary | null;
+      let right: IdeaSummary | null;
+      try {
+        [left, right] = await Promise.all([
+          summarizeIdea(candidate.left_id),
+          summarizeIdea(candidate.right_id),
+        ]);
+      } catch (error) {
+        summary.failures.push(errorText(error));
         continue;
       }
+      try {
+        // A merge earlier in this pass may have already absorbed one of them.
+        if (!left || !right || !left.primary_url || !right.primary_url) continue;
 
-      // Keep the older idea so a long-running story holds its identity.
-      const [target, absorbed] = left.member_count >= right.member_count
-        ? [left, right]
-        : [right, left];
+        const stored = await findDecision(left.primary_url, right.primary_url);
+        if (stored) {
+          if (storedAction(stored) === 'leave') continue;
+        } else if (!(await askIdeaMerge(left, right, runId, deps, summary))) {
+          continue;
+        }
 
-      await mergeIdeas(target.id, absorbed.id, runId, 'jev: same event as another idea');
-      merged += 1;
-      mergedThisPass += 1;
+        // Keep the older idea so a long-running story holds its identity.
+        const [target, absorbed] = left.member_count >= right.member_count
+          ? [left, right]
+          : [right, left];
+
+        await mergeIdeas(target.id, absorbed.id, runId, 'jev: same event as another idea');
+        merged += 1;
+        mergedThisPass += 1;
+      } catch (error) {
+        summary.failures.push(errorText(error));
+      }
     }
 
     if (mergedThisPass === 0) break;
@@ -157,10 +193,7 @@ async function askIdeaMerge(
     postIdeaId: left.id,
   });
 
-  const merge =
-    answers.sameEvent.noul >= HIGH_CONFIDENCE &&
-    answers.action.confidence >= HIGH_CONFIDENCE &&
-    answers.action.choice === 'merge';
+  const merge = resolveIdeaMerge(answers.sameEvent.noul, answers.action);
 
   await recordDecision({
     a: left.primary_url as string,
@@ -180,6 +213,7 @@ async function placeSource(
   deps: GroupingDeps,
   summary: GroupingSummary,
   placed: Set<string>,
+  pool: MatchPool | null = null,
 ): Promise<void> {
   const twin = await findUrlTwin(source.id, source.canonical_url);
   if (twin) {
@@ -200,7 +234,12 @@ async function placeSource(
     }
   }
 
-  const candidates = await shortlistCandidates(source.id, source.headline, SHORTLIST_LIMIT);
+  // D-265. The headline shortlist, plus the sources whose content overlaps
+  // most, including members of recently published ideas.
+  const candidates = unionCandidates(
+    await shortlistCandidates(source.id, source.headline, SHORTLIST_LIMIT),
+    pool ? await contentCandidates(pool, source) : [],
+  );
 
   // Score the whole shortlist rather than taking the first acceptable match.
   // Candidates are ordered by headline similarity, which is not the same as
@@ -253,8 +292,8 @@ async function decide(
   const stored = await findDecision(source.canonical_url, candidate.canonical_url);
   if (stored) {
     return {
-      action: stored.action,
-      strength: (stored.same_event_p ?? 0) * (stored.confidence ?? 0),
+      action: storedAction(stored),
+      strength: stored.same_event_p ?? 0,
     };
   }
 
@@ -298,23 +337,55 @@ async function decide(
     runId,
   });
 
-  return { action, strength: answers.sameEvent.noul * answers.relationship.confidence };
+  // D-265. Strength is how sure Jev is that it is the same story; merge or
+  // link only decides the member's role.
+  return { action, strength: answers.sameEvent.noul };
 }
 
 /**
- * GRP-03 / D-057: act only when both the same-event probability and the
- * relationship confidence clear the bar. Anything below leaves the source as
- * its own post idea, with no review flag (JEV-05 / D-029).
+ * GRP-03 / D-057, revised by D-265. The same-story probability decides
+ * whether the source joins; the relationship only decides its role. Being
+ * unsure between merge and link is not doubt that it is the same story, and
+ * the old rule threw those away: 15 of the 43 pairs Jev judged the same event
+ * at 0.8 or more, including a Flock duplicate at 0.98. A merge needs its own
+ * confidence; otherwise the source joins as a link. Only a confident
+ * "unrelated" overrides a same-story yes.
  */
 export function resolveAction(
   sameEventProbability: number,
   relationship: { choice: string; confidence: number },
 ): GroupingAction {
   if (sameEventProbability < HIGH_CONFIDENCE) return 'leave';
-  if (relationship.confidence < HIGH_CONFIDENCE) return 'leave';
-  if (relationship.choice === 'merge') return 'merge';
-  if (relationship.choice === 'link') return 'link';
-  return 'leave';
+  if (relationship.choice === 'unrelated' && relationship.confidence >= HIGH_CONFIDENCE) return 'leave';
+  if (relationship.choice === 'merge' && relationship.confidence >= HIGH_CONFIDENCE) return 'merge';
+  return 'link';
+}
+
+/**
+ * D-265. A decision stored under the old rule as "leave" with a same-story
+ * probability at the bar was a role tie, not a no. It reads as a link now.
+ * A human override always stands.
+ */
+export function storedAction(stored: {
+  action: GroupingAction;
+  same_event_p: number | null;
+  confidence: number | null;
+  override?: boolean | string | null;
+}): GroupingAction {
+  if (stored.override) return stored.action;
+  if (stored.action === 'leave' && (stored.same_event_p ?? 0) >= HIGH_CONFIDENCE && (stored.confidence ?? 0) < HIGH_CONFIDENCE) {
+    return 'link';
+  }
+  return stored.action;
+}
+
+/** D-265. Same rule for two ideas: the same story merges unless Jev is sure to keep them apart. */
+export function resolveIdeaMerge(
+  sameEventProbability: number,
+  action: { choice: string; confidence: number },
+): boolean {
+  if (sameEventProbability < HIGH_CONFIDENCE) return false;
+  return !(action.choice === 'keep_separate' && action.confidence >= HIGH_CONFIDENCE);
 }
 
 /**

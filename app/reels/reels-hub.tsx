@@ -18,6 +18,7 @@ import {
 
 import { Drawer, ReelVideo, Section } from '@/app/reels/ui';
 import { requestJson } from '@/lib/client-request';
+import { ENTERTAINMENT_BOOST, NET_BUCKET_WEIGHT, NET_VALUE_WEIGHT } from '@/lib/reels/config';
 import type { StoredCopyJob } from '@/lib/reels/copy/jobs';
 import { fullCaption } from '@/lib/reels/copy/report';
 import type { StoredCopy } from '@/lib/reels/copy/store';
@@ -201,23 +202,32 @@ function labels(score: StoredScore): { archetype: string | null; category: strin
   };
 }
 
-/** The addends of the net: winning framework, winning bucket, the higher value, blockbuster, and the Ball Knowledge bump when it applies. */
+/** The addends of the net: winning framework, winning bucket, the higher value, and blockbuster. Older rows also carry the retired Ball Knowledge bump. */
 function netParts(score: StoredScore): Array<{ label: string; value: string }> {
   if (score.net == null) return [];
   const parts: Array<{ label: string; value: string }> = [];
   const { archetype, category } = labels(score);
   if (category && score.psychology != null) parts.push({ label: category, value: score2(score.psychology) });
-  if (archetype && score.bucketScore != null) parts.push({ label: archetype, value: score2(score.bucketScore) });
+  // D-253: bucket fit counts half and value counts double, so the parts add up to the net.
+  if (archetype && score.bucketScore != null) {
+    parts.push({ label: `${archetype} ×${NET_BUCKET_WEIGHT}`, value: score2(NET_BUCKET_WEIGHT * score.bucketScore) });
+  }
   if (score.value != null) {
-    const knowledge = score.components.knowledge?.score ?? null;
-    const entertainment = score.components.entertainment?.score ?? null;
-    const label =
-      knowledge != null && (entertainment == null || knowledge >= entertainment) ? 'Knowledge' : 'Entertainment';
-    parts.push({ label, value: score2(score.value) });
+    // D-261: a boosted entertainment score competes at its boosted value.
+    const boost = score.components.entertainmentBoosted ? ENTERTAINMENT_BOOST : 1;
+    const entertainment = score.components.entertainment?.score;
+    const kinds: Array<[string, number | null]> = [
+      ['Useful', score.components.useful?.score ?? null],
+      ['Worth knowing', score.components.knowledge?.score ?? null],
+      [boost > 1 ? `Entertainment ×${ENTERTAINMENT_BOOST}` : 'Entertainment', entertainment == null ? null : entertainment * boost],
+    ];
+    const best = kinds.reduce((top, kind) => ((kind[1] ?? -1) > (top[1] ?? -1) ? kind : top));
+    parts.push({ label: `${best[0]} ×${NET_VALUE_WEIGHT}`, value: score2(NET_VALUE_WEIGHT * score.value) });
   }
   if (score.blockbuster > 0) parts.push({ label: 'Blockbuster', value: `+${score2(score.blockbuster)}` });
-  if (score.components.ballKnowledge > 0) {
-    parts.push({ label: 'Ball knowledge', value: `+${score2(score.components.ballKnowledge)}` });
+  // Only rows scored before D-261 carry the Ball Knowledge bump.
+  if ((score.components.ballKnowledge ?? 0) > 0) {
+    parts.push({ label: 'Ball knowledge', value: `+${score2(score.components.ballKnowledge ?? 0)}` });
   }
   return parts;
 }

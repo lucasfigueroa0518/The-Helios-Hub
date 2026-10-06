@@ -135,7 +135,7 @@ test('seeded prompt text carries none of the tells a rewrite most often leaves',
 
 test('the word count is stated as a hard constraint for the winning bucket', () => {
   const text = copyStrategySystem('the_saga', 'arousal');
-  assert.match(text, /20 to 32 words/);
+  assert.match(text, /14 to 32 words/);
   assert.match(text, /one screen/i);
   assert.match(text, /failed report/);
   assert.match(COPY_SKILL, /HARD CONSTRAINT/);
@@ -143,7 +143,7 @@ test('the word count is stated as a hard constraint for the winning bucket', () 
   assert.match(COPY_SKILL, /It asked a government website for spending data/);
   assert.match(COPY_SKILL, /already contains its line breaks/);
   assert.match(COPY_SKILL, /about two dozen characters/);
-  assert.match(COPY_SKILL, /Report two on-screen copies/);
+  assert.match(COPY_SKILL, /Report four on-screen copies/);
   assert.doesNotMatch(COPY_SKILL, /new screen/);
   const tool = REPORT_COPY_TOOL.input_schema.properties.on_screen_copies.description;
   assert.match(tool, /one screen/);
@@ -181,14 +181,25 @@ test('the constraint is on ideas, with the same list the Jev plain read uses (D-
 });
 
 test('the writer states a viewer stake, and both copies and the caption tell one story (D-213)', () => {
-  assert.match(COPY_SKILL, /write the viewer stake/);
+  assert.match(COPY_SKILL, /write the one you kept as the viewer stake/);
+  // D-259: three candidate stakes, weighed, the biggest the sources support kept.
+  assert.match(COPY_SKILL, /three candidate stakes from different angles/);
+  assert.match(COPY_SKILL, /never one bigger than they support/);
+  assert.match(COPY_SKILL, /Never cut who did what, or what happened\./);
+  assert.doesNotMatch(COPY_SKILL, /cut context before you cut the stake/);
+  // D-268: no repeated noun lists, no missing-context gap, figures and names serve the plain read.
+  assert.doesNotMatch(COPY_SKILL, /emails, photos/);
+  assert.doesNotMatch(FRAMEWORK_WRITING_LOGIC.curiosity.onScreen, /context missing/);
+  assert.match(FRAMEWORK_WRITING_LOGIC.curiosity.onScreen, /The gap is never the premise/);
+  assert.match(COPY_SKILL, /give the exact figure in the caption/);
+  assert.match(COPY_SKILL, /weigh the stake for the people in the story first/);
   assert.match(COPY_SKILL, /viewer_stake/);
   assert.match(COPY_SKILL, /a different first line and a different way in/);
   assert.match(COPY_SKILL, /It never opens on a second thread from the sources/);
   const properties = Object.keys(REPORT_COPY_TOOL.input_schema.properties);
   assert.ok(properties.indexOf('viewer_stake') < properties.indexOf('on_screen_copies'));
   assert.ok(REPORT_COPY_TOOL.input_schema.required.includes('viewer_stake'));
-  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v18');
+  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v27');
 });
 
 test('the pre-limit writer is preserved as a Threads candidate and stays off the reel path', () => {
@@ -286,20 +297,11 @@ test('the rewrite reuses every cached block and shows each score with its level 
   assert.deepEqual(rewrite.tools, draft.tools);
   assert.deepEqual(rewrite.messages[0].content[0], draft.messages[0].content[0]);
   const task = rewrite.messages[0].content[1].text;
-  assert.match(task, /did not clear the bar/);
-  assert.match(task, /Plain read at least 0\.75/);
-  assert.match(task, /Stake at least 0\.75/);
-  assert.match(task, /15 to 25 words/);
-  assert.match(task, /Words: 12, outside the range of 15 to 25\./);
-  assert.ok(task.includes(`Plain read 1.00. ${COPY_PICK_LEGENDS.plain[4]}`));
-  assert.ok(task.includes(`Stake 0.25. ${COPY_PICK_LEGENDS.stake[1]}`));
-  assert.ok(task.includes(`Reward 0.00. ${COPY_PICK_LEGENDS.reward[0]}`));
-  assert.match(task, /Same story as its caption's opening: no\./);
+  assert.match(task, /None of them is the one to post yet/);
+  assert.match(task, /Use them as material, not as drafts to edit/);
   assert.match(task, /Call report_copy once\. That call is the whole reply\./);
-  assert.match(task, /What a passing copy scores/);
-  assert.match(task, /A passing plain read sounds like this/);
-  assert.match(task, /A passing stake sounds like this/);
-  assert.match(task, /cannot rescue a copy under the bar/);
+  assert.doesNotMatch(task, /Plain read at least|Stake at least|What a passing copy scores|cannot rescue/, 'the rewrite is blind (round 3)');
+  assert.ok(!task.includes(COPY_PICK_LEGENDS.plain[4]));
   assert.doesNotMatch(draft.messages[0].content[1].text, /did not clear the bar/);
   assert.doesNotMatch(draft.messages[0].content[1].text, /What a passing copy scores/);
 });
@@ -330,8 +332,8 @@ test('a draft does not see Jev questions, and Ball Knowledge is graded on payoff
   const shown = [...prompt.system.map((block) => block.text), prompt.messages[0].content[1].text].join('\n');
   assert.equal(shown.includes(PAYOFF_QUESTION), false);
   assert.equal(shown.includes('How Jev scores'), false);
-  assert.match(shown, /Plain read at least 0\.75/);
-  assert.match(prompt.messages[0].content[1].text, /8 to 22 words/);
+  assert.doesNotMatch(shown, /Plain read at least 0\.75/, 'the rewrite is blind (round 3)');
+  assert.match(shown, /8 to 26 words/);
 });
 
 test('a rewrite block cannot be closed by the copy it quotes', () => {
@@ -566,4 +568,11 @@ test('a missing tool call names the stop reason and quotes the start of any text
   assert.match(chatty, /stop_reason: end_turn\./);
   assert.ok(chatty.includes(`"${'x'.repeat(MISSING_CALL_TEXT_CHARS)}`));
   assert.ok(!chatty.includes('x'.repeat(MISSING_CALL_TEXT_CHARS + 1)));
+});
+
+test('D-259: stake options are a required field reported before the viewer stake', () => {
+  const schema = REPORT_COPY_TOOL.input_schema as { properties: Record<string, unknown>; required: string[] };
+  const order = Object.keys(schema.properties);
+  assert.ok(order.indexOf('stake_options') < order.indexOf('viewer_stake'));
+  assert.ok(schema.required.includes('stake_options'));
 });

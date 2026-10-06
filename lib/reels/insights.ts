@@ -3,13 +3,22 @@ import { KLING_CLIP_SECONDS, RUN_TIMEZONE } from '@/lib/reels/config';
 import { monthStart } from '@/lib/reels/schedule';
 
 /**
- * Kling 3.0 Standard on Fal bills $0.084 per second of clip (D-103). Kling is
- * paid outside `reels.cost_events`, so its spend is counted from the video
- * jobs that reached Fal. Retries inside one job are not counted, so this is a
- * floor, not an invoice.
+ * Kling is paid outside `reels.cost_events`, so its spend is counted from the
+ * video jobs that reached Fal. Retries inside one job are not counted, so this
+ * is a floor, not an invoice. D-266: Kling 2.5 Turbo Standard bills $0.042 a
+ * second; a clip that finished before KLING_SWITCH_AT was Kling 3.0 Standard,
+ * 8 seconds at $0.084 (D-103), and keeps that price.
  */
-const KLING_USD_PER_SECOND = 0.084;
+const KLING_USD_PER_SECOND = 0.042;
 export const KLING_USD_PER_CLIP = KLING_USD_PER_SECOND * KLING_CLIP_SECONDS;
+export const KLING_V3_USD_PER_CLIP = 0.084 * 8;
+/** D-266. Midnight New York on the day the worker first ran Kling 2.5 Turbo. */
+export const KLING_SWITCH_AT = '2026-10-06T04:00:00.000Z';
+
+/** SQL for one clip's price, by when its job finished. */
+export function klingClipUsdSql(finishedAt: string): string {
+  return `(CASE WHEN ${finishedAt} >= '${KLING_SWITCH_AT}'::timestamptz THEN ${KLING_USD_PER_CLIP} ELSE ${KLING_V3_USD_PER_CLIP} END)`;
+}
 
 export type CostLine = { vendor: string; component: string; calls: number; usd: number };
 export type CostDay = { nyDate: string; ledgerUsd: number; klingUsd: number };
@@ -50,8 +59,9 @@ export async function loadReelsInsights(now = new Date()): Promise<ReelsInsights
         GROUP BY vendor, component ORDER BY usd DESC`,
       [since],
     ),
-    dbQuery<{ clips: number }>(
-      `SELECT count(*)::int AS clips FROM reels.video_jobs
+    dbQuery<{ clips: number; usd: number }>(
+      `SELECT count(*)::int AS clips, COALESCE(sum(${klingClipUsdSql('finished_at')}), 0)::float8 AS usd
+         FROM reels.video_jobs
         WHERE higgsfield_job_id IS NOT NULL AND finished_at >= $1`,
       [since],
     ),
@@ -64,8 +74,9 @@ export async function loadReelsInsights(now = new Date()): Promise<ReelsInsights
          FROM reels.cost_events WHERE created_at >= $1 GROUP BY 1`,
       [windowStart, RUN_TIMEZONE],
     ),
-    dbQuery<{ day: string; clips: number }>(
-      `SELECT to_char((finished_at AT TIME ZONE $2)::date, 'YYYY-MM-DD') AS day, count(*)::int AS clips
+    dbQuery<{ day: string; clips: number; usd: number }>(
+      `SELECT to_char((finished_at AT TIME ZONE $2)::date, 'YYYY-MM-DD') AS day, count(*)::int AS clips,
+              sum(${klingClipUsdSql('finished_at')})::float8 AS usd
          FROM reels.video_jobs
         WHERE higgsfield_job_id IS NOT NULL AND finished_at >= $1 GROUP BY 1`,
       [windowStart, RUN_TIMEZONE],
@@ -101,6 +112,7 @@ export async function loadReelsInsights(now = new Date()): Promise<ReelsInsights
   ]);
 
   const klingClips = kling.rows[0]?.clips ?? 0;
+  const klingUsd = Number(kling.rows[0]?.usd ?? 0);
   const ledgerTotal = lines.rows.reduce((sum, row) => sum + Number(row.usd), 0);
   const costLines: CostLine[] = lines.rows.map((row) => ({
     vendor: row.vendor,
@@ -109,26 +121,26 @@ export async function loadReelsInsights(now = new Date()): Promise<ReelsInsights
     usd: Number(row.usd),
   }));
   if (klingClips > 0) {
-    costLines.push({ vendor: 'fal', component: 'reel-video (Kling)', calls: klingClips, usd: klingClips * KLING_USD_PER_CLIP });
+    costLines.push({ vendor: 'fal', component: 'reel-video (Kling)', calls: klingClips, usd: klingUsd });
     costLines.sort((a, b) => b.usd - a.usd);
   }
 
   const ledgerByDay = new Map(ledgerDays.rows.map((row) => [row.day, Number(row.usd)]));
-  const klingByDay = new Map(klingDays.rows.map((row) => [row.day, row.clips]));
+  const klingByDay = new Map(klingDays.rows.map((row) => [row.day, Number(row.usd)]));
   const days: CostDay[] = [];
   for (let offset = DAYS - 1; offset >= 0; offset -= 1) {
     const day = nyDate(new Date(now.getTime() - offset * 86_400_000));
     days.push({
       nyDate: day,
       ledgerUsd: ledgerByDay.get(day) ?? 0,
-      klingUsd: (klingByDay.get(day) ?? 0) * KLING_USD_PER_CLIP,
+      klingUsd: klingByDay.get(day) ?? 0,
     });
   }
 
   return {
     costs: {
       lines: costLines,
-      monthToDateUsd: ledgerTotal + klingClips * KLING_USD_PER_CLIP,
+      monthToDateUsd: ledgerTotal + klingUsd,
       klingClips,
       reelsMade: reels.rows[0]?.reels ?? 0,
       days,

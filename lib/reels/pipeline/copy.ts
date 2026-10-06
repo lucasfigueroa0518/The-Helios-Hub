@@ -5,8 +5,10 @@ import { COPY_MODEL, FULL_STORY_CUE_ENABLED } from '@/lib/reels/config';
 import type { CopyInput } from '@/lib/reels/copy/assemble';
 import {
   COPY_CALLS_PER_IDEA,
+  COPY_POLISH_PASSES,
   buildCopyVariants,
   flattenCopyCalls,
+  polishLines,
   rewriteLines,
   type CopyLineJudgment,
   type CopyVariants,
@@ -339,6 +341,32 @@ export async function writeTargetCopy(
       drafts.push({ kind: 'rewrite', call: null, error: rewrite.error });
     }
     picked = buildCopyVariants(drafts, judgments, target.bucket);
+  }
+
+  /**
+   * Iteration rounds 4 and 5 (copy-caption-v22, v23). Still no pass: a blind
+   * polish call writes close, plainer variations of the nearest misses, and
+   * runs once more from the new nearest misses if the first still misses.
+   */
+  for (let pass = 0; pass < COPY_POLISH_PASSES && allowRewrite && picked.winner && !picked.winner.eligible; pass += 1) {
+    const nearest = polishLines(picked.variants.lines);
+    if (nearest.length > 0) {
+      const polish = await writeOnce({ ...input, polishOf: nearest }, 'copy-rewrite');
+      if (polish.call) {
+        const polishCall = polish.call;
+        try {
+          const added = await judge(flattenCopyCalls([{ call: polishCall, error: null }]));
+          drafts.push({ kind: 'rewrite', call: polishCall, error: null });
+          judgments = [...judgments, ...added];
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : String(error);
+          drafts.push({ kind: 'rewrite', call: null, error: `Polish pick failed: ${detail}` });
+        }
+      } else {
+        drafts.push({ kind: 'rewrite', call: null, error: polish.error });
+      }
+      picked = buildCopyVariants(drafts, judgments, target.bucket);
+    }
   }
 
   const { variants, winner } = picked;

@@ -7,7 +7,7 @@ import {
   type CopyRewriteLine,
 } from '@/lib/reels/copy/pick';
 import { ON_SCREEN_WORD_RANGE, REPORT_COPY_TOOL } from '@/lib/reels/copy/report';
-import { COPY_PICK_LEGENDS, PLAIN_QUESTION, STAKE_QUESTION, type CopyPickScoreId } from '@/lib/reels/jev/questions/copy-pick';
+import { COPY_PICK_LEGENDS, PLAIN_QUESTION, STAKE_QUESTION } from '@/lib/reels/jev/questions/copy-pick';
 import { SAME_STORY_MISS, SAME_STORY_PASS, SAME_STORY_QUESTION } from '@/lib/reels/jev/questions/copy-story-match';
 import {
   COPY_PROMPT_VERSION,
@@ -64,6 +64,8 @@ export type CopyInput = {
    * recent first, with their plain and stake scores. Shown to the drafts only.
    */
   earlierLines?: readonly EarlierCopyLine[];
+  /** Iteration round 4: the near misses a blind polish call builds on. Scores are never shown. */
+  polishOf?: readonly CopyRewriteLine[];
 };
 
 export type EarlierCopyLine = { nyDate: string; onScreenCopy: string; plain: number; stake: number };
@@ -176,43 +178,13 @@ function earlierLinesBlock(lines: readonly EarlierCopyLine[]): string[] {
 
 function draftTask(input: CopyInput): string {
   return [
-    'Write two on-screen copies and one caption for this post idea, from the source material above. Both copies open differently and carry the same stake, and the one caption pays both out.',
+    'Write four on-screen copies and one caption for this post idea, from the source material above. All four open differently and carry the same stake, and the one caption pays all of them out.',
     ...earlierLinesBlock(input.earlierLines ?? []),
     '',
     `Bucket: ${BUCKET_SPEC_TEXT[input.bucket].title}`,
     `Framework: ${FRAMEWORK_SPEC_TEXT[input.framework].title}`,
     '',
     'Call report_copy once. That call is the whole reply.',
-  ].join('\n');
-}
-
-const SCORE_LABEL: Record<CopyPickScoreId, string> = {
-  plain: 'Plain read',
-  stake: 'Stake',
-  loop: 'Loop',
-  care: 'Care',
-  reward: 'Reward',
-};
-
-const SCORE_ORDER: readonly CopyPickScoreId[] = ['plain', 'stake', 'loop', 'care', 'reward'];
-
-/** The legend line for the level a 0-to-1 score landed on. */
-function legendLine(id: CopyPickScoreId, score: number): string {
-  const levels = COPY_PICK_LEGENDS[id];
-  const level = Math.min(levels.length - 1, Math.max(0, Math.round(score * (levels.length - 1))));
-  return levels[level];
-}
-
-function rewriteCopyBlock(line: CopyRewriteLine, index: number, range: { min: number; max: number }): string {
-  return [
-    `<copy index="${index + 1}">`,
-    neutralize(line.onScreenCopy),
-    '</copy>',
-    `Words: ${line.words}, ${line.inRange ? 'inside' : 'outside'} the range of ${range.min} to ${range.max}.`,
-    ...SCORE_ORDER.map(
-      (id) => `${SCORE_LABEL[id]} ${line.scores[id].toFixed(2)}. ${legendLine(id, line.scores[id])}`,
-    ),
-    `Same story as its caption's opening: ${line.sameStory ? 'yes' : 'no'}.`,
   ].join('\n');
 }
 
@@ -255,22 +227,48 @@ export function passingStandard(bucket: BucketId): string {
   ].join('\n');
 }
 
+/**
+ * Iteration round 3 (copy-caption-v21). The rewrite is blind: it sees the draft
+ * lines as material, with no scores and no passing standard, and has one job,
+ * to say what the story means for the viewer. Showing the writer what it is
+ * graded against lowered pass rates before (D-235), and the scored rewrite
+ * passed no more often than a draft.
+ */
 function rewriteTask(input: CopyInput, lines: readonly CopyRewriteLine[]): string {
-  const range = ON_SCREEN_WORD_RANGE[input.bucket];
+  const storyFirst = input.bucket === 'the_saga' || input.bucket === 'personal_profile';
+  const opening = storyFirst
+    ? 'Every copy opens on the story as the bucket says, and before it ends it says outright what the story means for the viewer, through something of theirs, such as their emails, photos, passwords, money, voice, family, or job, or names the harm already done to the person in it.'
+    : "Every copy opens on something of the viewer's, such as their emails, photos, passwords, money, voice, family, or job, and what happens to it or what it now lets them do, then gives the fact from the sources that proves it.";
   return [
-    'The first reports for this post idea did not clear the bar. An on-screen copy clears it only when all four of these hold:',
+    'These on-screen copies were drafted for this post idea. None of them is the one to post yet.',
     '',
-    `1. Plain read at least ${COMPREHENSION_GATE.toFixed(2)}. A first-time viewer can say what happened, on one read.`,
-    `2. Stake at least ${STAKE_GATE.toFixed(2)}. That viewer can say why it matters to them, or what is on the line for the people in it.`,
-    `3. The word count is inside the bucket's range, ${range.min} to ${range.max} words.`,
-    "4. The caption's first paragraph tells the same story as the copy.",
+    ...lines.flatMap((line, index) => [`<copy index="${index + 1}">`, neutralize(line.onScreenCopy), '</copy>']),
     '',
-    passingStandard(input.bucket),
+    `Use them as material, not as drafts to edit. Write four new on-screen copies and one caption for the same story, from the source material above. ${opening} Keep the tension and the plain read: one read, everyday words, and no names the viewer would not know. Every copy tells the story the caption's first paragraph opens on. Every rule in this prompt still applies.`,
     '',
-    'None of the copies below cleared all four. Each one is shown with how a first-time viewer scored it, from 0 to 1, and what that level means.',
+    `Bucket: ${BUCKET_SPEC_TEXT[input.bucket].title}`,
+    `Framework: ${FRAMEWORK_SPEC_TEXT[input.framework].title}`,
     '',
-    ...lines.flatMap((line, index) => [rewriteCopyBlock(line, index, range), '']),
-    'Write two new on-screen copies and one caption for the same post idea, from the source material above. Keep what scored well and fix what the lowest scores name. A rewrite keeps the tension: a plainer copy that drops it is a failed report. Every rule in this prompt still applies.',
+    'Call report_copy once. That call is the whole reply.',
+  ].join('\n');
+}
+
+/**
+ * Iteration round 4 (copy-caption-v22). When the drafts and the blind rewrite
+ * still miss, the closest lines are handed back, unscored, for close and
+ * plainer variations: a local search around the near misses.
+ */
+function polishTask(input: CopyInput, lines: readonly CopyRewriteLine[]): string {
+  const storyFirst = input.bucket === 'the_saga' || input.bucket === 'personal_profile';
+  const keep = storyFirst
+    ? 'keep its opening on the story and what it means for the viewer at the end'
+    : "keep the viewer's thing as the subject where it already is, and what it means for them";
+  return [
+    'These on-screen copies are the ones to build on for this post idea.',
+    '',
+    ...lines.flatMap((line, index) => [`<copy index="${index + 1}">`, neutralize(line.onScreenCopy), '</copy>']),
+    '',
+    `Write ${lines.length} new on-screen copies, one close variation of each, in the same order. For each one, keep its idea and its tension, ${keep}, and say it in fewer, plainer words a first-time viewer gets on one read. Cut any name or figure that does not carry what is at stake. Write one caption that pays all of them out, from the source material above. Every copy tells the story the caption's first paragraph opens on. Every rule in this prompt still applies.`,
     '',
     `Bucket: ${BUCKET_SPEC_TEXT[input.bucket].title}`,
     `Framework: ${FRAMEWORK_SPEC_TEXT[input.framework].title}`,
@@ -281,6 +279,7 @@ function rewriteTask(input: CopyInput, lines: readonly CopyRewriteLine[]): strin
 
 /** The uncached half of the user turn. */
 export function buildCopyTaskBlock(input: CopyInput): string {
+  if (input.polishOf && input.polishOf.length > 0) return polishTask(input, input.polishOf);
   return input.rewriteOf && input.rewriteOf.length > 0 ? rewriteTask(input, input.rewriteOf) : draftTask(input);
 }
 

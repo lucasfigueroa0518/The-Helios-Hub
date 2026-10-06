@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 
 import { COPY_MODEL, PASSING_REELS_PER_NIGHT } from '@/lib/reels/config';
 import { resolveCopyModel } from '@/lib/reels/copy/model';
-import { holdOutReasons, loadPublishedStoryKeys, type HeldOutReason } from '@/lib/reels/copy/held-out';
+import { holdOutReasons, loadPublishedStoryKeys, loadWideCopyMisses, type HeldOutReason } from '@/lib/reels/copy/held-out';
 import { fillSlots, type GradedLine, type SlotIdea } from '@/lib/reels/copy/slots';
 import { loadCopyTargets, type CopyTarget } from '@/lib/reels/copy/store';
 import type { CopyClient } from '@/lib/reels/copy/writer';
@@ -33,8 +33,8 @@ export type PassingGeneration = {
  * already fills its slot. An idea that misses its tries is demoted for the
  * day, and the next idea tries. After four misses, the best graded line from
  * that pool ships. Frames are queued only for the reels this run wrote.
- * A story already published, or an idea built only from teasers, never takes
- * a slot (D-245, D-247).
+ * A story already published, an idea built only from teasers, or an idea whose
+ * earlier attempt missed widely never takes a slot (D-245, D-247, D-258).
  */
 export async function generatePassingReels(input: {
   runId: string | null;
@@ -61,17 +61,18 @@ export async function generatePassingReels(input: {
   const nyDate = rows[0]?.ny_date;
   if (!nyDate) throw new Error('That slate does not exist.');
 
-  const [slotIdeas, locks, penalties, published] = await Promise.all([
+  const [slotIdeas, locks, penalties, published, wideMisses] = await Promise.all([
     loadSlotIdeas(input.slateId),
     locksForSlate(input.slateId),
     loadDayPenalties(nyDate),
     loadPublishedStoryKeys(),
+    loadWideCopyMisses(nyDate),
   ]);
   const targets = new Map<string, CopyTarget>();
   for (const target of await loadCopyTargets(input.slateId, { all: true })) {
     targets.set(target.postIdeaId, target);
   }
-  const held = holdOutReasons(targets.values(), published);
+  const held = holdOutReasons(targets.values(), published, wideMisses);
   const heldOut = [...held].map(([postIdeaId, reason]) => ({ postIdeaId, reason }));
   if (heldOut.length > 0) {
     console.info(`[reels] held out of tonight's slots: ${heldOut.map((row) => `${row.postIdeaId} (${row.reason})`).join(', ')}`);

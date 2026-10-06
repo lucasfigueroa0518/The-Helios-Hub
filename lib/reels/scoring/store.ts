@@ -85,7 +85,9 @@ export async function slateIdeaIds(nyDate: string): Promise<string[]> {
 /** Yesterday's scored ideas, in the shape the carryover rule ranks. */
 export async function loadSlateRanked(
   nyDate: string,
-): Promise<Array<RankedIdea & { selected: boolean; rank: number | null; published: boolean }>> {
+): Promise<
+  Array<RankedIdea & { selected: boolean; rank: number | null; published: boolean; onClock: boolean }>
+> {
   const { rows } = await dbQuery<{
     post_idea_id: string;
     net: number | null;
@@ -95,6 +97,7 @@ export async function loadSlateRanked(
     selected: boolean;
     rank: number | null;
     published: boolean;
+    on_clock: boolean;
     last_joined: string;
   }>(
     `SELECT s.post_idea_id, s.net, s.bucket_score, s.psychology, s.confidence, s.selected, s.rank,
@@ -102,7 +105,12 @@ export async function loadSlateRanked(
             EXISTS (
               SELECT 1 FROM reels.published_status p
                WHERE p.post_idea_id = s.post_idea_id AND p.published
-            ) AS published
+            ) AS published,
+            EXISTS (
+              SELECT 1 FROM reels.posting_schedule ps
+               WHERE ps.post_idea_id = s.post_idea_id
+                 AND ps.status IN ('scheduled', 'publishing')
+            ) AS on_clock
        FROM reels.idea_scores s
        JOIN reels.post_ideas i ON i.id = s.post_idea_id
       WHERE s.slate_id = (
@@ -123,6 +131,7 @@ export async function loadSlateRanked(
     selected: row.selected,
     rank: row.rank,
     published: row.published,
+    onClock: row.on_clock,
   }));
 }
 

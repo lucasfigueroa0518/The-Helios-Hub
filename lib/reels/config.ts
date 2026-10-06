@@ -74,12 +74,23 @@ export const FIRST_NIGHT_LOOKBACK_HOURS = 24;
 
 /** ING-04 / D-035: per article/feed source. Ranked lists ingest whole. */
 export const ARTICLE_FEED_CAP = 15;
+/** D-262. New Hugging Face Daily Papers a night, most upvoted first. */
+export const HF_PAPERS_NEW_PER_NIGHT = 15;
+/** D-264. Days without a kept item before a watched source is called out. */
+export const QUIET_SOURCE_DAYS = 3;
 
 /** GRP-06 / D-058. */
 export const GROUP_SIZE_CAP = 6;
 
 /** GRP-01 / D-055: how many existing ideas a new source is compared against. */
 export const SHORTLIST_LIMIT = 5;
+/**
+ * D-265. Content-overlap candidates added to the headline shortlist, and the
+ * overlap floor. At 0.12, all 43 pairs Jev has judged the same event pass,
+ * against 142 of 600 it judged different; the top-K bound keeps Jev load flat.
+ */
+export const CONTENT_SHORTLIST_LIMIT = 5;
+export const CONTENT_OVERLAP_FLOOR = 0.12;
 
 /**
  * Headline-similarity floor for reaching Jev at all. Set from the first real
@@ -127,8 +138,21 @@ export const BLOCKBUSTER_BAR = 0.8;
  * known name jump a clearly better story.
  */
 export const BLOCKBUSTER_BONUS = 0.1;
-/** Added to the net when the winning bucket is Ball Knowledge. */
-export const BALL_KNOWLEDGE_BUMP = 0.08;
+/**
+ * D-261. Entertainment is multiplied by this once graded, when it is the
+ * highest of the three value scores or clears ENTERTAINMENT_BOOST_BAR.
+ * Value is not capped at 1 after the boost.
+ */
+export const ENTERTAINMENT_BOOST = 1.2;
+export const ENTERTAINMENT_BOOST_BAR = 0.7;
+
+/** D-254. Value at or above this bar doubles the blockbuster bonus. Not a selection gate. */
+export const VALUE_BAR = 0.7;
+export const BLOCKBUSTER_BONUS_HIGH_VALUE = 0.2;
+
+/** D-253. Net weights: value counts double, bucket fit counts half. */
+export const NET_VALUE_WEIGHT = 2;
+export const NET_BUCKET_WEIGHT = 0.5;
 /** D-227. How many misses are rescored. Ties at this cutoff join them. */
 export const CARRYOVER_WINDOW = 20;
 /**
@@ -223,16 +247,17 @@ export const VISUAL_STALE_MINUTES = 10;
 export const FULL_STORY_CUE_ENABLED = true;
 /** Motion writer. Same Claude model as the scene writer. The system prompt is cached. */
 export const MOTION_MODEL = 'claude-sonnet-5';
-/** One timestamped 8-second prompt. Enough room to finish, not enough for a second draft. */
+/** One timestamped clip-length prompt. Enough room to finish, not enough for a second draft. */
 export const MOTION_MAX_TOKENS = 1200;
 /** A video job still `running` after this was abandoned. Kling plus overlay can take minutes. */
 export const VIDEO_STALE_MINUTES = 20;
 
 /**
- * Kling 3.0 Standard on Fal accepts 3–15 seconds (D-103). Eight seconds with
- * sound off is $0.672, at the same $0.084 per second as the old 5-second clip.
+ * D-266. Kling 2.5 Turbo Standard on Fal takes 5 or 10 seconds only. Ten is
+ * closest to the 8 seconds Kling 3.0 made (D-103) and gives the longer copy
+ * time to read: $0.42 a clip at $0.042 a second, against $0.672 before.
  */
-export const KLING_CLIP_SECONDS = 8;
+export const KLING_CLIP_SECONDS = 10;
 /**
  * Opus 5.5 always thinks, and thinking shares this budget with the tool call.
  * 5,000 can finish the thinking before report_copy is written.

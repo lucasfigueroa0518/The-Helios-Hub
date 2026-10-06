@@ -15,18 +15,19 @@ import type { BucketId } from '@/lib/reels/scoring/decide';
  */
 
 /**
- * On-screen word counts from PRODUCT_SPEC.md. The Number and Ball Knowledge
- * run to 22 words since D-250, room for a complete thought with tension. The
- * Saga is 20 to 32 on one 8-second still that loops, about 11 seconds of
- * reading at 3 words a second (D-214).
+ * On-screen word counts from PRODUCT_SPEC.md. The Number, Ball Knowledge, and
+ * The Callout run to 26 words since D-267 (22 under D-250), room to carry the
+ * stake and stay plain. The Saga is 14 to 32 (20 to 32 before D-269) on one
+ * 10-second clip that loops, about 11 seconds of reading at 3 words a second
+ * at the top (D-214, D-266).
  */
 export const ON_SCREEN_WORD_RANGE: Record<BucketId, { min: number; max: number }> = {
-  ball_knowledge: { min: 8, max: 22 },
-  the_number: { min: 1, max: 22 },
-  the_saga: { min: 20, max: 32 },
+  ball_knowledge: { min: 8, max: 26 },
+  the_number: { min: 1, max: 26 },
+  the_saga: { min: 14, max: 32 },
   personal_profile: { min: 10, max: 18 },
   the_warning: { min: 15, max: 25 },
-  the_callout: { min: 12, max: 22 },
+  the_callout: { min: 12, max: 26 },
 };
 
 /** Instagram's caption limit and the "more" fold. */
@@ -34,11 +35,14 @@ export const CAPTION_MAX_CHARS = 2_200;
 export const CAPTION_FOLD_CHARS = 125;
 export const HASHTAG_RANGE = { min: 3, max: 5 };
 export const VIEWER_STAKE_MAX_WORDS = 20;
+/** Iteration round 1: each call asks for four copies. A report with two to six still parses. */
+export const ON_SCREEN_COPIES_PER_CALL = 4;
+export const ON_SCREEN_COPIES_RANGE = { min: 2, max: 6 };
 
 export const REPORT_COPY_TOOL = {
   name: 'report_copy',
   description:
-    'Report two final on-screen copies and one caption for this post idea. Both copies are doors into that one caption. Call it once.',
+    'Report four final on-screen copies and one caption for this post idea. All four are doors into that one caption. Call it once.',
   /**
    * Opus 5.5 rejects tool_choice type "tool". strict keeps the JSON valid
    * while the call uses tool_choice auto.
@@ -53,17 +57,23 @@ export const REPORT_COPY_TOOL = {
         description: 'At least three alternate on-screen lines. A record of the lines, not the published pair.',
         items: { type: 'string' },
       },
-      copy_draft: { type: 'string', description: 'The two on-screen lines before the final edit.' },
+      copy_draft: { type: 'string', description: 'The four on-screen lines before the final edit.' },
       caption_draft: { type: 'string', description: 'The caption before the final edit.' },
       remaining_patterns: {
         type: 'array',
         description: 'Humanizer patterns still present in the drafts, each as its number and a short quote. Empty when none.',
         items: { type: 'string' },
       },
+      stake_options: {
+        type: 'array',
+        description:
+          'Written before the viewer stake: three candidate stakes from different angles, one plain sentence each. Something of the viewer\'s and what happens to it; what was done, or is about to be done, to a person in the story; what this changes next for people like the viewer. Each one is supported by the sources.',
+        items: { type: 'string' },
+      },
       viewer_stake: {
         type: 'string',
         description:
-          'One plain sentence, 20 words at most, saying why this viewer should care. Tested against the hook questions before either copy is drafted. It belongs to this story: a sentence that would fit most posts about AI is not a stake yet. Both on-screen copies carry it in their own words, and the caption\'s first paragraph pays it out.',
+          'The most significant of the stake options: the most on the line, for the most viewers, landing soonest, and never bigger than the sources support. One plain sentence, 20 words at most, saying why this viewer should care. Tested against the hook questions before either copy is drafted. It belongs to this story: a sentence that would fit most posts about AI is not a stake yet. Both on-screen copies carry it in their own words, and the caption\'s first paragraph pays it out.',
       },
       tension: {
         type: 'string',
@@ -73,13 +83,13 @@ export const REPORT_COPY_TOOL = {
       on_screen_copies: {
         type: 'array',
         description:
-          'Exactly two final on-screen copies for the one screen. Same story about the same subject, same facts, same stake, paid out by the one caption. Each whole copy is a hook, and the two are different hooks, with a different first line and a different way in. A paraphrase is a failed report. Each copy has a line break already inserted at each natural pause. One line break between lines, and no blank line. A line break stays on this same screen. Count the words in each copy on its own. Each count must fall inside the bucket word range given in the prompt. A count outside that range is a failed report.',
+          'Exactly four final on-screen copies for the one screen. Same story about the same subject, same facts, same stake, paid out by the one caption. Each whole copy is a hook, and the four are different hooks, with a different first line and a different way in. A paraphrase is a failed report. Each copy has a line break already inserted at each natural pause. One line break between lines, and no blank line. A line break stays on this same screen. Count the words in each copy on its own. Each count must fall inside the bucket word range given in the prompt. A count outside that range is a failed report.',
         items: { type: 'string' },
       },
       caption: {
         type: 'string',
         description:
-          'The final caption, ending where the bucket structure ends. Leave out the call to action and the hashtags. They are posted from their own fields, so writing them here posts them twice. This one caption pays out both on-screen copies. Short paragraphs, with a real blank line between them. A caption that is one block is a failed report. The caption, the call to action, and the hashtags together must stay within 2,200 characters.',
+          'The final caption, ending where the bucket structure ends. Leave out the call to action and the hashtags. They are posted from their own fields, so writing them here posts them twice. This one caption pays out every on-screen copy. Short paragraphs, with a real blank line between them. A caption that is one block is a failed report. The caption, the call to action, and the hashtags together must stay within 2,200 characters.',
       },
       call_to_action: {
         type: 'string',
@@ -114,6 +124,7 @@ export const REPORT_COPY_TOOL = {
       'copy_draft',
       'caption_draft',
       'remaining_patterns',
+      'stake_options',
       'viewer_stake',
       'tension',
       'on_screen_copies',
@@ -126,9 +137,9 @@ export const REPORT_COPY_TOOL = {
   },
 };
 
-/** One copy call: two on-screen lines, one caption package. */
+/** One copy call: several on-screen lines, one caption package. */
 export type CopyCall = {
-  onScreenCopies: [string, string];
+  onScreenCopies: string[];
   viewerStake: string;
   caption: string;
   callToAction: string;
@@ -141,6 +152,8 @@ export type CopyCall = {
     remainingPatterns: string[];
     /** D-251. The tension the copies are built on, written before drafting. Absent on rows before v18. */
     tension?: string;
+    /** D-259. The candidate stakes the viewer stake was chosen from. Absent on rows before v24. */
+    stakeOptions?: string[];
     /** D-238. The Saga's note on whether an outcome already happened. Empty elsewhere; absent on rows before v17. */
     outcomeNote?: string;
   };
@@ -223,12 +236,14 @@ function sourceList(value: unknown): Array<{ name: string; url: string }> {
   });
 }
 
-function onScreenCopies(value: unknown): [string, string] {
-  const copies = list(value).map(restoreLineBreaks);
-  if (copies.length !== 2) {
-    throw new CopyReportError(`report_copy needs exactly two on-screen copies, got ${copies.length}.`);
+function onScreenCopies(value: unknown): string[] {
+  const copies = list(value);
+  if (copies.length < ON_SCREEN_COPIES_RANGE.min || copies.length > ON_SCREEN_COPIES_RANGE.max) {
+    throw new CopyReportError(
+      `report_copy needs ${ON_SCREEN_COPIES_PER_CALL} on-screen copies, got ${copies.length}.`,
+    );
   }
-  return [copies[0], copies[1]];
+  return copies;
 }
 
 export function parseCopyReport(input: unknown): CopyCall {
@@ -247,6 +262,7 @@ export function parseCopyReport(input: unknown): CopyCall {
       copyDraft: text(record, 'copy_draft', false),
       captionDraft: text(record, 'caption_draft', false),
       remainingPatterns: list(record.remaining_patterns),
+      stakeOptions: list(record.stake_options),
       outcomeNote: text(record, 'outcome_note', false),
       tension: text(record, 'tension', true),
     },

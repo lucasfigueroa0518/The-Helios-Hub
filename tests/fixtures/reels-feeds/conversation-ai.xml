@@ -1,0 +1,256 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+<entry>
+    <id>tag:theconversation.com,2011:article/292739</id>
+    <published>2026-10-06T15:53:33Z</published>
+    <updated>2026-10-06T15:53:33Z</updated>
+    <link rel="alternate" type="text/html" href="https://theconversation.com/how-ai-could-help-predict-and-explain-water-levels-in-the-great-lakes-292739"/>
+    <title>How AI could help predict and explain water levels in the Great Lakes</title>
+    <content type="html">&lt;p&gt;In January 2013, Lake Michigan reached its &lt;a href="https://doi.org/10.1029/2020GL090374"&gt;lowest water level on record&lt;/a&gt;. Seven years later, in the summer of 2020, it broke the opposite record with widespread flooding, eroded shorelines and closed lakeside roads. &lt;/p&gt;
+
+&lt;p&gt;The difference between the two water levels was nearly two metres. Lakes Superior, Erie and Ontario had the same reversal within a few months of each other. Almost no one saw it coming.&lt;/p&gt;
+
+&lt;p&gt;These shifts build over months, through a combination of rain, snow, evaporation and human decisions. Unravelling this complex interplay of factors is one of the most persistent and important challenges in the field of hydrology today. Water levels control the depth of harbours, the stability of shorelines, drinking water intakes and the &lt;a href="https://doi.org/10.1016/j.jglr.2018.10.012"&gt;survival of coastal wetlands&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;Our analysis of 40 years of fluctuations, &lt;a href="https://doi.org/10.1016/j.scitotenv.2025.181302"&gt;which we published in the &lt;em&gt;Science of the Total Environment&lt;/em&gt;&lt;/a&gt; journal, tackles this issue using tools from the field of artificial intelligence (AI).&lt;/p&gt;
+
+&lt;p&gt;The goal was not just to predict water levels, but to use AI to explain what causes them to vary.&lt;/p&gt;
+
+&lt;h2&gt;A machine that predicts but doesn’t explain&lt;/h2&gt;
+
+&lt;p&gt;For decades, the hydrologic balance was treated like a bank account: you add up the deposits (rain, runoff, inflows from upstream), subtract the withdrawals (evaporation, outflows), and the balance gives the water level. The approach is rigorous but requires extensive calibration and &lt;a href="https://www.science.org/doi/10.1126/science.1151915"&gt;does not accurately capture unusual climate variations&lt;/a&gt;.&lt;/p&gt;
+
+
+
+&lt;p&gt;Machine learning does the opposite: it is fed 40 years of data and uses an algorithm to identify patterns. An algorithm consists of a series of calculations that transforms the input numbers into an estimate of the water level and corrects itself if it deviates from actual measurements.&lt;/p&gt;
+
+&lt;p&gt;This improves accuracy, but the results do not include any explanation, which is necessary if the information is to be used to manage a dam or map a flood zone.&lt;/p&gt;
+
+&lt;h2&gt;Making the machine accountable&lt;/h2&gt;
+
+&lt;p&gt;To address this issue, we trained eight algorithms on the monthly water levels of Lakes Superior, Michigan, Erie, and Ontario, from 1982 to 2022. We incorporated nine variables into each algorithm, including air temperature and inflow rates.&lt;/p&gt;
+
+&lt;p&gt;Each variable was provided for the current month, as well as for one month earlier, two months earlier and up to six months prior. This allowed the model to link the water level in June to the snowfall in January.&lt;/p&gt;
+
+&lt;p&gt;For the four best-performing algorithms, the error dropped to about a dozen centimetres, compared to 14 to 21 for the simplest models.&lt;/p&gt;
+
+&lt;p&gt;We then had the model account for its results using SHapley Additive exPlanations (SHAP) values, a technique from game theory that equitably distributes a team’s payoff among its players. In this case, it provides the contribution of each variable to the rise or fall in water level for a given month. In other words, we asked which factors contribute more to controlling the water level: air temperatures or inflow rates ?&lt;/p&gt;
+
+&lt;p&gt;But SHAP does not provide information on how long it takes for a signal to travel across a watershed.&lt;/p&gt;
+
+&lt;p&gt;So we use a second technique: variogram analysis of response surfaces (VARS). Instead of observing the model, we interfere with it — for example, by increasing runoff as an early snowmelt would. We measure the impact of this interference one month later, then six months later.&lt;/p&gt;
+
+&lt;p&gt;Together, SHAP and VARS identify the variables responsible for water levels and their time lags.&lt;/p&gt;
+
+
+
+&lt;h2&gt;January snow determines June water levels&lt;/h2&gt;
+
+&lt;p&gt;The four lakes under study &lt;a href="https://doi.org/10.1016/S0380-1330(01)70665-X"&gt;exhibit fundamental differences&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;Lakes Superior and Michigan are large, slow-moving basins fed by snowmelt; their water levels depend on runoff and outflow. Lake Erie, which is shallow, depends on inflow from upstream via the Detroit River. Lake Ontario’s peculiarity is the significant impact of evaporation.&lt;/p&gt;
+
+&lt;p&gt;By applying the same method with the same variables, we obtained four different results regarding these characteristics.&lt;/p&gt;
+
+&lt;p&gt;The most striking result of our study pertained to time. We expected the influence of the variables to fade as we went further back in time, much like in a river where the impact of a downpour becomes invisible after a few days. The opposite turned out to be true: we saw that the influence actually increases after three or four months.&lt;/p&gt;
+
+&lt;p&gt;Our conclusion: a lake does not react to yesterday’s weather, but to the previous season’s. These lakes have significant inertia, and that’s good news for seasonal forecasting: part of what will determine next summer’s water level has already fallen in the form of snow.&lt;/p&gt;
+
+&lt;h2&gt;The most unpredictable lake is the one we control&lt;/h2&gt;
+
+&lt;p&gt;One lake defied our algorithms: Lake Ontario, with an error of more than 50 per cent higher than expected, due to human decisions.&lt;/p&gt;
+
+&lt;p&gt;The explanation lies in the fact that its water levels are regulated at the &lt;a href="https://www.ijc.org/en/loslrb/lake-st-lawrences"&gt;Moses-Saunders Power Dam&lt;/a&gt;, near Cornwall, Ont., according to operating rules that are adjusted on a day-to-day basis. In our model, each variable is summarized by a single monthly value. That means while the outflow from the dam is included in our data, the sequence of human decisions that produced it is lost in the overall calculation of the average.&lt;/p&gt;
+
+
+
+&lt;p&gt;When more water is released to protect downstream residents — even though climate conditions did not require it — the model observes a drop in water level with no identifiable cause among its variables. It learns poorly and makes more mistakes.&lt;/p&gt;
+
+&lt;p&gt;This failure highlights a limitation between what the climate explains and what falls under the category of collective decisions. The solution is simple: we must provide these rules to the model, just as we do for rain or snow. That way, algorithms will stop making decisions based on erroneous data.&lt;/p&gt;
+
+&lt;h2&gt;Beyond the Great Lakes&lt;/h2&gt;
+
+&lt;p&gt;The applications of our approach also extend beyond the Great Lakes and surface waters.&lt;/p&gt;
+
+&lt;p&gt;In collaboration &lt;a href="https://www.ouranos.ca/en"&gt;with Ouranos&lt;/a&gt;, the Québec consortium on regional climatology and climate change adaptation, we are now applying this approach to &lt;a href="https://www.ouranos.ca/en/projects-publications/recharge-eaux-souterraines-reseau-neurones"&gt;groundwater recharge in southern Québec&lt;/a&gt;, this time with a physics-based model.&lt;/p&gt;
+
+&lt;p&gt;Our contribution is the exception, as most &lt;a href="https://link.springer.com/article/10.1007/s10462-025-11165-2"&gt;AI models used in environmental applications are unable to explain themselves&lt;/a&gt;. Yet this is a non-negotiable requirement for a tool used to manage a dam or protect a source of drinking water.&lt;/p&gt;
+
+&lt;p&gt;An interpretable model is one that can be verified, discussed, and challenged. This is the prerequisite for AI to become a legitimate tool in water management.&lt;/p&gt;&lt;img src="https://counter.theconversation.com/content/292739/count.gif" alt="La Conversation Canada" width="1" height="1" /&gt;
+&lt;p class="fine-print"&gt;&lt;em&gt;&lt;span&gt;Rahim Barzegar received funding from the Université du Québec en Abitibi-Témiscamingue (UQAT).&lt;/span&gt;&lt;/em&gt;&lt;/p&gt;&lt;p class="fine-print"&gt;&lt;em&gt;&lt;span&gt;Ehsan Raei et Jan Franklin Adamowski ne travaillent pas, ne conseillent pas, ne possèdent pas de parts, ne reçoivent pas de fonds d&amp;#39;une organisation qui pourrait tirer profit de cet article, et n&amp;#39;ont déclaré aucune autre affiliation que leur poste universitaire.&lt;/span&gt;&lt;/em&gt;&lt;/p&gt;</content>
+    <summary>Water levels in the Great Lakes swing from one extreme to the other. An analysis using artificial intelligence reveals how (and why) weather causes them to fluctuate.</summary>
+    <author>
+      <name>Rahim Barzegar, Professeur, Université du Québec en Abitibi-Témiscamingue (UQAT)</name>
+      <foaf:homepage rdf:resource="https://theconversation.com/profiles/rahim-barzegar-2744453"/>
+    </author>
+    <author>
+      <name>Ehsan Raei, Researcher</name>
+      <foaf:homepage rdf:resource="https://theconversation.com/profiles/ehsan-raei-2746133"/>
+    </author>
+    <author>
+      <name>Jan Franklin Adamowski, James McGill Professor, McGill University</name>
+      <foaf:homepage rdf:resource="https://theconversation.com/profiles/jan-franklin-adamowski-2746185"/>
+    </author>
+    <rights>Licensed as Creative Commons – attribution, no derivatives.</rights>
+  </entry>
+<entry>
+    <id>tag:theconversation.com,2011:article/292831</id>
+    <published>2026-10-05T12:16:57Z</published>
+    <updated>2026-10-05T12:16:57Z</updated>
+    <link rel="alternate" type="text/html" href="https://theconversation.com/why-its-more-important-than-ever-to-jump-start-entrepreneurial-careers-from-the-college-classroom-292831"/>
+    <title>Why it’s more important than ever to jump-start entrepreneurial careers from the college classroom</title>
+    <content type="html">&lt;figure&gt;&lt;img src="https://images.theconversation.com/files/763435/original/file-20261001-60-o1rgw7.jpg?ixlib=rb-4.1.1&amp;amp;rect=0%2C0%2C3200%2C2133&amp;amp;q=45&amp;amp;auto=format&amp;amp;w=1050&amp;amp;h=700&amp;amp;fit=crop" /&gt;&lt;figcaption&gt;&lt;span class="caption"&gt;By teaching entrepreneurship, colleges can better prepare students for a fast-changing job market and technological disruption.&lt;/span&gt; &lt;span class="attribution"&gt;&lt;a class="source" href="https://www.gettyimages.com/detail/news-photo/in-this-photo-illustration-a-georgia-institute-of-news-photo/1247576996?phrase=georgia%20tech%20business&amp;amp;adppopup=true"&gt;Igor Golovniov/SOPA Images/LightRocket via Getty Images&lt;/a&gt;&lt;/span&gt;&lt;/figcaption&gt;&lt;/figure&gt;&lt;p&gt;Recent college graduates are facing a job market that’s only getting tougher. Their &lt;a href="https://www.newyorkfed.org/research/college-labor-market#--:explore:unemployment"&gt;unemployment rate hit 5.7%&lt;/a&gt;, compared to 4.1% for all workers, in June 2026. That may not sound like much, but it’s &lt;a href="https://www.wsj.com/lifestyle/careers/americans-without-college-degrees-are-having-one-of-the-best-job-markets-in-years-5f37d00e"&gt;one of the worst&lt;/a&gt; rates in the past 20 years. &lt;/p&gt;
+
+&lt;p&gt;Meanwhile, &lt;a href="https://www.forbes.com/sites/michaeltnietzel/2026/02/23/unemployment-and-underemployment-rates-among-recent-college-graduates/"&gt;roughly 4 in 10&lt;/a&gt; graduates are underemployed, which means they work in jobs that typically don’t require a college degree. That’s the highest rate since the COVID-19 pandemic. &lt;/p&gt;
+
+&lt;p&gt;As an &lt;a href="https://ece.gatech.edu/directory/raghupathy-sivakumar"&gt;educator&lt;/a&gt; for more than 25 years, I see the growing anxiety every day. In a change from years past, parents are now peppering me with questions: How can their kids leverage their college education in such a fast-changing world? Will they learn skills in school that will soon be antiquated once they graduate? &lt;/p&gt;
+
+&lt;p&gt;What’s essential to understand is that technology adoption cycles have accelerated at a breathtaking rate over the past few years. While the telephone and television took decades to reach 100 million users, ChatGPT and TikTok &lt;a href="https://www.reuters.com/technology/chatgpt-sets-record-fastest-growing-user-base-analyst-note-2023-02-01/"&gt;attained that threshold&lt;/a&gt; in a matter of months. Colleges need to adapt their curricula accordingly. &lt;/p&gt;
+
+&lt;p&gt;Georgia Tech, where I teach engineering, has focused on pushing entrepreneurship across our campus since 2014. We’re seeing encouraging signs from our follow-ups with graduating students that it’s helping their early careers.&lt;/p&gt;
+
+&lt;p&gt;I believe one of the best ways to adjust to these changes is to embed entrepreneurial experiences throughout college. Such hands-on learning, in turn, develops versatile, adaptable talent, producing graduates who can pivot across jobs as industries, technologies and opportunities evolve. And this needn’t be confined to business students – young people in all majors can benefit. &lt;/p&gt;
+
+&lt;h2&gt;3 core lessons&lt;/h2&gt;
+
+&lt;p&gt;The educational value of entrepreneurship isn’t principally that every student will be able to start a company. It’s that entrepreneurial experiences &lt;a href="https://create-x.gatech.edu/about-us"&gt;develop the capabilities&lt;/a&gt; students need in a rapidly changing economy – and ultimately build more resilient careers. &lt;/p&gt;
+
+&lt;p&gt;Here are some ways educators can future-proof the college experience, based on what I’ve learned and applied at Georgia Tech.  &lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Making adaptability a core skill:&lt;/strong&gt; Students need to learn &lt;a href="https://stacks.cdc.gov/view/cdc/223125"&gt;how to be nimble&lt;/a&gt;. This means recognizing important changes in the landscape, identifying new problems and the opportunities they create, articulating a response and mobilizing the necessary resources. Ultimately, this approach will help students be prepared for the real world.&lt;/p&gt;
+
+&lt;p&gt;To impart these lessons, I believe colleges should provide hands-on opportunities to help students learn through experience before they enter the workforce. For example, they could encourage students to develop a business venture idea that addresses a newly created opportunity in the marketplace through accelerators, or short-term “boot camps” for young companies to help them grown quickly. One example is Greptile, a startup that came out of the &lt;a href="https://www.greptile.com/"&gt;Georgia Tech CREATE-X accelerator&lt;/a&gt;. &lt;/p&gt;
+
+&lt;p&gt;The goal isn’t that a startup will be launched – that depends on several factors coming together – but that the student gains the experience to understand a changing landscape. &lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Understanding customer value:&lt;/strong&gt; Colleges can also teach students how to think about customer value – namely, why the solution they’re working on matters to the consumers buying it. This isn’t just for business students. All students can gain from learning to think about the customers or clients they will deal with in their careers. In fact, students from 38 majors have participated in the &lt;a href="https://create-x.gatech.edu/about-us"&gt;entrepreneurship programs at Georgia Tech&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;Through on-the-ground experience that requires them to find customers, students can learn about the real-world impact of the products and services they create. When students spend hundreds of hours selling their young startup to the outside world, they learn to understand value at a deep level.&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Emphasizing fundamentals:&lt;/strong&gt; Fundamental skills are key because they outlast the technology underpinning the business. In fact, the more quickly specific technologies change, the more important a strong grounding in fundamentals becomes. This means it’s a smarter investment to offer, say, a fundamental course on wireless networking or deep learning concepts over a course that teaches specific wireless technologies or emphasizes the use of a specific model. A strong foundation gives students the tools to adapt to technologies that may not yet exist when they graduate. &lt;/p&gt;
+
+&lt;figure class="align-center "&gt;
+            &lt;img alt="Students gather around tables and white boards to pitch business ideas to corporate partners in hopes of winning a prize." src="https://images.theconversation.com/files/763437/original/file-20261001-50-jz67yj.jpg?ixlib=rb-4.1.1&amp;amp;q=45&amp;amp;auto=format&amp;amp;w=754&amp;amp;fit=clip" srcset="https://images.theconversation.com/files/763437/original/file-20261001-50-jz67yj.jpg?ixlib=rb-4.1.1&amp;amp;q=45&amp;amp;auto=format&amp;amp;w=600&amp;amp;h=401&amp;amp;fit=crop&amp;amp;dpr=1 600w, https://images.theconversation.com/files/763437/original/file-20261001-50-jz67yj.jpg?ixlib=rb-4.1.1&amp;amp;q=30&amp;amp;auto=format&amp;amp;w=600&amp;amp;h=401&amp;amp;fit=crop&amp;amp;dpr=2 1200w, https://images.theconversation.com/files/763437/original/file-20261001-50-jz67yj.jpg?ixlib=rb-4.1.1&amp;amp;q=15&amp;amp;auto=format&amp;amp;w=600&amp;amp;h=401&amp;amp;fit=crop&amp;amp;dpr=3 1800w, https://images.theconversation.com/files/763437/original/file-20261001-50-jz67yj.jpg?ixlib=rb-4.1.1&amp;amp;q=45&amp;amp;auto=format&amp;amp;w=754&amp;amp;h=504&amp;amp;fit=crop&amp;amp;dpr=1 754w, https://images.theconversation.com/files/763437/original/file-20261001-50-jz67yj.jpg?ixlib=rb-4.1.1&amp;amp;q=30&amp;amp;auto=format&amp;amp;w=754&amp;amp;h=504&amp;amp;fit=crop&amp;amp;dpr=2 1508w, https://images.theconversation.com/files/763437/original/file-20261001-50-jz67yj.jpg?ixlib=rb-4.1.1&amp;amp;q=15&amp;amp;auto=format&amp;amp;w=754&amp;amp;h=504&amp;amp;fit=crop&amp;amp;dpr=3 2262w" sizes="(min-width: 1466px) 754px, (max-width: 599px) 100vw, (min-width: 600px) 600px, 237px"&gt;
+            &lt;figcaption&gt;
+              &lt;span class="caption"&gt;Students in startup training have to deal with uncertainty, resource constraints and customer interaction, all of which will make them more nimble in their careers.&lt;/span&gt;
+              &lt;span class="attribution"&gt;&lt;a class="source" href="https://www.gettyimages.com/detail/news-photo/northridge-ca-cal-state-northridge-students-participate-in-news-photo/1240490430?phrase=student%20startups&amp;amp;adppopup=true"&gt;David Crane/MediaNews Group/Los Angeles Daily News via Getty Images&lt;/a&gt;&lt;/span&gt;
+            &lt;/figcaption&gt;
+          &lt;/figure&gt;
+
+&lt;h2&gt;The many paths toward entrepreneurship&lt;/h2&gt;
+
+&lt;p&gt;Another great advantage of entrepreneurial experiences is that they force students to deal with uncertainty, recognize opportunities, work around resource constraints and learn how to create value. &lt;/p&gt;
+
+&lt;p&gt;But other strategies work as well. A few examples are project-based learning, internships and interdisciplinary capstone classes that let students pursue independent research projects as their final course. &lt;/p&gt;
+
+&lt;p&gt;That said, entrepreneurial experiences provide an unusually concentrated and effective environment that requires students to solve problems, engage with customers and mobilize resources they don’t directly control – all while getting real-world feedback. &lt;/p&gt;
+
+&lt;p&gt;More and more universities and colleges understand this point and have ramped up support for entrepreneurial activity for their students, &lt;a href="https://eship.cornell.edu/"&gt;such as Cornell&lt;/a&gt; and the &lt;a href="https://www.washington.edu/innovation/programs/"&gt;University of Washington&lt;/a&gt;. At Georgia Tech, we have a &lt;a href="https://www.wipo.int/documents/d/global-innovation-index/docs-en-2026-gii-2026-contributors-disrupting-the-disruptors.pdf"&gt;playbook that we have developed&lt;/a&gt; through our experiences that follows the following principles: &lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Embed entrepreneurship into the curriculum:&lt;/strong&gt; One simple way for colleges to incorporate entrepreneurial experiences into their coursework is to offer an entrepreneurship minor to all students, regardless of major. This would offer the opportunity to a broader range of students who otherwise might miss out.&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Build a pathway to business creation:&lt;/strong&gt; Entrepreneurial education is most effective when it leads to something bigger. To that end, many colleges are now offering a startup accelerator, &lt;a href="https://entrepreneurship.mit.edu/accelerator/program/"&gt;including MIT&lt;/a&gt;, &lt;a href="https://entrepreneurship.rice.edu/rice-startup-accelerator"&gt;Rice University&lt;/a&gt; and the &lt;a href="https://undergraduates.utexas.edu/launchpad/seal"&gt;University of Texas&lt;/a&gt;. &lt;/p&gt;
+
+&lt;p&gt;But more is needed: A startup pathway that caters to students at all stages can substantially broaden participation and impact, regardless of whether a business results. At Georgia Tech, we have a &lt;a href="https://commercialization.gatech.edu/"&gt;learn/make/launch/scale pathway&lt;/a&gt; that offers programs and resources for learning about entrepreneurship, building solutions, launching new ventures and eventually scaling them.&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Offer real venture experience:&lt;/strong&gt; A successful model combines theoretical learning with hands-on experience. The confidence that students gain through that experience may be at least as important an educational outcome as the viability of the startups they launch. After all, since most startups &lt;a href="https://hbr.org/2021/05/why-start-ups-fail"&gt;tend to fail&lt;/a&gt;, confidence is a value that successful entrepreneurs have to sustain.  &lt;/p&gt;
+
+&lt;h2&gt;Transferring skills to the workforce&lt;/h2&gt;
+
+&lt;p&gt;There’s another important element that’s needed: private sector partnerships. Fortunately, entrepreneurial education is well aligned with the interests of universities’ traditional corporate partners.&lt;/p&gt;
+
+&lt;p&gt;These companies, especially those with established, successful business models, &lt;a href="https://www.researchgate.net/publication/399057037"&gt;are eager&lt;/a&gt; to hire students with a strong understanding of fundamentals and entrepreneurial confidence. This next generation can help the companies navigate the future. &lt;/p&gt;
+
+&lt;p&gt;Companies can also offer industry know-how, mentorship opportunities and financial and in-kind support. And they understand that students building a startup have to think &lt;a href="https://www.researchgate.net/publication/386104454_Startups_can_offer_student_interns_real-life_advantages"&gt;beyond their own discipline&lt;/a&gt; to succeed. For example, an engineering student will need to understand customers, pricing, finance, sales, operations, intellectual property and team building. That broader perspective can make them more effective when they enter a corporate environment full time. &lt;/p&gt;
+
+&lt;p&gt;The same capabilities can also translate into venture creation itself: The value of entrepreneurial education can be seen across both traditional workforce pathways and startup outcomes. Our experience at Georgia Tech offers evidence of both.&lt;/p&gt;
+
+&lt;p&gt;Startups launched by Georgia Tech students over the past decade have crossed &lt;a href="https://create-x.gatech.edu/"&gt;US$4.5 billion&lt;/a&gt; in aggregate total valuation and have created thousands of jobs. We’ve also found encouraging early evidence that students who gain confidence through these experiences have &lt;a href="https://www.researchgate.net/publication/404299375_Entrepreneurship_Education_Shapes_Career_Trajectories_beyond_Entrepreneurial_Intentions"&gt;stronger career outcomes&lt;/a&gt;. &lt;/p&gt;
+
+&lt;p&gt;Georgia Tech isn’t alone. The University System of Georgia has recently created a new role: a &lt;a href="https://costasspirou.com/"&gt;chief innovation and entrepreneurial strategies officer&lt;/a&gt; to lead an initiative across all of the state’s public colleges and universities. &lt;/p&gt;
+
+&lt;p&gt;Other universities are pursuing similar paths, including the &lt;a href="https://www.cavalierdaily.com/article/2025/11/paul-cherukuri-leads-uvas-entrepreneurship-strategy-as-its-first-chief-innovation-officer"&gt;University of Virginia&lt;/a&gt;, &lt;a href="https://profiles.rice.edu/staff/adrian-tromel"&gt;Rice University&lt;/a&gt; and &lt;a href="https://news.cornell.edu/stories/2026/06/matt-marx-named-vice-provost-entrepreneurship-innovation-and-external-engagement"&gt;Cornell University&lt;/a&gt;. All now have an institutionwide leadership position focused on entrepreneurship.&lt;/p&gt;
+
+&lt;p&gt;Taken together, these developments suggest that educators increasingly view entrepreneurship as more than just support for students who want to start companies. These steps will help ensure that when students walk across the stage to receive their diplomas, they can meet the challenges ahead of them.&lt;/p&gt;&lt;img src="https://counter.theconversation.com/content/292831/count.gif" alt="The Conversation" width="1" height="1" /&gt;
+&lt;p class="fine-print"&gt;&lt;em&gt;&lt;span&gt;Raghupathy Sivakumar does not work for, consult, own shares in or receive funding from any company or organization that would benefit from this article, and has disclosed no relevant affiliations beyond their academic appointment.&lt;/span&gt;&lt;/em&gt;&lt;/p&gt;</content>
+    <summary>Hands-on learning about building a business is something students of all majors can benefit from.</summary>
+    <author>
+      <name>Raghupathy Sivakumar, Vice President of Commercialization and Chief Commercialization Officer, Georgia Institute of Technology</name>
+      <foaf:homepage rdf:resource="https://theconversation.com/profiles/raghupathy-sivakumar-2767284"/>
+    </author>
+    <rights>Licensed as Creative Commons – attribution, no derivatives.</rights>
+  </entry>
+<entry>
+    <id>tag:theconversation.com,2011:article/292105</id>
+    <published>2026-10-05T12:15:41Z</published>
+    <updated>2026-10-05T12:15:41Z</updated>
+    <link rel="alternate" type="text/html" href="https://theconversation.com/weve-tracked-80m-of-spending-on-almost-170-ai-generated-political-ads-this-year-its-weird-292105"/>
+    <title>We’ve tracked $80M of spending on almost 170 AI-generated political ads this year – it’s weird</title>
+    <content type="html">&lt;figure&gt;&lt;img src="https://images.theconversation.com/files/763163/original/file-20260930-50-yghztt.jpg?ixlib=rb-4.1.1&amp;amp;rect=0%2C0%2C2031%2C1354&amp;amp;q=45&amp;amp;auto=format&amp;amp;w=1050&amp;amp;h=700&amp;amp;fit=crop" /&gt;&lt;figcaption&gt;&lt;span class="caption"&gt;At a 2024 MIT Museum exhibit, visitors were asked to guess which videos were deepfakes.&lt;/span&gt; &lt;span class="attribution"&gt;&lt;a class="source" href="https://www.gettyimages.com/detail/news-photo/cambridge-ma-visitors-can-watch-videos-and-guess-if-the-news-photo/2147829782"&gt;Lane Turner/The Boston Globe via Getty Images&lt;/a&gt;&lt;/span&gt;&lt;/figcaption&gt;&lt;/figure&gt;&lt;p&gt;The 2026 U.S. midterm campaigns are the first in which AI-generated political ads are regularly appearing on people’s televisions and social media feeds.&lt;/p&gt;
+
+&lt;p&gt;&lt;a href="https://scholar.google.com/citations?user=X2Sg8SIAAAAJ&amp;amp;hl=en"&gt;We are researchers&lt;/a&gt; &lt;a href="https://scholar.google.com/citations?user=P6AUSLIAAAAJ&amp;amp;hl=en"&gt;who have been&lt;/a&gt; &lt;a href="https://scholar.google.com/citations?user=k93O1BQAAAAJ&amp;amp;hl=en"&gt;studying political advertising&lt;/a&gt; through the &lt;a href="https://mediaproject.wesleyan.edu/"&gt;Wesleyan Media Project&lt;/a&gt; since 2010. This election cycle – using data from media reports, student coders and AdImpact, a firm that tracks political ad spending – we’ve tracked about &lt;a href="https://mediaproject.wesleyan.edu/releases-090426/"&gt;US$80 million in spending&lt;/a&gt; on almost 170 unique ads that use AI. &lt;/p&gt;
+
+&lt;p&gt;What we found has surprised us: AI use spans from hyperrealistic deepfakes to subtle enhancements; Republican sponsors – both candidates and interest groups – are much more likely to use AI than are Democratic sponsors; and, thanks to a patchwork of state legislation, many of these ads do not disclose the use of AI at all.&lt;/p&gt;
+
+&lt;h2&gt;From deepfakes to subtle edits&lt;/h2&gt;
+
+&lt;p&gt;&lt;a href="https://thehill.com/homenews/campaign/5397074-stefanik-hits-back-at-dems-sexist-deepfake-ad/"&gt;An assortment of politicians&lt;/a&gt; and &lt;a href="https://www.brennancenter.org/our-work/research-reports/generative-ai-political-advertising"&gt;watchdog groups&lt;/a&gt; have expressed concern about campaigns using generative AI to produce deepfakes – synthetic videos showing people doing things they did not do – that might deceive voters.&lt;/p&gt;
+
+&lt;p&gt;We’ve noticed several ads containing hyperrealistic deepfakes of famous politicians, including &lt;a href="https://platform.adimpact.com/viewer/48a79ab7-c3e1-42c1-ba17-389104541670"&gt;Donald Trump&lt;/a&gt;, Nancy Pelosi, Barack Obama, Kamala Harris and Alexandria Ocasio-Cortez. &lt;a href="https://platform.adimpact.com/viewer/3749a016-862f-4b67-a9e2-e191be2276bf"&gt;Ocasio-Cortez&lt;/a&gt;, in particular, is a favorite among Republican advertisers, appearing in at least five ads.&lt;/p&gt;
+
+&lt;p&gt;We’ve seen deepfakes in which a Republican Senate candidate from Louisiana &lt;a href="https://platform.adimpact.com/viewer/49c0c9a9-f5f0-4dc1-be91-267193b1cdca"&gt;drives a school bus&lt;/a&gt; full of undocumented immigrants, a Republican candidate for governor from South Carolina &lt;a href="https://platform.adimpact.com/viewer/b641a315-1f87-4b19-bb10-9e1ff4344a3c"&gt;walks arm in arm with drag queens&lt;/a&gt;, and an ad in which Liz Cheney, Mitt Romney and Mike Pence are seen &lt;a href="https://platform.adimpact.com/viewer/4c4d9184-e8c5-4516-9311-2ff605f15b40"&gt;carrying pitchforks&lt;/a&gt; on the White House lawn. &lt;/p&gt;
+
+&lt;p&gt;People who are not politicians made appearances, too, including a fake &lt;a href="https://platform.adimpact.com/viewer/5665fbf4-ead8-4e54-8906-5c4530e74459"&gt;Dr. Anthony Fauci&lt;/a&gt;, seen running around a state fair with a huge syringe, presumably eager to vaccinate everyone. We’ve also noticed several ads in which AI was used to &lt;a href="https://platform.adimpact.com/viewer/2baebbc0-e73e-43e3-b07a-43ea05a44b1b"&gt;generate crowds or constituents&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;In several cases, AI was used to enhance visuals rather than generate something new. One ad from Chip Keating, a Republican candidate for governor in Oklahoma, &lt;a href="https://platform.adimpact.com/viewer/570681e9-80db-448f-afe9-4b4f7f19d57c"&gt;includes an AI disclaimer&lt;/a&gt;, but it doesn’t specify exactly how AI was used. Ads that use AI to enhance visuals don’t necessarily look different from ads that were created in the pre-AI era, which makes it difficult for viewers to discern whether they depict something false. &lt;/p&gt;
+
+&lt;h2&gt;A partisan gap&lt;/h2&gt;
+
+&lt;p&gt;Republicans – both candidates and groups such as super PACs and 501(c) organizations – are &lt;a href="https://mediaproject.wesleyan.edu/releases-090426/"&gt;much more likely&lt;/a&gt; to use AI in their ads than are Democrats, according to our research. &lt;/p&gt;
+
+&lt;p&gt;In fact, Republican candidates or pro-Republican groups were behind 80% of the ads we tracked and &lt;a href="https://mediaproject.wesleyan.edu/releases-090426/"&gt;83% of the spending&lt;/a&gt;. &lt;/p&gt;
+
+&lt;p&gt;We can only speculate as to why Republicans dominate the use of AI in political advertising in 2026. In general, Democrats tend to take on a regulatory mindset when it comes to political campaigns, favoring limits on campaign spending and required disclosures. In 2022, for instance, only Senate Democrats and two independents &lt;a href="https://www.senate.gov/legislative/LIS/roll_call_votes/vote1172/vote_117_2_00346.htm"&gt;voted to advance the DISCLOSE Act&lt;/a&gt; that would have required additional campaign finance disclosures for super PACs, labor unions and corporations. Republicans, by contrast, tend to be more in favor of a &lt;a href="https://press.princeton.edu/books/paperback/9780691113692/unfree-speech?srsltid=AU7gw4WZv2MOb1dBfyLGnMZHl-RRYT3FVMN0lpJk9HVJqfDzJlFTL6NR"&gt;free market approach&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;These more general philosophies may be reflected in the parties’ use of generative AI for political advertising, something about which voters are worried. Polling shows &lt;a href="https://www.techpolicy.press/poll-indicates-broad-support-for-regulating-ai-generated-media-related-to-elections/"&gt;broad support for more regulation&lt;/a&gt;, with 78% of registered voters favoring a ban on AI content that makes deceptive claims about candidates. &lt;/p&gt;
+
+&lt;figure class="align-center "&gt;
+            &lt;img alt="A screen in a press briefing room shows a social media video of a man in a sombrero and fake mustache, flanked by mariachi musicians, above a cable news banner." src="https://images.theconversation.com/files/763206/original/file-20260930-50-9adtrb.jpg?ixlib=rb-4.1.1&amp;amp;q=45&amp;amp;auto=format&amp;amp;w=754&amp;amp;fit=clip" srcset="https://images.theconversation.com/files/763206/original/file-20260930-50-9adtrb.jpg?ixlib=rb-4.1.1&amp;amp;q=45&amp;amp;auto=format&amp;amp;w=600&amp;amp;h=400&amp;amp;fit=crop&amp;amp;dpr=1 600w, https://images.theconversation.com/files/763206/original/file-20260930-50-9adtrb.jpg?ixlib=rb-4.1.1&amp;amp;q=30&amp;amp;auto=format&amp;amp;w=600&amp;amp;h=400&amp;amp;fit=crop&amp;amp;dpr=2 1200w, https://images.theconversation.com/files/763206/original/file-20260930-50-9adtrb.jpg?ixlib=rb-4.1.1&amp;amp;q=15&amp;amp;auto=format&amp;amp;w=600&amp;amp;h=400&amp;amp;fit=crop&amp;amp;dpr=3 1800w, https://images.theconversation.com/files/763206/original/file-20260930-50-9adtrb.jpg?ixlib=rb-4.1.1&amp;amp;q=45&amp;amp;auto=format&amp;amp;w=754&amp;amp;h=503&amp;amp;fit=crop&amp;amp;dpr=1 754w, https://images.theconversation.com/files/763206/original/file-20260930-50-9adtrb.jpg?ixlib=rb-4.1.1&amp;amp;q=30&amp;amp;auto=format&amp;amp;w=754&amp;amp;h=503&amp;amp;fit=crop&amp;amp;dpr=2 1508w, https://images.theconversation.com/files/763206/original/file-20260930-50-9adtrb.jpg?ixlib=rb-4.1.1&amp;amp;q=15&amp;amp;auto=format&amp;amp;w=754&amp;amp;h=503&amp;amp;fit=crop&amp;amp;dpr=3 2262w" sizes="(min-width: 1466px) 754px, (max-width: 599px) 100vw, (min-width: 600px) 600px, 237px"&gt;
+            &lt;figcaption&gt;
+              &lt;span class="caption"&gt;AI-modified videos of House Minority Leader Hakeem Jeffries posted by President Donald Trump were displayed at the White House in October 2025.&lt;/span&gt;
+              &lt;span class="attribution"&gt;&lt;a class="source" href="https://www.gettyimages.com/detail/news-photo/screen-displays-ai-modified-videos-of-house-minority-leader-news-photo/2238632782"&gt;Alex Wong/Getty Images News via Getty Images&lt;/a&gt;&lt;/span&gt;
+            &lt;/figcaption&gt;
+          &lt;/figure&gt;
+
+&lt;h2&gt;Disclaimers all over the map&lt;/h2&gt;
+
+&lt;p&gt;Because regulation of AI in advertising depends on a &lt;a href="https://ai-law-center.orrick.com/us-ai-law-tracker-see-all-states/"&gt;patchwork of state legislation&lt;/a&gt;, many of these ads are not required to disclose the use of AI. This lack of disclaimers makes tracking AI use in ads challenging. Our team has relied on media coverage and trained student coders to flag ads that are potentially AI-generated.&lt;/p&gt;
+
+&lt;p&gt;Across 35 states, only 31% of the ads we tracked – representing 22% of the spending – disclosed the use of AI tools. The wording of these disclaimers was all over the map. For example, one &lt;a href="https://adm0.page.link/gPax"&gt;Georgia ad&lt;/a&gt; included the disclaimer, “This video has been manipulated or generated with artificial intelligence,” while an &lt;a href="https://host2.adimpact.com/admo/viewer/50bf7133-7246-461c-979c-eca02e6b6359/"&gt;Oklahoma ad&lt;/a&gt; said, “Political satire. AI-generated images do not depict actual events.” A &lt;a href="https://platform.adimpact.com/viewer/427319df-664a-4938-9791-11dbbcf04db8"&gt;North Carolina state Senate ad&lt;/a&gt; said, “You guessed it! AI was definitely used to generate these silly video clips.” &lt;/p&gt;
+
+&lt;h2&gt;Laws don’t drive disclosure&lt;/h2&gt;
+
+&lt;p&gt;Some advertisers voluntarily disclose the use of AI even when they are not required to do so. Sometimes, the opposite occurs – advertisers don’t include disclaimers even when state law requires them to. In fact, we’ve found that a state law that requires disclaimers on ads that use AI has very little relationship with the actual use of disclaimers.&lt;/p&gt;
+
+&lt;p&gt;In states without laws governing the use of AI in political ads, 32% of ads contained a disclaimer; by contrast, in states with laws governing the use of AI, 29% contained a disclaimer. This comparison, however, is not perfect, as some of the ads in our database aren’t covered by their state’s law. Some states, such as Colorado, have laws that &lt;a href="https://www.ncsl.org/elections-and-campaigns/artificial-intelligence-ai-in-elections-and-campaigns"&gt;apply only to candidate deepfakes&lt;/a&gt; and thus exclude other uses of AI. In other instances, such as in Louisiana, an AI law was enacted after the ad aired.&lt;/p&gt;
+
+&lt;p&gt;&lt;a href="https://www.cbsnews.com/minnesota/news/new-minnesota-law-regulates-deepfakes-to-curb-influence-on-elections/"&gt;Minnesota law&lt;/a&gt; generally bans deepfakes in political ads, but an ad featuring synthetic video of &lt;a href="https://platform.adimpact.com/viewer/a09ff3fc-78fc-4843-8b90-d7570552117f"&gt;Democratic Senate candidate Peggy Flanagan&lt;/a&gt; aired in May 2026 anyway. Whether it violated state law is uncertain, as &lt;a href="https://www.revisor.mn.gov/statutes/cite/609.771"&gt;the law requires&lt;/a&gt; that the media be “so realistic that a reasonable person would believe it depicts speech or conduct of an individual who did not in fact engage in such speech or conduct.”&lt;/p&gt;
+
+&lt;p&gt;Moving forward, the real policy challenge will revolve around transparency, the enforceability of existing laws and simply figuring out what type of disclosure would be helpful to voters.&lt;/p&gt;&lt;img src="https://counter.theconversation.com/content/292105/count.gif" alt="The Conversation" width="1" height="1" /&gt;
+&lt;p class="fine-print"&gt;&lt;em&gt;&lt;span&gt;The authors do not work for, consult, own shares in or receive funding from any company or organization that would benefit from this article, and have disclosed no relevant affiliations beyond their academic appointment.&lt;/span&gt;&lt;/em&gt;&lt;/p&gt;</content>
+    <summary>Almost 170 ads and $80 million in spending and only 31% with a disclaimer: Here’s what researchers found when they tracked AI in this year’s campaign ads.</summary>
+    <author>
+      <name>Travis N. Ridout, Professor of Government and Public Policy, Washington State University</name>
+      <foaf:homepage rdf:resource="https://theconversation.com/profiles/travis-n-ridout-604996"/>
+    </author>
+    <author>
+      <name>Erika Franklin Fowler, Professor of Government, Wesleyan University</name>
+      <foaf:homepage rdf:resource="https://theconversation.com/profiles/erika-franklin-fowler-604998"/>
+    </author>
+    <author>
+      <name>Michael Franz, Professor of Government, Bowdoin College</name>
+      <foaf:homepage rdf:resource="https://theconversation.com/profiles/michael-franz-604994"/>
+    </author>
+    <rights>Licensed as Creative Commons – attribution, no derivatives.</rights>
+  </entry>
+</feed>
