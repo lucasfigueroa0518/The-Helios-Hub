@@ -12,6 +12,7 @@ import { sifDraft } from '@/fixtures/social/drafts';
 import { createFakeHttp, SIF_WEB } from '@/fixtures/social/photo-http';
 import type { JevAsk } from '@/lib/social/jev/client';
 import * as Identity from '@/lib/social/jev/questions/subject-identity.v1';
+import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v1';
 import { createCostMeter } from '@/lib/social/pipeline/cost-meter';
 import { BudgetExhausted, createLiveStages, createRunBudget } from '@/lib/social/pipeline/live-stages';
 import { runDay } from '@/lib/social/pipeline/orchestrator';
@@ -38,7 +39,13 @@ function fakeClaude(calls: string[], flags: unknown = { flags: [], main_claim_fa
   };
 }
 
-const identityJev: JevAsk = async (req) => {
+const identityJev: JevAsk = async (req, meta) => {
+  if (meta.version === Prescreen.VERSION) {
+    const st = req.state as ReturnType<typeof Prescreen.buildState>;
+    const a: Record<string, { noul: number }> = {};
+    st.candidates.forEach((_, k) => { a[Prescreen.fitId(k)] = { noul: 0.9 }; a[Prescreen.peopleId(k)] = { noul: 0.05 }; });
+    return { answers: a, usage: { input_tokens: 300, output_tokens: 0 }, model: 'stub-jev' };
+  }
   const state = req.state as ReturnType<typeof Identity.buildState>;
   const answers: Record<string, { noul: number }> = { is_person: { noul: 0.97 } };
   state.candidates.forEach((c, k) => { answers[Identity.matchId(k)] = { noul: /president|SEC/.test(c.description) ? 0.95 : 0.05 }; });

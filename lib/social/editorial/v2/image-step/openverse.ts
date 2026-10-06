@@ -67,6 +67,8 @@ export type OpenverseCandidate = {
   source: string;
   /** Openverse `title` field — used as fallback context. */
   title?: string;
+  /** Openverse tag names (for the Jev metadata pre-screen, spec §5A #6). */
+  tags?: string[];
 };
 
 /**
@@ -134,6 +136,7 @@ export async function searchOpenverse(
       creatorUrl: r.creator_url ? String(r.creator_url) : undefined,
       source,
       title: r.title ? String(r.title) : undefined,
+      tags: Array.isArray(r.tags) ? (r.tags as Array<{ name?: unknown }>).map((t) => String(t?.name ?? '')).filter(Boolean) : undefined,
     });
     if (out.length >= limit) break;
   }

@@ -215,6 +215,7 @@ Only the four sources needed to put a real photo on every slide:
 ### M7: Mechanical guarantees (spec §6)
 
 - **Quotation marks (Tommy, 2026-10-05):** allowed only around code-filled quote IDs. In the planted-error test, typed quote marks ("extremely reckless") survived a SWAP. M7 flags any quotation marks in slide or caption text that aren't a filled quote.
+- **Every text field reaches the slide (Tommy, 2026-10-06):** a mechanical check that every text field in the final draft (cover, headline, body, quote, numbers and their notes, follow) appears on the rendered slide. Any dropped text fails the render. Cause: the Writer v2 rewrite put a headline and body on quote slides and a body on a landing slide, and the frozen renderer silently dropped them (a link mismatch between draft fields and layouts).
 - **Trailing comma on displayed quotes (Tommy, 2026-10-05):** strip a trailing comma (and the space before it) from a quote as displayed on a slide, e.g. the SIF excerpt "… of all Americans,". Punctuation only; the words are unchanged, and the quoted-text match still checks the words against the brief.
 
 - **Silent fixes:** punctuation, quotes, whitespace, highlight snapping, credits and Source line.
@@ -248,6 +249,7 @@ Only the four sources needed to put a real photo on every slide:
     1. **Text fit:** each text region shrinks its font until the longest word fits on one line and the block fits the region, down to a minimum size; otherwise the render fails. No mid-word breaks (Altman checkpoint: "CYBERSECURIT/Y"). This also covers long stat and split-stat numbers (Gemini slide 4; Mistral checkpoint slide 3).
     2. **Contrast:** any text over a photo gets a dark scrim under the text area, on every layout.
     3. **Faces stay clear:** person photos use split layouts where photo and text have separate regions. Full-bleed photos under text are only for scene and mood photos.
+  - **Layouts show every draft field (Tommy, 2026-10-06):** the quote layout shows a headline and a body; the landing layout shows a body. The M7 dropped-text check fails any render until they do.
   - **Spread format:** the mechanics in spec §5.4 (one wide photo across the seam of two slides; if the photo isn't wide enough, both slides render as normal text slides).
   - **Photo-source bar** (from the 2026-10-06 checkpoint):
     - people and organization photos come only from the Wikidata main image (P18), never from P180 "depicts" photos (already live since 2026-10-06);

@@ -10,6 +10,7 @@ import { sifDraft } from '@/fixtures/social/drafts';
 import { commonsUrl, createFakeHttp, SIF_WEB, stockUrl } from '@/fixtures/social/photo-http';
 import type { JevAsk } from '@/lib/social/jev/client';
 import * as Identity from '@/lib/social/jev/questions/subject-identity.v1';
+import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v1';
 import { createDesignStage } from '@/lib/social/pipeline/design-stage';
 import type { Brief as PipelineBrief, Draft, ScoredCandidate } from '@/lib/social/pipeline/types';
 import { classifyCredit } from '@/lib/social/photos/credit';
@@ -31,8 +32,23 @@ type IdentityState = ReturnType<typeof Identity.buildState>;
 /** subject name → { person: P(is person), match: description → P(match) }. */
 type IdentityAnswers = Record<string, { person: number; match: (description: string) => number }>;
 
-function identityJev(answers: IdentityAnswers, calls: string[] = []): JevAsk {
+/** Stock pre-screen stub: fits unless the title says "off topic"; people when the title names them. */
+function prescreenAnswers(req: { state: unknown }): Record<string, { noul: number }> {
+  const state = req.state as ReturnType<typeof Prescreen.buildState>;
+  const out: Record<string, { noul: number }> = {};
+  state.candidates.forEach((c, k) => {
+    out[Prescreen.fitId(k)] = { noul: /off topic/.test(c.title) ? 0.1 : 0.9 };
+    out[Prescreen.peopleId(k)] = { noul: /people|soldier|students/.test(`${c.title} ${c.tags.join(' ')}`) ? 0.9 : 0.05 };
+  });
+  return out;
+}
+
+function identityJev(answers: IdentityAnswers, calls: string[] = [], prescreens: string[] = []): JevAsk {
   return async (req, meta) => {
+    if (meta.version === Prescreen.VERSION) {
+      prescreens.push(meta.subjectId);
+      return { answers: prescreenAnswers(req), usage: { input_tokens: 300, output_tokens: 0 }, model: 'stub-jev' };
+    }
     assert.equal(meta.version, Identity.VERSION);
     calls.push(meta.subjectId);
     const state = req.state as IdentityState;
@@ -429,4 +445,25 @@ test('stock size: only thumbnails are rejected (short side under 600px)', async 
   }
   assert.deepEqual([...new Set(seen)], [STOCK_MIN_SHORT_SIDE]);
   assert.equal(STOCK_MIN_SHORT_SIDE, 600);
+});
+
+// ── Stock pre-screen (spec §5A #6) ───────────────────────────────────────
+
+const ov = (title: string, tags: string[] = []) => ({ url: `https://s/${title.replace(/\W+/g, '-')}.jpg`, foreignLandingUrl: '', mime: 'image/jpeg', width: 1024, height: 683, license: 'by', creator: 'A', source: 'flickr', title, tags });
+
+test('pre-screen: a result that likely shows people is skipped for one that fits and shows no one', async () => {
+  const prescreens: string[] = [];
+  const stock = async () => [ov('server room maintenance', ['soldier']), ov('server room off topic'), ov('server racks')];
+  const t = await findPhoto({ kind: 'stock', value: 'server room' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS, [], prescreens), stock });
+  assert.equal(t.photo?.url, 'https://s/server-racks.jpg');
+  assert.deepEqual(prescreens, ['server room']);
+  assert.ok(t.steps.some((s) => /pre-screen "server room": .*people 0\.90.*✓/.test(s)), t.steps.join(' | '));
+});
+
+test('pre-screen: nothing passes → the two-word search, then the starter set', async () => {
+  const queries: string[] = [];
+  const stock = async (q: string) => { queries.push(q); return [ov('students at laptops'), ov('people in a lab')]; };
+  const t = await findPhoto({ kind: 'stock', value: 'student laptop campus' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS), stock });
+  assert.deepEqual(queries, ['student laptop campus', 'student laptop']);
+  assert.equal(t.via, 'starter');
 });

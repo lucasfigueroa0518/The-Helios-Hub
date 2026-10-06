@@ -431,7 +431,7 @@ Jev answers yes/no questions with a confidence score. It's very cheap (input onl
 | 3 | ~~Strategy decisions~~ | — | **Retired** with the old pipeline (§10) |
 | 4 | **Fact-checking claim by claim.** The Writer tags each claim with the brief fact it came from. Jev answers "does this source passage support this sentence?" A failed claim gets the brief's own wording swapped in by code (fits §4.2). Only replaces the Claude Fact-checker after matching it on a test set of past posts with known errors. | Claude Fact-checker | **DECIDED: built now**, with a one-batch comparison against Claude (§10) |
 | 5 | **Identifying photo subjects:** does this Wikidata entry match the person or company in the brief? | Matching logic | **DECIDED, required in M6** (S2, 2026-10-04: the old resolver matched "METR" to MGM and "Cursor" to the mouse cursor, 2 of 13 company matches. That's a measured rate, not a one-off, and a wrong subject is a must-hold failure.) **Two checks, both required before a photo is used:** (1) **Code:** the entry's "instance of" (P31) must fit the subject type (person = human; company = organization or business). (2) **Jev:** "Does this entry's description match the brief's description of this subject?" Jev also picks among the top candidates when the resolver can't decide, which recovers famous names it currently drops (Musk, Sacks, Lawler, NSA, FINRA). If either check fails, no photo of that subject; use the fallback chain. |
-| 6 | **Pre-screening stock photos:** do the photo's title and tags fit the requested scene? Runs before the image check. | Fewer image-check calls | PROPOSED |
+| 6 | **Pre-screening stock photos:** do the photo's title and tags fit the requested scene? Runs before the image check. | Fewer image-check calls | **DECIDED, built 2026-10-06** (Tommy, after the checkpoint showed people in stock results). Also asks whether a person is likely visible; a likely person is rejected (wrong-person class). One call per stock search, question set `stock-prescreen@1`, thresholds provisional (fit ≥ 0.5, people < 0.3). Metadata only: a person the title and tags don't hint at gets through. |
 
 **Story-scoring questions (#1, PROPOSED):**
 
@@ -556,7 +556,8 @@ These came up once in hand-run tests. They become fixes only if they recur in re
 | Editor: attribution put in a headline ("9to5Google: AI Pro gets Deep Think"; 1 occurrence) | Editor prompt: attribution goes in the body |
 | Editor: a clumsy gloss ("Alignment is efforts to build AI…"; 1 occurrence) | Watch only |
 | Editor: inaccurate edit notes (claimed a caption change that wasn't made; slide numbering off by one; claimed a cut that wasn't made). 2 of 3 stories | Watch; notes are for review only |
-| Stat slide repeats its number in the headline and the big number (NYC: "Proposed fine: $25,000 for…" over "$25,000"; 1 occurrence, 2026-10-05) | Writer prompt: on a stat slide the headline frames the number, never repeats it |
+| Stat slide repeats its number in the headline and the big number (NYC: "Proposed fine: $25,000 for…" over "$25,000", 2026-10-05; Mistral rewrite: "38 on the independent index…" over "38", 2026-10-06; **2 occurrences**) | Writer prompt: on a stat slide the headline frames the number, never repeats it |
+| Editor let 5 consecutive Altman headlines open with "He" (Writer v2 rewrite, 2026-10-06), against the voice rule "don't open two slides the same way"; 1 occurrence | Editor check: vary slide openings |
 
 **Process note (2026-10-04):** hand-run simulations are for illustrating the design, not for finding fixes. From here on, fixes come only from patterns in real batch logs.
 

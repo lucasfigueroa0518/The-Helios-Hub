@@ -9,7 +9,9 @@
  *   subject: <SUBJECTS name> → identity check, then that entry's Wikidata
  *            main image (P18) only. Never P180 "depicts" photos: they show
  *            other people (stage shots, delegations).
- *   stock:   <scene> → Openverse: the request, then its first two words
+ *   stock:   <scene> → Openverse: the request, then its first two words; each
+ *            search's results go through the Jev metadata pre-screen (fits the
+ *            scene, no person likely visible; spec §5A #6)
  *   then     the offline starter set (starter-set.ts), which can't come up empty
  *
  * Where the photo is drawn (its slot) limits what may go there:
@@ -26,6 +28,7 @@
 import { buildCredit, fetchEntityP18, fetchImageInfo, toCandidate } from '@/lib/social/editorial/v2/image-step/commons';
 import { buildStockCredit, searchOpenverse, type OpenverseCandidate } from '@/lib/social/editorial/v2/image-step/openverse';
 import type { JevAsk } from '@/lib/social/jev/client';
+import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v1';
 import type { Brief } from '@/lib/social/reporter/brief';
 import type { ArticlePhoto, PageReadOk } from '@/lib/social/reporter/read-page';
 import type { ImageRequest } from '@/lib/social/writer/draft';
@@ -162,13 +165,34 @@ export function stockQueries(request: string): string[] {
   return [...new Set([words.join(' '), words.slice(0, 2).join(' ')])].filter(Boolean);
 }
 
+/**
+ * Jev metadata pre-screen (spec §5A #6): the first result whose title and
+ * tags fit the scene and suggest no person. Scores are logged.
+ */
+async function prescreen(scene: string, cands: OpenverseCandidate[], deps: PhotoDeps, steps: string[]): Promise<OpenverseCandidate | null> {
+  const shown = cands.slice(0, Prescreen.MAX_CANDIDATES);
+  const res = await deps.jev(
+    { state: Prescreen.buildState(scene, shown.map((c) => ({ title: c.title ?? '', tags: c.tags ?? [], source: c.source }))), questions: Prescreen.buildQuestions(shown.length) },
+    { version: Prescreen.VERSION, subjectId: scene },
+  );
+  const { FIT_MIN, PEOPLE_MAX } = Prescreen.THRESHOLDS;
+  const scored = shown.map((c, k) => ({ c, fit: res.answers[Prescreen.fitId(k)]!.noul, people: res.answers[Prescreen.peopleId(k)]!.noul }));
+  const pick = scored.find((x) => x.fit >= FIT_MIN && x.people < PEOPLE_MAX) ?? null;
+  steps.push(`pre-screen "${scene}": ${scored.map((x) => `"${(x.c.title ?? '').slice(0, 40)}" fit ${x.fit.toFixed(2)} people ${x.people.toFixed(2)}${x === pick ? ' ✓' : ''}`).join('; ')}`);
+  return pick?.c ?? null;
+}
+
 async function stockPhoto(request: string, slot: PhotoSlot, ctx: PhotoContext, deps: PhotoDeps, steps: string[]): Promise<Photo | null> {
   const search: StockSearch = deps.stock ?? ((q, o) => searchOpenverse(q, { http: deps.http, minShortSide: o.minShortSide }));
   for (const query of stockQueries(request)) {
-    const cands = await search(query, { minShortSide: STOCK_MIN_SHORT_SIDE });
-    const pick = cands.find((c) => !ctx.used.has(c.url));
+    const cands = (await search(query, { minShortSide: STOCK_MIN_SHORT_SIDE })).filter((c) => !ctx.used.has(c.url));
+    if (!cands.length) {
+      steps.push(`stock "${query}" (${slot}): no unused results`);
+      continue;
+    }
+    const pick = await prescreen(request, cands, deps, steps);
     if (!pick) {
-      steps.push(`stock "${query}" (${slot}): ${cands.length ? 'every result already used' : 'no results'}`);
+      steps.push(`stock "${query}" (${slot}): no result passed the pre-screen`);
       continue;
     }
     steps.push(`stock "${query}" (${slot}): ${pick.source} ${pick.width}×${pick.height}${pick.title ? ` "${pick.title}"` : ''}`);
