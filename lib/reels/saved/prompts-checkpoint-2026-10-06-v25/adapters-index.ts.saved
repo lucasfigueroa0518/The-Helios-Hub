@@ -1,0 +1,173 @@
+import { awesomeLists } from '@/lib/reels/adapters/awesome-lists';
+import { githubTrending } from '@/lib/reels/adapters/github-trending';
+import { hackerNews } from '@/lib/reels/adapters/hacker-news';
+import { hfDailyPapers } from '@/lib/reels/adapters/hf-papers';
+import { markdownChangelogAdapter } from '@/lib/reels/adapters/markdown-changelog';
+import { rssAdapter } from '@/lib/reels/adapters/rss-feed';
+import { tldr } from '@/lib/reels/adapters/tldr';
+import { claudeWebSearch } from '@/lib/reels/adapters/web-search';
+import { QUIET_SOURCE_DAYS } from '@/lib/reels/config';
+import type { Adapter } from '@/lib/reels/types';
+
+/**
+ * The roster from D-050. Out of Build 1: Wikipedia (D-010), GH Archive
+ * (D-026), oral history (D-003), Wired and The Verge (paywalls would empty
+ * them under D-036), Hub trending, Bytes, JavaScript Weekly, and the vendors
+ * not named here.
+ *
+ * Feed URLs were delegated at implementation and each one was probed before
+ * being wired. Where an outlet publishes an AI-section feed, that is what we
+ * take. Anthropic publishes no news RSS, so A5 reads its platform release
+ * notes, which is the changelog the source type asks for.
+ */
+export const ADAPTERS: Adapter[] = [
+  // A1
+  githubTrending,
+  // A2
+  hackerNews,
+  // A3
+  hfDailyPapers,
+  // A5 — vendor changelogs and release notes
+  rssAdapter({
+    id: 'openai-news',
+    name: 'OpenAI',
+    type: 'A5',
+    bucket: 'A',
+    feedUrl: 'https://openai.com/news/rss.xml',
+  }),
+  markdownChangelogAdapter({
+    id: 'anthropic-release-notes',
+    name: 'Anthropic platform release notes',
+    type: 'A5',
+    bucket: 'A',
+    sourceUrl: 'https://docs.claude.com/en/release-notes/api.md',
+    pageUrl: 'https://platform.claude.com/docs/en/release-notes/api',
+  }),
+  rssAdapter({
+    id: 'cursor-changelog',
+    name: 'Cursor changelog',
+    type: 'A5',
+    bucket: 'A',
+    feedUrl: 'https://cursor.com/changelog/rss.xml',
+  }),
+  // A6 — curated dev newsletters
+  tldr,
+  rssAdapter({
+    id: 'console-dev',
+    name: 'Console.dev',
+    type: 'A6',
+    bucket: 'A',
+    feedUrl: 'https://console.dev/rss.xml',
+    inlineBody: true,
+  }),
+  // B1 — tech press
+  rssAdapter({
+    id: 'techcrunch',
+    name: 'TechCrunch',
+    type: 'B1',
+    bucket: 'B',
+    feedUrl: 'https://techcrunch.com/category/artificial-intelligence/feed/',
+    quietAfterDays: QUIET_SOURCE_DAYS,
+  }),
+  rssAdapter({
+    id: 'ars-technica',
+    name: 'Ars Technica',
+    type: 'B1',
+    bucket: 'B',
+    feedUrl: 'https://arstechnica.com/ai/feed/',
+    quietAfterDays: QUIET_SOURCE_DAYS + 1,
+  }),
+  rssAdapter({
+    id: '404-media',
+    name: '404 Media',
+    type: 'B1',
+    bucket: 'B',
+    feedUrl: 'https://www.404media.co/rss/',
+    quietAfterDays: QUIET_SOURCE_DAYS + 1,
+  }),
+  // B1 — story sources (D-263): AI stories with people, a plot, and consequences.
+  // Each feed was probed live on 2026-10-06 and resolved full text for every
+  // sampled article. Wired and The Verge were left out under D-050 for
+  // paywalls; both now return full article text.
+  rssAdapter({
+    id: 'futurism',
+    name: 'Futurism',
+    type: 'B1',
+    bucket: 'B',
+    feedUrl: 'https://futurism.com/categories/ai-artificial-intelligence/feed',
+    quietAfterDays: QUIET_SOURCE_DAYS,
+  }),
+  rssAdapter({
+    id: 'the-verge-ai',
+    name: 'The Verge',
+    type: 'B1',
+    bucket: 'B',
+    feedUrl: 'https://www.theverge.com/rss/ai-artificial-intelligence/index.xml',
+    quietAfterDays: QUIET_SOURCE_DAYS,
+  }),
+  rssAdapter({
+    id: 'wired-ai',
+    name: 'Wired',
+    type: 'B1',
+    bucket: 'B',
+    feedUrl: 'https://www.wired.com/feed/tag/ai/latest/rss',
+    quietAfterDays: QUIET_SOURCE_DAYS + 2,
+  }),
+  // Reports of real AI incidents, linking to the original news article.
+  rssAdapter({
+    id: 'ai-incident-db',
+    name: 'AI Incident Database',
+    type: 'B1',
+    bucket: 'B',
+    feedUrl: 'https://incidentdatabase.ai/rss.xml',
+    quietAfterDays: QUIET_SOURCE_DAYS,
+  }),
+  // B1 — mainstream press (D-263): the AI stories everyone else is hearing about.
+  rssAdapter({
+    id: 'guardian-ai',
+    name: 'The Guardian',
+    type: 'B1',
+    bucket: 'B',
+    feedUrl: 'https://www.theguardian.com/technology/artificialintelligenceai/rss',
+    quietAfterDays: QUIET_SOURCE_DAYS,
+  }),
+  // The whole technology section; the ingest screen drops what is not about AI.
+  rssAdapter({
+    id: 'bbc-tech',
+    name: 'BBC News',
+    type: 'B1',
+    bucket: 'B',
+    feedUrl: 'https://feeds.bbci.co.uk/news/technology/rss.xml',
+    quietAfterDays: QUIET_SOURCE_DAYS,
+  }),
+  // B3 — company blogs, post-mortems, model cards
+  rssAdapter({
+    id: 'cloudflare-blog',
+    name: 'Cloudflare blog',
+    type: 'B3',
+    bucket: 'B',
+    feedUrl: 'https://blog.cloudflare.com/rss/',
+  }),
+  rssAdapter({
+    id: 'deepmind-blog',
+    name: 'Google DeepMind',
+    type: 'B3',
+    bucket: 'B',
+    feedUrl: 'https://deepmind.google/blog/rss.xml',
+  }),
+  // A4 and B6 read what tonight already ingested, so they run last.
+  awesomeLists,
+  claudeWebSearch,
+];
+
+export function primaryAdapters(): Adapter[] {
+  return ADAPTERS.filter((adapter) => adapter.phase !== 'derived');
+}
+
+export function derivedAdapters(): Adapter[] {
+  return ADAPTERS.filter((adapter) => adapter.phase === 'derived');
+}
+
+export function adapterById(id: string): Adapter | undefined {
+  return ADAPTERS.find((adapter) => adapter.id === id);
+}
