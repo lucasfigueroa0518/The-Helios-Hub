@@ -6,10 +6,11 @@
  *   (pass-through until M7) → local preview
  *
  * LIVE: Claude (Sonnet 5.5), web search, Jev, Wikidata / Commons /
- * Openverse. Needs Tommy's OK. --cap-usd is required and is a hard total
+ * Openverse. Needs Tommy's OK. --cap-usd (default $2.00) is a hard total
  * cap on Claude (tokens + web search fees) + Jev: no call starts that
  * could pass it. No database, no Storage, no Instagram.
  *
+ *   npx tsx scripts/social_daily.ts --stories 2            (cap $2.00)
  *   npx tsx scripts/social_daily.ts --cap-usd 1.50 --stories 2
  *
  * Writes runs/daily-<ts>/: run.json (selection, every stage's result,
@@ -23,13 +24,16 @@ import path from 'node:path';
 
 process.loadEnvFile(path.join(process.cwd(), '.env.local'));
 
+const DEFAULT_CAP_USD = 2;
+
 async function main() {
   const arg = (name: string) => {
     const i = process.argv.indexOf(name);
     return i > 0 ? Number(process.argv[i + 1]) : undefined;
   };
-  const capUsd = arg('--cap-usd');
-  if (capUsd === undefined || !Number.isFinite(capUsd) || capUsd <= 0) throw new Error('--cap-usd <amount> is required for a live run');
+  // Default total cap $2.00 (Tommy, 2026-10-06; spec allows $5/day).
+  const capUsd = arg('--cap-usd') ?? DEFAULT_CAP_USD;
+  if (!Number.isFinite(capUsd) || capUsd <= 0) throw new Error('--cap-usd must be a positive amount');
   const stories = arg('--stories') ?? 2;
 
   const { default: Anthropic } = await import('@anthropic-ai/sdk');

@@ -11,6 +11,8 @@
  *   limits ("the same length limits as the Writer") and the voice it
  *   sharpens toward.
  *   PLACEMENT (caching): the draft and the brief go in the user message.
+ *   CHECK 2 (Tommy, 2026-10-06, with Writer prompt v2): every slide pulls to
+ *   the next, not only slide 2.
  */
 import { RULES_BLOCK } from '@/lib/social/prompts/rules-block';
 import { VOICE_BLOCK } from '@/lib/social/prompts/voice-block';
@@ -20,7 +22,7 @@ export const EDITOR_TESTED_TEXT = `You are the Editor for Helios Group's Instagr
 
 Make sure:
 1. The chosen cover alone says who did what.
-2. Slide 2 makes the reader want to keep swiping.
+2. Every slide makes the reader want the next; reorder or sharpen headlines to create the pull, without adding facts.
 3. Every slide makes sense to an outsider. Explain unfamiliar terms where they appear, using only the brief's TERMS.
 4. The reader finishes knowing why it matters.
 

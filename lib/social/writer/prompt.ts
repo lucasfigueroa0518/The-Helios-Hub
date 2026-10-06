@@ -13,6 +13,7 @@
  *   CAPTION WORDING (Tommy, 2026-10-05; known-wrong carry-overs): "— respect it"
  *   → ". Respect it." (voice bans em dashes); "the final SLIDES you were
  *   given" → "the slides you wrote" (the Writer writes both now).
+ *   V2 (Tommy, 2026-10-06): three momentum rule lines follow the additions.
  *   PLACEMENT (caching): "BRIEF\n{{brief}}" moves to the user message;
  *   the brief is the Reporter's JSON, with SUBJECTS marked well_known by code.
  */
@@ -25,6 +26,11 @@ export const WRITER_INTRO = `You are the Writer for Helios Group, an Instagram p
 export const WRITER_ADDED_RULES = `- Claim tags: give every cover, headline, body and caption line the IDs of the brief entries it rests on (F3, B1, Q2, N1) in its facts list; empty if none. Code checks them.
 - Widely known: each SUBJECTS entry has well_known (true/false), set by code from Wikidata. Use it for the COVER rule; don't guess.
 - You may pair two consecutive slides that tell one continuous beat; give the pair one IMAGE line (spread_with_next).`;
+
+/** Writer prompt v2 (Tommy, 2026-10-06; Lucas: slides feel isolated): momentum across the post. Word for word from the prompts file. */
+export const WRITER_MOMENTUM_RULES = `- Plan the post as one story, not a list of facts. Outline the arc before writing: the hook (cover) → what happened → why it matters → the turn (the pushback, the catch, the conflict) → what's still unknown or what comes next.
+- Every slide pulls the reader to the next one. End each slide on real tension from the brief (a contradiction, a consequence, a reaction, an open question) that the next slide pays off.
+- Tension comes only from the brief: disagreements, critics, stakes, NOT ANSWERED. Never invent suspense, tease facts that aren't there, or hold back the news.`;
 
 /** Shared Context policy + Glossing from RULES_BLOCK (after its tested rule lines). */
 const CONTEXT_AND_GLOSSING = RULES_BLOCK.slice(RULES_BLOCK.indexOf('## Context policy'));
@@ -82,7 +88,7 @@ As long as the story needs and no longer, usually one or two short paragraphs. I
 
 export const WRITER_SYSTEM = [
   WRITER_INTRO,
-  `## Rules\n\n${TESTED_WRITER_RULES}\n${WRITER_ADDED_RULES}`,
+  `## Rules\n\n${TESTED_WRITER_RULES}\n${WRITER_ADDED_RULES}\n${WRITER_MOMENTUM_RULES}`,
   CONTEXT_AND_GLOSSING,
   `When you're done, call submit_draft with these sections:\n${WRITER_SECTION_LIST}`,
   WRITER_CAPTION_SECTION,

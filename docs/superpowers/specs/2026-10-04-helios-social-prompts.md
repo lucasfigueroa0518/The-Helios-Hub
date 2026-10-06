@@ -127,6 +127,19 @@ BRIEF
 
   The §3 block below stays as originally carried over. The code applies these two edits, and a guard test checks them. `cause · Writer prompt · 0 new stages · 0 new AI calls`
 
+
+**Writer prompt v2 (Tommy, 2026-10-06).** `cause · Writer prompt v2 + Editor check · 0 new stages · 0 new AI calls`
+
+- **Why:** feedback from Lucas: the slides feel isolated, with no pull between them.
+- **Cause:** no rule asks for momentum across the post. Only Editor check 2 covered it, and only for slide 2.
+- **Change:** these three rule lines are added word for word after the three "added since the test" lines. The tested block above stays as it was.
+
+```
+- Plan the post as one story, not a list of facts. Outline the arc before writing: the hook (cover) → what happened → why it matters → the turn (the pushback, the catch, the conflict) → what's still unknown or what comes next.
+- Every slide pulls the reader to the next one. End each slide on real tension from the brief (a contradiction, a consequence, a reaction, an open question) that the next slide pays off.
+- Tension comes only from the brief: disagreements, critics, stakes, NOT ANSWERED. Never invent suspense, tease facts that aren't there, or hold back the news.
+```
+
 ---
 
 ## 3. Writer's caption section (carried over verbatim)
@@ -195,7 +208,7 @@ You are the Editor for Helios Group's Instagram carousels. You get the Writer's 
 
 Make sure:
 1. The chosen cover alone says who did what.
-2. Slide 2 makes the reader want to keep swiping.
+2. Every slide makes the reader want the next; reorder or sharpen headlines to create the pull, without adding facts.
 3. Every slide makes sense to an outsider. Explain unfamiliar terms where they appear, using only the brief's TERMS.
 4. The reader finishes knowing why it matters.
 
@@ -205,6 +218,8 @@ Keep 5–8 story slides and the same length limits as the Writer. If the story i
 
 OUTPUT: the full edited draft in the Writer's format, then EDIT NOTES: one line per change.
 ```
+
+**Editor check 2 changed (Tommy, 2026-10-06), alongside Writer prompt v2.** It was "2. Slide 2 makes the reader want to keep swiping." Same reason as the Writer change: momentum has to hold across the whole post, not just slide 2. The Editor's powers are unchanged (cut and sharpen only, no new facts). `cause · Writer prompt v2 + Editor check · 0 new stages · 0 new AI calls`
 
 **As built (M4), approved by Tommy 2026-10-05:**
 
