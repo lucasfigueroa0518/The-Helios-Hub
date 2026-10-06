@@ -13,7 +13,7 @@ export { isLiveAutoCampaign } from '@/lib/auto-campaigns/status';
 export type OutreachCampaignSlice = {
   id: string;
   name: string;
-  status: 'active' | 'archived';
+  status: 'active' | 'archived' | 'terminated';
   kind: string;
   auto_status: string | null;
   owner_id: string;

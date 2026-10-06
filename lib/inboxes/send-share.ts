@@ -42,10 +42,16 @@ async function loadShareClaims(identitySlug: IdentitySlug): Promise<ShareRow[]> 
     `SELECT id::text, COALESCE(kind, 'manual') AS kind, emails_per_day, delivery_settings
        FROM outreach.campaigns
       WHERE status = 'active'
-        AND COALESCE(sender_identity_slug, 'lucas') = $1
+        AND sender_identity_slug = $1
         AND (
-          COALESCE(kind, 'manual') <> 'auto'
-          OR auto_status = 'live'
+          (COALESCE(kind, 'manual') = 'auto' AND auto_status = 'live')
+          OR (
+            COALESCE(kind, 'manual') <> 'auto'
+            AND (
+              (delivery_settings->>'capacity_pct') IS NOT NULL
+              OR (delivery_settings->>'max_new_leads_per_day') IS NOT NULL
+            )
+          )
         )`,
     [identitySlug],
   );

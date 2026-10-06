@@ -31,7 +31,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
   const { id } = await params;
   let body: {
     name?: string;
-    status?: 'active' | 'archived';
+    status?: 'active' | 'archived' | 'terminated';
     auto_status?: 'live' | 'paused';
     emails_per_day?: number;
     follow_up_enabled?: boolean;

@@ -29,6 +29,8 @@ import {
 import { enqueueReadyAutoCampaignDrafts } from '@/lib/auto-campaigns/auto-send';
 import { formatNyDate } from '@/lib/drafting/send-queue-schedule';
 import { campaignDailyQuota } from '@/lib/inboxes/send-share';
+import { enqueueWork } from '@/lib/orchestration/repository';
+import { laneEnsureWork } from '@/lib/smartlead/lanes';
 import { resolveDeliverySettings } from '@/lib/smartlead/delivery-settings';
 import { normalizeLinkedinUrl } from '@/lib/auto-campaigns/credit-pipeline';
 import type { EnrichedPerson, ProspectCycleStats, ProspectLogEntry } from '@/lib/auto-campaigns/types';
@@ -157,6 +159,9 @@ export async function runAutoCampaignCycle(campaignId: string): Promise<{
       `UPDATE outreach.campaigns SET emails_per_day = $2, updated_at = now() WHERE id = $1`,
       [campaignId, emailsPerDay],
     );
+  }
+  if (share != null && emailsPerDay > 0 && campaign.sender_identity_slug) {
+    await enqueueWork(laneEnsureWork(campaignId, campaign.sender_identity_slug)).catch(() => undefined);
   }
   if (share != null && emailsPerDay <= 0) {
     await updateAutoCursor({

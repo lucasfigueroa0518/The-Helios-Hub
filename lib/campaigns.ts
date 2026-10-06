@@ -41,7 +41,7 @@ export type TagWithColor = {
 export type Campaign = {
   id: string;
   name: string;
-  status: 'active' | 'archived';
+  status: 'active' | 'archived' | 'terminated';
   owner_id: string;
   merged_into_id: string | null;
   needs_enrichment: boolean;
@@ -333,9 +333,8 @@ export async function createCampaign(
       ...seeded,
       ...incoming,
       capacity_pct: capacityPct,
-      // The create dialog sends a partial payload. Keep the 30-day approval
-      // lock unless the caller set a date explicitly.
-      require_approval_until: incoming?.require_approval_until ?? seeded.require_approval_until,
+      require_approval: false,
+      require_approval_until: null,
       follow_ups: incoming?.follow_ups ?? seeded.follow_ups,
       schedule: {
         ...seeded.schedule,
@@ -443,12 +442,15 @@ async function snapshotAutoQuota<T extends {
 export async function updateCampaign(
   ownerId: string,
   campaignId: string,
-  values: { name?: string; status?: 'active' | 'archived' },
+  values: { name?: string; status?: 'active' | 'archived' | 'terminated' },
 ): Promise<Campaign | null> {
   const name = values.name?.trim();
   if (values.name !== undefined && !name) throw new Error('Campaign name cannot be empty');
-  if (values.status && !['active', 'archived'].includes(values.status)) {
+  if (values.status && !['active', 'archived', 'terminated'].includes(values.status)) {
     throw new Error('Invalid campaign status');
+  }
+  if (values.status === 'terminated') {
+    return terminateCampaign(ownerId, campaignId, name);
   }
 
   const { rowCount } = await dbQuery(
@@ -469,6 +471,63 @@ export async function updateCampaign(
     [campaignId, ownerId, name ?? null, values.status ?? null],
   );
   if (!rowCount) return null;
+  return getCampaign(ownerId, campaignId);
+}
+
+/**
+ * Stops a campaign for good. It leaves the active list, drops out of capacity,
+ * and any mail still waiting is cancelled. Pause can be resumed. Terminate cannot.
+ */
+export async function terminateCampaign(
+  ownerId: string,
+  campaignId: string,
+  name?: string,
+): Promise<Campaign | null> {
+  const existing = await getCampaign(ownerId, campaignId);
+  if (!existing) return null;
+
+  const { rowCount } = await dbQuery(
+    `UPDATE outreach.campaigns
+        SET name = COALESCE($3, name),
+            status = 'terminated',
+            auto_status = CASE WHEN kind = 'auto' THEN 'paused' ELSE auto_status END,
+            next_cycle_at = NULL,
+            updated_at = now()
+      WHERE id = $1
+        AND (owner_id = $2 OR COALESCE(kind, 'manual') = 'auto')`,
+    [campaignId, ownerId, name ?? null],
+  );
+  if (!rowCount) return null;
+
+  const { pauseDraftingWorkspace } = await import('@/lib/drafting/repository');
+  await pauseDraftingWorkspace(campaignId, ownerId).catch(() => undefined);
+  await dbQuery(
+    `UPDATE outreach.email_send_queue
+        SET status = 'cancelled',
+            waiting_reason = 'campaign_terminated',
+            updated_at = now()
+      WHERE campaign_id = $1
+        AND status IN ('queued', 'handing_off')`,
+    [campaignId],
+  ).catch(() => undefined);
+  await dbQuery(
+    `UPDATE outreach.reply_sends
+        SET status = 'cancelled',
+            cancelled_at = COALESCE(cancelled_at, now()),
+            cancel_reason = 'campaign_terminated',
+            updated_at = now()
+      WHERE campaign_id = $1
+        AND status IN ('queued', 'scheduled', 'awaiting_human')`,
+    [campaignId],
+  ).catch(() => undefined);
+
+  const lanes = await listLanesForCampaign(campaignId);
+  for (const lane of lanes) {
+    if (lane.status === 'ready' || lane.status === 'creating') {
+      await pauseLane(lane.id).catch(() => undefined);
+    }
+  }
+
   return getCampaign(ownerId, campaignId);
 }
 
@@ -559,6 +618,7 @@ export async function updateAutoCampaign(
     if (!ready) autoStatus = 'pending_sender';
   }
   if (existing.status === 'archived') throw new Error('Archived campaigns cannot go live');
+  if (existing.status === 'terminated') throw new Error('Terminated campaigns cannot go live');
 
   const nextCycle = autoStatus === 'live'
     ? (shouldRunFirstCycleNow() ? new Date() : nextAutoCycleAt(campaignId))
@@ -645,8 +705,14 @@ export async function updateCampaignDelivery(
         ...values.deliverySettings.schedule,
       },
       follow_ups: values.deliverySettings.follow_ups ?? existing.delivery_settings.follow_ups,
+      require_approval: false,
+      require_approval_until: null,
     }
-    : existing.delivery_settings;
+    : {
+      ...existing.delivery_settings,
+      require_approval: false,
+      require_approval_until: null,
+    };
 
   await dbQuery(
     `UPDATE outreach.campaigns

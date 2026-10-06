@@ -46,6 +46,9 @@ function prospectActivity(payload: ProspectPayload | null): { busy: boolean; mes
   if (health === 'pending_sender') {
     return { busy: false, message: 'Sender setup is required before Apollo can run.' };
   }
+  if (payload.campaign.status === 'terminated') {
+    return { busy: false, message: 'Terminated. This campaign no longer sends or takes capacity.' };
+  }
   if (health === 'paused') {
     return { busy: false, message: 'Paused. Edit targeting, then resume.' };
   }
@@ -134,8 +137,9 @@ export function ProspectWorkspace({
   const campaign = data?.campaign;
   const days = data?.days ?? [];
   const dayIndex = day ? days.indexOf(day) : 0;
-  const live = campaign?.auto_status === 'live';
-  const health = campaign?.auto_status ?? 'pending_sender';
+  const live = campaign?.status === 'active' && campaign?.auto_status === 'live';
+  const terminated = campaign?.status === 'terminated';
+  const health = terminated ? 'terminated' : (campaign?.auto_status ?? 'pending_sender');
   const activity = prospectActivity(data);
 
   async function patch(body: Record<string, unknown>) {
@@ -187,6 +191,19 @@ export function ProspectWorkspace({
               Resume
             </button>
           ) : null}
+          {terminated ? null : (
+            <button
+              type="button"
+              className="btn btn--secondary"
+              disabled={saving}
+              onClick={() => {
+                if (!window.confirm('Terminate this campaign? It stops sending and gives its capacity back. This cannot be resumed.')) return;
+                void patch({ status: 'terminated' });
+              }}
+            >
+              Terminate
+            </button>
+          )}
         </div>
       </div>
 
