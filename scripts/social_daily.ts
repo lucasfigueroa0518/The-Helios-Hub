@@ -161,6 +161,12 @@ async function main() {
     // How often the 7-day rule gave way (Tommy, 2026-10-06).
     starterPoolExhausted: result.posts.flatMap((p) => p.photos).filter((t) => t.steps.some((x) => x.startsWith('starter-pool-exhausted'))).length,
     noTopicMatch: result.posts.flatMap((p) => p.photos).filter((t) => t.steps.some((x) => x.includes('no-topic-match'))).length,
+    // Photo rule (Tommy, 2026-10-06): share of story slides with IMAGE none, and spreads used.
+    textOnlyShare: (() => {
+      const story = result.posts.flatMap((p) => p.photos.slice(1));
+      return story.length ? Number((story.filter((t) => t.request.kind === 'none').length / story.length).toFixed(3)) : 0;
+    })(),
+    spreadCount: result.posts.flatMap((p) => p.render.slides).filter((sl) => sl.panoramaSide === 'left').length,
     capUsd,
   }, null, 2));
 

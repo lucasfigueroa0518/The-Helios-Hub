@@ -11,8 +11,9 @@
  *            other people (stage shots, delegations).
  *   stock:   <scene> → Openverse: the request, then its first two words; each
  *            search's results go through the Jev metadata pre-screen (fits the
- *            scene, no person likely visible; spec §5A #6)
+ *            scene, no person likely visible, no recognizable landmark; spec §5A #6)
  *   then     the offline starter set (starter-set.ts), which can't come up empty
+ *   none:    no photo; the slide renders without one (no fallback; spec §5.1)
  *
  * Where the photo is drawn (its slot) limits what may go there:
  *   split    (text, landing, image, cover): any of the above
@@ -28,7 +29,7 @@
 import { buildCredit, fetchEntityP18, fetchImageInfo, toCandidate } from '@/lib/social/editorial/v2/image-step/commons';
 import { buildStockCredit, searchOpenverse, type OpenverseCandidate } from '@/lib/social/editorial/v2/image-step/openverse';
 import type { JevAsk } from '@/lib/social/jev/client';
-import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v1';
+import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v2';
 import type { Brief } from '@/lib/social/reporter/brief';
 import type { ArticlePhoto, PageReadOk } from '@/lib/social/reporter/read-page';
 import type { ImageRequest } from '@/lib/social/writer/draft';
@@ -58,7 +59,7 @@ export type Photo = {
   subject: string | null;
 };
 
-export type ChainStep = 'article' | 'subject' | 'stock' | 'bank' | 'starter';
+export type ChainStep = 'article' | 'subject' | 'stock' | 'bank' | 'starter' | 'none';
 
 /** Identity check outcome for the run log. */
 export type IdentityNote = { subject: string; ok: boolean; detail: string; scores: import('./identity').IdentityScores | null };
@@ -194,10 +195,15 @@ async function prescreen(scene: string, cands: OpenverseCandidate[], deps: Photo
     { state: Prescreen.buildState(scene, shown.map((c) => ({ title: c.title ?? '', tags: c.tags ?? [], source: c.source }))), questions: Prescreen.buildQuestions(shown.length) },
     { version: Prescreen.VERSION, subjectId: scene },
   );
-  const { FIT_MIN, PEOPLE_MAX } = Prescreen.THRESHOLDS;
-  const scored = shown.map((c, k) => ({ c, fit: res.answers[Prescreen.fitId(k)]!.noul, people: res.answers[Prescreen.peopleId(k)]!.noul }));
-  const pick = scored.find((x) => x.fit >= FIT_MIN && x.people < PEOPLE_MAX) ?? null;
-  steps.push(`pre-screen "${scene}": ${scored.map((x) => `"${(x.c.title ?? '').slice(0, 40)}" fit ${x.fit.toFixed(2)} people ${x.people.toFixed(2)}${x === pick ? ' ✓' : ''}`).join('; ')}`);
+  const { FIT_MIN, PEOPLE_MAX, LANDMARK_MAX } = Prescreen.THRESHOLDS;
+  const scored = shown.map((c, k) => ({
+    c,
+    fit: res.answers[Prescreen.fitId(k)]!.noul,
+    people: res.answers[Prescreen.peopleId(k)]!.noul,
+    landmark: res.answers[Prescreen.landmarkId(k)]!.noul,
+  }));
+  const pick = scored.find((x) => x.fit >= FIT_MIN && x.people < PEOPLE_MAX && x.landmark < LANDMARK_MAX) ?? null;
+  steps.push(`pre-screen "${scene}": ${scored.map((x) => `"${(x.c.title ?? '').slice(0, 40)}" fit ${x.fit.toFixed(2)} people ${x.people.toFixed(2)} landmark ${x.landmark.toFixed(2)}${x === pick ? ' ✓' : ''}`).join('; ')}`);
   return pick?.c ?? null;
 }
 
@@ -264,6 +270,8 @@ export async function findPhoto(request: ImageRequest, ctx: PhotoContext, deps: 
       return null;
     }
   };
+  // IMAGE none (Tommy, 2026-10-06): no photo fits; the slide renders without one. No fallback.
+  if (request.kind === 'none') return { request, photo: null, via: 'none', identity: null, steps: ['IMAGE none: no photo requested'] };
   const empty = !request.value.trim();
   const fromBank = (need: BankNeed): Photo | null => {
     const e = pickFromBank(ctx.bank, need, avoidSet(ctx), ctx.lastUsed);

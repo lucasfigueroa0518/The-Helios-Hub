@@ -15,7 +15,7 @@ import { runDay } from '@/lib/social/pipeline/orchestrator';
 import { createInMemorySetAsideLog } from '@/lib/social/pipeline/set-aside-log';
 import { STUB_ARTICLES, createStubStages } from '@/lib/social/pipeline/stubs';
 import { createWriterStage } from '@/lib/social/pipeline/writer-stage';
-import { RULES_BLOCK, TESTED_WRITER_RULES, renderRulesFor } from '@/lib/social/prompts/rules-block';
+import { RULES_BLOCK, WRITER_RULES, renderRulesFor } from '@/lib/social/prompts/rules-block';
 import { VOICE_BLOCK } from '@/lib/social/prompts/voice-block';
 import type { MessagesCreate } from '@/lib/social/reporter/reporter';
 import { DraftValidationError, checkDraft, fillDraft, isExactExcerpt, type DraftSubmission } from '@/lib/social/writer/draft';
@@ -75,7 +75,7 @@ test('Writer prompt = tested intro + RULES (tested lines + 3 additions + shared 
     .replace(/^3\. Source credits, always,.*\n/m, '');
   const expected = [
     intro,
-    `## Rules\n\n${TESTED_WRITER_RULES}\n${WRITER_ADDED_RULES}\n${codeBlocks('**Writer prompt v2')[0]}`,
+    `## Rules\n\n${WRITER_RULES}\n${WRITER_ADDED_RULES}\n${codeBlocks('**Writer prompt v2')[0]}`,
     RULES_BLOCK.slice(RULES_BLOCK.indexOf('## Context policy')),
     `When you're done, call submit_draft with these sections:\n${sectionList}`,
     caption,
@@ -83,6 +83,7 @@ test('Writer prompt = tested intro + RULES (tested lines + 3 additions + shared 
   assert.equal(WRITER_SYSTEM, expected);
   assert.ok(!WRITER_SYSTEM.includes('{{brief}}') && !WRITER_SYSTEM.includes('\nOUTPUT\n') && !WRITER_SYSTEM.includes('${'));
   assert.equal(WRITER_ADDED_RULES.split('\n').length, 3);
+  assert.ok(WRITER_ADDED_RULES.includes(codeBlocks('**Photo rule (Tommy, 2026-10-06)')[1]!), 'spread line word for word');
   assert.equal(WRITER_MOMENTUM_RULES, codeBlocks('**Writer prompt v2')[0], 'v2 rules word for word from the prompts file');
   assert.ok(!WRITER_SYSTEM.includes('—'), 'no em dashes anywhere in the Writer prompt');
   assert.ok(!WRITER_SYSTEM.includes('Source:'), 'the Source line is built by code, not asked of the Writer');

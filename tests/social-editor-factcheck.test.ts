@@ -71,7 +71,9 @@ test('Editor powers: cutting, reordering and rewording are fine; new IDs or imag
   assert.deepEqual(editErrors((d) => { d.slides.splice(5, 1); d.slides.reverse(); d.slides[0]!.headline.text = 'Sharper'; }), []);
   assert.deepEqual(editErrors((d) => { d.slides[0]!.body!.facts.push('F5'); }), ["claim tag F5 wasn't in the Writer's draft"]);
   assert.deepEqual(editErrors((d) => { d.slides[2]!.quote_id = 'Q2'; d.slides[2]!.quote_excerpt = null; }), ["quote Q2 wasn't in the Writer's draft (the Editor never adds facts)"]);
-  assert.deepEqual(editErrors((d) => { d.slides[1]!.image = { kind: 'stock', value: 'city skyline' }; }), ['slide image "stock:city skyline" wasn\'t in the Writer\'s draft (don\'t touch IMAGE lines)']);
+  assert.deepEqual(editErrors((d) => { d.slides[1]!.image = { kind: 'stock', value: 'city skyline' }; }), ['slide image "stock:city skyline" wasn\'t in the Writer\'s draft (you may only change an IMAGE to none)']);
+  // Changing an IMAGE to none is a cut, so it's allowed (Tommy, 2026-10-06).
+  assert.deepEqual(editErrors((d) => { d.slides[1]!.image = { kind: 'none', value: '' }; }), []);
 });
 
 // ── Stubbed Claude ─────────────────────────────────────────────────────

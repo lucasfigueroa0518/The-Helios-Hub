@@ -10,7 +10,7 @@ import { sifDraft } from '@/fixtures/social/drafts';
 import { commonsUrl, createFakeHttp, SIF_WEB, stockUrl } from '@/fixtures/social/photo-http';
 import type { JevAsk } from '@/lib/social/jev/client';
 import * as Identity from '@/lib/social/jev/questions/subject-identity.v1';
-import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v1';
+import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v2';
 import { createDesignStage } from '@/lib/social/pipeline/design-stage';
 import type { Brief as PipelineBrief, Draft, ScoredCandidate } from '@/lib/social/pipeline/types';
 import { classifyCredit } from '@/lib/social/photos/credit';
@@ -40,6 +40,7 @@ function prescreenAnswers(req: { state: unknown }): Record<string, { noul: numbe
   state.candidates.forEach((c, k) => {
     out[Prescreen.fitId(k)] = { noul: /off topic/.test(c.title) ? 0.1 : 0.9 };
     out[Prescreen.peopleId(k)] = { noul: /people|soldier|students/.test(`${c.title} ${c.tags.join(' ')}`) ? 0.9 : 0.05 };
+    out[Prescreen.landmarkId(k)] = { noul: /Eiffel|Capitol|Times Square/.test(c.title) ? 0.9 : 0.05 };
   });
   return out;
 }
@@ -670,4 +671,68 @@ test('topics come from plain words; "NYC lawmakers" is not Congress', () => {
   assert.ok(topicsIn('Nvidia shares fell 5% on the Nasdaq').includes('stock markets'));
   assert.ok(topicsIn('The city expands CCTV and facial recognition').includes('surveillance'));
   assert.deepEqual(topicsIn('abstract mood'), []);
+});
+
+// ── Photo rule: IMAGE none, spreads, text-only rotation, landmarks (Tommy, 2026-10-06) ──
+
+import { checkDraft as checkDraftFn, DraftValidationError } from '@/lib/social/writer/draft';
+
+const draftErrors = (edit: (d: ReturnType<typeof sifDraft>) => void): string[] => {
+  const d = sifDraft();
+  edit(d);
+  try {
+    checkDraftFn(d, briefWith());
+    return [];
+  } catch (err) {
+    assert.ok(err instanceof DraftValidationError);
+    return err.errors.map((e) => `${e.section}: ${e.message}`);
+  }
+};
+
+test('IMAGE none: allowed on story slides (stat included), never on a cover', () => {
+  assert.deepEqual(draftErrors((d) => { d.slides[0]!.image = { kind: 'none', value: '' }; d.slides[3]!.image = { kind: 'none', value: '' }; }), []);
+  assert.match(draftErrors((d) => { d.cover_options[0]!.image = { kind: 'none', value: '' }; }).join(), /a cover always has an IMAGE/);
+});
+
+test('spreads: at most one; a photo on the first slide; the next slide carries IMAGE none', () => {
+  const ok = (d: ReturnType<typeof sifDraft>) => { d.slides[0]!.spread_with_next = true; d.slides[1]!.image = { kind: 'none', value: '' }; };
+  assert.deepEqual(draftErrors(ok), []);
+  assert.match(draftErrors((d) => { d.slides[0]!.spread_with_next = true; }).join(), /slide after a spread carries no IMAGE/);
+  assert.match(draftErrors((d) => { ok(d); d.slides[0]!.image = { kind: 'none', value: '' }; }).join(), /needs a photo on its first slide/);
+  assert.match(draftErrors((d) => { ok(d); d.slides[3]!.spread_with_next = true; d.slides[4]!.image = { kind: 'none', value: '' }; }).join(), /2 spreads/);
+  assert.match(draftErrors((d) => { d.slides.at(-1)!.spread_with_next = true; }).join(), /last slide/);
+});
+
+test('photo chain: IMAGE none gets no photo and no fallback', async () => {
+  const { deps: d, fake } = deps();
+  const t = await findPhoto({ kind: 'none', value: '' }, newPhotoContext(briefWith(), []), d);
+  assert.equal(t.photo, null);
+  assert.equal(t.via, 'none');
+  assert.equal(fake.calls.length, 0, 'nothing searched');
+});
+
+test('spread with IMAGE none on the second slide: both share the first slide\'s wide scene', () => {
+  const sub = sifDraft();
+  sub.slides[0]!.spread_with_next = true;
+  sub.slides[1]!.image = { kind: 'none', value: '' };
+  const wide: Photo = { url: '/wide.jpg', credit: 'c, CC0', source: 'starter', width: 3200, height: 1900, qid: null, subject: null };
+  const s = draftSlides(fillDraft(sub, briefWith()), { cover: null, slides: [wide, null, null, null, null, null] });
+  assert.equal(s[2]!.photoUrl, '/wide.jpg');
+  assert.equal(s[2]!.panoramaSide, 'right');
+});
+
+test('rotation: consecutive photo-less text slides alternate between copy at the top and copy low', () => {
+  const slides: SlideCopy[] = [1, 2, 3, 4].map((n) => textSlide(n, false));
+  const r = rotateLayouts(slides);
+  const layouts = r.slides.map(layoutOf);
+  for (let i = 2; i < layouts.length; i++) assert.ok(!(layouts[i] === layouts[i - 1] && layouts[i] === layouts[i - 2]), layouts.join(','));
+  assert.ok(layouts.includes('text-only-low'));
+  assert.deepEqual(r.unresolved, []);
+});
+
+test('pre-screen v2: a recognizable landmark is rejected', async () => {
+  const stock = async () => [ov('Eiffel Tower at night'), ov('city lights at night')];
+  const t = await findPhoto({ kind: 'stock', value: 'city lights' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS), stock });
+  assert.equal(t.photo?.url, 'https://s/city-lights-at-night.jpg');
+  assert.ok(t.steps.some((s) => /landmark 0\.90/.test(s)));
 });

@@ -17,7 +17,8 @@ import { checkShape, type Brief, type BriefError } from '@/lib/social/reporter/b
 
 export const SLIDE_TYPES = ['text', 'stat', 'split_stat', 'quote', 'landing', 'image'] as const;
 export type SlideType = (typeof SLIDE_TYPES)[number];
-export const IMAGE_KINDS = ['subject', 'article', 'stock'] as const;
+/** `none` (Tommy, 2026-10-06): no photo fits; the slide renders without one. Never on a cover. */
+export const IMAGE_KINDS = ['subject', 'article', 'stock', 'none'] as const;
 export type ImageKind = (typeof IMAGE_KINDS)[number];
 
 /** A line of slide or caption text and the brief IDs it rests on (claim tags). */
@@ -63,7 +64,7 @@ const facts = { ...strList, description: 'IDs of the brief facts/quotes/numbers 
 const tagged = (description: string) => obj({ text: { type: 'string', description }, facts });
 const image = obj({
   kind: { type: 'string', enum: [...IMAGE_KINDS] },
-  value: { type: 'string', description: 'subject: a name from SUBJECTS; article: a photo URL from ARTICLE PHOTOS; stock: a plain 2–3 word scene.' },
+  value: { type: 'string', description: 'subject: a name from SUBJECTS; article: a photo URL from ARTICLE PHOTOS; stock: a plain 2–3 word literal scene; none: empty (no photo fits). Covers never use none.' },
 });
 
 export const DRAFT_SCHEMA = obj({
@@ -84,7 +85,7 @@ export const DRAFT_SCHEMA = obj({
       quote_excerpt: { type: ['string', 'null'], description: 'Optional exact excerpt of that quote, with "…" for cuts. Null to use the whole quote.' },
       number_ids: { ...strList, description: 'Stat: one NUMBERS ID; split stat: two. Empty otherwise.' },
       image,
-      spread_with_next: { type: 'boolean', description: 'True when this slide and the next tell one continuous beat and share this IMAGE.' },
+      spread_with_next: { type: 'boolean', description: 'True when this slide and the next continue one beat and one wide literal scene fits both; this slide carries the IMAGE, the next slide has IMAGE none. At most one per post.' },
     }),
   },
   follow: { type: 'string', description: 'The FOLLOW line.' },
@@ -152,7 +153,18 @@ export function checkDraft(input: unknown, brief: Brief): DraftSubmission {
   d.cover_options.forEach((c, i) => {
     tagCheck(`cover_options[${i}]`, c.facts);
     imageCheck(`cover_options[${i}].image`, c.image);
+    if (c.image.kind === 'none') errors.push({ section: `cover_options[${i}].image`, message: 'a cover always has an IMAGE (never none)' });
   });
+  // Spreads (Tommy, 2026-10-06): at most one; its first slide carries a photo, the next slide IMAGE none.
+  const spreads = d.slides.map((s, i) => (s.spread_with_next ? i : -1)).filter((i) => i >= 0);
+  if (spreads.length > 1) errors.push({ section: 'slides', message: `${spreads.length} spreads (at most one per post)` });
+  for (const i of spreads) {
+    const at = `slides[${i}]`;
+    if (i === d.slides.length - 1) errors.push({ section: at, message: 'spread_with_next on the last slide (there is no next slide to pair with)' });
+    if (d.slides[i]!.image.kind === 'none') errors.push({ section: `${at}.image`, message: 'a spread needs a photo on its first slide' });
+    const next = d.slides[i + 1];
+    if (next && next.image.kind !== 'none') errors.push({ section: `slides[${i + 1}].image`, message: 'the slide after a spread carries no IMAGE (use none); the pair shares the first slide\'s' });
+  }
 
   d.slides.forEach((s, i) => {
     const at = `slides[${i}]`;

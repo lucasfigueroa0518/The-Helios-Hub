@@ -389,6 +389,9 @@
 .helios-text--photo-below .helios-text__headline { font-size: 80px; max-height: 230px; }
 .helios-text--photo-below .helios-text__body { font-size: 40px; max-height: 250px; }
 .helios-text--photo-top { padding-top: 0; }
+/* Alternate text-only layout (rotation): copy sits low, bigger headline. */
+.helios-text--low { justify-content: flex-end; padding-bottom: 48px; }
+.helios-text--low .helios-text__headline { font-size: 112px; }
 .helios-text--photo-top .helios-text__headline { font-size: 80px; max-height: 260px; }
 .helios-text--photo-top .helios-text__body { font-size: 40px; max-height: 320px; }
 

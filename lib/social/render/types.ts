@@ -230,6 +230,13 @@ export type SlideCopy = {
   photoPlacement?: 'below' | 'top';
 
   /**
+   * Text slide without a photo: where the copy sits. `top` (default) or
+   * `bottom`. Set by the layout rotation so consecutive photo-less slides
+   * alternate (Tommy, 2026-10-06), never by the editorial stages.
+   */
+  textAnchor?: 'top' | 'bottom';
+
+  /**
    * Quote slide: true only when the photo is an identity-verified photo of
    * the quote's speaker. Only then does it fill the round speaker spot;
    * any other photo is a darkened background, so no one is implied to be

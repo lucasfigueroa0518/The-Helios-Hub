@@ -248,7 +248,7 @@ The worst past slips (the made-up Suleyman quote, the untraceable "1,200") came 
   - **Unknown or missing credit:** not used. No image is better than a wrong one.
 - **Example:** both photos in the ABC "Super Intelligence Force" article were "Kent Nishimura/AFP via Getty Images," so both are rejected and the backups take over.
 
-**Every slide gets a photo (DECIDED).** No text-only slides. Stat slides get a symbolic background (§5.3a), quote slides get the speaker or a scene. The old "drop the coverage floor" lean is reversed.
+**Every slide that requests a photo gets one; the cover always does (DECIDED, revised 2026-10-06).** The Writer requests a photo only when a specific subject, article photo or literal scene fits the slide, and otherwise sets IMAGE `none`. A slide with `none` renders without a photo, which is a normal outcome ("No usable photo means a text-only slide", below). There are no symbolic stock scenes. Quote slides show the verified speaker or a scene when they request a photo. `cause · prompt + schema + spec · 0 new stages · 0 new AI calls` (This replaces 2026-10-04's "Every slide gets a photo. No text-only slides.")
 
 **Use every tool available, and pick the best (DECIDED).** For each slide, query all the sources that fit the request in parallel, collect the candidates, and **rank** them. Don't stop at the first hit.
 
@@ -297,7 +297,7 @@ Fallbacks are always **scenes, never people.** A slide never shows a person who 
 - Identity always comes from the records (Wikidata, official galleries, the article's caption), never from an AI looking at a face.
 - Code rejects agency credits wherever a photo comes from.
 - No photo is ever repeated.
-- No usable photo means a text-only slide, which is a normal outcome.
+- No usable photo means a text-only slide, which is a normal outcome. A slide with IMAGE `none` is one; a slide that requests a photo still always gets one (the starter set is the last step).
 
 **Photos are never edited.** No retouching or compositing. **To verify:** whether the cover's dark overlay behind the headline counts as an edit under the White House photo terms. If it does, use the cover's dark-canvas layout with the photo in its own frame.
 
@@ -382,13 +382,15 @@ It assigns them so that **no 3 consecutive slides share a layout.** Code enforce
 
 The old stat slide (a headline and a big number on an empty canvas) is the most skippable slide in a post. New design:
 
-- **The Writer adds a symbolic stock search** to every stat slide, for example `IMAGE: stock: wall clock close-up` for "120 days." This replaces the old rule that stat slides are always `type only`.
+- **Revised 2026-10-06 (Tommy):** stat slides follow the same photo rule as every story slide. A literal scene that fits gets a darkened background photo; otherwise IMAGE `none`, and the slide renders on the plain dark background. Symbolic stock searches are gone. *(Superseded: "The Writer adds a symbolic stock search to every stat slide, for example `IMAGE: stock: wall clock close-up` for '120 days'.")*
 - **The photo search finds it** in the free libraries. The no-repeat rule keeps it fresh.
 - **The renderer darkens it behind the number,** the same way the cover works. Code adds the photo credit.
 - **It sets the mood; it doesn't chart the data.** No charts, no calculated values (e.g. no deadline date worked out from "120 days").
 - **The headline stays factual** ("It has a deadline", not "The clock is running"). The picture carries the mood.
 - **No AI-generated images.**
-- **Fallback:** no photo found means today's plain dark stat slide.
+- **IMAGE `none`:** the plain dark stat slide.
+
+*Superseded 2026-10-06 (symbolic searches are gone; kept for the record):*
 
 | Stat | Example search |
 |---|---|
@@ -406,7 +408,7 @@ The old stat slide (a headline and a big number on an empty canvas) is the most 
 
 The reference is two Metaverse slides from the Laszlo pizza post. One wide photo spans the swipe: the right half of slide N and the left half of slide N+1 are one continuous picture.
 
-- **Writer:** may pair two consecutive slides that tell one continuous beat and give them one IMAGE line. Prompt change.
+- **Writer (revised 2026-10-06):** "When two consecutive slides continue one beat and one wide literal scene fits both, pair them with spread_with_next and give the pair one IMAGE. Use at most one spread per post." The slide after the pair's first has IMAGE `none`; the first needs a photo.
 - **Renderer:** lays the landscape photo across the seam. Code.
 - **Fallback:** if the photo isn't wide enough, both slides render as normal text slides. Code.
 - **Later:**
@@ -431,7 +433,7 @@ Jev answers yes/no questions with a confidence score. It's very cheap (input onl
 | 3 | ~~Strategy decisions~~ | — | **Retired** with the old pipeline (§10) |
 | 4 | **Fact-checking claim by claim.** The Writer tags each claim with the brief fact it came from. Jev answers "does this source passage support this sentence?" A failed claim gets the brief's own wording swapped in by code (fits §4.2). Only replaces the Claude Fact-checker after matching it on a test set of past posts with known errors. | Claude Fact-checker | **DECIDED: built now**, with a one-batch comparison against Claude (§10) |
 | 5 | **Identifying photo subjects:** does this Wikidata entry match the person or company in the brief? | Matching logic | **DECIDED, required in M6** (S2, 2026-10-04: the old resolver matched "METR" to MGM and "Cursor" to the mouse cursor, 2 of 13 company matches. That's a measured rate, not a one-off, and a wrong subject is a must-hold failure.) **Two checks, both required before a photo is used:** (1) **Code:** the entry's "instance of" (P31) must fit the subject type (person = human; company = organization or business). (2) **Jev:** "Does this entry's description match the brief's description of this subject?" Jev also picks among the top candidates when the resolver can't decide, which recovers famous names it currently drops (Musk, Sacks, Lawler, NSA, FINRA). If either check fails, no photo of that subject; use the fallback chain. |
-| 6 | **Pre-screening stock photos:** do the photo's title and tags fit the requested scene? Runs before the image check. | Fewer image-check calls | **DECIDED, built 2026-10-06** (Tommy, after the checkpoint showed people in stock results). Also asks whether a person is likely visible; a likely person is rejected (wrong-person class). One call per stock search, question set `stock-prescreen@1`, thresholds provisional (fit ≥ 0.5, people < 0.3). Metadata only: a person the title and tags don't hint at gets through. |
+| 6 | **Pre-screening stock photos:** do the photo's title and tags fit the requested scene? Runs before the image check. | Fewer image-check calls | **DECIDED, built 2026-10-06** (Tommy, after the checkpoint showed people in stock results). Also asks whether a person is likely visible; a likely person is rejected (wrong-person class). One call per stock search, question set `stock-prescreen@2` (v2, 2026-10-06: also rejects a recognizable landmark or specific place, ≥ 0.5), thresholds provisional (fit ≥ 0.5, people < 0.3, landmark < 0.5). Metadata only: a person the title and tags don't hint at gets through. |
 
 **Story-scoring questions (#1, PROPOSED):**
 
@@ -511,7 +513,7 @@ RSS feeds (hundreds)
 
 - 0 false facts in a finished post
 - 0 wrong-person photos
-- 0 slides without a photo
+- 0 slides missing a requested photo (a slide with IMAGE `none` has none by design; the cover always has one)
 - 0 slides that fail to render
 - No photo repeats within 7 days, from any source, the starter set included (Tommy, 2026-10-06)
 

@@ -192,7 +192,7 @@ function TextSlide({ slide }: { slide: SlideCopy }) {
   const body = slide.body ?? slide.bodyBottom;
   const placement = !slide.photoUrl ? 'none' : slide.photoPlacement === 'top' ? 'top' : 'below';
   return (
-    <div className={`helios-text helios-text--photo-${placement}`}>
+    <div className={`helios-text helios-text--photo-${placement}${placement === 'none' && slide.textAnchor === 'bottom' ? ' helios-text--low' : ''}`}>
       {placement === 'top' && <RegionPhoto slide={slide} className="helios-split__photo" />}
       <div className="helios-text__copy">
         {headline && (

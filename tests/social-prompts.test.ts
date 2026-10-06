@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { RULES_BLOCK, TESTED_WRITER_RULES, renderRulesFor } from '@/lib/social/prompts/rules-block';
+import { IMAGE_RULE, RULES_BLOCK, TESTED_IMAGE_RULE, TESTED_WRITER_RULES, WRITER_RULES, renderRulesFor } from '@/lib/social/prompts/rules-block';
 import { REPORTER_SYSTEM, reporterUserMessage } from '@/lib/social/reporter/prompt';
 import { VOICE_BLOCK } from '@/lib/social/prompts/voice-block';
 
@@ -26,7 +26,12 @@ test('RULES_BLOCK carries the tested Writer rules word for word', () => {
   const writer = codeBlocks(PROMPTS, '## 2. Writer')[0]!;
   const tested = writer.match(/RULES\n([\s\S]*?)\n\nOUTPUT/)![1];
   assert.equal(TESTED_WRITER_RULES, tested);
-  assert.ok(RULES_BLOCK.includes(TESTED_WRITER_RULES));
+  // Photo rule (2026-10-06): the tested IMAGE line is replaced, word for word from the prompts file.
+  const imageRule = codeBlocks(PROMPTS, '**Photo rule (Tommy, 2026-10-06)')[0]!;
+  assert.equal(IMAGE_RULE, imageRule);
+  assert.ok(TESTED_WRITER_RULES.includes(TESTED_IMAGE_RULE));
+  assert.equal(WRITER_RULES, TESTED_WRITER_RULES.replace(TESTED_IMAGE_RULE, IMAGE_RULE));
+  assert.ok(RULES_BLOCK.includes(WRITER_RULES) && !RULES_BLOCK.includes('symbolic'));
 });
 
 test('VOICE_BLOCK matches the reviewed text byte for byte', () => {

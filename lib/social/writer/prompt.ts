@@ -17,10 +17,13 @@
  *   → ". Respect it." (voice bans em dashes); "the final SLIDES you were
  *   given" → "the slides you wrote" (the Writer writes both now).
  *   V2 (Tommy, 2026-10-06): three momentum rule lines follow the additions.
+ *   PHOTO RULE (Tommy, 2026-10-06): the tested IMAGE line is replaced by
+ *   IMAGE_RULE (photos only when one fits, else none; no symbolic stock), and
+ *   the spread line by the one-spread, literal-scene version.
  *   PLACEMENT (caching): "BRIEF\n{{brief}}" moves to the user message;
  *   the brief is the Reporter's JSON, with SUBJECTS marked well_known by code.
  */
-import { RULES_BLOCK, TESTED_WRITER_RULES, renderRulesFor } from '@/lib/social/prompts/rules-block';
+import { RULES_BLOCK, WRITER_RULES, renderRulesFor } from '@/lib/social/prompts/rules-block';
 import { VOICE_BLOCK } from '@/lib/social/prompts/voice-block';
 
 export const WRITER_INTRO = `You are the Writer for Helios Group, an Instagram page that turns one AI news story into a carousel for smart, busy readers interested in AI who don't follow it closely. Write from the BRIEF only. No tools, no web, no outside knowledge.`;
@@ -28,7 +31,7 @@ export const WRITER_INTRO = `You are the Writer for Helios Group, an Instagram p
 /** The three "added since the test" rule lines (prompts file §2), in the tested terse style. */
 export const WRITER_ADDED_RULES = `- Claim tags: give every cover, headline, body and caption line the IDs of the brief entries it rests on (F3, B1, Q2, N1) in its facts list; empty if none. Code checks them.
 - Widely known: each SUBJECTS entry has well_known (true/false), set by code from Wikidata. Use it for the COVER rule; don't guess.
-- You may pair two consecutive slides that tell one continuous beat; give the pair one IMAGE line (spread_with_next).`;
+- When two consecutive slides continue one beat and one wide literal scene fits both, pair them with spread_with_next and give the pair one IMAGE. Use at most one spread per post.`;
 
 /** Writer prompt v2 (Tommy, 2026-10-06; Lucas: slides feel isolated): momentum across the post. Word for word from the prompts file. */
 export const WRITER_MOMENTUM_RULES = `- Plan the post as one story, not a list of facts. Outline the arc before writing: the hook (cover) → what happened → why it matters → the turn (the pushback, the catch, the conflict) → what's still unknown or what comes next.
@@ -90,7 +93,7 @@ As long as the story needs and no longer, usually one or two short paragraphs. I
 
 export const WRITER_SYSTEM = [
   WRITER_INTRO,
-  `## Rules\n\n${TESTED_WRITER_RULES}\n${WRITER_ADDED_RULES}\n${WRITER_MOMENTUM_RULES}`,
+  `## Rules\n\n${WRITER_RULES}\n${WRITER_ADDED_RULES}\n${WRITER_MOMENTUM_RULES}`,
   CONTEXT_AND_GLOSSING,
   `When you're done, call submit_draft with these sections:\n${WRITER_SECTION_LIST}`,
   WRITER_CAPTION_SECTION,

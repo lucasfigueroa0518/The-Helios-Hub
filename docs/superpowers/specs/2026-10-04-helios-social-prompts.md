@@ -140,6 +140,28 @@ BRIEF
 - Tension comes only from the brief: disagreements, critics, stakes, NOT ANSWERED. Never invent suspense, tease facts that aren't there, or hold back the news.
 ```
 
+
+**Photo rule (Tommy, 2026-10-06).** `cause · prompt + schema + spec · 0 new stages · 0 new AI calls`
+
+- **Why:** symbolic stock scenes put off-topic photos on slides. Spec §5.1 already says that no usable photo means a text-only slide, which is a normal outcome.
+- **Change 1, the IMAGE line:** the tested IMAGE line in the block above is replaced in code (`IMAGE_RULE`). "Symbolic stock scene" is gone. The new line:
+
+```
+- IMAGE on each story slide: subject: <name>, article: <photo> (from ARTICLE PHOTOS), stock: <plain 2–3 word literal scene>, or none. Request a photo only when a specific subject, article photo or literal scene fits the slide; otherwise use none. The chosen cover always has an IMAGE.
+```
+
+- **Change 2, the spread line:** the "added since the test" spread line is replaced:
+
+```
+- When two consecutive slides continue one beat and one wide literal scene fits both, pair them with spread_with_next and give the pair one IMAGE. Use at most one spread per post.
+```
+
+- **Change 3, the schema:** IMAGE kinds gain `none`.
+  - Cover options can't use it.
+  - The slide after a `spread_with_next: true` slide carries IMAGE `none`. The first slide of a pair needs a photo.
+  - At most one spread per post.
+- **Change 4, the Editor:** the POWERS line in §4 now reads "You may change an IMAGE to none (a cut); never add or change one." Its code check allows that and nothing else.
+
 ---
 
 ## 3. Writer's caption section (carried over verbatim)
@@ -215,7 +237,7 @@ Make sure:
 3. Every slide makes sense to an outsider. Explain unfamiliar terms where they appear, using only the brief's TERMS.
 4. The reader finishes knowing why it matters.
 
-POWERS: cut and sharpen only. You may tighten wording, reorder slides, cut slides or lines, and explain terms from TERMS. You never add facts, numbers, quotes or descriptors. Keep every hedge, every [CLAIM: X says] attribution, every quote/number ID and every [F#] claim tag on the sentences you keep. Don't touch IMAGE lines except to drop them with a cut slide.
+POWERS: cut and sharpen only. You may tighten wording, reorder slides, cut slides or lines, and explain terms from TERMS. You never add facts, numbers, quotes or descriptors. Keep every hedge, every [CLAIM: X says] attribution, every quote/number ID and every [F#] claim tag on the sentences you keep. You may change an IMAGE to none (a cut); never add or change one.
 
 Keep 5–8 story slides and the same length limits as the Writer. If the story is told in fewer slides, cut the rest.
 

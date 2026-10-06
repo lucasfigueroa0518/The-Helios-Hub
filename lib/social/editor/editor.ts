@@ -6,8 +6,8 @@
  * The code check is the Writer's checkDraft plus the parts of the prompt's
  * POWERS line that code can see without judgment: the Editor may not use a
  * quote, number or claim-tag ID the Writer didn't, and may not request an
- * image the Writer didn't ("Don't touch IMAGE lines except to drop them
- * with a cut slide"). One retry on failure, like every stage.
+ * image the Writer didn't; it may change one to none (a cut) (Tommy,
+ * 2026-10-06). One retry on failure, like every stage.
  */
 import { STAGE_MODELS, type StageModelConfig } from '@/lib/social/pipeline/models';
 import type { Brief, BriefError } from '@/lib/social/reporter/brief';
@@ -20,7 +20,7 @@ import type { FilledDraft } from '@/lib/social/writer/draft';
 
 import { EDITOR_SYSTEM, editorUserMessage } from './prompt';
 
-const imageKey = (i: ImageRequest) => `${i.kind}:${i.value}`;
+const imageKey = (i: ImageRequest) => (i.kind === 'none' ? 'none:' : `${i.kind}:${i.value}`);
 
 function idsOf(d: DraftSubmission) {
   const tags = new Set<string>();
@@ -47,7 +47,8 @@ export function checkEditorPowers(writer: DraftSubmission, edited: DraftSubmissi
   for (const id of e.quotes) if (!w.quotes.has(id)) errors.push({ section: 'powers', message: `quote ${id} wasn't in the Writer's draft (the Editor never adds facts)` });
   for (const id of e.numbers) if (!w.numbers.has(id)) errors.push({ section: 'powers', message: `number ${id} wasn't in the Writer's draft` });
   for (const id of e.tags) if (!w.tags.has(id)) errors.push({ section: 'powers', message: `claim tag ${id} wasn't in the Writer's draft` });
-  for (const key of e.slideImages) if (!w.slideImages.has(key)) errors.push({ section: 'powers', message: `slide image "${key}" wasn't in the Writer's draft (don't touch IMAGE lines)` });
+  // The Editor may change an IMAGE to none (a cut); never add or change one (Tommy, 2026-10-06).
+  for (const key of e.slideImages) if (key !== 'none:' && !w.slideImages.has(key)) errors.push({ section: 'powers', message: `slide image "${key}" wasn't in the Writer's draft (you may only change an IMAGE to none)` });
   for (const key of e.coverImages) if (!w.coverImages.has(key)) errors.push({ section: 'powers', message: `cover image "${key}" wasn't in the Writer's draft` });
   if (errors.length > 0) throw new DraftValidationError(errors);
 }

@@ -12,7 +12,7 @@
  * Static string: embedding it keeps the cached prompt prefix stable.
  */
 
-/** Tested Writer rules, word for word from the prompts file §2. */
+/** Tested Writer rules, word for word from the prompts file §2 (the shared rules use WRITER_RULES). */
 export const TESTED_WRITER_RULES = `- Every fact from the brief. Describe people/roles only with the brief's words.
 - Keep hedges. Claims marked [CLAIM: X says] must keep that attribution on the slide ("X says…").
 - Quotation marks only for QUOTES entries, by ID or exact excerpt with "…" (max 140 chars on quote slides). Avoid ⚠ single-source quotes on quote slides unless nothing else works; never use a quote marked as cut off.
@@ -26,9 +26,16 @@ export const TESTED_WRITER_RULES = `- Every fact from the brief. Describe people
 - EVERY slide has an IMAGE line: \`subject: <name>\`, \`article: <photo>\` (from ARTICLE PHOTOS), or \`stock: <plain 2–3 word scene>\`. Stat slides get a symbolic stock scene.
 - Write 3 cover options; choose one.`;
 
+/** The tested IMAGE line, replaced (Tommy, 2026-10-06): photos only when one fits; no symbolic stock scenes. */
+export const TESTED_IMAGE_RULE = "- EVERY slide has an IMAGE line: `subject: <name>`, `article: <photo>` (from ARTICLE PHOTOS), or `stock: <plain 2–3 word scene>`. Stat slides get a symbolic stock scene.";
+export const IMAGE_RULE = '- IMAGE on each story slide: subject: <name>, article: <photo> (from ARTICLE PHOTOS), stock: <plain 2–3 word literal scene>, or none. Request a photo only when a specific subject, article photo or literal scene fits the slide; otherwise use none. The chosen cover always has an IMAGE.';
+
+/** The Writer rules as used: the tested lines with the IMAGE line replaced. */
+export const WRITER_RULES = TESTED_WRITER_RULES.replace(TESTED_IMAGE_RULE, IMAGE_RULE);
+
 export const RULES_BLOCK = `## Rules
 
-${TESTED_WRITER_RULES}
+${WRITER_RULES}
 
 ## Context policy
 

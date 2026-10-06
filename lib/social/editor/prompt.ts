@@ -13,6 +13,9 @@
  *   PLACEMENT (caching): the draft and the brief go in the user message.
  *   CHECKED RULES (Tommy, 2026-10-06; M7): renderRulesFor('editor') follows
  *   RULES_BLOCK: the C1–C5 checks the Editor's draft must pass.
+ *   IMAGE POWER (Tommy, 2026-10-06): "Don't touch IMAGE lines except to drop
+ *   them with a cut slide." → "You may change an IMAGE to none (a cut); never
+ *   add or change one."
  *   CHECK 2 (Tommy, 2026-10-06, with Writer prompt v2): every slide pulls to
  *   the next, not only slide 2.
  */
@@ -28,7 +31,7 @@ Make sure:
 3. Every slide makes sense to an outsider. Explain unfamiliar terms where they appear, using only the brief's TERMS.
 4. The reader finishes knowing why it matters.
 
-POWERS: cut and sharpen only. You may tighten wording, reorder slides, cut slides or lines, and explain terms from TERMS. You never add facts, numbers, quotes or descriptors. Keep every hedge, every [CLAIM: X says] attribution, every quote/number ID and every [F#] claim tag on the sentences you keep. Don't touch IMAGE lines except to drop them with a cut slide.
+POWERS: cut and sharpen only. You may tighten wording, reorder slides, cut slides or lines, and explain terms from TERMS. You never add facts, numbers, quotes or descriptors. Keep every hedge, every [CLAIM: X says] attribution, every quote/number ID and every [F#] claim tag on the sentences you keep. You may change an IMAGE to none (a cut); never add or change one.
 
 Keep 5–8 story slides and the same length limits as the Writer. If the story is told in fewer slides, cut the rest.`;
 
