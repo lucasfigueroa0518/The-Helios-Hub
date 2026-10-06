@@ -197,7 +197,10 @@ As long as the story needs and no longer, usually one or two short paragraphs. I
 
 **Note:** the old caption line "If the slides skipped a fact… that's the Writer/Editor's decision" still makes sense: the Editor edits the slides after the Writer, and the caption follows the slides.
 
-**Open question for the first live batch (spec §4.3):** "Source:" credits are built by code per the spec, so the Writer's "Source:" line may be redundant. Keep it as tested for now, and drop one of the two if they ever disagree.
+**Resolved (Tommy, 2026-10-06): the Writer's "Source:" line is dropped.** The question was: "Source:" credits are built by code per the spec, so the Writer's "Source:" line may be redundant; drop one of the two if they ever disagree. In the post-M7 check, the code-built line replaced the Writer's on 2 of 3 stories.
+- **What changes:** the code removes ending item 3 ("Source credits, always, on one line that starts with "Source:" …") from the caption section above. The block stays as carried over, and a guard test checks the removal.
+- **What stays:** the Source line is built by code only (M7 F5): the outlets cited by the post's claim tags, each named once, in the order of the brief's SOURCES list, with no dates.
+- **Tag:** `decided item · prompt · 0 new stages · 0 new AI calls`
 
 ---
 

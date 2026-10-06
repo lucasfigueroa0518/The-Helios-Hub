@@ -70,7 +70,9 @@ test('Writer prompt = tested intro + RULES (tested lines + 3 additions + shared 
     .replace("${renderRulesFor('caption')}", renderRulesFor('writer'))
     // Caption wording fixes (2026-10-05).
     .replace('the final SLIDES you were given', 'the slides you wrote')
-    .replace("that's the Writer/Editor's decision — respect it.", "that's the Writer/Editor's decision. Respect it.");
+    .replace("that's the Writer/Editor's decision — respect it.", "that's the Writer/Editor's decision. Respect it.")
+    // Source line built by code (2026-10-06): ending item 3 dropped.
+    .replace(/^3\. Source credits, always,.*\n/m, '');
   const expected = [
     intro,
     `## Rules\n\n${TESTED_WRITER_RULES}\n${WRITER_ADDED_RULES}\n${codeBlocks('**Writer prompt v2')[0]}`,
@@ -83,6 +85,7 @@ test('Writer prompt = tested intro + RULES (tested lines + 3 additions + shared 
   assert.equal(WRITER_ADDED_RULES.split('\n').length, 3);
   assert.equal(WRITER_MOMENTUM_RULES, codeBlocks('**Writer prompt v2')[0], 'v2 rules word for word from the prompts file');
   assert.ok(!WRITER_SYSTEM.includes('—'), 'no em dashes anywhere in the Writer prompt');
+  assert.ok(!WRITER_SYSTEM.includes('Source:'), 'the Source line is built by code, not asked of the Writer');
 });
 
 test('the brief goes in the user message as JSON, with SUBJECTS marked well_known by code', async () => {
