@@ -14,7 +14,7 @@ import { toRenderPost } from '@/lib/social/render/from-draft';
 import { writeGeneratedPost } from '@/lib/social/render/local-store';
 import { fillDraft } from '@/lib/social/writer/draft';
 
-const photo = (i: number): Photo => pickStarter(new Set(STARTER_SET.slice(0, i % STARTER_SET.length).map((p) => starterUrl(p.file))))!;
+const photo = (i: number): Photo => pickStarter(new Set(STARTER_SET.slice(0, i % STARTER_SET.length).map((p) => starterUrl(p.file))), { request: 'server room', brief: null })!.photo;
 
 async function main() {
   const draft = fillDraft(sifDraft(), briefSuperIntelligenceForce());

@@ -11,8 +11,9 @@
  *   4. Faces clear: no text over a subject photo, and no text over a face
  *      the detector found in any photo.
  *   Framing (M8b): a browser face detector (MediaPipe, in this same page)
- *   finds faces, never identities; each photo's crop is centred on its
- *   largest face before measuring, and the crops are returned so the
+ *   finds faces, never identities, on subject and article photos only
+ *   (starter and pre-screened stock photos are people-free by definition);
+ *   each such photo's crop is centred on its largest face before measuring, and the crops are returned so the
  *   preview draws the same thing (SlideCopy.photoFocus).
  *
  * Local files (/social/..., fonts, the detector) are served from the repo;
@@ -171,7 +172,9 @@ window.__faces = (async () => {
         im.src = src;
       });
       const out: Array<{ slide: number; photo: string; faces: Box[]; focus: { x: number; y: number } | null; kind: string }> = [];
-      for (const img of [...document.querySelectorAll<HTMLImageElement>('img.helios-photo')]) {
+      // Faces only on subject and article photos (Tommy, 2026-10-06): starter and pre-screened stock
+      // photos are people-free by definition, and a false detection there would only move a crop.
+      for (const img of [...document.querySelectorAll<HTMLImageElement>('img.helios-photo[data-photo-kind="subject"]')]) {
         const src = img.currentSrc || img.src;
         if (!bySrc.has(src)) {
           const im = await load(src);

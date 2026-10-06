@@ -35,7 +35,7 @@ async function main() {
       // Logs written before photos carried `subject`: take it from the identity check that verified the photo.
       if (t.photo && t.photo.subject === undefined) t.photo.subject = t.photo.qid && t.identity?.ok ? t.identity.subject : null;
       if (t.photo) continue;
-      const p = pickStarter(used);
+      const p = pickStarter(used, { request: t.request.value, brief })?.photo;
       if (!p) continue;
       used.add(p.url);
       t.photo = p;

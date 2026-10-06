@@ -7,11 +7,12 @@
  *
  *   npx tsx scripts/social_rerender_checkpoint.ts runs/daily-<ts> runs/daily-<ts>/photos-rerun-<ts>
  */
-import { promises as fsp } from 'node:fs';
+import { existsSync, promises as fsp } from 'node:fs';
 import path from 'node:path';
 
 import { checkDroppedText } from '@/lib/social/mechanical/checks';
 import { createMechanicalStage } from '@/lib/social/pipeline/mechanical-stage';
+import { pickStarter } from '@/lib/social/photos/starter-set';
 import { checkRenderFit } from '@/lib/social/render/fit-check';
 import { toRenderPost } from '@/lib/social/render/from-draft';
 import { toSlug, writeGeneratedPost } from '@/lib/social/render/local-store';
@@ -32,7 +33,18 @@ async function main() {
     const name = toSlug(fillDraft(sub, brief).cover).slice(0, 40);
     const mech = await createMechanicalStage()({ storyId, submission: sub, filled: fillDraft(sub, brief) }, { storyId, parsed: brief, raw: '', pages: [] });
     const filled = mech.ok ? mech.value.filled : fillDraft(sub, brief);
-    const photos = [t.photos.cover, ...t.photos.slides].map((x: any) => x.photo);
+    // Saved traces may point at starter photos since removed: swap in the next eligible one, as the chain's last step would.
+    const avoid = new Set<string>();
+    const photos = [t.photos.cover, ...t.photos.slides].map((x: any) => {
+      const p = x.photo;
+      if (p?.url?.startsWith('/social/starter/') && !existsSync(path.join('public', p.url))) {
+        const next = pickStarter(new Set([...avoid, ...[t.photos.cover, ...t.photos.slides].map((y: any) => y.photo?.url)]), { request: x.request.value, brief })!.photo;
+        console.log(`  (starter photo ${p.url} was removed; using ${next.url})`);
+        avoid.add(next.url);
+        return next;
+      }
+      return p;
+    });
     const post = toRenderPost(filled, { cover: photos[0], slides: photos.slice(1) }, { source: brief.sources[0]?.outlet ?? '', sourceUrl: brief.sources[0]?.url ?? '', publishedAt: run.startedAt });
     const fit = await checkRenderFit(post, { screenshotDir: out, name });
     for (const f of fit.focus ?? []) if (f.focus && post.slides[f.slide - 1]?.photoUrl === f.photo) post.slides[f.slide - 1]!.photoFocus = f.focus;

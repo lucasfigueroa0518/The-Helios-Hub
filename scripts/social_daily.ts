@@ -160,6 +160,7 @@ async function main() {
     starterShare: Number(starterShare.toFixed(3)),
     // How often the 7-day rule gave way (Tommy, 2026-10-06).
     starterPoolExhausted: result.posts.flatMap((p) => p.photos).filter((t) => t.steps.some((x) => x.startsWith('starter-pool-exhausted'))).length,
+    noTopicMatch: result.posts.flatMap((p) => p.photos).filter((t) => t.steps.some((x) => x.includes('no-topic-match'))).length,
     capUsd,
   }, null, 2));
 

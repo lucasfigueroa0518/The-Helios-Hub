@@ -40,6 +40,8 @@ import { pickStarter, pickStarterLeastRecent } from './starter-set';
 
 /** Logged when the 7-day rule has to give way (spec §5D; counted in each run's report). */
 export const STARTER_POOL_EXHAUSTED = 'starter-pool-exhausted';
+/** Logged when no starter tag matched the slide or the story and the AI-compute default was used. */
+export const NO_TOPIC_MATCH = 'no-topic-match';
 
 export type PhotoSource = 'article' | 'commons' | 'stock' | 'bank' | 'starter';
 
@@ -304,14 +306,16 @@ export async function findPhoto(request: ImageRequest, ctx: PhotoContext, deps: 
   }
 
   // The offline starter set.
-  const starter = pickStarter(avoidSet(ctx), ctx.brief);
+  // Topic-matched per slide: the IMAGE request, then the brief's main topic, then the AI-compute default.
+  const slideTopic = { request: request.value, brief: ctx.brief };
+  const starter = pickStarter(avoidSet(ctx), slideTopic);
   if (starter) {
-    steps.push(`starter set: ${starter.url}`);
-    return done(starter, 'starter');
+    steps.push(`${starter.match === 'no-topic-match' ? `${NO_TOPIC_MATCH}: ` : ''}starter set (${starter.match}): ${starter.photo.url}`);
+    return done(starter.photo, 'starter');
   }
-  // Every eligible starter photo was used in the last 7 days (Tommy, 2026-10-06):
+  // Every matching starter photo was used in the last 7 days (Tommy, 2026-10-06):
   // reuse the least recently used one and say so. Never returns no photo.
-  const lru = pickStarterLeastRecent(ctx.used, ctx.lastUsed, ctx.brief);
-  steps.push(`${STARTER_POOL_EXHAUSTED}: every eligible starter photo used in the last 7 days; least recently used: ${lru.url}`);
-  return done(lru, 'starter');
+  const lru = pickStarterLeastRecent(ctx.used, ctx.lastUsed, slideTopic);
+  steps.push(`${STARTER_POOL_EXHAUSTED}${lru.match === 'no-topic-match' ? ` + ${NO_TOPIC_MATCH}` : ''}: every matching starter photo used in the last 7 days; least recently used: ${lru.photo.url}`);
+  return done(lru.photo, 'starter');
 }

@@ -51,7 +51,7 @@ export function createDesignStage(deps: DesignDeps): PipelineStages['design'] {
     for (const [i, t] of traces.entries()) {
       const failures = t.photo ? checkPhotoCredit(t.photo, i === 0 ? 'cover' : `slide ${i + 1}`, brief.parsed) : [];
       if (failures.length === 0) continue;
-      const starter = pickStarter(used, brief.parsed);
+      const starter = pickStarter(used, { request: t.request.value, brief: brief.parsed })?.photo;
       if (!starter) return { ok: false, reasonCode: 'render-failed', detail: `C6 ${failures.map((f) => f.detail).join('; ')}; starter set used up`, costUsd: tally.costUsd };
       used.add(starter.url);
       photoReplacements.push(`C6 ${failures[0]!.where}: ${failures.map((f) => f.detail).join('; ')} → ${starter.url}`);

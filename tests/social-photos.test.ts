@@ -282,7 +282,7 @@ test('starter set: big enough for a full post, every file on disk, verifiable cr
     assert.match(p.page, /^https:\/\/commons\.wikimedia\.org\/wiki\/File:/, p.file);
     assert.ok(['CC0', 'Public domain'].includes(p.license), p.file);
   }
-  assert.match(pickStarter(new Set())!.credit, /^Rsparks3 \(CC0\) · Wikimedia Commons$/);
+  assert.match(pickStarter(new Set(), { request: 'server room', brief: null })!.photo.credit, /^Rsparks3 \(CC0\) · Wikimedia Commons$/);
 });
 
 // ── Render adapter (M6) ──────────────────────────────────────────────────
@@ -559,7 +559,7 @@ test('starter-pool-exhausted: when every eligible starter photo was used this we
   const offline = { jev: identityJev(SIF_ANSWERS), http: (async () => { throw new Error('offline'); }) as unknown as typeof fetch };
   const recent = new Set(STARTER_SET.map((p) => starterUrl(p.file)));
   const lastUsed = new Map(STARTER_SET.map((p, i) => [starterUrl(p.file), `2026-10-0${(i % 5) + 1}T00:00:00Z`]));
-  lastUsed.set(starterUrl(STARTER_SET.find((p) => p.topic)!.file), '2026-09-01T00:00:00Z'); // story-specific: never a general fallback, however old
+  lastUsed.set(starterUrl(STARTER_SET.find((p) => p.topics.includes('US Congress'))!.file), '2026-09-01T00:00:00Z'); // off-topic: never used, however old
   const t = await findPhoto({ kind: 'stock', value: 'x' }, newPhotoContext(briefWith(), [], { recent, lastUsed }), offline);
   assert.equal(t.via, 'starter');
   assert.equal(lastUsed.get(t.photo!.url), '2026-10-01T00:00:00Z');
@@ -608,39 +608,66 @@ test('bank seed check: required fields, Wikidata ids, and no faces in company ph
   assert.match(checkBankEntry(entry({ kind: 'scene', tags: [] })).join(), /tags/);
 });
 
-// ── Starter set: story-specific photos (Tommy, 2026-10-06) ────────────────
+// ── Starter set: every photo is story-specific (Tommy, 2026-10-06) ──────
 
-import { briefTopics, pickStarter as pickStarterFn, pickStarterLeastRecent } from '@/lib/social/photos/starter-set';
+import { briefTopics, pickStarter as pickStarterFn, pickStarterLeastRecent, topicsIn, type StarterTopic } from '@/lib/social/photos/starter-set';
 
-test('starter set: 41 photos, 37 general + 4 story-specific (US Congress ×2, stock markets, surveillance)', () => {
+const topicsOf = (url: string) => STARTER_SET.find((s) => starterUrl(s.file) === url)!.topics;
+
+test('starter set: 41 photos, every one tagged with at least one topic', () => {
   assert.equal(STARTER_SET.length, 41);
-  assert.equal(STARTER_SET.filter((p) => !p.topic).length, 37);
-  assert.deepEqual(STARTER_SET.filter((p) => p.topic).map((p) => p.topic).sort(), ['US Congress', 'US Congress', 'stock markets', 'surveillance']);
+  assert.ok(STARTER_SET.every((p) => p.topics.length > 0));
+  assert.deepEqual(topicsOf(starterUrl('library-bookshelves-in-hove-libr.jpg')), ['Copyright, publishing and training data']);
+  assert.deepEqual(topicsOf(starterUrl('empty-lecture-hall-gfp-lecture-hall.jpg')), ['Education']);
+  assert.deepEqual(topicsOf(starterUrl('warehouse-fema-37526-florida-logis.jpg')), ['Trade and supply chain']);
 });
 
-test('story-specific photos: only when the brief is about the topic, never as a general fallback', () => {
-  const general = briefWith();
-  const all = new Set<string>();
-  for (let i = 0; i < STARTER_SET.length; i++) {
-    const p = pickStarterFn(all, general);
-    if (!p) break;
-    assert.ok(!STARTER_SET.find((s) => starterUrl(s.file) === p.url)!.topic, `general brief got ${p.url}`);
-    all.add(p.url);
+test('per slide: the IMAGE request first, then the brief\'s main topic, then the AI-compute default (no-topic-match)', () => {
+  const b = briefWith();
+  b.the_news.text = 'Google raised the price of its Gemini plans.';
+  const fromRequest = pickStarterFn(new Set(), { request: 'wind turbines at dusk', brief: b })!;
+  assert.equal(fromRequest.match, 'request');
+  assert.ok(topicsOf(fromRequest.photo.url).includes('Energy and power'));
+  const fromBrief = pickStarterFn(new Set(), { request: 'abstract mood', brief: b })!;
+  assert.equal(fromBrief.match, 'brief');
+  assert.ok(topicsOf(fromBrief.photo.url).includes('Money, funding and business'));
+  const none = briefWith();
+  none.the_news.text = 'Trump announced a Super Intelligence Force.';
+  const fallback = pickStarterFn(new Set(), { request: 'abstract mood', brief: none })!;
+  assert.equal(fallback.match, 'no-topic-match');
+  assert.ok(topicsOf(fallback.photo.url).includes('AI compute and data centers'));
+});
+
+test('a photo never lands off-topic: a general story never gets a Congress, stock-market or surveillance photo', () => {
+  const b = briefWith();
+  b.the_news.text = 'Trump announced a Super Intelligence Force.';
+  const taken = new Set<string>();
+  for (let i = 0; i < 8; i++) {
+    const p = pickStarterFn(taken, { request: 'abstract mood', brief: b })!;
+    for (const t of ['US Congress', 'stock markets', 'surveillance'] as StarterTopic[]) assert.ok(!topicsOf(p.photo.url).includes(t));
+    taken.add(p.photo.url);
   }
   const congress = briefWith();
   congress.the_news.text = 'The U.S. Senate passed an AI bill on Tuesday.';
-  const first = pickStarterFn(new Set(), congress)!;
-  assert.equal(STARTER_SET.find((s) => starterUrl(s.file) === first.url)!.topic, 'US Congress');
-  const lru = pickStarterLeastRecent(new Set(), new Map(STARTER_SET.filter((p) => p.topic).map((p) => [starterUrl(p.file), '2020-01-01'])), general);
-  assert.ok(!STARTER_SET.find((s) => starterUrl(s.file) === lru.url)!.topic, 'exhausted pool still never falls back to a story-specific photo');
+  assert.ok(topicsOf(pickStarterFn(new Set(), { request: 'abstract mood', brief: congress })!.photo.url).includes('US Congress'));
 });
 
-test('topics come from plain words in the brief; "NYC lawmakers" is not Congress', () => {
+test('starter-pool-exhausted: never a repeat within a post; widens instead', () => {
+  const b = briefWith();
+  b.the_news.text = 'Trump announced a Super Intelligence Force.';
+  const used = new Set<string>();
+  for (let i = 0; i < 12; i++) {
+    const p = pickStarterLeastRecent(used, new Map(), { request: 'abstract mood', brief: b });
+    assert.ok(!used.has(p.photo.url), `repeat at ${i}`);
+    used.add(p.photo.url);
+  }
+});
+
+test('topics come from plain words; "NYC lawmakers" is not Congress', () => {
   const b = briefWith();
   b.the_news.text = 'NYC Council lawmakers questioned AI companies at a hearing.';
-  assert.deepEqual([...briefTopics(b)], []);
-  b.the_news.text = 'Nvidia shares fell 5% on the Nasdaq after the IPO.';
-  assert.deepEqual([...briefTopics(b)], ['stock markets']);
-  b.the_news.text = 'The city expands CCTV and facial recognition.';
-  assert.deepEqual([...briefTopics(b)], ['surveillance']);
+  assert.ok(!briefTopics(b).includes('US Congress'));
+  assert.ok(topicsIn('Nvidia shares fell 5% on the Nasdaq').includes('stock markets'));
+  assert.ok(topicsIn('The city expands CCTV and facial recognition').includes('surveillance'));
+  assert.deepEqual(topicsIn('abstract mood'), []);
 });
