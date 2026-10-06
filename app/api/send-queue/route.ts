@@ -13,6 +13,16 @@ import { getSession } from '@/lib/session';
 
 export const runtime = 'nodejs';
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function uniqueParams(url: URL, key: string): string[] {
+  return [...new Set(url.searchParams.getAll(key).map((value) => value.trim()).filter(Boolean))];
+}
+
+function isUuid(value: string): boolean {
+  return UUID.test(value);
+}
+
 export async function GET(request: NextRequest) {
   const session = await getSession();
   if (!session) return draftingJson({ error: 'Unauthorized' }, 401);
@@ -22,18 +32,23 @@ export async function GET(request: NextRequest) {
   const boardWindow = sendQueueBoardWindow(today);
   const from = url.searchParams.get('from') ?? boardWindow.from;
   const to = url.searchParams.get('to') ?? boardWindow.to;
-  const campaignId = url.searchParams.get('campaign_id');
-  const identitySlug = url.searchParams.get('identity') as SenderIdentitySlug | null;
-  const inboxEmail = url.searchParams.get('inbox');
+  const campaignIds = uniqueParams(url, 'campaign_id').filter(isUuid);
+  if (campaignIds.length !== uniqueParams(url, 'campaign_id').length) {
+    return draftingJson({ error: 'campaign_id must be a uuid' }, 400);
+  }
+  const identitySlugs = uniqueParams(url, 'identity').filter(
+    (slug): slug is SenderIdentitySlug => slug === 'lucas' || slug === 'tommy',
+  );
+  const inboxEmails = uniqueParams(url, 'inbox');
 
   try {
     const result = await listSendQueue({
       ownerId: session.userId,
       from,
       to,
-      campaignId,
-      identitySlug: identitySlug === 'lucas' || identitySlug === 'tommy' ? identitySlug : null,
-      inboxEmail,
+      campaignIds,
+      identitySlugs,
+      inboxEmails,
     });
     return draftingJson({
       ...result,

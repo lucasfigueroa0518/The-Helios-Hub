@@ -24,7 +24,6 @@ import { MessageComposer } from '@/app/components/message-composer';
 import { buildSignatureHtml, resolveEmailSignature } from '@/lib/drafting/email-signature';
 import { parseMessageTemplate, parseSubjectTemplate } from '@/lib/drafting/message-template';
 import { isLiveAutoCampaign } from '@/lib/auto-campaigns/status';
-import { approvalLockExpired, DEFAULT_DELIVERY_SETTINGS } from '@/lib/smartlead/delivery-settings';
 import { CapacityShareField, ChoiceCards } from '@/app/hub/campaign-setup-fields';
 import type { InboxRoster } from '@/lib/inboxes/roster';
 
@@ -33,7 +32,7 @@ const DRAFTING_POLL_MS = 5_000;
 type Campaign = {
   id: string;
   name: string;
-  status: 'active' | 'archived';
+  status: 'active' | 'archived' | 'terminated';
   merged_into_id: string | null;
   needs_enrichment?: boolean;
   kind?: 'manual' | 'auto';
@@ -101,11 +100,10 @@ export function CampaignHub({ email }: { email: string }) {
   const [replyFallback, setReplyFallback] = useState<'claude' | 'human_only'>('claude');
   const [scheduleStart, setScheduleStart] = useState('09:00');
   const [scheduleEnd, setScheduleEnd] = useState('17:00');
-  const [requireApproval, setRequireApproval] = useState(true);
-  const [requireApprovalUntil, setRequireApprovalUntil] = useState<string | null>(null);
 
   const active = useMemo(() => campaigns.filter((campaign) => campaign.status === 'active'), [campaigns]);
   const archived = useMemo(() => campaigns.filter((campaign) => campaign.status === 'archived'), [campaigns]);
+  const terminated = useMemo(() => campaigns.filter((campaign) => campaign.status === 'terminated'), [campaigns]);
   const anyDrafting = useMemo(
     () => campaigns.some((campaign) => campaign.drafting_active),
     [campaigns],
@@ -181,8 +179,6 @@ export function CampaignHub({ email }: { email: string }) {
     setReplyFallback('claude');
     setScheduleStart('09:00');
     setScheduleEnd('17:00');
-    setRequireApproval(true);
-    setRequireApprovalUntil(null);
     setSenderIdentity('lucas');
     setSelected(null);
     setDialog('create');
@@ -199,8 +195,6 @@ export function CampaignHub({ email }: { email: string }) {
     setFollowUpBody(follow?.body_template ?? '');
     setScheduleStart(settings?.schedule.start ?? '09:00');
     setScheduleEnd(settings?.schedule.end ?? '17:00');
-    setRequireApproval(settings?.require_approval ?? true);
-    setRequireApprovalUntil(settings?.require_approval_until ?? null);
   }
 
   function deliveryPayload() {
@@ -313,10 +307,7 @@ export function CampaignHub({ email }: { email: string }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sender_identity_slug: senderIdentity,
-          delivery_settings: {
-            ...deliveryPayload(),
-            require_approval: requireApproval,
-          },
+          delivery_settings: deliveryPayload(),
         }),
       });
       invalidateHubCache('/api/campaigns');
@@ -326,6 +317,35 @@ export function CampaignHub({ email }: { email: string }) {
       setError(err instanceof Error ? err.message : 'Unable to update delivery');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function setAutoStatus(campaign: Campaign, autoStatus: 'live' | 'paused') {
+    try {
+      await requestJson(`/api/campaigns/${campaign.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ auto_status: autoStatus }),
+      });
+      invalidateHubCache('/api/campaigns');
+      await loadCampaigns(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to update campaign');
+    }
+  }
+
+  async function terminateCampaign(campaign: Campaign) {
+    if (!window.confirm(`Terminate “${campaign.name}”? It stops sending and gives its capacity back. This cannot be resumed.`)) return;
+    try {
+      await requestJson(`/api/campaigns/${campaign.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'terminated' }),
+      });
+      invalidateHubCache('/api/campaigns');
+      await loadCampaigns(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to terminate campaign');
     }
   }
 
@@ -431,11 +451,37 @@ export function CampaignHub({ email }: { email: string }) {
                     onDelivery={() => openDelivery(campaign)}
                     onMerge={() => openMerge(campaign)}
                     onArchive={() => void archiveCampaign(campaign)}
+                    onPause={() => void setAutoStatus(campaign, 'paused')}
+                    onResume={() => void setAutoStatus(campaign, 'live')}
+                    onTerminate={() => void terminateCampaign(campaign)}
                     onReload={() => void loadCampaigns(true)}
                   />
                 ))}
               </div>
             </div>
+          )}
+
+          {terminated.length > 0 && (
+            <details className="archived-campaigns">
+              <summary>Terminated campaigns ({terminated.length})</summary>
+              <div className="campaign-list">
+                {terminated.map((campaign) => (
+                  <CampaignRow
+                    key={campaign.id}
+                    campaign={campaign}
+                    canMerge={false}
+                    onRename={() => openRename(campaign)}
+                    onDelivery={() => undefined}
+                    onMerge={() => undefined}
+                    onArchive={() => undefined}
+                    onPause={() => undefined}
+                    onResume={() => undefined}
+                    onTerminate={() => undefined}
+                    onReload={() => void loadCampaigns(true)}
+                  />
+                ))}
+              </div>
+            </details>
           )}
 
           {archived.length > 0 && (
@@ -451,6 +497,9 @@ export function CampaignHub({ email }: { email: string }) {
                     onDelivery={() => openDelivery(campaign)}
                     onMerge={() => undefined}
                     onArchive={() => undefined}
+                    onPause={() => undefined}
+                    onResume={() => undefined}
+                    onTerminate={() => undefined}
                     onReload={() => void loadCampaigns(true)}
                   />
                 ))}
@@ -648,39 +697,6 @@ export function CampaignHub({ email }: { email: string }) {
                     scheduleEnd={scheduleEnd}
                     setScheduleEnd={setScheduleEnd}
                   />
-                  <div className="field">
-                    <span className="field__label">Approve before handoff</span>
-                    <div className="segmented" style={{ width: 'fit-content' }}>
-                      <button
-                        type="button"
-                        className={`segmented__item${requireApproval ? ' segmented__item--active' : ''}`}
-                        onClick={() => setRequireApproval(true)}
-                      >
-                        Required
-                      </button>
-                      <button
-                        type="button"
-                        className={`segmented__item${!requireApproval ? ' segmented__item--active' : ''}`}
-                        disabled={!approvalLockExpired({
-                          ...DEFAULT_DELIVERY_SETTINGS,
-                          require_approval: requireApproval,
-                          require_approval_until: requireApprovalUntil,
-                        })}
-                        onClick={() => setRequireApproval(false)}
-                      >
-                        Off
-                      </button>
-                    </div>
-                    <p className="field__hint" style={{ margin: 0, marginTop: 'var(--space-1)' }}>
-                      {requireApprovalUntil && !approvalLockExpired({
-                        ...DEFAULT_DELIVERY_SETTINGS,
-                        require_approval: requireApproval,
-                        require_approval_until: requireApprovalUntil,
-                      })
-                        ? `Stays on until ${requireApprovalUntil}. After that you can turn it off.`
-                        : 'Drafts wait for approval before Smartlead gets them.'}
-                    </p>
-                  </div>
                   <FollowUpFields
                     delay={followUpDelay}
                     setDelay={setFollowUpDelay}
@@ -841,7 +857,7 @@ function CampaignNameForm({
 }
 
 function CampaignRow({
-  campaign, canMerge, onRename, onDelivery, onMerge, onArchive, onReload,
+  campaign, canMerge, onRename, onDelivery, onMerge, onArchive, onPause, onResume, onTerminate, onReload,
 }: {
   campaign: Campaign;
   canMerge: boolean;
@@ -849,6 +865,9 @@ function CampaignRow({
   onDelivery: () => void;
   onMerge: () => void;
   onArchive: () => void;
+  onPause: () => void;
+  onResume: () => void;
+  onTerminate: () => void;
   onReload: () => void;
 }) {
   const [editingTag, setEditingTag] = useState(false);
@@ -891,7 +910,8 @@ function CampaignRow({
     : 'Drafting';
   const isAuto = campaign.kind === 'auto';
   const isLive = isLiveAutoCampaign(campaign);
-  const isPaused = isAuto && campaign.auto_status === 'paused';
+  const isPaused = isAuto && campaign.status === 'active' && campaign.auto_status === 'paused';
+  const isTerminated = campaign.status === 'terminated';
   const href = campaignHref(campaign);
   const laneLabel = campaign.lane_status ? `lane ${campaign.lane_status}` : 'lane pending';
   const forecastLabel = campaign.tomorrow_forecast
@@ -907,7 +927,11 @@ function CampaignRow({
     forecastLabel,
     isAuto ? `${campaign.sent_count ?? 0} sent` : null,
     isAuto ? `${campaign.lead_count} pulled` : `${campaign.lead_count} ${campaign.lead_count === 1 ? 'lead' : 'leads'}`,
-    isAuto ? (campaign.auto_status ?? 'pending_sender').replace(/_/g, ' ') : formatDate(campaign.last_run_at),
+    isTerminated
+      ? 'terminated'
+      : isAuto
+        ? (campaign.auto_status ?? 'pending_sender').replace(/_/g, ' ')
+        : formatDate(campaign.last_run_at),
   ].filter(Boolean).join(' · ');
 
   return (
@@ -921,6 +945,7 @@ function CampaignRow({
           <span className="campaign-row__heading">
             {isLive ? <LivePulse live label="Live" /> : null}
             {isPaused ? <span className="campaign-row__paused">Paused</span> : null}
+            {isTerminated ? <span className="campaign-row__paused">Terminated</span> : null}
             <span className="campaign-row__name">{campaign.name}</span>
             {draftingActive ? (
               <span className="campaign-row__drafting" role="status" aria-live="polite">
@@ -980,6 +1005,15 @@ function CampaignRow({
       </div>
 
       <div className="campaign-row__actions">
+        {campaign.status === 'active' && isAuto && isLive ? (
+          <button className="btn btn--quiet" onClick={onPause}>Pause</button>
+        ) : null}
+        {campaign.status === 'active' && isAuto && (isPaused || campaign.auto_status === 'exhausted' || campaign.auto_status === 'error') ? (
+          <button className="btn btn--quiet" onClick={onResume}>Resume</button>
+        ) : null}
+        {campaign.status === 'active' && (
+          <button className="btn btn--quiet" onClick={onTerminate}>Terminate</button>
+        )}
         {campaign.status === 'active' && canMerge && <button className="btn btn--quiet" onClick={onMerge}>Merge in</button>}
         <button className="btn btn--quiet" onClick={onRename}>Rename</button>
         {campaign.status === 'active' && <button className="btn btn--quiet" onClick={onDelivery}>Delivery</button>}

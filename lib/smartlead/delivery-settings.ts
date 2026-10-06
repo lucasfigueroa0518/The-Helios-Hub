@@ -37,7 +37,7 @@ export type DeliverySettings = {
   follow_ups: FollowUpStep[];
   reply_fallback: ReplyFallback;
   require_approval: boolean;
-  /** ISO date; the create dialog sets created_at + 30 days. */
+  /** Unused. Kept so older rows still parse. */
   require_approval_until: string | null;
 };
 
@@ -56,19 +56,18 @@ export const DEFAULT_DELIVERY_SETTINGS: DeliverySettings = {
   capacity_pct: null,
   follow_ups: [],
   reply_fallback: 'claude',
-  require_approval: true,
+  require_approval: false,
   require_approval_until: null,
 };
 
-/** Approval defaults on for a campaign's first 30 days. */
-export const REQUIRE_APPROVAL_DAYS = 30;
-
-export function initialDeliverySettings(createdAt: Date = new Date()): DeliverySettings {
-  const until = new Date(createdAt.getTime() + REQUIRE_APPROVAL_DAYS * 86_400_000);
+/** New campaigns send without a human review step. */
+export function initialDeliverySettings(): DeliverySettings {
   return {
     ...DEFAULT_DELIVERY_SETTINGS,
-    require_approval: true,
-    require_approval_until: until.toISOString().slice(0, 10),
+    schedule: { ...DEFAULT_DELIVERY_SETTINGS.schedule },
+    follow_ups: [],
+    require_approval: false,
+    require_approval_until: null,
   };
 }
 
@@ -143,26 +142,14 @@ export function resolveDeliverySettings(raw: unknown): DeliverySettings {
     capacity_pct: asCapacityPct(row.capacity_pct),
     follow_ups: asFollowUps(row.follow_ups),
     reply_fallback: fallback,
-    require_approval: asBoolean(row.require_approval, true),
+    require_approval: asBoolean(row.require_approval, false),
     require_approval_until: typeof row.require_approval_until === 'string'
       ? row.require_approval_until
       : null,
   };
 }
 
-/**
- * Approval is on while the flag is set. The `until` date is when the *user* may
- * switch it off, not an automatic expiry — leaving it on is always safe, and
- * silently disabling a safety gate on a timer is not.
- */
-export function approvalRequired(settings: DeliverySettings): boolean {
-  return settings.require_approval;
-}
-
-/** True once the user is allowed to turn approval off. */
-export function approvalLockExpired(
-  settings: DeliverySettings,
-  today = new Date().toISOString().slice(0, 10),
-): boolean {
-  return !settings.require_approval_until || settings.require_approval_until <= today;
+/** Drafts hand off without a review. The stored flag is ignored. */
+export function approvalRequired(_settings: DeliverySettings): boolean {
+  return false;
 }

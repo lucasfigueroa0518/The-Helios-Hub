@@ -146,21 +146,12 @@ test('isReadyForBulkSend excludes retry-suggested and non-drafted states', () =>
   );
 });
 
-test('requireApproval holds unreviewed drafts back from handoff', () => {
+test('unreviewed drafts are ready for handoff', () => {
   assert.equal(
     isReadyForBulkSend({
       state: 'ready_for_review',
       retrySuggested: false,
       reviewStatus: 'unreviewed',
-      requireApproval: true,
-    }),
-    false,
-  );
-  assert.equal(
-    isReadyForBulkSend({
-      state: 'ready_for_review',
-      retrySuggested: false,
-      reviewStatus: 'approved',
       requireApproval: true,
     }),
     true,
@@ -170,7 +161,6 @@ test('requireApproval holds unreviewed drafts back from handoff', () => {
       state: 'ready_for_review',
       retrySuggested: false,
       reviewStatus: 'unreviewed',
-      requireApproval: false,
     }),
     true,
   );

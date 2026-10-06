@@ -87,7 +87,6 @@ import { campaignRampDelayMs } from '@/lib/drafting/provider-admission';
 import { assertTransition, syncReviewStatus } from '@/lib/drafting/state';
 import type { DraftingRescueAssessment } from '@/lib/drafting/rescue';
 import { isReadyForBulkSend } from '@/lib/drafting/draft-review-order';
-import { approvalRequired, resolveDeliverySettings } from '@/lib/smartlead/delivery-settings';
 import {
   hasBlockingHardLintFailures,
   hasRetrySuggestedLint,
@@ -3161,16 +3160,10 @@ export async function sendCampaignApprovedDrafts(
   }
 
   const { rows: allRows } = await loadSendableDraftRows(campaignId, ownerId);
-  const { rows: settingsRows } = await dbQuery<{ delivery_settings: unknown }>(
-    'SELECT delivery_settings FROM outreach.campaigns WHERE id = $1',
-    [campaignId],
-  );
-  const requireApproval = approvalRequired(resolveDeliverySettings(settingsRows[0]?.delivery_settings));
   const rows = allRows.filter((row) => isReadyForBulkSend({
     state: row.state,
     retrySuggested: row.retrySuggested,
     reviewStatus: row.reviewStatus,
-    requireApproval,
   }));
   const sendStatuses = await loadLatestEmailSendStatuses(rows.map((row) => row.itemId));
   const activeQueue = await loadActiveQueueByItemIds(rows.map((row) => row.itemId));

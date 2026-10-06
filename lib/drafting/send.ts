@@ -89,24 +89,22 @@ async function loadInlineHeadshot(input: SendEmailInput): Promise<InlineHeadshot
   });
   const defaults = slug === 'tommy' ? TOMMY_SIGNATURE_DEFAULTS : LUCAS_SIGNATURE_DEFAULTS;
 
-  // Lucas ships a bundled public asset. Tommy's photo is the uploaded sender profile.
-  if (slug === 'lucas') {
-    try {
-      const filePath = path.join(
-        process.cwd(),
-        'public',
-        defaults.headshotPublicPath.replace(/^\//, ''),
-      );
-      const content = await readFile(filePath);
-      return {
-        content,
-        filename: path.basename(defaults.headshotPublicPath),
-        contentType: defaults.headshotPublicPath.endsWith('.png') ? 'image/png' : 'image/jpeg',
-        contentId: SIGNATURE_HEADSHOT_CID,
-      };
-    } catch {
-      // Fall through to uploaded storage.
-    }
+  // Known identities ship a bundled public headshot. Storage is the fallback.
+  try {
+    const filePath = path.join(
+      process.cwd(),
+      'public',
+      defaults.headshotPublicPath.replace(/^\//, ''),
+    );
+    const content = await readFile(filePath);
+    return {
+      content,
+      filename: path.basename(defaults.headshotPublicPath),
+      contentType: defaults.headshotPublicPath.endsWith('.png') ? 'image/png' : 'image/jpeg',
+      contentId: SIGNATURE_HEADSHOT_CID,
+    };
+  } catch {
+    // Fall through to uploaded storage.
   }
 
   try {

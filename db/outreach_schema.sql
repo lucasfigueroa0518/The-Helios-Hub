@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS outreach.campaigns (
     name            text NOT NULL,
     owner_id        uuid NOT NULL REFERENCES outreach.users (id),
     status          text NOT NULL DEFAULT 'active'
-                        CHECK (status IN ('active', 'archived')),
+                        CHECK (status IN ('active', 'archived', 'terminated')),
     merged_into_id  uuid REFERENCES outreach.campaigns (id),
     needs_enrichment boolean NOT NULL DEFAULT true,
     created_at      timestamptz NOT NULL DEFAULT now(),
@@ -169,6 +169,13 @@ BEGIN
       ADD CONSTRAINT campaigns_expansion_step_check
       CHECK (expansion_step >= 0 AND expansion_step <= 1024) NOT VALID;
 END $$;
+
+-- Existing databases keep the original inline check. Replace it so Terminate
+-- is a real status, distinct from archive.
+ALTER TABLE outreach.campaigns DROP CONSTRAINT IF EXISTS campaigns_status_check;
+ALTER TABLE outreach.campaigns
+  ADD CONSTRAINT campaigns_status_check
+  CHECK (status IN ('active', 'archived', 'terminated'));
 
 CREATE INDEX IF NOT EXISTS idx_campaigns_owner ON outreach.campaigns (owner_id);
 CREATE INDEX IF NOT EXISTS idx_campaigns_status ON outreach.campaigns (status);
