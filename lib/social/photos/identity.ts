@@ -24,10 +24,13 @@ const USER_AGENT = 'HeliosHub/1.0 (+https://heliosgroup.ai; helios@heliosgroup.a
 
 export type SubjectType = 'person' | 'organization';
 
+/** Jev's raw answers, logged on every result so thresholds are set from data (Tommy, 2026-10-06). */
+export type IdentityScores = { person: number; matches: Array<{ id: string; label: string; description: string; p: number }> };
+
 export type IdentityResult =
-  | { ok: true; qid: string; label: string; description: string; type: SubjectType; via: 'resolver' | 'jev-pick' }
+  | { ok: true; scores: IdentityScores; qid: string; label: string; description: string; type: SubjectType; via: 'resolver' | 'jev-pick' }
   /** `type` is Jev's answer when it got that far, so the fallback scene can fit the subject. */
-  | { ok: false; reason: string; type: SubjectType | null };
+  | { ok: false; reason: string; type: SubjectType | null; scores: IdentityScores | null };
 
 /** Code: what the entry is an instance of, as the two types we use. */
 export async function fetchEntityTypes(qid: string, http: typeof fetch = fetch): Promise<{ human: boolean; organization: boolean }> {
@@ -64,7 +67,7 @@ export async function checkIdentity(
     { http: deps.http },
   );
   const candidates = resolved.ok ? [resolved.candidate] : (resolved.candidates ?? []);
-  if (candidates.length === 0) return { ok: false, reason: `no Wikidata entry: ${resolved.ok ? '' : resolved.reason}`, type: null };
+  if (candidates.length === 0) return { ok: false, reason: `no Wikidata entry: ${resolved.ok ? '' : resolved.reason}`, type: null, scores: null };
 
   const res = await deps.jev(
     { state: Identity.buildState(subject, story, candidates), questions: Identity.buildQuestions(candidates.length) },
@@ -72,22 +75,26 @@ export async function checkIdentity(
   );
   const { MATCH_MIN, PERSON_MIN } = Identity.THRESHOLDS;
   const person = res.answers.is_person!.noul;
+  const scores: IdentityScores = {
+    person,
+    matches: candidates.map((c, k) => ({ id: c.id, label: c.label, description: c.description, p: res.answers[Identity.matchId(k)]!.noul })),
+  };
   const type: SubjectType | null = person >= PERSON_MIN ? 'person' : person <= 1 - PERSON_MIN ? 'organization' : null;
-  if (!type) return { ok: false, reason: `subject type unclear (person ${person.toFixed(2)})`, type: null };
+  if (!type) return { ok: false, reason: `subject type unclear (person ${person.toFixed(2)})`, type: null, scores };
 
   const matches = candidates
     .map((c, k) => ({ c, p: res.answers[Identity.matchId(k)]!.noul }))
     .filter((m) => m.p >= MATCH_MIN);
   if (matches.length === 0) {
-    return { ok: false, reason: `no entry matches the brief (${candidates.map((c) => `${c.id} "${c.description}"`).join('; ')})`, type };
+    return { ok: false, reason: `no entry matches the brief (${candidates.map((c) => `${c.id} "${c.description}"`).join('; ')})`, type, scores };
   }
-  if (matches.length > 1) return { ok: false, reason: `several entries match: ${matches.map((m) => m.c.id).join(', ')}`, type };
+  if (matches.length > 1) return { ok: false, reason: `several entries match: ${matches.map((m) => m.c.id).join(', ')}`, type, scores };
   const chosen = matches[0]!.c;
 
   const types = await fetchEntityTypes(chosen.id, deps.http);
   const fits = type === 'person' ? types.human : types.organization;
   if (!fits) {
-    return { ok: false, reason: `${chosen.id} "${chosen.label}" is not ${type === 'person' ? 'a human' : 'an organization'} in Wikidata (P31)`, type };
+    return { ok: false, reason: `${chosen.id} "${chosen.label}" is not ${type === 'person' ? 'a human' : 'an organization'} in Wikidata (P31)`, type, scores };
   }
-  return { ok: true, qid: chosen.id, label: chosen.label, description: chosen.description, type, via: resolved.ok ? 'resolver' : 'jev-pick' };
+  return { ok: true, scores, qid: chosen.id, label: chosen.label, description: chosen.description, type, via: resolved.ok ? 'resolver' : 'jev-pick' };
 }

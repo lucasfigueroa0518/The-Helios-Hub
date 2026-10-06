@@ -7,19 +7,24 @@ import type { Brief } from '@/lib/social/reporter/brief';
 import type { PageReadOk } from '@/lib/social/reporter/read-page';
 import type { FilledDraft } from '@/lib/social/writer/draft';
 
-import { findPhoto, newPhotoContext, type PhotoDeps, type PhotoTrace } from './find';
+import { findPhoto, newPhotoContext, type PhotoDeps, type PhotoSlot, type PhotoTrace } from './find';
+
+/** Where a slide type draws its photo. */
+export function slotFor(type: FilledDraft['slides'][number]['type']): PhotoSlot {
+  return type === 'stat' || type === 'split_stat' ? 'backdrop' : type === 'quote' ? 'quote' : 'split';
+}
 
 export type DraftPhotos = { cover: PhotoTrace; slides: PhotoTrace[] };
 
 export async function photosForDraft(draft: FilledDraft, brief: Brief, pages: PageReadOk[], deps: PhotoDeps): Promise<DraftPhotos> {
   const ctx = newPhotoContext(brief, pages);
   const chosen = draft.cover_options[draft.chosen_cover - 1]!;
-  const cover = await findPhoto(chosen.image, ctx, deps, { text: [chosen.text], speaker: null });
+  const cover = await findPhoto(chosen.image, ctx, deps, { text: [chosen.text], speaker: null, slot: 'split' });
   const slides: PhotoTrace[] = [];
   // In order, not in parallel: the used set decides which candidate each slide gets.
   for (const s of draft.slides) {
     const text = [s.headline.text, s.body?.text ?? '', s.quote?.text ?? ''];
-    slides.push(await findPhoto(s.image, ctx, deps, { text, speaker: s.quote?.speaker ?? null }));
+    slides.push(await findPhoto(s.image, ctx, deps, { text, speaker: s.quote?.speaker ?? null, slot: slotFor(s.type) }));
   }
   return { cover, slides };
 }

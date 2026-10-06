@@ -14,9 +14,9 @@ import { createDesignStage } from '@/lib/social/pipeline/design-stage';
 import type { Brief as PipelineBrief, Draft, ScoredCandidate } from '@/lib/social/pipeline/types';
 import { classifyCredit } from '@/lib/social/photos/credit';
 import { photosForDraft } from '@/lib/social/photos/design';
-import { FALLBACK_SCENES, findPhoto, NEUTRAL_SCENES, newPhotoContext, type Photo } from '@/lib/social/photos/find';
+import { FALLBACK_SCENES, findPhoto, NEUTRAL_SCENES, newPhotoContext, STOCK_MIN_SHORT_SIDE, type Photo } from '@/lib/social/photos/find';
 import { checkIdentity } from '@/lib/social/photos/identity';
-import { MAX_PHOTOS_PER_POST, STARTER_SET, starterUrl } from '@/lib/social/photos/starter-set';
+import { MAX_PHOTOS_PER_POST, pickStarter, STARTER_SET, starterUrl } from '@/lib/social/photos/starter-set';
 import { layoutOf, rotateLayouts } from '@/lib/social/render/layout-rotation';
 import type { SlideCopy } from '@/lib/social/render/types';
 import { toRenderPost } from '@/lib/social/render/from-draft';
@@ -177,7 +177,7 @@ test('an agency-credited article photo is rejected, including a credit-only capt
 test("chain: a rejected article photo falls back to the slide's subject, identity-checked", async () => {
   const { deps: d } = deps();
   const ctx = newPhotoContext(briefWith(), pages());
-  const t = await findPhoto({ kind: 'article', value: GETTY_SRC }, ctx, d, { text: ['Clayton will chair it', 'Jay Clayton chairs the force.'], speaker: null });
+  const t = await findPhoto({ kind: 'article', value: GETTY_SRC }, ctx, d, { text: ['Clayton will chair it', 'Jay Clayton chairs the force.'], speaker: null, slot: 'split' });
   assert.equal(t.via, 'subject');
   assert.equal(t.photo?.url, commonsUrl('Jay Clayton SEC.jpg'));
   assert.equal(t.identity?.ok, true);
@@ -186,7 +186,7 @@ test("chain: a rejected article photo falls back to the slide's subject, identit
 test("chain: a quote slide's speaker is its subject", async () => {
   const { deps: d } = deps();
   const ctx = newPhotoContext(briefWith(), []);
-  const t = await findPhoto({ kind: 'stock', value: 'flag on a pole' }, ctx, d, { text: ['His pitch'], speaker: 'Donald Trump' });
+  const t = await findPhoto({ kind: 'stock', value: 'flag on a pole' }, ctx, d, { text: ['His pitch'], speaker: 'Donald Trump', slot: 'quote' });
   assert.equal(t.via, 'subject');
   assert.equal(t.photo?.qid, 'Q22686');
 });
@@ -209,7 +209,7 @@ test('chain: every fixture slide gets a photo, each step logged', async () => {
     assert.ok(t.via);
   }
   // Clayton is named on the slide, but his one Commons photo is on the slide before: no repeat → neutral scene.
-  assert.ok(p.slides[1]!.steps.includes('subject from slide text: Jay Clayton'));
+  assert.ok(p.slides[1]!.steps.includes('subject from slide: Jay Clayton'));
   assert.ok(p.slides[1]!.steps.includes('every Commons photo already used in this post'));
   assert.equal(p.slides[1]!.via, 'neutral');
 });
@@ -257,13 +257,15 @@ test('every online source failing: every slide still gets a photo, from the offl
   assert.equal(new Set(all.map((t) => t.photo!.url)).size, all.length, 'no repeats');
 });
 
-test('starter set: big enough for a full post, every file on disk, no people', async () => {
+test('starter set: big enough for a full post, every file on disk, verifiable credit', async () => {
   const { existsSync } = await import('node:fs');
   assert.ok(STARTER_SET.length >= MAX_PHOTOS_PER_POST);
   for (const p of STARTER_SET) {
     assert.ok(existsSync(`public${starterUrl(p.file)}`), p.file);
-    assert.ok(!/\b(man|woman|person|people|portrait|face)\b/i.test(p.shows) || /no faces/.test(p.shows), p.file);
+    assert.match(p.page, /^https:\/\/commons\.wikimedia\.org\/wiki\/File:/, p.file);
+    assert.ok(['CC0', 'Public domain'].includes(p.license), p.file);
   }
+  assert.match(pickStarter(new Set())!.credit, /^Rsparks3 \(CC0\) · Wikimedia Commons$/);
 });
 
 // ── Render adapter (M6) ──────────────────────────────────────────────────
@@ -390,4 +392,41 @@ test('quote slide: the round speaker spot only for a verified photo of the speak
   assert.equal(at({ ...base, source: 'commons', qid: 'Q22686', subject: 'Donald Trump' }).photoIsSpeaker, true);
   assert.equal(at({ ...base, source: 'commons', qid: 'Q6163829', subject: 'Jay Clayton' }).photoIsSpeaker, false, 'someone else');
   assert.equal(at({ ...base, source: 'starter', qid: null, subject: null }).photoIsSpeaker, false, 'a scene');
+});
+
+// ── Slots: where the photo is drawn decides the chain (Tommy, 2026-10-06) ──
+
+test('stat background: the stock scene wins; subject and article photos are skipped', async () => {
+  const { deps: d } = deps();
+  const ctx = newPhotoContext(briefWith(), pages());
+  const t = await findPhoto({ kind: 'subject', value: 'Donald Trump' }, ctx, d, { text: ['Trump has 120 days'], speaker: null, slot: 'backdrop' });
+  assert.notEqual(t.via, 'subject');
+  assert.ok(t.steps.includes('subject photo skipped: the stat background is a scene'));
+  const a = await findPhoto({ kind: 'article', value: WH_SRC }, ctx, d, { text: [], speaker: null, slot: 'backdrop' });
+  assert.notEqual(a.via, 'article');
+  const s = await findPhoto({ kind: 'stock', value: 'wall clock' }, ctx, d, { text: ['Donald Trump'], speaker: null, slot: 'backdrop' });
+  assert.equal(s.via, 'stock');
+});
+
+test('quote: only the speaker, never another person named on the slide', async () => {
+  const { deps: d } = deps();
+  const ctx = newPhotoContext(briefWith(), []);
+  const t = await findPhoto({ kind: 'subject', value: 'Jay Clayton' }, ctx, d, { text: ['Jay Clayton'], speaker: 'Not In Subjects', slot: 'quote' });
+  assert.notEqual(t.via, 'subject');
+  assert.ok(t.photo, 'still gets a scene');
+});
+
+test('stock size: only thumbnails are rejected (short side under 600px)', async () => {
+  const seen: number[] = [];
+  const stock = async (_q: string, o: { minShortSide: number }) => {
+    seen.push(o.minShortSide);
+    return [{ url: 'https://s/flickr.jpg', foreignLandingUrl: '', mime: 'image/jpeg', width: 1024, height: 683, license: 'by', creator: 'A', source: 'flickr' }];
+  };
+  const d = { jev: identityJev(SIF_ANSWERS), stock };
+  for (const slot of ['split', 'backdrop'] as const) {
+    const t = await findPhoto({ kind: 'stock', value: 'x' }, newPhotoContext(briefWith(), []), d, { text: [], speaker: null, slot });
+    assert.equal(t.via, 'stock', slot);
+  }
+  assert.deepEqual([...new Set(seen)], [STOCK_MIN_SHORT_SIDE]);
+  assert.equal(STOCK_MIN_SHORT_SIDE, 600);
 });

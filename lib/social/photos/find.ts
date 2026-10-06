@@ -15,6 +15,16 @@
  * Fallbacks are scenes, never people (spec §5.1): step 2 only ever shows
  * the identity-verified subject itself.
  *
+ * The chain depends on where the photo is drawn (its slot, Tommy 2026-10-06):
+ *   split    (text, landing, image, cover): the full chain above
+ *   backdrop (stat, split stat): a darkened background behind the number,
+ *            scene or mood only, so the slide's stock scene wins and article
+ *            and subject photos are skipped
+ *   quote    the speaker's verified photo (the round spot), else a scene
+ *            backdrop; article photos and other people are skipped
+ * Stock size: only thumbnails are rejected (short side under
+ * STOCK_MIN_SHORT_SIDE). Framing (face-safe crops, placement) is M8.
+ *
  * Never twice in one post: every pick is checked against, and added to,
  * the post's used set. Nothing is written to the durable used-photo log
  * here; that happens when a post ships (M8/M10), not on a preview.
@@ -48,7 +58,7 @@ export type Photo = {
 export type ChainStep = 'article' | 'subject' | 'stock' | 'neutral' | 'starter';
 
 /** Identity check outcome for the run log. */
-export type IdentityNote = { subject: string; ok: boolean; detail: string };
+export type IdentityNote = { subject: string; ok: boolean; detail: string; scores: import('./identity').IdentityScores | null };
 
 /** What happened for one slide, for the run log. */
 export type PhotoTrace = {
@@ -74,7 +84,16 @@ export const FALLBACK_SCENES: Record<SubjectType | 'unknown', string> = {
 /** The last step's scenes, tried in order after the type-fitting one. No people. */
 export const NEUTRAL_SCENES = ['server room', 'office building exterior', 'circuit board', 'city skyline at night', 'computer keyboard', 'data center'];
 
-export type StockSearch = (query: string) => Promise<OpenverseCandidate[]>;
+/**
+ * The only stock size rule (Tommy, 2026-10-06): reject thumbnails. The
+ * inherited 1080px floor threw away every Openverse result.
+ */
+export const STOCK_MIN_SHORT_SIDE = 600;
+
+export type StockSearch = (query: string, opts: { minShortSide: number }) => Promise<OpenverseCandidate[]>;
+
+/** Where the photo is drawn; decides the chain and the size floor. */
+export type PhotoSlot = 'split' | 'backdrop' | 'quote';
 
 export type PhotoDeps = {
   jev: JevAsk;
@@ -136,10 +155,10 @@ async function subjectPhoto(name: string, ctx: PhotoContext, deps: PhotoDeps, st
   const id = await pending;
   if (!id.ok) {
     steps.push(`identity failed: ${id.reason}`);
-    return { photo: null, type: id.type, identity: { subject: name, ok: false, detail: id.reason } };
+    return { photo: null, type: id.type, identity: { subject: name, ok: false, detail: id.reason, scores: id.scores } };
   }
   steps.push(`identity ok: ${id.qid} "${id.label}" (${id.type}, ${id.via})`);
-  const identity: IdentityNote = { subject: name, ok: true, detail: `${id.qid} "${id.label}" — ${id.description} (${id.type}, ${id.via})` };
+  const identity: IdentityNote = { subject: name, ok: true, detail: `${id.qid} "${id.label}" — ${id.description} (${id.type}, ${id.via})`, scores: id.scores };
   const cands = await findCandidates(id.qid, { http: deps.http });
   const pick = cands.find((c) => !ctx.used.has(c.url));
   if (!pick) {
@@ -154,20 +173,20 @@ async function subjectPhoto(name: string, ctx: PhotoContext, deps: PhotoDeps, st
   };
 }
 
-async function stockPhoto(query: string, ctx: PhotoContext, deps: PhotoDeps, steps: string[]): Promise<Photo | null> {
-  const search: StockSearch = deps.stock ?? ((q) => searchOpenverse(q, { http: deps.http }));
-  const cands = await search(query);
+async function stockPhoto(query: string, slot: PhotoSlot, ctx: PhotoContext, deps: PhotoDeps, steps: string[]): Promise<Photo | null> {
+  const search: StockSearch = deps.stock ?? ((q, o) => searchOpenverse(q, { http: deps.http, minShortSide: o.minShortSide }));
+  const cands = await search(query, { minShortSide: STOCK_MIN_SHORT_SIDE });
   const pick = cands.find((c) => !ctx.used.has(c.url));
   if (!pick) {
-    steps.push(`stock "${query}": ${cands.length ? 'every result already used' : 'no results'}`);
+    steps.push(`stock "${query}" (${slot}): ${cands.length ? 'every result already used' : 'no results'}`);
     return null;
   }
-  steps.push(`stock "${query}": ${pick.source}${pick.title ? ` "${pick.title}"` : ''}`);
+  steps.push(`stock "${query}" (${slot}): ${pick.source} ${pick.width}×${pick.height}${pick.title ? ` "${pick.title}"` : ''}`);
   return { url: pick.url, credit: buildStockCredit(pick), source: 'stock', width: pick.width, height: pick.height, qid: null, subject: null };
 }
 
-/** The slide's words, for finding its subject when the IMAGE line names none. */
-export type SlideText = { text: string[]; speaker: string | null };
+/** The slide's words, for finding its subject when the IMAGE line names none, and where its photo goes. */
+export type SlideText = { text: string[]; speaker: string | null; slot: PhotoSlot };
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -194,8 +213,9 @@ export function subjectInText(slide: SlideText, brief: Brief): string | null {
 const errText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 /** One photo for one slide, down the fallback chain. A source error is logged and the chain moves on. */
-export async function findPhoto(request: ImageRequest, ctx: PhotoContext, deps: PhotoDeps, slide: SlideText = { text: [], speaker: null }): Promise<PhotoTrace> {
+export async function findPhoto(request: ImageRequest, ctx: PhotoContext, deps: PhotoDeps, slide: SlideText = { text: [], speaker: null, slot: 'split' }): Promise<PhotoTrace> {
   const steps: string[] = [];
+  const { slot } = slide;
   let identity: IdentityNote | null = null;
   let type: SubjectType | null = null;
   const done = (photo: Photo, via: ChainStep): PhotoTrace => {
@@ -211,16 +231,24 @@ export async function findPhoto(request: ImageRequest, ctx: PhotoContext, deps: 
     }
   };
 
-  // 1. The article's own photo.
+  // 1. The article's own photo (split slots only: it may show people).
   if (request.kind === 'article') {
-    const p = await attempt('article', () => articlePhoto(request.value, ctx, steps));
-    if (p) return done(p, 'article');
+    if (slot === 'split') {
+      const p = await attempt('article', () => articlePhoto(request.value, ctx, steps));
+      if (p) return done(p, 'article');
+    } else {
+      steps.push(`article photo skipped: a ${slot} slide shows only ${slot === 'quote' ? 'the speaker or a scene' : 'a scene'}`);
+    }
   }
 
-  // 2. The slide's subject.
-  const subject = request.kind === 'subject' ? request.value : subjectInText(slide, ctx.brief);
+  // 2. The slide's subject: on a quote slide only the speaker; never behind a number.
+  const subject =
+    slot === 'backdrop' ? null
+    : slot === 'quote' ? (slide.speaker && ctx.brief.subjects.some((s) => s.name === slide.speaker) ? slide.speaker : null)
+    : request.kind === 'subject' ? request.value : subjectInText(slide, ctx.brief);
+  if (slot === 'backdrop' && request.kind === 'subject') steps.push('subject photo skipped: the stat background is a scene');
   if (subject) {
-    if (request.kind !== 'subject') steps.push(`subject from slide text: ${subject}`);
+    if (request.kind !== 'subject' || request.value !== subject) steps.push(`subject from slide: ${subject}`);
     const r = await attempt('subject', async () => {
       const out = await subjectPhoto(subject, ctx, deps, steps);
       identity = out.identity;
@@ -232,7 +260,7 @@ export async function findPhoto(request: ImageRequest, ctx: PhotoContext, deps: 
 
   // 3. The slide's stock scene.
   if (request.kind === 'stock') {
-    const p = await attempt('stock', () => stockPhoto(request.value, ctx, deps, steps));
+    const p = await attempt('stock', () => stockPhoto(request.value, slot, ctx, deps, steps));
     if (p) return done(p, 'stock');
   }
 
@@ -240,7 +268,7 @@ export async function findPhoto(request: ImageRequest, ctx: PhotoContext, deps: 
   const scenes = [...new Set([FALLBACK_SCENES[type ?? 'unknown'], ...NEUTRAL_SCENES])];
   for (const scene of scenes) {
     steps.push(`neutral scene "${scene}"`);
-    const p = await attempt('neutral', () => stockPhoto(scene, ctx, deps, steps));
+    const p = await attempt('neutral', () => stockPhoto(scene, slot, ctx, deps, steps));
     if (p) return done(p, 'neutral');
   }
   // 5. The offline starter set.

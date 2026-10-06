@@ -81,6 +81,11 @@ export type StockAdapter = {
   search(query: string, opts?: { limit?: number; http?: typeof fetch }): Promise<OpenverseCandidate[]>;
 };
 
+function mimeFromUrl(url: string): string {
+  const ext = /\.(jpe?g|png)(?:$|[?#])/i.exec(url)?.[1]?.toLowerCase();
+  return ext === 'png' ? 'image/png' : ext ? 'image/jpeg' : '';
+}
+
 export async function searchOpenverse(
   query: string,
   opts: { limit?: number; http?: typeof fetch; minShortSide?: number } = {},
@@ -108,7 +113,9 @@ export async function searchOpenverse(
     if (BLOCKED_SOURCES.includes(source)) continue;
     const license = String(r.license ?? '').toLowerCase();
     if (!ALLOWED_LICENSES.includes(license as (typeof ALLOWED_LICENSES)[number])) continue;
-    const mime = String(r.mime_type ?? '');
+    // Openverse often leaves mime_type empty (seen 2026-10-05: 12 of 12
+    // results); then judge the type from the file URL's extension.
+    const mime = String(r.mime_type ?? '') || mimeFromUrl(String(r.url ?? ''));
     if (mime !== 'image/jpeg' && mime !== 'image/png') continue;
     const width = Number(r.width ?? 0);
     const height = Number(r.height ?? 0);
