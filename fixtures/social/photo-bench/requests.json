@@ -1,5 +1,5 @@
 {
-  "collectedAt": "2026-10-07T03:07:17.616Z",
+  "collectedAt": "2026-10-07T04:23:48.000Z",
   "note": "Every IMAGE request from the saved rebuild runs, deduplicated by kind + value + slot (link B bench, Tommy 2026-10-06). speakerIdsBackfilled: briefs from before quote speakers by ID; their subject IDs and quote speaker_ids were set here by name match, for this fixture only.",
   "speakerIdsBackfilled": [
     "https://www.theverge.com/ai-artificial-intelligence/1004811/openai-altman-bad-things-ai-tradeoff",
@@ -2797,6 +2797,1004 @@
         }
       ],
       "from": "runs/daily-2026-10-06T21-17-07-066Z/run.json"
+    },
+    "https://news.google.com/rss/articles/CBMi4wFBVV95cUxOTEVzRUQza2lET0xIdUNnRy04UjROMFN5OERRWVFocFNBVmlnam5TdDdubUZrSURHS2xHd2RUUDBUVEUyZEN2aFVaamxCYldLOGs4V0twbFNrZTJxRG1mYktFcHNqeDBXWnVXWHVMZHJ4MzlFbWFYajVvMFFoV211OXl5Tm9mYnhQTjdfWmlvWUdMaVhKNVFJNkYyaE5LWm1NdUpYODEwRzQzZG5MX2ZaRmxFdWs5djdFOHBwMlZVd3RMYmhRdTJyNWlxN0dGamd2UXN1a3pweDdiWFhuT0xENGxJNA?oc=5": {
+      "brief": {
+        "single_story": {
+          "yes": true,
+          "note": "All sources cover the same Oct 6, 2026 Anthropic launch of Claude for Google Workspace (public beta) plus new Docs/Sheets/Slides connectors."
+        },
+        "the_news": {
+          "text": "On October 6, 2026, Anthropic put Claude for Google Workspace, a sidebar add-on for Google Docs, Sheets and Slides, into public beta on all paid Claude plans, and released new beta connectors for creating and editing Google files from Claude chat.",
+          "ids": [
+            "F1",
+            "F2",
+            "F3"
+          ]
+        },
+        "why_it_matters": [
+          {
+            "text": "Claude users can now work with it inside Google's own office apps, where Google's Gemini is already built in, so Anthropic is competing with Google on Google's home turf.",
+            "ids": [
+              "F1",
+              "F11"
+            ]
+          },
+          {
+            "text": "The assistant can edit files directly, so Anthropic limits it: it asks before edits by default, always pauses for some actions, and is beta-limited. Anthropic itself says users should review proposed actions, especially in files from outside their organization.",
+            "ids": [
+              "F5",
+              "F6",
+              "F9"
+            ]
+          }
+        ],
+        "facts": [
+          {
+            "id": "F1",
+            "text": "[CLAIM: Anthropic says] Claude for Google Workspace is in public beta on all paid Claude plans and adds Claude to Google Docs, Sheets and Slides so users can work with it directly in open files.",
+            "sources": [
+              "claude.com (Anthropic)",
+              "Unite.AI",
+              "9to5Google",
+              "Indian Express"
+            ],
+            "claim_by": "Anthropic",
+            "notes": [
+              "Independently reported as a launch by 9to5Google, Indian Express and XDA Developers, but the reports rely on Anthropic's announcement; no independent hands-on testing was found in the sources opened."
+            ]
+          },
+          {
+            "id": "F2",
+            "text": "[CLAIM: Anthropic says] Anthropic is also releasing new Google Docs, Sheets and Slides connectors (beta) that Claude uses to create and edit Google files from the Claude chat.",
+            "sources": [
+              "claude.com (Anthropic)",
+              "Unite.AI",
+              "9to5Google"
+            ],
+            "claim_by": "Anthropic",
+            "notes": []
+          },
+          {
+            "id": "F3",
+            "text": "The add-on installs from the Google Workspace Marketplace; users open a file and go to Extensions > Claude > Open Claude, and one install covers all three apps.",
+            "sources": [
+              "claude.com (Anthropic)",
+              "Claude Help Center",
+              "Unite.AI",
+              "Indian Express",
+              "XDA Developers"
+            ],
+            "claim_by": null,
+            "notes": []
+          },
+          {
+            "id": "F4",
+            "text": "[CLAIM: Anthropic says] Claude opens in a sidebar beside the file and can read the open doc, sheet or deck, see which text, cells or slides are selected, and edit the file directly.",
+            "sources": [
+              "claude.com (Anthropic)",
+              "Unite.AI",
+              "Indian Express"
+            ],
+            "claim_by": "Anthropic",
+            "notes": []
+          },
+          {
+            "id": "F5",
+            "text": "[CLAIM: Anthropic says] In the default 'Ask before edits' mode each change appears as an approval card and Claude waits for approval; in 'Accept all edits' mode it applies changes without stopping.",
+            "sources": [
+              "claude.com (Anthropic)",
+              "Indian Express",
+              "9to5Google",
+              "Unite.AI"
+            ],
+            "claim_by": "Anthropic",
+            "notes": []
+          },
+          {
+            "id": "F6",
+            "text": "[CLAIM: Anthropic says] Regardless of mode, Claude stops and asks before inserting an image from a web address, adding a link or removing anyone's access, shown with a 'Security review' label and no 'always allow' option; it cannot share the file, give anyone access, change ownership, create menus or scheduled automations, or load arbitrary web pages into the file.",
+            "sources": [
+              "Claude Help Center",
+              "Unite.AI"
+            ],
+            "claim_by": "Anthropic",
+            "notes": [
+              "Stated in Anthropic's Help Center guide."
+            ]
+          },
+          {
+            "id": "F7",
+            "text": "[CLAIM: Anthropic says] In Docs Claude can fix a sentence or restyle a heading in place and propose larger rewrites as suggestion cards; in Sheets it can write formulas, build pivot tables and native charts, add tabs and use Python for joins or data cleaning; in Slides it can build slides from the deck's layouts and themes and flag overlapping, off-slide or hard-to-read elements.",
+            "sources": [
+              "claude.com (Anthropic)",
+              "Unite.AI",
+              "9to5Google",
+              "Indian Express"
+            ],
+            "claim_by": "Anthropic",
+            "notes": []
+          },
+          {
+            "id": "F8",
+            "text": "[CLAIM: Anthropic says] The add-on requires a paid Claude plan (Pro, Max, Team or Enterprise) and a Google account permitted to install Marketplace apps; Workspace super administrators can install it for everyone or for selected groups from the Google Admin console.",
+            "sources": [
+              "Unite.AI",
+              "Claude Help Center",
+              "claude.com (Anthropic)"
+            ],
+            "claim_by": "Anthropic",
+            "notes": [
+              "The plan list (Pro, Max, Team, Enterprise) is from Unite.AI's reading of the Help Center guide; the Help Center page as fetched did not show the full list."
+            ]
+          },
+          {
+            "id": "F9",
+            "text": "[CLAIM: Anthropic says] Beta limits include: Claude cannot read, reply to or resolve comments in Docs, and edits land as direct edits rather than suggestions; Connected Sheets backed by BigQuery cannot be read; Slides charts are inserted as images that don't update; Firefox is not supported; Google stops any single operation after six minutes; chat history is stored per file in the browser.",
+            "sources": [
+              "Unite.AI",
+              "Claude Help Center"
+            ],
+            "claim_by": "Anthropic",
+            "notes": [
+              "The Help Center page confirms the six-minute limit, Firefox problems, BigQuery limitation and per-browser chat history; the Docs comments and Slides charts limits are reported by Unite.AI citing the guide."
+            ]
+          },
+          {
+            "id": "F10",
+            "text": "[CLAIM: Anthropic says] The add-on requests two Google permissions and not access to Drive, Gmail, Calendar or contacts; Claude sees only the open file plus any connectors the user turns on; edits appear in version history under the user's name; content is not used for training.",
+            "sources": [
+              "Claude Help Center",
+              "Unite.AI"
+            ],
+            "claim_by": "Anthropic",
+            "notes": [
+              "Unite.AI adds that the Marketplace permissions screen also shows access to the user's primary Google Account email address and personal info, and that inputs/outputs are deleted within 30 days (attributed to Anthropic). The Help Center page as fetched did not include the 30-day detail."
+            ]
+          },
+          {
+            "id": "F11",
+            "text": "9to5Google notes that Gemini can already be used natively in Google Workspace apps, and frames the Claude add-on as useful for those already invested in Claude.",
+            "sources": [
+              "9to5Google"
+            ],
+            "claim_by": null,
+            "notes": [
+              "Independent framing from the outlet."
+            ]
+          },
+          {
+            "id": "F12",
+            "text": "[CLAIM: Anthropic says] The new Docs, Sheets and Slides connectors are separate from the existing Gmail, Calendar and Drive connectors; on Team and Enterprise plans an owner or primary owner must enable them first, and Claude's access matches the user's existing Google sharing permissions.",
+            "sources": [
+              "claude.com (Anthropic)",
+              "Unite.AI",
+              "Indian Express"
+            ],
+            "claim_by": "Anthropic",
+            "notes": [
+              "The 'separate from existing connectors' point is from Unite.AI, citing Anthropic's connector documentation, which I did not open."
+            ]
+          },
+          {
+            "id": "F13",
+            "text": "[CLAIM: Anthropic says] On Enterprise plans, the Compliance API, customer-managed encryption keys and OpenTelemetry audit export apply to the add-on.",
+            "sources": [
+              "claude.com (Anthropic)",
+              "Unite.AI"
+            ],
+            "claim_by": "Anthropic",
+            "notes": [
+              "Unite.AI adds that Zero Data Retention, Bedrock/Vertex/Azure inference and HIPAA-ready organizations are not supported in the beta (attributed to the guide)."
+            ]
+          }
+        ],
+        "background": [
+          {
+            "id": "B1",
+            "text": "Google's own Gemini AI is already available natively inside Google Workspace apps.",
+            "sources": [
+              "9to5Google"
+            ],
+            "claim_by": null,
+            "notes": []
+          }
+        ],
+        "quotes": [
+          {
+            "id": "Q1",
+            "text": "Claude for Google Workspace™ is now in public beta on all paid Claude plans.",
+            "speaker": "Anthropic",
+            "speaker_id": "S1",
+            "where": "Anthropic announcement article on claude.com",
+            "via": [
+              "claude.com (Anthropic)"
+            ],
+            "single_source": true,
+            "cut_off": false,
+            "notes": [
+              "Official statement; unsigned company article."
+            ]
+          },
+          {
+            "id": "Q2",
+            "text": "Claude treats document content as data rather than commands, labels hidden text it finds, and is designed not to follow a document's instruction to share the file, fetch a link, or contact anyone.",
+            "speaker": "Anthropic",
+            "speaker_id": "S1",
+            "where": "Claude Help Center guide, prompt injection section",
+            "via": [
+              "Claude Help Center"
+            ],
+            "single_source": false,
+            "cut_off": false,
+            "notes": [
+              "Unite.AI paraphrases the same point."
+            ]
+          }
+        ],
+        "numbers": [
+          {
+            "id": "N1",
+            "value": "six minutes",
+            "type": "duration",
+            "counts": "Google's limit on a single extension operation; after that a task stops partway",
+            "sources": [
+              "Claude Help Center",
+              "Unite.AI"
+            ],
+            "notes": []
+          },
+          {
+            "id": "N2",
+            "value": "30 days",
+            "type": "duration",
+            "counts": "Time within which Anthropic says inputs and outputs are deleted from its systems",
+            "sources": [
+              "Unite.AI"
+            ],
+            "notes": [
+              "Reported by Unite.AI as Anthropic's statement; not confirmed in the Help Center page text as fetched."
+            ]
+          },
+          {
+            "id": "N3",
+            "value": "October 6, 2026",
+            "type": "date",
+            "counts": "Date of the announcement / start of the public beta",
+            "sources": [
+              "Unite.AI",
+              "Indian Express",
+              "9to5Google",
+              "claude.com (Anthropic)"
+            ],
+            "notes": []
+          }
+        ],
+        "terms": [
+          {
+            "name": "Public beta",
+            "definition": "A pre-final release open to all eligible users (here, all paid Claude plans) that Anthropic says still has known limits.",
+            "source": "claude.com (Anthropic); Claude Help Center"
+          },
+          {
+            "name": "Connector",
+            "definition": "A link that lets Claude work with another service. The new Docs, Sheets and Slides connectors let Claude create and edit Google files from the Claude chat, starting in Claude rather than in the file.",
+            "source": "claude.com (Anthropic)"
+          },
+          {
+            "name": "Skill",
+            "definition": "A saved format or set of steps (such as a quarterly business review deck layout) that a team can reuse so the next deck follows the same format.",
+            "source": "claude.com (Anthropic)"
+          },
+          {
+            "name": "Prompt injection",
+            "definition": "Instructions hidden in a file (for example white text or tiny fonts) written by someone else that try to make an AI act on them.",
+            "source": "Claude Help Center"
+          },
+          {
+            "name": "Google Workspace Marketplace",
+            "definition": "Google's app store from which the Claude add-on is installed.",
+            "source": "claude.com (Anthropic)"
+          }
+        ],
+        "subjects": [
+          {
+            "id": "S1",
+            "name": "Anthropic",
+            "role": "AI company that makes Claude and announced the add-on and connectors"
+          },
+          {
+            "id": "S2",
+            "name": "Claude for Google Workspace",
+            "role": "Sidebar add-on for Google Docs, Sheets and Slides, in public beta"
+          },
+          {
+            "id": "S3",
+            "name": "Google (Google Workspace / Gemini)",
+            "role": "Maker of Docs, Sheets, Slides and the Marketplace; Gemini is its built-in AI"
+          }
+        ],
+        "events": [
+          {
+            "what": "Anthropic announces Claude for Google Workspace public beta and new Google file connectors",
+            "date": "2026-10-06",
+            "place": "Online (Anthropic announcement)"
+          }
+        ],
+        "article_photos": [
+          {
+            "caption": null,
+            "credit": null,
+            "url": "https://www.unite.ai/wp-content/uploads/2026/10/anthropic-brings-claude-into-google-docs-sheets-and-slides.jpg",
+            "page": "https://www.unite.ai/claude-ai-assistant-arrives-in-google-workspace-as-public-beta/"
+          },
+          {
+            "caption": "Claude in Google Docs. (Image: Anthropic)",
+            "credit": "Anthropic (per inline caption text)",
+            "url": "https://images.indianexpress.com/2026/10/Tech-featured-image25.jpg",
+            "page": "https://indianexpress.com/article/technology/artificial-intelligence/claude-ai-google-workspace-how-to-edit-docs-sheets-slides-10910049/"
+          },
+          {
+            "caption": null,
+            "credit": null,
+            "url": "https://i0.wp.com/9to5google.com/wp-content/uploads/sites/4/2026/10/claude-google-docs-1.jpg?w=1500&quality=82&strip=all&ssl=1",
+            "page": "https://9to5google.com/2026/10/06/claude-google-docs-sheet-slides/"
+          }
+        ],
+        "not_answered": [
+          "No independent hands-on testing or expert assessment of the add-on's performance or security was found in the sources opened; capability, privacy and security claims come from Anthropic.",
+          "No pricing detail beyond 'all paid plans' and no statement on when the beta will end or what general availability looks like.",
+          "Google's own reaction or any Google statement was not found.",
+          "Whether Anthropic's blog post is the same as the claude.com resources article: the claude.com/blog URL failed to open, so I used claude.com/resources/articles, which matches the announcement text.",
+          "Anthropic's connectors documentation (support.claude.com/en/articles/10166901) and the Marketplace listing were not opened; details attributed to them come only through Unite.AI.",
+          "The inline image captions in Indian Express are in the article body; the page tool returned no caption or credit for the photo."
+        ],
+        "sources": [
+          {
+            "outlet": "claude.com (Anthropic)",
+            "date": "2026-10-06",
+            "url": "https://claude.com/resources/articles/claude-now-works-in-google-docs-sheets-and-slides",
+            "kind": "official"
+          },
+          {
+            "outlet": "Claude Help Center",
+            "date": "2026-10-06",
+            "url": "https://support.claude.com/en/articles/16951679-use-claude-in-google-docs-sheets-and-slides",
+            "kind": "official"
+          },
+          {
+            "outlet": "Unite.AI",
+            "date": "2026-10-06",
+            "url": "https://www.unite.ai/claude-ai-assistant-arrives-in-google-workspace-as-public-beta/",
+            "kind": "original"
+          },
+          {
+            "outlet": "9to5Google",
+            "date": "2026-10-06",
+            "url": "https://9to5google.com/2026/10/06/claude-google-docs-sheet-slides/",
+            "kind": "original"
+          },
+          {
+            "outlet": "Indian Express",
+            "date": "2026-10-07",
+            "url": "https://indianexpress.com/article/technology/artificial-intelligence/claude-ai-google-workspace-how-to-edit-docs-sheets-slides-10910049/",
+            "kind": "original"
+          },
+          {
+            "outlet": "XDA Developers",
+            "date": "2026-10-07",
+            "url": "https://www.xda-developers.com/claude-can-now-access-your-google-docs-sheets-and-slides-with-minimal-effort/",
+            "kind": "original"
+          }
+        ],
+        "fetch_failures": [
+          {
+            "url": "https://www.digitaltrends.com/computing/claude-just-stepped-into-google-workspace-with-in-file-editing-automated-sheets-work-and-smarter-slides/",
+            "reason": "fetch failed"
+          },
+          {
+            "url": "https://claude.com/blog/claude-for-google-workspace",
+            "reason": "fetch failed (guessed URL)"
+          },
+          {
+            "url": "https://venturebeat.com/technology/you-can-now-open-claude-directly-in-google-docs-sheets-and-slides-and-vice-versa-open-and-edit-the-files-in-claude",
+            "reason": "fetch failed"
+          }
+        ]
+      },
+      "pages": [
+        {
+          "ok": true,
+          "url": "https://news.google.com/rss/articles/CBMijAFBVV95cUxQNEdyRG5INDY0bDlRRmJ3YlhTeXdieTRPZk52V0FJanMxR1p0eEJzU1JIS0pLRzJqeS1pTlhkYzlZVWtQZXZNQ21RdDZOZzY0anUyU0p2WEdqVGhGZkVPbk9ManNYOTVjTWZTX3VmOVdzUWVuOUxxVDRPVkVXb0gtbzBhalJib0E5UzRDZg?oc=5",
+          "resolvedUrl": "https://www.unite.ai/claude-ai-assistant-arrives-in-google-workspace-as-public-beta/",
+          "title": "Claude AI Assistant Arrives in Google Workspace as Public Beta",
+          "text": "",
+          "photos": [
+            {
+              "src": "https://www.unite.ai/wp-content/uploads/2026/10/anthropic-brings-claude-into-google-docs-sheets-and-slides.jpg",
+              "caption": null,
+              "credit": null,
+              "alt": null,
+              "from": "og:image"
+            }
+          ]
+        },
+        {
+          "ok": true,
+          "url": "https://news.google.com/rss/articles/CBMi0gFBVV95cUxOTDlFWTNBOG9Oa3AwQ05YWGRpM050bzBKUlBCcElQT1NDUGhTVzhpV05FZkhKVWpieFBva2J1RWEwS1laX2R5NEQyd1N3ZktwQ25xeXVReXpZT0ZXR0FIZ1Y1VmMzS3BnN1lSektiYk16NUNTUlJKejNtblFMU0U2TEJPTzNlYXRtdnNwMEtKYm41YkdvbE51TzZzQkFFcTE5UDJxSzd3eElfa0hzaDl4VVpsQnAzbGdsMjV6dHE2Y0ZDU3lHZFZSbW55bmpVdGlwc0HSAdgBQVVfeXFMT2UwODgxaS1QUERWc0lHVDgwNUwxdU5PSFZ1VlRVeHRCeHlGQ3RTbG14QlNrOUhiN0dOUVRjREo4U0IwcG5qZTRyMG03Y1ZPaktVSnN3YS0wTk9ZZFNDNUh3S09VM3cyMDdJWVJpZnhxNkpad2NPS3pjcmIyaWhvUG5iNkIwVmFuZGprRHNBekdNc0I1SFVtUEdEbVQ5TDE1U1hWaFRrSlFoX0JPcnIwRWlHUHJVc3VFVmhKSW1xT2dwaHp2ZWJUMWpJcTZBcF9HU1M5ZG1pdlBi?oc=5",
+          "resolvedUrl": "https://indianexpress.com/article/technology/artificial-intelligence/claude-ai-google-workspace-how-to-edit-docs-sheets-slides-10910049/",
+          "title": "Claude comes to Google Workspace: Here’s how to edit Google Docs, Sheets, and Slides",
+          "text": "",
+          "photos": [
+            {
+              "src": "https://images.indianexpress.com/2026/10/Tech-featured-image25.jpg",
+              "caption": null,
+              "credit": null,
+              "alt": null,
+              "from": "og:image"
+            }
+          ]
+        },
+        {
+          "ok": true,
+          "url": "https://news.google.com/rss/articles/CBMidEFVX3lxTE5meGVValkwclBPV1Fja1JGVU1nd21FVjJWaHRFNU9rTlNJYnM3YWQ3bXRRV1pPVjR6cnpTdmI2TmRiTjBfczkzZk9LUHY1MXFmZGZlWkNQY0hUaV9qamE2ZW1NMzdOZXVyVldEd00tdGN4dFUt?oc=5",
+          "resolvedUrl": "https://9to5google.com/2026/10/06/claude-google-docs-sheet-slides/",
+          "title": "Claude launches Google Docs, Sheets, and Slides integration with sidebar and more",
+          "text": "",
+          "photos": [
+            {
+              "src": "https://i0.wp.com/9to5google.com/wp-content/uploads/sites/4/2026/10/claude-google-docs-1.jpg?w=1500&quality=82&strip=all&ssl=1",
+              "caption": null,
+              "credit": null,
+              "alt": null,
+              "from": "figure"
+            },
+            {
+              "src": "https://9to5google.com/wp-content/uploads/sites/4/2026/10/claude-google-docs-1.jpg?quality=82&strip=all&resize=1200,628",
+              "caption": null,
+              "credit": null,
+              "alt": null,
+              "from": "og:image"
+            }
+          ]
+        },
+        {
+          "ok": true,
+          "url": "https://news.google.com/rss/articles/CBMirAFBVV95cUxOTTJlS3lpUk1vUTcyV2JHLU5iVDVMQWhNbmZPOENaNXU5UnJHZF9NMVU2bXFPVU1kbVFJT1pqTWJvZTJ5UW9ibE44eURPSjNaUkpXX1BFU3MyZm1PWVlDSVUyRUlHelRPUVhZSVVvZk8zeU11Y1Z5TWZKUEk4YUlsU1RGODNhQ3RCM2I5Q2RLZmRMeGM3SERneVN1OGlMR2VQLUlpRTdJV2tmQi1y?oc=5",
+          "resolvedUrl": "https://www.xda-developers.com/claude-can-now-access-your-google-docs-sheets-and-slides-with-minimal-effort/",
+          "title": "Claude can now access your Google Docs, Sheets, and Slides with minimal effort",
+          "text": "",
+          "photos": [
+            {
+              "src": "https://static0.xdaimages.com/wordpress/wp-content/uploads/wm/2026/08/two-tablets-showing-gemini-model-selection-and-claude-homepage.jpeg?w=1600&h=900&fit=crop",
+              "caption": null,
+              "credit": null,
+              "alt": null,
+              "from": "og:image"
+            }
+          ]
+        },
+        {
+          "ok": true,
+          "url": "https://support.claude.com/en/articles/16951679-use-claude-in-google-docs-sheets-and-slides",
+          "resolvedUrl": "https://support.claude.com/en/articles/16951679-use-claude-in-google-docs-sheets-and-slides",
+          "title": "Use Claude in Google Docs, Sheets, and Slides",
+          "text": "",
+          "photos": [
+            {
+              "src": "https://downloads.intercomcdn.com/i/o/lupk8zyo/792494/717b10d3ebd874823db64841659b/76f3062d78ebbb04863fb1de3ef9cca0.png",
+              "caption": null,
+              "credit": null,
+              "alt": null,
+              "from": "og:image"
+            }
+          ]
+        },
+        {
+          "ok": true,
+          "url": "https://claude.com/resources/articles/claude-now-works-in-google-docs-sheets-and-slides",
+          "resolvedUrl": "https://claude.com/resources/articles/claude-now-works-in-google-docs-sheets-and-slides",
+          "title": "Claude now works with Google Docs, Sheets, and Slides",
+          "text": "",
+          "photos": [
+            {
+              "src": "https://claude.com/resources/articles/claude-now-works-in-google-docs-sheets-and-slides/opengraph-image/og",
+              "caption": null,
+              "credit": null,
+              "alt": null,
+              "from": "og:image"
+            }
+          ]
+        }
+      ],
+      "from": "runs/daily-2026-10-07T03-45-32-722Z/run.json"
+    },
+    "https://news.google.com/rss/articles/CBMiwwFBVV95cUxQV2hxbEllWjBTSVlfODJGTHNncFk5Nnk5Vlk0b3poenAySFJ6YUZ1cm1mSElzWGdSallFQk0yQWhONzA1YXpIX0d1cHhSWEg1R2IyM3pILTNaVUNXVjZ1RnhVTGFPNldXNTBleUE1STc2YjZ5eEF3MzFRLXZESWNoclZoZkxQVnlKYzZMUkFQOGVZUzZEbU1WME5STUJ4VVROTjlFd1F6QWNJc3FYand3RnVuZXZrNzN6QnQ0U2oxNXNTaTg?oc=5": {
+      "brief": {
+        "single_story": {
+          "yes": true,
+          "note": "Single announcement: Anthropic's Oct 6, 2026 expanded Cyber Verification Program."
+        },
+        "the_news": {
+          "text": "On Oct 6, 2026, Anthropic merged Project Glasswing into an expanded Cyber Verification Program with three access tiers (Defense, Red Team, Specialized) that give vetted security teams fewer cyber blocks on its newest Claude models.",
+          "ids": [
+            "F1",
+            "F2",
+            "F3",
+            "F4",
+            "F5"
+          ]
+        },
+        "why_it_matters": [
+          {
+            "text": "Anthropic's public models block most cyber work because the same skills can help attackers or defenders. The program is how the company decides who gets fewer blocks, so it sets who can use the most capable AI for security work.",
+            "ids": [
+              "F6",
+              "F2"
+            ]
+          },
+          {
+            "text": "[CLAIM: Anthropic says] Glasswing partners found at least 129,000 verified vulnerabilities, and Anthropic is using this to justify widening access to many more defenders. Only Anthropic's own data supports this, and it says the data is partial.",
+            "ids": [
+              "F11",
+              "F12"
+            ]
+          }
+        ],
+        "facts": [
+          {
+            "id": "F1",
+            "text": "Anthropic launched an expanded Cyber Verification Program (CVP) that gives qualifying security professionals advanced cyber capabilities and reduced blocking classifiers, now in three access tiers.",
+            "sources": [
+              "Anthropic",
+              "SiliconANGLE"
+            ],
+            "claim_by": null,
+            "notes": [
+              "Announcement is Anthropic's own; SiliconANGLE confirms the announcement and describes it but adds no independent verification."
+            ]
+          },
+          {
+            "id": "F2",
+            "text": "Every tier includes Claude Opus 5.5, Claude Sonnet 5.5, Claude Mythos 5.1 and new models going forward.",
+            "sources": [
+              "Anthropic",
+              "SiliconANGLE"
+            ],
+            "claim_by": null,
+            "notes": []
+          },
+          {
+            "id": "F3",
+            "text": "Defense Access covers defensive work (security operations center and incident response, malware reverse-engineering, vulnerability analysis and validation). Eligible applicants include company, nonprofit, university and government security teams defending systems they own or maintain, critical infrastructure operators of any size (e.g. regional hospitals, municipal utilities), smaller security firms, open-source maintainers, and individual researchers with a track record of reported vulnerabilities. Anthropic aims to respond within a few days.",
+            "sources": [
+              "Anthropic",
+              "SiliconANGLE"
+            ],
+            "claim_by": null,
+            "notes": []
+          },
+          {
+            "id": "F4",
+            "text": "Red Team Access adds authorized penetration testing and red-teaming against systems the organization is authorized to test; real-time blocks remain on actions that could cause physical harm or mass disruption (e.g. deploying ransomware, damaging physical systems, pen testing high-risk safety systems). Review takes a few weeks, applicants are enrolled in Defense Access meanwhile, and individual researchers are not currently eligible.",
+            "sources": [
+              "Anthropic",
+              "SiliconANGLE"
+            ],
+            "claim_by": null,
+            "notes": []
+          },
+          {
+            "id": "F5",
+            "text": "Specialized Access, the tier with the fewest cyber blocks, is for a limited set of verified organizations authorized to test safety systems that could affect lives or disrupt markets (flight operating systems, power grids, telecom networks, interbank transfer infrastructure, government administrative networks); every organization is reviewed in depth with the US government, and existing Project Glasswing members move into it without reapproval for current models.",
+            "sources": [
+              "Anthropic",
+              "SiliconANGLE"
+            ],
+            "claim_by": null,
+            "notes": []
+          },
+          {
+            "id": "F6",
+            "text": "Anthropic says cybersecurity is dual use, so its generally available models (Claude Opus 5.5, Claude Fable 5.1, Claude Sonnet 5.5) have conservative cyber safeguards that block most cyber work, while still allowing tasks such as code review, patching known issues, vulnerability finding in owned source code and alert triage.",
+            "sources": [
+              "Anthropic",
+              "SiliconANGLE"
+            ],
+            "claim_by": "Anthropic",
+            "notes": [
+              "SiliconANGLE repeats the dual-use framing and says most security tasks sent to Opus 5.5 at launch (Sept. 22) were routed to the older Opus 4.8 (SiliconANGLE only)."
+            ]
+          },
+          {
+            "id": "F7",
+            "text": "Organizations in the program must allow data retention so Anthropic can monitor for cyber misuse; Enterprise Frontier Safeguards (EFS), due later this fall, will let eligible organizations store data in cloud infrastructure they control. Until then, organizations with Claude Fable 5.1 or Mythos 5.1 zero-data-retention access can use CVP with zero data retention.",
+            "sources": [
+              "Anthropic",
+              "SiliconANGLE"
+            ],
+            "claim_by": null,
+            "notes": [
+              "SiliconANGLE says EFS is 'due later this year'."
+            ]
+          },
+          {
+            "id": "F8",
+            "text": "CVP is available on the Claude Platform, Google Cloud's Vertex AI and Microsoft Foundry; on Amazon Bedrock it is only for customers eligible for Enterprise Frontier Safeguards.",
+            "sources": [
+              "Anthropic",
+              "SiliconANGLE"
+            ],
+            "claim_by": null,
+            "notes": []
+          },
+          {
+            "id": "F9",
+            "text": "Existing CVP members keep their current settings for previous models and will be automatically evaluated for access to Opus 5.5, Sonnet 5.5 and Mythos 5.1; Anthropic will verify all applicants and request proof of required security controls for the relevant tier.",
+            "sources": [
+              "Anthropic"
+            ],
+            "claim_by": null,
+            "notes": []
+          },
+          {
+            "id": "F10",
+            "text": "[CLAIM: Anthropic says] In its CyScenarioBench test (10 challenges, five attempts each, per tier, with Claude Opus 5.5), every task without CVP access was blocked on the first prompt; Defense Access blocked 46 of 50 trials at some point (four succeeded); Red Team Access had no blocks and 34 of 50 tasks completed, which Anthropic calls effectively equivalent to the model's 67.6% success rate with no safeguards (representative of Specialized Access).",
+            "sources": [
+              "Anthropic",
+              "SiliconANGLE"
+            ],
+            "claim_by": "Anthropic",
+            "notes": [
+              "Anthropic's own evaluation; no independent verification found. SiliconANGLE only restates Anthropic's results.",
+              "34 of 50 is 68%; Anthropic compares it to 67.6% and calls it 'effectively equivalent'."
+            ]
+          },
+          {
+            "id": "F11",
+            "text": "[CLAIM: Anthropic says] Through Project Glasswing, partners uncovered at least 129,000 verified software vulnerabilities between April and July 2026, and Anthropic's own open-source scanning found an additional 5,500 between April and October 2026; more than 33,000 of these verified vulnerabilities have so far been rated critical- or high-severity.",
+            "sources": [
+              "Anthropic",
+              "SiliconANGLE"
+            ],
+            "claim_by": "Anthropic",
+            "notes": [
+              "No independent confirmation found; SiliconANGLE restates the figures. Anthropic's post says 'of these'; SiliconANGLE says 'of that combined total'."
+            ]
+          },
+          {
+            "id": "F12",
+            "text": "[CLAIM: Anthropic says] The vulnerability figures are likely an undercount: they rely on 33 partner reports and Anthropic's open-source partnerships, fewer than 50% of partners disclosed patched numbers, and Anthropic expects true impact to be at least five times higher; several partners said the models sped up finding vulnerabilities by months or even years.",
+            "sources": [
+              "Anthropic",
+              "SiliconANGLE"
+            ],
+            "claim_by": "Anthropic",
+            "notes": [
+              "SiliconANGLE repeats the 33 reports, fewer-than-half patch disclosure and 'at least five times higher' claims, attributed to the company."
+            ]
+          }
+        ],
+        "background": [
+          {
+            "id": "B1",
+            "text": "For the past six months Anthropic gave trusted cyber access through two programs: Project Glasswing (Claude Mythos access for organizations securing the most critical software) and the CVP (reduced safeguards on Claude Opus and Sonnet for vetted security teams); the new program merges them.",
+            "sources": [
+              "Anthropic",
+              "SiliconANGLE"
+            ],
+            "claim_by": null,
+            "notes": [
+              "SiliconANGLE adds that Glasswing began in April and was widened to 150 more organizations in June (SiliconANGLE only)."
+            ]
+          }
+        ],
+        "quotes": [
+          {
+            "id": "Q1",
+            "text": "Cybersecurity is inherently dual use: the same capabilities that enable a security team to find and fix a vulnerability can also help a malicious actor exploit it.",
+            "speaker": "Anthropic",
+            "speaker_id": "S1",
+            "where": "Anthropic blog post 'Expanding the Cyber Verification Program', Oct 6, 2026",
+            "via": [
+              "Anthropic"
+            ],
+            "single_source": true,
+            "cut_off": false,
+            "notes": [
+              "⚠ Single source (official company post, unsigned)."
+            ]
+          },
+          {
+            "id": "Q2",
+            "text": "But defenders also need access to the best tools and most powerful capabilities to secure their systems.",
+            "speaker": "Anthropic",
+            "speaker_id": "S1",
+            "where": "Anthropic blog post 'Expanding the Cyber Verification Program', Oct 6, 2026",
+            "via": [
+              "Anthropic"
+            ],
+            "single_source": true,
+            "cut_off": false,
+            "notes": [
+              "⚠ Single source."
+            ]
+          }
+        ],
+        "numbers": [
+          {
+            "id": "N1",
+            "value": "three access tiers",
+            "type": "count",
+            "counts": "Tiers in expanded CVP: Defense Access, Red Team Access, Specialized Access",
+            "sources": [
+              "Anthropic",
+              "SiliconANGLE"
+            ],
+            "notes": []
+          },
+          {
+            "id": "N2",
+            "value": "at least 129,000",
+            "type": "count",
+            "counts": "Verified software vulnerabilities found by Glasswing partners, April–July 2026 (Anthropic's claim)",
+            "sources": [
+              "Anthropic",
+              "SiliconANGLE"
+            ],
+            "notes": [
+              "Based on survey data from a subset of partners (33 partner reports)."
+            ]
+          },
+          {
+            "id": "N3",
+            "value": "5,500",
+            "type": "count",
+            "counts": "Additional verified vulnerabilities found by Anthropic's own open-source scanning, April–October 2026 (Anthropic's claim)",
+            "sources": [
+              "Anthropic",
+              "SiliconANGLE"
+            ],
+            "notes": []
+          },
+          {
+            "id": "N4",
+            "value": "more than 33,000",
+            "type": "count",
+            "counts": "Verified vulnerabilities rated critical- or high-severity so far (Anthropic's claim)",
+            "sources": [
+              "Anthropic",
+              "SiliconANGLE"
+            ],
+            "notes": []
+          },
+          {
+            "id": "N5",
+            "value": "at least five times higher",
+            "type": "other",
+            "counts": "Anthropic's expectation of true impact versus reported vulnerability figures",
+            "sources": [
+              "Anthropic",
+              "SiliconANGLE"
+            ],
+            "notes": [
+              "Anthropic's estimate."
+            ]
+          },
+          {
+            "id": "N6",
+            "value": "46 of the 50 trials",
+            "type": "count",
+            "counts": "CyScenarioBench trials blocked in Defense Access tier (Claude Opus 5.5)",
+            "sources": [
+              "Anthropic",
+              "SiliconANGLE"
+            ],
+            "notes": [
+              "Anthropic's own test."
+            ]
+          },
+          {
+            "id": "N7",
+            "value": "34 of the 50 tasks",
+            "type": "count",
+            "counts": "Tasks completed by Opus 5.5 in Red Team Access tier, with no blocks",
+            "sources": [
+              "Anthropic",
+              "SiliconANGLE"
+            ],
+            "notes": []
+          },
+          {
+            "id": "N8",
+            "value": "67.6%",
+            "type": "percent",
+            "counts": "Opus 5.5 success rate on CyScenarioBench with no safeguards applied",
+            "sources": [
+              "Anthropic",
+              "SiliconANGLE"
+            ],
+            "notes": []
+          },
+          {
+            "id": "N9",
+            "value": "33 partner reports",
+            "type": "count",
+            "counts": "Partner reports behind the vulnerability data",
+            "sources": [
+              "Anthropic",
+              "SiliconANGLE"
+            ],
+            "notes": []
+          },
+          {
+            "id": "N10",
+            "value": "150 more organizations",
+            "type": "count",
+            "counts": "Glasswing expansion in June",
+            "sources": [
+              "SiliconANGLE"
+            ],
+            "notes": [
+              "SiliconANGLE only."
+            ]
+          }
+        ],
+        "terms": [
+          {
+            "name": "Cyber Verification Program (CVP)",
+            "definition": "Anthropic's program that makes advanced cyber capabilities and reduced blocking classifiers available to vetted security professionals.",
+            "source": "Anthropic"
+          },
+          {
+            "name": "Project Glasswing",
+            "definition": "Program that gave a group of organizations securing the most critical software access to Claude Mythos.",
+            "source": "Anthropic"
+          },
+          {
+            "name": "Dual use",
+            "definition": "The same capabilities that let a security team find and fix a vulnerability can also help a malicious actor exploit it.",
+            "source": "Anthropic"
+          },
+          {
+            "name": "Red teaming / penetration testing",
+            "definition": "Authorized adversarial testing of systems an organization is permitted to test.",
+            "source": "Anthropic"
+          },
+          {
+            "name": "Enterprise Frontier Safeguards (EFS)",
+            "definition": "A new solution combining the privacy of zero data retention with robust safeguards; lets eligible organizations store data in cloud infrastructure they control.",
+            "source": "Anthropic"
+          },
+          {
+            "name": "CyScenarioBench",
+            "definition": "An evaluation measuring whether models can plan and execute multi-stage cyber operations under realistic constraints.",
+            "source": "Anthropic"
+          }
+        ],
+        "subjects": [
+          {
+            "id": "S1",
+            "name": "Anthropic",
+            "role": "AI company; announced the expanded CVP"
+          },
+          {
+            "id": "S2",
+            "name": "Project Glasswing",
+            "role": "Anthropic's earlier trusted-access program for Claude Mythos, now folded into CVP"
+          },
+          {
+            "id": "S3",
+            "name": "Claude Opus 5.5 / Sonnet 5.5 / Mythos 5.1",
+            "role": "Anthropic models available in all CVP tiers"
+          },
+          {
+            "id": "S4",
+            "name": "US government",
+            "role": "Collaborates with Anthropic on in-depth review of Specialized Access organizations"
+          },
+          {
+            "id": "S5",
+            "name": "Booz Allen",
+            "role": "Glasswing partner Anthropic says shared its experience (link not opened)"
+          },
+          {
+            "id": "S6",
+            "name": "Comcast",
+            "role": "Glasswing partner Anthropic says shared its experience (link not opened)"
+          }
+        ],
+        "events": [
+          {
+            "what": "Anthropic announces expanded three-tier Cyber Verification Program",
+            "date": "2026-10-06",
+            "place": null
+          },
+          {
+            "what": "Enterprise Frontier Safeguards expected to become available",
+            "date": "later this fall 2026",
+            "place": null
+          }
+        ],
+        "article_photos": [
+          {
+            "caption": "Overview of the Cyber Verification Program tiers.",
+            "credit": null,
+            "url": "https://www.anthropic.com/_next/image?url=https%3A%2F%2Fwww-cdn.anthropic.com%2Fimages%2F4zrzovbb%2Fwebsite%2F2b1d3817fe9aa732e1be4ed18446a1b1367379e7-1920x2322.png&w=3840&q=75",
+            "page": "https://www.anthropic.com/news/cyber-verification-program"
+          },
+          {
+            "caption": null,
+            "credit": "Image: Anthropic (as stated in article text; no credit line in photo data)",
+            "url": "https://images.siliconangle.com/blogs.dir/1/files/2026/10/anthropidcyberverificationprogram.png",
+            "page": "https://siliconangle.com/2026/10/06/anthropic-folds-project-glasswing-into-an-expanded-three-tier-cyber-verification-program/"
+          }
+        ],
+        "not_answered": [
+          "No independent verification (outside Anthropic) of the vulnerability counts or CyScenarioBench results was found; the only other source opened, SiliconANGLE, restates Anthropic's figures.",
+          "No outside security expert, customer or government comment on the new tiers was found.",
+          "The per-tier table of verification and security-control requirements is in an image/Help Center; its details are not in the text I read.",
+          "Booz Allen and Comcast partner write-ups were not opened.",
+          "Why Opus 5.5 tasks were routed to Opus 4.8 and the Sept. 22 launch detail come from SiliconANGLE only."
+        ],
+        "sources": [
+          {
+            "outlet": "Anthropic",
+            "date": "2026-10-06",
+            "url": "https://www.anthropic.com/news/cyber-verification-program",
+            "kind": "official"
+          },
+          {
+            "outlet": "SiliconANGLE",
+            "date": "2026-10-06",
+            "url": "https://siliconangle.com/2026/10/06/anthropic-folds-project-glasswing-into-an-expanded-three-tier-cyber-verification-program/",
+            "kind": "original"
+          }
+        ],
+        "fetch_failures": []
+      },
+      "pages": [
+        {
+          "ok": true,
+          "url": "https://news.google.com/rss/articles/CBMiaEFVX3lxTE9HZElZMTI1d1F3R09RWTFKLU1xMXViLW9fRF92bDNFcjZxTzViUHprTmRCOVR5WGJHOWNEdS1IaEZsZjBPRU0ycFB6M1Rpd2h0ZkZwdk1wZWJUdzc5cFB3bG93RWRYQzFI?oc=5",
+          "resolvedUrl": "https://www.anthropic.com/news/cyber-verification-program",
+          "title": "Expanding the Cyber Verification Program",
+          "text": "",
+          "photos": [
+            {
+              "src": "https://www.anthropic.com/_next/image?url=https%3A%2F%2Fwww-cdn.anthropic.com%2Fimages%2F4zrzovbb%2Fwebsite%2F2b1d3817fe9aa732e1be4ed18446a1b1367379e7-1920x2322.png&w=3840&q=75",
+              "caption": "Overview of the Cyber Verification Program tiers.",
+              "credit": null,
+              "alt": null,
+              "from": "figure"
+            },
+            {
+              "src": "https://www.anthropic.com/api/opengraph-illustration?name=Hand%20Lock&backgroundColor=heather",
+              "caption": null,
+              "credit": null,
+              "alt": null,
+              "from": "og:image"
+            }
+          ]
+        },
+        {
+          "ok": true,
+          "url": "https://news.google.com/rss/articles/CBMiwwFBVV95cUxQV2hxbEllWjBTSVlfODJGTHNncFk5Nnk5Vlk0b3poenAySFJ6YUZ1cm1mSElzWGdSallFQk0yQWhONzA1YXpIX0d1cHhSWEg1R2IyM3pILTNaVUNXVjZ1RnhVTGFPNldXNTBleUE1STc2YjZ5eEF3MzFRLXZESWNoclZoZkxQVnlKYzZMUkFQOGVZUzZEbU1WME5STUJ4VVROTjlFd1F6QWNJc3FYand3RnVuZXZrNzN6QnQ0U2oxNXNTaTg?oc=5",
+          "resolvedUrl": "https://siliconangle.com/2026/10/06/anthropic-folds-project-glasswing-into-an-expanded-three-tier-cyber-verification-program/",
+          "title": "Anthropic folds Project Glasswing into an expanded three-tier Cyber Verification Program",
+          "text": "",
+          "photos": [
+            {
+              "src": "https://images.siliconangle.com/blogs.dir/1/files/2026/10/anthropidcyberverificationprogram.png",
+              "caption": null,
+              "credit": null,
+              "alt": null,
+              "from": "og:image"
+            }
+          ]
+        }
+      ],
+      "from": "runs/daily-2026-10-07T03-45-32-722Z/run.json"
     }
   },
   "requests": [
@@ -3309,6 +4307,101 @@
       "slideText": [
         "The White House leans on self-policing",
         "Reason says President Trump has largely rejected AI regulation, reportedly favoring liability. Last week Altman and other AI executives signed a White House commitment to self-police; Futurism calls it toothless."
+      ],
+      "speaker": null
+    },
+    {
+      "id": "R33",
+      "story": "https://news.google.com/rss/articles/CBMi4wFBVV95cUxOTEVzRUQza2lET0xIdUNnRy04UjROMFN5OERRWVFocFNBVmlnam5TdDdubUZrSURHS2xHd2RUUDBUVEUyZEN2aFVaamxCYldLOGs4V0twbFNrZTJxRG1mYktFcHNqeDBXWnVXWHVMZHJ4MzlFbWFYajVvMFFoV211OXl5Tm9mYnhQTjdfWmlvWUdMaVhKNVFJNkYyaE5LWm1NdUpYODEwRzQzZG5MX2ZaRmxFdWs5djdFOHBwMlZVd3RMYmhRdTJyNWlxN0dGamd2UXN1a3pweDdiWFhuT0xENGxJNA?oc=5",
+      "request": {
+        "kind": "article",
+        "value": "https://images.indianexpress.com/2026/10/Tech-featured-image25.jpg"
+      },
+      "slot": "split",
+      "cover": true,
+      "where": "cover",
+      "slideText": [
+        "Anthropic puts Claude inside Google Docs, Sheets and Slides in public beta"
+      ],
+      "speaker": null
+    },
+    {
+      "id": "R34",
+      "story": "https://news.google.com/rss/articles/CBMi4wFBVV95cUxOTEVzRUQza2lET0xIdUNnRy04UjROMFN5OERRWVFocFNBVmlnam5TdDdubUZrSURHS2xHd2RUUDBUVEUyZEN2aFVaamxCYldLOGs4V0twbFNrZTJxRG1mYktFcHNqeDBXWnVXWHVMZHJ4MzlFbWFYajVvMFFoV211OXl5Tm9mYnhQTjdfWmlvWUdMaVhKNVFJNkYyaE5LWm1NdUpYODEwRzQzZG5MX2ZaRmxFdWs5djdFOHBwMlZVd3RMYmhRdTJyNWlxN0dGamd2UXN1a3pweDdiWFhuT0xENGxJNA?oc=5",
+      "request": {
+        "kind": "stock",
+        "value": "slide deck"
+      },
+      "slot": "split",
+      "cover": false,
+      "where": "slide 4 (text)",
+      "slideText": [
+        "It reads the open file, and it edits it directly",
+        "Anthropic says Claude sees the open file and your selection. In Docs it fixes text in place, in Sheets it writes formulas and pivot tables, in Slides it builds slides from the deck's layouts."
+      ],
+      "speaker": null
+    },
+    {
+      "id": "R35",
+      "story": "https://news.google.com/rss/articles/CBMiwwFBVV95cUxQV2hxbEllWjBTSVlfODJGTHNncFk5Nnk5Vlk0b3poenAySFJ6YUZ1cm1mSElzWGdSallFQk0yQWhONzA1YXpIX0d1cHhSWEg1R2IyM3pILTNaVUNXVjZ1RnhVTGFPNldXNTBleUE1STc2YjZ5eEF3MzFRLXZESWNoclZoZkxQVnlKYzZMUkFQOGVZUzZEbU1WME5STUJ4VVROTjlFd1F6QWNJc3FYand3RnVuZXZrNzN6QnQ0U2oxNXNTaTg?oc=5",
+      "request": {
+        "kind": "stock",
+        "value": "code on screen"
+      },
+      "slot": "split",
+      "cover": false,
+      "where": "slide 2 (text)",
+      "slideText": [
+        "Public Claude blocks most cyber work",
+        "Anthropic says cybersecurity is dual use: skills that help a team fix a vulnerability can help an attacker exploit it. Public models allow code review and alert triage but block most cyber work. Who gets past that?"
+      ],
+      "speaker": null
+    },
+    {
+      "id": "R36",
+      "story": "https://news.google.com/rss/articles/CBMiwwFBVV95cUxQV2hxbEllWjBTSVlfODJGTHNncFk5Nnk5Vlk0b3poenAySFJ6YUZ1cm1mSElzWGdSallFQk0yQWhONzA1YXpIX0d1cHhSWEg1R2IyM3pILTNaVUNXVjZ1RnhVTGFPNldXNTBleUE1STc2YjZ5eEF3MzFRLXZESWNoclZoZkxQVnlKYzZMUkFQOGVZUzZEbU1WME5STUJ4VVROTjlFd1F6QWNJc3FYand3RnVuZXZrNzN6QnQ0U2oxNXNTaTg?oc=5",
+      "request": {
+        "kind": "article",
+        "value": "https://images.siliconangle.com/blogs.dir/1/files/2026/10/anthropidcyberverificationprogram.png"
+      },
+      "slot": "split",
+      "cover": false,
+      "where": "slide 3 (text)",
+      "slideText": [
+        "Two programs become one, in three tiers",
+        "For six months Anthropic ran Project Glasswing, with Claude Mythos access for critical software, and a Cyber Verification Program for vetted teams. Now they are one, in three tiers."
+      ],
+      "speaker": null
+    },
+    {
+      "id": "R37",
+      "story": "https://news.google.com/rss/articles/CBMiwwFBVV95cUxQV2hxbEllWjBTSVlfODJGTHNncFk5Nnk5Vlk0b3poenAySFJ6YUZ1cm1mSElzWGdSallFQk0yQWhONzA1YXpIX0d1cHhSWEg1R2IyM3pILTNaVUNXVjZ1RnhVTGFPNldXNTBleUE1STc2YjZ5eEF3MzFRLXZESWNoclZoZkxQVnlKYzZMUkFQOGVZUzZEbU1WME5STUJ4VVROTjlFd1F6QWNJc3FYand3RnVuZXZrNzN6QnQ0U2oxNXNTaTg?oc=5",
+      "request": {
+        "kind": "stock",
+        "value": "regional hospital"
+      },
+      "slot": "split",
+      "cover": false,
+      "where": "slide 4 (text)",
+      "slideText": [
+        "Defense and Red Team tiers loosen the blocks",
+        "Defense Access is open to operators of critical infrastructure such as regional hospitals; Anthropic aims to reply in a few days. Red Team adds authorized penetration testing, but deploying ransomware stays blocked."
+      ],
+      "speaker": null
+    },
+    {
+      "id": "R38",
+      "story": "https://news.google.com/rss/articles/CBMiwwFBVV95cUxQV2hxbEllWjBTSVlfODJGTHNncFk5Nnk5Vlk0b3poenAySFJ6YUZ1cm1mSElzWGdSallFQk0yQWhONzA1YXpIX0d1cHhSWEg1R2IyM3pILTNaVUNXVjZ1RnhVTGFPNldXNTBleUE1STc2YjZ5eEF3MzFRLXZESWNoclZoZkxQVnlKYzZMUkFQOGVZUzZEbU1WME5STUJ4VVROTjlFd1F6QWNJc3FYand3RnVuZXZrNzN6QnQ0U2oxNXNTaTg?oc=5",
+      "request": {
+        "kind": "stock",
+        "value": "power grid"
+      },
+      "slot": "split",
+      "cover": false,
+      "where": "slide 5 (text)",
+      "slideText": [
+        "Specialized Access: fewest blocks, deepest vetting",
+        "For a limited set of verified organizations testing power grids, telecom or interbank systems. Each is reviewed in depth with the US government. Glasswing members move in without reapproval for current models."
       ],
       "speaker": null
     }
