@@ -315,6 +315,26 @@ The backup tools use SUBJECTS and EVENTS for their lookups.
 - The photo coverage floor ("cover + every text slide + ≥ half of story slides"). Leaning toward dropping it, because it pushes the pipeline to grab any image. A text-only slide is a normal outcome.
 - The cause of the Openverse gap is the Writer's poetic search terms. Fix that in the Writer prompt (§4) before adding more sources.
 
+**Image strategy: AGREED DIRECTION (Tommy, 2026-10-07; not built yet).**
+
+**Why:** the photo-finder bench and the PREVIEW run showed stock can't carry the posts. With the vision check on, stock delivers about 6 of 22 requests. Article photos mostly fail the credit check (no credit line). Several posts end up almost all text-only.
+
+**Stock becomes the last fallback.** Priority order:
+
+| | Source | Notes |
+|---|---|---|
+| (a) | **Official images** from the subject company's own announcement page, which the Reporter already opens | Credited by code, e.g. "Image: Anthropic" |
+| (b) | **Logo cover cards** for company stories | The official logo from Wikidata P154, on a Helios-designed background |
+| (c) | **More photos per person** from Wikimedia Commons categories | Single-face photos only |
+| (d) | **Charts** drawn from the brief's NUMBERS | |
+| (e) | **Screenshots of real social posts**, for quotes said on X | |
+| (f) | Stock (Openverse, metadata pre-screen + vision check) | |
+| (g) | The cover's AI-compute starter fallback | |
+
+**No AI-generated imagery that looks real.**
+
+**Build order:** (a) and (b) first. The build proposal is `docs/superpowers/m8-drafts/image-strategy-proposal.md`. Nothing is built until Tommy approves it.
+
 ### 5.1a The Helios photo bank grows from every post (DECIDED, 2026-10-04)
 
 The photo bank isn't only a hand-picked starter set. **It grows automatically from the photos each post uses.**
