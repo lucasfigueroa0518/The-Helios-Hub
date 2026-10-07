@@ -25,8 +25,13 @@ export type PostMeta = { source: string; sourceUrl: string; publishedAt: string 
 export const photoKindOf = (photo: Photo): 'subject' | 'scene' | 'logo' =>
   photo.source === 'logo' ? 'logo' : photo.source === 'article' || photo.source === 'official' || photo.source === 'commons' || (photo.source === 'bank' && photo.qid) ? 'subject' : 'scene';
 
-function photoFields(photo: Photo | null): Pick<SlideCopy, 'photoUrl' | 'photoCredit' | 'photoKind' | 'logoPlate'> {
-  return photo ? { photoUrl: photo.url, photoCredit: photo.credit, photoKind: photoKindOf(photo), ...(photo.plate ? { logoPlate: photo.plate } : {}) } : {};
+/** Logos wider than this are sized by width on the card (Tommy, 2026-10-07). */
+export const LOGO_WIDE_ASPECT = 2;
+
+function photoFields(photo: Photo | null): Pick<SlideCopy, 'photoUrl' | 'photoCredit' | 'photoKind' | 'logoPlate' | 'logoWide'> {
+  if (!photo) return {};
+  const wide = photo.source === 'logo' && !!photo.width && !!photo.height && photo.width / photo.height > LOGO_WIDE_ASPECT;
+  return { photoUrl: photo.url, photoCredit: photo.credit, photoKind: photoKindOf(photo), ...(photo.plate ? { logoPlate: photo.plate } : {}), ...(wide ? { logoWide: true } : {}) };
 }
 
 function storySlide(s: FilledSlide, position: number, photo: Photo | null): SlideCopy {

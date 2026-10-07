@@ -1,0 +1,6 @@
+{
+  "note": "Per-request notes on the bench's fixed set (Tommy's rulings). Shown in the bench table; they don't change what the finder does.",
+  "requests": {
+    "R23": "request should not occur: a symbolic stock request (\"abstract neural network\") the Writer is no longer allowed to make (link A). The finder returned what was asked; not counted as a finder miss or a misleading finder pick (Tommy, 2026-10-07)."
+  }
+}

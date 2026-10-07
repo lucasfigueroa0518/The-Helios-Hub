@@ -213,7 +213,7 @@ function LogoCard({ slide }: { slide: SlideCopy }) {
     <div className="helios-logo-card" aria-hidden="true">
       <div className="helios-logo-card__wordmark">HELIOS</div>
       <div className={`helios-logo-card__plate helios-logo-card__plate--${slide.logoPlate ?? 'light'}`}>
-        <img className="helios-photo helios-logo-card__logo" src={slide.photoUrl} alt="" data-photo-kind="logo" />
+        <img className={`helios-photo helios-logo-card__logo${slide.logoWide ? ' helios-logo-card__logo--wide' : ''}`} src={slide.photoUrl} alt="" data-photo-kind="logo" />
       </div>
     </div>
   );

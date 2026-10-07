@@ -293,6 +293,14 @@ Only the four sources needed to put a real photo on every slide:
     - **(B) Photo finder:** the photo-finder bench. `fixtures/social/photo-bench/requests.json` holds every IMAGE request from the saved runs, deduplicated. `scripts/social_photo_bench.ts` runs the finder on each, with no Writer and no Claude: Jev only, cap $0.05. It outputs a contact sheet, a table, the hit rate and the misleading photos.
       - **Fixed inputs:** Openverse results are frozen in `fixtures/social/photo-bench/openverse-cache.json`, so two runs differ only by the code under test.
       - **Pass bar (Tommy, 2026-10-06):** 0 misleading photos, and every miss explained. The hit rate is tracked, not required.
+      - **Stock link: ACCEPTED AND FROZEN (Tommy, 2026-10-07).** Bench `runs/photo-bench-2026-10-07T12-44-34-274Z-v4-vision`, with R14 and R35 rerun after the banner fix.
+        - 0 misleading photos, and every miss is explained.
+        - R23 is a request problem, not a finder miss: a symbolic request the Writer may no longer make. It's marked "request should not occur" in `fixtures/social/photo-bench/annotations.json`.
+        - The chain: Openverse → Jev pre-screen v4 (fit and people) → the vision check on the top 3 → bank → text-only (story slides) or the AI-compute starter (covers).
+      - **Official images (a) and logo cover cards (b):** built (spec §5.1).
+        - Cover order: official image → subject P18 → logo card → stock → starter.
+        - A person cover uses the person's photo first; the official image and logo card come from the company named in the cover (confirmed by Tommy, 2026-10-07).
+        - Official images are off until Tommy approves allow-list rows.
       - **Finder since the first bench (Tommy, 2026-10-06):**
         - A vision check (`lib/social/photos/vision.ts`, its own model setting `PHOTO_VISION_MODEL`) looks at the top 3 metadata-passing stock candidates. The first passing all four questions wins: shows the requested thing, no person, no landmark, no outside brand. None passing means no stock photo. The cost is recorded per request.
         - The cover fallback is the starter set's AI-compute photos only, never a topic match.

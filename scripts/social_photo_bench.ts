@@ -88,6 +88,8 @@ async function main() {
   const fixture = JSON.parse(await fsp.readFile('fixtures/social/photo-bench/requests.json', 'utf8'));
   // Fixed company stories (image strategy (a)/(b), Tommy 2026-10-07): same stories and pages, hand-set requests.
   const company = JSON.parse(await fsp.readFile('fixtures/social/photo-bench/company-stories.json', 'utf8'));
+  // Tommy's rulings on specific requests (e.g. R23: "request should not occur"), shown in the table.
+  const annotations: Record<string, string> = JSON.parse(await fsp.readFile('fixtures/social/photo-bench/annotations.json', 'utf8')).requests;
   const only = arg('--only');
   // --only: comma-separated IDs or ID prefixes ("C", "R14,R35").
   const onlyIds = only ? only.split(',') : null;
@@ -139,9 +141,9 @@ async function main() {
     '',
     `Hit rate (a photo from the request's own chain: article, official, subject, logo card, stock or bank): **${hits.length}/${rows.length}** · by kind ${JSON.stringify(byKind)} · Jev $${tally.costUsd.toFixed(4)} · vision $${budget.claudeUsd().toFixed(4)} · cap $${capUsd}`,
     '',
-    '| ID | Request | Slot | Result | Source | Photo | Vision $ | Trace |',
-    '|---|---|---|---|---|---|---|---|',
-    ...rows.map((x) => `| ${x.id} | ${x.request.kind}: ${x.request.value.slice(0, 60).replace(/\|/g, '/')} | ${x.slot}${x.cover ? ' (cover)' : ''} | ${x.trace.via ?? 'none'} | ${x.trace.photo?.source ?? '—'} | ${x.trace.photo ? short(x.trace.photo.url) : '—'} | ${x.trace.visionUsd ? x.trace.visionUsd.toFixed(4) : '—'} | ${x.trace.steps.join(' → ').replace(/\|/g, '/').replace(/\n/g, ' ')} |`),
+    '| ID | Request | Slot | Result | Source | Photo | Vision $ | Note | Trace |',
+    '|---|---|---|---|---|---|---|---|---|',
+    ...rows.map((x) => `| ${x.id} | ${x.request.kind}: ${x.request.value.slice(0, 60).replace(/\|/g, '/')} | ${x.slot}${x.cover ? ' (cover)' : ''} | ${x.trace.via ?? 'none'} | ${x.trace.photo?.source ?? '—'} | ${x.trace.photo ? short(x.trace.photo.url) : '—'} | ${x.trace.visionUsd ? x.trace.visionUsd.toFixed(4) : '—'} | ${(annotations[x.id] ?? '').replace(/\|/g, '/')} | ${x.trace.steps.join(' → ').replace(/\|/g, '/').replace(/\n/g, ' ')} |`),
   ].join('\n');
   await fsp.writeFile(path.join(out, 'table.md'), table);
   const verdicts = rows.flatMap((x) => {
@@ -149,14 +151,14 @@ async function main() {
     return v.length ? [`## ${x.id} ${x.request.kind}: ${x.request.value} → ${x.trace.via}${x.trace.visionUsd ? ` ($${x.trace.visionUsd.toFixed(4)})` : ''}`, ...v.map((st) => `- ${st}`), ''] : [];
   });
   if (verdicts.length) await fsp.writeFile(path.join(out, 'verdicts.md'), [`# Vision verdicts · ${new Date().toISOString()}`, '', ...verdicts].join('\n'));
-  await fsp.writeFile(path.join(out, 'bench.json'), JSON.stringify({ version, vision: withVision, capUsd, jevUsd: tally.costUsd, visionUsd: budget.claudeUsd(), capRefused: budget.exhausted(), hits: hits.length, total: rows.length, byKind, rows }, null, 2));
+  await fsp.writeFile(path.join(out, 'bench.json'), JSON.stringify({ version, vision: withVision, annotations, capUsd, jevUsd: tally.costUsd, visionUsd: budget.claudeUsd(), capRefused: budget.exhausted(), hits: hits.length, total: rows.length, byKind, rows }, null, 2));
 
   // Contact sheet: 6 across.
   const sharp = (await import('sharp')).default;
   const W = 300, H = 300, gap = 10, cols = 6;
   const tiles: Buffer[] = [];
   for (const x of rows) {
-    tiles.push(await tile(x.trace.photo?.url ?? null, [`${x.id} ${x.request.kind}: ${x.request.value.startsWith('http') ? 'article photo' : x.request.value}`, `→ ${x.trace.via ?? 'none'}${x.trace.photo ? ` (${x.trace.photo.source})` : ''} · ${x.slot}${x.cover ? ' cover' : ''}${x.trace.visionUsd ? ` · vision $${x.trace.visionUsd.toFixed(3)}` : ''}`, x.trace.photo?.subject ?? (x.trace.photo?.credit ?? '').slice(0, 44)], W, H));
+    tiles.push(await tile(x.trace.photo?.url ?? null, [`${x.id} ${x.request.kind}: ${x.request.value.startsWith('http') ? 'article photo' : x.request.value}`, `→ ${x.trace.via ?? 'none'}${x.trace.photo ? ` (${x.trace.photo.source})` : ''} · ${x.slot}${x.cover ? ' cover' : ''}${x.trace.visionUsd ? ` · vision $${x.trace.visionUsd.toFixed(3)}` : ''}`, annotations[x.id] ? `NOTE: ${annotations[x.id]!.split(':')[0]}` : x.trace.photo?.subject ?? (x.trace.photo?.credit ?? '').slice(0, 44)], W, H));
   }
   const rowsN = Math.ceil(tiles.length / cols);
   await sharp({ create: { width: cols * W + (cols + 1) * gap, height: rowsN * H + (rowsN + 1) * gap, channels: 3, background: '#000' } })

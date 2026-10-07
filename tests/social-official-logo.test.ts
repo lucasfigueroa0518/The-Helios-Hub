@@ -216,3 +216,15 @@ test("official cover: when every figure is unusable (a table read as a banner), 
   assert.equal(t.via, 'official');
   assert.equal(t.photo?.url, 'https://blog.google/og.png');
 });
+
+test('logo sizing: up to 10:1 allowed; wider than 2:1 is sized by width (logoWide), narrower fits the plate', async () => {
+  const { LOGO_MAX_ASPECT } = await import('@/lib/social/photos/logo');
+  assert.equal(LOGO_MAX_ASPECT, 10);
+  const d = fillDraft(sifDraftHandoff(), briefSuperIntelligenceForce());
+  const logo = (w: number, h: number): Photo => ({ url: `https://upload.wikimedia.org/${w}x${h}.png`, credit: 'Logo: X (public domain) · Wikimedia Commons', source: 'logo', width: w, height: h, qid: 'Q1', subject: 'X', plate: 'light' });
+  const cover = (p: Photo) => toRenderPost(d, { cover: p, slides: d.slides.map(() => null) }, { source: 'x', sourceUrl: '', publishedAt: '2026-10-07T00:00:00Z' }).slides[0]!;
+  assert.equal(cover(logo(800, 90)).logoWide, true, 'Anthropic-style wordmark');
+  assert.equal(cover(logo(800, 800)).logoWide, undefined, 'a square mark fits the plate');
+  const r = await fetchLogo('Q95', 'Google', { http: await fakeLogoWeb() });
+  assert.ok(r.photo, 'an 800×320 (2.5:1) logo is accepted');
+});

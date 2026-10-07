@@ -23,8 +23,8 @@ const COMMONS_API = 'https://commons.wikimedia.org/w/api.php';
 const USER_AGENT = 'HeliosHub/1.0 (+https://heliosgroup.ai; helios@heliosgroup.ai)';
 /** Rendered width requested from Commons. */
 const LOGO_PX = 800;
-/** Wider than this (width ÷ height) and the logo would read as a thin strip on the card. */
-export const LOGO_MAX_ASPECT = 6;
+/** Wider than this (width ÷ height) and the logo would read as a thin strip on the card (Tommy, 2026-10-07: 10:1). */
+export const LOGO_MAX_ASPECT = 10;
 
 type Claim = {
   rank?: 'preferred' | 'normal' | 'deprecated';

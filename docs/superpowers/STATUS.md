@@ -1,6 +1,6 @@
 # Helios Social rebuild: STATUS
 
-**Updated:** 2026-10-07, after image strategy (a) and (b) were built and benched.
+**Updated:** 2026-10-07, after the stock link was accepted and logo sizing was changed.
 Claude keeps this page current after every step.
 
 - **Authorities:** the spec (`specs/2026-10-01-helios-social-rebuild.md`), the plan (`plans/2026-10-04-helios-social-rebuild.md`, M8 link map and exit criteria) and the prompts file (`specs/2026-10-04-helios-social-prompts.md`).
@@ -13,7 +13,7 @@ Claude keeps this page current after every step.
 | Reporter → Editor → Fact-checker | **Accepted, frozen** |
 | Renderer mechanics (text fit, bounds, contrast, faces clear, framing with no bands, rotation) | **Accepted, frozen**. New since: the logo-card cover layout, which passes the render check. |
 | **(A) Writer IMAGE requests** | Built, checked by offline tests only. |
-| **(B) Photo finder: stock** | Bench passes the bar except **R23**: an abstract fractal for "abstract neural network". Tommy to decide whether it's a finder miss or a request problem (link A). Not yet marked accepted. |
+| **(B) Photo finder: stock** | **Accepted, frozen** (Tommy, 2026-10-07). 0 misleading photos and every miss explained. R23 is marked "request should not occur": a symbolic request link A now forbids. |
 | **(B) Photo finder: official images (a)** | **Built; off until Tommy approves allow-list rows** (all 8 TBD). |
 | **(B) Photo finder: logo cards (b)** | **Built and on.** |
 | **(C) Renderer visuals** | Waiting for Tommy and Lucas to review fixed posts, especially text-only slides and the new logo card. |
@@ -48,15 +48,15 @@ Claude keeps this page current after every step.
   - `fillDraft` no longer gives an unattributed quote to the first subject.
 - **Image strategy (spec §5.1, agreed direction):** stock becomes the last fallback. The order is (a) official images, (b) logo cover cards, (c) Commons category photos, (d) charts from NUMBERS, (e) social-post screenshots. No AI imagery that looks real.
   - Cover order: official image → subject P18 → logo card → stock → starter.
-  - A person's own cover request keeps their photo first.
+  - A person cover uses the person's photo first; the official image and logo card come from the company named in the cover (confirmed by Tommy, 2026-10-07).
+  - Logo cards allow aspect ratios up to 10:1. Wide logos are sized by width, to about 80% of the card width.
+  - R23 ruled a request problem; the stock link is accepted and frozen.
 - **Hook pass:** the prompt edits above; the Fact-checker checks hook lines first for types 1 and 4–5; it runs only via `--hook`.
 - **PREVIEW runs:** labelled in `run.json`, and they don't write the used-photo log.
 
 ## Open items
 - **Tommy:**
-  - Approve allow-list rows: domains and editorial-use terms. The table is below.
-  - Decide the R23 question.
-  - Decide the logo aspect limit: Anthropic's wordmark (800×90) is past the 6:1 limit, so Anthropic covers get no logo card.
+  - Approve allow-list rows: domains and editorial-use terms. He is researching each company's press terms; all rows stay TBD until then. The table is below.
   - Seed the photo bank.
 - **Lucas:** review text-only slides, the logo card, and the Hook pass content and look (PREVIEW run, `runs/daily-2026-10-07T03-45-32-722Z`).
 - **Not built yet:** image strategy (c), (d) and (e).

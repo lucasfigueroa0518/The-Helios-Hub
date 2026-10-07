@@ -266,6 +266,12 @@ export type SlideCopy = {
   logoPlate?: 'light' | 'dark';
 
   /**
+   * Logo cover card: a wide logo (wider than 2:1) is sized by width, at about
+   * 80% of the card's width, not by a fixed height (Tommy, 2026-10-07).
+   */
+  logoWide?: boolean;
+
+  /**
    * Where to centre the photo's crop, as object-position fractions (0–1),
    * from the face detector (M8b). Unset means centre. `windowW`: the photo
    * window narrowed to this width (px) so the face stays within about 40% of
