@@ -18,6 +18,8 @@ export const STAGE_ORDER = [
   'reporter',
   'writer',
   'editor',
+  // Hook pass (prototype, Tommy 2026-10-06): runs only when a run switches it on (--hook); not in the daily default.
+  'hook',
   'fact-checker',
   // Mechanical text fixes and checks run before design (Tommy, 2026-10-06):
   // the render must show the fixed text. Photo and render checks run inside design.

@@ -18,6 +18,7 @@ export const STUB_COST_USD: Record<StageName, number> = {
   reporter: 0.35,
   writer: 0.25,
   editor: 0.12,
+  hook: 0.04,
   'fact-checker': 0.003,
   design: 0.05,
   mechanical: 0,

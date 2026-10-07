@@ -12,6 +12,14 @@
  *
  *   npx tsx scripts/social_daily.ts --stories 2            (cap $2.00)
  *   npx tsx scripts/social_daily.ts --cap-usd 1.50 --stories 2
+ *   npx tsx scripts/social_daily.ts --stories 3 --hook --preview
+ *
+ * --hook: the Hook pass for this run only (prototype; never the daily
+ * default). --preview: run.json is labelled PREVIEW (not an acceptance
+ * batch), the used-photo log is not written (so the acceptance batch's
+ * 7-day rule isn't spent on a preview), and preview-report.md lists per
+ * post: photo source and layout per slide, spreads, hook lines,
+ * Fact-checker flags and cost.
  *
  * Writes runs/daily-<ts>/: run.json (selection, every stage's result,
  * costs), brief-<n>.json, post-<n>.md (text + photos + identity + fit),
@@ -35,6 +43,8 @@ async function main() {
   const capUsd = arg('--cap-usd') ?? DEFAULT_CAP_USD;
   if (!Number.isFinite(capUsd) || capUsd <= 0) throw new Error('--cap-usd must be a positive amount');
   const stories = arg('--stories') ?? 2;
+  const hookOn = process.argv.includes('--hook');
+  const preview = process.argv.includes('--preview');
 
   const { default: Anthropic } = await import('@anthropic-ai/sdk');
   const { HELIOS_SOCIAL_FEEDS } = await import('@/lib/social/feeds');
@@ -50,6 +60,7 @@ async function main() {
   const { checkRenderFit } = await import('@/lib/social/render/fit-check');
   const { toSlug, writeGeneratedPost } = await import('@/lib/social/render/local-store');
   const { readPage } = await import('@/lib/social/reporter/read-page');
+  const layoutRotation = await import('@/lib/social/render/layout-rotation');
   const { liveMessagesCreate } = await import('@/lib/social/reporter/reporter');
   const { hasPhotoLive, isWellKnownLive } = await import('@/lib/social/writer/well-known');
   const { createFileUsedPhotoLog } = await import('@/lib/social/photos/used-photos');
@@ -104,6 +115,8 @@ async function main() {
     bank,
     reporterCapUsd: 0.45,
     maxReporterRuns: stories + 2,
+    // Hook pass for this run only (--hook); its budget renders take no screenshots.
+    ...(hookOn ? { hook: { fitCheck: checkRenderFit } } : {}),
   });
   const design = stages.design;
   stages.design = async (draft, brief, story) => {
@@ -123,7 +136,8 @@ async function main() {
   });
 
   // 7-day rule: a photo counts as used once its post reaches the review queue (today: the preview).
-  await usedLog.record(result.posts.flatMap((p) => p.render.slides.flatMap((sl, i) => (sl.photoUrl ? [{ url: sl.photoUrl, usedAt: now.toISOString(), storyId: p.storyId, slide: i + 1 }] : []))));
+  // A PREVIEW run doesn't count (Tommy, 2026-10-06: not the acceptance batch).
+  if (!preview) await usedLog.record(result.posts.flatMap((p) => p.render.slides.flatMap((sl, i) => (sl.photoUrl ? [{ url: sl.photoUrl, usedAt: now.toISOString(), storyId: p.storyId, slide: i + 1 }] : []))));
   const starterShare = (() => {
     const all = result.posts.flatMap((p) => p.photos.filter((t) => t.photo));
     return all.length ? all.filter((t) => t.via === 'starter').length / all.length : 0;
@@ -161,8 +175,9 @@ async function main() {
 
   await fsp.writeFile(
     path.join(runDir, 'run.json'),
-    JSON.stringify({ startedAt: now.toISOString(), capUsd, alreadyPosted, requestMix, articles: articles.length, jev: jevTally, claudeUsd: budget.claudeUsd(), totalUsd: budget.spent(), result, selection, stories: storyLogs, fit: Object.fromEntries(fitResults) }, null, 2),
+    JSON.stringify({ ...(preview ? { label: 'PREVIEW', note: 'Preview run, not the acceptance batch; the used-photo log was not written.' } : {}), hookPass: hookOn, startedAt: now.toISOString(), capUsd, alreadyPosted, requestMix, articles: articles.length, jev: jevTally, claudeUsd: budget.claudeUsd(), totalUsd: budget.spent(), result, selection, stories: storyLogs, fit: Object.fromEntries(fitResults) }, null, 2),
   );
+  if (preview) await fsp.writeFile(path.join(runDir, 'preview-report.md'), previewReport());
   console.log(JSON.stringify({
     runDir: path.relative(process.cwd(), runDir),
     articles: articles.length,
@@ -189,6 +204,46 @@ async function main() {
     alreadyPostedTop: alreadyPosted.slice(0, 5),
     capUsd,
   }, null, 2));
+
+  /** Per post (PREVIEW): photo source and layout per slide, spreads, hook lines, Fact-checker flags, cost. */
+  function previewReport(): string {
+    const { layoutOf } = layoutRotation;
+    let o = `# PREVIEW run ${stamp} (not the acceptance batch)\n\nHook pass: ${hookOn ? 'on (this run only)' : 'off'} · total $${budget.spent().toFixed(4)} of $${capUsd} · stop: ${result.stopReason}\n`;
+    for (const sa of result.setAsides) o += `- Set aside: ${sa.storyId} at ${sa.stage}: ${sa.reasonCode} (${sa.detail.slice(0, 200)})\n`;
+    for (const post of result.posts) {
+      const l = logs.get(post.storyId)!;
+      const source = (t: PostObject['photos'][number] | undefined) => {
+        if (!t || !t.photo) return t?.via === 'none' ? 'none (IMAGE none)' : 'none (text-only: nothing usable)';
+        return t.via === 'subject' ? 'subject' : t.via === 'article' ? 'article' : t.via === 'stock' ? 'stock' : t.via === 'starter' ? 'starter' : t.via === 'bank' ? 'bank' : String(t.via);
+      };
+      o += `\n## ${post.title}\n\nCost: $${post.costUsd.toFixed(4)} (by stage: ${post.stages.join(' → ')})\n\n| Slide | Layout | Photo source | Request | Vision $ |\n|---|---|---|---|---|\n`;
+      post.render.slides.forEach((sl, i) => {
+        const t = post.photos[i];
+        o += `| ${i + 1} | ${layoutOf(sl)}${sl.panoramaSide ? ` (${sl.panoramaSide})` : ''} | ${sl.layoutVariant === 'follow' ? '—' : source(t)} | ${t ? `${t.request.kind}${t.request.value ? `: ${t.request.value.slice(0, 50)}` : ''}` : '—'} | ${t?.visionUsd ? t.visionUsd.toFixed(4) : '—'} |\n`;
+      });
+      const spreads = post.render.slides.filter((sl) => sl.panoramaSide === 'left').length;
+      o += `\nSpreads: ${spreads}\n\nHook lines:\n`;
+      const hk = l.hook?.at(-1);
+      if (!hookOn) o += '- (Hook pass off)\n';
+      else if (!hk?.ok) o += `- Hook pass failed: ${hk ? `${hk.reason} ${hk.detail}` : 'no result'}\n`;
+      else {
+        o += `- Budgets: ${hk.budgets.map((b, i) => `S${i + 2} ${b}`).join(' · ')}\n`;
+        hk.hooks.forEach((h, i) => { if (h) o += `- S${i + 2} ${h.kind} [${h.facts.join(', ')}]: ${h.text}\n`; });
+        for (const d of hk.dropped) o += `- ${d}\n`;
+        if (!hk.hooks.some(Boolean)) o += '- (no lines added)\n';
+      }
+      o += '\nFact-checker flags:\n';
+      const fcs = l.factCheck;
+      if (!fcs.length) o += '- (none run)\n';
+      fcs.forEach((fc, k) => {
+        if (!fc.ok) { o += `- run ${k + 1}: failed (${fc.reason})\n`; return; }
+        if (!fc.flags.flags.length) o += `- run ${k + 1}: none\n`;
+        for (const f of fc.flags.flags) o += `- run ${k + 1}: ${f.where.part}${f.where.number ? ` ${f.where.number}` : ''} · type ${f.type} · ${f.fix.kind.toUpperCase()}${f.fix.replacement ? ` "${f.fix.replacement}"` : ''}: "${f.quoted_text}"\n`;
+        if (fc.outcome.kind !== 'ok') o += `- run ${k + 1} outcome: ${fc.outcome.kind}: ${fc.outcome.why}\n`;
+      });
+    }
+    return o;
+  }
 
   function readable(post: PostObject, fit: FitResult | undefined, slug: string | null): string {
     const txt = (r: Array<{ text: string }> | undefined) => (r ?? []).map((s) => s.text).join('');

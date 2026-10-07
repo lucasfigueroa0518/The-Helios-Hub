@@ -1,7 +1,7 @@
 /**
  * Helios Social rebuild — day orchestrator (spec §3, §2.4, §5B).
  *
- *   Jev scoring → Reporter → Writer → Editor → Fact-checker → mechanical → design
+ *   Jev scoring → Reporter → Writer → Editor → [Hook pass, when on] → Fact-checker → mechanical → design
  *
  * Each stage runs once. A stage that fails sets the story aside (logged
  * with stage + reason) and the next-ranked story takes the slot, until the
@@ -150,7 +150,9 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
         try {
           const written = await run('writer', () => stages.write(brief));
           const edited = await run('editor', () => stages.edit(written, brief));
-          checked = await run('fact-checker', () => stages.factCheck(edited, brief));
+          // Hook pass only when the run switched it on (prototype, Tommy 2026-10-06).
+          const hooked = stages.hook ? await run('hook', () => stages.hook!(edited, brief)) : edited;
+          checked = await run('fact-checker', () => stages.factCheck(hooked, brief));
           break;
         } catch (err) {
           if (!(err instanceof FreshDraftNeeded)) throw err;

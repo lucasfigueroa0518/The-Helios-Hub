@@ -30,12 +30,14 @@ import type { FitCheck } from '@/lib/social/render/fit-check';
 import type { PageRead } from '@/lib/social/reporter/read-page';
 import { runReporter, type MessagesCreate, type ReporterResult } from '@/lib/social/reporter/reporter';
 import type { EditorResult } from '@/lib/social/editor/editor';
+import type { HookResult } from '@/lib/social/hook/hook';
 import type { HasPhoto, IsWellKnown, WriterResult } from '@/lib/social/writer/writer';
 import { runWriter } from '@/lib/social/writer/writer';
 import { runEditor } from '@/lib/social/editor/editor';
 
 import { createDesignStage } from './design-stage';
 import { createFactCheckStage } from './factcheck-stage';
+import { createHookStage } from './hook-stage';
 import { createMechanicalStage } from './mechanical-stage';
 import { readableDate } from './reporter-stage';
 import type { PipelineStages } from './stages';
@@ -85,6 +87,8 @@ export type StoryLog = {
   writer: WriterResult[];
   editor: EditorResult[];
   factCheck: Array<Awaited<ReturnType<typeof runFactCheck>>>;
+  /** Hook pass results, when the run switched it on (with the measured budgets). */
+  hook?: Array<HookResult & { budgets: number[] }>;
   design?: PostObject;
   designFailure?: string;
 };
@@ -108,6 +112,8 @@ export type LiveStagesDeps = {
   reporterCapUsd: number;
   /** Safety stop on how many stories the Reporter may start. */
   maxReporterRuns: number;
+  /** Hook pass, for this run only (prototype; Tommy 2026-10-06). Absent: the daily default (no Hook pass). Its own fit check (no screenshots). */
+  hook?: { fitCheck: FitCheck };
 };
 
 /** A guard refusal surfaces inside a stage as a service error; report it as the cost cap it is. */
@@ -177,5 +183,9 @@ export function createLiveStages(deps: LiveStagesDeps): { stages: PipelineStages
     },
     mechanical: createMechanicalStage(),
   };
+  if (deps.hook) {
+    const hook = createHookStage({ create, fitCheck: deps.hook.fitCheck, onResult: (id, r) => (log(id).hook ??= []).push(r) });
+    stages.hook = async (draft, brief) => capAware(deps.budget, await hook(draft, brief));
+  }
   return { stages, logs };
 }

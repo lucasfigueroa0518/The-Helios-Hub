@@ -40,14 +40,14 @@ function day(stubOpts: StubOptions = {}, extra: { capUsd?: number; targetPosts?:
   };
 }
 
-test('dry run: 2 posts, each through all 7 stages in order, no set-asides', async () => {
+test('dry run: 2 posts, each through all 7 default stages in order (no Hook pass unless switched on), no set-asides', async () => {
   const calls: Array<{ stage: StageName; storyId: string }> = [];
   const { result } = day({ calls });
   const r = await result;
   assert.equal(r.stopReason, 'target-reached');
   assert.equal(r.posts.length, 2);
   assert.deepEqual(r.posts.map((p) => p.storyId), ['story-a', 'story-b']);
-  for (const post of r.posts) assert.deepEqual(post.stages, [...STAGE_ORDER]);
+  for (const post of r.posts) assert.deepEqual(post.stages, STAGE_ORDER.filter((x) => x !== 'hook'));
   assert.deepEqual(r.setAsides, []);
   // story-c is a backup and never runs.
   assert.ok(!calls.some((c) => c.storyId === 'story-c'));
@@ -245,4 +245,17 @@ test('nothing under lib/social imports Trial Reels code', async () => {
     }
   }
   assert.deepEqual(hits, []);
+});
+
+test('Hook pass switched on for a run: runs between the Editor and the Fact-checker, on the edited draft', async () => {
+  const stages = createStubStages();
+  const seen: string[] = [];
+  stages.hook = async (draft) => {
+    seen.push(draft.storyId);
+    return { ok: true, value: draft, costUsd: 0.04 };
+  };
+  const r = await runDay({ articles: STUB_ARTICLES, stages, meter: createCostMeter(), log: createInMemorySetAsideLog(), now: NOW });
+  assert.deepEqual(seen, ['story-a', 'story-b']);
+  for (const post of r.posts) assert.deepEqual(post.stages, [...STAGE_ORDER]);
+  assert.equal(r.costByStage.hook, 0.08);
 });
