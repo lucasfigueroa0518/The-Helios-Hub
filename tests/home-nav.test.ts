@@ -190,6 +190,43 @@ describe('outreach home stats calculation', () => {
     assert.equal(stats.takingActionCampaignsCount, 1);
     assert.deepEqual(stats.activeCampaignNames, ['Boston Industry Agnostic']);
     assert.equal(stats.totalCampaigns, 2);
+    assert.equal(stats.totalSent, 200);
+  });
+
+  it('keeps terminated campaign sends in the all-time total', () => {
+    const stats = computeOutreachStats(
+      [
+        {
+          id: 'live-1',
+          name: 'Boston Logistics',
+          kind: 'auto',
+          status: 'active',
+          auto_status: 'live',
+          owner_id: 'user-lucas-123',
+          sender_identity_slug: 'lucas',
+          sent_count: 12,
+          delivered_count: 12,
+        },
+        {
+          id: 'ended-1',
+          name: 'Boston Industry Agnostic',
+          kind: 'auto',
+          status: 'terminated',
+          auto_status: 'paused',
+          owner_id: 'user-lucas-123',
+          sender_identity_slug: 'lucas',
+          sent_count: 561,
+          delivered_count: 540,
+        },
+      ],
+      'user-lucas-123',
+      'lucas@heliosgroup.ai',
+      { emailsThisWeek: 0, sentThisWeek: 0, upcomingThisWeek: 0 },
+    );
+    assert.equal(stats.liveCampaignsCount, 1);
+    assert.equal(stats.totalSent, 573);
+    assert.equal(stats.totalDelivered, 552);
+    assert.equal(stats.deliveryRate, 552 / 573);
   });
 
   it('counts taken inbox slots plus held, not open capacity', () => {

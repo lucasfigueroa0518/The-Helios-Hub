@@ -150,15 +150,17 @@ export function heldSeatsThisWeek(input: {
 }
 
 export function computeOutreachStats(
-  activeCampaigns: OutreachCampaignSlice[],
+  campaigns: OutreachCampaignSlice[],
   userId: string,
   email: string,
   weekStats: WeekEmailTotals,
 ) {
-  const targetCampaigns = relevantOutreachCampaigns(activeCampaigns, userId, email);
-  const liveCampaigns = targetCampaigns.filter(isLiveAutoCampaign);
-  const autoCampaigns = targetCampaigns.filter((campaign) => campaign.kind === 'auto');
+  const targetCampaigns = relevantOutreachCampaigns(campaigns, userId, email);
+  const activeCampaigns = targetCampaigns.filter((campaign) => campaign.status === 'active');
+  const liveCampaigns = activeCampaigns.filter(isLiveAutoCampaign);
+  const autoCampaigns = activeCampaigns.filter((campaign) => campaign.kind === 'auto');
 
+  // All-time sent keeps terminated and archived history. Live counts do not.
   const totalSent = targetCampaigns.reduce((sum, campaign) => sum + (campaign.sent_count || 0), 0);
   const totalDelivered = targetCampaigns.reduce((sum, campaign) => sum + (campaign.delivered_count || 0), 0);
 
@@ -170,7 +172,7 @@ export function computeOutreachStats(
     totalSent,
     totalDelivered,
     deliveryRate: totalSent > 0 ? totalDelivered / totalSent : null,
-    totalInReviewOrDrafting: targetCampaigns.reduce(
+    totalInReviewOrDrafting: activeCampaigns.reduce(
       (sum, campaign) => sum + (campaign.drafting_generated || 0),
       0,
     ),

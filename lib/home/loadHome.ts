@@ -73,7 +73,7 @@ export async function loadHome(userId: string, email: string): Promise<HomePaylo
 
   const activeCampaigns = campaigns.filter((campaign) => campaign.status === 'active');
   const weekStats = await loadWeekStats(email);
-  const outreachStats = computeOutreachStats(activeCampaigns, userId, email, weekStats);
+  const outreachStats = computeOutreachStats(campaigns, userId, email, weekStats);
 
   return {
     displayName,
