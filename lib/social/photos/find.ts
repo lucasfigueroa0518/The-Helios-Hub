@@ -197,7 +197,8 @@ async function articlePhoto(url: string, ctx: PhotoContext, deps: PhotoDeps, ste
 /**
  * Cover, company story: the company's own announcement image (spec §5.1 (a)).
  * Its official pages' <figure> images first; og:image (often a title card)
- * only when the page has no usable figure.
+ * only when no figure on the page is usable. Each goes through the credit
+ * rule and the vision check (banners rejected).
  */
 async function officialCoverPhoto(company: OfficialCompany, ctx: PhotoContext, deps: PhotoDeps, steps: string[], spend: { visionUsd: number }): Promise<Photo | null> {
   const organizations = ctx.brief.subjects.map((s) => s.name);
@@ -213,9 +214,7 @@ async function officialCoverPhoto(company: OfficialCompany, ctx: PhotoContext, d
     const pageUrl = pg.resolvedUrl || pg.url;
     const figures = pg.photos.filter((x) => x.from === 'figure');
     const ordered = [...figures, ...pg.photos.filter((x) => x.from === 'og:image')];
-    let figureTried = false;
     for (const ph of ordered) {
-      if (ph.from === 'og:image' && figureTried) continue;
       const v = classifyCredit({ caption: ph.caption, credit: ph.credit, page: pageUrl, organizations, officialList: deps.officialList });
       if (v.verdict !== 'allowed' || !v.credit) {
         steps.push(`official image ${ph.from} ${ph.src.split('/').pop()?.slice(0, 40)}: credit ${v.verdict} (${v.reason})`);
@@ -223,7 +222,6 @@ async function officialCoverPhoto(company: OfficialCompany, ctx: PhotoContext, d
         continue;
       }
       if (taken(ctx, ph.src)) continue;
-      if (ph.from === 'figure') figureTried = true;
       if (!(await officialVisionOk(ph.src, ph.caption, company.company, ctx, deps, steps, spend))) continue;
       steps.push(`official image (${ph.from}): ${ph.src}`);
       return { url: ph.src, credit: v.credit, source: 'official', width: null, height: null, qid: null, subject: null };

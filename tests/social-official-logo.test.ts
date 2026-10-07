@@ -199,3 +199,20 @@ test('render: a logo photo makes a logo-card cover (logo kind, plate, Helios wor
   assert.match(html, /data-photo-kind="logo"/);
   assert.match(html, /Logo: Google \(public domain\)/);
 });
+
+test("official cover: when every figure is unusable (a table read as a banner), the page's og:image is tried next", async () => {
+  const b = googleBrief();
+  const pages = [page('https://blog.google/post', [
+    { src: 'https://blog.google/table.png', caption: null, credit: null, alt: null, from: 'figure' },
+    { src: 'https://blog.google/og.png', caption: null, credit: null, alt: null, from: 'og:image' },
+  ])];
+  const vision: VisionCheck = async ({ url }) => {
+    const v = verdict({ mostly_text_banner: url.endsWith('table.png') });
+    return { ok: true, verdict: v, pass: passesVision(v), costUsd: 0.0025 };
+  };
+  const c = newPhotoContext(b, pages);
+  c.identities = new Map([verified('Google', 'Q95', 'organization')]);
+  const t = await findPhoto({ kind: 'subject', value: 'Google' }, c, { jev: (async () => { throw new Error('x'); }) as never, vision, officialList: approved() }, { text: ['Google x'], speaker: null, slot: 'split', cover: true });
+  assert.equal(t.via, 'official');
+  assert.equal(t.photo?.url, 'https://blog.google/og.png');
+});
