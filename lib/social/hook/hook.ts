@@ -12,7 +12,8 @@
  *   per line (first attempt: back to the model; after the retry: that line
  *     is dropped and logged, the rest stand; adding nothing is a good
  *     answer): over the slide's measured budget, quotation marks, a number
- *     not in the tagged entries, a second why-it-matters line, C8 (the line
+ *     not in the tagged entries, a second why-it-matters line, a
+ *     why-it-matters line not resting on FACTS IDs only, C8 (the line
  *     repeats a number or a 4-word phrase of its own slide).
  * Existing text can't change: the tool only returns added lines.
  */
@@ -96,6 +97,7 @@ export function checkHooks(input: unknown, draft: DraftSubmission, brief: Brief,
   const hooks: Array<SlideHook | null> = draft.slides.map(() => null);
   const problems: Array<{ slide: number; message: string }> = [];
   let why = 0;
+  const factIds = new Set(brief.facts.map((f) => f.id));
   for (const h of [...sub.hooks].sort((a, b) => a.slide - b.slide)) {
     const text = h.line?.trim();
     if (!text || !h.kind) continue;
@@ -106,6 +108,8 @@ export function checkHooks(input: unknown, draft: DraftSubmission, brief: Brief,
     const allowed = new Set(h.facts.flatMap((id) => numbersIn(texts.get(id) ?? '')));
     for (const n of numbersIn(text)) if (!allowed.has(n)) lineProblems.push(`the number ${n} isn't in the tagged entries`);
     if (h.kind === 'why-it-matters' && ++why > 1) lineProblems.push('a second why-it-matters line (at most one per post)');
+    // Why-it-matters rests on FACTS IDs only (Tommy, 2026-10-06): WHY IT MATTERS is a guide, not a source.
+    if (h.kind === 'why-it-matters' && (h.facts.length === 0 || h.facts.some((id) => !factIds.has(id)))) lineProblems.push('a why-it-matters line rests on FACTS IDs only (tag F IDs; WHY IT MATTERS is a guide, not a source)');
     const hook: SlideHook = { text, kind: h.kind, facts: h.facts };
     // C8 against its own slide.
     const one = fillDraft(applyHooks(draft, draft.slides.map((_, j) => (j === i ? hook : null))), brief);

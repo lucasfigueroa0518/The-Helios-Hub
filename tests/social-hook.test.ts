@@ -24,9 +24,11 @@ const BUDGETS = [80, 80, 0, 80, 80, 80];
 const none = (slide: number): HookEntry => ({ slide, line: null, kind: null, facts: [] });
 const entries = (over: Record<number, HookEntry>) => sifDraft().slides.map((_, i) => over[i + 2] ?? none(i + 2));
 
-test('Hook prompt: the approved edits are in, and the old example is gone', () => {
-  assert.match(HOOK_SYSTEM, /Not everyone shrugged it off\./);
-  assert.ok(!HOOK_SYSTEM.includes('A governor answered'));
+test('Hook prompt: the approved edits are in, and no example line remains', () => {
+  assert.ok(!HOOK_SYSTEM.includes('Example') && !HOOK_SYSTEM.includes('shrugged') && !HOOK_SYSTEM.includes('A governor answered'));
+  assert.match(HOOK_SYSTEM, /A hook opens a question or raises the stakes the next slide answers\. Never announce the next section \('First…', 'Next…', 'Here's how…'\)\./);
+  assert.match(HOOK_SYSTEM, /If a hook restates a claim, keep the source's qualifier word for word \('relatively' never becomes 'perfectly'\)\./);
+  assert.match(HOOK_SYSTEM, /resting on FACTS IDs only/);
   assert.match(HOOK_SYSTEM, /No vague hype \('shocking', 'you won't believe'\)\. A tease must be specific to what the next slide says\./);
   assert.match(HOOK_SYSTEM, /## Voice/);
   assert.deepEqual(STAGE_MODELS.hook, { model: 'claude-sonnet-5-5', effort: 'high' });
@@ -68,7 +70,16 @@ test('Hook check: line problems go back once, then that line is dropped and logg
   assert.equal(r.hooks[2], null);
   assert.equal(r.hooks[3], null);
   assert.equal(r.hooks[4]?.text, 'Clayton will chair it, with three vice chairs.');
-  assert.equal(r.dropped.length, 4);
+  assert.equal(r.dropped.length, 5, "slide 3 has two problems: a second why-it-matters line, and no FACTS tag");
+});
+
+test('Hook check: a why-it-matters line rests on FACTS IDs only (not B, Q, N, and not untagged)', () => {
+  for (const facts of [[], ['B1'], ['F5', 'N1']]) {
+    const input = { hooks: entries({ 2: { slide: 2, line: 'The federal AI effort now has one lead.', kind: 'why-it-matters', facts } }) };
+    assert.throws(() => checkHooks(input, sifDraft(), brief(), BUDGETS, 1), /rests on FACTS IDs only/);
+  }
+  const ok = { hooks: entries({ 2: { slide: 2, line: 'The federal AI effort now has one lead.', kind: 'why-it-matters', facts: ['F5'] } }) };
+  assert.deepEqual(checkHooks(ok, sifDraft(), brief(), BUDGETS, 1).dropped, []);
 });
 
 test('Hook check: C8 checks the line against its own slide only', () => {

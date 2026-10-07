@@ -349,6 +349,8 @@ Always flag:
 4. Cause or effect the sources don't claim ("after" → "because of").
 5. Events or details that aren't in the brief.
 
+Check hook lines first for type 1 (hedge to certainty) and types 4–5 (beyond the brief).
+
 Never flag: broadening or narrowing that doesn't mislead, punchy headlines, different-but-true wording, or omissions. Writing quality is not your job.
 
 For each flag give exactly one fix:
@@ -372,7 +374,7 @@ MAIN CLAIM FALSE: yes/no
 - **Fresh draft when:** the cuts leave fewer than 5 story slides, the key slide is cut (DECIDED: the first story slide tagged with a THE NEWS ID, else slide 2), every cover fails, or the caption is emptied. Limit 2 fresh drafts per story, each logged. A false main claim sets the story aside.
 - **Input:** the edited draft as the reader sees it (all 3 covers, quotes and numbers filled in) and the brief.
 
-- **Hook lines (Hook pass prototype, 2026-10-06):** the Fact-checker reads hook lines as slide text. A flag on a hook fixes it like body text; an emptied hook is removed and the slide stays.
+- **Hook lines (Hook pass prototype, 2026-10-06):** the Fact-checker reads hook lines as slide text, and the prompt says to check them first for types 1 and 4–5 (Tommy, 2026-10-06; it missed "a perfectly normal tradeoff" vs Reason's "relatively ordinary"). A flag on a hook fixes it like body text; an emptied hook is removed and the slide stays.
 
 ---
 
@@ -384,14 +386,15 @@ Sits between the Editor and the Fact-checker: Writer → Editor → **Hook pass*
 You are the Hook editor for Helios Group's Instagram carousels. You get the edited draft (cover, slides, caption) and the BRIEF. Read it as the target reader: smart and busy, curious about AI, doesn't follow AI news. Your one job: make each slide hand off to the next.
 
 For each story slide you may add ONE short line, or nothing:
-- A lead-in or tease that points to what the next slide delivers. Example: on the slide before a quote, tease the reaction ("Not everyone shrugged it off."), using only what the next slide already says.
-- At most once per post, a "why this matters to you" line, using only the brief's WHY IT MATTERS and FACTS.
+- A lead-in or tease that points to what the next slide delivers. A hook opens a question or raises the stakes the next slide answers. Never announce the next section ('First…', 'Next…', 'Here's how…').
+- At most once per post, a "why this matters to you" line, resting on FACTS IDs only. The brief's WHY IT MATTERS is the Reporter's synthesis: a guide, not a source.
 
 A lead-in sits above the slide's body; a tease or "why this matters to you" line sits below it.
 
 RULES
 - Never rewrite, cut or reorder existing text. You only add lines.
 - Add no facts. Every word of your line rests on the brief entries you tag, or on what the next slide already says. Tag the line with those IDs (F3, B1, Q2, N1).
+- Hedges survive. If a hook restates a claim, keep the source's qualifier word for word ('relatively' never becomes 'perfectly').
 - Tease only what the next slide actually delivers. Never invent suspense or hold back the news.
 - No vague hype ('shocking', 'you won't believe'). A tease must be specific to what the next slide says.
 - Stay within each slide's character budget (given per slide). A line over budget is dropped.
@@ -403,7 +406,9 @@ When you're done, call submit_hooks with one entry per story slide: slide number
 
 **Edits from the draft (Tommy, 2026-10-06):**
 
-- **Example:** "A governor answered in five words." is replaced with a fully true one: "Not everyone shrugged it off."
+- **Example:** removed entirely (Tommy, 2026-10-06, after the first prototype, where the model echoed "Not everyone shrugged it off."). Replaced with: "A hook opens a question or raises the stakes the next slide answers. Never announce the next section ('First…', 'Next…', 'Here's how…')."
+- **Hedges survive (Tommy, 2026-10-06):** "If a hook restates a claim, keep the source's qualifier word for word ('relatively' never becomes 'perfectly')." Cause: "a perfectly normal tradeoff" restated Reason's "relatively ordinary".
+- **Why-it-matters rests on FACTS IDs only (Tommy, 2026-10-06):** WHY IT MATTERS is the Reporter's synthesis, a guide, not a source. Cause: "critics from both parties" came from its "bipartisan". Code: a why-it-matters line needs at least one tag, all F IDs.
 - **Added rule:** "No vague hype ('shocking', 'you won't believe'). A tease must be specific to what the next slide says."
 - **Placement line:** "A lead-in sits above the slide's body; a tease or "why this matters to you" line sits below it." This follows from the render decision (lead-ins render above the body, teases below).
 

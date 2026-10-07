@@ -7,6 +7,10 @@
  *   OUTPUT (same pattern as Reporter/Writer; approved 2026-10-05): "OUTPUT" →
  *   "When you're done, call submit_flags with these sections:"; the
  *   section list is unchanged.
+ *   HOOK LINES (Tommy, 2026-10-06, Hook pass prototype; it missed "a
+ *   perfectly normal tradeoff" vs Reason's "relatively ordinary"): "Check
+ *   hook lines first for type 1 (hedge to certainty) and types 4–5 (beyond
+ *   the brief)." after the always-flag list.
  *   PLACEMENT (caching): the edited draft (quotes and numbers filled) and
  *   the brief go in the user message.
  */
@@ -22,6 +26,8 @@ Always flag:
 3. Words put in someone's mouth, or a quote altered.
 4. Cause or effect the sources don't claim ("after" → "because of").
 5. Events or details that aren't in the brief.
+
+Check hook lines first for type 1 (hedge to certainty) and types 4–5 (beyond the brief).
 
 Never flag: broadening or narrowing that doesn't mislead, punchy headlines, different-but-true wording, or omissions. Writing quality is not your job.
 
