@@ -21,10 +21,12 @@ export type PostMeta = { source: string; sourceUrl: string; publishedAt: string 
 
 /** Article and Commons photos may show people (rule 3); stock and starter-set photos are scenes. */
 /** Article, Commons and bank person/company photos may show people or a subject (rule 3); stock, starter and bank scenes are scenes. */
-export const photoKindOf = (photo: Photo): 'subject' | 'scene' => (photo.source === 'article' || photo.source === 'commons' || (photo.source === 'bank' && photo.qid) ? 'subject' : 'scene');
+/** Official images count as subject (own region; they may show people or product UI). Logos are their own kind (cover cards). */
+export const photoKindOf = (photo: Photo): 'subject' | 'scene' | 'logo' =>
+  photo.source === 'logo' ? 'logo' : photo.source === 'article' || photo.source === 'official' || photo.source === 'commons' || (photo.source === 'bank' && photo.qid) ? 'subject' : 'scene';
 
-function photoFields(photo: Photo | null): Pick<SlideCopy, 'photoUrl' | 'photoCredit' | 'photoKind'> {
-  return photo ? { photoUrl: photo.url, photoCredit: photo.credit, photoKind: photoKindOf(photo) } : {};
+function photoFields(photo: Photo | null): Pick<SlideCopy, 'photoUrl' | 'photoCredit' | 'photoKind' | 'logoPlate'> {
+  return photo ? { photoUrl: photo.url, photoCredit: photo.credit, photoKind: photoKindOf(photo), ...(photo.plate ? { logoPlate: photo.plate } : {}) } : {};
 }
 
 function storySlide(s: FilledSlide, position: number, photo: Photo | null): SlideCopy {

@@ -257,7 +257,13 @@ export type SlideCopy = {
    * only goes in its own region; `scene` (stock, starter set) may sit full
    * bleed under text. Unset means scene.
    */
-  photoKind?: 'subject' | 'scene';
+  photoKind?: 'subject' | 'scene' | 'logo';
+
+  /**
+   * Logo cover card (spec §5.1 (b)): the plate behind the logo, chosen by
+   * code from the logo's luminance. The logo is never recoloured or cropped.
+   */
+  logoPlate?: 'light' | 'dark';
 
   /**
    * Where to centre the photo's crop, as object-position fractions (0–1),

@@ -43,14 +43,17 @@ import { classifyCredit } from './credit';
 import { checkIdentity, type IdentityResult, type SubjectType } from './identity';
 import { bankPhoto, pickFromBank, type BankEntry, type BankNeed } from './bank';
 import { pickCoverStarter } from './starter-set';
-import { VISION_TOP, describeVerdict, type VisionCheck } from './vision';
+import { VISION_TOP, describeVerdict, passesOfficialVision, type VisionCheck } from './vision';
+import { fetchLogo } from './logo';
+import { OFFICIAL_COMPANIES, listedCompany, officialPageOf, type OfficialCompany } from './official';
 
 /** Logged when the 7-day rule has to give way (spec §5D; counted in each run's report). */
 export const STARTER_POOL_EXHAUSTED = 'starter-pool-exhausted';
 /** Logged when no starter tag matched the slide or the story and the AI-compute default was used. */
 export const NO_TOPIC_MATCH = 'no-topic-match';
 
-export type PhotoSource = 'article' | 'commons' | 'stock' | 'bank' | 'starter';
+/** `official`: a SUBJECTS company's own announcement image (spec §5.1 (a)); `logo`: a logo cover card (§5.1 (b)). */
+export type PhotoSource = 'article' | 'official' | 'commons' | 'stock' | 'bank' | 'starter' | 'logo';
 
 export type Photo = {
   url: string;
@@ -63,10 +66,12 @@ export type Photo = {
   qid: string | null;
   /** The SUBJECTS name this photo was verified to show; null for scenes and article photos. */
   subject: string | null;
+  /** Logo cards: the plate behind the logo, chosen from its luminance. */
+  plate?: 'light' | 'dark';
 };
 
 /** `none`: the Writer asked for no photo. `text-only`: a story slide asked for one and none was usable. */
-export type ChainStep = 'article' | 'subject' | 'stock' | 'bank' | 'starter' | 'none' | 'text-only';
+export type ChainStep = 'article' | 'official' | 'subject' | 'logo' | 'stock' | 'bank' | 'starter' | 'none' | 'text-only';
 
 /** Identity check outcome for the run log. */
 export type IdentityNote = { subject: string; ok: boolean; detail: string; scores: import('./identity').IdentityScores | null };
@@ -101,8 +106,10 @@ export type PhotoDeps = {
   stock?: StockSearch;
   /** Stock pre-screen version: v4 (default, Tommy 2026-10-06: fit and people only) or v2/v3 (kept for the bench's before/after). */
   prescreen?: 'v2' | 'v3' | 'v4';
-  /** The photo vision check on the top stock candidates (vision.ts). Absent: metadata pre-screen only. */
+  /** The photo vision check on the top stock candidates and on official images (vision.ts). Absent: not run. */
   vision?: VisionCheck;
+  /** The official-images allow-list (official.ts); the bench may pass a preview copy. */
+  officialList?: OfficialCompany[];
 };
 
 export type PhotoContext = {
@@ -144,22 +151,129 @@ function lookupArticlePhoto(url: string, ctx: PhotoContext): { photo: Pick<Artic
   return b ? { photo: { caption: b.caption, credit: b.credit }, page: b.page } : null;
 }
 
-async function articlePhoto(url: string, ctx: PhotoContext, steps: string[]): Promise<Photo | null> {
+/** Does the caption name a SUBJECTS person (any subject that isn't a listed company)? Identity comes from the company's caption. */
+function captionNamesSubjectPerson(caption: string | null, ctx: PhotoContext, list: OfficialCompany[]): boolean {
+  if (!caption) return false;
+  return ctx.brief.subjects.some((s) => !listedCompany(s.name, list) && namedAt(s.name, caption) >= 0);
+}
+
+/** Official images go through the vision check when it's on: no banners, no unnamed prominent person. */
+async function officialVisionOk(url: string, caption: string | null, company: string, ctx: PhotoContext, deps: PhotoDeps, steps: string[], spend: { visionUsd: number }): Promise<boolean> {
+  if (!deps.vision) return true;
+  const v = await deps.vision({ url, scene: `an image from ${company}'s own announcement`, subjects: ctx.brief.subjects.map((x) => x.name), title: caption ?? undefined });
+  spend.visionUsd += v.costUsd;
+  if (!v.ok) {
+    steps.push(`vision (official): error (${v.error}) → skipped`);
+    return false;
+  }
+  const pass = passesOfficialVision(v.verdict, captionNamesSubjectPerson(caption, ctx, deps.officialList ?? OFFICIAL_COMPANIES));
+  steps.push(`vision (official): ${describeVerdict(v.verdict)} → ${pass ? 'PASS' : 'fail'} ($${v.costUsd.toFixed(4)})`);
+  return pass;
+}
+
+async function articlePhoto(url: string, ctx: PhotoContext, deps: PhotoDeps, steps: string[], spend: { visionUsd: number }): Promise<Photo | null> {
   const found = lookupArticlePhoto(url, ctx);
   if (!found) {
     steps.push('article photo not found in the pages read');
     return null;
   }
   const organizations = ctx.brief.subjects.map((s) => s.name);
-  const v = classifyCredit({ caption: found.photo.caption, credit: found.photo.credit, page: found.page, organizations });
+  const v = classifyCredit({ caption: found.photo.caption, credit: found.photo.credit, page: found.page, organizations, officialList: deps.officialList });
   steps.push(`credit ${v.verdict}: ${v.reason}`);
   if (v.verdict !== 'allowed') return null;
   if (taken(ctx, url)) {
     steps.push('already used in this post or in the last 7 days');
     return null;
   }
+  if (v.credit) {
+    // An official image (spec §5.1 (a)): code-built credit, and the vision check.
+    const company = v.credit.replace(/^Image: /, '');
+    if (!(await officialVisionOk(url, found.photo.caption, company, ctx, deps, steps, spend))) return null;
+    return { url, credit: v.credit, source: 'official', width: null, height: null, qid: null, subject: null };
+  }
   return { url, credit: (found.photo.credit ?? found.photo.caption ?? '').trim(), source: 'article', width: null, height: null, qid: null, subject: null };
 }
+
+/**
+ * Cover, company story: the company's own announcement image (spec §5.1 (a)).
+ * Its official pages' <figure> images first; og:image (often a title card)
+ * only when the page has no usable figure.
+ */
+async function officialCoverPhoto(company: OfficialCompany, ctx: PhotoContext, deps: PhotoDeps, steps: string[], spend: { visionUsd: number }): Promise<Photo | null> {
+  const organizations = ctx.brief.subjects.map((s) => s.name);
+  const pages = ctx.pages.filter((pg) => {
+    const o = officialPageOf(pg.resolvedUrl || pg.url, organizations, deps.officialList);
+    return o.status !== 'none' && o.company.company === company.company;
+  });
+  if (!pages.length) {
+    steps.push(`official image: no ${company.company} page among the pages read`);
+    return null;
+  }
+  for (const pg of pages) {
+    const pageUrl = pg.resolvedUrl || pg.url;
+    const figures = pg.photos.filter((x) => x.from === 'figure');
+    const ordered = [...figures, ...pg.photos.filter((x) => x.from === 'og:image')];
+    let figureTried = false;
+    for (const ph of ordered) {
+      if (ph.from === 'og:image' && figureTried) continue;
+      const v = classifyCredit({ caption: ph.caption, credit: ph.credit, page: pageUrl, organizations, officialList: deps.officialList });
+      if (v.verdict !== 'allowed' || !v.credit) {
+        steps.push(`official image ${ph.from} ${ph.src.split('/').pop()?.slice(0, 40)}: credit ${v.verdict} (${v.reason})`);
+        if (v.verdict === 'unknown' && /not approved|press terms/.test(v.reason)) return null;
+        continue;
+      }
+      if (taken(ctx, ph.src)) continue;
+      if (ph.from === 'figure') figureTried = true;
+      if (!(await officialVisionOk(ph.src, ph.caption, company.company, ctx, deps, steps, spend))) continue;
+      steps.push(`official image (${ph.from}): ${ph.src}`);
+      return { url: ph.src, credit: v.credit, source: 'official', width: null, height: null, qid: null, subject: null };
+    }
+  }
+  steps.push(`official image: none usable on ${company.company}'s pages`);
+  return null;
+}
+
+/** The company a cover is about: its subject request if that's a listed company, else the first listed SUBJECTS company named in the cover text. */
+function coverCompanyOf(request: ImageRequest, slide: SlideText, ctx: PhotoContext, list: OfficialCompany[]): { name: string; listed: OfficialCompany | null } | null {
+  if (request.kind === 'subject' && request.value.trim()) {
+    const listed = listedCompany(request.value, list);
+    if (listed) return { name: request.value, listed };
+  }
+  const text = slide.text.join(' ');
+  const hit = ctx.brief.subjects.map((s) => ({ s, at: namedAt(s.name, text), listed: listedCompany(s.name, list) })).filter((x) => x.listed && x.at >= 0).sort((a, b) => a.at - b.at)[0];
+  return hit ? { name: hit.s.name, listed: hit.listed } : null;
+}
+
+/** A logo cover card (spec §5.1 (b)) for a verified organization; never by name alone. */
+async function logoCard(name: string, ctx: PhotoContext, deps: PhotoDeps, steps: string[]): Promise<Photo | null> {
+  const subject = ctx.brief.subjects.find((s) => s.name === name) ?? { name, role: null };
+  let pending = ctx.identities.get(name);
+  if (!pending) {
+    pending = checkIdentity(subject, ctx.brief, { jev: deps.jev, http: deps.http });
+    ctx.identities.set(name, pending);
+  }
+  const id = await pending;
+  if (!id.ok) {
+    steps.push(`logo card: identity failed for ${name} (${id.reason})`);
+    return null;
+  }
+  if (id.type !== 'organization') {
+    steps.push(`logo card: ${name} is a ${id.type}, not an organization`);
+    return null;
+  }
+  const r = await fetchLogo(id.qid, listedCompany(name, deps.officialList ?? OFFICIAL_COMPANIES)?.company ?? id.label, { http: deps.http });
+  if (!r.photo) {
+    steps.push(`logo card: ${r.reason}`);
+    return null;
+  }
+  if (taken(ctx, r.photo.url)) {
+    steps.push('logo card: this logo was used in this post or in the last 7 days');
+    return null;
+  }
+  steps.push(`logo card: ${id.qid} File:${r.file} (${r.photo.plate} plate)`);
+  return r.photo;
+}
+
 
 async function subjectPhoto(name: string, ctx: PhotoContext, deps: PhotoDeps, steps: string[]): Promise<{ photo: Photo | null; type: SubjectType | null; identity: IdentityNote; qid?: string }> {
   const subject = ctx.brief.subjects.find((s) => s.name === name) ?? { name, role: null };
@@ -329,10 +443,20 @@ export async function findPhoto(request: ImageRequest, ctx: PhotoContext, deps: 
   const subject = request.kind === 'subject' && !empty ? request.value : empty && slot === 'split' && request.kind !== 'none' ? subjectInText(slide, ctx.brief) : null;
   if (empty && subject) steps.push(`empty request; subject from slide text: ${subject}`);
 
+  // Cover order for a company story (Tommy, 2026-10-07): official image → subject P18 → logo card → stock → starter.
+  // A person's own subject request keeps their photo first; then the company named in the cover text.
+  const list = deps.officialList ?? OFFICIAL_COMPANIES;
+  const company = slide.cover ? coverCompanyOf(request, slide, ctx, list) : null;
+  const personRequest = request.kind === 'subject' && !listedCompany(request.value, list);
+  if (slide.cover && company?.listed && !personRequest && request.kind !== 'article') {
+    const p = await attempt('official', () => officialCoverPhoto(company.listed!, ctx, deps, steps, spend));
+    if (p) return done(p, 'official');
+  }
+
   if (request.kind === 'article' && !empty) {
     if (slot === 'split') {
-      const p = await attempt('article', () => articlePhoto(request.value, ctx, steps));
-      if (p) return done(p, 'article');
+      const p = await attempt('article', () => articlePhoto(request.value, ctx, deps, steps, spend));
+      if (p) return done(p, p.source === 'official' ? 'official' : 'article');
     } else {
       steps.push(`article photo skipped: a ${slot} slide shows only ${slot === 'quote' ? 'the speaker or a scene' : 'a scene'}`);
     }
@@ -352,7 +476,19 @@ export async function findPhoto(request: ImageRequest, ctx: PhotoContext, deps: 
       const b = qid ? fromBank({ qid }) : null;
       if (b) return done(b, 'bank');
     }
-  } else if (request.kind === 'stock' && !empty) {
+  }
+
+  // Cover: a logo card for the organization (its own subject request, else the company named in the cover).
+  if (slide.cover) {
+    // The cover's own subject first (logoCard rejects a person by its verified type), then the company named in the cover.
+    const orgs = [...new Set([request.kind === 'subject' && !empty ? request.value : null, company?.name ?? null].filter((x): x is string => !!x))];
+    for (const org of orgs) {
+      const p = await attempt('logo', () => logoCard(org, ctx, deps, steps));
+      if (p) return done(p, 'logo');
+    }
+  }
+
+  if (request.kind === 'stock' && !empty) {
     const p = await attempt('stock', () => stockPhoto(request.value, slot, ctx, deps, steps, spend));
     if (p) return done(p, 'stock');
     const b = fromBank({ scene: request.value });

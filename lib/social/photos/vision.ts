@@ -13,6 +13,8 @@
  * story's SUBJECTS), and (Tommy, 2026-10-07, after the PREVIEW run's
  * "CJ Harris Regional Hospital") identifiable signage or a specific named
  * building or institution. The candidate's title is passed as context.
+ * Sixth question (Tommy, 2026-10-07, official images): mostly text or a
+ * graphic banner → rejected.
  * Definitions narrowed by Tommy, 2026-10-06, after the bench (camera dials
  * failed on an unidentified maker). The first candidate passing all four wins; none passing
  * means no stock photo.
@@ -42,6 +44,7 @@ export const VISION_SYSTEM = `You check one candidate stock photo for a news car
 3. Does it show a recognizable landmark: a famous landmark, capitol, monument or famous skyline a typical reader would recognize by sight? A named but ordinary building, facility or room is not a landmark.
 4. Is there a prominent logo a reader would take as part of the story, other than one of the SUBJECTS?
 5. Does the photo show identifiable signage or a specific named building or institution (a hospital, school, company site) a reader could take as part of the story?
+6. Is the image mostly text or a graphic banner?
 
 The photo's TITLE is given as context: it can name the place or institution shown.
 
@@ -60,6 +63,7 @@ export const SUBMIT_VERDICT_TOOL = {
     landmark_visible: { type: 'boolean' },
     story_logo: { type: 'boolean' },
     named_institution: { type: 'boolean', description: 'Identifiable signage or a specific named building or institution a reader could take as part of the story.' },
+    mostly_text_banner: { type: 'boolean', description: 'The image is mostly text or a graphic banner.' },
     logo_seen: { type: ['string', 'null'], description: 'The prominent logo seen, if any.' },
   }),
 } as unknown as Anthropic.Tool;
@@ -73,6 +77,7 @@ export type VisionVerdict = {
   story_logo: boolean;
   logo_seen: string | null;
   named_institution: boolean;
+  mostly_text_banner: boolean;
 };
 
 export type VisionResult = { ok: true; verdict: VisionVerdict; pass: boolean; costUsd: number } | { ok: false; error: string; costUsd: number };
@@ -82,17 +87,27 @@ export type VisionCheck = (input: { url: string; scene: string; subjects: string
 
 /** All four must pass. */
 export function passesVision(v: VisionVerdict): boolean {
-  return v.shows_requested && v.shows_requested_confidence >= SHOWS_MIN_CONFIDENCE && !v.person_prominent && !v.landmark_visible && !v.story_logo && !v.named_institution;
+  return v.shows_requested && v.shows_requested_confidence >= SHOWS_MIN_CONFIDENCE && !v.person_prominent && !v.landmark_visible && !v.story_logo && !v.named_institution && !v.mostly_text_banner;
+}
+
+/**
+ * Official images (spec §5.1 (a)): the company's own image, so its logo, site
+ * and signage are the story's own (questions 3–5 don't apply). Rejected: a
+ * banner (mostly text) and a prominent person the caption doesn't name as a
+ * SUBJECTS person (identity comes from the company's caption, never a face).
+ */
+export function passesOfficialVision(v: VisionVerdict, captionNamesSubjectPerson: boolean): boolean {
+  return !v.mostly_text_banner && (!v.person_prominent || captionNamesSubjectPerson);
 }
 
 export function describeVerdict(v: VisionVerdict): string {
-  return `shows ${v.shows_requested ? 'yes' : 'no'} ${v.shows_requested_confidence.toFixed(2)} · person (main/face) ${v.person_prominent ? 'yes' : 'no'} · landmark ${v.landmark_visible ? 'yes' : 'no'} · story logo ${v.story_logo ? `yes${v.logo_seen ? ` (${v.logo_seen})` : ''}` : 'no'} · named institution ${v.named_institution ? 'yes' : 'no'} · "${v.what_it_shows}"`;
+  return `shows ${v.shows_requested ? 'yes' : 'no'} ${v.shows_requested_confidence.toFixed(2)} · person (main/face) ${v.person_prominent ? 'yes' : 'no'} · landmark ${v.landmark_visible ? 'yes' : 'no'} · story logo ${v.story_logo ? `yes${v.logo_seen ? ` (${v.logo_seen})` : ''}` : 'no'} · named institution ${v.named_institution ? 'yes' : 'no'} · banner ${v.mostly_text_banner ? 'yes' : 'no'} · "${v.what_it_shows}"`;
 }
 
 function isVerdict(x: unknown): x is VisionVerdict {
   const v = x as VisionVerdict;
   return !!v && typeof v.what_it_shows === 'string' && typeof v.shows_requested === 'boolean' && typeof v.shows_requested_confidence === 'number'
-    && typeof v.person_prominent === 'boolean' && typeof v.landmark_visible === 'boolean' && typeof v.story_logo === 'boolean' && typeof v.named_institution === 'boolean';
+    && typeof v.person_prominent === 'boolean' && typeof v.landmark_visible === 'boolean' && typeof v.story_logo === 'boolean' && typeof v.named_institution === 'boolean' && typeof v.mostly_text_banner === 'boolean';
 }
 
 /** The photo, downscaled, as base64 JPEG. */

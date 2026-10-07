@@ -7,6 +7,8 @@
  */
 import { STAGE_MODELS, type StageModelConfig } from '@/lib/social/pipeline/models';
 import { classifyCredit } from '@/lib/social/photos/credit';
+import type { OfficialCompany } from '@/lib/social/photos/official';
+import type { PageReadOk } from '@/lib/social/reporter/read-page';
 import type { Brief, BriefError } from '@/lib/social/reporter/brief';
 import type { MessagesCreate, TurnUsage } from '@/lib/social/reporter/reporter';
 
@@ -29,7 +31,7 @@ export type HasPhoto = (subject: { name: string; role: string | null }, brief: B
  * filtered to those whose credit allows them, so every photo the Writer can
  * request can succeed.
  */
-export async function briefForWriter(brief: Brief, isWellKnown: IsWellKnown, hasPhoto: HasPhoto = async () => false) {
+export async function briefForWriter(brief: Brief, isWellKnown: IsWellKnown, hasPhoto: HasPhoto = async () => false, pages: PageReadOk[] = [], officialList?: OfficialCompany[]) {
   const subjects = await Promise.all(
     brief.subjects.map(async (s) => ({
       ...s,
@@ -38,9 +40,21 @@ export async function briefForWriter(brief: Brief, isWellKnown: IsWellKnown, has
     })),
   );
   const organizations = brief.subjects.map((s) => s.name);
-  const article_photos = brief.article_photos.filter(
-    (p) => p.url && classifyCredit({ caption: p.caption, credit: p.credit, page: p.page, organizations }).verdict === 'allowed',
-  );
+  const key = (u: string) => u.replace(/^https?:\/\//, '').replace(/[?#].*$/, '');
+  /** How the page reader found this photo: in the article body (figure) or as the share image (og:image). */
+  const fromOf = (url: string) => pages.flatMap((pg) => pg.photos).find((x) => key(x.src) === key(url))?.from ?? null;
+  const usable = brief.article_photos
+    .filter((p) => p.url)
+    .map((p) => ({ p, v: classifyCredit({ caption: p.caption, credit: p.credit, page: p.page, organizations, officialList }), from: fromOf(p.url!) }))
+    .filter((x) => x.v.verdict === 'allowed');
+  // Prefer <figure> images over og:image (Tommy, 2026-10-07: og:image is often a title card): a page's
+  // og:image is listed only when that page has no usable figure image.
+  const pagesWithFigure = new Set(usable.filter((x) => x.from === 'figure').map((x) => x.p.page));
+  const article_photos = usable
+    .filter((x) => !(x.from === 'og:image' && pagesWithFigure.has(x.p.page)))
+    .sort((a, b) => Number(b.from === 'figure') - Number(a.from === 'figure'))
+    // Official images (spec §5.1 (a)) carry the company they come from.
+    .map((x) => (x.v.credit ? { ...x.p, official_image_of: x.v.credit.replace(/^Image: /, '') } : x.p));
   return { ...brief, subjects, article_photos };
 }
 
@@ -138,6 +152,10 @@ export type WriterDeps = {
   /** photo_available marking (handoff); without it every subject is marked false and not checked. */
   hasPhoto?: HasPhoto;
   config?: StageModelConfig;
+  /** The pages the Reporter read: tells <figure> images from og:image for ARTICLE PHOTOS. */
+  pages?: PageReadOk[];
+  /** The official-images allow-list (official.ts); tests may pass their own. */
+  officialList?: OfficialCompany[];
 };
 
 /** checkDraft (structure and IDs), then the M7 text checks C1–C5 on the filled, fixed draft. */
@@ -208,7 +226,7 @@ const safely = <T,>(fn: () => T[]): T[] => {
 };
 
 export async function runWriter(brief: Brief, deps: WriterDeps): Promise<WriterResult> {
-  const forWriter = await briefForWriter(brief, deps.isWellKnown, deps.hasPhoto);
+  const forWriter = await briefForWriter(brief, deps.isWellKnown, deps.hasPhoto, deps.pages ?? [], deps.officialList);
   const photoSubjects = new Set(forWriter.subjects.filter((s) => s.photo_available).map((s) => s.name));
   let first: { draft: DraftSubmission; places: string[] } | null = null;
   let imageRequestsDropped: string[] = [];

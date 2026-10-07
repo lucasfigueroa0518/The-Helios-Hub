@@ -161,7 +161,7 @@ export function createLiveStages(deps: LiveStagesDeps): { stages: PipelineStages
       return { ok: true, value: { storyId: story.id, parsed: r.brief, raw: r.raw, pages: r.pages }, costUsd: r.costUsd };
     },
     async write(brief) {
-      const r = await runWriter(brief.parsed, { create, isWellKnown: deps.isWellKnown, hasPhoto: deps.hasPhoto });
+      const r = await runWriter(brief.parsed, { create, isWellKnown: deps.isWellKnown, hasPhoto: deps.hasPhoto, pages: brief.pages });
       log(brief.storyId).writer.push(r);
       if (!r.ok) return capAware(deps.budget, { ok: false, reasonCode: r.reason, detail: r.detail, costUsd: r.costUsd });
       return { ok: true, value: { storyId: brief.storyId, submission: r.draft, filled: r.filled }, costUsd: r.costUsd };

@@ -786,7 +786,7 @@ import { createVisionCheck, passesVision, SHOWS_MIN_CONFIDENCE, VISION_SYSTEM, V
 import { PHOTO_VISION_MODEL } from '@/lib/social/pipeline/models';
 import { DEFAULT_TOPIC } from '@/lib/social/photos/starter-set';
 
-const verdict = (over: Partial<VisionVerdict> = {}): VisionVerdict => ({ what_it_shows: 'x', shows_requested: true, shows_requested_confidence: 0.9, person_prominent: false, landmark_visible: false, story_logo: false, logo_seen: null, named_institution: false, ...over });
+const verdict = (over: Partial<VisionVerdict> = {}): VisionVerdict => ({ what_it_shows: 'x', shows_requested: true, shows_requested_confidence: 0.9, person_prominent: false, landmark_visible: false, story_logo: false, logo_seen: null, named_institution: false, mostly_text_banner: false, ...over });
 
 test('vision: all four must pass (shows it with enough confidence, no person, no landmark, no outside brand)', () => {
   assert.ok(passesVision(verdict()));
@@ -796,6 +796,7 @@ test('vision: all four must pass (shows it with enough confidence, no person, no
   assert.ok(!passesVision(verdict({ landmark_visible: true })));
   assert.ok(!passesVision(verdict({ story_logo: true, logo_seen: 'Equinix' })));
   assert.ok(!passesVision(verdict({ named_institution: true })), 'a specific named hospital, school or company site (CJ Harris Regional Hospital)');
+  assert.ok(!passesVision(verdict({ mostly_text_banner: true })), 'mostly text or a graphic banner');
 });
 
 /** Stub vision: verdicts by photo title in the URL; records what it was asked. */
