@@ -70,7 +70,7 @@ test('submit_brief schema mirrors the prompt sections; every object closed and f
   assert.equal(schema.additionalProperties, false);
   assert.deepEqual(schema.required, Object.keys(schema.properties));
   assert.deepEqual(Object.keys(schema.properties.facts.items.properties), ['id', 'text', 'sources', 'claim_by', 'notes']);
-  assert.deepEqual(Object.keys(schema.properties.quotes.items.properties), ['id', 'text', 'speaker', 'where', 'via', 'single_source', 'cut_off', 'notes']);
+  assert.deepEqual(Object.keys(schema.properties.quotes.items.properties), ['id', 'text', 'speaker', 'speaker_id', 'where', 'via', 'single_source', 'cut_off', 'notes']);
   assert.deepEqual(Object.keys(schema.properties.numbers.items.properties), ['id', 'value', 'type', 'counts', 'sources', 'notes']);
   assert.deepEqual(schema.properties.numbers.items.properties.type.enum, ['money', 'count', 'percent', 'duration', 'date', 'other']);
   // Every nested object is closed and fully required (strict tool use).

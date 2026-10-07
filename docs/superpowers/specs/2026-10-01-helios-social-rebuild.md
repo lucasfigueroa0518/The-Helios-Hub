@@ -248,7 +248,7 @@ The worst past slips (the made-up Suleyman quote, the untraceable "1,200") came 
   - **Unknown or missing credit:** not used. No image is better than a wrong one.
 - **Example:** both photos in the ABC "Super Intelligence Force" article were "Kent Nishimura/AFP via Getty Images," so both are rejected and the backups take over.
 
-**Every slide that requests a photo gets one; the cover always does (DECIDED, revised 2026-10-06).** The Writer requests a photo only when a specific subject, article photo or literal scene fits the slide, and otherwise sets IMAGE `none`. A slide with `none` renders without a photo, which is a normal outcome ("No usable photo means a text-only slide", below). There are no symbolic stock scenes. Quote slides show the verified speaker or a scene when they request a photo. `cause · prompt + schema + spec · 0 new stages · 0 new AI calls` (This replaces 2026-10-04's "Every slide gets a photo. No text-only slides.")
+**The cover always has a photo; a story slide shows one only when a usable photo is found (DECIDED, revised twice 2026-10-06).** The starter set is for the cover only. On a story slide, a failed subject request, a quote slide without a usable speaker photo, or any request with nothing usable renders text-only, never a stand-in scene. The Writer requests a photo only when a specific subject, article photo or literal scene fits the slide, and otherwise sets IMAGE `none`. A slide with `none` renders without a photo, which is a normal outcome ("No usable photo means a text-only slide", below). There are no symbolic stock scenes. Quote slides show the verified speaker or a scene when they request a photo. `cause · prompt + schema + spec · 0 new stages · 0 new AI calls` (This replaces 2026-10-04's "Every slide gets a photo. No text-only slides.")
 
 **Use every tool available, and pick the best (DECIDED).** For each slide, query all the sources that fit the request in parallel, collect the candidates, and **rank** them. Don't stop at the first hit.
 
@@ -297,7 +297,7 @@ Fallbacks are always **scenes, never people.** A slide never shows a person who 
 - Identity always comes from the records (Wikidata, official galleries, the article's caption), never from an AI looking at a face.
 - Code rejects agency credits wherever a photo comes from.
 - No photo is ever repeated.
-- No usable photo means a text-only slide, which is a normal outcome. A slide with IMAGE `none` is one; a slide that requests a photo still always gets one (the starter set is the last step).
+- No usable photo means a text-only slide, which is a normal outcome. A slide with IMAGE `none` is one, and so is a story slide whose requested photo isn't usable. The starter set is the cover's last step only.
 
 **Photos are never edited.** No retouching or compositing. **To verify:** whether the cover's dark overlay behind the headline counts as an edit under the White House photo terms. If it does, use the cover's dark-canvas layout with the photo in its own frame.
 
@@ -388,7 +388,7 @@ The old stat slide (a headline and a big number on an empty canvas) is the most 
 - **It sets the mood; it doesn't chart the data.** No charts, no calculated values (e.g. no deadline date worked out from "120 days").
 - **The headline stays factual** ("It has a deadline", not "The clock is running"). The picture carries the mood.
 - **No AI-generated images.**
-- **IMAGE `none`:** the plain dark stat slide.
+- **IMAGE `none`, or no usable photo found:** the plain dark stat slide (the starter set is cover-only).
 
 *Superseded 2026-10-06 (symbolic searches are gone; kept for the record):*
 
@@ -513,7 +513,7 @@ RSS feeds (hundreds)
 
 - 0 false facts in a finished post
 - 0 wrong-person photos
-- 0 slides missing a requested photo (a slide with IMAGE `none` has none by design; the cover always has one)
+- 0 covers without a fitting photo, and 0 misleading photos (a story slide without a usable photo renders text-only by design)
 - 0 slides that fail to render
 - No photo repeats within 7 days, from any source, the starter set included (Tommy, 2026-10-06)
 

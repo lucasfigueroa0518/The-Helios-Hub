@@ -26,6 +26,8 @@ export type BriefQuote = {
   /** Exact quote text, without the surrounding quotation marks. */
   text: string;
   speaker: string;
+  /** The speaker's SUBJECTS id (S1…), or null when the speaker isn't in SUBJECTS (Tommy, 2026-10-06). */
+  speaker_id: string | null;
   /** Where it was said (interview, post, statement). */
   where: string | null;
   /** Outlet(s) the quote was read in. */
@@ -54,7 +56,7 @@ export type Brief = {
   quotes: BriefQuote[];
   numbers: BriefNumber[];
   terms: Array<{ name: string; definition: string; source: string }>;
-  subjects: Array<{ name: string; role: string | null }>;
+  subjects: Array<{ id: string; name: string; role: string | null }>;
   events: Array<{ what: string; date: string | null; place: string | null }>;
   article_photos: Array<{ caption: string | null; credit: string | null; url: string | null; page: string | null }>;
   not_answered: string[];
@@ -98,6 +100,7 @@ export const BRIEF_SCHEMA = obj({
       id: { type: 'string', description: 'Q1, Q2, …' },
       text: { type: 'string', description: 'Exact text, word for word, without surrounding quotation marks.' },
       speaker: str,
+      speaker_id: { ...nullableStr, description: "The speaker's SUBJECTS id (S1, S2, …), or null if the speaker isn't in SUBJECTS." },
       where: { ...nullableStr, description: 'Where it was said.' },
       via: { ...strList, description: 'Outlet(s) you read it in.' },
       single_source: { type: 'boolean', description: 'Found in only ONE source (⚠).' },
@@ -117,6 +120,7 @@ export const BRIEF_SCHEMA = obj({
   ),
   terms: list(obj({ name: str, definition: { type: 'string', description: 'Plain-language definition taken from sources.' }, source: str })),
   subjects: list(obj({
+    id: { type: 'string', description: 'S1, S2, …' },
     name: { type: 'string', description: 'One person or one organization, never combined (no "A / B"). Describe any relation in role.' },
     role: nullableStr,
   })),
@@ -203,6 +207,15 @@ export function validateBrief(input: unknown): Brief {
   ];
   for (const [section, ids] of cited) {
     for (const id of ids) if (!seen.has(id)) errors.push({ section, message: `cites ${id}, which isn't in the brief` });
+  }
+  // Quote speakers by ID (Tommy, 2026-10-06): every speaker_id names a SUBJECTS entry.
+  const subjectIds = new Set<string>();
+  for (const s of brief.subjects) {
+    if (subjectIds.has(s.id)) errors.push({ section: 'subjects', message: `duplicate id ${s.id}` });
+    subjectIds.add(s.id);
+  }
+  for (const q of brief.quotes) {
+    if (q.speaker_id && !subjectIds.has(q.speaker_id)) errors.push({ section: 'quotes', message: `${q.id} speaker_id ${q.speaker_id} isn't in SUBJECTS` });
   }
   if (errors.length > 0) throw new BriefValidationError(errors);
   return brief;

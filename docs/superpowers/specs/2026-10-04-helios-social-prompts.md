@@ -75,6 +75,36 @@ SOURCES: outlet, date, URL (only ones you opened); list fetch failures separatel
 
 `cause · Reporter prompt v2 · 0 new stages · 0 new AI calls`
 
+**No repetition within a slide (Tommy and Lucas, 2026-10-06).** `cause · Writer rule + check · 0 new stages · 0 new AI calls`
+
+- **Why:** both reviewers flagged it, and the repeated number is its third case (NYC "$25,000", Mistral "38", and again on 10-06).
+- **Writer:** one rule line follows the momentum lines:
+
+```
+- Every element on a slide adds something new: headline, body, big number and label never repeat the same phrase or number. The headline says what the number means.
+```
+
+- **Editor:** the Editor's list of code checks gains one line:
+
+```
+- No repetition on a slide: the same number, or a phrase of four or more words, never appears in two of its headline, body, quote, big number and label.
+```
+
+- **Check C8 (code):** the same number, or a repeated phrase of four or more words, across the fields of one slide sends the draft back to the Editor once. If it still fails after that, it's a warning on the review screen.
+
+**Quote speakers by ID (Tommy, 2026-10-06).** `cause · Reporter prompt + schema · 0 new stages · 0 new AI calls`
+
+- **Why:** quote slides matched their speaker by name text. In the 2026-10-06 run, "Ron DeSantis (Florida governor)" didn't equal the SUBJECTS entry "Ron DeSantis", so the quote slide lost the speaker's verified photo.
+- **What changes:** two section-list lines.
+
+| Line | Exact wording |
+|---|---|
+| QUOTES | "... [cut off if cut off in every source]" → "... [cut off if cut off in every source] — speaker's SUBJECTS ID (S1…), or none" |
+| SUBJECTS | "SUBJECTS: people/companies/products in the story (with role)" → "SUBJECTS: S1, S2, … people/companies/products in the story (with role)" |
+
+- **Schema:** `submit_brief` gives every SUBJECTS entry an `id`, and every QUOTES entry a `speaker_id` (an S# or null). Code checks that each `speaker_id` exists in SUBJECTS.
+- **Matching:** quote slides now match their speaker by this ID.
+
 ---
 
 ## 2. Writer (tested)

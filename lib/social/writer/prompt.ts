@@ -38,6 +38,9 @@ export const WRITER_MOMENTUM_RULES = `- Plan the post as one story, not a list o
 - Every slide pulls the reader to the next one. End each slide on real tension from the brief (a contradiction, a consequence, a reaction, an open question) that the next slide pays off.
 - Tension comes only from the brief: disagreements, critics, stakes, NOT ANSWERED. Never invent suspense, tease facts that aren't there, or hold back the news.`;
 
+/** No repetition within a slide (Tommy and Lucas, 2026-10-06; third case of a repeated number). Word for word from the prompts file. */
+export const WRITER_SLIDE_RULE = '- Every element on a slide adds something new: headline, body, big number and label never repeat the same phrase or number. The headline says what the number means.';
+
 /** Shared Context policy + Glossing from RULES_BLOCK (after its tested rule lines). */
 const CONTEXT_AND_GLOSSING = RULES_BLOCK.slice(RULES_BLOCK.indexOf('## Context policy'));
 
@@ -93,7 +96,7 @@ As long as the story needs and no longer, usually one or two short paragraphs. I
 
 export const WRITER_SYSTEM = [
   WRITER_INTRO,
-  `## Rules\n\n${WRITER_RULES}\n${WRITER_ADDED_RULES}\n${WRITER_MOMENTUM_RULES}`,
+  `## Rules\n\n${WRITER_RULES}\n${WRITER_ADDED_RULES}\n${WRITER_MOMENTUM_RULES}\n${WRITER_SLIDE_RULE}`,
   CONTEXT_AND_GLOSSING,
   `When you're done, call submit_draft with these sections:\n${WRITER_SECTION_LIST}`,
   WRITER_CAPTION_SECTION,

@@ -67,6 +67,10 @@ Code checks the finished draft. A failure comes back to you once, with the exact
 - No hashtags in the caption.
 - At most 2 background slides (slides resting only on BACKGROUND entries).`;
 
+/** C8, the Editor's alone (Tommy, 2026-10-06): a repeat sends the draft back to it once. */
+export const EDITOR_CHECKED_RULE = '- No repetition on a slide: the same number, or a phrase of four or more words, never appears in two of its headline, body, quote, big number and label.';
+
 export function renderRulesFor(stage: RuleStage): string {
-  return stage === 'writer' || stage === 'editor' ? CHECKED_RULES : '';
+  if (stage === 'editor') return `${CHECKED_RULES}\n${EDITOR_CHECKED_RULE}`;
+  return stage === 'writer' ? CHECKED_RULES : '';
 }

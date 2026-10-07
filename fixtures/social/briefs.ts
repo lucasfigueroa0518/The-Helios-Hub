@@ -38,9 +38,9 @@ export function briefSuperIntelligenceForce(): Brief {
       { id: 'B2', text: 'Trump signed an executive order seeking to rebrand AI as "super intelligence."', sources: TC, claim_by: null, notes: [] },
     ],
     quotes: [
-      { id: 'Q1', text: Q1_TEXT, speaker: 'Donald Trump', where: 'Truth Social post', via: TC, single_source: true, cut_off: false, notes: [] },
-      { id: 'Q2', text: 'develop plans for responding to SI-enabled threats to our society, while preventing overregulation and regulatory capture that would stifle innovation and competition.', speaker: 'Super Intelligence Force charter', where: 'as reported by The Wall Street Journal', via: TC, single_source: true, cut_off: false, notes: [] },
-      { id: 'Q3', text: 'not being first.', speaker: 'Jay Clayton', where: 'to The Wall Street Journal', via: TC, single_source: true, cut_off: true, notes: [] },
+      { id: 'Q1', text: Q1_TEXT, speaker: 'Donald Trump', speaker_id: 'S1', where: 'Truth Social post', via: TC, single_source: true, cut_off: false, notes: [] },
+      { id: 'Q2', text: 'develop plans for responding to SI-enabled threats to our society, while preventing overregulation and regulatory capture that would stifle innovation and competition.', speaker: 'Super Intelligence Force charter', speaker_id: null, where: 'as reported by The Wall Street Journal', via: TC, single_source: true, cut_off: false, notes: [] },
+      { id: 'Q3', text: 'not being first.', speaker: 'Jay Clayton', speaker_id: 'S2', where: 'to The Wall Street Journal', via: TC, single_source: true, cut_off: true, notes: [] },
     ],
     numbers: [
       { id: 'N1', value: '120 days', type: 'duration', counts: 'time the task force has to report on the risks and opportunities presented by AI', sources: TC, notes: [] },
@@ -49,8 +49,8 @@ export function briefSuperIntelligenceForce(): Brief {
       { name: 'Super Intelligence Force', definition: "a new task force Trump announced to coordinate the federal government's effort on super intelligence", source: 'TechCrunch' },
     ],
     subjects: [
-      { name: 'Donald Trump', role: 'President of the United States' },
-      { name: 'Jay Clayton', role: 'national intelligence director; chair of the Super Intelligence Force' },
+      { id: 'S1', name: 'Donald Trump', role: 'President of the United States' },
+      { id: 'S2', name: 'Jay Clayton', role: 'national intelligence director; chair of the Super Intelligence Force' },
     ],
     events: [],
     article_photos: [

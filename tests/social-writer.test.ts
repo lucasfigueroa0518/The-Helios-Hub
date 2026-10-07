@@ -75,7 +75,7 @@ test('Writer prompt = tested intro + RULES (tested lines + 3 additions + shared 
     .replace(/^3\. Source credits, always,.*\n/m, '');
   const expected = [
     intro,
-    `## Rules\n\n${WRITER_RULES}\n${WRITER_ADDED_RULES}\n${codeBlocks('**Writer prompt v2')[0]}`,
+    `## Rules\n\n${WRITER_RULES}\n${WRITER_ADDED_RULES}\n${codeBlocks('**Writer prompt v2')[0]}\n${codeBlocks('**No repetition within a slide')[0]}`,
     RULES_BLOCK.slice(RULES_BLOCK.indexOf('## Context policy')),
     `When you're done, call submit_draft with these sections:\n${sectionList}`,
     caption,
@@ -110,6 +110,7 @@ test('a valid draft passes; code fills the exact quote excerpt and number value 
   assert.deepEqual(filled.slides[1]!.quote, {
     id: 'Q1',
     speaker: 'Donald Trump',
+    speaker_subject: 'Donald Trump',
     text: 'The Super Intelligence Force is tasked with coordinating the effort of the Federal Government … of all Americans,',
   });
   assert.deepEqual(filled.slides[2]!.numbers, [{ id: 'N1', value: '120 days', counts: 'time the task force has to report on the risks and opportunities presented by AI' }]);

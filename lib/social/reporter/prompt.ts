@@ -16,6 +16,9 @@
  *   prompt to the user message, so everything else is a stable, cached
  *   system prefix.
  *
+ *   QUOTE SPEAKERS BY ID (Tommy, 2026-10-06): SUBJECTS entries get IDs
+ *   (S1, S2, …) and each QUOTES entry names its speaker's SUBJECTS ID.
+ *
  *   ADDED SINCE THE TEST (prompts file §1, "Added since the test"):
  *     [A1] pages are read through the raw-text page reader (spec §4.2c);
  *     [A2] NUMBERS entries carry a number type (plan M2; format approved
@@ -44,10 +47,10 @@ THE NEWS: one line (who, what, when) with fact IDs
 WHY IT MATTERS (sourced only): 1–2 bullets with IDs
 FACTS: F1, F2, … each one sentence + (sources)
 BACKGROUND: B1, B2 (max 2) — earlier events a reader needs, each sourced
-QUOTES: Q1… exact text — speaker, where (via outlet) [⚠ if single source] [cut off if cut off in every source]
+QUOTES: Q1… exact text — speaker, where (via outlet) [⚠ if single source] [cut off if cut off in every source] — speaker's SUBJECTS ID (S1…), or none
 NUMBERS: N1: value | type | what it counts | source (type is one of: money, count, percent, duration, date, other; value exactly as the source writes it)
 TERMS: plain-language definitions taken from sources
-SUBJECTS: people/companies/products in the story (with role)
+SUBJECTS: S1, S2, … people/companies/products in the story (with role)
 EVENTS: photographable events with date/place, if any
 ARTICLE PHOTOS: caption | credit | URL (if visible)
 NOT ANSWERED BY SOURCES: bullets
