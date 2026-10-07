@@ -7,7 +7,6 @@
  */
 import { STAGE_MODELS, type StageModelConfig } from '@/lib/social/pipeline/models';
 import { classifyCredit } from '@/lib/social/photos/credit';
-import { officialPageOf, type OfficialCompany } from '@/lib/social/photos/official';
 import type { PageReadOk } from '@/lib/social/reporter/read-page';
 import type { Brief, BriefError } from '@/lib/social/reporter/brief';
 import type { MessagesCreate, TurnUsage } from '@/lib/social/reporter/reporter';
@@ -31,7 +30,7 @@ export type HasPhoto = (subject: { name: string; role: string | null }, brief: B
  * filtered to those whose credit allows them, so every photo the Writer can
  * request can succeed.
  */
-export async function briefForWriter(brief: Brief, isWellKnown: IsWellKnown, hasPhoto: HasPhoto = async () => false, pages: PageReadOk[] = [], officialList?: OfficialCompany[]) {
+export async function briefForWriter(brief: Brief, isWellKnown: IsWellKnown, hasPhoto: HasPhoto = async () => false, pages: PageReadOk[] = []) {
   const subjects = await Promise.all(
     brief.subjects.map(async (s) => ({
       ...s,
@@ -45,7 +44,7 @@ export async function briefForWriter(brief: Brief, isWellKnown: IsWellKnown, has
   const fromOf = (url: string) => pages.flatMap((pg) => pg.photos).find((x) => key(x.src) === key(url))?.from ?? null;
   const usable = brief.article_photos
     .filter((p) => p.url)
-    .map((p) => ({ p, v: classifyCredit({ caption: p.caption, credit: p.credit, page: p.page, organizations, officialList }), from: fromOf(p.url!) }))
+    .map((p) => ({ p, v: classifyCredit({ caption: p.caption, credit: p.credit, page: p.page, organizations }), from: fromOf(p.url!) }))
     .filter((x) => x.v.verdict === 'allowed');
   // Prefer <figure> images over og:image (Tommy, 2026-10-07: og:image is often a title card): a page's
   // og:image is listed only when that page has no usable figure image.
@@ -53,12 +52,7 @@ export async function briefForWriter(brief: Brief, isWellKnown: IsWellKnown, has
   const article_photos = usable
     .filter((x) => !(x.from === 'og:image' && pagesWithFigure.has(x.p.page)))
     .sort((a, b) => Number(b.from === 'figure') - Number(a.from === 'figure'))
-    // Official images (spec §5.1 (a)) carry the company they come from.
-    .map((x) => {
-      if (!x.v.credit) return x.p;
-      const o = officialPageOf(x.p.page, organizations, officialList);
-      return o.status === 'official' ? { ...x.p, official_image_of: o.company.company } : x.p;
-    });
+    .map((x) => x.p);
   return { ...brief, subjects, article_photos };
 }
 
@@ -132,15 +126,18 @@ export function imageHandoffFailures(d: DraftSubmission, brief: Brief, photoSubj
       errors.push({ section: `slide ${i + 2}.image`, message: `a quote slide's IMAGE is the speaker${speaker ? ` (subject: ${speaker})` : ''} or none, not ${s.image.kind}${s.image.value ? `: ${s.image.value}` : ''}; change the request${KEEP_WORDS}` });
     }
   });
-  // Slide types that show a photo (Tommy, 2026-10-06): article only where the finder draws one (text, landing, image).
-  // Stock shows on every other type too (a darkened background on stat slides); quote slides take the speaker (checked above).
+  // Slide types and what they show (spec §5.1 Photo chain v1): article and stock only on text, landing and image
+  // slides; a stat slide's background is automatic (IMAGE none); quote slides take the speaker (checked above).
   d.slides.forEach((s, i) => {
-    if (s.image.kind === 'article' && !['text', 'landing', 'image'].includes(s.type)) {
+    if (s.type === 'stat' || s.type === 'split_stat') {
+      if (s.image.kind !== 'none') errors.push({ section: `slide ${i + 2}.image`, message: `a ${s.type} slide's background is automatic: its IMAGE is none, not ${s.image.kind}${s.image.value ? `: ${s.image.value}` : ''}; change the request${KEEP_WORDS}` });
+    } else if (s.image.kind === 'article' && !['text', 'landing', 'image'].includes(s.type)) {
       errors.push({ section: `slide ${i + 2}.image`, message: `an article photo can't show on a ${s.type} slide (only text, landing and image slides); change the request${KEEP_WORDS}` });
     }
   });
   // One EDIT NOTES line per none, saying why (Tommy, 2026-10-06). The slide after a spread is none by design and needs none.
-  const nones = d.slides.filter((s, i) => s.image.kind === 'none' && !d.slides[i - 1]?.spread_with_next).length;
+  // Stat slides' none is automatic (their background is a designed one), so it needs no note.
+  const nones = d.slides.filter((s, i) => s.image.kind === 'none' && !d.slides[i - 1]?.spread_with_next && s.type !== 'stat' && s.type !== 'split_stat').length;
   const noteLines = d.edit_notes.filter((n) => /\bnone\b/i.test(n)).length;
   if (noteLines < nones) errors.push({ section: 'edit_notes', message: `${nones} slide(s) with IMAGE none but ${noteLines} EDIT NOTES line(s) about none; add one line per none saying why nothing physical fits` });
   return errors;
@@ -158,8 +155,6 @@ export type WriterDeps = {
   config?: StageModelConfig;
   /** The pages the Reporter read: tells <figure> images from og:image for ARTICLE PHOTOS. */
   pages?: PageReadOk[];
-  /** The official-images allow-list (official.ts); tests may pass their own. */
-  officialList?: OfficialCompany[];
 };
 
 /** checkDraft (structure and IDs), then the M7 text checks C1–C5 on the filled, fixed draft. */
@@ -230,7 +225,7 @@ const safely = <T,>(fn: () => T[]): T[] => {
 };
 
 export async function runWriter(brief: Brief, deps: WriterDeps): Promise<WriterResult> {
-  const forWriter = await briefForWriter(brief, deps.isWellKnown, deps.hasPhoto, deps.pages ?? [], deps.officialList);
+  const forWriter = await briefForWriter(brief, deps.isWellKnown, deps.hasPhoto, deps.pages ?? []);
   const photoSubjects = new Set(forWriter.subjects.filter((s) => s.photo_available).map((s) => s.name));
   let first: { draft: DraftSubmission; places: string[] } | null = null;
   let imageRequestsDropped: string[] = [];

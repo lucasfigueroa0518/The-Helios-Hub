@@ -91,16 +91,6 @@ export function passesVision(v: VisionVerdict): boolean {
   return v.shows_requested && v.shows_requested_confidence >= SHOWS_MIN_CONFIDENCE && !v.person_prominent && !v.landmark_visible && !v.story_logo && !v.named_institution;
 }
 
-/**
- * Official images (spec §5.1 (a)): the company's own image, so its logo, site
- * and signage are the story's own (questions 3–5 don't apply). Rejected: a
- * banner (mostly text) and a prominent person the caption doesn't name as a
- * SUBJECTS person (identity comes from the company's caption, never a face).
- */
-export function passesOfficialVision(v: VisionVerdict, captionNamesSubjectPerson: boolean): boolean {
-  return !v.mostly_text_banner && (!v.person_prominent || captionNamesSubjectPerson);
-}
-
 export function describeVerdict(v: VisionVerdict): string {
   return `shows ${v.shows_requested ? 'yes' : 'no'} ${v.shows_requested_confidence.toFixed(2)} · person (main/face) ${v.person_prominent ? 'yes' : 'no'} · landmark ${v.landmark_visible ? 'yes' : 'no'} · story logo ${v.story_logo ? `yes${v.logo_seen ? ` (${v.logo_seen})` : ''}` : 'no'} · named institution ${v.named_institution ? 'yes' : 'no'} · banner ${v.mostly_text_banner ? 'yes' : 'no'} · "${v.what_it_shows}"`;
 }

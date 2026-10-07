@@ -352,13 +352,8 @@
   font-size: 84px;
   max-height: 434px;
 }
-/* Logo cover card (spec §5.1 (b)): a Helios card. Canvas + faint grid + wordmark; the logo small, whole, on its own plate. */
-.helios-cover--logo {
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px) 0 0 / 54px 54px,
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px) 0 0 / 54px 54px,
-    var(--brand-canvas);
-}
+/* Logo cover card (spec §5.1): a Helios card. Plain canvas + wordmark (the design system allows no patterns); the logo whole, on its own plate. */
+.helios-cover--logo { background: var(--brand-canvas); }
 .helios-logo-card { position: absolute; top: 0; left: 0; width: 1080px; height: 780px; z-index: 0; }
 .helios-logo-card__wordmark {
   position: absolute; top: 112px; left: 96px;
@@ -377,6 +372,13 @@
 .helios-logo-card__logo--wide { width: 528px; max-width: none; height: auto; max-height: 276px; flex: none; }
 .helios-cover--logo .helios-cover__text { top: 820px; }
 .helios-cover--logo .helios-cover__headline { font-size: 84px; max-height: 434px; }
+
+/* Branded cover card (spec §5.1 Photo chain v1): the Helios sun-mark whole, clear space on every side, headline below. */
+.helios-cover--card { background: var(--brand-canvas); }
+.helios-cover-card { position: absolute; top: 0; left: 0; width: 1080px; height: 780px; z-index: 0; display: flex; align-items: center; justify-content: center; }
+.helios-cover-card__mark { width: 440px; height: 440px; margin-top: 60px; object-fit: contain; }
+.helios-cover--card .helios-cover__text { top: 820px; }
+.helios-cover--card .helios-cover__headline { font-size: 84px; max-height: 434px; }
 
 /* Arrow: top right, 8% down (spec §5.2). On a photo it sits on a dark disc. */
 .helios-cover__chevron {

@@ -19,11 +19,12 @@ const run = (text: string): SpanRun => [{ text, role: 'narrative' }];
 
 export type PostMeta = { source: string; sourceUrl: string; publishedAt: string };
 
-/** Article and Commons photos may show people (rule 3); stock and starter-set photos are scenes. */
-/** Article, Commons and bank person/company photos may show people or a subject (rule 3); stock, starter and bank scenes are scenes. */
-/** Official images count as subject (own region; they may show people or product UI). Logos are their own kind (cover cards). */
+/**
+ * Rule 3: article and Commons subject photos may show people → their own region; logos are
+ * logo cards; stock, starter photos and Helios-designed graphics are scenes.
+ */
 export const photoKindOf = (photo: Photo): 'subject' | 'scene' | 'logo' =>
-  photo.source === 'logo' ? 'logo' : photo.source === 'article' || photo.source === 'official' || photo.source === 'commons' || (photo.source === 'bank' && photo.qid) ? 'subject' : 'scene';
+  photo.source === 'logo' ? 'logo' : photo.source === 'article' || photo.source === 'commons' ? 'subject' : 'scene';
 
 /** Logos wider than this are sized by width on the card (Tommy, 2026-10-07). */
 export const LOGO_WIDE_ASPECT = 2;
@@ -91,10 +92,11 @@ function applySpreads(slides: SlideCopy[], draft: FilledDraft, photos: Array<Pho
 }
 
 /** The slides in draft order, before layout rotation. */
-export function draftSlides(draft: FilledDraft, photos: { cover: Photo | null; slides: Array<Photo | null> }): SlideCopy[] {
+/** `coverCard`: the branded cover card (no photo, headshot or logo; once approved, spec §5.1 Photo chain v1). */
+export function draftSlides(draft: FilledDraft, photos: { cover: Photo | null; slides: Array<Photo | null>; coverCard?: boolean }): SlideCopy[] {
   return applySpreads(
     [
-      { position: 0, layoutVariant: 'cover', headline: run(draft.cover), altText: draft.cover, ...photoFields(photos.cover) },
+      { position: 0, layoutVariant: 'cover', headline: run(draft.cover), altText: draft.cover, ...photoFields(photos.cover), ...(photos.coverCard && !photos.cover ? { coverCard: true } : {}) },
       ...draft.slides.map((s, i) => storySlide(s, i + 1, photos.slides[i] ?? null)),
       { position: draft.slides.length + 1, layoutVariant: 'follow', storySpecificLine: draft.follow, altText: draft.follow },
     ],
@@ -105,7 +107,7 @@ export function draftSlides(draft: FilledDraft, photos: { cover: Photo | null; s
 
 export function toRenderPost(
   draft: FilledDraft,
-  photos: { cover: Photo | null; slides: Array<Photo | null> },
+  photos: { cover: Photo | null; slides: Array<Photo | null>; coverCard?: boolean },
   meta: PostMeta,
 ): Post {
   return {

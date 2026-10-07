@@ -31,7 +31,7 @@ import { toRenderPost } from '@/lib/social/render/from-draft';
 import { toSlug, writeGeneratedPost } from '@/lib/social/render/local-store';
 import { liveMessagesCreate } from '@/lib/social/reporter/reporter';
 import { fillDraft, type DraftSlide, type DraftSubmission } from '@/lib/social/writer/draft';
-import { hasPhotoLive, isWellKnownLive } from '@/lib/social/writer/well-known';
+import { isWellKnownLive } from '@/lib/social/writer/well-known';
 
 const sameSlide = (a: DraftSlide, b: DraftSlide) =>
   a.type === b.type && a.quote_id === b.quote_id && a.number_ids.join() === b.number_ids.join() && a.image.kind === b.image.kind && a.image.value === b.image.value;
@@ -76,7 +76,6 @@ async function main() {
     budget,
     readPage: async () => { throw new Error('the prototype reads no pages'); },
     isWellKnown: isWellKnownLive,
-    hasPhoto: hasPhotoLive,
     fitCheck: checkRenderFit,
     usedLog: createFileUsedPhotoLog(),
     bank: await loadBank(),

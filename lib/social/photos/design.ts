@@ -1,7 +1,8 @@
 /**
- * Photos for a whole draft (plan M5): the chosen cover first, then each
- * story slide in order, one shared post context so no photo repeats and
- * each subject is identity-checked once.
+ * Photos for a whole draft (spec §5.1 Photo chain v1): the chosen cover
+ * first, then each story slide in order, one shared post context so no photo
+ * repeats and each subject is identity-checked once (the cache is shared with
+ * the Writer's photo_available for the same story).
  */
 import type { Brief } from '@/lib/social/reporter/brief';
 import type { PageReadOk } from '@/lib/social/reporter/read-page';

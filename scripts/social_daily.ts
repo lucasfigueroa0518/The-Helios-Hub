@@ -62,7 +62,7 @@ async function main() {
   const { readPage } = await import('@/lib/social/reporter/read-page');
   const layoutRotation = await import('@/lib/social/render/layout-rotation');
   const { liveMessagesCreate } = await import('@/lib/social/reporter/reporter');
-  const { hasPhotoLive, isWellKnownLive } = await import('@/lib/social/writer/well-known');
+  const { isWellKnownLive } = await import('@/lib/social/writer/well-known');
   const { createFileUsedPhotoLog } = await import('@/lib/social/photos/used-photos');
   const { loadBank } = await import('@/lib/social/photos/bank');
   const usedLog = createFileUsedPhotoLog();
@@ -104,7 +104,6 @@ async function main() {
     budget,
     readPage,
     isWellKnown: isWellKnownLive,
-    hasPhoto: hasPhotoLive,
     fitCheck: async (post) => {
       const r = await checkRenderFit(post, { screenshotDir: shotDir, name: currentStory });
       fitResults.set(currentStory, r);
@@ -191,7 +190,6 @@ async function main() {
     starterShare: Number(starterShare.toFixed(3)),
     // How often the 7-day rule gave way (Tommy, 2026-10-06).
     starterPoolExhausted: result.posts.flatMap((p) => p.photos).filter((t) => t.steps.some((x) => x.startsWith('starter-pool-exhausted'))).length,
-    noTopicMatch: result.posts.flatMap((p) => p.photos).filter((t) => t.steps.some((x) => x.includes('no-topic-match'))).length,
     // Photo rule (Tommy, 2026-10-06): share of story slides with IMAGE none, and spreads used.
     textOnlyShare: (() => {
       const story = result.posts.flatMap((p) => p.photos.slice(1));
@@ -214,9 +212,11 @@ async function main() {
     for (const sa of result.setAsides) o += `- Set aside: ${sa.storyId} at ${sa.stage}: ${sa.reasonCode} (${sa.detail.slice(0, 200)})\n`;
     for (const post of result.posts) {
       const l = logs.get(post.storyId)!;
+      // The chain step that supplied the slide (spec §5.1 Photo chain v1).
       const source = (t: PostObject['photos'][number] | undefined) => {
-        if (!t || !t.photo) return t?.via === 'none' ? 'none (IMAGE none)' : 'none (text-only: nothing usable)';
-        return t.via === 'subject' ? 'subject' : t.via === 'article' ? 'article' : t.via === 'stock' ? 'stock' : t.via === 'starter' ? 'starter' : t.via === 'bank' ? 'bank' : String(t.via);
+        if (!t) return '—';
+        const label: Record<string, string> = { none: 'none (IMAGE none)', 'text-only': 'none (text-only: nothing usable)', plain: 'none (stat: plain dark)', 'cover-card': 'branded cover card', 'stat-background': 'designed stat background' };
+        return label[t.via ?? ''] ?? String(t.via);
       };
       o += `\n## ${post.title}\n\nCost: $${post.costUsd.toFixed(4)} (by stage: ${post.stages.join(' → ')})\n\n| Slide | Layout | Photo source | Request | Vision $ |\n|---|---|---|---|---|\n`;
       post.render.slides.forEach((sl, i) => {

@@ -12,7 +12,7 @@ import { sifDraftHandoff } from '@/fixtures/social/drafts';
 import { createFakeHttp, SIF_WEB } from '@/fixtures/social/photo-http';
 import type { JevAsk } from '@/lib/social/jev/client';
 import * as Identity from '@/lib/social/jev/questions/subject-identity.v1';
-import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v2';
+import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v4';
 import { createCostMeter } from '@/lib/social/pipeline/cost-meter';
 import { BudgetExhausted, createLiveStages, createRunBudget } from '@/lib/social/pipeline/live-stages';
 import { runDay } from '@/lib/social/pipeline/orchestrator';
@@ -44,7 +44,7 @@ const identityJev: JevAsk = async (req, meta) => {
   if (meta.version === Prescreen.VERSION) {
     const st = req.state as ReturnType<typeof Prescreen.buildState>;
     const a: Record<string, { noul: number }> = {};
-    st.candidates.forEach((_, k) => { a[Prescreen.fitId(k)] = { noul: 0.9 }; a[Prescreen.peopleId(k)] = { noul: 0.05 }; a[Prescreen.landmarkId(k)] = { noul: 0.05 }; });
+    st.candidates.forEach((_, k) => { a[Prescreen.fitId(k)] = { noul: 0.9 }; a[Prescreen.peopleId(k)] = { noul: 0.05 }; });
     return { answers: a, usage: { input_tokens: 300, output_tokens: 0 }, model: 'stub-jev' };
   }
   const state = req.state as ReturnType<typeof Identity.buildState>;
@@ -84,7 +84,7 @@ test('live stages: two stories run Reporter → Writer → Editor → Fact-check
   const post = r.posts[0]!;
   assert.ok(post.render.slides.length > 0);
   assert.ok(post.photos[0]!.photo, 'the cover has a photo');
-  assert.ok(post.photos.slice(1).every((t) => t.photo || t.via === 'none'), 'every story slide has its requested photo or none');
+  assert.ok(post.photos.slice(1).every((t) => t.photo || t.via === 'none' || t.via === 'plain'), 'every story slide has its requested photo, none, or (stat) a plain background');
   const l = logs.get(post.storyId)!;
   assert.equal(l.writer.length, 1);
   assert.equal(l.factCheck.length, 1);

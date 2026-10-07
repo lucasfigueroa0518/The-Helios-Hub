@@ -8,6 +8,8 @@ import { createJevTally, jevCostUsd, type JevAsk } from '@/lib/social/jev/client
 import { checkDroppedText, checkPhotoCredit } from '@/lib/social/mechanical/checks';
 import { photosForDraft } from '@/lib/social/photos/design';
 import type { BankEntry } from '@/lib/social/photos/bank';
+import { DESIGNED_GRAPHICS } from '@/lib/social/photos/designed';
+import type { IdentityCache } from '@/lib/social/photos/p18';
 import { pickCoverStarter } from '@/lib/social/photos/starter-set';
 import type { UsedPhotoLog } from '@/lib/social/photos/used-photos';
 import type { PhotoDeps } from '@/lib/social/photos/find';
@@ -26,10 +28,12 @@ import type { PipelineStages } from './stages';
  */
 export type DesignDeps = PhotoDeps & {
   fitCheck: FitCheck;
-  /** The used-photo log (7-day rule) and the photo bank; empty when not given (tests). */
+  /** The used-photo log (7-day rule) and the bank (designed stat backgrounds); empty when not given (tests). */
   usedLog?: UsedPhotoLog;
   bank?: BankEntry[];
   now?: () => Date;
+  /** Identity results per story, shared with the Writer's photo_available (p18.ts). */
+  identitiesFor?: (storyId: string) => IdentityCache;
 };
 
 export function createDesignStage(deps: DesignDeps): PipelineStages['design'] {
@@ -46,7 +50,7 @@ export function createDesignStage(deps: DesignDeps): PipelineStages['design'] {
     // The used-photo check: the last 7 days (the log) plus every photo picked earlier in this run.
     const recent = new Set([...(deps.usedLog ? await deps.usedLog.recent(now) : []), ...usedThisRun]);
     const lastUsed = deps.usedLog ? await deps.usedLog.lastUsed() : new Map<string, string>();
-    const photos = await photosForDraft(draft.filled, brief.parsed, brief.pages, { ...deps, jev }, { recent, bank: deps.bank ?? [], lastUsed });
+    const photos = await photosForDraft(draft.filled, brief.parsed, brief.pages, { ...deps, jev }, { recent, bank: deps.bank ?? [], lastUsed, identities: deps.identitiesFor?.(draft.storyId) });
     // C6: never ship a photo without an allowed, credited licence.
     const traces = [photos.cover, ...photos.slides];
     const used = new Set([...recent, ...traces.flatMap((t) => (t.photo ? [t.photo.url] : []))]);
@@ -62,7 +66,14 @@ export function createDesignStage(deps: DesignDeps): PipelineStages['design'] {
         t.via = 'text-only';
         continue;
       }
-      // The cover takes an AI-compute starter photo, never a topic match (Tommy, 2026-10-06).
+      // The cover's last step (spec §5.1 Photo chain v1): the branded cover card once approved, else an AI-compute starter photo.
+      if ((deps.designed ?? DESIGNED_GRAPHICS).coverCard) {
+        photoReplacements.push(`C6 ${failures[0]!.where}: ${failures.map((f) => f.detail).join('; ')} → branded cover card`);
+        t.steps.push(`C6 replaced: ${failures.map((f) => f.detail).join('; ')} → branded cover card`);
+        t.photo = null;
+        t.via = 'cover-card';
+        continue;
+      }
       const starter = pickCoverStarter(used).photo;
       used.add(starter.url);
       photoReplacements.push(`C6 ${failures[0]!.where}: ${failures.map((f) => f.detail).join('; ')} → ${starter.url}`);
@@ -72,7 +83,7 @@ export function createDesignStage(deps: DesignDeps): PipelineStages['design'] {
     }
     const render = toRenderPost(
       draft.filled,
-      { cover: photos.cover.photo, slides: photos.slides.map((t) => t.photo) },
+      { cover: photos.cover.photo, slides: photos.slides.map((t) => t.photo), coverCard: photos.cover.via === 'cover-card' },
       { source: brief.parsed.sources[0]?.outlet ?? story.outlets[0] ?? '', sourceUrl: brief.parsed.sources[0]?.url ?? story.url, publishedAt: story.publishedAt.toISOString() },
     );
     const fit = await deps.fitCheck(render);

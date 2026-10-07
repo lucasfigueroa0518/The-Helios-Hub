@@ -10,7 +10,7 @@ import { sifDraft } from '@/fixtures/social/drafts';
 import { commonsUrl, createFakeHttp, SIF_WEB, stockUrl } from '@/fixtures/social/photo-http';
 import type { JevAsk } from '@/lib/social/jev/client';
 import * as Identity from '@/lib/social/jev/questions/subject-identity.v1';
-import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v3';
+import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v4';
 import { createDesignStage } from '@/lib/social/pipeline/design-stage';
 import type { Brief as PipelineBrief, Draft, ScoredCandidate } from '@/lib/social/pipeline/types';
 import { classifyCredit } from '@/lib/social/photos/credit';
@@ -18,7 +18,7 @@ import { photosForDraft } from '@/lib/social/photos/design';
 import { findPhoto, newPhotoContext, STOCK_MIN_SHORT_SIDE, stockQueries, type Photo } from '@/lib/social/photos/find';
 import { checkIdentity } from '@/lib/social/photos/identity';
 import { fitOkFor } from '@/fixtures/social/render-text';
-import { MAX_PHOTOS_PER_POST, pickStarter, STARTER_SET, starterUrl } from '@/lib/social/photos/starter-set';
+import { MAX_PHOTOS_PER_POST, pickCoverStarter, STARTER_SET, starterUrl } from '@/lib/social/photos/starter-set';
 import { layoutOf, rotateLayouts } from '@/lib/social/render/layout-rotation';
 import type { SlideCopy } from '@/lib/social/render/types';
 import { toRenderPost } from '@/lib/social/render/from-draft';
@@ -40,10 +40,6 @@ function prescreenAnswers(req: { state: unknown }): Record<string, { noul: numbe
   state.candidates.forEach((c, k) => {
     out[Prescreen.fitId(k)] = { noul: /off topic/.test(c.title) ? 0.1 : 0.9 };
     out[Prescreen.peopleId(k)] = { noul: /people|soldier|students/.test(`${c.title} ${c.tags.join(' ')}`) ? 0.9 : 0.05 };
-    out[Prescreen.landmarkId(k)] = { noul: /Eiffel|Capitol|Times Square/.test(c.title) ? 0.9 : 0.05 };
-    // v3 brand: a company named in the title that isn't a story subject.
-    const named = (c.title.match(/\b(Google|Microsoft|Equinix|OpenAI)\b/g) ?? []).filter((n) => !(state.story_subjects ?? []).includes(n));
-    out[Prescreen.brandId(k)] = { noul: named.length ? 0.9 : 0.05 };
   });
   return out;
 }
@@ -176,8 +172,9 @@ test('fixture slides get a photo from the right source', async () => {
   assert.equal(p.slides[0]!.photo?.url, commonsUrl('Jay Clayton SEC.jpg'), 'Clayton the SEC chairman, never the basketball player');
   assert.equal(p.slides[1]!.photo?.source, 'article');
   assert.match(p.slides[1]!.photo!.credit, /Official White House Photo/);
-  assert.equal(p.slides[3]!.photo?.source, 'stock');
-  assert.equal(p.slides[3]!.photo?.url, stockUrl('wall clock', 1));
+  // Stat slide (spec §5.1 Photo chain v1): a designed background, whatever the request; plain until approved.
+  assert.equal(p.slides[3]!.via, 'plain');
+  assert.equal(p.slides[3]!.photo, null);
 });
 
 test('an agency-credited article photo is rejected, including a credit-only caption; the story slide renders text-only', async () => {
@@ -199,14 +196,6 @@ test('request first: a rejected article photo never falls back to someone named 
   const t = await findPhoto({ kind: 'article', value: GETTY_SRC }, newPhotoContext(briefWith(), pages()), d, { text: ['Jay Clayton chairs the force.'], speaker: null, slot: 'split' });
   assert.equal(t.via, 'text-only');
   assert.deepEqual(jevCalls, [], 'no identity check: nobody was looked up');
-});
-
-test('empty request: the subject named in the slide text is used', async () => {
-  const { deps: d } = deps();
-  const t = await findPhoto({ kind: 'subject', value: '' }, newPhotoContext(briefWith(), []), d, { text: ['Clayton will chair it'], speaker: null, slot: 'split' });
-  assert.ok(t.steps.includes('empty request; subject from slide text: Jay Clayton'));
-  assert.equal(t.via, 'subject');
-  assert.equal(t.photo?.url, commonsUrl('Jay Clayton SEC.jpg'));
 });
 
 test('quote: the round spot only for a subject request naming the speaker; a stock request is a background', async () => {
@@ -254,11 +243,12 @@ test('a failed identity check: never another person; a story slide renders text-
   }
 });
 
-test('every fixture slide gets a photo; each subject is checked once', async () => {
+test('every fixture slide gets its photo (stat slides: plain until designed backgrounds are approved); each subject is checked once', async () => {
   const jevCalls: string[] = [];
   const { deps: d } = deps(jevCalls);
-  const p = await photosForDraft(fillDraft(sifDraft(), briefWith()), briefWith(), pages(), d);
-  const all = [p.cover, ...p.slides];
+  const draft = fillDraft(sifDraft(), briefWith());
+  const p = await photosForDraft(draft, briefWith(), pages(), d);
+  const all = [p.cover, ...p.slides.filter((_, i) => draft.slides[i]!.type !== 'stat')];
   for (const t of all) assert.ok(t.photo && t.via, `${t.request.kind}: ${t.request.value}`);
   assert.equal(new Set(all.map((t) => t.photo!.url)).size, all.length, 'no repeats');
   assert.deepEqual(jevCalls.sort(), ['Donald Trump', 'Jay Clayton']);
@@ -274,7 +264,7 @@ test('every online source failing: the cover still gets a starter photo; story s
   assert.equal(all.length, MAX_PHOTOS_PER_POST);
   assert.equal(p.cover.via, 'starter');
   for (const t of p.slides) {
-    assert.equal(t.via, 'text-only', `${t.request.value}`);
+    assert.ok(t.via === 'text-only' || t.via === 'plain', `${t.request.value}: ${t.via}`);
     assert.equal(t.photo, null);
   }
 });
@@ -287,7 +277,7 @@ test('starter set: big enough for a full post, every file on disk, verifiable cr
     assert.match(p.page, /^https:\/\/commons\.wikimedia\.org\/wiki\/File:/, p.file);
     assert.ok(['CC0', 'Public domain'].includes(p.license), p.file);
   }
-  assert.match(pickStarter(new Set(), { request: 'server room', brief: null })!.photo.credit, /^Rsparks3 \(CC0\) · Wikimedia Commons$/);
+  assert.match(pickCoverStarter(new Set()).photo.credit, /^Rsparks3 \(CC0\) · Wikimedia Commons$/);
 });
 
 // ── Render adapter (M6) ──────────────────────────────────────────────────
@@ -418,16 +408,32 @@ test('quote slide: the round speaker spot only for a verified photo of the speak
 
 // ── Slots: where the photo is drawn decides the chain (Tommy, 2026-10-06) ──
 
-test('stat background: the stock scene wins; subject and article photos are skipped', async () => {
+test('stat slides (Photo chain v1): a designed background from the bank whatever the request, by the 7-day rule; plain dark until approved', async () => {
   const { deps: d } = deps();
-  const ctx = newPhotoContext(briefWith(), pages());
-  const t = await findPhoto({ kind: 'subject', value: 'Donald Trump' }, ctx, d, { text: ['Trump has 120 days'], speaker: null, slot: 'backdrop' });
-  assert.notEqual(t.via, 'subject');
-  assert.ok(t.steps.includes('subject photo skipped: the stat background is a scene'));
-  const a = await findPhoto({ kind: 'article', value: WH_SRC }, ctx, d, { text: [], speaker: null, slot: 'backdrop' });
-  assert.notEqual(a.via, 'article');
-  const s = await findPhoto({ kind: 'stock', value: 'wall clock' }, ctx, d, { text: ['Donald Trump'], speaker: null, slot: 'backdrop' });
-  assert.equal(s.via, 'stock');
+  const bank: BankEntry[] = ['a', 'b'].map((x) => ({ id: `orbit-${x}`, url: `/social/bank/stat/orbit-${x}.png`, kind: 'stat-background', tags: ['orbit'], credit: 'Helios', width: 1080, height: 1350, addedAt: '2026-10-07' }));
+  const lastUsed = new Map([['/social/bank/stat/orbit-a.png', '2026-09-20'], ['/social/bank/stat/orbit-b.png', '2026-09-25']]);
+  for (const request of [{ kind: 'stock' as const, value: 'wall clock' }, { kind: 'subject' as const, value: 'Donald Trump' }, { kind: 'none' as const, value: '' }]) {
+    const off = await findPhoto(request, newPhotoContext(briefWith(), pages(), { bank, lastUsed }), d, { text: ['Trump has 120 days'], speaker: null, slot: 'backdrop' });
+    assert.equal(off.via, 'plain', `${request.kind}: not approved yet → plain`);
+    const on = await findPhoto(request, newPhotoContext(briefWith(), pages(), { bank, lastUsed }), { ...d, designed: { statBackgrounds: true, coverCard: false } }, { text: ['Trump has 120 days'], speaker: null, slot: 'backdrop' });
+    assert.equal(on.via, 'stat-background');
+    assert.equal(on.photo?.url, '/social/bank/stat/orbit-a.png', 'least recently used first');
+    assert.equal(on.photo?.credit, '', 'no credit pill');
+  }
+  const recent = new Set(['/social/bank/stat/orbit-a.png']);
+  const next = await findPhoto({ kind: 'none', value: '' }, newPhotoContext(briefWith(), [], { bank, lastUsed, recent }), { ...d, designed: { statBackgrounds: true, coverCard: false } }, { text: [], speaker: null, slot: 'backdrop' });
+  assert.equal(next.photo?.url, '/social/bank/stat/orbit-b.png', 'never one used in the last 7 days');
+  const { checkPhotoCredit } = await import('@/lib/social/mechanical/checks');
+  assert.deepEqual(checkPhotoCredit(next.photo!, 'slide 5', briefWith()), [], 'Helios-designed: no credit needed (C6)');
+});
+
+test('bank: Helios-designed stat backgrounds only; the check rejects anything else', () => {
+  const ok: BankEntry = { id: 'orbit-1', url: '/social/bank/stat/orbit-1.png', kind: 'stat-background', tags: ['orbit'], credit: 'Helios', width: 1080, height: 1350, addedAt: '2026-10-07' };
+  assert.deepEqual(checkBankEntry(ok), []);
+  assert.match(checkBankEntry({ ...ok, kind: 'company' as never }).join(), /stat backgrounds only/);
+  assert.match(checkBankEntry({ ...ok, credit: 'Courtesy of OpenAI' as never }).join(), /Helios-designed graphics only/);
+  assert.ok(bankMatches(ok, { statBackground: true }));
+  assert.equal(pickFromBank([ok], { statBackground: true }, new Set([ok.url]), new Map()), null);
 });
 
 test('quote: only the speaker, never another person named on the slide', async () => {
@@ -445,7 +451,7 @@ test('stock size: only thumbnails are rejected (short side under 600px)', async 
     return [{ url: 'https://s/flickr.jpg', foreignLandingUrl: '', mime: 'image/jpeg', width: 1024, height: 683, license: 'by', creator: 'A', source: 'flickr' }];
   };
   const d = { jev: identityJev(SIF_ANSWERS), stock };
-  for (const slot of ['split', 'backdrop'] as const) {
+  for (const slot of ['split', 'quote'] as const) {
     const t = await findPhoto({ kind: 'stock', value: 'x' }, newPhotoContext(briefWith(), []), d, { text: [], speaker: null, slot });
     assert.equal(t.via, 'stock', slot);
   }
@@ -571,112 +577,6 @@ test('starter-pool-exhausted: when every eligible starter photo was used this we
   assert.ok(t.steps.some((s) => s.startsWith('starter-pool-exhausted')));
 });
 
-const entry = (e: Partial<BankEntry>): BankEntry => ({ id: 'e', url: '/social/bank/e.jpg', kind: 'scene', qid: null, event: null, tags: [], credit: 'Courtesy of OpenAI', licence: 'press kit', source: 'x', width: 2000, height: 1300, faces: false, addedAt: '2026-10-06', ...e });
-
-test('bank: person and company photos only for the same Wikidata id; company photos with faces skipped', () => {
-  const openai = entry({ id: 'o', url: '/o.jpg', kind: 'company', qid: 'Q21708200' });
-  assert.ok(bankMatches(openai, { qid: 'Q21708200' }));
-  assert.ok(!bankMatches(openai, { qid: 'Q116758847' }));
-  assert.ok(!bankMatches({ ...openai, faces: true }, { qid: 'Q21708200' }), 'company photos never show people');
-  assert.ok(!bankMatches(entry({ kind: 'scene', tags: ['openai office'] }), { qid: 'Q21708200' }), 'never by name or tag');
-  assert.ok(bankMatches(entry({ kind: 'event', event: 'nyc-hearing' }), { event: 'nyc-hearing' }));
-  assert.ok(!bankMatches(entry({ kind: 'event', event: 'nyc-hearing' }), { event: 'other' }));
-});
-
-test('bank: scenes by tag; least recently used first; never this post or the last 7 days', () => {
-  const a = entry({ id: 'a', url: '/a.jpg', tags: ['server room'] });
-  const b = entry({ id: 'b', url: '/b.jpg', tags: ['data center servers'] });
-  const lastUsed = new Map([['/a.jpg', '2026-09-20'], ['/b.jpg', '2026-09-25']]);
-  assert.equal(pickFromBank([a, b], { scene: 'server racks' }, new Set(), lastUsed)?.id, 'a');
-  assert.equal(pickFromBank([a, b], { scene: 'server racks' }, new Set(['/a.jpg']), lastUsed)?.id, 'b');
-  assert.equal(pickFromBank([a, b], { scene: 'wall clock' }, new Set(), lastUsed), null);
-});
-
-test('bank in the chain: a subject with no usable main image gets its bank photo; credit passes C6', async () => {
-  const { deps: d } = deps();
-  const b = briefWith([{ name: 'OpenAI', role: 'AI company' }]);
-  const web = { ...SIF_WEB, search: { ...SIF_WEB.search, OpenAI: ['Q21708200'] }, entities: { ...SIF_WEB.entities, Q21708200: { id: 'Q21708200', label: 'OpenAI', description: 'American artificial intelligence research organization', human: false, organization: true, files: [] } } };
-  const answers = { ...SIF_ANSWERS, OpenAI: { person: 0.02, match: () => 0.95 } };
-  const bank = [entry({ id: 'o', url: '/social/bank/openai/office.jpg', kind: 'company', qid: 'Q21708200' })];
-  const t = await findPhoto({ kind: 'subject', value: 'OpenAI' }, newPhotoContext(b, [], { bank }), { jev: identityJev(answers), http: createFakeHttp(web).http });
-  void d;
-  assert.equal(t.via, 'bank');
-  assert.equal(t.photo?.url, '/social/bank/openai/office.jpg');
-  const { checkPhotoCredit } = await import('@/lib/social/mechanical/checks');
-  assert.deepEqual(checkPhotoCredit(t.photo!, 'slide 2', b), []);
-});
-
-test('bank seed check: required fields, Wikidata ids, and no faces in company photos', () => {
-  assert.deepEqual(checkBankEntry(entry({ kind: 'company', qid: 'Q21708200' })), []);
-  assert.match(checkBankEntry(entry({ kind: 'company', qid: null })).join(), /Wikidata id/);
-  assert.match(checkBankEntry(entry({ kind: 'company', qid: 'Q1', faces: true })).join(), /shows a face/);
-  assert.match(checkBankEntry(entry({ kind: 'scene', tags: [] })).join(), /tags/);
-});
-
-// ── Starter set: every photo is story-specific (Tommy, 2026-10-06) ──────
-
-import { briefTopics, pickStarter as pickStarterFn, pickStarterLeastRecent, topicsIn, type StarterTopic } from '@/lib/social/photos/starter-set';
-
-const topicsOf = (url: string) => STARTER_SET.find((s) => starterUrl(s.file) === url)!.topics;
-
-test('starter set: 41 photos, every one tagged with at least one topic', () => {
-  assert.equal(STARTER_SET.length, 41);
-  assert.ok(STARTER_SET.every((p) => p.topics.length > 0));
-  assert.deepEqual(topicsOf(starterUrl('library-bookshelves-in-hove-libr.jpg')), ['Copyright, publishing and training data']);
-  assert.deepEqual(topicsOf(starterUrl('empty-lecture-hall-gfp-lecture-hall.jpg')), ['Education']);
-  assert.deepEqual(topicsOf(starterUrl('warehouse-fema-37526-florida-logis.jpg')), ['Trade and supply chain']);
-});
-
-test('per slide: the IMAGE request first, then the brief\'s main topic, then the AI-compute default (no-topic-match)', () => {
-  const b = briefWith();
-  b.the_news.text = 'Google raised the price of its Gemini plans.';
-  const fromRequest = pickStarterFn(new Set(), { request: 'wind turbines at dusk', brief: b })!;
-  assert.equal(fromRequest.match, 'request');
-  assert.ok(topicsOf(fromRequest.photo.url).includes('Energy and power'));
-  const fromBrief = pickStarterFn(new Set(), { request: 'abstract mood', brief: b })!;
-  assert.equal(fromBrief.match, 'brief');
-  assert.ok(topicsOf(fromBrief.photo.url).includes('Money, funding and business'));
-  const none = briefWith();
-  none.the_news.text = 'Trump announced a Super Intelligence Force.';
-  const fallback = pickStarterFn(new Set(), { request: 'abstract mood', brief: none })!;
-  assert.equal(fallback.match, 'no-topic-match');
-  assert.ok(topicsOf(fallback.photo.url).includes('AI compute and data centers'));
-});
-
-test('a photo never lands off-topic: a general story never gets a Congress, stock-market or surveillance photo', () => {
-  const b = briefWith();
-  b.the_news.text = 'Trump announced a Super Intelligence Force.';
-  const taken = new Set<string>();
-  for (let i = 0; i < 8; i++) {
-    const p = pickStarterFn(taken, { request: 'abstract mood', brief: b })!;
-    for (const t of ['US Congress', 'stock markets', 'surveillance'] as StarterTopic[]) assert.ok(!topicsOf(p.photo.url).includes(t));
-    taken.add(p.photo.url);
-  }
-  const congress = briefWith();
-  congress.the_news.text = 'The U.S. Senate passed an AI bill on Tuesday.';
-  assert.ok(topicsOf(pickStarterFn(new Set(), { request: 'abstract mood', brief: congress })!.photo.url).includes('US Congress'));
-});
-
-test('starter-pool-exhausted: never a repeat within a post; widens instead', () => {
-  const b = briefWith();
-  b.the_news.text = 'Trump announced a Super Intelligence Force.';
-  const used = new Set<string>();
-  for (let i = 0; i < 12; i++) {
-    const p = pickStarterLeastRecent(used, new Map(), { request: 'abstract mood', brief: b });
-    assert.ok(!used.has(p.photo.url), `repeat at ${i}`);
-    used.add(p.photo.url);
-  }
-});
-
-test('topics come from plain words; "NYC lawmakers" is not Congress', () => {
-  const b = briefWith();
-  b.the_news.text = 'NYC Council lawmakers questioned AI companies at a hearing.';
-  assert.ok(!briefTopics(b).includes('US Congress'));
-  assert.ok(topicsIn('Nvidia shares fell 5% on the Nasdaq').includes('stock markets'));
-  assert.ok(topicsIn('The city expands CCTV and facial recognition').includes('surveillance'));
-  assert.deepEqual(topicsIn('abstract mood'), []);
-});
-
 // ── Photo rule: IMAGE none, spreads, text-only rotation, landmarks (Tommy, 2026-10-06) ──
 
 import { checkDraft as checkDraftFn, DraftValidationError } from '@/lib/social/writer/draft';
@@ -735,27 +635,6 @@ test('rotation: consecutive photo-less text slides alternate between copy at the
   for (let i = 2; i < layouts.length; i++) assert.ok(!(layouts[i] === layouts[i - 1] && layouts[i] === layouts[i - 2]), layouts.join(','));
   assert.ok(layouts.includes('text-only-low'));
   assert.deepEqual(r.unresolved, []);
-});
-
-test('pre-screen v3 (bench only): a recognizable landmark is rejected', async () => {
-  const stock = async () => [ov('Eiffel Tower at night'), ov('city lights at night')];
-  const t = await findPhoto({ kind: 'stock', value: 'city lights' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS), stock, prescreen: 'v3' });
-  assert.equal(t.photo?.url, 'https://s/city-lights-at-night.jpg');
-  assert.ok(t.steps.some((s) => /landmark 0\.90/.test(s)));
-});
-
-test("pre-screen v3: a result naming a company outside the story's SUBJECTS is rejected; a subject's own name is fine", async () => {
-  const stock = async () => [ov('Google data center racks'), ov('data center racks')];
-  const t = await findPhoto({ kind: 'stock', value: 'data center racks' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS), stock, prescreen: 'v3' });
-  assert.equal(t.photo?.url, 'https://s/data-center-racks.jpg');
-  assert.ok(t.steps.some((s) => /stock-prescreen@3 .*"Google data center racks" .*brand 0\.90/.test(s)));
-});
-
-test('topic words: none of the ambiguous AI-news words match any topic; research is literal only', async () => {
-  const { AMBIGUOUS_WORDS } = await import('@/lib/social/photos/starter-set');
-  for (const w of AMBIGUOUS_WORDS) assert.deepEqual(topicsIn(`the ${w} said`), [], w);
-  assert.deepEqual(topicsIn('French AI lab Mistral launched a new model with agents'), []);
-  assert.deepEqual(topicsIn('Scientists ran the experiment in a laboratory'), ['Research and labs']);
 });
 
 test('quote speakers by ID: the speaker matches by its SUBJECTS id, not by name text', async () => {
@@ -835,12 +714,6 @@ test(`vision: at most ${VISION_TOP} candidates are checked; none passing means n
   assert.ok(cover.steps.some((s) => /starter set \(AI compute, cover fallback\)/.test(s)));
 });
 
-test('cover fallback: never a topic match, even when the request names a starter topic (the padlock-on-Mistral case)', async () => {
-  const t = await findPhoto({ kind: 'stock', value: 'open padlock' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS), stock: async () => [] }, { text: ['x'], speaker: null, slot: 'split', cover: true });
-  const file = t.photo!.url.split('/').pop();
-  assert.ok(STARTER_SET.find((p) => p.file === file)!.topics.includes(DEFAULT_TOPIC));
-});
-
 test('vision request: own model, cached system + forced tool, the downscaled photo as an image block, the request and SUBJECTS as text', async () => {
   const sharp = (await import('sharp')).default;
   const png = await sharp({ create: { width: 1600, height: 1000, channels: 3, background: '#336' } }).png().toBuffer();
@@ -900,4 +773,53 @@ test('a cover whose request the Writer check dropped (none) keeps the AI-compute
   assert.ok(STARTER_SET.find((p) => p.file === cover.photo!.url.split('/').pop())!.topics.includes(DEFAULT_TOPIC), 'AI-compute, never a subject inferred from the cover text');
   const story = await findPhoto({ kind: 'none', value: '' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS) }, { text: ['x'], speaker: null, slot: 'split' });
   assert.equal(story.via, 'none');
+});
+
+// ── Photo chain v1 (spec §5.1, 2026-10-07): the Writer and the finder agree; the stock link is frozen ──
+
+import { createHasPhoto } from '@/lib/social/photos/p18';
+import { replayDeps, stockOutcome, type AcceptedStock } from '@/lib/social/photos/bench-replay';
+import { readFileSync } from 'node:fs';
+
+test("photo_available agrees with the finder: a subject is photo-available exactly when the finder's subject step finds its P18", async () => {
+  const b = briefWith([{ name: 'Nobody Pictured', role: 'American lawyer, former chairman of the SEC' }, { name: 'Sam Smith', role: 'AI researcher' }]);
+  const web = { ...SIF_WEB, search: { ...SIF_WEB.search, 'Nobody Pictured': ['Q900010'] }, entities: { ...SIF_WEB.entities, Q900010: { id: 'Q900010', label: 'Nobody Pictured', description: 'American lawyer, former chairman of the SEC', human: true, organization: false, files: [] } } };
+  const answers = { ...SIF_ANSWERS, 'Nobody Pictured': { person: 0.97, match: () => 0.95 } };
+  const jevCalls: string[] = [];
+  const shared = new Map();
+  const hasPhoto = createHasPhoto({ jev: identityJev(answers, jevCalls), http: createFakeHttp(web).http }, () => shared);
+  const outcomes: Array<[string, boolean, boolean]> = [];
+  for (const name of ['Donald Trump', 'Jay Clayton', 'Nobody Pictured', 'Sam Smith']) {
+    const available = await hasPhoto({ name }, b);
+    const t = await findPhoto({ kind: 'subject', value: name }, newPhotoContext(b, [], { identities: shared }), { jev: identityJev(answers, jevCalls), http: createFakeHttp(web).http }, { text: [], speaker: null, slot: 'split' });
+    outcomes.push([name, available, t.via === 'subject']);
+    assert.equal(available, t.via === 'subject', `${name}: photo_available ${available}, finder ${t.via}`);
+  }
+  assert.deepEqual(outcomes.map(([n, a]) => [n, a]), [['Donald Trump', true], ['Jay Clayton', true], ['Nobody Pictured', false], ['Sam Smith', false]]);
+  assert.deepEqual(jevCalls.sort(), ['Donald Trump', 'Jay Clayton', 'Nobody Pictured', 'Sam Smith'], 'one identity check per subject, shared by the Writer and the finder');
+});
+
+test('the frozen stock link replays unchanged with no live calls (accepted bench, 2026-10-07)', async () => {
+  const fixture = JSON.parse(readFileSync('fixtures/social/photo-bench/requests.json', 'utf8'));
+  const cache = JSON.parse(readFileSync('fixtures/social/photo-bench/openverse-cache.json', 'utf8')) as Record<string, unknown[]>;
+  const accepted = JSON.parse(readFileSync('fixtures/social/photo-bench/accepted-stock.json', 'utf8')).requests as AcceptedStock[];
+  assert.equal(accepted.length, 22);
+  const blocked = (async (u: unknown) => { throw new Error(`network blocked: ${String(u)}`); }) as unknown as typeof fetch;
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = blocked;
+  try {
+    for (const a of accepted) {
+      const r = fixture.requests.find((x: { id: string }) => x.id === a.id);
+      const story = fixture.stories[r.story];
+      const stock = async (q: string, o: { minShortSide: number }) => {
+        const hit = cache[`${q}|${o.minShortSide}`];
+        if (!hit) throw new Error(`not frozen: ${q}`);
+        return structuredClone(hit) as never;
+      };
+      const t = await findPhoto(r.request, newPhotoContext(story.brief, story.pages), { ...replayDeps(a), stock, http: blocked }, { text: r.slideText, speaker: r.speaker, slot: r.slot === 'backdrop' ? 'split' : r.slot, cover: r.cover });
+      assert.equal(stockOutcome(t), a.outcome, `${a.id}: ${t.steps.join(' | ')}`);
+    }
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });

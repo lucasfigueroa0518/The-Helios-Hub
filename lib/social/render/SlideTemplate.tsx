@@ -31,6 +31,7 @@ export type SlideTemplateProps = {
  * Layouts:
  *   cover        no photo · scene full-bleed + scrim · subject split (photo top, headline below)
  *                · logo card (Helios canvas, the company logo on its own plate, headline below)
+ *                · branded cover card (no photo, headshot or logo: the Helios sun-mark, headline below)
  *   text         headline + body; a photo takes its own region below or on top (split)
  *   landing      headline + body; photo region below
  *   stat         headline + body + big number; a scene photo is a darkened background
@@ -187,18 +188,19 @@ function PhotoCredit({ credit }: { credit: string | undefined }) {
 /* ── Cover ────────────────────────────────────────────────────────── */
 
 function CoverSlide({ slide }: { slide: SlideCopy }) {
-  const mode = !slide.photoUrl ? 'plain' : slide.photoKind === 'logo' ? 'logo' : slide.photoKind === 'subject' ? 'split' : 'bleed';
+  const mode = !slide.photoUrl ? (slide.coverCard ? 'card' : 'plain') : slide.photoKind === 'logo' ? 'logo' : slide.photoKind === 'subject' ? 'split' : 'bleed';
   return (
     <div className={`helios-cover helios-cover--${mode}`}>
       {mode === 'bleed' && <BleedPhoto slide={slide} />}
       {mode === 'split' && <RegionPhoto slide={slide} className="helios-cover__photo" />}
       {mode === 'logo' && <LogoCard slide={slide} />}
+      {mode === 'card' && <CoverCard />}
       <div className="helios-cover__text" data-scrim={mode === 'bleed' ? 'gradient' : undefined}>
         <Fit as="h1" className="helios-cover__headline" min={MIN.cover}>
           <SpanRunView run={slide.headline} />
         </Fit>
       </div>
-      <div className={`helios-cover__chevron${mode === 'plain' || mode === 'logo' ? '' : ' helios-cover__chevron--on-photo'}`} aria-hidden="true">→</div>
+      <div className={`helios-cover__chevron${mode === 'plain' || mode === 'logo' || mode === 'card' ? '' : ' helios-cover__chevron--on-photo'}`} aria-hidden="true">→</div>
     </div>
   );
 }
@@ -215,6 +217,20 @@ function LogoCard({ slide }: { slide: SlideCopy }) {
       <div className={`helios-logo-card__plate helios-logo-card__plate--${slide.logoPlate ?? 'light'}`}>
         <img className={`helios-photo helios-logo-card__logo${slide.logoWide ? ' helios-logo-card__logo--wide' : ''}`} src={slide.photoUrl} alt="" data-photo-kind="logo" />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Branded cover card (spec §5.1 Photo chain v1): the cover for a story with no
+ * photo, headshot or logo. Helios design system: the near-black canvas, the
+ * Helios sun-mark whole and unobscured with clear space on every side (logo
+ * protection), and the headline below. No photo, no pattern, no data.
+ */
+function CoverCard() {
+  return (
+    <div className="helios-cover-card" aria-hidden="true">
+      <img className="helios-cover-card__mark" src="/social/helios-mark.png" alt="" />
     </div>
   );
 }

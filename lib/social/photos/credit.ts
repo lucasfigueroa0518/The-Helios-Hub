@@ -18,10 +18,7 @@
  */
 import { outletKey, outletName } from '@/lib/social/ingest/select/outlets';
 
-import { officialCredit, officialPageOf, type OfficialCompany } from './official';
-
-/** `credit`: set when code builds the on-slide credit itself (official images: "Image: Google"). */
-export type CreditVerdict = { verdict: 'allowed' | 'rejected' | 'unknown'; reason: string; credit?: string };
+export type CreditVerdict = { verdict: 'allowed' | 'rejected' | 'unknown'; reason: string };
 
 /** Wire and stock agencies, and outlets that sell their staff photos. Whole-word, case-insensitive. */
 const AGENCIES = [
@@ -52,23 +49,13 @@ export function classifyCredit(input: {
   page: string | null;
   /** Organization names from the brief's SUBJECTS (a company crediting itself is allowed). */
   organizations: string[];
-  /** The official-images allow-list (official.ts); tests and the bench may pass their own. */
-  officialList?: OfficialCompany[];
 }): CreditVerdict {
   const text = [input.caption, input.credit].filter(Boolean).join(' · ').trim();
+  if (!text) return { verdict: 'unknown', reason: 'no caption or credit' };
   const w = words(text);
 
-  // Rejection wins everywhere, official pages included.
-  const agency = text ? AGENCIES.find((a) => w.includes(` ${a} `)) : undefined;
+  const agency = AGENCIES.find((a) => w.includes(` ${a} `));
   if (agency || AP.test(text)) return { verdict: 'rejected', reason: `agency credit (${agency ?? 'AP'})` };
-
-  // Official images (spec §5.1 (a), Tommy 2026-10-07): a SUBJECTS company's own page, on its approved
-  // allow-list domains, needs no credit line; code builds the credit.
-  const official = officialPageOf(input.page, input.organizations, input.officialList);
-  if (official.status === 'official') return { verdict: 'allowed', reason: `official page of ${official.company.company}`, credit: officialCredit(official.company) };
-  if (official.status === 'not-approved') return { verdict: 'unknown', reason: `official page of ${official.company.company}, but ${official.reason}` };
-
-  if (!text) return { verdict: 'unknown', reason: 'no caption or credit' };
 
   if (input.page) {
     const outlet = outletName({ feedKind: 'native', source: '', sourceUrl: input.page });

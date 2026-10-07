@@ -272,6 +272,13 @@ export type SlideCopy = {
   logoWide?: boolean;
 
   /**
+   * Cover with no photo, headshot or logo: the branded cover card, a
+   * Helios-designed graphic (spec §5.1 Photo chain v1; in use once Tommy
+   * approves it).
+   */
+  coverCard?: boolean;
+
+  /**
    * Where to centre the photo's crop, as object-position fractions (0–1),
    * from the face detector (M8b). Unset means centre. `windowW`: the photo
    * window narrowed to this width (px) so the face stays within about 40% of
