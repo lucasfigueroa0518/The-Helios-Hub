@@ -286,6 +286,14 @@ Only the four sources needed to put a real photo on every slide:
     3. **Render:** text fit, contrast, faces clear, crops not over-zoomed and rotation all pass.
     4. **Visual quality:** Tommy and Lucas sign off that each post is publishable as-is, text-only sequences included.
   - **On failure:** any failure gets a cause-level fix against its criterion, not a one-off patch.
+- **Link map (Tommy, 2026-10-06): design is tested one link at a time, on fixed inputs (the method that worked for the text chain).**
+  - **Accepted and frozen:** Reporter → Editor → Fact-checker; renderer mechanics (text fit, bounds, contrast, faces clear, framing, rotation).
+  - **In progress, each tested on its own fixed inputs:**
+    - **(A) Writer IMAGE requests:** checked by offline tests for now.
+    - **(B) Photo finder:** the photo-finder bench. `fixtures/social/photo-bench/requests.json` holds every IMAGE request from the saved runs, deduplicated. `scripts/social_photo_bench.ts` runs the finder on each, with no Writer and no Claude: Jev only, cap $0.05. It outputs a contact sheet, a table, the hit rate and the misleading photos.
+    - **(C) Renderer visuals:** the look of each layout, judged by Tommy and Lucas on fixed posts.
+  - **Separate track:** the Hook pass runs on saved drafts only and is not wired into runDay.
+  - **No end-to-end runs until A, B and C each pass.** Then the acceptance batch above.
 
 ### M9: Persistence and review page (spec Q8)
 

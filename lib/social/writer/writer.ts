@@ -52,6 +52,29 @@ const word4 = (s: string) => new Set(s.toLowerCase().split(/[^a-z0-9]+/).filter(
  * photo_available, each subject at most once; a stock scene names a
  * physical thing the slide itself mentions.
  */
+const KEEP_WORDS = " (never change the slide's words to fit a photo)";
+
+/** The text at a handoff place ("cover" or "slide N"), for the words-stay check. */
+function textAt(d: DraftSubmission, where: string): string | null {
+  if (where === 'cover') return d.cover_options[d.chosen_cover - 1]?.text ?? null;
+  const s = d.slides[Number(where.replace('slide ', '')) - 2];
+  return s ? `${s.headline.text}\n${s.body?.text ?? ''}` : null;
+}
+
+/**
+ * Words never change to fit a photo (Tommy, 2026-10-06): every place whose
+ * IMAGE request failed on the first attempt keeps its words on the retry.
+ */
+export function wordsChangedForPhoto(next: DraftSubmission, first: DraftSubmission, failedPlaces: string[]): BriefError[] {
+  return failedPlaces.flatMap((where) => {
+    const was = textAt(first, where);
+    const now = textAt(next, where);
+    return was !== null && now !== null && was !== now
+      ? [{ section: `${where}`, message: `the words changed after its IMAGE request failed; restore them and change the request instead (never change a slide's words to fit a photo)` }]
+      : [];
+  });
+}
+
 export function imageHandoffFailures(d: DraftSubmission, brief: Brief, photoSubjects: Set<string> | null): BriefError[] {
   const errors: BriefError[] = [];
   const chosen = d.cover_options[d.chosen_cover - 1]!;
@@ -66,18 +89,27 @@ export function imageHandoffFailures(d: DraftSubmission, brief: Brief, photoSubj
   const seen = new Map<string, string>();
   for (const r of requests) {
     if (r.image.kind === 'subject') {
-      if (photoSubjects && !photoSubjects.has(r.image.value)) errors.push({ section: `${r.where}.image`, message: `${r.image.value} has no usable photo (photo_available: false); request a literal stock scene or none` });
+      if (photoSubjects && !photoSubjects.has(r.image.value)) errors.push({ section: `${r.where}.image`, message: `${r.image.value} has no usable photo (photo_available: false); change the request to a literal stock scene or none${KEEP_WORDS}` });
       const prev = seen.get(r.image.value);
-      if (prev) errors.push({ section: `${r.where}.image`, message: `${r.image.value} is already requested on ${prev}; each subject at most once per post` });
+      if (prev) errors.push({ section: `${r.where}.image`, message: `${r.image.value} is already requested on ${prev}; each subject at most once per post; change this request${KEEP_WORDS}` });
       else seen.set(r.image.value, r.where);
     }
     if (r.image.kind === 'stock') {
       const slideWords = word4(r.text);
       if (![...word4(r.image.value)].some((w) => slideWords.has(w))) {
-        errors.push({ section: `${r.where}.image`, message: `stock "${r.image.value}" doesn't name a physical thing this slide mentions` });
+        errors.push({ section: `${r.where}.image`, message: `stock "${r.image.value}" doesn't name a physical thing this slide mentions; change the request to a scene the slide already mentions, or none${KEEP_WORDS}` });
       }
     }
   }
+  // Quote slides (Tommy, 2026-10-06): IMAGE is the speaker or none.
+  d.slides.forEach((s, i) => {
+    if (s.type !== 'quote' || s.image.kind === 'none') return;
+    const q = brief.quotes.find((x) => x.id === s.quote_id);
+    const speaker = q?.speaker_id ? brief.subjects.find((x) => x.id === q.speaker_id)?.name ?? null : null;
+    if (s.image.kind !== 'subject' || s.image.value !== speaker) {
+      errors.push({ section: `slide ${i + 2}.image`, message: `a quote slide's IMAGE is the speaker${speaker ? ` (subject: ${speaker})` : ''} or none, not ${s.image.kind}${s.image.value ? `: ${s.image.value}` : ''}; change the request${KEEP_WORDS}` });
+    }
+  });
   // One EDIT NOTES line per none, saying why (Tommy, 2026-10-06). The slide after a spread is none by design and needs none.
   const nones = d.slides.filter((s, i) => s.image.kind === 'none' && !d.slides[i - 1]?.spread_with_next).length;
   const noteLines = d.edit_notes.filter((n) => /\bnone\b/i.test(n)).length;
@@ -102,21 +134,46 @@ export function checkWrittenDraft(input: unknown, brief: Brief, attempt: number,
   const d = checkDraft(input, brief);
   const failures = draftTextFailures(fillDraft(d, brief), brief, attempt, stage);
   const errors = failures.map((f) => ({ section: `${f.id} ${f.where}`, message: f.detail }));
-  if (stage === 'writer' && attempt <= 1) errors.push(...imageHandoffFailures(d, brief, photoSubjects));
+  // Every handoff check runs on every attempt, the final one included (Tommy, 2026-10-06).
+  if (stage === 'writer') errors.push(...imageHandoffFailures(d, brief, photoSubjects));
   if (errors.length > 0) throw new DraftValidationError(errors);
   return d;
 }
 
+const safely = <T,>(fn: () => T[]): T[] => {
+  try {
+    return fn();
+  } catch {
+    return [];
+  }
+};
+
 export async function runWriter(brief: Brief, deps: WriterDeps): Promise<WriterResult> {
   const forWriter = await briefForWriter(brief, deps.isWellKnown, deps.hasPhoto);
   const photoSubjects = new Set(forWriter.subjects.filter((s) => s.photo_available).map((s) => s.name));
+  let first: { draft: DraftSubmission; places: string[] } | null = null;
   const r = await runStructuredCall({
     create: deps.create,
     config: deps.config ?? STAGE_MODELS.writer,
     system: WRITER_SYSTEM,
     tool: SUBMIT_DRAFT_TOOL,
     user: writerUserMessage(forWriter),
-    check: (input, attempt) => checkWrittenDraft(input, brief, attempt, 'writer', deps.hasPhoto ? photoSubjects : null),
+    check: (input, attempt) => {
+      // Words stay when a photo request fails: remember the first attempt's failed places.
+      const kept = attempt > 1 && first ? safely(() => wordsChangedForPhoto(input as DraftSubmission, first!.draft, first!.places)) : [];
+      try {
+        const d = checkWrittenDraft(input, brief, attempt, 'writer', deps.hasPhoto ? photoSubjects : null);
+        if (kept.length) throw new DraftValidationError(kept);
+        return d;
+      } catch (err) {
+        if (!(err instanceof DraftValidationError) || err.errors === kept) throw err;
+        if (attempt === 1) {
+          const places = [...new Set(err.errors.filter((e) => e.section.endsWith('.image')).map((e) => e.section.replace(/\.image$/, '')))];
+          if (places.length) first = { draft: structuredClone(input as DraftSubmission), places };
+        }
+        throw kept.length ? new DraftValidationError([...err.errors, ...kept]) : err;
+      }
+    },
   });
   const common = { costUsd: r.costUsd, turns: r.turns, draftRetries: r.retries, retryErrors: r.retryErrors, turnUsage: r.turnUsage };
   if (!r.ok) return { ok: false, reason: r.reason, detail: r.detail, raw: r.raw, ...common };

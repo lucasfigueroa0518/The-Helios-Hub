@@ -221,8 +221,9 @@ test('runDay: the Writer stage drafts each brief; its cost lands under writer', 
           d.slides[0]!.body!.facts = ['F1'];
           d.caption.facts = [];
           // The stub brief has no SUBJECTS, so subject images would fail the check.
-          d.cover_options = d.cover_options.map((c) => ({ ...c, image: stock('city skyline') }));
-          d.slides[0]!.image = stock('city skyline');
+          d.cover_options = d.cover_options.map((c) => ({ ...c, image: stock(c.text.split(' ').filter((w) => w.length >= 5)[0]!.toLowerCase()) }));
+          d.slides[0]!.image = { kind: 'none', value: '' };
+          d.edit_notes = ['Slide 2: IMAGE none, a post on social media has nothing physical to show.'];
           assert.ok(brief.the_news.text);
           return msg('tool_use', [submit(d)]);
         },
@@ -273,4 +274,53 @@ test('handoff: one EDIT NOTES line per none (the slide after a spread excepted)'
   assert.deepEqual(imageHandoffFailures(d, briefSuperIntelligenceForce(), null), []);
   d.edit_notes = d.edit_notes.slice(1);
   assert.match(imageHandoffFailures(d, briefSuperIntelligenceForce(), null).map((e) => e.message).join(), /IMAGE none but \d EDIT NOTES line/);
+});
+
+// ── Link A (Tommy, 2026-10-06): words stay, every check on every attempt, quote slides ──
+
+import { IMAGE_RULE } from '@/lib/social/prompts/rules-block';
+
+test('link A: the IMAGE rule says quote slides take the speaker or none, and words never change to fit a photo', () => {
+  assert.match(IMAGE_RULE, /On a quote slide, IMAGE is the speaker \(subject: <the quote's speaker>\) or none\./);
+  assert.match(IMAGE_RULE, /Never change a slide's words to fit a photo; change the request\./);
+});
+
+test('link A: a quote slide asks for its speaker (by speaker_id) or none; anyone else fails', () => {
+  const d = sifDraftHandoff();
+  const errs = (img: DraftSubmission['slides'][number]['image']) => {
+    const x = structuredClone(d);
+    x.slides[2]!.image = img;
+    x.edit_notes = x.edit_notes.filter((n) => !n.startsWith('Slide 4'));
+    if (img.kind === 'none') x.edit_notes.push('Slide 4: IMAGE none, the speaker has no usable photo.');
+    // Quote-slide errors only (the cover already asks for Trump, which is a separate once-per-post rule).
+    return imageHandoffFailures(x, briefSuperIntelligenceForce(), null).map((e) => e.message).filter((m) => m.includes('quote slide')).join();
+  };
+  assert.equal(errs({ kind: 'subject', value: 'Donald Trump' }), '', 'Q1 is Trump\'s (speaker_id S1)');
+  assert.equal(errs({ kind: 'none', value: '' }), '');
+  assert.match(errs({ kind: 'subject', value: 'Jay Clayton' }), /a quote slide's IMAGE is the speaker \(subject: Donald Trump\) or none, not subject: Jay Clayton/);
+  assert.match(errs({ kind: 'stock', value: 'federal government' }), /a quote slide's IMAGE is the speaker/);
+});
+
+test('link A: handoff checks run on the final attempt too; a request still failing on the retry fails the Writer', async () => {
+  const bad = sifDraftHandoff();
+  bad.cover_options[0]!.image = { kind: 'stock', value: 'city skyline' };
+  const r = await runWriter(briefSuperIntelligenceForce(), { create: scripted([msg('tool_use', [submit(bad)]), msg('tool_use', [submit(structuredClone(bad))])]).create, isWellKnown: notWellKnown });
+  assert.equal(r.ok, false);
+  assert.match(r.retryErrors[0]!, /cover\.image: stock "city skyline" doesn't name a physical thing this slide mentions; change the request .*never change the slide's words to fit a photo/);
+});
+
+test('link A: words stay when a photo request fails: rewriting the cover to fit the request fails; changing the request passes', async () => {
+  const bad = sifDraftHandoff();
+  bad.cover_options[0]!.image = { kind: 'stock', value: 'city skyline' };
+  // Retry 1: the words change to mention the skyline (the Mistral "datacenters" case).
+  const rewritten = structuredClone(bad);
+  rewritten.cover_options[0]!.text = 'Trump launches a Super Intelligence Force under the city skyline';
+  const r1 = await runWriter(briefSuperIntelligenceForce(), { create: scripted([msg('tool_use', [submit(bad)]), msg('tool_use', [submit(rewritten)])]).create, isWellKnown: notWellKnown });
+  assert.equal(r1.ok, false);
+  if (!r1.ok) assert.match(r1.detail, /cover: the words changed after its IMAGE request failed; restore them and change the request instead/);
+  // Retry 2: the request changes; the words stay.
+  const fixed = structuredClone(bad);
+  fixed.cover_options[0]!.image = { kind: 'subject', value: 'Donald Trump' };
+  const r2 = await runWriter(briefSuperIntelligenceForce(), { create: scripted([msg('tool_use', [submit(bad)]), msg('tool_use', [submit(fixed)])]).create, isWellKnown: notWellKnown });
+  assert.ok(r2.ok);
 });

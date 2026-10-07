@@ -173,11 +173,11 @@ function scripted(drafts: DraftSubmission[]): { create: MessagesCreate; requests
   const requests: Anthropic.MessageCreateParamsNonStreaming[] = [];
   return { requests, create: async (p) => { requests.push(structuredClone(p)); return submitMsg(drafts.shift()); } };
 }
-const sub = (edit: (d: DraftSubmission) => void) => { const d = sifDraft(); edit(d); return d; };
+const sub = (edit: (d: DraftSubmission) => void) => { const d = sifDraftHandoff(); edit(d); return d; };
 const tooLong = 'x '.repeat(40).trim();
 
 test('Writer code check: a C1 overage goes back once with the exact problem; fixed on the retry', async () => {
-  const s = scripted([sub((d) => (d.slides[0]!.headline.text = tooLong)), sifDraft()]);
+  const s = scripted([sub((d) => (d.slides[0]!.headline.text = tooLong)), sifDraftHandoff()]);
   const r = await runWriter(brief(), { create: s.create, isWellKnown: async () => false });
   assert.ok(r.ok);
   assert.equal(r.draftRetries, 1);
