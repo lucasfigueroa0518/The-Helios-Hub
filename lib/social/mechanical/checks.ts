@@ -255,6 +255,7 @@ export function expectedSlideText(d: FilledDraft): string[][] {
     ...d.slides.map((s) => [
       s.headline.text,
       ...(s.body ? [s.body.text] : []),
+      ...(s.hook ? [s.hook.text] : []),
       ...(s.quote ? [s.quote.text, s.quote.speaker] : []),
       ...s.numbers.flatMap((n) => [n.value, n.counts]),
     ]),
@@ -277,7 +278,7 @@ export function checkDroppedText(d: FilledDraft, renderedText: string[]): Failur
 }
 
 /** Numbers in a text, normalized ("$4.99" → "4.99", "1,000" → "1000", "38%" → "38"). */
-function numbersIn(text: string): string[] {
+export function numbersIn(text: string): string[] {
   return [...text.matchAll(/\d[\d,]*(?:\.\d+)?/g)].map((m) => m[0].replace(/,/g, ''));
 }
 
@@ -305,6 +306,8 @@ export function checkRepetition(d: FilledDraft, brief: Brief): Failure[] {
       ...(s.body ? [['body', s.body.text] as [string, string]] : []),
       ...(s.quote ? [['quote', s.quote.text] as [string, string]] : []),
       ...s.numbers.flatMap((n, k): Array<[string, string]> => [[`number ${k + 1}`, n.value], [`label ${k + 1}`, n.counts]]),
+      // The Hook pass line is checked against its own slide too (Tommy, 2026-10-06).
+      ...(s.hook ? [['hook', s.hook.text] as [string, string]] : []),
     ];
     const seenNum = new Map<string, string>();
     const seenPhrase = new Map<string, string>();

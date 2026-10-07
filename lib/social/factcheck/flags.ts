@@ -97,7 +97,7 @@ function partTexts(where: FlagWhere, draft: FilledDraft): string[] | null {
     return c ? [c.text] : null;
   }
   const s = where.number ? draft.slides[where.number - 2] : undefined;
-  return s ? [s.headline.text, s.body?.text ?? '', s.quote?.text ?? ''] : null;
+  return s ? [s.headline.text, s.body?.text ?? '', s.hook?.text ?? '', s.quote?.text ?? ''] : null;
 }
 
 export function checkFlags(input: unknown, draft: FilledDraft, brief: Brief): FlagsSubmission {
@@ -189,8 +189,16 @@ export function applyFlags(draft: DraftSubmission, flags: FlagsSubmission, brief
     const s = d.slides[i]!;
     const inHeadline = s.headline.text.toLowerCase().includes(flag.quoted_text.toLowerCase());
     const inBody = !!s.body && s.body.text.toLowerCase().includes(flag.quoted_text.toLowerCase());
+    const inHook = !!s.hook && s.hook.text.toLowerCase().includes(flag.quoted_text.toLowerCase());
     if (inHeadline) s.headline.text = fix(s.headline.text, flag);
     else if (inBody) s.body!.text = fix(s.body!.text, flag);
+    else if (inHook) {
+      // A Hook pass line is an addition: a flagged one is fixed like body text, and an emptied one simply goes.
+      s.hook!.text = fix(s.hook!.text, flag);
+      if (!s.hook!.text) s.hook = null;
+      applied.push(label);
+      continue;
+    }
     else {
       // The flag points into the filled quote or number: those can't be edited, so the slide goes.
       dropped.add(i);

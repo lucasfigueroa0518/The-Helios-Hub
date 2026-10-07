@@ -185,6 +185,13 @@ export type SlideCopy = {
    */
   photoCaption?: string;
 
+  /**
+   * Hook pass line (Lucas, Tommy 2026-10-06; prototype): one short line in a
+   * smaller, distinct style. `above`: a lead-in, drawn above the body;
+   * `below`: a tease or why-it-matters line, drawn below it.
+   */
+  hook?: { text: string; position: 'above' | 'below' };
+
   /** Required by the validator; drives screen-reader UX + accessibility. */
   altText: string;
 

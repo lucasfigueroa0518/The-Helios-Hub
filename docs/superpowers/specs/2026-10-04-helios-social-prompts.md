@@ -19,6 +19,7 @@
 | Writer's caption section | `lib/social/editorial/v2/prompts/caption.ts` at commit `abc82db` (old branch) | Yes (in production) |
 | Editor | Spec §4.1 | No |
 | Fact-checker (Claude comparison version) | Spec §4.2 | No |
+| Hook pass (prototype) | Lucas's proposal, approved with edits by Tommy (2026-10-06) | No |
 
 ---
 
@@ -371,3 +372,48 @@ MAIN CLAIM FALSE: yes/no
 - **Fresh draft when:** the cuts leave fewer than 5 story slides, the key slide is cut (DECIDED: the first story slide tagged with a THE NEWS ID, else slide 2), every cover fails, or the caption is emptied. Limit 2 fresh drafts per story, each logged. A false main claim sets the story aside.
 - **Input:** the edited draft as the reader sees it (all 3 covers, quotes and numbers filled in) and the brief.
 
+- **Hook lines (Hook pass prototype, 2026-10-06):** the Fact-checker reads hook lines as slide text. A flag on a hook fixes it like body text; an emptied hook is removed and the slide stays.
+
+---
+
+## 6. Hook pass (prototype; untested; Lucas's proposal, approved with edits by Tommy 2026-10-06)
+
+Sits between the Editor and the Fact-checker: Writer → Editor → **Hook pass** → Fact-checker → mechanical → design. `new stage · Hook pass · +1 stage · +1 AI call`. Not wired into the daily run until Lucas has reviewed the prototype renders. Draft and reasoning: `docs/superpowers/m8-drafts/hook-pass-prompt.md`.
+
+```
+You are the Hook editor for Helios Group's Instagram carousels. You get the edited draft (cover, slides, caption) and the BRIEF. Read it as the target reader: smart and busy, curious about AI, doesn't follow AI news. Your one job: make each slide hand off to the next.
+
+For each story slide you may add ONE short line, or nothing:
+- A lead-in or tease that points to what the next slide delivers. Example: on the slide before a quote, tease the reaction ("Not everyone shrugged it off."), using only what the next slide already says.
+- At most once per post, a "why this matters to you" line, using only the brief's WHY IT MATTERS and FACTS.
+
+A lead-in sits above the slide's body; a tease or "why this matters to you" line sits below it.
+
+RULES
+- Never rewrite, cut or reorder existing text. You only add lines.
+- Add no facts. Every word of your line rests on the brief entries you tag, or on what the next slide already says. Tag the line with those IDs (F3, B1, Q2, N1).
+- Tease only what the next slide actually delivers. Never invent suspense or hold back the news.
+- No vague hype ('shocking', 'you won't believe'). A tease must be specific to what the next slide says.
+- Stay within each slide's character budget (given per slide). A line over budget is dropped.
+- No quotation marks, no new numbers, and no names the slides don't already use.
+- Leave a slide alone when it already hands off, or when nothing true would add pull. Adding nothing is a good answer.
+
+When you're done, call submit_hooks with one entry per story slide: slide number, line (or null), kind (lead-in, tease or why-it-matters), and the IDs it rests on.
+```
+
+**Edits from the draft (Tommy, 2026-10-06):**
+
+- **Example:** "A governor answered in five words." is replaced with a fully true one: "Not everyone shrugged it off."
+- **Added rule:** "No vague hype ('shocking', 'you won't believe'). A tease must be specific to what the next slide says."
+- **Placement line:** "A lead-in sits above the slide's body; a tease or "why this matters to you" line sits below it." This follows from the render decision (lead-ins render above the body, teases below).
+
+**As built:**
+
+- **System:** the text above, then the voice block. Cached, with the submit_hooks tool.
+- **User message (per post):** the edited draft as the Editor submitted it, the brief, and `BUDGETS`, one line per story slide (`SLIDE n: N characters`, with `(full)` at 0).
+- **Budgets:** measured on the render, never guessed. Every story slide is rendered with a line of 30, 45, 60, 75, 90, 110 and 130 characters. A slide's budget is the longest line that passes, with every shorter one passing too. The render check covers text fit, bounds, contrast and faces.
+- **Code check, one retry:**
+  - These always fail: a slide that doesn't exist, two entries for one slide, a line without a kind, a tag that isn't a brief ID.
+  - These go back to the model on the first attempt: over budget, quotation marks, a number not in the tagged entries, a second why-it-matters line, C8 (the line repeats a number or a 4-word phrase of its own slide). After the retry, a line that still fails is dropped and logged, and the rest stand.
+- **Render:** the line is drawn in a smaller orange style. A lead-in sits above the body; a tease or why-it-matters line sits below it. C7 checks that it reaches the slide.
+- **Model:** its own `hook` setting in STAGE_MODELS (Sonnet 5.5, high effort).

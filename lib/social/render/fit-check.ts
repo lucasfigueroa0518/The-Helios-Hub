@@ -141,8 +141,11 @@ export const checkRenderFit: FitCheck = async (post, opts = {}) => {
     const problems: string[] = [];
 
     // 1. Text fit, with the preview's own routine.
-    const textFit = (await page.evaluate(`(${fitText.toString()})(document)`)) as TextFitFailure[];
-    for (const f of textFit) problems.push(`text fit: ${f.element} "${f.text}" (${f.reason}, min ${f.minPx}px)`);
+    // Per slide, so a failure names its slide (the Hook pass budget measures each slide on its own).
+    const textFit = (await page.evaluate(`[...document.querySelectorAll('.fit-frame')].map((frame) => (${fitText.toString()})(frame))`)) as TextFitFailure[][];
+    textFit.forEach((fails, i) => {
+      for (const f of fails) problems.push(`slide ${i + 1} text fit: ${f.element} "${f.text}" (${f.reason}, min ${f.minPx}px)`);
+    });
 
     // M8b: faces, then a face-centred crop on every photo that has one.
     await page.addScriptTag({

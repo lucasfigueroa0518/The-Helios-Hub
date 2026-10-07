@@ -29,7 +29,10 @@ function photoFields(photo: Photo | null): Pick<SlideCopy, 'photoUrl' | 'photoCr
 
 function storySlide(s: FilledSlide, position: number, photo: Photo | null): SlideCopy {
   const base = { position, headline: run(s.headline.text), altText: s.headline.text, ...photoFields(photo) };
-  const body = s.body ? { body: run(s.body.text) } : {};
+  const body = {
+    ...(s.body ? { body: run(s.body.text) } : {}),
+    ...(s.hook ? { hook: { text: s.hook.text, position: s.hook.kind === 'lead-in' ? ('above' as const) : ('below' as const) } } : {}),
+  };
   switch (s.type) {
     case 'stat': {
       const n = s.numbers[0]!;

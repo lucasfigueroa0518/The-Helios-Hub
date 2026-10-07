@@ -287,6 +287,19 @@
   color: var(--brand-narrative);
 }
 
+/* Hook pass line (prototype): smaller, orange, distinct from the body. */
+.helios-hook {
+  font-family: var(--font-body);
+  font-size: 34px;
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--brand-orange);
+  max-height: 130px;
+  margin: 0;
+}
+.helios-hook--above { margin-bottom: 12px; }
+.helios-hook--below { margin-top: 16px; }
+
 /* ── Cover ───────────────────────────────────────────────────────────── */
 
 .helios-cover {

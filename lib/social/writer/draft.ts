@@ -25,6 +25,11 @@ export type ImageKind = (typeof IMAGE_KINDS)[number];
 export type TaggedLine = { text: string; facts: string[] };
 export type ImageRequest = { kind: ImageKind; value: string };
 
+/** Hook pass (prototype): one short added line; `lead-in` renders above the body, the others below. */
+export const HOOK_KINDS = ['lead-in', 'tease', 'why-it-matters'] as const;
+export type HookKind = (typeof HOOK_KINDS)[number];
+export type SlideHook = { text: string; kind: HookKind; facts: string[] };
+
 export type DraftSlide = {
   type: SlideType;
   headline: TaggedLine;
@@ -38,6 +43,8 @@ export type DraftSlide = {
   image: ImageRequest;
   /** Spread: this slide and the next share one wide photo (this slide's IMAGE). */
   spread_with_next: boolean;
+  /** Added by the Hook pass only (never by the Writer or Editor; not in DRAFT_SCHEMA). */
+  hook?: SlideHook | null;
 };
 
 export type DraftSubmission = {
