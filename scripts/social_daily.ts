@@ -184,6 +184,8 @@ async function main() {
     })(),
     spreadCount: result.posts.flatMap((p) => p.render.slides).filter((sl) => sl.panoramaSide === 'left').length,
     requestMix,
+    // Aggregator-only facts the code removed before the Writer (Tommy, 2026-10-06).
+    aggregatorDropped: [...logs.entries()].flatMap(([storyId, l]) => (l.reporter?.ok ? l.reporter.aggregatorDropped.map((d) => `${storyId}: ${d}`) : [])),
     alreadyPostedTop: alreadyPosted.slice(0, 5),
     capUsd,
   }, null, 2));

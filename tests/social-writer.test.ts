@@ -43,7 +43,7 @@ function draft(): DraftSubmission {
     ],
     follow: 'Follow Helios for AI news without the hype.',
     caption: { text: 'Trump announced a Super Intelligence Force. Source: TechCrunch, October 4, 2026.', facts: ['F1'] },
-    edit_notes: ['Led with the spy chief role, not the name.'],
+    edit_notes: ['Led with the spy chief role, not the name.', 'Slide 3: IMAGE none, a quote has nothing physical to show.', 'Slide 4: IMAGE none, a deadline has nothing physical to show.'],
   };
 }
 
@@ -241,6 +241,7 @@ test('runDay: the Writer stage drafts each brief; its cost lands under writer', 
 // ── Handoff (Tommy, 2026-10-06): photo_available, filtered article photos, first-submission image check ──
 
 import { imageHandoffFailures } from '@/lib/social/writer/writer';
+import { sifDraftHandoff } from '@/fixtures/social/drafts';
 
 test('handoff: SUBJECTS marked photo_available; ARTICLE PHOTOS whose credit fails are dropped before the Writer', async () => {
   const brief = briefSuperIntelligenceForce();
@@ -265,4 +266,11 @@ test('handoff: subject only when photo_available, at most once; a stock scene na
   ok.slides[0]!.image = { kind: 'stock', value: 'Truth Social app' };
   ok.slides[0]!.body!.text = 'Trump announced the force in a post on the Truth Social app.';
   assert.deepEqual(imageHandoffFailures(ok, brief, null).filter((e) => e.section.startsWith('slide 2')), []);
+});
+
+test('handoff: one EDIT NOTES line per none (the slide after a spread excepted)', () => {
+  const d = sifDraftHandoff();
+  assert.deepEqual(imageHandoffFailures(d, briefSuperIntelligenceForce(), null), []);
+  d.edit_notes = d.edit_notes.slice(1);
+  assert.match(imageHandoffFailures(d, briefSuperIntelligenceForce(), null).map((e) => e.message).join(), /IMAGE none but \d EDIT NOTES line/);
 });

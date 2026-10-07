@@ -78,6 +78,10 @@ export function imageHandoffFailures(d: DraftSubmission, brief: Brief, photoSubj
       }
     }
   }
+  // One EDIT NOTES line per none, saying why (Tommy, 2026-10-06). The slide after a spread is none by design and needs none.
+  const nones = d.slides.filter((s, i) => s.image.kind === 'none' && !d.slides[i - 1]?.spread_with_next).length;
+  const noteLines = d.edit_notes.filter((n) => /\bnone\b/i.test(n)).length;
+  if (noteLines < nones) errors.push({ section: 'edit_notes', message: `${nones} slide(s) with IMAGE none but ${noteLines} EDIT NOTES line(s) about none; add one line per none saying why nothing physical fits` });
   return errors;
 }
 

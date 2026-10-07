@@ -47,6 +47,10 @@ export function sifDraft(): DraftSubmission {
  */
 export function sifDraftHandoff(): DraftSubmission {
   const d = sifDraft();
-  for (const s of d.slides) if (s.image.kind === 'stock') s.image = { kind: 'none', value: '' };
+  d.slides.forEach((s, i) => {
+    if (s.image.kind !== 'stock') return;
+    s.image = { kind: 'none', value: '' };
+    d.edit_notes.push(`Slide ${i + 2}: IMAGE none, nothing physical on the slide fits a photo.`);
+  });
   return d;
 }
