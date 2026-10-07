@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 
 import { SettingsForm } from '@/app/explainers/settings/settings-form';
+import { Section } from '@/app/reels/ui';
 import { explainersDb } from '@/lib/explainers/connection';
 import { loadSettingsView } from '@/lib/explainers/overview';
 import { getSession } from '@/lib/session';
@@ -34,15 +35,14 @@ export default async function ExplainersSettingsPage() {
         ) : (
           <>
             <SettingsForm initial={loaded.settings} />
-            <section className="ex-block" style={{ marginTop: 32 }}>
-              <div className="ex-block__head">
-                <h2 className="ex-block__title">Theme brief</h2>
-                <span className="ex-block__meta">
-                  {loaded.settings.theme_brief_version} · E-14 · read-only (new versions are added, never edited)
-                </span>
-              </div>
-              <pre className="ex-brief">{loaded.themeBrief}</pre>
-            </section>
+            <div className="ex-settings">
+              <Section title="Theme brief">
+                <p className="rh-muted">
+                  {loaded.settings.theme_brief_version} · E-14 · read-only. New versions are added, never edited.
+                </p>
+                <pre className="ex-brief">{loaded.themeBrief}</pre>
+              </Section>
+            </div>
           </>
         )}
       </div>

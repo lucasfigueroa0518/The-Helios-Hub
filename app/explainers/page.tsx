@@ -23,14 +23,16 @@ export default async function ExplainersTopicsPage() {
   return (
     <div className="rh">
       <div className="rh__inner">
-        <header className="rh__head">
-          <div>
-            <p className="rh__kicker">Explainers</p>
-            <h1 className="rh__title">Topics <span className="rh-beta">Beta</span></h1>
-          </div>
-        </header>
         {'error' in loaded ? (
-          <p className="rh-empty">Could not load topics: {loaded.error}</p>
+          <>
+            <header className="rh__head">
+              <div>
+                <p className="rh__kicker">Explainers</p>
+                <h1 className="rh__title">Topics <span className="rh-beta">Beta</span></h1>
+              </div>
+            </header>
+            <p className="rh-empty">Could not load topics: {loaded.error}</p>
+          </>
         ) : (
           <TopicsView view={loaded} />
         )}

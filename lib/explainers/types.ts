@@ -35,6 +35,7 @@ export const ARTIFACT_KINDS = [
   'video',
   'captions',
   'transcript_log',
+  'post_caption',
 ] as const;
 export type ArtifactKind = (typeof ARTIFACT_KINDS)[number];
 

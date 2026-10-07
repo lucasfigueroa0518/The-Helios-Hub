@@ -10,9 +10,22 @@ function iso(value: unknown): string | null {
   return value instanceof Date ? value.toISOString() : String(value);
 }
 
+function numOrNull(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 function serializeTopic(topic: TopicRow): TopicRow {
   return {
     ...topic,
+    audience_fit: numOrNull(topic.audience_fit),
+    teachability_45s: numOrNull(topic.teachability_45s),
+    analogy_potential: numOrNull(topic.analogy_potential),
+    visual_potential: numOrNull(topic.visual_potential),
+    accuracy_under_simplification: numOrNull(topic.accuracy_under_simplification),
+    hook_strength: numOrNull(topic.hook_strength),
+    weighted_score: numOrNull(topic.weighted_score),
     scored_at: iso(topic.scored_at),
     rendered_at: iso(topic.rendered_at),
     created_at: iso(topic.created_at)!,
@@ -42,6 +55,9 @@ export async function loadTopicsView(db: Queryable): Promise<TopicsView> {
 
 export type JobSummary = JobRow & {
   topic_title: string;
+  weighted_score: number | null;
+  video_id: string | null;
+  contact_sheet_id: string | null;
   cost_by_vendor: { vendor: CostVendor; usd: number; unknown_count: number }[];
   artifact_count: number;
   lint_count: number;
@@ -50,7 +66,13 @@ export type JobSummary = JobRow & {
 
 export async function loadReelsView(db: Queryable, limit = 50): Promise<JobSummary[]> {
   const { rows } = await db.query<Record<string, unknown>>(
-    `SELECT j.*, t.title AS topic_title, f.verdict,
+    `SELECT j.*, t.title AS topic_title, t.weighted_score, f.verdict,
+            (SELECT a.id FROM explainers.artifacts a
+              WHERE a.job_id = j.id AND a.kind = 'video'
+              ORDER BY a.seq DESC LIMIT 1) AS video_id,
+            (SELECT a.id FROM explainers.artifacts a
+              WHERE a.job_id = j.id AND a.kind = 'contact_sheet'
+              ORDER BY a.seq DESC LIMIT 1) AS contact_sheet_id,
             (SELECT count(*)::int FROM explainers.artifacts a WHERE a.job_id = j.id) AS artifact_count,
             (SELECT count(*)::int FROM explainers.lint_violations l WHERE l.job_id = j.id) AS lint_count,
             COALESCE((
@@ -75,6 +97,9 @@ export async function loadReelsView(db: Queryable, limit = 50): Promise<JobSumma
     ...(row as unknown as JobSummary),
     spend_usd: Number(row.spend_usd),
     spend_cap_usd: Number(row.spend_cap_usd),
+    weighted_score: row.weighted_score == null ? null : Number(row.weighted_score),
+    video_id: (row.video_id as string | null) ?? null,
+    contact_sheet_id: (row.contact_sheet_id as string | null) ?? null,
     requested_at: iso(row.requested_at)!,
     started_at: iso(row.started_at),
     finished_at: iso(row.finished_at),

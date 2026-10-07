@@ -21,7 +21,8 @@ Then read `.cursor/skills/humanizer/SKILL.md` and apply it to the draft before y
 
 ## What carries over from Trial Reels
 
-- Instagram shows about the first 125 characters, then "more". The first line has to stand alone inside that limit. Do not spend it on a greeting, a hashtag, or "In this video".
+- Every caption opens on its own line: `AI BRAIN BREAK - EPISODE N:` N is this reel's number in the series, starting at 1. Nothing else goes on that line.
+- Instagram shows about the first 125 characters, then "more". The episode line and the hook under it both have to fit inside that count. The hook has to make sense if someone never taps "more". Do not spend the hook on a greeting, a hashtag, or "In this video".
 - Short paragraphs with a blank line between them. One block is a failed caption.
 - No emoji. No URLs. Instagram does not make them clickable.
 - Helios never speaks as "we", "our", "us", or "I". Address the viewer as "you", or write in the third person.
@@ -36,23 +37,25 @@ Then read `.cursor/skills/humanizer/SKILL.md` and apply it to the draft before y
 
 A Trial Reel caption often carries the story the screen only opened. An Explainer Reel has already taught the thought: hook, analogy, mapping, example, catch, and where you meet it. The caption's job is to make a scroller stop and save the idea, not to teach it a second time.
 
-- The first line is a second way into the same idea. It is not the spoken thesis copied out, and it is not a description of the frames.
+- The hook, the line under the episode title, is a second way into the same idea. It is not the spoken thesis copied out, and it is not a description of the frames.
 - The body adds at most one thing the 45 seconds left thin: the catch in one more sentence, or the place the viewer will meet it. Then stop. Do not walk the seven beats.
 - The call to action asks them to save it for the next time they hit this exact situation. Name that situation from the reel.
 
 ## How to write it
 
 1. Name the one idea in a sentence, from the scope. If the script and the scope disagree, the script is what the video said.
-2. Draft the first line. It has to make sense with no video playing, inside 125 characters.
+2. Put `AI BRAIN BREAK - EPISODE N:` on the first line. Draft the hook on the next line. The episode line, the blank line, and the hook together stay inside 125 characters, and the hook has to make sense with no video playing.
 3. Draft two or three short paragraphs. Blank line between them.
 4. Add one save line, then the hashtags on their own lines after a blank line.
 5. Run the humanizer pass. Cut anything that restates the video beat by beat.
-6. Show one caption. Above it, note the first-line character count.
+6. Show one caption. Above it, note the character count of the episode line, the blank line, and the hook together.
 
 ## Shape
 
 ```
-First line, under 125 characters.
+AI BRAIN BREAK - EPISODE N:
+
+Hook. The episode line, the blank line, and this line stay under 125 characters.
 
 One short paragraph. The idea, in the viewer's world.
 
@@ -68,13 +71,15 @@ Save this for the next time <the situation this reel is about>.
 Reel: "What is a context window?" The spoken thesis is "A context window is the text a model can see at once." The example in the reel is a 1,000-token window and a 1,200-token chat, so the oldest 200 drop.
 
 ```
+AI BRAIN BREAK - EPISODE 1:
+
 Your AI didn't forget the start of the chat. It fell off the desk.
 
-A context window is only the text a model can see at once. Fill a 1,000-token window with 1,200 tokens of chat, and the oldest 200 drop out. They are not hidden. The model never sees them.
+When a chat runs to 1,200 tokens and the window holds 1,000, the oldest 200 drop out.
 
 Save this for the next time a long chat loses the beginning.
 
-#contextwindow #ai
+#contextwindow #tokens #ai
 ```
 
-The first line is 62 characters. It does not repeat the thesis, and it does not say Helios.
+The episode line and the hook together are 95 characters. The hook does not repeat the thesis, and it does not say Helios.

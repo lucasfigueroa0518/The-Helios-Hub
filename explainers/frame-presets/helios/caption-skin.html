@@ -3,8 +3,10 @@
 
   Structure, hooks, and the timeline script are the cartesian reference skin's, unchanged
   (HyperFrames v0.8.140): captions.mjs fills GROUPS / DURATION / size and injects the
-  :root tokens from frame.md. Token contract: --cap-ink · --cap-canvas · --cap-accent ·
-  --cap-accent-2 · --font-display · --font-body · --cap-band-top · --cap-band-height.
+  :root tokens from frame.md.   Token contract: --cap-ink · --cap-canvas · --cap-accent ·
+  --cap-accent-2 · --font-display · --font-body.
+  Position is NOT --cap-band-top. captions.mjs still injects that variable at the
+  bottom of the frame. This skin places the pill under Instagram's Reels header.
 
   Visual (BUILD_PLAN §8, E-12): a white pill with ink text in Roboto Medium, so it reads
   on the white frames and on the beat-5 night ground alike. No orange: the frame's single
@@ -28,13 +30,14 @@
     z-index: 20;
     pointer-events: none;
   }
-  /* the keep-out band, from captionBand(H) — frame content stays above it */
+  /* Under Instagram's Reels header (top 250px of 1080×1920), above the picture.
+     Hardcoded on purpose: --cap-band-top is the old bottom band. */
   .caption-stage {
     position: absolute;
     left: 0;
     right: 0;
-    top: var(--cap-band-top, 1594px);
-    height: var(--cap-band-height, 326px);
+    top: 250px;
+    height: 320px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -50,7 +53,7 @@
 
   /* the white pill — Helios pill radius, soft card shadow so it lifts off a white frame */
   .caption-pill {
-    max-width: 88%;
+    max-width: 76%;
     padding: 22px 40px 24px;
     background: #ffffff;
     border: 1px solid #e5e5e5;

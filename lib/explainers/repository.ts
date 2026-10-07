@@ -437,6 +437,21 @@ export async function addArtifact(
   return { ...rows[0], bytes: rows[0].bytes === null ? null : num(rows[0].bytes) };
 }
 
+/**
+ * Series number for the post caption. Finished reels that spent money count.
+ * The $0 fixture does not. The job being captioned is still running, so it is
+ * not in the count yet.
+ */
+export async function nextEpisodeNumber(db: Queryable, jobId: string): Promise<number> {
+  const { rows } = await db.query<{ n: number }>(
+    `SELECT count(*)::int AS n
+       FROM explainers.jobs
+      WHERE status = 'ok' AND spend_usd > 0 AND id <> $1`,
+    [jobId],
+  );
+  return Number(rows[0]?.n ?? 0) + 1;
+}
+
 export async function listArtifacts(db: Queryable, jobId: string): Promise<ArtifactRow[]> {
   const { rows } = await db.query<ArtifactRow>(
     'SELECT * FROM explainers.artifacts WHERE job_id = $1 ORDER BY seq',

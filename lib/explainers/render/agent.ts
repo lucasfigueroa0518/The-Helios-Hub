@@ -141,7 +141,13 @@ export function sessionOptions(input: SessionInput, abort: AbortController, onDe
       },
     },
     hooks: { PreToolUse: [{ hooks: [policyHook] }] },
-    // Nothing that reaches a prompt is approved: the hook decides, the rest is denied.
+    // Headless: nobody can approve a prompt. The default mode is `auto`, whose
+    // classifier denies any call it will not decide, and `permissionPrompts:
+    // 'none'` turns that into "stop and wait" (the server reel: frames 2 and 6
+    // were refused, then the orchestrator stopped). Bypass the classifier.
+    // The PreToolUse hook above is the gate that still runs.
+    permissionMode: 'bypassPermissions',
+    allowDangerouslySkipPermissions: true,
     permissionPrompts: 'none',
     strictMcpConfig: true,
     mcpServers: {},

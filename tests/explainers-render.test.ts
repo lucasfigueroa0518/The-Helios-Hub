@@ -11,7 +11,7 @@ import test from 'node:test';
 
 import type { ExplainersDb } from '@/lib/explainers/db';
 import { runAgentSession, scrubbedEnv, sessionOptions, UNSANDBOXED_HYPERFRAMES, type AgentMessage, type AgentQuery } from '@/lib/explainers/render/agent';
-import { runRenderJob, BUILD_PROMPT, PLAN_PROMPT, type RenderDeps } from '@/lib/explainers/render/job';
+import { runRenderJob, BUILD_PROMPT, PLAN_PROMPT, repairPrompt, type RenderDeps } from '@/lib/explainers/render/job';
 import { SpendMeter } from '@/lib/explainers/render/meter';
 import { checkBash, checkToolCall, insideDir } from '@/lib/explainers/render/policy';
 import { fetchSourceText, htmlToText, resolveSource, type FetchLike } from '@/lib/explainers/render/source';
@@ -166,7 +166,10 @@ test('the agent gets a scrubbed environment, no web tools, project settings only
   assert.equal(options.cwd, JOB);
   assert.deepEqual(options.settingSources, ['project']);
   assert.ok(!options.tools.includes('WebFetch') && !options.tools.includes('WebSearch'));
+  assert.equal(options.permissionMode, 'bypassPermissions');
+  assert.equal(options.allowDangerouslySkipPermissions, true);
   assert.equal(options.permissionPrompts, 'none');
+  assert.ok(options.agents['frame-worker'].tools.includes('SubagentHandback'));
   assert.equal(options.sandbox.enabled, true);
   assert.equal(options.sandbox.failIfUnavailable, true);
   assert.equal(options.sandbox.network.allowLocalBinding, true);
@@ -262,6 +265,25 @@ function deps(db: ExplainersDb, query: AgentQuery): RenderDeps {
     secrets: { anthropicApiKey: 'sk', heygenApiKey: 'hg' },
     prepare: ({ jobsRoot, jobId }: { jobsRoot: string; jobId: string }) => fakePrepare(jobsRoot, jobId),
     hyperframesLint: () => [{ source: 'hyperframes' as const, rule: 'studio_missing_editable_id', frame: 2, severity: 'warning' as const, detail: 'no id' }],
+    writeCaption: async (facts) => ({
+      text: [
+        `AI BRAIN BREAK - EPISODE ${facts.episode}:`,
+        '',
+        'The hook stays under the preview limit.',
+        '',
+        'One short paragraph from the reel.',
+        '',
+        'Save this for the next time this comes up.',
+        '',
+        '#one #two #three',
+      ].join('\n'),
+      usd: 0,
+      model: 'claude-sonnet-5-5',
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    }),
   };
 }
 
@@ -304,9 +326,11 @@ test('a render runs plan → checkpoint → build → collect and keeps every ar
   assert.ok(Math.abs(finished!.spend_usd - 1.3) < 1e-9);
 
   const kinds = (await listArtifacts(db, job.id)).map((a) => a.kind);
-  for (const k of ['brief', 'storyboard', 'script', 'lint_report', 'audio_meta', 'captions', 'contact_sheet', 'video', 'transcript_log']) {
+  for (const k of ['brief', 'storyboard', 'script', 'lint_report', 'audio_meta', 'captions', 'contact_sheet', 'video', 'transcript_log', 'post_caption']) {
     assert.ok(kinds.includes(k as never), `missing ${k}`);
   }
+  const caption = (await listArtifacts(db, job.id)).find((a) => a.kind === 'post_caption');
+  assert.match(caption?.content ?? '', /^AI BRAIN BREAK - EPISODE 1:/);
   const video = (await listArtifacts(db, job.id)).find((a) => a.kind === 'video')!;
   assert.equal(fs.readFileSync(d.store.localPath(video.storage_path!)!, 'utf8'), 'mp4-bytes');
 
@@ -322,6 +346,7 @@ test('a render runs plan → checkpoint → build → collect and keeps every ar
     'anthropic:session_a:claude-sonnet-5-5:true',
     'anthropic:session_b:claude-sonnet-5-5:true',
     'heygen:tts+bgm+sfx:false',
+    'anthropic:post_caption:claude-sonnet-5-5:true',
   ]);
 });
 
@@ -398,6 +423,9 @@ test('a placeholder index.html with no frames still fails without rendering', as
       fs.writeFileSync(path.join(o.cwd, 'index.html'), '<html>init placeholder</html>');
       yield result(0.2);
     },
+    [repairPrompt([1, 2, 3, 4, 5, 6, 7])]: async function* () {
+      yield result(0.05);
+    },
   });
   const d = deps(db, query);
   d.renderVideo = () => {
@@ -406,7 +434,44 @@ test('a placeholder index.html with no frames still fails without rendering', as
   const outcome = await runRenderJob(d, job);
   assert.equal(outcome.status, 'failed');
   assert.match(outcome.status === 'failed' ? outcome.error : '', /without a video \(success\)/);
+  assert.match(outcome.status === 'failed' ? outcome.error : '', /Missing frames 1, 2, 3, 4, 5, 6, 7/);
   assert.equal(rendered, 0);
+});
+
+test('missing frames get one repair session, then the worker renders', async () => {
+  const { db } = await scratchExplainersDb();
+  const job = await queuedJob(db);
+  let rendered = 0;
+  const write = (dir: string, n: number) => fs.writeFileSync(path.join(dir, `0${n}-beat.html`), '<template></template>');
+  const query = stubQuery({
+    [PLAN_PROMPT]: async function* (o) {
+      fs.writeFileSync(path.join(o.cwd, 'STORYBOARD.md'), goodStoryboard);
+      fs.writeFileSync(path.join(o.cwd, 'SCRIPT.md'), script);
+      yield result(0.1);
+    },
+    [BUILD_PROMPT]: async function* (o) {
+      fs.writeFileSync(path.join(o.cwd, 'index.html'), '<html></html>');
+      const frames = path.join(o.cwd, 'compositions', 'frames');
+      fs.mkdirSync(frames, { recursive: true });
+      for (const n of [1, 3, 4, 5, 7]) write(frames, n);
+      yield result(0.4);
+    },
+    [repairPrompt([2, 6])]: async function* (o) {
+      const frames = path.join(o.cwd, 'compositions', 'frames');
+      write(frames, 2);
+      write(frames, 6);
+      yield result(0.2);
+    },
+  });
+  const d = deps(db, query);
+  d.renderVideo = (projectDir) => {
+    rendered += 1;
+    fs.mkdirSync(path.join(projectDir, 'renders'), { recursive: true });
+    fs.writeFileSync(path.join(projectDir, 'renders', 'video.mp4'), 'repaired-mp4');
+  };
+  const outcome = await runRenderJob(d, job);
+  assert.deepEqual(outcome, { status: 'ok' });
+  assert.equal(rendered, 1);
 });
 
 test('no voice id or a planless session A fails cleanly', async () => {

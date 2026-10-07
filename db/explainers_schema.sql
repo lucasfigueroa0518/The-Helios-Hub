@@ -131,7 +131,7 @@ CREATE TABLE IF NOT EXISTS explainers.artifacts (
     job_id          uuid NOT NULL REFERENCES explainers.jobs (id) ON DELETE CASCADE,
     kind            text NOT NULL CHECK (kind IN ('brief', 'source', 'storyboard', 'script',
                                                   'audio_meta', 'lint_report', 'contact_sheet',
-                                                  'video', 'captions', 'transcript_log')),
+                                                  'video', 'captions', 'transcript_log', 'post_caption')),
     storage_path    text,
     content         text,
     bytes           bigint,
@@ -141,6 +141,13 @@ CREATE TABLE IF NOT EXISTS explainers.artifacts (
 
 CREATE INDEX IF NOT EXISTS idx_explainers_artifacts_job
     ON explainers.artifacts (job_id, kind);
+
+-- Existing databases keep the old kind list until this constraint is replaced.
+ALTER TABLE explainers.artifacts DROP CONSTRAINT IF EXISTS artifacts_kind_check;
+ALTER TABLE explainers.artifacts ADD CONSTRAINT artifacts_kind_check
+    CHECK (kind IN ('brief', 'source', 'storyboard', 'script',
+                    'audio_meta', 'lint_report', 'contact_sheet',
+                    'video', 'captions', 'transcript_log', 'post_caption'));
 
 -- ── Lint violations (E-07: recorded, not blocking in version one) ───────────
 

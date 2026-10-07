@@ -21,8 +21,8 @@ const deny = (reason: string): PolicyDecision => ({ allow: false, reason });
 // report; the file is still written, and the orchestrator waits out the silence.
 export const SESSION_TOOLS = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash', 'Agent', 'Task', 'Skill', 'TodoWrite', 'SubagentHandback'];
 
-/** Tools a frame worker may use: read its packet and frame.md, write its one file. */
-export const FRAME_WORKER_TOOLS = ['Read', 'Write', 'Edit', 'Glob', 'Grep'];
+/** Tools a frame worker may use: read its packet and frame.md, write its one file, hand the report back. */
+export const FRAME_WORKER_TOOLS = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'SubagentHandback'];
 
 const PATH_KEYS = ['file_path', 'path', 'notebook_path'];
 

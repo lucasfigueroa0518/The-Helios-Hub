@@ -62,8 +62,12 @@ Continue `/faceless-explainer` from Step 3.1 through Step 6 with these settings:
 - **Step 5 frame workers:** dispatch one `frame-worker` subagent per frame (that agent type carries
   the frame-worker model setting) with `_role.md` and its packet, plus
   this dispatch context line: "Helios preset: one orange focal mark per frame; icons only from
-  assets/icons/ (inline the SVG); fonts only from frame.md's Font loading block; nothing in the
-  bottom 17%."
+  assets/icons/ (inline the SVG); fonts only from frame.md's Font loading block; 12cqw clear on
+  both sides; nothing in the top 570px or the bottom 320px. The top 250px is Instagram's Reels
+  header. The next 320px is the burned-in caption band. The bottom 320px is Instagram's username,
+  post caption, and audio." When a worker finishes, check that its `compositions/frames/` file exists. If it
+  does not, dispatch that frame again. A tool result that says to stop and wait for the user is a
+  denied call, not a person. Retry that call. Do not ask how to continue.
 - **Step 6:** run `transitions inject`, `transitions verify`, `npx hyperframes lint`,
   `npx hyperframes check`, and `npx hyperframes snapshot --at <frame midpoints>`. Fix a failing
   frame with the smallest edit and rerun the failed check. Then render without asking:

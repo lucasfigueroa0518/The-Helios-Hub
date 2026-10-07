@@ -42,12 +42,24 @@ typography:
   caption:      { fontFamily: "Roboto", cqw: 5.2, weight: 500, lineHeight: 1.15, color: "ink" }
 
 spacing:
-  pad-x: "8cqw"
-  pad-top: "12cqw"
+  # 130px each side on a 1080-wide frame. Clears Instagram's right-hand
+  # like/comment/share column (~119px) and matches it on the left so the
+  # picture stays centered.
+  pad-x: "12cqw"
+  # Content starts under the caption band. 250px Instagram header + 320px captions.
+  pad-top: "570px"
   gap-lg: "7cqw"
   gap-md: "4.5cqw"
   gap-sm: "2.2cqw"
-  caption-keepout: "bottom 17% of the frame height"
+  # Organic Reels on a 1080×1920 frame, measured in the Instagram app.
+  # Top 250px: status bar and the semi-transparent "Reels" header. Empty.
+  # Next 320px (y 250–570): burned-in caption pill, nothing else.
+  # Bottom 320px (y 1600–1920): username, post caption, and audio. Empty.
+  ig-header: "250px"
+  caption-band-top: "250px"
+  caption-band-height: "320px"
+  ig-bottom: "320px"
+  caption-keepout: "y 250px–570px, and the bottom 320px"
 
 components:
   focal-mark:
@@ -87,7 +99,7 @@ components:
     description: "The beat-5 (technical catch) ground for rhythm. Text flips to {colors.on-night}; orange stays the focal mark; eyebrow stays green."
   logo-plate:
     asset: "assets/Helios-logo.png"
-    description: "Frame 7 only. The whole logo fully on canvas, unobscured, above the caption band, with clear space at least the height of the H on every side. Never cropped, overlapped, or replaced by a gradient orb."
+    description: "Frame 7 only. The whole logo fully on canvas, unobscured, centered in the content area (below the caption band, above Instagram's bottom chrome), with clear space at least the height of the H on every side. Never cropped, overlapped, or replaced by a gradient orb."
 ---
 
 # Helios — Explainer Reel frame
@@ -112,12 +124,15 @@ meaningful motion, and moments that can carry a sound effect.
 
 - **One focal mark** — exactly one orange element per frame. If two things compete, one goes ink.
 - **Squint** — the focal element or the headline dominates at 3× or more its nearest neighbor.
-- **Silence** — 40–50% of the frame above the caption band stays empty. A phone screen crowds fast.
+- **Silence** — 40–50% of the content area stays empty. A phone screen crowds fast.
 - **The picture explains** — a viewer with the sound off should still follow the mechanism.
 - **Reference** — the Helios website hero and pitch deck; failure looks like a busy infographic or a stock-slide template.
 
 - **Canvas:** 1080×1920 (9:16). Every size is authored in `cqw` against the frame container (`px ÷ 1080 × 100`).
-- **Safe area:** `pad-x` 8cqw on both sides, `pad-top` 12cqw. **Nothing sits in the bottom 17%** — that band belongs to the captions.
+- **Safe area:** `pad-x` 12cqw (130px) on both sides. Picture, headlines, and the logo live between y=570px and y=1600px.
+  - **y 0–250:** Instagram's Reels header. Semi-transparent "Reels" title, camera icon, and the phone status bar. Nothing of ours goes here.
+  - **y 250–570:** the burned-in caption band. The caption skin centers the pill here, under that header and above the picture. Frames leave this band empty.
+  - **y 1600–1920:** Instagram's username, the post caption, and the audio line. Nothing of ours goes here.
 - **Container law:** every frame ground sets `container-type: size`; frame-relative units are `cqw`/`cqh`, never `vw`.
 
 ## Colors
@@ -135,7 +150,7 @@ labels only** (it doubles as signposting: "THE ANALOGY", "UNDER THE HOOD", "THE 
 - **Pragmatica Extended ships Bold only.** Hierarchy comes from size, case, and color, never weight. `display` is uppercase; `h1`–`h3` are Title Case.
 - **Roboto 300** for body, **500** for strong body and captions, **700** for eyebrows. Eyebrows are uppercase, 0.18em tracking, green.
 - **Legibility floor:** any load-bearing text is at least **3.3cqw** (36px). `micro` is chrome and tags only.
-- **Fit to measure:** headline block at most 84cqw wide. 1–3 words → `display`; 4–6 → `h1`; 7+ → `h2`. On-screen text is a label or a headline, never a narration sentence.
+- **Fit to measure:** headline block at most 76cqw wide, inside the 12cqw side margins. 1–3 words → `display`; 4–6 → `h1`; 7+ → `h2`. On-screen text is a label or a headline, never a narration sentence.
 - **Numbers stay numerals** ("240 customers", "10,000 requests"). `stat-figure` is for the one number that matters, usually the focal mark.
 
 ## Depth & Surface
@@ -189,7 +204,7 @@ button-like element, no textures, no gradients outside the logo.
 
 ### 7 · Close (41–45s · type `branding`)
 
-White screen. Only the Helios logo, centered above the caption band. It animates in with the usual rise (opacity 0, 20px, ~400ms, `expo.out`) and holds. The voiceover is the one-line thesis and does not say "Helios". No headline, no URL, and no other mark.
+White screen. Only the Helios logo, centered in the content area (below y=570px, above y=1600px). It animates in with the usual rise (opacity 0, 20px, ~400ms, `expo.out`) and holds. The voiceover is the one-line thesis and does not say "Helios". No headline, no URL, and no other mark.
 
 ## Motion
 
@@ -208,7 +223,7 @@ Helios motion, tightened for 45 seconds:
 - Put eyebrows above headlines, green, uppercase, tracked 0.18em.
 - Build analogies as clean CSS scenes with labeled parts; make the moving piece the focal mark.
 - Use the approved Lucide icons for system parts, inlined from `assets/icons/`.
-- Keep every element above the caption band (top 83% of the frame).
+- Keep every element inside the content area: below y=570px, above y=1600px, and inside the 12cqw side margins.
 - Use the script's real numbers for the worked example; label units.
 
 ### Don't
@@ -223,20 +238,20 @@ Helios motion, tightened for 45 seconds:
 
 | Treatment | 9:16 (primary) |
 |---|---|
-| Hook | eyebrow + headline upper half, visual below, all above the caption band |
-| Analogy | scene fills the middle 55% of the frame height; labels beside or above parts |
-| Map | nodes stacked vertically or in a 2×2, connectors vertical |
-| Worked example | table or card pair centered; result number above the caption band |
-| Catch | statement upper half, belief/reality visual below |
-| Context | 2–3 cards stacked |
-| Close | white screen, Helios logo only, centered above the caption band |
+| Hook | eyebrow + headline at the top of the content area (just below y=570px), visual below, all above y=1600px |
+| Analogy | scene fills the content area; labels beside or above parts |
+| Map | nodes stacked vertically or in a 2×2, connectors vertical, all inside the content area |
+| Worked example | table or card pair centered in the content area; result number above y=1600px |
+| Catch | statement at the top of the content area, belief/reality visual below |
+| Context | 2–3 cards stacked inside the content area |
+| Close | white screen, Helios logo only, centered in the content area |
 
 ## Approved Entities
 
 **The Helios logo** — `assets/Helios-logo.png` (wordmark). Frame 7 only. Fully on canvas,
 unobscured, never overlapped by text, shapes, or captions, never cropped, never recolored, never
 replaced by a gradient orb. Clear space on every side at least the height of the "H". Render it at
-40–55cqw wide, centered, above the caption band.
+40–55cqw wide, centered in the content area (below y=570px, above y=1600px).
 
 **Icons** — Lucide 0.487.0, inline the SVG from `assets/icons/<name>.svg` (stroke `currentColor`,
 color by the parent). Only these names:
@@ -264,7 +279,7 @@ the storyboard; when the topic has a source, every claim and visual traces to it
 - **Palette** — only frontmatter colors; ink not pure black; no gradient outside the logo.
 - **Type** — Pragmatica Bold for headlines/figures, Roboto for the rest; load-bearing text ≥ 3.3cqw; no narration sentence on screen; no exclamation marks.
 - **Icons** — only approved Lucide names, inlined; no emoji or glyph icons.
-- **Keep-out** — nothing in the bottom 17%.
+- **Keep-out** — nothing in y 0–570px (Instagram header, then the caption band) or y 1600–1920px (Instagram's username, post caption, and audio). Side margins 12cqw.
 - **Logo** — frame 7 only, whole, unobscured, clear space ≥ the H height.
 - **Motion** — ~400ms `expo.out` reveals with a 20px rise, 0.06s stagger; content arrives on voiceover cues, not all at t=0.
 - **Fabrication** — every number traces to the script or source.

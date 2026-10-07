@@ -12,18 +12,30 @@ import {
   addLintViolations,
   finishJob,
   getTopic,
+  nextEpisodeNumber,
   recordCost,
   setJobStage,
 } from '@/lib/explainers/repository';
 import { loadSettings } from '@/lib/explainers/settings';
 import type { ArtifactStore } from '@/lib/explainers/storage';
 import type { ArtifactKind, JobRow, LintViolation, Mode, TopicRow } from '@/lib/explainers/types';
+import { CaptionError, writeExplainerCaption, type CaptionDraft, type CaptionFacts } from '@/lib/explainers/caption';
 import { lintStoryboard } from '../../../explainers/lint/lint-storyboard.mjs';
 
 export const PLAN_PROMPT =
   'Use the helios-explainer-director skill to run this reel. PHASE: plan. Do only the plan phase, then stop.';
 export const BUILD_PROMPT =
   'Use the helios-explainer-director skill to run this reel. PHASE: build. STORYBOARD.md and SCRIPT.md are final; do only the build phase, then stop.';
+
+/** One follow-up when session B stops successful but leaves beats unwritten. */
+export function repairPrompt(missing: readonly number[]): string {
+  return [
+    'Use the helios-explainer-director skill to run this reel. PHASE: build.',
+    `Frames ${missing.join(', ')} are missing from compositions/frames/.`,
+    'Write each missing frame, then finish the build: assemble, check, and render renders/video.mp4.',
+    'A tool result that says to stop and wait is a denied call, not a person. Retry it. Do not ask.',
+  ].join(' ');
+}
 
 export type RenderDeps = {
   db: ExplainersDb;
@@ -41,6 +53,8 @@ export type RenderDeps = {
    * `index.html` is assembled, the worker renders it. No extra model call.
    */
   renderVideo?: (projectDir: string) => void;
+  /** Swappable for tests. The real one calls Sonnet. A finished video always gets one. */
+  writeCaption?: (facts: CaptionFacts) => Promise<CaptionDraft>;
   log?: (event: string, fields?: Record<string, unknown>) => void;
 };
 
@@ -52,6 +66,20 @@ class RenderFailure extends Error {
   }
 }
 
+function recordCaptionCost(db: ExplainersDb, jobId: string, mode: Mode, draft: CaptionDraft): Promise<void> {
+  return recordCost(db, {
+    jobId,
+    mode,
+    vendor: 'anthropic',
+    component: `post_caption:${draft.model}`,
+    inputTokens: draft.inputTokens,
+    outputTokens: draft.outputTokens,
+    cacheReadTokens: draft.cacheReadTokens,
+    cacheWriteTokens: draft.cacheWriteTokens,
+    usd: draft.usd,
+  });
+}
+
 function read(file: string): string | null {
   return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
 }
@@ -60,13 +88,24 @@ function fileReady(file: string): boolean {
   return fs.existsSync(file) && fs.statSync(file).size > 0;
 }
 
+const BEAT_NUMBERS = [1, 2, 3, 4, 5, 6, 7];
+
+/** Frame numbers 1–7 that have no composition file yet. */
+export function missingFrameNumbers(projectDir: string): number[] {
+  const dir = path.join(projectDir, 'compositions', 'frames');
+  const present = new Set<number>();
+  if (fs.existsSync(dir)) {
+    for (const file of fs.readdirSync(dir)) {
+      const n = /^(\d+).+\.html$/.exec(file)?.[1];
+      if (n) present.add(Number(n));
+    }
+  }
+  return BEAT_NUMBERS.filter((n) => !present.has(n));
+}
+
 /** Init writes a placeholder index.html. A reel is assembled only once all seven frames exist. */
 function projectAssembled(projectDir: string): boolean {
-  if (!fileReady(path.join(projectDir, 'index.html'))) return false;
-  const dir = path.join(projectDir, 'compositions', 'frames');
-  if (!fs.existsSync(dir)) return false;
-  const frames = fs.readdirSync(dir).filter((file) => /^\d+.+\.html$/.test(file));
-  return frames.length >= 7;
+  return fileReady(path.join(projectDir, 'index.html')) && missingFrameNumbers(projectDir).length === 0;
 }
 
 /**
@@ -231,10 +270,23 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
 
     // Session B: build and render.
     await stage('session_b');
-    const b = await session(BUILD_PROMPT);
+    let b = await session(BUILD_PROMPT);
     await stage('session_b_done', { sessionBId: b.sessionId ?? undefined });
     await recordSessionCost(db, job, job.mode, 'session_b', b);
     if (b.capped) throw new RenderFailure(`Spend cap $${job.spend_cap_usd.toFixed(2)} reached in session B.`, true);
+
+    // A successful session can still stop with beats unwritten and no MP4 (the
+    // server reel: the auto classifier refused frames 2 and 6, and the model
+    // waited). One repair, then the worker render below. No third session.
+    const videoPath = path.join(ws.projectDir, 'renders', 'video.mp4');
+    const missing = missingFrameNumbers(ws.projectDir);
+    if (!fileReady(videoPath) && missing.length > 0 && b.subtype === 'success' && !b.isError) {
+      await stage('repair');
+      log('repair_frames', { jobId: job.id, missing });
+      b = await session(repairPrompt(missing));
+      await recordSessionCost(db, job, job.mode, 'repair', b);
+      if (b.capped) throw new RenderFailure(`Spend cap $${job.spend_cap_usd.toFixed(2)} reached while repairing missing frames.`, true);
+    }
 
     // Collect: outputs, audio telemetry, post-build lint.
     await stage('collect');
@@ -258,7 +310,7 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
     await addLintViolations(db, job.id, [...onScreen, ...hyperframes]);
     await keepText('lint_report', JSON.stringify({ phase: 'final', storyboard: final, hyperframes }, null, 2));
 
-    const video = path.join(ws.projectDir, 'renders', 'video.mp4');
+    const video = videoPath;
     if (projectAssembled(ws.projectDir) && !fileReady(video)) {
       await stage('render');
       log('worker_render', { jobId: job.id });
@@ -270,8 +322,43 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
       }
     }
     if (!(await keep('video', video, 'video.mp4'))) {
-      throw new RenderFailure(`Session B ended without a video (${b.subtype}${b.errors.length ? `: ${b.errors.join('; ')}` : ''}).`);
+      const stillMissing = missingFrameNumbers(ws.projectDir);
+      const gap = stillMissing.length ? ` Missing frames ${stillMissing.join(', ')}.` : '';
+      throw new RenderFailure(
+        `Session B ended without a video (${b.subtype}${b.errors.length ? `: ${b.errors.join('; ')}` : ''}).${gap}`,
+      );
     }
+
+    await stage('caption');
+    const episode = await nextEpisodeNumber(db, job.id);
+    const facts: CaptionFacts = {
+      episode,
+      title: topic.title,
+      scope: topic.scope,
+      storyboard: read(path.join(ws.projectDir, 'STORYBOARD.md')) ?? storyboard,
+      script: read(path.join(ws.projectDir, 'SCRIPT.md')) ?? script,
+      source: topic.source_text,
+    };
+    const writer = deps.writeCaption ?? ((input) => writeExplainerCaption(input, job.orchestrator_model));
+    let draft: CaptionDraft | null = null;
+    let captionError: unknown = null;
+    for (let attempt = 0; attempt < 2 && !draft; attempt += 1) {
+      try {
+        draft = await writer(facts);
+      } catch (error) {
+        captionError = error;
+        const spent = error instanceof CaptionError ? error.spent : undefined;
+        if (spent) await recordCaptionCost(db, job.id, job.mode, spent);
+        log('caption_failed', { jobId: job.id, attempt, error: error instanceof Error ? error.message : String(error) });
+      }
+    }
+    if (!draft) {
+      const detail = captionError instanceof Error ? captionError.message : String(captionError);
+      throw new RenderFailure(`Post caption failed: ${detail}`);
+    }
+    await recordCaptionCost(db, job.id, job.mode, draft);
+    await keepText('post_caption', draft.text);
+
     await finishJob(db, job.id, { status: 'ok' });
     log('job_ok', { jobId: job.id });
     return { status: 'ok' };
