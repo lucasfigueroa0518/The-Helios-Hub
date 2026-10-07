@@ -51,7 +51,7 @@ async function main() {
   const { toSlug, writeGeneratedPost } = await import('@/lib/social/render/local-store');
   const { readPage } = await import('@/lib/social/reporter/read-page');
   const { liveMessagesCreate } = await import('@/lib/social/reporter/reporter');
-  const { isWellKnownLive } = await import('@/lib/social/writer/well-known');
+  const { hasPhotoLive, isWellKnownLive } = await import('@/lib/social/writer/well-known');
   const { createFileUsedPhotoLog } = await import('@/lib/social/photos/used-photos');
   const { loadBank } = await import('@/lib/social/photos/bank');
   const usedLog = createFileUsedPhotoLog();
@@ -93,6 +93,7 @@ async function main() {
     budget,
     readPage,
     isWellKnown: isWellKnownLive,
+    hasPhoto: hasPhotoLive,
     fitCheck: async (post) => {
       const r = await checkRenderFit(post, { screenshotDir: shotDir, name: currentStory });
       fitResults.set(currentStory, r);

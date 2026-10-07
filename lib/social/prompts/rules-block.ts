@@ -26,9 +26,9 @@ export const TESTED_WRITER_RULES = `- Every fact from the brief. Describe people
 - EVERY slide has an IMAGE line: \`subject: <name>\`, \`article: <photo>\` (from ARTICLE PHOTOS), or \`stock: <plain 2–3 word scene>\`. Stat slides get a symbolic stock scene.
 - Write 3 cover options; choose one.`;
 
-/** The tested IMAGE line, replaced (Tommy, 2026-10-06): photos only when one fits; no symbolic stock scenes. */
+/** The tested IMAGE line, replaced (Tommy, 2026-10-06): no symbolic stock scenes; then (handoff, same day) the default flips to a photo. */
 export const TESTED_IMAGE_RULE = "- EVERY slide has an IMAGE line: `subject: <name>`, `article: <photo>` (from ARTICLE PHOTOS), or `stock: <plain 2–3 word scene>`. Stat slides get a symbolic stock scene.";
-export const IMAGE_RULE = '- IMAGE on each story slide: subject: <name>, article: <photo> (from ARTICLE PHOTOS), stock: <plain 2–3 word literal scene>, or none. Request a photo only when a specific subject, article photo or literal scene fits the slide; otherwise use none. The chosen cover always has an IMAGE.';
+export const IMAGE_RULE = '- IMAGE on every story slide: request a photo unless nothing physical fits. In order: subject: <name> (a SUBJECTS entry the slide is about, with photo_available true; each subject at most once per post), article: <photo> (from ARTICLE PHOTOS), stock: <plain 2–3 word literal scene> that names a physical thing the slide itself mentions. Use none only when the slide is about an idea with nothing physical to show, and add one EDIT NOTES line per none saying why. The chosen cover always has an IMAGE.';
 
 /** The Writer rules as used: the tested lines with the IMAGE line replaced. */
 export const WRITER_RULES = TESTED_WRITER_RULES.replace(TESTED_IMAGE_RULE, IMAGE_RULE);

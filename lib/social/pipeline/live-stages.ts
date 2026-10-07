@@ -29,7 +29,7 @@ import type { FitCheck } from '@/lib/social/render/fit-check';
 import type { PageRead } from '@/lib/social/reporter/read-page';
 import { runReporter, type MessagesCreate, type ReporterResult } from '@/lib/social/reporter/reporter';
 import type { EditorResult } from '@/lib/social/editor/editor';
-import type { IsWellKnown, WriterResult } from '@/lib/social/writer/writer';
+import type { HasPhoto, IsWellKnown, WriterResult } from '@/lib/social/writer/writer';
 import { runWriter } from '@/lib/social/writer/writer';
 import { runEditor } from '@/lib/social/editor/editor';
 
@@ -95,6 +95,8 @@ export type LiveStagesDeps = {
   budget: RunBudget;
   readPage: (url: string) => Promise<PageRead>;
   isWellKnown: IsWellKnown;
+  /** photo_available marking for the Writer (handoff). */
+  hasPhoto?: HasPhoto;
   fitCheck: FitCheck;
   http?: PhotoDeps['http'];
   /** 7-day rule and the photo bank (M8c). */
@@ -150,7 +152,7 @@ export function createLiveStages(deps: LiveStagesDeps): { stages: PipelineStages
       return { ok: true, value: { storyId: story.id, parsed: r.brief, raw: r.raw, pages: r.pages }, costUsd: r.costUsd };
     },
     async write(brief) {
-      const r = await runWriter(brief.parsed, { create, isWellKnown: deps.isWellKnown });
+      const r = await runWriter(brief.parsed, { create, isWellKnown: deps.isWellKnown, hasPhoto: deps.hasPhoto });
       log(brief.storyId).writer.push(r);
       if (!r.ok) return capAware(deps.budget, { ok: false, reasonCode: r.reason, detail: r.detail, costUsd: r.costUsd });
       return { ok: true, value: { storyId: brief.storyId, submission: r.draft, filled: r.filled }, costUsd: r.costUsd };

@@ -38,8 +38,8 @@ function draft(): DraftSubmission {
     chosen_cover: 1,
     slides: [
       { type: 'text', headline: { text: 'Announced on Truth Social', facts: ['F1'] }, body: { text: 'Trump announced the force in a Sunday morning post.', facts: ['F1'] }, quote_id: null, quote_excerpt: null, number_ids: [], image: { kind: 'subject', value: 'Jay Clayton' }, spread_with_next: false },
-      { type: 'quote', headline: { text: 'His pitch', facts: ['Q1'] }, body: null, quote_id: 'Q1', quote_excerpt: 'The Super Intelligence Force is tasked with coordinating the effort of the Federal Government … of all Americans,', number_ids: [], image: stock('government building'), spread_with_next: false },
-      { type: 'stat', headline: { text: 'It has a deadline', facts: ['N1'] }, body: null, quote_id: null, quote_excerpt: null, number_ids: ['N1'], image: stock('wall clock'), spread_with_next: false },
+      { type: 'quote', headline: { text: 'His pitch', facts: ['Q1'] }, body: null, quote_id: 'Q1', quote_excerpt: 'The Super Intelligence Force is tasked with coordinating the effort of the Federal Government … of all Americans,', number_ids: [], image: { kind: 'none', value: '' }, spread_with_next: false },
+      { type: 'stat', headline: { text: 'It has a deadline', facts: ['N1'] }, body: null, quote_id: null, quote_excerpt: null, number_ids: ['N1'], image: { kind: 'none', value: '' }, spread_with_next: false },
     ],
     follow: 'Follow Helios for AI news without the hype.',
     caption: { text: 'Trump announced a Super Intelligence Force. Source: TechCrunch, October 4, 2026.', facts: ['F1'] },
@@ -83,7 +83,7 @@ test('Writer prompt = tested intro + RULES (tested lines + 3 additions + shared 
   assert.equal(WRITER_SYSTEM, expected);
   assert.ok(!WRITER_SYSTEM.includes('{{brief}}') && !WRITER_SYSTEM.includes('\nOUTPUT\n') && !WRITER_SYSTEM.includes('${'));
   assert.equal(WRITER_ADDED_RULES.split('\n').length, 3);
-  assert.ok(WRITER_ADDED_RULES.includes(codeBlocks('**Photo rule (Tommy, 2026-10-06)')[1]!), 'spread line word for word');
+  assert.ok(WRITER_ADDED_RULES.includes(codeBlocks('- **Change 2, the spread line:**')[0]!), 'spread line word for word');
   assert.equal(WRITER_MOMENTUM_RULES, codeBlocks('**Writer prompt v2')[0], 'v2 rules word for word from the prompts file');
   assert.ok(!WRITER_SYSTEM.includes('—'), 'no em dashes anywhere in the Writer prompt');
   assert.ok(!WRITER_SYSTEM.includes('Source:'), 'the Source line is built by code, not asked of the Writer');
@@ -236,4 +236,33 @@ test('runDay: the Writer stage drafts each brief; its cost lands under writer', 
   assert.equal(r.posts.length, 2);
   assert.ok((meter.byStage().writer ?? 0) > 0);
   assert.equal(r.posts[0]!.render.slides[1]!.headline?.[0]?.text, 'Announced on Truth Social');
+});
+
+// ── Handoff (Tommy, 2026-10-06): photo_available, filtered article photos, first-submission image check ──
+
+import { imageHandoffFailures } from '@/lib/social/writer/writer';
+
+test('handoff: SUBJECTS marked photo_available; ARTICLE PHOTOS whose credit fails are dropped before the Writer', async () => {
+  const brief = briefSuperIntelligenceForce();
+  brief.article_photos.push({ caption: 'Signing. (Official White House Photo by Daniel Torok)', credit: null, url: 'https://example.com/wh.jpg', page: 'https://example.com/a' });
+  const forWriter = await briefForWriter(brief, async () => true, async (s) => s.name === 'Donald Trump');
+  assert.deepEqual(forWriter.subjects.map((s) => [s.name, s.photo_available]), [['Donald Trump', true], ['Jay Clayton', false]]);
+  assert.deepEqual(forWriter.article_photos.map((p) => p.url), ['https://example.com/wh.jpg'], 'the Getty photo is dropped');
+});
+
+test('handoff: subject only when photo_available, at most once; a stock scene names something the slide mentions', () => {
+  const brief = briefSuperIntelligenceForce();
+  const d = draft();
+  d.slides[0]!.image = { kind: 'subject', value: 'Donald Trump' }; // the cover already requests Trump
+  d.slides[2]!.image = { kind: 'stock', value: 'wall clock' }; // the stat slide says "deadline", not a clock
+  const errs = imageHandoffFailures(d, brief, new Set(['Donald Trump'])).map((e) => `${e.section}: ${e.message}`);
+  assert.ok(errs.some((e) => /Donald Trump is already requested on cover/.test(e)), errs.join(' | '));
+  assert.ok(errs.some((e) => /stock "wall clock" doesn't name a physical thing/.test(e)));
+  const clayton = draft();
+  clayton.slides[0]!.image = { kind: 'subject', value: 'Jay Clayton' };
+  assert.ok(imageHandoffFailures(clayton, brief, new Set(['Donald Trump'])).some((e) => /Jay Clayton has no usable photo/.test(e.message)));
+  const ok = draft();
+  ok.slides[0]!.image = { kind: 'stock', value: 'Truth Social app' };
+  ok.slides[0]!.body!.text = 'Trump announced the force in a post on the Truth Social app.';
+  assert.deepEqual(imageHandoffFailures(ok, brief, null).filter((e) => e.section.startsWith('slide 2')), []);
 });

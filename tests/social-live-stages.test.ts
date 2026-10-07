@@ -8,7 +8,7 @@ import test from 'node:test';
 import type Anthropic from '@anthropic-ai/sdk';
 
 import { briefSuperIntelligenceForce } from '@/fixtures/social/briefs';
-import { sifDraft } from '@/fixtures/social/drafts';
+import { sifDraftHandoff } from '@/fixtures/social/drafts';
 import { createFakeHttp, SIF_WEB } from '@/fixtures/social/photo-http';
 import type { JevAsk } from '@/lib/social/jev/client';
 import * as Identity from '@/lib/social/jev/questions/subject-identity.v1';
@@ -35,7 +35,7 @@ function fakeClaude(calls: string[], flags: unknown = { flags: [], main_claim_fa
     const names = (params.tools ?? []).map((t) => (t as { name?: string }).name);
     if (names.includes('submit_brief')) { calls.push('reporter'); return msg('submit_brief', briefSuperIntelligenceForce()); }
     if (names.includes('submit_flags')) { calls.push('fact-checker'); return msg('submit_flags', flags); }
-    if (names.includes('submit_draft')) { calls.push('draft'); return msg('submit_draft', sifDraft()); }
+    if (names.includes('submit_draft')) { calls.push('draft'); return msg('submit_draft', sifDraftHandoff()); }
     throw new Error(`unexpected request: ${names.join(',')}`);
   };
 }
@@ -83,7 +83,8 @@ test('live stages: two stories run Reporter → Writer → Editor → Fact-check
   assert.deepEqual(calls, ['reporter', 'draft', 'draft', 'fact-checker', 'reporter', 'draft', 'draft', 'fact-checker']);
   const post = r.posts[0]!;
   assert.ok(post.render.slides.length > 0);
-  assert.ok(post.photos.every((t) => t.photo), 'every slide has a photo');
+  assert.ok(post.photos[0]!.photo, 'the cover has a photo');
+  assert.ok(post.photos.slice(1).every((t) => t.photo || t.via === 'none'), 'every story slide has its requested photo or none');
   const l = logs.get(post.storyId)!;
   assert.equal(l.writer.length, 1);
   assert.equal(l.factCheck.length, 1);

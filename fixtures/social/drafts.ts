@@ -40,3 +40,13 @@ export function sifDraft(): DraftSubmission {
     edit_notes: [],
   };
 }
+
+/**
+ * The same draft under the handoff rule (Tommy, 2026-10-06): symbolic stock
+ * scenes the slide doesn't mention become IMAGE none.
+ */
+export function sifDraftHandoff(): DraftSubmission {
+  const d = sifDraft();
+  for (const s of d.slides) if (s.image.kind === 'stock') s.image = { kind: 'none', value: '' };
+  return d;
+}

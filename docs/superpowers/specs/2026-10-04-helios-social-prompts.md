@@ -180,6 +180,25 @@ BRIEF
 - IMAGE on each story slide: subject: <name>, article: <photo> (from ARTICLE PHOTOS), stock: <plain 2–3 word literal scene>, or none. Request a photo only when a specific subject, article photo or literal scene fits the slide; otherwise use none. The chosen cover always has an IMAGE.
 ```
 
+- **Handoff (Tommy, 2026-10-06, after the full run):** the IMAGE line above is replaced again. The default flips to a photo. This is the line in use:
+
+```
+- IMAGE on every story slide: request a photo unless nothing physical fits. In order: subject: <name> (a SUBJECTS entry the slide is about, with photo_available true; each subject at most once per post), article: <photo> (from ARTICLE PHOTOS), stock: <plain 2–3 word literal scene> that names a physical thing the slide itself mentions. Use none only when the slide is about an idea with nothing physical to show, and add one EDIT NOTES line per none saying why. The chosen cover always has an IMAGE.
+```
+
+  **Why:** in the run, 9 of 14 story slides used `none`, there were 0 stock requests, and the Writer requested a subject without a usable photo.
+
+  **The brief the Writer sees:**
+  - each SUBJECTS entry is marked `photo_available` by code: a Wikidata match whose main image is usable, with no AI;
+  - ARTICLE PHOTOS whose credit fails the check are dropped.
+
+  **Code check on the first submission:**
+  - a subject request must be marked `photo_available`;
+  - each subject at most once per post;
+  - a stock scene shares a word with the slide's own text.
+
+  A failed request on a story slide still renders text-only.
+
 - **Change 2, the spread line:** the "added since the test" spread line is replaced:
 
 ```

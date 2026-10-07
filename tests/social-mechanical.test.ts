@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { briefSuperIntelligenceForce } from '@/fixtures/social/briefs';
-import { sifDraft } from '@/fixtures/social/drafts';
+import { sifDraft, sifDraftHandoff } from '@/fixtures/social/drafts';
 import {
   applySilentFixes, buildSourceLine, checkBackground, checkCaption, checkDroppedText, checkLimits, checkPhotoCredit, checkQuoteMarks, checkVoice,
   expectedSlideText, fixDashes, fixQuoteMarks, fixTrailingComma, fixWhitespace, LIMITS, quotedSpans,
@@ -272,11 +272,12 @@ test('C8: a phrase of four or more words in two fields of one slide fails; acros
 });
 
 test('C8 goes back to the Editor only (once), not the Writer; after the Fact-checker it is a warning', async () => {
-  const rep = sub((d) => { d.slides[3]!.headline = { text: '120 days to report', facts: ['N1'] }; });
+  const rep = sifDraftHandoff();
+  rep.slides[3]!.headline = { text: '120 days to report', facts: ['N1'] };
   const w = await runWriter(brief(), { create: scripted([rep]).create, isWellKnown: async () => false });
   assert.ok(w.ok && w.draftRetries === 0, 'the Writer is not sent back for C8');
   const { runEditor } = await import('@/lib/social/editor/editor');
-  const e = await runEditor(brief(), rep, { create: scripted([rep, sifDraft()]).create });
+  const e = await runEditor(brief(), rep, { create: scripted([rep, sifDraftHandoff()]).create });
   assert.ok(e.ok);
   assert.equal(e.retries, 1);
   assert.match(e.retryErrors[0]!, /C8 slide 5: the number 120/);

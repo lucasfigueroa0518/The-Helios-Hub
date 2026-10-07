@@ -27,7 +27,8 @@ test('RULES_BLOCK carries the tested Writer rules word for word', () => {
   const tested = writer.match(/RULES\n([\s\S]*?)\n\nOUTPUT/)![1];
   assert.equal(TESTED_WRITER_RULES, tested);
   // Photo rule (2026-10-06): the tested IMAGE line is replaced, word for word from the prompts file.
-  const imageRule = codeBlocks(PROMPTS, '**Photo rule (Tommy, 2026-10-06)')[0]!;
+  // The handoff version (2026-10-06) is the line in use: the block after "**Handoff".
+  const imageRule = codeBlocks(PROMPTS, '- **Handoff (Tommy, 2026-10-06')[0]!;
   assert.equal(IMAGE_RULE, imageRule);
   assert.ok(TESTED_WRITER_RULES.includes(TESTED_IMAGE_RULE));
   assert.equal(WRITER_RULES, TESTED_WRITER_RULES.replace(TESTED_IMAGE_RULE, IMAGE_RULE));
