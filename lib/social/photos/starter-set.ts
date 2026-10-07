@@ -99,29 +99,33 @@ export const STARTER_SET: StarterPhoto[] = [
 ];
 
 /**
- * Plain words that put a text on a topic. AI-compute words are deliberately
- * narrow (no bare "AI"), so the default is a real fallback, not every match.
+ * Plain words that put a text on a topic (literal terms only, Tommy
+ * 2026-10-06). AI-compute words are deliberately narrow (no bare "AI"), so
+ * the default is a real fallback, not every match.
  */
 export const TOPIC_TERMS: Record<StarterTopic, RegExp> = {
-  'AI compute and data centers': /\b(data cent(?:er|re)s?|servers?|server rooms?|compute|computing power|GPUs?|supercomputers?|cloud computing|server racks?)\b/i,
+  'AI compute and data centers': /\b(data cent(?:er|re)s?|servers?|server rooms?|server racks?|compute|computing power|GPUs?|supercomputers?|cloud computing)\b/i,
   'Chips and semiconductors': /\b(chips?|semiconductors?|wafers?|microchips?|processors?|foundr(?:y|ies)|TSMC|export controls?)\b/i,
   'Software and coding': /\b(code|coding|software|developers?|programming|programmers?|keyboards?|open[- ]source)\b/i,
-  'Phones and consumer apps': /\b(phones?|smartphones?|iPhones?|Android|apps?|mobile|consumers?)\b/i,
-  'Energy and power': /\b(energy|electricity|power grid|grid|power plants?|nuclear|solar|wind|utilit(?:y|ies)|pylons?|power lines?)\b/i,
-  'Space and satellites': /\b(space|satellites?|orbit|rockets?|NASA|SpaceX|Starlink|ISS)\b/i,
+  'Phones and consumer apps': /\b(phones?|smartphones?|iPhones?|Android|apps?|mobile)\b/i,
+  'Energy and power': /\b(energy|electricity|power grids?|power plants?|nuclear|solar|wind (?:farms?|turbines?|power)|utility companies|utilities|pylons?|power lines?)\b/i,
+  'Space and satellites': /\b(outer space|spaceflight|space station|satellites?|orbit(?:al)?|rockets?|NASA|SpaceX|Starlink|ISS)\b/i,
   'Robotics and automation': /\b(robots?|robotics|robotic|automation|humanoids?|factor(?:y|ies)|manufacturing)\b/i,
-  'Research and labs': /\b(research|researchers?|labs?|laborator(?:y|ies)|scientists?|scientific|benchmarks?)\b/i,
-  'Money, funding and business': /\b(funding|fundraising|raised?|raises|investments?|investors?|valuation|revenue|profit|money|price|prices|pricing|subscriptions?|coins?|cash|deal)\b/i,
-  'Trade and supply chain': /\b(trade|tariffs?|exports?|imports?|supply chains?|shipping|ports?|containers?|warehouses?|logistics)\b/i,
-  'Security and hacking': /\b(security|hacks?|hackers?|hacking|breach(?:es)?|cyber\w*|vulnerabilit(?:y|ies)|passwords?|padlocks?|locks?)\b/i,
+  'Research and labs': /\b(laborator(?:y|ies)|scientists?|experiments?)\b/i,
+  'Money, funding and business': /\b(funding|fundraising|funding rounds?|investments?|investors?|valuation|revenue|profits?|money|prices?|pricing|subscriptions?|coins?|cash)\b/i,
+  'Trade and supply chain': /\b(trade|tariffs?|exports?|imports?|supply chains?|shipping|seaports?|shipping containers?|warehouses?|logistics)\b/i,
+  'Security and hacking': /\b(security|hacks?|hackers?|hacking|breach(?:es)?|cyber\w*|vulnerabilit(?:y|ies)|passwords?|padlocks?)\b/i,
   'Cities and infrastructure': /\b(cit(?:y|ies)|skylines?|urban|highways?|traffic|infrastructure|roads?)\b/i,
-  'Jobs and the workplace': /\b(jobs?|workers?|workplaces?|employees?|employers?|employment|layoffs?|hiring|offices?|unions?|meetings?|conference rooms?)\b/i,
+  'Jobs and the workplace': /\b(jobs?|workers?|workplaces?|employees?|employers?|employment|layoffs?|hiring|unions?)\b/i,
   Education: /\b(education|schools?|students?|universit(?:y|ies)|teachers?|classrooms?|lectures?|lecture halls?)\b/i,
   'Copyright, publishing and training data': /\b(copyright\w*|publishers?|publishing|authors?|books?|librar(?:y|ies)|training data|licensing deals?)\b/i,
   'US Congress': /\b(Congress|congressional|U\.?S\.? Senate|senators?|House of Representatives|Capitol Hill|Speaker of the House)\b/i,
   'stock markets': /\b(stock markets?|stock prices?|shares (?:fell|rose|jumped|dropped|slid|surged)|Nasdaq|NYSE|S&P 500|Dow Jones|IPO|market value|market cap(?:italization)?)\b/i,
   surveillance: /\b(surveillance|facial recognition|CCTV|spyware|spying)\b/i,
 };
+
+/** Words never used for matching: they mean something else in AI news (Tommy, 2026-10-06). Guarded by a test. */
+export const AMBIGUOUS_WORDS = ['lab', 'labs', 'model', 'models', 'agent', 'agents', 'research', 'researcher', 'space', 'raised', 'deal', 'port', 'container', 'lock', 'utility', 'office', 'meeting'];
 
 /** Topics a text is about. */
 export function topicsIn(text: string): StarterTopic[] {

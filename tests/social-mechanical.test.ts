@@ -232,13 +232,13 @@ test('design: C7 dropped text fails the render (render-failed)', async () => {
   assert.match((r as { detail: string }).detail, /C7 slide 4: not on the rendered slide: "His pitch"/);
 });
 
-test('design: C6 replaces a photo whose credit fails (agency) with a starter-set photo, logged', async () => {
+test('design: C6 drops a story-slide photo whose credit fails (agency): text-only, logged', async () => {
   const getty = { url: 'https://s/getty.jpg', foreignLandingUrl: '', mime: 'image/jpeg', width: 2000, height: 1300, license: 'by', creator: 'Kevin Dietsch / Getty Images', source: 'flickr', title: 'wall clock', tags: [] };
   const deps = { ...designDeps(), stock: async () => [getty] };
   const r = await createDesignStage(deps as never)(pdraft(), pbrief(), story);
   assert.ok(r.ok);
   assert.ok(r.value.checks.photoReplacements.length >= 1, JSON.stringify(r.value.checks));
-  assert.match(r.value.checks.photoReplacements[0]!, /agency credit \(getty\) → \/social\/starter\//);
+  assert.match(r.value.checks.photoReplacements[0]!, /agency credit \(getty\) → text-only/);
   assert.ok(!r.value.render.slides.some((sl) => sl.photoUrl === getty.url), 'the Getty photo never reaches the render');
 });
 
@@ -246,4 +246,45 @@ test('CHECKED_RULES matches the prompts file word for word', () => {
   const prompts = readFileSync('docs/superpowers/specs/2026-10-04-helios-social-prompts.md', 'utf8');
   const block = /\*\*Checked rules[\s\S]*?```\n([\s\S]*?)\n```/.exec(prompts)![1];
   assert.equal(CHECKED_RULES, block);
+});
+
+// ── C8: no repetition within a slide (Tommy and Lucas, 2026-10-06) ───────
+
+import { checkRepetition } from '@/lib/social/mechanical/checks';
+import { EDITOR_CHECKED_RULE, renderRulesFor as rulesFor } from '@/lib/social/prompts/rules-block';
+
+test('C8: the same number in the headline and the big number fails (the Mistral "38" case)', () => {
+  const d = draft((x) => (x.slides[3]!.headline.text = '120 days to report'));
+  const f = checkRepetition(d);
+  assert.deepEqual(ids(f), ['C8']);
+  assert.match(f[0]!.detail, /the number 120 is in both headline and number 1/);
+  assert.deepEqual(checkRepetition(draft()), [], 'the fixture headline "It has a deadline" says what the number means');
+});
+
+test('C8: a phrase of four or more words in two fields of one slide fails; across slides is fine', () => {
+  const d = draft((x) => {
+    x.slides[0]!.headline.text = 'Announced on Truth Social';
+    x.slides[0]!.body!.text = 'Trump announced it, announced on Truth Social this morning.';
+  });
+  assert.match(checkRepetition(d).map((f) => f.detail).join(), /"announced on truth social" is in both headline and body/);
+  const across = draft((x) => (x.slides[1]!.headline.text = 'Announced on Truth Social too'));
+  assert.deepEqual(checkRepetition(across), []);
+});
+
+test('C8 goes back to the Editor only (once), not the Writer; after the Fact-checker it is a warning', async () => {
+  const rep = sub((d) => { d.slides[3]!.headline = { text: '120 days to report', facts: ['N1'] }; });
+  const w = await runWriter(brief(), { create: scripted([rep]).create, isWellKnown: async () => false });
+  assert.ok(w.ok && w.draftRetries === 0, 'the Writer is not sent back for C8');
+  const { runEditor } = await import('@/lib/social/editor/editor');
+  const e = await runEditor(brief(), rep, { create: scripted([rep, sifDraft()]).create });
+  assert.ok(e.ok);
+  assert.equal(e.retries, 1);
+  assert.match(e.retryErrors[0]!, /C8 slide 5: the number 120/);
+  const m = await createMechanicalStage()(pdraft((x) => (x.slides[3]!.headline.text = '120 days to report')), pbrief());
+  assert.ok(m.ok);
+  assert.deepEqual(m.value.mechanical!.warnings.map((x) => x.id), ['C8']);
+  assert.ok(rulesFor('editor').includes(EDITOR_CHECKED_RULE) && !rulesFor('writer').includes(EDITOR_CHECKED_RULE));
+  const prompts = readFileSync('docs/superpowers/specs/2026-10-04-helios-social-prompts.md', 'utf8');
+  const blocks = [...prompts.slice(prompts.indexOf('**No repetition within a slide')).matchAll(/```\n([\s\S]*?)\n```/g)].map((m) => m[1]);
+  assert.equal(EDITOR_CHECKED_RULE, blocks[1], 'Editor line word for word from the prompts file');
 });

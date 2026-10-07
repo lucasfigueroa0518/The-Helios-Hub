@@ -67,7 +67,7 @@ export async function runEditor(brief: Brief, writerDraft: DraftSubmission, deps
     tool: SUBMIT_DRAFT_TOOL,
     user: editorUserMessage(writerDraft, brief),
     check: (input, attempt) => {
-      const edited = checkWrittenDraft(input, brief, attempt);
+      const edited = checkWrittenDraft(input, brief, attempt, 'editor');
       checkEditorPowers(writerDraft, edited);
       return edited;
     },

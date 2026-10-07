@@ -86,9 +86,9 @@ function pages(): PageReadOk[] {
   }];
 }
 
-function briefWith(extraSubjects: Brief['subjects'] = []): Brief {
+function briefWith(extraSubjects: Array<Omit<Brief['subjects'][number], 'id'>> = []): Brief {
   const b = briefSuperIntelligenceForce();
-  b.subjects.push(...extraSubjects);
+  b.subjects.push(...extraSubjects.map((x, i) => ({ id: `S${b.subjects.length + i + 1}`, ...x })));
   return b;
 }
 
@@ -177,24 +177,24 @@ test('fixture slides get a photo from the right source', async () => {
   assert.equal(p.slides[3]!.photo?.url, stockUrl('wall clock', 1));
 });
 
-test('an agency-credited article photo is rejected, including a credit-only caption; the starter set fills the slide', async () => {
+test('an agency-credited article photo is rejected, including a credit-only caption; the story slide renders text-only', async () => {
   const { deps: d } = deps();
   const ctx = newPhotoContext(briefWith(), pages());
   for (const src of [GETTY_SRC, FANJOY_SRC]) {
     const t = await findPhoto({ kind: 'article', value: src }, ctx, d);
     assert.ok(t.steps.some((s) => /credit rejected: agency/.test(s)));
-    assert.equal(t.via, 'starter');
+    assert.equal(t.via, 'text-only');
   }
   const unknown = await findPhoto({ kind: 'article', value: 'https://example.com/not-on-any-page.jpg' }, ctx, d);
   assert.ok(unknown.steps.some((s) => /not found in the pages read/.test(s)));
-  assert.equal(unknown.via, 'starter');
+  assert.equal(unknown.via, 'text-only');
 });
 
 test('request first: a rejected article photo never falls back to someone named on the slide', async () => {
   const jevCalls: string[] = [];
   const { deps: d } = deps(jevCalls);
   const t = await findPhoto({ kind: 'article', value: GETTY_SRC }, newPhotoContext(briefWith(), pages()), d, { text: ['Jay Clayton chairs the force.'], speaker: null, slot: 'split' });
-  assert.equal(t.via, 'starter');
+  assert.equal(t.via, 'text-only');
   assert.deepEqual(jevCalls, [], 'no identity check: nobody was looked up');
 });
 
@@ -216,7 +216,7 @@ test('quote: the round spot only for a subject request naming the speaker; a sto
   assert.equal(scene.via, 'stock');
 });
 
-test('stock: the request, then its first two words, then the starter set (no neutral scenes)', async () => {
+test('stock: the request, then its first two words, then text-only on a story slide (no neutral scenes)', async () => {
   assert.deepEqual(stockQueries('laptop warning screen'), ['laptop warning screen', 'laptop warning']);
   assert.deepEqual(stockQueries('wall clock'), ['wall clock']);
   const fake = createFakeHttp({ ...SIF_WEB, stockCount: { 'laptop warning screen': 0 } });
@@ -225,7 +225,7 @@ test('stock: the request, then its first two words, then the starter set (no neu
   assert.equal(two.photo?.url, stockUrl('laptop warning', 1));
   const none = createFakeHttp({ ...SIF_WEB, stockCount: { 'nothing here at all': 0, 'nothing here': 0 } });
   const t = await findPhoto({ kind: 'stock', value: 'nothing here at all' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS), http: none.http });
-  assert.equal(t.via, 'starter');
+  assert.equal(t.via, 'text-only');
   assert.equal(none.calls.filter((c) => c.includes('openverse')).length, 2);
 });
 
@@ -235,17 +235,18 @@ test('people photos: Wikidata main image (P18) only, never P180 "depicts"', asyn
   const first = await findPhoto({ kind: 'subject', value: 'Donald Trump' }, ctx, d);
   assert.equal(first.photo?.url, commonsUrl('Donald Trump official portrait.jpg'));
   const second = await findPhoto({ kind: 'subject', value: 'Donald Trump' }, ctx, d);
-  assert.equal(second.via, 'starter', 'P18 already used; never the P180 rally photo');
+  assert.equal(second.via, 'text-only', 'P18 already used; never the P180 rally photo');
   assert.ok(!fake.calls.some((c) => /haswbstatement/.test(decodeURIComponent(c))), 'no depicts search');
 });
 
-test('a failed identity check goes to the starter set, never another person', async () => {
+test('a failed identity check: never another person; a story slide renders text-only', async () => {
   const { deps: d } = deps();
   const brief = briefWith([{ name: 'Sam Smith', role: 'OpenAI researcher' }, { name: 'Cursor', role: 'AI coding company' }]);
   const ctx = newPhotoContext(brief, []);
   for (const name of ['Sam Smith', 'Cursor']) {
     const t = await findPhoto({ kind: 'subject', value: name }, ctx, d);
-    assert.equal(t.via, 'starter', name);
+    assert.equal(t.via, 'text-only', name);
+    assert.equal(t.photo, null);
     assert.equal(t.identity?.ok, false);
   }
 });
@@ -260,7 +261,7 @@ test('every fixture slide gets a photo; each subject is checked once', async () 
   assert.deepEqual(jevCalls.sort(), ['Donald Trump', 'Jay Clayton']);
 });
 
-test('every online source failing: every slide still gets a photo, from the offline starter set', async () => {
+test('every online source failing: the cover still gets a starter photo; story slides render text-only', async () => {
   const offline = { jev: identityJev(SIF_ANSWERS), http: (async () => { throw new Error('offline'); }) as unknown as typeof fetch };
   const sub = sifDraft();
   // 8 story slides + cover = the most a post can have.
@@ -268,11 +269,11 @@ test('every online source failing: every slide still gets a photo, from the offl
   const p = await photosForDraft(fillDraft(sub, briefWith()), briefWith(), [], offline);
   const all = [p.cover, ...p.slides];
   assert.equal(all.length, MAX_PHOTOS_PER_POST);
-  for (const t of all) {
-    assert.equal(t.via, 'starter', `${t.request.value}`);
-    assert.ok(t.steps.some((s) => /offline/.test(s)));
+  assert.equal(p.cover.via, 'starter');
+  for (const t of p.slides) {
+    assert.equal(t.via, 'text-only', `${t.request.value}`);
+    assert.equal(t.photo, null);
   }
-  assert.equal(new Set(all.map((t) => t.photo!.url)).size, all.length, 'no repeats');
 });
 
 test('starter set: big enough for a full post, every file on disk, verifiable credit', async () => {
@@ -431,7 +432,7 @@ test('quote: only the speaker, never another person named on the slide', async (
   const ctx = newPhotoContext(briefWith(), []);
   const t = await findPhoto({ kind: 'subject', value: 'Jay Clayton' }, ctx, d, { text: ['Jay Clayton'], speaker: 'Not In Subjects', slot: 'quote' });
   assert.notEqual(t.via, 'subject');
-  assert.ok(t.photo, 'still gets a scene');
+  assert.equal(t.photo, null, 'no usable speaker photo: text-only');
 });
 
 test('stock size: only thumbnails are rejected (short side under 600px)', async () => {
@@ -462,12 +463,12 @@ test('pre-screen: a result that likely shows people is skipped for one that fits
   assert.ok(t.steps.some((s) => /pre-screen "server room": .*people 0\.90.*✓/.test(s)), t.steps.join(' | '));
 });
 
-test('pre-screen: nothing passes → the two-word search, then the starter set', async () => {
+test('pre-screen: nothing passes → the two-word search, then text-only on a story slide', async () => {
   const queries: string[] = [];
   const stock = async (q: string) => { queries.push(q); return [ov('students at laptops'), ov('people in a lab')]; };
   const t = await findPhoto({ kind: 'stock', value: 'student laptop campus' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS), stock });
   assert.deepEqual(queries, ['student laptop campus', 'student laptop']);
-  assert.equal(t.via, 'starter');
+  assert.equal(t.via, 'text-only');
 });
 
 // ── M8a layout system ────────────────────────────────────────────────────
@@ -561,7 +562,7 @@ test('starter-pool-exhausted: when every eligible starter photo was used this we
   const recent = new Set(STARTER_SET.map((p) => starterUrl(p.file)));
   const lastUsed = new Map(STARTER_SET.map((p, i) => [starterUrl(p.file), `2026-10-0${(i % 5) + 1}T00:00:00Z`]));
   lastUsed.set(starterUrl(STARTER_SET.find((p) => p.topics.includes('US Congress'))!.file), '2026-09-01T00:00:00Z'); // off-topic: never used, however old
-  const t = await findPhoto({ kind: 'stock', value: 'x' }, newPhotoContext(briefWith(), [], { recent, lastUsed }), offline);
+  const t = await findPhoto({ kind: 'stock', value: 'x' }, newPhotoContext(briefWith(), [], { recent, lastUsed }), offline, { text: [], speaker: null, slot: 'split', cover: true });
   assert.equal(t.via, 'starter');
   assert.equal(lastUsed.get(t.photo!.url), '2026-10-01T00:00:00Z');
   assert.ok(t.steps.some((s) => s.startsWith('starter-pool-exhausted')));
@@ -735,4 +736,33 @@ test('pre-screen v2: a recognizable landmark is rejected', async () => {
   const t = await findPhoto({ kind: 'stock', value: 'city lights' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS), stock });
   assert.equal(t.photo?.url, 'https://s/city-lights-at-night.jpg');
   assert.ok(t.steps.some((s) => /landmark 0\.90/.test(s)));
+});
+
+test('topic words: none of the ambiguous AI-news words match any topic; research is literal only', async () => {
+  const { AMBIGUOUS_WORDS } = await import('@/lib/social/photos/starter-set');
+  for (const w of AMBIGUOUS_WORDS) assert.deepEqual(topicsIn(`the ${w} said`), [], w);
+  assert.deepEqual(topicsIn('French AI lab Mistral launched a new model with agents'), []);
+  assert.deepEqual(topicsIn('Scientists ran the experiment in a laboratory'), ['Research and labs']);
+});
+
+test('quote speakers by ID: the speaker matches by its SUBJECTS id, not by name text', async () => {
+  const b = briefWith();
+  b.quotes[0]!.speaker = 'Donald Trump (US president)'; // the name text no longer equals the SUBJECTS name
+  const sub = sifDraft();
+  sub.slides[2]!.image = { kind: 'subject', value: 'Donald Trump' };
+  sub.cover_options[0]!.image = { kind: 'stock', value: 'wall clock' }; // the cover mustn't take Trump's one main image
+  const filled = fillDraft(sub, b);
+  assert.equal(filled.slides[2]!.quote!.speaker_subject, 'Donald Trump');
+  const { deps: d } = deps();
+  const p = await photosForDraft(filled, b, [], d);
+  assert.equal(p.slides[2]!.via, 'subject', 'matched by speaker_id S1');
+  const post = toRenderPost(filled, { cover: null, slides: p.slides.map((t) => t.photo) }, { source: 's', sourceUrl: 'u', publishedAt: 'p' });
+  assert.equal(post.slides.find((x) => x.layoutVariant === 'quote')!.photoIsSpeaker, true);
+});
+
+test('brief check: every quote speaker_id names a SUBJECTS entry', async () => {
+  const { validateBrief, BriefValidationError } = await import('@/lib/social/reporter/brief');
+  const b = briefWith();
+  b.quotes[0]!.speaker_id = 'S9';
+  assert.throws(() => validateBrief(b), (e: unknown) => e instanceof BriefValidationError && /Q1 speaker_id S9 isn't in SUBJECTS/.test((e as Error).message));
 });

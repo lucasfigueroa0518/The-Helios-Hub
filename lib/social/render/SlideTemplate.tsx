@@ -137,7 +137,8 @@ function Fit({ as: Tag = 'div', className, min, children }: { as?: 'div' | 'h1' 
 /** Crop centred on the detected face (M8b), else the centre. */
 function focusStyle(slide: SlideCopy): CSSProperties | undefined {
   const f = slide.photoFocus;
-  return f ? { objectPosition: `${Math.round(f.x * 100)}% ${Math.round(f.y * 100)}%` } : undefined;
+  if (!f) return undefined;
+  return f.fit === 'contain' ? { objectFit: 'contain', objectPosition: '50% 50%' } : { objectPosition: `${Math.round(f.x * 100)}% ${Math.round(f.y * 100)}%` };
 }
 
 /** A photo in its own region (rule 3: the only place a subject photo goes). */

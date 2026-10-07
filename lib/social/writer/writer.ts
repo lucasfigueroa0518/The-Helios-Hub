@@ -38,9 +38,9 @@ export type WriterDeps = {
 };
 
 /** checkDraft (structure and IDs), then the M7 text checks C1–C5 on the filled, fixed draft. */
-export function checkWrittenDraft(input: unknown, brief: Brief, attempt: number): DraftSubmission {
+export function checkWrittenDraft(input: unknown, brief: Brief, attempt: number, stage: 'writer' | 'editor' = 'writer'): DraftSubmission {
   const d = checkDraft(input, brief);
-  const failures = draftTextFailures(fillDraft(d, brief), brief, attempt);
+  const failures = draftTextFailures(fillDraft(d, brief), brief, attempt, stage);
   if (failures.length > 0) throw new DraftValidationError(failures.map((f) => ({ section: `${f.id} ${f.where}`, message: f.detail })));
   return d;
 }

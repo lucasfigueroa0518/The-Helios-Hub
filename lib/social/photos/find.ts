@@ -12,7 +12,9 @@
  *   stock:   <scene> → Openverse: the request, then its first two words; each
  *            search's results go through the Jev metadata pre-screen (fits the
  *            scene, no person likely visible, no recognizable landmark; spec §5A #6)
- *   then     the offline starter set (starter-set.ts), which can't come up empty
+ *   then     cover: the offline starter set (starter-set.ts), which can't come
+ *            up empty. Story slides: text-only (the starter set is cover-only,
+ *            Tommy 2026-10-06)
  *   none:    no photo; the slide renders without one (no fallback; spec §5.1)
  *
  * Where the photo is drawn (its slot) limits what may go there:
@@ -59,7 +61,8 @@ export type Photo = {
   subject: string | null;
 };
 
-export type ChainStep = 'article' | 'subject' | 'stock' | 'bank' | 'starter' | 'none';
+/** `none`: the Writer asked for no photo. `text-only`: a story slide asked for one and none was usable. */
+export type ChainStep = 'article' | 'subject' | 'stock' | 'bank' | 'starter' | 'none' | 'text-only';
 
 /** Identity check outcome for the run log. */
 export type IdentityNote = { subject: string; ok: boolean; detail: string; scores: import('./identity').IdentityScores | null };
@@ -227,7 +230,8 @@ async function stockPhoto(request: string, slot: PhotoSlot, ctx: PhotoContext, d
 }
 
 /** The slide's words, for finding its subject when the IMAGE line names none, and where its photo goes. */
-export type SlideText = { text: string[]; speaker: string | null; slot: PhotoSlot };
+/** `cover`: the starter set is for the cover only (Tommy, 2026-10-06); story slides with no usable photo render text-only. */
+export type SlideText = { text: string[]; speaker: string | null; slot: PhotoSlot; cover?: boolean };
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -313,7 +317,12 @@ export async function findPhoto(request: ImageRequest, ctx: PhotoContext, deps: 
     if (b) return done(b, 'bank');
   }
 
-  // The offline starter set.
+  // Story slides: nothing usable → text-only (Tommy, 2026-10-06). The starter set is for the cover only.
+  if (!slide.cover) {
+    steps.push('no usable photo: story slide renders text-only (the starter set is cover-only)');
+    return { request, photo: null, via: 'text-only', identity, steps };
+  }
+  // The offline starter set (cover only).
   // Topic-matched per slide: the IMAGE request, then the brief's main topic, then the AI-compute default.
   const slideTopic = { request: request.value, brief: ctx.brief };
   const starter = pickStarter(avoidSet(ctx), slideTopic);

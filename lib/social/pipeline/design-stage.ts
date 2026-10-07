@@ -20,8 +20,8 @@ import type { PipelineStages } from './stages';
  * `fitCheck` is the render-fit check (every element inside the slide);
  * live runs pass `checkRenderFit`, tests a stub. Then the M7 checks that
  * need photos or the render (spec §6):
- *   C6 photo credit / licence / agency → that photo is replaced by the next
- *      starter-set photo (logged); set aside only if the starter set runs out
+ *   C6 photo credit / licence / agency → a story slide drops the photo
+ *      (text-only); the cover takes the next starter-set photo (logged)
  *   render fit, C7 dropped text → set aside as `render-failed`
  */
 export type DesignDeps = PhotoDeps & {
@@ -51,6 +51,14 @@ export function createDesignStage(deps: DesignDeps): PipelineStages['design'] {
     for (const [i, t] of traces.entries()) {
       const failures = t.photo ? checkPhotoCredit(t.photo, i === 0 ? 'cover' : `slide ${i + 1}`, brief.parsed) : [];
       if (failures.length === 0) continue;
+      // Story slides drop the photo (text-only); the cover takes a starter photo (the starter set is cover-only).
+      if (i > 0) {
+        photoReplacements.push(`C6 ${failures[0]!.where}: ${failures.map((f) => f.detail).join('; ')} → text-only`);
+        t.steps.push(`C6 dropped: ${failures.map((f) => f.detail).join('; ')} → text-only`);
+        t.photo = null;
+        t.via = 'text-only';
+        continue;
+      }
       const starter = pickStarter(used, { request: t.request.value, brief: brief.parsed })?.photo;
       if (!starter) return { ok: false, reasonCode: 'render-failed', detail: `C6 ${failures.map((f) => f.detail).join('; ')}; starter set used up`, costUsd: tally.costUsd };
       used.add(starter.url);

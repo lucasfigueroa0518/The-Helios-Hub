@@ -143,9 +143,24 @@ async function main() {
       await fsp.writeFile(path.join(runDir, `post-${n}.md`), readable(post, fitResults.get(titles.get(storyId) ?? ''), shipped ? slug : null));
     }
   }
+  // Selection: the already-posted score for every candidate (Tommy, 2026-10-06; no threshold change).
+  type Scored = { representative: { headline: string }; answers?: Record<string, number>; status?: string };
+  const sel = selection as { scored?: Scored[] } | null;
+  const alreadyPosted = (sel?.scored ?? [])
+    .map((g) => ({ headline: g.representative.headline, score: g.answers?.already_posted ?? null, status: g.status ?? null }))
+    .sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+  // M8 handoff criterion: the Writer's IMAGE request mix per post (after the Editor), and spreads.
+  const requestMix = [...logs.entries()].map(([storyId, l]) => {
+    const d = l.editor.at(-1)?.ok ? (l.editor.at(-1) as { draft: import('@/lib/social/writer/draft').DraftSubmission }).draft : null;
+    if (!d) return { storyId, mix: null };
+    const reqs = [d.cover_options[d.chosen_cover - 1]!.image, ...d.slides.map((s) => s.image)];
+    const mix = Object.fromEntries(['subject', 'article', 'stock', 'none'].map((k) => [k, reqs.filter((r) => r.kind === k).length]));
+    return { storyId, mix, spreads: d.slides.filter((s) => s.spread_with_next).length };
+  });
+
   await fsp.writeFile(
     path.join(runDir, 'run.json'),
-    JSON.stringify({ startedAt: now.toISOString(), capUsd, articles: articles.length, jev: jevTally, claudeUsd: budget.claudeUsd(), totalUsd: budget.spent(), result, selection, stories: storyLogs, fit: Object.fromEntries(fitResults) }, null, 2),
+    JSON.stringify({ startedAt: now.toISOString(), capUsd, alreadyPosted, requestMix, articles: articles.length, jev: jevTally, claudeUsd: budget.claudeUsd(), totalUsd: budget.spent(), result, selection, stories: storyLogs, fit: Object.fromEntries(fitResults) }, null, 2),
   );
   console.log(JSON.stringify({
     runDir: path.relative(process.cwd(), runDir),
@@ -167,6 +182,8 @@ async function main() {
       return story.length ? Number((story.filter((t) => t.request.kind === 'none').length / story.length).toFixed(3)) : 0;
     })(),
     spreadCount: result.posts.flatMap((p) => p.render.slides).filter((sl) => sl.panoramaSide === 'left').length,
+    requestMix,
+    alreadyPostedTop: alreadyPosted.slice(0, 5),
     capUsd,
   }, null, 2));
 

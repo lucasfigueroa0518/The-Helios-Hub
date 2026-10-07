@@ -20,6 +20,8 @@
  *        C6 photo credit and licence (credit present, allowed licence, no
  *           agency credit)
  *        C7 every text field reaches the rendered slide (dropped text)
+ *        C8 no repetition within a slide: the same number, or a phrase of 4+
+ *           words, in two of its fields (Tommy, 2026-10-06)
  *   Structure (quote/number IDs, excerpts, claim tags) is checkDraft's job
  *   and runs at the Writer and the Editor; the render-fit check and the
  *   cost cap already run in the design stage and the orchestrator.
@@ -140,7 +142,7 @@ export function applySilentFixes(draft: FilledDraft, brief?: Brief): { draft: Fi
 
 // ── B. Pass/fail checks ───────────────────────────────────────────────
 
-export type CheckId = 'C1' | 'C2' | 'C3' | 'C4' | 'C5' | 'C6' | 'C7';
+export type CheckId = 'C1' | 'C2' | 'C3' | 'C4' | 'C5' | 'C6' | 'C7' | 'C8';
 export type Failure = { id: CheckId; where: string; detail: string };
 
 /** Spec §6 #7 LIMITS (characters). */
@@ -274,11 +276,55 @@ export function checkDroppedText(d: FilledDraft, renderedText: string[]): Failur
   return out;
 }
 
+/** Numbers in a text, normalized ("$4.99" → "4.99", "1,000" → "1000", "38%" → "38"). */
+function numbersIn(text: string): string[] {
+  return [...text.matchAll(/\d[\d,]*(?:\.\d+)?/g)].map((m) => m[0].replace(/,/g, ''));
+}
+
+/** Word 4-grams of a text, lowercased. */
+function phrases4(text: string): string[] {
+  const w = text.toLowerCase().replace(/[’']/g, '').split(/[^a-z0-9]+/).filter(Boolean);
+  return w.length < 4 ? [] : w.slice(0, -3).map((_, i) => w.slice(i, i + 4).join(' '));
+}
+
+/**
+ * C8 (Tommy, 2026-10-06): every element on a slide adds something new. The
+ * same number, or a phrase of four or more words, in two fields of one slide
+ * (headline, body, quote, big number, its label) fails.
+ */
+export function checkRepetition(d: FilledDraft): Failure[] {
+  const out: Failure[] = [];
+  d.slides.forEach((s, i) => {
+    const fields: Array<[string, string]> = [
+      ['headline', s.headline.text],
+      ...(s.body ? [['body', s.body.text] as [string, string]] : []),
+      ...(s.quote ? [['quote', s.quote.text] as [string, string]] : []),
+      ...s.numbers.flatMap((n, k): Array<[string, string]> => [[`number ${k + 1}`, n.value], [`label ${k + 1}`, n.counts]]),
+    ];
+    const seenNum = new Map<string, string>();
+    const seenPhrase = new Map<string, string>();
+    for (const [name, text] of fields) {
+      for (const n of new Set(numbersIn(text))) {
+        const prev = seenNum.get(n);
+        if (prev && prev !== name) out.push({ id: 'C8', where: `slide ${i + 2}`, detail: `the number ${n} is in both ${prev} and ${name}` });
+        else seenNum.set(n, name);
+      }
+      for (const p of new Set(phrases4(text))) {
+        const prev = seenPhrase.get(p);
+        if (prev && prev !== name) out.push({ id: 'C8', where: `slide ${i + 2}`, detail: `"${p}" is in both ${prev} and ${name}` });
+        else seenPhrase.set(p, name);
+      }
+    }
+  });
+  // One failure per slide and pair is enough for the Editor.
+  return out.filter((f, k) => out.findIndex((g) => g.where === f.where && g.detail.split(' is in both ')[1] === f.detail.split(' is in both ')[1]) === k);
+}
+
 // ── Where the checks run ──────────────────────────────────────────────
 
-/** C1–C5: the checks on text, run on the fixed draft. */
+/** C1–C5 and C8: the checks on text, run on the fixed draft. */
 export function textChecks(d: FilledDraft, brief: Brief): Failure[] {
-  return [...checkLimits(d), ...checkQuoteMarks(d, brief), ...checkVoice(d), ...checkCaption(d), ...checkBackground(d)];
+  return [...checkLimits(d), ...checkQuoteMarks(d, brief), ...checkVoice(d), ...checkCaption(d), ...checkBackground(d), ...checkRepetition(d)];
 }
 
 /**
@@ -294,7 +340,8 @@ export const HARD_CHECKS: ReadonlySet<CheckId> = new Set(['C1', 'C2']);
  * submission every C1–C5 failure goes back to the model; on the retry only
  * the hard ones block, so style can't sink a draft.
  */
-export function draftTextFailures(filled: FilledDraft, brief: Brief, attempt: number): Failure[] {
-  const all = textChecks(applySilentFixes(filled, brief).draft, brief);
+export function draftTextFailures(filled: FilledDraft, brief: Brief, attempt: number, stage: 'writer' | 'editor' = 'writer'): Failure[] {
+  // C8 sends the draft back to the Editor once (Tommy, 2026-10-06); the Writer is told the rule in its prompt.
+  const all = textChecks(applySilentFixes(filled, brief).draft, brief).filter((f) => f.id !== 'C8' || stage === 'editor');
   return attempt <= 1 ? all : all.filter((f) => HARD_CHECKS.has(f.id));
 }

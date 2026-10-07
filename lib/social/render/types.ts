@@ -253,10 +253,12 @@ export type SlideCopy = {
   photoKind?: 'subject' | 'scene';
 
   /**
-   * Where to centre the photo's crop, in the photo's own coordinates (0–1),
-   * from the face detector (M8b). Unset means centre.
+   * Where to centre the photo's crop, as object-position fractions (0–1),
+   * from the face detector (M8b). Unset means centre. `fit: 'contain'`: the
+   * crop would cut the head and shoulders, so the whole photo is shown
+   * (zoom capped, Tommy 2026-10-06).
    */
-  photoFocus?: { x: number; y: number };
+  photoFocus?: { x: number; y: number; fit?: 'contain' };
 
   /**
    * Design-skill variant code from the helios-social-skill layout library.

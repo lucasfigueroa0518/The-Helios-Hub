@@ -197,8 +197,11 @@ export function checkDraft(input: unknown, brief: Brief): DraftSubmission {
 // ── Code fill-in (spec §4.2a): IDs → exact text from the brief ─────────
 
 export type FilledSlide = DraftSlide & {
-  /** Exact quote text (or the checked excerpt) and its speaker. */
-  quote: { text: string; speaker: string; id: string } | null;
+  /**
+   * Exact quote text (or the checked excerpt) and its speaker. `speaker_subject`: the
+   * SUBJECTS name the quote's speaker_id points to (quote slides match photos by it).
+   */
+  quote: { text: string; speaker: string; id: string; speaker_subject: string | null } | null;
   /** Exact number values, as the source wrote them. */
   numbers: Array<{ id: string; value: string; counts: string }>;
 };
@@ -215,7 +218,7 @@ export function fillDraft(d: DraftSubmission, brief: Brief): FilledDraft {
       const q = s.quote_id ? quotes.get(s.quote_id)! : null;
       return {
         ...s,
-        quote: q ? { id: q.id, text: s.quote_excerpt ?? q.text, speaker: q.speaker } : null,
+        quote: q ? { id: q.id, text: s.quote_excerpt ?? q.text, speaker: q.speaker, speaker_subject: brief.subjects.find((x) => x.id === q.speaker_id)?.name ?? null } : null,
         numbers: s.number_ids.map((id) => {
           const n = numbers.get(id)!;
           return { id, value: n.value, counts: n.counts };
