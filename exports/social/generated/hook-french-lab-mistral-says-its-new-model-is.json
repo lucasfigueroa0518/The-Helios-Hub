@@ -1,0 +1,191 @@
+{
+  "format": "carousel",
+  "storyType": "tech",
+  "source": "WIRED (Joel Khalili)",
+  "sourceUrl": "https://www.wired.com/story/mistral-new-model-le-chonk-open-source-china-us-frontier/",
+  "publishedAt": "2026-10-06T21:17:07.066Z",
+  "issueNumber": 0,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "headline": [
+        {
+          "text": "French lab Mistral says its new model is the best open-weight one outside China",
+          "role": "narrative"
+        }
+      ],
+      "altText": "French lab Mistral says its new model is the best open-weight one outside China",
+      "photoUrl": "/social/starter/data-center-roof.jpg",
+      "photoCredit": "Rsparks3 (CC0) · Wikimedia Commons",
+      "photoKind": "scene"
+    },
+    {
+      "position": 1,
+      "headline": [
+        {
+          "text": "Le Chonk is here, but the weights are not",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Le Chonk is here, but the weights are not",
+      "body": [
+        {
+          "text": "French lab Mistral launched Mistral Large 4, nicknamed le Chonk, in public preview on Oct 6. TechCrunch says it isn’t open-weight yet. Mistral says the weights, which let anyone self-host it, come by end of October.",
+          "role": "narrative"
+        }
+      ],
+      "hook": {
+        "text": "First, how big it is.",
+        "position": "below"
+      },
+      "layoutVariant": "text"
+    },
+    {
+      "position": 2,
+      "headline": [
+        {
+          "text": "A 1-trillion-parameter model",
+          "role": "narrative"
+        }
+      ],
+      "altText": "A 1-trillion-parameter model",
+      "body": [
+        {
+          "text": "Parameters are the values a model learns in training. Mistral calls this its largest and most capable model to date. Only 49 billion are active per query, which keeps serving costs lower.",
+          "role": "narrative"
+        }
+      ],
+      "hook": {
+        "text": "Mistral has a big claim about where that size puts it.",
+        "position": "below"
+      },
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "1 trillion-parameter",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "Size of Mistral Large 4"
+    },
+    {
+      "position": 3,
+      "headline": [
+        {
+          "text": "Mistral’s pitch: best open model outside China",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Mistral’s pitch: best open model outside China",
+      "body": [
+        {
+          "text": "Mistral says it is the strongest open-weight model built outside China by a substantial margin. CNBC says it still lags the frontier in areas such as coding.",
+          "role": "narrative"
+        }
+      ],
+      "hook": {
+        "text": "Independent testers see it differently.",
+        "position": "below"
+      },
+      "layoutVariant": "text"
+    },
+    {
+      "position": 4,
+      "headline": [
+        {
+          "text": "Early independent testing is less rosy",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Early independent testing is less rosy",
+      "body": [
+        {
+          "text": "Per The Register, independent benchmarker Artificial Analysis ranks the preview between DeepSeek V4.1 Flash and OpenAI’s GPT6 Luna. Well behind OpenAI and Anthropic flagships, well ahead of top US open-weight Inkling.",
+          "role": "narrative"
+        }
+      ],
+      "hook": {
+        "text": "Mistral's cybersecurity scores are another matter.",
+        "position": "below"
+      },
+      "layoutVariant": "text"
+    },
+    {
+      "position": 5,
+      "headline": [
+        {
+          "text": "The cyber scores are Mistral’s own",
+          "role": "narrative"
+        }
+      ],
+      "altText": "The cyber scores are Mistral’s own",
+      "body": [
+        {
+          "text": "Mistral says closed models, including Claude Opus 5.5 and GPT-6 Astra, score near zero on the patch test because they refuse. The Register did not independently confirm the numbers.",
+          "role": "narrative"
+        }
+      ],
+      "hook": {
+        "text": "A US policy move gave Mistral an opening.",
+        "position": "below"
+      },
+      "layoutVariant": "split_stat",
+      "title": [
+        {
+          "text": "82%",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "ML4 score on an Artificial Analysis Cyber Index vulnerability reproduce-and-patch test (Mistral's claim)",
+      "secondNumber": "93%",
+      "secondNote": "Share of Cybench's 40 challenges ML4 solves (Mistral's claim)"
+    },
+    {
+      "position": 6,
+      "headline": [
+        {
+          "text": "Washington’s June limits left an opening",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Washington’s June limits left an opening",
+      "body": [
+        {
+          "text": "In June the Trump administration put temporary limits on distributing OpenAI and Anthropic models over cyberattack concerns. WIRED says that created an opening for Mistral, which pitches open weights as a hedge.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text"
+    },
+    {
+      "position": 7,
+      "headline": [
+        {
+          "text": "Weights promised, benchmarks pending",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Weights promised, benchmarks pending",
+      "body": [
+        {
+          "text": "Mistral says weights land by end of October. Full independent benchmarks are pending, and hardware needs, API pricing and license terms have not been given.",
+          "role": "narrative"
+        }
+      ],
+      "hook": {
+        "text": "Mistral's pitch to anyone building on AI: open weights hedge against losing a closed model.",
+        "position": "below"
+      },
+      "layoutVariant": "landing"
+    },
+    {
+      "position": 8,
+      "layoutVariant": "follow",
+      "storySpecificLine": "Follow Helios to see whether the weights land by the end of October and whether independent benchmarks back Mistral’s claims.",
+      "altText": "Follow Helios to see whether the weights land by the end of October and whether independent benchmarks back Mistral’s claims."
+    }
+  ],
+  "caption": "French AI lab Mistral launched a public preview of Mistral Large 4, nicknamed Le Chonk, on Oct 6. Mistral says the 1-trillion-parameter model is the strongest open-weight model made outside China. Open-weight means the trained parameters are released so anyone can modify and self-host the model. Mistral says those weights arrive by the end of October.\n\nEarly testing by Artificial Analysis, reported by The Register, places the preview well behind OpenAI and Anthropic flagships but well ahead of the top US open-weight model, Thinking Machines Lab’s Inkling. Mistral’s cybersecurity scores are its own and were not independently confirmed. Mistral also says this is the first milestone funded by its €3 billion Series D, raised in September.\n\nWould you rather build on a model you can host yourself, or a closed one from a big lab?\n\nFollow Helios to see whether the weights actually arrive by the end of October.\n\nSource: WIRED, TechCrunch, The Register, CNBC and Mistral.",
+  "attributionBlock": "Photos: Rsparks3 (CC0) · Wikimedia Commons"
+}

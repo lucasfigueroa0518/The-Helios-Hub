@@ -9,12 +9,14 @@ import test from 'node:test';
 
 import { briefSuperIntelligenceForce } from '@/fixtures/social/briefs';
 import { sifDraftHandoff } from '@/fixtures/social/drafts';
-import { findPhoto, newPhotoContext, type Photo } from '@/lib/social/photos/find';
+import { newSearchContext, searchVisual, type Photo } from '@/lib/social/photos/find';
 import type { IdentityResult } from '@/lib/social/photos/identity';
 import { LOGO_MAX_ASPECT, currentLogoFile, fetchLogo, plateFor } from '@/lib/social/photos/logo';
 import { toRenderPost } from '@/lib/social/render/from-draft';
 import type { Brief } from '@/lib/social/reporter/brief';
-import { fillDraft } from '@/lib/social/writer/draft';
+import type { PageReadOk } from '@/lib/social/reporter/read-page';
+import { fillDraft, type VisualRequest } from '@/lib/social/writer/draft';
+import { articlePhotosFor } from '@/lib/social/photos/article-list';
 
 function briefWith(...subjects: Array<{ name: string; role: string; type?: 'person' | 'organization' }>): Brief {
   const b = briefSuperIntelligenceForce();
@@ -48,7 +50,6 @@ async function fakeLogoWeb(opts: { licence?: string; dark?: boolean; claims?: un
 }
 
 /** A cover slide, tagged with the given SUBJECTS IDs (photo spec §3 rule 3; briefWith adds S9, S10, …). */
-const cover = (text: string, tags: string[] = []) => ({ text: [text], speaker: null, slot: 'split' as const, cover: true, tags, icon: 'building-2' });
 
 test('logo: the current P154 value (preferred rank, else no end date, latest start)', () => {
   const v = (value: string, extra: Record<string, unknown> = {}) => ({ rank: 'normal' as const, mainsnak: { datavalue: { value } }, ...extra });
@@ -70,49 +71,30 @@ test('logo: the Commons licence check decides (no per-company permission); a dar
   assert.equal(LOGO_MAX_ASPECT, 10);
 });
 
-test('cover, organization subject: its logo card (any verified organization; brand-guideline preferences do not block it), not its P18', async () => {
+const search = (b: Brief, request: VisualRequest, http: typeof fetch, ids: Array<[string, Promise<IdentityResult>]>, opts: { recent?: Set<string>; pages?: PageReadOk[] } = {}) =>
+  searchVisual(request, newSearchContext(b, opts.pages ?? [], { identities: new Map(ids), recent: opts.recent, photos: opts.pages ? articlePhotosFor(b, opts.pages) : [] }), { jev: noJev, http }, { cover: true, tags: ['S9', 'S10'] });
+
+test('logo: a verified organization\'s logo card (brand-guideline preferences do not block it); its main photo is never a logo', async () => {
   const b = briefWith({ name: 'Anthropic', role: 'AI company' });
-  const c = newPhotoContext(b, []);
-  c.identities = new Map([verified('Anthropic', 'Q1', 'organization')]);
-  const t = await findPhoto({ kind: 'subject', value: 'Anthropic' }, c, { jev: noJev, http: await fakeLogoWeb({ p18: 'Anthropic office portrait.jpg' }) }, cover('Anthropic merges two security programs', ['S9']));
-  assert.equal(t.via, 'logo');
-  assert.equal(t.photo?.source, 'logo', 'the cover of a company story stays its logo card (Tommy, 2026-10-07)');
-  assert.ok(!t.steps.some((s) => /company photo|headshot/.test(s)), t.steps.join(' | '));
+  const t = await search(b, { kind: 'logo', query: 'Anthropic' }, await fakeLogoWeb({ p18: 'Anthropic office portrait.jpg' }), [verified('Anthropic', 'Q1', 'organization')]);
+  assert.deepEqual(t.candidates.map((c) => [c.lane, c.source]), [['logo', 'logo']]);
 });
 
-test("cover, person subject: the person's P18 first; then the logo card of the organization tagged on the cover; never a person's logo", async () => {
+test("person: the person's P18; a logo request for a person finds nothing (never a person's logo)", async () => {
   const b = briefWith({ name: 'Jane Doe', role: 'CEO of Acme', type: 'person' }, { name: 'Acme', role: 'company' });
-  const withP18 = newPhotoContext(b, []);
-  withP18.identities = new Map([verified('Jane Doe', 'Q2', 'person'), verified('Acme', 'Q1', 'organization')]);
-  const p = await findPhoto({ kind: 'subject', value: 'Jane Doe' }, withP18, { jev: noJev, http: await fakeLogoWeb({ p18: 'Jane Doe portrait.jpg' }) }, cover('Jane Doe leaves Acme', ['S9', 'S10']));
-  assert.equal(p.via, 'subject');
-  const noP18 = newPhotoContext(b, []);
-  noP18.identities = new Map([verified('Jane Doe', 'Q2', 'person'), verified('Acme', 'Q1', 'organization')]);
-  const l = await findPhoto({ kind: 'subject', value: 'Jane Doe' }, noP18, { jev: noJev, http: await fakeLogoWeb() }, cover('Jane Doe leaves Acme', ['S9', 'S10']));
-  assert.equal(l.via, 'logo');
-  assert.equal((l.photo as Photo).qid, 'Q1', "Acme's logo, never one for Jane Doe");
+  const ids = [verified('Jane Doe', 'Q2', 'person'), verified('Acme', 'Q1', 'organization')];
+  const p = await search(b, { kind: 'person', query: 'Jane Doe' }, await fakeLogoWeb({ p18: 'Jane Doe portrait.jpg' }), ids);
+  assert.equal(p.candidates[0]?.lane, 'headshot');
+  const l = await search(b, { kind: 'logo', query: 'Jane Doe' }, await fakeLogoWeb(), ids);
+  assert.deepEqual(l.candidates, []);
+  const acme = await search(b, { kind: 'logo', query: 'Acme' }, await fakeLogoWeb(), ids);
+  assert.equal(acme.candidates[0]?.qid, 'Q1', "Acme's logo, never one for Jane Doe");
 });
 
-test('cover order: logo card before stock; nothing → the cover icon', async () => {
+test('logos skip the 7-day rule, on covers too', async () => {
   const b = briefWith({ name: 'Acme', role: 'company' });
-  const stockCalls: string[] = [];
-  const stock = async (q: string) => { stockCalls.push(q); return []; };
-  const c1 = newPhotoContext(b, []);
-  c1.identities = new Map([verified('Acme', 'Q1', 'organization')]);
-  const l = await findPhoto({ kind: 'stock', value: 'office laptop' }, c1, { jev: noJev, http: await fakeLogoWeb(), stock }, cover('Acme ships a new model', ['S9']));
-  assert.equal(l.via, 'logo');
-  assert.deepEqual(stockCalls, [], 'stock is not reached');
-  // Logos are exempt from the 7-day rule across posts: used last week (or earlier in this run) → still the logo card.
-  const week = newPhotoContext(b, [], { recent: new Set(['https://upload.wikimedia.org/thumb/acme-logo.png']) });
-  week.identities = new Map([verified('Acme', 'Q1', 'organization')]);
-  assert.equal((await findPhoto({ kind: 'stock', value: 'office laptop' }, week, { jev: noJev, http: await fakeLogoWeb(), stock }, cover('Acme ships a new model', ['S9']))).via, 'logo');
-  // The logo already used in THIS post → stock (nothing) → the cover icon.
-  const c2 = newPhotoContext(b, []);
-  c2.used.add('https://upload.wikimedia.org/thumb/acme-logo.png');
-  c2.identities = new Map([verified('Acme', 'Q1', 'organization')]);
-  const s = await findPhoto({ kind: 'stock', value: 'office laptop' }, c2, { jev: noJev, http: await fakeLogoWeb(), stock }, cover('Acme ships a new model', ['S9']));
-  assert.equal(s.via, 'icon');
-  assert.equal(s.photo, null);
+  const t = await search(b, { kind: 'logo', query: 'Acme' }, await fakeLogoWeb(), [verified('Acme', 'Q1', 'organization')], { recent: new Set(['https://upload.wikimedia.org/thumb/acme-logo.png']) });
+  assert.equal(t.candidates[0]?.lane, 'logo');
 });
 
 test('render: a logo card (Helios canvas with the faint grid; plate; wide logos sized by width); a cover without a photo shows its icon', async () => {
@@ -142,19 +124,18 @@ test('render: a logo card (Helios canvas with the faint grid; plate; wide logos 
   assert.ok(/\.helios-cover--logo \{[^}]*linear-gradient/.test(css), 'the faint grid behind the logo card');
 });
 
-test('company cover: a usable article photo (the cover request) comes before the logo card', async () => {
+test('company: a usable article photo naming it is a candidate (dated by its page), next to its CEO and building', async () => {
   const b = briefWith({ name: 'Acme', role: 'company' });
-  const page = { ok: true as const, url: 'https://news.example/a', resolvedUrl: 'https://news.example/a', title: null, byline: null, publishedTime: null, text: 'x', truncated: false, photos: [{ src: 'https://news.example/acme-launch.jpg', caption: 'The launch. (Courtesy of Acme)', credit: null, alt: null, from: 'figure' as const }] };
-  const c = newPhotoContext(b, [page], { photos: articlePhotosFor(b, [page]) });
-  c.identities = new Map([verified('Acme', 'Q1', 'organization')]);
-  const t = await findPhoto({ kind: 'article', value: 'https://news.example/acme-launch.jpg' }, c, { jev: noJev, http: await fakeLogoWeb() }, cover('Acme ships a new model', ['S9']));
-  assert.equal(t.via, 'article');
+  const page = { ok: true as const, url: 'https://news.example/a', resolvedUrl: 'https://news.example/a', title: null, byline: null, publishedTime: '2026-10-04T09:00:00Z', text: 'x', truncated: false, photos: [{ src: 'https://news.example/acme-launch.jpg', caption: 'The launch. (Courtesy of Acme)', credit: null, alt: null, from: 'figure' as const }] };
+  const t = await search(b, { kind: 'company', query: 'Acme' }, await fakeLogoWeb(), [verified('Acme', 'Q1', 'organization')], { pages: [page] });
+  const article = t.candidates.find((c) => c.lane === 'article');
+  assert.equal(article?.url, 'https://news.example/acme-launch.jpg');
+  assert.equal(article?.date, '2026-10-04');
 });
 
 // ── Link 1 (photo spec §2–§4): an organization is offered its logo, never its main photo ──
 
 import { createSubjectAvailability } from '@/lib/social/photos/availability';
-import { articlePhotosFor } from '@/lib/social/photos/article-list';
 
 test('availability: an organization has logo_available from its verified P154; its main photo is never offered (logos only)', async () => {
   const b = briefWith({ name: 'Acme', role: 'AI company' });

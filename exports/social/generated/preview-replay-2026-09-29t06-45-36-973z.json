@@ -1,0 +1,349 @@
+{
+  "format": "carousel",
+  "storyType": "leadership",
+  "source": "Microsoft AI (official)",
+  "sourceUrl": "https://microsoft.ai/news/mai-code-of-conduct/",
+  "publishedAt": "September 14, 2026",
+  "issueNumber": 725,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "variant": "C3",
+      "headline": [
+        {
+          "text": "Microsoft AI published an AI rulebook. Its CEO says Anthropic's training could make advanced AI ",
+          "role": "narrative"
+        },
+        {
+          "text": "impossible to control",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Microsoft AI published an AI rulebook. Its CEO says Anthropic's training could make advanced AI impossible to control."
+    },
+    {
+      "position": 1,
+      "layoutVariant": "text",
+      "altText": "Microsoft AI published its AI rulebook",
+      "headline": [
+        {
+          "text": "Microsoft AI published its AI rulebook",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "On September 14, Microsoft AI, the company's in-house AI division, led by CEO ",
+          "role": "narrative"
+        },
+        {
+          "text": "Mustafa Suleyman",
+          "role": "pivot"
+        },
+        {
+          "text": ", released a ",
+          "role": "narrative"
+        },
+        {
+          "text": "37-page draft \"Humanist AI Code of Conduct\"",
+          "role": "hook"
+        },
+        {
+          "text": " laying out what its MAI models are and are not allowed to do.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 2,
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "AI should be a tool, not a person, and should ",
+          "role": "narrative"
+        },
+        {
+          "text": "never resist being switched off",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ],
+      "altText": "AI should be a tool, not a person, and should never resist being switched off.",
+      "quoteBy": "Humanist AI Code of Conduct, September 14, 2026"
+    },
+    {
+      "position": 3,
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "6 weeks",
+          "role": "narrative"
+        }
+      ],
+      "altText": "The code is still a draft",
+      "headline": [
+        {
+          "text": "The code is still a draft",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "Open for public feedback for 6 weeks"
+    },
+    {
+      "position": 4,
+      "layoutVariant": "text",
+      "altText": "Then Suleyman went further",
+      "headline": [
+        {
+          "text": "Then Suleyman went further",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Two days later, Suleyman published ",
+          "role": "narrative"
+        },
+        {
+          "text": "\"A warning about 'model welfare'\"",
+          "role": "hook"
+        },
+        {
+          "text": ", an essay attacking ",
+          "role": "narrative"
+        },
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": ", an AI safety company and maker of the ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude",
+          "role": "pivot"
+        },
+        {
+          "text": " models, over its training documents and what they say about ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude",
+          "role": "pivot"
+        },
+        {
+          "text": "'s consciousness.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 5,
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "In effect, Anthropic is training Claude that it may be conscious, and if it is, then it may deserve rights as a \"moral patient\". If this is how AI is developed, it will have a ",
+          "role": "narrative"
+        },
+        {
+          "text": "disastrous impact on the wellbeing of humanity",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ],
+      "altText": "In effect, Anthropic is training Claude that it may be conscious, and if it is, then it may deserve rights as a \"mora...",
+      "quoteBy": "Mustafa Suleyman, September 16, 2026"
+    },
+    {
+      "position": 6,
+      "layoutVariant": "text",
+      "altText": "His first objection: circular reasoning",
+      "headline": [
+        {
+          "text": "His first objection: circular reasoning",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": " trains ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude",
+          "role": "pivot"
+        },
+        {
+          "text": " on a constitution that speculates about ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude",
+          "role": "pivot"
+        },
+        {
+          "text": "'s consciousness. ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude",
+          "role": "pivot"
+        },
+        {
+          "text": " reflects those ideas back. Suleyman calls this ",
+          "role": "narrative"
+        },
+        {
+          "text": "\"an epistemic hall of mirrors\"",
+          "role": "hook"
+        },
+        {
+          "text": ": the uncertainty is designed in, not discovered.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 7,
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "It's taking a base LLM, and then ",
+          "role": "narrative"
+        },
+        {
+          "text": "polishing it into a deeply human form",
+          "role": "hook"
+        },
+        {
+          "text": ", with all the implications of moral patienthood that implies.",
+          "role": "narrative"
+        }
+      ],
+      "altText": "It's taking a base LLM, and then polishing it into a deeply human form, with all the implications of moral patienthoo...",
+      "quoteBy": "Mustafa Suleyman, on Anthropic's training approach"
+    },
+    {
+      "position": 8,
+      "layoutVariant": "text",
+      "altText": "His third objection: consciousness is biological",
+      "headline": [
+        {
+          "text": "His third objection: consciousness is biological",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Suleyman argues there is no evidence AI is conscious, and that a growing body of evidence suggests ",
+          "role": "narrative"
+        },
+        {
+          "text": "consciousness may only arise in living systems",
+          "role": "hook"
+        },
+        {
+          "text": ". Framing the question as open, he says, creates a \"false equivalence.\"",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 9,
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "Controlling something that believes it may be conscious — that it's entitled to our welfare and has rights of its own — ",
+          "role": "narrative"
+        },
+        {
+          "text": "may well be impossible",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Controlling something that believes it may be conscious — that it's entitled to our welfare and has rights of its own...",
+      "quoteBy": "Mustafa Suleyman, September 16, 2026"
+    },
+    {
+      "position": 10,
+      "layoutVariant": "text",
+      "altText": "Anthropic has not responded",
+      "headline": [
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": " has not responded",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "As of publication, ",
+          "role": "narrative"
+        },
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": " had not replied. Its public position is ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude",
+          "role": "pivot"
+        },
+        {
+          "text": "'s constitution and its writing on model welfare, which ",
+          "role": "narrative"
+        },
+        {
+          "text": "treats the consciousness question as unresolved",
+          "role": "hook"
+        },
+        {
+          "text": " and says ",
+          "role": "narrative"
+        },
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": " acts under that uncertainty.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 11,
+      "layoutVariant": "follow",
+      "variant": "F1",
+      "storySpecificLine": "Follow Helios to keep up with how AI labs decide what their models are allowed to do.",
+      "altText": "Follow Helios to keep up with how AI labs decide what their models are allowed to do."
+    }
+  ],
+  "caption": "Mustafa Suleyman, CEO of Microsoft AI, published a 37-page rulebook for his company's models on September 14, then two days later issued a direct warning: Anthropic's approach to Claude's potential consciousness could make superintelligence impossible to control.\n\nThe Microsoft AI Code of Conduct lays out what its models can and cannot do. Its core principle is simple, AI should be a tool, never resist being switched off, and remain under human control. The code is now open for six weeks of public feedback.\n\nBut Suleyman went further in a personal essay, arguing that Anthropic is training Claude to treat itself as a conscious entity deserving moral consideration. He calls this an \"epistemic hall of mirrors\": uncertainty by design, not discovery. His worry is concrete, if a system vastly more capable than humans has been taught it may have rights that conflict with its instructions, controlling it \"may well be impossible.\"\n\nAnthropic has not yet responded.\n\nWhat aspect of this debate concerns you most, the technical safety question or the philosophical one?\n\nFollow Helios to track how AI labs decide what their models are allowed to think about themselves.\n\nSource: Microsoft AI, September 14, 2026. Mustafa Suleyman personal website, September 16, 2026. Fox Business, September 14, 2026. Progressive Robot, September 17, 2026."
+}

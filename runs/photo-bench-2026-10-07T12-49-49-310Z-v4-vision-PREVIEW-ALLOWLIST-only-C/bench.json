@@ -1,0 +1,316 @@
+{
+  "version": "v4",
+  "vision": true,
+  "capUsd": 0.03,
+  "jevUsd": 0.00016233,
+  "visionUsd": 0.0057,
+  "capRefused": false,
+  "hits": 4,
+  "total": 6,
+  "byKind": {
+    "subject": "3/4",
+    "article": "1/2",
+    "stock": "0/0"
+  },
+  "rows": [
+    {
+      "id": "C1",
+      "story": "https://news.google.com/rss/articles/CBMiwwFBVV95cUxQV2hxbEllWjBTSVlfODJGTHNncFk5Nnk5Vlk0b3poenAySFJ6YUZ1cm1mSElzWGdSallFQk0yQWhONzA1YXpIX0d1cHhSWEg1R2IyM3pILTNaVUNXVjZ1RnhVTGFPNldXNTBleUE1STc2YjZ5eEF3MzFRLXZESWNoclZoZkxQVnlKYzZMUkFQOGVZUzZEbU1WME5STUJ4VVROTjlFd1F6QWNJc3FYand3RnVuZXZrNzN6QnQ0U2oxNXNTaTg?oc=5",
+      "request": {
+        "kind": "subject",
+        "value": "Anthropic"
+      },
+      "slot": "split",
+      "cover": true,
+      "where": "cover (company story)",
+      "slideText": [
+        "On Oct 6, 2026, Anthropic merged Project Glasswing into an expanded Cyber Verification Program with three access tiers (Defense, Red Team, Specialized) that give vetted security teams fewer cyber blocks on its newest Claude models."
+      ],
+      "speaker": null,
+      "why": "Anthropic story with an anthropic.com page (1 figure + og:image)",
+      "trace": {
+        "request": {
+          "kind": "subject",
+          "value": "Anthropic"
+        },
+        "photo": {
+          "url": "/social/starter/data-center-roof.jpg",
+          "credit": "Rsparks3 (CC0) · Wikimedia Commons",
+          "source": "starter",
+          "width": 2048,
+          "height": 1536,
+          "qid": null,
+          "subject": null
+        },
+        "via": "starter",
+        "identity": {
+          "subject": "Anthropic",
+          "ok": true,
+          "detail": "Q116758847 \"Anthropic\" — American artificial intelligence corporation (organization, resolver)",
+          "scores": {
+            "person": 0.01,
+            "matches": [
+              {
+                "id": "Q116758847",
+                "label": "Anthropic",
+                "description": "American artificial intelligence corporation",
+                "p": 0.97
+              }
+            ]
+          }
+        },
+        "steps": [
+          "vision (official): shows no 0.20 · person (main/face) no · landmark no · story logo no · named institution no · banner yes · \"A table describing the Cyber Verification Program tiers and their uses, requirements, and access levels.\" → fail ($0.0030)",
+          "official image: none usable on Anthropic's pages",
+          "identity ok: Q116758847 \"Anthropic\" (organization, resolver)",
+          "no Wikidata main image (P18)",
+          "bank: no match for {\"qid\":\"Q116758847\"}",
+          "logo card: logo too wide for a card (800×90)",
+          "starter set (AI compute, cover fallback): /social/starter/data-center-roof.jpg"
+        ],
+        "visionUsd": 0.003
+      }
+    },
+    {
+      "id": "C2",
+      "story": "https://www.wired.com/story/mistral-new-model-le-chonk-open-source-china-us-frontier/",
+      "request": {
+        "kind": "subject",
+        "value": "Mistral AI"
+      },
+      "slot": "split",
+      "cover": true,
+      "where": "cover (company story)",
+      "slideText": [
+        "On Oct 6, 2026, French AI lab Mistral launched a public preview of Mistral Large 4 (\"Le Chonk\"), a 1-trillion-parameter model it pitches for cyber defense. Weights are due at the end of October. [CLAIM: Mistral says] it is the best open-weight model from the US or Europe, and an independent index puts it well behind the top closed models."
+      ],
+      "speaker": null,
+      "why": "Mistral: no official page saved; P18 unusable → logo card expected",
+      "trace": {
+        "request": {
+          "kind": "subject",
+          "value": "Mistral AI"
+        },
+        "photo": {
+          "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e6/Mistral_AI_logo_%282025%E2%80%93%29.svg/960px-Mistral_AI_logo_%282025%E2%80%93%29.svg.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+          "credit": "Logo: Mistral AI (public domain) · Wikimedia Commons",
+          "source": "logo",
+          "width": 800,
+          "height": 564,
+          "qid": "Q119718658",
+          "subject": "Mistral AI",
+          "plate": "light"
+        },
+        "via": "logo",
+        "identity": {
+          "subject": "Mistral AI",
+          "ok": true,
+          "detail": "Q119718658 \"Mistral AI\" — French AI company (organization, resolver)",
+          "scores": {
+            "person": 0.02,
+            "matches": [
+              {
+                "id": "Q119718658",
+                "label": "Mistral AI",
+                "description": "French AI company",
+                "p": 0.96
+              }
+            ]
+          }
+        },
+        "steps": [
+          "official image: no Mistral AI page among the pages read",
+          "identity ok: Q119718658 \"Mistral AI\" (organization, resolver)",
+          "main image (P18) not usable (licence, size or type)",
+          "bank: no match for {\"qid\":\"Q119718658\"}",
+          "logo card: Q119718658 File:Mistral AI logo (2025–).svg (light plate)"
+        ]
+      }
+    },
+    {
+      "id": "C3",
+      "story": "https://www.theverge.com/ai-artificial-intelligence/1005451/google-gemini-free-flash-lite-only",
+      "request": {
+        "kind": "subject",
+        "value": "Google"
+      },
+      "slot": "split",
+      "cover": true,
+      "where": "cover (company story)",
+      "slideText": [
+        "Starting Oct. 9, 2026, Google will limit Gemini app users without a paid Google AI plan to the Flash-Lite model (losing Flash and Pro), and AI Plus subscribers will also lose Pro on a date Google will email them; Pro will need AI Pro ($19.99/month) or Ultra. [CLAIM: Google says, via its support page as reported by 9to5Google, PCMag, Engadget]"
+      ],
+      "speaker": null,
+      "why": "Google: only a support.google.com page with no images → P18 or logo",
+      "trace": {
+        "request": {
+          "kind": "subject",
+          "value": "Google"
+        },
+        "photo": {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/3/32/Googleplex_HQ_%28cropped%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+          "credit": "Asoundd, CC BY-SA 4.0 · Wikimedia Commons",
+          "source": "commons",
+          "width": 3024,
+          "height": 2212,
+          "qid": "Q95",
+          "subject": "Google"
+        },
+        "via": "subject",
+        "identity": {
+          "subject": "Google",
+          "ok": true,
+          "detail": "Q95 \"Google\" — American multinational technology company, a subsidiary of Alphabet Inc. (organization, resolver)",
+          "scores": {
+            "person": 0.02,
+            "matches": [
+              {
+                "id": "Q95",
+                "label": "Google",
+                "description": "American multinational technology company, a subsidiary of Alphabet Inc.",
+                "p": 0.96
+              }
+            ]
+          }
+        },
+        "steps": [
+          "official image: none usable on Google's pages",
+          "identity ok: Q95 \"Google\" (organization, resolver)",
+          "commons P18: File:Googleplex HQ (cropped).jpg"
+        ]
+      }
+    },
+    {
+      "id": "C4",
+      "story": "https://www.theverge.com/ai-artificial-intelligence/1004811/openai-altman-bad-things-ai-tradeoff",
+      "request": {
+        "kind": "subject",
+        "value": "OpenAI"
+      },
+      "slot": "split",
+      "cover": true,
+      "where": "cover (company story)",
+      "slideText": [
+        "OpenAI CEO Sam Altman said in a Politico Decoded interview (published Oct 4–5, 2026) that the world should accept 'some bad things happening' for AI's benefits, calling this a key difference from Anthropic and drawing sharp criticism."
+      ],
+      "speaker": null,
+      "why": "OpenAI: no official page saved; P18 (Pioneer Building) expected first",
+      "trace": {
+        "request": {
+          "kind": "subject",
+          "value": "OpenAI"
+        },
+        "photo": {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/3/33/Pioneer_Building%2C_San_Francisco_%282019%29_-1.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+          "credit": "HaeB, CC BY-SA 4.0 · Wikimedia Commons",
+          "source": "commons",
+          "width": 5408,
+          "height": 2717,
+          "qid": "Q21708200",
+          "subject": "OpenAI"
+        },
+        "via": "subject",
+        "identity": {
+          "subject": "OpenAI",
+          "ok": true,
+          "detail": "Q21708200 \"OpenAI\" — American artificial intelligence research organization (organization, jev-pick)",
+          "scores": {
+            "person": 0.02,
+            "matches": [
+              {
+                "id": "Q21708200",
+                "label": "OpenAI",
+                "description": "American artificial intelligence research organization",
+                "p": 0.97
+              },
+              {
+                "id": "Q96237091",
+                "label": "OpenAI API",
+                "description": "various AI APIs, products of OpenAI",
+                "p": 0.06
+              },
+              {
+                "id": "Q101366575",
+                "label": "OpenAir Sessions",
+                "description": "podcast from CPR News",
+                "p": 0.01
+              }
+            ]
+          }
+        },
+        "steps": [
+          "official image: no OpenAI page among the pages read",
+          "identity ok: Q21708200 \"OpenAI\" (organization, jev-pick)",
+          "commons P18: File:Pioneer Building, San Francisco (2019) -1.jpg"
+        ]
+      }
+    },
+    {
+      "id": "C5",
+      "story": "https://news.google.com/rss/articles/CBMi4wFBVV95cUxOTEVzRUQza2lET0xIdUNnRy04UjROMFN5OERRWVFocFNBVmlnam5TdDdubUZrSURHS2xHd2RUUDBUVEUyZEN2aFVaamxCYldLOGs4V0twbFNrZTJxRG1mYktFcHNqeDBXWnVXWHVMZHJ4MzlFbWFYajVvMFFoV211OXl5Tm9mYnhQTjdfWmlvWUdMaVhKNVFJNkYyaE5LWm1NdUpYODEwRzQzZG5MX2ZaRmxFdWs5djdFOHBwMlZVd3RMYmhRdTJyNWlxN0dGamd2UXN1a3pweDdiWFhuT0xENGxJNA?oc=5",
+      "request": {
+        "kind": "article",
+        "value": "https://i0.wp.com/9to5google.com/wp-content/uploads/sites/4/2026/10/claude-google-docs-1.jpg?w=1500&quality=82&strip=all&ssl=1"
+      },
+      "slot": "split",
+      "cover": false,
+      "where": "slide (partner-hosted page)",
+      "slideText": [
+        "On October 6, 2026, Anthropic put Claude for Google Workspace, a sidebar add-on for Google Docs, Sheets and Slides, into public beta on all paid Claude plans, and released new beta connectors for creating and editing Google files from Claude chat."
+      ],
+      "speaker": null,
+      "why": "9to5google.com contains \"google\" but is not a Google domain: never official",
+      "trace": {
+        "request": {
+          "kind": "article",
+          "value": "https://i0.wp.com/9to5google.com/wp-content/uploads/sites/4/2026/10/claude-google-docs-1.jpg?w=1500&quality=82&strip=all&ssl=1"
+        },
+        "photo": null,
+        "via": "text-only",
+        "identity": null,
+        "steps": [
+          "credit unknown: no caption or credit",
+          "no usable photo: story slide renders text-only (the starter set is cover-only)"
+        ]
+      }
+    },
+    {
+      "id": "C6",
+      "story": "https://news.google.com/rss/articles/CBMi4wFBVV95cUxOTEVzRUQza2lET0xIdUNnRy04UjROMFN5OERRWVFocFNBVmlnam5TdDdubUZrSURHS2xHd2RUUDBUVEUyZEN2aFVaamxCYldLOGs4V0twbFNrZTJxRG1mYktFcHNqeDBXWnVXWHVMZHJ4MzlFbWFYajVvMFFoV211OXl5Tm9mYnhQTjdfWmlvWUdMaVhKNVFJNkYyaE5LWm1NdUpYODEwRzQzZG5MX2ZaRmxFdWs5djdFOHBwMlZVd3RMYmhRdTJyNWlxN0dGamd2UXN1a3pweDdiWFhuT0xENGxJNA?oc=5",
+      "request": {
+        "kind": "article",
+        "value": "https://claude.com/resources/articles/claude-now-works-in-google-docs-sheets-and-slides/opengraph-image/og"
+      },
+      "slot": "split",
+      "cover": false,
+      "where": "slide (claude.com og:image only)",
+      "slideText": [
+        "On October 6, 2026, Anthropic put Claude for Google Workspace, a sidebar add-on for Google Docs, Sheets and Slides, into public beta on all paid Claude plans, and released new beta connectors for creating and editing Google files from Claude chat."
+      ],
+      "speaker": null,
+      "why": "An official page with only an og:image: allowed when approved, then the vision banner check decides",
+      "trace": {
+        "request": {
+          "kind": "article",
+          "value": "https://claude.com/resources/articles/claude-now-works-in-google-docs-sheets-and-slides/opengraph-image/og"
+        },
+        "photo": {
+          "url": "https://claude.com/resources/articles/claude-now-works-in-google-docs-sheets-and-slides/opengraph-image/og",
+          "credit": "Image: Anthropic",
+          "source": "official",
+          "width": null,
+          "height": null,
+          "qid": null,
+          "subject": null
+        },
+        "via": "official",
+        "identity": null,
+        "steps": [
+          "credit allowed: official page of Anthropic",
+          "vision (official): shows no 0.10 · person (main/face) no · landmark no · story logo no · named institution no · banner no · \"A simple line-drawn lightbulb icon with a star in the bulb on a tan background.\" → PASS ($0.0027)"
+        ],
+        "visionUsd": 0.0027
+      }
+    }
+  ]
+}

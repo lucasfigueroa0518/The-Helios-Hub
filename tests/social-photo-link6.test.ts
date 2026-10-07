@@ -2,7 +2,8 @@
  * Photo Link 6: the render review (photo spec §5b, option B). Offline: the
  * model is a stub that returns canned flags; the render check is a stub that
  * writes tiny screenshots. Covers the settings menu, the text-never-changes
- * rule, round 2 dropping to the icon, the saved before/after, and caching.
+ * rule, round 2 (the next photo, else the icon), spreads, the saved
+ * before/after, and caching.
  */
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
@@ -45,7 +46,7 @@ function shootingFit(bad: (p: Post) => number[] = () => []): FitCheck {
 
 const flag = (slide: number, change: SlideFlag['change'], extra: Partial<SlideFlag> = {}): SlideFlag => ({ slide, face_covered: false, too_busy: true, over_zoomed: false, crowds_mark: false, awkward: false, same_as_neighbour: false, broken: false, change, crop_x: null, crop_y: null, reason: 'too busy behind the text', ...extra });
 
-const traces = (n: number): PhotoTrace[] => Array.from({ length: n }, () => ({ request: { kind: 'none', value: '' }, photo: null, via: 'icon', icon: 'clock', identity: null, steps: [], alternates: [] }));
+const traces = (n: number): PhotoTrace[] => Array.from({ length: n }, () => ({ request: { kind: 'thematic', query: '' }, photo: null, via: 'icon', icon: 'clock', identity: null, steps: [], alternates: [] }));
 
 test('the settings menu: each change touches settings only, never text; what does not apply is refused', () => {
   const p = post();
@@ -67,7 +68,7 @@ test('the settings menu: each change touches settings only, never text; what doe
   assert.equal(toIcon(cover).headline, cover.headline);
 });
 
-test('round 1 applies the changes that pass; round 2: a slide still flagged drops to its icon; before and after are saved with the reason', async () => {
+test('round 1 applies the changes that pass; round 2: a slide still flagged takes its next photo, its icon only when there is none; before and after are saved with the reason', async () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'review-'));
   const calls: Post[] = [];
   const call: ReviewCall = async (_sheet, p) => {
@@ -84,12 +85,39 @@ test('round 1 applies the changes that pass; round 2: a slide still flagged drop
   assert.deepEqual(r.post.slides.map((s) => s.headline), p.slides.map((s) => s.headline), 'no text changed');
   const saved = JSON.parse(readFileSync(path.join(dir, 'story-1', 'review.json'), 'utf8'));
   assert.equal(saved.costUsd, 0.012);
-  assert.deepEqual(saved.changes.map((c: { slide: number; round: number; change: string }) => [c.slide, c.round, c.change]), [[1, 1, 'stronger fade'], [2, 1, 'crop → 0.50 0.20'], [2, 2, 'icon background']]);
+  assert.deepEqual(saved.changes.map((c: { slide: number; round: number; change: string }) => [c.slide, c.round, c.change]), [[1, 1, 'stronger fade'], [2, 1, 'crop → 0.50 0.20'], [2, 2, 'icon background (no other verified photo)']]);
   for (const c of saved.changes) {
     assert.ok(existsSync(path.join(dir, 'story-1', c.before)), c.before);
     assert.ok(existsSync(path.join(dir, 'story-1', c.after)), c.after);
   }
   assert.ok(r.log.some((l) => /slide 2: still too_busy after its fix \(still busy\) → icon background/.test(l)), r.log.join(' | '));
+
+  // With a verified runner-up (fifth round): the next photo, never the cover's (its neighbour).
+  let k = 0;
+  const again: ReviewCall = async () => (++k === 1 ? { flags: [flag(2, 'crop', { crop_x: 0.5, crop_y: 0.2 })], costUsd: 0.006 } : { flags: [flag(2, 'none', { reason: 'still busy' })], costUsd: 0.006 });
+  const t = traces(p.slides.length);
+  const alt = (url: string) => ({ url, credit: 'B, CC BY', source: 'stock' as const, width: 1600, height: 1000, qid: null, subject: null });
+  t[1]!.alternates = [alt('https://s/scene.jpg'), alt('https://s/runner-up.jpg')];
+  const r2 = await createRenderReview({ call: again, dir })({ post: p, storyId: 'story-2', traces: t, fit: fitOkFor(p), fitCheck: shootingFit() });
+  assert.equal(r2.post.slides[1]!.photoUrl, 'https://s/runner-up.jpg', "the runner-up; the cover's photo is skipped (its neighbour)");
+});
+
+test('spreads: the model is told; only a stronger fade applies, to both halves; any other change on a half is skipped; round 2 keeps a spread whole', async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'review-'));
+  const base = post();
+  const wide = { photoUrl: 'https://s/wide.jpg', photoCredit: 'W, CC BY', photoKind: 'scene' as const };
+  const p: Post = { ...base, slides: base.slides.map((x, i) => (i === 5 ? { ...x, ...wide, panoramaSide: 'left' as const } : i === 6 ? { ...x, ...wide, panoramaSide: 'right' as const } : x)) };
+  const { slideList } = await import('@/lib/social/render/review');
+  assert.match(slideList(p), /6\. .*, spread, left half, scene photo\n7\. .*, spread, right half, scene photo/);
+  assert.ok(REVIEW_SYSTEM.includes('Slides marked "spread" are one photo across two slides: judge them as a pair'));
+  let k = 0;
+  const call: ReviewCall = async () => (++k === 1 ? { flags: [flag(6, 'stronger_fade'), flag(7, 'crop', { crop_x: 0.2, crop_y: 0.2 })], costUsd: 0.006 } : { flags: [flag(6, 'none')], costUsd: 0.006 });
+  const r = await createRenderReview({ call, dir })({ post: p, storyId: 'sp', traces: traces(p.slides.length), fit: fitOkFor(p), fitCheck: shootingFit() });
+  assert.deepEqual([r.post.slides[5]!.fade, r.post.slides[6]!.fade], ['strong', 'strong'], 'the fade on both halves');
+  assert.equal(r.post.slides[6]!.photoFocus, undefined, 'no crop on one half');
+  assert.ok(r.log.some((l) => /slide 7: .* → crop: a spread half \(one photo across two slides\) → skipped/.test(l)), r.log.join(' | '));
+  assert.equal(r.post.slides[5]!.photoUrl, 'https://s/wide.jpg', 'round 2 keeps the spread whole');
+  assert.ok(r.log.some((l) => /slide 6: still too_busy .* a spread half \(kept whole\) → logged/.test(l)), r.log.join(' | '));
 });
 
 test('a change that breaks the render check is thrown away; a broken slide with no change is logged as a render bug; no second call without changes', async () => {

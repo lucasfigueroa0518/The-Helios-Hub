@@ -1,0 +1,183 @@
+{
+  "format": "carousel",
+  "storyType": "tech",
+  "source": "Google Labs Blog",
+  "sourceUrl": "https://blog.google/labs/cc-households/",
+  "publishedAt": "2026-09-17",
+  "issueNumber": 726,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "variant": "C3",
+      "headline": [
+        {
+          "text": "Google's CC started as a personal assistant. Now it ",
+          "role": "narrative"
+        },
+        {
+          "text": "runs the whole household",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Google's CC started as a personal assistant. Now it runs the whole household."
+    },
+    {
+      "position": 1,
+      "layoutVariant": "text",
+      "altText": "Demand drove the pivot",
+      "headline": [
+        {
+          "text": "Demand drove the pivot",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Tom Shane",
+          "role": "pivot"
+        },
+        {
+          "text": ", senior product manager at ",
+          "role": "narrative"
+        },
+        {
+          "text": "Google Labs",
+          "role": "pivot"
+        },
+        {
+          "text": ", wrote that \"",
+          "role": "narrative"
+        },
+        {
+          "text": "one of our top user requests",
+          "role": "hook"
+        },
+        {
+          "text": " was for ",
+          "role": "narrative"
+        },
+        {
+          "text": "CC",
+          "role": "pivot"
+        },
+        {
+          "text": " to do more to help run a busy home.\" Household coordination across multiple accounts was the trigger.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 2,
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "6",
+          "role": "narrative"
+        }
+      ],
+      "altText": "How many family members",
+      "headline": [
+        {
+          "text": "How many family members",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "family members per CC group"
+    },
+    {
+      "position": 3,
+      "layoutVariant": "text",
+      "altText": "What CC handles now",
+      "headline": [
+        {
+          "text": "What ",
+          "role": "narrative"
+        },
+        {
+          "text": "CC",
+          "role": "pivot"
+        },
+        {
+          "text": " handles now",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Shared inbox, shared calendar, shared task list. Every family member sees the same view; ",
+          "role": "narrative"
+        },
+        {
+          "text": "CC",
+          "role": "pivot"
+        },
+        {
+          "text": " ",
+          "role": "narrative"
+        },
+        {
+          "text": "keeps them in sync",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 4,
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "\"one of our top user requests was for CC to do more to ",
+          "role": "narrative"
+        },
+        {
+          "text": "help run a busy home",
+          "role": "hook"
+        },
+        {
+          "text": "\"",
+          "role": "narrative"
+        }
+      ],
+      "altText": "\"one of our top user requests was for CC to do more to help run a busy home\"",
+      "quoteBy": "Tom Shane, Google Labs"
+    },
+    {
+      "position": 5,
+      "layoutVariant": "text",
+      "altText": "One hard limit",
+      "headline": [
+        {
+          "text": "One hard limit",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "U.S. adults only",
+          "role": "hook"
+        },
+        {
+          "text": ", personal Gmail accounts only. School-provided accounts are not supported for now.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 6,
+      "layoutVariant": "follow",
+      "variant": "F1",
+      "storySpecificLine": "Follow Helios for AI tool coverage.",
+      "altText": "Follow Helios for AI tool coverage."
+    }
+  ],
+  "caption": "Google Labs opened up a household mode for CC. Would you let an AI run your family calendar? Follow Helios for coverage of how AI tools are landing in everyday life.\n\nSource: Google Labs Blog, September 17, 2026."
+}

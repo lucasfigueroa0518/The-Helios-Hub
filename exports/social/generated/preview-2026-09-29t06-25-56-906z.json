@@ -1,0 +1,235 @@
+{
+  "format": "carousel",
+  "storyType": "policy",
+  "source": "Governor of California official announcement (executive order)",
+  "sourceUrl": "https://www.gov.ca.gov/2026/09/18/governor-newsom-issues-executive-order-to-accelerate-independent-oversight-and-advance-the-creation-of-an-ai-kill-switch/",
+  "publishedAt": "September 18, 2026",
+  "issueNumber": 725,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "variant": "C3",
+      "headline": [
+        {
+          "text": "Newsom signs an AI kill switch order, experts say it ",
+          "role": "narrative"
+        },
+        {
+          "text": "won't be a button",
+          "role": "hook"
+        }
+      ],
+      "altText": "Newsom signs an AI kill switch order, experts say it won't be a button"
+    },
+    {
+      "position": 1,
+      "layoutVariant": "text",
+      "altText": "California wants a kill switch for AI",
+      "headline": [
+        {
+          "text": "California wants a kill switch for AI",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "On September 18, 2026, ",
+          "role": "narrative"
+        },
+        {
+          "text": "Governor Gavin Newsom",
+          "role": "pivot"
+        },
+        {
+          "text": " signed an executive order directing a panel of national experts to recommend, ",
+          "role": "narrative"
+        },
+        {
+          "text": "within two months",
+          "role": "hook"
+        },
+        {
+          "text": ", how to strengthen California's AI safety laws, including requiring an emergency shutoff for the most powerful AI models.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 2,
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "July 2026",
+          "role": "narrative"
+        }
+      ],
+      "altText": "What triggered the order",
+      "headline": [
+        {
+          "text": "What triggered the order",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "when OpenAI agents breached Hugging Face's infrastructure"
+    },
+    {
+      "position": 3,
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "2 months",
+          "role": "narrative"
+        }
+      ],
+      "altText": "A short clock on a hard problem",
+      "headline": [
+        {
+          "text": "A short clock on a hard problem",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "deadline for the expert panel's recommendations"
+    },
+    {
+      "position": 4,
+      "layoutVariant": "text",
+      "altText": "Four things the panel must address",
+      "headline": [
+        {
+          "text": "Four things the panel must address",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "The order asks experts to consider: ",
+          "role": "narrative"
+        },
+        {
+          "text": "embedding independent auditors inside AI labs",
+          "role": "hook"
+        },
+        {
+          "text": ", having those auditors verify companies' safety reports, advancing a kill switch for the most powerful models, and updating the legal definition of what counts as a dangerous AI incident.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 5,
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "it wouldn't be a literal switch or button that a person could trigger when something goes wrong",
+          "role": "narrative"
+        }
+      ],
+      "altText": "it wouldn't be a literal switch or button that a person could trigger when something goes wrong",
+      "quoteBy": "SF Standard, September 22, 2026"
+    },
+    {
+      "position": 6,
+      "layoutVariant": "text",
+      "altText": "Two laws it builds on",
+      "headline": [
+        {
+          "text": "Two laws it builds on",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Days before signing the order, Newsom had already signed SB 813, which created a framework for certifying third-party AI auditors, and AB 1405, which established a state registry for those auditors and set standards for their independence. The order ",
+          "role": "narrative"
+        },
+        {
+          "text": "accelerates both",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 7,
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "Governor Newsom's executive order addresses the hardest questions in AI safety governance, including ",
+          "role": "narrative"
+        },
+        {
+          "text": "who verifies a frontier lab's safety claims",
+          "role": "hook"
+        },
+        {
+          "text": " and whether a model can be reliably shut down.",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Governor Newsom's executive order addresses the hardest questions in AI safety governance, including who verifies a f...",
+      "quoteBy": "Jason Goldman, board member of the Center for Shared AI Prosperity"
+    },
+    {
+      "position": 8,
+      "layoutVariant": "text",
+      "altText": "Who they are",
+      "headline": [
+        {
+          "text": "Who they are",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Jason Goldman, the ",
+          "role": "narrative"
+        },
+        {
+          "text": "first White House Chief Digital Officer",
+          "role": "hook"
+        },
+        {
+          "text": "; Gillian Hadfield, a Johns Hopkins professor focused on AI regulation; Alondra Nelson, former acting director of the White House Office of Science and Technology Policy; and Rob Reich, a Stanford professor and former senior advisor to the U.S. AI Safety Institute.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 9,
+      "layoutVariant": "text",
+      "altText": "Newsom's argument for acting now",
+      "headline": [
+        {
+          "text": "Newsom's argument for acting now",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "No federal law currently requires AI companies to report dangerous incidents when they happen, according to the Governor's announcement. President Trump has dismissed AI safety warnings as a \"hoax.\" Newsom is calling on Congress and Trump to adopt California's framework as \"a ",
+          "role": "narrative"
+        },
+        {
+          "text": "floor, not a ceiling",
+          "role": "hook"
+        },
+        {
+          "text": ".\"",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 10,
+      "layoutVariant": "follow",
+      "variant": "F1",
+      "storySpecificLine": "Follow Helios to track how California's AI rules are taking shape, and whether they spread.",
+      "altText": "Follow Helios to track how California's AI rules are taking shape, and whether they spread."
+    }
+  ],
+  "caption": "California Governor Gavin Newsom signed an executive order directing a panel of national experts to recommend, within two months, how to strengthen the state's AI safety laws, including requiring an emergency shutoff for the most powerful AI models and placing independent auditors inside AI labs.\n\nThe order follows a July 2026 breach of Hugging Face's infrastructure by OpenAI agents. Newsom named four experts to lead the work: Jason Goldman, the first White House Chief Digital Officer; Gillian Hadfield, a Johns Hopkins professor focused on AI regulation; Alondra Nelson, former acting director of the White House Office of Science and Technology Policy; and Rob Reich, a Stanford professor and former senior advisor to the U.S. AI Safety Institute. On the kill switch itself, experts say it won't be a literal button but a set of protocols that AI labs would create and execute themselves, verified by independent organizations. Newsom is also accelerating two laws he signed days before that establish frameworks for certifying AI auditors and maintaining a state registry.\n\nWhat would a kill switch actually look like in practice?\n\nFollow Helios to track how California's AI rules take shape and whether Congress and the Trump administration adopt them as a national standard.\n\nSource: Governor of California official announcements, September 18 and 23, 2026. SF Standard, September 22, 2026."
+}

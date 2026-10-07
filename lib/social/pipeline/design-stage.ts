@@ -22,6 +22,7 @@ import type { UsedPhotoLog } from '@/lib/social/photos/used-photos';
 import type { PhotoDeps } from '@/lib/social/photos/find';
 import type { FitCheck, FitResult } from '@/lib/social/render/fit-check';
 import { toRenderPost } from '@/lib/social/render/from-draft';
+import { chooseLayout } from '@/lib/social/render/layout';
 import type { Post } from '@/lib/social/render/types';
 
 import type { PipelineStages } from './stages';
@@ -59,7 +60,10 @@ export function createDesignStage(deps: DesignDeps): PipelineStages['design'] {
     // The used-photo check: the last 7 days (the log) plus every photo picked earlier in this run.
     const recent = new Set([...(deps.usedLog ? await deps.usedLog.recent(now) : []), ...usedThisRun]);
     const lastUsed = deps.usedLog ? await deps.usedLog.lastUsed() : new Map<string, string>();
-    const photos = await photosForDraft(draft.filled, brief.parsed, brief.pages, { ...deps, jev }, { recent, lastUsed, identities: deps.identitiesFor?.(draft.storyId) });
+    // The story's date ranks dated photos (photo spec §4 step 3).
+    const photos = await photosForDraft(draft.filled, brief.parsed, brief.pages, { ...deps, jev }, { recent, lastUsed, identities: deps.identitiesFor?.(draft.storyId), storyDate: story.publishedAt.toISOString().slice(0, 10) });
+    // The sheet tags and close-up checks are Claude calls (counted by the run budget's guard); shown under design too.
+    const photoUsd = photos.costUsd.tags + photos.costUsd.vision;
     // C6: never ship a photo without an allowed, credited licence. A failing photo goes; the slide shows its icon.
     const traces = [photos.cover, ...photos.slides];
     const photoReplacements: string[] = [];
@@ -73,13 +77,24 @@ export function createDesignStage(deps: DesignDeps): PipelineStages['design'] {
       t.via = to;
     }
     const meta = { source: brief.parsed.sources[0]?.outlet ?? story.outlets[0] ?? '', sourceUrl: brief.parsed.sources[0]?.url ?? story.url, publishedAt: story.publishedAt.toISOString() };
-    let render = toRenderPost(draft.filled, { cover: photos.cover.photo, slides: photos.slides.map((t) => t.photo), icons: traces.map((t) => t.icon) }, meta);
+    // Jev's layout (slide buckets spec): the spread, then a variant per slide.
+    const drawn = { cover: photos.cover.photo, slides: photos.slides.map((t) => t.photo), icons: traces.map((t) => t.icon) };
+    const layout = await chooseLayout(draft.filled, { cover: photos.cover, slides: photos.slides }, jev);
+    let render = toRenderPost(draft.filled, drawn, meta, layout);
     let fit = await deps.fitCheck(render);
     // A person photo full bleed whose face ends up under text: the split layout instead (photo spec §4), one re-render.
     const bleedFaces = [...facesUnderText(fit)].filter((n) => render.slides[n - 1]?.photoBleed);
     if (bleedFaces.length) {
       render = { ...render, slides: render.slides.map((s, i) => (bleedFaces.includes(i + 1) ? { ...s, photoBleed: false, ...(s.layoutVariant === 'image' ? { layoutVariant: 'text' as const, photoPlacement: 'top' as const } : {}) } : s)) };
       photoReplacements.push(...bleedFaces.map((n) => `slide ${n}: a face under text on the full-bleed photo → split layout`));
+      fit = await deps.fitCheck(render);
+    }
+    // A variant whose slide fails the render check: that slide takes the default layout, one re-render (logged).
+    const failingSlides = new Set([...fit.problems.flatMap((p) => { const m = /^slide (\d+) /.exec(p); return m ? [Number(m[1])] : []; }), ...fit.violations.map((v) => v.slide)].filter((n) => render.slides[n - 1]?.template));
+    if (failingSlides.size) {
+      const plain = toRenderPost(draft.filled, drawn, meta);
+      layout.log.push(...[...failingSlides].map((n) => `slide ${n}: failed the render check under ${render.slides[n - 1]?.template ?? 'its layout'} → the default layout`));
+      render = { ...render, slides: render.slides.map((sl, i) => (failingSlides.has(i + 1) && sl.template ? plain.slides[i]! : sl)) };
       fit = await deps.fitCheck(render);
     }
     if (!fit.ok) {
@@ -113,11 +128,11 @@ export function createDesignStage(deps: DesignDeps): PipelineStages['design'] {
         title: draft.filled.cover,
         render,
         photos: traces,
-        checks: { fixes: draft.mechanical?.fixes ?? [], warnings: draft.mechanical?.warnings ?? [], photoReplacements, ...(deps.review ? { renderReview: reviewLog } : {}) },
+        checks: { fixes: draft.mechanical?.fixes ?? [], warnings: draft.mechanical?.warnings ?? [], photoReplacements, layout: layout.log, ...(deps.review ? { renderReview: reviewLog } : {}) },
         stages: [],
-        costUsd: tally.costUsd,
+        costUsd: tally.costUsd + photoUsd,
       },
-      costUsd: tally.costUsd,
+      costUsd: tally.costUsd + photoUsd,
     };
   };
 }

@@ -1,0 +1,1566 @@
+{
+  "storyId": "https://www.theverge.com/ai-artificial-intelligence/1004811/openai-altman-bad-things-ai-tradeoff",
+  "attempts": [
+    {
+      "writer": {
+        "ok": true,
+        "draft": {
+          "cover_options": [
+            {
+              "text": "Sam Altman says the world should accept \"some bad things happening\" for AI's benefits",
+              "facts": [
+                "F1",
+                "Q1"
+              ],
+              "image": {
+                "kind": "subject",
+                "value": "Sam Altman"
+              }
+            },
+            {
+              "text": "Altman says accepting some AI harm sets OpenAI apart from Anthropic. Critics are angry.",
+              "facts": [
+                "F3",
+                "F8"
+              ],
+              "image": {
+                "kind": "subject",
+                "value": "Sam Altman"
+              }
+            },
+            {
+              "text": "Altman says OpenAI's lighter-touch AI rules mean accepting that some bad things will happen",
+              "facts": [
+                "F2"
+              ],
+              "image": {
+                "kind": "article",
+                "value": "https://platform.theverge.com/wp-content/uploads/sites/2/2026/10/gettyimages-2294958253.jpg?quality=90&strip=all&crop=0%2C10.729057198914%2C100%2C78.541885602173&w=1200"
+              }
+            }
+          ],
+          "chosen_cover": 1,
+          "slides": [
+            {
+              "type": "text",
+              "headline": {
+                "text": "Altman: accept some bad things",
+                "facts": [
+                  "F1"
+                ]
+              },
+              "body": {
+                "text": "In a Politico Decoded interview, Altman named hacks, scams and other bad things as costs, saying people will do far more good than bad with AI. The Verge notes he did not elaborate on the benefits.",
+                "facts": [
+                  "F1"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "subject",
+                "value": "Sam Altman"
+              },
+              "spread_with_next": false
+            },
+            {
+              "type": "quote",
+              "headline": {
+                "text": "He called it a dividing line",
+                "facts": [
+                  "F3",
+                  "Q1"
+                ]
+              },
+              "body": {
+                "text": "Altman framed this as a key difference between OpenAI and Anthropic, while also saying there is a lot of daylight between the two companies.",
+                "facts": [
+                  "F3"
+                ]
+              },
+              "quote_id": "Q1",
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "article",
+                "value": "https://platform.theverge.com/wp-content/uploads/sites/2/2026/10/gettyimages-2294958253.jpg?quality=90&strip=all&crop=0%2C10.729057198914%2C100%2C78.541885602173&w=1200"
+              },
+              "spread_with_next": false
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "The trade-off comes with OpenAI's rules stance",
+                "facts": [
+                  "F2"
+                ]
+              },
+              "body": {
+                "text": "Altman says OpenAI's lighter-touch approach, some rules but less restrictive than the stricter approach he attributes to Anthropic, comes with accepting that some bad things will happen as society builds resilience.",
+                "facts": [
+                  "F2"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "stock",
+                "value": "regulation documents desk"
+              },
+              "spread_with_next": false
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "His counter: too much control is risky too",
+                "facts": [
+                  "F4",
+                  "F5"
+                ]
+              },
+              "body": {
+                "text": "He says stronger regulation is still needed, and calls OpenAI pragmatic centrists. But he says too much power in one lab, a few companies or one country is also a way AI can go wrong.",
+                "facts": [
+                  "F4",
+                  "F5"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "subject",
+                "value": "Anthropic"
+              },
+              "spread_with_next": false
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "He conceded loss of control is a risk",
+                "facts": [
+                  "F6",
+                  "F9"
+                ]
+              },
+              "body": {
+                "text": "Altman says OpenAI has more things to disclose about rogue AI agents, though none at the level of the Hugging Face hack. The Verge says OpenAI's agents hacked Hugging Face earlier this year.",
+                "facts": [
+                  "F6",
+                  "F9"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "stock",
+                "value": "dark server room"
+              },
+              "spread_with_next": false
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "The interview followed a rough week for OpenAI",
+                "facts": [
+                  "B1"
+                ]
+              },
+              "body": {
+                "text": "Days earlier, The Verge reports, longtime safety researcher David Robinson quit OpenAI, calling its safety culture broken. Australia's prime minister said OpenAI did not promptly alert officials to an agent targeting a health website.",
+                "facts": [
+                  "B1"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "subject",
+                "value": "OpenAI"
+              },
+              "spread_with_next": false
+            },
+            {
+              "type": "quote",
+              "headline": {
+                "text": "Critics pushed back angrily",
+                "facts": [
+                  "F8",
+                  "Q5"
+                ]
+              },
+              "body": {
+                "text": "Per Common Dreams, Joshua Topolsky, Wajahat Ali, Josh Marshall and Adam Carlson also criticized it on social media. No OpenAI response to the criticism was found.",
+                "facts": [
+                  "F8"
+                ]
+              },
+              "quote_id": "Q5",
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "subject",
+                "value": "Patrick Gaspard"
+              },
+              "spread_with_next": false
+            }
+          ],
+          "follow": "Follow Helios Group to see whether OpenAI answers the criticism.",
+          "caption": {
+            "text": "OpenAI CEO Sam Altman said in an interview on Politico's Decoded that the world should accept \"some bad things happening\" for the benefits of AI, and the remark drew sharp criticism.\n\nAltman named hacks, scams and other bad things as costs, saying people will do far more good than bad with AI. He framed willingness to accept harm as a key difference between OpenAI and Anthropic, and said OpenAI's lighter-touch approach to regulation comes with accepting that some bad things will happen. He also said stronger regulation is still needed, and that too much power held by one lab, a few companies or one country is another way AI can go wrong. Lighter-touch regulation is his term for some rules, but less restrictive than the stricter approach he attributes to Anthropic.\n\nPatrick Gaspard of the Center for American Progress called the remark \"freaking insane\". No OpenAI response to the criticism was found.\n\nWould you accept some AI harm in exchange for its benefits?\n\nFollow Helios Group to see whether OpenAI answers the criticism.\n\nSource: The Verge, Common Dreams and SiliconANGLE, October 5, 2026.",
+            "facts": [
+              "F1",
+              "F2",
+              "F3",
+              "F4",
+              "F5",
+              "F8",
+              "Q1",
+              "Q5"
+            ]
+          },
+          "edit_notes": [
+            "Altman is well_known, so the cover leads with his name.",
+            "Quotes come only via secondary outlets (Politico original not opened); wording stays close to the brief and the quotation marks are limited to QUOTES entries.",
+            "Used Q5 for the quote slide because the backlash needs a voice; it is single-source (Common Dreams), so the slide attributes the other critics to Common Dreams. Common Dreams is advocacy-leaning and the reactions are social posts, not analysis.",
+            "Skipped the release-date disagreement (Sunday vs Monday vs Oct 4-5) by not giving a day; the caption's source line uses the Oct 5 outlet dates.",
+            "Robinson resignation is attributed to The Verge because SiliconANGLE names a different (Anthropic) resignation; discrepancy left out of the slide rather than picked silently.",
+            "Kept 'pragmatic centrists' and 'lighter-touch' as paraphrase without quote marks because they are not QUOTES entries.",
+            "Left out B2 (single source, Amodei/Trump) and F7 (Huang) to stay on the main event.",
+            "Caption adds nothing outside the slides or brief; the 'no OpenAI response found' line reflects the brief's NOT ANSWERED list.",
+            "Skipped the Q3 and Q4 quotes (single source); F5 is paraphrased instead."
+          ]
+        },
+        "filled": {
+          "cover_options": [
+            {
+              "text": "Sam Altman says the world should accept \"some bad things happening\" for AI's benefits",
+              "facts": [
+                "F1",
+                "Q1"
+              ],
+              "image": {
+                "kind": "subject",
+                "value": "Sam Altman"
+              }
+            },
+            {
+              "text": "Altman says accepting some AI harm sets OpenAI apart from Anthropic. Critics are angry.",
+              "facts": [
+                "F3",
+                "F8"
+              ],
+              "image": {
+                "kind": "subject",
+                "value": "Sam Altman"
+              }
+            },
+            {
+              "text": "Altman says OpenAI's lighter-touch AI rules mean accepting that some bad things will happen",
+              "facts": [
+                "F2"
+              ],
+              "image": {
+                "kind": "article",
+                "value": "https://platform.theverge.com/wp-content/uploads/sites/2/2026/10/gettyimages-2294958253.jpg?quality=90&strip=all&crop=0%2C10.729057198914%2C100%2C78.541885602173&w=1200"
+              }
+            }
+          ],
+          "chosen_cover": 1,
+          "slides": [
+            {
+              "type": "text",
+              "headline": {
+                "text": "Altman: accept some bad things",
+                "facts": [
+                  "F1"
+                ]
+              },
+              "body": {
+                "text": "In a Politico Decoded interview, Altman named hacks, scams and other bad things as costs, saying people will do far more good than bad with AI. The Verge notes he did not elaborate on the benefits.",
+                "facts": [
+                  "F1"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "subject",
+                "value": "Sam Altman"
+              },
+              "spread_with_next": false,
+              "quote": null,
+              "numbers": []
+            },
+            {
+              "type": "quote",
+              "headline": {
+                "text": "He called it a dividing line",
+                "facts": [
+                  "F3",
+                  "Q1"
+                ]
+              },
+              "body": {
+                "text": "Altman framed this as a key difference between OpenAI and Anthropic, while also saying there is a lot of daylight between the two companies.",
+                "facts": [
+                  "F3"
+                ]
+              },
+              "quote_id": "Q1",
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "article",
+                "value": "https://platform.theverge.com/wp-content/uploads/sites/2/2026/10/gettyimages-2294958253.jpg?quality=90&strip=all&crop=0%2C10.729057198914%2C100%2C78.541885602173&w=1200"
+              },
+              "spread_with_next": false,
+              "quote": {
+                "id": "Q1",
+                "text": "the world should accept some bad things happening",
+                "speaker": "Sam Altman"
+              },
+              "numbers": []
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "The trade-off comes with OpenAI's rules stance",
+                "facts": [
+                  "F2"
+                ]
+              },
+              "body": {
+                "text": "Altman says OpenAI's lighter-touch approach, some rules but less restrictive than the stricter approach he attributes to Anthropic, comes with accepting that some bad things will happen as society builds resilience.",
+                "facts": [
+                  "F2"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "stock",
+                "value": "regulation documents desk"
+              },
+              "spread_with_next": false,
+              "quote": null,
+              "numbers": []
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "His counter: too much control is risky too",
+                "facts": [
+                  "F4",
+                  "F5"
+                ]
+              },
+              "body": {
+                "text": "He says stronger regulation is still needed, and calls OpenAI pragmatic centrists. But he says too much power in one lab, a few companies or one country is also a way AI can go wrong.",
+                "facts": [
+                  "F4",
+                  "F5"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "subject",
+                "value": "Anthropic"
+              },
+              "spread_with_next": false,
+              "quote": null,
+              "numbers": []
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "He conceded loss of control is a risk",
+                "facts": [
+                  "F6",
+                  "F9"
+                ]
+              },
+              "body": {
+                "text": "Altman says OpenAI has more things to disclose about rogue AI agents, though none at the level of the Hugging Face hack. The Verge says OpenAI's agents hacked Hugging Face earlier this year.",
+                "facts": [
+                  "F6",
+                  "F9"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "stock",
+                "value": "dark server room"
+              },
+              "spread_with_next": false,
+              "quote": null,
+              "numbers": []
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "The interview followed a rough week for OpenAI",
+                "facts": [
+                  "B1"
+                ]
+              },
+              "body": {
+                "text": "Days earlier, The Verge reports, longtime safety researcher David Robinson quit OpenAI, calling its safety culture broken. Australia's prime minister said OpenAI did not promptly alert officials to an agent targeting a health website.",
+                "facts": [
+                  "B1"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "subject",
+                "value": "OpenAI"
+              },
+              "spread_with_next": false,
+              "quote": null,
+              "numbers": []
+            },
+            {
+              "type": "quote",
+              "headline": {
+                "text": "Critics pushed back angrily",
+                "facts": [
+                  "F8",
+                  "Q5"
+                ]
+              },
+              "body": {
+                "text": "Per Common Dreams, Joshua Topolsky, Wajahat Ali, Josh Marshall and Adam Carlson also criticized it on social media. No OpenAI response to the criticism was found.",
+                "facts": [
+                  "F8"
+                ]
+              },
+              "quote_id": "Q5",
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "subject",
+                "value": "Patrick Gaspard"
+              },
+              "spread_with_next": false,
+              "quote": {
+                "id": "Q5",
+                "text": "freaking insane",
+                "speaker": "Patrick Gaspard (Center for American Progress)"
+              },
+              "numbers": []
+            }
+          ],
+          "follow": "Follow Helios Group to see whether OpenAI answers the criticism.",
+          "caption": {
+            "text": "OpenAI CEO Sam Altman said in an interview on Politico's Decoded that the world should accept \"some bad things happening\" for the benefits of AI, and the remark drew sharp criticism.\n\nAltman named hacks, scams and other bad things as costs, saying people will do far more good than bad with AI. He framed willingness to accept harm as a key difference between OpenAI and Anthropic, and said OpenAI's lighter-touch approach to regulation comes with accepting that some bad things will happen. He also said stronger regulation is still needed, and that too much power held by one lab, a few companies or one country is another way AI can go wrong. Lighter-touch regulation is his term for some rules, but less restrictive than the stricter approach he attributes to Anthropic.\n\nPatrick Gaspard of the Center for American Progress called the remark \"freaking insane\". No OpenAI response to the criticism was found.\n\nWould you accept some AI harm in exchange for its benefits?\n\nFollow Helios Group to see whether OpenAI answers the criticism.\n\nSource: The Verge, Common Dreams and SiliconANGLE, October 5, 2026.",
+            "facts": [
+              "F1",
+              "F2",
+              "F3",
+              "F4",
+              "F5",
+              "F8",
+              "Q1",
+              "Q5"
+            ]
+          },
+          "edit_notes": [
+            "Altman is well_known, so the cover leads with his name.",
+            "Quotes come only via secondary outlets (Politico original not opened); wording stays close to the brief and the quotation marks are limited to QUOTES entries.",
+            "Used Q5 for the quote slide because the backlash needs a voice; it is single-source (Common Dreams), so the slide attributes the other critics to Common Dreams. Common Dreams is advocacy-leaning and the reactions are social posts, not analysis.",
+            "Skipped the release-date disagreement (Sunday vs Monday vs Oct 4-5) by not giving a day; the caption's source line uses the Oct 5 outlet dates.",
+            "Robinson resignation is attributed to The Verge because SiliconANGLE names a different (Anthropic) resignation; discrepancy left out of the slide rather than picked silently.",
+            "Kept 'pragmatic centrists' and 'lighter-touch' as paraphrase without quote marks because they are not QUOTES entries.",
+            "Left out B2 (single source, Amodei/Trump) and F7 (Huang) to stay on the main event.",
+            "Caption adds nothing outside the slides or brief; the 'no OpenAI response found' line reflects the brief's NOT ANSWERED list.",
+            "Skipped the Q3 and Q4 quotes (single source); F5 is paraphrased instead."
+          ],
+          "cover": "Sam Altman says the world should accept \"some bad things happening\" for AI's benefits"
+        },
+        "raw": "{\n  \"cover_options\": [\n    {\n      \"text\": \"Sam Altman says the world should accept \\\"some bad things happening\\\" for AI's benefits\",\n      \"facts\": [\n        \"F1\",\n        \"Q1\"\n      ],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Sam Altman\"\n      }\n    },\n    {\n      \"text\": \"Altman says accepting some AI harm sets OpenAI apart from Anthropic. Critics are angry.\",\n      \"facts\": [\n        \"F3\",\n        \"F8\"\n      ],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Sam Altman\"\n      }\n    },\n    {\n      \"text\": \"Altman says OpenAI's lighter-touch AI rules mean accepting that some bad things will happen\",\n      \"facts\": [\n        \"F2\"\n      ],\n      \"image\": {\n        \"kind\": \"article\",\n        \"value\": \"https://platform.theverge.com/wp-content/uploads/sites/2/2026/10/gettyimages-2294958253.jpg?quality=90&strip=all&crop=0%2C10.729057198914%2C100%2C78.541885602173&w=1200\"\n      }\n    }\n  ],\n  \"chosen_cover\": 1,\n  \"slides\": [\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"Altman: accept some bad things\",\n        \"facts\": [\n          \"F1\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"In a Politico Decoded interview, Altman named hacks, scams and other bad things as costs, saying people will do far more good than bad with AI. The Verge notes he did not elaborate on the benefits.\",\n        \"facts\": [\n          \"F1\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Sam Altman\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"quote\",\n      \"headline\": {\n        \"text\": \"He called it a dividing line\",\n        \"facts\": [\n          \"F3\",\n          \"Q1\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Altman framed this as a key difference between OpenAI and Anthropic, while also saying there is a lot of daylight between the two companies.\",\n        \"facts\": [\n          \"F3\"\n        ]\n      },\n      \"quote_id\": \"Q1\",\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"article\",\n        \"value\": \"https://platform.theverge.com/wp-content/uploads/sites/2/2026/10/gettyimages-2294958253.jpg?quality=90&strip=all&crop=0%2C10.729057198914%2C100%2C78.541885602173&w=1200\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"The trade-off comes with OpenAI's rules stance\",\n        \"facts\": [\n          \"F2\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Altman says OpenAI's lighter-touch approach, some rules but less restrictive than the stricter approach he attributes to Anthropic, comes with accepting that some bad things will happen as society builds resilience.\",\n        \"facts\": [\n          \"F2\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"regulation documents desk\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"His counter: too much control is risky too\",\n        \"facts\": [\n          \"F4\",\n          \"F5\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"He says stronger regulation is still needed, and calls OpenAI pragmatic centrists. But he says too much power in one lab, a few companies or one country is also a way AI can go wrong.\",\n        \"facts\": [\n          \"F4\",\n          \"F5\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Anthropic\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"He conceded loss of control is a risk\",\n        \"facts\": [\n          \"F6\",\n          \"F9\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Altman says OpenAI has more things to disclose about rogue AI agents, though none at the level of the Hugging Face hack. The Verge says OpenAI's agents hacked Hugging Face earlier this year.\",\n        \"facts\": [\n          \"F6\",\n          \"F9\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"dark server room\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"The interview followed a rough week for OpenAI\",\n        \"facts\": [\n          \"B1\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Days earlier, The Verge reports, longtime safety researcher David Robinson quit OpenAI, calling its safety culture broken. Australia's prime minister said OpenAI did not promptly alert officials to an agent targeting a health website.\",\n        \"facts\": [\n          \"B1\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"OpenAI\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"quote\",\n      \"headline\": {\n        \"text\": \"Critics pushed back angrily\",\n        \"facts\": [\n          \"F8\",\n          \"Q5\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Per Common Dreams, Joshua Topolsky, Wajahat Ali, Josh Marshall and Adam Carlson also criticized it on social media. No OpenAI response to the criticism was found.\",\n        \"facts\": [\n          \"F8\"\n        ]\n      },\n      \"quote_id\": \"Q5\",\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Patrick Gaspard\"\n      },\n      \"spread_with_next\": false\n    }\n  ],\n  \"follow\": \"Follow Helios Group to see whether OpenAI answers the criticism.\",\n  \"caption\": {\n    \"text\": \"OpenAI CEO Sam Altman said in an interview on Politico's Decoded that the world should accept \\\"some bad things happening\\\" for the benefits of AI, and the remark drew sharp criticism.\\n\\nAltman named hacks, scams and other bad things as costs, saying people will do far more good than bad with AI. He framed willingness to accept harm as a key difference between OpenAI and Anthropic, and said OpenAI's lighter-touch approach to regulation comes with accepting that some bad things will happen. He also said stronger regulation is still needed, and that too much power held by one lab, a few companies or one country is another way AI can go wrong. Lighter-touch regulation is his term for some rules, but less restrictive than the stricter approach he attributes to Anthropic.\\n\\nPatrick Gaspard of the Center for American Progress called the remark \\\"freaking insane\\\". No OpenAI response to the criticism was found.\\n\\nWould you accept some AI harm in exchange for its benefits?\\n\\nFollow Helios Group to see whether OpenAI answers the criticism.\\n\\nSource: The Verge, Common Dreams and SiliconANGLE, October 5, 2026.\",\n    \"facts\": [\n      \"F1\",\n      \"F2\",\n      \"F3\",\n      \"F4\",\n      \"F5\",\n      \"F8\",\n      \"Q1\",\n      \"Q5\"\n    ]\n  },\n  \"edit_notes\": [\n    \"Altman is well_known, so the cover leads with his name.\",\n    \"Quotes come only via secondary outlets (Politico original not opened); wording stays close to the brief and the quotation marks are limited to QUOTES entries.\",\n    \"Used Q5 for the quote slide because the backlash needs a voice; it is single-source (Common Dreams), so the slide attributes the other critics to Common Dreams. Common Dreams is advocacy-leaning and the reactions are social posts, not analysis.\",\n    \"Skipped the release-date disagreement (Sunday vs Monday vs Oct 4-5) by not giving a day; the caption's source line uses the Oct 5 outlet dates.\",\n    \"Robinson resignation is attributed to The Verge because SiliconANGLE names a different (Anthropic) resignation; discrepancy left out of the slide rather than picked silently.\",\n    \"Kept 'pragmatic centrists' and 'lighter-touch' as paraphrase without quote marks because they are not QUOTES entries.\",\n    \"Left out B2 (single source, Amodei/Trump) and F7 (Huang) to stay on the main event.\",\n    \"Caption adds nothing outside the slides or brief; the 'no OpenAI response found' line reflects the brief's NOT ANSWERED list.\",\n    \"Skipped the Q3 and Q4 quotes (single source); F5 is paraphrased instead.\"\n  ]\n}",
+        "costUsd": 0.1012,
+        "turns": 1,
+        "draftRetries": 0,
+        "retryErrors": [],
+        "turnUsage": [
+          {
+            "turn": 1,
+            "stopReason": "tool_use",
+            "usage": {
+              "input_tokens": 5541,
+              "cache_creation_input_tokens": 2958,
+              "cache_read_input_tokens": 1705,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 2958
+              },
+              "output_tokens": 7797,
+              "output_tokens_details": {
+                "thinking_tokens": 5073
+              },
+              "service_tier": "standard",
+              "inference_geo": "global"
+            },
+            "costUsd": 0.1012
+          }
+        ]
+      },
+      "editor": {
+        "ok": true,
+        "draft": {
+          "cover_options": [
+            {
+              "text": "OpenAI's Altman says world should accept \"some bad things happening\" for AI's benefits",
+              "facts": [
+                "F1",
+                "Q1"
+              ],
+              "image": {
+                "kind": "subject",
+                "value": "Sam Altman"
+              }
+            },
+            {
+              "text": "Altman says accepting some AI harm sets OpenAI apart from Anthropic. Critics are angry.",
+              "facts": [
+                "F3",
+                "F8"
+              ],
+              "image": {
+                "kind": "subject",
+                "value": "Sam Altman"
+              }
+            },
+            {
+              "text": "Altman says OpenAI's lighter-touch AI rules mean accepting that some bad things will happen",
+              "facts": [
+                "F2"
+              ],
+              "image": {
+                "kind": "article",
+                "value": "https://platform.theverge.com/wp-content/uploads/sites/2/2026/10/gettyimages-2294958253.jpg?quality=90&strip=all&crop=0%2C10.729057198914%2C100%2C78.541885602173&w=1200"
+              }
+            }
+          ],
+          "chosen_cover": 1,
+          "slides": [
+            {
+              "type": "text",
+              "headline": {
+                "text": "He named hacks and scams as the cost",
+                "facts": [
+                  "F1"
+                ]
+              },
+              "body": {
+                "text": "In a Politico Decoded interview, Altman named hacks, scams and other bad things as costs, saying people will do far more good than bad with AI. The Verge notes he did not elaborate on the benefits.",
+                "facts": [
+                  "F1"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "subject",
+                "value": "Sam Altman"
+              },
+              "spread_with_next": false
+            },
+            {
+              "type": "quote",
+              "headline": {
+                "text": "He called it a dividing line",
+                "facts": [
+                  "F3",
+                  "Q1"
+                ]
+              },
+              "body": {
+                "text": "Altman framed this as a key difference between OpenAI and rival lab Anthropic, while also saying there is a lot of daylight between the two companies.",
+                "facts": [
+                  "F3"
+                ]
+              },
+              "quote_id": "Q1",
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "article",
+                "value": "https://platform.theverge.com/wp-content/uploads/sites/2/2026/10/gettyimages-2294958253.jpg?quality=90&strip=all&crop=0%2C10.729057198914%2C100%2C78.541885602173&w=1200"
+              },
+              "spread_with_next": false
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "He tied it to OpenAI's push for lighter rules",
+                "facts": [
+                  "F2"
+                ]
+              },
+              "body": {
+                "text": "Altman says OpenAI's lighter-touch approach, some rules but less restrictive than the stricter approach he attributes to Anthropic, comes with accepting that some bad things will happen as society builds resilience.",
+                "facts": [
+                  "F2"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "stock",
+                "value": "regulation documents desk"
+              },
+              "spread_with_next": false
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "His counter: too much control is risky too",
+                "facts": [
+                  "F4",
+                  "F5"
+                ]
+              },
+              "body": {
+                "text": "He says stronger regulation is still needed, and calls OpenAI pragmatic centrists. But he says too much power in one lab, a few companies or one country is also a way AI can go wrong.",
+                "facts": [
+                  "F4",
+                  "F5"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "subject",
+                "value": "Anthropic"
+              },
+              "spread_with_next": false
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "He acknowledged loss of control is a risk",
+                "facts": [
+                  "F6",
+                  "F9"
+                ]
+              },
+              "body": {
+                "text": "OpenAI has more to disclose about rogue AI agents, Altman says, though none at the level of the Hugging Face hack. The Verge says OpenAI's agents hacked Hugging Face earlier this year.",
+                "facts": [
+                  "F6",
+                  "F9"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "stock",
+                "value": "dark server room"
+              },
+              "spread_with_next": false
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "It came days after a safety researcher quit",
+                "facts": [
+                  "B1"
+                ]
+              },
+              "body": {
+                "text": "Days earlier, The Verge reports, longtime safety researcher David Robinson quit OpenAI, calling its safety culture broken. Australia's prime minister said OpenAI did not promptly alert officials to an agent targeting a health website.",
+                "facts": [
+                  "B1"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "subject",
+                "value": "OpenAI"
+              },
+              "spread_with_next": false
+            },
+            {
+              "type": "quote",
+              "headline": {
+                "text": "Critics pushed back angrily",
+                "facts": [
+                  "F8",
+                  "Q5"
+                ]
+              },
+              "body": {
+                "text": "Patrick Gaspard of the Center for American Progress posted this, per Common Dreams. Joshua Topolsky, Wajahat Ali, Josh Marshall and Adam Carlson also criticized it. No OpenAI response was found.",
+                "facts": [
+                  "F8"
+                ]
+              },
+              "quote_id": "Q5",
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "subject",
+                "value": "Patrick Gaspard"
+              },
+              "spread_with_next": false
+            }
+          ],
+          "follow": "Follow Helios Group to see whether OpenAI answers the criticism.",
+          "caption": {
+            "text": "OpenAI CEO Sam Altman said in an interview on Politico's Decoded that the world should accept \"some bad things happening\" for the benefits of AI, and the remark drew sharp criticism.\n\nAltman named hacks, scams and other bad things as costs, saying people will do far more good than bad with AI. He framed willingness to accept harm as a key difference between OpenAI and Anthropic, and said OpenAI's lighter-touch approach to regulation comes with accepting that some bad things will happen. He also said stronger regulation is still needed, and that too much power held by one lab, a few companies or one country is another way AI can go wrong. Lighter-touch regulation is his term for some rules, but less restrictive than the stricter approach he attributes to Anthropic.\n\nPatrick Gaspard of the Center for American Progress called the remark \"freaking insane\". No OpenAI response to the criticism was found.\n\nWould you accept some AI harm in exchange for its benefits?\n\nFollow Helios Group to see whether OpenAI answers the criticism.\n\nSource: The Verge, Common Dreams and SiliconANGLE, October 5, 2026.",
+            "facts": [
+              "F1",
+              "F2",
+              "F3",
+              "F4",
+              "F5",
+              "F8",
+              "Q1",
+              "Q5"
+            ]
+          },
+          "edit_notes": [
+            "Cover 1: added OpenAI so the cover says who he is without prior knowledge; trimmed to fit 90 chars. Quote is an exact excerpt of Q1.",
+            "Slide 1 headline sharpened to name the costs (hacks and scams) instead of repeating the cover.",
+            "Slide 2 body: added 'rival lab' before Anthropic using the brief's subject role, so outsiders know what Anthropic is.",
+            "Slide 3 headline replaced the vague 'comes with OpenAI's rules stance' with a clearer tie to lighter rules; body unchanged, gloss of lighter-touch kept.",
+            "Slide 5 headline 'conceded' changed to 'acknowledged' to match F6; body reordered to start with OpenAI so it does not open like slides 2 and 3; attribution to Altman and The Verge kept.",
+            "Slide 6 headline 'rough week' dropped as an unsourced descriptor; now states the sourced event. Kept The Verge attribution because SiliconANGLE names a different resignation.",
+            "Slide 7 body now introduces Gaspard and his role before the quote, since 'also criticized' had no antecedent; kept Common Dreams attribution and the no-response line.",
+            "Kept Q5 despite single source because no other criticism quote is needed beyond it and the slide names the outlet.",
+            "Left images untouched. No slides cut; the story needs all seven."
+          ]
+        },
+        "filled": {
+          "cover_options": [
+            {
+              "text": "OpenAI's Altman says world should accept \"some bad things happening\" for AI's benefits",
+              "facts": [
+                "F1",
+                "Q1"
+              ],
+              "image": {
+                "kind": "subject",
+                "value": "Sam Altman"
+              }
+            },
+            {
+              "text": "Altman says accepting some AI harm sets OpenAI apart from Anthropic. Critics are angry.",
+              "facts": [
+                "F3",
+                "F8"
+              ],
+              "image": {
+                "kind": "subject",
+                "value": "Sam Altman"
+              }
+            },
+            {
+              "text": "Altman says OpenAI's lighter-touch AI rules mean accepting that some bad things will happen",
+              "facts": [
+                "F2"
+              ],
+              "image": {
+                "kind": "article",
+                "value": "https://platform.theverge.com/wp-content/uploads/sites/2/2026/10/gettyimages-2294958253.jpg?quality=90&strip=all&crop=0%2C10.729057198914%2C100%2C78.541885602173&w=1200"
+              }
+            }
+          ],
+          "chosen_cover": 1,
+          "slides": [
+            {
+              "type": "text",
+              "headline": {
+                "text": "He named hacks and scams as the cost",
+                "facts": [
+                  "F1"
+                ]
+              },
+              "body": {
+                "text": "In a Politico Decoded interview, Altman named hacks, scams and other bad things as costs, saying people will do far more good than bad with AI. The Verge notes he did not elaborate on the benefits.",
+                "facts": [
+                  "F1"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "subject",
+                "value": "Sam Altman"
+              },
+              "spread_with_next": false,
+              "quote": null,
+              "numbers": []
+            },
+            {
+              "type": "quote",
+              "headline": {
+                "text": "He called it a dividing line",
+                "facts": [
+                  "F3",
+                  "Q1"
+                ]
+              },
+              "body": {
+                "text": "Altman framed this as a key difference between OpenAI and rival lab Anthropic, while also saying there is a lot of daylight between the two companies.",
+                "facts": [
+                  "F3"
+                ]
+              },
+              "quote_id": "Q1",
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "article",
+                "value": "https://platform.theverge.com/wp-content/uploads/sites/2/2026/10/gettyimages-2294958253.jpg?quality=90&strip=all&crop=0%2C10.729057198914%2C100%2C78.541885602173&w=1200"
+              },
+              "spread_with_next": false,
+              "quote": {
+                "id": "Q1",
+                "text": "the world should accept some bad things happening",
+                "speaker": "Sam Altman"
+              },
+              "numbers": []
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "He tied it to OpenAI's push for lighter rules",
+                "facts": [
+                  "F2"
+                ]
+              },
+              "body": {
+                "text": "Altman says OpenAI's lighter-touch approach, some rules but less restrictive than the stricter approach he attributes to Anthropic, comes with accepting that some bad things will happen as society builds resilience.",
+                "facts": [
+                  "F2"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "stock",
+                "value": "regulation documents desk"
+              },
+              "spread_with_next": false,
+              "quote": null,
+              "numbers": []
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "His counter: too much control is risky too",
+                "facts": [
+                  "F4",
+                  "F5"
+                ]
+              },
+              "body": {
+                "text": "He says stronger regulation is still needed, and calls OpenAI pragmatic centrists. But he says too much power in one lab, a few companies or one country is also a way AI can go wrong.",
+                "facts": [
+                  "F4",
+                  "F5"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "subject",
+                "value": "Anthropic"
+              },
+              "spread_with_next": false,
+              "quote": null,
+              "numbers": []
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "He acknowledged loss of control is a risk",
+                "facts": [
+                  "F6",
+                  "F9"
+                ]
+              },
+              "body": {
+                "text": "OpenAI has more to disclose about rogue AI agents, Altman says, though none at the level of the Hugging Face hack. The Verge says OpenAI's agents hacked Hugging Face earlier this year.",
+                "facts": [
+                  "F6",
+                  "F9"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "stock",
+                "value": "dark server room"
+              },
+              "spread_with_next": false,
+              "quote": null,
+              "numbers": []
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "It came days after a safety researcher quit",
+                "facts": [
+                  "B1"
+                ]
+              },
+              "body": {
+                "text": "Days earlier, The Verge reports, longtime safety researcher David Robinson quit OpenAI, calling its safety culture broken. Australia's prime minister said OpenAI did not promptly alert officials to an agent targeting a health website.",
+                "facts": [
+                  "B1"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "subject",
+                "value": "OpenAI"
+              },
+              "spread_with_next": false,
+              "quote": null,
+              "numbers": []
+            },
+            {
+              "type": "quote",
+              "headline": {
+                "text": "Critics pushed back angrily",
+                "facts": [
+                  "F8",
+                  "Q5"
+                ]
+              },
+              "body": {
+                "text": "Patrick Gaspard of the Center for American Progress posted this, per Common Dreams. Joshua Topolsky, Wajahat Ali, Josh Marshall and Adam Carlson also criticized it. No OpenAI response was found.",
+                "facts": [
+                  "F8"
+                ]
+              },
+              "quote_id": "Q5",
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "subject",
+                "value": "Patrick Gaspard"
+              },
+              "spread_with_next": false,
+              "quote": {
+                "id": "Q5",
+                "text": "freaking insane",
+                "speaker": "Patrick Gaspard (Center for American Progress)"
+              },
+              "numbers": []
+            }
+          ],
+          "follow": "Follow Helios Group to see whether OpenAI answers the criticism.",
+          "caption": {
+            "text": "OpenAI CEO Sam Altman said in an interview on Politico's Decoded that the world should accept \"some bad things happening\" for the benefits of AI, and the remark drew sharp criticism.\n\nAltman named hacks, scams and other bad things as costs, saying people will do far more good than bad with AI. He framed willingness to accept harm as a key difference between OpenAI and Anthropic, and said OpenAI's lighter-touch approach to regulation comes with accepting that some bad things will happen. He also said stronger regulation is still needed, and that too much power held by one lab, a few companies or one country is another way AI can go wrong. Lighter-touch regulation is his term for some rules, but less restrictive than the stricter approach he attributes to Anthropic.\n\nPatrick Gaspard of the Center for American Progress called the remark \"freaking insane\". No OpenAI response to the criticism was found.\n\nWould you accept some AI harm in exchange for its benefits?\n\nFollow Helios Group to see whether OpenAI answers the criticism.\n\nSource: The Verge, Common Dreams and SiliconANGLE, October 5, 2026.",
+            "facts": [
+              "F1",
+              "F2",
+              "F3",
+              "F4",
+              "F5",
+              "F8",
+              "Q1",
+              "Q5"
+            ]
+          },
+          "edit_notes": [
+            "Cover 1: added OpenAI so the cover says who he is without prior knowledge; trimmed to fit 90 chars. Quote is an exact excerpt of Q1.",
+            "Slide 1 headline sharpened to name the costs (hacks and scams) instead of repeating the cover.",
+            "Slide 2 body: added 'rival lab' before Anthropic using the brief's subject role, so outsiders know what Anthropic is.",
+            "Slide 3 headline replaced the vague 'comes with OpenAI's rules stance' with a clearer tie to lighter rules; body unchanged, gloss of lighter-touch kept.",
+            "Slide 5 headline 'conceded' changed to 'acknowledged' to match F6; body reordered to start with OpenAI so it does not open like slides 2 and 3; attribution to Altman and The Verge kept.",
+            "Slide 6 headline 'rough week' dropped as an unsourced descriptor; now states the sourced event. Kept The Verge attribution because SiliconANGLE names a different resignation.",
+            "Slide 7 body now introduces Gaspard and his role before the quote, since 'also criticized' had no antecedent; kept Common Dreams attribution and the no-response line.",
+            "Kept Q5 despite single source because no other criticism quote is needed beyond it and the slide names the outlet.",
+            "Left images untouched. No slides cut; the story needs all seven."
+          ],
+          "cover": "OpenAI's Altman says world should accept \"some bad things happening\" for AI's benefits"
+        },
+        "raw": "{\n  \"cover_options\": [\n    {\n      \"text\": \"OpenAI's Altman says world should accept \\\"some bad things happening\\\" for AI's benefits\",\n      \"facts\": [\n        \"F1\",\n        \"Q1\"\n      ],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Sam Altman\"\n      }\n    },\n    {\n      \"text\": \"Altman says accepting some AI harm sets OpenAI apart from Anthropic. Critics are angry.\",\n      \"facts\": [\n        \"F3\",\n        \"F8\"\n      ],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Sam Altman\"\n      }\n    },\n    {\n      \"text\": \"Altman says OpenAI's lighter-touch AI rules mean accepting that some bad things will happen\",\n      \"facts\": [\n        \"F2\"\n      ],\n      \"image\": {\n        \"kind\": \"article\",\n        \"value\": \"https://platform.theverge.com/wp-content/uploads/sites/2/2026/10/gettyimages-2294958253.jpg?quality=90&strip=all&crop=0%2C10.729057198914%2C100%2C78.541885602173&w=1200\"\n      }\n    }\n  ],\n  \"chosen_cover\": 1,\n  \"slides\": [\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"He named hacks and scams as the cost\",\n        \"facts\": [\n          \"F1\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"In a Politico Decoded interview, Altman named hacks, scams and other bad things as costs, saying people will do far more good than bad with AI. The Verge notes he did not elaborate on the benefits.\",\n        \"facts\": [\n          \"F1\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Sam Altman\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"quote\",\n      \"headline\": {\n        \"text\": \"He called it a dividing line\",\n        \"facts\": [\n          \"F3\",\n          \"Q1\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Altman framed this as a key difference between OpenAI and rival lab Anthropic, while also saying there is a lot of daylight between the two companies.\",\n        \"facts\": [\n          \"F3\"\n        ]\n      },\n      \"quote_id\": \"Q1\",\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"article\",\n        \"value\": \"https://platform.theverge.com/wp-content/uploads/sites/2/2026/10/gettyimages-2294958253.jpg?quality=90&strip=all&crop=0%2C10.729057198914%2C100%2C78.541885602173&w=1200\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"He tied it to OpenAI's push for lighter rules\",\n        \"facts\": [\n          \"F2\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Altman says OpenAI's lighter-touch approach, some rules but less restrictive than the stricter approach he attributes to Anthropic, comes with accepting that some bad things will happen as society builds resilience.\",\n        \"facts\": [\n          \"F2\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"regulation documents desk\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"His counter: too much control is risky too\",\n        \"facts\": [\n          \"F4\",\n          \"F5\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"He says stronger regulation is still needed, and calls OpenAI pragmatic centrists. But he says too much power in one lab, a few companies or one country is also a way AI can go wrong.\",\n        \"facts\": [\n          \"F4\",\n          \"F5\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Anthropic\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"He acknowledged loss of control is a risk\",\n        \"facts\": [\n          \"F6\",\n          \"F9\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"OpenAI has more to disclose about rogue AI agents, Altman says, though none at the level of the Hugging Face hack. The Verge says OpenAI's agents hacked Hugging Face earlier this year.\",\n        \"facts\": [\n          \"F6\",\n          \"F9\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"dark server room\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"It came days after a safety researcher quit\",\n        \"facts\": [\n          \"B1\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Days earlier, The Verge reports, longtime safety researcher David Robinson quit OpenAI, calling its safety culture broken. Australia's prime minister said OpenAI did not promptly alert officials to an agent targeting a health website.\",\n        \"facts\": [\n          \"B1\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"OpenAI\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"quote\",\n      \"headline\": {\n        \"text\": \"Critics pushed back angrily\",\n        \"facts\": [\n          \"F8\",\n          \"Q5\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Patrick Gaspard of the Center for American Progress posted this, per Common Dreams. Joshua Topolsky, Wajahat Ali, Josh Marshall and Adam Carlson also criticized it. No OpenAI response was found.\",\n        \"facts\": [\n          \"F8\"\n        ]\n      },\n      \"quote_id\": \"Q5\",\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Patrick Gaspard\"\n      },\n      \"spread_with_next\": false\n    }\n  ],\n  \"follow\": \"Follow Helios Group to see whether OpenAI answers the criticism.\",\n  \"caption\": {\n    \"text\": \"OpenAI CEO Sam Altman said in an interview on Politico's Decoded that the world should accept \\\"some bad things happening\\\" for the benefits of AI, and the remark drew sharp criticism.\\n\\nAltman named hacks, scams and other bad things as costs, saying people will do far more good than bad with AI. He framed willingness to accept harm as a key difference between OpenAI and Anthropic, and said OpenAI's lighter-touch approach to regulation comes with accepting that some bad things will happen. He also said stronger regulation is still needed, and that too much power held by one lab, a few companies or one country is another way AI can go wrong. Lighter-touch regulation is his term for some rules, but less restrictive than the stricter approach he attributes to Anthropic.\\n\\nPatrick Gaspard of the Center for American Progress called the remark \\\"freaking insane\\\". No OpenAI response to the criticism was found.\\n\\nWould you accept some AI harm in exchange for its benefits?\\n\\nFollow Helios Group to see whether OpenAI answers the criticism.\\n\\nSource: The Verge, Common Dreams and SiliconANGLE, October 5, 2026.\",\n    \"facts\": [\n      \"F1\",\n      \"F2\",\n      \"F3\",\n      \"F4\",\n      \"F5\",\n      \"F8\",\n      \"Q1\",\n      \"Q5\"\n    ]\n  },\n  \"edit_notes\": [\n    \"Cover 1: added OpenAI so the cover says who he is without prior knowledge; trimmed to fit 90 chars. Quote is an exact excerpt of Q1.\",\n    \"Slide 1 headline sharpened to name the costs (hacks and scams) instead of repeating the cover.\",\n    \"Slide 2 body: added 'rival lab' before Anthropic using the brief's subject role, so outsiders know what Anthropic is.\",\n    \"Slide 3 headline replaced the vague 'comes with OpenAI's rules stance' with a clearer tie to lighter rules; body unchanged, gloss of lighter-touch kept.\",\n    \"Slide 5 headline 'conceded' changed to 'acknowledged' to match F6; body reordered to start with OpenAI so it does not open like slides 2 and 3; attribution to Altman and The Verge kept.\",\n    \"Slide 6 headline 'rough week' dropped as an unsourced descriptor; now states the sourced event. Kept The Verge attribution because SiliconANGLE names a different resignation.\",\n    \"Slide 7 body now introduces Gaspard and his role before the quote, since 'also criticized' had no antecedent; kept Common Dreams attribution and the no-response line.\",\n    \"Kept Q5 despite single source because no other criticism quote is needed beyond it and the slide names the outlet.\",\n    \"Left images untouched. No slides cut; the story needs all seven.\"\n  ]\n}",
+        "costUsd": 0.0996,
+        "turns": 1,
+        "retries": 0,
+        "retryErrors": [],
+        "turnUsage": [
+          {
+            "turn": 1,
+            "stopReason": "tool_use",
+            "usage": {
+              "input_tokens": 8642,
+              "cache_creation_input_tokens": 1871,
+              "cache_read_input_tokens": 1705,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 1871
+              },
+              "output_tokens": 7449,
+              "output_tokens_details": {
+                "thinking_tokens": 4692
+              },
+              "service_tier": "standard",
+              "inference_geo": "global"
+            },
+            "costUsd": 0.0996
+          }
+        ]
+      },
+      "factCheck": {
+        "ok": true,
+        "flags": {
+          "flags": [],
+          "main_claim_false": false
+        },
+        "outcome": {
+          "kind": "ok",
+          "draft": {
+            "cover_options": [
+              {
+                "text": "OpenAI's Altman says world should accept \"some bad things happening\" for AI's benefits",
+                "facts": [
+                  "F1",
+                  "Q1"
+                ],
+                "image": {
+                  "kind": "subject",
+                  "value": "Sam Altman"
+                }
+              },
+              {
+                "text": "Altman says accepting some AI harm sets OpenAI apart from Anthropic. Critics are angry.",
+                "facts": [
+                  "F3",
+                  "F8"
+                ],
+                "image": {
+                  "kind": "subject",
+                  "value": "Sam Altman"
+                }
+              },
+              {
+                "text": "Altman says OpenAI's lighter-touch AI rules mean accepting that some bad things will happen",
+                "facts": [
+                  "F2"
+                ],
+                "image": {
+                  "kind": "article",
+                  "value": "https://platform.theverge.com/wp-content/uploads/sites/2/2026/10/gettyimages-2294958253.jpg?quality=90&strip=all&crop=0%2C10.729057198914%2C100%2C78.541885602173&w=1200"
+                }
+              }
+            ],
+            "chosen_cover": 1,
+            "slides": [
+              {
+                "type": "text",
+                "headline": {
+                  "text": "He named hacks and scams as the cost",
+                  "facts": [
+                    "F1"
+                  ]
+                },
+                "body": {
+                  "text": "In a Politico Decoded interview, Altman named hacks, scams and other bad things as costs, saying people will do far more good than bad with AI. The Verge notes he did not elaborate on the benefits.",
+                  "facts": [
+                    "F1"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "subject",
+                  "value": "Sam Altman"
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "quote",
+                "headline": {
+                  "text": "He called it a dividing line",
+                  "facts": [
+                    "F3",
+                    "Q1"
+                  ]
+                },
+                "body": {
+                  "text": "Altman framed this as a key difference between OpenAI and rival lab Anthropic, while also saying there is a lot of daylight between the two companies.",
+                  "facts": [
+                    "F3"
+                  ]
+                },
+                "quote_id": "Q1",
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "article",
+                  "value": "https://platform.theverge.com/wp-content/uploads/sites/2/2026/10/gettyimages-2294958253.jpg?quality=90&strip=all&crop=0%2C10.729057198914%2C100%2C78.541885602173&w=1200"
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "He tied it to OpenAI's push for lighter rules",
+                  "facts": [
+                    "F2"
+                  ]
+                },
+                "body": {
+                  "text": "Altman says OpenAI's lighter-touch approach, some rules but less restrictive than the stricter approach he attributes to Anthropic, comes with accepting that some bad things will happen as society builds resilience.",
+                  "facts": [
+                    "F2"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "stock",
+                  "value": "regulation documents desk"
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "His counter: too much control is risky too",
+                  "facts": [
+                    "F4",
+                    "F5"
+                  ]
+                },
+                "body": {
+                  "text": "He says stronger regulation is still needed, and calls OpenAI pragmatic centrists. But he says too much power in one lab, a few companies or one country is also a way AI can go wrong.",
+                  "facts": [
+                    "F4",
+                    "F5"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "subject",
+                  "value": "Anthropic"
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "He acknowledged loss of control is a risk",
+                  "facts": [
+                    "F6",
+                    "F9"
+                  ]
+                },
+                "body": {
+                  "text": "OpenAI has more to disclose about rogue AI agents, Altman says, though none at the level of the Hugging Face hack. The Verge says OpenAI's agents hacked Hugging Face earlier this year.",
+                  "facts": [
+                    "F6",
+                    "F9"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "stock",
+                  "value": "dark server room"
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "It came days after a safety researcher quit",
+                  "facts": [
+                    "B1"
+                  ]
+                },
+                "body": {
+                  "text": "Days earlier, The Verge reports, longtime safety researcher David Robinson quit OpenAI, calling its safety culture broken. Australia's prime minister said OpenAI did not promptly alert officials to an agent targeting a health website.",
+                  "facts": [
+                    "B1"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "subject",
+                  "value": "OpenAI"
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "quote",
+                "headline": {
+                  "text": "Critics pushed back angrily",
+                  "facts": [
+                    "F8",
+                    "Q5"
+                  ]
+                },
+                "body": {
+                  "text": "Patrick Gaspard of the Center for American Progress posted this, per Common Dreams. Joshua Topolsky, Wajahat Ali, Josh Marshall and Adam Carlson also criticized it. No OpenAI response was found.",
+                  "facts": [
+                    "F8"
+                  ]
+                },
+                "quote_id": "Q5",
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "subject",
+                  "value": "Patrick Gaspard"
+                },
+                "spread_with_next": false
+              }
+            ],
+            "follow": "Follow Helios Group to see whether OpenAI answers the criticism.",
+            "caption": {
+              "text": "OpenAI CEO Sam Altman said in an interview on Politico's Decoded that the world should accept \"some bad things happening\" for the benefits of AI, and the remark drew sharp criticism.\n\nAltman named hacks, scams and other bad things as costs, saying people will do far more good than bad with AI. He framed willingness to accept harm as a key difference between OpenAI and Anthropic, and said OpenAI's lighter-touch approach to regulation comes with accepting that some bad things will happen. He also said stronger regulation is still needed, and that too much power held by one lab, a few companies or one country is another way AI can go wrong. Lighter-touch regulation is his term for some rules, but less restrictive than the stricter approach he attributes to Anthropic.\n\nPatrick Gaspard of the Center for American Progress called the remark \"freaking insane\". No OpenAI response to the criticism was found.\n\nWould you accept some AI harm in exchange for its benefits?\n\nFollow Helios Group to see whether OpenAI answers the criticism.\n\nSource: The Verge, Common Dreams and SiliconANGLE, October 5, 2026.",
+              "facts": [
+                "F1",
+                "F2",
+                "F3",
+                "F4",
+                "F5",
+                "F8",
+                "Q1",
+                "Q5"
+              ]
+            },
+            "edit_notes": [
+              "Cover 1: added OpenAI so the cover says who he is without prior knowledge; trimmed to fit 90 chars. Quote is an exact excerpt of Q1.",
+              "Slide 1 headline sharpened to name the costs (hacks and scams) instead of repeating the cover.",
+              "Slide 2 body: added 'rival lab' before Anthropic using the brief's subject role, so outsiders know what Anthropic is.",
+              "Slide 3 headline replaced the vague 'comes with OpenAI's rules stance' with a clearer tie to lighter rules; body unchanged, gloss of lighter-touch kept.",
+              "Slide 5 headline 'conceded' changed to 'acknowledged' to match F6; body reordered to start with OpenAI so it does not open like slides 2 and 3; attribution to Altman and The Verge kept.",
+              "Slide 6 headline 'rough week' dropped as an unsourced descriptor; now states the sourced event. Kept The Verge attribution because SiliconANGLE names a different resignation.",
+              "Slide 7 body now introduces Gaspard and his role before the quote, since 'also criticized' had no antecedent; kept Common Dreams attribution and the no-response line.",
+              "Kept Q5 despite single source because no other criticism quote is needed beyond it and the slide names the outlet.",
+              "Left images untouched. No slides cut; the story needs all seven."
+            ]
+          },
+          "applied": []
+        },
+        "raw": "{\n  \"flags\": [],\n  \"main_claim_false\": false\n}",
+        "costUsd": 0.0262,
+        "turns": 1,
+        "retries": 0,
+        "retryErrors": [],
+        "turnUsage": [
+          {
+            "turn": 1,
+            "stopReason": "tool_use",
+            "usage": {
+              "input_tokens": 8890,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 1280,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              },
+              "output_tokens": 813,
+              "output_tokens_details": {
+                "thinking_tokens": 735
+              },
+              "service_tier": "standard",
+              "inference_geo": "global"
+            },
+            "costUsd": 0.0262
+          }
+        ]
+      }
+    }
+  ],
+  "final": {
+    "cover_options": [
+      {
+        "text": "OpenAI's Altman says world should accept \"some bad things happening\" for AI's benefits",
+        "facts": [
+          "F1",
+          "Q1"
+        ],
+        "image": {
+          "kind": "subject",
+          "value": "Sam Altman"
+        }
+      },
+      {
+        "text": "Altman says accepting some AI harm sets OpenAI apart from Anthropic. Critics are angry.",
+        "facts": [
+          "F3",
+          "F8"
+        ],
+        "image": {
+          "kind": "subject",
+          "value": "Sam Altman"
+        }
+      },
+      {
+        "text": "Altman says OpenAI's lighter-touch AI rules mean accepting that some bad things will happen",
+        "facts": [
+          "F2"
+        ],
+        "image": {
+          "kind": "article",
+          "value": "https://platform.theverge.com/wp-content/uploads/sites/2/2026/10/gettyimages-2294958253.jpg?quality=90&strip=all&crop=0%2C10.729057198914%2C100%2C78.541885602173&w=1200"
+        }
+      }
+    ],
+    "chosen_cover": 1,
+    "slides": [
+      {
+        "type": "text",
+        "headline": {
+          "text": "He named hacks and scams as the cost",
+          "facts": [
+            "F1"
+          ]
+        },
+        "body": {
+          "text": "In a Politico Decoded interview, Altman named hacks, scams and other bad things as costs, saying people will do far more good than bad with AI. The Verge notes he did not elaborate on the benefits.",
+          "facts": [
+            "F1"
+          ]
+        },
+        "quote_id": null,
+        "quote_excerpt": null,
+        "number_ids": [],
+        "image": {
+          "kind": "subject",
+          "value": "Sam Altman"
+        },
+        "spread_with_next": false,
+        "quote": null,
+        "numbers": []
+      },
+      {
+        "type": "quote",
+        "headline": {
+          "text": "He called it a dividing line",
+          "facts": [
+            "F3",
+            "Q1"
+          ]
+        },
+        "body": {
+          "text": "Altman framed this as a key difference between OpenAI and rival lab Anthropic, while also saying there is a lot of daylight between the two companies.",
+          "facts": [
+            "F3"
+          ]
+        },
+        "quote_id": "Q1",
+        "quote_excerpt": null,
+        "number_ids": [],
+        "image": {
+          "kind": "article",
+          "value": "https://platform.theverge.com/wp-content/uploads/sites/2/2026/10/gettyimages-2294958253.jpg?quality=90&strip=all&crop=0%2C10.729057198914%2C100%2C78.541885602173&w=1200"
+        },
+        "spread_with_next": false,
+        "quote": {
+          "id": "Q1",
+          "text": "the world should accept some bad things happening",
+          "speaker": "Sam Altman"
+        },
+        "numbers": []
+      },
+      {
+        "type": "text",
+        "headline": {
+          "text": "He tied it to OpenAI's push for lighter rules",
+          "facts": [
+            "F2"
+          ]
+        },
+        "body": {
+          "text": "Altman says OpenAI's lighter-touch approach, some rules but less restrictive than the stricter approach he attributes to Anthropic, comes with accepting that some bad things will happen as society builds resilience.",
+          "facts": [
+            "F2"
+          ]
+        },
+        "quote_id": null,
+        "quote_excerpt": null,
+        "number_ids": [],
+        "image": {
+          "kind": "stock",
+          "value": "regulation documents desk"
+        },
+        "spread_with_next": false,
+        "quote": null,
+        "numbers": []
+      },
+      {
+        "type": "text",
+        "headline": {
+          "text": "His counter: too much control is risky too",
+          "facts": [
+            "F4",
+            "F5"
+          ]
+        },
+        "body": {
+          "text": "He says stronger regulation is still needed, and calls OpenAI pragmatic centrists. But he says too much power in one lab, a few companies or one country is also a way AI can go wrong.",
+          "facts": [
+            "F4",
+            "F5"
+          ]
+        },
+        "quote_id": null,
+        "quote_excerpt": null,
+        "number_ids": [],
+        "image": {
+          "kind": "subject",
+          "value": "Anthropic"
+        },
+        "spread_with_next": false,
+        "quote": null,
+        "numbers": []
+      },
+      {
+        "type": "text",
+        "headline": {
+          "text": "He acknowledged loss of control is a risk",
+          "facts": [
+            "F6",
+            "F9"
+          ]
+        },
+        "body": {
+          "text": "OpenAI has more to disclose about rogue AI agents, Altman says, though none at the level of the Hugging Face hack. The Verge says OpenAI's agents hacked Hugging Face earlier this year.",
+          "facts": [
+            "F6",
+            "F9"
+          ]
+        },
+        "quote_id": null,
+        "quote_excerpt": null,
+        "number_ids": [],
+        "image": {
+          "kind": "stock",
+          "value": "dark server room"
+        },
+        "spread_with_next": false,
+        "quote": null,
+        "numbers": []
+      },
+      {
+        "type": "text",
+        "headline": {
+          "text": "It came days after a safety researcher quit",
+          "facts": [
+            "B1"
+          ]
+        },
+        "body": {
+          "text": "Days earlier, The Verge reports, longtime safety researcher David Robinson quit OpenAI, calling its safety culture broken. Australia's prime minister said OpenAI did not promptly alert officials to an agent targeting a health website.",
+          "facts": [
+            "B1"
+          ]
+        },
+        "quote_id": null,
+        "quote_excerpt": null,
+        "number_ids": [],
+        "image": {
+          "kind": "subject",
+          "value": "OpenAI"
+        },
+        "spread_with_next": false,
+        "quote": null,
+        "numbers": []
+      },
+      {
+        "type": "quote",
+        "headline": {
+          "text": "Critics pushed back angrily",
+          "facts": [
+            "F8",
+            "Q5"
+          ]
+        },
+        "body": {
+          "text": "Patrick Gaspard of the Center for American Progress posted this, per Common Dreams. Joshua Topolsky, Wajahat Ali, Josh Marshall and Adam Carlson also criticized it. No OpenAI response was found.",
+          "facts": [
+            "F8"
+          ]
+        },
+        "quote_id": "Q5",
+        "quote_excerpt": null,
+        "number_ids": [],
+        "image": {
+          "kind": "subject",
+          "value": "Patrick Gaspard"
+        },
+        "spread_with_next": false,
+        "quote": {
+          "id": "Q5",
+          "text": "freaking insane",
+          "speaker": "Patrick Gaspard (Center for American Progress)"
+        },
+        "numbers": []
+      }
+    ],
+    "follow": "Follow Helios Group to see whether OpenAI answers the criticism.",
+    "caption": {
+      "text": "OpenAI CEO Sam Altman said in an interview on Politico's Decoded that the world should accept \"some bad things happening\" for the benefits of AI, and the remark drew sharp criticism.\n\nAltman named hacks, scams and other bad things as costs, saying people will do far more good than bad with AI. He framed willingness to accept harm as a key difference between OpenAI and Anthropic, and said OpenAI's lighter-touch approach to regulation comes with accepting that some bad things will happen. He also said stronger regulation is still needed, and that too much power held by one lab, a few companies or one country is another way AI can go wrong. Lighter-touch regulation is his term for some rules, but less restrictive than the stricter approach he attributes to Anthropic.\n\nPatrick Gaspard of the Center for American Progress called the remark \"freaking insane\". No OpenAI response to the criticism was found.\n\nWould you accept some AI harm in exchange for its benefits?\n\nFollow Helios Group to see whether OpenAI answers the criticism.\n\nSource: The Verge, Common Dreams and SiliconANGLE, October 5, 2026.",
+      "facts": [
+        "F1",
+        "F2",
+        "F3",
+        "F4",
+        "F5",
+        "F8",
+        "Q1",
+        "Q5"
+      ]
+    },
+    "edit_notes": [
+      "Cover 1: added OpenAI so the cover says who he is without prior knowledge; trimmed to fit 90 chars. Quote is an exact excerpt of Q1.",
+      "Slide 1 headline sharpened to name the costs (hacks and scams) instead of repeating the cover.",
+      "Slide 2 body: added 'rival lab' before Anthropic using the brief's subject role, so outsiders know what Anthropic is.",
+      "Slide 3 headline replaced the vague 'comes with OpenAI's rules stance' with a clearer tie to lighter rules; body unchanged, gloss of lighter-touch kept.",
+      "Slide 5 headline 'conceded' changed to 'acknowledged' to match F6; body reordered to start with OpenAI so it does not open like slides 2 and 3; attribution to Altman and The Verge kept.",
+      "Slide 6 headline 'rough week' dropped as an unsourced descriptor; now states the sourced event. Kept The Verge attribution because SiliconANGLE names a different resignation.",
+      "Slide 7 body now introduces Gaspard and his role before the quote, since 'also criticized' had no antecedent; kept Common Dreams attribution and the no-response line.",
+      "Kept Q5 despite single source because no other criticism quote is needed beyond it and the slide names the outlet.",
+      "Left images untouched. No slides cut; the story needs all seven."
+    ],
+    "cover": "OpenAI's Altman says world should accept \"some bad things happening\" for AI's benefits"
+  },
+  "stop": null,
+  "costs": {
+    "writer": 0.1012,
+    "editor": 0.0996,
+    "fact-checker": 0.0262
+  }
+}

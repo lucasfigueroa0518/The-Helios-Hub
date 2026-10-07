@@ -1,0 +1,354 @@
+{
+  "format": "carousel",
+  "storyType": "model_launch",
+  "source": "Anthropic (official blog post)",
+  "sourceUrl": "https://claude.com/blog/cowork-is-now-claude",
+  "publishedAt": "September 16, 2026",
+  "issueNumber": 725,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "variant": "C3",
+      "headline": [
+        {
+          "text": "Anthropic is merging Claude Chat and Cowork. ",
+          "role": "narrative"
+        },
+        {
+          "text": "You no longer pick the tool",
+          "role": "hook"
+        },
+        {
+          "text": ", Claude does.",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Anthropic is merging Claude Chat and Cowork. You no longer pick the tool, Claude does."
+    },
+    {
+      "position": 1,
+      "layoutVariant": "text",
+      "altText": "Anthropic merged two Claude products into one",
+      "headline": [
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": " merged two ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude",
+          "role": "pivot"
+        },
+        {
+          "text": " products into one",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "On September 16, ",
+          "role": "narrative"
+        },
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": " merged ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude Chat",
+          "role": "pivot"
+        },
+        {
+          "text": " and ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude Cowork",
+          "role": "pivot"
+        },
+        {
+          "text": " into a single interface called \"one ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude",
+          "role": "pivot"
+        },
+        {
+          "text": ".\" Users no longer choose between a quick-question mode and a multi-step work mode. ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude decides what the task needs",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 2,
+      "layoutVariant": "text",
+      "altText": "Why they were separate to begin with",
+      "headline": [
+        {
+          "text": "Why they were separate to begin with",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Claude Chat",
+          "role": "pivot"
+        },
+        {
+          "text": " handled quick back-and-forth. Cowork, introduced in January 2026, was a separate space for bigger jobs: reading folders of files, running multi-step tasks, producing finished outputs. ",
+          "role": "narrative"
+        },
+        {
+          "text": "Agentic work",
+          "role": "hook"
+        },
+        {
+          "text": ", where ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude",
+          "role": "pivot"
+        },
+        {
+          "text": " acts on your behalf across multiple steps, is different from a single answer.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 3,
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "We built Cowork as a separate place for bigger work, and Design for visual work. People used both, and told us ",
+          "role": "narrative"
+        },
+        {
+          "text": "the frustrating part was deciding where a task belonged",
+          "role": "hook"
+        },
+        {
+          "text": ". What they'd started in one also didn't carry into the other.",
+          "role": "narrative"
+        }
+      ],
+      "altText": "We built Cowork as a separate place for bigger work, and Design for visual work. People used both, and told us the fr...",
+      "quoteBy": "Anthropic, official blog post, September 16, 2026"
+    },
+    {
+      "position": 4,
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "3 → 2",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Claude Code stays separate",
+      "headline": [
+        {
+          "text": "Claude Code stays separate",
+          "role": "hook"
+        }
+      ],
+      "numberNote": "Claude modes, before and after the merger"
+    },
+    {
+      "position": 5,
+      "layoutVariant": "text",
+      "altText": "Three new tools arrived the same day",
+      "headline": [
+        {
+          "text": "Three new tools arrived the same day",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Claude Docs",
+          "role": "pivot"
+        },
+        {
+          "text": " and ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude Slides",
+          "role": "pivot"
+        },
+        {
+          "text": " launched September 16 as beta tools. ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude Design",
+          "role": "hook"
+        },
+        {
+          "text": ", a visual creation tool released in April 2026 for generating designs and prototypes through natural-language prompts, now works inside regular conversations and stays available as a standalone product. All three are in beta on paid plans.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 6,
+      "layoutVariant": "text",
+      "altText": "What Docs and Slides can do",
+      "headline": [
+        {
+          "text": "What Docs and Slides can do",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "With ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude Docs",
+          "role": "pivot"
+        },
+        {
+          "text": ", you and ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude",
+          "role": "pivot"
+        },
+        {
+          "text": " write a document together and edit it directly or export it. ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude Slides",
+          "role": "pivot"
+        },
+        {
+          "text": " drafts a presentation you can edit, ",
+          "role": "narrative"
+        },
+        {
+          "text": "present straight from Claude",
+          "role": "hook"
+        },
+        {
+          "text": ", or download as PowerPoint or PDF. Docs supports viewer and editor roles but has no version history or comment-only access.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 7,
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "I could have Claude pull up [my legal research database], and it would pull all the cases, read them, ",
+          "role": "narrative"
+        },
+        {
+          "text": "figure out which other cases I might need",
+          "role": "hook"
+        },
+        {
+          "text": ", download them, and store them in a folder for my personal review.",
+          "role": "narrative"
+        }
+      ],
+      "altText": "I could have Claude pull up [my legal research database], and it would pull all the cases, read them, figure out whic...",
+      "quoteBy": "Andrew Keller, Senior Economist, quoted in Anthropic's blog post"
+    },
+    {
+      "position": 8,
+      "layoutVariant": "text",
+      "altText": "You still control how far Claude goes",
+      "headline": [
+        {
+          "text": "You still control how far ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude",
+          "role": "pivot"
+        },
+        {
+          "text": " goes",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "By default, ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude asks before taking an action",
+          "role": "hook"
+        },
+        {
+          "text": ". Users can switch to a setting where ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude",
+          "role": "pivot"
+        },
+        {
+          "text": " keeps working and checks in only when something needs closer review. Anything made with Docs, Slides, or Design lives at one shareable link that opens on a phone.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 9,
+      "layoutVariant": "text",
+      "altText": "When it reaches you depends on your plan",
+      "headline": [
+        {
+          "text": "When it reaches you depends on your plan",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "The rollout starts with Pro and Max subscribers on web, desktop, and mobile. Team and Free plans follow soon. Enterprise admins get at least 30 days' notice before anything changes. For existing Cowork users, everything is where they left it: chats, projects, artifacts, connectors, and skills. ",
+          "role": "narrative"
+        },
+        {
+          "text": "Nothing to turn on",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 10,
+      "layoutVariant": "follow",
+      "variant": "F1",
+      "storySpecificLine": "Follow Helios to keep up with how AI companies are reshaping the tools you use every day.",
+      "altText": "Follow Helios to keep up with how AI companies are reshaping the tools you use every day."
+    }
+  ],
+  "caption": "Anthropic merged Claude Chat and Claude Cowork into a single interface called \"one Claude\" on September 16. Users no longer choose between a quick-question mode and a multi-step work mode, Claude decides what the task needs. The company said the split frustrated people: they had to guess upfront whether a job belonged in Chat or Cowork, and work started in one couldn't carry into the other.\n\nThe same day, Anthropic launched Claude Docs and Claude Slides as beta tools. Both let you draft and edit inside a conversation, then export or present straight from Claude. Claude Design, a visual creation tool released in April, now works in any conversation while staying available standalone. Claude Code, the coding-focused product, stays separate. Everything rolls out to Pro and Max subscribers first, with Team and Free plans following soon.\n\nWhat's your most common Claude task, would you want Claude to handle the routing, or do you prefer picking your tool?\n\nFollow Helios to keep up with how AI companies are changing the tools you use every day.\n\nSource: Anthropic, September 16, 2026. Additional reporting: Fortune, 9to5Mac, PYMNTS, SQ Magazine, The Next Web, NeoTeo."
+}

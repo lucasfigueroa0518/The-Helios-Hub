@@ -1,0 +1,1645 @@
+{
+  "storyId": "https://www.theverge.com/ai-artificial-intelligence/1005451/google-gemini-free-flash-lite-only",
+  "attempts": [
+    {
+      "writer": {
+        "ok": true,
+        "draft": {
+          "cover_options": [
+            {
+              "text": "Google says free Gemini users lose Flash and Pro on Oct. 9, leaving only Flash-Lite",
+              "facts": [
+                "F1",
+                "N4"
+              ],
+              "image": {
+                "kind": "article",
+                "value": "https://s.yimg.com/lo/mysterio/api/5c88a299a92f36edb248baf837367cc8fd31da51cc544370b3a5fb6a17c7495c/lightyear_networkapi/resizefill_w976%3Bquality_80%3Bformat_webp/https%3A%2F%2Fd29szjachogqwa.cloudfront.net%2Fimages%2Fuser-uploaded%2Fgoogle-gemini-flash-pro-free-users-october-9-2026_6850.png"
+              }
+            },
+            {
+              "text": "Google is cutting free Gemini to one model on Oct. 9. Pro will need a $19.99 plan",
+              "facts": [
+                "F1",
+                "F3",
+                "N2",
+                "N4"
+              ],
+              "image": {
+                "kind": "subject",
+                "value": "Google"
+              }
+            },
+            {
+              "text": "Google says its cheapest paid Gemini plan, $4.99 a month, will lose Pro too",
+              "facts": [
+                "F2",
+                "N1"
+              ],
+              "image": {
+                "kind": "subject",
+                "value": "Google AI Plus"
+              }
+            }
+          ],
+          "chosen_cover": 1,
+          "slides": [
+            {
+              "type": "text",
+              "headline": {
+                "text": "Free Gemini drops from three models to one",
+                "facts": [
+                  "F1",
+                  "F4"
+                ]
+              },
+              "body": {
+                "text": "Google says via its support page that from Oct. 9, free users lose Flash and Pro. They now pick among three models in a menu. After the change, every free request will use Flash-Lite.",
+                "facts": [
+                  "F1",
+                  "F4",
+                  "N4"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "article",
+                "value": "https://www.engadget.com/img/gallery/google-removes-free-access-to-gemini-flash-and-pro-on-october-9/l-intro-1791285503.jpg"
+              },
+              "spread_with_next": false
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "Paying $4.99 a month won't keep Pro",
+                "facts": [
+                  "F2",
+                  "N1"
+                ]
+              },
+              "body": {
+                "text": "Google says AI Plus subscribers will be limited to Flash-Lite and Flash, with Pro gone. Their date may differ from Oct. 9. Google says it will email them when the change takes effect.",
+                "facts": [
+                  "F2",
+                  "N1"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "subject",
+                "value": "Google AI Plus"
+              },
+              "spread_with_next": false
+            },
+            {
+              "type": "split_stat",
+              "headline": {
+                "text": "Keeping Pro means moving up a plan",
+                "facts": [
+                  "F3",
+                  "F6"
+                ]
+              },
+              "body": {
+                "text": "Pro will require AI Pro or AI Ultra. Yahoo calculates that a Plus subscriber who wants to keep it pays roughly $15 more a month, or $180 a year, at current prices.",
+                "facts": [
+                  "F3",
+                  "F6",
+                  "N6"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [
+                "N1",
+                "N2"
+              ],
+              "image": {
+                "kind": "stock",
+                "value": "price tags"
+              },
+              "spread_with_next": false
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "What free users give up",
+                "facts": [
+                  "F9"
+                ]
+              },
+              "body": {
+                "text": "Google's support page calls Pro its most advanced model, for complex math and coding. It describes Flash-Lite as built for speed and everyday tasks like summarization and brainstorming.",
+                "facts": [
+                  "F9"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "stock",
+                "value": "laptop coding"
+              },
+              "spread_with_next": false
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "Google's second plan overhaul this year",
+                "facts": [
+                  "F10",
+                  "B1"
+                ]
+              },
+              "body": {
+                "text": "PCMag says it is the second overhaul of Google's AI plans this year. 9to5Google notes a May usage-limit change came first. PCMag suggests rising costs may play a part. Google has given no reason.",
+                "facts": [
+                  "F10",
+                  "B1"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "stock",
+                "value": "server room"
+              },
+              "spread_with_next": false
+            },
+            {
+              "type": "quote",
+              "headline": {
+                "text": "Google adds effort levels, and a catch",
+                "facts": [
+                  "F5",
+                  "Q2"
+                ]
+              },
+              "body": null,
+              "quote_id": "Q2",
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "stock",
+                "value": "dial gauge"
+              },
+              "spread_with_next": false
+            },
+            {
+              "type": "landing",
+              "headline": {
+                "text": "What is still unclear",
+                "facts": [
+                  "F2",
+                  "F7"
+                ]
+              },
+              "body": {
+                "text": "Google hasn't said exactly when Plus users lose Pro. Sources also split on Deep Think: 9to5Google says AI Pro gets it, while Engadget says AI Ultra subscribers do.",
+                "facts": [
+                  "F2",
+                  "F7"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "stock",
+                "value": "calendar email"
+              },
+              "spread_with_next": false
+            }
+          ],
+          "follow": "Follow Helios Group to see what changes for Gemini users after Oct. 9.",
+          "caption": {
+            "text": "Google says that from Oct. 9, Gemini app users without a paid Google AI plan will be limited to the Flash-Lite model and lose access to Flash and Pro. The change appears on Google's support page, as reported by 9to5Google, PCMag and Engadget.\n\nGoogle AI Plus subscribers ($4.99 a month in the US) will keep Flash-Lite and Flash but lose Pro, on a date Google says it will email them. Pro will require AI Pro or AI Ultra. Yahoo calculates that a Plus subscriber keeping Pro would pay roughly $15 more a month. Google has given no reason for the change. PCMag suggests rising storage and component costs may be a factor, and notes it is Google's second plan overhaul this year. Sources also disagree on whether AI Pro or only AI Ultra gets the Deep Think option.\n\nWould you pay $19.99 a month to keep Pro?\n\nFollow Helios Group to keep track of what Google changes in Gemini next.\n\nSource: 9to5Google, Oct. 3, 2026; PCMag, Oct. 5, 2026; Engadget, Oct. 6, 2026; Yahoo Creators, Oct. 6, 2026.",
+            "facts": [
+              "F1",
+              "F2",
+              "F3",
+              "F6",
+              "F7",
+              "F10",
+              "N1",
+              "N2",
+              "N4"
+            ]
+          },
+          "edit_notes": [
+            "Cover leads with Google (well_known true) and the Oct. 9 loss of Flash and Pro, kept as Google's claim via support page.",
+            "Skipped Q1 as a quote slide (single-source); paraphrased the email point in slide 3 body.",
+            "Split stat uses N1 and N2; $15 and $180 attributed to Yahoo's calculation, not computed by us.",
+            "Deep Think disagreement between 9to5Google and Engadget shown openly on the final slide, not picked.",
+            "Cost explanation attributed to PCMag as a suggestion; noted Google gave no reason. May change used as one background clause (B1).",
+            "Left out 4x/5x usage multiple (sources disagree), Gemini 4 Argon, student offer, 1 billion users and survey data to keep the story focused.",
+            "Caption names Yahoo's $15 figure; adds no facts beyond slides and brief. Used Q2 whole on the quote slide (two sources)."
+          ]
+        },
+        "filled": {
+          "cover_options": [
+            {
+              "text": "Google says free Gemini users lose Flash and Pro on Oct. 9, leaving only Flash-Lite",
+              "facts": [
+                "F1",
+                "N4"
+              ],
+              "image": {
+                "kind": "article",
+                "value": "https://s.yimg.com/lo/mysterio/api/5c88a299a92f36edb248baf837367cc8fd31da51cc544370b3a5fb6a17c7495c/lightyear_networkapi/resizefill_w976%3Bquality_80%3Bformat_webp/https%3A%2F%2Fd29szjachogqwa.cloudfront.net%2Fimages%2Fuser-uploaded%2Fgoogle-gemini-flash-pro-free-users-october-9-2026_6850.png"
+              }
+            },
+            {
+              "text": "Google is cutting free Gemini to one model on Oct. 9. Pro will need a $19.99 plan",
+              "facts": [
+                "F1",
+                "F3",
+                "N2",
+                "N4"
+              ],
+              "image": {
+                "kind": "subject",
+                "value": "Google"
+              }
+            },
+            {
+              "text": "Google says its cheapest paid Gemini plan, $4.99 a month, will lose Pro too",
+              "facts": [
+                "F2",
+                "N1"
+              ],
+              "image": {
+                "kind": "subject",
+                "value": "Google AI Plus"
+              }
+            }
+          ],
+          "chosen_cover": 1,
+          "slides": [
+            {
+              "type": "text",
+              "headline": {
+                "text": "Free Gemini drops from three models to one",
+                "facts": [
+                  "F1",
+                  "F4"
+                ]
+              },
+              "body": {
+                "text": "Google says via its support page that from Oct. 9, free users lose Flash and Pro. They now pick among three models in a menu. After the change, every free request will use Flash-Lite.",
+                "facts": [
+                  "F1",
+                  "F4",
+                  "N4"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "article",
+                "value": "https://www.engadget.com/img/gallery/google-removes-free-access-to-gemini-flash-and-pro-on-october-9/l-intro-1791285503.jpg"
+              },
+              "spread_with_next": false,
+              "quote": null,
+              "numbers": []
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "Paying $4.99 a month won't keep Pro",
+                "facts": [
+                  "F2",
+                  "N1"
+                ]
+              },
+              "body": {
+                "text": "Google says AI Plus subscribers will be limited to Flash-Lite and Flash, with Pro gone. Their date may differ from Oct. 9. Google says it will email them when the change takes effect.",
+                "facts": [
+                  "F2",
+                  "N1"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "subject",
+                "value": "Google AI Plus"
+              },
+              "spread_with_next": false,
+              "quote": null,
+              "numbers": []
+            },
+            {
+              "type": "split_stat",
+              "headline": {
+                "text": "Keeping Pro means moving up a plan",
+                "facts": [
+                  "F3",
+                  "F6"
+                ]
+              },
+              "body": {
+                "text": "Pro will require AI Pro or AI Ultra. Yahoo calculates that a Plus subscriber who wants to keep it pays roughly $15 more a month, or $180 a year, at current prices.",
+                "facts": [
+                  "F3",
+                  "F6",
+                  "N6"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [
+                "N1",
+                "N2"
+              ],
+              "image": {
+                "kind": "stock",
+                "value": "price tags"
+              },
+              "spread_with_next": false,
+              "quote": null,
+              "numbers": [
+                {
+                  "id": "N1",
+                  "value": "$4.99 per month",
+                  "counts": "Google AI Plus US price"
+                },
+                {
+                  "id": "N2",
+                  "value": "$19.99",
+                  "counts": "Google AI Pro US monthly price"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "What free users give up",
+                "facts": [
+                  "F9"
+                ]
+              },
+              "body": {
+                "text": "Google's support page calls Pro its most advanced model, for complex math and coding. It describes Flash-Lite as built for speed and everyday tasks like summarization and brainstorming.",
+                "facts": [
+                  "F9"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "stock",
+                "value": "laptop coding"
+              },
+              "spread_with_next": false,
+              "quote": null,
+              "numbers": []
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "Google's second plan overhaul this year",
+                "facts": [
+                  "F10",
+                  "B1"
+                ]
+              },
+              "body": {
+                "text": "PCMag says it is the second overhaul of Google's AI plans this year. 9to5Google notes a May usage-limit change came first. PCMag suggests rising costs may play a part. Google has given no reason.",
+                "facts": [
+                  "F10",
+                  "B1"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "stock",
+                "value": "server room"
+              },
+              "spread_with_next": false,
+              "quote": null,
+              "numbers": []
+            },
+            {
+              "type": "quote",
+              "headline": {
+                "text": "Google adds effort levels, and a catch",
+                "facts": [
+                  "F5",
+                  "Q2"
+                ]
+              },
+              "body": null,
+              "quote_id": "Q2",
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "stock",
+                "value": "dial gauge"
+              },
+              "spread_with_next": false,
+              "quote": {
+                "id": "Q2",
+                "text": "This will increase the model's ability to complete tasks and provide more thorough answers to queries, but will also use more of your limit.",
+                "speaker": "Google (support page)"
+              },
+              "numbers": []
+            },
+            {
+              "type": "landing",
+              "headline": {
+                "text": "What is still unclear",
+                "facts": [
+                  "F2",
+                  "F7"
+                ]
+              },
+              "body": {
+                "text": "Google hasn't said exactly when Plus users lose Pro. Sources also split on Deep Think: 9to5Google says AI Pro gets it, while Engadget says AI Ultra subscribers do.",
+                "facts": [
+                  "F2",
+                  "F7"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "stock",
+                "value": "calendar email"
+              },
+              "spread_with_next": false,
+              "quote": null,
+              "numbers": []
+            }
+          ],
+          "follow": "Follow Helios Group to see what changes for Gemini users after Oct. 9.",
+          "caption": {
+            "text": "Google says that from Oct. 9, Gemini app users without a paid Google AI plan will be limited to the Flash-Lite model and lose access to Flash and Pro. The change appears on Google's support page, as reported by 9to5Google, PCMag and Engadget.\n\nGoogle AI Plus subscribers ($4.99 a month in the US) will keep Flash-Lite and Flash but lose Pro, on a date Google says it will email them. Pro will require AI Pro or AI Ultra. Yahoo calculates that a Plus subscriber keeping Pro would pay roughly $15 more a month. Google has given no reason for the change. PCMag suggests rising storage and component costs may be a factor, and notes it is Google's second plan overhaul this year. Sources also disagree on whether AI Pro or only AI Ultra gets the Deep Think option.\n\nWould you pay $19.99 a month to keep Pro?\n\nFollow Helios Group to keep track of what Google changes in Gemini next.\n\nSource: 9to5Google, Oct. 3, 2026; PCMag, Oct. 5, 2026; Engadget, Oct. 6, 2026; Yahoo Creators, Oct. 6, 2026.",
+            "facts": [
+              "F1",
+              "F2",
+              "F3",
+              "F6",
+              "F7",
+              "F10",
+              "N1",
+              "N2",
+              "N4"
+            ]
+          },
+          "edit_notes": [
+            "Cover leads with Google (well_known true) and the Oct. 9 loss of Flash and Pro, kept as Google's claim via support page.",
+            "Skipped Q1 as a quote slide (single-source); paraphrased the email point in slide 3 body.",
+            "Split stat uses N1 and N2; $15 and $180 attributed to Yahoo's calculation, not computed by us.",
+            "Deep Think disagreement between 9to5Google and Engadget shown openly on the final slide, not picked.",
+            "Cost explanation attributed to PCMag as a suggestion; noted Google gave no reason. May change used as one background clause (B1).",
+            "Left out 4x/5x usage multiple (sources disagree), Gemini 4 Argon, student offer, 1 billion users and survey data to keep the story focused.",
+            "Caption names Yahoo's $15 figure; adds no facts beyond slides and brief. Used Q2 whole on the quote slide (two sources)."
+          ],
+          "cover": "Google says free Gemini users lose Flash and Pro on Oct. 9, leaving only Flash-Lite"
+        },
+        "raw": "{\n  \"cover_options\": [\n    {\n      \"text\": \"Google says free Gemini users lose Flash and Pro on Oct. 9, leaving only Flash-Lite\",\n      \"facts\": [\n        \"F1\",\n        \"N4\"\n      ],\n      \"image\": {\n        \"kind\": \"article\",\n        \"value\": \"https://s.yimg.com/lo/mysterio/api/5c88a299a92f36edb248baf837367cc8fd31da51cc544370b3a5fb6a17c7495c/lightyear_networkapi/resizefill_w976%3Bquality_80%3Bformat_webp/https%3A%2F%2Fd29szjachogqwa.cloudfront.net%2Fimages%2Fuser-uploaded%2Fgoogle-gemini-flash-pro-free-users-october-9-2026_6850.png\"\n      }\n    },\n    {\n      \"text\": \"Google is cutting free Gemini to one model on Oct. 9. Pro will need a $19.99 plan\",\n      \"facts\": [\n        \"F1\",\n        \"F3\",\n        \"N2\",\n        \"N4\"\n      ],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Google\"\n      }\n    },\n    {\n      \"text\": \"Google says its cheapest paid Gemini plan, $4.99 a month, will lose Pro too\",\n      \"facts\": [\n        \"F2\",\n        \"N1\"\n      ],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Google AI Plus\"\n      }\n    }\n  ],\n  \"chosen_cover\": 1,\n  \"slides\": [\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"Free Gemini drops from three models to one\",\n        \"facts\": [\n          \"F1\",\n          \"F4\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Google says via its support page that from Oct. 9, free users lose Flash and Pro. They now pick among three models in a menu. After the change, every free request will use Flash-Lite.\",\n        \"facts\": [\n          \"F1\",\n          \"F4\",\n          \"N4\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"article\",\n        \"value\": \"https://www.engadget.com/img/gallery/google-removes-free-access-to-gemini-flash-and-pro-on-october-9/l-intro-1791285503.jpg\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"Paying $4.99 a month won't keep Pro\",\n        \"facts\": [\n          \"F2\",\n          \"N1\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Google says AI Plus subscribers will be limited to Flash-Lite and Flash, with Pro gone. Their date may differ from Oct. 9. Google says it will email them when the change takes effect.\",\n        \"facts\": [\n          \"F2\",\n          \"N1\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Google AI Plus\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"split_stat\",\n      \"headline\": {\n        \"text\": \"Keeping Pro means moving up a plan\",\n        \"facts\": [\n          \"F3\",\n          \"F6\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Pro will require AI Pro or AI Ultra. Yahoo calculates that a Plus subscriber who wants to keep it pays roughly $15 more a month, or $180 a year, at current prices.\",\n        \"facts\": [\n          \"F3\",\n          \"F6\",\n          \"N6\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [\n        \"N1\",\n        \"N2\"\n      ],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"price tags\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"What free users give up\",\n        \"facts\": [\n          \"F9\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Google's support page calls Pro its most advanced model, for complex math and coding. It describes Flash-Lite as built for speed and everyday tasks like summarization and brainstorming.\",\n        \"facts\": [\n          \"F9\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"laptop coding\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"Google's second plan overhaul this year\",\n        \"facts\": [\n          \"F10\",\n          \"B1\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"PCMag says it is the second overhaul of Google's AI plans this year. 9to5Google notes a May usage-limit change came first. PCMag suggests rising costs may play a part. Google has given no reason.\",\n        \"facts\": [\n          \"F10\",\n          \"B1\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"server room\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"quote\",\n      \"headline\": {\n        \"text\": \"Google adds effort levels, and a catch\",\n        \"facts\": [\n          \"F5\",\n          \"Q2\"\n        ]\n      },\n      \"body\": null,\n      \"quote_id\": \"Q2\",\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"dial gauge\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"landing\",\n      \"headline\": {\n        \"text\": \"What is still unclear\",\n        \"facts\": [\n          \"F2\",\n          \"F7\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Google hasn't said exactly when Plus users lose Pro. Sources also split on Deep Think: 9to5Google says AI Pro gets it, while Engadget says AI Ultra subscribers do.\",\n        \"facts\": [\n          \"F2\",\n          \"F7\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"calendar email\"\n      },\n      \"spread_with_next\": false\n    }\n  ],\n  \"follow\": \"Follow Helios Group to see what changes for Gemini users after Oct. 9.\",\n  \"caption\": {\n    \"text\": \"Google says that from Oct. 9, Gemini app users without a paid Google AI plan will be limited to the Flash-Lite model and lose access to Flash and Pro. The change appears on Google's support page, as reported by 9to5Google, PCMag and Engadget.\\n\\nGoogle AI Plus subscribers ($4.99 a month in the US) will keep Flash-Lite and Flash but lose Pro, on a date Google says it will email them. Pro will require AI Pro or AI Ultra. Yahoo calculates that a Plus subscriber keeping Pro would pay roughly $15 more a month. Google has given no reason for the change. PCMag suggests rising storage and component costs may be a factor, and notes it is Google's second plan overhaul this year. Sources also disagree on whether AI Pro or only AI Ultra gets the Deep Think option.\\n\\nWould you pay $19.99 a month to keep Pro?\\n\\nFollow Helios Group to keep track of what Google changes in Gemini next.\\n\\nSource: 9to5Google, Oct. 3, 2026; PCMag, Oct. 5, 2026; Engadget, Oct. 6, 2026; Yahoo Creators, Oct. 6, 2026.\",\n    \"facts\": [\n      \"F1\",\n      \"F2\",\n      \"F3\",\n      \"F6\",\n      \"F7\",\n      \"F10\",\n      \"N1\",\n      \"N2\",\n      \"N4\"\n    ]\n  },\n  \"edit_notes\": [\n    \"Cover leads with Google (well_known true) and the Oct. 9 loss of Flash and Pro, kept as Google's claim via support page.\",\n    \"Skipped Q1 as a quote slide (single-source); paraphrased the email point in slide 3 body.\",\n    \"Split stat uses N1 and N2; $15 and $180 attributed to Yahoo's calculation, not computed by us.\",\n    \"Deep Think disagreement between 9to5Google and Engadget shown openly on the final slide, not picked.\",\n    \"Cost explanation attributed to PCMag as a suggestion; noted Google gave no reason. May change used as one background clause (B1).\",\n    \"Left out 4x/5x usage multiple (sources disagree), Gemini 4 Argon, student offer, 1 billion users and survey data to keep the story focused.\",\n    \"Caption names Yahoo's $15 figure; adds no facts beyond slides and brief. Used Q2 whole on the quote slide (two sources).\"\n  ]\n}",
+        "costUsd": 0.0628,
+        "turns": 1,
+        "draftRetries": 0,
+        "retryErrors": [],
+        "turnUsage": [
+          {
+            "turn": 1,
+            "stopReason": "tool_use",
+            "usage": {
+              "input_tokens": 6884,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 4663,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              },
+              "output_tokens": 4808,
+              "output_tokens_details": {
+                "thinking_tokens": 2187
+              },
+              "service_tier": "standard",
+              "inference_geo": "global"
+            },
+            "costUsd": 0.0628
+          }
+        ]
+      },
+      "editor": {
+        "ok": true,
+        "draft": {
+          "cover_options": [
+            {
+              "text": "Google says free Gemini users lose Flash and Pro on Oct. 9, leaving only Flash-Lite",
+              "facts": [
+                "F1",
+                "N4"
+              ],
+              "image": {
+                "kind": "article",
+                "value": "https://s.yimg.com/lo/mysterio/api/5c88a299a92f36edb248baf837367cc8fd31da51cc544370b3a5fb6a17c7495c/lightyear_networkapi/resizefill_w976%3Bquality_80%3Bformat_webp/https%3A%2F%2Fd29szjachogqwa.cloudfront.net%2Fimages%2Fuser-uploaded%2Fgoogle-gemini-flash-pro-free-users-october-9-2026_6850.png"
+              }
+            },
+            {
+              "text": "Google is cutting free Gemini to one model on Oct. 9. Pro will need a $19.99 plan",
+              "facts": [
+                "F1",
+                "F3",
+                "N2",
+                "N4"
+              ],
+              "image": {
+                "kind": "subject",
+                "value": "Google"
+              }
+            },
+            {
+              "text": "Google says its cheapest paid Gemini plan, $4.99 a month, will lose Pro too",
+              "facts": [
+                "F2",
+                "N1"
+              ],
+              "image": {
+                "kind": "subject",
+                "value": "Google AI Plus"
+              }
+            }
+          ],
+          "chosen_cover": 1,
+          "slides": [
+            {
+              "type": "text",
+              "headline": {
+                "text": "Free Gemini drops from three models to one",
+                "facts": [
+                  "F1",
+                  "F4"
+                ]
+              },
+              "body": {
+                "text": "Google says, via its support page, that from Oct. 9 free users lose Flash and Pro. Today they pick among three models in a menu. After the change, every free request will use Flash-Lite.",
+                "facts": [
+                  "F1",
+                  "F4",
+                  "N4"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "article",
+                "value": "https://www.engadget.com/img/gallery/google-removes-free-access-to-gemini-flash-and-pro-on-october-9/l-intro-1791285503.jpg"
+              },
+              "spread_with_next": false
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "What free users lose, and what they keep",
+                "facts": [
+                  "F9"
+                ]
+              },
+              "body": {
+                "text": "Google's support page calls Pro its most advanced model, for complex math and coding. Flash balances speed and reasoning. Flash-Lite is built for speed and everyday tasks like summarization and brainstorming.",
+                "facts": [
+                  "F9"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "stock",
+                "value": "laptop coding"
+              },
+              "spread_with_next": false
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "Paying $4.99 a month won't keep Pro",
+                "facts": [
+                  "F2",
+                  "N1"
+                ]
+              },
+              "body": {
+                "text": "Google says AI Plus subscribers will be limited to Flash-Lite and Flash, with Pro gone. Their date may differ from Oct. 9. Google says it will email them when the change takes effect.",
+                "facts": [
+                  "F2",
+                  "N1"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "subject",
+                "value": "Google AI Plus"
+              },
+              "spread_with_next": false
+            },
+            {
+              "type": "split_stat",
+              "headline": {
+                "text": "Keeping Pro means moving up a plan",
+                "facts": [
+                  "F3",
+                  "F6"
+                ]
+              },
+              "body": {
+                "text": "Pro will require AI Pro or AI Ultra. Yahoo calculates that a Plus subscriber who wants to keep it pays roughly $15 more a month, or $180 a year, at current prices.",
+                "facts": [
+                  "F3",
+                  "F6",
+                  "N6"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [
+                "N1",
+                "N2"
+              ],
+              "image": {
+                "kind": "stock",
+                "value": "price tags"
+              },
+              "spread_with_next": false
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "PCMag counts a second plan overhaul this year",
+                "facts": [
+                  "F10",
+                  "B1"
+                ]
+              },
+              "body": {
+                "text": "9to5Google notes a May usage-limit change came first. PCMag suggests rising costs may play a part. Google has given no reason.",
+                "facts": [
+                  "F10",
+                  "B1"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "stock",
+                "value": "server room"
+              },
+              "spread_with_next": false
+            },
+            {
+              "type": "quote",
+              "headline": {
+                "text": "Google adds low, medium and high effort levels",
+                "facts": [
+                  "F5",
+                  "Q2"
+                ]
+              },
+              "body": null,
+              "quote_id": "Q2",
+              "quote_excerpt": "…more thorough answers to queries, but will also use more of your limit.",
+              "number_ids": [],
+              "image": {
+                "kind": "stock",
+                "value": "dial gauge"
+              },
+              "spread_with_next": false
+            },
+            {
+              "type": "landing",
+              "headline": {
+                "text": "Pro now starts at $19.99 a month",
+                "facts": [
+                  "F3",
+                  "N2",
+                  "F9"
+                ]
+              },
+              "body": {
+                "text": "Anyone who uses Pro for complex math or coding will have to pay for it. Google hasn't said exactly when Plus subscribers lose it, and it has given no reason for the change.",
+                "facts": [
+                  "F2",
+                  "F9",
+                  "F10"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "stock",
+                "value": "calendar email"
+              },
+              "spread_with_next": false
+            }
+          ],
+          "follow": "Follow Helios Group to see what changes for Gemini users after Oct. 9.",
+          "caption": {
+            "text": "Google says that from Oct. 9, Gemini app users without a paid Google AI plan will be limited to the Flash-Lite model and lose access to Flash and Pro. The change appears on Google's support page, as reported by 9to5Google, PCMag and Engadget.\n\nGoogle AI Plus subscribers ($4.99 a month in the US) will keep Flash-Lite and Flash but lose Pro, on a date Google says it will email them. Pro will require AI Pro or AI Ultra. Yahoo calculates that a Plus subscriber keeping Pro would pay roughly $15 more a month. Google has given no reason for the change. PCMag suggests rising storage and component costs may be a factor, and notes it is Google's second plan overhaul this year.\n\nSources also disagree on whether AI Pro or only AI Ultra gets Deep Think, a Gemini option where queries can take a few minutes.\n\nWould you pay $19.99 a month to keep Pro?\n\nSource: 9to5Google, Oct. 3, 2026; PCMag, Oct. 5, 2026; Engadget, Oct. 6, 2026; Yahoo Creators, Oct. 6, 2026.",
+            "facts": [
+              "F1",
+              "F2",
+              "F3",
+              "F6",
+              "F7",
+              "F10",
+              "N1",
+              "N2",
+              "N4"
+            ]
+          },
+          "edit_notes": [
+            "Kept cover 1: names Google, the action, the date and the claim attribution.",
+            "Moved 'what free users lose' to slide 2 so Flash, Flash-Lite and Pro are explained (from F9) before the plan and price slides.",
+            "Slide 1 body tightened; kept 'Google says' and support-page attribution.",
+            "Added Flash gloss ('balances speed and reasoning') from F9 to slide 2.",
+            "Background slide headline now attributes the 'second overhaul' to PCMag instead of stating it as fact.",
+            "Quote slide headline now says what effort levels are (low, medium, high) since the quote alone doesn't; trimmed Q2 to an exact excerpt to stay under 140 chars and keep the catch.",
+            "Replaced the 'still unclear' landing with a why-it-matters landing (Pro needs a paid plan from $19.99); kept the open question on Plus timing and no stated reason. Dropped the Deep Think disagreement from the slides because the term needs a gloss that doesn't fit; it stays in the caption with a TERMS gloss.",
+            "Removed duplicate follow line from the caption since FOLLOW is its own field.",
+            "Split stat body left as is: $15 and $180 stay attributed to Yahoo's calculation."
+          ]
+        },
+        "filled": {
+          "cover_options": [
+            {
+              "text": "Google says free Gemini users lose Flash and Pro on Oct. 9, leaving only Flash-Lite",
+              "facts": [
+                "F1",
+                "N4"
+              ],
+              "image": {
+                "kind": "article",
+                "value": "https://s.yimg.com/lo/mysterio/api/5c88a299a92f36edb248baf837367cc8fd31da51cc544370b3a5fb6a17c7495c/lightyear_networkapi/resizefill_w976%3Bquality_80%3Bformat_webp/https%3A%2F%2Fd29szjachogqwa.cloudfront.net%2Fimages%2Fuser-uploaded%2Fgoogle-gemini-flash-pro-free-users-october-9-2026_6850.png"
+              }
+            },
+            {
+              "text": "Google is cutting free Gemini to one model on Oct. 9. Pro will need a $19.99 plan",
+              "facts": [
+                "F1",
+                "F3",
+                "N2",
+                "N4"
+              ],
+              "image": {
+                "kind": "subject",
+                "value": "Google"
+              }
+            },
+            {
+              "text": "Google says its cheapest paid Gemini plan, $4.99 a month, will lose Pro too",
+              "facts": [
+                "F2",
+                "N1"
+              ],
+              "image": {
+                "kind": "subject",
+                "value": "Google AI Plus"
+              }
+            }
+          ],
+          "chosen_cover": 1,
+          "slides": [
+            {
+              "type": "text",
+              "headline": {
+                "text": "Free Gemini drops from three models to one",
+                "facts": [
+                  "F1",
+                  "F4"
+                ]
+              },
+              "body": {
+                "text": "Google says, via its support page, that from Oct. 9 free users lose Flash and Pro. Today they pick among three models in a menu. After the change, every free request will use Flash-Lite.",
+                "facts": [
+                  "F1",
+                  "F4",
+                  "N4"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "article",
+                "value": "https://www.engadget.com/img/gallery/google-removes-free-access-to-gemini-flash-and-pro-on-october-9/l-intro-1791285503.jpg"
+              },
+              "spread_with_next": false,
+              "quote": null,
+              "numbers": []
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "What free users lose, and what they keep",
+                "facts": [
+                  "F9"
+                ]
+              },
+              "body": {
+                "text": "Google's support page calls Pro its most advanced model, for complex math and coding. Flash balances speed and reasoning. Flash-Lite is built for speed and everyday tasks like summarization and brainstorming.",
+                "facts": [
+                  "F9"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "stock",
+                "value": "laptop coding"
+              },
+              "spread_with_next": false,
+              "quote": null,
+              "numbers": []
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "Paying $4.99 a month won't keep Pro",
+                "facts": [
+                  "F2",
+                  "N1"
+                ]
+              },
+              "body": {
+                "text": "Google says AI Plus subscribers will be limited to Flash-Lite and Flash, with Pro gone. Their date may differ from Oct. 9. Google says it will email them when the change takes effect.",
+                "facts": [
+                  "F2",
+                  "N1"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "subject",
+                "value": "Google AI Plus"
+              },
+              "spread_with_next": false,
+              "quote": null,
+              "numbers": []
+            },
+            {
+              "type": "split_stat",
+              "headline": {
+                "text": "Keeping Pro means moving up a plan",
+                "facts": [
+                  "F3",
+                  "F6"
+                ]
+              },
+              "body": {
+                "text": "Pro will require AI Pro or AI Ultra. Yahoo calculates that a Plus subscriber who wants to keep it pays roughly $15 more a month, or $180 a year, at current prices.",
+                "facts": [
+                  "F3",
+                  "F6",
+                  "N6"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [
+                "N1",
+                "N2"
+              ],
+              "image": {
+                "kind": "stock",
+                "value": "price tags"
+              },
+              "spread_with_next": false,
+              "quote": null,
+              "numbers": [
+                {
+                  "id": "N1",
+                  "value": "$4.99 per month",
+                  "counts": "Google AI Plus US price"
+                },
+                {
+                  "id": "N2",
+                  "value": "$19.99",
+                  "counts": "Google AI Pro US monthly price"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "headline": {
+                "text": "PCMag counts a second plan overhaul this year",
+                "facts": [
+                  "F10",
+                  "B1"
+                ]
+              },
+              "body": {
+                "text": "9to5Google notes a May usage-limit change came first. PCMag suggests rising costs may play a part. Google has given no reason.",
+                "facts": [
+                  "F10",
+                  "B1"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "stock",
+                "value": "server room"
+              },
+              "spread_with_next": false,
+              "quote": null,
+              "numbers": []
+            },
+            {
+              "type": "quote",
+              "headline": {
+                "text": "Google adds low, medium and high effort levels",
+                "facts": [
+                  "F5",
+                  "Q2"
+                ]
+              },
+              "body": null,
+              "quote_id": "Q2",
+              "quote_excerpt": "…more thorough answers to queries, but will also use more of your limit.",
+              "number_ids": [],
+              "image": {
+                "kind": "stock",
+                "value": "dial gauge"
+              },
+              "spread_with_next": false,
+              "quote": {
+                "id": "Q2",
+                "text": "…more thorough answers to queries, but will also use more of your limit.",
+                "speaker": "Google (support page)"
+              },
+              "numbers": []
+            },
+            {
+              "type": "landing",
+              "headline": {
+                "text": "Pro now starts at $19.99 a month",
+                "facts": [
+                  "F3",
+                  "N2",
+                  "F9"
+                ]
+              },
+              "body": {
+                "text": "Anyone who uses Pro for complex math or coding will have to pay for it. Google hasn't said exactly when Plus subscribers lose it, and it has given no reason for the change.",
+                "facts": [
+                  "F2",
+                  "F9",
+                  "F10"
+                ]
+              },
+              "quote_id": null,
+              "quote_excerpt": null,
+              "number_ids": [],
+              "image": {
+                "kind": "stock",
+                "value": "calendar email"
+              },
+              "spread_with_next": false,
+              "quote": null,
+              "numbers": []
+            }
+          ],
+          "follow": "Follow Helios Group to see what changes for Gemini users after Oct. 9.",
+          "caption": {
+            "text": "Google says that from Oct. 9, Gemini app users without a paid Google AI plan will be limited to the Flash-Lite model and lose access to Flash and Pro. The change appears on Google's support page, as reported by 9to5Google, PCMag and Engadget.\n\nGoogle AI Plus subscribers ($4.99 a month in the US) will keep Flash-Lite and Flash but lose Pro, on a date Google says it will email them. Pro will require AI Pro or AI Ultra. Yahoo calculates that a Plus subscriber keeping Pro would pay roughly $15 more a month. Google has given no reason for the change. PCMag suggests rising storage and component costs may be a factor, and notes it is Google's second plan overhaul this year.\n\nSources also disagree on whether AI Pro or only AI Ultra gets Deep Think, a Gemini option where queries can take a few minutes.\n\nWould you pay $19.99 a month to keep Pro?\n\nSource: 9to5Google, Oct. 3, 2026; PCMag, Oct. 5, 2026; Engadget, Oct. 6, 2026; Yahoo Creators, Oct. 6, 2026.",
+            "facts": [
+              "F1",
+              "F2",
+              "F3",
+              "F6",
+              "F7",
+              "F10",
+              "N1",
+              "N2",
+              "N4"
+            ]
+          },
+          "edit_notes": [
+            "Kept cover 1: names Google, the action, the date and the claim attribution.",
+            "Moved 'what free users lose' to slide 2 so Flash, Flash-Lite and Pro are explained (from F9) before the plan and price slides.",
+            "Slide 1 body tightened; kept 'Google says' and support-page attribution.",
+            "Added Flash gloss ('balances speed and reasoning') from F9 to slide 2.",
+            "Background slide headline now attributes the 'second overhaul' to PCMag instead of stating it as fact.",
+            "Quote slide headline now says what effort levels are (low, medium, high) since the quote alone doesn't; trimmed Q2 to an exact excerpt to stay under 140 chars and keep the catch.",
+            "Replaced the 'still unclear' landing with a why-it-matters landing (Pro needs a paid plan from $19.99); kept the open question on Plus timing and no stated reason. Dropped the Deep Think disagreement from the slides because the term needs a gloss that doesn't fit; it stays in the caption with a TERMS gloss.",
+            "Removed duplicate follow line from the caption since FOLLOW is its own field.",
+            "Split stat body left as is: $15 and $180 stay attributed to Yahoo's calculation."
+          ],
+          "cover": "Google says free Gemini users lose Flash and Pro on Oct. 9, leaving only Flash-Lite"
+        },
+        "raw": "{\n  \"cover_options\": [\n    {\n      \"text\": \"Google says free Gemini users lose Flash and Pro on Oct. 9, leaving only Flash-Lite\",\n      \"facts\": [\n        \"F1\",\n        \"N4\"\n      ],\n      \"image\": {\n        \"kind\": \"article\",\n        \"value\": \"https://s.yimg.com/lo/mysterio/api/5c88a299a92f36edb248baf837367cc8fd31da51cc544370b3a5fb6a17c7495c/lightyear_networkapi/resizefill_w976%3Bquality_80%3Bformat_webp/https%3A%2F%2Fd29szjachogqwa.cloudfront.net%2Fimages%2Fuser-uploaded%2Fgoogle-gemini-flash-pro-free-users-october-9-2026_6850.png\"\n      }\n    },\n    {\n      \"text\": \"Google is cutting free Gemini to one model on Oct. 9. Pro will need a $19.99 plan\",\n      \"facts\": [\n        \"F1\",\n        \"F3\",\n        \"N2\",\n        \"N4\"\n      ],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Google\"\n      }\n    },\n    {\n      \"text\": \"Google says its cheapest paid Gemini plan, $4.99 a month, will lose Pro too\",\n      \"facts\": [\n        \"F2\",\n        \"N1\"\n      ],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Google AI Plus\"\n      }\n    }\n  ],\n  \"chosen_cover\": 1,\n  \"slides\": [\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"Free Gemini drops from three models to one\",\n        \"facts\": [\n          \"F1\",\n          \"F4\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Google says, via its support page, that from Oct. 9 free users lose Flash and Pro. Today they pick among three models in a menu. After the change, every free request will use Flash-Lite.\",\n        \"facts\": [\n          \"F1\",\n          \"F4\",\n          \"N4\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"article\",\n        \"value\": \"https://www.engadget.com/img/gallery/google-removes-free-access-to-gemini-flash-and-pro-on-october-9/l-intro-1791285503.jpg\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"What free users lose, and what they keep\",\n        \"facts\": [\n          \"F9\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Google's support page calls Pro its most advanced model, for complex math and coding. Flash balances speed and reasoning. Flash-Lite is built for speed and everyday tasks like summarization and brainstorming.\",\n        \"facts\": [\n          \"F9\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"laptop coding\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"Paying $4.99 a month won't keep Pro\",\n        \"facts\": [\n          \"F2\",\n          \"N1\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Google says AI Plus subscribers will be limited to Flash-Lite and Flash, with Pro gone. Their date may differ from Oct. 9. Google says it will email them when the change takes effect.\",\n        \"facts\": [\n          \"F2\",\n          \"N1\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Google AI Plus\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"split_stat\",\n      \"headline\": {\n        \"text\": \"Keeping Pro means moving up a plan\",\n        \"facts\": [\n          \"F3\",\n          \"F6\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Pro will require AI Pro or AI Ultra. Yahoo calculates that a Plus subscriber who wants to keep it pays roughly $15 more a month, or $180 a year, at current prices.\",\n        \"facts\": [\n          \"F3\",\n          \"F6\",\n          \"N6\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [\n        \"N1\",\n        \"N2\"\n      ],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"price tags\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"PCMag counts a second plan overhaul this year\",\n        \"facts\": [\n          \"F10\",\n          \"B1\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"9to5Google notes a May usage-limit change came first. PCMag suggests rising costs may play a part. Google has given no reason.\",\n        \"facts\": [\n          \"F10\",\n          \"B1\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"server room\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"quote\",\n      \"headline\": {\n        \"text\": \"Google adds low, medium and high effort levels\",\n        \"facts\": [\n          \"F5\",\n          \"Q2\"\n        ]\n      },\n      \"body\": null,\n      \"quote_id\": \"Q2\",\n      \"quote_excerpt\": \"…more thorough answers to queries, but will also use more of your limit.\",\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"dial gauge\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"landing\",\n      \"headline\": {\n        \"text\": \"Pro now starts at $19.99 a month\",\n        \"facts\": [\n          \"F3\",\n          \"N2\",\n          \"F9\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Anyone who uses Pro for complex math or coding will have to pay for it. Google hasn't said exactly when Plus subscribers lose it, and it has given no reason for the change.\",\n        \"facts\": [\n          \"F2\",\n          \"F9\",\n          \"F10\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"calendar email\"\n      },\n      \"spread_with_next\": false\n    }\n  ],\n  \"follow\": \"Follow Helios Group to see what changes for Gemini users after Oct. 9.\",\n  \"caption\": {\n    \"text\": \"Google says that from Oct. 9, Gemini app users without a paid Google AI plan will be limited to the Flash-Lite model and lose access to Flash and Pro. The change appears on Google's support page, as reported by 9to5Google, PCMag and Engadget.\\n\\nGoogle AI Plus subscribers ($4.99 a month in the US) will keep Flash-Lite and Flash but lose Pro, on a date Google says it will email them. Pro will require AI Pro or AI Ultra. Yahoo calculates that a Plus subscriber keeping Pro would pay roughly $15 more a month. Google has given no reason for the change. PCMag suggests rising storage and component costs may be a factor, and notes it is Google's second plan overhaul this year.\\n\\nSources also disagree on whether AI Pro or only AI Ultra gets Deep Think, a Gemini option where queries can take a few minutes.\\n\\nWould you pay $19.99 a month to keep Pro?\\n\\nSource: 9to5Google, Oct. 3, 2026; PCMag, Oct. 5, 2026; Engadget, Oct. 6, 2026; Yahoo Creators, Oct. 6, 2026.\",\n    \"facts\": [\n      \"F1\",\n      \"F2\",\n      \"F3\",\n      \"F6\",\n      \"F7\",\n      \"F10\",\n      \"N1\",\n      \"N2\",\n      \"N4\"\n    ]\n  },\n  \"edit_notes\": [\n    \"Kept cover 1: names Google, the action, the date and the claim attribution.\",\n    \"Moved 'what free users lose' to slide 2 so Flash, Flash-Lite and Pro are explained (from F9) before the plan and price slides.\",\n    \"Slide 1 body tightened; kept 'Google says' and support-page attribution.\",\n    \"Added Flash gloss ('balances speed and reasoning') from F9 to slide 2.\",\n    \"Background slide headline now attributes the 'second overhaul' to PCMag instead of stating it as fact.\",\n    \"Quote slide headline now says what effort levels are (low, medium, high) since the quote alone doesn't; trimmed Q2 to an exact excerpt to stay under 140 chars and keep the catch.\",\n    \"Replaced the 'still unclear' landing with a why-it-matters landing (Pro needs a paid plan from $19.99); kept the open question on Plus timing and no stated reason. Dropped the Deep Think disagreement from the slides because the term needs a gloss that doesn't fit; it stays in the caption with a TERMS gloss.\",\n    \"Removed duplicate follow line from the caption since FOLLOW is its own field.\",\n    \"Split stat body left as is: $15 and $180 stay attributed to Yahoo's calculation.\"\n  ]\n}",
+        "costUsd": 0.0787,
+        "turns": 1,
+        "retries": 0,
+        "retryErrors": [],
+        "turnUsage": [
+          {
+            "turn": 1,
+            "stopReason": "tool_use",
+            "usage": {
+              "input_tokens": 9912,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 3576,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              },
+              "output_tokens": 5812,
+              "output_tokens_details": {
+                "thinking_tokens": 3078
+              },
+              "service_tier": "standard",
+              "inference_geo": "global"
+            },
+            "costUsd": 0.0787
+          }
+        ]
+      },
+      "factCheck": {
+        "ok": true,
+        "flags": {
+          "flags": [],
+          "main_claim_false": false
+        },
+        "outcome": {
+          "kind": "ok",
+          "draft": {
+            "cover_options": [
+              {
+                "text": "Google says free Gemini users lose Flash and Pro on Oct. 9, leaving only Flash-Lite",
+                "facts": [
+                  "F1",
+                  "N4"
+                ],
+                "image": {
+                  "kind": "article",
+                  "value": "https://s.yimg.com/lo/mysterio/api/5c88a299a92f36edb248baf837367cc8fd31da51cc544370b3a5fb6a17c7495c/lightyear_networkapi/resizefill_w976%3Bquality_80%3Bformat_webp/https%3A%2F%2Fd29szjachogqwa.cloudfront.net%2Fimages%2Fuser-uploaded%2Fgoogle-gemini-flash-pro-free-users-october-9-2026_6850.png"
+                }
+              },
+              {
+                "text": "Google is cutting free Gemini to one model on Oct. 9. Pro will need a $19.99 plan",
+                "facts": [
+                  "F1",
+                  "F3",
+                  "N2",
+                  "N4"
+                ],
+                "image": {
+                  "kind": "subject",
+                  "value": "Google"
+                }
+              },
+              {
+                "text": "Google says its cheapest paid Gemini plan, $4.99 a month, will lose Pro too",
+                "facts": [
+                  "F2",
+                  "N1"
+                ],
+                "image": {
+                  "kind": "subject",
+                  "value": "Google AI Plus"
+                }
+              }
+            ],
+            "chosen_cover": 1,
+            "slides": [
+              {
+                "type": "text",
+                "headline": {
+                  "text": "Free Gemini drops from three models to one",
+                  "facts": [
+                    "F1",
+                    "F4"
+                  ]
+                },
+                "body": {
+                  "text": "Google says, via its support page, that from Oct. 9 free users lose Flash and Pro. Today they pick among three models in a menu. After the change, every free request will use Flash-Lite.",
+                  "facts": [
+                    "F1",
+                    "F4",
+                    "N4"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "article",
+                  "value": "https://www.engadget.com/img/gallery/google-removes-free-access-to-gemini-flash-and-pro-on-october-9/l-intro-1791285503.jpg"
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "What free users lose, and what they keep",
+                  "facts": [
+                    "F9"
+                  ]
+                },
+                "body": {
+                  "text": "Google's support page calls Pro its most advanced model, for complex math and coding. Flash balances speed and reasoning. Flash-Lite is built for speed and everyday tasks like summarization and brainstorming.",
+                  "facts": [
+                    "F9"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "stock",
+                  "value": "laptop coding"
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "Paying $4.99 a month won't keep Pro",
+                  "facts": [
+                    "F2",
+                    "N1"
+                  ]
+                },
+                "body": {
+                  "text": "Google says AI Plus subscribers will be limited to Flash-Lite and Flash, with Pro gone. Their date may differ from Oct. 9. Google says it will email them when the change takes effect.",
+                  "facts": [
+                    "F2",
+                    "N1"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "subject",
+                  "value": "Google AI Plus"
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "split_stat",
+                "headline": {
+                  "text": "Keeping Pro means moving up a plan",
+                  "facts": [
+                    "F3",
+                    "F6"
+                  ]
+                },
+                "body": {
+                  "text": "Pro will require AI Pro or AI Ultra. Yahoo calculates that a Plus subscriber who wants to keep it pays roughly $15 more a month, or $180 a year, at current prices.",
+                  "facts": [
+                    "F3",
+                    "F6",
+                    "N6"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [
+                  "N1",
+                  "N2"
+                ],
+                "image": {
+                  "kind": "stock",
+                  "value": "price tags"
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "PCMag counts a second plan overhaul this year",
+                  "facts": [
+                    "F10",
+                    "B1"
+                  ]
+                },
+                "body": {
+                  "text": "9to5Google notes a May usage-limit change came first. PCMag suggests rising costs may play a part. Google has given no reason.",
+                  "facts": [
+                    "F10",
+                    "B1"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "stock",
+                  "value": "server room"
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "quote",
+                "headline": {
+                  "text": "Google adds low, medium and high effort levels",
+                  "facts": [
+                    "F5",
+                    "Q2"
+                  ]
+                },
+                "body": null,
+                "quote_id": "Q2",
+                "quote_excerpt": "…more thorough answers to queries, but will also use more of your limit.",
+                "number_ids": [],
+                "image": {
+                  "kind": "stock",
+                  "value": "dial gauge"
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "landing",
+                "headline": {
+                  "text": "Pro now starts at $19.99 a month",
+                  "facts": [
+                    "F3",
+                    "N2",
+                    "F9"
+                  ]
+                },
+                "body": {
+                  "text": "Anyone who uses Pro for complex math or coding will have to pay for it. Google hasn't said exactly when Plus subscribers lose it, and it has given no reason for the change.",
+                  "facts": [
+                    "F2",
+                    "F9",
+                    "F10"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "stock",
+                  "value": "calendar email"
+                },
+                "spread_with_next": false
+              }
+            ],
+            "follow": "Follow Helios Group to see what changes for Gemini users after Oct. 9.",
+            "caption": {
+              "text": "Google says that from Oct. 9, Gemini app users without a paid Google AI plan will be limited to the Flash-Lite model and lose access to Flash and Pro. The change appears on Google's support page, as reported by 9to5Google, PCMag and Engadget.\n\nGoogle AI Plus subscribers ($4.99 a month in the US) will keep Flash-Lite and Flash but lose Pro, on a date Google says it will email them. Pro will require AI Pro or AI Ultra. Yahoo calculates that a Plus subscriber keeping Pro would pay roughly $15 more a month. Google has given no reason for the change. PCMag suggests rising storage and component costs may be a factor, and notes it is Google's second plan overhaul this year.\n\nSources also disagree on whether AI Pro or only AI Ultra gets Deep Think, a Gemini option where queries can take a few minutes.\n\nWould you pay $19.99 a month to keep Pro?\n\nSource: 9to5Google, Oct. 3, 2026; PCMag, Oct. 5, 2026; Engadget, Oct. 6, 2026; Yahoo Creators, Oct. 6, 2026.",
+              "facts": [
+                "F1",
+                "F2",
+                "F3",
+                "F6",
+                "F7",
+                "F10",
+                "N1",
+                "N2",
+                "N4"
+              ]
+            },
+            "edit_notes": [
+              "Kept cover 1: names Google, the action, the date and the claim attribution.",
+              "Moved 'what free users lose' to slide 2 so Flash, Flash-Lite and Pro are explained (from F9) before the plan and price slides.",
+              "Slide 1 body tightened; kept 'Google says' and support-page attribution.",
+              "Added Flash gloss ('balances speed and reasoning') from F9 to slide 2.",
+              "Background slide headline now attributes the 'second overhaul' to PCMag instead of stating it as fact.",
+              "Quote slide headline now says what effort levels are (low, medium, high) since the quote alone doesn't; trimmed Q2 to an exact excerpt to stay under 140 chars and keep the catch.",
+              "Replaced the 'still unclear' landing with a why-it-matters landing (Pro needs a paid plan from $19.99); kept the open question on Plus timing and no stated reason. Dropped the Deep Think disagreement from the slides because the term needs a gloss that doesn't fit; it stays in the caption with a TERMS gloss.",
+              "Removed duplicate follow line from the caption since FOLLOW is its own field.",
+              "Split stat body left as is: $15 and $180 stay attributed to Yahoo's calculation."
+            ]
+          },
+          "applied": []
+        },
+        "raw": "{\n  \"flags\": [],\n  \"main_claim_false\": false\n}",
+        "costUsd": 0.0318,
+        "turns": 1,
+        "retries": 0,
+        "retryErrors": [],
+        "turnUsage": [
+          {
+            "turn": 1,
+            "stopReason": "tool_use",
+            "usage": {
+              "input_tokens": 10308,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 1280,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              },
+              "output_tokens": 1096,
+              "output_tokens_details": {
+                "thinking_tokens": 1019
+              },
+              "service_tier": "standard",
+              "inference_geo": "global"
+            },
+            "costUsd": 0.0318
+          }
+        ]
+      }
+    }
+  ],
+  "final": {
+    "cover_options": [
+      {
+        "text": "Google says free Gemini users lose Flash and Pro on Oct. 9, leaving only Flash-Lite",
+        "facts": [
+          "F1",
+          "N4"
+        ],
+        "image": {
+          "kind": "article",
+          "value": "https://s.yimg.com/lo/mysterio/api/5c88a299a92f36edb248baf837367cc8fd31da51cc544370b3a5fb6a17c7495c/lightyear_networkapi/resizefill_w976%3Bquality_80%3Bformat_webp/https%3A%2F%2Fd29szjachogqwa.cloudfront.net%2Fimages%2Fuser-uploaded%2Fgoogle-gemini-flash-pro-free-users-october-9-2026_6850.png"
+        }
+      },
+      {
+        "text": "Google is cutting free Gemini to one model on Oct. 9. Pro will need a $19.99 plan",
+        "facts": [
+          "F1",
+          "F3",
+          "N2",
+          "N4"
+        ],
+        "image": {
+          "kind": "subject",
+          "value": "Google"
+        }
+      },
+      {
+        "text": "Google says its cheapest paid Gemini plan, $4.99 a month, will lose Pro too",
+        "facts": [
+          "F2",
+          "N1"
+        ],
+        "image": {
+          "kind": "subject",
+          "value": "Google AI Plus"
+        }
+      }
+    ],
+    "chosen_cover": 1,
+    "slides": [
+      {
+        "type": "text",
+        "headline": {
+          "text": "Free Gemini drops from three models to one",
+          "facts": [
+            "F1",
+            "F4"
+          ]
+        },
+        "body": {
+          "text": "Google says, via its support page, that from Oct. 9 free users lose Flash and Pro. Today they pick among three models in a menu. After the change, every free request will use Flash-Lite.",
+          "facts": [
+            "F1",
+            "F4",
+            "N4"
+          ]
+        },
+        "quote_id": null,
+        "quote_excerpt": null,
+        "number_ids": [],
+        "image": {
+          "kind": "article",
+          "value": "https://www.engadget.com/img/gallery/google-removes-free-access-to-gemini-flash-and-pro-on-october-9/l-intro-1791285503.jpg"
+        },
+        "spread_with_next": false,
+        "quote": null,
+        "numbers": []
+      },
+      {
+        "type": "text",
+        "headline": {
+          "text": "What free users lose, and what they keep",
+          "facts": [
+            "F9"
+          ]
+        },
+        "body": {
+          "text": "Google's support page calls Pro its most advanced model, for complex math and coding. Flash balances speed and reasoning. Flash-Lite is built for speed and everyday tasks like summarization and brainstorming.",
+          "facts": [
+            "F9"
+          ]
+        },
+        "quote_id": null,
+        "quote_excerpt": null,
+        "number_ids": [],
+        "image": {
+          "kind": "stock",
+          "value": "laptop coding"
+        },
+        "spread_with_next": false,
+        "quote": null,
+        "numbers": []
+      },
+      {
+        "type": "text",
+        "headline": {
+          "text": "Paying $4.99 a month won't keep Pro",
+          "facts": [
+            "F2",
+            "N1"
+          ]
+        },
+        "body": {
+          "text": "Google says AI Plus subscribers will be limited to Flash-Lite and Flash, with Pro gone. Their date may differ from Oct. 9. Google says it will email them when the change takes effect.",
+          "facts": [
+            "F2",
+            "N1"
+          ]
+        },
+        "quote_id": null,
+        "quote_excerpt": null,
+        "number_ids": [],
+        "image": {
+          "kind": "subject",
+          "value": "Google AI Plus"
+        },
+        "spread_with_next": false,
+        "quote": null,
+        "numbers": []
+      },
+      {
+        "type": "split_stat",
+        "headline": {
+          "text": "Keeping Pro means moving up a plan",
+          "facts": [
+            "F3",
+            "F6"
+          ]
+        },
+        "body": {
+          "text": "Pro will require AI Pro or AI Ultra. Yahoo calculates that a Plus subscriber who wants to keep it pays roughly $15 more a month, or $180 a year, at current prices.",
+          "facts": [
+            "F3",
+            "F6",
+            "N6"
+          ]
+        },
+        "quote_id": null,
+        "quote_excerpt": null,
+        "number_ids": [
+          "N1",
+          "N2"
+        ],
+        "image": {
+          "kind": "stock",
+          "value": "price tags"
+        },
+        "spread_with_next": false,
+        "quote": null,
+        "numbers": [
+          {
+            "id": "N1",
+            "value": "$4.99 per month",
+            "counts": "Google AI Plus US price"
+          },
+          {
+            "id": "N2",
+            "value": "$19.99",
+            "counts": "Google AI Pro US monthly price"
+          }
+        ]
+      },
+      {
+        "type": "text",
+        "headline": {
+          "text": "PCMag counts a second plan overhaul this year",
+          "facts": [
+            "F10",
+            "B1"
+          ]
+        },
+        "body": {
+          "text": "9to5Google notes a May usage-limit change came first. PCMag suggests rising costs may play a part. Google has given no reason.",
+          "facts": [
+            "F10",
+            "B1"
+          ]
+        },
+        "quote_id": null,
+        "quote_excerpt": null,
+        "number_ids": [],
+        "image": {
+          "kind": "stock",
+          "value": "server room"
+        },
+        "spread_with_next": false,
+        "quote": null,
+        "numbers": []
+      },
+      {
+        "type": "quote",
+        "headline": {
+          "text": "Google adds low, medium and high effort levels",
+          "facts": [
+            "F5",
+            "Q2"
+          ]
+        },
+        "body": null,
+        "quote_id": "Q2",
+        "quote_excerpt": "…more thorough answers to queries, but will also use more of your limit.",
+        "number_ids": [],
+        "image": {
+          "kind": "stock",
+          "value": "dial gauge"
+        },
+        "spread_with_next": false,
+        "quote": {
+          "id": "Q2",
+          "text": "…more thorough answers to queries, but will also use more of your limit.",
+          "speaker": "Google (support page)"
+        },
+        "numbers": []
+      },
+      {
+        "type": "landing",
+        "headline": {
+          "text": "Pro now starts at $19.99 a month",
+          "facts": [
+            "F3",
+            "N2",
+            "F9"
+          ]
+        },
+        "body": {
+          "text": "Anyone who uses Pro for complex math or coding will have to pay for it. Google hasn't said exactly when Plus subscribers lose it, and it has given no reason for the change.",
+          "facts": [
+            "F2",
+            "F9",
+            "F10"
+          ]
+        },
+        "quote_id": null,
+        "quote_excerpt": null,
+        "number_ids": [],
+        "image": {
+          "kind": "stock",
+          "value": "calendar email"
+        },
+        "spread_with_next": false,
+        "quote": null,
+        "numbers": []
+      }
+    ],
+    "follow": "Follow Helios Group to see what changes for Gemini users after Oct. 9.",
+    "caption": {
+      "text": "Google says that from Oct. 9, Gemini app users without a paid Google AI plan will be limited to the Flash-Lite model and lose access to Flash and Pro. The change appears on Google's support page, as reported by 9to5Google, PCMag and Engadget.\n\nGoogle AI Plus subscribers ($4.99 a month in the US) will keep Flash-Lite and Flash but lose Pro, on a date Google says it will email them. Pro will require AI Pro or AI Ultra. Yahoo calculates that a Plus subscriber keeping Pro would pay roughly $15 more a month. Google has given no reason for the change. PCMag suggests rising storage and component costs may be a factor, and notes it is Google's second plan overhaul this year.\n\nSources also disagree on whether AI Pro or only AI Ultra gets Deep Think, a Gemini option where queries can take a few minutes.\n\nWould you pay $19.99 a month to keep Pro?\n\nSource: 9to5Google, Oct. 3, 2026; PCMag, Oct. 5, 2026; Engadget, Oct. 6, 2026; Yahoo Creators, Oct. 6, 2026.",
+      "facts": [
+        "F1",
+        "F2",
+        "F3",
+        "F6",
+        "F7",
+        "F10",
+        "N1",
+        "N2",
+        "N4"
+      ]
+    },
+    "edit_notes": [
+      "Kept cover 1: names Google, the action, the date and the claim attribution.",
+      "Moved 'what free users lose' to slide 2 so Flash, Flash-Lite and Pro are explained (from F9) before the plan and price slides.",
+      "Slide 1 body tightened; kept 'Google says' and support-page attribution.",
+      "Added Flash gloss ('balances speed and reasoning') from F9 to slide 2.",
+      "Background slide headline now attributes the 'second overhaul' to PCMag instead of stating it as fact.",
+      "Quote slide headline now says what effort levels are (low, medium, high) since the quote alone doesn't; trimmed Q2 to an exact excerpt to stay under 140 chars and keep the catch.",
+      "Replaced the 'still unclear' landing with a why-it-matters landing (Pro needs a paid plan from $19.99); kept the open question on Plus timing and no stated reason. Dropped the Deep Think disagreement from the slides because the term needs a gloss that doesn't fit; it stays in the caption with a TERMS gloss.",
+      "Removed duplicate follow line from the caption since FOLLOW is its own field.",
+      "Split stat body left as is: $15 and $180 stay attributed to Yahoo's calculation."
+    ],
+    "cover": "Google says free Gemini users lose Flash and Pro on Oct. 9, leaving only Flash-Lite"
+  },
+  "stop": null,
+  "costs": {
+    "writer": 0.0628,
+    "editor": 0.0787,
+    "fact-checker": 0.0318
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "fixture": "example-post",
+  "humanized": false,
+  "exportedAt": "2026-09-27T00:35:52.679Z",
+  "format": "carousel",
+  "storyType": "safety",
+  "source": "AI | The Verge",
+  "sourceUrl": "https://www.theverge.com/podcast/996412/microsoft-ai-ceo-mustafa-suleyman-regulation-safety-anthropic-claude",
+  "slideCount": 11,
+  "files": [
+    "slide-00.png",
+    "slide-01.png",
+    "slide-02.png",
+    "slide-03.png",
+    "slide-04.png",
+    "slide-05.png",
+    "slide-06.png",
+    "slide-07.png",
+    "slide-08.png",
+    "slide-09.png",
+    "slide-10.png"
+  ]
+}

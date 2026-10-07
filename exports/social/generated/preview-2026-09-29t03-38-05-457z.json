@@ -1,0 +1,30 @@
+{
+  "format": "carousel",
+  "storyType": "model_launch",
+  "source": "Google Blog (Google Labs)",
+  "sourceUrl": "https://blog.google/innovation-and-ai/models-and-research/google-labs/cc-expanding-to-groups/",
+  "publishedAt": "September 17, 2026",
+  "issueNumber": 725,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "variant": "C3",
+      "headline": [
+        {
+          "text": "",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Cover"
+    },
+    {
+      "position": 1,
+      "layoutVariant": "follow",
+      "variant": "F1",
+      "storySpecificLine": "",
+      "altText": "Follow Helios"
+    }
+  ],
+  "caption": "Google Labs repositioned CC, its experimental AI agent, from a personal productivity tool into a shared household assistant for up to six family members. The shift came from user demand: families managing school schedules, sports, bills, and meal plans asked CC to help them coordinate. The updated CC can organize those logistics into a shared daily brief and calendar, and it can also take action on its own—pre-filling forms, drafting meal plans, checking drive times from Google Maps. But there's a catch: it's U.S.-only, requires you to be 18 or older with a personal Gmail account, which means school-provided accounts aren't supported. That locks out older kids who rely on school email for communications.\n\nWhat's the household coordination task you'd most want an AI agent to handle?\n\nFollow Helios for stories about AI agents moving beyond chatbots into real work.\n\nSource: Google Blog, September 17, 2026. Additional reporting: TechCrunch, SiliconAngle.\n\n\nWait—let me check:\n- \"it's U.S.-only\" — contraction, fine\n- \"can also take action on its own—pre-filling\" — I used an em dash again. Rules say no em dashes. Remove: \"can also take action: pre-filling forms, drafting meal plans, checking drive times.\"\n- Recount the main paragraphs for length and flow\n- Check every fact against slides/brief\n- \"older kids who rely on school email\" — is this supported? TechCrunch says \"it excludes the school-provided Google accounts that many students rely on for school communications.\" Yes, supported.\n\nLet me revise to remove em dash:\n\nGoogle Labs repositioned CC, its experimental AI agent, from a personal productivity tool into a shared household assistant for up to six family members. The shift came from user demand: families managing school schedules, sports, bills, and meal plans asked CC to help them coordinate. The updated CC can organize those logistics into a shared daily brief and calendar, and it can take action on its own: pre-filling forms, drafting meal plans, checking drive times from Google Maps. But there's a catch. It's U.S.-only, requires you to be 18 or older with a personal Gmail account, and school-provided accounts aren't supported. That locks out older kids who rely on school email for class communications.\n\nWhat's the household coordination task you'd most want an AI agent to handle?\n\nFollow Helios for stories about AI agents moving beyond chatbots into real work.\n\nSource: Google Blog, September 17, 2026. Additional reporting: TechCrunch, SiliconAngle.\n\n\nActually—check the phrasing \"moved beyond chatbots.\" The rules say no \"beyond.\" Let me use: \"Follow Helios for stories about AI agents actually doing things, not just answering questions.\" Hmm—that's casual but works. Or: \"Follow Helios to see what happens when AI agents stop chatting and start acting.\" Better.\n\nActually, re-reading rules: \"beyond\" is fine. The banned words are specific: landscape, ecosystem, space, game-changer, paradigm, revolutionary, seismic, watershed, pivotal, robust, groundbreaking, unprecedented, delve, testament, reshape, unlock, leverage, empower, elevate, transform, redefine, reimagine. \"Beyond\" isn't in that list.\n\nLet me use: \"Follow Helios for stories about AI agents going beyond chatbots to actually take action.\"\n\nFinal check on caption length and structure. Reading aloud: flows well. Facts are accurate and sourced. First sentence works on its own (Google repositioned CC from personal to household tool).\n\nOne more read for any hedging needed—all the facts I state are assertions backed by sources, no predictions. Good.\n\n\nCAPTION:\nGoogle Labs repositioned CC, its experimental AI agent, from a personal productivity tool into a shared household assistant for up to six family members. The shift came from user demand: families managing school schedules, sports, bills, and meal plans asked CC to help them coordinate. The updated CC can organize those logistics into a shared daily brief and calendar, and it can take action on its own: pre-filling forms, drafting meal plans, checking drive times from Google Maps. But there's a catch. It's U.S.-only, requires you to be 18 or older with a personal Gmail account, and school-provided accounts aren't supported. That locks out older kids who rely on school email for class communications.\n\nWhat's the household coordination task you'd most want an AI agent to handle?\n\nFollow Helios for stories about AI agents going beyond chatbots to actually take action.\n\nSource: Google Blog, September 17, 2026. Additional reporting: TechCrunch, SiliconAngle."
+}

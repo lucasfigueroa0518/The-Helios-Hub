@@ -262,6 +262,51 @@ BRIEF
   - **Final attempt:** failing tags are removed (logged as subject-tag-dropped), then failing requests become none (image-request-dropped). Words never change.
   - **Icons (Tommy, 2026-10-07; photo spec §5):** every cover option and story slide names an icon from a fixed list of 30 open-source Lucide outline icons (`lib/social/render/icons.ts`); code checks the name. On the final attempt a missing or unknown icon becomes `newspaper` (logged as icon-defaulted).
 
+- **Sixth round (Tommy, 2026-10-07; photo spec §4, slide buckets spec):** the two-tier visual request. The IMAGE line is replaced again. This is the line in use:
+
+```
+- VISUAL and subject tags. Give every cover option and story slide subject_ids: the SUBJECTS IDs of the people and organizations it is about and names in its words (empty if none). Give each a VISUAL and a different FALLBACK VISUAL: what the photo should show, as a kind and a short description. Kinds: person: <SUBJECTS name> (a person the slide names, with headshot_available true); company: <SUBJECTS name> (an organization the slide names: its CEO, building or official images); logo: <SUBJECTS name> (with logo_available true); product: <1–5 words naming it>; event: <1–5 words naming what happened>; thematic: <a plain 2–4 word physical scene tied to the topic, never a name> (server racks, circuit board, forest canopy); setting: <a plain 2–4 word place type, never a named place> (hospital ward, trading floor). Vary the kinds across the post so it isn't the same face and logo on every slide: use thematic, setting, product or event on slides about an idea, a number or a trend. On a quote slide, VISUAL is the speaker (person: <the quote's speaker>) when the speaker is a person in SUBJECTS, whether or not they have a photo. Never change a slide's words to fit a visual or a tag; change the request or the tag. Every cover option and story slide also names an icon: one of clock (a deadline, time, speed); calendar (a date, a schedule); shield (security, safety, protection); lock (privacy, access limits, lock-in); heart-pulse (health, medicine); cpu (chips, compute, a model); server (data centers, infrastructure); code (software, developers, code); smartphone (apps, phones, consumers); user (one person, a user); users (people, users, staff, the public); building-2 (a company, an office); landmark (government, a regulator); scale (law, fairness, a trade-off); gavel (a court, a ruling, a lawsuit); banknote (money, price, funding); briefcase (jobs, business, work); globe (countries, global reach); rocket (a launch, a release); zap (power, energy, a sudden change); file-text (a document, a report, a policy); message-square-quote (a statement, a quote); graduation-cap (education, students, research); factory (manufacturing, industry); search (search, an investigation); eye (surveillance, oversight, visibility); bot (an AI assistant, an agent); newspaper (the news, the press, a report); handshake (a deal, a partnership); triangle-alert (a risk, a warning, a failure). Pick the one that fits the slide's point; it is drawn only when no photo is found.
+```
+
+  The slide-kinds line is replaced:
+
+```
+- Slide kinds: text, stat (one or two numbers by ID), quote. You choose what each slide says; its layout is chosen for you.
+```
+
+  The spread line and CONCEPT are removed (Jev places the one spread; slide buckets spec §2). The stat line stays:
+
+```
+- At most 2 stat slides per post. Keep the strongest numbers as stat slides; put the others in a text slide's body.
+```
+
+  `cause · Writer prompt + schema + code check · 0 new stages · 0 new AI calls`
+
+  - **Why:** the fifth-round request (subject / article / stock / none) mixed *what* to show with *where* to find it. The Writer now says what the photo should show (person, company, logo, product, event, thematic, setting) plus a fallback; code searches every source for it (photo spec §4).
+  - **Schema:** `image` and `concept` are replaced by `visual` and `fallback_visual` (kind + query) on every cover option and slide; slide types are text, stat (1–2 numbers) and quote; `spread_with_next` is set by code only. ARTICLE PHOTOS are no longer shown to the Writer.
+  - **Code check:** person, company and logo name a SUBJECTS entry the slide is tagged with, of the right type, with a verified photo; thematic and setting are 1–4 word scenes naming no SUBJECT; product and event are 1–5 words; the fallback differs from the visual; a quote slide's visual is its person speaker; at most 2 stat slides. Final attempt: a failing visual becomes its fallback, else none (the icon).
+  - **Section list:** `/ VISUAL / FALLBACK VISUAL` replaces `/ IMAGE`; CONCEPT is removed.
+  - **Editor:** POWERS now says "You may swap a slide's visual for its fallback visual (a cut); never add or change a visual request." Its code check allows only visuals the Writer used.
+
+- **Fifth round (Tommy, 2026-10-07, after the first E2E run came out icon-heavy; photo spec §4):** "a photo in each of the slides". The IMAGE line is replaced again. This is the line in use:
+
+```
+- IMAGE and subject tags. Every slide shows a photo. Give every cover option and story slide subject_ids: the SUBJECTS IDs of the people and organizations it is about and names in its words (empty if none). Code picks a photo from the tags: a person's headshot, else a company's CEO, logo or headquarters. Your IMAGE request comes first, so use it to vary the post: subject: <name> (a SUBJECTS entry tagged on the slide: a person with headshot_available true, or an organization with logo_available true), article: <photo> (from ARTICLE PHOTOS, on a slide tagged with one of the subject_ids its caption names; an official_of image only on the cover or a slide tagged with that company), or stock: <a plain 2–4 word physical scene tied to the topic>, which need not be named on the slide (data center, circuit board, server racks, control room for tech; forest canopy, wind turbines for the environment), never a person's or company's name. Use stock on slides about an idea, a number or a trend, so the post isn't the same two faces and a logo. none: code picks the slide's photo from its tags. Give the post one CONCEPT: its default stock scene, used when a slide has nothing else. On a quote slide, IMAGE is the speaker (subject: <the quote's speaker>), whether or not they have a photo; none only when the speaker is an organization or isn't in SUBJECTS. A stat slide's photo is a darkened backdrop: its IMAGE is a stock scene or none. Never change a slide's words to fit a photo or a tag; change the request or the tag. The chosen cover always has an IMAGE. Every cover option and story slide also names an icon: one of clock (a deadline, time, speed); calendar (a date, a schedule); shield (security, safety, protection); lock (privacy, access limits, lock-in); heart-pulse (health, medicine); cpu (chips, compute, a model); server (data centers, infrastructure); code (software, developers, code); smartphone (apps, phones, consumers); user (one person, a user); users (people, users, staff, the public); building-2 (a company, an office); landmark (government, a regulator); scale (law, fairness, a trade-off); gavel (a court, a ruling, a lawsuit); banknote (money, price, funding); briefcase (jobs, business, work); globe (countries, global reach); rocket (a launch, a release); zap (power, energy, a sudden change); file-text (a document, a report, a policy); message-square-quote (a statement, a quote); graduation-cap (education, students, research); factory (manufacturing, industry); search (search, an investigation); eye (surveillance, oversight, visibility); bot (an AI assistant, an agent); newspaper (the news, the press, a report); handshake (a deal, a partnership); triangle-alert (a risk, a warning, a failure). Pick the one that fits the slide's point; it is drawn only when no photo is found.
+```
+
+  `cause · Writer prompt + schema + code check · 0 new stages · 0 new AI calls`
+
+  - **Why:** the Link 1 rules made icons the normal outcome: stat slides took none, a logo went on one story slide, each person once, and stock had to name something the slide mentions, so the run had subject 2 / article 0 / stock 0 / none 6.
+  - **Now:** code picks every slide's photo from its tags (a person's headshot, else the company's CEO, logo or headquarters); the Writer's request comes first and is how it varies the post. Stock is a conceptual scene tied to the topic, never a name. Stat slides take a stock scene or none (a darkened backdrop). New `concept` (CONCEPT): the post's default scene.
+  - **Code check, every attempt:** the logo-once, person-once and stat-none checks, the stock word check and the EDIT NOTES line per none are gone. New: a stock scene or concept is 1–4 words and names no SUBJECT (full name, or a person's last name); the concept is required; exactly one spread, on two text, landing or image slides, its first slide a stock scene; at most 2 stat or split stat slides.
+  - **Section list:** `CONCEPT: the post's default stock scene` before EDIT NOTES.
+  - **The spread and stat lines** (replace the spread line below):
+
+```
+- Every post has exactly one spread: two neighbouring text, landing or image slides that continue one beat share one wide photo. Mark the first with spread_with_next and give it a stock scene that suits a wide shot (data center aisle, forest canopy); the second has IMAGE none.
+- At most 2 stat or split stat slides per post. Keep the strongest numbers as stat slides; put the others in a text slide's body.
+```
+
 - **Change 2, the spread line:** the "added since the test" spread line is replaced:
 
 ```
@@ -349,7 +394,7 @@ Make sure:
 3. Every slide makes sense to an outsider. Explain unfamiliar terms where they appear, using only the brief's TERMS.
 4. The reader finishes knowing why it matters.
 
-POWERS: cut and sharpen only. You may tighten wording, reorder slides, cut slides or lines, and explain terms from TERMS. You never add facts, numbers, quotes or descriptors. Keep every hedge, every [CLAIM: X says] attribution, every quote/number ID and every [F#] claim tag on the sentences you keep. You may change an IMAGE to none (a cut); never add or change one.
+POWERS: cut and sharpen only. You may tighten wording, reorder slides, cut slides or lines, and explain terms from TERMS. You never add facts, numbers, quotes or descriptors. Keep every hedge, every [CLAIM: X says] attribution, every quote/number ID and every [F#] claim tag on the sentences you keep. You may swap a slide's visual for its fallback visual (a cut); never add or change a visual request.
 
 Keep 5–8 story slides and the same length limits as the Writer. If the story is told in fewer slides, cut the rest.
 

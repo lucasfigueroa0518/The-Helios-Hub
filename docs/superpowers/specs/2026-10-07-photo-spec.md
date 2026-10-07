@@ -14,7 +14,7 @@ The rules of the rebuild spec §2 apply unchanged: fix the cause, classify every
 
 ## 1. Goal (DECIDED)
 
-- **Every slide gets a visual.** A real photo when a fitting one exists; otherwise an icon background. Never a bare text slide.
+- **Every slide gets a photo** (Tommy, 2026-10-07, after the first E2E run came out icon-heavy: "a photo in each of the slides"): the person quoted, the CEO of the company being talked about, that company's logo or headquarters, or a conceptual photo tied to the topic. An icon background only when every source in §4 came up empty. Never a bare text slide.
 - **Never misleading.** Zero wrong-person photos, zero photos that imply something the story doesn't say.
 - **Fully automatic.** No human picks photos. Nobody approves per-company terms.
 - **No rights risk beyond what Tommy accepted** (§2).
@@ -26,8 +26,12 @@ The rules of the rebuild spec §2 apply unchanged: fix the cause, classify every
 | **Headshots** | The Wikidata main photo (P18) of an identity-verified person, openly licensed. |
 | **Logos** | The Wikidata logo (P154) of an identity-verified organization, if its Commons licence is open or public domain. Company brand-guideline preferences don't block it (Tommy: "If there are free, open-to-use logos that are just preferred not to be used by the companies, we can definitely use them."). |
 | **Article photos** | From the story's own source articles, when the credit is: government, Wikimedia Commons, an open licence (CC0, CC BY, CC BY-SA, public domain), or the company itself when that company is a subject of the story ("Courtesy of OpenAI"). |
-| **Official announcement images** | Images on a story company's own announcement page that the Reporter already opened. A plain list says which domains belong to which company (e.g. anthropic.com is Anthropic's; 9to5google.com is not Google's). No approval column, no per-company terms. Credit: "Image: <Company>". |
-| **Stock** | Openverse, openly licensed, through the frozen stock link (pre-screen v4 + vision check). |
+| **CEO headshots** (Tommy, 2026-10-07) | The P18 of the person a verified organization names as its current chief executive (Wikidata P169: preferred rank, no end date). No P169: its founder (P112), only when it has exactly one. The identity comes from the verified organization's own claim. On a slide that doesn't name them, the credit line names them ("Dario Amodei, Anthropic CEO · …"). |
+| **Headquarters** (Tommy, 2026-10-07) | A verified organization's own main photo (P18), only when its Commons title and description describe the organization's building or offices (one Jev metadata question, `org-hq@1`). Openly licensed like every Commons photo. |
+| **Official announcement images** | Images on a story company's own pages that the Reporter already opened. A plain list says which domains belong to which company (e.g. anthropic.com is Anthropic's; 9to5google.com is not Google's); any page on the company's own domain counts (Tommy, 2026-10-07). No approval column, no per-company terms. Credit: "Image: <Company>". |
+| **Wikimedia Commons search** (sixth round) | A direct search of Commons files (Openverse returned none on the bench), openly licensed (PD / CC0 / CC BY / CC BY-SA), with dates and full sizes. Never by a person's or a named place's name. |
+| **StockSnap lane** (sixth round) | The openly licensed StockSnap and rawpixel collections, searched on their own through Openverse's source filter (StockSnap passed the vision check 3 of 3 on the bench; Flickr 3 of 23). |
+| **Stock** | Openverse, openly licensed, through the frozen stock link (pre-screen v4 + vision check). Conceptual scenes are allowed (Tommy, 2026-10-07): a plain physical scene tied to the topic, not necessarily named on the slide (tech → circuit board, data center, server racks, a control room; environment → a tree, a forest). |
 | **Icons** | A Helios icon set, open-source or made for Helios. |
 | **Photo bank** | Grows automatically from photos posts have used, tagged so reuse stays correct (same verified person or company only; scenes by tag). No hand-seeding. |
 
@@ -47,24 +51,64 @@ The rules of the rebuild spec §2 apply unchanged: fix the cause, classify every
      **Naming rule** (Tommy, 2026-10-07): people match by full name or last name only, never first name. Organizations match by full name, or the first word only if no other subject in the story shares it; if two share it (Google, Google DeepMind), only the full name counts. A subject's type comes from the identity check, else from the Reporter, which marks each SUBJECT as a person or an organization (Tommy, 2026-10-07). Tags are re-checked by code right after the Editor; a failing tag is removed and logged (Tommy, 2026-10-07).
   4. **Official announcement images: the page counts as the caption** (Tommy, 2026-10-07). An image from a company's own announcement page may go on the cover or on a slide about that company's announcement, and nowhere else. Images that are mostly text (title cards, banners) are rejected, by the existing vision call's "mostly text or banner" question (Tommy, 2026-10-07).
 
-## 4. Each slide type (DECIDED)
+## 4. How a slide gets its photo (DECIDED, sixth round: Tommy, 2026-10-07)
 
-The order tried, left to right. The last step always succeeds.
+Replaces the per-slide-type chains of the fifth round. Four steps for the whole post, then one pick per slide.
 
-| Slide | Order |
+**1. The request (tier 1).** The Writer gives the cover and every slide a **visual** and a **fallback visual**,
+each a kind and a 2–4 word description:
+
+| Kind | What it is | Example |
+|---|---|---|
+| **person** | a SUBJECTS person | person: Sam Altman |
+| **company** | a SUBJECTS organization: its CEO, building or official images | company: Anthropic |
+| **logo** | a SUBJECTS organization's logo card | logo: OpenAI |
+| **product** | a named product | product: ChatGPT app |
+| **event** | something that happened | event: Senate hearing |
+| **thematic** | a conceptual scene tied to the topic (never a name) | thematic: server racks |
+| **setting** | a place type (never a named place) | setting: hospital ward |
+
+Code checks: person, company and logo name a SUBJECTS entry; thematic and setting name no SUBJECT; a quote
+slide's visual is its speaker.
+
+**2. The search (tier 2).** Every source that serves the kind is searched, in this order:
+
+| Kind | Sources |
 |---|---|
-| **Cover** | article or official image → the person's headshot (person story) → the company's logo card (company story) → stock → cover icon background |
-| **Story slide** | article or official image → headshot or logo of the subject the slide is about → stock → icon background |
-| **Quote slide** | the speaker's verified headshot → a second verified photo of them (§3) → an article photo whose caption names the speaker → otherwise a type-led quote slide (quote mark, quote, speaker's name and role) on the icon background. Quote slides are allowed whether or not the speaker has a photo (Tommy, 2026-10-07: unknown former employees may have the best quote). Never another person's photo or the company's logo in the speaker's spot. |
-| **Stat slide** | icon background, always. Tommy, 2026-10-07: "Stat slides keep IMAGE none; the icon background will be automatic." |
-| **Spread** (two slides, one wide photo across the seam) | kept (rebuild spec §5.4). One wide literal photo; if none is wide enough, both render as normal slides. |
+| person | Wikidata main photo (identity-verified) → second photo of them (§3) → article photo whose caption names them |
+| company | the CEO's headshot, its headquarters (§2) → official images → article photos |
+| logo | Wikidata logo (P154) |
+| product | official images → article photos → Commons search |
+| event | article photos → Commons search → Openverse |
+| thematic, setting | StockSnap lane → Commons search → Openverse |
+
+**3. The ranking.** Up to **2 candidates per request, at least 1** when any source has one:
+- person, company, event, product: the photo dated closest to the story wins; an undated photo ranks below a
+  dated one. Two photos within **12 days** of each other (cover: **35 days**) → the bigger image wins.
+- thematic, setting, logo: the bigger image wins.
+
+**4. The sheet.** Every candidate of the post (primary and fallback requests) is tiled onto numbered contact sheets
+(at most 16 tiles per sheet). One Haiku call per sheet tags each tile with 2–4 words and flags a possible person,
+landmark, logo, named place or text banner, as JSON in tile order. **Jev checks each tile's tags against its
+request** (`photo-fit@1`), which catches homonyms such as Apple the fruit for Apple the company. This is a new Jev
+check, approved by Tommy as the written exception that rebuild spec §5A requires.
+
+**5. The pick, per slide.** The best-ranked candidate that passes the fit check → the second → the fallback
+request's → the icon background. A flagged tile, and every slide's winner, get the close-up vision check (the frozen
+stock vision prompt; its rules stay: no person as the main subject, no landmark, no outside logo, no named
+institution, because a generic photo must never make a false claim about the story). Tags never decide who someone
+is: people and logos come only from verified sources.
+
+How each slide is then laid out (buckets, variants, spreads) is the slide design spec,
+`specs/2026-10-08-slide-buckets.md`.
 
 - **Everyone quoted is a SUBJECT** (Tommy, 2026-10-07). A change to the frozen Reporter: one rule in its prompt, plus a code check that every quote's speaker is in SUBJECTS. `cause · prompt + code check · 0 new stages · 0 new AI calls`. If a speaker still has no verified photo, the quote gets the type-led quote slide.
 - **People may be full-bleed if properly framed** (Tommy, 2026-10-07: "can we do full bleed and properly frame them?"). Code uses the face detector's face box to crop so the face sits in the upper part of the slide and fully clear of the text area and the HELIOS mark. If the photo can't be framed that way (face too low, too tight, cut off), the slide uses the split or framed-inset layout instead. The render review (§5b) checks faces under text or cut off. This replaces the renderer's freeze rule "person photos use split layouts only".
-- **Companies: logos only** (Tommy, 2026-10-07). Never a company's main photo (P18), on any slide.
-- **Logos:** on the cover, and on at most one story slide per post. Exempt from the 7-day rule across posts; never twice in one post besides that.
-- **No repeats:** no photo twice in a post or within 7 days, every source except logos.
-- **The Writer asks only for what the finder can deliver:** its IMAGE request and "has a photo" flag use the same checks as the finder.
+- **Companies: CEO, logo, headquarters** (Tommy, 2026-10-07, fifth round; replaces "logos only"). A company's main photo (P18) only as its headquarters (§2).
+- **No photo on two neighbouring slides** (the cover counts as slide 1). Otherwise a photo may come back later in the same post (a company has only a few photos; filling every slide needs repeats). A spread's two halves are one photo by design.
+- **7 days:** no photo within 7 days of an earlier post (or earlier in the same run), except logos, and headshots (CEO or subject) on story slides: a person has one main photo. A cover never repeats a headshot within 7 days (the "same photo on both covers" fixed case, §7).
+- **At most 2 stat or split stat slides per post** (Tommy, 2026-10-07); other numbers go in body text.
+- **The Writer asks only for what the search can deliver:** its visual requests use the same checks as the search.
 
 ## 5. Icon backgrounds
 
@@ -77,7 +121,7 @@ The order tried, left to right. The last step always succeeds.
 
 - **Reference:** the Oct 4 hand-made walkthrough, `docs/superpowers/m8-drafts/reference-carousel-daily-run-2026-10-04.html` (Tommy: its photo placements are "ideal for what we're looking for"). Its photos are placeholders; the placements and the variety are the target.
 - What we keep from it: a visual on every slide; layouts rotating (full photo, photo on top, text on top, stat, quote, spread, follow); most slides with text at the bottom over one consistent dark fade, so any real photo blends the way the placeholders do.
-- Where it differs from this spec: its symbolic stock photos (wall clock, stacks of reports, cooling towers) are replaced by icon backgrounds; its quote slide without a speaker photo becomes a type-led quote slide on the icon background, not a regular story slide (§4; Tommy, 2026-10-07).
+- Where it differs from this spec: its quote slide without a speaker photo becomes a type-led quote slide (§4). Its symbolic stock photos were first replaced by icon backgrounds; since 2026-10-07 (fifth round) conceptual stock scenes are back, through the stock link's screening.
 - **Icon slides join the layout rotation** as their own layout, so a run of icon slides doesn't look identical.
 - Text length per slide stays as it is (Tommy, 2026-10-07).
 
@@ -94,7 +138,7 @@ The order tried, left to right. The last step always succeeds.
 | Fade strength | How dark the gradient under the text is (within brand limits) |
 | Text position | Text at the top or the bottom of the slide |
 | Layout | Full photo, photo on top, split, framed inset |
-| Photo | The next-best photo the finder already verified, or the icon background |
+| Photo | The next-best photo the finder already verified; the icon background only when there is none |
 
 - **Fixed questions** (per slide; each "yes" points to a setting, with a one-line reason that goes in the log):
   1. Is any face covered by text, or cut off at the edge? → crop position, or layout
@@ -105,7 +149,8 @@ The order tried, left to right. The last step always succeeds.
   6. Do two neighbouring slides look nearly the same? → layout
   7. Does any slide look broken or bare? → log it (a render bug, not a setting)
 - The renderer keeps its own rules over any setting the model picks (faces clear of text, contrast, text fit, the arrow zone); a setting that breaks one is rejected by the render check.
-- **One round:** review → apply the actions → re-render (code, free) → review once more → anything still flagged drops to its icon background. At most 2 calls per post.
+- **One round:** review → apply the actions → re-render (code, free) → review once more → anything still flagged takes its next verified photo, and the icon background only when there is none. At most 2 calls per post.
+- **Spreads** are judged as a pair: a photo cut at the shared edge is intended; a change to one half applies to both halves or is skipped.
 - **Limits:** text never changes (it has passed the Editor and Fact-checker); no new photo searches; only runner-up photos that passed every §3 check. Logos and headshots are never swapped for another subject.
 - **Everything is logged** (each flag and action). A problem that repeats in 3+ of 10 posts is fixed at its cause (finder, crop code, layout), per the rebuild spec §2.3.
 - **Code checks first** (free, already partly in the render check): text fit, contrast, faces under text or cut off, over-zoomed crops, near-identical images, bare slides. The vision review covers what code can't judge.
@@ -118,7 +163,7 @@ The order tried, left to right. The last step always succeeds.
 
 ## 6. Out, parked, open
 
-**OUT:** press kits; the per-company approval rows; (c) Commons categories, "depicts" photos and Openverse searches by name; the sunset backgrounds; the Helios-logo cover card; the AI-compute starter photos (replaced by the cover icon); charts; AI-generated imagery; new sources for now (Flickr, Pexels, Unsplash).
+**OUT:** press kits; the per-company approval rows; (c) Commons categories, "depicts" photos, and Openverse or Commons searches by a person's or named place's name; the sunset backgrounds; the Helios-logo cover card; the AI-compute starter photos (replaced by the cover icon); charts; AI-generated imagery; sources that aren't openly licensed (Pexels, Unsplash; Tommy, 2026-10-07: new sources must be open-licensed); the Flickr API on its own; NASA.
 
 **PARKED:**
 - A free open-source vision model (Hugging Face) for the render review, instead of Haiku.
@@ -141,6 +186,8 @@ Quoted as Tommy gave them:
 - "Social gets its own new cloud worker (Lucas is setting it up). Never deploy Social to helios-orch-worker." (Plan, M10.)
 - Third round (Tommy, 2026-10-07): a speaker still missing after the Reporter's retry: keep the quote, log it, type-led slide; the QUOTES-line edit approved; official images from each company's own news and blog paths only; the naming rule (§3); tags re-checked right after the Editor; the Reporter marks each SUBJECT person or organization; the cover of a company story stays its logo card.
 - Fourth round (Tommy, 2026-10-07): no company main photos (P18) anywhere; companies get their logo only. This reverses the headquarters-photo go-ahead given in chat earlier the same day ("I like when buildings are used, like their headquarters"). Cover order and the full-bleed default stay as built. Commit Links 2–6; approved going over the $2.00 daily cap for the first end-to-end run (cap $2.50).
+- Sixth round (Tommy, 2026-10-07, after the fifth-round re-renders were still photo-poor): the two-tier request (§4), up to 2 ranked candidates per request, one contact sheet tagged by Haiku and checked by Jev (the §5A exception), two new open-licensed sources (Commons search, the StockSnap lane), and slide buckets with variants chosen by Jev (`specs/2026-10-08-slide-buckets.md`).
+- Fifth round (Tommy, 2026-10-07, after the first E2E run `runs/daily-2026-10-07T19-44-42-798Z` came out with no photos but logos): "a photo in each of the slides": the person quoted, the CEO, the logo or the headquarters, or a conceptual photo ("a circuit board or data centers … a picture of a tree"); one spread per post; at most 2 stat slides; the Hook pass on by default; official images from any page on the company's own domain. Agency and outlet article photos stay blocked. This reverses the fourth round's "no company main photos" for headquarters only (§2).
 - Second round (Tommy, 2026-10-07): §5a matches §4 (type-led quote slide); everyone quoted is a SUBJECT (§4); the official-image text check uses the existing vision call (§3 rule 4); the §3 "depicts" wording; the fixed cases in §7 Step 3.
 
 ## 7. How it gets built (DECIDED: the rebuild plan's method)

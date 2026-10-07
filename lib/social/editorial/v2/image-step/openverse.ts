@@ -69,7 +69,7 @@ function mimeFromUrl(url: string): string {
 
 export async function searchOpenverse(
   query: string,
-  opts: { limit?: number; http?: typeof fetch; minShortSide?: number } = {},
+  opts: { limit?: number; http?: typeof fetch; minShortSide?: number; minAspect?: number; sources?: string[] } = {},
 ): Promise<OpenverseCandidate[]> {
   const http = opts.http ?? fetch;
   const limit = opts.limit ?? 12;
@@ -80,6 +80,8 @@ export async function searchOpenverse(
   url.searchParams.set('license', ALLOWED_LICENSES.join(','));
   url.searchParams.set('category', 'photograph');
   url.searchParams.set('page_size', String(Math.min(limit, 20)));
+  // One provider lane (photo spec §2: the StockSnap lane searches StockSnap and rawpixel only).
+  if (opts.sources?.length) url.searchParams.set('source', opts.sources.join(','));
 
   const res = await http(url.toString(), {
     headers: { 'User-Agent': USER_AGENT, 'Accept': 'application/json' },
@@ -101,6 +103,7 @@ export async function searchOpenverse(
     const width = Number(r.width ?? 0);
     const height = Number(r.height ?? 0);
     if (Math.min(width, height) < minShortSide) continue;
+    if (opts.minAspect && width / height < opts.minAspect) continue;
     const creator = String(r.creator ?? '').trim();
     if (!creator) continue;
     out.push({

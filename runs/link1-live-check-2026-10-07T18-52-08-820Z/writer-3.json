@@ -1,0 +1,691 @@
+{
+  "storyId": "https://techcrunch.com/2026/10/06/anthropic-gives-startups-a-free-year-of-enterprise-service-and-1000-in-token-credits/",
+  "forWriter": {
+    "subjects": [
+      {
+        "id": "S1",
+        "name": "Anthropic",
+        "role": "AI lab; runs Claude Startups",
+        "well_known": true,
+        "type": "organization",
+        "headshot_available": false,
+        "logo_available": true,
+        "photo_available": false
+      },
+      {
+        "id": "S2",
+        "name": "Beth Robertson",
+        "role": "Head of startups at Anthropic",
+        "well_known": true,
+        "type": "person",
+        "headshot_available": false,
+        "logo_available": false,
+        "photo_available": false
+      },
+      {
+        "id": "S3",
+        "name": "Sarah Wolf",
+        "role": "Head of startup marketing at Anthropic",
+        "well_known": false,
+        "type": "person",
+        "headshot_available": false,
+        "logo_available": false,
+        "photo_available": false
+      },
+      {
+        "id": "S4",
+        "name": "OpenAI",
+        "role": "Rival with its own startup program",
+        "well_known": true,
+        "type": "organization",
+        "headshot_available": false,
+        "logo_available": false,
+        "photo_available": false
+      },
+      {
+        "id": "S5",
+        "name": "Google",
+        "role": "Rival with its own startup program",
+        "well_known": true,
+        "type": "organization",
+        "headshot_available": false,
+        "logo_available": true,
+        "photo_available": true
+      }
+    ],
+    "article_photos": []
+  },
+  "result": {
+    "ok": true,
+    "draft": {
+      "cover_options": [
+        {
+          "text": "Anthropic expands Claude Startups: a free year of Claude Team, up to $45K in offers",
+          "facts": [
+            "F1",
+            "F2",
+            "F3"
+          ],
+          "image": {
+            "kind": "subject",
+            "value": "Anthropic"
+          },
+          "subject_ids": [
+            "S1"
+          ]
+        },
+        {
+          "text": "Anthropic offers startups up to $45K in perks, most from other companies",
+          "facts": [
+            "F2",
+            "F3",
+            "F5"
+          ],
+          "image": {
+            "kind": "subject",
+            "value": "Anthropic"
+          },
+          "subject_ids": [
+            "S1"
+          ]
+        },
+        {
+          "text": "Anthropic opens Claude Startups to more organizations ahead of a widely expected IPO",
+          "facts": [
+            "F1",
+            "F7"
+          ],
+          "image": {
+            "kind": "subject",
+            "value": "Anthropic"
+          },
+          "subject_ids": [
+            "S1"
+          ]
+        }
+      ],
+      "chosen_cover": 2,
+      "slides": [
+        {
+          "type": "text",
+          "headline": {
+            "text": "Claude Startups opens to more organizations",
+            "facts": [
+              "F1"
+            ]
+          },
+          "body": {
+            "text": "Anthropic announced Tuesday it is expanding Claude Startups, which launched in May, to more organizations. It says thousands of companies already take part.",
+            "facts": [
+              "F1",
+              "B1",
+              "N6"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "subject",
+            "value": "Anthropic"
+          },
+          "spread_with_next": false,
+          "subject_ids": [
+            "S1"
+          ]
+        },
+        {
+          "type": "stat",
+          "headline": {
+            "text": "Cap on partner offers in the Claude Startup Stack",
+            "facts": [
+              "F3",
+              "N1"
+            ]
+          },
+          "body": {
+            "text": "Offers include ClickHouse ($5K Cloud credits), ElevenLabs (12 months free) and Hex (6 months free Enterprise). Members redeem each with a code in the Claude Console.",
+            "facts": [
+              "F3"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [
+            "N1"
+          ],
+          "image": {
+            "kind": "none",
+            "value": ""
+          },
+          "spread_with_next": false,
+          "subject_ids": []
+        },
+        {
+          "type": "split_stat",
+          "headline": {
+            "text": "Most of the $45K isn't Anthropic's money",
+            "facts": [
+              "F3",
+              "F5"
+            ]
+          },
+          "body": {
+            "text": "The Stack is third-party offers. Anthropic's own part is API credits (prepaid usage) and Claude Team, free only for orgs new to Team. The credits expire six months after being granted.",
+            "facts": [
+              "F3",
+              "F5",
+              "F2",
+              "F8"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [
+            "N2",
+            "N3"
+          ],
+          "image": {
+            "kind": "none",
+            "value": ""
+          },
+          "spread_with_next": false,
+          "subject_ids": [
+            "S1"
+          ]
+        },
+        {
+          "type": "text",
+          "headline": {
+            "text": "Anthropic's own paperwork keeps its distance",
+            "facts": [
+              "F5"
+            ]
+          },
+          "body": {
+            "text": "Per Unite.AI's account of Anthropic's addendum: Anthropic does not create, fund, administer or guarantee Stack benefits, and listing a provider is not an endorsement. Benefits carry no cash value.",
+            "facts": [
+              "F5"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "none",
+            "value": ""
+          },
+          "spread_with_next": false,
+          "subject_ids": [
+            "S1"
+          ]
+        },
+        {
+          "type": "stat",
+          "headline": {
+            "text": "Startups qualify on age or on funding",
+            "facts": [
+              "F6",
+              "N5"
+            ]
+          },
+          "body": {
+            "text": "Bootstrapped, pre-seed and venture-backed startups are eligible. Terms exclude applicants in places including China and Russia, and Anthropic decides eligibility in its sole discretion, per Unite.AI.",
+            "facts": [
+              "F6",
+              "F9"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [
+            "N5"
+          ],
+          "image": {
+            "kind": "none",
+            "value": ""
+          },
+          "spread_with_next": false,
+          "subject_ids": [
+            "S1"
+          ]
+        },
+        {
+          "type": "text",
+          "headline": {
+            "text": "Why Anthropic wants founders now",
+            "facts": [
+              "F7"
+            ]
+          },
+          "body": {
+            "text": "CNBC: the vast majority of Anthropic's revenue comes from businesses. It has spent much of the last year fending off OpenAI and Google, which both have startup programs, and a blockbuster IPO is widely expected.",
+            "facts": [
+              "F7"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "subject",
+            "value": "Google"
+          },
+          "spread_with_next": false,
+          "subject_ids": [
+            "S1",
+            "S4",
+            "S5"
+          ]
+        },
+        {
+          "type": "text",
+          "headline": {
+            "text": "Still unclear: what is actually new since May",
+            "facts": [
+              "F1",
+              "B1"
+            ]
+          },
+          "body": {
+            "text": "CNBC says the program is expanding to more organizations, but no source we found names the newly eligible groups. The thousands-of-companies figure comes from Anthropic alone.",
+            "facts": [
+              "F1",
+              "B1",
+              "N6"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "none",
+            "value": ""
+          },
+          "spread_with_next": false,
+          "subject_ids": [
+            "S1"
+          ]
+        }
+      ],
+      "follow": "Follow Helios for the fine print behind AI announcements, in a few swipes.",
+      "caption": {
+        "text": "Anthropic is expanding its Claude Startups program to more organizations, with a free year of Claude Team, $1,000 in Claude API credits and access to up to $45,000 in partner offers. The program launched in May, and Anthropic says thousands of companies already take part.\n\nMost of that $45,000 is not Anthropic's money. The offers, called the Claude Startup Stack, come from independent third-party companies. Unite.AI, describing Anthropic's addendum, reports that Anthropic does not create, fund, administer or guarantee them. Anthropic's own contribution is the API credits (prepaid usage for building Claude into a product) and Claude Team, free for up to five Premium seats for orgs new to Team. Startups founded in the last five years or funded in the last two can apply. CNBC reports Anthropic is competing with OpenAI and Google, which both have startup programs, and is gearing up for a widely expected IPO.\n\nWould a free year of tools make you build on one AI company's platform?\n\nFollow Helios for the fine print behind AI announcements, in a few swipes.",
+        "facts": [
+          "F1",
+          "F2",
+          "F3",
+          "F5",
+          "F6",
+          "F7",
+          "B1",
+          "N1",
+          "N2",
+          "N3",
+          "N5",
+          "N6"
+        ]
+      },
+      "edit_notes": [
+        "Chose cover 2: it carries the news (Anthropic offers startups perks) and the catch (third-party offers), both from F2, F3, F5. Anthropic is well known, so it leads by name.",
+        "Slide 3 headline avoids repeating $45,000; the stat slide image is none because backgrounds are automatic.",
+        "Slide 4 headline says 'most of the $45K', taken from the brief's why_it_matters, with no new numbers computed. The split stat shows N2 and N3.",
+        "Slide 4 has no image because stat slides use automatic backgrounds.",
+        "Slide 5 attributes the addendum to Unite.AI since the addendum was not opened directly. IMAGE none: the slide is about a legal disclaimer, and nothing physical fits.",
+        "Slide 6 is a stat slide on N5, so its image is none. The excluded-countries line is shortened to 'places including China and Russia', both on the F9 list, and attributed to Unite.AI.",
+        "Slide 7 is a one-clause 'why now' context slide from CNBC (F7). It uses Google's photo because the slide names Google; OpenAI has no photo. Quotation marks are not used.",
+        "Slide 8 ends on NOT ANSWERED items: what is new since May, and the unverified 'thousands' figure. IMAGE none: the slide is about an unanswered question, with nothing physical to show.",
+        "Skipped the Q1 to Q3 quotes: Q2 and Q3 are single-source, and Q1 would have pushed past 8 slides. Skipped Founder House, the Linear and Lovable discrepancy, and the Applied AI office hours to keep the arc on the money and the catch.",
+        "Anthropic's logo is used on the cover and once on slide 2."
+      ]
+    },
+    "filled": {
+      "cover_options": [
+        {
+          "text": "Anthropic expands Claude Startups: a free year of Claude Team, up to $45K in offers",
+          "facts": [
+            "F1",
+            "F2",
+            "F3"
+          ],
+          "image": {
+            "kind": "subject",
+            "value": "Anthropic"
+          },
+          "subject_ids": [
+            "S1"
+          ]
+        },
+        {
+          "text": "Anthropic offers startups up to $45K in perks, most from other companies",
+          "facts": [
+            "F2",
+            "F3",
+            "F5"
+          ],
+          "image": {
+            "kind": "subject",
+            "value": "Anthropic"
+          },
+          "subject_ids": [
+            "S1"
+          ]
+        },
+        {
+          "text": "Anthropic opens Claude Startups to more organizations ahead of a widely expected IPO",
+          "facts": [
+            "F1",
+            "F7"
+          ],
+          "image": {
+            "kind": "subject",
+            "value": "Anthropic"
+          },
+          "subject_ids": [
+            "S1"
+          ]
+        }
+      ],
+      "chosen_cover": 2,
+      "slides": [
+        {
+          "type": "text",
+          "headline": {
+            "text": "Claude Startups opens to more organizations",
+            "facts": [
+              "F1"
+            ]
+          },
+          "body": {
+            "text": "Anthropic announced Tuesday it is expanding Claude Startups, which launched in May, to more organizations. It says thousands of companies already take part.",
+            "facts": [
+              "F1",
+              "B1",
+              "N6"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "subject",
+            "value": "Anthropic"
+          },
+          "spread_with_next": false,
+          "subject_ids": [
+            "S1"
+          ],
+          "quote": null,
+          "numbers": []
+        },
+        {
+          "type": "stat",
+          "headline": {
+            "text": "Cap on partner offers in the Claude Startup Stack",
+            "facts": [
+              "F3",
+              "N1"
+            ]
+          },
+          "body": {
+            "text": "Offers include ClickHouse ($5K Cloud credits), ElevenLabs (12 months free) and Hex (6 months free Enterprise). Members redeem each with a code in the Claude Console.",
+            "facts": [
+              "F3"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [
+            "N1"
+          ],
+          "image": {
+            "kind": "none",
+            "value": ""
+          },
+          "spread_with_next": false,
+          "subject_ids": [],
+          "quote": null,
+          "numbers": [
+            {
+              "id": "N1",
+              "value": "$45,000",
+              "counts": "Max combined value of discounts/credits in the Claude Startup Stack (third-party offers)"
+            }
+          ]
+        },
+        {
+          "type": "split_stat",
+          "headline": {
+            "text": "Most of the $45K isn't Anthropic's money",
+            "facts": [
+              "F3",
+              "F5"
+            ]
+          },
+          "body": {
+            "text": "The Stack is third-party offers. Anthropic's own part is API credits (prepaid usage) and Claude Team, free only for orgs new to Team. The credits expire six months after being granted.",
+            "facts": [
+              "F3",
+              "F5",
+              "F2",
+              "F8"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [
+            "N2",
+            "N3"
+          ],
+          "image": {
+            "kind": "none",
+            "value": ""
+          },
+          "spread_with_next": false,
+          "subject_ids": [
+            "S1"
+          ],
+          "quote": null,
+          "numbers": [
+            {
+              "id": "N2",
+              "value": "$1,000",
+              "counts": "One-time Claude API credit per approved company; expires six months after grant"
+            },
+            {
+              "id": "N3",
+              "value": "one year / up to five Premium seats",
+              "counts": "Free Claude Team access"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "headline": {
+            "text": "Anthropic's own paperwork keeps its distance",
+            "facts": [
+              "F5"
+            ]
+          },
+          "body": {
+            "text": "Per Unite.AI's account of Anthropic's addendum: Anthropic does not create, fund, administer or guarantee Stack benefits, and listing a provider is not an endorsement. Benefits carry no cash value.",
+            "facts": [
+              "F5"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "none",
+            "value": ""
+          },
+          "spread_with_next": false,
+          "subject_ids": [
+            "S1"
+          ],
+          "quote": null,
+          "numbers": []
+        },
+        {
+          "type": "stat",
+          "headline": {
+            "text": "Startups qualify on age or on funding",
+            "facts": [
+              "F6",
+              "N5"
+            ]
+          },
+          "body": {
+            "text": "Bootstrapped, pre-seed and venture-backed startups are eligible. Terms exclude applicants in places including China and Russia, and Anthropic decides eligibility in its sole discretion, per Unite.AI.",
+            "facts": [
+              "F6",
+              "F9"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [
+            "N5"
+          ],
+          "image": {
+            "kind": "none",
+            "value": ""
+          },
+          "spread_with_next": false,
+          "subject_ids": [
+            "S1"
+          ],
+          "quote": null,
+          "numbers": [
+            {
+              "id": "N5",
+              "value": "last five years / last two years",
+              "counts": "Eligibility: founded within 5 years or funded within 2"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "headline": {
+            "text": "Why Anthropic wants founders now",
+            "facts": [
+              "F7"
+            ]
+          },
+          "body": {
+            "text": "CNBC: the vast majority of Anthropic's revenue comes from businesses. It has spent much of the last year fending off OpenAI and Google, which both have startup programs, and a blockbuster IPO is widely expected.",
+            "facts": [
+              "F7"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "subject",
+            "value": "Google"
+          },
+          "spread_with_next": false,
+          "subject_ids": [
+            "S1",
+            "S4",
+            "S5"
+          ],
+          "quote": null,
+          "numbers": []
+        },
+        {
+          "type": "text",
+          "headline": {
+            "text": "Still unclear: what is actually new since May",
+            "facts": [
+              "F1",
+              "B1"
+            ]
+          },
+          "body": {
+            "text": "CNBC says the program is expanding to more organizations, but no source we found names the newly eligible groups. The thousands-of-companies figure comes from Anthropic alone.",
+            "facts": [
+              "F1",
+              "B1",
+              "N6"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "none",
+            "value": ""
+          },
+          "spread_with_next": false,
+          "subject_ids": [
+            "S1"
+          ],
+          "quote": null,
+          "numbers": []
+        }
+      ],
+      "follow": "Follow Helios for the fine print behind AI announcements, in a few swipes.",
+      "caption": {
+        "text": "Anthropic is expanding its Claude Startups program to more organizations, with a free year of Claude Team, $1,000 in Claude API credits and access to up to $45,000 in partner offers. The program launched in May, and Anthropic says thousands of companies already take part.\n\nMost of that $45,000 is not Anthropic's money. The offers, called the Claude Startup Stack, come from independent third-party companies. Unite.AI, describing Anthropic's addendum, reports that Anthropic does not create, fund, administer or guarantee them. Anthropic's own contribution is the API credits (prepaid usage for building Claude into a product) and Claude Team, free for up to five Premium seats for orgs new to Team. Startups founded in the last five years or funded in the last two can apply. CNBC reports Anthropic is competing with OpenAI and Google, which both have startup programs, and is gearing up for a widely expected IPO.\n\nWould a free year of tools make you build on one AI company's platform?\n\nFollow Helios for the fine print behind AI announcements, in a few swipes.",
+        "facts": [
+          "F1",
+          "F2",
+          "F3",
+          "F5",
+          "F6",
+          "F7",
+          "B1",
+          "N1",
+          "N2",
+          "N3",
+          "N5",
+          "N6"
+        ]
+      },
+      "edit_notes": [
+        "Chose cover 2: it carries the news (Anthropic offers startups perks) and the catch (third-party offers), both from F2, F3, F5. Anthropic is well known, so it leads by name.",
+        "Slide 3 headline avoids repeating $45,000; the stat slide image is none because backgrounds are automatic.",
+        "Slide 4 headline says 'most of the $45K', taken from the brief's why_it_matters, with no new numbers computed. The split stat shows N2 and N3.",
+        "Slide 4 has no image because stat slides use automatic backgrounds.",
+        "Slide 5 attributes the addendum to Unite.AI since the addendum was not opened directly. IMAGE none: the slide is about a legal disclaimer, and nothing physical fits.",
+        "Slide 6 is a stat slide on N5, so its image is none. The excluded-countries line is shortened to 'places including China and Russia', both on the F9 list, and attributed to Unite.AI.",
+        "Slide 7 is a one-clause 'why now' context slide from CNBC (F7). It uses Google's photo because the slide names Google; OpenAI has no photo. Quotation marks are not used.",
+        "Slide 8 ends on NOT ANSWERED items: what is new since May, and the unverified 'thousands' figure. IMAGE none: the slide is about an unanswered question, with nothing physical to show.",
+        "Skipped the Q1 to Q3 quotes: Q2 and Q3 are single-source, and Q1 would have pushed past 8 slides. Skipped Founder House, the Linear and Lovable discrepancy, and the Applied AI office hours to keep the arc on the money and the catch.",
+        "Anthropic's logo is used on the cover and once on slide 2."
+      ],
+      "cover": "Anthropic offers startups up to $45K in perks, most from other companies"
+    },
+    "raw": "{\n  \"cover_options\": [\n    {\n      \"text\": \"Anthropic expands Claude Startups: a free year of Claude Team, up to $45K in offers\",\n      \"facts\": [\n        \"F1\",\n        \"F2\",\n        \"F3\"\n      ],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Anthropic\"\n      },\n      \"subject_ids\": [\n        \"S1\"\n      ]\n    },\n    {\n      \"text\": \"Anthropic offers startups up to $45K in perks, most from other companies\",\n      \"facts\": [\n        \"F2\",\n        \"F3\",\n        \"F5\"\n      ],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Anthropic\"\n      },\n      \"subject_ids\": [\n        \"S1\"\n      ]\n    },\n    {\n      \"text\": \"Anthropic opens Claude Startups to more organizations ahead of a widely expected IPO\",\n      \"facts\": [\n        \"F1\",\n        \"F7\"\n      ],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Anthropic\"\n      },\n      \"subject_ids\": [\n        \"S1\"\n      ]\n    }\n  ],\n  \"chosen_cover\": 2,\n  \"slides\": [\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"Claude Startups opens to more organizations\",\n        \"facts\": [\n          \"F1\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Anthropic announced Tuesday it is expanding Claude Startups, which launched in May, to more organizations. It says thousands of companies already take part.\",\n        \"facts\": [\n          \"F1\",\n          \"B1\",\n          \"N6\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Anthropic\"\n      },\n      \"spread_with_next\": false,\n      \"subject_ids\": [\n        \"S1\"\n      ]\n    },\n    {\n      \"type\": \"stat\",\n      \"headline\": {\n        \"text\": \"Cap on partner offers in the Claude Startup Stack\",\n        \"facts\": [\n          \"F3\",\n          \"N1\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Offers include ClickHouse ($5K Cloud credits), ElevenLabs (12 months free) and Hex (6 months free Enterprise). Members redeem each with a code in the Claude Console.\",\n        \"facts\": [\n          \"F3\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [\n        \"N1\"\n      ],\n      \"image\": {\n        \"kind\": \"none\",\n        \"value\": \"\"\n      },\n      \"spread_with_next\": false,\n      \"subject_ids\": []\n    },\n    {\n      \"type\": \"split_stat\",\n      \"headline\": {\n        \"text\": \"Most of the $45K isn't Anthropic's money\",\n        \"facts\": [\n          \"F3\",\n          \"F5\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"The Stack is third-party offers. Anthropic's own part is API credits (prepaid usage) and Claude Team, free only for orgs new to Team. The credits expire six months after being granted.\",\n        \"facts\": [\n          \"F3\",\n          \"F5\",\n          \"F2\",\n          \"F8\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [\n        \"N2\",\n        \"N3\"\n      ],\n      \"image\": {\n        \"kind\": \"none\",\n        \"value\": \"\"\n      },\n      \"spread_with_next\": false,\n      \"subject_ids\": [\n        \"S1\"\n      ]\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"Anthropic's own paperwork keeps its distance\",\n        \"facts\": [\n          \"F5\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Per Unite.AI's account of Anthropic's addendum: Anthropic does not create, fund, administer or guarantee Stack benefits, and listing a provider is not an endorsement. Benefits carry no cash value.\",\n        \"facts\": [\n          \"F5\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"none\",\n        \"value\": \"\"\n      },\n      \"spread_with_next\": false,\n      \"subject_ids\": [\n        \"S1\"\n      ]\n    },\n    {\n      \"type\": \"stat\",\n      \"headline\": {\n        \"text\": \"Startups qualify on age or on funding\",\n        \"facts\": [\n          \"F6\",\n          \"N5\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Bootstrapped, pre-seed and venture-backed startups are eligible. Terms exclude applicants in places including China and Russia, and Anthropic decides eligibility in its sole discretion, per Unite.AI.\",\n        \"facts\": [\n          \"F6\",\n          \"F9\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [\n        \"N5\"\n      ],\n      \"image\": {\n        \"kind\": \"none\",\n        \"value\": \"\"\n      },\n      \"spread_with_next\": false,\n      \"subject_ids\": [\n        \"S1\"\n      ]\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"Why Anthropic wants founders now\",\n        \"facts\": [\n          \"F7\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"CNBC: the vast majority of Anthropic's revenue comes from businesses. It has spent much of the last year fending off OpenAI and Google, which both have startup programs, and a blockbuster IPO is widely expected.\",\n        \"facts\": [\n          \"F7\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Google\"\n      },\n      \"spread_with_next\": false,\n      \"subject_ids\": [\n        \"S1\",\n        \"S4\",\n        \"S5\"\n      ]\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"Still unclear: what is actually new since May\",\n        \"facts\": [\n          \"F1\",\n          \"B1\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"CNBC says the program is expanding to more organizations, but no source we found names the newly eligible groups. The thousands-of-companies figure comes from Anthropic alone.\",\n        \"facts\": [\n          \"F1\",\n          \"B1\",\n          \"N6\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"none\",\n        \"value\": \"\"\n      },\n      \"spread_with_next\": false,\n      \"subject_ids\": [\n        \"S1\"\n      ]\n    }\n  ],\n  \"follow\": \"Follow Helios for the fine print behind AI announcements, in a few swipes.\",\n  \"caption\": {\n    \"text\": \"Anthropic is expanding its Claude Startups program to more organizations, with a free year of Claude Team, $1,000 in Claude API credits and access to up to $45,000 in partner offers. The program launched in May, and Anthropic says thousands of companies already take part.\\n\\nMost of that $45,000 is not Anthropic's money. The offers, called the Claude Startup Stack, come from independent third-party companies. Unite.AI, describing Anthropic's addendum, reports that Anthropic does not create, fund, administer or guarantee them. Anthropic's own contribution is the API credits (prepaid usage for building Claude into a product) and Claude Team, free for up to five Premium seats for orgs new to Team. Startups founded in the last five years or funded in the last two can apply. CNBC reports Anthropic is competing with OpenAI and Google, which both have startup programs, and is gearing up for a widely expected IPO.\\n\\nWould a free year of tools make you build on one AI company's platform?\\n\\nFollow Helios for the fine print behind AI announcements, in a few swipes.\",\n    \"facts\": [\n      \"F1\",\n      \"F2\",\n      \"F3\",\n      \"F5\",\n      \"F6\",\n      \"F7\",\n      \"B1\",\n      \"N1\",\n      \"N2\",\n      \"N3\",\n      \"N5\",\n      \"N6\"\n    ]\n  },\n  \"edit_notes\": [\n    \"Chose cover 2: it carries the news (Anthropic offers startups perks) and the catch (third-party offers), both from F2, F3, F5. Anthropic is well known, so it leads by name.\",\n    \"Slide 3 headline avoids repeating $45,000; the stat slide image is none because backgrounds are automatic.\",\n    \"Slide 4 headline says 'most of the $45K', taken from the brief's why_it_matters, with no new numbers computed. The split stat shows N2 and N3.\",\n    \"Slide 4 has no image because stat slides use automatic backgrounds.\",\n    \"Slide 5 attributes the addendum to Unite.AI since the addendum was not opened directly. IMAGE none: the slide is about a legal disclaimer, and nothing physical fits.\",\n    \"Slide 6 is a stat slide on N5, so its image is none. The excluded-countries line is shortened to 'places including China and Russia', both on the F9 list, and attributed to Unite.AI.\",\n    \"Slide 7 is a one-clause 'why now' context slide from CNBC (F7). It uses Google's photo because the slide names Google; OpenAI has no photo. Quotation marks are not used.\",\n    \"Slide 8 ends on NOT ANSWERED items: what is new since May, and the unverified 'thousands' figure. IMAGE none: the slide is about an unanswered question, with nothing physical to show.\",\n    \"Skipped the Q1 to Q3 quotes: Q2 and Q3 are single-source, and Q1 would have pushed past 8 slides. Skipped Founder House, the Linear and Lovable discrepancy, and the Applied AI office hours to keep the arc on the money and the catch.\",\n    \"Anthropic's logo is used on the cover and once on slide 2.\"\n  ]\n}",
+    "costUsd": 0.0976,
+    "turns": 1,
+    "draftRetries": 0,
+    "retryErrors": [],
+    "turnUsage": [
+      {
+        "turn": 1,
+        "stopReason": "tool_use",
+        "usage": {
+          "input_tokens": 5318,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 5490,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 8586,
+          "output_tokens_details": {
+            "thinking_tokens": 5797
+          },
+          "service_tier": "standard",
+          "inference_geo": "global"
+        },
+        "costUsd": 0.0976
+      }
+    ],
+    "imageRequestsDropped": []
+  }
+}

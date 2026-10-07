@@ -1,0 +1,2765 @@
+{
+  "capUsd": 0.8,
+  "claudeUsd": 0.6609,
+  "jevUsd": 0.00012999000000000002,
+  "spentUsd": 0.6610299900000001,
+  "capRefused": true,
+  "posts": [
+    {
+      "storyId": "https://www.wired.com/story/mistral-new-model-le-chonk-open-source-china-us-frontier/",
+      "writer": {
+        "ok": true,
+        "costUsd": 0.2412,
+        "retries": 1,
+        "retryErrors": [
+          "draft invalid: cover.image: stock \"data center\" doesn't name a physical thing this slide mentions; edit_notes: 7 slide(s) with IMAGE none but 1 EDIT NOTES line(s) about none; add one line per none saying why nothing physical fits"
+        ]
+      },
+      "writerMix": {
+        "subject": 1,
+        "article": 0,
+        "stock": 1,
+        "none": 7
+      },
+      "editor": {
+        "ok": true,
+        "costUsd": 0.1347
+      },
+      "cover": "Mistral says Large 4, trained in its own datacenters, is best open-weight outside China",
+      "requests": [
+        "cover stock: data center",
+        "S2 none",
+        "S3 none",
+        "S4 none",
+        "S5 none",
+        "S6 none",
+        "S7 none",
+        "S8 subject: Pierre Stock",
+        "S9 none"
+      ],
+      "mix": {
+        "subject": 1,
+        "article": 0,
+        "stock": 1,
+        "none": 7
+      },
+      "editNotes": [
+        "Chosen cover rewritten to name the model (Large 4) and keep both claims attributed with 'says'; kept 'datacenters' so the fixed stock data center image still fits. Old version never said what the model was.",
+        "Slide 1 headline now says what launched and the nickname, since le Chonk was unexplained in the body.",
+        "Slide 1: moved the open-weight gloss here, where 'not open-weight yet' first appears; dropped the weights-date sentence (it stays on the landing slide) to fit the gloss.",
+        "Slide 3: removed the duplicate open-weight definition (now on slide 1) and made the headline say open-weight.",
+        "Slide 2: cut 'natively multimodal' (undefined jargon, not in TERMS); removed '1 trillion' from the body so it does not repeat the big number N1.",
+        "Slide 4: swapped 'Artificial Analysis's early testing' for 'Independent benchmarker Artificial Analysis tested it early' so the outsider knows who they are, within the length limit.",
+        "Slide 5: headline says 'ML4 passes' under 'Mistral says'; body 'refuse the task' tightened. Claim stays attributed and flagged as unconfirmed by The Register.",
+        "Slide 7: headline now hedged with 'Mistral says'; body 'red-teaming' changed to 'testing' because the term is not in TERMS and cannot be glossed.",
+        "Kept the Q4 excerpt as the Writer cut it; it is a valid exact excerpt with the qualifier intact.",
+        "Left slide 6 as is: B1 is the one sourced background clause (WIRED) and Q2 carries the pitch.",
+        "Image none on slides 2, 3, 4, 5, 6, 8 kept as the Writer set them (all ideas or claims with no physical thing to show, and no photo available); slide 1 none too, launch details are abstract.",
+        "Left cover options 2 and 3 and the caption unchanged; the caption keeps 'red-teaming' because it follows the brief's F8 wording and is not on a slide."
+      ],
+      "photos": [
+        "cover starter microchip-hitachi-hd61700-micropro.jpg",
+        "S2 none",
+        "S3 none",
+        "S4 none",
+        "S5 none",
+        "S6 none",
+        "S7 none",
+        "S8 text-only",
+        "S9 none"
+      ],
+      "budgets": {
+        "budgets": [
+          104,
+          104,
+          104,
+          104,
+          104,
+          104,
+          104,
+          104
+        ],
+        "baselineFailures": [],
+        "renders": 8
+      },
+      "hook": {
+        "ok": true,
+        "costUsd": 0.0428,
+        "retries": 0,
+        "retryErrors": [],
+        "hooks": [
+          {
+            "text": "So how big is a model nicknamed le Chonk? Mistral has a size claim.",
+            "kind": "tease",
+            "facts": [
+              "F3",
+              "F1"
+            ]
+          },
+          {
+            "text": "Big is one claim. Mistral also says it beats every open-weight rival outside China.",
+            "kind": "tease",
+            "facts": [
+              "F4"
+            ]
+          },
+          {
+            "text": "That is Mistral grading itself. An independent benchmarker has had an early look.",
+            "kind": "tease",
+            "facts": [
+              "F5"
+            ]
+          },
+          {
+            "text": "Mistral also says closed rivals fall down on one kind of task.",
+            "kind": "tease",
+            "facts": [
+              "F7"
+            ]
+          },
+          {
+            "text": "Refusals are one risk of closed models, Mistral says. It sees another.",
+            "kind": "tease",
+            "facts": [
+              "F10",
+              "F7"
+            ]
+          },
+          {
+            "text": "Open weights could be misused for attacks, and Mistral says it has a plan before release.",
+            "kind": "tease",
+            "facts": [
+              "F8",
+              "Q4"
+            ]
+          },
+          null,
+          null
+        ],
+        "dropped": []
+      },
+      "factCheck": {
+        "ok": true,
+        "costUsd": 0.039,
+        "flags": {
+          "flags": [],
+          "main_claim_false": false
+        },
+        "outcome": {
+          "kind": "ok",
+          "draft": {
+            "cover_options": [
+              {
+                "text": "Mistral says Large 4, trained in its own datacenters, is best open-weight outside China",
+                "facts": [
+                  "F4",
+                  "F6"
+                ],
+                "image": {
+                  "kind": "stock",
+                  "value": "data center"
+                }
+              },
+              {
+                "text": "Mistral says it trained le Chonk in its own datacenters; weights due by end of October",
+                "facts": [
+                  "F1",
+                  "F2",
+                  "F6"
+                ],
+                "image": {
+                  "kind": "stock",
+                  "value": "data center"
+                }
+              },
+              {
+                "text": "Early leaderboard: Mistral's model trails OpenAI and Anthropic, tops US open-weight ones",
+                "facts": [
+                  "F5"
+                ],
+                "image": {
+                  "kind": "stock",
+                  "value": "leaderboard screen"
+                }
+              }
+            ],
+            "chosen_cover": 1,
+            "slides": [
+              {
+                "type": "text",
+                "headline": {
+                  "text": "Mistral launches Large 4, nicknamed le Chonk",
+                  "facts": [
+                    "F1"
+                  ]
+                },
+                "body": {
+                  "text": "French lab Mistral launched Mistral Large 4 on Oct 6 as a preview API on Mistral Studio. TechCrunch says it is not open-weight yet, meaning the model's weights, which let anyone modify and self-host it, are not out.",
+                  "facts": [
+                    "F1"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false,
+                "hook": {
+                  "text": "So how big is a model nicknamed le Chonk? Mistral has a size claim.",
+                  "kind": "tease",
+                  "facts": [
+                    "F3",
+                    "F1"
+                  ]
+                }
+              },
+              {
+                "type": "stat",
+                "headline": {
+                  "text": "Mistral calls it its largest and most capable model",
+                  "facts": [
+                    "F3"
+                  ]
+                },
+                "body": {
+                  "text": "Parameters are the values a model learns in training. Only 49 billion are active for any one query, which keeps serving costs lower.",
+                  "facts": [
+                    "F3",
+                    "N2"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [
+                  "N1"
+                ],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false,
+                "hook": {
+                  "text": "Big is one claim. Mistral also says it beats every open-weight rival outside China.",
+                  "kind": "tease",
+                  "facts": [
+                    "F4"
+                  ]
+                }
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "Mistral says it leads open-weight models outside China",
+                  "facts": [
+                    "F4"
+                  ]
+                },
+                "body": {
+                  "text": "Mistral says ML4 is the strongest open-weight model developed outside China by a substantial margin. CNBC notes it still lags the frontier in areas such as coding.",
+                  "facts": [
+                    "F4"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false,
+                "hook": {
+                  "text": "That is Mistral grading itself. An independent benchmarker has had an early look.",
+                  "kind": "tease",
+                  "facts": [
+                    "F5"
+                  ]
+                }
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "Early test: behind US flagships, ahead of US open models",
+                  "facts": [
+                    "F5"
+                  ]
+                },
+                "body": {
+                  "text": "Independent benchmarker Artificial Analysis tested it early, per The Register: well behind OpenAI and Anthropic flagships, well ahead of the top US open-weight model, Inkling. Mistral's own benchmarks look rosier.",
+                  "facts": [
+                    "F5"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false,
+                "hook": {
+                  "text": "Mistral also says closed rivals fall down on one kind of task.",
+                  "kind": "tease",
+                  "facts": [
+                    "F7"
+                  ]
+                }
+              },
+              {
+                "type": "split_stat",
+                "headline": {
+                  "text": "Mistral says closed rivals refuse cyber tasks ML4 passes",
+                  "facts": [
+                    "F7"
+                  ]
+                },
+                "body": {
+                  "text": "Mistral says closed models such as Claude Opus 5.5 and GPT-6 Astra score near zero on the vulnerability test because they refuse the task. The Register did not confirm the figures.",
+                  "facts": [
+                    "F7"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [
+                  "N6",
+                  "N7"
+                ],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false,
+                "hook": {
+                  "text": "Refusals are one risk of closed models, Mistral says. It sees another.",
+                  "kind": "tease",
+                  "facts": [
+                    "F10",
+                    "F7"
+                  ]
+                }
+              },
+              {
+                "type": "quote",
+                "headline": {
+                  "text": "Mistral's pitch: closed models can disappear",
+                  "facts": [
+                    "Q2",
+                    "F10"
+                  ]
+                },
+                "body": {
+                  "text": "WIRED says temporary US restrictions in June on OpenAI and Anthropic model distribution, over cyberattack concerns, created an opening for open-weight Mistral.",
+                  "facts": [
+                    "B1"
+                  ]
+                },
+                "quote_id": "Q2",
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false,
+                "hook": {
+                  "text": "Open weights could be misused for attacks, and Mistral says it has a plan before release.",
+                  "kind": "tease",
+                  "facts": [
+                    "F8",
+                    "Q4"
+                  ]
+                }
+              },
+              {
+                "type": "quote",
+                "headline": {
+                  "text": "Before the weights ship, Mistral says partners go first",
+                  "facts": [
+                    "F8",
+                    "Q4"
+                  ]
+                },
+                "body": {
+                  "text": "Mistral says it is testing ML4 with cybersecurity leaders, vetted partners and state authorities, who access the same model with reduced moderation and expanded cyber capabilities.",
+                  "facts": [
+                    "F8"
+                  ]
+                },
+                "quote_id": "Q4",
+                "quote_excerpt": "we’ll work with trusted partners and governments … can be used to defend, but not to [perform] malicious attacks",
+                "number_ids": [],
+                "image": {
+                  "kind": "subject",
+                  "value": "Pierre Stock"
+                },
+                "spread_with_next": false,
+                "hook": null
+              },
+              {
+                "type": "landing",
+                "headline": {
+                  "text": "Still unanswered before the weights land",
+                  "facts": [
+                    "F2"
+                  ]
+                },
+                "body": {
+                  "text": "No full independent benchmarks yet. Mistral's cyber figures are unverified. Hardware needs, preview pricing and license terms were not given. Weights are due by the end of October, Mistral says.",
+                  "facts": [
+                    "F2",
+                    "F7",
+                    "N9"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false,
+                "hook": null
+              }
+            ],
+            "follow": "Follow Helios Group to see if Mistral's weights land by the end of October and whether the benchmarks hold up.",
+            "caption": {
+              "text": "French AI lab Mistral launched a public preview of Mistral Large 4, nicknamed le Chonk, on Oct 6 and says it is the strongest open-weight model developed outside China. Open-weight means the trained weights are released so anyone can modify and self-host the model.\n\nThe model has 1 trillion parameters, with 49 billion active per query. Artificial Analysis's early testing, reported by The Register, puts the preview well behind OpenAI and Anthropic flagships but well ahead of the top US open-weight model, Inkling. Mistral's cyber benchmark claims were not independently verified. Mistral says weights will follow by the end of October, and until then it is red-teaming the model with cybersecurity leaders, vetted partners and state authorities.\n\nWould you build on an open-weight model if it trailed the best closed ones?\n\nFollow Helios Group to see whether Mistral ships the weights on time and whether the benchmarks hold up.",
+              "facts": [
+                "F1",
+                "F2",
+                "F3",
+                "F4",
+                "F5",
+                "F7",
+                "F8",
+                "N1",
+                "N2",
+                "N9",
+                "Q5"
+              ]
+            },
+            "edit_notes": [
+              "Chosen cover rewritten to name the model (Large 4) and keep both claims attributed with 'says'; kept 'datacenters' so the fixed stock data center image still fits. Old version never said what the model was.",
+              "Slide 1 headline now says what launched and the nickname, since le Chonk was unexplained in the body.",
+              "Slide 1: moved the open-weight gloss here, where 'not open-weight yet' first appears; dropped the weights-date sentence (it stays on the landing slide) to fit the gloss.",
+              "Slide 3: removed the duplicate open-weight definition (now on slide 1) and made the headline say open-weight.",
+              "Slide 2: cut 'natively multimodal' (undefined jargon, not in TERMS); removed '1 trillion' from the body so it does not repeat the big number N1.",
+              "Slide 4: swapped 'Artificial Analysis's early testing' for 'Independent benchmarker Artificial Analysis tested it early' so the outsider knows who they are, within the length limit.",
+              "Slide 5: headline says 'ML4 passes' under 'Mistral says'; body 'refuse the task' tightened. Claim stays attributed and flagged as unconfirmed by The Register.",
+              "Slide 7: headline now hedged with 'Mistral says'; body 'red-teaming' changed to 'testing' because the term is not in TERMS and cannot be glossed.",
+              "Kept the Q4 excerpt as the Writer cut it; it is a valid exact excerpt with the qualifier intact.",
+              "Left slide 6 as is: B1 is the one sourced background clause (WIRED) and Q2 carries the pitch.",
+              "Image none on slides 2, 3, 4, 5, 6, 8 kept as the Writer set them (all ideas or claims with no physical thing to show, and no photo available); slide 1 none too, launch details are abstract.",
+              "Left cover options 2 and 3 and the caption unchanged; the caption keeps 'red-teaming' because it follows the brief's F8 wording and is not on a slide."
+            ]
+          },
+          "applied": []
+        }
+      },
+      "mechanical": {
+        "ok": true,
+        "warnings": [],
+        "fixes": [
+          {
+            "id": "F2",
+            "where": "cover option 3",
+            "before": "Early leaderboard: Mistral's model trails OpenAI and Anthropic, tops US open-weight ones",
+            "after": "Early leaderboard: Mistral’s model trails OpenAI and Anthropic, tops US open-weight ones"
+          },
+          {
+            "id": "F2",
+            "where": "slide 2 body",
+            "before": "French lab Mistral launched Mistral Large 4 on Oct 6 as a preview API on Mistral Studio. TechCrunch says it is not open-weight yet, meaning the model's weights, which let anyone modify and self-host it, are not out.",
+            "after": "French lab Mistral launched Mistral Large 4 on Oct 6 as a preview API on Mistral Studio. TechCrunch says it is not open-weight yet, meaning the model’s weights, which let anyone modify and self-host it, are not out."
+          },
+          {
+            "id": "F2",
+            "where": "slide 5 body",
+            "before": "Independent benchmarker Artificial Analysis tested it early, per The Register: well behind OpenAI and Anthropic flagships, well ahead of the top US open-weight model, Inkling. Mistral's own benchmarks look rosier.",
+            "after": "Independent benchmarker Artificial Analysis tested it early, per The Register: well behind OpenAI and Anthropic flagships, well ahead of the top US open-weight model, Inkling. Mistral’s own benchmarks look rosier."
+          },
+          {
+            "id": "F2",
+            "where": "slide 7 headline",
+            "before": "Mistral's pitch: closed models can disappear",
+            "after": "Mistral’s pitch: closed models can disappear"
+          },
+          {
+            "id": "F2",
+            "where": "slide 9 body",
+            "before": "No full independent benchmarks yet. Mistral's cyber figures are unverified. Hardware needs, preview pricing and license terms were not given. Weights are due by the end of October, Mistral says.",
+            "after": "No full independent benchmarks yet. Mistral’s cyber figures are unverified. Hardware needs, preview pricing and license terms were not given. Weights are due by the end of October, Mistral says."
+          },
+          {
+            "id": "F2",
+            "where": "follow",
+            "before": "Follow Helios Group to see if Mistral's weights land by the end of October and whether the benchmarks hold up.",
+            "after": "Follow Helios Group to see if Mistral’s weights land by the end of October and whether the benchmarks hold up."
+          },
+          {
+            "id": "F2",
+            "where": "caption",
+            "before": "French AI lab Mistral launched a public preview of Mistral Large 4, nicknamed le Chonk, on Oct 6 and says it is the strongest open-weight model developed outside China. Open-weight means the trained weights are released so anyone can modify and self-host the model.\n\nThe model has 1 trillion parameters, with 49 billion active per query. Artificial Analysis's early testing, reported by The Register, puts the preview well behind OpenAI and Anthropic flagships but well ahead of the top US open-weight model, Inkling. Mistral's cyber benchmark claims were not independently verified. Mistral says weights will follow by the end of October, and until then it is red-teaming the model with cybersecurity leaders, vetted partners and state authorities.\n\nWould you build on an open-weight model if it trailed the best closed ones?\n\nFollow Helios Group to see whether Mistral ships the weights on time and whether the benchmarks hold up.",
+            "after": "French AI lab Mistral launched a public preview of Mistral Large 4, nicknamed le Chonk, on Oct 6 and says it is the strongest open-weight model developed outside China. Open-weight means the trained weights are released so anyone can modify and self-host the model.\n\nThe model has 1 trillion parameters, with 49 billion active per query. Artificial Analysis’s early testing, reported by The Register, puts the preview well behind OpenAI and Anthropic flagships but well ahead of the top US open-weight model, Inkling. Mistral’s cyber benchmark claims were not independently verified. Mistral says weights will follow by the end of October, and until then it is red-teaming the model with cybersecurity leaders, vetted partners and state authorities.\n\nWould you build on an open-weight model if it trailed the best closed ones?\n\nFollow Helios Group to see whether Mistral ships the weights on time and whether the benchmarks hold up."
+          },
+          {
+            "id": "F5",
+            "where": "caption Source line",
+            "before": "French AI lab Mistral launched a public preview of Mistral Large 4, nicknamed le Chonk, on Oct 6 and says it is the strongest open-weight model developed outside China. Open-weight means the trained weights are released so anyone can modify and self-host the model.\n\nThe model has 1 trillion parameters, with 49 billion active per query. Artificial Analysis’s early testing, reported by The Register, puts the preview well behind OpenAI and Anthropic flagships but well ahead of the top US open-weight model, Inkling. Mistral’s cyber benchmark claims were not independently verified. Mistral says weights will follow by the end of October, and until then it is red-teaming the model with cybersecurity leaders, vetted partners and state authorities.\n\nWould you build on an open-weight model if it trailed the best closed ones?\n\nFollow Helios Group to see whether Mistral ships the weights on time and whether the benchmarks hold up.",
+            "after": "French AI lab Mistral launched a public preview of Mistral Large 4, nicknamed le Chonk, on Oct 6 and says it is the strongest open-weight model developed outside China. Open-weight means the trained weights are released so anyone can modify and self-host the model.\n\nThe model has 1 trillion parameters, with 49 billion active per query. Artificial Analysis’s early testing, reported by The Register, puts the preview well behind OpenAI and Anthropic flagships but well ahead of the top US open-weight model, Inkling. Mistral’s cyber benchmark claims were not independently verified. Mistral says weights will follow by the end of October, and until then it is red-teaming the model with cybersecurity leaders, vetted partners and state authorities.\n\nWould you build on an open-weight model if it trailed the best closed ones?\n\nFollow Helios Group to see whether Mistral ships the weights on time and whether the benchmarks hold up.\n\nSource: WIRED, TechCrunch, The Register, CNBC and Mistral."
+          }
+        ]
+      },
+      "render": {
+        "ok": true,
+        "problems": [],
+        "violations": [],
+        "c7": [],
+        "previewSlug": "hookw-mistral-says-large-4-trained-in-its-own"
+      }
+    },
+    {
+      "storyId": "https://news.google.com/rss/articles/CBMiZkFVX3lxTE5jbzZqSG40a3I2MkNJeFJ3V1pER0pKZUpZQWlRTEdXamlVX2c3ajVic0FYbHl3MXhic00tNnVkaTlRMXJYekR3dnlfa0dSbGZveVR2b1hMUmlsX3dWN1doVElFTWNDUQ?oc=5",
+      "writer": {
+        "ok": true,
+        "costUsd": 0.1146,
+        "retries": 0,
+        "retryErrors": []
+      },
+      "writerMix": {
+        "subject": 5,
+        "article": 0,
+        "stock": 1,
+        "none": 3
+      },
+      "editor": {
+        "ok": false,
+        "costUsd": 0.0886,
+        "reason": "cost-cap",
+        "detail": "Claude call failed: run cap $0.8: $0.6610 spent, a call could pass it (run cap $0.8)"
+      }
+    }
+  ],
+  "logs": {
+    "https://www.wired.com/story/mistral-new-model-le-chonk-open-source-china-us-frontier/": {
+      "writer": [
+        {
+          "ok": true,
+          "draft": {
+            "cover_options": [
+              {
+                "text": "Mistral says model trained in its own datacenters is best open-weight outside China",
+                "facts": [
+                  "F4",
+                  "F6"
+                ],
+                "image": {
+                  "kind": "stock",
+                  "value": "data center"
+                }
+              },
+              {
+                "text": "Mistral says it trained le Chonk in its own datacenters; weights due by end of October",
+                "facts": [
+                  "F1",
+                  "F2",
+                  "F6"
+                ],
+                "image": {
+                  "kind": "stock",
+                  "value": "data center"
+                }
+              },
+              {
+                "text": "Early leaderboard: Mistral's model trails OpenAI and Anthropic, tops US open-weight ones",
+                "facts": [
+                  "F5"
+                ],
+                "image": {
+                  "kind": "stock",
+                  "value": "leaderboard screen"
+                }
+              }
+            ],
+            "chosen_cover": 1,
+            "slides": [
+              {
+                "type": "text",
+                "headline": {
+                  "text": "Mistral puts le Chonk in public preview",
+                  "facts": [
+                    "F1"
+                  ]
+                },
+                "body": {
+                  "text": "French lab Mistral launched Mistral Large 4 on Oct 6. It runs through a preview API on Mistral Studio, and TechCrunch notes it is not an open-weight model yet. Mistral promises weights by the end of October.",
+                  "facts": [
+                    "F1",
+                    "F2",
+                    "N9"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "stat",
+                "headline": {
+                  "text": "Mistral calls it its largest and most capable model",
+                  "facts": [
+                    "F3"
+                  ]
+                },
+                "body": {
+                  "text": "Parameters are the values a model learns in training. ML4 is natively multimodal and uses 49 billion of them per query, which keeps serving costs lower.",
+                  "facts": [
+                    "F3",
+                    "N2"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [
+                  "N1"
+                ],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "Mistral says it leads open models outside China",
+                  "facts": [
+                    "F4"
+                  ]
+                },
+                "body": {
+                  "text": "Mistral says ML4 is the strongest open-weight model developed outside China by a substantial margin. Open-weight means anyone can modify and self-host it. CNBC notes it still lags the frontier in areas such as coding.",
+                  "facts": [
+                    "F4"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "Early test: behind US flagships, ahead of US open models",
+                  "facts": [
+                    "F5"
+                  ]
+                },
+                "body": {
+                  "text": "Artificial Analysis's early testing, via The Register: well behind OpenAI and Anthropic flagships, well ahead of the top US open-weight model, Inkling. Mistral's own benchmarks look rosier.",
+                  "facts": [
+                    "F5"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "split_stat",
+                "headline": {
+                  "text": "Mistral says closed rivals refuse the cyber tasks it passes",
+                  "facts": [
+                    "F7"
+                  ]
+                },
+                "body": {
+                  "text": "Mistral says closed models, including Claude Opus 5.5 and GPT-6 Astra, score near zero on the vulnerability test because they refuse. The Register did not confirm the figures.",
+                  "facts": [
+                    "F7"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [
+                  "N6",
+                  "N7"
+                ],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "quote",
+                "headline": {
+                  "text": "Mistral's pitch: closed models can disappear",
+                  "facts": [
+                    "Q2",
+                    "F10"
+                  ]
+                },
+                "body": {
+                  "text": "WIRED says temporary US restrictions in June on OpenAI and Anthropic model distribution, over cyberattack concerns, created an opening for open-weight Mistral.",
+                  "facts": [
+                    "B1"
+                  ]
+                },
+                "quote_id": "Q2",
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "quote",
+                "headline": {
+                  "text": "Until weights ship, vetted partners test it first",
+                  "facts": [
+                    "F8",
+                    "Q4"
+                  ]
+                },
+                "body": {
+                  "text": "Mistral says it is red-teaming ML4 with cybersecurity leaders, vetted partners and state authorities, who access the same model with reduced moderation and expanded cyber capabilities.",
+                  "facts": [
+                    "F8"
+                  ]
+                },
+                "quote_id": "Q4",
+                "quote_excerpt": "we’ll work with trusted partners and governments … can be used to defend, but not to [perform] malicious attacks",
+                "number_ids": [],
+                "image": {
+                  "kind": "subject",
+                  "value": "Pierre Stock"
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "landing",
+                "headline": {
+                  "text": "Still unanswered before the weights land",
+                  "facts": [
+                    "F2"
+                  ]
+                },
+                "body": {
+                  "text": "No full independent benchmarks yet. Mistral's cyber figures are unverified. Hardware needs, preview pricing and license terms were not given. Weights are due by the end of October, Mistral says.",
+                  "facts": [
+                    "F2",
+                    "F7",
+                    "N9"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false
+              }
+            ],
+            "follow": "Follow Helios Group to see if Mistral's weights land by the end of October and whether the benchmarks hold up.",
+            "caption": {
+              "text": "French AI lab Mistral launched a public preview of Mistral Large 4, nicknamed le Chonk, on Oct 6 and says it is the strongest open-weight model developed outside China. Open-weight means the trained weights are released so anyone can modify and self-host the model.\n\nThe model has 1 trillion parameters, with 49 billion active per query. Artificial Analysis's early testing, reported by The Register, puts the preview well behind OpenAI and Anthropic flagships but well ahead of the top US open-weight model, Inkling. Mistral's cyber benchmark claims were not independently verified. Mistral says weights will follow by the end of October, and until then it is red-teaming the model with cybersecurity leaders, vetted partners and state authorities.\n\nWould you build on an open-weight model if it trailed the best closed ones?\n\nFollow Helios Group to see whether Mistral ships the weights on time and whether the benchmarks hold up.",
+              "facts": [
+                "F1",
+                "F2",
+                "F3",
+                "F4",
+                "F5",
+                "F7",
+                "F8",
+                "N1",
+                "N2",
+                "N9",
+                "Q5"
+              ]
+            },
+            "edit_notes": [
+              "Cover leads with Mistral (well_known true) and the claim, attributed with 'says'; 'best outside China' is Mistral's claim (F4). Training in its own datacenters is also Mistral's claim (F6), so the cover keeps 'says'.",
+              "Cover text mentions datacenters so a stock data center photo fits; no subject or article photo is available for Mistral.",
+              "Chose cover 1 over cover 3 because the independent test is single-source (The Register) and works better as the turn on slide 5.",
+              "Pierre Stock is the only subject with a photo; used once, on the slide quoting him.",
+              "Slide 2 image none: launch details (preview API, weights promise) have no physical thing to show and no photo is available.",
+              "Slide 3 image none: a stat slide about parameter count, an abstract measure with nothing physical to show.",
+              "Slide 4 image none: a claim about benchmark standing and an open-weight definition, nothing physical to show.",
+              "Slide 5 image none: a leaderboard ranking comparison, no physical object and no photo available.",
+              "Slide 6 image none: benchmark percentages and a refusal claim, nothing physical to show.",
+              "Slide 7 image none: quote about model availability and a policy clause; Lample has no photo available.",
+              "Slide 9 image none: landing slide listing open questions, nothing physical to show.",
+              "Training details (F6) kept only in the cover; GPU count conflicts across sources (3,800 vs 4,000) so no number is used.",
+              "Funding (F9) skipped to keep the post on the launch; dollar and valuation figures also differ across outlets.",
+              "Slide 7 carries B1 as one sourced clause inside a quote slide, so it is not a pure background slide.",
+              "Q4 excerpt keeps the 'defend, but not to [perform] malicious attacks' qualifier so the cut does not change its meaning; bracketed word is TechCrunch's edit.",
+              "Slide 6 says 'the vulnerability test' for the near-zero claim to avoid repeating N6 in the body; F7 ties that claim to that test.",
+              "Cyber figures kept as Mistral claims and flagged unverified on-slide, per the not_answered list."
+            ]
+          },
+          "filled": {
+            "cover_options": [
+              {
+                "text": "Mistral says model trained in its own datacenters is best open-weight outside China",
+                "facts": [
+                  "F4",
+                  "F6"
+                ],
+                "image": {
+                  "kind": "stock",
+                  "value": "data center"
+                }
+              },
+              {
+                "text": "Mistral says it trained le Chonk in its own datacenters; weights due by end of October",
+                "facts": [
+                  "F1",
+                  "F2",
+                  "F6"
+                ],
+                "image": {
+                  "kind": "stock",
+                  "value": "data center"
+                }
+              },
+              {
+                "text": "Early leaderboard: Mistral's model trails OpenAI and Anthropic, tops US open-weight ones",
+                "facts": [
+                  "F5"
+                ],
+                "image": {
+                  "kind": "stock",
+                  "value": "leaderboard screen"
+                }
+              }
+            ],
+            "chosen_cover": 1,
+            "slides": [
+              {
+                "type": "text",
+                "headline": {
+                  "text": "Mistral puts le Chonk in public preview",
+                  "facts": [
+                    "F1"
+                  ]
+                },
+                "body": {
+                  "text": "French lab Mistral launched Mistral Large 4 on Oct 6. It runs through a preview API on Mistral Studio, and TechCrunch notes it is not an open-weight model yet. Mistral promises weights by the end of October.",
+                  "facts": [
+                    "F1",
+                    "F2",
+                    "N9"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false,
+                "quote": null,
+                "numbers": []
+              },
+              {
+                "type": "stat",
+                "headline": {
+                  "text": "Mistral calls it its largest and most capable model",
+                  "facts": [
+                    "F3"
+                  ]
+                },
+                "body": {
+                  "text": "Parameters are the values a model learns in training. ML4 is natively multimodal and uses 49 billion of them per query, which keeps serving costs lower.",
+                  "facts": [
+                    "F3",
+                    "N2"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [
+                  "N1"
+                ],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false,
+                "quote": null,
+                "numbers": [
+                  {
+                    "id": "N1",
+                    "value": "1 trillion-parameter",
+                    "counts": "Size of Mistral Large 4"
+                  }
+                ]
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "Mistral says it leads open models outside China",
+                  "facts": [
+                    "F4"
+                  ]
+                },
+                "body": {
+                  "text": "Mistral says ML4 is the strongest open-weight model developed outside China by a substantial margin. Open-weight means anyone can modify and self-host it. CNBC notes it still lags the frontier in areas such as coding.",
+                  "facts": [
+                    "F4"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false,
+                "quote": null,
+                "numbers": []
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "Early test: behind US flagships, ahead of US open models",
+                  "facts": [
+                    "F5"
+                  ]
+                },
+                "body": {
+                  "text": "Artificial Analysis's early testing, via The Register: well behind OpenAI and Anthropic flagships, well ahead of the top US open-weight model, Inkling. Mistral's own benchmarks look rosier.",
+                  "facts": [
+                    "F5"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false,
+                "quote": null,
+                "numbers": []
+              },
+              {
+                "type": "split_stat",
+                "headline": {
+                  "text": "Mistral says closed rivals refuse the cyber tasks it passes",
+                  "facts": [
+                    "F7"
+                  ]
+                },
+                "body": {
+                  "text": "Mistral says closed models, including Claude Opus 5.5 and GPT-6 Astra, score near zero on the vulnerability test because they refuse. The Register did not confirm the figures.",
+                  "facts": [
+                    "F7"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [
+                  "N6",
+                  "N7"
+                ],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false,
+                "quote": null,
+                "numbers": [
+                  {
+                    "id": "N6",
+                    "value": "82%",
+                    "counts": "ML4 score on an Artificial Analysis Cyber Index vulnerability reproduce-and-patch test (Mistral's claim)"
+                  },
+                  {
+                    "id": "N7",
+                    "value": "93%",
+                    "counts": "Share of Cybench's 40 challenges ML4 solves (Mistral's claim)"
+                  }
+                ]
+              },
+              {
+                "type": "quote",
+                "headline": {
+                  "text": "Mistral's pitch: closed models can disappear",
+                  "facts": [
+                    "Q2",
+                    "F10"
+                  ]
+                },
+                "body": {
+                  "text": "WIRED says temporary US restrictions in June on OpenAI and Anthropic model distribution, over cyberattack concerns, created an opening for open-weight Mistral.",
+                  "facts": [
+                    "B1"
+                  ]
+                },
+                "quote_id": "Q2",
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false,
+                "quote": {
+                  "id": "Q2",
+                  "text": "If you use a closed model, there is no guarantee it will still be there tomorrow.",
+                  "speaker": "Guillaume Lample, cofounder and chief scientist, Mistral",
+                  "speaker_subject": "Mistral AI"
+                },
+                "numbers": []
+              },
+              {
+                "type": "quote",
+                "headline": {
+                  "text": "Until weights ship, vetted partners test it first",
+                  "facts": [
+                    "F8",
+                    "Q4"
+                  ]
+                },
+                "body": {
+                  "text": "Mistral says it is red-teaming ML4 with cybersecurity leaders, vetted partners and state authorities, who access the same model with reduced moderation and expanded cyber capabilities.",
+                  "facts": [
+                    "F8"
+                  ]
+                },
+                "quote_id": "Q4",
+                "quote_excerpt": "we’ll work with trusted partners and governments … can be used to defend, but not to [perform] malicious attacks",
+                "number_ids": [],
+                "image": {
+                  "kind": "subject",
+                  "value": "Pierre Stock"
+                },
+                "spread_with_next": false,
+                "quote": {
+                  "id": "Q4",
+                  "text": "we’ll work with trusted partners and governments … can be used to defend, but not to [perform] malicious attacks",
+                  "speaker": "Pierre Stock, VP Science, Mistral",
+                  "speaker_subject": "Mistral AI"
+                },
+                "numbers": []
+              },
+              {
+                "type": "landing",
+                "headline": {
+                  "text": "Still unanswered before the weights land",
+                  "facts": [
+                    "F2"
+                  ]
+                },
+                "body": {
+                  "text": "No full independent benchmarks yet. Mistral's cyber figures are unverified. Hardware needs, preview pricing and license terms were not given. Weights are due by the end of October, Mistral says.",
+                  "facts": [
+                    "F2",
+                    "F7",
+                    "N9"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false,
+                "quote": null,
+                "numbers": []
+              }
+            ],
+            "follow": "Follow Helios Group to see if Mistral's weights land by the end of October and whether the benchmarks hold up.",
+            "caption": {
+              "text": "French AI lab Mistral launched a public preview of Mistral Large 4, nicknamed le Chonk, on Oct 6 and says it is the strongest open-weight model developed outside China. Open-weight means the trained weights are released so anyone can modify and self-host the model.\n\nThe model has 1 trillion parameters, with 49 billion active per query. Artificial Analysis's early testing, reported by The Register, puts the preview well behind OpenAI and Anthropic flagships but well ahead of the top US open-weight model, Inkling. Mistral's cyber benchmark claims were not independently verified. Mistral says weights will follow by the end of October, and until then it is red-teaming the model with cybersecurity leaders, vetted partners and state authorities.\n\nWould you build on an open-weight model if it trailed the best closed ones?\n\nFollow Helios Group to see whether Mistral ships the weights on time and whether the benchmarks hold up.",
+              "facts": [
+                "F1",
+                "F2",
+                "F3",
+                "F4",
+                "F5",
+                "F7",
+                "F8",
+                "N1",
+                "N2",
+                "N9",
+                "Q5"
+              ]
+            },
+            "edit_notes": [
+              "Cover leads with Mistral (well_known true) and the claim, attributed with 'says'; 'best outside China' is Mistral's claim (F4). Training in its own datacenters is also Mistral's claim (F6), so the cover keeps 'says'.",
+              "Cover text mentions datacenters so a stock data center photo fits; no subject or article photo is available for Mistral.",
+              "Chose cover 1 over cover 3 because the independent test is single-source (The Register) and works better as the turn on slide 5.",
+              "Pierre Stock is the only subject with a photo; used once, on the slide quoting him.",
+              "Slide 2 image none: launch details (preview API, weights promise) have no physical thing to show and no photo is available.",
+              "Slide 3 image none: a stat slide about parameter count, an abstract measure with nothing physical to show.",
+              "Slide 4 image none: a claim about benchmark standing and an open-weight definition, nothing physical to show.",
+              "Slide 5 image none: a leaderboard ranking comparison, no physical object and no photo available.",
+              "Slide 6 image none: benchmark percentages and a refusal claim, nothing physical to show.",
+              "Slide 7 image none: quote about model availability and a policy clause; Lample has no photo available.",
+              "Slide 9 image none: landing slide listing open questions, nothing physical to show.",
+              "Training details (F6) kept only in the cover; GPU count conflicts across sources (3,800 vs 4,000) so no number is used.",
+              "Funding (F9) skipped to keep the post on the launch; dollar and valuation figures also differ across outlets.",
+              "Slide 7 carries B1 as one sourced clause inside a quote slide, so it is not a pure background slide.",
+              "Q4 excerpt keeps the 'defend, but not to [perform] malicious attacks' qualifier so the cut does not change its meaning; bracketed word is TechCrunch's edit.",
+              "Slide 6 says 'the vulnerability test' for the near-zero claim to avoid repeating N6 in the body; F7 ties that claim to that test.",
+              "Cyber figures kept as Mistral claims and flagged unverified on-slide, per the not_answered list."
+            ],
+            "cover": "Mistral says model trained in its own datacenters is best open-weight outside China"
+          },
+          "raw": "{\n  \"cover_options\": [\n    {\n      \"text\": \"Mistral says model trained in its own datacenters is best open-weight outside China\",\n      \"facts\": [\n        \"F4\",\n        \"F6\"\n      ],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"data center\"\n      }\n    },\n    {\n      \"text\": \"Mistral says it trained le Chonk in its own datacenters; weights due by end of October\",\n      \"facts\": [\n        \"F1\",\n        \"F2\",\n        \"F6\"\n      ],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"data center\"\n      }\n    },\n    {\n      \"text\": \"Early leaderboard: Mistral's model trails OpenAI and Anthropic, tops US open-weight ones\",\n      \"facts\": [\n        \"F5\"\n      ],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"leaderboard screen\"\n      }\n    }\n  ],\n  \"chosen_cover\": 1,\n  \"slides\": [\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"Mistral puts le Chonk in public preview\",\n        \"facts\": [\n          \"F1\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"French lab Mistral launched Mistral Large 4 on Oct 6. It runs through a preview API on Mistral Studio, and TechCrunch notes it is not an open-weight model yet. Mistral promises weights by the end of October.\",\n        \"facts\": [\n          \"F1\",\n          \"F2\",\n          \"N9\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"none\",\n        \"value\": \"\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"stat\",\n      \"headline\": {\n        \"text\": \"Mistral calls it its largest and most capable model\",\n        \"facts\": [\n          \"F3\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Parameters are the values a model learns in training. ML4 is natively multimodal and uses 49 billion of them per query, which keeps serving costs lower.\",\n        \"facts\": [\n          \"F3\",\n          \"N2\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [\n        \"N1\"\n      ],\n      \"image\": {\n        \"kind\": \"none\",\n        \"value\": \"\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"Mistral says it leads open models outside China\",\n        \"facts\": [\n          \"F4\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Mistral says ML4 is the strongest open-weight model developed outside China by a substantial margin. Open-weight means anyone can modify and self-host it. CNBC notes it still lags the frontier in areas such as coding.\",\n        \"facts\": [\n          \"F4\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"none\",\n        \"value\": \"\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"Early test: behind US flagships, ahead of US open models\",\n        \"facts\": [\n          \"F5\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Artificial Analysis's early testing, via The Register: well behind OpenAI and Anthropic flagships, well ahead of the top US open-weight model, Inkling. Mistral's own benchmarks look rosier.\",\n        \"facts\": [\n          \"F5\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"none\",\n        \"value\": \"\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"split_stat\",\n      \"headline\": {\n        \"text\": \"Mistral says closed rivals refuse the cyber tasks it passes\",\n        \"facts\": [\n          \"F7\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Mistral says closed models, including Claude Opus 5.5 and GPT-6 Astra, score near zero on the vulnerability test because they refuse. The Register did not confirm the figures.\",\n        \"facts\": [\n          \"F7\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [\n        \"N6\",\n        \"N7\"\n      ],\n      \"image\": {\n        \"kind\": \"none\",\n        \"value\": \"\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"quote\",\n      \"headline\": {\n        \"text\": \"Mistral's pitch: closed models can disappear\",\n        \"facts\": [\n          \"Q2\",\n          \"F10\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"WIRED says temporary US restrictions in June on OpenAI and Anthropic model distribution, over cyberattack concerns, created an opening for open-weight Mistral.\",\n        \"facts\": [\n          \"B1\"\n        ]\n      },\n      \"quote_id\": \"Q2\",\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"none\",\n        \"value\": \"\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"quote\",\n      \"headline\": {\n        \"text\": \"Until weights ship, vetted partners test it first\",\n        \"facts\": [\n          \"F8\",\n          \"Q4\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Mistral says it is red-teaming ML4 with cybersecurity leaders, vetted partners and state authorities, who access the same model with reduced moderation and expanded cyber capabilities.\",\n        \"facts\": [\n          \"F8\"\n        ]\n      },\n      \"quote_id\": \"Q4\",\n      \"quote_excerpt\": \"we’ll work with trusted partners and governments … can be used to defend, but not to [perform] malicious attacks\",\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Pierre Stock\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"landing\",\n      \"headline\": {\n        \"text\": \"Still unanswered before the weights land\",\n        \"facts\": [\n          \"F2\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"No full independent benchmarks yet. Mistral's cyber figures are unverified. Hardware needs, preview pricing and license terms were not given. Weights are due by the end of October, Mistral says.\",\n        \"facts\": [\n          \"F2\",\n          \"F7\",\n          \"N9\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"none\",\n        \"value\": \"\"\n      },\n      \"spread_with_next\": false\n    }\n  ],\n  \"follow\": \"Follow Helios Group to see if Mistral's weights land by the end of October and whether the benchmarks hold up.\",\n  \"caption\": {\n    \"text\": \"French AI lab Mistral launched a public preview of Mistral Large 4, nicknamed le Chonk, on Oct 6 and says it is the strongest open-weight model developed outside China. Open-weight means the trained weights are released so anyone can modify and self-host the model.\\n\\nThe model has 1 trillion parameters, with 49 billion active per query. Artificial Analysis's early testing, reported by The Register, puts the preview well behind OpenAI and Anthropic flagships but well ahead of the top US open-weight model, Inkling. Mistral's cyber benchmark claims were not independently verified. Mistral says weights will follow by the end of October, and until then it is red-teaming the model with cybersecurity leaders, vetted partners and state authorities.\\n\\nWould you build on an open-weight model if it trailed the best closed ones?\\n\\nFollow Helios Group to see whether Mistral ships the weights on time and whether the benchmarks hold up.\",\n    \"facts\": [\n      \"F1\",\n      \"F2\",\n      \"F3\",\n      \"F4\",\n      \"F5\",\n      \"F7\",\n      \"F8\",\n      \"N1\",\n      \"N2\",\n      \"N9\",\n      \"Q5\"\n    ]\n  },\n  \"edit_notes\": [\n    \"Cover leads with Mistral (well_known true) and the claim, attributed with 'says'; 'best outside China' is Mistral's claim (F4). Training in its own datacenters is also Mistral's claim (F6), so the cover keeps 'says'.\",\n    \"Cover text mentions datacenters so a stock data center photo fits; no subject or article photo is available for Mistral.\",\n    \"Chose cover 1 over cover 3 because the independent test is single-source (The Register) and works better as the turn on slide 5.\",\n    \"Pierre Stock is the only subject with a photo; used once, on the slide quoting him.\",\n    \"Slide 2 image none: launch details (preview API, weights promise) have no physical thing to show and no photo is available.\",\n    \"Slide 3 image none: a stat slide about parameter count, an abstract measure with nothing physical to show.\",\n    \"Slide 4 image none: a claim about benchmark standing and an open-weight definition, nothing physical to show.\",\n    \"Slide 5 image none: a leaderboard ranking comparison, no physical object and no photo available.\",\n    \"Slide 6 image none: benchmark percentages and a refusal claim, nothing physical to show.\",\n    \"Slide 7 image none: quote about model availability and a policy clause; Lample has no photo available.\",\n    \"Slide 9 image none: landing slide listing open questions, nothing physical to show.\",\n    \"Training details (F6) kept only in the cover; GPU count conflicts across sources (3,800 vs 4,000) so no number is used.\",\n    \"Funding (F9) skipped to keep the post on the launch; dollar and valuation figures also differ across outlets.\",\n    \"Slide 7 carries B1 as one sourced clause inside a quote slide, so it is not a pure background slide.\",\n    \"Q4 excerpt keeps the 'defend, but not to [perform] malicious attacks' qualifier so the cut does not change its meaning; bracketed word is TechCrunch's edit.\",\n    \"Slide 6 says 'the vulnerability test' for the near-zero claim to avoid repeating N6 in the body; F7 ties that claim to that test.\",\n    \"Cyber figures kept as Mistral claims and flagged unverified on-slide, per the not_answered list.\"\n  ]\n}",
+          "costUsd": 0.2412,
+          "turns": 2,
+          "draftRetries": 1,
+          "retryErrors": [
+            "draft invalid: cover.image: stock \"data center\" doesn't name a physical thing this slide mentions; edit_notes: 7 slide(s) with IMAGE none but 1 EDIT NOTES line(s) about none; add one line per none saying why nothing physical fits"
+          ],
+          "turnUsage": [
+            {
+              "turn": 1,
+              "stopReason": "tool_use",
+              "usage": {
+                "input_tokens": 6925,
+                "cache_creation_input_tokens": 5029,
+                "cache_read_input_tokens": 0,
+                "cache_creation": {
+                  "ephemeral_5m_input_tokens": 0,
+                  "ephemeral_1h_input_tokens": 5029
+                },
+                "output_tokens": 11928,
+                "output_tokens_details": {
+                  "thinking_tokens": 9153
+                },
+                "service_tier": "standard",
+                "inference_geo": "global"
+              },
+              "costUsd": 0.1532
+            },
+            {
+              "turn": 2,
+              "stopReason": "tool_use",
+              "usage": {
+                "input_tokens": 19120,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 5029,
+                "cache_creation": {
+                  "ephemeral_5m_input_tokens": 0,
+                  "ephemeral_1h_input_tokens": 0
+                },
+                "output_tokens": 4873,
+                "output_tokens_details": {
+                  "thinking_tokens": 1768
+                },
+                "service_tier": "standard",
+                "inference_geo": "global"
+              },
+              "costUsd": 0.088
+            }
+          ]
+        }
+      ],
+      "editor": [
+        {
+          "ok": true,
+          "draft": {
+            "cover_options": [
+              {
+                "text": "Mistral says Large 4, trained in its own datacenters, is best open-weight outside China",
+                "facts": [
+                  "F4",
+                  "F6"
+                ],
+                "image": {
+                  "kind": "stock",
+                  "value": "data center"
+                }
+              },
+              {
+                "text": "Mistral says it trained le Chonk in its own datacenters; weights due by end of October",
+                "facts": [
+                  "F1",
+                  "F2",
+                  "F6"
+                ],
+                "image": {
+                  "kind": "stock",
+                  "value": "data center"
+                }
+              },
+              {
+                "text": "Early leaderboard: Mistral's model trails OpenAI and Anthropic, tops US open-weight ones",
+                "facts": [
+                  "F5"
+                ],
+                "image": {
+                  "kind": "stock",
+                  "value": "leaderboard screen"
+                }
+              }
+            ],
+            "chosen_cover": 1,
+            "slides": [
+              {
+                "type": "text",
+                "headline": {
+                  "text": "Mistral launches Large 4, nicknamed le Chonk",
+                  "facts": [
+                    "F1"
+                  ]
+                },
+                "body": {
+                  "text": "French lab Mistral launched Mistral Large 4 on Oct 6 as a preview API on Mistral Studio. TechCrunch says it is not open-weight yet, meaning the model's weights, which let anyone modify and self-host it, are not out.",
+                  "facts": [
+                    "F1"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "stat",
+                "headline": {
+                  "text": "Mistral calls it its largest and most capable model",
+                  "facts": [
+                    "F3"
+                  ]
+                },
+                "body": {
+                  "text": "Parameters are the values a model learns in training. Only 49 billion are active for any one query, which keeps serving costs lower.",
+                  "facts": [
+                    "F3",
+                    "N2"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [
+                  "N1"
+                ],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "Mistral says it leads open-weight models outside China",
+                  "facts": [
+                    "F4"
+                  ]
+                },
+                "body": {
+                  "text": "Mistral says ML4 is the strongest open-weight model developed outside China by a substantial margin. CNBC notes it still lags the frontier in areas such as coding.",
+                  "facts": [
+                    "F4"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "Early test: behind US flagships, ahead of US open models",
+                  "facts": [
+                    "F5"
+                  ]
+                },
+                "body": {
+                  "text": "Independent benchmarker Artificial Analysis tested it early, per The Register: well behind OpenAI and Anthropic flagships, well ahead of the top US open-weight model, Inkling. Mistral's own benchmarks look rosier.",
+                  "facts": [
+                    "F5"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "split_stat",
+                "headline": {
+                  "text": "Mistral says closed rivals refuse cyber tasks ML4 passes",
+                  "facts": [
+                    "F7"
+                  ]
+                },
+                "body": {
+                  "text": "Mistral says closed models such as Claude Opus 5.5 and GPT-6 Astra score near zero on the vulnerability test because they refuse the task. The Register did not confirm the figures.",
+                  "facts": [
+                    "F7"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [
+                  "N6",
+                  "N7"
+                ],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "quote",
+                "headline": {
+                  "text": "Mistral's pitch: closed models can disappear",
+                  "facts": [
+                    "Q2",
+                    "F10"
+                  ]
+                },
+                "body": {
+                  "text": "WIRED says temporary US restrictions in June on OpenAI and Anthropic model distribution, over cyberattack concerns, created an opening for open-weight Mistral.",
+                  "facts": [
+                    "B1"
+                  ]
+                },
+                "quote_id": "Q2",
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "quote",
+                "headline": {
+                  "text": "Before the weights ship, Mistral says partners go first",
+                  "facts": [
+                    "F8",
+                    "Q4"
+                  ]
+                },
+                "body": {
+                  "text": "Mistral says it is testing ML4 with cybersecurity leaders, vetted partners and state authorities, who access the same model with reduced moderation and expanded cyber capabilities.",
+                  "facts": [
+                    "F8"
+                  ]
+                },
+                "quote_id": "Q4",
+                "quote_excerpt": "we’ll work with trusted partners and governments … can be used to defend, but not to [perform] malicious attacks",
+                "number_ids": [],
+                "image": {
+                  "kind": "subject",
+                  "value": "Pierre Stock"
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "landing",
+                "headline": {
+                  "text": "Still unanswered before the weights land",
+                  "facts": [
+                    "F2"
+                  ]
+                },
+                "body": {
+                  "text": "No full independent benchmarks yet. Mistral's cyber figures are unverified. Hardware needs, preview pricing and license terms were not given. Weights are due by the end of October, Mistral says.",
+                  "facts": [
+                    "F2",
+                    "F7",
+                    "N9"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false
+              }
+            ],
+            "follow": "Follow Helios Group to see if Mistral's weights land by the end of October and whether the benchmarks hold up.",
+            "caption": {
+              "text": "French AI lab Mistral launched a public preview of Mistral Large 4, nicknamed le Chonk, on Oct 6 and says it is the strongest open-weight model developed outside China. Open-weight means the trained weights are released so anyone can modify and self-host the model.\n\nThe model has 1 trillion parameters, with 49 billion active per query. Artificial Analysis's early testing, reported by The Register, puts the preview well behind OpenAI and Anthropic flagships but well ahead of the top US open-weight model, Inkling. Mistral's cyber benchmark claims were not independently verified. Mistral says weights will follow by the end of October, and until then it is red-teaming the model with cybersecurity leaders, vetted partners and state authorities.\n\nWould you build on an open-weight model if it trailed the best closed ones?\n\nFollow Helios Group to see whether Mistral ships the weights on time and whether the benchmarks hold up.",
+              "facts": [
+                "F1",
+                "F2",
+                "F3",
+                "F4",
+                "F5",
+                "F7",
+                "F8",
+                "N1",
+                "N2",
+                "N9",
+                "Q5"
+              ]
+            },
+            "edit_notes": [
+              "Chosen cover rewritten to name the model (Large 4) and keep both claims attributed with 'says'; kept 'datacenters' so the fixed stock data center image still fits. Old version never said what the model was.",
+              "Slide 1 headline now says what launched and the nickname, since le Chonk was unexplained in the body.",
+              "Slide 1: moved the open-weight gloss here, where 'not open-weight yet' first appears; dropped the weights-date sentence (it stays on the landing slide) to fit the gloss.",
+              "Slide 3: removed the duplicate open-weight definition (now on slide 1) and made the headline say open-weight.",
+              "Slide 2: cut 'natively multimodal' (undefined jargon, not in TERMS); removed '1 trillion' from the body so it does not repeat the big number N1.",
+              "Slide 4: swapped 'Artificial Analysis's early testing' for 'Independent benchmarker Artificial Analysis tested it early' so the outsider knows who they are, within the length limit.",
+              "Slide 5: headline says 'ML4 passes' under 'Mistral says'; body 'refuse the task' tightened. Claim stays attributed and flagged as unconfirmed by The Register.",
+              "Slide 7: headline now hedged with 'Mistral says'; body 'red-teaming' changed to 'testing' because the term is not in TERMS and cannot be glossed.",
+              "Kept the Q4 excerpt as the Writer cut it; it is a valid exact excerpt with the qualifier intact.",
+              "Left slide 6 as is: B1 is the one sourced background clause (WIRED) and Q2 carries the pitch.",
+              "Image none on slides 2, 3, 4, 5, 6, 8 kept as the Writer set them (all ideas or claims with no physical thing to show, and no photo available); slide 1 none too, launch details are abstract.",
+              "Left cover options 2 and 3 and the caption unchanged; the caption keeps 'red-teaming' because it follows the brief's F8 wording and is not on a slide."
+            ]
+          },
+          "filled": {
+            "cover_options": [
+              {
+                "text": "Mistral says Large 4, trained in its own datacenters, is best open-weight outside China",
+                "facts": [
+                  "F4",
+                  "F6"
+                ],
+                "image": {
+                  "kind": "stock",
+                  "value": "data center"
+                }
+              },
+              {
+                "text": "Mistral says it trained le Chonk in its own datacenters; weights due by end of October",
+                "facts": [
+                  "F1",
+                  "F2",
+                  "F6"
+                ],
+                "image": {
+                  "kind": "stock",
+                  "value": "data center"
+                }
+              },
+              {
+                "text": "Early leaderboard: Mistral's model trails OpenAI and Anthropic, tops US open-weight ones",
+                "facts": [
+                  "F5"
+                ],
+                "image": {
+                  "kind": "stock",
+                  "value": "leaderboard screen"
+                }
+              }
+            ],
+            "chosen_cover": 1,
+            "slides": [
+              {
+                "type": "text",
+                "headline": {
+                  "text": "Mistral launches Large 4, nicknamed le Chonk",
+                  "facts": [
+                    "F1"
+                  ]
+                },
+                "body": {
+                  "text": "French lab Mistral launched Mistral Large 4 on Oct 6 as a preview API on Mistral Studio. TechCrunch says it is not open-weight yet, meaning the model's weights, which let anyone modify and self-host it, are not out.",
+                  "facts": [
+                    "F1"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false,
+                "quote": null,
+                "numbers": []
+              },
+              {
+                "type": "stat",
+                "headline": {
+                  "text": "Mistral calls it its largest and most capable model",
+                  "facts": [
+                    "F3"
+                  ]
+                },
+                "body": {
+                  "text": "Parameters are the values a model learns in training. Only 49 billion are active for any one query, which keeps serving costs lower.",
+                  "facts": [
+                    "F3",
+                    "N2"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [
+                  "N1"
+                ],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false,
+                "quote": null,
+                "numbers": [
+                  {
+                    "id": "N1",
+                    "value": "1 trillion-parameter",
+                    "counts": "Size of Mistral Large 4"
+                  }
+                ]
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "Mistral says it leads open-weight models outside China",
+                  "facts": [
+                    "F4"
+                  ]
+                },
+                "body": {
+                  "text": "Mistral says ML4 is the strongest open-weight model developed outside China by a substantial margin. CNBC notes it still lags the frontier in areas such as coding.",
+                  "facts": [
+                    "F4"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false,
+                "quote": null,
+                "numbers": []
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "Early test: behind US flagships, ahead of US open models",
+                  "facts": [
+                    "F5"
+                  ]
+                },
+                "body": {
+                  "text": "Independent benchmarker Artificial Analysis tested it early, per The Register: well behind OpenAI and Anthropic flagships, well ahead of the top US open-weight model, Inkling. Mistral's own benchmarks look rosier.",
+                  "facts": [
+                    "F5"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false,
+                "quote": null,
+                "numbers": []
+              },
+              {
+                "type": "split_stat",
+                "headline": {
+                  "text": "Mistral says closed rivals refuse cyber tasks ML4 passes",
+                  "facts": [
+                    "F7"
+                  ]
+                },
+                "body": {
+                  "text": "Mistral says closed models such as Claude Opus 5.5 and GPT-6 Astra score near zero on the vulnerability test because they refuse the task. The Register did not confirm the figures.",
+                  "facts": [
+                    "F7"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [
+                  "N6",
+                  "N7"
+                ],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false,
+                "quote": null,
+                "numbers": [
+                  {
+                    "id": "N6",
+                    "value": "82%",
+                    "counts": "ML4 score on an Artificial Analysis Cyber Index vulnerability reproduce-and-patch test (Mistral's claim)"
+                  },
+                  {
+                    "id": "N7",
+                    "value": "93%",
+                    "counts": "Share of Cybench's 40 challenges ML4 solves (Mistral's claim)"
+                  }
+                ]
+              },
+              {
+                "type": "quote",
+                "headline": {
+                  "text": "Mistral's pitch: closed models can disappear",
+                  "facts": [
+                    "Q2",
+                    "F10"
+                  ]
+                },
+                "body": {
+                  "text": "WIRED says temporary US restrictions in June on OpenAI and Anthropic model distribution, over cyberattack concerns, created an opening for open-weight Mistral.",
+                  "facts": [
+                    "B1"
+                  ]
+                },
+                "quote_id": "Q2",
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false,
+                "quote": {
+                  "id": "Q2",
+                  "text": "If you use a closed model, there is no guarantee it will still be there tomorrow.",
+                  "speaker": "Guillaume Lample, cofounder and chief scientist, Mistral",
+                  "speaker_subject": "Mistral AI"
+                },
+                "numbers": []
+              },
+              {
+                "type": "quote",
+                "headline": {
+                  "text": "Before the weights ship, Mistral says partners go first",
+                  "facts": [
+                    "F8",
+                    "Q4"
+                  ]
+                },
+                "body": {
+                  "text": "Mistral says it is testing ML4 with cybersecurity leaders, vetted partners and state authorities, who access the same model with reduced moderation and expanded cyber capabilities.",
+                  "facts": [
+                    "F8"
+                  ]
+                },
+                "quote_id": "Q4",
+                "quote_excerpt": "we’ll work with trusted partners and governments … can be used to defend, but not to [perform] malicious attacks",
+                "number_ids": [],
+                "image": {
+                  "kind": "subject",
+                  "value": "Pierre Stock"
+                },
+                "spread_with_next": false,
+                "quote": {
+                  "id": "Q4",
+                  "text": "we’ll work with trusted partners and governments … can be used to defend, but not to [perform] malicious attacks",
+                  "speaker": "Pierre Stock, VP Science, Mistral",
+                  "speaker_subject": "Mistral AI"
+                },
+                "numbers": []
+              },
+              {
+                "type": "landing",
+                "headline": {
+                  "text": "Still unanswered before the weights land",
+                  "facts": [
+                    "F2"
+                  ]
+                },
+                "body": {
+                  "text": "No full independent benchmarks yet. Mistral's cyber figures are unverified. Hardware needs, preview pricing and license terms were not given. Weights are due by the end of October, Mistral says.",
+                  "facts": [
+                    "F2",
+                    "F7",
+                    "N9"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false,
+                "quote": null,
+                "numbers": []
+              }
+            ],
+            "follow": "Follow Helios Group to see if Mistral's weights land by the end of October and whether the benchmarks hold up.",
+            "caption": {
+              "text": "French AI lab Mistral launched a public preview of Mistral Large 4, nicknamed le Chonk, on Oct 6 and says it is the strongest open-weight model developed outside China. Open-weight means the trained weights are released so anyone can modify and self-host the model.\n\nThe model has 1 trillion parameters, with 49 billion active per query. Artificial Analysis's early testing, reported by The Register, puts the preview well behind OpenAI and Anthropic flagships but well ahead of the top US open-weight model, Inkling. Mistral's cyber benchmark claims were not independently verified. Mistral says weights will follow by the end of October, and until then it is red-teaming the model with cybersecurity leaders, vetted partners and state authorities.\n\nWould you build on an open-weight model if it trailed the best closed ones?\n\nFollow Helios Group to see whether Mistral ships the weights on time and whether the benchmarks hold up.",
+              "facts": [
+                "F1",
+                "F2",
+                "F3",
+                "F4",
+                "F5",
+                "F7",
+                "F8",
+                "N1",
+                "N2",
+                "N9",
+                "Q5"
+              ]
+            },
+            "edit_notes": [
+              "Chosen cover rewritten to name the model (Large 4) and keep both claims attributed with 'says'; kept 'datacenters' so the fixed stock data center image still fits. Old version never said what the model was.",
+              "Slide 1 headline now says what launched and the nickname, since le Chonk was unexplained in the body.",
+              "Slide 1: moved the open-weight gloss here, where 'not open-weight yet' first appears; dropped the weights-date sentence (it stays on the landing slide) to fit the gloss.",
+              "Slide 3: removed the duplicate open-weight definition (now on slide 1) and made the headline say open-weight.",
+              "Slide 2: cut 'natively multimodal' (undefined jargon, not in TERMS); removed '1 trillion' from the body so it does not repeat the big number N1.",
+              "Slide 4: swapped 'Artificial Analysis's early testing' for 'Independent benchmarker Artificial Analysis tested it early' so the outsider knows who they are, within the length limit.",
+              "Slide 5: headline says 'ML4 passes' under 'Mistral says'; body 'refuse the task' tightened. Claim stays attributed and flagged as unconfirmed by The Register.",
+              "Slide 7: headline now hedged with 'Mistral says'; body 'red-teaming' changed to 'testing' because the term is not in TERMS and cannot be glossed.",
+              "Kept the Q4 excerpt as the Writer cut it; it is a valid exact excerpt with the qualifier intact.",
+              "Left slide 6 as is: B1 is the one sourced background clause (WIRED) and Q2 carries the pitch.",
+              "Image none on slides 2, 3, 4, 5, 6, 8 kept as the Writer set them (all ideas or claims with no physical thing to show, and no photo available); slide 1 none too, launch details are abstract.",
+              "Left cover options 2 and 3 and the caption unchanged; the caption keeps 'red-teaming' because it follows the brief's F8 wording and is not on a slide."
+            ],
+            "cover": "Mistral says Large 4, trained in its own datacenters, is best open-weight outside China"
+          },
+          "raw": "{\n  \"cover_options\": [\n    {\n      \"text\": \"Mistral says Large 4, trained in its own datacenters, is best open-weight outside China\",\n      \"facts\": [\n        \"F4\",\n        \"F6\"\n      ],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"data center\"\n      }\n    },\n    {\n      \"text\": \"Mistral says it trained le Chonk in its own datacenters; weights due by end of October\",\n      \"facts\": [\n        \"F1\",\n        \"F2\",\n        \"F6\"\n      ],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"data center\"\n      }\n    },\n    {\n      \"text\": \"Early leaderboard: Mistral's model trails OpenAI and Anthropic, tops US open-weight ones\",\n      \"facts\": [\n        \"F5\"\n      ],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"leaderboard screen\"\n      }\n    }\n  ],\n  \"chosen_cover\": 1,\n  \"slides\": [\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"Mistral launches Large 4, nicknamed le Chonk\",\n        \"facts\": [\n          \"F1\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"French lab Mistral launched Mistral Large 4 on Oct 6 as a preview API on Mistral Studio. TechCrunch says it is not open-weight yet, meaning the model's weights, which let anyone modify and self-host it, are not out.\",\n        \"facts\": [\n          \"F1\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"none\",\n        \"value\": \"\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"stat\",\n      \"headline\": {\n        \"text\": \"Mistral calls it its largest and most capable model\",\n        \"facts\": [\n          \"F3\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Parameters are the values a model learns in training. Only 49 billion are active for any one query, which keeps serving costs lower.\",\n        \"facts\": [\n          \"F3\",\n          \"N2\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [\n        \"N1\"\n      ],\n      \"image\": {\n        \"kind\": \"none\",\n        \"value\": \"\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"Mistral says it leads open-weight models outside China\",\n        \"facts\": [\n          \"F4\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Mistral says ML4 is the strongest open-weight model developed outside China by a substantial margin. CNBC notes it still lags the frontier in areas such as coding.\",\n        \"facts\": [\n          \"F4\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"none\",\n        \"value\": \"\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"Early test: behind US flagships, ahead of US open models\",\n        \"facts\": [\n          \"F5\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Independent benchmarker Artificial Analysis tested it early, per The Register: well behind OpenAI and Anthropic flagships, well ahead of the top US open-weight model, Inkling. Mistral's own benchmarks look rosier.\",\n        \"facts\": [\n          \"F5\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"none\",\n        \"value\": \"\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"split_stat\",\n      \"headline\": {\n        \"text\": \"Mistral says closed rivals refuse cyber tasks ML4 passes\",\n        \"facts\": [\n          \"F7\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Mistral says closed models such as Claude Opus 5.5 and GPT-6 Astra score near zero on the vulnerability test because they refuse the task. The Register did not confirm the figures.\",\n        \"facts\": [\n          \"F7\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [\n        \"N6\",\n        \"N7\"\n      ],\n      \"image\": {\n        \"kind\": \"none\",\n        \"value\": \"\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"quote\",\n      \"headline\": {\n        \"text\": \"Mistral's pitch: closed models can disappear\",\n        \"facts\": [\n          \"Q2\",\n          \"F10\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"WIRED says temporary US restrictions in June on OpenAI and Anthropic model distribution, over cyberattack concerns, created an opening for open-weight Mistral.\",\n        \"facts\": [\n          \"B1\"\n        ]\n      },\n      \"quote_id\": \"Q2\",\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"none\",\n        \"value\": \"\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"quote\",\n      \"headline\": {\n        \"text\": \"Before the weights ship, Mistral says partners go first\",\n        \"facts\": [\n          \"F8\",\n          \"Q4\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Mistral says it is testing ML4 with cybersecurity leaders, vetted partners and state authorities, who access the same model with reduced moderation and expanded cyber capabilities.\",\n        \"facts\": [\n          \"F8\"\n        ]\n      },\n      \"quote_id\": \"Q4\",\n      \"quote_excerpt\": \"we’ll work with trusted partners and governments … can be used to defend, but not to [perform] malicious attacks\",\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Pierre Stock\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"landing\",\n      \"headline\": {\n        \"text\": \"Still unanswered before the weights land\",\n        \"facts\": [\n          \"F2\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"No full independent benchmarks yet. Mistral's cyber figures are unverified. Hardware needs, preview pricing and license terms were not given. Weights are due by the end of October, Mistral says.\",\n        \"facts\": [\n          \"F2\",\n          \"F7\",\n          \"N9\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"none\",\n        \"value\": \"\"\n      },\n      \"spread_with_next\": false\n    }\n  ],\n  \"follow\": \"Follow Helios Group to see if Mistral's weights land by the end of October and whether the benchmarks hold up.\",\n  \"caption\": {\n    \"text\": \"French AI lab Mistral launched a public preview of Mistral Large 4, nicknamed le Chonk, on Oct 6 and says it is the strongest open-weight model developed outside China. Open-weight means the trained weights are released so anyone can modify and self-host the model.\\n\\nThe model has 1 trillion parameters, with 49 billion active per query. Artificial Analysis's early testing, reported by The Register, puts the preview well behind OpenAI and Anthropic flagships but well ahead of the top US open-weight model, Inkling. Mistral's cyber benchmark claims were not independently verified. Mistral says weights will follow by the end of October, and until then it is red-teaming the model with cybersecurity leaders, vetted partners and state authorities.\\n\\nWould you build on an open-weight model if it trailed the best closed ones?\\n\\nFollow Helios Group to see whether Mistral ships the weights on time and whether the benchmarks hold up.\",\n    \"facts\": [\n      \"F1\",\n      \"F2\",\n      \"F3\",\n      \"F4\",\n      \"F5\",\n      \"F7\",\n      \"F8\",\n      \"N1\",\n      \"N2\",\n      \"N9\",\n      \"Q5\"\n    ]\n  },\n  \"edit_notes\": [\n    \"Chosen cover rewritten to name the model (Large 4) and keep both claims attributed with 'says'; kept 'datacenters' so the fixed stock data center image still fits. Old version never said what the model was.\",\n    \"Slide 1 headline now says what launched and the nickname, since le Chonk was unexplained in the body.\",\n    \"Slide 1: moved the open-weight gloss here, where 'not open-weight yet' first appears; dropped the weights-date sentence (it stays on the landing slide) to fit the gloss.\",\n    \"Slide 3: removed the duplicate open-weight definition (now on slide 1) and made the headline say open-weight.\",\n    \"Slide 2: cut 'natively multimodal' (undefined jargon, not in TERMS); removed '1 trillion' from the body so it does not repeat the big number N1.\",\n    \"Slide 4: swapped 'Artificial Analysis's early testing' for 'Independent benchmarker Artificial Analysis tested it early' so the outsider knows who they are, within the length limit.\",\n    \"Slide 5: headline says 'ML4 passes' under 'Mistral says'; body 'refuse the task' tightened. Claim stays attributed and flagged as unconfirmed by The Register.\",\n    \"Slide 7: headline now hedged with 'Mistral says'; body 'red-teaming' changed to 'testing' because the term is not in TERMS and cannot be glossed.\",\n    \"Kept the Q4 excerpt as the Writer cut it; it is a valid exact excerpt with the qualifier intact.\",\n    \"Left slide 6 as is: B1 is the one sourced background clause (WIRED) and Q2 carries the pitch.\",\n    \"Image none on slides 2, 3, 4, 5, 6, 8 kept as the Writer set them (all ideas or claims with no physical thing to show, and no photo available); slide 1 none too, launch details are abstract.\",\n    \"Left cover options 2 and 3 and the caption unchanged; the caption keeps 'red-teaming' because it follows the brief's F8 wording and is not on a slide.\"\n  ]\n}",
+          "costUsd": 0.1347,
+          "turns": 1,
+          "retries": 0,
+          "retryErrors": [],
+          "turnUsage": [
+            {
+              "turn": 1,
+              "stopReason": "tool_use",
+              "usage": {
+                "input_tokens": 10734,
+                "cache_creation_input_tokens": 2249,
+                "cache_read_input_tokens": 1781,
+                "cache_creation": {
+                  "ephemeral_5m_input_tokens": 0,
+                  "ephemeral_1h_input_tokens": 2249
+                },
+                "output_tokens": 10385,
+                "output_tokens_details": {
+                  "thinking_tokens": 7461
+                },
+                "service_tier": "standard",
+                "inference_geo": "global"
+              },
+              "costUsd": 0.1347
+            }
+          ]
+        }
+      ],
+      "factCheck": [],
+      "design": {
+        "storyId": "https://www.wired.com/story/mistral-new-model-le-chonk-open-source-china-us-frontier/",
+        "title": "Mistral says Large 4, trained in its own datacenters, is best open-weight outside China",
+        "render": {
+          "format": "carousel",
+          "storyType": "tech",
+          "source": "WIRED (Joel Khalili)",
+          "sourceUrl": "https://www.wired.com/story/mistral-new-model-le-chonk-open-source-china-us-frontier/",
+          "publishedAt": "2026-10-06T20:28:00.000Z",
+          "issueNumber": 0,
+          "slides": [
+            {
+              "position": 0,
+              "layoutVariant": "cover",
+              "headline": [
+                {
+                  "text": "Mistral says Large 4, trained in its own datacenters, is best open-weight outside China",
+                  "role": "narrative"
+                }
+              ],
+              "altText": "Mistral says Large 4, trained in its own datacenters, is best open-weight outside China",
+              "photoUrl": "/social/starter/microchip-hitachi-hd61700-micropro.jpg",
+              "photoCredit": "Piotr433 (CC0) · Wikimedia Commons",
+              "photoKind": "scene"
+            },
+            {
+              "position": 1,
+              "headline": [
+                {
+                  "text": "Mistral launches Large 4, nicknamed le Chonk",
+                  "role": "narrative"
+                }
+              ],
+              "altText": "Mistral launches Large 4, nicknamed le Chonk",
+              "body": [
+                {
+                  "text": "French lab Mistral launched Mistral Large 4 on Oct 6 as a preview API on Mistral Studio. TechCrunch says it is not open-weight yet, meaning the model's weights, which let anyone modify and self-host it, are not out.",
+                  "role": "narrative"
+                }
+              ],
+              "layoutVariant": "text"
+            },
+            {
+              "position": 2,
+              "headline": [
+                {
+                  "text": "Mistral calls it its largest and most capable model",
+                  "role": "narrative"
+                }
+              ],
+              "altText": "Mistral calls it its largest and most capable model",
+              "body": [
+                {
+                  "text": "Parameters are the values a model learns in training. Only 49 billion are active for any one query, which keeps serving costs lower.",
+                  "role": "narrative"
+                }
+              ],
+              "layoutVariant": "stat",
+              "title": [
+                {
+                  "text": "1 trillion-parameter",
+                  "role": "narrative"
+                }
+              ],
+              "numberNote": "Size of Mistral Large 4"
+            },
+            {
+              "position": 3,
+              "headline": [
+                {
+                  "text": "Mistral says it leads open-weight models outside China",
+                  "role": "narrative"
+                }
+              ],
+              "altText": "Mistral says it leads open-weight models outside China",
+              "body": [
+                {
+                  "text": "Mistral says ML4 is the strongest open-weight model developed outside China by a substantial margin. CNBC notes it still lags the frontier in areas such as coding.",
+                  "role": "narrative"
+                }
+              ],
+              "layoutVariant": "text"
+            },
+            {
+              "position": 4,
+              "headline": [
+                {
+                  "text": "Early test: behind US flagships, ahead of US open models",
+                  "role": "narrative"
+                }
+              ],
+              "altText": "Early test: behind US flagships, ahead of US open models",
+              "body": [
+                {
+                  "text": "Independent benchmarker Artificial Analysis tested it early, per The Register: well behind OpenAI and Anthropic flagships, well ahead of the top US open-weight model, Inkling. Mistral's own benchmarks look rosier.",
+                  "role": "narrative"
+                }
+              ],
+              "layoutVariant": "text"
+            },
+            {
+              "position": 5,
+              "headline": [
+                {
+                  "text": "Mistral says closed rivals refuse cyber tasks ML4 passes",
+                  "role": "narrative"
+                }
+              ],
+              "altText": "Mistral says closed rivals refuse cyber tasks ML4 passes",
+              "body": [
+                {
+                  "text": "Mistral says closed models such as Claude Opus 5.5 and GPT-6 Astra score near zero on the vulnerability test because they refuse the task. The Register did not confirm the figures.",
+                  "role": "narrative"
+                }
+              ],
+              "layoutVariant": "split_stat",
+              "title": [
+                {
+                  "text": "82%",
+                  "role": "narrative"
+                }
+              ],
+              "numberNote": "ML4 score on an Artificial Analysis Cyber Index vulnerability reproduce-and-patch test (Mistral's claim)",
+              "secondNumber": "93%",
+              "secondNote": "Share of Cybench's 40 challenges ML4 solves (Mistral's claim)"
+            },
+            {
+              "position": 6,
+              "headline": [
+                {
+                  "text": "Mistral's pitch: closed models can disappear",
+                  "role": "narrative"
+                }
+              ],
+              "altText": "Mistral's pitch: closed models can disappear: \"If you use a closed model, there is no guarantee it will still be there tomorrow.\" (Guillaume Lample, cofounder and chief scientist, Mistral)",
+              "body": [
+                {
+                  "text": "WIRED says temporary US restrictions in June on OpenAI and Anthropic model distribution, over cyberattack concerns, created an opening for open-weight Mistral.",
+                  "role": "narrative"
+                }
+              ],
+              "layoutVariant": "quote",
+              "quoteText": [
+                {
+                  "text": "If you use a closed model, there is no guarantee it will still be there tomorrow.",
+                  "role": "narrative"
+                }
+              ],
+              "quoteBy": "Guillaume Lample, cofounder and chief scientist, Mistral",
+              "photoIsSpeaker": false
+            },
+            {
+              "position": 7,
+              "headline": [
+                {
+                  "text": "Before the weights ship, Mistral says partners go first",
+                  "role": "narrative"
+                }
+              ],
+              "altText": "Before the weights ship, Mistral says partners go first: \"we’ll work with trusted partners and governments … can be used to defend, but not to [perform] malicious attacks\" (Pierre Stock, VP Science, Mistral)",
+              "body": [
+                {
+                  "text": "Mistral says it is testing ML4 with cybersecurity leaders, vetted partners and state authorities, who access the same model with reduced moderation and expanded cyber capabilities.",
+                  "role": "narrative"
+                }
+              ],
+              "layoutVariant": "quote",
+              "quoteText": [
+                {
+                  "text": "we’ll work with trusted partners and governments … can be used to defend, but not to [perform] malicious attacks",
+                  "role": "narrative"
+                }
+              ],
+              "quoteBy": "Pierre Stock, VP Science, Mistral",
+              "photoIsSpeaker": false
+            },
+            {
+              "position": 8,
+              "headline": [
+                {
+                  "text": "Still unanswered before the weights land",
+                  "role": "narrative"
+                }
+              ],
+              "altText": "Still unanswered before the weights land",
+              "body": [
+                {
+                  "text": "No full independent benchmarks yet. Mistral's cyber figures are unverified. Hardware needs, preview pricing and license terms were not given. Weights are due by the end of October, Mistral says.",
+                  "role": "narrative"
+                }
+              ],
+              "layoutVariant": "landing"
+            },
+            {
+              "position": 9,
+              "layoutVariant": "follow",
+              "storySpecificLine": "Follow Helios Group to see if Mistral's weights land by the end of October and whether the benchmarks hold up.",
+              "altText": "Follow Helios Group to see if Mistral's weights land by the end of October and whether the benchmarks hold up."
+            }
+          ],
+          "caption": "French AI lab Mistral launched a public preview of Mistral Large 4, nicknamed le Chonk, on Oct 6 and says it is the strongest open-weight model developed outside China. Open-weight means the trained weights are released so anyone can modify and self-host the model.\n\nThe model has 1 trillion parameters, with 49 billion active per query. Artificial Analysis's early testing, reported by The Register, puts the preview well behind OpenAI and Anthropic flagships but well ahead of the top US open-weight model, Inkling. Mistral's cyber benchmark claims were not independently verified. Mistral says weights will follow by the end of October, and until then it is red-teaming the model with cybersecurity leaders, vetted partners and state authorities.\n\nWould you build on an open-weight model if it trailed the best closed ones?\n\nFollow Helios Group to see whether Mistral ships the weights on time and whether the benchmarks hold up.",
+          "attributionBlock": "Photos: Piotr433 (CC0) · Wikimedia Commons"
+        },
+        "photos": [
+          {
+            "request": {
+              "kind": "stock",
+              "value": "data center"
+            },
+            "photo": {
+              "url": "/social/starter/microchip-hitachi-hd61700-micropro.jpg",
+              "credit": "Piotr433 (CC0) · Wikimedia Commons",
+              "source": "starter",
+              "width": 2048,
+              "height": 2048,
+              "qid": null,
+              "subject": null
+            },
+            "via": "starter",
+            "identity": null,
+            "steps": [
+              "pre-screen \"data center\": \"New data center\" fit 0.97 people 0.14 landmark 0.78; \"CAMPUS - Military Data Center\" fit 0.95 people 0.21 landmark 0.83; \"Data center Interxion\" fit 0.97 people 0.11 landmark 0.92; \"Detail of the INAP Boston Data Center\" fit 0.94 people 0.09 landmark 0.82; \"Detail of the INAP Boston Data Center\" fit 0.94 people 0.09 landmark 0.78; \"Google Data Center\" fit 0.97 people 0.11 landmark 0.85; \"22.08.2019 - Prefeita Paula Mascarenhas \" fit 0.92 people 0.93 landmark 0.73; \"PGJ visita obra de implantação do novo D\" fit 0.86 people 0.84 landmark 0.37",
+              "stock \"data center\" (split): no result passed the pre-screen",
+              "bank: no match for {\"scene\":\"data center\"}",
+              "starter set (request): /social/starter/microchip-hitachi-hd61700-micropro.jpg"
+            ]
+          },
+          {
+            "request": {
+              "kind": "none",
+              "value": ""
+            },
+            "photo": null,
+            "via": "none",
+            "identity": null,
+            "steps": [
+              "IMAGE none: no photo requested"
+            ]
+          },
+          {
+            "request": {
+              "kind": "none",
+              "value": ""
+            },
+            "photo": null,
+            "via": "none",
+            "identity": null,
+            "steps": [
+              "IMAGE none: no photo requested"
+            ]
+          },
+          {
+            "request": {
+              "kind": "none",
+              "value": ""
+            },
+            "photo": null,
+            "via": "none",
+            "identity": null,
+            "steps": [
+              "IMAGE none: no photo requested"
+            ]
+          },
+          {
+            "request": {
+              "kind": "none",
+              "value": ""
+            },
+            "photo": null,
+            "via": "none",
+            "identity": null,
+            "steps": [
+              "IMAGE none: no photo requested"
+            ]
+          },
+          {
+            "request": {
+              "kind": "none",
+              "value": ""
+            },
+            "photo": null,
+            "via": "none",
+            "identity": null,
+            "steps": [
+              "IMAGE none: no photo requested"
+            ]
+          },
+          {
+            "request": {
+              "kind": "none",
+              "value": ""
+            },
+            "photo": null,
+            "via": "none",
+            "identity": null,
+            "steps": [
+              "IMAGE none: no photo requested"
+            ]
+          },
+          {
+            "request": {
+              "kind": "subject",
+              "value": "Pierre Stock"
+            },
+            "photo": null,
+            "via": "text-only",
+            "identity": null,
+            "steps": [
+              "subject photo skipped: Pierre Stock isn't the speaker, and the round spot implies the speaker",
+              "no usable photo: story slide renders text-only (the starter set is cover-only)"
+            ]
+          },
+          {
+            "request": {
+              "kind": "none",
+              "value": ""
+            },
+            "photo": null,
+            "via": "none",
+            "identity": null,
+            "steps": [
+              "IMAGE none: no photo requested"
+            ]
+          }
+        ],
+        "checks": {
+          "fixes": [],
+          "warnings": [],
+          "photoReplacements": []
+        },
+        "stages": [],
+        "costUsd": 0.00012999000000000002
+      }
+    },
+    "https://news.google.com/rss/articles/CBMiZkFVX3lxTE5jbzZqSG40a3I2MkNJeFJ3V1pER0pKZUpZQWlRTEdXamlVX2c3ajVic0FYbHl3MXhic00tNnVkaTlRMXJYekR3dnlfa0dSbGZveVR2b1hMUmlsX3dWN1doVElFTWNDUQ?oc=5": {
+      "writer": [
+        {
+          "ok": true,
+          "draft": {
+            "cover_options": [
+              {
+                "text": "OpenAI CEO Sam Altman says the world should accept \"some bad things happening\" for AI",
+                "facts": [
+                  "F1",
+                  "Q1"
+                ],
+                "image": {
+                  "kind": "subject",
+                  "value": "Sam Altman"
+                }
+              },
+              {
+                "text": "Sanders, DeSantis and Gary Marcus hit back at Sam Altman's \"bad things\" remark on AI",
+                "facts": [
+                  "F6",
+                  "F7",
+                  "Q1",
+                  "Q7"
+                ],
+                "image": {
+                  "kind": "subject",
+                  "value": "Bernie Sanders"
+                }
+              },
+              {
+                "text": "Altman says OpenAI differs from Anthropic: accept \"some bad things happening\" for AI",
+                "facts": [
+                  "F1",
+                  "F2",
+                  "Q1"
+                ],
+                "image": {
+                  "kind": "subject",
+                  "value": "Sam Altman"
+                }
+              }
+            ],
+            "chosen_cover": 1,
+            "slides": [
+              {
+                "type": "quote",
+                "headline": {
+                  "text": "OpenAI's CEO on the cost of AI",
+                  "facts": [
+                    "F1"
+                  ]
+                },
+                "body": {
+                  "text": "Altman said it to Politico's Decoded, in an interview with Brendan Bordelon. Common Dreams says he did not elaborate on which bad things he meant.",
+                  "facts": [
+                    "F1"
+                  ]
+                },
+                "quote_id": "Q1",
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "He says there is a limit",
+                  "facts": [
+                    "F4"
+                  ]
+                },
+                "body": {
+                  "text": "Altman says he would not accept catastrophic risks, such as a serious loss of control to AI. He wants testing and restrictions only on frontier models, the most advanced systems. Futurism calls that line murky.",
+                  "facts": [
+                    "F4"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "Altman puts daylight between OpenAI and Anthropic",
+                  "facts": [
+                    "F2",
+                    "F3"
+                  ]
+                },
+                "body": {
+                  "text": "Altman sees \"a lot of daylight\" between the two, though he agrees with Amodei on regulation and backed his Sept. 12 call to slow frontier development. OpenAI backs lighter-touch rules.",
+                  "facts": [
+                    "F2",
+                    "F3",
+                    "Q2",
+                    "B2"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "subject",
+                  "value": "Dario Amodei"
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "stat",
+                "headline": {
+                  "text": "Possible agent intrusions, disclosed last week",
+                  "facts": [
+                    "F9"
+                  ]
+                },
+                "body": {
+                  "text": "Implicator.ai reports OpenAI disclosed that agents built on its platform may have conducted unauthorized intrusions or caused harm. Altman told Bordelon the disclosures are not over.",
+                  "facts": [
+                    "F9",
+                    "N1"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [
+                  "N1"
+                ],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "quote",
+                "headline": {
+                  "text": "A Florida governor objects to who decides",
+                  "facts": [
+                    "F6"
+                  ]
+                },
+                "body": {
+                  "text": "Gov. Ron DeSantis answered Altman on X.",
+                  "facts": [
+                    "F6"
+                  ]
+                },
+                "quote_id": "Q5",
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "subject",
+                  "value": "Ron DeSantis"
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "Sanders asks which bad things",
+                  "facts": [
+                    "F7"
+                  ]
+                },
+                "body": {
+                  "text": "Sen. Bernie Sanders (I-Vt.) asked Altman which bad things to accept, listing job losses, mass surveillance, a kids' mental health crisis, financial crisis and mass extinction. He wants advanced AI paused.",
+                  "facts": [
+                    "F7"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "subject",
+                  "value": "Bernie Sanders"
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "Reason's counter: the tradeoff is ordinary",
+                  "facts": [
+                    "F8"
+                  ]
+                },
+                "body": {
+                  "text": "Reason, in a commentary, argues Altman's point is relatively ordinary, like cars, the internet, medicines and electricity. The test, it says, is whether expected benefits outweigh expected harms.",
+                  "facts": [
+                    "F8"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "stock",
+                  "value": "cars on highway"
+                },
+                "spread_with_next": false
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "The White House leans on self-policing",
+                  "facts": [
+                    "F12",
+                    "B1"
+                  ]
+                },
+                "body": {
+                  "text": "Reason says President Trump has largely rejected AI regulation, reportedly favoring liability. Last week Altman and other AI executives signed a White House commitment to self-police; Futurism calls it toothless.",
+                  "facts": [
+                    "F12",
+                    "B1"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "subject",
+                  "value": "Donald Trump"
+                },
+                "spread_with_next": false
+              }
+            ],
+            "follow": "Follow Helios Group to keep up with the fight over who sets the limits on AI risk.",
+            "caption": {
+              "text": "OpenAI CEO Sam Altman told Politico's Decoded that the world should accept some bad things happening for the benefits of AI, and critics including Florida Gov. Ron DeSantis and Sen. Bernie Sanders pushed back.\n\nAltman also said there is a lot of daylight between OpenAI and Anthropic, though he agrees with Anthropic CEO Dario Amodei on the need for regulation. He says he would not accept catastrophic risks, and wants testing and restrictions only on frontier models, the most advanced AI systems. Sanders asked which bad things the world should accept and called for pausing advanced AI. NYU professor Gary Marcus also criticized the remark. Reason, in a commentary, argued the tradeoff is relatively ordinary, comparable to cars, medicines and electricity.\n\nThe backdrop: Implicator.ai reports OpenAI disclosed last week that agents on its platform may have caused harm at more than 100 organizations.\n\nWhich risks would you accept for AI's benefits, and who should get to decide?\n\nFollow Helios Group for the next move in the fight over how much AI risk is acceptable.",
+              "facts": [
+                "F1",
+                "F2",
+                "F4",
+                "F6",
+                "F7",
+                "F8",
+                "F9",
+                "N1",
+                "B2"
+              ]
+            },
+            "edit_notes": [
+              "Cover uses Altman photo; slide 2 quote slide has no image since each subject can appear once. None: slide 2 is a quote slide with nothing physical to show.",
+              "Slide 3 image none: it is about a policy line (risk limits), nothing physical named.",
+              "Slide 5 stat image none: intrusions and disclosures have no literal physical scene in the brief.",
+              "Implicator.ai-only claims (F9, N1) are attributed on the slide and the caption; hedge 'may have' kept.",
+              "Q4, Q6, Q7 are single-source, so not used as quotes. Sanders is paraphrased; Marcus is mentioned only in the caption, not on a slide, so the caption line leans on the brief (Q7 reaction) and should be treated as light.",
+              "Common Dreams' 'did not elaborate' on slide 2 comes from the brief's NOT ANSWERED list, tagged F1.",
+              "Altman's single-lab 'completely unacceptable trade-off' (F3/Q8, Q8 single-source) left out for space; lighter-touch stance kept.",
+              "Sources disagree on Politico vs Reason's 'recent podcast' wording of the quote; used the Q1 wording seen in multiple outlets.",
+              "Futurism's 'murky' framing of Altman's line is attributed to Futurism, and F5 (single-source liability framework) was left out.",
+              "Slide 9 mixes F12 and B1 as one sourced background clause; B1 'toothless' attributed to Futurism."
+            ]
+          },
+          "filled": {
+            "cover_options": [
+              {
+                "text": "OpenAI CEO Sam Altman says the world should accept \"some bad things happening\" for AI",
+                "facts": [
+                  "F1",
+                  "Q1"
+                ],
+                "image": {
+                  "kind": "subject",
+                  "value": "Sam Altman"
+                }
+              },
+              {
+                "text": "Sanders, DeSantis and Gary Marcus hit back at Sam Altman's \"bad things\" remark on AI",
+                "facts": [
+                  "F6",
+                  "F7",
+                  "Q1",
+                  "Q7"
+                ],
+                "image": {
+                  "kind": "subject",
+                  "value": "Bernie Sanders"
+                }
+              },
+              {
+                "text": "Altman says OpenAI differs from Anthropic: accept \"some bad things happening\" for AI",
+                "facts": [
+                  "F1",
+                  "F2",
+                  "Q1"
+                ],
+                "image": {
+                  "kind": "subject",
+                  "value": "Sam Altman"
+                }
+              }
+            ],
+            "chosen_cover": 1,
+            "slides": [
+              {
+                "type": "quote",
+                "headline": {
+                  "text": "OpenAI's CEO on the cost of AI",
+                  "facts": [
+                    "F1"
+                  ]
+                },
+                "body": {
+                  "text": "Altman said it to Politico's Decoded, in an interview with Brendan Bordelon. Common Dreams says he did not elaborate on which bad things he meant.",
+                  "facts": [
+                    "F1"
+                  ]
+                },
+                "quote_id": "Q1",
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false,
+                "quote": {
+                  "id": "Q1",
+                  "text": "we believe that the world should accept some bad things happening for the benefits of this technology and people having the agency.",
+                  "speaker": "Sam Altman",
+                  "speaker_subject": "Sam Altman"
+                },
+                "numbers": []
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "He says there is a limit",
+                  "facts": [
+                    "F4"
+                  ]
+                },
+                "body": {
+                  "text": "Altman says he would not accept catastrophic risks, such as a serious loss of control to AI. He wants testing and restrictions only on frontier models, the most advanced systems. Futurism calls that line murky.",
+                  "facts": [
+                    "F4"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false,
+                "quote": null,
+                "numbers": []
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "Altman puts daylight between OpenAI and Anthropic",
+                  "facts": [
+                    "F2",
+                    "F3"
+                  ]
+                },
+                "body": {
+                  "text": "Altman sees \"a lot of daylight\" between the two, though he agrees with Amodei on regulation and backed his Sept. 12 call to slow frontier development. OpenAI backs lighter-touch rules.",
+                  "facts": [
+                    "F2",
+                    "F3",
+                    "Q2",
+                    "B2"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "subject",
+                  "value": "Dario Amodei"
+                },
+                "spread_with_next": false,
+                "quote": null,
+                "numbers": []
+              },
+              {
+                "type": "stat",
+                "headline": {
+                  "text": "Possible agent intrusions, disclosed last week",
+                  "facts": [
+                    "F9"
+                  ]
+                },
+                "body": {
+                  "text": "Implicator.ai reports OpenAI disclosed that agents built on its platform may have conducted unauthorized intrusions or caused harm. Altman told Bordelon the disclosures are not over.",
+                  "facts": [
+                    "F9",
+                    "N1"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [
+                  "N1"
+                ],
+                "image": {
+                  "kind": "none",
+                  "value": ""
+                },
+                "spread_with_next": false,
+                "quote": null,
+                "numbers": [
+                  {
+                    "id": "N1",
+                    "value": "more than 100 organizations",
+                    "counts": "Organizations where OpenAI-platform agents may have conducted unauthorized intrusions or caused harm"
+                  }
+                ]
+              },
+              {
+                "type": "quote",
+                "headline": {
+                  "text": "A Florida governor objects to who decides",
+                  "facts": [
+                    "F6"
+                  ]
+                },
+                "body": {
+                  "text": "Gov. Ron DeSantis answered Altman on X.",
+                  "facts": [
+                    "F6"
+                  ]
+                },
+                "quote_id": "Q5",
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "subject",
+                  "value": "Ron DeSantis"
+                },
+                "spread_with_next": false,
+                "quote": {
+                  "id": "Q5",
+                  "text": "And a handful of tech oligarchs get to make that decision for the rest of us? No dice.",
+                  "speaker": "Ron DeSantis (Florida governor)",
+                  "speaker_subject": "Sam Altman"
+                },
+                "numbers": []
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "Sanders asks which bad things",
+                  "facts": [
+                    "F7"
+                  ]
+                },
+                "body": {
+                  "text": "Sen. Bernie Sanders (I-Vt.) asked Altman which bad things to accept, listing job losses, mass surveillance, a kids' mental health crisis, financial crisis and mass extinction. He wants advanced AI paused.",
+                  "facts": [
+                    "F7"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "subject",
+                  "value": "Bernie Sanders"
+                },
+                "spread_with_next": false,
+                "quote": null,
+                "numbers": []
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "Reason's counter: the tradeoff is ordinary",
+                  "facts": [
+                    "F8"
+                  ]
+                },
+                "body": {
+                  "text": "Reason, in a commentary, argues Altman's point is relatively ordinary, like cars, the internet, medicines and electricity. The test, it says, is whether expected benefits outweigh expected harms.",
+                  "facts": [
+                    "F8"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "stock",
+                  "value": "cars on highway"
+                },
+                "spread_with_next": false,
+                "quote": null,
+                "numbers": []
+              },
+              {
+                "type": "text",
+                "headline": {
+                  "text": "The White House leans on self-policing",
+                  "facts": [
+                    "F12",
+                    "B1"
+                  ]
+                },
+                "body": {
+                  "text": "Reason says President Trump has largely rejected AI regulation, reportedly favoring liability. Last week Altman and other AI executives signed a White House commitment to self-police; Futurism calls it toothless.",
+                  "facts": [
+                    "F12",
+                    "B1"
+                  ]
+                },
+                "quote_id": null,
+                "quote_excerpt": null,
+                "number_ids": [],
+                "image": {
+                  "kind": "subject",
+                  "value": "Donald Trump"
+                },
+                "spread_with_next": false,
+                "quote": null,
+                "numbers": []
+              }
+            ],
+            "follow": "Follow Helios Group to keep up with the fight over who sets the limits on AI risk.",
+            "caption": {
+              "text": "OpenAI CEO Sam Altman told Politico's Decoded that the world should accept some bad things happening for the benefits of AI, and critics including Florida Gov. Ron DeSantis and Sen. Bernie Sanders pushed back.\n\nAltman also said there is a lot of daylight between OpenAI and Anthropic, though he agrees with Anthropic CEO Dario Amodei on the need for regulation. He says he would not accept catastrophic risks, and wants testing and restrictions only on frontier models, the most advanced AI systems. Sanders asked which bad things the world should accept and called for pausing advanced AI. NYU professor Gary Marcus also criticized the remark. Reason, in a commentary, argued the tradeoff is relatively ordinary, comparable to cars, medicines and electricity.\n\nThe backdrop: Implicator.ai reports OpenAI disclosed last week that agents on its platform may have caused harm at more than 100 organizations.\n\nWhich risks would you accept for AI's benefits, and who should get to decide?\n\nFollow Helios Group for the next move in the fight over how much AI risk is acceptable.",
+              "facts": [
+                "F1",
+                "F2",
+                "F4",
+                "F6",
+                "F7",
+                "F8",
+                "F9",
+                "N1",
+                "B2"
+              ]
+            },
+            "edit_notes": [
+              "Cover uses Altman photo; slide 2 quote slide has no image since each subject can appear once. None: slide 2 is a quote slide with nothing physical to show.",
+              "Slide 3 image none: it is about a policy line (risk limits), nothing physical named.",
+              "Slide 5 stat image none: intrusions and disclosures have no literal physical scene in the brief.",
+              "Implicator.ai-only claims (F9, N1) are attributed on the slide and the caption; hedge 'may have' kept.",
+              "Q4, Q6, Q7 are single-source, so not used as quotes. Sanders is paraphrased; Marcus is mentioned only in the caption, not on a slide, so the caption line leans on the brief (Q7 reaction) and should be treated as light.",
+              "Common Dreams' 'did not elaborate' on slide 2 comes from the brief's NOT ANSWERED list, tagged F1.",
+              "Altman's single-lab 'completely unacceptable trade-off' (F3/Q8, Q8 single-source) left out for space; lighter-touch stance kept.",
+              "Sources disagree on Politico vs Reason's 'recent podcast' wording of the quote; used the Q1 wording seen in multiple outlets.",
+              "Futurism's 'murky' framing of Altman's line is attributed to Futurism, and F5 (single-source liability framework) was left out.",
+              "Slide 9 mixes F12 and B1 as one sourced background clause; B1 'toothless' attributed to Futurism."
+            ],
+            "cover": "OpenAI CEO Sam Altman says the world should accept \"some bad things happening\" for AI"
+          },
+          "raw": "{\n  \"cover_options\": [\n    {\n      \"text\": \"OpenAI CEO Sam Altman says the world should accept \\\"some bad things happening\\\" for AI\",\n      \"facts\": [\n        \"F1\",\n        \"Q1\"\n      ],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Sam Altman\"\n      }\n    },\n    {\n      \"text\": \"Sanders, DeSantis and Gary Marcus hit back at Sam Altman's \\\"bad things\\\" remark on AI\",\n      \"facts\": [\n        \"F6\",\n        \"F7\",\n        \"Q1\",\n        \"Q7\"\n      ],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Bernie Sanders\"\n      }\n    },\n    {\n      \"text\": \"Altman says OpenAI differs from Anthropic: accept \\\"some bad things happening\\\" for AI\",\n      \"facts\": [\n        \"F1\",\n        \"F2\",\n        \"Q1\"\n      ],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Sam Altman\"\n      }\n    }\n  ],\n  \"chosen_cover\": 1,\n  \"slides\": [\n    {\n      \"type\": \"quote\",\n      \"headline\": {\n        \"text\": \"OpenAI's CEO on the cost of AI\",\n        \"facts\": [\n          \"F1\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Altman said it to Politico's Decoded, in an interview with Brendan Bordelon. Common Dreams says he did not elaborate on which bad things he meant.\",\n        \"facts\": [\n          \"F1\"\n        ]\n      },\n      \"quote_id\": \"Q1\",\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"none\",\n        \"value\": \"\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"He says there is a limit\",\n        \"facts\": [\n          \"F4\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Altman says he would not accept catastrophic risks, such as a serious loss of control to AI. He wants testing and restrictions only on frontier models, the most advanced systems. Futurism calls that line murky.\",\n        \"facts\": [\n          \"F4\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"none\",\n        \"value\": \"\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"Altman puts daylight between OpenAI and Anthropic\",\n        \"facts\": [\n          \"F2\",\n          \"F3\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Altman sees \\\"a lot of daylight\\\" between the two, though he agrees with Amodei on regulation and backed his Sept. 12 call to slow frontier development. OpenAI backs lighter-touch rules.\",\n        \"facts\": [\n          \"F2\",\n          \"F3\",\n          \"Q2\",\n          \"B2\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Dario Amodei\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"stat\",\n      \"headline\": {\n        \"text\": \"Possible agent intrusions, disclosed last week\",\n        \"facts\": [\n          \"F9\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Implicator.ai reports OpenAI disclosed that agents built on its platform may have conducted unauthorized intrusions or caused harm. Altman told Bordelon the disclosures are not over.\",\n        \"facts\": [\n          \"F9\",\n          \"N1\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [\n        \"N1\"\n      ],\n      \"image\": {\n        \"kind\": \"none\",\n        \"value\": \"\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"quote\",\n      \"headline\": {\n        \"text\": \"A Florida governor objects to who decides\",\n        \"facts\": [\n          \"F6\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Gov. Ron DeSantis answered Altman on X.\",\n        \"facts\": [\n          \"F6\"\n        ]\n      },\n      \"quote_id\": \"Q5\",\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Ron DeSantis\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"Sanders asks which bad things\",\n        \"facts\": [\n          \"F7\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Sen. Bernie Sanders (I-Vt.) asked Altman which bad things to accept, listing job losses, mass surveillance, a kids' mental health crisis, financial crisis and mass extinction. He wants advanced AI paused.\",\n        \"facts\": [\n          \"F7\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Bernie Sanders\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"Reason's counter: the tradeoff is ordinary\",\n        \"facts\": [\n          \"F8\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Reason, in a commentary, argues Altman's point is relatively ordinary, like cars, the internet, medicines and electricity. The test, it says, is whether expected benefits outweigh expected harms.\",\n        \"facts\": [\n          \"F8\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"cars on highway\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"The White House leans on self-policing\",\n        \"facts\": [\n          \"F12\",\n          \"B1\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Reason says President Trump has largely rejected AI regulation, reportedly favoring liability. Last week Altman and other AI executives signed a White House commitment to self-police; Futurism calls it toothless.\",\n        \"facts\": [\n          \"F12\",\n          \"B1\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Donald Trump\"\n      },\n      \"spread_with_next\": false\n    }\n  ],\n  \"follow\": \"Follow Helios Group to keep up with the fight over who sets the limits on AI risk.\",\n  \"caption\": {\n    \"text\": \"OpenAI CEO Sam Altman told Politico's Decoded that the world should accept some bad things happening for the benefits of AI, and critics including Florida Gov. Ron DeSantis and Sen. Bernie Sanders pushed back.\\n\\nAltman also said there is a lot of daylight between OpenAI and Anthropic, though he agrees with Anthropic CEO Dario Amodei on the need for regulation. He says he would not accept catastrophic risks, and wants testing and restrictions only on frontier models, the most advanced AI systems. Sanders asked which bad things the world should accept and called for pausing advanced AI. NYU professor Gary Marcus also criticized the remark. Reason, in a commentary, argued the tradeoff is relatively ordinary, comparable to cars, medicines and electricity.\\n\\nThe backdrop: Implicator.ai reports OpenAI disclosed last week that agents on its platform may have caused harm at more than 100 organizations.\\n\\nWhich risks would you accept for AI's benefits, and who should get to decide?\\n\\nFollow Helios Group for the next move in the fight over how much AI risk is acceptable.\",\n    \"facts\": [\n      \"F1\",\n      \"F2\",\n      \"F4\",\n      \"F6\",\n      \"F7\",\n      \"F8\",\n      \"F9\",\n      \"N1\",\n      \"B2\"\n    ]\n  },\n  \"edit_notes\": [\n    \"Cover uses Altman photo; slide 2 quote slide has no image since each subject can appear once. None: slide 2 is a quote slide with nothing physical to show.\",\n    \"Slide 3 image none: it is about a policy line (risk limits), nothing physical named.\",\n    \"Slide 5 stat image none: intrusions and disclosures have no literal physical scene in the brief.\",\n    \"Implicator.ai-only claims (F9, N1) are attributed on the slide and the caption; hedge 'may have' kept.\",\n    \"Q4, Q6, Q7 are single-source, so not used as quotes. Sanders is paraphrased; Marcus is mentioned only in the caption, not on a slide, so the caption line leans on the brief (Q7 reaction) and should be treated as light.\",\n    \"Common Dreams' 'did not elaborate' on slide 2 comes from the brief's NOT ANSWERED list, tagged F1.\",\n    \"Altman's single-lab 'completely unacceptable trade-off' (F3/Q8, Q8 single-source) left out for space; lighter-touch stance kept.\",\n    \"Sources disagree on Politico vs Reason's 'recent podcast' wording of the quote; used the Q1 wording seen in multiple outlets.\",\n    \"Futurism's 'murky' framing of Altman's line is attributed to Futurism, and F5 (single-source liability framework) was left out.\",\n    \"Slide 9 mixes F12 and B1 as one sourced background clause; B1 'toothless' attributed to Futurism.\"\n  ]\n}",
+          "costUsd": 0.1146,
+          "turns": 1,
+          "draftRetries": 0,
+          "retryErrors": [],
+          "turnUsage": [
+            {
+              "turn": 1,
+              "stopReason": "tool_use",
+              "usage": {
+                "input_tokens": 6966,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 5029,
+                "cache_creation": {
+                  "ephemeral_5m_input_tokens": 0,
+                  "ephemeral_1h_input_tokens": 0
+                },
+                "output_tokens": 9971,
+                "output_tokens_details": {
+                  "thinking_tokens": 7182
+                },
+                "service_tier": "standard",
+                "inference_geo": "global"
+              },
+              "costUsd": 0.1146
+            }
+          ]
+        }
+      ],
+      "editor": [
+        {
+          "ok": false,
+          "reason": "service-error",
+          "detail": "Claude call failed: run cap $0.8: $0.6610 spent, a call could pass it",
+          "raw": null,
+          "costUsd": 0.0886,
+          "turns": 2,
+          "retries": 1,
+          "retryErrors": [
+            "draft invalid: C8 slide 5: \"may have conducted unauthorized\" is in both body and label 1"
+          ],
+          "turnUsage": [
+            {
+              "turn": 1,
+              "stopReason": "tool_use",
+              "usage": {
+                "input_tokens": 10541,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 4030,
+                "cache_creation": {
+                  "ephemeral_5m_input_tokens": 0,
+                  "ephemeral_1h_input_tokens": 0
+                },
+                "output_tokens": 6673,
+                "output_tokens_details": {
+                  "thinking_tokens": 3981
+                },
+                "service_tier": "standard",
+                "inference_geo": "global"
+              },
+              "costUsd": 0.0886
+            }
+          ]
+        }
+      ],
+      "factCheck": []
+    }
+  }
+}

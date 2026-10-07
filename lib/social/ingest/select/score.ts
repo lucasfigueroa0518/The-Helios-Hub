@@ -22,7 +22,7 @@ export async function scoreGroups(
       { version: Scoring.VERSION, subjectId: group.id },
     );
     const answers: Record<string, number> = {};
-    for (const [id, a] of Object.entries(res.answers)) answers[id] = a.noul;
+    for (const [id, a] of Object.entries(res.answers)) answers[id] = a.noul ?? 0;
     return judge(group, answers);
   });
 }

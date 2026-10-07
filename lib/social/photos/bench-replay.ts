@@ -56,7 +56,7 @@ export function visionVerdicts(steps: string[]): VisionVerdict[] {
 
 /** What the stock link decided for a request: the picked stock photo's URL, or "no stock photo". */
 export function stockOutcome(trace: Pick<PhotoTrace, 'via' | 'photo'>): string {
-  return trace.via === 'stock' && trace.photo ? trace.photo.url : 'no stock photo';
+  return trace.photo?.source === 'stock' ? trace.photo.url : 'no stock photo';
 }
 
 /** Jev and vision answering from the saved traces, in order; anything else (identity checks) is refused. */

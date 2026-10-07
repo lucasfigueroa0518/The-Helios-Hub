@@ -1,0 +1,61 @@
+{
+  "pins": {
+    "OpenAI": "Q124605186",
+    "Anthropic": "Q116758847"
+  },
+  "report": [
+    {
+      "slide": "cover",
+      "requestedSubject": "OpenAI",
+      "status": "picked",
+      "reason": "vision passed on File:1515 Third Street.jpg",
+      "picked": {
+        "wikidataId": "Q124605186",
+        "label": "OpenAI",
+        "commonsFile": "File:1515 Third Street.jpg",
+        "commonsUrl": "https://commons.wikimedia.org/wiki/File:1515_Third_Street.jpg",
+        "license": "CC BY 4.0",
+        "author": "Coolcaesar",
+        "storageUrl": "https://upload.wikimedia.org/wikipedia/commons/a/a7/1515_Third_Street.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+        "isPortrait": false,
+        "cacheHit": false
+      }
+    },
+    {
+      "slide": 4,
+      "requestedSubject": "Anthropic",
+      "status": "type-only",
+      "reason": "no Commons candidates via P18/P180/free-text for Q116758847 at ≥1080px short side"
+    },
+    {
+      "slide": 6,
+      "requestedSubject": "METR",
+      "status": "type-only",
+      "reason": "Wikidata: ambiguous: top Q179200 scored 2, runner-up Q5185279 scored 2 (need margin ≥2)"
+    },
+    {
+      "slide": 9,
+      "requestedSubject": "Marius Hobbhahn",
+      "status": "type-only",
+      "reason": "no Commons candidates via P18/P180/free-text for Q130931733 at ≥1080px short side"
+    }
+  ],
+  "selected": [
+    {
+      "slide": "cover",
+      "wikidataId": "Q124605186",
+      "subject": "OpenAI",
+      "label": "OpenAI",
+      "commonsFile": "File:1515 Third Street.jpg",
+      "storageUrl": "https://upload.wikimedia.org/wikipedia/commons/a/a7/1515_Third_Street.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0",
+      "author": "Coolcaesar",
+      "credit": "Coolcaesar, CC BY 4.0",
+      "isPortrait": false,
+      "source": "wikimedia"
+    }
+  ],
+  "visionCalls": 1,
+  "approxCostUsd": 0.0021856
+}

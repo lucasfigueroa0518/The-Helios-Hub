@@ -32,6 +32,8 @@ export type ArticlePhoto = {
   alt: string | null;
   /** 'figure' = in the article body; 'og:image' = the page's share image (no caption/credit). */
   from: 'figure' | 'og:image';
+  /** Pixel width from the srcset `w` descriptor or the img width attribute, when the page gives one (photo spec §4 ranking). */
+  width?: number | null;
 };
 
 export type PageReadOk = {
@@ -69,6 +71,17 @@ function largestFromSrcset(srcset: string | null): string | null {
     if (!best || w > best.w) best = { url, w };
   }
   return best?.url ?? null;
+}
+
+/** The largest width the page states for an image: its srcset `w`, else its width attribute. */
+function imageWidth(img: Element): number | null {
+  let best = 0;
+  for (const part of (img.getAttribute('srcset') ?? img.getAttribute('data-srcset') ?? '').split(',')) {
+    const w = /\s(\d+)w\s*$/.exec(part.trim())?.[1];
+    if (w) best = Math.max(best, Number(w));
+  }
+  const attr = Number(img.getAttribute('width') ?? 0);
+  return best || (attr > 0 ? attr : null);
 }
 
 function imageSrc(img: Element, base: string): string | null {
@@ -169,7 +182,7 @@ function extractPhotos(doc: Document, base: string): ArticlePhoto[] {
       const sibling = fig.querySelector(CREDIT_SELECTOR);
       if (sibling && !figcaption?.contains(sibling)) credit = clean(sibling.textContent) || null;
     }
-    photos.push({ src, caption, credit, alt: clean(img.getAttribute('alt')) || null, from: 'figure' });
+    photos.push({ src, caption, credit, alt: clean(img.getAttribute('alt')) || null, from: 'figure', width: imageWidth(img) });
   }
   const og = doc.querySelector('meta[property="og:image"]')?.getAttribute('content');
   if (og) {

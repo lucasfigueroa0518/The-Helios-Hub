@@ -1,0 +1,228 @@
+{
+  "log": [
+    {
+      "n": 1,
+      "title": "OpenAI’s Altman: ‘The world should accept some bad things happening for the benefits of this technology’ - Fortune",
+      "startingSources": [
+        "https://news.google.com/rss/articles/CBMioAFBVV95cUxNN3c3alN0UklSSXBPMG5xNGFVM21vc0VDR2RKblJ1WW05eVhWWWxrMC1MeXU2WnJuRklZbzVYRzR5Uy1FRjNlaTNTMXpxNkVvblBCZTVIZGJ6ZWNCV18ydENuSlBtTWJ3bHJlS2d2UXFrYjZSZ1JVbk9HM0JhVU9UYlM1T0VOTlBXMU9UWVFEQTNxYUJyanpOS0l6TE1PZGlK?oc=5",
+        "https://news.google.com/rss/articles/CBMixAFBVV95cUxPQXlpVFdYeDQwYktEWlcwTGtxRjdZY0JpdzhnOEhLUmwwd09PSVp3T2RPOEoyYTNINzU4QWp1a1Zya1lFVldWR0NEWjAwbXMxUl9aTUc1MmZTNDJmQkRzWU1MMDlTbGlHYmpKUnFjcXFxMzRCNUZFNDQ4VTR1YVU5Y0NzaGtRUmdoWktwclJ3QmRJaXEyNU1iT2FNYWpuOGhBVy1NVFhQdTU0aXkzYW92WFQzelRMVWR3VWlUT3JRUmZrTXQx?oc=5",
+        "https://news.google.com/rss/articles/CBMi2wFBVV95cUxNTnVfRVR2SEFxQk5FWGJqcHFTNlJZVDJZT3FfUG1Xa0MzSW80WndUb19zUUhwZkdJM1lOLW14X2tzaUpxRjJZZWRYMzFsLUtsQ2t3TDN2Wmg3WXRRNW9YZFlsLVVldk9XZkFCaWRVYXczSG84WFdPeW9DaFRqRkdOWEpSS1ROby1xT2ZlaHVlV2RPdEw2SF9fMVJvbHJIaWhUV0ZjT1VrdEdvVHgyT0M2TlBva1dnM3k4N0dKVXdEQ25FWkZpSkhQNWtyeU15clMzdkwtNmpmdHp1YVnSAdsBQVVfeXFMTU51X0VUdkhBcUJORVhianBxUzZSWVQyWU9xX1BtV2tDM0lvNFp3VG9fc1FIcGZHSTNZTi1teF9rc2lKcUYyWWVkWDMxbC1LbENrd0wzdlpoN1l0UTVvWGRZbC1VZXZPV2ZBQmlkVWF3M0hvOFhXT3lvQ2hUakZHTlhKUktUTm8tcU9mZWh1ZVdkT3RMNkhfXzFSb2xySGloVFdGY09Va3RHb1R4Mk9DNk5Qb2tXZzN5ODdHSlV3RENuRVpGaUpIUDVrcnlNeXJTM3ZMLTZqZnR6dWFZ?oc=5",
+        "https://news.google.com/rss/articles/CBMimwFBVV95cUxNWlp0T0FQR0FieVBLSWYtNGtPT212UzVjc2tzR3g2cjJyUXJBX1FDSmhPTHFuZ1N6RVNwajU1QkVudFVYVGc1NmJRRHhLZWFfUGJyWEdrREtBdy1ud21CaVFpR1l6ZXRJTTdQczFwYzNTSVJrVnhiTlpjZDlTaUR5MUs1Vy1rd3BXT0k4bm14eDJYbFF3dTNIcHpTMA?oc=5"
+      ],
+      "ok": true,
+      "reason": null,
+      "detail": null,
+      "costUsd": 0.1898,
+      "turns": 3,
+      "webSearches": 1,
+      "pageReadCalls": 6,
+      "reads": [
+        {
+          "url": "https://news.google.com/rss/articles/CBMioAFBVV95cUxNN3c3alN0UklSSXBPMG5xNGFVM21vc0VDR2RKblJ1WW05eVhWWWxrMC1MeXU2WnJuRklZbzVYRzR5Uy1FRjNlaTNTMXpxNkVvblBCZTVIZGJ6ZWNCV18ydENuSlBtTWJ3bHJlS2d2UXFrYjZSZ1JVbk9HM0JhVU9UYlM1T0VOTlBXMU9UWVFEQTNxYUJyanpOS0l6TE1PZGlK?oc=5",
+          "ok": true,
+          "chars": 9146
+        },
+        {
+          "url": "https://news.google.com/rss/articles/CBMixAFBVV95cUxPQXlpVFdYeDQwYktEWlcwTGtxRjdZY0JpdzhnOEhLUmwwd09PSVp3T2RPOEoyYTNINzU4QWp1a1Zya1lFVldWR0NEWjAwbXMxUl9aTUc1MmZTNDJmQkRzWU1MMDlTbGlHYmpKUnFjcXFxMzRCNUZFNDQ4VTR1YVU5Y0NzaGtRUmdoWktwclJ3QmRJaXEyNU1iT2FNYWpuOGhBVy1NVFhQdTU0aXkzYW92WFQzelRMVWR3VWlUT3JRUmZrTXQx?oc=5",
+          "ok": false,
+          "error": "could not resolve Google News link"
+        },
+        {
+          "url": "https://news.google.com/rss/articles/CBMi2wFBVV95cUxNTnVfRVR2SEFxQk5FWGJqcHFTNlJZVDJZT3FfUG1Xa0MzSW80WndUb19zUUhwZkdJM1lOLW14X2tzaUpxRjJZZWRYMzFsLUtsQ2t3TDN2Wmg3WXRRNW9YZFlsLVVldk9XZkFCaWRVYXczSG84WFdPeW9DaFRqRkdOWEpSS1ROby1xT2ZlaHVlV2RPdEw2SF9fMVJvbHJIaWhUV0ZjT1VrdEdvVHgyT0M2TlBva1dnM3k4N0dKVXdEQ25FWkZpSkhQNWtyeU15clMzdkwtNmpmdHp1YVnSAdsBQVVfeXFMTU51X0VUdkhBcUJORVhianBxUzZSWVQyWU9xX1BtV2tDM0lvNFp3VG9fc1FIcGZHSTNZTi1teF9rc2lKcUYyWWVkWDMxbC1LbENrd0wzdlpoN1l0UTVvWGRZbC1VZXZPV2ZBQmlkVWF3M0hvOFhXT3lvQ2hUakZHTlhKUktUTm8tcU9mZWh1ZVdkT3RMNkhfXzFSb2xySGloVFdGY09Va3RHb1R4Mk9DNk5Qb2tXZzN5ODdHSlV3RENuRVpGaUpIUDVrcnlNeXJTM3ZMLTZqZnR6dWFZ?oc=5",
+          "ok": true,
+          "chars": 3026
+        },
+        {
+          "url": "https://news.google.com/rss/articles/CBMimwFBVV95cUxNWlp0T0FQR0FieVBLSWYtNGtPT212UzVjc2tzR3g2cjJyUXJBX1FDSmhPTHFuZ1N6RVNwajU1QkVudFVYVGc1NmJRRHhLZWFfUGJyWEdrREtBdy1ud21CaVFpR1l6ZXRJTTdQczFwYzNTSVJrVnhiTlpjZDlTaUR5MUs1Vy1rd3BXT0k4bm14eDJYbFF3dTNIcHpTMA?oc=5",
+          "ok": true,
+          "chars": 2578
+        },
+        {
+          "url": "https://www.foxnews.com/live-news/ai-super-intelligence-trump-altman-10-05",
+          "ok": true,
+          "chars": 11712
+        },
+        {
+          "url": "https://thenextweb.com/news/sam-altman-ai-risks-politico-anthropic",
+          "ok": true,
+          "chars": 1901
+        }
+      ]
+    },
+    {
+      "n": 2,
+      "title": "Google Is Narrowing Free Gemini Access on October 9. Here’s What It Means for Your Business - Times Square Chronicles",
+      "startingSources": [
+        "https://news.google.com/rss/articles/CBMiV0FVX3lxTE4zMDlqVDZLRl9VbHIzUnhQZnRnallnbjlsVDREUngzcXJTQi1abU1OQ2hCTm1OSUZna1FvbGxWNFhXaTc1SkY3X3VIQ3Q0a2gyUl9GS0ZNOA?oc=5",
+        "https://news.google.com/rss/articles/CBMijwFBVV95cUxQS2JjdTdWZ050eUhSaDlEMVN4UVV2OW15czNwUXotRFE5RU1ndmVwel9PTWJJaGNuWVhUbUdPeGtPZWhVVUpTNFZSR21WSTFDOEFLNk5fYmFBVk5fRHBsSWpfUDFLQUNFRkxnNnFMYmdOOHFSTE1DTGhBRU1zYkxCTTdkZ3NweDdtWVA2UHBPQQ?oc=5",
+        "https://news.google.com/rss/articles/CBMimgFBVV95cUxNeXFhT1dYZXVoWVVnVUdDTUZMckFzVlRxcWNPcEdsM251Rml2dTNSZ2Q5alBHVUVnRF9GSTdxdUpmWEo3elRueEh4TFF3R2Y2SXpVM3h3NVhzeHZMbmNoQUh5aG40a014czlkMFBtMV9GLTYxRkg5aFM5emR3aGFKV3ZkQm5UTmRhZWtpSExxbXpSSUZONGQ2eGJB?oc=5",
+        "https://news.google.com/rss/articles/CBMiogFBVV95cUxNYm9QcVFvYWJnc051MTluT24xRVpsM1NHVlR6R0tGYnZIS0F0bkxPVktWSXg3MFNtbmwtVTJMcTllVG5VQ1VySVRNdmZQMnJnbnUtNl9IUl9oZHZVOEtZUVYwZ3BqdDRYUzRGeVpGbmVjbHNJZEw4NjI0Wlg3NjVZdF8ySU9rV2dlN3M0Ri1WeTdlV3ZCUnN0NHZXdzhkdHdYcnc?oc=5"
+      ],
+      "ok": true,
+      "reason": null,
+      "detail": null,
+      "costUsd": 0.1074,
+      "turns": 2,
+      "webSearches": 1,
+      "pageReadCalls": 4,
+      "reads": [
+        {
+          "url": "https://news.google.com/rss/articles/CBMiogFBVV95cUxNYm9QcVFvYWJnc051MTluT24xRVpsM1NHVlR6R0tGYnZIS0F0bkxPVktWSXg3MFNtbmwtVTJMcTllVG5VQ1VySVRNdmZQMnJnbnUtNl9IUl9oZHZVOEtZUVYwZ3BqdDRYUzRGeVpGbmVjbHNJZEw4NjI0Wlg3NjVZdF8ySU9rV2dlN3M0Ri1WeTdlV3ZCUnN0NHZXdzhkdHdYcnc?oc=5",
+          "ok": true,
+          "chars": 1815
+        },
+        {
+          "url": "https://news.google.com/rss/articles/CBMiV0FVX3lxTE4zMDlqVDZLRl9VbHIzUnhQZnRnallnbjlsVDREUngzcXJTQi1abU1OQ2hCTm1OSUZna1FvbGxWNFhXaTc1SkY3X3VIQ3Q0a2gyUl9GS0ZNOA?oc=5",
+          "ok": true,
+          "chars": 6301
+        },
+        {
+          "url": "https://news.google.com/rss/articles/CBMimgFBVV95cUxNeXFhT1dYZXVoWVVnVUdDTUZMckFzVlRxcWNPcEdsM251Rml2dTNSZ2Q5alBHVUVnRF9GSTdxdUpmWEo3elRueEh4TFF3R2Y2SXpVM3h3NVhzeHZMbmNoQUh5aG40a014czlkMFBtMV9GLTYxRkg5aFM5emR3aGFKV3ZkQm5UTmRhZWtpSExxbXpSSUZONGQ2eGJB?oc=5",
+          "ok": true,
+          "chars": 2287
+        },
+        {
+          "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxQS2JjdTdWZ050eUhSaDlEMVN4UVV2OW15czNwUXotRFE5RU1ndmVwel9PTWJJaGNuWVhUbUdPeGtPZWhVVUpTNFZSR21WSTFDOEFLNk5fYmFBVk5fRHBsSWpfUDFLQUNFRkxnNnFMYmdOOHFSTE1DTGhBRU1zYkxCTTdkZ3NweDdtWVA2UHBPQQ?oc=5",
+          "ok": true,
+          "chars": 4717
+        }
+      ]
+    },
+    {
+      "n": 3,
+      "title": "Anthropic, OpenAI, Google and Meta execs set to testify at NYC Council hearing on AI risks - CNBC",
+      "startingSources": [
+        "https://news.google.com/rss/articles/CBMipAFBVV95cUxQZUIydzZYNjQ4a2RSMEROU0N4RC1NM2JPdXp3RTdtRWVqSjc0Zk5YTU9EWGd2ZEtWSk1JTkZacVkwejgyajZIRlRvMnNsSkkzMFhFbzczNGM4eVVRLXktR19kYjNybkdpVzl4bkpIdHFzRVdYSmlUTjkwR2Z2VjR5cnpSMlRLcEVFSnVlVUN0MTdRLXZERzI1eURTaGxTNllCTndqbtIBqgFBVV95cUxPcVFrM05qVE9lTUtNUUdYV0ZtZ0xNSy1NdGQ2aURSQU1pd3g3ZnA1YlMwbUxPaFZhWlh4bWVwQ3NvalBSajNFZk5DNlA0NjVERUZiLXZ0cmZhMHdRQXo0dVg5elgyTjZsbDR5Sl9KWVJvaVVNZGRKZGFrWlpzak1veGN0Yy1PX3FIWEJCYXl3YlpFMXhnaFg4ZHpkcVMxblp4NTRWM2pRT2FPdw?oc=5",
+        "https://news.google.com/rss/articles/CBMizgFBVV95cUxQNmUzVVVySnJtNFBUYlhrMWlxY0xOMEVySFZTMzFlR25La0ZqSU00TlEtWTRMT3Z1ZE85S3dwTXg0LXZTV2JmeDZ5R1RYaU9qVGFtYzZrNnV4YXZMSEZ1bW5YUEFCQkZpV0t4V1NaRTI2VldmRGFwWEFLNkhzbzU0Nk9sQUpPRmVDNjg4YVBpMm5rR2hLR0FSYlhjZEhWemN2dHVWTW9mLS1mekdmU1RuSTBma2sta3B4T2p1Y3VmWUZnaG0zMmVNRENEOXZjZw?oc=5",
+        "https://news.google.com/rss/articles/CBMivgFBVV95cUxOSVkzeXRDRU5uOVdnaWlmeHJnNllkZzZEM0dIN0pJZ09LZWRDUVA3Wmx2TTltM09lNjRibnZsUE9jZ01LR205ZEp2R1VjdWdHV3dnZEpYZEwxTHZyd0w4YlIzTDFJaFdOSUtiRmwyNktNWG5aYmZKdEpBQ0hPSnNTWUNkLXZRSFBRLVJ3WHR3N2V1SUc3UjFvZVFYTnQzSDB0bnFjZzlXRDdkbklyWEF0MkVJa2Ywd09pSEhQTlVn0gHDAUFVX3lxTE4zcWIxU25CZXRxNnlXYXBfaG1oanBIcWRRSktUc2FLM0R1SkZfajVROFVpcTZ6SGVhTXotN2tJdGtFV0VpdVliUlJ5ZUx3MHRjWW9vVURZczVRc1ZHMlRlX28zOG92YjAzMF94X2hSa1FnSGZhbUYySExLR3VYcEVyUFhiWEtIdXRucDR3anRvN0xqVFRPeElBYTNZb0lkSkxGNFotR0g2Y0Ezbk5IMUZYREowdWYzYzZlQTJ1VnBqUHVQMA?oc=5",
+        "https://news.google.com/rss/articles/CBMixAFBVV95cUxQd1dMSmc1SVBUVkVKa1Vzenp5VktSV1NKdTRURXI5VzF2dHhWVFZRRHd3TU5OXzB0M1NqeFR6MW9QZk9wZUpGbGtmRGZqbUp1dmRjWXlTRFo4V2ZnOGhSdVZTTUN0RFU5Wk9jUEx1NTBlRkxlSUhUTkZfNVoxazJ3cWcxblJyak41U1ZqY3lGU0dIb1NqZDNreUJxN0FpdjJjeV9xTVJ1YlFfMlE2eG56NTV5MXo1R1V6QVYtcURsQUxiTkVX?oc=5"
+      ],
+      "ok": true,
+      "reason": null,
+      "detail": null,
+      "costUsd": 0.2293,
+      "turns": 3,
+      "webSearches": 1,
+      "pageReadCalls": 4,
+      "reads": [
+        {
+          "url": "https://news.google.com/rss/articles/CBMipAFBVV95cUxQZUIydzZYNjQ4a2RSMEROU0N4RC1NM2JPdXp3RTdtRWVqSjc0Zk5YTU9EWGd2ZEtWSk1JTkZacVkwejgyajZIRlRvMnNsSkkzMFhFbzczNGM4eVVRLXktR19kYjNybkdpVzl4bkpIdHFzRVdYSmlUTjkwR2Z2VjR5cnpSMlRLcEVFSnVlVUN0MTdRLXZERzI1eURTaGxTNllCTndqbtIBqgFBVV95cUxPcVFrM05qVE9lTUtNUUdYV0ZtZ0xNSy1NdGQ2aURSQU1pd3g3ZnA1YlMwbUxPaFZhWlh4bWVwQ3NvalBSajNFZk5DNlA0NjVERUZiLXZ0cmZhMHdRQXo0dVg5elgyTjZsbDR5Sl9KWVJvaVVNZGRKZGFrWlpzak1veGN0Yy1PX3FIWEJCYXl3YlpFMXhnaFg4ZHpkcVMxblp4NTRWM2pRT2FPdw?oc=5",
+          "ok": true,
+          "chars": 5570
+        },
+        {
+          "url": "https://news.google.com/rss/articles/CBMivgFBVV95cUxOSVkzeXRDRU5uOVdnaWlmeHJnNllkZzZEM0dIN0pJZ09LZWRDUVA3Wmx2TTltM09lNjRibnZsUE9jZ01LR205ZEp2R1VjdWdHV3dnZEpYZEwxTHZyd0w4YlIzTDFJaFdOSUtiRmwyNktNWG5aYmZKdEpBQ0hPSnNTWUNkLXZRSFBRLVJ3WHR3N2V1SUc3UjFvZVFYTnQzSDB0bnFjZzlXRDdkbklyWEF0MkVJa2Ywd09pSEhQTlVn0gHDAUFVX3lxTE4zcWIxU25CZXRxNnlXYXBfaG1oanBIcWRRSktUc2FLM0R1SkZfajVROFVpcTZ6SGVhTXotN2tJdGtFV0VpdVliUlJ5ZUx3MHRjWW9vVURZczVRc1ZHMlRlX28zOG92YjAzMF94X2hSa1FnSGZhbUYySExLR3VYcEVyUFhiWEtIdXRucDR3anRvN0xqVFRPeElBYTNZb0lkSkxGNFotR0g2Y0Ezbk5IMUZYREowdWYzYzZlQTJ1VnBqUHVQMA?oc=5",
+          "ok": true,
+          "chars": 2504
+        },
+        {
+          "url": "https://news.google.com/rss/articles/CBMixAFBVV95cUxQd1dMSmc1SVBUVkVKa1Vzenp5VktSV1NKdTRURXI5VzF2dHhWVFZRRHd3TU5OXzB0M1NqeFR6MW9QZk9wZUpGbGtmRGZqbUp1dmRjWXlTRFo4V2ZnOGhSdVZTTUN0RFU5Wk9jUEx1NTBlRkxlSUhUTkZfNVoxazJ3cWcxblJyak41U1ZqY3lGU0dIb1NqZDNreUJxN0FpdjJjeV9xTVJ1YlFfMlE2eG56NTV5MXo1R1V6QVYtcURsQUxiTkVX?oc=5",
+          "ok": true,
+          "chars": 2383
+        },
+        {
+          "url": "https://news.google.com/rss/articles/CBMizgFBVV95cUxQNmUzVVVySnJtNFBUYlhrMWlxY0xOMEVySFZTMzFlR25La0ZqSU00TlEtWTRMT3Z1ZE85S3dwTXg0LXZTV2JmeDZ5R1RYaU9qVGFtYzZrNnV4YXZMSEZ1bW5YUEFCQkZpV0t4V1NaRTI2VldmRGFwWEFLNkhzbzU0Nk9sQUpPRmVDNjg4YVBpMm5rR2hLR0FSYlhjZEhWemN2dHVWTW9mLS1mekdmU1RuSTBma2sta3B4T2p1Y3VmWUZnaG0zMmVNRENEOXZjZw?oc=5",
+          "ok": true,
+          "chars": 3990
+        }
+      ]
+    }
+  ],
+  "result": {
+    "posts": [
+      {
+        "storyId": "https://news.google.com/rss/articles/CBMigAJBVV95cUxPaEt6NWVLaEFYUWFBSFcxYVZCTnRIY0FQY0JWaGFRd0RHYkVjSlFqZlJXNE9fVG9Mb0FIWVRMTk93ZVV4RTI0TGxGU3BDMmNROXBRSERpX0RWdExKTTJMeXZNbVF3b3dNa3JfdF90RF9fLWlsdVFDaExpaERuUmJ4RjdoN2VfeW92VWlveVp3X3ZBQUtQYTZ1NXJ4ckVWdEtKam9RTGRmcmcwaU5Ub0U5cVJSZGlST21DcWIxdlV0ZElpeDNQY1BHd2tkZ1lWWU5RcDg2WWNfYmMyRGtHZk1OQjE3M3BzeWxlV0dydHFVR0hmWjJleS1fZFhSU19rYlB2?oc=5",
+        "title": "OpenAI’s Altman: ‘The world should accept some bad things happening for the benefits of this technology’ - Fortune",
+        "slides": [
+          {
+            "headline": "OpenAI CEO Sam Altman told Politico's new Decoded newsletter, published around Oct. 5, 2026, that the world should accept some bad things happening for AI's benefits, and he said OpenAI and Anthropic differ sharply on AI rules.",
+            "body": "What happened, in one line.",
+            "image": null
+          },
+          {
+            "headline": "Why it matters",
+            "body": "What it means for the reader.",
+            "image": null
+          }
+        ],
+        "caption": "OpenAI CEO Sam Altman told Politico's new Decoded newsletter, published around Oct. 5, 2026, that the world should accept some bad things happening for AI's benefits, and he said OpenAI and Anthropic differ sharply on AI rules. Source: example.com",
+        "stages": [
+          "jev-scoring",
+          "reporter",
+          "writer",
+          "editor",
+          "fact-checker",
+          "design",
+          "mechanical"
+        ],
+        "costUsd": 0.1898
+      },
+      {
+        "storyId": "https://news.google.com/rss/articles/CBMiV0FVX3lxTE4zMDlqVDZLRl9VbHIzUnhQZnRnallnbjlsVDREUngzcXJTQi1abU1OQ2hCTm1OSUZna1FvbGxWNFhXaTc1SkY3X3VIQ3Q0a2gyUl9GS0ZNOA?oc=5",
+        "title": "Google Is Narrowing Free Gemini Access on October 9. Here’s What It Means for Your Business - Times Square Chronicles",
+        "slides": [
+          {
+            "headline": "Google has updated a Gemini support page to say that from October 9, 2026, free Gemini users keep only the Flash-Lite model and AI Plus subscribers lose the Pro model; AI Pro keeps all three models and gains Deep Think (per Google's page, as reported by PCMag, MakeUseOf and The Mac Observer).",
+            "body": "What happened, in one line.",
+            "image": null
+          },
+          {
+            "headline": "Why it matters",
+            "body": "What it means for the reader.",
+            "image": null
+          }
+        ],
+        "caption": "Google has updated a Gemini support page to say that from October 9, 2026, free Gemini users keep only the Flash-Lite model and AI Plus subscribers lose the Pro model; AI Pro keeps all three models and gains Deep Think (per Google's page, as reported by PCMag, MakeUseOf and The Mac Observer). Source: example.com",
+        "stages": [
+          "jev-scoring",
+          "reporter",
+          "writer",
+          "editor",
+          "fact-checker",
+          "design",
+          "mechanical"
+        ],
+        "costUsd": 0.1074
+      },
+      {
+        "storyId": "https://www.bloomberg.com/news/articles/2026-10-04/ai-whistleblowers-google-openai-meta-to-face-new-york-city-council",
+        "title": "Anthropic, OpenAI, Google and Meta execs set to testify at NYC Council hearing on AI risks - CNBC",
+        "slides": [
+          {
+            "headline": "On Monday Oct 5, 2026, senior policy executives from Anthropic, OpenAI, Google and Meta testified under oath at a New York City Council hearing on AI risks, alongside ex-lab researchers warning of loss of control; SpaceXAI skipped its subpoena.",
+            "body": "What happened, in one line.",
+            "image": null
+          },
+          {
+            "headline": "Why it matters",
+            "body": "What it means for the reader.",
+            "image": null
+          }
+        ],
+        "caption": "On Monday Oct 5, 2026, senior policy executives from Anthropic, OpenAI, Google and Meta testified under oath at a New York City Council hearing on AI risks, alongside ex-lab researchers warning of loss of control; SpaceXAI skipped its subpoena. Source: example.com",
+        "stages": [
+          "jev-scoring",
+          "reporter",
+          "writer",
+          "editor",
+          "fact-checker",
+          "design",
+          "mechanical"
+        ],
+        "costUsd": 0.2293
+      }
+    ],
+    "setAsides": [],
+    "stopReason": "target-reached",
+    "costUsd": 0.5265,
+    "costByStage": {
+      "jev-scoring": 0,
+      "reporter": 0.5265,
+      "writer": 0,
+      "editor": 0,
+      "fact-checker": 0,
+      "design": 0,
+      "mechanical": 0
+    }
+  }
+}

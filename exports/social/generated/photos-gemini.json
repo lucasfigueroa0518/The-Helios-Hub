@@ -1,0 +1,163 @@
+{
+  "format": "carousel",
+  "storyType": "tech",
+  "source": "NPowerUser",
+  "sourceUrl": "https://nokiapoweruser.com/google-gemini-model-deprecation-36-37-flash-fast-mode-gemini-4-argon/",
+  "publishedAt": "2026-10-05T21:41:17.027Z",
+  "issueNumber": 0,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "headline": [
+        {
+          "text": "Google will limit free Gemini users to its lightest model, Flash-Lite, from Oct 9",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Google will limit free Gemini users to its lightest model, Flash-Lite, from Oct 9",
+      "photoUrl": "/social/stock/server-racks.jpg",
+      "photoCredit": "Unsplash"
+    },
+    {
+      "position": 1,
+      "headline": [
+        {
+          "text": "Free Gemini users lose Flash and Pro",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Free Gemini users lose Flash and Pro",
+      "photoUrl": "/social/stock/circuit-macro.jpg",
+      "photoCredit": "Unsplash",
+      "body": [
+        {
+          "text": "Gemini app users without a Google AI subscription will be limited to 3.5 Flash-Lite, the lightest tier. 3.6 Flash and 3.1 Pro will no longer be available to them.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "October 9",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "Date free users lose Flash and Pro in the Gemini app"
+    },
+    {
+      "position": 2,
+      "headline": [
+        {
+          "text": "AI Plus subscribers lose Pro too",
+          "role": "narrative"
+        }
+      ],
+      "altText": "AI Plus subscribers lose Pro too",
+      "photoUrl": "/social/stock/newspapers-stack.jpg",
+      "photoCredit": "Unsplash",
+      "body": [
+        {
+          "text": "AI Plus ($4.99 a month) will be limited to Flash-Lite and Flash, losing Pro, the most advanced tier. Google will email subscribers about when the change takes effect, so there is no fixed date.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text"
+    },
+    {
+      "position": 3,
+      "headline": [
+        {
+          "text": "9to5Google: AI Pro gets Deep Think",
+          "role": "narrative"
+        }
+      ],
+      "altText": "9to5Google: AI Pro gets Deep Think",
+      "photoUrl": "/social/stock/dashboard.jpg",
+      "photoCredit": "Unsplash",
+      "body": [
+        {
+          "text": "9to5Google reports AI Pro and AI Ultra see no regressions, and AI Pro subscribers get Deep Think, Gemini's maximum parallel reasoning option, which is currently only on the two Ultra plans.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "split_stat",
+      "title": [
+        {
+          "text": "$19.99 per month",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "Google AI Pro price",
+      "secondNumber": "$99.99 and $199.99/month",
+      "secondNote": "AI Ultra plans where Deep Think currently sits"
+    },
+    {
+      "position": 4,
+      "headline": [
+        {
+          "text": "Gemini adds low, medium and high effort levels",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Gemini adds low, medium and high effort levels: \"This will increase the model's ability to complete tasks… but will also use more of your limit.\" (Google (support page, describing new effort levels))",
+      "photoUrl": "/social/stock/earth-from-space.jpg",
+      "photoCredit": "Unsplash",
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "This will increase the model's ability to complete tasks… but will also use more of your limit.",
+          "role": "narrative"
+        }
+      ],
+      "quoteBy": "Google (support page, describing new effort levels)",
+      "photoIsSpeaker": false
+    },
+    {
+      "position": 5,
+      "headline": [
+        {
+          "text": "One outlet says more models are going. Unconfirmed",
+          "role": "narrative"
+        }
+      ],
+      "altText": "One outlet says more models are going. Unconfirmed",
+      "photoUrl": "/social/stock/macbook-glow.jpg",
+      "photoCredit": "Unsplash",
+      "body": [
+        {
+          "text": "NPowerUser says Google is retiring 3.6 and 3.7 Flash and has pulled dedicated Fast modes. Google's API deprecations page, updated Oct 1, lists no shutdown date for either. No other source confirms the claim.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text"
+    },
+    {
+      "position": 6,
+      "headline": [
+        {
+          "text": "Gemini 4 Argon is announced, not widely out",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Gemini 4 Argon is announced, not widely out",
+      "photoUrl": "/social/stock/circuit-schematic.jpg",
+      "photoCredit": "Unsplash",
+      "body": [
+        {
+          "text": "Google announced Gemini 4 Argon on Sept 30, first for trusted cyber defenders. Google says paid API customers and AI Ultra subscribers are next. 9to5Google says Argon's place in the Gemini app is unclear.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text"
+    },
+    {
+      "position": 7,
+      "layoutVariant": "follow",
+      "storySpecificLine": "Follow Helios Group for plain-English breakdowns of AI changes that land in the apps you already use.",
+      "altText": "Follow Helios Group for plain-English breakdowns of AI changes that land in the apps you already use."
+    }
+  ],
+  "caption": "Google will limit Gemini app users without a paid plan to its Flash-Lite model starting Oct 9, and they will lose access to Flash and Pro. AI Plus subscribers lose Pro too, on a date Google will give them by email.\n\nFlash-Lite is the lightest and fastest of Gemini's three model tiers, Flash is the middle option and Pro is the most advanced. Google is also adding low, medium and high effort levels, which make a model more capable on tasks but use more of your usage limit. 9to5Google reports AI Pro subscribers get Deep Think. NPowerUser says Google is retiring Gemini 3.6 and 3.7 Flash, but Google's API deprecations page and other sources don't confirm it. Gemini 4 Argon, announced Sept 30, is still in limited rollout.\n\nWould you pay for a Gemini plan to keep access to Pro?\n\nFollow Helios Group for plain-English breakdowns of AI changes that land in the apps you already use.\n\nSource: 9to5Google, October 3, 2026; PCMag (AU), MakeUseOf and NPowerUser, October 5, 2026; Google Blog, September 30, 2026. Additional reporting: TechCrunch, Engadget, Google AI for Developers.",
+  "attributionBlock": "Photos: Unsplash"
+}

@@ -1,0 +1,12 @@
+{
+  "ok": false,
+  "status": "needs_human_review",
+  "reason": "Writer OUTLINE failed validation after retry: OUTLINE: SLIDE 3 and SLIDE 4 are both \"text\". No two consecutive slides may share a kind — change one to a different kind (text / landing / stat / split_stat / quote / image) or merge them. | SLIDE 5 OUTLINE quote QUOTE is 143 chars, limit 140. Cut 3 chars — this kind can't be approved unless its content already fits on the slide as rendered. If you can't cut, change the kind to \"text\" (which allows a longer body). | OUTLINE: SLIDE 7 and SLIDE 8 are both \"text\". No two consecutive slides may share a kind — change one to a different kind (text / landing / stat / split_stat / quote / image) or merge them.",
+  "costUsd": 0.4186,
+  "stagesRun": [
+    "reporter",
+    "brief-integrity(cut 2 unsourced quotes)",
+    "writer",
+    "writer(outline-retry)"
+  ]
+}

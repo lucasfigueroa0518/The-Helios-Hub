@@ -75,16 +75,16 @@ export async function checkIdentity(
     { version: Identity.VERSION, subjectId: subject.name },
   );
   const { MATCH_MIN, PERSON_MIN } = Identity.THRESHOLDS;
-  const person = res.answers.is_person!.noul;
+  const person = res.answers.is_person!.noul ?? 0;
   const scores: IdentityScores = {
     person,
-    matches: candidates.map((c, k) => ({ id: c.id, label: c.label, description: c.description, p: res.answers[Identity.matchId(k)]!.noul })),
+    matches: candidates.map((c, k) => ({ id: c.id, label: c.label, description: c.description, p: res.answers[Identity.matchId(k)]!.noul ?? 0 })),
   };
   const type: SubjectType | null = person >= PERSON_MIN ? 'person' : person <= 1 - PERSON_MIN ? 'organization' : null;
   if (!type) return { ok: false, reason: `subject type unclear (person ${person.toFixed(2)})`, type: null, scores };
 
   const matches = candidates
-    .map((c, k) => ({ c, p: res.answers[Identity.matchId(k)]!.noul }))
+    .map((c, k) => ({ c, p: res.answers[Identity.matchId(k)]!.noul ?? 0 }))
     .filter((m) => m.p >= MATCH_MIN);
   if (matches.length === 0) {
     return { ok: false, reason: `no entry matches the brief (${candidates.map((c) => `${c.id} "${c.description}"`).join('; ')})`, type, scores };

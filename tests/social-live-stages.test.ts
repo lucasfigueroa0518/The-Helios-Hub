@@ -95,9 +95,10 @@ test('live stages: two stories run Reporter → Writer → Editor → Fact-check
   assert.ok((r.costByStage.reporter ?? 0) > 0 && (r.costByStage.writer ?? 0) > 0 && (r.costByStage.editor ?? 0) > 0 && (r.costByStage['fact-checker'] ?? 0) > 0);
 });
 
-test('live stages: a render that fails the fit check is set aside and the next story fills the slot', async () => {
+test('live stages: a render that still fails the fit check after the default layout is set aside, and the next story fills the slot', async () => {
   let n = 0;
-  const fitCheck: FitCheck = async (post) => (++n === 1 ? { ok: false, problems: [], slideText: [], violations: [{ slide: 5, element: 'div.helios-split-stat__number', text: '$99.99', over: { left: 0, top: 0, right: 300, bottom: 0 } }] } : fitOkFor(post));
+  // The first story fails twice: its Jev layout, then the default layout for the failing slide (slide buckets spec).
+  const fitCheck: FitCheck = async (post) => (++n <= 2 ? { ok: false, problems: [], slideText: [], violations: [{ slide: 5, element: 'div.helios-split-stat__number', text: '$99.99', over: { left: 0, top: 0, right: 300, bottom: 0 } }] } : fitOkFor(post));
   const { stages } = setup({ fitCheck });
   const r = await runDay({ articles: STUB_ARTICLES, stages, meter: createCostMeter({ capUsd: 5 }), log: createInMemorySetAsideLog(), now: new Date('2026-10-06T15:00:00Z'), targetPosts: 1 });
   assert.equal(r.posts.length, 1);

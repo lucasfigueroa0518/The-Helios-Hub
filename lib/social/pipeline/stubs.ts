@@ -8,7 +8,7 @@ import type { IngestArticle } from '@/lib/social/ingest/select/types';
 import type { Brief as ParsedBrief } from '@/lib/social/reporter/brief';
 import type { PhotoTrace } from '@/lib/social/photos/find';
 import { toRenderPost } from '@/lib/social/render/from-draft';
-import { fillDraft, type DraftSubmission, type ImageRequest } from '@/lib/social/writer/draft';
+import { fillDraft, type DraftSubmission, type VisualRequest } from '@/lib/social/writer/draft';
 
 import type { PipelineStages } from './stages';
 import type { ReasonCode, ScoredCandidate, StageName, StageResult } from './types';
@@ -75,13 +75,13 @@ export function stubCandidates(articles: IngestArticle[]): ScoredCandidate[] {
 /** Minimal valid draft for stub runs (passes checkDraft against stubBrief). */
 export function stubDraft(news: string): DraftSubmission {
   const line = (text: string) => ({ text, facts: ['F1'] });
-  const stock = { kind: 'stock' as const, value: 'office building' };
+  const visuals = { visual: { kind: 'thematic' as const, query: 'office building' }, fallback_visual: { kind: 'setting' as const, query: 'open office' } };
   return {
-    cover_options: [1, 2, 3].map((n) => ({ text: `${news} (${n})`, facts: ['F1'], image: stock })),
+    cover_options: [1, 2, 3].map((n) => ({ text: `${news} (${n})`, facts: ['F1'], ...visuals })),
     chosen_cover: 1,
     slides: [
-      { type: 'text', headline: line(news), body: line('What happened, in one line.'), quote_id: null, quote_excerpt: null, number_ids: [], image: stock, spread_with_next: false },
-      { type: 'text', headline: line('Why it matters'), body: line('What it means for the reader.'), quote_id: null, quote_excerpt: null, number_ids: [], image: stock, spread_with_next: false },
+      { type: 'text', headline: line(news), body: line('What happened, in one line.'), quote_id: null, quote_excerpt: null, number_ids: [], ...visuals },
+      { type: 'text', headline: line('Why it matters'), body: line('What it means for the reader.'), quote_id: null, quote_excerpt: null, number_ids: [], ...visuals },
     ],
     follow: 'Follow Helios for AI news.',
     caption: line(`${news} Source: example.com`),
@@ -140,8 +140,8 @@ export function createStubStages(opts: StubOptions = {}): PipelineStages {
       return result('fact-checker', draft.storyId, draft);
     },
     async design(draft, _brief, story) {
-      const noPhoto = (request: ImageRequest): PhotoTrace => ({ request, photo: null, via: 'icon', icon: null, identity: null, steps: ['stub: no photo'], alternates: [] });
-      const photos = [noPhoto(draft.filled.cover_options[draft.filled.chosen_cover - 1]!.image), ...draft.filled.slides.map((s) => noPhoto(s.image))];
+      const noPhoto = (request: VisualRequest): PhotoTrace => ({ request, photo: null, via: 'icon', icon: null, identity: null, steps: ['stub: no photo'], alternates: [] });
+      const photos = [noPhoto(draft.filled.cover_options[draft.filled.chosen_cover - 1]!.visual), ...draft.filled.slides.map((s) => noPhoto(s.visual))];
       return result('design', draft.storyId, {
         storyId: draft.storyId,
         title: story.title,

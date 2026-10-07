@@ -36,6 +36,8 @@ export type CommonsCandidate = {
    * through the vision KIND check downstream so logos get rejected.
    */
   source: 'P18' | 'P180' | 'commons-search';
+  /** When the photo was taken (extmetadata DateTimeOriginal, else DateTime), as YYYY-MM-DD or YYYY; null when unknown (photo spec §4 ranking). */
+  date?: string | null;
 };
 
 /**
@@ -83,6 +85,8 @@ export async function fetchImageInfo(
   url.searchParams.set('titles', titles.join('|'));
   url.searchParams.set('prop', 'imageinfo');
   url.searchParams.set('iiprop', 'url|size|mime|extmetadata');
+  // A 2160px-wide copy for rendering (originals can be tens of MB); the size fields stay the original's.
+  url.searchParams.set('iiurlwidth', '2160');
   url.searchParams.set('iiextmetadatalanguage', 'en');
   url.searchParams.set('format', 'json');
   url.searchParams.set('origin', '*');
@@ -106,6 +110,8 @@ export async function fetchImageInfo(
 
 export type RawImageInfo = {
   url: string;
+  /** A resized copy (iiurlwidth), when Commons made one: smaller than the original, same licence. */
+  thumburl?: string;
   width: number;
   height: number;
   mime: string;
@@ -140,7 +146,7 @@ export function toCandidate(
 
   return {
     file,
-    url: info.url,
+    url: info.thumburl ?? info.url,
     width: info.width,
     height: info.height,
     mime: info.mime,
@@ -149,7 +155,16 @@ export function toCandidate(
     licenseUrl: info.extmetadata?.LicenseUrl?.value ?? null,
     tier,
     source,
+    date: photoDate(info.extmetadata?.DateTimeOriginal?.value ?? info.extmetadata?.DateTime?.value ?? ''),
   };
+}
+
+/** The first date in a Commons date field (it may hold HTML or free text): YYYY-MM-DD, else YYYY; null when none. */
+export function photoDate(raw: string): string | null {
+  const text = stripHtml(raw);
+  const full = /\b(1[89]\d\d|20\d\d)-(\d\d)-(\d\d)\b/.exec(text);
+  if (full) return `${full[1]}-${full[2]}-${full[3]}`;
+  return /\b(1[89]\d\d|20\d\d)\b/.exec(text)?.[1] ?? null;
 }
 
 /**

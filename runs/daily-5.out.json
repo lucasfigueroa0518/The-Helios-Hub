@@ -1,0 +1,230 @@
+{
+  "runDir": "runs/daily-2026-10-05T18-24-20-795Z",
+  "articles": 380,
+  "stopReason": "target-reached",
+  "jevCalls": 445,
+  "jevInputTokens": 535381,
+  "jevCostUsd": 0.022486,
+  "meterUsd": 0.463386002,
+  "setAsides": [],
+  "reporter": [
+    {
+      "n": 1,
+      "storyId": "https://www.theverge.com/ai-artificial-intelligence/1004811/openai-altman-bad-things-ai-tradeoff",
+      "title": "OpenAI’s Altman: ‘The world should accept some bad things happening for the benefits of this technology’ - Fortune",
+      "startingSources": [
+        "https://news.google.com/rss/articles/CBMioAFBVV95cUxNN3c3alN0UklSSXBPMG5xNGFVM21vc0VDR2RKblJ1WW05eVhWWWxrMC1MeXU2WnJuRklZbzVYRzR5Uy1FRjNlaTNTMXpxNkVvblBCZTVIZGJ6ZWNCV18ydENuSlBtTWJ3bHJlS2d2UXFrYjZSZ1JVbk9HM0JhVU9UYlM1T0VOTlBXMU9UWVFEQTNxYUJyanpOS0l6TE1PZGlK?oc=5",
+        "https://www.theverge.com/ai-artificial-intelligence/1004811/openai-altman-bad-things-ai-tradeoff",
+        "https://news.google.com/rss/articles/CBMie0FVX3lxTE9RWkROZFRwUzBuMG83NzVUdEdGcXNmZHg2UXNfYTJBaTN3cmtoMlgxdno4S2xzVGlMcXZKYlRWNENJaGdQbUY0eDZhdUdXWHZOMkg1a0hVYlBlWmdwcEk5X3piY2hEQnVHTXEwTm8taUZmWmI5QjBpbm5icw?oc=5",
+        "https://news.google.com/rss/articles/CBMi2wFBVV95cUxNWUVYODhyYjZud0tVazFLUWFzczJjSWJGLW1QazIxblhuNlE5RGhhWHVVZ0Ewd0tlQ0JoN0V5eDU1dUVBS3BTWTNwX25qMno0Z3BuZmszTnFKSjBncWxQRWlNcmZKTWxRZHlXWU1hRHpNNVNGQmZoV1Jyc1ZTa1JNcFhLVzVDaWdPUHFqZUZENVBNRU1lcEwzZEFQLVBYbkZBNDZxbG5zSFBLcE16dVFWR3k3REQ1OVhidG0tLURoRUZxSzdJV2piekpoU044MjFsUjFDbU5BSjN4YlHSAdcBQVVfeXFMTlNWN242UXJXMVVXYVRVM0N3Zk5fTFkyUnJXMnphVTd3Z2hMbU1IMkRBUVlTcXZoWnlNSXlic1hDVEVxQ2g1RXRENjh0d195V0N0bmx5bmlKTElFaFVicHVneVZvQ1FCWjNSNUx1T0dfRnFJb1p5bG0tTnYzVFdsaGlqLTZvaGtDQ0paNGRkaDRDMDg5UGJ1MTZTZlZ0M2dOcDAtOEx3TFNxakpra1FkYzRUb25HVm1ReXJRWjU1U19IUk9qb3pDYnBBV2dzTTdpMk1MbEdMSDg?oc=5"
+      ],
+      "ok": true,
+      "reason": null,
+      "detail": null,
+      "costUsd": 0.1796,
+      "turns": 3,
+      "webSearches": 3,
+      "pageReadCalls": 6,
+      "submitRetries": 0,
+      "turnUsage": [
+        {
+          "turn": 1,
+          "stopReason": "tool_use",
+          "usage": {
+            "input_tokens": 4,
+            "cache_creation_input_tokens": 1187,
+            "cache_read_input_tokens": 9301,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 1187,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1223,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "service_tier": "standard",
+            "inference_geo": "global"
+          },
+          "costUsd": 0.0171
+        },
+        {
+          "turn": 2,
+          "stopReason": "tool_use",
+          "usage": {
+            "input_tokens": 10,
+            "cache_creation_input_tokens": 11538,
+            "cache_read_input_tokens": 93981,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 11538,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 551,
+            "output_tokens_details": {
+              "thinking_tokens": 52
+            },
+            "service_tier": "standard",
+            "inference_geo": "global",
+            "server_tool_use": {
+              "web_search_requests": 1,
+              "web_fetch_requests": 0
+            }
+          },
+          "costUsd": 0.0632
+        },
+        {
+          "turn": 3,
+          "stopReason": "tool_use",
+          "usage": {
+            "input_tokens": 6,
+            "cache_creation_input_tokens": 4052,
+            "cache_read_input_tokens": 72632,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 4052,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 5465,
+            "output_tokens_details": {
+              "thinking_tokens": 283
+            },
+            "service_tier": "standard",
+            "inference_geo": "global",
+            "server_tool_use": {
+              "web_search_requests": 2,
+              "web_fetch_requests": 0
+            }
+          },
+          "costUsd": 0.0993
+        }
+      ]
+    },
+    {
+      "n": 2,
+      "storyId": "https://news.google.com/rss/articles/CBMiV0FVX3lxTE4zMDlqVDZLRl9VbHIzUnhQZnRnallnbjlsVDREUngzcXJTQi1abU1OQ2hCTm1OSUZna1FvbGxWNFhXaTc1SkY3X3VIQ3Q0a2gyUl9GS0ZNOA?oc=5",
+      "title": "Major Google Gemini Shakeup: Older Models Deprecated, Fast Modes Pulled as Gemini 4 Argon Nears - nokiapoweruser.com",
+      "startingSources": [
+        "https://news.google.com/rss/articles/CBMinAFBVV95cUxQdXBCYlVjZ19rTVo4aFd0VVdjQVFHV1JfSmx5bFNtdXlVbjJLMnB3STlBZGVsTkVrSzg0S3pTMkpZcUNpZ1M2cHFhSGFDbEkzV1BVQkRMd0RlWWVQT1RPZHJuWFlib00ySlVRa0NEUXJBR1JvQV80M1NSUzVkeXRHaUh4WmJWS1d1ZmZOcUdMZWRXYllwZlFNdXBZWHI?oc=5",
+        "https://news.google.com/rss/articles/CBMiV0FVX3lxTE4zMDlqVDZLRl9VbHIzUnhQZnRnallnbjlsVDREUngzcXJTQi1abU1OQ2hCTm1OSUZna1FvbGxWNFhXaTc1SkY3X3VIQ3Q0a2gyUl9GS0ZNOA?oc=5",
+        "https://news.google.com/rss/articles/CBMijwFBVV95cUxQS2JjdTdWZ050eUhSaDlEMVN4UVV2OW15czNwUXotRFE5RU1ndmVwel9PTWJJaGNuWVhUbUdPeGtPZWhVVUpTNFZSR21WSTFDOEFLNk5fYmFBVk5fRHBsSWpfUDFLQUNFRkxnNnFMYmdOOHFSTE1DTGhBRU1zYkxCTTdkZ3NweDdtWVA2UHBPQQ?oc=5",
+        "https://news.google.com/rss/articles/CBMiogFBVV95cUxNYm9QcVFvYWJnc051MTluT24xRVpsM1NHVlR6R0tGYnZIS0F0bkxPVktWSXg3MFNtbmwtVTJMcTllVG5VQ1VySVRNdmZQMnJnbnUtNl9IUl9oZHZVOEtZUVYwZ3BqdDRYUzRGeVpGbmVjbHNJZEw4NjI0Wlg3NjVZdF8ySU9rV2dlN3M0Ri1WeTdlV3ZCUnN0NHZXdzhkdHdYcnc?oc=5"
+      ],
+      "ok": true,
+      "reason": null,
+      "detail": null,
+      "costUsd": 0.2613,
+      "turns": 5,
+      "webSearches": 7,
+      "pageReadCalls": 10,
+      "submitRetries": 0,
+      "turnUsage": [
+        {
+          "turn": 1,
+          "stopReason": "tool_use",
+          "usage": {
+            "input_tokens": 4,
+            "cache_creation_input_tokens": 973,
+            "cache_read_input_tokens": 9301,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 973,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 991,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "service_tier": "standard",
+            "inference_geo": "global"
+          },
+          "costUsd": 0.0142
+        },
+        {
+          "turn": 2,
+          "stopReason": "tool_use",
+          "usage": {
+            "input_tokens": 8,
+            "cache_creation_input_tokens": 12677,
+            "cache_read_input_tokens": 72256,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 12677,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 845,
+            "output_tokens_details": {
+              "thinking_tokens": 130
+            },
+            "service_tier": "standard",
+            "inference_geo": "global",
+            "server_tool_use": {
+              "web_search_requests": 5,
+              "web_fetch_requests": 0
+            }
+          },
+          "costUsd": 0.1046
+        },
+        {
+          "turn": 3,
+          "stopReason": "tool_use",
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 2623,
+            "cache_read_input_tokens": 22951,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 2623,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 296,
+            "output_tokens_details": {
+              "thinking_tokens": 57
+            },
+            "service_tier": "standard",
+            "inference_geo": "global"
+          },
+          "costUsd": 0.0141
+        },
+        {
+          "turn": 4,
+          "stopReason": "tool_use",
+          "usage": {
+            "input_tokens": 4,
+            "cache_creation_input_tokens": 3185,
+            "cache_read_input_tokens": 53099,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 3185,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 320,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "service_tier": "standard",
+            "inference_geo": "global",
+            "server_tool_use": {
+              "web_search_requests": 2,
+              "web_fetch_requests": 0
+            }
+          },
+          "costUsd": 0.0418
+        },
+        {
+          "turn": 5,
+          "stopReason": "tool_use",
+          "usage": {
+            "input_tokens": 2,
+            "cache_creation_input_tokens": 8385,
+            "cache_read_input_tokens": 28759,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 8385,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 5984,
+            "output_tokens_details": {
+              "thinking_tokens": 211
+            },
+            "service_tier": "standard",
+            "inference_geo": "global"
+          },
+          "costUsd": 0.0866
+        }
+      ]
+    }
+  ]
+}

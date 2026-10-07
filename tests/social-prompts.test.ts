@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { IMAGE_RULE, RULES_BLOCK, TESTED_IMAGE_RULE, TESTED_WRITER_RULES, WRITER_RULES, renderRulesFor } from '@/lib/social/prompts/rules-block';
+import { KINDS_RULE, RULES_BLOCK, TESTED_IMAGE_RULE, TESTED_KINDS_LINE, TESTED_WRITER_RULES, VISUAL_RULE, WRITER_RULES, renderRulesFor } from '@/lib/social/prompts/rules-block';
 import { REPORTER_SYSTEM, reporterUserMessage } from '@/lib/social/reporter/prompt';
 import { VOICE_BLOCK } from '@/lib/social/prompts/voice-block';
 
@@ -28,11 +28,12 @@ test('RULES_BLOCK carries the tested Writer rules word for word', () => {
   assert.equal(TESTED_WRITER_RULES, tested);
   // Photo rule (2026-10-06): the tested IMAGE line is replaced, word for word from the prompts file.
   // The handoff version (2026-10-06) is the line in use: the block after "**Handoff".
-  // Link 1 (2026-10-07) is the line in use: the block after "**Link 1".
-  const imageRule = codeBlocks(PROMPTS, '- **Link 1 (Tommy, 2026-10-07')[0]!;
-  assert.equal(IMAGE_RULE, imageRule);
-  assert.ok(TESTED_WRITER_RULES.includes(TESTED_IMAGE_RULE));
-  assert.equal(WRITER_RULES, TESTED_WRITER_RULES.replace(TESTED_IMAGE_RULE, IMAGE_RULE));
+  // Sixth round (2026-10-07): the visual line and the slide-kinds line in use, the first two blocks after "**Sixth round".
+  const [visualRule, kindsRule] = codeBlocks(PROMPTS, '- **Sixth round (Tommy, 2026-10-07');
+  assert.equal(VISUAL_RULE, visualRule);
+  assert.equal(KINDS_RULE, kindsRule);
+  assert.ok(TESTED_WRITER_RULES.includes(TESTED_IMAGE_RULE) && TESTED_WRITER_RULES.includes(TESTED_KINDS_LINE));
+  assert.equal(WRITER_RULES, TESTED_WRITER_RULES.replace(TESTED_IMAGE_RULE, VISUAL_RULE).replace(TESTED_KINDS_LINE, KINDS_RULE));
   assert.ok(RULES_BLOCK.includes(WRITER_RULES) && !RULES_BLOCK.includes('symbolic'));
 });
 

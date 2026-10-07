@@ -26,10 +26,12 @@ export function createStubJev(table: StubTable, handlers: Record<string, JevAsk>
     const entry = table[key];
     if (!entry) throw new Error(`stub Jev: no answers for ${key}`);
     const answers: JevResult['answers'] = {};
-    for (const id of Object.keys(request.questions)) {
+    for (const [id, q] of Object.entries(request.questions)) {
       const p = entry[id] ?? entry['*'];
       if (p === undefined) throw new Error(`stub Jev: no answer for ${key} / ${id}`);
-      answers[id] = { noul: p };
+      // A choice question: the stub picks the first label (tests that care pass a handler).
+      const labels = (q as { type?: string; criteria?: Record<string, unknown> }).type === 'choice' ? Object.keys((q as { criteria: Record<string, unknown> }).criteria) : null;
+      answers[id] = labels ? { choice: labels[0]!, probabilities: Object.fromEntries(labels.map((l, i) => [l, i === 0 ? p : (1 - p) / Math.max(1, labels.length - 1)])) } : { noul: p };
     }
     // Rough token count (≈4 chars/token) so cost plumbing is exercised.
     const input_tokens = Math.ceil(JSON.stringify(request).length / 4);

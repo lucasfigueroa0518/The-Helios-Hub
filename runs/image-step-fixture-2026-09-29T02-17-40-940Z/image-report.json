@@ -1,0 +1,25 @@
+[
+  {
+    "slide": "cover",
+    "requestedSubject": "Gavin Newsom",
+    "status": "picked",
+    "reason": "vision passed on File:Gavin Newsom official photo.jpg",
+    "picked": {
+      "wikidataId": "Q461391",
+      "label": "Gavin Newsom",
+      "commonsFile": "File:Gavin Newsom official photo.jpg",
+      "commonsUrl": "https://commons.wikimedia.org/wiki/File:Gavin_Newsom_official_photo.jpg",
+      "license": "Public domain",
+      "author": "Office of the Lieutenant Governor of California",
+      "storageUrl": "https://okslkogkokdwylmcsygz.supabase.co/storage/v1/object/public/helios-social-images/wikidata/Q461391/724a506f.jpg",
+      "isPortrait": true,
+      "cacheHit": false
+    }
+  },
+  {
+    "slide": 3,
+    "requestedSubject": "the California State Capitol",
+    "status": "type-only",
+    "reason": "Wikidata: no Wikidata entities match \"the California State Capitol\""
+  }
+]

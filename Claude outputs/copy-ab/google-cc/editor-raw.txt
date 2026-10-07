@@ -1,0 +1,50 @@
+COVER: Google's CC started as a personal assistant. Now it runs the whole household.
+COVER HIGHLIGHT: runs the whole household
+COVER IMAGE: type only
+
+SLIDE 2
+HEADLINE: Demand drove the pivot
+BODY: Google Labs' senior product manager Tom Shane wrote that "one of our top user requests was for CC to do more to help run a busy home." Household coordination across multiple personal accounts, Google said, was the trigger.
+HIGHLIGHT: one of our top user requests
+
+SLIDE 3
+BIG NUMBER: 6
+NUMBER NOTE: family members per CC group
+HEADLINE: Who can join a CC group
+NOTE: U.S. adults with personal Gmail only
+HIGHLIGHT: 6
+
+SLIDE 4
+HEADLINE: You decide what CC sees
+BODY: Each member chooses what to share. Options: forward a one-off email or photo, set up auto-sharing from specific senders (a school, a sports club, a travel company), or link a Drive folder or calendar directly.
+HIGHLIGHT: Each member chooses what to share
+
+SLIDE 5
+HEADLINE: The daily briefing CC sends
+BODY: Every morning, CC sends the group a "Your Day Ahead" summary — who needs to be where, what tasks are pending, and what CC completed the day before. It writes dates and to-dos directly into a shared family calendar and task list.
+HIGHLIGHT: Your Day Ahead
+
+SLIDE 6
+HEADLINE: What CC can do on its own
+BODY: CC can pre-fill permission slip and activity registration PDFs, build school supply shopping lists, draft weekly meal plans, check live drive times from Google Maps between back-to-back activities, and create shared Google Docs and Sheets.
+HIGHLIGHT: pre-fill permission slip
+
+SLIDE 7
+HEADLINE: CC sees only what you share
+NOTE: Members can change permissions any time
+HIGHLIGHT: only what you share
+
+SLIDE 8
+HEADLINE: One catch: kids are locked out
+NOTE: Tweens, teens, and school Gmail accounts not eligible
+HIGHLIGHT: kids are locked out
+
+SLIDE 9
+HEADLINE: How to get it
+BODY: Existing CC users will get an email invitation to upgrade in the coming days. New users can join a waitlist. The experiment is U.S.-only for now.
+HIGHLIGHT: join a waitlist
+
+FOLLOW: Follow Helios for coverage of AI agents moving from personal tools into shared, everyday life.
+
+EDIT NOTES:
+None. The Writer's draft meets the bar. Every slide answers a distinct reader question, no slide repeats another, all claims are sourced, voice is direct, images are compliant, and length limits are clear. The two back-to-back landing slides (7 and 8) are flagged and justified in the Writer's notes — the content difference is real and the landing form is the right call for both. No changes made.

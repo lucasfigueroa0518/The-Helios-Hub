@@ -5,14 +5,14 @@
  *
  * The code check is the Writer's checkDraft plus the parts of the prompt's
  * POWERS line that code can see without judgment: the Editor may not use a
- * quote, number or claim-tag ID the Writer didn't, and may not request an
- * image the Writer didn't; it may change one to none (a cut) (Tommy,
- * 2026-10-06). One retry on failure, like every stage.
+ * quote, number or claim-tag ID the Writer didn't, and may not ask for a
+ * visual the Writer didn't; it may swap a slide's visual for its fallback (a
+ * cut; sixth round, Tommy 2026-10-07). One retry on failure, like every stage.
  */
 import { STAGE_MODELS, type StageModelConfig } from '@/lib/social/pipeline/models';
 import type { Brief, BriefError } from '@/lib/social/reporter/brief';
 import type { MessagesCreate } from '@/lib/social/reporter/reporter';
-import { DraftValidationError, SUBMIT_DRAFT_TOOL, fillDraft, type DraftSubmission, type ImageRequest } from '@/lib/social/writer/draft';
+import { DraftValidationError, SUBMIT_DRAFT_TOOL, fillDraft, type DraftSubmission, type VisualRequest } from '@/lib/social/writer/draft';
 import { checkWrittenDraft, defaultIcons, pruneSubjectTags, type SubjectKinds } from '@/lib/social/writer/writer';
 import { runStructuredCall, type StructuredFailure } from '@/lib/social/writer/structured-call';
 import type { TurnUsage } from '@/lib/social/reporter/reporter';
@@ -20,7 +20,7 @@ import type { FilledDraft } from '@/lib/social/writer/draft';
 
 import { EDITOR_SYSTEM, editorUserMessage } from './prompt';
 
-const imageKey = (i: ImageRequest) => (i.kind === 'none' ? 'none:' : `${i.kind}:${i.value}`);
+const visualKey = (v: VisualRequest) => `${v.kind}:${v.query.trim().toLowerCase()}`;
 
 function idsOf(d: DraftSubmission) {
   const tags = new Set<string>();
@@ -34,8 +34,7 @@ function idsOf(d: DraftSubmission) {
     tags,
     quotes: new Set(d.slides.flatMap((s) => (s.quote_id ? [s.quote_id] : []))),
     numbers: new Set(d.slides.flatMap((s) => s.number_ids)),
-    slideImages: new Set(d.slides.map((s) => imageKey(s.image))),
-    coverImages: new Set(d.cover_options.map((c) => imageKey(c.image))),
+    visuals: new Set([...d.cover_options, ...d.slides].flatMap((x) => [visualKey(x.visual), visualKey(x.fallback_visual)])),
   };
 }
 
@@ -47,9 +46,8 @@ export function checkEditorPowers(writer: DraftSubmission, edited: DraftSubmissi
   for (const id of e.quotes) if (!w.quotes.has(id)) errors.push({ section: 'powers', message: `quote ${id} wasn't in the Writer's draft (the Editor never adds facts)` });
   for (const id of e.numbers) if (!w.numbers.has(id)) errors.push({ section: 'powers', message: `number ${id} wasn't in the Writer's draft` });
   for (const id of e.tags) if (!w.tags.has(id)) errors.push({ section: 'powers', message: `claim tag ${id} wasn't in the Writer's draft` });
-  // The Editor may change an IMAGE to none (a cut); never add or change one (Tommy, 2026-10-06).
-  for (const key of e.slideImages) if (key !== 'none:' && !w.slideImages.has(key)) errors.push({ section: 'powers', message: `slide image "${key}" wasn't in the Writer's draft (you may only change an IMAGE to none)` });
-  for (const key of e.coverImages) if (!w.coverImages.has(key)) errors.push({ section: 'powers', message: `cover image "${key}" wasn't in the Writer's draft` });
+  // The Editor may swap a visual for its fallback (a cut); never ask for one the Writer didn't (Tommy, 2026-10-07).
+  for (const key of e.visuals) if (!w.visuals.has(key)) errors.push({ section: 'powers', message: `visual "${key}" wasn't in the Writer's draft (you may only swap a slide's visual for its fallback)` });
   if (errors.length > 0) throw new DraftValidationError(errors);
 }
 

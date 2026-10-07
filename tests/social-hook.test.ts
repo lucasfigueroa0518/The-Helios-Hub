@@ -160,14 +160,14 @@ test('runHookPass: cached system + tool, budgets in the user message, one retry,
 import { placeholderPhotos } from '@/lib/social/pipeline/hook-stage';
 import { sifDraftHandoff } from '@/fixtures/social/drafts';
 
-test('hook stage budgets: placeholder photos follow the finder slot rules (subject region, speaker spot, scene, none)', () => {
+test('hook stage budgets: placeholder photos follow the visual kind (people and companies: a subject region; the speaker in the round spot; scenes; stat: a backdrop)', () => {
   const d = sifDraftHandoff();
-  d.slides[2]!.image = { kind: 'subject', value: 'Donald Trump' }; // quote slide, Trump's quote
-  d.slides[3]!.image = { kind: 'stock', value: 'deadline' }; // stat slide → scene backdrop
+  d.slides[2]!.visual = { kind: 'person', query: 'Donald Trump' }; // quote slide, Trump's quote
+  d.slides[3]!.visual = { kind: 'thematic', query: 'deadline clock' }; // stat slide → scene backdrop
   const p = placeholderPhotos(fillDraft(d, brief()));
   assert.equal(p.cover?.subject, 'Donald Trump');
   assert.equal(p.slides[1]?.source, 'commons', 'subject request → subject region');
   assert.equal(p.slides[2]?.subject, 'Donald Trump', 'the speaker in the round spot');
   assert.equal(p.slides[3]?.source, 'stock');
-  assert.equal(p.slides[4], null, 'IMAGE none → no photo');
+  assert.equal(p.slides[4]?.source, 'stock', 'a thematic visual → a scene');
 });

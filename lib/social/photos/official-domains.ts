@@ -7,28 +7,28 @@
  * the caption).
  *
  * Plain data, reviewed by Tommy. A news site about a company is never its
- * own (9to5google.com is not Google's), and only the company's news and
- * blog sections count (support.google.com does not).
+ * own (9to5google.com is not Google's). Since 2026-10-07 (fifth round) any
+ * page on a company's own product domain counts (anthropic.com/claude-haiku-5-5
+ * is Anthropic's launch page); shared hosts stay limited to the company's
+ * section (Google's blog, Meta's newsroom). Text banners are still rejected
+ * by the vision text check (photo spec §3 rule 4).
  */
 /** A company's own news or blog section: a host (exact, "www." ignored) and, unless the whole host is news, a path prefix. */
 export type NewsPath = { host: string; path?: string };
 
 export type OfficialDomains = { company: string; names: string[]; paths: NewsPath[] };
 
-/**
- * Each company's own news and blog sections only (Tommy, 2026-10-07): no fan
- * or news sites, no support, product or docs pages.
- */
+/** Each company's own domains (Tommy, 2026-10-07, fifth round: any page on them); no fan or news sites. */
 export const OFFICIAL_DOMAINS: OfficialDomains[] = [
-  { company: 'Anthropic', names: ['Anthropic'], paths: [{ host: 'anthropic.com', path: '/news/' }, { host: 'claude.com', path: '/blog/' }] },
-  { company: 'OpenAI', names: ['OpenAI'], paths: [{ host: 'openai.com', path: '/index/' }, { host: 'openai.com', path: '/news/' }] },
+  { company: 'Anthropic', names: ['Anthropic'], paths: [{ host: 'anthropic.com' }, { host: 'claude.com' }] },
+  { company: 'OpenAI', names: ['OpenAI'], paths: [{ host: 'openai.com' }] },
   { company: 'Google', names: ['Google', 'Alphabet'], paths: [{ host: 'blog.google' }] },
-  { company: 'Google DeepMind', names: ['Google DeepMind', 'DeepMind'], paths: [{ host: 'deepmind.google', path: '/discover/blog/' }, { host: 'blog.google', path: '/technology/google-deepmind/' }] },
-  { company: 'Meta', names: ['Meta', 'Meta Platforms'], paths: [{ host: 'about.fb.com', path: '/news/' }, { host: 'ai.meta.com', path: '/blog/' }] },
+  { company: 'Google DeepMind', names: ['Google DeepMind', 'DeepMind'], paths: [{ host: 'deepmind.google' }, { host: 'blog.google', path: '/technology/google-deepmind/' }] },
+  { company: 'Meta', names: ['Meta', 'Meta Platforms'], paths: [{ host: 'about.fb.com', path: '/news/' }, { host: 'ai.meta.com' }] },
   { company: 'Microsoft', names: ['Microsoft'], paths: [{ host: 'blogs.microsoft.com' }, { host: 'news.microsoft.com' }] },
   { company: 'Nvidia', names: ['Nvidia', 'NVIDIA'], paths: [{ host: 'nvidianews.nvidia.com' }, { host: 'blogs.nvidia.com' }] },
-  { company: 'Mistral AI', names: ['Mistral AI', 'Mistral'], paths: [{ host: 'mistral.ai', path: '/news/' }] },
-  { company: 'xAI', names: ['xAI'], paths: [{ host: 'x.ai', path: '/news/' }] },
+  { company: 'Mistral AI', names: ['Mistral AI', 'Mistral'], paths: [{ host: 'mistral.ai' }] },
+  { company: 'xAI', names: ['xAI'], paths: [{ host: 'x.ai' }] },
 ];
 
 const partsOf = (url: string): { host: string; path: string } | null => {

@@ -1,0 +1,241 @@
+{
+  "format": "carousel",
+  "storyType": "policy",
+  "source": "Gottheimer official press release",
+  "sourceUrl": "",
+  "publishedAt": "September 18, 2026",
+  "issueNumber": 725,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "variant": "C2",
+      "headline": [
+        {
+          "text": "A Democrat and a Republican introduced a bill to ",
+          "role": "narrative"
+        },
+        {
+          "text": "make the NSA review AI before it ships",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ],
+      "altText": "A Democrat and a Republican introduced a bill to make the NSA review AI before it ships.",
+      "photoUrl": "https://okslkogkokdwylmcsygz.supabase.co/storage/v1/object/public/helios-social-images/wikidata/Q6288908/4f20094d.jpg",
+      "photoCredit": "Kristie Boyd; U.S. House Office of Photography (public domain)"
+    },
+    {
+      "position": 1,
+      "layoutVariant": "text",
+      "altText": "Two bills, one announcement",
+      "headline": [
+        {
+          "text": "Two bills, one announcement",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "On September 18, Rep. Josh Gottheimer (D-NJ), Co-Chair of the ",
+          "role": "narrative"
+        },
+        {
+          "text": "House AI Commission",
+          "role": "pivot"
+        },
+        {
+          "text": ", introduced ",
+          "role": "narrative"
+        },
+        {
+          "text": "two bipartisan AI security bills",
+          "role": "hook"
+        },
+        {
+          "text": " at Fairleigh Dickinson University in Teaneck.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 2,
+      "layoutVariant": "landing",
+      "headline": [
+        {
+          "text": "No mandatory AI safety checks exist today",
+          "role": "narrative"
+        }
+      ],
+      "altText": "No mandatory AI safety checks exist today",
+      "note": "Gottheimer introduced the American AI Security Act and the China FIREWALL Act to fill that gap."
+    },
+    {
+      "position": 3,
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "\"Right now, there are ",
+          "role": "narrative"
+        },
+        {
+          "text": "no mandatory requirements for pre-deployment testing",
+          "role": "hook"
+        },
+        {
+          "text": " of frontier AI models. That doesn't work in banking, it doesn't work in food safety, it doesn't work in medicine, and it sure as hell shouldn't work with the technology that experts say could help build a bioweapon or take down our power grid.\"",
+          "role": "narrative"
+        }
+      ],
+      "altText": "\"Right now, there are no mandatory requirements for pre-deployment testing of frontier AI models. That doesn't work i...",
+      "quoteBy": "Rep. Josh Gottheimer (D-NJ)"
+    },
+    {
+      "position": 4,
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "30 days",
+          "role": "narrative"
+        }
+      ],
+      "altText": "NSA gets 30 days to vet a model",
+      "headline": [
+        {
+          "text": "NSA gets ",
+          "role": "narrative"
+        },
+        {
+          "text": "30 days",
+          "role": "hook"
+        },
+        {
+          "text": " to vet a model",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Under the ",
+          "role": "narrative"
+        },
+        {
+          "text": "American AI Security Act",
+          "role": "pivot"
+        },
+        {
+          "text": ", the NSA would get full access to evaluate any covered model before release. Companies could appeal decisions through an expedited process.",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "Plus one 30-day extension if needed"
+    },
+    {
+      "position": 5,
+      "layoutVariant": "text",
+      "altText": "Other Chinese AI is already walking in",
+      "headline": [
+        {
+          "text": "Other Chinese AI is already walking in",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "DeepSeek",
+          "role": "pivot"
+        },
+        {
+          "text": " is already blocked from federal devices. The ",
+          "role": "narrative"
+        },
+        {
+          "text": "China FIREWALL Act",
+          "role": "pivot"
+        },
+        {
+          "text": " would extend that ban to other Chinese open-weight models. Gottheimer named ",
+          "role": "narrative"
+        },
+        {
+          "text": "Kimi K3 and Qwen",
+          "role": "hook"
+        },
+        {
+          "text": " as models still on federal systems.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 6,
+      "layoutVariant": "text",
+      "altText": "Gottheimer is also pressing the White House",
+      "headline": [
+        {
+          "text": "Gottheimer is also pressing the White House",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "He is sending a letter to National Cyber Director ",
+          "role": "narrative"
+        },
+        {
+          "text": "Sean Cairncross",
+          "role": "pivot"
+        },
+        {
+          "text": " asking whether the administration's AI cybersecurity clearinghouse is built for today's threats, including ",
+          "role": "narrative"
+        },
+        {
+          "text": "autonomous AI-driven cyberattacks",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 7,
+      "layoutVariant": "text",
+      "altText": "A vote isn't scheduled",
+      "headline": [
+        {
+          "text": "A vote isn't scheduled",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Gottheimer said Republican leadership has ",
+          "role": "narrative"
+        },
+        {
+          "text": "refused to bring AI safety legislation to the floor",
+          "role": "hook"
+        },
+        {
+          "text": ". He is calling on the Speaker to reconvene Congress before the election. Near-term action is unlikely.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 8,
+      "layoutVariant": "follow",
+      "variant": "F1",
+      "storySpecificLine": "Follow Helios to keep up with how Congress is moving on AI regulation.",
+      "altText": "Follow Helios to keep up with how Congress is moving on AI regulation."
+    }
+  ],
+  "caption": "Rep. Josh Gottheimer and Republican co-sponsors introduced two bipartisan bills to tighten rules on AI. The American AI Security Act would require the NSA to review the most powerful AI models for national security risks before companies release them, giving the agency 30 days, with a possible 30-day extension. The China FIREWALL Act would ban Chinese-developed open-weight models, whose code anyone can download and run, from federal devices and software. Gottheimer cited models like Kimi K3 and Qwen still on government systems.\n\nRepublican leadership has blocked AI safety votes so far. Gottheimer called on the Speaker to bring these bills to the floor before the election, but near-term action is unlikely.\n\nWhat would mandatory NSA review change about how you think of AI safety in government?\n\nFollow Helios to track how Congress moves the needle on AI policy.\n\nSource: Rep. Gottheimer's office, WRFNJ, September 18, 2026. Additional reporting: Internet2.\n\nPhotos: Kristie Boyd; U.S. House Office of Photography (public domain). Via Wikimedia Commons.",
+  "attributionBlock": "Photos: Kristie Boyd; U.S. House Office of Photography (public domain). Via Wikimedia Commons."
+}

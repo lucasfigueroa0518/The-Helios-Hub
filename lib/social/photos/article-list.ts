@@ -37,6 +37,8 @@ export type ListedPhoto = {
   subject_ids: string[];
   /** Official images: the SUBJECTS ID of the company whose own page it is. */
   official_of: string | null;
+  /** Pixel width when the page states one (srcset or width attribute). */
+  width?: number | null;
 };
 
 export const photoUrlKey = (u: string) => u.replace(/^https?:\/\//, '').replace(/[?#].*$/, '');
@@ -61,13 +63,13 @@ export function articlePhotosFor(brief: Brief, pages: PageReadOk[], kinds: Map<s
         // Agencies are rejected even on a company's own page; the outlet rule doesn't apply there.
         if (classifyCredit({ caption: p.caption, credit: p.credit, page: null, organizations: [] }).verdict === 'rejected') continue;
         seen.add(key);
-        out.push({ url: p.src, caption, credit: p.credit, page: pageUrl, subject_ids: names, official_of: official.subject.id });
+        out.push({ url: p.src, caption, credit: p.credit, page: pageUrl, subject_ids: names, official_of: official.subject.id, width: p.width ?? null });
         continue;
       }
       if (!caption || names.length === 0) continue;
       if (classifyCredit({ caption: p.caption, credit: p.credit, page: pageUrl, organizations }).verdict !== 'allowed') continue;
       seen.add(key);
-      out.push({ url: p.src, caption, credit: p.credit, page: pageUrl, subject_ids: names, official_of: null });
+      out.push({ url: p.src, caption, credit: p.credit, page: pageUrl, subject_ids: names, official_of: null, width: p.width ?? null });
     }
   }
   return out;

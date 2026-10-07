@@ -1,0 +1,147 @@
+{
+  "format": "carousel",
+  "storyType": "tech",
+  "source": "TechCrunch",
+  "sourceUrl": "https://techcrunch.com/2026/10/04/trump-unveils-his-new-super-intelligence-force/",
+  "publishedAt": "2026-10-04T12:00:00Z",
+  "issueNumber": 0,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "headline": [
+        {
+          "text": "Trump launches a Super Intelligence Force, led by his spy chief",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Trump launches a Super Intelligence Force, led by his spy chief",
+      "photoUrl": "/social/stock/server-racks.jpg",
+      "photoCredit": "Stub photo 1 · stand-in"
+    },
+    {
+      "position": 1,
+      "headline": [
+        {
+          "text": "Announced on Truth Social",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Announced on Truth Social",
+      "photoUrl": "/social/stock/circuit-macro.jpg",
+      "photoCredit": "Stub photo 2 · stand-in",
+      "body": [
+        {
+          "text": "Trump announced the force in a Sunday morning post on Truth Social.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text"
+    },
+    {
+      "position": 2,
+      "headline": [
+        {
+          "text": "Clayton will chair it",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Clayton will chair it",
+      "photoUrl": "/social/stock/newspapers-stack.jpg",
+      "photoCredit": "Stub photo 3 · stand-in",
+      "body": [
+        {
+          "text": "The Wall Street Journal reports Clayton will chair the force, with three vice chairs.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text"
+    },
+    {
+      "position": 3,
+      "headline": [
+        {
+          "text": "His pitch",
+          "role": "narrative"
+        }
+      ],
+      "altText": "His pitch: \"The Super Intelligence Force is tasked with coordinating the effort of the Federal Government … of all Americans,\" (Donald Trump)",
+      "photoUrl": "/social/stock/dashboard.jpg",
+      "photoCredit": "Stub photo 4 · stand-in",
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "The Super Intelligence Force is tasked with coordinating the effort of the Federal Government … of all Americans,",
+          "role": "narrative"
+        }
+      ],
+      "quoteBy": "Donald Trump"
+    },
+    {
+      "position": 4,
+      "headline": [
+        {
+          "text": "It has a deadline",
+          "role": "narrative"
+        }
+      ],
+      "altText": "It has a deadline",
+      "photoUrl": "/social/stock/earth-from-space.jpg",
+      "photoCredit": "Stub photo 5 · stand-in",
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "120 days",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "time the task force has to report on the risks and opportunities presented by AI"
+    },
+    {
+      "position": 5,
+      "headline": [
+        {
+          "text": "What the charter says",
+          "role": "narrative"
+        }
+      ],
+      "altText": "What the charter says",
+      "photoUrl": "/social/stock/macbook-glow.jpg",
+      "photoCredit": "Stub photo 6 · stand-in",
+      "body": [
+        {
+          "text": "The charter reportedly says it will plan responses to SI-enabled threats while preventing overregulation.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text"
+    },
+    {
+      "position": 6,
+      "headline": [
+        {
+          "text": "Why the name",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Why the name",
+      "photoUrl": "/social/stock/server-racks.jpg",
+      "photoCredit": "Stub photo 7 · stand-in",
+      "body": [
+        {
+          "text": "Trump signed an executive order seeking to rebrand AI as super intelligence.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text"
+    },
+    {
+      "position": 7,
+      "layoutVariant": "follow",
+      "storySpecificLine": "Follow Helios for AI news without the hype.",
+      "altText": "Follow Helios for AI news without the hype."
+    }
+  ],
+  "caption": "Trump announced a Super Intelligence Force on Sunday. Source: TechCrunch, October 4, 2026.",
+  "attributionBlock": "Photos: Stub photo 1 · stand-in; Stub photo 2 · stand-in; Stub photo 3 · stand-in; Stub photo 4 · stand-in; Stub photo 5 · stand-in; Stub photo 6 · stand-in; Stub photo 7 · stand-in"
+}

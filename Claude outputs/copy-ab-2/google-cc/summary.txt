@@ -1,0 +1,113 @@
+PROMPTS: prompts-2026-09-29-fact-first (commit a0c7073)
+HARNESS: scripts/copy_ab_2.ts
+
+# google-cc
+
+STATUS: needs_human_review
+REASON: fact-check FLAGGED after 2 rounds — 1 open flag(s):
+  - SMALL CAPTION / TEXT
+    TEXT: "each choosing what information to share, emails, calendar events, photos, Drive folders"
+    PROBLEM: Sources list emails, photos, Drive folders/files, and calendars (as in "add CC to a Calendar") as the shareable items. "Calendar events" is not enumerated as a discrete item members share; the sources describe sharing a calendar itself with CC, not individual calendar events.
+    SOURCES SAY: "you can Share a Drive folder or files with CC or add CC to a Calendar" (Google blog); "Drive folders and calendars can be shared with the agent directly" (SiliconAngle).
+COST: $0.4550
+STAGES: reporter → brief-integrity(cut 1 unsourced quote) → writer → writer(outline-retry) → editor → caption → field-repair(SLIDE 7 BODY) r1.1 → field-repair(SLIDE 9 BODY) r1.1 → editor(check-errors r1.1) → editor(check-errors r1.2) → fact-checker(r1) → editor(fact-check r1) → caption(fact-check r1) → editor(check-errors r2.1) → editor(check-errors r2.2) → fact-checker(r2) → image-step-skipped
+
+THE NEWS: On September 17, 2026, Google Labs announced a major update to its experimental AI agent CC, reshaping it from a personal productivity tool into a shared household agent that up to six family members can use together to manage schedules, tasks, emails, and logistics.
+TERMS: 8
+
+## APPROVED OUTLINE
+- SLIDE 2: text
+- SLIDE 3: quote
+- SLIDE 4: stat
+- SLIDE 5: text
+- SLIDE 6: landing
+- SLIDE 7: text
+- SLIDE 8: landing
+- SLIDE 9: text
+
+## FINAL SLIDES
+
+COVER: Google's CC was a solo productivity tool. Now it helps run the household.
+COVER IMAGE: type only
+
+SLIDE 2
+  HEADLINE: CC started as a one-person tool
+  BODY: Google Labs, Google's internal team for early-stage experiments, built CC as a personal productivity agent, pulling from Gmail, Calendar, and Drive to email a single user a daily briefing.
+  HIGHLIGHT: personal productivity agent
+  IMAGE: type only
+
+SLIDE 3
+  QUOTE: "One of our top user requests was for CC to do more to help run a busy home."
+  QUOTE BY: Tom Shane, Google Labs, Sept. 17 blog post
+  HIGHLIGHT: help run a busy home
+
+SLIDE 4
+  HEADLINE: One CC account, whole household
+  BIG NUMBER: 6 members
+  NUMBER NOTE: the maximum who can share one CC
+  HIGHLIGHT: 6 members
+
+SLIDE 5
+  HEADLINE: You control what CC sees
+  BODY: Each member chooses what to share. Forward a one-off email or a photo of a birthday invite. Set auto-share from chosen senders, a school, a sports club, a travel company. Or share a Drive folder or calendar directly.
+  HIGHLIGHT: Each member chooses what to share
+  IMAGE: type only
+
+SLIDE 6
+  HEADLINE: Every morning: "Your Day Ahead"
+  NOTE: CC's morning briefing: who's where, tasks due, what CC handled the day before
+  HIGHLIGHT: who's where, tasks due, what CC handled the day before
+
+SLIDE 7
+  HEADLINE: CC can act, not just organize
+  BODY: CC fills out registration PDFs, builds school supply lists, drafts weekly meal plans, and checks live drive times from Google Maps between back-to-back activities. When it needs more info, it asks.
+  HIGHLIGHT: fills out registration PDFs
+  IMAGE: type only
+
+SLIDE 8
+  HEADLINE: CC stays inside the group
+  NOTE: Won't act or share outside without permission
+  HIGHLIGHT: CC stays inside the group
+
+SLIDE 9
+  HEADLINE: One big catch
+  BODY: The experiment is U.S.-only, for people 18 and over with a personal Gmail account. School-provided accounts are not supported, so tweens and teens cannot use it even at schools that run on Google.
+  HIGHLIGHT: tweens and teens cannot use it
+  IMAGE: type only
+
+FOLLOW: Follow Helios Group for more on how AI agents are moving from your inbox into your home.
+
+## CAPTION
+Google Labs is turning CC, its experimental AI agent, into a shared household tool. Up to six family members can now use one CC account together, each choosing what information to share, emails, calendar events, photos, Drive folders, so CC can manage the family's schedules, tasks, and logistics. Every morning it delivers "Your Day Ahead," a briefing of who needs to be where and what's pending. CC can also fill out permission slips, draft meal plans, check drive times between activities, and update a shared family calendar. The catch: it's U.S.-only for now, limited to people 18 and over with personal Gmail accounts, which means school-provided accounts don't work and tweens and teens cannot use it.
+
+How do you think families will use a shared AI agent like this? Tell us in the comments.
+
+Follow Helios Group for more on how AI agents are moving from your inbox into your home.
+
+Source: Google Blog, September 17, 2026. Additional reporting: TechCrunch, SiliconAngle.
+
+## FACT-CHECK ROUNDS
+Round 1: verdict FLAGGED — 2 flag(s)
+  - [SMALL] COVER / TEXT
+      TEXT: runs the whole household
+      PROBLEM: Stronger claim than sources support; sources say CC helps families manage logistics and coordination, not that it "runs" the household
+      SOURCES SAY: Google says CC helps families "spend less time coordinating logistics and more time just being together" and is "an agent for families and households" — household management assistant, not a household operator
+  - [SMALL] CAPTION / TEXT
+      TEXT: cutting out the tweens and teens who might benefit most
+      PROBLEM: "who might benefit most" is an editorial opinion not found in any source; the sources say only that tweens and teens are excluded, not that they would benefit most
+      SOURCES SAY: TechCrunch calls the age restriction "a big drawback" and notes tweens and teens can't use it, but does not say they would benefit most
+Round 2: verdict FLAGGED — 1 flag(s)
+  - [SMALL] CAPTION / TEXT
+      TEXT: "each choosing what information to share, emails, calendar events, photos, Drive folders"
+      PROBLEM: Sources list emails, photos, Drive folders/files, and calendars (as in "add CC to a Calendar") as the shareable items. "Calendar events" is not enumerated as a discrete item members share; the sources describe sharing a 
+      SOURCES SAY: "you can Share a Drive folder or files with CC or add CC to a Calendar" (Google blog); "Drive folders and calendars can be shared with the agent directly" (SiliconAngle).
+
+## REPAIRS
+- r1 editor: field-repair SLIDE 7 BODY: 224→197 chars (limit 220)  ($0.0024)
+- r1 editor: field-repair SLIDE 9 BODY: 221→196 chars (limit 220)  ($0.0021)
+- r1 editor: 4 non-length slide error(s), try 1/2  ($0.0192)
+- r1 editor: 2 non-length slide error(s), try 2/2  ($0.0173)
+- r1 editor: 1 small slide flag(s)  ($0.0151)
+- r1 caption: 1 small caption flag(s)  ($0.0049)
+- r2 editor: 2 non-length slide error(s), try 1/2  ($0.0179)
+- r2 editor: 3 non-length slide error(s), try 2/2  ($0.0179)

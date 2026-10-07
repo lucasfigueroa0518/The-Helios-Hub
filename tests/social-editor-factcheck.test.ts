@@ -67,13 +67,13 @@ const editErrors = (edit: (d: ReturnType<typeof sifDraft>) => void) => {
   return [];
 };
 
-test('Editor powers: cutting, reordering and rewording are fine; new IDs or images are not', () => {
+test('Editor powers: cutting, reordering and rewording are fine; new IDs or visuals are not; swapping in the fallback is a cut', () => {
   assert.deepEqual(editErrors((d) => { d.slides.splice(5, 1); d.slides.reverse(); d.slides[0]!.headline.text = 'Sharper'; }), []);
   assert.deepEqual(editErrors((d) => { d.slides[0]!.body!.facts.push('F5'); }), ["claim tag F5 wasn't in the Writer's draft"]);
   assert.deepEqual(editErrors((d) => { d.slides[2]!.quote_id = 'Q2'; d.slides[2]!.quote_excerpt = null; }), ["quote Q2 wasn't in the Writer's draft (the Editor never adds facts)"]);
-  assert.deepEqual(editErrors((d) => { d.slides[1]!.image = { kind: 'stock', value: 'city skyline' }; }), ['slide image "stock:city skyline" wasn\'t in the Writer\'s draft (you may only change an IMAGE to none)']);
-  // Changing an IMAGE to none is a cut, so it's allowed (Tommy, 2026-10-06).
-  assert.deepEqual(editErrors((d) => { d.slides[1]!.image = { kind: 'none', value: '' }; }), []);
+  assert.deepEqual(editErrors((d) => { d.slides[1]!.visual = { kind: 'thematic', query: 'city skyline' }; }), ['visual "thematic:city skyline" wasn\'t in the Writer\'s draft (you may only swap a slide\'s visual for its fallback)']);
+  // Swapping a visual for its fallback is a cut, so it's allowed (Tommy, 2026-10-07).
+  assert.deepEqual(editErrors((d) => { d.slides[1]!.visual = { ...d.slides[1]!.fallback_visual }; }), []);
 });
 
 // ── Stubbed Claude ─────────────────────────────────────────────────────
@@ -285,7 +285,7 @@ test('after the Editor: a tag its edits no longer name is removed and logged; a 
   assert.deepEqual(r.draft.slides[1]!.subject_ids, []);
   assert.deepEqual(r.draft.slides[4]!.subject_ids, []);
   assert.equal(r.draft.slides[1]!.body!.text, edited.slides[1]!.body!.text, 'the Editor\'s words stay');
-  assert.deepEqual(r.draft.slides[1]!.image, writer.slides[1]!.image, 'the request stays as the Editor left it');
+  assert.deepEqual(r.draft.slides[1]!.visual, writer.slides[1]!.visual, 'the request stays as the Editor left it');
   assert.deepEqual(r.tagsDropped, ['subject-tag-dropped: slide 3 S2 (Jay Clayton) (not named on the slide)', 'subject-tag-dropped: slide 6 had no subject_ids → []']);
   assert.deepEqual(r.filled.slides[1]!.subject_ids, [], 'the filled draft carries the checked tags');
 });

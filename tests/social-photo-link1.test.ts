@@ -18,12 +18,12 @@ import { sifDraftHandoff } from '@/fixtures/social/drafts';
 import { articlePhotosFor, type ListedPhoto } from '@/lib/social/photos/article-list';
 import { isNamedIn, namedSubjects, subjectIdsNamedIn, type NamedSubject } from '@/lib/social/photos/named';
 import { officialSubjectOf } from '@/lib/social/photos/official-domains';
-import { IMAGE_RULE } from '@/lib/social/prompts/rules-block';
+import { VISUAL_RULE } from '@/lib/social/prompts/rules-block';
 import type { Brief } from '@/lib/social/reporter/brief';
 import type { MessagesCreate } from '@/lib/social/reporter/reporter';
 import type { PageReadOk } from '@/lib/social/reporter/read-page';
-import type { DraftSlide, DraftSubmission, ImageRequest } from '@/lib/social/writer/draft';
-import { briefForWriter, imageHandoffFailures, photoViewOf, pruneSubjectTags, runWriter, type PhotoView, type WriterSubject } from '@/lib/social/writer/writer';
+import type { DraftSlide, DraftSubmission, VisualRequest } from '@/lib/social/writer/draft';
+import { briefForWriter, photoViewOf, pruneSubjectTags, runWriter, visualHandoffFailures, type PhotoView, type WriterSubject } from '@/lib/social/writer/writer';
 
 type Story = { label: string; brief: Brief; pages: PageReadOk[]; writerDraft: DraftSubmission };
 const FX = JSON.parse(readFileSync('fixtures/social/photo-link1/stories.json', 'utf8')) as { stories: Story[] };
@@ -33,23 +33,27 @@ type Flags = Pick<WriterSubject, 'type' | 'headshot_available' | 'logo_available
 const person = (headshot = true): Flags => ({ type: 'person', headshot_available: headshot, logo_available: false });
 const org = (logo = true): Flags => ({ type: 'organization', headshot_available: false, logo_available: logo });
 
-/** The handoff view: availability flags by subject name (anything unlisted: nothing), the ARTICLE PHOTOS list. */
-function viewFor(brief: Brief, flags: Record<string, Flags>, photos: ListedPhoto[] = []): PhotoView {
+/** The handoff view: availability flags by subject name (anything unlisted: nothing). */
+function viewFor(brief: Brief, flags: Record<string, Flags>): PhotoView {
+  const { article_photos: _a, ...rest } = brief;
+  void _a;
   const subjects = brief.subjects.map((s): WriterSubject => ({ ...s, well_known: false, ...(flags[s.name] ?? { type: null, headshot_available: false, logo_available: false }) }));
-  return photoViewOf({ ...brief, subjects, article_photos: photos }, { flags: true });
+  return photoViewOf({ ...rest, subjects }, { flags: true });
 }
 
-const none: ImageRequest = { kind: 'none', value: '' };
-const subj = (value: string): ImageRequest => ({ kind: 'subject', value });
-const art = (value: string): ImageRequest => ({ kind: 'article', value });
-const stock = (value: string): ImageRequest => ({ kind: 'stock', value });
+const vPerson = (query: string): VisualRequest => ({ kind: 'person', query });
+const vCompany = (query: string): VisualRequest => ({ kind: 'company', query });
+const vLogo = (query: string): VisualRequest => ({ kind: 'logo', query });
+const scene = (query: string): VisualRequest => ({ kind: 'thematic', query });
 
-type SlideSpec = { type?: DraftSlide['type']; headline: string; body?: string; quote_id?: string; number_ids?: string[]; image: ImageRequest; tags?: string[] };
+type SlideSpec = { type?: DraftSlide['type']; headline: string; body?: string; quote_id?: string; number_ids?: string[]; visual: VisualRequest; fallback?: VisualRequest; tags?: string[] };
 
-/** A draft for a saved brief: the cover, then the given slides. Notes cover every none. */
-function draftOf(cover: { text: string; image: ImageRequest; tags?: string[] }, slides: SlideSpec[]): DraftSubmission {
+const fallbackFor = (v: VisualRequest) => (v.query === 'office desk' ? scene('city street') : scene('office desk'));
+
+/** A draft for a saved brief: the cover, then the given slides (each with a scene fallback unless given). */
+function draftOf(cover: { text: string; visual: VisualRequest; tags?: string[] }, slides: SlideSpec[]): DraftSubmission {
   return {
-    cover_options: [0, 1, 2].map(() => ({ text: cover.text, facts: [], image: cover.image, icon: 'newspaper', ...(cover.tags ? { subject_ids: cover.tags } : {}) })),
+    cover_options: [0, 1, 2].map(() => ({ text: cover.text, facts: [], visual: cover.visual, fallback_visual: fallbackFor(cover.visual), icon: 'newspaper', ...(cover.tags ? { subject_ids: cover.tags } : {}) })),
     chosen_cover: 1,
     slides: slides.map((s) => ({
       type: s.type ?? 'text',
@@ -58,18 +62,18 @@ function draftOf(cover: { text: string; image: ImageRequest; tags?: string[] }, 
       quote_id: s.quote_id ?? null,
       quote_excerpt: null,
       number_ids: s.number_ids ?? [],
-      image: s.image,
+      visual: s.visual,
+      fallback_visual: s.fallback ?? fallbackFor(s.visual),
       icon: 'newspaper',
       ...(s.tags ? { subject_ids: s.tags } : {}),
-      spread_with_next: false,
     })),
     follow: 'Follow Helios.',
     caption: { text: 'Caption.', facts: [] },
-    edit_notes: slides.map((_, i) => `Slide ${i + 2}: IMAGE none if none, nothing physical fits.`),
+    edit_notes: [],
   };
 }
 
-const errs = (d: DraftSubmission, brief: Brief, view: PhotoView | null) => imageHandoffFailures(d, brief, view).map((e) => `${e.section}: ${e.message}`);
+const errs = (d: DraftSubmission, brief: Brief, view: PhotoView | null) => visualHandoffFailures(d, brief, view).map((e) => `${e.section}: ${e.message}`);
 const at = (list: string[], where: string) => list.filter((e) => e.startsWith(`${where}.`)).join(' | ');
 
 // ── Naming (the shared rule for tags and captions) ─────────────────────
@@ -116,24 +120,25 @@ test("naming: an unknown type counts by its full name only; the Reporter's mark 
 
 // ── ARTICLE PHOTOS: the code-built list (photo spec §3 rules 1–4) ──────
 
-test('official domains: each company\'s own news and blog paths; a news site about a company is never its own', () => {
+test('official domains: any page on a company\'s own domain (fifth round); a news site about a company is never its own', () => {
   const subjects = [{ id: 'S1', name: 'Anthropic' }, { id: 'S2', name: 'Google' }];
   assert.equal(officialSubjectOf('https://www.anthropic.com/news/cyber-verification-program', subjects)?.subject.id, 'S1');
   assert.equal(officialSubjectOf('https://9to5google.com/2026/10/03/gemini-model-limits-oct-26/', subjects), null);
   assert.equal(officialSubjectOf('https://blog.google/products/gemini/limits/', subjects)?.subject.id, 'S2');
   assert.equal(officialSubjectOf('https://mistral.ai/news/mistral-large-4/', subjects), null, 'only for a company that is a SUBJECT');
-  // News and blog paths only (Tommy, 2026-10-07): no support, product or docs pages.
+  // Any page on the company's own domain (Tommy, 2026-10-07, fifth round): the Haiku 5.5 launch page counts.
+  assert.equal(officialSubjectOf('https://www.anthropic.com/claude-haiku-5-5', subjects)?.subject.id, 'S1');
+  assert.equal(officialSubjectOf('https://claude.com/resources/articles/claude-now-works-in-google-docs', subjects)?.subject.id, 'S1');
+  // Shared hosts stay limited to the company's section: support.google.com is not on Google's list.
   assert.equal(officialSubjectOf('https://support.google.com/gemini/answer/16275805', subjects), null);
-  assert.equal(officialSubjectOf('https://www.anthropic.com/claude', subjects), null);
-  assert.equal(officialSubjectOf('https://claude.com/resources/articles/claude-now-works-in-google-docs', subjects), null);
-  assert.equal(officialSubjectOf('https://claude.com/blog/google-docs', subjects)?.subject.id, 'S1');
 });
 
 test('ARTICLE PHOTOS on the saved pages: every article photo the saved Writers asked for is out (R02, R15, R17, R18, R33, R36)', () => {
   const asked: Array<[string, string, string]> = [];
   for (const s of FX.stories) {
     const listed = new Set(articlePhotosFor(s.brief, s.pages).map((p) => p.url));
-    const d = s.writerDraft;
+    // The saved drafts predate the sixth round: their old IMAGE requests.
+    const d = s.writerDraft as unknown as { chosen_cover: number; cover_options: Array<{ image: { kind: string; value: string } }>; slides: Array<{ image: { kind: string; value: string } }> };
     for (const img of [d.cover_options[d.chosen_cover - 1]!.image, ...d.slides.map((x) => x.image)]) {
       if (img.kind === 'article') asked.push([s.label, img.value.slice(-40), listed.has(img.value) ? 'listed' : 'out']);
     }
@@ -186,12 +191,12 @@ test('the Writer sees type, headshot_available (people) and logo_available (orga
     ['Super Intelligence Force', 'organization', false, false],
   ]);
   assert.ok(forWriter.subjects.every((s) => !('photo_available' in s)), 'no company main photos (Tommy, 2026-10-07)');
-  assert.deepEqual(forWriter.article_photos, [], 'no pages, no photos (the Reporter\'s retyped list is not used)');
+  assert.ok(!('article_photos' in forWriter), 'article photos are a source the search tries, never asked for by URL (sixth round)');
 });
 
-test('the IMAGE rule tells the Writer the new handoff', () => {
-  for (const s of ['subject_ids', 'headshot_available true', 'logo_available true', 'or an organization with logo_available true: its logo card on the cover, its logo on at most one story slide besides the cover', 'an official_of image only on the cover or a slide tagged with that company', 'On a quote slide, IMAGE is the speaker (subject: <the quote\'s speaker>), whether or not they have a photo; none only when the speaker is an organization or isn\'t in SUBJECTS', 'a stat slide\'s background is automatic, so its IMAGE is none', 'Never change a slide\'s words to fit a photo or a tag']) {
-    assert.ok(IMAGE_RULE.includes(s), s);
+test('the VISUAL rule tells the Writer the two-tier request (sixth round)', () => {
+  for (const s of ['subject_ids', 'a VISUAL and a different FALLBACK VISUAL', 'person: <SUBJECTS name>', 'headshot_available true', 'company: <SUBJECTS name>', 'logo: <SUBJECTS name> (with logo_available true)', 'product: <1–5 words naming it>', 'event: <1–5 words naming what happened>', 'thematic: <a plain 2–4 word physical scene tied to the topic, never a name>', 'setting: <a plain 2–4 word place type, never a named place>', "Vary the kinds across the post so it isn't the same face and logo on every slide", "On a quote slide, VISUAL is the speaker (person: <the quote's speaker>)", "Never change a slide's words to fit a visual or a tag"]) {
+    assert.ok(VISUAL_RULE.includes(s), s);
   }
 });
 
@@ -211,132 +216,89 @@ test('tags: required on the cover and every slide, SUBJECTS IDs only, each named
   assert.equal(at(e, 'slide 4'), '', 'the quote slide names Trump through its speaker line');
 });
 
-// ── Subject requests: headshots, logos, limits ─────────────────────────
+// ── Visual requests by kind (sixth round) ──────────────────────────────
 
-test('Le Chonk (R10, 21:17): "subject: Mistral AI" is a logo request: the cover and one story slide; never a second slide; never without a logo', () => {
+test('Le Chonk (R10, 21:17): "logo: Mistral AI" on any slide that names it; never without a verified logo', () => {
   const s = story('lechonk-2117');
   const view = viewFor(s.brief, { 'Mistral AI': org(true) });
   // Mistral AI and Mistral Large 4 share "Mistral": the slides name Mistral AI in full.
-  const d = draftOf({ text: 'Mistral AI says its new model is the best open one outside China', image: subj('Mistral AI'), tags: ['S1'] }, [
-    { headline: 'Mistral AI ships Le Chonk', body: 'It released its largest model yet.', image: subj('Mistral AI'), tags: ['S1'] },
-    { headline: 'Why Mistral AI matters', body: 'It is Europe\'s best-funded AI lab.', image: subj('Mistral AI'), tags: ['S1'] },
+  const d = draftOf({ text: 'Mistral AI says its new model is the best open one outside China', visual: vLogo('Mistral AI'), tags: ['S1'] }, [
+    { headline: 'Mistral AI ships Le Chonk', body: 'It released its largest model yet.', visual: vCompany('Mistral AI'), tags: ['S1'] },
+    { headline: 'Why Mistral AI matters', body: 'It is Europe\'s best-funded AI lab.', visual: vLogo('Mistral AI'), tags: ['S1'] },
   ]);
   const e = errs(d, s.brief, view);
-  assert.equal(at(e, 'cover'), '');
-  assert.equal(at(e, 'slide 2'), '');
-  assert.match(at(e, 'slide 3'), /Mistral AI's logo is already on slide 2; a logo goes on the cover and at most one story slide/);
+  assert.equal(at(e, 'cover') + at(e, 'slide 2') + at(e, 'slide 3'), '');
   const noLogo = errs(d, s.brief, viewFor(s.brief, { 'Mistral AI': org(false) }));
-  assert.match(at(noLogo, 'cover'), /Mistral AI has no verified logo \(logo_available: false\); change the request to an article photo, a literal stock scene or none/);
+  assert.match(at(noLogo, 'cover'), /Mistral AI has no verified logo \(logo_available: false\); ask for another visual/);
 });
 
-test('Altman (16:00): OpenAI (R07, R08) and Anthropic (R05) are logo requests on slides that name them; untagged fails', () => {
+test('Altman (16:00): company and logo visuals only on slides that name them; untagged fails', () => {
   const s = story('altman-1600');
   const view = viewFor(s.brief, { 'Sam Altman': person(), OpenAI: org(), Anthropic: org() });
-  const d = draftOf({ text: 'OpenAI CEO Sam Altman says the world should accept some bad things', image: subj('Sam Altman'), tags: ['S1', 'S2'] }, [
-    { headline: 'OpenAI\'s pitch', body: 'OpenAI says the benefits outweigh the harms.', image: subj('OpenAI'), tags: ['S2'] },
-    { headline: 'Anthropic disagrees', body: 'Anthropic has argued for slower deployment.', image: subj('Anthropic'), tags: ['S3'] },
-    { headline: 'The backlash', body: 'Critics called the remarks reckless.', image: subj('OpenAI'), tags: [] },
+  const d = draftOf({ text: 'OpenAI CEO Sam Altman says the world should accept some bad things', visual: vPerson('Sam Altman'), tags: ['S1', 'S2'] }, [
+    { headline: 'OpenAI\'s pitch', body: 'OpenAI says the benefits outweigh the harms.', visual: vCompany('OpenAI'), tags: ['S2'] },
+    { headline: 'Anthropic disagrees', body: 'Anthropic has argued for slower deployment.', visual: vLogo('Anthropic'), tags: ['S3'] },
+    { headline: 'The backlash', body: 'Critics called the remarks reckless.', visual: vCompany('OpenAI'), tags: [] },
   ]);
   const e = errs(d, s.brief, view);
-  assert.equal(at(e, 'slide 2'), '');
-  assert.equal(at(e, 'slide 3'), '');
-  assert.match(at(e, 'slide 4'), /subject: OpenAI isn't tagged on this slide; request only a subject the slide is tagged with/);
+  assert.equal(at(e, 'slide 2') + at(e, 'slide 3'), '');
+  assert.match(at(e, 'slide 4'), /company: OpenAI isn't tagged on this slide; ask only for a subject the slide names, or ask for a thematic, setting, product or event visual/);
 });
 
-test('a person: the headshot once per post besides their quote slide; never without a verified headshot', () => {
+test('person visuals: on any slide that names them (no once-per-post limit); never without a verified headshot; never an organization', () => {
   const s = story('altman-1600');
-  const view = viewFor(s.brief, { 'Sam Altman': person(), 'Jensen Huang': person(false) });
-  const d = draftOf({ text: 'Sam Altman says the world should accept some bad things', image: subj('Sam Altman'), tags: ['S1'] }, [
-    { type: 'quote', headline: 'In his words', quote_id: 'Q1', image: subj('Sam Altman'), tags: ['S1'] },
-    { headline: 'Altman again', body: 'Altman doubled down on Monday.', image: subj('Sam Altman'), tags: ['S1'] },
-    { headline: 'Huang weighs in', body: 'Jensen Huang said chips are not the bottleneck.', image: subj('Jensen Huang'), tags: ['S8'] },
+  const view = viewFor(s.brief, { 'Sam Altman': person(), 'Jensen Huang': person(false), OpenAI: org() });
+  const d = draftOf({ text: 'Sam Altman says the world should accept some bad things', visual: vPerson('Sam Altman'), tags: ['S1'] }, [
+    { headline: 'Altman again', body: 'Altman doubled down on Monday.', visual: vPerson('Sam Altman'), tags: ['S1'] },
+    { headline: 'Huang weighs in', body: 'Jensen Huang said chips are not the bottleneck.', visual: vPerson('Jensen Huang'), tags: ['S8'] },
+    { headline: "OpenAI's view", body: 'OpenAI says the benefits outweigh the harms.', visual: vPerson('OpenAI'), tags: ['S2'] },
   ]);
   const e = errs(d, s.brief, view);
-  assert.equal(at(e, 'slide 2'), '', 'his quote slide may show him again (a second photo)');
-  assert.match(at(e, 'slide 3'), /Sam Altman is already requested on cover; each person at most once per post \(their quote slide aside\)/);
-  assert.match(at(e, 'slide 4'), /Jensen Huang has no verified headshot \(headshot_available: false\)/);
+  assert.equal(at(e, 'slide 2'), '', 'the pick keeps the same photo off neighbouring slides');
+  assert.match(at(e, 'slide 3'), /Jensen Huang has no verified headshot \(headshot_available: false\)/);
+  assert.match(at(e, 'slide 4'), /OpenAI is an organization: ask for company: or logo:, not person:/);
 });
 
-test('an organization: its logo only, the cover card and at most one story slide; no logo, no request', () => {
-  const s = story('altman-1600');
-  const d = draftOf({ text: 'OpenAI CEO Sam Altman says the world should accept some bad things', image: subj('OpenAI'), tags: ['S1', 'S2'] }, [
-    { headline: "OpenAI's pitch", body: 'OpenAI says the benefits outweigh the harms.', image: subj('OpenAI'), tags: ['S2'] },
-    { headline: 'Inside OpenAI', body: 'OpenAI has grown to thousands of staff.', image: subj('OpenAI'), tags: ['S2'] },
-  ]);
-  const e = errs(d, s.brief, viewFor(s.brief, { OpenAI: org(true) }));
-  assert.equal(at(e, 'cover') + at(e, 'slide 2'), '', 'the logo card, the logo on one story slide');
-  assert.match(at(e, 'slide 3'), /OpenAI's logo is already on slide 2; a logo goes on the cover and at most one story slide/);
-  const noLogo = errs(d, s.brief, viewFor(s.brief, { OpenAI: org(false) }));
-  assert.match(at(noLogo, 'slide 2'), /OpenAI has no verified logo \(logo_available: false\)/);
-});
+// ── Quote slides ───────────────────────────────────────────────────────
 
-// ── Article requests ───────────────────────────────────────────────────
-
-test("article requests: only from the list; a caption's subjects must meet the slide's tags; an official image only on the cover or its company's slide", () => {
-  const s = story('security-0345');
-  const photos = articlePhotosFor(s.brief, s.pages);
-  const official = photos[0]!.url;
-  const extra: ListedPhoto = { url: 'https://x/glasswing.jpg', caption: 'Project Glasswing partners', credit: 'Courtesy of Anthropic', page: 'https://x', subject_ids: ['S2'], official_of: null };
-  const view = viewFor(s.brief, { Anthropic: org() }, [...photos, extra]);
-  const saved = s.writerDraft.slides[1]!.image.value; // R36, the SiliconANGLE share image
-  const d = draftOf({ text: 'Anthropic merges two security programs', image: art(official), tags: ['S1'] }, [
-    { headline: 'Two programs become one', body: 'Anthropic folded Project Glasswing into the new program.', image: art(official), tags: ['S1', 'S2'] },
-    { headline: 'Who qualifies', body: 'Vetted security teams get fewer blocks.', image: art(official), tags: [] },
-    { headline: 'The tiers', body: 'Three tiers, from research to defense work.', image: art(saved), tags: [] },
-    { headline: 'Glasswing partners', body: 'Project Glasswing partners keep their access.', image: art('https://x/glasswing.jpg'), tags: ['S2'] },
-    { headline: 'Booz Allen joins', body: 'Booz Allen is among the first members.', image: art('https://x/glasswing.jpg'), tags: ['S5'] },
-  ]);
-  const e = errs(d, s.brief, view);
-  assert.equal(at(e, 'cover'), '');
-  assert.equal(at(e, 'slide 2'), '');
-  assert.match(at(e, 'slide 3'), /an official image of Anthropic goes only on the cover or a slide tagged with Anthropic/);
-  assert.match(at(e, 'slide 4'), /isn't in ARTICLE PHOTOS; use one listed there/);
-  assert.equal(at(e, 'slide 5'), '');
-  assert.match(at(e, 'slide 6'), /this article photo's caption names Project Glasswing; the slide isn't tagged with any of them/);
-});
-
-// ── Quote slides (photo spec §4, corrected 2026-10-07) ─────────────────
-
-test('quote slides: the speaker whether or not they have a photo (DeSantis, Pierre Stock); never another person, a logo or a scene', () => {
+test('quote slides: a person speaker in SUBJECTS is the visual, photo or not (DeSantis, Pierre Stock); never another person or a scene', () => {
   const a = story('altman-2117');
   const view = viewFor(a.brief, { 'Ron DeSantis': person(false), 'Sam Altman': person() });
-  const q = (image: ImageRequest) => at(errs(draftOf({ text: 'Altman says some bad things will happen', image: subj('Sam Altman'), tags: ['S1'] }, [{ type: 'quote', headline: 'DeSantis responds', quote_id: 'Q5', image, tags: ['S6'] }]), a.brief, view), 'slide 2');
-  assert.equal(q(subj('Ron DeSantis')), '', 'no verified headshot: still the speaker (a type-led slide if nothing else is found)');
-  assert.match(q(none), /a quote slide's IMAGE is its speaker \(subject: Ron DeSantis\), never another person, a logo or a scene/);
-  assert.match(q(subj('Sam Altman')), /a quote slide's IMAGE is its speaker \(subject: Ron DeSantis\)/);
-  assert.match(q(stock('podium')), /a quote slide's IMAGE is its speaker/);
+  const q = (visual: VisualRequest, fallback?: VisualRequest) => at(errs(draftOf({ text: 'Altman says some bad things will happen', visual: vPerson('Sam Altman'), tags: ['S1'] }, [{ type: 'quote', headline: 'DeSantis responds', quote_id: 'Q5', visual, ...(fallback ? { fallback } : {}), tags: ['S6'] }]), a.brief, view), 'slide 2');
+  assert.doesNotMatch(q(vPerson('Ron DeSantis')), /a quote slide's visual/, 'no verified headshot: still the speaker (a type-led slide if nothing else is found)');
+  assert.match(q(scene('podium')), /a quote slide's visual is its speaker \(person: Ron DeSantis\)/);
+  assert.match(q(vPerson('Sam Altman')), /a quote slide's visual is its speaker \(person: Ron DeSantis\)/);
   const m = story('mistral-1600');
-  const stockQuote = draftOf({ text: 'Mistral ships Large 4', image: subj('Mistral AI'), tags: ['S1'] }, [{ type: 'quote', headline: 'Stock on the benchmark', quote_id: 'Q5', image: subj('Pierre Stock'), tags: ['S4'] }]);
-  assert.equal(at(errs(stockQuote, m.brief, viewFor(m.brief, { 'Pierre Stock': person(false), 'Mistral AI': org() })), 'slide 2'), '');
+  const stockQuote = draftOf({ text: 'Mistral ships Large 4', visual: vCompany('Mistral AI'), tags: ['S1'] }, [{ type: 'quote', headline: 'Stock on the benchmark', quote_id: 'Q5', visual: vPerson('Pierre Stock'), tags: ['S4'] }]);
+  assert.doesNotMatch(at(errs(stockQuote, m.brief, viewFor(m.brief, { 'Pierre Stock': person(false), 'Mistral AI': org() })), 'slide 2'), /quote slide/);
 });
 
-test("quote slides: an organization speaker (Anthropic) or a speaker not in SUBJECTS (Topolsky) takes none, a type-led slide; never the company's logo in the speaker's spot", () => {
+test('quote slides: an organization speaker (Anthropic) or one not in SUBJECTS (Topolsky) may ask for any visual (the round spot is only ever a verified speaker photo)', () => {
   const g = story('gdocs-0345');
   const gv = viewFor(g.brief, { Anthropic: org() });
-  const q = (brief: Brief, view: PhotoView, quoteId: string, image: ImageRequest, tags: string[]) => at(errs(draftOf({ text: 'Anthropic puts Claude in Google Docs', image: subj('Anthropic'), tags: ['S1'] }, [{ type: 'quote', headline: 'What it said', quote_id: quoteId, image, tags }]), brief, view), 'slide 2');
-  assert.equal(q(g.brief, gv, 'Q1', none, ['S1']), '');
-  assert.match(q(g.brief, gv, 'Q1', subj('Anthropic'), ['S1']), /the speaker \(Anthropic\) is an organization: its logo never goes in the speaker's spot, so its IMAGE is none \(a type-led quote slide\)/);
+  const q = (brief: Brief, view: PhotoView, quoteId: string, visual: VisualRequest, tags: string[]) => at(errs(draftOf({ text: 'Anthropic puts Claude in Google Docs', visual: vLogo('Anthropic'), tags: ['S1'] }, [{ type: 'quote', headline: 'What it said', quote_id: quoteId, visual, tags }]), brief, view), 'slide 2');
+  assert.equal(q(g.brief, gv, 'Q1', scene('document editor'), ['S1']), '');
+  assert.equal(q(g.brief, gv, 'Q1', vCompany('Anthropic'), ['S1']), '');
   const a = story('altman-1600');
   assert.equal(a.brief.quotes.find((x) => x.id === 'Q6')!.speaker_id, null, 'Joshua Topolsky is not in this older brief\'s SUBJECTS');
-  assert.equal(q(a.brief, viewFor(a.brief, {}), 'Q6', none, []), '');
-  assert.match(q(a.brief, viewFor(a.brief, { 'Sam Altman': person() }), 'Q6', subj('Sam Altman'), []), /the quote's speaker isn't in SUBJECTS: its IMAGE is none \(a type-led quote slide\)/);
+  assert.equal(q(a.brief, viewFor(a.brief, {}), 'Q6', scene('newsroom desk'), []), '');
 });
 
-// ── Stat slides, stock ─────────────────────────────────────────────────
+// ── Stat slides and scenes ─────────────────────────────────────────────
 
-test('stat slides take none (R11, R14, R20: the saved stock backdrops fail); stock must name something on the slide (R23)', () => {
+test('stat slides: at most 2 per post; scenes (thematic, setting) never name a SUBJECT; conceptual scenes need not be on the slide', () => {
   const m = story('mistral-1600');
-  const d = draftOf({ text: 'Mistral ships Large 4', image: subj('Mistral AI'), tags: ['S1'] }, [
-    { type: 'stat', headline: 'A trillion parameters', number_ids: [m.brief.numbers[0]!.id], image: stock('data center racks'), tags: [] },
-    { type: 'stat', headline: 'Its score', number_ids: [m.brief.numbers[0]!.id], image: stock('code on screen'), tags: [] },
-    { type: 'split_stat', headline: 'Price', number_ids: m.brief.numbers.slice(0, 2).map((n) => n.id), image: stock('price tag cash'), tags: [] },
-    { headline: 'How it works', body: 'A mixture of experts routes each token to a few experts.', image: stock('abstract neural network'), tags: [] },
+  const d = draftOf({ text: 'Mistral ships Large 4', visual: vCompany('Mistral AI'), tags: ['S1'] }, [
+    { type: 'stat', headline: 'A trillion parameters', number_ids: [m.brief.numbers[0]!.id], visual: scene('data center racks'), tags: [] },
+    { type: 'stat', headline: 'Its score', number_ids: [m.brief.numbers[0]!.id], visual: scene('code on screen'), tags: [] },
+    { type: 'stat', headline: 'Price', number_ids: m.brief.numbers.slice(0, 2).map((n) => n.id), visual: scene('price tag cash'), tags: [] },
+    { headline: 'How it works', body: 'A mixture of experts routes each token to a few experts.', visual: scene('abstract neural network'), tags: [] },
+    { headline: 'Where it runs', body: 'It runs on rented chips.', visual: { kind: 'setting', query: 'Mistral AI office' }, tags: [] },
   ]);
   const e = errs(d, m.brief, viewFor(m.brief, { 'Mistral AI': org() }));
-  assert.match(at(e, 'slide 2'), /a stat slide's background is automatic: its IMAGE is none, not stock: data center racks/);
-  assert.match(at(e, 'slide 3'), /not stock: code on screen/);
-  assert.match(at(e, 'slide 4'), /a split_stat slide's background is automatic: its IMAGE is none, not stock: price tag cash/);
-  assert.match(at(e, 'slide 5'), /stock "abstract neural network" doesn't name a physical thing this slide mentions/);
+  assert.equal(at(e, 'slide 2') + at(e, 'slide 3') + at(e, 'slide 4') + at(e, 'slide 5'), '');
+  assert.match(at(e, 'slide 6'), /scene "Mistral AI office" names Mistral AI/);
+  assert.match(e.join(' | '), /slides: 3 stat slides; at most 2 per post/);
 });
 
 // ── The final attempt: tags pruned, requests dropped, words kept ───────
@@ -345,25 +307,25 @@ const usage = { input_tokens: 4000, output_tokens: 3000, cache_read_input_tokens
 const msg = (input: unknown) => ({ id: 'm', type: 'message', role: 'assistant', model: 'x', stop_reason: 'tool_use', stop_sequence: null, usage, content: [{ type: 'tool_use', id: `t_${Math.random()}`, name: 'submit_draft', input }] }) as unknown as Anthropic.Message;
 const scripted = (inputs: unknown[]): MessagesCreate => async () => msg(inputs.shift());
 
-test('final attempt: failing tags are removed and logged, then failing requests become none; the words never change', async () => {
+test('final attempt: failing tags are removed and logged, then a failing visual becomes its fallback; the words never change', async () => {
   const brief = briefSuperIntelligenceForce();
   const bad = sifDraftHandoff();
   bad.slides[1]!.subject_ids = ['S2', 'S1']; // Trump isn't named on the Clayton slide
   delete bad.slides[4]!.subject_ids;
-  bad.slides[5]!.image = { kind: 'subject', value: 'Jay Clayton' };
+  bad.slides[5]!.visual = vPerson('Jay Clayton');
   bad.slides[5]!.subject_ids = ['S2']; // Clayton isn't named on "Why the name"
   const r = await runWriter(brief, { create: scripted([bad, structuredClone(bad)]), isWellKnown: async () => false });
   assert.ok(r.ok);
   assert.deepEqual(r.draft.slides[1]!.subject_ids, ['S2']);
   assert.deepEqual(r.draft.slides[4]!.subject_ids, []);
   assert.deepEqual(r.draft.slides[5]!.subject_ids, []);
-  assert.equal(r.draft.slides[5]!.image.kind, 'none', 'the request lost its tag, so it is dropped');
-  assert.equal(r.draft.slides[1]!.image.value, 'Jay Clayton', 'a request whose tag survives is kept');
+  assert.deepEqual(r.draft.slides[5]!.visual, bad.slides[5]!.fallback_visual, 'the request lost its tag, so its fallback takes over');
+  assert.deepEqual(r.draft.slides[1]!.visual, vPerson('Jay Clayton'), 'a request whose tag survives is kept');
   assert.deepEqual(r.draft.slides.map((s) => s.headline.text), bad.slides.map((s) => s.headline.text), 'words unchanged');
   for (const line of ['subject-tag-dropped: slide 3 S1 (Donald Trump) (not named on the slide)', 'subject-tag-dropped: slide 6 had no subject_ids → []', 'subject-tag-dropped: slide 7 S2 (Jay Clayton) (not named on the slide)']) {
-    assert.ok(r.imageRequestsDropped.includes(line), `${line} | ${r.imageRequestsDropped.join(' | ')}`);
+    assert.ok(r.visualsDropped.includes(line), `${line} | ${r.visualsDropped.join(' | ')}`);
   }
-  assert.ok(r.imageRequestsDropped.some((l) => /^image-request-dropped: slide 7 subject: Jay Clayton → none/.test(l)), r.imageRequestsDropped.join(' | '));
+  assert.ok(r.visualsDropped.some((l) => /^visual-dropped: slide 7 person: Jay Clayton → its fallback/.test(l)), r.visualsDropped.join(' | '));
 });
 
 test("words stay when a tag fails: adding a name to the slide to fit its tag fails the retry", async () => {
@@ -374,7 +336,7 @@ test("words stay when a tag fails: adding a name to the slide to fit its tag fai
   rewritten.slides[4]!.body!.text = 'Clayton says the charter will plan responses to SI-enabled threats while preventing overregulation.';
   const r = await runWriter(brief, { create: scripted([bad, rewritten]), isWellKnown: async () => false });
   assert.equal(r.ok, false);
-  if (!r.ok) assert.match(r.detail, /slide 6: the words changed after its IMAGE request failed; restore them/);
+  if (!r.ok) assert.match(r.detail, /slide 6: the words changed after its visual request failed; restore them/);
 });
 
 test('pruneSubjectTags keeps valid tags and only touches tags', () => {
@@ -415,8 +377,8 @@ test("type-led quote slide: no verified speaker photo → quote mark, quote, the
 import { DEFAULT_ICON, ICON_LIST_FOR_WRITER, ICON_NAMES } from '@/lib/social/render/icons';
 import { defaultIcons } from '@/lib/social/writer/writer';
 
-test('icons: the IMAGE rule lists every icon; the cover and every slide must name one from the list', () => {
-  assert.ok(IMAGE_RULE.includes(ICON_LIST_FOR_WRITER));
+test('icons: the VISUAL rule lists every icon; the cover and every slide must name one from the list', () => {
+  assert.ok(VISUAL_RULE.includes(ICON_LIST_FOR_WRITER));
   assert.equal(ICON_NAMES.length, 30);
   const brief = briefSuperIntelligenceForce();
   const d = sifDraftHandoff();

@@ -20,6 +20,10 @@
  *   PHOTO RULE (Tommy, 2026-10-06): the tested IMAGE line is replaced by
  *   IMAGE_RULE (photos only when one fits, else none; no symbolic stock), and
  *   the spread line by the one-spread, literal-scene version.
+ *   SIXTH ROUND (Tommy, 2026-10-07): the IMAGE line becomes VISUAL_RULE (a
+ *   visual and a fallback per slide, by kind); slide kinds are text, stat and
+ *   quote (KINDS_RULE); the spread line and CONCEPT are gone (Jev lays slides
+ *   out; slide buckets spec); at most 2 stat slides stays.
  *   PLACEMENT (caching): "BRIEF\n{{brief}}" moves to the user message;
  *   the brief is the Reporter's JSON, with SUBJECTS marked well_known by code.
  */
@@ -31,7 +35,7 @@ export const WRITER_INTRO = `You are the Writer for Helios Group, an Instagram p
 /** The three "added since the test" rule lines (prompts file §2), in the tested terse style. */
 export const WRITER_ADDED_RULES = `- Claim tags: give every cover, headline, body and caption line the IDs of the brief entries it rests on (F3, B1, Q2, N1) in its facts list; empty if none. Code checks them.
 - Widely known: each SUBJECTS entry has well_known (true/false), set by code from Wikidata. Use it for the COVER rule; don't guess.
-- When two consecutive slides continue one beat and one wide literal scene fits both, pair them with spread_with_next and give the pair one IMAGE. Use at most one spread per post.`;
+- At most 2 stat slides per post. Keep the strongest numbers as stat slides; put the others in a text slide's body.`;
 
 /** Writer prompt v2 (Tommy, 2026-10-06; Lucas: slides feel isolated): momentum across the post. Word for word from the prompts file. */
 export const WRITER_MOMENTUM_RULES = `- Plan the post as one story, not a list of facts. Outline the arc before writing: the hook (cover) → what happened → why it matters → the turn (the pushback, the catch, the conflict) → what's still unknown or what comes next.
@@ -45,7 +49,7 @@ export const WRITER_SLIDE_RULE = '- Every element on a slide adds something new:
 const CONTEXT_AND_GLOSSING = RULES_BLOCK.slice(RULES_BLOCK.indexOf('## Context policy'));
 
 export const WRITER_SECTION_LIST = `COVER OPTIONS: 1. 2. 3.  CHOSEN: n
-SLIDE 2 / TYPE / HEADLINE / BODY / (QUOTE or BIG NUMBER by ID) / IMAGE   (repeat)
+SLIDE 2 / TYPE / HEADLINE / BODY / (QUOTE or BIG NUMBER by ID) / VISUAL / FALLBACK VISUAL   (repeat)
 FOLLOW: …
 CAPTION: (see caption section)
 EDIT NOTES: one line per judgment call`;

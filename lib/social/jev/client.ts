@@ -12,9 +12,15 @@ export const JEV_INPUT_USD_PER_MTOK = 0.042;
 
 export type JevUsage = { input_tokens: number; output_tokens: number };
 
-/** All Social question sets use Nouls; `noul` is the probability of yes. */
+/**
+ * A Noul answer (`noul`: the probability of yes), or a Choice answer (the
+ * picked label and every label's probability; the slide bucket and variant
+ * picks, sixth round).
+ */
+export type JevAnswer = { noul: number; choice?: undefined; probabilities?: undefined } | { choice: string; probabilities: Record<string, number>; noul?: undefined };
+
 export type JevResult = {
-  answers: Record<string, { noul: number }>;
+  answers: Record<string, JevAnswer>;
   usage: JevUsage;
   model: string;
 };
@@ -42,8 +48,9 @@ export function createJevAsk(config: ConstructorParameters<typeof TypeSafeClient
     const res = await client.systemOne(request);
     const answers: JevResult['answers'] = {};
     for (const [id, answer] of Object.entries(res.answers)) {
-      if (answer.type !== 'noul') throw new Error(`Jev answer ${id} is ${answer.type}; Social sets use noul only`);
-      answers[id] = { noul: answer.noul };
+      if (answer.type === 'noul') answers[id] = { noul: answer.noul };
+      else if (answer.type === 'choice') answers[id] = { choice: answer.choice, probabilities: { ...answer.probabilities } };
+      else throw new Error(`Jev answer ${id} is ${answer.type}; Social sets use noul and choice only`);
     }
     return {
       answers,

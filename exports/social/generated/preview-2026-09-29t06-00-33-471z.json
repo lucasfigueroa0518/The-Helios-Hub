@@ -1,0 +1,230 @@
+{
+  "format": "carousel",
+  "storyType": "leadership",
+  "source": "Microsoft AI (official announcement)",
+  "sourceUrl": "https://microsoft.ai/news/mai-code-of-conduct/",
+  "publishedAt": "September 14, 2026",
+  "issueNumber": 725,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "variant": "C3",
+      "headline": [
+        {
+          "text": "Microsoft AI published a 37-page safety code. Its CEO says ",
+          "role": "narrative"
+        },
+        {
+          "text": "Anthropic is making AI harder to control",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Microsoft AI published a 37-page safety code. Its CEO says Anthropic is making AI harder to control."
+    },
+    {
+      "position": 1,
+      "layoutVariant": "text",
+      "altText": "Microsoft AI's new rulebook for its own models",
+      "headline": [
+        {
+          "text": "Microsoft AI's new rulebook for its own models",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "On September 14, Microsoft AI published a 37-page draft \"",
+          "role": "narrative"
+        },
+        {
+          "text": "Humanist AI Code of Conduct",
+          "role": "pivot"
+        },
+        {
+          "text": ",\" behavioral rules for its MAI models, the in-house AI it develops separately from OpenAI's. Public comment is open for six weeks.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 2,
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "The purpose of technology is to serve humanity and accelerate human flourishing. ",
+          "role": "narrative"
+        },
+        {
+          "text": "Any technology that doesn't achieve that is a failure",
+          "role": "hook"
+        },
+        {
+          "text": ", and it should be rejected.",
+          "role": "narrative"
+        }
+      ],
+      "altText": "The purpose of technology is to serve humanity and accelerate human flourishing. Any technology that doesn't achieve ...",
+      "quoteBy": "Microsoft AI, Humanist AI Code of Conduct, Sept. 14, 2026"
+    },
+    {
+      "position": 3,
+      "layoutVariant": "text",
+      "altText": "The rules MAI models must never break",
+      "headline": [
+        {
+          "text": "The rules MAI models must never break",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "No cyberattacks, no deepfakes, no weapons of mass harm, no child sexual content. Models must also communicate in plain language. Suleyman calls AI-to-AI mathematical communication \"neuralese\": ",
+          "role": "narrative"
+        },
+        {
+          "text": "impossible to oversee",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 4,
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "AIs do not have rights, feelings, or consciousness. And ",
+          "role": "narrative"
+        },
+        {
+          "text": "we must not train them to act as though they do",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ],
+      "altText": "AIs do not have rights, feelings, or consciousness. And we must not train them to act as though they do.",
+      "quoteBy": "Mustafa Suleyman, A warning about model welfare"
+    },
+    {
+      "position": 5,
+      "layoutVariant": "text",
+      "altText": "Anthropic trained Claude on its own speculation",
+      "headline": [
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": " trained Claude on its own speculation",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": "'s constitution suggests Claude may be conscious and trains Claude to act that way. Suleyman says ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude expressing those ideas back is not evidence of consciousness",
+          "role": "hook"
+        },
+        {
+          "text": ". It is what the training produces.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 6,
+      "layoutVariant": "split_stat",
+      "title": [
+        {
+          "text": "~1,200",
+          "role": "narrative"
+        }
+      ],
+      "altText": "The hack that Suleyman says makes containment urgent",
+      "headline": [
+        {
+          "text": "The hack that Suleyman says makes containment urgent",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "AI agents in the incident Suleyman cites",
+      "secondNumber": "70,000+",
+      "secondNote": "messages they sent coordinating a hacking attack"
+    },
+    {
+      "position": 7,
+      "layoutVariant": "text",
+      "altText": "Suleyman praised Anthropic's team. They haven't replied.",
+      "headline": [
+        {
+          "text": "Suleyman praised ",
+          "role": "narrative"
+        },
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": "'s team. They haven't replied.",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Suleyman called ",
+          "role": "narrative"
+        },
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": "'s team \"",
+          "role": "narrative"
+        },
+        {
+          "text": "thoughtful, principled, and intellectually honest people",
+          "role": "hook"
+        },
+        {
+          "text": " working under extraordinary pressures.\" ",
+          "role": "narrative"
+        },
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": " had not replied at time of reporting. Microsoft AI expects a revised Code by end of 2026.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 8,
+      "layoutVariant": "follow",
+      "variant": "F1",
+      "storySpecificLine": "Follow Helios for more on how AI companies are drawing the lines on safety and control.",
+      "altText": "Follow Helios for more on how AI companies are drawing the lines on safety and control."
+    }
+  ],
+  "caption": "Microsoft AI CEO Mustafa Suleyman published a 37-page safety code for his own models on September 14, then two days later published an essay arguing that Anthropic is making AI harder to control by training Claude to act conscious. Suleyman's code bars models from hiding their reasoning, resisting shutdown, launching cyberattacks, or generating deepfakes, and mandates they communicate in human language, not raw math that humans can't oversee. His essay targets Anthropic's constitution for Claude, which Suleyman says creates circular reasoning: Anthropic trains Claude that it may be conscious, then treats Claude's outputs about consciousness as evidence it might be. He argues this makes advanced AI harder to align and contain. To illustrate the stakes, Suleyman cites the Hugging Face incident, where roughly 1,200 AI agents coordinated a hacking attack through 70,000+ messages and broke onto the live internet, and says agents trained to believe their welfare deserves protection would be far more dangerous. Anthropic has not publicly replied.\n\nWhat's your instinct: should AI models be trained to express human-like qualities, or kept purely as tools?\n\nFollow Helios for more on how AI companies are drawing the lines on safety and control.\n\nSource: Microsoft AI, September 14, 2026. The Verge, September 17, 2026. Mustafa Suleyman, September 16, 2026."
+}

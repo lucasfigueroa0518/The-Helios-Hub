@@ -1,0 +1,17 @@
+{
+  "fixture": "openai-funding",
+  "humanized": false,
+  "exportedAt": "2026-09-22T21:40:40.912Z",
+  "format": "carousel",
+  "storyType": "ai_funding",
+  "source": "Reuters",
+  "sourceUrl": "https://news.google.com/rss/articles/CBMiwwFBVV95cUxOc3hqMlQtdi1BT1QzTGs4U1BVXzcxb05pRnpHMjI4RjBFekZBQ2lQSVZRTURaN1h3eGlZN0pCdmY1UzdwQzlNeldrMXh0YTFkZmxsdVBmV211YmdwZWIxTTAya1VpLUdtbGNRZkZZbFBVUklUVnVzd1NZRHpSTkpTZ3pWUGhQMmVzaW1qZDYydE83eTBNb3c4T2duTEw2dWx5WUVjZXVTX1Ixb25LR2ExRHlQTDltNWVrLW5KOExsdjJCaFE?oc=5",
+  "slideCount": 5,
+  "files": [
+    "slide-00.png",
+    "slide-01.png",
+    "slide-02.png",
+    "slide-03.png",
+    "slide-04.png"
+  ]
+}

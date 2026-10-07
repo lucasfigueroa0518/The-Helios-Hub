@@ -1,0 +1,294 @@
+{
+  "format": "carousel",
+  "storyType": "policy",
+  "source": "Bloomberg Technology",
+  "sourceUrl": "https://www.bloomberg.com/news/articles/2026-09-18/newsom-pitches-ai-kill-switch-extra-oversight-in-california",
+  "publishedAt": "2026-09-18T15:12:53.000Z",
+  "issueNumber": 722,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "variant": "C3",
+      "beat": "HOOK",
+      "altText": "Cover slide. Bold white text on dark background reads: 'Gavin Newsom just ordered a kill switch for frontier AI models — and California's working group has 2 months to make it real.' High-contrast editorial portrait of Gavin Newsom in background.",
+      "headline": [
+        {
+          "role": "narrative",
+          "text": "Gavin Newsom just ordered a kill switch for frontier AI models — and California's working group has 2 months to make it real."
+        }
+      ]
+    },
+    {
+      "position": 1,
+      "layoutVariant": "story_beat",
+      "variant": "B1",
+      "beat": "GROUND",
+      "altText": "Slide showing the California state Capitol building. Text explains that Newsom signed the executive order on September 18, 2026 and gave the working group two months to report back.",
+      "body": [
+        {
+          "role": "narrative",
+          "text": "On "
+        },
+        {
+          "role": "pivot",
+          "text": "Friday, September 18, 2026"
+        },
+        {
+          "role": "narrative",
+          "text": ", "
+        },
+        {
+          "role": "pivot",
+          "text": "Gavin Newsom"
+        },
+        {
+          "role": "narrative",
+          "text": " signed an executive order directing a working group to develop AI safety guardrails for "
+        },
+        {
+          "role": "pivot",
+          "text": "California"
+        },
+        {
+          "role": "narrative",
+          "text": "—the state where most of the world's frontier AI is built."
+        }
+      ],
+      "bodyBottom": [
+        {
+          "role": "narrative",
+          "text": "The group has two months to deliver formal safety and security recommendations to the governor's office."
+        }
+      ],
+      "photoUrl": "https://images.unsplash.com/photo-1517048676732-d65bc937f952?w=1200",
+      "photoCredit": "PHOTO: JASON GOODMAN · UNSPLASH"
+    },
+    {
+      "position": 2,
+      "layoutVariant": "data_block",
+      "variant": "D1",
+      "beat": "SCALE",
+      "altText": "Type-forward slide with '2 months' in giant orange text. Below it, a comparison: 2 months versus the typical 6–18 month legislative cycle.",
+      "headline": [
+        {
+          "role": "narrative",
+          "text": "FASTER THAN ANY LEGISLATURE MOVES."
+        }
+      ],
+      "body": [
+        {
+          "role": "narrative",
+          "text": "Normal state legislative cycles run "
+        },
+        {
+          "role": "hook",
+          "text": "6 to 18 months"
+        },
+        {
+          "role": "narrative",
+          "text": ". Newsom's working group delivers its AI safety guidance in two."
+        }
+      ],
+      "title": [
+        {
+          "role": "hook",
+          "text": "2 months."
+        }
+      ]
+    },
+    {
+      "position": 3,
+      "layoutVariant": "data_block",
+      "variant": "D3",
+      "beat": "MECHANISM",
+      "altText": "Split diagram slide. Left side shows a kill-switch icon with label 'Frontier model shutoff.' Right side shows an auditor icon with label 'Third-party safety plans.' Both are proposed obligations for AI companies under the executive order.",
+      "headline": [
+        {
+          "role": "narrative",
+          "text": "WHAT COMPANIES WOULD ACTUALLY FACE."
+        }
+      ],
+      "body": [
+        {
+          "role": "narrative",
+          "text": "First: build a "
+        },
+        {
+          "role": "hook",
+          "text": "kill switch"
+        },
+        {
+          "role": "narrative",
+          "text": " into every frontier model — a hard shutoff that can be triggered if a system goes wrong. Second: hand your safety planning to independent third parties who draft the guardrails, not your own engineers."
+        }
+      ],
+      "title": [
+        {
+          "role": "narrative",
+          "text": "Two obligations on the table."
+        }
+      ]
+    },
+    {
+      "position": 4,
+      "layoutVariant": "story_beat",
+      "variant": "B4",
+      "beat": "CONTEXT",
+      "altText": "Aerial or map view of the Silicon Valley tech corridor. Text explains California's position as the center of gravity for AI development and why a state-level order has national consequences.",
+      "body": [
+        {
+          "role": "pivot",
+          "text": "California"
+        },
+        {
+          "role": "narrative",
+          "text": " leads AI model development globally. More frontier models are built there than anywhere else."
+        }
+      ],
+      "bodyBottom": [
+        {
+          "role": "pivot",
+          "text": "California"
+        },
+        {
+          "role": "narrative",
+          "text": " formalizing these rules makes them the "
+        },
+        {
+          "role": "hook",
+          "text": "de facto national standard"
+        },
+        {
+          "role": "narrative",
+          "text": " before Congress drafts anything."
+        }
+      ],
+      "photoUrl": "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=1200",
+      "photoCredit": "PHOTO: MIKE KONONOV · UNSPLASH"
+    },
+    {
+      "position": 5,
+      "layoutVariant": "proof",
+      "variant": "P1",
+      "beat": "PROOF",
+      "altText": "Screenshot-style recreation of the published headline: 'Newsom Wants AI Kill Switch to Rein in Tech Industry.' Below it, a brief commentary confirming the order came from the governor's office.",
+      "headline": [
+        {
+          "role": "narrative",
+          "text": "On the record."
+        }
+      ],
+      "body": [
+        {
+          "role": "narrative",
+          "text": "The executive order came directly from the "
+        },
+        {
+          "role": "pivot",
+          "text": "governor's office"
+        },
+        {
+          "role": "narrative",
+          "text": " on "
+        },
+        {
+          "role": "pivot",
+          "text": "September 18, 2026"
+        },
+        {
+          "role": "narrative",
+          "text": ". The headline is real. The two-month clock is already running."
+        }
+      ],
+      "photoUrl": "https://assets.bwbx.io/images/users/iqjWHBFdfxIU/i3W3JthlrnN4/v1/1200x800.jpg",
+      "photoCredit": "PHOTO · ARTICLE HERO"
+    },
+    {
+      "position": 6,
+      "layoutVariant": "story_beat",
+      "variant": "B4",
+      "beat": "SCENARIO",
+      "altText": "Dark, moody data-center photo. Text describes a hypothetical AI lab in San Francisco facing compliance pressure after the working group delivers its report in October 2026.",
+      "body": [
+        {
+          "role": "narrative",
+          "text": "Imagine you run an AI lab in San Francisco. It's October 2026. The working group just filed its report."
+        }
+      ],
+      "bodyBottom": [
+        {
+          "role": "narrative",
+          "text": "Your lawyers are telling you to "
+        },
+        {
+          "role": "hook",
+          "text": "retrofit your model architecture"
+        },
+        {
+          "role": "narrative",
+          "text": " before any federal framework exists. A third-party auditor you've never met is writing your safety plan."
+        }
+      ],
+      "photoUrl": "https://images.unsplash.com/photo-1497366216548-37526070297c?w=1200",
+      "photoCredit": "PHOTO: COPERNICO · UNSPLASH"
+    },
+    {
+      "position": 7,
+      "layoutVariant": "thesis",
+      "variant": "T1",
+      "beat": "THESIS",
+      "altText": "Type-only slide. Single bold sentence: 'California's 2-month clock may set the rules for frontier AI in America — well before Congress finds the time.'",
+      "body": [
+        {
+          "role": "pivot",
+          "text": "California's"
+        },
+        {
+          "role": "narrative",
+          "text": " "
+        },
+        {
+          "role": "hook",
+          "text": "2-month clock"
+        },
+        {
+          "role": "narrative",
+          "text": " may set the rules for frontier AI in America before Congress acts."
+        }
+      ]
+    },
+    {
+      "position": 8,
+      "layoutVariant": "debate",
+      "variant": "T2",
+      "beat": "DEBATE",
+      "altText": "Split-screen type layout. Left side labeled 'NECESSARY' argues for the kill-switch mandate. Right side labeled 'OVERREACH' argues it risks driving AI development elsewhere.",
+      "headline": [
+        {
+          "role": "narrative",
+          "text": "Should states mandate kill-switches for frontier AI?"
+        }
+      ],
+      "sides": [
+        {
+          "text": "Frontier models carry catastrophic risk. A hard shutoff requirement is the minimum responsible standard, and California is right to move first.",
+          "label": "NECESSARY"
+        },
+        {
+          "text": "A kill-switch mandate designed by a two-month working group could push development to states — or countries — with no guardrails at all.",
+          "label": "OVERREACH"
+        }
+      ]
+    },
+    {
+      "position": 9,
+      "layoutVariant": "follow",
+      "variant": "F1",
+      "beat": "FOLLOW",
+      "altText": "Clean minimal slide with account logo or brand mark. Text reads: 'We track the AI policy moves buried in press releases — before they reshape the industry.'",
+      "storySpecificLine": "We track the AI policy moves buried in press releases before they shift the industry."
+    }
+  ],
+  "caption": "On September 18, 2026, California Governor Gavin Newsom signed an executive order directing a working group to deliver AI safety and security recommendations within two months — a timeline that runs faster than the standard state legislative process, which typically takes six to eighteen months. The proposed measures the group must consider include requiring AI companies to build a kill switch into frontier models and mandating that independent third parties, rather than the companies themselves, draft their safety plans. This report is sourced from a statement issued by the governor's office and has not yet been independently corroborated by outside reporting, so treat the specific mechanism details as preliminary until further confirmation."
+}

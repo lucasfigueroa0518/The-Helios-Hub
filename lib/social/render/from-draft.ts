@@ -9,9 +9,10 @@
  *   - layout rotation (spec §5.3) and spreads (§5.4) are applied here;
  *   - story category chip: `tech` until there's a classifier for it.
  */
-import type { Photo } from '@/lib/social/photos/find';
+import { SPREAD_MIN_ASPECT, type Photo } from '@/lib/social/photos/find';
 import type { FilledDraft, FilledSlide } from '@/lib/social/writer/draft';
 
+import { templateById, type TemplateId } from './buckets';
 import { DEFAULT_ICON, isIcon } from './icons';
 import { rotateLayouts } from './layout-rotation';
 import type { Post, SlideCopy, SpanRun } from './types';
@@ -22,11 +23,11 @@ export type PostMeta = { source: string; sourceUrl: string; publishedAt: string 
 
 /**
  * Rule 3: photos that may show people (article and official images, headshots,
- * second photos) → their own region unless framed for full bleed; logos are
- * logo cards; stock photos are scenes.
+ * CEO and second photos) → their own region unless framed for full bleed; logos
+ * are logo cards; stock photos, Commons search scenes and headquarters (a building) are scenes.
  */
 export const photoKindOf = (photo: Photo): 'subject' | 'scene' | 'logo' =>
-  photo.source === 'logo' ? 'logo' : photo.source === 'stock' ? 'scene' : 'subject';
+  photo.source === 'logo' ? 'logo' : photo.source === 'stock' || photo.source === 'hq' || photo.source === 'commons-search' ? 'scene' : 'subject';
 
 /**
  * People full bleed when properly framed (photo spec §4; Tommy, 2026-10-07):
@@ -61,19 +62,15 @@ function storySlide(s: FilledSlide, position: number, photo: Photo | null, icon:
   };
   switch (s.type) {
     case 'stat': {
+      if (s.numbers.length === 2) {
+        const [a, b] = s.numbers;
+        return { ...base, ...body, layoutVariant: 'split_stat', title: run(a!.value), numberNote: a!.counts, secondNumber: b!.value, secondNote: b!.counts };
+      }
       const n = s.numbers[0]!;
       return { ...base, ...body, layoutVariant: 'stat', title: run(n.value), numberNote: n.counts };
     }
-    case 'split_stat': {
-      const [a, b] = s.numbers;
-      return { ...base, ...body, layoutVariant: 'split_stat', title: run(a!.value), numberNote: a!.counts, secondNumber: b!.value, secondNote: b!.counts };
-    }
     case 'quote':
       return { ...base, ...body, layoutVariant: 'quote', quoteText: run(s.quote!.text), quoteBy: s.quote!.speaker, ...(s.quote!.speaker_role ? { quoteRole: s.quote!.speaker_role } : {}), photoIsSpeaker: !!photo?.qid && !!s.quote!.speaker_subject && photo.subject === s.quote!.speaker_subject, altText: `${s.headline.text}: "${s.quote!.text}" (${s.quote!.speaker})` };
-    case 'landing':
-      return { ...base, ...body, layoutVariant: 'landing' };
-    case 'image':
-      return { ...base, ...body, layoutVariant: 'image' };
     default:
       // The target look (photo spec §5a): a photo that can sit under text (a scene, or a person framed for it)
       // goes full bleed with the text at the bottom over the dark fade; the layout rotation varies it from there.
@@ -87,8 +84,7 @@ export function attributionBlock(photos: Array<Photo | null>): string | undefine
   return credits.length ? `Photos: ${credits.join('; ')}` : undefined;
 }
 
-/** A spread photo must fill two slides side by side (2160×1350): at least 1.6 times as wide as tall. */
-export const SPREAD_MIN_ASPECT = 2160 / 1350;
+export { SPREAD_MIN_ASPECT };
 
 /**
  * Spread (spec §5.4): a slide marked spread_with_next shares its scene
@@ -96,13 +92,13 @@ export const SPREAD_MIN_ASPECT = 2160 / 1350;
  * photo (rule 3), a photo not wide enough, or no next slide → both render
  * as normal slides.
  */
-function applySpreads(slides: SlideCopy[], draft: FilledDraft, photos: Array<Photo | null>): SlideCopy[] {
+function applySpreads(slides: SlideCopy[], draft: FilledDraft, photos: Array<Photo | null>, spreadAt: number | null): SlideCopy[] {
   const out = [...slides];
   draft.slides.forEach((s, i) => {
     const p = photos[i];
     const a = out[i + 1];
     const b = out[i + 2];
-    if (!s.spread_with_next || !p || !a || !b || b.layoutVariant === 'follow') return;
+    if (!(spreadAt === i || s.spread_with_next) || !p || !a || !b || b.layoutVariant === 'follow') return;
     if (photoKindOf(p) !== 'scene' || !p.width || !p.height || p.width / p.height < SPREAD_MIN_ASPECT) return;
     if (a.panoramaSide || b.panoramaSide) return;
     out[i + 1] = { ...a, panoramaSide: 'left' };
@@ -114,24 +110,34 @@ function applySpreads(slides: SlideCopy[], draft: FilledDraft, photos: Array<Pho
 /** Photos per slide (cover first) and, optionally, the icons the chain settled on (cover first; else the draft's). */
 export type DraftPhotos = { cover: Photo | null; slides: Array<Photo | null>; icons?: Array<string | null> };
 
-/** The slides in draft order, before layout rotation. Every slide carries its icon; the renderer draws it when there is no photo. */
-export function draftSlides(draft: FilledDraft, photos: DraftPhotos): SlideCopy[] {
+/** Jev's layout (render/layout.ts): a template per slide (cover first) and the spread's first slide. */
+export type ChosenLayout = { templates: TemplateId[]; spreadAt: number | null };
+
+/**
+ * The slides in draft order. Every slide carries its icon; the renderer draws
+ * it when there is no photo. With a layout, each slide takes its template's
+ * settings (text never changes); without one (stubs, tests), the default.
+ */
+export function draftSlides(draft: FilledDraft, photos: DraftPhotos, layout?: ChosenLayout): SlideCopy[] {
   const chosen = draft.cover_options[draft.chosen_cover - 1];
-  return applySpreads(
-    [
-      { position: 0, layoutVariant: 'cover', headline: run(draft.cover), altText: draft.cover, icon: iconOf(photos.icons?.[0] ?? chosen?.icon), ...photoFields(photos.cover) },
-      ...draft.slides.map((s, i) => storySlide(s, i + 1, photos.slides[i] ?? null, photos.icons?.[i + 1])),
-      { position: draft.slides.length + 1, layoutVariant: 'follow', storySpecificLine: draft.follow, altText: draft.follow },
-    ],
-    draft,
-    photos.slides,
-  );
+  const slides: SlideCopy[] = [
+    { position: 0, layoutVariant: 'cover', headline: run(draft.cover), altText: draft.cover, icon: iconOf(photos.icons?.[0] ?? chosen?.icon), ...photoFields(photos.cover) },
+    ...draft.slides.map((s, i) => storySlide(s, i + 1, photos.slides[i] ?? null, photos.icons?.[i + 1])),
+    { position: draft.slides.length + 1, layoutVariant: 'follow', storySpecificLine: draft.follow, altText: draft.follow },
+  ];
+  const spread = applySpreads(slides, draft, photos.slides, layout?.spreadAt ?? null);
+  if (!layout) return spread;
+  return spread.map((s, i) => {
+    const id = layout.templates[i];
+    return id ? { ...templateById(id).apply(s), template: id } : s;
+  });
 }
 
 export function toRenderPost(
   draft: FilledDraft,
   photos: DraftPhotos,
   meta: PostMeta,
+  layout?: ChosenLayout,
 ): Post {
   return {
     format: 'carousel',
@@ -140,7 +146,7 @@ export function toRenderPost(
     sourceUrl: meta.sourceUrl,
     publishedAt: meta.publishedAt,
     issueNumber: 0,
-    slides: rotateLayouts(draftSlides(draft, photos)).slides,
+    slides: rotateLayouts(draftSlides(draft, photos, layout)).slides,
     caption: draft.caption.text,
     attributionBlock: attributionBlock([photos.cover, ...photos.slides]),
   };

@@ -1,0 +1,102 @@
+[
+  {
+    "subject": {
+      "name": "Julie Menin",
+      "role": "NYC Council Speaker who convened the hearing"
+    },
+    "result": {
+      "ok": false,
+      "reason": "no entry matches the brief (Q6308392 \"American lawyer and businesswoman\")",
+      "type": "person",
+      "scores": {
+        "person": 0.97,
+        "matches": [
+          {
+            "id": "Q6308392",
+            "label": "Julie Menin",
+            "description": "American lawyer and businesswoman",
+            "p": 0.62
+          }
+        ]
+      }
+    }
+  },
+  {
+    "subject": {
+      "name": "Logan Graham",
+      "role": "Head of Frontier Red Team, Anthropic; testified"
+    },
+    "result": {
+      "ok": false,
+      "reason": "no entry matches the brief (Q125766681 \"Canadian Rhodes Scholar\")",
+      "type": "person",
+      "scores": {
+        "person": 0.97,
+        "matches": [
+          {
+            "id": "Q125766681",
+            "label": "Logan Graham",
+            "description": "Canadian Rhodes Scholar",
+            "p": 0.61
+          }
+        ]
+      }
+    }
+  },
+  {
+    "subject": {
+      "name": "Jacob Coxon",
+      "role": "Former Anthropic researcher/whistleblower; witness"
+    },
+    "result": {
+      "ok": false,
+      "reason": "no entry matches the brief (Q141395021 \"British AI researcher\")",
+      "type": "person",
+      "scores": {
+        "person": 0.9,
+        "matches": [
+          {
+            "id": "Q141395021",
+            "label": "Jacob Coxon",
+            "description": "British AI researcher",
+            "p": 0.38
+          }
+        ]
+      }
+    }
+  },
+  {
+    "subject": {
+      "name": "Alex Turner",
+      "role": "Former Google DeepMind researcher; witness"
+    },
+    "result": {
+      "ok": false,
+      "reason": "no entry matches the brief (Q315643 \"British musician (born 1986)\"; Q56435535 \"researcher\"; Q4717916 \"American film director\")",
+      "type": "person",
+      "scores": {
+        "person": 0.86,
+        "matches": [
+          {
+            "id": "Q315643",
+            "label": "Alex Turner",
+            "description": "British musician (born 1986)",
+            "p": 0.02
+          },
+          {
+            "id": "Q56435535",
+            "label": "Alex J Turner",
+            "description": "researcher",
+            "p": 0.51
+          },
+          {
+            "id": "Q4717916",
+            "label": "Alex Turner",
+            "description": "American film director",
+            "p": 0.02
+          }
+        ]
+      }
+    }
+  }
+]

@@ -99,7 +99,7 @@ test('page reader returns raw text, word for word (spec §4.2c)', () => {
   assert.ok(page.text.length > 500);
 });
 
-test('photos: credit in its own element is split from the caption; largest srcset; og:image last', () => {
+test('photos: credit in its own element is split from the caption; largest srcset (its width kept for ranking); og:image last', () => {
   const { photos } = parseArticleHtml(PAGE_CREDIT_ELEMENT, URL_A)!;
   assert.equal(photos.length, 2);
   assert.deepEqual(photos[0], {
@@ -108,6 +108,7 @@ test('photos: credit in its own element is split from the caption; largest srcse
     credit: 'Photo: Lee Park for Example Tech',
     alt: 'Dana Whitlock on stage',
     from: 'figure',
+    width: 1600,
   });
   assert.deepEqual(photos[1], {
     src: 'https://cdn.example.com/og/northwind-share.jpg', caption: null, credit: null, alt: null, from: 'og:image',

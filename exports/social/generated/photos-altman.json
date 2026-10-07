@@ -1,0 +1,174 @@
+{
+  "format": "carousel",
+  "storyType": "tech",
+  "source": "Fortune (Jim Edwards newsletter)",
+  "sourceUrl": "https://fortune.com/2026/10/05/openai-sam-altman-the-world-should-accept-some-bad-things-happening/",
+  "publishedAt": "2026-10-05T21:41:10.495Z",
+  "issueNumber": 0,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "headline": [
+        {
+          "text": "OpenAI's Altman says the world should accept some bad things happening for AI's benefits",
+          "role": "narrative"
+        }
+      ],
+      "altText": "OpenAI's Altman says the world should accept some bad things happening for AI's benefits",
+      "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/2/2f/Sam_Altman_speaking_at_TED_%28cropped%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "photoCredit": "Steve Jurvetson, CC BY 2.0 · Wikimedia Commons"
+    },
+    {
+      "position": 1,
+      "headline": [
+        {
+          "text": "Where Altman splits from Anthropic",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Where Altman splits from Anthropic: \"we believe that the world should accept some bad things happening for the benefits of this technology and people having the agency.\" (Sam Altman)",
+      "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/c/cb/Disrupt_SF_TechCrunch_Disrupt_2019_%2848838144796%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "photoCredit": "TechCrunch, CC BY 2.0 · Wikimedia Commons",
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "we believe that the world should accept some bad things happening for the benefits of this technology and people having the agency.",
+          "role": "narrative"
+        }
+      ],
+      "quoteBy": "Sam Altman",
+      "photoIsSpeaker": true
+    },
+    {
+      "position": 2,
+      "headline": [
+        {
+          "text": "He would turn down a no-hacks guarantee",
+          "role": "narrative"
+        }
+      ],
+      "altText": "He would turn down a no-hacks guarantee",
+      "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/9/99/%E2%80%9CSam_Altman%E2%80%9D_by_Village_Global_%28Cropped%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "photoCredit": "Village Global, CC BY 2.0 · Wikimedia Commons",
+      "body": [
+        {
+          "text": "Altman said he would not take a trade guaranteeing no major hacks, no misuse and zero scams. He thinks people will do orders of magnitude more good than bad. The Verge notes he did not elaborate on the benefits.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text"
+    },
+    {
+      "position": 3,
+      "headline": [
+        {
+          "text": "He still draws a line at catastrophe",
+          "role": "narrative"
+        }
+      ],
+      "altText": "He still draws a line at catastrophe",
+      "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/d/d0/TechCrunch_Disrupt_SF_2017_-_Day_2_%2836522989073%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "photoCredit": "TechCrunch, CC BY 2.0 · Wikimedia Commons",
+      "body": [
+        {
+          "text": "Altman said he does not accept the really catastrophic risks, including a serious loss of control to AI. Futurism calls that a walk-back and says where he draws the line is murky.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text"
+    },
+    {
+      "position": 4,
+      "headline": [
+        {
+          "text": "OpenAI as the pragmatic middle",
+          "role": "narrative"
+        }
+      ],
+      "altText": "OpenAI as the pragmatic middle",
+      "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/a/a7/1515_Third_Street.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "photoCredit": "Coolcaesar, CC BY 4.0 · Wikimedia Commons",
+      "body": [
+        {
+          "text": "The Verge reports Altman said stronger regulation is still needed. He put OpenAI between Anthropic's more cautious approach and those favoring little or no regulation.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text",
+      "photoPlacement": "top"
+    },
+    {
+      "position": 5,
+      "headline": [
+        {
+          "text": "The two labs had been moving closer",
+          "role": "narrative"
+        }
+      ],
+      "altText": "The two labs had been moving closer",
+      "photoUrl": "/social/stock/server-racks.jpg",
+      "photoCredit": "Unsplash",
+      "body": [
+        {
+          "text": "Per Business Insider/Politico, OpenAI had backed stricter state safety laws and a House proposal for outside safety evaluators. Altman also agreed last month with Amodei's call to slow the most advanced models.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text"
+    },
+    {
+      "position": 6,
+      "headline": [
+        {
+          "text": "Earlier, Altman sounded more cautious",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Earlier, Altman sounded more cautious",
+      "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/8/8d/Sam_Altman_CropEdit_James_Tamim.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "photoCredit": "TechCrunch, CC BY 2.0 · Wikimedia Commons",
+      "body": [
+        {
+          "text": "In an earlier Fortune interview, Altman said a 10% risk of AI killing everyone by the end of the decade is unacceptable. He also said alignment is not solved. Alignment is efforts to build AI aligned with human values.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "10%",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "Risk of AI killing everyone by end of decade that Altman called unacceptable (earlier Fortune interview)"
+    },
+    {
+      "position": 7,
+      "headline": [
+        {
+          "text": "A cybersecurity CEO says Altman is wrong",
+          "role": "narrative"
+        }
+      ],
+      "altText": "A cybersecurity CEO says Altman is wrong",
+      "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/b/b1/Jay_Chaudhry.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "photoCredit": "BluBayou (CC0) · Wikimedia Commons",
+      "body": [
+        {
+          "text": "Zscaler CEO Jay Chaudhry said on Yahoo Finance that accepting the consequences is not acceptable, and that models and enterprises must each do their part. Zscaler sells protection against rogue AI agents, so it has a commercial interest.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text"
+    },
+    {
+      "position": 8,
+      "layoutVariant": "follow",
+      "storySpecificLine": "Follow Helios Group to keep up with what AI leaders say when the cameras are on and how others respond.",
+      "altText": "Follow Helios Group to keep up with what AI leaders say when the cameras are on and how others respond."
+    }
+  ],
+  "caption": "OpenAI CEO Sam Altman said in Politico's new Decoded interview that the world should accept some bad things happening for the benefits of AI, and he named that as a point where he differs from Anthropic and its CEO Dario Amodei.\n\nAltman said he would not take a trade guaranteeing no major hacks, no misuse and zero scams, because he thinks people will do orders of magnitude more good than bad. He also said he does not accept the really catastrophic risks, including a serious loss of control to AI. Zscaler CEO Jay Chaudhry said on Yahoo Finance that Altman is wrong. In an earlier Fortune interview, Altman called a 10% risk of AI killing everyone by the end of the decade unacceptable.\n\nWould you accept some bad outcomes from AI in exchange for its benefits?\n\nFollow Helios Group for plain-English AI news, including how rival labs and critics respond to what AI leaders say.\n\nSource: The Verge, Fortune, Futurism, Yahoo Finance via AOL, October 5, 2026; Business Insider/Politico via Yahoo Tech, October 4, 2026.",
+  "attributionBlock": "Photos: Steve Jurvetson, CC BY 2.0 · Wikimedia Commons; TechCrunch, CC BY 2.0 · Wikimedia Commons; Village Global, CC BY 2.0 · Wikimedia Commons; Coolcaesar, CC BY 4.0 · Wikimedia Commons; Unsplash; BluBayou (CC0) · Wikimedia Commons"
+}

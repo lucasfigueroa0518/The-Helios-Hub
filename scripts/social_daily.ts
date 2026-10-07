@@ -12,11 +12,11 @@
  *
  *   npx tsx scripts/social_daily.ts --stories 2            (cap $2.00)
  *   npx tsx scripts/social_daily.ts --cap-usd 1.50 --stories 2
- *   npx tsx scripts/social_daily.ts --stories 3 --hook --preview
+ *   npx tsx scripts/social_daily.ts --stories 3 --no-hook --preview
  *   npx tsx scripts/social_daily.ts --stories 2 --preview --review   (the render review on; before/after under the run folder, render-review)
  *
- * --hook: the Hook pass for this run only (prototype; never the daily
- * default). --preview: run.json is labelled PREVIEW (not an acceptance
+ * The Hook pass runs by default (Tommy, 2026-10-07, fifth round: signed
+ * off after the 03:45 preview); --no-hook turns it off for one run. --preview: run.json is labelled PREVIEW (not an acceptance
  * batch), the used-photo log is not written (so the acceptance batch's
  * 7-day rule isn't spent on a preview), and preview-report.md lists per
  * post: photo source and layout per slide, spreads, hook lines,
@@ -44,7 +44,7 @@ async function main() {
   const capUsd = arg('--cap-usd') ?? DEFAULT_CAP_USD;
   if (!Number.isFinite(capUsd) || capUsd <= 0) throw new Error('--cap-usd must be a positive amount');
   const stories = arg('--stories') ?? 2;
-  const hookOn = process.argv.includes('--hook');
+  const hookOn = !process.argv.includes('--no-hook');
   // The render review (photo spec §5b), fixes on, before/after saved (Tommy, 2026-10-07: the first end-to-end run is its calibration).
   const reviewOn = process.argv.includes('--review');
   const preview = process.argv.includes('--preview');
@@ -122,7 +122,7 @@ async function main() {
 
     reporterCapUsd: 0.45,
     maxReporterRuns: stories + 2,
-    // Hook pass for this run only (--hook); its budget renders take no screenshots.
+    // The Hook pass (on by default; --no-hook turns it off); its budget renders take no screenshots.
     ...(hookOn ? { hook: { fitCheck: checkRenderFit } } : {}),
   });
   const design = stages.design;
@@ -149,7 +149,7 @@ async function main() {
     await usedLog.record(result.posts.flatMap((p) => p.render.slides.flatMap((sl, i) => {
       if (!sl.photoUrl) return [];
       const t = p.photos.find((x) => x.photo?.url === sl.photoUrl);
-      return [{ url: sl.photoUrl, usedAt: now.toISOString(), storyId: p.storyId, slide: i + 1, source: t?.photo?.source, qid: t?.photo?.qid ?? null, subject: t?.photo?.subject ?? null, credit: sl.photoCredit, ...(t?.photo?.source === 'stock' ? { scene: t.request.value } : {}) }];
+      return [{ url: sl.photoUrl, usedAt: now.toISOString(), storyId: p.storyId, slide: i + 1, source: t?.photo?.source, qid: t?.photo?.qid ?? null, subject: t?.photo?.subject ?? null, credit: sl.photoCredit, ...(t?.photo?.source === 'stock' ? { scene: t.request.query } : {}) }];
     })));
   }
   const iconShare = (() => {
@@ -178,13 +178,13 @@ async function main() {
   const alreadyPosted = (sel?.scored ?? [])
     .map((g) => ({ headline: g.representative.headline, score: g.answers?.already_posted ?? null, status: g.status ?? null }))
     .sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
-  // M8 handoff criterion: the Writer's IMAGE request mix per post (after the Editor), and spreads.
+  // The Writer's visual request mix per post (after the Editor; photo spec §4, sixth round).
+  const { VISUAL_KINDS } = await import('@/lib/social/writer/draft');
   const requestMix = [...logs.entries()].map(([storyId, l]) => {
     const d = l.editor.at(-1)?.ok ? (l.editor.at(-1) as { draft: import('@/lib/social/writer/draft').DraftSubmission }).draft : null;
     if (!d) return { storyId, mix: null };
-    const reqs = [d.cover_options[d.chosen_cover - 1]!.image, ...d.slides.map((s) => s.image)];
-    const mix = Object.fromEntries(['subject', 'article', 'stock', 'none'].map((k) => [k, reqs.filter((r) => r.kind === k).length]));
-    return { storyId, mix, spreads: d.slides.filter((s) => s.spread_with_next).length };
+    const reqs = [d.cover_options[d.chosen_cover - 1]!.visual, ...d.slides.map((s) => s.visual)];
+    return { storyId, mix: Object.fromEntries(VISUAL_KINDS.map((k) => [k, reqs.filter((r) => r.kind === k).length])) };
   });
 
   await fsp.writeFile(
@@ -205,15 +205,15 @@ async function main() {
     iconShare: Number(iconShare.toFixed(3)),
     // How often the 7-day rule gave way (Tommy, 2026-10-06).
     starterPoolExhausted: result.posts.flatMap((p) => p.photos).filter((t) => t.steps.some((x) => x.startsWith('starter-pool-exhausted'))).length,
-    // Photo rule (Tommy, 2026-10-06): share of story slides with IMAGE none, and spreads used.
-    textOnlyShare: (() => {
+    // Share of story slides without a photo (Tommy, 2026-10-07: a photo on every slide), and spreads used.
+    noPhotoShare: (() => {
       const story = result.posts.flatMap((p) => p.photos.slice(1));
-      return story.length ? Number((story.filter((t) => t.request.kind === 'none').length / story.length).toFixed(3)) : 0;
+      return story.length ? Number((story.filter((t) => !t.photo).length / story.length).toFixed(3)) : 0;
     })(),
     spreadCount: result.posts.flatMap((p) => p.render.slides).filter((sl) => sl.panoramaSide === 'left').length,
     requestMix,
-    // IMAGE requests the Writer check turned to none on the final attempt (Tommy, 2026-10-07).
-    imageRequestsDropped: [...logs.entries()].flatMap(([storyId, l]) => l.writer.flatMap((w) => (w.imageRequestsDropped ?? []).map((d) => `${storyId}: ${d}`))),
+    // Visual requests the Writer check replaced on the final attempt (Tommy, 2026-10-07).
+    visualsDropped: [...logs.entries()].flatMap(([storyId, l]) => l.writer.flatMap((w) => (w.visualsDropped ?? []).map((d: string) => `${storyId}: ${d}`))),
     // Aggregator-only facts the code removed before the Writer (Tommy, 2026-10-06).
     aggregatorDropped: [...logs.entries()].flatMap(([storyId, l]) => (l.reporter?.ok ? l.reporter.aggregatorDropped.map((d) => `${storyId}: ${d}`) : [])),
     // Subject tags the edited words no longer name, removed right after the Editor (Tommy, 2026-10-07).
@@ -227,7 +227,7 @@ async function main() {
   /** Per post (PREVIEW): photo source and layout per slide, spreads, hook lines, Fact-checker flags, cost. */
   function previewReport(): string {
     const { layoutOf } = layoutRotation;
-    let o = `# PREVIEW run ${stamp} (not the acceptance batch)\n\nHook pass: ${hookOn ? 'on (this run only)' : 'off'} · total $${budget.spent().toFixed(4)} of $${capUsd} · stop: ${result.stopReason}\n`;
+    let o = `# PREVIEW run ${stamp} (not the acceptance batch)\n\nHook pass: ${hookOn ? 'on' : 'off (--no-hook)'} · total $${budget.spent().toFixed(4)} of $${capUsd} · stop: ${result.stopReason}\n`;
     for (const sa of result.setAsides) o += `- Set aside: ${sa.storyId} at ${sa.stage}: ${sa.reasonCode} (${sa.detail.slice(0, 200)})\n`;
     for (const post of result.posts) {
       const l = logs.get(post.storyId)!;
@@ -241,10 +241,12 @@ async function main() {
       o += `\n## ${post.title}\n\nCost: $${post.costUsd.toFixed(4)} (by stage: ${post.stages.join(' → ')})\n\n| Slide | Layout | Photo source | Request | Vision $ |\n|---|---|---|---|---|\n`;
       post.render.slides.forEach((sl, i) => {
         const t = post.photos[i];
-        o += `| ${i + 1} | ${layoutOf(sl)}${sl.panoramaSide ? ` (${sl.panoramaSide})` : ''} | ${sl.layoutVariant === 'follow' ? '—' : source(t)} | ${t ? `${t.request.kind}${t.request.value ? `: ${t.request.value.slice(0, 50)}` : ''}` : '—'} | ${t?.visionUsd ? t.visionUsd.toFixed(4) : '—'} |\n`;
+        o += `| ${i + 1} | ${layoutOf(sl)}${sl.panoramaSide ? ` (${sl.panoramaSide})` : ''} | ${sl.layoutVariant === 'follow' ? '—' : source(t)} | ${t ? `${t.request.kind}${t.request.query ? `: ${t.request.query.slice(0, 50)}` : ''}${t.tags?.length ? ` [${t.tags.join(', ')}]` : ''}` : '—'} | ${t?.visionUsd ? t.visionUsd.toFixed(4) : '—'} |\n`;
       });
       const spreads = post.render.slides.filter((sl) => sl.panoramaSide === 'left').length;
-      o += `\nSpreads: ${spreads}\n\nHook lines:\n`;
+      // Jev's layout log: the spread decision and each slide's variant (slide buckets spec).
+      const layoutLog = (post.checks as { layout?: string[] }).layout ?? [];
+      o += `\nSpreads: ${spreads}\n\nLayout (Jev):\n${layoutLog.map((x) => `- ${x}`).join('\n') || '- (none logged)'}\n\nHook lines:\n`;
       const hk = l.hook?.at(-1);
       if (!hookOn) o += '- (Hook pass off)\n';
       else if (!hk?.ok) o += `- Hook pass failed: ${hk ? `${hk.reason} ${hk.detail}` : 'no result'}\n`;
@@ -283,8 +285,8 @@ async function main() {
       if (s.storySpecificLine) o += `- Follow line: ${s.storySpecificLine}\n`;
       const t = post.photos[i];
       if (t) {
-        o += `- Image request: ${t.request.kind}: ${t.request.value}\n`;
-        o += `- Photo: ${t.photo ? `${t.photo.url} (via ${t.via}${t.via !== t.request.kind ? ', fallback' : ''})\n- Credit: ${t.photo.credit}` : 'NONE'}\n`;
+        o += `- Visual request: ${t.request.kind}: ${t.request.query}\n`;
+        o += `- Photo: ${t.photo ? `${t.photo.url} (via ${t.via})\n- Credit: ${t.photo.credit}` : 'NONE'}${t.tags?.length ? `\n- Tags: ${t.tags.join(', ')}` : ''}\n`;
         if (t.identity) {
           const sc = t.identity.scores;
           o += `- Identity (${t.identity.subject}): ${t.identity.ok ? 'ok' : 'FAILED'} — ${t.identity.detail}${sc ? ` · is_person ${sc.person.toFixed(2)} · ${sc.matches.map((m) => `${m.id} ${m.p.toFixed(2)}`).join(', ')}` : ''}\n`;

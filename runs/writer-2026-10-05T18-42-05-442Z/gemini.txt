@@ -1,0 +1,62 @@
+COVER OPTIONS
+→ 1. Google will limit free Gemini app users to Flash-Lite on Oct 9, cutting Flash and Pro (85 ch)  [F1, N1]  | IMAGE article: https://sm.pcmag.com/t/pcmag_au/photo/g/googles-up/googles-updated-model-limits-for-gemini-users_jyxv.3840.png
+  2. Google's AI Plus subscribers lose Gemini Pro, and free users drop to Flash-Lite (79 ch)  [F1, F2]  | IMAGE article: https://9to5google.com/wp-content/uploads/sites/4/2026/10/Google-AI-Ultra-Gemini-3.1-Pro-Deep-Think.jpg?strip=info&w=1480
+  3. Google cuts free Gemini users to Flash-Lite on Oct 9. A report of more cuts is unconfirmed (90 ch)  [F1, N1, F8, F5]  | IMAGE stock: locked phone screen
+
+SLIDE 2 · STAT
+  HEADLINE: Free Gemini users lose Flash and Pro (36 ch)  [F1, N1]
+  BODY: Gemini app users without a Google AI subscription will be limited to 3.5 Flash-Lite. 3.6 Flash and 3.1 Pro are no longer available to them. (139 ch)  [F1]
+  BIG NUMBER [N1, filled]: October 9  (Date free users lose Flash and Pro in the Gemini app)
+  IMAGE stock: locked door
+
+SLIDE 3 · TEXT
+  HEADLINE: AI Plus subscribers lose Pro too (32 ch)  [F2, N2]
+  BODY: AI Plus ($4.99 a month) will be limited to Flash-Lite and Flash. Google will email subscribers about when the change takes effect, so there is no fixed date. (157 ch)  [F2, N2]
+  IMAGE article: https://sm.pcmag.com/t/pcmag_au/photo/g/googles-up/googles-updated-model-limits-for-gemini-users_jyxv.3840.png
+
+SLIDE 4 · SPLIT_STAT
+  HEADLINE: AI Pro gets Deep Think (22 ch)  [F4, N3, N4]
+  BODY: 9to5Google reports AI Pro and AI Ultra see no regressions. Deep Think, Gemini's maximum parallel reasoning option, is currently only on the two Ultra plans. (156 ch)  [F4]
+  BIG NUMBER [N3, filled]: $19.99 per month  (Google AI Pro price)
+  BIG NUMBER [N4, filled]: $99.99 and $199.99/month  (AI Ultra plans where Deep Think currently sits)
+  IMAGE article: https://9to5google.com/wp-content/uploads/sites/4/2026/10/Google-AI-Ultra-Gemini-3.1-Pro-Deep-Think.jpg?strip=info&w=1480
+
+SLIDE 5 · QUOTE
+  HEADLINE: New effort levels cost more of your limit (41 ch)  [F3, Q1]
+  QUOTE [Q1, filled]: "This will increase the model's ability to complete tasks… but will also use more of your limit." — Google (support page, describing new effort levels) (95 ch)
+  IMAGE stock: turning dial
+
+SLIDE 6 · TEXT
+  HEADLINE: Gemini 4 Argon is announced, not widely out (43 ch)  [F6, F7]
+  BODY: Google announced Gemini 4 Argon on Sept 30, starting with Fairwind Program cyber defenders. Google says wider release starts with paid API customers and AI Ultra subscribers. 9to5Google says its place in the Gemini app is unclear. (230 ch)  [F6, F7]
+  IMAGE article: https://storage.googleapis.com/gweb-uniblog-publish-prod/images/g4_30-09-26_key-art_blog.width-1300.png
+
+SLIDE 7 · TEXT
+  HEADLINE: One report says more is going. Google's page disagrees (54 ch)  [F8, F5]
+  BODY: NPowerUser says Google is retiring 3.6 and 3.7 Flash and has pulled Fast modes. Google's Gemini API deprecations page, updated Oct 1, lists no shutdown date for either. No other source confirms the claim. (204 ch)  [F8, F5]
+  IMAGE stock: question mark sign
+
+FOLLOW: Follow Helios Group for plain-English breakdowns of AI changes that land in the apps you already use.
+
+CAPTION (1080 ch)  [F1, F2, F3, F4, F5, F6, F8, N1]:
+Google will limit Gemini app users without a paid plan to its Flash-Lite model starting Oct 9, and they will lose access to Flash and Pro. AI Plus subscribers lose Pro too, on a date Google will give them by email.
+
+Flash-Lite is the lightest and fastest of Gemini's three model tiers, Flash is the middle option and Pro is the most advanced. Google is also adding low, medium and high effort levels, which make a model more capable on tasks but use more of your usage limit. 9to5Google reports AI Pro subscribers get Deep Think. NPowerUser says Google is retiring Gemini 3.6 and 3.7 Flash, but Google's API deprecations page and other sources don't confirm it. Gemini 4 Argon, announced Sept 30, is still in limited rollout.
+
+Would you pay for a Gemini plan to keep access to Pro?
+
+Follow Helios Group for plain-English breakdowns of AI changes that land in the apps you already use.
+
+Source: 9to5Google, October 3, 2026; PCMag (AU), MakeUseOf and NPowerUser, October 5, 2026; Google Blog, September 30, 2026. Additional reporting: TechCrunch, Engadget, Google AI for Developers.
+
+EDIT NOTES:
+- Cover leads with Google; it is a company, so the role-first rule for unknown people does not apply.
+- Showed the NPowerUser claim next to Google's deprecations page rather than picking a side; attributed it by name and kept it as the last slide.
+- Dropped B2 (OpenAI/Anthropic comparison): single source and a competitor context paragraph the policy disallows.
+- Skipped B1 (earlier plan overhaul) as not essential; story is told in 6 slides, no padding.
+- Did not use Q3 (single-source quote); paraphrased the AI Plus email without quote marks.
+- Q1 excerpt trimmed to stay under 140 chars; both halves are exact text from the quote.
+- Left out the Argon price and token limit (N6, N7) as off-topic for the access-change story.
+- Deep Think detail is single-sourced to 9to5Google, so the slide attributes it to them.
+- Fast modes written without quote marks since they are not a QUOTES entry.
+- Glossed Flash-Lite/Flash/Pro in the caption using the TERMS list (PCMag) instead of using slide space.

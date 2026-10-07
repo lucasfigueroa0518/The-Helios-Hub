@@ -1,0 +1,126 @@
+{
+  "primaryErrors": [
+    {
+      "kind": "cover_photo",
+      "target": "cover",
+      "field": "IMAGE",
+      "message": "COVER IMAGE is \"type only\" but THE NEWS names a person (Josh Gottheimer (D-NJ-5)). Change COVER IMAGE to \"photo of <that person or organization>\" — the cover should show whoever is at the center of the story."
+    },
+    {
+      "kind": "char_limit",
+      "target": "slide",
+      "slidePosition": 3,
+      "field": "BODY",
+      "message": "SLIDE 3 BODY (241 characters, limit 220): cut at least 21 characters (about 4 words). Cut words, not facts: remove filler, glosses already explained elsewhere, and restated context first. If a fact must go, say which one in EDIT NOTES."
+    },
+    {
+      "kind": "rhythm",
+      "target": "slide",
+      "slidePosition": 3,
+      "field": "TYPE",
+      "message": "SLIDE 3 and SLIDE 2 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them."
+    },
+    {
+      "kind": "rhythm",
+      "target": "slide",
+      "slidePosition": 6,
+      "field": "TYPE",
+      "message": "SLIDE 6 and SLIDE 5 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them."
+    },
+    {
+      "kind": "rhythm",
+      "target": "slide",
+      "slidePosition": 9,
+      "field": "TYPE",
+      "message": "SLIDE 9 and SLIDE 8 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them."
+    },
+    {
+      "kind": "variety",
+      "target": "slide",
+      "field": "TYPES",
+      "message": "This post has 8 slides between the cover and the follow slide but only 2 distinct kinds (text, quote). A long post needs at least 3 different kinds — mix in a Landing line, Stat, Split stat, Quote or Image slide so the carousel doesn't read as one long note."
+    },
+    {
+      "kind": "term_unexplained",
+      "target": "slide",
+      "slidePosition": 6,
+      "message": "TERM \"Open-weight AI models\" first appears on SLIDE 6 but neither that slide nor SLIDE 7 explains it using the brief's TERMS description (\"AI models whose underlying parameters are made publicly available, allowing anyone to download and run them — the category of Chinese AI targeted by the China FIREWALL Act.\"). Add a plain-language gloss on one of the two slides, or drop the term."
+    },
+    {
+      "kind": "slide_repeats",
+      "target": "slide",
+      "slidePosition": 6,
+      "message": "SLIDE 6 shares 3 content tokens with COVER (\"agencie\", \"chinese\", \"federal\"). This slide is restating the cover — either rewrite it around a different reader question or pull a fact from UNUSED BRIEF FACTS."
+    },
+    {
+      "kind": "slide_repeats",
+      "target": "slide",
+      "slidePosition": 8,
+      "message": "SLIDE 8 shares 3 content tokens with COVER (\"agencie\", \"chinese\", \"federal\"). This slide is restating the cover — either rewrite it around a different reader question or pull a fact from UNUSED BRIEF FACTS."
+    },
+    {
+      "kind": "slide_repeats",
+      "target": "slide",
+      "slidePosition": 8,
+      "message": "SLIDE 8 shares 3 content tokens with SLIDE 6 (\"agencie\", \"chinese\", \"federal\"). One of these two slides is a repeat — rewrite one around a different reader question or pull a fact from UNUSED BRIEF FACTS."
+    },
+    {
+      "kind": "cover_claim_uniqueness",
+      "target": "cover",
+      "message": "COVER claim overlaps with 2 story slides: SLIDE 6 (\"agencie\", \"chinese\", \"federal\"), SLIDE 8 (\"agencie\", \"chinese\", \"federal\"). The cover should summarize the change of the whole post, not restate multiple slides. Either broaden the cover to a higher-level frame or rewrite the affected slides around different reader questions."
+    }
+  ],
+  "finalErrors": [
+    {
+      "kind": "char_limit",
+      "target": "slide",
+      "slidePosition": 3,
+      "field": "QUOTE",
+      "message": "SLIDE 3 QUOTE (319 characters, limit 140): cut at least 179 characters (about 30 words). Cut words, not facts: remove filler, glosses already explained elsewhere, and restated context first. If a fact must go, say which one in EDIT NOTES."
+    },
+    {
+      "kind": "banned_always",
+      "target": "slide",
+      "slidePosition": 4,
+      "field": "HEADLINE",
+      "message": "SLIDE 4 HEADLINE (28 characters, limit 60): contains banned \"X, not Y\" invented contrast. Remove it (rewrite the phrase without it) — this construction is never allowed in Helios voice."
+    },
+    {
+      "kind": "char_limit",
+      "target": "slide",
+      "slidePosition": 5,
+      "field": "BODY",
+      "message": "SLIDE 5 BODY (224 characters, limit 220): cut at least 4 characters (about 1 words). Cut words, not facts: remove filler, glosses already explained elsewhere, and restated context first. If a fact must go, say which one in EDIT NOTES."
+    },
+    {
+      "kind": "char_limit",
+      "target": "slide",
+      "slidePosition": 7,
+      "field": "BODY",
+      "message": "SLIDE 7 BODY (223 characters, limit 220): cut at least 3 characters (about 1 words). Cut words, not facts: remove filler, glosses already explained elsewhere, and restated context first. If a fact must go, say which one in EDIT NOTES."
+    },
+    {
+      "kind": "rhythm",
+      "target": "slide",
+      "slidePosition": 5,
+      "field": "TYPE",
+      "message": "SLIDE 5 and SLIDE 4 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them."
+    },
+    {
+      "kind": "rhythm",
+      "target": "slide",
+      "slidePosition": 8,
+      "field": "TYPE",
+      "message": "SLIDE 8 and SLIDE 7 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them."
+    },
+    {
+      "kind": "variety",
+      "target": "slide",
+      "field": "TYPES",
+      "message": "This post has 7 slides between the cover and the follow slide but only 2 distinct kinds (text, quote). A long post needs at least 3 different kinds — mix in a Landing line, Stat, Split stat, Quote or Image slide so the carousel doesn't read as one long note."
+    }
+  ],
+  "finalHardCount": 1,
+  "finalSoftCount": 6,
+  "repaired": true
+}

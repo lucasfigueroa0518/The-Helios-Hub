@@ -1,0 +1,27 @@
+{
+  "runDir": "runs/daily-2026-10-06T21-17-07-066Z",
+  "articles": 489,
+  "stopReason": "target-reached",
+  "posts": [
+    "French lab Mistral says its new model is the best open-weight one outside China",
+    "OpenAI CEO Sam Altman says the world should accept “some bad things happening” for AI"
+  ],
+  "setAsides": [],
+  "freshDrafts": [],
+  "costByStage": {
+    "jev-scoring": 0.02514968400000001,
+    "reporter": 0.4924,
+    "writer": 0.2149,
+    "editor": 0.1912,
+    "fact-checker": 0.06470000000000001,
+    "mechanical": 0,
+    "design": 0.000145782
+  },
+  "totalUsd": 0.9886,
+  "starterShare": 0.714,
+  "starterPoolExhausted": 0,
+  "noTopicMatch": 3,
+  "textOnlyShare": 0.643,
+  "spreadCount": 0,
+  "capUsd": 2
+}

@@ -23,6 +23,7 @@ import { priceAnthropicMessages, type MessageUsageLike } from '@/lib/anthropic-p
 import type { JevAsk } from '@/lib/social/jev/client';
 import type { PhotoDeps } from '@/lib/social/photos/find';
 import type { UsedPhotoLog } from '@/lib/social/photos/used-photos';
+import { createTagSheet } from '@/lib/social/photos/tag-sheet';
 import { createVisionCheck } from '@/lib/social/photos/vision';
 import { createRenderReview, createReviewCall } from '@/lib/social/render/review';
 import { createSubjectAvailability, type SubjectAvailability } from '@/lib/social/photos/availability';
@@ -141,6 +142,8 @@ export function createLiveStages(deps: LiveStagesDeps): { stages: PipelineStages
   const factCheck = createFactCheckStage({ create, onResult: (id, r) => log(id).factCheck.push(r) });
   // The photo vision check on top stock candidates (Tommy, 2026-10-06), under the same budget guard.
   const vision = createVisionCheck({ create, http: deps.http });
+  // The candidate contact sheet's tagging call (photo spec §4 step 4), under the same budget guard.
+  const tagSheet = createTagSheet({ create });
   // Subject types for the naming rule, from the identity results the Writer's lookup already cached.
   const kindsFrom = async (cache: IdentityCache) => new Map(await Promise.all([...cache].map(async ([name, p]) => [name, (await p.catch(() => null))?.type ?? null] as const)));
   // Identity results per story, shared by the Writer's availability flags and the finder (they must agree).
@@ -152,7 +155,7 @@ export function createLiveStages(deps: LiveStagesDeps): { stages: PipelineStages
   };
   // The render review (photo spec §5b): Haiku on the contact sheet, under the same budget guard.
   const review = deps.renderReview ? createRenderReview({ call: createReviewCall({ create }), dir: deps.renderReview.dir }) : undefined;
-  const design = createDesignStage({ jev: deps.jev, http: deps.http, vision, faces: deps.faces, secondPhotos: deps.secondPhotos, fitCheck: deps.fitCheck, usedLog: deps.usedLog, now: () => deps.now, identitiesFor, review });
+  const design = createDesignStage({ jev: deps.jev, http: deps.http, vision, tagSheet, faces: deps.faces, secondPhotos: deps.secondPhotos, fitCheck: deps.fitCheck, usedLog: deps.usedLog, now: () => deps.now, identitiesFor, review });
 
   const stages: PipelineStages = {
     score: deps.score,

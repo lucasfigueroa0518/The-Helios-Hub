@@ -19,6 +19,8 @@ export type FakeWeb = {
   entities: Record<string, FakeEntity>;
   /** Openverse: how many results each query returns (default 2). */
   stockCount?: Record<string, number>;
+  /** Openverse, StockSnap provider: how many StockSnap results each query returns (default 0). */
+  stocksnapCount?: Record<string, number>;
 };
 
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
@@ -70,12 +72,21 @@ export function createFakeHttp(web: FakeWeb): { http: typeof fetch; calls: strin
     }
     if (url.hostname === 'api.openverse.org') {
       const q = p.get('q') ?? '';
-      const n = web.stockCount?.[q] ?? 2;
+      // The source filter (the StockSnap lane): only that provider's results.
+      const lane = p.get('source');
+      const flickr = lane ? 0 : web.stockCount?.[q] ?? 2;
+      const snap = !lane || lane.includes('stocksnap') ? web.stocksnapCount?.[q] ?? 0 : 0;
       return json({
-        results: Array.from({ length: n }, (_, i) => ({
-          url: stockUrl(q, i + 1), foreign_landing_url: 'https://flickr.example', mime_type: 'image/jpeg',
-          width: 2400, height: 1600, license: 'by', creator: 'Jane Doe', source: 'flickr', title: `${q} ${i + 1}`,
-        })),
+        results: [
+          ...Array.from({ length: snap }, (_, i) => ({
+            url: stockUrl(`snap ${q}`, i + 1), foreign_landing_url: 'https://stocksnap.example', mime_type: 'image/jpeg',
+            width: 3600, height: 2400, license: 'cc0', creator: 'Snap Photographer', source: 'stocksnap', title: `${q} close-up ${i + 1}`,
+          })),
+          ...Array.from({ length: flickr }, (_, i) => ({
+            url: stockUrl(q, i + 1), foreign_landing_url: 'https://flickr.example', mime_type: 'image/jpeg',
+            width: 2400, height: 1600, license: 'by', creator: 'Jane Doe', source: 'flickr', title: `${q} ${i + 1}`,
+          })),
+        ],
       });
     }
     throw new Error(`fake http: unexpected request ${url.href}`);

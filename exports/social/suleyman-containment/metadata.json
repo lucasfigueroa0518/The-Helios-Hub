@@ -1,0 +1,17 @@
+{
+  "fixture": "suleyman-containment",
+  "humanized": false,
+  "exportedAt": "2026-09-23T13:38:56.420Z",
+  "format": "carousel",
+  "storyType": "safety",
+  "source": "The Verge",
+  "sourceUrl": "https://www.theverge.com/podcast/996412/microsoft-ai-ceo-mustafa-suleyman-regulation-safety-anthropic-claude",
+  "slideCount": 5,
+  "files": [
+    "slide-00.png",
+    "slide-01.png",
+    "slide-02.png",
+    "slide-03.png",
+    "slide-04.png"
+  ]
+}

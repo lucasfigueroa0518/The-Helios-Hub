@@ -1,0 +1,1907 @@
+[
+  {
+    "url": "https://news.google.com/rss/articles/CBMiogFBVV95cUxOOFdzTlQtOEhXc0pRa2dtWjM0Rjg1bnVGOWJXU1RDWjEwTEtBSHNZRUNFTnNmVHNTeGhLWl95RkVxTVBST3FfcVlBWWk2Y0J3cWEzeEx0V0xFSnpZSWljUzhRMVluTXN6MGZYN2xpTzNVZkVWUWJaY1dJeHh5UzhVZnB6RnJ2U3VNZ1pxLUhfc3NubFcxY0RJNzN2czBWTEc3RGc?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "Business Insider",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.businessinsider.com/david-robinson-the-openai-safety-leader-who-quit-the-company-2026-10",
+    "host": "www.businessinsider.com",
+    "chars": 5891,
+    "ms": 2444
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMilwFBVV95cUxQcWxpdlNydk84N1RyS1dIamJvTVBWYUs2VWdVc21NeVRWZDRxQkpkR0VkUHdqUnZ3dDVoWVdmS0gxa21mVXRDdjFQSXJibkx6Zno3dklOSzlhRVltT3pGbzVOazlFOXQ1bXctb2hiLVp1TzBTMWpRWThFbUFLaDBRQzNnZ3RfTW9tRS13cGcyVHFwOUEtMTBJ?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "Yahoo",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.yahoo.com/news/politics/articles/another-alarm-bell-openai-safety-184349681.html",
+    "host": "www.yahoo.com",
+    "chars": 3491,
+    "ms": 1738
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMidkFVX3lxTE05a1JuSEJTOUVleE5sTmtjRmZLMWhpZWRtOWFuOTJSYnFSa2dCVnlFZWdoNVpTM0pSSWpKc09HSjB1QlhjUFpYNHFqems4MWNnOXJITkpPX3BTekJNNXBIU2FtTHB3WmFjdGRfS0lxckhYNEJMRlE?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "Taipei Times",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.taipeitimes.com/News/biz/archives/2026/10/05/2003865388",
+    "host": "www.taipeitimes.com",
+    "chars": 3540,
+    "ms": 1555
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMifEFVX3lxTE9Lcmc2T0Ytd1RhRFdTTHB6SjJaTEE5ZzE5ZzhnTVZ4NUVfcWJpeGtjOGduQXVRWWs0OXZqY24xR0F6aXBLYXpHWG02X0hOdWxXNk91Q25KSmdqdHZ5Z1FEX3VKdEpQbkdZcDZld3M2dU9WLVNTNER1c0l2Q2w?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "Tech Xplore",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://techxplore.com/news/2026-10-ai-safety-layers-nuclear-openai.html",
+    "host": "techxplore.com",
+    "ms": 1750
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMitgFBVV95cUxOcldEYVVROGhFOHl0UGVvVkEzTnZyWkRBRTVxWkZOeXphTkdqYkJ1dFFNOFFJNldDdVVRTE1KaGxaNUJmQWlBNVhocE9CSHNnMFE1WVZQb3lBRF9KSTZKNVFHMndMSGJOYVdHRzhIdEZXNGMtNml2clZCYUtKTk52TjlZTVRRWE1OVFdiMTBIOFdpeEp2RW5mT2RqaEp2UkFGLVZTLVZPSkdIMzE3blc5YzFMdTFsQQ?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "The Guardian",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.theguardian.com/technology/2026/oct/03/openai-safety-leader-quits-warning-ai-companys-culture-is-broken",
+    "host": "www.theguardian.com",
+    "chars": 4015,
+    "ms": 2073
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMisAFBVV95cUxPanBnbDA2SnluX0swT1ZpQ212VUNKRHh1T3d2Tmt0VDBieEtFVmh6blFFZEVCZlFLbjd4TnNYRnhacmtoSEdRTTFsbVdQN3RjRW5BTVd2NkJwdkdmcHNBa2czV3BZc19MYnJ1dkFvTkh1YXZQQkw1Zmtma2Y4Qm10RzlIUlhJS1ZSUHJnVVdTNlk1djVnNndqNXJBZ29hcEVJUmdkZTNWcklGWEF4TGtuZw?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "Reuters",
+    "runs": [
+      1,
+      2,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.reuters.com/legal/litigation/openai-safety-employee-quits-says-time-trial-error-is-over-2026-10-03/",
+    "host": "www.reuters.com",
+    "ms": 1278
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiqAFBVV95cUxQR0JlUHlOLTF6R21EV2trSHd6Si1Tckd6SXdDeXZIY1ZKRkxLZzJmRFNwamo2WXhYRTNTYWhJMWpDZTJyb01vd2NpQXZTaE9BRWxnaEFsdDYzeThJdDA0Y0RQcUhjTWlPYkx1c1NxXzRkcWgyRk54N0Y2SDJVY3ZYMUdQaEhEbzZEVkowX1VBODRsNHRMMTBPX3BUMHdwai12MUZtMVhwRVM?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "TechCrunch",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://techcrunch.com/2026/10/03/openai-safety-employee-resigns-claiming-the-companys-culture-is-broken/",
+    "host": "techcrunch.com",
+    "chars": 4723,
+    "ms": 2061
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMikgFBVV95cUxPN20tZjFiX1d5WEdVanJFQWoxNEdpalhTNzJPb3Rlc0tPOERjVW00cS01YkxudVI1LXNHQnBhVUJ2aDhSdFJKTm96eF9wZ2JVVDF0N2NibE9oRFdhQUg1ZEIxejNsUV9kalRvR1ZRaFg1UThCN1p2YVFxNjlxa0dZRWpTdGVONkYyZnNmTWJpc2c3UQ?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "Business Insider",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.businessinsider.com/safety-leader-david-robinson-resigns-from-openai-2026-10",
+    "host": "www.businessinsider.com",
+    "chars": 5090,
+    "ms": 1631
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMijgFBVV95cUxPdkNtNmhTZDJlQm1CWGhwcEpuLU85bzNxajM1OXdsTmIzYzhJQ2hQMG82UjNSN3BRSzhialRXNENrbFFRY0FHN3FacUhLN1AzT3I5ejlQTmYwMXRXNmZzSC1VZ1ZIdWpvNjk4b2dfRGdTUTZpVEhfZkVCUGxBdWRiSXB3b1pfSWNEVlVwR2tn?oc=5",
+    "feed": "gnews-ai-policy",
+    "outlet": "The Tech Buzz",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "unreadable",
+    "detail": "https://www.techbuzz.ai/articles/trump-unveils-super-intelligence-force-for-ai-safety",
+    "host": "www.techbuzz.ai",
+    "chars": 0,
+    "ms": 4249
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMimwFBVV95cUxQaG9QM0xaS1hfT0RXMjlmWWJodEFCQmljTEtIZ1NVbTR2M19KNHNaX216STZHX3FNR1pYREYzeWhWOWJqS0x0dTMtTU5VRW9jTGNuUFVuYWZOZzVBWlFxNDJOMDZWWDhZZXpZS3RQU2hIekFwdG9fMHFXYzRRRUpleXM1YUc1Tk5CYmREVlZwYmRIZ0JnbHJSeGNrRQ?oc=5",
+    "feed": "gnews-ai-policy",
+    "outlet": "GV Wire",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://gvwire.com/2026/10/03/as-public-fears-of-ai-grow-trump-digs-in-on-voluntary-safeguards/",
+    "host": "gvwire.com",
+    "ms": 1755
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMilgFBVV95cUxNa1QxSWRrU05FQWdBWUNFRXJtZVNtU1JFNEg4MEhwRDdzTjFIaksweWp0TEVhLUtTTjZxbkJ6SFVlVE5aNUxIM2IwcWROWC1CV2lxN1pnZllhQm9VUnpTc1NQMUM5TWhVMnB3MFRhU09HNWd4UjRKaXFaTEZUNUpESzBhZTJiNVYtNUhDVUphVkpSbkQ1MVE?oc=5",
+    "feed": "gnews-ai-policy",
+    "outlet": "Yahoo",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.yahoo.com/news/politics/articles/hakeem-jeffries-calls-trumps-ai-023011904.html",
+    "host": "www.yahoo.com",
+    "chars": 6332,
+    "ms": 1386
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMi5AFBVV95cUxOMFRiNXpyNk5kMXVQY1lVaHdNTUM3ZWxnUGNMQXowdkpuSmtZMkF2aVhFMFc3UllESU1ra3dFQXFoc3hrVmhpWGRyaHBVNGhBVG1jd24wbVJwZjVSUEg5dk9OTkdGZnNDYWFzZFRsZVZTUmRsUlBMUkxCM3JfZy1INXJZbFZ3Qld1R2JfUVRmNTUzS1B1V3E0dDdfeFdTeXI4cmlkREpKOFZIbFJjNkFZVkkwV1VzZmpkNElmZGFMejNnTHZhdkNJcmpjakd3M0JWY1JOVG9MSDdLMXRqZDhlMkk3c2g?oc=5",
+    "feed": "gnews-ai-policy",
+    "outlet": "Forbes",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.forbes.com/sites/lanceeliot/2026/10/03/ai-makers-make-pinky-promise-pledge-over-ai-safety-but-will-it-truly-save-us-from-human-extinction/",
+    "host": "www.forbes.com",
+    "ms": 1337
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMivgFBVV95cUxORnR5cUVLZE91ckU2X0sxOGNzbjA4SjU4MFhiUXNvb0E4M1FLTldoT3d0b3BDUmU3NFVxOUk1eURXMmhEVExrQTNKT3d2LXY2emNNSUo0Nzd0Vkp0WmxiTDh0MVhhM2h1NnRIZnVnZmRNcmJNNmlCajkxN1U2ZGJBZHlLNEVYanF6c2lBc0pVOHh2a1h4QWs0Yngxc0RYX3pOS2NDUGZRRjRKQmtLbnpxZk5QNjljNjJVSkNQRVNn?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "Reuters",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.reuters.com/business/former-anthropic-researcher-coxon-testify-new-york-city-ai-hearing-bloomberg-2026-10-04/",
+    "host": "www.reuters.com",
+    "ms": 936
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMioAJBVV95cUxNU056THNLS2Q1MzNaaFFGY2V1a0w5aVRsX0NwSGV4NWRMc29RLTFvWnZlOF9hU09vb3FJNE5LVFJ2Y0VIZnVuVEloOFZLMXBKalZvMTkzY012RDExSFFmWVJsR0w3RFZQMDdUcm9HYUlHZUZKaTRjYWVpWmVIREFtMFc2Tml2Z3I4WUVhSG1xVEMtN1ByRFo0TjgtVG9JUHNNd1lwOFg5bUVva1hhTGNTT1JjZ1BfZHdBdGJDVVVlenBMQUNMclZFd0xDclB0aHMySEtxamF4ZTBvTzIxRWlqcGx2Vno2WlFtSDVLNExSY080WUpKano2SjlpdVo0WEZFQWNkd192QzVrbmFDbUVOb2VVWXJobUFLaWJJemFFRjg?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "The Lufkin Daily News",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "unreadable",
+    "detail": "https://lufkindailynews.com/news_reuters/business/former-anthropic-researcher-coxon-to-testify-at-new-york-city-ai-hearing-bloomberg-news-reports/article_d5e08673-8069-5e04-8888-d1d7adcca76e.html",
+    "host": "lufkindailynews.com",
+    "chars": 0,
+    "ms": 2272
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiuAFBVV95cUxQQVVRR3BBcHZWM2JKOWdfSXZZMzdLQ053am4ta2xzSzFULWdoZHlhbnlFNGNMRFhoUGRvX1lCeXprSjRPWVczTkNGVlViN2VwRHoyZHV1cFdlRHpNS0ZUV2FseUNZbS1Xei1wbkJwcjVaY09QWm9GRUV4dExBb1lOZUIzYzhCZFB1Z0lpc2pvSlhCcnJXa2hJNTVYeDkwSnpWeFRLV25qNDhIOHB6ZW9wSVBxOVhsRWtK?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "Bloomberg",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.bloomberg.com/news/articles/2026-10-04/ai-whistleblowers-google-openai-meta-to-face-new-york-city-council",
+    "host": "www.bloomberg.com",
+    "ms": 1061
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiuwFBVV95cUxQT1k2R0NaRTBYN1dEMEFCTEtmT0F6cFNXdmdfZTRpMHpkU2hjTEF3akh1SnBKRjVYaUhDVHhXMFh5VU9iSlVqbFZfQWpPdUItSVVWRndaVUI0Vy1LX2tROXFJeVM4VUFpb0NZRENOd2UtZlg1VmFNMlB0azBtREhGY2ZWWnh6b1pvaFBmelNtVEpqUzUtRE1fVVVfZFJfV1ZRdHBfenBRY0ZnSjBCUXhQVzVGbTRSME1aNG9Z?oc=5",
+    "feed": "gnews-ai-policy",
+    "outlet": "GuruFocus",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.gurufocus.com/news/9108895/softbank-ceo-raises-ai-safety-concerns-amid-65b-openai-investment-sftby-analysis",
+    "host": "www.gurufocus.com",
+    "chars": 7990,
+    "ms": 2224
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiogFBVV95cUxNY2ttUC1nek00STN1N2VSZWNEbWNuT0hKMGZzSFRtVFEwSS14VUU3OUJJblRiT0p3OThIVWpIZm94RGV5Mk9xUGRZU09hOTR0UGQ4Y2Y0b0hxMi02OWxMdDJTa3pCdWVSWFAyVlJyX2JnUFhIOFJMYzY4SWtXaVdIWHNxR3FycEN3bDAtT0hvX25JVG9pQUlUemxDVWxSZFBQRnc?oc=5",
+    "feed": "gnews-ai-policy",
+    "outlet": "Seeking Alpha",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "unreadable",
+    "detail": "https://seekingalpha.com/news/4650039-softbank-s-son-warns-of-ai-safety-risks-despite-65b-openai-bet",
+    "host": "seekingalpha.com",
+    "chars": 0,
+    "ms": 3207
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMi3gFBVV95cUxOVjVuOURFeVg1cXRfQWpwaTExT3JXM0NSSzR4NVNEZmNUY2htaUY1TC1laW1ZZDJUNFQ4UVdybEJGRjkyTXB0ZDhldFBxOU1yNWtUZVdjOEtqa2w3QThIaG1UOGhTSUp6SGQ5WVA0SnhReURpQmJ0UEtaTnp6ekhtVF9PRDFxbVlEMTJrcjA2Y19vV0p3emppRVhXcFhkY1Y0N2M0Y0NyNG5jMG9GYmF1b0EtQkpQcm9ITFdtN2p4SjlSS3IwdTVTcDR0YXZkUi1QUXJuSXkzS2dHWDhoclHSAeMBQVVfeXFMTWFMd21mUFpWQmdkU1l6eG1qdzFFYzJNS3k4RzlhOFl0bllOcjRzdkxPTUZ1aTVFWE43TDBJUFVtc2pGcEdnMFI5TUtiVXMwNzhwWkpoYXQwVmh0T1ZhM3hHdlV0TGltdFdjTXhMQmhJS29EZC1EMTVTWEIxMV81RDFZTGxjdlRhd2RoUk9wU0RqVFZ3Qm9oM3N4X2ltMFBpRkxCT05ycXo3VnFUVzByWkRucTZadlNnNUdaTzF0cWVwekZ6dGt2aG9DSDBOYmJyZGJmZG5fUDhfSm81TUxZdXBvRkk?oc=5",
+    "feed": "gnews-ai-policy",
+    "outlet": "The Economic Times",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://m.economictimes.com/news/international/world-news/softbanks-masayoshi-son-has-rare-cautionary-note-on-ai-safety/articleshow/134677844.cms",
+    "host": "m.economictimes.com",
+    "chars": 2684,
+    "ms": 3820
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiswFBVV95cUxOT1JRSmhzTS0wZVI4ZmlyRnFJNExQS2RtUzRrX1V0aXl5THFMWldJWlk2bmpCNEprdFdQNG1EN0t6SlZHSjFaSVU3X2d4V2huNU9BM04xRVl5MTBPUVh1bTJlTzEtWVF5UGpuUmlTc1pGNmhNVUphU21tYjlmekhncHZ4WG8wcE9rQUxqRkREbmk1T3NaN2Q1RnNwZjB3cGx2SWMzUXRVVkltR1VlQjN2VWZGaw?oc=5",
+    "feed": "gnews-ai-policy",
+    "outlet": "Bloomberg",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.bloomberg.com/news/articles/2026-10-04/softbank-s-masayoshi-son-has-rare-cautionary-note-on-ai-safety",
+    "host": "www.bloomberg.com",
+    "ms": 2546
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiXEFVX3lxTFBVWmpWcUY1SVAtVWc2bnhmNHhSOWVFYnY4aGR3RG4xRHZwWlNNdFhwRS1aSUZhQk5kNUpGRnhBdU03T01rU0JXaWdnQ1hPck1RT0lCbE03V3Q5Ti05?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "OpenAI",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://openai.com/index/the-eternal-complement/",
+    "host": "openai.com",
+    "chars": 18216,
+    "ms": 2571
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMie0FVX3lxTE1nbHlqb3pMOWFvOUtjZV84Ykd1LUhTYmhpQklIVVJ1VlQ3VVZoaC1QZWttOVRZZVpxRW1fcHZ3VVJsM1pyM3hLc3NQMWJmbzl5TjNGM0piQ2xsYzc2SXRudC1IUUNkR1ZLZ1cwQ2JBTTdNT3lfMmE3ZWNTUQ?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "Semafor",
+    "runs": [
+      1,
+      2,
+      2
+    ],
+    "stage": "thin",
+    "detail": "https://www.semafor.com/article/10/04/2026/legal-risks-mount-for-openai",
+    "host": "www.semafor.com",
+    "chars": 802,
+    "ms": 1907
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMihAFBVV95cUxOYldObXMzV0twYk10UlNaa0t6Y2E3TkJTNFB6WEp2NTJqcjAyTHBxTmpRM2hsVm9HZFhyeHFSV2UtY3dINVU2M3U4X1JKTnNQYUFONHNBQk5sSTAycENmNUNhSnVKY2lYSkUyZFRrSHJxX0p5ME9WVEtsM3V3TmlHZ3JsWjI?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "Financial Times",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.ft.com/content/7feba19e-b498-4453-a744-214638044f0a?syn-25a6b1a6=1",
+    "host": "www.ft.com",
+    "ms": 1676
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMihAFBVV95cUxNbTIyS2l3QWYtSTZxVzB4Znp2U2ZtQzY3NHl5M0VHa3FVMU1PWTR4eWdmd0VwNnNIRTVlS0gyaU9WTVBDZ2RCRGU5dXFKWmc2bWdNWlpfazdrUHpBRGMyRmN5dTc4Qzh6OGh5cUpuZkNGb1BNZ0lxVW5FMmpwLUkycDNPcW8?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "Financial Times",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.ft.com/content/2c24ece3-ac99-43a8-b0e6-4a3867e37ebf?syn-25a6b1a6=1",
+    "host": "www.ft.com",
+    "ms": 1303
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMie0FVX3lxTE42Y3BtOVJxOWlqTGFfX0dCNmo1OFRHa1hNRDJrOGlCeDJsOXhrcm9FdWhpT0FrZk9zbmZHd3l0UUFsNW1qeEY5bVplRm1UenZsNkZ4R3dNSkFOdlMxR3gwRXBtLUhQeFdURURMWGNJT2lCY3dCbHVzMXRUdw?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "Futurism",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://futurism.com/artificial-intelligence/anthropic-lobbying-vatican",
+    "host": "futurism.com",
+    "chars": 3103,
+    "ms": 1421
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMioAFBVV95cUxQQm5va0Q4Tmk5dnI3RkhwaUpTbFhnRlhDWGQ1MWFvNjFCS3lwWEZabF9mSDRFOHJjMkhTbG5oOW80cWRIXzYyekktM1p4UlF5Y2ZqUk5LZ1NwRjA1UnRJWlY2Z25RUENXYmpXWG9ZclhPVExOaEd3UU5EeW5XTWRROVZKbzlBaVd2Wk1MRUtYSEdiZUdWZTRXeFdfNmNQcUla?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "The Canberra Times",
+    "runs": [
+      1
+    ],
+    "stage": "ok",
+    "detail": "https://www.canberratimes.com.au/story/9362505/ai-benefits-warrant-accepting-some-risks-sam-altman/",
+    "host": "www.canberratimes.com.au",
+    "chars": 3081,
+    "ms": 2400
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMi6wFBVV95cUxON0c3akFxcHNyTG5hRzBDSmg2dENvOWRPVVhueXkwc0JZVFR5cVpuZGhaXzJ0VEdnTHkteW12UnhodXpHRkRqU3NPOU1CaDJST051a0tPeEpYTjZGZEYwTW5IWmNNWDhudzY3UmxyMEYyWklhaUJ5cDR6dHlPX216Z1p6UHpjb3EwSGZnbHNCajl0QzVndzNWQjJpRXVteVlrODNpTnpTZ1o3YllidDU5cnZuaVFmRExjOTFpVFBOU3RISHBINmxqUzZiVjFLSVZCMllZam13bnpfR1Z6eGF2ajQwMG9lUjI1SXVR?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "TRT World",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.trtworld.com/article/8dffcfb41f2c?utm_source=%2Flive%2F69a2a1d4e4ba8e89ecd092dc&utm_medium=internal&utm_campaign=recommended&utm_content=inline",
+    "host": "www.trtworld.com",
+    "chars": 2943,
+    "ms": 2221
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMirgFBVV95cUxOZTFSQWlSbG5kQnBjVDB4S0ZlY3RiOVQ5MjZsN1Z1M3pJb0JoT1FDR05UVEFYUmoxSU10bXl2cFlpWmxRQWNlVF9Rai1nTC1UdUdqWmZxU09zNTNwaFhrWVh1b3hzeVNmVjlGLU90RllMd2hYQkJjaC1mYnNTTXZrbWJOVEUtUTZfZ1dmOFFXZEtaVllKeTdtZTVWeWpaUHpNSTFsSkxJNWU2M1BxQ0E?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "Politico",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.politico.com/newsletters/forecast/2026/10/04/sam-altman-exclusive-bad-things-will-happen-01106284",
+    "host": "www.politico.com",
+    "ms": 878
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxNYWFnWk90ajlEOFlsMktzU0RvSjc1cWpxRW9hb2FyZDBKR1pKanpPUE13TmpvRm5kdzY3NDN3WTZuQXB3bnVodlktZkRnS1JLR0E3NzlMR1k1aWZWUm5XUkIxSzA2Ynp0QzBwRmFZQTZGWjd6WWlOS09qbWZFM1lNYU1fTnlaMmY3?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "Politico",
+    "runs": [
+      1,
+      1,
+      2,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.politico.com/news/2026/10/04/sam-altman-decoded-interview-ai-01106217",
+    "host": "www.politico.com",
+    "ms": 848
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMinwFBVV95cUxNd2ZEcWh2X3EyWEhYTW02SWF2NnpZbzFSSWd3TTZZZmtRTWJILU9PcXNUXzg1b0U1Q2g5dEI5R3Q4aGRXeld6dDBJaTdKei04NzVxSmlWX3ZLbDFyeVo0X1dpY2ZUZXhOelBSb3FjbEo3NndkRTFjTDRIUlNhOXJuclZLdFZhaHZLVDRxSUMyT2ZSVlBSV0YxbzBQTWdxVGs?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "BW Businessworld",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.businessworld.in/article/sam-altman-warns-against-giving-ai-religious-authority-626765",
+    "host": "www.businessworld.in",
+    "chars": 2566,
+    "ms": 2404
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMidkFVX3lxTE94dUtkRWN6SzVHbWdDb0JLZlNIVUh2WGg4Z2FGZ2MyNEhJN2g2bk5hUWYzb3B0SUY1ZjQwOVRGUno0bFBnVnRDVDltQS11LXFyX24wQmxlYUVrd0ZXRVNaNHFOU3U3S2lHV0t4MERYWUNRdE1EMVE?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "finance.biggo.com",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://finance.biggo.com/news/0fb3f150-e662-45a8-a680-ce8b1d251b00",
+    "host": "finance.biggo.com",
+    "chars": 4869,
+    "ms": 2036
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiugFBVV95cUxOVTNZU0YtRWFPSU9hN3o0eFZnVlVQWlkyZEJHMDhyNF9nVFZ6MzE2OFVoRW5mWjVYeGZqQmh1WUlzeHVoVk03NThuSGl0XzZyX2ZxbVRLVUJjdEd3T0ktWm81bUp4OEJIWjZ3eEZrZ0JZWnRuRzdMM0ZuV0UyRFFsUFBZQmR2UHI4dlFtRUtJemNmU0NiM3ZFcFktdjR1akFXWVJaYzVzNHNLMGhndDFKcUFWdWlvclhMa3c?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "Anadolu Ajansı",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "unreadable",
+    "detail": "https://www.aa.com.tr/en/science-technology/openai-ceo-warns-giving-ai-religious-force-poses-real-safety-issue/4077770",
+    "host": "www.aa.com.tr",
+    "chars": 0,
+    "ms": 2528
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMixwFBVV95cUxNaGMtZWVzMms3M1JWSmVadGxtbldKVE9qT2JfejJ5R25DM0wyM1RQczdNLTZlOVpBN3NzWmJxSE92LXNNX2YxYTZNOTJEZXA5WDlyQ293LVBidkJJWEdEY3lsUEFqYkNBOHBFa0tZM0M0Z1lyTU94VmxpdXFzalNjcU1IQVk5Y1NXdjJkX2xJVUtTT3N2WUlnNWUxZlNHYThzOVJZN0ZlbkxGUmxRQXp0UHBtVWdkanpTUW1Tem02R3otT3Zxb0JF0gHHAUFVX3lxTE1oYy1lZXMyazczUlZKZVp0bG1uV0pUT2pPYl96MnlHbkMzTDIzVFBzN00tNmU5WkE3c3NaYnFIT3Ytc01fZjFhNk05MkRlcDlYOXJDb3ctUGJ2QklYR0RjeWxQQWpiQ0E4cEVrS1kzQzRnWXJNT3hWbGl1cXNqU2NxTUhBWTljU1d2MmRfbElVS1NPc3ZZSWc1ZTFmU0dhOHM5Ulk3RmVuTEZSbFFBenRQcG1VZ2RqelNRbVN6bTZHei1PdnFvQkU?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "StoryBoard 18",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.storyboard18.com/amp/digital/very-uncomfortable-sam-altman-warns-against-treating-ai-as-a-religious-force-111936.htm",
+    "host": "www.storyboard18.com",
+    "chars": 2763,
+    "ms": 2721
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMi2wFBVV95cUxPbDhKX1JsQVREdXFHeVhRQWZRMl9xVHFuS280a0Z0ME1OYnp5eVZGT0ZXdFIzLVVaQ2NqbDNlSmF6eExTaHg5bUNMMzhCa05DMVdaa0pCOU5uOEFWdkY1blZCREhEdEFqZnU3OVlPc2ZsRlNqUVpPamxCTm5NY1RDQkVmNEtGb0JYY0JwTDNKcEdBa0tLQTBuSUhVMW8xM25CQ2dvb19BR21tQ1BSb0p6LXhEV3VMNjR0bTFkV25aN2dYRldpZDNicVBMS0xZWjRUVmFSYk96RjRvODg?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "Benzinga",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.benzinga.com/markets/tech/26/10/62152147/sam-altman-warns-giving-ai-religious-force-could-be-a-real-safety-issue-very-uncomfortable",
+    "host": "www.benzinga.com",
+    "ms": 1580
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMivgFBVV95cUxQbWhwdU5aem5ONklTWGk3bUNtZUZFcFNsU0d4Ym95Rl9OYnpsQzEyRlVMSXVxNl9CaXBKcnhxN0MxcVZiczR6OEY3LXdGVklISm1BdzgtQjhWM0VWd3JSTXl0My10RDJTeGZWTFc2am9YRGY1eDQzcjFOVTljR29RbnVJaW80clAyYXFHdXRNWVNla1FZbTZfMEllbm5zekk5YmNqS1BZUXhfbUYwZUNDS09XMTBUVEExNnFMYzZ30gHGAUFVX3lxTE5EYVYwaFc2QXdpaUFqb2hLT01xNm1adms4ZU94OVl5cVhYWkhzaTRRNzQyWUZZaU9WWHlvRnU0ZkZ5SWUxTXF6SGxvYXRyVkV1UnNidDc1MUVya0E5Mi15akJaRzJJYUNaYXhwTFA2anRqT1dsN0Q1THljSV9sOWVRdUJfWDc0Qy05UFFtUlE5MGNxUnI4RWdzZ3hMcXllX0pLbENtY3JpSEsxNVFPMFV3M0ppZFZoLUcwYUN3ejk0d0h0eTlhZw?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "NDTV Profit",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.ndtvprofit.com/world/sam-altman-warns-against-giving-ai-religious-force-calls-it-a-real-safety-issue-12136053",
+    "host": "www.ndtvprofit.com",
+    "chars": 3042,
+    "ms": 3375
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMimwJBVV95cUxOQzVINWRJaFhOc3lfci1qZEpLSXduSEhleEJLNXA1WUQxVVdLLWg4ZHc4NGhCeFAtN2xXTjlRVXRMRnU5RGlaQ09XWEgzOFFUUklHZGY1RHl1V0dPcDJFd3RNa0dZQ3FGenpsYzBmLThja3NIRUwxSklGYlRuR0xndlBUcERiVDZOd1llOGFxUmVGM1lzTWlrWHlEVWlyZlEyR3c5OGRqX2xEOW1scHhpVU9GT2JfWGIxbWlMb1R1cjlVWDJORlMzX2o0WUpGNEt5ckVOdG5WSHNDOWlJdTRKMG9ReVUwdXMwWDNSREREVkU5aTdHdEV1bWh5V1hMUlBocnBYbVdQUXVQRGE3U2lsbS00dXBLQzRWUl9r0gGgAkFVX3lxTE9fUjhtMEg3b3FlZEkzOFg0UlBHNHBGMm41WFlWdmVicm1jQzk2OW1sN2xWRnRtRkNrSGhxWjdqMEdUWkpMT1F1SnRTSTQ2MHp3amNEMVN5WTdMV0dRSFY2dWJJMUZoX2g3dWJKWjZDaUZYNnNTeUh5aW5MTmE0bF92UGFmVENBLTBxOTV0dzJ0blVRanZlOU93X2NzVEtGUlZrX0dENUd1M08tdjR5d1RQNk5lWUFPQ0RWNmtKcjV0QU90YWtCWFcyVnVkUmxzbHNJZFZRMjlfUzZ2S016NDJGQ2xtdjI2SjBlaHp6SzJKSFZVQWJzSjhVRnVxZUJ0VThwOWEzR1pBNGh0dkc5aWhISXBwRVpSdWUwNTZYUm1leQ?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "Wccftech",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://wccftech.com/openais-sam-altman-takes-a-dig-at-anthropics-altercation-with-the-pope-on-ai-consciousness-conveniently-forgetting-his-own-antics-that-have-leaned-on-religious-symbolism/",
+    "host": "wccftech.com",
+    "chars": 4699,
+    "ms": 1394
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMikAFBVV95cUxQeDNqM2d2WnBUNWcxb1Fwd0RQUnJ2SDZIdFFaUE12YlFiNkNIWUl6U2taNjc0SEcxY2x4amVJN3pHUVMyUDFuR3R6RjJmcms1WVc0N3RGSS1WZWN2dnNfWGZFUzdNekNuVms2OW1KOHFCbE9yQ0dkX2o0NEIzblFTUDBMQWVyLXY3Nkc4MUNBOGY?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "Business Insider",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.businessinsider.com/sam-altman-dont-treat-ai-like-a-religious-force-2026-10",
+    "host": "www.businessinsider.com",
+    "chars": 2638,
+    "ms": 1781
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiuAFBVV95cUxPcExYb3hQYWZtNUtZS1JtVGg3bVVMTVphWEpLSlQ0Y3dWQ1UxZk5OMkdrNGpucEFwZ0pYaU1WLXgya0xkMDBWb1l4MEJSZ1IzbUVlX25Pc3BXV3M3Z3hGUVc3U29fSkJxMFJNNWlxeDlXeXlKLUhpaWx1N0ZFQXdlYjE5N1h0a1R3UU9XMjlFYk9qa0Fkal9GOHlVZVFzRU5RSGVVdElISFZoR1VrMUFMbWoxQXNUMDVi0gHAAUFVX3lxTE40Q3c1N21GMmF4Z0NsdUcyOXFNMHgxTzZZYjBBUEtPQ25pTGEybTk1QkZ3RFpkN1g3ZUlnMWJoc2ZrcGxxRVpmdXZfdEZuVlB1RDBxdGE4V0JaQm9qekpKT08tLTRlSTV4VVBfdTZxeGh6Y3ZfMG5Jc0RxbTZuRW1VZmF6VDgwTHZzVVNmZThKOW1qdnViaVBweFZqRUNHRkdZWnhqSWx2cVBGTnlNR3JWTHJwb08zNU9kTnRZMnhxNw?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "NDTV",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.ndtv.com/artificial-intelligence/openai-vs-anthropic-sam-altman-takes-a-jab-over-religious-force-12135027",
+    "host": "www.ndtv.com",
+    "chars": 10072,
+    "ms": 3987
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxORG96X2d2YlZHeXRKVFZMamFsVklneUVYNzBnV3RJdWFndV9ONkdheE9IZktfQXU0dnF1b1BLY0VDb3c3TDk1RmUwaS1DcFJtYWNhVWZ2MTNHS21JbkE0SHVoV2lxMm1RWjNwSmJYZ0tOX054UE1mUTVCWFAxRGhJbDBfcHVWZ1ZHNXpRLW1pbw?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "Axios",
+    "runs": [
+      1,
+      1,
+      2,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.axios.com/2026/10/03/openai-anthropic-altman-amodei-religious-force-models",
+    "host": "www.axios.com",
+    "ms": 2106
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiowFBVV95cUxOcW1HZDBHU1JFd1NqX1hLUlJ1ZFZOTDF4N1RSQ3F3OG9DemdIWEE3OUdxRlZhMURtQVQ3ODVBS0ZEY04yeHZTMk9SNkV5S0RzODFwS214QkIxY1pRSlFnWU5NcFA0LVBnNnNGYWlscFpsUkhuYXEwTEZFbU9GajFrb0poakw2MTBnaXI4aFVoakkxTk1OQlFLb1M5MWVFM3ZKNWg0?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "The Atlantic",
+    "runs": [
+      1,
+      1,
+      2,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.theatlantic.com/science/2026/10/anthropic-artificial-intelligence-science-biology/688878/",
+    "host": "www.theatlantic.com",
+    "ms": 2164
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMitgFBVV95cUxQbWFwUXdTZy10VVI0V2VKbG54UGxReWRmbTNxZldVTFdZUWFDaEE1NXdsa0FjYXhuaEFER0plUWVobExwYVJrVXZEUEdwRUZxSElZemlmUExjZV85ajlGSUxCZ0t0U0pqMHRObkZlaWhRY1pyQ3dvQUhqSmpTaGtvekVrMWNrdWJ6SmZEckJERWVYbW5sejF0M2RSN0dGSnBhY3A3Q210MHgxM0hGTUE5VnNfaDdYZw?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "Seeking Alpha",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "unreadable",
+    "detail": "https://seekingalpha.com/news/4650047-openai-s-altman-draws-regulatory-divide-with-anthropic-over-ai-risks-politico",
+    "host": "seekingalpha.com",
+    "chars": 0,
+    "ms": 2494
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMi1wFBVV95cUxNT3cyVnpsRGRJdDNuLURieDZzTHRGZUJ0YnNTakdiRml4UHprdjJkRXJ6M1V5dGdhVlp6elVXMGJ6N2V4eWNpSU5kMC11dGxqRW80dG5NdkVmeHdfZ1J5Q2p2bVZVOHpXS3NtUkY0WjlhNnc4YTdmcUloaWowT1F1aUVnM1ZCdXFUNm1wZThNLWlPLVFwOHJiYnBmaFZISWh6M1Z5b01pbGZLQmE3cnd2S3VJSi1WaTZKQVo2dXVWbG9kYjRBODFCRTRGSzRRWjktM2VrSG9aYw?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "TradingView",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.tradingview.com/news/seekingalpha:0d20c8ab5094b:0-openai-s-altman-draws-regulatory-divide-with-anthropic-over-ai-risks-politico/",
+    "host": "www.tradingview.com",
+    "chars": 3252,
+    "ms": 2033
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMimAFBVV95cUxOVGlSM2lMaWg5Ym1HS3gxSXNMaC1raEUyUm5TdkgtOTY4ak5NNm9tMTRydmlRRTFfQ01sOGtLWUpNQ25oVzJrckMwQU5fb3hrQUhDRDhOeFJvamdjNVF4VmRfSk0wS0prZkx0MlNNQjUxdW9jV0hBTTlTWkZOZXZya0Vfc3RMVmtPeHV5dURneFpsWmNSQ1B6LQ?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "Futurism",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://futurism.com/artificial-intelligence/chinese-hackers-impersonate-anthropic-ai-secrets",
+    "host": "futurism.com",
+    "chars": 3350,
+    "ms": 2265
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMihwFBVV95cUxOOUtjSXdCS2Q3SkZXM3hHQjZLckwtWTYxV2JpSkZKS2pKTGJJb1c2U0xUR2V4Y21ESGVrSjl3TldXb2RLZlhUTGkzaWQ0a0NRazF2LTFQcmhMZUItWFFMNE91VTJUYVBIbUtRSzV3LXRKRFRsSFlxdTZxdWw2RTBUNlp0SUo5Y1k?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "The Information",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.theinformation.com/articles/anthropics-big-charity-bill-shareholders",
+    "host": "www.theinformation.com",
+    "ms": 2513
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMikAFBVV95cUxQdFFvVTRvZWhxbFJFVk5wOHZPZjMwRGZXaFAzcktoWVVfNnNJaGxBV09VbmExdldvYTJDV0x4MTRlNVctZFUxX1lJRWF0SjNCdWlfd1hCcWZvRnlaNWJ4ZzZpYkR0ZHZud1phWmliUnBDWmlacmxfSkg5UWZNSFFjRDZRYVNxSktYV3pHY1B5cGw?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "Americans for Financial Reform",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "thin",
+    "detail": "https://ourfinancialsecurity.org/news/anthropics-message-everybody-slow-down-except-us/",
+    "host": "ourfinancialsecurity.org",
+    "chars": 1464,
+    "ms": 2126
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMivAFBVV95cUxOTmQySFJZMlVYdFJoNXhEVHQyZVhtVElZR1doTVF3XzNfSnE3OU45N2RPdlFzVmpNdlZMVFAxQjA5aWM3SGFkWVFKNEh2My1sbUx1dXlvcTM2Y0U5elNGazVkSTAyektVU0d2UndOSk0ydXFobVREQ0dzTkp4UXBJZkVTclFNRXVhVDM2Z0p1NDlqaGU2ZUhWYWdsLTZ5QkNLX3pkSjRiU3R1SmpBcFZBVVFKalZsM0poUGdacg?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "Fortune",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://fortune.com/article/anthropic-daniela-amodei-entrepreneurs-should-go-on-vacation-road-test-potential-cofounders/",
+    "host": "fortune.com",
+    "chars": 4559,
+    "ms": 2370
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMifkFVX3lxTE1oelBYbV9RbzJGTFI0Z2gwSmtjNVNqYmZrV3VIbnRMaXdZenJHeUxMWlJ5UVl4SHZXemx1T1FvMTU0Wi1JZlVsTS1qOS1kTERGa2wwdVpXNmdqVUIxZmRMMjE1MnNYb1dMc213bVpTS2w0UzA0UEZzdUdWSmt1dw?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "shattered.io",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://shattered.io/openai-jalapeno-chip-3-6x-lower-latency-nvidia-2026/",
+    "host": "shattered.io",
+    "chars": 21429,
+    "ms": 2653
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiswFBVV95cUxOYndMcmhiWEdsRDdPenp6bDVaM3g3dG5JeUJIbXdrMUxRaElhNm5mcnczMzFjSUFTTjB3TzN0elJLamFsME0yMVlxRDhjcVYxWWZwRUwyeDl1Y25Va0FuLU0wc1lDVk5ydGhPWEQzSm9wS1JuTDBpeFUwVm4yZTBfM3VldDhWT0tXc2NUVGdEeE9xbU9hRjM0SjV2RFBUWGdCalNoblhuY3JnbUFXeWFtbG1RSdIBuAFBVV95cUxNZlVKN3YzekhXdklJcVBpdHl0Uy1xVWtFWHozRTNfNVhBMS1uSV92MUx0ZDFGTml0S2lZa0pmaE9tX3lueWQ3SnctRmVIWW9qR251V0hDUmlyREJoal82VmMyaG9jS2FLYndjc2pCOGlSNC1fREljZzVrLWJNbENBSkp1clZsVnQ3bDhua2xkWWRzUUtqaXg5aEluenhHT3g5N21hcEVBX1gxUXBfcTA2Q3EtZFN0ZkVz?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "Fox News",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.foxnews.com/politics/tech-powerhouse-regulatory-push-bears-similarities-notorious-washington-strategy",
+    "host": "www.foxnews.com",
+    "chars": 7408,
+    "ms": 1164
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMixAFBVV95cUxPVnFQTDlrbjY4bTZ0Qk55eDF2cjlCQl82RTloblRTV3pvUXppRVJkUWsybUlpckZhaG5kb1lZcnF3bXhCaXkzNC00Sk1QNUZ1SnB4WG13SjVDVjFxaFRJeG4wSlNfWGNlTktPWnhKU0tMN0NpeG9ERHhBNjJFeXRySjJwanFWQS05c2lOckQyWEMyQXVhc1NVQm5lRlNiUkZSTkFwRXMyR3Y2aGV6NHE0UVNUWVZwVEhxZElXRC1pdk5sdmtV?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "EdTech Innovation Hub",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.edtechinnovationhub.com/news/google-deepmind-creates-watermarked-ai-designed-proteins-that-still-work-in-lab-tests",
+    "host": "www.edtechinnovationhub.com",
+    "chars": 6359,
+    "ms": 1896
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMioAFBVV95cUxOYS1zdkx1OVNZRzN0VWh1aG9QemQwWlpGOUk5WGExeTJMdkpkd3R2dHhGajdfQS1qYVNjNTJ5TmQtVU4tczlRMl9PRWptRmZDVUZ3ZldIVE5GUDF4aW92emVSZDU1YndUaWh3SThEaGpJQUNydEd4TkdUOVhGQXR1bjV3X0RMOTEwRUMyUmF3c01GM002bDZTSElNTnJGMDdO?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "TheStreet",
+    "runs": [
+      1,
+      1,
+      2,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.thestreet.com/technology/mistral-ceo-has-blunt-take-on-ai-safety-fight-cites-negligence",
+    "host": "www.thestreet.com",
+    "ms": 924
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMilAFBVV95cUxPWkpFMEJHc2JQWHQ3a0dLdlBISlpoN0k2Y1VRZXFqRmNvX3hfSTRtLTFOWlNHcTB6SU50TGJVZ2tFclNZejVMbjdjRVdKSjIwWmE4T1VucXBld0lZQWFKSjQydngxLWJQbGxXZGhwamVOVmFkNFpCTHdkZG9FRTh6TGlfVWpIQ3d5UXN0SU83cUxmWUtu?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "MIXED Reality News",
+    "runs": [
+      1
+    ],
+    "stage": "ok",
+    "detail": "https://mixed-news.com/en/california-attorney-general-bonta-investigative-subpoena-openai/",
+    "host": "mixed-news.com",
+    "chars": 4269,
+    "ms": 1600
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiqAFBVV95cUxPUTdGNmNqN1RwZkc0SjJyT0kxZ1IzMjN4clN5V0FhUkRqRGpkaFBpSXNQQUxHSnhMM2dxdWlISTFYNVpSVV9QRTUxd1duZ1RwWk9fUm82dS1IclhsNlhRM3kyMDNVNVJkTVFHUmhYRHZmMmlrMlM2M1k3Qy12M1lERlRLYlJvaUpKWWZVZlpfckYwR1JDVDNDd2JSa09tV1hMekp0Xy1Zd2Y?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "PYMNTS.com",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.pymnts.com/cpi-posts/california-subpoenas-openai-as-scrutiny-of-ai-cybersecurity-risks-grows/",
+    "host": "www.pymnts.com",
+    "chars": 3024,
+    "ms": 1498
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMizAFBVV95cUxNYXdOQkNGN2NyMjVhNDlOZUVRTUdMWkE1OVNsaEtCQUcyS1hzQ2R3UkhLX1A4VjlWX2lOSHZXSjNSQ3NTT0g1M3ZCX0ltWHJSaGhDelJqdjJwbmVKeENqSkFIallKdzdVUWdqR0IwcndOLWhDbjdnbHN2NXFwTk1UczBMNkRoM3NVdllOcUhJUkFDZ3dWM0dfWnV4V19ldVVnS21UbEg3bnhBWV9FNzFHM3ZieWlYTy05aDJfYm9YYzZYdlJUODZBV0ZyTm3SAdIBQVVfeXFMTXhoYkFWNEtHOEVIclNCSlc0X3BsWk8yaGlGLVQyeFRZUm5rX2hNVjZtY0owZFIxZFFqdUxtbXNaQUgyR040UEpYM21Hdi1UTF9DbVJLRjRSa1RxdHA3cXNROFNtZ09ldEwtLWpSNGtJYnFqaVIta3BKdkdacXZqNFRWd0xZR0tLMUpWLVdUSUlhLUtvTUxSdGJEWS0zbEg1UkxPNHFDOURSalhKTHY5RXQ2b2xyNHRjbC1FNEMxcFR4Z1RWQnhyRVA1amZ1NHBqX1N3?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "BleepingComputer",
+    "runs": [
+      1,
+      1,
+      2,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.bleepingcomputer.com/news/artificial-intelligence/anthropic-asks-claude-users-to-share-voice-data-for-ai-model-training/",
+    "host": "www.bleepingcomputer.com",
+    "chars": 1882,
+    "ms": 2006
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMi1AFBVV95cUxOZ2lZZFB3ZmpQSGlxanc4a1d0NjE4ZHBqMkRRREFaYUc0MHZfZ0dPLVBBeGtIeFg5UHBKbjdoZ21FeS1YTFVnOG4wQmhDaUdpSnF6MF93ZmhrUEMzWUV3T050eVZ1eHBSRXF1TnJtaWhuUVdRNmYtc09jU1l2VWlsOWEydEJYRlVxa082ZVZWUUVpN0l4eWo3d1JKd0l4ODd2eEJuTmg4bXVYQzNvZHdOd2ctVE85SWJXcUE0aU9ZUmtuUC1RcW9XV3dPUjFWMzBoSTJydQ?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "24/7 Wall St.",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://247wallst.com/investing/2026/10/04/broadcoms-massive-42-billion-chip-buying-deal-with-anthropic-raises-circular-financing-worries/",
+    "host": "247wallst.com",
+    "chars": 4919,
+    "ms": 1732
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiwwFBVV95cUxOQlRGWEliQzN1RHlPYlM5M0d4Q0VaNERpTVVXRW1jVWs5STR5UDR0V1M4WVAwSmNjUXY5dG1RcFZXbENJblBmVkFoalo3LUFkQS1kSGxPZ3M4ZnpXRGF5YVo2d2k2QWFPaFpVdHhfaVlDNTJfRklKRzk5Y2g0Vm1ZUFBTWlo1dk9wR0pEWklHOWdKYTE2UUdyai16cFF2dHYzNWF3MVJ1UXRxdXFobGZOR0NvaVJ2MGsydXdpaXYyZkVHWWc?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "EdTech Innovation Hub",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.edtechinnovationhub.com/news/openai-hires-greeces-former-ai-adviser-vassilis-koutsoumpas-for-global-strategy-role",
+    "host": "www.edtechinnovationhub.com",
+    "chars": 3634,
+    "ms": 1224
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiugFBVV95cUxOdmJldUg3MkVyRlB6a0xfZTQzSjZVYi1VVlNacjU4c1FPMjJXbTQ4S29JTEFURTJ5X0h2Z3lfNEM4QnRUUTdXaEZnNW1SOEVwRDBXZVpKdHdhU0UtOVZ6eDJCQ3lHTTBIczltT05PUHhsR1l5RGxwa2xZSmozU09QaUV3T3ZOLTUzblRodUZGTERlcmVEdmpDQTR6cjFtRUNKSEFoaTNOWDhXQmhXaFdDUE0wZTBpTnA4Umc?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "UA.NEWS",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://ua.news/en/world/anthropic-zaiavila-pro-vikoristannia-claude-v-prorosiiskikh-kampaniiakh-u-tsar-deutsche-welle",
+    "host": "ua.news",
+    "chars": 2750,
+    "ms": 1375
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiqAFBVV95cUxOX0NQSElZdDZQSmFwTWEyNnlsZkJlR082dHBCWlRpcFFpRUk4VHh3eHo2N3dZWUpSeGkwQS1kRUEwSmVGQXNpSnJuU0VpcHRQZ2xwSjV4Nk40azhQX0sxbmRaQTUyV09JUTFrazlvc2RFUjl4SnFMSmpYMVl0MVVMMnBNcXNBS21LTG5CczRSVjNVZjQ1M1JVcElKak1LWFRibVJzTXpTbnM?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "Nacionale News",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.nacionale.com/en/articles/russia-accused-using-ai-claude-pro-russian-campaigns-central-africa",
+    "host": "www.nacionale.com",
+    "ms": 1378
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMizgFBVV95cUxPRmdkdHFFV09tWERfUW9MYlIxN3NRS0NLdkxwdklTUUtzenZZMXNuT012dTU3Z2hFUXpLUFhxMV8zSkhkdllYdnM2bEtTd3c2UzBJRXFJYlJqSGtXTDdmbmkwY2pKX2pZVklMR0pDQ0JBLTRWR2hxZ3V4QVFEaTZLeUJjQ04zbzVQQlk2Y3pzUkdjNmVhUXpqNjFsWU11ejdJbnBfT2RkektIQzVHejlVaTl5SDF6VVUwa29LUHZRQXpLTTNVUmllaGQwTTJUQdIBzgFBVV95cUxOazlNYnZxZmdrTTV4TGdjQUJtLXlzY0M3bm8xWFRwdGhYTDBKR2tQT1NEWlpoeEZJUGI4TTRJakpBc0liSDQtZTNEZmZUZV9kUHNYMmIzM0xsbU9FaERadjFtRDNxVGdOb2Z6M1pmNkZxcUppNzlyMFNpNFdOc0dMQUF0MHR2bTNqYXM2Rk84cVdTdGk5RHY0cXVvX0tObC0tZjdGTm9DNDhEdlFuek03X0pramxKM0YwSnRCUFBxZzVQTG9ucjJYR1NuV1hSUQ?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "DW.com",
+    "runs": [
+      1,
+      1,
+      2,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.dw.com/en/anthropic-report-is-russia-using-ai-for-disinformation-in-the-central-african-republic-and-elsewhere/a-79476947",
+    "host": "www.dw.com",
+    "chars": 5194,
+    "ms": 1904
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMilAFBVV95cUxQWS1nVmRuc3RqZWNPaDdQTDVya0oxaU1WODVUdHpDa2RoZkVzUjg3M21kNEZDVVo5WjVxajl2TXVQM25LYW9hYUNPNG5vcktEM3ZIZGVaSFBzaTRWM1BzZENUX2l1UDUxVXV1cnN6UGtoUk9qZERlOG9BVlVMR0Rzc2NPTVZiRXRwUnZqLThpcHNkZkdt?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "Investing.com",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.investing.com/news/stock-market-news/how-muse-stacks-up-vs-openai-dots-4930890",
+    "host": "www.investing.com",
+    "ms": 987
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiqwFBVV95cUxPdHROYkNMYVlfQjVSb0N1a1NNbnkwMWVWb2NSOVJMVzFuR096S1hxUi04VERfaXcxUUFjUjJEcDJGNFVpMjBQLVd1Ry1kMVlMTHJxZ0JUbUxFY0ZGeVZLNXRfQmswd0hFVkRVbUNURF9ObTE3NEVLYm5CRHNFcUlVQ0RjcVJNRDVZWXdObmJWN1dEcE5DT1Q5SE1mcm50Rl9PVUpwOWs5TS16YWM?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "Sports Business Journal",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "thin",
+    "detail": "https://www.sportsbusinessjournal.com/Articles/2026/10/04/openai-taps-fernando-mendoza-after-chatgpt-jokes/",
+    "host": "www.sportsbusinessjournal.com",
+    "chars": 902,
+    "ms": 1118
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMi6wFBVV95cUxPRlRkcDdVbUdtS1VET0RiMDBaQUZQQ3Vla3YzSjFhY3BmcEVVSVR0VlRsenpQN2w3cXFwRTVNNUY4bVhlWGtsVjdkWThEMHRhNEM0U0dBWE01Z01SMWVudmJtY3dOdHExZWQydklQRV82dzI5WFZycHJjcHF1bklpajU1VHZKWDBrbUFHYWo1V2FSSEJOWlBrZFJCY3BRdnNkU2VjVy1WMUluaFBjSzRtYkZuTmNHbUMxSnIwYWRsdmZJUEJ3dm5UUFFESWdxajVNc0c1cW80X3NCb0YySFhiMWJCR19wcWpYdzhJ?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "Benzinga",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.benzinga.com/markets/ipos/26/10/62152426/openai-anthropic-are-bypassing-wall-streets-ipo-freeze-a-luxury-only-the-top-two-or-three-players-have",
+    "host": "www.benzinga.com",
+    "ms": 1299
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMinAFBVV95cUxQcTVuSTdRZE5fRk94MTB1RVNjM2xuc3NremZTUXJJWE9DT05VLXdObC15Nmprci1KU0lSR19ScXRwTDBlZ1k0Z0UzQ19KNE9iQzZRVFpGU2o1MWZYQ25RV1JwYkhKN05BTmh0dTRuMjAzWEdqalpjaGpGZkRhNDMtaU1OX25sSGJGVFJIUFRrZndXVUszQkFsVmlweS0?oc=5",
+    "feed": "gnews-frontier-labs",
+    "outlet": "forkast.news",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://forkast.news/anthropics-public-s-1-still-missing-from-edgar-as-october-ipo-window-opens/",
+    "host": "forkast.news",
+    "chars": 5709,
+    "ms": 1510
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiwAFBVV95cUxPd0FpOW96d2RrRHV6YVlTaWZVNTVPaWZIZU5PMDRrczJnY3RwSWhjMTZneExMaGlDYXhna0JfaFpzZjROSjdrZ01JclZFNEdKdkpIYkhMS3dtWEZ2V01YZEx1Y0ZTQ0loQmp1TWxoRjkybkNqd19LT0NqVmNvWWY1cU1nbmhWSVRPbW5Bemd3Sk5kaVZYUlJfTkxpSlVjdUJvUmZRel9MTXF1RjVka2tWemdDYkNJd2NHVlhHYWtlUTA?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "Thurrott.com",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "thin",
+    "detail": "https://www.thurrott.com/forums/apple/apple/thread/john-ternus-is-taking-a-more-hands-on-role-in-apples-design-teams-as-ceo",
+    "host": "www.thurrott.com",
+    "chars": 460,
+    "ms": 2022
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMifkFVX3lxTE1TaFVNWGtQc0Q2TWdIM05PWEFlVXVKUUN0RzRkd0I3SnBQNWNEU3NnQW0xM0hXNjJ6Z1RRaUYyWVg5dl82UlJwY0VmcU9Kd0VqOHRZam9DOVdqa0dQTWo0MHo3a1Y1RVFpcHFNVDEtd2hWQ21HSVBMMk1MS3NzUQ?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "The Mac Observer",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.macobserver.com/news/john-ternus-apple-hands-on-design-chief/",
+    "host": "www.macobserver.com",
+    "chars": 2145,
+    "ms": 1324
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxNLUI4SG1MZ1F6Q2tnZTNkWWpTdWdZRXJGMW5vY2lmZm4zVWkxcGFoUTY0SGFfVE95S3UwNk9uWkp4RVhzUUl2TVVlRHdzQ1dwajFrVkFvX0JHX3BXa21BLW5waXNISXRnaWUxTG9TZk5aU0JzUHU0R3NTS0dyX3VfU2NCX0hKeWY1?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "The Mac Observer",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.macobserver.com/news/john-ternus-apple-ceo-focus-product-engineering/",
+    "host": "www.macobserver.com",
+    "chars": 1967,
+    "ms": 1344
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMihwFBVV95cUxPY2p0bURLd0Q3NlFSY2NLbjJORXBsTTV6QWFueHhhWlUyaUFWamNMUkFKT3hreFI1cjByYkR0M0paS2QxNWJ2Q3VXQjVIalRWQXhLZXRWanM1MURKT2JfcVBTMmRjQlIzNFRNWnpDTnRYVVJqMEczanZRUEJKQlBhMnY2NU5DOEE?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "The Mac Observer",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.macobserver.com/news/apple-design-teams-report-directly-john-ternus/",
+    "host": "www.macobserver.com",
+    "chars": 2045,
+    "ms": 1347
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMitAFBVV95cUxQZm00YXNTX0JYRVJrSGhCN1dqNUNkbk94aWZ3OC1VcGdRRnhMcmYycGxZYlNiTEp6QVprZjl3QlZjaGJkS3Y2c0FEcVp2NHFtM3RXTjVHbG5LLTZmMTZwdDZSSGlZZFFtblIzajBrMmstSHBxSjJnVTk5X3M2SndnTnpuT2pOajVLLVBwQS14ZjlGNVZOaEJwUmxXUEpkR1lhZXh6Nmw3bzI5eTJzZGhxMUtfS3LSAboBQVVfeXFMUFcxYVJZR3prM1pweWRZY19lT3NOTDM0Nk50SnBfV2dJQlcxZGJfU09Xd3dNTVIydWVtSW9XSlJMajZrWElieFk4V3lSQllmTURod2plQ3dQektKejd4eUVQWTJPUmVndkF4YzBybkNJMkdFR2xuRENHYm1VRnIzaVJEWUFWR2dNbjk3THV0MmtUX19sUGNzeTk4X3VMVlg4NEJPTUNrRG84T1VSUlJGdGIyYVNTWVJuVnJR?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "Firstpost",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.firstpost.com/tech/apple-ceo-john-ternus-takes-a-more-hands-on-approach-to-design-report-14050323.html",
+    "host": "www.firstpost.com",
+    "chars": 2804,
+    "ms": 2226
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiugFBVV95cUxObUdrZHk3RkF2Tks3dzRWQ0MyNFRpcVVWYUQ2VlVadjY5dmx0TzZxcXNRc1NMS3BrNXJQMU9Fbzd1d3dyUm5zSzNMQS1yTUZzWjJTRFNlM0J6SXpFX2pCQVE4ZTNvcTVNSlRuSjVYZTJYbjJIRzg0MmFhdHRsSUV2YVZFRkNEbWxUaGgwMDFKMk1NS1VWa1ppSy1NbUNJM2FwNExvWnFzRV92bUJjbFpuQlExVVRkLXZ3cEE?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "northeasttimes.com",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://northeasttimes.com/2026/10/04/apple-ceo-john-ternus-spends-several-days-a-week-in-the-company-s-design-studio/",
+    "host": "northeasttimes.com",
+    "ms": 1445
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMirwFBVV95cUxQUWdYQW1qZDZoaGwxcldPaFQzcVBuWVJsQzhEcklUZ0pVcjBBTTcwWjkyTUt6Q2tyaUdsQ3FBM0FjSmhXQTl3ZldIS0tOVVBvN0hxSHh1MVlia2s0bXpXdEhfZlB2QkpNcElnQWwzaW1LM3loSEZXcTFCSm1POWRTMk1fMy04TDUwQXVHMFBKZFZQM1duakV2MzNscER5V3M0SXM1VVdWM2xRdHZiVlh3?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "GuruFocus",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.gurufocus.com/news/9108861/apples-ceo-john-ternus-prioritizes-design-and-upcoming-product-launches",
+    "host": "www.gurufocus.com",
+    "chars": 5917,
+    "ms": 1353
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMisAFBVV95cUxQWmxJX0ptcVRCN2dCZlYzb2JWOUxxLUR3UW95M0tBelptTm4wbHpiclhucjk1TFlVMnZpT1k1V0RLU2dlOGFQa1oxQU5vWU1SMENLaW80RGNxNHhxQS1GLVZydWVrdHdZNkZmM3U4QzB0TUNkQUh5LWgtYXVEb0hHTFVqdVVGNU5XbTRtVzNuR2VMeXZiTkpiQlE5YWVmY1daX2FfTDRSVW5VTDNJMnd4bw?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "9to5Mac",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://9to5mac.com/2026/10/04/john-ternus-is-taking-a-more-hands-on-role-in-apples-design-teams-as-ceo-report/",
+    "host": "9to5mac.com",
+    "chars": 2791,
+    "ms": 1521
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMilAFBVV95cUxONktxc1BwOUZpRlVueHpsZjhWRlpBdkM1eTVqSEZtc3Qza0xWOV9iUi1fWHNWd2lieG84RkE3bU02V2o1SW5fTi1ZNDM5Y0R1a2xlbEJNRU9RLW9xWmEzOVU0VTUyR2hoREhaMGlMNjhCR2pIRnc5amFYVzh4cDU4QWc5VGVWZnVyNVdyTm1wR21BODg0?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "AppleInsider",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://appleinsider.com/articles/26/10/04/design-is-a-jobsian-level-focus-for-john-ternus",
+    "host": "appleinsider.com",
+    "chars": 3830,
+    "ms": 1231
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiuAFBVV95cUxPa1Z5MEZDZWNHZk9SeS1QdkhRTkdxLVJCbndhajdsYTJnYnl4am9pS0ZnamZERXJoOFBNdVphOE9CNlNva3ZmZklEYTJjelVOeVhLNk1Zb1cyX21xS2Q2Ri1Qa3owY3NBWEVlYmMzSEJGV1hMWWVYcFZaTHY0Q3NRam05S09wTElaVXlPcnFIbk4zT2ZxX3p3SzlaQkp0azZnMkVDeDdIRUtIQkNzV1BDRHZwalpwNVVQ0gG-AUFVX3lxTFBhc2pPT1RCNTZCTEk2dTgtUmd4SnR2R1JiQVI3VFA5TTlaY3lkbTMzX011Wk14Rmg3Tk9aUUd0R2RxUzgzLWFUTVd0MWUwalBZRXFrOXQyckVRMWVvaG43RTBlbHQyYUxBRlEzRXkwLVRobnJJU19DQnpIbmFYV3R5Q0NLY1Nqd2tBcGhrZ0x1QXhNUUpuLVZiYUJOUGtHZ0F4Tmc3anN0OHE2OFJBYkZvYy04ejRGZUhwZ0Z3UGc?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "The Apple Post",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.theapplepost.com/2026/10/04/72923/apple-ceo-john-ternus-taking-hands-on-role-in-design-teams-report-says/",
+    "host": "www.theapplepost.com",
+    "chars": 2401,
+    "ms": 2503
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiyAFBVV95cUxQRkVyd3FmTWlFU25rNlJYQ3lKcDhXY3YtdnV4TENhdGZSMkNWUFhZZmI5XzU0ZGhJMHdmdkZKallDb0dlNXRheFZYTGhicnI2TkVTVnF3UFFfRXBfMVVqc2NlblpFY2JtT3h4bnhsbmN0U2xTYktNc21xSlBudnVRMkRZN0dPMnN4d3hjemdHS1hvZnMxYjFVNmVmZzFXSC16bFJPM3VKTG0xTXZna2lMeU1QWjgwQllpMVQ0UlBraWRFMFRQVklMSQ?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "Bloomberg",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.bloomberg.com/news/newsletters/2026-10-04/apple-s-john-ternus-leads-design-touch-screen-oled-macbook-pro-gets-lighter",
+    "host": "www.bloomberg.com",
+    "ms": 1589
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMixAFBVV95cUxNam1mdkNzT21NWXlWMTQyOFlwNkQ3X1UxZ1VWdDNQZExRdWs2dW54NWJOZ2gxODRjNnNWV1VXTWp6ZjlnaXFIMlhxdnliRzBmUDVBSXBJX0hBMnRlSFhPVGpuenRfbWpOQUplSUM4Q0Fzel9HbUVlejRNVm5ZaWdyMFBaWUExUlhGUTlIc01kSzBRMU8wRHJWOC1ic0dwc2FUZVVtT3FQUTNWaHI0aDV6cnk3SjhWNXQzNi1zdE5kYXJWRTRD?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "South China Morning Post",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.scmp.com/opinion/world-opinion/article/3369516/dario-amodeis-american-ai-imperialism?module=opinion&pgtype=section",
+    "host": "www.scmp.com",
+    "ms": 2072
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiwgFBVV95cUxOSzR1dXk0WVR1dzVndjNBQ0lITlR4ZXFFVTVTVVZOY2V0WFBfN0ktNlFjNlh1WnotbkFkRjVwVUprXzRwS3FWNmRVWXQ4QnAyVkNiQUVRNWc1eGNwUVB4bnItT2ExQzZaRHBYUEZRSUZhalJYNmhKNU1KbDgxNi0td2NXNTVJTHpSUjFWTmhic0dadm9DbV83RnZWTTBMN0RjVlVVZDRQTXJxMmJGM0JlSmc5MXVuSHJPeHBtMWxHTnZBZw?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "PhoneArena",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.phonearena.com/news/apple-ceo-john-ternus-mimicking-steve-jobs-makes-me-hopeful-for-that-original-magic_id183809",
+    "host": "www.phonearena.com",
+    "ms": 1586
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiogFBVV95cUxNTnFDeXdUaGRRY3FzRWFMbVpRbFBrVXVhOHNDWDRMaFQ1T1kzclBENEtWa3R5UDBDQktzb3Z3N0FYUjJsejBwZUY5eURuejdvaFg4eXJrSndRLWdvTGtDcVdwOFdXeHZlVWo4eXJDc3ZGWlg0aTZwak1ySWwtS3hkSzNmdVR3MEhGXzdGRDRjV3dpMzVTOFhDX0o1Z3FBSDBqamfSAacBQVVfeXFMTzVVZEpXZk9NbHhzV241am1weGozclJlMUV6WFd1VFFQSnhoLXhibFlnVnNQaGRsUm5QNjFtT2F4ZXdQUk9BN0VCbHgweEUySVhkMjRHZDROSmRoem1FUGwzTXVVd2wxZWkycDdWZld1RW5JaFJJd0tQMkx2VlkwNG9wS3Z6blByVkFpLV9lbEhjMjNSTDdoQzROTDhPbnlGbTdlRHJIUE0?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "ABC News",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://abcnews.com/Business/exclusive-anthropic-ceo-calls-stronger-regulation-ai/story?id=133753620",
+    "host": "abcnews.com",
+    "chars": 4010,
+    "ms": 1504
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMif0FVX3lxTE5SczlwcnluOXZuMDRRUEZTOUFXR2ZycFd2ektzel91eDc3VFNXVEFFeUlGLTM3WVRDLUZ4Y1Y4enJuWlFlZ1JaY2NOSHNpOEFYUVE2TVhhcmR4Qm14ekhKeXBWWXdvbXZXSF8wamtoampBUjJGLUhOYW1pa052cU0?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "The Mac Observer",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.macobserver.com/news/john-ternus-apple-design-studio-tim-cook/",
+    "host": "www.macobserver.com",
+    "chars": 2047,
+    "ms": 1389
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMijgFBVV95cUxOTXg5VFBDbk1xMmlfZEdLVW1sOW5pOUd5ZWY5NWtFbzFwQmpDMzQ3c1lrVjhyVEVpZmhuZmh5X0VHeVVNV1d5d3VWTi1jazI5QjRoRkFrMTd1TnJER0lkS05hTGR4WTQyNUFNeDBOMkRBRFhPNlFkQ2tNbDdJUGdJc0lVTWVQbWo3OW56OFdn0gGTAUFVX3lxTE9Zbjg0dnVYX2NodkpINTY0UXJaNGdlYUp5MXNFcTJ2c3ZRQW5lVE5rX1Z6dEtYUVJBdjdJRmVsMjJtN21MVWhlZFBveE9SYmJMeDM5VTRfQWUyejNTYnY3RlBBdjd0OWgwOXRwaWtEN0x1Y0czWXhuRlJSWVlQUy11LXE1TDNrUTAzZlFRWGw0OG5zaw?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "ABC News",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://abcnews.com/US/apple-ceo-tim-cook-stepping-john-ternus-set/story?id=132217743",
+    "host": "abcnews.com",
+    "chars": 2751,
+    "ms": 1307
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMinAFBVV95cUxPc3pPSENMWl9tWGQwZ29QX0paQXcwZ04yOFdwV3NMdTNybjAxQlVyM0VsYnZxc3p2cVIyNVBEdjBkcWFKMVhSTERVLV9renVYRWxINnhlUGZkTGFmTGxUTHRPLTN1dERrTlNGMk1IRDdqb2RqQl9mTDlpbC0yV2xrbjlxQ0t4cEtxcUI5YnQ1eG8tZFhLaUN3QUNZd1Y?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "Yahoo Tech",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "thin",
+    "detail": "https://tech.yahoo.com/ai/apple-intelligence/articles/john-ternus-tear-apple-cult-143002764.html",
+    "host": "tech.yahoo.com",
+    "chars": 1360,
+    "ms": 2695
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiqgFBVV95cUxQQnZSNFdiOUdGWWpkYWxGZk9rT1VMYXJGX0RNRjFleUxRWks4a2pGbVpfZ3JuM2lSZkZkQ1NLWG90ODNuVC1WU01wZVBjVTdUeUFwNXBpaWpLdFNoRHJqRURhZU55NDdrNF9JeEZMa1JyS2F1ZkxRVGdtcmVYR21aa2thU0pHRVVjRHRFRXVSc09nWF9VVHRSVzNvS0tKdTlmb2lCSVgyajk2UdIBsgFBVV95cUxQeC1NXzVjdWYtNGEyY2hZMDd3NGlWRkhmZGhEaGRBRDB5ZzJoZFF5YVpFanN6Z3lqSnAySS0tSGROUHc1WkVDX0txZU5tTmVxUDl0N0x2SnF5aVY3VDdVV25YRFRGZkMtZmRXOGR2SHRHUldFd2FwSm9JS2dOZHhyM2FrVHRmbWVpNjg3Sm1ReExyQjFHUjVCb19ibTA5VFQ2RGFfRG5qRENGX0NRVnphODR3?oc=5",
+    "feed": "gnews-ai-execs",
+    "outlet": "NDTV",
+    "runs": [
+      1
+    ],
+    "stage": "thin",
+    "detail": "https://www.ndtv.com/offbeat/openai-ceo-sam-altman-reveals-the-strangest-and-best-part-of-his-day-12135694",
+    "host": "www.ndtv.com",
+    "chars": 1322,
+    "ms": 2214
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMimwFBVV95cUxOQUlJbWNvLUdBZmJjZms4UTZyUVE0NFR1YkM1ZFhpZkJkSW1WSnRSOGpoam9xOXB4TUxPcXdTMzNSWVRXOWVIOE92VmVCUWVxUFlJc3hYbUlxVkdwVVdsTXFLOVhGOTdjbHh6WTJBMEdxQVF1cHI3OTNLLWNsLUNGbGxKczFUM1JjV2M2SU15cWJnb09STVJXcGlNZw?oc=5",
+    "feed": "gnews-ai-marketing",
+    "outlet": "Yahoo Finance",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://finance.yahoo.com/markets/stocks/articles/extreme-networks-extr-hires-ai-070817974.html",
+    "host": "finance.yahoo.com",
+    "ms": 2222
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMi0gFBVV95cUxPY1hsLUw3R1pJSHR1VnJlcnVhOEc3R0pEdnVCb0FGSTVUQk50QTJ6WGlaTGduNG00aGRBcW5XUGpCMm5BdlZOb1lMY0Z2bXpOZEdJV2xsa0huSUw0Y1hzQlVEclR5T3QzMTRVWENQQXAweVlETnJIU3BFaFFDT0lKOXJfS0lfc1F1SDJLbERoLXFTV2N0a3V4WU56WnRqa2RlVWE2a0QwLXJPOFVocGFyYzl3REhndVJqa3pjM2YwZ2ZJTEE4dnFzOW9FcEw2UUg3TFE?oc=5",
+    "feed": "gnews-ai-marketing",
+    "outlet": "FinancialContent",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.financialcontent.com/article/marketersmedia-2026-10-3-ai-marketing-gap-analysis-with-12-month-business-growth-plan-announced",
+    "host": "www.financialcontent.com",
+    "chars": 4499,
+    "ms": 2652
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiuAFBVV95cUxQUnNYSUd5WHJ1WDY2X2pLMUIwY3pvVnZaOVp3U1pBTnAyclByME5YLUxqd2N2UHRYMDFfUm5iWkFPdGxuNktqU0RmVkVRVUxraUZ4T0REbEJmM3pVZUZvV0ZoR1dJU1RDdUFLRC1SS1dKYm5kWVhJb05feFp5dGotSmhjakpyWGtYNjkzdnZsWEFESlhaQ1dGXzRydnMxb0kxVU41YlhSdUJBM1RvTkdnT0NvRFhOaU9u?oc=5",
+    "feed": "gnews-ai-marketing",
+    "outlet": "AD HOC NEWS",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.ad-hoc-news.de/boerse/news/corporate-news/yext-stock-adds-flamel-ai-to-its-ai-marketing-platform/70224227",
+    "host": "www.ad-hoc-news.de",
+    "chars": 2581,
+    "ms": 2430
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMi0gFBVV95cUxNVW9fdmJjZ2tjS1N6dzRwWVdyTzA2eUdWQm1Wb1B0S3Y2ZTZmY3c4MFM4dVY1WDBYV0dhbFdvUlJjYS1JSE1tVXdSeTNjeEN4US1XZDBHMXlmOVJoYXNMR0U3cVFYeGRFb1gtTDNxbDBwYk1IRUZSSUFLUEgwS1BzemZNTEgza3ROVFlGR2RlX2F3N19qcGY4RVJqYW9rMFVYd2ZVTndVSkNKUHpvV3FFSDI3TzcxcV96UWozNjBJRDFsekhrWWVhVEprdlozcS1laEE?oc=5",
+    "feed": "gnews-ai-marketing",
+    "outlet": "Nigeria Communications Week",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.nigeriacommunicationsweek.com.ng/2026/10/04/fccpc-mulls-n100m-penalty-for-erring-businesses-on-draft-ai-marketing-regulation",
+    "host": "www.nigeriacommunicationsweek.com.ng",
+    "chars": 2460,
+    "ms": 2881
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiogFBVV95cUxOcEgxRFB3OTczaldGS2lwVlhZTllULVduc3llVGlSOGI5ODhRb1dSZ3B4bnhyaFQ2V2V3Vnl0LVRlWlFfU2pucjVra3VHRUVDVDhrN2VlQ2wwamdGMm1wcnJPbm9kckYwZXAtaXdYcklmV0F6VVdyU1FBUHRoWVJpdThXelVVWVctem05MUdBemRkbUJHM1hyS3B0TjhqZVowNWc?oc=5",
+    "feed": "gnews-ai-marketing",
+    "outlet": "LEADERSHIP Newspapers",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://leadership.ng/fccpcs-draft-ai-marketing-regulation-mulls-n100m-penalty-on-erring-businesses/",
+    "host": "leadership.ng",
+    "chars": 3222,
+    "ms": 1737
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiS0FVX3lxTFBqYUNVVXNqMDBReXBSeDFTdEZ2bDZfWHFmVldTZzd5RHhJRFZIc2ZWTmpLcG9xaWpzY3U5aXAzZTU2eWI3TVV2TDhyZw?oc=5",
+    "feed": "gnews-ai-marketing",
+    "outlet": "Học viện Nông nghiệp Việt Nam",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "unreadable",
+    "detail": "https://vnua.edu.vn/page-100561039/",
+    "host": "vnua.edu.vn",
+    "chars": 0,
+    "ms": 5075
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMipwFBVV95cUxOM01fdWQzYk1Kejk2ZkdPOEJCSGIxZkhpVEJOM21IYWJ3SVZoZTZCM1F3dU5NY0FuUGs2eTZNeVc5N0dyQm9XSWxCMzViZEx4Qzd5WnFXZS1rcURFTGp2dXk2akZWU2RrNjA4SDRqeU0yMk5oTE5kSGUtaFl4R05iRVdKci1BNWJwSkQ4WTIyX1J2V0dHa2FOd3lIdWdkUlVia3NRUWR3RQ?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "Android Police",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.androidpolice.com/turned-gemini-notebook-into-gardening-expert-plants-finally-stopped-dying/",
+    "host": "www.androidpolice.com",
+    "chars": 5157,
+    "ms": 1080
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMirgFBVV95cUxNQVJLbVZiUENDZTFEUzZHV0xLamQ4d3ZJX1BVSUNJNlJhSG9qa0QzWlNCX2kwVDhjQUtFSnRFWll2d1ItZFN4ZnJJdUU4UWxyY28zNUpzZlZhbElvTHFsLWlvRE42cGx2eHZNR0s0OUo0QkhOOXROelJINHdHZmVmMVdMeDl6emlQRzRQUEdlM1JQNnFma0F5ZnZNWTJUNm9NV1dENldaRlRyTUNOeGfSAbMBQVVfeXFMTzBROGFBc1BuS0pjWFlpYXJkOGg5YlBWT3RJcEM3TjJqZzNldXJ4UG1LTEZsMmk2ZXdpSGZZYlQzTGtmM1otYjYwWWFNVVc1X0plR1lOS3FKUnFnZ2Y0VDZkLWIzMWdGYzlvZXRiS2tLc0Y1MHlZN0l1TTkxY0t5Wk1RR0NIMzA5WWJKMU5nQUY3WmdFbkhJN3ZsNEdkQjlZbUtjNXdvM2tVcW1QLU9QV1g2VkE?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "Boing Boing",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://boingboing.net/2026/10/04/youre-not-using-claude-to-its-full-potential-this-15-e-degree-can-help.html",
+    "host": "boingboing.net",
+    "ms": 1582
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMirAFBVV95cUxOSllOMVV4SzdGY2tYWDgwVTQ2N3dhS2FEOXBtQWlFTjVraWlXdVhCaXpGZkZmRF9CZ3VfTW1namxQRDRJNjVJVnhsME41RzFZdDBxdWdwVWZfdjA3VU9nc1dhUGp6cVlPVXlJT0FhTWF5OFc4T3RBTm1DUmZNRXFuRmFaRl9NdC1qbzlCYWdaOWNsS19zUC1YVFA5UFp1SDZqM3lkcHE1WExteXpL?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "XDA",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.xda-developers.com/built-the-same-note-taking-app-with-claude-code-codex-and-google-antigravity/",
+    "host": "www.xda-developers.com",
+    "chars": 14737,
+    "ms": 1428
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMimgFBVV95cUxNR1p0R0pKeGc3M3pScHlpbHpqazJxRnZRMHhLTEUxeEFYaWpROE11UWxSOUEtVVMyOGJSVVJHaC1XeWVKWTlpVGVZZ25ocHU0d2xadFNoY1lpQWJ5WnZpZ2R0UmtEMFU4MFpQNno1VHZ2cU5FVmROT3dvYVVkQ1dlbTFyNHA2elBEM0NnX0d2WjEwNnNrX3c2NkdR?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "Business Insider",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.businessinsider.com/job-seeker-used-claude-track-search-improve-interviews-2026-10",
+    "host": "www.businessinsider.com",
+    "chars": 5612,
+    "ms": 1415
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiqwFBVV95cUxQUVFIXzJjc0RvN3dZZXI2d1QyelMtbTMtZzhQWDZUVWtsSHdWYUtyanEtR0RHWGQ2NVg2YXM4Ti05eUI0R2RFZGxGWTRCTGp1V3QwZmJpTGREY3NfLUhxcWM5eXJTdUR2aHdhQWtYSjRTelVZQVZaLXJpSllUazhoVnB1MkZhUUtsZ1AxVm9DYmlqZ0wxNWVJcGZJZlJVNVExMHVDdjVaeXFJdTg?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "XDA",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.xda-developers.com/these-open-source-ai-tools-got-so-good-i-finally-cancelled-my-subscriptions/",
+    "host": "www.xda-developers.com",
+    "chars": 10558,
+    "ms": 1527
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxNTlFZZmZwNVlScGZMVTRtTXhzRHdoeVUwcFR2WEpDQVJ3SjRjZjJDb3pWQ2xNMHlEUHJ4THMxUkFrcUtCV1djNU0wV05vZUFHdllSNzFpZTl6N2VOVE9kS3V1aU83M21VNkdPRTV3Rm5xQmM2ZmUyZUNURXhrMVhubjl1MlhzTkdjRk9IS2dtQQ?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "PPC Land",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://ppc.land/google-cuts-two-of-three-gemini-models-for-free-users-from-october-9/",
+    "host": "ppc.land",
+    "chars": 15536,
+    "ms": 1887
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiwwFBVV95cUxNR0YzZGhXd3hTVll6X0dlWXdhRmdFVjRmZGhDNi1kMWotdzE2d1B0UzdKdEplRElWYmpJUVE3ME1DMkFXVGh5RE9aVnVHM2Z0QUxBLU5rRkkydXlpaGtpa1JScHcxdkZsRC05VE5iWC1iQThwTkN5cmx2QTVNWVdrT1lCMXJha2ZEbW8yaUR5ZmdjMGFld3lPTDhzbzV3UkYtNnlidXdLeTlOZXdvYkJxalYtM0FXLUJIdFd5MmRDRjhzc0E?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "the-decoder.com",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "thin",
+    "detail": "https://the-decoder.com/googles-new-gemini-tiers-cut-free-users-to-its-weakest-model-and-lock-5-month-subscribers-out-of-pro/",
+    "host": "the-decoder.com",
+    "chars": 1315,
+    "ms": 2007
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMifEFVX3lxTE1SczRGNU5YN0lDbmRSencya2ExcjlZLXpyUG91ckJsWDJNbmJVdjNxWWtTbVVoV056WUFnLTdiSVVjRFVpM09LVkFjdE1hVDVoeTdvVkpyaUZHbldaeGJPc3ExYzFZazVZVXZwZ2JHM0JjNkFMTDlRRFNIOVI?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "tech-insider.org",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://tech-insider.org/gemini-argon-1m-token-debut-free-tier-cut-2026/",
+    "host": "tech-insider.org",
+    "chars": 22056,
+    "ms": 2283
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMickFVX3lxTE8tVjJfbS1oSllFbEd4QzRLVTZLZTNIclR3R3pQV0o1ZExrS2M2Q083MzgyeGQza190dWtlWjNkNmxYUGtUUlhsS0RiRzFXel9EQXg5RWlfS2UxcklVZDJsZjFIc0dKbnZ4Z3NtNkVLSWFPZw?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "Межа. Новини України.",
+    "runs": [
+      1
+    ],
+    "stage": "ok",
+    "detail": "https://mezha.net/eng/news/b4031c6f_google_limits_gemini_models/",
+    "host": "mezha.net",
+    "chars": 1768,
+    "ms": 2650
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMid0FVX3lxTFBDcVJyQ1p5QmV6dEc2MG9aR3k3R2RSMDdPaXc0Q1N3Z1RyalRzQjdsOFJCY2ttT3VVMDc1ZXFlaTl6MzJSalJaUHZtdmF2c05Lc0xEYTh2Qjh6WEN3dTJFLVVtY0dRR05naHZDZGE4MjlwaHJSU3pV?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "tech-insider.org",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://tech-insider.org/google-cuts-free-gemini-1-model-oct-9-2026/",
+    "host": "tech-insider.org",
+    "chars": 18938,
+    "ms": 1290
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMijAFBVV95cUxOQVRqRGRLajdkeHEwenlTck5PT193cjZYNUtrY1V3U0VfWndtTVpzb2hpbGFUc1ZjcGhWUG9nY292ajVPQnVway01NjJ6ZXZ3cFhnZUs0cDRsT3dwY0xpU0VDX1h5NmJxY1UxMjh1OHNiYnFaZGp4X3lJN0tzNDlBRWRlRUNSS216c3R4OA?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "martincid.com",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.martincid.com/technology-sv/gemini-free-users-flash-lite-only-october-9/",
+    "host": "www.martincid.com",
+    "chars": 3079,
+    "ms": 1406
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMibkFVX3lxTE04R1J3UHRCTHp2S0FSeTd6YUllLS1TYVZvMDFSeVZraUFnZDJxdjk5Rm9Pd3o0Zlk3NEp2WkhOSXQ1aTVTdGJRb2NXaktIRlM1YmVqeHprdWVobkpPTXBiVkVzRFloWC1DamlXbmZB?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "9to5Google",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://9to5google.com/2026/10/03/gemini-model-limits-oct-26/",
+    "host": "9to5google.com",
+    "chars": 1930,
+    "ms": 1427
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiqwFBVV95cUxPdlo0UEZ2WTZoNmFlWTBzVzhSREJ5d3hxS08wcWtVTjZlMVJFY24yXzZaTUw2dEFDOHZJQ1B1al9MREVEb1JfNDJnUFJqMUxSdFVvcVBxaWpkY0JDazB4dVBTZy0zZkRyMEZ6cjJFaS1FSVFKd1h6OVFwazU5UGE0SW1CWEg3WnJrR2RnTmdRMVhGVTQ5dnFNZkcwR1ppX3FpOEIteTVadDc4bUk?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "Android Headlines",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.androidheadlines.com/2026/10/google-cuts-gemini-ai-model-access-free-ai-plus-tiers-changes.html",
+    "host": "www.androidheadlines.com",
+    "ms": 1591
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMi0wFBVV95cUxOWFI0UmZWanE0aExlWm96SWVlZHZUTEVBVDVfd1hYY19pMmVnaC1iN09aOVc1RXhfMVdHdjBTd2c3MTEzcUhKcUwyZ3paYUVKMkMyS3E2VzctaXp1ZElBUjZ3ZEwtOG1xZVdLVXJTeGRvb3FVTTlJNUVqcDZOYXFEOGt5UWEtekJpNmtwUXNxVURQVUhMeDFhaFk0R2RzY0xaSFBTcm5PaGRGTXByRTVnODZQdWQ5aVlvWXV5Vzd0RlNORGloUmwwWUF1VGM3YlpUaGZJ?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "Florida Tech",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.crimson.fit.edu/scitech/the-ruins-of-nasas-gemini-program-launch-complex-19/article_efcb743b-7978-4507-8135-a2b86ae4b95f.html",
+    "host": "www.crimson.fit.edu",
+    "chars": 12193,
+    "ms": 1911
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxOVEtBQmd3VXE2cFp4MHNEd0lhUnJxd1dzbkx3c25DakwyakU1dFI4VFF2eHhwOXJ2QzQxdTJsS045MWpMWHNWNXp3VlVvbkVhaVBWMGpRUllxZFlSMXQ2X2pSeWVBY2RMMEVldEJ2VV9oazhfajhScFVwTlpJcFR1SXpma2JPSllY?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "chosun.com",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "unreadable",
+    "detail": "https://www.chosun.com/english/industry-en/2026/10/05/MHRLVIHE2NCQHNMYWCSRZTTV5M/",
+    "host": "www.chosun.com",
+    "chars": 0,
+    "ms": 2247
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxORTlPOTNyWnBwZ1RxdENJN0doQVZBNWF1S25ibUlGUkd1aWt0V29BdkhOSzRTZGZ3NjVadmNBUWxRWWlCZGRXZFpUcTg4MkZ3bUJBSGU0MlJMZUlXUExIWFVvNHhEQXduQkFjNzNxaTJNM2VtaUtlV01ZVUNkckxmSUxBMHJQeXVP?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "chosun.com",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "unreadable",
+    "detail": "https://www.chosun.com/english/industry-en/2026/10/04/SUTONPY2OFBHPAFJM5G4I5Y22Q/",
+    "host": "www.chosun.com",
+    "chars": 0,
+    "ms": 1536
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiZ0FVX3lxTFBiVGZwU29XazRFNnJXREdtc1BMUUhLcDUwVjRPMUxWNklxRWVlR3B5ZklVeXh2T2JHNEdYMnppbFRnQlFSeHRCVmFnTlNPa3duVUhTcFlpbEV5V3ZNTTEycVRMUWFFR1E?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "MakeUseOf",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.makeuseof.com/claude-vs-gemini-android-apps/",
+    "host": "www.makeuseof.com",
+    "chars": 7341,
+    "ms": 1738
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMimgFBVV95cUxNUU5fNmNpYkVoSFlqZnc2UURtaVp0MG1ndVNEaFdjYzJsMklOMmlfOGZYdGtxdTFlX3NUcEFRMUVIVmsydlR1bXhBRUM1WnZsbW9Mc0tCMVRpT0hUVG5PZjcyX0hHb0VhNTJXWFdGbktEdW5ORE9sVDI5eVd5dkxmWFVkZTFHN2lBazZFVjYtTUhRUl9jbEhjdEtn?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "PPC Land",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://ppc.land/chatgpt-gemini-and-google-never-name-9-of-40-uk-software-firms-in-shortlists/",
+    "host": "ppc.land",
+    "chars": 21357,
+    "ms": 1090
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMilAFBVV95cUxQcldPdGd1X1RHMFRQalA1MmhFanZiLWRST2VmNkNDQkNuRlQ1V3YxVEx6MmlRZVROS0tpUWlXanlfcUdqdlhmaUhaWU5DV3NOQVJyTGhfT1BUR0VVVWRNa29BSF9nYVZxVUIxOWtHSTVWSDFEd0FkTmNEMXlieDE1amZZNGgzUHQwTFlvTkRlUHNzWE12?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "99Bitcoins",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://99bitcoins.com/news/presales/google-gemini-ai-predicts-ethereum-could-hit-8500-q4/",
+    "host": "99bitcoins.com",
+    "ms": 990
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiiwFBVV95cUxNY25zOVdkYS1lRnY1emhXM3A2VExWMHVQclhqWU1Fa3B5QW5zQXlvUkJTaWw0MHFVUVJHbWdwU3FvcG5IVjFIdi1RVEhtbkFJT2dwMGRWNm1IVzZyRW8yWUE3X2hEZXFGT2FtLWxYMGNfdHczRng3OENfclR5a09hRnI1cWowVWN4QXFZ?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "Legacy obituary",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.legacy.com/us/obituaries/dayton/name/george-claude-obituary?id=62670712",
+    "host": "www.legacy.com",
+    "ms": 939
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMisgFBVV95cUxOb3hhOVNOVWowOFBnTTE1c251MDJnemE2bWZPUXJKSVkxb3MxdEptYkg5R1RTbEJlbFpfN0FuRnhsVVlhVHhzNk90SDZRcmN0M3NiN2pJSlpEOXpDcUNubVpyQ0M3Qk16cU5NT1Qxa1N1cnlsUnA0YUV6OVJtdkwtVDlVN0xJTUFVaWtKWkZkNVpCUHQyU3p4bEJtZzItLVVmZjhLcG1tamF6LVVBekRkOU9B0gHGAUFVX3lxTE5reV9mMDZLV2F6dmdXUjZsSnNjUlJHa1lVMWJseGtEZ0hzel9fRzlQQ19jS1BKbUg2a2RZUXE2Vmh3OWRQejQ5WmNEeTJtVlM2a0Zabm41cHY5c0hsWVR5aVkwaU5YbnBVR0w1SVl4NlRYVjJOSnVHdGVhdWxXOVRLMXdYQlZac2lqcGlCam91bUd2dmpKcXhwSy1QVjg3QXFLTDZjeFk0YnFPajJSZjYzX08wWWRlVnpPQlU5ZkhXc0JuYWdHZw?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "NJ.com",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.nj.com/advice/2026/10/todays-horoscope-gemini-kind-but-clever-responses-gain-respect-oct-4-2026.html",
+    "host": "www.nj.com",
+    "ms": 1449
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMimgFBVV95cUxPdDdnYW9DMWxadE1jTkRNRG4tdk9KUm5Kb1VOX3NGbXh6LWZfbnp5NFk4NWRNSTJjWTRmUkxCRWoxWDN0aHRFTE52MjZ1dEc0WUZTaVhvam4zalgtNVZzN3ZaV1E2MzJGS3d4VE1tSDRSR0QwMnhycDh5dlVsZlBYQTB1ZnpJRVBfSVZKc2hKTnNRU2dvV2V6NjR3?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "The Bulwark",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.thebulwark.com/p/rfk-jr-wants-to-ai-ify-health-care-claude-says-he-is-full-of-crap",
+    "host": "www.thebulwark.com",
+    "chars": 13117,
+    "ms": 1236
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMioAFBVV95cUxQblRFekt6MlBEcXM2Nm1Tc2tGRDZ5bGNtRXFSaVBYTlh3Sk1UYVhtR3RwSzJjMk1WM0VWRnBmWWdyS3U2Q3hFelc0Tk9lU0trMGJCTGtmYk42QzNtZ2M0cGFZUmZ0Z21TRmZvSlVwN1RuZnFyUkdTYm1meDdZVU12Uy1oODhjbDZac1Y5MW5EaXFvVmthVGdmNXQyVktpZjVP?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "Macworld",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.macworld.com/article/3249793/learn-claude-code-and-cowork-just-15-during-deal-days.html",
+    "host": "www.macworld.com",
+    "chars": 1998,
+    "ms": 1382
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMimAFBVV95cUxObUVHUVRGRjlrSDlFNWtMRUp5dEJaSEs0czA4b1hWSFJoM1hUNDZBSl9lU0c1VXBkM3hLcmtPZFkxRXpDUWJhSm1LcmhDVlFtSkpfUnc3akxnNFoxWUtkR0JJajVCYXV4VXNoUklWdkFad0lvcElLZ2dmQU5aV0JxQVpGQ09CNkxuZTB6MjVtM1NHaTV1d29nMg?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "MIXED Reality News",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://mixed-news.com/en/solos-airgo-1-27-0-chatgpt-claude-gemini-romanian-italian-georgian/",
+    "host": "mixed-news.com",
+    "chars": 3388,
+    "ms": 1429
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMikgFBVV95cUxNSGloSDd4QW5EeG1wTG1YeEZTYlUyWjFZTG9VYi1zSmVTNFVoM1dQamdjaFl5dHFfb1FLZUFESE1rVjhqd1FERHpSdXFJX05NbXh3RnYxY3pZMXVZV2dPMXAzaldOa3VqRkJjbXhDdUo4cXJnTmJ3c2xPZ05ZS1VWRUFuczlDeW5VT2lVcGJxblJ2UQ?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "Legacy obituary",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.legacy.com/us/obituaries/828newsnow/name/michael-bishop-obituary?id=62672678",
+    "host": "www.legacy.com",
+    "ms": 1423
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMib0FVX3lxTE10RTR1TTB2WGZGY2NlelZHRjlLR01WOGE0MksyMzlKS3J1RVI4ZEJjRi1NUi05bXBLNkZqLVBfek0wVXBaMzNhQnB1cjFFMVFLUDVubDB4Y0lLcGk0WHp3c1VUbmpESW1kZndkbEM1cw?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "shattered.io",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://shattered.io/gemini-argon-vending-bench-cheating-2026/",
+    "host": "shattered.io",
+    "chars": 20022,
+    "ms": 1593
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMimwFBVV95cUxQSUJIYlE4SGhWY19KbG04S1BDRWc5b3Jic3RFMzM3cVBvN0MtNEI0R0s2V3hpZXVWd1RoTHJWMHM1RmFDRHhHQU1XaXVuaUhzQ3ZXazN0enBSbEtfM0dZT3BNRmVkbTJIVVRtLU9OM2VLamdWUU5BNGtTbnlJXzRjS0pFUVZNRlJSS3gySW1fZVMteHB1eUUyQ3pSUQ?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "Pasquale Pillitteri",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://pasqualepillitteri.it/en/news/20680/claude-reports-threat-police-florida-woman-arrested",
+    "host": "pasqualepillitteri.it",
+    "chars": 5837,
+    "ms": 1983
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMi2AFBVV95cUxPRTR2LVpyc3JKVVZ1amNoVHJQWVg5aFQtQXRXclRYV3k1c3BuajVRbm1mRjZkdUpGblN4XzV1ZG9haTVaR2dXUVZBd1lqVF9kWlBOWHFSTWJ3UG9UckRJTTJVaU1xb0J4eFh2R01yTnRvV1Z1ZDlrQmdRVzdOSkYySDRxTjgtdERVTnNmZEs0NF9jZXByNVp0Zkdrd2o0VUowbWpaR2FjckUzcGZUMGo1dktRTl9ETmREUTh2R3Z5UnUwZ1JYQTZZdk9RNTBHZnB5OEk3MmpGRGLSAdgBQVVfeXFMT0U0di1acnNySlVWdWpjaFRyUFlYOWhULUF0V3JUWFd5NXNwbmo1UW5tZkY2ZHVKRm5TeF81dWRvYWk1WkdnV1FWQXdZalRfZFpQTlhxUk1id1BvVHJESU0yVWlNcW9CeHhYdkdNck50b1dWdWQ5a0JnUVc3TkpGMkg0cU44LXREVU5zZmRLNDRfY2VwcjVadGZHa3dqNFVKMG1qWkdhY3JFM3BmVDBqNXZLUU5fRE5kRFE4dkd2eVJ1MGdSWEE2WXZPUTUwR2ZweThJNzJqRkRi?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "marktechpost.com",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.marktechpost.com/2026/10/04/gpt-6-astra-vs-gpt-6-1-sol-vs-gemini-4-argon-vs-claude-fable-5-1-which-frontier-model-fits-which-job/",
+    "host": "www.marktechpost.com",
+    "ms": 1063
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMilAFBVV95cUxOb3h1V0xxUVVPNTRCNkdMZlRlQXRyMWp0Z3MxNjhPaWRtZE4yUU5lbGhjM1BYN3VWekhLRXJFcmkzMy1za2NYcFFZUXlLUHVKR2lXSFJWVC1oc3FFQjVLQ2pIS0xNcUY5aTJkQy1CNTNlSFhRVklOUkdGMkRmYktSWVNNSU03SjVKal9JcG8tVEFReHhj?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "Yahoo Tech",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://tech.yahoo.com/ai/gemini/articles/geminis-best-feature-built-people-100010158.html",
+    "host": "tech.yahoo.com",
+    "chars": 4916,
+    "ms": 2232
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMinwFBVV95cUxQYjVlSUg1ODdRS0U2N2Y0WUhyS3Q4T0hSWkszVGdpT2l1bXlHdnZXZEZDS1Y5UVZoeHZsd1lvZlM3ZmY4WGc0bU44U1Q4TjVyYXdsWTZqbHBPMnhJLU94aHBuTU1YeWFKUFpBRG9KSzVmSnBwWGhRbDVJQ3pNNnp1WFpDUGNmcWtoLTVhQzkxQWlWZGVYRUxidnVjVUdlZm8?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "PCMag",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.pcmag.com/deals/score-chatgpt-claude-gemini-and-more-in-one-spot-for-only-55-until-oct",
+    "host": "www.pcmag.com",
+    "chars": 2451,
+    "ms": 1587
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMihwFBVV95cUxNNGpxMjZVN1BXWmk4QXJTWUtKeENJeGFPM0hEZ0d5alc2NDNGbXhNY1lFZkpwbDM4NjdEYkg1UmJxTlQyeXFQeWhRMnlaZWZKQ0NENTduZ3I1VExqVktmeGJvRzlUT21BSy1Vd2NidHZ6dmt0NUlINXVKaUFxMENGbWFoNk1pYUU?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "bostonglobe.com",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.bostonglobe.com/2026/10/03/sports/sunday-hockey-notes-claude-julien/",
+    "host": "www.bostonglobe.com",
+    "chars": 14075,
+    "ms": 2744
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMivwFBVV95cUxOUjRKLWVETFZQY1lNSkM5azZ5bG1la2tiazhzYThFc09Lc0dRaXpDREpoNXRJQTF4aVBIQUNScWJsMURyZWJGVi0wMXpBVEZweFExU0JMTTJjdFlfcVk4UWpKMHo1d2NobEtvQVBtRzE4SlB2ZWhaeXdKVzh4T2hneFc1LW1ybV83d2ZndmdTVFpjV0FhWDhDb2hyQ1pZVG9sbjFPVUVzWUlmNS13RU1UbjVpRGhTd1RLaUNKalZ0RdIBxAFBVV95cUxOLXhWNnhWSjYzSE44aTNXdkprWG5ydE82c2dCelRVSTB2c0ZQTENjRlJqVHFVSmEwNUlEYTBza2ZkWTlhUUFnYjV0ZGt0b2ZyU29QYUhtQmJmSzhxTjNMQW03SlBPMlgzRS1PYzhJWDdfSmxzQ3FmMk1TMndGYWl2aGVyUkNMckdaWGg0S01hWFRnZmxDSTZ5Nmg5aTZaZzc5MkJxN3VVYnZCNFZMYkowMHZkbUw0VmhWcE1PN1E4aGZnN2Vt?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "BleepingComputer",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.bleepingcomputer.com/news/google/google-gemini-could-soon-get-full-access-to-your-macs-files-apps-and-the-web/",
+    "host": "www.bleepingcomputer.com",
+    "chars": 2222,
+    "ms": 2056
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMikwFBVV95cUxPcGdoZzFOdXpJNmlkNnlrQ2FONUltaTc2aHVNbEZVdlNyNHM1MkNVT011S1lGaHVnT2lvOUx1Mm1jSkZWWWdzT3NxeEV4WlVLZHRmYnY4ZENtYmFTc1RoQ1NmU0VhTERSeUpva1djdUROc1hMOGxiRzFEY3BXNjBiaEVNbFRoNkVaTWNCc3U5VjNYejA?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "Pandaily",
+    "runs": [
+      1
+    ],
+    "stage": "unreadable",
+    "detail": "https://pandaily.com/deepseek-harness-v0-2-1-alpha-1-claude-code-mods-compatibility-layer",
+    "host": "pandaily.com",
+    "chars": 0,
+    "ms": 3233
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiugFBVV95cUxOTXgweHd4MHhnRmJsTnAxUUQ1dWhuWUp2OXl0ZDlUUDVPU1VKNFpEZ1JGaWVDT2lLTnRqX3VlQlJsdHVBM2FlUnFvVVl6N0tHODVrdWlvRnZxblFqY0V5QnRZNXp0dTNlbzBONnJxU0g5NzRsQmpZd2p2WXphNXJxME05bmpsTEFsQ29jWjhCOFpNVVFqeXdibXAyazhaZTBBakdpcS0zeHNtOWFEWkVvbFB2anl3RmZWcWc?oc=5",
+    "feed": "gnews-ai-policy",
+    "outlet": "KCRA",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.kcra.com/article/congressman-sam-liccardo-urges-us-china-cooperation-on-ai-safety-ca-politics-360/74000916",
+    "host": "www.kcra.com",
+    "chars": 4117,
+    "ms": 2039
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMidkFVX3lxTE9OcVB4cXVWNnh4SnA4ejJ1SGZENUFPNS00empFS2dGa0RtZi0zdmFMZTloUjVSSTNkVU5KalRzU3puV0VKbmdvem5fb1JlbnJfc1J1WlJ2ellNZDVrbEJGeFczTkxjVE82U2tQWUJxSTFrblhqRXc?oc=5",
+    "feed": "gnews-ai-policy",
+    "outlet": "Fortune",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://fortune.com/2026/10/04/how-fdr-roosevelt-would-regulate-ai/",
+    "host": "fortune.com",
+    "chars": 5769,
+    "ms": 1584
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMinwFBVV95cUxQdWIxZXFnUDNQTWtLV3hqd01hU29qTlcydl9uemtRLVFXUzI1UTRTQjd3N05abnkweE1LTHhJbExiVWhEMFdfaGNMVkxpanpfSmZJeEsycjN4a01nQVdCdVZaWDdqQy1STTVlT19ra20wRDd5VHdxU1BxSGdWVjFsWXd1WTF3aFZ1elB1THh4MUlLektfOXpXZW9tSmx4TUE?oc=5",
+    "feed": "gnews-ai-policy",
+    "outlet": "Cybersecurity Insiders",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.cybersecurity-insiders.com/the-eu-ai-act-cant-regulate-what-we-havent-learned-to-test/",
+    "host": "www.cybersecurity-insiders.com",
+    "chars": 6449,
+    "ms": 1796
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMivAFBVV95cUxNZjIxdm0xVGk4eHJ2UFJtY0tfMUNHMW1ZcGZ5b1RhS29NZmx0RE5QeXNWRWw4S0E3TlZxOEswUDlCMjBidjdZZnpsdkZ1Ml9SZzB2OThuaEh3eGsxNG5DeEZ3UHB6a25jeXA0VXRrQ2poTE1NSVRubXZJVGFQVzg5NWtqTHhyZDJYbS1XbXMwdm42VDRseF9ZQ1AtR0x5WjNkTmJPVXNiM0xTNTJfaFRTQUZQUW40UnphdmVzcw?oc=5",
+    "feed": "gnews-ai-policy",
+    "outlet": "Duluth News Tribune",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.duluthnewstribune.com/opinion/columns/pro-con-lets-not-make-the-cure-of-ai-regulation-worse-than-the-disease",
+    "host": "www.duluthnewstribune.com",
+    "chars": 4960,
+    "ms": 3088
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMikgFBVV95cUxPbVlwWEs3X3g2dzRlOU91TUk1V1A5cldYblowLVNaeG8xLXJqSjhmSE5JME1XTTVJTnI3amNFQmtIaV9SSkNIbmJhOUlQSDIzN2Z4NWY3SE9hajdkcUtnQ1hWemlqTjhyOEwwUXFtR1Nvam4xMm9JRGhyeXBOeEZ4VGJYbFAwRlB6YjBlQW9xS245UQ?oc=5",
+    "feed": "gnews-ai-policy",
+    "outlet": "Briefs Finance",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.briefs.co/news/softbank-s-masayoshi-son-urges-ai-safety-and-teamwork-as-u-s/",
+    "host": "www.briefs.co",
+    "chars": 3028,
+    "ms": 1502
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMi2gFBVV95cUxOOS1zNFB4ZndkcnRDeGFNeXZFNEQ0Qmh3ZUFDeHJWR2M1Zzl5MUVBalNvVWVkX203VVROblRVUi03SXBYRnNQUHBybzFnZU9vNUlPUUJVekJOZ3Y0cTVGVnAwNjRxZXFfUHdyVEhrcXFsVHNWTkkxMmw2cERiWFdMOE9fQVhWd3JjcWhubXFmVjAwa1dkdlcxTklwMzhXSW1kQ2xiSmNTVUNWdmhOdW16V0p1MDlEYlg3bmlqdjlhN1k4ejBNV2FQYTJGUGhJbUFQaG1jbDBCVEl5Zw?oc=5",
+    "feed": "gnews-ai-policy",
+    "outlet": "NBC Palm Springs",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.nbcpalmsprings.com/business-finance-and-tech/2026/10/04/what-to-watch-in-business-this-week-fed-minutes-ai-safety-and-retail-sales",
+    "host": "www.nbcpalmsprings.com",
+    "chars": 1604,
+    "ms": 1761
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTFBsV25aNm81Y1I1TjVkTFZ0Vjg5VzBTQkM2aG12ZnBQTnd6UGFrVThYSUJpTUtKUWZrdWF1WXd3QmRRQk9KcnJiWDV3ZVRjQkZEZTU5U2ZoVE5naXRDSWxF0gFcQVVfeXFMTXdra2xuaDFXSU1FdzdycUNXakZuRVRaeG5lN0Z3SDJrQk9HeEZteUdBekFESzk3TUpXT1I3WmZWc1hyV2RLV1djUGkwN2x0RWg5LWRQZkV1SWNIaWg?oc=5",
+    "feed": "gnews-ai-policy",
+    "outlet": "Modern Ghana",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.modernghana.com/videonews/abc/2/728919",
+    "host": "www.modernghana.com",
+    "ms": 1227
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMilwFBVV95cUxQTHNld0RrRnliM2l5NVVPVkpwSXZzSUVOT2gzT28tWUtJaEROUHd4VDVWVTd4UkxHNjFvLW9PMlZjbkhfVkRYeHp1VUgyNUZvMkZNb1pMQ2M5QkdqOVZWbUItTGQtRXhpT2tpVV9SczNnUzhkSjc2NnJ3bnc2Snp6SkdVRTltbzZDRS1nLWZ5bW54dkNuMFFz?oc=5",
+    "feed": "gnews-ai-policy",
+    "outlet": "The Economist",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.economist.com/the-world-in-brief/2026/10/04/0f5c7f66-2aba-4552-9203-b67f12b91d8e",
+    "host": "www.economist.com",
+    "ms": 1413
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMioAFBVV95cUxPcmV1aHBZdXFuaVFwdXpRUHZJZkRqTjZ4cTBOaXdoLXd3MjN3cXVkN2ZXSmZWQUtoOVNNckdnQlZmSkpsY0EwZGlYWHNGLWl1OFZWeHhMUTNEdXlyTk81OUszc01TQ3pFU1ExQjdQWWxScXVvU1QzMlc2U2ZfQzJDYTNlZFlwcVNiYUVJbGM5eVdvVThUcFVhSHMxWnN4T0F1?oc=5",
+    "feed": "gnews-ai-policy",
+    "outlet": "YourStory.com",
+    "runs": [
+      1,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://yourstory.com/2026/10/india-needs-own-ai-safety-framework-not-copy-us-pact-industry-experts",
+    "host": "yourstory.com",
+    "ms": 1308
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiekFVX3lxTE1FN3ZoRS1FbnVNNzlsYzg5ZU84TG5yRVZ6NFN6OGJjMHhIVWJKb3dEcmFmdmtHS21BckoyeXdNQmxIdzN4bnFJMkp5dDZSSnJxYjB2YmJiMXFRYVN5QWxDVnE4SGNOMjREaHFuLVdaUVBsanpPRWFoV2lR?oc=5",
+    "feed": "semafor-tech",
+    "outlet": "Semafor",
+    "runs": [
+      2
+    ],
+    "stage": "thin",
+    "detail": "https://www.semafor.com/article/10/04/2026/trump-unveils-ai-task-force",
+    "host": "www.semafor.com",
+    "chars": 792,
+    "ms": 1402
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiugFBVV95cUxOczlKTmxkdnE3WHZpaWs1Y2V2dFJJOENfZkRRdjdCdGJBcXRqMFRWVlFKMGZWRDhlTXBiOTQxNUY1dDlSNlZYcXlmS1ZaaF9iWkJsek5QeTZ5V2txU0hOVnFXUE9EZHU1NE1XdldXV3FaQzAzcU9KZmZNcXhJMzVaVHdYV2tIUHVDdG5Cc1FMTjFHUHRvQzEtQmhFdDUwOXR3RlUwWlBDX3c5ZlNUMWZZd1BLcm12TWVWYWc?oc=5",
+    "feed": "reuters-tech",
+    "outlet": "Reuters",
+    "runs": [
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.reuters.com/world/us/jay-clayton-lead-trumps-ai-task-force-deliver-report-120-days-wsj-reports-2026-10-03/",
+    "host": "www.reuters.com",
+    "ms": 1121
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMizgFBVV95cUxNMEVOQVV3UE8tWE1zWlYtNHFPeGUwWGFaakJnZi1UOXN6bm1KLVRNclM1ak5fU0Zlcno5a0hBQTc1VGxTUGNteWhiWWtreXRnQ21odzIydVE1ZXdEVFk3Y3g0cEtnVVg3RDJfcjZrNlE5RzMxZXdqMkVCSjFIdlFES1MwVTFOa2FVdHBtNUpHYURwSmhtUWlhVVNtTFVSTmVrZzh6SWlDb3poRTBLcm5DLUR6cTVBM1Z0cDlqVWFEOFBpRzFnaFlXbC1mMEJCdw?oc=5",
+    "feed": "venturebeat-ai",
+    "outlet": "VentureBeat",
+    "runs": [
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://venturebeat.com/orchestration/we-built-an-ai-agent-for-servicenow-the-real-pain-points-were-narrower-than-our-roadmap-assumed",
+    "host": "venturebeat.com",
+    "ms": 1158
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiU0FVX3lxTE9YaGJIS3pjZ1Jucks5VkhTVUJGQ3Z1VXlxcHpYd2Zjb2FGUVVka1cwMlFyOXJJUTdCR3hrVWRwSG1TWG4wbEpiNnJyTW9EVEgtalFZ?oc=5",
+    "feed": "venturebeat-ai",
+    "outlet": "VentureBeat",
+    "runs": [
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://venturebeat.com/author/brian-king",
+    "host": "venturebeat.com",
+    "ms": 913
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMizAFBVV95cUxNU1lNVUVZZ2h4VG9hWTZ3d2lLYk4wX281Nk5LbGpWT0xRWGZKX0I5UWU2bzdNa0xKam9sRjRTREh1QmY2aVRpRlluYzhJQWVjbnZoY3dCcG13dnBtaXU0Z2ZwcGc0dmJiOThqd29QTjMtYmRaa2ZmOHNpVjBPNnV5a0ttMFVLcmk4eWZKTmEtNFBUS1dsNmhrYTJMWk9lMnh2ZFZXYS03NzhIRjQ4Qk5JdG1lTG56TXhjOWlJekZGcVI2MFpjWXd6WlIwYWU?oc=5",
+    "feed": "reuters-tech",
+    "outlet": "Reuters",
+    "runs": [
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.reuters.com/world/asia-pacific/south-korean-president-orders-probe-into-data-leaks-across-financial-industry-2026-10-04/",
+    "host": "www.reuters.com",
+    "ms": 1079
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiqAFBVV95cUxNOGhDUmJ2UzEwZ0hlenFISFFXdkZyVHd1TGNIZEhLTERLaDRWaXh4dlpVM1RfU0p4Vlh2cjVybWZtOWZkVVp0ZEVndGQ3T2pZd0tyelVvV3JnQ09FQlNOYWtVeUhCMjZud2NpYUVEZllhbHhIeVFvOXpEY0lLTklTNnNpNnhDTUdVS1dYSzl6S3VwbzgydXlKZVFRTkE4Y0dsYlJtQldVWkY?oc=5",
+    "feed": "reuters-tech",
+    "outlet": "Reuters",
+    "runs": [
+      2,
+      2,
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.reuters.com/business/openais-altman-says-ai-benefits-warrant-accepting-some-risks-2026-10-04/",
+    "host": "www.reuters.com",
+    "ms": 828
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMiowFBVV95cUxQT1lwRkt2ZlBuMTlqLVZCbk5ZVExzN0JMd0FnT0F5SllkSGdCU2xkNUlsSHVKZTRuNklIYlY5VTU5QmpqeUdWOXpJWEdhWGhaSE11dmRpQ0taekpfUllyay16MDg3VERqRm5WSjY3bGhKSGZVcnJWOFBod1FsQzBIdjVVN1U0b0xfT3VoZDNJdFZpVDJyN1Q0NlpjeUUtM2hFbUxF?oc=5",
+    "feed": "reuters-tech",
+    "outlet": "Reuters",
+    "runs": [
+      2
+    ],
+    "stage": "fetch-failed",
+    "detail": "https://www.reuters.com/business/media-telecom/musk-says-he-will-rename-spacexai-spacexsi-2026-10-04/",
+    "host": "www.reuters.com",
+    "ms": 905
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMifkFVX3lxTFB6QjZxOGc2cmdaanpKcWxEdTFQSlF2cTF6cmM1UGQ3ckxhOG9keVhOdEdWbW9qOGNTRUlJZnZNbEJhSkMwV2tJZTBmMTFmSURXTEFrRzVjNmVfRDFFUTBGRmR4OG1lTF84SWFVTmhHWmVVbWlXZWZGS0lFZTQ1Zw?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "MakeUseOf",
+    "runs": [
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.makeuseof.com/claude-code-codex-antigravity-android-app-test/",
+    "host": "www.makeuseof.com",
+    "chars": 5675,
+    "ms": 1306
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMikAFBVV95cUxNcHNQS1JkZ0lMbk5hS1IyblJWZllSNHIydzZwTmg5OUV2dXBLZ3M1TWtEczVVOThGMW1aVjVhSXNaLWFDWGxaaE0xMjEwMlhPVmNiRmthMWVkMVJiUEpqWTVQLXhKYWpuWWJYQm1BRmo4OVQ2SDA2UWxhR3daUU44NzJsbTlld2Q2QXdvWTFxTE0?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "Yahoo",
+    "runs": [
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.yahoo.com/lifestyle/articles/gemini-horoscope-october-5-2026-000000658.html",
+    "host": "www.yahoo.com",
+    "chars": 1678,
+    "ms": 1184
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMigwFBVV95cUxOdUhROVIwWUhvajU3bl9DWnlHLU11Z2VzRlB0Q0Y2Y1oySkt5TERJZ3dEcExYVkhsdlJrRVYyLTFSdnl0S3lPS2VOTFVyU3dvTVVsenl2dlZNamJlTjFrRXY5UkV2R2xGLURqdEZJSFdEb2hnUHhqS01qSmZVYlpZcmJ0VQ?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "tech-insider.org",
+    "runs": [
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://tech-insider.org/ca/gpt-6-luna-vs-claude-sonnet-5-5-vs-grok-4-7-2026/",
+    "host": "tech-insider.org",
+    "chars": 38811,
+    "ms": 1985
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxOTnE1bHRLNGJrOElYdW1ET0JnTHFzeVlLTmEtQVJ2NnMtbnZhSVdlXzBZdEFQNlp1SGJIcTA4WWNRMDFoM0Nna0RLS1BMR0tlcEVtblpKNkdZQU41ampacjNFLURkczVYRm1fLWlwRjRvTHdLRDhiV0gyQ3Z1ak1LbkJvd3U0R0FTMk55cnprVQ?oc=5",
+    "feed": "gnews-ai-products",
+    "outlet": "Yahoo Tech",
+    "runs": [
+      2
+    ],
+    "stage": "thin",
+    "detail": "https://tech.yahoo.com/ai/gemini/articles/google-unveils-gemini-4-argon-000324898.html",
+    "host": "tech.yahoo.com",
+    "chars": 1304,
+    "ms": 1730
+  },
+  {
+    "url": "https://news.google.com/rss/articles/CBMixwFBVV95cUxOckVkX3VtQVZOckhzcFZCRFluTzFUeEx5OURjamUyendWWDVsM3VzT284RXpJUU1fbEtCRllvdURrcWpSbnd2VEY3QXJUT2xFcVNYS2hFcUNSek1sdWFPVVJmTkpXRG1aUzBUeU5oVzU3ZmtwR20waTd1bE13dk9SODNUa3F5S241QnNyamFrdzVsODE0X3J4Y0RQdmpFb3NPYzl0dTRwelB0WEVjWld0Y1haX3VYdmJNWHFRZ19HMnJWTVZfMUJ3?oc=5",
+    "feed": "gnews-ai-policy",
+    "outlet": "EdTech Innovation Hub",
+    "runs": [
+      2
+    ],
+    "stage": "ok",
+    "detail": "https://www.edtechinnovationhub.com/news/former-us-surgeon-general-vivek-murthy-to-lead-common-sense-medias-youth-ai-safety-push",
+    "host": "www.edtechinnovationhub.com",
+    "chars": 4956,
+    "ms": 1361
+  }
+]

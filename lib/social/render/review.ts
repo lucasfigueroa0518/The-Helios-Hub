@@ -14,8 +14,14 @@
  *
  *   round 1   review → apply the changes → re-render (code) → keep only the
  *             changes that pass the render check with the text unchanged
- *   round 2   review once more → a slide still flagged drops to its icon
- *             background (a slide already without a photo: logged only)
+ *   round 2   review once more → a slide still flagged takes its next
+ *             verified photo; the icon background only when there is none
+ *             (fifth round, Tommy 2026-10-07: a photo on every slide)
+ *
+ * Spreads are one photo across two slides: the model is told so, and code
+ * applies only a stronger fade, to both halves; any other change on a half is
+ * skipped and logged, so the review can't break a spread. A next photo is
+ * never the photo of a neighbouring slide.
  *
  * First end-to-end run (Tommy, 2026-10-07): fixes on, and the before and
  * after of every changed slide is saved with its reason, as the calibration.
@@ -62,8 +68,10 @@ For a slide with any "yes", pick ONE change from this menu, the one most likely 
 - stronger_fade: a darker fade under the text
 - text_top / text_bottom: move the text block on a full-photo slide
 - layout_full_photo / layout_photo_top / layout_split: change the slide's layout
-- next_photo: use the next-best photo for that slide, or its icon background if there is none
+- next_photo: use the next-best photo for that slide (its icon background only if there is none)
 - none: nothing on the menu helps (for "broken": always none; it is logged as a render bug)
+
+Slides marked "spread" are one photo across two slides: judge them as a pair; a photo cut at their shared edge is intended.
 
 List only slides with at least one "yes". Give a one-line reason for each. Call submit_review once.`;
 
@@ -115,7 +123,7 @@ const flagNames = (f: SlideFlag) => FLAGS.filter((k) => f[k]).join(', ');
 /** What each slide shows, as text beside the contact sheet. */
 export function slideList(post: Post): string {
   return post.slides
-    .map((s, i) => `${i + 1}. ${s.layoutVariant === 'cover' ? 'cover' : layoutOf(s)}${s.photoUrl ? `, ${s.photoKind === 'logo' ? 'logo' : s.photoKind === 'subject' ? 'photo of a person or the story' : 'scene photo'}` : s.layoutVariant === 'follow' ? '' : ', icon background (no photo)'}`)
+    .map((s, i) => `${i + 1}. ${s.layoutVariant === 'cover' ? 'cover' : layoutOf(s)}${s.panoramaSide ? `, spread, ${s.panoramaSide} half` : ''}${s.photoUrl ? `, ${s.photoKind === 'logo' ? 'logo' : s.photoKind === 'subject' ? 'photo of a person or the story' : 'scene photo'}` : s.layoutVariant === 'follow' ? '' : ', icon background (no photo)'}`)
     .join('\n');
 }
 
@@ -144,9 +152,11 @@ export function applyChange(s: SlideCopy, f: SlideFlag, next: PhotoTrace['altern
       return { slide: null, note: `${f.change}: not on this layout` };
     }
     case 'layout_full_photo':
+      if (s.template) return { slide: null, note: `${f.change}: the layout is Jev's variant (${s.template}); the review never changes it` };
       return story && bleedable ? { slide: { ...s, layoutVariant: 'image', photoPlacement: undefined }, note: 'layout → full photo' } : { slide: null, note: 'layout_full_photo: this photo may not sit under text' };
     case 'layout_photo_top':
     case 'layout_split':
+      if (s.template) return { slide: null, note: `${f.change}: the layout is Jev's variant (${s.template}); the review never changes it` };
       return story && hasPhoto ? { slide: { ...s, layoutVariant: 'text', photoPlacement: f.change === 'layout_photo_top' ? 'top' : 'below' }, note: `layout → ${f.change === 'layout_photo_top' ? 'photo on top' : 'split'}` } : { slide: null, note: `${f.change}: not on this slide` };
     case 'next_photo':
       if (next) {
@@ -222,6 +232,20 @@ export function createRenderReview(deps: RenderReviewDeps) {
     const textSame = (a: FitResult, b: FitResult, n: number) => a.slideText[n - 1] === b.slideText[n - 1];
     // Alternates per rendered slide: cover = trace 0, story slides = traces 1…; the follow slide has none.
     const alternates = traces.map((t) => [...t.alternates]);
+    /** The next verified photo for slide n (1-based) that isn't on a neighbouring slide. */
+    const nextFor = (p: Post, n: number) => {
+      const near = new Set([p.slides[n - 2]?.photoUrl, p.slides[n]?.photoUrl].filter(Boolean));
+      const list = alternates[n - 1] ?? [];
+      while (list.length && near.has(list[0]!.url)) list.shift();
+      return list.shift();
+    };
+    /** A spread half (and its partner): only a stronger fade, on both halves. */
+    const spreadChange = (p: Post, n: number, f: SlideFlag): { post: Post; note: string } | { post: null; note: string } => {
+      const s = p.slides[n - 1]!;
+      if (f.change !== 'stronger_fade') return { post: null, note: `${f.change}: a spread half (one photo across two slides) → skipped` };
+      const partner = s.panoramaSide === 'left' ? n + 1 : n - 1;
+      return { post: { ...p, slides: p.slides.map((x, i) => (i === n - 1 || i === partner - 1 ? { ...x, fade: 'strong' as const } : x)) }, note: 'stronger fade on both spread halves' };
+    };
 
     // ── Round 1 ──
     const before = await shoot(post, 'before');
@@ -240,7 +264,17 @@ export function createRenderReview(deps: RenderReviewDeps) {
         log.push(`slide ${f.slide}: looks broken or bare (${f.reason}) → logged as a render bug`);
         continue;
       }
-      const a = applyChange(s, f, alternates[f.slide - 1]?.shift());
+      if (s.panoramaSide) {
+        const sp = spreadChange(current, f.slide, f);
+        if (!sp.post) {
+          log.push(`slide ${f.slide}: ${flagNames(f)} (${f.reason}) → ${sp.note}`);
+          continue;
+        }
+        current = sp.post;
+        changed.set(f.slide, { flag: f, note: sp.note });
+        continue;
+      }
+      const a = applyChange(s, f, f.change === 'next_photo' ? nextFor(current, f.slide) : undefined);
       if (!a.slide) {
         log.push(`slide ${f.slide}: ${flagNames(f)} (${f.reason}) → ${a.note}: not applied`);
         continue;
@@ -264,7 +298,7 @@ export function createRenderReview(deps: RenderReviewDeps) {
       record.push({ slide: n, round: 1, flags: flagNames(c.flag), reason: c.flag.reason, change: c.note, before: `before-slide-${String(n).padStart(2, '0')}.png`, after: `after-1-slide-${String(n).padStart(2, '0')}.png` });
     }
 
-    // ── Round 2: anything still flagged drops to its icon background ──
+    // ── Round 2: anything still flagged takes its next verified photo; the icon only when there is none ──
     let final = after;
     if (changed.size) {
       const r2 = await deps.call(after.sheet, current);
@@ -275,13 +309,17 @@ export function createRenderReview(deps: RenderReviewDeps) {
         const still = r2.flags.filter((f) => flagged(f) && changed.has(f.slide));
         for (const f of still) {
           const s = current.slides[f.slide - 1]!;
-          if (!s.photoUrl) {
-            log.push(`slide ${f.slide}: still ${flagNames(f)} (${f.reason}), no photo to drop → logged`);
+          if (!s.photoUrl || s.panoramaSide) {
+            log.push(`slide ${f.slide}: still ${flagNames(f)} (${f.reason}), ${s.panoramaSide ? 'a spread half (kept whole)' : 'no photo to change'} → logged`);
             continue;
           }
-          current = { ...current, slides: current.slides.map((x, i) => (i === f.slide - 1 ? toIcon(x) : x)) };
-          log.push(`slide ${f.slide}: still ${flagNames(f)} after its fix (${f.reason}) → icon background`);
-          record.push({ slide: f.slide, round: 2, flags: flagNames(f), reason: f.reason, change: 'icon background', before: `after-1-slide-${String(f.slide).padStart(2, '0')}.png`, after: `final-slide-${String(f.slide).padStart(2, '0')}.png` });
+          const next = nextFor(current, f.slide);
+          const a = next ? applyChange(s, { ...f, change: 'next_photo' }, next) : null;
+          const slide = a?.slide ?? toIcon(s);
+          const change = a?.slide ? a.note : 'icon background (no other verified photo)';
+          current = { ...current, slides: current.slides.map((x, i) => (i === f.slide - 1 ? slide : x)) };
+          log.push(`slide ${f.slide}: still ${flagNames(f)} after its fix (${f.reason}) → ${change}`);
+          record.push({ slide: f.slide, round: 2, flags: flagNames(f), reason: f.reason, change, before: `after-1-slide-${String(f.slide).padStart(2, '0')}.png`, after: `final-slide-${String(f.slide).padStart(2, '0')}.png` });
         }
         if (still.length) final = await shoot(current, 'final');
       }

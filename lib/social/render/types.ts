@@ -321,6 +321,8 @@ export type SlideCopy = {
    * renders in its default composition when absent.
    */
   variant?: Variant;
+  /** The bucket variant Jev chose (render/buckets.ts TemplateId; slide buckets spec). The layout rotation never swaps a slide that has one. */
+  template?: string;
 
   /**
    * The editorial beat this slide carries. Kept for tracing/analytics; the

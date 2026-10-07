@@ -34,7 +34,8 @@ export function layoutOf(s: SlideCopy): Layout {
   }
 }
 
-const canSwap = (s: SlideCopy) => (s.layoutVariant === 'text' || s.layoutVariant === 'image') && !s.panoramaSide;
+/** A slide with a Jev-chosen template (slide buckets spec) keeps it; rotation only reports. */
+const canSwap = (s: SlideCopy) => (s.layoutVariant === 'text' || s.layoutVariant === 'image') && !s.panoramaSide && !s.template;
 /** Photo-less text slides alternate between copy at the top and copy low (Tommy, 2026-10-06). */
 const TEXT_ONLY: Layout[] = ['text-only', 'text-only-low'];
 /** Full bleed under text: scene photos, and person photos framed for it (photo spec §4). */

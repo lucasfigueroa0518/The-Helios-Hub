@@ -1,0 +1,17 @@
+{
+  "fixture": "openai-sol",
+  "humanized": false,
+  "exportedAt": "2026-09-22T22:02:52.531Z",
+  "format": "carousel",
+  "storyType": "safety",
+  "source": "TechCrunch",
+  "sourceUrl": "https://news.google.com/rss/articles/CBMirAFBVV95cUxNekFPOXhiUFNXem5jSFV2VU54TTZpM3JYRThaNDhFTldnMEJTTWdnalFMSzVEaFV2WVBDS2xPMFQzd3lCbk1hbFEzQXAyUDRXTEwxUGhhTW51aWVsRHkyeVpDMGVzaXpxR1EtTmpKc2ZodzFsa0V4N0JNaUZtclpXakRPV1hyY3RycWRPREFDaE1uLXp1NGNrMFppTGxwaFlPS2pYaXRxWF9vWl9V?oc=5",
+  "slideCount": 5,
+  "files": [
+    "slide-00.png",
+    "slide-01.png",
+    "slide-02.png",
+    "slide-03.png",
+    "slide-04.png"
+  ]
+}

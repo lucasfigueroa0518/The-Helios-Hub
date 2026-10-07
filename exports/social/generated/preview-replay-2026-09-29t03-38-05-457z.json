@@ -1,0 +1,356 @@
+{
+  "format": "carousel",
+  "storyType": "model_launch",
+  "source": "Google Blog (Google Labs)",
+  "sourceUrl": "https://blog.google/innovation-and-ai/models-and-research/google-labs/cc-expanding-to-groups/",
+  "publishedAt": "September 17, 2026",
+  "issueNumber": 725,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "variant": "C3",
+      "headline": [
+        {
+          "text": "Google repositions CC, its experimental AI agent, as a ",
+          "role": "narrative"
+        },
+        {
+          "text": "shared household tool",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Google repositions CC, its experimental AI agent, as a shared household tool."
+    },
+    {
+      "position": 1,
+      "layoutVariant": "text",
+      "altText": "From personal agent to household assistant",
+      "headline": [
+        {
+          "text": "From personal agent to household assistant",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Google Labs",
+          "role": "pivot"
+        },
+        {
+          "text": " announced on September 17 that ",
+          "role": "narrative"
+        },
+        {
+          "text": "CC",
+          "role": "pivot"
+        },
+        {
+          "text": ", its experimental AI agent, is now a ",
+          "role": "narrative"
+        },
+        {
+          "text": "household assistant for up to six family members",
+          "role": "hook"
+        },
+        {
+          "text": ". ",
+          "role": "narrative"
+        },
+        {
+          "text": "CC",
+          "role": "pivot"
+        },
+        {
+          "text": " began as a personal agent delivering daily briefings from Gmail, Calendar, and Drive.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 2,
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "6",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Room for the whole family",
+      "headline": [
+        {
+          "text": "Room for the whole family",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "family members can use one CC account"
+    },
+    {
+      "position": 3,
+      "layoutVariant": "text",
+      "altText": "Users asked for this",
+      "headline": [
+        {
+          "text": "Users asked for this",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Google said ",
+          "role": "narrative"
+        },
+        {
+          "text": "top requests pushed the pivot",
+          "role": "hook"
+        },
+        {
+          "text": ". People wanted ",
+          "role": "narrative"
+        },
+        {
+          "text": "CC",
+          "role": "pivot"
+        },
+        {
+          "text": " to help run a household: tracking school schedules, sports practices, bills, and meal plans. Home management is harder when information sits in separate accounts.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 4,
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "Managing a household is often a ",
+          "role": "narrative"
+        },
+        {
+          "text": "shared responsibility with a lot of coordination",
+          "role": "hook"
+        },
+        {
+          "text": ", made even more challenging with information spread over multiple user accounts.",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Managing a household is often a shared responsibility with a lot of coordination, made even more challenging with inf...",
+      "quoteBy": "Tom Shane, Senior Product Manager, Google Labs"
+    },
+    {
+      "position": 5,
+      "layoutVariant": "text",
+      "altText": "You control what CC sees",
+      "headline": [
+        {
+          "text": "You control what ",
+          "role": "narrative"
+        },
+        {
+          "text": "CC",
+          "role": "pivot"
+        },
+        {
+          "text": " sees",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Each family member decides what to share",
+          "role": "hook"
+        },
+        {
+          "text": ": forward emails or photos, auto-share from senders like schools or sports clubs, or share Drive folders and calendars. Each week, ",
+          "role": "narrative"
+        },
+        {
+          "text": "CC",
+          "role": "pivot"
+        },
+        {
+          "text": " suggests new senders to approve or ignore.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 6,
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "1",
+          "role": "narrative"
+        }
+      ],
+      "altText": "What it delivers each morning",
+      "headline": [
+        {
+          "text": "What it delivers each morning",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "CC",
+          "role": "pivot"
+        },
+        {
+          "text": " adds dates and to-dos to a shared calendar and task list, keeping them current as plans change. It builds a ",
+          "role": "narrative"
+        },
+        {
+          "text": "shared household memory",
+          "role": "hook"
+        },
+        {
+          "text": " for things like a go-to grocery list or favorite restaurants.",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "shared daily brief for the whole group"
+    },
+    {
+      "position": 7,
+      "layoutVariant": "text",
+      "altText": "CC can act on the family's behalf",
+      "headline": [
+        {
+          "text": "CC",
+          "role": "pivot"
+        },
+        {
+          "text": " can act on the family's behalf",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "CC",
+          "role": "pivot"
+        },
+        {
+          "text": " can ",
+          "role": "narrative"
+        },
+        {
+          "text": "pre-fill permission slips",
+          "role": "hook"
+        },
+        {
+          "text": ", build supply lists, draft meal plans, and check live drive times from Google Maps between activities. It creates shared Docs and Sheets, asking for details it doesn't have.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 8,
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "18+",
+          "role": "narrative"
+        }
+      ],
+      "altText": "One big limit",
+      "headline": [
+        {
+          "text": "One big limit",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "minimum age, U.S. only, personal Gmail required"
+    },
+    {
+      "position": 9,
+      "layoutVariant": "text",
+      "altText": "Not the only player in the game",
+      "headline": [
+        {
+          "text": "Not the only player in the game",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "CC",
+          "role": "pivot"
+        },
+        {
+          "text": " enters a growing field of consumer AI agents focused on families. Startups like ",
+          "role": "narrative"
+        },
+        {
+          "text": "Ollie and Fambot",
+          "role": "hook"
+        },
+        {
+          "text": " are experimenting with AI tools to help parents manage household logistics.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 10,
+      "layoutVariant": "text",
+      "altText": "How it all works",
+      "headline": [
+        {
+          "text": "How it all works",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Every ",
+          "role": "narrative"
+        },
+        {
+          "text": "CC",
+          "role": "pivot"
+        },
+        {
+          "text": " runs on its ",
+          "role": "narrative"
+        },
+        {
+          "text": "own isolated cloud computer",
+          "role": "hook"
+        },
+        {
+          "text": ", powered by Google's ",
+          "role": "narrative"
+        },
+        {
+          "text": "Gemini",
+          "role": "pivot"
+        },
+        {
+          "text": " models and ",
+          "role": "narrative"
+        },
+        {
+          "text": "Antigravity",
+          "role": "pivot"
+        },
+        {
+          "text": ", an internal system that allows it to take actions like filling out forms or pulling data from Google Maps.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 11,
+      "layoutVariant": "follow",
+      "variant": "F1",
+      "storySpecificLine": "Follow Helios to stay on top of how AI companies are building tools for families.",
+      "altText": "Follow Helios to stay on top of how AI companies are building tools for families."
+    }
+  ],
+  "caption": "Google Labs repositioned CC, its experimental AI agent, from a personal productivity tool into a shared household assistant for up to six family members. The shift came from user demand: families asked CC to help manage school schedules, sports, bills, and meal plans. The updated CC organizes those logistics into a shared daily brief and calendar, and it can take action on its own: pre-filling forms, drafting meal plans, checking drive times from Google Maps. There's a significant limit, though. It's U.S.-only, requires you to be 18 or older with a personal Gmail account, and school-provided accounts aren't supported.\n\nWhat household coordination task would you most want an AI agent to handle?\n\nFollow Helios for stories about AI agents going beyond chatbots to actually take action.\n\nSource: Google Blog, September 17, 2026. Additional reporting: TechCrunch, SiliconAngle."
+}

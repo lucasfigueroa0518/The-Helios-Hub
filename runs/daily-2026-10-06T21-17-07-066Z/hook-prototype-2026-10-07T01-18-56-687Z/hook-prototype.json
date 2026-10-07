@@ -1,0 +1,59 @@
+{
+  "capUsd": 0.25,
+  "spentUsd": 0,
+  "capRefused": false,
+  "posts": [
+    {
+      "storyId": "https://www.wired.com/story/mistral-new-model-le-chonk-open-source-china-us-frontier/",
+      "cover": "French lab Mistral says its new model is the best open-weight one outside China",
+      "budgets": {
+        "budgets": [
+          129,
+          129,
+          129,
+          129,
+          129,
+          129,
+          129
+        ],
+        "baselineFailures": [],
+        "renders": 8
+      },
+      "photos": [
+        "S2 —",
+        "S3 —",
+        "S4 —",
+        "S5 —",
+        "S6 —",
+        "S7 —",
+        "S8 —"
+      ]
+    },
+    {
+      "storyId": "https://news.google.com/rss/articles/CBMiZkFVX3lxTE5jbzZqSG40a3I2MkNJeFJ3V1pER0pKZUpZQWlRTEdXamlVX2c3ajVic0FYbHl3MXhic00tNnVkaTlRMXJYekR3dnlfa0dSbGZveVR2b1hMUmlsX3dWN1doVElFTWNDUQ?oc=5",
+      "cover": "OpenAI CEO Sam Altman says the world should accept \"some bad things happening\" for AI",
+      "budgets": {
+        "budgets": [
+          129,
+          129,
+          129,
+          129,
+          129,
+          129,
+          129
+        ],
+        "baselineFailures": [],
+        "renders": 8
+      },
+      "photos": [
+        "S2 —",
+        "S3 —",
+        "S4 —",
+        "S5 —",
+        "S6 —",
+        "S7 —",
+        "S8 Bernie_Sanders_2023.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+PROMPTS: prompts-2026-09-29-fact-first (commit a0c7073)
+HARNESS: scripts/copy_ab_2.ts
+
+# newsom
+
+STATUS: needs_human_review
+REASON: Writer OUTLINE failed validation after retry: OUTLINE: SLIDE 8 and SLIDE 9 are both "text". No two consecutive slides may share a kind — change one to a different kind (text / landing / stat / split_stat / quote / image) or merge them.
+COST: $0.3375
+STAGES: reporter → brief-integrity(cut 1 unsourced quote) → writer → writer(outline-retry)
+
+THE NEWS: California Governor Gavin Newsom signed an executive order on Friday, September 18, 2026, directing a group of "world-leading experts" to develop AI safety recommendations for state law within two months, including exploring the creation of a "kill switch" for frontier AI models.
+TERMS: 11
