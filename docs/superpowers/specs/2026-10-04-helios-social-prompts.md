@@ -193,7 +193,7 @@ BRIEF
 - **Handoff (Tommy, 2026-10-06, after the full run):** the IMAGE line above is replaced again. The default flips to a photo. This is the line in use:
 
 ```
-- IMAGE on every story slide: request a photo unless nothing physical fits. In order: subject: <name> (a SUBJECTS entry the slide is about, with photo_available true; each subject at most once per post), article: <photo> (from ARTICLE PHOTOS), stock: <plain 2–3 word literal scene> that names a physical thing the slide itself mentions. Use none only when the slide is about an idea with nothing physical to show, and add one EDIT NOTES line per none saying why. On a quote slide, IMAGE is the speaker (subject: <the quote's speaker>) or none. Never change a slide's words to fit a photo; change the request. The chosen cover always has an IMAGE.
+- IMAGE on every story slide: request a photo unless nothing physical fits. In order: subject: <name> (a SUBJECTS entry the slide is about, with photo_available true; each subject at most once per post), article: <photo> (from ARTICLE PHOTOS), stock: <plain 2–3 word literal scene> that names a physical thing the slide itself mentions. Use none only when the slide is about an idea with nothing physical to show, and add one EDIT NOTES line per none saying why. On a quote slide, IMAGE is the speaker (subject: <the quote's speaker>) or none. article: goes only on text, landing and image slides; stock: on those and on stat slides (a darkened background). Never change a slide's words to fit a photo; change the request. The chosen cover always has an IMAGE.
 ```
 
   **Why:** in the run, 9 of 14 story slides used `none`, there were 0 stock requests, and the Writer requested a subject without a usable photo.
@@ -201,6 +201,7 @@ BRIEF
   **Link A fixes (Tommy, 2026-10-06, after the Writer prototype run), added to the line above:**
   - "On a quote slide, IMAGE is the speaker (subject: <the quote's speaker>) or none." The Writer asked for a non-speaker on a quote slide, and that slide went text-only.
   - "Never change a slide's words to fit a photo; change the request." The Writer rewrote a cover to say "datacenters" so a "data center" request would pass.
+  - "article: goes only on text, landing and image slides; stock: on those and on stat slides (a darkened background)." (Tommy, 2026-10-06, after the photo-finder bench: article requests on quote and stat slides were never drawn.)
   - In code: the handoff checks run on every attempt, the final one included. A place whose IMAGE request failed on the first attempt must keep its words on the retry.
 
   **The brief the Writer sees:**

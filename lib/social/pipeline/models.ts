@@ -22,3 +22,10 @@ export const STAGE_MODELS: Record<ClaudeStage, StageModelConfig> = {
   hook: { model: 'claude-sonnet-5-5', effort: 'high' },
   'fact-checker': { model: 'claude-sonnet-5-5', effort: 'high' },
 };
+
+/**
+ * Photo vision check (Tommy, 2026-10-06, after the photo-finder bench): a
+ * small vision model looks at the top stock candidates. Its own setting;
+ * no effort parameter (a short forced-tool answer).
+ */
+export const PHOTO_VISION_MODEL = { model: 'claude-haiku-4-5-20251001' } as const;

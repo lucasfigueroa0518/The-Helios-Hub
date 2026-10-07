@@ -156,6 +156,22 @@ function tiers(request: string, brief: Brief | null): Array<{ match: StarterMatc
   ].filter((t) => t.photos.length > 0);
 }
 
+/**
+ * Cover fallback (Tommy, 2026-10-06, after the bench): when a cover's own
+ * request fails, the starter photo comes only from the AI-compute set,
+ * never from a topic match (a topic match put a padlock on a Mistral
+ * cover). The first one not in `avoid` (this post + the last 7 days); when
+ * all are, the least recently used one not in this post. Never null.
+ */
+export function pickCoverStarter(avoid: Set<string>, usedThisPost: Set<string> = new Set(), lastUsed: Map<string, string> = new Map()): { photo: Photo; exhausted: boolean } {
+  const set = STARTER_SET.filter((p) => p.topics.includes(DEFAULT_TOPIC));
+  const fresh = set.find((p) => !avoid.has(starterUrl(p.file)));
+  if (fresh) return { photo: toPhoto(fresh), exhausted: false };
+  const age = (p: StarterPhoto) => lastUsed.get(starterUrl(p.file)) ?? '';
+  const lru = [...set].filter((p) => !usedThisPost.has(starterUrl(p.file))).sort((a, b) => age(a).localeCompare(age(b)))[0] ?? set[0]!;
+  return { photo: toPhoto(lru), exhausted: true };
+}
+
 /** The first matching starter photo not in `avoid` (this post + the last 7 days), and which tier matched. */
 export function pickStarter(avoid: Set<string>, slide: { request: string; brief: Brief | null }): { photo: Photo; match: StarterMatch } | null {
   for (const t of tiers(slide.request, slide.brief)) {

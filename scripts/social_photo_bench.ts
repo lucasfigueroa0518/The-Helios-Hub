@@ -16,7 +16,10 @@
  * Output (runs/photo-bench-<ts>-<version>/): contact-sheet.png,
  * table.md (request → photo or none → source → trace), bench.json.
  *
- *   npx tsx scripts/social_photo_bench.ts [--prescreen v2|v3] [--cap-usd 0.05]
+ * --vision adds the photo vision check (a Claude vision call per checked
+ * candidate; Tommy approved 2026-10-06), under one budget with Jev.
+ *
+ *   npx tsx scripts/social_photo_bench.ts [--prescreen v2|v3] [--vision] [--cap-usd 0.05]
  */
 import { promises as fsp } from 'node:fs';
 import path from 'node:path';
@@ -27,6 +30,9 @@ import { capped, createJevAsk, createJevTally, tallied } from '@/lib/social/jev/
 import { findPhoto, newPhotoContext, type PhotoTrace, type StockSearch } from '@/lib/social/photos/find';
 import { searchOpenverse, type OpenverseCandidate } from '@/lib/social/editorial/v2/image-step/openverse';
 import type { IdentityResult } from '@/lib/social/photos/identity';
+import { createVisionCheck } from '@/lib/social/photos/vision';
+import { createRunBudget } from '@/lib/social/pipeline/live-stages';
+import { liveMessagesCreate } from '@/lib/social/reporter/reporter';
 
 type BenchRequest = {
   id: string;
@@ -76,7 +82,7 @@ async function main() {
   const capUsd = Number(arg('--cap-usd') ?? 0.05);
   const fixture = JSON.parse(await fsp.readFile('fixtures/social/photo-bench/requests.json', 'utf8'));
   const requests: BenchRequest[] = fixture.requests;
-  const out = path.join('runs', `photo-bench-${new Date().toISOString().replace(/[:.]/g, '-')}-${version}`);
+  const out = path.join('runs', `photo-bench-${new Date().toISOString().replace(/[:.]/g, '-')}-${version}${process.argv.includes('--vision') ? '-vision' : ''}`);
   await fsp.mkdir(out, { recursive: true });
 
   const CACHE = 'fixtures/social/photo-bench/openverse-cache.json';
@@ -89,6 +95,9 @@ async function main() {
   };
   const tally = createJevTally();
   const jev = capped(tallied(createJevAsk(), tally), tally, capUsd);
+  const withVision = process.argv.includes('--vision');
+  const budget = createRunBudget({ capUsd, otherSpendUsd: () => tally.costUsd, reserveUsd: 0.01 });
+  const vision = withVision ? createVisionCheck({ create: budget.guard(liveMessagesCreate(new (await import('@anthropic-ai/sdk')).default())) }) : undefined;
   const identities = new Map<string, Map<string, Promise<IdentityResult>>>();
   const rows: Array<BenchRequest & { trace: PhotoTrace }> = [];
   for (const r of requests) {
@@ -96,9 +105,9 @@ async function main() {
     const ctx = newPhotoContext(story.brief, story.pages);
     ctx.identities = identities.get(r.story) ?? new Map();
     identities.set(r.story, ctx.identities);
-    const trace = await findPhoto(r.request, ctx, { jev, prescreen: version, stock }, { text: r.slideText, speaker: r.speaker, slot: r.slot, cover: r.cover });
+    const trace = await findPhoto(r.request, ctx, { jev, prescreen: version, stock, vision }, { text: r.slideText, speaker: r.speaker, slot: r.slot, cover: r.cover });
     rows.push({ ...r, trace });
-    console.log(`${r.id} ${r.request.kind}: ${r.request.value.slice(0, 50)} (${r.slot}${r.cover ? ', cover' : ''}) → ${trace.via}${trace.photo ? ` ${trace.photo.source}` : ''}`);
+    console.log(`${r.id} ${r.request.kind}: ${r.request.value.slice(0, 50)} (${r.slot}${r.cover ? ', cover' : ''}) → ${trace.via}${trace.photo ? ` ${trace.photo.source}` : ''}${trace.visionUsd ? ` · vision $${trace.visionUsd.toFixed(4)}` : ''}`);
   }
 
   if (recorded) await fsp.writeFile(CACHE, JSON.stringify(cache, null, 2));
@@ -114,21 +123,26 @@ async function main() {
   const table = [
     `# Photo-finder bench · pre-screen ${version} · ${new Date().toISOString()}`,
     '',
-    `Hit rate (a photo from the request's own chain: article, subject, stock or bank): **${hits.length}/${rows.length}** · by kind ${JSON.stringify(byKind)} · Jev $${tally.costUsd.toFixed(4)} of $${capUsd}`,
+    `Hit rate (a photo from the request's own chain: article, subject, stock or bank): **${hits.length}/${rows.length}** · by kind ${JSON.stringify(byKind)} · Jev $${tally.costUsd.toFixed(4)} · vision $${budget.claudeUsd().toFixed(4)} · cap $${capUsd}`,
     '',
-    '| ID | Request | Slot | Result | Source | Photo | Trace |',
-    '|---|---|---|---|---|---|---|',
-    ...rows.map((x) => `| ${x.id} | ${x.request.kind}: ${x.request.value.slice(0, 60).replace(/\|/g, '/')} | ${x.slot}${x.cover ? ' (cover)' : ''} | ${x.trace.via ?? 'none'} | ${x.trace.photo?.source ?? '—'} | ${x.trace.photo ? short(x.trace.photo.url) : '—'} | ${x.trace.steps.join(' → ').replace(/\|/g, '/').replace(/\n/g, ' ')} |`),
+    '| ID | Request | Slot | Result | Source | Photo | Vision $ | Trace |',
+    '|---|---|---|---|---|---|---|---|',
+    ...rows.map((x) => `| ${x.id} | ${x.request.kind}: ${x.request.value.slice(0, 60).replace(/\|/g, '/')} | ${x.slot}${x.cover ? ' (cover)' : ''} | ${x.trace.via ?? 'none'} | ${x.trace.photo?.source ?? '—'} | ${x.trace.photo ? short(x.trace.photo.url) : '—'} | ${x.trace.visionUsd ? x.trace.visionUsd.toFixed(4) : '—'} | ${x.trace.steps.join(' → ').replace(/\|/g, '/').replace(/\n/g, ' ')} |`),
   ].join('\n');
   await fsp.writeFile(path.join(out, 'table.md'), table);
-  await fsp.writeFile(path.join(out, 'bench.json'), JSON.stringify({ version, capUsd, jevUsd: tally.costUsd, hits: hits.length, total: rows.length, byKind, rows }, null, 2));
+  const verdicts = rows.flatMap((x) => {
+    const v = x.trace.steps.filter((st) => st.startsWith('vision '));
+    return v.length ? [`## ${x.id} ${x.request.kind}: ${x.request.value} → ${x.trace.via}${x.trace.visionUsd ? ` ($${x.trace.visionUsd.toFixed(4)})` : ''}`, ...v.map((st) => `- ${st}`), ''] : [];
+  });
+  if (verdicts.length) await fsp.writeFile(path.join(out, 'verdicts.md'), [`# Vision verdicts · ${new Date().toISOString()}`, '', ...verdicts].join('\n'));
+  await fsp.writeFile(path.join(out, 'bench.json'), JSON.stringify({ version, vision: withVision, capUsd, jevUsd: tally.costUsd, visionUsd: budget.claudeUsd(), capRefused: budget.exhausted(), hits: hits.length, total: rows.length, byKind, rows }, null, 2));
 
   // Contact sheet: 6 across.
   const sharp = (await import('sharp')).default;
   const W = 300, H = 300, gap = 10, cols = 6;
   const tiles: Buffer[] = [];
   for (const x of rows) {
-    tiles.push(await tile(x.trace.photo?.url ?? null, [`${x.id} ${x.request.kind}: ${x.request.value.startsWith('http') ? 'article photo' : x.request.value}`, `→ ${x.trace.via ?? 'none'}${x.trace.photo ? ` (${x.trace.photo.source})` : ''} · ${x.slot}${x.cover ? ' cover' : ''}`, x.trace.photo?.subject ?? (x.trace.photo?.credit ?? '').slice(0, 44)], W, H));
+    tiles.push(await tile(x.trace.photo?.url ?? null, [`${x.id} ${x.request.kind}: ${x.request.value.startsWith('http') ? 'article photo' : x.request.value}`, `→ ${x.trace.via ?? 'none'}${x.trace.photo ? ` (${x.trace.photo.source})` : ''} · ${x.slot}${x.cover ? ' cover' : ''}${x.trace.visionUsd ? ` · vision $${x.trace.visionUsd.toFixed(3)}` : ''}`, x.trace.photo?.subject ?? (x.trace.photo?.credit ?? '').slice(0, 44)], W, H));
   }
   const rowsN = Math.ceil(tiles.length / cols);
   await sharp({ create: { width: cols * W + (cols + 1) * gap, height: rowsN * H + (rowsN + 1) * gap, channels: 3, background: '#000' } })
@@ -136,7 +150,7 @@ async function main() {
     .png()
     .toFile(path.join(out, 'contact-sheet.png'));
 
-  console.log(`\nHit rate ${hits.length}/${rows.length} ${JSON.stringify(byKind)} · Jev $${tally.costUsd.toFixed(4)} of $${capUsd}`);
+  console.log(`\nHit rate ${hits.length}/${rows.length} ${JSON.stringify(byKind)} · Jev $${tally.costUsd.toFixed(4)} · vision $${budget.claudeUsd().toFixed(4)} · total $${budget.spent().toFixed(4)} of $${capUsd}${budget.exhausted() ? ' (the guard refused a call)' : ''}`);
   console.log(`Output: ${out}`);
 }
 

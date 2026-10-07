@@ -332,3 +332,17 @@ test('fillDraft: a quote with no speaker_id has no speaker_subject (never the fi
   const filled = fillDraft(sifDraftHandoff(), b);
   assert.equal(filled.slides[2]!.quote!.speaker_subject, null);
 });
+
+test('link A: article requests only on text, landing and image slides; stock also on stat slides; quote slides take the speaker', () => {
+  const brief = briefSuperIntelligenceForce();
+  const url = brief.article_photos[0]!.url!;
+  const errs = (i: number, image: DraftSubmission['slides'][number]['image']) => {
+    const d = sifDraftHandoff();
+    d.slides[i]!.image = image;
+    return imageHandoffFailures(d, brief, null).map((e) => `${e.section}: ${e.message}`).filter((m) => m.startsWith(`slide ${i + 2}.image`)).join();
+  };
+  assert.equal(errs(0, { kind: 'article', value: url }), '', 'text slide');
+  assert.match(errs(3, { kind: 'article', value: url }), /an article photo can't show on a stat slide/);
+  assert.match(errs(2, { kind: 'article', value: url }), /a quote slide's IMAGE is the speaker/);
+  assert.equal(errs(3, { kind: 'stock', value: 'deadline' }), '', 'stock on a stat slide is its darkened background (the scene names a word the slide uses)');
+});

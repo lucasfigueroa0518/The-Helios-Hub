@@ -4,8 +4,8 @@
  * 2026-10-06):
  *
  *   selection (Jev) → Reporter → Writer → Editor → Fact-checker →
- *   mechanical (text fixes + checks, M7) → design (basic photos, photo
- *   credit check, render-fit and dropped-text checks)
+ *   mechanical (text fixes + checks, M7) → design (basic photos with the
+ *   stock vision check, photo credit check, render-fit and dropped-text checks)
  *
  * Every client is injected (Claude `create`, Jev, page reader, HTTP, the
  * fit check), so tests pass fakes and nothing here reaches a live service
@@ -24,6 +24,7 @@ import type { JevAsk } from '@/lib/social/jev/client';
 import type { BankEntry } from '@/lib/social/photos/bank';
 import type { PhotoDeps } from '@/lib/social/photos/find';
 import type { UsedPhotoLog } from '@/lib/social/photos/used-photos';
+import { createVisionCheck } from '@/lib/social/photos/vision';
 import { runFactCheck } from '@/lib/social/factcheck/factcheck';
 import type { FitCheck } from '@/lib/social/render/fit-check';
 import type { PageRead } from '@/lib/social/reporter/read-page';
@@ -125,7 +126,9 @@ export function createLiveStages(deps: LiveStagesDeps): { stages: PipelineStages
   let reporterRuns = 0;
 
   const factCheck = createFactCheckStage({ create, onResult: (id, r) => log(id).factCheck.push(r) });
-  const design = createDesignStage({ jev: deps.jev, http: deps.http, fitCheck: deps.fitCheck, usedLog: deps.usedLog, bank: deps.bank, now: () => deps.now });
+  // The photo vision check on top stock candidates (Tommy, 2026-10-06), under the same budget guard.
+  const vision = createVisionCheck({ create, http: deps.http });
+  const design = createDesignStage({ jev: deps.jev, http: deps.http, vision, fitCheck: deps.fitCheck, usedLog: deps.usedLog, bank: deps.bank, now: () => deps.now });
 
   const stages: PipelineStages = {
     score: deps.score,

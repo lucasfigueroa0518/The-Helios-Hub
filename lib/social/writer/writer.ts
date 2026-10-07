@@ -110,6 +110,13 @@ export function imageHandoffFailures(d: DraftSubmission, brief: Brief, photoSubj
       errors.push({ section: `slide ${i + 2}.image`, message: `a quote slide's IMAGE is the speaker${speaker ? ` (subject: ${speaker})` : ''} or none, not ${s.image.kind}${s.image.value ? `: ${s.image.value}` : ''}; change the request${KEEP_WORDS}` });
     }
   });
+  // Slide types that show a photo (Tommy, 2026-10-06): article only where the finder draws one (text, landing, image).
+  // Stock shows on every other type too (a darkened background on stat slides); quote slides take the speaker (checked above).
+  d.slides.forEach((s, i) => {
+    if (s.image.kind === 'article' && !['text', 'landing', 'image'].includes(s.type)) {
+      errors.push({ section: `slide ${i + 2}.image`, message: `an article photo can't show on a ${s.type} slide (only text, landing and image slides); change the request${KEEP_WORDS}` });
+    }
+  });
   // One EDIT NOTES line per none, saying why (Tommy, 2026-10-06). The slide after a spread is none by design and needs none.
   const nones = d.slides.filter((s, i) => s.image.kind === 'none' && !d.slides[i - 1]?.spread_with_next).length;
   const noteLines = d.edit_notes.filter((n) => /\bnone\b/i.test(n)).length;

@@ -291,6 +291,12 @@ Only the four sources needed to put a real photo on every slide:
   - **In progress, each tested on its own fixed inputs:**
     - **(A) Writer IMAGE requests:** checked by offline tests for now.
     - **(B) Photo finder:** the photo-finder bench. `fixtures/social/photo-bench/requests.json` holds every IMAGE request from the saved runs, deduplicated. `scripts/social_photo_bench.ts` runs the finder on each, with no Writer and no Claude: Jev only, cap $0.05. It outputs a contact sheet, a table, the hit rate and the misleading photos.
+      - **Fixed inputs:** Openverse results are frozen in `fixtures/social/photo-bench/openverse-cache.json`, so two runs differ only by the code under test.
+      - **Pass bar (Tommy, 2026-10-06):** 0 misleading photos, and every miss explained. The hit rate is tracked, not required.
+      - **Finder since the first bench (Tommy, 2026-10-06):**
+        - A vision check (`lib/social/photos/vision.ts`, its own model setting `PHOTO_VISION_MODEL`) looks at the top 3 metadata-passing stock candidates. The first passing all four questions wins: shows the requested thing, no person, no landmark, no outside brand. None passing means no stock photo. The cost is recorded per request.
+        - The cover fallback is the starter set's AI-compute photos only, never a topic match.
+      - **Bench cap:** $0.30 with the vision check (Jev + vision).
     - **(C) Renderer visuals:** the look of each layout, judged by Tommy and Lucas on fixed posts.
   - **Separate track:** the Hook pass runs on saved drafts only and is not wired into runDay.
   - **No end-to-end runs until A, B and C each pass.** Then the acceptance batch above.

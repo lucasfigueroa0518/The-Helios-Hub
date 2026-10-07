@@ -13,9 +13,9 @@
  *            search's results go through the Jev metadata pre-screen (fits the
  *            scene, no person likely visible, no recognizable landmark, and
  *            in v3 no outside company or brand; spec §5A #6)
- *   then     cover: the offline starter set (starter-set.ts), which can't come
- *            up empty. Story slides: text-only (the starter set is cover-only,
- *            Tommy 2026-10-06)
+ *   then     cover: the offline starter set's AI-compute photos only, never a
+ *            topic match (starter-set.ts; can't come up empty). Story slides:
+ *            text-only (the starter set is cover-only, Tommy 2026-10-06)
  *   none:    no photo; the slide renders without one (no fallback; spec §5.1)
  *
  * Where the photo is drawn (its slot) limits what may go there:
@@ -41,7 +41,8 @@ import type { ImageRequest } from '@/lib/social/writer/draft';
 import { classifyCredit } from './credit';
 import { checkIdentity, type IdentityResult, type SubjectType } from './identity';
 import { bankPhoto, pickFromBank, type BankEntry, type BankNeed } from './bank';
-import { pickStarter, pickStarterLeastRecent } from './starter-set';
+import { pickCoverStarter } from './starter-set';
+import { VISION_TOP, describeVerdict, type VisionCheck } from './vision';
 
 /** Logged when the 7-day rule has to give way (spec §5D; counted in each run's report). */
 export const STARTER_POOL_EXHAUSTED = 'starter-pool-exhausted';
@@ -77,6 +78,8 @@ export type PhotoTrace = {
   via: ChainStep | null;
   identity: IdentityNote | null;
   steps: string[];
+  /** Vision check spend for this request (Tommy, 2026-10-06: recorded per request). */
+  visionUsd?: number;
 };
 
 /**
@@ -97,6 +100,8 @@ export type PhotoDeps = {
   stock?: StockSearch;
   /** Stock pre-screen version: v3 (default, Tommy 2026-10-06) or v2 (kept for the bench's before/after). */
   prescreen?: 'v2' | 'v3';
+  /** The photo vision check on the top stock candidates (vision.ts). Absent: metadata pre-screen only. */
+  vision?: VisionCheck;
 };
 
 export type PhotoContext = {
@@ -197,7 +202,7 @@ export function stockQueries(request: string): string[] {
  * tags fit the scene and suggest no person, no landmark and (v3) no
  * company or brand outside the story's SUBJECTS. Scores are logged.
  */
-async function prescreen(scene: string, cands: OpenverseCandidate[], ctx: PhotoContext, deps: PhotoDeps, steps: string[]): Promise<OpenverseCandidate | null> {
+async function prescreen(scene: string, cands: OpenverseCandidate[], ctx: PhotoContext, deps: PhotoDeps, steps: string[]): Promise<OpenverseCandidate[]> {
   const v3 = (deps.prescreen ?? 'v3') === 'v3';
   const P = v3 ? PrescreenV3 : PrescreenV2;
   const shown = cands.slice(0, P.MAX_CANDIDATES);
@@ -215,26 +220,48 @@ async function prescreen(scene: string, cands: OpenverseCandidate[], ctx: PhotoC
     brand: v3 ? res.answers[PrescreenV3.brandId(k)]!.noul : 0,
   }));
   const brandMax = v3 ? PrescreenV3.THRESHOLDS.BRAND_MAX : 1;
-  const pick = scored.find((x) => x.fit >= FIT_MIN && x.people < PEOPLE_MAX && x.landmark < LANDMARK_MAX && x.brand < brandMax) ?? null;
-  steps.push(`pre-screen ${P.VERSION} "${scene}": ${scored.map((x) => `"${(x.c.title ?? '').slice(0, 40)}" fit ${x.fit.toFixed(2)} people ${x.people.toFixed(2)} landmark ${x.landmark.toFixed(2)}${v3 ? ` brand ${x.brand.toFixed(2)}` : ''}${x === pick ? ' ✓' : ''}`).join('; ')}`);
-  return pick?.c ?? null;
+  const passing = scored.filter((x) => x.fit >= FIT_MIN && x.people < PEOPLE_MAX && x.landmark < LANDMARK_MAX && x.brand < brandMax);
+  steps.push(`pre-screen ${P.VERSION} "${scene}": ${scored.map((x) => `"${(x.c.title ?? '').slice(0, 40)}" fit ${x.fit.toFixed(2)} people ${x.people.toFixed(2)} landmark ${x.landmark.toFixed(2)}${v3 ? ` brand ${x.brand.toFixed(2)}` : ''}${passing.includes(x) ? ' ✓' : ''}`).join('; ')}`);
+  return passing.map((x) => x.c);
 }
 
-async function stockPhoto(request: string, slot: PhotoSlot, ctx: PhotoContext, deps: PhotoDeps, steps: string[]): Promise<Photo | null> {
+async function stockPhoto(request: string, slot: PhotoSlot, ctx: PhotoContext, deps: PhotoDeps, steps: string[], spend: { visionUsd: number }): Promise<Photo | null> {
   const search: StockSearch = deps.stock ?? ((q, o) => searchOpenverse(q, { http: deps.http, minShortSide: o.minShortSide }));
+  const toPhoto = (pick: OpenverseCandidate): Photo => ({ url: pick.url, credit: buildStockCredit(pick), source: 'stock', width: pick.width, height: pick.height, qid: null, subject: null });
   for (const query of stockQueries(request)) {
     const cands = (await search(query, { minShortSide: STOCK_MIN_SHORT_SIDE })).filter((c) => !taken(ctx, c.url));
     if (!cands.length) {
       steps.push(`stock "${query}" (${slot}): no unused results`);
       continue;
     }
-    const pick = await prescreen(request, cands, ctx, deps, steps);
-    if (!pick) {
+    const passing = await prescreen(request, cands, ctx, deps, steps);
+    if (!passing.length) {
       steps.push(`stock "${query}" (${slot}): no result passed the pre-screen`);
       continue;
     }
-    steps.push(`stock "${query}" (${slot}): ${pick.source} ${pick.width}×${pick.height}${pick.title ? ` "${pick.title}"` : ''}`);
-    return { url: pick.url, credit: buildStockCredit(pick), source: 'stock', width: pick.width, height: pick.height, qid: null, subject: null };
+    if (!deps.vision) {
+      const pick = passing[0]!;
+      steps.push(`stock "${query}" (${slot}): ${pick.source} ${pick.width}×${pick.height}${pick.title ? ` "${pick.title}"` : ''}`);
+      return toPhoto(pick);
+    }
+    // Vision check (Tommy, 2026-10-06): the top candidates, in order; the first passing all four wins; none passing means none.
+    const subjects = ctx.brief.subjects.map((x) => x.name);
+    for (const c of passing.slice(0, VISION_TOP)) {
+      const v = await deps.vision({ url: c.url, scene: request, subjects });
+      spend.visionUsd += v.costUsd;
+      const label = `"${(c.title ?? '').slice(0, 50)}"`;
+      if (!v.ok) {
+        steps.push(`vision ${label}: error (${v.error}) → skipped`);
+        continue;
+      }
+      steps.push(`vision ${label}: ${describeVerdict(v.verdict)} → ${v.pass ? 'PASS' : 'fail'} ($${v.costUsd.toFixed(4)})`);
+      if (v.pass) {
+        steps.push(`stock "${query}" (${slot}): ${c.source} ${c.width}×${c.height}${c.title ? ` "${c.title}"` : ''}`);
+        return toPhoto(c);
+      }
+    }
+    steps.push(`stock "${query}" (${slot}): no candidate passed the vision check → no stock photo`);
+    return null;
   }
   return null;
 }
@@ -270,11 +297,12 @@ const errText = (err: unknown) => (err instanceof Error ? err.message : String(e
 /** One photo for one slide, down the chain. A source error is logged and the chain moves on. */
 export async function findPhoto(request: ImageRequest, ctx: PhotoContext, deps: PhotoDeps, slide: SlideText = { text: [], speaker: null, slot: 'split' }): Promise<PhotoTrace> {
   const steps: string[] = [];
+  const spend = { visionUsd: 0 };
   const { slot } = slide;
   let identity: IdentityNote | null = null;
   const done = (photo: Photo, via: ChainStep): PhotoTrace => {
     ctx.used.add(photo.url);
-    return { request, photo, via, identity, steps };
+    return { request, photo, via, identity, steps, ...(spend.visionUsd ? { visionUsd: spend.visionUsd } : {}) };
   };
   const attempt = async (label: string, fn: () => Promise<Photo | null>): Promise<Photo | null> => {
     try {
@@ -321,7 +349,7 @@ export async function findPhoto(request: ImageRequest, ctx: PhotoContext, deps: 
       if (b) return done(b, 'bank');
     }
   } else if (request.kind === 'stock' && !empty) {
-    const p = await attempt('stock', () => stockPhoto(request.value, slot, ctx, deps, steps));
+    const p = await attempt('stock', () => stockPhoto(request.value, slot, ctx, deps, steps, spend));
     if (p) return done(p, 'stock');
     const b = fromBank({ scene: request.value });
     if (b) return done(b, 'bank');
@@ -330,19 +358,12 @@ export async function findPhoto(request: ImageRequest, ctx: PhotoContext, deps: 
   // Story slides: nothing usable → text-only (Tommy, 2026-10-06). The starter set is for the cover only.
   if (!slide.cover) {
     steps.push('no usable photo: story slide renders text-only (the starter set is cover-only)');
-    return { request, photo: null, via: 'text-only', identity, steps };
+    return { request, photo: null, via: 'text-only', identity, steps, ...(spend.visionUsd ? { visionUsd: spend.visionUsd } : {}) };
   }
-  // The offline starter set (cover only).
-  // Topic-matched per slide: the IMAGE request, then the brief's main topic, then the AI-compute default.
-  const slideTopic = { request: request.value, brief: ctx.brief };
-  const starter = pickStarter(avoidSet(ctx), slideTopic);
-  if (starter) {
-    steps.push(`${starter.match === 'no-topic-match' ? `${NO_TOPIC_MATCH}: ` : ''}starter set (${starter.match}): ${starter.photo.url}`);
-    return done(starter.photo, 'starter');
-  }
-  // Every matching starter photo was used in the last 7 days (Tommy, 2026-10-06):
-  // reuse the least recently used one and say so. Never returns no photo.
-  const lru = pickStarterLeastRecent(ctx.used, ctx.lastUsed, slideTopic);
-  steps.push(`${STARTER_POOL_EXHAUSTED}${lru.match === 'no-topic-match' ? ` + ${NO_TOPIC_MATCH}` : ''}: every matching starter photo used in the last 7 days; least recently used: ${lru.photo.url}`);
-  return done(lru.photo, 'starter');
+  // The offline starter set (cover only), from the AI-compute set only, never a topic match (Tommy, 2026-10-06).
+  const starter = pickCoverStarter(avoidSet(ctx), ctx.used, ctx.lastUsed);
+  steps.push(starter.exhausted
+    ? `${STARTER_POOL_EXHAUSTED}: every AI-compute starter photo used in the last 7 days; least recently used: ${starter.photo.url}`
+    : `starter set (AI compute, cover fallback): ${starter.photo.url}`);
+  return done(starter.photo, 'starter');
 }

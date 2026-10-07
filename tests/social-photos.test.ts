@@ -776,3 +776,85 @@ test('brief check: every quote speaker_id names a SUBJECTS entry', async () => {
   b.quotes[0]!.speaker_id = 'S9';
   assert.throws(() => validateBrief(b), (e: unknown) => e instanceof BriefValidationError && /Q1 speaker_id S9 isn't in SUBJECTS/.test((e as Error).message));
 });
+
+// ── Vision check + cover fallback (Tommy, 2026-10-06, after the bench) ──
+
+import { createVisionCheck, passesVision, SHOWS_MIN_CONFIDENCE, VISION_SYSTEM, VISION_TOP, type VisionCheck, type VisionVerdict } from '@/lib/social/photos/vision';
+import { PHOTO_VISION_MODEL } from '@/lib/social/pipeline/models';
+import { DEFAULT_TOPIC } from '@/lib/social/photos/starter-set';
+
+const verdict = (over: Partial<VisionVerdict> = {}): VisionVerdict => ({ what_it_shows: 'x', shows_requested: true, shows_requested_confidence: 0.9, person_visible: false, landmark_visible: false, outside_brand_visible: false, brand_seen: null, ...over });
+
+test('vision: all four must pass (shows it with enough confidence, no person, no landmark, no outside brand)', () => {
+  assert.ok(passesVision(verdict()));
+  assert.ok(!passesVision(verdict({ shows_requested: false })));
+  assert.ok(!passesVision(verdict({ shows_requested_confidence: SHOWS_MIN_CONFIDENCE - 0.01 })));
+  assert.ok(!passesVision(verdict({ person_visible: true })));
+  assert.ok(!passesVision(verdict({ landmark_visible: true })));
+  assert.ok(!passesVision(verdict({ outside_brand_visible: true, brand_seen: 'Equinix' })));
+});
+
+/** Stub vision: verdicts by photo title in the URL; records what it was asked. */
+function stubVision(byUrl: Record<string, Partial<VisionVerdict>>, asked: string[] = []): VisionCheck {
+  return async ({ url }) => {
+    asked.push(url);
+    const v = verdict(byUrl[url] ?? {});
+    return { ok: true, verdict: v, pass: passesVision(v), costUsd: 0.002 };
+  };
+}
+
+test('vision: the first metadata-passing candidate that passes the image check wins; cost is recorded per request', async () => {
+  const stock = async () => [ov('price tags on wood'), ov('price tag on a shirt'), ov('cash and price tag')];
+  const asked: string[] = [];
+  const vision = stubVision({ 'https://s/price-tags-on-wood.jpg': { shows_requested: false, what_it_shows: 'cork pieces' } }, asked);
+  const t = await findPhoto({ kind: 'stock', value: 'price tag' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS), stock, vision });
+  assert.equal(t.photo?.url, 'https://s/price-tag-on-a-shirt.jpg');
+  assert.deepEqual(asked, ['https://s/price-tags-on-wood.jpg', 'https://s/price-tag-on-a-shirt.jpg']);
+  assert.equal(t.visionUsd, 0.004);
+  assert.ok(t.steps.some((s) => /vision "price tags on wood": shows no .*"cork pieces" → fail/.test(s)), t.steps.join(' | '));
+});
+
+test(`vision: at most ${VISION_TOP} candidates are checked; none passing means no stock photo (no second search); a story slide goes text-only, a cover takes an AI-compute starter`, async () => {
+  const queries: string[] = [];
+  const stock = async (q: string) => { queries.push(q); return ['a', 'b', 'c', 'd'].map((x) => ov(`museum government building ${x}`)); };
+  const asked: string[] = [];
+  const vision = stubVision(Object.fromEntries(['a', 'b', 'c', 'd'].map((x) => [`https://s/museum-government-building-${x}.jpg`, { shows_requested: false }])), asked);
+  const story = await findPhoto({ kind: 'stock', value: 'government building exterior' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS), stock, vision });
+  assert.equal(asked.length, VISION_TOP);
+  assert.deepEqual(queries, ['government building exterior'], 'no two-word search after the vision check says none');
+  assert.equal(story.via, 'text-only');
+  const cover = await findPhoto({ kind: 'stock', value: 'government building exterior' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS), stock, vision }, { text: ['Mistral launches its new model'], speaker: null, slot: 'split', cover: true });
+  assert.equal(cover.via, 'starter');
+  const file = cover.photo!.url.split('/').pop();
+  assert.ok(STARTER_SET.find((p) => p.file === file)!.topics.includes(DEFAULT_TOPIC), 'the cover fallback is an AI-compute starter photo');
+  assert.ok(cover.steps.some((s) => /starter set \(AI compute, cover fallback\)/.test(s)));
+});
+
+test('cover fallback: never a topic match, even when the request names a starter topic (the padlock-on-Mistral case)', async () => {
+  const t = await findPhoto({ kind: 'stock', value: 'open padlock' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS), stock: async () => [] }, { text: ['x'], speaker: null, slot: 'split', cover: true });
+  const file = t.photo!.url.split('/').pop();
+  assert.ok(STARTER_SET.find((p) => p.file === file)!.topics.includes(DEFAULT_TOPIC));
+});
+
+test('vision request: own model, cached system + forced tool, the downscaled photo as an image block, the request and SUBJECTS as text', async () => {
+  const sharp = (await import('sharp')).default;
+  const png = await sharp({ create: { width: 1600, height: 1000, channels: 3, background: '#336' } }).png().toBuffer();
+  const http = (async () => new Response(new Uint8Array(png), { status: 200 })) as unknown as typeof fetch;
+  const requests: any[] = [];
+  const create = async (p: any) => {
+    requests.push(p);
+    return { id: 'm', type: 'message', role: 'assistant', model: p.model, stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 900, output_tokens: 80, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, content: [{ type: 'tool_use', id: 't', name: 'submit_verdict', input: verdict({ what_it_shows: 'a blue field' }) }] } as any;
+  };
+  const r = await createVisionCheck({ create, http })({ url: 'https://s/x.jpg', scene: 'data center racks', subjects: ['Mistral AI'] });
+  assert.ok(r.ok && r.pass && r.costUsd > 0);
+  const q = requests[0];
+  assert.equal(q.model, PHOTO_VISION_MODEL.model);
+  assert.equal(q.system[0].text, VISION_SYSTEM);
+  assert.ok(q.system[0].cache_control && q.tools[0].cache_control);
+  assert.deepEqual(q.tool_choice, { type: 'tool', name: 'submit_verdict' });
+  const [img, text] = q.messages[0].content;
+  assert.equal(img.type, 'image');
+  const meta = await sharp(Buffer.from(img.source.data, 'base64')).metadata();
+  assert.equal(Math.max(meta.width!, meta.height!), 768);
+  assert.equal(text.text, 'REQUESTED: data center racks\nSUBJECTS: Mistral AI');
+});

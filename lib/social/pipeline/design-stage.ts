@@ -8,7 +8,7 @@ import { createJevTally, jevCostUsd, type JevAsk } from '@/lib/social/jev/client
 import { checkDroppedText, checkPhotoCredit } from '@/lib/social/mechanical/checks';
 import { photosForDraft } from '@/lib/social/photos/design';
 import type { BankEntry } from '@/lib/social/photos/bank';
-import { pickStarter } from '@/lib/social/photos/starter-set';
+import { pickCoverStarter } from '@/lib/social/photos/starter-set';
 import type { UsedPhotoLog } from '@/lib/social/photos/used-photos';
 import type { PhotoDeps } from '@/lib/social/photos/find';
 import type { FitCheck } from '@/lib/social/render/fit-check';
@@ -59,8 +59,8 @@ export function createDesignStage(deps: DesignDeps): PipelineStages['design'] {
         t.via = 'text-only';
         continue;
       }
-      const starter = pickStarter(used, { request: t.request.value, brief: brief.parsed })?.photo;
-      if (!starter) return { ok: false, reasonCode: 'render-failed', detail: `C6 ${failures.map((f) => f.detail).join('; ')}; starter set used up`, costUsd: tally.costUsd };
+      // The cover takes an AI-compute starter photo, never a topic match (Tommy, 2026-10-06).
+      const starter = pickCoverStarter(used).photo;
       used.add(starter.url);
       photoReplacements.push(`C6 ${failures[0]!.where}: ${failures.map((f) => f.detail).join('; ')} → ${starter.url}`);
       t.steps.push(`C6 replaced: ${failures.map((f) => f.detail).join('; ')} → starter set ${starter.url}`);
