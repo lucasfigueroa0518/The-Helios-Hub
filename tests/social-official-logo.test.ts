@@ -12,7 +12,7 @@ import { findPhoto, newPhotoContext, type Photo } from '@/lib/social/photos/find
 import type { IdentityResult } from '@/lib/social/photos/identity';
 import { currentLogoFile, fetchLogo, plateFor } from '@/lib/social/photos/logo';
 import { OFFICIAL_COMPANIES, officialPageOf, type OfficialCompany } from '@/lib/social/photos/official';
-import { passesVision, type VisionCheck, type VisionVerdict } from '@/lib/social/photos/vision';
+import { passesOfficialVision, passesVision, type VisionCheck, type VisionVerdict } from '@/lib/social/photos/vision';
 import { toRenderPost } from '@/lib/social/render/from-draft';
 import type { Brief } from '@/lib/social/reporter/brief';
 import type { PageReadOk } from '@/lib/social/reporter/read-page';
@@ -81,9 +81,10 @@ test("Writer brief: <figure> images before og:image; a page's og:image dropped w
 
 const verdict = (over: Partial<VisionVerdict> = {}): VisionVerdict => ({ what_it_shows: 'x', shows_requested: true, shows_requested_confidence: 0.9, person_prominent: false, landmark_visible: false, story_logo: false, logo_seen: null, named_institution: false, mostly_text_banner: false, ...over });
 
-test('vision: the sixth question (mostly text or a graphic banner) rejects', () => {
-  assert.ok(passesVision(verdict()));
-  assert.ok(!passesVision(verdict({ mostly_text_banner: true })));
+test('vision: the sixth question (mostly text or a graphic banner) rejects an official image; stock ignores it', () => {
+  assert.ok(passesOfficialVision(verdict(), false));
+  assert.ok(!passesOfficialVision(verdict({ mostly_text_banner: true }), false));
+  assert.ok(passesVision(verdict({ mostly_text_banner: true })));
 });
 
 /** Identity already verified (no Jev / resolver in these tests). */

@@ -796,7 +796,7 @@ test('vision: all four must pass (shows it with enough confidence, no person, no
   assert.ok(!passesVision(verdict({ landmark_visible: true })));
   assert.ok(!passesVision(verdict({ story_logo: true, logo_seen: 'Equinix' })));
   assert.ok(!passesVision(verdict({ named_institution: true })), 'a specific named hospital, school or company site (CJ Harris Regional Hospital)');
-  assert.ok(!passesVision(verdict({ mostly_text_banner: true })), 'mostly text or a graphic banner');
+  assert.ok(passesVision(verdict({ mostly_text_banner: true })), 'stock ignores the banner answer (code on a screen reads as text)');
 });
 
 /** Stub vision: verdicts by photo title in the URL; records what it was asked. */

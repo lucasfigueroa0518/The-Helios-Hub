@@ -1,0 +1,101 @@
+{
+  "note": "Fixed company stories for the image strategy (a) official images and (b) logo cards (Tommy, 2026-10-07). Stories and pages come from requests.json; the requests are hand-set.",
+  "requests": [
+    {
+      "id": "C1",
+      "story": "https://news.google.com/rss/articles/CBMiwwFBVV95cUxQV2hxbEllWjBTSVlfODJGTHNncFk5Nnk5Vlk0b3poenAySFJ6YUZ1cm1mSElzWGdSallFQk0yQWhONzA1YXpIX0d1cHhSWEg1R2IyM3pILTNaVUNXVjZ1RnhVTGFPNldXNTBleUE1STc2YjZ5eEF3MzFRLXZESWNoclZoZkxQVnlKYzZMUkFQOGVZUzZEbU1WME5STUJ4VVROTjlFd1F6QWNJc3FYand3RnVuZXZrNzN6QnQ0U2oxNXNTaTg?oc=5",
+      "request": {
+        "kind": "subject",
+        "value": "Anthropic"
+      },
+      "slot": "split",
+      "cover": true,
+      "where": "cover (company story)",
+      "slideText": [
+        "On Oct 6, 2026, Anthropic merged Project Glasswing into an expanded Cyber Verification Program with three access tiers (Defense, Red Team, Specialized) that give vetted security teams fewer cyber blocks on its newest Claude models."
+      ],
+      "speaker": null,
+      "why": "Anthropic story with an anthropic.com page (1 figure + og:image)"
+    },
+    {
+      "id": "C2",
+      "story": "https://www.wired.com/story/mistral-new-model-le-chonk-open-source-china-us-frontier/",
+      "request": {
+        "kind": "subject",
+        "value": "Mistral AI"
+      },
+      "slot": "split",
+      "cover": true,
+      "where": "cover (company story)",
+      "slideText": [
+        "On Oct 6, 2026, French AI lab Mistral launched a public preview of Mistral Large 4 (\"Le Chonk\"), a 1-trillion-parameter model it pitches for cyber defense. Weights are due at the end of October. [CLAIM: Mistral says] it is the best open-weight model from the US or Europe, and an independent index puts it well behind the top closed models."
+      ],
+      "speaker": null,
+      "why": "Mistral: no official page saved; P18 unusable → logo card expected"
+    },
+    {
+      "id": "C3",
+      "story": "https://www.theverge.com/ai-artificial-intelligence/1005451/google-gemini-free-flash-lite-only",
+      "request": {
+        "kind": "subject",
+        "value": "Google"
+      },
+      "slot": "split",
+      "cover": true,
+      "where": "cover (company story)",
+      "slideText": [
+        "Starting Oct. 9, 2026, Google will limit Gemini app users without a paid Google AI plan to the Flash-Lite model (losing Flash and Pro), and AI Plus subscribers will also lose Pro on a date Google will email them; Pro will need AI Pro ($19.99/month) or Ultra. [CLAIM: Google says, via its support page as reported by 9to5Google, PCMag, Engadget]"
+      ],
+      "speaker": null,
+      "why": "Google: only a support.google.com page with no images → P18 or logo"
+    },
+    {
+      "id": "C4",
+      "story": "https://www.theverge.com/ai-artificial-intelligence/1004811/openai-altman-bad-things-ai-tradeoff",
+      "request": {
+        "kind": "subject",
+        "value": "OpenAI"
+      },
+      "slot": "split",
+      "cover": true,
+      "where": "cover (company story)",
+      "slideText": [
+        "OpenAI CEO Sam Altman said in a Politico Decoded interview (published Oct 4–5, 2026) that the world should accept 'some bad things happening' for AI's benefits, calling this a key difference from Anthropic and drawing sharp criticism."
+      ],
+      "speaker": null,
+      "why": "OpenAI: no official page saved; P18 (Pioneer Building) expected first"
+    },
+    {
+      "id": "C5",
+      "story": "https://news.google.com/rss/articles/CBMi4wFBVV95cUxOTEVzRUQza2lET0xIdUNnRy04UjROMFN5OERRWVFocFNBVmlnam5TdDdubUZrSURHS2xHd2RUUDBUVEUyZEN2aFVaamxCYldLOGs4V0twbFNrZTJxRG1mYktFcHNqeDBXWnVXWHVMZHJ4MzlFbWFYajVvMFFoV211OXl5Tm9mYnhQTjdfWmlvWUdMaVhKNVFJNkYyaE5LWm1NdUpYODEwRzQzZG5MX2ZaRmxFdWs5djdFOHBwMlZVd3RMYmhRdTJyNWlxN0dGamd2UXN1a3pweDdiWFhuT0xENGxJNA?oc=5",
+      "request": {
+        "kind": "article",
+        "value": "https://i0.wp.com/9to5google.com/wp-content/uploads/sites/4/2026/10/claude-google-docs-1.jpg?w=1500&quality=82&strip=all&ssl=1"
+      },
+      "slot": "split",
+      "cover": false,
+      "where": "slide (partner-hosted page)",
+      "slideText": [
+        "On October 6, 2026, Anthropic put Claude for Google Workspace, a sidebar add-on for Google Docs, Sheets and Slides, into public beta on all paid Claude plans, and released new beta connectors for creating and editing Google files from Claude chat."
+      ],
+      "speaker": null,
+      "why": "9to5google.com contains \"google\" but is not a Google domain: never official"
+    },
+    {
+      "id": "C6",
+      "story": "https://news.google.com/rss/articles/CBMi4wFBVV95cUxOTEVzRUQza2lET0xIdUNnRy04UjROMFN5OERRWVFocFNBVmlnam5TdDdubUZrSURHS2xHd2RUUDBUVEUyZEN2aFVaamxCYldLOGs4V0twbFNrZTJxRG1mYktFcHNqeDBXWnVXWHVMZHJ4MzlFbWFYajVvMFFoV211OXl5Tm9mYnhQTjdfWmlvWUdMaVhKNVFJNkYyaE5LWm1NdUpYODEwRzQzZG5MX2ZaRmxFdWs5djdFOHBwMlZVd3RMYmhRdTJyNWlxN0dGamd2UXN1a3pweDdiWFhuT0xENGxJNA?oc=5",
+      "request": {
+        "kind": "article",
+        "value": "https://claude.com/resources/articles/claude-now-works-in-google-docs-sheets-and-slides/opengraph-image/og"
+      },
+      "slot": "split",
+      "cover": false,
+      "where": "slide (claude.com og:image only)",
+      "slideText": [
+        "On October 6, 2026, Anthropic put Claude for Google Workspace, a sidebar add-on for Google Docs, Sheets and Slides, into public beta on all paid Claude plans, and released new beta connectors for creating and editing Google files from Claude chat."
+      ],
+      "speaker": null,
+      "why": "An official page with only an og:image: allowed when approved, then the vision banner check decides"
+    }
+  ]
+}

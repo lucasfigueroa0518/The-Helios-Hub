@@ -33,6 +33,7 @@ import { findPhoto, newPhotoContext, type PhotoTrace, type StockSearch } from '@
 import { searchOpenverse, type OpenverseCandidate } from '@/lib/social/editorial/v2/image-step/openverse';
 import type { IdentityResult } from '@/lib/social/photos/identity';
 import { createVisionCheck } from '@/lib/social/photos/vision';
+import { OFFICIAL_COMPANIES } from '@/lib/social/photos/official';
 import { createRunBudget } from '@/lib/social/pipeline/live-stages';
 import { liveMessagesCreate } from '@/lib/social/reporter/reporter';
 
@@ -40,6 +41,7 @@ type BenchRequest = {
   id: string;
   story: string;
   request: { kind: 'subject' | 'article' | 'stock'; value: string };
+  why?: string;
   slot: 'split' | 'backdrop' | 'quote';
   cover: boolean;
   where: string;
@@ -53,7 +55,8 @@ const arg = (name: string) => {
 };
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const HIT_VIA = new Set(['article', 'subject', 'stock', 'bank']);
+// Hits: a photo from the request's own chain (incl. official images and logo cards); starter and text-only are misses.
+const HIT_VIA = new Set(['article', 'official', 'subject', 'logo', 'stock', 'bank']);
 
 async function tile(url: string | null, label: string[], w: number, h: number): Promise<Buffer> {
   const sharp = (await import('sharp')).default;
@@ -83,8 +86,17 @@ async function main() {
   const version = (arg('--prescreen') ?? 'v4') as 'v2' | 'v3' | 'v4';
   const capUsd = Number(arg('--cap-usd') ?? 0.05);
   const fixture = JSON.parse(await fsp.readFile('fixtures/social/photo-bench/requests.json', 'utf8'));
-  const requests: BenchRequest[] = fixture.requests;
-  const out = path.join('runs', `photo-bench-${new Date().toISOString().replace(/[:.]/g, '-')}-${version}${process.argv.includes('--vision') ? '-vision' : ''}`);
+  // Fixed company stories (image strategy (a)/(b), Tommy 2026-10-07): same stories and pages, hand-set requests.
+  const company = JSON.parse(await fsp.readFile('fixtures/social/photo-bench/company-stories.json', 'utf8'));
+  const only = arg('--only');
+  // --only: comma-separated IDs or ID prefixes ("C", "R14,R35").
+  const onlyIds = only ? only.split(',') : null;
+  const requests: BenchRequest[] = [...fixture.requests, ...company.requests].filter((r: BenchRequest) => !onlyIds || onlyIds.some((o) => (o.length > 1 && /\d/.test(o) ? r.id === o : r.id.startsWith(o))));
+  // --preview-allowlist: every allow-list row treated as approved, for THIS bench run only (to show what approval
+  // would give). The production list (official.ts) is untouched: rows stay TBD until Tommy approves them.
+  const previewAllowlist = process.argv.includes('--preview-allowlist');
+  const officialList = previewAllowlist ? OFFICIAL_COMPANIES.map((c) => ({ ...c, approved: true, editorialUse: 'permitted' as const })) : undefined;
+  const out = path.join('runs', `photo-bench-${new Date().toISOString().replace(/[:.]/g, '-')}-${version}${process.argv.includes('--vision') ? '-vision' : ''}${process.argv.includes('--preview-allowlist') ? '-PREVIEW-ALLOWLIST' : ''}${arg('--only') ? `-only-${arg('--only')}` : ''}`);
   await fsp.mkdir(out, { recursive: true });
 
   const CACHE = 'fixtures/social/photo-bench/openverse-cache.json';
@@ -107,7 +119,7 @@ async function main() {
     const ctx = newPhotoContext(story.brief, story.pages);
     ctx.identities = identities.get(r.story) ?? new Map();
     identities.set(r.story, ctx.identities);
-    const trace = await findPhoto(r.request, ctx, { jev, prescreen: version, stock, vision }, { text: r.slideText, speaker: r.speaker, slot: r.slot, cover: r.cover });
+    const trace = await findPhoto(r.request, ctx, { jev, prescreen: version, stock, vision, officialList }, { text: r.slideText, speaker: r.speaker, slot: r.slot, cover: r.cover });
     rows.push({ ...r, trace });
     console.log(`${r.id} ${r.request.kind}: ${r.request.value.slice(0, 50)} (${r.slot}${r.cover ? ', cover' : ''}) → ${trace.via}${trace.photo ? ` ${trace.photo.source}` : ''}${trace.visionUsd ? ` · vision $${trace.visionUsd.toFixed(4)}` : ''}`);
   }
@@ -123,9 +135,9 @@ async function main() {
   // Table.
   const short = (u: string) => (u.startsWith('/') ? u : u.replace(/^https?:\/\//, '').split('?')[0]!.slice(0, 70));
   const table = [
-    `# Photo-finder bench · pre-screen ${version} · ${new Date().toISOString()}`,
+    `# Photo-finder bench · pre-screen ${version} · ${new Date().toISOString()}${previewAllowlist ? ' · PREVIEW ALLOW-LIST (every row treated as approved for this run only; production rows are TBD)' : ''}`,
     '',
-    `Hit rate (a photo from the request's own chain: article, subject, stock or bank): **${hits.length}/${rows.length}** · by kind ${JSON.stringify(byKind)} · Jev $${tally.costUsd.toFixed(4)} · vision $${budget.claudeUsd().toFixed(4)} · cap $${capUsd}`,
+    `Hit rate (a photo from the request's own chain: article, official, subject, logo card, stock or bank): **${hits.length}/${rows.length}** · by kind ${JSON.stringify(byKind)} · Jev $${tally.costUsd.toFixed(4)} · vision $${budget.claudeUsd().toFixed(4)} · cap $${capUsd}`,
     '',
     '| ID | Request | Slot | Result | Source | Photo | Vision $ | Trace |',
     '|---|---|---|---|---|---|---|---|',

@@ -14,7 +14,8 @@
  * "CJ Harris Regional Hospital") identifiable signage or a specific named
  * building or institution. The candidate's title is passed as context.
  * Sixth question (Tommy, 2026-10-07, official images): mostly text or a
- * graphic banner → rejected.
+ * graphic banner → an official image is rejected. Stock ignores it (a photo
+ * of code on a screen answered "banner yes" on the bench).
  * Definitions narrowed by Tommy, 2026-10-06, after the bench (camera dials
  * failed on an unidentified maker). The first candidate passing all four wins; none passing
  * means no stock photo.
@@ -87,7 +88,7 @@ export type VisionCheck = (input: { url: string; scene: string; subjects: string
 
 /** All four must pass. */
 export function passesVision(v: VisionVerdict): boolean {
-  return v.shows_requested && v.shows_requested_confidence >= SHOWS_MIN_CONFIDENCE && !v.person_prominent && !v.landmark_visible && !v.story_logo && !v.named_institution && !v.mostly_text_banner;
+  return v.shows_requested && v.shows_requested_confidence >= SHOWS_MIN_CONFIDENCE && !v.person_prominent && !v.landmark_visible && !v.story_logo && !v.named_institution;
 }
 
 /**
