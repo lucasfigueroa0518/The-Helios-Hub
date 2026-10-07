@@ -292,7 +292,12 @@ function phrases4(text: string): string[] {
  * same number, or a phrase of four or more words, in two fields of one slide
  * (headline, body, quote, big number, its label) fails.
  */
-export function checkRepetition(d: FilledDraft): Failure[] {
+/**
+ * C8. The number check counts only values from the brief's NUMBERS entries,
+ * never digits inside names ("Mistral Large 4", "GPT-6") (Tommy, 2026-10-06).
+ */
+export function checkRepetition(d: FilledDraft, brief: Brief): Failure[] {
+  const briefNumbers = new Set(brief.numbers.flatMap((n) => numbersIn(n.value)));
   const out: Failure[] = [];
   d.slides.forEach((s, i) => {
     const fields: Array<[string, string]> = [
@@ -304,7 +309,7 @@ export function checkRepetition(d: FilledDraft): Failure[] {
     const seenNum = new Map<string, string>();
     const seenPhrase = new Map<string, string>();
     for (const [name, text] of fields) {
-      for (const n of new Set(numbersIn(text))) {
+      for (const n of new Set(numbersIn(text).filter((x) => briefNumbers.has(x)))) {
         const prev = seenNum.get(n);
         if (prev && prev !== name) out.push({ id: 'C8', where: `slide ${i + 2}`, detail: `the number ${n} is in both ${prev} and ${name}` });
         else seenNum.set(n, name);
@@ -324,7 +329,7 @@ export function checkRepetition(d: FilledDraft): Failure[] {
 
 /** C1–C5 and C8: the checks on text, run on the fixed draft. */
 export function textChecks(d: FilledDraft, brief: Brief): Failure[] {
-  return [...checkLimits(d), ...checkQuoteMarks(d, brief), ...checkVoice(d), ...checkCaption(d), ...checkBackground(d), ...checkRepetition(d)];
+  return [...checkLimits(d), ...checkQuoteMarks(d, brief), ...checkVoice(d), ...checkCaption(d), ...checkBackground(d), ...checkRepetition(d, brief)];
 }
 
 /**

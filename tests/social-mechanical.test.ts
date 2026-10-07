@@ -255,10 +255,18 @@ import { EDITOR_CHECKED_RULE, renderRulesFor as rulesFor } from '@/lib/social/pr
 
 test('C8: the same number in the headline and the big number fails (the Mistral "38" case)', () => {
   const d = draft((x) => (x.slides[3]!.headline.text = '120 days to report'));
-  const f = checkRepetition(d);
+  const f = checkRepetition(d, brief());
   assert.deepEqual(ids(f), ['C8']);
   assert.match(f[0]!.detail, /the number 120 is in both headline and number 1/);
-  assert.deepEqual(checkRepetition(draft()), [], 'the fixture headline "It has a deadline" says what the number means');
+  assert.deepEqual(checkRepetition(draft(), brief()), [], 'the fixture headline "It has a deadline" says what the number means');
+});
+
+test('C8: digits inside names are not numbers (Mistral Large 4, GPT-6); only NUMBERS values count', () => {
+  const d = draft((x) => {
+    x.slides[0]!.headline.text = 'GPT-6 meets Mistral Large 4';
+    x.slides[0]!.body!.text = 'Mistral Large 4 and GPT-6 were both named.';
+  });
+  assert.deepEqual(checkRepetition(d, brief()).filter((f) => /the number/.test(f.detail)), []);
 });
 
 test('C8: a phrase of four or more words in two fields of one slide fails; across slides is fine', () => {
@@ -266,9 +274,9 @@ test('C8: a phrase of four or more words in two fields of one slide fails; acros
     x.slides[0]!.headline.text = 'Announced on Truth Social';
     x.slides[0]!.body!.text = 'Trump announced it, announced on Truth Social this morning.';
   });
-  assert.match(checkRepetition(d).map((f) => f.detail).join(), /"announced on truth social" is in both headline and body/);
+  assert.match(checkRepetition(d, brief()).map((f) => f.detail).join(), /"announced on truth social" is in both headline and body/);
   const across = draft((x) => (x.slides[1]!.headline.text = 'Announced on Truth Social too'));
-  assert.deepEqual(checkRepetition(across), []);
+  assert.deepEqual(checkRepetition(across, brief()), []);
 });
 
 test('C8 goes back to the Editor only (once), not the Writer; after the Fact-checker it is a warning', async () => {
