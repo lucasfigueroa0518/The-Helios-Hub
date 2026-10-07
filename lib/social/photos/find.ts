@@ -249,7 +249,7 @@ async function stockPhoto(request: string, slot: PhotoSlot, ctx: PhotoContext, d
     // Vision check (Tommy, 2026-10-06): the top candidates, in order; the first passing all four wins; none passing means none.
     const subjects = ctx.brief.subjects.map((x) => x.name);
     for (const c of passing.slice(0, VISION_TOP)) {
-      const v = await deps.vision({ url: c.url, scene: request, subjects });
+      const v = await deps.vision({ url: c.url, scene: request, subjects, title: c.title ?? undefined });
       spend.visionUsd += v.costUsd;
       const label = `"${(c.title ?? '').slice(0, 50)}"`;
       if (!v.ok) {

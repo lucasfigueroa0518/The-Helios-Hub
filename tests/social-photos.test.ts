@@ -783,7 +783,7 @@ import { createVisionCheck, passesVision, SHOWS_MIN_CONFIDENCE, VISION_SYSTEM, V
 import { PHOTO_VISION_MODEL } from '@/lib/social/pipeline/models';
 import { DEFAULT_TOPIC } from '@/lib/social/photos/starter-set';
 
-const verdict = (over: Partial<VisionVerdict> = {}): VisionVerdict => ({ what_it_shows: 'x', shows_requested: true, shows_requested_confidence: 0.9, person_prominent: false, landmark_visible: false, story_logo: false, logo_seen: null, ...over });
+const verdict = (over: Partial<VisionVerdict> = {}): VisionVerdict => ({ what_it_shows: 'x', shows_requested: true, shows_requested_confidence: 0.9, person_prominent: false, landmark_visible: false, story_logo: false, logo_seen: null, named_institution: false, ...over });
 
 test('vision: all four must pass (shows it with enough confidence, no person, no landmark, no outside brand)', () => {
   assert.ok(passesVision(verdict()));
@@ -792,6 +792,7 @@ test('vision: all four must pass (shows it with enough confidence, no person, no
   assert.ok(!passesVision(verdict({ person_prominent: true })));
   assert.ok(!passesVision(verdict({ landmark_visible: true })));
   assert.ok(!passesVision(verdict({ story_logo: true, logo_seen: 'Equinix' })));
+  assert.ok(!passesVision(verdict({ named_institution: true })), 'a specific named hospital, school or company site (CJ Harris Regional Hospital)');
 });
 
 /** Stub vision: verdicts by photo title in the URL; records what it was asked. */
@@ -845,7 +846,7 @@ test('vision request: own model, cached system + forced tool, the downscaled pho
     requests.push(p);
     return { id: 'm', type: 'message', role: 'assistant', model: p.model, stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 900, output_tokens: 80, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, content: [{ type: 'tool_use', id: 't', name: 'submit_verdict', input: verdict({ what_it_shows: 'a blue field' }) }] } as any;
   };
-  const r = await createVisionCheck({ create, http })({ url: 'https://s/x.jpg', scene: 'data center racks', subjects: ['Mistral AI'] });
+  const r = await createVisionCheck({ create, http })({ url: 'https://s/x.jpg', scene: 'data center racks', subjects: ['Mistral AI'], title: 'CJ Harris Regional Hospital' });
   assert.ok(r.ok && r.pass && r.costUsd > 0);
   const q = requests[0];
   assert.equal(q.model, PHOTO_VISION_MODEL.model);
@@ -856,7 +857,7 @@ test('vision request: own model, cached system + forced tool, the downscaled pho
   assert.equal(img.type, 'image');
   const meta = await sharp(Buffer.from(img.source.data, 'base64')).metadata();
   assert.equal(Math.max(meta.width!, meta.height!), 768);
-  assert.equal(text.text, 'REQUESTED: data center racks\nSUBJECTS: Mistral AI');
+  assert.equal(text.text, 'REQUESTED: data center racks\nSUBJECTS: Mistral AI\nTITLE: CJ Harris Regional Hospital');
 });
 
 test('pre-screen v4 (default): fit and people only; a title naming a landmark or a company goes on to the vision check, which decides', async () => {
@@ -867,4 +868,24 @@ test('pre-screen v4 (default): fit and people only; a title naming a landmark or
   assert.deepEqual(asked, ['https://s/Google-data-center-at-the-Eiffel-Tower.jpg'], 'the people title is stopped by the metadata pre-screen; the landmark/brand title reaches vision');
   assert.equal(t.via, 'text-only');
   assert.ok(t.steps.some((s) => /stock-prescreen@4 .*fit 0\.90 people 0\.05 ✓/.test(s) && !/landmark|brand/.test(s)), t.steps.join(' | '));
+});
+
+test('no repeat photos within a run: a second post never gets a photo picked earlier in the same run (covers included)', async () => {
+  const { deps: d } = deps();
+  const parsed = briefWith();
+  const stage = createDesignStage({ ...d, fitCheck: async (post) => fitOkFor(post) });
+  const story = { id: 's1', title: 't', url: TC_URL, outlets: ['TechCrunch'], publishedAt: new Date('2026-10-04T12:00:00Z') } as ScoredCandidate;
+  // Covers whose own request fails both fall back to the AI-compute starter set.
+  const post = (id: string) => {
+    const submission: DraftSubmission = sifDraft();
+    submission.cover_options[0]!.image = { kind: 'article', value: 'https://example.com/not-on-any-page.jpg' };
+    submission.slides.forEach((s) => (s.image = { kind: 'none', value: '' }));
+    return { storyId: id, submission, filled: fillDraft(submission, parsed) };
+  };
+  const a = await stage(post('a'), { storyId: 'a', parsed, raw: '', pages: [] }, story);
+  const b = await stage(post('b'), { storyId: 'b', parsed, raw: '', pages: [] }, story);
+  assert.ok(a.ok && b.ok);
+  assert.equal(a.value.photos[0]!.via, 'starter');
+  assert.equal(b.value.photos[0]!.via, 'starter');
+  assert.notEqual(a.value.render.slides[0]!.photoUrl, b.value.render.slides[0]!.photoUrl, 'two covers in one run never share a photo');
 });

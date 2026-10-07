@@ -33,6 +33,8 @@ export type DesignDeps = PhotoDeps & {
 };
 
 export function createDesignStage(deps: DesignDeps): PipelineStages['design'] {
+  // Photos picked earlier in this run (Tommy, 2026-10-07: both PREVIEW covers got the same microchip).
+  const usedThisRun = new Set<string>();
   return async (draft, brief, story) => {
     const tally = createJevTally();
     const jev: JevAsk = async (req, meta) => {
@@ -41,7 +43,8 @@ export function createDesignStage(deps: DesignDeps): PipelineStages['design'] {
       return res;
     };
     const now = deps.now?.() ?? new Date();
-    const recent = deps.usedLog ? await deps.usedLog.recent(now) : new Set<string>();
+    // The used-photo check: the last 7 days (the log) plus every photo picked earlier in this run.
+    const recent = new Set([...(deps.usedLog ? await deps.usedLog.recent(now) : []), ...usedThisRun]);
     const lastUsed = deps.usedLog ? await deps.usedLog.lastUsed() : new Map<string, string>();
     const photos = await photosForDraft(draft.filled, brief.parsed, brief.pages, { ...deps, jev }, { recent, bank: deps.bank ?? [], lastUsed });
     // C6: never ship a photo without an allowed, credited licence.
@@ -87,6 +90,7 @@ export function createDesignStage(deps: DesignDeps): PipelineStages['design'] {
     if (dropped.length > 0) {
       return { ok: false, reasonCode: 'render-failed', detail: dropped.map((f) => `C7 ${f.where}: ${f.detail}`).join('; '), costUsd: tally.costUsd };
     }
+    for (const t of traces) if (t.photo) usedThisRun.add(t.photo.url);
     return {
       ok: true,
       value: {

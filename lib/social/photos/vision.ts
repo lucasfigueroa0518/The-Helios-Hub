@@ -10,8 +10,11 @@
  * pixels: shows the requested thing (yes/no + confidence), a person as a
  * main subject or a recognizable face, any recognizable landmark, a
  * prominent logo a reader would take as part of the story (outside the
- * story's SUBJECTS). Definitions narrowed by Tommy, 2026-10-06, after the
- * bench (camera dials failed on an unidentified maker). The first candidate passing all four wins; none passing
+ * story's SUBJECTS), and (Tommy, 2026-10-07, after the PREVIEW run's
+ * "CJ Harris Regional Hospital") identifiable signage or a specific named
+ * building or institution. The candidate's title is passed as context.
+ * Definitions narrowed by Tommy, 2026-10-06, after the bench (camera dials
+ * failed on an unidentified maker). The first candidate passing all four wins; none passing
  * means no stock photo.
  *
  * Model: PHOTO_VISION_MODEL (its own setting). The photo is downscaled to
@@ -38,6 +41,9 @@ export const VISION_SYSTEM = `You check one candidate stock photo for a news car
 2. Is a person a main subject of the photo, or is any face recognizable?
 3. Does it show a recognizable landmark: a famous landmark, capitol, monument or famous skyline a typical reader would recognize by sight? A named but ordinary building, facility or room is not a landmark.
 4. Is there a prominent logo a reader would take as part of the story, other than one of the SUBJECTS?
+5. Does the photo show identifiable signage or a specific named building or institution (a hospital, school, company site) a reader could take as part of the story?
+
+The photo's TITLE is given as context: it can name the place or institution shown.
 
 Call submit_verdict with your answers and one short line saying what the photo shows.`;
 
@@ -53,6 +59,7 @@ export const SUBMIT_VERDICT_TOOL = {
     person_prominent: { type: 'boolean' },
     landmark_visible: { type: 'boolean' },
     story_logo: { type: 'boolean' },
+    named_institution: { type: 'boolean', description: 'Identifiable signage or a specific named building or institution a reader could take as part of the story.' },
     logo_seen: { type: ['string', 'null'], description: 'The prominent logo seen, if any.' },
   }),
 } as unknown as Anthropic.Tool;
@@ -65,25 +72,27 @@ export type VisionVerdict = {
   landmark_visible: boolean;
   story_logo: boolean;
   logo_seen: string | null;
+  named_institution: boolean;
 };
 
 export type VisionResult = { ok: true; verdict: VisionVerdict; pass: boolean; costUsd: number } | { ok: false; error: string; costUsd: number };
 
-export type VisionCheck = (input: { url: string; scene: string; subjects: string[] }) => Promise<VisionResult>;
+/** `title`: the candidate's title, as context (it can name the institution shown). */
+export type VisionCheck = (input: { url: string; scene: string; subjects: string[]; title?: string }) => Promise<VisionResult>;
 
 /** All four must pass. */
 export function passesVision(v: VisionVerdict): boolean {
-  return v.shows_requested && v.shows_requested_confidence >= SHOWS_MIN_CONFIDENCE && !v.person_prominent && !v.landmark_visible && !v.story_logo;
+  return v.shows_requested && v.shows_requested_confidence >= SHOWS_MIN_CONFIDENCE && !v.person_prominent && !v.landmark_visible && !v.story_logo && !v.named_institution;
 }
 
 export function describeVerdict(v: VisionVerdict): string {
-  return `shows ${v.shows_requested ? 'yes' : 'no'} ${v.shows_requested_confidence.toFixed(2)} · person (main/face) ${v.person_prominent ? 'yes' : 'no'} · landmark ${v.landmark_visible ? 'yes' : 'no'} · story logo ${v.story_logo ? `yes${v.logo_seen ? ` (${v.logo_seen})` : ''}` : 'no'} · "${v.what_it_shows}"`;
+  return `shows ${v.shows_requested ? 'yes' : 'no'} ${v.shows_requested_confidence.toFixed(2)} · person (main/face) ${v.person_prominent ? 'yes' : 'no'} · landmark ${v.landmark_visible ? 'yes' : 'no'} · story logo ${v.story_logo ? `yes${v.logo_seen ? ` (${v.logo_seen})` : ''}` : 'no'} · named institution ${v.named_institution ? 'yes' : 'no'} · "${v.what_it_shows}"`;
 }
 
 function isVerdict(x: unknown): x is VisionVerdict {
   const v = x as VisionVerdict;
   return !!v && typeof v.what_it_shows === 'string' && typeof v.shows_requested === 'boolean' && typeof v.shows_requested_confidence === 'number'
-    && typeof v.person_prominent === 'boolean' && typeof v.landmark_visible === 'boolean' && typeof v.story_logo === 'boolean';
+    && typeof v.person_prominent === 'boolean' && typeof v.landmark_visible === 'boolean' && typeof v.story_logo === 'boolean' && typeof v.named_institution === 'boolean';
 }
 
 /** The photo, downscaled, as base64 JPEG. */
@@ -98,7 +107,7 @@ async function loadImage(url: string, http: typeof fetch): Promise<string> {
 export function createVisionCheck(deps: { create: MessagesCreate; http?: typeof fetch; model?: string }): VisionCheck {
   const model = deps.model ?? PHOTO_VISION_MODEL.model;
   const tools = [withToolCache(SUBMIT_VERDICT_TOOL)];
-  return async ({ url, scene, subjects }) => {
+  return async ({ url, scene, subjects, title }) => {
     let data: string;
     try {
       data = await loadImage(url, deps.http ?? fetch);
@@ -117,7 +126,7 @@ export function createVisionCheck(deps: { create: MessagesCreate; http?: typeof 
           role: 'user',
           content: [
             { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } },
-            { type: 'text', text: `REQUESTED: ${scene}\nSUBJECTS: ${subjects.length ? subjects.join('; ') : '(none)'}` },
+            { type: 'text', text: `REQUESTED: ${scene}\nSUBJECTS: ${subjects.length ? subjects.join('; ') : '(none)'}\nTITLE: ${title?.trim() || '(none)'}` },
           ],
         }],
       } as Anthropic.MessageCreateParamsNonStreaming);
