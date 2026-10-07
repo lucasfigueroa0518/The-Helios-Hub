@@ -294,7 +294,7 @@
   font-weight: 500;
   line-height: 1.25;
   color: var(--brand-orange);
-  max-height: 130px;
+  max-height: 86px; /* two lines at 34px: one short line, never a paragraph */
   margin: 0;
 }
 .helios-hook--above { margin-bottom: 12px; }

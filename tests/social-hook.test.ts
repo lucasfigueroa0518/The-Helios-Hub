@@ -98,16 +98,24 @@ test('Hook lines: rendered (lead-in above, others below), counted by C7, and fix
   }
 });
 
-test('Hook budgets: measured per slide, the longest passing probe with every shorter one passing; a failing slide gets 0', async () => {
+test('Hook budgets: measured per slide, the longest passing probe with every shorter one passing; a failing slide gets 0; nothing may shrink', async () => {
   const filled = fillDraft(sifDraft(), brief());
   // Stub render check: slide k passes while its hook is at most `room[k]` characters; slide 4 fails even with no line.
-  const room: Record<number, number> = { 2: 50, 3: 200, 4: -1, 5: 0, 6: 100, 7: 70 };
+  const room: Record<number, number> = { 2: 50, 3: 200, 4: -1, 5: 0, 6: 100, 7: 200 };
+  // Slide 7's body shrinks once the line passes 40 characters; slide 3's line itself shrinks past 70.
   const fitCheck: FitCheck = async (post) => {
     const problems = post.slides.flatMap((s, i) => ((s.hook?.text.length ?? 0) > room[i + 1]! || room[i + 1] === -1 ? [`slide ${i + 1} text fit: x`] : []));
-    return { ok: problems.length === 0, problems, violations: [], slideText: [] };
+    const sizes = post.slides.map((s, i) => {
+      const n = s.hook?.text.length ?? 0;
+      return [
+        { element: 'helios-text__body', px: i + 1 === 7 && n > 40 ? 38 : 44 },
+        ...(s.hook ? [{ element: 'helios-hook', px: i + 1 === 3 && n > 70 ? 28 : 34 }] : []),
+      ];
+    });
+    return { ok: problems.length === 0, problems, violations: [], slideText: [], sizes };
   };
   const r = await measureHookBudgets(filled, { cover: null, slides: filled.slides.map(() => null) }, { source: '', sourceUrl: '', publishedAt: '' }, fitCheck, [30, 60, 90]);
-  assert.deepEqual(r.budgets, [fillerLine(30).length, fillerLine(90).length, 0, 0, fillerLine(90).length, fillerLine(60).length]);
+  assert.deepEqual(r.budgets, [fillerLine(30).length, fillerLine(60).length, 0, 0, fillerLine(90).length, fillerLine(30).length]);
   assert.deepEqual(r.baselineFailures, [4]);
   assert.ok(fillerLine(60).length <= 60 && fillerLine(60).length > 50);
 });

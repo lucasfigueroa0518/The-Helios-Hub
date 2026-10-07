@@ -58,6 +58,8 @@ export type FitResult = {
   problems: string[];
   /** Each rendered slide's text, cover first (M7 C7). */
   slideText: string[];
+  /** Each text region's font size after fitting, per slide in order (the Hook pass budget). Absent from test stubs. */
+  sizes?: Array<Array<{ element: string; px: number }>>;
   /** Face boxes and crops per photo slide (M8b). Absent from test stubs. */
   focus?: SlideFocus[];
 };
@@ -101,6 +103,13 @@ function localFile(pathname: string): string {
   return path.join(process.cwd(), 'public', p);
 }
 
+/**
+ * Remote photos fetched once per process: repeated renders of one post (the
+ * Hook pass budget probes) would otherwise re-download each original and
+ * get throttled by Wikimedia. Only successful responses are kept.
+ */
+const remotePhotoCache = new Map<string, { body: Buffer; headers: Record<string, string> }>();
+
 export const checkRenderFit: FitCheck = async (post, opts = {}) => {
   const { chromium } = await import('playwright');
   const browser = await chromium.launch();
@@ -124,9 +133,16 @@ export const checkRenderFit: FitCheck = async (post, opts = {}) => {
     // Remote photos: add CORS so the face detector may read their pixels.
     await page.route((u) => !u.href.startsWith(ORIGIN) && !/fonts\.(googleapis|gstatic)\.com/.test(u.hostname), async (route) => {
       if (route.request().resourceType() !== 'image') return route.continue();
+      const url = route.request().url();
       try {
-        const res = await route.fetch();
-        await route.fulfill({ response: res, headers: { ...res.headers(), 'access-control-allow-origin': '*' } });
+        let hit = remotePhotoCache.get(url);
+        if (!hit) {
+          const res = await route.fetch();
+          if (!res.ok()) return route.fulfill({ response: res, headers: { ...res.headers(), 'access-control-allow-origin': '*' } });
+          hit = { body: await res.body(), headers: res.headers() };
+          remotePhotoCache.set(url, hit);
+        }
+        await route.fulfill({ status: 200, body: hit.body, headers: { ...hit.headers, 'access-control-allow-origin': '*' } });
       } catch {
         await route.abort();
       }
@@ -297,7 +313,10 @@ window.__faces = (async () => {
         }
       });
       const slideText = [...document.querySelectorAll<HTMLElement>('.fit-frame .helios-slide')].map((el) => el.textContent ?? '');
-      return { problems, violations, slideText };
+      const sizes = [...document.querySelectorAll<HTMLElement>('.fit-frame')].map((frame) =>
+        [...frame.querySelectorAll<HTMLElement>('[data-fit-min]')].map((el) => ({ element: el.className.split(' ')[0] ?? '', px: parseFloat(getComputedStyle(el).fontSize) })),
+      );
+      return { problems, violations, slideText, sizes };
     }, TOLERANCE_PX);
 
     const violations = measured.violations.filter(
@@ -307,7 +326,7 @@ window.__faces = (async () => {
 
     if (opts.screenshotDir) await screenshots(page, opts.screenshotDir, opts.name ?? 'post');
 
-    return { ok: violations.length === 0 && problems.length === 0, violations, problems, slideText: measured.slideText, focus: framing.focus };
+    return { ok: violations.length === 0 && problems.length === 0, violations, problems, slideText: measured.slideText, sizes: measured.sizes, focus: framing.focus };
   } finally {
     await browser.close();
   }
