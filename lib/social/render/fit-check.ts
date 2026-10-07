@@ -47,7 +47,8 @@ export type FitViolation = {
 export type FaceBox = { x: number; y: number; w: number; h: number; score: number };
 
 /** The crop chosen for one slide's photo: object-position fractions (SlideCopy.photoFocus). */
-export type SlideFocus = { slide: number; photo: string; faces: FaceBox[]; focus: { x: number; y: number; fit?: 'contain' } | null; kind: string };
+/** `windowW`: a narrowed photo window (px) when the crop would zoom the face past 40% of its height; `faceShare`: the face's share of the window height. */
+export type SlideFocus = { slide: number; photo: string; faces: FaceBox[]; focus: { x: number; y: number; windowW?: number; faceShare?: number } | null; kind: string };
 
 export type FitResult = {
   ok: boolean;
@@ -171,7 +172,7 @@ window.__faces = (async () => {
         im.onerror = () => res(null);
         im.src = src;
       });
-      const out: Array<{ slide: number; photo: string; faces: Box[]; focus: { x: number; y: number; fit?: 'contain' } | null; kind: string }> = [];
+      const out: Array<{ slide: number; photo: string; faces: Box[]; focus: { x: number; y: number; windowW?: number; faceShare?: number } | null; kind: string }> = [];
       // Faces only on subject and article photos (Tommy, 2026-10-06): starter and pre-screened stock
       // photos are people-free by definition, and a false detection there would only move a crop.
       for (const img of [...document.querySelectorAll<HTMLImageElement>('img.helios-photo[data-photo-kind="subject"]')]) {
@@ -194,33 +195,40 @@ window.__faces = (async () => {
         const faces = bySrc.get(src)!;
         const slide = Number(img.closest<HTMLElement>('.fit-frame')!.dataset.slide);
         const spread = /spread/.test(img.className);
-        let focus: { x: number; y: number; fit?: 'contain' } | null = null;
+        let focus: { x: number; y: number; windowW?: number; faceShare?: number } | null = null;
         const main = [...faces].sort((a, b) => b.w * b.h - a.w * a.h)[0];
         if (main && !spread && img.naturalWidth) {
-          // object-fit: cover; put the face centre at the box centre across, 40% down.
-          const W = img.clientWidth, H = img.clientHeight;
-          const s = Math.max(W / img.naturalWidth, H / img.naturalHeight);
-          const sw = img.naturalWidth * s, sh = img.naturalHeight * s;
-          const cx = main.x + main.w / 2, cy = main.y + main.h / 2;
-          // Zoom cap (Tommy, 2026-10-06): the crop must hold head and shoulders, about 2.6 face
-          // widths across and from half a face above to 1.7 faces below. If the cover crop's window
-          // can't, show the whole photo instead (object-fit: contain on the dark canvas).
-          const winW = W / sw, winH = H / sh;
-          const needW = Math.min(1, main.w * 2.6), needH = Math.min(1, main.h * 3.2);
-          if (winW + 1e-6 < needW || winH + 1e-6 < needH) {
-            focus = { x: 0.5, y: 0.5, fit: 'contain' as const };
-            img.style.objectFit = 'contain';
-            img.style.objectPosition = '50% 50%';
-          } else {
-            const bandTop = Math.max(0, main.y - main.h * 0.5);
-            const px = sw > W + 0.5 ? (W / 2 - cx * sw) / (W - sw) : 0.5;
-            // Keep the band (from half a face above the head) in frame, face about 40% down.
-            const pyFace = sh > H + 0.5 ? (H * 0.4 - cy * sh) / (H - sh) : 0.5;
-            const pyBand = sh > H + 0.5 ? (0 - bandTop * sh) / (H - sh) : 0.5;
-            const py = Math.min(pyFace, pyBand);
-            focus = { x: Math.min(1, Math.max(0, px)), y: Math.min(1, Math.max(0, py)) };
-            img.style.objectPosition = `${(focus.x * 100).toFixed(1)}% ${(focus.y * 100).toFixed(1)}%`;
+          // Face crop (Tommy, 2026-10-06): never pillarbox; always fill the window (object-fit: cover).
+          // Zoom is limited by face size: the face at most FACE_MAX of the window's height. When the
+          // cover crop would zoom past that, the photo window narrows (a smaller photo, never bands);
+          // a narrower window lowers the scale until the photo's own height sets it.
+          const FACE_MAX = 0.4;
+          const H = img.clientHeight;
+          let W = img.clientWidth;
+          const nw = img.naturalWidth, nh = img.naturalHeight;
+          const faceFrac = (w: number) => (main.h * nh * Math.max(w / nw, H / nh)) / H;
+          let windowW: number | undefined;
+          if (faceFrac(W) > FACE_MAX && !img.classList.contains('helios-quote__speaker')) {
+            const minW = (H * nw) / nh; // below this, the photo's height sets the scale
+            const capW = (FACE_MAX * H * nw) / (main.h * nh);
+            const target = Math.round(Math.max(minW, Math.min(W, capW)));
+            if (target < W - 1) {
+              windowW = target;
+              img.style.width = `${target}px`;
+              img.style.flex = 'none';
+              if (getComputedStyle(img).position === 'absolute') img.style.left = `${Math.round((W - target) / 2)}px`;
+              else img.style.alignSelf = 'center';
+              W = target;
+            }
           }
+          const s = Math.max(W / nw, H / nh);
+          const sw = nw * s, sh = nh * s;
+          const cx = main.x + main.w / 2, cy = main.y + main.h / 2;
+          // The face centred across and about 40% down (the crop as before the cap).
+          const px = sw > W + 0.5 ? (W / 2 - cx * sw) / (W - sw) : 0.5;
+          const py = sh > H + 0.5 ? (H * 0.4 - cy * sh) / (H - sh) : 0.5;
+          focus = { x: Math.min(1, Math.max(0, px)), y: Math.min(1, Math.max(0, py)), ...(windowW ? { windowW } : {}), faceShare: Number(faceFrac(W).toFixed(3)) };
+          img.style.objectPosition = `${(focus.x * 100).toFixed(1)}% ${(focus.y * 100).toFixed(1)}%`;
         }
         out.push({ slide, photo: src, faces, focus, kind: img.dataset.photoKind ?? 'scene' });
       }

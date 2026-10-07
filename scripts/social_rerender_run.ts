@@ -49,7 +49,7 @@ async function main() {
     console.log(`  story slides with a photo: ${story.filter(Boolean).length} of ${story.length}`);
     console.log(`  mechanical: ${mech.ok ? `pass · warnings ${JSON.stringify(mech.value.mechanical!.warnings.map((w) => `${w.id} ${w.where}: ${w.detail}`))}` : `SET ASIDE ${mech.reasonCode}: ${mech.detail}`}`);
     console.log(`  render check: ${fit.ok ? 'PASS' : `FAILED ${JSON.stringify([...fit.problems, ...fit.violations.map((v) => v.element)])}`} · C7: ${c7.length ? 'FAILED' : 'PASS'}`);
-    for (const f of fit.focus ?? []) if (f.faces.length) console.log(`  slide ${f.slide}: ${f.faces.length} face(s) → ${f.focus?.fit === 'contain' ? 'zoom capped: whole photo' : `crop ${Math.round((f.focus?.x ?? 0.5) * 100)}% ${Math.round((f.focus?.y ?? 0.5) * 100)}%`}`);
+    for (const f of fit.focus ?? []) if (f.faces.length) console.log(`  slide ${f.slide}: ${f.faces.length} face(s) → crop ${Math.round((f.focus?.x ?? 0.5) * 100)}% ${Math.round((f.focus?.y ?? 0.5) * 100)}%, face ${Math.round((f.focus?.faceShare ?? 0) * 100)}% of the window height${f.focus?.windowW ? `, window narrowed to ${f.focus.windowW}px` : ''}`);
   }
   console.log(`\nScreenshots: ${out}`);
 }

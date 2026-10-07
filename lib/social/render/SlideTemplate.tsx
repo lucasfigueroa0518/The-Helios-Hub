@@ -138,12 +138,17 @@ function Fit({ as: Tag = 'div', className, min, children }: { as?: 'div' | 'h1' 
 function focusStyle(slide: SlideCopy): CSSProperties | undefined {
   const f = slide.photoFocus;
   if (!f) return undefined;
-  return f.fit === 'contain' ? { objectFit: 'contain', objectPosition: '50% 50%' } : { objectPosition: `${Math.round(f.x * 100)}% ${Math.round(f.y * 100)}%` };
+  const pos: CSSProperties = { objectPosition: `${Math.round(f.x * 100)}% ${Math.round(f.y * 100)}%` };
+  // A narrowed window (face-size zoom limit): a smaller photo, centred, never bands.
+  return f.windowW ? { ...pos, width: `${f.windowW}px`, flex: 'none', alignSelf: 'center' } : pos;
 }
 
 /** A photo in its own region (rule 3: the only place a subject photo goes). */
 function RegionPhoto({ slide, className }: { slide: SlideCopy; className: string }) {
-  return <img className={`helios-photo ${className}`} src={slide.photoUrl} alt="" aria-hidden="true" data-photo-kind={slide.photoKind ?? 'scene'} style={focusStyle(slide)} />;
+  const style = focusStyle(slide);
+  // The cover photo is absolutely positioned: centre a narrowed window by its left edge.
+  const cover = className === 'helios-cover__photo' && slide.photoFocus?.windowW ? { left: `${Math.round((1080 - slide.photoFocus.windowW) / 2)}px` } : undefined;
+  return <img className={`helios-photo ${className}`} src={slide.photoUrl} alt="" aria-hidden="true" data-photo-kind={slide.photoKind ?? 'scene'} style={{ ...style, ...cover }} />;
 }
 
 /** A full-bleed scene photo under a gradient-scrimmed text block (rules 2 + 3). */
