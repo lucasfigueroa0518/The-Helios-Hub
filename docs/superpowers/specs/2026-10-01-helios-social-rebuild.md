@@ -268,7 +268,7 @@ This is the only description of the photo system. Code comments, STATUS and the 
 
 **Rules everywhere:**
 
-- **No repeats:** never twice in a post or within 7 days, for every source. Enforced in code with the used-photo log (`used-photos.ts`) plus the photos picked earlier in the same run.
+- **No repeats:** never twice in a post or within 7 days, for every source. Enforced in code with the used-photo log (`used-photos.ts`) plus the photos picked earlier in the same run. **Exception (Tommy, 2026-10-07): logo cards are exempt from the 7-day rule across posts**, but the same logo never appears twice in one post.
 - **Identity comes from records** (Wikidata, the credited article caption), never from a model looking at a face.
 - **No usable photo means a designed slide** (text-only, or plain dark for stats). It's a normal outcome. No further source is added for it.
 - **No AI-generated imagery that looks real.** Photos are never edited.

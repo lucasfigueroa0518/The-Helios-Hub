@@ -27,6 +27,7 @@
  *
  * No repeats: never twice in a post or within 7 days, every source (the
  * post's used set + `recent`, the used-photo log and earlier posts in the run).
+ * Exception: a logo card may repeat across posts; never twice in one post.
  */
 import { buildCredit } from '@/lib/social/editorial/v2/image-step/commons';
 import { buildStockCredit, searchOpenverse, type OpenverseCandidate } from '@/lib/social/editorial/v2/image-step/openverse';
@@ -205,8 +206,9 @@ async function logoCard(name: string, ctx: PhotoContext, deps: PhotoDeps, steps:
     steps.push(`logo card: ${r.reason}`);
     return null;
   }
-  if (taken(ctx, r.photo.url)) {
-    steps.push('logo card: this logo was used in this post or in the last 7 days');
+  // Logos are exempt from the 7-day rule across posts (Tommy, 2026-10-07); never the same logo twice in one post.
+  if (ctx.used.has(r.photo.url)) {
+    steps.push('logo card: this logo is already used in this post');
     return null;
   }
   steps.push(`logo card: ${id.qid} File:${r.file} (${r.photo.plate} plate)`);

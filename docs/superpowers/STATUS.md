@@ -1,11 +1,11 @@
 # Helios Social rebuild: STATUS
 
-**Updated:** 2026-10-07, after the photo fix (`docs/superpowers/photo-fix-2026-10-07.md`).
+**Updated:** 2026-10-07, after the logo-card exemption from the 7-day rule.
 Claude keeps this page current after every step.
 
 - **Authorities:** the spec (`specs/2026-10-01-helios-social-rebuild.md`), the plan (`plans/2026-10-04-helios-social-rebuild.md`, M8 link map and exit criteria) and the prompts file (`specs/2026-10-04-helios-social-prompts.md`).
 - **The photo system:** spec §5.1 **Photo chain v1** is its only description. The table below is a copy of it.
-- **Tests:** 198 social tests pass, offline. The full suite is 1165/1166; the one failure is the known reels-visual venv test, which is outside Social.
+- **Tests:** 199 social tests pass, offline. The full suite is 1165/1166; the one failure is the known reels-visual venv test, which is outside Social.
 - **Sign-off:** Tommy alone signs off on everything (Lucas is out of the workflow, 2026-10-07).
 
 ## Photo chain v1 (spec §5.1)
@@ -19,7 +19,8 @@ Claude keeps this page current after every step.
 
 **The pieces:**
 - **Stock:** Openverse → Jev pre-screen v4 (fit, people) → the vision check on the top 3. A candidate passes only if it shows the thing, with no main-subject person or face, no landmark, no outside logo and no named institution.
-- **No repeats:** never twice in a post, within 7 days, or earlier in the same run, for every source.
+- **No repeats:** never twice in a post, within 7 days, or earlier in the same run, for every source. **Exception:** a logo card may repeat across posts, but never twice in one post.
+- **Company covers:** a usable article photo (when it's the cover's request) still comes before the logo card.
 - **The Writer and the finder agree:** `photo_available` is exactly "P18 usable", from one shared check (`lib/social/photos/p18.ts`).
 - **Fully automatic.** Only sources with no rights questions. When nothing is found, the slide is a designed slide.
 

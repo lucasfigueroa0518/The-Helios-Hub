@@ -103,13 +103,19 @@ test('cover order: logo card before stock; nothing → the AI-compute starter, o
   const l = await findPhoto({ kind: 'stock', value: 'office laptop' }, c1, { jev: noJev, http: await fakeLogoWeb(), stock }, cover('Acme ships a new model'));
   assert.equal(l.via, 'logo');
   assert.deepEqual(stockCalls, [], 'stock is not reached');
-  // The logo used in the last 7 days → stock (nothing) → starter, or the cover card when approved.
-  const c2 = newPhotoContext(b, [], { recent: new Set(['https://upload.wikimedia.org/thumb/acme-logo.png']) });
+  // Logos are exempt from the 7-day rule across posts: used last week (or earlier in this run) → still the logo card.
+  const week = newPhotoContext(b, [], { recent: new Set(['https://upload.wikimedia.org/thumb/acme-logo.png']) });
+  week.identities = new Map([verified('Acme', 'Q1', 'organization')]);
+  assert.equal((await findPhoto({ kind: 'stock', value: 'office laptop' }, week, { jev: noJev, http: await fakeLogoWeb(), stock }, cover('Acme ships a new model'))).via, 'logo');
+  // The logo already used in THIS post → stock (nothing) → starter, or the cover card when approved.
+  const c2 = newPhotoContext(b, []);
+  c2.used.add('https://upload.wikimedia.org/thumb/acme-logo.png');
   c2.identities = new Map([verified('Acme', 'Q1', 'organization')]);
   const s = await findPhoto({ kind: 'stock', value: 'office laptop' }, c2, { jev: noJev, http: await fakeLogoWeb(), stock }, cover('Acme ships a new model'));
   assert.equal(s.via, 'starter');
   assert.ok(isAiComputeStarter(s.photo!.url));
-  const c3 = newPhotoContext(b, [], { recent: new Set(['https://upload.wikimedia.org/thumb/acme-logo.png']) });
+  const c3 = newPhotoContext(b, []);
+  c3.used.add('https://upload.wikimedia.org/thumb/acme-logo.png');
   c3.identities = new Map([verified('Acme', 'Q1', 'organization')]);
   const card = await findPhoto({ kind: 'stock', value: 'office laptop' }, c3, { jev: noJev, http: await fakeLogoWeb(), stock, designed: { statBackgrounds: false, coverCard: true } }, cover('Acme ships a new model'));
   assert.equal(card.via, 'cover-card');
@@ -140,4 +146,13 @@ test('render: a logo card (Helios canvas, no pattern; plate; wide logos sized by
   assert.match(cardHtml, /helios-cover-card__mark" src="\/social\/helios-mark\.png"/);
   const css = (await import('node:fs')).readFileSync('app/social/render/preview/preview.css', 'utf8');
   assert.ok(!/\.helios-cover--logo \{[^}]*linear-gradient/.test(css), 'no pattern behind the logo card (Helios design system)');
+});
+
+test('company cover: a usable article photo (the cover request) comes before the logo card', async () => {
+  const b = briefWith({ name: 'Acme', role: 'company' });
+  const page = { ok: true as const, url: 'https://news.example/a', resolvedUrl: 'https://news.example/a', title: null, byline: null, publishedTime: null, text: 'x', truncated: false, photos: [{ src: 'https://news.example/acme-launch.jpg', caption: 'The launch. (Courtesy of Acme)', credit: null, alt: null, from: 'figure' as const }] };
+  const c = newPhotoContext(b, [page]);
+  c.identities = new Map([verified('Acme', 'Q1', 'organization')]);
+  const t = await findPhoto({ kind: 'article', value: 'https://news.example/acme-launch.jpg' }, c, { jev: noJev, http: await fakeLogoWeb() }, cover('Acme ships a new model'));
+  assert.equal(t.via, 'article');
 });
