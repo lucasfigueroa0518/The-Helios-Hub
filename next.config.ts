@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: [
     'tesseract.js',
     '@tesseract.js-data/eng',
+    '@electric-sql/pglite',
   ],
   webpack: (config) => {
     config.resolve.alias = {

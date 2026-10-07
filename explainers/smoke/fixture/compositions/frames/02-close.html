@@ -1,0 +1,30 @@
+<template>
+  <div id="root" data-composition-id="02-close" data-width="1080" data-height="1920" data-start="0" data-duration="3">
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      /* FONT_FACES */
+      #root { position: absolute; inset: 0; container-type: size; }
+      .c02-ground { position: absolute; inset: 0; background: #FFFFFF; }
+      .c02-thesis { position: absolute; left: 8cqw; right: 8cqw; top: 24cqh; font-family: "Pragmatica Extended"; font-weight: 700; font-size: 8.1cqw; line-height: 1.0; letter-spacing: -0.02em; color: #171717; text-align: center; }
+      .c02-thesis .c02-focal { color: #FF5E1A; }
+      .c02-logo { position: absolute; left: 50%; top: 40cqh; width: 48cqw; margin-left: -24cqw; }
+      .c02-logo img { display: block; width: 100%; height: auto; }
+      .c02-url { position: absolute; left: 0; right: 0; top: 75cqh; text-align: center; font-family: "Roboto"; font-weight: 500; font-size: 2.2cqw; letter-spacing: 0.12em; text-transform: uppercase; color: #737373; }
+    </style>
+    <div id="c02-ground" class="c02-ground clip" data-start="0" data-duration="3" data-track-index="0"></div>
+    <div class="c02-thesis" id="c02-thesis">One preset. <span class="c02-focal">Every</span> reel.</div>
+    <div class="c02-logo" id="c02-logo"><img src="assets/Helios-logo.png" alt="Helios" /></div>
+    <div class="c02-url" id="c02-url">heliosmarketing.org</div>
+    <script>
+      (function () {
+        var tl = gsap.timeline({ paused: true });
+        var ease = "expo.out";
+        tl.fromTo("#c02-thesis", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: ease }, 0.1);
+        tl.fromTo("#c02-logo", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: ease }, 0.9);
+        tl.fromTo("#c02-url", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: ease }, 1.2);
+        window.__timelines = window.__timelines || {};
+        window.__timelines["02-close"] = tl;
+      })();
+    </script>
+  </div>
+</template>

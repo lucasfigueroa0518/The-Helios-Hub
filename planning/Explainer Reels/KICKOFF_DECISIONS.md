@@ -1,6 +1,6 @@
 # Explainer Reels: kickoff decisions (E-14 to E-22)
 
-Lucas's kickoff packet, received 2026-10-07, answering `BUILD_PLAN.md` Section 3. The packet text below is kept verbatim. Lucas answered seven follow-up questions the same day; those answers are the **Amendments** block, and where an amendment and the packet disagree, **the amendment wins**. The summary of the final decisions is in `BUILD_PLAN.md` Section 1.
+Lucas's kickoff packet, received 2026-10-07, answering `BUILD_PLAN.md` Section 3. The packet text below is kept verbatim. Lucas answered nine follow-up questions the same day; those answers are the **Amendments** block, and where an amendment and the packet disagree, **the amendment wins**. The summary of the final decisions is in `BUILD_PLAN.md` Section 1.
 
 ## Amendments (Lucas, 2026-10-07; override the packet)
 
@@ -13,6 +13,8 @@ Lucas's kickoff packet, received 2026-10-07, answering `BUILD_PLAN.md` Section 3
 | A-5 | E-16 promotion, E-05 | **No promotion while `auto_render` is off.** The daily idea cycle still generates, scores, dedupes, and trims the pool to 25. Lucas clicks **Generate** on any pool candidate (shown ranked); that candidate leaves the pool. When `auto_render` is on, the daily cycle promotes the single highest-ranked candidate and renders it, up to `production_daily_render_cap`. |
 | A-6 | E-21 | Provisional systemd limits come from the M4 zero-cost fixture render (Chrome + FFmpeg only). Final `MemoryMax`, `MemoryHigh`, `Nice`, and the dedicated-VM decision are set by the engineering agent after Lucas's first live run (M7), when Agent SDK session memory is known. |
 | A-7 | E-16, A-5 | **The daily idea cycle runs only while `auto_render` is on.** With it off, nothing is generated, scored, or deduped, and the pool stays as it is; Lucas seeds topics by hand and clicks Generate on any pool candidate. Hand-added topics are still scored and deduped when added (that spend is Lucas's own click). |
+| A-8 | E-15 gates and weighted score | **Raw Jev scores, never rounded.** Jev returns an expected score (e.g. 2.7). The weighted score, ranking, and tie-breaks use it as returned. A gate rejects when the raw score is below the E-15 minimum: audience_fit < 1, teachability_45s < 2, analogy_potential < 1, visual_potential < 1, accuracy_under_simplification < 2. |
+| A-9 | E-15 candidate schema, A-7 | **Every scope is model-written alongside its title.** The daily generator writes title and scope in one call. Titles Lucas enters by hand get their scopes from one Sonnet call per click, all titles together, before Jev scores them. Lucas never types a scope. |
 
 ---
 

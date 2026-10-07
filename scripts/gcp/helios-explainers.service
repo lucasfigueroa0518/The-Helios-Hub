@@ -1,0 +1,28 @@
+[Unit]
+Description=Helios Explainer Reels worker (one render at a time)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Its own directory: deploy-worker-code.sh owns /opt/helios-worker/app, this unit never reads it.
+WorkingDirectory=/opt/helios-explainers/app
+EnvironmentFile=/opt/helios-explainers/worker.env
+ExecStart=/usr/bin/npm run explainers:worker
+Restart=always
+RestartSec=15
+KillSignal=SIGTERM
+# A render in flight is failed on restart and retried by Lucas's click; give it time to wind down.
+TimeoutStopSec=120
+# PROVISIONAL (E-21, A-6). Not measured on the VM yet. The M4 fixture render on a Mac
+# peaked near 1 GB for the CLI process alone, before Chrome workers and the Claude Code
+# agent processes. Replace all three values from the E-21 protocol after the first live
+# run; if the measured peak plus the other workers leaves no headroom on 8 GB, the answer
+# is a dedicated VM, not a tighter limit.
+MemoryHigh=2000M
+MemoryMax=2500M
+# Above helios-worker (5) and level with helios-reels (10): renders yield to outreach.
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

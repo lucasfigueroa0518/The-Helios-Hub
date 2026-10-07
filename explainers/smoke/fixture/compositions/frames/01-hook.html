@@ -1,0 +1,36 @@
+<template>
+  <div id="root" data-composition-id="01-hook" data-width="1080" data-height="1920" data-start="0" data-duration="3">
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      /* FONT_FACES */
+      #root { position: absolute; inset: 0; container-type: size; }
+      .h01-ground { position: absolute; inset: 0; background: #FFFFFF; }
+      .h01-stack { position: absolute; left: 8cqw; right: 8cqw; top: 22cqh; display: flex; flex-direction: column; gap: 4.5cqw; }
+      .h01-eyebrow { font-family: "Roboto"; font-weight: 700; font-size: 2.8cqw; letter-spacing: 0.18em; text-transform: uppercase; color: #138510; }
+      .h01-title { font-family: "Pragmatica Extended"; font-weight: 700; font-size: 10.4cqw; line-height: 0.95; letter-spacing: -0.03em; text-transform: uppercase; color: #171717; }
+      .h01-title .h01-focal { color: #FF5E1A; }
+      .h01-body { font-family: "Roboto"; font-weight: 300; font-size: 4.1cqw; line-height: 1.35; color: #525252; }
+      .h01-node { position: absolute; left: 50%; top: 52cqh; width: 26cqw; height: 26cqw; margin-left: -13cqw; border: 0.37cqw solid #171717; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #171717; }
+      .h01-node svg { width: 45%; height: 45%; }
+    </style>
+    <div id="h01-ground" class="h01-ground clip" data-start="0" data-duration="3" data-track-index="0"></div>
+    <div class="h01-stack">
+      <div class="h01-eyebrow" id="h01-eyebrow">Fixture</div>
+      <div class="h01-title" id="h01-title">Smoke <span class="h01-focal">Test</span></div>
+      <div class="h01-body" id="h01-body">Pragmatica Bold, Roboto Light</div>
+    </div>
+    <div class="h01-node" id="h01-node"><!-- ICON:database --></div>
+    <script>
+      (function () {
+        var tl = gsap.timeline({ paused: true });
+        var ease = "expo.out";
+        tl.fromTo("#h01-eyebrow", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: ease }, 0.05);
+        tl.fromTo("#h01-title", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: ease }, 0.11);
+        tl.fromTo("#h01-body", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: ease }, 0.9);
+        tl.fromTo("#h01-node", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: ease }, 1.6);
+        window.__timelines = window.__timelines || {};
+        window.__timelines["01-hook"] = tl;
+      })();
+    </script>
+  </div>
+</template>

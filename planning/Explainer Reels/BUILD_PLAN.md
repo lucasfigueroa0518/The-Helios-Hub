@@ -9,9 +9,9 @@ This file is the spec for the implementing agent (Opus 5.5). It follows the conv
 | Field | Value |
 |---|---|
 | Active build | Explainer Reels, version one |
-| Stage | M0 done. Decisions E-01 to E-22 logged (Section 1). Kickoff packet and amendments in `KICKOFF_DECISIONS.md`. |
+| Stage | M1–M6 done (M5's VM install deferred by the local-only rule). Everything local: no Supabase schema, no commits, no VM deploy (Lucas, 2026-10-07). |
 | Branch | `explainer-reels`, cut from `main` (E-03) |
-| Next action | M1 (schema, repository, settings) |
+| Next action | M7 retry: Lucas clicks Generate again. The first three clicks failed at collect (no MP4). Sandbox listen and the worker render fallback are fixed; restart `npm run explainers:worker` so it loads them. |
 | Last updated | 2026-10-07 |
 
 ## 0. Rules that override everything here
@@ -77,7 +77,7 @@ No Agent SDK, HyperFrames, HeyGen, or headless Chrome exists in the repo today. 
 
 ## 3. Kickoff decisions (resolved 2026-10-07)
 
-All nine items are answered: E-14 to E-22 in Section 1, with the full packet, artifacts (theme brief, Jev question set, voice script, measurement protocols), and Lucas's amendments A-1 to A-7 in `KICKOFF_DECISIONS.md`. Amendments override the packet. Still open by design: HeyGen `voice_id` (lookup), real per-reel cost (M7), systemd values (M4 provisional, M7 final), Supabase limit and target bitrate (inspect + measure).
+All nine items are answered: E-14 to E-22 in Section 1, with the full packet, artifacts (theme brief, Jev question set, voice script, measurement protocols), and Lucas's amendments A-1 to A-9 in `KICKOFF_DECISIONS.md`. Amendments override the packet. Still open by design: HeyGen `voice_id` (lookup), real per-reel cost (M7), systemd values (M4 provisional, M7 final), Supabase limit and target bitrate (inspect + measure).
 
 ## 4. Architecture
 
@@ -161,7 +161,7 @@ Verify that the faceless-explainer skill actually stops after Step 3 when the di
 | 4 | 21 to 29s | One tiny worked example with real numbers | `social_proof` | worked example |
 | 5 | 29 to 35s | The technical catch | `benefit_highlight` | common belief vs reality |
 | 6 | 35 to 41s | Where you meet it in the real world | `social_proof` | demonstration |
-| 7 | 41 to 45s | One-line thesis, callback to the hook, Helios close | `branding` | callback and distillation |
+| 7 | 41 to 45s | White screen, only the Helios logo. The spoken line is the thesis and does not say Helios. (Lucas, after the first rendered reel.) | `branding` | callback and distillation |
 
 This sits inside HyperFrames' own story rules (one structure per video, hook in outcome language, value claim by beat 2, storyboard as a proposal, visuals trace to the source). It adds a fixed order and does not contradict them. Voiceover is 6 to 20 words per frame as phrase cues. Use 2 to 3 transition types, with frame 1 a `cut`.
 
@@ -214,13 +214,56 @@ Build in order. Each ends with a report to Lucas.
 | M | Scope | Accept |
 |---|---|---|
 | M0 | Read docs, create branch `explainer-reels` from `main`, interview Lucas on Section 3, log E-14 onward, write the decision log into this file | Every blocking Section 3 item answered and logged. **Done 2026-10-07.** |
-| M1 | Schema, apply script, `npm run db:explainers`, repository layer, settings | Schema applies on a scratch database. Repository tests pass offline |
+| M1 | Schema, apply script, `npm run db:explainers`, repository layer, settings | Schema applies on a scratch database. Repository tests pass offline. **Done 2026-10-07** (see M1 notes) |
 | M2 | Nav item, layout, three tabs against the DB. Tiny dev fixture of 1 to 2 rows | Pages render with fixture data. Auth blocks unauthenticated requests |
 | M3 | Topic intake, seeding, idea generator (cached prompt), Jev scoring (question set approved by Lucas), promotion rule | Pure and SQL tests pass with stubbed model and Jev. No live call made |
-| M4 | Vendored skills at the pinned commit, Helios preset, recipe, director skill, lint script with fixtures | **Zero-cost smoke test:** a hand-authored 2-frame fixture project (no LLM, silent audio) runs `build-frame` with the preset, then `lint`, `check`, `snapshot`, `render` locally. The MP4 shows Pragmatica loaded and Helios colors. Lint script tests pass |
-| M5 | Worker, workspace management, source fetch, Agent SDK runner (two sessions and checkpoint), scrubbed env, tool restrictions, spend meter, uploads, systemd unit and deploy script | Tests pass with a stubbed SDK emitting canned messages, including a spend-cap abort. Unit installs on the VM and the deploy script leaves `/opt/helios-worker/app` untouched |
-| M6 | Review drawer, signed video route, feedback save | Feedback rows persist with tags. A fixture reel plays |
+| M4 | Vendored skills at the pinned commit, Helios preset, recipe, director skill, lint script with fixtures | **Zero-cost smoke test:** a hand-authored 2-frame fixture project (no LLM, silent audio) runs `build-frame` with the preset, then `lint`, `check`, `snapshot`, `render` locally. The MP4 shows Pragmatica loaded and Helios colors. Lint script tests pass. **Done 2026-10-07** (see M4 notes) |
+| M5 | Worker, workspace management, source fetch, Agent SDK runner (two sessions and checkpoint), scrubbed env, tool restrictions, spend meter, uploads, systemd unit and deploy script | Tests pass with a stubbed SDK emitting canned messages, including a spend-cap abort. Unit installs on the VM and the deploy script leaves `/opt/helios-worker/app` untouched. **Done 2026-10-07, VM install deferred** (see M5 notes) |
+| M6 | Review drawer, signed video route, feedback save | Feedback rows persist with tags. A fixture reel plays. **Done 2026-10-07**: drawer (Outputs, Review, Plan, Inputs, Run) on the Reels tab; files served from local storage by an authenticated route with byte ranges (no signed URLs until E-22 picks the bucket); fixture job carries the M4 smoke MP4 |
 | M7 | **Lucas runs the first live reel** (Generate click). The agent reports telemetry only | Report: spend by stage and vendor, wall time, peak memory, lint violations, errors, denied tool calls. No quality grading |
+
+**M1 notes (2026-10-07).**
+- Scratch database is PGlite (`@electric-sql/pglite`, Postgres 18 in WASM, dev dependency). `tests/explainers-pglite.ts` loads the real `db/explainers_schema.sql`, so `npm test` runs the repository SQL offline with no Supabase connection.
+- The repository takes an `ExplainersDb` (`lib/explainers/db.ts`): `liveExplainersDb` wraps the shared pg pool, tests pass PGlite.
+- Schema choices not spelled out above: `topics.scope` is nullable (hand-seeded titles get a scope at scoring, M3). `feedback` is one row per job and saving again replaces it. `idea_cycles` allows one running/ok cycle per Eastern day. The theme brief lives in `theme_briefs` (v1 seeded verbatim from E-14, test-enforced), selected by the `theme_brief_version` setting. Production daily caps count jobs and spend by Eastern calendar day. A failed job leaves its topic `queued` so Generate can retry it.
+- `cost_events` is `explainers.cost_events`, separate from `reels.cost_events`. Whether `RecordingJevRunner` also writes Reels cost rows is checked in M3.
+
+**Local-only rule (Lucas, 2026-10-07).** Until a run validates the product: the `explainers` schema lives in a local PGlite database (`.explainers-local/pgdata`, gitignored; `lib/explainers/connection.ts`), never Supabase, and nothing is committed. `EXPLAINERS_DB=supabase` exists but stays off. `npm run explainers:fixture` seeds two topics and one finished job (stop the dev server first; one process owns the data directory).
+
+**M2 notes (2026-10-07).** Nav item `Explainers` (Beta), `/explainers` pages and `/api/explainers` protected (pages redirect, API 401; verified with curl). Tabs: Topics, Reels (job list; the review drawer is M6), Settings (validated PATCH; confirmation before auto-render on or production mode). Pages reuse the Trial Reels hub tokens (`reels.css`) plus `explainers.css`.
+
+**M3 notes (2026-10-07).**
+- Jev returns an expected score (e.g. 2.7), not a whole level. Everything uses it raw (A-8): weighted score, ranking, and the gates, which reject below the E-15 `*_min` values (`SCORE_MIN` in `lib/explainers/scoring.ts`).
+- Each E-15 question gets only its listed state fields. Questions with identical state share a call: three Jev calls per topic. Source text goes under an untrusted key.
+- Explainers has its own Jev runner (`lib/explainers/jev/runner.ts`): logs to `explainers.jev_logs`, costs to `explainers.cost_events`. The Reels runner would have written to `reels.jev_logs` and `reels.cost_events` in Supabase and counted toward the Reels watch.
+- Dedupe follows A-3. The three new ideas are evaluated one at a time, so a later idea is checked against an earlier one that entered the pool; this covers "dedupe among the 3" without a separate pair call. A noul of 0.5 or more counts as duplicate.
+- Hand-added topics are scored on add (A-7). Lucas enters titles only; one Sonnet call per click writes every scope (A-9, `writeScopes`, cached system prefix), then Jev scores each. Paste lists are one title per line, at most 25 per request.
+- R6: the idea-generator prompt (`idea-generator-v1`) and the Stage 2 pairwise wording (`explainers-duplicate-pairs-v1`) were approved by Lucas on 2026-10-07. The scope-writer prompt (`scope-writer-v1`) was approved after its first live run. Both calls use structured outputs (`output_config.format`), because Sonnet 5.5 rejects forced `tool_choice` with a 400. The E-15 scoring set and Stage 1 gate are verbatim and test-enforced.
+- The daily cycle (`runIdeaCycle`) exists and is tested with stubs; nothing schedules it until the worker (M5), and it does nothing while `auto_render` is off.
+
+**M4 notes (2026-10-07).**
+- **Skills:** `explainers/hyperframes-skills/` holds the eight skills from `heygen-com/hyperframes` at commit `5c7f631` (v0.8.140), unchanged, with `LICENSE` (Apache 2.0), `CREDITS.md`, and `VENDORED.md`. Only one upstream test file references a skill outside the eight.
+- **CLI:** `hyperframes@0.8.140` is pinned in `explainers/runtime/package.json`, installed only where renders run, never in the Vercel app. Every call sets `HYPERFRAMES_SKIP_SKILLS=1` (init never syncs skills), `HYPERFRAMES_NO_TELEMETRY=1`, `DO_NOT_TRACK=1`, `HYPERFRAMES_NO_UPDATE_CHECK=1`. Update checks only print notices; they never install. Verified `init` left `~/.claude/skills` and `~/.agents/skills` untouched.
+- **Preset location:** `--preset-dir` takes a folder of presets, so the preset is `explainers/frame-presets/helios/` (not `explainers/helios-preset/`).
+- **Fonts:** `build-frame.mjs` does not stage fonts from `--preset-dir`, and its remix gives display and body to the first brand font in `tokens.json`, which would collapse Pragmatica + Roboto into one face. So `tokens.json` lists no colors and no fonts (preset kept as authored), the worker copies `explainers/design/fonts/` into `assets/fonts/`, and the preset's FRAME.md carries a fixed `@font-face` block. Roboto 300/400/500/700 woff2 come from `@fontsource/roboto` 5.3.0 (OFL 1.1). Fonts must ship as files: the render machine is a clean headless Chrome.
+- **Icons:** 62 Lucide 0.487.0 icons (ISC) in `explainers/frame-presets/helios/icons/`, copied into `assets/icons/`; the plan said about 40. The extras are everyday objects for analogies (receipt, cart, utensils, truck, store) and system parts.
+- **Recipe:** `explainers/recipe/` in the `recipe-store.mjs` format (`recipe.json`, `frame.md` = the preset's FRAME.md, `storyboard-skeleton.md` with the seven beats, `brief-skeleton.md`). M5 copies it to the job's `.media/recipes/helios-explainer/` and points `HYPERFRAMES_MEDIA_HOME` at the job directory so `~/.media` is never touched.
+- **Upstream gates:** HyperFrames gates every render on a human ("render now, or what changes?"), even in autonomous mode. The director overrides it: Lucas's Generate click is the render approval. The storyboard field the plan calls "clarity technique" is named `persuasion` upstream.
+- **Lint:** `explainers/lint/lint-storyboard.mjs` (uses the vendored storyboard parser). At the checkpoint it reads `STORYBOARD.md` + `SCRIPT.md`; after the build, `--frames-dir` adds the on-screen checks (exclamation marks, emoji, narration repeated on screen). Output matches `explainers.lint_violations`.
+- **Smoke test:** `node explainers/smoke/run-smoke.mjs` runs init → build-frame → assemble → transitions → lint → check → snapshot → render on a two-frame fixture. On Lucas's Mac (M5 Pro): lint and check pass with 0 warnings, the 6s 1080×1920 H.264 renders in 5.8s, and `/usr/bin/time` reports 983 MB max RSS for the CLI process (not the Chrome children; E-21 needs the cgroup measurement on the VM). The fixture is mostly white and static (0.61 Mbps), so it says nothing about E-22's real file size. Renders accept `--workers` (each a ~256 MB Chrome) and `--video-bitrate`; the director renders with `--workers 1`.
+- **Schema:** jobs, artifacts, and lint violations gained a `seq` identity column for stable ordering (timestamps can tie, ids are random), with idempotent `ADD COLUMN IF NOT EXISTS` upgrades so existing local databases keep their rows.
+- **Not ours:** `tests/seo-gsc-auth.test.ts` has 5 TypeScript errors on `main` too (hidden by the incremental cache).
+
+**M5 notes (2026-10-07).**
+- **Local-only consequences.** The first run happens on Lucas's Mac, not the VM. The unit (`scripts/gcp/helios-explainers.service`) and deploy script (`scripts/gcp/deploy-explainers-worker.sh`) are written and tested statically (never writes `/opt/helios-worker`), but not run. Storage is a local folder (`.explainers-local/storage`, `lib/explainers/storage.ts`) until E-22.
+- **Local database.** PGlite allows one process per folder, and its socket server multiplexes connections over one session (unsafe for transactions). So `npm run explainers:db` runs a real Postgres 17 from the `embedded-postgres` npm package (dev dependency, no system install) at `127.0.0.1:54329`, and the app and worker connect through `EXPLAINERS_DATABASE_URL`. First start copies every row from the PGlite folder once (tested on a copy: 27 topics, 78 Jev logs, 81 cost events). Tests keep in-memory PGlite.
+- **Agent SDK placement.** `@anthropic-ai/claude-agent-sdk` 0.3.293 needs `@anthropic-ai/sdk` ≥ 0.93 and zod 4; the Hub is on 0.65 and outreach/Reels must not change. It lives in `explainers/runtime/` with its own SDK and is loaded from there at run time (`loadAgentQuery`). Its native Claude Code binary arrives as a platform package at install.
+- **Guard rails** (`lib/explainers/render/agent.ts`, `policy.ts`): env replaced entirely (only Anthropic/HeyGen keys, voice id, HOME/TMPDIR in the job, HyperFrames flags); `settingSources: ['project']` so the operator's `~/.claude` never loads; tools without WebFetch/WebSearch/MCP; a PreToolUse hook runs every call (frame workers included) through the policy (file tools inside the project; Bash allowlist, no substitution, pipes, redirects outside, network tools, `node -e`, `npx` other than hyperframes, `hyperframes skills|upgrade|publish`); `permissionPrompts: 'none'`; OS sandbox on with `failIfUnavailable`, writes limited to the project and job HOME, network limited to `*.heygen.com`, `*.heygen.ai`, `heygen-product.s3-accelerate.amazonaws.com` (music and SFX files; seen in run 2), and `cdn.jsdelivr.net`, localhost bind allowed, and `ANTHROPIC_API_KEY` denied to sandboxed commands. HyperFrames leaves the sandbox only on a prefix rule (`npx hyperframes *`, space before `*`). An exact `npx hyperframes` never matched `npx hyperframes check`, so runs 1–3 stayed sandboxed and `listen` on 127.0.0.1 returned EPERM. `SubagentHandback` is allowed so frame workers can report. `source` is not a shell-word ban: that matched `source.txt`.
+- **Worker render.** If session B stops with all seven frames and `index.html` but no `renders/video.mp4`, the worker runs the pinned CLI itself (`--quality high --workers 1`). Init's placeholder `index.html` is not enough. No extra model call.
+- **Spend.** A live meter prices every streamed assistant message (orchestrator and frame workers, deduplicated by id) and aborts past `spend_cap_usd`; `maxBudgetUsd` is set to what remains as a backstop. Session costs are recorded per model from the SDK's `modelUsage`; an aborted session records its streamed estimate. HeyGen is recorded as one `usd_known = false` event.
+- **Frame-worker model.** A `frame-worker` agent definition carries `frame_worker_model`; the approved director now dispatches to it by name (one-phrase change to `director-v1`).
+- **Job flow** (`lib/explainers/render/job.ts`): source (worker fetch, 15s, 2 MB, http(s) only, private addresses refused, text only) → workspace (real `hyperframes init` + build-frame + skills + recipe, offline) → session A (plan) → checkpoint lint (recorded) → session B (build + render) → collect (video, contact sheet, captions, audio meta, post-build on-screen lint, `hyperframes lint --json`, transcript). Failures keep every artifact. Orphaned `running` jobs fail at worker start.
+- **Before the first run, Lucas:** adds `HEYGEN_API_KEY` and `EXPLAINERS_DATABASE_URL` to `.env.local`; stops the dev server; runs `npm run explainers:db`; restarts the dev server; sets the HeyGen voice id (E-19 lookup); runs `npm run explainers:worker`.
 
 **After M7 (not in this build):** Jev, script, and LLM review and revision loops, designed from the first runs' feedback tags and violations. They plug in at the checkpoint in Section 5.
 

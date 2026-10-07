@@ -47,6 +47,7 @@ const files = [
   'db/seo_schema.sql',
   'db/trello_schema.sql',
   'db/reels_schema.sql',
+  'db/explainers_schema.sql',
 ];
 for (const file of files) {
   console.log(`\n── ${file} ──`);
