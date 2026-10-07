@@ -241,7 +241,7 @@ test('runDay: the Writer stage drafts each brief; its cost lands under writer', 
 
 // ── Handoff (Tommy, 2026-10-06): photo_available, filtered article photos, first-submission image check ──
 
-import { imageHandoffFailures } from '@/lib/social/writer/writer';
+import { dropFailingImageRequests, imageHandoffFailures } from '@/lib/social/writer/writer';
 import { sifDraftHandoff } from '@/fixtures/social/drafts';
 
 test('handoff: SUBJECTS marked photo_available; ARTICLE PHOTOS whose credit fails are dropped before the Writer', async () => {
@@ -301,12 +301,27 @@ test('link A: a quote slide asks for its speaker (by speaker_id) or none; anyone
   assert.match(errs({ kind: 'stock', value: 'federal government' }), /a quote slide's IMAGE is the speaker/);
 });
 
-test('link A: handoff checks run on the final attempt too; a request still failing on the retry fails the Writer', async () => {
+test('a failing IMAGE request no longer kills a story: on the final attempt it becomes none (words unchanged), logged as image-request-dropped; the cover keeps its fallback', async () => {
   const bad = sifDraftHandoff();
   bad.cover_options[0]!.image = { kind: 'stock', value: 'city skyline' };
+  bad.slides[0]!.image = { kind: 'stock', value: 'video call' };
   const r = await runWriter(briefSuperIntelligenceForce(), { create: scripted([msg('tool_use', [submit(bad)]), msg('tool_use', [submit(structuredClone(bad))])]).create, isWellKnown: notWellKnown });
-  assert.equal(r.ok, false);
+  assert.ok(r.ok, 'the story continues');
   assert.match(r.retryErrors[0]!, /cover\.image: stock "city skyline" doesn't name a physical thing this slide mentions; change the request .*never change the slide's words to fit a photo/);
+  assert.equal(r.draft.cover_options[0]!.image.kind, 'none');
+  assert.equal(r.draft.slides[0]!.image.kind, 'none');
+  assert.equal(r.draft.cover_options[0]!.text, bad.cover_options[0]!.text, 'words unchanged');
+  assert.equal(r.draft.slides[0]!.headline.text, bad.slides[0]!.headline.text);
+  assert.ok(r.imageRequestsDropped.some((l) => /^image-request-dropped: cover stock: city skyline → none/.test(l)), r.imageRequestsDropped.join(' | '));
+  assert.ok(r.imageRequestsDropped.some((l) => /^image-request-dropped: slide 2 stock: video call → none/.test(l)));
+});
+
+test('dropping a spread\'s first photo also ends the spread', () => {
+  const d = sifDraftHandoff();
+  d.slides[0]!.spread_with_next = true;
+  const { draft } = dropFailingImageRequests(d, [{ section: 'slide 2.image', message: 'x' }]);
+  assert.equal(draft.slides[0]!.image.kind, 'none');
+  assert.equal(draft.slides[0]!.spread_with_next, false);
 });
 
 test('link A: words stay when a photo request fails: rewriting the cover to fit the request fails; changing the request passes', async () => {

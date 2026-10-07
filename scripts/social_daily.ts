@@ -199,6 +199,8 @@ async function main() {
     })(),
     spreadCount: result.posts.flatMap((p) => p.render.slides).filter((sl) => sl.panoramaSide === 'left').length,
     requestMix,
+    // IMAGE requests the Writer check turned to none on the final attempt (Tommy, 2026-10-07).
+    imageRequestsDropped: [...logs.entries()].flatMap(([storyId, l]) => l.writer.flatMap((w) => (w.imageRequestsDropped ?? []).map((d) => `${storyId}: ${d}`))),
     // Aggregator-only facts the code removed before the Writer (Tommy, 2026-10-06).
     aggregatorDropped: [...logs.entries()].flatMap(([storyId, l]) => (l.reporter?.ok ? l.reporter.aggregatorDropped.map((d) => `${storyId}: ${d}`) : [])),
     alreadyPostedTop: alreadyPosted.slice(0, 5),

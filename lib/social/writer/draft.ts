@@ -160,7 +160,8 @@ export function checkDraft(input: unknown, brief: Brief): DraftSubmission {
   d.cover_options.forEach((c, i) => {
     tagCheck(`cover_options[${i}]`, c.facts);
     imageCheck(`cover_options[${i}].image`, c.image);
-    if (c.image.kind === 'none') errors.push({ section: `cover_options[${i}].image`, message: 'a cover always has an IMAGE (never none)' });
+    // "A cover always has an IMAGE" is the Writer's handoff check (writer.ts), so a request the code
+    // dropped on the final attempt can travel as none; the finder gives a cover with none the AI-compute fallback.
   });
   // Spreads (Tommy, 2026-10-06): at most one; its first slide carries a photo, the next slide IMAGE none.
   const spreads = d.slides.map((s, i) => (s.spread_with_next ? i : -1)).filter((i) => i >= 0);

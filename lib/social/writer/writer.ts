@@ -14,7 +14,7 @@ import { draftTextFailures } from '@/lib/social/mechanical/checks';
 
 import { DraftValidationError, SUBMIT_DRAFT_TOOL, checkDraft, fillDraft, type DraftSubmission, type FilledDraft } from './draft';
 import { WRITER_SYSTEM, writerUserMessage } from './prompt';
-import { runStructuredCall } from './structured-call';
+import { MAX_CHECK_RETRIES, runStructuredCall } from './structured-call';
 
 
 /** Is this subject widely known? Spec §4.1a: yes when it has a Wikidata match. */
@@ -101,6 +101,10 @@ export function imageHandoffFailures(d: DraftSubmission, brief: Brief, photoSubj
       }
     }
   }
+  // The chosen cover always has an IMAGE (never none); so do the other options.
+  d.cover_options.forEach((c, i) => {
+    if (c.image.kind === 'none') errors.push({ section: i === d.chosen_cover - 1 ? 'cover.image' : `cover_options[${i}].image`, message: 'a cover always has an IMAGE (never none)' });
+  });
   // Quote slides (Tommy, 2026-10-06): IMAGE is the speaker or none.
   d.slides.forEach((s, i) => {
     if (s.type !== 'quote' || s.image.kind === 'none') return;
@@ -125,8 +129,8 @@ export function imageHandoffFailures(d: DraftSubmission, brief: Brief, photoSubj
 }
 
 export type WriterResult =
-  | { ok: true; draft: DraftSubmission; filled: FilledDraft; raw: string; costUsd: number; turns: number; draftRetries: number; retryErrors: string[]; turnUsage: TurnUsage[] }
-  | { ok: false; reason: 'malformed-output' | 'service-error' | 'refused'; detail: string; raw: string | null; costUsd: number; turns: number; draftRetries: number; retryErrors: string[]; turnUsage: TurnUsage[] };
+  | { ok: true; draft: DraftSubmission; filled: FilledDraft; raw: string; costUsd: number; turns: number; draftRetries: number; retryErrors: string[]; turnUsage: TurnUsage[]; imageRequestsDropped: string[] }
+  | { ok: false; reason: 'malformed-output' | 'service-error' | 'refused'; detail: string; raw: string | null; costUsd: number; turns: number; draftRetries: number; retryErrors: string[]; turnUsage: TurnUsage[]; imageRequestsDropped: string[] };
 
 export type WriterDeps = {
   create: MessagesCreate;
@@ -137,12 +141,60 @@ export type WriterDeps = {
 };
 
 /** checkDraft (structure and IDs), then the M7 text checks C1–C5 on the filled, fixed draft. */
-export function checkWrittenDraft(input: unknown, brief: Brief, attempt: number, stage: 'writer' | 'editor' = 'writer', photoSubjects: Set<string> | null = null): DraftSubmission {
-  const d = checkDraft(input, brief);
+/**
+ * A failing IMAGE request no longer kills a story (Tommy, 2026-10-07): on
+ * the Writer's final attempt, every request still failing the handoff check
+ * becomes none (the slide text is unchanged) and is logged as
+ * image-request-dropped. A spread whose first photo is dropped is no longer
+ * a spread. The chosen cover with none keeps its AI-compute fallback (the
+ * finder). A missing EDIT NOTES line for a code-dropped none is only logged.
+ */
+export function dropFailingImageRequests(d: DraftSubmission, failures: BriefError[]): { draft: DraftSubmission; dropped: string[] } {
+  const out = structuredClone(d);
+  const dropped: string[] = [];
+  for (const f of failures) {
+    if (f.section === 'edit_notes') {
+      dropped.push(`image-request-dropped (log only): ${f.message}`);
+      continue;
+    }
+    const slide = /^slide (\d+)\.image$/.exec(f.section);
+    const option = /^cover_options\[(\d+)\]\.image$/.exec(f.section);
+    const img = f.section === 'cover.image' ? out.cover_options[out.chosen_cover - 1]!.image : slide ? out.slides[Number(slide[1]) - 2]?.image : option ? out.cover_options[Number(option[1])]?.image : undefined;
+    if (!img || img.kind === 'none') {
+      if (img) dropped.push(`image-request-dropped: ${f.section.replace(/\.image$/, '')} stays none (${f.message})`);
+      continue;
+    }
+    dropped.push(`image-request-dropped: ${f.section.replace(/\.image$/, '')} ${img.kind}: ${img.value} → none (${f.message})`);
+    img.kind = 'none';
+    img.value = '';
+    if (slide) out.slides[Number(slide[1]) - 2]!.spread_with_next = false;
+  }
+  return { draft: out, dropped };
+}
+
+export function checkWrittenDraft(
+  input: unknown,
+  brief: Brief,
+  attempt: number,
+  stage: 'writer' | 'editor' = 'writer',
+  photoSubjects: Set<string> | null = null,
+  final?: { onDropped: (lines: string[]) => void },
+): DraftSubmission {
+  let d = checkDraft(input, brief);
   const failures = draftTextFailures(fillDraft(d, brief), brief, attempt, stage);
   const errors = failures.map((f) => ({ section: `${f.id} ${f.where}`, message: f.detail }));
   // Every handoff check runs on every attempt, the final one included (Tommy, 2026-10-06).
-  if (stage === 'writer') errors.push(...imageHandoffFailures(d, brief, photoSubjects));
+  if (stage === 'writer') {
+    const handoff = imageHandoffFailures(d, brief, photoSubjects);
+    if (final && handoff.length > 0 && errors.length === 0) {
+      // Final attempt: drop the failing requests instead of failing the story (Tommy, 2026-10-07).
+      const r = dropFailingImageRequests(d, handoff);
+      d = checkDraft(r.draft, brief);
+      final.onDropped(r.dropped);
+    } else {
+      errors.push(...handoff);
+    }
+  }
   if (errors.length > 0) throw new DraftValidationError(errors);
   return d;
 }
@@ -159,6 +211,7 @@ export async function runWriter(brief: Brief, deps: WriterDeps): Promise<WriterR
   const forWriter = await briefForWriter(brief, deps.isWellKnown, deps.hasPhoto);
   const photoSubjects = new Set(forWriter.subjects.filter((s) => s.photo_available).map((s) => s.name));
   let first: { draft: DraftSubmission; places: string[] } | null = null;
+  let imageRequestsDropped: string[] = [];
   const r = await runStructuredCall({
     create: deps.create,
     config: deps.config ?? STAGE_MODELS.writer,
@@ -169,7 +222,8 @@ export async function runWriter(brief: Brief, deps: WriterDeps): Promise<WriterR
       // Words stay when a photo request fails: remember the first attempt's failed places.
       const kept = attempt > 1 && first ? safely(() => wordsChangedForPhoto(input as DraftSubmission, first!.draft, first!.places)) : [];
       try {
-        const d = checkWrittenDraft(input, brief, attempt, 'writer', deps.hasPhoto ? photoSubjects : null);
+        const final = attempt > MAX_CHECK_RETRIES ? { onDropped: (lines: string[]) => (imageRequestsDropped = lines) } : undefined;
+        const d = checkWrittenDraft(input, brief, attempt, 'writer', deps.hasPhoto ? photoSubjects : null, final);
         if (kept.length) throw new DraftValidationError(kept);
         return d;
       } catch (err) {
@@ -182,7 +236,7 @@ export async function runWriter(brief: Brief, deps: WriterDeps): Promise<WriterR
       }
     },
   });
-  const common = { costUsd: r.costUsd, turns: r.turns, draftRetries: r.retries, retryErrors: r.retryErrors, turnUsage: r.turnUsage };
+  const common = { costUsd: r.costUsd, turns: r.turns, draftRetries: r.retries, retryErrors: r.retryErrors, turnUsage: r.turnUsage, imageRequestsDropped };
   if (!r.ok) return { ok: false, reason: r.reason, detail: r.detail, raw: r.raw, ...common };
   return { ok: true, draft: r.value, filled: fillDraft(r.value, brief), raw: r.raw, ...common };
 }

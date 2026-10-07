@@ -202,7 +202,7 @@ BRIEF
   - "On a quote slide, IMAGE is the speaker (subject: <the quote's speaker>) or none." The Writer asked for a non-speaker on a quote slide, and that slide went text-only.
   - "Never change a slide's words to fit a photo; change the request." The Writer rewrote a cover to say "datacenters" so a "data center" request would pass.
   - "article: goes only on text, landing and image slides; stock: on those and on stat slides (a darkened background)." (Tommy, 2026-10-06, after the photo-finder bench: article requests on quote and stat slides were never drawn.)
-  - In code: the handoff checks run on every attempt, the final one included. A place whose IMAGE request failed on the first attempt must keep its words on the retry.
+  - In code: the handoff checks run on every attempt, the final one included. (Tommy, 2026-10-07) On the final attempt, a request still failing becomes none instead of failing the story. The words are unchanged, it's logged as image-request-dropped, and the cover keeps its AI-compute fallback. The rule "a cover always has an IMAGE" is now part of the Writer's handoff check. A place whose IMAGE request failed on the first attempt must keep its words on the retry.
 
   **The brief the Writer sees:**
   - each SUBJECTS entry is marked `photo_available` by code: a Wikidata match whose main image is usable, with no AI;

@@ -693,9 +693,12 @@ const draftErrors = (edit: (d: ReturnType<typeof sifDraft>) => void): string[] =
   }
 };
 
-test('IMAGE none: allowed on story slides (stat included), never on a cover', () => {
+test('IMAGE none: allowed on story slides (stat included); never on a cover from the Writer (its handoff check, so a code-dropped cover can travel as none)', async () => {
   assert.deepEqual(draftErrors((d) => { d.slides[0]!.image = { kind: 'none', value: '' }; d.slides[3]!.image = { kind: 'none', value: '' }; }), []);
-  assert.match(draftErrors((d) => { d.cover_options[0]!.image = { kind: 'none', value: '' }; }).join(), /a cover always has an IMAGE/);
+  const { imageHandoffFailures } = await import('@/lib/social/writer/writer');
+  const d = sifDraft();
+  d.cover_options[0]!.image = { kind: 'none', value: '' };
+  assert.match(imageHandoffFailures(d, briefSuperIntelligenceForce(), null).map((e) => `${e.section}: ${e.message}`).join(), /cover\.image: a cover always has an IMAGE/);
 });
 
 test('spreads: at most one; a photo on the first slide; the next slide carries IMAGE none', () => {
@@ -888,4 +891,12 @@ test('no repeat photos within a run: a second post never gets a photo picked ear
   assert.equal(a.value.photos[0]!.via, 'starter');
   assert.equal(b.value.photos[0]!.via, 'starter');
   assert.notEqual(a.value.render.slides[0]!.photoUrl, b.value.render.slides[0]!.photoUrl, 'two covers in one run never share a photo');
+});
+
+test('a cover whose request the Writer check dropped (none) keeps the AI-compute fallback; a story slide with none gets no photo', async () => {
+  const cover = await findPhoto({ kind: 'none', value: '' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS) }, { text: ['Trump launches a Super Intelligence Force'], speaker: null, slot: 'split', cover: true });
+  assert.equal(cover.via, 'starter');
+  assert.ok(STARTER_SET.find((p) => p.file === cover.photo!.url.split('/').pop())!.topics.includes(DEFAULT_TOPIC), 'AI-compute, never a subject inferred from the cover text');
+  const story = await findPhoto({ kind: 'none', value: '' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS) }, { text: ['x'], speaker: null, slot: 'split' });
+  assert.equal(story.via, 'none');
 });

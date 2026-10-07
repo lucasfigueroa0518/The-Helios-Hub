@@ -315,7 +315,9 @@ export async function findPhoto(request: ImageRequest, ctx: PhotoContext, deps: 
     }
   };
   // IMAGE none (Tommy, 2026-10-06): no photo fits; the slide renders without one. No fallback.
-  if (request.kind === 'none') return { request, photo: null, via: 'none', identity: null, steps: ['IMAGE none: no photo requested'] };
+  // A cover with none (a request the Writer check dropped) keeps the AI-compute fallback below (Tommy, 2026-10-07).
+  if (request.kind === 'none' && !slide.cover) return { request, photo: null, via: 'none', identity: null, steps: ['IMAGE none: no photo requested'] };
+  if (request.kind === 'none') steps.push('cover IMAGE none (request dropped by the Writer check) → AI-compute starter');
   const empty = !request.value.trim();
   const fromBank = (need: BankNeed): Photo | null => {
     const e = pickFromBank(ctx.bank, need, avoidSet(ctx), ctx.lastUsed);
@@ -324,7 +326,7 @@ export async function findPhoto(request: ImageRequest, ctx: PhotoContext, deps: 
   };
 
   // A subject: the request's, or (only when the request is empty) one named in the slide text.
-  const subject = request.kind === 'subject' && !empty ? request.value : empty && slot === 'split' ? subjectInText(slide, ctx.brief) : null;
+  const subject = request.kind === 'subject' && !empty ? request.value : empty && slot === 'split' && request.kind !== 'none' ? subjectInText(slide, ctx.brief) : null;
   if (empty && subject) steps.push(`empty request; subject from slide text: ${subject}`);
 
   if (request.kind === 'article' && !empty) {
