@@ -411,7 +411,7 @@ When you're done, call submit_hooks with one entry per story slide: slide number
 
 - **System:** the text above, then the voice block. Cached, with the submit_hooks tool.
 - **User message (per post):** the edited draft as the Editor submitted it, the brief, and `BUDGETS`, one line per story slide (`SLIDE n: N characters`, with `(full)` at 0).
-- **Budgets:** measured on the render, never guessed. Every story slide is rendered with a line of 30, 45, 60, 75, 90, 110 and 130 characters. A slide's budget is the longest line that passes, with every shorter one passing too. The render check covers text fit, bounds, contrast and faces.
+- **Budgets:** measured on the render, never guessed. Every story slide is rendered with a line of 30, 45, 60, 75, 90, 110 and 130 characters. A slide's budget is the longest line that passes, with every shorter one passing too. The render check covers text fit, bounds, contrast and faces. **Passing also means nothing shrank:** every existing text region keeps its size, and the hook renders at its full 34px, two lines at most. Text fit alone accepted 129-character lines by shrinking the body copy.
 - **Code check, one retry:**
   - These always fail: a slide that doesn't exist, two entries for one slide, a line without a kind, a tag that isn't a brief ID.
   - These go back to the model on the first attempt: over budget, quotation marks, a number not in the tagged entries, a second why-it-matters line, C8 (the line repeats a number or a 4-word phrase of its own slide). After the retry, a line that still fails is dropped and logged, and the rest stand.
