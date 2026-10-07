@@ -6,11 +6,8 @@
  *   person        headshot: the identity-verified entry's main photo (P18)
  *                 is usable (p18.ts)
  *   organization  logo: the verified entry's logo (P154) passes the
- *                 Commons licence check (logo.ts); photo: its main photo
- *                 (P18, often its headquarters) is usable, same rule as a
- *                 headshot (Tommy, 2026-10-07: buildings are welcome on
- *                 slides about the company). The finder also requires that
- *                 the face detector finds no face in it (Link 4).
+ *                 Commons licence check (logo.ts). A company's main photo
+ *                 (P18) is never used (Tommy, 2026-10-07: logos only).
  *   unclear       nothing (the identity check failed or couldn't tell)
  *
  * Code plus the existing identity check (Jev), cached per story. Whether a
@@ -23,23 +20,23 @@ import type { SubjectType } from './identity';
 import { fetchLogo } from './logo';
 import { identityOf, subjectP18, type IdentityCache } from './p18';
 
-/** `photo`: an organization's main photo (P18). `headshot`: a person's. */
-export type Availability = { kind: SubjectType | null; headshot: boolean; logo: boolean; photo: boolean };
+/** `headshot`: a person's main photo (P18). `logo`: an organization's logo (P154). */
+export type Availability = { kind: SubjectType | null; headshot: boolean; logo: boolean };
 
 export type SubjectAvailability = (subject: { name: string; role: string | null }, brief: Brief) => Promise<Availability>;
 
-export const NOTHING: Availability = { kind: null, headshot: false, logo: false, photo: false };
+export const NOTHING: Availability = { kind: null, headshot: false, logo: false };
 
 export function createSubjectAvailability(deps: { jev: JevAsk; http?: typeof fetch }, cacheFor: (brief: Brief) => IdentityCache): SubjectAvailability {
   return async (subject, brief) => {
     const cache = cacheFor(brief);
     const id = await identityOf(subject.name, brief, deps, cache);
-    if (!id.ok) return { kind: id.type, headshot: false, logo: false, photo: false };
+    if (!id.ok) return { kind: id.type, headshot: false, logo: false };
     if (id.type === 'person') {
       const r = await subjectP18(subject.name, brief, deps, cache);
-      return { kind: 'person', headshot: r.pick !== null, logo: false, photo: false };
+      return { kind: 'person', headshot: r.pick !== null, logo: false };
     }
-    const [logo, main] = await Promise.all([fetchLogo(id.qid, id.label, { http: deps.http }), subjectP18(subject.name, brief, deps, cache)]);
-    return { kind: 'organization', headshot: false, logo: logo.photo !== null, photo: main.pick !== null };
+    const logo = await fetchLogo(id.qid, id.label, { http: deps.http });
+    return { kind: 'organization', headshot: false, logo: logo.photo !== null };
   };
 }

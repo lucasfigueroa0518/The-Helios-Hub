@@ -24,7 +24,6 @@ import { capped, createJevAsk, createJevTally, tallied } from '@/lib/social/jev/
 import { checkDroppedText } from '@/lib/social/mechanical/checks';
 import { createLiveStages, createRunBudget } from '@/lib/social/pipeline/live-stages';
 import type { Brief, ScoredCandidate } from '@/lib/social/pipeline/types';
-import { loadBank } from '@/lib/social/photos/bank';
 import { createFileUsedPhotoLog } from '@/lib/social/photos/used-photos';
 import { checkRenderFit } from '@/lib/social/render/fit-check';
 import { toRenderPost } from '@/lib/social/render/from-draft';
@@ -78,7 +77,6 @@ async function main() {
     isWellKnown: isWellKnownLive,
     fitCheck: checkRenderFit,
     usedLog: createFileUsedPhotoLog(),
-    bank: await loadBank(),
     now,
     reporterCapUsd: 0,
     maxReporterRuns: 0,

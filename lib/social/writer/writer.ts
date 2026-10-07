@@ -10,6 +10,7 @@ import { photoUrlKey, articlePhotosFor, type ListedPhoto } from '@/lib/social/ph
 import { NOTHING, type SubjectAvailability } from '@/lib/social/photos/availability';
 import type { SubjectType } from '@/lib/social/photos/identity';
 import { isNamedIn, namedSubjects, type NamedSubject } from '@/lib/social/photos/named';
+import { DEFAULT_ICON, isIcon } from '@/lib/social/render/icons';
 import type { PageReadOk } from '@/lib/social/reporter/read-page';
 import type { Brief, BriefError } from '@/lib/social/reporter/brief';
 import type { MessagesCreate, TurnUsage } from '@/lib/social/reporter/reporter';
@@ -31,8 +32,8 @@ export type IsWellKnown = (subject: { name: string; role: string | null }, brief
  *   SUBJECTS: well_known (cover rule); type (person / organization: the
  *     identity check's, else the Reporter's mark); headshot_available (a
  *     person's verified main photo); logo_available (an organization's
- *     verified logo); photo_available (an organization's verified main photo,
- *     often its headquarters; Tommy, 2026-10-07).
+ *     verified logo; a company's main photo is never offered: logos only,
+ *     Tommy, 2026-10-07).
  *   ARTICLE PHOTOS: the code-built list (photos/article-list.ts): body photos
  *     with a caption naming a SUBJECT and an allowed credit, plus official
  *     images from a SUBJECTS company's own page. Each carries the SUBJECTS IDs
@@ -43,7 +44,6 @@ export type WriterSubject = Omit<Brief['subjects'][number], 'type'> & {
   type: SubjectType | null;
   headshot_available: boolean;
   logo_available: boolean;
-  photo_available: boolean;
 };
 
 export type WriterBrief = Omit<Brief, 'subjects' | 'article_photos'> & { subjects: WriterSubject[]; article_photos: ListedPhoto[] };
@@ -58,7 +58,6 @@ export async function briefForWriter(brief: Brief, isWellKnown: IsWellKnown, ava
         type: a.kind ?? s.type ?? null,
         headshot_available: a.kind === 'person' && a.headshot,
         logo_available: a.kind === 'organization' && a.logo,
-        photo_available: a.kind === 'organization' && a.photo,
       };
     }),
   );
@@ -105,6 +104,7 @@ export function wordsChangedForPhoto(next: DraftSubmission, first: DraftSubmissi
 
 type Place = {
   where: string;
+  icon: string | undefined;
   /** 'cover' or the slide type. */
   kind: 'cover' | DraftSubmission['slides'][number]['type'];
   image: ImageRequest;
@@ -118,12 +118,13 @@ type Place = {
 function placesOf(d: DraftSubmission, brief: Brief): Place[] {
   const chosen = d.cover_options[d.chosen_cover - 1]!;
   return [
-    { where: 'cover', kind: 'cover', image: chosen.image, tags: chosen.subject_ids, text: chosen.text, quoteId: null, afterSpread: false },
+    { where: 'cover', icon: chosen.icon, kind: 'cover', image: chosen.image, tags: chosen.subject_ids, text: chosen.text, quoteId: null, afterSpread: false },
     ...d.slides.map((s, i): Place => {
       const q = s.quote_id ? brief.quotes.find((x) => x.id === s.quote_id) : undefined;
       const n = s.number_ids.map((id) => brief.numbers.find((x) => x.id === id)?.counts ?? '').join(' ');
       return {
         where: `slide ${i + 2}`,
+        icon: s.icon,
         kind: s.type,
         image: s.image,
         tags: s.subject_ids,
@@ -169,6 +170,7 @@ export function imageHandoffFailures(d: DraftSubmission, brief: Brief, view: Pho
 
   for (const p of places) {
     errors.push(...tagFailures(p, brief, named));
+    if (!isIcon(p.icon)) errors.push({ section: `${p.where}.icon`, message: p.icon ? `icon "${p.icon}" isn't on the icon list; pick one from the list` : 'name an icon for this slide, from the icon list' });
     const { image: img, where } = p;
     const section = `${where}.image`;
     const tagged = (id: string) => (p.tags ?? []).includes(id);
@@ -207,19 +209,18 @@ export function imageHandoffFailures(d: DraftSubmission, brief: Brief, view: Pho
       const ws = view?.subjects?.get(s.name);
       const isOrg = typeOf(s.name) === 'organization';
       if (ws) {
-        // Organizations: the cover is the logo card; a story slide shows the main photo (often the headquarters) or the logo.
-        const has = !isOrg ? ws.headshot_available : where === 'cover' ? ws.logo_available : ws.photo_available || ws.logo_available;
+        // Organizations: their logo only, the cover's logo card or one story slide (Tommy, 2026-10-07).
+        const has = !isOrg ? ws.headshot_available : ws.logo_available;
         if (!has) {
-          const what = !isOrg ? 'no verified headshot (headshot_available: false)' : where === 'cover' ? 'no verified logo for the cover card (logo_available: false)' : 'no verified photo or logo (photo_available and logo_available: false)';
+          const what = !isOrg ? 'no verified headshot (headshot_available: false)' : 'no verified logo (logo_available: false)';
           errors.push({ section, message: `${s.name} has ${what}; change the request to an article photo, a literal stock scene or none${KEEP_WORDS}` });
         }
       }
       if (isOrg) {
-        // Story slides: its main photo once and its logo once at most (photo spec §4: a logo on at most one story slide; no repeats).
+        // Story slides: its logo on at most one (photo spec §4).
         if (where !== 'cover') {
           const prev = orgOnSlides.get(s.name) ?? [];
-          const slots = ws ? Number(ws.photo_available) + Number(ws.logo_available) : 1;
-          if (prev.length >= slots) errors.push({ section, message: `${s.name} is already shown on ${prev.join(' and ')}; an organization goes on at most ${slots} story slide${slots === 1 ? '' : 's'} (its main photo once, its logo once); change this request${KEEP_WORDS}` });
+          if (prev.length >= 1) errors.push({ section, message: `${s.name}'s logo is already on ${prev.join(' and ')}; a logo goes on the cover and at most one story slide; change this request${KEEP_WORDS}` });
           orgOnSlides.set(s.name, [...prev, where]);
         }
       } else {
@@ -304,6 +305,20 @@ export type WriterDeps = {
   pages?: PageReadOk[];
 };
 
+/** A missing or unknown icon on the chosen cover or a slide becomes DEFAULT_ICON, logged as icon-defaulted (final attempt; after the Editor). */
+export function defaultIcons(d: DraftSubmission): { draft: DraftSubmission; dropped: string[] } {
+  const out = structuredClone(d);
+  const dropped: string[] = [];
+  const fix = (t: { icon?: string }, where: string) => {
+    if (isIcon(t.icon)) return;
+    dropped.push(`icon-defaulted: ${where} ${t.icon ? `"${t.icon}"` : '(none)'} → ${DEFAULT_ICON}`);
+    t.icon = DEFAULT_ICON;
+  };
+  fix(out.cover_options[out.chosen_cover - 1]!, 'cover');
+  out.slides.forEach((s, i) => fix(s, `slide ${i + 2}`));
+  return { draft: out, dropped };
+}
+
 /** checkDraft (structure and IDs), then the M7 text checks C1–C5 on the filled, fixed draft. */
 /**
  * A failing IMAGE request no longer kills a story (Tommy, 2026-10-07): on
@@ -354,9 +369,10 @@ export function checkWrittenDraft(
     if (final && handoff.length > 0 && errors.length === 0) {
       // Final attempt: drop the failing tags, then the failing requests, instead of failing the story (Tommy, 2026-10-07).
       const t = pruneSubjectTags(d, brief, kindsOf(view));
-      const r = dropFailingImageRequests(t.draft, imageHandoffFailures(t.draft, brief, view));
+      const ic = defaultIcons(t.draft);
+      const r = dropFailingImageRequests(ic.draft, imageHandoffFailures(ic.draft, brief, view));
       d = checkDraft(r.draft, brief);
-      final.onDropped([...t.dropped, ...r.dropped]);
+      final.onDropped([...t.dropped, ...ic.dropped, ...r.dropped]);
     } else {
       errors.push(...handoff);
     }

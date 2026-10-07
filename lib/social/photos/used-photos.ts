@@ -2,6 +2,11 @@
  * Used-photo log and the 7-day rule (spec §5D, Tommy 2026-10-06): no photo
  * is reused within 7 days, from any source, the starter set included.
  *
+ * The photo bank (photo spec §2): every entry is tagged so reuse stays
+ * correct: its source, the verified subject (Wikidata QID and SUBJECTS name)
+ * for subject photos, and its credit. The bank grows from these entries; no
+ * hand-seeding.
+ *
  * A local JSON file until M9 moves it to the database. A photo counts as
  * used when its post reaches the review queue (today: the local preview);
  * the daily runner records it. The photo chain treats every URL used in
@@ -12,7 +17,18 @@ import path from 'node:path';
 
 export const NO_REPEAT_DAYS = 7;
 
-export type UsedPhoto = { url: string; usedAt: string; storyId: string; slide: number };
+export type UsedPhoto = {
+  url: string;
+  usedAt: string;
+  storyId: string;
+  slide: number;
+  /** Bank tags (photo spec §2): reuse only for the same verified person or company; scenes by their request. */
+  source?: string;
+  qid?: string | null;
+  subject?: string | null;
+  credit?: string;
+  scene?: string;
+};
 
 export type UsedPhotoLog = {
   /** URLs used within NO_REPEAT_DAYS before `now`. */

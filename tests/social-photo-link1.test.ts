@@ -29,13 +29,13 @@ type Story = { label: string; brief: Brief; pages: PageReadOk[]; writerDraft: Dr
 const FX = JSON.parse(readFileSync('fixtures/social/photo-link1/stories.json', 'utf8')) as { stories: Story[] };
 const story = (label: string) => structuredClone(FX.stories.find((s) => s.label === label)!);
 
-type Flags = Pick<WriterSubject, 'type' | 'headshot_available' | 'logo_available' | 'photo_available'>;
-const person = (headshot = true): Flags => ({ type: 'person', headshot_available: headshot, logo_available: false, photo_available: false });
-const org = (logo = true, photo = false): Flags => ({ type: 'organization', headshot_available: false, logo_available: logo, photo_available: photo });
+type Flags = Pick<WriterSubject, 'type' | 'headshot_available' | 'logo_available'>;
+const person = (headshot = true): Flags => ({ type: 'person', headshot_available: headshot, logo_available: false });
+const org = (logo = true): Flags => ({ type: 'organization', headshot_available: false, logo_available: logo });
 
 /** The handoff view: availability flags by subject name (anything unlisted: nothing), the ARTICLE PHOTOS list. */
 function viewFor(brief: Brief, flags: Record<string, Flags>, photos: ListedPhoto[] = []): PhotoView {
-  const subjects = brief.subjects.map((s): WriterSubject => ({ ...s, well_known: false, ...(flags[s.name] ?? { type: null, headshot_available: false, logo_available: false, photo_available: false }) }));
+  const subjects = brief.subjects.map((s): WriterSubject => ({ ...s, well_known: false, ...(flags[s.name] ?? { type: null, headshot_available: false, logo_available: false }) }));
   return photoViewOf({ ...brief, subjects, article_photos: photos }, { flags: true });
 }
 
@@ -49,7 +49,7 @@ type SlideSpec = { type?: DraftSlide['type']; headline: string; body?: string; q
 /** A draft for a saved brief: the cover, then the given slides. Notes cover every none. */
 function draftOf(cover: { text: string; image: ImageRequest; tags?: string[] }, slides: SlideSpec[]): DraftSubmission {
   return {
-    cover_options: [0, 1, 2].map(() => ({ text: cover.text, facts: [], image: cover.image, ...(cover.tags ? { subject_ids: cover.tags } : {}) })),
+    cover_options: [0, 1, 2].map(() => ({ text: cover.text, facts: [], image: cover.image, icon: 'newspaper', ...(cover.tags ? { subject_ids: cover.tags } : {}) })),
     chosen_cover: 1,
     slides: slides.map((s) => ({
       type: s.type ?? 'text',
@@ -59,6 +59,7 @@ function draftOf(cover: { text: string; image: ImageRequest; tags?: string[] }, 
       quote_excerpt: null,
       number_ids: s.number_ids ?? [],
       image: s.image,
+      icon: 'newspaper',
       ...(s.tags ? { subject_ids: s.tags } : {}),
       spread_with_next: false,
     })),
@@ -176,19 +177,20 @@ test('ARTICLE PHOTOS: a body photo is listed only with a caption naming a SUBJEC
 
 // ── The brief the Writer sees ──────────────────────────────────────────
 
-test('the Writer sees type, headshot_available (people), logo_available and photo_available (organizations); the identity check\'s type wins', async () => {
+test('the Writer sees type, headshot_available (people) and logo_available (organizations: logos only); the identity check\'s type wins', async () => {
   const brief = briefSuperIntelligenceForce();
-  const forWriter = await briefForWriter(brief, async () => false, async (s) => (s.name === 'Super Intelligence Force' ? { kind: 'organization', headshot: true, logo: false, photo: true } : s.name === 'Jay Clayton' ? { kind: null, headshot: false, logo: true, photo: true } : { kind: 'person', headshot: true, logo: true, photo: true }));
-  assert.deepEqual(forWriter.subjects.map((s) => [s.name, s.type, s.headshot_available, s.logo_available, s.photo_available]), [
-    ['Donald Trump', 'person', true, false, false],
-    ['Jay Clayton', 'person', false, false, false], // the identity check couldn't tell: the Reporter's mark
-    ['Super Intelligence Force', 'organization', false, false, true],
+  const forWriter = await briefForWriter(brief, async () => false, async (s) => (s.name === 'Super Intelligence Force' ? { kind: 'organization', headshot: true, logo: false } : s.name === 'Jay Clayton' ? { kind: null, headshot: false, logo: true } : { kind: 'person', headshot: true, logo: true }));
+  assert.deepEqual(forWriter.subjects.map((s) => [s.name, s.type, s.headshot_available, s.logo_available]), [
+    ['Donald Trump', 'person', true, false],
+    ['Jay Clayton', 'person', false, false], // the identity check couldn't tell: the Reporter's mark
+    ['Super Intelligence Force', 'organization', false, false],
   ]);
+  assert.ok(forWriter.subjects.every((s) => !('photo_available' in s)), 'no company main photos (Tommy, 2026-10-07)');
   assert.deepEqual(forWriter.article_photos, [], 'no pages, no photos (the Reporter\'s retyped list is not used)');
 });
 
 test('the IMAGE rule tells the Writer the new handoff', () => {
-  for (const s of ['subject_ids', 'headshot_available true', 'logo_available true', 'on the cover with logo_available true (its logo card), on a story slide with photo_available or logo_available true, its main photo and its logo each at most once per post besides the cover', 'an official_of image only on the cover or a slide tagged with that company', 'On a quote slide, IMAGE is the speaker (subject: <the quote\'s speaker>), whether or not they have a photo; none only when the speaker is an organization or isn\'t in SUBJECTS', 'a stat slide\'s background is automatic, so its IMAGE is none', 'Never change a slide\'s words to fit a photo or a tag']) {
+  for (const s of ['subject_ids', 'headshot_available true', 'logo_available true', 'or an organization with logo_available true: its logo card on the cover, its logo on at most one story slide besides the cover', 'an official_of image only on the cover or a slide tagged with that company', 'On a quote slide, IMAGE is the speaker (subject: <the quote\'s speaker>), whether or not they have a photo; none only when the speaker is an organization or isn\'t in SUBJECTS', 'a stat slide\'s background is automatic, so its IMAGE is none', 'Never change a slide\'s words to fit a photo or a tag']) {
     assert.ok(IMAGE_RULE.includes(s), s);
   }
 });
@@ -222,9 +224,9 @@ test('Le Chonk (R10, 21:17): "subject: Mistral AI" is a logo request: the cover 
   const e = errs(d, s.brief, view);
   assert.equal(at(e, 'cover'), '');
   assert.equal(at(e, 'slide 2'), '');
-  assert.match(at(e, 'slide 3'), /Mistral AI is already shown on slide 2; an organization goes on at most 1 story slide \(its main photo once, its logo once\)/);
+  assert.match(at(e, 'slide 3'), /Mistral AI's logo is already on slide 2; a logo goes on the cover and at most one story slide/);
   const noLogo = errs(d, s.brief, viewFor(s.brief, { 'Mistral AI': org(false) }));
-  assert.match(at(noLogo, 'cover'), /Mistral AI has no verified logo for the cover card \(logo_available: false\); change the request to an article photo, a literal stock scene or none/);
+  assert.match(at(noLogo, 'cover'), /Mistral AI has no verified logo \(logo_available: false\); change the request to an article photo, a literal stock scene or none/);
 });
 
 test('Altman (16:00): OpenAI (R07, R08) and Anthropic (R05) are logo requests on slides that name them; untagged fails', () => {
@@ -255,20 +257,17 @@ test('a person: the headshot once per post besides their quote slide; never with
   assert.match(at(e, 'slide 4'), /Jensen Huang has no verified headshot \(headshot_available: false\)/);
 });
 
-test('an organization on story slides: its main photo (often the headquarters) and its logo, once each; the cover stays the logo card', () => {
+test('an organization: its logo only, the cover card and at most one story slide; no logo, no request', () => {
   const s = story('altman-1600');
   const d = draftOf({ text: 'OpenAI CEO Sam Altman says the world should accept some bad things', image: subj('OpenAI'), tags: ['S1', 'S2'] }, [
     { headline: "OpenAI's pitch", body: 'OpenAI says the benefits outweigh the harms.', image: subj('OpenAI'), tags: ['S2'] },
     { headline: 'Inside OpenAI', body: 'OpenAI has grown to thousands of staff.', image: subj('OpenAI'), tags: ['S2'] },
-    { headline: 'OpenAI again', body: 'OpenAI declined to comment.', image: subj('OpenAI'), tags: ['S2'] },
   ]);
-  const both = errs(d, s.brief, viewFor(s.brief, { OpenAI: org(true, true) }));
-  assert.equal(at(both, 'cover') + at(both, 'slide 2') + at(both, 'slide 3'), '', 'the logo card, the headquarters, the logo');
-  assert.match(at(both, 'slide 4'), /OpenAI is already shown on slide 2 and slide 3; an organization goes on at most 2 story slides/);
-  const photoOnly = errs(d, s.brief, viewFor(s.brief, { OpenAI: org(false, true) }));
-  assert.match(at(photoOnly, 'cover'), /OpenAI has no verified logo for the cover card/);
-  assert.equal(at(photoOnly, 'slide 2'), '', 'the headquarters on a story slide');
-  assert.match(at(photoOnly, 'slide 3'), /at most 1 story slide/);
+  const e = errs(d, s.brief, viewFor(s.brief, { OpenAI: org(true) }));
+  assert.equal(at(e, 'cover') + at(e, 'slide 2'), '', 'the logo card, the logo on one story slide');
+  assert.match(at(e, 'slide 3'), /OpenAI's logo is already on slide 2; a logo goes on the cover and at most one story slide/);
+  const noLogo = errs(d, s.brief, viewFor(s.brief, { OpenAI: org(false) }));
+  assert.match(at(noLogo, 'slide 2'), /OpenAI has no verified logo \(logo_available: false\)/);
 });
 
 // ── Article requests ───────────────────────────────────────────────────
@@ -409,4 +408,26 @@ test("type-led quote slide: no verified speaker photo → quote mark, quote, the
   const photoHtml = renderToStaticMarkup(React.createElement(SlideTemplate, { post: withPhoto, position: at }));
   assert.match(photoHtml, /helios-quote--speaker/);
   assert.doesNotMatch(photoHtml, /helios-quote__role/, 'the accepted speaker layout is unchanged');
+});
+
+// ── Icons (photo spec §5; Tommy, 2026-10-07: the Writer picks) ─────────
+
+import { DEFAULT_ICON, ICON_LIST_FOR_WRITER, ICON_NAMES } from '@/lib/social/render/icons';
+import { defaultIcons } from '@/lib/social/writer/writer';
+
+test('icons: the IMAGE rule lists every icon; the cover and every slide must name one from the list', () => {
+  assert.ok(IMAGE_RULE.includes(ICON_LIST_FOR_WRITER));
+  assert.equal(ICON_NAMES.length, 30);
+  const brief = briefSuperIntelligenceForce();
+  const d = sifDraftHandoff();
+  delete d.cover_options[0]!.icon;
+  d.slides[0]!.icon = 'unicorn';
+  const e = errs(d, brief, null);
+  assert.match(at(e, 'cover'), /cover\.icon: name an icon for this slide, from the icon list/);
+  assert.match(at(e, 'slide 2'), /slide 2\.icon: icon "unicorn" isn't on the icon list; pick one from the list/);
+  const { draft, dropped } = defaultIcons(d);
+  assert.equal(draft.cover_options[0]!.icon, DEFAULT_ICON);
+  assert.equal(draft.slides[0]!.icon, DEFAULT_ICON);
+  assert.deepEqual(dropped, ['icon-defaulted: cover (none) → newspaper', 'icon-defaulted: slide 2 "unicorn" → newspaper']);
+  assert.equal(draft.slides[1]!.icon, 'user', 'valid icons stay');
 });

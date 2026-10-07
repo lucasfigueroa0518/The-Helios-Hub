@@ -12,6 +12,7 @@
 import type { Photo } from '@/lib/social/photos/find';
 import type { FilledDraft, FilledSlide } from '@/lib/social/writer/draft';
 
+import { DEFAULT_ICON, isIcon } from './icons';
 import { rotateLayouts } from './layout-rotation';
 import type { Post, SlideCopy, SpanRun } from './types';
 
@@ -20,23 +21,40 @@ const run = (text: string): SpanRun => [{ text, role: 'narrative' }];
 export type PostMeta = { source: string; sourceUrl: string; publishedAt: string };
 
 /**
- * Rule 3: article and Commons subject photos may show people → their own region; logos are
- * logo cards; stock, starter photos and Helios-designed graphics are scenes.
+ * Rule 3: photos that may show people (article and official images, headshots,
+ * second photos) → their own region unless framed for full bleed; logos are
+ * logo cards; stock photos are scenes.
  */
 export const photoKindOf = (photo: Photo): 'subject' | 'scene' | 'logo' =>
-  photo.source === 'logo' ? 'logo' : photo.source === 'article' || photo.source === 'commons' ? 'subject' : 'scene';
+  photo.source === 'logo' ? 'logo' : photo.source === 'stock' ? 'scene' : 'subject';
+
+/**
+ * People full bleed when properly framed (photo spec §4; Tommy, 2026-10-07):
+ * exactly one face the detector found, whole, roughly centred across, in the
+ * upper half of the photo and neither tiny nor too tight. Otherwise the split
+ * layout. The render check still fails any face under text; the design stage
+ * then puts the slide back to split.
+ */
+export function canBleedPerson(photo: Photo): boolean {
+  if (photoKindOf(photo) !== 'subject' || photo.faces?.length !== 1) return false;
+  const f = photo.faces[0]!;
+  const cx = f.x + f.w / 2;
+  return cx >= 0.2 && cx <= 0.8 && f.y >= 0.03 && f.y + f.h <= 0.5 && f.h >= 0.06 && f.h <= 0.4;
+}
 
 /** Logos wider than this are sized by width on the card (Tommy, 2026-10-07). */
 export const LOGO_WIDE_ASPECT = 2;
 
-function photoFields(photo: Photo | null): Pick<SlideCopy, 'photoUrl' | 'photoCredit' | 'photoKind' | 'logoPlate' | 'logoWide'> {
+function photoFields(photo: Photo | null): Pick<SlideCopy, 'photoUrl' | 'photoCredit' | 'photoKind' | 'logoPlate' | 'logoWide' | 'photoBleed'> {
   if (!photo) return {};
   const wide = photo.source === 'logo' && !!photo.width && !!photo.height && photo.width / photo.height > LOGO_WIDE_ASPECT;
-  return { photoUrl: photo.url, photoCredit: photo.credit, photoKind: photoKindOf(photo), ...(photo.plate ? { logoPlate: photo.plate } : {}), ...(wide ? { logoWide: true } : {}) };
+  return { photoUrl: photo.url, photoCredit: photo.credit, photoKind: photoKindOf(photo), ...(photo.plate ? { logoPlate: photo.plate } : {}), ...(wide ? { logoWide: true } : {}), ...(canBleedPerson(photo) ? { photoBleed: true } : {}) };
 }
 
-function storySlide(s: FilledSlide, position: number, photo: Photo | null): SlideCopy {
-  const base = { position, headline: run(s.headline.text), altText: s.headline.text, ...photoFields(photo) };
+const iconOf = (name: string | null | undefined) => (isIcon(name) ? name : DEFAULT_ICON);
+
+function storySlide(s: FilledSlide, position: number, photo: Photo | null, icon: string | null | undefined): SlideCopy {
+  const base = { position, headline: run(s.headline.text), altText: s.headline.text, icon: iconOf(icon ?? s.icon), ...photoFields(photo) };
   const body = {
     ...(s.body ? { body: run(s.body.text) } : {}),
     ...(s.hook ? { hook: { text: s.hook.text, position: s.hook.kind === 'lead-in' ? ('above' as const) : ('below' as const) } } : {}),
@@ -57,7 +75,9 @@ function storySlide(s: FilledSlide, position: number, photo: Photo | null): Slid
     case 'image':
       return { ...base, ...body, layoutVariant: 'image' };
     default:
-      return { ...base, ...body, layoutVariant: 'text' };
+      // The target look (photo spec §5a): a photo that can sit under text (a scene, or a person framed for it)
+      // goes full bleed with the text at the bottom over the dark fade; the layout rotation varies it from there.
+      return { ...base, ...body, layoutVariant: photo && (photoKindOf(photo) === 'scene' || canBleedPerson(photo)) ? 'image' : 'text' };
   }
 }
 
@@ -91,13 +111,16 @@ function applySpreads(slides: SlideCopy[], draft: FilledDraft, photos: Array<Pho
   return out;
 }
 
-/** The slides in draft order, before layout rotation. */
-/** `coverCard`: the branded cover card (no photo, headshot or logo; once approved, spec §5.1 Photo chain v1). */
-export function draftSlides(draft: FilledDraft, photos: { cover: Photo | null; slides: Array<Photo | null>; coverCard?: boolean }): SlideCopy[] {
+/** Photos per slide (cover first) and, optionally, the icons the chain settled on (cover first; else the draft's). */
+export type DraftPhotos = { cover: Photo | null; slides: Array<Photo | null>; icons?: Array<string | null> };
+
+/** The slides in draft order, before layout rotation. Every slide carries its icon; the renderer draws it when there is no photo. */
+export function draftSlides(draft: FilledDraft, photos: DraftPhotos): SlideCopy[] {
+  const chosen = draft.cover_options[draft.chosen_cover - 1];
   return applySpreads(
     [
-      { position: 0, layoutVariant: 'cover', headline: run(draft.cover), altText: draft.cover, ...photoFields(photos.cover), ...(photos.coverCard && !photos.cover ? { coverCard: true } : {}) },
-      ...draft.slides.map((s, i) => storySlide(s, i + 1, photos.slides[i] ?? null)),
+      { position: 0, layoutVariant: 'cover', headline: run(draft.cover), altText: draft.cover, icon: iconOf(photos.icons?.[0] ?? chosen?.icon), ...photoFields(photos.cover) },
+      ...draft.slides.map((s, i) => storySlide(s, i + 1, photos.slides[i] ?? null, photos.icons?.[i + 1])),
       { position: draft.slides.length + 1, layoutVariant: 'follow', storySpecificLine: draft.follow, altText: draft.follow },
     ],
     draft,
@@ -107,7 +130,7 @@ export function draftSlides(draft: FilledDraft, photos: { cover: Photo | null; s
 
 export function toRenderPost(
   draft: FilledDraft,
-  photos: { cover: Photo | null; slides: Array<Photo | null>; coverCard?: boolean },
+  photos: DraftPhotos,
   meta: PostMeta,
 ): Post {
   return {

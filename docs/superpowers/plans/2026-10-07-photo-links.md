@@ -197,4 +197,5 @@
 ## Status
 - **Step A (every speaker is a SUBJECT; SUBJECTS typed):** built; live check passed (2 stories, $0.40).
 - **Link 1:** built; offline tests pass; live check on 4 saved briefs: 4 drafts pass ($0.57). Run: `runs/link1-live-check-2026-10-07T18-52-08-820Z`. The full agreement test (every accepted request resolves in the finder) waits for Link 5.
-- **Added in this round (Tommy, 2026-10-07):** the naming rule (people: full or last name; organizations: full name, or an unshared first word); company main photos (headquarters) on story slides, the cover stays the logo card; official images from news/blog paths only; tags re-checked right after the Editor; the Reporter marks SUBJECTS person or organization.
+- **Links 2–6:** built offline and committed; companies get their logo only (Tommy, 2026-10-07: no company main photos, reversing the headquarters go-ahead from earlier that day); all offline tests pass; the frozen stock link replays unchanged. Next: the first end-to-end run with the render review on, with Tommy's OK.
+- **Added in this round (Tommy, 2026-10-07):** the naming rule (people: full or last name; organizations: full name, or an unshared first word); the cover stays the logo card; official images from news/blog paths only; tags re-checked right after the Editor; the Reporter marks SUBJECTS person or organization.

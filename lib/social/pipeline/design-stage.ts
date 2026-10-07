@@ -1,40 +1,49 @@
 /**
- * The `design` stage for runDay (plan M5 + M6 + M7 photo/render checks): basic photos for the
- * chosen cover and every story slide, then the render Post the local
- * preview draws. Cost is Jev's identity checks only (fractions of a cent);
- * Wikidata, Commons and Openverse are free.
+ * The `design` stage for runDay (photo spec §4–§5b; plan M8): the photo
+ * chain for the chosen cover and every story slide, the render Post, the
+ * render checks, then the render review (when given).
+ *
+ *   C6 photo credit / licence / agency → that slide's photo goes; it shows
+ *      its icon background (a quote slide: type-led). Logged.
+ *   render fit, C7 dropped text → set aside as `render-failed`. A person
+ *      photo placed full bleed whose face ends up under text goes back to
+ *      the split layout first (photo spec §4), and the post re-renders once.
+ *   render review (photo spec §5b, optional): one Haiku review of the
+ *      contact sheet; its fixes change slide settings only, never text.
+ *
+ * AI spend here: Jev (identity, stock pre-screen; counted in this stage's
+ * cost), the vision checks and the render review (counted by the run budget).
  */
 import { createJevTally, jevCostUsd, type JevAsk } from '@/lib/social/jev/client';
 import { checkDroppedText, checkPhotoCredit } from '@/lib/social/mechanical/checks';
 import { photosForDraft } from '@/lib/social/photos/design';
-import type { BankEntry } from '@/lib/social/photos/bank';
-import { DESIGNED_GRAPHICS } from '@/lib/social/photos/designed';
 import type { IdentityCache } from '@/lib/social/photos/p18';
-import { pickCoverStarter } from '@/lib/social/photos/starter-set';
 import type { UsedPhotoLog } from '@/lib/social/photos/used-photos';
 import type { PhotoDeps } from '@/lib/social/photos/find';
-import type { FitCheck } from '@/lib/social/render/fit-check';
+import type { FitCheck, FitResult } from '@/lib/social/render/fit-check';
 import { toRenderPost } from '@/lib/social/render/from-draft';
+import type { Post } from '@/lib/social/render/types';
 
 import type { PipelineStages } from './stages';
 
+/** The render review (photo spec §5b), injected so tests and runs without it skip it. */
+export type RenderReviewStep = (input: { post: Post; storyId: string; traces: import('@/lib/social/photos/find').PhotoTrace[]; fit: FitResult; fitCheck: FitCheck }) => Promise<{ post: Post; fit: FitResult; log: string[] }>;
+
 /**
  * `fitCheck` is the render-fit check (every element inside the slide);
- * live runs pass `checkRenderFit`, tests a stub. Then the M7 checks that
- * need photos or the render (spec §6):
- *   C6 photo credit / licence / agency → a story slide drops the photo
- *      (text-only); the cover takes the next starter-set photo (logged)
- *   render fit, C7 dropped text → set aside as `render-failed`
+ * live runs pass `checkRenderFit`, tests a stub.
  */
 export type DesignDeps = PhotoDeps & {
   fitCheck: FitCheck;
-  /** The used-photo log (7-day rule) and the bank (designed stat backgrounds); empty when not given (tests). */
+  /** The used-photo log (7-day rule); empty when not given (tests). */
   usedLog?: UsedPhotoLog;
-  bank?: BankEntry[];
   now?: () => Date;
   /** Identity results per story, shared with the Writer's availability flags. */
   identitiesFor?: (storyId: string) => IdentityCache;
+  review?: RenderReviewStep;
 };
+
+const facesUnderText = (fit: FitResult) => new Set(fit.problems.flatMap((p) => { const m = /^slide (\d+) faces: .* covers a face$/.exec(p); return m ? [Number(m[1])] : []; }));
 
 export function createDesignStage(deps: DesignDeps): PipelineStages['design'] {
   // Photos picked earlier in this run (Tommy, 2026-10-07: both PREVIEW covers got the same microchip).
@@ -50,43 +59,29 @@ export function createDesignStage(deps: DesignDeps): PipelineStages['design'] {
     // The used-photo check: the last 7 days (the log) plus every photo picked earlier in this run.
     const recent = new Set([...(deps.usedLog ? await deps.usedLog.recent(now) : []), ...usedThisRun]);
     const lastUsed = deps.usedLog ? await deps.usedLog.lastUsed() : new Map<string, string>();
-    const photos = await photosForDraft(draft.filled, brief.parsed, brief.pages, { ...deps, jev }, { recent, bank: deps.bank ?? [], lastUsed, identities: deps.identitiesFor?.(draft.storyId) });
-    // C6: never ship a photo without an allowed, credited licence.
+    const photos = await photosForDraft(draft.filled, brief.parsed, brief.pages, { ...deps, jev }, { recent, lastUsed, identities: deps.identitiesFor?.(draft.storyId) });
+    // C6: never ship a photo without an allowed, credited licence. A failing photo goes; the slide shows its icon.
     const traces = [photos.cover, ...photos.slides];
-    const used = new Set([...recent, ...traces.flatMap((t) => (t.photo ? [t.photo.url] : []))]);
     const photoReplacements: string[] = [];
     for (const [i, t] of traces.entries()) {
       const failures = t.photo ? checkPhotoCredit(t.photo, i === 0 ? 'cover' : `slide ${i + 1}`, brief.parsed) : [];
       if (failures.length === 0) continue;
-      // Story slides drop the photo (text-only); the cover takes a starter photo (the starter set is cover-only).
-      if (i > 0) {
-        photoReplacements.push(`C6 ${failures[0]!.where}: ${failures.map((f) => f.detail).join('; ')} → text-only`);
-        t.steps.push(`C6 dropped: ${failures.map((f) => f.detail).join('; ')} → text-only`);
-        t.photo = null;
-        t.via = 'text-only';
-        continue;
-      }
-      // The cover's last step (spec §5.1 Photo chain v1): the branded cover card once approved, else an AI-compute starter photo.
-      if ((deps.designed ?? DESIGNED_GRAPHICS).coverCard) {
-        photoReplacements.push(`C6 ${failures[0]!.where}: ${failures.map((f) => f.detail).join('; ')} → branded cover card`);
-        t.steps.push(`C6 replaced: ${failures.map((f) => f.detail).join('; ')} → branded cover card`);
-        t.photo = null;
-        t.via = 'cover-card';
-        continue;
-      }
-      const starter = pickCoverStarter(used).photo;
-      used.add(starter.url);
-      photoReplacements.push(`C6 ${failures[0]!.where}: ${failures.map((f) => f.detail).join('; ')} → ${starter.url}`);
-      t.steps.push(`C6 replaced: ${failures.map((f) => f.detail).join('; ')} → starter set ${starter.url}`);
-      t.photo = starter;
-      t.via = 'starter';
+      const to = draft.filled.slides[i - 1]?.type === 'quote' ? 'type-led' : 'icon';
+      photoReplacements.push(`C6 ${failures[0]!.where}: ${failures.map((f) => f.detail).join('; ')} → ${to}`);
+      t.steps.push(`C6 dropped: ${failures.map((f) => f.detail).join('; ')} → ${to}`);
+      t.photo = null;
+      t.via = to;
     }
-    const render = toRenderPost(
-      draft.filled,
-      { cover: photos.cover.photo, slides: photos.slides.map((t) => t.photo), coverCard: photos.cover.via === 'cover-card' },
-      { source: brief.parsed.sources[0]?.outlet ?? story.outlets[0] ?? '', sourceUrl: brief.parsed.sources[0]?.url ?? story.url, publishedAt: story.publishedAt.toISOString() },
-    );
-    const fit = await deps.fitCheck(render);
+    const meta = { source: brief.parsed.sources[0]?.outlet ?? story.outlets[0] ?? '', sourceUrl: brief.parsed.sources[0]?.url ?? story.url, publishedAt: story.publishedAt.toISOString() };
+    let render = toRenderPost(draft.filled, { cover: photos.cover.photo, slides: photos.slides.map((t) => t.photo), icons: traces.map((t) => t.icon) }, meta);
+    let fit = await deps.fitCheck(render);
+    // A person photo full bleed whose face ends up under text: the split layout instead (photo spec §4), one re-render.
+    const bleedFaces = [...facesUnderText(fit)].filter((n) => render.slides[n - 1]?.photoBleed);
+    if (bleedFaces.length) {
+      render = { ...render, slides: render.slides.map((s, i) => (bleedFaces.includes(i + 1) ? { ...s, photoBleed: false, ...(s.layoutVariant === 'image' ? { layoutVariant: 'text' as const, photoPlacement: 'top' as const } : {}) } : s)) };
+      photoReplacements.push(...bleedFaces.map((n) => `slide ${n}: a face under text on the full-bleed photo → split layout`));
+      fit = await deps.fitCheck(render);
+    }
     if (!fit.ok) {
       const detail = [...fit.problems, ...fit.violations.map((v) => `slide ${v.slide} ${v.element} outside the slide (${JSON.stringify(v.over)}): "${v.text}"`)].join('; ');
       return { ok: false, reasonCode: 'render-failed', detail, costUsd: tally.costUsd };
@@ -101,7 +96,16 @@ export function createDesignStage(deps: DesignDeps): PipelineStages['design'] {
     if (dropped.length > 0) {
       return { ok: false, reasonCode: 'render-failed', detail: dropped.map((f) => `C7 ${f.where}: ${f.detail}`).join('; '), costUsd: tally.costUsd };
     }
-    for (const t of traces) if (t.photo) usedThisRun.add(t.photo.url);
+    // The render review (photo spec §5b): settings only; the fit and C7 checks hold after every fix.
+    let reviewLog: string[] = [];
+    if (deps.review) {
+      const r = await deps.review({ post: render, storyId: draft.storyId, traces, fit, fitCheck: deps.fitCheck });
+      render = r.post;
+      reviewLog = r.log;
+      const after = checkDroppedText(draft.filled, r.fit.slideText);
+      if (!r.fit.ok || after.length) return { ok: false, reasonCode: 'render-failed', detail: `after the render review: ${[...r.fit.problems, ...after.map((f) => f.detail)].join('; ')}`, costUsd: tally.costUsd };
+    }
+    for (const sl of render.slides) if (sl.photoUrl) usedThisRun.add(sl.photoUrl);
     return {
       ok: true,
       value: {
@@ -109,7 +113,7 @@ export function createDesignStage(deps: DesignDeps): PipelineStages['design'] {
         title: draft.filled.cover,
         render,
         photos: traces,
-        checks: { fixes: draft.mechanical?.fixes ?? [], warnings: draft.mechanical?.warnings ?? [], photoReplacements },
+        checks: { fixes: draft.mechanical?.fixes ?? [], warnings: draft.mechanical?.warnings ?? [], photoReplacements, ...(deps.review ? { renderReview: reviewLog } : {}) },
         stages: [],
         costUsd: tally.costUsd,
       },

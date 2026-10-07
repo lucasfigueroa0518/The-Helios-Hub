@@ -18,7 +18,8 @@ import type { FilledDraft, ImageRequest } from '@/lib/social/writer/draft';
 
 import type { PipelineStages } from './stages';
 
-const PLACEHOLDER = '/social/starter/data-center-roof.jpg';
+/** Any local image: the budget measures text space, not the photo (the starter set is out, photo spec §6). */
+const PLACEHOLDER = '/social/helios-mark.png';
 
 const placeholder = (source: Photo['source'], subject: string | null): Photo => ({ url: PLACEHOLDER, credit: 'placeholder (budget measurement)', source, width: 2048, height: 1536, qid: subject ? 'Q0' : null, subject });
 

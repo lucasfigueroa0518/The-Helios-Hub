@@ -278,11 +278,32 @@ export type SlideCopy = {
   logoWide?: boolean;
 
   /**
-   * Cover with no photo, headshot or logo: the branded cover card, a
-   * Helios-designed graphic (spec §5.1 Photo chain v1; in use once Tommy
-   * approves it).
+   * The icon drawn when the slide has no photo (render/icons.ts; photo spec
+   * §5): faint Helios-orange outline off the bottom-right edge; on the cover,
+   * raised and slightly brighter. Set on every slide; unused when a photo shows.
    */
-  coverCard?: boolean;
+  icon?: string;
+
+  /**
+   * Icon background placement, set by the layout rotation so a run of icon
+   * slides doesn't look identical (photo spec §5a): `right` (default) or `left`.
+   */
+  iconSide?: 'right' | 'left';
+
+  /**
+   * A person photo framed for full bleed (photo spec §4): one face, whole, in
+   * the upper half (from-draft.ts canBleedPerson). Only then may a subject
+   * photo sit under text; the render check still fails a face under text.
+   */
+  photoBleed?: boolean;
+
+  /**
+   * Render review settings (photo spec §5b): how dark the fade under text is,
+   * and whether a full-bleed slide's text sits at the top or the bottom.
+   * Unset: the layout's default.
+   */
+  fade?: 'normal' | 'strong';
+  bleedText?: 'bottom' | 'top';
 
   /**
    * Where to centre the photo's crop, as object-position fractions (0–1),

@@ -378,12 +378,32 @@
 .helios-cover--logo .helios-cover__text { top: 820px; }
 .helios-cover--logo .helios-cover__headline { font-size: 84px; max-height: 434px; }
 
-/* Branded cover card (spec §5.1 Photo chain v1): the Helios sun-mark whole, clear space on every side, headline below. */
-.helios-cover--card { background: var(--brand-canvas); }
-.helios-cover-card { position: absolute; top: 0; left: 0; width: 1080px; height: 780px; z-index: 0; display: flex; align-items: center; justify-content: center; }
-.helios-cover-card__mark { width: 440px; height: 440px; margin-top: 60px; object-fit: contain; }
-.helios-cover--card .helios-cover__text { top: 820px; }
-.helios-cover--card .helios-cover__headline { font-size: 84px; max-height: 434px; }
+/* Icon backgrounds (photo spec §5; the approved mock-ups, docs/superpowers/m8-drafts/icon-mockups/):
+   one large outline icon in faint Helios orange running off the bottom edge, a faint orange glow.
+   Behind everything on the slide; text and layout unchanged. */
+.helios-icon-bg { position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.helios-icon-bg__glow { position: absolute; inset: 0; background: radial-gradient(circle at 85% 85%, rgba(255, 94, 26, 0.07), transparent 55%); }
+.helios-icon-bg__icon { position: absolute; width: 1150px; height: 1150px; right: -330px; bottom: -260px; color: rgba(255, 94, 26, 0.17); }
+.helios-icon-bg__icon svg { display: block; }
+/* The layout rotation alternates the side so a run of icon slides doesn't look identical (photo spec §5a). */
+.helios-icon-bg--left .helios-icon-bg__glow { background: radial-gradient(circle at 15% 85%, rgba(255, 94, 26, 0.07), transparent 55%); }
+.helios-icon-bg--left .helios-icon-bg__icon { right: auto; left: -330px; }
+/* Cover (photo spec §5, format decided, exact look open): the icon raised, clear of the headline at the bottom, slightly brighter. */
+.helios-cover--icon .helios-icon-bg { z-index: 0; }
+.helios-icon-bg--cover .helios-icon-bg__glow { background: radial-gradient(circle at 78% 24%, rgba(255, 94, 26, 0.10), transparent 55%); }
+.helios-icon-bg--cover .helios-icon-bg__icon { width: 860px; height: 860px; right: -170px; top: -110px; bottom: auto; color: rgba(255, 94, 26, 0.26); }
+
+/* Render review settings (photo spec §5b): a stronger fade under text; text at the top of a full-bleed slide. */
+.helios-fade--strong [data-scrim="gradient"]::before {
+  top: -260px;
+  background: linear-gradient(to bottom, rgba(10, 10, 10, 0) 0, rgba(10, 10, 10, 0.92) 200px, rgba(10, 10, 10, 0.95) 100%);
+}
+.helios-image--text-top .helios-image__copy { top: 0; bottom: auto; padding: 96px 96px 0; }
+.helios-image--text-top [data-scrim="gradient"]::before {
+  top: 0;
+  bottom: -180px;
+  background: linear-gradient(to top, rgba(10, 10, 10, 0) 0, rgba(10, 10, 10, 0.82) 180px, rgba(10, 10, 10, 0.88) 100%);
+}
 
 /* Arrow: top right, 8% down (spec §5.2). On a photo it sits on a dark disc. */
 .helios-cover__chevron {
@@ -432,6 +452,13 @@
   height: 500px;
 }
 .helios-text--photo-below .helios-split__photo { margin-top: auto; }
+/* A logo on a story slide (photo spec §4): the logo card's plate inside the photo region, the logo whole. */
+.helios-logo-region { display: flex; align-items: center; justify-content: center; }
+.helios-logo-region__plate {
+  width: 560px; height: 340px; border-radius: 24px; padding: 60px; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center; border-bottom: 6px solid var(--brand-orange);
+}
+.helios-logo-region__logo--wide { width: 440px; max-width: none; height: auto; max-height: 220px; flex: none; }
 .helios-text--photo-below .helios-text__headline { font-size: 80px; max-height: 230px; }
 .helios-text--photo-below .helios-text__body { font-size: 40px; max-height: 250px; }
 .helios-text--photo-top { padding-top: 0; }

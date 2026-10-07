@@ -194,7 +194,8 @@ window.__faces = (async () => {
       const out: Array<{ slide: number; photo: string; faces: Box[]; focus: { x: number; y: number; windowW?: number; faceShare?: number } | null; kind: string }> = [];
       // Faces only on subject and article photos (Tommy, 2026-10-06): starter and pre-screened stock
       // photos are people-free by definition, and a false detection there would only move a crop.
-      for (const img of [...document.querySelectorAll<HTMLImageElement>('img.helios-photo[data-photo-kind="subject"]')]) {
+      // A person photo full bleed (photo spec §4) is checked the same way: its faces must stay clear of text.
+      for (const img of [...document.querySelectorAll<HTMLImageElement>('img.helios-photo[data-photo-kind="subject"], img.helios-photo[data-photo-kind="person-bleed"]')]) {
         const src = img.currentSrc || img.src;
         if (!bySrc.has(src)) {
           const im = await load(src);
@@ -281,6 +282,8 @@ window.__faces = (async () => {
           const over = { left: Math.max(0, b.left - r.left), top: Math.max(0, b.top - r.top), right: Math.max(0, r.right - b.right), bottom: Math.max(0, r.bottom - b.bottom) };
           // Full-bleed photos are clipped by the slide; they may extend past it (spreads by design).
           if (el.matches('img.helios-photo, .helios-backdrop__shade, .helios-cover, .helios-image')) return;
+          // Icon backgrounds run off the edge by design (photo spec §5) and carry no text.
+          if (el.closest('.helios-icon-bg')) return;
           if (Object.values(over).some((v) => v > tol)) {
             violations.push({ slide, element: `${el.tagName.toLowerCase()}.${[...el.classList].join('.')}`, text: (el.textContent ?? '').trim().slice(0, 80), over: Object.fromEntries(Object.entries(over).map(([k, v]) => [k, Math.round(v)])) as R });
           }

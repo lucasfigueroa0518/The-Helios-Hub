@@ -14,7 +14,6 @@ import path from 'node:path';
 
 import { checkDroppedText } from '@/lib/social/mechanical/checks';
 import { createMechanicalStage } from '@/lib/social/pipeline/mechanical-stage';
-import { pickCoverStarter } from '@/lib/social/photos/starter-set';
 import { checkRenderFit } from '@/lib/social/render/fit-check';
 import { toRenderPost } from '@/lib/social/render/from-draft';
 import { toSlug, writeGeneratedPost } from '@/lib/social/render/local-store';
@@ -32,12 +31,9 @@ async function main() {
     const mech = await createMechanicalStage()({ storyId, submission: sub, filled: fillDraft(sub, brief) }, { storyId, parsed: brief, raw: '', pages: [] });
     const filled = mech.ok ? mech.value.filled : fillDraft(sub, brief);
     const traces = l.design.photos;
-    const photos = traces.map((t: any, i: number) => {
-      if (t.via !== 'starter') return t.photo;
-      if (i > 0) return null; // story slide: text-only
-      return pickCoverStarter(new Set()).photo;
-    });
-    const coverChange = photos[0]?.url !== traces[0].photo?.url ? `cover starter → ${photos[0]?.url}` : 'cover unchanged';
+    // The starter set is out (photo spec §6): a saved starter photo becomes the icon background.
+    const photos = traces.map((t: any) => (t.via === 'starter' ? null : t.photo));
+    const coverChange = photos[0]?.url !== traces[0].photo?.url ? 'cover starter → icon background' : 'cover unchanged';
     const post = toRenderPost(filled, { cover: photos[0], slides: photos.slice(1) }, { source: brief.sources[0]?.outlet ?? '', sourceUrl: brief.sources[0]?.url ?? '', publishedAt: run.startedAt });
     const name = toSlug(filled.cover).slice(0, 40);
     const fit = await checkRenderFit(post, { screenshotDir: out, name });

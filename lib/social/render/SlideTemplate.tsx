@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 
+import { DEFAULT_ICON, ICONS } from '@/lib/social/render/icons';
 import { fitText } from '@/lib/social/render/text-fit';
 import type { Post, SlideCopy, SpanRun } from '@/lib/social/render/types';
 
@@ -31,7 +32,10 @@ export type SlideTemplateProps = {
  * Layouts:
  *   cover        no photo · scene full-bleed + scrim · subject split (photo top, headline below)
  *                · logo card (Helios canvas, the company logo on its own plate, headline below)
- *                · branded cover card (no photo, headshot or logo: the Helios sun-mark, headline below)
+ *                · icon (no photo: the Writer's icon, raised and slightly brighter; photo spec §5)
+ *   every slide without a photo draws its icon background (photo spec §5): one large faint
+ *   orange outline icon off the bottom edge with a faint glow; text and layout unchanged.
+ *   A person photo framed for full bleed (photoBleed) may sit under text like a scene photo.
  *   text         headline + body; a photo takes its own region below or on top (split)
  *   landing      headline + body; photo region below
  *   stat         headline + body + big number; a scene photo is a darkened background
@@ -70,7 +74,8 @@ export function SlideTemplate({ post, position }: SlideTemplateProps) {
 
   // Legacy aliases → design-v1 components.
   let kind: string = slide.layoutVariant === 'story_beat' ? 'text' : slide.layoutVariant === 'data_block' ? 'stat' : slide.layoutVariant;
-  const scenePhoto = Boolean(slide.photoUrl) && slide.photoKind !== 'subject';
+  // A person photo framed for full bleed (photo spec §4) may sit under text like a scene photo.
+  const scenePhoto = Boolean(slide.photoUrl) && (slide.photoKind !== 'subject' || slide.photoBleed === true);
   // Rule 3: full bleed under text only for a scene photo; a spread needs one too.
   if (slide.panoramaSide && scenePhoto && (kind === 'text' || kind === 'image' || kind === 'landing')) kind = 'spread';
   const textFromImage = kind === 'image' && !scenePhoto;
@@ -88,6 +93,7 @@ export function SlideTemplate({ post, position }: SlideTemplateProps) {
       role="img"
       aria-label={slide.altText}
     >
+      {!slide.photoUrl && kind !== 'cover' && kind !== 'follow' && <IconBackground slide={slide} />}
       {showWordmark && (
         <div className="helios-masthead helios-masthead--minimal" aria-hidden="true">
           <div className="helios-masthead__wordmark">HELIOS</div>
@@ -110,6 +116,28 @@ export function SlideTemplate({ post, position }: SlideTemplateProps) {
 }
 
 /* ── Building blocks ──────────────────────────────────────────────── */
+
+/**
+ * The icon background (photo spec §5; the approved mock-ups in
+ * docs/superpowers/m8-drafts/icon-mockups/): one large outline icon in faint
+ * Helios orange running off the bottom edge, a faint orange glow. Behind
+ * everything; never a photo, so no credit and no contrast rule.
+ */
+function IconBackground({ slide, cover }: { slide: SlideCopy; cover?: boolean }) {
+  const Icon = (ICONS[slide.icon ?? DEFAULT_ICON] ?? ICONS[DEFAULT_ICON]!).icon;
+  const side = slide.iconSide === 'left' ? 'left' : 'right';
+  return (
+    <div className={`helios-icon-bg helios-icon-bg--${cover ? 'cover' : side}`} aria-hidden="true" data-icon={slide.icon ?? DEFAULT_ICON}>
+      <div className="helios-icon-bg__glow" />
+      <div className="helios-icon-bg__icon">
+        <Icon width="100%" height="100%" strokeWidth={0.42} absoluteStrokeWidth={false} />
+      </div>
+    </div>
+  );
+}
+
+/** Photo-kind marker for the render check: a person photo full bleed is checked for faces under text. */
+const photoKindAttr = (slide: SlideCopy) => (slide.photoKind === 'subject' && slide.photoBleed ? 'person-bleed' : slide.photoKind ?? 'scene');
 
 /** Minimum font sizes (px) per text role: the floor for rule 1. */
 const MIN = { headline: 44, cover: 48, body: 28, number: 52, splitNumber: 40, note: 22, quote: 36, by: 18, landing: 52, hook: 24 } as const;
@@ -157,6 +185,16 @@ function focusStyle(slide: SlideCopy): CSSProperties | undefined {
 
 /** A photo in its own region (rule 3: the only place a subject photo goes). */
 function RegionPhoto({ slide, className }: { slide: SlideCopy; className: string }) {
+  // A logo on a story slide (photo spec §4): whole, on its plate, never cropped like a photo.
+  if (slide.photoKind === 'logo') {
+    return (
+      <div className={`${className} helios-logo-region`} aria-hidden="true">
+        <div className={`helios-logo-region__plate helios-logo-card__plate--${slide.logoPlate ?? 'light'}`}>
+          <img className={`helios-photo helios-logo-card__logo${slide.logoWide ? ' helios-logo-region__logo--wide' : ''}`} src={slide.photoUrl} alt="" data-photo-kind="logo" />
+        </div>
+      </div>
+    );
+  }
   const style = focusStyle(slide);
   // The cover photo is absolutely positioned: centre a narrowed window by its left edge.
   const cover = className === 'helios-cover__photo' && slide.photoFocus?.windowW ? { left: `${Math.round((1080 - slide.photoFocus.windowW) / 2)}px` } : undefined;
@@ -166,7 +204,7 @@ function RegionPhoto({ slide, className }: { slide: SlideCopy; className: string
 /** A full-bleed scene photo under a gradient-scrimmed text block (rules 2 + 3). */
 function BleedPhoto({ slide, spread }: { slide: SlideCopy; spread?: 'left' | 'right' }) {
   const cls = spread ? `helios-bleed__photo helios-bleed__photo--spread-${spread}` : 'helios-bleed__photo';
-  return <img className={`helios-photo ${cls}`} src={slide.photoUrl} alt="" aria-hidden="true" data-photo-kind={slide.photoKind ?? 'scene'} style={spread ? undefined : focusStyle(slide)} />;
+  return <img className={`helios-photo ${cls}`} src={slide.photoUrl} alt="" aria-hidden="true" data-photo-kind={photoKindAttr(slide)} style={spread ? undefined : focusStyle(slide)} />;
 }
 
 /** Darkened full-bleed background behind a slide's content (spec §5.3a; rule 2 via the shade). */
@@ -188,19 +226,19 @@ function PhotoCredit({ credit }: { credit: string | undefined }) {
 /* ── Cover ────────────────────────────────────────────────────────── */
 
 function CoverSlide({ slide }: { slide: SlideCopy }) {
-  const mode = !slide.photoUrl ? (slide.coverCard ? 'card' : 'plain') : slide.photoKind === 'logo' ? 'logo' : slide.photoKind === 'subject' ? 'split' : 'bleed';
+  const mode = !slide.photoUrl ? 'icon' : slide.photoKind === 'logo' ? 'logo' : slide.photoKind === 'subject' && !slide.photoBleed ? 'split' : 'bleed';
   return (
-    <div className={`helios-cover helios-cover--${mode}`}>
+    <div className={`helios-cover helios-cover--${mode}${mode === 'bleed' && slide.fade === 'strong' ? ' helios-fade--strong' : ''}`}>
       {mode === 'bleed' && <BleedPhoto slide={slide} />}
       {mode === 'split' && <RegionPhoto slide={slide} className="helios-cover__photo" />}
       {mode === 'logo' && <LogoCard slide={slide} />}
-      {mode === 'card' && <CoverCard />}
+      {mode === 'icon' && <IconBackground slide={slide} cover />}
       <div className="helios-cover__text" data-scrim={mode === 'bleed' ? 'gradient' : undefined}>
         <Fit as="h1" className="helios-cover__headline" min={MIN.cover}>
           <SpanRunView run={slide.headline} />
         </Fit>
       </div>
-      <div className={`helios-cover__chevron${mode === 'plain' || mode === 'logo' || mode === 'card' ? '' : ' helios-cover__chevron--on-photo'}`} aria-hidden="true">→</div>
+      <div className={`helios-cover__chevron${mode === 'icon' || mode === 'logo' ? '' : ' helios-cover__chevron--on-photo'}`} aria-hidden="true">→</div>
     </div>
   );
 }
@@ -217,20 +255,6 @@ function LogoCard({ slide }: { slide: SlideCopy }) {
       <div className={`helios-logo-card__plate helios-logo-card__plate--${slide.logoPlate ?? 'light'}`}>
         <img className={`helios-photo helios-logo-card__logo${slide.logoWide ? ' helios-logo-card__logo--wide' : ''}`} src={slide.photoUrl} alt="" data-photo-kind="logo" />
       </div>
-    </div>
-  );
-}
-
-/**
- * Branded cover card (spec §5.1 Photo chain v1): the cover for a story with no
- * photo, headshot or logo. Helios design system: the near-black canvas, the
- * Helios sun-mark whole and unobscured with clear space on every side (logo
- * protection), and the headline below. No photo, no pattern, no data.
- */
-function CoverCard() {
-  return (
-    <div className="helios-cover-card" aria-hidden="true">
-      <img className="helios-cover-card__mark" src="/social/helios-mark.png" alt="" />
     </div>
   );
 }
@@ -409,7 +433,7 @@ function QuoteSlide({ slide }: { slide: SlideCopy }) {
 
 function ImageSlide({ slide, spread }: { slide: SlideCopy; spread?: 'left' | 'right' }) {
   return (
-    <div className={`helios-image${spread ? ` helios-image--spread-${spread}` : ''}`}>
+    <div className={`helios-image${spread ? ` helios-image--spread-${spread}` : ''}${slide.bleedText === 'top' ? ' helios-image--text-top' : ''}${slide.fade === 'strong' ? ' helios-fade--strong' : ''}`}>
       <BleedPhoto slide={slide} spread={spread} />
       <div className="helios-image__copy" data-scrim="gradient">
         {slide.headline && (

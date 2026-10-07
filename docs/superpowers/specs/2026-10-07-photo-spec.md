@@ -25,7 +25,6 @@ The rules of the rebuild spec §2 apply unchanged: fix the cause, classify every
 |---|---|
 | **Headshots** | The Wikidata main photo (P18) of an identity-verified person, openly licensed. |
 | **Logos** | The Wikidata logo (P154) of an identity-verified organization, if its Commons licence is open or public domain. Company brand-guideline preferences don't block it (Tommy: "If there are free, open-to-use logos that are just preferred not to be used by the companies, we can definitely use them."). |
-| **Company photos** | The Wikidata main photo (P18) of an identity-verified organization, often its headquarters (Tommy, 2026-10-07: "I like when buildings are used, like their headquarters"). Openly licensed, the same size rule as a headshot, and the face detector finds no face in it. Only on story slides tagged with that company; the cover of a company story stays its logo card. |
 | **Article photos** | From the story's own source articles, when the credit is: government, Wikimedia Commons, an open licence (CC0, CC BY, CC BY-SA, public domain), or the company itself when that company is a subject of the story ("Courtesy of OpenAI"). |
 | **Official announcement images** | Images on a story company's own announcement page that the Reporter already opened. A plain list says which domains belong to which company (e.g. anthropic.com is Anthropic's; 9to5google.com is not Google's). No approval column, no per-company terms. Credit: "Image: <Company>". |
 | **Stock** | Openverse, openly licensed, through the frozen stock link (pre-screen v4 + vision check). |
@@ -55,14 +54,14 @@ The order tried, left to right. The last step always succeeds.
 | Slide | Order |
 |---|---|
 | **Cover** | article or official image → the person's headshot (person story) → the company's logo card (company story) → stock → cover icon background |
-| **Story slide** | article or official image → the subject the slide is about: a person's headshot, or a company's main photo (often its headquarters), then its logo → stock → icon background |
+| **Story slide** | article or official image → headshot or logo of the subject the slide is about → stock → icon background |
 | **Quote slide** | the speaker's verified headshot → a second verified photo of them (§3) → an article photo whose caption names the speaker → otherwise a type-led quote slide (quote mark, quote, speaker's name and role) on the icon background. Quote slides are allowed whether or not the speaker has a photo (Tommy, 2026-10-07: unknown former employees may have the best quote). Never another person's photo or the company's logo in the speaker's spot. |
 | **Stat slide** | icon background, always. Tommy, 2026-10-07: "Stat slides keep IMAGE none; the icon background will be automatic." |
 | **Spread** (two slides, one wide photo across the seam) | kept (rebuild spec §5.4). One wide literal photo; if none is wide enough, both render as normal slides. |
 
 - **Everyone quoted is a SUBJECT** (Tommy, 2026-10-07). A change to the frozen Reporter: one rule in its prompt, plus a code check that every quote's speaker is in SUBJECTS. `cause · prompt + code check · 0 new stages · 0 new AI calls`. If a speaker still has no verified photo, the quote gets the type-led quote slide.
 - **People may be full-bleed if properly framed** (Tommy, 2026-10-07: "can we do full bleed and properly frame them?"). Code uses the face detector's face box to crop so the face sits in the upper part of the slide and fully clear of the text area and the HELIOS mark. If the photo can't be framed that way (face too low, too tight, cut off), the slide uses the split or framed-inset layout instead. The render review (§5b) checks faces under text or cut off. This replaces the renderer's freeze rule "person photos use split layouts only".
-- **Company photos:** a company's main photo at most once per post (the no-repeat rule), on story slides only.
+- **Companies: logos only** (Tommy, 2026-10-07). Never a company's main photo (P18), on any slide.
 - **Logos:** on the cover, and on at most one story slide per post. Exempt from the 7-day rule across posts; never twice in one post besides that.
 - **No repeats:** no photo twice in a post or within 7 days, every source except logos.
 - **The Writer asks only for what the finder can deliver:** its IMAGE request and "has a photo" flag use the same checks as the finder.
@@ -71,7 +70,8 @@ The order tried, left to right. The last step always succeeds.
 
 - **DECIDED, look (story and stat slides):** the mock-ups in `docs/superpowers/m8-drafts/icon-mockups/`. One large outline icon, faint Helios orange, running off the bottom-right edge, faint orange glow; the text and layout unchanged.
 - **DECIDED, cover:** its own format: the icon raised (clear of the headline at the bottom) and slightly brighter. **OPEN:** exact look, from a mock-up.
-- **DECIDED:** each icon must relate to the story and the slide (a clock for a deadline, a person for users, a heartbeat for health, a shield for security). **OPEN:** the set, and how the right icon is chosen.
+- **DECIDED:** each icon must relate to the story and the slide (a clock for a deadline, a person for users, a heartbeat for health, a shield for security).
+- **DECIDED, how it's chosen (Tommy, 2026-10-07):** the Writer picks. It gets a fixed list of about 25 open-source outline icons (Lucide, ISC licence: clock, shield, heartbeat, chip, person, scale, money…) and names one per slide and per cover option. Code checks it's on the list. The icon is the last step of every chain, so it is used whenever no photo is found. 0 new AI calls.
 
 ## 5a. Target look for placement (DECIDED)
 
@@ -110,6 +110,8 @@ The order tried, left to right. The last step always succeeds.
 - **Everything is logged** (each flag and action). A problem that repeats in 3+ of 10 posts is fixed at its cause (finder, crop code, layout), per the rebuild spec §2.3.
 - **Code checks first** (free, already partly in the render check): text fit, contrast, faces under text or cut off, over-zoomed crops, near-identical images, bare slides. The vision review covers what code can't judge.
 
+**First end-to-end run (Tommy, 2026-10-07):** the review runs with fixes on (option B: it changes slide settings and the renderer rebuilds the HTML; it never edits text). It saves the before and after of every slide it changes, with its reason, so Tommy can judge whether its fixes helped. That run counts as the calibration.
+
 **Calibration before the loop is switched on.** Run the review report-only on saved posts Tommy has already judged, and compare its flags with his. The loop is switched on only when Haiku agrees with Tommy on most flags; this is the written exception the rebuild spec §2.2 requires for a new AI step. Calibration also reports the real cost per post (estimate: one Haiku call per post on the contact sheet, ~$0.006 per call, 2 calls per post; per-slide calls or Sonnet would cost several times more and are not the design).
 
 **Model choice (Tommy, 2026-10-07): Haiku.** A free open-source model from Hugging Face (Lucas's suggestion) would need Tommy's Mac on during every run or a much bigger worker; parked.
@@ -126,7 +128,7 @@ The order tried, left to right. The last step always succeeds.
 - A paid editorial photo licence, if the account grows.
 
 **OPEN, for Tommy before build:**
-1. The cover icon look and the icon set (§5).
+1. The cover icon's exact look (§5): built to the decided format (icon raised, slightly brighter), shown to Tommy on the first end-to-end run.
 
 ## 6a. Clean-up decisions after the Step 0 map (Tommy, 2026-10-07)
 
@@ -137,7 +139,8 @@ Quoted as Tommy gave them:
 - "Leave commit 32b3234 as is. Add one line to STATUS saying its 'per Tommy' approval claim was wrong."
 - Two answers to the map's questions are in §3 (lead image, slide subject). Quote slides: see the corrected §4 row (Tommy, 2026-10-07).
 - "Social gets its own new cloud worker (Lucas is setting it up). Never deploy Social to helios-orch-worker." (Plan, M10.)
-- Third round (Tommy, 2026-10-07): a speaker still missing after the Reporter's retry: keep the quote, log it, type-led slide; the QUOTES-line edit approved; official images from each company's own news and blog paths only; the naming rule (§3); tags re-checked right after the Editor; the Reporter marks each SUBJECT person or organization; company main photos (headquarters) on story slides, the cover stays the logo card (§2, §4).
+- Third round (Tommy, 2026-10-07): a speaker still missing after the Reporter's retry: keep the quote, log it, type-led slide; the QUOTES-line edit approved; official images from each company's own news and blog paths only; the naming rule (§3); tags re-checked right after the Editor; the Reporter marks each SUBJECT person or organization; the cover of a company story stays its logo card.
+- Fourth round (Tommy, 2026-10-07): no company main photos (P18) anywhere; companies get their logo only. This reverses the headquarters-photo go-ahead given in chat earlier the same day ("I like when buildings are used, like their headquarters"). Cover order and the full-bleed default stay as built. Commit Links 2–6; approved going over the $2.00 daily cap for the first end-to-end run (cap $2.50).
 - Second round (Tommy, 2026-10-07): §5a matches §4 (type-led quote slide); everyone quoted is a SUBJECT (§4); the official-image text check uses the existing vision call (§3 rule 4); the §3 "depicts" wording; the fixed cases in §7 Step 3.
 
 ## 7. How it gets built (DECIDED: the rebuild plan's method)

@@ -101,7 +101,7 @@ async function main() {
       draftRetries: r.draftRetries,
       retryErrors: r.retryErrors,
       dropped: r.imageRequestsDropped,
-      subjects: forWriter.subjects.map((s) => `${s.id} ${s.name}: ${s.type ?? '?'}${s.headshot_available ? ' headshot' : ''}${s.logo_available ? ' logo' : ''}${s.photo_available ? ' photo' : ''}`),
+      subjects: forWriter.subjects.map((s) => `${s.id} ${s.name}: ${s.type ?? '?'}${s.headshot_available ? ' headshot' : ''}${s.logo_available ? ' logo' : ''}`),
       articlePhotos: forWriter.article_photos.map((p) => `${p.official_of ? `official ${p.official_of}` : `names ${p.subject_ids.join(',')}`}: ${p.url.slice(-50)}`),
       cover: d ? `${d.cover_options[d.chosen_cover - 1]!.image.kind}: ${d.cover_options[d.chosen_cover - 1]!.image.value.slice(-50)} [${d.cover_options[d.chosen_cover - 1]!.subject_ids?.join(',') ?? '-'}]` : null,
       slides: d ? d.slides.map((s, i) => `${i + 2} ${s.type}: ${s.image.kind}${s.image.value ? ` ${s.image.value.slice(-45)}` : ''} [${s.subject_ids?.join(',') ?? '-'}]`) : null,

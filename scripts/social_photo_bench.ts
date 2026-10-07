@@ -126,8 +126,8 @@ async function main() {
     ctx.identities = identities.get(r.story) ?? new Map();
     identities.set(r.story, ctx.identities);
     const deps = replay ? { ...replayDeps(accepted.get(r.id)!), stock } : { jev: liveJev!, stock, vision: liveVision };
-    // Replay: stat-slide requests run as story slides (the stock step is what's frozen).
-    const slot = replay && r.slot === 'backdrop' ? 'split' : r.slot;
+    // Replay: stat and quote stock requests run as story slides (the photo spec gives those slides no stock; the stock step must be unchanged).
+    const slot = replay && r.slot !== 'split' ? 'split' : r.slot;
     const trace = await findPhoto(r.request, ctx, deps, { text: r.slideText, speaker: r.speaker, slot, cover: r.cover });
     const row: (typeof rows)[number] = { ...r, trace };
     if (replay) {

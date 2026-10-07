@@ -37,8 +37,8 @@ export function layoutOf(s: SlideCopy): Layout {
 const canSwap = (s: SlideCopy) => (s.layoutVariant === 'text' || s.layoutVariant === 'image') && !s.panoramaSide;
 /** Photo-less text slides alternate between copy at the top and copy low (Tommy, 2026-10-06). */
 const TEXT_ONLY: Layout[] = ['text-only', 'text-only-low'];
-/** Full bleed under text is for scene photos only (layout rule 3). */
-const canBleed = (s: SlideCopy) => s.photoKind !== 'subject';
+/** Full bleed under text: scene photos, and person photos framed for it (photo spec §4). */
+const canBleed = (s: SlideCopy) => (s.photoKind ?? 'scene') === 'scene' || s.photoBleed === true;
 
 function withLayout(s: SlideCopy, layout: Layout): SlideCopy {
   if (layout === 'text-only' || layout === 'text-only-low') return { ...s, layoutVariant: 'text', textAnchor: layout === 'text-only-low' ? 'bottom' : 'top' };
@@ -74,6 +74,16 @@ export function rotateLayouts(input: SlideCopy[]): RotationResult {
     const to = options.find((l) => l !== from && !neighbours.has(l)) ?? options.find((l) => l !== from)!;
     slides[target] = withLayout(slides[target]!, to);
     changes.push(`slide ${target + 1}: ${from} → ${to}`);
+  }
+  // Icon slides (no photo) in a row alternate the icon's side (photo spec §5a: a run of icon slides doesn't look identical).
+  let side: 'right' | 'left' = 'right';
+  for (let i = 0; i < slides.length; i++) {
+    const s = slides[i]!;
+    const icon = !s.photoUrl && s.layoutVariant !== 'cover' && s.layoutVariant !== 'follow';
+    const prevIcon = i > 0 && !slides[i - 1]!.photoUrl && slides[i - 1]!.layoutVariant !== 'cover' && slides[i - 1]!.layoutVariant !== 'follow';
+    if (!icon) continue;
+    side = prevIcon ? (side === 'right' ? 'left' : 'right') : 'right';
+    if (side === 'left') slides[i] = { ...s, iconSide: 'left' };
   }
   return { slides, changes, unresolved };
 }

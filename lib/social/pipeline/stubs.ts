@@ -140,7 +140,7 @@ export function createStubStages(opts: StubOptions = {}): PipelineStages {
       return result('fact-checker', draft.storyId, draft);
     },
     async design(draft, _brief, story) {
-      const noPhoto = (request: ImageRequest): PhotoTrace => ({ request, photo: null, via: null, identity: null, steps: ['stub: no photo'] });
+      const noPhoto = (request: ImageRequest): PhotoTrace => ({ request, photo: null, via: 'icon', icon: null, identity: null, steps: ['stub: no photo'], alternates: [] });
       const photos = [noPhoto(draft.filled.cover_options[draft.filled.chosen_cover - 1]!.image), ...draft.filled.slides.map((s) => noPhoto(s.image))];
       return result('design', draft.storyId, {
         storyId: draft.storyId,

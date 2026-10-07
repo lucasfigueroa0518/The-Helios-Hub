@@ -13,7 +13,7 @@ import { STAGE_MODELS, type StageModelConfig } from '@/lib/social/pipeline/model
 import type { Brief, BriefError } from '@/lib/social/reporter/brief';
 import type { MessagesCreate } from '@/lib/social/reporter/reporter';
 import { DraftValidationError, SUBMIT_DRAFT_TOOL, fillDraft, type DraftSubmission, type ImageRequest } from '@/lib/social/writer/draft';
-import { checkWrittenDraft, pruneSubjectTags, type SubjectKinds } from '@/lib/social/writer/writer';
+import { checkWrittenDraft, defaultIcons, pruneSubjectTags, type SubjectKinds } from '@/lib/social/writer/writer';
 import { runStructuredCall, type StructuredFailure } from '@/lib/social/writer/structured-call';
 import type { TurnUsage } from '@/lib/social/reporter/reporter';
 import type { FilledDraft } from '@/lib/social/writer/draft';
@@ -78,5 +78,7 @@ export async function runEditor(brief: Brief, writerDraft: DraftSubmission, deps
   // Tags re-checked right after the Editor (Tommy, 2026-10-07): code, no retry. A tag the edited
   // words no longer name is removed and logged; the words and the requests stay as the Editor left them.
   const t = pruneSubjectTags(r.value, brief, deps.subjectKinds ?? null);
-  return { ok: true, draft: t.draft, filled: fillDraft(t.draft, brief), raw: r.raw, ...common, tagsDropped: t.dropped };
+  // An icon the Editor dropped or changed to one not on the list falls back to the default (logged).
+  const ic = defaultIcons(t.draft);
+  return { ok: true, draft: ic.draft, filled: fillDraft(ic.draft, brief), raw: r.raw, ...common, tagsDropped: [...t.dropped, ...ic.dropped] };
 }

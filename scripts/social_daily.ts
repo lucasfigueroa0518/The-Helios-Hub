@@ -13,6 +13,7 @@
  *   npx tsx scripts/social_daily.ts --stories 2            (cap $2.00)
  *   npx tsx scripts/social_daily.ts --cap-usd 1.50 --stories 2
  *   npx tsx scripts/social_daily.ts --stories 3 --hook --preview
+ *   npx tsx scripts/social_daily.ts --stories 2 --preview --review   (the render review on; before/after under the run folder, render-review)
  *
  * --hook: the Hook pass for this run only (prototype; never the daily
  * default). --preview: run.json is labelled PREVIEW (not an acceptance
@@ -44,6 +45,8 @@ async function main() {
   if (!Number.isFinite(capUsd) || capUsd <= 0) throw new Error('--cap-usd must be a positive amount');
   const stories = arg('--stories') ?? 2;
   const hookOn = process.argv.includes('--hook');
+  // The render review (photo spec §5b), fixes on, before/after saved (Tommy, 2026-10-07: the first end-to-end run is its calibration).
+  const reviewOn = process.argv.includes('--review');
   const preview = process.argv.includes('--preview');
 
   const { default: Anthropic } = await import('@anthropic-ai/sdk');
@@ -64,9 +67,9 @@ async function main() {
   const { liveMessagesCreate } = await import('@/lib/social/reporter/reporter');
   const { isWellKnownLive } = await import('@/lib/social/writer/well-known');
   const { createFileUsedPhotoLog } = await import('@/lib/social/photos/used-photos');
-  const { loadBank } = await import('@/lib/social/photos/bank');
+  const { detectFacesLive } = await import('@/lib/social/photos/faces');
+  const { createSecondPhotos } = await import('@/lib/social/photos/second-photo');
   const usedLog = createFileUsedPhotoLog();
-  const bank = await loadBank();
   type Selection = import('@/lib/social/ingest/select/select').Selection;
   type FitResult = import('@/lib/social/render/fit-check').FitResult;
   type PostObject = import('@/lib/social/pipeline/types').PostObject;
@@ -104,14 +107,19 @@ async function main() {
     budget,
     readPage,
     isWellKnown: isWellKnownLive,
-    fitCheck: async (post) => {
+    // A caller's own screenshot place (the render review's before/after) wins; otherwise the run's screenshots.
+    fitCheck: async (post, opts) => {
+      if (opts?.screenshotDir) return checkRenderFit(post, opts);
       const r = await checkRenderFit(post, { screenshotDir: shotDir, name: currentStory });
       fitResults.set(currentStory, r);
       return r;
     },
+    faces: detectFacesLive,
+    secondPhotos: createSecondPhotos(),
+    ...(reviewOn ? { renderReview: { dir: path.join(runDir, 'render-review') } } : {}),
     now,
     usedLog,
-    bank,
+
     reporterCapUsd: 0.45,
     maxReporterRuns: stories + 2,
     // Hook pass for this run only (--hook); its budget renders take no screenshots.
@@ -136,10 +144,17 @@ async function main() {
 
   // 7-day rule: a photo counts as used once its post reaches the review queue (today: the preview).
   // A PREVIEW run doesn't count (Tommy, 2026-10-06: not the acceptance batch).
-  if (!preview) await usedLog.record(result.posts.flatMap((p) => p.render.slides.flatMap((sl, i) => (sl.photoUrl ? [{ url: sl.photoUrl, usedAt: now.toISOString(), storyId: p.storyId, slide: i + 1 }] : []))));
-  const starterShare = (() => {
-    const all = result.posts.flatMap((p) => p.photos.filter((t) => t.photo));
-    return all.length ? all.filter((t) => t.via === 'starter').length / all.length : 0;
+  // Each entry carries its bank tags (photo spec §2): source, verified subject, credit, and a stock photo's scene.
+  if (!preview) {
+    await usedLog.record(result.posts.flatMap((p) => p.render.slides.flatMap((sl, i) => {
+      if (!sl.photoUrl) return [];
+      const t = p.photos.find((x) => x.photo?.url === sl.photoUrl);
+      return [{ url: sl.photoUrl, usedAt: now.toISOString(), storyId: p.storyId, slide: i + 1, source: t?.photo?.source, qid: t?.photo?.qid ?? null, subject: t?.photo?.subject ?? null, credit: sl.photoCredit, ...(t?.photo?.source === 'stock' ? { scene: t.request.value } : {}) }];
+    })));
+  }
+  const iconShare = (() => {
+    const all = result.posts.flatMap((p) => p.photos);
+    return all.length ? all.filter((t) => !t.photo).length / all.length : 0;
   })();
 
   // ── Outputs ──────────────────────────────────────────────────────────
@@ -187,7 +202,7 @@ async function main() {
     costByStage: result.costByStage,
     totalUsd: Number(budget.spent().toFixed(4)),
     // Information only (Tommy, 2026-10-06).
-    starterShare: Number(starterShare.toFixed(3)),
+    iconShare: Number(iconShare.toFixed(3)),
     // How often the 7-day rule gave way (Tommy, 2026-10-06).
     starterPoolExhausted: result.posts.flatMap((p) => p.photos).filter((t) => t.steps.some((x) => x.startsWith('starter-pool-exhausted'))).length,
     // Photo rule (Tommy, 2026-10-06): share of story slides with IMAGE none, and spreads used.
@@ -216,11 +231,12 @@ async function main() {
     for (const sa of result.setAsides) o += `- Set aside: ${sa.storyId} at ${sa.stage}: ${sa.reasonCode} (${sa.detail.slice(0, 200)})\n`;
     for (const post of result.posts) {
       const l = logs.get(post.storyId)!;
-      // The chain step that supplied the slide (spec §5.1 Photo chain v1).
+      // The chain step that supplied the slide (photo spec §4).
       const source = (t: PostObject['photos'][number] | undefined) => {
         if (!t) return '—';
-        const label: Record<string, string> = { none: 'none (IMAGE none)', 'text-only': 'none (text-only: nothing usable)', plain: 'none (stat: plain dark)', 'cover-card': 'branded cover card', 'stat-background': 'designed stat background' };
-        return label[t.via ?? ''] ?? String(t.via);
+        if (t.via === 'icon') return `icon background (${t.icon ?? 'default'})`;
+        if (t.via === 'type-led') return `type-led quote (${t.icon ?? 'default'})`;
+        return String(t.via);
       };
       o += `\n## ${post.title}\n\nCost: $${post.costUsd.toFixed(4)} (by stage: ${post.stages.join(' → ')})\n\n| Slide | Layout | Photo source | Request | Vision $ |\n|---|---|---|---|---|\n`;
       post.render.slides.forEach((sl, i) => {

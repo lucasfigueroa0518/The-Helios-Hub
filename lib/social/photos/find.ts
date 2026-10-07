@@ -1,60 +1,61 @@
 /**
- * The photo finder: spec §5.1 "Photo chain v1" (Tommy, 2026-10-07), the
- * only description of the chain. Fully automatic; only sources with no
- * rights questions. When nothing is found the slide is a designed slide; no
- * further source is tried.
+ * The photo finder (photo spec §4; Link 5): one slide at a time, down its
+ * chain, left to right. The last step always succeeds: the slide's icon
+ * background (the Writer's icon, render/icons.ts).
  *
- *   Cover:        article photo (credit check) → the subject person's P18
- *                 (identity check) → logo card (identity-verified
- *                 organization, Commons licence check) → stock → starter set
- *                 (AI-compute photos; replaced by the branded cover card once
- *                 Tommy approves it).
- *   Story slides  article photo (credit check) or the subject's P18, or
- *   (text, landing, stock, as the Writer's IMAGE request says → text-only.
- *   image):
- *   Quote slides: the verified speaker's P18 → text-only. (A stock request is
- *                 a darkened background.)
- *   Stat slides:  a Helios-designed background from the bank
- *                 (`stat-background`), by the 7-day rule, even when IMAGE is
- *                 none; plain dark until the set is approved.
+ *   Cover        the Writer's request → an article photo or official image
+ *                → the person's headshot (person story) → the company's logo
+ *                card (company story) → cover icon
+ *   Story slide  the Writer's request → an article photo or official image
+ *                → the tagged subject: a person's headshot; a company's logo
+ *                (at most one story slide; never its main photo) → icon
+ *                (the Writer's none goes straight to the icon)
+ *   Quote slide  the speaker's headshot → a second photo of them (§3) → an
+ *                article photo whose caption names them → type-led slide
+ *                (icon). An organization or unlisted speaker: type-led.
+ *   Stat slide   icon, always
  *
- * Stock: Openverse (the request, then its first two words) → Jev metadata
- * pre-screen v4 (fit, people) → the vision check on the top VISION_TOP
- * candidates (vision.ts); none passing means no stock photo.
+ * Every photo is one the Writer could have asked for: subjects by the slide's
+ * tags, article photos and official images from the same code-built list
+ * (article-list.ts), subject photos from the same availability rules
+ * (p18.ts, logo.ts). Stock is the frozen stock link (pre-screen v4 + the
+ * vision check), unchanged.
  *
- * AI calls: Jev (identity check, stock pre-screen) and the vision check
- * (Haiku, stock only). Everything else is code.
+ * AI calls: Jev (identity, stock pre-screen), the stock vision check, and
+ * the official-image text check (the same vision call, its "mostly text or
+ * banner" answer; photo spec §3 rule 4). Faces: the code face detector.
  *
- * No repeats: never twice in a post or within 7 days, every source (the
- * post's used set + `recent`, the used-photo log and earlier posts in the run).
- * Exception: a logo card may repeat across posts; never twice in one post.
+ * No repeats: never twice in a post or within 7 days, every source, except
+ * a logo: the cover and one story slide, exempt from the 7-day rule.
  */
 import { buildCredit } from '@/lib/social/editorial/v2/image-step/commons';
 import { buildStockCredit, searchOpenverse, type OpenverseCandidate } from '@/lib/social/editorial/v2/image-step/openverse';
 import type { JevAsk } from '@/lib/social/jev/client';
 import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v4';
+import type { FaceBox } from '@/lib/social/render/fit-check';
 import type { Brief } from '@/lib/social/reporter/brief';
-import type { ArticlePhoto, PageReadOk } from '@/lib/social/reporter/read-page';
+import type { PageReadOk } from '@/lib/social/reporter/read-page';
 import type { ImageRequest } from '@/lib/social/writer/draft';
 
-import { bankPhoto, pickFromBank, type BankEntry } from './bank';
-import { classifyCredit } from './credit';
-import { DESIGNED_GRAPHICS } from './designed';
-import type { IdentityScores } from './identity';
+import { photoUrlKey, type ListedPhoto } from './article-list';
+import type { DetectFaces } from './faces';
+import type { IdentityScores, SubjectType } from './identity';
 import { fetchLogo } from './logo';
 import { P18_MIN_SHORT_SIDE, identityOf, subjectP18, type IdentityCache } from './p18';
-import { pickCoverStarter } from './starter-set';
+import type { SecondPhotos } from './second-photo';
 import { VISION_TOP, describeVerdict, type VisionCheck } from './vision';
 
-/** Logged when the 7-day rule has to give way (spec §5D; counted in each run's report). */
-export const STARTER_POOL_EXHAUSTED = 'starter-pool-exhausted';
-
-/** `designed`: a Helios-designed graphic (stat backgrounds); `logo`: a logo cover card. */
-export type PhotoSource = 'article' | 'commons' | 'stock' | 'starter' | 'logo' | 'designed';
+/**
+ * `article`: an article photo (caption names the subject); `official`: an image
+ * from a company's own news page; `commons`: a person's main photo (headshot);
+ * `second`: a second photo of a person; `logo`: a logo card (a company's only
+ * photo: never its main photo; Tommy, 2026-10-07); `stock`: the stock link.
+ */
+export type PhotoSource = 'article' | 'official' | 'commons' | 'second' | 'logo' | 'stock';
 
 export type Photo = {
   url: string;
-  /** Short on-slide credit line ('' for Helios-designed graphics: no credit pill). */
+  /** Short on-slide credit line. */
   credit: string;
   source: PhotoSource;
   width: number | null;
@@ -65,14 +66,12 @@ export type Photo = {
   subject: string | null;
   /** Logo cards: the plate behind the logo, chosen from its luminance. */
   plate?: 'light' | 'dark';
+  /** Face boxes from the face detector (0–1 of the photo), when it ran; framing uses them (Link 5). */
+  faces?: FaceBox[];
 };
 
-/**
- * `none`: the Writer asked for no photo. `text-only`: a story slide asked for
- * one and none was usable. `plain`: a stat slide without a designed
- * background. `cover-card`: the branded cover card (once approved).
- */
-export type ChainStep = 'article' | 'subject' | 'logo' | 'stock' | 'stat-background' | 'starter' | 'cover-card' | 'none' | 'text-only' | 'plain';
+/** Which step supplied the result. `icon`: the icon background; `type-led`: a quote slide without a speaker photo. */
+export type ChainStep = 'article' | 'official' | 'subject' | 'second' | 'logo' | 'stock' | 'icon' | 'type-led';
 
 /** Identity check outcome for the run log. */
 export type IdentityNote = { subject: string; ok: boolean; detail: string; scores: IdentityScores | null };
@@ -81,11 +80,14 @@ export type IdentityNote = { subject: string; ok: boolean; detail: string; score
 export type PhotoTrace = {
   request: ImageRequest;
   photo: Photo | null;
-  /** The chain step that supplied the result; null only if every step failed. */
-  via: ChainStep | null;
+  via: ChainStep;
+  /** The icon drawn when there is no photo (the Writer's, else the default). */
+  icon: string | null;
   identity: IdentityNote | null;
   steps: string[];
-  /** Vision check spend for this request. */
+  /** Other photos for this slide that passed every check (the render review's next-best photo). */
+  alternates: Photo[];
+  /** Vision check spend for this slide (stock and official images). */
   visionUsd?: number;
 };
 
@@ -94,7 +96,7 @@ export const STOCK_MIN_SHORT_SIDE = P18_MIN_SHORT_SIDE;
 
 export type StockSearch = (query: string, opts: { minShortSide: number }) => Promise<OpenverseCandidate[]>;
 
-/** Where the photo is drawn: `split` (cover, text, landing, image), `quote`, `backdrop` (stat). */
+/** Where the photo is drawn: `split` (cover, text, landing, image), `quote`, `backdrop` (stat: icon only). */
 export type PhotoSlot = 'split' | 'backdrop' | 'quote';
 
 export type PhotoDeps = {
@@ -104,116 +106,241 @@ export type PhotoDeps = {
   stock?: StockSearch;
   /** The vision check on the top stock candidates (vision.ts). Absent: the first pre-screened result is used. */
   vision?: VisionCheck;
-  /** Designed graphics in use (Tommy's one-time approval); defaults to DESIGNED_GRAPHICS. Sample renders pass their own. */
-  designed?: { statBackgrounds: boolean; coverCard: boolean };
+  /** The face detector (faces.ts). Absent: second photos aren't used (they need a face count). */
+  faces?: DetectFaces;
+  /** Second photos of a person (second-photo.ts). Absent: none. */
+  secondPhotos?: SecondPhotos;
 };
 
 export type PhotoContext = {
   brief: Brief;
   pages: PageReadOk[];
+  /** ARTICLE PHOTOS: the same code-built list the Writer saw (article-list.ts). */
+  photos: ListedPhoto[];
+  /** Each subject's type (identity check, else the Reporter's mark). */
+  kinds: Map<string, SubjectType | null>;
   /** URLs already used in this post. Updated by findPhoto. */
   used: Set<string>;
-  /** URLs used in the last 7 days or earlier in this run, any source. Never picked. */
+  /** URLs used in the last 7 days or earlier in this run, any source. Never picked (logos aside). */
   recent: Set<string>;
-  /** The bank (designed stat backgrounds) and when each URL was last used, for least-recently-used picks. */
-  bank: BankEntry[];
+  /** When each URL was last used. */
   lastUsed: Map<string, string>;
-  /** Identity results by subject name (p18.ts), shared with the Writer's availability flags for the same story. */
+  /** Identity results by subject name (p18.ts), shared with the Writer's availability flags. */
   identities: IdentityCache;
+  /** Organizations whose logo already sits on a story slide in this post. */
+  logoOnStorySlide: Set<string>;
+  /** Official-image text checks, by URL (one vision call each per post). */
+  officialChecked: Map<string, boolean>;
 };
 
 export function newPhotoContext(
   brief: Brief,
   pages: PageReadOk[],
-  opts: { recent?: Set<string>; bank?: BankEntry[]; lastUsed?: Map<string, string>; identities?: IdentityCache } = {},
+  opts: { recent?: Set<string>; lastUsed?: Map<string, string>; identities?: IdentityCache; photos?: ListedPhoto[]; kinds?: Map<string, SubjectType | null> } = {},
 ): PhotoContext {
-  return { brief, pages, used: new Set(), identities: opts.identities ?? new Map(), recent: opts.recent ?? new Set(), bank: opts.bank ?? [], lastUsed: opts.lastUsed ?? new Map() };
+  return {
+    brief,
+    pages,
+    photos: opts.photos ?? [],
+    kinds: opts.kinds ?? new Map(brief.subjects.map((s) => [s.name, s.type ?? null])),
+    used: new Set(),
+    recent: opts.recent ?? new Set(),
+    lastUsed: opts.lastUsed ?? new Map(),
+    identities: opts.identities ?? new Map(),
+    logoOnStorySlide: new Set(),
+    officialChecked: new Map(),
+  };
 }
 
-/** Used in this post, in the last 7 days, or earlier in this run (spec §5D). */
+/** Used in this post, in the last 7 days, or earlier in this run. */
 const taken = (ctx: PhotoContext, url: string) => ctx.used.has(url) || ctx.recent.has(url);
-const avoidSet = (ctx: PhotoContext) => new Set([...ctx.used, ...ctx.recent]);
 
-const urlKey = (u: string) => u.replace(/^https?:\/\//, '').replace(/[?#].*$/, '');
+/** The slide's words, where its photo goes, its subject tags, its icon, and the quote's speaker. */
+export type SlideText = {
+  text: string[];
+  /** The quote's speaker (its SUBJECTS name), on quote slides. */
+  speaker: string | null;
+  slot: PhotoSlot;
+  cover?: boolean;
+  /** The SUBJECTS IDs the slide is tagged with (photo spec §3 rule 3). */
+  tags?: string[];
+  /** The Writer's icon for this slide. */
+  icon?: string | null;
+};
 
-/** The page reader's record of a photo URL (exact data), else the brief's copy. */
-function lookupArticlePhoto(url: string, ctx: PhotoContext): { photo: Pick<ArticlePhoto, 'caption' | 'credit'>; page: string | null } | null {
-  const key = urlKey(url);
-  for (const page of ctx.pages) {
-    const p = page.photos.find((x) => urlKey(x.src) === key);
-    if (p) return { photo: p, page: page.resolvedUrl || page.url };
-  }
-  const b = ctx.brief.article_photos.find((x) => x.url && urlKey(x.url) === key);
-  return b ? { photo: { caption: b.caption, credit: b.credit }, page: b.page } : null;
-}
+const errText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
-async function articlePhoto(url: string, ctx: PhotoContext, steps: string[]): Promise<Photo | null> {
-  const found = lookupArticlePhoto(url, ctx);
-  if (!found) {
-    steps.push('article photo not found in the pages read');
+type Run = {
+  ctx: PhotoContext;
+  deps: PhotoDeps;
+  steps: string[];
+  spend: { visionUsd: number };
+  identity: IdentityNote | null;
+};
+
+async function attempt(run: Run, label: string, fn: () => Promise<Photo | null>): Promise<Photo | null> {
+  try {
+    return await fn();
+  } catch (err) {
+    run.steps.push(`${label} error: ${errText(err)}`);
     return null;
   }
-  const organizations = ctx.brief.subjects.map((s) => s.name);
-  const v = classifyCredit({ caption: found.photo.caption, credit: found.photo.credit, page: found.page, organizations });
-  steps.push(`credit ${v.verdict}: ${v.reason}`);
-  if (v.verdict !== 'allowed') return null;
-  if (taken(ctx, url)) {
-    steps.push('already used in this post or in the last 7 days');
-    return null;
-  }
-  return { url, credit: (found.photo.credit ?? found.photo.caption ?? '').trim(), source: 'article', width: null, height: null, qid: null, subject: null };
 }
 
-/** The subject's P18 (p18.ts: the same check as the Writer's headshot_available), if free to use here. */
-async function subjectPhoto(name: string, ctx: PhotoContext, deps: PhotoDeps, steps: string[], opts: { personOnly: boolean }): Promise<{ photo: Photo | null; identity: IdentityNote }> {
-  const r = await subjectP18(name, ctx.brief, deps, ctx.identities);
-  const id = r.identity;
-  if (!id.ok) {
-    steps.push(`identity failed: ${id.reason}`);
-    return { photo: null, identity: { subject: name, ok: false, detail: id.reason, scores: id.scores } };
+const subjectByName = (ctx: PhotoContext, name: string) => ctx.brief.subjects.find((s) => s.name === name) ?? null;
+const subjectById = (ctx: PhotoContext, id: string) => ctx.brief.subjects.find((s) => s.id === id) ?? null;
+
+/** Faces for one photo, when the detector is there; null when it isn't or the photo didn't load. */
+async function facesOf(run: Run, url: string): Promise<FaceBox[] | null> {
+  if (!run.deps.faces) return null;
+  return (await run.deps.faces([url])).get(url) ?? null;
+}
+
+// ── Article photos and official images ───────────────────────────────
+
+function articleCredit(run: Run, p: ListedPhoto): string {
+  if (p.official_of) return `Image: ${subjectById(run.ctx, p.official_of)?.name ?? 'the company'}`;
+  return (p.credit ?? p.caption ?? '').trim();
+}
+
+/** The official-image text check: the vision call's "mostly text or banner" answer (photo spec §3 rule 4). */
+async function officialImageOk(run: Run, p: ListedPhoto): Promise<boolean> {
+  const cached = run.ctx.officialChecked.get(p.url);
+  if (cached !== undefined) return cached;
+  if (!run.deps.vision) {
+    run.steps.push('official image: no vision check available → not used');
+    run.ctx.officialChecked.set(p.url, false);
+    return false;
   }
-  steps.push(`identity ok: ${id.qid} "${id.label}" (${id.type}, ${id.via})`);
-  const identity: IdentityNote = { subject: name, ok: true, detail: `${id.qid} "${id.label}" — ${id.description} (${id.type}, ${id.via})`, scores: id.scores };
-  if (opts.personOnly && id.type !== 'person') {
-    steps.push(`cover: ${name} is an organization (its P18 is not used on a cover; logo card next)`);
-    return { photo: null, identity };
+  const company = subjectById(run.ctx, p.official_of!)?.name ?? '';
+  const v = await run.deps.vision({ url: p.url, scene: `an image from ${company}'s announcement`, subjects: run.ctx.brief.subjects.map((s) => s.name), title: p.caption ?? undefined });
+  run.spend.visionUsd += v.costUsd;
+  const ok = v.ok && !v.verdict.mostly_text_banner;
+  run.steps.push(v.ok ? `official image text check: ${v.verdict.mostly_text_banner ? 'mostly text or a banner → rejected' : 'a picture → ok'} ($${v.costUsd.toFixed(4)})` : `official image text check error (${v.error}) → not used`);
+  run.ctx.officialChecked.set(p.url, ok);
+  return ok;
+}
+
+/** May this listed photo go on this slide? Its caption's subjects meet the tags; an official image goes on the cover or its company's slide. */
+function fitsSlide(p: ListedPhoto, tags: string[], cover: boolean): boolean {
+  if (p.official_of) return cover || tags.includes(p.official_of);
+  return p.subject_ids.some((id) => tags.includes(id));
+}
+
+async function listedPhoto(run: Run, p: ListedPhoto): Promise<Photo | null> {
+  if (taken(run.ctx, p.url)) {
+    run.steps.push(`article photo ${photoUrlKey(p.url).slice(-40)}: already used in this post or in the last 7 days`);
+    return null;
   }
+  if (p.official_of && !(await officialImageOk(run, p))) return null;
+  const faces = await facesOf(run, p.url);
+  run.steps.push(`${p.official_of ? 'official image' : 'article photo'}: ${photoUrlKey(p.url).slice(-50)}${p.caption ? ` "${p.caption.slice(0, 60)}"` : ''}`);
+  return { url: p.url, credit: articleCredit(run, p), source: p.official_of ? 'official' : 'article', width: null, height: null, qid: null, subject: null, ...(faces ? { faces } : {}) };
+}
+
+/** The Writer's article request, if it is on the list and fits the slide. */
+async function requestedArticle(run: Run, url: string, tags: string[], cover: boolean): Promise<Photo | null> {
+  const p = run.ctx.photos.find((x) => photoUrlKey(x.url) === photoUrlKey(url));
+  if (!p) {
+    run.steps.push('article request: not in ARTICLE PHOTOS');
+    return null;
+  }
+  if (!fitsSlide(p, tags, cover)) {
+    run.steps.push("article request: its caption's subjects aren't tagged on this slide");
+    return null;
+  }
+  return listedPhoto(run, p);
+}
+
+/** The first listed photo that fits the slide and passes its checks. */
+async function anyArticle(run: Run, tags: string[], cover: boolean, only?: (p: ListedPhoto) => boolean): Promise<Photo | null> {
+  for (const p of run.ctx.photos) {
+    if (!fitsSlide(p, tags, cover) || (only && !only(p))) continue;
+    const photo = await listedPhoto(run, p);
+    if (photo) return photo;
+  }
+  return null;
+}
+
+// ── Subjects: headshots, second photos, logos ────────────────────────
+
+async function verified(run: Run, name: string) {
+  const id = await identityOf(name, run.ctx.brief, run.deps, run.ctx.identities);
+  run.identity = id.ok
+    ? { subject: name, ok: true, detail: `${id.qid} "${id.label}" — ${id.description} (${id.type}, ${id.via})`, scores: id.scores }
+    : { subject: name, ok: false, detail: id.reason, scores: id.scores };
+  run.steps.push(id.ok ? `identity ok: ${id.qid} "${id.label}" (${id.type}, ${id.via})` : `identity failed for ${name}: ${id.reason}`);
+  return id;
+}
+
+/** A person's main photo (P18), the same check as the Writer's headshot_available. */
+async function headshot(run: Run, name: string): Promise<Photo | null> {
+  const id = await verified(run, name);
+  if (!id.ok || id.type !== 'person') return null;
+  const r = await subjectP18(name, run.ctx.brief, run.deps, run.ctx.identities);
   if (!r.pick) {
-    steps.push(r.why ?? 'no usable P18');
-    return { photo: null, identity };
+    run.steps.push(`headshot: ${r.why ?? 'no usable main photo'}`);
+    return null;
   }
-  if (taken(ctx, r.pick.url)) {
-    steps.push('main image (P18) already used in this post or in the last 7 days');
-    return { photo: null, identity };
+  if (taken(run.ctx, r.pick.url)) {
+    run.steps.push('headshot: already used in this post or in the last 7 days');
+    return null;
   }
-  steps.push(`commons P18: ${r.pick.file}`);
-  return { photo: { url: r.pick.url, credit: `${buildCredit(r.pick)} · Wikimedia Commons`, source: 'commons', width: r.pick.width, height: r.pick.height, qid: id.qid, subject: name }, identity };
+  const faces = await facesOf(run, r.pick.url);
+  run.steps.push(`headshot (P18): ${r.pick.file}`);
+  return { url: r.pick.url, credit: `${buildCredit(r.pick)} · Wikimedia Commons`, source: 'commons', width: r.pick.width, height: r.pick.height, qid: id.qid, subject: name, ...(faces ? { faces } : {}) };
 }
 
-/** A logo cover card for an identity-verified organization whose Commons logo passes the licence check. */
-async function logoCard(name: string, ctx: PhotoContext, deps: PhotoDeps, steps: string[]): Promise<Photo | null> {
-  const id = await identityOf(name, ctx.brief, deps, ctx.identities);
-  if (!id.ok) {
-    steps.push(`logo card: identity failed for ${name} (${id.reason})`);
+/** A second photo of a verified person: tagged as depicting them by QID, their name in the title, exactly one face (photo spec §3). */
+async function secondPhoto(run: Run, name: string): Promise<Photo | null> {
+  if (!run.deps.secondPhotos || !run.deps.faces) {
+    run.steps.push('second photo: not available in this run (no search or face detector)');
     return null;
   }
-  if (id.type !== 'organization') {
-    steps.push(`logo card: ${name} is a ${id.type}, not an organization`);
+  const id = await verified(run, name);
+  if (!id.ok || id.type !== 'person') return null;
+  const cands = (await run.deps.secondPhotos(id.qid, name)).filter((c) => !taken(run.ctx, c.url));
+  if (!cands.length) {
+    run.steps.push('second photo: no Commons file tagged with this person and titled with their name');
     return null;
   }
-  const r = await fetchLogo(id.qid, id.label, { http: deps.http });
+  const faces = await run.deps.faces(cands.map((c) => c.url));
+  for (const c of cands) {
+    const f = faces.get(c.url);
+    if (!f || f.length !== 1) {
+      run.steps.push(`second photo ${c.file}: ${f ? `${f.length} faces` : 'did not load'} → not used`);
+      continue;
+    }
+    run.steps.push(`second photo: ${c.file} (one face)`);
+    return { url: c.url, credit: `${buildCredit(c)} · Wikimedia Commons`, source: 'second', width: c.width, height: c.height, qid: id.qid, subject: name, faces: f };
+  }
+  return null;
+}
+
+/** A logo card: the cover, and at most one story slide per organization (exempt from the 7-day rule). */
+async function logoCard(run: Run, name: string, cover: boolean): Promise<Photo | null> {
+  if (!cover && run.ctx.logoOnStorySlide.has(name)) {
+    run.steps.push(`logo: ${name}'s logo is already on a story slide`);
+    return null;
+  }
+  const id = await verified(run, name);
+  if (!id.ok || id.type !== 'organization') return null;
+  const r = await fetchLogo(id.qid, id.label, { http: run.deps.http });
   if (!r.photo) {
-    steps.push(`logo card: ${r.reason}`);
+    run.steps.push(`logo: ${r.reason}`);
     return null;
   }
-  // Logos are exempt from the 7-day rule across posts (Tommy, 2026-10-07); never the same logo twice in one post.
-  if (ctx.used.has(r.photo.url)) {
-    steps.push('logo card: this logo is already used in this post');
+  // A story slide may repeat the cover's logo; never two story slides (logoOnStorySlide).
+  if (cover && run.ctx.used.has(r.photo.url)) {
+    run.steps.push('logo: already used in this post');
     return null;
   }
-  steps.push(`logo card: ${id.qid} File:${r.file} (${r.photo.plate} plate)`);
+  if (!cover) run.ctx.logoOnStorySlide.add(name);
+  run.steps.push(`logo: ${id.qid} File:${r.file} (${r.photo.plate} plate)`);
   return r.photo;
 }
+
+// ── Stock: the frozen stock link, unchanged ──────────────────────────
 
 /** Search terms for a stock request: the request, then its first two words (Tommy, 2026-10-06). */
 export function stockQueries(request: string): string[] {
@@ -274,122 +401,98 @@ async function stockPhoto(request: string, slot: PhotoSlot, ctx: PhotoContext, d
   return null;
 }
 
-/** The slide's words (the cover's text names its organizations), where its photo goes, and the quote's speaker. */
-export type SlideText = { text: string[]; speaker: string | null; slot: PhotoSlot; cover?: boolean };
+// ── The chains ───────────────────────────────────────────────────────
 
-const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-/** Where a subject is named in the text: the full name, or the last word of a multi-word name ("Clayton"). -1 if not. */
-function namedAt(name: string, text: string): number {
-  const words = name.split(/\s+/);
-  const forms = [name, ...(words.length > 1 && words.at(-1)!.length >= 4 ? [words.at(-1)!] : [])];
-  const at = forms.map((f) => new RegExp(`\\b${escapeRe(f)}\\b`, 'i').exec(text)?.index ?? -1).filter((i) => i >= 0);
-  return at.length ? Math.min(...at) : -1;
+/** A tagged subject's photo on a story slide: a person's headshot; a company's logo (never its main photo; Tommy, 2026-10-07). */
+async function taggedSubject(run: Run, name: string): Promise<{ photo: Photo; via: ChainStep } | null> {
+  const kind = run.ctx.kinds.get(name) ?? null;
+  if (kind === 'organization') {
+    const l = await attempt(run, 'logo', () => logoCard(run, name, false));
+    return l ? { photo: l, via: 'logo' } : null;
+  }
+  const h = await attempt(run, 'headshot', () => headshot(run, name));
+  return h ? { photo: h, via: 'subject' } : null;
 }
 
-/** SUBJECTS named in the cover text, in order of appearance (logo card candidates when the cover names an organization). */
-function subjectsNamedIn(text: string, brief: Brief): string[] {
-  return brief.subjects
-    .map((s) => ({ n: s.name, at: namedAt(s.name, text) }))
-    .filter((h) => h.at >= 0)
-    .sort((a, b) => a.at - b.at)
-    .map((h) => h.n);
-}
-
-/** Logo card candidates per cover: the cover's own subject, then up to this many SUBJECTS named in the cover. */
-const COVER_NAMED_MAX = 2;
-
-const errText = (err: unknown) => (err instanceof Error ? err.message : String(err));
-
-/** One result for one slide, down Photo chain v1. A source error is logged and the chain moves on. */
+/** One result for one slide. A source error is logged and the chain moves on. */
 export async function findPhoto(request: ImageRequest, ctx: PhotoContext, deps: PhotoDeps, slide: SlideText = { text: [], speaker: null, slot: 'split' }): Promise<PhotoTrace> {
-  const steps: string[] = [];
-  const spend = { visionUsd: 0 };
-  const { slot } = slide;
-  const designed = deps.designed ?? DESIGNED_GRAPHICS;
-  let identity: IdentityNote | null = null;
-  const extra = () => (spend.visionUsd ? { visionUsd: spend.visionUsd } : {});
+  const run: Run = { ctx, deps, steps: [], spend: { visionUsd: 0 }, identity: null };
+  const icon = slide.icon ?? null;
+  const tags = slide.tags ?? [];
+  const cover = Boolean(slide.cover);
+  const extra = () => (run.spend.visionUsd ? { visionUsd: run.spend.visionUsd } : {});
+  const alternatesFor = (chosen: Photo | null): Photo[] =>
+    ctx.photos
+      .filter((p) => !p.official_of && fitsSlide(p, tags, cover) && !taken(ctx, p.url) && p.url !== chosen?.url)
+      .slice(0, 3)
+      .map((p) => ({ url: p.url, credit: (p.credit ?? p.caption ?? '').trim(), source: 'article' as const, width: null, height: null, qid: null, subject: null }));
   const done = (photo: Photo, via: ChainStep): PhotoTrace => {
     ctx.used.add(photo.url);
-    return { request, photo, via, identity, steps, ...extra() };
+    return { request, photo, via, icon, identity: run.identity, steps: run.steps, alternates: alternatesFor(photo), ...extra() };
   };
-  const nothing = (via: ChainStep, why: string): PhotoTrace => {
-    steps.push(why);
-    return { request, photo: null, via, identity, steps, ...extra() };
-  };
-  const attempt = async (label: string, fn: () => Promise<Photo | null>): Promise<Photo | null> => {
-    try {
-      return await fn();
-    } catch (err) {
-      steps.push(`${label} error: ${errText(err)}`);
-      return null;
-    }
+  const none = (via: 'icon' | 'type-led', why: string): PhotoTrace => {
+    run.steps.push(why);
+    return { request, photo: null, via, icon, identity: run.identity, steps: run.steps, alternates: alternatesFor(null), ...extra() };
   };
   const value = request.value.trim();
 
-  // ── Stat slides: a designed background, whatever the request ──
-  if (slot === 'backdrop') {
-    if (!designed.statBackgrounds) return nothing('plain', 'stat slide: plain dark background (designed stat backgrounds not approved yet)');
-    const e = pickFromBank(ctx.bank, { statBackground: true }, avoidSet(ctx), ctx.lastUsed);
-    if (!e) return nothing('plain', 'stat slide: no designed background free under the 7-day rule → plain dark');
-    steps.push(`stat background: ${e.id}`);
-    return done(bankPhoto(e), 'stat-background');
+  // ── Stat slides: the icon background, always ──
+  if (slide.slot === 'backdrop') return none('icon', 'stat slide: icon background');
+
+  // ── Quote slides: the speaker, else a type-led slide ──
+  if (slide.slot === 'quote') {
+    const speaker = slide.speaker;
+    if (!speaker) return none('type-led', "quote slide: the speaker isn't in SUBJECTS → type-led");
+    if ((ctx.kinds.get(speaker) ?? null) === 'organization') return none('type-led', `quote slide: ${speaker} is an organization (never a logo in the speaker's spot) → type-led`);
+    const h = await attempt(run, 'headshot', () => headshot(run, speaker));
+    if (h) return done(h, 'subject');
+    const s2 = await attempt(run, 'second photo', () => secondPhoto(run, speaker));
+    if (s2) return done(s2, 'second');
+    const id = subjectByName(ctx, speaker)?.id;
+    const a = id ? await attempt(run, 'article', () => anyArticle(run, [id], false, (p) => !p.official_of)) : null;
+    if (a) return done({ ...a, subject: speaker }, 'article');
+    return none('type-led', 'quote slide: no verified photo of the speaker → type-led');
   }
 
-  // ── Quote slides: the verified speaker's P18; a stock request is a darkened background ──
-  if (slot === 'quote') {
-    if (request.kind === 'subject' && value) {
-      if (value !== slide.speaker) return nothing('text-only', `quote slide: ${value} isn't the speaker, and the round spot implies the speaker → text-only`);
-      const r = await subjectPhoto(value, ctx, deps, steps, { personOnly: false }).catch((err) => (steps.push(`subject error: ${errText(err)}`), null));
-      if (r) identity = r.identity;
-      if (r?.photo) return done(r.photo, 'subject');
-      return nothing('text-only', 'quote slide: no usable photo of the speaker → text-only');
-    }
-    if (request.kind === 'stock' && value) {
-      const p = await attempt('stock', () => stockPhoto(value, slot, ctx, deps, steps, spend));
-      if (p) return done(p, 'stock');
-      return nothing('text-only', 'quote slide: no stock background → text-only');
-    }
-    if (request.kind === 'none') return nothing('none', 'IMAGE none: no photo requested');
-    return nothing('text-only', `quote slide: a ${request.kind} request isn't shown on a quote slide → text-only`);
-  }
+  // ── Cover and story slides ──
+  if (request.kind === 'none' && !cover) return none('icon', 'IMAGE none → icon background');
 
-  // ── Split slides (cover, text, landing, image) ──
-  if (request.kind === 'none' && !slide.cover) return nothing('none', 'IMAGE none: no photo requested');
-  if (request.kind === 'none') steps.push('cover IMAGE none (request dropped by the Writer check)');
-
+  // The spec order, left to right; within each step the Writer's request is tried first.
+  // 1. An article photo or official image that fits the slide.
   if (request.kind === 'article' && value) {
-    const p = await attempt('article', () => articlePhoto(value, ctx, steps));
-    if (p) return done(p, 'article');
-  } else if (request.kind === 'subject' && value) {
-    // Covers use a person's P18; an organization's cover is its logo card. Story slides use any subject's P18.
-    const r = await subjectPhoto(value, ctx, deps, steps, { personOnly: Boolean(slide.cover) }).catch((err) => (steps.push(`subject error: ${errText(err)}`), null));
-    if (r) identity = r.identity;
-    if (r?.photo) return done(r.photo, 'subject');
-  } else if (request.kind === 'stock' && value && !slide.cover) {
-    const p = await attempt('stock', () => stockPhoto(value, slot, ctx, deps, steps, spend));
-    if (p) return done(p, 'stock');
+    const p = await attempt(run, 'article', () => requestedArticle(run, value, tags, cover));
+    if (p) return done(p, p.source === 'official' ? 'official' : 'article');
+  }
+  const a = await attempt(run, 'article', () => anyArticle(run, tags, cover));
+  if (a) return done(a, a.source === 'official' ? 'official' : 'article');
+
+  // 2. The subject. Cover: a person's headshot (person story), then a company's logo card (company story).
+  //    Story slide: a person's headshot; a company's logo.
+  const tagged = tags.map((id) => subjectById(ctx, id)?.name).filter((n): n is string => Boolean(n));
+  const requested = request.kind === 'subject' && value ? [value] : [];
+  const names = [...new Set([...requested, ...tagged])];
+  if (cover) {
+    for (const n of names.filter((x) => (ctx.kinds.get(x) ?? null) === 'person')) {
+      const h = await attempt(run, 'headshot', () => headshot(run, n));
+      if (h) return done(h, 'subject');
+    }
+    for (const n of names.filter((x) => (ctx.kinds.get(x) ?? null) === 'organization')) {
+      const l = await attempt(run, 'logo', () => logoCard(run, n, true));
+      if (l) return done(l, 'logo');
+    }
+  } else {
+    for (const n of names) {
+      const r = await taggedSubject(run, n);
+      if (r) return done(r.photo, r.via);
+    }
   }
 
-  if (!slide.cover) return nothing('text-only', 'no usable photo: story slide renders text-only');
-
-  // Cover: a logo card for a verified organization: the cover's own subject, then SUBJECTS named in the cover.
-  const named = subjectsNamedIn(slide.text.join(' '), ctx.brief).slice(0, COVER_NAMED_MAX);
-  const orgs = [...new Set([request.kind === 'subject' && value ? value : null, ...named].filter((x): x is string => !!x))];
-  for (const org of orgs) {
-    const p = await attempt('logo', () => logoCard(org, ctx, deps, steps));
-    if (p) return done(p, 'logo');
-  }
-
-  // Cover: stock, then the starter set (or the branded cover card once approved).
+  // 3. Stock: the Writer's literal scene, through the frozen stock link.
   if (request.kind === 'stock' && value) {
-    const p = await attempt('stock', () => stockPhoto(value, slot, ctx, deps, steps, spend));
+    const p = await attempt(run, 'stock', () => stockPhoto(value, slide.slot, ctx, deps, run.steps, run.spend));
     if (p) return done(p, 'stock');
   }
-  if (designed.coverCard) return nothing('cover-card', 'cover: the branded cover card (no photo, headshot or logo)');
-  const starter = pickCoverStarter(avoidSet(ctx), ctx.used, ctx.lastUsed);
-  steps.push(starter.exhausted
-    ? `${STARTER_POOL_EXHAUSTED}: every AI-compute starter photo used in the last 7 days; least recently used: ${starter.photo.url}`
-    : `starter set (AI compute, cover fallback): ${starter.photo.url}`);
-  return done(starter.photo, 'starter');
+
+  // 4. The icon background (the cover's own format).
+  return none('icon', cover ? 'cover: nothing usable → cover icon background' : 'no usable photo → icon background');
 }

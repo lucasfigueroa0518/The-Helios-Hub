@@ -131,7 +131,7 @@ test('C6 photo credit: present, allowed licence, no agency credit', () => {
   const p = (credit: string, source: Photo['source'] = 'stock'): Photo => ({ url: 'u', credit, source, width: 1, height: 1, qid: null, subject: null });
   const b = brief();
   assert.deepEqual(checkPhotoCredit(p('Jane Doe, CC BY · via flickr'), 'slide 2', b), []);
-  assert.deepEqual(checkPhotoCredit(p('NASA (public domain) · Wikimedia Commons', 'starter'), 'slide 2', b), []);
+  assert.deepEqual(checkPhotoCredit(p('NASA (public domain) · Wikimedia Commons', 'commons'), 'slide 2', b), []);
   assert.match(checkPhotoCredit(p(''), 'slide 2', b)[0]!.detail, /without a credit/);
   assert.match(checkPhotoCredit(p('Jane Doe · via flickr'), 'slide 2', b)[0]!.detail, /no allowed licence/);
   assert.match(checkPhotoCredit(p('Kevin Dietsch / Getty Images, CC BY'), 'slide 2', b)[0]!.detail, /agency/);
@@ -238,7 +238,7 @@ test('design: C6 drops a story-slide photo whose credit fails (agency): text-onl
   const r = await createDesignStage(deps as never)(pdraft(), pbrief(), story);
   assert.ok(r.ok);
   assert.ok(r.value.checks.photoReplacements.length >= 1, JSON.stringify(r.value.checks));
-  assert.match(r.value.checks.photoReplacements[0]!, /agency credit \(getty\) → text-only/);
+  assert.match(r.value.checks.photoReplacements[0]!, /agency credit \(getty\) → icon/);
   assert.ok(!r.value.render.slides.some((sl) => sl.photoUrl === getty.url), 'the Getty photo never reaches the render');
 });
 

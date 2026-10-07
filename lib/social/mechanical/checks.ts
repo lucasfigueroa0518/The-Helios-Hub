@@ -235,8 +235,6 @@ const LICENCE_RE = /\b(cc0|cc by(?:-sa)?|public domain)\b/i;
 /** C6: every photo has a credit, an allowed licence, and no agency credit. */
 export function checkPhotoCredit(photo: Photo, where: string, brief: Brief): Failure[] {
   const out: Failure[] = [];
-  // Helios-designed graphics (bank stat backgrounds) carry no third-party rights and no credit pill.
-  if (photo.source === 'designed') return [];
   if (!photo.credit.trim()) return [{ id: 'C6', where, detail: 'photo without a credit' }];
   const agency = classifyCredit({ caption: null, credit: photo.credit, page: null, organizations: [] });
   if (agency.verdict === 'rejected') out.push({ id: 'C6', where, detail: `rejected credit: ${agency.reason}` });
@@ -244,6 +242,10 @@ export function checkPhotoCredit(photo: Photo, where: string, brief: Brief): Fai
     // Article photos: the credit itself must be an allowed one (company, government, Commons).
     const v = classifyCredit({ caption: null, credit: photo.credit, page: null, organizations: brief.subjects.map((s) => s.name) });
     if (v.verdict !== 'allowed') out.push({ id: 'C6', where, detail: `article photo credit not allowed: ${v.reason}` });
+  } else if (photo.source === 'official') {
+    // Official images (photo spec §2): credited by code to a SUBJECTS company, "Image: <Company>".
+    const company = photo.credit.replace(/^Image:\s*/, '');
+    if (!/^Image:\s/.test(photo.credit) || !brief.subjects.some((s) => s.name === company)) out.push({ id: 'C6', where, detail: `official image credit isn't "Image: <a SUBJECTS company>": "${photo.credit}"` });
   } else if (!LICENCE_RE.test(photo.credit)) {
     out.push({ id: 'C6', where, detail: `no allowed licence in the credit: "${photo.credit}"` });
   }

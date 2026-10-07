@@ -22,7 +22,6 @@ import { checkDroppedText } from '@/lib/social/mechanical/checks';
 import { createRunBudget } from '@/lib/social/pipeline/live-stages';
 import { createMechanicalStage } from '@/lib/social/pipeline/mechanical-stage';
 import type { Photo } from '@/lib/social/photos/find';
-import { pickCoverStarter } from '@/lib/social/photos/starter-set';
 import { checkRenderFit } from '@/lib/social/render/fit-check';
 import { toRenderPost } from '@/lib/social/render/from-draft';
 import { toSlug, writeGeneratedPost } from '@/lib/social/render/local-store';
@@ -68,7 +67,7 @@ async function main() {
     const savedFinal: DraftSubmission = l.factCheck.at(-1).outcome.draft;
     const traces = l.design.photos;
     // The run's photos, as the re-render uses them: story-slide starter photos dropped (cover-only set).
-    const savedPhotos: Array<Photo | null> = traces.map((t: any, i: number) => (t.via === 'starter' ? (i > 0 ? null : pickCoverStarter(new Set()).photo) : t.photo));
+    const savedPhotos: Array<Photo | null> = traces.map((t: any) => (t.via === 'starter' ? null : t.photo));
     const coverPhoto = savedPhotos[0] ?? null;
     const editedToSaved = edited.slides.map(() => -1);
     const savedToEdited = alignSlides(edited.slides, savedFinal.slides);

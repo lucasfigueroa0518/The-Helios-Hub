@@ -21,10 +21,10 @@
  */
 import { priceAnthropicMessages, type MessageUsageLike } from '@/lib/anthropic-pricing';
 import type { JevAsk } from '@/lib/social/jev/client';
-import type { BankEntry } from '@/lib/social/photos/bank';
 import type { PhotoDeps } from '@/lib/social/photos/find';
 import type { UsedPhotoLog } from '@/lib/social/photos/used-photos';
 import { createVisionCheck } from '@/lib/social/photos/vision';
+import { createRenderReview, createReviewCall } from '@/lib/social/render/review';
 import { createSubjectAvailability, type SubjectAvailability } from '@/lib/social/photos/availability';
 import type { IdentityCache } from '@/lib/social/photos/p18';
 import { runFactCheck } from '@/lib/social/factcheck/factcheck';
@@ -106,9 +106,14 @@ export type LiveStagesDeps = {
   availability?: SubjectAvailability;
   fitCheck: FitCheck;
   http?: PhotoDeps['http'];
-  /** 7-day rule and the photo bank (M8c). */
+  /** The used-photo log: the 7-day rule (M8c). */
   usedLog?: UsedPhotoLog;
-  bank?: BankEntry[];
+  /** The face detector (photos/faces.ts): second photos, full-bleed framing. Absent: neither. */
+  faces?: PhotoDeps['faces'];
+  /** Second photos of a person (photos/second-photo.ts). */
+  secondPhotos?: PhotoDeps['secondPhotos'];
+  /** The render review (photo spec §5b), for runs that switch it on: its before/after images go under `dir`. */
+  renderReview?: { dir: string };
   now: Date;
   /** Per-story Reporter cap (the Reporter's own rule: stop before a turn at cap − $0.10). */
   reporterCapUsd: number;
@@ -145,7 +150,9 @@ export function createLiveStages(deps: LiveStagesDeps): { stages: PipelineStages
     if (!c) identities.set(storyId, (c = new Map()));
     return c;
   };
-  const design = createDesignStage({ jev: deps.jev, http: deps.http, vision, fitCheck: deps.fitCheck, usedLog: deps.usedLog, bank: deps.bank, now: () => deps.now, identitiesFor });
+  // The render review (photo spec §5b): Haiku on the contact sheet, under the same budget guard.
+  const review = deps.renderReview ? createRenderReview({ call: createReviewCall({ create }), dir: deps.renderReview.dir }) : undefined;
+  const design = createDesignStage({ jev: deps.jev, http: deps.http, vision, faces: deps.faces, secondPhotos: deps.secondPhotos, fitCheck: deps.fitCheck, usedLog: deps.usedLog, now: () => deps.now, identitiesFor, review });
 
   const stages: PipelineStages = {
     score: deps.score,

@@ -31,15 +31,15 @@ const stock = (value: string) => ({ kind: 'stock' as const, value });
 function draft(): DraftSubmission {
   return {
     cover_options: [
-      { text: 'Trump launches a Super Intelligence Force, led by his spy chief', facts: ['F1', 'F2'], image: { kind: 'subject', value: 'Donald Trump' }, subject_ids: ['S1', 'S3'] },
+      { text: 'Trump launches a Super Intelligence Force, led by his spy chief', facts: ['F1', 'F2'], image: { kind: 'subject', value: 'Donald Trump' }, subject_ids: ['S1', 'S3'], icon: 'landmark' },
       { text: "Trump's new AI task force has 120 days", facts: ['F4'], image: stock('wall clock'), subject_ids: ['S1'] },
       { text: 'The White House names its AI czar', facts: ['F3'], image: stock('White House'), subject_ids: [] },
     ],
     chosen_cover: 1,
     slides: [
-      { type: 'text', headline: { text: 'Announced on Truth Social', facts: ['F1'] }, body: { text: 'Trump announced the force in a Sunday morning post.', facts: ['F1'] }, quote_id: null, quote_excerpt: null, number_ids: [], image: { kind: 'none', value: '' }, subject_ids: ['S1'], spread_with_next: false },
-      { type: 'quote', headline: { text: 'His pitch', facts: ['Q1'] }, body: null, quote_id: 'Q1', quote_excerpt: 'The Super Intelligence Force is tasked with coordinating the effort of the Federal Government … of all Americans,', number_ids: [], image: { kind: 'subject', value: 'Donald Trump' }, subject_ids: ['S1'], spread_with_next: false },
-      { type: 'stat', headline: { text: 'It has a deadline', facts: ['N1'] }, body: null, quote_id: null, quote_excerpt: null, number_ids: ['N1'], image: { kind: 'none', value: '' }, subject_ids: [], spread_with_next: false },
+      { type: 'text', headline: { text: 'Announced on Truth Social', facts: ['F1'] }, body: { text: 'Trump announced the force in a Sunday morning post.', facts: ['F1'] }, quote_id: null, quote_excerpt: null, number_ids: [], image: { kind: 'none', value: '' }, subject_ids: ['S1'], icon: 'smartphone', spread_with_next: false },
+      { type: 'quote', headline: { text: 'His pitch', facts: ['Q1'] }, body: null, quote_id: 'Q1', quote_excerpt: 'The Super Intelligence Force is tasked with coordinating the effort of the Federal Government … of all Americans,', number_ids: [], image: { kind: 'subject', value: 'Donald Trump' }, subject_ids: ['S1'], icon: 'message-square-quote', spread_with_next: false },
+      { type: 'stat', headline: { text: 'It has a deadline', facts: ['N1'] }, body: null, quote_id: null, quote_excerpt: null, number_ids: ['N1'], image: { kind: 'none', value: '' }, subject_ids: [], icon: 'clock', spread_with_next: false },
     ],
     follow: 'Follow Helios for AI news without the hype.',
     caption: { text: 'Trump announced a Super Intelligence Force. Source: TechCrunch, October 4, 2026.', facts: ['F1'] },

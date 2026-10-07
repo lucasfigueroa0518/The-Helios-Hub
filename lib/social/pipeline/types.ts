@@ -118,7 +118,8 @@ export type PostObject = {
   /** How each photo was found or why there is none: cover first, then each story slide. */
   photos: PhotoTrace[];
   /** Mechanical fixes applied and warnings for the review screen (spec §6); photo replacements by C6. */
-  checks: { fixes: Fix[]; warnings: Failure[]; photoReplacements: string[] };
+  /** `renderReview`: what the render review flagged and changed (photo spec §5b), when it ran. */
+  checks: { fixes: Fix[]; warnings: Failure[]; photoReplacements: string[]; renderReview?: string[] };
   /** Stages this post went through, in order. */
   stages: StageName[];
   costUsd: number;
