@@ -20,6 +20,11 @@
       "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/c/c5/Dario_Amodei_at_TechCrunch_Disrupt_2023_02_%28cropped%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
       "photoCredit": "Dario Amodei, Anthropic CEO · TechCrunch, CC BY 2.0 · Wikimedia Commons",
       "photoKind": "subject",
+      "photoSize": {
+        "w": 1768,
+        "h": 2208
+      },
+      "coverMode": "split",
       "template": "cover-split",
       "photoFocus": {
         "x": 0.5,
@@ -41,6 +46,10 @@
       "photoUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/69/NOIRLab_HQ_Server_Racks_%286V6A0402-CC%29.jpg/3840px-NOIRLab_HQ_Server_Racks_%286V6A0402-CC%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
       "photoCredit": "NOIRLab/NSF/AURA/T. Slovinský, CC BY 4.0 · Wikimedia Commons",
       "photoKind": "scene",
+      "photoSize": {
+        "w": 5472,
+        "h": 3648
+      },
       "body": [
         {
           "text": "Anthropic released Claude Haiku 5.5 on October 7, 2026. It calls it its cheapest, fastest and most capable small model yet, built for high-volume jobs like summaries, database queries and classification.",
@@ -64,6 +73,10 @@
       "photoUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5a/NOIRLab_HQ_Server_Racks_%286V6A0404-CC%29.jpg/3840px-NOIRLab_HQ_Server_Racks_%286V6A0404-CC%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
       "photoCredit": "NOIRLab/NSF/AURA/T. Slovinský, CC BY 4.0 · Wikimedia Commons",
       "photoKind": "scene",
+      "photoSize": {
+        "w": 5472,
+        "h": 3648
+      },
       "body": [
         {
           "text": "That is for prompts up to 100,000 tokens. Longer prompts cost more. Haiku 4.5, Anthropic's previous small model, charged $1.00 / $5.00.",
@@ -90,6 +103,10 @@
       ],
       "altText": "The saving Anthropic claims once a new tokenizer is counted",
       "icon": "banknote",
+      "photoSize": {
+        "w": 5568,
+        "h": 3712
+      },
       "body": [
         {
           "text": "Anthropic says the average run costs that much less than on Haiku 4.5, even though the new tokenizer uses slightly more tokens per task. The Decoder says real savings are likely smaller than per-token prices suggest.",
@@ -119,6 +136,10 @@
       "photoUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/40/Modern_office_building%2C_Theresienh%C3%B6he%2C_M%C3%BCnchen.jpg/3840px-Modern_office_building%2C_Theresienh%C3%B6he%2C_M%C3%BCnchen.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
       "photoCredit": "Robert von Oliva (naruciakk) (CC0) · Wikimedia Commons",
       "photoKind": "scene",
+      "photoSize": {
+        "w": 5449,
+        "h": 3625
+      },
       "body": [
         {
           "text": "The table has Haiku 5.5 ahead of GPT-6 Luna on every row where Luna has a score, like Terminal-Bench 4.0 (command-line tasks): 39.2% vs 16.4%. Kingy AI lists Luna at the same short-prompt price.",

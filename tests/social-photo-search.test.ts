@@ -307,7 +307,7 @@ test('photosForDraft: every online source failing → every slide still gets its
 
 // ── Buckets and variants (slide buckets spec) ─────────────────────────────
 
-const facts = (over: Partial<SlideFacts>): SlideFacts => ({ bucket: 'story', photo: 'scene', speakerPhoto: false, wide: false, headlineChars: 40, bodyChars: 120, quoteChars: 0, ...over });
+const facts = (over: Partial<SlideFacts>): SlideFacts => ({ bucket: 'story', photo: 'scene', speakerPhoto: false, wide: false, sharpBleed: true, sharpBackdrop: true, headlineChars: 40, bodyChars: 120, quoteChars: 0, ...over });
 
 test('variants: code keeps those the slide can take and the post has not used', () => {
   const ids = (f: SlideFacts, used: string[] = []) => allowedTemplates(f, new Set(used as never)).map((t) => t.id);
@@ -368,4 +368,28 @@ test('a Commons search photo is a scene (stat backdrop, full bleed, spreads) and
   state.prev = 'something else';
   const later = await pickForSlide({ slot: { kind: 'story', speaker: null }, requests: [{ request: v('thematic', 'server racks'), scored: [scored(c)] }] }, state, {}, [], 0.5);
   assert.equal(later.winner, null);
+});
+
+// ── Adaptive framing (premium polish, 2026-10-07) ─────────────────────────
+
+import { BLEED_MAX_UPSCALE, SHARP_UPSCALE, coverScale, fillsSharp, matteBox, panelTreatment } from '@/lib/social/render/framing';
+
+test('framing: a photo fills a panel only when sharp and mostly kept; small or far-off shapes get a matte, never enlarged past 1.25×', () => {
+  const panel = { w: 888, h: 500 };
+  assert.equal(panelTreatment({ w: 3000, h: 1800 }, panel), 'fill', 'big, close shape');
+  assert.equal(panelTreatment({ w: 683, h: 1024 }, panel), 'matte', 'a small portrait in a landscape panel');
+  assert.equal(panelTreatment({ w: 600, h: 340 }, panel), 'matte', 'right shape, too small: 1.48× would pixelate');
+  assert.equal(panelTreatment(null, panel), 'matte', 'unknown size: never risk blowing it up');
+  const box = matteBox({ w: 400, h: 600 }, panel);
+  assert.ok(box.w <= 400 * SHARP_UPSCALE && box.h <= 420, JSON.stringify(box));
+});
+
+test('framing: full bleed and spreads only within 1.5× enlargement; a small scene cover is framed, not blown up', () => {
+  assert.equal(fillsSharp({ w: 1024, h: 683 }, { w: 1080, h: 1350 }), false, `${coverScale({ w: 1024, h: 683 }, { w: 1080, h: 1350 }).toFixed(2)}× > ${BLEED_MAX_UPSCALE}`);
+  assert.equal(fillsSharp({ w: 3600, h: 2400 }, { w: 1080, h: 1350 }), true);
+  assert.equal(fillsSharp({ w: 3600, h: 2400 }, { w: 2160, h: 1350 }), true, 'a big 3:2 photo spreads');
+  const ids = (f: SlideFacts) => allowedTemplates(f, new Set()).map((t) => t.id);
+  assert.deepEqual(ids(facts({ bucket: 'cover', sharpBleed: false })), ['cover-split'], 'a small scene: the framed split cover');
+  assert.ok(!ids(facts({ sharpBleed: false })).includes('story-full-bleed'));
+  assert.deepEqual(ids(facts({ bucket: 'stat', sharpBackdrop: false })), ['stat-plain'], 'too small even for a darkened backdrop');
 });

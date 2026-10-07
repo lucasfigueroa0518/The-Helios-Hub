@@ -46,10 +46,10 @@ export function canBleedPerson(photo: Photo): boolean {
 /** Logos wider than this are sized by width on the card (Tommy, 2026-10-07). */
 export const LOGO_WIDE_ASPECT = 2;
 
-function photoFields(photo: Photo | null): Pick<SlideCopy, 'photoUrl' | 'photoCredit' | 'photoKind' | 'logoPlate' | 'logoWide' | 'photoBleed'> {
+function photoFields(photo: Photo | null): Pick<SlideCopy, 'photoUrl' | 'photoCredit' | 'photoKind' | 'photoSize' | 'logoPlate' | 'logoWide' | 'photoBleed'> {
   if (!photo) return {};
   const wide = photo.source === 'logo' && !!photo.width && !!photo.height && photo.width / photo.height > LOGO_WIDE_ASPECT;
-  return { photoUrl: photo.url, photoCredit: photo.credit, photoKind: photoKindOf(photo), ...(photo.plate ? { logoPlate: photo.plate } : {}), ...(wide ? { logoWide: true } : {}), ...(canBleedPerson(photo) ? { photoBleed: true } : {}) };
+  return { photoUrl: photo.url, photoCredit: photo.credit, photoKind: photoKindOf(photo), ...(photo.width && photo.height ? { photoSize: { w: photo.width, h: photo.height } } : {}), ...(photo.plate ? { logoPlate: photo.plate } : {}), ...(wide ? { logoWide: true } : {}), ...(canBleedPerson(photo) ? { photoBleed: true } : {}) };
 }
 
 const iconOf = (name: string | null | undefined) => (isIcon(name) ? name : DEFAULT_ICON);

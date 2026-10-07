@@ -20,6 +20,11 @@
       "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/3/3a/Jim_Steyer_Collision_2018_-_Day_Two_01_%28cropped%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
       "photoCredit": "Jim Steyer, Common Sense Media founder · Collision Conf, CC BY 2.0 · Wikimedia Commons",
       "photoKind": "subject",
+      "photoSize": {
+        "w": 2782,
+        "h": 3712
+      },
+      "coverMode": "split",
       "template": "cover-split",
       "photoFocus": {
         "x": 0.5,
@@ -41,6 +46,10 @@
       "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/8/89/Smartphone_display_screen.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
       "photoCredit": "Skitterphoto (CC0) · Wikimedia Commons",
       "photoKind": "scene",
+      "photoSize": {
+        "w": 3798,
+        "h": 2407
+      },
       "body": [
         {
           "text": "OpenAI announced ChatGPT for Teens in August for users 13 to 17, with parental notifications and other guardrails. On Oct. 7, Common Sense Media's Youth AI Safety Institute gave it Unacceptable Risk, its worst tier.",
@@ -48,8 +57,8 @@
         }
       ],
       "layoutVariant": "text",
-      "photoPlacement": "below",
-      "template": "story-photo-below"
+      "photoPlacement": "top",
+      "template": "story-photo-top"
     },
     {
       "position": 2,
@@ -64,6 +73,10 @@
       "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/4/4a/Smartphone_lock_screen_enter_PIN.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
       "photoCredit": "Mykhal (CC0) · Wikimedia Commons",
       "photoKind": "scene",
+      "photoSize": {
+        "w": 750,
+        "h": 1200
+      },
       "body": [
         {
           "text": "Futurism reports alerts came only from older accounts, which Common Sense says had weeks of sensitive-topic history.",
@@ -90,6 +103,10 @@
       ],
       "altText": "Crisis help and Red Lines fell short, Common Sense says",
       "icon": "heart-pulse",
+      "photoSize": {
+        "w": 5568,
+        "h": 3712
+      },
       "body": [
         {
           "text": "Common Sense says ChatGPT missed warranted crisis referrals to a hotline or professional, and scored under its 95% threshold on severe harms it treats as Red Lines.",
@@ -121,6 +138,10 @@
       "photoUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/40/Modern_office_building%2C_Theresienh%C3%B6he%2C_M%C3%BCnchen.jpg/3840px-Modern_office_building%2C_Theresienh%C3%B6he%2C_M%C3%BCnchen.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
       "photoCredit": "Robert von Oliva (naruciakk) (CC0) · Wikimedia Commons",
       "photoKind": "scene",
+      "photoSize": {
+        "w": 5449,
+        "h": 3625
+      },
       "body": [
         {
           "text": "Common Sense says age estimation, which infers from usage if a user is under 18, never moved adult-registered test accounts to the teen experience, and teens could leave parent-set Study Hours by deleting @study.",
@@ -152,6 +173,10 @@
       "photoUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/40/Modern_office_building%2C_Theresienh%C3%B6he%2C_M%C3%BCnchen.jpg/3840px-Modern_office_building%2C_Theresienh%C3%B6he%2C_M%C3%BCnchen.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
       "photoCredit": "Robert von Oliva (naruciakk) (CC0) · Wikimedia Commons",
       "photoKind": "scene",
+      "photoSize": {
+        "w": 5449,
+        "h": 3625
+      },
       "panoramaSide": "right",
       "bleedText": "top",
       "template": "spread-text-top"

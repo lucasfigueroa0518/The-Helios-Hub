@@ -228,7 +228,8 @@ window.__faces = (async () => {
           const nw = img.naturalWidth, nh = img.naturalHeight;
           const faceFrac = (w: number) => (main.h * nh * Math.max(w / nw, H / nh)) / H;
           let windowW: number | undefined;
-          if (faceFrac(W) > FACE_MAX && !img.classList.contains('helios-quote__speaker')) {
+          // Never on the round speaker spot, nor a matted photo (shown whole; render/framing.ts).
+          if (faceFrac(W) > FACE_MAX && !img.closest('.helios-quote__speaker, .helios-frame--matte')) {
             const minW = (H * nw) / nh; // below this, the photo's height sets the scale
             const capW = (FACE_MAX * H * nw) / (main.h * nh);
             const target = Math.round(Math.max(minW, Math.min(W, capW)));
@@ -281,7 +282,8 @@ window.__faces = (async () => {
           if (r.width === 0 && r.height === 0) return;
           const over = { left: Math.max(0, b.left - r.left), top: Math.max(0, b.top - r.top), right: Math.max(0, r.right - b.right), bottom: Math.max(0, r.bottom - b.bottom) };
           // Full-bleed photos are clipped by the slide; they may extend past it (spreads by design).
-          if (el.matches('img.helios-photo, .helios-backdrop__shade, .helios-cover, .helios-image')) return;
+          // A framed photo's blurred copy is scaled past its frame and clipped by it (adaptive framing).
+          if (el.matches('img.helios-photo, .helios-backdrop__shade, .helios-cover, .helios-image, .helios-frame__blur')) return;
           // Icon backgrounds run off the edge by design (photo spec §5) and carry no text.
           if (el.closest('.helios-icon-bg')) return;
           if (Object.values(over).some((v) => v > tol)) {

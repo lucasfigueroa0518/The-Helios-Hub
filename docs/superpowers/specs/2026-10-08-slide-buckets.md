@@ -69,3 +69,11 @@ Every variant passes the frozen render checks: text fit, bounds, contrast, faces
 One state per decision: the slide's content type, headline and body lengths (characters), number or quote length,
 the photo's kind (scene, person, logo, none), its Haiku tags, its shape (wide, tall), and the variants already used.
 Jev answers with `choice`; its probabilities are logged with the pick.
+
+## 5. Adaptive framing and finishes (Tommy, 2026-10-07: "more premium … how pixelized an image can become … when it's nice for an image to go end to end")
+
+Code (`lib/social/render/framing.ts`) decides from the photo's own pixel size and the frame it would fill:
+
+- **End to end** (full bleed, the bleed cover, spreads) only when the photo needs at most **1.5×** enlargement; darkened backdrops (stat, quote) at most **2.2×**, softened with a light blur. A scene too small for a full-bleed cover takes the framed split cover.
+- **Panels** fill edge to edge when the photo needs at most **1.25×** and the crop keeps at least 60% of it; otherwise a **matte**: the photo whole and sharp (never past 1.25×) on a blurred, darkened copy of itself. Unknown size: matte.
+- **Finishes:** rounded panels with a soft drop shadow and an inner hairline; eased fades under text (0.84 where copy starts); the split cover melts into the canvas; feathered edges when the face framing narrows a person photo; backdrops darkest where copy sits, with a shallow blur; a blurred-glass credit pill and arrow disc; a quiet double ring on the speaker portrait; balanced headline lines. No new colours, no texture (the Helios brand).

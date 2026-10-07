@@ -323,6 +323,10 @@ export type SlideCopy = {
   variant?: Variant;
   /** The bucket variant Jev chose (render/buckets.ts TemplateId; slide buckets spec). The layout rotation never swaps a slide that has one. */
   template?: string;
+  /** The photo's own pixel size, when the source gives it: adaptive framing (render/framing.ts) uses it to avoid pixelating. */
+  photoSize?: { w: number; h: number };
+  /** The cover composition the variant chose (cover-bleed / cover-split …); absent: from the photo kind, as before. */
+  coverMode?: 'bleed' | 'split' | 'logo' | 'icon';
 
   /**
    * The editorial beat this slide carries. Kept for tracing/analytics; the

@@ -22,6 +22,7 @@ import { SPREAD_MIN_ASPECT, type Photo, type PhotoTrace } from '@/lib/social/pho
 import type { FilledDraft } from '@/lib/social/writer/draft';
 
 import { TEMPLATES, allowedTemplates, type Bucket, type PhotoShape, type SlideFacts, type TemplateId } from './buckets';
+import { BACKDROP_MAX_UPSCALE, SLIDE, SPREAD, fillsSharp } from './framing';
 import { canBleedPerson, photoKindOf } from './from-draft';
 
 export type Layout = {
@@ -38,7 +39,9 @@ export function photoShape(p: Photo | null): PhotoShape {
   return kind === 'logo' ? 'logo' : kind === 'scene' ? 'scene' : canBleedPerson(p) ? 'person-bleed' : 'person';
 }
 
-const isWide = (p: Photo | null) => !!p && photoKindOf(p) === 'scene' && !!p.width && !!p.height && p.width / p.height >= SPREAD_MIN_ASPECT;
+const sizeOf = (p: Photo | null) => (p?.width && p.height ? { w: p.width, h: p.height } : null);
+/** Wide enough for a spread and sharp across both slides (adaptive framing). */
+const isWide = (p: Photo | null) => !!p && photoKindOf(p) === 'scene' && !!p.width && !!p.height && p.width / p.height >= SPREAD_MIN_ASPECT && fillsSharp(sizeOf(p), SPREAD);
 
 const errText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
@@ -97,7 +100,7 @@ export async function chooseLayout(draft: FilledDraft, photos: { cover: PhotoTra
       templates.push(templates[n - 1]!);
       continue;
     }
-    const facts: SlideFacts = { bucket: p.bucket, photo: photoShape(p.photo), speakerPhoto: p.speakerPhoto, wide: isWide(p.photo), headlineChars: p.headline.length, bodyChars: p.body.length, quoteChars: p.quote.length };
+    const facts: SlideFacts = { bucket: p.bucket, photo: photoShape(p.photo), speakerPhoto: p.speakerPhoto, wide: isWide(p.photo), sharpBleed: fillsSharp(sizeOf(p.photo), SLIDE), sharpBackdrop: fillsSharp(sizeOf(p.photo), SLIDE, BACKDROP_MAX_UPSCALE), headlineChars: p.headline.length, bodyChars: p.body.length, quoteChars: p.quote.length };
     let options = allowedTemplates(facts, used);
     let reused = false;
     if (!options.length) {
@@ -109,7 +112,7 @@ export async function chooseLayout(draft: FilledDraft, photos: { cover: PhotoTra
     let id: TemplateId;
     if (!options.length) {
       // Nothing fits (a photo no variant takes): the bucket's no-photo variant, logged.
-      id = (TEMPLATES.find((t) => t.bucket === p.bucket && t.needs({ ...facts, photo: 'none', speakerPhoto: false }))?.id ?? TEMPLATES.find((t) => t.bucket === p.bucket)!.id);
+      id = (TEMPLATES.find((t) => t.bucket === p.bucket && t.needs({ ...facts, photo: 'none', speakerPhoto: false, sharpBleed: false, sharpBackdrop: false }))?.id ?? TEMPLATES.find((t) => t.bucket === p.bucket)!.id);
       log.push(`slide ${n + 1}: no ${p.bucket} variant takes a ${facts.photo} photo → ${id}`);
     } else if (options.length === 1) {
       id = options[0]!.id;

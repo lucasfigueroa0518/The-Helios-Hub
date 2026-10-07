@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 
+import { BACKDROP_MAX_UPSCALE, BLEED_MAX_UPSCALE, SHARP_UPSCALE, SLIDE, coverScale, matteBox, panelTreatment, type Size } from '@/lib/social/render/framing';
 import { DEFAULT_ICON, ICONS } from '@/lib/social/render/icons';
 import { fitText } from '@/lib/social/render/text-fit';
 import type { Post, SlideCopy, SpanRun } from '@/lib/social/render/types';
@@ -183,7 +184,17 @@ function focusStyle(slide: SlideCopy): CSSProperties | undefined {
   return f.windowW ? { ...pos, width: `${f.windowW}px`, flex: 'none', alignSelf: 'center' } : pos;
 }
 
-/** A photo in its own region (rule 3: the only place a subject photo goes). */
+/** Each region's frame size (render/framing.ts decides fill or matte against it). */
+const FRAMES: Record<string, Size> = { 'helios-cover__photo': { w: 1080, h: 780 }, 'helios-split__photo': { w: 888, h: 500 }, 'helios-quote__speaker': { w: 220, h: 220 } };
+
+/**
+ * A photo in its own region (rule 3: the only place a subject photo goes),
+ * framed adaptively (render/framing.ts): edge to edge when it's sharp and
+ * keeps most of itself; otherwise matted, whole and never enlarged past
+ * SHARP_UPSCALE, on a blurred, darkened copy of itself. A person photo is
+ * cropped around the face, so it fills unless it would pixelate. The blurred
+ * copy also fills the side bands when the face framing narrows the window.
+ */
 function RegionPhoto({ slide, className }: { slide: SlideCopy; className: string }) {
   // A logo on a story slide (photo spec §4): whole, on its plate, never cropped like a photo.
   if (slide.photoKind === 'logo') {
@@ -195,10 +206,17 @@ function RegionPhoto({ slide, className }: { slide: SlideCopy; className: string
       </div>
     );
   }
-  const style = focusStyle(slide);
-  // The cover photo is absolutely positioned: centre a narrowed window by its left edge.
-  const cover = className === 'helios-cover__photo' && slide.photoFocus?.windowW ? { left: `${Math.round((1080 - slide.photoFocus.windowW) / 2)}px` } : undefined;
-  return <img className={`helios-photo ${className}`} src={slide.photoUrl} alt="" aria-hidden="true" data-photo-kind={slide.photoKind ?? 'scene'} style={{ ...style, ...cover }} />;
+  const frame = FRAMES[className] ?? FRAMES['helios-split__photo']!;
+  const person = slide.photoKind === 'subject';
+  const treatment = className === 'helios-quote__speaker' ? 'fill' : person ? (slide.photoSize && coverScale(slide.photoSize, frame) > BLEED_MAX_UPSCALE ? 'matte' : 'fill') : panelTreatment(slide.photoSize, frame);
+  const box = treatment === 'matte' ? matteBox(slide.photoSize, frame) : null;
+  const imgStyle: CSSProperties | undefined = box ? { width: `${box.w}px`, height: `${box.h}px`, objectFit: 'contain' } : focusStyle(slide);
+  return (
+    <div className={`helios-frame helios-frame--${treatment} ${className}`} data-frame={treatment}>
+      <div className="helios-frame__blur" aria-hidden="true" style={{ backgroundImage: `url("${slide.photoUrl}")` }} />
+      <img className="helios-photo helios-frame__img" src={slide.photoUrl} alt="" aria-hidden="true" data-photo-kind={slide.photoKind ?? 'scene'} style={imgStyle} />
+    </div>
+  );
 }
 
 /** A full-bleed scene photo under a gradient-scrimmed text block (rules 2 + 3). */
@@ -207,11 +225,12 @@ function BleedPhoto({ slide, spread }: { slide: SlideCopy; spread?: 'left' | 'ri
   return <img className={`helios-photo ${cls}`} src={slide.photoUrl} alt="" aria-hidden="true" data-photo-kind={photoKindAttr(slide)} style={spread ? undefined : focusStyle(slide)} />;
 }
 
-/** Darkened full-bleed background behind a slide's content (spec §5.3a; rule 2 via the shade). */
+/** Darkened full-bleed background behind a slide's content (spec §5.3a; rule 2 via the shade). An enlarged photo is softened so its pixels never show. */
 function Backdrop({ slide }: { slide: SlideCopy }) {
+  const soft = !!slide.photoSize && coverScale(slide.photoSize, SLIDE) > SHARP_UPSCALE && coverScale(slide.photoSize, SLIDE) <= BACKDROP_MAX_UPSCALE;
   return (
     <>
-      <img className="helios-photo helios-backdrop__img" src={slide.photoUrl} alt="" aria-hidden="true" data-photo-kind={slide.photoKind ?? 'scene'} style={focusStyle(slide)} />
+      <img className={`helios-photo helios-backdrop__img${soft ? ' helios-backdrop__img--soft' : ''}`} src={slide.photoUrl} alt="" aria-hidden="true" data-photo-kind={slide.photoKind ?? 'scene'} style={focusStyle(slide)} />
       <div className="helios-backdrop__shade" aria-hidden="true" />
     </>
   );
@@ -226,7 +245,8 @@ function PhotoCredit({ credit }: { credit: string | undefined }) {
 /* ── Cover ────────────────────────────────────────────────────────── */
 
 function CoverSlide({ slide }: { slide: SlideCopy }) {
-  const mode = !slide.photoUrl ? 'icon' : slide.photoKind === 'logo' ? 'logo' : slide.photoKind === 'subject' && !slide.photoBleed ? 'split' : 'bleed';
+  // The variant's composition (slide buckets spec), else from the photo kind.
+  const mode = !slide.photoUrl ? 'icon' : slide.photoKind === 'logo' ? 'logo' : slide.coverMode === 'split' || slide.coverMode === 'bleed' ? slide.coverMode : slide.photoKind === 'subject' && !slide.photoBleed ? 'split' : 'bleed';
   return (
     <div className={`helios-cover helios-cover--${mode}${mode === 'bleed' && slide.fade === 'strong' ? ' helios-fade--strong' : ''}`}>
       {mode === 'bleed' && <BleedPhoto slide={slide} />}
