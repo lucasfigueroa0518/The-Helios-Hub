@@ -101,7 +101,7 @@ test('C4 caption: no hashtags', () => {
 
 test('F5 Source line: built from the outlets the post’s claim tags cite, deduped, in SOURCES order; replaces the Writer’s line', () => {
   const b = brief();
-  b.sources = [{ outlet: 'TechCrunch', date: null, url: 'u1' }, { outlet: 'The Wall Street Journal (paywalled)', date: null, url: 'u2' }];
+  b.sources = [{ outlet: 'TechCrunch', date: null, url: 'u1', kind: 'original' }, { outlet: 'The Wall Street Journal (paywalled)', date: null, url: 'u2', kind: 'original' }];
   b.facts[0]!.sources = ['The Wall Street Journal (paywalled)', 'TechCrunch'];
   const d = draft((x) => (x.caption.text = 'Trump announced it.\n\nSource: Somewhere Else, 2026.'));
   assert.equal(buildSourceLine(d, b), 'Source: TechCrunch and The Wall Street Journal.');

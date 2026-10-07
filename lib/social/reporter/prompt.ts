@@ -16,6 +16,10 @@
  *   prompt to the user message, so everything else is a stable, cached
  *   system prefix.
  *
+ *   SOURCE KIND (Tommy, 2026-10-06): each SOURCES entry is marked original,
+ *   official or aggregator; facts resting only on aggregators go back once,
+ *   then code drops them.
+ *
  *   QUOTE SPEAKERS BY ID (Tommy, 2026-10-06): SUBJECTS entries get IDs
  *   (S1, S2, …) and each QUOTES entry names its speaker's SUBJECTS ID.
  *
@@ -54,7 +58,7 @@ SUBJECTS: S1, S2, … people/companies/products in the story (with role)
 EVENTS: photographable events with date/place, if any
 ARTICLE PHOTOS: caption | credit | URL (if visible)
 NOT ANSWERED BY SOURCES: bullets
-SOURCES: outlet, date, URL (only ones you opened); list fetch failures separately`;
+SOURCES: outlet, date, URL (only ones you opened), kind (original, official or aggregator); list fetch failures separately`;
 
 export type ReporterStoryInput = {
   /** The story one-liner from selection (the group's headline). */

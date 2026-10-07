@@ -103,7 +103,7 @@ export function stubBrief(news: string): ParsedBrief {
     events: [],
     article_photos: [],
     not_answered: [],
-    sources: [{ outlet: 'Example News', date: null, url: 'https://example.com' }],
+    sources: [{ outlet: 'Example News', date: null, url: 'https://example.com', kind: 'original' }],
     fetch_failures: [],
   };
 }

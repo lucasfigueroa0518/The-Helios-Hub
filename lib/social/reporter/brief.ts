@@ -47,6 +47,9 @@ export type BriefNumber = {
   notes: string[];
 };
 
+export const SOURCE_KINDS = ['original', 'official', 'aggregator'] as const;
+export type SourceKind = (typeof SOURCE_KINDS)[number];
+
 export type Brief = {
   single_story: { yes: boolean; note: string | null };
   the_news: { text: string; ids: string[] };
@@ -60,7 +63,8 @@ export type Brief = {
   events: Array<{ what: string; date: string | null; place: string | null }>;
   article_photos: Array<{ caption: string | null; credit: string | null; url: string | null; page: string | null }>;
   not_answered: string[];
-  sources: Array<{ outlet: string; date: string | null; url: string }>;
+  /** kind (Tommy, 2026-10-06): original reporting, an official source, or an aggregator. */
+  sources: Array<{ outlet: string; date: string | null; url: string; kind: SourceKind }>;
   fetch_failures: Array<{ url: string; reason: string }>;
 };
 
@@ -134,7 +138,12 @@ export const BRIEF_SCHEMA = obj({
     }),
   ),
   not_answered: strList,
-  sources: list(obj({ outlet: str, date: nullableStr, url: { type: 'string', description: 'Only sources you opened.' } })),
+  sources: list(obj({
+    outlet: str,
+    date: nullableStr,
+    url: { type: 'string', description: 'Only sources you opened.' },
+    kind: { type: 'string', enum: [...SOURCE_KINDS], description: "original: the outlet's own reporting; official: the company, government or person behind the news; aggregator: summarizes other outlets' reporting." },
+  })),
   fetch_failures: list(obj({ url: str, reason: str })),
 });
 
@@ -184,11 +193,21 @@ export function checkShape(value: unknown, schema: any = BRIEF_SCHEMA, at = 'bri
 }
 
 /** Shape, then: sources exist, IDs are unique, cited IDs exist. Returns the brief or throws. */
-export function validateBrief(input: unknown): Brief {
+/**
+ * `aggregators`: also fail FACTS, BACKGROUND and NUMBERS whose only sources
+ * are aggregators (Tommy, 2026-10-06). The Reporter gets this once, while it
+ * still has its retry; after that, code drops them (dropAggregatorOnly).
+ */
+export function validateBrief(input: unknown, opts: { aggregators?: boolean } = {}): Brief {
   const shape = checkShape(input);
   if (shape.length > 0) throw new BriefValidationError(shape);
   const brief = input as Brief;
   const errors: BriefError[] = [];
+  if (opts.aggregators) {
+    for (const x of aggregatorOnly(brief)) {
+      errors.push({ section: 'aggregator-only', message: `${x.id} rests only on aggregators (${x.sources.join(', ')}): open the primary or drop the fact` });
+    }
+  }
   if (brief.sources.length === 0) errors.push({ section: 'sources', message: 'no sources' });
   const has = (list: string[]) => list.some((s) => s.trim());
   for (const [section, items] of [['facts', brief.facts], ['background', brief.background], ['numbers', brief.numbers]] as const) {
@@ -219,6 +238,45 @@ export function validateBrief(input: unknown): Brief {
   }
   if (errors.length > 0) throw new BriefValidationError(errors);
   return brief;
+}
+
+const outletKeyOf = (s: string) => s.replace(/\s*\([^)]*\)\s*/g, ' ').toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+/** FACTS, BACKGROUND and NUMBERS whose every source is an aggregator in SOURCES. */
+export function aggregatorOnly(brief: Brief): Array<{ id: string; sources: string[] }> {
+  const aggregators = new Set(brief.sources.filter((s) => s.kind === 'aggregator').map((s) => outletKeyOf(s.outlet)));
+  if (aggregators.size === 0) return [];
+  return [...brief.facts, ...brief.background, ...brief.numbers]
+    .filter((x) => x.sources.length > 0 && x.sources.every((s) => aggregators.has(outletKeyOf(s))))
+    .map((x) => ({ id: x.id, sources: x.sources }));
+}
+
+/**
+ * Code removes what is still aggregator-only after the Reporter's retry,
+ * along with anything citing it (WHY IT MATTERS items; the ID in THE
+ * NEWS), before the Writer sees the brief. Returns what was removed (logged).
+ */
+export function dropAggregatorOnly(brief: Brief): { brief: Brief; dropped: string[] } {
+  const ids = new Set(aggregatorOnly(brief).map((x) => x.id));
+  if (ids.size === 0) return { brief, dropped: [] };
+  const dropped: string[] = [];
+  const keep = <T extends { id: string }>(xs: T[]) => xs.filter((x) => (ids.has(x.id) ? (dropped.push(`${x.id} (aggregator-only)`), false) : true));
+  const why = brief.why_it_matters.filter((w) => {
+    const cites = w.ids.filter((id) => ids.has(id));
+    if (cites.length) dropped.push(`WHY IT MATTERS "${w.text.slice(0, 60)}" (cites ${cites.join(', ')})`);
+    return cites.length === 0;
+  });
+  return {
+    brief: {
+      ...brief,
+      facts: keep(brief.facts),
+      background: keep(brief.background),
+      numbers: keep(brief.numbers),
+      why_it_matters: why,
+      the_news: { ...brief.the_news, ids: brief.the_news.ids.filter((id) => !ids.has(id)) },
+    },
+    dropped,
+  };
 }
 
 /** Lookup by ID for copy-by-ID (spec §4.2a). */

@@ -80,7 +80,9 @@ test('Reporter prompt = tested text, STORY line moved to the user message, plus 
     .replace('NUMBERS: N1 value | what it counts | source', 'NUMBERS: N1: value | type | what it counts | source (type is one of: money, count, percent, duration, date, other; value exactly as the source writes it)')
     // Quote speakers by ID (2026-10-06).
     .replace('[cut off if cut off in every source]', "[cut off if cut off in every source] — speaker's SUBJECTS ID (S1…), or none")
-    .replace('SUBJECTS: people/companies/products in the story (with role)', 'SUBJECTS: S1, S2, … people/companies/products in the story (with role)');
+    .replace('SUBJECTS: people/companies/products in the story (with role)', 'SUBJECTS: S1, S2, … people/companies/products in the story (with role)')
+    // Source kind (2026-10-06).
+    .replace('SOURCES: outlet, date, URL (only ones you opened);', 'SOURCES: outlet, date, URL (only ones you opened), kind (original, official or aggregator);');
   assert.equal(REPORTER_SYSTEM, expected);
   assert.equal(
     reporterUserMessage({ story: 'Trump unveils his new Super Intelligence Force', startingSources: ['https://a.example/1', 'https://b.example/2'], today: 'October 4, 2026' }),

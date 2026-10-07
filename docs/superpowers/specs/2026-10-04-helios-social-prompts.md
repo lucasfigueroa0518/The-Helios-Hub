@@ -92,7 +92,16 @@ SOURCES: outlet, date, URL (only ones you opened); list fetch failures separatel
 
 - **Check C8 (code):** the same number, or a repeated phrase of four or more words, across the fields of one slide sends the draft back to the Editor once. If it still fails after that, it's a warning on the review screen.
 
-**Quote speakers by ID (Tommy, 2026-10-06).** `cause · Reporter prompt + schema · 0 new stages · 0 new AI calls`
+**Aggregator-only facts (Tommy, 2026-10-06).** `cause · Reporter prompt + schema + code · 0 new stages · 0 new AI calls`
+
+- **Why:** in the 2026-10-06 run, "more than 100 organizations" (F9, N1) rested only on Implicator.ai, a partly AI-generated summary site. That broke the aggregator rule, and it was fixed after one case.
+- **What changes:** the SOURCES line in the section list. "SOURCES: outlet, date, URL (only ones you opened); list fetch failures separately" becomes "SOURCES: outlet, date, URL (only ones you opened), kind (original, official or aggregator); list fetch failures separately".
+- **Schema:** each `submit_brief` SOURCES entry gets a `kind`.
+- **Code:**
+  - a FACT, BACKGROUND entry or NUMBER whose only sources are aggregators goes back to the Reporter once: "open the primary or drop the fact";
+  - anything still aggregator-only after that is removed by code before the Writer sees the brief, along with any WHY IT MATTERS item citing it and its ID in THE NEWS, and the removal is logged.
+
+ `cause · Reporter prompt + schema · 0 new stages · 0 new AI calls`
 
 - **Why:** quote slides matched their speaker by name text. In the 2026-10-06 run, "Ron DeSantis (Florida governor)" didn't equal the SUBJECTS entry "Ron DeSantis", so the quote slide lost the speaker's verified photo.
 - **What changes:** two section-list lines.

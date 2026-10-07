@@ -404,3 +404,42 @@ test('Reporter: a submission that fails the check gets one retry with the errors
   assert.equal(r.retryErrors.length, 1);
   assert.match(r.retryErrors[0]!, /facts: F1 has no source/);
 });
+
+// ── Aggregator-only facts (Tommy, 2026-10-06) ─────────────────────────────
+
+import { aggregatorOnly, dropAggregatorOnly } from '@/lib/social/reporter/brief';
+
+function withAggregator(): Brief {
+  const b = briefSuperIntelligenceForce();
+  b.sources.push({ outlet: 'Implicator.ai (partly AI-generated summary)', date: null, url: 'https://www.implicator.ai/x', kind: 'aggregator' });
+  b.facts[3]!.sources = ['Implicator.ai'];
+  b.numbers[0]!.sources = ['Implicator.ai', 'TechCrunch'];
+  return b;
+}
+
+test('aggregator-only: a fact resting only on aggregators is found; one with an original source is not', () => {
+  assert.deepEqual(aggregatorOnly(withAggregator()).map((x) => x.id), ['F4']);
+  assert.deepEqual(aggregatorOnly(briefSuperIntelligenceForce()), []);
+});
+
+test('aggregator-only: code drops the fact and anything citing it, and logs it', () => {
+  const b = withAggregator();
+  b.the_news.ids.push('F4');
+  b.why_it_matters.push({ text: 'The deadline is short.', ids: ['F4'] });
+  const { brief, dropped } = dropAggregatorOnly(b);
+  assert.ok(!brief.facts.some((f) => f.id === 'F4'));
+  assert.ok(!brief.the_news.ids.includes('F4'));
+  assert.ok(!brief.why_it_matters.some((w) => w.ids.includes('F4')));
+  assert.ok(dropped.includes('F4 (aggregator-only)') && dropped.filter((d) => d.startsWith('WHY IT MATTERS')).length === 2, dropped.join(' | '));
+});
+
+test('Reporter: aggregator-only goes back once ("open the primary or drop the fact"); what remains is dropped by code', async () => {
+  const s = scripted([msg('tool_use', [submit(withAggregator())]), msg('tool_use', [submit(withAggregator())])]);
+  const r = await runReporter(STORY, { create: s.create, readPage: stubRead() });
+  assert.ok(r.ok);
+  assert.equal(r.submitRetries, 1);
+  assert.match(r.retryErrors[0]!, /F4 rests only on aggregators .*open the primary or drop the fact/);
+  assert.ok(!r.brief.facts.some((f) => f.id === 'F4'));
+  assert.ok(r.aggregatorDropped.includes('F4 (aggregator-only)'));
+  assert.ok(r.aggregatorDropped.some((d) => /WHY IT MATTERS .*cites F4/.test(d)), 'the WHY IT MATTERS item citing it goes too');
+});

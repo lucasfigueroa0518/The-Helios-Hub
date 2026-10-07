@@ -57,7 +57,7 @@ export function briefSuperIntelligenceForce(): Brief {
       { caption: null, credit: 'Image Credits:Kevin Dietsch / Staff / Getty Images', url: 'https://techcrunch.com/wp-content/uploads/2026/09/GettyImages-2297764008.jpg', page: TC_URL },
     ],
     not_answered: ["The task force's budget and staff.", 'When the 120 days start.'],
-    sources: [{ outlet: 'TechCrunch', date: 'October 4, 2026', url: TC_URL }],
+    sources: [{ outlet: 'TechCrunch', date: 'October 4, 2026', url: TC_URL, kind: 'original' }],
     fetch_failures: [],
   };
 }
