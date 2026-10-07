@@ -42,7 +42,7 @@ function prescreenAnswers(req: { state: unknown }): Record<string, { noul: numbe
     out[Prescreen.peopleId(k)] = { noul: /people|soldier|students/.test(`${c.title} ${c.tags.join(' ')}`) ? 0.9 : 0.05 };
     out[Prescreen.landmarkId(k)] = { noul: /Eiffel|Capitol|Times Square/.test(c.title) ? 0.9 : 0.05 };
     // v3 brand: a company named in the title that isn't a story subject.
-    const named = (c.title.match(/\b(Google|Microsoft|Equinix|OpenAI)\b/g) ?? []).filter((n) => !state.story_subjects.includes(n));
+    const named = (c.title.match(/\b(Google|Microsoft|Equinix|OpenAI)\b/g) ?? []).filter((n) => !(state.story_subjects ?? []).includes(n));
     out[Prescreen.brandId(k)] = { noul: named.length ? 0.9 : 0.05 };
   });
   return out;
@@ -50,7 +50,7 @@ function prescreenAnswers(req: { state: unknown }): Record<string, { noul: numbe
 
 function identityJev(answers: IdentityAnswers, calls: string[] = [], prescreens: string[] = []): JevAsk {
   return async (req, meta) => {
-    if (meta.version === Prescreen.VERSION) {
+    if (meta.version.startsWith('stock-prescreen@')) {
       prescreens.push(meta.subjectId);
       return { answers: prescreenAnswers(req), usage: { input_tokens: 300, output_tokens: 0 }, model: 'stub-jev' };
     }
@@ -463,7 +463,7 @@ test('pre-screen: a result that likely shows people is skipped for one that fits
   const t = await findPhoto({ kind: 'stock', value: 'server room' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS, [], prescreens), stock });
   assert.equal(t.photo?.url, 'https://s/server-racks.jpg');
   assert.deepEqual(prescreens, ['server room']);
-  assert.ok(t.steps.some((s) => /pre-screen stock-prescreen@3 "server room": .*people 0\.90.*✓/.test(s)), t.steps.join(' | '));
+  assert.ok(t.steps.some((s) => /pre-screen stock-prescreen@4 "server room": .*people 0\.90.*✓/.test(s)), t.steps.join(' | '));
 });
 
 test('pre-screen: nothing passes → the two-word search, then text-only on a story slide', async () => {
@@ -734,16 +734,16 @@ test('rotation: consecutive photo-less text slides alternate between copy at the
   assert.deepEqual(r.unresolved, []);
 });
 
-test('pre-screen: a recognizable landmark is rejected', async () => {
+test('pre-screen v3 (bench only): a recognizable landmark is rejected', async () => {
   const stock = async () => [ov('Eiffel Tower at night'), ov('city lights at night')];
-  const t = await findPhoto({ kind: 'stock', value: 'city lights' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS), stock });
+  const t = await findPhoto({ kind: 'stock', value: 'city lights' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS), stock, prescreen: 'v3' });
   assert.equal(t.photo?.url, 'https://s/city-lights-at-night.jpg');
   assert.ok(t.steps.some((s) => /landmark 0\.90/.test(s)));
 });
 
 test("pre-screen v3: a result naming a company outside the story's SUBJECTS is rejected; a subject's own name is fine", async () => {
   const stock = async () => [ov('Google data center racks'), ov('data center racks')];
-  const t = await findPhoto({ kind: 'stock', value: 'data center racks' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS), stock });
+  const t = await findPhoto({ kind: 'stock', value: 'data center racks' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS), stock, prescreen: 'v3' });
   assert.equal(t.photo?.url, 'https://s/data-center-racks.jpg');
   assert.ok(t.steps.some((s) => /stock-prescreen@3 .*"Google data center racks" .*brand 0\.90/.test(s)));
 });
@@ -783,15 +783,15 @@ import { createVisionCheck, passesVision, SHOWS_MIN_CONFIDENCE, VISION_SYSTEM, V
 import { PHOTO_VISION_MODEL } from '@/lib/social/pipeline/models';
 import { DEFAULT_TOPIC } from '@/lib/social/photos/starter-set';
 
-const verdict = (over: Partial<VisionVerdict> = {}): VisionVerdict => ({ what_it_shows: 'x', shows_requested: true, shows_requested_confidence: 0.9, person_visible: false, landmark_visible: false, outside_brand_visible: false, brand_seen: null, ...over });
+const verdict = (over: Partial<VisionVerdict> = {}): VisionVerdict => ({ what_it_shows: 'x', shows_requested: true, shows_requested_confidence: 0.9, person_prominent: false, landmark_visible: false, story_logo: false, logo_seen: null, ...over });
 
 test('vision: all four must pass (shows it with enough confidence, no person, no landmark, no outside brand)', () => {
   assert.ok(passesVision(verdict()));
   assert.ok(!passesVision(verdict({ shows_requested: false })));
   assert.ok(!passesVision(verdict({ shows_requested_confidence: SHOWS_MIN_CONFIDENCE - 0.01 })));
-  assert.ok(!passesVision(verdict({ person_visible: true })));
+  assert.ok(!passesVision(verdict({ person_prominent: true })));
   assert.ok(!passesVision(verdict({ landmark_visible: true })));
-  assert.ok(!passesVision(verdict({ outside_brand_visible: true, brand_seen: 'Equinix' })));
+  assert.ok(!passesVision(verdict({ story_logo: true, logo_seen: 'Equinix' })));
 });
 
 /** Stub vision: verdicts by photo title in the URL; records what it was asked. */
@@ -857,4 +857,14 @@ test('vision request: own model, cached system + forced tool, the downscaled pho
   const meta = await sharp(Buffer.from(img.source.data, 'base64')).metadata();
   assert.equal(Math.max(meta.width!, meta.height!), 768);
   assert.equal(text.text, 'REQUESTED: data center racks\nSUBJECTS: Mistral AI');
+});
+
+test('pre-screen v4 (default): fit and people only; a title naming a landmark or a company goes on to the vision check, which decides', async () => {
+  const stock = async () => [ov('Google data center at the Eiffel Tower'), ov('people at a data center')];
+  const asked: string[] = [];
+  const vision = stubVision({ 'https://s/Google-data-center-at-the-Eiffel-Tower.jpg': { landmark_visible: true } }, asked);
+  const t = await findPhoto({ kind: 'stock', value: 'data center' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS), stock, vision });
+  assert.deepEqual(asked, ['https://s/Google-data-center-at-the-Eiffel-Tower.jpg'], 'the people title is stopped by the metadata pre-screen; the landmark/brand title reaches vision');
+  assert.equal(t.via, 'text-only');
+  assert.ok(t.steps.some((s) => /stock-prescreen@4 .*fit 0\.90 people 0\.05 ✓/.test(s) && !/landmark|brand/.test(s)), t.steps.join(' | '));
 });

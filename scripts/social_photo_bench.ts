@@ -6,7 +6,9 @@
  * free. Nothing is written to the used-photo log.
  *
  * Each request runs on its own (a fresh post context, so results don't
- * depend on order); identity checks are shared per story.
+ * depend on order); identity checks are shared per story. The bench ignores
+ * the used-photo log (no 7-day rule; Tommy, 2026-10-06): it never reads or
+ * writes it.
  *
  * Fixed inputs: Openverse results are frozen in
  * fixtures/social/photo-bench/openverse-cache.json (recorded on the first
@@ -19,7 +21,7 @@
  * --vision adds the photo vision check (a Claude vision call per checked
  * candidate; Tommy approved 2026-10-06), under one budget with Jev.
  *
- *   npx tsx scripts/social_photo_bench.ts [--prescreen v2|v3] [--vision] [--cap-usd 0.05]
+ *   npx tsx scripts/social_photo_bench.ts [--prescreen v2|v3|v4] [--vision] [--cap-usd 0.05]
  */
 import { promises as fsp } from 'node:fs';
 import path from 'node:path';
@@ -78,7 +80,7 @@ async function tile(url: string | null, label: string[], w: number, h: number): 
 }
 
 async function main() {
-  const version = (arg('--prescreen') ?? 'v3') as 'v2' | 'v3';
+  const version = (arg('--prescreen') ?? 'v4') as 'v2' | 'v3' | 'v4';
   const capUsd = Number(arg('--cap-usd') ?? 0.05);
   const fixture = JSON.parse(await fsp.readFile('fixtures/social/photo-bench/requests.json', 'utf8'));
   const requests: BenchRequest[] = fixture.requests;
