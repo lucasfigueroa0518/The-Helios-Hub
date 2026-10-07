@@ -1,20 +1,10 @@
 /**
- * Openverse stock-image adapter. Used by runImageStep when the Writer's
- * IMAGE line is `stock: <scene>` — the finder queries the Openverse API
- * (no key required, public rate-limited endpoint) for a photograph
- * matching the scene, filters to safe licences + safe sources +
- * minimum size, and returns candidates ready for the vision KIND check.
- *
- * Openverse aggregates images from many upstream sources (Flickr,
- * Wikimedia Commons, museums, iNaturalist, etc.). We block a small
- * denylist of news-agency-adjacent sources to avoid grabbing
- * Reuters/AP/Bloomberg-tagged photos.
- *
- * Pluggable: `StockAdapter` is the shape any future stock provider
- * (Pixabay, Unsplash…) must satisfy so `runImageStep` never depends on
- * one provider.
- *
- * 2026-10-01 image redesign (Tommy Part 1).
+ * Openverse search (pulled code; spec §5.1 Photo chain v1, the stock step):
+ * a photograph for the Writer's `stock: <scene>` request, filtered to open
+ * licences (CC0, public domain mark, CC BY, CC BY-SA), a named creator,
+ * jpg/png, a minimum size, and away from a small denylist of news-agency
+ * sources. The finder (photos/find.ts) then runs the Jev pre-screen and the
+ * vision check.
  */
 
 const OPENVERSE_API = 'https://api.openverse.org/v1/images/';
@@ -71,17 +61,6 @@ export type OpenverseCandidate = {
   tags?: string[];
 };
 
-/**
- * Stock adapter interface. Any provider (Openverse, Pixabay, Unsplash)
- * must expose `search(query, opts)`. runImageStep binds to
- * `StockAdapter`, not the Openverse implementation, so a future swap
- * doesn't touch orchestration.
- */
-export type StockAdapter = {
-  /** Provider name used in logs / credits ('openverse', 'pixabay'…). */
-  name: string;
-  search(query: string, opts?: { limit?: number; http?: typeof fetch }): Promise<OpenverseCandidate[]>;
-};
 
 function mimeFromUrl(url: string): string {
   const ext = /\.(jpe?g|png)(?:$|[?#])/i.exec(url)?.[1]?.toLowerCase();
@@ -159,8 +138,3 @@ export function buildStockCredit(cand: Pick<OpenverseCandidate, 'creator' | 'lic
   return `${cand.creator}, ${licenseText} · via ${cand.source}`;
 }
 
-/** The default Openverse adapter, ready to hand to runImageStep. */
-export const OPENVERSE_ADAPTER: StockAdapter = {
-  name: 'openverse',
-  search: searchOpenverse,
-};

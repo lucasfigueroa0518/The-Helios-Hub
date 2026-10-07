@@ -13,7 +13,7 @@ import { promises as fsp } from 'node:fs';
 import path from 'node:path';
 
 import type { PhotoTrace } from '@/lib/social/photos/find';
-import { pickStarter } from '@/lib/social/photos/starter-set';
+import { pickCoverStarter } from '@/lib/social/photos/starter-set';
 import { checkRenderFit } from '@/lib/social/render/fit-check';
 import { draftSlides, toRenderPost } from '@/lib/social/render/from-draft';
 import { rotateLayouts } from '@/lib/social/render/layout-rotation';
@@ -31,12 +31,12 @@ async function main() {
     const draft = fillDraft(saved.final, brief);
     const traces = [log.photos.cover, ...log.photos.slides];
     const used = new Set(traces.flatMap((t) => (t.photo ? [t.photo.url] : [])));
-    for (const t of traces) {
+    for (const [i, t] of traces.entries()) {
       // Logs written before photos carried `subject`: take it from the identity check that verified the photo.
       if (t.photo && t.photo.subject === undefined) t.photo.subject = t.photo.qid && t.identity?.ok ? t.identity.subject : null;
-      if (t.photo) continue;
-      const p = pickStarter(used, { request: t.request.value, brief })?.photo;
-      if (!p) continue;
+      // The daily run's rule (spec §5.1 Photo chain v1): only the cover gets a starter photo (AI-compute set); story slides stay text-only.
+      if (t.photo || i > 0) continue;
+      const p = pickCoverStarter(used).photo;
       used.add(p.url);
       t.photo = p;
       t.via = 'starter';

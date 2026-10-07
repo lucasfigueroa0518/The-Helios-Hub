@@ -1,24 +1,25 @@
 /**
- * Photo vision check (Tommy, 2026-10-06, after the photo-finder bench: the
- * metadata pre-screen reads titles and tags, not pixels, so it passed
- * "Price Tags on Wood" (cork) and a museum of stuffed deer).
+ * The stock vision check (spec §5.1 Photo chain v1; part of the stock link,
+ * accepted and frozen 2026-10-07). Only stock candidates are checked: after
+ * the Jev metadata pre-screen v4 (titles and tags), the top VISION_TOP
+ * candidates get one image check each, in order. The first that passes wins;
+ * none passing means no stock photo.
  *
- *   classification: new AI call · photo vision check · 0 new stages · +1 AI call per checked candidate
+ *   classification: AI call · photo vision check (Haiku, PHOTO_VISION_MODEL) · 0 stages · 1 call per checked candidate
  *
- * After the Jev metadata pre-screen, the top VISION_TOP passing stock
- * candidates get one image check each, in order. Four questions about the
- * pixels: shows the requested thing (yes/no + confidence), a person as a
- * main subject or a recognizable face, any recognizable landmark, a
- * prominent logo a reader would take as part of the story (outside the
- * story's SUBJECTS), and (Tommy, 2026-10-07, after the PREVIEW run's
- * "CJ Harris Regional Hospital") identifiable signage or a specific named
- * building or institution. The candidate's title is passed as context.
- * Sixth question (Tommy, 2026-10-07, official images): mostly text or a
- * graphic banner → an official image is rejected. Stock ignores it (a photo
- * of code on a screen answered "banner yes" on the bench).
- * Definitions narrowed by Tommy, 2026-10-06, after the bench (camera dials
- * failed on an unidentified maker). The first candidate passing all four wins; none passing
- * means no stock photo.
+ * The prompt asks six questions. A candidate passes (passesVision) on five
+ * answers: it shows the requested thing (yes, confidence ≥
+ * SHOWS_MIN_CONFIDENCE); no person as a main subject and no recognizable
+ * face; no recognizable landmark; no prominent logo outside the story's
+ * SUBJECTS; no identifiable signage or named building or institution. The
+ * sixth answer (mostly text or a graphic banner) is recorded and not used:
+ * it was written for official images, which are off.
+ *
+ * The prompt is FROZEN with the stock link: change it only by reopening the
+ * link. Known wording issue, left as is for that reason: the prompt first
+ * says "Ignore any title or caption you might guess", then that the photo's
+ * TITLE is given as context. The intent: judge the pixels; use the given
+ * title only to recognize a named place or institution.
  *
  * Model: PHOTO_VISION_MODEL (its own setting). The photo is downscaled to
  * VISION_LONG_SIDE px before sending. Caching: tool → system marked (static);
@@ -86,7 +87,7 @@ export type VisionResult = { ok: true; verdict: VisionVerdict; pass: boolean; co
 /** `title`: the candidate's title, as context (it can name the institution shown). */
 export type VisionCheck = (input: { url: string; scene: string; subjects: string[]; title?: string }) => Promise<VisionResult>;
 
-/** All four must pass. */
+/** Pass: shows the thing (with confidence), no main-subject person or face, no landmark, no outside logo, no named institution. */
 export function passesVision(v: VisionVerdict): boolean {
   return v.shows_requested && v.shows_requested_confidence >= SHOWS_MIN_CONFIDENCE && !v.person_prominent && !v.landmark_visible && !v.story_logo && !v.named_institution;
 }

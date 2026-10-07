@@ -1,7 +1,11 @@
 /**
- * Logo cover cards (spec §5.1 image strategy (b); Tommy approved the build
- * 2026-10-07): a company story's cover can be a Helios-designed card with the
- * company's official logo.
+ * Logo cover cards (spec §5.1 Photo chain v1, cover step 3): a story whose
+ * cover subject (or an organization the cover names) is an organization
+ * gets a Helios-designed card with its official logo. Allowed for any
+ * identity-verified organization whose Commons logo file passes the licence
+ * check; brand-guideline preferences don't block it (Tommy, 2026-10-07: "If
+ * there are free, open-to-use logos that are just preferred not to be used
+ * by the companies, we can definitely use them.").
  *
  *   - From Wikidata P154 ("logo image") on the identity-verified QID only,
  *     never matched by name. The current value: preferred rank, else one

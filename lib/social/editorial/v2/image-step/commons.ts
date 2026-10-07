@@ -1,19 +1,9 @@
 /**
- * Commons candidate finder for a resolved Wikidata entity.
- *
- * Per docs/IMAGES-V1-HANDOFF.md §Accuracy rules: photos must be linked
- * to the exact Wikidata entity, either:
- *   1. P18 — the entity's main image (highest confidence).
- *   2. P180 depicts — Commons files whose structured "depicts" claim
- *      names this Q-id.
- *
- * Free-text Commons search is NEVER used (spec: "Never a free-text
- * search result for a person's name").
- *
- * For each candidate this module pulls imageinfo (license, artist,
- * dimensions, MIME), applies the license filter with preference
- * ordering (PD/CC0 > CC BY > CC BY-SA), size filter, MIME filter,
- * strips HTML from the artist field, and returns a sorted list.
+ * Wikimedia Commons plumbing (pulled code; spec §5.1 Photo chain v1):
+ * fetch an entity's main image (P18), read file info, and keep a file only
+ * when it is usable: an allowed licence (PD / CC0 / CC BY / CC BY-SA, no NC
+ * or ND), a credited author, jpg/png, a minimum short side. Used by p18.ts
+ * (the subject's P18), logo.ts (licence) and the credit lines.
  */
 
 const COMMONS_API = 'https://commons.wikimedia.org/w/api.php';
@@ -76,39 +66,6 @@ export async function fetchEntityP18(
   const p18 = body.entities?.[qid]?.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
   if (typeof p18 !== 'string' || !p18) return null;
   return p18; // "Gavin Newsom by Gage Skidmore 3.jpg"
-}
-
-/**
- * Search Commons for files whose structured "depicts" (P180) claim
- * points at the given Q-id. Uses `haswbstatement:P180=<qid>` — a
- * server-side filter, not free-text.
- *
- * Limit stays low (spec caps candidates at 5). Files without P180 —
- * ie photos never marked as depicting the entity — are correctly
- * excluded.
- */
-export async function searchCommonsByDepicts(
-  qid: string,
-  opts: { limit?: number; http?: typeof fetch } = {},
-): Promise<string[]> {
-  const http = opts.http ?? fetch;
-  const limit = opts.limit ?? 5;
-  const url = new URL(COMMONS_API);
-  url.searchParams.set('action', 'query');
-  url.searchParams.set('list', 'search');
-  url.searchParams.set('srsearch', `haswbstatement:P180=${qid}`);
-  url.searchParams.set('srnamespace', '6'); // File:
-  url.searchParams.set('srlimit', String(limit));
-  url.searchParams.set('format', 'json');
-  url.searchParams.set('origin', '*');
-  const res = await http(url.toString(), {
-    headers: { 'User-Agent': USER_AGENT, 'Accept': 'application/json' },
-  });
-  if (!res.ok) throw new Error(`Commons search failed: HTTP ${res.status}`);
-  const body = (await res.json()) as {
-    query?: { search?: Array<{ title: string }> };
-  };
-  return (body.query?.search ?? []).map((s) => s.title); // "File:..."
 }
 
 /**
@@ -231,148 +188,6 @@ export function stripHtml(html: string): string {
     .replace(/&#39;/g, "'")
     .replace(/\s+/g, ' ')
     .trim();
-}
-
-/**
- * Free-text Commons search fallback. Only called by findCandidates when
- * P18/P180 turn up nothing. Returns file titles for downstream
- * license/size/vision filtering. Namespace is restricted to 6 (File:)
- * and results are capped tight because free-text search has no
- * accuracy guardrails on its own — the vision KIND check downstream
- * still has to reject anything that isn't a real photo of the subject.
- *
- * 2026-10-01 Part 1: added because small nonprofits (METR, Redwood,
- * Apollo) don't have P18 or depicts-linked photos on Wikidata but do
- * have plenty of well-licensed photos on Commons — the free-text
- * search catches those. Never used for people (P18 handles people
- * well; free-text on a person's name is a legendarily wrong-face
- * failure mode).
- */
-/**
- * Cheap title-relevance filter for free-text Commons hits. Requires the
- * subject name to appear as a whole word in the first 40 characters of
- * the file title (after the "File:" prefix). Case-insensitive. Rejects
- * the "anthropic figure" / "anthropic principle" class of false matches
- * where the subject appears as an adjective deep in a longer descriptive
- * title. Exported for direct unit testing.
- */
-export function titleContainsSubject(title: string, subject: string): boolean {
-  const bare = title.replace(/^File:/i, '').slice(0, 40).toLowerCase();
-  const s = subject.trim().toLowerCase();
-  if (!s) return false;
-  const re = new RegExp(`(^|[^a-z0-9])${escapeReForTitle(s)}([^a-z0-9]|$)`, 'i');
-  return re.test(bare);
-}
-function escapeReForTitle(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-export async function searchCommonsFreeText(
-  query: string,
-  opts: { limit?: number; http?: typeof fetch } = {},
-): Promise<string[]> {
-  const http = opts.http ?? fetch;
-  const limit = opts.limit ?? 6;
-  const url = new URL(COMMONS_API);
-  url.searchParams.set('action', 'query');
-  url.searchParams.set('list', 'search');
-  url.searchParams.set('srsearch', query);
-  url.searchParams.set('srnamespace', '6');
-  url.searchParams.set('srlimit', String(limit));
-  url.searchParams.set('format', 'json');
-  url.searchParams.set('origin', '*');
-  const res = await http(url.toString(), {
-    headers: { 'User-Agent': USER_AGENT, 'Accept': 'application/json' },
-  });
-  if (!res.ok) throw new Error(`Commons free-text search failed: HTTP ${res.status}`);
-  const body = (await res.json()) as { query?: { search?: Array<{ title: string }> } };
-  return (body.query?.search ?? []).map((s) => s.title);
-}
-
-/**
- * Given a resolved Wikidata entity, find and rank Commons candidates.
- * Preference: P18 first, then P180 depicts. Within each source,
- * preference: PD/CC0 → CC BY → CC BY-SA. Caps at `limit` (default 5).
- *
- * When both P18 and P180 return zero usable files AND the caller passed
- * `fallbackQuery` (subject label — set for orgs but never for people),
- * runs a free-text Commons search with a lower short-side floor
- * (`fallbackMinShortSide`, default 800 px). Files from that fallback
- * still go through the vision KIND check downstream so logos and
- * screenshots are rejected. 2026-10-01 Part 1.
- */
-export async function findCandidates(
-  qid: string,
-  opts: {
-    minShortSide?: number;
-    limit?: number;
-    http?: typeof fetch;
-    fallbackQuery?: string;
-    fallbackMinShortSide?: number;
-  } = {},
-): Promise<CommonsCandidate[]> {
-  const limit = opts.limit ?? 5;
-  const titles: Array<{ title: string; source: 'P18' | 'P180' | 'commons-search' }> = [];
-
-  const p18 = await fetchEntityP18(qid, { http: opts.http });
-  if (p18) titles.push({ title: `File:${p18}`, source: 'P18' });
-
-  const depicts = await searchCommonsByDepicts(qid, { limit: 8, http: opts.http });
-  for (const t of depicts) {
-    if (!titles.some((x) => x.title === t)) titles.push({ title: t, source: 'P180' });
-  }
-
-  // Fetch imageinfo for the linked candidates first.
-  let info: Record<string, RawImageInfo> = {};
-  if (titles.length > 0) {
-    info = await fetchImageInfo(titles.map((t) => t.title), { http: opts.http });
-  }
-
-  const kept: CommonsCandidate[] = [];
-  for (const t of titles) {
-    const raw = info[t.title];
-    if (!raw) continue;
-    const cand = toCandidate(t.title, raw, t.source, { minShortSide: opts.minShortSide });
-    if (cand) kept.push(cand);
-  }
-
-  // Free-text fallback: when linked sources produce nothing usable AND
-  // the caller opted in with fallbackQuery, take a small pass through
-  // Commons free-text search at a lower size floor.
-  //
-  // Title-relevance filter (2026-10-01 second pass): free-text search
-  // for a short subject name like "Anthropic" returns an Egyptian
-  // textile depicting an "anthropic figure" — same word, wrong subject.
-  // Require the subject name to appear as a WHOLE WORD in the first 40
-  // characters of the file title (after the "File:" prefix). That gates
-  // out substring accidents while still admitting "File:Anthropic HQ.jpg"
-  // or "File:METR office 2025.jpg". Vision KIND check still runs
-  // downstream so logos and screenshots are also rejected.
-  if (kept.length === 0 && opts.fallbackQuery) {
-    const fbTitles = await searchCommonsFreeText(opts.fallbackQuery, { limit: 8, http: opts.http });
-    const relevant = fbTitles.filter((t) => titleContainsSubject(t, opts.fallbackQuery!));
-    if (relevant.length > 0) {
-      const fbInfo = await fetchImageInfo(relevant, { http: opts.http });
-      const fbMinShort = opts.fallbackMinShortSide ?? 800;
-      for (const t of relevant) {
-        const raw = fbInfo[t];
-        if (!raw) continue;
-        const cand = toCandidate(t, raw, 'commons-search', { minShortSide: fbMinShort });
-        if (cand) kept.push(cand);
-      }
-    }
-  }
-
-  const tierRank: Record<LicenseTier, number> = { 'PD/CC0': 0, 'CC BY': 1, 'CC BY-SA': 2 };
-  const sourceRank: Record<'P18' | 'P180' | 'commons-search', number> = { P18: 0, P180: 1, 'commons-search': 2 };
-  kept.sort((a, b) => {
-    if (sourceRank[a.source] !== sourceRank[b.source]) return sourceRank[a.source] - sourceRank[b.source];
-    if (tierRank[a.tier] !== tierRank[b.tier]) return tierRank[a.tier] - tierRank[b.tier];
-    // Break ties on short side (bigger is better inside the same tier).
-    return Math.min(b.width, b.height) - Math.min(a.width, a.height);
-  });
-
-  return kept.slice(0, limit);
 }
 
 /**

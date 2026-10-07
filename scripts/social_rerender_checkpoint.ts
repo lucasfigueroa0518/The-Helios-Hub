@@ -12,7 +12,7 @@ import path from 'node:path';
 
 import { checkDroppedText } from '@/lib/social/mechanical/checks';
 import { createMechanicalStage } from '@/lib/social/pipeline/mechanical-stage';
-import { pickStarter } from '@/lib/social/photos/starter-set';
+import { pickCoverStarter } from '@/lib/social/photos/starter-set';
 import { checkRenderFit } from '@/lib/social/render/fit-check';
 import { toRenderPost } from '@/lib/social/render/from-draft';
 import { toSlug, writeGeneratedPost } from '@/lib/social/render/local-store';
@@ -35,10 +35,12 @@ async function main() {
     const filled = mech.ok ? mech.value.filled : fillDraft(sub, brief);
     // Saved traces may point at starter photos since removed: swap in the next eligible one, as the chain's last step would.
     const avoid = new Set<string>();
-    const photos = [t.photos.cover, ...t.photos.slides].map((x: any) => {
+    const photos = [t.photos.cover, ...t.photos.slides].map((x: any, i: number) => {
       const p = x.photo;
+      // The daily run's rule (spec §5.1 Photo chain v1): starter photos are for the cover only, AI-compute set.
+      if (i > 0 && p?.url?.startsWith('/social/starter/')) return null;
       if (p?.url?.startsWith('/social/starter/') && !existsSync(path.join('public', p.url))) {
-        const next = pickStarter(new Set([...avoid, ...[t.photos.cover, ...t.photos.slides].map((y: any) => y.photo?.url)]), { request: x.request.value, brief })!.photo;
+        const next = pickCoverStarter(new Set([...avoid, ...[t.photos.cover, ...t.photos.slides].map((y: any) => y.photo?.url)])).photo;
         console.log(`  (starter photo ${p.url} was removed; using ${next.url})`);
         avoid.add(next.url);
         return next;

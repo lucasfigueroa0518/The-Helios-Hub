@@ -1,30 +1,19 @@
 /**
- * The Helios starter set (spec §5.1a, order step 4): hand-picked photos
- * stored in the repo (public/social/starter), the last step of the photo
- * chain. Offline, so no slide is ever empty even when every online source
- * fails.
+ * The Helios starter set (spec §5.1 Photo chain v1): photos stored in the
+ * repo (public/social/starter), the last step of a COVER's chain only (story
+ * slides with nothing usable render text-only). Offline, so a cover is never
+ * empty even when every online source fails. Once Tommy approves the
+ * branded cover card, it replaces this step.
  *
- * Rules for an entry (Tommy, 2026-10-06; reviewed photo by photo):
- *   - literal, neutral scenes or objects only: no people, no logos, no
- *     recognizable place or landmark, no mood imagery (clocks, hourglasses,
- *     rain);
- *   - a verifiable credit: Wikimedia Commons, CC0 or public domain, with the
- *     file page recorded so anyone can check author and licence;
- *   - checked by eye, the face detector (0 faces) and Jev's pre-screen
- *     (people < 0.3).
+ * Only the AI-compute photos (DEFAULT_TOPIC) are used, never a topic match:
+ * the first one not used in this post, the last 7 days or earlier in the
+ * run; when all are, the least recently used one not in this post, logged as
+ * starter-pool-exhausted. The other tagged photos stay in the set unused.
  *
- * Every photo is story-specific (Tommy, 2026-10-06: a photo has to fit the
- * story it lands in). Each carries topic tags, and a slide gets one only
- * when a tag matches, per slide (plain-word matching, no judgment):
- *   1. the slide's IMAGE request ("stock: server room corridor");
- *   2. the brief's main topic (THE NEWS);
- *   3. else the AI-compute photos, logged as no-topic-match.
- * When every photo of the matched tier was used in the last 7 days, the
- * least recently used one is reused and logged as starter-pool-exhausted:
- * the chain never fails to return a photo.
+ * Rules for an entry (2026-10-06): literal, neutral scenes or objects only (no
+ * people, logos, recognizable places or mood imagery); Wikimedia Commons,
+ * CC0 or public domain, with the file page recorded.
  */
-import type { Brief } from '@/lib/social/reporter/brief';
-
 import type { Photo } from './find';
 
 /** Cover + up to 8 story slides (spec: 5–8 story slides). */
@@ -98,45 +87,6 @@ export const STARTER_SET: StarterPhoto[] = [
   { file: 'camera-cctv-cameras-in-mumbai.jpg', shows: 'camera', width: 2048, height: 1024, author: 'Punit Rajpal', license: 'CC0', page: 'https://commons.wikimedia.org/wiki/File:CCTV_cameras_in_Mumbai.jpg', topics: ['surveillance'] },
 ];
 
-/**
- * Plain words that put a text on a topic (literal terms only, Tommy
- * 2026-10-06). AI-compute words are deliberately narrow (no bare "AI"), so
- * the default is a real fallback, not every match.
- */
-export const TOPIC_TERMS: Record<StarterTopic, RegExp> = {
-  'AI compute and data centers': /\b(data cent(?:er|re)s?|servers?|server rooms?|server racks?|compute|computing power|GPUs?|supercomputers?|cloud computing)\b/i,
-  'Chips and semiconductors': /\b(chips?|semiconductors?|wafers?|microchips?|processors?|foundr(?:y|ies)|TSMC|export controls?)\b/i,
-  'Software and coding': /\b(code|coding|software|developers?|programming|programmers?|keyboards?|open[- ]source)\b/i,
-  'Phones and consumer apps': /\b(phones?|smartphones?|iPhones?|Android|apps?|mobile)\b/i,
-  'Energy and power': /\b(energy|electricity|power grids?|power plants?|nuclear|solar|wind (?:farms?|turbines?|power)|utility companies|utilities|pylons?|power lines?)\b/i,
-  'Space and satellites': /\b(outer space|spaceflight|space station|satellites?|orbit(?:al)?|rockets?|NASA|SpaceX|Starlink|ISS)\b/i,
-  'Robotics and automation': /\b(robots?|robotics|robotic|automation|humanoids?|factor(?:y|ies)|manufacturing)\b/i,
-  'Research and labs': /\b(laborator(?:y|ies)|scientists?|experiments?)\b/i,
-  'Money, funding and business': /\b(funding|fundraising|funding rounds?|investments?|investors?|valuation|revenue|profits?|money|prices?|pricing|subscriptions?|coins?|cash)\b/i,
-  'Trade and supply chain': /\b(trade|tariffs?|exports?|imports?|supply chains?|shipping|seaports?|shipping containers?|warehouses?|logistics)\b/i,
-  'Security and hacking': /\b(security|hacks?|hackers?|hacking|breach(?:es)?|cyber\w*|vulnerabilit(?:y|ies)|passwords?|padlocks?)\b/i,
-  'Cities and infrastructure': /\b(cit(?:y|ies)|skylines?|urban|highways?|traffic|infrastructure|roads?)\b/i,
-  'Jobs and the workplace': /\b(jobs?|workers?|workplaces?|employees?|employers?|employment|layoffs?|hiring|unions?)\b/i,
-  Education: /\b(education|schools?|students?|universit(?:y|ies)|teachers?|classrooms?|lectures?|lecture halls?)\b/i,
-  'Copyright, publishing and training data': /\b(copyright\w*|publishers?|publishing|authors?|books?|librar(?:y|ies)|training data|licensing deals?)\b/i,
-  'US Congress': /\b(Congress|congressional|U\.?S\.? Senate|senators?|House of Representatives|Capitol Hill|Speaker of the House)\b/i,
-  'stock markets': /\b(stock markets?|stock prices?|shares (?:fell|rose|jumped|dropped|slid|surged)|Nasdaq|NYSE|S&P 500|Dow Jones|IPO|market value|market cap(?:italization)?)\b/i,
-  surveillance: /\b(surveillance|facial recognition|CCTV|spyware|spying)\b/i,
-};
-
-/** Words never used for matching: they mean something else in AI news (Tommy, 2026-10-06). Guarded by a test. */
-export const AMBIGUOUS_WORDS = ['lab', 'labs', 'model', 'models', 'agent', 'agents', 'research', 'researcher', 'space', 'raised', 'deal', 'port', 'container', 'lock', 'utility', 'office', 'meeting'];
-
-/** Topics a text is about. */
-export function topicsIn(text: string): StarterTopic[] {
-  return TOPICS.filter((t) => TOPIC_TERMS[t].test(text));
-}
-
-/** The brief's main topic(s): from THE NEWS. */
-export function briefTopics(brief: Brief | null): StarterTopic[] {
-  return brief ? topicsIn(brief.the_news.text) : [];
-}
-
 export const starterUrl = (file: string) => `/social/starter/${file}`;
 
 /** Same short form as Commons subject photos: "NASA (public domain) · Wikimedia Commons". */
@@ -144,24 +94,11 @@ export const starterCredit = (p: StarterPhoto) => `${p.author} (${p.license === 
 
 const toPhoto = (s: StarterPhoto): Photo => ({ url: starterUrl(s.file), credit: starterCredit(s), source: 'starter', width: s.width, height: s.height, qid: null, subject: null });
 
-export type StarterMatch = 'request' | 'brief' | 'no-topic-match';
-
-/** The tiers to try for a slide, most specific first; empty tiers are skipped. */
-function tiers(request: string, brief: Brief | null): Array<{ match: StarterMatch; photos: StarterPhoto[] }> {
-  const withTopic = (ts: StarterTopic[]) => STARTER_SET.filter((p) => p.topics.some((t) => ts.includes(t)));
-  return [
-    { match: 'request' as const, photos: withTopic(topicsIn(request)) },
-    { match: 'brief' as const, photos: withTopic(briefTopics(brief)) },
-    { match: 'no-topic-match' as const, photos: withTopic([DEFAULT_TOPIC]) },
-  ].filter((t) => t.photos.length > 0);
-}
-
 /**
- * Cover fallback (Tommy, 2026-10-06, after the bench): when a cover's own
- * request fails, the starter photo comes only from the AI-compute set,
- * never from a topic match (a topic match put a padlock on a Mistral
- * cover). The first one not in `avoid` (this post + the last 7 days); when
- * all are, the least recently used one not in this post. Never null.
+ * The cover's last step: an AI-compute starter photo, never a topic match.
+ * The first one not in `avoid` (this post + the last 7 days + earlier in
+ * the run); when all are, the least recently used one not in this post.
+ * Never null.
  */
 export function pickCoverStarter(avoid: Set<string>, usedThisPost: Set<string> = new Set(), lastUsed: Map<string, string> = new Map()): { photo: Photo; exhausted: boolean } {
   const set = STARTER_SET.filter((p) => p.topics.includes(DEFAULT_TOPIC));
@@ -170,35 +107,4 @@ export function pickCoverStarter(avoid: Set<string>, usedThisPost: Set<string> =
   const age = (p: StarterPhoto) => lastUsed.get(starterUrl(p.file)) ?? '';
   const lru = [...set].filter((p) => !usedThisPost.has(starterUrl(p.file))).sort((a, b) => age(a).localeCompare(age(b)))[0] ?? set[0]!;
   return { photo: toPhoto(lru), exhausted: true };
-}
-
-/** The first matching starter photo not in `avoid` (this post + the last 7 days), and which tier matched. */
-export function pickStarter(avoid: Set<string>, slide: { request: string; brief: Brief | null }): { photo: Photo; match: StarterMatch } | null {
-  for (const t of tiers(slide.request, slide.brief)) {
-    const s = t.photos.find((p) => !avoid.has(starterUrl(p.file)));
-    if (s) return { photo: toPhoto(s), match: t.match };
-  }
-  return null;
-}
-
-/**
- * starter-pool-exhausted: every photo of every matching tier was used in the
- * last 7 days. The least recently used one of the most specific tier that
- * still has a photo not in this post; a photo is never repeated within a
- * post, so a post that uses up a tier widens to the AI-compute default, then
- * Software and coding, then any starter photo. Never null.
- */
-export function pickStarterLeastRecent(usedThisPost: Set<string>, lastUsed: Map<string, string>, slide: { request: string; brief: Brief | null }): { photo: Photo; match: StarterMatch } {
-  const age = (p: StarterPhoto) => lastUsed.get(starterUrl(p.file)) ?? '';
-  const widen: Array<{ match: StarterMatch; photos: StarterPhoto[] }> = [
-    ...tiers(slide.request, slide.brief),
-    { match: 'no-topic-match', photos: STARTER_SET.filter((p) => p.topics.includes('Software and coding')) },
-    { match: 'no-topic-match', photos: STARTER_SET },
-  ];
-  for (const t of widen) {
-    const free = t.photos.filter((p) => !usedThisPost.has(starterUrl(p.file))).sort((a, b) => age(a).localeCompare(age(b)));
-    if (free[0]) return { photo: toPhoto(free[0]), match: t.match };
-  }
-  const oldest = [...STARTER_SET].sort((a, b) => age(a).localeCompare(age(b)))[0]!;
-  return { photo: toPhoto(oldest), match: 'no-topic-match' };
 }

@@ -14,7 +14,7 @@ import path from 'node:path';
 
 import { checkDroppedText } from '@/lib/social/mechanical/checks';
 import { createMechanicalStage } from '@/lib/social/pipeline/mechanical-stage';
-import { pickStarter } from '@/lib/social/photos/starter-set';
+import { pickCoverStarter } from '@/lib/social/photos/starter-set';
 import { checkRenderFit } from '@/lib/social/render/fit-check';
 import { toRenderPost } from '@/lib/social/render/from-draft';
 import { toSlug, writeGeneratedPost } from '@/lib/social/render/local-store';
@@ -35,7 +35,7 @@ async function main() {
     const photos = traces.map((t: any, i: number) => {
       if (t.via !== 'starter') return t.photo;
       if (i > 0) return null; // story slide: text-only
-      return pickStarter(new Set(), { request: t.request.value, brief })?.photo ?? t.photo;
+      return pickCoverStarter(new Set()).photo;
     });
     const coverChange = photos[0]?.url !== traces[0].photo?.url ? `cover starter → ${photos[0]?.url}` : 'cover unchanged';
     const post = toRenderPost(filled, { cover: photos[0], slides: photos.slice(1) }, { source: brief.sources[0]?.outlet ?? '', sourceUrl: brief.sources[0]?.url ?? '', publishedAt: run.startedAt });

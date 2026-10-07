@@ -11,7 +11,8 @@
  *      type: person = human (Q5); organization = anything under
  *      organization (Q43229) in Wikidata's class tree.
  *
- * Either check fails → no subject photo (the caller falls back to a scene).
+ * Either check fails → no subject photo (spec §5.1 Photo chain v1: a story
+ * slide renders text-only; a cover moves on to the logo card, stock, starter).
  * Identity comes from records, never from a model looking at a face.
  */
 import { resolveSubject } from '@/lib/social/editorial/v2/image-step/wikidata';
