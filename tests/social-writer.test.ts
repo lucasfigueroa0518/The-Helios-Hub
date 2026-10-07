@@ -324,3 +324,11 @@ test('link A: words stay when a photo request fails: rewriting the cover to fit 
   const r2 = await runWriter(briefSuperIntelligenceForce(), { create: scripted([msg('tool_use', [submit(bad)]), msg('tool_use', [submit(fixed)])]).create, isWellKnown: notWellKnown });
   assert.ok(r2.ok);
 });
+
+test('fillDraft: a quote with no speaker_id has no speaker_subject (never the first subject by an undefined match)', () => {
+  const b = briefSuperIntelligenceForce();
+  b.quotes[0]!.speaker_id = null;
+  b.subjects = b.subjects.map((x) => ({ ...x, id: undefined as unknown as string }));
+  const filled = fillDraft(sifDraftHandoff(), b);
+  assert.equal(filled.slides[2]!.quote!.speaker_subject, null);
+});

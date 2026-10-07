@@ -10,7 +10,7 @@ import { sifDraft } from '@/fixtures/social/drafts';
 import { commonsUrl, createFakeHttp, SIF_WEB, stockUrl } from '@/fixtures/social/photo-http';
 import type { JevAsk } from '@/lib/social/jev/client';
 import * as Identity from '@/lib/social/jev/questions/subject-identity.v1';
-import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v2';
+import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v3';
 import { createDesignStage } from '@/lib/social/pipeline/design-stage';
 import type { Brief as PipelineBrief, Draft, ScoredCandidate } from '@/lib/social/pipeline/types';
 import { classifyCredit } from '@/lib/social/photos/credit';
@@ -41,6 +41,9 @@ function prescreenAnswers(req: { state: unknown }): Record<string, { noul: numbe
     out[Prescreen.fitId(k)] = { noul: /off topic/.test(c.title) ? 0.1 : 0.9 };
     out[Prescreen.peopleId(k)] = { noul: /people|soldier|students/.test(`${c.title} ${c.tags.join(' ')}`) ? 0.9 : 0.05 };
     out[Prescreen.landmarkId(k)] = { noul: /Eiffel|Capitol|Times Square/.test(c.title) ? 0.9 : 0.05 };
+    // v3 brand: a company named in the title that isn't a story subject.
+    const named = (c.title.match(/\b(Google|Microsoft|Equinix|OpenAI)\b/g) ?? []).filter((n) => !state.story_subjects.includes(n));
+    out[Prescreen.brandId(k)] = { noul: named.length ? 0.9 : 0.05 };
   });
   return out;
 }
@@ -460,7 +463,7 @@ test('pre-screen: a result that likely shows people is skipped for one that fits
   const t = await findPhoto({ kind: 'stock', value: 'server room' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS, [], prescreens), stock });
   assert.equal(t.photo?.url, 'https://s/server-racks.jpg');
   assert.deepEqual(prescreens, ['server room']);
-  assert.ok(t.steps.some((s) => /pre-screen "server room": .*people 0\.90.*✓/.test(s)), t.steps.join(' | '));
+  assert.ok(t.steps.some((s) => /pre-screen stock-prescreen@3 "server room": .*people 0\.90.*✓/.test(s)), t.steps.join(' | '));
 });
 
 test('pre-screen: nothing passes → the two-word search, then text-only on a story slide', async () => {
@@ -731,11 +734,18 @@ test('rotation: consecutive photo-less text slides alternate between copy at the
   assert.deepEqual(r.unresolved, []);
 });
 
-test('pre-screen v2: a recognizable landmark is rejected', async () => {
+test('pre-screen: a recognizable landmark is rejected', async () => {
   const stock = async () => [ov('Eiffel Tower at night'), ov('city lights at night')];
   const t = await findPhoto({ kind: 'stock', value: 'city lights' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS), stock });
   assert.equal(t.photo?.url, 'https://s/city-lights-at-night.jpg');
   assert.ok(t.steps.some((s) => /landmark 0\.90/.test(s)));
+});
+
+test("pre-screen v3: a result naming a company outside the story's SUBJECTS is rejected; a subject's own name is fine", async () => {
+  const stock = async () => [ov('Google data center racks'), ov('data center racks')];
+  const t = await findPhoto({ kind: 'stock', value: 'data center racks' }, newPhotoContext(briefWith(), []), { jev: identityJev(SIF_ANSWERS), stock });
+  assert.equal(t.photo?.url, 'https://s/data-center-racks.jpg');
+  assert.ok(t.steps.some((s) => /stock-prescreen@3 .*"Google data center racks" .*brand 0\.90/.test(s)));
 });
 
 test('topic words: none of the ambiguous AI-news words match any topic; research is literal only', async () => {

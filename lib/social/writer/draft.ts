@@ -225,7 +225,7 @@ export function fillDraft(d: DraftSubmission, brief: Brief): FilledDraft {
       const q = s.quote_id ? quotes.get(s.quote_id)! : null;
       return {
         ...s,
-        quote: q ? { id: q.id, text: s.quote_excerpt ?? q.text, speaker: q.speaker, speaker_subject: brief.subjects.find((x) => x.id === q.speaker_id)?.name ?? null } : null,
+        quote: q ? { id: q.id, text: s.quote_excerpt ?? q.text, speaker: q.speaker, speaker_subject: (q.speaker_id ? brief.subjects.find((x) => x.id === q.speaker_id)?.name : null) ?? null } : null,
         numbers: s.number_ids.map((id) => {
           const n = numbers.get(id)!;
           return { id, value: n.value, counts: n.counts };

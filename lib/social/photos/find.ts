@@ -11,7 +11,8 @@
  *            other people (stage shots, delegations).
  *   stock:   <scene> → Openverse: the request, then its first two words; each
  *            search's results go through the Jev metadata pre-screen (fits the
- *            scene, no person likely visible, no recognizable landmark; spec §5A #6)
+ *            scene, no person likely visible, no recognizable landmark, and
+ *            in v3 no outside company or brand; spec §5A #6)
  *   then     cover: the offline starter set (starter-set.ts), which can't come
  *            up empty. Story slides: text-only (the starter set is cover-only,
  *            Tommy 2026-10-06)
@@ -31,7 +32,8 @@
 import { buildCredit, fetchEntityP18, fetchImageInfo, toCandidate } from '@/lib/social/editorial/v2/image-step/commons';
 import { buildStockCredit, searchOpenverse, type OpenverseCandidate } from '@/lib/social/editorial/v2/image-step/openverse';
 import type { JevAsk } from '@/lib/social/jev/client';
-import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v2';
+import * as PrescreenV2 from '@/lib/social/jev/questions/stock-prescreen.v2';
+import * as PrescreenV3 from '@/lib/social/jev/questions/stock-prescreen.v3';
 import type { Brief } from '@/lib/social/reporter/brief';
 import type { ArticlePhoto, PageReadOk } from '@/lib/social/reporter/read-page';
 import type { ImageRequest } from '@/lib/social/writer/draft';
@@ -93,6 +95,8 @@ export type PhotoDeps = {
   /** Injected for tests; live runs pass fetch. */
   http?: typeof fetch;
   stock?: StockSearch;
+  /** Stock pre-screen version: v3 (default, Tommy 2026-10-06) or v2 (kept for the bench's before/after). */
+  prescreen?: 'v2' | 'v3';
 };
 
 export type PhotoContext = {
@@ -190,23 +194,29 @@ export function stockQueries(request: string): string[] {
 
 /**
  * Jev metadata pre-screen (spec §5A #6): the first result whose title and
- * tags fit the scene and suggest no person. Scores are logged.
+ * tags fit the scene and suggest no person, no landmark and (v3) no
+ * company or brand outside the story's SUBJECTS. Scores are logged.
  */
-async function prescreen(scene: string, cands: OpenverseCandidate[], deps: PhotoDeps, steps: string[]): Promise<OpenverseCandidate | null> {
-  const shown = cands.slice(0, Prescreen.MAX_CANDIDATES);
+async function prescreen(scene: string, cands: OpenverseCandidate[], ctx: PhotoContext, deps: PhotoDeps, steps: string[]): Promise<OpenverseCandidate | null> {
+  const v3 = (deps.prescreen ?? 'v3') === 'v3';
+  const P = v3 ? PrescreenV3 : PrescreenV2;
+  const shown = cands.slice(0, P.MAX_CANDIDATES);
+  const meta = shown.map((c) => ({ title: c.title ?? '', tags: c.tags ?? [], source: c.source }));
   const res = await deps.jev(
-    { state: Prescreen.buildState(scene, shown.map((c) => ({ title: c.title ?? '', tags: c.tags ?? [], source: c.source }))), questions: Prescreen.buildQuestions(shown.length) },
-    { version: Prescreen.VERSION, subjectId: scene },
+    { state: v3 ? PrescreenV3.buildState(scene, meta, ctx.brief.subjects.map((x) => x.name)) : PrescreenV2.buildState(scene, meta), questions: P.buildQuestions(shown.length) },
+    { version: P.VERSION, subjectId: scene },
   );
-  const { FIT_MIN, PEOPLE_MAX, LANDMARK_MAX } = Prescreen.THRESHOLDS;
+  const { FIT_MIN, PEOPLE_MAX, LANDMARK_MAX } = P.THRESHOLDS;
   const scored = shown.map((c, k) => ({
     c,
-    fit: res.answers[Prescreen.fitId(k)]!.noul,
-    people: res.answers[Prescreen.peopleId(k)]!.noul,
-    landmark: res.answers[Prescreen.landmarkId(k)]!.noul,
+    fit: res.answers[P.fitId(k)]!.noul,
+    people: res.answers[P.peopleId(k)]!.noul,
+    landmark: res.answers[P.landmarkId(k)]!.noul,
+    brand: v3 ? res.answers[PrescreenV3.brandId(k)]!.noul : 0,
   }));
-  const pick = scored.find((x) => x.fit >= FIT_MIN && x.people < PEOPLE_MAX && x.landmark < LANDMARK_MAX) ?? null;
-  steps.push(`pre-screen "${scene}": ${scored.map((x) => `"${(x.c.title ?? '').slice(0, 40)}" fit ${x.fit.toFixed(2)} people ${x.people.toFixed(2)} landmark ${x.landmark.toFixed(2)}${x === pick ? ' ✓' : ''}`).join('; ')}`);
+  const brandMax = v3 ? PrescreenV3.THRESHOLDS.BRAND_MAX : 1;
+  const pick = scored.find((x) => x.fit >= FIT_MIN && x.people < PEOPLE_MAX && x.landmark < LANDMARK_MAX && x.brand < brandMax) ?? null;
+  steps.push(`pre-screen ${P.VERSION} "${scene}": ${scored.map((x) => `"${(x.c.title ?? '').slice(0, 40)}" fit ${x.fit.toFixed(2)} people ${x.people.toFixed(2)} landmark ${x.landmark.toFixed(2)}${v3 ? ` brand ${x.brand.toFixed(2)}` : ''}${x === pick ? ' ✓' : ''}`).join('; ')}`);
   return pick?.c ?? null;
 }
 
@@ -218,7 +228,7 @@ async function stockPhoto(request: string, slot: PhotoSlot, ctx: PhotoContext, d
       steps.push(`stock "${query}" (${slot}): no unused results`);
       continue;
     }
-    const pick = await prescreen(request, cands, deps, steps);
+    const pick = await prescreen(request, cands, ctx, deps, steps);
     if (!pick) {
       steps.push(`stock "${query}" (${slot}): no result passed the pre-screen`);
       continue;
