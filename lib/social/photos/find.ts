@@ -45,7 +45,7 @@ import { bankPhoto, pickFromBank, type BankEntry, type BankNeed } from './bank';
 import { pickCoverStarter } from './starter-set';
 import { VISION_TOP, describeVerdict, passesOfficialVision, type VisionCheck } from './vision';
 import { fetchLogo } from './logo';
-import { OFFICIAL_COMPANIES, listedCompany, officialPageOf, type OfficialCompany } from './official';
+import { OFFICIAL_COMPANIES, listedCompany, logoPermission, officialPageOf, type OfficialCompany } from './official';
 
 /** Logged when the 7-day rule has to give way (spec §5D; counted in each run's report). */
 export const STARTER_POOL_EXHAUSTED = 'starter-pool-exhausted';
@@ -187,8 +187,9 @@ async function articlePhoto(url: string, ctx: PhotoContext, deps: PhotoDeps, ste
   }
   if (v.credit) {
     // An official image (spec §5.1 (a)): code-built credit, and the vision check.
-    const company = v.credit.replace(/^Image: /, '');
-    if (!(await officialVisionOk(url, found.photo.caption, company, ctx, deps, steps, spend))) return null;
+    const company = officialPageOf(found.page, organizations, deps.officialList);
+    const name = company.status === 'official' ? company.company.company : 'the company';
+    if (!(await officialVisionOk(url, found.photo.caption, name, ctx, deps, steps, spend))) return null;
     return { url, credit: v.credit, source: 'official', width: null, height: null, qid: null, subject: null };
   }
   return { url, credit: (found.photo.credit ?? found.photo.caption ?? '').trim(), source: 'article', width: null, height: null, qid: null, subject: null };
@@ -259,7 +260,13 @@ async function logoCard(name: string, ctx: PhotoContext, deps: PhotoDeps, steps:
     steps.push(`logo card: ${name} is a ${id.type}, not an organization`);
     return null;
   }
-  const r = await fetchLogo(id.qid, listedCompany(name, deps.officialList ?? OFFICIAL_COMPANIES)?.company ?? id.label, { http: deps.http });
+  // Logo permission gate (Tommy, 2026-10-07): only companies whose row allows logo use.
+  const permission = logoPermission(name, deps.officialList ?? OFFICIAL_COMPANIES);
+  if (!permission.ok) {
+    steps.push(`logo card: not allowed: ${permission.reason}`);
+    return null;
+  }
+  const r = await fetchLogo(id.qid, permission.company.company, { http: deps.http });
   if (!r.photo) {
     steps.push(`logo card: ${r.reason}`);
     return null;

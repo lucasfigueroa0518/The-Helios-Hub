@@ -7,7 +7,7 @@
  */
 import { STAGE_MODELS, type StageModelConfig } from '@/lib/social/pipeline/models';
 import { classifyCredit } from '@/lib/social/photos/credit';
-import type { OfficialCompany } from '@/lib/social/photos/official';
+import { officialPageOf, type OfficialCompany } from '@/lib/social/photos/official';
 import type { PageReadOk } from '@/lib/social/reporter/read-page';
 import type { Brief, BriefError } from '@/lib/social/reporter/brief';
 import type { MessagesCreate, TurnUsage } from '@/lib/social/reporter/reporter';
@@ -54,7 +54,11 @@ export async function briefForWriter(brief: Brief, isWellKnown: IsWellKnown, has
     .filter((x) => !(x.from === 'og:image' && pagesWithFigure.has(x.p.page)))
     .sort((a, b) => Number(b.from === 'figure') - Number(a.from === 'figure'))
     // Official images (spec §5.1 (a)) carry the company they come from.
-    .map((x) => (x.v.credit ? { ...x.p, official_image_of: x.v.credit.replace(/^Image: /, '') } : x.p));
+    .map((x) => {
+      if (!x.v.credit) return x.p;
+      const o = officialPageOf(x.p.page, organizations, officialList);
+      return o.status === 'official' ? { ...x.p, official_image_of: o.company.company } : x.p;
+    });
   return { ...brief, subjects, article_photos };
 }
 

@@ -11,7 +11,7 @@ import { classifyCredit } from '@/lib/social/photos/credit';
 import { findPhoto, newPhotoContext, type Photo } from '@/lib/social/photos/find';
 import type { IdentityResult } from '@/lib/social/photos/identity';
 import { currentLogoFile, fetchLogo, plateFor } from '@/lib/social/photos/logo';
-import { OFFICIAL_COMPANIES, officialPageOf, type OfficialCompany } from '@/lib/social/photos/official';
+import { OFFICIAL_COMPANIES, logoPermission, officialPageOf, type OfficialCompany } from '@/lib/social/photos/official';
 import { passesOfficialVision, passesVision, type VisionCheck, type VisionVerdict } from '@/lib/social/photos/vision';
 import { toRenderPost } from '@/lib/social/render/from-draft';
 import type { Brief } from '@/lib/social/reporter/brief';
@@ -22,6 +22,8 @@ import { sifDraftHandoff } from '@/fixtures/social/drafts';
 
 const approved = (over: Partial<OfficialCompany> = {}): OfficialCompany[] =>
   OFFICIAL_COMPANIES.map((c) => (c.company === 'Google' ? { ...c, approved: true, editorialUse: 'permitted' as const, ...over } : c));
+/** The same list with Google's official-images row not approved (to test the off state). */
+const googleOff = (): OfficialCompany[] => OFFICIAL_COMPANIES.map((c) => (c.company === 'Google' ? { ...c, approved: false, editorialUse: 'TBD' as const } : c));
 
 function googleBrief(): Brief {
   const b = briefSuperIntelligenceForce();
@@ -31,14 +33,33 @@ function googleBrief(): Brief {
 
 const page = (url: string, photos: PageReadOk['photos']): PageReadOk => ({ ok: true, url, resolvedUrl: url, title: null, byline: null, publishedTime: null, text: 'x', truncated: false, photos });
 
-test('allow-list: every starting row is TBD and not approved; nothing is official until Tommy approves a row', () => {
-  for (const c of OFFICIAL_COMPANIES) {
-    assert.equal(c.approved, false, c.company);
-    assert.equal(c.editorialUse, 'TBD', c.company);
-  }
-  assert.deepEqual(OFFICIAL_COMPANIES.map((c) => c.company), ['Anthropic', 'OpenAI', 'Google', 'Meta', 'Microsoft', 'Nvidia', 'Mistral AI', 'xAI']);
-  const r = officialPageOf('https://blog.google/products/gemini/x', ['Google']);
-  assert.equal(r.status, 'not-approved');
+test("allow-list rows as Tommy set them (2026-10-07): official images on for Google and Microsoft only; logos allowed / needs permission / off; per-company credit", () => {
+  const row = (n: string) => OFFICIAL_COMPANIES.find((c) => c.company === n)!;
+  assert.deepEqual(OFFICIAL_COMPANIES.filter((c) => c.approved).map((c) => c.company), ['Google', 'Microsoft']);
+  assert.deepEqual(row('Google').domains, ['blog.google', 'google.com', 'deepmind.google']);
+  assert.equal(row('Google').credit, 'Source: Google');
+  assert.equal(row('Microsoft').credit, 'Used with permission from Microsoft');
+  assert.deepEqual(OFFICIAL_COMPANIES.filter((c) => c.logo === 'allowed').map((c) => c.company).sort(), ['Google', 'Mistral AI', 'OpenAI']);
+  assert.deepEqual(OFFICIAL_COMPANIES.filter((c) => c.logo === 'needs-permission').map((c) => c.company).sort(), ['Anthropic', 'Nvidia', 'xAI']);
+  assert.deepEqual(OFFICIAL_COMPANIES.filter((c) => c.logo === 'off').map((c) => c.company).sort(), ['Meta', 'Microsoft']);
+  for (const c of OFFICIAL_COMPANIES.filter((x) => !x.approved)) assert.equal(c.editorialUse, 'TBD', c.company);
+  assert.equal(officialPageOf('https://www.anthropic.com/news/x', ['Anthropic']).status, 'not-approved');
+});
+
+test('Microsoft: the news.microsoft.com image gallery only; other pages on the domain never count', () => {
+  assert.equal(officialPageOf('https://news.microsoft.com/imagegallery/copilot', ['Microsoft']).status, 'official');
+  assert.equal(officialPageOf('https://news.microsoft.com/source/features/ai/x', ['Microsoft']).status, 'none');
+  assert.equal(officialPageOf('https://blogs.microsoft.com/blog/x', ['Microsoft']).status, 'none');
+});
+
+test('logo permission gate: allowed rows get a card; needs-permission, off and unlisted organizations get none, with the reason', () => {
+  assert.equal(logoPermission('Google').ok, true);
+  const anthropic = logoPermission('Anthropic');
+  assert.ok(!anthropic.ok && /brand guidelines require prior approval/.test(anthropic.reason));
+  const meta = logoPermission('Meta');
+  assert.ok(!meta.ok && /off for now/.test(meta.reason));
+  const unlisted = logoPermission('Menlo Ventures');
+  assert.ok(!unlisted.ok && /not on the allow-list/.test(unlisted.reason));
 });
 
 test('allow-list match: the company must be a story subject and the page on one of its domains (subdomains count); a partner page never counts', () => {
@@ -51,15 +72,15 @@ test('allow-list match: the company must be a story subject and the page on one 
   assert.equal(officialPageOf('https://blog.google/x', ['Google'], approved({ editorialUse: 'not-permitted' })).status, 'not-approved', 'terms must permit editorial use');
 });
 
-test('credit: an approved official page needs no credit line and gets "Image: <Company>"; an agency credit still rejects; unapproved stays unknown', () => {
+test("credit: an approved official page needs no credit line and gets the company's own credit text; an agency credit still rejects; unapproved stays unknown", () => {
   const organizations = ['Google'];
-  const ok = classifyCredit({ caption: null, credit: null, page: 'https://blog.google/x', organizations, officialList: approved() });
-  assert.deepEqual(ok, { verdict: 'allowed', reason: 'official page of Google', credit: 'Image: Google' });
+  const ok = classifyCredit({ caption: null, credit: null, page: 'https://blog.google/x', organizations });
+  assert.deepEqual(ok, { verdict: 'allowed', reason: 'official page of Google', credit: 'Source: Google' });
   const getty = classifyCredit({ caption: 'Sundar Pichai on stage', credit: 'Getty Images', page: 'https://blog.google/x', organizations, officialList: approved() });
   assert.equal(getty.verdict, 'rejected');
-  const tbd = classifyCredit({ caption: null, credit: null, page: 'https://blog.google/x', organizations });
+  const tbd = classifyCredit({ caption: null, credit: null, page: 'https://www.anthropic.com/news/x', organizations: ['Anthropic'] });
   assert.equal(tbd.verdict, 'unknown');
-  assert.match(tbd.reason, /official page of Google, but Google row not approved yet/);
+  assert.match(tbd.reason, /official page of Anthropic, but Anthropic row not approved yet/);
 });
 
 test("Writer brief: <figure> images before og:image; a page's og:image dropped when it has a usable figure; official images marked official_image_of", async () => {
@@ -75,7 +96,7 @@ test("Writer brief: <figure> images before og:image; a page's og:image dropped w
   const w = await briefForWriter(b, async () => false, async () => false, pages, approved());
   assert.deepEqual(w.article_photos.map((p) => p.url), ['https://blog.google/figure-1.png']);
   assert.equal((w.article_photos[0] as { official_image_of?: string }).official_image_of, 'Google');
-  const unapproved = await briefForWriter(b, async () => false, async () => false, pages);
+  const unapproved = await briefForWriter(b, async () => false, async () => false, pages, googleOff());
   assert.deepEqual(unapproved.article_photos, [], 'not approved → unknown → not listed');
 });
 
@@ -154,11 +175,11 @@ test('cover order for a company story: official image → (subject P18) → logo
   const a = await findPhoto(request, ctx(), { jev, http, vision, officialList: approved(), stock: async () => [] }, cover);
   assert.equal(a.via, 'official');
   assert.equal(a.photo?.url, 'https://blog.google/sidebar.png');
-  assert.equal(a.photo?.credit, 'Image: Google');
+  assert.equal(a.photo?.credit, 'Source: Google');
   assert.deepEqual(asked, ['https://blog.google/banner.png', 'https://blog.google/sidebar.png']);
 
-  // Not approved (the default list): no official image → the logo card.
-  const l = await findPhoto(request, ctx(), { jev, http, vision, stock: async () => [] }, cover);
+  // Google's official-images row off: no official image → the logo card (Google's logo is allowed).
+  const l = await findPhoto(request, ctx(), { jev, http, vision, officialList: googleOff(), stock: async () => [] }, cover);
   assert.equal(l.via, 'logo');
   assert.equal(l.photo?.plate, 'light');
   assert.ok(l.steps.some((s) => /official image .*credit unknown \(official page of Google, but Google row not approved yet\)/.test(s)), l.steps.join(' | '));
@@ -166,7 +187,7 @@ test('cover order for a company story: official image → (subject P18) → logo
   // The logo used in the last 7 days → stock (none here) → the AI-compute starter.
   const c3 = ctx();
   c3.recent.add('https://upload.wikimedia.org/thumb/google-logo.png');
-  const s = await findPhoto(request, c3, { jev, http, vision, stock: async () => [] }, cover);
+  const s = await findPhoto(request, c3, { jev, http, vision, officialList: googleOff(), stock: async () => [] }, cover);
   assert.equal(s.via, 'starter');
   assert.ok(s.steps.some((x) => /logo card: this logo was used/.test(x)));
 });
@@ -227,4 +248,15 @@ test('logo sizing: up to 10:1 allowed; wider than 2:1 is sized by width (logoWid
   assert.equal(cover(logo(800, 800)).logoWide, undefined, 'a square mark fits the plate');
   const r = await fetchLogo('Q95', 'Google', { http: await fakeLogoWeb() });
   assert.ok(r.photo, 'an 800×320 (2.5:1) logo is accepted');
+});
+
+test('logo gate in the finder: an Anthropic cover gets no logo card (needs permission) and the log says why', async () => {
+  const b = briefSuperIntelligenceForce();
+  b.subjects = [...b.subjects, { id: 'S9', name: 'Anthropic', role: 'company' }];
+  const c = newPhotoContext(b, []);
+  c.identities = new Map([verified('Anthropic', 'Q116758847', 'organization')]);
+  const http = (async () => { throw new Error('no fetch expected'); }) as unknown as typeof fetch;
+  const t = await findPhoto({ kind: 'subject', value: 'Anthropic' }, c, { jev: (async () => { throw new Error('x'); }) as never, http }, { text: ['Anthropic x'], speaker: null, slot: 'split', cover: true });
+  assert.equal(t.via, 'starter');
+  assert.ok(t.steps.some((s) => /logo card: not allowed: Anthropic's brand guidelines require prior approval/.test(s)), t.steps.join(' | '));
 });
