@@ -241,11 +241,11 @@ Only the four sources needed to put a real photo on every slide:
 **S2 results (2026-10-04) that shape M6:**
 
 - **People:** 60% have at least 1 usable Commons photo, 47% have 2 or more. Well-known people are covered; lesser-known people mostly aren't.
-- **Companies:** 13% have one. Company slides depend on **press kits** and the **photo bank**, so build the press-kit lookup early in M6. The bank needs plenty of generic company scenes (offices, servers, product-in-hand).
+- **Companies:** 13% have one. *(Superseded 2026-10-07: a company cover is its logo card (spec §5.1 Photo chain v1); no press kits, no photo bank.)*
 - **Identity check:** the subject identity check (spec §5A #5: the P31 type check plus Jev's description match) is required before any subject photo is used.
-- **Photo bank (spec §5.1a):** grows from every shipped photo. Build the tag schema, the 7-day reuse rule and the "event photos stay with their event" rule in M6, with the bank second in the search order.
+- **Photo bank:** *(superseded 2026-10-07: the bank holds Helios-designed graphics only, spec §5.1a; a photo bank was never built.)*
 
-- **Photo chain:**
+- **Photo chain** *(superseded 2026-10-07 by spec §5.1 Photo chain v1; kept for the record)*:
   - article photos filtered by their credit line;
   - official portraits and government galleries by date;
   - conference Flickr accounts (organizer accounts only);
@@ -257,7 +257,7 @@ Only the four sources needed to put a real photo on every slide:
 - **Ranking:** code first, then the Jev metadata pre-screen, then the image check on the top ~5.
 - No-repeat log.
 - **Rendering:** cover fit measured on the rendered slide, face-safe crop (code library), stat-slide darkened backgrounds (§5.3a), spread slides (§5.4). (Basic layout rotation and the arrow move were pulled into M6.)
-- Article photos, Commons, stock and the identity check already exist from M5; this milestone adds the rest of the chain and the photo bank.
+- Article photos, Commons, stock and the identity check already exist from M5. *(Superseded 2026-10-07: the chain is spec §5.1 Photo chain v1; no photo bank.)*
 - **Held for M8 (Tommy, 2026-10-06; the renderer was frozen before the checkpoint):**
   - **Design rules from the freeze.** These are layout-system rules for every layout, not patches. The draft is in `docs/superpowers/m8-drafts/`.
     1. **Text fit:** each text region shrinks its font until the longest word fits on one line and the block fits the region, down to a minimum size; otherwise the render fails. No mid-word breaks (Altman checkpoint: "CYBERSECURIT/Y"). This also covers long stat and split-stat numbers (Gemini slide 4; Mistral checkpoint slide 3).
@@ -297,14 +297,15 @@ Only the four sources needed to put a real photo on every slide:
         - 0 misleading photos, and every miss is explained.
         - R23 is a request problem, not a finder miss: a symbolic request the Writer may no longer make. It's marked "request should not occur" in `fixtures/social/photo-bench/annotations.json`.
         - The chain: Openverse → Jev pre-screen v4 (fit and people) → the vision check on the top 3 → bank → text-only (story slides) or the AI-compute starter (covers).
-      - **Official images (a) and logo cover cards (b):** built (spec §5.1).
-        - Cover order: official image → subject P18 → logo card → stock → starter.
-        - A person cover uses the person's photo first; the official image and logo card come from the company named in the cover (confirmed by Tommy, 2026-10-07).
-        - Official images are off until Tommy approves allow-list rows.
-      - **Finder since the first bench (Tommy, 2026-10-06):**
-        - A vision check (`lib/social/photos/vision.ts`, its own model setting `PHOTO_VISION_MODEL`) looks at the top 3 metadata-passing stock candidates. The first passing all four questions wins: shows the requested thing, no person, no landmark, no outside brand. None passing means no stock photo. The cost is recorded per request.
-        - The cover fallback is the starter set's AI-compute photos only, never a topic match.
-      - **Bench cap:** $0.30 with the vision check (Jev + vision).
+      - **Photo chain v1 (spec §5.1, 2026-10-07) is the only chain.** Code, STATUS and the handoff point to it.
+        - Cover: article → the subject person's P18 → logo card (verified organization, licence check) → stock → starter, replaced by the branded cover card once approved.
+        - Story slides: article or P18 or stock → text-only.
+        - Quote slides: the speaker's P18 → text-only.
+        - Stat slides: a designed background (plain until approved).
+        - Official images: off. (c) more photos: dropped. No per-company approvals.
+        - The Writer's `photo_available` and the finder share one P18 check (`p18.ts`, pinned by a test).
+        - The frozen stock link replays offline with no live calls (`scripts/social_photo_bench.ts --replay` and a test).
+      - **Bench cap:** $0.30 with the vision check (Jev + vision); the replay costs nothing.
     - **(C) Renderer visuals:** the look of each layout, judged by Tommy alone on fixed posts.
   - **Separate track:** the Hook pass runs on saved drafts only and is not wired into runDay.
   - **No end-to-end runs until A, B and C each pass.** Then the acceptance batch above.
