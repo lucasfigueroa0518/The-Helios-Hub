@@ -54,7 +54,7 @@ SLIDE 3: 0 characters (full)
 ## Prototype run (after the prompt is approved)
 - **Inputs:** today's 2 saved drafts (Mistral and Altman, `runs/daily-2026-10-06T21-17-07-066Z`).
 - **Steps:** Hook pass → Fact-checker → mechanical → render, offline photos reused.
-- **Stop:** no pipeline wiring until Lucas has reviewed.
+- **Stop:** no pipeline wiring until Tommy has reviewed (he alone signs off, 2026-10-07).
 - **Estimated cost:**
 
 | Item | Estimate |

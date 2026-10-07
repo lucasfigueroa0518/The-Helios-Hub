@@ -388,7 +388,7 @@ MAIN CLAIM FALSE: yes/no
 
 ## 6. Hook pass (prototype; untested; Lucas's proposal, approved with edits by Tommy 2026-10-06)
 
-Sits between the Editor and the Fact-checker: Writer → Editor → **Hook pass** → Fact-checker → mechanical → design. `new stage · Hook pass · +1 stage · +1 AI call`. Not wired into the daily run until Lucas has reviewed the prototype renders. Draft and reasoning: `docs/superpowers/m8-drafts/hook-pass-prompt.md`.
+Sits between the Editor and the Fact-checker: Writer → Editor → **Hook pass** → Fact-checker → mechanical → design. `new stage · Hook pass · +1 stage · +1 AI call`. Not wired into the daily run until Tommy has reviewed the prototype renders (he alone signs off, 2026-10-07). Draft and reasoning: `docs/superpowers/m8-drafts/hook-pass-prompt.md`.
 
 ```
 You are the Hook editor for Helios Group's Instagram carousels. You get the edited draft (cover, slides, caption) and the BRIEF. Read it as the target reader: smart and busy, curious about AI, doesn't follow AI news. Your one job: make each slide hand off to the next.

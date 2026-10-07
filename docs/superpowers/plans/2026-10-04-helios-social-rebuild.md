@@ -284,7 +284,7 @@ Only the four sources needed to put a real photo on every slide:
        - spreads appear where a beat continues, or we can explain why not;
        - the request mix is reported per post.
     3. **Render:** text fit, contrast, faces clear, crops not over-zoomed and rotation all pass.
-    4. **Visual quality:** Tommy and Lucas sign off that each post is publishable as-is, text-only sequences included.
+    4. **Visual quality:** Tommy signs off that each post is publishable as-is, text-only sequences included. (Tommy alone, 2026-10-07: Lucas is out of the workflow.)
   - **On failure:** any failure gets a cause-level fix against its criterion, not a one-off patch.
 - **Link map (Tommy, 2026-10-06): design is tested one link at a time, on fixed inputs (the method that worked for the text chain).**
   - **Accepted and frozen:** Reporter → Editor → Fact-checker; renderer mechanics (text fit, bounds, contrast, faces clear, framing, rotation).
@@ -305,7 +305,7 @@ Only the four sources needed to put a real photo on every slide:
         - A vision check (`lib/social/photos/vision.ts`, its own model setting `PHOTO_VISION_MODEL`) looks at the top 3 metadata-passing stock candidates. The first passing all four questions wins: shows the requested thing, no person, no landmark, no outside brand. None passing means no stock photo. The cost is recorded per request.
         - The cover fallback is the starter set's AI-compute photos only, never a topic match.
       - **Bench cap:** $0.30 with the vision check (Jev + vision).
-    - **(C) Renderer visuals:** the look of each layout, judged by Tommy and Lucas on fixed posts.
+    - **(C) Renderer visuals:** the look of each layout, judged by Tommy alone on fixed posts.
   - **Separate track:** the Hook pass runs on saved drafts only and is not wired into runDay.
   - **No end-to-end runs until A, B and C each pass.** Then the acceptance batch above.
 

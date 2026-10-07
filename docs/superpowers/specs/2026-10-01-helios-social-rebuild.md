@@ -228,136 +228,74 @@ The worst past slips (the made-up Suleyman quote, the untraceable "1,200") came 
 
 ## 5. Design stage (the main investment)
 
-### 5.1 Image sources
+### 5.1 Photo chain v1 (DECIDED, Tommy, 2026-10-07)
 
-**DECIDED:**
+This is the only description of the photo system. Code comments, STATUS and the handoff point here. Earlier text is in Appendix A.
 
-- **Stock photos are allowed.**
-- **No photo is repeated within a post or within 7 days** (updated by §5.1a). Enforced in code with the used-photo log (`used-log.ts`), which also feeds the photo bank.
-  `cause · code · 0 stages · 0 AI`
+**Tommy's decisions (2026-10-07), quoted from `docs/superpowers/photo-fix-2026-10-07.md`:**
 
-**Source order (DECIDED):** first the article's own photos, then the backup lookup tools.
+- "The photo system is fully automatic and uses only sources with no rights questions. No human picks photos, no per-company approvals. When nothing is found, the slide is a designed slide; we don't add another source."
+- Logos: "If there are free, open-to-use logos that are just preferred not to be used by the companies, we can definitely use them." A logo card is allowed for any identity-verified organization whose Commons logo file passes the licence check. Brand-guideline preferences don't block it.
+- "Official company images (a): off. (c) Commons/Openverse more-photos: dropped. (d) charts and (e) post screenshots: not planned."
+- Helios-designed graphics are made by Claude Code from the Helios design system and approved once by Tommy.
 
-**1. The article's own photos, when their credit allows it.**
+**The chain, by slide type.** The Writer's IMAGE request decides. Nothing is inferred from a slide's words.
 
-- **How they're found:** the page reader extracts every photo from the source articles with its caption and credit line. This is code, not AI; today's reader turns pages into text and drops images, so this is a tool change.
-- **The Reporter lists them under ARTICLE PHOTOS,** with the caption and credit copied exactly.
-- **Code decides from the credit line:**
-  - **Allowed:** the company itself ("Courtesy of OpenAI", "Photo: Google"), official government ("Official White House Photo by …", agency photos), Wikimedia Commons, or an open licence (CC0, CC BY, CC BY-SA, public domain).
-  - **Rejected:** wire agencies and stock agencies (Getty, AFP, AP, Reuters, Bloomberg, Shutterstock and similar), and the outlet's own staff photographers.
-  - **Unknown or missing credit:** not used. No image is better than a wrong one.
-- **Example:** both photos in the ABC "Super Intelligence Force" article were "Kent Nishimura/AFP via Getty Images," so both are rejected and the backups take over.
-
-**The cover always has a photo; a story slide shows one only when a usable photo is found (DECIDED, revised twice 2026-10-06).** The starter set is for the cover only. On a story slide, a failed subject request, a quote slide without a usable speaker photo, or any request with nothing usable renders text-only, never a stand-in scene. The Writer requests a photo only when a specific subject, article photo or literal scene fits the slide, and otherwise sets IMAGE `none`. A slide with `none` renders without a photo, which is a normal outcome ("No usable photo means a text-only slide", below). There are no symbolic stock scenes. Quote slides show the verified speaker or a scene when they request a photo. `cause · prompt + schema + spec · 0 new stages · 0 new AI calls` (This replaces 2026-10-04's "Every slide gets a photo. No text-only slides.")
-
-**Use every tool available, and pick the best (DECIDED).** For each slide, query all the sources that fit the request in parallel, collect the candidates, and **rank** them. Don't stop at the first hit.
-
-- **Ranking is code first:**
-  - source tier (article photo > official > conference/press > Commons > stock);
-  - resolution;
-  - fit to the slide shape;
-  - date closest to the event;
-  - not already used.
-- **Then two checks run on the top few only:**
-  - the Jev metadata pre-screen (§5A #6);
-  - the existing image check, run on the top ~5 candidates to cap its cost.
-
-**Fallback chain for the guarantee:**
-
-1. A specific photo (subject, event or article).
-2. A broader scene search ("government building", "Washington D.C.").
-3. **The Helios photo bank:** a few hundred pre-cleared generic photos tagged by theme, curated once. It can never come up empty.
-
-Fallbacks are always **scenes, never people.** A slide never shows a person who might be mistaken for the subject.
-
-**Full tool list:**
-
-| Category | Tools |
+| Slide | Chain |
 |---|---|
-| People | Wikimedia Commons via Wikidata; official government portraits (agency heads, Congress via the congressional directory); **conference photo accounts on Flickr** (Web Summit, TechCrunch Disrupt, SXSW, Collision, etc., often CC BY); company press kits |
-| Events and government | White House gallery; DVIDS (Defense, public domain); NASA image library; Library of Congress; National Archives; agency and embassy Flickr accounts; EU Commission audiovisual service and the UK Open Government Licence (terms per source) |
-| Companies and products | Newsrooms and press kits (Nvidia, OpenAI, Google, Microsoft, …; "editorial use" terms checked per company); Commons |
-| Scenes and ideas | Openverse (searches many libraries at once), Pexels, Pixabay, Unsplash, StockSnap, Burst, Kaboompics, ISO Republic, Reshot |
+| **Cover** | article photo (credit check) → the subject person's P18 photo (identity check) → logo card (identity-verified organization, Commons licence check) → stock → starter set (AI-compute photos). Once Tommy approves the branded cover card, it replaces the starter set. |
+| **Story slides** (text, landing, image) | article photo (credit check), or the subject's P18 (identity check), or stock, as the request says → text-only. |
+| **Quote slides** | the verified speaker's P18 → text-only. (A stock request is a darkened background.) |
+| **Stat slides** (stat, split stat) | a Helios-designed background from the bank (`stat-background`), picked by the 7-day rule, used even when IMAGE is `none`. Plain dark until Tommy approves the set. |
 
-**Identity for people:** must come from a trustworthy record: Wikidata, an official or organizer account's caption (a conference's own Flickr), or an allowed article photo's caption. Never a random upload titled with a name.
+**Each step:**
 
-**Measure before building:** run the existing Wikidata lookup (`image-step/wikidata.ts`, plain code, no AI) against every person and company named in past posts. Report how many have a usable photo, and how many have two or more. This sizes the photo bank.
-
-**2. Backup lookup tools** (all code), by what the slide needs:
-
-| Slide needs | Tools, in order |
-|---|---|
-| A named person | Official government portrait (officials) → company press kit (executives) → Wikimedia Commons via Wikidata (P18 / P180) |
-| An event | Government photo galleries by date (e.g. the White House gallery for the Sept. 29, 2026 AI luncheon: 19 official photos) → the company's own event photos |
-| A company or product | Press kit → Wikimedia Commons |
-| A general scene | Free libraries: Openverse, Pexels, Pixabay, Unsplash |
+- **Article photo:** a photo the page reader found in a source article, used only when its credit line is allowed: the company itself, official government, Wikimedia Commons, or an open licence. Agency and stock-agency credits, the outlet's own staff, and unknown or missing credits are rejected. Never on quote or stat slides.
+- **P18:** the subject's Wikidata main image, after the identity check (the resolver, Jev, and the entry's P31 type).
+  - The file is usable only with an allowed licence (PD, CC0, CC BY, CC BY-SA), a credited author, jpg/png, and a short side of at least 600px.
+  - On a cover, only a person's P18 is used; an organization's cover is its logo card.
+  - **The Writer and the finder agree.** `photo_available` (the Writer) is true exactly when this P18 is usable. Both call the same function (`lib/social/photos/p18.ts`) with one identity check per subject per story. A test pins this.
+- **Logo card:** for the cover's own subject when it's an organization, else the first organizations the cover text names.
+  - The logo is the current Wikidata P154 file on Commons, licence-checked. It's drawn whole on a light or dark plate chosen by code, on the Helios canvas: never recoloured or cropped, no pattern.
+  - Logos are sized by width up to 10:1.
+- **Stock (frozen link, accepted 2026-10-07):**
+  - Openverse runs the request, then its first two words.
+  - The Jev metadata pre-screen v4 keeps results that fit and suggest no person.
+  - The vision check (Haiku, `PHOTO_VISION_MODEL`) runs on the top 3. A candidate passes only if it shows the requested thing (confidence ≥ 0.7) and has no main-subject person or recognizable face, no recognizable landmark, no prominent logo outside the story's SUBJECTS, and no identifiable signage or named institution.
+  - The first passing candidate wins. None passing means no stock photo.
+- **Starter set:** covers only, from the AI-compute photos (`public/social/starter`), least recently used when all were used in the last 7 days. Never a topic match.
+- **Designed graphics:** see §5.1a. Off in the daily run until Tommy approves them (`DESIGNED_GRAPHICS`).
 
 **Rules everywhere:**
 
-- Identity always comes from the records (Wikidata, official galleries, the article's caption), never from an AI looking at a face.
-- Code rejects agency credits wherever a photo comes from.
-- No photo is ever repeated.
-- No usable photo means a text-only slide, which is a normal outcome. A slide with IMAGE `none` is one, and so is a story slide whose requested photo isn't usable. The starter set is the cover's last step only.
+- **No repeats:** never twice in a post or within 7 days, for every source. Enforced in code with the used-photo log (`used-photos.ts`) plus the photos picked earlier in the same run.
+- **Identity comes from records** (Wikidata, the credited article caption), never from a model looking at a face.
+- **No usable photo means a designed slide** (text-only, or plain dark for stats). It's a normal outcome. No further source is added for it.
+- **No AI-generated imagery that looks real.** Photos are never edited.
 
-**Photos are never edited.** No retouching or compositing. **To verify:** whether the cover's dark overlay behind the headline counts as an edit under the White House photo terms. If it does, use the cover's dark-canvas layout with the photo in its own frame.
+**AI calls:** Jev (the identity check, the stock pre-screen) and the vision check (stock candidates only). Everything else is code.
 
-**The Reporter's brief:** the IMAGES section becomes three sections:
+**Off and not planned:** official company images; Commons/Openverse "more photos" per subject; charts; post screenshots; hand-picked photo banks; per-company approvals.
 
-- **ARTICLE PHOTOS:** the photos found in the source articles, with caption and credit copied exactly.
-- **SUBJECTS:** the people, companies and products in the story.
-- **EVENTS:** what happened, the date and the place.
+**Testing:** the photo-finder bench (`fixtures/social/photo-bench`, `scripts/social_photo_bench.ts`).
+- Its pass bar: 0 misleading photos, every miss explained, hit rate tracked.
+- The frozen stock link replays offline from the accepted run (`--replay`, and a test).
 
-The backup tools use SUBJECTS and EVENTS for their lookups.
+`cause · photo finder + Writer handoff + renderer · 0 new stages · 0 new AI calls`
 
-**OPEN:**
+### 5.1a The Helios bank: designed graphics only (DECIDED, 2026-10-07)
 
-- Read the Pixabay and Unsplash licence and API terms in full. Unsplash's API expects hotlinking and a specific credit format, which may not fit photos rendered into a PNG.
-- The photo coverage floor ("cover + every text slide + ≥ half of story slides"). Leaning toward dropping it, because it pushes the pipeline to grab any image. A text-only slide is a normal outcome.
-- The cause of the Openverse gap is the Writer's poetic search terms. Fix that in the Writer prompt (§4) before adding more sources.
+The bank (`public/social/bank`, `lib/social/photos/bank.ts`) holds Helios-designed graphics only.
+- **Made by:** Claude Code, from the Helios design system: the orange palette on the near-black canvas, Pragmatica Extended + Roboto, its spacing and logo-protection rules.
+- **Approval:** once, by Tommy.
+- **Not allowed:** photos, AI imagery that looks real, and anything that draws or implies data.
 
-**Image strategy: AGREED DIRECTION (Tommy, 2026-10-07; not built yet).**
+- **`stat-background`:** about 15 backgrounds for stat slides, a few per theme, tagged. Picked least recently used, never twice in a post or within 7 days.
+- **The branded cover card** (a renderer layout, not a bank file): the cover for a story with no photo, headshot or logo.
 
-**Why:** the photo-finder bench and the PREVIEW run showed stock can't carry the posts. With the vision check on, stock delivers about 6 of 22 requests. Article photos mostly fail the credit check (no credit line). Several posts end up almost all text-only.
+Samples for Tommy's one-time approval are in `runs/designed-graphics-2026-10-07/`. Both stay off in the daily run until he approves them.
 
-**Stock becomes the last fallback.** Priority order:
-
-| | Source | Notes |
-|---|---|---|
-| (a) | **Official images** from the subject company's own announcement page, which the Reporter already opens | Credited by code, e.g. "Image: Anthropic" |
-| (b) | **Logo cover cards** for company stories | The official logo from Wikidata P154, on a Helios-designed background |
-| (c) | **More photos per person** from Wikimedia Commons categories | Single-face photos only |
-| (d) | **Charts** drawn from the brief's NUMBERS | |
-| (e) | **Screenshots of real social posts**, for quotes said on X | |
-| (f) | Stock (Openverse, metadata pre-screen + vision check) | |
-| (g) | The cover's AI-compute starter fallback | |
-
-**No AI-generated imagery that looks real.**
-
-**Build order:** (a) and (b) first. The build proposal is `docs/superpowers/m8-drafts/image-strategy-proposal.md`. Nothing is built until Tommy approves it.
-
-### 5.1a The Helios photo bank grows from every post (DECIDED, 2026-10-04)
-
-The photo bank isn't only a hand-picked starter set. **It grows automatically from the photos each post uses.**
-
-- **What goes in:** every photo that passed all checks and shipped in a post: allowed licence, no agency credit, identity verified for people and companies. It extends the existing used-photo log (`used-log.ts`).
-- **Tags on each entry:**
-  - **What it shows:** a person or company *with its Wikidata ID*, or scene keywords ("server room", "government building").
-  - **Type:** person, company, event, scene, or stat background.
-  - **Source, licence and exact credit line**, so credits stay correct on reuse.
-  - **Size, shape and face position**, for crop-safe reuse.
-  - **Dates:** when it was taken, and the date and post of each use.
-- **Order in the photo search:**
-  1. A fresh, specific photo.
-  2. **The bank, matched by tag.**
-  3. A broader scene search.
-  4. The hand-picked starter set (seeded from the old `photos/atmosphere.ts` themes).
-- **Reuse rules:**
-  - **Never twice in the same post, and not used in the last 7 days.** When several bank photos match, use the one used least recently. This replaces the earlier "ideally never used again".
-  - **Event photos stay with their event:** reused only for posts about that same event, never to illustrate a different one.
-  - **Person and company photos** are reused only for the same verified Wikidata ID, never matched by name.
-  - **Scenes and stat backgrounds** are reused freely by tag.
-
-`plumbing · code · 0 new stages · 0 AI`
+`design · renderer + bank · 0 new stages · 0 AI`
 
 ### 5.2 Cover rendering (DECIDED)
 
@@ -374,7 +312,7 @@ The template is locked by the design-v1 contract.
   - **Faces:** the face-safe crop (below) also keeps faces out of the arrow zone.
   - `design change · renderer code · 0 AI`
 - **Face-safe crop:** a plain code library finds where the face is, never who it is, so the 4:5 crop doesn't cut it off. `cause · code · 0 AI`
-- **No usable photo:** the dark canvas. That's a normal outcome.
+- **No usable photo:** a cover is never empty. Its chain (§5.1 Photo chain v1) ends at the starter set, and later at the branded cover card. A logo cover card is drawn on the plain Helios canvas.
 
 ### 5.3 Slide variety (DECIDED)
 
@@ -398,31 +336,15 @@ It assigns them so that **no 3 consecutive slides share a layout.** Code enforce
 - **The renderer alternates layouts within a type** (photo on top vs. bottom, text left vs. centered). `code · 0 AI`
 - **The slide-type mix is logged per post.** Monotone posts again and again are a pattern to fix at the Reporter.
 
-### 5.3a Stat slides get a symbolic background photo (DECIDED)
+### 5.3a Stat slides get a Helios-designed background (DECIDED, 2026-10-07)
 
-The old stat slide (a headline and a big number on an empty canvas) is the most skippable slide in a post. New design:
-
-- **Revised 2026-10-06 (Tommy):** stat slides follow the same photo rule as every story slide. A literal scene that fits gets a darkened background photo; otherwise IMAGE `none`, and the slide renders on the plain dark background. Symbolic stock searches are gone. *(Superseded: "The Writer adds a symbolic stock search to every stat slide, for example `IMAGE: stock: wall clock close-up` for '120 days'.")*
-- **The photo search finds it** in the free libraries. The no-repeat rule keeps it fresh.
-- **The renderer darkens it behind the number,** the same way the cover works. Code adds the photo credit.
+- **Background:** a stat slide's background is a Helios-designed `stat-background` from the bank (§5.1a), picked by the 7-day rule, whatever the IMAGE line says. It stays plain dark until Tommy approves the set.
+- **Writer:** sets a stat slide's IMAGE to `none`, and that `none` needs no EDIT NOTES line.
+- **Renderer:** darkens the background behind the number, as before. A designed background has no credit pill.
 - **It sets the mood; it doesn't chart the data.** No charts, no calculated values (e.g. no deadline date worked out from "120 days").
-- **The headline stays factual** ("It has a deadline", not "The clock is running"). The picture carries the mood.
-- **No AI-generated images.**
-- **IMAGE `none`, or no usable photo found:** the plain dark stat slide (the starter set is cover-only).
+- **The headline stays factual** ("It has a deadline", not "The clock is running").
 
-*Superseded 2026-10-06 (symbolic searches are gone; kept for the record):*
-
-| Stat | Example search |
-|---|---|
-| 120 days | `stock: wall clock close-up` |
-| $5 billion investment | `stock: stacks of cash` |
-| 41,000 patients | `stock: hospital waiting room` |
-| 40% of jobs | `stock: busy office floor` |
-| 1 million users | `stock: crowd of people from above` |
-
-**Later option:** a curated Helios set of about 15 backgrounds, a few per theme, for a more signature look.
-
-`design change · prompt + rule + renderer · 0 new stages · 0 AI`
+`design change · rule + renderer · 0 new stages · 0 AI`
 
 ### 5.4 New slide type: spread (DECIDED that we want it; mechanics PROPOSED)
 
@@ -571,7 +493,7 @@ These came up once in hand-run tests. They become fixes only if they recur in re
 | The story one-liner came from an off-topic article (Gemini group, Times Square Chronicles headline over a Meta Muse article; 1 occurrence, 2026-10-05) | Take the one-liner from a read member whose text matches the group |
 | An aggregator was the only source for a minor fact, against the v2 aggregator rule: Firstpost for the NYC hearing's 11 AM start time (F2, N4); FourWeekMBA for Gemini's "May 17" usage-limit date (B1). 2 occurrences, 2026-10-05 | Tighten the aggregator rule if it repeats |
 | The different-story check (winner #2) judged 7 of 9 shortlisted stories "same topic as #1" (all OpenAI/AI safety), pushing the 14-outlet NYC hearing out of the winners (1 occurrence, fresh daily run 2026-10-05) | Narrow the different-story question (same company *and* topic) if it repeats |
-| Writer: a split-stat slide requested an article photo instead of a symbolic stock scene (Gemini, 1 occurrence, 2026-10-05) | Writer prompt: stat rule covers split stats |
+| Writer: a split-stat slide requested an article photo instead of a symbolic stock scene (Gemini, 1 occurrence, 2026-10-05) | Superseded 2026-10-07: stat and split-stat slides take a designed background and IMAGE `none` (§5.3a); the Writer check enforces it |
 | Writer: a body ran 230 characters, over the 220 limit (Gemini, 1 occurrence) | M7's length check catches it; watch how often |
 | Writer: chose a ⚠ single-source quote over an unused multi-source one, and the edit notes misstated which were single-source (NYC hearing, 1 occurrence) | Writer prompt: quote-choice rule |
 | `well_known` from a Wikidata match is noisy: lesser-known people marked well known through namesakes (Logan Graham, Morgan Dwyer); combined names find no match ("Google / Google DeepMind") (2026-10-05) | Identity check (spec §5A #5) for well_known; single-entity SUBJECTS (done 2026-10-05) |
@@ -726,3 +648,165 @@ Nobody outside is reviewing this spec, and nothing waits on anyone. The four ite
 | **Jev story-scoring questions** (§5A #1) | **Use the questions as written, minus number/quote (dropped in story-scoring@2, 2026-10-04),** with "AI is the main subject" as the relevance wording. Relevance and substance are required, the other three add to the score, and ties are broken by outlet count. **Calibration:** thresholds are calibrated from live run reports (§2.3); every run logs Jev's raw answers per candidate. (The hand-labelled S1 set was dropped 2026-10-04.) |
 | **Jev strategy scoring** (§5A #3) | **Retired** with the old pipeline. Not part of the rebuild. |
 | **Pattern threshold** (§2.3) | **3 or more of the last 10 posts** (rolling) makes a failure a fix candidate. **Exception:** anything that publishes a false fact or a wrong-person photo is fixed after a single occurrence. |
+
+## Appendix A. Superseded photo text (kept for the record)
+
+Photo chain v1 (§5.1, 2026-10-07) replaces everything below. Kept for the record only, with `used-log.ts` corrected to `used-photos.ts` and unbuilt claims removed.
+
+### Former 5.1: Image sources
+
+**DECIDED:**
+
+- **Stock photos are allowed.**
+- **No photo is repeated within a post or within 7 days** (updated by §5.1a). Enforced in code with the used-photo log (`used-photos.ts`), which also feeds the photo bank.
+  `cause · code · 0 stages · 0 AI`
+
+**Source order (DECIDED):** first the article's own photos, then the backup lookup tools.
+
+**1. The article's own photos, when their credit allows it.**
+
+- **How they're found:** the page reader extracts every photo from the source articles with its caption and credit line. This is code, not AI; today's reader turns pages into text and drops images, so this is a tool change.
+- **The Reporter lists them under ARTICLE PHOTOS,** with the caption and credit copied exactly.
+- **Code decides from the credit line:**
+  - **Allowed:** the company itself ("Courtesy of OpenAI", "Photo: Google"), official government ("Official White House Photo by …", agency photos), Wikimedia Commons, or an open licence (CC0, CC BY, CC BY-SA, public domain).
+  - **Rejected:** wire agencies and stock agencies (Getty, AFP, AP, Reuters, Bloomberg, Shutterstock and similar), and the outlet's own staff photographers.
+  - **Unknown or missing credit:** not used. No image is better than a wrong one.
+- **Example:** both photos in the ABC "Super Intelligence Force" article were "Kent Nishimura/AFP via Getty Images," so both are rejected and the backups take over.
+
+**The cover always has a photo; a story slide shows one only when a usable photo is found (DECIDED, revised twice 2026-10-06).** The starter set is for the cover only. On a story slide, a failed subject request, a quote slide without a usable speaker photo, or any request with nothing usable renders text-only, never a stand-in scene. The Writer requests a photo only when a specific subject, article photo or literal scene fits the slide, and otherwise sets IMAGE `none`. A slide with `none` renders without a photo, which is a normal outcome ("No usable photo means a text-only slide", below). There are no symbolic stock scenes. Quote slides show the verified speaker or a scene when they request a photo. `cause · prompt + schema + spec · 0 new stages · 0 new AI calls` (This replaces 2026-10-04's "Every slide gets a photo. No text-only slides.")
+
+**Use every tool available, and pick the best (DECIDED).** For each slide, query all the sources that fit the request in parallel, collect the candidates, and **rank** them. Don't stop at the first hit.
+
+- **Ranking is code first:**
+  - source tier (article photo > official > conference/press > Commons > stock);
+  - resolution;
+  - fit to the slide shape;
+  - date closest to the event;
+  - not already used.
+- **Then two checks run on the top few only:**
+  - the Jev metadata pre-screen (§5A #6);
+  - the existing image check, run on the top ~5 candidates to cap its cost.
+
+**Fallback chain for the guarantee:**
+
+1. A specific photo (subject, event or article).
+2. A broader scene search ("government building", "Washington D.C.").
+3. *(Removed 2026-10-07: a curated photo bank was never built.)*
+
+Fallbacks are always **scenes, never people.** A slide never shows a person who might be mistaken for the subject.
+
+**Full tool list:**
+
+| Category | Tools |
+|---|---|
+| People | Wikimedia Commons via Wikidata; official government portraits (agency heads, Congress via the congressional directory); **conference photo accounts on Flickr** (Web Summit, TechCrunch Disrupt, SXSW, Collision, etc., often CC BY); company press kits |
+| Events and government | White House gallery; DVIDS (Defense, public domain); NASA image library; Library of Congress; National Archives; agency and embassy Flickr accounts; EU Commission audiovisual service and the UK Open Government Licence (terms per source) |
+| Companies and products | Newsrooms and press kits (Nvidia, OpenAI, Google, Microsoft, …; "editorial use" terms checked per company); Commons |
+| Scenes and ideas | Openverse (searches many libraries at once), Pexels, Pixabay, Unsplash, StockSnap, Burst, Kaboompics, ISO Republic, Reshot |
+
+**Identity for people:** must come from a trustworthy record: Wikidata, an official or organizer account's caption (a conference's own Flickr), or an allowed article photo's caption. Never a random upload titled with a name.
+
+**Measure before building:** run the existing Wikidata lookup (`image-step/wikidata.ts`, plain code, no AI) against every person and company named in past posts. Report how many have a usable photo, and how many have two or more. This sizes the photo bank.
+
+**2. Backup lookup tools** (all code), by what the slide needs:
+
+| Slide needs | Tools, in order |
+|---|---|
+| A named person | Official government portrait (officials) → company press kit (executives) → Wikimedia Commons via Wikidata (P18 / P180) |
+| An event | Government photo galleries by date (e.g. the White House gallery for the Sept. 29, 2026 AI luncheon: 19 official photos) → the company's own event photos |
+| A company or product | Press kit → Wikimedia Commons |
+| A general scene | Free libraries: Openverse, Pexels, Pixabay, Unsplash |
+
+**Rules everywhere:**
+
+- Identity always comes from the records (Wikidata, official galleries, the article's caption), never from an AI looking at a face.
+- Code rejects agency credits wherever a photo comes from.
+- No photo is ever repeated.
+- No usable photo means a text-only slide, which is a normal outcome. A slide with IMAGE `none` is one, and so is a story slide whose requested photo isn't usable. The starter set is the cover's last step only.
+
+**Photos are never edited.** No retouching or compositing. **To verify:** whether the cover's dark overlay behind the headline counts as an edit under the White House photo terms. If it does, use the cover's dark-canvas layout with the photo in its own frame.
+
+**The Reporter's brief:** the IMAGES section becomes three sections:
+
+- **ARTICLE PHOTOS:** the photos found in the source articles, with caption and credit copied exactly.
+- **SUBJECTS:** the people, companies and products in the story.
+- **EVENTS:** what happened, the date and the place.
+
+The backup tools use SUBJECTS and EVENTS for their lookups.
+
+**OPEN:**
+
+- Read the Pixabay and Unsplash licence and API terms in full. Unsplash's API expects hotlinking and a specific credit format, which may not fit photos rendered into a PNG.
+- The photo coverage floor ("cover + every text slide + ≥ half of story slides"). Leaning toward dropping it, because it pushes the pipeline to grab any image. A text-only slide is a normal outcome.
+- The cause of the Openverse gap is the Writer's poetic search terms. Fix that in the Writer prompt (§4) before adding more sources.
+
+**Image strategy: AGREED DIRECTION (Tommy, 2026-10-07; not built yet).**
+
+**Why:** the photo-finder bench and the PREVIEW run showed stock can't carry the posts. With the vision check on, stock delivers about 6 of 22 requests. Article photos mostly fail the credit check (no credit line). Several posts end up almost all text-only.
+
+**Stock becomes the last fallback.** Priority order:
+
+| | Source | Notes |
+|---|---|---|
+| (a) | **Official images** from the subject company's own announcement page, which the Reporter already opens | Credited by code, e.g. "Image: Anthropic" |
+| (b) | **Logo cover cards** for company stories | The official logo from Wikidata P154, on a Helios-designed background |
+| (c) | **More photos per person** from Wikimedia Commons categories | Single-face photos only |
+| (d) | **Charts** drawn from the brief's NUMBERS | |
+| (e) | **Screenshots of real social posts**, for quotes said on X | |
+| (f) | Stock (Openverse, metadata pre-screen + vision check) | |
+| (g) | The cover's AI-compute starter fallback | |
+
+**No AI-generated imagery that looks real.**
+
+**Build order:** (a) and (b) first. The build proposal is `docs/superpowers/m8-drafts/image-strategy-proposal.md`. Nothing is built until Tommy approves it.
+
+### Former 5.1a: photo bank (2026-10-04)
+
+*(Removed 2026-10-07: "the bank grows from every post" was never built.)*
+
+- **What goes in:** every photo that passed all checks and shipped in a post: allowed licence, no agency credit, identity verified for people and companies. It extends the existing used-photo log (`used-photos.ts`).
+- **Tags on each entry:**
+  - **What it shows:** a person or company *with its Wikidata ID*, or scene keywords ("server room", "government building").
+  - **Type:** person, company, event, scene, or stat background.
+  - **Source, licence and exact credit line**, so credits stay correct on reuse.
+  - **Size, shape and face position**, for crop-safe reuse.
+  - **Dates:** when it was taken, and the date and post of each use.
+- **Order in the photo search:**
+  1. A fresh, specific photo.
+  2. **The bank, matched by tag.**
+  3. A broader scene search.
+  4. The hand-picked starter set (seeded from the old `photos/atmosphere.ts` themes).
+- **Reuse rules:**
+  - **Never twice in the same post, and not used in the last 7 days.** When several bank photos match, use the one used least recently. This replaces the earlier "ideally never used again".
+  - **Event photos stay with their event:** reused only for posts about that same event, never to illustrate a different one.
+  - **Person and company photos** are reused only for the same verified Wikidata ID, never matched by name.
+  - **Scenes and stat backgrounds** are reused freely by tag.
+
+`plumbing · code · 0 new stages · 0 AI`
+
+### Former 5.3a: Stat slides get a symbolic background photo
+
+The old stat slide (a headline and a big number on an empty canvas) is the most skippable slide in a post. New design:
+
+- **Revised 2026-10-06 (Tommy):** stat slides follow the same photo rule as every story slide. A literal scene that fits gets a darkened background photo; otherwise IMAGE `none`, and the slide renders on the plain dark background. Symbolic stock searches are gone. *(Superseded: "The Writer adds a symbolic stock search to every stat slide, for example `IMAGE: stock: wall clock close-up` for '120 days'.")*
+- **The photo search finds it** in the free libraries. The no-repeat rule keeps it fresh.
+- **The renderer darkens it behind the number,** the same way the cover works. Code adds the photo credit.
+- **It sets the mood; it doesn't chart the data.** No charts, no calculated values (e.g. no deadline date worked out from "120 days").
+- **The headline stays factual** ("It has a deadline", not "The clock is running"). The picture carries the mood.
+- **No AI-generated images.**
+- **IMAGE `none`, or no usable photo found:** the plain dark stat slide (the starter set is cover-only).
+
+*Superseded 2026-10-06 (symbolic searches are gone; kept for the record):*
+
+| Stat | Example search |
+|---|---|
+| 120 days | `stock: wall clock close-up` |
+| $5 billion investment | `stock: stacks of cash` |
+| 41,000 patients | `stock: hospital waiting room` |
+| 40% of jobs | `stock: busy office floor` |
+| 1 million users | `stock: crowd of people from above` |
+
+**Later option:** a curated Helios set of about 15 backgrounds, a few per theme, for a more signature look.
+
+`design change · prompt + rule + renderer · 0 new stages · 0 AI`
+

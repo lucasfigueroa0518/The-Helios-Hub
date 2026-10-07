@@ -1,1 +1,209 @@
-[]
+[
+  {
+    "id": "stat-sunrise-1",
+    "url": "/social/bank/stat/sunrise-1.png",
+    "kind": "stat-background",
+    "tags": [
+      "sunrise",
+      "radial sun",
+      "bottom edge"
+    ],
+    "credit": "Helios",
+    "width": 1080,
+    "height": 1350,
+    "addedAt": "2026-10-07"
+  },
+  {
+    "id": "stat-sunrise-2",
+    "url": "/social/bank/stat/sunrise-2.png",
+    "kind": "stat-background",
+    "tags": [
+      "sunrise",
+      "radial sun",
+      "bottom edge"
+    ],
+    "credit": "Helios",
+    "width": 1080,
+    "height": 1350,
+    "addedAt": "2026-10-07"
+  },
+  {
+    "id": "stat-sunrise-3",
+    "url": "/social/bank/stat/sunrise-3.png",
+    "kind": "stat-background",
+    "tags": [
+      "sunrise",
+      "radial sun",
+      "bottom edge"
+    ],
+    "credit": "Helios",
+    "width": 1080,
+    "height": 1350,
+    "addedAt": "2026-10-07"
+  },
+  {
+    "id": "stat-corner-1",
+    "url": "/social/bank/stat/corner-1.png",
+    "kind": "stat-background",
+    "tags": [
+      "corner glow",
+      "radial sun"
+    ],
+    "credit": "Helios",
+    "width": 1080,
+    "height": 1350,
+    "addedAt": "2026-10-07"
+  },
+  {
+    "id": "stat-corner-2",
+    "url": "/social/bank/stat/corner-2.png",
+    "kind": "stat-background",
+    "tags": [
+      "corner glow",
+      "radial sun"
+    ],
+    "credit": "Helios",
+    "width": 1080,
+    "height": 1350,
+    "addedAt": "2026-10-07"
+  },
+  {
+    "id": "stat-corner-3",
+    "url": "/social/bank/stat/corner-3.png",
+    "kind": "stat-background",
+    "tags": [
+      "corner glow",
+      "radial sun"
+    ],
+    "credit": "Helios",
+    "width": 1080,
+    "height": 1350,
+    "addedAt": "2026-10-07"
+  },
+  {
+    "id": "stat-eclipse-1",
+    "url": "/social/bank/stat/eclipse-1.png",
+    "kind": "stat-background",
+    "tags": [
+      "eclipse",
+      "radial sun",
+      "ring"
+    ],
+    "credit": "Helios",
+    "width": 1080,
+    "height": 1350,
+    "addedAt": "2026-10-07"
+  },
+  {
+    "id": "stat-eclipse-2",
+    "url": "/social/bank/stat/eclipse-2.png",
+    "kind": "stat-background",
+    "tags": [
+      "eclipse",
+      "radial sun",
+      "ring"
+    ],
+    "credit": "Helios",
+    "width": 1080,
+    "height": 1350,
+    "addedAt": "2026-10-07"
+  },
+  {
+    "id": "stat-eclipse-3",
+    "url": "/social/bank/stat/eclipse-3.png",
+    "kind": "stat-background",
+    "tags": [
+      "eclipse",
+      "radial sun",
+      "ring"
+    ],
+    "credit": "Helios",
+    "width": 1080,
+    "height": 1350,
+    "addedAt": "2026-10-07"
+  },
+  {
+    "id": "stat-horizon-1",
+    "url": "/social/bank/stat/horizon-1.png",
+    "kind": "stat-background",
+    "tags": [
+      "horizon",
+      "hairline",
+      "radial sun"
+    ],
+    "credit": "Helios",
+    "width": 1080,
+    "height": 1350,
+    "addedAt": "2026-10-07"
+  },
+  {
+    "id": "stat-horizon-2",
+    "url": "/social/bank/stat/horizon-2.png",
+    "kind": "stat-background",
+    "tags": [
+      "horizon",
+      "hairline",
+      "radial sun"
+    ],
+    "credit": "Helios",
+    "width": 1080,
+    "height": 1350,
+    "addedAt": "2026-10-07"
+  },
+  {
+    "id": "stat-horizon-3",
+    "url": "/social/bank/stat/horizon-3.png",
+    "kind": "stat-background",
+    "tags": [
+      "horizon",
+      "hairline",
+      "radial sun"
+    ],
+    "credit": "Helios",
+    "width": 1080,
+    "height": 1350,
+    "addedAt": "2026-10-07"
+  },
+  {
+    "id": "stat-frame-1",
+    "url": "/social/bank/stat/frame-1.png",
+    "kind": "stat-background",
+    "tags": [
+      "frame",
+      "hairline",
+      "radial sun"
+    ],
+    "credit": "Helios",
+    "width": 1080,
+    "height": 1350,
+    "addedAt": "2026-10-07"
+  },
+  {
+    "id": "stat-frame-2",
+    "url": "/social/bank/stat/frame-2.png",
+    "kind": "stat-background",
+    "tags": [
+      "frame",
+      "hairline",
+      "radial sun"
+    ],
+    "credit": "Helios",
+    "width": 1080,
+    "height": 1350,
+    "addedAt": "2026-10-07"
+  },
+  {
+    "id": "stat-frame-3",
+    "url": "/social/bank/stat/frame-3.png",
+    "kind": "stat-background",
+    "tags": [
+      "frame",
+      "hairline",
+      "radial sun"
+    ],
+    "credit": "Helios",
+    "width": 1080,
+    "height": 1350,
+    "addedAt": "2026-10-07"
+  }
+]
