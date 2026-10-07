@@ -1,9 +1,8 @@
 /**
  * A subject's Wikidata main image (P18): the one definition both links use
- * (spec §5.1 Photo chain v1). The Writer's `photo_available` and the photo
- * finder's subject step call this same function, with the same identity
- * check and the same usability rule, so they always agree: a subject is
- * photo-available exactly when its P18 is usable.
+ * (photo spec §2: headshots). The Writer's `headshot_available`
+ * (availability.ts) and the photo finder's subject step call this same
+ * function, with the same identity check and the same usability rule.
  *
  *   identity: the full identity check (identity.ts: resolver, Jev, P31),
  *             cached per post/story so one subject costs one check
@@ -53,9 +52,4 @@ export async function subjectP18(name: string, brief: Brief, deps: { jev: JevAsk
   const info = (await fetchImageInfo([file], { http: deps.http }))[file];
   const pick = info ? toCandidate(file, info, 'P18', { minShortSide: P18_MIN_SHORT_SIDE }) : null;
   return { identity, file: p18, pick, why: pick ? null : 'main image (P18) not usable (licence, size or type)' };
-}
-
-/** `photo_available` for the Writer: true exactly when the subject's P18 is usable (same check as the finder). */
-export function createHasPhoto(deps: { jev: JevAsk; http?: typeof fetch }, cacheFor: (brief: Brief) => IdentityCache) {
-  return async (subject: { name: string }, brief: Brief): Promise<boolean> => (await subjectP18(subject.name, brief, deps, cacheFor(brief))).pick !== null;
 }

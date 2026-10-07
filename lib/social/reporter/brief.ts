@@ -26,7 +26,11 @@ export type BriefQuote = {
   /** Exact quote text, without the surrounding quotation marks. */
   text: string;
   speaker: string;
-  /** The speaker's SUBJECTS id (S1…), or null when the speaker isn't in SUBJECTS (Tommy, 2026-10-06). */
+  /**
+   * The speaker's SUBJECTS id (S1…) (Tommy, 2026-10-06). Everyone quoted is a
+   * SUBJECT (Tommy, 2026-10-07); null only when the Reporter still left the
+   * speaker out after its retry (logged, never sent back twice).
+   */
   speaker_id: string | null;
   /** Where it was said (interview, post, statement). */
   where: string | null;
@@ -47,6 +51,9 @@ export type BriefNumber = {
   notes: string[];
 };
 
+export const SUBJECT_KINDS = ['person', 'organization'] as const;
+export type SubjectKind = (typeof SUBJECT_KINDS)[number];
+
 export const SOURCE_KINDS = ['original', 'official', 'aggregator'] as const;
 export type SourceKind = (typeof SOURCE_KINDS)[number];
 
@@ -59,7 +66,8 @@ export type Brief = {
   quotes: BriefQuote[];
   numbers: BriefNumber[];
   terms: Array<{ name: string; definition: string; source: string }>;
-  subjects: Array<{ id: string; name: string; role: string | null }>;
+  /** `type` (Tommy, 2026-10-07): person or organization, marked by the Reporter; the identity check's type wins when it has one. */
+  subjects: Array<{ id: string; name: string; role: string | null; type: SubjectKind }>;
   events: Array<{ what: string; date: string | null; place: string | null }>;
   article_photos: Array<{ caption: string | null; credit: string | null; url: string | null; page: string | null }>;
   not_answered: string[];
@@ -104,7 +112,7 @@ export const BRIEF_SCHEMA = obj({
       id: { type: 'string', description: 'Q1, Q2, …' },
       text: { type: 'string', description: 'Exact text, word for word, without surrounding quotation marks.' },
       speaker: str,
-      speaker_id: { ...nullableStr, description: "The speaker's SUBJECTS id (S1, S2, …), or null if the speaker isn't in SUBJECTS." },
+      speaker_id: { ...nullableStr, description: "The speaker's SUBJECTS id (S1, S2, …). Everyone quoted is listed in SUBJECTS." },
       where: { ...nullableStr, description: 'Where it was said.' },
       via: { ...strList, description: 'Outlet(s) you read it in.' },
       single_source: { type: 'boolean', description: 'Found in only ONE source (⚠).' },
@@ -127,6 +135,7 @@ export const BRIEF_SCHEMA = obj({
     id: { type: 'string', description: 'S1, S2, …' },
     name: { type: 'string', description: 'One person or one organization, never combined (no "A / B"). Describe any relation in role.' },
     role: nullableStr,
+    type: { type: 'string', enum: [...SUBJECT_KINDS], description: 'person, or organization (a company, government body, lab or product).' },
   })),
   events: list(obj({ what: { type: 'string', description: 'Photographable event.' }, date: nullableStr, place: nullableStr })),
   article_photos: list(
@@ -198,7 +207,13 @@ export function checkShape(value: unknown, schema: any = BRIEF_SCHEMA, at = 'bri
  * are aggregators (Tommy, 2026-10-06). The Reporter gets this once, while it
  * still has its retry; after that, code drops them (dropAggregatorOnly).
  */
-export function validateBrief(input: unknown, opts: { aggregators?: boolean } = {}): Brief {
+/**
+ * `speakers`: also fail QUOTES whose speaker isn't in SUBJECTS (speaker_id
+ * null) (Tommy, 2026-10-07: everyone quoted is a SUBJECT). Like
+ * `aggregators`, the Reporter gets this once, while it still has its retry;
+ * after that the quote stays, unattributed to a subject, and is logged.
+ */
+export function validateBrief(input: unknown, opts: { aggregators?: boolean; speakers?: boolean } = {}): Brief {
   const shape = checkShape(input);
   if (shape.length > 0) throw new BriefValidationError(shape);
   const brief = input as Brief;
@@ -206,6 +221,11 @@ export function validateBrief(input: unknown, opts: { aggregators?: boolean } = 
   if (opts.aggregators) {
     for (const x of aggregatorOnly(brief)) {
       errors.push({ section: 'aggregator-only', message: `${x.id} rests only on aggregators (${x.sources.join(', ')}): open the primary or drop the fact` });
+    }
+  }
+  if (opts.speakers) {
+    for (const q of quoteSpeakersNotInSubjects(brief)) {
+      errors.push({ section: 'quotes', message: `${q.id}'s speaker (${q.speaker}) isn't in SUBJECTS: list them in SUBJECTS with their role and give ${q.id} their ID` });
     }
   }
   if (brief.sources.length === 0) errors.push({ section: 'sources', message: 'no sources' });
@@ -238,6 +258,11 @@ export function validateBrief(input: unknown, opts: { aggregators?: boolean } = 
   }
   if (errors.length > 0) throw new BriefValidationError(errors);
   return brief;
+}
+
+/** QUOTES whose speaker isn't a SUBJECTS entry (no speaker_id). An unknown speaker_id is a separate error. */
+export function quoteSpeakersNotInSubjects(brief: Brief): Array<{ id: string; speaker: string }> {
+  return brief.quotes.filter((q) => !q.speaker_id).map((q) => ({ id: q.id, speaker: q.speaker }));
 }
 
 const outletKeyOf = (s: string) => s.replace(/\s*\([^)]*\)\s*/g, ' ').toLowerCase().replace(/[^a-z0-9]+/g, '');

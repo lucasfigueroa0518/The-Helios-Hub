@@ -39,7 +39,7 @@ export function briefSuperIntelligenceForce(): Brief {
     ],
     quotes: [
       { id: 'Q1', text: Q1_TEXT, speaker: 'Donald Trump', speaker_id: 'S1', where: 'Truth Social post', via: TC, single_source: true, cut_off: false, notes: [] },
-      { id: 'Q2', text: 'develop plans for responding to SI-enabled threats to our society, while preventing overregulation and regulatory capture that would stifle innovation and competition.', speaker: 'Super Intelligence Force charter', speaker_id: null, where: 'as reported by The Wall Street Journal', via: TC, single_source: true, cut_off: false, notes: [] },
+      { id: 'Q2', text: 'develop plans for responding to SI-enabled threats to our society, while preventing overregulation and regulatory capture that would stifle innovation and competition.', speaker: 'Super Intelligence Force charter', speaker_id: 'S3', where: 'as reported by The Wall Street Journal', via: TC, single_source: true, cut_off: false, notes: [] },
       { id: 'Q3', text: 'not being first.', speaker: 'Jay Clayton', speaker_id: 'S2', where: 'to The Wall Street Journal', via: TC, single_source: true, cut_off: true, notes: [] },
     ],
     numbers: [
@@ -49,8 +49,10 @@ export function briefSuperIntelligenceForce(): Brief {
       { name: 'Super Intelligence Force', definition: "a new task force Trump announced to coordinate the federal government's effort on super intelligence", source: 'TechCrunch' },
     ],
     subjects: [
-      { id: 'S1', name: 'Donald Trump', role: 'President of the United States' },
-      { id: 'S2', name: 'Jay Clayton', role: 'national intelligence director; chair of the Super Intelligence Force' },
+      { id: 'S1', name: 'Donald Trump', role: 'President of the United States', type: 'person' },
+      { id: 'S2', name: 'Jay Clayton', role: 'national intelligence director; chair of the Super Intelligence Force', type: 'person' },
+      // Everyone quoted is a SUBJECT (Tommy, 2026-10-07): Q2 quotes the task force's charter.
+      { id: 'S3', name: 'Super Intelligence Force', role: 'new federal AI task force; its charter is quoted', type: 'organization' },
     ],
     events: [],
     article_photos: [

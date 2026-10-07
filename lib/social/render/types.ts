@@ -179,6 +179,12 @@ export type SlideCopy = {
   quoteBy?: string;
 
   /**
+   * Quote slide: the speaker's role from SUBJECTS. Shown after the name on a
+   * type-led quote slide (no verified speaker photo; photo spec §4).
+   */
+  quoteRole?: string;
+
+  /**
    * Optional overlay caption baked onto the photo (subject name + role, e.g.
    * "Sam Altman · CEO OpenAI"). Renders bottom-left of the photo in white
    * over a dark scrim so it reads on any image.

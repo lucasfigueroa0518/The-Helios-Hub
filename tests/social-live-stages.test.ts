@@ -84,7 +84,9 @@ test('live stages: two stories run Reporter → Writer → Editor → Fact-check
   const post = r.posts[0]!;
   assert.ok(post.render.slides.length > 0);
   assert.ok(post.photos[0]!.photo, 'the cover has a photo');
-  assert.ok(post.photos.slice(1).every((t) => t.photo || t.via === 'none' || t.via === 'plain'), 'every story slide has its requested photo, none, or (stat) a plain background');
+  // A quote slide whose speaker's main photo is already on the cover renders type-led until the second-photo step (photo spec §3; Links 3 and 5).
+  const isQuote = (i: number) => post.render.slides[i + 1]?.layoutVariant === 'quote';
+  assert.ok(post.photos.slice(1).every((t, i) => t.photo || t.via === 'none' || t.via === 'plain' || (t.via === 'text-only' && isQuote(i))), 'every story slide has its requested photo, none, (stat) a plain background or (quote) a type-led slide');
   const l = logs.get(post.storyId)!;
   assert.equal(l.writer.length, 1);
   assert.equal(l.factCheck.length, 1);

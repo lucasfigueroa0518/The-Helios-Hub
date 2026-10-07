@@ -32,7 +32,7 @@ export type DesignDeps = PhotoDeps & {
   usedLog?: UsedPhotoLog;
   bank?: BankEntry[];
   now?: () => Date;
-  /** Identity results per story, shared with the Writer's photo_available (p18.ts). */
+  /** Identity results per story, shared with the Writer's availability flags. */
   identitiesFor?: (storyId: string) => IdentityCache;
 };
 

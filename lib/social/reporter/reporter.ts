@@ -18,7 +18,7 @@ import { cachedSystemText, withConversationCache, withToolCache } from '@/lib/an
 import { priceAnthropicMessages, type MessageUsageLike } from '@/lib/anthropic-pricing';
 import { STAGE_MODELS, type StageModelConfig } from '@/lib/social/pipeline/models';
 
-import { BriefValidationError, SUBMIT_BRIEF_TOOL, dropAggregatorOnly, validateBrief, type Brief } from './brief';
+import { BriefValidationError, SUBMIT_BRIEF_TOOL, dropAggregatorOnly, quoteSpeakersNotInSubjects, validateBrief, type Brief } from './brief';
 import { REPORTER_SYSTEM, reporterUserMessage, type ReporterStoryInput } from './prompt';
 import { readPage as readPageLive, type PageRead, type PageReadOk } from './read-page';
 
@@ -90,7 +90,7 @@ export function pageToToolText(page: PageRead): string {
 export type TurnUsage = { turn: number; stopReason: string | null; usage: unknown; costUsd: number };
 
 export type ReporterResult =
-  | { ok: true; brief: Brief; raw: string; pages: PageReadOk[]; costUsd: number; turns: number; webSearches: number; pageReads: number; submitRetries: number; retryErrors: string[]; turnUsage: TurnUsage[]; aggregatorDropped: string[] }
+  | { ok: true; brief: Brief; raw: string; pages: PageReadOk[]; costUsd: number; turns: number; webSearches: number; pageReads: number; submitRetries: number; retryErrors: string[]; turnUsage: TurnUsage[]; aggregatorDropped: string[]; speakersNotInSubjects: string[] }
   | { ok: false; reason: 'malformed-output' | 'service-error' | 'refused' | 'cost-cap'; detail: string; raw: string | null; costUsd: number; turns: number; webSearches: number; pageReads: number; submitRetries: number; retryErrors: string[]; turnUsage: TurnUsage[] };
 
 export type ReporterDeps = {
@@ -178,10 +178,13 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
       // The final step: the brief as JSON, then the code check.
       const raw = JSON.stringify(submit.input, null, 2);
       try {
-        // Aggregator-only facts go back while a retry is left; after that, code drops them (logged).
-        const checked = validateBrief(submit.input, { aggregators: submitRetries < MAX_SUBMIT_RETRIES });
+        // Aggregator-only facts and quote speakers missing from SUBJECTS go back while a retry is left;
+        // after that, code drops the aggregator-only facts and keeps the quotes (both logged).
+        const retryLeft = submitRetries < MAX_SUBMIT_RETRIES;
+        const checked = validateBrief(submit.input, { aggregators: retryLeft, speakers: retryLeft });
         const { brief, dropped } = dropAggregatorOnly(checked);
-        return { ok: true, brief, raw, pages, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries, retryErrors, turnUsage, aggregatorDropped: dropped };
+        const speakersNotInSubjects = quoteSpeakersNotInSubjects(brief).map((q) => `${q.id} (${q.speaker}): speaker not in SUBJECTS after the retry; kept, no speaker photo`);
+        return { ok: true, brief, raw, pages, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries, retryErrors, turnUsage, aggregatorDropped: dropped, speakersNotInSubjects };
       } catch (err) {
         const detail = err instanceof BriefValidationError ? err.message : `brief check failed: ${String(err)}`;
         // A failed check is a glitch (spec §7.1): one retry with the errors, then set aside.

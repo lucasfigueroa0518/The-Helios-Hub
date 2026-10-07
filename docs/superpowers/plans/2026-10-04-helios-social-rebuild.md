@@ -224,6 +224,8 @@ Only the four sources needed to put a real photo on every slide:
 
 ### M8: Full photo chain and design (spec §5.1–5.4)
 
+> **Photos (2026-10-07):** the only photo authority is `specs/2026-10-07-photo-spec.md`, and the build order is `plans/2026-10-07-photo-links.md`. Everything about photos below ("Photo chain v1", designed graphics, the cover card, the bank) is superseded and kept for the record.
+
 **Scope as decided (Tommy, 2026-10-06). This replaces the photo-chain list below:**
 
 - **M8a, layout system:** the three rules from the freeze (text fit, contrast, faces clear), quote and landing layouts that show every draft field, measured cover fit, and spread slides. People stay in split layouts only for now; full-bleed person photos get revisited once M8b gives face boxes.
@@ -324,7 +326,8 @@ Only the four sources needed to put a real photo on every slide:
 ### M10: Instagram publishing and daily schedule
 
 - **Publish** posts the carousel (JPEG URLs + caption) through the existing Meta/Instagram setup, with a single confirm (PROPOSED).
-- **Daily schedule** on the GCP worker: ingest → 2 winners → pipeline → review queue. Redeploy the worker.
+- **Daily schedule** on Social's own worker: ingest → 2 winners → pipeline → review queue.
+- **Worker (Tommy, 2026-10-07):** Social gets its own new cloud worker, which Lucas is setting up. **Never deploy Social to `helios-orch-worker`.**
 - **Accept:** a dry-run publish against a test or private target, or a stubbed client.
 
 ### M11: First live batch (spec §5D), with Tommy's explicit go-ahead

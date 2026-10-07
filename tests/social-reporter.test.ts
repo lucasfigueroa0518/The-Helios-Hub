@@ -443,3 +443,50 @@ test('Reporter: aggregator-only goes back once ("open the primary or drop the fa
   assert.ok(r.aggregatorDropped.includes('F4 (aggregator-only)'));
   assert.ok(r.aggregatorDropped.some((d) => /WHY IT MATTERS .*cites F4/.test(d)), 'the WHY IT MATTERS item citing it goes too');
 });
+
+// ── Every speaker is a SUBJECT (Tommy, 2026-10-07; photo spec §4) ─────────────
+
+import { quoteSpeakersNotInSubjects } from '@/lib/social/reporter/brief';
+
+test('every speaker is a SUBJECT: the Reporter prompt says so, and the QUOTES line no longer allows "none"', () => {
+  assert.ok(REPORTER_SYSTEM.includes('- Everyone you quote is listed in SUBJECTS, with their role, and the quote names their SUBJECTS ID.'));
+  assert.ok(!REPORTER_SYSTEM.includes('SUBJECTS ID (S1…), or none'));
+});
+
+test('every speaker is a SUBJECT: a quote with no speaker_id is found and fails the check while a retry is left', () => {
+  const b = briefSuperIntelligenceForce();
+  assert.deepEqual(quoteSpeakersNotInSubjects(b), [], 'the fixture lists every speaker');
+  b.quotes[1]!.speaker_id = null;
+  assert.deepEqual(quoteSpeakersNotInSubjects(b), [{ id: 'Q2', speaker: 'Super Intelligence Force charter' }]);
+  assert.throws(() => validateBrief(b, { speakers: true }), /Q2's speaker \(Super Intelligence Force charter\) isn't in SUBJECTS: list them in SUBJECTS with their role and give Q2 their ID/);
+  assert.doesNotThrow(() => validateBrief(b), 'without the flag (after the retry) the brief passes');
+});
+
+test('every speaker is a SUBJECT: the check changes nothing in a brief that passes', () => {
+  const b = briefSuperIntelligenceForce();
+  const before = structuredClone(b);
+  assert.deepEqual(validateBrief(b, { aggregators: true, speakers: true }), before);
+});
+
+test('Reporter: a missing speaker goes back once with the fix; a fixed brief passes with nothing logged', async () => {
+  const bad = briefSuperIntelligenceForce();
+  bad.quotes[1]!.speaker_id = null;
+  bad.subjects = bad.subjects.filter((s) => s.id !== 'S3');
+  const { create, requests } = scripted([msg('tool_use', [submit(bad)]), msg('tool_use', [submit()])]);
+  const r = await runReporter(STORY, { create });
+  assert.ok(r.ok);
+  assert.match((requests[1] as any).messages.at(-1).content[0].content, /Q2's speaker \(Super Intelligence Force charter\) isn't in SUBJECTS/);
+  assert.deepEqual(r.speakersNotInSubjects, []);
+  assert.deepEqual(r.brief, briefSuperIntelligenceForce(), 'the fixed brief is used as submitted');
+});
+
+test('Reporter: a speaker still missing after the retry is kept and logged, never sent back twice', async () => {
+  const bad = briefSuperIntelligenceForce();
+  bad.quotes[1]!.speaker_id = null;
+  const { create, requests } = scripted([msg('tool_use', [submit(bad)]), msg('tool_use', [submit(structuredClone(bad))])]);
+  const r = await runReporter(STORY, { create });
+  assert.ok(r.ok, 'the story continues');
+  assert.equal(requests.length, 2);
+  assert.deepEqual(r.speakersNotInSubjects, ['Q2 (Super Intelligence Force charter): speaker not in SUBJECTS after the retry; kept, no speaker photo']);
+  assert.deepEqual(r.brief, bad, 'nothing else in the brief changes');
+});

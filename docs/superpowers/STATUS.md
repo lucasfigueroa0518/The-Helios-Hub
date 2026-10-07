@@ -1,30 +1,20 @@
 # Helios Social rebuild: STATUS
 
-**Updated:** 2026-10-07, after the logo-card exemption from the 7-day rule.
+**Updated:** 2026-10-07, after Step A, photo Link 1 and their live check (runs/link1-live-check-2026-10-07T18-52-08-820Z, $0.97 of a $2.00 cap). Committed.
 Claude keeps this page current after every step.
 
 - **Authorities:** the spec (`specs/2026-10-01-helios-social-rebuild.md`), the plan (`plans/2026-10-04-helios-social-rebuild.md`, M8 link map and exit criteria) and the prompts file (`specs/2026-10-04-helios-social-prompts.md`).
-- **The photo system:** spec §5.1 **Photo chain v1** is its only description. The table below is a copy of it.
-- **Tests:** 199 social tests pass, offline. The full suite is 1165/1166; the one failure is the known reels-visual venv test, which is outside Social.
+- **The photo system:** `specs/2026-10-07-photo-spec.md` is the **only photo authority** (DRAFT until Tommy approves it line by line). Every other description of photos is superseded: "Photo chain v1" in spec §5.1, §5.1a and §5.3a, plan M8, the handoff and code headers.
+- **Tests:** 226 social tests pass, offline. The full suite is 1193/1194; the one failure is the known reels-visual test, which is outside Social. The frozen stock link still replays unchanged.
 - **Sign-off:** Tommy alone signs off on everything (Lucas is out of the workflow, 2026-10-07).
 
-## Photo chain v1 (spec §5.1)
+## Photo code today (not the target)
 
-| Slide | Chain |
-|---|---|
-| **Cover** | article photo (credit check) → the subject person's P18 (identity check) → logo card (identity-verified organization, Commons licence check) → stock → starter set (AI-compute photos). The branded cover card replaces the starter set once Tommy approves it. |
-| **Story slides** (text, landing, image) | article photo or the subject's P18 or stock, as the Writer's request says → text-only |
-| **Quote slides** | the verified speaker's P18 → text-only (a stock request is a darkened background) |
-| **Stat slides** | a Helios-designed background from the bank, by the 7-day rule, even when IMAGE is `none`. Plain dark until Tommy approves the set. |
+The code still runs "Photo chain v1" (commits `d114151` → `f991cd6`) until the links are rebuilt against the photo spec.
+- How the code differs from the spec: `photo-map-2026-10-07.md`.
+- The build plan: `plans/2026-10-07-photo-links.md`.
 
-**The pieces:**
-- **Stock:** Openverse → Jev pre-screen v4 (fit, people) → the vision check on the top 3. A candidate passes only if it shows the thing, with no main-subject person or face, no landmark, no outside logo and no named institution.
-- **No repeats:** never twice in a post, within 7 days, or earlier in the same run, for every source. **Exception:** a logo card may repeat across posts, but never twice in one post.
-- **Company covers:** a usable article photo (when it's the cover's request) still comes before the logo card.
-- **The Writer and the finder agree:** `photo_available` is exactly "P18 usable", from one shared check (`lib/social/photos/p18.ts`).
-- **Fully automatic.** Only sources with no rights questions. When nothing is found, the slide is a designed slide.
-
-**Off, dropped or not planned:** official company images (off); more Commons/Openverse photos per subject (dropped); charts and post screenshots (not planned); per-company approvals and hand-picked photo banks (none).
+**Correction (2026-10-07):** commit `32b3234` says official-image rows for Google and Microsoft were approved "per Tommy". That claim is wrong: Tommy never approved those rows.
 
 ## Link map (M8)
 
@@ -32,43 +22,35 @@ Claude keeps this page current after every step.
 |---|---|
 | Reporter → Editor → Fact-checker | **Accepted, frozen** |
 | Renderer mechanics (text fit, bounds, contrast, faces clear, framing, rotation) | **Accepted, frozen** |
-| **(A) Writer IMAGE requests** | Built; offline tests only. Matches Photo chain v1, including: stat slides take IMAGE `none`, article and stock requests only on text, landing and image slides, quote slides take the speaker or none, and a failing request on the final attempt becomes `none`. |
-| **(B) Photo finder: stock** | **Accepted, frozen** (2026-10-07). Replays offline with no live calls: 22/22 stock requests pick exactly what was accepted (`scripts/social_photo_bench.ts --replay`, and a test). |
-| **(B) Photo finder: covers** | Built to Photo chain v1: logo cards for any verified organization. The PREVIEW re-render shows the Anthropic logo card. |
-| **(C) Renderer visuals** | Waiting for Tommy's review: text-only slides, the logo card, and the designed graphics. |
+| Step A: every speaker is a SUBJECT; each SUBJECT marked person or organization (Reporter prompt + code check) | **Built; live check passed** (2 stories re-run: every speaker in SUBJECTS, every SUBJECT typed, no retries; $0.40). |
+| Photo Link 1: the Writer's IMAGE request (subject tags and the naming rule, headshot/logo/company-photo flags, ARTICLE PHOTOS by the caption rules, official images from news/blog paths, quote slides by speaker, type-led quote slide, tags re-checked after the Editor) | **Built; live check run** (4 saved briefs: 4 drafts pass, 2 after one retry; $0.57). Waiting for Tommy's acceptance. |
+| Photo links 2–6 (identity → search → screening → placement → render review) | **Planned** (`plans/2026-10-07-photo-links.md`). Not started. Until Link 5, the finder still runs "Photo chain v1". |
+| Stock search + screening (part of Links 3–4) | **Accepted, frozen** (2026-10-07). Replays offline with no live calls: 22/22 stock requests pick exactly what was accepted (`scripts/social_photo_bench.ts --replay`, and a test). |
 | Hook pass (separate track) | Built; tested on saved drafts and one PREVIEW run. Runs only with `--hook`. Waiting for Tommy's review. |
 
-**No end-to-end runs until A, B and C each pass**, then the M8 acceptance batch (2 fresh runs, 4 posts).
+**No end-to-end runs until the photo links pass**, then the M8 acceptance batch (2 fresh runs, 4 posts).
 
 ## Decisions since the checkpoint (2026-10-06 → 07)
+
 - **Testing:**
   - Design is tested one link at a time on fixed inputs: the photo-finder bench, with frozen Openverse results.
   - Its pass bar: 0 misleading photos, every miss explained, hit rate tracked.
-- **Photo finder:**
-  - Face crops fill the frame, never bands.
-  - The stock pre-screen is v4 (fit and people).
-  - The vision check: Haiku, its own model setting.
-  - Starter photos are for covers only, AI-compute only.
-  - No repeats within a run.
 - **Writer:**
-  - the handoff rules in (A);
-  - C8 counts only NUMBERS values;
-  - aggregator-only facts are removed and logged;
+  - C8 counts only NUMBERS values.
+  - Aggregator-only facts are removed and logged.
   - `fillDraft` no longer gives an unattributed quote to the first subject.
-- **Photo fix (Tommy, 2026-10-07; `photo-fix-2026-10-07.md`):**
-  - Photo chain v1 is written in the spec as the only chain.
-  - Official images are off, (c) is dropped, and the allow-list and logo permission gate are removed.
-  - Logos are allowed for any verified organization whose Commons file passes the licence check.
-  - The bank holds Helios-designed graphics only.
-  - Lucas is out; Tommy alone signs off.
-- **Hook pass:** the prompt edits; the Fact-checker checks hook lines first for types 1 and 4–5; it runs only via `--hook`.
+- **Photos:** everything is in the photo spec. The photo fix note (`photo-fix-2026-10-07.md`) and "Photo chain v1" are superseded.
+- **Hook pass:**
+  - The prompt edits.
+  - The Fact-checker checks hook lines first for types 1 and 4–5.
+  - It runs only via `--hook`.
 - **PREVIEW runs:** labelled in `run.json`; they don't write the used-photo log.
 
 ## Open items (Tommy)
-- **Approve the Helios-designed graphics once.** The samples are in `runs/designed-graphics-2026-10-07/`: 15 stat backgrounds and 3 stat slides, plus 3 branded cover cards. Until then, stat slides are plain dark and covers end at the starter set.
-- **Review renderer visuals (link C):**
-  - the PREVIEW re-render under Photo chain v1: `runs/daily-2026-10-07T03-45-32-722Z/rerender-chain-v1-2026-10-07T14-48-38-225Z/`;
-  - text-only slides;
-  - the logo card.
-- **Review the Hook pass** content and look (same PREVIEW run).
-- **The M8 acceptance batch**, after A, B and C pass.
+
+- **Approve the photo spec** line by line, including its OPEN item: the cover icon look and the icon set (§5).
+- **Accept Link 1** (live check report, 2026-10-07).
+- **SUBJECT names with qualifiers** ("Google (Google Workspace / Gemini)", "Gemini (app)", "Google AI Plus / AI Pro / AI Ultra"): their tags can never match the naming rule. Seen in 3+ briefs: a Reporter-side fix candidate for Tommy.
+- **The icon set and the cover icon look** (photo spec §5, OPEN): needed before Link 5 and the end-to-end run.
+- **Review the Hook pass** content and look (PREVIEW run `runs/daily-2026-10-07T03-45-32-722Z`).
+- **The M8 acceptance batch**, after the photo links pass.

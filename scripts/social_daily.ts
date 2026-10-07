@@ -201,6 +201,10 @@ async function main() {
     imageRequestsDropped: [...logs.entries()].flatMap(([storyId, l]) => l.writer.flatMap((w) => (w.imageRequestsDropped ?? []).map((d) => `${storyId}: ${d}`))),
     // Aggregator-only facts the code removed before the Writer (Tommy, 2026-10-06).
     aggregatorDropped: [...logs.entries()].flatMap(([storyId, l]) => (l.reporter?.ok ? l.reporter.aggregatorDropped.map((d) => `${storyId}: ${d}`) : [])),
+    // Subject tags the edited words no longer name, removed right after the Editor (Tommy, 2026-10-07).
+    tagsDroppedAfterEditor: [...logs.entries()].flatMap(([storyId, l]) => l.editor.flatMap((e) => (e.ok ? e.tagsDropped.map((d) => `${storyId}: ${d}`) : []))),
+    // Quote speakers still missing from SUBJECTS after the Reporter's retry (Tommy, 2026-10-07).
+    speakersNotInSubjects: [...logs.entries()].flatMap(([storyId, l]) => (l.reporter?.ok ? (l.reporter.speakersNotInSubjects ?? []).map((d) => `${storyId}: ${d}`) : [])),
     alreadyPostedTop: alreadyPosted.slice(0, 5),
     capUsd,
   }, null, 2));

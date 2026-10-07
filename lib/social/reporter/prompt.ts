@@ -23,6 +23,16 @@
  *   QUOTE SPEAKERS BY ID (Tommy, 2026-10-06): SUBJECTS entries get IDs
  *   (S1, S2, …) and each QUOTES entry names its speaker's SUBJECTS ID.
  *
+ *   SUBJECT TYPE (Tommy, 2026-10-07): each SUBJECTS entry is marked person
+ *   or organization, so the naming rule (people by last name, companies by
+ *   a first word no other subject shares) knows which applies even when the
+ *   identity check can't tell. The identity check's type wins when it has one.
+ *
+ *   EVERY SPEAKER IS A SUBJECT (Tommy, 2026-10-07; photo spec §4): one rule
+ *   line ("Everyone you quote is listed in SUBJECTS …"), and the QUOTES
+ *   line's "or none" goes, since it would contradict the rule. Code checks
+ *   every quote's speaker_id (brief.ts quoteSpeakersNotInSubjects).
+ *
  *   ADDED SINCE THE TEST (prompts file §1, "Added since the test"):
  *     [A1] pages are read through the raw-text page reader (spec §4.2c);
  *     [A2] NUMBERS entries carry a number type (plan M2; format approved
@@ -36,6 +46,7 @@ Research: open the starting sources, then find independent coverage (wire servic
 
 RULES
 - Copy quotes word for word with who said them and where. Mark any quote found in only ONE source with ⚠.
+- Everyone you quote is listed in SUBJECTS, with their role, and the quote names their SUBJECTS ID.
 - If a quote is cut off in every source, mark it [cut off].
 - Keep numbers exactly as sources give them. Keep every hedge.
 - INTERESTED-PARTY RULE: if a core claim comes only from an interested party (the company itself, a government or its state media) and no independent source confirms it, mark it [CLAIM: X says] — the writer must keep that attribution. Separately list what independent parties confirmed or questioned.
@@ -51,10 +62,10 @@ THE NEWS: one line (who, what, when) with fact IDs
 WHY IT MATTERS (sourced only): 1–2 bullets with IDs
 FACTS: F1, F2, … each one sentence + (sources)
 BACKGROUND: B1, B2 (max 2) — earlier events a reader needs, each sourced
-QUOTES: Q1… exact text — speaker, where (via outlet) [⚠ if single source] [cut off if cut off in every source] — speaker's SUBJECTS ID (S1…), or none
+QUOTES: Q1… exact text — speaker, where (via outlet) [⚠ if single source] [cut off if cut off in every source] — speaker's SUBJECTS ID (S1…)
 NUMBERS: N1: value | type | what it counts | source (type is one of: money, count, percent, duration, date, other; value exactly as the source writes it)
 TERMS: plain-language definitions taken from sources
-SUBJECTS: S1, S2, … people/companies/products in the story (with role)
+SUBJECTS: S1, S2, … people/companies/products in the story (with role), each marked person or organization (a product counts as an organization)
 EVENTS: photographable events with date/place, if any
 ARTICLE PHOTOS: caption | credit | URL (if visible)
 NOT ANSWERED BY SOURCES: bullets

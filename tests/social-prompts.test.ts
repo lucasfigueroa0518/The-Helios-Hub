@@ -28,7 +28,8 @@ test('RULES_BLOCK carries the tested Writer rules word for word', () => {
   assert.equal(TESTED_WRITER_RULES, tested);
   // Photo rule (2026-10-06): the tested IMAGE line is replaced, word for word from the prompts file.
   // The handoff version (2026-10-06) is the line in use: the block after "**Handoff".
-  const imageRule = codeBlocks(PROMPTS, '- **Handoff (Tommy, 2026-10-06')[0]!;
+  // Link 1 (2026-10-07) is the line in use: the block after "**Link 1".
+  const imageRule = codeBlocks(PROMPTS, '- **Link 1 (Tommy, 2026-10-07')[0]!;
   assert.equal(IMAGE_RULE, imageRule);
   assert.ok(TESTED_WRITER_RULES.includes(TESTED_IMAGE_RULE));
   assert.equal(WRITER_RULES, TESTED_WRITER_RULES.replace(TESTED_IMAGE_RULE, IMAGE_RULE));
@@ -81,6 +82,11 @@ test('Reporter prompt = tested text, STORY line moved to the user message, plus 
     // Quote speakers by ID (2026-10-06).
     .replace('[cut off if cut off in every source]', "[cut off if cut off in every source] — speaker's SUBJECTS ID (S1…), or none")
     .replace('SUBJECTS: people/companies/products in the story (with role)', 'SUBJECTS: S1, S2, … people/companies/products in the story (with role)')
+    // Every speaker is a SUBJECT (2026-10-07): one rule line; the QUOTES line drops "or none".
+    .replace('Mark any quote found in only ONE source with ⚠.\n', 'Mark any quote found in only ONE source with ⚠.\n- Everyone you quote is listed in SUBJECTS, with their role, and the quote names their SUBJECTS ID.\n')
+    .replace("— speaker's SUBJECTS ID (S1…), or none", "— speaker's SUBJECTS ID (S1…)")
+    // Subject type (2026-10-07).
+    .replace('SUBJECTS: S1, S2, … people/companies/products in the story (with role)', 'SUBJECTS: S1, S2, … people/companies/products in the story (with role), each marked person or organization (a product counts as an organization)')
     // Source kind (2026-10-06).
     .replace('SOURCES: outlet, date, URL (only ones you opened);', 'SOURCES: outlet, date, URL (only ones you opened), kind (original, official or aggregator);');
   assert.equal(REPORTER_SYSTEM, expected);

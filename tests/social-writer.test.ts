@@ -31,19 +31,19 @@ const stock = (value: string) => ({ kind: 'stock' as const, value });
 function draft(): DraftSubmission {
   return {
     cover_options: [
-      { text: 'Trump launches a Super Intelligence Force, led by his spy chief', facts: ['F1', 'F2'], image: { kind: 'subject', value: 'Donald Trump' } },
-      { text: "Trump's new AI task force has 120 days", facts: ['F4'], image: stock('wall clock') },
-      { text: 'The White House names its AI czar', facts: ['F3'], image: stock('White House') },
+      { text: 'Trump launches a Super Intelligence Force, led by his spy chief', facts: ['F1', 'F2'], image: { kind: 'subject', value: 'Donald Trump' }, subject_ids: ['S1', 'S3'] },
+      { text: "Trump's new AI task force has 120 days", facts: ['F4'], image: stock('wall clock'), subject_ids: ['S1'] },
+      { text: 'The White House names its AI czar', facts: ['F3'], image: stock('White House'), subject_ids: [] },
     ],
     chosen_cover: 1,
     slides: [
-      { type: 'text', headline: { text: 'Announced on Truth Social', facts: ['F1'] }, body: { text: 'Trump announced the force in a Sunday morning post.', facts: ['F1'] }, quote_id: null, quote_excerpt: null, number_ids: [], image: { kind: 'subject', value: 'Jay Clayton' }, spread_with_next: false },
-      { type: 'quote', headline: { text: 'His pitch', facts: ['Q1'] }, body: null, quote_id: 'Q1', quote_excerpt: 'The Super Intelligence Force is tasked with coordinating the effort of the Federal Government … of all Americans,', number_ids: [], image: { kind: 'none', value: '' }, spread_with_next: false },
-      { type: 'stat', headline: { text: 'It has a deadline', facts: ['N1'] }, body: null, quote_id: null, quote_excerpt: null, number_ids: ['N1'], image: { kind: 'none', value: '' }, spread_with_next: false },
+      { type: 'text', headline: { text: 'Announced on Truth Social', facts: ['F1'] }, body: { text: 'Trump announced the force in a Sunday morning post.', facts: ['F1'] }, quote_id: null, quote_excerpt: null, number_ids: [], image: { kind: 'none', value: '' }, subject_ids: ['S1'], spread_with_next: false },
+      { type: 'quote', headline: { text: 'His pitch', facts: ['Q1'] }, body: null, quote_id: 'Q1', quote_excerpt: 'The Super Intelligence Force is tasked with coordinating the effort of the Federal Government … of all Americans,', number_ids: [], image: { kind: 'subject', value: 'Donald Trump' }, subject_ids: ['S1'], spread_with_next: false },
+      { type: 'stat', headline: { text: 'It has a deadline', facts: ['N1'] }, body: null, quote_id: null, quote_excerpt: null, number_ids: ['N1'], image: { kind: 'none', value: '' }, subject_ids: [], spread_with_next: false },
     ],
     follow: 'Follow Helios for AI news without the hype.',
     caption: { text: 'Trump announced a Super Intelligence Force. Source: TechCrunch, October 4, 2026.', facts: ['F1'] },
-    edit_notes: ['Led with the spy chief role, not the name.', 'Slide 3: IMAGE none, a quote has nothing physical to show.', 'Slide 4: IMAGE none, a deadline has nothing physical to show.'],
+    edit_notes: ['Led with the spy chief role, not the name.', 'Slide 2: IMAGE none, a social-media post has nothing physical to show.'],
   };
 }
 
@@ -92,7 +92,7 @@ test('Writer prompt = tested intro + RULES (tested lines + 3 additions + shared 
 test('the brief goes in the user message as JSON, with SUBJECTS marked well_known by code', async () => {
   const brief = briefSuperIntelligenceForce();
   const forWriter = await briefForWriter(brief, async (s) => s.name === 'Donald Trump');
-  assert.deepEqual(forWriter.subjects.map((s) => [s.name, s.well_known]), [['Donald Trump', true], ['Jay Clayton', false]]);
+  assert.deepEqual(forWriter.subjects.map((s) => [s.name, s.well_known]), [['Donald Trump', true], ['Jay Clayton', false], ['Super Intelligence Force', false]]);
   const msg = writerUserMessage(forWriter);
   assert.ok(msg.startsWith('BRIEF\n{'));
   assert.deepEqual(JSON.parse(msg.slice('BRIEF\n'.length)).subjects[1].well_known, false);
@@ -111,6 +111,7 @@ test('a valid draft passes; code fills the exact quote excerpt and number value 
     id: 'Q1',
     speaker: 'Donald Trump',
     speaker_subject: 'Donald Trump',
+    speaker_role: 'President of the United States',
     text: 'The Super Intelligence Force is tasked with coordinating the effort of the Federal Government … of all Americans,',
   });
   assert.deepEqual(filled.slides[2]!.numbers, [{ id: 'N1', value: '120 days', counts: 'time the task force has to report on the risks and opportunities presented by AI' }]);
@@ -244,31 +245,6 @@ test('runDay: the Writer stage drafts each brief; its cost lands under writer', 
 import { dropFailingImageRequests, imageHandoffFailures } from '@/lib/social/writer/writer';
 import { sifDraftHandoff } from '@/fixtures/social/drafts';
 
-test('handoff: SUBJECTS marked photo_available; ARTICLE PHOTOS whose credit fails are dropped before the Writer', async () => {
-  const brief = briefSuperIntelligenceForce();
-  brief.article_photos.push({ caption: 'Signing. (Official White House Photo by Daniel Torok)', credit: null, url: 'https://example.com/wh.jpg', page: 'https://example.com/a' });
-  const forWriter = await briefForWriter(brief, async () => true, async (s) => s.name === 'Donald Trump');
-  assert.deepEqual(forWriter.subjects.map((s) => [s.name, s.photo_available]), [['Donald Trump', true], ['Jay Clayton', false]]);
-  assert.deepEqual(forWriter.article_photos.map((p) => p.url), ['https://example.com/wh.jpg'], 'the Getty photo is dropped');
-});
-
-test('handoff: subject only when photo_available, at most once; a stock scene names something the slide mentions', () => {
-  const brief = briefSuperIntelligenceForce();
-  const d = draft();
-  d.slides[0]!.image = { kind: 'subject', value: 'Donald Trump' }; // the cover already requests Trump
-  d.slides[2]!.image = { kind: 'stock', value: 'wall clock' }; // the stat slide says "deadline", not a clock
-  const errs = imageHandoffFailures(d, brief, new Set(['Donald Trump'])).map((e) => `${e.section}: ${e.message}`);
-  assert.ok(errs.some((e) => /Donald Trump is already requested on cover/.test(e)), errs.join(' | '));
-  assert.ok(errs.some((e) => /stock "wall clock" doesn't name a physical thing/.test(e)));
-  const clayton = draft();
-  clayton.slides[0]!.image = { kind: 'subject', value: 'Jay Clayton' };
-  assert.ok(imageHandoffFailures(clayton, brief, new Set(['Donald Trump'])).some((e) => /Jay Clayton has no usable photo/.test(e.message)));
-  const ok = draft();
-  ok.slides[0]!.image = { kind: 'stock', value: 'Truth Social app' };
-  ok.slides[0]!.body!.text = 'Trump announced the force in a post on the Truth Social app.';
-  assert.deepEqual(imageHandoffFailures(ok, brief, null).filter((e) => e.section.startsWith('slide 2')), []);
-});
-
 test('handoff: one EDIT NOTES line per none (the slide after a spread excepted)', () => {
   const d = sifDraftHandoff();
   assert.deepEqual(imageHandoffFailures(d, briefSuperIntelligenceForce(), null), []);
@@ -278,28 +254,6 @@ test('handoff: one EDIT NOTES line per none (the slide after a spread excepted)'
 
 // ── Link A (Tommy, 2026-10-06): words stay, every check on every attempt, quote slides ──
 
-import { IMAGE_RULE } from '@/lib/social/prompts/rules-block';
-
-test('link A: the IMAGE rule says quote slides take the speaker or none, and words never change to fit a photo', () => {
-  assert.match(IMAGE_RULE, /On a quote slide, IMAGE is the speaker \(subject: <the quote's speaker>\) or none\./);
-  assert.match(IMAGE_RULE, /Never change a slide's words to fit a photo; change the request\./);
-});
-
-test('link A: a quote slide asks for its speaker (by speaker_id) or none; anyone else fails', () => {
-  const d = sifDraftHandoff();
-  const errs = (img: DraftSubmission['slides'][number]['image']) => {
-    const x = structuredClone(d);
-    x.slides[2]!.image = img;
-    x.edit_notes = x.edit_notes.filter((n) => !n.startsWith('Slide 4'));
-    if (img.kind === 'none') x.edit_notes.push('Slide 4: IMAGE none, the speaker has no usable photo.');
-    // Quote-slide errors only (the cover already asks for Trump, which is a separate once-per-post rule).
-    return imageHandoffFailures(x, briefSuperIntelligenceForce(), null).map((e) => e.message).filter((m) => m.includes('quote slide')).join();
-  };
-  assert.equal(errs({ kind: 'subject', value: 'Donald Trump' }), '', 'Q1 is Trump\'s (speaker_id S1)');
-  assert.equal(errs({ kind: 'none', value: '' }), '');
-  assert.match(errs({ kind: 'subject', value: 'Jay Clayton' }), /a quote slide's IMAGE is the speaker \(subject: Donald Trump\) or none, not subject: Jay Clayton/);
-  assert.match(errs({ kind: 'stock', value: 'federal government' }), /a quote slide's IMAGE is the speaker/);
-});
 
 test('a failing IMAGE request no longer kills a story: on the final attempt it becomes none (words unchanged), logged as image-request-dropped; the cover keeps its fallback', async () => {
   const bad = sifDraftHandoff();
@@ -318,6 +272,7 @@ test('a failing IMAGE request no longer kills a story: on the final attempt it b
 
 test('dropping a spread\'s first photo also ends the spread', () => {
   const d = sifDraftHandoff();
+  d.slides[0]!.image = { kind: 'stock', value: 'phone screen' };
   d.slides[0]!.spread_with_next = true;
   const { draft } = dropFailingImageRequests(d, [{ section: 'slide 2.image', message: 'x' }]);
   assert.equal(draft.slides[0]!.image.kind, 'none');
@@ -348,17 +303,3 @@ test('fillDraft: a quote with no speaker_id has no speaker_subject (never the fi
   assert.equal(filled.slides[2]!.quote!.speaker_subject, null);
 });
 
-test('link A: article and stock only on text, landing and image slides; a stat slide\'s IMAGE is none (its background is automatic); quote slides take the speaker', () => {
-  const brief = briefSuperIntelligenceForce();
-  const url = brief.article_photos[0]!.url!;
-  const errs = (i: number, image: DraftSubmission['slides'][number]['image']) => {
-    const d = sifDraftHandoff();
-    d.slides[i]!.image = image;
-    return imageHandoffFailures(d, brief, null).map((e) => `${e.section}: ${e.message}`).filter((m) => m.startsWith(`slide ${i + 2}.image`)).join();
-  };
-  assert.equal(errs(0, { kind: 'article', value: url }), '', 'text slide');
-  assert.match(errs(3, { kind: 'article', value: url }), /a stat slide's background is automatic: its IMAGE is none, not article/);
-  assert.match(errs(2, { kind: 'article', value: url }), /a quote slide's IMAGE is the speaker/);
-  assert.match(errs(3, { kind: 'stock', value: 'deadline' }), /a stat slide's background is automatic: its IMAGE is none, not stock: deadline/);
-  assert.equal(errs(3, { kind: 'none', value: '' }), '', 'stat none needs no EDIT NOTES line');
-});

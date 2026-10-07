@@ -352,8 +352,13 @@
   font-size: 84px;
   max-height: 434px;
 }
-/* Logo cover card (spec §5.1): a Helios card. Plain canvas + wordmark (the design system allows no patterns); the logo whole, on its own plate. */
-.helios-cover--logo { background: var(--brand-canvas); }
+/* Logo cover card (photo spec §2, §4): a Helios card. Canvas + faint grid + wordmark; the logo whole, on its own plate. */
+.helios-cover--logo {
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px) 0 0 / 54px 54px,
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px) 0 0 / 54px 54px,
+    var(--brand-canvas);
+}
 .helios-logo-card { position: absolute; top: 0; left: 0; width: 1080px; height: 780px; z-index: 0; }
 .helios-logo-card__wordmark {
   position: absolute; top: 112px; left: 96px;

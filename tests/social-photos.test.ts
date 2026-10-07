@@ -85,9 +85,9 @@ function pages(): PageReadOk[] {
   }];
 }
 
-function briefWith(extraSubjects: Array<Omit<Brief['subjects'][number], 'id'>> = []): Brief {
+function briefWith(extraSubjects: Array<Omit<Brief['subjects'][number], 'id' | 'type'> & { type?: Brief['subjects'][number]['type'] }> = []): Brief {
   const b = briefSuperIntelligenceForce();
-  b.subjects.push(...extraSubjects.map((x, i) => ({ id: `S${b.subjects.length + i + 1}`, ...x })));
+  b.subjects.push(...extraSubjects.map((x, i) => ({ id: `S${b.subjects.length + i + 1}`, type: 'person' as const, ...x })));
   return b;
 }
 
@@ -777,23 +777,23 @@ test('a cover whose request the Writer check dropped (none) keeps the AI-compute
 
 // ── Photo chain v1 (spec §5.1, 2026-10-07): the Writer and the finder agree; the stock link is frozen ──
 
-import { createHasPhoto } from '@/lib/social/photos/p18';
+import { createSubjectAvailability } from '@/lib/social/photos/availability';
 import { replayDeps, stockOutcome, type AcceptedStock } from '@/lib/social/photos/bench-replay';
 import { readFileSync } from 'node:fs';
 
-test("photo_available agrees with the finder: a subject is photo-available exactly when the finder's subject step finds its P18", async () => {
+test("headshot_available agrees with the finder: a person has a headshot exactly when the finder's subject step finds their P18", async () => {
   const b = briefWith([{ name: 'Nobody Pictured', role: 'American lawyer, former chairman of the SEC' }, { name: 'Sam Smith', role: 'AI researcher' }]);
   const web = { ...SIF_WEB, search: { ...SIF_WEB.search, 'Nobody Pictured': ['Q900010'] }, entities: { ...SIF_WEB.entities, Q900010: { id: 'Q900010', label: 'Nobody Pictured', description: 'American lawyer, former chairman of the SEC', human: true, organization: false, files: [] } } };
   const answers = { ...SIF_ANSWERS, 'Nobody Pictured': { person: 0.97, match: () => 0.95 } };
   const jevCalls: string[] = [];
   const shared = new Map();
-  const hasPhoto = createHasPhoto({ jev: identityJev(answers, jevCalls), http: createFakeHttp(web).http }, () => shared);
+  const availability = createSubjectAvailability({ jev: identityJev(answers, jevCalls), http: createFakeHttp(web).http }, () => shared);
   const outcomes: Array<[string, boolean, boolean]> = [];
   for (const name of ['Donald Trump', 'Jay Clayton', 'Nobody Pictured', 'Sam Smith']) {
-    const available = await hasPhoto({ name }, b);
+    const available = (await availability({ name, role: null }, b)).headshot;
     const t = await findPhoto({ kind: 'subject', value: name }, newPhotoContext(b, [], { identities: shared }), { jev: identityJev(answers, jevCalls), http: createFakeHttp(web).http }, { text: [], speaker: null, slot: 'split' });
     outcomes.push([name, available, t.via === 'subject']);
-    assert.equal(available, t.via === 'subject', `${name}: photo_available ${available}, finder ${t.via}`);
+    assert.equal(available, t.via === 'subject', `${name}: headshot_available ${available}, finder ${t.via}`);
   }
   assert.deepEqual(outcomes.map(([n, a]) => [n, a]), [['Donald Trump', true], ['Jay Clayton', true], ['Nobody Pictured', false], ['Sam Smith', false]]);
   assert.deepEqual(jevCalls.sort(), ['Donald Trump', 'Jay Clayton', 'Nobody Pictured', 'Sam Smith'], 'one identity check per subject, shared by the Writer and the finder');

@@ -17,9 +17,9 @@ import { toRenderPost } from '@/lib/social/render/from-draft';
 import type { Brief } from '@/lib/social/reporter/brief';
 import { fillDraft } from '@/lib/social/writer/draft';
 
-function briefWith(...subjects: Array<{ name: string; role: string }>): Brief {
+function briefWith(...subjects: Array<{ name: string; role: string; type?: 'person' | 'organization' }>): Brief {
   const b = briefSuperIntelligenceForce();
-  b.subjects = [...b.subjects, ...subjects.map((s, i) => ({ id: `S${9 + i}`, ...s }))];
+  b.subjects = [...b.subjects, ...subjects.map((s, i) => ({ id: `S${9 + i}`, type: 'organization' as const, ...s }))];
   return b;
 }
 
@@ -81,7 +81,7 @@ test('cover, organization subject: its logo card (any verified organization; bra
 });
 
 test("cover, person subject: the person's P18 first; then the logo card of the organization named in the cover; never a person's logo", async () => {
-  const b = briefWith({ name: 'Jane Doe', role: 'CEO of Acme' }, { name: 'Acme', role: 'company' });
+  const b = briefWith({ name: 'Jane Doe', role: 'CEO of Acme', type: 'person' }, { name: 'Acme', role: 'company' });
   const withP18 = newPhotoContext(b, []);
   withP18.identities = new Map([verified('Jane Doe', 'Q2', 'person'), verified('Acme', 'Q1', 'organization')]);
   const p = await findPhoto({ kind: 'subject', value: 'Jane Doe' }, withP18, { jev: noJev, http: await fakeLogoWeb({ p18: 'Jane Doe portrait.jpg' }) }, cover('Jane Doe leaves Acme'));
@@ -122,7 +122,7 @@ test('cover order: logo card before stock; nothing → the AI-compute starter, o
   assert.equal(card.photo, null);
 });
 
-test('render: a logo card (Helios canvas, no pattern; plate; wide logos sized by width) and the branded cover card (the sun-mark, headline below)', async () => {
+test('render: a logo card (Helios canvas with the faint grid; plate; wide logos sized by width) and the branded cover card (the sun-mark, headline below)', async () => {
   const d = fillDraft(sifDraftHandoff(), briefSuperIntelligenceForce());
   const logo = (w: number, h: number): Photo => ({ url: `https://upload.wikimedia.org/${w}x${h}.png`, credit: 'Logo: Acme (public domain) · Wikimedia Commons', source: 'logo', width: w, height: h, qid: 'Q1', subject: 'Acme', plate: 'dark' });
   const meta = { source: 'x', sourceUrl: '', publishedAt: '2026-10-07T00:00:00Z' };
@@ -145,7 +145,8 @@ test('render: a logo card (Helios canvas, no pattern; plate; wide logos sized by
   assert.match(cardHtml, /helios-cover--card/);
   assert.match(cardHtml, /helios-cover-card__mark" src="\/social\/helios-mark\.png"/);
   const css = (await import('node:fs')).readFileSync('app/social/render/preview/preview.css', 'utf8');
-  assert.ok(!/\.helios-cover--logo \{[^}]*linear-gradient/.test(css), 'no pattern behind the logo card (Helios design system)');
+  // The faint grid stays: its removal was never decided (Tommy, 2026-10-07).
+  assert.ok(/\.helios-cover--logo \{[^}]*linear-gradient/.test(css), 'the faint grid behind the logo card');
 });
 
 test('company cover: a usable article photo (the cover request) comes before the logo card', async () => {
@@ -155,4 +156,20 @@ test('company cover: a usable article photo (the cover request) comes before the
   c.identities = new Map([verified('Acme', 'Q1', 'organization')]);
   const t = await findPhoto({ kind: 'article', value: 'https://news.example/acme-launch.jpg' }, c, { jev: noJev, http: await fakeLogoWeb() }, cover('Acme ships a new model'));
   assert.equal(t.via, 'article');
+});
+
+// ── Link 1 (photo spec §2–§4): an organization is offered its logo, never its main photo ──
+
+import { createSubjectAvailability } from '@/lib/social/photos/availability';
+
+test('availability: an organization has logo_available from its verified P154 and photo_available from its main photo (its headquarters)', async () => {
+  const b = briefWith({ name: 'Acme', role: 'AI company' });
+  const cache = new Map([verified('Acme', 'Q1', 'organization')]);
+  const http = await fakeLogoWeb({ p18: 'Acme HQ building portrait.jpg' });
+  const a = await createSubjectAvailability({ jev: noJev, http }, () => cache)({ name: 'Acme', role: 'AI company' }, b);
+  assert.deepEqual(a, { kind: 'organization', headshot: false, logo: true, photo: true });
+  const noLogo = await createSubjectAvailability({ jev: noJev, http: await fakeLogoWeb({ claims: [], p18: 'Acme HQ building portrait.jpg' }) }, () => cache)({ name: 'Acme', role: 'AI company' }, b);
+  assert.deepEqual(noLogo, { kind: 'organization', headshot: false, logo: false, photo: true }, 'no logo: the main photo alone');
+  const neither = await createSubjectAvailability({ jev: noJev, http: await fakeLogoWeb({ claims: [] }) }, () => new Map([verified('Acme', 'Q1', 'organization')]))({ name: 'Acme', role: 'AI company' }, b);
+  assert.deepEqual(neither, { kind: 'organization', headshot: false, logo: false, photo: false });
 });

@@ -166,7 +166,7 @@ test('hook stage budgets: placeholder photos follow the finder slot rules (subje
   d.slides[3]!.image = { kind: 'stock', value: 'deadline' }; // stat slide → scene backdrop
   const p = placeholderPhotos(fillDraft(d, brief()));
   assert.equal(p.cover?.subject, 'Donald Trump');
-  assert.equal(p.slides[0]?.source, 'commons', 'subject request → subject region');
+  assert.equal(p.slides[1]?.source, 'commons', 'subject request → subject region');
   assert.equal(p.slides[2]?.subject, 'Donald Trump', 'the speaker in the round spot');
   assert.equal(p.slides[3]?.source, 'stock');
   assert.equal(p.slides[4], null, 'IMAGE none → no photo');

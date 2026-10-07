@@ -41,6 +41,13 @@ export type DraftSlide = {
   /** Stat: one ID; split stat: two. */
   number_ids: string[];
   image: ImageRequest;
+  /**
+   * The SUBJECTS IDs this slide is about and names (photo spec §3 rule 3;
+   * Tommy, 2026-10-07). The Writer must give them (its handoff check); the
+   * schema keeps them optional so the Editor's echo of the draft never fails
+   * on them.
+   */
+  subject_ids?: string[];
   /** Spread: this slide and the next share one wide photo (this slide's IMAGE). */
   spread_with_next: boolean;
   /** Added by the Hook pass only (never by the Writer or Editor; not in DRAFT_SCHEMA). */
@@ -48,7 +55,7 @@ export type DraftSlide = {
 };
 
 export type DraftSubmission = {
-  cover_options: Array<{ text: string; facts: string[]; image: ImageRequest }>;
+  cover_options: Array<{ text: string; facts: string[]; image: ImageRequest; subject_ids?: string[] }>;
   /** 1-based index into cover_options. */
   chosen_cover: number;
   slides: DraftSlide[];
@@ -69,6 +76,9 @@ const obj = (properties: Record<string, unknown>) => ({
 });
 const facts = { ...strList, description: 'IDs of the brief facts/quotes/numbers this line rests on (F3, B1, Q2, N1). Empty if none.' };
 const tagged = (description: string) => obj({ text: { type: 'string', description }, facts });
+const subjectIds = { ...strList, description: 'SUBJECTS IDs (S1, S2, …) of the people and organizations this slide is about and names in its words. Empty if none.' };
+/** An object schema whose listed keys are optional (present in properties, not required). */
+const optional = (schema: ReturnType<typeof obj>, ...keys: string[]) => ({ ...schema, required: schema.required.filter((k) => !keys.includes(k)) });
 const image = obj({
   kind: { type: 'string', enum: [...IMAGE_KINDS] },
   value: { type: 'string', description: 'subject: a name from SUBJECTS; article: a photo URL from ARTICLE PHOTOS; stock: a plain 2–3 word literal scene; none: empty (no photo fits). Covers never use none.' },
@@ -78,13 +88,13 @@ export const DRAFT_SCHEMA = obj({
   cover_options: {
     type: 'array',
     description: 'Exactly 3 cover options.',
-    items: obj({ text: { type: 'string', description: '≤90 chars; says who did what on its own.' }, facts, image }),
+    items: optional(obj({ text: { type: 'string', description: '≤90 chars; says who did what on its own.' }, facts, image, subject_ids: subjectIds }), 'subject_ids'),
   },
   chosen_cover: { type: 'integer', description: 'Which cover option is chosen: 1, 2 or 3.' },
   slides: {
     type: 'array',
     description: 'Story slides in order (5–8), starting with slide 2.',
-    items: obj({
+    items: optional(obj({
       type: { type: 'string', enum: [...SLIDE_TYPES] },
       headline: tagged('≤60 chars.'),
       body: { ...tagged('≤220 chars.'), type: ['object', 'null'], description: 'Null on landing, quote and stat slides without a body.' },
@@ -92,8 +102,9 @@ export const DRAFT_SCHEMA = obj({
       quote_excerpt: { type: ['string', 'null'], description: 'Optional exact excerpt of that quote, with "…" for cuts. Null to use the whole quote.' },
       number_ids: { ...strList, description: 'Stat: one NUMBERS ID; split stat: two. Empty otherwise.' },
       image,
+      subject_ids: subjectIds,
       spread_with_next: { type: 'boolean', description: 'True when this slide and the next continue one beat and one wide literal scene fits both; this slide carries the IMAGE, the next slide has IMAGE none. At most one per post.' },
-    }),
+    }), 'subject_ids'),
   },
   follow: { type: 'string', description: 'The FOLLOW line.' },
   caption: tagged('The full caption (see the caption section).'),
@@ -207,9 +218,10 @@ export function checkDraft(input: unknown, brief: Brief): DraftSubmission {
 export type FilledSlide = DraftSlide & {
   /**
    * Exact quote text (or the checked excerpt) and its speaker. `speaker_subject`: the
-   * SUBJECTS name the quote's speaker_id points to (quote slides match photos by it).
+   * SUBJECTS name the quote's speaker_id points to (quote slides match photos by it);
+   * `speaker_role`: that entry's role, for the type-led quote slide (photo spec §4).
    */
-  quote: { text: string; speaker: string; id: string; speaker_subject: string | null } | null;
+  quote: { text: string; speaker: string; id: string; speaker_subject: string | null; speaker_role: string | null } | null;
   /** Exact number values, as the source wrote them. */
   numbers: Array<{ id: string; value: string; counts: string }>;
 };
@@ -224,9 +236,10 @@ export function fillDraft(d: DraftSubmission, brief: Brief): FilledDraft {
     cover: d.cover_options[d.chosen_cover - 1]!.text,
     slides: d.slides.map((s) => {
       const q = s.quote_id ? quotes.get(s.quote_id)! : null;
+      const who = q?.speaker_id ? brief.subjects.find((x) => x.id === q.speaker_id) : undefined;
       return {
         ...s,
-        quote: q ? { id: q.id, text: s.quote_excerpt ?? q.text, speaker: q.speaker, speaker_subject: (q.speaker_id ? brief.subjects.find((x) => x.id === q.speaker_id)?.name : null) ?? null } : null,
+        quote: q ? { id: q.id, text: s.quote_excerpt ?? q.text, speaker: q.speaker, speaker_subject: who?.name ?? null, speaker_role: who?.role ?? null } : null,
         numbers: s.number_ids.map((id) => {
           const n = numbers.get(id)!;
           return { id, value: n.value, counts: n.counts };

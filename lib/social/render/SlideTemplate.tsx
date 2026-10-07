@@ -370,6 +370,8 @@ function QuoteSlide({ slide }: { slide: SlideCopy }) {
   const speaker = Boolean(slide.photoUrl) && slide.photoIsSpeaker === true;
   const backdrop = Boolean(slide.photoUrl) && !speaker;
   const quote = slide.quoteText;
+  // Type-led quote slide (photo spec §4): no verified speaker photo, so the attribution carries the role too.
+  const role = !speaker && slide.quoteRole && !slide.quoteBy?.toLowerCase().includes(slide.quoteRole.toLowerCase()) ? slide.quoteRole : null;
   return (
     <div className={`helios-quote${speaker ? ' helios-quote--speaker' : ''}${backdrop ? ' helios-quote--backdrop' : ''}`} data-scrim={backdrop ? 'shade' : undefined}>
       {backdrop && <Backdrop slide={slide} />}
@@ -389,6 +391,7 @@ function QuoteSlide({ slide }: { slide: SlideCopy }) {
         <Fit className="helios-quote__attribution" min={MIN.by}>
           <span aria-hidden="true">— </span>
           {slide.quoteBy}
+          {role && <span className="helios-quote__role">, {role}</span>}
         </Fit>
       )}
       <HookLine slide={slide} at="above" />

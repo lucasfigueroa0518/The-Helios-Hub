@@ -268,3 +268,33 @@ test('runDay: the Editor stage passes its draft on in the same shape', async () 
   });
   assert.equal(r.posts.length, 1);
 });
+
+// ── Subject tags re-checked right after the Editor (Tommy, 2026-10-07) ──
+
+import { sifDraftHandoff } from '@/fixtures/social/drafts';
+
+test('after the Editor: a tag its edits no longer name is removed and logged; a missing list becomes empty; words and requests stay', async () => {
+  const writer = sifDraftHandoff();
+  const edited = structuredClone(writer);
+  edited.slides[1]!.headline.text = 'A new chair';
+  edited.slides[1]!.body!.text = 'The Wall Street Journal reports he will chair the force, with three vice chairs.'; // Clayton cut
+  delete edited.slides[4]!.subject_ids;
+  const { create } = scripted([msg([tool('submit_draft', edited)])]);
+  const r = await runEditor(brief(), writer, { create });
+  assert.ok(r.ok);
+  assert.deepEqual(r.draft.slides[1]!.subject_ids, []);
+  assert.deepEqual(r.draft.slides[4]!.subject_ids, []);
+  assert.equal(r.draft.slides[1]!.body!.text, edited.slides[1]!.body!.text, 'the Editor\'s words stay');
+  assert.deepEqual(r.draft.slides[1]!.image, writer.slides[1]!.image, 'the request stays as the Editor left it');
+  assert.deepEqual(r.tagsDropped, ['subject-tag-dropped: slide 3 S2 (Jay Clayton) (not named on the slide)', 'subject-tag-dropped: slide 6 had no subject_ids → []']);
+  assert.deepEqual(r.filled.slides[1]!.subject_ids, [], 'the filled draft carries the checked tags');
+});
+
+test('after the Editor: tags the edited words still name are kept, nothing logged', async () => {
+  const writer = sifDraftHandoff();
+  const { create } = scripted([msg([tool('submit_draft', structuredClone(writer))])]);
+  const r = await runEditor(brief(), writer, { create });
+  assert.ok(r.ok);
+  assert.deepEqual(r.tagsDropped, []);
+  assert.deepEqual(r.draft.slides.map((s) => s.subject_ids), writer.slides.map((s) => s.subject_ids));
+});

@@ -3,7 +3,7 @@
  * known when its SUBJECTS entry has a Wikidata match. Code, no AI: the
  * pulled resolver (exact label, or a clear match against the brief's text).
  *
- * `photo_available` is not here: it's p18.ts, the same P18 check the photo
+ * The photo flags are not here: they're photos/availability.ts, the same check the photo
  * finder uses, so the Writer and the finder always agree.
  */
 import { resolveSubject } from '@/lib/social/editorial/v2/image-step/wikidata';

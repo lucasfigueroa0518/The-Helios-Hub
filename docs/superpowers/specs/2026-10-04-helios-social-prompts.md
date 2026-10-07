@@ -115,6 +115,29 @@ SOURCES: outlet, date, URL (only ones you opened); list fetch failures separatel
 - **Schema:** `submit_brief` gives every SUBJECTS entry an `id`, and every QUOTES entry a `speaker_id` (an S# or null). Code checks that each `speaker_id` exists in SUBJECTS.
 - **Matching:** quote slides now match their speaker by this ID.
 
+**Subject type (Tommy, 2026-10-07).** `cause · Reporter prompt + schema · 0 new stages · 0 new AI calls`
+
+- **Why:** the naming rule for subject tags differs by type (people by full or last name; organizations by full name or a first word no other subject shares). When the identity check can't tell (no Wikidata entry), the type was unknown and only full names counted.
+- **What changes:** the SUBJECTS line. The identity check's type wins when it has one; the Reporter's mark fills in otherwise.
+
+| Line | Exact wording |
+|---|---|
+| SUBJECTS | "SUBJECTS: S1, S2, … people/companies/products in the story (with role)" → "SUBJECTS: S1, S2, … people/companies/products in the story (with role), each marked person or organization (a product counts as an organization)" |
+
+- **Schema:** each SUBJECTS entry gets `type`: `person` or `organization`.
+
+**Every speaker is a SUBJECT (Tommy, 2026-10-07; photo spec §4).** `cause · Reporter prompt + code check · 0 new stages · 0 new AI calls`
+
+- **Why:** a quote slide shows its speaker: the verified headshot, a second verified photo, an article photo whose caption names them, or a type-led slide with their name and role. All of these work from the speaker's SUBJECTS entry. A speaker left out of SUBJECTS has no ID, no role and no photo path.
+- **What changes:** one rule line, and the QUOTES line drops "or none", which the rule contradicts.
+
+| Line | Exact wording |
+|---|---|
+| RULES (after "Copy quotes word for word…") | new: "- Everyone you quote is listed in SUBJECTS, with their role, and the quote names their SUBJECTS ID." |
+| QUOTES | "... — speaker's SUBJECTS ID (S1…), or none" → "... — speaker's SUBJECTS ID (S1…)" |
+
+- **Code:** a quote with no `speaker_id` goes back to the Reporter once, with the fix: "list them in SUBJECTS with their role and give Q# their ID". This runs alongside the aggregator check, on the same single retry. A quote still without a speaker after that is kept, logged (`speakersNotInSubjects`) and shown as a type-led quote slide without a photo. The schema keeps `speaker_id` nullable for that case.
+
 ---
 
 ## 2. Writer (tested)
@@ -216,6 +239,27 @@ BRIEF
   - a stock scene shares a word with the slide's own text.
 
   A failed request on a story slide still renders text-only.
+
+- **Link 1 (Tommy, 2026-10-07; photo spec §3–§4):** the IMAGE line is replaced again. This is the line in use:
+
+```
+- IMAGE and subject tags. Give every cover option and story slide subject_ids: the SUBJECTS IDs of the people and organizations it is about and names in its words (empty if none). IMAGE on every story slide: request a photo unless nothing physical fits. In order: subject: <name> (a SUBJECTS entry tagged on the slide: a person with headshot_available true, at most once per post besides their quote slide; or an organization: on the cover with logo_available true (its logo card), on a story slide with photo_available or logo_available true, its main photo and its logo each at most once per post besides the cover), article: <photo> (from ARTICLE PHOTOS, on a slide tagged with one of the subject_ids its caption names; an official_of image only on the cover or a slide tagged with that company), stock: <plain 2–3 word literal scene> that names a physical thing the slide itself mentions. Use none only when the slide is about an idea with nothing physical to show, and add one EDIT NOTES line per none saying why. On a quote slide, IMAGE is the speaker (subject: <the quote's speaker>), whether or not they have a photo; none only when the speaker is an organization or isn't in SUBJECTS. subject:, article: and stock: go only on the cover and on text, landing and image slides; a stat slide's background is automatic, so its IMAGE is none. Never change a slide's words to fit a photo or a tag; change the request or the tag. The chosen cover always has an IMAGE.
+```
+
+  `cause · Writer prompt + schema + code check · 0 new stages · 0 new AI calls`
+
+  - **Why:** the Writer could ask for photos the finder couldn't deliver well: an organization's main photo (OpenAI's was a building), article photos whose caption didn't name the slide's subject, and stock or none on quote slides. The photo spec makes the finder decide by subject, so the Writer has to say which subjects each slide is about.
+  - **Schema:** cover options and slides gain `subject_ids` (SUBJECTS IDs). It's optional in the schema, so the Editor's echo of the draft never fails on it; the Writer's handoff check requires it.
+  - **The brief the Writer sees:** SUBJECTS carry `type` (the identity check's, else the Reporter's mark), `headshot_available` (a person's verified main photo), `logo_available` (an organization's verified logo) and `photo_available` (an organization's verified main photo, often its headquarters; Tommy, 2026-10-07: buildings are welcome on slides about the company). The cover of a company story stays its logo card. ARTICLE PHOTOS is a code-built list from the pages the Reporter opened. It holds only body photos with a caption naming a SUBJECT and an allowed credit, plus official images from a SUBJECTS company's own page. Each entry carries `subject_ids` (whom its caption names) and `official_of`.
+  - **Code check, every attempt:**
+    - every tag is a SUBJECTS ID named on its slide;
+    - a subject request is tagged on the slide and has its flag;
+    - each person at most once (the quote slide aside), a logo on at most one story slide;
+    - an article photo's caption subjects meet the slide's tags; an official image only on the cover or a slide tagged with its company;
+    - a quote slide's IMAGE is its speaker (none only for an organization or a speaker not in SUBJECTS);
+    - stat slides take none;
+    - the stock word check and the EDIT NOTES line per none are unchanged.
+  - **Final attempt:** failing tags are removed (logged as subject-tag-dropped), then failing requests become none (image-request-dropped). Words never change.
 
 - **Change 2, the spread line:** the "added since the test" spread line is replaced:
 

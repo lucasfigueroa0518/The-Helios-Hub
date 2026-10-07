@@ -25,14 +25,15 @@ import type { BankEntry } from '@/lib/social/photos/bank';
 import type { PhotoDeps } from '@/lib/social/photos/find';
 import type { UsedPhotoLog } from '@/lib/social/photos/used-photos';
 import { createVisionCheck } from '@/lib/social/photos/vision';
-import { createHasPhoto, type IdentityCache } from '@/lib/social/photos/p18';
+import { createSubjectAvailability, type SubjectAvailability } from '@/lib/social/photos/availability';
+import type { IdentityCache } from '@/lib/social/photos/p18';
 import { runFactCheck } from '@/lib/social/factcheck/factcheck';
 import type { FitCheck } from '@/lib/social/render/fit-check';
 import type { PageRead } from '@/lib/social/reporter/read-page';
 import { runReporter, type MessagesCreate, type ReporterResult } from '@/lib/social/reporter/reporter';
 import type { EditorResult } from '@/lib/social/editor/editor';
 import type { HookResult } from '@/lib/social/hook/hook';
-import type { HasPhoto, IsWellKnown, WriterResult } from '@/lib/social/writer/writer';
+import type { IsWellKnown, WriterResult } from '@/lib/social/writer/writer';
 import { runWriter } from '@/lib/social/writer/writer';
 import { runEditor } from '@/lib/social/editor/editor';
 
@@ -101,8 +102,8 @@ export type LiveStagesDeps = {
   budget: RunBudget;
   readPage: (url: string) => Promise<PageRead>;
   isWellKnown: IsWellKnown;
-  /** photo_available for the Writer. Default: p18.ts, the finder's own P18 check, sharing its identity results per story. Tests may pass a stub. */
-  hasPhoto?: HasPhoto;
+  /** headshot_available / logo_available for the Writer. Default: photos/availability.ts, sharing the finder's identity results per story. Tests may pass a stub. */
+  availability?: SubjectAvailability;
   fitCheck: FitCheck;
   http?: PhotoDeps['http'];
   /** 7-day rule and the photo bank (M8c). */
@@ -135,7 +136,9 @@ export function createLiveStages(deps: LiveStagesDeps): { stages: PipelineStages
   const factCheck = createFactCheckStage({ create, onResult: (id, r) => log(id).factCheck.push(r) });
   // The photo vision check on top stock candidates (Tommy, 2026-10-06), under the same budget guard.
   const vision = createVisionCheck({ create, http: deps.http });
-  // Identity results per story, shared by the Writer's photo_available and the finder (they must agree; p18.ts).
+  // Subject types for the naming rule, from the identity results the Writer's lookup already cached.
+  const kindsFrom = async (cache: IdentityCache) => new Map(await Promise.all([...cache].map(async ([name, p]) => [name, (await p.catch(() => null))?.type ?? null] as const)));
+  // Identity results per story, shared by the Writer's availability flags and the finder (they must agree).
   const identities = new Map<string, IdentityCache>();
   const identitiesFor = (storyId: string) => {
     let c = identities.get(storyId);
@@ -169,14 +172,14 @@ export function createLiveStages(deps: LiveStagesDeps): { stages: PipelineStages
       return { ok: true, value: { storyId: story.id, parsed: r.brief, raw: r.raw, pages: r.pages }, costUsd: r.costUsd };
     },
     async write(brief) {
-      const hasPhoto = deps.hasPhoto ?? createHasPhoto({ jev: deps.jev, http: deps.http }, () => identitiesFor(brief.storyId));
-      const r = await runWriter(brief.parsed, { create, isWellKnown: deps.isWellKnown, hasPhoto, pages: brief.pages });
+      const availability = deps.availability ?? createSubjectAvailability({ jev: deps.jev, http: deps.http }, () => identitiesFor(brief.storyId));
+      const r = await runWriter(brief.parsed, { create, isWellKnown: deps.isWellKnown, availability, pages: brief.pages });
       log(brief.storyId).writer.push(r);
       if (!r.ok) return capAware(deps.budget, { ok: false, reasonCode: r.reason, detail: r.detail, costUsd: r.costUsd });
       return { ok: true, value: { storyId: brief.storyId, submission: r.draft, filled: r.filled }, costUsd: r.costUsd };
     },
     async edit(draft, brief) {
-      const r = await runEditor(brief.parsed, draft.submission, { create });
+      const r = await runEditor(brief.parsed, draft.submission, { create, subjectKinds: await kindsFrom(identitiesFor(draft.storyId)) });
       log(draft.storyId).editor.push(r);
       if (!r.ok) return capAware(deps.budget, { ok: false, reasonCode: r.reason, detail: r.detail, costUsd: r.costUsd });
       return { ok: true, value: { storyId: draft.storyId, submission: r.draft, filled: r.filled }, costUsd: r.costUsd };

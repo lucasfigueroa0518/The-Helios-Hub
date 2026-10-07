@@ -2,5 +2,48 @@
   "note": "Per-request notes on the bench's fixed set (Tommy's rulings). Shown in the bench table; they don't change what the finder does.",
   "requests": {
     "R23": "request should not occur: a symbolic stock request (\"abstract neural network\") the Writer is no longer allowed to make (link A). The finder returned what was asked; not counted as a finder miss or a misleading finder pick (Tommy, 2026-10-07)."
+  },
+  "forbidden": {
+    "note": "Fixed cases (Tommy, 2026-10-07; photo spec §7 Step 3): these photos may never appear for these requests. Links 3-5 must keep it so. URLs from runs/daily-2026-10-06T16-00-02-338Z/run.json (Tommy, 2026-10-07).",
+    "R03": {
+      "request": "stock: laptop warning screen",
+      "photo": "the brick building: \"JOHN K THORNE (public domain)\", Flickr \"BUILDING 33 (STATION HEADQUARTERS) BIGGIN HILL\"",
+      "urls": [
+        "https://live.staticflickr.com/65535/51377937576_c42dacf65b_b.jpg"
+      ],
+      "seen": "runs/daily-2026-10-06T16-00-02-338Z (Altman post, slide 3)"
+    },
+    "R10": {
+      "request": "subject: Mistral AI (cover)",
+      "photo": "the brick building: \"JOHN K THORNE (public domain)\", Flickr \"BUILDING 33 (STATION HEADQUARTERS) BIGGIN HILL\" (the \"1930s building for Mistral\")",
+      "urls": [
+        "https://live.staticflickr.com/65535/51377937576_c42dacf65b_b.jpg"
+      ],
+      "seen": "runs/daily-2026-10-06T16-00-02-338Z/run.json (recorded under the Altman story; the same file)"
+    },
+    "R13": {
+      "request": "stock: government building exterior",
+      "photo": "the San Francisco townhouse: \"HaeB, CC BY-SA 4.0 · Wikimedia Commons\", File:Pioneer Building, San Francisco (2019) -1.jpg (OpenAI's Wikidata P18)",
+      "urls": [
+        "https://upload.wikimedia.org/wikipedia/commons/3/33/Pioneer_Building%2C_San_Francisco_%282019%29_-1.jpg"
+      ],
+      "seen": "runs/daily-2026-10-06T16-00-02-338Z/run.json (recorded under the Altman story; the same file)"
+    },
+    "LECHONK-2117-COVER": {
+      "request": "subject: Mistral AI (cover)",
+      "photo": "a biology lab with a WARNING sign, picked from the word \"lab\"",
+      "urls": [
+        "/social/starter/lab-bench-laminar-flow-hood-2.jpg"
+      ],
+      "seen": "runs/daily-2026-10-06T21-17-07-066Z (Le Chonk post, cover)"
+    },
+    "LECHONK-2117-INSET": {
+      "request": "subject: Mistral AI (slide 2)",
+      "photo": "the lab-bench inset",
+      "urls": [
+        "/social/starter/lab-bench-uv-ontsmetting-laminaire.jpg"
+      ],
+      "seen": "runs/daily-2026-10-06T21-17-07-066Z (Le Chonk post, slide 2)"
+    }
   }
 }

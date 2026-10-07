@@ -118,7 +118,7 @@ export type PhotoContext = {
   /** The bank (designed stat backgrounds) and when each URL was last used, for least-recently-used picks. */
   bank: BankEntry[];
   lastUsed: Map<string, string>;
-  /** Identity results by subject name (p18.ts), shared with the Writer's photo_available for the same story. */
+  /** Identity results by subject name (p18.ts), shared with the Writer's availability flags for the same story. */
   identities: IdentityCache;
 };
 
@@ -164,7 +164,7 @@ async function articlePhoto(url: string, ctx: PhotoContext, steps: string[]): Pr
   return { url, credit: (found.photo.credit ?? found.photo.caption ?? '').trim(), source: 'article', width: null, height: null, qid: null, subject: null };
 }
 
-/** The subject's P18 (p18.ts: the same check as the Writer's photo_available), if free to use here. */
+/** The subject's P18 (p18.ts: the same check as the Writer's headshot_available), if free to use here. */
 async function subjectPhoto(name: string, ctx: PhotoContext, deps: PhotoDeps, steps: string[], opts: { personOnly: boolean }): Promise<{ photo: Photo | null; identity: IdentityNote }> {
   const r = await subjectP18(name, ctx.brief, deps, ctx.identities);
   const id = r.identity;

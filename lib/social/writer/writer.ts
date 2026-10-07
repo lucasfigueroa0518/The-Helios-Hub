@@ -6,14 +6,17 @@
  * The call itself (caching, check, one retry) is runStructuredCall.
  */
 import { STAGE_MODELS, type StageModelConfig } from '@/lib/social/pipeline/models';
-import { classifyCredit } from '@/lib/social/photos/credit';
+import { photoUrlKey, articlePhotosFor, type ListedPhoto } from '@/lib/social/photos/article-list';
+import { NOTHING, type SubjectAvailability } from '@/lib/social/photos/availability';
+import type { SubjectType } from '@/lib/social/photos/identity';
+import { isNamedIn, namedSubjects, type NamedSubject } from '@/lib/social/photos/named';
 import type { PageReadOk } from '@/lib/social/reporter/read-page';
 import type { Brief, BriefError } from '@/lib/social/reporter/brief';
 import type { MessagesCreate, TurnUsage } from '@/lib/social/reporter/reporter';
 
 import { draftTextFailures } from '@/lib/social/mechanical/checks';
 
-import { DraftValidationError, SUBMIT_DRAFT_TOOL, checkDraft, fillDraft, type DraftSubmission, type FilledDraft } from './draft';
+import { DraftValidationError, SUBMIT_DRAFT_TOOL, checkDraft, fillDraft, type DraftSubmission, type FilledDraft, type ImageRequest } from './draft';
 import { WRITER_SYSTEM, writerUserMessage } from './prompt';
 import { MAX_CHECK_RETRIES, runStructuredCall } from './structured-call';
 
@@ -21,50 +24,62 @@ import { MAX_CHECK_RETRIES, runStructuredCall } from './structured-call';
 /** Is this subject widely known? Spec §4.1a: yes when it has a Wikidata match. */
 export type IsWellKnown = (subject: { name: string; role: string | null }, brief: Brief) => Promise<boolean>;
 
-/** Does this subject have a usable main photo? (Code only: Wikidata match + a usable main image.) */
-export type HasPhoto = (subject: { name: string; role: string | null }, brief: Brief) => Promise<boolean>;
+/**
+ * The brief the Writer sees (photo spec §3, §4; Link 1, Tommy 2026-10-07):
+ * the Reporter's JSON with code-set marks, so every photo the Writer can ask
+ * for is one the finder can deliver.
+ *   SUBJECTS: well_known (cover rule); type (person / organization: the
+ *     identity check's, else the Reporter's mark); headshot_available (a
+ *     person's verified main photo); logo_available (an organization's
+ *     verified logo); photo_available (an organization's verified main photo,
+ *     often its headquarters; Tommy, 2026-10-07).
+ *   ARTICLE PHOTOS: the code-built list (photos/article-list.ts): body photos
+ *     with a caption naming a SUBJECT and an allowed credit, plus official
+ *     images from a SUBJECTS company's own page. Each carries the SUBJECTS IDs
+ *     its caption names, and official images the company's ID.
+ */
+export type WriterSubject = Omit<Brief['subjects'][number], 'type'> & {
+  well_known: boolean;
+  type: SubjectType | null;
+  headshot_available: boolean;
+  logo_available: boolean;
+  photo_available: boolean;
+};
+
+export type WriterBrief = Omit<Brief, 'subjects' | 'article_photos'> & { subjects: WriterSubject[]; article_photos: ListedPhoto[] };
+
+export async function briefForWriter(brief: Brief, isWellKnown: IsWellKnown, availability?: SubjectAvailability, pages: PageReadOk[] = []): Promise<WriterBrief> {
+  const subjects = await Promise.all(
+    brief.subjects.map(async (s): Promise<WriterSubject> => {
+      const a = availability ? await availability(s, brief).catch(() => NOTHING) : NOTHING;
+      return {
+        ...s,
+        well_known: await isWellKnown(s, brief).catch(() => false),
+        type: a.kind ?? s.type ?? null,
+        headshot_available: a.kind === 'person' && a.headshot,
+        logo_available: a.kind === 'organization' && a.logo,
+        photo_available: a.kind === 'organization' && a.photo,
+      };
+    }),
+  );
+  const kinds = new Map(subjects.map((s) => [s.name, s.type]));
+  return { ...brief, subjects, article_photos: articlePhotosFor(brief, pages, kinds) };
+}
 
 /**
- * The brief the Writer sees: the Reporter's JSON with SUBJECTS marked by code
- * (well_known; photo_available, Tommy 2026-10-06), and ARTICLE PHOTOS
- * filtered to those whose credit allows them, so every photo the Writer can
- * request can succeed.
+ * What the handoff check needs from the Writer's brief. `subjects` is null
+ * when no availability lookup ran (tests): the flags aren't checked then.
  */
-export async function briefForWriter(brief: Brief, isWellKnown: IsWellKnown, hasPhoto: HasPhoto = async () => false, pages: PageReadOk[] = []) {
-  const subjects = await Promise.all(
-    brief.subjects.map(async (s) => ({
-      ...s,
-      well_known: await isWellKnown(s, brief).catch(() => false),
-      photo_available: await hasPhoto(s, brief).catch(() => false),
-    })),
-  );
-  const organizations = brief.subjects.map((s) => s.name);
-  const key = (u: string) => u.replace(/^https?:\/\//, '').replace(/[?#].*$/, '');
-  /** How the page reader found this photo: in the article body (figure) or as the share image (og:image). */
-  const fromOf = (url: string) => pages.flatMap((pg) => pg.photos).find((x) => key(x.src) === key(url))?.from ?? null;
-  const usable = brief.article_photos
-    .filter((p) => p.url)
-    .map((p) => ({ p, v: classifyCredit({ caption: p.caption, credit: p.credit, page: p.page, organizations }), from: fromOf(p.url!) }))
-    .filter((x) => x.v.verdict === 'allowed');
-  // Prefer <figure> images over og:image (Tommy, 2026-10-07: og:image is often a title card): a page's
-  // og:image is listed only when that page has no usable figure image.
-  const pagesWithFigure = new Set(usable.filter((x) => x.from === 'figure').map((x) => x.p.page));
-  const article_photos = usable
-    .filter((x) => !(x.from === 'og:image' && pagesWithFigure.has(x.p.page)))
-    .sort((a, b) => Number(b.from === 'figure') - Number(a.from === 'figure'))
-    .map((x) => x.p);
-  return { ...brief, subjects, article_photos };
+export type PhotoView = { subjects: Map<string, WriterSubject> | null; photos: ListedPhoto[] | null; kinds?: SubjectKinds };
+
+export function photoViewOf(b: WriterBrief, opts: { flags: boolean }): PhotoView {
+  return { subjects: opts.flags ? new Map(b.subjects.map((s) => [s.name, s])) : null, photos: b.article_photos, kinds: new Map(b.subjects.map((s) => [s.name, s.type])) };
 }
 
 const word4 = (s: string) => new Set(s.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4).map((w) => w.replace(/s$/, '')));
 
-/**
- * The Writer's IMAGE requests (handoff, Tommy 2026-10-06), checked on its
- * first submission only: a subject photo only for a subject marked
- * photo_available, each subject at most once; a stock scene names a
- * physical thing the slide itself mentions.
- */
 const KEEP_WORDS = " (never change the slide's words to fit a photo)";
+const KEEP_WORDS_TAG = " (never change the slide's words to fit a tag)";
 
 /** The text at a handoff place ("cover" or "slide N"), for the words-stay check. */
 function textAt(d: DraftSubmission, where: string): string | null {
@@ -74,8 +89,9 @@ function textAt(d: DraftSubmission, where: string): string | null {
 }
 
 /**
- * Words never change to fit a photo (Tommy, 2026-10-06): every place whose
- * IMAGE request failed on the first attempt keeps its words on the retry.
+ * Words never change to fit a photo (Tommy, 2026-10-06), or a subject tag:
+ * every place whose IMAGE request or tags failed on the first attempt keeps
+ * its words on the retry.
  */
 export function wordsChangedForPhoto(next: DraftSubmission, first: DraftSubmission, failedPlaces: string[]): BriefError[] {
   return failedPlaces.flatMap((where) => {
@@ -87,60 +103,191 @@ export function wordsChangedForPhoto(next: DraftSubmission, first: DraftSubmissi
   });
 }
 
-export function imageHandoffFailures(d: DraftSubmission, brief: Brief, photoSubjects: Set<string> | null): BriefError[] {
-  const errors: BriefError[] = [];
+type Place = {
+  where: string;
+  /** 'cover' or the slide type. */
+  kind: 'cover' | DraftSubmission['slides'][number]['type'];
+  image: ImageRequest;
+  tags: string[] | undefined;
+  /** What the slide shows: headline, body, quote and its speaker, number labels (cover: its text). */
+  text: string;
+  quoteId: string | null;
+  afterSpread: boolean;
+};
+
+function placesOf(d: DraftSubmission, brief: Brief): Place[] {
   const chosen = d.cover_options[d.chosen_cover - 1]!;
-  const requests: Array<{ where: string; image: DraftSubmission['slides'][number]['image']; text: string }> = [
-    { where: 'cover', image: chosen.image, text: chosen.text },
-    ...d.slides.map((s, i) => {
-      const q = s.quote_id ? brief.quotes.find((x) => x.id === s.quote_id)?.text ?? '' : '';
+  return [
+    { where: 'cover', kind: 'cover', image: chosen.image, tags: chosen.subject_ids, text: chosen.text, quoteId: null, afterSpread: false },
+    ...d.slides.map((s, i): Place => {
+      const q = s.quote_id ? brief.quotes.find((x) => x.id === s.quote_id) : undefined;
       const n = s.number_ids.map((id) => brief.numbers.find((x) => x.id === id)?.counts ?? '').join(' ');
-      return { where: `slide ${i + 2}`, image: s.image, text: [s.headline.text, s.body?.text ?? '', q, n].join(' ') };
+      return {
+        where: `slide ${i + 2}`,
+        kind: s.type,
+        image: s.image,
+        tags: s.subject_ids,
+        text: [s.headline.text, s.body?.text ?? '', q?.text ?? '', q?.speaker ?? '', n].join(' '),
+        quoteId: s.quote_id,
+        afterSpread: Boolean(d.slides[i - 1]?.spread_with_next),
+      };
     }),
   ];
-  const seen = new Map<string, string>();
-  for (const r of requests) {
-    if (r.image.kind === 'subject') {
-      if (photoSubjects && !photoSubjects.has(r.image.value)) errors.push({ section: `${r.where}.image`, message: `${r.image.value} has no usable photo (photo_available: false); change the request to a literal stock scene or none${KEEP_WORDS}` });
-      const prev = seen.get(r.image.value);
-      if (prev) errors.push({ section: `${r.where}.image`, message: `${r.image.value} is already requested on ${prev}; each subject at most once per post; change this request${KEEP_WORDS}` });
-      else seen.set(r.image.value, r.where);
+}
+
+const PHOTO_SLIDES = new Set(['cover', 'text', 'landing', 'image']);
+
+/** Each subject's type for the naming rule (from the availability lookup), or null (unknown: full names only). */
+export type SubjectKinds = Map<string, SubjectType | null> | null;
+
+const kindsOf = (view: PhotoView | null): SubjectKinds => view?.kinds ?? (view?.subjects ? new Map([...view.subjects.values()].map((s) => [s.name, s.type])) : null);
+
+/** Subject tags (photo spec §3 rule 3, Tommy 2026-10-07): given, known, and named on the slide. */
+function tagFailures(p: Place, brief: Brief, named: NamedSubject[]): BriefError[] {
+  if (!p.tags) return [{ section: `${p.where}.subject_ids`, message: 'tag this slide with subject_ids: the SUBJECTS IDs it is about and names (an empty list if none)' }];
+  return p.tags.flatMap((id) => {
+    const s = named.find((x) => x.id === id);
+    if (!s) return [{ section: `${p.where}.subject_ids`, message: `${id} isn't a SUBJECTS ID; remove it` }];
+    if (!isNamedIn(s, p.text, named)) return [{ section: `${p.where}.subject_ids`, message: `${id} (${s.name}) isn't named on this slide; remove the tag${KEEP_WORDS_TAG}` }];
+    return [];
+  });
+}
+
+/**
+ * The Writer's IMAGE requests and subject tags (photo spec §4; Link 1,
+ * Tommy 2026-10-07), checked on every attempt. `view` null skips the
+ * availability flags and the ARTICLE PHOTOS list (tests without a lookup).
+ */
+export function imageHandoffFailures(d: DraftSubmission, brief: Brief, view: PhotoView | null): BriefError[] {
+  const errors: BriefError[] = [];
+  const places = placesOf(d, brief);
+  const named = namedSubjects(brief.subjects, kindsOf(view));
+  const subjectByName = new Map(brief.subjects.map((s) => [s.name, s]));
+  const typeOf = (name: string) => named.find((x) => x.name === name)?.kind ?? null;
+  const personAt = new Map<string, string>();
+  const orgOnSlides = new Map<string, string[]>();
+
+  for (const p of places) {
+    errors.push(...tagFailures(p, brief, named));
+    const { image: img, where } = p;
+    const section = `${where}.image`;
+    const tagged = (id: string) => (p.tags ?? []).includes(id);
+
+    // Quote slides: the speaker, or none when the speaker is an organization or not a SUBJECT.
+    if (p.kind === 'quote') {
+      const q = brief.quotes.find((x) => x.id === p.quoteId);
+      const speaker = q?.speaker_id ? brief.subjects.find((x) => x.id === q.speaker_id) ?? null : null;
+      if (!speaker) {
+        if (img.kind !== 'none') errors.push({ section, message: `the quote's speaker isn't in SUBJECTS: its IMAGE is none (a type-led quote slide), not ${img.kind}${img.value ? `: ${img.value}` : ''}; change the request${KEEP_WORDS}` });
+      } else if (typeOf(speaker.name) === 'organization') {
+        if (img.kind !== 'none') errors.push({ section, message: `the speaker (${speaker.name}) is an organization: its logo never goes in the speaker's spot, so its IMAGE is none (a type-led quote slide); change the request${KEEP_WORDS}` });
+      } else if (img.kind !== 'subject' || img.value !== speaker.name) {
+        errors.push({ section, message: `a quote slide's IMAGE is its speaker (subject: ${speaker.name}), never another person, a logo or a scene; a speaker without a verified photo still gets a type-led quote slide; not ${img.kind}${img.value ? `: ${img.value}` : ''}; change the request${KEEP_WORDS}` });
+      }
+      continue;
     }
-    if (r.image.kind === 'stock') {
-      const slideWords = word4(r.text);
-      if (![...word4(r.image.value)].some((w) => slideWords.has(w))) {
-        errors.push({ section: `${r.where}.image`, message: `stock "${r.image.value}" doesn't name a physical thing this slide mentions; change the request to a scene the slide already mentions, or none${KEEP_WORDS}` });
+    // Stat slides: the icon background is automatic.
+    if (p.kind === 'stat' || p.kind === 'split_stat') {
+      if (img.kind !== 'none') errors.push({ section, message: `a ${p.kind} slide's background is automatic: its IMAGE is none, not ${img.kind}${img.value ? `: ${img.value}` : ''}; change the request${KEEP_WORDS}` });
+      continue;
+    }
+    if (img.kind === 'none') {
+      if (where === 'cover') errors.push({ section, message: 'a cover always has an IMAGE (never none)' });
+      continue;
+    }
+    if (!PHOTO_SLIDES.has(p.kind)) {
+      errors.push({ section, message: `${img.kind}: can't show on a ${p.kind} slide (only the cover, text, landing and image slides); change the request${KEEP_WORDS}` });
+      continue;
+    }
+
+    if (img.kind === 'subject') {
+      const s = subjectByName.get(img.value);
+      if (!s) continue; // checkDraft reports a name that isn't in SUBJECTS
+      if (!tagged(s.id)) errors.push({ section, message: `subject: ${s.name} isn't tagged on this slide; request only a subject the slide is tagged with, or change the request${KEEP_WORDS}` });
+      const ws = view?.subjects?.get(s.name);
+      const isOrg = typeOf(s.name) === 'organization';
+      if (ws) {
+        // Organizations: the cover is the logo card; a story slide shows the main photo (often the headquarters) or the logo.
+        const has = !isOrg ? ws.headshot_available : where === 'cover' ? ws.logo_available : ws.photo_available || ws.logo_available;
+        if (!has) {
+          const what = !isOrg ? 'no verified headshot (headshot_available: false)' : where === 'cover' ? 'no verified logo for the cover card (logo_available: false)' : 'no verified photo or logo (photo_available and logo_available: false)';
+          errors.push({ section, message: `${s.name} has ${what}; change the request to an article photo, a literal stock scene or none${KEEP_WORDS}` });
+        }
+      }
+      if (isOrg) {
+        // Story slides: its main photo once and its logo once at most (photo spec §4: a logo on at most one story slide; no repeats).
+        if (where !== 'cover') {
+          const prev = orgOnSlides.get(s.name) ?? [];
+          const slots = ws ? Number(ws.photo_available) + Number(ws.logo_available) : 1;
+          if (prev.length >= slots) errors.push({ section, message: `${s.name} is already shown on ${prev.join(' and ')}; an organization goes on at most ${slots} story slide${slots === 1 ? '' : 's'} (its main photo once, its logo once); change this request${KEEP_WORDS}` });
+          orgOnSlides.set(s.name, [...prev, where]);
+        }
+      } else {
+        const prev = personAt.get(s.name);
+        if (prev) errors.push({ section, message: `${s.name} is already requested on ${prev}; each person at most once per post (their quote slide aside); change this request${KEEP_WORDS}` });
+        else personAt.set(s.name, where);
+      }
+    }
+
+    if (img.kind === 'article' && view?.photos) {
+      const photo = view.photos.find((x) => photoUrlKey(x.url) === photoUrlKey(img.value));
+      if (!photo) {
+        errors.push({ section, message: `article: ${img.value} isn't in ARTICLE PHOTOS; use one listed there, or change the request${KEEP_WORDS}` });
+      } else if (photo.official_of) {
+        const company = brief.subjects.find((x) => x.id === photo.official_of)?.name ?? photo.official_of;
+        if (where !== 'cover' && !tagged(photo.official_of)) errors.push({ section, message: `an official image of ${company} goes only on the cover or a slide tagged with ${company}; change the request${KEEP_WORDS}` });
+      } else if (!photo.subject_ids.some(tagged)) {
+        const names = photo.subject_ids.map((id) => brief.subjects.find((x) => x.id === id)?.name ?? id).join(', ');
+        errors.push({ section, message: `this article photo's caption names ${names}; the slide isn't tagged with any of them; change the request${KEEP_WORDS}` });
+      }
+    }
+
+    if (img.kind === 'stock') {
+      const slideWords = word4(p.text);
+      if (![...word4(img.value)].some((w) => slideWords.has(w))) {
+        errors.push({ section, message: `stock "${img.value}" doesn't name a physical thing this slide mentions; change the request to a scene the slide already mentions, or none${KEEP_WORDS}` });
       }
     }
   }
-  // The chosen cover always has an IMAGE (never none); so do the other options.
+  // The other cover options never use none either.
   d.cover_options.forEach((c, i) => {
-    if (c.image.kind === 'none') errors.push({ section: i === d.chosen_cover - 1 ? 'cover.image' : `cover_options[${i}].image`, message: 'a cover always has an IMAGE (never none)' });
+    if (i !== d.chosen_cover - 1 && c.image.kind === 'none') errors.push({ section: `cover_options[${i}].image`, message: 'a cover always has an IMAGE (never none)' });
   });
-  // Quote slides (Tommy, 2026-10-06): IMAGE is the speaker or none.
-  d.slides.forEach((s, i) => {
-    if (s.type !== 'quote' || s.image.kind === 'none') return;
-    const q = brief.quotes.find((x) => x.id === s.quote_id);
-    const speaker = q?.speaker_id ? brief.subjects.find((x) => x.id === q.speaker_id)?.name ?? null : null;
-    if (s.image.kind !== 'subject' || s.image.value !== speaker) {
-      errors.push({ section: `slide ${i + 2}.image`, message: `a quote slide's IMAGE is the speaker${speaker ? ` (subject: ${speaker})` : ''} or none, not ${s.image.kind}${s.image.value ? `: ${s.image.value}` : ''}; change the request${KEEP_WORDS}` });
-    }
-  });
-  // Slide types and what they show (spec §5.1 Photo chain v1): article and stock only on text, landing and image
-  // slides; a stat slide's background is automatic (IMAGE none); quote slides take the speaker (checked above).
-  d.slides.forEach((s, i) => {
-    if (s.type === 'stat' || s.type === 'split_stat') {
-      if (s.image.kind !== 'none') errors.push({ section: `slide ${i + 2}.image`, message: `a ${s.type} slide's background is automatic: its IMAGE is none, not ${s.image.kind}${s.image.value ? `: ${s.image.value}` : ''}; change the request${KEEP_WORDS}` });
-    } else if (s.image.kind === 'article' && !['text', 'landing', 'image'].includes(s.type)) {
-      errors.push({ section: `slide ${i + 2}.image`, message: `an article photo can't show on a ${s.type} slide (only text, landing and image slides); change the request${KEEP_WORDS}` });
-    }
-  });
-  // One EDIT NOTES line per none, saying why (Tommy, 2026-10-06). The slide after a spread is none by design and needs none.
-  // Stat slides' none is automatic (their background is a designed one), so it needs no note.
-  const nones = d.slides.filter((s, i) => s.image.kind === 'none' && !d.slides[i - 1]?.spread_with_next && s.type !== 'stat' && s.type !== 'split_stat').length;
+  // One EDIT NOTES line per none on a story slide that could show a photo (Tommy, 2026-10-06). Stat and
+  // quote slides' none is automatic (an icon background, a type-led quote), and so is the slide after a spread.
+  const nones = places.filter((p) => p.where !== 'cover' && PHOTO_SLIDES.has(p.kind) && p.image.kind === 'none' && !p.afterSpread).length;
   const noteLines = d.edit_notes.filter((n) => /\bnone\b/i.test(n)).length;
   if (noteLines < nones) errors.push({ section: 'edit_notes', message: `${nones} slide(s) with IMAGE none but ${noteLines} EDIT NOTES line(s) about none; add one line per none saying why nothing physical fits` });
   return errors;
+}
+
+/**
+ * Subject tags that fail are removed (a missing list becomes empty), logged
+ * as subject-tag-dropped. Words never change. Used on the Writer's final
+ * attempt and right after the Editor (Tommy, 2026-10-07).
+ */
+export function pruneSubjectTags(d: DraftSubmission, brief: Brief, kinds: SubjectKinds = null): { draft: DraftSubmission; dropped: string[] } {
+  const out = structuredClone(d);
+  const named = namedSubjects(brief.subjects, kinds);
+  const dropped: string[] = [];
+  const places = placesOf(out, brief);
+  const targets = [out.cover_options[out.chosen_cover - 1]!, ...out.slides];
+  places.forEach((p, i) => {
+    const t = targets[i]!;
+    if (!t.subject_ids) {
+      t.subject_ids = [];
+      dropped.push(`subject-tag-dropped: ${p.where} had no subject_ids → []`);
+      return;
+    }
+    const keep = t.subject_ids.filter((id) => {
+      const s = named.find((x) => x.id === id);
+      const ok = Boolean(s && isNamedIn(s, p.text, named));
+      if (!ok) dropped.push(`subject-tag-dropped: ${p.where} ${id}${s ? ` (${s.name})` : ''} (not named on the slide)`);
+      return ok;
+    });
+    t.subject_ids = keep;
+  });
+  return { draft: out, dropped };
 }
 
 export type WriterResult =
@@ -150,10 +297,10 @@ export type WriterResult =
 export type WriterDeps = {
   create: MessagesCreate;
   isWellKnown: IsWellKnown;
-  /** photo_available marking (handoff); without it every subject is marked false and not checked. */
-  hasPhoto?: HasPhoto;
+  /** headshot_available / logo_available marking (photos/availability.ts); without it the flags aren't checked. */
+  availability?: SubjectAvailability;
   config?: StageModelConfig;
-  /** The pages the Reporter read: tells <figure> images from og:image for ARTICLE PHOTOS. */
+  /** The pages the Reporter read: the ARTICLE PHOTOS list is built from them (photos/article-list.ts). */
   pages?: PageReadOk[];
 };
 
@@ -163,8 +310,9 @@ export type WriterDeps = {
  * the Writer's final attempt, every request still failing the handoff check
  * becomes none (the slide text is unchanged) and is logged as
  * image-request-dropped. A spread whose first photo is dropped is no longer
- * a spread. The chosen cover with none keeps its AI-compute fallback (the
- * finder). A missing EDIT NOTES line for a code-dropped none is only logged.
+ * a spread. The chosen cover with none goes down the finder's cover chain
+ * (photo spec §4; its last step always succeeds). A missing EDIT NOTES line
+ * for a code-dropped none is only logged.
  */
 export function dropFailingImageRequests(d: DraftSubmission, failures: BriefError[]): { draft: DraftSubmission; dropped: string[] } {
   const out = structuredClone(d);
@@ -194,7 +342,7 @@ export function checkWrittenDraft(
   brief: Brief,
   attempt: number,
   stage: 'writer' | 'editor' = 'writer',
-  photoSubjects: Set<string> | null = null,
+  view: PhotoView | null = null,
   final?: { onDropped: (lines: string[]) => void },
 ): DraftSubmission {
   let d = checkDraft(input, brief);
@@ -202,12 +350,13 @@ export function checkWrittenDraft(
   const errors = failures.map((f) => ({ section: `${f.id} ${f.where}`, message: f.detail }));
   // Every handoff check runs on every attempt, the final one included (Tommy, 2026-10-06).
   if (stage === 'writer') {
-    const handoff = imageHandoffFailures(d, brief, photoSubjects);
+    const handoff = imageHandoffFailures(d, brief, view);
     if (final && handoff.length > 0 && errors.length === 0) {
-      // Final attempt: drop the failing requests instead of failing the story (Tommy, 2026-10-07).
-      const r = dropFailingImageRequests(d, handoff);
+      // Final attempt: drop the failing tags, then the failing requests, instead of failing the story (Tommy, 2026-10-07).
+      const t = pruneSubjectTags(d, brief, kindsOf(view));
+      const r = dropFailingImageRequests(t.draft, imageHandoffFailures(t.draft, brief, view));
       d = checkDraft(r.draft, brief);
-      final.onDropped(r.dropped);
+      final.onDropped([...t.dropped, ...r.dropped]);
     } else {
       errors.push(...handoff);
     }
@@ -225,8 +374,8 @@ const safely = <T,>(fn: () => T[]): T[] => {
 };
 
 export async function runWriter(brief: Brief, deps: WriterDeps): Promise<WriterResult> {
-  const forWriter = await briefForWriter(brief, deps.isWellKnown, deps.hasPhoto, deps.pages ?? []);
-  const photoSubjects = new Set(forWriter.subjects.filter((s) => s.photo_available).map((s) => s.name));
+  const forWriter = await briefForWriter(brief, deps.isWellKnown, deps.availability, deps.pages ?? []);
+  const view = photoViewOf(forWriter, { flags: Boolean(deps.availability) });
   let first: { draft: DraftSubmission; places: string[] } | null = null;
   let imageRequestsDropped: string[] = [];
   const r = await runStructuredCall({
@@ -240,13 +389,13 @@ export async function runWriter(brief: Brief, deps: WriterDeps): Promise<WriterR
       const kept = attempt > 1 && first ? safely(() => wordsChangedForPhoto(input as DraftSubmission, first!.draft, first!.places)) : [];
       try {
         const final = attempt > MAX_CHECK_RETRIES ? { onDropped: (lines: string[]) => (imageRequestsDropped = lines) } : undefined;
-        const d = checkWrittenDraft(input, brief, attempt, 'writer', deps.hasPhoto ? photoSubjects : null, final);
+        const d = checkWrittenDraft(input, brief, attempt, 'writer', view, final);
         if (kept.length) throw new DraftValidationError(kept);
         return d;
       } catch (err) {
         if (!(err instanceof DraftValidationError) || err.errors === kept) throw err;
         if (attempt === 1) {
-          const places = [...new Set(err.errors.filter((e) => e.section.endsWith('.image')).map((e) => e.section.replace(/\.image$/, '')))];
+          const places = [...new Set(err.errors.filter((e) => /\.(image|subject_ids)$/.test(e.section)).map((e) => e.section.replace(/\.(image|subject_ids)$/, '')))];
           if (places.length) first = { draft: structuredClone(input as DraftSubmission), places };
         }
         throw kept.length ? new DraftValidationError([...err.errors, ...kept]) : err;
