@@ -55,7 +55,7 @@ async function main() {
     const cover = render.slides[0];
     const title = (cover?.headline ?? cover?.title ?? []).map((r) => r.text).join('').trim() || slug;
     const stat = await fsp.stat(path.join(GENERATED_DIR, `${slug}.json`));
-    await upsertPost(query, { runId: null, slug, storyId: render.sourceUrl || null, title, status: 'preview', brief: null, draft: null, render, createdAt: stat.mtime.toISOString() });
+    await upsertPost(query, { runId: null, slug, storyId: render.sourceUrl || null, title, status: 'preview', brief: null, draft: null, render, createdAt: stat.mtime.toISOString(), origin: 'dev' });
   }
 
   for (const t of Object.keys(before)) console.log(`social.${t}: ${before[t]} → ${await count(t)}`);

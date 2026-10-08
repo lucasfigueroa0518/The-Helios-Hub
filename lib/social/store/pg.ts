@@ -143,6 +143,15 @@ export async function insertRun(query: Query, r: RunInsert): Promise<string> {
   return rows[0].id as string;
 }
 
+/** The worker's queued run (lib/social/overnight/runs.ts), finished by the daily script. */
+export async function finishRun(query: Query, id: string, r: Omit<RunInsert, 'kind' | 'startedAt' | 'capUsd'> & { status: 'ok' | 'partial' | 'failed' }): Promise<void> {
+  await query(
+    `UPDATE social.runs SET status = $2, finished_at = $3, hook_pass = $4, claude_usd = $5, total_usd = $6, stop_reason = $7, run_dir = $8, machine = $9, record = $10::jsonb
+      WHERE id = $1`,
+    [id, r.status, r.finishedAt, r.hookPass, r.claudeUsd, r.totalUsd, r.stopReason, r.runDir, r.machine, JSON.stringify(r.record)],
+  );
+}
+
 export type PostInsert = {
   runId: string | null;
   slug: string;
@@ -153,17 +162,20 @@ export type PostInsert = {
   draft: unknown;
   render: RenderPost;
   createdAt?: string;
+  /** `dev` for hand-started runs and re-render scripts; the worker's runs are `pipeline`. Default `pipeline`. */
+  origin?: 'pipeline' | 'dev';
 };
 
 /** Insert or replace a post by slug (a re-run of the same slug overwrites it). Returns its id. */
 export async function upsertPost(query: Query, p: PostInsert): Promise<string> {
   const { rows } = await query(
-    `INSERT INTO social.posts (run_id, slug, story_id, title, status, brief, draft, render, caption, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, $9, coalesce($10::timestamptz, now()))
+    `INSERT INTO social.posts (run_id, slug, story_id, title, status, brief, draft, render, caption, created_at, origin)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, $9, coalesce($10::timestamptz, now()), $11)
      ON CONFLICT (slug) DO UPDATE SET run_id = excluded.run_id, story_id = excluded.story_id, title = excluded.title,
-       status = excluded.status, brief = excluded.brief, draft = excluded.draft, render = excluded.render, caption = excluded.caption
+       status = excluded.status, brief = excluded.brief, draft = excluded.draft, render = excluded.render, caption = excluded.caption,
+       origin = excluded.origin
      RETURNING id`,
-    [p.runId, p.slug, p.storyId, p.title, p.status, p.brief == null ? null : JSON.stringify(p.brief), p.draft == null ? null : JSON.stringify(p.draft), JSON.stringify(p.render), p.render.caption ?? null, p.createdAt ?? null],
+    [p.runId, p.slug, p.storyId, p.title, p.status, p.brief == null ? null : JSON.stringify(p.brief), p.draft == null ? null : JSON.stringify(p.draft), JSON.stringify(p.render), p.render.caption ?? null, p.createdAt ?? null, p.origin ?? 'pipeline'],
   );
   return rows[0].id as string;
 }

@@ -4,7 +4,7 @@
  * Runs as its own systemd unit beside `helios-worker` so a long scrape can
  * never starve outreach drafting, and vice versa. Vercel does not run this.
  *
- *   npm run reels:worker        # schedule 1 AM America/New_York (songs at 12:30 AM), then loop
+ *   npm run reels:worker        # schedule 1 AM America/New_York (songs at 12:30 AM, insights at 5 AM), then loop
  *   npm run reels:run           # one run now, then exit
  */
 import fs from 'node:fs';
@@ -45,8 +45,9 @@ async function main(): Promise<void> {
   const { claimAndPickSong } = await import('@/lib/reels/music/pick');
   const { claimAndPublish } = await import('@/lib/reels/music/publish');
   const { releaseDueSchedules } = await import('@/lib/reels/publish/schedule');
-  const { SONG_INGEST_HOUR_LOCAL, SONG_INGEST_MINUTE_LOCAL, RUN_TIMEZONE } = await import('@/lib/reels/config');
+  const { INSIGHTS_HOUR_LOCAL, SONG_INGEST_HOUR_LOCAL, SONG_INGEST_MINUTE_LOCAL, RUN_TIMEZONE } = await import('@/lib/reels/config');
   const nextSongsAt = () => nextRunAt(new Date(), RUN_TIMEZONE, SONG_INGEST_HOUR_LOCAL, SONG_INGEST_MINUTE_LOCAL);
+  const nextInsightsAt = () => nextRunAt(new Date(), RUN_TIMEZONE, INSIGHTS_HOUR_LOCAL, 0);
   const { closeDbPool } = await import('@/lib/db');
 
   let stopping = false;
@@ -67,7 +68,8 @@ async function main(): Promise<void> {
 
     let scheduledFor = nextRunAt(new Date());
     let songsFor = nextSongsAt();
-    log('scheduled', { nextRunAt: scheduledFor.toISOString(), nextSongsAt: songsFor.toISOString(), pollMs: POLL_MS });
+    let insightsFor = nextInsightsAt();
+    log('scheduled', { nextRunAt: scheduledFor.toISOString(), nextSongsAt: songsFor.toISOString(), nextInsightsAt: insightsFor.toISOString(), pollMs: POLL_MS });
 
     while (!stopping) {
       // 12:30 AM song ingest (D-137, D-166). Its own log, so a failure never blocks 1 AM.
@@ -85,6 +87,13 @@ async function main(): Promise<void> {
       if (Date.now() >= scheduledFor.getTime()) {
         const outcome = await runReelsNight('scheduled');
         log('run_complete', { trigger: 'scheduled', status: outcome.status, runId: outcome.runId });
+        scheduledFor = nextRunAt(new Date());
+        log('scheduled', { nextRunAt: scheduledFor.toISOString() });
+        continue;
+      }
+
+      // 5:00 AM insights sweep, its own hour so it never overlaps a night run (docs/social-overnight.md).
+      if (Date.now() >= insightsFor.getTime()) {
         const insights = await import('@/lib/reels/media-insights/poll')
           .then((mod) => mod.pollDueInsights({ limit: mod.INSIGHTS_NIGHTLY_BATCH, force: true }))
           .catch((error) => {
@@ -100,8 +109,7 @@ async function main(): Promise<void> {
             detail: insights.detail ?? undefined,
           });
         }
-        scheduledFor = nextRunAt(new Date());
-        log('scheduled', { nextRunAt: scheduledFor.toISOString() });
+        insightsFor = nextInsightsAt();
         continue;
       }
 

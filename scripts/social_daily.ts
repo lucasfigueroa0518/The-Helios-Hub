@@ -37,7 +37,12 @@ import { promises as fsp } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-process.loadEnvFile(path.join(process.cwd(), '.env.local'));
+// On the social worker VM the environment comes from systemd (worker.env); there is no .env.local.
+try {
+  process.loadEnvFile(path.join(process.cwd(), '.env.local'));
+} catch (err) {
+  if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+}
 
 const DEFAULT_CAP_USD = 2;
 
@@ -54,6 +59,14 @@ async function main() {
   // The render review (photo spec §5b), fixes on, before/after saved (Tommy, 2026-10-07: the first end-to-end run is its calibration).
   const reviewOn = process.argv.includes('--review');
   const preview = process.argv.includes('--preview');
+  // --run-id: the social worker's queued run (lib/social/overnight/runs.ts); its posts are `pipeline`.
+  // A run started by hand is recorded as before and its posts are `dev`.
+  const runIdArg = (() => {
+    const i = process.argv.indexOf('--run-id');
+    return i > 0 ? process.argv[i + 1] : undefined;
+  })();
+  if (runIdArg !== undefined && !/^[0-9a-f-]{36}$/i.test(runIdArg)) throw new Error('--run-id must be a run id');
+  if (runIdArg && preview) throw new Error('--run-id runs are never previews');
 
   const { newAnthropic } = await import('@/lib/anthropic-client');
   const { HELIOS_SOCIAL_FEEDS } = await import('@/lib/social/feeds');
@@ -61,7 +74,7 @@ async function main() {
   const { fetchBodyLive } = await import('@/lib/social/ingest/select/enrich');
   const { fetchFeeds } = await import('@/lib/social/ingest/select/feed-health');
   const { createSocialStore } = await import('@/lib/social/store');
-  const { insertRun, upsertPost } = await import('@/lib/social/store/pg');
+  const { finishRun, insertRun, upsertPost } = await import('@/lib/social/store/pg');
   const { createCostMeter } = await import('@/lib/social/pipeline/cost-meter');
   const { createLiveStages, createRunBudget } = await import('@/lib/social/pipeline/live-stages');
   const { runDay } = await import('@/lib/social/pipeline/orchestrator');
@@ -208,13 +221,20 @@ async function main() {
   // The database record (spec 2026-10-08-social-storage.md): written after the files, so a database failure loses nothing.
   if (store.query) {
     try {
-      const runId = await insertRun(store.query, {
-        kind: preview ? 'preview' : 'daily', startedAt: now.toISOString(), finishedAt: new Date().toISOString(), hookPass: hookOn, capUsd,
+      const finished = {
+        finishedAt: new Date().toISOString(), hookPass: hookOn,
         claudeUsd: budget.claudeUsd(), totalUsd: budget.spent(), stopReason: result.stopReason ?? null,
         runDir: path.relative(process.cwd(), runDir), machine: os.hostname(),
         record: JSON.parse(await fsp.readFile(path.join(runDir, 'run.json'), 'utf8')),
-      });
-      for (const p of shippedPosts) await upsertPost(store.query, { runId, ...p, status: preview ? 'preview' : 'review' });
+      };
+      let runId: string;
+      if (runIdArg) {
+        await finishRun(store.query, runIdArg, { ...finished, status: shippedPosts.length > 0 ? 'ok' : 'partial' });
+        runId = runIdArg;
+      } else {
+        runId = await insertRun(store.query, { kind: preview ? 'preview' : 'daily', startedAt: now.toISOString(), capUsd, ...finished });
+      }
+      for (const p of shippedPosts) await upsertPost(store.query, { runId, ...p, status: preview ? 'preview' : 'review', origin: runIdArg ? 'pipeline' : 'dev' });
       console.log(`Database: run ${runId}, ${shippedPosts.length} post(s) in social.posts`);
     } catch (err) {
       console.error(`Database write failed (the run folder is complete): ${err instanceof Error ? err.message : String(err)}`);

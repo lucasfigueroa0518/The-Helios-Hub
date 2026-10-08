@@ -22,6 +22,7 @@
     "db:trello:migrate-data": "node scripts/migrate_trello_data.js",
     "db:reels": "node scripts/apply_reels_schema.js",
     "db:social": "node scripts/apply_social_schema.js",
+    "social:worker": "tsx scripts/social_worker.ts",
     "db:explainers": "node scripts/apply_explainers_schema.js",
     "explainers:fixture": "tsx scripts/explainers_fixture.ts",
     "explainers:db": "tsx scripts/explainers_local_db.ts",

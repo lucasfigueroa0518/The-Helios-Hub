@@ -1,0 +1,24 @@
+[Unit]
+Description=Helios Social carousel worker (3 AM run, slides, schedule, publish, insights)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/helios-social/app
+EnvironmentFile=/opt/helios-social/worker.env
+ExecStart=/usr/bin/npm run social:worker
+Restart=always
+RestartSec=15
+KillSignal=SIGTERM
+# A run in flight is a child process; give it time to wind down.
+TimeoutStopSec=120
+# Runs on helios-social-worker (e2-medium, 4 GB + 4 GB swap). The 3 AM run
+# renders with headless Chromium; the other social workers run at other hours
+# (docs/social-overnight.md).
+MemoryMax=2000M
+MemoryHigh=1600M
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

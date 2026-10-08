@@ -62,7 +62,7 @@ test('runs and posts: JSON goes in as jsonb text, a post is upserted by slug, th
   const render = { caption: 'Cap', slides: [] } as any;
   await upsertPost(query, { runId, slug: 'post-x-1', storyId: 's', title: 'T', status: 'preview', brief: { b: 1 }, draft: null, render });
   assert.match(calls[1]!.text, /ON CONFLICT \(slug\) DO UPDATE/);
-  assert.deepEqual(calls[1]!.params, ['id-1', 'post-x-1', 's', 'T', 'preview', '{"b":1}', null, JSON.stringify(render), 'Cap', null]);
+  assert.deepEqual(calls[1]!.params, ['id-1', 'post-x-1', 's', 'T', 'preview', '{"b":1}', null, JSON.stringify(render), 'Cap', null, 'pipeline']);
 });
 
 test('listPosts: filters are optional parameters, newest first', async () => {

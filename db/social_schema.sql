@@ -108,3 +108,145 @@ CREATE TABLE IF NOT EXISTS social.feed_health (
 );
 
 CREATE INDEX IF NOT EXISTS idx_social_feed_health_day ON social.feed_health (day, slug);
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- Overnight: run queue, schedule, publish, insights (docs/social-overnight.md).
+-- Same shapes as Trial Reels (db/reels_schema.sql). The social worker runs the
+-- 3:00 AM NY carousel run; nothing posts until publishing_live is on.
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- ── Runs as a queue ─────────────────────────────────────────────────────────
+-- The CLI (scripts/social_daily.ts) still records a finished run in one insert
+-- (status ok, trigger cli). The worker inserts `requested`, claims it, and
+-- finishes it, like reels.runs.
+ALTER TABLE social.runs ADD COLUMN IF NOT EXISTS trigger text NOT NULL DEFAULT 'cli';
+ALTER TABLE social.runs ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'ok';
+ALTER TABLE social.runs ADD COLUMN IF NOT EXISTS requested_at timestamptz NOT NULL DEFAULT now();
+ALTER TABLE social.runs ADD COLUMN IF NOT EXISTS error text;
+ALTER TABLE social.runs ALTER COLUMN started_at DROP NOT NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'social_runs_trigger_check') THEN
+    ALTER TABLE social.runs ADD CONSTRAINT social_runs_trigger_check
+      CHECK (trigger IN ('scheduled', 'manual', 'cli'));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'social_runs_status_check') THEN
+    ALTER TABLE social.runs ADD CONSTRAINT social_runs_status_check
+      CHECK (status IN ('requested', 'running', 'ok', 'partial', 'failed', 'skipped'));
+  END IF;
+END $$;
+
+-- At most one run in flight, and at most one queued behind it.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_social_runs_single_running
+    ON social.runs ((status)) WHERE status = 'running';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_social_runs_single_requested
+    ON social.runs ((status)) WHERE status = 'requested';
+
+-- ── Posts: dev rows and slide images ────────────────────────────────────────
+-- `dev`: development renders (the one-time file import, re-render scripts).
+-- The calendar and analytics read `pipeline` rows only. Like Trial Reels there
+-- is no approved-version pointer: the newest `review` post per story wins.
+-- `slide_objects`: Storage paths of the 1080x1350 JPEGs, in slide order.
+ALTER TABLE social.posts ADD COLUMN IF NOT EXISTS origin text NOT NULL DEFAULT 'pipeline';
+ALTER TABLE social.posts ADD COLUMN IF NOT EXISTS slide_objects jsonb;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'social_posts_origin_check') THEN
+    ALTER TABLE social.posts ADD CONSTRAINT social_posts_origin_check CHECK (origin IN ('pipeline', 'dev'));
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_social_posts_story ON social.posts (story_id, created_at DESC);
+
+-- ── Settings the page and the worker share ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS social.settings (
+    key         text PRIMARY KEY,
+    value       jsonb NOT NULL,
+    updated_at  timestamptz NOT NULL DEFAULT now()
+);
+
+-- The 3:00 AM run. Off until a human turns it on (a night costs ~$2).
+INSERT INTO social.settings (key, value) VALUES ('auto_run', 'false'::jsonb) ON CONFLICT (key) DO NOTHING;
+-- Scheduling and auto-publishing. Off until a human turns it on.
+INSERT INTO social.settings (key, value) VALUES ('publishing_live', 'false'::jsonb) ON CONFLICT (key) DO NOTHING;
+
+-- ── Posting schedule ────────────────────────────────────────────────────────
+-- One carousel per Eastern-time slot per day.
+CREATE TABLE IF NOT EXISTS social.posting_schedule (
+    id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    post_id             uuid NOT NULL REFERENCES social.posts (id),
+    ny_date             date NOT NULL,
+    slot                text NOT NULL CHECK (slot IN ('morning')),
+    publish_at          timestamptz NOT NULL,
+    status              text NOT NULL CHECK (status IN ('scheduled', 'publishing', 'published', 'cancelled', 'failed')),
+    source              text NOT NULL CHECK (source IN ('auto', 'user')),
+    publish_attempt_id  uuid,
+    error               text,
+    created_at          timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_social_posting_schedule_due
+    ON social.posting_schedule (publish_at) WHERE status = 'scheduled';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_social_posting_schedule_slot
+    ON social.posting_schedule (ny_date, slot) WHERE status IN ('scheduled', 'publishing', 'published');
+CREATE UNIQUE INDEX IF NOT EXISTS idx_social_posting_schedule_post
+    ON social.posting_schedule (post_id) WHERE status IN ('scheduled', 'publishing');
+
+-- ── Publish attempts ────────────────────────────────────────────────────────
+-- creating (child + parent containers) → processing (status poll) →
+-- publishing (media_publish) → published | failed.
+CREATE TABLE IF NOT EXISTS social.publish_attempts (
+    id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    post_id             uuid NOT NULL REFERENCES social.posts (id),
+    trigger             text NOT NULL CHECK (trigger IN ('approve', 'auto', 'force')),
+    status              text NOT NULL CHECK (status IN (
+                          'requested', 'creating', 'processing', 'publishing', 'published', 'failed'
+                        )),
+    requested_at        timestamptz NOT NULL DEFAULT now(),
+    started_at          timestamptz,
+    finished_at         timestamptz,
+    caption             text NOT NULL,
+    image_objects       jsonb NOT NULL,
+    child_container_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
+    container_id        text,
+    media_id            text,
+    permalink           text,
+    status_log          jsonb NOT NULL DEFAULT '[]'::jsonb,
+    error               text,
+    insights_checked_at timestamptz,
+    insights_settled_at timestamptz
+);
+
+CREATE INDEX IF NOT EXISTS idx_social_publish_recent ON social.publish_attempts (requested_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_social_publish_inflight_post
+    ON social.publish_attempts (post_id) WHERE status IN ('requested', 'creating', 'processing', 'publishing');
+-- A carousel posts once.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_social_publish_once
+    ON social.publish_attempts (post_id) WHERE status = 'published';
+CREATE INDEX IF NOT EXISTS idx_social_publish_insights_open
+    ON social.publish_attempts (finished_at DESC)
+    WHERE status = 'published' AND insights_settled_at IS NULL AND media_id IS NOT NULL;
+
+-- ── Instagram performance snapshots ─────────────────────────────────────────
+-- Lifetime totals, one row per published carousel per New York day asked
+-- (due/settle rules: lib/reels/media-insights/due.ts).
+CREATE TABLE IF NOT EXISTS social.media_insights (
+    media_id             text NOT NULL,
+    ny_date              date NOT NULL,
+    publish_attempt_id   uuid REFERENCES social.publish_attempts (id) ON DELETE CASCADE,
+    captured_at          timestamptz NOT NULL DEFAULT now(),
+    views                double precision,
+    reach                double precision,
+    likes                double precision,
+    comments             double precision,
+    saved                double precision,
+    shares               double precision,
+    total_interactions   double precision,
+    raw                  jsonb NOT NULL DEFAULT '{}'::jsonb,
+    PRIMARY KEY (media_id, ny_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_social_media_insights_attempt
+    ON social.media_insights (publish_attempt_id, ny_date DESC);

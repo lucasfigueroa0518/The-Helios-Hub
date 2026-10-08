@@ -11,6 +11,9 @@ export const RUN_HOUR_LOCAL = 1;
 export const SONG_INGEST_HOUR_LOCAL = 0;
 export const SONG_INGEST_MINUTE_LOCAL = 30;
 
+/** Nightly insights sweep, its own hour after every social run (docs/social-overnight.md). */
+export const INSIGHTS_HOUR_LOCAL = 5;
+
 /** D-138: top 10 trending `music` and top 20 trending `original_sound`. */
 export const SONG_TRENDING_TOP = { music: 10, original_sound: 20 } as const;
 
