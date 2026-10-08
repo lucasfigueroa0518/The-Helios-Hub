@@ -61,6 +61,15 @@ export type Brief = {
   single_story: { yes: boolean; note: string | null };
   the_news: { text: string; ids: string[] };
   why_it_matters: Array<{ text: string; ids: string[] }>;
+  /**
+   * The story's shape (Tommy, 2026-10-07, copy overhaul): events in order,
+   * the plot in beats, and the real disagreements or open questions. Every
+   * line arranges listed facts by ID; none adds a fact. Optional in the type
+   * so briefs saved before the overhaul still load; required of the Reporter.
+   */
+  timeline?: Array<{ date: string | null; what: string; ids: string[] }>;
+  plot?: Array<{ beat: PlotBeat; text: string; ids: string[] }>;
+  tensions?: Array<{ text: string; ids: string[] }>;
   facts: BriefFact[];
   background: BriefFact[];
   quotes: BriefQuote[];
@@ -98,6 +107,10 @@ const fact = (idHint: string) =>
     notes: { ...strList, description: 'Caveats, disagreements, extra outlets. Empty if none.' },
   });
 
+/** PLOT beat labels, in story order (copy overhaul, 2026-10-07). */
+export const PLOT_BEATS = ['SETUP', 'TRIGGER', 'CONFLICT', 'RESPONSE', 'OPEN'] as const;
+export type PlotBeat = (typeof PLOT_BEATS)[number];
+
 export const BRIEF_SCHEMA = obj({
   single_story: obj({ yes: { type: 'boolean' }, note: nullableStr }),
   the_news: obj({
@@ -105,6 +118,20 @@ export const BRIEF_SCHEMA = obj({
     ids: { ...strList, description: 'Fact IDs it rests on.' },
   }),
   why_it_matters: list(obj({ text: str, ids: { ...strList, description: 'IDs it rests on (sourced only).' } })),
+  timeline: list(obj({
+    date: { ...nullableStr, description: 'As precise as the sources give it (YYYY-MM-DD when known); null if undated.' },
+    what: { type: 'string', description: 'What happened, one line.' },
+    ids: { ...strList, description: 'Fact IDs it rests on.' },
+  })),
+  plot: list(obj({
+    beat: { type: 'string', enum: [...PLOT_BEATS], description: 'SETUP → TRIGGER → CONFLICT → RESPONSE → OPEN, in that order.' },
+    text: { type: 'string', description: 'One line; arranges listed facts, adds none.' },
+    ids: { ...strList, description: 'Fact IDs it rests on (an OPEN beat may rest on NOT ANSWERED: empty).' },
+  })),
+  tensions: list(obj({
+    text: { type: 'string', description: 'Who says what vs who says what, or the open question.' },
+    ids: { ...strList, description: 'IDs on each side (an open question from NOT ANSWERED: empty).' },
+  })),
   facts: list(fact('F1, F2, …')),
   background: list(fact('B1, B2 (max 2)')),
   quotes: list(
@@ -243,10 +270,14 @@ export function validateBrief(input: unknown, opts: { aggregators?: boolean; spe
   const cited: Array<[string, string[]]> = [
     ['the_news', brief.the_news.ids],
     ...brief.why_it_matters.map((w): [string, string[]] => ['why_it_matters', w.ids]),
+    ...(brief.timeline ?? []).map((t): [string, string[]] => ['timeline', t.ids]),
+    ...(brief.plot ?? []).map((p): [string, string[]] => ['plot', p.ids]),
+    ...(brief.tensions ?? []).map((t): [string, string[]] => ['tensions', t.ids]),
   ];
   for (const [section, ids] of cited) {
     for (const id of ids) if (!seen.has(id)) errors.push({ section, message: `cites ${id}, which isn't in the brief` });
   }
+  errors.push(...storyShapeErrors(brief));
   // Quote speakers by ID (Tommy, 2026-10-06): every speaker_id names a SUBJECTS entry.
   const subjectIds = new Set<string>();
   for (const s of brief.subjects) {
@@ -258,6 +289,32 @@ export function validateBrief(input: unknown, opts: { aggregators?: boolean; spe
   }
   if (errors.length > 0) throw new BriefValidationError(errors);
   return brief;
+}
+
+/**
+ * The story shape's order (copy overhaul, 2026-10-07): PLOT beats in label
+ * order, each but OPEN resting on fact IDs; TIMELINE dated entries oldest
+ * first, each resting on fact IDs.
+ */
+export function storyShapeErrors(brief: Pick<Brief, 'plot' | 'timeline'>): BriefError[] {
+  const errors: BriefError[] = [];
+  let last = -1;
+  for (const [i, p] of (brief.plot ?? []).entries()) {
+    const at = PLOT_BEATS.indexOf(p.beat);
+    if (at < last) errors.push({ section: 'plot', message: `beat ${i + 1} (${p.beat}) comes after ${PLOT_BEATS[last]}: keep SETUP → TRIGGER → CONFLICT → RESPONSE → OPEN order` });
+    last = Math.max(last, at);
+    if (p.beat !== 'OPEN' && p.ids.length === 0) errors.push({ section: 'plot', message: `beat ${i + 1} (${p.beat}) cites no fact IDs` });
+  }
+  let prev = '';
+  for (const [i, t] of (brief.timeline ?? []).entries()) {
+    if (t.ids.length === 0) errors.push({ section: 'timeline', message: `entry ${i + 1} cites no fact IDs` });
+    const d = t.date && /^\d{4}(-\d{2}(-\d{2})?)?/.exec(t.date)?.[0];
+    if (d) {
+      if (prev && d < prev.slice(0, d.length)) errors.push({ section: 'timeline', message: `entry ${i + 1} (${t.date}) is before an earlier entry: oldest first` });
+      prev = d;
+    }
+  }
+  return errors;
 }
 
 /** QUOTES whose speaker isn't a SUBJECTS entry (no speaker_id). An unknown speaker_id is a separate error. */

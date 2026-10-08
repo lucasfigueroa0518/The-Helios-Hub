@@ -390,9 +390,10 @@ You are the Editor for Helios Group's Instagram carousels. You get the Writer's 
 
 Make sure:
 1. The chosen cover alone says who did what.
-2. Every slide makes the reader want the next; reorder or sharpen headlines to create the pull, without adding facts.
-3. Every slide makes sense to an outsider. Explain unfamiliar terms where they appear, using only the brief's TERMS.
+2. Every slide makes the reader want the next: each slide's last line hands off to the next one. Reorder, sharpen or cut to create the pull, without adding facts.
+3. Every slide makes sense to an outsider. Explain a term only where the slide fails without it, using only the brief's TERMS; otherwise leave it for the caption.
 4. The reader finishes knowing why it matters.
+5. Hold the word budget: one idea per slide, bodies of one or two short sentences. Cut before you add.
 
 POWERS: cut and sharpen only. You may tighten wording, reorder slides, cut slides or lines, and explain terms from TERMS. You never add facts, numbers, quotes or descriptors. Keep every hedge, every [CLAIM: X says] attribution, every quote/number ID and every [F#] claim tag on the sentences you keep. You may swap a slide's visual for its fallback visual (a cut); never add or change a visual request.
 
@@ -422,7 +423,7 @@ OUTPUT: the full edited draft in the Writer's format, then EDIT NOTES: one line 
 ### Checked by code
 
 Code checks the finished draft. A failure comes back to you once, with the exact problem:
-- Length: cover ≤90 characters, headline ≤60, body ≤220, a quote on a quote slide ≤140, caption ≤2,200. Never over.
+- Length: cover ≤75 characters; headline 15–60 and body ≤130, together ≤155; a quote on a quote slide ≤120; caption ≤2,200. Never over.
 - Quotation marks only around words that are a QUOTES entry, word for word, or an exact excerpt of one.
 - None of the voice list's banned words or phrases, no sentence opening with "Meanwhile," "Additionally," "Furthermore" or "That said," no exclamation marks, no emoji. Quoted speech is exempt.
 - No hashtags in the caption.
@@ -520,3 +521,64 @@ When you're done, call submit_hooks with one entry per story slide: slide number
   - These go back to the model on the first attempt: over budget, quotation marks, a number not in the tagged entries, a second why-it-matters line, C8 (the line repeats a number or a 4-word phrase of its own slide). After the retry, a line that still fails is dropped and logged, and the rest stand.
 - **Render:** the line is drawn in a smaller orange style. A lead-in sits above the body; a tease or why-it-matters line sits below it. C7 checks that it reaches the slide.
 - **Model:** its own `hook` setting in STAGE_MODELS (Sonnet 5.5, high effort).
+
+## 8. Copy overhaul (Tommy, 2026-10-07)
+
+Plan: `plans/2026-10-07-copy-overhaul.md`. Restore point: tag `social-copy-checkpoint-2026-10-07`. Truth rules untouched; contradictions aligned; half the words; the bridge inside the Writer; a story shape in the brief.
+
+`cause · Reporter, Writer and Editor prompts + schema + code checks · 0 new stages · 0 new AI calls`
+
+- **Copy overhaul, Reporter:** one rule line after the stay-on-the-main-event rule, then three sections after WHY IT MATTERS:
+
+```
+- TIMELINE, PLOT and TENSIONS only arrange facts you already listed: every line cites fact IDs (an OPEN beat or an open question may rest on NOT ANSWERED instead) and adds no fact, cause or motive of its own. "After" is order, never "because."
+```
+
+```
+TIMELINE: the story's events in the order they happened, oldest first: date (as precise as the sources give it, or undated) | what happened | fact IDs. Include earlier events from BACKGROUND that set the story up. Only events your sources date or clearly order.
+PLOT: 4–6 beats that tell this story in order, one line each with fact IDs, each labelled SETUP (the situation before the news), TRIGGER (what happened), CONFLICT (who pushes back, what's at stake, what doesn't add up), RESPONSE (how the other side answered) or OPEN (what's still unknown or comes next, from NOT ANSWERED). Labels go in that order; skip one the sources don't support, never invent one to fill the shape.
+TENSIONS: each real disagreement or open question in the sources, one line each: who says what vs who says what (with IDs), or the open question. None if the sources show none.
+```
+
+- **Copy overhaul, Writer rule lines:** the tested cover, punchy-headline and length lines are replaced, in that order:
+
+```
+- COVER (≤75 chars): must say who did what on its own. If the main person isn't widely known, lead with role/country, not their name.
+```
+
+```
+- Headlines may be punchy, but never false. The body states the precise claim in the fewest words it takes: the hedge and the attribution stay, the padding goes.
+```
+
+```
+- 5–8 story slides. Stop when the story is told; never pad to 8. One idea per slide: a second idea is a second slide, or it's cut.
+- Headline and body share one budget of 155 characters: the headline 15–60, the body up to 130, together never over 155. Trade between them as the slide needs (a short headline buys a longer body, and the other way round). Aim for a body of one or two short sentences, about 12–18 words, and the post's slides under about 130 words in all.
+```
+
+- **Copy overhaul, Writer added lines:** the stat line is replaced and an attribution line follows it (after the claim-tag and widely-known lines):
+
+```
+- At most 2 stat slides per post. Keep the strongest numbers as stat slides; use another number in a body only when the slide's point needs it, else leave it for the caption.
+- Attribute in the fewest words that keep the claim honest: "Common Sense says" or "per Common Sense", once per slide. Never stack two attributions on one slide.
+```
+
+- **Copy overhaul, Writer momentum:** replaces the three v2 momentum lines:
+
+```
+- Build the post from the brief's PLOT and TIMELINE: the slides follow its beats in order (SETUP → TRIGGER → CONFLICT → RESPONSE → OPEN), one beat per slide or two, so each slide grows out of the one before.
+- Write for the feed: each slide is a beat a thumb stops on. Lead with the most surprising true thing on the slide.
+- The bridge lives inside the slide: its last line hands off to the next slide. A bridge is a fact from the brief that raises the question the next slide answers (a contradiction, a consequence, a reaction, an open question from TENSIONS or NOT ANSWERED). It is part of the copy, not an extra line.
+- A fair tease withholds the next slide's detail, never the news: the cover and slide 2 state the news plainly. Never invent suspense or tease a fact the brief doesn't have.
+- Not every slide needs a bridge: the last story slide lands the point instead.
+```
+
+- **Copy overhaul, structure:** the voice block leaves the caption section and becomes `## Voice (slides and caption)` before it; the VISUAL rule leaves the rule list and becomes `## Photos and icons` after the voice. Glossing and VOICE_BLOCK edits are in the shared-blocks doc. The Editor's checks 2–3 are edited in §4's block above, and check 5 added there.
+
+- **Copy overhaul, checked by code:** the length line becomes:
+
+```
+- Length: cover ≤75 characters; headline 15–60 and body ≤130, together ≤155; a quote on a quote slide ≤120; caption ≤2,200. Never over.
+```
+
+  Code (C1): cover ≤75; headline 15–60; body ≤130; headline + body ≤155; a quote on a quote slide ≤120; caption ≤2,200.
+

@@ -15,7 +15,7 @@ import { runDay } from '@/lib/social/pipeline/orchestrator';
 import { createInMemorySetAsideLog } from '@/lib/social/pipeline/set-aside-log';
 import { STUB_ARTICLES, createStubStages } from '@/lib/social/pipeline/stubs';
 import { createWriterStage } from '@/lib/social/pipeline/writer-stage';
-import { RULES_BLOCK, WRITER_RULES, renderRulesFor } from '@/lib/social/prompts/rules-block';
+import { RULES_BLOCK, VISUAL_RULE, WRITER_RULES, renderRulesFor } from '@/lib/social/prompts/rules-block';
 import { VOICE_BLOCK } from '@/lib/social/prompts/voice-block';
 import type { MessagesCreate } from '@/lib/social/reporter/reporter';
 import { DraftValidationError, checkDraft, fillDraft, isExactExcerpt, type DraftSubmission, type VisualRequest } from '@/lib/social/writer/draft';
@@ -38,10 +38,10 @@ function draft(): DraftSubmission {
     chosen_cover: 1,
     slides: [
       { type: 'text', headline: { text: 'Announced on Truth Social', facts: ['F1'] }, body: { text: 'Trump announced the force in a Sunday morning post.', facts: ['F1'] }, quote_id: null, quote_excerpt: null, number_ids: [], visual: v('thematic', 'smartphone screen'), fallback_visual: v('person', 'Donald Trump'), subject_ids: ['S1'], icon: 'smartphone' },
-      { type: 'quote', headline: { text: 'His pitch', facts: ['Q1'] }, body: null, quote_id: 'Q1', quote_excerpt: 'The Super Intelligence Force is tasked with coordinating the effort of the Federal Government … of all Americans,', number_ids: [], visual: v('person', 'Donald Trump'), fallback_visual: v('thematic', 'press podium'), subject_ids: ['S1'], icon: 'message-square-quote' },
+      { type: 'quote', headline: { text: 'His pitch for the force', facts: ['Q1'] }, body: null, quote_id: 'Q1', quote_excerpt: 'The Super Intelligence Force is tasked with coordinating the effort of the Federal Government … of all Americans,', number_ids: [], visual: v('person', 'Donald Trump'), fallback_visual: v('thematic', 'press podium'), subject_ids: ['S1'], icon: 'message-square-quote' },
       { type: 'stat', headline: { text: 'It has a deadline', facts: ['N1'] }, body: null, quote_id: null, quote_excerpt: null, number_ids: ['N1'], visual: v('thematic', 'wall clock'), fallback_visual: v('thematic', 'desk calendar'), subject_ids: [], icon: 'clock' },
       { type: 'text', headline: { text: 'What the charter says', facts: ['F6'] }, body: { text: 'The charter reportedly says it will plan responses to SI-enabled threats.', facts: ['F6'] }, quote_id: null, quote_excerpt: null, number_ids: [], visual: v('thematic', 'stacks of documents'), fallback_visual: v('setting', 'government office'), subject_ids: [], icon: 'file-text' },
-      { type: 'text', headline: { text: 'Why the name', facts: ['B2'] }, body: { text: 'Trump signed an executive order seeking to rebrand AI as super intelligence.', facts: ['B2'] }, quote_id: null, quote_excerpt: null, number_ids: [], visual: v('thematic', 'pen and paper'), fallback_visual: v('thematic', 'signed document'), subject_ids: ['S1'], icon: 'file-text' },
+      { type: 'text', headline: { text: 'Why the name matters', facts: ['B2'] }, body: { text: 'Trump signed an executive order seeking to rebrand AI as super intelligence.', facts: ['B2'] }, quote_id: null, quote_excerpt: null, number_ids: [], visual: v('thematic', 'pen and paper'), fallback_visual: v('thematic', 'signed document'), subject_ids: ['S1'], icon: 'file-text' },
     ],
     follow: 'Follow Helios for AI news without the hype.',
     caption: { text: 'Trump announced a Super Intelligence Force. Source: TechCrunch, October 4, 2026.', facts: ['F1'] },
@@ -63,13 +63,14 @@ function errorsOf(edit: (d: DraftSubmission) => void): string[] {
 
 // ── Prompt (prompts file §2–3) ─────────────────────────────────────────
 
-test('Writer prompt = tested intro + RULES (tested lines + 3 additions + shared policy) + submit_draft line + section list + caption section', () => {
+test('Writer prompt = tested intro + RULES (tested lines + additions + momentum) + shared policy + Voice + Photos and icons + section list + caption section (copy overhaul)', () => {
   const tested = codeBlocks('## 2. Writer')[0]!;
   const intro = tested.slice(0, tested.indexOf('\n\nRULES\n'));
   // Sixth round (2026-10-07): VISUAL / FALLBACK VISUAL replace IMAGE.
   const sectionList = tested.slice(tested.indexOf('\n\nOUTPUT\n') + '\n\nOUTPUT\n'.length, tested.indexOf('\n\nBRIEF\n')).replace('/ IMAGE   (repeat)', '/ VISUAL / FALLBACK VISUAL   (repeat)');
   const caption = codeBlocks('## 3. Writer')[0]!
-    .replace('${VOICE_BLOCK}', VOICE_BLOCK)
+    // Copy overhaul (2026-10-07): the voice leaves the caption for its own section before it.
+    .replace('### Voice\n\n${VOICE_BLOCK}\n\n', '')
     .replace("${renderRulesFor('caption')}", renderRulesFor('writer'))
     // Caption wording fixes (2026-10-05).
     .replace('the final SLIDES you were given', 'the slides you wrote')
@@ -78,17 +79,22 @@ test('Writer prompt = tested intro + RULES (tested lines + 3 additions + shared 
     .replace(/^3\. Source credits, always,.*\n/m, '');
   const expected = [
     intro,
-    `## Rules\n\n${WRITER_RULES}\n${WRITER_ADDED_RULES}\n${codeBlocks('**Writer prompt v2')[0]}\n${codeBlocks('**No repetition within a slide')[0]}`,
+    `## Rules\n\n${WRITER_RULES}\n${WRITER_ADDED_RULES}\n${codeBlocks('- **Copy overhaul, Writer momentum')[0]}\n${codeBlocks('**No repetition within a slide')[0]}`,
     RULES_BLOCK.slice(RULES_BLOCK.indexOf('## Context policy')),
+    `## Voice (slides and caption)\n\n${VOICE_BLOCK}`,
+    `## Photos and icons\n\n${VISUAL_RULE}`,
     `When you're done, call submit_draft with these sections:\n${sectionList}`,
     caption,
   ].join('\n\n');
   assert.equal(WRITER_SYSTEM, expected);
   assert.ok(!WRITER_SYSTEM.includes('{{brief}}') && !WRITER_SYSTEM.includes('\nOUTPUT\n') && !WRITER_SYSTEM.includes('${'));
-  assert.equal(WRITER_ADDED_RULES.split('\n').length, 3);
-  // Sixth round (2026-10-07): the stat line, the third block after "**Sixth round" (the spread line is gone).
-  assert.ok(WRITER_ADDED_RULES.endsWith(codeBlocks('- **Sixth round (Tommy, 2026-10-07')[2]!), 'stat line word for word');
-  assert.equal(WRITER_MOMENTUM_RULES, codeBlocks('**Writer prompt v2')[0], 'v2 rules word for word from the prompts file');
+  assert.equal(WRITER_ADDED_RULES.split('\n').length, 4);
+  // Copy overhaul (2026-10-07): the stat and attribution lines, word for word from the prompts file §8.
+  assert.ok(WRITER_ADDED_RULES.endsWith(codeBlocks('- **Copy overhaul, Writer added lines')[0]!), 'stat and attribution lines word for word');
+  assert.equal(WRITER_MOMENTUM_RULES, codeBlocks('- **Copy overhaul, Writer momentum')[0], 'momentum word for word from the prompts file §8');
+  // The bridge lives in the Writer; the photo rules follow the copy rules.
+  assert.ok(WRITER_SYSTEM.indexOf('## Photos and icons') > WRITER_SYSTEM.indexOf('## Voice (slides and caption)'));
+  assert.ok(WRITER_SYSTEM.indexOf('## Voice (slides and caption)') < WRITER_SYSTEM.indexOf('## Caption'));
   assert.ok(!WRITER_SYSTEM.includes('—'), 'no em dashes anywhere in the Writer prompt');
   assert.ok(!WRITER_SYSTEM.includes('Source:'), 'the Source line is built by code, not asked of the Writer');
 });

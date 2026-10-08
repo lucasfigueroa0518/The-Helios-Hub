@@ -19,7 +19,7 @@ async function main() {
   const inputs = process.argv.slice(2).filter((a) => a.includes('=')).map((a) => a.split('=') as [string, string]);
   if (!Number.isFinite(cap) || cap <= 0 || inputs.length === 0) throw new Error('usage: --cap-usd <amount> <name>=<brief.json> …');
 
-  const { default: Anthropic } = await import('@anthropic-ai/sdk');
+  const { newAnthropic } = await import('@/lib/anthropic-client');
   const { liveMessagesCreate } = await import('@/lib/social/reporter/reporter');
   const { validateBrief } = await import('@/lib/social/reporter/brief');
   const { runWriter, briefForWriter } = await import('@/lib/social/writer/writer');
@@ -27,7 +27,7 @@ async function main() {
   const { priceAnthropicMessages } = await import('@/lib/anthropic-pricing');
   const { STAGE_MODELS } = await import('@/lib/social/pipeline/models');
 
-  const live = liveMessagesCreate(new Anthropic());
+  const live = liveMessagesCreate(newAnthropic());
   let spent = 0;
   const create: typeof live = async (params) => {
     if (spent + CALL_RESERVE_USD > cap) throw new Error(`total cap: $${spent.toFixed(4)} spent, a call could pass $${cap}`);

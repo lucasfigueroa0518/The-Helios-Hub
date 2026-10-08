@@ -20,6 +20,10 @@
  *   PHOTO RULE (Tommy, 2026-10-06): the tested IMAGE line is replaced by
  *   IMAGE_RULE (photos only when one fits, else none; no symbolic stock), and
  *   the spread line by the one-spread, literal-scene version.
+ *   COPY OVERHAUL (Tommy, 2026-10-07; prompts file §8): half the words
+ *   (one headline + body budget), momentum from the brief's PLOT with the
+ *   bridge inside each slide, attribution in the fewest words, extra numbers
+ *   to the caption, voice in its own section, photo rules after the copy rules.
  *   SIXTH ROUND (Tommy, 2026-10-07): the IMAGE line becomes VISUAL_RULE (a
  *   visual and a fallback per slide, by kind); slide kinds are text, stat and
  *   quote (KINDS_RULE); the spread line and CONCEPT are gone (Jev lays slides
@@ -27,7 +31,7 @@
  *   PLACEMENT (caching): "BRIEF\n{{brief}}" moves to the user message;
  *   the brief is the Reporter's JSON, with SUBJECTS marked well_known by code.
  */
-import { RULES_BLOCK, WRITER_RULES, renderRulesFor } from '@/lib/social/prompts/rules-block';
+import { RULES_BLOCK, VISUAL_RULE, WRITER_RULES, renderRulesFor } from '@/lib/social/prompts/rules-block';
 import { VOICE_BLOCK } from '@/lib/social/prompts/voice-block';
 
 export const WRITER_INTRO = `You are the Writer for Helios Group, an Instagram page that turns one AI news story into a carousel for smart, busy readers interested in AI who don't follow it closely. Write from the BRIEF only. No tools, no web, no outside knowledge.`;
@@ -35,12 +39,18 @@ export const WRITER_INTRO = `You are the Writer for Helios Group, an Instagram p
 /** The three "added since the test" rule lines (prompts file §2), in the tested terse style. */
 export const WRITER_ADDED_RULES = `- Claim tags: give every cover, headline, body and caption line the IDs of the brief entries it rests on (F3, B1, Q2, N1) in its facts list; empty if none. Code checks them.
 - Widely known: each SUBJECTS entry has well_known (true/false), set by code from Wikidata. Use it for the COVER rule; don't guess.
-- At most 2 stat slides per post. Keep the strongest numbers as stat slides; put the others in a text slide's body.`;
+- At most 2 stat slides per post. Keep the strongest numbers as stat slides; use another number in a body only when the slide's point needs it, else leave it for the caption.
+- Attribute in the fewest words that keep the claim honest: "Common Sense says" or "per Common Sense", once per slide. Never stack two attributions on one slide.`;
 
-/** Writer prompt v2 (Tommy, 2026-10-06; Lucas: slides feel isolated): momentum across the post. Word for word from the prompts file. */
-export const WRITER_MOMENTUM_RULES = `- Plan the post as one story, not a list of facts. Outline the arc before writing: the hook (cover) → what happened → why it matters → the turn (the pushback, the catch, the conflict) → what's still unknown or what comes next.
-- Every slide pulls the reader to the next one. End each slide on real tension from the brief (a contradiction, a consequence, a reaction, an open question) that the next slide pays off.
-- Tension comes only from the brief: disagreements, critics, stakes, NOT ANSWERED. Never invent suspense, tease facts that aren't there, or hold back the news.`;
+/**
+ * Momentum (copy overhaul, Tommy 2026-10-07; replaces prompt v2's three lines): the post follows the brief's PLOT
+ * and TIMELINE, and the bridge to the next slide is the slide's own last line. Word for word from the prompts file §8.
+ */
+export const WRITER_MOMENTUM_RULES = `- Build the post from the brief's PLOT and TIMELINE: the slides follow its beats in order (SETUP → TRIGGER → CONFLICT → RESPONSE → OPEN), one beat per slide or two, so each slide grows out of the one before.
+- Write for the feed: each slide is a beat a thumb stops on. Lead with the most surprising true thing on the slide.
+- The bridge lives inside the slide: its last line hands off to the next slide. A bridge is a fact from the brief that raises the question the next slide answers (a contradiction, a consequence, a reaction, an open question from TENSIONS or NOT ANSWERED). It is part of the copy, not an extra line.
+- A fair tease withholds the next slide's detail, never the news: the cover and slide 2 state the news plainly. Never invent suspense or tease a fact the brief doesn't have.
+- Not every slide needs a bridge: the last story slide lands the point instead.`;
 
 /** No repetition within a slide (Tommy and Lucas, 2026-10-06; third case of a repeated number). Word for word from the prompts file. */
 export const WRITER_SLIDE_RULE = '- Every element on a slide adds something new: headline, body, big number and label never repeat the same phrase or number. The headline says what the number means.';
@@ -86,10 +96,6 @@ After the summary, each on its own line:
 
 Image credits are added automatically after your caption. Don't write them.
 
-### Voice
-
-${VOICE_BLOCK}
-
 No hashtags.
 
 ${CAPTION_CHECK_RULES}
@@ -102,6 +108,10 @@ export const WRITER_SYSTEM = [
   WRITER_INTRO,
   `## Rules\n\n${WRITER_RULES}\n${WRITER_ADDED_RULES}\n${WRITER_MOMENTUM_RULES}\n${WRITER_SLIDE_RULE}`,
   CONTEXT_AND_GLOSSING,
+  // Copy overhaul (2026-10-07): the voice covers the slides too, so it gets its own section before the caption;
+  // the photo request rules follow the copy rules instead of sitting among them.
+  `## Voice (slides and caption)\n\n${VOICE_BLOCK}`,
+  `## Photos and icons\n\n${VISUAL_RULE}`,
   `When you're done, call submit_draft with these sections:\n${WRITER_SECTION_LIST}`,
   WRITER_CAPTION_SECTION,
 ].join('\n\n').replace(/\n{3,}/g, '\n\n');

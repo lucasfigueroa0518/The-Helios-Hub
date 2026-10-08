@@ -33,6 +33,10 @@
  *   line's "or none" goes, since it would contradict the rule. Code checks
  *   every quote's speaker_id (brief.ts quoteSpeakersNotInSubjects).
  *
+ *   STORY SHAPE (Tommy, 2026-10-07, copy overhaul): TIMELINE, PLOT and
+ *   TENSIONS sections and one rule that they only arrange listed facts, so the
+ *   Writer knows how the facts relate (plot, conflict, chronology).
+ *
  *   ADDED SINCE THE TEST (prompts file §1, "Added since the test"):
  *     [A1] pages are read through the raw-text page reader (spec §4.2c);
  *     [A2] NUMBERS entries carry a number type (plan M2; format approved
@@ -55,11 +59,15 @@ RULES
 - For photos found in source articles, copy caption and credit line exactly.
 - Aggregators are outlets that summarize other outlets' reporting, including AI-generated summary sites. Use them only to find the original. Never use an aggregator as the only source for a fact or quote.
 - Stay on the main event. FACTS cover only this story. Earlier or related events go in BACKGROUND (max 2), and only if a reader needs them to understand the news. Leave everything else out.
+- TIMELINE, PLOT and TENSIONS only arrange facts you already listed: every line cites fact IDs (an OPEN beat or an open question may rest on NOT ANSWERED instead) and adds no fact, cause or motive of its own. "After" is order, never "because."
 
 When you're done, call submit_brief with these sections:
 SINGLE STORY: yes/no
 THE NEWS: one line (who, what, when) with fact IDs
 WHY IT MATTERS (sourced only): 1–2 bullets with IDs
+TIMELINE: the story's events in the order they happened, oldest first: date (as precise as the sources give it, or undated) | what happened | fact IDs. Include earlier events from BACKGROUND that set the story up. Only events your sources date or clearly order.
+PLOT: 4–6 beats that tell this story in order, one line each with fact IDs, each labelled SETUP (the situation before the news), TRIGGER (what happened), CONFLICT (who pushes back, what's at stake, what doesn't add up), RESPONSE (how the other side answered) or OPEN (what's still unknown or comes next, from NOT ANSWERED). Labels go in that order; skip one the sources don't support, never invent one to fill the shape.
+TENSIONS: each real disagreement or open question in the sources, one line each: who says what vs who says what (with IDs), or the open question. None if the sources show none.
 FACTS: F1, F2, … each one sentence + (sources)
 BACKGROUND: B1, B2 (max 2) — earlier events a reader needs, each sourced
 QUOTES: Q1… exact text — speaker, where (via outlet) [⚠ if single source] [cut off if cut off in every source] — speaker's SUBJECTS ID (S1…)

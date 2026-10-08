@@ -148,7 +148,7 @@ test('C7 dropped text: every draft field must appear on its rendered slide', () 
   rendered[quoteSlide] = `${d.slides[quoteSlide - 1]!.quote!.text} ${d.slides[quoteSlide - 1]!.quote!.speaker}`;
   const f = checkDroppedText(d, rendered);
   assert.deepEqual(ids(f), ['C7']);
-  assert.match(f[0]!.detail, /His pitch/);
+  assert.match(f[0]!.detail, /His pitch for the force/);
 });
 
 // ── Wiring (Tommy, 2026-10-06) ───────────────────────────────────────────
@@ -223,13 +223,13 @@ const designDeps = (fitCheck = async (post: Parameters<typeof fitOkFor>[0]) => f
 test('design: C7 dropped text fails the render (render-failed)', async () => {
   const fitCheck = async (post: Parameters<typeof fitOkFor>[0]) => {
     const r = fitOkFor(post);
-    r.slideText[3] = r.slideText[3]!.replace('His pitch', '');
+    r.slideText[3] = r.slideText[3]!.replace('His pitch for the force', '');
     return r;
   };
   const r = await createDesignStage(designDeps(fitCheck) as never)(pdraft(), pbrief(), story);
   assert.equal(r.ok, false);
   assert.equal((r as { reasonCode: string }).reasonCode, 'render-failed');
-  assert.match((r as { detail: string }).detail, /C7 slide 4: not on the rendered slide: "His pitch"/);
+  assert.match((r as { detail: string }).detail, /C7 slide 4: not on the rendered slide: "His pitch for the force"/);
 });
 
 test('design: C6 drops a story-slide photo whose credit fails (agency): text-only, logged', async () => {

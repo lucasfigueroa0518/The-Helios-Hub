@@ -39,8 +39,31 @@ export const VISUAL_RULE = `- VISUAL and subject tags. Give every cover option a
 export const TESTED_KINDS_LINE = '- Slide kinds: text, stat / split stat (by ID), quote, landing, image. Variety where material supports it.';
 export const KINDS_RULE = '- Slide kinds: text, stat (one or two numbers by ID), quote. You choose what each slide says; its layout is chosen for you.';
 
-/** The Writer rules as used: the tested lines with the IMAGE and slide-kinds lines replaced. */
-export const WRITER_RULES = TESTED_WRITER_RULES.replace(TESTED_IMAGE_RULE, VISUAL_RULE).replace(TESTED_KINDS_LINE, KINDS_RULE);
+/**
+ * Copy overhaul (Tommy, 2026-10-07; prompts file §8): social-first copy at
+ * half the words. Three tested lines are replaced: the cover cap, the
+ * punchy-headline line and the length line (one shared headline + body
+ * budget with elastic limits). Truth rules are untouched.
+ */
+export const TESTED_COVER_LINE = `- COVER (≤90 chars): must say who did what on its own. If the main person isn't widely known, lead with role/country, not their name.`;
+export const COVER_RULE = `- COVER (≤75 chars): must say who did what on its own. If the main person isn't widely known, lead with role/country, not their name.`;
+export const TESTED_PUNCHY_LINE = `- Headlines may be punchy, but never false. Body states the precise version.`;
+export const PUNCHY_RULE = `- Headlines may be punchy, but never false. The body states the precise claim in the fewest words it takes: the hedge and the attribution stay, the padding goes.`;
+export const TESTED_LENGTH_LINE = `- 5–8 story slides. Stop when the story is told; never pad to 8. Headline ≤60, body ≤220 chars.`;
+export const LENGTH_RULE = `- 5–8 story slides. Stop when the story is told; never pad to 8. One idea per slide: a second idea is a second slide, or it's cut.
+- Headline and body share one budget of 155 characters: the headline 15–60, the body up to 130, together never over 155. Trade between them as the slide needs (a short headline buys a longer body, and the other way round). Aim for a body of one or two short sentences, about 12–18 words, and the post's slides under about 130 words in all.`;
+
+/**
+ * The Writer rules as used: the tested lines with the slide-kinds, cover,
+ * punchy and length lines replaced. The IMAGE line's replacement (VISUAL_RULE)
+ * moved out of the copy rules into its own "Photos and icons" section (copy
+ * overhaul: copy rules lead the prompt).
+ */
+export const WRITER_RULES = TESTED_WRITER_RULES.replace(`${TESTED_IMAGE_RULE}\n`, '')
+  .replace(TESTED_KINDS_LINE, KINDS_RULE)
+  .replace(TESTED_COVER_LINE, COVER_RULE)
+  .replace(TESTED_PUNCHY_LINE, PUNCHY_RULE)
+  .replace(TESTED_LENGTH_LINE, LENGTH_RULE);
 
 export const RULES_BLOCK = `## Rules
 
@@ -57,7 +80,7 @@ Not allowed: repeating a competitor's prior announcement as coverage of this sto
 
 ## Glossing (advisory, not required)
 
-A term needs a gloss only if the slide doesn't make sense without it. If a gloss would eat more than about a fifth of a slide's body, move the definition to the caption or a dedicated slide instead of shrinking the fact. Glosses always come from the TERMS list in the brief; never invent a definition. TERMS explanations count as sourced by the Fact-checker.`;
+A term needs a gloss only if the slide doesn't make sense without it. If a gloss would eat more than about a fifth of a slide's body, move the definition to the caption instead of shrinking the fact. Glosses always come from the TERMS list in the brief; never invent a definition. TERMS explanations count as sourced by the Fact-checker.`;
 
 export type RuleStage = 'reporter' | 'writer' | 'editor' | 'fact-checker';
 
@@ -70,7 +93,7 @@ export type RuleStage = 'reporter' | 'writer' | 'editor' | 'fact-checker';
 export const CHECKED_RULES = `### Checked by code
 
 Code checks the finished draft. A failure comes back to you once, with the exact problem:
-- Length: cover ≤90 characters, headline ≤60, body ≤220, a quote on a quote slide ≤140, caption ≤2,200. Never over.
+- Length: cover ≤75 characters; headline 15–60 and body ≤130, together ≤155; a quote on a quote slide ≤120; caption ≤2,200. Never over.
 - Quotation marks only around words that are a QUOTES entry, word for word, or an exact excerpt of one.
 - None of the voice list's banned words or phrases, no sentence opening with "Meanwhile," "Additionally," "Furthermore" or "That said," no exclamation marks, no emoji. Quoted speech is exempt.
 - No hashtags in the caption.

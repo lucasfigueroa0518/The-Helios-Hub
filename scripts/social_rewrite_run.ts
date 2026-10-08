@@ -17,7 +17,7 @@ async function main() {
   const runDir = process.argv.slice(2).find((a, i, all) => !a.startsWith('--') && all[i - 1] !== '--cap-usd');
   if (!Number.isFinite(cap) || cap <= 0 || !runDir) throw new Error('usage: --cap-usd <amount> <runs/daily-dir>');
 
-  const { default: Anthropic } = await import('@anthropic-ai/sdk');
+  const { newAnthropic } = await import('@/lib/anthropic-client');
   const { liveMessagesCreate } = await import('@/lib/social/reporter/reporter');
   const { createRunBudget } = await import('@/lib/social/pipeline/live-stages');
   const { MAX_FRESH_DRAFTS } = await import('@/lib/social/pipeline/orchestrator');
@@ -29,7 +29,7 @@ async function main() {
   type FilledDraft = import('@/lib/social/writer/draft').FilledDraft;
 
   const budget = createRunBudget({ capUsd: cap, otherSpendUsd: () => 0 });
-  const create = budget.guard(liveMessagesCreate(new Anthropic()));
+  const create = budget.guard(liveMessagesCreate(newAnthropic()));
   const run = JSON.parse(await fsp.readFile(path.join(runDir, 'run.json'), 'utf8'));
   const outDir = path.join(runDir, `rewrite-${new Date().toISOString().replace(/[:.]/g, '-')}`);
   await fsp.mkdir(outDir, { recursive: true });

@@ -31,7 +31,7 @@ async function main() {
   const at = process.argv.indexOf('--cap-usd');
   const cap = at > 0 ? Number(process.argv[at + 1]) : NaN;
   if (!Number.isFinite(cap) || cap <= 0) throw new Error('--cap-usd is required');
-  const { default: Anthropic } = await import('@anthropic-ai/sdk');
+  const { newAnthropic } = await import('@/lib/anthropic-client');
   const { liveMessagesCreate } = await import('@/lib/social/reporter/reporter');
   const { validateBrief } = await import('@/lib/social/reporter/brief');
   const { runFactCheck } = await import('@/lib/social/factcheck/factcheck');
@@ -48,7 +48,7 @@ async function main() {
     line.text = line.text.replace(p.from, p.to);
   }
 
-  const live = liveMessagesCreate(new Anthropic());
+  const live = liveMessagesCreate(newAnthropic());
   let spent = 0;
   const create: typeof live = async (params) => {
     if (spent + 0.05 > cap) throw new Error(`cap: $${spent.toFixed(4)} spent`);

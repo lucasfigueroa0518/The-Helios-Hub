@@ -151,7 +151,7 @@ test('apply: SWAP and CUT are applied by code; nothing else changes', () => {
 });
 
 test('apply: a cut that empties a headline drops the slide; a flag inside the filled quote drops the slide', () => {
-  const headline = apply([flag({ where: { part: 'slide', number: 7 }, quoted_text: 'Why the name', fact_id: 'B2' })]);
+  const headline = apply([flag({ where: { part: 'slide', number: 7 }, quoted_text: 'Why the name matters', fact_id: 'B2' })]);
   assert.equal(headline.kind, 'ok');
   if (headline.kind === 'ok') assert.equal(headline.draft.slides.length, 5);
   const quote = apply([flag({ where: { part: 'slide', number: 4 }, quoted_text: 'coordinating the effort', fact_id: null, type: 3 })]);
@@ -184,7 +184,7 @@ test('apply: fewer than 5 slides, or the key slide cut → fresh draft; main cla
   assert.equal(keySlideIndex(sifDraft(), brief()), 0); // slide 2 carries THE NEWS (F1)
   const key = apply([flag({ quoted_text: 'Announced on Truth Social' })]);
   assert.deepEqual(key.kind === 'fresh-draft' && key.why, 'the key slide (slide 2) was cut');
-  const few = apply([3, 6, 7].map((n) => flag({ where: { part: 'slide', number: n }, quoted_text: ['Clayton will chair it', 'What the charter says', 'Why the name'][[3, 6, 7].indexOf(n)]! })));
+  const few = apply([3, 6, 7].map((n) => flag({ where: { part: 'slide', number: n }, quoted_text: ['Clayton will chair it', 'What the charter says', 'Why the name matters'][[3, 6, 7].indexOf(n)]! })));
   assert.deepEqual(few.kind === 'fresh-draft' && few.why, 'cuts leave 3 story slides (< 5)');
   assert.deepEqual(apply([], true), { kind: 'set-aside', why: "the story's main claim is false" });
 });
@@ -276,7 +276,7 @@ import { sifDraftHandoff } from '@/fixtures/social/drafts';
 test('after the Editor: a tag its edits no longer name is removed and logged; a missing list becomes empty; words and requests stay', async () => {
   const writer = sifDraftHandoff();
   const edited = structuredClone(writer);
-  edited.slides[1]!.headline.text = 'A new chair';
+  edited.slides[1]!.headline.text = 'A new chair for the force';
   edited.slides[1]!.body!.text = 'The Wall Street Journal reports he will chair the force, with three vice chairs.'; // Clayton cut
   delete edited.slides[4]!.subject_ids;
   const { create } = scripted([msg([tool('submit_draft', edited)])]);

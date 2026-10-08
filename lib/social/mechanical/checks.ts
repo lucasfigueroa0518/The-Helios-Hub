@@ -145,8 +145,12 @@ export function applySilentFixes(draft: FilledDraft, brief?: Brief): { draft: Fi
 export type CheckId = 'C1' | 'C2' | 'C3' | 'C4' | 'C5' | 'C6' | 'C7' | 'C8';
 export type Failure = { id: CheckId; where: string; detail: string };
 
-/** Spec §6 #7 LIMITS (characters). */
-export const LIMITS = { cover: 90, headline: 60, body: 220, quote: 140, caption: 2200 } as const;
+/**
+ * Spec §6 #7 LIMITS (characters). Copy overhaul (Tommy, 2026-10-07): half
+ * the words. Headline and body share one budget (`slide`), elastic within
+ * limits: the headline 15–60, the body up to 130, together at most 155.
+ */
+export const LIMITS = { cover: 75, headline: 60, headlineMin: 15, body: 130, slide: 155, quote: 120, caption: 2200 } as const;
 
 /** C1: character limits, with the exact overage (spec §6: never trimmed). */
 export function checkLimits(d: FilledDraft): Failure[] {
@@ -156,9 +160,13 @@ export function checkLimits(d: FilledDraft): Failure[] {
   };
   over('cover', d.cover, LIMITS.cover);
   d.slides.forEach((s, i) => {
-    over(`slide ${i + 2} headline`, s.headline.text, LIMITS.headline);
-    if (s.body) over(`slide ${i + 2} body`, s.body.text, LIMITS.body);
-    if (s.quote) over(`slide ${i + 2} quote`, s.quote.text, LIMITS.quote);
+    const at = `slide ${i + 2}`;
+    over(`${at} headline`, s.headline.text, LIMITS.headline);
+    if (s.headline.text.length < LIMITS.headlineMin) out.push({ id: 'C1', where: `${at} headline`, detail: `${s.headline.text.length} chars, at least ${LIMITS.headlineMin} (a headline, not a fragment)` });
+    if (s.body) over(`${at} body`, s.body.text, LIMITS.body);
+    const both = s.headline.text.length + (s.body?.text.length ?? 0);
+    if (both > LIMITS.slide) out.push({ id: 'C1', where: `${at} headline + body`, detail: `${both} chars together, limit ${LIMITS.slide} (${both - LIMITS.slide} over): shorten either` });
+    if (s.quote) over(`${at} quote`, s.quote.text, LIMITS.quote);
   });
   over('caption', d.caption.text, LIMITS.caption);
   return out;

@@ -25,6 +25,18 @@ export function briefSuperIntelligenceForce(): Brief {
       { text: "The task force's charter reportedly says it will plan responses to SI-enabled threats while preventing overregulation.", ids: ['F6'] },
       { text: 'It will reportedly have 120 days to report on the risks and opportunities presented by AI.', ids: ['F4'] },
     ],
+    // The story shape (copy overhaul, 2026-10-07): events in order, plot beats, tensions; every line arranges listed facts.
+    timeline: [
+      { date: '2026-09', what: 'Trump says he will form an AI Force and appoint an AI czar', ids: ['B1'] },
+      { date: '2026-10-04', what: 'Trump announces the Super Intelligence Force on Truth Social', ids: ['F1'] },
+    ],
+    plot: [
+      { beat: 'SETUP', text: 'Trump had promised an AI Force and rebranded AI as super intelligence', ids: ['B1', 'B2'] },
+      { beat: 'TRIGGER', text: 'He announces the Super Intelligence Force, led by Jay Clayton', ids: ['F1', 'F2'] },
+      { beat: 'CONFLICT', text: 'Its charter pairs planning for SI-enabled threats with preventing overregulation', ids: ['F6'] },
+      { beat: 'OPEN', text: 'What its 120-day report will say', ids: ['F4'] },
+    ],
+    tensions: [{ text: 'The charter aims both to plan for SI-enabled threats and to prevent overregulation', ids: ['F6'] }],
     facts: [
       { id: 'F1', text: 'Trump announced the formation of a new Super Intelligence Force in a Sunday morning post on Truth Social.', sources: TC, claim_by: null, notes: [] },
       { id: 'F2', text: 'Trump said the force will be led by national intelligence director Jay Clayton and other members of his administration.', sources: TC, claim_by: null, notes: [] },

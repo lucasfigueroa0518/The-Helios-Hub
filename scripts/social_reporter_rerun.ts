@@ -17,7 +17,7 @@ async function main() {
   if (!runPath || !Number.isFinite(cap) || cap <= 0) throw new Error('usage: <run.json> --cap-usd <amount> [--picks w0,w1,b0]');
   const picks = (at('--picks') ?? 'w0,w1,b0').split(',');
 
-  const { default: Anthropic } = await import('@anthropic-ai/sdk');
+  const { newAnthropic } = await import('@/lib/anthropic-client');
   const { liveMessagesCreate, runReporter } = await import('@/lib/social/reporter/reporter');
   const { readPage } = await import('@/lib/social/reporter/read-page');
   const { readableDate } = await import('@/lib/social/pipeline/reporter-stage');
@@ -34,7 +34,7 @@ async function main() {
   const now = new Date();
   const runDir = path.join(process.cwd(), 'runs', `reporter-rerun-${now.toISOString().replace(/[:.]/g, '-')}`);
   await fsp.mkdir(runDir, { recursive: true });
-  const create = liveMessagesCreate(new Anthropic());
+  const create = liveMessagesCreate(newAnthropic());
   const log: any[] = [];
   const zero = Object.fromEntries(Object.keys(STUB_COST_USD).map((k) => [k, 0]));
 
