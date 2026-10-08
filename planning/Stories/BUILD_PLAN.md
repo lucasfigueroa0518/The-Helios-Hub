@@ -9,9 +9,9 @@ This file is the spec for the implementing agent. It follows the conventions of 
 | Field | Value |
 |---|---|
 | Active build | Instagram Stories, version one |
-| Stage | M1 and M2 accepted (2026-10-08). M3 to M8 built and tested offline (2026-10-08); waiting for Lucas: prompt and question-set approvals, the schema go-ahead (S-61), and the first Generate clicks (M5, M6, M7). |
+| Stage | M1, M2 accepted; M3–M8 built, prompts and question sets approved, `stories` schema applied to Supabase (2026-10-08). Waiting for Lucas's first Generate click per series (M5, M6, M7). |
 | Branch | `stories` at `54e794d` (= `main` on 2026-10-07: Trial Reels, the carousel pipeline, and Explainer Reels). No upstream, not pushed; a push does not update `main`. |
-| Next action | Lucas: approve the drafts in §8.2, say when to apply the `stories` schema, then click Generate for each series (§13 runbook). |
+| Next action | Lucas: run the worker and click Generate for each series (§13). |
 | Last updated | 2026-10-07 (M1 report, decisions S-34 to S-43) |
 
 ## 0. Rules that override everything here
@@ -270,22 +270,24 @@ Decisions after kickoff go here, numbered from S-34.
 | S-67 | **The photo finder runs without Tommy's vision, face and contact-sheet steps** in v1 (they live inside his design stage): Stories calls `searchVisual` with a minimal brief, the read source pages and Jev identity checks, and takes the top candidate not used in 7 days. The render review and Lucas's review of the first sets are the look checks. | Agent, M3 |
 | S-68 | **History is written when a set publishes**, not when it builds, so a rejected set never blocks its stories. Tommy's `social.used_photos` gets one row per published non-logo photo (S-24). | Agent, M8 |
 | S-69 | **Worker rules (M8):** auto sets are requested after 1:30 AM New York; an auto set approves itself only when the review didn't flag it; an approved set whose window has passed stays approved (the Hub offers Publish now or Reject; risk 6). `STORIES_DB=local` keeps the `stories` tables in PGlite until the schema is applied. | Agent, M8 |
+| S-70 | **The photo finder's close-up vision check runs on Haiku 5.5** (`claude-haiku-5-5`): Tommy's `createVisionCheck` is called with that model (his code unchanged), and Stories prices each call itself. Supersedes the vision part of S-67. | Lucas, 2026-10-08 |
+| S-71 | **The `stories` schema is applied to Supabase** (2026-10-08, Lucas's go-ahead; S-61). Verified read-only: 9 tables, every auto switch off. Stories scripts load `.env.local` through `scripts/stories_env.ts`. | Lucas, 2026-10-08 |
 
 ### 8.2 Prompt and question-set registry
 
 | ID | Component | Engine | Status |
 |---|---|---|---|
-| `major-news@1` | Morning Download ranking | Jev | Drafted in M3 (`lib/stories/questions.ts`); needs approval |
-| `md-headlines@1` | Morning Download story frames | Sonnet 5.5 | Drafted in M3 (`lib/stories/prompts.ts`); needs approval |
-| `md-grounding@1` | Headline supported by source | Jev | Drafted in M3; needs approval |
-| `stories-same-event@1` | Cross-system merge | Jev | Drafted in M3; needs approval |
-| `gtn-extract@1` | Numbers from shortlisted stories | Sonnet 5.5 | Drafted in M6; needs approval |
-| `gtn-candidate@1` | Guess the Number scoring | Jev | Drafted in M6; needs approval |
-| `gtn-question@1` | Question, answer, label, meaning, topic | Sonnet 5.5 | Drafted in M6; needs approval |
-| `fvp-pair@1` | Pair finding (web search, at most 5) | Sonnet 5.5 + web_search | Drafted in M7; needs approval |
-| `fvp-verify@1` | Price and install path re-check | Sonnet 5.5 + web_fetch | Drafted in M7; needs approval |
-| `fvp-pair-score@1` | Pair scoring | Jev | Drafted in M7; needs approval |
-| `fvp-copy@1` | The tease line | Sonnet 5.5 | Drafted in M7; needs approval |
+| `major-news@1` | Morning Download ranking | Jev | Approved by Lucas 2026-10-08 (`lib/stories/questions.ts`) |
+| `md-headlines@1` | Morning Download story frames | Sonnet 5.5 | Approved by Lucas 2026-10-08 (`lib/stories/prompts.ts`) |
+| `md-grounding@1` | Headline supported by source | Jev | Drafted in M3 ; approved by Lucas 2026-10-08 |
+| `stories-same-event@1` | Cross-system merge | Jev | Drafted in M3 ; approved by Lucas 2026-10-08 |
+| `gtn-extract@1` | Numbers from shortlisted stories | Sonnet 5.5 | Drafted in M6 ; approved by Lucas 2026-10-08 |
+| `gtn-candidate@1` | Guess the Number scoring | Jev | Drafted in M6 ; approved by Lucas 2026-10-08 |
+| `gtn-question@1` | Question, answer, label, meaning, topic | Sonnet 5.5 | Drafted in M6 ; approved by Lucas 2026-10-08 |
+| `fvp-pair@1` | Pair finding (web search, at most 5) | Sonnet 5.5 + web_search | Drafted in M7 ; approved by Lucas 2026-10-08 |
+| `fvp-verify@1` | Price and install path re-check | Sonnet 5.5 + web_fetch | Drafted in M7 ; approved by Lucas 2026-10-08 |
+| `fvp-pair-score@1` | Pair scoring | Jev | Drafted in M7 ; approved by Lucas 2026-10-08 |
+| `fvp-copy@1` | The tease line | Sonnet 5.5 | Drafted in M7 ; approved by Lucas 2026-10-08 |
 | `stories-render-review@1` | Contact-sheet review of a rendered set | Haiku 5.5 | Approved by Lucas 2026-10-08 |
 
 ### 8.3 Milestone reports
@@ -367,7 +369,7 @@ At the merge, Tommy's scheduler and publisher can replace the last two, his rend
 
 ## 13. Runbook (Lucas's Mac, in isolation)
 
-1. **Schema (once, on Lucas's go-ahead):** `npm run db:stories` applies `db/stories_schema.sql` to Supabase (additive, schema `stories` only). Until then, `STORIES_DB=local` runs the worker on PGlite at `.stories-local/` (the Hub tab needs the Supabase schema).
+1. **Schema:** applied to Supabase 2026-10-08 (S-71). `npm run db:stories` is idempotent if it ever needs re-running.
 2. **Chromium:** Playwright's headless Chromium build 1243 is installed (S-42). On another machine: `npx playwright install chromium`.
 3. **Worker:** `npm run stories:worker` (leave it running; it polls every 15 seconds). One pass: `npm run stories:run`.
 4. **First set of a series (M5, M6, M7):** click Generate on `/stories`, or `npm run stories:run -- --request morning_download` (`guess_the_number`, `free_vs_paid`). The worker builds it (live calls, about $0.08–0.45), renders, reviews, and the set shows as Ready. Approve to post in its window, Publish now to post at once, or Reject with tags.

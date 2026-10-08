@@ -5,12 +5,15 @@
  *
  * The live finder gets a minimal brief (the story's subjects, its sources and
  * date) and the read pages of its source URLs, then runs `searchVisual` with
- * Jev for identity checks. It runs without Tommy's vision, face and
- * contact-sheet steps (those are wired inside his design stage); the render
- * review (S-33) and Lucas's review of the first sets are the look checks.
+ * Jev for identity checks, and Tommy's close-up vision check on Haiku 5.5
+ * (S-70; priced by Stories, lib/stories/cost.ts). His face and contact-sheet
+ * steps stay inside his design stage.
  */
+import type Anthropic from '@anthropic-ai/sdk';
 import { createJevAsk, type JevAsk } from '@/lib/social/jev/client';
 import { newSearchContext, searchVisual, type Candidate } from '@/lib/social/photos/find';
+import { createVisionCheck } from '@/lib/social/photos/vision';
+import { priceCall } from '@/lib/stories/cost';
 import type { Brief } from '@/lib/social/reporter/brief';
 import { readPage, type PageReadOk } from '@/lib/social/reporter/read-page';
 import type { VisualKind } from '@/lib/social/writer/draft';
@@ -58,8 +61,22 @@ export function minimalBrief(req: PhotoRequest): Brief {
   };
 }
 
-export function createLivePhotoFinder(opts: { jev?: JevAsk; http?: typeof fetch } = {}): PhotoFinder {
+export const PHOTO_VISION_MODEL = 'claude-haiku-5-5';
+
+export function createLivePhotoFinder(opts: { jev?: JevAsk; http?: typeof fetch; create?: (p: Anthropic.MessageCreateParamsNonStreaming) => Promise<Anthropic.Message> } = {}): PhotoFinder {
   let usd = 0;
+  // The vision check on Haiku 5.5; its cost counted at Haiku 5.5's price.
+  const vision = opts.create
+    ? createVisionCheck({
+        model: PHOTO_VISION_MODEL,
+        http: opts.http,
+        create: async (p) => {
+          const res = await opts.create!(p);
+          usd += priceCall(PHOTO_VISION_MODEL, res.usage).usd;
+          return res;
+        },
+      })
+    : undefined;
   const jev: JevAsk = opts.jev ?? createJevAsk();
   const tallied: JevAsk = async (request, meta) => {
     const r = await jev(request, meta);
@@ -78,7 +95,7 @@ export function createLivePhotoFinder(opts: { jev?: JevAsk; http?: typeof fetch 
         if (p && p.ok) pages.push(p);
       }
       const ctx = newSearchContext(minimalBrief(req), pages, { recent: req.exclude, storyDate: req.storyDate });
-      const { candidates } = await searchVisual({ kind: req.kind as VisualKind, query: req.query }, ctx, { jev: tallied, http: opts.http ?? fetch });
+      const { candidates } = await searchVisual({ kind: req.kind as VisualKind, query: req.query }, ctx, { jev: tallied, http: opts.http ?? fetch, ...(vision ? { vision } : {}) });
       const pick = candidates.find((c) => !req.exclude.has(c.url));
       return pick ? toStoryPhoto(pick, req.kind) : null;
     },

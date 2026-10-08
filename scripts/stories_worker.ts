@@ -14,6 +14,7 @@
  * Building a set makes live Claude, Jev and web calls: only for a set Lucas
  * requested (Generate, --request) or a series he switched to auto (rule 0.1).
  */
+import './stories_env';
 import { liveJevTransport } from '@/lib/reels/jev/client';
 import { liveStoriesDb, type StoriesDb } from '@/lib/stories/db';
 import { DEFAULT_LOCAL_DIR, openLocalStoriesDb } from '@/lib/stories/local-db';
@@ -64,7 +65,7 @@ async function main() {
         sourceDb,
         jevTransport: liveJevTransport,
         write: liveWriterCreate(),
-        photos: createLivePhotoFinder(),
+        photos: createLivePhotoFinder({ create: (p) => client.messages.create(p) }),
         renderer,
         review: createReviewCall({ create: (p) => client.messages.create(p), model: settings.models.review }),
         storage: createStoriesStorage(),
