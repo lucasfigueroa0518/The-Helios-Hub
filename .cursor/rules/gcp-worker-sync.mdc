@@ -9,11 +9,12 @@ Production queue/drafting execution does **not** run on Vercel. It runs on the
 always-on GCP VM `helios-orch-worker` (`us-west1-a`, project
 `helios-influencer-network`, systemd unit `helios-worker`).
 
-The same VM also runs **`helios-reels`**, a separate unit for Trial Reels
-nightly ingestion (`lib/reels/**`, `scripts/reels_worker.ts`). It shares the
-`/opt/helios-worker/app` checkout and `worker.env`, so shipping code updates
-both, but each unit restarts on its own. Install it with
-`./scripts/gcp/deploy-reels-worker.sh`; details in `docs/trial-reels.md`.
+Social workers do **not** run on that VM. Trial Reels (`helios-reels`), and
+later Carousels, Explainers, and IG Stories, run on **`helios-social-worker`**
+(e2-medium, same zone and project) from `/opt/helios-social/app` with
+`/opt/helios-social/worker.env`. Ship them with
+`./scripts/gcp/deploy-social-worker.sh`; the night clock and per-type contract
+are in `docs/social-overnight.md`.
 
 Vercel deploys only the Next.js app. Shipping orchestration handlers, drafting
 jobs, extraction, send-queue, or worker env changes without updating this VM
@@ -27,8 +28,9 @@ whenever you change any of:
 
 - `lib/orchestration/**`, `lib/drafting/**`, `lib/pre-enriched-ingest.ts`,
  `lib/storage.ts`, `lib/mailbox-verify.ts`, send-queue / Resend worker paths
-- `lib/reels/**` or `scripts/reels_worker.ts` (then also
- `sudo systemctl restart helios-reels`)
+- `lib/reels/**`, `lib/social/**`, or any social worker script → redeploy
+  with `./scripts/gcp/deploy-social-worker.sh` instead (it restarts the enabled
+  social units)
 - `scripts/orchestration_worker.ts` or worker bootstrap/deploy scripts
 - Required worker secrets / env vars (also update
   `scripts/gcp/worker.env.example` and the gitignored `scripts/gcp/worker.env`)
