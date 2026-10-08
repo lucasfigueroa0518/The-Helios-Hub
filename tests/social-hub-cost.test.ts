@@ -19,7 +19,7 @@ import {
   type LedgerRow,
   type Pool,
 } from '@/lib/social-hub/cost';
-import { buildDataset } from '@/lib/social-hub/dataset';
+import { buildDataset, findPost } from '@/lib/social-hub/dataset';
 import { hubId } from '@/lib/social-hub/ids';
 import { readAll } from '@/lib/social-hub/load';
 import { agreement, buildLedger, readCosts, reelItem } from '@/lib/social-hub/queries/costs';
@@ -212,16 +212,17 @@ test('the real ledgers reconcile end to end, with the expected attribution per v
 
   const d = buildDataset(await readAll(query), costs, new Date('2026-10-08T12:00:00Z'));
   assert.deepEqual(d.costNotes, []);
-  const cost = (id: string) => d.posts.find((p) => p.id === id)?.costMicros;
+  const cost = (id: string) => findPost(d, id)?.costMicros;
   const reelCost = 66_667 + 33 + 250_000 + 166_650 + 25_000 + kling;
   assert.equal(cost(hubId('reels', 'attempt', IDS.reelAttempt)), reelCost);
   assert.equal(cost(hubId('reels', 'attempt', IDS.reelAttemptFailed)), reelCost, 'a second try shows the same content cost');
-  const both = d.posts.filter((p) => p.id === hubId('reels', 'attempt', IDS.reelAttempt) || p.id === hubId('reels', 'attempt', IDS.reelAttemptFailed));
-  assert.equal(costOfPosts(both).micros, reelCost, 'counted once across both posts');
+  // Both tries are one post now (D46): the failed try folded into the published reel.
+  assert.equal(findPost(d, hubId('reels', 'attempt', IDS.reelAttempt)), findPost(d, hubId('reels', 'attempt', IDS.reelAttemptFailed)));
+  assert.equal(costOfPosts([findPost(d, hubId('reels', 'attempt', IDS.reelAttempt))!]).micros, reelCost, 'counted once');
   assert.equal(cost(hubId('carousels', 'attempt', IDS.socAttempt)), 1_050_000);
   // Reused content adds $0 when it posts: the published carousel's cost is the sum of the runs that made it,
   // and no row exists on any posting day beyond those runs.
-  const posted = d.posts.find((p) => p.id === hubId('carousels', 'attempt', IDS.socAttempt))!;
+  const posted = findPost(d, hubId('carousels', 'attempt', IDS.socAttempt))!;
   assert.equal(posted.costNote, null, 'made 10-06, posted 10-06');
   assert.equal(cost(hubId('carousels', 'post', IDS.socPost2)), 550_000);
   assert.equal(cost(hubId('stories', 'set', IDS.set1)), 210_000);

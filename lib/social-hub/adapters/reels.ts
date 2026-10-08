@@ -12,6 +12,7 @@ import {
   yesNo,
 } from '@/lib/social-hub/adapters/common';
 import { hubId } from '@/lib/social-hub/ids';
+import { foldLifecycle } from '@/lib/social-hub/lifecycle';
 import { reelItem } from '@/lib/social-hub/queries/costs';
 import type { ReelAttemptRow, ReelIdeaRow, ReelScheduleRow, ReelsRead } from '@/lib/social-hub/queries/reels';
 import type { FactorValue, HubIdea, HubPost, NativeField } from '@/lib/social-hub/types';
@@ -269,7 +270,7 @@ export function reelPosts(read: ReelsRead): HubPost[] {
   for (const post of posts) {
     post.sources = post.idea ? sourceRefs.get(post.idea.id) ?? [] : [];
   }
-  return posts;
+  return foldLifecycle('reels', posts);
 }
 
 export function reelIdeas(rows: readonly ReelIdeaRow[]): HubIdea[] {

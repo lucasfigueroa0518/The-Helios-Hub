@@ -98,5 +98,5 @@ export function buildDataset(
 }
 
 export function findPost(dataset: HubDataset, id: string): HubPost | null {
-  return dataset.posts.find((p) => p.id === id) ?? null;
+  return dataset.posts.find((p) => p.id === id) ?? dataset.posts.find((p) => p.aliases?.includes(id)) ?? null;
 }

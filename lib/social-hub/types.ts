@@ -90,8 +90,12 @@ export type ContentVersion = {
 export type SourceRef = { url: string; title: string | null };
 
 export type HubPost = {
-  /** Durable hub id (spec §3): `vertical:attempt`, `vertical:schedule:<id>`, `stories:<set>`. */
+  /** Durable hub id (spec §3, D46): the content's id, stable through its whole life (lib/social-hub/ids.ts). */
   id: string;
+  /** Older ids this post was shown under (attempt, slot, content-ready ids); links to them still open it. */
+  aliases?: string[];
+  /** Earlier tries that didn't post (a failed attempt, a cancelled slot), newest first. */
+  tries?: Array<{ status: HubStatus; at: string | null; note: string | null }>;
   vertical: Vertical;
   format: Format;
   name: string;

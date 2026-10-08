@@ -13,6 +13,7 @@ import {
   yesNo,
 } from '@/lib/social-hub/adapters/common';
 import { hubId } from '@/lib/social-hub/ids';
+import { foldLifecycle } from '@/lib/social-hub/lifecycle';
 import type { CarouselIdeaRow, CarouselPostRow, CarouselsRead } from '@/lib/social-hub/queries/carousels';
 import type { ContentVersion, FactorValue, HubIdea, HubPost, HubStatus, MetricSnapshot, NativeField, SourceRef } from '@/lib/social-hub/types';
 import { CAROUSEL_SLOTS } from '@/lib/social/overnight/config';
@@ -162,7 +163,6 @@ export function carouselPosts(read: CarouselsRead): HubPost[] {
   const history = historyByMedia(read.insights);
   const postById = new Map(read.posts.map((p) => [p.post_id, p]));
   const posts: HubPost[] = [];
-  const placed = new Set<string>();
 
   for (const row of read.attempts) {
     const post = postById.get(row.post_id);
@@ -185,8 +185,6 @@ export function carouselPosts(read: CarouselsRead): HubPost[] {
       history: snapshots,
       refs: { attemptId: row.attempt_id, postId: row.post_id, ...(row.schedule_id ? { scheduleId: row.schedule_id } : {}) },
     });
-    // A failed try does not keep the content from returning to Content ready.
-    if (status !== 'failed') placed.add(row.post_id);
   }
   for (const row of read.schedules) {
     const post = postById.get(row.post_id);
@@ -205,9 +203,9 @@ export function carouselPosts(read: CarouselsRead): HubPost[] {
       history: [],
       refs: { scheduleId: row.schedule_id, postId: row.post_id },
     });
-    if (status === 'scheduled' || status === 'publishing') placed.add(row.post_id);
   }
-  // Content ready (spec §9a): the newest `review` post per story with no live slot or attempt.
+  // Content ready (spec §9a): the newest `review` post per story. The lifecycle view keeps it
+  // only when nothing live holds that post (lib/social-hub/lifecycle.ts).
   const newest = new Map<string, CarouselPostRow>();
   for (const row of read.posts) {
     if (row.status !== 'review') continue;
@@ -216,7 +214,6 @@ export function carouselPosts(read: CarouselsRead): HubPost[] {
     if (!seen || Date.parse(row.created_at) > Date.parse(seen.created_at)) newest.set(key, row);
   }
   for (const row of newest.values()) {
-    if (placed.has(row.post_id)) continue;
     posts.push({
       ...shell(row, read.posts, { slot: null, approvedAt: null, requireApproval: read.requireApproval }, row.post_id),
       id: hubId('carousels', 'post', row.post_id),
@@ -231,7 +228,7 @@ export function carouselPosts(read: CarouselsRead): HubPost[] {
       refs: { postId: row.post_id },
     });
   }
-  return posts;
+  return foldLifecycle('carousels', posts);
 }
 
 export function carouselIdeas(rows: readonly CarouselIdeaRow[]): HubIdea[] {

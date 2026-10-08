@@ -7,7 +7,7 @@ import test from 'node:test';
 
 import { reelFactorValues } from '@/lib/social-hub/adapters/reels';
 import { setMetrics } from '@/lib/social-hub/adapters/stories';
-import { buildDataset, type HubDataset } from '@/lib/social-hub/dataset';
+import { buildDataset, findPost, type HubDataset } from '@/lib/social-hub/dataset';
 import { factorsFor, groupPosts, THIN_SAMPLE } from '@/lib/social-hub/factors';
 import { hubId } from '@/lib/social-hub/ids';
 import { readAll } from '@/lib/social-hub/load';
@@ -32,8 +32,9 @@ function dataset(): Promise<HubDataset> {
   return cached;
 }
 
+/** By id, or by an older id the lifecycle view kept as an alias (D46): old links still open the post. */
 const byId = (d: HubDataset, id: string) => {
-  const post = d.posts.find((p) => p.id === id);
+  const post = findPost(d, id);
   assert.ok(post, `missing ${id}; have ${d.posts.map((p) => p.id).join(', ')}`);
   return post;
 };
@@ -266,11 +267,13 @@ test('regressions from the M2 critique: unlinked published slots, failed tries, 
   await pg.exec(`INSERT INTO social.used_photos (url, used_at, story_id, slide, source) VALUES ('https://img/9', '2026-10-06T07:31:00Z', 'story-2', 0, 'unsplash')`);
   const d = buildDataset(await readAll(query), null, new Date('2026-10-08T12:00:00Z'));
   assert.equal(d.posts.filter((p) => p.vertical === 'reels' && p.status === 'published').length, 1);
-  assert.ok(d.posts.some((p) => p.id === hubId('carousels', 'post', IDS.socPost2) && p.status === 'ready'));
-  const failed = d.posts.find((p) => p.vertical === 'carousels' && p.status === 'failed');
-  assert.equal(failed?.statusNote, 'container error');
-  assert.equal(failed?.approval.note, 'Approved', 'force counts as approval (SH-17)');
-  const ready = d.posts.find((p) => p.id === hubId('carousels', 'post', IDS.socPost2))!;
+  // One post per content (D46): the failed try folds into the review carousel, which is Content ready again.
+  const ready = findPost(d, hubId('carousels', 'post', IDS.socPost2))!;
+  assert.equal(ready.id, hubId('carousels', 'content', IDS.socPost2), 'stable id: the post\'s own id');
+  assert.equal(ready.status, 'ready');
+  assert.equal(ready.statusNote, 'Last try failed: container error');
+  assert.deepEqual(ready.tries?.map((t) => [t.status, t.note]), [['failed', 'container error']]);
+  assert.equal(d.posts.some((p) => p.vertical === 'carousels' && p.status === 'failed'), false, 'no separate failed post for the same content');
   assert.deepEqual(ready.factorValues.photos, { kind: 'tags', values: [{ key: 'unsplash', label: 'Unsplash' }], empty: 'No photo record' });
   assert.equal(d.ideas.some((i) => i.vertical === 'reels' && i.state === 'content_ready'), false, 'SH-59');
 });

@@ -11,6 +11,7 @@ import {
   text,
 } from '@/lib/social-hub/adapters/common';
 import { hubId } from '@/lib/social-hub/ids';
+import { foldLifecycle } from '@/lib/social-hub/lifecycle';
 import type {
   ExplainerAttemptRow,
   ExplainerJobRow,
@@ -151,13 +152,11 @@ export function explainerPosts(read: ExplainersRead): HubPost[] {
   const history = historyByMedia(read.insights);
   const jobById = new Map(read.jobs.map((j) => [j.job_id, j]));
   const posts: HubPost[] = [];
-  const placed = new Set<string>();
 
   for (const row of read.attempts) {
     const job = jobById.get(row.job_id);
     if (!job) continue;
     posts.push(attemptPost(row, job, read, history));
-    if (row.status !== 'failed') placed.add(row.job_id);
   }
   for (const row of read.schedules) {
     const job = jobById.get(row.job_id);
@@ -176,9 +175,9 @@ export function explainerPosts(read: ExplainersRead): HubPost[] {
       history: [],
       refs: { scheduleId: row.schedule_id, jobId: row.job_id, topicId: job.topic_id },
     });
-    if (status === 'scheduled' || status === 'publishing') placed.add(row.job_id);
   }
-  // Content ready (spec §9a): the newest finished render per topic that has no live slot or attempt.
+  // Content ready (spec §9a): the newest finished render per topic. The lifecycle view keeps it
+  // only when nothing live holds that render (lib/social-hub/lifecycle.ts).
   const newestPerTopic = new Map<string, ExplainerJobRow>();
   for (const job of read.jobs) {
     if (job.status !== 'ok' || !job.video_artifact_id) continue;
@@ -186,7 +185,7 @@ export function explainerPosts(read: ExplainersRead): HubPost[] {
     if (!seen || Date.parse(job.finished_at ?? '') > Date.parse(seen.finished_at ?? '')) newestPerTopic.set(job.topic_id, job);
   }
   for (const job of newestPerTopic.values()) {
-    if (placed.has(job.job_id) || job.verdict === 'rejected') continue;
+    if (job.verdict === 'rejected') continue;
     posts.push({
       ...shell({ job, jobs: read.jobs, requireApproval: read.requireApproval, slot: null }),
       id: hubId('explainers', 'job', job.job_id),
@@ -201,7 +200,7 @@ export function explainerPosts(read: ExplainersRead): HubPost[] {
       refs: { jobId: job.job_id, topicId: job.topic_id },
     });
   }
-  return posts;
+  return foldLifecycle('explainers', posts);
 }
 
 export function explainerIdeas(rows: readonly ExplainerTopicRow[]): HubIdea[] {

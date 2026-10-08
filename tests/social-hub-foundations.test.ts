@@ -16,12 +16,16 @@ test('hub ids round-trip for every vertical and kind', () => {
     ['carousels', 'attempt'], ['carousels', 'schedule'], ['carousels', 'post'],
     ['stories', 'set'],
   ];
-  for (const [vertical, kind] of cases) {
+  // Two-part ids are content ids (D46); an older attempt or set id has the same shape and parses as content.
+  const twoPart = new Set(['attempt', 'set', 'content']);
+  for (const [vertical, kind] of [...cases, ['reels', 'content'], ['carousels', 'content'], ['explainers', 'content'], ['stories', 'content'], ['reels', 'idea']] as typeof cases) {
     const id = hubId(vertical, kind, U);
-    assert.deepEqual(parseHubId(id), { vertical, kind, ref: U }, id);
-    assert.deepEqual(parseHubId(encodeURIComponent(id)), { vertical, kind, ref: U });
+    const parsedKind = twoPart.has(kind) ? 'content' : kind;
+    assert.deepEqual(parseHubId(id), { vertical, kind: parsedKind, ref: U }, id);
+    assert.deepEqual(parseHubId(encodeURIComponent(id)), { vertical, kind: parsedKind, ref: U });
   }
-  assert.equal(hubId('reels', 'attempt', U), `reels:${U}`);
+  assert.equal(hubId('reels', 'content', U), `reels:${U}`);
+  assert.equal(hubId('reels', 'idea', U), `reels:idea:${U}`);
   assert.equal(hubId('stories', 'set', U), `stories:${U}`);
 });
 
