@@ -17,6 +17,7 @@ export const IDS = {
   slate: '10000000-0000-4000-8000-000000000031',
   video1: '10000000-0000-4000-8000-000000000041',
   reelAttempt: '10000000-0000-4000-8000-000000000051',
+  reelItem1: '10000000-0000-4000-8000-000000000071',
   reelSched1: '10000000-0000-4000-8000-000000000061',
   reelSched2: '10000000-0000-4000-8000-000000000062',
   reelSched3: '10000000-0000-4000-8000-000000000063',
@@ -87,16 +88,22 @@ INSERT INTO reels.copy_jobs (post_idea_id, slate_id, status, finished_at, usd)
 VALUES ('${I.idea1}', '${I.slate}', 'ok', '2026-10-06T06:10:00Z', 0.2);
 INSERT INTO reels.video_jobs (id, post_idea_id, slate_id, status, finished_at, motion_prompt, video_storage_path, higgsfield_job_id, usd)
 VALUES ('${I.video1}', '${I.idea1}', '${I.slate}', 'ok', '2026-10-06T08:00:00Z', E'Hook: glitch\\nHook SFX: none', 'videos/1.mp4', 'h1', 0.1);
-INSERT INTO reels.publish_attempts (id, video_job_id, post_idea_id, trigger, status, requested_at, finished_at, audio_id, caption, graduation_strategy, media_id, permalink)
-VALUES ('${I.reelAttempt}', '${I.video1}', '${I.idea1}', 'auto', 'published', '2026-10-06T13:25:00Z', '2026-10-06T13:30:00Z', 'aud-1', 'caption', 'MANUAL', 'm-r1', 'https://instagram.com/reel/r1');
-INSERT INTO reels.posting_schedule (id, post_idea_id, video_job_id, ny_date, slot, publish_at, status, source, publish_attempt_id, approved_at) VALUES
- ('${I.reelSched1}', '${I.idea1}', '${I.video1}', '2026-10-06', 'morning', '2026-10-06T13:30:00Z', 'published', 'auto', '${I.reelAttempt}', '2026-10-06T11:00:00Z'),
- ('${I.reelSched2}', '${I.idea2}', NULL, '2026-10-07', 'midday', '2026-10-07T16:00:00Z', 'scheduled', 'auto', NULL, NULL),
- ('${I.reelSched3}', '${I.idea3}', NULL, '2026-10-06', 'evening', '2026-10-06T23:00:00Z', 'cancelled', 'auto', NULL, NULL);
-UPDATE reels.posting_schedule SET error = 'not approved before its slot' WHERE id = '${I.reelSched3}';
-INSERT INTO reels.media_insights (media_id, ny_date, publish_attempt_id, views, reach, likes, comments, saved, shares, reposts, total_interactions, avg_watch_time_ms, total_watch_time_ms, skip_rate) VALUES
- ('m-r1', '2026-10-06', '${I.reelAttempt}', 100, 80, 5, 1, 2, 3, 0, 11, 4000, 400000, 0.4),
- ('m-r1', '2026-10-07', '${I.reelAttempt}', 250, 190, 12, 2, 6, 9, 1, 30, 5200, 1300000, 0.31);
+-- Trial Reels' lifecycle is on the spine (social_hub, D39): the item is the video; slots carry their idea.
+INSERT INTO social_hub.content_items (id, vertical, format, native_ref, idea_ref)
+VALUES ('${I.reelItem1}', 'reels', 'reel', '${I.video1}', '${I.idea1}');
+INSERT INTO social_hub.approvals (content_item_id, decision, decided_at, via)
+VALUES ('${I.reelItem1}', 'approved', '2026-10-06T11:00:00Z', 'user');
+INSERT INTO social_hub.publish_attempts (id, content_item_id, vertical, trigger, status, requested_at, finished_at, caption, payload, media_id, permalink)
+VALUES ('${I.reelAttempt}', '${I.reelItem1}', 'reels', 'auto', 'published', '2026-10-06T13:25:00Z', '2026-10-06T13:30:00Z', 'caption',
+        '{"audio_id": "aud-1", "graduation_strategy": "MANUAL", "post_idea_id": "${I.idea1}"}', 'm-r1', 'https://instagram.com/reel/r1');
+INSERT INTO social_hub.schedule (id, content_item_id, vertical, idea_ref, ny_date, slot, publish_at, status, source, publish_attempt_id, approved_at) VALUES
+ ('${I.reelSched1}', '${I.reelItem1}', 'reels', '${I.idea1}', '2026-10-06', 'morning', '2026-10-06T13:30:00Z', 'published', 'auto', '${I.reelAttempt}', '2026-10-06T11:00:00Z'),
+ ('${I.reelSched2}', NULL, 'reels', '${I.idea2}', '2026-10-07', 'midday', '2026-10-07T16:00:00Z', 'scheduled', 'auto', NULL, NULL),
+ ('${I.reelSched3}', NULL, 'reels', '${I.idea3}', '2026-10-06', 'evening', '2026-10-06T23:00:00Z', 'cancelled', 'auto', NULL, NULL);
+UPDATE social_hub.schedule SET error = 'not approved before its slot' WHERE id = '${I.reelSched3}';
+INSERT INTO social_hub.media_insights (media_id, ny_date, vertical, publish_attempt_id, views, reach, likes, comments, saved, shares, reposts, total_interactions, avg_watch_time_ms, total_watch_time_ms, skip_rate) VALUES
+ ('m-r1', '2026-10-06', 'reels', '${I.reelAttempt}', 100, 80, 5, 1, 2, 3, 0, 11, 4000, 400000, 0.4),
+ ('m-r1', '2026-10-07', 'reels', '${I.reelAttempt}', 250, 190, 12, 2, 6, 9, 1, 30, 5200, 1300000, 0.31);
 
 -- ── Explainers ─────────────────────────────────────────────────────────────
 INSERT INTO explainers.idea_cycles (id, status, mode, ny_date) VALUES ('${I.cycle}', 'ok', 'production', '2026-10-05');
@@ -190,8 +197,9 @@ VALUES ('${I.socRunEmpty}', 'daily', '2026-10-07T07:00:00Z', '2026-10-07T07:20:0
 INSERT INTO reels.video_jobs (id, post_idea_id, slate_id, status, finished_at, video_storage_path, usd)
 VALUES ('${I.video2}', '${I.idea2}', '${I.slate}', 'ok', '2026-10-06T08:30:00Z', 'videos/2.mp4', 0.6);
 -- A failed retry on the posted reel: a second post on the same content item.
-INSERT INTO reels.publish_attempts (id, video_job_id, post_idea_id, trigger, status, requested_at, finished_at, audio_id, caption, graduation_strategy, error)
-VALUES ('${I.reelAttemptFailed}', '${I.video1}', '${I.idea1}', 'force', 'failed', '2026-10-07T13:00:00Z', '2026-10-07T13:01:00Z', 'aud-1', 'caption', 'MANUAL', 'quota');
+INSERT INTO social_hub.publish_attempts (id, content_item_id, vertical, trigger, status, requested_at, finished_at, caption, payload, error)
+VALUES ('${I.reelAttemptFailed}', '${I.reelItem1}', 'reels', 'force', 'failed', '2026-10-07T13:00:00Z', '2026-10-07T13:01:00Z', 'caption',
+        '{"audio_id": "aud-1", "graduation_strategy": "MANUAL", "post_idea_id": "${I.idea1}"}', 'quota');
 -- A later daily run touched story-1 again (rerun-photos); a preview run touched story-2.
 INSERT INTO social.runs (id, kind, started_at, finished_at, hook_pass, cap_usd, claude_usd, total_usd, status, trigger, record) VALUES
  ('${I.socRunRerun}', 'daily', '2026-10-08T07:00:00Z', '2026-10-08T07:10:00Z', false, 2, 0.28, 0.3, 'ok', 'scheduled',

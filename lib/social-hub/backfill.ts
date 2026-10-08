@@ -126,3 +126,75 @@ export async function backfillExplainers(query: SpineQuery): Promise<BackfillCou
   const approvals = await run(EXPLAINERS.approvals);
   return { items, attempts, schedule, insights, approvals };
 }
+
+const REELS = {
+  // The item is the video. An attempt whose video retention already deleted
+  // (video_job_id NULL) gets its own item, 'attempt:<id>', so its record survives.
+  items: `
+INSERT INTO social_hub.content_items (vertical, format, native_ref, idea_ref)
+SELECT DISTINCT ON (native_ref) 'reels', 'reel', native_ref, idea_ref
+  FROM (
+    SELECT video_job_id::text AS native_ref, post_idea_id::text AS idea_ref FROM reels.publish_attempts WHERE video_job_id IS NOT NULL
+    UNION ALL
+    SELECT 'attempt:' || id, post_idea_id::text FROM reels.publish_attempts WHERE video_job_id IS NULL
+    UNION ALL
+    SELECT video_job_id::text, post_idea_id::text FROM reels.posting_schedule WHERE video_job_id IS NOT NULL
+  ) x
+ ORDER BY native_ref
+ON CONFLICT DO NOTHING`,
+  attempts: `
+INSERT INTO social_hub.publish_attempts (id, content_item_id, vertical, trigger, status, requested_at, started_at, finished_at,
+       caption, payload, container_id, media_id, permalink, status_log, error,
+       insights_checked_at, insights_settled_at, legacy_id)
+SELECT a.id, ci.id, 'reels', a.trigger, a.status, a.requested_at, a.started_at, a.finished_at,
+       a.caption,
+       jsonb_build_object('audio_id', a.audio_id, 'song_title', a.song_title, 'song_artist', a.song_artist,
+                          'audio_volume', a.audio_volume, 'video_volume', a.video_volume,
+                          'graduation_strategy', a.graduation_strategy, 'share_to_feed', a.share_to_feed,
+                          'song_pick_id', a.song_pick_id, 'post_idea_id', a.post_idea_id),
+       a.container_id, a.media_id, a.permalink, a.status_log, a.error, a.insights_checked_at, a.insights_settled_at, a.id
+  FROM reels.publish_attempts a
+  JOIN social_hub.content_items ci ON ci.vertical = 'reels' AND ci.native_ref = coalesce(a.video_job_id::text, 'attempt:' || a.id)
+ON CONFLICT DO NOTHING`,
+  schedule: `
+INSERT INTO social_hub.schedule (id, content_item_id, vertical, idea_ref, ny_date, slot, publish_at, status, source,
+       publish_attempt_id, error, created_at, approved_at, legacy_id)
+SELECT s.id, ci.id, 'reels', s.post_idea_id::text, s.ny_date, s.slot, s.publish_at, s.status, s.source,
+       s.publish_attempt_id, s.error, s.created_at, s.approved_at, s.id
+  FROM reels.posting_schedule s
+  LEFT JOIN social_hub.content_items ci ON ci.vertical = 'reels' AND ci.native_ref = s.video_job_id::text
+ON CONFLICT DO NOTHING`,
+  insights: `
+INSERT INTO social_hub.media_insights (media_id, ny_date, vertical, publish_attempt_id, captured_at, views, reach, likes, comments,
+       saved, shares, reposts, total_interactions, avg_watch_time_ms, total_watch_time_ms, skip_rate, shared_to_feed, raw)
+SELECT m.media_id, m.ny_date, 'reels', m.publish_attempt_id, m.captured_at, m.views, m.reach, m.likes, m.comments,
+       m.saved, m.shares, m.reposts, m.total_interactions, m.avg_watch_time_ms, m.total_watch_time_ms, m.skip_rate,
+       m.is_shared_to_feed, m.raw
+  FROM reels.media_insights m
+  JOIN social_hub.publish_attempts a ON a.id = m.publish_attempt_id
+ON CONFLICT DO NOTHING`,
+  // A slot's approval carried onto the video it booked, else a Force post (SH-17): the earliest per video.
+  approvals: `
+INSERT INTO social_hub.approvals (content_item_id, decision, decided_at, via)
+SELECT DISTINCT ON (ci.id) ci.id, 'approved', d.at, d.via
+  FROM (
+    SELECT video_job_id, approved_at AS at, 'user' AS via FROM reels.posting_schedule
+     WHERE approved_at IS NOT NULL AND video_job_id IS NOT NULL
+    UNION ALL
+    SELECT video_job_id, requested_at, 'force' FROM reels.publish_attempts WHERE trigger = 'force' AND video_job_id IS NOT NULL
+  ) d
+  JOIN social_hub.content_items ci ON ci.vertical = 'reels' AND ci.native_ref = d.video_job_id::text
+ ORDER BY ci.id, d.at
+ON CONFLICT DO NOTHING`,
+};
+
+/** Trial Reels: reels.{posting_schedule, publish_attempts, media_insights} → social_hub. reels.published_status stays. */
+export async function backfillReels(query: SpineQuery): Promise<BackfillCounts> {
+  const run = async (sql: string) => (await query(`WITH moved AS (${sql.trim()} RETURNING 1) SELECT count(*)::int AS n FROM moved`)).rows[0].n as number;
+  const items = await run(REELS.items);
+  const attempts = await run(REELS.attempts);
+  const schedule = await run(REELS.schedule);
+  const insights = await run(REELS.insights);
+  const approvals = await run(REELS.approvals);
+  return { items, attempts, schedule, insights, approvals };
+}

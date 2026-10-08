@@ -667,6 +667,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_reels_song_picks_inflight_video
 -- polls it to FINISHED, and publishes. No FK to post_ideas and the video FK
 -- nulls out, so the record of what posted outlives retention, like
 -- published_status (D-061). A success also upserts published_status.
+--
+-- Frozen: publish_attempts, posting_schedule and media_insights moved to the
+-- lifecycle spine (social_hub, D39). History only; scripts/backfill_spine.ts
+-- reads them and nothing writes them. Dropped in unification Phase 7.
+-- published_status stays here and is still written.
 
 CREATE TABLE IF NOT EXISTS reels.publish_attempts (
     id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),

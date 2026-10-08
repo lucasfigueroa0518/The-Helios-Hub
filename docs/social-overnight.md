@@ -45,12 +45,17 @@ into one shared set of tables in `social_hub`: `content_items` (the stable
 identity of each postable unit), `approvals` (one decision per item),
 `schedule`, `publish_attempts` and `media_insights`, each with a `vertical`
 column. Types join one at a time (expand → backfill → switch → contract;
-`scripts/backfill_spine.ts`). **Carousels and Explainers have joined**:
-their slots, attempts, approvals and insights live on the spine, and their old
-`posting_schedule`, `publish_attempts` and `media_insights` tables are frozen
-history, read only by the backfill until they are dropped. Explainers keep
-their review verdict (with its tags) in `explainers.feedback`; saving it
-mirrors the decision onto the item's spine approval. A new type joins the spine
+`scripts/backfill_spine.ts`). **Carousels, Explainers and Trial Reels have
+joined**: their slots, attempts, approvals and insights live on the spine, and
+their old `posting_schedule`, `publish_attempts` and `media_insights` tables
+are frozen history, read only by the backfill until they are dropped.
+Explainers keep their review verdict (with its tags) in `explainers.feedback`;
+saving it mirrors the decision onto the item's spine approval. A Trial Reels
+item is the video; its slot belongs to the post idea (`schedule.idea_ref`) and
+is booked before any video exists, so the slot carries its own approval
+(`schedule.approved_at`) until the video is attached and the approval moves to
+the item. Reels readers use the shapes in `lib/reels/spine-tables.ts`;
+`reels.published_status` stays where it is. A new type joins the spine
 instead of adding items 3–5 to its own schema.
 6. **Media at a signed public URL** in Supabase Storage. Meta fetches the file
    itself, so local paths and session-protected routes don't work.
@@ -74,7 +79,8 @@ the earliest open window); IG Stories post only a set someone approved
 
 Each type has a `require_approval` setting, on (and treated as on when the row
 is missing). With it on, an auto-scheduled Trial Reel or Carousel slot posts
-only once a person approves it (Trial Reels: `posting_schedule.approved_at`;
+only once a person approves it (Trial Reels: the slot's
+`social_hub.schedule.approved_at`, carried to the video's item when it posts;
 Carousels: the item's `social_hub.approvals` row, so approved content stays
 approved wherever it is placed); an unapproved slot that comes due is
 cancelled with the reason, never posted late. A rejected item never posts. Explainers

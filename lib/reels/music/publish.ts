@@ -11,6 +11,8 @@ import { CAPTION_MAX_CHARS, fullCaption, shortenAssembledCaption } from '@/lib/r
 import { setPublished } from '@/lib/reels/repository';
 import { createLiveMetaClient, metaConfigured, type MetaClient } from '@/lib/reels/music/meta';
 import { getSetting, publishMix, type MixSetting } from '@/lib/reels/music/store';
+import { reelItemId } from '@/lib/reels/publish/items';
+import { REEL_ATTEMPTS } from '@/lib/reels/spine-tables';
 import { signFrameObject } from '@/lib/reels/visual/storage';
 
 /**
@@ -18,6 +20,10 @@ import { signFrameObject } from '@/lib/reels/visual/storage';
  * queues an attempt; the worker creates the Reels container with the song
  * attached by audio_id, waits for FINISHED, and publishes it as a trial reel.
  * Success also marks the post idea published (D-005, D-061).
+ *
+ * Attempts live on the lifecycle spine (social_hub.publish_attempts, vertical
+ * 'reels', D39), with the song, mix and trial settings in `payload`. One
+ * publish at a time across every type on the spine: they share one account.
  */
 
 export type PublishTrigger = 'approve' | 'auto' | 'mix_test' | 'force';
@@ -67,8 +73,10 @@ export async function publishReadiness(
   }>(
     `SELECT v.post_idea_id, v.status, v.video_storage_path, c.caption, c.call_to_action, c.hashtags,
             p.id AS pick_id, p.picked_audio_id, p.picked_title, p.picked_artist,
-            EXISTS (SELECT 1 FROM reels.publish_attempts a
-                     WHERE a.video_job_id = v.id AND a.status = 'published' AND a.trigger <> 'mix_test') AS published
+            EXISTS (SELECT 1 FROM social_hub.publish_attempts a
+                      JOIN social_hub.content_items ci ON ci.id = a.content_item_id
+                     WHERE ci.vertical = 'reels' AND ci.native_ref = v.id::text
+                       AND a.status = 'published' AND a.trigger <> 'mix_test') AS published
        FROM reels.video_jobs v
        LEFT JOIN reels.idea_copy c ON c.post_idea_id = v.post_idea_id AND c.slate_id = v.slate_id AND c.status = 'ok'
        LEFT JOIN LATERAL (
@@ -134,27 +142,25 @@ export async function queuePublish(
   const reel = ready.reel;
   const caption = reel.caption.length > CAPTION_MAX_CHARS ? shortenAssembledCaption(reel.caption) : reel.caption;
   const mix = reel.mix;
+  const itemId = await reelItemId(videoJobId);
+  if (!itemId) return { queued: false, status: 400, note: 'This reel has no finished video.' };
+  const payload = {
+    audio_id: reel.audioId,
+    song_title: reel.title,
+    song_artist: reel.artist,
+    audio_volume: mix.audioVolume,
+    video_volume: mix.videoVolume,
+    graduation_strategy: TRIAL_GRADUATION_STRATEGY,
+    share_to_feed: await shareToFeed(),
+    song_pick_id: reel.pickId,
+    post_idea_id: reel.postIdeaId,
+  };
   try {
     const inserted = await dbQuery<{ id: string }>(
-      `INSERT INTO reels.publish_attempts (
-          video_job_id, post_idea_id, song_pick_id, trigger, status, audio_id, song_title, song_artist,
-          audio_volume, video_volume, caption, graduation_strategy, share_to_feed)
-       VALUES ($1,$2,$3,$4,'requested',$5,$6,$7,$8,$9,$10,$11,$12)
+      `INSERT INTO social_hub.publish_attempts (content_item_id, vertical, trigger, status, caption, payload)
+       VALUES ($1, 'reels', $2, 'requested', $3, $4::jsonb)
        RETURNING id`,
-      [
-        videoJobId,
-        reel.postIdeaId,
-        reel.pickId,
-        trigger,
-        reel.audioId,
-        reel.title,
-        reel.artist,
-        mix.audioVolume,
-        mix.videoVolume,
-        caption,
-        TRIAL_GRADUATION_STRATEGY,
-        await shareToFeed(),
-      ],
+      [itemId, trigger, caption, JSON.stringify(payload)],
     );
     return { queued: true, id: inserted.rows[0].id };
   } catch (error) {
@@ -165,20 +171,20 @@ export async function queuePublish(
 
 async function claimPublish(): Promise<string | null> {
   await dbQuery(
-    `UPDATE reels.publish_attempts
+    `UPDATE social_hub.publish_attempts
         SET status = 'failed', finished_at = now(),
             error = 'The worker stopped while this reel was publishing. Check Instagram before approving again.'
-      WHERE status IN ('creating', 'processing', 'publishing')
+      WHERE vertical = 'reels' AND status IN ('creating', 'processing', 'publishing')
         AND started_at < now() - ($1::int * interval '1 minute')`,
     [PUBLISH_STALE_MINUTES],
   );
   try {
     const { rows } = await dbQuery<{ id: string }>(
-      `UPDATE reels.publish_attempts SET status = 'creating', started_at = now()
+      `UPDATE social_hub.publish_attempts SET status = 'creating', started_at = now()
         WHERE id = (
-          SELECT id FROM reels.publish_attempts
-           WHERE status = 'requested'
-             AND NOT EXISTS (SELECT 1 FROM reels.publish_attempts a WHERE a.status IN ('creating', 'processing', 'publishing'))
+          SELECT id FROM social_hub.publish_attempts
+           WHERE vertical = 'reels' AND status = 'requested'
+             AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts a WHERE a.status IN ('creating', 'processing', 'publishing'))
            ORDER BY requested_at
            FOR UPDATE SKIP LOCKED
            LIMIT 1)
@@ -194,7 +200,7 @@ async function claimPublish(): Promise<string | null> {
 async function update(id: string, fields: Record<string, unknown>): Promise<void> {
   const keys = Object.keys(fields);
   const sets = keys.map((key, index) => `${key} = $${index + 2}`);
-  await dbQuery(`UPDATE reels.publish_attempts SET ${sets.join(', ')} WHERE id = $1`, [id, ...keys.map((key) => fields[key])]);
+  await dbQuery(`UPDATE social_hub.publish_attempts SET ${sets.join(', ')} WHERE id = $1`, [id, ...keys.map((key) => fields[key])]);
 }
 
 export type PublishDeps = {
@@ -225,7 +231,7 @@ export async function claimAndPublish(deps: PublishDeps = {}): Promise<{ id: str
     }>(
       `SELECT a.post_idea_id, v.video_storage_path, a.audio_id, a.audio_volume, a.video_volume, a.caption,
               a.graduation_strategy, a.share_to_feed
-         FROM reels.publish_attempts a
+         FROM ${REEL_ATTEMPTS} a
          LEFT JOIN reels.video_jobs v ON v.id = a.video_job_id
         WHERE a.id = $1`,
       [id],

@@ -23,8 +23,7 @@ SELECT error AS text, updated_at::text AS at
 
 export async function readLatestQuota(q: HubQuery): Promise<QuotaRow | null> {
   const reads = await Promise.all([
-    q<QuotaRow>(FEED_SQL('reels.publish_attempts')).catch(() => ({ rows: [] as QuotaRow[] })),
-    // Every type that has joined the lifecycle spine (D36): Carousels, Explainers.
+    // Every type on the lifecycle spine (D36, D39): Carousels, Explainers, Trial Reels.
     q<QuotaRow>(FEED_SQL('social_hub.publish_attempts')).catch(() => ({ rows: [] as QuotaRow[] })),
     q<QuotaRow>(STORIES_SQL).catch(() => ({ rows: [] as QuotaRow[] })),
   ]);

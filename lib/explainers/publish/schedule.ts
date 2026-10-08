@@ -10,7 +10,7 @@ import { queuePublish } from './publish';
 /**
  * Up to `posts_per_day` explainers per Eastern day (default 2), one per
  * window (1:00–2:30 PM, 3:30–5:00 PM), each ≥ 30 minutes from any other
- * feed post (SH-46 – SH-48), the shape of reels.posting_schedule. While
+ * feed post (SH-46 – SH-48), on the lifecycle spine (D38). While
  * publishing is live, every approved, unposted render gets the next free
  * window; a due slot becomes a publish attempt. Slots live on the lifecycle
  * spine (social_hub.schedule, vertical 'explainers', D36).

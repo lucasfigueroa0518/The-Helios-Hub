@@ -1,4 +1,5 @@
 import { dbQuery } from '@/lib/db';
+import { REEL_ATTEMPTS } from '@/lib/reels/spine-tables';
 import type { IgAudio } from '@/lib/reels/music/meta';
 import type { AudioType, PoolSong, TrendingSound } from '@/lib/reels/music/pool';
 import type { SongTags } from '@/lib/reels/music/vocab';
@@ -67,7 +68,7 @@ const ATTACHED_SQL = `
     ) latest
     WHERE latest.picked_audio_id = s.audio_id
       AND NOT EXISTS (
-        SELECT 1 FROM reels.publish_attempts a
+        SELECT 1 FROM ${REEL_ATTEMPTS} a
          WHERE a.video_job_id = latest.video_job_id AND a.status = 'published'
       )
   )`;

@@ -242,3 +242,46 @@ ALTER TABLE social_hub.media_insights ADD COLUMN IF NOT EXISTS reposts double pr
 ALTER TABLE social_hub.media_insights ADD COLUMN IF NOT EXISTS avg_watch_time_ms double precision;
 ALTER TABLE social_hub.media_insights ADD COLUMN IF NOT EXISTS total_watch_time_ms double precision;
 ALTER TABLE social_hub.media_insights ADD COLUMN IF NOT EXISTS skip_rate double precision;
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- Trial Reels join the spine (D39)
+-- ════════════════════════════════════════════════════════════════════════════
+-- A Reels item is the video (native_ref = reels.video_jobs.id, idea_ref =
+-- post_idea_id). A Reels slot belongs to the post idea and is booked before
+-- any video exists, so a schedule row may carry only its idea (idea_ref) until
+-- the video is attached when the slot comes due.
+ALTER TABLE social_hub.content_items DROP CONSTRAINT IF EXISTS content_items_vertical_check;
+ALTER TABLE social_hub.content_items ADD CONSTRAINT content_items_vertical_check
+    CHECK (vertical IN ('carousels', 'explainers', 'reels'));
+
+ALTER TABLE social_hub.schedule ALTER COLUMN content_item_id DROP NOT NULL;
+ALTER TABLE social_hub.schedule ADD COLUMN IF NOT EXISTS idea_ref text;
+-- Trial Reels' approval of an idea's slot, which can come before the slot has
+-- a video (and so before there is an item to approve). It is carried onto the
+-- item's approval when the video is attached. Other types approve the item.
+ALTER TABLE social_hub.schedule ADD COLUMN IF NOT EXISTS approved_at timestamptz;
+ALTER TABLE social_hub.schedule DROP CONSTRAINT IF EXISTS schedule_item_or_idea_check;
+ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_item_or_idea_check
+    CHECK (content_item_id IS NOT NULL OR idea_ref IS NOT NULL);
+ALTER TABLE social_hub.schedule DROP CONSTRAINT IF EXISTS schedule_slot_check;
+ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_slot_check CHECK (
+    (vertical = 'carousels' AND slot IN ('morning', 'afternoon'))
+    OR (vertical = 'explainers' AND slot IN ('afternoon', 'late'))
+    OR (vertical = 'reels' AND slot IN ('morning', 'midday', 'evening'))
+);
+-- One active slot per Trial Reels idea (the old idx_reels_posting_schedule_idea).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_social_hub_schedule_reels_idea
+    ON social_hub.schedule (vertical, idea_ref)
+    WHERE vertical = 'reels' AND status IN ('scheduled', 'publishing');
+
+-- Trial Reels' payload: audio_id, song_title, song_artist, audio_volume,
+-- video_volume, graduation_strategy, share_to_feed, song_pick_id, post_idea_id.
+-- mix_test posts the same reel at another mix on purpose (publish_once skips it).
+ALTER TABLE social_hub.publish_attempts DROP CONSTRAINT IF EXISTS publish_attempts_trigger_check;
+ALTER TABLE social_hub.publish_attempts ADD CONSTRAINT publish_attempts_trigger_check CHECK (
+    (vertical IN ('carousels', 'explainers') AND trigger IN ('approve', 'auto', 'force'))
+    OR (vertical = 'reels' AND trigger IN ('approve', 'auto', 'mix_test', 'force'))
+);
+
+-- Whether Instagram reports the reel as shared to the feed (Trial Reels).
+ALTER TABLE social_hub.media_insights ADD COLUMN IF NOT EXISTS shared_to_feed boolean;

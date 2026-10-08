@@ -5,7 +5,7 @@
  */
 export type SpineQuery = (text: string, params?: unknown[]) => Promise<{ rows: any[] }>;
 
-export type SpineVertical = 'carousels' | 'explainers';
+export type SpineVertical = 'carousels' | 'explainers' | 'reels';
 export type SpineFormat = 'feed' | 'reel' | 'story';
 
 /** The item's stable id, created the first time any lifecycle step touches the content. */

@@ -1,4 +1,5 @@
 import { dbQuery } from '@/lib/db';
+import { REEL_ATTEMPTS } from '@/lib/reels/spine-tables';
 import { clapConfigured } from '@/lib/reels/music/clap';
 import { metaConfigured } from '@/lib/reels/music/meta';
 import { songPickApproved, type PickStatus, type ShortlistEntry, type StoredShortlist } from '@/lib/reels/music/pick';
@@ -86,7 +87,7 @@ export async function loadReelSongs(videoJobIds: string[]): Promise<Record<strin
       finished_at: string | null;
     }>(
       `SELECT DISTINCT ON (video_job_id) video_job_id, status, trigger, error, permalink, finished_at::text
-         FROM reels.publish_attempts
+         FROM ${REEL_ATTEMPTS} pa
         WHERE video_job_id = ANY($1::uuid[]) AND trigger <> 'mix_test'
         ORDER BY video_job_id, requested_at DESC`,
       [videoJobIds],

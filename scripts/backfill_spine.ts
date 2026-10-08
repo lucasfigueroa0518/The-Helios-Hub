@@ -5,6 +5,7 @@
  *
  *   npx tsx scripts/backfill_spine.ts carousels --apply
  *   npx tsx scripts/backfill_spine.ts explainers --apply
+ *   npx tsx scripts/backfill_spine.ts reels --apply
  */
 import path from 'node:path';
 
@@ -16,15 +17,17 @@ try {
 
 async function main() {
   const vertical = process.argv[2];
-  if (vertical !== 'carousels' && vertical !== 'explainers') throw new Error('Usage: npx tsx scripts/backfill_spine.ts <carousels|explainers> --apply');
+  if (vertical !== 'carousels' && vertical !== 'explainers' && vertical !== 'reels') {
+    throw new Error('Usage: npx tsx scripts/backfill_spine.ts <carousels|explainers|reels> --apply');
+  }
   if (!process.argv.includes('--apply')) {
     console.error('Refusing to run without --apply (this writes to the shared database).');
     process.exit(2);
   }
   const { closeDbPool, dbQuery } = await import('@/lib/db');
-  const { backfillCarousels, backfillExplainers } = await import('@/lib/social-hub/backfill');
+  const { backfillCarousels, backfillExplainers, backfillReels } = await import('@/lib/social-hub/backfill');
   try {
-    const run = vertical === 'carousels' ? backfillCarousels : backfillExplainers;
+    const run = { carousels: backfillCarousels, explainers: backfillExplainers, reels: backfillReels }[vertical];
     const counts = await run((text, params) => dbQuery(text, params));
     console.log(JSON.stringify({ vertical, copied: counts }));
   } finally {
