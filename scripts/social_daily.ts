@@ -8,7 +8,12 @@
  * LIVE: Claude (Sonnet 5.5), web search, Jev, Wikidata / Commons /
  * Openverse. Needs Tommy's OK. --cap-usd (default $2.00) is a hard total
  * cap on Claude (tokens + web search fees) + Jev: no call starts that
- * could pass it. No database, no Storage, no Instagram.
+ * could pass it. No Storage, no Instagram.
+ *
+ * Storage (spec 2026-10-08-social-storage.md): with DATABASE_URL set (and
+ * SOCIAL_STORE not "file"), the used-photo log, posted stories, set-asides
+ * and feed health live in the Postgres `social` schema, and the run and its
+ * shipped posts are recorded there too. Otherwise the local files, as before.
  *
  *   npx tsx scripts/social_daily.ts --stories 2            (cap $2.00)
  *   npx tsx scripts/social_daily.ts --cap-usd 1.50 --stories 2
@@ -29,6 +34,7 @@
  * set-aside log in Claude outputs/.
  */
 import { promises as fsp } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 process.loadEnvFile(path.join(process.cwd(), '.env.local'));
@@ -49,27 +55,27 @@ async function main() {
   const reviewOn = process.argv.includes('--review');
   const preview = process.argv.includes('--preview');
 
-  const { default: Anthropic } = await import('@anthropic-ai/sdk');
+  const { newAnthropic } = await import('@/lib/anthropic-client');
   const { HELIOS_SOCIAL_FEEDS } = await import('@/lib/social/feeds');
   const { capped, createJevAsk, createJevTally, tallied } = await import('@/lib/social/jev/client');
   const { fetchBodyLive } = await import('@/lib/social/ingest/select/enrich');
-  const { createFileFeedHealthLog, fetchFeeds } = await import('@/lib/social/ingest/select/feed-health');
-  const { createFilePosted } = await import('@/lib/social/ingest/select/posted');
+  const { fetchFeeds } = await import('@/lib/social/ingest/select/feed-health');
+  const { createSocialStore } = await import('@/lib/social/store');
+  const { insertRun, upsertPost } = await import('@/lib/social/store/pg');
   const { createCostMeter } = await import('@/lib/social/pipeline/cost-meter');
   const { createLiveStages, createRunBudget } = await import('@/lib/social/pipeline/live-stages');
   const { runDay } = await import('@/lib/social/pipeline/orchestrator');
   const { createSelectionStage } = await import('@/lib/social/pipeline/selection-stage');
-  const { createFileSetAsideLog } = await import('@/lib/social/pipeline/set-aside-log');
   const { checkRenderFit } = await import('@/lib/social/render/fit-check');
   const { toSlug, writeGeneratedPost } = await import('@/lib/social/render/local-store');
   const { readPage } = await import('@/lib/social/reporter/read-page');
   const layoutRotation = await import('@/lib/social/render/layout-rotation');
   const { liveMessagesCreate } = await import('@/lib/social/reporter/reporter');
   const { isWellKnownLive } = await import('@/lib/social/writer/well-known');
-  const { createFileUsedPhotoLog } = await import('@/lib/social/photos/used-photos');
   const { detectFacesLive } = await import('@/lib/social/photos/faces');
   const { createSecondPhotos } = await import('@/lib/social/photos/second-photo');
-  const usedLog = createFileUsedPhotoLog();
+  const store = await createSocialStore();
+  const usedLog = store.usedPhotos;
   type Selection = import('@/lib/social/ingest/select/select').Selection;
   type FitResult = import('@/lib/social/render/fit-check').FitResult;
   type PostObject = import('@/lib/social/pipeline/types').PostObject;
@@ -95,14 +101,14 @@ async function main() {
     score: createSelectionStage({
       feeds: HELIOS_SOCIAL_FEEDS,
       jev,
-      posted: createFilePosted(),
+      posted: store.posted,
       fetchBody: fetchBodyLive,
-      feedHealthLog: createFileFeedHealthLog(),
+      feedHealthLog: store.feedHealth,
       onSelection: (s) => {
         selection = s;
       },
     }),
-    create: liveMessagesCreate(new Anthropic()),
+    create: liveMessagesCreate(newAnthropic()),
     jev,
     budget,
     readPage,
@@ -137,7 +143,7 @@ async function main() {
     stages,
     // The meter stops the day between stages at the full cap; only the Claude-call guard keeps a per-call reserve.
     meter: createCostMeter({ capUsd }),
-    log: createFileSetAsideLog(),
+    log: store.setAsides,
     now,
     targetPosts: stories,
   });
@@ -159,6 +165,8 @@ async function main() {
 
   // ── Outputs ──────────────────────────────────────────────────────────
   const storyLogs = Object.fromEntries(logs);
+  // Shipped posts for the database: slug, brief and final draft (after the Hook pass and the Fact-checker).
+  const shippedPosts: Array<{ slug: string; storyId: string; title: string; brief: unknown; draft: unknown; render: PostObject['render'] }> = [];
   let n = 0;
   for (const [storyId, l] of logs) {
     n++;
@@ -167,8 +175,13 @@ async function main() {
     const post = result.posts.find((p) => p.storyId === storyId) ?? l.design;
     if (post) {
       const shipped = result.posts.some((p) => p.storyId === storyId);
-      const slug = `checkpoint-${stamp.slice(0, 10)}-${n}`;
-      if (shipped) await writeGeneratedPost(slug, post.render);
+      // Unique per run (the old checkpoint-<date>-N let two runs on one day overwrite each other).
+      const slug = `post-${stamp.toLowerCase()}-${n}`;
+      if (shipped) {
+        await writeGeneratedPost(slug, post.render);
+        const finalDraft = (l.factCheck.at(-1) as { outcome?: { draft?: unknown } } | undefined)?.outcome?.draft ?? null;
+        shippedPosts.push({ slug, storyId, title: post.title, brief: l.reporter?.ok ? l.reporter.brief : null, draft: finalDraft, render: post.render });
+      }
       await fsp.writeFile(path.join(runDir, `post-${n}.md`), readable(post, fitResults.get(titles.get(storyId) ?? ''), shipped ? slug : null));
     }
   }
@@ -192,6 +205,21 @@ async function main() {
     JSON.stringify({ ...(preview ? { label: 'PREVIEW', note: 'Preview run, not the acceptance batch; the used-photo log was not written.' } : {}), hookPass: hookOn, startedAt: now.toISOString(), capUsd, alreadyPosted, requestMix, articles: articles.length, jev: jevTally, claudeUsd: budget.claudeUsd(), totalUsd: budget.spent(), result, selection, stories: storyLogs, fit: Object.fromEntries(fitResults) }, null, 2),
   );
   if (preview) await fsp.writeFile(path.join(runDir, 'preview-report.md'), previewReport());
+  // The database record (spec 2026-10-08-social-storage.md): written after the files, so a database failure loses nothing.
+  if (store.query) {
+    try {
+      const runId = await insertRun(store.query, {
+        kind: preview ? 'preview' : 'daily', startedAt: now.toISOString(), finishedAt: new Date().toISOString(), hookPass: hookOn, capUsd,
+        claudeUsd: budget.claudeUsd(), totalUsd: budget.spent(), stopReason: result.stopReason ?? null,
+        runDir: path.relative(process.cwd(), runDir), machine: os.hostname(),
+        record: JSON.parse(await fsp.readFile(path.join(runDir, 'run.json'), 'utf8')),
+      });
+      for (const p of shippedPosts) await upsertPost(store.query, { runId, ...p, status: preview ? 'preview' : 'review' });
+      console.log(`Database: run ${runId}, ${shippedPosts.length} post(s) in social.posts`);
+    } catch (err) {
+      console.error(`Database write failed (the run folder is complete): ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
   console.log(JSON.stringify({
     runDir: path.relative(process.cwd(), runDir),
     articles: articles.length,
