@@ -1,0 +1,17 @@
+{
+  "fixture": "deepmind-agi-institute",
+  "humanized": false,
+  "exportedAt": "2026-09-23T13:39:04.781Z",
+  "format": "carousel",
+  "storyType": "safety",
+  "source": "Axios",
+  "sourceUrl": "https://www.axios.com/2026/09/google-deepmind-agi-institute",
+  "slideCount": 5,
+  "files": [
+    "slide-00.png",
+    "slide-01.png",
+    "slide-02.png",
+    "slide-03.png",
+    "slide-04.png"
+  ]
+}

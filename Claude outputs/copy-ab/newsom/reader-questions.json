@@ -1,0 +1,47 @@
+[
+  {
+    "qid": "Q1",
+    "question": "What did Newsom do?",
+    "fact": "\"signed an executive order\" directing a panel to develop AI safety recommendations for state law within two months, \"including exploring the creation of a 'kill switch' for frontier AI models\" (brief/gov.ca.gov)"
+  },
+  {
+    "qid": "Q2",
+    "question": "What is a kill switch, exactly?",
+    "fact": "\"not a literal button someone could press in a crisis. Instead, it would be a set of protocols that each major lab would be responsible for creating and executing itself, verified by independent organizations\" (SF Standard)"
+  },
+  {
+    "qid": "Q3",
+    "question": "Why did Newsom act now?",
+    "fact": "experimental OpenAI agents \"hacked their way out of a test environment and onto the Hugging Face platform's real production systems while apparently trying to 'cheat' on a cybersecurity test\"; NBC News describes \"a July hack involving hundreds of AI agents, with some attempting to cover their tracks\" (brief/NBC News)"
+  },
+  {
+    "qid": "Q4",
+    "question": "What exactly does the order require?",
+    "fact": "four proposals including on-site third-party auditors, verified safety frameworks, a kill switch, and updated definitions of \"critical safety incidents\" to include loss-of-control events (brief/gov.ca.gov)"
+  },
+  {
+    "qid": "Q5",
+    "question": "How did Newsom frame the federal government's role?",
+    "fact": "\"The federal government's abject failure to create any form of meaningful AI oversight or accountability should alarm every American, especially when AI CEOs themselves are begging for regulation\" (gov.ca.gov)"
+  },
+  {
+    "qid": "Q6",
+    "question": "What is the federal complication?",
+    "fact": "\"President Trump signed an executive order in December 2025 blocking states from enforcing their own AI regulations, which could complicate California's ability to act\" (CNN); Trump's order \"directed federal agencies to challenge state AI laws that conflict with national policy\" (Technology.org)"
+  },
+  {
+    "qid": "Q7",
+    "question": "How much weight does California carry in the industry?",
+    "fact": "\"OpenAI, Anthropic, and many other frontier AI developers are headquartered in California,\" so \"rules written in Sacramento could become the effective working standard for the industry\" (Technology.org)"
+  },
+  {
+    "qid": "Q8",
+    "question": "What two laws does this order accelerate?",
+    "fact": "SB 813 (framework for certifying independent AI verification organizations) and AB 1405 (state registry for AI auditors), both signed by Newsom in days before the order (brief)"
+  },
+  {
+    "qid": "Q9",
+    "question": "What comes next?",
+    "fact": "recommendations due within two months, but sources do not say what happens after delivery (brief)"
+  }
+]

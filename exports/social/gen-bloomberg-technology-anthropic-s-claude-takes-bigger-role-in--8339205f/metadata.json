@@ -1,0 +1,23 @@
+{
+  "fixture": "example-post",
+  "humanized": false,
+  "exportedAt": "2026-09-27T00:36:09.660Z",
+  "format": "carousel",
+  "storyType": "agents",
+  "source": "Bloomberg Technology",
+  "sourceUrl": "https://www.bloomberg.com/news/videos/2026-09-18/bloomberg-tech-9-18-2026-video",
+  "slideCount": 11,
+  "files": [
+    "slide-00.png",
+    "slide-01.png",
+    "slide-02.png",
+    "slide-03.png",
+    "slide-04.png",
+    "slide-05.png",
+    "slide-06.png",
+    "slide-07.png",
+    "slide-08.png",
+    "slide-09.png",
+    "slide-10.png"
+  ]
+}

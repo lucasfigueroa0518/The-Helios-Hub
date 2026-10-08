@@ -1,0 +1,47 @@
+[
+  {
+    "qid": "Q1",
+    "question": "What happened?",
+    "fact": "Gottheimer \"introduced two bipartisan AI security bills\" on September 18, 2026 (Gottheimer press release)"
+  },
+  {
+    "qid": "Q2",
+    "question": "Who did it?",
+    "fact": "\"Josh Gottheimer (D-NJ-5),\" \"Co-Chair of the House AI Commission and a senior member of the House Intelligence Committee\" (Gottheimer press release)"
+  },
+  {
+    "qid": "Q3",
+    "question": "What does the American AI Security Act do?",
+    "fact": "\"would create a mandatory government review process for advanced AI models ahead of their release,\" led by the NSA, lasting \"30 days, with the possibility of a single 30-day extension\" (Gottheimer press release)"
+  },
+  {
+    "qid": "Q4",
+    "question": "Why does Gottheimer say this is needed?",
+    "fact": "\"Right now, there are no mandatory requirements for pre-deployment testing of frontier AI models\" (Gottheimer press release)"
+  },
+  {
+    "qid": "Q5",
+    "question": "What does the China FIREWALL Act do?",
+    "fact": "\"would prohibit Chinese-developed open-weight AI models from government-issued devices and bar federal agencies from purchasing software that relies on those models\" (Gottheimer press release)"
+  },
+  {
+    "qid": "Q6",
+    "question": "Which Chinese models does Gottheimer name?",
+    "fact": "\"Moonshot's Kimi K3 and Alibaba's Qwen, are still walking right through the front door of our federal agencies\" (Gottheimer press release)"
+  },
+  {
+    "qid": "Q7",
+    "question": "How does this build on existing law?",
+    "fact": "the proposal \"would expand on restrictions involving the Chinese AI model DeepSeek included in the fiscal 2026 National Defense Authorization Act\" (Gottheimer press release)"
+  },
+  {
+    "qid": "Q8",
+    "question": "What is the current administration's posture, and how does this change it?",
+    "fact": "\"the current administration process is voluntary, based on a June 2026 Executive Order, and Gottheimer's bill would codify mandatory pre-deployment review in law\" (Gottheimer press release)"
+  },
+  {
+    "qid": "Q9",
+    "question": "What are the limits or obstacles?",
+    "fact": "\"Republican leadership has refused to bring AI safety legislation to the floor for a vote\"; \"the sources do not say when or whether a vote is scheduled\" (Gottheimer press release / brief)"
+  }
+]

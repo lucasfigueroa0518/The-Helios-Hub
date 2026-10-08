@@ -1,5 +1,6 @@
 import fs from 'node:fs';
-import Anthropic from '@anthropic-ai/sdk';
+import type Anthropic from '@anthropic-ai/sdk';
+import { newAnthropic } from '@/lib/anthropic-client';
 import { agentMailListMessages, agentMailSendProbe } from '@/lib/agentmail';
 import { renderSitePage } from '@/lib/site-browser-render';
 import { MAPPING_MODEL } from '@/lib/models';
@@ -18,7 +19,7 @@ async function testClaude() {
     results.push({ name: 'Claude API', ok: false, detail: 'ANTHROPIC_API_KEY missing' });
     return;
   }
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 0 });
+  const client = newAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 0 });
   const message = await client.messages.create({
     model: MAPPING_MODEL,
     max_tokens: 16,
@@ -38,7 +39,7 @@ async function testWebSearch() {
     results.push({ name: 'Claude web_search', ok: false, detail: 'ANTHROPIC_API_KEY missing' });
     return;
   }
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 0 });
+  const client = newAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 0 });
   const message = await client.messages.create({
     model: MAPPING_MODEL,
     max_tokens: 120,

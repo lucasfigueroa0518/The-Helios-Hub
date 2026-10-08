@@ -1,0 +1,73 @@
+# gottheimer
+
+THE NEWS: On Friday, September 18, 2026, U.S. Rep. Josh Gottheimer (D-NJ-5) introduced two bipartisan AI security bills at Fairleigh Dickinson University in Teaneck, NJ: the American AI Security Act, which would require mandatory NSA reviews of the most powerful AI models before release, and the China FIREWALL Act, which would ban Chinese-developed AI from all federal government systems and devices.
+TERMS: 16
+
+## READER QUESTIONS (9)
+- Q1: What happened?  ← Gottheimer "introduced two bipartisan AI security bills" on September 18, 2026 (Gottheimer press release)
+- Q2: Who did it?  ← "Josh Gottheimer (D-NJ-5)," "Co-Chair of the House AI Commission and a senior member of the House Intelligence Committee" (Gottheimer press release)
+- Q3: What does the American AI Security Act do?  ← "would create a mandatory government review process for advanced AI models ahead of their release," led by the NSA, lasting "30 days, with the possibility of a single 30-day extension" (Gottheimer press release)
+- Q4: Why does Gottheimer say this is needed?  ← "Right now, there are no mandatory requirements for pre-deployment testing of frontier AI models" (Gottheimer press release)
+- Q5: What does the China FIREWALL Act do?  ← "would prohibit Chinese-developed open-weight AI models from government-issued devices and bar federal agencies from purchasing software that relies on those models" (Gottheimer press release)
+- Q6: Which Chinese models does Gottheimer name?  ← "Moonshot's Kimi K3 and Alibaba's Qwen, are still walking right through the front door of our federal agencies" (Gottheimer press release)
+- Q7: How does this build on existing law?  ← the proposal "would expand on restrictions involving the Chinese AI model DeepSeek included in the fiscal 2026 National Defense Authorization Act" (Gottheimer press release)
+- Q8: What is the current administration's posture, and how does this change it?  ← "the current administration process is voluntary, based on a June 2026 Executive Order, and Gottheimer's bill would codify mandatory pre-deployment review in law" (Gottheimer press release)
+- Q9: What are the limits or obstacles?  ← "Republican leadership has refused to bring AI safety legislation to the floor for a vote"; "the sources do not say when or whether a vote is scheduled" (Gottheimer press release / brief)
+
+## UNUSED (0)
+
+## FINAL SLIDES (Tommy scores "new fact vs repeat" by hand)
+
+COVER: Rep. Josh Gottheimer introduced two bipartisan AI security bills on Friday.
+COVER IMAGE: photo of Josh Gottheimer
+
+SLIDE 2 — text
+  HEADLINE: One bill: mandatory NSA review
+  BODY: The American AI Security Act, co-led with Rep. Mike Lawler (R-NY), would require the NSA to review the most powerful AI models before release. The NSA gets 30 days, with one possible extension.
+  HIGHLIGHT: require the NSA to review
+  IMAGE: type only
+
+SLIDE 3 — quote
+  QUOTE: "Right now, there are no mandatory requirements for pre-deployment testing of frontier AI models. That doesn't work in banking, it doesn't work in food safety, it doesn't work in medicine, and it sure as hell shouldn't work with the technology that experts say could help build a bioweapon or take down our power grid."
+  QUOTE BY: Rep. Josh Gottheimer
+  HIGHLIGHT: no mandatory requirements for pre-deployment testing
+
+SLIDE 4 — text
+  HEADLINE: Why mandatory, not voluntary
+  BODY: The Trump administration's current AI review process is voluntary, based on a June 2026 Executive Order. Gottheimer's bill would codify the requirement in law.
+  HIGHLIGHT: codify the requirement in law
+  IMAGE: type only
+
+SLIDE 5 — text
+  HEADLINE: The second bill targets China
+  BODY: The China FIREWALL Act, co-led with Rep. Nick LaLota (R-NY), would ban Chinese-developed AI models from federal government devices. These are models whose code is publicly available, allowing anyone to download and run them.
+  HIGHLIGHT: ban Chinese-developed AI models
+  IMAGE: type only
+
+SLIDE 6 — quote
+  QUOTE: "Moonshot's Kimi K3 and Alibaba's Qwen are still walking right through the front door of our federal agencies."
+  QUOTE BY: Rep. Josh Gottheimer
+  HIGHLIGHT: walking right through the front door
+
+SLIDE 7 — text
+  HEADLINE: Expands an existing ban
+  BODY: In 2025, Gottheimer secured a ban on DeepSeek, a Chinese AI model, in the National Defense Authorization Act. The FIREWALL Act extends that restriction to other Chinese open-weight models now in use across federal agencies.
+  HIGHLIGHT: extends that restriction to other Chinese
+  IMAGE: type only
+
+SLIDE 8 — text
+  HEADLINE: No vote scheduled yet
+  BODY: Republican leadership has refused to bring AI safety legislation to a floor vote. Gottheimer called on the Speaker to reconvene Congress before the election to pass both bills.
+  HIGHLIGHT: refused to bring AI safety legislation to a floor vote
+  IMAGE: type only
+
+FOLLOW: Follow Helios for updates on these AI security bills as Congress decides.
+
+## CODE CHECKS AFTER REPAIR (7)
+- [char_limit] slide s3: SLIDE 3 QUOTE (319 characters, limit 140): cut at least 179 characters (about 30 words). Cut words, not facts: remove filler, glosses already explained elsewhere, and restated context first. If a fact
+- [banned_always] slide s4: SLIDE 4 HEADLINE (28 characters, limit 60): contains banned "X, not Y" invented contrast. Remove it (rewrite the phrase without it) — this construction is never allowed in Helios voice.
+- [char_limit] slide s5: SLIDE 5 BODY (224 characters, limit 220): cut at least 4 characters (about 1 words). Cut words, not facts: remove filler, glosses already explained elsewhere, and restated context first. If a fact mus
+- [char_limit] slide s7: SLIDE 7 BODY (223 characters, limit 220): cut at least 3 characters (about 1 words). Cut words, not facts: remove filler, glosses already explained elsewhere, and restated context first. If a fact mus
+- [rhythm] slide s5: SLIDE 5 and SLIDE 4 are both "text" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them.
+- [rhythm] slide s8: SLIDE 8 and SLIDE 7 are both "text" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them.
+- [variety] slide: This post has 7 slides between the cover and the follow slide but only 2 distinct kinds (text, quote). A long post needs at least 3 different kinds — mix in a Landing line, Stat, Split stat, Quote or 

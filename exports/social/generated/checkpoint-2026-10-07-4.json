@@ -1,0 +1,212 @@
+{
+  "format": "carousel",
+  "storyType": "tech",
+  "source": "Anthropic",
+  "sourceUrl": "https://www.anthropic.com/news/cyber-verification-program",
+  "publishedAt": "2026-10-06T22:46:00.000Z",
+  "issueNumber": 0,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "headline": [
+        {
+          "text": "Anthropic merges two security programs, giving vetted teams fewer cyber blocks on Claude",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Anthropic merges two security programs, giving vetted teams fewer cyber blocks on Claude",
+      "photoUrl": "/social/starter/microchip-hitachi-hd61700-micropro.jpg",
+      "photoCredit": "Piotr433 (CC0) · Wikimedia Commons",
+      "photoKind": "scene"
+    },
+    {
+      "position": 1,
+      "headline": [
+        {
+          "text": "Public Claude blocks most cyber work",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Public Claude blocks most cyber work",
+      "photoUrl": "https://cdn.stocksnap.io/img-thumbs/960w/TIV258VG3N.jpg",
+      "photoCredit": "Lorenzo Cafaro (public domain)",
+      "photoKind": "scene",
+      "body": [
+        {
+          "text": "Anthropic says cybersecurity is dual use: skills that help a team fix a vulnerability can help an attacker exploit it. Public models allow code review and alert triage but block most cyber work. Who gets past that?",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text"
+    },
+    {
+      "position": 2,
+      "headline": [
+        {
+          "text": "Two programs become one, in three tiers",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Two programs become one, in three tiers",
+      "body": [
+        {
+          "text": "For six months Anthropic ran Project Glasswing, with Claude Mythos access for organizations securing the most critical software, and a Cyber Verification Program for vetted teams. Now they are one.",
+          "role": "narrative"
+        }
+      ],
+      "hook": {
+        "text": "The merged program has three tiers, and the first two loosen the blocks in different ways.",
+        "position": "below"
+      },
+      "layoutVariant": "text"
+    },
+    {
+      "position": 3,
+      "headline": [
+        {
+          "text": "Defense and Red Team tiers loosen the blocks",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Defense and Red Team tiers loosen the blocks",
+      "photoUrl": "https://live.staticflickr.com/65535/52030923570_24408ba31e_b.jpg",
+      "photoCredit": "w_lemay, CC BY-SA · via flickr",
+      "photoKind": "scene",
+      "body": [
+        {
+          "text": "Defense Access is open to critical infrastructure operators such as regional hospitals; Anthropic aims to reply in a few days. Red Team adds authorized adversarial testing, but deploying ransomware stays blocked.",
+          "role": "narrative"
+        }
+      ],
+      "hook": {
+        "text": "One tier has fewer blocks still, and the US government helps review who gets in.",
+        "position": "below"
+      },
+      "layoutVariant": "text"
+    },
+    {
+      "position": 4,
+      "headline": [
+        {
+          "text": "Specialized Access: fewest blocks, US government review",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Specialized Access: fewest blocks, US government review",
+      "body": [
+        {
+          "text": "Only a limited set of verified organizations testing power grids, telecom or interbank systems qualify. Each is reviewed in depth with the US government. Glasswing members move in without reapproval for current models.",
+          "role": "narrative"
+        }
+      ],
+      "hook": {
+        "text": "Fewer blocks come with a condition about what members hand over to Anthropic.",
+        "position": "below"
+      },
+      "layoutVariant": "text"
+    },
+    {
+      "position": 5,
+      "headline": [
+        {
+          "text": "The catch: members must let Anthropic keep their data",
+          "role": "narrative"
+        }
+      ],
+      "altText": "The catch: members must let Anthropic keep their data",
+      "body": [
+        {
+          "text": "Organizations must allow data retention so Anthropic can monitor for cyber misuse. Enterprise Frontier Safeguards, due later this fall, will let eligible ones store data in cloud infrastructure they control.",
+          "role": "narrative"
+        }
+      ],
+      "hook": {
+        "text": "Anthropic ran its own test to show what each tier lets through.",
+        "position": "below"
+      },
+      "layoutVariant": "text"
+    },
+    {
+      "position": 6,
+      "headline": [
+        {
+          "text": "Anthropic’s test: Red Team Access had no blocks",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Anthropic’s test: Red Team Access had no blocks",
+      "body": [
+        {
+          "text": "In its own CyScenarioBench test, every task without CVP access was blocked at the first prompt. Anthropic calls the Red Team result effectively equivalent to a 67.6% success rate with no safeguards.",
+          "role": "narrative"
+        }
+      ],
+      "hook": {
+        "text": "Anthropic also offers a vulnerability count to justify wider access, and calls it partial.",
+        "position": "below"
+      },
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "34 of the 50 tasks",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "Tasks completed by Opus 5.5 in Red Team Access tier, with no blocks"
+    },
+    {
+      "position": 7,
+      "headline": [
+        {
+          "text": "Anthropic says Glasswing partners found verified flaws",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Anthropic says Glasswing partners found verified flaws",
+      "body": [
+        {
+          "text": "Found April to July 2026. Anthropic cites this to justify wider access, and calls it partial: it rests on 33 partner reports, and Anthropic expects true impact to be at least five times higher.",
+          "role": "narrative"
+        }
+      ],
+      "hook": {
+        "text": "Both this count and the test come from Anthropic, and no outside check turned up.",
+        "position": "below"
+      },
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "at least 129,000",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "Verified software vulnerabilities found by Glasswing partners, April–July 2026 (Anthropic's claim)"
+    },
+    {
+      "position": 8,
+      "headline": [
+        {
+          "text": "Anthropic’s own numbers, no outside check found",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Anthropic’s own numbers, no outside check found",
+      "body": [
+        {
+          "text": "The program decides who gets fewer blocks, so it sets who can use the most capable AI for security work. The test and vulnerability figures are Anthropic’s own; SiliconANGLE restates them.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "landing"
+    },
+    {
+      "position": 9,
+      "layoutVariant": "follow",
+      "storySpecificLine": "Follow Helios Group to see whether anyone outside Anthropic checks these numbers.",
+      "altText": "Follow Helios Group to see whether anyone outside Anthropic checks these numbers."
+    }
+  ],
+  "caption": "On Oct 6, 2026, Anthropic merged Project Glasswing into an expanded Cyber Verification Program, giving vetted security teams fewer cyber blocks on its newest Claude models, in three access tiers: Defense, Red Team and Specialized.\n\nAnthropic says cybersecurity is dual use, so its public Claude models block most cyber work. The new tiers decide who gets fewer blocks. Specialized Access has the fewest, and every organization in it is reviewed in depth with the US government. Members must allow data retention so Anthropic can monitor for misuse.\n\nAnthropic says its own test shows each tier blocking less, and says Glasswing partners found at least 129,000 verified vulnerabilities between April and July 2026. It calls that count partial. The figures are Anthropic’s own, and SiliconANGLE restates them.\n\nShould the most capable AI security tools go only to vetted teams?\n\nFollow Helios Group to see whether anyone outside Anthropic checks these numbers.\n\nSource: Anthropic and SiliconANGLE.",
+  "attributionBlock": "Photos: Piotr433 (CC0) · Wikimedia Commons; Lorenzo Cafaro (public domain); w_lemay, CC BY-SA · via flickr"
+}

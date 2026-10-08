@@ -75,11 +75,9 @@ test('late in the day only the window still open can take a reel', () => {
   assert.equal(afterNine, null);
 });
 
-test('only ranks 1 to 3 can be put on the clock', () => {
-  assert.equal(isPostingRank(1), true);
-  assert.equal(isPostingRank(3), true);
-  assert.equal(isPostingRank(4), false);
-  assert.equal(isPostingRank(null), false);
+test('a selected reel can go on the clock at any rank', () => {
+  assert.equal(isPostingRank(true), true);
+  assert.equal(isPostingRank(false), false);
 });
 
 test('calendar days do not drift across a 24-hour add', () => {

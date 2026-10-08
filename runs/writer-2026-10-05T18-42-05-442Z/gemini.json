@@ -1,0 +1,526 @@
+{
+  "brief": "runs/daily-2026-10-05T18-24-20-795Z/brief-2.json",
+  "wellKnown": [
+    "Google / Google DeepMind: false",
+    "Gemini 4 Argon: false",
+    "Gemini 3.6 Flash, 3.7 Flash, 3.8 Flash, 3.5 Flash-Lite, 3.1 Pro: false",
+    "Koray Kavukcuoglu: true",
+    "NPowerUser (nokiapoweruser.com): false",
+    "9to5Google (Abner Li): false"
+  ],
+  "result": {
+    "ok": true,
+    "draft": {
+      "cover_options": [
+        {
+          "text": "Google will limit free Gemini app users to Flash-Lite on Oct 9, cutting Flash and Pro",
+          "facts": [
+            "F1",
+            "N1"
+          ],
+          "image": {
+            "kind": "article",
+            "value": "https://sm.pcmag.com/t/pcmag_au/photo/g/googles-up/googles-updated-model-limits-for-gemini-users_jyxv.3840.png"
+          }
+        },
+        {
+          "text": "Google's AI Plus subscribers lose Gemini Pro, and free users drop to Flash-Lite",
+          "facts": [
+            "F1",
+            "F2"
+          ],
+          "image": {
+            "kind": "article",
+            "value": "https://9to5google.com/wp-content/uploads/sites/4/2026/10/Google-AI-Ultra-Gemini-3.1-Pro-Deep-Think.jpg?strip=info&w=1480"
+          }
+        },
+        {
+          "text": "Google cuts free Gemini users to Flash-Lite on Oct 9. A report of more cuts is unconfirmed",
+          "facts": [
+            "F1",
+            "N1",
+            "F8",
+            "F5"
+          ],
+          "image": {
+            "kind": "stock",
+            "value": "locked phone screen"
+          }
+        }
+      ],
+      "chosen_cover": 1,
+      "slides": [
+        {
+          "type": "stat",
+          "headline": {
+            "text": "Free Gemini users lose Flash and Pro",
+            "facts": [
+              "F1",
+              "N1"
+            ]
+          },
+          "body": {
+            "text": "Gemini app users without a Google AI subscription will be limited to 3.5 Flash-Lite. 3.6 Flash and 3.1 Pro are no longer available to them.",
+            "facts": [
+              "F1"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [
+            "N1"
+          ],
+          "image": {
+            "kind": "stock",
+            "value": "locked door"
+          },
+          "spread_with_next": false
+        },
+        {
+          "type": "text",
+          "headline": {
+            "text": "AI Plus subscribers lose Pro too",
+            "facts": [
+              "F2",
+              "N2"
+            ]
+          },
+          "body": {
+            "text": "AI Plus ($4.99 a month) will be limited to Flash-Lite and Flash. Google will email subscribers about when the change takes effect, so there is no fixed date.",
+            "facts": [
+              "F2",
+              "N2"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "article",
+            "value": "https://sm.pcmag.com/t/pcmag_au/photo/g/googles-up/googles-updated-model-limits-for-gemini-users_jyxv.3840.png"
+          },
+          "spread_with_next": false
+        },
+        {
+          "type": "split_stat",
+          "headline": {
+            "text": "AI Pro gets Deep Think",
+            "facts": [
+              "F4",
+              "N3",
+              "N4"
+            ]
+          },
+          "body": {
+            "text": "9to5Google reports AI Pro and AI Ultra see no regressions. Deep Think, Gemini's maximum parallel reasoning option, is currently only on the two Ultra plans.",
+            "facts": [
+              "F4"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [
+            "N3",
+            "N4"
+          ],
+          "image": {
+            "kind": "article",
+            "value": "https://9to5google.com/wp-content/uploads/sites/4/2026/10/Google-AI-Ultra-Gemini-3.1-Pro-Deep-Think.jpg?strip=info&w=1480"
+          },
+          "spread_with_next": false
+        },
+        {
+          "type": "quote",
+          "headline": {
+            "text": "New effort levels cost more of your limit",
+            "facts": [
+              "F3",
+              "Q1"
+            ]
+          },
+          "body": null,
+          "quote_id": "Q1",
+          "quote_excerpt": "This will increase the model's ability to complete tasks… but will also use more of your limit.",
+          "number_ids": [],
+          "image": {
+            "kind": "stock",
+            "value": "turning dial"
+          },
+          "spread_with_next": false
+        },
+        {
+          "type": "text",
+          "headline": {
+            "text": "Gemini 4 Argon is announced, not widely out",
+            "facts": [
+              "F6",
+              "F7"
+            ]
+          },
+          "body": {
+            "text": "Google announced Gemini 4 Argon on Sept 30, starting with Fairwind Program cyber defenders. Google says wider release starts with paid API customers and AI Ultra subscribers. 9to5Google says its place in the Gemini app is unclear.",
+            "facts": [
+              "F6",
+              "F7"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "article",
+            "value": "https://storage.googleapis.com/gweb-uniblog-publish-prod/images/g4_30-09-26_key-art_blog.width-1300.png"
+          },
+          "spread_with_next": false
+        },
+        {
+          "type": "text",
+          "headline": {
+            "text": "One report says more is going. Google's page disagrees",
+            "facts": [
+              "F8",
+              "F5"
+            ]
+          },
+          "body": {
+            "text": "NPowerUser says Google is retiring 3.6 and 3.7 Flash and has pulled Fast modes. Google's Gemini API deprecations page, updated Oct 1, lists no shutdown date for either. No other source confirms the claim.",
+            "facts": [
+              "F8",
+              "F5"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "stock",
+            "value": "question mark sign"
+          },
+          "spread_with_next": false
+        }
+      ],
+      "follow": "Follow Helios Group for plain-English breakdowns of AI changes that land in the apps you already use.",
+      "caption": {
+        "text": "Google will limit Gemini app users without a paid plan to its Flash-Lite model starting Oct 9, and they will lose access to Flash and Pro. AI Plus subscribers lose Pro too, on a date Google will give them by email.\n\nFlash-Lite is the lightest and fastest of Gemini's three model tiers, Flash is the middle option and Pro is the most advanced. Google is also adding low, medium and high effort levels, which make a model more capable on tasks but use more of your usage limit. 9to5Google reports AI Pro subscribers get Deep Think. NPowerUser says Google is retiring Gemini 3.6 and 3.7 Flash, but Google's API deprecations page and other sources don't confirm it. Gemini 4 Argon, announced Sept 30, is still in limited rollout.\n\nWould you pay for a Gemini plan to keep access to Pro?\n\nFollow Helios Group for plain-English breakdowns of AI changes that land in the apps you already use.\n\nSource: 9to5Google, October 3, 2026; PCMag (AU), MakeUseOf and NPowerUser, October 5, 2026; Google Blog, September 30, 2026. Additional reporting: TechCrunch, Engadget, Google AI for Developers.",
+        "facts": [
+          "F1",
+          "F2",
+          "F3",
+          "F4",
+          "F5",
+          "F6",
+          "F8",
+          "N1"
+        ]
+      },
+      "edit_notes": [
+        "Cover leads with Google; it is a company, so the role-first rule for unknown people does not apply.",
+        "Showed the NPowerUser claim next to Google's deprecations page rather than picking a side; attributed it by name and kept it as the last slide.",
+        "Dropped B2 (OpenAI/Anthropic comparison): single source and a competitor context paragraph the policy disallows.",
+        "Skipped B1 (earlier plan overhaul) as not essential; story is told in 6 slides, no padding.",
+        "Did not use Q3 (single-source quote); paraphrased the AI Plus email without quote marks.",
+        "Q1 excerpt trimmed to stay under 140 chars; both halves are exact text from the quote.",
+        "Left out the Argon price and token limit (N6, N7) as off-topic for the access-change story.",
+        "Deep Think detail is single-sourced to 9to5Google, so the slide attributes it to them.",
+        "Fast modes written without quote marks since they are not a QUOTES entry.",
+        "Glossed Flash-Lite/Flash/Pro in the caption using the TERMS list (PCMag) instead of using slide space."
+      ]
+    },
+    "filled": {
+      "cover_options": [
+        {
+          "text": "Google will limit free Gemini app users to Flash-Lite on Oct 9, cutting Flash and Pro",
+          "facts": [
+            "F1",
+            "N1"
+          ],
+          "image": {
+            "kind": "article",
+            "value": "https://sm.pcmag.com/t/pcmag_au/photo/g/googles-up/googles-updated-model-limits-for-gemini-users_jyxv.3840.png"
+          }
+        },
+        {
+          "text": "Google's AI Plus subscribers lose Gemini Pro, and free users drop to Flash-Lite",
+          "facts": [
+            "F1",
+            "F2"
+          ],
+          "image": {
+            "kind": "article",
+            "value": "https://9to5google.com/wp-content/uploads/sites/4/2026/10/Google-AI-Ultra-Gemini-3.1-Pro-Deep-Think.jpg?strip=info&w=1480"
+          }
+        },
+        {
+          "text": "Google cuts free Gemini users to Flash-Lite on Oct 9. A report of more cuts is unconfirmed",
+          "facts": [
+            "F1",
+            "N1",
+            "F8",
+            "F5"
+          ],
+          "image": {
+            "kind": "stock",
+            "value": "locked phone screen"
+          }
+        }
+      ],
+      "chosen_cover": 1,
+      "slides": [
+        {
+          "type": "stat",
+          "headline": {
+            "text": "Free Gemini users lose Flash and Pro",
+            "facts": [
+              "F1",
+              "N1"
+            ]
+          },
+          "body": {
+            "text": "Gemini app users without a Google AI subscription will be limited to 3.5 Flash-Lite. 3.6 Flash and 3.1 Pro are no longer available to them.",
+            "facts": [
+              "F1"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [
+            "N1"
+          ],
+          "image": {
+            "kind": "stock",
+            "value": "locked door"
+          },
+          "spread_with_next": false,
+          "quote": null,
+          "numbers": [
+            {
+              "id": "N1",
+              "value": "October 9",
+              "counts": "Date free users lose Flash and Pro in the Gemini app"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "headline": {
+            "text": "AI Plus subscribers lose Pro too",
+            "facts": [
+              "F2",
+              "N2"
+            ]
+          },
+          "body": {
+            "text": "AI Plus ($4.99 a month) will be limited to Flash-Lite and Flash. Google will email subscribers about when the change takes effect, so there is no fixed date.",
+            "facts": [
+              "F2",
+              "N2"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "article",
+            "value": "https://sm.pcmag.com/t/pcmag_au/photo/g/googles-up/googles-updated-model-limits-for-gemini-users_jyxv.3840.png"
+          },
+          "spread_with_next": false,
+          "quote": null,
+          "numbers": []
+        },
+        {
+          "type": "split_stat",
+          "headline": {
+            "text": "AI Pro gets Deep Think",
+            "facts": [
+              "F4",
+              "N3",
+              "N4"
+            ]
+          },
+          "body": {
+            "text": "9to5Google reports AI Pro and AI Ultra see no regressions. Deep Think, Gemini's maximum parallel reasoning option, is currently only on the two Ultra plans.",
+            "facts": [
+              "F4"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [
+            "N3",
+            "N4"
+          ],
+          "image": {
+            "kind": "article",
+            "value": "https://9to5google.com/wp-content/uploads/sites/4/2026/10/Google-AI-Ultra-Gemini-3.1-Pro-Deep-Think.jpg?strip=info&w=1480"
+          },
+          "spread_with_next": false,
+          "quote": null,
+          "numbers": [
+            {
+              "id": "N3",
+              "value": "$19.99 per month",
+              "counts": "Google AI Pro price"
+            },
+            {
+              "id": "N4",
+              "value": "$99.99 and $199.99/month",
+              "counts": "AI Ultra plans where Deep Think currently sits"
+            }
+          ]
+        },
+        {
+          "type": "quote",
+          "headline": {
+            "text": "New effort levels cost more of your limit",
+            "facts": [
+              "F3",
+              "Q1"
+            ]
+          },
+          "body": null,
+          "quote_id": "Q1",
+          "quote_excerpt": "This will increase the model's ability to complete tasks… but will also use more of your limit.",
+          "number_ids": [],
+          "image": {
+            "kind": "stock",
+            "value": "turning dial"
+          },
+          "spread_with_next": false,
+          "quote": {
+            "id": "Q1",
+            "text": "This will increase the model's ability to complete tasks… but will also use more of your limit.",
+            "speaker": "Google (support page, describing new effort levels)"
+          },
+          "numbers": []
+        },
+        {
+          "type": "text",
+          "headline": {
+            "text": "Gemini 4 Argon is announced, not widely out",
+            "facts": [
+              "F6",
+              "F7"
+            ]
+          },
+          "body": {
+            "text": "Google announced Gemini 4 Argon on Sept 30, starting with Fairwind Program cyber defenders. Google says wider release starts with paid API customers and AI Ultra subscribers. 9to5Google says its place in the Gemini app is unclear.",
+            "facts": [
+              "F6",
+              "F7"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "article",
+            "value": "https://storage.googleapis.com/gweb-uniblog-publish-prod/images/g4_30-09-26_key-art_blog.width-1300.png"
+          },
+          "spread_with_next": false,
+          "quote": null,
+          "numbers": []
+        },
+        {
+          "type": "text",
+          "headline": {
+            "text": "One report says more is going. Google's page disagrees",
+            "facts": [
+              "F8",
+              "F5"
+            ]
+          },
+          "body": {
+            "text": "NPowerUser says Google is retiring 3.6 and 3.7 Flash and has pulled Fast modes. Google's Gemini API deprecations page, updated Oct 1, lists no shutdown date for either. No other source confirms the claim.",
+            "facts": [
+              "F8",
+              "F5"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "stock",
+            "value": "question mark sign"
+          },
+          "spread_with_next": false,
+          "quote": null,
+          "numbers": []
+        }
+      ],
+      "follow": "Follow Helios Group for plain-English breakdowns of AI changes that land in the apps you already use.",
+      "caption": {
+        "text": "Google will limit Gemini app users without a paid plan to its Flash-Lite model starting Oct 9, and they will lose access to Flash and Pro. AI Plus subscribers lose Pro too, on a date Google will give them by email.\n\nFlash-Lite is the lightest and fastest of Gemini's three model tiers, Flash is the middle option and Pro is the most advanced. Google is also adding low, medium and high effort levels, which make a model more capable on tasks but use more of your usage limit. 9to5Google reports AI Pro subscribers get Deep Think. NPowerUser says Google is retiring Gemini 3.6 and 3.7 Flash, but Google's API deprecations page and other sources don't confirm it. Gemini 4 Argon, announced Sept 30, is still in limited rollout.\n\nWould you pay for a Gemini plan to keep access to Pro?\n\nFollow Helios Group for plain-English breakdowns of AI changes that land in the apps you already use.\n\nSource: 9to5Google, October 3, 2026; PCMag (AU), MakeUseOf and NPowerUser, October 5, 2026; Google Blog, September 30, 2026. Additional reporting: TechCrunch, Engadget, Google AI for Developers.",
+        "facts": [
+          "F1",
+          "F2",
+          "F3",
+          "F4",
+          "F5",
+          "F6",
+          "F8",
+          "N1"
+        ]
+      },
+      "edit_notes": [
+        "Cover leads with Google; it is a company, so the role-first rule for unknown people does not apply.",
+        "Showed the NPowerUser claim next to Google's deprecations page rather than picking a side; attributed it by name and kept it as the last slide.",
+        "Dropped B2 (OpenAI/Anthropic comparison): single source and a competitor context paragraph the policy disallows.",
+        "Skipped B1 (earlier plan overhaul) as not essential; story is told in 6 slides, no padding.",
+        "Did not use Q3 (single-source quote); paraphrased the AI Plus email without quote marks.",
+        "Q1 excerpt trimmed to stay under 140 chars; both halves are exact text from the quote.",
+        "Left out the Argon price and token limit (N6, N7) as off-topic for the access-change story.",
+        "Deep Think detail is single-sourced to 9to5Google, so the slide attributes it to them.",
+        "Fast modes written without quote marks since they are not a QUOTES entry.",
+        "Glossed Flash-Lite/Flash/Pro in the caption using the TERMS list (PCMag) instead of using slide space."
+      ],
+      "cover": "Google will limit free Gemini app users to Flash-Lite on Oct 9, cutting Flash and Pro"
+    },
+    "raw": "{\n  \"cover_options\": [\n    {\n      \"text\": \"Google will limit free Gemini app users to Flash-Lite on Oct 9, cutting Flash and Pro\",\n      \"facts\": [\n        \"F1\",\n        \"N1\"\n      ],\n      \"image\": {\n        \"kind\": \"article\",\n        \"value\": \"https://sm.pcmag.com/t/pcmag_au/photo/g/googles-up/googles-updated-model-limits-for-gemini-users_jyxv.3840.png\"\n      }\n    },\n    {\n      \"text\": \"Google's AI Plus subscribers lose Gemini Pro, and free users drop to Flash-Lite\",\n      \"facts\": [\n        \"F1\",\n        \"F2\"\n      ],\n      \"image\": {\n        \"kind\": \"article\",\n        \"value\": \"https://9to5google.com/wp-content/uploads/sites/4/2026/10/Google-AI-Ultra-Gemini-3.1-Pro-Deep-Think.jpg?strip=info&w=1480\"\n      }\n    },\n    {\n      \"text\": \"Google cuts free Gemini users to Flash-Lite on Oct 9. A report of more cuts is unconfirmed\",\n      \"facts\": [\n        \"F1\",\n        \"N1\",\n        \"F8\",\n        \"F5\"\n      ],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"locked phone screen\"\n      }\n    }\n  ],\n  \"chosen_cover\": 1,\n  \"slides\": [\n    {\n      \"type\": \"stat\",\n      \"headline\": {\n        \"text\": \"Free Gemini users lose Flash and Pro\",\n        \"facts\": [\n          \"F1\",\n          \"N1\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Gemini app users without a Google AI subscription will be limited to 3.5 Flash-Lite. 3.6 Flash and 3.1 Pro are no longer available to them.\",\n        \"facts\": [\n          \"F1\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [\n        \"N1\"\n      ],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"locked door\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"AI Plus subscribers lose Pro too\",\n        \"facts\": [\n          \"F2\",\n          \"N2\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"AI Plus ($4.99 a month) will be limited to Flash-Lite and Flash. Google will email subscribers about when the change takes effect, so there is no fixed date.\",\n        \"facts\": [\n          \"F2\",\n          \"N2\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"article\",\n        \"value\": \"https://sm.pcmag.com/t/pcmag_au/photo/g/googles-up/googles-updated-model-limits-for-gemini-users_jyxv.3840.png\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"split_stat\",\n      \"headline\": {\n        \"text\": \"AI Pro gets Deep Think\",\n        \"facts\": [\n          \"F4\",\n          \"N3\",\n          \"N4\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"9to5Google reports AI Pro and AI Ultra see no regressions. Deep Think, Gemini's maximum parallel reasoning option, is currently only on the two Ultra plans.\",\n        \"facts\": [\n          \"F4\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [\n        \"N3\",\n        \"N4\"\n      ],\n      \"image\": {\n        \"kind\": \"article\",\n        \"value\": \"https://9to5google.com/wp-content/uploads/sites/4/2026/10/Google-AI-Ultra-Gemini-3.1-Pro-Deep-Think.jpg?strip=info&w=1480\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"quote\",\n      \"headline\": {\n        \"text\": \"New effort levels cost more of your limit\",\n        \"facts\": [\n          \"F3\",\n          \"Q1\"\n        ]\n      },\n      \"body\": null,\n      \"quote_id\": \"Q1\",\n      \"quote_excerpt\": \"This will increase the model's ability to complete tasks… but will also use more of your limit.\",\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"turning dial\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"Gemini 4 Argon is announced, not widely out\",\n        \"facts\": [\n          \"F6\",\n          \"F7\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Google announced Gemini 4 Argon on Sept 30, starting with Fairwind Program cyber defenders. Google says wider release starts with paid API customers and AI Ultra subscribers. 9to5Google says its place in the Gemini app is unclear.\",\n        \"facts\": [\n          \"F6\",\n          \"F7\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"article\",\n        \"value\": \"https://storage.googleapis.com/gweb-uniblog-publish-prod/images/g4_30-09-26_key-art_blog.width-1300.png\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"One report says more is going. Google's page disagrees\",\n        \"facts\": [\n          \"F8\",\n          \"F5\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"NPowerUser says Google is retiring 3.6 and 3.7 Flash and has pulled Fast modes. Google's Gemini API deprecations page, updated Oct 1, lists no shutdown date for either. No other source confirms the claim.\",\n        \"facts\": [\n          \"F8\",\n          \"F5\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"question mark sign\"\n      },\n      \"spread_with_next\": false\n    }\n  ],\n  \"follow\": \"Follow Helios Group for plain-English breakdowns of AI changes that land in the apps you already use.\",\n  \"caption\": {\n    \"text\": \"Google will limit Gemini app users without a paid plan to its Flash-Lite model starting Oct 9, and they will lose access to Flash and Pro. AI Plus subscribers lose Pro too, on a date Google will give them by email.\\n\\nFlash-Lite is the lightest and fastest of Gemini's three model tiers, Flash is the middle option and Pro is the most advanced. Google is also adding low, medium and high effort levels, which make a model more capable on tasks but use more of your usage limit. 9to5Google reports AI Pro subscribers get Deep Think. NPowerUser says Google is retiring Gemini 3.6 and 3.7 Flash, but Google's API deprecations page and other sources don't confirm it. Gemini 4 Argon, announced Sept 30, is still in limited rollout.\\n\\nWould you pay for a Gemini plan to keep access to Pro?\\n\\nFollow Helios Group for plain-English breakdowns of AI changes that land in the apps you already use.\\n\\nSource: 9to5Google, October 3, 2026; PCMag (AU), MakeUseOf and NPowerUser, October 5, 2026; Google Blog, September 30, 2026. Additional reporting: TechCrunch, Engadget, Google AI for Developers.\",\n    \"facts\": [\n      \"F1\",\n      \"F2\",\n      \"F3\",\n      \"F4\",\n      \"F5\",\n      \"F6\",\n      \"F8\",\n      \"N1\"\n    ]\n  },\n  \"edit_notes\": [\n    \"Cover leads with Google; it is a company, so the role-first rule for unknown people does not apply.\",\n    \"Showed the NPowerUser claim next to Google's deprecations page rather than picking a side; attributed it by name and kept it as the last slide.\",\n    \"Dropped B2 (OpenAI/Anthropic comparison): single source and a competitor context paragraph the policy disallows.\",\n    \"Skipped B1 (earlier plan overhaul) as not essential; story is told in 6 slides, no padding.\",\n    \"Did not use Q3 (single-source quote); paraphrased the AI Plus email without quote marks.\",\n    \"Q1 excerpt trimmed to stay under 140 chars; both halves are exact text from the quote.\",\n    \"Left out the Argon price and token limit (N6, N7) as off-topic for the access-change story.\",\n    \"Deep Think detail is single-sourced to 9to5Google, so the slide attributes it to them.\",\n    \"Fast modes written without quote marks since they are not a QUOTES entry.\",\n    \"Glossed Flash-Lite/Flash/Pro in the caption using the TERMS list (PCMag) instead of using slide space.\"\n  ]\n}",
+    "costUsd": 0.144,
+    "turns": 2,
+    "draftRetries": 1,
+    "turnUsage": [
+      {
+        "turn": 1,
+        "stopReason": "tool_use",
+        "usage": {
+          "input_tokens": 6763,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 4468,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 7270,
+          "output_tokens_details": {
+            "thinking_tokens": 4613
+          },
+          "service_tier": "standard",
+          "inference_geo": "global"
+        },
+        "costUsd": 0.0871
+      },
+      {
+        "turn": 2,
+        "stopReason": "tool_use",
+        "usage": {
+          "input_tokens": 14200,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 4468,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 2761,
+          "output_tokens_details": {
+            "thinking_tokens": 0
+          },
+          "service_tier": "standard",
+          "inference_geo": "global"
+        },
+        "costUsd": 0.0569
+      }
+    ]
+  }
+}

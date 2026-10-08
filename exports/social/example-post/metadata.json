@@ -1,0 +1,17 @@
+{
+  "fixture": "example-post",
+  "humanized": false,
+  "exportedAt": "2026-09-22T21:13:47.733Z",
+  "format": "carousel",
+  "storyType": "safety",
+  "source": "Anthropic",
+  "sourceUrl": "https://www.anthropic.com/news/accenture-embedded-evaluation",
+  "slideCount": 5,
+  "files": [
+    "slide-00.png",
+    "slide-01.png",
+    "slide-02.png",
+    "slide-03.png",
+    "slide-04.png"
+  ]
+}

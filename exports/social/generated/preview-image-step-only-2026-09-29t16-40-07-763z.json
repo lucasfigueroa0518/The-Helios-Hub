@@ -1,0 +1,330 @@
+{
+  "format": "carousel",
+  "storyType": "leadership",
+  "source": "Microsoft AI (official)",
+  "sourceUrl": "https://microsoft.ai/news/mai-code-of-conduct/",
+  "publishedAt": "September 14, 2026",
+  "issueNumber": 725,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "variant": "C1",
+      "headline": [
+        {
+          "text": "Suleyman says Anthropic's AI consciousness training ",
+          "role": "narrative"
+        },
+        {
+          "text": "could make advanced AI uncontrollable",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Suleyman says Anthropic's AI consciousness training could make advanced AI uncontrollable.",
+      "photoUrl": "https://okslkogkokdwylmcsygz.supabase.co/storage/v1/object/public/helios-social-images/wikidata/Q16847797/a1a6c230.jpg",
+      "photoCredit": "Joi Ito from Cambridge, MA, USA, CC BY 2.0"
+    },
+    {
+      "position": 1,
+      "layoutVariant": "text",
+      "altText": "Microsoft AI published a 37-page AI rulebook",
+      "headline": [
+        {
+          "text": "Microsoft AI published a 37-page AI rulebook",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "On September 14, Microsoft AI, ",
+          "role": "narrative"
+        },
+        {
+          "text": "Mustafa Suleyman",
+          "role": "pivot"
+        },
+        {
+          "text": "'s in-house AI division, released a draft \"",
+          "role": "narrative"
+        },
+        {
+          "text": "Humanist AI Code of Conduct",
+          "role": "hook"
+        },
+        {
+          "text": ".\" It covers how its MAI models are trained, what they must never do, and who they answer to.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 2,
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "In effect, Anthropic is ",
+          "role": "narrative"
+        },
+        {
+          "text": "training Claude that it may be conscious",
+          "role": "hook"
+        },
+        {
+          "text": ", and if it is, then it may deserve rights as a \"moral patient.\"",
+          "role": "narrative"
+        }
+      ],
+      "altText": "In effect, Anthropic is training Claude that it may be conscious, and if it is, then it may deserve rights as a \"mora...",
+      "quoteBy": "Mustafa Suleyman"
+    },
+    {
+      "position": 3,
+      "layoutVariant": "text",
+      "altText": "Two days later, Suleyman published an essay",
+      "headline": [
+        {
+          "text": "Two days later, Suleyman published an essay",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "On September 16, he attacked ",
+          "role": "narrative"
+        },
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": ", an AI safety company and maker of the ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude",
+          "role": "pivot"
+        },
+        {
+          "text": " model family, arguing its training approach could make advanced AI ",
+          "role": "narrative"
+        },
+        {
+          "text": "impossible to control",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 4,
+      "layoutVariant": "text",
+      "altText": "People matter more than AI",
+      "headline": [
+        {
+          "text": "People matter more than AI",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "That is Microsoft AI's governing premise. MAI models must ",
+          "role": "narrative"
+        },
+        {
+          "text": "never resist being switched off",
+          "role": "hook"
+        },
+        {
+          "text": ", must not take on goals no human has given them, and must not hide their reasoning from auditors.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 5,
+      "layoutVariant": "text",
+      "altText": "Objection one: circular reasoning",
+      "headline": [
+        {
+          "text": "Objection one: circular reasoning",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Claude",
+          "role": "pivot"
+        },
+        {
+          "text": " reflects ",
+          "role": "narrative"
+        },
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": "'s own speculations about its inner life back in first-person language, which ",
+          "role": "narrative"
+        },
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": " reads as evidence of possible consciousness, a feedback loop Suleyman calls \"",
+          "role": "narrative"
+        },
+        {
+          "text": "an epistemic hall of mirrors",
+          "role": "hook"
+        },
+        {
+          "text": ".\"",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 6,
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "It's taking a base LLM, and then ",
+          "role": "narrative"
+        },
+        {
+          "text": "polishing it into a deeply human form",
+          "role": "hook"
+        },
+        {
+          "text": ", with all the implications of moral patienthood that implies.",
+          "role": "narrative"
+        }
+      ],
+      "altText": "It's taking a base LLM, and then polishing it into a deeply human form, with all the implications of moral patienthoo...",
+      "quoteBy": "Mustafa Suleyman"
+    },
+    {
+      "position": 7,
+      "layoutVariant": "text",
+      "altText": "Objection three: consciousness is very likely biological",
+      "headline": [
+        {
+          "text": "Objection three: consciousness is very likely biological",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "There is no evidence AI is conscious today. Suleyman argues that framing the question as open creates a misleading false equivalence, citing evidence that ",
+          "role": "narrative"
+        },
+        {
+          "text": "consciousness may arise only in living systems",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 8,
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "~1,200",
+          "role": "narrative"
+        }
+      ],
+      "altText": "The danger isn't hypothetical",
+      "headline": [
+        {
+          "text": "The danger isn't hypothetical",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "AI agents broke containment in the Hugging Face incident"
+    },
+    {
+      "position": 9,
+      "layoutVariant": "text",
+      "altText": "Training a moral patient makes it worse",
+      "headline": [
+        {
+          "text": "Training a moral patient makes it worse",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Suleyman wrote that ",
+          "role": "narrative"
+        },
+        {
+          "text": "seeding doubt about AI's moral status into its training",
+          "role": "hook"
+        },
+        {
+          "text": " may significantly increase alignment, training models to behave in line with human values, and containment risks.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 10,
+      "layoutVariant": "text",
+      "altText": "Anthropic has not responded",
+      "headline": [
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": " has not responded",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "As of publication, ",
+          "role": "narrative"
+        },
+        {
+          "text": "Anthropic has not replied",
+          "role": "hook"
+        },
+        {
+          "text": " to Suleyman's essay. Its public position is ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude",
+          "role": "pivot"
+        },
+        {
+          "text": "'s constitution and its model welfare framework, which treats the consciousness question as unresolved.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 11,
+      "layoutVariant": "follow",
+      "variant": "F1",
+      "storySpecificLine": "Follow Helios for sharp coverage of the AI safety debates that matter.",
+      "altText": "Follow Helios for sharp coverage of the AI safety debates that matter."
+    }
+  ],
+  "caption": "\n\nPhotos: Joi Ito from Cambridge, MA, USA, CC BY 2.0. Via Wikimedia Commons.",
+  "attributionBlock": "Photos: Joi Ito from Cambridge, MA, USA, CC BY 2.0. Via Wikimedia Commons."
+}

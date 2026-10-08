@@ -1,0 +1,537 @@
+{
+  "brief": "runs/reporter-rerun-2026-10-05T16-55-15-969Z/brief-3.json",
+  "wellKnown": [
+    "Julie Menin: true",
+    "Logan Graham: true",
+    "Morgan Dwyer: true",
+    "Alice Friend: false",
+    "Shane Cahill: false",
+    "SpaceXAI (xAI) / Elon Musk: false",
+    "Jacob Coxon: true",
+    "Alex Turner: false",
+    "Daniel Kokotajlo: true",
+    "Zohran Mamdani: true"
+  ],
+  "result": {
+    "ok": true,
+    "draft": {
+      "cover_options": [
+        {
+          "text": "Anthropic, OpenAI, Google and Meta testified under oath to NYC Council. SpaceXAI skipped.",
+          "facts": [
+            "F1",
+            "F6"
+          ],
+          "image": {
+            "kind": "stock",
+            "value": "city council hearing"
+          }
+        },
+        {
+          "text": "NYC Council says it will go to court after Musk's SpaceXAI skipped its AI hearing",
+          "facts": [
+            "F6"
+          ],
+          "image": {
+            "kind": "subject",
+            "value": "SpaceXAI (xAI) / Elon Musk"
+          }
+        },
+        {
+          "text": "Ex-Anthropic researcher tells NYC Council AI could end in human extinction",
+          "facts": [
+            "F8",
+            "Q2"
+          ],
+          "image": {
+            "kind": "article",
+            "value": "https://image.cnbcfm.com/api/v1/image/108372636-1791214003815-gettyimages-2298703465-mms12751_3aopwyib.jpeg?v=1791214175&w=1920&h=1080"
+          }
+        }
+      ],
+      "chosen_cover": 1,
+      "slides": [
+        {
+          "type": "text",
+          "headline": {
+            "text": "Menin opened by calling out Washington",
+            "facts": [
+              "F10"
+            ]
+          },
+          "body": {
+            "text": "At a rare hearing of all 51 Council members, Speaker Julie Menin opened by criticising the federal light-touch approach, after President Trump signed a voluntary accord with tech leaders last week.",
+            "facts": [
+              "F2",
+              "N1",
+              "F10"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "subject",
+            "value": "Julie Menin"
+          },
+          "spread_with_next": false
+        },
+        {
+          "type": "text",
+          "headline": {
+            "text": "Four firms sent policy leads, not CEOs",
+            "facts": [
+              "F3"
+            ]
+          },
+          "body": {
+            "text": "Anthropic: Logan Graham, head of its Frontier Red Team. OpenAI: Morgan Dwyer, head of policy development and operations. Google: Alice Friend. Meta: Shane Cahill, AI policy director for legislation.",
+            "facts": [
+              "F3"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "stock",
+            "value": "witnesses under oath"
+          },
+          "spread_with_next": false
+        },
+        {
+          "type": "text",
+          "headline": {
+            "text": "Three firms agreed after a subpoena threat, Council says",
+            "facts": [
+              "F5"
+            ]
+          },
+          "body": {
+            "text": "Menin's office says OpenAI and Google agreed on Sept 27 and Anthropic confirmed late that night, hours before a subpoena was due to be served. Meta had already said yes.",
+            "facts": [
+              "F4",
+              "F5"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "stock",
+            "value": "legal documents desk"
+          },
+          "spread_with_next": false
+        },
+        {
+          "type": "text",
+          "headline": {
+            "text": "SpaceXAI was the only company that stayed away",
+            "facts": [
+              "F6"
+            ]
+          },
+          "body": {
+            "text": "Elon Musk's SpaceXAI was the only company called that did not attend. Menin says that violates the subpoena issued the week before, and that the Council will pursue the matter in court.",
+            "facts": [
+              "F6"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "subject",
+            "value": "SpaceXAI (xAI) / Elon Musk"
+          },
+          "spread_with_next": false
+        },
+        {
+          "type": "text",
+          "headline": {
+            "text": "Two former lab researchers urged caution",
+            "facts": [
+              "F8"
+            ]
+          },
+          "body": {
+            "text": "Jacob Coxon, who quit Anthropic last month, called the industry's approach extremely reckless. Former OpenAI researcher Daniel Kokotajlo called for more transparency and for slowing development of the leading models.",
+            "facts": [
+              "F8"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "article",
+            "value": "https://image.cnbcfm.com/api/v1/image/108372636-1791214003815-gettyimages-2298703465-mms12751_3aopwyib.jpeg?v=1791214175&w=1920&h=1080"
+          },
+          "spread_with_next": false
+        },
+        {
+          "type": "quote",
+          "headline": {
+            "text": "A former Google DeepMind researcher on China",
+            "facts": [
+              "F7"
+            ]
+          },
+          "body": {
+            "text": "Answering Menin on balancing frontier model development against the race with China, Alex Turner warned that misaligned AI, whose goals diverge from human intentions, could be more dangerous than China.",
+            "facts": [
+              "F7"
+            ]
+          },
+          "quote_id": "Q1",
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "subject",
+            "value": "Alex Turner"
+          },
+          "spread_with_next": false
+        },
+        {
+          "type": "stat",
+          "headline": {
+            "text": "A $25,000 fine for breaking two proposed laws",
+            "facts": [
+              "F9",
+              "N2"
+            ]
+          },
+          "body": {
+            "text": "Council proposals: no AI sold or deployed in the five boroughs without outside-expert vetting, plus a kill switch, a human override that can shut down the system. Proposals only, not enacted.",
+            "facts": [
+              "F9",
+              "N2"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [
+            "N2"
+          ],
+          "image": {
+            "kind": "stock",
+            "value": "gavel and ledger"
+          },
+          "spread_with_next": false
+        }
+      ],
+      "follow": "Follow Helios Group for plain-English updates on the NYC Council's AI bills and the SpaceXAI subpoena.",
+      "caption": {
+        "text": "Senior executives from Anthropic, OpenAI, Google and Meta testified under oath at a rare New York City Council hearing on AI risks on Oct 5, 2026. Elon Musk's SpaceXAI did not show up despite a subpoena, a legal order compelling attendance and sworn testimony.\n\nThe hearing convened all 51 Council members. The companies sent policy leads, not CEOs. Speaker Julie Menin's office says OpenAI, Google and Anthropic agreed to appear only after the Council threatened subpoenas. Menin says SpaceXAI's absence violates its subpoena and that the Council will pursue the matter in court. Former Anthropic researcher Jacob Coxon called the industry's approach extremely reckless. The Council is weighing proposals that include outside-expert vetting of AI and a kill switch, with a $25,000 fine for violating either of those two laws. They are proposals only. Menin opened by criticising the federal government's light-touch approach.\n\nShould a city be writing AI rules before the federal government does?\n\nFollow Helios Group for plain-English updates on the NYC Council's AI bills and the SpaceXAI subpoena.\n\nSource: CNBC, Oct 5, 2026; NY Post, citing Bloomberg, Oct 5, 2026; NY1, Oct 5, 2026; NYC Council press release, Sept 28, 2026. Additional reporting: Firstpost.",
+        "facts": [
+          "F1",
+          "F2",
+          "F3",
+          "F5",
+          "F6",
+          "F8",
+          "F9",
+          "F10",
+          "N1",
+          "N2"
+        ]
+      },
+      "edit_notes": [
+        "Cover 1 chosen: names all four firms and the no-show, which is the news in one line. SpaceXAI is not well known, so the cover leads with the four firms rather than Musk.",
+        "Slide 4 keeps the 'Council says' attribution because the timeline is Menin's office's account (F5).",
+        "Menin's quotes Q3 and Q5 and Coxon's Q2 are single-source, so I used Turner's Q1 on the quote slide. 'Extremely reckless' is paraphrased without quote marks because it is not in QUOTES.",
+        "Paraphrased Menin's 'direct violation' and 'pursue this matter in court' without quote marks (not in QUOTES) and kept 'says'.",
+        "Skipped B1 (summer escape incidents, unverified) and B2 (Hochul rule) to keep the post on the hearing; no background slides.",
+        "Used N2 on the stat slide and kept 'proposals only, not enacted'. 51 is in the slide 2 body, with no stat slide.",
+        "The Q4 'owe it to the public' quote was not used. Menin's 'troubling at best' remark and the Alice Friend federal framework line were left out for space.",
+        "Misaligned AI glossed in the Turner slide from TERMS; kill switch glossed from TERMS; subpoena glossed in the caption from TERMS.",
+        "Caption adds no facts beyond the slides and brief. The question is an opinion prompt that needs no outside facts."
+      ]
+    },
+    "filled": {
+      "cover_options": [
+        {
+          "text": "Anthropic, OpenAI, Google and Meta testified under oath to NYC Council. SpaceXAI skipped.",
+          "facts": [
+            "F1",
+            "F6"
+          ],
+          "image": {
+            "kind": "stock",
+            "value": "city council hearing"
+          }
+        },
+        {
+          "text": "NYC Council says it will go to court after Musk's SpaceXAI skipped its AI hearing",
+          "facts": [
+            "F6"
+          ],
+          "image": {
+            "kind": "subject",
+            "value": "SpaceXAI (xAI) / Elon Musk"
+          }
+        },
+        {
+          "text": "Ex-Anthropic researcher tells NYC Council AI could end in human extinction",
+          "facts": [
+            "F8",
+            "Q2"
+          ],
+          "image": {
+            "kind": "article",
+            "value": "https://image.cnbcfm.com/api/v1/image/108372636-1791214003815-gettyimages-2298703465-mms12751_3aopwyib.jpeg?v=1791214175&w=1920&h=1080"
+          }
+        }
+      ],
+      "chosen_cover": 1,
+      "slides": [
+        {
+          "type": "text",
+          "headline": {
+            "text": "Menin opened by calling out Washington",
+            "facts": [
+              "F10"
+            ]
+          },
+          "body": {
+            "text": "At a rare hearing of all 51 Council members, Speaker Julie Menin opened by criticising the federal light-touch approach, after President Trump signed a voluntary accord with tech leaders last week.",
+            "facts": [
+              "F2",
+              "N1",
+              "F10"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "subject",
+            "value": "Julie Menin"
+          },
+          "spread_with_next": false,
+          "quote": null,
+          "numbers": []
+        },
+        {
+          "type": "text",
+          "headline": {
+            "text": "Four firms sent policy leads, not CEOs",
+            "facts": [
+              "F3"
+            ]
+          },
+          "body": {
+            "text": "Anthropic: Logan Graham, head of its Frontier Red Team. OpenAI: Morgan Dwyer, head of policy development and operations. Google: Alice Friend. Meta: Shane Cahill, AI policy director for legislation.",
+            "facts": [
+              "F3"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "stock",
+            "value": "witnesses under oath"
+          },
+          "spread_with_next": false,
+          "quote": null,
+          "numbers": []
+        },
+        {
+          "type": "text",
+          "headline": {
+            "text": "Three firms agreed after a subpoena threat, Council says",
+            "facts": [
+              "F5"
+            ]
+          },
+          "body": {
+            "text": "Menin's office says OpenAI and Google agreed on Sept 27 and Anthropic confirmed late that night, hours before a subpoena was due to be served. Meta had already said yes.",
+            "facts": [
+              "F4",
+              "F5"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "stock",
+            "value": "legal documents desk"
+          },
+          "spread_with_next": false,
+          "quote": null,
+          "numbers": []
+        },
+        {
+          "type": "text",
+          "headline": {
+            "text": "SpaceXAI was the only company that stayed away",
+            "facts": [
+              "F6"
+            ]
+          },
+          "body": {
+            "text": "Elon Musk's SpaceXAI was the only company called that did not attend. Menin says that violates the subpoena issued the week before, and that the Council will pursue the matter in court.",
+            "facts": [
+              "F6"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "subject",
+            "value": "SpaceXAI (xAI) / Elon Musk"
+          },
+          "spread_with_next": false,
+          "quote": null,
+          "numbers": []
+        },
+        {
+          "type": "text",
+          "headline": {
+            "text": "Two former lab researchers urged caution",
+            "facts": [
+              "F8"
+            ]
+          },
+          "body": {
+            "text": "Jacob Coxon, who quit Anthropic last month, called the industry's approach extremely reckless. Former OpenAI researcher Daniel Kokotajlo called for more transparency and for slowing development of the leading models.",
+            "facts": [
+              "F8"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "article",
+            "value": "https://image.cnbcfm.com/api/v1/image/108372636-1791214003815-gettyimages-2298703465-mms12751_3aopwyib.jpeg?v=1791214175&w=1920&h=1080"
+          },
+          "spread_with_next": false,
+          "quote": null,
+          "numbers": []
+        },
+        {
+          "type": "quote",
+          "headline": {
+            "text": "A former Google DeepMind researcher on China",
+            "facts": [
+              "F7"
+            ]
+          },
+          "body": {
+            "text": "Answering Menin on balancing frontier model development against the race with China, Alex Turner warned that misaligned AI, whose goals diverge from human intentions, could be more dangerous than China.",
+            "facts": [
+              "F7"
+            ]
+          },
+          "quote_id": "Q1",
+          "quote_excerpt": null,
+          "number_ids": [],
+          "image": {
+            "kind": "subject",
+            "value": "Alex Turner"
+          },
+          "spread_with_next": false,
+          "quote": {
+            "id": "Q1",
+            "text": "China is not our only potential adversary,",
+            "speaker": "Alex Turner (former Google DeepMind researcher)"
+          },
+          "numbers": []
+        },
+        {
+          "type": "stat",
+          "headline": {
+            "text": "A $25,000 fine for breaking two proposed laws",
+            "facts": [
+              "F9",
+              "N2"
+            ]
+          },
+          "body": {
+            "text": "Council proposals: no AI sold or deployed in the five boroughs without outside-expert vetting, plus a kill switch, a human override that can shut down the system. Proposals only, not enacted.",
+            "facts": [
+              "F9",
+              "N2"
+            ]
+          },
+          "quote_id": null,
+          "quote_excerpt": null,
+          "number_ids": [
+            "N2"
+          ],
+          "image": {
+            "kind": "stock",
+            "value": "gavel and ledger"
+          },
+          "spread_with_next": false,
+          "quote": null,
+          "numbers": [
+            {
+              "id": "N2",
+              "value": "$25,000",
+              "counts": "Fine for failing to comply with the proposed outside-vetting or kill-switch laws"
+            }
+          ]
+        }
+      ],
+      "follow": "Follow Helios Group for plain-English updates on the NYC Council's AI bills and the SpaceXAI subpoena.",
+      "caption": {
+        "text": "Senior executives from Anthropic, OpenAI, Google and Meta testified under oath at a rare New York City Council hearing on AI risks on Oct 5, 2026. Elon Musk's SpaceXAI did not show up despite a subpoena, a legal order compelling attendance and sworn testimony.\n\nThe hearing convened all 51 Council members. The companies sent policy leads, not CEOs. Speaker Julie Menin's office says OpenAI, Google and Anthropic agreed to appear only after the Council threatened subpoenas. Menin says SpaceXAI's absence violates its subpoena and that the Council will pursue the matter in court. Former Anthropic researcher Jacob Coxon called the industry's approach extremely reckless. The Council is weighing proposals that include outside-expert vetting of AI and a kill switch, with a $25,000 fine for violating either of those two laws. They are proposals only. Menin opened by criticising the federal government's light-touch approach.\n\nShould a city be writing AI rules before the federal government does?\n\nFollow Helios Group for plain-English updates on the NYC Council's AI bills and the SpaceXAI subpoena.\n\nSource: CNBC, Oct 5, 2026; NY Post, citing Bloomberg, Oct 5, 2026; NY1, Oct 5, 2026; NYC Council press release, Sept 28, 2026. Additional reporting: Firstpost.",
+        "facts": [
+          "F1",
+          "F2",
+          "F3",
+          "F5",
+          "F6",
+          "F8",
+          "F9",
+          "F10",
+          "N1",
+          "N2"
+        ]
+      },
+      "edit_notes": [
+        "Cover 1 chosen: names all four firms and the no-show, which is the news in one line. SpaceXAI is not well known, so the cover leads with the four firms rather than Musk.",
+        "Slide 4 keeps the 'Council says' attribution because the timeline is Menin's office's account (F5).",
+        "Menin's quotes Q3 and Q5 and Coxon's Q2 are single-source, so I used Turner's Q1 on the quote slide. 'Extremely reckless' is paraphrased without quote marks because it is not in QUOTES.",
+        "Paraphrased Menin's 'direct violation' and 'pursue this matter in court' without quote marks (not in QUOTES) and kept 'says'.",
+        "Skipped B1 (summer escape incidents, unverified) and B2 (Hochul rule) to keep the post on the hearing; no background slides.",
+        "Used N2 on the stat slide and kept 'proposals only, not enacted'. 51 is in the slide 2 body, with no stat slide.",
+        "The Q4 'owe it to the public' quote was not used. Menin's 'troubling at best' remark and the Alice Friend federal framework line were left out for space.",
+        "Misaligned AI glossed in the Turner slide from TERMS; kill switch glossed from TERMS; subpoena glossed in the caption from TERMS.",
+        "Caption adds no facts beyond the slides and brief. The question is an opinion prompt that needs no outside facts."
+      ],
+      "cover": "Anthropic, OpenAI, Google and Meta testified under oath to NYC Council. SpaceXAI skipped."
+    },
+    "raw": "{\n  \"cover_options\": [\n    {\n      \"text\": \"Anthropic, OpenAI, Google and Meta testified under oath to NYC Council. SpaceXAI skipped.\",\n      \"facts\": [\n        \"F1\",\n        \"F6\"\n      ],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"city council hearing\"\n      }\n    },\n    {\n      \"text\": \"NYC Council says it will go to court after Musk's SpaceXAI skipped its AI hearing\",\n      \"facts\": [\n        \"F6\"\n      ],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"SpaceXAI (xAI) / Elon Musk\"\n      }\n    },\n    {\n      \"text\": \"Ex-Anthropic researcher tells NYC Council AI could end in human extinction\",\n      \"facts\": [\n        \"F8\",\n        \"Q2\"\n      ],\n      \"image\": {\n        \"kind\": \"article\",\n        \"value\": \"https://image.cnbcfm.com/api/v1/image/108372636-1791214003815-gettyimages-2298703465-mms12751_3aopwyib.jpeg?v=1791214175&w=1920&h=1080\"\n      }\n    }\n  ],\n  \"chosen_cover\": 1,\n  \"slides\": [\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"Menin opened by calling out Washington\",\n        \"facts\": [\n          \"F10\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"At a rare hearing of all 51 Council members, Speaker Julie Menin opened by criticising the federal light-touch approach, after President Trump signed a voluntary accord with tech leaders last week.\",\n        \"facts\": [\n          \"F2\",\n          \"N1\",\n          \"F10\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Julie Menin\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"Four firms sent policy leads, not CEOs\",\n        \"facts\": [\n          \"F3\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Anthropic: Logan Graham, head of its Frontier Red Team. OpenAI: Morgan Dwyer, head of policy development and operations. Google: Alice Friend. Meta: Shane Cahill, AI policy director for legislation.\",\n        \"facts\": [\n          \"F3\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"witnesses under oath\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"Three firms agreed after a subpoena threat, Council says\",\n        \"facts\": [\n          \"F5\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Menin's office says OpenAI and Google agreed on Sept 27 and Anthropic confirmed late that night, hours before a subpoena was due to be served. Meta had already said yes.\",\n        \"facts\": [\n          \"F4\",\n          \"F5\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"legal documents desk\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"SpaceXAI was the only company that stayed away\",\n        \"facts\": [\n          \"F6\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Elon Musk's SpaceXAI was the only company called that did not attend. Menin says that violates the subpoena issued the week before, and that the Council will pursue the matter in court.\",\n        \"facts\": [\n          \"F6\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"SpaceXAI (xAI) / Elon Musk\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"text\",\n      \"headline\": {\n        \"text\": \"Two former lab researchers urged caution\",\n        \"facts\": [\n          \"F8\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Jacob Coxon, who quit Anthropic last month, called the industry's approach extremely reckless. Former OpenAI researcher Daniel Kokotajlo called for more transparency and for slowing development of the leading models.\",\n        \"facts\": [\n          \"F8\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"article\",\n        \"value\": \"https://image.cnbcfm.com/api/v1/image/108372636-1791214003815-gettyimages-2298703465-mms12751_3aopwyib.jpeg?v=1791214175&w=1920&h=1080\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"quote\",\n      \"headline\": {\n        \"text\": \"A former Google DeepMind researcher on China\",\n        \"facts\": [\n          \"F7\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Answering Menin on balancing frontier model development against the race with China, Alex Turner warned that misaligned AI, whose goals diverge from human intentions, could be more dangerous than China.\",\n        \"facts\": [\n          \"F7\"\n        ]\n      },\n      \"quote_id\": \"Q1\",\n      \"quote_excerpt\": null,\n      \"number_ids\": [],\n      \"image\": {\n        \"kind\": \"subject\",\n        \"value\": \"Alex Turner\"\n      },\n      \"spread_with_next\": false\n    },\n    {\n      \"type\": \"stat\",\n      \"headline\": {\n        \"text\": \"A $25,000 fine for breaking two proposed laws\",\n        \"facts\": [\n          \"F9\",\n          \"N2\"\n        ]\n      },\n      \"body\": {\n        \"text\": \"Council proposals: no AI sold or deployed in the five boroughs without outside-expert vetting, plus a kill switch, a human override that can shut down the system. Proposals only, not enacted.\",\n        \"facts\": [\n          \"F9\",\n          \"N2\"\n        ]\n      },\n      \"quote_id\": null,\n      \"quote_excerpt\": null,\n      \"number_ids\": [\n        \"N2\"\n      ],\n      \"image\": {\n        \"kind\": \"stock\",\n        \"value\": \"gavel and ledger\"\n      },\n      \"spread_with_next\": false\n    }\n  ],\n  \"follow\": \"Follow Helios Group for plain-English updates on the NYC Council's AI bills and the SpaceXAI subpoena.\",\n  \"caption\": {\n    \"text\": \"Senior executives from Anthropic, OpenAI, Google and Meta testified under oath at a rare New York City Council hearing on AI risks on Oct 5, 2026. Elon Musk's SpaceXAI did not show up despite a subpoena, a legal order compelling attendance and sworn testimony.\\n\\nThe hearing convened all 51 Council members. The companies sent policy leads, not CEOs. Speaker Julie Menin's office says OpenAI, Google and Anthropic agreed to appear only after the Council threatened subpoenas. Menin says SpaceXAI's absence violates its subpoena and that the Council will pursue the matter in court. Former Anthropic researcher Jacob Coxon called the industry's approach extremely reckless. The Council is weighing proposals that include outside-expert vetting of AI and a kill switch, with a $25,000 fine for violating either of those two laws. They are proposals only. Menin opened by criticising the federal government's light-touch approach.\\n\\nShould a city be writing AI rules before the federal government does?\\n\\nFollow Helios Group for plain-English updates on the NYC Council's AI bills and the SpaceXAI subpoena.\\n\\nSource: CNBC, Oct 5, 2026; NY Post, citing Bloomberg, Oct 5, 2026; NY1, Oct 5, 2026; NYC Council press release, Sept 28, 2026. Additional reporting: Firstpost.\",\n    \"facts\": [\n      \"F1\",\n      \"F2\",\n      \"F3\",\n      \"F5\",\n      \"F6\",\n      \"F8\",\n      \"F9\",\n      \"F10\",\n      \"N1\",\n      \"N2\"\n    ]\n  },\n  \"edit_notes\": [\n    \"Cover 1 chosen: names all four firms and the no-show, which is the news in one line. SpaceXAI is not well known, so the cover leads with the four firms rather than Musk.\",\n    \"Slide 4 keeps the 'Council says' attribution because the timeline is Menin's office's account (F5).\",\n    \"Menin's quotes Q3 and Q5 and Coxon's Q2 are single-source, so I used Turner's Q1 on the quote slide. 'Extremely reckless' is paraphrased without quote marks because it is not in QUOTES.\",\n    \"Paraphrased Menin's 'direct violation' and 'pursue this matter in court' without quote marks (not in QUOTES) and kept 'says'.\",\n    \"Skipped B1 (summer escape incidents, unverified) and B2 (Hochul rule) to keep the post on the hearing; no background slides.\",\n    \"Used N2 on the stat slide and kept 'proposals only, not enacted'. 51 is in the slide 2 body, with no stat slide.\",\n    \"The Q4 'owe it to the public' quote was not used. Menin's 'troubling at best' remark and the Alice Friend federal framework line were left out for space.\",\n    \"Misaligned AI glossed in the Turner slide from TERMS; kill switch glossed from TERMS; subpoena glossed in the caption from TERMS.\",\n    \"Caption adds no facts beyond the slides and brief. The question is an opinion prompt that needs no outside facts.\"\n  ]\n}",
+    "costUsd": 0.1287,
+    "turns": 1,
+    "draftRetries": 0,
+    "turnUsage": [
+      {
+        "turn": 1,
+        "stopReason": "tool_use",
+        "usage": {
+          "input_tokens": 8243,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 4468,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 11136,
+          "output_tokens_details": {
+            "thinking_tokens": 8230
+          },
+          "service_tier": "standard",
+          "inference_geo": "global"
+        },
+        "costUsd": 0.1287
+      }
+    ]
+  }
+}

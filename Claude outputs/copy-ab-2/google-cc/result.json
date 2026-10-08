@@ -1,0 +1,25 @@
+{
+  "ok": false,
+  "status": "needs_human_review",
+  "reason": "fact-check FLAGGED after 2 rounds — 1 open flag(s):\n  - SMALL CAPTION / TEXT\n    TEXT: \"each choosing what information to share, emails, calendar events, photos, Drive folders\"\n    PROBLEM: Sources list emails, photos, Drive folders/files, and calendars (as in \"add CC to a Calendar\") as the shareable items. \"Calendar events\" is not enumerated as a discrete item members share; the sources describe sharing a calendar itself with CC, not individual calendar events.\n    SOURCES SAY: \"you can Share a Drive folder or files with CC or add CC to a Calendar\" (Google blog); \"Drive folders and calendars can be shared with the agent directly\" (SiliconAngle).",
+  "costUsd": 0.455,
+  "stagesRun": [
+    "reporter",
+    "brief-integrity(cut 1 unsourced quote)",
+    "writer",
+    "writer(outline-retry)",
+    "editor",
+    "caption",
+    "field-repair(SLIDE 7 BODY) r1.1",
+    "field-repair(SLIDE 9 BODY) r1.1",
+    "editor(check-errors r1.1)",
+    "editor(check-errors r1.2)",
+    "fact-checker(r1)",
+    "editor(fact-check r1)",
+    "caption(fact-check r1)",
+    "editor(check-errors r2.1)",
+    "editor(check-errors r2.2)",
+    "fact-checker(r2)",
+    "image-step-skipped"
+  ]
+}

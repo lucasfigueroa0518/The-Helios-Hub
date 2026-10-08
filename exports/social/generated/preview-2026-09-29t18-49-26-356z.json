@@ -1,0 +1,286 @@
+{
+  "format": "carousel",
+  "storyType": "policy",
+  "source": "Gottheimer official press release",
+  "sourceUrl": "",
+  "publishedAt": "September 18, 2026",
+  "issueNumber": 725,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "variant": "C3",
+      "headline": [
+        {
+          "text": "No law requires testing AI before release",
+          "role": "hook"
+        },
+        {
+          "text": ". Two new bills would change that.",
+          "role": "narrative"
+        }
+      ],
+      "altText": "No law requires testing AI before release. Two new bills would change that."
+    },
+    {
+      "position": 1,
+      "layoutVariant": "text",
+      "altText": "Two bills, two threats",
+      "headline": [
+        {
+          "text": "Two bills, two threats",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Rep. Josh Gottheimer (D-NJ) introduced the ",
+          "role": "narrative"
+        },
+        {
+          "text": "American AI Security Act",
+          "role": "pivot"
+        },
+        {
+          "text": ", ",
+          "role": "narrative"
+        },
+        {
+          "text": "mandatory NSA reviews of powerful AI before release",
+          "role": "hook"
+        },
+        {
+          "text": ", and the ",
+          "role": "narrative"
+        },
+        {
+          "text": "China FIREWALL Act",
+          "role": "pivot"
+        },
+        {
+          "text": ", banning Chinese-developed AI from federal systems.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 2,
+      "layoutVariant": "text",
+      "altText": "The gap in current law",
+      "headline": [
+        {
+          "text": "The gap in current law",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "No law requires companies to test a frontier AI model",
+          "role": "hook"
+        },
+        {
+          "text": ", the most powerful AI systems, for risks before releasing it. Gottheimer calls that a gap his bills are designed to close.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 3,
+      "layoutVariant": "text",
+      "altText": "How the NSA review would work",
+      "headline": [
+        {
+          "text": "How the NSA review would work",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "The NSA gets full access to evaluate whether a covered model could launch a cyberattack or help build chemical, biological, or radiological weapons. The review runs ",
+          "role": "narrative"
+        },
+        {
+          "text": "30 days, with one extension",
+          "role": "hook"
+        },
+        {
+          "text": ". Companies can appeal.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 4,
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "\"Right now, there are ",
+          "role": "narrative"
+        },
+        {
+          "text": "no mandatory requirements for pre-deployment testing of frontier AI models",
+          "role": "hook"
+        },
+        {
+          "text": ".\"",
+          "role": "narrative"
+        }
+      ],
+      "altText": "\"Right now, there are no mandatory requirements for pre-deployment testing of frontier AI models.\"",
+      "quoteBy": "Rep. Josh Gottheimer (D-NJ)"
+    },
+    {
+      "position": 5,
+      "layoutVariant": "text",
+      "altText": "The loophole the FIREWALL Act targets",
+      "headline": [
+        {
+          "text": "The loophole the FIREWALL Act targets",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "DeepSeek",
+          "role": "pivot"
+        },
+        {
+          "text": ", a Chinese AI model already blocked from federal devices, is just one. Gottheimer says ",
+          "role": "narrative"
+        },
+        {
+          "text": "agencies can still use other Chinese open-weight models",
+          "role": "hook"
+        },
+        {
+          "text": " and buy software with them built in.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 6,
+      "layoutVariant": "text",
+      "altText": "What open-weight means",
+      "headline": [
+        {
+          "text": "What open-weight means",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Open-weight AI models are systems whose underlying parameters are made publicly available, ",
+          "role": "narrative"
+        },
+        {
+          "text": "anyone can download and run them",
+          "role": "hook"
+        },
+        {
+          "text": ". The ",
+          "role": "narrative"
+        },
+        {
+          "text": "China FIREWALL Act",
+          "role": "pivot"
+        },
+        {
+          "text": " would ban Chinese-developed ones from government devices and procurement.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 7,
+      "layoutVariant": "text",
+      "altText": "Models still getting through",
+      "headline": [
+        {
+          "text": "Models still getting through",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Gottheimer named two examples in his remarks: Moonshot's ",
+          "role": "narrative"
+        },
+        {
+          "text": "Kimi K3 and Alibaba's Qwen",
+          "role": "hook"
+        },
+        {
+          "text": ", Chinese open-weight models he says are still accessible on federal systems and in software agencies can purchase.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 8,
+      "layoutVariant": "text",
+      "altText": "A letter to the cyber chief",
+      "headline": [
+        {
+          "text": "A letter to the cyber chief",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Gottheimer is writing to National Cyber Director ",
+          "role": "narrative"
+        },
+        {
+          "text": "Sean Cairncross",
+          "role": "pivot"
+        },
+        {
+          "text": " to ask whether the AI cybersecurity clearinghouse is \"",
+          "role": "narrative"
+        },
+        {
+          "text": "built for the threat we're facing in 2026",
+          "role": "hook"
+        },
+        {
+          "text": ", or the threat we were facing two years ago.\"",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 9,
+      "layoutVariant": "text",
+      "altText": "The road to a vote is blocked",
+      "headline": [
+        {
+          "text": "The road to a vote is blocked",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Gottheimer says ",
+          "role": "narrative"
+        },
+        {
+          "text": "Republican leadership has refused to bring AI safety legislation to the floor",
+          "role": "hook"
+        },
+        {
+          "text": ". He is calling on the Speaker to reconvene Congress before the election. No vote is scheduled.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 10,
+      "layoutVariant": "follow",
+      "variant": "F1",
+      "storySpecificLine": "Follow Helios for clear, accurate coverage of how Congress is moving on AI.",
+      "altText": "Follow Helios for clear, accurate coverage of how Congress is moving on AI."
+    }
+  ],
+  "caption": "Rep. Josh Gottheimer introduced two bills Friday to require government vetting of powerful AI before release and ban Chinese-developed AI from federal systems. The American AI Security Act would give the NSA 30 days to review frontier AI models for risks like cyberattacks or weapons development before companies can release them. The China FIREWALL Act would block Chinese open-weight models, AI anyone can download and run, from federal devices and ban software built with them. Gottheimer says the first fills a gap: no current law requires companies to test advanced AI for risks before launch. He's also pressuring Republican leadership to bring the bills to a vote before the election; they've so far refused.\n\nWhat's your take: should government agencies review AI before it's released to the public?\n\nFollow Helios for sharp analysis of how Congress is actually moving on AI safety.\n\nSource: Rep. Gottheimer's official press release, September 18, 2026. Additional reporting: WRNJ."
+}

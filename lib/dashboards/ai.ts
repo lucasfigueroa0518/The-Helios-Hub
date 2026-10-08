@@ -1,4 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk';
+import type Anthropic from '@anthropic-ai/sdk';
+import { newAnthropic } from '@/lib/anthropic-client';
 
 import { cachedSystemText, withConversationCache } from '@/lib/anthropic-cache';
 import { priceAnthropicMessages, type AnthropicUsageContract } from '@/lib/anthropic-pricing';
@@ -344,7 +345,7 @@ export async function generateUpdate(
       windowEnd,
     );
 
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const anthropic = newAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const parsed = await callClaudeWithRetry(anthropic, prompt);
     billedUsage = parsed.billedUsage;
 

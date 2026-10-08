@@ -1,4 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk';
+import type Anthropic from '@anthropic-ai/sdk';
+import { newAnthropic } from '@/lib/anthropic-client';
 import {
   cachedSystemText,
   withConversationCache,
@@ -746,7 +747,7 @@ export async function researchCompanyLive(
   options: { maxSearchUses?: number } = {},
 ) {
   if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured');
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = newAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const prompt = userPrompt(disambiguation);
   const system = researchSystem(SYSTEM_PROMPT);
   const tools = searchAndReportTools(
@@ -791,7 +792,7 @@ export async function researchProfileRescueLive(
   if (disambiguation.research_pass !== 'profile_rescue' || disambiguation.people.length !== 1) {
     throw new Error('Profile rescue requires exactly one rescue-scoped person');
   }
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = newAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const prompt = profileRescuePrompt(disambiguation);
   const system = researchSystem(PROFILE_RESCUE_SYSTEM_PROMPT);
   const tools = searchAndReportTools(
@@ -835,7 +836,7 @@ export async function researchEmailRescueLive(
   if (disambiguation.research_pass !== 'email_rescue' || disambiguation.people.length < 1) {
     throw new Error('Email rescue requires at least one rescue-scoped person');
   }
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = newAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const prompt = emailRescuePrompt(disambiguation);
   const system = researchSystem(EMAIL_RESCUE_SYSTEM_PROMPT);
   const tools = searchAndReportTools(
@@ -910,7 +911,7 @@ export async function researchCompanyWithSearxng(
       }] : [],
     ));
   }
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = newAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const message = await client.messages.create({
     model: RESEARCH_MODEL,
     max_tokens: 1800,

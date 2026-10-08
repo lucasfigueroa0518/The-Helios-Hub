@@ -1,0 +1,372 @@
+{
+  "format": "carousel",
+  "storyType": "agents",
+  "source": "Anthropic (original announcement): \"Measurements for understanding the pace of AI development inside frontier labs.\" Published . Link:",
+  "sourceUrl": "https://www.anthropic.com/institute/measuring-pace-of-ai-development",
+  "publishedAt": "September 17, 2026",
+  "issueNumber": 725,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "variant": "C3",
+      "headline": [
+        {
+          "text": "Anthropic says Claude now leads 26% of its own AI research. In February it was ",
+          "role": "narrative"
+        },
+        {
+          "text": "under 1%",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Anthropic says Claude now leads 26% of its own AI research. In February it was under 1%."
+    },
+    {
+      "position": 1,
+      "layoutVariant": "text",
+      "altText": "What \"leads\" actually means",
+      "headline": [
+        {
+          "text": "What \"leads\" actually means",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": " uses a six-step scale, from AL0 (no AI) to AL5 (",
+          "role": "narrative"
+        },
+        {
+          "text": "fully autonomous",
+          "role": "hook"
+        },
+        {
+          "text": "). At AL4, called \"leads,\" ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude",
+          "role": "pivot"
+        },
+        {
+          "text": " completes most of a task from a high-level prompt while a human supervises.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 2,
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "26%",
+          "role": "narrative"
+        }
+      ],
+      "altText": "From under 1% to 26% in six months",
+      "headline": [
+        {
+          "text": "From ",
+          "role": "narrative"
+        },
+        {
+          "text": "under 1%",
+          "role": "hook"
+        },
+        {
+          "text": " to 26% in six months",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "As of August, ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude",
+          "role": "pivot"
+        },
+        {
+          "text": " was at the \"leads\" level or above for 26% of ",
+          "role": "narrative"
+        },
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": "'s AI R&D work. In February that figure was under 1%. More than 90% of measured work reached at least \"collaborates,\" meaning ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude",
+          "role": "pivot"
+        },
+        {
+          "text": " was involved under close human direction or more.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 3,
+      "layoutVariant": "text",
+      "altText": "How Anthropic built the index",
+      "headline": [
+        {
+          "text": "How ",
+          "role": "narrative"
+        },
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": " built the index",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Each week in July, ",
+          "role": "narrative"
+        },
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": " sampled 20% of staff from model development departments. A ",
+          "role": "narrative"
+        },
+        {
+          "text": "Claude",
+          "role": "pivot"
+        },
+        {
+          "text": " agent reviewed each person's work records, including Slack messages, and produced roughly ",
+          "role": "narrative"
+        },
+        {
+          "text": "15,000 granular tasks",
+          "role": "hook"
+        },
+        {
+          "text": ", organized into 542 categories.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 4,
+      "layoutVariant": "text",
+      "altText": "Claude rated its own work",
+      "headline": [
+        {
+          "text": "Claude",
+          "role": "pivot"
+        },
+        {
+          "text": " rated its own work",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Claude",
+          "role": "pivot"
+        },
+        {
+          "text": "'s scores matched human ratings exactly 59% of the time. Human raters agreed with each other only 35% of the time. Model and human ratings were within one level of each other ",
+          "role": "narrative"
+        },
+        {
+          "text": "97% of the time",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 5,
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "0.002%",
+          "role": "narrative"
+        }
+      ],
+      "altText": "30,000 agents, one billion decisions",
+      "headline": [
+        {
+          "text": "30,000 agents, one billion decisions",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "As of August, roughly 30,000 AI agents were doing research and engineering work at ",
+          "role": "narrative"
+        },
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": " at any given time on its most-used internal platform. Over one billion agent decisions were tracked that month. About 0.002%, roughly ",
+          "role": "narrative"
+        },
+        {
+          "text": "one in 47,000",
+          "role": "hook"
+        },
+        {
+          "text": ", were blocked.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 6,
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "6%",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Safety's share of compute",
+      "headline": [
+        {
+          "text": "Safety's share of compute",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "During July 13 to July 20, about 6% of ",
+          "role": "narrative"
+        },
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": "'s AI R&D compute went toward safety work. For compute used in AI-driven research, that figure was closer to 12%. ",
+          "role": "narrative"
+        },
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": " cautioned that compute is an ",
+          "role": "narrative"
+        },
+        {
+          "text": "imperfect measure",
+          "role": "hook"
+        },
+        {
+          "text": " of safety effort.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 7,
+      "layoutVariant": "text",
+      "altText": "Why Anthropic published this",
+      "headline": [
+        {
+          "text": "Why ",
+          "role": "narrative"
+        },
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": " published this",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": " linked the index to ",
+          "role": "narrative"
+        },
+        {
+          "text": "recursive self-improvement",
+          "role": "hook"
+        },
+        {
+          "text": ", the idea that an AI could eventually build its own successor with little or no human involvement. AI systems are already part of building future models, ",
+          "role": "narrative"
+        },
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": " said, making tracking automation necessary.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 8,
+      "layoutVariant": "text",
+      "altText": "A call to other labs",
+      "headline": [
+        {
+          "text": "A call to other labs",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": " said any frontier AI developer could publish comparable measurements covering AI-led R&D, agent oversight and compute allocated to safety. Cross-lab comparisons would need common methodologies, and ",
+          "role": "narrative"
+        },
+        {
+          "text": "independent third-party verification",
+          "role": "hook"
+        },
+        {
+          "text": " could help.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 9,
+      "layoutVariant": "follow",
+      "variant": "F1",
+      "storySpecificLine": "Follow Helios to track how AI companies measure and disclose what their models do inside the lab.",
+      "altText": "Follow Helios to track how AI companies measure and disclose what their models do inside the lab."
+    }
+  ],
+  "caption": "Anthropic says Claude, its flagship AI model, now \"leads\" 26% of the company's own AI research and development work. In February that figure was under 1%.\n\n\"Leads\" comes from an automation scale Anthropic borrowed from independent research organization Epoch AI, running from AL0 (no AI) to AL5 (fully autonomous). At AL4, the \"leads\" level, Claude completes most of a task from a high-level prompt while a human supervises. More than 90% of Anthropic's measured R&D work reached at least \"collaborates,\" meaning Claude was involved under close human direction or above. The 26% sits inside that 90% figure, not on top of it. Claude has not reached full autonomy for any measured subset of work.\n\nTo build the index, Anthropic sampled 20% of model development staff each week in July, pulled work records including Slack messages, and had Claude organize the results into roughly 15,000 tasks across 542 categories. Claude then rated those tasks. Its scores matched human raters exactly 59% of the time; human raters agreed with each other only 35% of the time. As of August, roughly 30,000 AI agents were running inside Anthropic at any given time, logging over one billion decisions that month. About 0.002% were blocked. Anthropic also reported that roughly 6% of AI research compute went to safety work during one week in July, rising to about 12% for compute used specifically in AI-driven research. Anthropic said compute is an imperfect measure of safety effort.\n\nAnthropic linked the disclosure to the concept of recursive self-improvement, where an AI could eventually build its own successor with little or no human involvement. The company called on other frontier AI labs to publish comparable figures covering AI-led R&D, agent oversight and compute allocated to safety.\n\nWould you want other AI labs to publish measurements like this?\n\nFollow Helios to track how AI companies measure and disclose what their models do inside the lab.\n\nSource: Anthropic, September 17, 2026. Additional reporting: The Rundown AI, Analytics Insight, Storyboard18, September 2026."
+}

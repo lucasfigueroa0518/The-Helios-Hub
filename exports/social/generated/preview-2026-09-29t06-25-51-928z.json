@@ -1,0 +1,388 @@
+{
+  "format": "carousel",
+  "storyType": "leadership",
+  "source": "CNBC (Annie Palmer)",
+  "sourceUrl": "https://www.cnbc.com/2026/09/15/elon-musk-ai-safety-testing.html",
+  "publishedAt": "September 15, 2026",
+  "issueNumber": 725,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "variant": "C3",
+      "headline": [
+        {
+          "text": "Elon Musk backed rivals' AI slowdown call. Then ",
+          "role": "narrative"
+        },
+        {
+          "text": "lobbied Trump to kill oversight",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Elon Musk backed rivals' AI slowdown call. Then lobbied Trump to kill oversight."
+    },
+    {
+      "position": 1,
+      "layoutVariant": "text",
+      "altText": "Musk backed rivals he once called evil",
+      "headline": [
+        {
+          "text": "Musk backed rivals he once called evil",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "On September 12, ",
+          "role": "narrative"
+        },
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": " CEO ",
+          "role": "narrative"
+        },
+        {
+          "text": "Dario Amodei",
+          "role": "pivot"
+        },
+        {
+          "text": " published an essay arguing AI labs should deliberately slow capability gains so safety work can catch up. Musk posted three words on X: ",
+          "role": "narrative"
+        },
+        {
+          "text": "\"Dario is right.\"",
+          "role": "hook"
+        }
+      ]
+    },
+    {
+      "position": 2,
+      "layoutVariant": "split_stat",
+      "title": [
+        {
+          "text": "3,800",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Two triggers drove Amodei's call",
+      "headline": [
+        {
+          "text": "Two triggers drove Amodei's call",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "words in Amodei's \"We Must Pace the Frontier\" essay",
+      "secondNumber": "1 - 2",
+      "secondNote": "years of slowdown Amodei argued for"
+    },
+    {
+      "position": 3,
+      "layoutVariant": "text",
+      "altText": "Anthropic committed. Altman followed.",
+      "headline": [
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": " committed. Altman followed.",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Amodei's essay came with a unilateral pledge: ",
+          "role": "narrative"
+        },
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": " would give third-party evaluators, independent outside assessors, ",
+          "role": "narrative"
+        },
+        {
+          "text": "permanent, employee-level access",
+          "role": "hook"
+        },
+        {
+          "text": " to verify its safety practices. ",
+          "role": "narrative"
+        },
+        {
+          "text": "OpenAI",
+          "role": "pivot"
+        },
+        {
+          "text": " CEO ",
+          "role": "narrative"
+        },
+        {
+          "text": "Sam Altman",
+          "role": "pivot"
+        },
+        {
+          "text": " publicly agreed to the same.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 4,
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "So, you know, instead of grading your own homework, you would at least have ",
+          "role": "narrative"
+        },
+        {
+          "text": "competitors grading your homework",
+          "role": "hook"
+        },
+        {
+          "text": " and raising the alarm if they see concerns.",
+          "role": "narrative"
+        }
+      ],
+      "altText": "So, you know, instead of grading your own homework, you would at least have competitors grading your homework and rai...",
+      "quoteBy": "Elon Musk, at the All-In Summit, September 15, 2026"
+    },
+    {
+      "position": 5,
+      "layoutVariant": "text",
+      "altText": "Musk proposed rivals test each other",
+      "headline": [
+        {
+          "text": "Musk proposed rivals test each other",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Speaking virtually at the ",
+          "role": "narrative"
+        },
+        {
+          "text": "All-In Summit",
+          "role": "pivot"
+        },
+        {
+          "text": " on September 15, Musk called for SpaceXAI, ",
+          "role": "narrative"
+        },
+        {
+          "text": "OpenAI",
+          "role": "pivot"
+        },
+        {
+          "text": ", ",
+          "role": "narrative"
+        },
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": ", Google, Meta and three or four leading Chinese companies to run a \"",
+          "role": "narrative"
+        },
+        {
+          "text": "test harness",
+          "role": "hook"
+        },
+        {
+          "text": "\", a peer-review system, on each other's models before release. Rival labs have not agreed.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 6,
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "You can always escalate the amount of regulatory oversight, but it is very difficult to reduce it. It does tend to be very much a ",
+          "role": "narrative"
+        },
+        {
+          "text": "one-way ratchet",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ],
+      "altText": "You can always escalate the amount of regulatory oversight, but it is very difficult to reduce it. It does tend to be...",
+      "quoteBy": "Elon Musk, at the All-In Summit, September 15, 2026"
+    },
+    {
+      "position": 7,
+      "layoutVariant": "text",
+      "altText": "Privately, Musk moved to block one",
+      "headline": [
+        {
+          "text": "Privately, Musk moved to block one",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Behind the scenes, Musk joined ",
+          "role": "narrative"
+        },
+        {
+          "text": "Jensen Huang",
+          "role": "pivot"
+        },
+        {
+          "text": " of Nvidia and Mark Zuckerberg of Meta in separately advising Trump to ",
+          "role": "narrative"
+        },
+        {
+          "text": "oppose an industry-funded AI regulator",
+          "role": "hook"
+        },
+        {
+          "text": ", a body proposed by Google DeepMind CEO ",
+          "role": "narrative"
+        },
+        {
+          "text": "Demis Hassabis",
+          "role": "pivot"
+        },
+        {
+          "text": ", modeled on FINRA, which oversees U.S. brokerage firms. Trump did not move forward.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 8,
+      "layoutVariant": "split_stat",
+      "title": [
+        {
+          "text": "3",
+          "role": "narrative"
+        }
+      ],
+      "altText": "The concern: who would run it",
+      "headline": [
+        {
+          "text": "The concern: who would run it",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "tech chiefs who separately lobbied Trump against the watchdog",
+      "secondNumber": "0",
+      "secondNote": "companies that agreed to Musk's peer-review proposal"
+    },
+    {
+      "position": 9,
+      "layoutVariant": "text",
+      "altText": "The concern: who would benefit",
+      "headline": [
+        {
+          "text": "The concern: who would benefit",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Resistance from Musk, Zuckerberg and Huang reportedly centered on concerns that the proposed body could ",
+          "role": "narrative"
+        },
+        {
+          "text": "concentrate influence",
+          "role": "hook"
+        },
+        {
+          "text": " around ",
+          "role": "narrative"
+        },
+        {
+          "text": "OpenAI",
+          "role": "pivot"
+        },
+        {
+          "text": ", ",
+          "role": "narrative"
+        },
+        {
+          "text": "Anthropic",
+          "role": "pivot"
+        },
+        {
+          "text": " and Google, three companies already near the center of the frontier AI debate.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 10,
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "We need real regulation that creates a level playing field for companies but also protects the public, and ",
+          "role": "narrative"
+        },
+        {
+          "text": "the companies just can't do that themselves",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ],
+      "altText": "We need real regulation that creates a level playing field for companies but also protects the public, and the compan...",
+      "quoteBy": "Tyler Whitmer, CEO of LASST, to CNBC"
+    },
+    {
+      "position": 11,
+      "layoutVariant": "text",
+      "altText": "The White House is split",
+      "headline": [
+        {
+          "text": "The White House is split",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Trump called AI danger fears a \"hoax\"",
+          "role": "hook"
+        },
+        {
+          "text": " and said slowing AI would give China an advantage. Treasury Secretary Scott Bessent, Chief of Staff Susie Wiles and National Cyber Director Sean Cairncross have pushed for greater scrutiny, at odds with adviser ",
+          "role": "narrative"
+        },
+        {
+          "text": "David Sacks",
+          "role": "pivot"
+        },
+        {
+          "text": ", who has argued for less intervention.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 12,
+      "layoutVariant": "follow",
+      "variant": "F1",
+      "storySpecificLine": "Follow Helios to keep up with how AI companies are debating who should police the technology.",
+      "altText": "Follow Helios to keep up with how AI companies are debating who should police the technology."
+    }
+  ],
+  "caption": "Elon Musk publicly backed rivals' call to slow AI development, then quietly lobbied Trump to block an industry watchdog that could have enforced it. In mid-September, Musk endorsed Anthropic CEO Dario Amodei's essay arguing labs should deliberately pace capability gains so safety work can catch up. Days later at the All-In Summit, Musk proposed a peer-review system where competing labs test each other's models before release. But behind the scenes, Musk joined Nvidia's Jensen Huang and Meta's Mark Zuckerberg in separately advising Trump to reject a proposed FINRA-style AI regulator, reportedly concerned it would concentrate power around OpenAI, Anthropic and Google. Trump didn't move forward with the watchdog. No other lab has agreed to Musk's testing proposal.\n\nThe split extends to the White House itself. Trump called AI danger fears a \"hoax\" and warned that slowing development would give China an advantage. Treasury Secretary Scott Bessent, Chief of Staff Susie Wiles and National Cyber Director Sean Cairncross have pushed for greater scrutiny, at odds with adviser David Sacks, who favors less intervention.\n\nWould you support AI companies policing themselves, or does the technology need outside oversight?\n\nFollow Helios to track how tech leaders are choosing between self-regulation and real accountability on AI.\n\nSource: CNBC, September 15 and 18, 2026. Additional reporting: Tech Startups, IBTimes UK."
+}

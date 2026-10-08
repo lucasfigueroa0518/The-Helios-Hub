@@ -1,0 +1,449 @@
+{
+  "single_story": {
+    "yes": true,
+    "note": "The headline story (NPowerUser) bundles three claims. Independent sources confirm only the Gemini app model-access change for Oct 9 and that Gemini 4 Argon is already announced (Sept 30) with limited rollout. The 'deprecation' of 3.6/3.7 Flash and removal of 'Fast modes' is NOT confirmed by Google's deprecations page or any other source I opened. One starting source (t2conline.com) is actually about Meta's Muse for small business and does not cover Gemini."
+  },
+  "the_news": {
+    "text": "Google updated a support page saying that from Oct 9, 2026 Gemini app users without a paid plan will be limited to Flash-Lite and AI Plus users lose Pro, while Gemini 4 Argon (announced Sept 30) is still in limited rollout; NPowerUser's claim that 3.6/3.7 Flash are being retired and 'Fast' modes pulled is unconfirmed.",
+    "ids": [
+      "F1",
+      "F2",
+      "F3",
+      "F6",
+      "F8"
+    ]
+  },
+  "why_it_matters": [
+    {
+      "text": "Free Gemini app users lose access to the Flash and Pro models on Oct 9, so the more capable models move behind paid plans; Google AI Pro subscribers gain Deep Think.",
+      "ids": [
+        "F1",
+        "F2",
+        "F4"
+      ]
+    },
+    {
+      "text": "Google's newest flagship, Gemini 4 Argon, is not yet widely available and will reach paid API customers and AI Ultra subscribers first.",
+      "ids": [
+        "F6",
+        "F7"
+      ]
+    }
+  ],
+  "facts": [
+    {
+      "id": "F1",
+      "text": "Starting Oct 9, Gemini app users without a Google AI subscription will be limited to the (3.5) Flash-Lite model and will no longer be able to access (3.6) Flash or (3.1) Pro.",
+      "sources": [
+        "9to5Google",
+        "PCMag",
+        "MakeUseOf"
+      ],
+      "claim_by": null,
+      "notes": [
+        "Based on an updated Google support page; I could not open the support page itself. 9to5Google, PCMag and MakeUseOf all report it."
+      ]
+    },
+    {
+      "id": "F2",
+      "text": "AI Plus subscribers will be limited to Flash-Lite and Flash and lose Pro, and will 'receive an email that explains when these changes will take effect.'",
+      "sources": [
+        "9to5Google",
+        "PCMag",
+        "MakeUseOf"
+      ],
+      "claim_by": null,
+      "notes": [
+        "The AI Plus date is not fixed; per 9to5Google the email will say when the change applies to each account."
+      ]
+    },
+    {
+      "id": "F3",
+      "text": "The Gemini app is also adding 'low,' 'medium,' and 'high' effort levels for each available model, which increase the model's ability to complete tasks but use more of the user's limit.",
+      "sources": [
+        "9to5Google",
+        "PCMag",
+        "MakeUseOf"
+      ],
+      "claim_by": null,
+      "notes": [
+        "9to5Google says the levels are expected in October and match what is in Google AI Studio and Antigravity; PCMag says users will 'soon' be able to choose."
+      ]
+    },
+    {
+      "id": "F4",
+      "text": "AI Pro and AI Ultra see no regressions; AI Pro ($19.99/month) subscribers get Deep Think, currently only on the $99.99 and $199.99/month plans.",
+      "sources": [
+        "9to5Google"
+      ],
+      "claim_by": null,
+      "notes": [
+        "Deep Think detail found only in 9to5Google among the pages I opened (Notebookcheck snippet from search also mentions it but I could not open that page)."
+      ]
+    },
+    {
+      "id": "F5",
+      "text": "Google's own Gemini API deprecations page (last updated 2026-10-01) lists gemini-3.6-flash and gemini-3.7-flash with 'No shutdown date announced', and gemini-3.8-flash as a September 2, 2026 release.",
+      "sources": [
+        "Google AI for Developers (Gemini deprecations page)"
+      ],
+      "claim_by": null,
+      "notes": [
+        "This does not support NPowerUser's claim that 3.6/3.7 Flash are being 'rapidly phased out'. The page was last updated Oct 1, before the NPowerUser article (Oct 5), so it may not reflect later changes."
+      ]
+    },
+    {
+      "id": "F6",
+      "text": "Google announced Gemini 4 Argon on Sept 30, 2026, rolling it out first to trusted cyber defenders in its Fairwind Program, and says it will reach developers, enterprises and consumers 'as soon as possible', starting with paid API customers and Google AI Ultra subscribers.",
+      "sources": [
+        "Google Blog",
+        "TechCrunch",
+        "Engadget",
+        "9to5Google"
+      ],
+      "claim_by": null,
+      "notes": [
+        "NPowerUser frames Argon as still 'nearing' and in 'grey-box testing'; the model has actually been formally announced with limited rollout."
+      ]
+    },
+    {
+      "id": "F7",
+      "text": "9to5Google says it is not clear where Argon will fit in the Gemini app, and Google has not specified whether Argon is a Pro model or a new tier above it.",
+      "sources": [
+        "9to5Google"
+      ],
+      "claim_by": null,
+      "notes": []
+    },
+    {
+      "id": "F8",
+      "text": "[CLAIM: NPowerUser says] Google is retiring Gemini 3.6 Flash and 3.7 Flash in favor of Gemini 3.8 Flash and has pulled dedicated 'Fast' modes from model selectors in favor of auto-routing, with Flash-Lite handling low-latency tasks.",
+      "sources": [
+        "NPowerUser"
+      ],
+      "claim_by": "NPowerUser",
+      "notes": [
+        "Not confirmed by any independent source or by Google's deprecations page (F5). The article cites no Google announcement and gives no shutdown dates. It also contains internal oddities (e.g. a table citing a 3.5/3.6 Flash retirement, a 'Gemini Flash checkpoint' reference). Treat as unverified."
+      ]
+    },
+    {
+      "id": "F9",
+      "text": "Argon is priced at an introductory $2 per million input tokens and $10 per million output tokens and has a 1M-token output limit, up from 64K.",
+      "sources": [
+        "Google Blog",
+        "Engadget"
+      ],
+      "claim_by": null,
+      "notes": [
+        "Google's figures; Engadget cites Artificial Analysis comparing cost with GPT-6 Astra."
+      ]
+    }
+  ],
+  "background": [
+    {
+      "id": "B1",
+      "text": "Google overhauled its Gemini plans earlier this year, with a compute-based usage change in May.",
+      "sources": [
+        "9to5Google",
+        "PCMag"
+      ],
+      "claim_by": null,
+      "notes": [
+        "PCMag says this is the second overhaul of AI plans this year and links it to rising storage and component costs (PCMag's inference)."
+      ]
+    },
+    {
+      "id": "B2",
+      "text": "OpenAI recently halved advanced-model allowances on some paid plans, while Anthropic raised five-hour usage limits by 20 percent for some plans alongside the launch of Claude Opus 5.5.",
+      "sources": [
+        "MakeUseOf"
+      ],
+      "claim_by": null,
+      "notes": [
+        "Single source for this comparison."
+      ]
+    }
+  ],
+  "quotes": [
+    {
+      "id": "Q1",
+      "text": "This will increase the model's ability to complete tasks and provide more thorough answers to queries, but will also use more of your limit.",
+      "speaker": "Google (support page, describing new effort levels)",
+      "where": "Google Gemini support page, as quoted by 9to5Google",
+      "via": [
+        "9to5Google",
+        "PCMag"
+      ],
+      "single_source": false,
+      "cut_off": false,
+      "notes": [
+        "PCMag's version is slightly different in wording: 'will also use more of your limit.'"
+      ]
+    },
+    {
+      "id": "Q2",
+      "text": "Built to sustain deep reasoning across complex, long-horizon workflows, Argon is fundamentally changing the way we work and build at Google.",
+      "speaker": "Google",
+      "where": "Google blog post on Gemini 4 Argon, Sept 30, 2026",
+      "via": [
+        "Google Blog",
+        "TechCrunch"
+      ],
+      "single_source": false,
+      "cut_off": false,
+      "notes": []
+    },
+    {
+      "id": "Q3",
+      "text": "receive an email that explains when these changes will take effect.",
+      "speaker": "Google (support page, on AI Plus subscribers)",
+      "where": "Google Gemini support page, as quoted by 9to5Google",
+      "via": [
+        "9to5Google"
+      ],
+      "single_source": true,
+      "cut_off": false,
+      "notes": [
+        "⚠ Single source for exact wording; MakeUseOf paraphrases."
+      ]
+    }
+  ],
+  "numbers": [
+    {
+      "id": "N1",
+      "value": "October 9",
+      "type": "date",
+      "counts": "Date free users lose Flash and Pro in the Gemini app",
+      "sources": [
+        "9to5Google",
+        "PCMag",
+        "MakeUseOf"
+      ],
+      "notes": [
+        "Date applies to users without a plan; AI Plus date comes by email."
+      ]
+    },
+    {
+      "id": "N2",
+      "value": "$4.99 per month",
+      "type": "money",
+      "counts": "Google AI Plus price",
+      "sources": [
+        "9to5Google",
+        "PCMag"
+      ],
+      "notes": []
+    },
+    {
+      "id": "N3",
+      "value": "$19.99 per month",
+      "type": "money",
+      "counts": "Google AI Pro price",
+      "sources": [
+        "9to5Google",
+        "PCMag"
+      ],
+      "notes": []
+    },
+    {
+      "id": "N4",
+      "value": "$99.99 and $199.99/month",
+      "type": "money",
+      "counts": "AI Ultra plans where Deep Think currently sits",
+      "sources": [
+        "9to5Google"
+      ],
+      "notes": []
+    },
+    {
+      "id": "N5",
+      "value": "2x and 5x",
+      "type": "other",
+      "counts": "Gemini usage limits of AI Plus and AI Pro vs. the free plan",
+      "sources": [
+        "PCMag"
+      ],
+      "notes": [
+        "Google does not explain how limits are calculated."
+      ]
+    },
+    {
+      "id": "N6",
+      "value": "$2 per million input tokens and $10 per million output tokens",
+      "type": "money",
+      "counts": "Gemini 4 Argon introductory price",
+      "sources": [
+        "Google Blog",
+        "Engadget"
+      ],
+      "notes": []
+    },
+    {
+      "id": "N7",
+      "value": "1M tokens",
+      "type": "count",
+      "counts": "Gemini 4 Argon output token limit (up from 64K)",
+      "sources": [
+        "Google Blog",
+        "Engadget"
+      ],
+      "notes": []
+    },
+    {
+      "id": "N8",
+      "value": "over a billion users per month",
+      "type": "count",
+      "counts": "Gemini app monthly users, announced in August",
+      "sources": [
+        "TechCrunch"
+      ],
+      "notes": []
+    }
+  ],
+  "terms": [
+    {
+      "name": "Flash-Lite / Flash / Pro",
+      "definition": "Gemini's three model tiers: Flash-Lite is the lightest and fastest, Flash the all-around middle option, Pro the most advanced.",
+      "source": "PCMag"
+    },
+    {
+      "name": "Effort levels (low/medium/high)",
+      "definition": "A setting that raises a model's ability to complete tasks and give more thorough answers, but uses more of the user's usage limit.",
+      "source": "9to5Google / PCMag"
+    },
+    {
+      "name": "Deep Think",
+      "definition": "A Gemini option for 'maximum parallel reasoning', currently on the top-tier Ultra plans and coming to AI Pro.",
+      "source": "9to5Google"
+    },
+    {
+      "name": "Fairwind Program",
+      "definition": "Google's security initiative for governments and trusted partners needing models with the most advanced cybersecurity capabilities; first recipients of Gemini 4 Argon.",
+      "source": "TechCrunch / Engadget"
+    },
+    {
+      "name": "Deprecation vs. shutdown",
+      "definition": "Deprecation is the announcement that Google no longer supports a model and it will be shut down soon; shutdown means the endpoint is completely turned off.",
+      "source": "Google AI for Developers (Gemini deprecations page)"
+    }
+  ],
+  "subjects": [
+    {
+      "name": "Google / Google DeepMind",
+      "role": "Maker of Gemini; changing model access and launching Argon"
+    },
+    {
+      "name": "Gemini 4 Argon",
+      "role": "New frontier model, limited rollout since Sept 30, 2026"
+    },
+    {
+      "name": "Gemini 3.6 Flash, 3.7 Flash, 3.8 Flash, 3.5 Flash-Lite, 3.1 Pro",
+      "role": "Current/previous Gemini models named in the stories"
+    },
+    {
+      "name": "Koray Kavukcuoglu",
+      "role": "Author of Google's Argon announcement blog post"
+    },
+    {
+      "name": "NPowerUser (nokiapoweruser.com)",
+      "role": "Outlet whose article prompted the story; claims unverified"
+    },
+    {
+      "name": "9to5Google (Abner Li)",
+      "role": "First spotted the support page update"
+    }
+  ],
+  "events": [
+    {
+      "what": "Free Gemini app users lose access to Flash and Pro models",
+      "date": "2026-10-09",
+      "place": "Gemini app (global, personal accounts)"
+    }
+  ],
+  "article_photos": [
+    {
+      "caption": "(no caption)",
+      "credit": "(Credit: Google)",
+      "url": "https://sm.pcmag.com/t/pcmag_au/photo/g/googles-up/googles-updated-model-limits-for-gemini-users_jyxv.3840.png",
+      "page": "https://au.pcmag.com/ai/120240/using-google-gemini-for-free-youre-losing-some-models-later-this-week"
+    },
+    {
+      "caption": "(no caption)",
+      "credit": null,
+      "url": "https://9to5google.com/wp-content/uploads/sites/4/2026/10/Google-AI-Ultra-Gemini-3.1-Pro-Deep-Think.jpg?strip=info&w=1480",
+      "page": "https://9to5google.com/2026/10/03/gemini-model-limits-oct-26/"
+    },
+    {
+      "caption": "(no caption)",
+      "credit": null,
+      "url": "https://storage.googleapis.com/gweb-uniblog-publish-prod/images/g4_30-09-26_key-art_blog.width-1300.png",
+      "page": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-argon/"
+    }
+  ],
+  "not_answered": [
+    "Google's own support page ('Changes to Gemini model access and limits') was not opened; the access-change facts rely on 9to5Google, PCMag and MakeUseOf reporting it.",
+    "No independent or official confirmation that Gemini 3.6 Flash / 3.7 Flash are being retired or have shutdown dates; Google's deprecations page (updated Oct 1) shows none.",
+    "No independent confirmation that dedicated 'Fast' modes were removed from selectors; the only source is NPowerUser.",
+    "When Gemini 4 Argon will reach the general public, and whether it will be a Pro model or a new tier, is not stated.",
+    "The AI Plus change date is not given; Google emails subscribers.",
+    "Notebookcheck's article could not be opened (fetch failed), so it is not used.",
+    "Why Google is making the access change is not stated by Google in sources opened; MakeUseOf and PCMag offer cost-based interpretations."
+  ],
+  "sources": [
+    {
+      "outlet": "NPowerUser",
+      "date": "2026-10-05",
+      "url": "https://nokiapoweruser.com/google-gemini-model-deprecation-36-37-flash-fast-mode-gemini-4-argon/"
+    },
+    {
+      "outlet": "MakeUseOf",
+      "date": "2026-10-05",
+      "url": "https://www.makeuseof.com/googles-new-paywall-blocks-advanced-models-from-gemini-free/"
+    },
+    {
+      "outlet": "PCMag (AU)",
+      "date": "2026-10-05",
+      "url": "https://au.pcmag.com/ai/120240/using-google-gemini-for-free-youre-losing-some-models-later-this-week"
+    },
+    {
+      "outlet": "9to5Google",
+      "date": "2026-10-03",
+      "url": "https://9to5google.com/2026/10/03/gemini-model-limits-oct-26/"
+    },
+    {
+      "outlet": "TechCrunch",
+      "date": "2026-09-30",
+      "url": "https://techcrunch.com/2026/09/30/google-releases-gemini-4-argon-called-its-most-powerful-model-yet/"
+    },
+    {
+      "outlet": "Engadget",
+      "date": "2026-10-01",
+      "url": "https://www.engadget.com/2274263/google-gemini-4-model-argon/"
+    },
+    {
+      "outlet": "Google AI for Developers (Gemini deprecations page)",
+      "date": "2026-10-01 (last updated)",
+      "url": "https://ai.google.dev/gemini-api/docs/deprecations"
+    },
+    {
+      "outlet": "Google Blog",
+      "date": "2026-09-30",
+      "url": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-argon/"
+    },
+    {
+      "outlet": "Times Square Chronicles (t2conline.com)",
+      "date": "2026-10-05",
+      "url": "https://t2conline.com/google-and-gemini-app/"
+    }
+  ],
+  "fetch_failures": [
+    {
+      "url": "https://www.notebookcheck.net/Google-Gemini-drops-Flash-and-Pro-for-free-users-on-October-9.1415964.0.html",
+      "reason": "fetch failed (not retried)"
+    },
+    {
+      "url": "https://t2conline.com/google-and-gemini-app/",
+      "reason": "Opened, but the content is about Meta's Muse for small business, not Gemini; not used for facts."
+    }
+  ]
+}

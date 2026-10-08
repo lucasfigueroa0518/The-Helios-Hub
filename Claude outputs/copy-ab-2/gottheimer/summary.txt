@@ -1,0 +1,133 @@
+PROMPTS: prompts-2026-09-29-fact-first (commit a0c7073)
+HARNESS: scripts/copy_ab_2.ts
+
+# gottheimer
+
+STATUS: needs_human_review
+REASON: hard code checks failed after 2 tries per stage in round 1: COVER TEXT (93 characters, limit 90): cut at least 3 characters (about 1 words). Cut words, not facts: remove filler, glosses already explained elsewhere, and restated context first. If a fact must go, say which one in EDIT NOTES. | SLIDE 3 kind changed from "landing" (approved outline, post-enforce-structure) to "text" (final post). Editor / soft-repair pass silently restructured this slide. Restore the approved kind (Text / Landing / Stat / Split stat / Quote / Image) or, if the change was intentional to satisfy another check, note the reason in EDIT NOTES. | SLIDE 4 kind changed from "text" (approved outline, post-enforce-structure) to "stat" (final post). Editor / soft-repair pass silently restructured this slide. Restore the approved kind (Text / Landing / Stat / Split stat / Quote / Image) or, if the change was intentional to satisfy another check, note the reason in EDIT NOTES. | SLIDE 5 kind changed from "stat" (approved outline, post-enforce-structure) to "quote" (final post). Editor / soft-repair pass silently restructured this slide. Restore the approved kind (Text / Landing / Stat / Split stat / Quote / Image) or, if the change was intentional to satisfy another check, note the reason in EDIT NOTES. | SLIDE 6 kind changed from "quote" (approved outline, post-enforce-structure) to "text" (final post). Editor / soft-repair pass silently restructured this slide. Restore the approved kind (Text / Landing / Stat / Split stat / Quote / Image) or, if the change was intentional to satisfy another check, note the reason in EDIT NOTES. | SLIDE 8 kind changed from "landing" (approved outline, post-enforce-structure) to "text" (final post). Editor / soft-repair pass silently restructured this slide. Restore the approved kind (Text / Landing / Stat / Split stat / Quote / Image) or, if the change was intentional to satisfy another check, note the reason in EDIT NOTES.
+Fact-check flags on the same post:
+  - SMALL SLIDE 2 / BODY: Sources say Gottheimer "announced" the bills; Politico specifically says he "intends to introduce" them. "Introduced" implies formal legislative introduction, which the sources do not confirm. (SOURCES SAY: Press release: "announced a new bipartisan agenda"; WRNJ: "announced two bipartisan bills"; Politico/NewsBreak: "said Friday he intends to introduce two bipartisan bills")
+  - SMALL SLIDE 4 / HEADLINE: The slide delivers only a number (30 days / one extension). It answers "how long," not "what the NSA would check." That content appears on slide 6 under a different headline. The headline overpromises what the slide delivers. (SOURCES SAY: Nothing about this headline framing; the 30-day figure is supported, but the headline misrepresents the slide's content.)
+  - SMALL SLIDE 6 / BODY: Sources say "a serious cyberattack." Dropping "serious" removes a qualifier present in every source version of this description. (SOURCES SAY: Press release: "launch a serious cyberattack"; WRNJ: "conduct a serious cyberattack"; Politico: "launch a serious cyberattack")
+  - SMALL SLIDE 9 / BODY: The sources don't state this fact. It is an inference drawn from Gottheimer's call on the Speaker to reconvene, not something any source says explicitly. (SOURCES SAY: Sources say Republican leadership has refused to bring the legislation to the floor and Gottheimer called on the Speaker to reconvene; no source states "a vote date has not been set.")
+  - SMALL CAPTION / TEXT: Same error as slide 2. Sources say he "announced" the bills or "intends to introduce" them; formal introduction is not confirmed. (SOURCES SAY: Press release: "announced"; Politico/NewsBreak: "intends to introduce")
+  - SMALL CAPTION / TEXT: "Steep climb" is editorial opinion not found in any source. Gottheimer said Republican leadership "refused to directly bring" the bills to a vote and called on the Speaker to reconvene, but no source characterizes the legislative prospects as a "steep climb." (SOURCES SAY: Gottheimer's remarks: "Republican leadership has refused to directly bring any of these critical pieces of legislation to the floor for a vote." No characterization of odds or difficulty level.)
+COST: $0.3638
+STAGES: reporter → writer → writer(outline-retry) → editor → caption → field-repair(COVER TEXT) r1.1 → field-repair(SLIDE 7 BODY) r1.1 → editor(check-errors r1.1) → field-repair(COVER TEXT) r1.2 → field-repair(SLIDE 2 BODY) r1.2 → field-repair(SLIDE 8 BODY) r1.2 → editor(check-errors r1.2) → fact-checker(on-bail r1) → image-step-skipped
+
+THE NEWS: On Friday, September 18, 2026, U.S. Rep. Josh Gottheimer (D-NJ-5) introduced two bipartisan AI security bills at Fairleigh Dickinson University in Teaneck, NJ: the American AI Security Act, which would require mandatory NSA reviews of the most powerful AI models before release, and the China FIREWALL Act, which would ban Chinese-developed AI from all federal government systems and devices.
+TERMS: 16
+
+## APPROVED OUTLINE
+- SLIDE 2: text
+- SLIDE 3: landing
+- SLIDE 4: text
+- SLIDE 5: stat
+- SLIDE 6: quote
+- SLIDE 7: text
+- SLIDE 8: landing
+- SLIDE 9: text
+
+## FINAL SLIDES
+
+COVER: A U.S. congressman wants the NSA to vet powerful AI before release. No law requires this now.
+COVER IMAGE: photo of Josh Gottheimer
+
+SLIDE 2
+  HEADLINE: Two bills, one bipartisan push
+  BODY: Rep. Josh Gottheimer (D-NJ), co-chair of the House AI Commission, introduced two bills at Fairleigh Dickinson University: one requiring NSA review of powerful AI models, one banning Chinese-developed AI from federal systems.
+  HIGHLIGHT: NSA review of powerful AI models
+  IMAGE: type only
+
+SLIDE 3
+  HEADLINE: No mandatory review exists now
+  BODY: The current administration review process is voluntary, based on a June 2026 Executive Order. Gottheimer's American AI Security Act would make pre-deployment NSA review mandatory by law.
+  NOTE: A June 2026 Executive Order makes it voluntary
+  HIGHLIGHT: No mandatory review exists now
+  IMAGE: type only
+
+SLIDE 4
+  HEADLINE: What the NSA would check
+  BIG NUMBER: 30 days
+  NUMBER NOTE: one 30-day extension allowed
+  HIGHLIGHT: 30 days
+
+SLIDE 5
+  QUOTE: "Right now, there are no mandatory requirements for pre-deployment testing of frontier AI models."
+  QUOTE BY: Rep. Josh Gottheimer, Sept. 18 remarks
+  HIGHLIGHT: no mandatory requirements for pre-deployment testing
+
+SLIDE 6
+  HEADLINE: What the NSA would evaluate
+  BODY: Developers must give the NSA full access to assess whether a model could launch a cyberattack or help build a chemical, biological, or radiological weapon. Companies can appeal decisions through an expedited process.
+  HIGHLIGHT: chemical, biological, or radiological weapon
+  IMAGE: type only
+
+SLIDE 7
+  HEADLINE: DeepSeek is blocked. Others aren't.
+  BODY: DeepSeek, a Chinese AI model already banned from federal devices under the FY26 defense bill, is just one model. The China FIREWALL Act would extend that ban to any Chinese-developed open-weight AI, including Moonshot's Kimi K3 and Alibaba's Qwen.
+  HIGHLIGHT: Kimi K3 and Alibaba's Qwen
+  IMAGE: type only
+
+SLIDE 8
+  HEADLINE: Gottheimer questions the clearinghouse
+  BODY: Gottheimer is writing to National Cyber Director Sean Cairncross, asking whether the administration's AI cybersecurity clearinghouse can handle autonomous AI-driven attacks or treat the AI supply chain as critical infrastructure.
+  HIGHLIGHT: AI supply chain as critical infrastructure
+  IMAGE: type only
+
+SLIDE 9
+  HEADLINE: The bills face a wall
+  BODY: Republican leadership has refused to bring AI safety legislation to the floor. Gottheimer called on the Speaker to reconvene Congress before the election. A vote date has not been set.
+  HIGHLIGHT: refused to bring AI safety legislation to the floor
+  IMAGE: type only
+
+FOLLOW: Follow Helios for coverage of every major AI policy move in Congress, before it affects you.
+
+## CAPTION
+Rep. Josh Gottheimer introduced two bipartisan bills Friday that would require the NSA to review powerful AI models before release and ban Chinese-developed models from federal devices.
+
+The American AI Security Act would mandate that developers give the NSA full access to check whether a model could enable cyberattacks or help build chemical, biological, or radiological weapons. The NSA would have 30 days to decide, with one possible extension. Right now, such reviews are voluntary under a June 2026 executive order. The China FIREWALL Act would expand an existing DeepSeek ban to cover other Chinese models like Moonshot's Kimi K3 and Alibaba's Qwen that are still used on federal systems.
+
+Gottheimer acknowledged the bills face a steep climb: Republican leadership has refused to bring AI safety legislation to a vote, though he called on the Speaker to reconvene Congress before the election to pass them.
+
+What would you want the government to prioritize in reviewing AI before it's released?
+
+Follow Helios for coverage of every major AI policy move in Congress, before it affects you.
+
+Source: Gottheimer's office, September 18, 2026. Additional reporting: WRNJ, NewsBreak.
+
+## FACT-CHECK ROUNDS
+Round 1: verdict FLAGGED — 6 flag(s)
+  - [SMALL] SLIDE 2 / BODY
+      TEXT: introduced two bills at Fairleigh Dickinson University
+      PROBLEM: Sources say Gottheimer "announced" the bills; Politico specifically says he "intends to introduce" them. "Introduced" implies formal legislative introduction, which the sources do not confirm.
+      SOURCES SAY: Press release: "announced a new bipartisan agenda"; WRNJ: "announced two bipartisan bills"; Politico/NewsBreak: "said Friday he intends to introduce two bipartisan bills"
+  - [SMALL] SLIDE 4 / HEADLINE
+      TEXT: What the NSA would check
+      PROBLEM: The slide delivers only a number (30 days / one extension). It answers "how long," not "what the NSA would check." That content appears on slide 6 under a different headline. The headline overpromises what the slide deli
+      SOURCES SAY: Nothing about this headline framing; the 30-day figure is supported, but the headline misrepresents the slide's content.
+  - [SMALL] SLIDE 6 / BODY
+      TEXT: launch a cyberattack
+      PROBLEM: Sources say "a serious cyberattack." Dropping "serious" removes a qualifier present in every source version of this description.
+      SOURCES SAY: Press release: "launch a serious cyberattack"; WRNJ: "conduct a serious cyberattack"; Politico: "launch a serious cyberattack"
+  - [SMALL] SLIDE 9 / BODY
+      TEXT: A vote date has not been set.
+      PROBLEM: The sources don't state this fact. It is an inference drawn from Gottheimer's call on the Speaker to reconvene, not something any source says explicitly.
+      SOURCES SAY: Sources say Republican leadership has refused to bring the legislation to the floor and Gottheimer called on the Speaker to reconvene; no source states "a vote date has not been set."
+  - [SMALL] CAPTION / TEXT
+      TEXT: Rep. Josh Gottheimer introduced two bipartisan bills Friday
+      PROBLEM: Same error as slide 2. Sources say he "announced" the bills or "intends to introduce" them; formal introduction is not confirmed.
+      SOURCES SAY: Press release: "announced"; Politico/NewsBreak: "intends to introduce"
+  - [SMALL] CAPTION / TEXT
+      TEXT: Gottheimer acknowledged the bills face a steep climb
+      PROBLEM: "Steep climb" is editorial opinion not found in any source. Gottheimer said Republican leadership "refused to directly bring" the bills to a vote and called on the Speaker to reconvene, but no source characterizes the le
+      SOURCES SAY: Gottheimer's remarks: "Republican leadership has refused to directly bring any of these critical pieces of legislation to the floor for a vote." No characterization of odds or difficulty level.
+
+## REPAIRS
+- r1 editor: field-repair COVER TEXT: 93→81 chars (limit 90)  ($0.0018)
+- r1 editor: field-repair SLIDE 7 BODY: 241→241 chars (limit 220)  ($0.0027)
+- r1 editor: 5 non-length slide error(s), try 1/2  ($0.0279)
+- r1 editor: field-repair COVER TEXT: 94→96 chars (limit 90)  ($0.0019)
+- r1 editor: field-repair SLIDE 2 BODY: 249→224 chars (limit 220)  ($0.0027)
+- r1 editor: field-repair SLIDE 8 BODY: 249→229 chars (limit 220)  ($0.0025)
+- r1 editor: 9 non-length slide error(s), try 2/2  ($0.0396)

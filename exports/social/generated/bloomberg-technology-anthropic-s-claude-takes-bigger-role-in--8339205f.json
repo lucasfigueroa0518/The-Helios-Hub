@@ -1,0 +1,335 @@
+{
+  "format": "carousel",
+  "storyType": "agents",
+  "source": "Bloomberg Technology",
+  "sourceUrl": "https://www.bloomberg.com/news/videos/2026-09-18/bloomberg-tech-9-18-2026-video",
+  "publishedAt": "2026-09-18T19:31:00.000Z",
+  "issueNumber": 723,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "variant": "C1",
+      "beat": "HOOK",
+      "altText": "Bold type-only cover slide. Large orange '26%' numeral dominates the frame. Anthropic wordmark below. White headline text on dark background.",
+      "headline": [
+        {
+          "role": "narrative",
+          "text": "Anthropic just revealed Claude is leading "
+        },
+        {
+          "role": "hook",
+          "text": "26%"
+        },
+        {
+          "role": "narrative",
+          "text": " of its own R&D. AI is now building the next version of itself."
+        }
+      ],
+      "photoUrl": "https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=1200",
+      "photoCredit": "PHOTO: LUCA BRAVO · UNSPLASH"
+    },
+    {
+      "position": 1,
+      "layoutVariant": "story_beat",
+      "variant": "B1",
+      "beat": "GROUND",
+      "altText": "Three-panel icon grid showing Anthropic, SoftBank, and Crusoe logos or symbols. Text covers the five Ws of all three news events.",
+      "body": [
+        {
+          "role": "narrative",
+          "text": "On "
+        },
+        {
+          "role": "pivot",
+          "text": "September 18, 2026"
+        },
+        {
+          "role": "narrative",
+          "text": ", three stories broke at once. "
+        },
+        {
+          "role": "pivot",
+          "text": "Anthropic"
+        },
+        {
+          "role": "narrative",
+          "text": " disclosed that "
+        },
+        {
+          "role": "pivot",
+          "text": "Claude"
+        },
+        {
+          "role": "narrative",
+          "text": " is leading "
+        },
+        {
+          "role": "hook",
+          "text": "26%"
+        },
+        {
+          "role": "narrative",
+          "text": " of its AI research and development."
+        }
+      ],
+      "bodyBottom": [
+        {
+          "role": "pivot",
+          "text": "SoftBank"
+        },
+        {
+          "role": "narrative",
+          "text": " disclosed nearly "
+        },
+        {
+          "role": "hook",
+          "text": "$21 billion"
+        },
+        {
+          "role": "narrative",
+          "text": " in potential fresh borrowings to finance AI. "
+        },
+        {
+          "role": "pivot",
+          "text": "Crusoe"
+        },
+        {
+          "role": "narrative",
+          "text": " closed $4 billion in new infrastructure funding."
+        }
+      ],
+      "photoUrl": "https://assets.bwbx.io/images/users/iqjWHBFdfxIU/iE2fx0O6JK7Q/v3/500x-1.webp",
+      "photoCredit": "VIA BLOOMBERG TECHNOLOGY"
+    },
+    {
+      "position": 2,
+      "layoutVariant": "data_block",
+      "variant": "D1",
+      "beat": "SCALE",
+      "altText": "Pie chart with 26% segment shaded orange and labeled 'Claude-led'. The remaining 74% is unlabeled and gray. Large orange '26%' numeral above the chart.",
+      "headline": [
+        {
+          "role": "narrative",
+          "text": "MORE THAN ONE IN FOUR."
+        }
+      ],
+      "body": [
+        {
+          "role": "narrative",
+          "text": "More than one in four R&D tasks at one of the world's leading AI labs is now AI-directed. This is their operating model, not an experiment."
+        }
+      ],
+      "title": [
+        {
+          "role": "hook",
+          "text": "26%"
+        }
+      ],
+      "photoUrl": "https://images.unsplash.com/photo-1497366216548-37526070297c?w=1200",
+      "photoCredit": "PHOTO: COPERNICO · UNSPLASH"
+    },
+    {
+      "position": 3,
+      "layoutVariant": "data_block",
+      "variant": "D3",
+      "beat": "MECHANISM",
+      "altText": "Circular flywheel diagram with four nodes: Claude, R&D output, model training, better Claude. Orange arrows connecting each node in a loop.",
+      "headline": [
+        {
+          "role": "narrative",
+          "text": "HOW AI BUILDS ITSELF."
+        }
+      ],
+      "body": [
+        {
+          "role": "narrative",
+          "text": "Claude runs experiments and surfaces findings. Those findings feed into the next training cycle. The next cycle produces a "
+        },
+        {
+          "role": "hook",
+          "text": "better Claude"
+        },
+        {
+          "role": "narrative",
+          "text": ", which then runs more experiments."
+        }
+      ],
+      "bodyBottom": [
+        {
+          "role": "narrative",
+          "text": "Every iteration tightens the clock. Labs skipping this work will lose ground."
+        }
+      ],
+      "title": [
+        {
+          "role": "narrative",
+          "text": "THE LOOP."
+        }
+      ],
+      "photoUrl": "https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200",
+      "photoCredit": "PHOTO: MICHAEL DZIEDZIC · UNSPLASH"
+    },
+    {
+      "position": 4,
+      "layoutVariant": "proof",
+      "variant": "P1",
+      "beat": "PROOF",
+      "altText": "Screenshot-style card of a Bloomberg Technology segment headline about Anthropic's Claude R&D role. Ed Ludlow byline visible beneath the headline.",
+      "headline": [
+        {
+          "role": "narrative",
+          "text": "On the record."
+        }
+      ],
+      "body": [
+        {
+          "role": "narrative",
+          "text": "Bloomberg's "
+        },
+        {
+          "role": "pivot",
+          "text": "Ed Ludlow"
+        },
+        {
+          "role": "narrative",
+          "text": " reported the 26% figure directly from "
+        },
+        {
+          "role": "pivot",
+          "text": "Anthropic"
+        },
+        {
+          "role": "narrative",
+          "text": "'s own findings. The number came from the lab itself, not an estimate or projection."
+        }
+      ],
+      "photoUrl": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200",
+      "photoCredit": "PHOTO: CARLOS MUZA · UNSPLASH"
+    },
+    {
+      "position": 5,
+      "layoutVariant": "story_beat",
+      "variant": "B5",
+      "beat": "TURN",
+      "altText": "Bold turn slide. Large white uppercase text: THE MONEY ALREADY KNOWS. Dark background, minimal design.",
+      "headline": [
+        {
+          "role": "hook",
+          "text": "THE MONEY ALREADY KNOWS."
+        }
+      ]
+    },
+    {
+      "position": 6,
+      "layoutVariant": "data_block",
+      "variant": "D1",
+      "beat": "SCALE",
+      "altText": "Comparison bar chart. Left bar: SoftBank $21B in orange. Right bar: sovereign wealth fund annual deployment benchmark in gray. Labels beneath each bar.",
+      "headline": [
+        {
+          "role": "narrative",
+          "text": "SOFTBANK'S BET ON THE LOOP."
+        }
+      ],
+      "body": [
+        {
+          "role": "pivot",
+          "text": "SoftBank"
+        },
+        {
+          "role": "narrative",
+          "text": " is mobilizing nearly "
+        },
+        {
+          "role": "hook",
+          "text": "$21 billion"
+        },
+        {
+          "role": "narrative",
+          "text": " in fresh borrowings to build out AI financing capacity. That compares to what mid-sized sovereign wealth funds deploy in a year."
+        }
+      ],
+      "title": [
+        {
+          "role": "hook",
+          "text": "$21B"
+        }
+      ]
+    },
+    {
+      "position": 7,
+      "layoutVariant": "story_beat",
+      "variant": "B1",
+      "beat": "ANALOGY",
+      "altText": "Illustration or photo of an automated factory floor. Overlay text reads: 'A factory that designs its own upgrades — every night, automatically.'",
+      "body": [
+        {
+          "role": "narrative",
+          "text": "Think of a factory that builds cars and redesigns its own assembly line every night, automatically. It gets better faster than any factory relying only on human engineers. That's what a 26% Claude R&D share means for "
+        },
+        {
+          "role": "pivot",
+          "text": "Anthropic"
+        },
+        {
+          "role": "narrative",
+          "text": "."
+        }
+      ]
+    },
+    {
+      "position": 8,
+      "layoutVariant": "thesis",
+      "variant": "T1",
+      "beat": "THESIS",
+      "altText": "Type-only slide. Single editorial sentence centered on a dark background. Minimal design, no imagery.",
+      "body": [
+        {
+          "role": "narrative",
+          "text": "The "
+        },
+        {
+          "role": "hook",
+          "text": "26%"
+        },
+        {
+          "role": "narrative",
+          "text": " figure shows when AI labs started automating their own evolution."
+        }
+      ]
+    },
+    {
+      "position": 9,
+      "layoutVariant": "debate",
+      "variant": "T2",
+      "beat": "DEBATE",
+      "altText": "Split-card design. Left side labeled 'FASTER BREAKTHROUGHS' in orange. Right side labeled 'LESS HUMAN CONTROL' in white. Dark dividing line between the two panels.",
+      "headline": [
+        {
+          "role": "narrative",
+          "text": "If AI directs a quarter of R&D, where does human oversight fit in?"
+        }
+      ],
+      "sides": [
+        {
+          "text": "AI-led research compresses the clock for every lab running the loop, accelerating capabilities that would take humans years.",
+          "label": "FASTER BREAKTHROUGHS"
+        },
+        {
+          "text": "When the model designs its own next version, human researchers become editors of a process they no longer fully author.",
+          "label": "LESS HUMAN CONTROL"
+        }
+      ]
+    },
+    {
+      "position": 10,
+      "layoutVariant": "follow",
+      "variant": "F1",
+      "beat": "FOLLOW",
+      "altText": "Clean brand slide. Account handle prominent in center. No busy imagery. Dark background with Helios branding.",
+      "storySpecificLine": "We track the loop. You'll know when 26% becomes 50%."
+    }
+  ],
+  "caption": "On September 18, 2026, Bloomberg's Ed Ludlow reported that Anthropic's own data shows Claude is leading 26% of the company's AI research and development. The figure came from Anthropic itself — not a third-party estimate. That same week, SoftBank disclosed nearly $21 billion in potential fresh borrowings to expand its AI financing capacity, and infrastructure company Crusoe closed roughly $4 billion in new funding, with CEO Chase Lochmiller speaking publicly about the race to build the compute layer powering frontier AI. Capital markets are pricing in a world where AI self-directed R&D is an operating assumption. One detail the source material leaves open is how Anthropic defines 'leading' a task — whether Claude is initiating research directions autonomously or executing on human-defined prompts at scale."
+}

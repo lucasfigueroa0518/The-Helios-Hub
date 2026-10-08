@@ -1,0 +1,250 @@
+{
+  "format": "carousel",
+  "storyType": "model_launch",
+  "source": "Google Labs Blog",
+  "sourceUrl": "https://blog.google/labs/cc-households/",
+  "publishedAt": "2026-09-17",
+  "issueNumber": 1,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "variant": "C3",
+      "headline": [
+        {
+          "text": "Google's CC started as a personal assistant. Now it ",
+          "role": "narrative"
+        },
+        {
+          "text": "runs the whole household",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Google's CC started as a personal assistant. Now it runs the whole household."
+    },
+    {
+      "position": 1,
+      "layoutVariant": "text",
+      "altText": "Demand drove the pivot",
+      "headline": [
+        {
+          "text": "Demand drove the pivot",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Tom Shane, senior product manager at ",
+          "role": "narrative"
+        },
+        {
+          "text": "Google Labs",
+          "role": "pivot"
+        },
+        {
+          "text": ", wrote that \"",
+          "role": "narrative"
+        },
+        {
+          "text": "one of our top user requests",
+          "role": "hook"
+        },
+        {
+          "text": " was for ",
+          "role": "narrative"
+        },
+        {
+          "text": "CC",
+          "role": "pivot"
+        },
+        {
+          "text": " to do more to help run a busy home.\" Household coordination across multiple accounts was the trigger.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 2,
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "6",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Who can join",
+      "headline": [
+        {
+          "text": "Who can join",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "family members per CC group"
+    },
+    {
+      "position": 3,
+      "layoutVariant": "text",
+      "altText": "Three ways to share with CC",
+      "headline": [
+        {
+          "text": "Three ways to share with ",
+          "role": "narrative"
+        },
+        {
+          "text": "CC",
+          "role": "pivot"
+        }
+      ],
+      "body": [
+        {
+          "text": "Forward a one-off email or photo",
+          "role": "hook"
+        },
+        {
+          "text": ". Set up auto-sharing from specific senders like a school or sports club. Or link a Drive folder or calendar directly.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 4,
+      "layoutVariant": "text",
+      "altText": "The daily briefing CC sends",
+      "headline": [
+        {
+          "text": "The daily briefing ",
+          "role": "narrative"
+        },
+        {
+          "text": "CC",
+          "role": "pivot"
+        },
+        {
+          "text": " sends",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Every morning, ",
+          "role": "narrative"
+        },
+        {
+          "text": "CC",
+          "role": "pivot"
+        },
+        {
+          "text": " sends \"",
+          "role": "narrative"
+        },
+        {
+          "text": "Your Day Ahead",
+          "role": "hook"
+        },
+        {
+          "text": "\", who needs to be where, what tasks are pending, and what ",
+          "role": "narrative"
+        },
+        {
+          "text": "CC",
+          "role": "pivot"
+        },
+        {
+          "text": " completed yesterday. It updates a shared family calendar and task list.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 5,
+      "layoutVariant": "text",
+      "altText": "What CC can do on its own",
+      "headline": [
+        {
+          "text": "What ",
+          "role": "narrative"
+        },
+        {
+          "text": "CC",
+          "role": "pivot"
+        },
+        {
+          "text": " can do on its own",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Pre-fill permission slips and activity registration forms, build school supply lists, draft meal plans, check live drive times between activities, create shared docs and sheets.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 6,
+      "layoutVariant": "text",
+      "altText": "One catch: kids are locked out",
+      "headline": [
+        {
+          "text": "One catch: ",
+          "role": "narrative"
+        },
+        {
+          "text": "kids are locked out",
+          "role": "hook"
+        }
+      ],
+      "body": [
+        {
+          "text": "The experiment requires U.S. adults with personal Gmail accounts. Tweens, teens, and school-provided accounts are not eligible.",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 7,
+      "layoutVariant": "text",
+      "altText": "How to get it",
+      "headline": [
+        {
+          "text": "How to get it",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Existing ",
+          "role": "narrative"
+        },
+        {
+          "text": "CC",
+          "role": "pivot"
+        },
+        {
+          "text": " users will get an email invitation to upgrade in the coming days. New users can ",
+          "role": "narrative"
+        },
+        {
+          "text": "join a waitlist",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ]
+    },
+    {
+      "position": 8,
+      "layoutVariant": "follow",
+      "variant": "F1",
+      "storySpecificLine": "Follow Helios for coverage of AI agents moving from personal tools into shared, everyday life.",
+      "altText": "Follow Helios for coverage of AI agents moving from personal tools into shared, everyday life."
+    }
+  ],
+  "caption": "Sample caption. Source: Google Labs Blog, September 17, 2026."
+}

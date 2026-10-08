@@ -165,7 +165,7 @@ old records have to keep meaning what they said.
 
 ## The copy writer gate (Build 3)
 
-After scoring, the run fills three reels that clear the copy gate (P-10,
+After scoring, the run fills the day's reels, up to three (P-10,
 `copy-caption-v16`). Copy calls use the latest Sonnet release on the models
 list, and `claude-sonnet-5-5` when that list cannot be read (D-222). The
 account's job is to grow an audience with AI news, stories, knowledge, and
@@ -195,15 +195,24 @@ word range, and same story stay. When none of the four clears, one rewrite call 
 each copy with its scores, what each level means, and the legend lines Jev
 treats as a pass (D-223). It writes two more copies and a caption.
 
-A night fills three passing reels. "Generate N" means N reels that clear the
-gate (D-225). A reel Lucas locked for that date already counts and is not
-rewritten. September 29 slots 1 and 2 are locked (D-226). The idea that opens
-a slot gets the rewrite. If both tries miss, that idea is demoted for the day
-and the next idea gets one try, with no rewrite. After four ideas miss the
-same slot, the best graded line from those four ships (D-224). The demotion
-lives in `reels.copy_day_penalties` and changes the day's rank only. Tomorrow's
+A night posts two or three reels. The cap is still 3
+(`PASSING_REELS_PER_NIGHT`). One slot is reserved for the highest-net idea
+whose winning framework is curiosity or identity and whose winning bucket is
+Ball Knowledge, or The Number when curiosity won. The Saga, The Warning, and
+Personal Profile stay out of that slot. That reel is written and posted on its
+best line whether or not it clears the gate. The other slots are the highest
+ideas outside that lane. The second reel gets four tries, and when all four
+miss, the best graded line from those four ships, so the day still has two.
+A third reel is posted only when another of those ideas clears the gate. A
+miss is not posted as the third reel. A reel Lucas locked for that date
+already counts and is not rewritten (D-226). A lock already in the knowledge
+lane counts as the reserved reel. The idea that opens a general slot gets the
+rewrite. If both tries miss, that idea is demoted for the day and the next
+idea gets one try, with no rewrite. The demotion lives in
+`reels.copy_day_penalties` and changes the day's rank only. Tomorrow's
 carryover reads the original net. The Scores button for one idea still ships
-its nearest miss (D-216).
+its nearest miss (D-216). D-224 and D-225, which always filled three passing
+reels, stay as history.
 
 Cost: the two calls are about $0.12 an idea together on Sonnet 5.5; a rewrite
 adds about half of that again. A slot that needs all four ideas costs more.
@@ -287,10 +296,11 @@ created on deploy). Frames are PNGs in the private Supabase bucket
    similarity across their members) and asks Jev whether to fuse them,
    repeating while anything still merges.
 7. **Score and write.** Jev scores and ranks the timely ideas
-   (`scoring-pass1-v4`, `scoring-pass2-v4`), the top three are selected, and,
-   if P-10 is approved, the writer produces copy for one reel per window still
-   open that day, up to three. At 12–1 AM that is three. Later in the day it
-   is however many windows have not ended. Scoring
+   (`scoring-pass1-v4`, `scoring-pass2-v4`). If P-10 is approved, the writer
+   fills one reel per window still open that day, up to three. One of those
+   is the knowledge-lane reel. A third reel is posted only when a second idea
+   outside that lane clears the copy gate. At 12–1 AM the cap is three. Later
+   in the day it is however many windows have not ended. Scoring
    judges for the AI-curious viewer first and counts the builder minority as
    a bonus; a builder-only story cannot reach the top of the scale (D-206).
    Value tops out only when the reason to care fits one plain sentence with no
@@ -300,8 +310,8 @@ created on deploy). Frames are PNGs in the private Supabase bucket
    one each. A window that has started can still take a reel in the minutes
    left. A reel that does not fit is not placed on the next day; it carries
    into tomorrow's pool at its stored score. An idea already scheduled or
-   publishing is not picked again. The bench, everything past rank
-   3, is not scheduled. The worker posts the ones that landed in a window
+   publishing is not picked again. The bench, everything not selected for
+   the day, is not scheduled. The worker posts the ones that landed in a window
    as trial reels (D-207). Force post sends one immediately, still as a trial reel.
 8. **Retain.** Sources older than 3 weeks are hard-deleted. Fingerprints,
    published-status rows, and Jev logs outlive them.

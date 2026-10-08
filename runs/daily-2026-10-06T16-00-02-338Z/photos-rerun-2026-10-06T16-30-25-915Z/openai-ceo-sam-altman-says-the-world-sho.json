@@ -1,0 +1,260 @@
+{
+  "storyId": "https://www.theverge.com/ai-artificial-intelligence/1004811/openai-altman-bad-things-ai-tradeoff",
+  "photos": {
+    "cover": {
+      "request": {
+        "kind": "subject",
+        "value": "Sam Altman"
+      },
+      "photo": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/2/2f/Sam_Altman_speaking_at_TED_%28cropped%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+        "credit": "Steve Jurvetson, CC BY 2.0 · Wikimedia Commons",
+        "source": "commons",
+        "width": 1216,
+        "height": 1140,
+        "qid": "Q7407093",
+        "subject": "Sam Altman"
+      },
+      "via": "subject",
+      "identity": {
+        "subject": "Sam Altman",
+        "ok": true,
+        "detail": "Q7407093 \"Sam Altman\" — American entrepreneur and investor (born 1985) (person, resolver)",
+        "scores": {
+          "person": 0.98,
+          "matches": [
+            {
+              "id": "Q7407093",
+              "label": "Sam Altman",
+              "description": "American entrepreneur and investor (born 1985)",
+              "p": 0.93
+            }
+          ]
+        }
+      },
+      "steps": [
+        "identity ok: Q7407093 \"Sam Altman\" (person, resolver)",
+        "commons P18: File:Sam Altman speaking at TED (cropped).jpg"
+      ]
+    },
+    "slides": [
+      {
+        "request": {
+          "kind": "article",
+          "value": "https://platform.theverge.com/wp-content/uploads/sites/2/2026/10/gettyimages-2294958253.jpg?quality=90&strip=all&crop=0%2C10.729057198914%2C100%2C78.541885602173&w=1200"
+        },
+        "photo": {
+          "url": "/social/starter/data-center-roof.jpg",
+          "credit": "Rsparks3 (CC0) · Wikimedia Commons",
+          "source": "starter",
+          "width": 2560,
+          "height": 1920,
+          "qid": null,
+          "subject": null
+        },
+        "via": "starter",
+        "identity": null,
+        "steps": [
+          "article photo skipped: a quote slide shows only the speaker or a scene",
+          "starter set: /social/starter/data-center-roof.jpg"
+        ]
+      },
+      {
+        "request": {
+          "kind": "stock",
+          "value": "laptop warning screen"
+        },
+        "photo": {
+          "url": "/social/starter/city-skyline-night.jpg",
+          "credit": "RFNirmala (CC0) · Wikimedia Commons",
+          "source": "starter",
+          "width": 2560,
+          "height": 1920,
+          "qid": null,
+          "subject": null
+        },
+        "via": "starter",
+        "identity": null,
+        "steps": [
+          "stock \"laptop warning screen\" (split): no results",
+          "stock \"laptop warning\" (split): no results",
+          "starter set: /social/starter/city-skyline-night.jpg"
+        ]
+      },
+      {
+        "request": {
+          "kind": "stock",
+          "value": "phone scrolling feed"
+        },
+        "photo": {
+          "url": "https://live.staticflickr.com/65535/52548576212_4c4b7fb8d0_b.jpg",
+          "credit": "A Guy Named Nyal, CC BY-SA · via flickr",
+          "source": "stock",
+          "width": 1024,
+          "height": 683,
+          "qid": null,
+          "subject": null
+        },
+        "via": "stock",
+        "identity": null,
+        "steps": [
+          "stock \"phone scrolling feed\" (split): no results",
+          "stock \"phone scrolling\" (split): flickr 1024×683 \"Looking Forward To Finding A Bar\""
+        ]
+      },
+      {
+        "request": {
+          "kind": "stock",
+          "value": "government building columns"
+        },
+        "photo": {
+          "url": "https://live.staticflickr.com/65535/52230166631_25c596e3d0_b.jpg",
+          "credit": "w_lemay, CC BY-SA · via flickr",
+          "source": "stock",
+          "width": 1024,
+          "height": 768,
+          "qid": null,
+          "subject": null
+        },
+        "via": "stock",
+        "identity": null,
+        "steps": [
+          "stock \"government building columns\" (split): flickr 1024×768 \"Ali’iolani Hale, King Street, Honolulu, HI\""
+        ]
+      },
+      {
+        "request": {
+          "kind": "subject",
+          "value": "Anthropic"
+        },
+        "photo": {
+          "url": "/social/starter/circuit-board.jpg",
+          "credit": "ComputerUserUser (CC0) · Wikimedia Commons",
+          "source": "starter",
+          "width": 2560,
+          "height": 1920,
+          "qid": null,
+          "subject": null
+        },
+        "via": "starter",
+        "identity": {
+          "subject": "Anthropic",
+          "ok": true,
+          "detail": "Q116758847 \"Anthropic\" — American artificial intelligence corporation (organization, resolver)",
+          "scores": {
+            "person": 0.02,
+            "matches": [
+              {
+                "id": "Q116758847",
+                "label": "Anthropic",
+                "description": "American artificial intelligence corporation",
+                "p": 0.9
+              }
+            ]
+          }
+        },
+        "steps": [
+          "identity ok: Q116758847 \"Anthropic\" (organization, resolver)",
+          "no Wikidata main image (P18)",
+          "starter set: /social/starter/circuit-board.jpg"
+        ]
+      },
+      {
+        "request": {
+          "kind": "stock",
+          "value": "server room corridor"
+        },
+        "photo": {
+          "url": "https://live.staticflickr.com/65535/54943478092_14c7d36f26_b.jpg",
+          "credit": "S.C. Air National Guard (public domain)",
+          "source": "stock",
+          "width": 1024,
+          "height": 683,
+          "qid": null,
+          "subject": null
+        },
+        "via": "stock",
+        "identity": null,
+        "steps": [
+          "stock \"server room corridor\" (split): no results",
+          "stock \"server room\" (split): flickr 1024×683 \"169th Communications Squadron server room maintenance\""
+        ]
+      },
+      {
+        "request": {
+          "kind": "stock",
+          "value": "hacker dark keyboard"
+        },
+        "photo": {
+          "url": "/social/starter/nyc-from-orbit.jpg",
+          "credit": "NASA (public domain) · Wikimedia Commons",
+          "source": "starter",
+          "width": 2560,
+          "height": 1707,
+          "qid": null,
+          "subject": null
+        },
+        "via": "starter",
+        "identity": null,
+        "steps": [
+          "stock \"hacker dark keyboard\" (split): no results",
+          "stock \"hacker dark\" (split): no results",
+          "starter set: /social/starter/nyc-from-orbit.jpg"
+        ]
+      },
+      {
+        "request": {
+          "kind": "subject",
+          "value": "OpenAI"
+        },
+        "photo": {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/3/33/Pioneer_Building%2C_San_Francisco_%282019%29_-1.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+          "credit": "HaeB, CC BY-SA 4.0 · Wikimedia Commons",
+          "source": "commons",
+          "width": 5408,
+          "height": 2717,
+          "qid": "Q21708200",
+          "subject": "OpenAI"
+        },
+        "via": "subject",
+        "identity": {
+          "subject": "OpenAI",
+          "ok": true,
+          "detail": "Q21708200 \"OpenAI\" — American artificial intelligence research organization (organization, jev-pick)",
+          "scores": {
+            "person": 0.03,
+            "matches": [
+              {
+                "id": "Q21708200",
+                "label": "OpenAI",
+                "description": "American artificial intelligence research organization",
+                "p": 0.97
+              },
+              {
+                "id": "Q96237091",
+                "label": "OpenAI API",
+                "description": "various AI APIs, products of OpenAI",
+                "p": 0.05
+              },
+              {
+                "id": "Q101366575",
+                "label": "OpenAir Sessions",
+                "description": "podcast from CPR News",
+                "p": 0.01
+              }
+            ]
+          }
+        },
+        "steps": [
+          "identity ok: Q21708200 \"OpenAI\" (organization, jev-pick)",
+          "commons P18: File:Pioneer Building, San Francisco (2019) -1.jpg"
+        ]
+      }
+    ]
+  },
+  "fit": {
+    "ok": true,
+    "violations": [],
+    "problems": []
+  }
+}

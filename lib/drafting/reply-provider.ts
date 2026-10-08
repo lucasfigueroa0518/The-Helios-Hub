@@ -1,4 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk';
+import type Anthropic from '@anthropic-ai/sdk';
+import { newAnthropic } from '@/lib/anthropic-client';
 
 import { withDraftingAnthropicSlot } from '@/lib/drafting/anthropic-semaphore';
 import {
@@ -189,7 +190,7 @@ async function writeLive(input: ReplyWriteInput): Promise<ReplyWriteOutput> {
   }
 
   const assets = await loadReplyAssets();
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = newAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const cacheTtl = resolvedDraftingPromptCacheTtl();
   const system = cachedSystemText(buildReplySystemPrompt(assets.skill.content), cacheTtl);
   const userPrompt = buildReplyUserPrompt({ ...input, skillContent: assets.skill.content });

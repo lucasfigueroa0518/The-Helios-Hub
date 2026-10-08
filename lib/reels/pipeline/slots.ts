@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { newAnthropic } from '@/lib/anthropic-client';
 
 import { COPY_MODEL, PASSING_REELS_PER_NIGHT } from '@/lib/reels/config';
 import { resolveCopyModel } from '@/lib/reels/copy/model';
@@ -29,12 +29,12 @@ export type PassingGeneration = {
 };
 
 /**
- * D-224, D-225. Produce `count` reels that clear the copy gate. A locked reel
- * already fills its slot. An idea that misses its tries is demoted for the
- * day, and the next idea tries. After four misses, the best graded line from
- * that pool ships. Frames are queued only for the reels this run wrote.
- * A story already published, an idea built only from teasers, or an idea whose
- * earlier attempt missed widely never takes a slot (D-245, D-247, D-258).
+ * D-272. Produce up to `count` reels. One slot is the knowledge lane and ships on
+ * its best line. One more can ship a miss so the day still has two. A third
+ * ships only when another idea clears the gate. A locked reel already fills
+ * its slot. Frames are queued only for the reels this run wrote. A story
+ * already published, an idea built only from teasers, or an idea whose earlier
+ * attempt missed widely never takes a slot (D-245, D-247, D-258).
  */
 export async function generatePassingReels(input: {
   runId: string | null;
@@ -47,7 +47,7 @@ export async function generatePassingReels(input: {
   const count = input.count ?? PASSING_REELS_PER_NIGHT;
   if (!copyPromptApproved()) return { status: 'skipped', filled: [], heldOut: [], usd: 0, failures: [] };
   if (!input.client && !process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not set.');
-  const client: CopyClient = input.client ?? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client: CopyClient = input.client ?? newAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const model = await resolveCopyModel(() => {
     const listed = client as CopyClient & { models?: { list: () => AsyncIterable<{ id: string }> } };
     if (!listed.models) return [];
@@ -137,7 +137,7 @@ export async function generatePassingReels(input: {
 
   const made = filled.length;
   return {
-    status: failures.length === 0 && made >= count ? 'ok' : 'partial',
+    status: failures.length === 0 && made >= 1 ? 'ok' : 'partial',
     filled,
     heldOut,
     usd,

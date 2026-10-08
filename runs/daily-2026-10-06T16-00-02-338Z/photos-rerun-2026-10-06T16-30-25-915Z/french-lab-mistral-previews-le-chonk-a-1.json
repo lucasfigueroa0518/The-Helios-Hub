@@ -1,0 +1,263 @@
+{
+  "storyId": "https://www.wired.com/story/mistral-new-model-le-chonk-open-source-china-us-frontier/",
+  "photos": {
+    "cover": {
+      "request": {
+        "kind": "subject",
+        "value": "Mistral AI"
+      },
+      "photo": {
+        "url": "/social/starter/data-center-roof.jpg",
+        "credit": "Rsparks3 (CC0) · Wikimedia Commons",
+        "source": "starter",
+        "width": 2560,
+        "height": 1920,
+        "qid": null,
+        "subject": null
+      },
+      "via": "starter",
+      "identity": {
+        "subject": "Mistral AI",
+        "ok": true,
+        "detail": "Q119718658 \"Mistral AI\" — French AI company (organization, resolver)",
+        "scores": {
+          "person": 0.02,
+          "matches": [
+            {
+              "id": "Q119718658",
+              "label": "Mistral AI",
+              "description": "French AI company",
+              "p": 0.96
+            }
+          ]
+        }
+      },
+      "steps": [
+        "identity ok: Q119718658 \"Mistral AI\" (organization, resolver)",
+        "main image (P18) not usable (licence, size or type)",
+        "starter set: /social/starter/data-center-roof.jpg"
+      ]
+    },
+    "slides": [
+      {
+        "request": {
+          "kind": "subject",
+          "value": "Mistral AI"
+        },
+        "photo": {
+          "url": "/social/starter/city-skyline-night.jpg",
+          "credit": "RFNirmala (CC0) · Wikimedia Commons",
+          "source": "starter",
+          "width": 2560,
+          "height": 1920,
+          "qid": null,
+          "subject": null
+        },
+        "via": "starter",
+        "identity": {
+          "subject": "Mistral AI",
+          "ok": true,
+          "detail": "Q119718658 \"Mistral AI\" — French AI company (organization, resolver)",
+          "scores": {
+            "person": 0.02,
+            "matches": [
+              {
+                "id": "Q119718658",
+                "label": "Mistral AI",
+                "description": "French AI company",
+                "p": 0.96
+              }
+            ]
+          }
+        },
+        "steps": [
+          "identity ok: Q119718658 \"Mistral AI\" (organization, resolver)",
+          "main image (P18) not usable (licence, size or type)",
+          "starter set: /social/starter/city-skyline-night.jpg"
+        ]
+      },
+      {
+        "request": {
+          "kind": "stock",
+          "value": "data center racks"
+        },
+        "photo": {
+          "url": "https://live.staticflickr.com/65535/53959529900_03085e5c71_b.jpg",
+          "credit": "Jefferson Lab (public domain)",
+          "source": "stock",
+          "width": 1024,
+          "height": 682,
+          "qid": null,
+          "subject": null
+        },
+        "via": "stock",
+        "identity": null,
+        "steps": [
+          "stock \"data center racks\" (backdrop): flickr 1024×682 \"2024 Data Center Details\""
+        ]
+      },
+      {
+        "request": {
+          "kind": "stock",
+          "value": "security operations center"
+        },
+        "photo": {
+          "url": "https://live.staticflickr.com/65535/52428173293_36c67e70bc_b.jpg",
+          "credit": "NavyMedicine (public domain)",
+          "source": "stock",
+          "width": 1024,
+          "height": 682,
+          "qid": null,
+          "subject": null
+        },
+        "via": "stock",
+        "identity": null,
+        "steps": [
+          "stock \"security operations center\" (split): flickr 1024×682 \"NMRTC San Diego celebrates Sterile Processing Department Week 221012-N-XB470-1005\""
+        ]
+      },
+      {
+        "request": {
+          "kind": "stock",
+          "value": "government building exterior"
+        },
+        "photo": {
+          "url": "https://live.staticflickr.com/65535/51445162826_e1b961ae41_b.jpg",
+          "credit": "archer10 (Dennis), CC BY-SA · via flickr",
+          "source": "stock",
+          "width": 850,
+          "height": 1024,
+          "qid": null,
+          "subject": null
+        },
+        "via": "stock",
+        "identity": null,
+        "steps": [
+          "stock \"government building exterior\" (split): flickr 850×1024 \"NS-01411-Cropped - Gull Rock Lighthouse\""
+        ]
+      },
+      {
+        "request": {
+          "kind": "stock",
+          "value": "code on screen"
+        },
+        "photo": {
+          "url": "https://cdn.stocksnap.io/img-thumbs/960w/TIV258VG3N.jpg",
+          "credit": "Lorenzo Cafaro (public domain)",
+          "source": "stock",
+          "width": 3769,
+          "height": 2513,
+          "qid": null,
+          "subject": null
+        },
+        "via": "stock",
+        "identity": null,
+        "steps": [
+          "stock \"code on screen\" (backdrop): stocksnap 3769×2513 \"Code Coding\""
+        ]
+      },
+      {
+        "request": {
+          "kind": "article",
+          "value": "https://the-decoder.com/wp-content/uploads/2026/10/Artificial-Analysis-Intelligence-Index-by-Open-Weights-Proprietary-6-Oct-26.png"
+        },
+        "photo": {
+          "url": "/social/starter/circuit-board.jpg",
+          "credit": "ComputerUserUser (CC0) · Wikimedia Commons",
+          "source": "starter",
+          "width": 2560,
+          "height": 1920,
+          "qid": null,
+          "subject": null
+        },
+        "via": "starter",
+        "identity": null,
+        "steps": [
+          "article photo skipped: a backdrop slide shows only a scene",
+          "starter set: /social/starter/circuit-board.jpg"
+        ]
+      },
+      {
+        "request": {
+          "kind": "stock",
+          "value": "open padlock"
+        },
+        "photo": {
+          "url": "https://live.staticflickr.com/65535/52777805009_4d1aa0ab17_b.jpg",
+          "credit": "Welcome to Switzerland backstage!, CC BY · via flickr",
+          "source": "stock",
+          "width": 1024,
+          "height": 683,
+          "qid": null,
+          "subject": null
+        },
+        "via": "stock",
+        "identity": null,
+        "steps": [
+          "stock \"open padlock\" (split): flickr 1024×683 \"Fort Furggels - Main Gate\""
+        ]
+      }
+    ]
+  },
+  "fit": {
+    "ok": false,
+    "violations": [
+      {
+        "slide": 3,
+        "element": "h2.helios-stat__headline",
+        "text": "1 trillion parameters",
+        "over": {
+          "left": 0,
+          "top": 0,
+          "right": 4096,
+          "bottom": 0
+        }
+      },
+      {
+        "slide": 3,
+        "element": "span.helios-span.helios-span--narrative",
+        "text": "1 trillion parameters",
+        "over": {
+          "left": 0,
+          "top": 0,
+          "right": 23,
+          "bottom": 0
+        }
+      },
+      {
+        "slide": 3,
+        "element": "p.helios-stat__body",
+        "text": "Mistral says 49 billion of them are active at a time. That is how a mixture-of-e",
+        "over": {
+          "left": 0,
+          "top": 0,
+          "right": 4096,
+          "bottom": 0
+        }
+      },
+      {
+        "slide": 3,
+        "element": "span.helios-span.helios-span--narrative",
+        "text": "Mistral says 49 billion of them are active at a time. That is how a mixture-of-e",
+        "over": {
+          "left": 0,
+          "top": 0,
+          "right": 1777,
+          "bottom": 0
+        }
+      },
+      {
+        "slide": 3,
+        "element": "div.helios-stat__number-block",
+        "text": "1 trillion parameters (49 billion active)ML4 model size and active parameters",
+        "over": {
+          "left": 0,
+          "top": 0,
+          "right": 4096,
+          "bottom": 0
+        }
+      }
+    ],
+    "problems": []
+  }
+}

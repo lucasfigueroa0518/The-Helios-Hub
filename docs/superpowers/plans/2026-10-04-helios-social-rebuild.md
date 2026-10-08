@@ -1,0 +1,346 @@
+# Helios Social rebuild: implementation plan
+
+
+**Spec:** `docs/superpowers/specs/2026-10-01-helios-social-rebuild.md` (the authority; this plan only sequences it)
+**Owner:** Tommy Pozo
+**Status:** DRAFT, not started
+
+## Ground rules for every milestone
+
+- **One milestone at a time.** Meet its acceptance criteria and report before starting the next.
+- **Tests are offline.** Pure functions, SQL and plumbing are tested with stubbed model responses. **No live Claude, Jev or web-search calls in tests or agent runs.** The only live run is §5D, and only with Tommy's go-ahead.
+- **Prompt caching** on every `messages.create`: stable prefix first, `cache_control` on the last stable block (`lib/anthropic-cache.ts`, `docs/prompt-caching.md`).
+- **Worker sync:** any change to worker logic or worker environment variables also redeploys the GCP VM (`./scripts/gcp/deploy-worker-code.sh`) in the same session.
+- **Change tag on every commit:** `cause/symptom · type · new stages · new AI calls` (spec §2.2). Anything tagged 🔴 needs a written spec exception first.
+- **No patches from single failures** (spec §2.3, §5C).
+
+## Pull rule (DECIDED, supersedes the longer list below)
+
+**Pull only code that fetches, draws or stores. Write fresh anything that decides.**
+
+The old pipeline's errors came from its judgment layer (stages, prompts, rules, loops, checks), not from its plumbing. So only plumbing comes over, and it must not import any old pipeline code. The type checker enforces that.
+
+**The minimal pull (~15 files):**
+
+| Area | Files | Why it's safe |
+|---|---|---|
+| Slide drawing | `lib/social/render/SlideTemplate.tsx`, `lib/social/render/types.ts`, `app/social/render/preview/` (+ `fixtures/social/example-post.ts`) | Draws slides from data; no editorial logic |
+| Photo lookups | `v2/image-step/wikidata.ts`, `commons.ts`, `openverse.ts`, `cache.ts`, `storage.ts`, `used-log.ts` | Fetch and store photos; no imports from the old pipeline |
+| Fetching news | `lib/social/ingest/fetch-feeds.ts`, `extract-article-body.ts`, `resolve-google-news.ts`, `lib/social/feeds.ts` (feed list) | Fetch articles; no judgment |
+| Shared plumbing | `lib/anthropic-cache.ts`, `lib/anthropic.ts`, `lib/db.ts`, `lib/social/session.ts` | Project-wide infrastructure |
+
+**Written fresh** (old files may be **read as reference**, never copied in):
+
+- **Orchestrator, brief parser, adapter, rules block, mechanical checks, cover fit, duplicate grouping, Jev questions:** all new.
+- **The image-step entry point (`index.ts`) and the image check (`vision.ts`):** new. The old ones encode the old IMAGE-line rules.
+- **JPEG export:** new and small.
+- **All prompts:** start from `specs/2026-10-04-helios-social-prompts.md`, not from a blank page. Tested text there (Reporter, Writer, caption) is copied, not reworded; only its "added since the test" items are new. The Editor and Fact-checker drafts there are the starting point.
+  - Reference: the old Reporter's reporting rules. The caption instructions carry over verbatim (spec §4.3) and are already in the prompts file.
+- **Review page:** keep the look; rebuild its data loading and buttons on the new post shape. The old `PageClient.tsx` and the review route are reference.
+
+**Reference only, never pulled:** `lib/social/photos/atmosphere.ts`, used to seed the photo bank's theme list.
+
+The tables below are kept as the import-trace record. Where they say "pull, then rework", read it as **write fresh, using the old file as reference.**
+
+## Branch and what to pull (traced from actual imports, 2026-10-04)
+
+**Method:** new branch `feature/helios-social-rebuild`. Bring files over with `git checkout helios-social-v2/2026-10-02-root-cause-fixes -- <path>`, then run the type checker. Any import of a removed module shows up as an error, so the compiler defines the boundary.
+
+**Pull as is** (no imports of removed code):
+
+| Area | Files |
+|---|---|
+| Slide renderer (v2 path) | `lib/social/render/SlideTemplate.tsx`, `lib/social/render/types.ts`, `app/social/render/preview/` (+ `fixtures/social/example-post.ts`), `v2/cover-fit.ts`, `v2/cover-reflow.ts` |
+| Photo lookup base | `v2/image-step/` (wikidata, commons, openverse, vision, used-log, cache, storage, index), `v2/image-line.ts` |
+| Ingest | `lib/social/ingest/fetch-feeds.ts`, `extract-article-body.ts`, `resolve-google-news.ts`, `lib/social/feeds.ts`, `lib/social/watchlist.ts` |
+| Shared | `lib/anthropic-cache.ts`, `lib/anthropic.ts`, `lib/db.ts`, `lib/social/session.ts`, `v2/voice-block.ts`, `v2/tools/fetch-page.ts` (reworked in M2) |
+
+**Pull, then rework** (each one encodes old decisions or old data):
+
+| File | Why |
+|---|---|
+| `v2/adapter.ts` | Maps posts to slides; depends on `parse.ts` types, which change |
+| `v2/render-preview.ts` | Imports a type from `test-runner-support.ts` (being removed). Swap in a local type. |
+| `v2/export-winner.ts` (JPEG export) | Imports the `Winner` type from `jev-gate.ts` (being removed). Swap in a local type. |
+| `v2/parse.ts` | Parses the **old** brief format; the new structured brief needs new parsing (M2) |
+| `v2/rules-block.ts` | Still holds the coverage floor, "type only" on stat slides and "the Editor keeps kinds", all changed in the spec. **Rewrite.** |
+| `v2/code-checks.ts`, `v2/rules/registry.ts` | Review every check against the spec; drop checks for removed rules |
+| `lib/social/dedup.ts` | Groups stories using companies/people/topics from the **Haiku extraction we're removing**. Needs a new way to group (M1). |
+| `lib/social/ingest/judge-relevance.ts`, `lib/social/rubric.ts` | Single relevance question → the full Jev question set (M1) |
+| `app/social/PageClient.tsx`, `app/social/actions/loadBatch.ts`, `app/api/social/review/[id]/route.ts`, `lib/social/types.ts` | The review page is built on the **old pipeline's article shape** (and uses `dedup.ts`). The buttons carry over; the data model behind them is reworked in M7. |
+| `lib/social/photos/atmosphere.ts` | Hand-picked Unsplash theme photos: the seed for the Helios photo bank |
+| `v2/prompts/*` | Reworked per M2–M4; caption instructions carried over to the Writer verbatim |
+
+**Leave behind:**
+
+- **Removed stages:** `v2/orchestrate.ts`, `field-repair.ts`, `fact-check-cut.ts`, `jev-gate.ts`, `caption.ts`, `enforce-structure.ts`, `test-runner-support.ts`.
+- **Dropped ingest calls:** `ingest/extract-packet.ts`, `ingest/shadow-haiku-judge.ts`.
+- **The whole older pipeline:** `pipeline/generate.ts`, `editorial/strategy*.ts`, `copy.ts`, `fact-sheet.ts`, `story-plan.ts`, `hook-mine.ts`, `archetype.ts`, `qa.ts`, `polish.ts`, `repair.ts`, and `photos/subjects.ts`, `photos/picker.ts`.
+- **Correction:** `render/layout-picker.ts` and `render/photo-assigner.ts` were first listed as "keep". They belong to the old pipeline (they import `copy.ts`, `fact-sheet.ts`, `story-plan.ts`, `photos/picker.ts`), so they're left behind. The v2 renderer doesn't use them.
+- **`lib/social/editorial/config.ts`:** used only by removed or reworked modules. Re-create only what's needed.
+
+## Relationship to Trial Reels (DECIDED)
+
+Trial Reels (`lib/reels/`) is a **separate product with different criteria**. Social never modifies Reels code, tables or workers.
+
+- **Not used:** anything in Reels' Jev setup, its question sets or its scoring criteria. Social writes its own Jev client on the `@typesafe-ai/sdk` package, and its own versioned question sets (spec §5A, §5B, §5B-1).
+- **Not used:** Reels' ingest, grouping, fetchers, copy, visual or music code.
+- **Usable: the Instagram integration (M8).** The Meta credentials/account setup and the low-level Instagram API client may be reused **read-only**.
+  - **If generic:** if the low-level pieces (token/account config, API request helper) are generic, import them as they are.
+  - **If tied to Reels:** if they're tied to Reels tables or video jobs, write Social's own client using the same Meta credentials. Don't edit Reels to make them generic.
+  - **Carousel calls are new either way:** Reels publishes video, and carousels use Instagram's carousel container flow.
+- **Social keeps its own feed and page fetching:** re-pull the old Social fetchers (`lib/social/ingest/fetch-feeds.ts`, `extract-article-body.ts`, `resolve-google-news.ts`) and their 4 packages (`rss-parser`, `jsdom`, `@mozilla/readability`, `google-news-decoder`).
+
+## Step 0: risk tests first (first days, before the full build)
+
+Test the three things most likely to surprise us, so a failure shows up in week one, not week three:
+
+| Test | What | Cost / approval |
+|---|---|---|
+| ~~S1: Jev story scoring~~ | **Dropped (2026-10-04).** No hand-labelled set. Jev thresholds are calibrated from live run reports (§2.3); every run logs Jev's raw answers per candidate for that. | — |
+| **S2: Photo coverage** | Script on Tommy's machine: for every person and company in past briefs, does Wikidata/Commons have a usable photo, and how many have two or more? Plus a sample of the other sources. | No AI. Free. |
+| **S3: Instagram publish** | Publish one test carousel (JPEGs + caption) to a private or test account through the existing Meta setup. | No AI. **Tommy's OK.** |
+
+If one fails, adjust the spec before building around it.
+
+## Milestones
+
+### M0: Skeleton and removals
+
+- **Remove:**
+  - fact-check loop
+  - Writer rewrite path
+  - `field-repair.ts`
+  - Editor CUT / repair mode
+  - `fact-check-cut.ts`
+  - final-gate bail
+  - `jev-gate.ts` and 6-draft generation
+  - separate Caption stage
+- **New orchestrator:** Jev scoring → Reporter → Writer → Editor → Fact-checker → Design → mechanical checks, with every model stage stubbed.
+- **Set-aside log:** stage + reason code + story; stories expire with the day.
+- **Cost meter** with the $5/day cap.
+- **Accept:**
+  - an end-to-end dry run with stubs produces a post object and log entries;
+  - the removed modules have no remaining imports;
+  - the test suite is green.
+
+### M1: Ingest and story selection (spec §5B, §5B-1, §5A #1–2)
+
+- Feeds, freshness filter (24h, 36h on weekends), feed-health log.
+- Duplicate grouping in code (same story, many outlets = 1 candidate, with outlet count).
+- One Jev call per candidate:
+  - the scoring questions, with relevance reworded to "AI is the main subject" (5 since story-scoring@2 dropped number/quote);
+  - the 4 skip-list category questions;
+  - the "already posted" question.
+- Ranking, tie-break by outlet count, shortlist of up to 10, 2 winners with the different-stories rule, backups in order, widen to 48h if fewer than 2 qualify.
+- **Remove** the per-article Haiku extraction. Leave the shadow judge off.
+- **Accept:** fixture feeds with stubbed Jev answers give the expected shortlist, winners, skips and feed-health entries.
+
+**Order (reordered 2026-10-04 for the earliest end-to-end run):** M2 → M3 → M4 → M5 basic photos → M6 local preview render → **checkpoint: first end-to-end run**. Everything else comes after the checkpoint. Prompts come from the prompts file unchanged.
+
+### M2: Reporter and raw-text page reader (spec §4, §4.2c, §5.1)
+
+- **Reporter prompt:** from the prompts file, §1.
+
+- `fetch-page` returns **raw text** plus the photos with captions and credit lines (code, no summarizing).
+- **New brief format:**
+  - THE NEWS
+  - WHY IT MATTERS
+  - F / B facts with sources
+  - Q quotes (exact text, ⚠ for single-source)
+  - N numbers with a number type. **Format (approved 2026-10-04):** `N1: nearly $21 billion | money | Meta's planned AI spending this year | Reuters`. Types: money, count, percent, duration, date, other. The value is copied exactly as the source writes it.
+  - TERMS
+  - SUBJECTS
+  - EVENTS
+  - ARTICLE PHOTOS
+  - NOT ANSWERED
+  - SOURCES
+  - [CLAIM: X says] marks
+- A parser for the brief, with validation (IDs unique, every fact sourced).
+- **Accept:** a saved fixture brief (the Super Intelligence Force or Robinson story) parses, and a malformed brief fails with a clear error.
+
+### M3: Writer and copy-by-ID (spec §4.1a, §4.2a, §4.3, §5.3, §5.3a)
+
+- **Writer prompt:** from the prompts file, §2–3 (tested text plus the listed additions):
+  - quotes and numbers by ID, plus exact excerpts;
+  - 3 cover options;
+  - role before an unknown name;
+  - an IMAGE line on every slide;
+  - a symbolic stock search on stat slides;
+  - the caption instructions carried over verbatim from `prompts/caption.ts`;
+  - "stop when the story is told".
+- **Code fill-in:** IDs → exact text. Excerpt and quoted-words check against the brief.
+- **Accept:** a stubbed Writer output with IDs renders exact quotes and numbers; a made-up excerpt is rejected.
+
+### M4: Editor, Fact-checker, fixes and fresh drafts (spec §4.1, §4.2, §4.2b)
+
+- **Editor prompt:** from the prompts file, §4 (line editor, the four reader checks, cut/sharpen only).
+- **Fact-checker, two versions:**
+  - **Jev claim checking (target):** Writer claim tags `[F3]` → code pairs each sentence with its source passage → one Jev yes/no per pair. Code also flags untagged sentences that contain a number, name or quote.
+  - **Claude Fact-checker (comparison, batch 1 only, prompt from the prompts file §5):** the single truth test and the 5 always-flag types, giving a swap from the brief or a cut.
+  - Both check all 3 cover options.
+- **Fix logic:** swap → cut → cover fallback → a fresh draft (no notes) → next story. Limits: 2 fresh drafts per story, $5/day.
+- **Accept:** stubbed flags exercise every branch, and the fresh-draft limit and cost cap are enforced.
+
+### M5: Basic photos (spec §5.1, §5A #5), before the checkpoint
+
+Only the four sources needed to put a real photo on every slide:
+
+- **Article photos**, filtered by their credit line (allowed: company, official government, Commons, open licence; rejected: wire and stock agencies and outlet staff; unknown credit means not used). The page reader already returns caption and credit (M2).
+  - **The credit check reads caption + credit together as one text** (Tommy, 2026-10-05), so a credit sitting in either field is caught. The page reader sometimes files a credit-only caption ("Benjamin Fanjoy/Getty Images") as the caption; that's handled here, not in the reader.
+- **Commons via Wikidata** (P18 / P180), using the pulled `wikidata.ts` and `commons.ts`.
+- **Stock** via Openverse (`openverse.ts`), for `stock:` IMAGE lines and stat slides.
+- **Identity check** before any subject photo is used: code checks the entry's P31 against the subject type, and Jev checks the description against the brief (spec §5A #5). If either fails, there's no subject photo and the slide falls back to stock.
+- **No-repeat log** (`used-log.ts`): never twice in a post.
+- **Accept:** fixture slides get a photo from the right source; a person slide never shows another person; an agency-credited article photo is rejected; a failed identity check falls back to a scene.
+
+### M6: Render to a local preview page, before the checkpoint
+
+- Render the finished post through the pulled `SlideTemplate.tsx` and `app/social/render/preview/` on a local page: slides, caption and photo credits.
+- Local only: no Storage uploads, no database, no Instagram.
+- **Pulled forward from M8 (Tommy, 2026-10-05):**
+  - basic layout rotation, no 3 consecutive slides with the same layout (spec §5.3; renderer only);
+  - the cover arrow at its decided spot, top right about 8% down with a clear zone (spec §5.2);
+  - the offline starter set as the last photo step, so no slide is ever empty even when every online source fails (spec §5.1a step 4).
+- **Accept:** a stubbed post renders every slide on the preview page with its photo and credit.
+
+### Checkpoint: first end-to-end run (with Tommy's go-ahead and a cost estimate)
+
+- Real selection → Reporter → Writer → Editor → Fact-checker → basic photos → local preview, on a small number of stories agreed beforehand.
+- Read the result and the set-aside log. Fix only patterns (spec §2.3).
+- **Fact-checker at the checkpoint:** Claude only, the comparison version. **Jev claim checking is built after the checkpoint and before M11** (Tommy, 2026-10-05). M11 runs both side by side (spec §10). Checking claims against the **source passages**, not only the brief, is also the layer that catches brief-level drift, where the Reporter carries an outlet's paraphrase as a fact or drops a qualifier (NYC brief F7, 2026-10-05).
+
+## After the checkpoint
+
+### M7: Mechanical guarantees (spec §6)
+
+- **Quotation marks (Tommy, 2026-10-05):** allowed only around code-filled quote IDs. In the planted-error test, typed quote marks ("extremely reckless") survived a SWAP. M7 flags any quotation marks in slide or caption text that aren't a filled quote.
+- **Every text field reaches the slide (Tommy, 2026-10-06):** a mechanical check that every text field in the final draft (cover, headline, body, quote, numbers and their notes, follow) appears on the rendered slide. Any dropped text fails the render. Cause: the Writer v2 rewrite put a headline and body on quote slides and a body on a landing slide, and the frozen renderer silently dropped them (a link mismatch between draft fields and layouts).
+- **Trailing comma on displayed quotes (Tommy, 2026-10-05):** strip a trailing comma (and the space before it) from a quote as displayed on a slide, e.g. the SIF excerpt "… of all Americans,". Punctuation only; the words are unchanged, and the quoted-text match still checks the words against the brief.
+
+- **Silent fixes:** punctuation, quotes, whitespace, highlight snapping, credits and Source line.
+- **Pass/fail checks:** structure, character limits (one retry), quoted-text match, background slides ≤ 2, agency-credit rejection, photo licence/resolution/crop, render, cost cap.
+- **Accept:** a unit test per guarantee.
+
+### M8: Full photo chain and design (spec §5.1–5.4)
+
+> **Photos (2026-10-07):** the only photo authority is `specs/2026-10-07-photo-spec.md`, and the build order is `plans/2026-10-07-photo-links.md`. Everything about photos below ("Photo chain v1", designed graphics, the cover card, the bank) is superseded and kept for the record.
+
+**Scope as decided (Tommy, 2026-10-06). This replaces the photo-chain list below:**
+
+- **M8a, layout system:** the three rules from the freeze (text fit, contrast, faces clear), quote and landing layouts that show every draft field, measured cover fit, and spread slides. People stay in split layouts only for now; full-bleed person photos get revisited once M8b gives face boxes.
+- **M8b, framing:** a code face detector (spec §5.2). It runs in the browser (MediaPipe) inside the headless Chrome already used for the render-fit check, so there's no native dependency and no AI call. It returns face boxes for cropping and text placement.
+- **M8c, simplified:**
+  - **No new external sources:** no Flickr, Pexels, DVIDS, NASA or Congress. The photo chain is producing correct photos.
+  - **Used-photo log with the 7-day rule:** no photo is reused within 7 days, from any source, the starter set included.
+  - **Starter set:** grows from 10 to about 50 faceless CC0 or public-domain scenes, checked once by Jev's pre-screen. Tommy reviews the list before it's committed.
+  - **Photo bank:** tag schema, reuse rules and a hand-seed path, kept in a local file until M9. Tommy supplies press photos for OpenAI, Anthropic, Google, Meta, Microsoft, Nvidia, Mistral and xAI.
+- **Accept:**
+  - all tests pass;
+  - the 3 saved posts re-render offline with C7 and the render-fit check passing (no AI calls), with screenshots sent;
+  - then stop and wait for Tommy's OK before the full fresh end-to-end run.
+
+**S2 results (2026-10-04) that shape M6:**
+
+- **People:** 60% have at least 1 usable Commons photo, 47% have 2 or more. Well-known people are covered; lesser-known people mostly aren't.
+- **Companies:** 13% have one. *(Superseded 2026-10-07: a company cover is its logo card (spec §5.1 Photo chain v1); no press kits, no photo bank.)*
+- **Identity check:** the subject identity check (spec §5A #5: the P31 type check plus Jev's description match) is required before any subject photo is used.
+- **Photo bank:** *(superseded 2026-10-07: the bank holds Helios-designed graphics only, spec §5.1a; a photo bank was never built.)*
+
+- **Photo chain** *(superseded 2026-10-07 by spec §5.1 Photo chain v1; kept for the record)*:
+  - article photos filtered by their credit line;
+  - official portraits and government galleries by date;
+  - conference Flickr accounts (organizer accounts only);
+  - press kits;
+  - Commons via Wikidata;
+  - stock libraries;
+  - broader scene search;
+  - the Helios photo bank.
+- **Ranking:** code first, then the Jev metadata pre-screen, then the image check on the top ~5.
+- No-repeat log.
+- **Rendering:** cover fit measured on the rendered slide, face-safe crop (code library), stat-slide darkened backgrounds (§5.3a), spread slides (§5.4). (Basic layout rotation and the arrow move were pulled into M6.)
+- Article photos, Commons, stock and the identity check already exist from M5. *(Superseded 2026-10-07: the chain is spec §5.1 Photo chain v1; no photo bank.)*
+- **Held for M8 (Tommy, 2026-10-06; the renderer was frozen before the checkpoint):**
+  - **Design rules from the freeze.** These are layout-system rules for every layout, not patches. The draft is in `docs/superpowers/m8-drafts/`.
+    1. **Text fit:** each text region shrinks its font until the longest word fits on one line and the block fits the region, down to a minimum size; otherwise the render fails. No mid-word breaks (Altman checkpoint: "CYBERSECURIT/Y"). This also covers long stat and split-stat numbers (Gemini slide 4; Mistral checkpoint slide 3).
+    2. **Contrast:** any text over a photo gets a dark scrim under the text area, on every layout.
+    3. **Faces stay clear:** person photos use split layouts where photo and text have separate regions. Full-bleed photos under text are only for scene and mood photos.
+  - **Layouts show every draft field (Tommy, 2026-10-06):** the quote layout shows a headline and a body; the landing layout shows a body. The M7 dropped-text check fails any render until they do.
+  - **Spread format:** the mechanics in spec §5.4 (one wide photo across the seam of two slides; if the photo isn't wide enough, both slides render as normal text slides).
+  - **Photo-source bar** (from the 2026-10-06 checkpoint):
+    - people and organization photos come only from the Wikidata main image (P18), never from P180 "depicts" photos (already live since 2026-10-06);
+    - scene photos must not show people: stock fallback scenes showed a soldier and Navy medics on slides naming other people;
+    - stock must fit the slide: a bar for Anthropic, a 1930s building for Mistral;
+    - framing: face-safe crop and placement. Altman's photos were cropped to hands and legs.
+- **Accept:** *(superseded by the exit criteria below)* fixture slides always get a photo; a person slide never falls back to another person; covers pass the fit check.
+- **M8 exit criteria (Tommy, 2026-10-06; replaces every earlier M8 "Accept"):**
+  - **Scope:** M8 is accepted as a link in the chain, including the Writer → Design handoff, not as a component on its own.
+  - **Acceptance batch:** 2 fresh runs (4 posts) after the queued fixes.
+  - **PASS requires all four:**
+    1. **Photos correct:**
+       - zero misleading photos;
+       - every cover has a fitting photo;
+       - quote slides use the speaker's verified photo whenever one exists.
+    2. **Handoff:**
+       - the Writer's IMAGE requests use the full range (subject, article, literal stock, none);
+       - spreads appear where a beat continues, or we can explain why not;
+       - the request mix is reported per post.
+    3. **Render:** text fit, contrast, faces clear, crops not over-zoomed and rotation all pass.
+    4. **Visual quality:** Tommy signs off that each post is publishable as-is, text-only sequences included. (Tommy alone, 2026-10-07: Lucas is out of the workflow.)
+  - **On failure:** any failure gets a cause-level fix against its criterion, not a one-off patch.
+- **Link map (Tommy, 2026-10-06): design is tested one link at a time, on fixed inputs (the method that worked for the text chain).**
+  - **Accepted and frozen:** Reporter → Editor → Fact-checker; renderer mechanics (text fit, bounds, contrast, faces clear, framing, rotation).
+  - **In progress, each tested on its own fixed inputs:**
+    - **(A) Writer IMAGE requests:** checked by offline tests for now.
+    - **(B) Photo finder:** the photo-finder bench. `fixtures/social/photo-bench/requests.json` holds every IMAGE request from the saved runs, deduplicated. `scripts/social_photo_bench.ts` runs the finder on each, with no Writer and no Claude: Jev only, cap $0.05. It outputs a contact sheet, a table, the hit rate and the misleading photos.
+      - **Fixed inputs:** Openverse results are frozen in `fixtures/social/photo-bench/openverse-cache.json`, so two runs differ only by the code under test.
+      - **Pass bar (Tommy, 2026-10-06):** 0 misleading photos, and every miss explained. The hit rate is tracked, not required.
+      - **Stock link: ACCEPTED AND FROZEN (Tommy, 2026-10-07).** Bench `runs/photo-bench-2026-10-07T12-44-34-274Z-v4-vision`, with R14 and R35 rerun after the banner fix.
+        - 0 misleading photos, and every miss is explained.
+        - R23 is a request problem, not a finder miss: a symbolic request the Writer may no longer make. It's marked "request should not occur" in `fixtures/social/photo-bench/annotations.json`.
+        - The chain: Openverse → Jev pre-screen v4 (fit and people) → the vision check on the top 3 → bank → text-only (story slides) or the AI-compute starter (covers).
+      - **Photo chain v1 (spec §5.1, 2026-10-07) is the only chain.** Code, STATUS and the handoff point to it.
+        - Cover: article → the subject person's P18 → logo card (verified organization, licence check) → stock → starter, replaced by the branded cover card once approved.
+        - Story slides: article or P18 or stock → text-only.
+        - Quote slides: the speaker's P18 → text-only.
+        - Stat slides: a designed background (plain until approved).
+        - Official images: off. (c) more photos: dropped. No per-company approvals.
+        - The Writer's `photo_available` and the finder share one P18 check (`p18.ts`, pinned by a test).
+        - The frozen stock link replays offline with no live calls (`scripts/social_photo_bench.ts --replay` and a test).
+      - **Bench cap:** $0.30 with the vision check (Jev + vision); the replay costs nothing.
+    - **(C) Renderer visuals:** the look of each layout, judged by Tommy alone on fixed posts.
+  - **Separate track:** the Hook pass runs on saved drafts only and is not wired into runDay.
+  - **No end-to-end runs until A, B and C each pass.** Then the acceptance batch above.
+
+### M9: Persistence and review page (spec Q8)
+
+- Write finished posts to `article_queue`. Real database writes start here, with Tommy's OK.
+- Upload slide JPEGs to Storage.
+- **Wire the existing `/social` page and review endpoint:**
+  - **Publish** (replaces Approve)
+  - **Regenerate with notes** (one rerun)
+  - **Reject** (discard + automatically fill the slot from backups)
+- Show photo credits and identity proof.
+- **Accept:** a stubbed post appears on the page and each button changes its state correctly.
+
+### M10: Instagram publishing and daily schedule
+
+- **Publish** posts the carousel (JPEG URLs + caption) through the existing Meta/Instagram setup, with a single confirm (PROPOSED).
+- **Daily schedule** on Social's own worker: ingest → 2 winners → pipeline → review queue.
+- **Worker (Tommy, 2026-10-07):** Social gets its own new cloud worker, which Lucas is setting up. **Never deploy Social to `helios-orch-worker`.**
+- **Accept:** a dry-run publish against a test or private target, or a stubbed client.
+
+### M11: First live batch (spec §5D), with Tommy's explicit go-ahead
+
+- 10 stories in one sitting, about $10–17.
+- Jev and Claude fact-check side by side. Both results are logged and compared, then the pipeline switches to Jev only if Jev catches everything Claude caught (spec §10).
+- Judged on: 0 false facts, 0 wrong-person photos, 0 slides without a photo, 0 render failures, **≥ 7 of 10 approved as is**, plus the other measures.
+- **Pass:** switch on the daily schedule.
+- **Miss:** fix only what shows up in 3 or more of the 10.
+
+
+## Parallel tracks (not blocking)
+
+- **Read the photo terms:** White House photos (overlay/edit and commercial use), Pixabay, Unsplash, EU audiovisual service.
+- **Photo bank:** curate a few hundred pre-cleared generic photos tagged by theme.
+- **Coverage script:** Wikidata photo coverage of past subjects. Run on Tommy's machine with network access; no AI.

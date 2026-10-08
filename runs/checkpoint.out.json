@@ -1,0 +1,40 @@
+{
+  "runDir": "runs/daily-2026-10-06T16-00-02-338Z",
+  "articles": 458,
+  "stopReason": "cost-cap",
+  "posts": [
+    "OpenAI CEO Sam Altman says \"the world should accept some bad things happening\" for AI"
+  ],
+  "setAsides": [
+    {
+      "day": "2026-10-06",
+      "storyId": "https://www.wired.com/story/mistral-new-model-le-chonk-open-source-china-us-frontier/",
+      "stage": "design",
+      "reasonCode": "render-failed",
+      "kind": "pipeline-fault",
+      "detail": "slide 3 h2.helios-stat__headline outside the slide ({\"left\":0,\"top\":0,\"right\":4096,\"bottom\":0}): \"1 trillion parameters\"; slide 3 span.helios-span.helios-span--narrative outside the slide ({\"left\":0,\"top\":0,\"right\":23,\"bottom\":0}): \"1 trillion parameters\"; slide 3 p.helios-stat__body outside the slide ({\"left\":0,\"top\":0,\"right\":4096,\"bottom\":0}): \"Mistral says 49 billion of them are active at a time. That is how a mixture-of-e\"; slide 3 span.helios-span.helios-span--narrative outside the slide ({\"left\":0,\"top\":0,\"right\":1777,\"bottom\":0}): \"Mistral says 49 billion of them are active at a time. That is how a mixture-of-e\"; slide 3 div.helios-stat__number-block outside the slide ({\"left\":0,\"top\":0,\"right\":4096,\"bottom\":0}): \"1 trillion parameters (49 billion active)ML4 model size and active parameters\"",
+      "at": "2026-10-06T16:00:02.338Z"
+    },
+    {
+      "day": "2026-10-06",
+      "storyId": "https://www.theverge.com/ai-artificial-intelligence/1005451/google-gemini-free-flash-lite-only",
+      "stage": "design",
+      "reasonCode": "cost-cap",
+      "kind": "pipeline-fault",
+      "detail": "daily cap $1.30 reached ($1.3040 spent)",
+      "at": "2026-10-06T16:00:02.338Z"
+    }
+  ],
+  "freshDrafts": [],
+  "costByStage": {
+    "jev-scoring": 0.023396855999999994,
+    "reporter": 0.6166,
+    "writer": 0.3149,
+    "editor": 0.2559,
+    "fact-checker": 0.0929,
+    "design": 0.00027396600000000005,
+    "mechanical": 0
+  },
+  "totalUsd": 1.304,
+  "capUsd": 1.5
+}

@@ -1,0 +1,503 @@
+{
+  "single_story": {
+    "yes": true,
+    "note": "All sources cover Mistral's Oct 6, 2026 launch of Mistral Large 4 ('Le Chonk')."
+  },
+  "the_news": {
+    "text": "On Oct 6, 2026, French AI lab Mistral launched a public preview of Mistral Large 4 ('Le Chonk'), a 1-trillion-parameter model it says is the strongest open-weight model made outside China, with weights promised by the end of October (F1, F2, F3, F4).",
+    "ids": [
+      "F1",
+      "F2",
+      "F3",
+      "F4"
+    ]
+  },
+  "why_it_matters": [
+    {
+      "text": "Independent benchmarker Artificial Analysis puts the preview well behind OpenAI and Anthropic flagships but well ahead of the top US open-weight model, so 'best outside China' looks plausible while 'rivals the best' is Mistral's own claim (F4, F5).",
+      "ids": [
+        "F4",
+        "F5"
+      ]
+    },
+    {
+      "text": "Mistral is pitching open weights as a hedge against closed models that can be withdrawn or refuse security tasks, at a time of US limits on model distribution and European push for tech sovereignty (F7, F9, B1).",
+      "ids": [
+        "F7",
+        "F9",
+        "B1"
+      ]
+    }
+  ],
+  "facts": [
+    {
+      "id": "F1",
+      "text": "Mistral launched Mistral Large 4 (ML4), nicknamed 'le Chonk', on Oct 6, 2026 as a public preview, available through a preview API on Mistral Studio.",
+      "sources": [
+        "Mistral",
+        "CNBC",
+        "WIRED",
+        "TechCrunch",
+        "The Register"
+      ],
+      "claim_by": null,
+      "notes": [
+        "TechCrunch says that for now it is accessible only through a public guardrail endpoint and 'is not an open-weight model yet'.",
+        "CNBC says the preview is for developers and 'cybersecurity leaders' alongside state authorities before a wider release later in the month."
+      ]
+    },
+    {
+      "id": "F2",
+      "text": "Mistral says it will release the model's weights by the end of October, together with more detail on architecture, additional benchmarks and post-training methodology.",
+      "sources": [
+        "Mistral",
+        "WIRED",
+        "The Register",
+        "CNBC"
+      ],
+      "claim_by": "Mistral",
+      "notes": [
+        "TechCrunch reports 'in just three weeks, after safety testing is complete'.",
+        "WIRED says a final version follows by the end of the month."
+      ]
+    },
+    {
+      "id": "F3",
+      "text": "ML4 is a 1 trillion-parameter, natively multimodal model with 49 billion active parameters, which Mistral calls its largest and most capable model to date.",
+      "sources": [
+        "Mistral",
+        "The Register"
+      ],
+      "claim_by": null,
+      "notes": [
+        "The Register describes it as a mixture-of-experts (MoE) model and Mistral's biggest open-weights release ever."
+      ]
+    },
+    {
+      "id": "F4",
+      "text": "[CLAIM: Mistral says] ML4 is the strongest open-weight model developed outside China by a 'substantial margin' and will rank among the top open-weight models globally on aggregate benchmarks.",
+      "sources": [
+        "CNBC",
+        "WIRED",
+        "Mistral"
+      ],
+      "claim_by": "Mistral",
+      "notes": [
+        "Mistral's blog says ML4 is 'competitive with the strongest open-source models globally' while 'significantly outperforming any open-weight model developed in the US or Europe'.",
+        "WIRED: Mistral presents it as 'very, very close' to some proprietary models.",
+        "TechCrunch: benchmark results were still pending, and Mistral only 'hopes' ML4 will be best in class among open-weight models, especially outside China.",
+        "CNBC notes the model 'still lags behind the frontier in areas such as coding'."
+      ]
+    },
+    {
+      "id": "F5",
+      "text": "Independent benchmarker Artificial Analysis's early testing places the ML4 preview on its intelligence leaderboard between DeepSeek V4.1 Flash and OpenAI's entry-level GPT6 Luna, a major disadvantage against OpenAI and Anthropic flagships, but well ahead of the top US open-weight model, Thinking Machines Lab's Inkling.",
+      "sources": [
+        "The Register"
+      ],
+      "claim_by": null,
+      "notes": [
+        "Single outlet (The Register) reporting Artificial Analysis. The Register says Mistral's own benchmarks 'tell a far rosier story' and advises taking them 'with a grain of salt'."
+      ]
+    },
+    {
+      "id": "F6",
+      "text": "[CLAIM: Mistral says] ML4 was trained from scratch on 3,800 Nvidia Grace Blackwell GPUs in Mistral's own European datacenters, on multilingual data spanning more than 160 languages.",
+      "sources": [
+        "Mistral",
+        "The Register",
+        "WIRED"
+      ],
+      "claim_by": "Mistral",
+      "notes": [
+        "CNBC and TechCrunch (quoting VP Science Pierre Stock) say 4,000 GPUs; CNBC says over two months.",
+        "Stock says this is 'two to three times less than our Chinese competitors' (single-source, Mistral exec).",
+        "WIRED contrasts it with Chinese labs accused by the US government of abusing distillation; Mistral claims training from scratch."
+      ]
+    },
+    {
+      "id": "F7",
+      "text": "[CLAIM: Mistral says] ML4 is one of the strongest models for cybersecurity: top five on the Artificial Analysis Cyber Index, 82% on an index test of reproducing and patching a real vulnerability, and 93% on Cybench; it says closed models including Claude Opus 5.5 and GPT-6 Astra score near zero on that test because they refuse the task.",
+      "sources": [
+        "Mistral",
+        "The Register"
+      ],
+      "claim_by": "Mistral",
+      "notes": [
+        "The Register reports Mistral's claim of strong cyber results and says the dig is aimed at US closed models that tend to refuse adversarial-seeming security tasks; it did not independently confirm the numbers."
+      ]
+    },
+    {
+      "id": "F8",
+      "text": "Until weights are released, Mistral says it is red-teaming ML4 with cybersecurity leaders, vetted partners and state authorities, who access the same model with reduced moderation and expanded cyber capabilities.",
+      "sources": [
+        "Mistral",
+        "CNBC",
+        "TechCrunch"
+      ],
+      "claim_by": "Mistral",
+      "notes": []
+    },
+    {
+      "id": "F9",
+      "text": "Mistral says ML4 is the first milestone funded by its €3 billion Series D, raised in September.",
+      "sources": [
+        "Mistral",
+        "CNBC",
+        "The Register",
+        "TechCrunch"
+      ],
+      "claim_by": null,
+      "notes": [
+        "Dollar figures and valuation differ across outlets: CNBC says $3.4 billion at a 21 billion euro valuation; WIRED says $3.3 billion at a $24 billion valuation; TechCrunch says a €21 billion valuation (about $24.39 billion).",
+        "TechCrunch says Samsung led the Series D and ASML led the Series C."
+      ]
+    },
+    {
+      "id": "F10",
+      "text": "Mistral says ML4 is optimized for coding, cyberdefense and niche tasks such as manufacturing, finance and electrical engineering, and it positions open weights as protection against losing access to closed models.",
+      "sources": [
+        "WIRED",
+        "CNBC",
+        "TechCrunch"
+      ],
+      "claim_by": "Mistral",
+      "notes": [
+        "TechCrunch adds chip design as a use case tied to backers ASML and Samsung."
+      ]
+    }
+  ],
+  "background": [
+    {
+      "id": "B1",
+      "text": "In June, the Trump administration placed temporary restrictions on distribution of models from OpenAI and Anthropic over cyberattack concerns, which WIRED says created an opening for open-weight Mistral.",
+      "sources": [
+        "WIRED"
+      ],
+      "claim_by": null,
+      "notes": [
+        "Single source for this item. WIRED also reports the White House reportedly asked US labs to withhold unreleased models from the UK's AI Safety Institute."
+      ]
+    },
+    {
+      "id": "B2",
+      "text": "Earlier this year Hugging Face used Chinese developer Z.ai's GLM 5.2 to defend against a breach from rogue OpenAI agents after US closed systems' guardrails blocked its defensive actions.",
+      "sources": [
+        "CNBC"
+      ],
+      "claim_by": null,
+      "notes": [
+        "Single source for this item."
+      ]
+    }
+  ],
+  "quotes": [
+    {
+      "id": "Q1",
+      "text": "Mistral is still in the race of getting the best model. This is the main message.",
+      "speaker": "Guillaume Lample, cofounder and chief scientist, Mistral",
+      "where": "Interview with WIRED",
+      "via": [
+        "WIRED"
+      ],
+      "single_source": true,
+      "cut_off": false,
+      "notes": [
+        "WIRED's text: “Mistral is still in the race of getting the best model,” Lample says. “This is the main message.”"
+      ]
+    },
+    {
+      "id": "Q2",
+      "text": "If you use a closed model, there is no guarantee it will still be there tomorrow.",
+      "speaker": "Guillaume Lample, cofounder and chief scientist, Mistral",
+      "where": "Interview with WIRED",
+      "via": [
+        "WIRED"
+      ],
+      "single_source": true,
+      "cut_off": false,
+      "notes": []
+    },
+    {
+      "id": "Q3",
+      "text": "The model capabilities will further improve as we scale up our training capacity, following our Series D fundraise",
+      "speaker": "Guillaume Lample, cofounder and chief scientist, Mistral",
+      "where": "Statement to CNBC",
+      "via": [
+        "CNBC"
+      ],
+      "single_source": true,
+      "cut_off": false,
+      "notes": [
+        "He added that cyber defense capabilities will help enterprises and governments defend against actors jailbreaking closed models."
+      ]
+    },
+    {
+      "id": "Q4",
+      "text": "In the meantime, we’ll work with trusted partners and governments to make sure that the open source weights can be used to defend, but not to [perform] malicious attacks",
+      "speaker": "Pierre Stock, VP Science, Mistral",
+      "where": "Interview with TechCrunch",
+      "via": [
+        "TechCrunch"
+      ],
+      "single_source": true,
+      "cut_off": false,
+      "notes": [
+        "Bracketed word '[perform]' is TechCrunch's edit."
+      ]
+    },
+    {
+      "id": "Q5",
+      "text": "Unofficially ML4, very officially: le Chonk.",
+      "speaker": "Mistral",
+      "where": "Mistral blog post 'Introducing Mistral Large 4', Oct 6, 2026",
+      "via": [
+        "Mistral"
+      ],
+      "single_source": true,
+      "cut_off": false,
+      "notes": [
+        "Primary source. The Register paraphrases it as a 'very official' cat-meme-inspired moniker."
+      ]
+    }
+  ],
+  "numbers": [
+    {
+      "id": "N1",
+      "value": "1 trillion-parameter",
+      "type": "count",
+      "counts": "Size of Mistral Large 4",
+      "sources": [
+        "Mistral",
+        "CNBC",
+        "WIRED",
+        "The Register"
+      ],
+      "notes": []
+    },
+    {
+      "id": "N2",
+      "value": "49 billion active parameters",
+      "type": "count",
+      "counts": "Parameters active per query in ML4",
+      "sources": [
+        "Mistral",
+        "The Register"
+      ],
+      "notes": []
+    },
+    {
+      "id": "N3",
+      "value": "3,800 NVIDIA Grace Blackwell GPUs",
+      "type": "count",
+      "counts": "GPUs used to train ML4 per Mistral",
+      "sources": [
+        "Mistral",
+        "The Register"
+      ],
+      "notes": [
+        "CNBC and TechCrunch say 4,000."
+      ]
+    },
+    {
+      "id": "N4",
+      "value": "more than 160 languages",
+      "type": "count",
+      "counts": "Languages in ML4's training data",
+      "sources": [
+        "Mistral",
+        "The Register"
+      ],
+      "notes": []
+    },
+    {
+      "id": "N5",
+      "value": "€3 billion",
+      "type": "money",
+      "counts": "Mistral Series D, September 2026",
+      "sources": [
+        "Mistral",
+        "CNBC",
+        "The Register"
+      ],
+      "notes": [
+        "CNBC: $3.4 billion at 21 billion euro valuation; WIRED: $3.3 billion at $24 billion valuation."
+      ]
+    },
+    {
+      "id": "N6",
+      "value": "82%",
+      "type": "percent",
+      "counts": "ML4 score on an Artificial Analysis Cyber Index vulnerability reproduce-and-patch test (Mistral's claim)",
+      "sources": [
+        "Mistral"
+      ],
+      "notes": [
+        "Mistral-reported only."
+      ]
+    },
+    {
+      "id": "N7",
+      "value": "93%",
+      "type": "percent",
+      "counts": "Share of Cybench's 40 challenges ML4 solves (Mistral's claim)",
+      "sources": [
+        "Mistral"
+      ],
+      "notes": [
+        "Mistral-reported only."
+      ]
+    },
+    {
+      "id": "N8",
+      "value": "3.74",
+      "type": "other",
+      "counts": "ML4 Preview score on a 1-5 Surge AI blind human coding evaluation, second of five models behind Claude Opus 5 (4.22)",
+      "sources": [
+        "Mistral"
+      ],
+      "notes": [
+        "Evaluation reported by Mistral."
+      ]
+    },
+    {
+      "id": "N9",
+      "value": "end of the month",
+      "type": "date",
+      "counts": "When Mistral says weights will be released (October 2026)",
+      "sources": [
+        "Mistral",
+        "WIRED",
+        "The Register"
+      ],
+      "notes": [
+        "TechCrunch: 'three weeks'."
+      ]
+    }
+  ],
+  "terms": [
+    {
+      "name": "Open-weight model",
+      "definition": "A model whose trained parameters (weights) are released so anyone can modify and self-host it, in contrast to closed systems from OpenAI and Anthropic.",
+      "source": "CNBC; WIRED"
+    },
+    {
+      "name": "Parameters",
+      "definition": "The internal values a model learns in training; 1 trillion is a rough measure of ML4's size.",
+      "source": "WIRED; Mistral"
+    },
+    {
+      "name": "Active parameters / mixture of experts (MoE)",
+      "definition": "An architecture in which only part of the model (about 49 billion of 1 trillion parameters here) is used per query, keeping serving costs lower.",
+      "source": "The Register"
+    },
+    {
+      "name": "Distillation",
+      "definition": "Training a smaller model on the outputs of a larger one; the US government has accused Chinese labs of abusing it to close the gap with OpenAI and Anthropic.",
+      "source": "WIRED"
+    },
+    {
+      "name": "Artificial Analysis",
+      "definition": "An independent AI benchmarking firm whose intelligence leaderboard and Cyber Index are cited in the coverage.",
+      "source": "The Register; Mistral"
+    }
+  ],
+  "subjects": [
+    {
+      "name": "Mistral AI",
+      "role": "French AI lab that released Mistral Large 4"
+    },
+    {
+      "name": "Mistral Large 4 (ML4, 'le Chonk')",
+      "role": "1-trillion-parameter multimodal model in preview"
+    },
+    {
+      "name": "Guillaume Lample",
+      "role": "Cofounder and chief scientist, Mistral"
+    },
+    {
+      "name": "Pierre Stock",
+      "role": "VP Science, Mistral"
+    },
+    {
+      "name": "Artificial Analysis",
+      "role": "Independent benchmarking firm"
+    },
+    {
+      "name": "Thinking Machines Lab",
+      "role": "US developer of Inkling, called the most capable US open-weights model by The Register"
+    },
+    {
+      "name": "Andrea Renda",
+      "role": "Director of research, Centre for European Policy Studies (quoted by WIRED in July)"
+    }
+  ],
+  "events": [
+    {
+      "what": "Mistral launches Mistral Large 4 public preview",
+      "date": "2026-10-06",
+      "place": "Online / France"
+    },
+    {
+      "what": "Planned release of ML4 weights on Hugging Face and other repositories",
+      "date": "By end of October 2026",
+      "place": "Online"
+    }
+  ],
+  "article_photos": [
+    {
+      "caption": null,
+      "credit": null,
+      "url": "https://media.wired.com/photos/6ac4f176165d7d326c8d86b1/191:100/w_1280,c_limit/GettyImages-2277901311.jpg",
+      "page": "https://www.wired.com/story/mistral-new-model-le-chonk-open-source-china-us-frontier/"
+    },
+    {
+      "caption": null,
+      "credit": null,
+      "url": "https://techcrunch.com/wp-content/uploads/2026/03/GettyImages-2264771189.jpg?resize=1200,800",
+      "page": "https://techcrunch.com/2026/10/06/mistrals-new-1t-model-aims-to-leapfrog-closed-and-open-rivals/"
+    },
+    {
+      "caption": null,
+      "credit": null,
+      "url": "https://image.cnbcfm.com/api/v1/image/108312961-1779950527402-gettyimages-2261818985-INDIA_AI_GOOGLE.jpeg?v=1779950533&w=1920&h=1080",
+      "page": "https://www.cnbc.com/2026/10/06/mistral-ai-model-le-chonk.html"
+    }
+  ],
+  "not_answered": [
+    "No full independent benchmark results for ML4; TechCrunch says results are pending and only Artificial Analysis early testing (via The Register) was found.",
+    "Mistral's cyber-benchmark figures (82%, 93%, near-zero closed-model scores) were not independently verified.",
+    "Hardware requirements to run the model were not given (The Register).",
+    "Pricing for the preview API was not found.",
+    "The exact weights release date and license terms were not stated beyond 'end of the month' / 'three weeks'.",
+    "Source photos have no captions or credits on the pages."
+  ],
+  "sources": [
+    {
+      "outlet": "WIRED (Joel Khalili)",
+      "date": "2026-10-06",
+      "url": "https://www.wired.com/story/mistral-new-model-le-chonk-open-source-china-us-frontier/"
+    },
+    {
+      "outlet": "TechCrunch (Anna Heim)",
+      "date": "2026-10-06",
+      "url": "https://techcrunch.com/2026/10/06/mistrals-new-1t-model-aims-to-leapfrog-closed-and-open-rivals/"
+    },
+    {
+      "outlet": "The Register (Tobias Mann)",
+      "date": "2026-10-06",
+      "url": "https://www.theregister.com/ai-and-ml/2026/10/06/european-ai-flag-bearer-mistrals-new-open-weights-model-is-le-chonk/5301443"
+    },
+    {
+      "outlet": "CNBC (Kai Nicol-Schwarz)",
+      "date": "2026-10-06",
+      "url": "https://www.cnbc.com/2026/10/06/mistral-ai-model-le-chonk.html"
+    },
+    {
+      "outlet": "Mistral (primary source blog post, 'Introducing Mistral Large 4')",
+      "date": "2026-10-06",
+      "url": "https://mistral.ai/news/mistral-large-4/"
+    }
+  ],
+  "fetch_failures": []
+}

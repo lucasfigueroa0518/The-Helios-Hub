@@ -1,0 +1,185 @@
+{
+  "format": "carousel",
+  "storyType": "tech",
+  "source": "the-decoder.com",
+  "sourceUrl": "https://the-decoder.com/mistral-large-4-is-said-to-be-the-most-powerful-open-ai-model-from-europe-and-the-u-s/",
+  "publishedAt": "2026-10-06T16:00:02.338Z",
+  "issueNumber": 0,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "headline": [
+        {
+          "text": "French lab Mistral previews Le Chonk, a 1T-parameter AI model pitched for cyber defense",
+          "role": "narrative"
+        }
+      ],
+      "altText": "French lab Mistral previews Le Chonk, a 1T-parameter AI model pitched for cyber defense",
+      "photoUrl": "/social/starter/data-center-roof.jpg",
+      "photoCredit": "Rsparks3 (CC0) · Wikimedia Commons"
+    },
+    {
+      "position": 1,
+      "headline": [
+        {
+          "text": "Le Chonk is live. The weights are not.",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Le Chonk is live. The weights are not.",
+      "photoUrl": "/social/starter/city-skyline-night.jpg",
+      "photoCredit": "RFNirmala (CC0) · Wikimedia Commons",
+      "body": [
+        {
+          "text": "On Oct 6, French lab Mistral put Mistral Large 4, nicknamed Le Chonk, into public preview through its API. Its weights, the parameters that let others self-host a model, are due at the end of October.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text"
+    },
+    {
+      "position": 2,
+      "headline": [
+        {
+          "text": "1 trillion parameters",
+          "role": "narrative"
+        }
+      ],
+      "altText": "1 trillion parameters",
+      "photoUrl": "https://live.staticflickr.com/65535/51714054020_58f054e2dc_b.jpg",
+      "photoCredit": "7C0, CC BY · via flickr",
+      "body": [
+        {
+          "text": "Mistral says 49 billion of them are active at a time. That is how a mixture-of-experts design works: only some parameters run for a given input.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "1 trillion parameters (49 billion active)",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "ML4 model size and active parameters"
+    },
+    {
+      "position": 3,
+      "headline": [
+        {
+          "text": "Mistral pitches it as a defender's model",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Mistral pitches it as a defender's model",
+      "photoUrl": "/social/starter/circuit-board.jpg",
+      "photoCredit": "ComputerUserUser (CC0) · Wikimedia Commons",
+      "body": [
+        {
+          "text": "Mistral says closed-model safety filters block legitimate defensive work and attackers jailbreak them anyway. It says losing provider access mid-incident is a risk. ML4 can run in private clouds or on-premise.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text"
+    },
+    {
+      "position": 4,
+      "headline": [
+        {
+          "text": "Wired and CNBC: closed US models hit limits this year",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Wired and CNBC: closed US models hit limits this year",
+      "photoUrl": "https://live.staticflickr.com/65535/52441724533_ff5a190042_b.jpg",
+      "photoCredit": "w_lemay, CC BY-SA · via flickr",
+      "body": [
+        {
+          "text": "In June, the Trump administration temporarily limited OpenAI and Anthropic model distribution over cyberattack concerns. Hugging Face used Z.ai's GLM 5.2 against a breach after US closed models' guardrails blocked it.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text"
+    },
+    {
+      "position": 5,
+      "headline": [
+        {
+          "text": "82% on a vulnerability patch test",
+          "role": "narrative"
+        }
+      ],
+      "altText": "82% on a vulnerability patch test",
+      "photoUrl": "https://cdn.stocksnap.io/img-thumbs/960w/TIV258VG3N.jpg",
+      "photoCredit": "Lorenzo Cafaro (public domain)",
+      "body": [
+        {
+          "text": "Artificial Analysis lists 82% on CyberGym-E2E-AA, above MiMo-V2.6-Pro's 79%. Mistral says Claude Opus 5.5 and GPT-6 Astra score near zero because they refuse the task. Artificial Analysis does not list that comparison.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "82 percent",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "ML4 score on the reproduce-and-patch vulnerability test (CyberGym-E2E-AA)"
+    },
+    {
+      "position": 6,
+      "headline": [
+        {
+          "text": "Independent index: 38, with the leader at 58",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Independent index: 38, with the leader at 58",
+      "photoUrl": "/social/starter/nyc-from-orbit.jpg",
+      "photoCredit": "NASA (public domain) · Wikimedia Commons",
+      "body": [
+        {
+          "text": "Artificial Analysis scores it 38, up from 9 for Mistral Large 3. Claude Opus 5.5 (Max) leads at 58. Mistral says it is the best open-weight model from the US or Europe; several Chinese open-weight models rank above it.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "38",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "ML4 score on the Artificial Analysis Intelligence Index"
+    },
+    {
+      "position": 7,
+      "headline": [
+        {
+          "text": "Open is still a promise until the weights ship",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Open is still a promise until the weights ship",
+      "photoUrl": "https://live.staticflickr.com/65535/53767927045_1151d9077c_b.jpg",
+      "photoCredit": "comedy_nose, CC BY · via flickr",
+      "body": [
+        {
+          "text": "Until then Artificial Analysis lists it as proprietary and the license is unknown. Mistral says it is red-teaming, meaning testing for misuse risks, with security firms, vetted partners and government agencies.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text"
+    },
+    {
+      "position": 8,
+      "layoutVariant": "follow",
+      "storySpecificLine": "Follow Helios Group to see what the license says when Mistral ships the Large 4 weights at the end of October.",
+      "altText": "Follow Helios Group to see what the license says when Mistral ships the Large 4 weights at the end of October."
+    }
+  ],
+  "caption": "French AI lab Mistral launched a public preview of Mistral Large 4, nicknamed Le Chonk, a 1-trillion-parameter model it pitches for cyber defense. It is available through Mistral's API, and the weights are due at the end of October.\n\nMistral says it is the best open-weight model from the US or Europe. An open-weight model is one whose trained parameters are released so others can modify and self-host it. This one isn't out yet, so Artificial Analysis lists it as proprietary for now. On that firm's independent Intelligence Index, which aggregates ten benchmarks, it scores 38, up from 9 for Mistral Large 3. Claude Opus 5.5 (Max) leads at 58. Mistral also says Claude Opus 5.5 and GPT-6 Astra score near zero on a vulnerability patch test because they refuse the task. Artificial Analysis does not list that comparison.\n\nWould you rather defend your systems with a model you run yourself or a closed one from a provider?\n\nFollow Helios Group to see what the license says when Mistral releases the weights at the end of October.\n\nSource: the-decoder.com, Wired, TechCrunch, CNBC, Artificial Analysis (LinkedIn) and Mistral on X, all October 6, 2026.",
+  "attributionBlock": "Photos: Rsparks3 (CC0) · Wikimedia Commons; RFNirmala (CC0) · Wikimedia Commons; 7C0, CC BY · via flickr; ComputerUserUser (CC0) · Wikimedia Commons; w_lemay, CC BY-SA · via flickr; Lorenzo Cafaro (public domain); NASA (public domain) · Wikimedia Commons; comedy_nose, CC BY · via flickr"
+}

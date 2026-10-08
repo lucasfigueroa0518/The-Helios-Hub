@@ -1,0 +1,74 @@
+{
+  "cover": {
+    "kind": "edited",
+    "text": "Rep. Josh Gottheimer wants the NSA to test AI models before release.",
+    "highlight": "test AI models before release",
+    "image": "photo of Josh Gottheimer"
+  },
+  "slides": [
+    {
+      "position": 2,
+      "headline": "Two bipartisan AI bills unveiled Friday",
+      "body": "On September 18, Rep. Josh Gottheimer (NJ-5) unveiled two bipartisan AI security bills at Fairleigh Dickinson University in Teaneck.",
+      "highlight": "two bipartisan AI security bills",
+      "image": "type only"
+    },
+    {
+      "position": 3,
+      "headline": "No mandatory pre-deployment AI testing",
+      "highlight": "No mandatory pre-deployment AI testing",
+      "image": "type only"
+    },
+    {
+      "position": 4,
+      "quote": "Right now, there are no mandatory requirements for pre-deployment testing of frontier AI models.",
+      "quoteBy": "Rep. Josh Gottheimer (NJ-5)",
+      "highlight": "no mandatory requirements for pre-deployment testing of frontier AI models",
+      "image": "photo of Josh Gottheimer"
+    },
+    {
+      "position": 5,
+      "headline": "The NSA would get 30 days to vet a model",
+      "bigNumber": "30 days",
+      "numberNote": "Plus one 30-day extension if needed",
+      "highlight": "30 days",
+      "image": "type only"
+    },
+    {
+      "position": 6,
+      "headline": "The FIREWALL Act would extend that ban",
+      "body": "DeepSeek is already blocked from federal devices. Gottheimer named Kimi K3 and Qwen as Chinese open-weight models the bill would also keep off federal systems.",
+      "highlight": "Kimi K3 and Qwen",
+      "image": "type only"
+    },
+    {
+      "position": 7,
+      "headline": "He's also pressing the Cyber Director",
+      "note": "Letter to Cyber Director on AI cyberattacks",
+      "highlight": "AI cybersecurity clearinghouse",
+      "image": "type only",
+      "body": "Gottheimer said he's writing to Sean Cairncross, the President's Cyber Director, asking whether the Administration's new AI cybersecurity clearinghouse is built for today's threats."
+    },
+    {
+      "position": 8,
+      "headline": "Leadership refused a floor vote",
+      "highlight": "without acting on any of these critical pieces of legislation",
+      "image": "type only",
+      "note": "Gottheimer said Republican leadership sent Congress home without acting on any of these critical pieces of legislation."
+    }
+  ],
+  "follow": "Follow Helios to keep up with how Congress is moving on AI regulation.",
+  "editNotes": null,
+  "caption": "Rep. Josh Gottheimer introduced two bipartisan AI security bills at Fairleigh Dickinson University on September 18. The American AI Security Act, co-led with Rep. Mike Lawler, would require mandatory NSA reviews of the most powerful AI models before companies release them, giving the agency 30 days with a possible 30-day extension. The China FIREWALL Act, co-led with Rep. Nick LaLota, would ban Chinese-developed open-weight AI models from federal devices and software. Gottheimer named Kimi K3 and Qwen as models still on federal systems. He is also sending a letter to National Cyber Director Sean Cairncross about the administration\u2019s AI cybersecurity clearinghouse.\n\nGottheimer said Republican leadership has refused to directly bring these bills to the floor for a vote, and he is urging the Speaker to reconvene Congress before the election.\n\nWould you want the NSA reviewing every powerful AI model before release?\n\nFollow Helios to track how Congress is moving on AI safety.\n\nSource: Gottheimer\u2019s office and WRNJ Radio, September 18, 2026. Additional reporting: Politico (via NewsBreak) and Internet2.",
+  "slideKinds": [
+    "cover",
+    "text",
+    "landing",
+    "quote",
+    "stat",
+    "text",
+    "landing",
+    "text",
+    "follow"
+  ]
+}

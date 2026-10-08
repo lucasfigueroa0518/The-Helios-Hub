@@ -1,0 +1,302 @@
+{
+  "format": "carousel",
+  "storyType": "safety",
+  "source": "AI News & Artificial Intelligence | TechCrunch",
+  "sourceUrl": "https://techcrunch.com/video/dario-amodei-and-other-ai-leaders-want-to-pace-the-frontier-buthow/",
+  "publishedAt": "2026-09-18T17:09:56.000Z",
+  "issueNumber": 721,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "variant": "C2",
+      "beat": "HOOK",
+      "altText": "Split-frame portrait: Dario Amodei on the left, Jensen Huang on the right, against a neutral background. Text reads the chosen hook headline.",
+      "headline": [
+        {
+          "role": "narrative",
+          "text": "Dario Amodei wants to slow down AI — "
+        },
+        {
+          "role": "hook",
+          "text": "and Jensen Huang just said no."
+        },
+        {
+          "role": "narrative",
+          "text": " Here's what that fight means for every lab racing the frontier."
+        }
+      ],
+      "photoUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e4/Dario_Amodei_at_TechCrunch_Disrupt_2023_01_%28cropped%29.jpg/960px-Dario_Amodei_at_TechCrunch_Disrupt_2023_01_%28cropped%29.jpg?utm_source=en.wikipedia.org&utm_campaign=index&utm_content=thumbnail",
+      "photoCredit": "DARIO AMODEI · VIA WIKIPEDIA"
+    },
+    {
+      "position": 1,
+      "layoutVariant": "story_beat",
+      "variant": "B1",
+      "beat": "GROUND",
+      "altText": "Type-only slide on a clean minimal layout. Explains that Amodei's plan arrived one week after an internal doomsday warning, built around independent safety evaluators and inter-lab coordination.",
+      "body": [
+        {
+          "role": "narrative",
+          "text": "One week after an "
+        },
+        {
+          "role": "pivot",
+          "text": "Anthropic"
+        },
+        {
+          "role": "narrative",
+          "text": " researcher's doomsday warning rattled the AI world, "
+        },
+        {
+          "role": "pivot",
+          "text": "Dario Amodei"
+        },
+        {
+          "role": "narrative",
+          "text": " went public with a plan."
+        }
+      ],
+      "bodyBottom": [
+        {
+          "role": "narrative",
+          "text": "He called it "
+        },
+        {
+          "role": "hook",
+          "text": "\"pace the frontier.\""
+        },
+        {
+          "role": "narrative",
+          "text": " Independent safety evaluators. Coordination between AI labs in democratic countries. A framework to manage what comes next."
+        }
+      ],
+      "photoUrl": "https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=1200",
+      "photoCredit": "PHOTO: ALEX KONDRATIEV · UNSPLASH"
+    },
+    {
+      "position": 2,
+      "layoutVariant": "story_beat",
+      "variant": "B4",
+      "beat": "CONTEXT",
+      "altText": "Atmospheric AI lab photo or abstract risk-signal graphic. Text explains that the urgency behind Amodei's proposal came from an internal Anthropic researcher's warning, not outside pressure.",
+      "body": [
+        {
+          "role": "narrative",
+          "text": "The warning didn't come from a critic outside the industry."
+        },
+        {
+          "role": "narrative",
+          "text": " It came from inside "
+        },
+        {
+          "role": "pivot",
+          "text": "Anthropic"
+        },
+        {
+          "role": "narrative",
+          "text": " itself."
+        }
+      ],
+      "bodyBottom": [
+        {
+          "role": "narrative",
+          "text": "When your own researcher goes public with a doomsday scenario, inaction becomes liability."
+        }
+      ],
+      "photoUrl": "https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=1200",
+      "photoCredit": "PHOTO: LUCA BRAVO · UNSPLASH"
+    },
+    {
+      "position": 3,
+      "layoutVariant": "data_block",
+      "variant": "D3",
+      "beat": "MECHANISM",
+      "altText": "Simple diagram showing the flow: AI labs feed into independent safety evaluators, which connect to a democratic-country coordination body. Text explains the mechanism of Amodei's proposal.",
+      "body": [
+        {
+          "role": "narrative",
+          "text": "Labs submit to "
+        },
+        {
+          "role": "hook",
+          "text": "independent safety evaluators."
+        },
+        {
+          "role": "narrative",
+          "text": " Those evaluators report to a coordination body shared by AI labs in democratic countries."
+        }
+      ],
+      "bodyBottom": [
+        {
+          "role": "narrative",
+          "text": "No single company decides when it's safe to push forward."
+        },
+        {
+          "role": "hook",
+          "text": " That's the whole point."
+        }
+      ],
+      "title": [
+        {
+          "role": "narrative",
+          "text": "HOW TO PACE THE FRONTIER"
+        }
+      ]
+    },
+    {
+      "position": 4,
+      "layoutVariant": "story_beat",
+      "variant": "B5",
+      "beat": "TURN",
+      "altText": "High-contrast portrait of Jensen Huang. The headline declares his pointed pushback against Amodei's coordination framework.",
+      "headline": [
+        {
+          "role": "pivot",
+          "text": "JENSEN HUANG "
+        },
+        {
+          "role": "hook",
+          "text": "ISN'T BUYING IT."
+        }
+      ]
+    },
+    {
+      "position": 5,
+      "layoutVariant": "story_beat",
+      "variant": "B4",
+      "beat": "STAKES",
+      "altText": "Two-column type-forward visual. Left column outlines what happens if Amodei's framework takes hold; right column shows the outcome if Huang's resistance prevails.",
+      "body": [
+        {
+          "role": "pivot",
+          "text": "If"
+        },
+        {
+          "role": "narrative",
+          "text": " "
+        },
+        {
+          "role": "pivot",
+          "text": "Amodei"
+        },
+        {
+          "role": "narrative",
+          "text": "'s framework holds, labs in democratic countries operate under shared rules. Safety evaluators gain real authority."
+        }
+      ],
+      "bodyBottom": [
+        {
+          "role": "pivot",
+          "text": "If "
+        },
+        {
+          "role": "pivot",
+          "text": "Huang"
+        },
+        {
+          "role": "narrative",
+          "text": "'s resistance wins, the coordination falls apart. "
+        },
+        {
+          "role": "hook",
+          "text": "Every lab races on its own terms."
+        }
+      ],
+      "photoUrl": "https://images.unsplash.com/photo-1497366216548-37526070297c?w=1200",
+      "photoCredit": "PHOTO: COPERNICO · UNSPLASH"
+    },
+    {
+      "position": 6,
+      "layoutVariant": "story_beat",
+      "variant": "B2",
+      "beat": "SCENARIO",
+      "altText": "Government building or regulatory-body metaphor photo. Text describes the scenario where industry fails to self-govern and regulators step into the vacuum.",
+      "body": [
+        {
+          "role": "pivot",
+          "text": "What happens if"
+        },
+        {
+          "role": "narrative",
+          "text": " "
+        },
+        {
+          "role": "hook",
+          "text": "neither side wins?"
+        },
+        {
+          "role": "narrative",
+          "text": " No consensus on what slowing down means. No one enforces it."
+        }
+      ],
+      "bodyBottom": [
+        {
+          "role": "narrative",
+          "text": "That vacuum doesn't stay empty."
+        },
+        {
+          "role": "hook",
+          "text": " Governments move in. Binding rules get written by people who weren't in the room."
+        }
+      ],
+      "photoUrl": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200",
+      "photoCredit": "PHOTO: CARLOS MUZA · UNSPLASH"
+    },
+    {
+      "position": 7,
+      "layoutVariant": "thesis",
+      "variant": "T1",
+      "beat": "THESIS",
+      "altText": "Type-only slide with bold typography and a single strong statement. The thesis reframes the Amodei-Huang conflict as a fight over who controls AI governance.",
+      "body": [
+        {
+          "role": "narrative",
+          "text": "This fight is about who writes the rules for frontier AI. The labs or the regulators."
+        }
+      ]
+    },
+    {
+      "position": 8,
+      "layoutVariant": "debate",
+      "variant": "T2",
+      "beat": "DEBATE",
+      "altText": "Type-only slide with two clearly labeled sides framing the central debate: industry self-governance versus mandatory government regulation of AI pacing.",
+      "headline": [
+        {
+          "role": "narrative",
+          "text": "Can competing labs ever agree on what "
+        },
+        {
+          "role": "hook",
+          "text": "slowing down"
+        },
+        {
+          "role": "narrative",
+          "text": " means, and who gets to police it?"
+        }
+      ],
+      "body": [
+        {
+          "role": "narrative",
+          "text": "Side A: Industry self-governance. Labs set the pace together, safety evaluators keep them honest."
+        }
+      ],
+      "bodyBottom": [
+        {
+          "role": "narrative",
+          "text": "Mandatory regulatory oversight. Governments step in before the labs can agree on anything."
+        }
+      ]
+    },
+    {
+      "position": 9,
+      "layoutVariant": "follow",
+      "variant": "F1",
+      "beat": "FOLLOW",
+      "altText": "Account branding slide with clean logo lockup. Follow line invites readers to stay ahead of AI governance power moves.",
+      "storySpecificLine": "We map the power struggles that decide who controls the AI frontier before the press releases do."
+    }
+  ],
+  "caption": "One week after an Anthropic researcher's internal doomsday warning went public, CEO Dario Amodei laid out a formal framework for managing the pace of frontier AI development. The plan — which Amodei is calling 'pace the frontier' — relies on independent safety evaluators and coordination between AI labs operating in democratic countries. It has picked up some early industry support, but it has also drawn pointed resistance from Nvidia's Jensen Huang, making the Amodei-Huang split the most visible fault line in the AI governance debate right now. Source is TechCrunch's Equity podcast, hosted by Kirsten Korosec, Anthony Ha, and Sean O'Kane. The episode also covers Automattic's boardroom coup and several major deals, both of which the slides here skip. The real tension the Equity hosts surface — and the one this carousel leaves open — is whether competing labs can ever actually agree on what slowing down means, and who has the authority to enforce it. Where do you come down: industry self-governance, or mandatory regulatory oversight?"
+}

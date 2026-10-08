@@ -1,0 +1,8 @@
+# Photo-finder bench · pre-screen v4 · 2026-10-07T12:49:46.532Z
+
+Hit rate (a photo from the request's own chain: article, official, subject, logo card, stock or bank): **2/2** · by kind {"subject":"0/0","article":"0/0","stock":"2/2"} · Jev $0.0002 · vision $0.0056 · cap $0.02
+
+| ID | Request | Slot | Result | Source | Photo | Vision $ | Trace |
+|---|---|---|---|---|---|---|---|
+| R14 | stock: code on screen | backdrop | stock | stock | cdn.stocksnap.io/img-thumbs/960w/TIV258VG3N.jpg | 0.0028 | pre-screen stock-prescreen@4 "code on screen": "Code Coding" fit 0.94 people 0.16 ✓; "Programming Code" fit 0.97 people 0.25 ✓; "Coding" fit 0.79 people 0.70; "Puerto Rico National Guard" fit 0.02 people 0.98; "Code Technology" fit 0.93 people 0.05 ✓ → vision "Code Coding": shows yes 0.95 · person (main/face) no · landmark no · story logo no · named institution no · banner yes · "Computer code displayed on screen with JavaScript syntax highlighting" → PASS ($0.0028) → stock "code on screen" (backdrop): stocksnap 3769×2513 "Code Coding" |
+| R35 | stock: code on screen | split | stock | stock | cdn.stocksnap.io/img-thumbs/960w/TIV258VG3N.jpg | 0.0028 | pre-screen stock-prescreen@4 "code on screen": "Code Coding" fit 0.94 people 0.20 ✓; "Programming Code" fit 0.97 people 0.29 ✓; "Coding" fit 0.79 people 0.75; "Puerto Rico National Guard" fit 0.02 people 0.98; "Code Technology" fit 0.93 people 0.05 ✓ → vision "Code Coding": shows yes 0.95 · person (main/face) no · landmark no · story logo no · named institution no · banner yes · "Computer code and programming text on a dark background" → PASS ($0.0028) → stock "code on screen" (split): stocksnap 3769×2513 "Code Coding" |

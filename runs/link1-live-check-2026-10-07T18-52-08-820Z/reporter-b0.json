@@ -1,0 +1,721 @@
+{
+  "ok": true,
+  "brief": {
+    "single_story": {
+      "yes": true,
+      "note": "All sources cover the same Google support-page change to Gemini model access starting Oct. 9, 2026."
+    },
+    "the_news": {
+      "text": "Starting Oct. 9, 2026, Google will limit free Gemini app users to Flash-Lite only (no Flash or Pro) and remove Pro from AI Plus ($4.99/month) subscribers on a date Google will email them, per an updated Google support page; AI Pro ($19.99/month) is the cheapest plan that keeps all three models.",
+      "ids": [
+        "F1",
+        "F2",
+        "F3",
+        "F4"
+      ]
+    },
+    "why_it_matters": [
+      {
+        "text": "Free users lose the model picker's Flash and Pro options, and anyone relying on Pro (coding, studying, large files) on free or AI Plus must pay $19.99/month for AI Pro to keep it, an extra $15/month ($180/year) over AI Plus per Yahoo's math.",
+        "ids": [
+          "F1",
+          "F2",
+          "F3",
+          "F6"
+        ]
+      },
+      {
+        "text": "The change touches a very large user base: Google says Gemini passed 1 billion monthly users in August (Google's own claim as relayed by Yahoo), and PCMag ties it to rising storage and component costs, noting Google has not itself been quoted giving that reason.",
+        "ids": [
+          "F9",
+          "F10"
+        ]
+      }
+    ],
+    "facts": [
+      {
+        "id": "F1",
+        "text": "Beginning Oct. 9, Gemini app users without a paid Google AI subscription will lose access to Flash and Pro and be limited to Flash-Lite.",
+        "sources": [
+          "Yahoo Creators",
+          "Engadget",
+          "9to5Google",
+          "PCMag"
+        ],
+        "claim_by": null,
+        "notes": [
+          "Based on an updated Google support page, per 9to5Google, Engadget and PCMag. The support page version I opened still showed all models available to all plans (likely an older/cached version), so I could not verify the new wording directly."
+        ]
+      },
+      {
+        "id": "F2",
+        "text": "Google AI Plus subscribers will keep Flash-Lite and Flash but lose Pro; they will receive an email explaining when the changes take effect for their account, so their date may differ from Oct. 9.",
+        "sources": [
+          "9to5Google",
+          "Yahoo Creators",
+          "PCMag",
+          "Engadget"
+        ],
+        "claim_by": null,
+        "notes": [
+          "Engadget says AI Plus users will lose Gemini 3.1 Pro but doesn't mention the email."
+        ]
+      },
+      {
+        "id": "F3",
+        "text": "AI Pro and AI Ultra see no regressions: both keep Flash-Lite, Flash and Pro, and AI Pro will gain the Deep Think option, currently only on the $99.99 and $199.99/month plans.",
+        "sources": [
+          "9to5Google",
+          "Yahoo Creators"
+        ],
+        "claim_by": null,
+        "notes": [
+          "Engadget says Ultra subscribers get Deep Think; 9to5Google says Pro is adding it. Yahoo says Pro requires AI Pro or AI Ultra."
+        ]
+      },
+      {
+        "id": "F4",
+        "text": "Model versions named by 9to5Google and PCMag: free users keep (3.5) Flash-Lite and lose (3.6) Flash and (3.1) Pro.",
+        "sources": [
+          "9to5Google",
+          "PCMag"
+        ],
+        "claim_by": null,
+        "notes": [
+          "Yahoo and Engadget use generic names (Flash-Lite, Flash, Pro), with Engadget naming only Gemini 3.1 Pro."
+        ]
+      },
+      {
+        "id": "F5",
+        "text": "Google is adding low, medium and high effort levels for each available model in the Gemini app; higher levels give more thorough answers but use more of the user's limit.",
+        "sources": [
+          "9to5Google",
+          "PCMag",
+          "Engadget"
+        ],
+        "claim_by": null,
+        "notes": [
+          "9to5Google says the app 'looks to be adding' these levels in October; PCMag says users will 'soon' be able to choose."
+        ]
+      },
+      {
+        "id": "F6",
+        "text": "Google currently lists AI Plus at $4.99/month, AI Pro at $19.99/month and AI Ultra from $99.99/month in the U.S.; a Plus subscriber who wants to keep Pro would pay another $15 a month, or $180 a year.",
+        "sources": [
+          "Yahoo Creators",
+          "PCMag",
+          "9to5Google"
+        ],
+        "claim_by": null,
+        "notes": [
+          "The $15 and $180 figures are Yahoo's arithmetic from list prices."
+        ]
+      },
+      {
+        "id": "F7",
+        "text": "Eligible U.S. college students can get one year of AI Pro free (valued at $19.99/month), redeemable through Dec. 31, 2026; a valid payment method is required and it charges $19.99/month after the free year unless canceled.",
+        "sources": [
+          "Yahoo Creators"
+        ],
+        "claim_by": null,
+        "notes": [
+          "PCMag also says students remain eligible for a free year of AI Pro but gives no details."
+        ]
+      },
+      {
+        "id": "F8",
+        "text": "AI Ultra subscribers will also get access to Gemini 4 Argon once it launches generally; it is currently available only to members of Google's Fairwind program for governments and trusted partners.",
+        "sources": [
+          "Engadget",
+          "9to5Google"
+        ],
+        "claim_by": null,
+        "notes": [
+          "9to5Google says it is unclear whether Argon will be a Pro model or a new tier above it."
+        ]
+      },
+      {
+        "id": "F9",
+        "text": "Google says Gemini passed 1 billion monthly users in August.",
+        "sources": [
+          "Yahoo Creators"
+        ],
+        "claim_by": "Google",
+        "notes": [
+          "Company figure relayed by Yahoo; not independently confirmed in the sources I opened."
+        ]
+      },
+      {
+        "id": "F10",
+        "text": "PCMag says this is the second time Google has overhauled its AI plans this year and that the changes come as storage and component costs keep rising, potentially affecting Google's AI infrastructure spending.",
+        "sources": [
+          "PCMag"
+        ],
+        "claim_by": "PCMag",
+        "notes": [
+          "PCMag's own hedged inference; Google is not quoted giving a reason."
+        ]
+      },
+      {
+        "id": "F11",
+        "text": "PCMag reports AI Plus and AI Pro offer 2x and 5x Gemini usage limits versus the free plan, and that Google does not explain how limits are calculated.",
+        "sources": [
+          "PCMag"
+        ],
+        "claim_by": null,
+        "notes": [
+          "The Google support page I opened lists AI Plus at 2x and AI Pro at 4x higher than standard limits, and AI Ultra at 5x or 20x higher than AI Pro. That conflicts with PCMag's 5x for Pro."
+        ]
+      }
+    ],
+    "background": [
+      {
+        "id": "B1",
+        "text": "The model-access limits follow a compute-based usage limit change Google made to the Gemini app in May.",
+        "sources": [
+          "9to5Google"
+        ],
+        "claim_by": null,
+        "notes": [
+          "Google's support page says limits are compute-based and factor in prompt complexity, models and features used, and chat length; limits refresh every 5 hours until a weekly limit is hit."
+        ]
+      }
+    ],
+    "quotes": [
+      {
+        "id": "Q1",
+        "text": "receive an email that explains when these changes will take effect",
+        "speaker": "Google (support page)",
+        "speaker_id": "S1",
+        "where": "Updated Gemini support document, as quoted by 9to5Google",
+        "via": [
+          "9to5Google"
+        ],
+        "single_source": true,
+        "cut_off": false,
+        "notes": [
+          "Fragment quoted by 9to5Google about AI Plus subscribers. Yahoo paraphrases the same point."
+        ]
+      },
+      {
+        "id": "Q2",
+        "text": "This will increase the model’s ability to complete tasks and provide more thorough answers to queries, but will also use more of your limit.",
+        "speaker": "Google (support page)",
+        "speaker_id": "S1",
+        "where": "Gemini support page on effort levels, as quoted by PCMag",
+        "via": [
+          "PCMag",
+          "9to5Google"
+        ],
+        "single_source": false,
+        "cut_off": false,
+        "notes": [
+          "PCMag attributes it to Google in quotation marks. 9to5Google shows the same sentence in its text but not in quotation marks."
+        ]
+      },
+      {
+        "id": "Q3",
+        "text": "Calculation of your usage will factor in the complexity of your prompt, the features you use, and the length of your chat",
+        "speaker": "Google (support page)",
+        "speaker_id": "S1",
+        "where": "Gemini support page, as quoted by PCMag",
+        "via": [
+          "PCMag"
+        ],
+        "single_source": true,
+        "cut_off": false,
+        "notes": [
+          "The support page I opened has similar but not identical wording."
+        ]
+      }
+    ],
+    "numbers": [
+      {
+        "id": "N1",
+        "value": "Oct. 9",
+        "type": "date",
+        "counts": "Date free users lose Flash and Pro",
+        "sources": [
+          "Yahoo Creators",
+          "9to5Google",
+          "Engadget",
+          "PCMag"
+        ],
+        "notes": [
+          "AI Plus date set by email."
+        ]
+      },
+      {
+        "id": "N2",
+        "value": "$4.99 a month",
+        "type": "money",
+        "counts": "Google AI Plus U.S. price",
+        "sources": [
+          "Yahoo Creators",
+          "9to5Google",
+          "PCMag"
+        ],
+        "notes": [
+          "Engadget rounds to $5."
+        ]
+      },
+      {
+        "id": "N3",
+        "value": "$19.99",
+        "type": "money",
+        "counts": "Google AI Pro monthly U.S. price",
+        "sources": [
+          "Yahoo Creators",
+          "9to5Google",
+          "PCMag"
+        ],
+        "notes": [
+          "Yahoo: nearly $240 a year."
+        ]
+      },
+      {
+        "id": "N4",
+        "value": "From $99.99/month",
+        "type": "money",
+        "counts": "AI Ultra U.S. starting price",
+        "sources": [
+          "Yahoo Creators",
+          "9to5Google"
+        ],
+        "notes": [
+          "9to5Google also cites a $199.99/month plan."
+        ]
+      },
+      {
+        "id": "N5",
+        "value": "$180 over a year",
+        "type": "money",
+        "counts": "Extra annual cost for a Plus subscriber moving to AI Pro",
+        "sources": [
+          "Yahoo Creators"
+        ],
+        "notes": [
+          "Yahoo's calculation."
+        ]
+      },
+      {
+        "id": "N6",
+        "value": "1 billion monthly users in August",
+        "type": "count",
+        "counts": "Gemini monthly users, per Google",
+        "sources": [
+          "Yahoo Creators"
+        ],
+        "notes": [
+          "Company claim."
+        ]
+      },
+      {
+        "id": "N7",
+        "value": "5,067 U.S. adults; 55% of AI users pay for at least one AI product",
+        "type": "other",
+        "counts": "Menlo Ventures/Morning Consult July survey, as cited by Yahoo",
+        "sources": [
+          "Yahoo Creators"
+        ],
+        "notes": [
+          "Typical payer spend was $20 to $49 a month. I did not open the survey."
+        ]
+      },
+      {
+        "id": "N8",
+        "value": "2x and 5x",
+        "type": "other",
+        "counts": "AI Plus and AI Pro usage limits versus free, per PCMag",
+        "sources": [
+          "PCMag"
+        ],
+        "notes": [
+          "The Google support page I opened says 2x and 4x."
+        ]
+      }
+    ],
+    "terms": [
+      {
+        "name": "Flash-Lite",
+        "definition": "Google's efficient 'workhorse' Gemini model built for speed, ideal for everyday tasks like summarization and brainstorming.",
+        "source": "Google Gemini Apps Help"
+      },
+      {
+        "name": "Flash",
+        "definition": "A more powerful Gemini model that balances speed and reasoning to solve a large variety of problems, from simple to complex.",
+        "source": "Google Gemini Apps Help"
+      },
+      {
+        "name": "Pro",
+        "definition": "Google's most advanced Gemini model, strong at complex math, coding and reasoning, with deeper understanding of text, files, images and video.",
+        "source": "Google Gemini Apps Help"
+      },
+      {
+        "name": "Deep Think",
+        "definition": "A Gemini option providing 'maximum parallel reasoning'; queries can take a few minutes. It requires the Pro model.",
+        "source": "Google Gemini Apps Help"
+      },
+      {
+        "name": "Compute-based usage limits",
+        "definition": "Limits on Gemini use that factor in prompt complexity, models and features used, and chat length. They refresh every 5 hours until a weekly limit is reached.",
+        "source": "Google Gemini Apps Help"
+      }
+    ],
+    "subjects": [
+      {
+        "id": "S1",
+        "name": "Google",
+        "role": "Maker of Gemini; changed model access on its support page",
+        "type": "organization"
+      },
+      {
+        "id": "S2",
+        "name": "Gemini (app)",
+        "role": "Google's AI chatbot app and website with Flash-Lite, Flash and Pro models",
+        "type": "organization"
+      },
+      {
+        "id": "S3",
+        "name": "Google AI Plus / AI Pro / AI Ultra",
+        "role": "Google's paid AI subscription tiers ($4.99, $19.99, from $99.99 per month)",
+        "type": "organization"
+      },
+      {
+        "id": "S4",
+        "name": "Menlo Ventures",
+        "role": "Ran the survey of paying AI users with Morning Consult, cited by Yahoo",
+        "type": "organization"
+      },
+      {
+        "id": "S5",
+        "name": "Noël Burgess",
+        "role": "Author of the Yahoo Creators article",
+        "type": "person"
+      }
+    ],
+    "events": [
+      {
+        "what": "Free Gemini users lose Flash and Pro; the model picker is limited to Flash-Lite",
+        "date": "2026-10-09",
+        "place": "Global, in the Gemini app and web"
+      }
+    ],
+    "article_photos": [
+      {
+        "caption": "Google's Gemini model picker currently includes Flash-Lite, Flash and Pro. Starting Oct. 9, free users will be limited to Flash-Lite. (Noël Burgess)",
+        "credit": null,
+        "url": "https://s.yimg.com/lo/mysterio/api/5c88a299a92f36edb248baf837367cc8fd31da51cc544370b3a5fb6a17c7495c/lightyear_networkapi/resizefill_w976%3Bquality_80%3Bformat_webp/https%3A%2F%2Fd29szjachogqwa.cloudfront.net%2Fimages%2Fuser-uploaded%2Fgoogle-gemini-flash-pro-free-users-october-9-2026_6850.png",
+        "page": "https://creators.yahoo.com/lifestyle/story/google-gemini-free-users-lose-flash-and-pro-oct-9-heres-what-it-costs-to-keep-them-002845209.html"
+      },
+      {
+        "caption": null,
+        "credit": "(Credit: Google)",
+        "url": "https://sm.pcmag.com/t/pcmag_me/photo/g/googles-up/googles-updated-model-limits-for-gemini-users_kxcg.3840.png",
+        "page": "https://me.pcmag.com/en/ai/38241/using-google-gemini-for-free-youre-losing-some-models-later-this-week"
+      },
+      {
+        "caption": null,
+        "credit": "Kenneth Cheung/Getty Images",
+        "url": "https://www.engadget.com/img/gallery/google-removes-free-access-to-gemini-flash-and-pro-on-october-9/l-intro-1791285503.jpg",
+        "page": "https://www.engadget.com/2278504/google-removes-free-access-gemini-flash-pro-october-9/"
+      }
+    ],
+    "not_answered": [
+      "The updated Google support page with the new Oct. 9 wording could not be confirmed directly. The version I opened still showed all models available on every plan, so the change is sourced through 9to5Google, Engadget and PCMag reporting on that page.",
+      "Google gave no stated reason for the change in the sources opened. PCMag's cost explanation is its own inference.",
+      "The exact date AI Plus subscribers lose Pro is not given. Google says it will email them.",
+      "Whether free users keep any limited access to Flash or Pro after Oct. 9 is not stated.",
+      "Whether Gemini 4 Argon will count as a Pro model or a new tier is unclear (9to5Google).",
+      "The Google support page says AI Pro has 4x limits, while PCMag says 5x. This is unresolved.",
+      "No independent expert comment or Google spokesperson statement was found."
+    ],
+    "sources": [
+      {
+        "outlet": "Yahoo Creators (Noël Burgess)",
+        "date": "2026-10-06",
+        "url": "https://creators.yahoo.com/lifestyle/story/google-gemini-free-users-lose-flash-and-pro-oct-9-heres-what-it-costs-to-keep-them-002845209.html",
+        "kind": "original"
+      },
+      {
+        "outlet": "9to5Google (Abner Li)",
+        "date": "2026-10-03",
+        "url": "https://9to5google.com/2026/10/03/gemini-model-limits-oct-26/",
+        "kind": "original"
+      },
+      {
+        "outlet": "Engadget (Mariella Moon)",
+        "date": "2026-10-06",
+        "url": "https://www.engadget.com/2278504/google-removes-free-access-gemini-flash-pro-october-9/",
+        "kind": "original"
+      },
+      {
+        "outlet": "PCMag (Jibin Joseph)",
+        "date": "2026-10-05",
+        "url": "https://www.pcmag.com/news/using-google-gemini-for-free-youre-losing-some-models-later-this-week",
+        "kind": "original"
+      },
+      {
+        "outlet": "PCMag Middle East (Jibin Joseph)",
+        "date": "2026-10-06",
+        "url": "https://me.pcmag.com/en/ai/38241/using-google-gemini-for-free-youre-losing-some-models-later-this-week",
+        "kind": "original"
+      },
+      {
+        "outlet": "Google Gemini Apps Help (support page)",
+        "date": null,
+        "url": "https://support.google.com/gemini/answer/16275805?hl=en",
+        "kind": "official"
+      },
+      {
+        "outlet": "UA.NEWS (summarizing Engadget)",
+        "date": "2026-10-06",
+        "url": "https://ua.news/en/technologies/google-zakriie-bezkoshtovnii-dostup-do-modelei-gemini-flash-i-pro-engadget",
+        "kind": "aggregator"
+      }
+    ],
+    "fetch_failures": [
+      {
+        "url": "https://www.androidauthority.com/google-gemini-free-ai-plus-usage-limits-3719012/",
+        "reason": "fetch failed (not retried, to stay within the tool-call budget)"
+      }
+    ]
+  },
+  "raw": "{\n  \"single_story\": {\n    \"yes\": true,\n    \"note\": \"All sources cover the same Google support-page change to Gemini model access starting Oct. 9, 2026.\"\n  },\n  \"the_news\": {\n    \"text\": \"Starting Oct. 9, 2026, Google will limit free Gemini app users to Flash-Lite only (no Flash or Pro) and remove Pro from AI Plus ($4.99/month) subscribers on a date Google will email them, per an updated Google support page; AI Pro ($19.99/month) is the cheapest plan that keeps all three models.\",\n    \"ids\": [\n      \"F1\",\n      \"F2\",\n      \"F3\",\n      \"F4\"\n    ]\n  },\n  \"why_it_matters\": [\n    {\n      \"text\": \"Free users lose the model picker's Flash and Pro options, and anyone relying on Pro (coding, studying, large files) on free or AI Plus must pay $19.99/month for AI Pro to keep it, an extra $15/month ($180/year) over AI Plus per Yahoo's math.\",\n      \"ids\": [\n        \"F1\",\n        \"F2\",\n        \"F3\",\n        \"F6\"\n      ]\n    },\n    {\n      \"text\": \"The change touches a very large user base: Google says Gemini passed 1 billion monthly users in August (Google's own claim as relayed by Yahoo), and PCMag ties it to rising storage and component costs, noting Google has not itself been quoted giving that reason.\",\n      \"ids\": [\n        \"F9\",\n        \"F10\"\n      ]\n    }\n  ],\n  \"facts\": [\n    {\n      \"id\": \"F1\",\n      \"text\": \"Beginning Oct. 9, Gemini app users without a paid Google AI subscription will lose access to Flash and Pro and be limited to Flash-Lite.\",\n      \"sources\": [\n        \"Yahoo Creators\",\n        \"Engadget\",\n        \"9to5Google\",\n        \"PCMag\"\n      ],\n      \"claim_by\": null,\n      \"notes\": [\n        \"Based on an updated Google support page, per 9to5Google, Engadget and PCMag. The support page version I opened still showed all models available to all plans (likely an older/cached version), so I could not verify the new wording directly.\"\n      ]\n    },\n    {\n      \"id\": \"F2\",\n      \"text\": \"Google AI Plus subscribers will keep Flash-Lite and Flash but lose Pro; they will receive an email explaining when the changes take effect for their account, so their date may differ from Oct. 9.\",\n      \"sources\": [\n        \"9to5Google\",\n        \"Yahoo Creators\",\n        \"PCMag\",\n        \"Engadget\"\n      ],\n      \"claim_by\": null,\n      \"notes\": [\n        \"Engadget says AI Plus users will lose Gemini 3.1 Pro but doesn't mention the email.\"\n      ]\n    },\n    {\n      \"id\": \"F3\",\n      \"text\": \"AI Pro and AI Ultra see no regressions: both keep Flash-Lite, Flash and Pro, and AI Pro will gain the Deep Think option, currently only on the $99.99 and $199.99/month plans.\",\n      \"sources\": [\n        \"9to5Google\",\n        \"Yahoo Creators\"\n      ],\n      \"claim_by\": null,\n      \"notes\": [\n        \"Engadget says Ultra subscribers get Deep Think; 9to5Google says Pro is adding it. Yahoo says Pro requires AI Pro or AI Ultra.\"\n      ]\n    },\n    {\n      \"id\": \"F4\",\n      \"text\": \"Model versions named by 9to5Google and PCMag: free users keep (3.5) Flash-Lite and lose (3.6) Flash and (3.1) Pro.\",\n      \"sources\": [\n        \"9to5Google\",\n        \"PCMag\"\n      ],\n      \"claim_by\": null,\n      \"notes\": [\n        \"Yahoo and Engadget use generic names (Flash-Lite, Flash, Pro), with Engadget naming only Gemini 3.1 Pro.\"\n      ]\n    },\n    {\n      \"id\": \"F5\",\n      \"text\": \"Google is adding low, medium and high effort levels for each available model in the Gemini app; higher levels give more thorough answers but use more of the user's limit.\",\n      \"sources\": [\n        \"9to5Google\",\n        \"PCMag\",\n        \"Engadget\"\n      ],\n      \"claim_by\": null,\n      \"notes\": [\n        \"9to5Google says the app 'looks to be adding' these levels in October; PCMag says users will 'soon' be able to choose.\"\n      ]\n    },\n    {\n      \"id\": \"F6\",\n      \"text\": \"Google currently lists AI Plus at $4.99/month, AI Pro at $19.99/month and AI Ultra from $99.99/month in the U.S.; a Plus subscriber who wants to keep Pro would pay another $15 a month, or $180 a year.\",\n      \"sources\": [\n        \"Yahoo Creators\",\n        \"PCMag\",\n        \"9to5Google\"\n      ],\n      \"claim_by\": null,\n      \"notes\": [\n        \"The $15 and $180 figures are Yahoo's arithmetic from list prices.\"\n      ]\n    },\n    {\n      \"id\": \"F7\",\n      \"text\": \"Eligible U.S. college students can get one year of AI Pro free (valued at $19.99/month), redeemable through Dec. 31, 2026; a valid payment method is required and it charges $19.99/month after the free year unless canceled.\",\n      \"sources\": [\n        \"Yahoo Creators\"\n      ],\n      \"claim_by\": null,\n      \"notes\": [\n        \"PCMag also says students remain eligible for a free year of AI Pro but gives no details.\"\n      ]\n    },\n    {\n      \"id\": \"F8\",\n      \"text\": \"AI Ultra subscribers will also get access to Gemini 4 Argon once it launches generally; it is currently available only to members of Google's Fairwind program for governments and trusted partners.\",\n      \"sources\": [\n        \"Engadget\",\n        \"9to5Google\"\n      ],\n      \"claim_by\": null,\n      \"notes\": [\n        \"9to5Google says it is unclear whether Argon will be a Pro model or a new tier above it.\"\n      ]\n    },\n    {\n      \"id\": \"F9\",\n      \"text\": \"Google says Gemini passed 1 billion monthly users in August.\",\n      \"sources\": [\n        \"Yahoo Creators\"\n      ],\n      \"claim_by\": \"Google\",\n      \"notes\": [\n        \"Company figure relayed by Yahoo; not independently confirmed in the sources I opened.\"\n      ]\n    },\n    {\n      \"id\": \"F10\",\n      \"text\": \"PCMag says this is the second time Google has overhauled its AI plans this year and that the changes come as storage and component costs keep rising, potentially affecting Google's AI infrastructure spending.\",\n      \"sources\": [\n        \"PCMag\"\n      ],\n      \"claim_by\": \"PCMag\",\n      \"notes\": [\n        \"PCMag's own hedged inference; Google is not quoted giving a reason.\"\n      ]\n    },\n    {\n      \"id\": \"F11\",\n      \"text\": \"PCMag reports AI Plus and AI Pro offer 2x and 5x Gemini usage limits versus the free plan, and that Google does not explain how limits are calculated.\",\n      \"sources\": [\n        \"PCMag\"\n      ],\n      \"claim_by\": null,\n      \"notes\": [\n        \"The Google support page I opened lists AI Plus at 2x and AI Pro at 4x higher than standard limits, and AI Ultra at 5x or 20x higher than AI Pro. That conflicts with PCMag's 5x for Pro.\"\n      ]\n    }\n  ],\n  \"background\": [\n    {\n      \"id\": \"B1\",\n      \"text\": \"The model-access limits follow a compute-based usage limit change Google made to the Gemini app in May.\",\n      \"sources\": [\n        \"9to5Google\"\n      ],\n      \"claim_by\": null,\n      \"notes\": [\n        \"Google's support page says limits are compute-based and factor in prompt complexity, models and features used, and chat length; limits refresh every 5 hours until a weekly limit is hit.\"\n      ]\n    }\n  ],\n  \"quotes\": [\n    {\n      \"id\": \"Q1\",\n      \"text\": \"receive an email that explains when these changes will take effect\",\n      \"speaker\": \"Google (support page)\",\n      \"speaker_id\": \"S1\",\n      \"where\": \"Updated Gemini support document, as quoted by 9to5Google\",\n      \"via\": [\n        \"9to5Google\"\n      ],\n      \"single_source\": true,\n      \"cut_off\": false,\n      \"notes\": [\n        \"Fragment quoted by 9to5Google about AI Plus subscribers. Yahoo paraphrases the same point.\"\n      ]\n    },\n    {\n      \"id\": \"Q2\",\n      \"text\": \"This will increase the model’s ability to complete tasks and provide more thorough answers to queries, but will also use more of your limit.\",\n      \"speaker\": \"Google (support page)\",\n      \"speaker_id\": \"S1\",\n      \"where\": \"Gemini support page on effort levels, as quoted by PCMag\",\n      \"via\": [\n        \"PCMag\",\n        \"9to5Google\"\n      ],\n      \"single_source\": false,\n      \"cut_off\": false,\n      \"notes\": [\n        \"PCMag attributes it to Google in quotation marks. 9to5Google shows the same sentence in its text but not in quotation marks.\"\n      ]\n    },\n    {\n      \"id\": \"Q3\",\n      \"text\": \"Calculation of your usage will factor in the complexity of your prompt, the features you use, and the length of your chat\",\n      \"speaker\": \"Google (support page)\",\n      \"speaker_id\": \"S1\",\n      \"where\": \"Gemini support page, as quoted by PCMag\",\n      \"via\": [\n        \"PCMag\"\n      ],\n      \"single_source\": true,\n      \"cut_off\": false,\n      \"notes\": [\n        \"The support page I opened has similar but not identical wording.\"\n      ]\n    }\n  ],\n  \"numbers\": [\n    {\n      \"id\": \"N1\",\n      \"value\": \"Oct. 9\",\n      \"type\": \"date\",\n      \"counts\": \"Date free users lose Flash and Pro\",\n      \"sources\": [\n        \"Yahoo Creators\",\n        \"9to5Google\",\n        \"Engadget\",\n        \"PCMag\"\n      ],\n      \"notes\": [\n        \"AI Plus date set by email.\"\n      ]\n    },\n    {\n      \"id\": \"N2\",\n      \"value\": \"$4.99 a month\",\n      \"type\": \"money\",\n      \"counts\": \"Google AI Plus U.S. price\",\n      \"sources\": [\n        \"Yahoo Creators\",\n        \"9to5Google\",\n        \"PCMag\"\n      ],\n      \"notes\": [\n        \"Engadget rounds to $5.\"\n      ]\n    },\n    {\n      \"id\": \"N3\",\n      \"value\": \"$19.99\",\n      \"type\": \"money\",\n      \"counts\": \"Google AI Pro monthly U.S. price\",\n      \"sources\": [\n        \"Yahoo Creators\",\n        \"9to5Google\",\n        \"PCMag\"\n      ],\n      \"notes\": [\n        \"Yahoo: nearly $240 a year.\"\n      ]\n    },\n    {\n      \"id\": \"N4\",\n      \"value\": \"From $99.99/month\",\n      \"type\": \"money\",\n      \"counts\": \"AI Ultra U.S. starting price\",\n      \"sources\": [\n        \"Yahoo Creators\",\n        \"9to5Google\"\n      ],\n      \"notes\": [\n        \"9to5Google also cites a $199.99/month plan.\"\n      ]\n    },\n    {\n      \"id\": \"N5\",\n      \"value\": \"$180 over a year\",\n      \"type\": \"money\",\n      \"counts\": \"Extra annual cost for a Plus subscriber moving to AI Pro\",\n      \"sources\": [\n        \"Yahoo Creators\"\n      ],\n      \"notes\": [\n        \"Yahoo's calculation.\"\n      ]\n    },\n    {\n      \"id\": \"N6\",\n      \"value\": \"1 billion monthly users in August\",\n      \"type\": \"count\",\n      \"counts\": \"Gemini monthly users, per Google\",\n      \"sources\": [\n        \"Yahoo Creators\"\n      ],\n      \"notes\": [\n        \"Company claim.\"\n      ]\n    },\n    {\n      \"id\": \"N7\",\n      \"value\": \"5,067 U.S. adults; 55% of AI users pay for at least one AI product\",\n      \"type\": \"other\",\n      \"counts\": \"Menlo Ventures/Morning Consult July survey, as cited by Yahoo\",\n      \"sources\": [\n        \"Yahoo Creators\"\n      ],\n      \"notes\": [\n        \"Typical payer spend was $20 to $49 a month. I did not open the survey.\"\n      ]\n    },\n    {\n      \"id\": \"N8\",\n      \"value\": \"2x and 5x\",\n      \"type\": \"other\",\n      \"counts\": \"AI Plus and AI Pro usage limits versus free, per PCMag\",\n      \"sources\": [\n        \"PCMag\"\n      ],\n      \"notes\": [\n        \"The Google support page I opened says 2x and 4x.\"\n      ]\n    }\n  ],\n  \"terms\": [\n    {\n      \"name\": \"Flash-Lite\",\n      \"definition\": \"Google's efficient 'workhorse' Gemini model built for speed, ideal for everyday tasks like summarization and brainstorming.\",\n      \"source\": \"Google Gemini Apps Help\"\n    },\n    {\n      \"name\": \"Flash\",\n      \"definition\": \"A more powerful Gemini model that balances speed and reasoning to solve a large variety of problems, from simple to complex.\",\n      \"source\": \"Google Gemini Apps Help\"\n    },\n    {\n      \"name\": \"Pro\",\n      \"definition\": \"Google's most advanced Gemini model, strong at complex math, coding and reasoning, with deeper understanding of text, files, images and video.\",\n      \"source\": \"Google Gemini Apps Help\"\n    },\n    {\n      \"name\": \"Deep Think\",\n      \"definition\": \"A Gemini option providing 'maximum parallel reasoning'; queries can take a few minutes. It requires the Pro model.\",\n      \"source\": \"Google Gemini Apps Help\"\n    },\n    {\n      \"name\": \"Compute-based usage limits\",\n      \"definition\": \"Limits on Gemini use that factor in prompt complexity, models and features used, and chat length. They refresh every 5 hours until a weekly limit is reached.\",\n      \"source\": \"Google Gemini Apps Help\"\n    }\n  ],\n  \"subjects\": [\n    {\n      \"id\": \"S1\",\n      \"name\": \"Google\",\n      \"role\": \"Maker of Gemini; changed model access on its support page\",\n      \"type\": \"organization\"\n    },\n    {\n      \"id\": \"S2\",\n      \"name\": \"Gemini (app)\",\n      \"role\": \"Google's AI chatbot app and website with Flash-Lite, Flash and Pro models\",\n      \"type\": \"organization\"\n    },\n    {\n      \"id\": \"S3\",\n      \"name\": \"Google AI Plus / AI Pro / AI Ultra\",\n      \"role\": \"Google's paid AI subscription tiers ($4.99, $19.99, from $99.99 per month)\",\n      \"type\": \"organization\"\n    },\n    {\n      \"id\": \"S4\",\n      \"name\": \"Menlo Ventures\",\n      \"role\": \"Ran the survey of paying AI users with Morning Consult, cited by Yahoo\",\n      \"type\": \"organization\"\n    },\n    {\n      \"id\": \"S5\",\n      \"name\": \"Noël Burgess\",\n      \"role\": \"Author of the Yahoo Creators article\",\n      \"type\": \"person\"\n    }\n  ],\n  \"events\": [\n    {\n      \"what\": \"Free Gemini users lose Flash and Pro; the model picker is limited to Flash-Lite\",\n      \"date\": \"2026-10-09\",\n      \"place\": \"Global, in the Gemini app and web\"\n    }\n  ],\n  \"article_photos\": [\n    {\n      \"caption\": \"Google's Gemini model picker currently includes Flash-Lite, Flash and Pro. Starting Oct. 9, free users will be limited to Flash-Lite. (Noël Burgess)\",\n      \"credit\": null,\n      \"url\": \"https://s.yimg.com/lo/mysterio/api/5c88a299a92f36edb248baf837367cc8fd31da51cc544370b3a5fb6a17c7495c/lightyear_networkapi/resizefill_w976%3Bquality_80%3Bformat_webp/https%3A%2F%2Fd29szjachogqwa.cloudfront.net%2Fimages%2Fuser-uploaded%2Fgoogle-gemini-flash-pro-free-users-october-9-2026_6850.png\",\n      \"page\": \"https://creators.yahoo.com/lifestyle/story/google-gemini-free-users-lose-flash-and-pro-oct-9-heres-what-it-costs-to-keep-them-002845209.html\"\n    },\n    {\n      \"caption\": null,\n      \"credit\": \"(Credit: Google)\",\n      \"url\": \"https://sm.pcmag.com/t/pcmag_me/photo/g/googles-up/googles-updated-model-limits-for-gemini-users_kxcg.3840.png\",\n      \"page\": \"https://me.pcmag.com/en/ai/38241/using-google-gemini-for-free-youre-losing-some-models-later-this-week\"\n    },\n    {\n      \"caption\": null,\n      \"credit\": \"Kenneth Cheung/Getty Images\",\n      \"url\": \"https://www.engadget.com/img/gallery/google-removes-free-access-to-gemini-flash-and-pro-on-october-9/l-intro-1791285503.jpg\",\n      \"page\": \"https://www.engadget.com/2278504/google-removes-free-access-gemini-flash-pro-october-9/\"\n    }\n  ],\n  \"not_answered\": [\n    \"The updated Google support page with the new Oct. 9 wording could not be confirmed directly. The version I opened still showed all models available on every plan, so the change is sourced through 9to5Google, Engadget and PCMag reporting on that page.\",\n    \"Google gave no stated reason for the change in the sources opened. PCMag's cost explanation is its own inference.\",\n    \"The exact date AI Plus subscribers lose Pro is not given. Google says it will email them.\",\n    \"Whether free users keep any limited access to Flash or Pro after Oct. 9 is not stated.\",\n    \"Whether Gemini 4 Argon will count as a Pro model or a new tier is unclear (9to5Google).\",\n    \"The Google support page says AI Pro has 4x limits, while PCMag says 5x. This is unresolved.\",\n    \"No independent expert comment or Google spokesperson statement was found.\"\n  ],\n  \"sources\": [\n    {\n      \"outlet\": \"Yahoo Creators (Noël Burgess)\",\n      \"date\": \"2026-10-06\",\n      \"url\": \"https://creators.yahoo.com/lifestyle/story/google-gemini-free-users-lose-flash-and-pro-oct-9-heres-what-it-costs-to-keep-them-002845209.html\",\n      \"kind\": \"original\"\n    },\n    {\n      \"outlet\": \"9to5Google (Abner Li)\",\n      \"date\": \"2026-10-03\",\n      \"url\": \"https://9to5google.com/2026/10/03/gemini-model-limits-oct-26/\",\n      \"kind\": \"original\"\n    },\n    {\n      \"outlet\": \"Engadget (Mariella Moon)\",\n      \"date\": \"2026-10-06\",\n      \"url\": \"https://www.engadget.com/2278504/google-removes-free-access-gemini-flash-pro-october-9/\",\n      \"kind\": \"original\"\n    },\n    {\n      \"outlet\": \"PCMag (Jibin Joseph)\",\n      \"date\": \"2026-10-05\",\n      \"url\": \"https://www.pcmag.com/news/using-google-gemini-for-free-youre-losing-some-models-later-this-week\",\n      \"kind\": \"original\"\n    },\n    {\n      \"outlet\": \"PCMag Middle East (Jibin Joseph)\",\n      \"date\": \"2026-10-06\",\n      \"url\": \"https://me.pcmag.com/en/ai/38241/using-google-gemini-for-free-youre-losing-some-models-later-this-week\",\n      \"kind\": \"original\"\n    },\n    {\n      \"outlet\": \"Google Gemini Apps Help (support page)\",\n      \"date\": null,\n      \"url\": \"https://support.google.com/gemini/answer/16275805?hl=en\",\n      \"kind\": \"official\"\n    },\n    {\n      \"outlet\": \"UA.NEWS (summarizing Engadget)\",\n      \"date\": \"2026-10-06\",\n      \"url\": \"https://ua.news/en/technologies/google-zakriie-bezkoshtovnii-dostup-do-modelei-gemini-flash-i-pro-engadget\",\n      \"kind\": \"aggregator\"\n    }\n  ],\n  \"fetch_failures\": [\n    {\n      \"url\": \"https://www.androidauthority.com/google-gemini-free-ai-plus-usage-limits-3719012/\",\n      \"reason\": \"fetch failed (not retried, to stay within the tool-call budget)\"\n    }\n  ]\n}",
+  "pages": [
+    {
+      "ok": true,
+      "url": "https://news.google.com/rss/articles/CBMinAFBVV95cUxQSm45bzM5OGhDNTcwQ0pTYlJhLVN4bUpkUHdNMnY3T1J1S2prYlFmYnV5dXJPajlGWUxreWhwZlZBWXpRUVQ4UVhvVFJnSWM2M1ZrdHZib0RLZGswak53UnZPWGt3SXVmMXBqQlJub2hHMmN6cWVMV2pEcm1KV1ptY0R2aUdsa2dGRUtMLWtqYklMLWx2SjNaOWFBNXo?oc=5",
+      "resolvedUrl": "https://www.pcmag.com/news/using-google-gemini-for-free-youre-losing-some-models-later-this-week",
+      "title": "Using Google Gemini for Free? You're Losing Some Models Later This Week",
+      "byline": "Jibin Joseph",
+      "publishedTime": "2026-10-05T09:31:14+00:00",
+      "text": "If you’re not paying for Gemini, you are about to lose access to the chatbot’s Flash and Pro models.As spotted by 9to5Google, Google has updated a support page to note that it is restricting what Gemini models free and AI Plus users can use. On Oct. 9, free users will lose access to both Gemini’s 3.6 Flash and 3.1 Pro models, while AI Plus subscribers will soon be notified via email that they’re losing access to the 3.1 Pro model.Google’s Gemini models come in three tiers. Flash-Lite is the lightest and fastest, Flash is the all-around middle option, and Pro is the most advanced.\n\nSo far, free users have had limited access to all three models. Once the new limits take effect, they will only be able to access the 3.5 Flash-Lite model. The 3.6 Flash model unlocks with Google’s $4.99-per-month AI Plus plan, while the 3.1 Pro model unlocks with a $19.99-per-month AI Pro subscription. Students, meanwhile, remain eligible for a year of Google’s AI Pro plan for free.\n\n(Credit: Google)\n\nGoogle also notes that you’ll soon be able to choose the level of effort each model puts into your queries, between low, medium, or high. “This will increase the model’s ability to complete tasks and provide more thorough answers to queries, but will also use more of your limit,” the company says.\n\nRecommended by Our Editors\n\nCompared with the free plan, Google’s AI Plus and Pro plans offer 2x and 5x Gemini usage limits, respectively. The company, however, doesn’t explain how it calculates these limits. “Calculation of your usage will factor in the complexity of your prompt, the features you use, and the length of your chat,” it says.This is the second time Google has overhauled its AI plans this year. The latest changes come as storage and component costs continue to rise, potentially directly affecting the company's AI infrastructure spending.\n\nAbout Our Expert\n\nJibin Joseph\n\nContributor\n\nExperience\n\nJibin is a tech news writer based out of Ahmedabad, India. Previously, he served as the editor of iGeeksBlog and is a self-proclaimed tech enthusiast who loves breaking down complex information for a broader audience.\n\nLatest By Jibin Joseph\n\nRead Full Bio",
+      "truncated": false,
+      "photos": [
+        {
+          "src": "https://i.pcmag.com/imagery/articles/02BUeQ9DfPsTGvx7Jqd1P5H-1.fit_lim.size_1200x630.v1791187258.jpg",
+          "caption": null,
+          "credit": null,
+          "alt": null,
+          "from": "og:image"
+        }
+      ]
+    },
+    {
+      "ok": true,
+      "url": "https://news.google.com/rss/articles/CBMiqgFBVV95cUxON1VEY0dCWWJOZlVwTFA3VTBNLUtoNXptZmlzdksyZ1BRRWFIS0szeUZkdUNId1RlUWxtRk1vczBoQnBOLU9NNmR0RVhjTWVuV2ZRSVFmZUE3V2F6Y2NEQlJfLTZIWXBHZ3JBYkZZMzdoM1hFeGxFVjV5RkRwNHNPU0RqS01nanZPU1k5Nmg1cVJ6eGRWclhDcGNxV0szUEx3WWU4QmJNVDNxZw?oc=5",
+      "resolvedUrl": "https://ua.news/en/technologies/google-zakriie-bezkoshtovnii-dostup-do-modelei-gemini-flash-i-pro-engadget",
+      "title": "Google to end free access to Gemini Flash and Pro models — Engadget",
+      "byline": "UA.NEWS",
+      "publishedTime": "2026-10-06 15:04:31",
+      "text": "Google will end free access to the Gemini Flash and Gemini Pro models in the app and web version of its chatbot on October 9. For users without a subscription, all requests will be handled by Gemini Flash-Lite, the company’s most economical model, Engadget reports.Which models will remain freeCurrently, free users can choose from three models in a drop-down menu in the app or next to the input field in the browser. After the change, this choice will disappear: only Flash-Lite will remain for free accounts. Gemini Flash is more powerful than Lite, while Gemini Pro is designed for more complex tasks and deeper reasoning.More current news is available on the UA.News Telegram channel Telegram.Changes for subscribersUsers of the cheapest Google AI Plus plan, which costs $5 per month in the United States, will also lose access to Gemini 3.1 Pro. Google describes this model as suitable for complex math tasks, programming, and working with text, files, images, and video. The company notes that users who need such capabilities may have to upgrade to the Google AI Pro plan, which costs $20 per month in the United States. AI Ultra, with higher limits, costs at least $100.The company is also introducing effort-level settings for each model — low, medium, and high. A higher level is expected to provide more detailed responses but use up the usage limit faster. AI Ultra subscribers will receive the Deep Think option and, after its general launch, access to Gemini 4 Argon, which is currently available to members of the Fairwind program for governments and verified partners.",
+      "truncated": false,
+      "photos": [
+        {
+          "src": "https://cdn-cabinet.ua.news/uploads/images/google_ends_free_access_to_gemini_flash_1791288265779.webp",
+          "caption": null,
+          "credit": null,
+          "alt": null,
+          "from": "og:image"
+        }
+      ]
+    },
+    {
+      "ok": true,
+      "url": "https://news.google.com/rss/articles/CBMi1wFBVV95cUxPbHJDQmFybEt6b1p0a2QyMm44LS02UmxCaS14VzdsdnctYjB3STI0b2dvcDFIdnpaRHpwY0o3MmNkY1VPOXRhR2ZYNzJOSWE5OGtqRzBUaEFpeWplYTUxQmxOcTdwU3dDSFRmOVl0YzdhektNaGNuY2xMcmRyWndYbDBXc285c01VQ25WUEljSXFUa1BXUnNWeTJGNVRpeDVaS3RPWk95djludjcwLXRiYmtHQldxcUJHRWlGLUdKMVp1Y2x6dlM4aG4tQnI3WThiQm9EWC1fUQ?oc=5",
+      "resolvedUrl": "https://creators.yahoo.com/lifestyle/story/google-gemini-free-users-lose-flash-and-pro-oct-9-heres-what-it-costs-to-keep-them-002845209.html",
+      "title": "Google Gemini Free Users Lose Flash and Pro Oct. 9. Here’s What It Costs to Keep Them",
+      "byline": "Noël Burgess",
+      "publishedTime": "2026-10-06T00:28:45.000Z",
+      "text": "Google's free Gemini app is about to have a much shorter menu. Beginning Oct. 9, people using Gemini without a paid AI subscription will lose access to Flash and Pro. Flash-Lite will be the only model available to them. Google AI Plus subscribers are losing Pro as well, although Google says those customers will receive an email with the date their access changes.The price difference gets your attention quickly. Google currently lists AI Plus at $4.99 a month and AI Pro at $19.99. A Plus subscriber who regularly uses Pro and wants to keep it would be looking at another $15 a month, or $180 over a year, at current prices.If you have never opened Gemini's model picker, you may not care. If Pro is where you go for coding, studying, large files or the sort of research project that starts innocently and somehow leaves you with 14 browser tabs open, I would check your account before Oct. 9.Google says Gemini passed 1 billion monthly users in August, making this a change plenty of people could notice.What changes on Oct. 9Google's new lineup leaves free users with Flash-Lite. AI Plus keeps Flash-Lite and Flash. Pro will require AI Pro or AI Ultra once the changes reach an account.PlanCurrent U.S. priceFlash-LiteFlashProFree$0YesNoNoAI Plus$4.99/monthYesYesNoAI Pro$19.99/monthYesYesYesAI UltraFrom $99.99/monthYesYesYesGoogle describes Flash-Lite as its speedy model for everyday work such as summarizing and brainstorming. Flash handles a wider range of problems and adds more reasoning capability. Pro is Google's most advanced model, with stronger performance on complex math, coding, studying, files, images and video.I wouldn't pay $20 a month simply because the word \"Pro\" disappears from a menu. If most of your Gemini use involves summaries, quick questions, trip ideas or cleaning up an email, Flash-Lite may do everything you need.People already leaning on Pro have a harder decision. Google built it for the more demanding work, and AI Pro will soon be the cheapest plan that keeps all three models.The $19.99 price lands in an interesting spotConsumers are getting increasingly comfortable paying for AI. Menlo Ventures surveyed 5,067 U.S. adults with Morning Consult in July and found 55% of AI users pay for at least one AI product. Among people who pay, the typical monthly spend was $20 to $49. The research also found payers use AI daily at nearly twice the rate of non-payers.Someone who opens Gemini a few times a month is probably going to live with Flash-Lite. Someone using AI every day for work, school or a side business may already think of $20 as another software bill. Still, subscriptions add up. AI Pro at $19.99 costs nearly $240 a year. Moving up from AI Plus adds $180 to that annual bill.Before paying it, I'd spend a week paying attention to the model you actually select. If you keep reaching for Flash, the $4.99 Plus plan still gives you access to it after the change. If you keep reaching for Pro, you have your answer.AI Plus customers may have more timeOct. 9 is the start date Google gives for users without an AI subscription. AI Plus customers have a different schedule. Google says Plus subscribers should receive an email explaining when the changes take effect for their account.So if you pay for AI Plus and Pro is still available after Oct. 9, don't assume Google abandoned the change. Your account may have a later date. I also wouldn't upgrade before reading that email. There is no prize for being the first person to volunteer for a larger monthly bill.College students should check Google's free offer firstEligible U.S. college students have a much easier decision. Google is offering them one year of AI Pro at no charge, a plan it values at $19.99 a month. The offer can be redeemed through Dec. 31, 2026. Google requires a valid payment method, and the subscription begins charging $19.99 a month after the free year unless it is canceled.If you qualify, check that offer before paying for Pro yourself. A free year at Google's normal price is worth almost $240.Check which Gemini model you actually use before paying moreThe easiest thing you can do before Oct. 9 takes about ten seconds. Open Gemini. Look at the model picker. See what you have been using.If Flash-Lite is already doing most of the work, keep your money. If you rely on Flash, AI Plus keeps it for $4.99 a month. If Pro has become part of your routine, AI Pro is where Google is putting it.Right now, many users can open that menu and choose among Flash-Lite, Flash and Pro. Soon the choices you see will depend much more on the plan attached to your account.And before spending another $180 a year, it is worth knowing which one you were actually using.",
+      "truncated": false,
+      "photos": [
+        {
+          "src": "https://s.yimg.com/lo/mysterio/api/5c88a299a92f36edb248baf837367cc8fd31da51cc544370b3a5fb6a17c7495c/lightyear_networkapi/resizefill_w976%3Bquality_80%3Bformat_webp/https%3A%2F%2Fd29szjachogqwa.cloudfront.net%2Fimages%2Fuser-uploaded%2Fgoogle-gemini-flash-pro-free-users-october-9-2026_6850.png",
+          "caption": "Google's Gemini model picker currently includes Flash-Lite, Flash and Pro. Starting Oct. 9, free users will be limited to Flash-Lite. (Noël Burgess)",
+          "credit": null,
+          "alt": "Google Gemini model selector showing Flash-Lite, Flash and Pro before the Oct. 9, 2026 access changes",
+          "from": "figure"
+        },
+        {
+          "src": "https://s.yimg.com/lo/mysterio/api/468348def6d5310417e7df2ad79146a6c5e030cdd4d138d066023d968b5532dd/lightyear_networkapi/resizefill_w1200%3Bquality_80%3Bformat_webp/https%3A%2F%2Fd29szjachogqwa.cloudfront.net%2Fimages%2Fuser-uploaded%2Fgoogle-gemini-flash-pro-free-users-october-9-2026_6850.png",
+          "caption": null,
+          "credit": null,
+          "alt": null,
+          "from": "og:image"
+        }
+      ]
+    },
+    {
+      "ok": true,
+      "url": "https://news.google.com/rss/articles/CBMipAFBVV95cUxPUk1LUG11SHFVb29QMjBIcjRTVVdMb2d4LTBLczNJUU50c3ZUc0hmQ0FJbFJJN3FNdERNMXhzczc2UEVtQXdyc2JReHVxR2JxTkcwNlRJbHY3QnJSUUdVck9xXzlKZjk4RVBwcXpXMllOeE11eFl4WU5LcjhJOGxUSTNmZ2xiN1ZVcmQ5UEsycGduZ3VZNnVqbVBTYmZwNFdpNG5WQw?oc=5",
+      "resolvedUrl": "https://me.pcmag.com/en/ai/38241/using-google-gemini-for-free-youre-losing-some-models-later-this-week",
+      "title": "Using Google Gemini for Free? You're Losing Some Models Later This Week",
+      "byline": "Jibin Joseph",
+      "publishedTime": "2026-10-06T04:14:36+00:00",
+      "text": "If you’re not paying for Gemini, you are about to lose access to the chatbot’s Flash and Pro models.\n\nAs spotted by 9to5Google, Google has updated a support page to note that it is restricting what Gemini models free and AI Plus users can use. On Oct. 9, free users will lose access to both Gemini’s 3.6 Flash and 3.1 Pro models, while AI Plus subscribers will soon be notified via email that they’re losing access to the 3.1 Pro model.\n\nIf you use Gemini in the UAE, Saudi Arabia, or elsewhere in the Middle East, the change to watch is the model limit taking effect on Oct. 9. The available information doesn’t confirm local subscription prices in AED, SAR, or EGP.\n\nGoogle’s Gemini models come in three tiers. Flash-Lite is the lightest and fastest, Flash is the all-around middle option, and Pro is the most advanced.\n\nSo far, free users have had limited access to all three models. Once the new limits take effect, they will only be able to access the 3.5 Flash-Lite model. The 3.6 Flash model unlocks with Google’s $4.99-per-month AI Plus plan, while the 3.1 Pro model unlocks with a $19.99-per-month AI Pro subscription. Students, meanwhile, remain eligible for a year of Google’s AI Pro plan for free. Students in Egypt and Saudi Arabia can also check the regional details of Google Gemini Pro’s free student offer.\n\n(Credit: Google)\n\nGoogle also notes that you’ll soon be able to choose the level of effort each model puts into your queries, between low, medium, or high. “This will increase the model’s ability to complete tasks and provide more thorough answers to queries, but will also use more of your limit,” the company says.\n\nCompared with the free plan, Google’s AI Plus and Pro plans offer 2x and 5x Gemini usage limits, respectively. The company, however, doesn’t explain how it calculates these limits. “Calculation of your usage will factor in the complexity of your prompt, the features you use, and the length of your chat,” it says.\n\nThis is the second time Google has overhauled its AI plans this year. The latest changes come as storage and component costs continue to rise, potentially directly affecting the company's AI infrastructure spending.\n\nGoogle Gemini plan pricing and availability in the UAE and Saudi Arabia\n\nThe plan prices in this report are listed in US dollars: $4.99 per month for AI Plus and $19.99 per month for AI Pro. No verified UAE, Saudi Arabia, or Egypt prices are available here, so we haven’t added AED, SAR, or EGP conversions. Check the Gemini app or your Google account for the price shown for your location.\n\nFor users in the Middle East, the key date is Oct. 9: free accounts will lose access to Flash and Pro, while Google says AI Plus subscribers will be notified about losing Pro access. The article’s information does not specify a separate regional rollout schedule.",
+      "truncated": false,
+      "photos": [
+        {
+          "src": "https://sm.pcmag.com/t/pcmag_me/photo/g/googles-up/googles-updated-model-limits-for-gemini-users_kxcg.3840.png",
+          "caption": null,
+          "credit": "(Credit: Google)",
+          "alt": null,
+          "from": "figure"
+        },
+        {
+          "src": "https://sm.pcmag.com/t/pcmag_me/news/u/using-goog/using-google-gemini-for-free-youre-losing-some-models-later_4r5b.1200.jpg",
+          "caption": null,
+          "credit": null,
+          "alt": null,
+          "from": "og:image"
+        }
+      ]
+    },
+    {
+      "ok": true,
+      "url": "https://9to5google.com/2026/10/03/gemini-model-limits-oct-26/",
+      "resolvedUrl": "https://9to5google.com/2026/10/03/gemini-model-limits-oct-26/",
+      "title": "Gemini app limiting what models free & AI Plus users can access, AI Pro adding Deep Think",
+      "byline": "Abner Li",
+      "publishedTime": "2026-10-03T20:57:47+00:00",
+      "text": "Following the compute-based usage change in May, Google will soon introduce limits on which Gemini models free users and AI Plus subscribers can access.\n\nAccording to an updated support document this week, Gemini app users without a Google AI subscription will be limited to the (3.5) Flash-Lite model. Starting October 9, users who do not pay for Gemini will no longer be able to access (3.6) Flash or (3.1) Pro.\n\nMeanwhile, AI Plus subscribers will be limited to Flash-Lite and Flash, with Pro no longer available. These $4.99 per month users will “receive an email that explains when these changes will take effect.”\n\nGemini ModelGoogle AI PlanFlash-LiteFlashProWithout a plan✓XXAI Plus✓✓XAI Pro✓✓✓AI Ultra✓✓✓\n\nThere are no regressions for AI Pro and AI Ultra. Rather, $19.99/month customers will get access to the Deep Think option for “maximum parallel reasoning” that’s currently just on the $99.99 and $199.99/month plans.\n\nGemini 3.1 Pro with Deep Think on AI Ultra\n\nIn October, the Gemini app also looks to be adding new “low,” “medium,” and “high” effort levels “for each available model.”\n\nThis will increase the model’s ability to complete tasks and provide more thorough answers to queries, but will also use more of your limit.\n\nAt the moment, you can just enable “Extended thinking: Complex problem solving.” The three new effort/thinking levels would match what’s available in Google AI Studio and Antigravity.\n\nIt’s not clear where Gemini 4 Argon will fit in. Google announced earlier this week that it’s first coming to AI Ultra subscribers. The company has yet to specify whether Argon will be classified as a Pro model or be part of a new tier above it.\n\nMore on Gemini app:\n\nGemini app gains new ‘Map’ tool, replacing ‘/’ with ‘@’\n\nGoogle announces Gemini 4 Argon as its new frontier model\n\nGoogle details Gems to skills migration, including free access\n\nFTC: We use income earning auto affiliate links. More.",
+      "truncated": false,
+      "photos": [
+        {
+          "src": "https://9to5google.com/wp-content/uploads/sites/4/2026/10/Google-AI-Ultra-Gemini-3.1-Pro-Deep-Think.jpg?strip=info&w=1480",
+          "caption": null,
+          "credit": null,
+          "alt": null,
+          "from": "figure"
+        },
+        {
+          "src": "https://9to5google.com/wp-content/uploads/sites/4/2026/10/Google-AI-Studio-effort-levels.jpg?strip=info&w=593",
+          "caption": null,
+          "credit": null,
+          "alt": null,
+          "from": "figure"
+        },
+        {
+          "src": "https://9to5google.com/wp-content/uploads/sites/4/2026/10/Google-Antigravity-effort-levels.jpg?strip=info&w=1020",
+          "caption": null,
+          "credit": null,
+          "alt": null,
+          "from": "figure"
+        },
+        {
+          "src": "https://9to5google.com/wp-content/uploads/sites/4/2026/03/gemini-logo.jpg?quality=82&strip=all&resize=1200,628",
+          "caption": null,
+          "credit": null,
+          "alt": null,
+          "from": "og:image"
+        }
+      ]
+    },
+    {
+      "ok": true,
+      "url": "https://www.engadget.com/2278504/google-removes-free-access-gemini-flash-pro-october-9/",
+      "resolvedUrl": "https://www.engadget.com/2278504/google-removes-free-access-gemini-flash-pro-october-9/",
+      "title": "Google Removes Free Access To Gemini Flash And Pro On October 9",
+      "byline": "Mariella Moon",
+      "publishedTime": "2026-10-06T11:22:53+00:00",
+      "text": "Free Gemini users will only be able to use Gemini Flash-Lite.\n\nKenneth Cheung/Getty Images\n\nGoogle has revealed changes to its Gemini apps and website on its support page, which could impact how you use the AI chatbot if you're not paying for a subscription. Starting on October 9, you will no longer be able to access the Gemini Flash and Pro models if you're on a free account. At the moment, you'll see three options in the drop-down menu at the top of the app or right next to the text box on desktop. But in a few days, all your free inquiries on Gemini will use Flash-Lite, Google's most cost-effective model. Flash is a step up from Lite, while Pro was designed for advanced reasoning and more complex tasks.\n\nIf you're paying for Google AI Plus, the company's cheapest subscription tier that costs $5 a month in the US, you will be losing access to the Gemini 3.1 Pro model, as well. Google says Pro excels at dealing with complex math and coding prompts, and it has a \"deeper understanding across text, files, images and videos\" than other models. In other words, if you use Gemini for coding or as a study aid and need it to digest loads of documents and other materials, you may need to start paying for an AI Pro plan. Google AI Pro costs $20 a month, while AI Ultra, which has higher usage limits, will cost you at least $100 a month.\n\nIn addition to those changes, Google is adding \"effort level\" options for each model. You'll be able to choose between low, medium and high, which provide models with increasing abilities to complete tasks. The higher the level, the more thorough the answers, though it will also eat more of your limit. If you pay for an AI Ultra subscription, you'll get access to a Deep Think option if you need to tap into Gemini's maximum capabilities.\n\nAI Ultra subscribers will also get access to Gemini 4 Argon when it rolls out to the general public. Right now, it's only available to members of Google's Fairwind Program for governments and trusted partners.",
+      "truncated": false,
+      "photos": [
+        {
+          "src": "https://www.engadget.com/img/gallery/google-removes-free-access-to-gemini-flash-and-pro-on-october-9/l-intro-1791285503.jpg",
+          "caption": null,
+          "credit": null,
+          "alt": null,
+          "from": "og:image"
+        }
+      ]
+    },
+    {
+      "ok": true,
+      "url": "https://support.google.com/gemini/answer/16275805?hl=en",
+      "resolvedUrl": "https://support.google.com/gemini/answer/16275805?hl=en",
+      "title": "Gemini Apps limits & upgrades for Google AI subscribers",
+      "byline": null,
+      "publishedTime": null,
+      "text": "Gemini Apps have compute-based usage limits that determine how much you can interact with Gemini tools and features. These limits factor in the complexity of your prompt, the models and features you use, and the length of your chat. Your limit refreshes every 5 hours until you reach your weekly limit.\n\nYou can upgrade to a Google AI plan for expanded access to features and models in Gemini Apps. Gemini Apps upgrades are part of select Google One paid plans for personal accounts. Learn more about availalble subscriptions.\n\nImportant: This article is for users managing Gemini Apps for a personal Google Account. If you’re using a work or school Google Account, learn more about using Gemini Apps with a work or school account.\n\nWhat you need\n\nTo use Gemini Apps with a Google AI plan in most countries, you must be 13 (or the applicable age in your country) or over.\n\nTo use Gemini Apps with a Google AI plan in the European Economic Area, Switzerland, or the United Kingdom, you must be 18 years of age or older.\n\nSome features may not be available for users under the age of 18 or 13 (or the applicable age in your country). In the help center, you will find additional information about age requirements.\n\nWhere Google AI Plus is available\n\nÅland Islands\n\nAlbania\n\nAlgeria\n\nAmerican Samoa\n\nAngola\n\nAntigua and Barbuda\n\nArgentina\n\nArmenia\n\nAruba\n\nAustralia\n\nAustria\n\nAzerbaijan\n\nBahamas\n\nBahrain\n\nBangladesh\n\nBelgium\n\nBelize\n\nBenin\n\nBermuda\n\nBolivia\n\nBosnia and Herzegovina\n\nBotswana\n\nBrazil\n\nBritish Virgin Islands\n\nBulgaria\n\nBurkina Faso\n\nCabo Verde\n\nCambodia\n\nCameroon\n\nCanada\n\nCayman Islands\n\nChile\n\nColombia\n\nCosta Rica\n\nCôte d'Ivoire\n\nCroatia\n\nCyprus\n\nCzech Republic\n\nDenmark\n\nDominican Republic\n\nEcuador\n\nEgypt\n\nEl Salvador\n\nEstonia\n\nFaroe Islands\n\nFiji\n\nFinland\n\nFrance\n\nFrench Guiana\n\nFrench Polynesia\n\nGabon\n\nGeorgia\n\nGermany\n\nGhana\n\nGibraltar\n\nGreece\n\nGreenland\n\nGuadeloupe\n\nGuam\n\nGuatemala\n\nGuinea-Bissau\n\nHaiti\n\nHonduras\n\nHong Kong\n\nHungary\n\nIceland\n\nIndia\n\nIndonesia\n\nIraq\n\nIreland\n\nIsrael\n\nItaly\n\nJamaica\n\nJapan\n\nJordan\n\nKazakhstan\n\nKenya\n\nKuwait\n\nKyrgyzstan\n\nLaos\n\nLatvia\n\nLebanon\n\nLiechtenstein\n\nLithuania\n\nLuxembourg\n\nMacau\n\nMalaysia\n\nMaldives\n\nMali\n\nMalta\n\nMarshall Islands\n\nMartinique\n\nMauritius\n\nMayotte\n\nMexico\n\nMoldova\n\nMonaco\n\nMorocco\n\nMozambique\n\nNamibia\n\nNepal\n\nNetherlands\n\nNew Caledonia\n\nNew Zealand\n\nNicaragua\n\nNiger\n\nNigeria\n\nNorth Macedonia\n\nNorthern Mariana Islands\n\nNorway\n\nOman\n\nPakistan\n\nPalau\n\nPanama\n\nPapua New Guinea\n\nParaguay\n\nPeru\n\nPhilippines\n\nPoland\n\nPortugal\n\nPuerto Rico\n\nQatar\n\nRéunion\n\nRomania\n\nRwanda\n\nSaint Barthélemy\n\nSaint Martin\n\nSaint Pierre and Miquelon\n\nSan Marino\n\nSaudi Arabia\n\nSenegal\n\nSerbia\n\nSeychelles\n\nSierra Leone\n\nSingapore\n\nSlovakia\n\nSlovenia\n\nSouth Africa\n\nSouth Korea\n\nSpain\n\nSri Lanka\n\nSvalbard and Jan Mayen\n\nSweden\n\nSwitzerland\n\nTaiwan\n\nTajikistan\n\nTanzania\n\nThailand\n\nTogo\n\nTonga\n\nTrinidad and Tobago\n\nTunisia\n\nTürkiye\n\nTurkmenistan\n\nUganda\n\nUkraine\n\nUnited Arab Emirates\n\nUnited Kingdom\n\nUnited States\n\nUruguay\n\nUS Virgin Islands\n\nUzbekistan\n\nVenezuela\n\nVietnam\n\nWallis and Futuna\n\nYemen\n\nZambia\n\nZimbabwe\n\nWhere Google AI Pro & Google AI Ultra are available\n\nGemini app access and limits\n\nImportant:\n\nGemini Apps limits may change. Access is subject to change or may be limited based on testing, experimentation, or availability.\n\nGemini Apps usage limits are designed to ensure an optimal experience for everyone. This means we may at times have to cap the number of prompts and conversations you can have, or how much you can use some features, within a specific timeframe.\n\nUsage limits\n\nPlan\n\nLimit\n\nWithout an AI plan\n\nStandard limits\n\nAI Plus\n\n2x higher than standard limits\n\nAI Pro\n\n4x higher than standard limits\n\nAI Ultra\n\n5x or 20x higher than AI Pro limits depending on your subscription\n\nAbout Gemini 3 models\n\nImportant: Model names, versions, and availability may change.\n\nGemini has the following available models:\n\nGemini Flash-Lite is an efficient workhorse model designed for speed. It's ideal for everyday tasks like summarization and brainstorming.\n\nGemini Flash is a more powerful model that balances speed and reasoning to solve a large variety of problems, from simple to complex.\n\nGemini Pro is our most advanced model that excels at complex math and coding prompts with high performance and reasoning. Pro has a deeper understanding across text, files, images and videos, plus major upgrades for coding and studying. Generally, response time for Gemini 3 Pro prompts will take longer than if using other models.\n\nThinking level\n\nWhere available, you can adjust the thinking level for Gemini models.\n\nStandard thinking is the default and best for most questions. With Standard thinking, responses will be generally faster.\n\nExtended thinking is best for complex problem solving. With Extended thinking, the model will reason over your prompt longer before responding.\n\nDeep think (AI Ultra only) provides maximum parallel reasoning. Deep Think queries generally can take a few minutes before seeing a response. Deep think requires the Pro model.\n\nTip: More advanced models and higher thinking levels consume more of your usage.\n\nModel Access\n\nPlan\n\nGemini 3 Flash-lite\n\nGemini 3 Flash\n\nGemini 3 Pro\n\nWithout an AI Plan\n\nYes\n\nYes\n\nYes\n\nAI Plus\n\nYes\n\nYes\n\nYes\n\nAI Pro\n\nYes\n\nYes\n\nYes\n\nAI Ultra\n\nYes\n\nYes\n\nYes\n\nContext windows\n\nWhen you upload files to Gemini Apps, it needs to \"read\" the content to provide useful insights or answers. The context window is like the reading capacity. It determines how much content can be understood together at one time. A larger context window allows Gemini Apps to work with longer prompts and chats.\n\nPlan\n\nContext window\n\nWithout an AI plan\n\n32k tokens\n\nAI Plus\n\n128k tokens\n\nAI Pro & AI Ultra\n\n1 million tokens\n\nFeature availability\n\nSome features are only available with Google AI subscription plans. Some features (like media generation or Deep Research) will consume more of your usage.\n\nFeature\n\nWithout a Google AI plan\n\nGoogle AI Plus\n\nGoogle AI Pro\n\nGoogle AI Ultra\n\nCanvas\n\nGems\n\nStorybook\n\nConnected Apps\n\nQuizzes & flashcards\n\nAudio overviews\n\nScreen automation\n\nSlide generation\n\nDeep Research\n\nDaily brief\n\nGemini Spark\n\nImage generation with Nano Banana 2\n\nRedo images with Nano Banana Pro\n\nVideo generation\n\nMusic generation\n\nScheduled actions\n\nEarly access to features\n\nPriority access to some new features\n\nMore info about limits\n\nWhat you can do when you reach a usage limit\n\nIf you have a Google AI subscription and reach your limit, you can continue your conversation with Flash-Lite.\n\nIf you reach your five hour or weekly usage limits you can upgrade to a Google AI subscription with higher limits or wait until your model limit is refreshed. Learn how to upgrade.\n\nUsage limit changesLimits may change without notice, including due to capacity constraints. When there’s a large increase in activity in Gemini Apps, we may change limits to maintain a high standard of quality.\n\nImportant:\n\nFor users without a Google AI plan, some features that require more compute resources, like Deep Research, may be unavailable during periods of high demand.\n\nIf capacity changes, limits for users without a Google AI plan may be limited before users with a plan.\n\nHow to tell if you’re close to a limit & when it refreshes\n\nWhy you might want a larger context windowA larger context window allows Gemini to read and comprehend more. For example, with a 1M token context window, Gemini can understand up to 1,500 pages of text or 30,000 lines of code.\n\nIf you exceed the context window, this could lead to responses that don’t take into account all the content provided or miss connections or details throughout the content. This is most relevant for prompts that require attention to many details scattered throughout large files.",
+      "truncated": false,
+      "photos": []
+    }
+  ],
+  "costUsd": 0.182,
+  "turns": 3,
+  "webSearches": 3,
+  "pageReads": 8,
+  "submitRetries": 0,
+  "retryErrors": [],
+  "turnUsage": [
+    {
+      "turn": 1,
+      "stopReason": "tool_use",
+      "usage": {
+        "input_tokens": 4,
+        "cache_creation_input_tokens": 1154,
+        "cache_read_input_tokens": 9665,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 1154,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 1180,
+        "output_tokens_details": {
+          "thinking_tokens": 0
+        },
+        "service_tier": "standard",
+        "inference_geo": "global"
+      },
+      "costUsd": 0.0166
+    },
+    {
+      "turn": 2,
+      "stopReason": "tool_use",
+      "usage": {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 10495,
+        "cache_read_input_tokens": 87812,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 10495,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 935,
+        "output_tokens_details": {
+          "thinking_tokens": 54
+        },
+        "service_tier": "standard",
+        "inference_geo": "global",
+        "server_tool_use": {
+          "web_search_requests": 3,
+          "web_fetch_requests": 0
+        }
+      },
+      "costUsd": 0.0832
+    },
+    {
+      "turn": 3,
+      "stopReason": "tool_use",
+      "usage": {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 5507,
+        "cache_read_input_tokens": 21314,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 5507,
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens": 6420,
+        "output_tokens_details": {
+          "thinking_tokens": 448
+        },
+        "service_tier": "standard",
+        "inference_geo": "global"
+      },
+      "costUsd": 0.0822
+    }
+  ],
+  "aggregatorDropped": [],
+  "speakersNotInSubjects": []
+}

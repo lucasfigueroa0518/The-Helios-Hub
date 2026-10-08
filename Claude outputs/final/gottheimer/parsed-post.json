@@ -1,0 +1,60 @@
+{
+  "cover": {
+    "kind": "edited",
+    "text": "Rep. Josh Gottheimer wants the NSA to test AI models before release.",
+    "highlight": "test AI models before release",
+    "image": "photo of Josh Gottheimer"
+  },
+  "slides": [
+    {
+      "position": 2,
+      "headline": "Two bipartisan AI bills unveiled Friday",
+      "body": "On September 18, Rep. Josh Gottheimer (NJ-5) unveiled two bipartisan AI security bills at Fairleigh Dickinson University in Teaneck.",
+      "highlight": "two bipartisan AI security bills",
+      "image": "type only"
+    },
+    {
+      "position": 3,
+      "headline": "No mandatory AI safety checks today",
+      "highlight": "No mandatory AI safety checks",
+      "image": "type only"
+    },
+    {
+      "position": 4,
+      "quote": "Right now, there are no mandatory requirements for pre-deployment testing of frontier AI models.",
+      "quoteBy": "Rep. Josh Gottheimer (NJ-5)",
+      "highlight": "no mandatory requirements for pre-deployment testing of frontier AI models",
+      "image": "photo of Josh Gottheimer"
+    },
+    {
+      "position": 5,
+      "headline": "The NSA would get 30 days to vet a model",
+      "bigNumber": "30 days",
+      "numberNote": "Plus one 30-day extension if needed",
+      "highlight": "30 days",
+      "image": "type only"
+    },
+    {
+      "position": 6,
+      "headline": "The FIREWALL Act would extend that ban",
+      "body": "DeepSeek is already blocked from federal devices. Gottheimer named Kimi K3 and Qwen as Chinese open-weight models the bill would also keep off federal systems.",
+      "highlight": "Kimi K3 and Qwen",
+      "image": "type only"
+    },
+    {
+      "position": 7,
+      "headline": "He's also pressing the White House on AI cyberattacks",
+      "highlight": "AI cyberattacks",
+      "image": "type only"
+    },
+    {
+      "position": 8,
+      "headline": "A floor vote isn't scheduled",
+      "body": "Gottheimer said Republican leadership has refused to directly bring the bills to the floor for a vote, and sent Congress home. He is urging the Speaker to reconvene.",
+      "highlight": "refused to directly bring the bills to the floor",
+      "image": "type only"
+    }
+  ],
+  "follow": "Follow Helios to keep up with how Congress is moving on AI regulation.",
+  "editNotes": null
+}

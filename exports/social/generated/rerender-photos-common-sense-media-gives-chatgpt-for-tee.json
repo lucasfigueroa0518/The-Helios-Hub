@@ -1,0 +1,256 @@
+{
+  "format": "carousel",
+  "storyType": "tech",
+  "source": "Futurism",
+  "sourceUrl": "https://futurism.com/artificial-intelligence/openai-chatgpt-for-teens-report",
+  "publishedAt": "2026-10-07T19:44:42.798Z",
+  "issueNumber": 0,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "headline": [
+        {
+          "text": "Common Sense Media gives ChatGPT for Teens its worst rating; OpenAI disputes it",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Common Sense Media gives ChatGPT for Teens its worst rating; OpenAI disputes it",
+      "icon": "triangle-alert",
+      "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/3/3a/Jim_Steyer_Collision_2018_-_Day_Two_01_%28cropped%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+      "photoCredit": "Jim Steyer, Common Sense Media founder · Collision Conf, CC BY 2.0 · Wikimedia Commons",
+      "photoKind": "subject",
+      "photoSize": {
+        "w": 2782,
+        "h": 3712
+      },
+      "coverMode": "split",
+      "template": "cover-split",
+      "photoFocus": {
+        "x": 0.5,
+        "y": 0.44644234890698686,
+        "windowW": 660,
+        "faceShare": 0.4
+      }
+    },
+    {
+      "position": 1,
+      "headline": [
+        {
+          "text": "Built for teens, rated Unacceptable Risk",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Built for teens, rated Unacceptable Risk",
+      "icon": "shield",
+      "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/8/89/Smartphone_display_screen.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+      "photoCredit": "Skitterphoto (CC0) · Wikimedia Commons",
+      "photoKind": "scene",
+      "photoSize": {
+        "w": 3798,
+        "h": 2407
+      },
+      "body": [
+        {
+          "text": "OpenAI announced ChatGPT for Teens in August for users 13 to 17, with parental notifications and other guardrails. On Oct. 7, Common Sense Media's Youth AI Safety Institute gave it Unacceptable Risk, its worst tier.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text",
+      "photoPlacement": "top",
+      "template": "story-photo-top"
+    },
+    {
+      "position": 2,
+      "headline": [
+        {
+          "text": "Common Sense says new accounts got zero parent alerts",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Common Sense says new accounts got zero parent alerts",
+      "icon": "triangle-alert",
+      "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/4/4a/Smartphone_lock_screen_enter_PIN.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+      "photoCredit": "Mykhal (CC0) · Wikimedia Commons",
+      "photoKind": "scene",
+      "photoSize": {
+        "w": 750,
+        "h": 1200
+      },
+      "body": [
+        {
+          "text": "Futurism reports alerts came only from older accounts, which Common Sense says had weeks of sensitive-topic history.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "four times",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "Times reviewers triggered parental notifications: twice out of 990 prompts before launch, twice out of 450 after, only on older accounts",
+      "template": "stat-backdrop"
+    },
+    {
+      "position": 3,
+      "headline": [
+        {
+          "text": "Crisis help and Red Lines fell short, Common Sense says",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Crisis help and Red Lines fell short, Common Sense says",
+      "icon": "heart-pulse",
+      "photoSize": {
+        "w": 5568,
+        "h": 3712
+      },
+      "body": [
+        {
+          "text": "Common Sense says ChatGPT missed warranted crisis referrals to a hotline or professional, and scored under its 95% threshold on severe harms it treats as Red Lines.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "split_stat",
+      "title": [
+        {
+          "text": "more than one in four",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "Warranted crisis referrals missed across tested mental-health conditions",
+      "secondNumber": "three of the five",
+      "secondNote": "Severe-harm 'Red Lines' where ChatGPT fell below the Institute's 95% threshold",
+      "template": "stat-plain"
+    },
+    {
+      "position": 4,
+      "headline": [
+        {
+          "text": "Two more gaps: age estimation and Study Hours",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Two more gaps: age estimation and Study Hours",
+      "icon": "lock",
+      "photoUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/40/Modern_office_building%2C_Theresienh%C3%B6he%2C_M%C3%BCnchen.jpg/3840px-Modern_office_building%2C_Theresienh%C3%B6he%2C_M%C3%BCnchen.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "photoCredit": "Robert von Oliva (naruciakk) (CC0) · Wikimedia Commons",
+      "photoKind": "scene",
+      "photoSize": {
+        "w": 5449,
+        "h": 3625
+      },
+      "body": [
+        {
+          "text": "Common Sense says age estimation, which infers from usage if a user is under 18, never moved adult-registered test accounts to the teen experience, and teens could leave parent-set Study Hours by deleting @study.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "image",
+      "panoramaSide": "left",
+      "bleedText": "top",
+      "template": "spread-text-top"
+    },
+    {
+      "position": 5,
+      "headline": [
+        {
+          "text": "Some protections did work, the report found",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Some protections did work, the report found",
+      "icon": "scale",
+      "body": [
+        {
+          "text": "Common Sense says ChatGPT for Teens was successful at curbing romantic and sexual roleplay. Futurism notes experts often rated the substance of mental-health answers as good, but crisis responses uneven.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "image",
+      "photoUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/40/Modern_office_building%2C_Theresienh%C3%B6he%2C_M%C3%BCnchen.jpg/3840px-Modern_office_building%2C_Theresienh%C3%B6he%2C_M%C3%BCnchen.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "photoCredit": "Robert von Oliva (naruciakk) (CC0) · Wikimedia Commons",
+      "photoKind": "scene",
+      "photoSize": {
+        "w": 5449,
+        "h": 3625
+      },
+      "panoramaSide": "right",
+      "bleedText": "top",
+      "template": "spread-text-top"
+    },
+    {
+      "position": 6,
+      "headline": [
+        {
+          "text": "OpenAI says the tests may have run too early",
+          "role": "narrative"
+        }
+      ],
+      "altText": "OpenAI says the tests may have run too early: \"the bulk of their testing may have begun and concluded before activation of parental controls was complete\" (OpenAI spokesperson Eric Porterfield)",
+      "icon": "message-square-quote",
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "the bulk of their testing may have begun and concluded before activation of parental controls was complete",
+          "role": "narrative"
+        }
+      ],
+      "quoteBy": "OpenAI spokesperson Eric Porterfield",
+      "quoteRole": "OpenAI spokesperson",
+      "template": "quote-type-led"
+    },
+    {
+      "position": 7,
+      "headline": [
+        {
+          "text": "Common Sense's reply: it confirmed the launch first",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Common Sense's reply: it confirmed the launch first",
+      "icon": "clock",
+      "body": [
+        {
+          "text": "Common Sense says it confirmed with OpenAI before testing that teen features were fully launched. OpenAI later disclosed alerts can take several hours; accounts linked longer still got none, Common Sense says.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text",
+      "textAnchor": "top",
+      "template": "story-text-top",
+      "iconSide": "left"
+    },
+    {
+      "position": 8,
+      "headline": [
+        {
+          "text": "The verdict: 18+ only until third parties test the fixes",
+          "role": "narrative"
+        }
+      ],
+      "altText": "The verdict: 18+ only until third parties test the fixes: \"A teen can spend an hour talking about self-harm without their parent getting a single alert.\" (Tom Siegel)",
+      "icon": "message-square-quote",
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "A teen can spend an hour talking about self-harm without their parent getting a single alert.",
+          "role": "narrative"
+        }
+      ],
+      "quoteBy": "Tom Siegel",
+      "quoteRole": "Executive director, Common Sense Media's Youth AI Safety Institute",
+      "template": "quote-type-led"
+    },
+    {
+      "position": 9,
+      "layoutVariant": "follow",
+      "storySpecificLine": "Follow Helios for the next move in the OpenAI and Common Sense Media dispute over teen safety testing.",
+      "altText": "Follow Helios for the next move in the OpenAI and Common Sense Media dispute over teen safety testing."
+    }
+  ],
+  "caption": "Common Sense Media's Youth AI Safety Institute rated OpenAI's ChatGPT for Teens an Unacceptable Risk on Oct. 7, 2026, and OpenAI disputes the testing.\n\nThe Institute says OpenAI should restrict ChatGPT to users 18 and older until it fixes the gaps, with the fixes independently tested by third parties. Common Sense says testers spent up to an hour discussing suicidal ideation, self-harm or disordered eating on new parent-linked accounts, and the parents got zero alerts. It also says ChatGPT missed more than one in four warranted crisis referrals and that age estimation, OpenAI's way of inferring from usage whether someone is under 18, never switched adult-registered test accounts to the teen experience. The report did find ChatGPT for Teens was successful at curbing romantic and sexual roleplay.\n\nOpenAI spokesperson Eric Porterfield says the bulk of the testing may have begun and concluded before activation of parental controls was complete. Common Sense says it confirmed with OpenAI before testing that the teen features were fully launched, and that some accounts were linked longer than the several hours OpenAI says alerts can take and still got none. Common Sense advises families to talk to kids about the risks and not to rely on built-in protections and alerts.\n\nWould you rely on a built-in parent alert to tell you your teen is in trouble?\n\nFollow Helios to keep up with how OpenAI and Common Sense Media's dispute over teen safety testing plays out.",
+  "attributionBlock": "Photos: Jim Steyer, Common Sense Media founder · Collision Conf, CC BY 2.0 · Wikimedia Commons; Skitterphoto (CC0) · Wikimedia Commons; Mykhal (CC0) · Wikimedia Commons; usembassynewzealand (public domain); Robert von Oliva (naruciakk) (CC0) · Wikimedia Commons"
+}

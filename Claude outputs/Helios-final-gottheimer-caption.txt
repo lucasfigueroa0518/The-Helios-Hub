@@ -1,0 +1,11 @@
+Rep. Josh Gottheimer announced two bipartisan AI security bills at Fairleigh Dickinson University on September 18. The American AI Security Act, co-led with Rep. Mike Lawler, would require mandatory NSA reviews of the most powerful AI models before companies release them, giving the agency 30 days with a possible 30-day extension. The China FIREWALL Act, co-led with Rep. Nick LaLota, would ban Chinese-developed open-weight AI models from federal devices and bar agencies from software that relies on them. Gottheimer named Kimi K3 and Qwen as models still allowed on federal systems. He is also sending a letter to National Cyber Director Sean Cairncross about the administration’s AI cybersecurity clearinghouse.
+
+Gottheimer said Republican leadership has refused to directly bring any of these critical pieces of legislation to the floor for a vote, and he is urging the Speaker to reconvene Congress before the election.
+
+Would you want the NSA reviewing every powerful AI model before release?
+
+Follow Helios to track how Congress is moving on AI safety.
+
+Source: Gottheimer’s office and WRNJ Radio, September 18, 2026. Additional reporting: Politico (via NewsBreak) and Internet2.
+
+Photos: Kristie Boyd; U.S. House Office of Photography (public domain). Via Wikimedia Commons.

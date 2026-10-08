@@ -1,0 +1,331 @@
+{
+  "format": "carousel",
+  "storyType": "ai_funding",
+  "source": "AI News & Artificial Intelligence | TechCrunch",
+  "sourceUrl": "https://techcrunch.com/2026/09/17/crusoe-raises-3-9b-to-build-massive-data-centers-and-small-modular-ai-factories/",
+  "publishedAt": "2026-09-17T23:25:52.000Z",
+  "issueNumber": 723,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "variant": "C1",
+      "beat": "HOOK",
+      "altText": "Bold type-driven cover. '$30.9B' dominates in large orange numerals. Crusoe wordmark sits below against a dark data-center silhouette background.",
+      "headline": [
+        {
+          "role": "narrative",
+          "text": "Crusoe just tripled its valuation to "
+        },
+        {
+          "role": "hook",
+          "text": "$30.9B"
+        },
+        {
+          "role": "narrative",
+          "text": " in 10 months. Its truck-deployable AI data centers are why hyperscalers should pay attention."
+        }
+      ],
+      "photoUrl": "https://images.unsplash.com/photo-1517048676732-d65bc937f952?w=1200",
+      "photoCredit": "PHOTO: JASON GOODMAN · UNSPLASH"
+    },
+    {
+      "position": 1,
+      "layoutVariant": "data_block",
+      "variant": "D1",
+      "beat": "SCALE",
+      "altText": "Bar chart comparing Crusoe's $10B valuation last October to its current $30.9B. A separate callout label reads '$13B contract — more than 3x the round size.'",
+      "headline": [
+        {
+          "role": "narrative",
+          "text": "THREE TIMES THE COMPANY IN TEN MONTHS."
+        }
+      ],
+      "body": [
+        {
+          "role": "narrative",
+          "text": "In "
+        },
+        {
+          "role": "pivot",
+          "text": "October"
+        },
+        {
+          "role": "narrative",
+          "text": ", Crusoe was worth "
+        },
+        {
+          "role": "hook",
+          "text": "$10B"
+        },
+        {
+          "role": "narrative",
+          "text": ". It just raised $3.9B in a single Series F round. The $13B Jane Street contract—signed separately—is more than three times the round itself."
+        }
+      ],
+      "title": [
+        {
+          "role": "hook",
+          "text": "$30.9B"
+        }
+      ],
+      "photoUrl": "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=1200",
+      "photoCredit": "PHOTO: MIKE KONONOV · UNSPLASH"
+    },
+    {
+      "position": 2,
+      "layoutVariant": "story_beat",
+      "variant": "B1",
+      "beat": "GROUND",
+      "altText": "Map pin on Abilene, Texas with a data center icon. Portrait of Chase Lochmiller alongside the key facts of the raise.",
+      "body": [
+        {
+          "role": "pivot",
+          "text": "Crusoe"
+        },
+        {
+          "role": "narrative",
+          "text": " is an AI data center developer. Its CEO, "
+        },
+        {
+          "role": "pivot",
+          "text": "Chase Lochmiller"
+        },
+        {
+          "role": "narrative",
+          "text": ", co-founded the company in "
+        },
+        {
+          "role": "hook",
+          "text": "2018"
+        },
+        {
+          "role": "narrative",
+          "text": ". On Thursday it announced a $3.9B Series F, pushing its valuation to $30.9B. One of its largest sites is in "
+        },
+        {
+          "role": "pivot",
+          "text": "Abilene, Texas"
+        },
+        {
+          "role": "narrative",
+          "text": ", where "
+        },
+        {
+          "role": "pivot",
+          "text": "OpenAI"
+        },
+        {
+          "role": "narrative",
+          "text": " is a tenant."
+        }
+      ],
+      "photoUrl": "https://techcrunch.com/wp-content/uploads/2026/09/crusoe-ceo-getty.jpg?resize=1200,800",
+      "photoCredit": "VIA AI NEWS & ARTIFICIAL INTELLIGENCE | TECHCRUNCH"
+    },
+    {
+      "position": 3,
+      "layoutVariant": "data_block",
+      "variant": "D3",
+      "beat": "MECHANISM",
+      "altText": "Illustration of a flatbed truck carrying a modular data center unit. Simple diagram below showing the sequence: truck arrives, hooks to power, compute goes online.",
+      "headline": [
+        {
+          "role": "narrative",
+          "text": "DATA CENTERS YOU CAN MOVE BY TRUCK."
+        }
+      ],
+      "body": [
+        {
+          "role": "narrative",
+          "text": "Crusoe's modular "
+        },
+        {
+          "role": "hook",
+          "text": "Spark"
+        },
+        {
+          "role": "narrative",
+          "text": " units ship on flatbeds and plug into power wherever it exists. No construction crew. No years of site prep. They deploy almost anywhere there's a large power source and sidestep the community opposition that stalls traditional data center builds."
+        }
+      ],
+      "title": [
+        {
+          "role": "hook",
+          "text": "SPARK"
+        }
+      ],
+      "photoUrl": "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1200",
+      "photoCredit": "PHOTO: PRODUCT SCHOOL · UNSPLASH"
+    },
+    {
+      "position": 4,
+      "layoutVariant": "story_beat",
+      "variant": "B4",
+      "beat": "CONTEXT",
+      "altText": "Timeline graphic showing three milestones: 2018 flared-gas crypto mining, 2024 OpenAI site in Abilene, 2025 $30.9B valuation.",
+      "body": [
+        {
+          "role": "pivot",
+          "text": "Crusoe started in"
+        },
+        {
+          "role": "narrative",
+          "text": " "
+        },
+        {
+          "role": "hook",
+          "text": "2018"
+        },
+        {
+          "role": "narrative",
+          "text": " burning flared natural gas to mine crypto. By 2024 it was OpenAI's landlord in Abilene. By 2025 it's worth $30.9B. Seven years, three completely different businesses."
+        }
+      ],
+      "photoUrl": "https://images.unsplash.com/photo-1497366216548-37526070297c?w=1200",
+      "photoCredit": "PHOTO: COPERNICO · UNSPLASH"
+    },
+    {
+      "position": 5,
+      "layoutVariant": "proof",
+      "variant": "P1",
+      "beat": "PROOF",
+      "altText": "Screenshot-style card attributing the $13B Jane Street deal to Bloomberg. An Nvidia logo badge appears as an investor callout in the corner.",
+      "headline": [
+        {
+          "role": "narrative",
+          "text": "The receipts."
+        }
+      ],
+      "body": [
+        {
+          "role": "pivot",
+          "text": "Bloomberg"
+        },
+        {
+          "role": "narrative",
+          "text": " reported Crusoe signed a "
+        },
+        {
+          "role": "hook",
+          "text": "$13B, five-year cloud contract"
+        },
+        {
+          "role": "narrative",
+          "text": " with quantitative trading firm "
+        },
+        {
+          "role": "pivot",
+          "text": "Jane Street"
+        },
+        {
+          "role": "narrative",
+          "text": " to supply GPUs and AI infrastructure. Then "
+        },
+        {
+          "role": "pivot",
+          "text": "Nvidia"
+        },
+        {
+          "role": "narrative",
+          "text": " joined the Series F as an investor — a chipmaker writing a check to one of its own customers."
+        }
+      ]
+    },
+    {
+      "position": 6,
+      "layoutVariant": "story_beat",
+      "variant": "B5",
+      "beat": "TURN",
+      "altText": "Single bold headline on a dark background: 'THIS ISN'T A LANDLORD PLAY.' No other elements.",
+      "headline": [
+        {
+          "role": "hook",
+          "text": "THIS IS A FULL-STACK PLAY."
+        }
+      ]
+    },
+    {
+      "position": 7,
+      "layoutVariant": "story_beat",
+      "variant": "B4",
+      "beat": "STAKES",
+      "altText": "Split graphic. Left panel: 'Crusoe wins — speed and reach.' Right panel: 'Hyperscalers feel pressure — scale advantage narrows.' Speed vs scale labels beneath each.",
+      "body": [
+        {
+          "role": "narrative",
+          "text": "Crusoe runs "
+        },
+        {
+          "role": "hook",
+          "text": "three revenue lines"
+        },
+        {
+          "role": "narrative",
+          "text": ": leasing floor space, renting its own GPUs, and selling AI inference compute. CEO "
+        },
+        {
+          "role": "pivot",
+          "text": "Chase Lochmiller"
+        },
+        {
+          "role": "narrative",
+          "text": " calls it controlling the infrastructure \"from electrons to tokens.\" If Spark units can land near any power source in days, hyperscalers compete on deployment speed, not scale. The race shifts."
+        }
+      ]
+    },
+    {
+      "position": 8,
+      "layoutVariant": "thesis",
+      "variant": "T1",
+      "beat": "THESIS",
+      "altText": "Type-only slide, no photo. A single strong editorial sentence serves as the hero text against a clean dark background.",
+      "body": [
+        {
+          "role": "narrative",
+          "text": "AI infrastructure is splitting in two: "
+        },
+        {
+          "role": "hook",
+          "text": "giant campuses for concentrated demand"
+        },
+        {
+          "role": "narrative",
+          "text": ", and deployable micro-factories for everywhere else. Crusoe is betting the second market is bigger than anyone priced in. Goldman Sachs and Morgan Stanley are already taking the meeting."
+        }
+      ]
+    },
+    {
+      "position": 9,
+      "layoutVariant": "debate",
+      "variant": "T2",
+      "beat": "DEBATE",
+      "altText": "Two-column debate card. Left column labeled 'THREAT' in orange. Right column labeled 'GAP FILLER' in white. Each has a one-sentence position beneath the label.",
+      "headline": [
+        {
+          "role": "narrative",
+          "text": "Is Spark a real hyperscaler threat, or just filling the gaps they won't touch?"
+        }
+      ],
+      "sides": [
+        {
+          "text": "Truck-deployable compute that bypasses construction timelines and community opposition forces hyperscalers to compete on speed, not just capital.",
+          "label": "THREAT"
+        },
+        {
+          "text": "AWS and Microsoft won't bother with small deployments — Spark captures underserved demand without threatening the core hyperscaler model.",
+          "label": "GAP FILLER"
+        }
+      ]
+    },
+    {
+      "position": 10,
+      "layoutVariant": "follow",
+      "variant": "F1",
+      "beat": "FOLLOW",
+      "altText": "Clean brand-color background. Account handle displayed prominently. Short follow line beneath.",
+      "storySpecificLine": "We track who controls AI compute infrastructure."
+    }
+  ],
+  "caption": "Crusoe announced a $3.9 billion Series F on Thursday, lifting its valuation to $30.9 billion — up from $10 billion just ten months ago. The round was co-led by Atreides Management, Mubadala Capital, and Valor Equity Partners, with Nvidia, Founders Fund, GIC, the Qatar Investment Authority, Radical Ventures, and TPG also participating. Alongside the raise, Crusoe unveiled Spark, a line of modular data centers that ship by flatbed truck and connect to power almost anywhere, with no large construction workforce required. Bloomberg separately reported a $13 billion, five-year cloud contract with quantitative trading firm Jane Street. Axios reported last month that Crusoe had already met with Goldman Sachs and Morgan Stanley to discuss a potential IPO."
+}

@@ -1,0 +1,66 @@
+COVER OPTIONS
+→ 1. Sam Altman says the world should accept some bad things happening for AI's benefits (83 ch)  [F2, F1]  | IMAGE subject: Sam Altman
+  2. OpenAI CEO Sam Altman says the world should accept some bad AI outcomes for its benefits (88 ch)  [F2, F3]  | IMAGE article: https://futurism.com/wp-content/uploads/2026/10/sam-altman-world-suffer-glories-ai.jpg?quality=85&w=2048
+  3. Asked how OpenAI differs from Anthropic, Sam Altman says accept some bad things happening (89 ch)  [F2]  | IMAGE subject: Sam Altman
+
+SLIDE 2 · QUOTE
+  HEADLINE: Where Altman splits from Anthropic (34 ch)  [F2]
+  BODY: Asked in Politico's new Decoded interview where he diverges from Anthropic and CEO Dario Amodei, Altman gave this answer. (121 ch)  [F1, F2]
+  QUOTE [Q1, filled]: "we believe that the world should accept some bad things happening for the benefits of this technology and people having the agency." — Sam Altman (131 ch)
+  IMAGE article: https://futurism.com/wp-content/uploads/2026/10/sam-altman-world-suffer-glories-ai.jpg?quality=85&w=2048
+
+SLIDE 3 · TEXT
+  HEADLINE: He would turn down a no-hacks guarantee (39 ch)  [F3]
+  BODY: Altman said he would not take a trade guaranteeing no major hacks, no misuse and zero scams. He thinks people will do orders of magnitude more good than bad. The Verge notes he did not elaborate on the benefits. (211 ch)  [F3]
+  IMAGE article: https://platform.theverge.com/wp-content/uploads/sites/2/2026/10/gettyimages-2294958253.jpg?quality=90&strip=all&crop=0%2C10.729057198914%2C100%2C78.541885602173&w=1200
+
+SLIDE 4 · TEXT
+  HEADLINE: He still draws a line at catastrophe (36 ch)  [F5]
+  BODY: Altman said he does not accept the really catastrophic risks, including a serious loss of control to AI. Futurism calls that a walk-back and says where he draws the line is murky. (179 ch)  [F5]
+  IMAGE subject: Sam Altman
+
+SLIDE 5 · TEXT
+  HEADLINE: The two labs had been moving closer (35 ch)  [B1]
+  BODY: Per Business Insider/Politico, OpenAI had backed stricter state safety laws and a House proposal for outside safety evaluators. Altman also agreed last month with Amodei's call to slow the most advanced models. (210 ch)  [B1]
+  IMAGE stock: state legislature chamber
+
+SLIDE 6 · TEXT
+  HEADLINE: OpenAI as the pragmatic middle (30 ch)  [F9]
+  BODY: The Verge reports Altman said stronger regulation is still needed. He put OpenAI between Anthropic's more cautious approach and those favoring little or no regulation. (167 ch)  [F9]
+  IMAGE subject: OpenAI
+
+SLIDE 7 · STAT
+  HEADLINE: Earlier, Altman sounded more cautious (37 ch)  [F10, N1]
+  BODY: In an earlier Fortune interview, Altman said a 10% risk of AI killing everyone by the end of the decade is unacceptable. He also said alignment is not solved. Alignment means building AI that fits human values. (210 ch)  [F10, N1]
+  BIG NUMBER [N1, filled]: 10%  (Risk of AI killing everyone by end of decade that Altman called unacceptable (earlier Fortune interview))
+  IMAGE stock: warning sign
+
+SLIDE 8 · TEXT
+  HEADLINE: A cybersecurity CEO says Altman is wrong (40 ch)  [F8]
+  BODY: Zscaler CEO Jay Chaudhry said on Yahoo Finance that accepting the consequences is not acceptable, and that models and enterprises must each do their part. Zscaler sells protection against rogue AI agents. (204 ch)  [F8]
+  IMAGE subject: Jay Chaudhry
+
+FOLLOW: Follow Helios Group to keep up with what AI leaders say when the cameras are on and how others respond.
+
+CAPTION (1019 ch)  [F1, F2, F3, F5, F8, F10, N1]:
+OpenAI CEO Sam Altman said in Politico's new Decoded interview that the world should accept some bad things happening for the benefits of AI, and he named that as a point where he differs from Anthropic and its CEO Dario Amodei.
+
+Altman said he would not take a trade guaranteeing no major hacks, no misuse and zero scams, because he thinks people will do orders of magnitude more good than bad. He also said he does not accept the really catastrophic risks, including a serious loss of control to AI. Zscaler CEO Jay Chaudhry said on Yahoo Finance that Altman is wrong. In an earlier Fortune interview, Altman called a 10% risk of AI killing everyone by the end of the decade unacceptable.
+
+Would you accept some bad outcomes from AI in exchange for its benefits?
+
+Follow Helios Group for plain-English AI news, including how rival labs and critics respond to what AI leaders say.
+
+Source: The Verge, Fortune, Futurism, Yahoo Finance via AOL, October 5, 2026; Business Insider/Politico via Yahoo Tech, October 4, 2026.
+
+EDIT NOTES:
+- Cover leads with Altman's name since well_known is true; attributed as 'says' with the F2 wording.
+- Used Q1 on the quote slide in full; skipped Q2 as too long for a quote slide and paraphrased F3 instead.
+- Skipped single-source quotes Q3, Q4, Q5, Q6; paraphrased Chaudhry (F8) rather than quoting Q5.
+- Futurism's 'walk-back' and 'murky' characterization kept attributed to Futurism as editorial framing.
+- 'Pragmatic centrists' is single-source (Verge), so the slide attributes it to The Verge and avoids quotation marks.
+- F10's 'We have not solved alignment' is not a QUOTES entry, so paraphrased without quote marks and glossed alignment from TERMS.
+- Included Zscaler's commercial interest (from F8 notes) so readers can weigh the criticism.
+- One background slide (B1, from Business Insider/Politico) to explain why the split matters; left out B2, the Verge's Hugging Face/Robinson claims and F6/F7 as single-source or beyond the core story.
+- Omitted N2 (Zscaler market cap) as irrelevant padding.
+- The Politico original was not opened, so slides attribute via outlets where sources are single.

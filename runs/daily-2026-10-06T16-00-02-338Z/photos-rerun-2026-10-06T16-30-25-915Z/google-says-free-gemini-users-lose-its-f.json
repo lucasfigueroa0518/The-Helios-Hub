@@ -1,0 +1,199 @@
+{
+  "storyId": "https://www.theverge.com/ai-artificial-intelligence/1005451/google-gemini-free-flash-lite-only",
+  "photos": {
+    "cover": {
+      "request": {
+        "kind": "article",
+        "value": "https://s.yimg.com/lo/mysterio/api/5c88a299a92f36edb248baf837367cc8fd31da51cc544370b3a5fb6a17c7495c/lightyear_networkapi/resizefill_w976%3Bquality_80%3Bformat_webp/https%3A%2F%2Fd29szjachogqwa.cloudfront.net%2Fimages%2Fuser-uploaded%2Fgoogle-gemini-flash-pro-free-users-october-9-2026_6850.png"
+      },
+      "photo": {
+        "url": "/social/starter/data-center-roof.jpg",
+        "credit": "Rsparks3 (CC0) · Wikimedia Commons",
+        "source": "starter",
+        "width": 2560,
+        "height": 1920,
+        "qid": null,
+        "subject": null
+      },
+      "via": "starter",
+      "identity": null,
+      "steps": [
+        "credit unknown: no credit line",
+        "starter set: /social/starter/data-center-roof.jpg"
+      ]
+    },
+    "slides": [
+      {
+        "request": {
+          "kind": "article",
+          "value": "https://www.engadget.com/img/gallery/google-removes-free-access-to-gemini-flash-and-pro-on-october-9/l-intro-1791285503.jpg"
+        },
+        "photo": {
+          "url": "/social/starter/city-skyline-night.jpg",
+          "credit": "RFNirmala (CC0) · Wikimedia Commons",
+          "source": "starter",
+          "width": 2560,
+          "height": 1920,
+          "qid": null,
+          "subject": null
+        },
+        "via": "starter",
+        "identity": null,
+        "steps": [
+          "credit unknown: no caption or credit",
+          "starter set: /social/starter/city-skyline-night.jpg"
+        ]
+      },
+      {
+        "request": {
+          "kind": "stock",
+          "value": "locked phone screen"
+        },
+        "photo": {
+          "url": "https://live.staticflickr.com/65535/52308063140_d4a78d9100_b.jpg",
+          "credit": "Don Komarechka (public domain)",
+          "source": "stock",
+          "width": 1024,
+          "height": 1024,
+          "qid": null,
+          "subject": null
+        },
+        "via": "stock",
+        "identity": null,
+        "steps": [
+          "stock \"locked phone screen\" (split): flickr 1024×1024 \"Light of the Sunflower\""
+        ]
+      },
+      {
+        "request": {
+          "kind": "stock",
+          "value": "price tag cash"
+        },
+        "photo": {
+          "url": "https://live.staticflickr.com/65535/53005905065_724d4b5c21_b.jpg",
+          "credit": "icomparioimages, CC BY · via flickr",
+          "source": "stock",
+          "width": 1024,
+          "height": 683,
+          "qid": null,
+          "subject": null
+        },
+        "via": "stock",
+        "identity": null,
+        "steps": [
+          "stock \"price tag cash\" (backdrop): flickr 1024×683 \"Saving Money on Fuel in the UK\""
+        ]
+      },
+      {
+        "request": {
+          "kind": "stock",
+          "value": "student laptop campus"
+        },
+        "photo": {
+          "url": "https://live.staticflickr.com/65535/51938459461_3e8d7e0f40_b.jpg",
+          "credit": "Phil Roeder, CC BY · via flickr",
+          "source": "stock",
+          "width": 1024,
+          "height": 683,
+          "qid": null,
+          "subject": null
+        },
+        "via": "stock",
+        "identity": null,
+        "steps": [
+          "stock \"student laptop campus\" (split): flickr 1024×683 \"13,600\""
+        ]
+      },
+      {
+        "request": {
+          "kind": "stock",
+          "value": "dial settings control"
+        },
+        "photo": {
+          "url": "https://cdn.stocksnap.io/img-thumbs/960w/J2WSGVRLCD.jpg",
+          "credit": "One Idea LLC (public domain)",
+          "source": "stock",
+          "width": 5472,
+          "height": 3648,
+          "qid": null,
+          "subject": null
+        },
+        "via": "stock",
+        "identity": null,
+        "steps": [
+          "stock \"dial settings control\" (quote): stocksnap 5472×3648 \"Digital Camera\""
+        ]
+      },
+      {
+        "request": {
+          "kind": "stock",
+          "value": "data center servers"
+        },
+        "photo": {
+          "url": "https://live.staticflickr.com/65535/53958179352_afd55469b4_b.jpg",
+          "credit": "Jefferson Lab (public domain)",
+          "source": "stock",
+          "width": 1024,
+          "height": 676,
+          "qid": null,
+          "subject": null
+        },
+        "via": "stock",
+        "identity": null,
+        "steps": [
+          "stock \"data center servers\" (split): flickr 1024×676 \"2024 Data Center Details\""
+        ]
+      }
+    ]
+  },
+  "fit": {
+    "ok": false,
+    "violations": [
+      {
+        "slide": 4,
+        "element": "h2.helios-split-stat__headline",
+        "text": "Keeping Pro means a bigger bill",
+        "over": {
+          "left": 0,
+          "top": 0,
+          "right": 787,
+          "bottom": 0
+        }
+      },
+      {
+        "slide": 4,
+        "element": "span.helios-span.helios-span--narrative",
+        "text": "Keeping Pro means a bigger bill",
+        "over": {
+          "left": 0,
+          "top": 0,
+          "right": 758,
+          "bottom": 0
+        }
+      },
+      {
+        "slide": 4,
+        "element": "div.helios-split-stat__pair",
+        "text": "$4.99 per monthGoogle AI Plus US price$19.99Google AI Pro US monthly price",
+        "over": {
+          "left": 0,
+          "top": 0,
+          "right": 787,
+          "bottom": 0
+        }
+      },
+      {
+        "slide": 4,
+        "element": "span.helios-span.helios-span--narrative",
+        "text": "$4.99 per month",
+        "over": {
+          "left": 0,
+          "top": 0,
+          "right": 296,
+          "bottom": 0
+        }
+      }
+    ],
+    "problems": []
+  }
+}

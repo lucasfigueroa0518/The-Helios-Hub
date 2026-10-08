@@ -1,0 +1,75 @@
+{
+  "cover": {
+    "kind": "edited",
+    "text": "Google's CC started as a personal assistant. Now it runs the whole household.",
+    "highlight": "runs the whole household",
+    "image": "type only"
+  },
+  "slides": [
+    {
+      "position": 2,
+      "headline": "Demand drove the pivot",
+      "body": "Tom Shane, senior product manager at Google Labs, wrote that \"one of our top user requests was for CC to do more to help run a busy home.\" Household coordination across multiple accounts was the trigger.",
+      "highlight": "one of our top user requests",
+      "image": "type only"
+    },
+    {
+      "position": 3,
+      "headline": "Who can join",
+      "note": "U.S. adults with personal Gmail only",
+      "bigNumber": "6",
+      "numberNote": "family members per CC group",
+      "highlight": "6"
+    },
+    {
+      "position": 4,
+      "headline": "Three ways to share with CC",
+      "body": "Forward a one-off email or photo. Set up auto-sharing from specific senders like a school or sports club. Or link a Drive folder or calendar directly.",
+      "highlight": "Forward a one-off email or photo",
+      "image": "type only"
+    },
+    {
+      "position": 5,
+      "headline": "The daily briefing CC sends",
+      "body": "Every morning, CC sends \"Your Day Ahead\", who needs to be where, what tasks are pending, and what CC completed yesterday. It updates a shared family calendar and task list.",
+      "highlight": "Your Day Ahead",
+      "image": "type only"
+    },
+    {
+      "position": 6,
+      "headline": "What CC can do on its own",
+      "body": "Pre-fill permission slips and activity registration forms, build school supply lists, draft meal plans, check live drive times between activities, create shared docs and sheets.",
+      "highlight": "pre-fill permission slips",
+      "image": "type only"
+    },
+    {
+      "position": 7,
+      "headline": "One catch: kids are locked out",
+      "body": "The experiment requires U.S. adults with personal Gmail accounts. Tweens, teens, and school-provided accounts are not eligible.",
+      "highlight": "kids are locked out",
+      "image": "type only"
+    },
+    {
+      "position": 8,
+      "headline": "How to get it",
+      "body": "Existing CC users will get an email invitation to upgrade in the coming days. New users can join a waitlist.",
+      "highlight": "join a waitlist",
+      "image": "type only"
+    }
+  ],
+  "follow": "Follow Helios for coverage of AI agents moving from personal tools into shared, everyday life.",
+  "editNotes": [
+    "Slide 2: cut \"Google said\" (4 chars) to hit 220-char limit; the attribution in the previous sentence carries the claim.",
+    "Slide 2: added IMAGE: type only to break up text slides (Slides 4, 5, 6 are all text; adding images helps rhythm).",
+    "Slide 4: rewrote as \"Three ways to share with CC\" (new headline) and restructured body into three short, parallel sentences to answer \"how does sharing work\" without repeating Slide 7's \"Each member chooses what to share.\" This addresses the CHECK ERROR flag that Slides 4 and 7 shared content tokens.",
+    "Slide 5: cut \"directly\" (9 chars) to hit 220-char limit; the meaning is clear without it.",
+    "Slide 5: added IMAGE: type only for rhythm.",
+    "Slide 6: cut \"activity registration PDFs\" and replaced with \"activity registration forms\" (shorter); cut \"from Google Maps\" (14 chars) as context already given in the action being described; body now 176 chars, well under limit.",
+    "Slide 6: added IMAGE: type only for rhythm.",
+    "Slide 7: rewrote to focus on the eligibility barrier (U.S., personal Gmail only, no school accounts, no minors) without repeating Slide 4's sharing-choice content. Body now addresses \"who is locked out\" as a distinct question.",
+    "Slide 7: changed from Landing to Text format to break the two-landing-slides-in-a-row rhythm violation (old Slides 7 and 8).",
+    "Slide 8: changed to Landing format (HEADLINE + BODY only, no NOTE).",
+    "Slide 8: added IMAGE: type only.",
+    "Removed the Google Labs definition gloss: Tom Shane's title (\"senior product manager at Google Labs\") is sufficient context for a smart reader; the brief's TERMS description is not needed on a live post."
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "version": "v4",
+  "vision": true,
+  "capUsd": 0.02,
+  "jevUsd": 0,
+  "visionUsd": 0.0057,
+  "capRefused": false,
+  "hits": 1,
+  "total": 1,
+  "byKind": {
+    "subject": "1/1",
+    "article": "0/0",
+    "stock": "0/0"
+  },
+  "rows": [
+    {
+      "id": "C1",
+      "story": "https://news.google.com/rss/articles/CBMiwwFBVV95cUxQV2hxbEllWjBTSVlfODJGTHNncFk5Nnk5Vlk0b3poenAySFJ6YUZ1cm1mSElzWGdSallFQk0yQWhONzA1YXpIX0d1cHhSWEg1R2IyM3pILTNaVUNXVjZ1RnhVTGFPNldXNTBleUE1STc2YjZ5eEF3MzFRLXZESWNoclZoZkxQVnlKYzZMUkFQOGVZUzZEbU1WME5STUJ4VVROTjlFd1F6QWNJc3FYand3RnVuZXZrNzN6QnQ0U2oxNXNTaTg?oc=5",
+      "request": {
+        "kind": "subject",
+        "value": "Anthropic"
+      },
+      "slot": "split",
+      "cover": true,
+      "where": "cover (company story)",
+      "slideText": [
+        "On Oct 6, 2026, Anthropic merged Project Glasswing into an expanded Cyber Verification Program with three access tiers (Defense, Red Team, Specialized) that give vetted security teams fewer cyber blocks on its newest Claude models."
+      ],
+      "speaker": null,
+      "why": "Anthropic story with an anthropic.com page (1 figure + og:image)",
+      "trace": {
+        "request": {
+          "kind": "subject",
+          "value": "Anthropic"
+        },
+        "photo": {
+          "url": "https://www.anthropic.com/api/opengraph-illustration?name=Hand%20Lock&backgroundColor=heather",
+          "credit": "Image: Anthropic",
+          "source": "official",
+          "width": null,
+          "height": null,
+          "qid": null,
+          "subject": null
+        },
+        "via": "official",
+        "identity": null,
+        "steps": [
+          "vision (official): shows no 0.10 · person (main/face) no · landmark no · story logo no · named institution yes · banner yes · \"A comparison table of Cyber Verification Program access tiers and their uses and requirements.\" → fail ($0.0030)",
+          "vision (official): shows no 0.10 · person (main/face) no · landmark no · story logo no · named institution no · banner no · \"Symbolic illustration of a keyhole with hands, representing security or access control\" → PASS ($0.0027)",
+          "official image (og:image): https://www.anthropic.com/api/opengraph-illustration?name=Hand%20Lock&backgroundColor=heather"
+        ],
+        "visionUsd": 0.0057
+      }
+    }
+  ]
+}

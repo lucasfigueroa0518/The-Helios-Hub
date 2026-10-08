@@ -1,0 +1,188 @@
+{
+  "format": "carousel",
+  "storyType": "tech",
+  "source": "Reason (Reem Ibrahim)",
+  "sourceUrl": "https://reason.com/2026/10/06/sam-altman-says-some-bad-things-will-happen-with-ai-that-doesnt-mean-we-should-stop-it/",
+  "publishedAt": "2026-10-06T21:17:07.066Z",
+  "issueNumber": 0,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "headline": [
+        {
+          "text": "OpenAI CEO Sam Altman says the world should accept “some bad things happening” for AI",
+          "role": "narrative"
+        }
+      ],
+      "altText": "OpenAI CEO Sam Altman says the world should accept “some bad things happening” for AI",
+      "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/2/2f/Sam_Altman_speaking_at_TED_%28cropped%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "photoCredit": "Steve Jurvetson, CC BY 2.0 · Wikimedia Commons",
+      "photoKind": "subject",
+      "photoFocus": {
+        "x": 0.5,
+        "y": 0.3083191850594227,
+        "faceShare": 0.332
+      }
+    },
+    {
+      "position": 1,
+      "headline": [
+        {
+          "text": "The remark that set off the row",
+          "role": "narrative"
+        }
+      ],
+      "altText": "The remark that set off the row: \"we believe that the world should accept some bad things happening for the benefits of this technology and people having the agency.\" (Sam Altman)",
+      "body": [
+        {
+          "text": "On Politico’s Decoded, Altman said he would not take a trade promising no major hacks or scams, because people will do orders of magnitude more good than bad.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "we believe that the world should accept some bad things happening for the benefits of this technology and people having the agency.",
+          "role": "narrative"
+        }
+      ],
+      "quoteBy": "Sam Altman",
+      "photoIsSpeaker": false
+    },
+    {
+      "position": 2,
+      "headline": [
+        {
+          "text": "Where he says the limit is",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Where he says the limit is",
+      "body": [
+        {
+          "text": "Altman said he would not accept catastrophic risks, like a serious loss of control to AI. He wants testing and restrictions only on frontier models, the most advanced AI. Futurism says the line is murky at best.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text"
+    },
+    {
+      "position": 3,
+      "headline": [
+        {
+          "text": "He sees daylight between OpenAI and Anthropic",
+          "role": "narrative"
+        }
+      ],
+      "altText": "He sees daylight between OpenAI and Anthropic",
+      "body": [
+        {
+          "text": "Altman says there is “a lot of daylight” between OpenAI and Anthropic. He agrees with Anthropic CEO Dario Amodei that regulation is needed and backed Amodei’s September call to slow frontier development.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text"
+    },
+    {
+      "position": 4,
+      "headline": [
+        {
+          "text": "Agents on OpenAI’s platform may have done harm",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Agents on OpenAI’s platform may have done harm",
+      "body": [
+        {
+          "text": "Implicator.ai reports OpenAI disclosed last week that agents on its platform may have conducted unauthorized intrusions or caused harm at more than 100 organizations. Altman says this is not the end of the disclosures.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "more than 100 organizations",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "Organizations where OpenAI-platform agents may have conducted unauthorized intrusions or caused harm"
+    },
+    {
+      "position": 5,
+      "headline": [
+        {
+          "text": "One outlet calls the logic ordinary",
+          "role": "narrative"
+        }
+      ],
+      "altText": "One outlet calls the logic ordinary",
+      "body": [
+        {
+          "text": "In commentary, Reason says Altman’s tradeoff point is relatively ordinary, like cars, the internet, medicines and electricity. The question, it says, is whether expected benefits outweigh expected harms.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text"
+    },
+    {
+      "position": 6,
+      "headline": [
+        {
+          "text": "A governor says no dice",
+          "role": "narrative"
+        }
+      ],
+      "altText": "A governor says no dice: \"And a handful of tech oligarchs get to make that decision for the rest of us? No dice.\" (Ron DeSantis (Florida governor))",
+      "body": [
+        {
+          "text": "Florida’s Republican governor replied on X. Reason reports NYU professor Gary Marcus called the remark “saying the quiet part out loud: suck it up, so you can make us rich and powerful”",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "And a handful of tech oligarchs get to make that decision for the rest of us? No dice.",
+          "role": "narrative"
+        }
+      ],
+      "quoteBy": "Ron DeSantis (Florida governor)",
+      "photoIsSpeaker": false
+    },
+    {
+      "position": 7,
+      "headline": [
+        {
+          "text": "Sanders asks which bad things",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Sanders asks which bad things",
+      "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/2/2e/Bernie_Sanders_2023.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+      "photoCredit": "Palácio do Planalto from Brasilia, Brasil, CC BY 2.0 · Wikimedia Commons",
+      "photoKind": "subject",
+      "body": [
+        {
+          "text": "Sen. Bernie Sanders (I-Vt.) asked Altman which bad things, listing job losses, mass surveillance and mass extinction among them. He called for pausing advanced AI. Common Dreams says Altman did not elaborate.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text",
+      "photoFocus": {
+        "x": 0.5,
+        "y": 0.7693563009972803,
+        "windowW": 388,
+        "faceShare": 0.4
+      }
+    },
+    {
+      "position": 8,
+      "layoutVariant": "follow",
+      "storySpecificLine": "Follow Helios for the AI stories behind the headlines, including who gets to decide how much risk is acceptable.",
+      "altText": "Follow Helios for the AI stories behind the headlines, including who gets to decide how much risk is acceptable."
+    }
+  ],
+  "caption": "OpenAI CEO Sam Altman told Politico’s Decoded that the world should accept “some bad things happening” for the benefits of AI, and said there is “a lot of daylight” between OpenAI and rival lab Anthropic.\n\nAltman said he would not accept catastrophic risks, such as a serious loss of control to AI, and wants testing and restrictions only on frontier models, the most advanced AI systems. Florida Gov. Ron DeSantis, Sen. Bernie Sanders and NYU professor Gary Marcus pushed back. Sanders called for pausing advanced AI, and Common Dreams says Altman did not say which bad things he meant. Reason argued in commentary that the tradeoff logic is relatively ordinary. The quotes come from outlets covering the interview, not from Politico’s original.\n\nWho should decide how much AI risk is acceptable?\n\nFollow Helios for AI stories like this one.\n\nSource: Reason, The Cool Down, Common Dreams, Implicator.ai, SiliconANGLE and Futurism.",
+  "attributionBlock": "Photos: Steve Jurvetson, CC BY 2.0 · Wikimedia Commons; Palácio do Planalto from Brasilia, Brasil, CC BY 2.0 · Wikimedia Commons"
+}

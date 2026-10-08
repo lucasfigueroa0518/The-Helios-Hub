@@ -1,0 +1,17 @@
+{
+  "fixture": "ai-safety-explosive",
+  "humanized": false,
+  "exportedAt": "2026-09-23T13:39:00.711Z",
+  "format": "carousel",
+  "storyType": "safety",
+  "source": "The Verge",
+  "sourceUrl": "https://www.theverge.com/features/inside-the-suddenly-explosive-world-of-ai-safety",
+  "slideCount": 5,
+  "files": [
+    "slide-00.png",
+    "slide-01.png",
+    "slide-02.png",
+    "slide-03.png",
+    "slide-04.png"
+  ]
+}

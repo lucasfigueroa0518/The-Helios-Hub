@@ -1,0 +1,33 @@
+I'll work through each slide and the caption systematically against the sources.
+
+**COVER:** "Gov. Newsom signs an order to plan an AI kill switch for California." — Accurate. The order directs experts to consider/advance a kill switch; "plan" captures the conditional nature. No flag.
+
+**SLIDE 2:** "asking a state panel to recommend AI safety rules within two months — including a kill switch, an emergency shutoff for frontier AI models." — Accurate and the TERMS definition of kill switch matches. No flag.
+
+**SLIDE 3:** Clean. No flag.
+
+**SLIDE 4:** "The panel is asked to weigh embedding independent auditors inside AI labs, requiring outside verification of company safety reports, and advancing the kill switch itself, verified by an independent verification organization." — Accurate summary of three of the four proposals. No flag.
+
+**SLIDE 5:** Quote check — "We're not waiting to act — we're going to speed up our work on substantial and responsible AI oversight before it's too late." Sources confirm this exact quote from Newsom. Attribution correct. No flag.
+
+**SLIDE 6:** "Each major AI lab would instead create and run its own set of protocols to shut down a model, verified on an ongoing basis by an outside organization." — The SF Standard says "a set of protocols that each of the major labs would be responsible for creating and executing themselves, verified by independent organizations." The slide adds "on an ongoing basis" — this phrase actually comes from the governor's official announcement ("with the efficacy of the switch verified on an ongoing basis by an independent verification organization"), so it's sourced. No flag.
+
+**SLIDE 7:** Quote check — "California has only a limited capacity to control what a company incorporated in Delaware does with a data center in Oregon to serve a customer in Colorado." — SF Standard has this verbatim, attributed to Max Harms, researcher at the Machine Intelligence Research Institute. Correct. No flag.
+
+**SLIDE 8:** "The SF Standard reports California 'sets trends that often end up determining how things get done at the federal level.'" — SF Standard says: "California sets trends that often end up determining how things get done at the federal level." This is accurate as a partial quote. But the slide attributes this as a statement by SF Standard (i.e., as the outlet's own assertion). Checking the source: this phrasing appears in the SF Standard article as part of its own narration, not a quote from an expert. The slide's framing is accurate. No flag.
+
+**CAPTION:** "The panel is asked to consider four proposals: embedding independent auditors inside AI labs, requiring outside verification of company safety reports, advancing the kill switch, and updating what counts as a critical safety incident." — This correctly lists all four proposals from the official announcement. No flag.
+
+Checking the caption's SF Standard quote: "sets trends that often end up determining how things get done at the federal level" — accurate partial quote from SF Standard. No flag.
+
+Now checking something I want to re-examine: Slide 8 and the caption both attribute "sets trends that often end up determining how things get done at the federal level" to SF Standard as a reported fact. Looking at the SF Standard source: "Still, Harms added, the proposal for a switch matters, as California sets trends that often end up determining how things get done at the federal level." — This is actually Max Harms speaking (or paraphrased). The slide and caption attribute it to SF Standard as the outlet's own reporting/narration, but in context it's Harms' view being relayed. This is a misattribution — the claim is Harms', not SF Standard's independent assertion. However, the slide says "SF Standard reports" and the caption similarly frames it as SF Standard's report — which is technically accurate as a description of what the article says, even if it's conveying Harms' view. This is borderline, but the framing "SF Standard reports" is a fair way to cite the outlet for content that appears in its article.
+
+Actually, re-reading more carefully: "Still, Harms added, the proposal for a switch matters, as California sets trends that often end up determining how things get done at the federal level." The "as California sets trends..." clause is ambiguous — it could be Harms' words or the reporter's narration introduced by Harms' statement. Either way, presenting it as "SF Standard reports" is a defensible citation. No flag.
+
+Everything checks out.
+
+---
+
+VERDICT: PASS
+
+FLAGS: None.

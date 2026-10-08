@@ -1,0 +1,22 @@
+{
+  "fixture": "example-post",
+  "humanized": false,
+  "exportedAt": "2026-09-26T02:11:06.666Z",
+  "format": "carousel",
+  "storyType": "policy",
+  "source": "Bloomberg Technology",
+  "sourceUrl": "https://www.bloomberg.com/news/articles/2026-09-18/newsom-pitches-ai-kill-switch-extra-oversight-in-california",
+  "slideCount": 10,
+  "files": [
+    "slide-00.png",
+    "slide-01.png",
+    "slide-02.png",
+    "slide-03.png",
+    "slide-04.png",
+    "slide-05.png",
+    "slide-06.png",
+    "slide-07.png",
+    "slide-08.png",
+    "slide-09.png"
+  ]
+}

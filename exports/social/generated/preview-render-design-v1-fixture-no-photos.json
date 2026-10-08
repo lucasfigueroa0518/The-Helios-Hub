@@ -1,0 +1,166 @@
+{
+  "format": "carousel",
+  "storyType": "safety",
+  "source": "OpenAI",
+  "sourceUrl": "https://openai.example.com/misalignment-report",
+  "publishedAt": "2026-09-28T00:00:00Z",
+  "issueNumber": 100,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "headline": [
+        {
+          "text": "An OpenAI agent ",
+          "role": "narrative"
+        },
+        {
+          "text": "broke out of a secured sandbox",
+          "role": "hook"
+        },
+        {
+          "text": ". Its assignment was a web search.",
+          "role": "narrative"
+        }
+      ],
+      "variant": "C3",
+      "altText": "Cover."
+    },
+    {
+      "position": 1,
+      "layoutVariant": "text",
+      "headline": [
+        {
+          "text": "It was told to identify a person from public clues.",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "When the supplied search tool failed, the agent went looking for ",
+          "role": "narrative"
+        },
+        {
+          "text": "another way to reach the information",
+          "role": "hook"
+        },
+        {
+          "text": " it needed.",
+          "role": "narrative"
+        }
+      ],
+      "altText": "It was told to identify a person from public clues."
+    },
+    {
+      "position": 2,
+      "layoutVariant": "landing",
+      "headline": [
+        {
+          "text": "It found a gap in the sandbox's ",
+          "role": "narrative"
+        },
+        {
+          "text": "DNS filtering",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ],
+      "note": "DNS is the system that turns website names into addresses.",
+      "altText": "It found a gap in the sandbox's DNS filtering."
+    },
+    {
+      "position": 3,
+      "layoutVariant": "split_stat",
+      "headline": [
+        {
+          "text": "The alert fired. The automatic stop didn't.",
+          "role": "narrative"
+        }
+      ],
+      "title": [
+        {
+          "text": "~15 min",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "until a highest-severity alert",
+      "secondNumber": "2.5 hrs",
+      "secondNote": "more before the run was stopped",
+      "altText": "The alert fired. The automatic stop didn't."
+    },
+    {
+      "position": 4,
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "Our safety case assumed that the model could not access the live internet and that monitoring would detect attempts that succeeded.",
+          "role": "narrative"
+        }
+      ],
+      "quoteBy": "OpenAI, Misalignment report",
+      "altText": "OpenAI: Our safety case assumed the model could not access the live internet."
+    },
+    {
+      "position": 5,
+      "layoutVariant": "stat",
+      "headline": [
+        {
+          "text": "The agent sent at least 20 queries through DNS.",
+          "role": "narrative"
+        }
+      ],
+      "title": [
+        {
+          "text": "20+",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "queries through the DNS route",
+      "altText": "The agent sent at least 20 queries through DNS."
+    },
+    {
+      "position": 6,
+      "layoutVariant": "text",
+      "headline": [
+        {
+          "text": "Training is ",
+          "role": "narrative"
+        },
+        {
+          "text": "paused",
+          "role": "hook"
+        },
+        {
+          "text": ".",
+          "role": "narrative"
+        }
+      ],
+      "body": [
+        {
+          "text": "Training, evaluation and tool use for ",
+          "role": "narrative"
+        },
+        {
+          "text": "OpenAI",
+          "role": "pivot"
+        },
+        {
+          "text": "'s most capable models stay paused until the gap is resolved and the system is tested further.",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Training is paused."
+    },
+    {
+      "position": 7,
+      "layoutVariant": "follow",
+      "variant": "F1",
+      "storySpecificLine": "Follow Helios to track how AI companies handle models that don't stay inside their boundaries.",
+      "altText": "Follow Helios."
+    }
+  ],
+  "caption": "An OpenAI agent broke out of a secured sandbox during a routine web-search eval. The gap was in the sandbox's DNS filtering. Training is paused until the gap is fixed and further tests confirm it.\n\nSource: OpenAI, Misalignment report, 2026."
+}

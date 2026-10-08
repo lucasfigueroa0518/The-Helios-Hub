@@ -1,0 +1,260 @@
+{
+  "format": "carousel",
+  "storyType": "policy",
+  "source": "AI | The Verge",
+  "sourceUrl": "https://www.theverge.com/policy/997516/california-governor-newsom-ai-kill-switch",
+  "publishedAt": "2026-09-18T17:04:51.000Z",
+  "issueNumber": 723,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "variant": "C1",
+      "beat": "HOOK",
+      "altText": "Bold white text over a portrait of Governor Gavin Newsom against the California state capitol. Headline reads: Newsom just ordered a kill switch for AI — and California has 60 days to make it law.",
+      "headline": [
+        {
+          "role": "narrative",
+          "text": "Newsom just ordered a kill switch for AI — "
+        },
+        {
+          "role": "hook",
+          "text": "California has 60 days to make it law."
+        }
+      ],
+      "photoUrl": "https://images.unsplash.com/photo-1517048676732-d65bc937f952?w=1200",
+      "photoCredit": "PHOTO: JASON GOODMAN · UNSPLASH"
+    },
+    {
+      "position": 1,
+      "layoutVariant": "story_beat",
+      "variant": "B1",
+      "beat": "GROUND",
+      "altText": "Slide showing text over a photo of the California State Capitol or an executive order signing. Explains what Newsom signed, why he signed it, and California's intent to lead on AI oversight.",
+      "body": [
+        {
+          "role": "narrative",
+          "text": "On "
+        },
+        {
+          "role": "pivot",
+          "text": "September 18, 2026"
+        },
+        {
+          "role": "narrative",
+          "text": ", California Gov. "
+        },
+        {
+          "role": "pivot",
+          "text": "Gavin Newsom"
+        },
+        {
+          "role": "narrative",
+          "text": " signed an executive order on AI oversight. It directs the state to convene an expert group and deliver concrete safety recommendations within two months. Those recommendations will become California state law."
+        }
+      ],
+      "bodyBottom": [
+        {
+          "role": "narrative",
+          "text": "Newsom is moving "
+        },
+        {
+          "role": "pivot",
+          "text": "California"
+        },
+        {
+          "role": "narrative",
+          "text": " to the front of the line on frontier AI without waiting for Washington."
+        }
+      ],
+      "photoUrl": "https://platform.theverge.com/wp-content/uploads/sites/2/2026/09/gettyimages-2292819671.jpg?quality=90&strip=all&crop=0%2C10.729329167465%2C100%2C78.541341665071&w=1200",
+      "photoCredit": "VIA AI | THE VERGE"
+    },
+    {
+      "position": 2,
+      "layoutVariant": "data_block",
+      "variant": "D1",
+      "beat": "SCALE",
+      "altText": "Large orange '2 MONTHS' against a split graphic comparing the California deadline to years-long federal rulemaking timelines. A countdown or hourglass visual reinforces urgency.",
+      "headline": [
+        {
+          "role": "narrative",
+          "text": "FASTER THAN WASHINGTON CAN SCHEDULE A HEARING."
+        }
+      ],
+      "body": [
+        {
+          "role": "narrative",
+          "text": "Federal rulemaking routinely takes years. Newsom's expert group has "
+        },
+        {
+          "role": "hook",
+          "text": "two months"
+        },
+        {
+          "role": "narrative",
+          "text": " to deliver recommendations that could rewrite the rules for every frontier AI company operating in the state."
+        }
+      ],
+      "title": [
+        {
+          "role": "hook",
+          "text": "2 MONTHS."
+        }
+      ],
+      "photoUrl": "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=1200",
+      "photoCredit": "PHOTO: MIKE KONONOV · UNSPLASH"
+    },
+    {
+      "position": 3,
+      "layoutVariant": "data_block",
+      "variant": "D3",
+      "beat": "MECHANISM",
+      "altText": "Three-panel icon layout. Each panel names one compliance requirement: kill switch authority, onsite auditor embeds, and independently audited transparency reports. Type-heavy slide on a dark background.",
+      "headline": [
+        {
+          "role": "narrative",
+          "text": "WHAT THE ORDER ACTUALLY DEMANDS."
+        }
+      ],
+      "body": [
+        {
+          "role": "narrative",
+          "text": "One: a "
+        },
+        {
+          "role": "hook",
+          "text": "kill switch"
+        },
+        {
+          "role": "narrative",
+          "text": "— the authority to shut down frontier AI models deemed unsafe. Two: independent auditors embedded onsite inside AI companies for regular reviews. Three: transparency reports and risk assessments held to independent auditor standards, not the companies' own."
+        }
+      ],
+      "title": [
+        {
+          "role": "hook",
+          "text": "THREE TEETH."
+        }
+      ],
+      "photoUrl": "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1200",
+      "photoCredit": "PHOTO: PRODUCT SCHOOL · UNSPLASH"
+    },
+    {
+      "position": 4,
+      "layoutVariant": "story_beat",
+      "variant": "B4",
+      "beat": "SCENARIO",
+      "altText": "Moody photo of a server room or open-plan AI office. Text overlay describes what day one of the law looks like from inside a frontier AI company in San Francisco.",
+      "body": [
+        {
+          "role": "narrative",
+          "text": "Imagine you run a frontier AI lab in "
+        },
+        {
+          "role": "pivot",
+          "text": "San Francisco."
+        },
+        {
+          "role": "narrative",
+          "text": " The law takes effect. On day one, a state-approved auditor walks through your door and sets up a desk. Your internal risk assessments become public record. If your model crosses a safety threshold, someone outside your company can shut it down."
+        }
+      ],
+      "photoUrl": "https://images.unsplash.com/photo-1497366216548-37526070297c?w=1200",
+      "photoCredit": "PHOTO: COPERNICO · UNSPLASH"
+    },
+    {
+      "position": 5,
+      "layoutVariant": "story_beat",
+      "variant": "B5",
+      "beat": "TURN",
+      "altText": "World map with California highlighted and radiating lines pointing to global tech hubs. Large text reads: CALIFORNIA RULES. THE WORLD FOLLOWS.",
+      "headline": [
+        {
+          "role": "hook",
+          "text": "CALIFORNIA RULES. THE WORLD FOLLOWS."
+        }
+      ]
+    },
+    {
+      "position": 6,
+      "layoutVariant": "proof",
+      "variant": "P1",
+      "beat": "PROOF",
+      "altText": "News-clipping aesthetic showing the headline 'Gavin Newsom is pushing for an AI kill switch.' Commentary below confirms the kill-switch mandate is documented reporting, not speculation.",
+      "headline": [
+        {
+          "role": "hook",
+          "text": "It's in print."
+        }
+      ],
+      "body": [
+        {
+          "role": "narrative",
+          "text": "This "
+        },
+        {
+          "role": "hook",
+          "text": "kill-switch mandate"
+        },
+        {
+          "role": "narrative",
+          "text": " is documented in press coverage of an executive order Newsom signed on the record. The expert group's recommendations and any resulting legislation will be public."
+        }
+      ]
+    },
+    {
+      "position": 7,
+      "layoutVariant": "thesis",
+      "variant": "T1",
+      "beat": "THESIS",
+      "altText": "Wide aerial shot of Silicon Valley or San Francisco skyline. Single editorial sentence as large type overlay: California is testing whether one state can bend trillion-dollar AI companies to its safety rules — before the federal government writes any.",
+      "body": [
+        {
+          "role": "narrative",
+          "text": "California is testing whether one state can force "
+        },
+        {
+          "role": "hook",
+          "text": "trillion-dollar AI companies"
+        },
+        {
+          "role": "narrative",
+          "text": " to follow its safety rules before the federal government acts."
+        }
+      ]
+    },
+    {
+      "position": 8,
+      "layoutVariant": "debate",
+      "variant": "T2",
+      "beat": "DEBATE",
+      "altText": "Split-screen type layout with two labeled positions: PROTECT and FRAGMENT. Each presents one side of the debate over state-level AI regulation.",
+      "headline": [
+        {
+          "role": "narrative",
+          "text": "Do state-level AI regulations protect the public or splinter the market?"
+        }
+      ],
+      "sides": [
+        {
+          "text": "California can move faster than Washington. A state-level kill switch and mandatory audits put real teeth in AI safety years before federal rules exist.",
+          "label": "PROTECT"
+        },
+        {
+          "text": "Fifty different state regimes mean fifty compliance headaches. Labs may simply move operations — and jobs — to friendlier jurisdictions.",
+          "label": "FRAGMENT"
+        }
+      ]
+    },
+    {
+      "position": 9,
+      "layoutVariant": "follow",
+      "variant": "F1",
+      "beat": "FOLLOW",
+      "altText": "Clean brand-color slide with account handle and a single follow line: We track the laws being written around AI before they hit the headlines.",
+      "storySpecificLine": "We track AI legislation before it becomes news."
+    }
+  ],
+  "caption": "California Gov. Gavin Newsom signed an executive order Friday directing the state to convene an expert group with a two-month window to deliver concrete AI safety recommendations — recommendations that could become state law. The three proposals on the table are significant: a kill-switch mechanism giving the state authority to shut down frontier AI models deemed unsafe, mandatory onsite embeds of independent auditors inside AI companies, and transparency reports held to third-party auditor standards rather than self-certification. The source reporting on this order is early-stage and thin on final legislative language, so treat the mandate as in-motion, not settled. California is the world's fifth-largest economy."
+}

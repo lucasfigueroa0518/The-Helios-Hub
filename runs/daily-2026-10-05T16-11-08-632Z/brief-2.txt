@@ -1,0 +1,102 @@
+SINGLE STORY: yes. All four starting links resolve to pages. Three cover the Gemini change. The first link, the Times Square Chronicles article titled "Google Is Narrowing Free Gemini Access…", does not contain the Gemini story. Its text is about Meta's "Muse for Small Business" AI agent, and it never mentions Gemini or October 9. Don't use it as a source for this story. See NOT ANSWERED and SOURCES.
+
+THE NEWS: [CLAIM: Google's support page says] From October 9, 2026, Gemini app users without a Google AI plan will be limited to the Flash-Lite model, and AI Plus subscribers will lose Pro (F1, F2, F3). Independent outlets confirmed that the support page says this, but none independently verified how it will be applied (F1–F3, F13).
+
+WHY IT MATTERS (sourced only)
+- Google is moving its more capable models behind paid tiers. Free users keep only the lightest model, and Pro is limited to the $19.99 and higher plans (F1, F2, F4, F5).
+- MakeUseOf puts this in a wider industry trend of AI companies restricting access to advanced models because of cost. It cites OpenAI's reported $13.07 billion 2025 revenue against a $38.5 billion net loss (F11, N8, N9).
+
+FACTS
+- F1. [CLAIM: Google's support page says] Starting October 9, Gemini app users who don't pay for a Google AI plan can use only the Flash-Lite model and lose Flash and Pro. (9to5Google, PCMag, MakeUseOf, Mac Observer, Thurrott, Android Authority)
+- F2. [CLAIM: Google's support page says] AI Plus subscribers ($4.99 a month) will keep Flash-Lite and Flash and lose Pro. (9to5Google, Mac Observer, MakeUseOf, Android Authority)
+- F3. AI Plus subscribers will get an email explaining when the change takes effect for their account, so the date for them is not stated. (9to5Google, PCMag, MakeUseOf, Mac Observer, Thurrott)
+- F4. AI Pro ($19.99 a month) and AI Ultra subscribers keep access to all three models (Flash-Lite, Flash, Pro). (9to5Google, Mac Observer, MakeUseOf)
+- F5. AI Pro subscribers will gain the Deep Think option, which is currently only on the $99.99 and $199.99 per month plans. (9to5Google, Mac Observer)
+- F6. Thurrott says Deep Think previously required a $99.99/month AI Ultra subscription. (Thurrott)
+- F7. The Gemini app will add "low," "medium," and "high" effort levels for each available model in October. (9to5Google, Mac Observer, PCMag, MakeUseOf, Thurrott)
+- F8. Higher effort levels use up the user's limit faster. (9to5Google, PCMag, Thurrott, MakeUseOf)
+- F9. 9to5Google says the effort levels would match what's in Google AI Studio and Antigravity. At the moment, users can only enable "Extended thinking: Complex problem solving." (9to5Google)
+- F10. PCMag reports that AI Plus and Pro plans offer 2x and 5x Gemini usage limits compared with the free plan. PCMag says Google doesn't explain how it calculates the limits. (PCMag)
+- F11. MakeUseOf reports OpenAI recently halved advanced-model allowances on some paid plans, and some existing Pro users got free GPT credits as a buffer. (MakeUseOf)
+- F12. MakeUseOf reports Anthropic raised five-hour usage limits by 20 percent for Pro, Max, Team and eligible Enterprise subscribers alongside the launch of Claude Opus 5.5. (MakeUseOf) ⚠ single source.
+- F13. All coverage traces back to Google's updated support page, which 9to5Google spotted first. PCMag, Thurrott and Android Authority credit 9to5Google. (9to5Google, PCMag, Thurrott, Android Authority)
+- F14. Mac Observer says Gemini 4 Argon is expected to arrive first for AI Ultra subscribers. 9to5Google says Google announced this earlier in the week, and that it's unclear whether Argon is a Pro model or a new tier above it. (Mac Observer, 9to5Google)
+- F15. PCMag says students remain eligible for a year of AI Pro free. (PCMag) ⚠ single source.
+- F16. PCMag says the latest changes come as storage and component costs continue to rise, "potentially" affecting Google's AI infrastructure spending. This is PCMag's interpretation, and Google gave no reason in any opened source. (PCMag)
+- F17. MakeUseOf and Mac Observer interpret the move as a push to get users to upgrade or pay more. This is commentary, not a statement from Google. (MakeUseOf, Mac Observer)
+- F18. SOURCES DISAGREE on model version numbers.
+  - 9to5Google, PCMag and Thurrott say the free tier is limited to (3.5) Flash-Lite, and that users lose (3.6) Flash and (3.1) Pro.
+  - Android Authority's summary says free users get "Gemini 3.1-Flash-Lite", but its body says "Gemini 3.5-Flash-Lite".
+  - Android Authority also mentions Gemini 3.8 Flash arriving in September. No other source mentions this.
+  - Use model tier names (Flash-Lite, Flash, Pro) rather than version numbers.
+
+BACKGROUND
+- B1. The change follows a compute-based usage change in May. Thurrott says compute-based limits for the Gemini chatbot refresh every 5 hours until users reach a weekly limit. (9to5Google, Thurrott)
+- B2. PCMag says this is the second time Google has overhauled its AI plans this year. (PCMag) ⚠ single source.
+
+QUOTES
+- Q1. "This will increase the model’s ability to complete tasks and provide more thorough answers to queries, but will also use more of your limit." — Google support page, on effort levels (via 9to5Google, PCMag, Thurrott; PCMag's quote has a trailing comma)
+- Q2. "receive an email that explains when these changes will take effect." — Google support page, on AI Plus subscribers (via 9to5Google) ⚠ 9to5Google is the only source that quotes it in full. PCMag and Thurrott paraphrase.
+- Q3. "maximum parallel reasoning" — Google support page, describing Deep Think (via 9to5Google, Thurrott)
+- Q4. "Calculation of your usage will factor in the complexity of your prompt, the features you use, and the length of your chat," — Google support page (via PCMag) ⚠
+
+NUMBERS
+- N1: October 9 (2026) | date | when the free and AI Plus model changes begin (the AI Plus date is subject to a later email) | 9to5Google, Android Authority, PCMag
+- N2: $4.99 per month | money | AI Plus price | 9to5Google, Mac Observer, PCMag
+- N3: $19.99 per month | money | AI Pro price | 9to5Google, Mac Observer, PCMag, Thurrott
+- N4: $99.99 and $199.99/month | money | higher plans that currently have Deep Think (9to5Google writes "$99.99 and $199.99/month plans") | 9to5Google, Mac Observer
+- N5: 2x and 5x | other | Gemini usage limits of AI Plus and Pro vs. the free plan | PCMag
+- N6: every 5 hours / weekly limit | duration | how often compute-based usage limits refresh | Thurrott
+- N7: 5TB | count | cloud storage in Google AI Pro | Thurrott
+- N8: $13.07 billion | money | OpenAI's 2025 revenue ("reportedly") | MakeUseOf
+- N9: $38.5 billion | money | OpenAI's 2025 net loss | MakeUseOf
+- N10: 20 percent | percent | increase in Anthropic's five-hour limits | MakeUseOf
+
+TERMS
+- Flash-Lite: "the lightest and fastest" Gemini model (PCMag).
+- Flash: "the all-around middle option" (PCMag).
+- Pro: "the most advanced" model (PCMag).
+- Deep Think: an option for "maximum parallel reasoning" (9to5Google). Mac Observer says it helps with complex problem solving.
+- Effort levels: low, medium or high settings. Higher effort gives more thorough answers but uses more of the user's limit (Q1).
+- Usage limit: PCMag quotes Google as saying usage is calculated from prompt complexity, features used and chat length (Q4).
+
+SUBJECTS
+- Google / Gemini app: the company making the change.
+- Gemini Flash-Lite, Flash, Pro: the three model tiers.
+- Gemini 4 Argon: new frontier model, coming first to AI Ultra.
+- Google AI Plus, AI Pro, AI Ultra: the paid plans.
+- 9to5Google (Abner Li): first outlet to report the change.
+- OpenAI and Anthropic: competitors cited for context (MakeUseOf).
+
+EVENTS
+- October 9, 2026: the model restrictions begin. No location or photographable event is given.
+
+ARTICLE PHOTOS
+- (no caption) | Credit: Google | https://sm.pcmag.com/t/pcmag_au/photo/g/googles-up/googles-updated-model-limits-for-gemini-users_jyxv.3840.png (PCMag; apparently a Google screenshot of the updated model limits)
+- (no caption) | (no credit) | https://sm.pcmag.com/t/pcmag_au/news/u/using-goog/using-google-gemini-for-free-youre-losing-some-models-later_ba3e.1200.jpg (PCMag)
+- (no caption) | (no credit) | https://9to5google.com/wp-content/uploads/sites/4/2026/10/Google-AI-Ultra-Gemini-3.1-Pro-Deep-Think.jpg?strip=info&w=1480 (9to5Google; body text labels it "Gemini 3.1 Pro with Deep Think on AI Ultra")
+- (no caption) | (no credit) | https://www.macobserver.com/wp-content/uploads/2026/07/Google-Brings-Gemini-Spark-to-Mac-With-Local-File-Automation.png (Mac Observer; body text reads "Google Gemini Logo. Image: Google")
+- (no caption) | (no credit) | https://static0.makeuseofimages.com/wordpress/wp-content/uploads/wm/2026/10/gemini-free-models.jpeg?w=1600&h=900&fit=crop (MakeUseOf; the page text includes "Credit: Shimul Sood / MakeUseOf", but it isn't clearly tied to a specific photo)
+- Other photos in the 9to5Google, Android Authority, Thurrott and Times Square Chronicles articles have no caption or credit. The Times Square Chronicles photo is unrelated to Gemini.
+
+NOT ANSWERED BY SOURCES
+- I did not open Google's support page, so all Google statements come secondhand. No Google spokesperson or press statement appears in any source.
+- Google gives no stated reason for the change. PCMag's cost explanation is its own speculation.
+- No source explains the business impact, which is the angle in the Times Square Chronicles headline. Workspace and business accounts are not mentioned. Every source covers personal Gemini accounts only (MakeUseOf says "personal accounts").
+- It is unclear whether any usage quota changes for free users beyond the model restriction.
+- The exact date for AI Plus users is not given.
+- The exact release date for the effort levels is not given beyond "October".
+- No independent verification that the change is taking effect, since the date is still in the future (today is October 5).
+- Gemini 4 Argon's classification and release date are not given.
+- No user or expert reaction was found beyond MakeUseOf's commentary. MakeUseOf's claim that users are dissatisfied is unattributed.
+
+SOURCES (all opened)
+- 9to5Google (Abner Li), Oct 3, 2026: https://9to5google.com/2026/10/03/gemini-model-limits-oct-26/
+- PCMag Australia (Jibin Joseph), Oct 5, 2026: https://au.pcmag.com/ai/120240/using-google-gemini-for-free-youre-losing-some-models-later-this-week
+- MakeUseOf (Hamed Paydarfar), Oct 5, 2026: https://www.makeuseof.com/googles-new-paywall-blocks-advanced-models-from-gemini-free/
+- The Mac Observer (Akshay Kumar), Oct 5, 2026: https://www.macobserver.com/news/google-adjusts-gemini-access-and-adds-deep-think-to-pro-tier/
+- Android Authority (Tushar Mehta), Oct 5, 2026: https://www.androidauthority.com/google-gemini-free-ai-plus-usage-limits-3719012/
+- Thurrott (Laurent Giret), Oct 5, 2026: https://www.thurrott.com/a-i/342429/google-gemini-will-soon-limit-model-access-for-free-and-plus-users
+- Times Square Chronicles (Elisabeth Qoku), Oct 5, 2026: https://t2conline.com/google-and-gemini-app/. This was opened, but it is off-topic: it covers Meta Muse, not Gemini. It was not used for any fact above.
+
+FETCH FAILURES: none. Google's support page was never opened. Other search hits (Notebookcheck, ppc.land, FourWeekMBA and others) were not opened and are not cited.

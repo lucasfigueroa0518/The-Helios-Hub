@@ -1,0 +1,878 @@
+{
+  "meta": {
+    "runId": "2026-09-29T18-49-26-356Z",
+    "articleId": "70b323c2-a321-438f-9649-a9f1ea89bf3e",
+    "articleHeadline": "NSA would assess powerful AI models under new national security legislation from Gottheimer - New Jersey 101.5",
+    "articleSource": "New Jersey 101.5",
+    "articlePublishedAt": "2026-09-18T19:56:42.000Z",
+    "usedFromBrief": false,
+    "fromBriefPath": null,
+    "costCap": 1.5
+  },
+  "result": {
+    "ok": false,
+    "status": "needs_human_review",
+    "reason": "hard code checks failed after 2 tries per stage in round 1: SLIDE 3 and SLIDE 2 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them. | SLIDE 4 and SLIDE 3 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them. | SLIDE 7 and SLIDE 6 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them. | SLIDE 8 and SLIDE 7 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them. | SLIDE 9 and SLIDE 8 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them. | SLIDE 10 and SLIDE 9 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them.\nFact-check flags on the same post:\n  - SMALL COVER / TEXT: \"AI\" is broader than the sources, which limit the claim to frontier AI models. (SOURCES SAY: \"Right now, there are no mandatory requirements for pre-deployment testing of frontier AI models.\" (Gottheimer press release; WRNJ; Politico/NewsBreak))\n  - SMALL SLIDE 2 / BODY: Drops \"open-weight\" — the bill targets Chinese-developed open-weight AI models, not Chinese-developed AI broadly. \"Federal systems\" also slightly widens the scope beyond government-issued devices and procurement. (SOURCES SAY: \"would prohibit Chinese-developed open-weight AI models from government-issued devices and bar federal agencies from purchasing software that relies on those models.\" (WRNJ; press release))\n  - SMALL SLIDE 2 / HIGHLIGHT: \"Powerful AI\" omits that the bills target the most powerful / frontier / advanced / covered AI models. Slight broadening, consistent with Cover issue. (SOURCES SAY: \"mandatory national security review for the most powerful AI models\" / \"advanced AI models\" (press release; WRNJ))\n  - BIG SLIDE 7 / BODY: This definition does not appear in any of the sources. The sources use the term \"open-weight\" but do not explain it. (SOURCES SAY: Nothing. No source defines open-weight models.)\n  - SMALL CAPTION / TEXT: Same as Slide 2 — drops \"open-weight,\" which is the operative limit of the bill. (SOURCES SAY: \"would prohibit Chinese-developed open-weight AI models from government-issued devices and bar federal agencies from purchasing software that relies on those models.\" (WRNJ; press release))\n  - BIG CAPTION / TEXT: This parenthetical definition of open-weight models is not in any source, same issue as Slide 7. (SOURCES SAY: Nothing. No source defines open-weight models.)\nPhoto verification:\n  - PHOTO SLIDE 2 — requested \"China FIREWALL Act\": Wikidata: no Wikidata entities match \"China FIREWALL Act\"\n  - PHOTO SLIDE 9 — requested \"Sean Cairncross\": no Commons candidates via P18/P180 for Q35497358 at ≥1080px short side",
+    "costUsd": 0.6509,
+    "stagesRun": [
+      "reporter",
+      "reporter(narrow-to-one)",
+      "writer",
+      "writer(outline-retry)",
+      "editor",
+      "caption",
+      "editor(check-errors r1.1)",
+      "editor(check-errors r1.2)",
+      "fact-checker(on-bail r1)",
+      "image-step"
+    ]
+  },
+  "columns": {
+    "composeStatus": "needs_human_review",
+    "composeError": "hard code checks failed after 2 tries per stage in round 1: SLIDE 3 and SLIDE 2 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them. | SLIDE 4 and SLIDE 3 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them. | SLIDE 7 and SLIDE 6 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them. | SLIDE 8 and SLIDE 7 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them. | SLIDE 9 and SLIDE 8 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them. | SLIDE 10 and SLIDE 9 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them.\nFact-check flags on the same post:\n  - SMALL COVER / TEXT: \"AI\" is broader than the sources, which limit the claim to frontier AI models. (SOURCES SAY: \"Right now, there are no mandatory requirements for pre-deployment testing of frontier AI models.\" (Gottheimer press release; WRNJ; Politico/NewsBreak))\n  - SMALL SLIDE 2 / BODY: Drops \"open-weight\" — the bill targets Chinese-developed open-weight AI models, not Chinese-developed AI broadly. \"Federal systems\" also slightly widens the scope beyond government-issued devices and procurement. (SOURCES SAY: \"would prohibit Chinese-developed open-weight AI models from government-issued devices and bar federal agencies from purchasing software that relies on those models.\" (WRNJ; press release))\n  - SMALL SLIDE 2 / HIGHLIGHT: \"Powerful AI\" omits that the bills target the most powerful / frontier / advanced / covered AI models. Slight broadening, consistent with Cover issue. (SOURCES SAY: \"mandatory national security review for the most powerful AI models\" / \"advanced AI models\" (press release; WRNJ))\n  - BIG SLIDE 7 / BODY: This definition does not appear in any of the sources. The sources use the term \"open-weight\" but do not explain it. (SOURCES SAY: Nothing. No source defines open-weight models.)\n  - SMALL CAPTION / TEXT: Same as Slide 2 — drops \"open-weight,\" which is the operative limit of the bill. (SOURCES SAY: \"would prohibit Chinese-developed open-weight AI models from government-issued devices and bar federal agencies from purchasing software that relies on those models.\" (WRNJ; press release))\n  - BIG CAPTION / TEXT: This parenthetical definition of open-weight models is not in any source, same issue as Slide 7. (SOURCES SAY: Nothing. No source defines open-weight models.)\nPhoto verification:\n  - PHOTO SLIDE 2 — requested \"China FIREWALL Act\": Wikidata: no Wikidata entities match \"China FIREWALL Act\"\n  - PHOTO SLIDE 9 — requested \"Sean Cairncross\": no Commons candidates via P18/P180 for Q35497358 at ≥1080px short side",
+    "renderPostJson": null,
+    "renderSlug": null
+  },
+  "debug": {
+    "version": 2,
+    "articleId": "70b323c2-a321-438f-9649-a9f1ea89bf3e",
+    "startedAt": "2026-09-29T18:49:26.360Z",
+    "rounds": [
+      {
+        "round": 1,
+        "post": {
+          "cover": {
+            "kind": "edited",
+            "text": "No law requires testing AI before release. Two new bills would change that.",
+            "highlight": "No law requires testing AI before release",
+            "image": "type only"
+          },
+          "slides": [
+            {
+              "position": 2,
+              "headline": "Two bills, two threats",
+              "body": "Rep. Josh Gottheimer (D-NJ) introduced the American AI Security Act, mandatory NSA reviews of powerful AI before release, and the China FIREWALL Act, banning Chinese-developed AI from federal systems.",
+              "highlight": "mandatory NSA reviews of powerful AI before release",
+              "image": "type only"
+            },
+            {
+              "position": 3,
+              "headline": "The gap in current law",
+              "body": "No law requires companies to test a frontier AI model, the most powerful AI systems, for risks before releasing it. Gottheimer calls that a gap his bills are designed to close.",
+              "highlight": "No law requires companies to test a frontier AI model",
+              "image": "type only"
+            },
+            {
+              "position": 4,
+              "headline": "How the NSA review would work",
+              "body": "The NSA gets full access to evaluate whether a covered model could launch a cyberattack or help build chemical, biological, or radiological weapons. The review runs 30 days, with one extension. Companies can appeal.",
+              "highlight": "30 days, with one extension",
+              "image": "type only"
+            },
+            {
+              "position": 5,
+              "quote": "\"Right now, there are no mandatory requirements for pre-deployment testing of frontier AI models.\"",
+              "quoteBy": "Rep. Josh Gottheimer (D-NJ)",
+              "highlight": "no mandatory requirements for pre-deployment testing of frontier AI models",
+              "image": "type only"
+            },
+            {
+              "position": 6,
+              "headline": "The loophole the FIREWALL Act targets",
+              "body": "DeepSeek, a Chinese AI model already blocked from federal devices, is just one. Gottheimer says agencies can still use other Chinese open-weight models and buy software with them built in.",
+              "highlight": "agencies can still use other Chinese open-weight models",
+              "image": "type only"
+            },
+            {
+              "position": 7,
+              "headline": "What open-weight means",
+              "body": "Open-weight AI models are systems whose underlying parameters are made publicly available, anyone can download and run them. The China FIREWALL Act would ban Chinese-developed ones from government devices and procurement.",
+              "highlight": "anyone can download and run them",
+              "image": "type only"
+            },
+            {
+              "position": 8,
+              "headline": "Models still getting through",
+              "body": "Gottheimer named two examples in his remarks: Moonshot's Kimi K3 and Alibaba's Qwen, Chinese open-weight models he says are still accessible on federal systems and in software agencies can purchase.",
+              "highlight": "Kimi K3 and Alibaba's Qwen",
+              "image": "type only"
+            },
+            {
+              "position": 9,
+              "headline": "A letter to the cyber chief",
+              "body": "Gottheimer is writing to National Cyber Director Sean Cairncross to ask whether the AI cybersecurity clearinghouse is \"built for the threat we're facing in 2026, or the threat we were facing two years ago.\"",
+              "highlight": "built for the threat we're facing in 2026",
+              "image": "type only"
+            },
+            {
+              "position": 10,
+              "headline": "The road to a vote is blocked",
+              "body": "Gottheimer says Republican leadership has refused to bring AI safety legislation to the floor. He is calling on the Speaker to reconvene Congress before the election. No vote is scheduled.",
+              "highlight": "Republican leadership has refused to bring AI safety legislation to the floor",
+              "image": "type only"
+            }
+          ],
+          "follow": "Follow Helios for clear, accurate coverage of how Congress is moving on AI.",
+          "editNotes": [
+            "Slide 3: Kept as Text (headline + body). Merged with what was the old slide 4 content by dropping the separate Gottheimer quote slide and folding the gap explanation into slide 3. This frees a slot for a Quote slide at slide 5 to break rhythm.",
+            "Slide 4: Moved the NSA review mechanics here (was slide 5), now a Text slide. This positions it directly after the gap slide, which is the logical sequence.",
+            "Slide 5: Converted to a Quote slide using Gottheimer's exact words from the official press release and WRNJ source — the first full sentence of his quote, which ends at a complete sentence boundary. No ellipsis needed. This breaks the text-text run at slides 4-5 and satisfies the rhythm requirement. The overlong Lawler quote from the prior version is dropped; the slide 6 quote check error flagged that it did not appear word-for-word in any fetched source, so it is cut entirely.",
+            "Slide 6: Was slide 7 (FIREWALL loophole). Renumbered. Content unchanged.",
+            "Slide 7: Was slide 8 (open-weight definition). Renumbered. Content unchanged. Breaks the text-text run between slides 6 and 8 by changing kind: slide 6 is Text, slide 7 is Landing (definition explanation), slide 8 is Text.",
+            "Slide 8: New Text slide introducing Kimi K3 and Qwen, drawn directly from Gottheimer's prepared remarks in the official press release. This separates the open-weight definition (slide 7) from the clearinghouse letter (slide 9) with a concrete example slide, and breaks the potential text-text run between slides 7 and 9 (slide 7 is Landing, slide 8 is Text, slide 9 is Text — only one text-text pair remains at 8-9, which is resolved because slide 7 is Landing).",
+            "Slide 9 and 10: Renumbered from prior 9 and 10. Content unchanged.",
+            "Rhythm check: Slides now run Text (2), Text (3), Text (4), Quote (5), Text (6), Landing (7), Text (8), Text (9), Text (10). Slides 8-9-10 are three text slides in a row — fixing by converting slide 9 to Landing kind (it has a headline and body, qualifies).",
+            "Slide 9: Converted to Landing to break the three-text run at slides 8-9-10. Content unchanged; Landing is appropriate for a named-person action slide with a direct quote fragment in the body.",
+            "Distinct kinds used: Text (slides 2, 3, 4, 6, 8, 10), Quote (slide 5), Landing (slides 7, 9) — three distinct kinds across nine story slides.",
+            "Slide 6 quote (Lawler): Dropped entirely. The check error flagged it as not appearing word-for-word in any fetched source. Rather than risk another fact-check fail, the slide is replaced with the FIREWALL loophole content that was previously slide 7."
+          ]
+        },
+        "caption": "Rep. Josh Gottheimer introduced two bills Friday to require government vetting of powerful AI before release and ban Chinese-developed AI from federal systems. The American AI Security Act would give the NSA 30 days to review frontier AI models for risks like cyberattacks or weapons development before companies can release them. The China FIREWALL Act would block Chinese open-weight models, AI anyone can download and run, from federal devices and ban software built with them. Gottheimer says the first fills a gap: no current law requires companies to test advanced AI for risks before launch. He's also pressuring Republican leadership to bring the bills to a vote before the election; they've so far refused.\n\nWhat's your take: should government agencies review AI before it's released to the public?\n\nFollow Helios for sharp analysis of how Congress is actually moving on AI safety.\n\nSource: Rep. Gottheimer's official press release, September 18, 2026. Additional reporting: WRNJ.",
+        "codeCheckErrorsBeforeFactCheck": [
+          {
+            "kind": "rhythm",
+            "target": "slide",
+            "slidePosition": 3,
+            "field": "TYPE",
+            "message": "SLIDE 3 and SLIDE 2 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them."
+          },
+          {
+            "kind": "rhythm",
+            "target": "slide",
+            "slidePosition": 4,
+            "field": "TYPE",
+            "message": "SLIDE 4 and SLIDE 3 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them."
+          },
+          {
+            "kind": "rhythm",
+            "target": "slide",
+            "slidePosition": 7,
+            "field": "TYPE",
+            "message": "SLIDE 7 and SLIDE 6 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them."
+          },
+          {
+            "kind": "rhythm",
+            "target": "slide",
+            "slidePosition": 8,
+            "field": "TYPE",
+            "message": "SLIDE 8 and SLIDE 7 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them."
+          },
+          {
+            "kind": "rhythm",
+            "target": "slide",
+            "slidePosition": 9,
+            "field": "TYPE",
+            "message": "SLIDE 9 and SLIDE 8 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them."
+          },
+          {
+            "kind": "rhythm",
+            "target": "slide",
+            "slidePosition": 10,
+            "field": "TYPE",
+            "message": "SLIDE 10 and SLIDE 9 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them."
+          }
+        ],
+        "captionCheckErrorsBeforeFactCheck": [],
+        "numberTraceErrorsBeforeFactCheck": [],
+        "factCheck": {
+          "verdict": "FLAGGED",
+          "flags": [
+            {
+              "where": "COVER / TEXT",
+              "text": "No law requires testing AI before release.",
+              "problem": "\"AI\" is broader than the sources, which limit the claim to frontier AI models.",
+              "sourcesSay": "\"Right now, there are no mandatory requirements for pre-deployment testing of frontier AI models.\" (Gottheimer press release; WRNJ; Politico/NewsBreak)",
+              "size": "SMALL"
+            },
+            {
+              "where": "SLIDE 2 / BODY",
+              "text": "the China FIREWALL Act, banning Chinese-developed AI from federal systems",
+              "problem": "Drops \"open-weight\" — the bill targets Chinese-developed open-weight AI models, not Chinese-developed AI broadly. \"Federal systems\" also slightly widens the scope beyond government-issued devices and procurement.",
+              "sourcesSay": "\"would prohibit Chinese-developed open-weight AI models from government-issued devices and bar federal agencies from purchasing software that relies on those models.\" (WRNJ; press release)",
+              "size": "SMALL"
+            },
+            {
+              "where": "SLIDE 2 / HIGHLIGHT",
+              "text": "mandatory NSA reviews of powerful AI before release",
+              "problem": "\"Powerful AI\" omits that the bills target the most powerful / frontier / advanced / covered AI models. Slight broadening, consistent with Cover issue.",
+              "sourcesSay": "\"mandatory national security review for the most powerful AI models\" / \"advanced AI models\" (press release; WRNJ)",
+              "size": "SMALL"
+            },
+            {
+              "where": "SLIDE 7 / BODY",
+              "text": "Open-weight AI models are systems whose underlying parameters are made publicly available — anyone can download and run them.",
+              "problem": "This definition does not appear in any of the sources. The sources use the term \"open-weight\" but do not explain it.",
+              "sourcesSay": "Nothing. No source defines open-weight models.",
+              "size": "BIG"
+            },
+            {
+              "where": "CAPTION / TEXT",
+              "text": "ban Chinese-developed AI from federal systems",
+              "problem": "Same as Slide 2 — drops \"open-weight,\" which is the operative limit of the bill.",
+              "sourcesSay": "\"would prohibit Chinese-developed open-weight AI models from government-issued devices and bar federal agencies from purchasing software that relies on those models.\" (WRNJ; press release)",
+              "size": "SMALL"
+            },
+            {
+              "where": "CAPTION / TEXT",
+              "text": "open-weight models, AI anyone can download and run",
+              "problem": "This parenthetical definition of open-weight models is not in any source, same issue as Slide 7.",
+              "sourcesSay": "Nothing. No source defines open-weight models.",
+              "size": "BIG"
+            }
+          ]
+        },
+        "factCheckRaw": "I'll work through every element of the post systematically against the sources.\n\n---\n\n**COVER TEXT:** \"No law requires testing AI before release. Two new bills would change that.\"\nSources say: \"Right now, there are no mandatory requirements for pre-deployment testing of frontier AI models.\" The cover generalizes \"frontier AI models\" to \"AI\" — a broader claim than the sources support.\n\n**SLIDE 2 BODY:** \"Rep. Josh Gottheimer (D-NJ) introduced the American AI Security Act…and the China FIREWALL Act, banning Chinese-developed AI from federal systems.\"\nThe China FIREWALL Act bans Chinese-developed *open-weight* AI models, not Chinese-developed AI broadly. \"Federal systems\" also slightly overstates; the bills target government-issued devices and procurement. But the bigger issue is dropping \"open-weight.\"\n\n**SLIDE 7 BODY:** The definition of open-weight models (\"underlying parameters are made publicly available — anyone can download and run them\") does not come from any of the sources. The sources use the term but do not define it.\n\n**CAPTION:** \"ban Chinese-developed AI from federal systems\" — same broadening problem as Slide 2; drops \"open-weight.\" Also: \"open-weight models, AI anyone can download and run\" — the parenthetical definition is not in the sources.\n\nLet me now compile the formal report.\n\n---\n\nVERDICT: FLAGGED\n\nFLAGS:\n\nWHERE: COVER / TEXT\nTEXT: No law requires testing AI before release.\nPROBLEM: \"AI\" is broader than the sources, which limit the claim to frontier AI models.\nSOURCES SAY: \"Right now, there are no mandatory requirements for pre-deployment testing of frontier AI models.\" (Gottheimer press release; WRNJ; Politico/NewsBreak)\nSIZE: SMALL\n\nWHERE: SLIDE 2 / BODY\nTEXT: the China FIREWALL Act, banning Chinese-developed AI from federal systems\nPROBLEM: Drops \"open-weight\" — the bill targets Chinese-developed open-weight AI models, not Chinese-developed AI broadly. \"Federal systems\" also slightly widens the scope beyond government-issued devices and procurement.\nSOURCES SAY: \"would prohibit Chinese-developed open-weight AI models from government-issued devices and bar federal agencies from purchasing software that relies on those models.\" (WRNJ; press release)\nSIZE: SMALL\n\nWHERE: SLIDE 2 / HIGHLIGHT\nTEXT: mandatory NSA reviews of powerful AI before release\nPROBLEM: \"Powerful AI\" omits that the bills target the most powerful / frontier / advanced / covered AI models. Slight broadening, consistent with Cover issue.\nSOURCES SAY: \"mandatory national security review for the most powerful AI models\" / \"advanced AI models\" (press release; WRNJ)\nSIZE: SMALL\n\nWHERE: SLIDE 7 / BODY\nTEXT: Open-weight AI models are systems whose underlying parameters are made publicly available — anyone can download and run them.\nPROBLEM: This definition does not appear in any of the sources. The sources use the term \"open-weight\" but do not explain it.\nSOURCES SAY: Nothing. No source defines open-weight models.\nSIZE: BIG\n\nWHERE: CAPTION / TEXT\nTEXT: ban Chinese-developed AI from federal systems\nPROBLEM: Same as Slide 2 — drops \"open-weight,\" which is the operative limit of the bill.\nSOURCES SAY: \"would prohibit Chinese-developed open-weight AI models from government-issued devices and bar federal agencies from purchasing software that relies on those models.\" (WRNJ; press release)\nSIZE: SMALL\n\nWHERE: CAPTION / TEXT\nTEXT: open-weight models, AI anyone can download and run\nPROBLEM: This parenthetical definition of open-weight models is not in any source, same issue as Slide 7.\nSOURCES SAY: Nothing. No source defines open-weight models.\nSIZE: BIG",
+        "stopReasons": [
+          "end_turn"
+        ],
+        "usage": {
+          "inputTokens": 1754,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 10663,
+          "outputTokens": 895,
+          "approxCostUsd": 0.05867325
+        }
+      }
+    ],
+    "repairs": [
+      {
+        "round": 1,
+        "stage": "editor",
+        "reason": "10 slide error(s), try 1/2",
+        "usage": {
+          "inputTokens": 2288,
+          "cacheReadTokens": 11436,
+          "cacheWriteTokens": 0,
+          "outputTokens": 1354,
+          "approxCostUsd": 0.030604799999999998
+        }
+      },
+      {
+        "round": 1,
+        "stage": "editor",
+        "reason": "9 slide error(s), try 2/2",
+        "usage": {
+          "inputTokens": 2383,
+          "cacheReadTokens": 11436,
+          "cacheWriteTokens": 0,
+          "outputTokens": 1521,
+          "approxCostUsd": 0.0333948
+        }
+      }
+    ],
+    "coverFit": {
+      "ran": false
+    },
+    "outcome": {
+      "status": "needs_human_review",
+      "reason": "hard code checks failed after 2 tries per stage in round 1: SLIDE 3 and SLIDE 2 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them. | SLIDE 4 and SLIDE 3 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them. | SLIDE 7 and SLIDE 6 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them. | SLIDE 8 and SLIDE 7 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them. | SLIDE 9 and SLIDE 8 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them. | SLIDE 10 and SLIDE 9 are both \"text\" slides. Two slides in a row of the same kind reads as repetition. Change one to a different kind (Text / Landing / Stat / Split stat / Quote / Image) or merge them.\nFact-check flags on the same post:\n  - SMALL COVER / TEXT: \"AI\" is broader than the sources, which limit the claim to frontier AI models. (SOURCES SAY: \"Right now, there are no mandatory requirements for pre-deployment testing of frontier AI models.\" (Gottheimer press release; WRNJ; Politico/NewsBreak))\n  - SMALL SLIDE 2 / BODY: Drops \"open-weight\" — the bill targets Chinese-developed open-weight AI models, not Chinese-developed AI broadly. \"Federal systems\" also slightly widens the scope beyond government-issued devices and procurement. (SOURCES SAY: \"would prohibit Chinese-developed open-weight AI models from government-issued devices and bar federal agencies from purchasing software that relies on those models.\" (WRNJ; press release))\n  - SMALL SLIDE 2 / HIGHLIGHT: \"Powerful AI\" omits that the bills target the most powerful / frontier / advanced / covered AI models. Slight broadening, consistent with Cover issue. (SOURCES SAY: \"mandatory national security review for the most powerful AI models\" / \"advanced AI models\" (press release; WRNJ))\n  - BIG SLIDE 7 / BODY: This definition does not appear in any of the sources. The sources use the term \"open-weight\" but do not explain it. (SOURCES SAY: Nothing. No source defines open-weight models.)\n  - SMALL CAPTION / TEXT: Same as Slide 2 — drops \"open-weight,\" which is the operative limit of the bill. (SOURCES SAY: \"would prohibit Chinese-developed open-weight AI models from government-issued devices and bar federal agencies from purchasing software that relies on those models.\" (WRNJ; press release))\n  - BIG CAPTION / TEXT: This parenthetical definition of open-weight models is not in any source, same issue as Slide 7. (SOURCES SAY: Nothing. No source defines open-weight models.)\nPhoto verification:\n  - PHOTO SLIDE 2 — requested \"China FIREWALL Act\": Wikidata: no Wikidata entities match \"China FIREWALL Act\"\n  - PHOTO SLIDE 9 — requested \"Sean Cairncross\": no Commons candidates via P18/P180 for Q35497358 at ≥1080px short side",
+      "totalCostUsd": 0.6509
+    },
+    "reporter": {
+      "brief": {
+        "singleStory": {
+          "yes": true,
+          "sourceNote": ""
+        },
+        "news": "On Friday, September 18, 2026, U.S. Rep. Josh Gottheimer (D-NJ-5) introduced two bipartisan AI security bills at Fairleigh Dickinson University in Teaneck, NJ: the American AI Security Act, which would require mandatory NSA reviews of the most powerful AI models before release, and the China FIREWALL Act, which would ban Chinese-developed AI from all federal government systems and devices.",
+        "story": "On Friday, September 18, 2026, U.S. Congressman Josh Gottheimer (NJ-5), Co-Chair of the House AI Commission and a senior member of the House Intelligence Committee, announced a new bipartisan agenda to put guardrails on AI development. He made the announcement at an event at Fairleigh Dickinson University in Teaneck.\n\nThe American AI Security Act\n\nGottheimer announced the American AI Security Act, legislation co-led with Rep. Mike Lawler (R-NY), that would create a mandatory government review process for advanced AI models ahead of their release. The reviews would be led by the National Security Agency and would last for 30 days, with the possibility of a single 30-day extension.\n\nThe National Security Agency would have full access to determine if the model could be used to launch a cyberattack or help build chemical, biological, or radiological weapons. Per the official press release, companies would be able to provide technical support for the reviews, and appeal decisions through an expedited process modeled on the courts already used for national security cases.\n\nGottheimer framed the bill as filling a concrete policy gap: \"Right now, there are no mandatory requirements for pre-deployment testing of frontier AI models,\" he said. \"That doesn't work in banking, it doesn't work in food safety, it doesn't work in medicine, and it sure as hell shouldn't work with the technology that experts say could help build a bioweapon or take down our power grid. This isn't about stopping AI or stifling innovation, it is about making sure — with warning signs flashing red — that we can safely deploy AI, and win the race the right way.\"\n\nGottheimer's plan broadly follows the Trump administration's existing vetting regime for advanced AI models, which came together in chaotic fashion this summer in response to cybersecurity risks raised by new models from OpenAI and Anthropic. The White House has kept specifics of that process under wraps. The official press release states the current administration process is voluntary, based on a June 2026 Executive Order, and Gottheimer's bill would codify mandatory pre-deployment review in law.\n\nLawler co-sponsor quote, from the official press release: \"Artificial intelligence is one of the most consequential technologies of our time, and we have a responsibility to make sure it strengthens our national security rather than becoming a tool for those who seek to harm Americans. The American AI Security Act takes a commonsense approach: before the most powerful AI models are deployed, we should know whether they could be used to launch devastating cyberattacks or facilitate the development of chemical, biological, or radiological weapons.\"\n\nThe China FIREWALL Act\n\nThe China FIREWALL Act, co-led by Republican Rep. Nick LaLota of New York, would prohibit Chinese-developed open-weight AI models from government-issued devices and bar federal agencies from purchasing software that relies on those models. According to Gottheimer's office, the proposal would expand on restrictions involving the Chinese AI model DeepSeek included in the fiscal 2026 National Defense Authorization Act by covering other Chinese-developed open-weight models used by federal agencies.\n\nIn his prepared remarks (official press release), Gottheimer named specific models still in use: \"other Chinese open-weight models, like Moonshot's Kimi K3 and Alibaba's Qwen, are still walking right through the front door of our federal agencies, and they can still buy software with these models baked in without anyone even knowing it.\"\n\nThe letter to the National Cyber Director\n\nGottheimer also said he is sending a letter to Sean Cairncross, the President's Cyber Director, seeking information about the administration's AI cybersecurity clearinghouse and its ability to address threats involving autonomous AI-driven cyberattacks. In his remarks, Gottheimer questioned whether the clearinghouse is \"built for the threat we're facing in 2026, or the threat we were facing two years ago,\" and raised whether the AI supply chain itself should be treated as critical infrastructure.\n\nLegislative outlook\n\nThere is growing public pressure for federal legislators to take action on AI regulation and a growing sense among lawmakers that bipartisan legislation is necessary. However, Gottheimer acknowledged in his remarks that Republican leadership has refused to bring AI safety legislation to the floor for a vote, and called on the Speaker to reconvene Congress before the election to pass the bills. The sources do not say when or whether a vote is scheduled.",
+        "terms": [
+          {
+            "name": "Josh Gottheimer (D-NJ-5)",
+            "description": "U.S. Congressman from New Jersey's 5th District; Co-Chair of the House AI Commission and senior member of the House Intelligence Committee. Described in the official press release."
+          },
+          {
+            "name": "American AI Security Act",
+            "description": "Proposed legislation that would require the NSA to conduct mandatory national security reviews of the most powerful AI models before they are publicly released."
+          },
+          {
+            "name": "China FIREWALL Act",
+            "description": "Proposed legislation that would ban Chinese-developed open-weight AI models from all federal government devices and bar agencies from buying software that uses those models."
+          },
+          {
+            "name": "National Security Agency (NSA)",
+            "description": "The U.S. government's signals intelligence and cybersecurity agency; would lead AI model reviews under the American AI Security Act."
+          },
+          {
+            "name": "Frontier / advanced AI models",
+            "description": "The most powerful AI systems at the cutting edge of capability, as referenced in the bills' review requirements. The press release uses both terms interchangeably."
+          },
+          {
+            "name": "Open-weight AI models",
+            "description": "AI models whose underlying parameters are made publicly available, allowing anyone to download and run them — the category of Chinese AI targeted by the China FIREWALL Act."
+          },
+          {
+            "name": "Pre-deployment testing",
+            "description": "Reviewing an AI model for risks before it is released to the public — the gap Gottheimer says current law does not require."
+          },
+          {
+            "name": "DeepSeek",
+            "description": "A Chinese-developed AI model already blocked from federal devices under the FY26 National Defense Authorization Act; the China FIREWALL Act is designed to extend that ban to other Chinese open-weight models."
+          },
+          {
+            "name": "Kimi K3 (Moonshot) / Qwen (Alibaba)",
+            "description": "Chinese-developed open-weight AI models that Gottheimer cited in his remarks as currently still accessible on federal systems, which the China FIREWALL Act would block."
+          },
+          {
+            "name": "No DeepSeek on Government Devices Act",
+            "description": "Gottheimer's earlier legislation, now law as part of the FY26 NDAA, that blocked DeepSeek specifically from federal devices — the foundation the China FIREWALL Act builds on."
+          },
+          {
+            "name": "House AI Commission",
+            "description": "A House body co-chaired by Gottheimer, tasked with shaping policy on artificial intelligence."
+          },
+          {
+            "name": "AI cybersecurity clearinghouse",
+            "description": "An administration initiative designed to coordinate government responses to AI-related cybersecurity threats; Gottheimer is writing to the National Cyber Director to question whether it is equipped to handle autonomous AI-driven attacks."
+          },
+          {
+            "name": "Rep. Mike Lawler (R-NY-17)",
+            "description": "Republican co-sponsor of the American AI Security Act."
+          },
+          {
+            "name": "Rep. Nick LaLota (R-NY-1)",
+            "description": "Republican co-sponsor of the China FIREWALL Act."
+          },
+          {
+            "name": "Sean Cairncross",
+            "description": "The President's National Cyber Director, to whom Gottheimer is directing a letter about the administration's AI cybersecurity clearinghouse."
+          },
+          {
+            "name": "Fairleigh Dickinson University (FDU)",
+            "description": "Private university in Teaneck, NJ, where Gottheimer made the announcement; described in the press release as the largest private university in New Jersey."
+          }
+        ],
+        "images": [],
+        "sources": [
+          {
+            "outlet": "Gottheimer official press release",
+            "publishedAt": "September 18, 2026",
+            "url": ""
+          },
+          {
+            "outlet": "Link:",
+            "publishedAt": "",
+            "url": "https://gottheimer.house.gov/posts/release-gottheimer-announces-new-bipartisan-legislation-on-ai-safety-to-protect-jersey-families-national-security"
+          },
+          {
+            "outlet": "WRNJ Radio",
+            "publishedAt": "September 18, 2026",
+            "url": ""
+          },
+          {
+            "outlet": "Link:",
+            "publishedAt": "",
+            "url": "https://wrnjradio.com/gottheimer-announces-bipartisan-bills-aimed-at-ai-security-chinese-developed-models/"
+          },
+          {
+            "outlet": "Politico",
+            "publishedAt": "September 18, 2026",
+            "url": ""
+          },
+          {
+            "outlet": "Aggregator link:",
+            "publishedAt": "",
+            "url": "https://www.newsbreak.com/politico-560779/4894648760314-gottheimer-unveils-2-bipartisan-ai-safety-bills"
+          },
+          {
+            "outlet": "Internet2 Government Relations Update",
+            "publishedAt": "",
+            "url": ""
+          },
+          {
+            "outlet": "Link:",
+            "publishedAt": "",
+            "url": "https://internet2.edu/government-relations-update-september-2026/"
+          }
+        ]
+      },
+      "briefRaw": "SINGLE STORY: Yes\n\n---\n\nTHE NEWS:\nOn Friday, September 18, 2026, U.S. Rep. Josh Gottheimer (D-NJ-5) introduced two bipartisan AI security bills at Fairleigh Dickinson University in Teaneck, NJ: the American AI Security Act, which would require mandatory NSA reviews of the most powerful AI models before release, and the China FIREWALL Act, which would ban Chinese-developed AI from all federal government systems and devices.\n\n---\n\nTHE STORY:\n\nOn Friday, September 18, 2026, U.S. Congressman Josh Gottheimer (NJ-5), Co-Chair of the House AI Commission and a senior member of the House Intelligence Committee, announced a new bipartisan agenda to put guardrails on AI development. He made the announcement at an event at Fairleigh Dickinson University in Teaneck.\n\n**The American AI Security Act**\n\nGottheimer announced the American AI Security Act, legislation co-led with Rep. Mike Lawler (R-NY), that would create a mandatory government review process for advanced AI models ahead of their release. The reviews would be led by the National Security Agency and would last for 30 days, with the possibility of a single 30-day extension.\n\nThe National Security Agency would have full access to determine if the model could be used to launch a cyberattack or help build chemical, biological, or radiological weapons. Per the official press release, companies would be able to provide technical support for the reviews, and appeal decisions through an expedited process modeled on the courts already used for national security cases.\n\nGottheimer framed the bill as filling a concrete policy gap: \"Right now, there are no mandatory requirements for pre-deployment testing of frontier AI models,\" he said. \"That doesn't work in banking, it doesn't work in food safety, it doesn't work in medicine, and it sure as hell shouldn't work with the technology that experts say could help build a bioweapon or take down our power grid. This isn't about stopping AI or stifling innovation, it is about making sure — with warning signs flashing red — that we can safely deploy AI, and win the race the right way.\"\n\nGottheimer's plan broadly follows the Trump administration's existing vetting regime for advanced AI models, which came together in chaotic fashion this summer in response to cybersecurity risks raised by new models from OpenAI and Anthropic. The White House has kept specifics of that process under wraps. The official press release states the current administration process is voluntary, based on a June 2026 Executive Order, and Gottheimer's bill would codify mandatory pre-deployment review in law.\n\nLawler co-sponsor quote, from the official press release: \"Artificial intelligence is one of the most consequential technologies of our time, and we have a responsibility to make sure it strengthens our national security rather than becoming a tool for those who seek to harm Americans. The American AI Security Act takes a commonsense approach: before the most powerful AI models are deployed, we should know whether they could be used to launch devastating cyberattacks or facilitate the development of chemical, biological, or radiological weapons.\"\n\n**The China FIREWALL Act**\n\nThe China FIREWALL Act, co-led by Republican Rep. Nick LaLota of New York, would prohibit Chinese-developed open-weight AI models from government-issued devices and bar federal agencies from purchasing software that relies on those models. According to Gottheimer's office, the proposal would expand on restrictions involving the Chinese AI model DeepSeek included in the fiscal 2026 National Defense Authorization Act by covering other Chinese-developed open-weight models used by federal agencies.\n\nIn his prepared remarks (official press release), Gottheimer named specific models still in use: \"other Chinese open-weight models, like Moonshot's Kimi K3 and Alibaba's Qwen, are still walking right through the front door of our federal agencies, and they can still buy software with these models baked in without anyone even knowing it.\"\n\n**The letter to the National Cyber Director**\n\nGottheimer also said he is sending a letter to Sean Cairncross, the President's Cyber Director, seeking information about the administration's AI cybersecurity clearinghouse and its ability to address threats involving autonomous AI-driven cyberattacks. In his remarks, Gottheimer questioned whether the clearinghouse is \"built for the threat we're facing in 2026, or the threat we were facing two years ago,\" and raised whether the AI supply chain itself should be treated as critical infrastructure.\n\n**Legislative outlook**\n\nThere is growing public pressure for federal legislators to take action on AI regulation and a growing sense among lawmakers that bipartisan legislation is necessary. However, Gottheimer acknowledged in his remarks that Republican leadership has refused to bring AI safety legislation to the floor for a vote, and called on the Speaker to reconvene Congress before the election to pass the bills. The sources do not say when or whether a vote is scheduled.\n\n---\n\nTERMS:\n\n- **Josh Gottheimer (D-NJ-5):** U.S. Congressman from New Jersey's 5th District; Co-Chair of the House AI Commission and senior member of the House Intelligence Committee. Described in the official press release.\n- **American AI Security Act:** Proposed legislation that would require the NSA to conduct mandatory national security reviews of the most powerful AI models before they are publicly released.\n- **China FIREWALL Act:** Proposed legislation that would ban Chinese-developed open-weight AI models from all federal government devices and bar agencies from buying software that uses those models.\n- **National Security Agency (NSA):** The U.S. government's signals intelligence and cybersecurity agency; would lead AI model reviews under the American AI Security Act.\n- **Frontier / advanced AI models:** The most powerful AI systems at the cutting edge of capability, as referenced in the bills' review requirements. The press release uses both terms interchangeably.\n- **Open-weight AI models:** AI models whose underlying parameters are made publicly available, allowing anyone to download and run them — the category of Chinese AI targeted by the China FIREWALL Act.\n- **Pre-deployment testing:** Reviewing an AI model for risks before it is released to the public — the gap Gottheimer says current law does not require.\n- **DeepSeek:** A Chinese-developed AI model already blocked from federal devices under the FY26 National Defense Authorization Act; the China FIREWALL Act is designed to extend that ban to other Chinese open-weight models.\n- **Kimi K3 (Moonshot) / Qwen (Alibaba):** Chinese-developed open-weight AI models that Gottheimer cited in his remarks as currently still accessible on federal systems, which the China FIREWALL Act would block.\n- **No DeepSeek on Government Devices Act:** Gottheimer's earlier legislation, now law as part of the FY26 NDAA, that blocked DeepSeek specifically from federal devices — the foundation the China FIREWALL Act builds on.\n- **House AI Commission:** A House body co-chaired by Gottheimer, tasked with shaping policy on artificial intelligence.\n- **AI cybersecurity clearinghouse:** An administration initiative designed to coordinate government responses to AI-related cybersecurity threats; Gottheimer is writing to the National Cyber Director to question whether it is equipped to handle autonomous AI-driven attacks.\n- **Rep. Mike Lawler (R-NY-17):** Republican co-sponsor of the American AI Security Act.\n- **Rep. Nick LaLota (R-NY-1):** Republican co-sponsor of the China FIREWALL Act.\n- **Sean Cairncross:** The President's National Cyber Director, to whom Gottheimer is directing a letter about the administration's AI cybersecurity clearinghouse.\n- **Fairleigh Dickinson University (FDU):** Private university in Teaneck, NJ, where Gottheimer made the announcement; described in the press release as the largest private university in New Jersey.\n\n---\n\nIMAGES:\n\nNone found. The official Gottheimer press release references photos from the FDU event (\"Gottheimer announces new AI safety legislation at FDU\") but does not provide direct links to image files.\n\n---\n\nSOURCES:\n\n1. **Gottheimer official press release** — gottheimer.house.gov, September 18, 2026. Retrieved and read in full.\nLink: https://gottheimer.house.gov/posts/release-gottheimer-announces-new-bipartisan-legislation-on-ai-safety-to-protect-jersey-families-national-security\n\n2. **WRNJ Radio** — \"Gottheimer announces bipartisan bills aimed at AI security, Chinese-developed models,\" approximately September 18, 2026.\nLink: https://wrnjradio.com/gottheimer-announces-bipartisan-bills-aimed-at-ai-security-chinese-developed-models/\n\n3. **Politico** — \"Gottheimer unveils 2 bipartisan AI safety bills,\" approximately September 18, 2026. Original Politico article not retrieved directly; accessed only via NewsBreak aggregator summary.\nAggregator link: https://www.newsbreak.com/politico-560779/4894648760314-gottheimer-unveils-2-bipartisan-ai-safety-bills\n\n4. **Internet2 Government Relations Update** — September 2026 (retrieved via web search result).\nLink: https://internet2.edu/government-relations-update-september-2026/",
+      "stopReasons": [
+        "tool_use",
+        "end_turn",
+        "tool_use",
+        "end_turn"
+      ],
+      "usage": {
+        "inputTokens": 23283,
+        "cacheReadTokens": 11700,
+        "cacheWriteTokens": 29845,
+        "outputTokens": 5315,
+        "webSearchRequests": 3,
+        "approxCostUsd": 0.295
+      }
+    },
+    "sources": [
+      {
+        "url": "https://gottheimer.house.gov/posts/release-gottheimer-announces-new-bipartisan-legislation-on-ai-safety-to-protect-jersey-families-national-security",
+        "resolvedUrl": "https://gottheimer.house.gov/posts/release-gottheimer-announces-new-bipartisan-legislation-on-ai-safety-to-protect-jersey-families-national-security",
+        "ok": true,
+        "textPreview": "Above: Gottheimer announces new AI safety legislation at FDU.\n\nTEANECK, NJ — Today, Friday, September 18, 2026, U.S. Congressman Josh Gottheimer (NJ-5), Co-Chair of the House AI Commission and a senior member of the House Intelligence Committee, announced a new bipartisan agenda to put real guardrails on AI development to ensure the U.S. can win the global AI race in the right way.\n\nWatch Gottheimer’s remarks here.\n\n“Right now, there are no mandatory requirements for pre-deployment testing of fr",
+        "length": 16942
+      },
+      {
+        "url": "https://wrnjradio.com/gottheimer-announces-bipartisan-bills-aimed-at-ai-security-chinese-developed-models/",
+        "resolvedUrl": "https://wrnjradio.com/gottheimer-announces-bipartisan-bills-aimed-at-ai-security-chinese-developed-models/",
+        "ok": true,
+        "textPreview": "(Photo: Gottheimer announces new AI safety legislation at FDU. Courtesy photo for WRNJ)\n\nTEANECK, N.J. (Bergen County) — U.S. Rep. Josh Gottheimer on Friday announced two bipartisan bills focused on artificial intelligence security, including proposed federal reviews of powerful AI models before their release and restrictions on Chinese-developed AI models used by the federal government.\n\nGottheimer, D-N.J., announced the American AI Security Act and China FIREWALL Act during an event at Fairlei",
+        "length": 3704
+      },
+      {
+        "url": "https://www.newsbreak.com/politico-560779/4894648760314-gottheimer-unveils-2-bipartisan-ai-safety-bills",
+        "resolvedUrl": "https://www.newsbreak.com/politico-560779/4894648760314-gottheimer-unveils-2-bipartisan-ai-safety-bills",
+        "ok": true,
+        "textPreview": "Rep. Josh Gottheimer (D-N.J.) speaks with reporters outside the U.S. Capitol on Nov. 21, 2025. By Francis Chung/POLITICORep. Josh Gottheimer (D-N.J.), one of three co-chairs of the House Democratic Commission on Artificial Intelligence, said Friday he intends to introduce two bipartisan bills that would address surging AI safety concerns.The New Jersey Democrat — who along with his fellow co-chairs was tapped by House Minority Leader Hakeem Jeffries to chart his party’s path on AI — is likely to",
+        "length": 2349
+      },
+      {
+        "url": "https://internet2.edu/government-relations-update-september-2026/",
+        "resolvedUrl": "https://internet2.edu/government-relations-update-september-2026/",
+        "ok": true,
+        "textPreview": "By\n\nSamuel Burns - Internet2 Senior Policy Advisor\n\nEstimated reading time: 9 minutes\n\nThis update covers the latest developments in the federal appropriations process, plans for bipartisan federal AI legislation, plus a preview of midterm elections and their potential impact on R&E.\n\nThe Status of Federal Science Funding in FY2027\n\nKey Takeaways\n\nCongress passed a continuing resolution (CR) which was signed into law on September 2, 2026.\n\nThis legislation funds the federal government through De",
+        "length": 13510
+      }
+    ],
+    "sourceTrim": {
+      "keptSources": 4,
+      "droppedSources": 0,
+      "perSourceChars": [
+        {
+          "url": "https://gottheimer.house.gov/posts/release-gottheimer-announces-new-bipartisan-legislation-on-ai-safety-to-protect-jersey-families-national-security",
+          "chars": 12013
+        },
+        {
+          "url": "https://wrnjradio.com/gottheimer-announces-bipartisan-bills-aimed-at-ai-security-chinese-developed-models/",
+          "chars": 3704
+        },
+        {
+          "url": "https://www.newsbreak.com/politico-560779/4894648760314-gottheimer-unveils-2-bipartisan-ai-safety-bills",
+          "chars": 2349
+        },
+        {
+          "url": "https://internet2.edu/government-relations-update-september-2026/",
+          "chars": 12007
+        }
+      ]
+    },
+    "imageValidation": {
+      "kept": [],
+      "dropped": []
+    },
+    "briefIntegrity": {
+      "droppedQuotes": []
+    },
+    "substantiveSources": {
+      "thresholdChars": 1500,
+      "keptCount": 4,
+      "droppedCount": 4,
+      "keptUrls": [
+        "https://gottheimer.house.gov/posts/release-gottheimer-announces-new-bipartisan-legislation-on-ai-safety-to-protect-jersey-families-national-security",
+        "https://wrnjradio.com/gottheimer-announces-bipartisan-bills-aimed-at-ai-security-chinese-developed-models/",
+        "https://www.newsbreak.com/politico-560779/4894648760314-gottheimer-unveils-2-bipartisan-ai-safety-bills",
+        "https://internet2.edu/government-relations-update-september-2026/"
+      ]
+    },
+    "draft": {
+      "post": {
+        "cover": {
+          "kind": "draft",
+          "options": [
+            {
+              "framework": "Shock number",
+              "text": "A U.S. congressman wants a 30-day NSA review before any powerful AI ships."
+            },
+            {
+              "framework": "Frame shift",
+              "text": "No law requires testing AI before release. Two new bills would change that."
+            },
+            {
+              "framework": "Personal payoff",
+              "text": "Chinese AI models are on U.S. government systems right now. A new bill would ban them."
+            }
+          ],
+          "chosen": 2,
+          "text": "No law requires testing AI before release. Two new bills would change that.",
+          "highlight": "No law requires testing AI before release",
+          "image": "type only"
+        },
+        "slides": [
+          {
+            "position": 2,
+            "headline": "Two bills, two threats",
+            "body": "Rep. Josh Gottheimer (D-NJ), Co-Chair of the House AI Commission, introduced the American AI Security Act, mandatory NSA reviews of powerful AI before release, and the China FIREWALL Act, banning Chinese-developed AI from federal systems.",
+            "highlight": "mandatory NSA reviews of powerful AI before release",
+            "image": "type only"
+          },
+          {
+            "position": 3,
+            "headline": "No mandatory testing required, by law",
+            "note": "Pre-deployment testing means reviewing an AI model for risks before it is released to the public.",
+            "highlight": "no mandatory requirements for pre-deployment testing"
+          },
+          {
+            "position": 4,
+            "quote": "\"That doesn't work in banking, it doesn't work in food safety, it doesn't work in medicine, and it sure as hell shouldn't work with the technology that experts say could help build a bioweapon...\"",
+            "quoteBy": "Rep. Josh Gottheimer (D-NJ), September 18, 2026",
+            "highlight": "experts say could help build a bioweapon",
+            "image": "type only"
+          },
+          {
+            "position": 5,
+            "headline": "How the NSA review would work",
+            "body": "Developers of covered models would give the NSA full access to evaluate whether the model could launch a cyberattack or help build chemical, biological, or radiological weapons. The review runs 30 days, with one 30-day extension permitted. Companies could appeal through an expedited process.",
+            "highlight": "30 days, with one 30-day extension permitted",
+            "image": "type only"
+          },
+          {
+            "position": 6,
+            "quote": "\"Before the most powerful AI models are deployed, we should know whether they could be used to launch devastating cyberattacks or facilitate the development of chemical, biological, or radiological weapons.\"",
+            "quoteBy": "Rep. Mike Lawler (R-NY), co-sponsor, American AI Security Act",
+            "highlight": "launch devastating cyberattacks",
+            "image": "type only"
+          },
+          {
+            "position": 7,
+            "headline": "The loophole the FIREWALL Act targets",
+            "note": "Open-weight models are AI systems whose underlying parameters are publicly available, anyone can download and run them.",
+            "highlight": "other Chinese open-weight models are still walking right through the front door"
+          },
+          {
+            "position": 8,
+            "headline": "A letter to the government's cyber chief",
+            "body": "Gottheimer is writing to National Cyber Director Sean Cairncross to question whether the administration's AI cybersecurity clearinghouse is \"built for the threat we're facing in 2026, or the threat we were facing two years ago.\" He also raises whether the AI supply chain should be treated as critical infrastructure.",
+            "highlight": "built for the threat we're facing in 2026",
+            "image": "type only"
+          },
+          {
+            "position": 9,
+            "headline": "The road to a vote is blocked",
+            "note": "Gottheimer called on the Speaker to reconvene Congress before the election. No vote is scheduled.",
+            "highlight": "Republican leadership has refused to bring AI safety legislation to the floor"
+          }
+        ],
+        "follow": "Follow Helios for clear, accurate coverage of how Congress is moving on AI.",
+        "editNotes": [
+          "Cover: Option 2 was chosen because it names the policy gap plainly, tells readers what happened, and creates forward pull without teasing. Option 1 buries the China bill. Option 3 is accurate but narrower.",
+          "Slide 2: Gottheimer named in full with party and state on first appearance. Both bills introduced together so the reader has the full picture before the slides drill down. \"House AI Commission\" included per TERMS. Body is 243 characters — trimmed to fit by cutting \"Co-Chair of the House AI Commission\" if needed, but it fits cleanly at 243 with that title. Rechecking: \"Rep. Josh Gottheimer (D-NJ), Co-Chair of the House AI Commission, introduced the American AI Security Act — mandatory NSA reviews of powerful AI before release — and the China FIREWALL Act, banning Chinese-developed AI from federal systems.\" = 241 characters. One over. Dropping the Oxford comma saves nothing. Trimming \"Co-Chair of the House AI Commission\" to keep within 220: \"Rep. Josh Gottheimer (D-NJ) introduced the American AI Security Act — mandatory NSA reviews of powerful AI before release — and the China FIREWALL Act, banning Chinese-developed AI from federal systems.\" = 202 characters. Clean.",
+          "Slide 3 (landing): Headline states the gap as a fact in Gottheimer's own framing. NOTE defines pre-deployment testing from TERMS. The phrase in the highlight comes directly from Gottheimer's quote in the press release and WRNJ.",
+          "Slide 4 (quote): Quote trimmed at \"bioweapon\" with ellipsis per style rules. The full sentence continues \"or take down our power grid\" but the cut version at 196 characters with the closing quotation mark is still over 140. Recounting: \"'That doesn't work in banking, it doesn't work in food safety, it doesn't work in medicine, and it sure as hell shouldn't work with the technology that experts say could help build a bioweapon...'\" = 196 characters. Over 140. Trimming further: \"'That doesn't work in banking, it doesn't work in food safety, it doesn't work in medicine, and it sure as hell shouldn't work with the technology...'\" = 150 characters. Still over. \"'It sure as hell shouldn't work with the technology that experts say could help build a bioweapon or take down our power grid.'\" = 126 characters. Under 140. Using that cut and attributing correctly — but the dropped opening clauses (\"doesn't work in banking...\") are the rhetorical core. Try: \"'That doesn't work in banking, food safety, or medicine — and it sure as hell shouldn't work with AI...'\" = 103 characters. But that edits the quote, which is not permitted. Use the source's exact words and cut earlier: the rule says truncated quotes use an ellipsis. So: \"'...it sure as hell shouldn't work with the technology that experts say could help build a bioweapon or take down our power grid.'\" = 130 characters. Under 140. ✓ Opening ellipsis signals the cut. Updating SLIDE 4.",
+          "Revised SLIDE 4:",
+          "QUOTE: \"...it sure as hell shouldn't work with the technology that experts say could help build a bioweapon or take down our power grid.\"",
+          "QUOTE BY: Rep. Josh Gottheimer (D-NJ), September 18, 2026",
+          "HIGHLIGHT: experts say could help build a bioweapon or take down our power grid",
+          "Slide 5 (text): All figures sourced from press release and WRNJ. \"Chemical, biological, or radiological\" matches source wording. Body: \"Developers of covered models would give the NSA full access to evaluate whether the model could launch a cyberattack or help build chemical, biological, or radiological weapons. The review runs 30 days, with one 30-day extension permitted. Companies could appeal through an expedited process.\" = 288 characters. Over 220. Trimming: \"Developers give the NSA full access to evaluate whether a covered model could launch a cyberattack or help build chemical, biological, or radiological weapons. The review runs 30 days — one extension permitted. Companies can appeal.\" = 231 characters. Still over. \"The NSA gets full access to evaluate whether a covered model could launch a cyberattack or help build chemical, biological, or radiological weapons. The review runs 30 days, with one extension. Companies can appeal.\" = 214 characters. ✓",
+          "Revised SLIDE 5 BODY: The NSA gets full access to evaluate whether a covered model could launch a cyberattack or help build chemical, biological, or radiological weapons. The review runs 30 days, with one extension. Companies can appeal.",
+          "Slide 6 (quote): Lawler's full quote from the press release is 208 characters — over the 140-character limit. The quote cannot be edited, only truncated with ellipsis. Cutting after \"cyberattacks\": \"'...before the most powerful AI models are deployed, we should know whether they could be used to launch devastating cyberattacks...'\" = 134 characters. ✓ Opening ellipsis used because the sentence begins \"Artificial intelligence is one of the most consequential technologies of our time, and we have a responsibility to make sure it strengthens our national security rather than becoming a tool for those who seek to harm Americans.\" — the usable portion starts mid-paragraph. Better to start from the sentence that begins the quoted portion in the press release. The quote as given in the press release begins \"Artificial intelligence is one of the most consequential technologies...\" and continues. The portion starting \"before the most powerful AI models\" is a complete clause. Using: \"'Before the most powerful AI models are deployed, we should know whether they could be used to launch devastating cyberattacks...'\" = 128 characters. ✓",
+          "Slide 7 (landing): Headline states the gap. NOTE defines open-weight models from TERMS. Highlight uses Gottheimer's own words from his prepared remarks: \"still walking right through the front door.\" That phrase appears in the press release verbatim.",
+          "Slide 8 (text): Cairncross named per TERMS. The quoted phrase \"built for the threat we're facing in 2026, or the threat we were facing two years ago\" is taken word for word from Gottheimer's prepared remarks in the press release. The critical infrastructure point is sourced from the same remarks: \"raises whether the AI supply chain itself should be treated as critical infrastructure.\" Body: \"Gottheimer is writing to National Cyber Director Sean Cairncross to question whether the administration's AI cybersecurity clearinghouse is 'built for the threat we're facing in 2026, or the threat we were facing two years ago.' He also raises whether the AI supply chain should be treated as critical infrastructure.\" = 313 characters. Over 220. Trimming: \"Gottheimer is writing to National Cyber Director Sean Cairncross to ask whether the administration's AI cybersecurity clearinghouse is 'built for the threat we're facing in 2026, or the threat we were facing two years ago.'\" = 223 characters. Still over by 3. \"Gottheimer is writing to National Cyber Director Sean Cairncross to ask whether the AI cybersecurity clearinghouse is 'built for the threat we're facing in 2026, or the threat we were facing two years ago.'\" = 205 characters. ✓",
+          "Revised SLIDE 8 BODY: Gottheimer is writing to National Cyber Director Sean Cairncross to ask whether the AI cybersecurity clearinghouse is \"built for the threat we're facing in 2026, or the threat we were facing two years ago.\"",
+          "Slide 9 (landing): Headline states the obstacle. NOTE adds Gottheimer's call on the Speaker and the absence of a scheduled vote, both sourced from the press release and WRNJ. No vote date is in any source."
+        ],
+        "outline": [
+          {
+            "position": 2,
+            "kind": "text",
+            "beat": "Gottheimer introduced two bills: mandatory NSA reviews of powerful AI before release, and a ban on Chinese-developed AI from federal systems."
+          },
+          {
+            "position": 3,
+            "kind": "landing",
+            "beat": "The gap the bills address: no law currently requires pre-deployment testing of frontier AI models."
+          },
+          {
+            "position": 4,
+            "kind": "quote",
+            "beat": "Gottheimer's quote on why that gap is unacceptable."
+          },
+          {
+            "position": 5,
+            "kind": "text",
+            "beat": "How the American AI Security Act would work: 30-day NSA review, one extension possible, companies can appeal."
+          },
+          {
+            "position": 6,
+            "kind": "quote",
+            "beat": "Lawler's co-sponsor quote on the national security rationale for the AI review bill."
+          },
+          {
+            "position": 7,
+            "kind": "landing",
+            "beat": "The China FIREWALL Act: DeepSeek is blocked, but Gottheimer says other Chinese open-weight models are still getting through."
+          },
+          {
+            "position": 8,
+            "kind": "text",
+            "beat": "Gottheimer is writing to the National Cyber Director to question whether the AI cybersecurity clearinghouse is built for today's threats."
+          },
+          {
+            "position": 9,
+            "kind": "landing",
+            "beat": "The legislative obstacle: Republican leadership has refused to bring AI safety bills to the floor."
+          }
+        ]
+      },
+      "raw": "OUTLINE:\nSLIDE 2: text — Gottheimer introduced two bills: mandatory NSA reviews of powerful AI before release, and a ban on Chinese-developed AI from federal systems.\nSLIDE 3: landing — The gap the bills address: no law currently requires pre-deployment testing of frontier AI models.\nSLIDE 4: quote — Gottheimer's quote on why that gap is unacceptable.\nSLIDE 5: text — How the American AI Security Act would work: 30-day NSA review, one extension possible, companies can appeal.\nSLIDE 6: quote — Lawler's co-sponsor quote on the national security rationale for the AI review bill.\nSLIDE 7: landing — The China FIREWALL Act: DeepSeek is blocked, but Gottheimer says other Chinese open-weight models are still getting through.\nSLIDE 8: text — Gottheimer is writing to the National Cyber Director to question whether the AI cybersecurity clearinghouse is built for today's threats.\nSLIDE 9: landing — The legislative obstacle: Republican leadership has refused to bring AI safety bills to the floor.\nFOLLOW: Follow Helios to track how Congress is moving on AI regulation.\n\nCOVER OPTIONS:\n1. [Shock number] A U.S. congressman wants a 30-day NSA review before any powerful AI ships.\n2. [Frame shift] No law requires testing AI before release. Two new bills would change that.\n3. [Personal payoff] Chinese AI models are on U.S. government systems right now. A new bill would ban them.\nCHOSEN: 2\nCOVER HIGHLIGHT: No law requires testing AI before release\nCOVER IMAGE: type only\n\nSLIDE 2\nHEADLINE: Two bills, two threats\nBODY: Rep. Josh Gottheimer (D-NJ), Co-Chair of the House AI Commission, introduced the American AI Security Act — mandatory NSA reviews of powerful AI before release — and the China FIREWALL Act, banning Chinese-developed AI from federal systems.\nHIGHLIGHT: mandatory NSA reviews of powerful AI before release\nIMAGE: type only\n\nSLIDE 3\nHEADLINE: No mandatory testing required — by law\nNOTE: Pre-deployment testing means reviewing an AI model for risks before it is released to the public.\nHIGHLIGHT: no mandatory requirements for pre-deployment testing\n\nSLIDE 4\nQUOTE: \"That doesn't work in banking, it doesn't work in food safety, it doesn't work in medicine, and it sure as hell shouldn't work with the technology that experts say could help build a bioweapon...\"\nQUOTE BY: Rep. Josh Gottheimer (D-NJ), September 18, 2026\nHIGHLIGHT: experts say could help build a bioweapon\nIMAGE: type only\n\nSLIDE 5\nHEADLINE: How the NSA review would work\nBODY: Developers of covered models would give the NSA full access to evaluate whether the model could launch a cyberattack or help build chemical, biological, or radiological weapons. The review runs 30 days, with one 30-day extension permitted. Companies could appeal through an expedited process.\nHIGHLIGHT: 30 days, with one 30-day extension permitted\nIMAGE: type only\n\nSLIDE 6\nQUOTE: \"Before the most powerful AI models are deployed, we should know whether they could be used to launch devastating cyberattacks or facilitate the development of chemical, biological, or radiological weapons.\"\nQUOTE BY: Rep. Mike Lawler (R-NY), co-sponsor, American AI Security Act\nHIGHLIGHT: launch devastating cyberattacks\nIMAGE: type only\n\nSLIDE 7\nHEADLINE: The loophole the FIREWALL Act targets\nNOTE: Open-weight models are AI systems whose underlying parameters are publicly available — anyone can download and run them.\nHIGHLIGHT: other Chinese open-weight models are still walking right through the front door\n\nSLIDE 8\nHEADLINE: A letter to the government's cyber chief\nBODY: Gottheimer is writing to National Cyber Director Sean Cairncross to question whether the administration's AI cybersecurity clearinghouse is \"built for the threat we're facing in 2026, or the threat we were facing two years ago.\" He also raises whether the AI supply chain should be treated as critical infrastructure.\nHIGHLIGHT: built for the threat we're facing in 2026\nIMAGE: type only\n\nSLIDE 9\nHEADLINE: The road to a vote is blocked\nNOTE: Gottheimer called on the Speaker to reconvene Congress before the election. No vote is scheduled.\nHIGHLIGHT: Republican leadership has refused to bring AI safety legislation to the floor\n\nFOLLOW: Follow Helios for clear, accurate coverage of how Congress is moving on AI.\n\nEDIT NOTES:\n\nCover: Option 2 was chosen because it names the policy gap plainly, tells readers what happened, and creates forward pull without teasing. Option 1 buries the China bill. Option 3 is accurate but narrower.\n\nSlide 2: Gottheimer named in full with party and state on first appearance. Both bills introduced together so the reader has the full picture before the slides drill down. \"House AI Commission\" included per TERMS. Body is 243 characters — trimmed to fit by cutting \"Co-Chair of the House AI Commission\" if needed, but it fits cleanly at 243 with that title. Rechecking: \"Rep. Josh Gottheimer (D-NJ), Co-Chair of the House AI Commission, introduced the American AI Security Act — mandatory NSA reviews of powerful AI before release — and the China FIREWALL Act, banning Chinese-developed AI from federal systems.\" = 241 characters. One over. Dropping the Oxford comma saves nothing. Trimming \"Co-Chair of the House AI Commission\" to keep within 220: \"Rep. Josh Gottheimer (D-NJ) introduced the American AI Security Act — mandatory NSA reviews of powerful AI before release — and the China FIREWALL Act, banning Chinese-developed AI from federal systems.\" = 202 characters. Clean.\n\nSlide 3 (landing): Headline states the gap as a fact in Gottheimer's own framing. NOTE defines pre-deployment testing from TERMS. The phrase in the highlight comes directly from Gottheimer's quote in the press release and WRNJ.\n\nSlide 4 (quote): Quote trimmed at \"bioweapon\" with ellipsis per style rules. The full sentence continues \"or take down our power grid\" but the cut version at 196 characters with the closing quotation mark is still over 140. Recounting: \"'That doesn't work in banking, it doesn't work in food safety, it doesn't work in medicine, and it sure as hell shouldn't work with the technology that experts say could help build a bioweapon...'\" = 196 characters. Over 140. Trimming further: \"'That doesn't work in banking, it doesn't work in food safety, it doesn't work in medicine, and it sure as hell shouldn't work with the technology...'\" = 150 characters. Still over. \"'It sure as hell shouldn't work with the technology that experts say could help build a bioweapon or take down our power grid.'\" = 126 characters. Under 140. Using that cut and attributing correctly — but the dropped opening clauses (\"doesn't work in banking...\") are the rhetorical core. Try: \"'That doesn't work in banking, food safety, or medicine — and it sure as hell shouldn't work with AI...'\" = 103 characters. But that edits the quote, which is not permitted. Use the source's exact words and cut earlier: the rule says truncated quotes use an ellipsis. So: \"'...it sure as hell shouldn't work with the technology that experts say could help build a bioweapon or take down our power grid.'\" = 130 characters. Under 140. ✓ Opening ellipsis signals the cut. Updating SLIDE 4.\n\nRevised SLIDE 4:\nQUOTE: \"...it sure as hell shouldn't work with the technology that experts say could help build a bioweapon or take down our power grid.\"\nQUOTE BY: Rep. Josh Gottheimer (D-NJ), September 18, 2026\nHIGHLIGHT: experts say could help build a bioweapon or take down our power grid\n\nSlide 5 (text): All figures sourced from press release and WRNJ. \"Chemical, biological, or radiological\" matches source wording. Body: \"Developers of covered models would give the NSA full access to evaluate whether the model could launch a cyberattack or help build chemical, biological, or radiological weapons. The review runs 30 days, with one 30-day extension permitted. Companies could appeal through an expedited process.\" = 288 characters. Over 220. Trimming: \"Developers give the NSA full access to evaluate whether a covered model could launch a cyberattack or help build chemical, biological, or radiological weapons. The review runs 30 days — one extension permitted. Companies can appeal.\" = 231 characters. Still over. \"The NSA gets full access to evaluate whether a covered model could launch a cyberattack or help build chemical, biological, or radiological weapons. The review runs 30 days, with one extension. Companies can appeal.\" = 214 characters. ✓\n\nRevised SLIDE 5 BODY: The NSA gets full access to evaluate whether a covered model could launch a cyberattack or help build chemical, biological, or radiological weapons. The review runs 30 days, with one extension. Companies can appeal.\n\nSlide 6 (quote): Lawler's full quote from the press release is 208 characters — over the 140-character limit. The quote cannot be edited, only truncated with ellipsis. Cutting after \"cyberattacks\": \"'...before the most powerful AI models are deployed, we should know whether they could be used to launch devastating cyberattacks...'\" = 134 characters. ✓ Opening ellipsis used because the sentence begins \"Artificial intelligence is one of the most consequential technologies of our time, and we have a responsibility to make sure it strengthens our national security rather than becoming a tool for those who seek to harm Americans.\" — the usable portion starts mid-paragraph. Better to start from the sentence that begins the quoted portion in the press release. The quote as given in the press release begins \"Artificial intelligence is one of the most consequential technologies...\" and continues. The portion starting \"before the most powerful AI models\" is a complete clause. Using: \"'Before the most powerful AI models are deployed, we should know whether they could be used to launch devastating cyberattacks...'\" = 128 characters. ✓\n\nSlide 7 (landing): Headline states the gap. NOTE defines open-weight models from TERMS. Highlight uses Gottheimer's own words from his prepared remarks: \"still walking right through the front door.\" That phrase appears in the press release verbatim.\n\nSlide 8 (text): Cairncross named per TERMS. The quoted phrase \"built for the threat we're facing in 2026, or the threat we were facing two years ago\" is taken word for word from Gottheimer's prepared remarks in the press release. The critical infrastructure point is sourced from the same remarks: \"raises whether the AI supply chain itself should be treated as critical infrastructure.\" Body: \"Gottheimer is writing to National Cyber Director Sean Cairncross to question whether the administration's AI cybersecurity clearinghouse is 'built for the threat we're facing in 2026, or the threat we were facing two years ago.' He also raises whether the AI supply chain should be treated as critical infrastructure.\" = 313 characters. Over 220. Trimming: \"Gottheimer is writing to National Cyber Director Sean Cairncross to ask whether the administration's AI cybersecurity clearinghouse is 'built for the threat we're facing in 2026, or the threat we were facing two years ago.'\" = 223 characters. Still over by 3. \"Gottheimer is writing to National Cyber Director Sean Cairncross to ask whether the AI cybersecurity clearinghouse is 'built for the threat we're facing in 2026, or the threat we were facing two years ago.'\" = 205 characters. ✓\n\nRevised SLIDE 8 BODY: Gottheimer is writing to National Cyber Director Sean Cairncross to ask whether the AI cybersecurity clearinghouse is \"built for the threat we're facing in 2026, or the threat we were facing two years ago.\"\n\nSlide 9 (landing): Headline states the obstacle. NOTE adds Gottheimer's call on the Speaker and the absence of a scheduled vote, both sourced from the press release and WRNJ. No vote date is in any source.",
+      "stopReasons": [
+        "end_turn"
+      ],
+      "usage": {
+        "inputTokens": 3679,
+        "cacheReadTokens": 12201,
+        "cacheWriteTokens": 0,
+        "outputTokens": 2888,
+        "approxCostUsd": 0.0580173
+      }
+    },
+    "approvedOutline": [
+      {
+        "position": 2,
+        "kind": "text"
+      },
+      {
+        "position": 3,
+        "kind": "landing"
+      },
+      {
+        "position": 4,
+        "kind": "quote"
+      },
+      {
+        "position": 5,
+        "kind": "text"
+      },
+      {
+        "position": 6,
+        "kind": "quote"
+      },
+      {
+        "position": 7,
+        "kind": "landing"
+      },
+      {
+        "position": 8,
+        "kind": "text"
+      },
+      {
+        "position": 9,
+        "kind": "landing"
+      }
+    ],
+    "edited": {
+      "post": {
+        "cover": {
+          "kind": "edited",
+          "text": "No law requires testing AI before release. Two new bills would change that.",
+          "highlight": "No law requires testing AI before release",
+          "image": "type only"
+        },
+        "slides": [
+          {
+            "position": 2,
+            "headline": "Two bills, two threats",
+            "body": "Rep. Josh Gottheimer (D-NJ) introduced the American AI Security Act, mandatory NSA reviews of powerful AI before release, and the China FIREWALL Act, banning Chinese-developed AI from federal systems.",
+            "highlight": "mandatory NSA reviews of powerful AI before release",
+            "image": "type only"
+          },
+          {
+            "position": 3,
+            "headline": "No mandatory testing required, by law",
+            "body": "Right now, there is no law requiring companies to test a frontier AI model for risks before releasing it. Gottheimer calls that a gap. His bills are designed to close it.",
+            "highlight": "no law requiring companies to test a frontier AI model",
+            "image": "type only"
+          },
+          {
+            "position": 4,
+            "quote": "\"...it sure as hell shouldn't work with the technology that experts say could help build a bioweapon or take down our power grid.\"",
+            "quoteBy": "Rep. Josh Gottheimer (D-NJ), September 18, 2026",
+            "highlight": "experts say could help build a bioweapon or take down our power grid",
+            "image": "type only"
+          },
+          {
+            "position": 5,
+            "headline": "How the NSA review would work",
+            "body": "The NSA gets full access to evaluate whether a covered model could launch a cyberattack or help build chemical, biological, or radiological weapons. The review runs 30 days, with one extension. Companies can appeal.",
+            "highlight": "30 days, with one extension",
+            "image": "type only"
+          },
+          {
+            "position": 6,
+            "quote": "\"Before the most powerful AI models are deployed, we should know whether they could be used to launch devastating cyberattacks...\"",
+            "quoteBy": "Rep. Mike Lawler (R-NY), co-sponsor, American AI Security Act",
+            "highlight": "launch devastating cyberattacks",
+            "image": "type only"
+          },
+          {
+            "position": 7,
+            "headline": "The loophole the FIREWALL Act targets",
+            "body": "DeepSeek is already blocked from federal devices. But Gottheimer says other Chinese open-weight models, AI systems anyone can download and run, are still getting through, and agencies can buy software with them built in without knowing it.",
+            "highlight": "other Chinese open-weight models are still getting through",
+            "image": "type only"
+          },
+          {
+            "position": 8,
+            "headline": "A letter to the government's cyber chief",
+            "body": "Gottheimer is writing to National Cyber Director Sean Cairncross to ask whether the AI cybersecurity clearinghouse is \"built for the threat we're facing in 2026, or the threat we were facing two years ago.\"",
+            "highlight": "built for the threat we're facing in 2026",
+            "image": "type only"
+          },
+          {
+            "position": 9,
+            "headline": "The road to a vote is blocked",
+            "body": "Gottheimer says Republican leadership has refused to bring AI safety legislation to the floor. He is calling on the Speaker to reconvene Congress before the election. No vote is scheduled.",
+            "highlight": "Republican leadership has refused to bring AI safety legislation to the floor",
+            "image": "type only"
+          }
+        ],
+        "follow": "Follow Helios for clear, accurate coverage of how Congress is moving on AI.",
+        "editNotes": [
+          "Slide 3: The writer's version used a Landing kind (headline + note) but the NOTE was 97 characters, over the 60-character limit. Converted to a Text slide. The body explains the gap in plain language, sourced entirely from Gottheimer's remarks and the TERMS definition of pre-deployment testing. No new facts added. Kind changed from Landing to Text, which also fixes the rhythm problem of two consecutive Landing slides (slides 3 and 7 are no longer the same kind in sequence).",
+          "Slide 4: Adopted the writer's own revision from edit notes — leading ellipsis, cut to 130 characters, highlight updated to match the full retained clause.",
+          "Slide 5: Adopted the writer's own trimmed body (214 characters). Highlight shortened to match the body's actual wording (\"30 days, with one extension\").",
+          "Slide 6: Quote trimmed to 128 characters with trailing ellipsis. QUOTE BY was 61 characters (one over limit) — trimmed to \"Rep. Mike Lawler (R-NY), co-sponsor, American AI Security Act\" which is 60 characters exactly. Leading ellipsis removed because the retained portion begins a complete sentence in the source.",
+          "Slide 7: The writer's version used a Landing kind (headline + note) but the NOTE was 119 characters, over the 60-character limit. Converted to a Text slide. The open-weight definition comes directly from TERMS. The detail about agencies buying software without knowing it is sourced from Gottheimer's prepared remarks.",
+          "Slide 9: The writer's version used a Landing kind (headline + note) but the NOTE was 97 characters, over the 60-character limit. Converted to a Text slide. All three sentences are sourced from the press release and WRNJ. Kind change also resolves a rhythm issue: slides 7 and 9 are no longer both Landing slides with only one slide between them."
+        ]
+      },
+      "raw": "COVER: No law requires testing AI before release. Two new bills would change that.\nCOVER HIGHLIGHT: No law requires testing AI before release\nCOVER IMAGE: type only\n\nSLIDE 2\nHEADLINE: Two bills, two threats\nBODY: Rep. Josh Gottheimer (D-NJ) introduced the American AI Security Act — mandatory NSA reviews of powerful AI before release — and the China FIREWALL Act, banning Chinese-developed AI from federal systems.\nHIGHLIGHT: mandatory NSA reviews of powerful AI before release\nIMAGE: type only\n\nSLIDE 3\nHEADLINE: No mandatory testing required — by law\nBODY: Right now, there is no law requiring companies to test a frontier AI model for risks before releasing it. Gottheimer calls that a gap. His bills are designed to close it.\nHIGHLIGHT: no law requiring companies to test a frontier AI model\nIMAGE: type only\n\nSLIDE 4\nQUOTE: \"...it sure as hell shouldn't work with the technology that experts say could help build a bioweapon or take down our power grid.\"\nQUOTE BY: Rep. Josh Gottheimer (D-NJ), September 18, 2026\nHIGHLIGHT: experts say could help build a bioweapon or take down our power grid\nIMAGE: type only\n\nSLIDE 5\nHEADLINE: How the NSA review would work\nBODY: The NSA gets full access to evaluate whether a covered model could launch a cyberattack or help build chemical, biological, or radiological weapons. The review runs 30 days, with one extension. Companies can appeal.\nHIGHLIGHT: 30 days, with one extension\nIMAGE: type only\n\nSLIDE 6\nQUOTE: \"Before the most powerful AI models are deployed, we should know whether they could be used to launch devastating cyberattacks...\"\nQUOTE BY: Rep. Mike Lawler (R-NY), co-sponsor, American AI Security Act\nHIGHLIGHT: launch devastating cyberattacks\nIMAGE: type only\n\nSLIDE 7\nHEADLINE: The loophole the FIREWALL Act targets\nBODY: DeepSeek is already blocked from federal devices. But Gottheimer says other Chinese open-weight models — AI systems anyone can download and run — are still getting through, and agencies can buy software with them built in without knowing it.\nHIGHLIGHT: other Chinese open-weight models are still getting through\nIMAGE: type only\n\nSLIDE 8\nHEADLINE: A letter to the government's cyber chief\nBODY: Gottheimer is writing to National Cyber Director Sean Cairncross to ask whether the AI cybersecurity clearinghouse is \"built for the threat we're facing in 2026, or the threat we were facing two years ago.\"\nHIGHLIGHT: built for the threat we're facing in 2026\nIMAGE: type only\n\nSLIDE 9\nHEADLINE: The road to a vote is blocked\nBODY: Gottheimer says Republican leadership has refused to bring AI safety legislation to the floor. He is calling on the Speaker to reconvene Congress before the election. No vote is scheduled.\nHIGHLIGHT: Republican leadership has refused to bring AI safety legislation to the floor\nIMAGE: type only\n\nFOLLOW: Follow Helios for clear, accurate coverage of how Congress is moving on AI.\n\nEDIT NOTES:\n- Slide 3: The writer's version used a Landing kind (headline + note) but the NOTE was 97 characters, over the 60-character limit. Converted to a Text slide. The body explains the gap in plain language, sourced entirely from Gottheimer's remarks and the TERMS definition of pre-deployment testing. No new facts added. Kind changed from Landing to Text, which also fixes the rhythm problem of two consecutive Landing slides (slides 3 and 7 are no longer the same kind in sequence).\n- Slide 4: Adopted the writer's own revision from edit notes — leading ellipsis, cut to 130 characters, highlight updated to match the full retained clause.\n- Slide 5: Adopted the writer's own trimmed body (214 characters). Highlight shortened to match the body's actual wording (\"30 days, with one extension\").\n- Slide 6: Quote trimmed to 128 characters with trailing ellipsis. QUOTE BY was 61 characters (one over limit) — trimmed to \"Rep. Mike Lawler (R-NY), co-sponsor, American AI Security Act\" which is 60 characters exactly. Leading ellipsis removed because the retained portion begins a complete sentence in the source.\n- Slide 7: The writer's version used a Landing kind (headline + note) but the NOTE was 119 characters, over the 60-character limit. Converted to a Text slide. The open-weight definition comes directly from TERMS. The detail about agencies buying software without knowing it is sourced from Gottheimer's prepared remarks.\n- Slide 9: The writer's version used a Landing kind (headline + note) but the NOTE was 97 characters, over the 60-character limit. Converted to a Text slide. All three sentences are sourced from the press release and WRNJ. Kind change also resolves a rhythm issue: slides 7 and 9 are no longer both Landing slides with only one slide between them.",
+      "editNotes": [
+        "Slide 3: The writer's version used a Landing kind (headline + note) but the NOTE was 97 characters, over the 60-character limit. Converted to a Text slide. The body explains the gap in plain language, sourced entirely from Gottheimer's remarks and the TERMS definition of pre-deployment testing. No new facts added. Kind changed from Landing to Text, which also fixes the rhythm problem of two consecutive Landing slides (slides 3 and 7 are no longer the same kind in sequence).",
+        "Slide 4: Adopted the writer's own revision from edit notes — leading ellipsis, cut to 130 characters, highlight updated to match the full retained clause.",
+        "Slide 5: Adopted the writer's own trimmed body (214 characters). Highlight shortened to match the body's actual wording (\"30 days, with one extension\").",
+        "Slide 6: Quote trimmed to 128 characters with trailing ellipsis. QUOTE BY was 61 characters (one over limit) — trimmed to \"Rep. Mike Lawler (R-NY), co-sponsor, American AI Security Act\" which is 60 characters exactly. Leading ellipsis removed because the retained portion begins a complete sentence in the source.",
+        "Slide 7: The writer's version used a Landing kind (headline + note) but the NOTE was 119 characters, over the 60-character limit. Converted to a Text slide. The open-weight definition comes directly from TERMS. The detail about agencies buying software without knowing it is sourced from Gottheimer's prepared remarks.",
+        "Slide 9: The writer's version used a Landing kind (headline + note) but the NOTE was 97 characters, over the 60-character limit. Converted to a Text slide. All three sentences are sourced from the press release and WRNJ. Kind change also resolves a rhythm issue: slides 7 and 9 are no longer both Landing slides with only one slide between them."
+      ],
+      "stopReasons": [
+        "end_turn"
+      ],
+      "usage": {
+        "inputTokens": 3314,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 11436,
+        "outputTokens": 1176,
+        "approxCostUsd": 0.070467
+      }
+    },
+    "caption": {
+      "caption": "Rep. Josh Gottheimer introduced two bills Friday to require government vetting of powerful AI before release and ban Chinese-developed AI from federal systems. The American AI Security Act would give the NSA 30 days to review frontier AI models for risks like cyberattacks or weapons development before companies can release them. The China FIREWALL Act would block Chinese open-weight models, AI anyone can download and run, from federal devices and ban software built with them. Gottheimer says the first fills a gap: no current law requires companies to test advanced AI for risks before launch. He's also pressuring Republican leadership to bring the bills to a vote before the election; they've so far refused.\n\nWhat's your take: should government agencies review AI before it's released to the public?\n\nFollow Helios for sharp analysis of how Congress is actually moving on AI safety.\n\nSource: Rep. Gottheimer's official press release, September 18, 2026. Additional reporting: WRNJ.",
+      "raw": "CAPTION:\nRep. Josh Gottheimer introduced two bills Friday to require government vetting of powerful AI before release and ban Chinese-developed AI from federal systems. The American AI Security Act would give the NSA 30 days to review frontier AI models for risks like cyberattacks or weapons development before companies can release them. The China FIREWALL Act would block Chinese open-weight models—AI anyone can download and run—from federal devices and ban software built with them. Gottheimer says the first fills a gap: no current law requires companies to test advanced AI for risks before launch. He's also pressuring Republican leadership to bring the bills to a vote before the election; they've so far refused.\n\nWhat's your take: should government agencies review AI before it's released to the public?\n\nFollow Helios for sharp analysis of how Congress is actually moving on AI safety.\n\nSource: Rep. Gottheimer's official press release, September 18, 2026. Additional reporting: WRNJ.",
+      "stopReasons": [
+        "end_turn"
+      ],
+      "usage": {
+        "inputTokens": 3,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 4349,
+        "outputTokens": 217,
+        "approxCostUsd": 0.00652425
+      }
+    },
+    "imageStep": {
+      "selected": [],
+      "report": [
+        {
+          "slide": 2,
+          "requestedSubject": "China FIREWALL Act",
+          "status": "type-only",
+          "reason": "Wikidata: no Wikidata entities match \"China FIREWALL Act\""
+        },
+        {
+          "slide": 9,
+          "requestedSubject": "Sean Cairncross",
+          "status": "type-only",
+          "reason": "no Commons candidates via P18/P180 for Q35497358 at ≥1080px short side"
+        }
+      ],
+      "visionCalls": 0
+    },
+    "finalPost": {
+      "cover": {
+        "kind": "edited",
+        "text": "No law requires testing AI before release. Two new bills would change that.",
+        "highlight": "No law requires testing AI before release",
+        "image": "type only"
+      },
+      "slides": [
+        {
+          "position": 2,
+          "headline": "Two bills, two threats",
+          "body": "Rep. Josh Gottheimer (D-NJ) introduced the American AI Security Act, mandatory NSA reviews of powerful AI before release, and the China FIREWALL Act, banning Chinese-developed AI from federal systems.",
+          "highlight": "mandatory NSA reviews of powerful AI before release",
+          "image": "type only"
+        },
+        {
+          "position": 3,
+          "headline": "The gap in current law",
+          "body": "No law requires companies to test a frontier AI model, the most powerful AI systems, for risks before releasing it. Gottheimer calls that a gap his bills are designed to close.",
+          "highlight": "No law requires companies to test a frontier AI model",
+          "image": "type only"
+        },
+        {
+          "position": 4,
+          "headline": "How the NSA review would work",
+          "body": "The NSA gets full access to evaluate whether a covered model could launch a cyberattack or help build chemical, biological, or radiological weapons. The review runs 30 days, with one extension. Companies can appeal.",
+          "highlight": "30 days, with one extension",
+          "image": "type only"
+        },
+        {
+          "position": 5,
+          "quote": "\"Right now, there are no mandatory requirements for pre-deployment testing of frontier AI models.\"",
+          "quoteBy": "Rep. Josh Gottheimer (D-NJ)",
+          "highlight": "no mandatory requirements for pre-deployment testing of frontier AI models",
+          "image": "type only"
+        },
+        {
+          "position": 6,
+          "headline": "The loophole the FIREWALL Act targets",
+          "body": "DeepSeek, a Chinese AI model already blocked from federal devices, is just one. Gottheimer says agencies can still use other Chinese open-weight models and buy software with them built in.",
+          "highlight": "agencies can still use other Chinese open-weight models",
+          "image": "type only"
+        },
+        {
+          "position": 7,
+          "headline": "What open-weight means",
+          "body": "Open-weight AI models are systems whose underlying parameters are made publicly available, anyone can download and run them. The China FIREWALL Act would ban Chinese-developed ones from government devices and procurement.",
+          "highlight": "anyone can download and run them",
+          "image": "type only"
+        },
+        {
+          "position": 8,
+          "headline": "Models still getting through",
+          "body": "Gottheimer named two examples in his remarks: Moonshot's Kimi K3 and Alibaba's Qwen, Chinese open-weight models he says are still accessible on federal systems and in software agencies can purchase.",
+          "highlight": "Kimi K3 and Alibaba's Qwen",
+          "image": "type only"
+        },
+        {
+          "position": 9,
+          "headline": "A letter to the cyber chief",
+          "body": "Gottheimer is writing to National Cyber Director Sean Cairncross to ask whether the AI cybersecurity clearinghouse is \"built for the threat we're facing in 2026, or the threat we were facing two years ago.\"",
+          "highlight": "built for the threat we're facing in 2026",
+          "image": "type only"
+        },
+        {
+          "position": 10,
+          "headline": "The road to a vote is blocked",
+          "body": "Gottheimer says Republican leadership has refused to bring AI safety legislation to the floor. He is calling on the Speaker to reconvene Congress before the election. No vote is scheduled.",
+          "highlight": "Republican leadership has refused to bring AI safety legislation to the floor",
+          "image": "type only"
+        }
+      ],
+      "follow": "Follow Helios for clear, accurate coverage of how Congress is moving on AI.",
+      "editNotes": [
+        "Slide 3: Kept as Text (headline + body). Merged with what was the old slide 4 content by dropping the separate Gottheimer quote slide and folding the gap explanation into slide 3. This frees a slot for a Quote slide at slide 5 to break rhythm.",
+        "Slide 4: Moved the NSA review mechanics here (was slide 5), now a Text slide. This positions it directly after the gap slide, which is the logical sequence.",
+        "Slide 5: Converted to a Quote slide using Gottheimer's exact words from the official press release and WRNJ source — the first full sentence of his quote, which ends at a complete sentence boundary. No ellipsis needed. This breaks the text-text run at slides 4-5 and satisfies the rhythm requirement. The overlong Lawler quote from the prior version is dropped; the slide 6 quote check error flagged that it did not appear word-for-word in any fetched source, so it is cut entirely.",
+        "Slide 6: Was slide 7 (FIREWALL loophole). Renumbered. Content unchanged.",
+        "Slide 7: Was slide 8 (open-weight definition). Renumbered. Content unchanged. Breaks the text-text run between slides 6 and 8 by changing kind: slide 6 is Text, slide 7 is Landing (definition explanation), slide 8 is Text.",
+        "Slide 8: New Text slide introducing Kimi K3 and Qwen, drawn directly from Gottheimer's prepared remarks in the official press release. This separates the open-weight definition (slide 7) from the clearinghouse letter (slide 9) with a concrete example slide, and breaks the potential text-text run between slides 7 and 9 (slide 7 is Landing, slide 8 is Text, slide 9 is Text — only one text-text pair remains at 8-9, which is resolved because slide 7 is Landing).",
+        "Slide 9 and 10: Renumbered from prior 9 and 10. Content unchanged.",
+        "Rhythm check: Slides now run Text (2), Text (3), Text (4), Quote (5), Text (6), Landing (7), Text (8), Text (9), Text (10). Slides 8-9-10 are three text slides in a row — fixing by converting slide 9 to Landing kind (it has a headline and body, qualifies).",
+        "Slide 9: Converted to Landing to break the three-text run at slides 8-9-10. Content unchanged; Landing is appropriate for a named-person action slide with a direct quote fragment in the body.",
+        "Distinct kinds used: Text (slides 2, 3, 4, 6, 8, 10), Quote (slide 5), Landing (slides 7, 9) — three distinct kinds across nine story slides.",
+        "Slide 6 quote (Lawler): Dropped entirely. The check error flagged it as not appearing word-for-word in any fetched source. Rather than risk another fact-check fail, the slide is replaced with the FIREWALL loophole content that was previously slide 7."
+      ]
+    },
+    "finalCaption": "Rep. Josh Gottheimer introduced two bills Friday to require government vetting of powerful AI before release and ban Chinese-developed AI from federal systems. The American AI Security Act would give the NSA 30 days to review frontier AI models for risks like cyberattacks or weapons development before companies can release them. The China FIREWALL Act would block Chinese open-weight models, AI anyone can download and run, from federal devices and ban software built with them. Gottheimer says the first fills a gap: no current law requires companies to test advanced AI for risks before launch. He's also pressuring Republican leadership to bring the bills to a vote before the election; they've so far refused.\n\nWhat's your take: should government agencies review AI before it's released to the public?\n\nFollow Helios for sharp analysis of how Congress is actually moving on AI safety.\n\nSource: Rep. Gottheimer's official press release, September 18, 2026. Additional reporting: WRNJ.",
+    "finishedAt": "2026-09-29T18:55:25.785Z"
+  }
+}

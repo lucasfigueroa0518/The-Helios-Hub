@@ -1,4 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk';
+import type Anthropic from '@anthropic-ai/sdk';
+import { newAnthropic } from '@/lib/anthropic-client';
 
 import { loadDraftingAssets } from '@/lib/drafting/assets';
 import { priceAnthropicMessages, toProviderUsage } from '@/lib/anthropic-pricing';
@@ -346,7 +347,7 @@ async function researchLive(input: DraftingResearchInput): Promise<DraftingResea
   const researchMaxTokens = protocolBudget.autoMaxTokens;
   const reportMaxTokens = protocolBudget.reportMaxTokens;
   const cacheTtl = resolvedDraftingPromptCacheTtl();
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = newAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const system = buildResearchSystemBlocks({
     positioningText: input.positioningText || assets.positioning.text,
     capabilityCatalog: assets.capabilities.catalog,
