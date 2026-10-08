@@ -67,9 +67,21 @@ test('C1 limits: over the limit fails with the exact overage; never trimmed', ()
   const d = draft((x) => (x.slides[1]!.headline.text = long));
   const f = checkLimits(d);
   assert.deepEqual(ids(f), ['C1']);
-  assert.match(f[0]!.detail, /67 chars, limit 60 \(7 over\)/);
+  assert.match(f[0]!.detail, /52 chars, limit 45 \(7 over\)/);
   assert.equal(d.slides[1]!.headline.text, long);
   assert.deepEqual(checkLimits(draft()), []);
+});
+
+test('C1 copy budget (2026-10-08): headline and body share 168; the split is elastic within headline 15–45 and body ≤140', () => {
+  const set = (h: number, b: number) => draft((x) => { x.slides[0]!.headline.text = 'h'.repeat(h); x.slides[0]!.body!.text = 'b'.repeat(b); });
+  assert.deepEqual(checkLimits(set(28, 140)), [], 'short headline, full body');
+  assert.deepEqual(checkLimits(set(45, 123)), [], 'full headline, shorter body');
+  const both = checkLimits(set(45, 130));
+  assert.deepEqual(both.map((f) => f.where), ['slide 2 headline + body']);
+  assert.match(both[0]!.detail, /175 chars together, limit 168 \(7 over\)/);
+  const tiny = checkLimits(set(10, 50));
+  assert.deepEqual(tiny.map((f) => f.where), ['slide 2 headline']);
+  assert.match(tiny[0]!.detail, /at least 15/);
 });
 
 test('C2 quote marks: allowed only around a QUOTES entry word for word', () => {
@@ -181,7 +193,7 @@ test('Writer code check: a C1 overage goes back once with the exact problem; fix
   const r = await runWriter(brief(), { create: s.create, isWellKnown: async () => false });
   assert.ok(r.ok);
   assert.equal(r.draftRetries, 1);
-  assert.match(r.retryErrors[0]!, /C1 slide 2 headline: 79 chars, limit 60 \(19 over\)/);
+  assert.match(r.retryErrors[0]!, /C1 slide 2 headline: 79 chars, limit 45 \(34 over\)/);
 });
 
 test('Writer code check: style (C3) blocks only the first submission; a hard failure (C1) on the retry sets it aside', async () => {

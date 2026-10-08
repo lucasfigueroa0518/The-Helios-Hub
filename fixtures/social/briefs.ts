@@ -25,11 +25,7 @@ export function briefSuperIntelligenceForce(): Brief {
       { text: "The task force's charter reportedly says it will plan responses to SI-enabled threats while preventing overregulation.", ids: ['F6'] },
       { text: 'It will reportedly have 120 days to report on the risks and opportunities presented by AI.', ids: ['F4'] },
     ],
-    // The story shape (copy overhaul, 2026-10-07): events in order, plot beats, tensions; every line arranges listed facts.
-    timeline: [
-      { date: '2026-09', what: 'Trump says he will form an AI Force and appoint an AI czar', ids: ['B1'] },
-      { date: '2026-10-04', what: 'Trump announces the Super Intelligence Force on Truth Social', ids: ['F1'] },
-    ],
+    // The story shape (2026-10-08): plot beats and tensions; every line arranges listed facts.
     plot: [
       { beat: 'SETUP', text: 'Trump had promised an AI Force and rebranded AI as super intelligence', ids: ['B1', 'B2'] },
       { beat: 'TRIGGER', text: 'He announces the Super Intelligence Force, led by Jay Clayton', ids: ['F1', 'F2'] },

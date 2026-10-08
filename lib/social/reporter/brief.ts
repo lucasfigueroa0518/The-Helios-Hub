@@ -62,12 +62,11 @@ export type Brief = {
   the_news: { text: string; ids: string[] };
   why_it_matters: Array<{ text: string; ids: string[] }>;
   /**
-   * The story's shape (Tommy, 2026-10-07, copy overhaul): events in order,
-   * the plot in beats, and the real disagreements or open questions. Every
-   * line arranges listed facts by ID; none adds a fact. Optional in the type
-   * so briefs saved before the overhaul still load; required of the Reporter.
+   * The story's shape (Tommy, 2026-10-08): the plot in beats and the real
+   * disagreements or open questions, for the Writer to see. Every line
+   * arranges listed facts by ID; none adds a fact. Optional in the type so
+   * older saved briefs still load; required of the Reporter.
    */
-  timeline?: Array<{ date: string | null; what: string; ids: string[] }>;
   plot?: Array<{ beat: PlotBeat; text: string; ids: string[] }>;
   tensions?: Array<{ text: string; ids: string[] }>;
   facts: BriefFact[];
@@ -118,11 +117,6 @@ export const BRIEF_SCHEMA = obj({
     ids: { ...strList, description: 'Fact IDs it rests on.' },
   }),
   why_it_matters: list(obj({ text: str, ids: { ...strList, description: 'IDs it rests on (sourced only).' } })),
-  timeline: list(obj({
-    date: { ...nullableStr, description: 'As precise as the sources give it (YYYY-MM-DD when known); null if undated.' },
-    what: { type: 'string', description: 'What happened, one line.' },
-    ids: { ...strList, description: 'Fact IDs it rests on.' },
-  })),
   plot: list(obj({
     beat: { type: 'string', enum: [...PLOT_BEATS], description: 'SETUP → TRIGGER → CONFLICT → RESPONSE → OPEN, in that order.' },
     text: { type: 'string', description: 'One line; arranges listed facts, adds none.' },
@@ -270,7 +264,6 @@ export function validateBrief(input: unknown, opts: { aggregators?: boolean; spe
   const cited: Array<[string, string[]]> = [
     ['the_news', brief.the_news.ids],
     ...brief.why_it_matters.map((w): [string, string[]] => ['why_it_matters', w.ids]),
-    ...(brief.timeline ?? []).map((t): [string, string[]] => ['timeline', t.ids]),
     ...(brief.plot ?? []).map((p): [string, string[]] => ['plot', p.ids]),
     ...(brief.tensions ?? []).map((t): [string, string[]] => ['tensions', t.ids]),
   ];
@@ -291,12 +284,8 @@ export function validateBrief(input: unknown, opts: { aggregators?: boolean; spe
   return brief;
 }
 
-/**
- * The story shape's order (copy overhaul, 2026-10-07): PLOT beats in label
- * order, each but OPEN resting on fact IDs; TIMELINE dated entries oldest
- * first, each resting on fact IDs.
- */
-export function storyShapeErrors(brief: Pick<Brief, 'plot' | 'timeline'>): BriefError[] {
+/** The story shape's order (2026-10-08): PLOT beats in label order, each but OPEN resting on fact IDs. */
+export function storyShapeErrors(brief: Pick<Brief, 'plot'>): BriefError[] {
   const errors: BriefError[] = [];
   let last = -1;
   for (const [i, p] of (brief.plot ?? []).entries()) {
@@ -304,15 +293,6 @@ export function storyShapeErrors(brief: Pick<Brief, 'plot' | 'timeline'>): Brief
     if (at < last) errors.push({ section: 'plot', message: `beat ${i + 1} (${p.beat}) comes after ${PLOT_BEATS[last]}: keep SETUP → TRIGGER → CONFLICT → RESPONSE → OPEN order` });
     last = Math.max(last, at);
     if (p.beat !== 'OPEN' && p.ids.length === 0) errors.push({ section: 'plot', message: `beat ${i + 1} (${p.beat}) cites no fact IDs` });
-  }
-  let prev = '';
-  for (const [i, t] of (brief.timeline ?? []).entries()) {
-    if (t.ids.length === 0) errors.push({ section: 'timeline', message: `entry ${i + 1} cites no fact IDs` });
-    const d = t.date && /^\d{4}(-\d{2}(-\d{2})?)?/.exec(t.date)?.[0];
-    if (d) {
-      if (prev && d < prev.slice(0, d.length)) errors.push({ section: 'timeline', message: `entry ${i + 1} (${t.date}) is before an earlier entry: oldest first` });
-      prev = d;
-    }
   }
   return errors;
 }

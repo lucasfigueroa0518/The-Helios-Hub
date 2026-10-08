@@ -7,19 +7,14 @@
  * Static string: embedding it keeps the cached prompt prefix stable.
  *
  * The derived banned-phrase lists are code checks and come back in M7 (mechanical guarantees).
- *
- * Copy overhaul (Tommy, 2026-10-07): three lines changed to fit social copy
- * and to settle two contradictions (shared-blocks doc §1): "for the feed";
- * the cover rule wins over "use real names" on the cover; short sentences are
- * the default on slides. Every banned word and construction is unchanged.
  */
-export const VOICE_BLOCK = `Direct, dry, confident. A sharp editor writing for the feed, not a press release.
+export const VOICE_BLOCK = `Direct, dry, confident. A sharp editor, not a press release.
 
 Write the way a person talks:
-- Use real names. "Norland Labs says," not "the company says" when you can name it. On the cover, the cover rule wins: a person who isn't widely known is introduced by role or country first.
+- Use real names. "Norland Labs says," not "the company says" when you can name it.
 - Say who did what. "Norland Labs tested the software," not "the software was tested."
 - Read every line aloud in your head. If nobody would say it in a normal voice, rewrite it.
-- Short sentences are the default on slides. Vary the rhythm with the occasional longer one; never three long ones in a row.
+- Vary sentence length. In the caption, three short sentences in a row is too many; on a slide, one or two short sentences is normal.
 - Don't open two slides the same way.
 
 Never use:

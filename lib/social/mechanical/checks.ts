@@ -146,11 +146,12 @@ export type CheckId = 'C1' | 'C2' | 'C3' | 'C4' | 'C5' | 'C6' | 'C7' | 'C8';
 export type Failure = { id: CheckId; where: string; detail: string };
 
 /**
- * Spec §6 #7 LIMITS (characters). Copy overhaul (Tommy, 2026-10-07): half
- * the words. Headline and body share one budget (`slide`), elastic within
- * limits: the headline 15–60, the body up to 130, together at most 155.
+ * Spec §6 #7 LIMITS (characters). Copy budget (Tommy, 2026-10-08): the slide
+ * copy drops 40%. Headline and body share one budget (`slide`, 60% of the old
+ * 60 + 220), elastic within limits: the headline 15–45, the body up to 140,
+ * together at most 168. Cover, quote and caption stay.
  */
-export const LIMITS = { cover: 75, headline: 60, headlineMin: 15, body: 130, slide: 155, quote: 120, caption: 2200 } as const;
+export const LIMITS = { cover: 90, headline: 45, headlineMin: 15, body: 140, slide: 168, quote: 140, caption: 2200 } as const;
 
 /** C1: character limits, with the exact overage (spec §6: never trimmed). */
 export function checkLimits(d: FilledDraft): Failure[] {

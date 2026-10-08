@@ -18,13 +18,13 @@
 **New:** identical, byte for byte. No differences.
 
 ```
-Direct, dry, confident. A sharp editor writing for the feed, not a press release.
+Direct, dry, confident. A sharp editor, not a press release.
 
 Write the way a person talks:
-- Use real names. "Norland Labs says," not "the company says" when you can name it. On the cover, the cover rule wins: a person who isn't widely known is introduced by role or country first.
+- Use real names. "Norland Labs says," not "the company says" when you can name it.
 - Say who did what. "Norland Labs tested the software," not "the software was tested."
 - Read every line aloud in your head. If nobody would say it in a normal voice, rewrite it.
-- Short sentences are the default on slides. Vary the rhythm with the occasional longer one; never three long ones in a row.
+- Vary sentence length. In the caption, three short sentences in a row is too many; on a slide, one or two short sentences is normal.
 - Don't open two slides the same way.
 
 Never use:
@@ -88,7 +88,7 @@ Not allowed: repeating a competitor's prior announcement as coverage of this sto
 
 ## Glossing (advisory, not required)
 
-A term needs a gloss only if the slide doesn't make sense without it. If a gloss would eat more than about a fifth of a slide's body, move the definition to the caption instead of shrinking the fact. Glosses always come from the TERMS list in the brief; never invent a definition. TERMS explanations count as sourced by the Fact-checker.
+A term needs a gloss only if the slide doesn't make sense without it. If a gloss would eat more than about a fifth of a slide's body, move the definition to the caption or a dedicated slide instead of shrinking the fact. Glosses always come from the TERMS list in the brief; never invent a definition. TERMS explanations count as sourced by the Fact-checker.
 ```
 
 ---
@@ -123,8 +123,6 @@ The prompts file says: "Where a tested rule repeats one in RULES_BLOCK, keep one
 
 The §2 text above is the proposal as reviewed. The implemented block is that text with these decisions applied.
 
-## Copy overhaul (Tommy, 2026-10-07)
+## 5. Copy budget (Tommy, 2026-10-08)
 
-Edited in place above, to settle contradictions and fit social copy (plan `plans/2026-10-07-copy-overhaul.md`, B4, B5, B8):
-- VOICE_BLOCK: "A sharp editor writing for the feed"; the cover rule wins over "use real names" on the cover; "Short sentences are the default on slides…" replaces "Vary sentence length. Three short sentences in a row is too many." Every banned word and construction is unchanged.
-- Glossing: a long gloss moves to the caption only (no longer "or a dedicated slide").
+The voice line on sentence length (§1) now reads: "Vary sentence length. In the caption, three short sentences in a row is too many; on a slide, one or two short sentences is normal." The old line pushed slide bodies toward longer sentences, against the 40% shorter slide budget (prompts file §8).

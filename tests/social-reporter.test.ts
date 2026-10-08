@@ -64,7 +64,7 @@ test('brief check: sources exist, IDs unique, cited IDs exist', () => {
 test('submit_brief schema mirrors the prompt sections; every object closed and fully required', () => {
   const schema = BRIEF_SCHEMA as { properties: Record<string, any>; required: string[]; additionalProperties: boolean };
   assert.deepEqual(Object.keys(schema.properties), [
-    'single_story', 'the_news', 'why_it_matters', 'timeline', 'plot', 'tensions', 'facts', 'background', 'quotes', 'numbers',
+    'single_story', 'the_news', 'why_it_matters', 'plot', 'tensions', 'facts', 'background', 'quotes', 'numbers',
     'terms', 'subjects', 'events', 'article_photos', 'not_answered', 'sources', 'fetch_failures',
   ]);
   assert.equal(schema.additionalProperties, false);

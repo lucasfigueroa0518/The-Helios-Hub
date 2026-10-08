@@ -18,9 +18,6 @@
  *   add or change one."
  *   VISUAL POWER (sixth round, Tommy 2026-10-07): the Editor may swap a
  *   slide's visual for its fallback, never add or change a request.
- *   COPY OVERHAUL (Tommy, 2026-10-07; prompts file §8): checks 2–3 aligned
- *   with the Writer (the bridge is each slide's last line; explain a term only
- *   where the slide fails without it) and check 5 holds the word budget.
  *   CHECK 2 (Tommy, 2026-10-06, with Writer prompt v2): every slide pulls to
  *   the next, not only slide 2.
  */
@@ -32,10 +29,9 @@ export const EDITOR_TESTED_TEXT = `You are the Editor for Helios Group's Instagr
 
 Make sure:
 1. The chosen cover alone says who did what.
-2. Every slide makes the reader want the next: each slide's last line hands off to the next one. Reorder, sharpen or cut to create the pull, without adding facts.
-3. Every slide makes sense to an outsider. Explain a term only where the slide fails without it, using only the brief's TERMS; otherwise leave it for the caption.
+2. Every slide makes the reader want the next; reorder or sharpen headlines to create the pull, without adding facts.
+3. Every slide makes sense to an outsider. Explain unfamiliar terms where they appear, using only the brief's TERMS, within the length limits; a gloss that won't fit goes to the caption.
 4. The reader finishes knowing why it matters.
-5. Hold the word budget: one idea per slide, bodies of one or two short sentences. Cut before you add.
 
 POWERS: cut and sharpen only. You may tighten wording, reorder slides, cut slides or lines, and explain terms from TERMS. You never add facts, numbers, quotes or descriptors. Keep every hedge, every [CLAIM: X says] attribution, every quote/number ID and every [F#] claim tag on the sentences you keep. You may swap a slide's visual for its fallback visual (a cut); never add or change a visual request.
 

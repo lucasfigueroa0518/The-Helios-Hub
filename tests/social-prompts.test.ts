@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { COVER_RULE, KINDS_RULE, LENGTH_RULE, PUNCHY_RULE, RULES_BLOCK, TESTED_COVER_LINE, TESTED_IMAGE_RULE, TESTED_KINDS_LINE, TESTED_LENGTH_LINE, TESTED_PUNCHY_LINE, TESTED_WRITER_RULES, VISUAL_RULE, WRITER_RULES, renderRulesFor } from '@/lib/social/prompts/rules-block';
+import { KINDS_RULE, LENGTH_RULE, PUNCHY_RULE, RULES_BLOCK, TESTED_IMAGE_RULE, TESTED_KINDS_LINE, TESTED_LENGTH_LINE, TESTED_PUNCHY_LINE, TESTED_WRITER_RULES, VISUAL_RULE, WRITER_RULES, renderRulesFor } from '@/lib/social/prompts/rules-block';
 import { REPORTER_SYSTEM, reporterUserMessage } from '@/lib/social/reporter/prompt';
 import { VOICE_BLOCK } from '@/lib/social/prompts/voice-block';
 
@@ -32,13 +32,11 @@ test('RULES_BLOCK carries the tested Writer rules word for word', () => {
   const [visualRule, kindsRule] = codeBlocks(PROMPTS, '- **Sixth round (Tommy, 2026-10-07');
   assert.equal(VISUAL_RULE, visualRule);
   assert.equal(KINDS_RULE, kindsRule);
-  // Copy overhaul (2026-10-07): the cover, punchy and length lines, word for word from the prompts file §8.
-  const [coverRule, punchyRule, lengthRule] = codeBlocks(PROMPTS, '- **Copy overhaul, Writer rule lines');
-  assert.deepEqual([COVER_RULE, PUNCHY_RULE, LENGTH_RULE], [coverRule, punchyRule, lengthRule]);
-  for (const line of [TESTED_IMAGE_RULE, TESTED_KINDS_LINE, TESTED_COVER_LINE, TESTED_PUNCHY_LINE, TESTED_LENGTH_LINE]) assert.ok(TESTED_WRITER_RULES.includes(line), line);
-  // The VISUAL rule moved to its own "Photos and icons" section (copy overhaul): out of the rule list.
-  assert.equal(WRITER_RULES, TESTED_WRITER_RULES.replace(`${TESTED_IMAGE_RULE}\n`, '').replace(TESTED_KINDS_LINE, KINDS_RULE).replace(TESTED_COVER_LINE, COVER_RULE).replace(TESTED_PUNCHY_LINE, PUNCHY_RULE).replace(TESTED_LENGTH_LINE, LENGTH_RULE));
-  assert.ok(!WRITER_RULES.includes(VISUAL_RULE));
+  assert.ok(TESTED_WRITER_RULES.includes(TESTED_IMAGE_RULE) && TESTED_WRITER_RULES.includes(TESTED_KINDS_LINE));
+  // Copy budget (2026-10-08): the punchy and length lines, word for word from the prompts file §8.
+  assert.deepEqual([PUNCHY_RULE, LENGTH_RULE], codeBlocks(PROMPTS, '- **Copy budget, Writer rule lines').slice(0, 2));
+  for (const line of [TESTED_PUNCHY_LINE, TESTED_LENGTH_LINE]) assert.ok(TESTED_WRITER_RULES.includes(line), line);
+  assert.equal(WRITER_RULES, TESTED_WRITER_RULES.replace(TESTED_IMAGE_RULE, VISUAL_RULE).replace(TESTED_KINDS_LINE, KINDS_RULE).replace(TESTED_PUNCHY_LINE, PUNCHY_RULE).replace(TESTED_LENGTH_LINE, LENGTH_RULE));
   assert.ok(RULES_BLOCK.includes(WRITER_RULES) && !RULES_BLOCK.includes('symbolic'));
 });
 
@@ -58,7 +56,7 @@ test("RULES_BLOCK applies Tommy's review decisions (a)-(c)", () => {
 test('renderRulesFor: the Writer and Editor are told the M7 checks C1–C5 (f); other stages get nothing', () => {
   for (const stage of ['writer', 'editor'] as const) {
     const r = renderRulesFor(stage);
-    for (const s of ['cover ≤75', 'headline 15–60', 'body ≤130, together ≤155', 'Quotation marks only', 'banned words', 'No hashtags', 'At most 2 background slides']) assert.ok(r.includes(s), `${stage}: ${s}`);
+    for (const s of ['headline 15–45', 'body ≤140, together ≤168', 'Quotation marks only', 'banned words', 'No hashtags', 'At most 2 background slides']) assert.ok(r.includes(s), `${stage}: ${s}`);
   }
   for (const stage of ['reporter', 'fact-checker'] as const) assert.equal(renderRulesFor(stage), '');
 });
@@ -95,9 +93,9 @@ test('Reporter prompt = tested text, STORY line moved to the user message, plus 
     .replace('SUBJECTS: S1, S2, … people/companies/products in the story (with role)', 'SUBJECTS: S1, S2, … people/companies/products in the story (with role), each marked person or organization (a product counts as an organization)')
     // Source kind (2026-10-06).
     .replace('SOURCES: outlet, date, URL (only ones you opened);', 'SOURCES: outlet, date, URL (only ones you opened), kind (original, official or aggregator);')
-    // Copy overhaul (2026-10-07): the story shape, word for word from the prompts file §8.
-    .replace('Leave everything else out.\n', `Leave everything else out.\n${codeBlocks(PROMPTS, '- **Copy overhaul, Reporter')[0]}\n`)
-    .replace('WHY IT MATTERS (sourced only): 1–2 bullets with IDs\n', `WHY IT MATTERS (sourced only): 1–2 bullets with IDs\n${codeBlocks(PROMPTS, '- **Copy overhaul, Reporter')[1]}\n`);
+    // Story shape (2026-10-08): PLOT and TENSIONS, word for word from the prompts file §8.
+    .replace('Leave everything else out.\n', `Leave everything else out.\n${codeBlocks(PROMPTS, '- **Story shape, Reporter')[0]}\n`)
+    .replace('WHY IT MATTERS (sourced only): 1–2 bullets with IDs\n', `WHY IT MATTERS (sourced only): 1–2 bullets with IDs\n${codeBlocks(PROMPTS, '- **Story shape, Reporter')[1]}\n`);
   assert.equal(REPORTER_SYSTEM, expected);
   assert.equal(
     reporterUserMessage({ story: 'Trump unveils his new Super Intelligence Force', startingSources: ['https://a.example/1', 'https://b.example/2'], today: 'October 4, 2026' }),
