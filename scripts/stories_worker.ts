@@ -1,7 +1,8 @@
 /**
- * The Stories worker (plan §4, M8). In isolation it runs on Lucas's Mac
- * (S-30, S-35): `npm run stories:worker` polls every 15 seconds; `--once`
- * runs one pass. Mirrors scripts/reels_worker.ts (SIGTERM finishes the pass).
+ * The Stories worker (plan §4, M8). Runs as the `helios-stories` systemd unit
+ * on helios-social-worker (docs/social-overnight.md); locally `npm run
+ * stories:worker` polls every 15 seconds and `--once` runs one pass. Mirrors
+ * scripts/reels_worker.ts (SIGTERM finishes the pass).
  *
  *   npm run stories:worker
  *   npm run stories:run                        one pass

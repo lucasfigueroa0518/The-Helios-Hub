@@ -35,7 +35,7 @@ by the block Kling received.
 | Piece | Where |
 |---|---|
 | Review page `/reels` | Vercel, with the rest of the app |
-| Nightly run | GCP VM `helios-orch-worker`, systemd unit **`helios-reels`** |
+| Nightly run | GCP VM `helios-social-worker`, systemd unit **`helios-reels`** (moved off `helios-orch-worker`; docs/social-overnight.md) |
 | Storage | Existing Supabase Postgres, schema `reels` |
 
 The app never executes a run itself. **Run now** on `/reels` inserts a row with
@@ -55,7 +55,7 @@ npm run db:reels                        # create the reels schema
 Verify:
 
 ```bash
-gcloud compute ssh helios-orch-worker --zone=us-west1-a \
+gcloud compute ssh helios-social-worker --zone=us-west1-a \
   --command='sudo systemctl status helios-reels --no-pager'
 ```
 
@@ -144,7 +144,7 @@ Measured on the first nights: about **$0.02 of Jev** for a full night (roughly
 story**. `web-search-v2` writes two stories a night (D-236), so that part of
 the bill is about twice the single-story nights.
 
-The spend watch is **$50/month** (D-023). It is checked once before a run
+The spend watch is **$100/month** (`MONTHLY_WATCH_USD` in `lib/reels/config.ts`; D-023 set the first $50). It is checked once before a run
 starts: at or over the ceiling the run records `skipped` and does nothing. A run
 already under way is never aborted partway, because a half-ingested night is
 worse than a slightly expensive one.
@@ -350,9 +350,7 @@ that are still due. The nightly run drains up to 200.
 under `lib/reels/**` or `scripts/reels_worker.ts` means redeploying:
 
 ```bash
-./scripts/gcp/deploy-worker-code.sh     # new code (restarts helios-worker)
-gcloud compute ssh helios-orch-worker --zone=us-west1-a \
-  --command='sudo systemctl restart helios-reels'
+./scripts/gcp/deploy-social-worker.sh   # new code; restarts every social unit (D34)
 ```
 
 A Vercel deploy updates the `/reels` page only, never the nightly run.
