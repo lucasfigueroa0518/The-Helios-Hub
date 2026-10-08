@@ -1,5 +1,5 @@
-import { REEL_ATTEMPTS, REEL_INSIGHTS, REEL_SCHEDULE } from '@/lib/reels/spine-tables';
 import type { HubQuery } from '@/lib/social-hub/db';
+import { forVertical, insightRows, type SpineRead } from '@/lib/social-hub/queries/spine';
 
 /**
  * Trial Reels reads (SELECT only). The attempt query copies the shape of
@@ -120,55 +120,24 @@ const SCORE_LATERAL = `
           LIMIT 1
        ) src ON true`;
 
-export const REEL_ATTEMPTS_SQL = `
-SELECT a.id AS attempt_id, a.status, a.trigger, a.media_id, a.post_idea_id, a.video_job_id,
-       a.requested_at::text AS requested_at, a.finished_at::text AS finished_at,
-       a.permalink, a.error, a.caption, a.song_title, a.song_artist, a.graduation_strategy,
+/**
+ * The content behind each (idea, video) the spine read names (D48): the video
+ * and its visual, and the idea's score, copy and headline, preferring the
+ * video's own slate as before.
+ */
+export const REEL_FACTS_SQL = `
+SELECT r.idea::text AS post_idea_id, r.video::text AS video_job_id,
        left(v.motion_prompt, 500) AS motion_prompt, v.video_storage_path,
-       v.finished_at::text AS video_finished_at, v.slate_id AS video_slate_id,
-       vis.render AS visual_render, song.audio_type, song.genre,
-       sched.id AS schedule_id, sched.slot AS schedule_slot,
-       sched.publish_at::text AS schedule_publish_at, COALESCE(sched.approved_at, ap.decided_at)::text AS approved_at,
+       v.finished_at::text AS video_finished_at, v.slate_id AS video_slate_id, vis.render AS visual_render,
        score.chosen_framework, score.chosen_bucket, score.blockbuster, score.net, score.origin,
        copy.on_screen_copy, copy.full_story_below, src.headline
-  FROM ${REEL_ATTEMPTS} a
-  LEFT JOIN social_hub.approvals ap ON ap.content_item_id = a.content_item_id AND ap.decision = 'approved'
-  LEFT JOIN reels.video_jobs v ON v.id = a.video_job_id
+  FROM unnest($1::uuid[], $2::uuid[]) AS r(idea, video)
+  LEFT JOIN reels.video_jobs v ON v.id = r.video
   LEFT JOIN reels.visual_jobs vis ON vis.id = v.visual_job_id
-  LEFT JOIN reels.songs song ON song.audio_id = a.audio_id
-  LEFT JOIN LATERAL (
-    SELECT id, slot, publish_at, approved_at
-      FROM ${REEL_SCHEDULE} x
-     WHERE publish_attempt_id = a.id
-     ORDER BY CASE status WHEN 'published' THEN 0 ELSE 1 END, publish_at DESC
-     LIMIT 1
-  ) sched ON true
-  ${SCORE_LATERAL.replaceAll('%IDEA%', 'a.post_idea_id')}
- WHERE a.trigger <> 'mix_test'
- ORDER BY a.requested_at DESC`;
+  ${SCORE_LATERAL.replaceAll('%IDEA%', 'r.idea')}`;
 
-/** Slots with no attempt yet: scheduled, cancelled-unapproved, or failed before a try. */
-export const REEL_SCHEDULES_SQL = `
-SELECT ps.id AS schedule_id, ps.post_idea_id, ps.video_job_id, ps.ny_date::text AS ny_date, ps.slot,
-       ps.publish_at::text AS publish_at, ps.status, ps.source, ps.error,
-       COALESCE(ps.approved_at, ap.decided_at)::text AS approved_at, ps.created_at::text AS created_at,
-       v.video_storage_path, v.finished_at::text AS video_finished_at, v.slate_id AS video_slate_id,
-       score.chosen_framework, score.chosen_bucket, score.net,
-       copy.on_screen_copy, src.headline
-  FROM ${REEL_SCHEDULE} ps
-  LEFT JOIN social_hub.approvals ap ON ap.content_item_id = ps.content_item_id AND ap.decision = 'approved'
-  LEFT JOIN reels.video_jobs v ON v.id = ps.video_job_id
-  ${SCORE_LATERAL.replaceAll('%IDEA%', 'ps.post_idea_id')}
- WHERE ps.publish_attempt_id IS NULL
-   -- A slot marked published with no attempt is the "already published" case; the attempt row is the post.
-   AND ps.status <> 'published'
- ORDER BY ps.publish_at DESC`;
-
-export const REEL_INSIGHTS_SQL = `
-SELECT media_id, ny_date::text AS ny_date, views, reach, likes, comments, saved, shares, reposts,
-       total_interactions, avg_watch_time_ms, total_watch_time_ms, skip_rate
-  FROM ${REEL_INSIGHTS} i
- ORDER BY media_id, ny_date`;
+/** Each posted song's type and genre (attempts carry the audio id in their payload). */
+export const REEL_SONGS_SQL = `SELECT audio_id, audio_type, genre FROM reels.songs WHERE audio_id = ANY($1::text[])`;
 
 /** The idea pool from the newest slate (spec §7 Ideas): scores as the night ranked them. */
 export const REEL_IDEAS_SQL = `
@@ -196,16 +165,13 @@ SELECT s.post_idea_id, src.headline, s.net, s.rank, s.selected, s.origin, latest
  ORDER BY s.rank NULLS LAST, s.net DESC NULLS LAST
  LIMIT 200`;
 
-/** Source articles behind every idea that reached a slot or an attempt (spec §7 Sources). */
+/** Source articles behind every idea that reached a slot or an attempt (spec §7 Sources); the ideas come from the spine read. */
 export const REEL_SOURCES_SQL = `
 SELECT DISTINCT m.post_idea_id, s.canonical_url AS url, s.headline
   FROM reels.post_idea_members m
   JOIN reels.sources s ON s.id = m.source_id
  WHERE m.role <> 'merged_duplicate'
-   AND m.post_idea_id IN (
-     SELECT post_idea_id FROM ${REEL_ATTEMPTS} a WHERE trigger <> 'mix_test'
-     UNION SELECT post_idea_id FROM ${REEL_SCHEDULE} ps
-   )`;
+   AND m.post_idea_id = ANY($1::uuid[])`;
 
 export const REEL_REQUIRE_APPROVAL_SQL = `SELECT value FROM reels.settings WHERE key = 'require_approval'`;
 
@@ -215,19 +181,64 @@ export function settingIsOn(rows: Array<{ value: unknown }>): boolean {
   return value !== false && value !== 'false';
 }
 
-export async function readReels(q: HubQuery): Promise<ReelsRead> {
-  const [attempts, schedules, insights, ideas, sources, approval] = await Promise.all([
-    q<ReelAttemptRow>(REEL_ATTEMPTS_SQL),
-    q<ReelScheduleRow>(REEL_SCHEDULES_SQL),
-    q<InsightRow>(REEL_INSIGHTS_SQL),
+type ReelFacts = Pick<ReelAttemptRow,
+  'motion_prompt' | 'video_storage_path' | 'video_finished_at' | 'video_slate_id' | 'visual_render' | 'chosen_framework' | 'chosen_bucket'
+  | 'blockbuster' | 'net' | 'origin' | 'on_screen_copy' | 'full_story_below' | 'headline'> & { post_idea_id: string; video_job_id: string | null };
+
+const NO_FACTS: Omit<ReelFacts, 'post_idea_id' | 'video_job_id'> = {
+  motion_prompt: null, video_storage_path: null, video_finished_at: null, video_slate_id: null, visual_render: null, chosen_framework: null,
+  chosen_bucket: null, blockbuster: null, net: null, origin: null, on_screen_copy: null, full_story_below: null, headline: null,
+};
+
+const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
+
+export async function readReels(q: HubQuery, spine: SpineRead): Promise<ReelsRead> {
+  const mine = forVertical(spine, 'reels');
+  // The (idea, video) pairs the spine rows name, once each.
+  const pairs = new Map<string, { idea: string; video: string | null }>();
+  for (const r of [...mine.attempts, ...mine.schedules]) {
+    if (r.idea_ref) pairs.set(`${r.idea_ref}|${r.content_ref ?? ''}`, { idea: r.idea_ref, video: r.content_ref });
+  }
+  const list = [...pairs.values()];
+  const ideaIds = [...new Set(list.map((p) => p.idea))];
+  const audioIds = [...new Set(mine.attempts.map((a) => str(a.payload?.audio_id)).filter((x): x is string => Boolean(x)))];
+  const [facts, songs, ideas, sources, approval] = await Promise.all([
+    q<ReelFacts>(REEL_FACTS_SQL, [list.map((p) => p.idea), list.map((p) => p.video)]),
+    q<{ audio_id: string; audio_type: string | null; genre: string | null }>(REEL_SONGS_SQL, [audioIds]),
     q<ReelIdeaRow>(REEL_IDEAS_SQL),
-    q<ReelSourceRow>(REEL_SOURCES_SQL),
+    q<ReelSourceRow>(REEL_SOURCES_SQL, [ideaIds]),
     q<{ value: unknown }>(REEL_REQUIRE_APPROVAL_SQL),
   ]);
+  const factsOf = new Map(facts.rows.map((f) => [`${f.post_idea_id}|${f.video_job_id ?? ''}`, f]));
+  const songOf = new Map(songs.rows.map((s) => [s.audio_id, s]));
+  const fact = (idea: string | null, video: string | null) => {
+    const { post_idea_id: _idea, video_job_id: _video, ...rest } = factsOf.get(`${idea}|${video ?? ''}`) ?? { post_idea_id: '', video_job_id: null, ...NO_FACTS };
+    return rest;
+  };
   return {
-    attempts: attempts.rows,
-    schedules: schedules.rows,
-    insights: insights.rows,
+    // Lifecycle from the shared spine read (D48); content from the facts above.
+    attempts: mine.attempts.map((a) => {
+      const song = songOf.get(str(a.payload?.audio_id) ?? '');
+      return {
+        attempt_id: a.attempt_id, status: a.status, trigger: a.trigger, media_id: a.media_id,
+        post_idea_id: a.idea_ref ?? '', video_job_id: a.content_ref,
+        requested_at: a.requested_at, finished_at: a.finished_at, permalink: a.permalink, error: a.error, caption: a.caption,
+        song_title: str(a.payload?.song_title), song_artist: str(a.payload?.song_artist), graduation_strategy: str(a.payload?.graduation_strategy),
+        audio_type: song?.audio_type ?? null, genre: song?.genre ?? null,
+        schedule_id: a.schedule_id, schedule_slot: a.slot, schedule_publish_at: a.publish_at, approved_at: a.approved_at,
+        ...fact(a.idea_ref, a.content_ref),
+      };
+    }),
+    schedules: mine.schedules.map((r) => {
+      const f = fact(r.idea_ref, r.content_ref);
+      return {
+        schedule_id: r.schedule_id, post_idea_id: r.idea_ref ?? '', video_job_id: r.content_ref, ny_date: r.ny_date, slot: r.slot,
+        publish_at: r.publish_at, status: r.status, source: r.source, error: r.error, approved_at: r.approved_at, created_at: r.created_at,
+        video_storage_path: f.video_storage_path, video_finished_at: f.video_finished_at, video_slate_id: f.video_slate_id,
+        chosen_framework: f.chosen_framework, chosen_bucket: f.chosen_bucket, net: f.net, on_screen_copy: f.on_screen_copy, headline: f.headline,
+      };
+    }),
+    insights: insightRows(mine.insights, 'reels'),
     ideas: ideas.rows,
     sources: sources.rows,
     requireApproval: settingIsOn(approval.rows),

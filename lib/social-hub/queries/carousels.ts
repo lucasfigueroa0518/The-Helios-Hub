@@ -1,12 +1,13 @@
 import type { HubQuery } from '@/lib/social-hub/db';
 import { settingIsOn, type InsightRow } from '@/lib/social-hub/queries/reels';
+import { forVertical, insightRows, type SpineRead } from '@/lib/social-hub/queries/spine';
 
 /**
  * Carousel reads (SELECT only). Content lives in schema `social`: post idea =
  * news story (`story_id`); content version = a `social.posts` row. Only
  * `pipeline` rows count (dev renders never post; db/social_schema.sql).
- * Slots, attempts, approvals and insights live on the lifecycle spine
- * (`social_hub`, vertical 'carousels', D36); the row shapes are unchanged.
+ * Slots, attempts, approvals and insights come from the shared spine read
+ * (queries/spine.ts, D48), mapped to the row shapes below.
  */
 
 export type CarouselPostRow = {
@@ -97,40 +98,6 @@ SELECT p.id AS post_id, p.run_id, p.slug, p.story_id, p.title, p.status, p.capti
  WHERE p.origin = 'pipeline'
  ORDER BY p.created_at DESC`;
 
-export const CAROUSEL_ATTEMPTS_SQL = `
-SELECT a.id AS attempt_id, ci.native_ref AS post_id, a.status, a.trigger,
-       a.requested_at::text AS requested_at, a.finished_at::text AS finished_at,
-       a.media_id, a.permalink, a.error,
-       s.id AS schedule_id, s.slot, s.publish_at::text AS publish_at, ap.decided_at::text AS approved_at
-  FROM social_hub.publish_attempts a
-  JOIN social_hub.content_items ci ON ci.id = a.content_item_id
-  LEFT JOIN social_hub.approvals ap ON ap.content_item_id = a.content_item_id AND ap.decision = 'approved'
-  LEFT JOIN LATERAL (
-    SELECT id, slot, publish_at FROM social_hub.schedule
-     WHERE publish_attempt_id = a.id
-     ORDER BY publish_at DESC LIMIT 1
-  ) s ON true
- WHERE a.vertical = 'carousels'
- ORDER BY a.requested_at DESC`;
-
-export const CAROUSEL_SCHEDULES_SQL = `
-SELECT s.id AS schedule_id, ci.native_ref AS post_id, s.ny_date::text AS ny_date, s.slot, s.publish_at::text AS publish_at,
-       s.status, s.source, s.error, ap.decided_at::text AS approved_at
-  FROM social_hub.schedule s
-  JOIN social_hub.content_items ci ON ci.id = s.content_item_id
-  LEFT JOIN social_hub.approvals ap ON ap.content_item_id = s.content_item_id AND ap.decision = 'approved'
- WHERE s.vertical = 'carousels'
-   AND s.publish_attempt_id IS NULL
-   -- A slot marked published with no attempt is the "already published" case; the attempt row is the post.
-   AND s.status <> 'published'
- ORDER BY s.publish_at DESC`;
-
-export const CAROUSEL_INSIGHTS_SQL = `
-SELECT media_id, ny_date::text AS ny_date, views, reach, likes, comments, saved, shares, total_interactions, follows, profile_visits
-  FROM social_hub.media_insights
- WHERE vertical = 'carousels'
- ORDER BY media_id, ny_date`;
-
 /** Candidate stories from the newest daily run's shortlist, scored by Jev (probSum). */
 export const CAROUSEL_IDEAS_SQL = `
 WITH latest AS (
@@ -154,20 +121,26 @@ SELECT c->>'id' AS story_id,
 
 export const CAROUSEL_REQUIRE_APPROVAL_SQL = `SELECT value FROM social.settings WHERE key = 'require_approval'`;
 
-export async function readCarousels(q: HubQuery): Promise<CarouselsRead> {
-  const [posts, attempts, schedules, insights, ideas, approval] = await Promise.all([
+export async function readCarousels(q: HubQuery, spine: SpineRead): Promise<CarouselsRead> {
+  const [posts, ideas, approval] = await Promise.all([
     q<CarouselPostRow>(CAROUSEL_POSTS_SQL),
-    q<CarouselAttemptRow>(CAROUSEL_ATTEMPTS_SQL),
-    q<CarouselScheduleRow>(CAROUSEL_SCHEDULES_SQL),
-    q<InsightRow>(CAROUSEL_INSIGHTS_SQL),
     q<CarouselIdeaRow>(CAROUSEL_IDEAS_SQL),
     q<{ value: unknown }>(CAROUSEL_REQUIRE_APPROVAL_SQL),
   ]);
+  const mine = forVertical(spine, 'carousels');
   return {
     posts: posts.rows,
-    attempts: attempts.rows,
-    schedules: schedules.rows,
-    insights: insights.rows,
+    // Slots, attempts and insights come from the shared spine read (D48); the post is the item.
+    attempts: mine.attempts.filter((a) => a.content_ref).map((a) => ({
+      attempt_id: a.attempt_id, post_id: a.content_ref!, status: a.status, trigger: a.trigger,
+      requested_at: a.requested_at, finished_at: a.finished_at, media_id: a.media_id, permalink: a.permalink, error: a.error,
+      schedule_id: a.schedule_id, slot: a.slot, publish_at: a.publish_at, approved_at: a.approved_at,
+    })),
+    schedules: mine.schedules.filter((r) => r.content_ref).map((r) => ({
+      schedule_id: r.schedule_id, post_id: r.content_ref!, ny_date: r.ny_date, slot: r.slot, publish_at: r.publish_at,
+      status: r.status, source: r.source, error: r.error, approved_at: r.approved_at,
+    })),
+    insights: insightRows(mine.insights, 'carousels'),
     ideas: ideas.rows,
     requireApproval: settingIsOn(approval.rows),
   };

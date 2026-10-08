@@ -1,4 +1,5 @@
 import type { HubQuery } from '@/lib/social-hub/db';
+import { forVertical, insightRows, type SpineRead } from '@/lib/social-hub/queries/spine';
 import { settingIsOn, type InsightRow } from '@/lib/social-hub/queries/reels';
 
 /** Explainer Reels reads (SELECT only). Post = render job; idea = topic (spec §9a). */
@@ -101,40 +102,6 @@ SELECT j.id AS job_id, j.topic_id, j.status, j.trigger, j.mode, j.spend_usd,
   ) vid ON true
  ORDER BY j.seq DESC`;
 
-// Slots, attempts and insights live on the lifecycle spine (social_hub, vertical 'explainers', D36).
-export const EXPLAINER_ATTEMPTS_SQL = `
-SELECT a.id AS attempt_id, ci.native_ref AS job_id, a.status, a.trigger,
-       a.requested_at::text AS requested_at, a.finished_at::text AS finished_at,
-       a.media_id, a.permalink, a.error, a.caption,
-       s.id AS schedule_id, s.slot, s.publish_at::text AS publish_at
-  FROM social_hub.publish_attempts a
-  JOIN social_hub.content_items ci ON ci.id = a.content_item_id
-  LEFT JOIN LATERAL (
-    SELECT id, slot, publish_at FROM social_hub.schedule
-     WHERE publish_attempt_id = a.id
-     ORDER BY publish_at DESC LIMIT 1
-  ) s ON true
- WHERE a.vertical = 'explainers'
- ORDER BY a.requested_at DESC`;
-
-export const EXPLAINER_SCHEDULES_SQL = `
-SELECT s.id AS schedule_id, ci.native_ref AS job_id, s.ny_date::text AS ny_date, s.slot, s.publish_at::text AS publish_at,
-       s.status, s.source, s.error
-  FROM social_hub.schedule s
-  JOIN social_hub.content_items ci ON ci.id = s.content_item_id
- WHERE s.vertical = 'explainers'
-   AND s.publish_attempt_id IS NULL
-   -- A slot marked published with no attempt is the "already published" case; the attempt row is the post.
-   AND s.status <> 'published'
- ORDER BY s.publish_at DESC`;
-
-export const EXPLAINER_INSIGHTS_SQL = `
-SELECT media_id, ny_date::text AS ny_date, views, reach, likes, comments, saved, shares,
-       total_interactions, avg_watch_time_ms, total_watch_time_ms, skip_rate
-  FROM social_hub.media_insights
- WHERE vertical = 'explainers'
- ORDER BY media_id, ny_date`;
-
 /** The topic pool (spec §7 Ideas): every live topic with its score and content stock. */
 export const EXPLAINER_TOPICS_SQL = `
 SELECT t.id AS topic_id, t.title, t.scope, t.status, t.origin, t.weighted_score,
@@ -152,20 +119,26 @@ SELECT t.id AS topic_id, t.title, t.scope, t.status, t.origin, t.weighted_score,
 
 export const EXPLAINER_REQUIRE_APPROVAL_SQL = `SELECT value FROM explainers.settings WHERE key = 'require_approval'`;
 
-export async function readExplainers(q: HubQuery): Promise<ExplainersRead> {
-  const [jobs, attempts, schedules, insights, topics, approval] = await Promise.all([
+export async function readExplainers(q: HubQuery, spine: SpineRead): Promise<ExplainersRead> {
+  const [jobs, topics, approval] = await Promise.all([
     q<ExplainerJobRow>(EXPLAINER_JOBS_SQL),
-    q<ExplainerAttemptRow>(EXPLAINER_ATTEMPTS_SQL),
-    q<ExplainerScheduleRow>(EXPLAINER_SCHEDULES_SQL),
-    q<InsightRow>(EXPLAINER_INSIGHTS_SQL),
     q<ExplainerTopicRow>(EXPLAINER_TOPICS_SQL),
     q<{ value: unknown }>(EXPLAINER_REQUIRE_APPROVAL_SQL),
   ]);
+  const mine = forVertical(spine, 'explainers');
   return {
     jobs: jobs.rows,
-    attempts: attempts.rows,
-    schedules: schedules.rows,
-    insights: insights.rows,
+    // Slots, attempts and insights come from the shared spine read (D48); the render is the item.
+    attempts: mine.attempts.filter((a) => a.content_ref).map((a) => ({
+      attempt_id: a.attempt_id, job_id: a.content_ref!, status: a.status, trigger: a.trigger,
+      requested_at: a.requested_at, finished_at: a.finished_at, media_id: a.media_id, permalink: a.permalink, error: a.error,
+      caption: a.caption ?? '', schedule_id: a.schedule_id, slot: a.slot, publish_at: a.publish_at,
+    })),
+    schedules: mine.schedules.filter((r) => r.content_ref).map((r) => ({
+      schedule_id: r.schedule_id, job_id: r.content_ref!, ny_date: r.ny_date, slot: r.slot, publish_at: r.publish_at,
+      status: r.status, source: r.source, error: r.error,
+    })),
+    insights: insightRows(mine.insights, 'explainers'),
     topics: topics.rows,
     requireApproval: settingIsOn(approval.rows),
   };

@@ -7,6 +7,7 @@ import { readExplainers } from '@/lib/social-hub/queries/explainers';
 import { readLatestQuota } from '@/lib/social-hub/queries/quota';
 import { latestQuotaSnapshot } from '@/lib/social-hub/refresh';
 import { readReels } from '@/lib/social-hub/queries/reels';
+import { readSpine } from '@/lib/social-hub/queries/spine';
 import { readStories } from '@/lib/social-hub/queries/stories';
 
 function settle<T>(work: Promise<T>): Promise<T | Error> {
@@ -20,12 +21,27 @@ function explainersHandle(q: HubQuery): Promise<HubQuery> {
   return handle;
 }
 
-/** Read every vertical side by side (SELECT only). A failing schema degrades to an error note. */
+/** Explainers share the main database (tests pass one handle; live: EXPLAINERS_DB=supabase with no own URL). */
+function explainersShareMain(q: HubQuery): boolean {
+  if (q !== liveHubQuery) return true;
+  return process.env.EXPLAINERS_DB === 'supabase' && !process.env.EXPLAINERS_DATABASE_URL?.trim();
+}
+
+/**
+ * Read every vertical side by side (SELECT only). The lifecycle comes from ONE
+ * shared spine read for every type on the main database (D48); Explainers on a
+ * database of their own get their own spine read there. Each type's own
+ * queries read only its content. A failing schema degrades to an error note.
+ */
 export async function readAll(q: HubQuery = liveHubQuery, explainersQ: Promise<HubQuery> = explainersHandle(q)): Promise<VerticalReads> {
+  const shared = explainersShareMain(q);
+  const mainSpine = readSpine(q, shared ? ['carousels', 'reels', 'explainers'] : ['carousels', 'reels']);
+  mainSpine.catch(() => undefined); // each reader reports the failure itself
+  const explainersSpine = (eq: HubQuery) => (shared ? mainSpine : readSpine(eq, ['explainers']));
   const [reels, explainers, carousels, stories] = await Promise.all([
-    settle(readReels(q)),
-    settle(explainersQ.then((eq) => readExplainers(eq))),
-    settle(readCarousels(q)),
+    settle(mainSpine.then((spine) => readReels(q, spine))),
+    settle(explainersQ.then(async (eq) => readExplainers(eq, await explainersSpine(eq)))),
+    settle(mainSpine.then((spine) => readCarousels(q, spine))),
     settle(readStories(q)),
   ]);
   return { reels, explainers, carousels, stories };
