@@ -415,3 +415,14 @@ CREATE TABLE IF NOT EXISTS explainers.media_insights (
 
 CREATE INDEX IF NOT EXISTS idx_explainers_media_insights_attempt
     ON explainers.media_insights (publish_attempt_id, ny_date DESC);
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- Social Hub P2-M2 (SH-46 – SH-49): two windows a day, two renders a day.
+-- ════════════════════════════════════════════════════════════════════════════
+-- afternoon = 1:00–2:30 PM, late = 3:30–5:00 PM (lib/explainers/publish/config.ts).
+ALTER TABLE explainers.posting_schedule DROP CONSTRAINT IF EXISTS posting_schedule_slot_check;
+ALTER TABLE explainers.posting_schedule ADD CONSTRAINT posting_schedule_slot_check CHECK (slot IN ('afternoon', 'late'));
+INSERT INTO explainers.settings (key, value) VALUES ('posts_per_day', '2'::jsonb) ON CONFLICT (key) DO NOTHING;
+-- Raise the old defaults only; a value someone set by hand is kept.
+UPDATE explainers.settings SET value = '2'::jsonb, updated_at = now() WHERE key = 'daily_render_cap' AND value = '1'::jsonb;
+UPDATE explainers.settings SET value = '10'::jsonb, updated_at = now() WHERE key = 'daily_spend_cap_usd' AND value = '6'::jsonb;

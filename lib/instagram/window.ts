@@ -73,3 +73,64 @@ export function chooseWindow(
   }
   return null;
 }
+
+/**
+ * Any two feed posts stay at least this far apart, across every content type
+ * (SH-47). Stories are not feed posts and are exempt.
+ */
+export const FEED_GAP_MINUTES = 30;
+
+/** Offsets in [startOffset, startOffset + count) whose instant is ≥ gap from every busy instant. */
+export function spacedOffsets(
+  instantOf: (offset: number) => Date,
+  startOffset: number,
+  count: number,
+  busy: readonly Date[],
+  gapMinutes = FEED_GAP_MINUTES,
+): number[] {
+  const gap = gapMinutes * 60_000;
+  const out: number[] = [];
+  for (let offset = startOffset; offset < startOffset + count; offset += 1) {
+    const t = instantOf(offset).getTime();
+    if (busy.every((b) => Math.abs(b.getTime() - t) >= gap)) out.push(offset);
+  }
+  return out;
+}
+
+/**
+ * Several windows a day (SH-46, SH-48): the earliest open window whose
+ * `nyDate|slot` is not taken and that still has a minute ≥ 30 minutes from
+ * every other feed post; the minute is drawn uniformly from those.
+ */
+export function chooseFromWindows(
+  windows: readonly PostingWindow[],
+  now: Date,
+  takenSlots: ReadonlySet<string>,
+  busy: readonly Date[],
+  rng: (count: number) => number = uniformIndex,
+  throughDate?: string,
+): WindowChoice | null {
+  const start = calendarDateKey(now, SOCIAL_TIMEZONE);
+  const last = throughDate ?? addCalendarDays(start, 13);
+  for (let day = 0; day < 14; day += 1) {
+    const nyDate = addCalendarDays(start, day);
+    if (nyDate > last) break;
+    for (const w of windows) {
+      if (takenSlots.has(slotTakenKey(nyDate, w.id))) continue;
+      const open = openWindowRange(w, nyDate, now);
+      if (!open) continue;
+      const offsets = spacedOffsets((o) => windowMinuteInstant(w, nyDate, o), open.startOffset, open.count, busy);
+      if (offsets.length === 0) continue;
+      const drawn = rng(offsets.length);
+      if (!Number.isInteger(drawn) || drawn < 0 || drawn >= offsets.length) {
+        throw new Error(`Slot draw returned ${drawn} for ${offsets.length} open minutes.`);
+      }
+      return { nyDate, slot: w.id, publishAt: windowMinuteInstant(w, nyDate, offsets[drawn]!) };
+    }
+  }
+  return null;
+}
+
+export function slotTakenKey(nyDate: string, slot: string): string {
+  return `${nyDate}|${slot}`;
+}

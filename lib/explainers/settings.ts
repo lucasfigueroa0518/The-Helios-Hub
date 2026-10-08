@@ -34,8 +34,9 @@ export const DEFAULT_SETTINGS: ExplainersSettings = {
   mode: 'development',
   auto_render: false,
   per_reel_cap_usd: 5,
-  daily_render_cap: 1,
-  daily_spend_cap_usd: 6,
+  // SH-49: two renders a day under the $5 per-reel cap.
+  daily_render_cap: 2,
+  daily_spend_cap_usd: 10,
   pool_size: 25,
   ideas_per_day: 3,
   dedupe_lookback_days: 45,

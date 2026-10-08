@@ -80,20 +80,39 @@ test('require_approval off: unreviewed renders may go, rejected ones never', asy
   assert.equal(await scheduleApproved(db, new Date('2026-10-08T12:00:00Z'), () => 0), 1);
 });
 
-test('publishing_live is off by default; approved renders take one 3:00–4:30 PM window per day', async () => {
+test('publishing_live is off by default; approved renders take two windows a day (1:00–2:30, 3:30–5:00 PM)', async () => {
   const { db } = await scratchExplainersDb();
   assert.equal(await publishingLive(db), false);
   await renderedJob(db, { verdict: null, title: 'unreviewed' });
   const first = await renderedJob(db, { title: 'first' });
   const second = await renderedJob(db, { title: 'second' });
+  const third = await renderedJob(db, { title: 'third' });
   const now = new Date('2026-10-08T12:00:00Z'); // 8:00 AM EDT
-  assert.equal(await scheduleApproved(db, now, () => 0), 2);
-  const { rows } = await db.query<{ job_id: string; d: string; publish_at: Date }>(
-    `SELECT job_id, ny_date::text AS d, publish_at FROM explainers.posting_schedule ORDER BY publish_at`,
+  assert.equal(await scheduleApproved(db, now, () => 0), 3);
+  const { rows } = await db.query<{ job_id: string; d: string; slot: string; publish_at: Date }>(
+    `SELECT job_id, ny_date::text AS d, slot, publish_at FROM explainers.posting_schedule ORDER BY publish_at`,
   );
-  assert.deepEqual(rows.map((r) => [r.job_id, r.d]), [[first, '2026-10-08'], [second, '2026-10-09']]);
-  assert.equal(new Date(rows[0]!.publish_at).toISOString(), '2026-10-08T19:00:00.000Z'); // 3:00 PM EDT
+  assert.deepEqual(rows.map((r) => [r.job_id, r.d, r.slot]), [
+    [first, '2026-10-08', 'afternoon'],
+    [second, '2026-10-08', 'late'],
+    [third, '2026-10-09', 'afternoon'],
+  ]);
+  assert.equal(new Date(rows[0]!.publish_at).toISOString(), '2026-10-08T17:00:00.000Z'); // 1:00 PM EDT
+  assert.equal(new Date(rows[1]!.publish_at).toISOString(), '2026-10-08T19:30:00.000Z'); // 3:30 PM EDT
   assert.equal(await scheduleApproved(db, now, () => 0), 0, 'already on the clock');
+});
+
+test('posts_per_day 1 keeps one window; another type\'s feed post 30 minutes away pushes the minute', async () => {
+  const { db } = await scratchExplainersDb();
+  await db.query(`INSERT INTO explainers.settings (key, value) VALUES ('posts_per_day', '1'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+  const a = await renderedJob(db, { title: 'a' });
+  const b = await renderedJob(db, { title: 'b' });
+  // Own feed post at 1:10 PM EDT on 10-08 (a manual slot): the draw must keep ≥ 30 minutes from it.
+  await db.query(`INSERT INTO explainers.posting_schedule (job_id, ny_date, slot, publish_at, status, source) VALUES ($1, '2026-10-07', 'afternoon', '2026-10-08T17:10:00Z', 'scheduled', 'user')`, [b]);
+  assert.equal(await scheduleApproved(db, new Date('2026-10-08T12:00:00Z'), () => 0), 1);
+  const row = (await db.query<{ job_id: string; d: string; publish_at: Date }>(`SELECT job_id, ny_date::text AS d, publish_at FROM explainers.posting_schedule WHERE job_id = $1`, [a])).rows[0]!;
+  assert.equal(row.d, '2026-10-08');
+  assert.equal(new Date(row.publish_at).toISOString(), '2026-10-08T17:40:00.000Z', 'first minute 30 minutes clear of 1:10 PM');
 });
 
 test('end to end: a due slot is released, published as a feed reel, and marked; it cannot post twice', async () => {

@@ -181,3 +181,29 @@ export async function claimAndPublish(deps: PublishDeps): Promise<{ id: string; 
     return { id, status: 'failed' };
   }
 }
+
+/**
+ * Hard publish (Social Hub, SH-15/SH-17): post this render now. A person's
+ * click counts as approval: an unreviewed render is recorded `approved`
+ * (note says so); a rejected one is refused. Its waiting slot is closed so
+ * it cannot post twice.
+ */
+export async function hardPublishJob(db: Queryable, jobId: string, by: string): Promise<Queued> {
+  const { rows } = await db.query<{ verdict: string | null }>(`SELECT verdict FROM explainers.feedback WHERE job_id = $1`, [jobId]);
+  const verdict = rows[0]?.verdict ?? null;
+  if (verdict === 'rejected') return { queued: false, note: 'This render was rejected in review.', terminal: true };
+  if (verdict == null) {
+    await db.query(
+      `INSERT INTO explainers.feedback (job_id, verdict, tags, note, created_by)
+       VALUES ($1, 'approved', ARRAY[]::text[], 'Approved by Hard publish from the Social Hub', $2)
+       ON CONFLICT (job_id) DO NOTHING`,
+      [jobId, by],
+    );
+  }
+  await db.query(
+    `UPDATE explainers.posting_schedule SET status = 'cancelled', error = 'Hard published from the Social Hub'
+      WHERE job_id = $1 AND status = 'scheduled'`,
+    [jobId],
+  );
+  return queuePublish(db, jobId, 'force');
+}

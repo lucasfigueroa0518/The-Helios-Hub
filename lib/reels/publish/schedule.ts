@@ -1,3 +1,4 @@
+import { busyFeedTimes } from '@/lib/instagram/feed-spacing';
 import { dbQuery } from '@/lib/db';
 import { queuePublish, publishReadiness, type PublishTrigger } from '@/lib/reels/music/publish';
 import { getSetting } from '@/lib/reels/music/store';
@@ -137,7 +138,9 @@ export async function schedulePostIdea(
   }
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const choice = chooseSlot(now, await takenSlots(calendarDateKey(now)), uniformIndex, POSTING_TIME_ZONE, throughDate);
+    // SH-47: keep ≥ 30 minutes from Explainer and Carousel feed posts (Trial Reels logic otherwise unchanged, SH-59).
+    const busy = await busyFeedTimes((text, params) => dbQuery(text, params), now, 'reels').catch(() => []);
+    const choice = chooseSlot(now, await takenSlots(calendarDateKey(now)), uniformIndex, POSTING_TIME_ZONE, throughDate, busy);
     if (!choice) {
       const note = throughDate
         ? 'No posting window is still open today.'
@@ -405,4 +408,18 @@ export async function loadSchedulesForIdeas(postIdeaIds: string[]): Promise<Reco
   const out: Record<string, StoredSchedule> = {};
   for (const row of rows) out[row.post_idea_id] = toSchedule(row);
   return out;
+}
+
+/**
+ * Force post (the /reels Force button, also the Social Hub's Hard publish):
+ * post now as a trial reel, skipping the slot. The same three steps as the
+ * force branch of POST /api/reels/publish, in one place.
+ */
+export async function forcePost(videoJobId: string): Promise<{ queued: true; id: string; note: string } | { queued: false; status: number; note: string }> {
+  const ready = await publishReadiness(videoJobId, { trigger: 'force' });
+  if (!ready.ok) return { queued: false, status: ready.status, note: ready.note };
+  await cancelScheduledPost(ready.postIdeaId);
+  const result = await queuePublish(videoJobId, 'force');
+  if (!result.queued) return { queued: false, status: result.status, note: result.note };
+  return { queued: true, id: result.id, note: 'Posting to Instagram now as a trial reel.' };
 }

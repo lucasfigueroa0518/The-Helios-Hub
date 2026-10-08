@@ -13,8 +13,9 @@ All times are America/New_York (DST-safe, see `lib/reels/schedule.ts`).
 | Content type | Schema | systemd unit | Run | Posting window(s) | Insights sweep | Status |
 |---|---|---|---|---|---|---|
 | Trial Reels | `reels` | `helios-reels` | 12:30 song ingest, 1:00 night run | 8:45–10:00 AM, 11:15 AM–12:30 PM, 6:00–9:00 PM | 5:00 | live |
-| Explainer Reels | `explainers` | `helios-explainers` | 2:00 idea cycle (only with `auto_render` on) | 3:00–4:30 PM, approved reels only | 5:15 | built; renders need `HEYGEN_API_KEY` on the VM |
-| Carousels | `social` | `helios-social` | 3:00 daily run (only with `auto_run` on) | 7:00–8:15 AM | 5:30 | built |
+| Explainer Reels | `explainers` | `helios-explainers` | 2:00 idea cycle (only with `auto_render` on; up to `daily_render_cap` = 2 renders) | 1:00–2:30 PM and 3:30–5:00 PM (`posts_per_day` = 2), approved reels only | 5:15 | built; renders need `HEYGEN_API_KEY` on the VM |
+| Carousels | `social` | `helios-social` | 3:00 daily run (only with `auto_run` on); the run's top `posts_per_day` = 2 posts are scheduled | 9:00–10:00 AM and 2:30–3:30 PM | 5:30 | built |
+| Social Hub | `social_hub` | `helios-social` (same worker) | 5:45 account sweep (account insights, demographics, active times, publishing quota); refreshes the hub queues on visit | none (reads only) | 5:45 | built |
 | IG Stories | `stories` | `helios-stories` | 4:00 sets for series with `auto` on (Morning Download daily, Guess the Number Mon/Thu, Free vs. Paid Tue/Sat) | 8:30–10:00 AM, every series; may overlap other types (Stories are not feed posts) | every 2 hours while live, final read at 23 h | built (Lucas); no live set yet |
 
 One type per hour so no two pipelines call Claude, Jev, or Meta at the same
@@ -76,8 +77,14 @@ each frame carries its own `ig_media_id`; there is no separate
 Every type posts to one IG business account (`META_IG_BUSINESS_ACCOUNT_ID`).
 Before creating a container, each publisher reads
 `GET /{ig-user-id}/content_publishing_limit` and fails the attempt, with the
-quota in its error, when fewer than 5 posts are left in the 24-hour window. Posting
-windows across types must not overlap: update the table above before adding one.
+quota in its error, when fewer than 5 posts are left in the 24-hour window.
+
+Posting windows may overlap (SH-47). Every scheduler keeps any two **feed**
+posts at least 30 minutes apart across all types
+(`lib/instagram/feed-spacing.ts`, `lib/instagram/window.ts`
+`FEED_GAP_MINUTES`); Stories are not feed posts and are exempt. Trial Reels
+keep their own slots and selection and only skip minutes too close to another
+type's post. Update the table above when adding a window.
 
 ## Naming
 
@@ -87,7 +94,7 @@ In the `social` (carousel) code, "story" means a **news story** (`story_id`,
 
 ## Adding a content type
 
-1. Pick the next free hour and a non-overlapping posting window; add a row above.
+1. Pick the next free hour and a posting window; add a row above. Schedule through the shared 30-minute feed spacing.
 2. Add the six contract items to the type's schema file (additive, idempotent).
 3. Add a systemd unit and deploy it to the social worker VM.
 4. Ship with `auto_run` and `publishing_live` off.

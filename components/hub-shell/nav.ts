@@ -5,7 +5,7 @@ export type HubSubItem = {
 };
 
 export type HubNavItem = {
-  id: 'home' | 'outreach' | 'reels' | 'stories' | 'explainers' | 'events' | 'dashboards' | 'trello' | 'website';
+  id: 'home' | 'outreach' | 'reels' | 'stories' | 'explainers' | 'social' | 'events' | 'dashboards' | 'trello' | 'website';
   href: string;
   label: string;
   badge?: string;
@@ -46,6 +46,13 @@ export const HUB_NAV: HubNavItem[] = [
     label: 'Explainers',
     badge: 'Beta',
     match: (path) => path.startsWith('/explainers'),
+  },
+  {
+    id: 'social',
+    href: '/social',
+    label: 'Social Hub',
+    badge: 'Beta',
+    match: (path) => path === '/social' || (path.startsWith('/social/') && !path.startsWith('/social/render')),
   },
   {
     id: 'dashboards',

@@ -16,8 +16,8 @@ import { pollCarouselInsights, type CarouselInsightsClient } from '@/lib/social/
 import type { CarouselMetaClient } from '@/lib/social/overnight/meta';
 import { carouselCaption, claimAndPublish, queuePublish } from '@/lib/social/overnight/publish';
 import { claimRun, failRun, requestRun } from '@/lib/social/overnight/runs';
-import { approveSchedule, releaseDueSchedules, scheduleRunPost } from '@/lib/social/overnight/schedule';
-import { chooseCarouselSlot, openMinuteRange } from '@/lib/social/overnight/slots';
+import { approveSchedule, releaseDueSchedules, scheduleRunPost, scheduleRunPosts } from '@/lib/social/overnight/schedule';
+import { chooseCarouselSlot, chooseCarouselSlots, openMinuteRange } from '@/lib/social/overnight/slots';
 import type { Query } from '@/lib/social/store/pg';
 
 async function scratchDb(): Promise<{ query: Query; pg: PGlite }> {
@@ -64,25 +64,41 @@ const sign = async (objectPath: string) => `https://signed/${objectPath}`;
 
 // ── Posting window ──────────────────────────────────────────────────────────
 
-test('window: 7:00–8:15 AM New York, today when still open, tomorrow once taken, DST-safe', () => {
+test('window: first window 9:00–10:00 AM New York, today when still open, tomorrow once taken, DST-safe', () => {
   const beforeDawn = new Date('2026-10-08T07:00:00Z'); // 3:00 AM EDT
   const choice = chooseCarouselSlot(beforeDawn, new Set(), () => 0)!;
   assert.equal(choice.nyDate, '2026-10-08');
-  assert.equal(choice.publishAt.toISOString(), '2026-10-08T11:00:00.000Z'); // 7:00 AM EDT
+  assert.equal(choice.publishAt.toISOString(), '2026-10-08T13:00:00.000Z'); // 9:00 AM EDT
   const taken = chooseCarouselSlot(beforeDawn, new Set(['2026-10-08']), () => 0)!;
   assert.equal(taken.nyDate, '2026-10-09');
-  // After the November change the same 7:00 AM is 12:00 UTC.
+  // After the November change the same 9:00 AM is 14:00 UTC.
   const winter = chooseCarouselSlot(new Date('2026-11-10T08:00:00Z'), new Set(), () => 0)!;
-  assert.equal(winter.publishAt.toISOString(), '2026-11-10T12:00:00.000Z');
+  assert.equal(winter.publishAt.toISOString(), '2026-11-10T14:00:00.000Z');
   // throughDate limits the search to today.
   assert.equal(chooseCarouselSlot(beforeDawn, new Set(['2026-10-08']), () => 0, '2026-10-08'), null);
 });
 
 test('window: a started window only offers minutes still ahead; an ended one is closed', () => {
-  const midWindow = new Date('2026-10-08T11:30:00Z'); // 7:30 AM EDT
+  const midWindow = new Date('2026-10-08T13:30:00Z'); // 9:30 AM EDT
   const open = openMinuteRange('2026-10-08', midWindow)!;
-  assert.equal(open.count, CAROUSEL_SLOT.endMinute - (7 * 60 + 30));
-  assert.equal(openMinuteRange('2026-10-08', new Date('2026-10-08T12:20:00Z')), null);
+  assert.equal(open.count, CAROUSEL_SLOT.endMinute - (9 * 60 + 30));
+  assert.equal(openMinuteRange('2026-10-08', new Date('2026-10-08T14:05:00Z')), null);
+});
+
+test('two windows a day (9:00–10:00, 2:30–3:30), posts_per_day caps them, other feed posts keep 30 minutes away', () => {
+  const beforeDawn = new Date('2026-10-08T07:00:00Z');
+  const morning = chooseCarouselSlots(beforeDawn, new Set(), [], 2, () => 0)!;
+  assert.equal(morning.slot, 'morning');
+  const afternoon = chooseCarouselSlots(beforeDawn, new Set(['2026-10-08|morning']), [], 2, () => 0)!;
+  assert.deepEqual([afternoon.nyDate, afternoon.slot, afternoon.publishAt.toISOString()], ['2026-10-08', 'afternoon', '2026-10-08T18:30:00.000Z']);
+  const oneADay = chooseCarouselSlots(beforeDawn, new Set(['2026-10-08|morning']), [], 1, () => 0)!;
+  assert.deepEqual([oneADay.nyDate, oneADay.slot], ['2026-10-09', 'morning']);
+  // A Trial Reel at 9:10 AM: the first carousel minute is 9:40.
+  const spaced = chooseCarouselSlots(beforeDawn, new Set(), [new Date('2026-10-08T13:10:00Z')], 2, () => 0)!;
+  assert.equal(spaced.publishAt.toISOString(), '2026-10-08T13:40:00.000Z');
+  // Feed posts filling the whole morning window move the carousel to the afternoon.
+  const busy = [new Date('2026-10-08T13:00:00Z'), new Date('2026-10-08T13:30:00Z'), new Date('2026-10-08T14:00:00Z')];
+  assert.equal(chooseCarouselSlots(beforeDawn, new Set(), busy, 2, () => 0)!.slot, 'afternoon');
 });
 
 // ── Run queue ───────────────────────────────────────────────────────────────
@@ -134,16 +150,16 @@ test('end to end: run post scheduled into today, released when due, published, m
   const best = await insertPost(query, { runId, slug: 'post-x-1' });
   await insertPost(query, { runId, slug: 'post-x-2' });
   const now = new Date('2026-10-08T07:30:00Z');
-  const scheduled = await scheduleRunPost(query, runId!, now, () => 0);
-  assert.equal(scheduled.scheduled, true);
-  const sched = (await query(`SELECT post_id, ny_date::text AS d, publish_at FROM social.posting_schedule`)).rows;
-  assert.equal(sched.length, 1);
-  assert.equal(sched[0].post_id, best, 'the best-ranked story (lowest slug number) goes');
-  assert.equal(sched[0].d, calendarDateKey(now));
+  const scheduled = await scheduleRunPosts(query, runId!, now, () => 0);
+  assert.deepEqual(scheduled.map((s) => s.scheduled), [true, true], 'the run\'s top two posts (SH-48)');
+  const sched = (await query(`SELECT id, post_id, ny_date::text AS d, slot, publish_at FROM social.posting_schedule ORDER BY publish_at`)).rows;
+  assert.equal(sched.length, 2);
+  assert.equal(sched[0].post_id, best, 'the best-ranked story (lowest slug number) takes the first window');
+  assert.deepEqual(sched.map((r: { slot: string; d: string }) => [r.d, r.slot]), [[calendarDateKey(now), 'morning'], [calendarDateKey(now), 'afternoon']]);
 
-  // A person approves it; make it due, then release and publish.
-  assert.equal(await approveSchedule(query, (await query(`SELECT id FROM social.posting_schedule`)).rows[0].id), true);
-  await query(`UPDATE social.posting_schedule SET publish_at = now() - interval '1 minute'`);
+  // A person approves the first; make it due, then release and publish.
+  assert.equal(await approveSchedule(query, sched[0].id), true);
+  await query(`UPDATE social.posting_schedule SET publish_at = now() - interval '1 minute' WHERE id = $1`, [sched[0].id]);
   assert.equal(await releaseDueSchedules(query), 1);
   const { meta, calls } = stubMeta();
   const out = await claimAndPublish({ query, meta, signImage: sign, sleep: async () => undefined });
@@ -154,7 +170,7 @@ test('end to end: run post scheduled into today, released when due, published, m
   assert.equal(attempt.status, 'published');
   assert.equal(attempt.media_id, 'media-1');
   assert.deepEqual(attempt.child_container_ids, ['child-1', 'child-2', 'child-3']);
-  assert.equal((await query(`SELECT status FROM social.posting_schedule`)).rows[0].status, 'published');
+  assert.equal((await query(`SELECT status FROM social.posting_schedule WHERE id = $1`, [sched[0].id])).rows[0].status, 'published');
   const post = (await query(`SELECT status, published_at FROM social.posts WHERE id = $1`, [best])).rows[0];
   assert.equal(post.status, 'published');
   assert.ok(post.published_at);
@@ -214,14 +230,14 @@ test('insights: a fresh carousel is read and stored; blanks never overwrite a st
   );
   let reach: number | null = 120;
   const client: CarouselInsightsClient = {
-    async insights() { return { views: 300, reach, likes: 10, comments: 1, saved: 4, shares: 2, total_interactions: 17, raw: {} }; },
+    async insights() { return { views: 300, reach, likes: 10, comments: 1, saved: 4, shares: 2, total_interactions: 17, follows: 3, profile_visits: 9, raw: {} }; },
   };
   const first = await pollCarouselInsights(query, client, new Date('2026-10-08T13:00:00Z'));
   assert.deepEqual([first.considered, first.written], [1, 1]);
   reach = null;
   await pollCarouselInsights(query, client, new Date('2026-10-08T14:00:00Z'));
-  const row = (await query(`SELECT views, reach, saved FROM social.media_insights WHERE media_id = 'm1'`)).rows[0];
-  assert.deepEqual([row.views, row.reach, row.saved], [300, 120, 4]);
+  const row = (await query(`SELECT views, reach, saved, follows, profile_visits FROM social.media_insights WHERE media_id = 'm1'`)).rows[0];
+  assert.deepEqual([row.views, row.reach, row.saved, row.follows, row.profile_visits], [300, 120, 4, 3, 9]);
   // Within the 30-minute cooldown nothing is due.
   assert.equal((await pollCarouselInsights(query, client, new Date('2026-10-08T14:10:00Z'))).considered, 0);
 });

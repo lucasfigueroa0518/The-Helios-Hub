@@ -53,7 +53,12 @@ function isProtectedPage(pathname: string): boolean {
     || pathname === '/reels'
     || pathname.startsWith('/reels/')
     || pathname === '/stories'
-    || pathname.startsWith('/stories/');
+    || pathname.startsWith('/stories/')
+    // Social Hub pages (the carousel render preview at /social/render stays as it was).
+    || pathname === '/social'
+    || (pathname.startsWith('/social/') && !pathname.startsWith('/social/render')
+      // The fixture preview has no data and 404s in production builds (Social Hub D10).
+      && !(process.env.NODE_ENV !== 'production' && pathname.startsWith('/social/preview')));
 }
 
 export default auth((req) => {
@@ -103,6 +108,8 @@ export const config = {
     '/reels/:path*',
     '/stories',
     '/stories/:path*',
+    '/social',
+    '/social/:path*',
     '/d/:path*',
     '/watch/:path*',
     '/api/:path*',

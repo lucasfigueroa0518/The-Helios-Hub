@@ -1,14 +1,17 @@
 import type { Queryable } from '@/lib/explainers/db';
 import { calendarDateKey } from '@/lib/instagram/clock';
-import { chooseWindow, uniformIndex } from '@/lib/instagram/window';
+import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
+import { chooseFromWindows, slotTakenKey, uniformIndex } from '@/lib/instagram/window';
 
-import { EXPLAINER_WINDOW } from './config';
+import { DEFAULT_POSTS_PER_DAY, EXPLAINER_WINDOWS } from './config';
 import { queuePublish } from './publish';
 
 /**
- * One explainer per Eastern day in the 3:00–4:30 PM window, the shape of
- * reels.posting_schedule. While publishing is live, every approved, unposted
- * render gets the next free day; a due slot becomes a publish attempt.
+ * Up to `posts_per_day` explainers per Eastern day (default 2), one per
+ * window (1:00–2:30 PM, 3:30–5:00 PM), each ≥ 30 minutes from any other
+ * feed post (SH-46 – SH-48), the shape of reels.posting_schedule. While
+ * publishing is live, every approved, unposted render gets the next free
+ * window; a due slot becomes a publish attempt.
  */
 
 function isUniqueViolation(error: unknown): boolean {
@@ -25,6 +28,13 @@ export async function publishingLive(db: Queryable): Promise<boolean> {
 export async function requireApproval(db: Queryable): Promise<boolean> {
   const { rows } = await db.query<{ value: unknown }>(`SELECT value FROM explainers.settings WHERE key = 'require_approval'`);
   return rows[0]?.value !== false;
+}
+
+/** `posts_per_day` from explainers.settings (SH-48), else the default. */
+export async function postsPerDay(db: Queryable): Promise<number> {
+  const { rows } = await db.query<{ value: unknown }>(`SELECT value FROM explainers.settings WHERE key = 'posts_per_day'`);
+  const value = Number(rows[0]?.value);
+  return Number.isInteger(value) && value >= 1 ? value : DEFAULT_POSTS_PER_DAY;
 }
 
 export type ScheduleOutcome = { scheduled: true; id: string; publishAt: string } | { scheduled: false; note: string };
@@ -45,12 +55,15 @@ export async function scheduleJob(
   if (existing) return { scheduled: true, id: existing.id, publishAt: new Date(existing.publish_at).toISOString() };
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const { rows: takenRows } = await db.query<{ d: string }>(
-      `SELECT ny_date::text AS d FROM explainers.posting_schedule
+    const { rows: takenRows } = await db.query<{ d: string; slot: string }>(
+      `SELECT ny_date::text AS d, slot FROM explainers.posting_schedule
         WHERE status IN ('scheduled', 'publishing', 'published') AND ny_date >= $1::date`,
       [calendarDateKey(now)],
     );
-    const choice = chooseWindow(EXPLAINER_WINDOW, now, new Set(takenRows.map((r) => r.d)), rng);
+    const spacing = (text: string, params?: unknown[]) => db.query<Record<string, unknown>>(text, params);
+    const busy = [...(await busyFeedTimes(spacing, now, 'explainers')), ...(await ownFeedTimes(spacing, 'explainers', now))];
+    const windows = EXPLAINER_WINDOWS.slice(0, Math.max(1, Math.min(await postsPerDay(db), EXPLAINER_WINDOWS.length)));
+    const choice = chooseFromWindows(windows, now, new Set(takenRows.map((r) => slotTakenKey(r.d, r.slot))), busy, rng);
     if (!choice) return { scheduled: false, note: 'No explainer window is open in the next two weeks.' };
     try {
       const { rows } = await db.query<{ id: string; publish_at: string }>(

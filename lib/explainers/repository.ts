@@ -527,3 +527,25 @@ export async function getFeedback(db: Queryable, jobId: string): Promise<Feedbac
   );
   return rows[0] ?? null;
 }
+
+/**
+ * Hard regenerate (Social Hub, SH-15/SH-16/SH-54): render this topic again
+ * now. A topic that already rendered goes back to `promoted` so
+ * `requestRender` accepts it; the daily caps still apply. The new render
+ * becomes the current version when it finishes; earlier ones stay as history.
+ */
+export async function requestRerender(
+  db: ExplainersDb,
+  input: { topicId: string; settings: ExplainersSettings; now?: Date },
+): Promise<RenderRequest> {
+  const reopened = await db.query<{ id: string }>(
+    `UPDATE explainers.topics SET status = 'promoted', updated_at = now() WHERE id = $1 AND status = 'rendered' RETURNING id`,
+    [input.topicId],
+  );
+  const result = await requestRender(db, { topicId: input.topicId, trigger: 'click', settings: input.settings, now: input.now });
+  // A cap refused it: the topic goes back to how it was.
+  if (!result.ok && reopened.rows[0]) {
+    await db.query(`UPDATE explainers.topics SET status = 'rendered', updated_at = now() WHERE id = $1 AND status = 'promoted'`, [input.topicId]);
+  }
+  return result;
+}

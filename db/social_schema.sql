@@ -255,3 +255,13 @@ CREATE TABLE IF NOT EXISTS social.media_insights (
 
 CREATE INDEX IF NOT EXISTS idx_social_media_insights_attempt
     ON social.media_insights (publish_attempt_id, ny_date DESC);
+
+-- Feed follows and profile visits (Social Hub P2-M1; available for FEED media per META_API_CHECK).
+ALTER TABLE social.media_insights ADD COLUMN IF NOT EXISTS follows double precision;
+ALTER TABLE social.media_insights ADD COLUMN IF NOT EXISTS profile_visits double precision;
+
+-- Two carousel windows a day (Social Hub P2-M2, SH-46): morning 9:00–10:00, afternoon 2:30–3:30.
+ALTER TABLE social.posting_schedule DROP CONSTRAINT IF EXISTS posting_schedule_slot_check;
+ALTER TABLE social.posting_schedule ADD CONSTRAINT posting_schedule_slot_check CHECK (slot IN ('morning', 'afternoon'));
+-- Carousels posted per day (SH-48). The run schedules its top this-many posts.
+INSERT INTO social.settings (key, value) VALUES ('posts_per_day', '2'::jsonb) ON CONFLICT (key) DO NOTHING;

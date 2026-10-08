@@ -10,7 +10,8 @@ import type { Query } from '@/lib/social/store/pg';
  * closing read.
  */
 
-export const CAROUSEL_METRICS = ['views', 'reach', 'likes', 'comments', 'saved', 'shares', 'total_interactions'] as const;
+/** Feed media metrics (Social Hub META_API_CHECK): follows and profile_visits added in P2-M1. */
+export const CAROUSEL_METRICS = ['views', 'reach', 'likes', 'comments', 'saved', 'shares', 'total_interactions', 'follows', 'profile_visits'] as const;
 export type CarouselMetric = (typeof CAROUSEL_METRICS)[number];
 export type CarouselReading = InsightsReading<CarouselMetric>;
 export type CarouselInsightsClient = InsightsClient<CarouselMetric>;
@@ -47,8 +48,8 @@ export async function pollCarouselInsights(query: Query, client: CarouselInsight
     }
     if (CAROUSEL_METRICS.some((m) => reading[m] != null)) {
       await query(
-        `INSERT INTO social.media_insights (media_id, ny_date, publish_attempt_id, views, reach, likes, comments, saved, shares, total_interactions, raw)
-         VALUES ($1, $2::date, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
+        `INSERT INTO social.media_insights (media_id, ny_date, publish_attempt_id, views, reach, likes, comments, saved, shares, total_interactions, follows, profile_visits, raw)
+         VALUES ($1, $2::date, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)
          ON CONFLICT (media_id, ny_date) DO UPDATE SET
            publish_attempt_id = EXCLUDED.publish_attempt_id, captured_at = now(),
            views = COALESCE(EXCLUDED.views, social.media_insights.views),
@@ -58,8 +59,10 @@ export async function pollCarouselInsights(query: Query, client: CarouselInsight
            saved = COALESCE(EXCLUDED.saved, social.media_insights.saved),
            shares = COALESCE(EXCLUDED.shares, social.media_insights.shares),
            total_interactions = COALESCE(EXCLUDED.total_interactions, social.media_insights.total_interactions),
+           follows = COALESCE(EXCLUDED.follows, social.media_insights.follows),
+           profile_visits = COALESCE(EXCLUDED.profile_visits, social.media_insights.profile_visits),
            raw = EXCLUDED.raw`,
-        [row.media_id, nyDate, row.id, reading.views, reading.reach, reading.likes, reading.comments, reading.saved, reading.shares, reading.total_interactions, JSON.stringify(reading.raw ?? {})],
+        [row.media_id, nyDate, row.id, reading.views, reading.reach, reading.likes, reading.comments, reading.saved, reading.shares, reading.total_interactions, reading.follows, reading.profile_visits, JSON.stringify(reading.raw ?? {})],
       );
       written += 1;
     }

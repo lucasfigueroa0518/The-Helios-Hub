@@ -386,7 +386,7 @@ test('production: the idea run is skipped once the day has spent its cap', async
   await saveSetting(db, 'auto_render', true);
   await saveSetting(db, 'mode', 'production');
   await db.query(
-    `INSERT INTO explainers.cost_events (mode, vendor, component, usd) VALUES ('production', 'anthropic', 'render', 6)`,
+    `INSERT INTO explainers.cost_events (mode, vendor, component, usd) VALUES ('production', 'anthropic', 'render', 10)`,
   );
   const ideas = stubIdeas([]);
   const result = await runIdeaCycle({ db, ideaModel: ideas, jevTransport: stubJev({}).transport });

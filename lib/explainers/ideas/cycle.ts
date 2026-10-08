@@ -118,14 +118,18 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
     }
     await trimPool(db, settings.pool_size);
 
-    const [best] = await listPool(db);
+    // The top `daily_render_cap` topics (SH-49: two a day); requestRender still enforces both caps.
+    const promoted = (await listPool(db)).slice(0, Math.max(1, settings.daily_render_cap));
+    const best = promoted[0];
     let render: RenderRequest | null = null;
-    if (best) {
+    for (const topic of promoted) {
       await db.query(
         `UPDATE explainers.topics SET status = 'promoted', updated_at = now() WHERE id = $1`,
-        [best.id],
+        [topic.id],
       );
-      render = await requestRender(db, { topicId: best.id, trigger: 'auto', settings, now: deps.now });
+      const requested = await requestRender(db, { topicId: topic.id, trigger: 'auto', settings, now: deps.now });
+      render ??= requested;
+      if (!requested.ok) break;
     }
 
     await db.query(

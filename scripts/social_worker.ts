@@ -8,10 +8,14 @@
  * A queued run (3 AM or manual) is carried out by scripts/social_daily.ts in a
  * child process (--run-id), so a Chromium crash or memory spike ends the
  * child, not the worker. After it: each shipped post's slides are rendered to
- * JPEGs in Storage, and the best post takes today's 7:00–8:15 AM window.
+ * JPEGs in Storage, and the best posts take today's windows (9:00–10:00 AM, 2:30–3:30 PM).
  *
  * Nothing is scheduled or published unless social.settings.publishing_live is
  * on. Insights: every 30 minutes while a carousel is fresh, and a 5:30 AM sweep.
+ *
+ * Social Hub (P2-M1): a 5:45 AM account sweep into the social_hub schema, and
+ * any refresh the hub queued (refresh-on-visit): account pull, carousel
+ * insights, and the Trial Reels insights poll (its own claim and cooldown).
  *
  * LIVE when auto_run is on: Claude, web search, Jev (~$2 a night, capped by
  * the run's cap_usd). The worker never turns either switch on.
@@ -45,7 +49,7 @@ async function main(): Promise<void> {
   const { socialQuery } = await import('@/lib/social/store');
   const { autoRunOn, getSocialSetting, publishingLive, requireApproval } = await import('@/lib/social/overnight/settings');
   const runs = await import('@/lib/social/overnight/runs');
-  const { releaseDueSchedules, scheduleRunPost } = await import('@/lib/social/overnight/schedule');
+  const { releaseDueSchedules, scheduleRunPosts } = await import('@/lib/social/overnight/schedule');
   const { claimAndPublish } = await import('@/lib/social/overnight/publish');
   const { createLiveCarouselClient, metaConfigured } = await import('@/lib/social/overnight/meta');
   const { createCarouselInsightsClient, pollCarouselInsights } = await import('@/lib/social/overnight/insights');
@@ -54,6 +58,9 @@ async function main(): Promise<void> {
   const { storeSlideJpegs } = await import('@/lib/social/overnight/slides');
   const { checkRenderFit } = await import('@/lib/social/render/fit-check');
   const { closeDbPool } = await import('@/lib/db');
+  const hub = await import('@/lib/instagram/account-sweep');
+  const { createGraph } = await import('@/lib/instagram/graph');
+  const { pollDueInsights } = await import('@/lib/reels/media-insights/poll');
   const query = await socialQuery();
 
   let stopping = false;
@@ -67,6 +74,25 @@ async function main(): Promise<void> {
 
   const nextRun = () => nextRunAt(new Date(), cfg.SOCIAL_RUN_HOUR_LOCAL, cfg.SOCIAL_RUN_MINUTE_LOCAL);
   const nextSweep = () => nextRunAt(new Date(), cfg.SOCIAL_INSIGHTS_HOUR_LOCAL, cfg.SOCIAL_INSIGHTS_MINUTE_LOCAL);
+  const nextHubSweep = () => nextRunAt(new Date(), cfg.HUB_SWEEP_HOUR_LOCAL, cfg.HUB_SWEEP_MINUTE_LOCAL);
+
+  /** Account sweep for the Social Hub; `id` is the refresh row it reports into. */
+  async function hubSweep(id: string, withPostPolls: boolean): Promise<void> {
+    let stats = null;
+    let failure: string | null = null;
+    try {
+      const graph = createGraph();
+      stats = await hub.runAccountSweep({ query, call: graph.call, igUserId: graph.igUserId, publishingLimit: () => graph.ops.publishingLimit() });
+      if (withPostPolls) {
+        await insights(true).catch((error) => stats!.errors.push(`carousel insights: ${errorText(error)}`));
+        await pollDueInsights({}).catch((error: unknown) => stats!.errors.push(`reels insights: ${errorText(error)}`));
+      }
+    } catch (error) {
+      failure = errorText(error);
+    }
+    await hub.finishHubRefresh(query, id, stats, failure).catch((error) => log('hub_refresh_record_failed', { error: errorText(error) }));
+    log('hub_sweep_complete', { id, failure, ...(stats ? { days: stats.days, demographics: stats.demographics, onlineHours: stats.onlineHours, quota: stats.quota, errors: stats.errors.slice(0, 5) } : {}) });
+  }
 
   /** The daily script in a child process. Resolves with its exit code and the end of its stderr. */
   function runDailyScript(runId: string, stories: number, capUsd: number): Promise<{ code: number | null; tail: string }> {
@@ -108,8 +134,9 @@ async function main(): Promise<void> {
     }
 
     if (await publishingLive()) {
-      const scheduled = await scheduleRunPost(query, run.id);
-      log('schedule', scheduled.scheduled ? { runId: run.id, publishAt: scheduled.publishAt } : { runId: run.id, note: scheduled.note });
+      for (const scheduled of await scheduleRunPosts(query, run.id)) {
+        log('schedule', scheduled.scheduled ? { runId: run.id, publishAt: scheduled.publishAt } : { runId: run.id, note: scheduled.note });
+      }
     }
   }
 
@@ -122,6 +149,7 @@ async function main(): Promise<void> {
   try {
     let runAt = nextRun();
     let sweepAt = nextSweep();
+    let hubSweepAt = nextHubSweep();
     let lastInsights = 0;
     log('scheduled', { nextRunAt: runAt.toISOString(), nextInsightsAt: sweepAt.toISOString(), pollMs: POLL_MS });
 
@@ -146,6 +174,27 @@ async function main(): Promise<void> {
         lastInsights = Date.now();
         sweepAt = nextSweep();
         continue;
+      }
+
+      if (Date.now() >= hubSweepAt.getTime()) {
+        if (metaConfigured()) {
+          const id = await hub.startOvernightRefresh(query).catch((error) => {
+            log('hub_sweep_skipped', { error: errorText(error) });
+            return null;
+          });
+          if (id) await hubSweep(id, false);
+        }
+        hubSweepAt = nextHubSweep();
+        continue;
+      }
+
+      if (metaConfigured()) {
+        await hub.failStaleRefreshes(query).catch(() => undefined);
+        const refresh = await hub.claimHubRefresh(query).catch(() => null);
+        if (refresh) {
+          await hubSweep(refresh.id, true);
+          continue;
+        }
       }
 
       const claimed = await runs.claimRun(query).catch((error) => {

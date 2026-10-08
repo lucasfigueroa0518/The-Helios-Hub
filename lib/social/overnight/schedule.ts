@@ -1,13 +1,17 @@
 import type { Query } from '@/lib/social/store/pg';
 
 import { calendarDateKey } from '@/lib/instagram/clock';
-import { SOCIAL_TIMEZONE } from './config';
+import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
+import { slotTakenKey } from '@/lib/instagram/window';
+import { DEFAULT_POSTS_PER_DAY, SOCIAL_TIMEZONE } from './config';
 import { queuePublish } from './publish';
-import { chooseCarouselSlot, uniformIndex } from './slots';
+import { chooseCarouselSlots, uniformIndex } from './slots';
 
 /**
- * One carousel per Eastern day in the 7:00–8:15 AM window, the same shape as
- * reels.posting_schedule. The 3:00 AM run fills today's window only while
+ * Up to `posts_per_day` carousels per Eastern day (default 2), one per
+ * window (9:00–10:00 AM, 2:30–3:30 PM), the same shape as
+ * reels.posting_schedule, each ≥ 30 minutes from any other feed post
+ * (SH-46 – SH-48). The 3:00 AM run fills today's windows only while
  * publishing is live; a due slot becomes a normal publish attempt.
  */
 
@@ -15,13 +19,20 @@ function isUniqueViolation(error: unknown): boolean {
   return (error as { code?: string } | null)?.code === '23505';
 }
 
-async function takenDays(query: Query, fromDate: string): Promise<Set<string>> {
+async function takenSlots(query: Query, fromDate: string): Promise<Set<string>> {
   const { rows } = await query(
-    `SELECT ny_date::text AS ny_date FROM social.posting_schedule
+    `SELECT ny_date::text AS ny_date, slot FROM social.posting_schedule
       WHERE status IN ('scheduled', 'publishing', 'published') AND ny_date >= $1::date`,
     [fromDate],
   );
-  return new Set(rows.map((r) => r.ny_date as string));
+  return new Set(rows.map((r) => slotTakenKey(r.ny_date as string, r.slot as string)));
+}
+
+/** `posts_per_day` from social.settings (SH-48), else the default. */
+export async function postsPerDay(query: Query): Promise<number> {
+  const { rows } = await query(`SELECT value FROM social.settings WHERE key = 'posts_per_day'`);
+  const value = Number(rows[0]?.value);
+  return Number.isInteger(value) && value >= 1 ? value : DEFAULT_POSTS_PER_DAY;
 }
 
 export type ScheduleOutcome = { scheduled: true; id: string; publishAt: string } | { scheduled: false; note: string };
@@ -44,8 +55,9 @@ export async function schedulePost(
   if (existing) return { scheduled: true, id: existing.id, publishAt: new Date(existing.publish_at).toISOString() };
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const choice = chooseCarouselSlot(now, await takenDays(query, calendarDateKey(now, SOCIAL_TIMEZONE)), rng, throughDate);
-    if (!choice) return { scheduled: false, note: throughDate ? 'Today’s carousel window is taken or over.' : 'No carousel window is open in the next two weeks.' };
+    const busy = [...(await busyFeedTimes(query, now, 'social')), ...(await ownFeedTimes(query, 'social', now))];
+    const choice = chooseCarouselSlots(now, await takenSlots(query, calendarDateKey(now, SOCIAL_TIMEZONE)), busy, await postsPerDay(query), rng, throughDate);
+    if (!choice) return { scheduled: false, note: throughDate ? 'Today’s carousel windows are taken or over.' : 'No carousel window is open in the next two weeks.' };
     try {
       const { rows } = await query(
         `INSERT INTO social.posting_schedule (post_id, ny_date, slot, publish_at, status, source, approved_at)
@@ -63,20 +75,33 @@ export async function schedulePost(
 }
 
 /**
- * After a run: the run's best post (lowest slug number = best-ranked story)
- * that is in review with its slides stored goes into today's window. The
- * caller checks publishing_live first.
+ * After a run: the run's best posts (lowest slug number = best-ranked story)
+ * that are in review with slides stored go into today's windows, up to
+ * `posts_per_day` (SH-48: the top two by default). The caller checks
+ * publishing_live first.
  */
-export async function scheduleRunPost(query: Query, runId: string, now = new Date(), rng?: (count: number) => number): Promise<ScheduleOutcome> {
+export async function scheduleRunPosts(query: Query, runId: string, now = new Date(), rng?: (count: number) => number): Promise<ScheduleOutcome[]> {
+  const perDay = await postsPerDay(query);
   const { rows } = await query(
     `SELECT id FROM social.posts
       WHERE run_id = $1 AND status = 'review' AND origin = 'pipeline' AND slide_objects IS NOT NULL
       ORDER BY slug
-      LIMIT 1`,
-    [runId],
+      LIMIT $2`,
+    [runId, perDay],
   );
-  if (!rows[0]) return { scheduled: false, note: 'The run shipped no post ready to schedule.' };
-  return schedulePost(query, rows[0].id, 'auto', now, calendarDateKey(now, SOCIAL_TIMEZONE), rng);
+  if (!rows[0]) return [{ scheduled: false, note: 'The run shipped no post ready to schedule.' }];
+  const out: ScheduleOutcome[] = [];
+  for (const row of rows) {
+    const result = await schedulePost(query, row.id, 'auto', now, calendarDateKey(now, SOCIAL_TIMEZONE), rng);
+    out.push(result);
+    if (!result.scheduled) break;
+  }
+  return out;
+}
+
+/** The run's best post only (kept for callers that want one). */
+export async function scheduleRunPost(query: Query, runId: string, now = new Date(), rng?: (count: number) => number): Promise<ScheduleOutcome> {
+  return (await scheduleRunPosts(query, runId, now, rng))[0]!;
 }
 
 /** A person approves a scheduled carousel (the Social Hub review screen). */
@@ -123,4 +148,21 @@ export async function releaseDueSchedules(query: Query, opts: { requireApproval:
     }
   }
   return released;
+}
+
+export const HARD_PUBLISH_NOTE = 'Hard published from the Social Hub (posted now, outside its slot).';
+
+/**
+ * Hard publish (Social Hub, SH-15/SH-17): post this carousel now. A person's
+ * click is its approval, so the post's waiting slot is approved and closed
+ * (cancelled with the reason) before the force attempt is queued; the slot
+ * can then never post it a second time.
+ */
+export async function hardPublishPost(query: Query, postId: string) {
+  await query(
+    `UPDATE social.posting_schedule SET approved_at = coalesce(approved_at, now()), status = 'cancelled', error = $2
+      WHERE post_id = $1 AND status = 'scheduled'`,
+    [postId, HARD_PUBLISH_NOTE],
+  );
+  return queuePublish(query, postId, 'force');
 }
