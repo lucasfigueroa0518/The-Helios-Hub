@@ -9,9 +9,9 @@ This file is the spec for the implementing agent. It follows the conventions of 
 | Field | Value |
 |---|---|
 | Active build | Instagram Stories, version one |
-| Stage | M1 built: templates, renderer and mock-ups on fixture data. Waiting for Lucas to approve the templates, the closer line and the brand bends (O-7). |
+| Stage | M1 accepted 2026-10-08 (Lucas: "Move forward to M2"). M2 in progress. |
 | Branch | `stories` at `54e794d` (= `main` on 2026-10-07: Trial Reels, the carousel pipeline, and Explainer Reels). No upstream, not pushed; a push does not update `main`. |
-| Next action | Lucas reviews `exports/stories/m1/sheets/`. On approval: commit M1, then M2. |
+| Next action | M2: schema, repository, render review, storage, publisher and insights against stubs. |
 | Last updated | 2026-10-07 (M1 report, decisions S-34 to S-43) |
 
 ## 0. Rules that override everything here
@@ -108,6 +108,7 @@ Interview with Lucas, 2026-10-07. "Default" rows were stated to Lucas at the end
 | O-8 | **Unconfirmed brand details.** The design system still lists `@heliosmarketingg` and `lucas@heliosmarketing.org`. The closer doesn't need them, but say if they changed. | Lucas | M1 |
 | O-9 | **The installed `helios-design-system` skill** in the Claude app is a separate copy managed through claude.ai. It still says Helios Marketing until the updated folder is re-uploaded. | Lucas | Any time |
 | O-10 | **Who sets Guess the Number's difficulty** (S-49). Recommendation: code maps it from the `gtn-candidate@1` answers (`guessable` and `surprise` probabilities → Low / Medium / High, thresholds calibrated on the first runs) so it's measured, not a model's opinion; the writing call only writes the topic. | Lucas | M6 |
+| O-11 | ~~Which style ships~~ **Resolved by S-54.** **Which style ships** for Guess the Number and Free vs. Paid: polished, homemade, or both in rotation (the review could then A/B them on completion and replies). Homemade emoji are the Mac's Apple Color Emoji; a Linux renderer would draw Noto (Android-looking) emoji, which matters for O-5. | Lucas | M6 |
 
 ## 4. Architecture
 
@@ -252,6 +253,9 @@ Decisions after kickoff go here, numbered from S-34.
 | S-50 | **Free vs. Paid opens with an intro slide** in Lucas's words, verbatim: "Free Vs. Paid is our series where we give you guys open source or free tools that can replace the tech you're currently paying for, enjoy :)" under the stacked FREE / vs. / PAID title, both words lit; cue "Tap for today's pick". The ":)" is a deliberate bend of the no-emoji rule. A set is intro → paid → free. | Lucas, M1 review |
 | S-51 | **No hints on Guess the Number.** The question frame is the game line, the question and the cue; question data has no `hint`/`context` field. | Lucas, M1 review |
 | S-52 | **Closer headline:** "Follow for AI news, updates and lessons." ("every morning" removed). | Lucas, M1 review |
+| S-53 | **Homemade style (exploration).** Guess the Number and Free vs. Paid can also render as if built in Instagram's own story editor: Classic text (Inter Medium, Trial Reels' stand-in for San Francisco), the editor's per-line highlight boxes (white, black, see-through, colour), full-screen photos or tilted photo stickers, logos as white-edged cutouts, pen-tool arrows and strike-throughs, emoji glued to their words, a few degrees of tilt, no logo or masthead. Same frame data; `Frame.style` picks `polished` or `homemade`. Safe zones, text fit and credits still apply; text over a full-screen photo must sit in a box and never on a sticker (renderer checks). The polished templates were checkpointed first (`765b922`). | Lucas asked, 2026-10-08 |
+| S-54 | **Guess the Number and Free vs. Paid ship in the homemade style; Morning Download stays polished** (`SERIES_STYLE` in `lib/stories/render/types.ts`). Resolves O-11. | Lucas, 2026-10-08 |
+| S-55 | **Homemade full-screen photos are darkened and see-through** (60% opacity over the backdrop fill, then a 40% black shade) so the typed lines read. | Lucas, 2026-10-08 |
 
 ### 8.2 Prompt and question-set registry
 
@@ -271,10 +275,11 @@ Decisions after kickoff go here, numbered from S-34.
 
 ### 8.3 Milestone reports
 
-**M1 (2026-10-07): templates on fixture data. No model calls, $0 spent.**
+**M1 (2026-10-07 to 10-08): templates on fixture data. No model calls, $0 spent. Accepted by Lucas 2026-10-08** with the homemade style for the two games (S-54, S-55), the closer line (S-52) and the backdrop bends (O-7) as rendered.
 
 - **Built:** `lib/stories/render/`: `types.ts` (frame data, safe zones, 8 MB cap), `copy.ts` (fixed opener, closer and label copy: DRAFT until approved), `StoryFrame.tsx` (one component per role: opener, story, closer, question, answer, paid, free), `stories.css` (Helios tokens, four backdrops), `text-fit.ts` (copied from Tommy's), `render.ts` (React → Chromium → checks → sRGB JPEG, contact sheet; modeled on `fit-check.ts`, copied), `assets/` (Pragmatica, Roboto 300–700, the sun mark), `fixtures/m1.ts` + `fixtures/photos/`. Script `npm run stories:mockups`. Test `tests/stories-render.test.ts` (5, offline).
 - **Variants:** Morning Download opener (photo window and typographic), story frame (bleed and typographic), closer; Guess the Number photo-led, marquee and type-led, each question and answer; Free vs. Paid paid and free. Every one on black, white, orange and green: 60 frames.
+- **Homemade exploration (S-53):** both series also render in an Instagram-editor style: `npm run stories:mockups -- --homemade` writes `exports/stories/m1-homemade/sheets/` (40 frames, all checks passing, largest JPEG 623 KB). `npm test` 1390/1390 (1380 + 10). Polished renders kept in `exports/stories/m1-polished/sheets/` (committed at `765b922`).
 - **Revision 2 (Lucas's review):** intro slides for Guess the Number (S-49) and Free vs. Paid (S-50), no hints (S-51), closer without "every morning" (S-52). 68 frames.
 - **Revision 1 (Lucas's review):** bleed fades everywhere (S-44), game-show Guess the Number (S-45), Free vs. Paid title-led (S-46), no pills (S-47). The fade check was proven with a negative test (copy moved onto a photo fails: "text on a photo (95% visible)").
 - **Renderer checks, all passing:** fonts and images loaded, text fit, nothing out of frame, every text block, logo, cue and credit inside y 250–1580, no text on a bleed photo above 30% opacity. Largest JPEG 389 KB (68 frames).

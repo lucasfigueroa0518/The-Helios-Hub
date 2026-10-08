@@ -3,23 +3,41 @@
  * fixture sets (no model calls), write JPEGs and contact sheets.
  *
  *   npm run stories:mockups [-- --out exports/stories/m1]
+ *   npm run stories:mockups -- --homemade    (S-53: Guess the Number and
+ *     Free vs. Paid in the homemade style, to exports/stories/m1-homemade)
  */
 import path from 'node:path';
 
 import { contactSheet, openRenderer, type FrameReport } from '../lib/stories/render/render';
 import { BACKDROPS, FREE_VS_PAID, GUESS_THE_NUMBER, MORNING_DOWNLOAD, MORNING_DOWNLOAD_TYPE, asSet } from '../lib/stories/render/fixtures/m1';
-import type { Frame } from '../lib/stories/render/types';
+import type { Frame, Style } from '../lib/stories/render/types';
 
+const HOMEMADE = process.argv.includes('--homemade');
 const outArg = process.argv.indexOf('--out');
-const OUT = path.resolve(outArg > 0 ? process.argv[outArg + 1]! : 'exports/stories/m1');
+const OUT = path.resolve(outArg > 0 ? process.argv[outArg + 1]! : HOMEMADE ? 'exports/stories/m1-homemade' : 'exports/stories/m1');
 
 type Job = { sheet: string; title: string; cols: number; sets: Array<{ name: string; frames: Frame[]; labels: string[] }> };
 
 /** Each family is its own set (intro, question, answer); the intro is shown once. */
-const gtn = (backdrop: (typeof BACKDROPS)[number]) =>
-  (['photo', 'marquee', 'type'] as const).flatMap((family, i) => asSet('guess_the_number', backdrop, GUESS_THE_NUMBER[family]).slice(i === 0 ? 0 : 1));
+const gtn = (backdrop: (typeof BACKDROPS)[number], style: Style = 'polished') =>
+  (['photo', 'marquee', 'type'] as const).flatMap((family, i) => asSet('guess_the_number', backdrop, GUESS_THE_NUMBER[family], style).slice(i === 0 ? 0 : 1));
 
-const jobs: Job[] = [
+const homemadeJobs: Job[] = [
+  {
+    sheet: 'guess-the-number-homemade',
+    title: 'HOMEMADE · Guess the Number: intro, then question + answer (full-screen photo, photo sticker, text only). Rows: black, white, orange, green fills',
+    cols: 7,
+    sets: BACKDROPS.map((b) => ({ name: `guess-the-number/${b}/gtn`, frames: gtn(b, 'homemade'), labels: ['intro', 'photo · Q', 'photo · A', 'sticker · Q', 'sticker · A', 'text · Q', 'text · A'].map((l) => `${b} · ${l}`) })),
+  },
+  {
+    sheet: 'free-vs-paid-homemade',
+    title: 'HOMEMADE · Free vs. Paid: intro, paid, free',
+    cols: 6,
+    sets: BACKDROPS.map((b) => ({ name: `free-vs-paid/${b}/fvp`, frames: asSet('free_vs_paid', b, FREE_VS_PAID, 'homemade'), labels: [`${b} · intro`, `${b} · paid`, `${b} · free`] })),
+  },
+];
+
+const polishedJobs: Job[] = [
   {
     sheet: 'morning-download',
     title: 'Helios Morning Download: opener, 3 story frames, closer. Every photo a bleed fade. Rows: black, white, orange, green',
@@ -48,6 +66,8 @@ const jobs: Job[] = [
     sets: BACKDROPS.map((b) => ({ name: `free-vs-paid/${b}/fvp`, frames: asSet('free_vs_paid', b, FREE_VS_PAID), labels: [`${b} · intro`, `${b} · paid`, `${b} · free`] })),
   },
 ];
+
+const jobs = HOMEMADE ? homemadeJobs : polishedJobs;
 
 async function main() {
   const renderer = await openRenderer();

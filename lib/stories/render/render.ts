@@ -15,6 +15,8 @@
  *   5. Contrast: text sits on a bleed photo only where it has faded below
  *      30% (S-44: every photo is a bleed fade; the stops come from fades.ts
  *      through `data-fade`). The masthead over a photo has its own shade.
+ *      Homemade style (S-53): text over a full-screen photo must sit in a
+ *      highlight box (`data-boxed`), and never on a photo sticker.
  *
  * Local files are served from the repo on a private origin; remote photos
  * load from their URLs.
@@ -41,7 +43,7 @@ export type Renderer = {
 
 const MIME: Record<string, string> = {
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml',
-  '.otf': 'font/otf', '.woff2': 'font/woff2',
+  '.otf': 'font/otf', '.woff2': 'font/woff2', '.ttf': 'font/ttf',
 };
 
 /** A photo path inside the repo becomes a URL on the private origin; URLs pass through. */
@@ -64,10 +66,15 @@ export async function framesHtml(frames: Frame[]): Promise<string> {
   (globalThis as { React?: unknown }).React = React;
   const { renderToStaticMarkup } = await import('react-dom/server');
   const { StoryFrame } = await import('./StoryFrame');
+  const { HomemadeFrame } = await import('./HomemadeFrame');
   const css = await fsp.readFile(path.join(process.cwd(), 'lib/stories/render/stories.css'), 'utf8');
+  const homemadeCss = await fsp.readFile(path.join(process.cwd(), 'lib/stories/render/homemade.css'), 'utf8');
   const body = frames
     .map((f, i) => {
-      const inner = renderToStaticMarkup(React.createElement(StoryFrame, { frame: withUrls(f), logoSrc: `${ORIGIN}/__assets/helios-logo.png` }));
+      const inner =
+        f.style === 'homemade'
+          ? renderToStaticMarkup(React.createElement(HomemadeFrame, { frame: withUrls(f) }))
+          : renderToStaticMarkup(React.createElement(StoryFrame, { frame: withUrls(f), logoSrc: `${ORIGIN}/__assets/helios-logo.png` }));
       return `<div class="st-host" data-frame="${i + 1}" style="width:${FRAME_W}px;height:${FRAME_H}px">${inner}</div>`;
     })
     .join('\n');
@@ -76,9 +83,11 @@ export async function framesHtml(frames: Frame[]): Promise<string> {
   return `<!doctype html><html><head><meta charset="utf-8"><style>
 ${face('PragmaticaExtended-Bold.otf', 'Pragmatica Extended', 700)}
 ${[300, 400, 500, 700].map((w) => face(`Roboto-${w}.woff2`, 'Roboto', w)).join('\n')}
+${face('Inter-Medium.ttf', 'Inter', 500)}
 html, body { margin: 0; background: #111; }
 .st-host { position: relative; overflow: hidden; }
 ${css}
+${homemadeCss}
 </style></head><body>${body}</body></html>`;
 }
 
@@ -127,7 +136,7 @@ export async function openRenderer(): Promise<Renderer> {
       });
       await page.goto(`${ORIGIN}/__frames`, { waitUntil: 'networkidle', timeout: 90_000 });
       await page.evaluate(async () => {
-        await Promise.all(['700 40px "Pragmatica Extended"', '300 40px Roboto', '400 40px Roboto', '500 40px Roboto', '700 40px Roboto'].map((f) => document.fonts.load(f)));
+        await Promise.all(['700 40px "Pragmatica Extended"', '300 40px Roboto', '400 40px Roboto', '500 40px Roboto', '700 40px Roboto', '500 40px Inter'].map((f) => document.fonts.load(f)));
         await document.fonts.ready;
         await Promise.all([...document.images].map((img) => (img.complete ? null : new Promise((r) => { img.onload = img.onerror = r; }))));
       });
@@ -138,7 +147,7 @@ export async function openRenderer(): Promise<Renderer> {
       const measured = await page.evaluate(
         ({ tol, safeTop, safeBottom, frameH, maxAlpha }) => {
           const global: string[] = [];
-          for (const f of ['700 40px "Pragmatica Extended"', '300 40px Roboto', '400 40px Roboto', '500 40px Roboto', '700 40px Roboto']) {
+          for (const f of ['700 40px "Pragmatica Extended"', '300 40px Roboto', '400 40px Roboto', '500 40px Roboto', '700 40px Roboto', '500 40px Inter']) {
             if (!document.fonts.check(f)) global.push(`font did not load: ${f}`);
           }
           type R = { left: number; top: number; right: number; bottom: number };
@@ -152,7 +161,7 @@ export async function openRenderer(): Promise<Renderer> {
               if (!img.naturalWidth) problems.push(`image failed to load: ${img.getAttribute('src')}`);
             });
             // 3. Bounds.
-            host.querySelectorAll<HTMLElement>('.st-frame *').forEach((el) => {
+            host.querySelectorAll<HTMLElement>('.st-frame *, .hm-frame *').forEach((el) => {
               if (el.closest('[data-decor], .st-bg')) return;
               const r = el.getBoundingClientRect();
               if (r.width === 0 && r.height === 0) return;
@@ -170,10 +179,20 @@ export async function openRenderer(): Promise<Renderer> {
             }
             // 5. Text on photos.
             const bleeds = [...host.querySelectorAll<HTMLElement>('[data-fade]')];
+            const fullPhotos = [...host.querySelectorAll<HTMLElement>('[data-boxed-only]')];
+            const stickers = [...host.querySelectorAll<HTMLElement>('[data-sticker]')];
             for (const el of safe) {
               if (el.closest('.st-masthead--on-photo') || el.classList.contains('st-credit')) continue;
               if (el.querySelector('[data-safe]')) continue; // judge the innermost text blocks
               const r = el.getBoundingClientRect();
+              for (const c of fullPhotos) {
+                if (overlap(r, c.getBoundingClientRect()) && !el.closest('[data-boxed]')) problems.push(`text on a photo without a box: ${label(el)}`);
+              }
+              // Judge the highlight itself, not the whole line's box.
+              const ink = (el.querySelector('.hm-hl') ?? el).getBoundingClientRect();
+              for (const c of stickers) {
+                if (overlap(ink, c.getBoundingClientRect())) problems.push(`text on a photo sticker: ${label(el)}`);
+              }
               for (const c of bleeds) {
                 const cr = c.getBoundingClientRect();
                 if (!overlap(r, cr)) continue;

@@ -113,3 +113,32 @@ test('every photo is a bleed fade (S-44), and no frame draws a pill cue (S-47)',
 test('an intro frame on Morning Download fails loudly (its opener is the intro)', async () => {
   await assert.rejects(framesHtml(asSet('morning_download', 'black', [{ role: 'intro' }])), /no intro frame/);
 });
+
+test('homemade style (S-53): same data, Instagram-editor look; every line on a full photo is boxed', async () => {
+  const frames = [
+    ...Object.values(GUESS_THE_NUMBER).flatMap((set) => asSet('guess_the_number', 'black', set, 'homemade')),
+    ...asSet('free_vs_paid', 'black', FREE_VS_PAID, 'homemade'),
+  ];
+  const html = await framesHtml(frames);
+  assert.equal((html.match(/class="hm-frame /g) ?? []).length, frames.length);
+  assert.doesNotMatch(html, /class="st-frame /);
+  assert.match(html, /font-family: 'Inter'; src: url\('http:\/\/stories\.local\/__assets\/Inter-Medium\.ttf'\)/);
+  // Instagram's highlight boxes, pen arrows, stickers, emoji.
+  assert.match(html, /hm-hl hm-box--white/);
+  assert.match(html, /class="hm-pen"/);
+  assert.match(html, /data-sticker="true"/);
+  assert.match(html, /🤔/);
+  // No logo or masthead in the homemade look.
+  assert.doesNotMatch(html, /helios-logo\.png/);
+  // Lines over a full-screen photo carry a box.
+  const photoFrame = /<div class="hm-frame[^"]*hm-role-question"[\s\S]*?data-boxed-only="true"[\s\S]*?(?=<div class="st-host"|$)/.exec(html)?.[0] ?? '';
+  assert.ok(photoFrame.includes("Can you guess"), "found the full-photo question frame");
+  for (const line of photoFrame.match(/<div class="hm-line[^>]*>/g) ?? []) assert.match(line, /data-boxed="true"/);
+});
+
+test('pen strokes are seeded: same text, same stroke', async () => {
+  const { arrowPaths, seedOf, strikePath } = await import('@/lib/stories/render/pen');
+  assert.deepEqual(arrowPaths(170, 90, seedOf('tap to play')), arrowPaths(170, 90, seedOf('tap to play')));
+  assert.notDeepEqual(arrowPaths(170, 90, seedOf('tap to play')), arrowPaths(170, 90, seedOf('tap for the free one')));
+  assert.match(strikePath(200, 60, 7), /^M/);
+});

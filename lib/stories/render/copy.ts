@@ -56,3 +56,37 @@ export const FVP = {
   devTool: 'Developer tool',
   free: 'Free',
 };
+
+/**
+ * Homemade style (S-53, exploration): the same words as above, typed the way
+ * someone types a story on their phone, with emoji. DRAFT until Lucas
+ * approves the homemade look. An emoji is glued to the word before it with a
+ * no-break space, the way a phone keeps them on one line.
+ */
+export const HOMEMADE = {
+  gtn: {
+    today: "Today's",
+    title: '“Guess the Number”\u00A0🎯',
+    difficulty: 'Difficulty',
+    /** Difficulty as chili peppers, the way people rate heat. */
+    spice: { low: '🌶️', medium: '🌶️🌶️', high: '🌶️🌶️🌶️' },
+    topic: 'Topic',
+    play: 'tap to play',
+    kicker: 'Can you guess the number?\u00A0🤔',
+    cue: 'lock it in 🔒 tap to reveal',
+    reveal: 'the answer is…',
+    wow: '🤯',
+    close: 'how close did you get?\u00A0👀',
+  },
+  fvp: {
+    free: 'FREE',
+    vs: 'vs',
+    paid: 'PAID',
+    introCue: "tap for today's pick",
+    ouch: '😬',
+    cue: 'tap for the free one',
+    freeBadge: 'FREE\u00A0✅',
+    howTo: 'how to get it\u00A0👇',
+  },
+  photo: '📷',
+};

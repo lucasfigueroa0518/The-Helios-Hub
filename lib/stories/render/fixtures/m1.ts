@@ -4,7 +4,7 @@
  * calls. Used for the design mock-ups and the renderer's offline tests.
  */
 import credits from './photos/credits.json';
-import { BACKDROPS, type Backdrop, type Frame, type FrameData, type Photo, type Series } from '../types';
+import { BACKDROPS, type Backdrop, type Frame, type FrameData, type Photo, type Series, type Style } from '../types';
 
 type CreditKey = keyof typeof credits;
 const DIR = 'lib/stories/render/fixtures/photos';
@@ -128,8 +128,8 @@ export const FREE_VS_PAID: [FrameData, FrameData, FrameData] = [
 ];
 
 /** Number a list of frame data as one set on one backdrop. */
-export function asSet(series: Series, backdrop: Backdrop, data: FrameData[]): Frame[] {
-  return data.map((d, i) => ({ series, backdrop, index: i + 1, total: data.length, data: d }));
+export function asSet(series: Series, backdrop: Backdrop, data: FrameData[], style: Style = 'polished'): Frame[] {
+  return data.map((d, i) => ({ series, backdrop, style, index: i + 1, total: data.length, data: d }));
 }
 
 export { BACKDROPS };

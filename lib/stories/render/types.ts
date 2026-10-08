@@ -71,9 +71,26 @@ export type FreeData = {
 export type FrameData = OpenerData | StoryData | CloserData | IntroData | QuestionData | AnswerData | PaidData | FreeData;
 export type FrameRole = FrameData['role'];
 
+/**
+ * Visual style (S-53, exploration): `polished` is the Helios design system;
+ * `homemade` looks typed out in Instagram's own story editor (Classic text,
+ * highlight boxes, stickers, pen arrows, emoji). Same data, either style.
+ */
+export const STYLES = ['polished', 'homemade'] as const;
+export type Style = (typeof STYLES)[number];
+
+/** The style each series ships in (S-54): Morning Download polished, the two games homemade. */
+export const SERIES_STYLE: Record<Series, Style> = {
+  morning_download: 'polished',
+  guess_the_number: 'homemade',
+  free_vs_paid: 'homemade',
+};
+
 export type Frame = {
   series: Series;
   backdrop: Backdrop;
+  /** Default polished. */
+  style?: Style;
   /** 1-based position in the set, and the set's size. */
   index: number;
   total: number;
