@@ -105,7 +105,7 @@ async function main(): Promise<void> {
             blocked: insights.blocked,
             considered: insights.considered,
             written: insights.written,
-            message: insights.message,
+            note: insights.message,
             detail: insights.detail ?? undefined,
           });
         }

@@ -14,7 +14,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 # bubblewrap + socat: the Linux sandbox for the Explainers render agent (Agent SDK).
 # fonts-noto-color-emoji: the homemade Stories frames' emoji (no Apple Color Emoji on Linux).
-apt-get install -y ca-certificates curl git build-essential python3 python3-venv ffmpeg bubblewrap socat fonts-noto-color-emoji
+apt-get install -y ca-certificates curl git build-essential python3 python3-venv ffmpeg bubblewrap socat fonts-noto-color-emoji unzip
 
 if ! swapon --show | grep -q '/swapfile'; then
   if [[ ! -f /swapfile ]]; then

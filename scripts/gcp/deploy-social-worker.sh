@@ -80,7 +80,7 @@ gcloud compute ssh ${IAP} "${INSTANCE}" --zone="${ZONE}" --project="${PROJECT}" 
   # Headless Chromium for carousel slide renders.
   sudo npx playwright install --with-deps chromium
   # Explainer Reels: pinned HyperFrames CLI + Agent SDK, Chrome for renders, the agent sandbox.
-  command -v bwrap >/dev/null && command -v socat >/dev/null || sudo apt-get install -y -qq bubblewrap socat
+  command -v bwrap >/dev/null && command -v socat >/dev/null && command -v unzip >/dev/null || sudo apt-get install -y -qq bubblewrap socat unzip
   # IG Stories: color emoji for the homemade frames.
   fc-list | grep -qi 'Noto Color Emoji' || sudo apt-get install -y -qq fonts-noto-color-emoji
   sudo mkdir -p /opt/helios-social/explainers/jobs /opt/helios-social/explainers/storage
