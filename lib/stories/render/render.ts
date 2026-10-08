@@ -34,7 +34,7 @@ const TOLERANCE_PX = 1;
 /** Text may sit on a bleed photo only where the photo's mask has faded below this. */
 const BLEED_TEXT_MAX_ALPHA = 0.3;
 
-export type FrameReport = { index: number; role: string; problems: string[]; file?: string; bytes?: number };
+export type FrameReport = { index: number; role: string; problems: string[]; jpeg: Buffer; bytes: number; file?: string };
 export type RenderResult = { ok: boolean; frames: FrameReport[]; problems: string[] };
 export type Renderer = {
   render(frames: Frame[], opts?: { outDir?: string; name?: string }): Promise<RenderResult>;
@@ -212,21 +212,23 @@ export async function openRenderer(): Promise<Renderer> {
       );
       const globalProblems = measured.pop() ?? [];
 
+      // Every frame's JPEG, in order; written to disk too when asked.
+      const hosts = await page.$$('.st-host');
+      const jpegs: Buffer[] = [];
+      for (const host of hosts) jpegs.push(await toStoryJpeg(await host.screenshot({ type: 'png' })));
       const reports: FrameReport[] = frames.map((f, i) => ({
         index: i + 1,
         role: f.data.role,
         problems: [...(fit[i] ?? []).map((x) => `text fit: ${x.element} "${x.text}" (${x.reason}, min ${x.minPx}px)`), ...(measured[i] ?? [])],
+        jpeg: jpegs[i]!,
+        bytes: jpegs[i]!.length,
       }));
-
       if (opts.outDir) {
         await fsp.mkdir(opts.outDir, { recursive: true });
-        const hosts = await page.$$('.st-host');
-        for (const [i, host] of hosts.entries()) {
-          const jpeg = await toStoryJpeg(await host.screenshot({ type: 'png' }));
+        for (const [i, r] of reports.entries()) {
           const file = path.join(opts.outDir, `${opts.name ?? 'frame'}-${String(i + 1).padStart(2, '0')}-${frames[i]!.data.role}.jpg`);
-          await fsp.writeFile(file, jpeg);
-          reports[i]!.file = file;
-          reports[i]!.bytes = jpeg.length;
+          await fsp.writeFile(file, r.jpeg);
+          r.file = file;
         }
       }
       return { ok: globalProblems.length === 0 && reports.every((r) => r.problems.length === 0), frames: reports, problems: globalProblems };
@@ -238,12 +240,21 @@ export async function openRenderer(): Promise<Renderer> {
   return { render, close: () => browser.close() };
 }
 
+export type SheetOptions = { cols: number; scale?: number; labels?: string[]; title?: string };
+
+/** A contact sheet written to disk (M1 mock-ups; Lucas's review). */
+export async function contactSheet(images: Array<string | Buffer>, out: string, opts: SheetOptions): Promise<string> {
+  await fsp.mkdir(path.dirname(out), { recursive: true });
+  await fsp.writeFile(out, await contactSheetJpeg(images, opts));
+  return out;
+}
+
 /**
- * Contact sheet (S-33: the render review looks at the set as one image; M1:
- * Lucas reviews the templates). Rows of `cols` frames at `scale`, an optional
- * label under each.
+ * Contact sheet (S-33: the render review looks at the set as one image).
+ * Rows of `cols` frames at `scale`, an optional label under each. JPEG.
  */
-export async function contactSheet(files: string[], out: string, opts: { cols: number; scale?: number; labels?: string[]; title?: string }): Promise<string> {
+export async function contactSheetJpeg(images: Array<string | Buffer>, opts: SheetOptions): Promise<Buffer> {
+  const files = images;
   const sharp = (await import('sharp')).default;
   const scale = opts.scale ?? 0.25;
   const tw = Math.round(FRAME_W * scale), th = Math.round(FRAME_H * scale);
@@ -263,7 +274,5 @@ export async function contactSheet(files: string[], out: string, opts: { cols: n
     const text = opts.labels?.[i];
     if (text) layers.push({ input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${tw}" height="${labelH}"><text x="2" y="30" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#bdbdbd">${esc(text)}</text></svg>`), left, top: top + th });
   }
-  await fsp.mkdir(path.dirname(out), { recursive: true });
-  await sharp({ create: { width, height, channels: 3, background: '#1a1a1a' } }).composite(layers).jpeg({ quality: 88 }).toFile(out);
-  return out;
+  return sharp({ create: { width, height, channels: 3, background: '#1a1a1a' } }).composite(layers).jpeg({ quality: 88 }).toBuffer();
 }

@@ -66,4 +66,8 @@ Lucas Head Shot.jpg
 
 # Explainer Reels local database (PGlite), until a run validates the product
 .explainers-local/
+.stories-local/
+exports/stories/m1/
+exports/stories/m1-homemade/*/
+!exports/stories/m1-homemade/sheets/
 explainers/smoke/.out/

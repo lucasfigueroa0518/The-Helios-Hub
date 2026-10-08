@@ -9,9 +9,9 @@ This file is the spec for the implementing agent. It follows the conventions of 
 | Field | Value |
 |---|---|
 | Active build | Instagram Stories, version one |
-| Stage | M1 accepted 2026-10-08 (Lucas: "Move forward to M2"). M2 in progress. |
+| Stage | M1 accepted 2026-10-08. M2 built and tested offline (2026-10-08); M2 accepted 2026-10-08 with the review prompt approved. Waiting on when to apply the `stories` schema to Supabase (S-61). |
 | Branch | `stories` at `54e794d` (= `main` on 2026-10-07: Trial Reels, the carousel pipeline, and Explainer Reels). No upstream, not pushed; a push does not update `main`. |
-| Next action | M2: schema, repository, render review, storage, publisher and insights against stubs. |
+| Next action | M3 (Morning Download pipeline; its prompts and Jev question sets come to Lucas as drafts). |
 | Last updated | 2026-10-07 (M1 report, decisions S-34 to S-43) |
 
 ## 0. Rules that override everything here
@@ -103,7 +103,7 @@ Interview with Lucas, 2026-10-07. "Default" rows were stated to Lucas at the end
 | O-3 | **Heads-up to Tommy.** Stories reads `social.*`, calls his photo finder as-is (his changes flow into Stories), and inserts rows into `social.used_photos` for photos it publishes. | Lucas tells Tommy | M3 |
 | O-4 | ~~Carousel runs only when Tommy starts it.~~ **Not this build's concern (S-30).** Until the merge, Morning Download simply uses whatever carousel runs exist, and Trial Reels alone on days with none. | — | — |
 | O-5 | **Where the renderer's browser runs.** React templates become images in headless Chromium, as the carousel's do (S-32). `npm ci` installs the `playwright` package but not Chromium or its system libraries. In isolation, Stories renders on Lucas's Mac: dependencies are installed, and Playwright 1.63's own headless Chromium (build 1243) was installed into `~/Library/Caches/ms-playwright` during M1 (the cache only had 1200 and 1217; S-42); on the VM it needs `npx playwright install --with-deps chromium` and a memory check beside the other units. At the merge it renders wherever Tommy's hub renders. | Lucas | M8 |
-| O-6 | **Story insights window.** Confirm in M2 which story metrics the Graph API returns and for how long after posting; the poller is built to capture before expiry. | Agent | M2 |
+| O-6 | ~~Story insights window.~~ **Resolved in M2 (S-60).** | Agent | M2 |
 | O-7 | **Brand bends** to accept on the mock-ups: flooded orange and green backdrops (the system says orange for action, green for metadata, white canvas); a black backdrop (the system says off-black `#171717` for text, never `#000`). Trial Reels already ships flooded grades (D-219, D-221). | Lucas | M1 |
 | O-8 | **Unconfirmed brand details.** The design system still lists `@heliosmarketingg` and `lucas@heliosmarketing.org`. The closer doesn't need them, but say if they changed. | Lucas | M1 |
 | O-9 | **The installed `helios-design-system` skill** in the Claude app is a separate copy managed through claude.ai. It still says Helios Marketing until the updated folder is re-uploaded. | Lucas | Any time |
@@ -256,6 +256,13 @@ Decisions after kickoff go here, numbered from S-34.
 | S-53 | **Homemade style (exploration).** Guess the Number and Free vs. Paid can also render as if built in Instagram's own story editor: Classic text (Inter Medium, Trial Reels' stand-in for San Francisco), the editor's per-line highlight boxes (white, black, see-through, colour), full-screen photos or tilted photo stickers, logos as white-edged cutouts, pen-tool arrows and strike-throughs, emoji glued to their words, a few degrees of tilt, no logo or masthead. Same frame data; `Frame.style` picks `polished` or `homemade`. Safe zones, text fit and credits still apply; text over a full-screen photo must sit in a box and never on a sticker (renderer checks). The polished templates were checkpointed first (`765b922`). | Lucas asked, 2026-10-08 |
 | S-54 | **Guess the Number and Free vs. Paid ship in the homemade style; Morning Download stays polished** (`SERIES_STYLE` in `lib/stories/render/types.ts`). Resolves O-11. | Lucas, 2026-10-08 |
 | S-55 | **Homemade full-screen photos are darkened and see-through** (60% opacity over the backdrop fill, then a 40% black shade) so the typed lines read. | Lucas, 2026-10-08 |
+| S-56 | **Stories prices its own Claude calls** (`lib/stories/cost.ts`): the shared `lib/anthropic-pricing.ts` prices every Haiku at Haiku 4.5's $1/$5, ten times Haiku 5.5's $0.10/$0.50 list price. A separate task was raised to fix the shared helper. | Agent, M2 |
+| S-57 | **Render review call shape.** Haiku 5.5 (`claude-haiku-5-5`), thinking on at `effort: low`, `tool_choice: auto` with a strict `submit_review` tool (a forced tool call would skip thinking), no sampling parameters. Cache breakpoints on the last tool and the system block; the frame list and the contact sheet (one JPEG) are the uncached per-set suffix. Haiku 5.5 caches prefixes of 512 tokens and up. About $0.0005 a set. | Agent, M2 |
+| S-58 | **Render review menu:** `backdrop`, `crop`, `family` (Guess the Number; question and answer move together), `drop_photo`, `none`. A frame the renderer's code checks already fail is flagged without asking the model; a change that breaks the code checks is undone and flagged; a changed frame still failing on the second look is flagged; a review that errors or refuses flags the whole set. | Agent, M2 |
+| S-59 | **Publishing a set:** check the account's API publishing quota (100 posts per rolling 24 hours) has room for every frame; create every container first and wait until all are `FINISHED` (status checked once a minute, up to five times, per Meta); only then publish in order, 4 seconds apart, 3 attempts per frame. A container error or expiry stops the set before anything is live; a frame that still fails stops the set and reports what went out. | Agent, M2 (Meta content-publishing docs, 2026-10-08) |
+| S-60 | **Story insights (resolves O-6):** reach, views, replies, shares, follows, profile_visits, total_interactions, and navigation by `story_navigation_action_type` (tap forward, tap back, exit, swipe forward); `impressions` is deprecated and not asked for. Metrics are lifetime and "only available for 24 hours" (can lag up to 48). Poll every 2 hours; the final capture lands at 23 hours. Under 5 viewers (error 10) is an empty capture, not a failure; `replies` reads 0 for viewers in Europe and Japan. A `story_insights` webhook could capture final numbers at expiry later. | Agent, M2 (Meta media-insights reference, 2026-10-08) |
+| S-61 | **The `stories` schema goes to Supabase only on Lucas's go-ahead** (`npm run db:stories`; `DATABASE_URL` is the shared production database). Until then tests use PGlite, and local runs can use PGlite at `.stories-local/` (the Explainers precedent). | Agent, M2 |
+| S-62 | **Storage over `fetch` with TLS verification on**; the reels copy it was modeled on turns verification off. Bucket `stories`, private; frames at `sets/<set id>/<seq>-<role>.jpg`, signed for 1 hour when the container is created. | Agent, M2 |
 
 ### 8.2 Prompt and question-set registry
 
@@ -271,9 +278,15 @@ Decisions after kickoff go here, numbered from S-34.
 | `fvp-pair-score@1` | Pair scoring | Jev | Draft, needs approval |
 | `fvp-copy@1` | Free vs. Paid copy | Sonnet | Draft, needs approval |
 | `same-event` (Stories copy) | Cross-system merge | Jev | Draft, needs approval |
-| `stories-render-review@1` | Contact-sheet review of a rendered set | Haiku 5.5 | Draft, needs approval |
+| `stories-render-review@1` | Contact-sheet review of a rendered set | Haiku 5.5 | Approved by Lucas 2026-10-08 (`lib/stories/render/review.ts` `REVIEW_SYSTEM`) |
 
 ### 8.3 Milestone reports
+
+**M2 (2026-10-08), accepted by Lucas 2026-10-08: schema, repository, render review, storage, publisher, insights. Offline only; no live Claude, Meta or Supabase call; $0 spent.**
+
+- **Built:** `db/stories_schema.sql` (9 tables in schema `stories`: sets, frames, candidates, history, insights, jev_logs, cost_events, settings, feedback; one live set per series per day) + `scripts/apply_stories_schema.js` (`npm run db:stories`, not run: S-61); `lib/stories/db.ts`, `local-db.ts` (PGlite), `settings.ts` (S-05, S-20 defaults, auto off), `repository.ts` (guarded status moves, build save, renders, history, costs, Jev logs, insights); `render/review.ts` (`stories-render-review@1`, S-33, S-57, S-58); `cost.ts` (S-56); `storage.ts` (S-62); `publish/meta.ts`, `publish/publish.ts` (S-59), `publish/insights.ts` (S-60); `render-stage.ts` (render → review → upload → save → ready, words checked unchanged). The renderer now returns each frame's JPEG and builds contact sheets in memory.
+- **Accept met:** `npm test` 1419/1419 (1390 + 29 new, all offline: PGlite, stubbed Haiku, stubbed Meta and storage). `npm run test:stories:render` (real Chromium): a fixture set of each series renders to 1080×1920 sRGB JPEGs under 8 MB (largest 414 KB), is reviewed, uploaded and saved `ready` on PGlite. `tsc --noEmit`: only the 5 known errors.
+- **Needs Lucas:** approve the review prompt (`REVIEW_SYSTEM`); say when to apply the schema to Supabase (needed by M4 at the latest, for the Stories tab on Vercel).
 
 **M1 (2026-10-07 to 10-08): templates on fixture data. No model calls, $0 spent. Accepted by Lucas 2026-10-08** with the homemade style for the two games (S-54, S-55), the closer line (S-52) and the backdrop bends (O-7) as rendered.
 
