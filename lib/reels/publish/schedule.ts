@@ -1,4 +1,3 @@
-import { busyFeedTimes } from '@/lib/instagram/feed-spacing';
 import { dbQuery } from '@/lib/db';
 import { queuePublish, publishReadiness, type PublishTrigger } from '@/lib/reels/music/publish';
 import { getSetting } from '@/lib/reels/music/store';
@@ -138,9 +137,8 @@ export async function schedulePostIdea(
   }
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    // SH-47: keep ≥ 30 minutes from Explainer and Carousel feed posts (Trial Reels logic otherwise unchanged, SH-59).
-    const busy = await busyFeedTimes((text, params) => dbQuery(text, params), now, 'reels').catch(() => []);
-    const choice = chooseSlot(now, await takenSlots(calendarDateKey(now)), uniformIndex, POSTING_TIME_ZONE, throughDate, busy);
+    // Trial Reels are exempt from the cross-type feed spacing (D33 revises SH-47).
+    const choice = chooseSlot(now, await takenSlots(calendarDateKey(now)), uniformIndex, POSTING_TIME_ZONE, throughDate);
     if (!choice) {
       const note = throughDate
         ? 'No posting window is still open today.'

@@ -1,11 +1,15 @@
 /**
  * Booked feed posts across every content type, for the ≥ 30-minute spacing
  * rule (SH-47). Each schema is read on its own and a missing one is skipped
- * (Explainers may run on their own database locally). Stories are exempt.
+ * (Explainers may run on their own database locally). Stories are exempt, and
+ * so are Trial Reels (D33): they go to non-followers, not the follower feed,
+ * so they neither wait for other posts nor make other posts wait.
  */
 export type SpacingQuery = (text: string, params?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }>;
 
-export type FeedSchema = 'reels' | 'explainers' | 'social';
+export type FeedSchema = 'explainers' | 'social';
+
+const FEED_SCHEMAS: readonly FeedSchema[] = ['explainers', 'social'];
 
 const BOOKED = (schema: FeedSchema) => `
 SELECT publish_at FROM ${schema}.posting_schedule
@@ -17,7 +21,7 @@ export async function busyFeedTimes(query: SpacingQuery, from: Date, except: Fee
   const fromIso = new Date(from.getTime() - 60 * 60_000).toISOString();
   const toIso = new Date(from.getTime() + 15 * 86_400_000).toISOString();
   const out: Date[] = [];
-  for (const schema of ['reels', 'explainers', 'social'] as const) {
+  for (const schema of FEED_SCHEMAS) {
     if (schema === except) continue;
     try {
       const { rows } = await query(BOOKED(schema), [fromIso, toIso]);

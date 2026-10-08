@@ -79,12 +79,13 @@ Before creating a container, each publisher reads
 `GET /{ig-user-id}/content_publishing_limit` and fails the attempt, with the
 quota in its error, when fewer than 5 posts are left in the 24-hour window.
 
-Posting windows may overlap (SH-47). Every scheduler keeps any two **feed**
-posts at least 30 minutes apart across all types
+Posting windows may overlap (SH-47). The Carousel and Explainer schedulers
+keep any two **feed** posts at least 30 minutes apart
 (`lib/instagram/feed-spacing.ts`, `lib/instagram/window.ts`
-`FEED_GAP_MINUTES`); Stories are not feed posts and are exempt. Trial Reels
-keep their own slots and selection and only skip minutes too close to another
-type's post. Update the table above when adding a window.
+`FEED_GAP_MINUTES`). Stories are not feed posts and are exempt. Trial Reels
+are exempt too (D33): trial reels reach non-followers, not the follower feed,
+so they keep their own slots exactly as before and other types don't space
+around them. Update the table above when adding a window.
 
 ## Naming
 

@@ -76,7 +76,7 @@ export function chooseWindow(
 
 /**
  * Any two feed posts stay at least this far apart, across every content type
- * (SH-47). Stories are not feed posts and are exempt.
+ * (SH-47). Stories are not feed posts and are exempt; so are Trial Reels (D33).
  */
 export const FEED_GAP_MINUTES = 30;
 

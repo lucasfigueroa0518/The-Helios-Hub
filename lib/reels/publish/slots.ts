@@ -2,7 +2,6 @@ import { randomInt } from 'node:crypto';
 
 import { RUN_TIMEZONE } from '@/lib/reels/config';
 import { calendarDateKey, zonedTime } from '@/lib/reels/schedule';
-import { spacedOffsets } from '@/lib/instagram/window';
 
 /**
  * Three posting windows, America/New_York, every day of the week.
@@ -158,8 +157,6 @@ export function chooseSlot(
   rng: (count: number) => number = uniformIndex,
   timeZone = POSTING_TIME_ZONE,
   throughDate?: string,
-  /** Other content types' feed posts (SH-47): minutes within 30 minutes of one are skipped. */
-  busy: readonly Date[] = [],
 ): SlotChoice | null {
   const start = calendarDateKey(now, timeZone);
   const last = throughDate ?? addCalendarDays(start, 13);
@@ -170,21 +167,12 @@ export function chooseSlot(
       if (taken.has(slotKey(nyDate, slot.id))) continue;
       const open = openMinuteRange(nyDate, slot.id, now, timeZone);
       if (!open) continue;
-      if (busy.length === 0) {
-        const drawn = rng(open.count);
-        if (!Number.isInteger(drawn) || drawn < 0 || drawn >= open.count) {
-          throw new Error(`Slot draw returned ${drawn} for a window of ${open.count} minutes.`);
-        }
-        const offset = open.startOffset + drawn;
-        return { nyDate, slot: slot.id, publishAt: slotMinuteInstant(nyDate, slot.id, offset, timeZone) };
+      const drawn = rng(open.count);
+      if (!Number.isInteger(drawn) || drawn < 0 || drawn >= open.count) {
+        throw new Error(`Slot draw returned ${drawn} for a window of ${open.count} minutes.`);
       }
-      const offsets = spacedOffsets((o) => slotMinuteInstant(nyDate, slot.id, o, timeZone), open.startOffset, open.count, busy);
-      if (offsets.length === 0) continue;
-      const drawn = rng(offsets.length);
-      if (!Number.isInteger(drawn) || drawn < 0 || drawn >= offsets.length) {
-        throw new Error(`Slot draw returned ${drawn} for ${offsets.length} open minutes.`);
-      }
-      return { nyDate, slot: slot.id, publishAt: slotMinuteInstant(nyDate, slot.id, offsets[drawn]!, timeZone) };
+      const offset = open.startOffset + drawn;
+      return { nyDate, slot: slot.id, publishAt: slotMinuteInstant(nyDate, slot.id, offset, timeZone) };
     }
   }
   return null;

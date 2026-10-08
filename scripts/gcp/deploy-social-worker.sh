@@ -5,6 +5,8 @@
 #   ./scripts/gcp/deploy-social-worker.sh
 #
 # Units: every scripts/gcp/<name>.service listed in SOCIAL_UNITS is copied in.
+# The default is all four social units: every one runs from /opt/helios-social/app,
+# which this script replaces, so leaving one out strands it on a deleted folder (D34).
 # A unit is restarted only if it is already enabled on the VM, so a new unit
 # stays off until someone runs `sudo systemctl enable --now <name>` there.
 #
@@ -18,7 +20,7 @@ cd "$ROOT"
 PROJECT="${GCP_PROJECT:-helios-influencer-network}"
 ZONE="${GCP_ZONE:-us-west1-a}"
 INSTANCE="${SOCIAL_INSTANCE:-helios-social-worker}"
-UNITS="${SOCIAL_UNITS:-helios-reels}"
+UNITS="${SOCIAL_UNITS:-helios-reels helios-social helios-explainers helios-stories}"
 ENV_FILE="${SOCIAL_WORKER_ENV_FILE:-}"
 IAP=""
 if [[ "${GCP_SSH_IAP:-}" == "1" ]]; then
