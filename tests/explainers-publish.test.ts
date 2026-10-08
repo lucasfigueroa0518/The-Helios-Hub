@@ -1,7 +1,8 @@
 /**
  * Explainer Reels overnight (docs/social-overnight.md): only approved renders
- * whose video is in the bucket are scheduled and published; insights land in
- * explainers.media_insights. Offline: the real schema on PGlite, a stubbed
+ * whose video is in the bucket are scheduled and published; slots, attempts
+ * and insights live on the lifecycle spine (social_hub, D36). Offline: the
+ * real schemas on PGlite, a stubbed
  * Meta client, a stubbed bucket.
  */
 import test from 'node:test';
@@ -12,6 +13,8 @@ import path from 'node:path';
 
 import type { Queryable } from '@/lib/explainers/db';
 import { pollExplainerInsights, type ExplainerInsightsClient } from '@/lib/explainers/publish/insights';
+import { explainerItemId } from '@/lib/explainers/publish/items';
+import { saveFeedback } from '@/lib/explainers/repository';
 import type { ReelMetaClient } from '@/lib/explainers/publish/meta';
 import { claimAndPublish, publishReadiness, queuePublish } from '@/lib/explainers/publish/publish';
 import { publishingLive, releaseDueSchedules, scheduleApproved } from '@/lib/explainers/publish/schedule';
@@ -38,7 +41,8 @@ async function renderedJob(db: Queryable, opts: { verdict?: 'approved' | 'reject
     await db.query(`INSERT INTO explainers.artifacts (job_id, kind, content) VALUES ($1, 'post_caption', $2)`, [jobId, opts.caption ?? 'AI BRAIN BREAK - EPISODE 1: APIs']);
   }
   if (opts.verdict !== null) {
-    await db.query(`INSERT INTO explainers.feedback (job_id, verdict) VALUES ($1, $2)`, [jobId, opts.verdict ?? 'approved']);
+    // The review page's own write path: it mirrors the verdict onto the spine.
+    await saveFeedback(db, { jobId, verdict: opts.verdict ?? 'approved', tags: [] });
   }
   return jobId;
 }
@@ -90,7 +94,8 @@ test('publishing_live is off by default; approved renders take two windows a day
   const now = new Date('2026-10-08T12:00:00Z'); // 8:00 AM EDT
   assert.equal(await scheduleApproved(db, now, () => 0), 3);
   const { rows } = await db.query<{ job_id: string; d: string; slot: string; publish_at: Date }>(
-    `SELECT job_id, ny_date::text AS d, slot, publish_at FROM explainers.posting_schedule ORDER BY publish_at`,
+    `SELECT ci.native_ref AS job_id, s.ny_date::text AS d, s.slot, s.publish_at
+       FROM social_hub.schedule s JOIN social_hub.content_items ci ON ci.id = s.content_item_id ORDER BY s.publish_at`,
   );
   assert.deepEqual(rows.map((r) => [r.job_id, r.d, r.slot]), [
     [first, '2026-10-08', 'afternoon'],
@@ -108,9 +113,15 @@ test('posts_per_day 1 keeps one window; another type\'s feed post 30 minutes awa
   const a = await renderedJob(db, { title: 'a' });
   const b = await renderedJob(db, { title: 'b' });
   // Own feed post at 1:10 PM EDT on 10-08 (a manual slot): the draw must keep ≥ 30 minutes from it.
-  await db.query(`INSERT INTO explainers.posting_schedule (job_id, ny_date, slot, publish_at, status, source) VALUES ($1, '2026-10-07', 'afternoon', '2026-10-08T17:10:00Z', 'scheduled', 'user')`, [b]);
+  await db.query(
+    `INSERT INTO social_hub.schedule (content_item_id, vertical, ny_date, slot, publish_at, status, source) VALUES ($1, 'explainers', '2026-10-07', 'afternoon', '2026-10-08T17:10:00Z', 'scheduled', 'user')`,
+    [await explainerItemId(db, b)],
+  );
   assert.equal(await scheduleApproved(db, new Date('2026-10-08T12:00:00Z'), () => 0), 1);
-  const row = (await db.query<{ job_id: string; d: string; publish_at: Date }>(`SELECT job_id, ny_date::text AS d, publish_at FROM explainers.posting_schedule WHERE job_id = $1`, [a])).rows[0]!;
+  const row = (await db.query<{ d: string; publish_at: Date }>(
+    `SELECT s.ny_date::text AS d, s.publish_at FROM social_hub.schedule s JOIN social_hub.content_items ci ON ci.id = s.content_item_id WHERE ci.native_ref = $1`,
+    [a],
+  )).rows[0]!;
   assert.equal(row.d, '2026-10-08');
   assert.equal(new Date(row.publish_at).toISOString(), '2026-10-08T17:40:00.000Z', 'first minute 30 minutes clear of 1:10 PM');
 });
@@ -119,15 +130,15 @@ test('end to end: a due slot is released, published as a feed reel, and marked; 
   const { db } = await scratchExplainersDb();
   const jobId = await renderedJob(db);
   await scheduleApproved(db, new Date('2026-10-08T12:00:00Z'), () => 0);
-  await db.query(`UPDATE explainers.posting_schedule SET publish_at = now() - interval '1 minute'`);
+  await db.query(`UPDATE social_hub.schedule SET publish_at = now() - interval '1 minute'`);
   assert.equal(await releaseDueSchedules(db), 1);
   const { meta, calls } = stubMeta();
   const out = await claimAndPublish({ db, meta, signVideo, sleep: async () => undefined });
   assert.equal(out?.status, 'published');
   assert.equal(calls[0], `reel https://signed/jobs/${jobId}/video.mp4 feed=true`);
-  const attempt = (await db.query<{ status: string; media_id: string; caption: string }>(`SELECT status, media_id, caption FROM explainers.publish_attempts`)).rows[0]!;
+  const attempt = (await db.query<{ status: string; media_id: string; caption: string }>(`SELECT status, media_id, caption FROM social_hub.publish_attempts`)).rows[0]!;
   assert.deepEqual([attempt.status, attempt.media_id, attempt.caption], ['published', 'media-9', 'AI BRAIN BREAK - EPISODE 1: APIs']);
-  assert.equal((await db.query<{ status: string }>(`SELECT status FROM explainers.posting_schedule`)).rows[0]!.status, 'published');
+  assert.equal((await db.query<{ status: string }>(`SELECT status FROM social_hub.schedule`)).rows[0]!.status, 'published');
   const again = await queuePublish(db, jobId, 'force');
   assert.equal(again.queued, false);
   assert.equal(await scheduleApproved(db, new Date(), () => 0), 0);
@@ -150,9 +161,9 @@ test('insights: reel metrics stored with skip rate as a fraction; blanks keep ea
   const { db } = await scratchExplainersDb();
   const jobId = await renderedJob(db);
   await db.query(
-    `INSERT INTO explainers.publish_attempts (job_id, trigger, status, caption, video_object, media_id, finished_at)
-     VALUES ($1, 'auto', 'published', 'c', 'v', 'm1', '2026-10-08T12:00:00Z')`,
-    [jobId],
+    `INSERT INTO social_hub.publish_attempts (content_item_id, vertical, trigger, status, caption, payload, media_id, finished_at)
+     VALUES ($1, 'explainers', 'auto', 'published', 'c', '{"video_object": "v"}', 'm1', '2026-10-08T12:00:00Z')`,
+    [await explainerItemId(db, jobId)],
   );
   let views: number | null = 900;
   const client: ExplainerInsightsClient = {
@@ -163,7 +174,7 @@ test('insights: reel metrics stored with skip rate as a fraction; blanks keep ea
   assert.equal((await pollExplainerInsights(db, client, new Date('2026-10-08T13:00:00Z'))).written, 1);
   views = null;
   await pollExplainerInsights(db, client, new Date('2026-10-08T14:00:00Z'));
-  const row = (await db.query<{ views: number; skip_rate: number; avg_watch_time_ms: number }>(`SELECT views, skip_rate, avg_watch_time_ms FROM explainers.media_insights`)).rows[0]!;
+  const row = (await db.query<{ views: number; skip_rate: number; avg_watch_time_ms: number }>(`SELECT views, skip_rate, avg_watch_time_ms FROM social_hub.media_insights`)).rows[0]!;
   assert.deepEqual([row.views, row.skip_rate, row.avg_watch_time_ms], [900, 0.42, 12000]);
 });
 

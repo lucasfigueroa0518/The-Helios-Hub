@@ -4,6 +4,7 @@ import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { chooseFromWindows, slotTakenKey, uniformIndex } from '@/lib/instagram/window';
 
 import { DEFAULT_POSTS_PER_DAY, EXPLAINER_WINDOWS } from './config';
+import { explainerItemId } from './items';
 import { queuePublish } from './publish';
 
 /**
@@ -11,7 +12,8 @@ import { queuePublish } from './publish';
  * window (1:00–2:30 PM, 3:30–5:00 PM), each ≥ 30 minutes from any other
  * feed post (SH-46 – SH-48), the shape of reels.posting_schedule. While
  * publishing is live, every approved, unposted render gets the next free
- * window; a due slot becomes a publish attempt.
+ * window; a due slot becomes a publish attempt. Slots live on the lifecycle
+ * spine (social_hub.schedule, vertical 'explainers', D36).
  */
 
 function isUniqueViolation(error: unknown): boolean {
@@ -46,18 +48,20 @@ export async function scheduleJob(
   now = new Date(),
   rng: (count: number) => number = uniformIndex,
 ): Promise<ScheduleOutcome> {
+  const itemId = await explainerItemId(db, jobId);
+  if (!itemId) return { scheduled: false, note: 'The render is gone.' };
   const active = async () =>
     (await db.query<{ id: string; publish_at: string }>(
-      `SELECT id, publish_at FROM explainers.posting_schedule WHERE job_id = $1 AND status IN ('scheduled', 'publishing') LIMIT 1`,
-      [jobId],
+      `SELECT id, publish_at FROM social_hub.schedule WHERE content_item_id = $1 AND status IN ('scheduled', 'publishing') LIMIT 1`,
+      [itemId],
     )).rows[0];
   const existing = await active();
   if (existing) return { scheduled: true, id: existing.id, publishAt: new Date(existing.publish_at).toISOString() };
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const { rows: takenRows } = await db.query<{ d: string; slot: string }>(
-      `SELECT ny_date::text AS d, slot FROM explainers.posting_schedule
-        WHERE status IN ('scheduled', 'publishing', 'published') AND ny_date >= $1::date`,
+      `SELECT ny_date::text AS d, slot FROM social_hub.schedule
+        WHERE vertical = 'explainers' AND status IN ('scheduled', 'publishing', 'published') AND ny_date >= $1::date`,
       [calendarDateKey(now)],
     );
     const spacing = (text: string, params?: unknown[]) => db.query<Record<string, unknown>>(text, params);
@@ -67,9 +71,9 @@ export async function scheduleJob(
     if (!choice) return { scheduled: false, note: 'No explainer window is open in the next two weeks.' };
     try {
       const { rows } = await db.query<{ id: string; publish_at: string }>(
-        `INSERT INTO explainers.posting_schedule (job_id, ny_date, slot, publish_at, status, source)
-         VALUES ($1, $2::date, $3, $4::timestamptz, 'scheduled', $5) RETURNING id, publish_at`,
-        [jobId, choice.nyDate, choice.slot, choice.publishAt.toISOString(), source],
+        `INSERT INTO social_hub.schedule (content_item_id, vertical, ny_date, slot, publish_at, status, source)
+         VALUES ($1, 'explainers', $2::date, $3, $4::timestamptz, 'scheduled', $5) RETURNING id, publish_at`,
+        [itemId, choice.nyDate, choice.slot, choice.publishAt.toISOString(), source],
       );
       return { scheduled: true, id: rows[0]!.id, publishAt: new Date(rows[0]!.publish_at).toISOString() };
     } catch (error) {
@@ -92,11 +96,13 @@ export async function scheduleApproved(db: Queryable, now = new Date(), rng?: (c
     `SELECT j.id
        FROM explainers.jobs j
        LEFT JOIN explainers.feedback f ON f.job_id = j.id
+       LEFT JOIN social_hub.content_items ci ON ci.vertical = 'explainers' AND ci.native_ref = j.id::text
+       LEFT JOIN social_hub.approvals ap ON ap.content_item_id = ci.id
       WHERE j.status = 'ok'
-        AND (f.verdict = 'approved' OR (NOT $1::boolean AND f.verdict IS NULL))
+        AND (ap.decision = 'approved' OR (NOT $1::boolean AND ap.decision IS NULL))
         AND EXISTS (SELECT 1 FROM explainers.artifacts a WHERE a.job_id = j.id AND a.kind = 'video' AND a.storage_location = 'bucket')
-        AND NOT EXISTS (SELECT 1 FROM explainers.posting_schedule s WHERE s.job_id = j.id AND s.status IN ('scheduled', 'publishing', 'published'))
-        AND NOT EXISTS (SELECT 1 FROM explainers.publish_attempts p WHERE p.job_id = j.id AND p.status IN ('requested', 'creating', 'processing', 'publishing', 'published'))
+        AND NOT EXISTS (SELECT 1 FROM social_hub.schedule s WHERE s.content_item_id = ci.id AND s.status IN ('scheduled', 'publishing', 'published'))
+        AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts p WHERE p.content_item_id = ci.id AND p.status IN ('requested', 'creating', 'processing', 'publishing', 'published'))
       ORDER BY f.created_at NULLS LAST, j.finished_at`,
     [approvalNeeded],
   );
@@ -112,25 +118,28 @@ export async function scheduleApproved(db: Queryable, now = new Date(), rng?: (c
 /** Due slots become publish attempts. A failing readiness check fails the slot, with the reason. */
 export async function releaseDueSchedules(db: Queryable): Promise<number> {
   const { rows } = await db.query<{ id: string; job_id: string; source: string }>(
-    `SELECT id, job_id, source FROM explainers.posting_schedule WHERE status = 'scheduled' AND publish_at <= now() ORDER BY publish_at`,
+    `SELECT s.id, ci.native_ref AS job_id, s.source
+       FROM social_hub.schedule s JOIN social_hub.content_items ci ON ci.id = s.content_item_id
+      WHERE s.vertical = 'explainers' AND s.status = 'scheduled' AND s.publish_at <= now()
+      ORDER BY s.publish_at`,
   );
   let released = 0;
   for (const row of rows) {
     const claimed = await db.query(
-      `UPDATE explainers.posting_schedule SET status = 'publishing' WHERE id = $1 AND status = 'scheduled' RETURNING id`,
+      `UPDATE social_hub.schedule SET status = 'publishing' WHERE id = $1 AND status = 'scheduled' RETURNING id`,
       [row.id],
     );
     if (!claimed.rows[0]) continue;
     const result = await queuePublish(db, row.job_id, row.source === 'user' ? 'approve' : 'auto');
     if (result.queued) {
-      await db.query(`UPDATE explainers.posting_schedule SET publish_attempt_id = $2 WHERE id = $1`, [row.id, result.id]);
+      await db.query(`UPDATE social_hub.schedule SET publish_attempt_id = $2 WHERE id = $1`, [row.id, result.id]);
       released += 1;
     } else if (result.alreadyPublished) {
-      await db.query(`UPDATE explainers.posting_schedule SET status = 'published', error = NULL WHERE id = $1`, [row.id]);
+      await db.query(`UPDATE social_hub.schedule SET status = 'published', error = NULL WHERE id = $1`, [row.id]);
     } else if (result.terminal) {
-      await db.query(`UPDATE explainers.posting_schedule SET status = 'failed', error = $2 WHERE id = $1`, [row.id, result.note]);
+      await db.query(`UPDATE social_hub.schedule SET status = 'failed', error = $2 WHERE id = $1`, [row.id, result.note]);
     } else {
-      await db.query(`UPDATE explainers.posting_schedule SET status = 'scheduled', error = $2 WHERE id = $1`, [row.id, result.note]);
+      await db.query(`UPDATE social_hub.schedule SET status = 'scheduled', error = $2 WHERE id = $1`, [row.id, result.note]);
     }
   }
   return released;

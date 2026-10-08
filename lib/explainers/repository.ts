@@ -1,5 +1,6 @@
 import type { ExplainersDb, Queryable } from '@/lib/explainers/db';
 import type { ExplainersSettings } from '@/lib/explainers/settings';
+import { syncExplainerApproval } from '@/lib/explainers/publish/items';
 import {
   FAILURE_TAGS,
   SCORE_KEYS,
@@ -517,6 +518,8 @@ export async function saveFeedback(
      RETURNING *`,
     [input.jobId, input.verdict, tags, input.note?.trim() || null, input.createdBy ?? null],
   );
+  // The lifecycle spine reads approval from one place for every type (D36).
+  await syncExplainerApproval(db, input.jobId);
   return rows[0];
 }
 

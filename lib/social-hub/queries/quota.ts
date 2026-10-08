@@ -21,13 +21,12 @@ SELECT error AS text, updated_at::text AS at
  ORDER BY updated_at DESC
  LIMIT 1`;
 
-export async function readLatestQuota(q: HubQuery, explainersQ: Promise<HubQuery>): Promise<QuotaRow | null> {
+export async function readLatestQuota(q: HubQuery): Promise<QuotaRow | null> {
   const reads = await Promise.all([
     q<QuotaRow>(FEED_SQL('reels.publish_attempts')).catch(() => ({ rows: [] as QuotaRow[] })),
-    // Carousels and every type that has joined the lifecycle spine (D36).
+    // Every type that has joined the lifecycle spine (D36): Carousels, Explainers.
     q<QuotaRow>(FEED_SQL('social_hub.publish_attempts')).catch(() => ({ rows: [] as QuotaRow[] })),
     q<QuotaRow>(STORIES_SQL).catch(() => ({ rows: [] as QuotaRow[] })),
-    explainersQ.then((eq) => eq<QuotaRow>(FEED_SQL('explainers.publish_attempts'))).catch(() => ({ rows: [] as QuotaRow[] })),
   ]);
   const rows = reads.flatMap((r) => r.rows).filter((r) => r.at);
   rows.sort((a, b) => Date.parse(b.at!) - Date.parse(a.at!));

@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS social_hub.publishing_quota (
 -- measured. These tables hold that life for every type.
 --
 -- Types join one at a time (expand → backfill → switch → contract). The CHECKs
--- that list a type's values say which types have joined: today, Carousels.
+-- that list a type's values say which types have joined: Carousels, Explainers.
 -- No foreign key points into a type's content tables: content can be deleted
 -- (Trial Reels retention) while its publishing record must outlive it.
 -- ════════════════════════════════════════════════════════════════════════════
@@ -116,15 +116,15 @@ CREATE TABLE IF NOT EXISTS social_hub.content_items (
     id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     vertical        text NOT NULL,
     format          text NOT NULL CHECK (format IN ('feed', 'reel', 'story')),
-    -- The type's own id for the content (Carousels: social.posts.id).
+    -- The type's own id for the content (Carousels: social.posts.id; Explainers: explainers.jobs.id).
     native_ref      text NOT NULL,
-    -- The post idea it was made for (Carousels: the news story_id).
+    -- The post idea it was made for (Carousels: the news story_id; Explainers: the topic id).
     idea_ref        text,
     created_at      timestamptz NOT NULL DEFAULT now(),
     UNIQUE (vertical, native_ref)
 );
 ALTER TABLE social_hub.content_items DROP CONSTRAINT IF EXISTS content_items_vertical_check;
-ALTER TABLE social_hub.content_items ADD CONSTRAINT content_items_vertical_check CHECK (vertical IN ('carousels'));
+ALTER TABLE social_hub.content_items ADD CONSTRAINT content_items_vertical_check CHECK (vertical IN ('carousels', 'explainers'));
 CREATE INDEX IF NOT EXISTS idx_social_hub_items_idea ON social_hub.content_items (vertical, idea_ref);
 
 -- A person's (or a setting's) decision on one item. One current decision per
@@ -155,10 +155,12 @@ CREATE TABLE IF NOT EXISTS social_hub.schedule (
     -- The row's id in the type's old posting_schedule, when it was copied over.
     legacy_id           uuid UNIQUE
 );
--- Each type's windows (Carousels: morning 9:00–10:00, afternoon 2:30–3:30).
+-- Each type's windows (Carousels: morning 9:00–10:00, afternoon 2:30–3:30;
+-- Explainers: afternoon 1:00–2:30, late 3:30–5:00).
 ALTER TABLE social_hub.schedule DROP CONSTRAINT IF EXISTS schedule_slot_check;
 ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_slot_check CHECK (
     (vertical = 'carousels' AND slot IN ('morning', 'afternoon'))
+    OR (vertical = 'explainers' AND slot IN ('afternoon', 'late'))
 );
 CREATE INDEX IF NOT EXISTS idx_social_hub_schedule_due
     ON social_hub.schedule (publish_at) WHERE status = 'scheduled';
@@ -183,7 +185,8 @@ CREATE TABLE IF NOT EXISTS social_hub.publish_attempts (
     started_at          timestamptz,
     finished_at         timestamptz,
     caption             text NOT NULL,
-    -- What the type posts, in its own shape (Carousels: {"image_objects": [...]}).
+    -- What the type posts, in its own shape (Carousels: {"image_objects": [...]};
+    -- Explainers: {"video_object": "...", "share_to_feed": true}).
     payload             jsonb NOT NULL DEFAULT '{}'::jsonb,
     -- Containers made before the final one (carousel children, story frames).
     child_container_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
@@ -198,7 +201,7 @@ CREATE TABLE IF NOT EXISTS social_hub.publish_attempts (
 );
 ALTER TABLE social_hub.publish_attempts DROP CONSTRAINT IF EXISTS publish_attempts_trigger_check;
 ALTER TABLE social_hub.publish_attempts ADD CONSTRAINT publish_attempts_trigger_check CHECK (
-    (vertical = 'carousels' AND trigger IN ('approve', 'auto', 'force'))
+    (vertical IN ('carousels', 'explainers') AND trigger IN ('approve', 'auto', 'force'))
 );
 CREATE INDEX IF NOT EXISTS idx_social_hub_publish_recent ON social_hub.publish_attempts (requested_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_social_hub_publish_inflight
@@ -234,3 +237,8 @@ CREATE TABLE IF NOT EXISTS social_hub.media_insights (
 );
 CREATE INDEX IF NOT EXISTS idx_social_hub_media_insights_attempt
     ON social_hub.media_insights (publish_attempt_id, ny_date DESC);
+-- Reel metrics (Explainers, Trial Reels): watch time in ms, skip rate as a 0–1 share of plays.
+ALTER TABLE social_hub.media_insights ADD COLUMN IF NOT EXISTS reposts double precision;
+ALTER TABLE social_hub.media_insights ADD COLUMN IF NOT EXISTS avg_watch_time_ms double precision;
+ALTER TABLE social_hub.media_insights ADD COLUMN IF NOT EXISTS total_watch_time_ms double precision;
+ALTER TABLE social_hub.media_insights ADD COLUMN IF NOT EXISTS skip_rate double precision;

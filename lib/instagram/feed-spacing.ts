@@ -14,9 +14,9 @@ const FEED_SCHEMAS: readonly FeedSchema[] = ['explainers', 'social'];
 const ACTIVE = `status IN ('scheduled', 'publishing', 'published')
    AND publish_at >= $1::timestamptz AND publish_at < $2::timestamptz`;
 
-/** Where each type's bookings live: Carousels on the lifecycle spine (D36), Explainers in their own schema until they join. */
+/** Each type's bookings, on the lifecycle spine (D36). */
 const BOOKED: Record<FeedSchema, string> = {
-  explainers: `SELECT publish_at FROM explainers.posting_schedule WHERE ${ACTIVE}`,
+  explainers: `SELECT publish_at FROM social_hub.schedule WHERE vertical = 'explainers' AND ${ACTIVE}`,
   social: `SELECT publish_at FROM social_hub.schedule WHERE vertical = 'carousels' AND ${ACTIVE}`,
 };
 

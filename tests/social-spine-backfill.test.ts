@@ -8,7 +8,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 
-import { backfillCarousels } from '@/lib/social-hub/backfill';
+import { backfillCarousels, backfillExplainers } from '@/lib/social-hub/backfill';
 import { buildDataset } from '@/lib/social-hub/dataset';
 import { readAll } from '@/lib/social-hub/load';
 import type { SpineQuery } from '@/lib/social-hub/spine';
@@ -93,12 +93,57 @@ test('backfill skips a row the switched code already wrote (no duplicate post fo
     SELECT id, 'carousels', 'force', 'published', 'c' FROM social_hub.content_items WHERE native_ref = '${IDS.socPost1}';`);
   const counts = await backfillCarousels(spine);
   assert.equal(counts.attempts, 0, 'publish_once: the item already has a published attempt');
-  assert.equal((await pg.query<{ n: number }>(`SELECT count(*)::int AS n FROM social_hub.content_items`)).rows[0]!.n, 1);
+  assert.equal((await pg.query<{ n: number }>(`SELECT count(*)::int AS n FROM social_hub.content_items WHERE vertical = 'carousels'`)).rows[0]!.n, 1);
+});
+
+// ── Explainers ──────────────────────────────────────────────────────────────
+
+/** The fixture's Explainers lifecycle as the old tables held it, plus an approved render nobody scheduled yet. */
+const EXPLAINER_LEGACY = `
+DELETE FROM social_hub.media_insights WHERE vertical = 'explainers';
+DELETE FROM social_hub.schedule WHERE vertical = 'explainers';
+DELETE FROM social_hub.publish_attempts WHERE vertical = 'explainers';
+DELETE FROM social_hub.approvals WHERE content_item_id IN (SELECT id FROM social_hub.content_items WHERE vertical = 'explainers');
+DELETE FROM social_hub.content_items WHERE vertical = 'explainers';
+INSERT INTO explainers.publish_attempts (id, job_id, trigger, status, requested_at, finished_at, caption, video_object, media_id, permalink)
+VALUES ('${IDS.expAttempt}', '${IDS.job1}', 'auto', 'published', '2026-10-06T19:25:00Z', '2026-10-06T19:30:00Z', 'caption', 'jobs/1/video.mp4', 'm-e1', 'https://instagram.com/reel/e1');
+INSERT INTO explainers.posting_schedule (id, job_id, ny_date, slot, publish_at, status, source, publish_attempt_id)
+VALUES ('${IDS.expSched}', '${IDS.job1}', '2026-10-06', 'afternoon', '2026-10-06T19:30:00Z', 'published', 'auto', '${IDS.expAttempt}');
+INSERT INTO explainers.media_insights (media_id, ny_date, publish_attempt_id, views, reach, likes, comments, saved, shares, total_interactions, avg_watch_time_ms, total_watch_time_ms, skip_rate)
+VALUES ('m-e1', '2026-10-07', '${IDS.expAttempt}', 400, 310, 20, 3, 15, 12, 50, 9000, 3600000, 0.22);
+INSERT INTO explainers.feedback (job_id, verdict) VALUES ('${IDS.job2}', 'approved');`;
+
+test('backfill Explainers: same hub view, verdicts mirrored (an approved, unscheduled render stays schedulable), idempotent', async () => {
+  const native = await openHubTestDb();
+  await seedHubFixture(native.pg);
+  await native.pg.exec(`
+    INSERT INTO explainers.feedback (job_id, verdict) VALUES ('${IDS.job2}', 'approved');
+    INSERT INTO social_hub.content_items (vertical, format, native_ref, idea_ref) VALUES ('explainers', 'reel', '${IDS.job2}', '${IDS.topic1}');
+    INSERT INTO social_hub.approvals (content_item_id, decision, via) SELECT id, 'approved', 'user' FROM social_hub.content_items WHERE native_ref = '${IDS.job2}';
+    UPDATE explainers.feedback SET created_at = '2026-10-07T08:00:00Z', updated_at = '2026-10-07T08:00:00Z';`);
+  const expected = buildDataset(await readAll(native.query), null, NOW).posts.filter((p) => p.vertical === 'explainers');
+
+  const { pg, query } = await openHubTestDb();
+  await seedHubFixture(pg);
+  await pg.exec(EXPLAINER_LEGACY);
+  await pg.exec(`UPDATE explainers.feedback SET created_at = '2026-10-07T08:00:00Z', updated_at = '2026-10-07T08:00:00Z';`);
+  const spine = query as unknown as SpineQuery;
+  assert.deepEqual(await backfillExplainers(spine), { items: 2, attempts: 1, schedule: 1, insights: 1, approvals: 2 });
+  assert.deepEqual(await backfillExplainers(spine), { items: 0, attempts: 0, schedule: 0, insights: 0, approvals: 0 });
+  const got = buildDataset(await readAll(query), null, NOW).posts.filter((p) => p.vertical === 'explainers');
+  assert.deepEqual(got, expected);
+  const job2 = (await pg.query<{ decision: string }>(
+    `SELECT a.decision FROM social_hub.approvals a JOIN social_hub.content_items ci ON ci.id = a.content_item_id WHERE ci.native_ref = '${IDS.job2}'`,
+  )).rows[0];
+  assert.equal(job2?.decision, 'approved', 'the scheduler reads this; without it the render would never get a slot');
+  // A verdict changed after the copy is re-synced by running again.
+  await pg.exec(`UPDATE explainers.feedback SET verdict = 'rejected', updated_at = now() WHERE job_id = '${IDS.job2}'`);
+  assert.equal((await backfillExplainers(spine)).approvals, 1);
 });
 
 // ── Contract: after the switch nothing writes the old Carousels tables ───────
 
-const LEGACY = /\bsocial\.(posting_schedule|publish_attempts|media_insights)\b/;
+const LEGACY = /\b(social|explainers)\.(posting_schedule|publish_attempts|media_insights)\b/;
 const ALLOWED = new Set(['lib/social-hub/backfill.ts']);
 
 function walk(dir: string): string[] {
@@ -109,7 +154,7 @@ function walk(dir: string): string[] {
   });
 }
 
-test('only the backfill still names social.posting_schedule, publish_attempts or media_insights', () => {
+test('only the backfill still names the frozen Carousels and Explainers lifecycle tables', () => {
   const offenders = ['lib', 'app', 'scripts', 'components']
     .flatMap((dir) => walk(path.join(process.cwd(), dir)))
     .filter((file) => !ALLOWED.has(file) && LEGACY.test(readFileSync(file, 'utf8')));

@@ -340,6 +340,9 @@ INSERT INTO explainers.settings (key, value) VALUES ('publishing_live', 'false':
 INSERT INTO explainers.settings (key, value) VALUES ('require_approval', 'true'::jsonb) ON CONFLICT (key) DO NOTHING;
 
 -- One explainer per Eastern-time window per day.
+-- Frozen: posting_schedule, publish_attempts and media_insights moved to the
+-- lifecycle spine (social_hub, D36/D38). History only; scripts/backfill_spine.ts
+-- reads them and nothing writes them. Dropped in unification Phase 7.
 CREATE TABLE IF NOT EXISTS explainers.posting_schedule (
     id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     job_id              uuid NOT NULL REFERENCES explainers.jobs (id),

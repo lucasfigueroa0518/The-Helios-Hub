@@ -45,10 +45,12 @@ into one shared set of tables in `social_hub`: `content_items` (the stable
 identity of each postable unit), `approvals` (one decision per item),
 `schedule`, `publish_attempts` and `media_insights`, each with a `vertical`
 column. Types join one at a time (expand → backfill → switch → contract;
-`scripts/backfill_spine.ts`). **Carousels have joined**: their slots,
-attempts, approvals and insights live on the spine, and `social.posting_schedule`,
-`social.publish_attempts` and `social.media_insights` are frozen history, read
-only by the backfill until they are dropped. A new type joins the spine
+`scripts/backfill_spine.ts`). **Carousels and Explainers have joined**:
+their slots, attempts, approvals and insights live on the spine, and their old
+`posting_schedule`, `publish_attempts` and `media_insights` tables are frozen
+history, read only by the backfill until they are dropped. Explainers keep
+their review verdict (with its tags) in `explainers.feedback`; saving it
+mirrors the decision onto the item's spine approval. A new type joins the spine
 instead of adding items 3–5 to its own schema.
 6. **Media at a signed public URL** in Supabase Storage. Meta fetches the file
    itself, so local paths and session-protected routes don't work.

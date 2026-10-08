@@ -36,7 +36,7 @@ export async function loadDataset(q: HubQuery = liveHubQuery, now = new Date()):
   const [reads, costs, quota, snapshot, account] = await Promise.all([
     readAll(q, explainersQ),
     settle(readCosts(q, explainersQ)),
-    readLatestQuota(q, explainersQ).catch(() => null),
+    readLatestQuota(q).catch(() => null),
     latestQuotaSnapshot(q, now).catch(() => null),
     readAccount(q).catch((error: unknown) => ({ present: false as const, error: error instanceof Error ? error.message : String(error) })),
   ]);

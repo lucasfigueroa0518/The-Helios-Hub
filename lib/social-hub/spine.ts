@@ -5,7 +5,7 @@
  */
 export type SpineQuery = (text: string, params?: unknown[]) => Promise<{ rows: any[] }>;
 
-export type SpineVertical = 'carousels';
+export type SpineVertical = 'carousels' | 'explainers';
 export type SpineFormat = 'feed' | 'reel' | 'story';
 
 /** The item's stable id, created the first time any lifecycle step touches the content. */
@@ -47,4 +47,9 @@ export async function rejectItem(query: SpineQuery, itemId: string, by: string |
      ON CONFLICT (content_item_id) DO UPDATE SET decision = 'rejected', via = 'user', decided_by = excluded.decided_by, decided_at = now()`,
     [itemId, by],
   );
+}
+
+/** Withdraw a decision (a review reopened): the item is undecided again. */
+export async function clearDecision(query: SpineQuery, itemId: string): Promise<void> {
+  await query(`DELETE FROM social_hub.approvals WHERE content_item_id = $1`, [itemId]);
 }

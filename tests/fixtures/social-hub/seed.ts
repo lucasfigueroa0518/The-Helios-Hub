@@ -29,6 +29,7 @@ export const IDS = {
   art2: '20000000-0000-4000-8000-000000000022',
   expAttempt: '20000000-0000-4000-8000-000000000031',
   expSched: '20000000-0000-4000-8000-000000000041',
+  expItem1: '20000000-0000-4000-8000-000000000051',
   socRun: '30000000-0000-4000-8000-000000000001',
   socPost1: '30000000-0000-4000-8000-000000000011',
   socPost2: '30000000-0000-4000-8000-000000000012',
@@ -109,12 +110,16 @@ INSERT INTO explainers.artifacts (id, job_id, kind, storage_path, storage_locati
  ('${I.art1}', '${I.job1}', 'video', 'jobs/1/video.mp4', 'bucket'),
  ('${I.art2}', '${I.job2}', 'video', 'jobs/2/video.mp4', 'local');
 INSERT INTO explainers.feedback (job_id, verdict, tags) VALUES ('${I.job1}', 'approved', ARRAY['hook', 'pacing']);
-INSERT INTO explainers.publish_attempts (id, job_id, trigger, status, requested_at, finished_at, caption, video_object, media_id, permalink)
-VALUES ('${I.expAttempt}', '${I.job1}', 'auto', 'published', '2026-10-06T19:25:00Z', '2026-10-06T19:30:00Z', 'caption', 'jobs/1/video.mp4', 'm-e1', 'https://instagram.com/reel/e1');
-INSERT INTO explainers.posting_schedule (id, job_id, ny_date, slot, publish_at, status, source, publish_attempt_id)
-VALUES ('${I.expSched}', '${I.job1}', '2026-10-06', 'afternoon', '2026-10-06T19:30:00Z', 'published', 'auto', '${I.expAttempt}');
-INSERT INTO explainers.media_insights (media_id, ny_date, publish_attempt_id, views, reach, likes, comments, saved, shares, total_interactions, avg_watch_time_ms, total_watch_time_ms, skip_rate)
-VALUES ('m-e1', '2026-10-07', '${I.expAttempt}', 400, 310, 20, 3, 15, 12, 50, 9000, 3600000, 0.22);
+-- Explainers' lifecycle is on the spine (social_hub, D36); the verdict above is mirrored as the item's approval.
+INSERT INTO social_hub.content_items (id, vertical, format, native_ref, idea_ref)
+VALUES ('${I.expItem1}', 'explainers', 'reel', '${I.job1}', '${I.topic1}');
+INSERT INTO social_hub.approvals (content_item_id, decision, via) VALUES ('${I.expItem1}', 'approved', 'user');
+INSERT INTO social_hub.publish_attempts (id, content_item_id, vertical, trigger, status, requested_at, finished_at, caption, payload, media_id, permalink)
+VALUES ('${I.expAttempt}', '${I.expItem1}', 'explainers', 'auto', 'published', '2026-10-06T19:25:00Z', '2026-10-06T19:30:00Z', 'caption', '{"video_object": "jobs/1/video.mp4", "share_to_feed": true}', 'm-e1', 'https://instagram.com/reel/e1');
+INSERT INTO social_hub.schedule (id, content_item_id, vertical, ny_date, slot, publish_at, status, source, publish_attempt_id)
+VALUES ('${I.expSched}', '${I.expItem1}', 'explainers', '2026-10-06', 'afternoon', '2026-10-06T19:30:00Z', 'published', 'auto', '${I.expAttempt}');
+INSERT INTO social_hub.media_insights (media_id, ny_date, vertical, publish_attempt_id, views, reach, likes, comments, saved, shares, total_interactions, avg_watch_time_ms, total_watch_time_ms, skip_rate)
+VALUES ('m-e1', '2026-10-07', 'explainers', '${I.expAttempt}', 400, 310, 20, 3, 15, 12, 50, 9000, 3600000, 0.22);
 
 -- ── Carousels ──────────────────────────────────────────────────────────────
 INSERT INTO social.runs (id, kind, started_at, finished_at, hook_pass, cap_usd, claude_usd, total_usd, status, trigger, record)
