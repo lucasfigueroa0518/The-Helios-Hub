@@ -1,4 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk';
+import type Anthropic from '@anthropic-ai/sdk';
+import { newAnthropic } from '@/lib/anthropic-client';
 
 import { priceAnthropicMessages } from '@/lib/anthropic-pricing';
 import { COPY_MODEL, FULL_STORY_CUE_ENABLED } from '@/lib/reels/config';
@@ -69,7 +70,7 @@ export async function writeSlateCopy(
   if (!deps?.client && !process.env.ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY is not set.');
   }
-  const client: CopyClient = deps?.client ?? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client: CopyClient = deps?.client ?? newAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   const targets = await loadCopyTargets(slateId);
   let written = 0;
@@ -149,7 +150,7 @@ export async function writeIdeaCopy(
   const targets = await loadCopyTargets(slateId, { postIdeaId });
   const target = targets[0];
   if (!target) return failed('This post idea has no winning bucket and framework to write from.');
-  const client: CopyClient = deps?.client ?? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client: CopyClient = deps?.client ?? newAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   return writeTargetCopy(client, runId, slateId, target, deps);
 }
 

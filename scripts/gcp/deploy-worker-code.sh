@@ -37,35 +37,55 @@ echo "Deploying worker code → ${INSTANCE} (${ZONE}, project ${PROJECT})"
 # Fail fast if the Anthropic key in worker.env is missing/disabled — otherwise
 # every user's drafting research fails with research_provider_error in production.
 if [[ -f "${ENV_FILE}" ]]; then
-  ANTHROPIC_API_KEY="$(
+  PROBE_STATUS="$(
     node -e '
       const fs = require("fs");
       const text = fs.readFileSync(process.argv[1], "utf8");
-      for (const line of text.split(/\r?\n/)) {
-        const m = line.match(/^ANTHROPIC_API_KEY=(.*)$/);
-        if (!m) continue;
-        let v = m[1].trim();
-        if ((v.startsWith("\"") && v.endsWith("\"")) || (v.startsWith("'\''") && v.endsWith("'\''"))) {
-          v = v.slice(1, -1);
+      const read = (name) => {
+        for (const line of text.split(/\r?\n/)) {
+          const m = line.match(new RegExp("^" + name + "=(.*)$"));
+          if (!m) continue;
+          let v = m[1].trim();
+          if ((v.startsWith("\"") && v.endsWith("\"")) || (v.startsWith("'\''") && v.endsWith("'\''"))) {
+            v = v.slice(1, -1);
+          }
+          return v;
         }
-        process.stdout.write(v);
+        return "";
+      };
+      const key = read("ANTHROPIC_API_KEY");
+      const workspace = read("ANTHROPIC_WORKSPACE_ID");
+      if (!key) {
+        process.stdout.write("missing");
         process.exit(0);
       }
+      const headers = {
+        "content-type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+      };
+      if (workspace) headers["anthropic-workspace-id"] = workspace;
+      fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 1,
+          messages: [{ role: "user", content: "ping" }],
+        }),
+      }).then(async (res) => {
+        fs.writeFileSync("/tmp/helios-anthropic-probe.json", await res.text());
+        process.stdout.write(String(res.status));
+      }).catch((error) => {
+        process.stderr.write(String(error && error.message ? error.message : error) + "\n");
+        process.stdout.write("error");
+      });
     ' "${ENV_FILE}"
   )"
-  if [[ -z "${ANTHROPIC_API_KEY}" ]]; then
+  if [[ "${PROBE_STATUS}" == "missing" || -z "${PROBE_STATUS}" ]]; then
     echo "ERROR: ANTHROPIC_API_KEY missing in ${ENV_FILE}" >&2
     exit 1
   fi
-  PROBE_STATUS="$(
-    curl -sS -o /tmp/helios-anthropic-probe.json -w '%{http_code}' \
-      https://api.anthropic.com/v1/messages \
-      -H "content-type: application/json" \
-      -H "x-api-key: ${ANTHROPIC_API_KEY}" \
-      -H "anthropic-version: 2023-06-01" \
-      -d '{"model":"claude-haiku-4-5-20251001","max_tokens":1,"messages":[{"role":"user","content":"ping"}]}' \
-      || true
-  )"
   if [[ "${PROBE_STATUS}" != "200" ]]; then
     echo "ERROR: ANTHROPIC_API_KEY probe failed (HTTP ${PROBE_STATUS})." >&2
     echo "Sync a working key from .env.local into ${ENV_FILE}, then redeploy." >&2

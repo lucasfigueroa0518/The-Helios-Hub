@@ -1,4 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk';
+import type Anthropic from '@anthropic-ai/sdk';
+import { newAnthropic } from '@/lib/anthropic-client';
 
 import { cachedSystemText, withConversationCache, withToolCache } from '@/lib/anthropic-cache';
 import { priceAnthropicMessages } from '@/lib/anthropic-pricing';
@@ -390,7 +391,7 @@ export const claudeWebSearch: Adapter = {
       listRunSources(runId),
     ]);
 
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const client = newAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const tools: Anthropic.MessageCreateParams['tools'] = [
       { type: 'web_search_20250305', name: 'web_search', max_uses: B6_SEARCH_MAX_USES },
       withToolCache(REPORT_STORY_TOOL as Anthropic.Tool),

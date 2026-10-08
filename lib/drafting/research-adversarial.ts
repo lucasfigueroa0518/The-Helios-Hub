@@ -1,4 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk';
+import type Anthropic from '@anthropic-ai/sdk';
+import { newAnthropic } from '@/lib/anthropic-client';
 
 import {
   withConversationCache,
@@ -715,7 +716,7 @@ async function adversarialLive(
     throw new Error('ANTHROPIC_API_KEY is not configured');
   }
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = newAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const cacheTtl = resolvedDraftingPromptCacheTtl();
   const system: Anthropic.TextBlockParam[] = [{
     type: 'text',

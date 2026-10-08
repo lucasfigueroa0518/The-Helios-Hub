@@ -67,3 +67,6 @@ Lucas Head Shot.jpg
 # Helios Social dev outputs: local to each machine, never in git (Tommy, 2026-10-08)
 /runs/
 /Claude outputs/
+# Explainer Reels local database (PGlite), until a run validates the product
+.explainers-local/
+explainers/smoke/.out/

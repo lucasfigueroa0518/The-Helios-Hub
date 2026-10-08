@@ -22,6 +22,11 @@
     "db:trello:migrate-data": "node scripts/migrate_trello_data.js",
     "db:reels": "node scripts/apply_reels_schema.js",
     "db:social": "node scripts/apply_social_schema.js",
+    "db:explainers": "node scripts/apply_explainers_schema.js",
+    "explainers:fixture": "tsx scripts/explainers_fixture.ts",
+    "explainers:db": "tsx scripts/explainers_local_db.ts",
+    "explainers:worker": "tsx scripts/explainers_worker.ts",
+    "explainers:smoke": "node explainers/smoke/run-smoke.mjs",
     "db:setup": "node scripts/db_setup.js",
     "db:gen-bootstrap": "node scripts/gen_bootstrap.js",
     "worker": "tsx scripts/orchestration_worker.ts",
@@ -99,6 +104,7 @@
     "uuid": "11.1.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@mediapipe/tasks-vision": "1.1.0",
     "@types/jsdom": "^30.0.0",
     "@types/node": "^22.0.0",
@@ -107,6 +113,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.4.20",
+    "embedded-postgres": "17.10.0-beta.17",
     "playwright": "1.63.0",
     "postcss": "^8.5.28",
     "tailwindcss": "^3.4.17",

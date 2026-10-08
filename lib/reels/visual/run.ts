@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { newAnthropic } from '@/lib/anthropic-client';
 import type { Message } from '@anthropic-ai/sdk/resources/messages';
 
 import { priceAnthropicMessages } from '@/lib/anthropic-pricing';
@@ -478,7 +478,7 @@ async function renderClaimed(id: string, client?: SceneClient, jev?: JevRunner):
     });
     return 'failed';
   }
-  const sceneClient: SceneClient = client ?? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const sceneClient: SceneClient = client ?? newAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   let profile: ColorProfile = 'green';
   try {

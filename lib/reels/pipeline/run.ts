@@ -70,7 +70,7 @@ export async function claimAndRun(deps?: Partial<RunDeps>): Promise<RunOutcome |
 }
 
 /**
- * One night: ingest, group, score, write copy for the selected three, clean up.
+ * One night: ingest, group, score, write the day's two or three reels, clean up.
  *
  * The spend watch is checked before any adapter runs (FND-05 / D-023). A run
  * already under way is never aborted partway for budget: a half-ingested night
@@ -146,8 +146,8 @@ export async function executeRun(run: RunRow, deps?: Partial<RunDeps>): Promise<
             copyWritten = copy.filled.filter((slot) => !slot.locked).length;
             selected = copy.filled.length;
             const notes = [
-              copy.filled.length < count
-                ? `Filled ${copy.filled.length} of ${count} passing reels.`
+              copy.status === 'partial' && copy.failures.length === 0
+                ? `Filled ${copy.filled.length} of ${count} reels.`
                 : undefined,
               copy.failures.length > 0
                 ? `Copy failed for ${copy.failures.length} idea(s): ${copy.failures.join('; ')}`

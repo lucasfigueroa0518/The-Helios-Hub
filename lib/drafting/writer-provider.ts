@@ -1,4 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk';
+import type Anthropic from '@anthropic-ai/sdk';
+import { newAnthropic } from '@/lib/anthropic-client';
 
 import { withToolCache } from '@/lib/anthropic-cache';
 import { priceAnthropicMessages, toProviderUsage } from '@/lib/anthropic-pricing';
@@ -140,7 +141,7 @@ async function writeLive(input: DraftingWriteInput): Promise<DraftingWriteResult
     throw new Error('ANTHROPIC_API_KEY is not configured');
   }
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = newAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const cacheTtl = resolvedDraftingPromptCacheTtl();
   const system = buildWriterSystemBlocks({
     skillContent: input.skillContent,

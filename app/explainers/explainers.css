@@ -1,0 +1,82 @@
+/* Explainers-only pieces that the shared Trial Reels classes do not cover. */
+
+.ex-settings { display: grid; gap: 10px; max-width: 760px; margin-top: 22px; }
+.ex-settings .helios-field-input { width: min(320px, 100%); }
+.ex-settings .rh-card__row { align-items: center; flex-wrap: wrap; }
+.ex-settings .rh-muted { margin: 2px 0 0; }
+
+.ex-form { display: grid; gap: 8px; }
+.ex-form + .ex-form { margin-top: 22px; }
+.ex-form .helios-field-input { width: 100%; max-width: none; }
+.ex-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--rh-line-strong);
+  border-radius: 10px;
+  background: var(--rh-surface);
+  color: var(--rh-ink);
+  font: inherit;
+  resize: vertical;
+}
+.ex-actions { display: flex; align-items: center; gap: 12px; }
+.ex-review { display: grid; gap: 10px; }
+.ex-review__verdict, .ex-review__tags { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.ex-bench .rh-row {
+  grid-template-columns: 28px minmax(0, 1fr) auto auto auto;
+  cursor: default;
+}
+.ex-row-actions { display: flex; gap: 4px; justify-content: flex-end; white-space: nowrap; }
+
+.ex-detail .rh-detail__head { grid-template-columns: auto minmax(0, 1fr); }
+.ex-reel .rh-reel__hit { z-index: 3; }
+.ex-reel .rh-reel__play { background: rgba(22, 22, 22, 0.55); color: #fff; }
+.ex-reel__error {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.ex-sheet { display: block; max-width: 100%; border-radius: 12px; border: 1px solid var(--rh-line); }
+.ex-links { display: flex; gap: 14px; margin: 12px 0 0; font-size: 13px; }
+.ex-links a { color: var(--rh-accent-ink); }
+.ex-brief {
+  max-height: 420px;
+  overflow: auto;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--rh-line);
+  border-radius: 14px;
+  background: var(--rh-bg);
+  color: var(--rh-body);
+  font: inherit;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 640px) {
+  .ex-bench .rh-row {
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "rank main score"
+      "actions actions actions";
+    align-items: start;
+    row-gap: 8px;
+  }
+  .ex-bench .rh-row__rank { grid-area: rank; padding-top: 2px; }
+  .ex-bench .rh-row__main { grid-area: main; }
+  .ex-bench .rh-row__score { grid-area: score; }
+  .ex-bench .ex-row-actions { grid-area: actions; }
+  .ex-bench .rh-row__labels {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .ex-settings .rh-card__row { align-items: flex-start; flex-direction: column; }
+}

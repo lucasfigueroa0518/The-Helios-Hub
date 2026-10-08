@@ -149,19 +149,19 @@ export async function schedulePostIdea(
 }
 
 export const BENCH_SCHEDULE_NOTE =
-  'Only the day’s three best reels go on the clock. The rest stay on the bench.';
+  'Only the reels selected for today go on the clock. The rest stay on the bench.';
 
 export const MISSED_TODAY_NOTE =
   'This reel missed today’s windows. It carries to tomorrow at its score, instead of being scheduled late.';
 
-/** True when this rank is one of the three that can post today. */
-export function isPostingRank(rank: number | null): boolean {
-  return rank != null && rank >= 1 && rank <= 3;
+/** True when this idea was selected for today's reels. Rank alone leaves it on the bench. */
+export function isPostingRank(selected: boolean): boolean {
+  return selected;
 }
 
-async function rankOnDate(postIdeaId: string, nyDate: string): Promise<number | null> {
-  const { rows } = await dbQuery<{ rank: number | null }>(
-    `SELECT s.rank
+async function selectedOnDate(postIdeaId: string, nyDate: string): Promise<boolean> {
+  const { rows } = await dbQuery<{ selected: boolean }>(
+    `SELECT s.selected
        FROM reels.idea_scores s
        JOIN reels.score_slates sl ON sl.id = s.slate_id
       WHERE s.post_idea_id = $1::uuid
@@ -170,7 +170,7 @@ async function rankOnDate(postIdeaId: string, nyDate: string): Promise<number | 
       LIMIT 1`,
     [postIdeaId, nyDate],
   );
-  return rows[0]?.rank ?? null;
+  return rows[0]?.selected === true;
 }
 
 /** How many of today's windows can still take a reel. A started window counts until it ends. */
@@ -183,16 +183,16 @@ export async function windowsStillOpen(now = new Date()): Promise<number> {
 }
 
 /**
- * A person can put one of today's top three into a window still open today.
- * The bench is not scheduled. A day with no window left is a miss, not a
- * tomorrow slot.
+ * A person can put one of today's selected reels into a window still open
+ * today. The bench is not scheduled. A day with no window left is a miss,
+ * not a tomorrow slot.
  */
 export async function scheduleVideo(videoJobId: string, now = new Date()): Promise<ScheduleOutcome> {
   const ready = await publishReadiness(videoJobId);
   if (!ready.ok) return { scheduled: false, status: ready.status, note: ready.note };
   const today = calendarDateKey(now);
-  const rank = await rankOnDate(ready.postIdeaId, today);
-  if (!isPostingRank(rank)) {
+  const selected = await selectedOnDate(ready.postIdeaId, today);
+  if (!isPostingRank(selected)) {
     return { scheduled: false, status: 409, note: BENCH_SCHEDULE_NOTE };
   }
   const result = await schedulePostIdea(ready.postIdeaId, 'user', videoJobId, now, today);
@@ -203,9 +203,9 @@ export async function scheduleVideo(videoJobId: string, now = new Date()): Promi
 }
 
 /**
- * The top three by rank, best first, one per window still open on that
- * slate's Eastern day. A later rank is not scheduled once the day has no
- * window left. Does nothing while publishing is not live.
+ * The reels selected for this slate, best rank first, one per window still
+ * open on that slate's Eastern day. A later reel is not scheduled once the
+ * day has no window left. Does nothing while publishing is not live.
  */
 export async function scheduleSelectedSlate(slateId: string, now = new Date()): Promise<{ scheduled: number }> {
   if (!(await publishingLive())) return { scheduled: 0 };
@@ -214,13 +214,12 @@ export async function scheduleSelectedSlate(slateId: string, now = new Date()): 
        FROM reels.idea_scores s
        JOIN reels.score_slates sl ON sl.id = s.slate_id
       WHERE s.slate_id = $1
-        AND s.rank IS NOT NULL
-        AND s.rank <= 3
+        AND s.selected
         AND NOT EXISTS (
           SELECT 1 FROM reels.published_status p
            WHERE p.post_idea_id = s.post_idea_id AND p.published
         )
-      ORDER BY s.rank`,
+      ORDER BY s.rank NULLS LAST`,
     [slateId],
   );
   const nyDate = rows[0]?.ny_date;

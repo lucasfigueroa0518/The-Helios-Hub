@@ -1,0 +1,183 @@
+<!--
+  Helios — caption skin (preset-local source for explainers/frame-presets/helios).
+
+  Structure, hooks, and the timeline script are the cartesian reference skin's, unchanged
+  (HyperFrames v0.8.140): captions.mjs fills GROUPS / DURATION / size and injects the
+  :root tokens from frame.md.   Token contract: --cap-ink · --cap-canvas · --cap-accent ·
+  --cap-accent-2 · --font-display · --font-body.
+  Position is NOT --cap-band-top. captions.mjs still injects that variable at the
+  bottom of the frame. This skin places the pill under Instagram's Reels header.
+
+  Visual (BUILD_PLAN §8, E-12): a white pill with ink text in Roboto Medium, so it reads
+  on the white frames and on the beat-5 night ground alike. No orange: the frame's single
+  orange focal mark must not compete with the captions. Upcoming words are faint ink, the
+  current word is solid ink on a light neutral wash, spoken words settle to solid ink.
+-->
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+
+<!-- captions.mjs injects the project's :root tokens here -->
+<style data-brand-tokens></style>
+
+<style>
+  #captions-root {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .caption-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    pointer-events: none;
+  }
+  /* Under Instagram's Reels header (top 250px of 1080×1920), above the picture.
+     Hardcoded on purpose: --cap-band-top is the old bottom band. */
+  .caption-stage {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 250px;
+    height: 320px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .caption-group {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+  }
+
+  /* the white pill — Helios pill radius, soft card shadow so it lifts off a white frame */
+  .caption-pill {
+    max-width: 76%;
+    padding: 22px 40px 24px;
+    background: #ffffff;
+    border: 1px solid #e5e5e5;
+    border-radius: 9999px;
+    box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.22);
+  }
+  .caption-line {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.08em 0.3em;
+    font-family: var(--font-body, "Roboto"), Helvetica, Arial, sans-serif;
+    font-weight: 500;
+    font-size: 56px;
+    line-height: 1.15;
+    letter-spacing: 0;
+  }
+
+  /* upcoming — faint ink */
+  .caption-word {
+    display: inline-block;
+    padding: 0 0.08em;
+    border-radius: 0.2em;
+    color: rgba(23, 23, 23, 0.4);
+  }
+  /* current word — solid ink on a light neutral wash */
+  .caption-word.is-active {
+    color: #171717;
+    background: #f5f5f5;
+  }
+  /* already spoken — solid ink */
+  .caption-word.is-spoken {
+    color: #171717;
+    background: transparent;
+  }
+
+  /* optional per-word accents (dormant until a word-classer tags them) — ink only */
+  .caption-word.cap-num {
+    font-variant-numeric: tabular-nums;
+  }
+</style>
+
+<div
+  id="captions-root"
+  data-composition-id="captions"
+  data-timeline-locked
+  data-start="0"
+  data-duration="0"
+  data-fps="30"
+  data-width="0"
+  data-height="0"
+>
+  <div class="caption-layer" aria-hidden="true">
+    <div id="caption-stage" class="caption-stage"></div>
+  </div>
+</div>
+
+<script>
+  // captions.mjs injects the engine's scene-aware groups + real duration here.
+  var GROUPS = [];
+  var DURATION = 0;
+
+  (function () {
+    var stage = document.getElementById("caption-stage");
+
+    // build DOM: one .caption-group per group, .caption-word per word
+    GROUPS.forEach(function (group, g) {
+      var groupEl = document.createElement("div");
+      groupEl.className = "caption-group";
+      groupEl.id = "caption-group-" + g;
+      var pill = document.createElement("div");
+      pill.className = "caption-pill";
+      var line = document.createElement("div");
+      line.className = "caption-line";
+      (group.words || []).forEach(function (w, i) {
+        var span = document.createElement("span");
+        span.className = "caption-word";
+        span.id = "caption-word-" + g + "-" + i;
+        span.textContent = String(w.text);
+        line.appendChild(span);
+      });
+      pill.appendChild(line);
+      groupEl.appendChild(pill);
+      stage.appendChild(groupEl);
+    });
+
+    window.__timelines = window.__timelines || {};
+    var tl = gsap.timeline({ paused: true });
+
+    GROUPS.forEach(function (group, g) {
+      var groupEl = document.getElementById("caption-group-" + g);
+      var words = group.words || [];
+      var next = GROUPS[g + 1];
+      var isLast = g === GROUPS.length - 1;
+      var start = Math.max(0, Number(group.start));
+      var end = isLast ? DURATION : Math.min(Number(next.start), Number(group.end) + 0.3);
+      if (end <= start) end = start + 0.01;
+
+      // group on/off — exactly one group visible at a time
+      tl.set(groupEl, { opacity: 1 }, start);
+      tl.set(groupEl, { opacity: 0 }, end);
+
+      // 3-state karaoke via className SETS — seek-safe (gsap.set applies on the
+      // engine's frame-by-frame seek; .call callbacks would NOT fire).
+      words.forEach(function (w, i) {
+        var el = document.getElementById("caption-word-" + g + "-" + i);
+        var at = Math.max(start, Number(w.start));
+        tl.set(el, { className: "caption-word" }, start); // upcoming (also resets on reverse-seek)
+        tl.set(el, { className: "caption-word is-active" }, at); // current
+        tl.fromTo(el, { scale: 0.985 }, { scale: 1, duration: 0.2, ease: "power1.out" }, at);
+        if (i + 1 < words.length) {
+          var nextAt = Math.max(start, Number(words[i + 1].start));
+          tl.set(el, { className: "caption-word is-spoken" }, nextAt); // demote when next activates
+        }
+      });
+      if (words.length) {
+        var lastEl = document.getElementById("caption-word-" + g + "-" + (words.length - 1));
+        var lastSpoken = Math.min(end, Number(words[words.length - 1].end) + 0.1);
+        tl.set(lastEl, { className: "caption-word is-spoken" }, lastSpoken);
+      }
+    });
+
+    // full-span anchor so the sub-comp timeline spans the whole video
+    tl.to({}, { duration: DURATION }, 0);
+    window.__timelines["captions"] = tl;
+  })();
+</script>
