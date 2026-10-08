@@ -45,6 +45,10 @@ async function main(): Promise<void> {
   const { claimAndPickSong } = await import('@/lib/reels/music/pick');
   const { claimAndPublish } = await import('@/lib/reels/music/publish');
   const { releaseDueSchedules } = await import('@/lib/reels/publish/schedule');
+  const { publisherOwnsPublishing } = await import('@/lib/publishing/publisher');
+  const { dbQuery } = await import('@/lib/db');
+  /** With publisher_mode 'live' and its heartbeat listing Trial Reels, the single publisher releases and posts (D40, D41). */
+  const standDown = () => publisherOwnsPublishing((text, params) => dbQuery(text, params) as never, 'reels');
   const { INSIGHTS_HOUR_LOCAL, SONG_INGEST_HOUR_LOCAL, SONG_INGEST_MINUTE_LOCAL, RUN_TIMEZONE } = await import('@/lib/reels/config');
   const nextSongsAt = () => nextRunAt(new Date(), RUN_TIMEZONE, SONG_INGEST_HOUR_LOCAL, SONG_INGEST_MINUTE_LOCAL);
   const nextInsightsAt = () => nextRunAt(new Date(), RUN_TIMEZONE, INSIGHTS_HOUR_LOCAL, 0);
@@ -161,13 +165,13 @@ async function main(): Promise<void> {
         continue;
       }
 
-      const due = await releaseDueSchedules().catch((error) => {
+      const due = (await standDown()) ? 0 : await releaseDueSchedules().catch((error) => {
         log('schedule_release_failed', { error: error instanceof Error ? error.message : String(error) });
         return 0;
       });
       if (due > 0) log('schedule_due', { released: due });
 
-      const published = await claimAndPublish().catch((error) => {
+      const published = (await standDown()) ? null : await claimAndPublish().catch((error) => {
         log('publish_failed', { error: error instanceof Error ? error.message : String(error) });
         return null;
       });

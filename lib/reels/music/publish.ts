@@ -1,4 +1,5 @@
 import { dbQuery } from '@/lib/db';
+import { checkAccountQuota } from '@/lib/instagram/account-gate';
 import {
   PUBLISH_POLL_SECONDS,
   PUBLISH_POLL_TIMEOUT_MINUTES,
@@ -169,7 +170,8 @@ export async function queuePublish(
   }
 }
 
-async function claimPublish(): Promise<string | null> {
+/** Fail this type's attempts a dead worker left mid-publish. */
+export async function failStaleAttempts(): Promise<void> {
   await dbQuery(
     `UPDATE social_hub.publish_attempts
         SET status = 'failed', finished_at = now(),
@@ -178,13 +180,17 @@ async function claimPublish(): Promise<string | null> {
         AND started_at < now() - ($1::int * interval '1 minute')`,
     [PUBLISH_STALE_MINUTES],
   );
+}
+
+async function claimPublish(): Promise<string | null> {
+  await failStaleAttempts();
   try {
     const { rows } = await dbQuery<{ id: string }>(
       `UPDATE social_hub.publish_attempts SET status = 'creating', started_at = now()
         WHERE id = (
           SELECT id FROM social_hub.publish_attempts
            WHERE vertical = 'reels' AND status = 'requested'
-             AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts a WHERE a.status IN ('creating', 'processing', 'publishing'))
+             AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts a WHERE a.status IN ('creating', 'processing', 'publishing') AND a.started_at > now() - interval '30 minutes')
            ORDER BY requested_at
            FOR UPDATE SKIP LOCKED
            LIMIT 1)
@@ -215,6 +221,15 @@ export async function claimAndPublish(deps: PublishDeps = {}): Promise<{ id: str
   if (!deps.meta && !metaConfigured()) return null;
   const id = await claimPublish();
   if (!id) return null;
+  return carryAttempt(deps, id);
+}
+
+/**
+ * Carry one claimed attempt (status `creating`) to Instagram: a late rejection
+ * check, the caption gate (D-246), the account quota gate (D40: new for Trial
+ * Reels), the trial container with its song, the poll, the publish.
+ */
+export async function carryAttempt(deps: PublishDeps, id: string): Promise<{ id: string; status: PublishStatus }> {
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const now = deps.now ?? Date.now;
   const statusLog: Array<{ at: string; statusCode: string; status: string | null }> = [];
@@ -238,6 +253,13 @@ export async function claimAndPublish(deps: PublishDeps = {}): Promise<{ id: str
     );
     const attempt = rows[0];
     if (!attempt?.video_storage_path) throw new Error('The video for this reel is gone.');
+    // Rejected after its slot opened: never posts (D41).
+    const { rows: rejected } = await dbQuery(
+      `SELECT 1 FROM social_hub.publish_attempts a JOIN social_hub.approvals ap ON ap.content_item_id = a.content_item_id
+        WHERE a.id = $1 AND ap.decision = 'rejected'`,
+      [id],
+    );
+    if (rejected[0]) throw new Error('This reel was rejected after its slot opened; nothing was posted.');
     // D-246: attempts queued before the gate existed are checked here too.
     const posted = postableCaption(attempt.caption);
     if (posted.problems.length > 0) {
@@ -252,6 +274,9 @@ export async function claimAndPublish(deps: PublishDeps = {}): Promise<{ id: str
       await update(id, { caption: attempt.caption });
     }
     const meta = deps.meta ?? createLiveMetaClient();
+    // The account is shared by every content type (lib/instagram/account-gate.ts); Trial Reels now count too.
+    const gate = await checkAccountQuota({ ops: meta, query: (text, params) => dbQuery(text, params) as never });
+    if (!gate.ok) throw new Error(gate.message);
     const videoUrl = await (deps.signVideo ?? ((objectPath) => signFrameObject(objectPath, PUBLISH_VIDEO_URL_SECONDS)))(
       attempt.video_storage_path,
     );

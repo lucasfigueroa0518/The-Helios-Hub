@@ -97,7 +97,9 @@ export async function shadowPlan(query: SpineQuery, drivers: readonly PublishDri
   const due: ShadowPlan['due'] = [];
   if (verticals.length > 0) {
     const { rows } = await query(
-      `SELECT s.id, s.vertical, a.decision
+      `SELECT s.id, s.vertical,
+              -- A rejection wins; Trial Reels may approve the idea's slot before its video exists (D39).
+              CASE WHEN a.decision = 'rejected' THEN 'rejected' WHEN s.approved_at IS NOT NULL THEN 'approved' ELSE a.decision END AS decision
          FROM social_hub.schedule s
          LEFT JOIN social_hub.approvals a ON a.content_item_id = s.content_item_id
         WHERE s.status = 'scheduled' AND s.publish_at <= now() AND s.vertical = ANY($1::text[])

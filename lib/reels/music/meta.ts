@@ -42,7 +42,7 @@ export type ContainerInput = {
   shareToFeed: boolean | null;
 };
 
-export interface MetaClient extends Pick<InstagramContainerOps, 'containerStatus' | 'publishContainer' | 'permalink'> {
+export interface MetaClient extends Pick<InstagramContainerOps, 'containerStatus' | 'publishContainer' | 'permalink' | 'publishingLimit'> {
   /** Trending sounds of one type, in the order Meta returns them, up to `atLeast` if pages allow. */
   trending(audioType: AudioType, atLeast: number): Promise<IgAudio[]>;
   downloadPreview(url: string): Promise<{ bytes: Buffer; contentType: string | null }>;
@@ -106,5 +106,6 @@ export function createLiveMetaClient(fetchImpl: typeof fetch = fetch): MetaClien
     containerStatus: ops.containerStatus,
     publishContainer: ops.publishContainer,
     permalink: ops.permalink,
+    publishingLimit: ops.publishingLimit,
   };
 }

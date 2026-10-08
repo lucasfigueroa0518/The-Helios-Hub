@@ -117,14 +117,17 @@ run, Explainers as reels are approved, Trial Reels nightly). The
 `lib/publishing/drivers/`) does the rest for every type on the spine:
 releases due slots under each type's own rules, carries **one post at a time
 across the whole account**, oldest first, through the gate, and reads
-insights every 30 minutes. `social_hub.settings` `publisher_mode` decides who
-posts:
+insights every 30 minutes. Trial Reels are always driven: their `publishing_live`
+only switches the nightly auto-schedule, and a person's Approve or Force post
+goes out while it is off. Trial Reels now pass the same quota gate as every
+other type (D33/D40: quota yes, feed spacing no). `social_hub.settings`
+`publisher_mode` decides who posts:
 
 | Mode | Publisher | Type workers |
 |---|---|---|
 | `off` (default) | idle | release, post and read insights, as before |
 | `shadow` | logs `shadow_plan`: what it would release, cancel and post | still post |
-| `live` | releases, posts, reads insights | stand down from those steps (they still schedule) |
+| `live` | releases, posts, reads insights; writes `publisher_heartbeat` listing the types it drives | stand down from those steps while the heartbeat (< 5 min old) lists their type; they still schedule, and resume on their own if the publisher goes quiet |
 
 Going live: enable the unit (`sudo systemctl enable --now helios-publisher`),
 set `shadow` for a day and compare its `shadow_plan` lines with the type

@@ -54,6 +54,7 @@ function stubMeta() {
     async containerStatus() { return { statusCode: 'FINISHED', status: null }; },
     async publishContainer() { return 'media-1'; },
     async permalink() { return 'https://instagram.com/reel/x'; },
+    async publishingLimit() { return { quotaUsage: 3, quotaTotal: 100 }; },
   };
   return { meta, containers };
 }
@@ -168,4 +169,17 @@ test('insights land on the spine with shared_to_feed; mix tests are never read',
     `SELECT vertical, views, shared_to_feed, skip_rate FROM social_hub.media_insights`,
   )).rows[0]!;
   assert.deepEqual([row.vertical, row.views, row.shared_to_feed, row.skip_rate], ['reels', 500, false, 0.3]);
+});
+
+test('the account gate now covers Trial Reels: too little quota left fails the try before any container (D40)', async () => {
+  const pg = await spineDb();
+  await seedReel(pg);
+  assert.equal((await forcePost(VIDEO)).queued, true);
+  const { meta, containers } = stubMeta();
+  meta.publishingLimit = async () => ({ quotaUsage: 97, quotaTotal: 100 });
+  const out = await claimAndPublish({ meta, signVideo: async (p) => p, sleep: async () => undefined });
+  assert.equal(out?.status, 'failed');
+  assert.equal(containers.length, 0, 'no trial container was made');
+  const row = (await pg.query<{ error: string }>(`SELECT error FROM social_hub.publish_attempts WHERE vertical = 'reels'`)).rows[0]!;
+  assert.match(row.error, /3 of 100 posts left in its 24-hour quota/);
 });

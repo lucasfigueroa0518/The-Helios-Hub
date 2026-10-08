@@ -48,13 +48,18 @@ async function main(): Promise<void> {
   const { signArtifact } = await import('@/lib/explainers/storage');
   const { carouselsDriver } = await import('@/lib/publishing/drivers/carousels');
   const { explainersDriver } = await import('@/lib/publishing/drivers/explainers');
+  const { reelsDriver } = await import('@/lib/publishing/drivers/reels');
+  const { createLiveMetaClient } = await import('@/lib/reels/music/meta');
   const { publisherMode, publisherTick, recordHeartbeat } = await import('@/lib/publishing/publisher');
   type PublishDriver = import('@/lib/publishing/drivers/types').PublishDriver;
 
   const query = await socialQuery();
   const slideBucket = mediaBucket(SLIDE_BUCKET);
   const token = () => process.env.META_USER_ACCESS_TOKEN!;
-  const drivers: PublishDriver[] = [carouselsDriver({ query, meta: createLiveCarouselClient, signImage: (p, s) => slideBucket.sign(p, s), token })];
+  const drivers: PublishDriver[] = [
+    carouselsDriver({ query, meta: createLiveCarouselClient, signImage: (p, s) => slideBucket.sign(p, s), token }),
+    reelsDriver({ meta: createLiveMetaClient }),
+  ];
 
   // Explainers join only when they share the account's database (D38); a separate one has its own worker.
   if (process.env.EXPLAINERS_DB === 'supabase' && !process.env.EXPLAINERS_DATABASE_URL?.trim()) {

@@ -77,6 +77,9 @@ function metaStub(lists: { music: IgAudio[]; original_sound: IgAudio[] }, calls:
     async downloadPreview(url) {
       return { bytes: Buffer.from(url), contentType: 'audio/mpeg' };
     },
+    async publishingLimit() {
+      return { quotaUsage: 3, quotaTotal: 100 };
+    },
     async createReelContainer(input) {
       calls.push(`create:${input.audioId}:${input.audioVolume}/${input.videoVolume}:${input.graduationStrategy}:${input.shareToFeed}`);
       return 'container-stub';
