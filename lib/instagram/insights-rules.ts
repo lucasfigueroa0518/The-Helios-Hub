@@ -1,9 +1,9 @@
-import { calendarDateKey } from './clock';
+import { calendarDateKey } from '@/lib/instagram/clock';
 
 /**
- * Due/settle rules and Graph payload readers for carousel insights, copied
- * from lib/reels/media-insights/{due,parse}.ts so both content types read
- * Instagram the same way (Social never imports Trial Reels code).
+ * Due/settle rules and Graph payload readers for Instagram insights, the same
+ * rules as lib/reels/media-insights/{due,parse}.ts, shared by the content
+ * types outside Trial Reels.
  */
 
 /** Newer than this: asked again every 30 minutes. */
@@ -40,9 +40,18 @@ export function readInsightData(body: unknown): Record<string, number | null> {
     if (typeof name !== 'string') continue;
     const values = (row as { values?: unknown }).values;
     const first = Array.isArray(values) ? values[0] : null;
-    out[name] = readMetricNumber(first && typeof first === 'object' ? (first as { value?: unknown }).value : null);
+    const number = readMetricNumber(first && typeof first === 'object' ? (first as { value?: unknown }).value : null);
+    out[name] = name === 'reels_skip_rate' ? normalizeSkipRate(number) : number;
   }
   return out;
+}
+
+/** Meta documents a fraction of plays; a 0–100 payload is folded into that fraction. */
+export function normalizeSkipRate(value: number | null): number | null {
+  if (value == null || !Number.isFinite(value) || value < 0) return null;
+  if (value <= 1) return value;
+  if (value <= 100) return value / 100;
+  return null;
 }
 
 export function metricsNamedIn(message: string, requested: readonly string[]): string[] {

@@ -2,10 +2,8 @@
  * Carousel overnight constants (docs/social-overnight.md). Times are
  * America/New_York, the same zone and DST handling as Trial Reels.
  */
-export const SOCIAL_TIMEZONE = 'America/New_York';
+export { SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 
-/** Same Graph version as Trial Reels (lib/reels/config.ts META_GRAPH_VERSION). */
-export const META_GRAPH_VERSION = 'v26.0';
 
 /** The daily run: 3:00 AM, an hour after Explainers, an hour before IG Stories. */
 export const SOCIAL_RUN_HOUR_LOCAL = 3;

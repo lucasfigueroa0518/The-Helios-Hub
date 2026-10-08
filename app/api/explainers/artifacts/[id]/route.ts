@@ -4,7 +4,7 @@ import { Readable } from 'node:stream';
 import { NextResponse } from 'next/server';
 
 import { explainersDb } from '@/lib/explainers/connection';
-import { localArtifactStore } from '@/lib/explainers/storage';
+import { localArtifactStore, signArtifact } from '@/lib/explainers/storage';
 import { getSession } from '@/lib/session';
 
 export const runtime = 'nodejs';
@@ -14,8 +14,10 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const TYPES: Record<string, string> = { mp4: 'video/mp4', jpg: 'image/jpeg', png: 'image/png', json: 'application/json', jsonl: 'application/x-ndjson' };
 
 /**
- * A stored render file (video, contact sheet, captions, transcript), from local
- * storage until E-22 picks the bucket. Byte ranges are served so the video seeks.
+ * A stored render file (video, contact sheet, captions, transcript). Served
+ * from this machine's disk when it is here (byte ranges, so the video seeks);
+ * otherwise a render from the social worker VM is redirected to a short-lived
+ * signed URL in the private `explainers` bucket.
  */
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -24,9 +26,15 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   if (!UUID.test(id)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const db = await explainersDb();
-  const { rows } = await db.query<{ storage_path: string | null }>('SELECT storage_path FROM explainers.artifacts WHERE id = $1', [id]);
+  const { rows } = await db.query<{ storage_path: string | null; storage_location: string | null }>(
+    'SELECT storage_path, storage_location FROM explainers.artifacts WHERE id = $1',
+    [id],
+  );
   const key = rows[0]?.storage_path;
   const file = key ? localArtifactStore().localPath(key) : null;
+  if (key && !file && rows[0]?.storage_location === 'bucket') {
+    return NextResponse.redirect(await signArtifact(key), { status: 302, headers: { 'cache-control': 'private, no-store' } });
+  }
   if (!key || !file) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const size = fs.statSync(file).size;

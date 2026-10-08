@@ -1,10 +1,10 @@
-import { SOCIAL_TIMEZONE } from './config';
-
 /**
- * New York wall-clock maths for the carousel worker. Copied from
- * lib/reels/schedule.ts (Social never imports Trial Reels code): offsets come
- * from Intl, so 3:00 AM stays 3:00 AM across both DST changes.
+ * New York wall-clock maths shared by the social content types' overnight
+ * workers (docs/social-overnight.md). Same logic as lib/reels/schedule.ts:
+ * offsets come from Intl, so 3:00 AM stays 3:00 AM across both DST changes.
  */
+
+export const SOCIAL_TIMEZONE = 'America/New_York';
 
 export function zoneOffsetMinutes(at: Date, timeZone: string = SOCIAL_TIMEZONE): number {
   const parts = new Intl.DateTimeFormat('en-US', {

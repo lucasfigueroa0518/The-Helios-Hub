@@ -1,6 +1,6 @@
 import type { Query } from '@/lib/social/store/pg';
 
-import { calendarDateKey } from './clock';
+import { calendarDateKey } from '@/lib/instagram/clock';
 import { SOCIAL_TIMEZONE } from './config';
 import { queuePublish } from './publish';
 import { chooseCarouselSlot, uniformIndex } from './slots';

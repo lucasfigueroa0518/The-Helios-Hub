@@ -58,7 +58,8 @@ test('schema applies and re-applies cleanly', async () => {
   const { rows } = await pg.query<{ n: number }>(
     `SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema = 'explainers'`,
   );
-  assert.equal(rows[0].n, 10);
+  // 10 product tables + posting_schedule, publish_attempts, media_insights (docs/social-overnight.md).
+  assert.equal(rows[0].n, 13);
 });
 
 test('a database created before the seq columns upgrades in place', async () => {

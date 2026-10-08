@@ -12,7 +12,8 @@ NODE_MAJOR=22
 export DEBIAN_FRONTEND=noninteractive
 
 apt-get update -y
-apt-get install -y ca-certificates curl git build-essential python3 python3-venv ffmpeg
+# bubblewrap + socat: the Linux sandbox for the Explainers render agent (Agent SDK).
+apt-get install -y ca-certificates curl git build-essential python3 python3-venv ffmpeg bubblewrap socat
 
 if ! swapon --show | grep -q '/swapfile'; then
   if [[ ! -f /swapfile ]]; then
@@ -31,7 +32,7 @@ if ! command -v node >/dev/null || [[ "$(node -v | cut -d. -f1 | tr -d v)" -lt "
   apt-get install -y nodejs
 fi
 
-mkdir -p "${APP_DIR}/app"
+mkdir -p "${APP_DIR}/app" "${APP_DIR}/explainers/jobs" "${APP_DIR}/explainers/storage"
 chmod 755 "${APP_DIR}"
 
 echo "Bootstrap done: node $(node -v), $(ffmpeg -version | head -1)"

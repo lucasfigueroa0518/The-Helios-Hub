@@ -1,13 +1,19 @@
 /**
- * Explainer Reels worker (BUILD_PLAN §4–§6). Claims one queued render at a time
- * and runs it; while auto_render is on, also runs the daily idea cycle.
+ * Explainer Reels worker (BUILD_PLAN §4–§6, docs/social-overnight.md). Claims
+ * one queued render at a time and runs it; while auto_render is on, also runs
+ * the daily idea cycle at 2:00 AM New York. While publishing_live is on,
+ * approved renders are scheduled into the 3:00–4:30 PM window and published.
+ * Insights: every 30 minutes while a reel is fresh, and a 5:15 AM sweep.
  *
  *   npm run explainers:worker          # loop: poll every 15s
  *   npm run explainers:worker -- --once   # run the next queued render, then exit
  *
- * Needs EXPLAINERS_DATABASE_URL (locally: `npm run explainers:db`),
- * ANTHROPIC_API_KEY, and HEYGEN_API_KEY. It never sees Supabase or outreach
- * keys it does not need, and passes only render keys to the agent.
+ * Database: EXPLAINERS_DATABASE_URL (locally: `npm run explainers:db`) or
+ * EXPLAINERS_DB=supabase (the social worker VM). EXPLAINERS_STORAGE=bucket
+ * copies render outputs to the `explainers` Supabase bucket. Renders need
+ * ANTHROPIC_API_KEY and HEYGEN_API_KEY; without the HeyGen key the worker
+ * still schedules, publishes and reads insights, and skips renders. Only
+ * render keys are passed to the agent.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -28,8 +34,8 @@ function log(message: string, fields: Record<string, unknown> = {}): void {
 }
 
 const POLL_MS = 15_000;
-/** The daily idea cycle runs once per Eastern day, at or after this hour (A-7: only with auto_render on). */
-const IDEA_CYCLE_HOUR_NY = 9;
+const INSIGHTS_EVERY_MS = 30 * 60_000;
+const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 function required(name: string): string {
   const value = process.env[name]?.trim();
@@ -42,14 +48,25 @@ function required(name: string): string {
 
 async function main(): Promise<void> {
   const once = process.argv.includes('--once');
-  required('EXPLAINERS_DATABASE_URL');
-  const secrets = { anthropicApiKey: required('ANTHROPIC_API_KEY'), heygenApiKey: required('HEYGEN_API_KEY') };
+  if (!process.env.EXPLAINERS_DATABASE_URL?.trim() && process.env.EXPLAINERS_DB !== 'supabase') {
+    log('missing_env', { name: 'EXPLAINERS_DATABASE_URL or EXPLAINERS_DB=supabase' });
+    process.exit(1);
+  }
+  const heygenApiKey = process.env.HEYGEN_API_KEY?.trim() ?? '';
+  if (!heygenApiKey) log('renders_disabled', { reason: 'HEYGEN_API_KEY is not set' });
+  const secrets = { anthropicApiKey: required('ANTHROPIC_API_KEY'), heygenApiKey };
 
   const { explainersDb } = await import('@/lib/explainers/connection');
   const { claimNextJob, failStaleRunningJobs, nyDate } = await import('@/lib/explainers/repository');
   const { runRenderJob } = await import('@/lib/explainers/render/job');
   const { loadAgentQuery } = await import('@/lib/explainers/render/agent');
-  const { localArtifactStore } = await import('@/lib/explainers/storage');
+  const { artifactStoreFromEnv, signArtifact } = await import('@/lib/explainers/storage');
+  const { IDEA_CYCLE_HOUR_NY, EXPLAINERS_INSIGHTS_HOUR_NY, EXPLAINERS_INSIGHTS_MINUTE_NY } = await import('@/lib/explainers/publish/config');
+  const { publishingLive, releaseDueSchedules, scheduleApproved } = await import('@/lib/explainers/publish/schedule');
+  const { claimAndPublish } = await import('@/lib/explainers/publish/publish');
+  const { createLiveReelClient, metaConfigured } = await import('@/lib/explainers/publish/meta');
+  const { createExplainerInsightsClient, pollExplainerInsights } = await import('@/lib/explainers/publish/insights');
+  const { nextRunAt } = await import('@/lib/instagram/clock');
   const { loadSettings } = await import('@/lib/explainers/settings');
   const { runIdeaCycle } = await import('@/lib/explainers/ideas/cycle');
   const { anthropicIdeaModel } = await import('@/lib/explainers/ideas/generator');
@@ -58,7 +75,7 @@ async function main(): Promise<void> {
 
   const db = await explainersDb();
   const query = await loadAgentQuery();
-  const store = localArtifactStore();
+  const store = artifactStoreFromEnv();
   const jobsRoot = process.env.EXPLAINERS_JOBS_DIR || path.join(process.cwd(), '.explainers-local', 'jobs');
 
   // One worker, one render at a time: anything still `running` died with a previous process.
@@ -75,6 +92,7 @@ async function main(): Promise<void> {
   process.on('SIGTERM', () => stop('SIGTERM'));
 
   const renderNext = async (): Promise<boolean> => {
+    if (!secrets.heygenApiKey) return false;
     const job = await claimNextJob(db);
     if (!job) return false;
     log('job_claimed', { jobId: job.id, topicId: job.topic_id, trigger: job.trigger, capUsd: job.spend_cap_usd });
@@ -88,8 +106,29 @@ async function main(): Promise<void> {
     return;
   }
 
+  /** Approved reels onto the clock, due slots into attempts, one attempt to Instagram. Only while publishing_live is on. */
+  const publishStep = async (): Promise<void> => {
+    if (!(await publishingLive(db))) return;
+    const scheduled = await scheduleApproved(db);
+    if (scheduled > 0) log('scheduled_approved', { count: scheduled });
+    const released = await releaseDueSchedules(db);
+    if (released > 0) log('schedule_due', { released });
+    if (!metaConfigured()) return;
+    const published = await claimAndPublish({ db, meta: createLiveReelClient(), signVideo: signArtifact });
+    if (published) log('publish_complete', { ...published });
+  };
+
+  const insightsStep = async (force: boolean): Promise<void> => {
+    if (!metaConfigured()) return;
+    const result = await pollExplainerInsights(db, createExplainerInsightsClient({ token: process.env.META_USER_ACCESS_TOKEN! }));
+    if (force || result.considered > 0) log('insights_complete', { ...result });
+  };
+
   let lastCycleDay = '';
-  log('started', { pollMs: POLL_MS, jobsRoot });
+  let lastInsights = 0;
+  const nextSweep = () => nextRunAt(new Date(), EXPLAINERS_INSIGHTS_HOUR_NY, EXPLAINERS_INSIGHTS_MINUTE_NY);
+  let sweepAt = nextSweep();
+  log('started', { pollMs: POLL_MS, jobsRoot, ideaCycleHourNy: IDEA_CYCLE_HOUR_NY, nextInsightsAt: sweepAt.toISOString(), storage: process.env.EXPLAINERS_STORAGE ?? 'local' });
   while (!stopping) {
     try {
       const settings = await loadSettings(db);
@@ -102,8 +141,15 @@ async function main(): Promise<void> {
         log('idea_cycle', { status: cycle.status, ...('reason' in cycle ? { reason: cycle.reason } : {}) });
       }
       await renderNext();
+      await publishStep().catch((error) => log('publish_failed', { error: errorText(error) }));
+      if (Date.now() >= sweepAt.getTime() || Date.now() - lastInsights >= INSIGHTS_EVERY_MS) {
+        const forced = Date.now() >= sweepAt.getTime();
+        await insightsStep(forced).catch((error) => log('insights_failed', { error: errorText(error) }));
+        lastInsights = Date.now();
+        if (forced) sweepAt = nextSweep();
+      }
     } catch (error) {
-      log('loop_error', { error: error instanceof Error ? error.message : String(error) });
+      log('loop_error', { error: errorText(error) });
     }
     for (let waited = 0; waited < POLL_MS && !stopping; waited += 1000) {
       await new Promise((resolve) => setTimeout(resolve, 1000));

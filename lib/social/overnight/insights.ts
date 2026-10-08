@@ -1,80 +1,22 @@
+import { calendarDateKey } from '@/lib/instagram/clock';
+import { InsightsBlockedError, createInsightsClient, safeMessage, type InsightsClient, type InsightsReading } from '@/lib/instagram/insights-client';
+import { INSIGHTS_WARM_MS, insightIsDue } from '@/lib/instagram/insights-rules';
 import type { Query } from '@/lib/social/store/pg';
 
-import { calendarDateKey } from './clock';
-import { META_GRAPH_VERSION, SOCIAL_TIMEZONE } from './config';
-import { INSIGHTS_WARM_MS, graphErrorIsPermission, graphErrorIsToken, insightIsDue, metricsNamedIn, readInsightData } from './insights-rules';
-
 /**
- * Lifetime insights for published carousels, into social.media_insights. The
- * due/settle rules are Trial Reels' (copied in ./insights-rules.ts): every
+ * Lifetime insights for published carousels, into social.media_insights, on
+ * the Trial Reels due/settle rules (lib/instagram/insights-rules.ts): every
  * 30 minutes for two days, once a New York day through day 14, then one
- * closing read. A metric Meta rejects for carousels comes back null.
+ * closing read.
  */
 
 export const CAROUSEL_METRICS = ['views', 'reach', 'likes', 'comments', 'saved', 'shares', 'total_interactions'] as const;
-export type CarouselReading = Record<(typeof CAROUSEL_METRICS)[number], number | null> & { raw: unknown };
-
-export class InsightsBlockedError extends Error {
-  constructor(readonly blocked: 'permission' | 'token', message: string) {
-    super(message);
-  }
-}
-
-export interface CarouselInsightsClient {
-  insights(mediaId: string): Promise<CarouselReading>;
-}
+export type CarouselMetric = (typeof CAROUSEL_METRICS)[number];
+export type CarouselReading = InsightsReading<CarouselMetric>;
+export type CarouselInsightsClient = InsightsClient<CarouselMetric>;
 
 export function createCarouselInsightsClient(options: { token: string; fetchImpl?: typeof fetch }): CarouselInsightsClient {
-  const fetchImpl = options.fetchImpl ?? fetch;
-  const base = `https://graph.facebook.com/${META_GRAPH_VERSION}`;
-
-  async function call(mediaId: string, names: string[]): Promise<unknown> {
-    const url = new URL(`${base}/${mediaId}/insights`);
-    url.searchParams.set('access_token', options.token);
-    url.searchParams.set('metric', names.join(','));
-    url.searchParams.set('period', 'lifetime');
-    const response = await fetchImpl(url);
-    const body = (await response.json().catch(() => null)) as { error?: { message?: string; code?: number } } | null;
-    const graphError = body?.error ?? null;
-    if (!response.ok || graphError) {
-      const code = graphError?.code ?? null;
-      const detail = graphError?.message ?? `Meta returned ${response.status}.`;
-      const message = `Meta returned ${response.status}: ${detail} (code ${code ?? '?'})`;
-      if (graphErrorIsToken(code, detail)) throw new InsightsBlockedError('token', message);
-      if (graphErrorIsPermission(response.status, code, detail)) throw new InsightsBlockedError('permission', message);
-      throw new Error(message);
-    }
-    return body;
-  }
-
-  /** Drops metrics Meta names as unsupported, else splits the list in half (as the reels client does). */
-  async function load(mediaId: string, names: string[]): Promise<{ metrics: Record<string, number | null>; bodies: unknown[] }> {
-    if (names.length === 0) return { metrics: {}, bodies: [] };
-    try {
-      const body = await call(mediaId, names);
-      const found = readInsightData(body);
-      return { metrics: Object.fromEntries(names.map((n) => [n, found[n] ?? null])), bodies: [body] };
-    } catch (error) {
-      if (error instanceof InsightsBlockedError) throw error;
-      const named = metricsNamedIn(error instanceof Error ? error.message : String(error), names);
-      if (named.length > 0 && named.length < names.length) {
-        const rest = await load(mediaId, names.filter((n) => !named.includes(n)));
-        return { metrics: { ...rest.metrics, ...Object.fromEntries(named.map((n) => [n, null])) }, bodies: rest.bodies };
-      }
-      if (names.length === 1) return { metrics: { [names[0]!]: null }, bodies: [] };
-      const mid = Math.ceil(names.length / 2);
-      const left = await load(mediaId, names.slice(0, mid));
-      const right = await load(mediaId, names.slice(mid));
-      return { metrics: { ...left.metrics, ...right.metrics }, bodies: [...left.bodies, ...right.bodies] };
-    }
-  }
-
-  return {
-    async insights(mediaId) {
-      const loaded = await load(mediaId, [...CAROUSEL_METRICS]);
-      return { ...(Object.fromEntries(CAROUSEL_METRICS.map((n) => [n, loaded.metrics[n] ?? null])) as Record<(typeof CAROUSEL_METRICS)[number], number | null>), raw: { insights: loaded.bodies } };
-    },
-  };
+  return createInsightsClient({ ...options, metrics: CAROUSEL_METRICS });
 }
 
 export type CarouselInsightsResult = { considered: number; written: number; blocked: 'permission' | 'token' | null; detail: string | null };
@@ -91,7 +33,7 @@ export async function pollCarouselInsights(query: Query, client: CarouselInsight
   const due = open
     .filter((r) => insightIsDue({ finishedAt: new Date(r.finished_at), checkedAt: r.insights_checked_at ? new Date(r.insights_checked_at) : null, now }))
     .slice(0, limit);
-  const nyDate = calendarDateKey(now, SOCIAL_TIMEZONE);
+  const nyDate = calendarDateKey(now);
   let written = 0;
   let detail: string | null = null;
   for (const row of due) {
@@ -99,9 +41,8 @@ export async function pollCarouselInsights(query: Query, client: CarouselInsight
     try {
       reading = await client.insights(row.media_id);
     } catch (error) {
-      const message = (error instanceof Error ? error.message : String(error)).replace(/access_token=[^&\s]+/gi, 'access_token=(redacted)').slice(0, 500);
-      if (error instanceof InsightsBlockedError) return { considered: due.length, written, blocked: error.blocked, detail: message };
-      detail ??= message;
+      if (error instanceof InsightsBlockedError) return { considered: due.length, written, blocked: error.blocked, detail: safeMessage(error) };
+      detail ??= safeMessage(error);
       continue;
     }
     if (CAROUSEL_METRICS.some((m) => reading[m] != null)) {

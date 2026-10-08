@@ -40,7 +40,7 @@ const POLL_MS = 15_000;
 const INSIGHTS_EVERY_MS = 30 * 60_000;
 
 async function main(): Promise<void> {
-  const { nextRunAt } = await import('@/lib/social/overnight/clock');
+  const { nextRunAt } = await import('@/lib/instagram/clock');
   const cfg = await import('@/lib/social/overnight/config');
   const { socialQuery } = await import('@/lib/social/store');
   const { autoRunOn, getSocialSetting, publishingLive } = await import('@/lib/social/overnight/settings');
@@ -49,7 +49,8 @@ async function main(): Promise<void> {
   const { claimAndPublish } = await import('@/lib/social/overnight/publish');
   const { createLiveCarouselClient, metaConfigured } = await import('@/lib/social/overnight/meta');
   const { createCarouselInsightsClient, pollCarouselInsights } = await import('@/lib/social/overnight/insights');
-  const { signSlideObject, uploadSlideObject } = await import('@/lib/social/overnight/storage');
+  const { mediaBucket } = await import('@/lib/media-bucket');
+  const slideBucket = mediaBucket(cfg.SLIDE_BUCKET);
   const { storeSlideJpegs } = await import('@/lib/social/overnight/slides');
   const { checkRenderFit } = await import('@/lib/social/render/fit-check');
   const { closeDbPool } = await import('@/lib/db');
@@ -98,7 +99,7 @@ async function main(): Promise<void> {
     for (const post of await runs.postsMissingSlides(query, run.id)) {
       try {
         const render = (await query(`SELECT render FROM social.posts WHERE id = $1`, [post.id])).rows[0]?.render;
-        const objects = await storeSlideJpegs(post.slug, render, { fitCheck: checkRenderFit, upload: uploadSlideObject });
+        const objects = await storeSlideJpegs(post.slug, render, { fitCheck: checkRenderFit, upload: (p: string, b: Buffer) => slideBucket.upload(p, b, 'image/jpeg') });
         await runs.saveSlideObjects(query, post.id, objects);
         log('slides_stored', { slug: post.slug, slides: objects.length });
       } catch (error) {
@@ -163,7 +164,7 @@ async function main(): Promise<void> {
         });
         if (due > 0) log('schedule_due', { released: due });
         if (metaConfigured()) {
-          const published = await claimAndPublish({ query, meta: createLiveCarouselClient(), signImage: signSlideObject }).catch((error) => {
+          const published = await claimAndPublish({ query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs) }).catch((error) => {
             log('publish_failed', { error: errorText(error) });
             return null;
           });

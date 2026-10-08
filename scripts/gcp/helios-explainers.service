@@ -5,9 +5,11 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-# Its own directory: deploy-worker-code.sh owns /opt/helios-worker/app, this unit never reads it.
-WorkingDirectory=/opt/helios-explainers/app
-EnvironmentFile=/opt/helios-explainers/worker.env
+# helios-social-worker (docs/social-overnight.md). Render work and local copies live
+# under /opt/helios-social/explainers (EXPLAINERS_JOBS_DIR, EXPLAINERS_STORAGE_DIR in
+# worker.env), so a redeploy of the app directory never removes them.
+WorkingDirectory=/opt/helios-social/app
+EnvironmentFile=/opt/helios-social/worker.env
 ExecStart=/usr/bin/npm run explainers:worker
 Restart=always
 RestartSec=15
@@ -17,8 +19,7 @@ TimeoutStopSec=120
 # PROVISIONAL (E-21, A-6). Not measured on the VM yet. The M4 fixture render on a Mac
 # peaked near 1 GB for the CLI process alone, before Chrome workers and the Claude Code
 # agent processes. Replace all three values from the E-21 protocol after the first live
-# run; if the measured peak plus the other workers leaves no headroom on 8 GB, the answer
-# is a dedicated VM, not a tighter limit.
+# run. The VM is an e2-medium (4 GB + 4 GB swap); renders run at 2 AM, alone.
 MemoryHigh=2000M
 MemoryMax=2500M
 # Above helios-worker (5) and level with helios-reels (10): renders yield to outreach.

@@ -79,6 +79,10 @@ gcloud compute ssh ${IAP} "${INSTANCE}" --zone="${ZONE}" --project="${PROJECT}" 
   sudo npm ci
   # Headless Chromium for carousel slide renders.
   sudo npx playwright install --with-deps chromium
+  # Explainer Reels: pinned HyperFrames CLI + Agent SDK, Chrome for renders, the agent sandbox.
+  command -v bwrap >/dev/null && command -v socat >/dev/null || sudo apt-get install -y -qq bubblewrap socat
+  sudo mkdir -p /opt/helios-social/explainers/jobs /opt/helios-social/explainers/storage
+  (cd explainers/runtime && sudo npm ci --no-audit --no-fund && sudo HYPERFRAMES_NO_TELEMETRY=1 npx --no-install hyperframes browser ensure || true)
   for unit in ${UNITS}; do
     sudo cp /tmp/\${unit}.service /etc/systemd/system/\${unit}.service
   done

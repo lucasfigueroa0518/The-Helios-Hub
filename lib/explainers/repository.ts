@@ -426,13 +426,14 @@ export async function addArtifact(
     storagePath?: string | null;
     content?: string | null;
     bytes?: number | null;
+    storageLocation?: 'local' | 'bucket';
   },
 ): Promise<ArtifactRow> {
   const { rows } = await db.query<ArtifactRow>(
-    `INSERT INTO explainers.artifacts (job_id, kind, storage_path, content, bytes)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO explainers.artifacts (job_id, kind, storage_path, content, bytes, storage_location)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [input.jobId, input.kind, input.storagePath ?? null, input.content ?? null, input.bytes ?? null],
+    [input.jobId, input.kind, input.storagePath ?? null, input.content ?? null, input.bytes ?? null, input.storageLocation ?? 'local'],
   );
   return { ...rows[0], bytes: rows[0].bytes === null ? null : num(rows[0].bytes) };
 }
