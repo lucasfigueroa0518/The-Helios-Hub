@@ -395,6 +395,23 @@ export async function releaseDueSchedules(): Promise<number> {
   return released;
 }
 
+/**
+ * A person rejects a trial reel (Social Hub Reject, D47): its video is
+ * rejected on the spine, and the idea's waiting slot is cancelled with the
+ * reason. A reel with no video yet just loses its slot.
+ */
+export async function rejectReel(postIdeaId: string, videoJobId: string | null, by: string | null): Promise<{ rejected: boolean; note: string }> {
+  const { rejectReelItem } = await import('@/lib/reels/publish/items');
+  if (videoJobId) await rejectReelItem(videoJobId, by);
+  const { rows } = await dbQuery(
+    `UPDATE social_hub.schedule SET status = 'cancelled', error = $2
+      WHERE vertical = 'reels' AND idea_ref = $1 AND status = 'scheduled' RETURNING id`,
+    [postIdeaId, REJECTED_NOTE],
+  );
+  if (!videoJobId && rows.length === 0) return { rejected: false, note: 'Nothing is waiting to post for this idea.' };
+  return { rejected: true, note: 'Rejected. It will not post.' };
+}
+
 /** Drop a clock time so Force post does not also fire when the slot arrives. */
 export async function cancelScheduledPost(postIdeaId: string): Promise<void> {
   await dbQuery(

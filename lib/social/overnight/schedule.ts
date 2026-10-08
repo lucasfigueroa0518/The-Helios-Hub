@@ -3,7 +3,7 @@ import type { Query } from '@/lib/social/store/pg';
 import { calendarDateKey } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { slotTakenKey } from '@/lib/instagram/window';
-import { approveItem } from '@/lib/social-hub/spine';
+import { approveItem, rejectItem } from '@/lib/social-hub/spine';
 import { DEFAULT_POSTS_PER_DAY, SOCIAL_TIMEZONE } from './config';
 import { carouselItemId } from './items';
 import { queuePublish } from './publish';
@@ -197,6 +197,22 @@ export async function releaseDueSchedules(query: Query, opts: { requireApproval:
     }
   }
   return released;
+}
+
+/**
+ * A person rejects a carousel (Social Hub Reject, D47): its item is rejected on
+ * the spine, so it never posts and is never reused (SH-60), and its waiting slot
+ * is cancelled with the reason.
+ */
+export async function rejectPost(query: Query, postId: string, by: string | null = null): Promise<boolean> {
+  const itemId = await carouselItemId(query, postId);
+  if (!itemId) return false;
+  await rejectItem(query, itemId, by);
+  await query(
+    `UPDATE social_hub.schedule SET status = 'cancelled', error = $2 WHERE content_item_id = $1 AND status = 'scheduled'`,
+    [itemId, REJECTED_NOTE],
+  );
+  return true;
 }
 
 export const HARD_PUBLISH_NOTE = 'Hard published from the Social Hub (posted now, outside its slot).';

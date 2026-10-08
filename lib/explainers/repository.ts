@@ -523,6 +523,15 @@ export async function saveFeedback(
   return rows[0];
 }
 
+/**
+ * Set a render's verdict from outside the review page (Social Hub actions, D47),
+ * keeping the tags and note a reviewer already left.
+ */
+export async function setVerdict(db: Queryable, jobId: string, verdict: Verdict, by: string | null): Promise<FeedbackRow> {
+  const existing = await getFeedback(db, jobId);
+  return saveFeedback(db, { jobId, verdict, tags: existing?.tags ?? [], note: existing?.note ?? null, createdBy: by });
+}
+
 export async function getFeedback(db: Queryable, jobId: string): Promise<FeedbackRow | null> {
   const { rows } = await db.query<FeedbackRow>(
     'SELECT * FROM explainers.feedback WHERE job_id = $1',

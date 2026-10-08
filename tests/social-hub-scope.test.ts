@@ -263,6 +263,7 @@ const INTENDED: Record<(typeof ACTION_FLAGS)[number], boolean> = {
   approveTrialReel: false,
   hardPublish: false,
   hardRegenerate: false,
+  reject: false,
   refreshOnVisit: false,
 };
 

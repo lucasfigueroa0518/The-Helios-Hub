@@ -130,7 +130,7 @@ export function typicalCost(posts: readonly HubPost[], vertical: Vertical, today
 // ── Actions (flagged; wired only to existing functions) ──────────────────────
 
 export type ActionPlan =
-  | { kind: 'post'; action: 'approveCarousel' | 'approveTrialReel' | 'hardPublish' | 'hardRegenerate'; label: string; endpoint: string; body: Record<string, string | null>; disabled: string | null; confirm?: string }
+  | { kind: 'post'; action: 'approveCarousel' | 'approveTrialReel' | 'hardPublish' | 'hardRegenerate' | 'reject'; label: string; endpoint: string; body: Record<string, unknown>; disabled: string | null; confirm?: string }
   | { kind: 'link'; label: string; href: string; note: string };
 
 export type Quota = { left: number | null; total: number | null; source: string; publishedLast24h: number };
@@ -164,6 +164,21 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
     } else if (post.vertical === 'reels' && post.refs.postIdeaId) {
       plans.push({ kind: 'post', action: 'approveTrialReel', label: 'Approve', endpoint: '/api/social-hub/actions/approve-trial-reel', body: { postIdeaId: post.refs.postIdeaId, videoJobId: post.refs.videoJobId ?? null }, disabled: null });
     }
+  }
+  // Reject (D47): content that hasn't posted yet never will. Explainers are rejected on their review
+  // page, which keeps the tag-based feedback (the link below).
+  if (post.vertical !== 'explainers' && (post.status === 'ready' || post.status === 'scheduled')) {
+    const refs = post.vertical === 'carousels'
+      ? { postId: post.refs.postId }
+      : post.vertical === 'reels'
+        ? { postIdeaId: post.refs.postIdeaId, ...(post.refs.videoJobId ? { videoJobId: post.refs.videoJobId } : {}) }
+        : { setId: post.refs.setId };
+    const missing = Object.values(refs).some((v) => !v);
+    plans.push({
+      kind: 'post', action: 'reject', label: 'Reject', endpoint: '/api/social-hub/actions/reject',
+      body: { vertical: post.vertical, refs }, disabled: missing ? 'No content id.' : null,
+      confirm: 'Reject this post? It will not post, and its slot is released.',
+    });
   }
   if ((post.vertical === 'explainers' || post.vertical === 'stories') && post.status === 'ready' && !post.approval.approvedAt) {
     plans.push({ kind: 'link', label: 'Review', href: info.reviewHref, note: `Approved on ${info.reviewHref}, which keeps its tag-based feedback.` });

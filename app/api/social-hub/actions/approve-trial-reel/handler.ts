@@ -1,25 +1,25 @@
-import { isUuid, type ActionSpec } from '@/lib/social-hub/action-route';
+import type { ContentActions } from '@/lib/publishing/actions/types';
+import { isUuid } from '@/lib/social-hub/action-route';
+import type { Vertical } from '@/lib/social-hub/types';
 
-type Outcome = { scheduled: boolean; note: string; status?: number };
-type Deps = { schedulePostIdea: (postIdeaId: string, source: 'user', videoJobId: string | null) => Promise<Outcome> };
+import { contentAction, type Parsed } from '../content-action';
 
 /**
- * Approve a Trial Reels slot inline: `schedulePostIdea(idea, 'user', video)`
- * in lib/reels/publish/schedule.ts approves the slot the night chose (a
- * person scheduling a reel approves it), exactly as /reels does.
+ * Approve a Trial Reels slot inline (D47, `reelActions.approve`): the idea's
+ * slot is approved by a person scheduling it, exactly as /reels does.
+ * Older body: `{ postIdeaId, videoJobId }`.
  */
-export function approveTrialReel(deps: Deps): ActionSpec<{ postIdeaId: string; videoJobId: string | null }> {
-  return {
+export function approveTrialReel(actions: () => Promise<Record<Vertical, ContentActions>>) {
+  return contentAction({
     flag: 'approveTrialReel',
-    parse: (b) => {
+    verb: 'approve',
+    actions,
+    allowed: ['reels'],
+    legacy: (b): Parsed | null => {
       const body = b as { postIdeaId?: unknown; videoJobId?: unknown } | null;
       if (!isUuid(body?.postIdeaId)) return null;
-      if (body.videoJobId != null && !isUuid(body.videoJobId)) return null;
-      return { postIdeaId: body.postIdeaId, videoJobId: (body.videoJobId as string | null | undefined) ?? null };
+      if (body!.videoJobId != null && !isUuid(body!.videoJobId)) return null;
+      return { vertical: 'reels', target: { postIdeaId: body!.postIdeaId as string, ...(body!.videoJobId ? { videoJobId: body!.videoJobId as string } : {}) } };
     },
-    run: async ({ postIdeaId, videoJobId }) => {
-      const out = await deps.schedulePostIdea(postIdeaId, 'user', videoJobId);
-      return out.scheduled ? { ok: true, note: out.note } : { ok: false, note: out.note, status: out.status };
-    },
-  };
+  });
 }

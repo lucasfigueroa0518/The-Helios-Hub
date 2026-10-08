@@ -183,3 +183,15 @@ test('the account gate now covers Trial Reels: too little quota left fails the t
   const row = (await pg.query<{ error: string }>(`SELECT error FROM social_hub.publish_attempts WHERE vertical = 'reels'`)).rows[0]!;
   assert.match(row.error, /3 of 100 posts left in its 24-hour quota/);
 });
+
+test('Reject (D47): a trial reel\'s video is rejected and its idea\'s waiting slot cancelled', async () => {
+  const pg = await spineDb();
+  await seedReel(pg);
+  await schedulePostIdea(IDEA, 'auto', null, NOW);
+  const { rejectReel, REJECTED_NOTE: NOTE } = await import('@/lib/reels/publish/schedule');
+  assert.deepEqual(await rejectReel(IDEA, VIDEO, 'tommy'), { rejected: true, note: 'Rejected. It will not post.' });
+  const slot = (await pg.query<{ status: string; error: string }>(`SELECT status, error FROM social_hub.schedule`)).rows[0]!;
+  assert.deepEqual([slot.status, slot.error], ['cancelled', NOTE]);
+  assert.equal((await pg.query<{ decision: string }>(`SELECT decision FROM social_hub.approvals`)).rows[0]!.decision, 'rejected');
+  assert.equal((await queuePublish(VIDEO, 'approve')).queued, true, 'queueing is the type\'s own rule; the carry refuses a rejected reel (D41)');
+});

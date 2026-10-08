@@ -5,7 +5,7 @@
  * person turns each on, one at a time, after checking it on real data.
  */
 
-export type ActionFlag = 'approveCarousel' | 'approveTrialReel' | 'hardPublish' | 'hardRegenerate' | 'refreshOnVisit';
+export type ActionFlag = 'approveCarousel' | 'approveTrialReel' | 'hardPublish' | 'hardRegenerate' | 'reject' | 'refreshOnVisit';
 
 export type ViewFlag = 'calendar' | 'analytics' | 'house' | 'post';
 
@@ -21,6 +21,8 @@ export const SOCIAL_HUB_FLAGS: HubFlags = Object.freeze({
     approveTrialReel: false,
     hardPublish: false,
     hardRegenerate: false,
+    // Reject for every type (D47), through the user-action layer. Off until Tommy turns it on.
+    reject: false,
     // Needs the social_hub schema applied and the worker redeployed first.
     refreshOnVisit: false,
   }),
@@ -37,6 +39,7 @@ export const ACTION_FLAGS: readonly ActionFlag[] = [
   'approveTrialReel',
   'hardPublish',
   'hardRegenerate',
+  'reject',
   'refreshOnVisit',
 ];
 

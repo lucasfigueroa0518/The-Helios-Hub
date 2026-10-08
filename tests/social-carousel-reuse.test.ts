@@ -239,3 +239,16 @@ test('a carousel rejected after its attempt was queued is never posted', async (
   assert.equal(out.status, 'failed');
   assert.deepEqual(calls, [], 'no container was made');
 });
+
+test('Reject (D47): the carousel never posts or gets reused, and its waiting slot is cancelled with the reason', async () => {
+  const { query } = await scratchDb();
+  const { rejectPost } = await import('@/lib/social/overnight/schedule');
+  const postId = await insertPost(query, { slug: 'nope', storyId: 'story-7' });
+  await approvePost(query, postId, new Date('2026-10-08T07:30:00Z'));
+  assert.equal(await rejectPost(query, postId, 'tommy'), true);
+  const slot = (await query(`SELECT status, error FROM social_hub.schedule`)).rows[0];
+  assert.deepEqual([slot.status, slot.error], ['cancelled', REJECTED_NOTE]);
+  const decision = (await query(`SELECT decision, decided_by FROM social_hub.approvals`)).rows[0];
+  assert.deepEqual([decision.decision, decision.decided_by], ['rejected', 'tommy']);
+  assert.equal(await storedPostFor(query, 'story-7'), null, 'a rejected post is never reused');
+});
