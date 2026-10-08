@@ -9,9 +9,9 @@ This file is the spec for the implementing agent. It follows the conventions of 
 | Field | Value |
 |---|---|
 | Active build | Instagram Stories, version one |
-| Stage | M1 accepted 2026-10-08. M2 built and tested offline (2026-10-08); M2 accepted 2026-10-08 with the review prompt approved. Waiting on when to apply the `stories` schema to Supabase (S-61). |
+| Stage | M1 and M2 accepted (2026-10-08). M3 to M8 built and tested offline (2026-10-08); waiting for Lucas: prompt and question-set approvals, the schema go-ahead (S-61), and the first Generate clicks (M5, M6, M7). |
 | Branch | `stories` at `54e794d` (= `main` on 2026-10-07: Trial Reels, the carousel pipeline, and Explainer Reels). No upstream, not pushed; a push does not update `main`. |
-| Next action | M3 (Morning Download pipeline; its prompts and Jev question sets come to Lucas as drafts). |
+| Next action | Lucas: approve the drafts in §8.2, say when to apply the `stories` schema, then click Generate for each series (§13 runbook). |
 | Last updated | 2026-10-07 (M1 report, decisions S-34 to S-43) |
 
 ## 0. Rules that override everything here
@@ -263,24 +263,43 @@ Decisions after kickoff go here, numbered from S-34.
 | S-60 | **Story insights (resolves O-6):** reach, views, replies, shares, follows, profile_visits, total_interactions, and navigation by `story_navigation_action_type` (tap forward, tap back, exit, swipe forward); `impressions` is deprecated and not asked for. Metrics are lifetime and "only available for 24 hours" (can lag up to 48). Poll every 2 hours; the final capture lands at 23 hours. Under 5 viewers (error 10) is an empty capture, not a failure; `replies` reads 0 for viewers in Europe and Japan. A `story_insights` webhook could capture final numbers at expiry later. | Agent, M2 (Meta media-insights reference, 2026-10-08) |
 | S-61 | **The `stories` schema goes to Supabase only on Lucas's go-ahead** (`npm run db:stories`; `DATABASE_URL` is the shared production database). Until then tests use PGlite, and local runs can use PGlite at `.stories-local/` (the Explainers precedent). | Agent, M2 |
 | S-62 | **Storage over `fetch` with TLS verification on**; the reels copy it was modeled on turns verification off. Bucket `stories`, private; frames at `sets/<set id>/<seq>-<role>.jpg`, signed for 1 hour when the container is created. | Agent, M2 |
+| S-63 | **Morning Download ranking, first values:** score = 0.25·blockbuster_entity + 0.15·political_relevance + 0.20·global_relevance + 0.20·broad_effect + 0.20·headline_news; bar 0.55; same-event merge at 0.70 (Jev only for cross-system pairs sharing a proper name); grounding passes at 0.60. To calibrate on real runs. | Agent, M3 |
+| S-64 | **Guess the Number, first values:** score = mean of the six gtn-candidate answers, carousel numbers ×1.15 (S-10); at most 12 pre-scored, top 4 written, the best re-score must reach 0.60. Difficulty from the written question: (1 − guessable)·0.5 + surprise·0.5, under 0.4 Low, under 0.65 Medium, else High (O-10 recommendation, provisional). Layout family rotates photo ↔ marquee; type-led when no photo. | Agent, M6 |
+| S-65 | **Free vs. Paid, first values:** pair score = mean of the four fvp-pair-score answers, bar 0.60; a developer tool only when none of the last 3 sets had one (S-08); the chosen pair is re-checked by fvp-verify@1 with web fetch (price and install path) and dropped if either doesn't hold. Web search costs $10 per 1,000 searches, recorded as its own cost row. | Agent, M7 |
+| S-66 | **Sonnet calls carry the server-side refusal fallback** (`fallbacks: "default"`, beta server-side-fallback-2026-07-01, the Claude API reference's default for Sonnet 5.5): a refusal is retried on another model inside the same call; the cost is priced by the model that answered. `tool_choice` is auto with a strict tool (Sonnet 5.5 rejects a forced tool). | Agent, M3 |
+| S-67 | **The photo finder runs without Tommy's vision, face and contact-sheet steps** in v1 (they live inside his design stage): Stories calls `searchVisual` with a minimal brief, the read source pages and Jev identity checks, and takes the top candidate not used in 7 days. The render review and Lucas's review of the first sets are the look checks. | Agent, M3 |
+| S-68 | **History is written when a set publishes**, not when it builds, so a rejected set never blocks its stories. Tommy's `social.used_photos` gets one row per published non-logo photo (S-24). | Agent, M8 |
+| S-69 | **Worker rules (M8):** auto sets are requested after 1:30 AM New York; an auto set approves itself only when the review didn't flag it; an approved set whose window has passed stays approved (the Hub offers Publish now or Reject; risk 6). `STORIES_DB=local` keeps the `stories` tables in PGlite until the schema is applied. | Agent, M8 |
 
 ### 8.2 Prompt and question-set registry
 
 | ID | Component | Engine | Status |
 |---|---|---|---|
-| `major-news@1` | Morning Download ranking | Jev | Draft, needs approval |
-| `md-headlines@1` | Morning Download story frames | Sonnet | Draft, needs approval |
-| `md-grounding@1` | Headline supported by source | Jev | Draft, needs approval |
-| `gtn-extract@1` | Numbers from shortlisted stories | Sonnet | Draft, needs approval |
-| `gtn-candidate@1` | Guess the Number scoring | Jev | Draft, needs approval |
-| `gtn-question@1` | Question and answer copy | Sonnet | Draft, needs approval |
-| `fvp-pair@1` | Pair finding and verification | Sonnet + web_search | Draft, needs approval |
-| `fvp-pair-score@1` | Pair scoring | Jev | Draft, needs approval |
-| `fvp-copy@1` | Free vs. Paid copy | Sonnet | Draft, needs approval |
-| `same-event` (Stories copy) | Cross-system merge | Jev | Draft, needs approval |
-| `stories-render-review@1` | Contact-sheet review of a rendered set | Haiku 5.5 | Approved by Lucas 2026-10-08 (`lib/stories/render/review.ts` `REVIEW_SYSTEM`) |
+| `major-news@1` | Morning Download ranking | Jev | Drafted in M3 (`lib/stories/questions.ts`); needs approval |
+| `md-headlines@1` | Morning Download story frames | Sonnet 5.5 | Drafted in M3 (`lib/stories/prompts.ts`); needs approval |
+| `md-grounding@1` | Headline supported by source | Jev | Drafted in M3; needs approval |
+| `stories-same-event@1` | Cross-system merge | Jev | Drafted in M3; needs approval |
+| `gtn-extract@1` | Numbers from shortlisted stories | Sonnet 5.5 | Drafted in M6; needs approval |
+| `gtn-candidate@1` | Guess the Number scoring | Jev | Drafted in M6; needs approval |
+| `gtn-question@1` | Question, answer, label, meaning, topic | Sonnet 5.5 | Drafted in M6; needs approval |
+| `fvp-pair@1` | Pair finding (web search, at most 5) | Sonnet 5.5 + web_search | Drafted in M7; needs approval |
+| `fvp-verify@1` | Price and install path re-check | Sonnet 5.5 + web_fetch | Drafted in M7; needs approval |
+| `fvp-pair-score@1` | Pair scoring | Jev | Drafted in M7; needs approval |
+| `fvp-copy@1` | The tease line | Sonnet 5.5 | Drafted in M7; needs approval |
+| `stories-render-review@1` | Contact-sheet review of a rendered set | Haiku 5.5 | Approved by Lucas 2026-10-08 |
 
 ### 8.3 Milestone reports
+
+**M3 to M8 (2026-10-08), built at Lucas's request to finish the plan without stopping. Offline only: no live Claude, Jev, web, Meta or Supabase-write call; $0 spent. Not accepted yet.**
+
+- **M3 Morning Download:** `lib/stories/sources/reels.ts` and `sources/carousel.ts` (read-only pools; the one `social.used_photos` insert), `jev.ts` (Stories' own Jev log and cost rows), `questions.ts`, `prompts.ts`, `copy/humanizer.generated.ts` (`npm run stories:sync-copy-text`), `writer.ts` (S-66), `photos.ts` (S-67), `build/morning-download.ts` (S-63), `build/index.ts` (watch check → builder → save → render stage).
+- **M4 Stories tab:** `/stories` (Queue: Generate per series, phone-sized frame previews, candidates and cost, Approve, Reject with tags and a note, Regenerate, Publish now), `/stories/history` (completion, exits on frames 1–3, replies), `/stories/settings` (enabled, auto with confirmation); `/api/stories/*` through `lib/stories/api.ts`; Hub nav entry "Stories · Beta"; `/stories` protected in `middleware.ts` like `/reels`. `next build` compiles every page and route.
+- **M5 (Lucas's first Morning Download click):** nothing to build; ready to run (§13).
+- **M6 Guess the Number:** `build/guess-the-number.ts` (S-64).
+- **M7 Free vs. Paid:** `build/free-vs-paid.ts` (S-65).
+- **M8 Scheduling:** `lib/stories/schedule.ts` (S-20 windows, uniform minute, auto requests), `lib/stories/worker.ts` (S-68, S-69), `scripts/stories_worker.ts` (`npm run stories:worker`, `stories:run`, `--request <series>`).
+- **Tests:** `npm test` 1439/1439 (1380 baseline + 59 Stories), `npm run test:stories:render` 3/3 (real Chromium), `tsc` only the 5 known errors, a worker pass on local PGlite runs clean.
+- **Waiting on Lucas:** the drafts in §8.2; the schema go-ahead (S-61); the first click per series (M5, M6, M7, §13); the auto switch per series (M8); O-3 (tell Tommy); O-10 (difficulty).
 
 **M2 (2026-10-08), accepted by Lucas 2026-10-08: schema, repository, render review, storage, publisher, insights. Offline only; no live Claude, Meta or Supabase call; $0 spent.**
 
@@ -345,3 +364,12 @@ Not part of this build. Tommy is putting the carousel and explainer systems unde
 - **Schedule:** `scripts/stories_worker.ts` and the `stories.sets` queue.
 
 At the merge, Tommy's scheduler and publisher can replace the last two, his renderer can host the templates, and anything that touches the explainer system takes his version (S-31). The `stories` schema can stay or fold into `social`; that is Tommy's call then.
+
+## 13. Runbook (Lucas's Mac, in isolation)
+
+1. **Schema (once, on Lucas's go-ahead):** `npm run db:stories` applies `db/stories_schema.sql` to Supabase (additive, schema `stories` only). Until then, `STORIES_DB=local` runs the worker on PGlite at `.stories-local/` (the Hub tab needs the Supabase schema).
+2. **Chromium:** Playwright's headless Chromium build 1243 is installed (S-42). On another machine: `npx playwright install chromium`.
+3. **Worker:** `npm run stories:worker` (leave it running; it polls every 15 seconds). One pass: `npm run stories:run`.
+4. **First set of a series (M5, M6, M7):** click Generate on `/stories`, or `npm run stories:run -- --request morning_download` (`guess_the_number`, `free_vs_paid`). The worker builds it (live calls, about $0.08–0.45), renders, reviews, and the set shows as Ready. Approve to post in its window, Publish now to post at once, or Reject with tags.
+5. **Auto (M8):** after one or two good sets, turn a series' Auto on in Settings. Auto sets build after 1:30 AM and post in their window; a set the review flags waits for you.
+6. **Env names used:** `ANTHROPIC_API_KEY`, `ANTHROPIC_WORKSPACE_ID`, `TYPESAFE_API_KEY` (Jev), `META_USER_ACCESS_TOKEN`, `META_IG_BUSINESS_ACCOUNT_ID`, `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL` (and `DIRECT_DATABASE_URL` for the schema script).

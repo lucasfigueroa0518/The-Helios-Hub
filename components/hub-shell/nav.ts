@@ -5,7 +5,7 @@ export type HubSubItem = {
 };
 
 export type HubNavItem = {
-  id: 'home' | 'outreach' | 'reels' | 'explainers' | 'events' | 'dashboards' | 'trello' | 'website';
+  id: 'home' | 'outreach' | 'reels' | 'stories' | 'explainers' | 'events' | 'dashboards' | 'trello' | 'website';
   href: string;
   label: string;
   badge?: string;
@@ -32,6 +32,13 @@ export const HUB_NAV: HubNavItem[] = [
     label: 'Trial Reels',
     badge: 'Beta',
     match: (path) => path.startsWith('/reels'),
+  },
+  {
+    id: 'stories',
+    href: '/stories',
+    label: 'Stories',
+    badge: 'Beta',
+    match: (path) => path.startsWith('/stories'),
   },
   {
     id: 'explainers',
