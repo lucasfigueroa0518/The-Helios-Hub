@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { newAnthropic } from '@/lib/anthropic-client';
 import { cachedSystemText } from '@/lib/anthropic-cache';
 import { priceAnthropicMessages } from '@/lib/anthropic-pricing';
 import { MAPPING_MODEL, resolvedDraftingPromptCacheTtl } from '@/lib/models';
@@ -272,7 +272,7 @@ export async function mapAttributesToSearchParams(
   if (!process.env.ANTHROPIC_API_KEY?.trim() || process.env.DRAFTING_MODE !== 'live') {
     return { params: fallback };
   }
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = newAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const ttl = resolvedDraftingPromptCacheTtl();
   const message = await client.messages.create({
     model: MAPPING_MODEL,

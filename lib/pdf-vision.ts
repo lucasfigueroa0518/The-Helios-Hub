@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { newAnthropic } from '@/lib/anthropic-client';
 import { PDFDocument } from 'pdf-lib';
 import type { ExtractedPerson, ExtractionResult } from '@/lib/extraction';
 import { cachedSystemText, withToolCache } from '@/lib/anthropic-cache';
@@ -117,7 +118,7 @@ async function callWithRetry<T>(fn: () => Promise<T>): Promise<T> {
 export function createLivePdfCaller(collector?: AnthropicUsageCollector): PdfCaller {
   assertLiveExtractionAllowed();
   if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured');
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 0 });
+  const client = newAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 0 });
 
   return {
     async extract(pdfBytes, pageCount) {

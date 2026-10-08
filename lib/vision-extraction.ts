@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { newAnthropic } from '@/lib/anthropic-client';
 import type { ImageTile } from '@/lib/image-tiling';
 import type { ExtractedPerson, ExtractionResult } from '@/lib/extraction';
 import { cachedSystemText, withToolCache } from '@/lib/anthropic-cache';
@@ -149,7 +150,7 @@ function toolInput<T>(message: Anthropic.Message, toolName: string): T | null {
 export function createLiveVisionCaller(collector?: AnthropicUsageCollector): VisionCaller {
   assertLiveExtractionAllowed();
   if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured');
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 0 });
+  const client = newAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 0 });
 
   return {
     async count(tile) {

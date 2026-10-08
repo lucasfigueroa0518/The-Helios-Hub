@@ -1,4 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk';
+import type Anthropic from '@anthropic-ai/sdk';
+import { newAnthropic } from '@/lib/anthropic-client';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -341,7 +342,7 @@ export async function claimAndRenderVideo(deps?: {
 }): Promise<{ id: string; status: VideoStatus } | null> {
   const id = await claimVideoJob();
   if (!id) return null;
-  const motionClient = deps?.motion ?? new Anthropic();
+  const motionClient = deps?.motion ?? newAnthropic();
   let usd = 0;
   try {
     const target = await loadVideoTarget(id);

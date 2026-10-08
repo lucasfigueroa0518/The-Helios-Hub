@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { newAnthropic } from '@/lib/anthropic-client';
 
 import { COPY_MODEL, PASSING_REELS_PER_NIGHT } from '@/lib/reels/config';
 import { resolveCopyModel } from '@/lib/reels/copy/model';
@@ -47,7 +47,7 @@ export async function generatePassingReels(input: {
   const count = input.count ?? PASSING_REELS_PER_NIGHT;
   if (!copyPromptApproved()) return { status: 'skipped', filled: [], heldOut: [], usd: 0, failures: [] };
   if (!input.client && !process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not set.');
-  const client: CopyClient = input.client ?? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client: CopyClient = input.client ?? newAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const model = await resolveCopyModel(() => {
     const listed = client as CopyClient & { models?: { list: () => AsyncIterable<{ id: string }> } };
     if (!listed.models) return [];
