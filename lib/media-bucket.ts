@@ -2,8 +2,8 @@ import https from 'node:https';
 
 /**
  * Private Supabase Storage buckets for social media files (carousel slides,
- * explainer videos), signed for Meta at publish time. The same calls as
- * lib/reels/visual/storage.ts, whose bucket is fixed to reels-frames.
+ * explainer videos, Trial Reels frames and videos), signed for Meta at
+ * publish time. lib/reels/visual/storage.ts is this client on `reels-frames`.
  */
 
 function getSettings() {
@@ -20,7 +20,8 @@ function encodePath(objectPath: string) {
 const UPLOAD_ATTEMPTS = 4;
 const UPLOAD_TIMEOUT_MS = 60_000;
 
-function isRetryableUploadStatus(status: number): boolean {
+/** Gateway timeouts and brief storage outages. A 4xx other than 408/429 will not clear by waiting. */
+export function isRetryableUploadStatus(status: number): boolean {
   return status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
 }
 
@@ -94,7 +95,11 @@ async function uploadObject(bucket: string, objectPath: string, body: Buffer, co
   throw new Error(lastError);
 }
 
-/** Same `/storage/v1` prefix fix as the reels frames (lib/reels/visual/storage.ts frameSignedUrl). */
+/**
+ * Supabase returns a path that starts with `/object/sign/...`. Joining that
+ * onto a base that already has a path drops `/storage/v1`, so the fetcher gets
+ * a URL that 404s. Prefix the storage route, then resolve against the project.
+ */
 export function bucketSignedUrl(baseUrl: string, signedPath: string): string {
   const absolute = signedPath.startsWith('http');
   const pathAndQuery = absolute ? `${new URL(signedPath).pathname}${new URL(signedPath).search}` : signedPath;
@@ -118,16 +123,43 @@ async function signObject(bucket: string, objectPath: string, expiresIn: number)
   return bucketSignedUrl(baseUrl, parsed.signedURL);
 }
 
+async function downloadObject(bucket: string, objectPath: string): Promise<Buffer> {
+  const result = await request('GET', `/storage/v1/object/${bucket}/${encodePath(objectPath)}`, undefined, {});
+  if (result.status < 200 || result.status >= 300) throw new Error(`Download from ${bucket} failed (${result.status})`);
+  return result.body;
+}
+
+async function removeObjects(bucket: string, objectPaths: string[]): Promise<void> {
+  if (objectPaths.length === 0) return;
+  const payload = JSON.stringify({ prefixes: objectPaths });
+  const result = await request('DELETE', `/storage/v1/object/${bucket}`, payload, {
+    'content-type': 'application/json',
+    'content-length': String(Buffer.byteLength(payload)),
+  });
+  if (result.status < 200 || result.status >= 300) {
+    throw new Error(`Delete in ${bucket} failed (${result.status}): ${result.body.toString('utf8').slice(0, 200)}`);
+  }
+}
+
 export type MediaBucket = {
   upload(objectPath: string, body: Buffer, contentType: string): Promise<void>;
   /** Short-lived URL Meta (or a reviewer's browser) can fetch. The bucket stays private. */
   sign(objectPath: string, expiresIn?: number): Promise<string>;
 };
 
+/** The full client: also reads objects back and deletes them (Trial Reels retention). */
+export type ManagedMediaBucket = MediaBucket & {
+  download(objectPath: string): Promise<Buffer>;
+  /** Hard-delete objects. Missing objects are not an error. */
+  remove(objectPaths: string[]): Promise<void>;
+};
+
 /** A private bucket, created on first upload. */
-export function mediaBucket(bucket: string): MediaBucket {
+export function mediaBucket(bucket: string): ManagedMediaBucket {
   return {
     upload: (objectPath, body, contentType) => uploadObject(bucket, objectPath, body, contentType),
     sign: (objectPath, expiresIn = 3600) => signObject(bucket, objectPath, expiresIn),
+    download: (objectPath) => downloadObject(bucket, objectPath),
+    remove: (objectPaths) => removeObjects(bucket, objectPaths),
   };
 }

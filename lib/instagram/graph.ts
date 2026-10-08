@@ -1,11 +1,13 @@
 /**
- * Instagram Graph plumbing shared by the content types outside Trial Reels
- * (docs/social-overnight.md). Same account and user token as Trial Reels
- * (lib/reels/music/meta.ts), which keeps its own client.
+ * Instagram Graph transport shared by every content type (docs/social-overnight.md):
+ * one account, one user token, one error describer. Each type keeps only its
+ * own container payload (carousel children, trial reel params, explainer reel,
+ * story frame) on top of `call`; tests/instagram-payloads.test.ts pins them.
  */
 
-/** Same Graph version as Trial Reels (lib/reels/config.ts META_GRAPH_VERSION). */
-export const META_GRAPH_VERSION = 'v26.0';
+import { META_GRAPH_VERSION } from './graph-version';
+
+export { META_GRAPH_VERSION };
 
 export type ContainerStatus = { statusCode: string; status: string | null };
 export type PublishingLimit = { quotaUsage: number; quotaTotal: number | null };
@@ -17,6 +19,12 @@ export interface InstagramContainerOps {
   permalink(mediaId: string): Promise<string | null>;
   /** The account's rolling 24-hour publishing quota, shared by every content type. */
   publishingLimit(): Promise<PublishingLimit>;
+}
+
+export class MetaNotConfiguredError extends Error {
+  constructor() {
+    super('Meta is not configured: META_USER_ACCESS_TOKEN and META_IG_BUSINESS_ACCOUNT_ID must be set.');
+  }
 }
 
 export function metaConfigured(): boolean {
@@ -32,18 +40,17 @@ function describeGraphError(status: number, body: unknown): string {
   return `Meta returned ${status}: ${error.message ?? 'no message'} (code ${error.code ?? '?'}${error.error_subcode ? `/${error.error_subcode}` : ''}, trace ${error.fbtrace_id ?? '?'})`;
 }
 
+/** `path` is relative to the pinned version, or a full Graph URL (a paging link). */
 export type GraphCall = <T>(method: 'GET' | 'POST', path: string, params: Record<string, string>) => Promise<T>;
 
 export function createGraph(fetchImpl: typeof fetch = fetch): { call: GraphCall; igUserId: string; ops: InstagramContainerOps } {
   const token = process.env.META_USER_ACCESS_TOKEN;
   const igUserId = process.env.META_IG_BUSINESS_ACCOUNT_ID;
-  if (!token || !igUserId) {
-    throw new Error('Meta is not configured: META_USER_ACCESS_TOKEN and META_IG_BUSINESS_ACCOUNT_ID must be set.');
-  }
+  if (!token || !igUserId) throw new MetaNotConfiguredError();
   const base = `https://graph.facebook.com/${META_GRAPH_VERSION}`;
 
   const call: GraphCall = async <T>(method: 'GET' | 'POST', p: string, params: Record<string, string>) => {
-    const url = new URL(`${base}${p}`);
+    const url = new URL(p.startsWith('http') ? p : `${base}${p}`);
     const form = new URLSearchParams({ ...params, access_token: token });
     let response: Response;
     if (method === 'GET') {

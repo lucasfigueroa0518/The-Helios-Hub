@@ -34,11 +34,8 @@ export const SONG_POOL_CAP = 50;
 /** D-148: the narrowing layer hands Jev exactly this many songs. */
 export const SONG_SHORTLIST_SIZE = 12;
 
-/**
- * Pinned rather than unversioned, which would silently follow the app's
- * default. v26.0 shipped 2026-07-29 and is current as of 2026-09-27.
- */
-export const META_GRAPH_VERSION = 'v26.0';
+/** One pinned Graph version for every content type (lib/instagram/graph.ts). */
+export { META_GRAPH_VERSION } from '@/lib/instagram/graph-version';
 /** Implementation brake: day one only reads past the first page for replacements. */
 export const META_TRENDING_MAX_PAGES = 5;
 /**

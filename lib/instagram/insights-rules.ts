@@ -1,9 +1,8 @@
 import { calendarDateKey } from '@/lib/instagram/clock';
 
 /**
- * Due/settle rules and Graph payload readers for Instagram insights, the same
- * rules as lib/reels/media-insights/{due,parse}.ts, shared by the content
- * types outside Trial Reels.
+ * Due/settle rules and Graph payload readers for Instagram insights, shared
+ * by every content type (Trial Reels re-export them from lib/reels/media-insights).
  */
 
 /** Newer than this: asked again every 30 minutes. */

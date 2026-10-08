@@ -1,5 +1,8 @@
-import { META_GRAPH_VERSION, META_TRENDING_MAX_PAGES } from '@/lib/reels/config';
+import { createGraph, type InstagramContainerOps } from '@/lib/instagram/graph';
+import { META_TRENDING_MAX_PAGES } from '@/lib/reels/config';
 import type { AudioType } from '@/lib/reels/music/pool';
+
+export { MetaNotConfiguredError, metaConfigured, type ContainerStatus } from '@/lib/instagram/graph';
 
 /**
  * Instagram API with Facebook Login: the Audio API for trending sounds and the
@@ -8,7 +11,9 @@ import type { AudioType } from '@/lib/reels/music/pool';
  * `.env.local` is not used.
  *
  * Everything goes through `MetaClient` so the ingest and publish jobs run
- * offline in tests against a stub.
+ * offline in tests against a stub. The Graph transport and the status /
+ * publish / permalink steps are the shared ones (lib/instagram/graph.ts); this
+ * file keeps only what is Trial Reels': the Audio API and the trial container.
  */
 
 /** One sound as `/ig_audio` returns it. Nothing about genre, mood, or BPM. */
@@ -37,59 +42,15 @@ export type ContainerInput = {
   shareToFeed: boolean | null;
 };
 
-export type ContainerStatus = { statusCode: string; status: string | null };
-
-export interface MetaClient {
+export interface MetaClient extends Pick<InstagramContainerOps, 'containerStatus' | 'publishContainer' | 'permalink'> {
   /** Trending sounds of one type, in the order Meta returns them, up to `atLeast` if pages allow. */
   trending(audioType: AudioType, atLeast: number): Promise<IgAudio[]>;
   downloadPreview(url: string): Promise<{ bytes: Buffer; contentType: string | null }>;
   createReelContainer(input: ContainerInput): Promise<string>;
-  containerStatus(containerId: string): Promise<ContainerStatus>;
-  publishContainer(containerId: string): Promise<string>;
-  permalink(mediaId: string): Promise<string | null>;
-}
-
-export class MetaNotConfiguredError extends Error {
-  constructor() {
-    super('Meta is not configured: META_USER_ACCESS_TOKEN and META_IG_BUSINESS_ACCOUNT_ID must be set.');
-  }
-}
-
-export function metaConfigured(): boolean {
-  return Boolean(process.env.META_USER_ACCESS_TOKEN && process.env.META_IG_BUSINESS_ACCOUNT_ID);
-}
-
-type GraphError = { error?: { message?: string; code?: number; error_subcode?: number; fbtrace_id?: string } };
-
-/** Params only; the token never goes into anything that gets logged. */
-function describeGraphError(status: number, body: unknown): string {
-  const error = (body as GraphError | null)?.error;
-  if (!error) return `Meta returned ${status}.`;
-  return `Meta returned ${status}: ${error.message ?? 'no message'} (code ${error.code ?? '?'}${error.error_subcode ? `/${error.error_subcode}` : ''}, trace ${error.fbtrace_id ?? '?'})`;
 }
 
 export function createLiveMetaClient(fetchImpl: typeof fetch = fetch): MetaClient {
-  const token = process.env.META_USER_ACCESS_TOKEN;
-  const igUserId = process.env.META_IG_BUSINESS_ACCOUNT_ID;
-  if (!token || !igUserId) throw new MetaNotConfiguredError();
-  const base = `https://graph.facebook.com/${META_GRAPH_VERSION}`;
-
-  async function call<T>(method: 'GET' | 'POST', path: string, params: Record<string, string>): Promise<T> {
-    const url = new URL(path.startsWith('http') ? path : `${base}${path}`);
-    const form = new URLSearchParams({ ...params, access_token: token! });
-    let response: Response;
-    if (method === 'GET') {
-      for (const [key, value] of form) url.searchParams.set(key, value);
-      response = await fetchImpl(url);
-    } else {
-      response = await fetchImpl(url, { method: 'POST', body: form });
-    }
-    const body = (await response.json().catch(() => null)) as T | GraphError | null;
-    if (!response.ok || (body && typeof body === 'object' && 'error' in body && body.error)) {
-      throw new Error(describeGraphError(response.status, body));
-    }
-    return body as T;
-  }
+  const { call, igUserId, ops } = createGraph(fetchImpl);
 
   return {
     async trending(audioType, atLeast) {
@@ -142,22 +103,8 @@ export function createLiveMetaClient(fetchImpl: typeof fetch = fetch): MetaClien
       return body.id;
     },
 
-    async containerStatus(containerId) {
-      const body = await call<{ status_code?: string; status?: string }>('GET', `/${containerId}`, {
-        fields: 'status_code,status',
-      });
-      return { statusCode: body.status_code ?? 'UNKNOWN', status: body.status ?? null };
-    },
-
-    async publishContainer(containerId) {
-      const body = await call<{ id?: string }>('POST', `/${igUserId}/media_publish`, { creation_id: containerId });
-      if (!body.id) throw new Error('Meta published but returned no media id.');
-      return body.id;
-    },
-
-    async permalink(mediaId) {
-      const body = await call<{ permalink?: string }>('GET', `/${mediaId}`, { fields: 'permalink' });
-      return body.permalink ?? null;
-    },
+    containerStatus: ops.containerStatus,
+    publishContainer: ops.publishContainer,
+    permalink: ops.permalink,
   };
 }

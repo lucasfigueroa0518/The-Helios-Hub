@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { mediaBucket } from '@/lib/media-bucket';
+import { mediaBucket, type MediaBucket } from '@/lib/media-bucket';
 
 /**
  * Where render outputs live. Keys look like `jobs/<jobId>/video.mp4`.
@@ -53,7 +53,7 @@ export function contentTypeFor(key: string): string {
 }
 
 /** Local copy (the render keeps reading it) plus the bucket copy. */
-export function bucketArtifactStore(local = localArtifactStore(), bucket = mediaBucket(ARTIFACT_BUCKET)): ArtifactStore {
+export function bucketArtifactStore(local = localArtifactStore(), bucket: MediaBucket = mediaBucket(ARTIFACT_BUCKET)): ArtifactStore {
   return {
     async put(key, sourcePath) {
       const stored = await local.put(key, sourcePath);

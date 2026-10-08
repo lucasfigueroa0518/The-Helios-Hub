@@ -63,9 +63,12 @@ slot that comes due is cancelled with the reason, never posted late. Explainers
 need the `approved` verdict; Stories never auto-approve a set. Tommy turns
 these off himself.
 
-Shared code for the types outside Trial Reels lives in `lib/instagram/` (clock,
-posting windows, Graph container calls, insights client and rules) and
-`lib/media-bucket.ts` (private Supabase buckets).
+Shared code lives in `lib/instagram/` (clock, posting windows, the Graph
+transport and container calls, insights client and rules) and
+`lib/media-bucket.ts` (private Supabase buckets). Trial Reels, Carousels and
+Explainers all post through the same Graph transport; each keeps only its own
+container payload, pinned by `tests/instagram-payloads.test.ts`. IG Stories
+still carry their own copies until they join (unification plan, Stories wave).
 
 ## Shared Instagram account
 
