@@ -63,3 +63,7 @@ Lucas Head Shot.jpg
 !.cursor/
 !.cursor/rules/
 !.cursor/rules/**
+
+# Helios Social dev outputs: local to each machine, never in git (Tommy, 2026-10-08)
+/runs/
+/Claude outputs/
