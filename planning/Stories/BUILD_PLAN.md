@@ -9,10 +9,10 @@ This file is the spec for the implementing agent. It follows the conventions of 
 | Field | Value |
 |---|---|
 | Active build | Instagram Stories, version one |
-| Stage | M0 (this plan). Nothing built. |
+| Stage | M1 built: templates, renderer and mock-ups on fixture data. Waiting for Lucas to approve the templates, the closer line and the brand bends (O-7). |
 | Branch | `stories` at `54e794d` (= `main` on 2026-10-07: Trial Reels, the carousel pipeline, and Explainer Reels). No upstream, not pushed; a push does not update `main`. |
-| Next action | M1: design mock-ups (React templates on fixture data) for Lucas's approval. |
-| Last updated | 2026-10-07 (rebased onto `54e794d`) |
+| Next action | Lucas reviews `exports/stories/m1/sheets/`. On approval: commit M1, then M2. |
+| Last updated | 2026-10-07 (M1 report, decisions S-34 to S-43) |
 
 ## 0. Rules that override everything here
 
@@ -20,7 +20,7 @@ From `CLAUDE.md`, restated because this build calls models every day.
 
 1. **No live Claude API, `web_search`, or Jev calls in automated tests or agent development runs.** Tests stub every model and vendor call. The autonomous spend ceiling is about $1.50 without Lucas's in-the-moment go-ahead. **Lucas's click on Generate (or his switching a series to automatic) is the approval boundary for live runs.** Agents report telemetry; Lucas judges quality.
 2. **Prompt caching** on every `messages.create`: stable prefix first (tools → system → messages), the breakpoint on the last stable block, never on the per-day payload. Helpers in `lib/anthropic-cache.ts`. Clients come from `newAnthropic()` in `lib/anthropic-client.ts` (the workspace header, `a4a5186`).
-3. **Worker sync.** Any worker code or env change is deployed to the VM in the same session. Deploy only from `main` (Section 6).
+3. **Worker sync.** Not while Stories is in isolation: its worker runs on Lucas's Mac and nothing is deployed to the VM (S-35). Once Stories has a VM unit, any worker code or env change is deployed in the same session, only from `main` (Section 6).
 4. **Milestones in order**, each with its Accept met and a report to Lucas.
 5. **Prompts and Jev question sets need Lucas's approval** before they produce anything he reviews. Draft, show, revise, log in the registry (Section 8.2).
 6. **Stories never edits `lib/reels/` or `lib/social/`.** It imports from them read-only. Tommy owns `lib/social/` and signs off on it alone. Stories writes to Tommy's tables only where his storage spec allows it: a row in `social.used_photos` for a photo Stories actually published (`docs/superpowers/specs/2026-10-08-social-storage.md` §3).
@@ -102,11 +102,12 @@ Interview with Lucas, 2026-10-07. "Default" rows were stated to Lucas at the end
 | O-2 | ~~Do story frames carry a photo?~~ **Resolved by S-29:** yes, and the carousel's photo for that story is allowed. | — | — |
 | O-3 | **Heads-up to Tommy.** Stories reads `social.*`, calls his photo finder as-is (his changes flow into Stories), and inserts rows into `social.used_photos` for photos it publishes. | Lucas tells Tommy | M3 |
 | O-4 | ~~Carousel runs only when Tommy starts it.~~ **Not this build's concern (S-30).** Until the merge, Morning Download simply uses whatever carousel runs exist, and Trial Reels alone on days with none. | — | — |
-| O-5 | **Where the renderer's browser runs.** React templates become images in headless Chromium, as the carousel's do (S-32). `npm ci` installs the `playwright` package but not Chromium or its system libraries. In isolation, Stories renders on Lucas's Mac: Playwright's Chromium builds are already cached there (`~/Library/Caches/ms-playwright`), but this checkout's `node_modules` is behind `package.json` (no `playwright`, `jsdom`, `@mozilla/readability`), so M2 starts with `npm install`; on the VM it needs `npx playwright install --with-deps chromium` and a memory check beside the other units. At the merge it renders wherever Tommy's hub renders. | Lucas | M8 |
+| O-5 | **Where the renderer's browser runs.** React templates become images in headless Chromium, as the carousel's do (S-32). `npm ci` installs the `playwright` package but not Chromium or its system libraries. In isolation, Stories renders on Lucas's Mac: dependencies are installed, and Playwright 1.63's own headless Chromium (build 1243) was installed into `~/Library/Caches/ms-playwright` during M1 (the cache only had 1200 and 1217; S-42); on the VM it needs `npx playwright install --with-deps chromium` and a memory check beside the other units. At the merge it renders wherever Tommy's hub renders. | Lucas | M8 |
 | O-6 | **Story insights window.** Confirm in M2 which story metrics the Graph API returns and for how long after posting; the poller is built to capture before expiry. | Agent | M2 |
 | O-7 | **Brand bends** to accept on the mock-ups: flooded orange and green backdrops (the system says orange for action, green for metadata, white canvas); a black backdrop (the system says off-black `#171717` for text, never `#000`). Trial Reels already ships flooded grades (D-219, D-221). | Lucas | M1 |
 | O-8 | **Unconfirmed brand details.** The design system still lists `@heliosmarketingg` and `lucas@heliosmarketing.org`. The closer doesn't need them, but say if they changed. | Lucas | M1 |
 | O-9 | **The installed `helios-design-system` skill** in the Claude app is a separate copy managed through claude.ai. It still says Helios Marketing until the updated folder is re-uploaded. | Lucas | Any time |
+| O-10 | **Who sets Guess the Number's difficulty** (S-49). Recommendation: code maps it from the `gtn-candidate@1` answers (`guessable` and `surprise` probabilities → Low / Medium / High, thresholds calibrated on the first runs) so it's measured, not a model's opinion; the writing call only writes the topic. | Lucas | M6 |
 
 ## 4. Architecture
 
@@ -128,7 +129,7 @@ The app never builds or publishes a set. It inserts rows (Generate, Approve, Pub
 **Data model** (`db/stories_schema.sql`, `scripts/apply_stories_schema.js`, `npm run db:stories`; additive DDL only, own schema):
 
 - `sets`: `id`, `series` (`morning_download`, `guess_the_number`, `free_vs_paid`), `ny_date`, `status` (`requested`, `building`, `ready`, `approved`, `scheduled`, `publishing`, `published`, `rejected`, `failed`), `slot`, `publish_at`, `trigger` (`click`, `auto`), `payload jsonb` (the chosen stories or number or pair, with sources), `error`, `spend_usd`, timestamps. One set per series per day (unique partial index).
-- `frames`: `set_id`, `seq`, `role` (`opener`, `story`, `closer`, `question`, `answer`, `paid`, `free`), `template`, `backdrop` (`black`, `white`, `orange`, `green`), `copy jsonb`, `photo jsonb` (url, source, credit, qid, scene), `storage_path`, `ig_container_id`, `ig_media_id`, `published_at`.
+- `frames`: `set_id`, `seq`, `role` (`opener`, `story`, `closer`, `intro`, `question`, `answer`, `paid`, `free`), `template`, `backdrop` (`black`, `white`, `orange`, `green`), `copy jsonb`, `photo jsonb` (url, source, credit, qid, scene), `storage_path`, `ig_container_id`, `ig_media_id`, `published_at`.
 - `candidates`: every candidate a build considered: `set_id`, `origin` (`reels`, `carousel`, `catalog`, `generated`), `ref` (idea id, post slug, run id + story id, catalog id), `payload jsonb`, Jev answers, `score`, `chosen boolean`, `reason`.
 - `history`: what has been shown, for repeat checks: series, story key or number key or tool pair key, `shown_at`.
 - `insights`: `frame_id`, `captured_at`, `reach`, `views`, `replies`, `shares`, `follows`, `profile_visits`, `taps_forward`, `taps_back`, `exits`, `swipe_forward`, `raw jsonb`.
@@ -165,7 +166,7 @@ Code turns the answers into one score (weights calibrated from the first runs an
 
 ### 5.2 Guess the Number (Monday and Thursday, 6:00–9:00 PM)
 
-**Frames:** question (with image) → answer (image when good enough).
+**Frames:** intro (S-49: today's game, difficulty, topic) → question (with image) → answer (image when good enough).
 
 **Pool (last 7 days, S-26):**
 1. Carousel posts (`social.posts` with status `review` or `published`): every `brief.numbers` entry, with its fact, source, and the post's photos.
@@ -177,15 +178,15 @@ Carousel candidates carry a source weight above reels candidates (S-10); its siz
 
 **Two passes:**
 1. **Pre-score** (`gtn-candidate@1`, DRAFT, needs R6) on the raw number and its fact sentence: `public_context` (would an average person understand what is being counted and why it matters, with one line of context?), `guessable` (could they make a reasonable guess, neither trivial nor impossible?), `want_to_guess` (would they want to?), `interest_category` (is it about something people most want to know: money, jobs, everyday tools, famous companies or people, safety, health, the future?), `surprise` (does the true answer land differently from most guesses?), and `verifiable` (is the number stated plainly in the source, not derived?). Top 4 go on.
-2. **Write** (`gtn-question@1`, DRAFT, cached Sonnet): the question line, one line of context, the answer, and one line of what it means, humanized. **Re-score** the written question with the same node; the best clears the bar or the set is skipped for that day and the Hub says so.
+2. **Write** (`gtn-question@1`, DRAFT, cached Sonnet): the question line, the answer, one line of what it means, and the intro's topic line, humanized. No hint or context line (S-51). Difficulty: see O-10. **Re-score** the written question with the same node; the best clears the bar or the set is skipped for that day and the Hub says so.
 
 **Images (S-12):** a carousel number reuses its post's photo when the photo-fit check passes for the question; otherwise the finder runs with a request written in the same call as the question. The answer frame takes a second distinct photo only when it passes the bar.
 
-**Templates (S-13):** at least three families (photo-led, split, type-led), each on the four backdrops. Rotation never repeats the previous set's family and backdrop.
+**Templates (S-13, S-44, S-45):** three families (photo-led, marquee, type-led), each on the four backdrops; every photo a bleed fade. Rotation never repeats the previous set's family and backdrop.
 
 ### 5.3 Free vs. Paid (Tuesday and Saturday, 6:00–9:00 PM)
 
-**Frames:** paid tool + price + tease → free tool + what it does + how to get it.
+**Frames:** intro (S-50, fixed copy) → paid tool + price + tease → free tool + what it does + how to get it.
 
 **Pool:** Ball Knowledge ideas from the last 14 days (their copy names what a tool replaces), GitHub Trending sources, and `reels.list_catalog`, filtered to tools a general user can install (S-08).
 
@@ -230,6 +231,28 @@ New `HUB_NAV` entry `stories`, label `Stories`, badge `Beta`. `/stories` and `/a
 
 Decisions after kickoff go here, numbered from S-34.
 
+| ID | Decision | Source |
+|---|---|---|
+| S-34 | **S-25 is superseded by M1 and S-32.** The mock-ups Lucas approves *are* the real React templates in `lib/stories/render/`, rendered on fixture data. | Lucas, 2026-10-07 |
+| S-35 | **No VM deploys while Stories is in isolation.** The worker runs on Lucas's Mac; rule 0.3 applies only once a VM unit exists, and only from `main`. | Lucas, 2026-10-07 |
+| S-36 | **Contrast per backdrop.** Text on orange is off-black `#171717` (white on Helios orange is about 3.1:1; off-black about 5.9:1). White on green (about 4.8:1). The black backdrop is near-black `#0A0A0A`, never `#000`. Accents: the logo gradient on black and white; white on orange and green. | Lucas, 2026-10-07 (part of O-7) |
+| S-37 | **Logo treatment.** Always the whole full-colour sun mark (`assets/helios-logo.png`), never recoloured, cropped or covered, below the 250 px line with clear space. On orange and green it carries a thin white ring so it doesn't melt into the field. | Lucas, 2026-10-07 (part of O-7) |
+| S-38 | **The closer shows heliosgroup.ai only**, no Instagram handle, until the handle is confirmed (O-8; the carousel's follow slide prints `@heliosgroup.ai`, the design system still says `@heliosmarketingg`). | Lucas, 2026-10-07 |
+| S-39 | **Type.** Pragmatica Extended for the opener title, questions, numbers, prices, tool names and the closer headline. Morning Download headlines (two full sentences) are Roboto: the first sentence Medium in full ink, the rest Light; the split skips abbreviations ("Gov.", "Sept.", "U.S."). | Lucas, 2026-10-07 |
+| S-40 | **Fixture photos** are real Commons files fetched once into `lib/stories/render/fixtures/photos/` with `credits.json` (artist, license, page). Free, about 3 MB. | Lucas, 2026-10-07 |
+| S-41 | **Bleed photos fade long on black and start fading later on the other backdrops.** A long fade into a flooded colour tints the photo. Stops live in `lib/stories/render/fades.ts`, the one source for the mask and the check; text may sit on a bleed photo only where it has faded below 30%. | Agent, M1 (revised after S-44) |
+| S-42 | **Playwright's own Chromium** (headless shell build 1243, about 94 MB) was installed on Lucas's Mac with `npx playwright install chromium`; Playwright 1.63 can't launch the cached 1200/1217 builds. | Agent, M1 |
+| S-43 | **Credits are never truncated.** A credit wraps to two lines and shrinks to 16 px at most; it sits just above the reply bar (bottom edge at y=1576). | Agent, M1 |
+| S-44 | **Every photo is a bleed fade, never a card.** Story frames and photo-led Guess the Number frames hang the photo from the top edge and fade it into the backdrop; the Morning Download opener and the marquee family use a "window" that fades in and out between two text blocks (so the logo stays top center). Guess the Number's split family is replaced by the marquee family. | Lucas, M1 review |
+| S-45 | **Guess the Number plays like a game show, through the copy.** "Can you guess the number?" is the dominant line on every question frame (Pragmatica, largest type on the frame); the question follows as the challenge; the context becomes a **Hint**; the cue is "Lock it in. Tap to reveal". The answer frame opens "The answer is", then the number, and asks "How close did you get?". Question data carries `hint`, not `context`. | Lucas, M1 review |
+| S-46 | **Free vs. Paid leads with the series title.** "FREE / vs. / PAID" stacked large at the top of both slides like a fight card; the side the slide is about is lit (PAID on slide 1, FREE on slide 2). The masthead drops its label on Guess the Number and Free vs. Paid, since the title carries the series. | Lucas, M1 review |
+| S-47 | **No pills or buttons in Stories.** The next-frame cue is type and an arrow, right-aligned, on the side people tap to go forward. The closer's heliosgroup.ai is type with an underline, not a button (a Story can't link without a sticker). | Lucas, M1 review |
+| S-48 | Story frames carry no layout setting any more (bleed only); the render review's (S-33) settings for a story frame are backdrop and photo focus. | Agent, follows S-44 |
+| S-49 | **Guess the Number opens with an intro slide:** Today's "Guess the Number", **Difficulty:** Low / Medium / High, **Topic:** one line the model writes. Type-led with the "?" watermark; cue "Tap to play". A set is intro → question → answer. | Lucas, M1 review |
+| S-50 | **Free vs. Paid opens with an intro slide** in Lucas's words, verbatim: "Free Vs. Paid is our series where we give you guys open source or free tools that can replace the tech you're currently paying for, enjoy :)" under the stacked FREE / vs. / PAID title, both words lit; cue "Tap for today's pick". The ":)" is a deliberate bend of the no-emoji rule. A set is intro → paid → free. | Lucas, M1 review |
+| S-51 | **No hints on Guess the Number.** The question frame is the game line, the question and the cue; question data has no `hint`/`context` field. | Lucas, M1 review |
+| S-52 | **Closer headline:** "Follow for AI news, updates and lessons." ("every morning" removed). | Lucas, M1 review |
+
 ### 8.2 Prompt and question-set registry
 
 | ID | Component | Engine | Status |
@@ -245,6 +268,20 @@ Decisions after kickoff go here, numbered from S-34.
 | `fvp-copy@1` | Free vs. Paid copy | Sonnet | Draft, needs approval |
 | `same-event` (Stories copy) | Cross-system merge | Jev | Draft, needs approval |
 | `stories-render-review@1` | Contact-sheet review of a rendered set | Haiku 5.5 | Draft, needs approval |
+
+### 8.3 Milestone reports
+
+**M1 (2026-10-07): templates on fixture data. No model calls, $0 spent.**
+
+- **Built:** `lib/stories/render/`: `types.ts` (frame data, safe zones, 8 MB cap), `copy.ts` (fixed opener, closer and label copy: DRAFT until approved), `StoryFrame.tsx` (one component per role: opener, story, closer, question, answer, paid, free), `stories.css` (Helios tokens, four backdrops), `text-fit.ts` (copied from Tommy's), `render.ts` (React → Chromium → checks → sRGB JPEG, contact sheet; modeled on `fit-check.ts`, copied), `assets/` (Pragmatica, Roboto 300–700, the sun mark), `fixtures/m1.ts` + `fixtures/photos/`. Script `npm run stories:mockups`. Test `tests/stories-render.test.ts` (5, offline).
+- **Variants:** Morning Download opener (photo window and typographic), story frame (bleed and typographic), closer; Guess the Number photo-led, marquee and type-led, each question and answer; Free vs. Paid paid and free. Every one on black, white, orange and green: 60 frames.
+- **Revision 2 (Lucas's review):** intro slides for Guess the Number (S-49) and Free vs. Paid (S-50), no hints (S-51), closer without "every morning" (S-52). 68 frames.
+- **Revision 1 (Lucas's review):** bleed fades everywhere (S-44), game-show Guess the Number (S-45), Free vs. Paid title-led (S-46), no pills (S-47). The fade check was proven with a negative test (copy moved onto a photo fails: "text on a photo (95% visible)").
+- **Renderer checks, all passing:** fonts and images loaded, text fit, nothing out of frame, every text block, logo, cue and credit inside y 250–1580, no text on a bleed photo above 30% opacity. Largest JPEG 389 KB (68 frames).
+- **Baselines:** `npm test` 1388/1388 (1380 + 8 new). `tsc --noEmit`: only the 5 known errors in `tests/seo-gsc-auth.test.ts`.
+- **For Lucas:** `exports/stories/m1/sheets/` (`morning-download.jpg`, `morning-download-typographic.jpg`, `guess-the-number.jpg`, `free-vs-paid.jpg`); full frames under `exports/stories/m1/<series>/<backdrop>/`.
+- **Needs approval:** the revised templates, the closer wording (`copy.ts`: CLOSER), the fixed labels ("Today's \"Guess the Number\"", "Difficulty", "Topic", "Tap to play", "Can you guess the number?", "Lock it in. Tap to reveal", "The answer is", "How close did you get?", "Free vs. Paid", "Tap for today's pick", "The paid one", "The free one", "Tap for the free one", "Tap for today's N stories"), and the brand bends (O-7, S-36, S-37).
+- **Known gaps, by design for M2:** no face detection or face-centred crops yet (fixture crops are set by hand); no matte framing for small photos; the render review (S-33) is M2.
 
 ## 9. Cost
 

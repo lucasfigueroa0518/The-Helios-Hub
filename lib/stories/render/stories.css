@@ -1,0 +1,461 @@
+/*
+ * Stories frame styles (S-18, S-32). Helios design system tokens
+ * (/Users/lucasfigueroa/HELIOS/Helios Design System/colors_and_type.css),
+ * restated here because the renderer is a clean headless browser.
+ * Frames are 1080×1920; Instagram's safe band is y 250–1580.
+ * Fonts are declared by the renderer (@font-face on its asset route).
+ * Bleed fades are drawn inline from fades.ts (one source with the check).
+ */
+
+.st-frame {
+  /* Brand tokens */
+  --orange: #FF5E1A;
+  --green: #138510;
+  --off-black: #171717;
+  --near-black: #0A0A0A;
+  --logo-gradient: linear-gradient(180deg, #FF8A4F 0%, #FF5E1A 52%, #E63946 100%);
+  --display: 'Pragmatica Extended', 'Helvetica Neue', Arial, sans-serif;
+
+  --gutter: 72px;
+
+  position: relative;
+  width: 1080px;
+  height: 1920px;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  font-weight: 300;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.st-frame *, .st-frame *::before, .st-frame *::after { box-sizing: border-box; }
+:where(.st-frame) :where(h1, h2, p) { margin: 0; font-weight: inherit; }
+.st-frame [data-fit-min] { overflow-wrap: normal; word-break: normal; hyphens: none; }
+
+/* ── Backdrops (S-18; brand bends O-7, S-36) ──────────────────────── */
+
+.st-bd-black {
+  --bg: var(--near-black);
+  --ink: #FFFFFF;
+  --ink-2: rgba(255, 255, 255, 0.78);
+  --ink-3: rgba(255, 255, 255, 0.56);
+  --eyebrow: var(--orange);
+  --dot: var(--orange);
+  --arrow: var(--orange);
+  --rule: rgba(255, 255, 255, 0.14);
+  --plate-bg: #FFFFFF;
+  --plate-shadow: 0 0 80px -24px rgba(255, 94, 26, 0.55);
+  --howto-bg: rgba(255, 255, 255, 0.05);
+  --howto-line: rgba(255, 255, 255, 0.10);
+  --icon: var(--orange);
+  --glyph: rgba(255, 94, 26, 0.10);
+  --ring: transparent;
+  --logo-glow: 0 0 90px -16px rgba(255, 94, 26, 0.75);
+  --accent-fill: var(--logo-gradient);
+}
+.st-bd-black .st-bg {
+  background:
+    radial-gradient(900px 760px at 92% 4%, rgba(255, 94, 26, 0.26), transparent 62%),
+    radial-gradient(760px 620px at 0% 100%, rgba(230, 57, 70, 0.12), transparent 64%),
+    var(--near-black);
+}
+
+.st-bd-white {
+  --bg: #FFFFFF;
+  --ink: var(--off-black);
+  --ink-2: #525252;
+  --ink-3: #737373;
+  --eyebrow: var(--green);
+  --dot: var(--orange);
+  --arrow: var(--orange);
+  --rule: #E5E5E5;
+  --plate-bg: #FFFFFF;
+  --plate-shadow: 0 24px 60px -24px rgba(23, 23, 23, 0.28), 0 0 0 1px #F0F0F0;
+  --howto-bg: #FAFAFA;
+  --howto-line: #EDEDED;
+  --icon: var(--green);
+  --glyph: rgba(255, 94, 26, 0.07);
+  --ring: transparent;
+  --logo-glow: 0 24px 60px -24px rgba(230, 57, 70, 0.45);
+  --accent-fill: var(--logo-gradient);
+}
+.st-bd-white .st-bg {
+  background:
+    radial-gradient(900px 760px at 96% 0%, rgba(255, 94, 26, 0.09), transparent 62%),
+    linear-gradient(180deg, #FFFFFF 0%, #FFFFFF 60%, #FAFAFA 100%);
+}
+
+/* Flooded orange: off-black type, white accents (S-36). */
+.st-bd-orange {
+  --bg: var(--orange);
+  --ink: var(--off-black);
+  --ink-2: rgba(23, 23, 23, 0.84);
+  --ink-3: rgba(23, 23, 23, 0.66);
+  --eyebrow: var(--off-black);
+  --dot: #FFFFFF;
+  --arrow: #FFFFFF;
+  --rule: rgba(23, 23, 23, 0.20);
+  --plate-bg: #FFFFFF;
+  --plate-shadow: 0 36px 70px -30px rgba(80, 18, 0, 0.65);
+  --howto-bg: rgba(255, 255, 255, 0.16);
+  --howto-line: rgba(255, 255, 255, 0.32);
+  --icon: var(--off-black);
+  --glyph: rgba(255, 255, 255, 0.16);
+  --ring: #FFFFFF;
+  --logo-glow: 0 30px 60px -26px rgba(80, 18, 0, 0.7);
+  --accent-fill: linear-gradient(#FFFFFF, #FFFFFF);
+}
+.st-bd-orange .st-bg {
+  background:
+    radial-gradient(1000px 820px at 10% 0%, rgba(255, 255, 255, 0.20), transparent 60%),
+    linear-gradient(168deg, #FF8A4F 0%, #FF5E1A 46%, #F04E26 100%);
+}
+
+/* Flooded green: white type (S-36). */
+.st-bd-green {
+  --bg: var(--green);
+  --ink: #FFFFFF;
+  --ink-2: rgba(255, 255, 255, 0.86);
+  --ink-3: rgba(255, 255, 255, 0.70);
+  --eyebrow: rgba(255, 255, 255, 0.92);
+  --dot: #FFFFFF;
+  --arrow: #FFFFFF;
+  --rule: rgba(255, 255, 255, 0.24);
+  --plate-bg: #FFFFFF;
+  --plate-shadow: 0 36px 70px -30px rgba(0, 30, 0, 0.7);
+  --howto-bg: rgba(255, 255, 255, 0.10);
+  --howto-line: rgba(255, 255, 255, 0.26);
+  --icon: #FFFFFF;
+  --glyph: rgba(255, 255, 255, 0.10);
+  --ring: #FFFFFF;
+  --logo-glow: 0 30px 60px -26px rgba(0, 30, 0, 0.75);
+  --accent-fill: linear-gradient(#FFFFFF, #FFFFFF);
+}
+.st-bd-green .st-bg {
+  background:
+    radial-gradient(1000px 820px at 92% 0%, rgba(255, 255, 255, 0.14), transparent 60%),
+    linear-gradient(168deg, #1B9C17 0%, #138510 46%, #0E690C 100%);
+}
+
+.st-bg { position: absolute; inset: 0; }
+
+/* ── Shared pieces ─────────────────────────────────────────────────── */
+
+.st-accent-text {
+  background: var(--accent-fill);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* The whole sun mark, never cropped or covered (logo protection; S-37). */
+.st-logo { position: relative; flex: none; border-radius: 50%; box-shadow: 0 0 0 var(--ring-w, 6px) var(--ring), var(--logo-glow); }
+.st-logo__img { position: absolute; inset: -1.8%; width: 103.6%; height: 103.6%; display: block; }
+.st-logo--small { --ring-w: 3px; box-shadow: 0 0 0 var(--ring-w) var(--ring); }
+
+.st-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  font-weight: 700;
+  font-size: 26px;
+  line-height: 1.2;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--eyebrow);
+}
+
+.st-masthead {
+  position: absolute;
+  top: 290px;
+  left: var(--gutter);
+  right: var(--gutter);
+  height: 60px;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  z-index: 3;
+}
+.st-masthead__label { font-weight: 700; font-size: 25px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink); }
+.st-masthead__pos { margin-left: auto; font-weight: 500; font-size: 25px; letter-spacing: 0.14em; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.st-masthead--on-photo .st-masthead__label { color: #FFFFFF; }
+.st-masthead--on-photo .st-masthead__pos { color: rgba(255, 255, 255, 0.8); }
+.st-masthead--on-photo .st-logo--small { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.9); }
+
+/* Next-frame cue: type and an arrow on the right, where people tap (S-47). No pill. */
+.st-cue {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  align-self: flex-end;
+  margin-left: auto;
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.st-cue__icon { flex: none; color: var(--arrow); }
+
+.st-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--dot); flex: none; }
+.st-dots { display: flex; gap: 16px; justify-content: center; }
+
+.st-source { display: flex; align-items: center; gap: 14px; font-size: 32px; line-height: 1.2; color: var(--ink-3); }
+.st-source__verb { font-weight: 300; }
+.st-source__name { font-weight: 500; color: var(--ink); margin-left: -4px; }
+
+/* Credit: just above the reply bar, wraps to two lines, never truncated (S-43). */
+.st-credit {
+  position: absolute;
+  left: var(--gutter);
+  right: var(--gutter);
+  bottom: 344px;
+  max-height: 52px;
+  font-weight: 400;
+  font-size: 20px;
+  line-height: 26px;
+  letter-spacing: 0.02em;
+  color: var(--ink-3);
+  z-index: 3;
+}
+
+/* Bleed photo (S-44): full width; the mask is inline (fades.ts). */
+.st-bleed { position: absolute; left: 0; width: 1080px; }
+.st-bleed .st-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.st-bleed--top { top: 0; }
+.st-bleed__shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0, 0, 0, 0.66) 0px, rgba(0, 0, 0, 0.30) 330px, transparent 500px); }
+
+/* ── Morning Download: opener ─────────────────────────────────────── */
+
+.st-opener { position: absolute; inset: 0; }
+.st-opener__head {
+  position: absolute;
+  top: 296px;
+  left: var(--gutter);
+  right: var(--gutter);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.st-opener__logo { margin-bottom: 34px; }
+.st-opener__date { margin-bottom: 22px; }
+.st-opener__title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 112px;
+  line-height: 0.96;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+}
+.st-opener__line { display: block; padding: 0 4px; }
+.st-opener__tagline { margin-top: 28px; font-size: 44px; line-height: 1.25; max-height: 60px; color: var(--ink-2); width: 100%; }
+.st-opener__photo { top: 820px; height: 620px; }
+.st-opener__cue { position: absolute; right: var(--gutter); top: 1458px; }
+
+.st-opener--type .st-opener__head { top: 360px; }
+.st-opener--type .st-opener__logo { margin-bottom: 64px; }
+.st-opener--type .st-opener__date { margin-bottom: 36px; }
+.st-opener--type .st-opener__title { font-size: 136px; }
+.st-opener--type .st-opener__tagline { margin-top: 40px; font-size: 52px; max-height: 70px; }
+
+/* ── Morning Download: story frame ────────────────────────────────── */
+
+.st-story { position: absolute; inset: 0; }
+.st-story__photo { height: 1180px; }
+.st-story__copy {
+  position: absolute;
+  left: var(--gutter);
+  right: var(--gutter);
+  top: 1110px;
+  bottom: 404px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+.st-story--type .st-story__copy { top: 420px; justify-content: center; }
+.st-story__headline { font-size: 52px; line-height: 1.24; letter-spacing: -0.005em; max-height: 330px; }
+.st-story--type .st-story__headline { font-size: 72px; max-height: 900px; }
+.st-story__lead { font-weight: 500; color: var(--ink); }
+.st-story__rest { font-weight: 300; color: var(--ink-2); }
+
+/* ── Morning Download: closer ─────────────────────────────────────── */
+
+.st-closer {
+  position: absolute;
+  left: var(--gutter);
+  right: var(--gutter);
+  top: 250px;
+  bottom: 340px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.st-closer__eyebrow { margin-bottom: 64px; }
+.st-closer__logo { margin-bottom: 72px; }
+.st-closer__headline { font-family: var(--display); font-weight: 700; font-size: 66px; line-height: 1.08; letter-spacing: -0.02em; max-height: 300px; width: 100%; }
+.st-closer .st-dots { margin: 48px 0; }
+.st-closer__body { font-size: 40px; line-height: 1.4; color: var(--ink-2); max-height: 120px; width: 100%; }
+.st-closer__url {
+  margin-top: 64px;
+  padding-bottom: 14px;
+  border-bottom: 4px solid var(--arrow);
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 60px;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+/* ── Guess the Number (S-45: a game show in the copy) ─────────────── */
+
+.st-gtn { position: absolute; inset: 0; }
+.st-gtn__copy {
+  position: absolute;
+  left: var(--gutter);
+  right: var(--gutter);
+  bottom: 404px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 26px;
+}
+.st-gtn__top { position: absolute; left: var(--gutter); right: var(--gutter); top: 392px; display: flex; flex-direction: column; gap: 14px; }
+
+/* The dominant line: "Can you guess the number?" */
+.st-gtn__kicker { font-family: var(--display); font-weight: 700; font-size: 112px; line-height: 0.98; letter-spacing: -0.03em; text-transform: uppercase; max-height: 336px; }
+.st-gtn--marquee .st-gtn__kicker { font-size: 122px; line-height: 0.98; max-height: 362px; }
+.st-gtn--type .st-gtn__kicker { font-size: 132px; line-height: 0.98; max-height: 400px; }
+.st-gtn__question { font-weight: 500; font-size: 50px; line-height: 1.2; letter-spacing: -0.005em; max-height: 124px; }
+.st-gtn--type .st-gtn__question { font-size: 60px; max-height: 220px; margin-top: 18px; }
+.st-gtn__cue { margin-top: 10px; }
+.st-gtn--type .st-gtn__cue { margin-top: 36px; }
+
+.st-gtn--photo.st-gtn--question .st-gtn__photo { height: 780px; }
+.st-gtn--photo.st-gtn--question .st-gtn__copy { top: 750px; gap: 22px; }
+.st-gtn--photo.st-gtn--answer .st-gtn__photo { height: 800px; }
+.st-gtn--photo.st-gtn--answer .st-gtn__copy { top: 760px; gap: 22px; }
+.st-gtn--marquee .st-gtn__photo { top: 760px; height: 470px; }
+.st-gtn--marquee .st-gtn__copy { top: 1180px; gap: 22px; }
+.st-gtn--marquee.st-gtn--answer .st-gtn__photo { top: 740px; height: 440px; }
+.st-gtn--marquee.st-gtn--answer .st-gtn__copy { top: 1150px; gap: 18px; }
+.st-gtn--type .st-gtn__copy { top: 400px; justify-content: center; }
+
+.st-gtn__reveal { font-family: var(--display); font-weight: 700; font-size: 44px; line-height: 1.1; letter-spacing: -0.01em; text-transform: uppercase; color: var(--ink); }
+.st-gtn__number { font-family: var(--display); font-weight: 700; font-size: 230px; line-height: 1.0; letter-spacing: -0.04em; max-height: 250px; padding-bottom: 6px; white-space: nowrap; }
+.st-gtn--marquee .st-gtn__number { font-size: 250px; max-height: 270px; }
+.st-gtn--type .st-gtn__number { font-size: 330px; max-height: 350px; }
+.st-gtn__label { font-weight: 500; font-size: 46px; line-height: 1.22; color: var(--ink); max-height: 114px; }
+.st-gtn__meaning { font-size: 36px; line-height: 1.34; color: var(--ink-2); max-height: 98px; }
+.st-gtn--type .st-gtn__meaning { font-size: 42px; max-height: 172px; }
+.st-gtn__close { font-family: var(--display); font-weight: 700; font-size: 42px; line-height: 1.1; letter-spacing: -0.01em; max-height: 50px; color: var(--ink); }
+.st-gtn--type .st-gtn__close { font-size: 50px; max-height: 60px; margin-top: 12px; }
+
+/* Intro (S-49): Today's "Guess the Number", difficulty, topic. */
+.st-intro {
+  position: absolute;
+  left: var(--gutter);
+  right: var(--gutter);
+  top: 400px;
+  bottom: 404px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.st-intro__today { font-family: var(--display); font-weight: 700; font-size: 56px; line-height: 1.1; letter-spacing: -0.02em; color: var(--ink-2); margin-bottom: 18px; }
+.st-intro__title { font-family: var(--display); font-weight: 700; font-size: 138px; line-height: 0.96; letter-spacing: -0.035em; text-transform: uppercase; max-height: 410px; }
+.st-intro__rows { margin-top: 64px; border-top: 1px solid var(--rule); }
+.st-intro__row { display: flex; align-items: baseline; gap: 32px; padding: 30px 0; border-bottom: 1px solid var(--rule); }
+.st-intro__label { flex: none; width: 250px; font-weight: 700; font-size: 26px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--eyebrow); }
+.st-intro__value { flex: 1; min-width: 0; color: var(--ink); }
+.st-intro__value--difficulty { font-family: var(--display); font-weight: 700; font-size: 60px; line-height: 1; letter-spacing: -0.02em; }
+.st-intro__value--topic { font-weight: 500; font-size: 46px; line-height: 1.2; max-height: 112px; }
+.st-intro__cue { margin-top: 64px; }
+
+/* Type-led: one huge "?" watermark off the right edge (decor; never text content). */
+.st-glyph {
+  position: absolute;
+  right: -170px;
+  top: 260px;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 1500px;
+  line-height: 1;
+  color: var(--glyph);
+  pointer-events: none;
+}
+
+/* ── Free vs. Paid (S-46: the series title leads) ─────────────────── */
+
+.st-fvp { position: absolute; inset: 0; }
+.st-fvp__title {
+  position: absolute;
+  left: var(--gutter);
+  right: var(--gutter);
+  top: 392px;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--display);
+  font-weight: 700;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.st-fvp__word { display: block; font-size: 168px; line-height: 0.9; letter-spacing: -0.04em; padding-bottom: 6px; }
+.st-fvp__dim { color: var(--ink); }
+.st-bd-green .st-fvp__dim { color: var(--off-black); }
+.st-fvp__vs { display: flex; align-items: center; gap: 28px; margin: 6px 0 10px; font-size: 52px; line-height: 1; letter-spacing: 0; text-transform: lowercase; color: var(--ink-3); }
+.st-fvp__vs::after { content: ''; flex: 1; height: 2px; background: var(--rule); }
+.st-fvp__copy {
+  position: absolute;
+  left: var(--gutter);
+  right: var(--gutter);
+  top: 820px;
+  bottom: 404px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 28px;
+}
+.st-fvp__toolrow { display: flex; align-items: center; gap: 36px; }
+.st-fvp__toolname { display: flex; flex-direction: column; gap: 16px; min-width: 0; flex: 1; }
+.st-plate {
+  width: 156px;
+  height: 156px;
+  border-radius: 40px;
+  background: var(--plate-bg);
+  box-shadow: var(--plate-shadow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 26px;
+  flex: none;
+}
+.st-plate__logo { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+.st-fvp__tool { font-family: var(--display); font-weight: 700; font-size: 58px; line-height: 1.04; letter-spacing: -0.02em; max-height: 122px; }
+.st-fvp__price { display: flex; align-items: baseline; gap: 22px; flex-wrap: nowrap; }
+.st-fvp__amount { font-family: var(--display); font-weight: 700; font-size: 140px; line-height: 1.0; letter-spacing: -0.04em; white-space: nowrap; max-height: 152px; padding-bottom: 6px; }
+.st-fvp--paid .st-fvp__amount { color: var(--ink); }
+.st-fvp__period { font-size: 42px; color: var(--ink-3); white-space: nowrap; }
+.st-fvp__was { font-size: 44px; font-weight: 400; color: var(--ink-3); text-decoration: line-through; text-decoration-thickness: 3px; white-space: nowrap; }
+.st-fvp__tease { font-size: 42px; line-height: 1.32; color: var(--ink-2); max-height: 112px; }
+.st-fvp__cue { margin-top: 12px; }
+.st-fvp__title--intro { top: 420px; }
+.st-fvp__title--intro .st-fvp__word { font-size: 220px; }
+.st-fvp__title--intro .st-fvp__vs { font-size: 64px; margin: 10px 0 16px; }
+.st-fvp__copy--intro { top: 1020px; justify-content: flex-start; gap: 56px; }
+.st-fvp__intro-line { font-size: 52px; line-height: 1.3; color: var(--ink); max-height: 340px; }
+.st-fvp__what { font-size: 38px; line-height: 1.34; color: var(--ink-2); max-height: 104px; }
+.st-chip { display: inline-flex; align-items: center; height: 44px; padding: 0 20px; border-radius: 9999px; border: 2px solid currentColor; font-size: 20px; letter-spacing: 0.12em; }
+.st-howto { display: flex; flex-direction: column; border-radius: 32px; background: var(--howto-bg); box-shadow: inset 0 0 0 1.5px var(--howto-line); padding: 8px 32px; }
+.st-howto__row { display: flex; align-items: center; gap: 22px; height: 82px; font-size: 36px; font-weight: 400; color: var(--ink); white-space: nowrap; }
+.st-howto__row + .st-howto__row { box-shadow: inset 0 1.5px 0 var(--howto-line); }
+.st-howto__icon { color: var(--icon); flex: none; }

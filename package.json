@@ -38,6 +38,7 @@
     "reels:probe": "tsx scripts/reels_probe.ts",
     "reels:regroup": "tsx scripts/reels_regroup.ts",
     "reels:sync-copy-text": "tsx scripts/reels_sync_copy_text.ts",
+    "stories:mockups": "tsx scripts/stories_m1_mockups.ts",
     "reels:copy-preview": "tsx scripts/reels_copy_preview.ts",
     "reels:higgsfield-login": "tsx scripts/reels_higgsfield_login.ts",
     "verify:orchestration": "node scripts/verify_orchestration_schema.js",
