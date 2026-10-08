@@ -38,7 +38,6 @@ function request(
       url,
       {
         method,
-        rejectUnauthorized: false,
         headers: { apikey: serviceRole, authorization: `Bearer ${serviceRole}`, ...headers },
       },
       (response) => {

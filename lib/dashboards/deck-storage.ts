@@ -30,7 +30,6 @@ export async function uploadDeckObject(
       url,
       {
         method: 'POST',
-        rejectUnauthorized: false,
         headers: {
           apikey: serviceRole,
           authorization: `Bearer ${serviceRole}`,
@@ -70,7 +69,6 @@ export async function downloadDeckObject(path: string): Promise<Buffer> {
       url,
       {
         method: 'GET',
-        rejectUnauthorized: false,
         headers: {
           apikey: serviceRole,
           authorization: `Bearer ${serviceRole}`,
@@ -102,7 +100,6 @@ export async function removeDeckObject(path: string): Promise<void> {
       url,
       {
         method: 'DELETE',
-        rejectUnauthorized: false,
         headers: {
           apikey: serviceRole,
           authorization: `Bearer ${serviceRole}`,

@@ -21,7 +21,6 @@ function storageRequest<T>(method: string, pathname: string, body?: unknown): Pr
       url,
       {
         method,
-        rejectUnauthorized: false,
         headers: {
           apikey: serviceRole,
           authorization: `Bearer ${serviceRole}`,
@@ -68,7 +67,6 @@ export async function downloadStoredObject(path: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const request = https.request(url, {
       method: 'GET',
-      rejectUnauthorized: false,
       headers: { apikey: serviceRole, authorization: `Bearer ${serviceRole}` },
     }, (response) => {
       const chunks: Buffer[] = [];
@@ -115,7 +113,6 @@ export async function uploadStoredObject(
       url,
       {
         method: 'POST',
-        rejectUnauthorized: false,
         headers: {
           apikey: serviceRole,
           authorization: `Bearer ${serviceRole}`,
