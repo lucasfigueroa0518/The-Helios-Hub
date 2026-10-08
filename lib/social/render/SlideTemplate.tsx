@@ -7,9 +7,15 @@ import { DEFAULT_ICON, ICONS } from '@/lib/social/render/icons';
 import { fitText } from '@/lib/social/render/text-fit';
 import type { Post, SlideCopy, SpanRun } from '@/lib/social/render/types';
 
+/** Black is the shipped canvas. The other three recolor the same layouts. */
+export const SLIDE_CANVASES = ['black', 'green', 'orange', 'white'] as const;
+export type SlideCanvas = (typeof SLIDE_CANVASES)[number];
+
 export type SlideTemplateProps = {
   post: Post;
   position: number;
+  /** Defaults to black, the current carousel canvas. */
+  canvas?: SlideCanvas;
 };
 
 /**
@@ -47,7 +53,7 @@ export type SlideTemplateProps = {
  *   spread       one wide scene photo across two slides (panoramaSide), text on a scrim
  *   follow       closing slide
  */
-export function SlideTemplate({ post, position }: SlideTemplateProps) {
+export function SlideTemplate({ post, position, canvas = 'black' }: SlideTemplateProps) {
   const ref = useRef<HTMLDivElement>(null);
   const slide = post.slides[position];
 
@@ -90,6 +96,7 @@ export function SlideTemplate({ post, position }: SlideTemplateProps) {
       ref={ref}
       className={`helios-slide helios-slide--${post.format} helios-slide--${kind}`}
       data-slide-ready="true"
+      data-canvas={canvas === 'black' ? undefined : canvas}
       data-variant={slide.variant ?? undefined}
       role="img"
       aria-label={slide.altText}

@@ -96,9 +96,10 @@ export type Beat =
 /**
  * One phrase inside a headline or body sentence. The three-role color-emphasis
  * system paints one color per span, never per word inside a phrase.
- *   narrative — default (white on dark, near-black on Helios White)
- *   hook      — orange; one per sentence, never absent, never doubled
- *   pivot     — green; dates, names, transitions ("But then,", "The catch:")
+ *   narrative — white on black and green, near-black on orange and white
+ *   hook      — orange on black and white; near-black on green; orange on a
+ *               black chip on the orange canvas
+ *   pivot     — green on black and white; underlined on green and orange
  */
 export type SpanRole = 'narrative' | 'hook' | 'pivot';
 
