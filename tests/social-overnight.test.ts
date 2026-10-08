@@ -10,7 +10,7 @@ import path from 'node:path';
 
 import { PGlite } from '@electric-sql/pglite';
 
-import { calendarDateKey } from '@/lib/social/overnight/clock';
+import { calendarDateKey } from '@/lib/instagram/clock';
 import { CAROUSEL_SLOT } from '@/lib/social/overnight/config';
 import { pollCarouselInsights, type CarouselInsightsClient } from '@/lib/social/overnight/insights';
 import type { CarouselMetaClient } from '@/lib/social/overnight/meta';
