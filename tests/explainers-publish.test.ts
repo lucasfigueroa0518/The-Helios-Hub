@@ -65,10 +65,19 @@ test('approval gate: unreviewed, rejected, local-only, or captionless renders ne
     return r.ok ? 'ok' : r.note;
   };
   assert.match(await notes(await renderedJob(db, { verdict: null, title: 'a' })), /approved/);
-  assert.match(await notes(await renderedJob(db, { verdict: 'rejected', title: 'b' })), /approved/);
+  assert.match(await notes(await renderedJob(db, { verdict: 'rejected', title: 'b' })), /rejected/);
   assert.match(await notes(await renderedJob(db, { location: 'local', title: 'c' })), /not in Storage/);
   assert.match(await notes(await renderedJob(db, { caption: null, title: 'd' })), /caption/);
   assert.equal(await notes(await renderedJob(db, { title: 'e' })), 'ok');
+});
+
+test('require_approval off: unreviewed renders may go, rejected ones never', async () => {
+  const { db } = await scratchExplainersDb();
+  await db.query(`UPDATE explainers.settings SET value = 'false'::jsonb WHERE key = 'require_approval'`);
+  const unreviewed = await renderedJob(db, { verdict: null, title: 'u' });
+  await renderedJob(db, { verdict: 'rejected', title: 'r' });
+  assert.equal((await publishReadiness(db, unreviewed)).ok, true);
+  assert.equal(await scheduleApproved(db, new Date('2026-10-08T12:00:00Z'), () => 0), 1);
 });
 
 test('publishing_live is off by default; approved renders take one 3:00–4:30 PM window per day', async () => {

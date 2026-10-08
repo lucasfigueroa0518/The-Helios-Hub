@@ -84,6 +84,16 @@ export async function publishingLive(): Promise<boolean> {
   return (await getSetting<boolean>('publishing_live')) === true;
 }
 
+/**
+ * Every content type needs a person's approval before it posts (docs/social-overnight.md).
+ * On unless the setting says false. An auto-scheduled reel then posts only once approved.
+ */
+export async function requireApproval(): Promise<boolean> {
+  return (await getSetting<boolean>('require_approval')) !== false;
+}
+
+export const NOT_APPROVED_NOTE = 'Nobody approved this reel before its slot, so it was not posted.';
+
 async function activeSchedule(postIdeaId: string): Promise<StoredSchedule | null> {
   const { rows } = await dbQuery<ScheduleRow>(
     `SELECT id, post_idea_id, video_job_id, ny_date::text AS ny_date, slot, publish_at, status, source
@@ -120,7 +130,11 @@ export async function schedulePostIdea(
   throughDate?: string,
 ): Promise<ScheduleOutcome> {
   const existing = await activeSchedule(postIdeaId);
-  if (existing) return { scheduled: true, schedule: existing, note: scheduleNote(existing) };
+  if (existing) {
+    // A person scheduling a reel the night already put on the clock approves that slot.
+    if (source === 'user') await dbQuery(`UPDATE reels.posting_schedule SET approved_at = coalesce(approved_at, now()) WHERE id = $1`, [existing.id]);
+    return { scheduled: true, schedule: existing, note: scheduleNote(existing) };
+  }
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const choice = chooseSlot(now, await takenSlots(calendarDateKey(now)), uniformIndex, POSTING_TIME_ZONE, throughDate);
@@ -132,8 +146,8 @@ export async function schedulePostIdea(
     }
     try {
       const { rows } = await dbQuery<ScheduleRow>(
-        `INSERT INTO reels.posting_schedule (post_idea_id, video_job_id, ny_date, slot, publish_at, status, source)
-         VALUES ($1, $2, $3::date, $4, $5, 'scheduled', $6)
+        `INSERT INTO reels.posting_schedule (post_idea_id, video_job_id, ny_date, slot, publish_at, status, source, approved_at)
+         VALUES ($1, $2, $3::date, $4, $5, 'scheduled', $6, CASE WHEN $6::text = 'user' THEN now() END)
          RETURNING id, post_idea_id, video_job_id, ny_date::text AS ny_date, slot, publish_at, status, source`,
         [postIdeaId, videoJobId, choice.nyDate, choice.slot, choice.publishAt.toISOString(), source],
       );
@@ -278,14 +292,23 @@ export async function releaseDueSchedules(): Promise<number> {
     post_idea_id: string;
     video_job_id: string | null;
     source: ScheduleSource;
+    approved_at: string | null;
   }>(
-    `SELECT id, post_idea_id, video_job_id, source
+    `SELECT id, post_idea_id, video_job_id, source, approved_at
        FROM reels.posting_schedule
       WHERE status = 'scheduled' AND publish_at <= now()
       ORDER BY publish_at`,
   );
+  const approvalNeeded = rows.some((row) => !row.approved_at) && (await requireApproval());
   let released = 0;
   for (const row of rows) {
+    if (approvalNeeded && !row.approved_at) {
+      await dbQuery(
+        `UPDATE reels.posting_schedule SET status = 'cancelled', error = $2 WHERE id = $1 AND status = 'scheduled'`,
+        [row.id, NOT_APPROVED_NOTE],
+      );
+      continue;
+    }
     const videoId = await readyVideo(row.post_idea_id, row.video_job_id);
     if (!videoId) continue;
     const claimed = await dbQuery<{ id: string }>(

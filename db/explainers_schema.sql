@@ -336,6 +336,8 @@ END $$;
 
 -- Scheduling and publishing approved reels. Off until a human turns it on.
 INSERT INTO explainers.settings (key, value) VALUES ('publishing_live', 'false'::jsonb) ON CONFLICT (key) DO NOTHING;
+-- A person approves every reel before it posts (the feedback verdict). On unless set to false.
+INSERT INTO explainers.settings (key, value) VALUES ('require_approval', 'true'::jsonb) ON CONFLICT (key) DO NOTHING;
 
 -- One explainer per Eastern-time window per day.
 CREATE TABLE IF NOT EXISTS explainers.posting_schedule (

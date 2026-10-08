@@ -171,6 +171,8 @@ CREATE TABLE IF NOT EXISTS social.settings (
 INSERT INTO social.settings (key, value) VALUES ('auto_run', 'false'::jsonb) ON CONFLICT (key) DO NOTHING;
 -- Scheduling and auto-publishing. Off until a human turns it on.
 INSERT INTO social.settings (key, value) VALUES ('publishing_live', 'false'::jsonb) ON CONFLICT (key) DO NOTHING;
+-- A person approves every carousel before it posts (docs/social-overnight.md).
+INSERT INTO social.settings (key, value) VALUES ('require_approval', 'true'::jsonb) ON CONFLICT (key) DO NOTHING;
 
 -- ── Posting schedule ────────────────────────────────────────────────────────
 -- One carousel per Eastern-time slot per day.
@@ -186,6 +188,9 @@ CREATE TABLE IF NOT EXISTS social.posting_schedule (
     error               text,
     created_at          timestamptz NOT NULL DEFAULT now()
 );
+
+-- A person's approval of the slot; with require_approval on, an unapproved slot never posts.
+ALTER TABLE social.posting_schedule ADD COLUMN IF NOT EXISTS approved_at timestamptz;
 
 CREATE INDEX IF NOT EXISTS idx_social_posting_schedule_due
     ON social.posting_schedule (publish_at) WHERE status = 'scheduled';

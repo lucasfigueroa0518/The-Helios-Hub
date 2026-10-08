@@ -19,6 +19,11 @@ export async function autoRunOn(): Promise<boolean> {
   return (await getSocialSetting<boolean>('auto_run')) === true;
 }
 
+/** A person approves every carousel before it posts (docs/social-overnight.md). On unless set to false. */
+export async function requireApproval(): Promise<boolean> {
+  return (await getSocialSetting<boolean>('require_approval')) !== false;
+}
+
 /** Scheduling and auto-publishing. Off until a human turns it on. */
 export async function publishingLive(): Promise<boolean> {
   return (await getSocialSetting<boolean>('publishing_live')) === true;

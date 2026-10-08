@@ -24,8 +24,8 @@ CREATE TABLE reels.post_idea_members (source_id uuid PRIMARY KEY, post_idea_id u
 CREATE TABLE reels.idea_scores (slate_id uuid NOT NULL, post_idea_id uuid NOT NULL, origin text NOT NULL, net double precision, selected boolean NOT NULL DEFAULT false, chosen_bucket text, blockbuster double precision NOT NULL DEFAULT 0, PRIMARY KEY (slate_id, post_idea_id));
 CREATE TABLE reels.list_catalog (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), list_id text NOT NULL, entry_name text NOT NULL, entry_url text NOT NULL, description text);
 CREATE SCHEMA IF NOT EXISTS social;
-CREATE TABLE social.runs (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), kind text NOT NULL DEFAULT 'daily', started_at timestamptz NOT NULL DEFAULT now(), finished_at timestamptz, record jsonb NOT NULL DEFAULT '{}'::jsonb);
-CREATE TABLE social.posts (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), run_id uuid, slug text NOT NULL UNIQUE, story_id text, title text NOT NULL DEFAULT '', status text NOT NULL, brief jsonb, render jsonb NOT NULL DEFAULT '{}'::jsonb, created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE social.runs (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), kind text NOT NULL DEFAULT 'daily', trigger text NOT NULL DEFAULT 'scheduled', started_at timestamptz NOT NULL DEFAULT now(), finished_at timestamptz, record jsonb NOT NULL DEFAULT '{}'::jsonb);
+CREATE TABLE social.posts (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), run_id uuid, slug text NOT NULL UNIQUE, story_id text, title text NOT NULL DEFAULT '', status text NOT NULL, origin text NOT NULL DEFAULT 'pipeline', brief jsonb, render jsonb NOT NULL DEFAULT '{}'::jsonb, created_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE social.used_photos (id bigserial PRIMARY KEY, url text NOT NULL, used_at timestamptz NOT NULL, story_id text NOT NULL, slide integer NOT NULL, source text, qid text, subject text, credit text, scene text, post_id uuid, UNIQUE (url, used_at, story_id, slide));
 `;
 

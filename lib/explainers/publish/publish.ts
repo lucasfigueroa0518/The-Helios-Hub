@@ -58,7 +58,11 @@ export async function publishReadiness(
   if (!job) return { ok: false, note: 'The render is gone.' };
   if (job.published) return { ok: false, note: 'This explainer is already published.', alreadyPublished: true };
   if (job.status !== 'ok') return { ok: false, note: `The render is ${job.status}, not finished.` };
-  if (job.verdict !== 'approved') return { ok: false, note: 'Only a reel a person approved can be published.' };
+  if (job.verdict === 'rejected') return { ok: false, note: 'This reel was rejected.' };
+  if (job.verdict !== 'approved') {
+    const { rows: setting } = await db.query<{ value: unknown }>(`SELECT value FROM explainers.settings WHERE key = 'require_approval'`);
+    if (setting[0]?.value !== false) return { ok: false, note: 'Only a reel a person approved can be published.' };
+  }
   if (!job.video) return { ok: false, note: 'The render has no video.' };
   if (job.location !== 'bucket') return { ok: false, note: 'The video is only on the machine that rendered it, not in Storage.' };
   const caption = job.caption?.trim() ?? '';

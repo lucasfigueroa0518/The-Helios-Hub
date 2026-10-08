@@ -213,3 +213,9 @@ CREATE TABLE IF NOT EXISTS stories.feedback (
 
 CREATE INDEX IF NOT EXISTS idx_stories_feedback_set
     ON stories.feedback (set_id, created_at DESC);
+
+-- ── Overnight switches (docs/social-overnight.md) ───────────────────────────
+-- Every content type needs a person's approval before it posts, and ships with
+-- publishing off. lib/stories/settings.ts reads both; missing rows mean the same.
+INSERT INTO stories.settings (key, value) VALUES ('require_approval', 'true'::jsonb) ON CONFLICT (key) DO NOTHING;
+INSERT INTO stories.settings (key, value) VALUES ('publishing_live', 'false'::jsonb) ON CONFLICT (key) DO NOTHING;

@@ -16,7 +16,7 @@ import { pollCarouselInsights, type CarouselInsightsClient } from '@/lib/social/
 import type { CarouselMetaClient } from '@/lib/social/overnight/meta';
 import { carouselCaption, claimAndPublish, queuePublish } from '@/lib/social/overnight/publish';
 import { claimRun, failRun, requestRun } from '@/lib/social/overnight/runs';
-import { releaseDueSchedules, scheduleRunPost } from '@/lib/social/overnight/schedule';
+import { approveSchedule, releaseDueSchedules, scheduleRunPost } from '@/lib/social/overnight/schedule';
 import { chooseCarouselSlot, openMinuteRange } from '@/lib/social/overnight/slots';
 import type { Query } from '@/lib/social/store/pg';
 
@@ -141,7 +141,8 @@ test('end to end: run post scheduled into today, released when due, published, m
   assert.equal(sched[0].post_id, best, 'the best-ranked story (lowest slug number) goes');
   assert.equal(sched[0].d, calendarDateKey(now));
 
-  // Make it due, then release and publish.
+  // A person approves it; make it due, then release and publish.
+  assert.equal(await approveSchedule(query, (await query(`SELECT id FROM social.posting_schedule`)).rows[0].id), true);
   await query(`UPDATE social.posting_schedule SET publish_at = now() - interval '1 minute'`);
   assert.equal(await releaseDueSchedules(query), 1);
   const { meta, calls } = stubMeta();
@@ -160,6 +161,27 @@ test('end to end: run post scheduled into today, released when due, published, m
   // A second release finds nothing; the post cannot go twice.
   assert.equal(await releaseDueSchedules(query), 0);
   assert.equal((await queuePublish(query, best, 'force')).queued, false);
+});
+
+test('approval: a due slot nobody approved is cancelled, never posted; with require_approval off it goes', async () => {
+  const { query } = await scratchDb();
+  assert.equal((await query(`SELECT value FROM social.settings WHERE key = 'require_approval'`)).rows[0].value, true);
+  const runId = await requestRun(query, 'scheduled', { capUsd: 2, hookPass: true });
+  await insertPost(query, { runId, slug: 'post-y-1' });
+  await scheduleRunPost(query, runId!, new Date('2026-10-08T07:30:00Z'), () => 0);
+  await query(`UPDATE social.posting_schedule SET publish_at = now() - interval '1 minute'`);
+  assert.equal(await releaseDueSchedules(query), 0);
+  const row = (await query(`SELECT status, error FROM social.posting_schedule`)).rows[0];
+  assert.equal(row.status, 'cancelled');
+  assert.match(row.error, /approved/);
+  assert.equal((await query(`SELECT count(*)::int AS n FROM social.publish_attempts`)).rows[0].n, 0);
+
+  await query(`UPDATE social.runs SET status = 'ok' WHERE status = 'requested'`);
+  const other = await requestRun(query, 'manual', { capUsd: 2, hookPass: true });
+  await insertPost(query, { runId: other, slug: 'post-z-1' });
+  await scheduleRunPost(query, other!, new Date('2026-10-09T07:30:00Z'), () => 0);
+  await query(`UPDATE social.posting_schedule SET publish_at = now() - interval '1 minute' WHERE status = 'scheduled'`);
+  assert.equal(await releaseDueSchedules(query, { requireApproval: false }), 1);
 });
 
 test('publish: Instagram ERROR fails the attempt and the slot; a near-full quota never creates containers', async () => {

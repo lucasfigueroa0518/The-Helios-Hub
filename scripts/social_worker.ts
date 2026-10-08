@@ -43,7 +43,7 @@ async function main(): Promise<void> {
   const { nextRunAt } = await import('@/lib/instagram/clock');
   const cfg = await import('@/lib/social/overnight/config');
   const { socialQuery } = await import('@/lib/social/store');
-  const { autoRunOn, getSocialSetting, publishingLive } = await import('@/lib/social/overnight/settings');
+  const { autoRunOn, getSocialSetting, publishingLive, requireApproval } = await import('@/lib/social/overnight/settings');
   const runs = await import('@/lib/social/overnight/runs');
   const { releaseDueSchedules, scheduleRunPost } = await import('@/lib/social/overnight/schedule');
   const { claimAndPublish } = await import('@/lib/social/overnight/publish');
@@ -158,7 +158,7 @@ async function main(): Promise<void> {
       }
 
       if (await publishingLive().catch(() => false)) {
-        const due = await releaseDueSchedules(query).catch((error) => {
+        const due = await releaseDueSchedules(query, { requireApproval: await requireApproval() }).catch((error) => {
           log('schedule_release_failed', { error: errorText(error) });
           return 0;
         });

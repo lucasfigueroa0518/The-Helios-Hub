@@ -15,7 +15,7 @@ All times are America/New_York (DST-safe, see `lib/reels/schedule.ts`).
 | Trial Reels | `reels` | `helios-reels` | 12:30 song ingest, 1:00 night run | 8:45–10:00 AM, 11:15 AM–12:30 PM, 6:00–9:00 PM | 5:00 | live |
 | Explainer Reels | `explainers` | `helios-explainers` | 2:00 idea cycle (only with `auto_render` on) | 3:00–4:30 PM, approved reels only | 5:15 | built; renders need `HEYGEN_API_KEY` on the VM |
 | Carousels | `social` | `helios-social` | 3:00 daily run (only with `auto_run` on) | 7:00–8:15 AM | 5:30 | built |
-| IG Stories | `ig_story` (proposed) | TBD | 4:00 | TBD | 5:45, plus within the day (story insights expire after 24h) | Lucas, in progress |
+| IG Stories | `stories` | `helios-stories` | 4:00 sets for series with `auto` on (Morning Download daily, Guess the Number Mon/Thu, Free vs. Paid Tue/Sat) | 8:30–10:00 AM, every series; may overlap other types (Stories are not feed posts) | every 2 hours while live, final read at 23 h | built (Lucas); no live set yet |
 
 One type per hour so no two pipelines call Claude, Jev, or Meta at the same
 time. All workers run on the social worker VM; outreach stays alone on
@@ -52,13 +52,26 @@ Nothing posts without a person's approval (Tommy, 2026-10-08). Every
 `publishing_live` ships off. Trial Reels posts only from the Approve / Force
 buttons while it is off; Explainers schedules only reels with an `approved`
 verdict in `explainers.feedback`; Carousels have no approve step yet, so they
-never post until the Social Hub review screen exists.
+never post until the Social Hub review screen exists; IG Stories post only a
+set someone approved (Approve / Publish now on `/stories`).
+
+Each type has a `require_approval` setting, on (and treated as on when the row
+is missing). With it on, an auto-scheduled Trial Reel or Carousel slot posts
+only once a person approves it (`posting_schedule.approved_at`); an unapproved
+slot that comes due is cancelled with the reason, never posted late. Explainers
+need the `approved` verdict; Stories never auto-approve a set. Tommy turns
+these off himself.
 
 Shared code for the types outside Trial Reels lives in `lib/instagram/` (clock,
 posting windows, Graph container calls, insights client and rules) and
 `lib/media-bucket.ts` (private Supabase buckets).
 
 ## Shared Instagram account
+
+Stories differ from the contract in shape, not in substance: `stories.sets`
+is both the run queue and the schedule (`publish_at`, status `scheduled`), and
+each frame carries its own `ig_media_id`; there is no separate
+`posting_schedule` or `publish_attempts` table.
 
 Every type posts to one IG business account (`META_IG_BUSINESS_ACCOUNT_ID`).
 Before creating a container, each publisher reads
@@ -69,7 +82,8 @@ windows across types must not overlap: update the table above before adding one.
 ## Naming
 
 In the `social` (carousel) code, "story" means a **news story** (`story_id`,
-`posted_stories`). Use `ig_story` for Instagram Stories so the two never collide.
+`posted_stories`). Instagram Stories live in the `stories` schema and
+`lib/stories`; say "IG Stories" in prose when the two could be confused.
 
 ## Adding a content type
 

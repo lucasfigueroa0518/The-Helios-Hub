@@ -1,0 +1,24 @@
+[Unit]
+Description=Helios Instagram Stories worker (4 AM sets, approval, 8:30-10 AM posting, insights)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# helios-social-worker (docs/social-overnight.md). The renderer reads its assets
+# relative to the working directory, so it must be the app root.
+WorkingDirectory=/opt/helios-social/app
+EnvironmentFile=/opt/helios-social/worker.env
+ExecStart=/usr/bin/npm run stories:worker
+Restart=always
+RestartSec=15
+KillSignal=SIGTERM
+# A pass finishes its current step on SIGTERM.
+TimeoutStopSec=120
+# Headless Chromium renders 1080x1920 frames; sets build at 4 AM, alone.
+MemoryMax=1500M
+MemoryHigh=1200M
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

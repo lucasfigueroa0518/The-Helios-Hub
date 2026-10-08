@@ -801,6 +801,12 @@ CREATE TABLE IF NOT EXISTS reels.posting_schedule (
     created_at          timestamptz NOT NULL DEFAULT now()
 );
 
+-- A person's approval of the slot (docs/social-overnight.md). With require_approval on, an
+-- auto-scheduled reel posts only once approved; a reel a person scheduled is approved by that act.
+ALTER TABLE reels.posting_schedule ADD COLUMN IF NOT EXISTS approved_at timestamptz;
+
+INSERT INTO reels.settings (key, value) VALUES ('require_approval', 'true'::jsonb) ON CONFLICT (key) DO NOTHING;
+
 CREATE INDEX IF NOT EXISTS idx_reels_posting_schedule_due
     ON reels.posting_schedule (publish_at)
     WHERE status = 'scheduled';

@@ -2,12 +2,14 @@
  * One pass of the Stories worker (plan §4, §7, M8). scripts/stories_worker.ts
  * runs it every 15 seconds; tests run it against PGlite and stubs.
  *
- *   1. auto series: request today's set (after the nightly reels run)
+ *   1. auto series: request today's set at 4:00 AM (docs/social-overnight.md)
  *   2. build: claim one `requested` set → build, render, review → `ready`;
- *      an auto set approves itself unless the review flagged it (S-05, S-33)
+ *      an auto set approves itself only when require_approval is off and the
+ *      review did not flag it (S-05, S-33); otherwise it waits for Approve
  *   3. schedule: each approved set gets a minute in its window (S-20)
  *   4. publish: each due set posts its frames in order (S-59); on success the
  *      history (repeat checks) and Tommy's used-photo log are written (S-24)
+ *      Steps 3 and 4 run only while publishing_live is on.
  *   5. insights: poll published frames every 2 hours until the final capture
  */
 import type { StoriesDb } from '@/lib/stories/db';
@@ -37,8 +39,8 @@ import { loadSettings } from '@/lib/stories/settings';
 import { recordPublishedPhoto } from '@/lib/stories/sources/carousel';
 import type { StoriesStorage } from '@/lib/stories/storage';
 
-/** Auto sets are requested after the nightly reels run (≈ 1 AM ET) has had time to finish. */
-export const AUTO_REQUEST_AFTER = '01:30';
+/** Auto sets are requested in the Stories hour of the night clock (docs/social-overnight.md). */
+export const AUTO_REQUEST_AFTER = '04:00';
 
 export type WorkerDeps = {
   db: StoriesDb;
@@ -75,7 +77,13 @@ export async function tick(deps: WorkerDeps): Promise<{ built: number; scheduled
     const r = await buildSet(b, claimed.id);
     out.built++;
     log(`build ${claimed.series} ${claimed.ny_date}: ${r.status}${r.flagged ? ' (flagged)' : ''} ${r.detail.slice(0, 200)}`);
-    if (r.status === 'ready' && claimed.trigger === 'auto' && settings.series[claimed.series].auto && !r.flagged) await approveSet(deps.db, claimed.id);
+    if (r.status === 'ready' && claimed.trigger === 'auto' && settings.series[claimed.series].auto && !r.flagged && !settings.requireApproval) await approveSet(deps.db, claimed.id);
+  }
+
+  // 3–4 post nothing while the master switch is off.
+  if (!settings.publishingLive) {
+    await pollInsights(deps, now, out);
+    return out;
   }
 
   // 3. Schedule approved sets.
@@ -94,20 +102,24 @@ export async function tick(deps: WorkerDeps): Promise<{ built: number; scheduled
   }
 
   // 5. Insights.
+  await pollInsights(deps, now, out);
+  return out;
+}
+
+async function pollInsights(deps: WorkerDeps, now: Date, out: { insights: number }): Promise<void> {
+  const log = deps.log ?? (() => {});
   const due = await framesDueForInsights(deps.db, { now });
-  if (due.length) {
-    const client = deps.insights();
-    for (const f of due) {
-      try {
-        const r = await client.storyInsights(f.ig_media_id);
-        await recordInsights(deps.db, f.id, r.metrics, r.raw, isFinalCapture(new Date(f.published_at), now), now);
-        out.insights++;
-      } catch (err) {
-        log(`insights ${f.ig_media_id}: ${err instanceof Error ? err.message : String(err)}`);
-      }
+  if (!due.length) return;
+  const client = deps.insights();
+  for (const f of due) {
+    try {
+      const r = await client.storyInsights(f.ig_media_id);
+      await recordInsights(deps.db, f.id, r.metrics, r.raw, isFinalCapture(new Date(f.published_at), now), now);
+      out.insights++;
+    } catch (err) {
+      log(`insights ${f.ig_media_id}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
-  return out;
 }
 
 async function publishOne(deps: WorkerDeps, setId: string, series: Series): Promise<void> {

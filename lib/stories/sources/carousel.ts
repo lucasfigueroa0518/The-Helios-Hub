@@ -54,10 +54,11 @@ export function postPhoto(render: Json | null): { url: string; credit: string } 
 /** Morning Download pool, carousel side (plan §5.1): qualified stories from runs finished in the last 30 hours, shortlist first. */
 export async function morningDownloadCarousel(db: Queryable, now: Date): Promise<StoryCandidate[]> {
   const runs = await db.query<{ record: Json }>(
-    `SELECT record FROM social.runs WHERE finished_at > $1::timestamptz - interval '30 hours' ORDER BY finished_at DESC`,
+    // Pipeline runs only: hand-started runs (trigger 'cli') and their posts are development (origin 'dev').
+    `SELECT record FROM social.runs WHERE trigger <> 'cli' AND finished_at > $1::timestamptz - interval '30 hours' ORDER BY finished_at DESC`,
     [now.toISOString()],
   );
-  const posts = await db.query<PostRow>(`SELECT slug, story_id, status, brief, render, created_at::text FROM social.posts WHERE created_at > $1::timestamptz - interval '30 hours'`, [now.toISOString()]);
+  const posts = await db.query<PostRow>(`SELECT slug, story_id, status, brief, render, created_at::text FROM social.posts WHERE origin = 'pipeline' AND created_at > $1::timestamptz - interval '30 hours'`, [now.toISOString()]);
   const photoByStory = new Map(posts.rows.filter((p) => p.story_id).map((p) => [p.story_id!, postPhoto(p.render)]));
   const out: StoryCandidate[] = [];
   for (const { record } of runs.rows) {
@@ -91,7 +92,7 @@ export type NumberCandidate = {
 export async function carouselNumbers(db: Queryable, now: Date): Promise<NumberCandidate[]> {
   const { rows } = await db.query<PostRow>(
     `SELECT slug, story_id, status, brief, render, created_at::text FROM social.posts
-      WHERE status IN ('review', 'published') AND created_at > $1::timestamptz - interval '7 days' ORDER BY created_at DESC`,
+      WHERE status IN ('review', 'published') AND origin = 'pipeline' AND created_at > $1::timestamptz - interval '7 days' ORDER BY created_at DESC`,
     [now.toISOString()],
   );
   const out: NumberCandidate[] = [];
@@ -126,7 +127,7 @@ export async function carouselNumbers(db: Queryable, now: Date): Promise<NumberC
 
 /** Shortlisted stories from the last 7 days that never became a post: Stories extracts their numbers (S-26). */
 export async function shortlistWithoutBrief(db: Queryable, now: Date): Promise<StoryCandidate[]> {
-  const runs = await db.query<{ record: Json }>(`SELECT record FROM social.runs WHERE finished_at > $1::timestamptz - interval '7 days'`, [now.toISOString()]);
+  const runs = await db.query<{ record: Json }>(`SELECT record FROM social.runs WHERE trigger <> 'cli' AND finished_at > $1::timestamptz - interval '7 days'`, [now.toISOString()]);
   const posted = new Set((await db.query<{ story_id: string }>(`SELECT story_id FROM social.posts WHERE story_id IS NOT NULL`)).rows.map((r) => r.story_id));
   const out: StoryCandidate[] = [];
   for (const { record } of runs.rows) {

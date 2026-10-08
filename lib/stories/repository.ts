@@ -276,6 +276,16 @@ export async function recordCost(db: StoriesDb, e: CostEvent): Promise<void> {
 }
 
 /** Spend this New York calendar month, for the monthly watch (plan §9). */
+/** Spend on one New York day (the daily cap, docs/social-overnight.md). */
+export async function daySpendUsd(db: Queryable, now: Date = new Date()): Promise<number> {
+  const { rows } = await db.query<{ usd: number }>(
+    `SELECT COALESCE(sum(usd), 0)::float8 AS usd FROM stories.cost_events
+      WHERE (created_at AT TIME ZONE 'America/New_York')::date = $1::date`,
+    [nyDate(now)],
+  );
+  return rows[0]?.usd ?? 0;
+}
+
 export async function monthSpendUsd(db: Queryable, now: Date = new Date()): Promise<number> {
   const month = nyDate(now).slice(0, 7);
   const { rows } = await db.query<{ usd: number }>(
@@ -334,7 +344,12 @@ export async function framesDueForInsights(db: Queryable, opts: { now?: Date; ev
       WHERE f.ig_media_id IS NOT NULL
         AND f.published_at > $1::timestamptz - interval '24 hours'
         AND NOT EXISTS (SELECT 1 FROM stories.insights i WHERE i.frame_id = f.id AND i.final)
-        AND NOT EXISTS (SELECT 1 FROM stories.insights i WHERE i.frame_id = f.id AND i.captured_at > $1::timestamptz - make_interval(mins => $2))
+        -- Due every everyMinutes, and once more as soon as it is 23 hours old: the final
+        -- capture must land before the 24-hour cutoff above drops the frame.
+        AND (
+          NOT EXISTS (SELECT 1 FROM stories.insights i WHERE i.frame_id = f.id AND i.captured_at > $1::timestamptz - make_interval(mins => $2))
+          OR f.published_at <= $1::timestamptz - interval '23 hours'
+        )
       ORDER BY f.published_at`,
     [now, opts.everyMinutes ?? 120],
   );

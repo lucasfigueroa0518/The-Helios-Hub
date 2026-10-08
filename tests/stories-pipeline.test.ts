@@ -287,11 +287,13 @@ test('buildSet: the monthly watch skips; a builder error fails the set; a good b
 /* ── Schedule (M8) ───────────────────────────────────────────────── */
 
 test('schedule: windows in New York time, a uniform minute, never late', () => {
+  // Every series posts 8:30–10:00 AM (Tommy, 2026-10-08).
+  for (const s of Object.values(DEFAULT_SETTINGS.series)) assert.deepEqual([s.window.start, s.window.end], ['08:30', '10:00']);
   const md = DEFAULT_SETTINGS.series.morning_download.window;
   const { start, end } = windowBounds(md, DATE);
-  assert.equal(start.toISOString(), '2026-10-08T12:45:00.000Z');
+  assert.equal(start.toISOString(), '2026-10-08T12:30:00.000Z');
   assert.equal(end.toISOString(), '2026-10-08T14:00:00.000Z');
-  assert.equal(pickPublishAt(md, DATE, NOW, () => 0)!.toISOString(), '2026-10-08T12:45:00.000Z');
+  assert.equal(pickPublishAt(md, DATE, NOW, () => 0)!.toISOString(), '2026-10-08T12:30:00.000Z');
   assert.equal(pickPublishAt(md, DATE, NOW, (n) => n - 1)!.toISOString(), '2026-10-08T14:00:00.000Z');
   assert.equal(pickPublishAt(md, DATE, new Date('2026-10-08T13:30:20Z'), () => 0)!.toISOString(), '2026-10-08T13:31:00.000Z');
   assert.equal(pickPublishAt(md, DATE, new Date('2026-10-08T14:01:00Z')), null);
@@ -312,9 +314,17 @@ test('auto sets: only for series switched to auto, due today, still before the w
 
 /* ── The worker loop (M8) ────────────────────────────────────────── */
 
-test('worker: auto request → build → self-approve → schedule → publish in order → history, used photos, insights', async () => {
+/** The two switches every content type has (docs/social-overnight.md); both ship in the safe position. */
+async function setSwitches(db: Awaited<ReturnType<typeof harnessDb>>['db'], s: { requireApproval: boolean; publishingLive: boolean }) {
+  for (const [key, value] of [['require_approval', s.requireApproval], ['publishing_live', s.publishingLive]] as const) {
+    await db.query(`INSERT INTO stories.settings (key, value) VALUES ($1, $2::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [key, JSON.stringify(value)]);
+  }
+}
+
+test('worker (approval off, publishing live): auto request at 4 AM → build → self-approve → schedule → publish in order → history, used photos, insights', async () => {
   const { db } = await harnessDb();
   await saveSeriesSetting(db, 'guess_the_number', { auto: true });
+  await setSwitches(db, { requireApproval: false, publishingLive: true });
   const renderer = await stubRenderer();
   const published: string[] = [];
   const meta: StoriesMetaClient = {
@@ -324,7 +334,7 @@ test('worker: auto request → build → self-approve → schedule → publish i
     publishingQuota: async () => ({ used: 0, total: 100 }),
   };
   const st = storage();
-  let clock = new Date('2026-10-08T06:00:00Z'); // 2:00 AM New York
+  let clock = new Date('2026-10-08T08:00:00Z'); // 4:00 AM New York
   const frames = [
     { seq: 1, role: 'intro' as const, backdrop: 'black' as const, copy: { role: 'intro' as const, difficulty: 'medium' as const, topic: 'ChatGPT users' } },
     { seq: 2, role: 'question' as const, backdrop: 'black' as const, copy: { role: 'question' as const, family: 'photo' as const, question: 'How many?', photo: { src: 'https://img.test/q.jpg', credit: 'c', kind: 'person' as const } } },
@@ -342,7 +352,7 @@ test('worker: auto request → build → self-approve → schedule → publish i
   const [set] = await (await import('@/lib/stories/repository')).listSets(db, { series: 'guess_the_number' });
   assert.equal(set!.status, 'scheduled');
   const at = new Date(set!.publish_at!);
-  assert.ok(at >= new Date('2026-10-08T22:00:00Z') && at <= new Date('2026-10-09T01:00:00Z'));
+  assert.ok(at >= new Date('2026-10-08T12:30:00Z') && at <= new Date('2026-10-08T14:00:00Z'));
 
   clock = new Date(at.getTime() + 1000);
   const second = await tick(deps);
@@ -363,14 +373,15 @@ test('worker: auto request → build → self-approve → schedule → publish i
   assert.equal(rows[0]!.final, false);
 });
 
-test('worker: a flagged auto set is not self-approved; a failed publish records what went live', async () => {
+test('worker: a flagged auto set is not self-approved even with approval off', async () => {
   const { db } = await harnessDb();
   await saveSeriesSetting(db, 'guess_the_number', { auto: true });
+  await setSwitches(db, { requireApproval: false, publishingLive: true });
   const renderer = await stubRenderer();
   const flagging: ReviewCall = async () => ({ error: 'review call failed: 529', usage: null });
   const st = storage();
   const deps = {
-    db, sourceDb: db, now: () => new Date('2026-10-08T06:00:00Z'),
+    db, sourceDb: db, now: () => new Date('2026-10-08T08:00:00Z'),
     builder: async () => ({ db, sourceDb: db, jevTransport: stubJev(), write: stubWriter({}), photos: stubPhotos(), renderer, review: flagging, storage: st, builders: { guess_the_number: async () => ({ ok: true as const, payload: {}, frames: [{ seq: 1, role: 'intro' as const, backdrop: 'black' as const, copy: { role: 'intro' as const, difficulty: 'low' as const, topic: 't' } }], candidates: [], historyKeys: [] }) } }),
     meta: () => { throw new Error('not used'); },
     storage: () => st,
@@ -382,6 +393,46 @@ test('worker: a flagged auto set is not self-approved; a failed publish records 
   const sets = await (await import('@/lib/stories/repository')).listSets(db, {});
   assert.equal(sets[0]!.status, 'ready');
   assert.equal(sets[0]!.flagged, true);
+});
+
+test('worker (defaults): nothing before 4 AM; an auto set waits at ready for Approve; an approved set is not scheduled while publishing is off', async () => {
+  const { db } = await harnessDb();
+  await saveSeriesSetting(db, 'guess_the_number', { auto: true });
+  const renderer = await stubRenderer();
+  const st = storage();
+  let clock = new Date('2026-10-08T07:30:00Z'); // 3:30 AM New York
+  const frames = [{ seq: 1, role: 'intro' as const, backdrop: 'black' as const, copy: { role: 'intro' as const, difficulty: 'low' as const, topic: 't' } }];
+  const deps = {
+    db, sourceDb: db, now: () => clock,
+    builder: async () => ({ db, sourceDb: db, jevTransport: stubJev(), write: stubWriter({}), photos: stubPhotos(), renderer, review: cleanReview, storage: st, builders: { guess_the_number: async () => ({ ok: true as const, payload: {}, frames, candidates: [], historyKeys: [] }) } }),
+    meta: () => { throw new Error('nothing may publish'); },
+    storage: () => st,
+    insights: () => { throw new Error('not used'); },
+  };
+  assert.deepEqual(await tick(deps), { built: 0, scheduled: 0, published: 0, insights: 0 });
+  clock = new Date('2026-10-08T08:00:00Z'); // 4:00 AM
+  assert.equal((await tick(deps)).built, 1);
+  const repo = await import('@/lib/stories/repository');
+  const [set] = await repo.listSets(db, { series: 'guess_the_number' });
+  assert.equal(set!.status, 'ready', 'require_approval is on by default');
+  await repo.approveSet(db, set!.id);
+  assert.equal((await tick(deps)).scheduled, 0, 'publishing_live is off by default');
+  assert.equal((await getSet(db, set!.id))!.set.status, 'approved');
+});
+
+test('insights: a frame gets its final capture at 23 hours, before it drops out at 24', async () => {
+  const { db } = await harnessDb();
+  const { set } = await requestSet(db, { series: 'morning_download', nyDate: DATE, trigger: 'click', style: 'polished' });
+  const { rows } = await db.query<{ id: string }>(
+    `INSERT INTO stories.frames (set_id, seq, role, template, backdrop, copy, ig_media_id, published_at)
+     VALUES ($1, 1, 'opener', 't', 'black', '{}'::jsonb, 'm1', '2026-10-08T13:00:00Z') RETURNING id`,
+    [set.id],
+  );
+  const repo = await import('@/lib/stories/repository');
+  // Captured at 22:10; the next 2-hour poll would be at 24:10, after the cutoff.
+  await repo.recordInsights(db, rows[0]!.id, { reach: 1 }, [], false, new Date('2026-10-09T11:10:00Z'));
+  const at23 = new Date('2026-10-09T12:00:30Z');
+  assert.deepEqual((await repo.framesDueForInsights(db, { now: at23 })).map((f) => f.ig_media_id), ['m1']);
 });
 
 /* ── The writer call ─────────────────────────────────────────────── */

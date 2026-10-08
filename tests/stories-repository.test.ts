@@ -170,5 +170,8 @@ test('settings: defaults, auto off for every series, overrides persist', async (
   const next = await saveSeriesSetting(db, 'guess_the_number', { auto: true }, 'lucas');
   assert.equal(next.series.guess_the_number.auto, true);
   assert.equal(next.series.free_vs_paid.auto, false);
-  assert.equal((await loadSettings(db)).series.guess_the_number.window.start, '18:00');
+  assert.equal((await loadSettings(db)).series.guess_the_number.window.start, '08:30');
+  // Every content type requires approval and ships with publishing off (docs/social-overnight.md).
+  assert.equal(s.requireApproval, true);
+  assert.equal(s.publishingLive, false);
 });

@@ -21,6 +21,12 @@ export async function publishingLive(db: Queryable): Promise<boolean> {
   return rows[0]?.value === true;
 }
 
+/** The `require_approval` row: on unless set to false (docs/social-overnight.md). */
+export async function requireApproval(db: Queryable): Promise<boolean> {
+  const { rows } = await db.query<{ value: unknown }>(`SELECT value FROM explainers.settings WHERE key = 'require_approval'`);
+  return rows[0]?.value !== false;
+}
+
 export type ScheduleOutcome = { scheduled: true; id: string; publishAt: string } | { scheduled: false; note: string };
 
 export async function scheduleJob(
@@ -62,17 +68,24 @@ export async function scheduleJob(
   return { scheduled: false, note: 'That window was just taken.' };
 }
 
-/** Approved, finished, unposted, unscheduled renders with their video in Storage, oldest approval first. */
+/**
+ * Finished, unposted, unscheduled renders with their video in Storage: the
+ * approved ones, oldest approval first; with require_approval off, also the
+ * ones nobody reviewed (never a rejected one).
+ */
 export async function scheduleApproved(db: Queryable, now = new Date(), rng?: (count: number) => number): Promise<number> {
+  const approvalNeeded = await requireApproval(db);
   const { rows } = await db.query<{ id: string }>(
     `SELECT j.id
        FROM explainers.jobs j
-       JOIN explainers.feedback f ON f.job_id = j.id AND f.verdict = 'approved'
+       LEFT JOIN explainers.feedback f ON f.job_id = j.id
       WHERE j.status = 'ok'
+        AND (f.verdict = 'approved' OR (NOT $1::boolean AND f.verdict IS NULL))
         AND EXISTS (SELECT 1 FROM explainers.artifacts a WHERE a.job_id = j.id AND a.kind = 'video' AND a.storage_location = 'bucket')
         AND NOT EXISTS (SELECT 1 FROM explainers.posting_schedule s WHERE s.job_id = j.id AND s.status IN ('scheduled', 'publishing', 'published'))
         AND NOT EXISTS (SELECT 1 FROM explainers.publish_attempts p WHERE p.job_id = j.id AND p.status IN ('requested', 'creating', 'processing', 'publishing', 'published'))
-      ORDER BY f.created_at`,
+      ORDER BY f.created_at NULLS LAST, j.finished_at`,
+    [approvalNeeded],
   );
   let scheduled = 0;
   for (const row of rows) {

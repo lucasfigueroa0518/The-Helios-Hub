@@ -11,7 +11,7 @@ import type { PhotoFinder } from '@/lib/stories/photos';
 import type { Renderer } from '@/lib/stories/render/render';
 import type { ReviewCall } from '@/lib/stories/render/review';
 import { runRenderStage } from '@/lib/stories/render-stage';
-import { failSet, getSet, markSkipped, monthSpendUsd, recordCost, saveBuild } from '@/lib/stories/repository';
+import { daySpendUsd, failSet, getSet, markSkipped, monthSpendUsd, recordCost, saveBuild } from '@/lib/stories/repository';
 import { loadSettings } from '@/lib/stories/settings';
 import type { StoriesStorage } from '@/lib/stories/storage';
 import type { WriterCreate } from '@/lib/stories/writer';
@@ -47,6 +47,11 @@ export async function buildSet(deps: SetBuilderDeps, setId: string): Promise<Set
   if (spent >= settings.monthlyWatchUsd) {
     await markSkipped(deps.db, setId, `monthly watch reached ($${spent.toFixed(2)} of $${settings.monthlyWatchUsd})`);
     return { status: 'skipped', detail: 'monthly watch reached' };
+  }
+  const today = await daySpendUsd(deps.db, now);
+  if (today >= settings.dailyCapUsd) {
+    await markSkipped(deps.db, setId, `daily cap reached ($${today.toFixed(2)} of $${settings.dailyCapUsd})`);
+    return { status: 'skipped', detail: 'daily cap reached' };
   }
   const photoUsdBefore = deps.photos.usd;
   try {

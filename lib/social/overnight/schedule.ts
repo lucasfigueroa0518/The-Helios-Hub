@@ -48,8 +48,8 @@ export async function schedulePost(
     if (!choice) return { scheduled: false, note: throughDate ? 'Today’s carousel window is taken or over.' : 'No carousel window is open in the next two weeks.' };
     try {
       const { rows } = await query(
-        `INSERT INTO social.posting_schedule (post_id, ny_date, slot, publish_at, status, source)
-         VALUES ($1, $2::date, $3, $4::timestamptz, 'scheduled', $5) RETURNING id, publish_at`,
+        `INSERT INTO social.posting_schedule (post_id, ny_date, slot, publish_at, status, source, approved_at)
+         VALUES ($1, $2::date, $3, $4::timestamptz, 'scheduled', $5, CASE WHEN $5::text = 'user' THEN now() END) RETURNING id, publish_at`,
         [postId, choice.nyDate, choice.slot, choice.publishAt.toISOString(), source],
       );
       return { scheduled: true, id: rows[0].id, publishAt: new Date(rows[0].publish_at).toISOString() };
@@ -79,13 +79,32 @@ export async function scheduleRunPost(query: Query, runId: string, now = new Dat
   return schedulePost(query, rows[0].id, 'auto', now, calendarDateKey(now, SOCIAL_TIMEZONE), rng);
 }
 
-/** Due slots become publish attempts. A failing queue check fails the slot, with the reason. */
-export async function releaseDueSchedules(query: Query): Promise<number> {
+/** A person approves a scheduled carousel (the Social Hub review screen). */
+export async function approveSchedule(query: Query, scheduleId: string): Promise<boolean> {
   const { rows } = await query(
-    `SELECT id, post_id, source FROM social.posting_schedule WHERE status = 'scheduled' AND publish_at <= now() ORDER BY publish_at`,
+    `UPDATE social.posting_schedule SET approved_at = coalesce(approved_at, now()) WHERE id = $1 AND status = 'scheduled' RETURNING id`,
+    [scheduleId],
+  );
+  return rows.length > 0;
+}
+
+export const NOT_APPROVED_NOTE = 'Nobody approved this carousel before its slot, so it was not posted.';
+
+/**
+ * Due slots become publish attempts. With require_approval on (the default),
+ * an unapproved slot is cancelled instead. A failing queue check fails the
+ * slot, with the reason.
+ */
+export async function releaseDueSchedules(query: Query, opts: { requireApproval: boolean } = { requireApproval: true }): Promise<number> {
+  const { rows } = await query(
+    `SELECT id, post_id, source, approved_at FROM social.posting_schedule WHERE status = 'scheduled' AND publish_at <= now() ORDER BY publish_at`,
   );
   let released = 0;
   for (const row of rows) {
+    if (opts.requireApproval && !row.approved_at) {
+      await query(`UPDATE social.posting_schedule SET status = 'cancelled', error = $2 WHERE id = $1 AND status = 'scheduled'`, [row.id, NOT_APPROVED_NOTE]);
+      continue;
+    }
     const claimed = await query(
       `UPDATE social.posting_schedule SET status = 'publishing' WHERE id = $1 AND status = 'scheduled' RETURNING id`,
       [row.id],
