@@ -11,13 +11,15 @@ import {
   PUBLISH_QUOTA_HEADROOM,
   PUBLISH_STALE_MINUTES,
 } from './config';
+import { carouselItemId } from './items';
 import type { CarouselMetaClient } from './meta';
 
 /**
- * Carousel publish attempts, the same lifecycle as reels.publish_attempts:
- * requested → creating (item + parent containers) → processing (status poll)
- * → publishing (media_publish) → published | failed. One publish at a time
- * across the table; a carousel posts once.
+ * Carousel publish attempts on the lifecycle spine (social_hub.publish_attempts,
+ * vertical 'carousels'): requested → creating (item + parent containers) →
+ * processing (status poll) → publishing (media_publish) → published | failed.
+ * A carousel posts once. One publish at a time across every type already on
+ * the spine: they share one Instagram account (D36).
  */
 
 export type PublishTrigger = 'approve' | 'auto' | 'force';
@@ -55,11 +57,13 @@ export async function queuePublish(query: Query, postId: string, trigger: Publis
   if (caption.length > CAPTION_MAX_CHARS) {
     return { queued: false, note: `The caption with credits is ${caption.length} characters; Instagram takes ${CAPTION_MAX_CHARS}.`, terminal: true };
   }
+  const itemId = await carouselItemId(query, postId);
+  if (!itemId) return { queued: false, note: 'The post is gone.', terminal: true };
   try {
     const inserted = await query(
-      `INSERT INTO social.publish_attempts (post_id, trigger, status, caption, image_objects)
-       VALUES ($1, $2, 'requested', $3, $4::jsonb) RETURNING id`,
-      [postId, trigger, caption, JSON.stringify(objects)],
+      `INSERT INTO social_hub.publish_attempts (content_item_id, vertical, trigger, status, caption, payload)
+       VALUES ($1, 'carousels', $2, 'requested', $3, $4::jsonb) RETURNING id`,
+      [itemId, trigger, caption, JSON.stringify({ image_objects: objects })],
     );
     return { queued: true, id: inserted.rows[0].id as string };
   } catch (error) {
@@ -70,19 +74,19 @@ export async function queuePublish(query: Query, postId: string, trigger: Publis
 
 async function claimPublish(query: Query): Promise<string | null> {
   await query(
-    `UPDATE social.publish_attempts
+    `UPDATE social_hub.publish_attempts
         SET status = 'failed', finished_at = now(),
             error = 'The worker stopped while this carousel was publishing. Check Instagram before trying again.'
-      WHERE status IN ('creating', 'processing', 'publishing')
+      WHERE vertical = 'carousels' AND status IN ('creating', 'processing', 'publishing')
         AND started_at < now() - make_interval(mins => $1)`,
     [PUBLISH_STALE_MINUTES],
   );
   const { rows } = await query(
-    `UPDATE social.publish_attempts SET status = 'creating', started_at = now()
+    `UPDATE social_hub.publish_attempts SET status = 'creating', started_at = now()
       WHERE id = (
-        SELECT id FROM social.publish_attempts
-         WHERE status = 'requested'
-           AND NOT EXISTS (SELECT 1 FROM social.publish_attempts a WHERE a.status IN ('creating', 'processing', 'publishing'))
+        SELECT id FROM social_hub.publish_attempts
+         WHERE vertical = 'carousels' AND status = 'requested'
+           AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts a WHERE a.status IN ('creating', 'processing', 'publishing'))
          ORDER BY requested_at
          FOR UPDATE SKIP LOCKED
          LIMIT 1)
@@ -94,12 +98,12 @@ async function claimPublish(query: Query): Promise<string | null> {
 async function update(query: Query, id: string, fields: Record<string, unknown>): Promise<void> {
   const keys = Object.keys(fields);
   const sets = keys.map((key, index) => `${key} = $${index + 2}`);
-  await query(`UPDATE social.publish_attempts SET ${sets.join(', ')} WHERE id = $1`, [id, ...keys.map((key) => fields[key])]);
+  await query(`UPDATE social_hub.publish_attempts SET ${sets.join(', ')} WHERE id = $1`, [id, ...keys.map((key) => fields[key])]);
 }
 
 export async function markScheduleForAttempt(query: Query, attemptId: string, status: 'published' | 'failed', error: string | null): Promise<void> {
   await query(
-    `UPDATE social.posting_schedule SET status = $2, error = $3 WHERE publish_attempt_id = $1 AND status = 'publishing'`,
+    `UPDATE social_hub.schedule SET status = $2, error = $3 WHERE publish_attempt_id = $1 AND status = 'publishing'`,
     [attemptId, status, error],
   );
 }
@@ -121,7 +125,12 @@ export async function claimAndPublish(deps: PublishDeps): Promise<{ id: string; 
   const now = deps.now ?? Date.now;
   const statusLog: Array<{ at: string; statusCode: string; status: string | null }> = [];
   try {
-    const { rows } = await query(`SELECT post_id, caption, image_objects FROM social.publish_attempts WHERE id = $1`, [id]);
+    const { rows } = await query(
+      `SELECT ci.native_ref AS post_id, a.caption, a.payload->'image_objects' AS image_objects
+         FROM social_hub.publish_attempts a JOIN social_hub.content_items ci ON ci.id = a.content_item_id
+        WHERE a.id = $1`,
+      [id],
+    );
     const attempt = rows[0] as { post_id: string; caption: string; image_objects: string[] };
 
     // The account is shared by every content type (docs/social-overnight.md).

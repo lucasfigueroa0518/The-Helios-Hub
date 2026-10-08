@@ -155,7 +155,8 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
     : null;
 
   if (post.vertical === 'carousels' && post.status === 'ready') {
-    plans.push({ kind: 'post', action: 'approveCarousel', label: 'Approve', endpoint: '/api/social-hub/actions/approve-carousel', body: { scheduleId: null }, disabled: 'Needs a slot first: a carousel in review gets one in Phase 2 (P2-M4).' });
+    // Content ready (P2-M4): approving places it in the earliest open window.
+    plans.push({ kind: 'post', action: 'approveCarousel', label: 'Approve', endpoint: '/api/social-hub/actions/approve-carousel', body: { postId: post.refs.postId ?? null }, disabled: post.refs.postId ? null : 'No content id.' });
   }
   if (post.status === 'scheduled' && post.approval.required && !post.approval.approvedAt) {
     if (post.vertical === 'carousels' && post.refs.scheduleId) {

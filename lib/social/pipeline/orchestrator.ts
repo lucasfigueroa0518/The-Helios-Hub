@@ -9,6 +9,10 @@
  *
  * Glitch retries (§7.1) live inside each stage (one retry on a failed
  * code check); fresh drafts (§4.2b) loop here.
+ *
+ * A story that already has a finished post (SH-60, P2-M4) is not run again:
+ * when `stored` finds one, the story keeps its rank and counts toward the
+ * day's posts with no stage run and no spend; its stored post is shipped.
  */
 import type { CostMeter } from './cost-meter';
 import type { SetAsideEntry, SetAsideLog } from './set-aside-log';
@@ -37,7 +41,12 @@ export type RunDayInput = {
   log: SetAsideLog;
   now: Date;
   targetPosts?: number;
+  /** The finished post already stored for a story, if any (SH-60). Omitted: every story runs. */
+  stored?: (storyId: string) => Promise<string | null>;
 };
+
+/** One shipped story, in rank order: a post made today, or a stored post reused. */
+export type ShipEntry = { storyId: string; reusedPostId: string | null };
 
 export type RunDayResult = {
   posts: PostObject[];
@@ -47,6 +56,8 @@ export type RunDayResult = {
   costByStage: Partial<Record<StageName, number>>;
   /** Every fresh draft and why it was needed (spec §4.2b: logged). */
   freshDrafts: FreshDraftEntry[];
+  /** What the day ships, best-ranked story first. */
+  shipped: ShipEntry[];
 };
 
 class SetAside extends Error {
@@ -66,6 +77,7 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
   const posts: PostObject[] = [];
   const setAsides: SetAsideEntry[] = [];
   const freshDrafts: FreshDraftEntry[] = [];
+  const shipped: ShipEntry[] = [];
 
   const finish = (stopReason: StopReason): RunDayResult => ({
     posts,
@@ -74,6 +86,7 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
     costUsd: meter.spent(),
     costByStage: meter.byStage(),
     freshDrafts,
+    shipped,
   });
 
   const logCap = async (storyId: string, stage: StageName) => {
@@ -131,7 +144,12 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
 
   // ── One story at a time, in rank order ──────────────────────────────
   for (const story of ranked) {
-    if (posts.length >= target) return finish('target-reached');
+    if (shipped.length >= target) return finish('target-reached');
+    const reused = input.stored ? await input.stored(story.id) : null;
+    if (reused) {
+      shipped.push({ storyId: story.id, reusedPostId: reused });
+      continue;
+    }
     const trail: StageName[] = ['jev-scoring'];
     let storyCost = 0;
     let current: StageName = 'reporter';
@@ -169,6 +187,7 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
       const fixed = await run('mechanical', () => stages.mechanical(checked, brief));
       const designed = await run('design', () => stages.design(fixed, brief, story));
       posts.push({ ...designed, stages: trail, costUsd: storyCost });
+      shipped.push({ storyId: story.id, reusedPostId: null });
     } catch (err) {
       if (err instanceof SetAside) {
         setAsides.push(err.entry);
@@ -182,5 +201,5 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
     }
   }
 
-  return finish(posts.length >= target ? 'target-reached' : 'out-of-stories');
+  return finish(shipped.length >= target ? 'target-reached' : 'out-of-stories');
 }

@@ -36,15 +36,20 @@ test('carousel hard publish: the waiting slot is approved and closed with the re
   const { pg, q } = await db();
   await pg.exec(`
     UPDATE social.posts SET slide_objects = '["a.jpg","b.jpg","c.jpg"]'::jsonb WHERE id = '${IDS.socPost2}';
-    INSERT INTO social.posting_schedule (post_id, ny_date, slot, publish_at, status, source)
-    VALUES ('${IDS.socPost2}', '2026-10-09', 'morning', '2026-10-09T13:20:00Z', 'scheduled', 'auto');`);
+    INSERT INTO social_hub.content_items (id, vertical, format, native_ref, idea_ref)
+    VALUES ('30000000-0000-4000-8000-000000000042', 'carousels', 'feed', '${IDS.socPost2}', 'story-2');
+    INSERT INTO social_hub.schedule (content_item_id, vertical, ny_date, slot, publish_at, status, source)
+    VALUES ('30000000-0000-4000-8000-000000000042', 'carousels', '2026-10-09', 'morning', '2026-10-09T13:20:00Z', 'scheduled', 'auto');`);
   const out = await hardPublishPost(q as never, IDS.socPost2);
-  const slot = (await pg.query<{ status: string; error: string; approved_at: string | null }>(`SELECT status, error, approved_at FROM social.posting_schedule WHERE post_id = '${IDS.socPost2}'`)).rows[0]!;
+  const slot = (await pg.query<{ status: string; error: string; approved_at: string | null }>(`
+    SELECT s.status, s.error, a.decided_at AS approved_at
+      FROM social_hub.schedule s LEFT JOIN social_hub.approvals a ON a.content_item_id = s.content_item_id AND a.decision = 'approved'
+     WHERE s.content_item_id = '30000000-0000-4000-8000-000000000042'`)).rows[0]!;
   assert.equal(slot.status, 'cancelled');
   assert.equal(slot.error, HARD_PUBLISH_NOTE);
   assert.ok(slot.approved_at, 'the click is the approval (SH-17)');
   if (out.queued) {
-    const attempt = (await pg.query<{ trigger: string }>(`SELECT trigger FROM social.publish_attempts WHERE post_id = '${IDS.socPost2}'`)).rows[0]!;
+    const attempt = (await pg.query<{ trigger: string }>(`SELECT trigger FROM social_hub.publish_attempts WHERE content_item_id = '30000000-0000-4000-8000-000000000042'`)).rows[0]!;
     assert.equal(attempt.trigger, 'force');
   } else {
     assert.ok(out.note, 'a refusal comes back with its reason');

@@ -1,0 +1,117 @@
+/**
+ * Moving Carousels' lifecycle history onto the spine (D36). The backfill is
+ * idempotent, and the hub shows exactly what it shows for rows written on the
+ * spine natively (parity). Offline: PGlite with the real schema files.
+ */
+import assert from 'node:assert/strict';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import path from 'node:path';
+import test from 'node:test';
+
+import { backfillCarousels } from '@/lib/social-hub/backfill';
+import { buildDataset } from '@/lib/social-hub/dataset';
+import { readAll } from '@/lib/social-hub/load';
+import type { SpineQuery } from '@/lib/social-hub/spine';
+
+import { openHubTestDb } from './fixtures/social-hub/pglite';
+import { IDS, seedHubFixture } from './fixtures/social-hub/seed';
+
+const NOW = new Date('2026-10-08T12:00:00Z');
+const FORCE_ATTEMPT = '30000000-0000-4000-8000-000000000032';
+const CANCELLED_SLOT = '30000000-0000-4000-8000-000000000022';
+
+/** The fixture's Carousels lifecycle, as the old tables held it before the switch. */
+const LEGACY_ROWS = `
+DELETE FROM social_hub.media_insights WHERE vertical = 'carousels';
+DELETE FROM social_hub.schedule WHERE vertical = 'carousels';
+DELETE FROM social_hub.publish_attempts WHERE vertical = 'carousels';
+DELETE FROM social_hub.approvals;
+DELETE FROM social_hub.content_items WHERE vertical = 'carousels';
+INSERT INTO social.publish_attempts (id, post_id, trigger, status, requested_at, finished_at, caption, image_objects, media_id, permalink)
+VALUES ('${IDS.socAttempt}', '${IDS.socPost1}', 'auto', 'published', '2026-10-06T11:29:00Z', '2026-10-06T11:31:00Z', 'caption', '[]', 'm-c1', 'https://instagram.com/p/c1');
+INSERT INTO social.posting_schedule (id, post_id, ny_date, slot, publish_at, status, source, publish_attempt_id, approved_at)
+VALUES ('${IDS.socSched}', '${IDS.socPost1}', '2026-10-06', 'morning', '2026-10-06T11:30:00Z', 'published', 'auto', '${IDS.socAttempt}', '2026-10-06T10:00:00Z');
+INSERT INTO social.media_insights (media_id, ny_date, publish_attempt_id, views, reach, likes, comments, saved, shares, total_interactions)
+VALUES ('m-c1', '2026-10-07', '${IDS.socAttempt}', 900, 700, 40, 6, 30, 22, 98);`;
+
+/** History the native fixture doesn't have: a cancelled-unapproved slot and a failed Force try on the review post. */
+const EXTRA_LEGACY = `
+INSERT INTO social.posting_schedule (id, post_id, ny_date, slot, publish_at, status, source, error)
+VALUES ('${CANCELLED_SLOT}', '${IDS.socPost2}', '2026-10-06', 'afternoon', '2026-10-06T18:40:00Z', 'cancelled', 'auto', 'Nobody approved this carousel before its slot, so it was not posted.');
+INSERT INTO social.publish_attempts (id, post_id, trigger, status, requested_at, finished_at, caption, image_objects, error)
+VALUES ('${FORCE_ATTEMPT}', '${IDS.socPost2}', 'force', 'failed', '2026-10-07T15:00:00Z', '2026-10-07T15:02:00Z', 'c', '["x.jpg"]', 'container error');`;
+
+async function legacyDb() {
+  const { pg, query } = await openHubTestDb();
+  await seedHubFixture(pg);
+  await pg.exec(LEGACY_ROWS);
+  return { pg, query, spine: query as unknown as SpineQuery };
+}
+
+const carousels = async (query: Parameters<typeof readAll>[0]) => {
+  const d = buildDataset(await readAll(query), null, NOW);
+  return { posts: d.posts.filter((p) => p.vertical === 'carousels'), ideas: d.ideas.filter((i) => i.vertical === 'carousels') };
+};
+
+test('backfill: the hub shows the same Carousels from copied history as from rows written on the spine', async () => {
+  const native = await openHubTestDb();
+  await seedHubFixture(native.pg);
+  const expected = await carousels(native.query);
+  assert.ok(expected.posts.some((p) => p.status === 'published'), 'the fixture has a published carousel');
+
+  const { query, spine } = await legacyDb();
+  const empty = await carousels(query);
+  assert.equal(empty.posts.some((p) => p.status === 'published'), false, 'before the backfill the spine has no Carousels history');
+  await backfillCarousels(spine);
+  assert.deepEqual(await carousels(query), expected);
+});
+
+test('backfill: copies once, keeps ids, and a second run changes nothing', async () => {
+  const { pg, spine } = await legacyDb();
+  await pg.exec(EXTRA_LEGACY);
+  const first = await backfillCarousels(spine);
+  assert.deepEqual(first, { items: 2, attempts: 2, schedule: 2, insights: 1, approvals: 2 });
+  assert.deepEqual(await backfillCarousels(spine), { items: 0, attempts: 0, schedule: 0, insights: 0, approvals: 0 });
+
+  const attempt = (await pg.query<{ id: string; legacy_id: string; payload: unknown }>(`SELECT id, legacy_id, payload FROM social_hub.publish_attempts WHERE id = '${FORCE_ATTEMPT}'`)).rows[0]!;
+  assert.equal(attempt.legacy_id, FORCE_ATTEMPT, 'same id, recorded as legacy_id');
+  assert.deepEqual(attempt.payload, { image_objects: ['x.jpg'] });
+  const approvals = (await pg.query<{ native_ref: string; via: string }>(
+    `SELECT ci.native_ref, a.via FROM social_hub.approvals a JOIN social_hub.content_items ci ON ci.id = a.content_item_id ORDER BY ci.native_ref`,
+  )).rows;
+  assert.deepEqual(approvals.map((a) => [a.native_ref, a.via]), [[IDS.socPost1, 'user'], [IDS.socPost2, 'force']], 'slot approval and Force (SH-17) both carry over');
+  const cancelled = (await pg.query<{ status: string; error: string }>(`SELECT status, error FROM social_hub.schedule WHERE id = '${CANCELLED_SLOT}'`)).rows[0]!;
+  assert.equal(cancelled.status, 'cancelled');
+});
+
+test('backfill skips a row the switched code already wrote (no duplicate post for one item)', async () => {
+  const { pg, spine } = await legacyDb();
+  // After the switch the worker queued a new try for the same post before the backfill ran.
+  await pg.exec(`
+    INSERT INTO social_hub.content_items (vertical, format, native_ref, idea_ref) VALUES ('carousels', 'feed', '${IDS.socPost1}', 'story-1');
+    INSERT INTO social_hub.publish_attempts (content_item_id, vertical, trigger, status, caption)
+    SELECT id, 'carousels', 'force', 'published', 'c' FROM social_hub.content_items WHERE native_ref = '${IDS.socPost1}';`);
+  const counts = await backfillCarousels(spine);
+  assert.equal(counts.attempts, 0, 'publish_once: the item already has a published attempt');
+  assert.equal((await pg.query<{ n: number }>(`SELECT count(*)::int AS n FROM social_hub.content_items`)).rows[0]!.n, 1);
+});
+
+// ── Contract: after the switch nothing writes the old Carousels tables ───────
+
+const LEGACY = /\bsocial\.(posting_schedule|publish_attempts|media_insights)\b/;
+const ALLOWED = new Set(['lib/social-hub/backfill.ts']);
+
+function walk(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const full = path.join(dir, name);
+    if (statSync(full).isDirectory()) return name === 'node_modules' ? [] : walk(full);
+    return /\.(ts|tsx)$/.test(name) ? [path.relative(process.cwd(), full)] : [];
+  });
+}
+
+test('only the backfill still names social.posting_schedule, publish_attempts or media_insights', () => {
+  const offenders = ['lib', 'app', 'scripts', 'components']
+    .flatMap((dir) => walk(path.join(process.cwd(), dir)))
+    .filter((file) => !ALLOWED.has(file) && LEGACY.test(readFileSync(file, 'utf8')));
+  assert.deepEqual(offenders, []);
+});

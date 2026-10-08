@@ -74,7 +74,7 @@ async function main() {
   const { fetchBodyLive } = await import('@/lib/social/ingest/select/enrich');
   const { fetchFeeds } = await import('@/lib/social/ingest/select/feed-health');
   const { createSocialStore } = await import('@/lib/social/store');
-  const { finishRun, insertRun, upsertPost } = await import('@/lib/social/store/pg');
+  const { finishRun, insertRun, recordShipList, storedPostFor, upsertPost } = await import('@/lib/social/store/pg');
   const { createCostMeter } = await import('@/lib/social/pipeline/cost-meter');
   const { createLiveStages, createRunBudget } = await import('@/lib/social/pipeline/live-stages');
   const { runDay } = await import('@/lib/social/pipeline/orchestrator');
@@ -159,6 +159,8 @@ async function main() {
     log: store.setAsides,
     now,
     targetPosts: stories,
+    // The worker's runs reuse a story's finished post instead of making it again (SH-60, P2-M4).
+    ...(runIdArg && store.query ? { stored: (storyId: string) => storedPostFor(store.query!, storyId) } : {}),
   });
 
   // 7-day rule: a photo counts as used once its post reaches the review queue (today: the preview).
@@ -229,13 +231,22 @@ async function main() {
       };
       let runId: string;
       if (runIdArg) {
-        await finishRun(store.query, runIdArg, { ...finished, status: shippedPosts.length > 0 ? 'ok' : 'partial' });
+        await finishRun(store.query, runIdArg, { ...finished, status: result.shipped.length > 0 ? 'ok' : 'partial' });
         runId = runIdArg;
       } else {
         runId = await insertRun(store.query, { kind: preview ? 'preview' : 'daily', startedAt: now.toISOString(), capUsd, ...finished });
       }
-      for (const p of shippedPosts) await upsertPost(store.query, { runId, ...p, status: preview ? 'preview' : 'review', origin: runIdArg ? 'pipeline' : 'dev' });
-      console.log(`Database: run ${runId}, ${shippedPosts.length} post(s) in social.posts`);
+      const newIds = new Map<string, string>();
+      for (const p of shippedPosts) newIds.set(p.storyId, await upsertPost(store.query, { runId, ...p, status: preview ? 'preview' : 'review', origin: runIdArg ? 'pipeline' : 'dev' }));
+      if (runIdArg) {
+        const shipList = result.shipped.flatMap((e) => {
+          const id = e.reusedPostId ?? newIds.get(e.storyId);
+          return id ? [id] : [];
+        });
+        await recordShipList(store.query, runId, shipList);
+      }
+      const reusedCount = result.shipped.filter((e) => e.reusedPostId).length;
+      console.log(`Database: run ${runId}, ${shippedPosts.length} post(s) in social.posts${reusedCount ? `, ${reusedCount} stored post(s) reused` : ''}`);
     } catch (err) {
       console.error(`Database write failed (the run folder is complete): ${err instanceof Error ? err.message : String(err)}`);
     }

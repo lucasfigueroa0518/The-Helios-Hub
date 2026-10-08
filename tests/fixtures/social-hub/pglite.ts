@@ -19,10 +19,21 @@ function schemaSql(file: string): string {
     .join('\n');
 }
 
+/** The account-insight tables the P2-M1 sweep fills; the "not applied yet" states are tested without them. */
+const ACCOUNT_TABLES = ['account_insights_daily', 'account_demographics_daily', 'online_followers_daily', 'refreshes', 'publishing_quota'];
+
+/**
+ * The lifecycle spine (social_hub content_items … media_insights) is always
+ * there: Carousels live on it (D36). `withHubSchema: false` leaves out only
+ * the account tables.
+ */
 export async function openHubTestDb(opts: { withHubSchema?: boolean } = {}): Promise<{ pg: PGlite; query: HubQuery }> {
   const pg = new PGlite({ extensions: { pg_trgm } });
   for (const schema of SCHEMAS) await pg.exec(schemaSql(`${schema}_schema.sql`));
-  if (opts.withHubSchema) await pg.exec(schemaSql('social_hub_schema.sql'));
+  await pg.exec(schemaSql('social_hub_schema.sql'));
+  if (!opts.withHubSchema) {
+    for (const table of ACCOUNT_TABLES) await pg.exec(`DROP TABLE social_hub.${table}`);
+  }
   const query: HubQuery = async (text, params) => ({ rows: (await pg.query(text, params as unknown[])).rows as never[] });
   return { pg, query };
 }

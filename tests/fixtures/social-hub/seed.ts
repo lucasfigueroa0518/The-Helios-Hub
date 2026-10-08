@@ -34,6 +34,7 @@ export const IDS = {
   socPost2: '30000000-0000-4000-8000-000000000012',
   socSched: '30000000-0000-4000-8000-000000000021',
   socAttempt: '30000000-0000-4000-8000-000000000031',
+  socItem1: '30000000-0000-4000-8000-000000000041',
   set1: '40000000-0000-4000-8000-000000000001',
   set2: '40000000-0000-4000-8000-000000000002',
   frame1: '40000000-0000-4000-8000-000000000011',
@@ -133,15 +134,20 @@ INSERT INTO social.posts (id, run_id, slug, story_id, title, status, render, cap
   '{"source": "TechCrunch", "sourceUrl": "https://example.com/a", "storyType": "tech", "slides": [{}, {}, {}]}', E'Crusoe raised $3.9B.\\nMore below.', '2026-10-06T07:30:00Z', 'pipeline', '["posts/post-1/slide-01.jpg", "posts/post-1/slide-02.jpg", "posts/post-1/slide-03.jpg"]'),
  ('${I.socPost2}', '${I.socRun}', 'post-2', 'story-2', 'Newsom pushes an AI kill switch', 'review',
   '{"source": "The Verge", "sourceUrl": "https://example.com/d", "slides": [{}, {}, {}, {}]}', 'Newsom wants a kill switch.', '2026-10-06T07:35:00Z', 'pipeline', NULL);
-INSERT INTO social.posting_schedule (id, post_id, ny_date, slot, publish_at, status, source, publish_attempt_id, approved_at)
-VALUES ('${I.socSched}', '${I.socPost1}', '2026-10-06', 'morning', '2026-10-06T11:30:00Z', 'published', 'auto', '${I.socAttempt}', '2026-10-06T10:00:00Z');
-INSERT INTO social.publish_attempts (id, post_id, trigger, status, requested_at, finished_at, caption, image_objects, media_id, permalink)
-VALUES ('${I.socAttempt}', '${I.socPost1}', 'auto', 'published', '2026-10-06T11:29:00Z', '2026-10-06T11:31:00Z', 'caption', '[]', 'm-c1', 'https://instagram.com/p/c1');
+-- Carousels' lifecycle is on the spine (social_hub, D36).
+INSERT INTO social_hub.content_items (id, vertical, format, native_ref, idea_ref)
+VALUES ('${I.socItem1}', 'carousels', 'feed', '${I.socPost1}', 'story-1');
+INSERT INTO social_hub.approvals (content_item_id, decision, decided_at, via)
+VALUES ('${I.socItem1}', 'approved', '2026-10-06T10:00:00Z', 'user');
+INSERT INTO social_hub.schedule (id, content_item_id, vertical, ny_date, slot, publish_at, status, source, publish_attempt_id)
+VALUES ('${I.socSched}', '${I.socItem1}', 'carousels', '2026-10-06', 'morning', '2026-10-06T11:30:00Z', 'published', 'auto', '${I.socAttempt}');
+INSERT INTO social_hub.publish_attempts (id, content_item_id, vertical, trigger, status, requested_at, finished_at, caption, payload, media_id, permalink)
+VALUES ('${I.socAttempt}', '${I.socItem1}', 'carousels', 'auto', 'published', '2026-10-06T11:29:00Z', '2026-10-06T11:31:00Z', 'caption', '{"image_objects": []}', 'm-c1', 'https://instagram.com/p/c1');
 INSERT INTO social.used_photos (url, used_at, story_id, slide, source, post_id) VALUES
  ('https://img/1', '2026-10-06T07:30:00Z', 'story-1', 0, 'wikimedia', '${I.socPost1}'),
  ('https://img/2', '2026-10-06T07:30:00Z', 'story-1', 1, 'logo', '${I.socPost1}');
-INSERT INTO social.media_insights (media_id, ny_date, publish_attempt_id, views, reach, likes, comments, saved, shares, total_interactions)
-VALUES ('m-c1', '2026-10-07', '${I.socAttempt}', 900, 700, 40, 6, 30, 22, 98);
+INSERT INTO social_hub.media_insights (media_id, ny_date, vertical, publish_attempt_id, views, reach, likes, comments, saved, shares, total_interactions)
+VALUES ('m-c1', '2026-10-07', 'carousels', '${I.socAttempt}', 900, 700, 40, 6, 30, 22, 98);
 
 -- ── IG Stories ─────────────────────────────────────────────────────────────
 INSERT INTO stories.sets (id, series, ny_date, status, trigger, style, payload, publish_at, approved_at, published_at, built_at, spend_usd) VALUES

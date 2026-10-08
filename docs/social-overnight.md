@@ -38,28 +38,44 @@ Each content type has, in its own schema:
 4. **`publish_attempts`**: one row per try, holding `media_id`, `permalink`,
    `status_log`, `error`, `insights_checked_at`, `insights_settled_at`.
 5. **`media_insights`**: keyed `(media_id, ny_date)`, metric columns plus `raw`.
-   Use the due/settle rules in `lib/instagram/insights-rules.ts` (the same as
-   `lib/reels/media-insights/due.ts`).
+   Use the due/settle rules in `lib/instagram/insights-rules.ts`.
+
+**The lifecycle spine (D36).** Items 3–5 are moving out of each type's schema
+into one shared set of tables in `social_hub`: `content_items` (the stable
+identity of each postable unit), `approvals` (one decision per item),
+`schedule`, `publish_attempts` and `media_insights`, each with a `vertical`
+column. Types join one at a time (expand → backfill → switch → contract;
+`scripts/backfill_spine.ts`). **Carousels have joined**: their slots,
+attempts, approvals and insights live on the spine, and `social.posting_schedule`,
+`social.publish_attempts` and `social.media_insights` are frozen history, read
+only by the backfill until they are dropped. A new type joins the spine
+instead of adding items 3–5 to its own schema.
 6. **Media at a signed public URL** in Supabase Storage. Meta fetches the file
    itself, so local paths and session-protected routes don't work.
 
 Versioning: like Trial Reels, there is no "approved version" pointer. The newest
 successful render for an idea or story is the one that gets scheduled and
-published.
+published. Carousels keep that content with its news story (SH-60): when the
+3 AM run selects a story whose newest post is finished and in review, it
+skips the story's stages (no spend) and ships the stored post at the story's
+rank (`social.runs.ship_post_ids`).
 
 ## Approval
 
 Nothing posts without a person's approval (Tommy, 2026-10-08). Every
 `publishing_live` ships off. Trial Reels posts only from the Approve / Force
 buttons while it is off; Explainers schedules only reels with an `approved`
-verdict in `explainers.feedback`; Carousels have no approve step yet, so they
-never post until the Social Hub review screen exists; IG Stories post only a
-set someone approved (Approve / Publish now on `/stories`).
+verdict in `explainers.feedback`; Carousels are approved in the Social Hub
+(a slot the run placed, or a carousel in review, which approving places in
+the earliest open window); IG Stories post only a set someone approved
+(Approve / Publish now on `/stories`).
 
 Each type has a `require_approval` setting, on (and treated as on when the row
 is missing). With it on, an auto-scheduled Trial Reel or Carousel slot posts
-only once a person approves it (`posting_schedule.approved_at`); an unapproved
-slot that comes due is cancelled with the reason, never posted late. Explainers
+only once a person approves it (Trial Reels: `posting_schedule.approved_at`;
+Carousels: the item's `social_hub.approvals` row, so approved content stays
+approved wherever it is placed); an unapproved slot that comes due is
+cancelled with the reason, never posted late. A rejected item never posts. Explainers
 need the `approved` verdict; Stories never auto-approve a set. Tommy turns
 these off himself.
 

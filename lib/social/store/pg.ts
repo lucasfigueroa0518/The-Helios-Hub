@@ -180,6 +180,32 @@ export async function upsertPost(query: Query, p: PostInsert): Promise<string> {
   return rows[0].id as string;
 }
 
+/**
+ * The finished post a story already has (SH-60): its newest pipeline post in
+ * review with slides stored. The newest version is the current one (SH-54),
+ * so when that one was rejected the story runs again; nothing older is used.
+ */
+export async function storedPostFor(query: Query, storyId: string): Promise<string | null> {
+  const { rows } = await query(
+    `SELECT p.id, p.status, p.slide_objects IS NOT NULL AS has_slides, a.decision
+       FROM social.posts p
+       LEFT JOIN social_hub.content_items ci ON ci.vertical = 'carousels' AND ci.native_ref = p.id::text
+       LEFT JOIN social_hub.approvals a ON a.content_item_id = ci.id
+      WHERE p.story_id = $1 AND p.origin = 'pipeline' AND p.status IN ('review', 'published', 'rejected')
+      ORDER BY p.created_at DESC
+      LIMIT 1`,
+    [storyId],
+  );
+  const newest = rows[0];
+  if (!newest || newest.status !== 'review' || !newest.has_slides || newest.decision === 'rejected') return null;
+  return newest.id as string;
+}
+
+/** The run's ship list, post ids best-ranked first (social.runs.ship_post_ids). */
+export async function recordShipList(query: Query, runId: string, postIds: string[]): Promise<void> {
+  await query(`UPDATE social.runs SET ship_post_ids = $2::jsonb WHERE id = $1`, [runId, JSON.stringify(postIds)]);
+}
+
 // ── Reads (the preview pages and other systems) ────────────────────────────
 
 export type PostSummary = { id: string; slug: string; storyId: string | null; title: string; status: PostStatus; createdAt: string; runId: string | null };

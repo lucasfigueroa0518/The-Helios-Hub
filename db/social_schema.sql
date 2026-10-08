@@ -174,6 +174,12 @@ INSERT INTO social.settings (key, value) VALUES ('publishing_live', 'false'::jso
 -- A person approves every carousel before it posts (docs/social-overnight.md).
 INSERT INTO social.settings (key, value) VALUES ('require_approval', 'true'::jsonb) ON CONFLICT (key) DO NOTHING;
 
+-- ── Frozen: posting_schedule, publish_attempts, media_insights ──────────────
+-- Carousels' slots, attempts, approvals and insights moved to the lifecycle
+-- spine (social_hub, D36). These three tables are history: only
+-- scripts/backfill_spine.ts reads them, and nothing writes them. They are
+-- dropped once the backfill has been checked (unification Phase 7).
+
 -- ── Posting schedule ────────────────────────────────────────────────────────
 -- One carousel per Eastern-time slot per day.
 CREATE TABLE IF NOT EXISTS social.posting_schedule (
@@ -265,3 +271,9 @@ ALTER TABLE social.posting_schedule DROP CONSTRAINT IF EXISTS posting_schedule_s
 ALTER TABLE social.posting_schedule ADD CONSTRAINT posting_schedule_slot_check CHECK (slot IN ('morning', 'afternoon'));
 -- Carousels posted per day (SH-48). The run schedules its top this-many posts.
 INSERT INTO social.settings (key, value) VALUES ('posts_per_day', '2'::jsonb) ON CONFLICT (key) DO NOTHING;
+
+-- The run's ship list (Social Hub P2-M4, SH-60): post ids in rank order, both
+-- the posts it made and the stored posts it reused for stories that already
+-- had a finished post. The worker schedules from it. NULL: an older run, whose
+-- own posts are scheduled by slug order.
+ALTER TABLE social.runs ADD COLUMN IF NOT EXISTS ship_post_ids jsonb;

@@ -11,10 +11,14 @@ export type FeedSchema = 'explainers' | 'social';
 
 const FEED_SCHEMAS: readonly FeedSchema[] = ['explainers', 'social'];
 
-const BOOKED = (schema: FeedSchema) => `
-SELECT publish_at FROM ${schema}.posting_schedule
- WHERE status IN ('scheduled', 'publishing', 'published')
+const ACTIVE = `status IN ('scheduled', 'publishing', 'published')
    AND publish_at >= $1::timestamptz AND publish_at < $2::timestamptz`;
+
+/** Where each type's bookings live: Carousels on the lifecycle spine (D36), Explainers in their own schema until they join. */
+const BOOKED: Record<FeedSchema, string> = {
+  explainers: `SELECT publish_at FROM explainers.posting_schedule WHERE ${ACTIVE}`,
+  social: `SELECT publish_at FROM social_hub.schedule WHERE vertical = 'carousels' AND ${ACTIVE}`,
+};
 
 /** Feed post instants from `from` through two weeks ahead, in every schema but `except`. */
 export async function busyFeedTimes(query: SpacingQuery, from: Date, except: FeedSchema | null = null): Promise<Date[]> {
@@ -24,7 +28,7 @@ export async function busyFeedTimes(query: SpacingQuery, from: Date, except: Fee
   for (const schema of FEED_SCHEMAS) {
     if (schema === except) continue;
     try {
-      const { rows } = await query(BOOKED(schema), [fromIso, toIso]);
+      const { rows } = await query(BOOKED[schema], [fromIso, toIso]);
       for (const row of rows) out.push(new Date(String(row.publish_at)));
     } catch {
       // That schema isn't reachable from this handle: its own scheduler spaces against us.
@@ -35,6 +39,6 @@ export async function busyFeedTimes(query: SpacingQuery, from: Date, except: Fee
 
 /** The scheduler's own schema: other slots of the same type also count as feed posts. */
 export async function ownFeedTimes(query: SpacingQuery, schema: FeedSchema, from: Date): Promise<Date[]> {
-  const { rows } = await query(BOOKED(schema), [new Date(from.getTime() - 60 * 60_000).toISOString(), new Date(from.getTime() + 15 * 86_400_000).toISOString()]);
+  const { rows } = await query(BOOKED[schema], [new Date(from.getTime() - 60 * 60_000).toISOString(), new Date(from.getTime() + 15 * 86_400_000).toISOString()]);
   return rows.map((r) => new Date(String(r.publish_at)));
 }

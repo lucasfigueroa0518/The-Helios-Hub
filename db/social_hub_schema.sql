@@ -1,9 +1,11 @@
--- db/social_hub_schema.sql — Social Hub account insights and refresh queue (idempotent).
+-- db/social_hub_schema.sql — Social Hub account insights, refresh queue, and the
+-- lifecycle spine every content type shares (idempotent).
 -- Schema `social_hub` inside the existing Helios Supabase Postgres.
--- Spec: planning/Social Hub/PRODUCT_SPEC.md §5.1, §8 (SH-23, SH-24); metric names: META_API_CHECK.md.
+-- Spec: planning/Social Hub/PRODUCT_SPEC.md §5.1, §8 (SH-23, SH-24); metric names: META_API_CHECK.md;
+-- the spine: DECISIONS_LOG D36.
 -- Additive only: nothing here reads or alters another schema.
 --
--- WRITTEN, NOT APPLIED in Phase 1. Apply (a human decision, Phase 2 P2-M1):
+-- Apply (a human decision):
 --   node scripts/apply_social_hub_schema.js --apply
 \set ON_ERROR_STOP on
 
@@ -94,3 +96,141 @@ CREATE TABLE IF NOT EXISTS social_hub.publishing_quota (
     quota_usage     double precision NOT NULL,
     quota_total     double precision
 );
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- The lifecycle spine (backend unification Move 3; plan in
+-- planning/Social Hub/DECISIONS_LOG.md D36). Every content type is made its own
+-- way (social.posts, reels.video_jobs, explainers.jobs, stories.sets), but after
+-- that it lives the same life: approved → placed on the calendar → posted →
+-- measured. These tables hold that life for every type.
+--
+-- Types join one at a time (expand → backfill → switch → contract). The CHECKs
+-- that list a type's values say which types have joined: today, Carousels.
+-- No foreign key points into a type's content tables: content can be deleted
+-- (Trial Reels retention) while its publishing record must outlive it.
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- One postable unit, created once and never deleted: its id is the stable
+-- identity the hub follows from "content ready" through "published".
+CREATE TABLE IF NOT EXISTS social_hub.content_items (
+    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    vertical        text NOT NULL,
+    format          text NOT NULL CHECK (format IN ('feed', 'reel', 'story')),
+    -- The type's own id for the content (Carousels: social.posts.id).
+    native_ref      text NOT NULL,
+    -- The post idea it was made for (Carousels: the news story_id).
+    idea_ref        text,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (vertical, native_ref)
+);
+ALTER TABLE social_hub.content_items DROP CONSTRAINT IF EXISTS content_items_vertical_check;
+ALTER TABLE social_hub.content_items ADD CONSTRAINT content_items_vertical_check CHECK (vertical IN ('carousels'));
+CREATE INDEX IF NOT EXISTS idx_social_hub_items_idea ON social_hub.content_items (vertical, idea_ref);
+
+-- A person's (or a setting's) decision on one item. One current decision per
+-- item: approving content approves it wherever it lands on the calendar.
+CREATE TABLE IF NOT EXISTS social_hub.approvals (
+    content_item_id uuid PRIMARY KEY REFERENCES social_hub.content_items (id),
+    decision        text NOT NULL CHECK (decision IN ('approved', 'rejected')),
+    decided_at      timestamptz NOT NULL DEFAULT now(),
+    decided_by      text,
+    -- user: a click in the hub or a review page; force: Hard publish (SH-17);
+    -- auto: the type's own rule; setting: require_approval was off.
+    via             text NOT NULL CHECK (via IN ('user', 'force', 'auto', 'setting'))
+);
+
+-- One placement on the calendar.
+CREATE TABLE IF NOT EXISTS social_hub.schedule (
+    id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    content_item_id     uuid NOT NULL REFERENCES social_hub.content_items (id),
+    vertical            text NOT NULL,
+    ny_date             date NOT NULL,
+    slot                text NOT NULL,
+    publish_at          timestamptz NOT NULL,
+    status              text NOT NULL CHECK (status IN ('scheduled', 'publishing', 'published', 'cancelled', 'failed')),
+    source              text NOT NULL CHECK (source IN ('auto', 'user')),
+    publish_attempt_id  uuid,
+    error               text,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    -- The row's id in the type's old posting_schedule, when it was copied over.
+    legacy_id           uuid UNIQUE
+);
+-- Each type's windows (Carousels: morning 9:00–10:00, afternoon 2:30–3:30).
+ALTER TABLE social_hub.schedule DROP CONSTRAINT IF EXISTS schedule_slot_check;
+ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_slot_check CHECK (
+    (vertical = 'carousels' AND slot IN ('morning', 'afternoon'))
+);
+CREATE INDEX IF NOT EXISTS idx_social_hub_schedule_due
+    ON social_hub.schedule (publish_at) WHERE status = 'scheduled';
+-- One item per window per day, per type.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_social_hub_schedule_slot
+    ON social_hub.schedule (vertical, ny_date, slot) WHERE status IN ('scheduled', 'publishing', 'published');
+-- An item waits in one slot at a time.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_social_hub_schedule_item
+    ON social_hub.schedule (content_item_id) WHERE status IN ('scheduled', 'publishing');
+
+-- One try at posting an item: requested → creating → processing → publishing →
+-- published | failed (| partial: a Story set that stopped with frames live).
+CREATE TABLE IF NOT EXISTS social_hub.publish_attempts (
+    id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    content_item_id     uuid NOT NULL REFERENCES social_hub.content_items (id),
+    vertical            text NOT NULL,
+    trigger             text NOT NULL,
+    status              text NOT NULL CHECK (status IN (
+                          'requested', 'creating', 'processing', 'publishing', 'published', 'failed', 'partial'
+                        )),
+    requested_at        timestamptz NOT NULL DEFAULT now(),
+    started_at          timestamptz,
+    finished_at         timestamptz,
+    caption             text NOT NULL,
+    -- What the type posts, in its own shape (Carousels: {"image_objects": [...]}).
+    payload             jsonb NOT NULL DEFAULT '{}'::jsonb,
+    -- Containers made before the final one (carousel children, story frames).
+    child_container_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
+    container_id        text,
+    media_id            text,
+    permalink           text,
+    status_log          jsonb NOT NULL DEFAULT '[]'::jsonb,
+    error               text,
+    insights_checked_at timestamptz,
+    insights_settled_at timestamptz,
+    legacy_id           uuid UNIQUE
+);
+ALTER TABLE social_hub.publish_attempts DROP CONSTRAINT IF EXISTS publish_attempts_trigger_check;
+ALTER TABLE social_hub.publish_attempts ADD CONSTRAINT publish_attempts_trigger_check CHECK (
+    (vertical = 'carousels' AND trigger IN ('approve', 'auto', 'force'))
+);
+CREATE INDEX IF NOT EXISTS idx_social_hub_publish_recent ON social_hub.publish_attempts (requested_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_social_hub_publish_inflight
+    ON social_hub.publish_attempts (content_item_id) WHERE status IN ('requested', 'creating', 'processing', 'publishing');
+-- An item posts once. Trial Reels' mix_test is the one deliberate repeat.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_social_hub_publish_once
+    ON social_hub.publish_attempts (content_item_id) WHERE status = 'published' AND trigger <> 'mix_test';
+CREATE INDEX IF NOT EXISTS idx_social_hub_publish_insights_open
+    ON social_hub.publish_attempts (finished_at DESC)
+    WHERE status = 'published' AND insights_settled_at IS NULL AND media_id IS NOT NULL;
+
+-- Lifetime totals per published media, one row per New York day asked
+-- (due/settle rules: lib/instagram/insights-rules.ts). A type's own metrics
+-- go in `extra`; the shared ones have columns.
+CREATE TABLE IF NOT EXISTS social_hub.media_insights (
+    media_id             text NOT NULL,
+    ny_date              date NOT NULL,
+    vertical             text NOT NULL,
+    publish_attempt_id   uuid REFERENCES social_hub.publish_attempts (id) ON DELETE CASCADE,
+    captured_at          timestamptz NOT NULL DEFAULT now(),
+    views                double precision,
+    reach                double precision,
+    likes                double precision,
+    comments             double precision,
+    saved                double precision,
+    shares               double precision,
+    total_interactions   double precision,
+    follows              double precision,
+    profile_visits       double precision,
+    extra                jsonb NOT NULL DEFAULT '{}'::jsonb,
+    raw                  jsonb NOT NULL DEFAULT '{}'::jsonb,
+    PRIMARY KEY (media_id, ny_date)
+);
+CREATE INDEX IF NOT EXISTS idx_social_hub_media_insights_attempt
+    ON social_hub.media_insights (publish_attempt_id, ny_date DESC);

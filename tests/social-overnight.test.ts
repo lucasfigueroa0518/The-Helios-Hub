@@ -13,6 +13,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { calendarDateKey } from '@/lib/instagram/clock';
 import { CAROUSEL_SLOT } from '@/lib/social/overnight/config';
 import { pollCarouselInsights, type CarouselInsightsClient } from '@/lib/social/overnight/insights';
+import { carouselItemId } from '@/lib/social/overnight/items';
 import type { CarouselMetaClient } from '@/lib/social/overnight/meta';
 import { carouselCaption, claimAndPublish, queuePublish } from '@/lib/social/overnight/publish';
 import { claimRun, failRun, requestRun } from '@/lib/social/overnight/runs';
@@ -20,15 +21,20 @@ import { approveSchedule, releaseDueSchedules, scheduleRunPost, scheduleRunPosts
 import { chooseCarouselSlot, chooseCarouselSlots, openMinuteRange } from '@/lib/social/overnight/slots';
 import type { Query } from '@/lib/social/store/pg';
 
-async function scratchDb(): Promise<{ query: Query; pg: PGlite }> {
-  const sql = fs
-    .readFileSync(path.join(process.cwd(), 'db', 'social_schema.sql'), 'utf8')
+const schemaSql = (file: string) =>
+  fs
+    .readFileSync(path.join(process.cwd(), 'db', file), 'utf8')
     .split(/\r?\n/)
     .filter((line) => !line.startsWith('\\'))
     .join('\n');
+
+/** The social schema (content) and the social_hub spine (slots, attempts, approvals, insights; D36). */
+async function scratchDb(): Promise<{ query: Query; pg: PGlite }> {
+  const sql = schemaSql('social_schema.sql');
   const pg = new PGlite();
   await pg.exec(sql);
   await pg.exec(sql); // idempotent
+  await pg.exec(schemaSql('social_hub_schema.sql'));
   const query: Query = async (text, params) => ({ rows: (await pg.query(text, params)).rows as any[] });
   return { query, pg };
 }
@@ -152,25 +158,26 @@ test('end to end: run post scheduled into today, released when due, published, m
   const now = new Date('2026-10-08T07:30:00Z');
   const scheduled = await scheduleRunPosts(query, runId!, now, () => 0);
   assert.deepEqual(scheduled.map((s) => s.scheduled), [true, true], 'the run\'s top two posts (SH-48)');
-  const sched = (await query(`SELECT id, post_id, ny_date::text AS d, slot, publish_at FROM social.posting_schedule ORDER BY publish_at`)).rows;
+  const sched = (await query(`SELECT s.id, ci.native_ref AS post_id, s.ny_date::text AS d, s.slot, s.publish_at
+                                FROM social_hub.schedule s JOIN social_hub.content_items ci ON ci.id = s.content_item_id ORDER BY s.publish_at`)).rows;
   assert.equal(sched.length, 2);
   assert.equal(sched[0].post_id, best, 'the best-ranked story (lowest slug number) takes the first window');
   assert.deepEqual(sched.map((r: { slot: string; d: string }) => [r.d, r.slot]), [[calendarDateKey(now), 'morning'], [calendarDateKey(now), 'afternoon']]);
 
   // A person approves the first; make it due, then release and publish.
   assert.equal(await approveSchedule(query, sched[0].id), true);
-  await query(`UPDATE social.posting_schedule SET publish_at = now() - interval '1 minute' WHERE id = $1`, [sched[0].id]);
+  await query(`UPDATE social_hub.schedule SET publish_at = now() - interval '1 minute' WHERE id = $1`, [sched[0].id]);
   assert.equal(await releaseDueSchedules(query), 1);
   const { meta, calls } = stubMeta();
   const out = await claimAndPublish({ query, meta, signImage: sign, sleep: async () => undefined });
   assert.equal(out?.status, 'published');
   assert.deepEqual(calls.slice(0, 3), ['item https://signed/posts/post-x-1/slide-1.jpg', 'item https://signed/posts/post-x-1/slide-2.jpg', 'item https://signed/posts/post-x-1/slide-3.jpg']);
   assert.match(calls[3]!, /^carousel child-1,child-2,child-3 /);
-  const attempt = (await query(`SELECT status, media_id, permalink, child_container_ids FROM social.publish_attempts`)).rows[0];
+  const attempt = (await query(`SELECT status, media_id, permalink, child_container_ids FROM social_hub.publish_attempts`)).rows[0];
   assert.equal(attempt.status, 'published');
   assert.equal(attempt.media_id, 'media-1');
   assert.deepEqual(attempt.child_container_ids, ['child-1', 'child-2', 'child-3']);
-  assert.equal((await query(`SELECT status FROM social.posting_schedule WHERE id = $1`, [sched[0].id])).rows[0].status, 'published');
+  assert.equal((await query(`SELECT status FROM social_hub.schedule WHERE id = $1`, [sched[0].id])).rows[0].status, 'published');
   const post = (await query(`SELECT status, published_at FROM social.posts WHERE id = $1`, [best])).rows[0];
   assert.equal(post.status, 'published');
   assert.ok(post.published_at);
@@ -185,18 +192,18 @@ test('approval: a due slot nobody approved is cancelled, never posted; with requ
   const runId = await requestRun(query, 'scheduled', { capUsd: 2, hookPass: true });
   await insertPost(query, { runId, slug: 'post-y-1' });
   await scheduleRunPost(query, runId!, new Date('2026-10-08T07:30:00Z'), () => 0);
-  await query(`UPDATE social.posting_schedule SET publish_at = now() - interval '1 minute'`);
+  await query(`UPDATE social_hub.schedule SET publish_at = now() - interval '1 minute'`);
   assert.equal(await releaseDueSchedules(query), 0);
-  const row = (await query(`SELECT status, error FROM social.posting_schedule`)).rows[0];
+  const row = (await query(`SELECT status, error FROM social_hub.schedule`)).rows[0];
   assert.equal(row.status, 'cancelled');
   assert.match(row.error, /approved/);
-  assert.equal((await query(`SELECT count(*)::int AS n FROM social.publish_attempts`)).rows[0].n, 0);
+  assert.equal((await query(`SELECT count(*)::int AS n FROM social_hub.publish_attempts`)).rows[0].n, 0);
 
   await query(`UPDATE social.runs SET status = 'ok' WHERE status = 'requested'`);
   const other = await requestRun(query, 'manual', { capUsd: 2, hookPass: true });
   await insertPost(query, { runId: other, slug: 'post-z-1' });
   await scheduleRunPost(query, other!, new Date('2026-10-09T07:30:00Z'), () => 0);
-  await query(`UPDATE social.posting_schedule SET publish_at = now() - interval '1 minute' WHERE status = 'scheduled'`);
+  await query(`UPDATE social_hub.schedule SET publish_at = now() - interval '1 minute' WHERE status = 'scheduled'`);
   assert.equal(await releaseDueSchedules(query, { requireApproval: false }), 1);
 });
 
@@ -207,7 +214,7 @@ test('publish: Instagram ERROR fails the attempt and the slot; a near-full quota
   const failing = stubMeta({ async containerStatus() { return { statusCode: 'ERROR', status: 'bad image' }; } });
   const out = await claimAndPublish({ query, meta: failing.meta, signImage: sign, sleep: async () => undefined });
   assert.equal(out?.status, 'failed');
-  assert.match((await query(`SELECT error FROM social.publish_attempts`)).rows[0].error, /ERROR.*bad image/);
+  assert.match((await query(`SELECT error FROM social_hub.publish_attempts`)).rows[0].error, /ERROR.*bad image/);
 
   const b = await insertPost(query, { slug: 'b' });
   await queuePublish(query, b, 'approve');
@@ -223,10 +230,11 @@ test('insights: a fresh carousel is read and stored; blanks never overwrite a st
   const { query } = await scratchDb();
   const postId = await insertPost(query, { slug: 'p' });
   const finished = new Date('2026-10-08T12:00:00Z');
+  const itemId = await carouselItemId(query, postId);
   await query(
-    `INSERT INTO social.publish_attempts (post_id, trigger, status, caption, image_objects, media_id, finished_at)
-     VALUES ($1, 'auto', 'published', 'c', '[]'::jsonb, 'm1', $2)`,
-    [postId, finished.toISOString()],
+    `INSERT INTO social_hub.publish_attempts (content_item_id, vertical, trigger, status, caption, media_id, finished_at)
+     VALUES ($1, 'carousels', 'auto', 'published', 'c', 'm1', $2)`,
+    [itemId, finished.toISOString()],
   );
   let reach: number | null = 120;
   const client: CarouselInsightsClient = {
@@ -236,7 +244,7 @@ test('insights: a fresh carousel is read and stored; blanks never overwrite a st
   assert.deepEqual([first.considered, first.written], [1, 1]);
   reach = null;
   await pollCarouselInsights(query, client, new Date('2026-10-08T14:00:00Z'));
-  const row = (await query(`SELECT views, reach, saved, follows, profile_visits FROM social.media_insights WHERE media_id = 'm1'`)).rows[0];
+  const row = (await query(`SELECT views, reach, saved, follows, profile_visits FROM social_hub.media_insights WHERE media_id = 'm1'`)).rows[0];
   assert.deepEqual([row.views, row.reach, row.saved, row.follows, row.profile_visits], [300, 120, 4, 3, 9]);
   // Within the 30-minute cooldown nothing is due.
   assert.equal((await pollCarouselInsights(query, client, new Date('2026-10-08T14:10:00Z'))).considered, 0);

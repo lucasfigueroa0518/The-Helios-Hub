@@ -53,7 +53,7 @@ test('with every flag off, each action spec answers 404 before reading the sessi
   const OFF: HubFlags = { views: SOCIAL_HUB_FLAGS.views, actions: Object.fromEntries(ACTION_FLAGS.map((f) => [f, false])) as HubFlags['actions'] };
   const never = (async () => { throw new Error('must not be called'); }) as never;
   const specs: Array<ActionSpec<any>> = [
-    approveCarousel({ approveSchedule: never, socialQuery: never }),
+    approveCarousel({ approveSchedule: never, approvePost: never, socialQuery: never }),
     approveTrialReel({ schedulePostIdea: never }),
     hardPublish({ reelsForcePost: never, carouselHardPublish: never, socialQuery: never, explainerHardPublish: never, explainersDb: never, storiesPublishNow: never, storiesDb: null }),
     hardRegenerate({ explainersDb: never, loadExplainerSettings: never, explainerRerender: never, storiesRegenerate: never, storiesDb: null }),
@@ -83,27 +83,42 @@ test('with a flag off, nothing behind the route runs (session, body, pipeline ca
     return originalJson();
   };
   const OFF: HubFlags = { views: SOCIAL_HUB_FLAGS.views, actions: { ...SOCIAL_HUB_FLAGS.actions, approveCarousel: false } };
-  const POST = actionRoute(approveCarousel({ approveSchedule: approveSchedule as never, socialQuery: async () => 'q' }), { session, flags: OFF });
+  const POST = actionRoute(approveCarousel({ approveSchedule: approveSchedule as never, approvePost: noPost, socialQuery: async () => 'q' }), { session, flags: OFF });
   assert.equal((await POST(request)).status, 404);
   assert.equal(approveSchedule.calls.length, 0);
   assert.equal(session.calls.length, 0);
   assert.equal(bodyRead, false);
 });
 
+const noPost = (async () => { throw new Error('approvePost must not be called'); }) as never;
+
 const on = (extra: Partial<ActionEnv> = {}): ActionEnv => ({ flags: ALL_ON, session: async () => ({ email: 'tommy@helios.test' }), ...extra });
 
 test('approve carousel (flag forced on): approveSchedule(query, scheduleId)', async () => {
   const approveSchedule = spy<[unknown, string], boolean>(true);
-  const POST = actionRoute(approveCarousel({ approveSchedule: approveSchedule as never, socialQuery: async () => 'the-query' }), on());
+  const POST = actionRoute(approveCarousel({ approveSchedule: approveSchedule as never, approvePost: noPost, socialQuery: async () => 'the-query' }), on());
   const res = await POST(req({ scheduleId: U }));
   assert.equal(res.status, 200);
   assert.deepEqual(approveSchedule.calls, [['the-query', U]]);
   assert.equal((await POST(req({ scheduleId: 'nope' }))).status, 400);
-  const gone = actionRoute(approveCarousel({ approveSchedule: spy(false) as never, socialQuery: async () => 'q' }), on());
+  const gone = actionRoute(approveCarousel({ approveSchedule: spy(false) as never, approvePost: noPost, socialQuery: async () => 'q' }), on());
   assert.equal((await gone(req({ scheduleId: U }))).status, 409);
-  const anon = actionRoute(approveCarousel({ approveSchedule: approveSchedule as never, socialQuery: async () => 'q' }), on({ session: async () => null }));
+  const anon = actionRoute(approveCarousel({ approveSchedule: approveSchedule as never, approvePost: noPost, socialQuery: async () => 'q' }), on({ session: async () => null }));
   assert.equal((await anon(req({ scheduleId: U }))).status, 401);
   assert.equal(approveSchedule.calls.length, 1, 'no call without a session');
+});
+
+test('approve carousel in review (P2-M4): approvePost(query, postId) approves it into the earliest open window', async () => {
+  const approvePost = spy<[unknown, string], unknown>({ scheduled: true, id: U, publishAt: '2026-10-09T13:30:00.000Z' });
+  const POST = actionRoute(approveCarousel({ approveSchedule: noPost, approvePost: approvePost as never, socialQuery: async () => 'the-query' }), on());
+  const res = await POST(req({ postId: U }));
+  assert.equal(res.status, 200);
+  assert.match((await res.json()).note, /Approved and scheduled for 2026-10-09T13:30/);
+  assert.deepEqual(approvePost.calls, [['the-query', U]]);
+  const full = actionRoute(approveCarousel({ approveSchedule: noPost, approvePost: spy({ scheduled: false, note: 'No carousel window is open in the next two weeks.' }) as never, socialQuery: async () => 'q' }), on());
+  const refused = await full(req({ postId: U }));
+  assert.equal(refused.status, 409);
+  assert.match((await refused.json()).note, /No carousel window/);
 });
 
 test('approve trial reel (flag forced on): schedulePostIdea(idea, "user", video)', async () => {
@@ -182,13 +197,13 @@ test('failure paths: pipeline refusals and thrown errors come back as failures, 
   const r3 = await storyStale(req({ vertical: 'stories', ref: U }));
   assert.equal(r3.status, 409, "the pipeline's ApiError status passes through");
   assert.match((await r3.json()).note, /moved on/);
-  const boom = actionRoute(approveCarousel({ approveSchedule: (async () => { throw new Error('db down'); }) as never, socialQuery: async () => 'q' }), on());
+  const boom = actionRoute(approveCarousel({ approveSchedule: (async () => { throw new Error('db down'); }) as never, approvePost: noPost, socialQuery: async () => 'q' }), on());
   assert.equal((await boom(req({ scheduleId: U }))).status, 500);
 });
 
 test('JSON only: a form-encoded post is refused before any call', async () => {
   const approveSchedule = spy<[unknown, string], boolean>(true);
-  const POST = actionRoute(approveCarousel({ approveSchedule: approveSchedule as never, socialQuery: async () => 'q' }), on());
+  const POST = actionRoute(approveCarousel({ approveSchedule: approveSchedule as never, approvePost: noPost, socialQuery: async () => 'q' }), on());
   const form = new Request('http://hub.test', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: `scheduleId=${U}` });
   assert.equal((await POST(form)).status, 415);
   assert.equal(approveSchedule.calls.length, 0);
@@ -247,7 +262,9 @@ test('actions per vertical: flagged posts where an existing function exists, lin
   assert.match(regen.confirm!, /\$3\.00/);
   const readyCarousel = find((p) => p.vertical === 'carousels' && p.status === 'ready');
   const noSlot = actionsFor(readyCarousel, ctx).find((p) => p.kind === 'post' && p.action === 'approveCarousel') as Extract<ReturnType<typeof actionsFor>[number], { kind: 'post' }>;
-  assert.match(noSlot.disabled!, /Needs a slot first/);
+  // P2-M4: a carousel in review is approved straight into the earliest open window.
+  assert.equal(noSlot.disabled, null);
+  assert.deepEqual(noSlot.body, { postId: readyCarousel.refs.postId });
   const skipped = find((p) => p.vertical === 'stories' && p.status === 'skipped');
   const sPub = actionsFor(skipped, ctx).find((p) => p.kind === 'post' && p.action === 'hardPublish') as Extract<ReturnType<typeof actionsFor>[number], { kind: 'post' }>;
   assert.match(sPub.disabled!, /never reused/);

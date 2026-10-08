@@ -2,9 +2,11 @@ import type { HubQuery } from '@/lib/social-hub/db';
 import { settingIsOn, type InsightRow } from '@/lib/social-hub/queries/reels';
 
 /**
- * Carousel reads (schema `social`, SELECT only). Post idea = news story
- * (`story_id`); content version = a `social.posts` row. Only `pipeline`
- * rows count (dev renders never post; db/social_schema.sql).
+ * Carousel reads (SELECT only). Content lives in schema `social`: post idea =
+ * news story (`story_id`); content version = a `social.posts` row. Only
+ * `pipeline` rows count (dev renders never post; db/social_schema.sql).
+ * Slots, attempts, approvals and insights live on the lifecycle spine
+ * (`social_hub`, vertical 'carousels', D36); the row shapes are unchanged.
  */
 
 export type CarouselPostRow = {
@@ -96,30 +98,37 @@ SELECT p.id AS post_id, p.run_id, p.slug, p.story_id, p.title, p.status, p.capti
  ORDER BY p.created_at DESC`;
 
 export const CAROUSEL_ATTEMPTS_SQL = `
-SELECT a.id AS attempt_id, a.post_id, a.status, a.trigger,
+SELECT a.id AS attempt_id, ci.native_ref AS post_id, a.status, a.trigger,
        a.requested_at::text AS requested_at, a.finished_at::text AS finished_at,
        a.media_id, a.permalink, a.error,
-       s.id AS schedule_id, s.slot, s.publish_at::text AS publish_at, s.approved_at::text AS approved_at
-  FROM social.publish_attempts a
+       s.id AS schedule_id, s.slot, s.publish_at::text AS publish_at, ap.decided_at::text AS approved_at
+  FROM social_hub.publish_attempts a
+  JOIN social_hub.content_items ci ON ci.id = a.content_item_id
+  LEFT JOIN social_hub.approvals ap ON ap.content_item_id = a.content_item_id AND ap.decision = 'approved'
   LEFT JOIN LATERAL (
-    SELECT id, slot, publish_at, approved_at FROM social.posting_schedule
+    SELECT id, slot, publish_at FROM social_hub.schedule
      WHERE publish_attempt_id = a.id
      ORDER BY publish_at DESC LIMIT 1
   ) s ON true
+ WHERE a.vertical = 'carousels'
  ORDER BY a.requested_at DESC`;
 
 export const CAROUSEL_SCHEDULES_SQL = `
-SELECT id AS schedule_id, post_id, ny_date::text AS ny_date, slot, publish_at::text AS publish_at,
-       status, source, error, approved_at::text AS approved_at
-  FROM social.posting_schedule
- WHERE publish_attempt_id IS NULL
+SELECT s.id AS schedule_id, ci.native_ref AS post_id, s.ny_date::text AS ny_date, s.slot, s.publish_at::text AS publish_at,
+       s.status, s.source, s.error, ap.decided_at::text AS approved_at
+  FROM social_hub.schedule s
+  JOIN social_hub.content_items ci ON ci.id = s.content_item_id
+  LEFT JOIN social_hub.approvals ap ON ap.content_item_id = s.content_item_id AND ap.decision = 'approved'
+ WHERE s.vertical = 'carousels'
+   AND s.publish_attempt_id IS NULL
    -- A slot marked published with no attempt is the "already published" case; the attempt row is the post.
-   AND status <> 'published'
- ORDER BY publish_at DESC`;
+   AND s.status <> 'published'
+ ORDER BY s.publish_at DESC`;
 
 export const CAROUSEL_INSIGHTS_SQL = `
 SELECT media_id, ny_date::text AS ny_date, views, reach, likes, comments, saved, shares, total_interactions, follows, profile_visits
-  FROM social.media_insights
+  FROM social_hub.media_insights
+ WHERE vertical = 'carousels'
  ORDER BY media_id, ny_date`;
 
 /** Candidate stories from the newest daily run's shortlist, scored by Jev (probSum). */
@@ -137,10 +146,10 @@ SELECT c->>'id' AS story_id,
        latest.started_at::text AS run_started_at,
        (SELECT count(*)::int FROM social.posts p WHERE p.story_id = c->>'id' AND p.origin = 'pipeline') AS post_count,
        (SELECT max(p.created_at)::text FROM social.posts p WHERE p.story_id = c->>'id' AND p.origin = 'pipeline') AS last_post_at,
-       EXISTS (SELECT 1 FROM social.publish_attempts a JOIN social.posts p ON p.id = a.post_id
-                WHERE p.story_id = c->>'id' AND a.status = 'published') AS published,
-       EXISTS (SELECT 1 FROM social.posting_schedule s JOIN social.posts p ON p.id = s.post_id
-                WHERE p.story_id = c->>'id' AND s.status IN ('scheduled', 'publishing')) AS scheduled
+       EXISTS (SELECT 1 FROM social_hub.publish_attempts a JOIN social_hub.content_items ci ON ci.id = a.content_item_id
+                WHERE ci.vertical = 'carousels' AND ci.idea_ref = c->>'id' AND a.status = 'published') AS published,
+       EXISTS (SELECT 1 FROM social_hub.schedule s JOIN social_hub.content_items ci ON ci.id = s.content_item_id
+                WHERE ci.vertical = 'carousels' AND ci.idea_ref = c->>'id' AND s.status IN ('scheduled', 'publishing')) AS scheduled
   FROM latest, jsonb_array_elements(latest.record->'selection'->'shortlist') c`;
 
 export const CAROUSEL_REQUIRE_APPROVAL_SQL = `SELECT value FROM social.settings WHERE key = 'require_approval'`;

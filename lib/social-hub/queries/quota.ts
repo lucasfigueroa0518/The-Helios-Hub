@@ -7,9 +7,9 @@ import type { HubQuery } from '@/lib/social-hub/db';
  */
 export type QuotaRow = { text: string | null; at: string | null };
 
-const FEED_SQL = (schema: string) => `
+const FEED_SQL = (table: string) => `
 SELECT error AS text, COALESCE(finished_at, requested_at)::text AS at
-  FROM ${schema}.publish_attempts
+  FROM ${table}
  WHERE error ILIKE '%24-hour quota%'
  ORDER BY COALESCE(finished_at, requested_at) DESC
  LIMIT 1`;
@@ -23,10 +23,11 @@ SELECT error AS text, updated_at::text AS at
 
 export async function readLatestQuota(q: HubQuery, explainersQ: Promise<HubQuery>): Promise<QuotaRow | null> {
   const reads = await Promise.all([
-    q<QuotaRow>(FEED_SQL('reels')).catch(() => ({ rows: [] as QuotaRow[] })),
-    q<QuotaRow>(FEED_SQL('social')).catch(() => ({ rows: [] as QuotaRow[] })),
+    q<QuotaRow>(FEED_SQL('reels.publish_attempts')).catch(() => ({ rows: [] as QuotaRow[] })),
+    // Carousels and every type that has joined the lifecycle spine (D36).
+    q<QuotaRow>(FEED_SQL('social_hub.publish_attempts')).catch(() => ({ rows: [] as QuotaRow[] })),
     q<QuotaRow>(STORIES_SQL).catch(() => ({ rows: [] as QuotaRow[] })),
-    explainersQ.then((eq) => eq<QuotaRow>(FEED_SQL('explainers'))).catch(() => ({ rows: [] as QuotaRow[] })),
+    explainersQ.then((eq) => eq<QuotaRow>(FEED_SQL('explainers.publish_attempts'))).catch(() => ({ rows: [] as QuotaRow[] })),
   ]);
   const rows = reads.flatMap((r) => r.rows).filter((r) => r.at);
   rows.sort((a, b) => Date.parse(b.at!) - Date.parse(a.at!));

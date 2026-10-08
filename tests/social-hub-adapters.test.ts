@@ -257,8 +257,11 @@ test('regressions from the M2 critique: unlinked published slots, failed tries, 
   await pg.exec(`INSERT INTO reels.posting_schedule (post_idea_id, ny_date, slot, publish_at, status, source)
                  VALUES ('${IDS.idea1}', '2026-10-05', 'evening', '2026-10-05T23:00:00Z', 'published', 'auto')`);
   // A failed try on the review carousel: it stays Content ready.
-  await pg.exec(`INSERT INTO social.publish_attempts (post_id, trigger, status, caption, image_objects, error)
-                 VALUES ('${IDS.socPost2}', 'force', 'failed', 'c', '[]', 'container error')`);
+  await pg.exec(`INSERT INTO social_hub.content_items (id, vertical, format, native_ref, idea_ref)
+                 VALUES ('30000000-0000-4000-8000-000000000042', 'carousels', 'feed', '${IDS.socPost2}', 'story-2');
+                 INSERT INTO social_hub.approvals (content_item_id, decision, via) VALUES ('30000000-0000-4000-8000-000000000042', 'approved', 'force');
+                 INSERT INTO social_hub.publish_attempts (content_item_id, vertical, trigger, status, caption, error)
+                 VALUES ('30000000-0000-4000-8000-000000000042', 'carousels', 'force', 'failed', 'c', 'container error')`);
   // Photo rows the pipeline writes without post_id still count for the story.
   await pg.exec(`INSERT INTO social.used_photos (url, used_at, story_id, slide, source) VALUES ('https://img/9', '2026-10-06T07:31:00Z', 'story-2', 0, 'unsplash')`);
   const d = buildDataset(await readAll(query), null, new Date('2026-10-08T12:00:00Z'));
