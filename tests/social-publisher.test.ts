@@ -8,7 +8,7 @@ import test from 'node:test';
 import { checkAccountQuota, DEFAULT_QUOTA_RESERVE } from '@/lib/instagram/account-gate';
 import { carouselsDriver } from '@/lib/publishing/drivers/carousels';
 import type { PublishDriver } from '@/lib/publishing/drivers/types';
-import { claimNextAttempt, publisherMode, publisherOwnsPublishing, publisherTick } from '@/lib/publishing/publisher';
+import { claimNextAttempt, HEARTBEAT_STALE_MS, publisherMode, publisherOwnsPublishing, publisherTick, recordHeartbeat } from '@/lib/publishing/publisher';
 import type { SpineQuery } from '@/lib/social-hub/spine';
 import type { CarouselMetaClient } from '@/lib/social/overnight/meta';
 import { queuePublish } from '@/lib/social/overnight/publish';
@@ -46,6 +46,7 @@ test('gate: the reserve is an account setting, and every reading is recorded for
 function stubDriver(vertical: PublishDriver['vertical'], opts: { live?: boolean; carried?: string[] } = {}): PublishDriver {
   return {
     vertical,
+    refusesAtRelease: vertical === 'carousels' ? 'cancel' : 'fail',
     live: async () => opts.live ?? true,
     requireApproval: async () => true,
     failStale: async () => undefined,
@@ -72,7 +73,7 @@ test('publisher: off by default, so the type workers keep publishing exactly as 
   const { pg, query } = await openHubTestDb({ withHubSchema: true });
   const q = query as unknown as SpineQuery;
   assert.equal(await publisherMode(q), 'off');
-  assert.equal(await publisherOwnsPublishing(q), false);
+  assert.equal(await publisherOwnsPublishing(q, 'carousels'), false);
   const carried: string[] = [];
   await seedAttempt(pg, 'carousels', 'p1', '2026-10-08T12:00:00Z');
   assert.deepEqual(await publisherTick(q, [stubDriver('carousels', { carried })]), { mode: 'off' });
@@ -90,14 +91,13 @@ test('publisher shadow: reports what it would do and changes nothing', async () 
   assert.deepEqual((result as { plan: { next: unknown } }).plan.next, { attemptId: a, vertical: 'explainers' });
   assert.deepEqual(carried, [], 'nothing carried');
   assert.equal((await pg.query<{ status: string }>(`SELECT status FROM social_hub.publish_attempts`)).rows[0]!.status, 'requested', 'nothing claimed');
-  assert.equal(await publisherOwnsPublishing(q), false, 'the type workers still post in shadow mode');
+  assert.equal(await publisherOwnsPublishing(q, 'explainers'), false, 'the type workers still post in shadow mode');
 });
 
 test('publisher live: one post at a time across every type, oldest first; a type switched off is never carried', async () => {
   const { pg, query } = await openHubTestDb({ withHubSchema: true });
   const q = query as unknown as SpineQuery;
   await pg.exec(`UPDATE social_hub.settings SET value = '"live"'::jsonb WHERE key = 'publisher_mode'`);
-  assert.equal(await publisherOwnsPublishing(q), true);
   const explainer = await seedAttempt(pg, 'explainers', 'j1', '2026-10-08T12:00:00Z');
   const carousel = await seedAttempt(pg, 'carousels', 'p1', '2026-10-08T12:05:00Z');
   const carried: string[] = [];
@@ -142,4 +142,28 @@ test('publisher live end to end: an approved carousel slot is released, gated, a
   assert.equal((await pg.query<{ n: number }>(`SELECT count(*)::int AS n FROM social_hub.publishing_quota`)).rows[0]!.n, 1, 'the gate recorded its reading');
   // Already published: neither the publisher nor a type worker can post it again.
   assert.equal((await queuePublish(q, '40000000-0000-4000-8000-000000000001', 'force')).queued, false);
+});
+
+// ── Review fixes (D41) ───────────────────────────────────────────────────────
+
+test('stand-down: a type worker stands down only while a live publisher reports, recently, that it drives that type', async () => {
+  const { pg, query } = await openHubTestDb({ withHubSchema: true });
+  const q = query as unknown as SpineQuery;
+  await pg.exec(`UPDATE social_hub.settings SET value = '"live"'::jsonb WHERE key = 'publisher_mode'`);
+  const now = new Date('2026-10-08T15:00:00Z');
+  assert.equal(await publisherOwnsPublishing(q, 'carousels', now), false, 'live but never reported: the worker keeps posting');
+  await recordHeartbeat(q, ['carousels'], now);
+  assert.equal(await publisherOwnsPublishing(q, 'carousels', now), true);
+  assert.equal(await publisherOwnsPublishing(q, 'explainers', now), false, 'a type the publisher cannot drive keeps its own worker');
+  const later = new Date(now.getTime() + HEARTBEAT_STALE_MS + 1000);
+  assert.equal(await publisherOwnsPublishing(q, 'carousels', later), false, 'a publisher that went quiet: the worker resumes');
+});
+
+test('one type\'s attempt stuck past the stale limit does not block every type\'s next post', async () => {
+  const { pg, query } = await openHubTestDb({ withHubSchema: true });
+  const q = query as unknown as SpineQuery;
+  const stuck = await seedAttempt(pg, 'explainers', 'j-stuck', '2026-10-08T10:00:00Z', 'creating');
+  await pg.exec(`UPDATE social_hub.publish_attempts SET started_at = now() - interval '45 minutes' WHERE id = '${stuck}'`);
+  const next = await seedAttempt(pg, 'carousels', 'p-next', '2026-10-08T11:00:00Z');
+  assert.deepEqual(await claimNextAttempt(q, ['carousels']), { id: next, vertical: 'carousels' });
 });

@@ -109,7 +109,7 @@ async function main(): Promise<void> {
   }
 
   /** With publisher_mode 'live' the single publisher releases, posts and reads insights (D40). */
-  const standDown = () => publisherOwnsPublishing((text, params) => db.query(text, params) as never);
+  const standDown = () => publisherOwnsPublishing((text, params) => db.query(text, params) as never, 'explainers');
 
   /** Approved reels onto the clock, due slots into attempts, one attempt to Instagram. Only while publishing_live is on. */
   const publishStep = async (): Promise<void> => {

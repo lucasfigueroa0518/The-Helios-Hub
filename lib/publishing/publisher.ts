@@ -12,9 +12,14 @@ import type { SpineQuery, SpineVertical } from '@/lib/social-hub/spine';
  *   off    – each type's own worker loop, as before; the publisher idles.
  *   shadow – the publisher only reads and logs what it would do; the type
  *            workers still post. Compare a day of logs before going live.
- *   live   – the publisher posts and polls insights; the type workers stand down.
- * Both may run at once safely: every release and claim is a guarded UPDATE,
- * and a post can be published only once (publish_once).
+ *   live   – the publisher posts and polls insights; the type workers stand
+ *            down while its heartbeat says it drives their type.
+ * Both may run at once safely: every release is a guarded UPDATE and a post
+ * can be published only once (publish_once). Two claimers racing in the same
+ * instant can each start a different post (the in-flight check reads a
+ * snapshot), as two type workers could before; once live, the publisher is
+ * the only claimer. In-flight attempts older than the 30-minute stale limit
+ * never block a claim, so one type's crash can't stop every type.
  */
 
 export type PublisherMode = 'off' | 'shadow' | 'live';
@@ -29,9 +34,34 @@ export async function publisherMode(query: SpineQuery): Promise<PublisherMode> {
   }
 }
 
-/** A type worker asks this before its own release / publish / insights steps. */
-export async function publisherOwnsPublishing(query: SpineQuery): Promise<boolean> {
-  return (await publisherMode(query)) === 'live';
+/** A live publisher that has not reported for this long is treated as gone: the type workers resume. */
+export const HEARTBEAT_STALE_MS = 5 * 60_000;
+
+/** The publisher reports each pass which types it drives (social_hub.settings `publisher_heartbeat`). */
+export async function recordHeartbeat(query: SpineQuery, verticals: readonly SpineVertical[], now = new Date()): Promise<void> {
+  await query(
+    `INSERT INTO social_hub.settings (key, value, updated_at) VALUES ('publisher_heartbeat', $1::jsonb, now())
+     ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = now()`,
+    [JSON.stringify({ at: now.toISOString(), verticals })],
+  );
+}
+
+/**
+ * A type worker asks this before its own release / publish / insights steps.
+ * It stands down only when the publisher is live AND has reported in the last
+ * few minutes that it drives this type (D41): a publisher that is down, or
+ * that cannot reach this type's database, never leaves the type unposted.
+ */
+export async function publisherOwnsPublishing(query: SpineQuery, vertical: SpineVertical, now = new Date()): Promise<boolean> {
+  if ((await publisherMode(query)) !== 'live') return false;
+  try {
+    const { rows } = await query(`SELECT value FROM social_hub.settings WHERE key = 'publisher_heartbeat'`);
+    const beat = rows[0]?.value as { at?: string; verticals?: string[] } | undefined;
+    if (!beat?.at || !Array.isArray(beat.verticals)) return false;
+    return now.getTime() - Date.parse(beat.at) < HEARTBEAT_STALE_MS && beat.verticals.includes(vertical);
+  } catch {
+    return false;
+  }
 }
 
 /** The oldest queued attempt among `verticals`, claimed only while nothing is in flight on the account. */
@@ -42,7 +72,7 @@ export async function claimNextAttempt(query: SpineQuery, verticals: readonly Sp
       WHERE id = (
         SELECT id FROM social_hub.publish_attempts
          WHERE status = 'requested' AND vertical = ANY($1::text[])
-           AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts a WHERE a.status IN ('creating', 'processing', 'publishing'))
+           AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts a WHERE a.status IN ('creating', 'processing', 'publishing') AND a.started_at > now() - interval '30 minutes')
          ORDER BY requested_at
          FOR UPDATE SKIP LOCKED
          LIMIT 1)
@@ -54,7 +84,7 @@ export async function claimNextAttempt(query: SpineQuery, verticals: readonly Sp
 
 export type ShadowPlan = {
   /** Due slots and what each type's rules would do with them. */
-  due: Array<{ vertical: SpineVertical; scheduleId: string; action: 'release' | 'cancel'; why: string }>;
+  due: Array<{ vertical: SpineVertical; scheduleId: string; action: 'release' | 'cancel' | 'fail'; why: string }>;
   /** The attempt the publisher would carry next, if any. */
   next: { attemptId: string; vertical: SpineVertical } | null;
 };
@@ -77,15 +107,17 @@ export async function shadowPlan(query: SpineQuery, drivers: readonly PublishDri
     for (const row of rows) {
       const driver = live.find((d) => d.vertical === row.vertical)!;
       const needs = await driver.requireApproval();
-      if (row.decision === 'rejected') due.push({ vertical: row.vertical, scheduleId: row.id, action: 'cancel', why: 'rejected' });
-      else if (needs && row.decision !== 'approved') due.push({ vertical: row.vertical, scheduleId: row.id, action: 'cancel', why: 'not approved' });
+      // Each type's own outcome for content it may not post: Carousels cancel the slot, Explainers fail it.
+      const refuse = driver.refusesAtRelease;
+      if (row.decision === 'rejected') due.push({ vertical: row.vertical, scheduleId: row.id, action: refuse, why: 'rejected' });
+      else if (needs && row.decision !== 'approved') due.push({ vertical: row.vertical, scheduleId: row.id, action: refuse, why: 'not approved' });
       else due.push({ vertical: row.vertical, scheduleId: row.id, action: 'release', why: row.decision === 'approved' ? 'approved' : 'approval not required' });
     }
   }
   const { rows: next } = await query(
     `SELECT id, vertical FROM social_hub.publish_attempts
       WHERE status = 'requested' AND vertical = ANY($1::text[])
-        AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts a WHERE a.status IN ('creating', 'processing', 'publishing'))
+        AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts a WHERE a.status IN ('creating', 'processing', 'publishing') AND a.started_at > now() - interval '30 minutes')
       ORDER BY requested_at LIMIT 1`,
     [verticals],
   );

@@ -100,6 +100,7 @@ export async function scheduleApproved(db: Queryable, now = new Date(), rng?: (c
        LEFT JOIN social_hub.approvals ap ON ap.content_item_id = ci.id
       WHERE j.status = 'ok'
         AND (ap.decision = 'approved' OR (NOT $1::boolean AND ap.decision IS NULL))
+        AND f.verdict IS DISTINCT FROM 'rejected'
         AND EXISTS (SELECT 1 FROM explainers.artifacts a WHERE a.job_id = j.id AND a.kind = 'video' AND a.storage_location = 'bucket')
         AND NOT EXISTS (SELECT 1 FROM social_hub.schedule s WHERE s.content_item_id = ci.id AND s.status IN ('scheduled', 'publishing', 'published'))
         AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts p WHERE p.content_item_id = ci.id AND p.status IN ('requested', 'creating', 'processing', 'publishing', 'published'))

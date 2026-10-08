@@ -20,7 +20,7 @@ import path from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import type pg from 'pg';
 
-import { schemaSql } from '@/lib/explainers/local-db';
+import { SPINE_SCHEMA_PATH, schemaSql } from '@/lib/explainers/local-db';
 
 const ROOT = process.env.EXPLAINERS_LOCAL_ROOT || path.join(process.cwd(), '.explainers-local');
 const DATA_DIR = path.join(ROOT, 'pg17');
@@ -127,6 +127,8 @@ async function main(): Promise<void> {
   await client.connect();
   try {
     await client.query(schemaSql());
+    // The lifecycle spine Explainers schedule and publish on (D38).
+    await client.query(schemaSql(SPINE_SCHEMA_PATH));
     await copyFromPglite(client);
     const { rows } = await client.query<{ n: number }>('SELECT count(*)::int AS n FROM explainers.topics');
     console.log(`✓ explainers local Postgres ready: ${rows[0].n} topic(s)`);

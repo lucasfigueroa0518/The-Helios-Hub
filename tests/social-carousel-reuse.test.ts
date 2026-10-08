@@ -13,6 +13,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { rejectItem } from '@/lib/social-hub/spine';
 import { carouselItemId } from '@/lib/social/overnight/items';
 import { approvePost, NOT_APPROVED_NOTE, REJECTED_NOTE, releaseDueSchedules, schedulePost, scheduleRunPosts } from '@/lib/social/overnight/schedule';
+import { carryAttempt, queuePublish } from '@/lib/social/overnight/publish';
 import { requestRun } from '@/lib/social/overnight/runs';
 import { createCostMeter } from '@/lib/social/pipeline/cost-meter';
 import { runDay } from '@/lib/social/pipeline/orchestrator';
@@ -172,4 +173,69 @@ test('one item per content: scheduling and approving the same post twice reuses 
   assert.ok(first.scheduled && second.scheduled && first.id === second.id, 'a post already on the clock keeps its slot');
   assert.equal((await query(`SELECT count(*)::int AS n FROM social_hub.content_items`)).rows[0].n, 1);
   assert.deepEqual((await query(`SELECT decided_at FROM social_hub.approvals`)).rows[0].decided_at, firstAt);
+});
+
+// ── Review fixes (D41) ───────────────────────────────────────────────────────
+
+test('a post whose publish may have reached Instagram (a worker died mid-publish) is never reused', async () => {
+  const { query } = await scratchDb();
+  const postId = await insertPost(query, { slug: 'maybe-live', storyId: 'story-9' });
+  const itemId = (await carouselItemId(query, postId))!;
+  await query(
+    `INSERT INTO social_hub.publish_attempts (content_item_id, vertical, trigger, status, caption, error)
+     VALUES ($1, 'carousels', 'auto', 'failed', 'c', 'The worker stopped while this carousel was publishing. Check Instagram before trying again.')`,
+    [itemId],
+  );
+  assert.equal(await storedPostFor(query, 'story-9'), null);
+  // A clean failure before anything went out (e.g. the quota gate) still allows reuse.
+  const clean = await insertPost(query, { slug: 'clean-fail', storyId: 'story-10' });
+  await query(
+    `INSERT INTO social_hub.publish_attempts (content_item_id, vertical, trigger, status, caption, error)
+     VALUES ($1, 'carousels', 'auto', 'failed', 'c', 'The Instagram account has 3 of 100 posts left in its 24-hour quota.')`,
+    [(await carouselItemId(query, clean))!],
+  );
+  assert.equal(await storedPostFor(query, 'story-10'), clean);
+});
+
+test('the ship list fills today\'s windows even when a reused post already waits in a later slot', async () => {
+  const { query } = await scratchDb();
+  const waiting = await insertPost(query, { slug: 'post-w', storyId: 'story-1', createdAt: '2026-10-06T07:00:00Z' });
+  await approvePost(query, waiting, new Date('2026-10-09T07:30:00Z'));
+  const runId = (await requestRun(query, 'scheduled', { capUsd: 2, hookPass: true }))!;
+  const a = await insertPost(query, { slug: 'post-a', storyId: 'story-2', runId });
+  const b = await insertPost(query, { slug: 'post-b', storyId: 'story-3', runId });
+  await recordShipList(query, runId, [waiting, a, b]);
+  const out = await scheduleRunPosts(query, runId, new Date('2026-10-08T07:30:00Z'), () => 0);
+  assert.deepEqual(out.map((o) => o.scheduled), [true, true], 'both of today\'s windows filled by the run\'s own posts');
+  const today = (await query(`SELECT count(*)::int AS n FROM social_hub.schedule WHERE ny_date = '2026-10-08'`)).rows[0].n;
+  assert.equal(today, 2);
+});
+
+test('an uppercase id still finds the post\'s one item', async () => {
+  const { query } = await scratchDb();
+  const postId = await insertPost(query, { slug: 'case', storyId: 'story-1' });
+  assert.equal(await carouselItemId(query, postId.toUpperCase()), await carouselItemId(query, postId));
+  assert.equal((await query(`SELECT count(*)::int AS n FROM social_hub.content_items`)).rows[0].n, 1);
+});
+
+test('a carousel rejected after its attempt was queued is never posted', async () => {
+  const { query } = await scratchDb();
+  const postId = await insertPost(query, { slug: 'late-no', storyId: 'story-1' });
+  const queued = await queuePublish(query, postId, 'approve');
+  assert.equal(queued.queued, true);
+  await rejectItem(query, (await carouselItemId(query, postId))!);
+  const calls: string[] = [];
+  const meta = {
+    async createImageItem() { calls.push('item'); return 'c'; },
+    async createCarousel() { calls.push('carousel'); return 'p'; },
+    async containerStatus() { return { statusCode: 'FINISHED', status: null }; },
+    async publishContainer() { calls.push('publish'); return 'm'; },
+    async permalink() { return null; },
+    async publishingLimit() { return { quotaUsage: 0, quotaTotal: 100 }; },
+  };
+  const id = (queued as { id: string }).id;
+  await query(`UPDATE social_hub.publish_attempts SET status = 'creating', started_at = now() WHERE id = $1`, [id]);
+  const out = await carryAttempt({ query, meta, signImage: async (p) => p, sleep: async () => undefined }, id);
+  assert.equal(out.status, 'failed');
+  assert.deepEqual(calls, [], 'no container was made');
 });

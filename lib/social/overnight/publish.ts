@@ -92,7 +92,7 @@ async function claimPublish(query: Query): Promise<string | null> {
       WHERE id = (
         SELECT id FROM social_hub.publish_attempts
          WHERE vertical = 'carousels' AND status = 'requested'
-           AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts a WHERE a.status IN ('creating', 'processing', 'publishing'))
+           AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts a WHERE a.status IN ('creating', 'processing', 'publishing') AND a.started_at > now() - interval '30 minutes')
          ORDER BY requested_at
          FOR UPDATE SKIP LOCKED
          LIMIT 1)
@@ -143,6 +143,14 @@ export async function carryAttempt(deps: PublishDeps, id: string): Promise<{ id:
       [id],
     );
     const attempt = rows[0] as { post_id: string; caption: string; image_objects: string[] };
+
+    // Rejected after its slot opened: never posts (D41).
+    const { rows: rejected } = await query(
+      `SELECT 1 FROM social_hub.publish_attempts a JOIN social_hub.approvals ap ON ap.content_item_id = a.content_item_id
+        WHERE a.id = $1 AND ap.decision = 'rejected'`,
+      [id],
+    );
+    if (rejected[0]) throw new Error('This carousel was rejected after its slot opened; nothing was posted.');
 
     // The account is shared by every content type (lib/instagram/account-gate.ts).
     const gate = await checkAccountQuota({ ops: meta, query });

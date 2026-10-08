@@ -13,6 +13,8 @@ export interface PublishDriver {
   live(): Promise<boolean>;
   /** The type's `require_approval` switch (on unless set to false). */
   requireApproval(): Promise<boolean>;
+  /** What happens to a due slot whose content may not post: Carousels cancel it, Explainers fail it at queueing. */
+  refusesAtRelease: 'cancel' | 'fail';
   /** Fail this type's attempts a dead process left mid-publish. */
   failStale(): Promise<void>;
   /** Due slots become attempts (or are cancelled/failed) under the type's rules. */

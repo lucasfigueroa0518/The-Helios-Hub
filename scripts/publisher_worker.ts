@@ -48,7 +48,7 @@ async function main(): Promise<void> {
   const { signArtifact } = await import('@/lib/explainers/storage');
   const { carouselsDriver } = await import('@/lib/publishing/drivers/carousels');
   const { explainersDriver } = await import('@/lib/publishing/drivers/explainers');
-  const { publisherMode, publisherTick } = await import('@/lib/publishing/publisher');
+  const { publisherMode, publisherTick, recordHeartbeat } = await import('@/lib/publishing/publisher');
   type PublishDriver = import('@/lib/publishing/drivers/types').PublishDriver;
 
   const query = await socialQuery();
@@ -84,6 +84,8 @@ async function main(): Promise<void> {
           if (lastMode !== 'unconfigured') log('meta_unconfigured');
           lastMode = 'unconfigured';
         } else {
+          // Tell the type workers which types this publisher drives (they stand down only for those).
+          await recordHeartbeat(query, drivers.map((d) => d.vertical)).catch((error) => log('heartbeat_failed', { error: errorText(error) }));
           const result = await publisherTick(query, drivers);
           if (result.mode !== lastMode) log('mode', { mode: result.mode });
           lastMode = result.mode;

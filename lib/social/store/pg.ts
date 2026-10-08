@@ -184,10 +184,16 @@ export async function upsertPost(query: Query, p: PostInsert): Promise<string> {
  * The finished post a story already has (SH-60): its newest pipeline post in
  * review with slides stored. The newest version is the current one (SH-54),
  * so when that one was rejected the story runs again; nothing older is used.
+ * A post with any publish try that may have reached Instagram (anything but
+ * a clean failure, D41) is never reused: a worker that died mid-publish
+ * leaves the post in review, possibly already live.
  */
 export async function storedPostFor(query: Query, storyId: string): Promise<string | null> {
   const { rows } = await query(
-    `SELECT p.id, p.status, p.slide_objects IS NOT NULL AS has_slides, a.decision
+    `SELECT p.id, p.status, p.slide_objects IS NOT NULL AS has_slides, a.decision,
+            EXISTS (SELECT 1 FROM social_hub.publish_attempts t
+                     WHERE t.content_item_id = ci.id
+                       AND (t.status <> 'failed' OR t.media_id IS NOT NULL OR t.error LIKE 'The worker stopped%')) AS tried
        FROM social.posts p
        LEFT JOIN social_hub.content_items ci ON ci.vertical = 'carousels' AND ci.native_ref = p.id::text
        LEFT JOIN social_hub.approvals a ON a.content_item_id = ci.id
@@ -197,7 +203,7 @@ export async function storedPostFor(query: Query, storyId: string): Promise<stri
     [storyId],
   );
   const newest = rows[0];
-  if (!newest || newest.status !== 'review' || !newest.has_slides || newest.decision === 'rejected') return null;
+  if (!newest || newest.status !== 'review' || !newest.has_slides || newest.decision === 'rejected' || newest.tried) return null;
   return newest.id as string;
 }
 

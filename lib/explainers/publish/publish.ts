@@ -44,11 +44,13 @@ export async function publishReadiness(
     caption: string | null;
   }>(
     `SELECT j.status,
-            ap.decision AS verdict,
+            -- A rejection in either place wins: the review page writes feedback first (D41).
+            CASE WHEN f.verdict = 'rejected' OR ap.decision = 'rejected' THEN 'rejected' ELSE ap.decision END AS verdict,
             EXISTS (SELECT 1 FROM social_hub.publish_attempts p WHERE p.content_item_id = ci.id AND p.status = 'published') AS published,
             v.storage_path AS video, v.storage_location AS location,
             c.content AS caption
        FROM explainers.jobs j
+       LEFT JOIN explainers.feedback f ON f.job_id = j.id
        LEFT JOIN social_hub.content_items ci ON ci.vertical = 'explainers' AND ci.native_ref = j.id::text
        LEFT JOIN social_hub.approvals ap ON ap.content_item_id = ci.id
        LEFT JOIN LATERAL (SELECT storage_path, storage_location FROM explainers.artifacts
@@ -112,7 +114,7 @@ async function claimPublish(db: Queryable): Promise<string | null> {
       WHERE id = (
         SELECT id FROM social_hub.publish_attempts
          WHERE vertical = 'explainers' AND status = 'requested'
-           AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts a WHERE a.status IN ('creating', 'processing', 'publishing'))
+           AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts a WHERE a.status IN ('creating', 'processing', 'publishing') AND a.started_at > now() - interval '30 minutes')
          ORDER BY requested_at
          FOR UPDATE SKIP LOCKED
          LIMIT 1)
@@ -162,6 +164,17 @@ export async function carryAttempt(deps: PublishDeps, id: string): Promise<{ id:
       [id],
     );
     const attempt = rows[0]!;
+
+    // Rejected after its slot opened: never posts (D41).
+    const { rows: rejected } = await db.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM social_hub.publish_attempts a
+         JOIN social_hub.content_items ci ON ci.id = a.content_item_id
+         LEFT JOIN social_hub.approvals ap ON ap.content_item_id = ci.id
+         LEFT JOIN explainers.feedback f ON f.job_id::text = ci.native_ref
+        WHERE a.id = $1 AND (ap.decision = 'rejected' OR f.verdict = 'rejected')`,
+      [id],
+    );
+    if (rejected[0]!.n > 0) throw new Error('This reel was rejected after its slot opened; nothing was posted.');
 
     // The account is shared by every content type (lib/instagram/account-gate.ts).
     const gate = await checkAccountQuota({ ops: meta, query: (text, params) => db.query(text, params) as never });

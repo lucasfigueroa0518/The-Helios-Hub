@@ -192,3 +192,15 @@ test('bucket store: keeps the local copy and uploads the same key with its conte
   assert.deepEqual(uploads, ['jobs/j1/video.mp4 video/mp4 9']);
   assert.ok(store.localPath('jobs/j1/video.mp4'));
 });
+
+test('a rejection in the review wins even when the spine still says approved (a failed mirror write, D41)', async () => {
+  const { db } = await scratchExplainersDb();
+  const jobId = await renderedJob(db, { title: 'mirror' });
+  assert.equal((await publishReadiness(db, jobId)).ok, true);
+  // The review page saved "rejected" but the spine sync never ran.
+  await db.query(`UPDATE explainers.feedback SET verdict = 'rejected' WHERE job_id = $1`, [jobId]);
+  const ready = await publishReadiness(db, jobId);
+  assert.equal(ready.ok, false);
+  assert.match((ready as { note: string }).note, /rejected/);
+  assert.equal(await scheduleApproved(db, new Date('2026-10-08T12:00:00Z'), () => 0), 0);
+});

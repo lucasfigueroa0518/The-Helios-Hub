@@ -10,9 +10,10 @@ import { approveItem, clearDecision, ensureContentItem, rejectItem, type Approva
 export const spineOf = (db: Queryable): SpineQuery => (text, params) => db.query(text, params) as ReturnType<SpineQuery>;
 
 export async function explainerItemId(db: Queryable, jobId: string): Promise<string | null> {
-  const { rows } = await db.query<{ topic_id: string | null }>(`SELECT topic_id FROM explainers.jobs WHERE id = $1`, [jobId]);
+  // native_ref is the database's own id text, never the caller's spelling of it (D41).
+  const { rows } = await db.query<{ id: string; topic_id: string | null }>(`SELECT id::text AS id, topic_id::text AS topic_id FROM explainers.jobs WHERE id = $1`, [jobId]);
   if (!rows[0]) return null;
-  return ensureContentItem(spineOf(db), { vertical: 'explainers', format: 'reel', nativeRef: jobId, ideaRef: rows[0].topic_id ?? null });
+  return ensureContentItem(spineOf(db), { vertical: 'explainers', format: 'reel', nativeRef: rows[0].id, ideaRef: rows[0].topic_id ?? null });
 }
 
 /** Copy the render's verdict onto its item: approved, rejected, or (no verdict) undecided. */

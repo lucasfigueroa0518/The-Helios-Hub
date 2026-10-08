@@ -66,7 +66,7 @@ async function main(): Promise<void> {
   const { publisherOwnsPublishing } = await import('@/lib/publishing/publisher');
   const query = await socialQuery();
   /** With publisher_mode 'live' the single publisher releases, posts and reads insights (D40). */
-  const standDown = () => publisherOwnsPublishing(query);
+  const standDown = () => publisherOwnsPublishing(query, 'carousels');
 
   let stopping = false;
   const stop = (signal: string) => {

@@ -98,6 +98,9 @@ SELECT p.id FROM social.runs r
  CROSS JOIN LATERAL jsonb_array_elements_text(r.ship_post_ids) WITH ORDINALITY AS o(post_id, n)
  JOIN social.posts p ON p.id::text = o.post_id
 WHERE r.id = $1 AND p.status = 'review' AND p.origin = 'pipeline' AND p.slide_objects IS NOT NULL
+  -- A reused post already waiting in a slot keeps it; it does not take one of today's windows (D41).
+  AND NOT EXISTS (SELECT 1 FROM social_hub.schedule s JOIN social_hub.content_items ci ON ci.id = s.content_item_id
+                   WHERE ci.vertical = 'carousels' AND ci.native_ref = p.id::text AND s.status IN ('scheduled', 'publishing'))
 ORDER BY o.n
 LIMIT $2`;
 

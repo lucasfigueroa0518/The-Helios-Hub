@@ -16,6 +16,7 @@ export function carouselsDriver(deps: {
   const setting = async (key: string) => (await deps.query(`SELECT value FROM social.settings WHERE key = $1`, [key])).rows[0]?.value;
   const driver: PublishDriver = {
     vertical: 'carousels',
+    refusesAtRelease: 'cancel',
     live: async () => (await setting('publishing_live')) === true,
     requireApproval: async () => (await setting('require_approval')) !== false,
     failStale: () => failStaleAttempts(deps.query),

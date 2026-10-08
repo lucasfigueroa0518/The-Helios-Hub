@@ -19,6 +19,7 @@ export function explainersDriver(deps: {
 }): PublishDriver {
   return {
     vertical: 'explainers',
+    refusesAtRelease: 'fail',
     live: () => publishingLive(deps.db),
     requireApproval: () => requireApproval(deps.db),
     failStale: () => failStaleAttempts(deps.db),
