@@ -96,9 +96,36 @@ each frame carries its own `ig_media_id`; there is no separate
 `posting_schedule` or `publish_attempts` table.
 
 Every type posts to one IG business account (`META_IG_BUSINESS_ACCOUNT_ID`).
-Before creating a container, each publisher reads
-`GET /{ig-user-id}/content_publishing_limit` and fails the attempt, with the
-quota in its error, when fewer than 5 posts are left in the 24-hour window.
+Before creating a container, every post goes through the **account gate**
+(`lib/instagram/account-gate.ts`): it reads
+`GET /{ig-user-id}/content_publishing_limit`, records the reading in
+`social_hub.publishing_quota`, and fails the attempt, with the quota in its
+error, when fewer than `quota_reserve` posts are left (an account setting in
+`social_hub.settings`, default 5; a Story set needs one more per extra frame).
+
+### The single publisher (D40)
+
+Each type places its own content on the calendar (Carousels after the 3 AM
+run, Explainers as reels are approved, Trial Reels nightly). The
+`helios-publisher` unit (`scripts/publisher_worker.ts`, drivers in
+`lib/publishing/drivers/`) does the rest for every type on the spine:
+releases due slots under each type's own rules, carries **one post at a time
+across the whole account**, oldest first, through the gate, and reads
+insights every 30 minutes. `social_hub.settings` `publisher_mode` decides who
+posts:
+
+| Mode | Publisher | Type workers |
+|---|---|---|
+| `off` (default) | idle | release, post and read insights, as before |
+| `shadow` | logs `shadow_plan`: what it would release, cancel and post | still post |
+| `live` | releases, posts, reads insights | stand down from those steps (they still schedule) |
+
+Going live: enable the unit (`sudo systemctl enable --now helios-publisher`),
+set `shadow` for a day and compare its `shadow_plan` lines with the type
+workers' `schedule_due` / `publish_complete` lines, then set `live`. Each
+type's own `publishing_live` still decides whether that type posts at all.
+Running both at once is safe: every release and claim is a guarded UPDATE and
+a post publishes only once.
 
 Posting windows may overlap (SH-47). The Carousel and Explainer schedulers
 keep any two **feed** posts at least 30 minutes apart

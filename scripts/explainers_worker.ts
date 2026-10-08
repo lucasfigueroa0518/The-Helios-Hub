@@ -2,7 +2,8 @@
  * Explainer Reels worker (BUILD_PLAN §4–§6, docs/social-overnight.md). Claims
  * one queued render at a time and runs it; while auto_render is on, also runs
  * the daily idea cycle at 2:00 AM New York. While publishing_live is on,
- * approved renders are scheduled into the 3:00–4:30 PM window and published.
+ * approved renders are scheduled into the 1:00–2:30 PM and 3:30–5:00 PM
+ * windows and published (by the single publisher once publisher_mode is live).
  * Insights: every 30 minutes while a reel is fresh, and a 5:15 AM sweep.
  *
  *   npm run explainers:worker          # loop: poll every 15s
@@ -66,6 +67,7 @@ async function main(): Promise<void> {
   const { claimAndPublish } = await import('@/lib/explainers/publish/publish');
   const { createLiveReelClient, metaConfigured } = await import('@/lib/explainers/publish/meta');
   const { createExplainerInsightsClient, pollExplainerInsights } = await import('@/lib/explainers/publish/insights');
+  const { publisherOwnsPublishing } = await import('@/lib/publishing/publisher');
   const { nextRunAt } = await import('@/lib/instagram/clock');
   const { loadSettings } = await import('@/lib/explainers/settings');
   const { runIdeaCycle } = await import('@/lib/explainers/ideas/cycle');
@@ -106,11 +108,15 @@ async function main(): Promise<void> {
     return;
   }
 
+  /** With publisher_mode 'live' the single publisher releases, posts and reads insights (D40). */
+  const standDown = () => publisherOwnsPublishing((text, params) => db.query(text, params) as never);
+
   /** Approved reels onto the clock, due slots into attempts, one attempt to Instagram. Only while publishing_live is on. */
   const publishStep = async (): Promise<void> => {
     if (!(await publishingLive(db))) return;
     const scheduled = await scheduleApproved(db);
     if (scheduled > 0) log('scheduled_approved', { count: scheduled });
+    if (await standDown()) return;
     const released = await releaseDueSchedules(db);
     if (released > 0) log('schedule_due', { released });
     if (!metaConfigured()) return;
@@ -119,7 +125,7 @@ async function main(): Promise<void> {
   };
 
   const insightsStep = async (force: boolean): Promise<void> => {
-    if (!metaConfigured()) return;
+    if (!metaConfigured() || (await standDown())) return;
     const result = await pollExplainerInsights(db, createExplainerInsightsClient({ token: process.env.META_USER_ACCESS_TOKEN! }));
     if (force || result.considered > 0) log('insights_complete', { ...result });
   };

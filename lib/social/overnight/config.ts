@@ -52,5 +52,3 @@ export const CAROUSEL_MIN_ITEMS = 2;
 export const CAROUSEL_MAX_ITEMS = 10;
 export const CAPTION_MAX_CHARS = 2200;
 
-/** Skip a publish when fewer than this many posts are left in the account's 24-hour quota. */
-export const PUBLISH_QUOTA_HEADROOM = 5;

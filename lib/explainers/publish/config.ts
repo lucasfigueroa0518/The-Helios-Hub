@@ -33,5 +33,3 @@ export const PUBLISH_POLL_TIMEOUT_MINUTES = 10;
 export const PUBLISH_STALE_MINUTES = 30;
 export const CAPTION_MAX_CHARS = 2200;
 
-/** Skip a publish when fewer than this many posts are left in the shared account's 24-hour quota. */
-export const PUBLISH_QUOTA_HEADROOM = 5;

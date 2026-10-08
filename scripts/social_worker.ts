@@ -12,6 +12,8 @@
  *
  * Nothing is scheduled or published unless social.settings.publishing_live is
  * on. Insights: every 30 minutes while a carousel is fresh, and a 5:30 AM sweep.
+ * Once social_hub.settings publisher_mode is 'live', releasing, posting and
+ * the 30-minute insights reads belong to the single publisher (D40).
  *
  * Social Hub (P2-M1): a 5:45 AM account sweep into the social_hub schema, and
  * any refresh the hub queued (refresh-on-visit): account pull, carousel
@@ -61,7 +63,10 @@ async function main(): Promise<void> {
   const hub = await import('@/lib/instagram/account-sweep');
   const { createGraph } = await import('@/lib/instagram/graph');
   const { pollDueInsights } = await import('@/lib/reels/media-insights/poll');
+  const { publisherOwnsPublishing } = await import('@/lib/publishing/publisher');
   const query = await socialQuery();
+  /** With publisher_mode 'live' the single publisher releases, posts and reads insights (D40). */
+  const standDown = () => publisherOwnsPublishing(query);
 
   let stopping = false;
   const stop = (signal: string) => {
@@ -206,7 +211,7 @@ async function main(): Promise<void> {
         continue;
       }
 
-      if (await publishingLive().catch(() => false)) {
+      if (!(await standDown()) && (await publishingLive().catch(() => false))) {
         const due = await releaseDueSchedules(query, { requireApproval: await requireApproval() }).catch((error) => {
           log('schedule_release_failed', { error: errorText(error) });
           return 0;
@@ -224,7 +229,7 @@ async function main(): Promise<void> {
         }
       }
 
-      if (Date.now() - lastInsights >= INSIGHTS_EVERY_MS) {
+      if (Date.now() - lastInsights >= INSIGHTS_EVERY_MS && !(await standDown())) {
         await insights(false).catch((error) => log('insights_failed', { error: errorText(error) }));
         lastInsights = Date.now();
       }

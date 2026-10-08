@@ -36,7 +36,11 @@ test('the schema is additive, idempotent, and creates only social_hub objects', 
   assert.deepEqual(added.sort(), ['social_hub.account_demographics_daily', 'social_hub.account_insights_daily', 'social_hub.online_followers_daily', 'social_hub.publishing_quota', 'social_hub.refreshes']);
   assert.ok(before.every((t) => after.includes(t)), 'nothing removed');
   const body = sql.replace(/--.*$/gm, '');
-  assert.doesNotMatch(body.replace(/\bON DELETE CASCADE\b/gi, ''), /\b(INSERT|UPDATE|DELETE|DROP TABLE|DROP SCHEMA)\b/i, 'no data written, nothing dropped');
+  // The only rows written are the account settings' defaults, which never overwrite a value someone set.
+  const seeds = body.match(/INSERT INTO social_hub\.settings [^;]*;/g) ?? [];
+  for (const seed of seeds) assert.match(seed, /ON CONFLICT \(key\) DO NOTHING;$/, seed);
+  const rest = seeds.reduce((t, seed) => t.replace(seed, ''), body).replace(/\bON DELETE CASCADE\b/gi, '');
+  assert.doesNotMatch(rest, /\b(INSERT|UPDATE|DELETE|DROP TABLE|DROP SCHEMA)\b/i, 'no other data written, nothing dropped');
   // The spine swaps its own CHECKs as content types join (D36); nothing outside social_hub is altered.
   for (const m of body.matchAll(/\bALTER\s+TABLE\s+(\S+)/gi)) assert.match(m[1]!, /^social_hub\./, m[0]);
   for (const line of sql.split('\n').filter((l) => /^\s*CREATE\s/i.test(l))) assert.match(line, /IF NOT EXISTS/i, line);

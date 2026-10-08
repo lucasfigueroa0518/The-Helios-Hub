@@ -97,6 +97,20 @@ CREATE TABLE IF NOT EXISTS social_hub.publishing_quota (
     quota_total     double precision
 );
 
+-- ── Account settings (unification Move 5–6, D40) ────────────────────────────
+-- Settings that belong to the one Instagram account, not to a content type.
+-- Each type keeps its own settings table for its own switches.
+CREATE TABLE IF NOT EXISTS social_hub.settings (
+    key         text PRIMARY KEY,
+    value       jsonb NOT NULL,
+    updated_at  timestamptz NOT NULL DEFAULT now()
+);
+-- Fail a publish when fewer than this many posts are left in the account's 24 h quota.
+INSERT INTO social_hub.settings (key, value) VALUES ('quota_reserve', '5'::jsonb) ON CONFLICT (key) DO NOTHING;
+-- Who posts: 'off' (each type's worker, as before), 'shadow' (the publisher only
+-- logs what it would do), 'live' (the publisher posts; the type workers stand down).
+INSERT INTO social_hub.settings (key, value) VALUES ('publisher_mode', '"off"'::jsonb) ON CONFLICT (key) DO NOTHING;
+
 -- ════════════════════════════════════════════════════════════════════════════
 -- The lifecycle spine (backend unification Move 3; plan in
 -- planning/Social Hub/DECISIONS_LOG.md D36). Every content type is made its own

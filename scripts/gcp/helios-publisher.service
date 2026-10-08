@@ -1,0 +1,23 @@
+[Unit]
+Description=Helios single publisher (every content type's posts to the one Instagram account, D40)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/helios-social/app
+EnvironmentFile=/opt/helios-social/worker.env
+# tsx directly: package.json stays as it is (the Social Hub scope test pins it).
+ExecStart=/opt/helios-social/app/node_modules/.bin/tsx scripts/publisher_worker.ts
+Restart=always
+RestartSec=15
+KillSignal=SIGTERM
+# A post in flight finishes its status poll (≤ 10 min) or is failed as stale on restart.
+TimeoutStopSec=60
+# No renders here: Graph calls and Postgres only.
+MemoryMax=600M
+MemoryHigh=450M
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

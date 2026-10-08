@@ -1,10 +1,10 @@
 import type { Queryable } from '@/lib/explainers/db';
+import { checkAccountQuota } from '@/lib/instagram/account-gate';
 
 import {
   CAPTION_MAX_CHARS,
   PUBLISH_POLL_SECONDS,
   PUBLISH_POLL_TIMEOUT_MINUTES,
-  PUBLISH_QUOTA_HEADROOM,
   PUBLISH_STALE_MINUTES,
   PUBLISH_VIDEO_URL_SECONDS,
 } from './config';
@@ -93,7 +93,8 @@ export async function queuePublish(db: Queryable, jobId: string, trigger: Publis
   }
 }
 
-async function claimPublish(db: Queryable): Promise<string | null> {
+/** Fail this type's attempts a dead worker left mid-publish. */
+export async function failStaleAttempts(db: Queryable): Promise<void> {
   await db.query(
     `UPDATE social_hub.publish_attempts
         SET status = 'failed', finished_at = now(),
@@ -102,6 +103,10 @@ async function claimPublish(db: Queryable): Promise<string | null> {
         AND started_at < now() - make_interval(mins => $1)`,
     [PUBLISH_STALE_MINUTES],
   );
+}
+
+async function claimPublish(db: Queryable): Promise<string | null> {
+  await failStaleAttempts(db);
   const { rows } = await db.query<{ id: string }>(
     `UPDATE social_hub.publish_attempts SET status = 'creating', started_at = now()
       WHERE id = (
@@ -139,9 +144,14 @@ export type PublishDeps = {
 
 /** Claim one queued explainer and carry it to Instagram. */
 export async function claimAndPublish(deps: PublishDeps): Promise<{ id: string; status: 'published' | 'failed' } | null> {
-  const { db, meta } = deps;
-  const id = await claimPublish(db);
+  const id = await claimPublish(deps.db);
   if (!id) return null;
+  return carryAttempt(deps, id);
+}
+
+/** Carry one claimed attempt (status `creating`) to Instagram: the account gate, the container, the poll, the publish. */
+export async function carryAttempt(deps: PublishDeps, id: string): Promise<{ id: string; status: 'published' | 'failed' }> {
+  const { db, meta } = deps;
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const now = deps.now ?? Date.now;
   const statusLog: Array<{ at: string; statusCode: string; status: string | null }> = [];
@@ -153,11 +163,9 @@ export async function claimAndPublish(deps: PublishDeps): Promise<{ id: string; 
     );
     const attempt = rows[0]!;
 
-    // The account is shared by every content type (docs/social-overnight.md).
-    const limit = await meta.publishingLimit();
-    if (limit.quotaTotal != null && limit.quotaTotal - limit.quotaUsage < PUBLISH_QUOTA_HEADROOM) {
-      throw new Error(`The Instagram account has ${limit.quotaTotal - limit.quotaUsage} of ${limit.quotaTotal} posts left in its 24-hour quota.`);
-    }
+    // The account is shared by every content type (lib/instagram/account-gate.ts).
+    const gate = await checkAccountQuota({ ops: meta, query: (text, params) => db.query(text, params) as never });
+    if (!gate.ok) throw new Error(gate.message);
 
     const videoUrl = await deps.signVideo(attempt.video_object, PUBLISH_VIDEO_URL_SECONDS);
     const containerId = await meta.createReel({ videoUrl, caption: attempt.caption, shareToFeed: attempt.share_to_feed });

@@ -20,7 +20,7 @@ cd "$ROOT"
 PROJECT="${GCP_PROJECT:-helios-influencer-network}"
 ZONE="${GCP_ZONE:-us-west1-a}"
 INSTANCE="${SOCIAL_INSTANCE:-helios-social-worker}"
-UNITS="${SOCIAL_UNITS:-helios-reels helios-social helios-explainers helios-stories}"
+UNITS="${SOCIAL_UNITS:-helios-reels helios-social helios-explainers helios-stories helios-publisher}"
 ENV_FILE="${SOCIAL_WORKER_ENV_FILE:-}"
 IAP=""
 if [[ "${GCP_SSH_IAP:-}" == "1" ]]; then
