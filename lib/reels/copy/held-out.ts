@@ -1,4 +1,5 @@
 import { dbQuery } from '@/lib/db';
+import { REEL_SCHEDULE } from '@/lib/reels/spine-tables';
 import { PUBLISHED_STORY_HOLD_DAYS } from '@/lib/reels/config';
 import type { CopyTarget } from '@/lib/reels/copy/store';
 import { canonicalizeUrl } from '@/lib/reels/net/http';
@@ -117,7 +118,7 @@ export function holdOutReasons(
 export async function loadPublishedStoryKeys(days = PUBLISHED_STORY_HOLD_DAYS): Promise<PublishedStoryKeys> {
   const { rows } = await dbQuery<{ post_idea_id: string; url: string | null }>(
     `WITH published AS (
-       SELECT DISTINCT post_idea_id FROM reels.posting_schedule
+       SELECT DISTINCT post_idea_id FROM ${REEL_SCHEDULE} ps
         WHERE status = 'published' AND publish_at > now() - ($1 || ' days')::interval
      )
      SELECT p.post_idea_id, u.url
@@ -174,7 +175,7 @@ export async function loadWideCopyMisses(nyDate: string): Promise<Set<string>> {
 export async function recentPublishedHeadlines(days = PUBLISHED_STORY_HOLD_DAYS): Promise<string[]> {
   const { rows } = await dbQuery<{ headline: string }>(
     `SELECT DISTINCT ON (p.post_idea_id) src.headline
-       FROM reels.posting_schedule p
+       FROM ${REEL_SCHEDULE} p
        JOIN reels.post_idea_members m ON m.post_idea_id = p.post_idea_id
        JOIN reels.sources src ON src.id = m.source_id
       WHERE p.status = 'published' AND p.publish_at > now() - ($1 || ' days')::interval

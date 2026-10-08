@@ -1,3 +1,4 @@
+import { REEL_ATTEMPTS, REEL_INSIGHTS, REEL_SCHEDULE } from '@/lib/reels/spine-tables';
 import type { HubQuery } from '@/lib/social-hub/db';
 
 /**
@@ -127,16 +128,17 @@ SELECT a.id AS attempt_id, a.status, a.trigger, a.media_id, a.post_idea_id, a.vi
        v.finished_at::text AS video_finished_at, v.slate_id AS video_slate_id,
        vis.render AS visual_render, song.audio_type, song.genre,
        sched.id AS schedule_id, sched.slot AS schedule_slot,
-       sched.publish_at::text AS schedule_publish_at, sched.approved_at::text AS approved_at,
+       sched.publish_at::text AS schedule_publish_at, COALESCE(sched.approved_at, ap.decided_at)::text AS approved_at,
        score.chosen_framework, score.chosen_bucket, score.blockbuster, score.net, score.origin,
        copy.on_screen_copy, copy.full_story_below, src.headline
-  FROM reels.publish_attempts a
+  FROM ${REEL_ATTEMPTS} a
+  LEFT JOIN social_hub.approvals ap ON ap.content_item_id = a.content_item_id AND ap.decision = 'approved'
   LEFT JOIN reels.video_jobs v ON v.id = a.video_job_id
   LEFT JOIN reels.visual_jobs vis ON vis.id = v.visual_job_id
   LEFT JOIN reels.songs song ON song.audio_id = a.audio_id
   LEFT JOIN LATERAL (
     SELECT id, slot, publish_at, approved_at
-      FROM reels.posting_schedule
+      FROM ${REEL_SCHEDULE} x
      WHERE publish_attempt_id = a.id
      ORDER BY CASE status WHEN 'published' THEN 0 ELSE 1 END, publish_at DESC
      LIMIT 1
@@ -149,11 +151,12 @@ SELECT a.id AS attempt_id, a.status, a.trigger, a.media_id, a.post_idea_id, a.vi
 export const REEL_SCHEDULES_SQL = `
 SELECT ps.id AS schedule_id, ps.post_idea_id, ps.video_job_id, ps.ny_date::text AS ny_date, ps.slot,
        ps.publish_at::text AS publish_at, ps.status, ps.source, ps.error,
-       ps.approved_at::text AS approved_at, ps.created_at::text AS created_at,
+       COALESCE(ps.approved_at, ap.decided_at)::text AS approved_at, ps.created_at::text AS created_at,
        v.video_storage_path, v.finished_at::text AS video_finished_at, v.slate_id AS video_slate_id,
        score.chosen_framework, score.chosen_bucket, score.net,
        copy.on_screen_copy, src.headline
-  FROM reels.posting_schedule ps
+  FROM ${REEL_SCHEDULE} ps
+  LEFT JOIN social_hub.approvals ap ON ap.content_item_id = ps.content_item_id AND ap.decision = 'approved'
   LEFT JOIN reels.video_jobs v ON v.id = ps.video_job_id
   ${SCORE_LATERAL.replaceAll('%IDEA%', 'ps.post_idea_id')}
  WHERE ps.publish_attempt_id IS NULL
@@ -164,7 +167,7 @@ SELECT ps.id AS schedule_id, ps.post_idea_id, ps.video_job_id, ps.ny_date::text 
 export const REEL_INSIGHTS_SQL = `
 SELECT media_id, ny_date::text AS ny_date, views, reach, likes, comments, saved, shares, reposts,
        total_interactions, avg_watch_time_ms, total_watch_time_ms, skip_rate
-  FROM reels.media_insights
+  FROM ${REEL_INSIGHTS} i
  ORDER BY media_id, ny_date`;
 
 /** The idea pool from the newest slate (spec §7 Ideas): scores as the night ranked them. */
@@ -174,8 +177,8 @@ WITH latest AS (
 )
 SELECT s.post_idea_id, src.headline, s.net, s.rank, s.selected, s.origin, latest.scored_at::text AS scored_at,
        ps.published,
-       EXISTS (SELECT 1 FROM reels.posting_schedule x
-                WHERE x.post_idea_id = s.post_idea_id AND x.status IN ('scheduled', 'publishing')) AS scheduled,
+       EXISTS (SELECT 1 FROM social_hub.schedule x
+                WHERE x.vertical = 'reels' AND x.idea_ref = s.post_idea_id::text AND x.status IN ('scheduled', 'publishing')) AS scheduled,
        EXISTS (SELECT 1 FROM reels.video_jobs j WHERE j.post_idea_id = s.post_idea_id AND j.status = 'ok') AS has_video,
        (SELECT count(*)::int FROM reels.video_jobs j WHERE j.post_idea_id = s.post_idea_id AND j.status = 'ok') AS video_count,
        (SELECT max(j.finished_at)::text FROM reels.video_jobs j WHERE j.post_idea_id = s.post_idea_id AND j.status = 'ok') AS last_video_at
@@ -200,8 +203,8 @@ SELECT DISTINCT m.post_idea_id, s.canonical_url AS url, s.headline
   JOIN reels.sources s ON s.id = m.source_id
  WHERE m.role <> 'merged_duplicate'
    AND m.post_idea_id IN (
-     SELECT post_idea_id FROM reels.publish_attempts WHERE trigger <> 'mix_test'
-     UNION SELECT post_idea_id FROM reels.posting_schedule
+     SELECT post_idea_id FROM ${REEL_ATTEMPTS} a WHERE trigger <> 'mix_test'
+     UNION SELECT post_idea_id FROM ${REEL_SCHEDULE} ps
    )`;
 
 export const REEL_REQUIRE_APPROVAL_SQL = `SELECT value FROM reels.settings WHERE key = 'require_approval'`;

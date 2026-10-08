@@ -254,8 +254,8 @@ test('regressions from the M2 critique: unlinked published slots, failed tries, 
   const { pg, query } = await openHubTestDb();
   await seedHubFixture(pg);
   // "Already published" slot with no attempt link: not a second post.
-  await pg.exec(`INSERT INTO reels.posting_schedule (post_idea_id, ny_date, slot, publish_at, status, source)
-                 VALUES ('${IDS.idea1}', '2026-10-05', 'evening', '2026-10-05T23:00:00Z', 'published', 'auto')`);
+  await pg.exec(`INSERT INTO social_hub.schedule (vertical, idea_ref, ny_date, slot, publish_at, status, source)
+                 VALUES ('reels', '${IDS.idea1}', '2026-10-05', 'evening', '2026-10-05T23:00:00Z', 'published', 'auto')`);
   // A failed try on the review carousel: it stays Content ready.
   await pg.exec(`INSERT INTO social_hub.content_items (id, vertical, format, native_ref, idea_ref)
                  VALUES ('30000000-0000-4000-8000-000000000042', 'carousels', 'feed', '${IDS.socPost2}', 'story-2');

@@ -1,4 +1,5 @@
 import { dbQuery } from '@/lib/db';
+import { REEL_ATTEMPTS } from '@/lib/reels/spine-tables';
 import { ADAPTERS, adapterById } from '@/lib/reels/adapters';
 import { metaConfigured } from '@/lib/reels/music/meta';
 import { songPickApproved } from '@/lib/reels/music/pick';
@@ -111,7 +112,7 @@ export async function loadHealthPage(windowDays = 7, now = new Date()): Promise<
          UNION ALL
          SELECT 'song' FROM reels.song_picks WHERE status IN ('requested', 'running')
          UNION ALL
-         SELECT 'publish' FROM reels.publish_attempts WHERE status NOT IN ('published', 'failed')
+         SELECT 'publish' FROM social_hub.publish_attempts WHERE vertical = 'reels' AND status NOT IN ('published', 'failed')
        ) jobs
        GROUP BY stage`,
     ),
@@ -140,10 +141,10 @@ export async function loadHealthPage(windowDays = 7, now = new Date()): Promise<
                WHERE later.post_idea_id = j.post_idea_id AND later.status = 'ok' AND later.finished_at >= j.finished_at
             )
          UNION ALL
-         SELECT 'publish', a.finished_at, a.error FROM reels.publish_attempts a
+         SELECT 'publish', a.finished_at, a.error FROM ${REEL_ATTEMPTS} a
           WHERE a.status = 'failed' AND a.trigger <> 'mix_test' AND a.finished_at >= $1
             AND NOT EXISTS (
-              SELECT 1 FROM reels.publish_attempts later
+              SELECT 1 FROM ${REEL_ATTEMPTS} later
                WHERE later.video_job_id = a.video_job_id
                  AND later.status = 'published'
                  AND later.finished_at >= a.finished_at

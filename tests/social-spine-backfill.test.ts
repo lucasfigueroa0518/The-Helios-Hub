@@ -8,7 +8,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 
-import { backfillCarousels, backfillExplainers } from '@/lib/social-hub/backfill';
+import { backfillCarousels, backfillExplainers, backfillReels } from '@/lib/social-hub/backfill';
 import { buildDataset } from '@/lib/social-hub/dataset';
 import { readAll } from '@/lib/social-hub/load';
 import type { SpineQuery } from '@/lib/social-hub/spine';
@@ -141,10 +141,79 @@ test('backfill Explainers: same hub view, verdicts mirrored (an approved, unsche
   assert.equal((await backfillExplainers(spine)).approvals, 1);
 });
 
-// ── Contract: after the switch nothing writes the old Carousels tables ───────
+// ── Trial Reels (D39) ───────────────────────────────────────────────────────
 
-const LEGACY = /\b(social|explainers)\.(posting_schedule|publish_attempts|media_insights)\b/;
-const ALLOWED = new Set(['lib/social-hub/backfill.ts']);
+const REEL_ORPHAN_ATTEMPT = '10000000-0000-4000-8000-000000000059';
+
+/** The fixture's Trial Reels lifecycle as the old tables held it. */
+const REEL_LEGACY = `
+DELETE FROM social_hub.media_insights WHERE vertical = 'reels';
+DELETE FROM social_hub.schedule WHERE vertical = 'reels';
+DELETE FROM social_hub.publish_attempts WHERE vertical = 'reels';
+DELETE FROM social_hub.approvals WHERE content_item_id IN (SELECT id FROM social_hub.content_items WHERE vertical = 'reels');
+DELETE FROM social_hub.content_items WHERE vertical = 'reels';
+INSERT INTO reels.publish_attempts (id, video_job_id, post_idea_id, trigger, status, requested_at, finished_at, audio_id, caption, graduation_strategy, media_id, permalink)
+VALUES ('${IDS.reelAttempt}', '${IDS.video1}', '${IDS.idea1}', 'auto', 'published', '2026-10-06T13:25:00Z', '2026-10-06T13:30:00Z', 'aud-1', 'caption', 'MANUAL', 'm-r1', 'https://instagram.com/reel/r1');
+INSERT INTO reels.publish_attempts (id, video_job_id, post_idea_id, trigger, status, requested_at, finished_at, audio_id, caption, graduation_strategy, error)
+VALUES ('${IDS.reelAttemptFailed}', '${IDS.video1}', '${IDS.idea1}', 'force', 'failed', '2026-10-07T13:00:00Z', '2026-10-07T13:01:00Z', 'aud-1', 'caption', 'MANUAL', 'quota');
+INSERT INTO reels.posting_schedule (id, post_idea_id, video_job_id, ny_date, slot, publish_at, status, source, publish_attempt_id, approved_at) VALUES
+ ('${IDS.reelSched1}', '${IDS.idea1}', '${IDS.video1}', '2026-10-06', 'morning', '2026-10-06T13:30:00Z', 'published', 'auto', '${IDS.reelAttempt}', '2026-10-06T11:00:00Z'),
+ ('${IDS.reelSched2}', '${IDS.idea2}', NULL, '2026-10-07', 'midday', '2026-10-07T16:00:00Z', 'scheduled', 'auto', NULL, NULL),
+ ('${IDS.reelSched3}', '${IDS.idea3}', NULL, '2026-10-06', 'evening', '2026-10-06T23:00:00Z', 'cancelled', 'auto', NULL, NULL);
+UPDATE reels.posting_schedule SET error = 'not approved before its slot' WHERE id = '${IDS.reelSched3}';
+INSERT INTO reels.media_insights (media_id, ny_date, publish_attempt_id, views, reach, likes, comments, saved, shares, reposts, total_interactions, avg_watch_time_ms, total_watch_time_ms, skip_rate) VALUES
+ ('m-r1', '2026-10-06', '${IDS.reelAttempt}', 100, 80, 5, 1, 2, 3, 0, 11, 4000, 400000, 0.4),
+ ('m-r1', '2026-10-07', '${IDS.reelAttempt}', 250, 190, 12, 2, 6, 9, 1, 30, 5200, 1300000, 0.31);`;
+
+test('backfill Trial Reels: same hub view, slots without a video keep their idea, idempotent', async () => {
+  const native = await openHubTestDb();
+  await seedHubFixture(native.pg);
+  const reelsOf = async (q: Parameters<typeof readAll>[0]) => {
+    const d = buildDataset(await readAll(q), null, NOW);
+    return { posts: d.posts.filter((p) => p.vertical === 'reels'), ideas: d.ideas.filter((i) => i.vertical === 'reels') };
+  };
+  const expected = await reelsOf(native.query);
+  assert.ok(expected.posts.some((p) => p.status === 'published'));
+
+  const { pg, query } = await openHubTestDb();
+  await seedHubFixture(pg);
+  await pg.exec(REEL_LEGACY);
+  const spine = query as unknown as SpineQuery;
+  assert.deepEqual(await backfillReels(spine), { items: 1, attempts: 2, schedule: 3, insights: 2, approvals: 1 });
+  assert.deepEqual(await backfillReels(spine), { items: 0, attempts: 0, schedule: 0, insights: 0, approvals: 0 });
+  assert.deepEqual(await reelsOf(query), expected);
+
+  const slots = (await pg.query<{ idea_ref: string; content_item_id: string | null }>(
+    `SELECT idea_ref, content_item_id FROM social_hub.schedule WHERE vertical = 'reels' ORDER BY id`,
+  )).rows;
+  assert.deepEqual(slots.map((s) => [s.idea_ref, s.content_item_id != null]), [
+    [IDS.idea1, true],
+    [IDS.idea2, false],
+    [IDS.idea3, false],
+  ], 'a slot booked before any video carries only its idea');
+  const payload = (await pg.query<{ payload: Record<string, unknown> }>(`SELECT payload FROM social_hub.publish_attempts WHERE id = '${IDS.reelAttempt}'`)).rows[0]!.payload;
+  assert.equal(payload.graduation_strategy, 'MANUAL', 'the trial setting is carried, never lost');
+  assert.equal(payload.audio_id, 'aud-1');
+});
+
+test('backfill Trial Reels: an attempt whose video retention deleted keeps its record on its own item', async () => {
+  const { pg, query } = await openHubTestDb();
+  await seedHubFixture(pg);
+  await pg.exec(REEL_LEGACY);
+  await pg.exec(`INSERT INTO reels.publish_attempts (id, video_job_id, post_idea_id, trigger, status, requested_at, finished_at, audio_id, caption, graduation_strategy, media_id)
+                 VALUES ('${REEL_ORPHAN_ATTEMPT}', NULL, '${IDS.idea2}', 'auto', 'published', '2026-09-01T13:00:00Z', '2026-09-01T13:01:00Z', 'aud-9', 'c', 'MANUAL', 'm-old')`);
+  await backfillReels(query as unknown as SpineQuery);
+  const row = (await pg.query<{ native_ref: string; idea_ref: string }>(
+    `SELECT ci.native_ref, ci.idea_ref FROM social_hub.publish_attempts a JOIN social_hub.content_items ci ON ci.id = a.content_item_id WHERE a.id = '${REEL_ORPHAN_ATTEMPT}'`,
+  )).rows[0]!;
+  assert.deepEqual([row.native_ref, row.idea_ref], [`attempt:${REEL_ORPHAN_ATTEMPT}`, IDS.idea2]);
+});
+
+// ── Contract: after the switch nothing writes the old lifecycle tables ───────
+
+const LEGACY = /\b(social|explainers|reels)\.(posting_schedule|publish_attempts|media_insights)\b/;
+/** The backfill reads them; spine-tables.ts names them in comments describing the shapes it keeps. */
+const ALLOWED = new Set(['lib/social-hub/backfill.ts', 'lib/reels/spine-tables.ts']);
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -154,7 +223,7 @@ function walk(dir: string): string[] {
   });
 }
 
-test('only the backfill still names the frozen Carousels and Explainers lifecycle tables', () => {
+test('only the backfill still names the frozen Carousels, Explainers and Trial Reels lifecycle tables', () => {
   const offenders = ['lib', 'app', 'scripts', 'components']
     .flatMap((dir) => walk(path.join(process.cwd(), dir)))
     .filter((file) => !ALLOWED.has(file) && LEGACY.test(readFileSync(file, 'utf8')));

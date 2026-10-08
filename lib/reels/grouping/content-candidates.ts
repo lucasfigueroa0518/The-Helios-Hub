@@ -1,4 +1,5 @@
 import { dbQuery } from '@/lib/db';
+import { REEL_SCHEDULE } from '@/lib/reels/spine-tables';
 import {
   CONTENT_OVERLAP_FLOOR,
   CONTENT_SHORTLIST_LIMIT,
@@ -40,7 +41,7 @@ const POOL_SQL = `
        (s.ingest_time > now() - ($1 || ' hours')::interval
          AND (m.post_idea_id IS NULL OR i.last_joined > now() - ($1 || ' hours')::interval))
        OR m.post_idea_id IN (
-         SELECT post_idea_id FROM reels.posting_schedule
+         SELECT post_idea_id FROM ${REEL_SCHEDULE} ps
           WHERE status = 'published' AND publish_at > now() - ($2 || ' days')::interval)
      )`;
 
