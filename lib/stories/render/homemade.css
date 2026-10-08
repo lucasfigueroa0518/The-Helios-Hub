@@ -1,0 +1,116 @@
+/*
+ * Homemade style (S-53, exploration): Instagram's own story editor.
+ * Classic text is Inter Medium (Trial Reels' stand-in for San Francisco);
+ * emoji come from the system emoji font. Fills are flat, the way the pen
+ * tool's long-press fill paints them. Highlight boxes follow the editor:
+ * one rounded box per line, lines touching.
+ */
+
+.hm-frame {
+  position: relative;
+  width: 1080px;
+  height: 1920px;
+  overflow: hidden;
+  font-family: 'Inter', 'Apple Color Emoji', 'Noto Color Emoji', 'Helvetica Neue', Arial, sans-serif;
+  font-weight: 500;
+  color: #FFFFFF;
+  -webkit-font-smoothing: antialiased;
+}
+.hm-frame *, .hm-frame *::before, .hm-frame *::after { box-sizing: border-box; }
+.hm-frame [data-fit-min] { overflow-wrap: normal; word-break: normal; hyphens: none; }
+
+.hm-fill { position: absolute; inset: 0; }
+.hm-bd-black .hm-fill { background: #000000; }
+.hm-bd-white .hm-fill { background: #FFFFFF; }
+.hm-bd-orange .hm-fill { background: #FF5E1A; }
+.hm-bd-green .hm-fill { background: #138510; }
+
+/* Posted from the camera roll: the photo fills the screen, see-through over
+   the fill and darkened so the typed lines read (S-55). */
+.hm-photo-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0.6; }
+.hm-photo-shade { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.4); }
+
+/* Everything typed sits in the safe band. */
+.hm-stack {
+  position: absolute;
+  left: 72px;
+  right: 72px;
+  top: 330px;
+  bottom: 404px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.hm-stack--center { justify-content: center; }
+.hm-stack--bottom { justify-content: flex-end; }
+.hm-gap { height: 8px; flex: none; }
+.hm-gap--big { height: 40px; }
+
+.hm-line { font-size: var(--hm-size, 52px); flex: none; width: fit-content; max-width: 100%; align-self: center; line-height: 1.42; letter-spacing: -0.012em; }
+.hm-line--left { align-self: flex-start; }
+.hm-line--right { align-self: flex-end; }
+.hm-row { display: flex; align-items: center; justify-content: center; gap: 28px; flex: none; }
+.hm-row .hm-line { width: auto; }
+
+/* The editor's highlight: a rounded box behind each line. */
+.hm-hl {
+  padding: 0.05em 0.3em 0.1em;
+  border-radius: 0.24em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.hm-box--white { background: #FFFFFF; color: #000000; }
+.hm-box--black { background: #000000; color: #FFFFFF; }
+.hm-box--soft { background: rgba(0, 0, 0, 0.55); color: #FFFFFF; }
+.hm-box--orange { background: #FF5E1A; color: #FFFFFF; }
+.hm-box--green { background: #138510; color: #FFFFFF; }
+.hm-box--red { background: #ED4956; color: #FFFFFF; }
+.hm-box--white-green { background: #FFFFFF; color: #138510; }
+.hm-box--plain-light { padding: 0; background: none; color: #FFFFFF; }
+.hm-box--plain-dark { padding: 0; background: none; color: #000000; }
+
+/* Pen tool. */
+.hm-pen { flex: none; overflow: visible; }
+.hm-pen path { fill: none; stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; }
+
+.hm-cue {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  align-self: flex-end;
+  flex: none;
+  font-size: 42px;
+  line-height: 1.42;
+  transform: rotate(-2deg);
+  white-space: nowrap;
+}
+.hm-cue .hm-pen { margin-top: 14px; }
+
+.hm-struck { position: relative; display: inline-block; }
+.hm-strike { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+.hm-strike path { stroke-width: 7; }
+
+/* Photo sticker: rounded corners, tilted, dropped on the fill. */
+.hm-sticker { align-self: center; flex: none; border-radius: 36px; overflow: hidden; }
+.hm-sticker img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Logo as a cutout sticker: a white edge and a soft lift. */
+.hm-cutout { align-self: center; flex: none; }
+.hm-cutout img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(5px 0 0 #FFFFFF) drop-shadow(-5px 0 0 #FFFFFF) drop-shadow(0 5px 0 #FFFFFF) drop-shadow(0 -5px 0 #FFFFFF) drop-shadow(0 12px 24px rgba(0, 0, 0, 0.28));
+}
+
+.hm-credit {
+  position: absolute;
+  left: 72px;
+  right: 72px;
+  bottom: 344px;
+  max-height: 68px;
+  font-size: 22px;
+  line-height: 1.5;
+}

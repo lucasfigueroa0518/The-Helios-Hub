@@ -1,0 +1,83 @@
+{
+  "newsom": {
+    "file": "newsom.jpg",
+    "title": "Governor of California Gavin Newsom, 2026 Official Portrait 2.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File%3AGovernor_of_California_Gavin_Newsom%2C_2026_Official_Portrait_2.jpg",
+    "artist": "Charles Ommanney – Office of the Governor of California",
+    "license": "Public domain",
+    "width": 1601,
+    "height": 2400
+  },
+  "capitol": {
+    "file": "capitol.jpg",
+    "title": "California State Capitol (top), NW view up dllu 2018.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File%3ACalifornia_State_Capitol_(top)%2C_NW_view_up_dllu_2018.jpg",
+    "artist": "Dllu",
+    "license": "CC BY-SA 4.0",
+    "width": 2400,
+    "height": 1601
+  },
+  "suleyman": {
+    "file": "suleyman.jpg",
+    "title": "Mustafa Suleyman photo.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File%3AMustafa_Suleyman_photo.jpg",
+    "artist": "Christopher Wilson",
+    "license": "CC BY-SA 4.0",
+    "width": 2400,
+    "height": 1596
+  },
+  "amodei": {
+    "file": "amodei.jpg",
+    "title": "Dario Amodei at TechCrunch Disrupt 2023 01 (cropped).jpg",
+    "page": "https://commons.wikimedia.org/wiki/File%3ADario_Amodei_at_TechCrunch_Disrupt_2023_01_(cropped).jpg",
+    "artist": "TechCrunch",
+    "license": "CC BY 2.0",
+    "width": 1500,
+    "height": 1941
+  },
+  "altman": {
+    "file": "altman.jpg",
+    "title": "Sam Altman CropEdit James Tamim.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File%3ASam_Altman_CropEdit_James_Tamim.jpg",
+    "artist": "TechCrunch",
+    "license": "CC BY 2.0",
+    "width": 1998,
+    "height": 1999
+  },
+  "datacenter": {
+    "file": "datacenter.jpg",
+    "title": "Datacenter Server Racks (22370909788).jpg",
+    "page": "https://commons.wikimedia.org/wiki/File%3ADatacenter_Server_Racks_(22370909788).jpg",
+    "artist": "Carl Lender from Sunrise, USA",
+    "license": "CC BY 2.0",
+    "width": 2400,
+    "height": 1600
+  },
+  "openai_hq": {
+    "file": "openai_hq.jpg",
+    "title": "Pioneer Building, San Francisco (2019) -1.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File%3APioneer_Building%2C_San_Francisco_(2019)_-1.jpg",
+    "artist": "HaeB",
+    "license": "CC BY-SA 4.0",
+    "width": 2400,
+    "height": 1206
+  },
+  "photoshop": {
+    "file": "photoshop.png",
+    "title": "Adobe Photoshop CC icon.svg",
+    "page": "https://commons.wikimedia.org/wiki/File%3AAdobe_Photoshop_CC_icon.svg",
+    "artist": "Adobe Inc.",
+    "license": "Public domain",
+    "width": 960,
+    "height": 936
+  },
+  "gimp": {
+    "file": "gimp.png",
+    "title": "The GIMP icon - v3.0.svg",
+    "page": "https://commons.wikimedia.org/wiki/File%3AThe_GIMP_icon_-_v3.0.svg",
+    "artist": "Aryeom Han",
+    "license": "CC BY-SA 4.0",
+    "width": 960,
+    "height": 960
+  }
+}
