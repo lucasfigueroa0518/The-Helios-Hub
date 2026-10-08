@@ -229,3 +229,19 @@ test('only the backfill still names the frozen Carousels, Explainers and Trial R
     .filter((file) => !ALLOWED.has(file) && LEGACY.test(readFileSync(file, 'utf8')));
   assert.deepEqual(offenders, []);
 });
+
+test('re-applying the hub schema over rows of every type never fails (no constraint narrows mid-file, D45)', async () => {
+  const { pg } = await openHubTestDb({ withHubSchema: true });
+  await pg.exec(`
+    INSERT INTO social_hub.content_items (vertical, format, native_ref) VALUES
+      ('carousels', 'feed', 'c'), ('explainers', 'reel', 'e'), ('reels', 'reel', 'r'), ('stories', 'story', 's');
+    INSERT INTO social_hub.schedule (content_item_id, vertical, ny_date, slot, publish_at, status, source)
+      SELECT id, vertical, '2026-10-08', CASE vertical WHEN 'carousels' THEN 'morning' WHEN 'explainers' THEN 'late' WHEN 'reels' THEN 'evening' ELSE 'free_vs_paid' END,
+             now(), 'cancelled', 'auto' FROM social_hub.content_items;
+    INSERT INTO social_hub.publish_attempts (content_item_id, vertical, trigger, status, caption)
+      SELECT id, vertical, CASE vertical WHEN 'reels' THEN 'mix_test' ELSE 'auto' END, 'failed', '' FROM social_hub.content_items;`);
+  const sql = readFileSync(path.join(process.cwd(), 'db/social_hub_schema.sql'), 'utf8').split(/\r?\n/).filter((l) => !l.startsWith('\\')).join('\n');
+  await pg.exec(sql);
+  await pg.exec(sql);
+  await assert.rejects(pg.exec(`INSERT INTO social_hub.content_items (vertical, format, native_ref) VALUES ('tiktok', 'reel', 'x')`), 'the vertical check is back after a re-apply');
+});

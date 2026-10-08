@@ -118,8 +118,9 @@ INSERT INTO social_hub.settings (key, value) VALUES ('publisher_mode', '"off"'::
 -- that it lives the same life: approved → placed on the calendar → posted →
 -- measured. These tables hold that life for every type.
 --
--- Types join one at a time (expand → backfill → switch → contract). The CHECKs
--- that list a type's values say which types have joined: Carousels, Explainers.
+-- Types join one at a time (expand → backfill → switch → contract). Every
+-- definition of a CHECK below carries the FULL final list, so re-running this
+-- file over rows of every type never narrows a constraint mid-file (D45).
 -- No foreign key points into a type's content tables: content can be deleted
 -- (Trial Reels retention) while its publishing record must outlive it.
 -- ════════════════════════════════════════════════════════════════════════════
@@ -138,7 +139,7 @@ CREATE TABLE IF NOT EXISTS social_hub.content_items (
     UNIQUE (vertical, native_ref)
 );
 ALTER TABLE social_hub.content_items DROP CONSTRAINT IF EXISTS content_items_vertical_check;
-ALTER TABLE social_hub.content_items ADD CONSTRAINT content_items_vertical_check CHECK (vertical IN ('carousels', 'explainers'));
+ALTER TABLE social_hub.content_items ADD CONSTRAINT content_items_vertical_check CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories'));
 CREATE INDEX IF NOT EXISTS idx_social_hub_items_idea ON social_hub.content_items (vertical, idea_ref);
 
 -- A person's (or a setting's) decision on one item. One current decision per
@@ -175,6 +176,8 @@ ALTER TABLE social_hub.schedule DROP CONSTRAINT IF EXISTS schedule_slot_check;
 ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_slot_check CHECK (
     (vertical = 'carousels' AND slot IN ('morning', 'afternoon'))
     OR (vertical = 'explainers' AND slot IN ('afternoon', 'late'))
+    OR (vertical = 'reels' AND slot IN ('morning', 'midday', 'evening'))
+    OR (vertical = 'stories' AND slot IN ('morning_download', 'guess_the_number', 'free_vs_paid'))
 );
 CREATE INDEX IF NOT EXISTS idx_social_hub_schedule_due
     ON social_hub.schedule (publish_at) WHERE status = 'scheduled';
@@ -216,6 +219,8 @@ CREATE TABLE IF NOT EXISTS social_hub.publish_attempts (
 ALTER TABLE social_hub.publish_attempts DROP CONSTRAINT IF EXISTS publish_attempts_trigger_check;
 ALTER TABLE social_hub.publish_attempts ADD CONSTRAINT publish_attempts_trigger_check CHECK (
     (vertical IN ('carousels', 'explainers') AND trigger IN ('approve', 'auto', 'force'))
+    OR (vertical = 'reels' AND trigger IN ('approve', 'auto', 'mix_test', 'force'))
+    OR (vertical = 'stories' AND trigger IN ('approve', 'auto'))
 );
 CREATE INDEX IF NOT EXISTS idx_social_hub_publish_recent ON social_hub.publish_attempts (requested_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_social_hub_publish_inflight
@@ -265,8 +270,7 @@ ALTER TABLE social_hub.media_insights ADD COLUMN IF NOT EXISTS skip_rate double 
 -- any video exists, so a schedule row may carry only its idea (idea_ref) until
 -- the video is attached when the slot comes due.
 ALTER TABLE social_hub.content_items DROP CONSTRAINT IF EXISTS content_items_vertical_check;
-ALTER TABLE social_hub.content_items ADD CONSTRAINT content_items_vertical_check
-    CHECK (vertical IN ('carousels', 'explainers', 'reels'));
+ALTER TABLE social_hub.content_items ADD CONSTRAINT content_items_vertical_check CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories'));
 
 ALTER TABLE social_hub.schedule ALTER COLUMN content_item_id DROP NOT NULL;
 ALTER TABLE social_hub.schedule ADD COLUMN IF NOT EXISTS idea_ref text;
@@ -282,6 +286,7 @@ ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_slot_check CHECK (
     (vertical = 'carousels' AND slot IN ('morning', 'afternoon'))
     OR (vertical = 'explainers' AND slot IN ('afternoon', 'late'))
     OR (vertical = 'reels' AND slot IN ('morning', 'midday', 'evening'))
+    OR (vertical = 'stories' AND slot IN ('morning_download', 'guess_the_number', 'free_vs_paid'))
 );
 -- One active slot per Trial Reels idea (the old idx_reels_posting_schedule_idea).
 CREATE UNIQUE INDEX IF NOT EXISTS idx_social_hub_schedule_reels_idea
@@ -295,6 +300,7 @@ ALTER TABLE social_hub.publish_attempts DROP CONSTRAINT IF EXISTS publish_attemp
 ALTER TABLE social_hub.publish_attempts ADD CONSTRAINT publish_attempts_trigger_check CHECK (
     (vertical IN ('carousels', 'explainers') AND trigger IN ('approve', 'auto', 'force'))
     OR (vertical = 'reels' AND trigger IN ('approve', 'auto', 'mix_test', 'force'))
+    OR (vertical = 'stories' AND trigger IN ('approve', 'auto'))
 );
 
 -- Whether Instagram reports the reel as shared to the feed (Trial Reels).
@@ -310,8 +316,7 @@ ALTER TABLE social_hub.media_insights ADD COLUMN IF NOT EXISTS shared_to_feed bo
 -- 'partial' when it stopped with frames live), and per-frame insights (the
 -- day's latest capture; Stories' navigation metrics and `final` in `extra`).
 ALTER TABLE social_hub.content_items DROP CONSTRAINT IF EXISTS content_items_vertical_check;
-ALTER TABLE social_hub.content_items ADD CONSTRAINT content_items_vertical_check
-    CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories'));
+ALTER TABLE social_hub.content_items ADD CONSTRAINT content_items_vertical_check CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories'));
 ALTER TABLE social_hub.schedule DROP CONSTRAINT IF EXISTS schedule_slot_check;
 ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_slot_check CHECK (
     (vertical = 'carousels' AND slot IN ('morning', 'afternoon'))
