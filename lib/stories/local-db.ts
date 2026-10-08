@@ -12,12 +12,14 @@ import type { Queryable, StoriesDb } from '@/lib/stories/db';
  */
 
 export const SCHEMA_PATH = path.join(process.cwd(), 'db', 'stories_schema.sql');
+/** The lifecycle spine every set is projected onto (D44). Self-contained, so it applies here too. */
+export const SPINE_SCHEMA_PATH = path.join(process.cwd(), 'db', 'social_hub_schema.sql');
 export const DEFAULT_LOCAL_DIR = path.join(process.cwd(), '.stories-local', 'pgdata');
 
-/** The schema file minus psql meta-commands (`\set ...`), which PGlite cannot run. */
-export function schemaSql(): string {
+/** A schema file minus psql meta-commands (`\set ...`), which PGlite cannot run. */
+export function schemaSql(file: string = SCHEMA_PATH): string {
   return fs
-    .readFileSync(SCHEMA_PATH, 'utf8')
+    .readFileSync(file, 'utf8')
     .split(/\r?\n/)
     .filter((line) => !line.startsWith('\\'))
     .join('\n');
@@ -41,5 +43,6 @@ export async function openLocalStoriesDb(dataDir?: string): Promise<{ db: Storie
   if (dataDir) fs.mkdirSync(dataDir, { recursive: true });
   const pg = new PGlite(dataDir);
   await pg.exec(schemaSql());
+  await pg.exec(schemaSql(SPINE_SCHEMA_PATH));
   return { db: pgliteDb(pg), pg };
 }

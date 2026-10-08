@@ -2,8 +2,9 @@
  * Publishing one Story set (plan §7). The Graph API has no scheduled publish
  * for Stories; the worker is the clock and calls this at the set's minute.
  *
- *   1. Quota: the account's API publishing cap (100 posts per 24 hours) must
- *      have room for every frame, or nothing is published.
+ *   1. Quota: the account gate (lib/instagram/account-gate.ts, D44) must find
+ *      room for every frame above the account's reserve, or nothing is
+ *      published. The same rule every content type posts under.
  *   2. Containers: one per frame (signed URL to its JPEG), then wait until
  *      every container is FINISHED (Meta: poll at most once a minute, up to
  *      five minutes). A container that errors or expires stops the set before
@@ -15,6 +16,8 @@
  * Side effects go through callbacks so the worker records each step as it
  * happens (a crash mid-set leaves an accurate record).
  */
+import { checkAccountQuota } from '@/lib/instagram/account-gate';
+import type { SpineQuery } from '@/lib/social-hub/spine';
 import type { StoriesMetaClient } from '@/lib/stories/publish/meta';
 import type { StoriesStorage } from '@/lib/stories/storage';
 
@@ -33,6 +36,8 @@ export type PublishDeps = {
   /** Pause between frames so they land in order. */
   gapMs?: number;
   publishAttempts?: number;
+  /** Where the gate reads the account's reserve and records its reading (social_hub); default reserve without it. */
+  gateQuery?: SpineQuery | null;
 };
 
 export type PublishOutcome =
@@ -45,12 +50,10 @@ export async function publishSet(frames: PublishFrame[], deps: PublishDeps): Pro
   const ordered = [...frames].sort((a, b) => a.seq - b.seq);
   if (!ordered.length) return { ok: false, stage: 'container', error: 'no frames', published: [] };
 
-  // 1. Quota.
+  // 1. Quota: one frame is one post (the account gate, D44).
   try {
-    const q = await deps.meta.publishingQuota();
-    if (q && q.total - q.used < ordered.length) {
-      return { ok: false, stage: 'quota', error: `publishing quota: ${q.used}/${q.total} used in 24 hours, ${ordered.length} frames to post`, published: [] };
-    }
+    const gate = await checkAccountQuota({ ops: deps.meta, need: ordered.length, query: deps.gateQuery ?? null });
+    if (!gate.ok) return { ok: false, stage: 'quota', error: `${gate.message} ${ordered.length} frames to post.`, published: [] };
   } catch (err) {
     // The quota read failing is not a reason to skip a set; publish will fail loudly if the cap is hit.
     void err;

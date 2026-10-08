@@ -17,8 +17,8 @@ try {
 
 async function main() {
   const vertical = process.argv[2];
-  if (vertical !== 'carousels' && vertical !== 'explainers' && vertical !== 'reels') {
-    throw new Error('Usage: npx tsx scripts/backfill_spine.ts <carousels|explainers|reels> --apply');
+  if (vertical !== 'carousels' && vertical !== 'explainers' && vertical !== 'reels' && vertical !== 'stories') {
+    throw new Error('Usage: npx tsx scripts/backfill_spine.ts <carousels|explainers|reels|stories> --apply');
   }
   if (!process.argv.includes('--apply')) {
     console.error('Refusing to run without --apply (this writes to the shared database).');
@@ -27,6 +27,13 @@ async function main() {
   const { closeDbPool, dbQuery } = await import('@/lib/db');
   const { backfillCarousels, backfillExplainers, backfillReels } = await import('@/lib/social-hub/backfill');
   try {
+    if (vertical === 'stories') {
+      // Stories are projected, not copied (D44): re-project every set from stories.sets.
+      const { liveStoriesDb } = await import('@/lib/stories/db');
+      const { projectAllSets } = await import('@/lib/stories/spine');
+      console.log(JSON.stringify({ vertical, projected: await projectAllSets(liveStoriesDb) }));
+      return;
+    }
     const run = { carousels: backfillCarousels, explainers: backfillExplainers, reels: backfillReels }[vertical];
     const counts = await run((text, params) => dbQuery(text, params));
     console.log(JSON.stringify({ vertical, copied: counts }));

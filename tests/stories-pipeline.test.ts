@@ -332,6 +332,7 @@ test('worker (approval off, publishing live): auto request at 4 AM → build →
     containerStatus: async () => ({ state: 'FINISHED', status: null }),
     publishContainer: async (id) => (published.push(id), `m:${id}`),
     publishingQuota: async () => ({ used: 0, total: 100 }),
+    publishingLimit: async () => ({ quotaUsage: 0, quotaTotal: 100 }),
   };
   const st = storage();
   let clock = new Date('2026-10-08T08:00:00Z'); // 4:00 AM New York

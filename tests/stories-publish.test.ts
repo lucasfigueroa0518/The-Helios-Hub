@@ -77,7 +77,7 @@ test('meta: a STORIES container from an image URL; the token never shows in erro
     if (c.url.pathname.endsWith('/media_publish')) return { status: 400, json: { error: { message: 'Media ID is not available', code: 9007, fbtrace_id: 'T' } } };
     return { json: { status_code: 'FINISHED', status: 'Finished: Media has been uploaded' } };
   });
-  const m = createStoriesMetaClient({ token: 'SECRET_TOKEN', igUserId: '1784', fetchImpl: s.fetch, version: 'v26.0' });
+  const m = createStoriesMetaClient({ token: 'SECRET_TOKEN', igUserId: '1784', fetchImpl: s.fetch });
   assert.equal(await m.createStoryContainer('https://x/signed.jpg'), 'c1');
   const create = new URLSearchParams(s.calls[0]!.body!);
   assert.equal(s.calls[0]!.url.toString(), 'https://graph.facebook.com/v26.0/1784/media');
@@ -118,6 +118,10 @@ function fakeMeta(opts: { quota?: { used: number; total: number } | null; states
     async publishingQuota() {
       return opts.quota === undefined ? { used: 0, total: 100 } : opts.quota;
     },
+    async publishingLimit() {
+      const q = opts.quota === undefined ? { used: 0, total: 100 } : opts.quota;
+      return q ? { quotaUsage: q.used, quotaTotal: q.total } : { quotaUsage: 0, quotaTotal: null };
+    },
   };
   return { meta, log };
 }
@@ -142,7 +146,8 @@ test('publishSet: containers first, all ready, then publish in order', async () 
 
 test('publishSet: no quota room or a failed container stops the set before anything goes live', async () => {
   const full = await publishSet(FRAMES, { ...fakeMeta({ quota: { used: 98, total: 100 } }), storage, sleep: noSleep });
-  assert.deepEqual(full, { ok: false, stage: 'quota', error: 'publishing quota: 98/100 used in 24 hours, 3 frames to post', published: [] });
+  // The account gate (D44): 2 left is below the account reserve, before the 3 frames even count.
+  assert.deepEqual(full, { ok: false, stage: 'quota', error: 'The Instagram account has 2 of 100 posts left in its 24-hour quota. 3 frames to post.', published: [] });
 
   const { meta, log } = fakeMeta({ states: [['FINISHED'], ['ERROR']] });
   const bad = await publishSet(FRAMES, { meta, storage, sleep: noSleep });

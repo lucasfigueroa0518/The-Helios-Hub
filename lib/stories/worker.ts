@@ -37,6 +37,7 @@ import {
 import { pickPublishAt, requestAutoSets } from '@/lib/stories/schedule';
 import { loadSettings } from '@/lib/stories/settings';
 import { recordPublishedPhoto } from '@/lib/stories/sources/carousel';
+import { accountBusy } from '@/lib/stories/spine';
 import type { StoriesStorage } from '@/lib/stories/storage';
 
 /** Auto sets are requested in the Stories hour of the night clock (docs/social-overnight.md). */
@@ -97,8 +98,7 @@ export async function tick(deps: WorkerDeps): Promise<{ built: number; scheduled
 
   // 4. Publish due sets.
   for (const s of await dueSets(deps.db, now)) {
-    await publishOne(deps, s.id, s.series);
-    out.published++;
+    if (await publishOne(deps, s.id, s.series)) out.published++;
   }
 
   // 5. Insights.
@@ -122,19 +122,26 @@ async function pollInsights(deps: WorkerDeps, now: Date, out: { insights: number
   }
 }
 
-async function publishOne(deps: WorkerDeps, setId: string, series: Series): Promise<void> {
+async function publishOne(deps: WorkerDeps, setId: string, series: Series): Promise<boolean> {
   const log = deps.log ?? (() => {});
+  // One post at a time on the account (D44): wait while another type is mid-publish; the next pass retries.
+  if (await accountBusy(deps.db)) {
+    log(`publish ${series}: waiting, another post is in flight on the account`);
+    return false;
+  }
   await markPublishing(deps.db, setId);
   const got = (await getSet(deps.db, setId))!;
   const missing = got.frames.filter((f) => !f.storage_path);
   if (missing.length) {
     await failSet(deps.db, setId, `frames without a rendered JPEG: ${missing.map((f) => f.seq).join(', ')}`);
-    return;
+    return true;
   }
   const result = await publishSet(
     got.frames.map((f) => ({ id: f.id, seq: f.seq, storagePath: f.storage_path! })),
     {
       meta: deps.meta(),
+      // The account gate reads the reserve and records its reading on the spine (D44).
+      gateQuery: (text, params) => deps.db.query(text, params) as never,
       storage: deps.storage(),
       sleep: deps.sleep,
       now: deps.now,
@@ -146,7 +153,7 @@ async function publishOne(deps: WorkerDeps, setId: string, series: Series): Prom
     const went = result.published.length;
     await failSet(deps.db, setId, `${result.stage}: ${result.error}${went ? ` (${went} frame(s) already live)` : ' (nothing went live)'}`);
     log(`publish ${series}: failed at ${result.stage}: ${result.error}`);
-    return;
+    return true;
   }
   await markPublished(deps.db, setId);
   const keys = (got.set.payload.historyKeys as string[] | undefined) ?? [];
@@ -157,4 +164,5 @@ async function publishOne(deps: WorkerDeps, setId: string, series: Series): Prom
     await recordPublishedPhoto(deps.sourceDb, { url: f.photo.src, usedAt: at, storyId: `stories:${setId}`, slide: f.seq, credit: f.photo.credit, scene: f.role }).catch((err) => log(`used_photos: ${err instanceof Error ? err.message : String(err)}`));
   }
   log(`published ${series} ${got.set.ny_date}: ${result.mediaIds.length} frames`);
+  return true;
 }

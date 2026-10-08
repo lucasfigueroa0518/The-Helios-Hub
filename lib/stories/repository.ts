@@ -9,6 +9,7 @@
  */
 import type { Queryable, StoriesDb } from '@/lib/stories/db';
 import type { Backdrop, FrameData, FrameRole, Photo, Series, Style } from '@/lib/stories/render/types';
+import { projectSet } from '@/lib/stories/spine';
 
 export type SetStatus = 'requested' | 'building' | 'ready' | 'approved' | 'scheduled' | 'publishing' | 'published' | 'rejected' | 'failed' | 'skipped';
 
@@ -81,7 +82,15 @@ async function move(db: Queryable, setId: string, from: SetStatus[], to: SetStat
     [setId, to, from, ...params],
   );
   if (!rows[0]) throw new StaleStatusError(setId, from, to);
+  // Every transition re-projects the set onto the lifecycle spine (D44), in the same transaction when there is one.
+  await projectSet(db, setId);
   return rows[0];
+}
+
+/** Re-project a frame's set after a frame or capture changes (D44). */
+async function projectFrameSet(db: Queryable, frameId: string): Promise<void> {
+  const { rows } = await db.query<{ set_id: string }>(`SELECT set_id::text AS set_id FROM stories.frames WHERE id = $1`, [frameId]);
+  if (rows[0]) await projectSet(db, rows[0].set_id);
 }
 
 /* ── Sets ─────────────────────────────────────────────────────────── */
@@ -226,10 +235,12 @@ export const markPublished = (db: Queryable, setId: string) => move(db, setId, [
 
 export async function recordFrameContainer(db: Queryable, frameId: string, containerId: string): Promise<void> {
   await db.query(`UPDATE stories.frames SET ig_container_id = $2 WHERE id = $1`, [frameId, containerId]);
+  await projectFrameSet(db, frameId);
 }
 
 export async function recordFramePublished(db: Queryable, frameId: string, mediaId: string, at: Date = new Date()): Promise<void> {
   await db.query(`UPDATE stories.frames SET ig_media_id = $2, published_at = $3 WHERE id = $1`, [frameId, mediaId, at.toISOString()]);
+  await projectFrameSet(db, frameId);
 }
 
 /* ── History (repeat checks) ──────────────────────────────────────── */
@@ -331,6 +342,7 @@ export async function recordInsights(db: Queryable, frameId: string, m: FrameMet
      VALUES ($1, $2, $3, ${METRIC_COLS.map((_, i) => `$${i + 4}`).join(', ')}, $${METRIC_COLS.length + 4}::jsonb)`,
     [frameId, at.toISOString(), final, ...METRIC_COLS.map((c) => m[c] ?? null), JSON.stringify(raw ?? {})],
   );
+  await projectFrameSet(db, frameId);
 }
 
 /**

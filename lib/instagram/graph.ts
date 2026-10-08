@@ -43,9 +43,13 @@ function describeGraphError(status: number, body: unknown): string {
 /** `path` is relative to the pinned version, or a full Graph URL (a paging link). */
 export type GraphCall = <T>(method: 'GET' | 'POST', path: string, params: Record<string, string>) => Promise<T>;
 
-export function createGraph(fetchImpl: typeof fetch = fetch): { call: GraphCall; igUserId: string; ops: InstagramContainerOps } {
-  const token = process.env.META_USER_ACCESS_TOKEN;
-  const igUserId = process.env.META_IG_BUSINESS_ACCOUNT_ID;
+export function createGraph(
+  fetchImpl: typeof fetch = fetch,
+  /** Explicit credentials (a client built with its own token in tests); the env otherwise. */
+  creds?: { token: string; igUserId: string },
+): { call: GraphCall; igUserId: string; ops: InstagramContainerOps } {
+  const token = creds?.token ?? process.env.META_USER_ACCESS_TOKEN;
+  const igUserId = creds?.igUserId ?? process.env.META_IG_BUSINESS_ACCOUNT_ID;
   if (!token || !igUserId) throw new MetaNotConfiguredError();
   const base = `https://graph.facebook.com/${META_GRAPH_VERSION}`;
 

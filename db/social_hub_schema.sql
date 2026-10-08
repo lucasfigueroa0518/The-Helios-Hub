@@ -299,3 +299,29 @@ ALTER TABLE social_hub.publish_attempts ADD CONSTRAINT publish_attempts_trigger_
 
 -- Whether Instagram reports the reel as shared to the feed (Trial Reels).
 ALTER TABLE social_hub.media_insights ADD COLUMN IF NOT EXISTS shared_to_feed boolean;
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- IG Stories join the spine as a projection (D44; branch feature/stories-on-spine)
+-- ════════════════════════════════════════════════════════════════════════════
+-- stories.sets stays the source of truth for the Stories app. Every set
+-- transition re-projects the set onto the spine (lib/stories/spine.ts): item
+-- (native_ref = set id, idea_ref = 'series:ny_date'), approval, one slot
+-- (slot = the series), one attempt per publish (frames as child containers;
+-- 'partial' when it stopped with frames live), and per-frame insights (the
+-- day's latest capture; Stories' navigation metrics and `final` in `extra`).
+ALTER TABLE social_hub.content_items DROP CONSTRAINT IF EXISTS content_items_vertical_check;
+ALTER TABLE social_hub.content_items ADD CONSTRAINT content_items_vertical_check
+    CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories'));
+ALTER TABLE social_hub.schedule DROP CONSTRAINT IF EXISTS schedule_slot_check;
+ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_slot_check CHECK (
+    (vertical = 'carousels' AND slot IN ('morning', 'afternoon'))
+    OR (vertical = 'explainers' AND slot IN ('afternoon', 'late'))
+    OR (vertical = 'reels' AND slot IN ('morning', 'midday', 'evening'))
+    OR (vertical = 'stories' AND slot IN ('morning_download', 'guess_the_number', 'free_vs_paid'))
+);
+ALTER TABLE social_hub.publish_attempts DROP CONSTRAINT IF EXISTS publish_attempts_trigger_check;
+ALTER TABLE social_hub.publish_attempts ADD CONSTRAINT publish_attempts_trigger_check CHECK (
+    (vertical IN ('carousels', 'explainers') AND trigger IN ('approve', 'auto', 'force'))
+    OR (vertical = 'reels' AND trigger IN ('approve', 'auto', 'mix_test', 'force'))
+    OR (vertical = 'stories' AND trigger IN ('approve', 'auto'))
+);

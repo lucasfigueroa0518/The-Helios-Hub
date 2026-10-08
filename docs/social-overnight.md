@@ -99,7 +99,15 @@ still carry their own copies until they join (unification plan, Stories wave).
 Stories differ from the contract in shape, not in substance: `stories.sets`
 is both the run queue and the schedule (`publish_at`, status `scheduled`), and
 each frame carries its own `ig_media_id`; there is no separate
-`posting_schedule` or `publish_attempts` table.
+`posting_schedule` or `publish_attempts` table. **On the spine as a
+projection (D44):** `stories.sets` stays the Stories app's source of truth,
+and every transition re-projects the set onto `social_hub` (`lib/stories/spine.ts`):
+item, approval, a slot named for the series, one attempt per publish (frames
+as child containers, `partial` when it stopped with frames live) and
+per-frame insights. Stories post through the account gate (room for every
+frame above the reserve), wait while another type is mid-publish, and use
+the shared Graph transport. They keep their own clock and worker (a set
+posts at its own minute, never late), so the publisher doesn't drive them.
 
 Every type posts to one IG business account (`META_IG_BUSINESS_ACCOUNT_ID`).
 Before creating a container, every post goes through the **account gate**
