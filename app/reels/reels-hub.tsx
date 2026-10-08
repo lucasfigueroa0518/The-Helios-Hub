@@ -336,8 +336,7 @@ function badgeLabel(state: PublishState, windowsOpen: number): string | null {
 }
 
 function isPostingReel(reel: Reel): boolean {
-  const rank = reel.score.rank;
-  return rank != null && rank >= 1 && rank <= 3;
+  return reel.score.selected;
 }
 
 /* ------------------------------------------------------------------- hub */
@@ -485,7 +484,7 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
         value
           ? placed > 0
             ? `Live is on. ${placed} of today's reels are on the clock.`
-            : "Live is on. Tonight's three reels will be scheduled into the day's slots."
+            : "Live is on. Tonight's selected reels will be scheduled into the day's slots."
           : 'Live is off. Reels already on the clock still post.',
       );
       await refresh();
@@ -497,9 +496,8 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
   const health = healthOf(data);
   const reels = view ? view.slate.scores.map((score) => reelFor(view, score)) : [];
   const ranked = [...reels].sort((a, b) => (a.score.rank ?? 999) - (b.score.rank ?? 999));
-  const top = ranked.filter((reel) => (reel.score.rank ?? 999) <= 3).slice(0, 3);
-  const posting = new Set(top.map((reel) => reel.score.postIdeaId));
-  const rest = view?.isCurrent ? ranked.filter((reel) => !posting.has(reel.score.postIdeaId)) : [];
+  const top = ranked.filter((reel) => reel.score.selected);
+  const rest = view?.isCurrent ? ranked.filter((reel) => !reel.score.selected) : [];
   const open = reels.find((reel) => reel.score.postIdeaId === openId) ?? null;
   const today = todayInNewYork();
 
@@ -550,7 +548,7 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
               type="button"
               className={`rh-live${data.music.publishingLive ? ' is-on' : ''}`}
               aria-pressed={data.music.publishingLive}
-              title="When Live is on, each night's three reels are scheduled into the day's posting slots and posted as trial reels."
+              title="When Live is on, each night's selected reels are scheduled into the day's posting slots and posted as trial reels."
               onClick={() => {
                 if (data.music.publishingLive) void setLive(false);
                 else setConfirmLive(true);
@@ -566,7 +564,7 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
         </header>
 
         {views.length === 0 || !view ? (
-          <p className="rh-empty">No scored days yet. The next run ranks the timely post ideas and picks the top three.</p>
+          <p className="rh-empty">No scored days yet. The next run ranks the timely post ideas and picks the day&apos;s reels.</p>
         ) : (
           <>
             <nav className="rh-days" aria-label="Days">
@@ -595,7 +593,7 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
                     >
                       <span className="rh-day__date">{formatNyDate(item.slate.nyDate)}</span>
                       <span className="rh-day__sub">
-                        {item.slate.nyDate === today ? 'Today' : item.isCurrent ? 'Latest' : 'Top 3'}
+                        {item.slate.nyDate === today ? 'Today' : item.isCurrent ? 'Latest' : 'Selected'}
                       </span>
                     </button>
                   );
@@ -640,7 +638,7 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
 
             {top.length > 0 && (
               <p className="rh-muted rh-posting-note">
-                These three are the only reels that can post today, one per window. A reel that misses the windows still open carries to tomorrow. It is not scheduled late.
+                These reels can post today, one per window still open. A reel that misses today's windows carries to tomorrow. It is not scheduled late.
               </p>
             )}
 
@@ -690,7 +688,7 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
           >
             <h2 id="rh-live-title">Go live?</h2>
             <p>
-              Today&apos;s three best reels will be scheduled into the windows still open and posted to Instagram. The bench stays off the clock.
+              Today&apos;s selected reels will be scheduled into the windows still open and posted to Instagram. The bench stays off the clock.
             </p>
             <div className="rh-confirm__actions">
               <button type="button" className="rh-btn" onClick={() => setConfirmLive(false)}>

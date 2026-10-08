@@ -1,5 +1,6 @@
 import { dbQuery, dbTransaction } from '@/lib/db';
 import { orderedForSlots, type SlotIdea, type SlotLock } from '@/lib/reels/copy/slots';
+import { BUCKET_IDS, FRAMEWORK_IDS, type BucketId, type FrameworkId } from '@/lib/reels/scoring/decide';
 
 export type ReelLock = SlotLock & { nyDate: string; slateId: string };
 
@@ -65,6 +66,14 @@ export async function clearDayPenalty(slateId: string, nyDate: string, postIdeaI
   await rerankSlate(slateId, nyDate);
 }
 
+function asFramework(value: string): FrameworkId | null {
+  return (FRAMEWORK_IDS as readonly string[]).includes(value) ? (value as FrameworkId) : null;
+}
+
+function asBucket(value: string): BucketId | null {
+  return (BUCKET_IDS as readonly string[]).includes(value) ? (value as BucketId) : null;
+}
+
 export async function loadSlotIdeas(slateId: string): Promise<SlotIdea[]> {
   const { rows } = await dbQuery<{
     post_idea_id: string;
@@ -73,8 +82,11 @@ export async function loadSlotIdeas(slateId: string): Promise<SlotIdea[]> {
     psychology: number | null;
     confidence: number | null;
     last_joined: string;
+    chosen_framework: string;
+    chosen_bucket: string;
   }>(
-    `SELECT s.post_idea_id::text, s.net, s.bucket_score, s.psychology, s.confidence, i.last_joined
+    `SELECT s.post_idea_id::text, s.net, s.bucket_score, s.psychology, s.confidence, i.last_joined,
+            s.chosen_framework, s.chosen_bucket
        FROM reels.idea_scores s
        JOIN reels.post_ideas i ON i.id = s.post_idea_id
       WHERE s.slate_id = $1::uuid
@@ -90,6 +102,8 @@ export async function loadSlotIdeas(slateId: string): Promise<SlotIdea[]> {
     psychologyScore: row.psychology ?? 0,
     lastJoinedMs: new Date(row.last_joined).getTime(),
     confidence: row.confidence ?? 0,
+    framework: asFramework(row.chosen_framework),
+    bucket: asBucket(row.chosen_bucket),
   }));
 }
 

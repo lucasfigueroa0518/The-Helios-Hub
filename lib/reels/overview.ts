@@ -26,7 +26,7 @@ export type ReelsOverview = {
   slateDays: SlateDay[];
   /** Full score list for the current day. This is the newest slate. */
   slate: StoredSlate | null;
-  /** Earlier days, each reduced to that day's selected top 3. */
+  /** Earlier days, each reduced to the reels selected that day. */
   archive: ArchivedSlate[];
   /** On-screen copy and captions for the current slate, by post idea id. */
   copy: Record<string, StoredCopy>;

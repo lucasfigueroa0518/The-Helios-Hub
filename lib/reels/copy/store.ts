@@ -18,8 +18,9 @@ export type CopyTarget = {
 
 /**
  * Ideas to write, with the winning pair and every member's full body.
- * Nightly copy uses the selected three. A canary can ask for the top ranks
- * instead, including ideas that were not selected.
+ * Nightly copy asks for every ranked idea, so a knowledge-lane story below
+ * the top of the slate can still be written. A canary can ask for the top
+ * ranks instead, including ideas that were not selected.
  */
 export async function loadCopyTargets(
   slateId: string,
