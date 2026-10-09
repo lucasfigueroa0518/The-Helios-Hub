@@ -152,7 +152,7 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
                     <span className="rh-row__rank">{item.rank}</span>
                     <span className="rh-row__main">
                       <span className="rh-row__headline">{item.idea.title}</span>
-                      {item.idea.detail ? <span className="rh-row__labels">{item.idea.detail}</span> : null}
+                      {item.idea.detail ? <span className="rh-row__labels">{section.title && item.idea.detail.startsWith(`${section.title} · `) ? item.idea.detail.slice(section.title.length + 3) : item.idea.detail}</span> : null}
                     </span>
                     <span className="rh-row__pills">
                       {item.card ? (
