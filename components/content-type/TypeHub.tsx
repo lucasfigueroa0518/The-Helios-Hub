@@ -26,6 +26,20 @@ import { IDEA_STATE_LABEL } from '@/lib/social-hub/views/pools';
 
 const ASPECT: Record<string, string> = { feed: '4 / 5', reel: '9 / 16', story: '9 / 16' };
 
+const STORY_GROUPS = ['Morning Download', 'Guess the Number', 'Free vs. Paid'];
+
+/** Stories ideas sit in one list per series. Other types stay one list. */
+function benchSections(vertical: string, bench: TypeBenchItem[]): Array<{ title: string | null; items: TypeBenchItem[] }> {
+  if (vertical !== 'stories') return [{ title: null, items: bench }];
+  const by = new Map<string, TypeBenchItem[]>();
+  for (const item of bench) {
+    const title = item.idea.group || 'Other';
+    by.set(title, [...(by.get(title) ?? []), item]);
+  }
+  const titles = [...STORY_GROUPS.filter((t) => by.has(t)), ...[...by.keys()].filter((t) => !STORY_GROUPS.includes(t))];
+  return titles.map((title) => ({ title, items: (by.get(title) ?? []).map((item, i) => ({ ...item, rank: i + 1 })) }));
+}
+
 const dayLabel = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).replace(',', '');
 const longDay = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
 
@@ -128,8 +142,11 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
           {bench.length === 0 ? (
             <p className="rh-empty">The pool is empty until its next refill.</p>
           ) : (
+            benchSections(model.vertical, bench).map((section) => (
+            <div key={section.title ?? 'bench'} className="rh-bench-group">
+              {section.title ? <h4 className="rh-bench-group__title">{section.title} <span>{section.items.length}</span></h4> : null}
             <ul className="rh-rest__list">
-              {bench.map((item) => (
+              {section.items.map((item) => (
                 <li key={item.idea.id}>
                   <div className="rh-row" role="button" tabIndex={0} onClick={() => (item.card ? setOpenPost(item.card.post.id) : setOpenIdea(item.idea.id))} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (item.card) setOpenPost(item.card.post.id); else setOpenIdea(item.idea.id); } }}>
                     <span className="rh-row__rank">{item.rank}</span>
@@ -153,6 +170,8 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
                 </li>
               ))}
             </ul>
+            </div>
+            ))
           )}
         </section>
       </div>

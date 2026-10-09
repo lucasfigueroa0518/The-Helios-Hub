@@ -217,6 +217,7 @@ export function storyIdeas(rows: readonly StoryCandidateRow[]): HubIdea[] {
       generatedAt: null,
       createdAt: iso(row.created_at),
       detail: `${SERIES[row.series] ?? row.series} · ${row.ny_date.slice(0, 10)} · from ${ORIGIN_LABEL[row.origin] ?? row.origin}`,
+      group: SERIES[row.series] ?? row.series,
     };
   });
 }

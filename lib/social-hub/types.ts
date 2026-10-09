@@ -151,6 +151,8 @@ export type HubIdea = {
   generatedAt: string | null;
   createdAt: string | null;
   detail: string | null;
+  /** Stories: which series this idea belongs to. */
+  group?: string | null;
 };
 
 export type HubSource = {

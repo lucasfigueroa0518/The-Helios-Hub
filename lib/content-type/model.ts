@@ -87,7 +87,7 @@ export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date)
     rows.push({
       rank: rows.length + 1,
       card,
-      idea: { id: card.post.id, vertical, title: card.post.name, score: null, scoreLabel: '', state: 'content_ready', hasContent: true, versionCount: 1, generatedAt: card.post.generatedAt, createdAt: card.post.generatedAt, detail: null },
+      idea: { id: card.post.id, vertical, title: card.post.name, score: null, scoreLabel: '', state: 'content_ready', hasContent: true, versionCount: 1, generatedAt: card.post.generatedAt, createdAt: card.post.generatedAt, detail: null, group: card.post.idea?.label ?? null },
     });
   }
   return {
