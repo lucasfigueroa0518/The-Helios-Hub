@@ -224,6 +224,15 @@ export async function rejectSet(db: StoriesDb, setId: string, fb: { tags?: strin
 /** The minute it posts (S-20). Publish now is a schedule at now(). */
 export const scheduleSet = (db: Queryable, setId: string, publishAt: Date) => move(db, setId, ['approved', 'scheduled'], 'scheduled', 'publish_at = $4', [publishAt.toISOString()]);
 
+/**
+ * A person puts an approved set on another day or minute (Social Hub
+ * Schedule here / move, D50). Its day moves with it, so the series' one
+ * live set per day still holds (a clash is the unique index's 23505).
+ * Never a set that is posting or posted. Re-projected like every move.
+ */
+export const rescheduleSet = (db: Queryable, setId: string, nyDate: string, publishAt: Date) =>
+  move(db, setId, ['approved', 'scheduled'], 'scheduled', 'ny_date = $4::date, publish_at = $5', [nyDate, publishAt.toISOString()]);
+
 /** Scheduled sets whose minute has come, oldest first. */
 export async function dueSets(db: Queryable, now: Date = new Date()): Promise<StorySet[]> {
   const { rows } = await db.query<StorySet>(`SELECT ${SET_COLS} FROM stories.sets WHERE status = 'scheduled' AND publish_at <= $1 ORDER BY publish_at`, [now.toISOString()]);

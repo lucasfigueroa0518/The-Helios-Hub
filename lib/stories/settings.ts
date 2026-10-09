@@ -77,9 +77,11 @@ export async function loadSettings(db: Queryable): Promise<StoriesSettings> {
 }
 
 /** Turn a series' auto switch on or off, or enable/disable it (Settings tab, M4). */
-export async function saveSeriesSetting(db: Queryable, series: Series, patch: Partial<Pick<SeriesSettings, 'enabled' | 'auto'>>, by?: string): Promise<StoriesSettings> {
+export async function saveSeriesSetting(db: Queryable, series: Series, patch: Partial<Pick<SeriesSettings, 'enabled' | 'auto'>> & { days?: number[] }, by?: string): Promise<StoriesSettings> {
   const current = await loadSettings(db);
-  const next = { ...current.series, [series]: { ...current.series[series], ...patch } };
+  const { days, ...rest } = patch;
+  const merged = { ...current.series[series], ...rest, ...(days ? { window: { ...current.series[series].window, days } } : {}) };
+  const next = { ...current.series, [series]: merged };
   await db.query(
     `INSERT INTO stories.settings (key, value, updated_by, updated_at) VALUES ('series', $1::jsonb, $2, now())
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()`,

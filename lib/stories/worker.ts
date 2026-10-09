@@ -67,7 +67,8 @@ export async function tick(deps: WorkerDeps): Promise<{ built: number; scheduled
 
   // 1. Auto series.
   if (nyClock(now) >= AUTO_REQUEST_AFTER) {
-    const requested = await requestAutoSets(deps.db, settings, now);
+    // Daily fill (D54): a series day someone already filled gets no auto set; logged once as fill_reduced.
+    const requested = await requestAutoSets(deps.db, settings, now, { log: (message, fields) => log(`${message} ${JSON.stringify(fields)}`) });
     if (requested.length) log(`auto: requested ${requested.join(', ')}`);
   }
 

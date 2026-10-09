@@ -97,7 +97,7 @@ test('an approved slot attaches the video, carries the approval, and posts a tri
   const { meta, containers } = stubMeta();
   const out = await claimAndPublish({ meta, signVideo: async (p) => `https://signed/${p}`, sleep: async () => undefined });
   assert.equal(out?.status, 'published');
-  assert.equal(containers[0]!.graduationStrategy, 'MANUAL', 'a trial reel stays off the grid');
+  assert.equal(containers[0]!.graduationStrategy, 'SS_PERFORMANCE', 'a trial reel graduates itself when it performs');
   assert.equal(containers[0]!.audioId, 'aud-7');
   assert.equal((await pg.query<{ status: string }>(`SELECT status FROM social_hub.schedule`)).rows[0]!.status, 'published');
   assert.equal((await pg.query<{ published: boolean }>(`SELECT published FROM reels.published_status WHERE post_idea_id = $1`, [IDEA])).rows[0]!.published, true);

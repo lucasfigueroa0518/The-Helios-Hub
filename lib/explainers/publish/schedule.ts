@@ -2,9 +2,11 @@ import type { Queryable } from '@/lib/explainers/db';
 import { calendarDateKey } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { chooseFromWindows, slotTakenKey, uniformIndex } from '@/lib/instagram/window';
+import { POOL_ORDER_BY } from '@/lib/explainers/repository';
+import { bookSlot } from '@/lib/social-hub/spine';
 
 import { DEFAULT_POSTS_PER_DAY, EXPLAINER_WINDOWS } from './config';
-import { explainerItemId } from './items';
+import { explainerItemId, spineOf } from './items';
 import { queuePublish } from './publish';
 
 /**
@@ -70,12 +72,8 @@ export async function scheduleJob(
     const choice = chooseFromWindows(windows, now, new Set(takenRows.map((r) => slotTakenKey(r.d, r.slot))), busy, rng);
     if (!choice) return { scheduled: false, note: 'No explainer window is open in the next two weeks.' };
     try {
-      const { rows } = await db.query<{ id: string; publish_at: string }>(
-        `INSERT INTO social_hub.schedule (content_item_id, vertical, ny_date, slot, publish_at, status, source)
-         VALUES ($1, 'explainers', $2::date, $3, $4::timestamptz, 'scheduled', $5) RETURNING id, publish_at`,
-        [itemId, choice.nyDate, choice.slot, choice.publishAt.toISOString(), source],
-      );
-      return { scheduled: true, id: rows[0]!.id, publishAt: new Date(rows[0]!.publish_at).toISOString() };
+      const booked = await bookSlot(spineOf(db), { vertical: 'explainers', itemId, nyDate: choice.nyDate, slot: choice.slot, publishAt: choice.publishAt, source });
+      return { scheduled: true, id: booked.id, publishAt: booked.publishAt };
     } catch (error) {
       if (!isUniqueViolation(error)) throw error;
       const raced = await active();
@@ -86,6 +84,25 @@ export async function scheduleJob(
 }
 
 /**
+ * Finished, unposted, unscheduled renders with their video in Storage that
+ * may go on the calendar: the approved ones; with require_approval off
+ * (`$1` false), also the ones nobody reviewed (never a rejected one).
+ * Shared by `scheduleApproved` and the 2 AM daily fill (`fillCandidates`).
+ */
+const PLACEABLE_RENDERS = `
+SELECT j.id, j.topic_id, f.created_at AS reviewed_at, j.finished_at
+  FROM explainers.jobs j
+  LEFT JOIN explainers.feedback f ON f.job_id = j.id
+  LEFT JOIN social_hub.content_items ci ON ci.vertical = 'explainers' AND ci.native_ref = j.id::text
+  LEFT JOIN social_hub.approvals ap ON ap.content_item_id = ci.id
+ WHERE j.status = 'ok'
+   AND (ap.decision = 'approved' OR (NOT $1::boolean AND ap.decision IS NULL))
+   AND f.verdict IS DISTINCT FROM 'rejected'
+   AND EXISTS (SELECT 1 FROM explainers.artifacts a WHERE a.job_id = j.id AND a.kind = 'video' AND a.storage_location = 'bucket')
+   AND NOT EXISTS (SELECT 1 FROM social_hub.schedule s WHERE s.content_item_id = ci.id AND s.status IN ('scheduled', 'publishing', 'published'))
+   AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts p WHERE p.content_item_id = ci.id AND p.status IN ('requested', 'creating', 'processing', 'publishing', 'published'))`;
+
+/**
  * Finished, unposted, unscheduled renders with their video in Storage: the
  * approved ones, oldest approval first; with require_approval off, also the
  * ones nobody reviewed (never a rejected one).
@@ -93,18 +110,7 @@ export async function scheduleJob(
 export async function scheduleApproved(db: Queryable, now = new Date(), rng?: (count: number) => number): Promise<number> {
   const approvalNeeded = await requireApproval(db);
   const { rows } = await db.query<{ id: string }>(
-    `SELECT j.id
-       FROM explainers.jobs j
-       LEFT JOIN explainers.feedback f ON f.job_id = j.id
-       LEFT JOIN social_hub.content_items ci ON ci.vertical = 'explainers' AND ci.native_ref = j.id::text
-       LEFT JOIN social_hub.approvals ap ON ap.content_item_id = ci.id
-      WHERE j.status = 'ok'
-        AND (ap.decision = 'approved' OR (NOT $1::boolean AND ap.decision IS NULL))
-        AND f.verdict IS DISTINCT FROM 'rejected'
-        AND EXISTS (SELECT 1 FROM explainers.artifacts a WHERE a.job_id = j.id AND a.kind = 'video' AND a.storage_location = 'bucket')
-        AND NOT EXISTS (SELECT 1 FROM social_hub.schedule s WHERE s.content_item_id = ci.id AND s.status IN ('scheduled', 'publishing', 'published'))
-        AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts p WHERE p.content_item_id = ci.id AND p.status IN ('requested', 'creating', 'processing', 'publishing', 'published'))
-      ORDER BY f.created_at NULLS LAST, j.finished_at`,
+    `SELECT r.id FROM (${PLACEABLE_RENDERS}) r ORDER BY r.reviewed_at NULLS LAST, r.finished_at`,
     [approvalNeeded],
   );
   let scheduled = 0;
@@ -114,6 +120,41 @@ export async function scheduleApproved(db: Queryable, now = new Date(), rng?: (c
     scheduled += 1;
   }
   return scheduled;
+}
+
+/** One candidate for the night's slots (daily fill, D54): a pool topic, or a topic whose render survives. */
+export type FillCandidate = { topicId: string; title: string; /** The surviving render; null for a fresh pool topic. */ jobId: string | null };
+
+/**
+ * The 2 AM daily fill's candidates (D54), best first by the pool's own order
+ * (POOL_ORDER_BY): every pool topic, and every rendered topic whose newest
+ * finished render is placeable (approved, or unreviewed with require_approval
+ * off; video in Storage; no slot, no try) and none of whose renders has
+ * posted. The cycle renders a pool topic it picks; it places a surviving
+ * render instead of rendering its topic again.
+ */
+export async function fillCandidates(db: Queryable, approvalNeeded: boolean): Promise<FillCandidate[]> {
+  const { rows } = await db.query<{ topic_id: string; title: string; job_id: string | null }>(
+    `WITH placeable AS (${PLACEABLE_RENDERS}),
+     newest AS (
+       SELECT DISTINCT ON (topic_id) id, topic_id FROM explainers.jobs
+        WHERE status = 'ok'
+        ORDER BY topic_id, finished_at DESC NULLS LAST, seq DESC)
+     SELECT c.id::text AS topic_id, c.title, c.job_id FROM (
+       SELECT t.*, n.id::text AS job_id
+         FROM explainers.topics t
+         LEFT JOIN newest n ON n.topic_id = t.id AND t.status = 'rendered' AND n.id IN (SELECT id FROM placeable)
+        WHERE t.status = 'pool'
+           OR (n.id IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM explainers.jobs j2
+                                 JOIN social_hub.content_items ci2 ON ci2.vertical = 'explainers' AND ci2.native_ref = j2.id::text
+                                 JOIN social_hub.publish_attempts pa ON pa.content_item_id = ci2.id
+                                WHERE j2.topic_id = t.id AND pa.status = 'published'))
+     ) c
+     ORDER BY ${POOL_ORDER_BY}`,
+    [approvalNeeded],
+  );
+  return rows.map((r) => ({ topicId: r.topic_id, title: r.title, jobId: r.job_id }));
 }
 
 /** Due slots become publish attempts. A failing readiness check fails the slot, with the reason. */

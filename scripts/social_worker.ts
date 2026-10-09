@@ -9,6 +9,14 @@
  * child process (--run-id), so a Chromium crash or memory spike ends the
  * child, not the worker. After it: each shipped post's slides are rendered to
  * JPEGs in Storage, and the best posts take today's windows (9:00–10:00 AM, 2:30–3:30 PM).
+ * Daily fill (D54): carousels a person placed for today count toward
+ * posts_per_day, so the run makes (and schedules) only the rest, and is
+ * skipped with the reason when nothing is left.
+ *
+ * A one-story rerun the Social Hub queued (Regenerate, social.rerun_requests,
+ * D51) is claimed when no run is queued or running: it opens its own run and
+ * the same child script carries it out (--rerun-post), under the run cap;
+ * its new post is not auto-scheduled.
  *
  * Nothing is scheduled or published unless social.settings.publishing_live is
  * on. Insights: every 30 minutes while a carousel is fresh, and a 5:30 AM sweep.
@@ -51,7 +59,8 @@ async function main(): Promise<void> {
   const { socialQuery } = await import('@/lib/social/store');
   const { autoRunOn, getSocialSetting, publishingLive, requireApproval } = await import('@/lib/social/overnight/settings');
   const runs = await import('@/lib/social/overnight/runs');
-  const { releaseDueSchedules, scheduleRunPosts } = await import('@/lib/social/overnight/schedule');
+  const { carouselFill, nightStories, releaseDueSchedules, scheduleRunPosts } = await import('@/lib/social/overnight/schedule');
+  const { quotaFilledNote, reportFill } = await import('@/lib/social-hub/fill');
   const { claimAndPublish } = await import('@/lib/social/overnight/publish');
   const { createLiveCarouselClient, metaConfigured } = await import('@/lib/social/overnight/meta');
   const { createCarouselInsightsClient, pollCarouselInsights } = await import('@/lib/social/overnight/insights');
@@ -100,10 +109,11 @@ async function main(): Promise<void> {
   }
 
   /** The daily script in a child process. Resolves with its exit code and the end of its stderr. */
-  function runDailyScript(runId: string, stories: number, capUsd: number): Promise<{ code: number | null; tail: string }> {
+  function runDailyScript(runId: string, stories: number, capUsd: number, rerunPostId?: string): Promise<{ code: number | null; tail: string }> {
     return new Promise((resolve) => {
       const tsx = path.join(process.cwd(), 'node_modules', '.bin', 'tsx');
-      const child = spawn(tsx, ['scripts/social_daily.ts', '--run-id', runId, '--stories', String(stories), '--cap-usd', String(capUsd)], {
+      const args = ['scripts/social_daily.ts', '--run-id', runId, '--stories', String(stories), '--cap-usd', String(capUsd), ...(rerunPostId ? ['--rerun-post', rerunPostId] : [])];
+      const child = spawn(tsx, args, {
         cwd: process.cwd(),
         env: process.env,
         stdio: ['ignore', 'inherit', 'pipe'],
@@ -118,10 +128,28 @@ async function main(): Promise<void> {
     });
   }
 
-  async function carryOutRun(run: { id: string; capUsd: number }): Promise<void> {
-    const stories = (await getSocialSetting<number>('run_stories')) ?? cfg.DEFAULT_RUN_STORIES;
-    log('run_started', { runId: run.id, stories, capUsd: run.capUsd });
-    const { code, tail } = await runDailyScript(run.id, stories, run.capUsd);
+  /** A queued run, or a one-story rerun (`rerun`: its post; D51) carried out in the same child script. */
+  async function carryOutRun(run: { id: string; capUsd: number }, rerun?: { requestId: string; postId: string }): Promise<void> {
+    let stories = 1;
+    if (!rerun) {
+      // Daily fill (D54): what people placed for today counts toward posts_per_day; the run makes only the rest.
+      const runStories = (await getSocialSetting<number>('run_stories')) ?? cfg.DEFAULT_RUN_STORIES;
+      // A failed read never strands the claimed run: it makes run_stories, as before the rule.
+      const fill = await carouselFill(query).catch((error) => {
+        log('fill_failed', { runId: run.id, error: errorText(error) });
+        return null;
+      });
+      stories = fill ? nightStories(fill, runStories) : runStories;
+      if (fill) reportFill(fill, log, { runId: run.id, runStories, stories });
+      if (fill && stories < 1) {
+        const note = `${quotaFilledNote(fill, 'carousel')} The run made nothing new.`;
+        await runs.skipRun(query, run.id, note);
+        log('run_skipped', { runId: run.id, reason: 'quota_filled', note });
+        return;
+      }
+    }
+    log('run_started', { runId: run.id, stories, capUsd: run.capUsd, ...(rerun ? { rerunOf: rerun.postId, rerunRequest: rerun.requestId } : {}) });
+    const { code, tail } = await runDailyScript(run.id, stories, run.capUsd, rerun?.postId);
     // The script finishes the run itself; one still `running` means it died first.
     await runs.failRun(query, run.id, `The daily script exited (${code}) before finishing the run. ${tail}`);
     const status = (await query(`SELECT status FROM social.runs WHERE id = $1`, [run.id])).rows[0]?.status;
@@ -138,7 +166,8 @@ async function main(): Promise<void> {
       }
     }
 
-    if (await publishingLive()) {
+    // A rerun's new version waits in Content ready for a person; only the nightly run fills today's windows.
+    if (!rerun && (await publishingLive())) {
       for (const scheduled of await scheduleRunPosts(query, run.id)) {
         log('schedule', scheduled.scheduled ? { runId: run.id, publishAt: scheduled.publishAt } : { runId: run.id, note: scheduled.note });
       }
@@ -156,6 +185,7 @@ async function main(): Promise<void> {
     let sweepAt = nextSweep();
     let hubSweepAt = nextHubSweep();
     let lastInsights = 0;
+    let lastRerunError: string | null = null;
     log('scheduled', { nextRunAt: runAt.toISOString(), nextInsightsAt: sweepAt.toISOString(), pollMs: POLL_MS });
 
     while (!stopping) {
@@ -208,6 +238,24 @@ async function main(): Promise<void> {
       });
       if (claimed) {
         await carryOutRun(claimed).catch((error) => log('run_failed', { runId: claimed.id, error: errorText(error) }));
+        continue;
+      }
+
+      // One-story reruns the Social Hub queued (D51), when no run is queued or running.
+      const capUsd = (await getSocialSetting<number>('run_cap_usd').catch(() => null)) ?? cfg.DEFAULT_RUN_CAP_USD;
+      const rerun = await runs.claimRerun(query, { capUsd, hookPass: true }).catch((error) => {
+        // Logged once per distinct error (e.g. the table before db/social_schema.sql is applied), not every poll.
+        const text = errorText(error);
+        if (text !== lastRerunError) log('rerun_claim_failed', { error: text });
+        lastRerunError = text;
+        return null;
+      });
+      if (rerun) {
+        await carryOutRun({ id: rerun.runId, capUsd: rerun.capUsd }, { requestId: rerun.id, postId: rerun.postId })
+          .catch((error) => log('run_failed', { runId: rerun.runId, error: errorText(error) }));
+        await runs.settleReruns(query).catch((error) => log('rerun_settle_failed', { error: errorText(error) }));
+        const done = (await query(`SELECT status, new_post_id, error FROM social.rerun_requests WHERE id = $1`, [rerun.id]).catch(() => ({ rows: [] }))).rows[0];
+        log('rerun_complete', { requestId: rerun.id, runId: rerun.runId, status: done?.status, newPostId: done?.new_post_id ?? null, error: done?.error ?? null });
         continue;
       }
 

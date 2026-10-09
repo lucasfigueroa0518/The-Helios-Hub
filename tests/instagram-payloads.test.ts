@@ -2,7 +2,7 @@
  * Golden Graph requests for every content type (backend unification, Move 2).
  * Records what each client sends to Meta: the transport moves into
  * lib/instagram, but each payload must stay exactly as it is. Above all, a
- * Trial Reel must keep `trial_params` (MANUAL graduation), or it posts to the grid.
+ * Trial Reel must keep `trial_params` (SS_PERFORMANCE: it graduates itself when it performs), or it posts straight to the grid.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -57,8 +57,8 @@ const PUBLISH: Sent = { method: 'POST', url: `${BASE}/${IG}/media_publish`, para
 const PERMALINK: Sent = { method: 'GET', url: `${BASE}/media-1`, params: { fields: 'permalink' } };
 const QUOTA: Sent = { method: 'GET', url: `${BASE}/${IG}/content_publishing_limit`, params: { fields: 'quota_usage,config' } };
 
-test('Trial Reel: REELS with trial_params MANUAL and the song attached by audio_id', async () => {
-  assert.equal(TRIAL_GRADUATION_STRATEGY, 'MANUAL', 'SS_PERFORMANCE would let Instagram put a trial reel on the grid');
+test('Trial Reel: REELS with trial_params SS_PERFORMANCE and the song attached by audio_id', async () => {
+  assert.equal(TRIAL_GRADUATION_STRATEGY, 'SS_PERFORMANCE', 'a trial reel graduates itself when it performs');
   await withMetaEnv(async () => {
     const { sent, fetchImpl } = recorder();
     const meta = createLiveMetaClient(fetchImpl);
@@ -80,7 +80,7 @@ test('Trial Reel: REELS with trial_params MANUAL and the song attached by audio_
       video_url: 'https://store.example/reel.mp4',
       caption: 'Reel caption',
       audio_configuration: '{"audio_id":"audio-42","audio_volume":80,"video_volume":20}',
-      trial_params: '{"graduation_strategy":"MANUAL"}',
+      trial_params: '{"graduation_strategy":"SS_PERFORMANCE"}',
     };
     assert.deepEqual(sent, [
       { method: 'POST', url: `${BASE}/${IG}/media`, params: reel },

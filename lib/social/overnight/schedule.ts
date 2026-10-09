@@ -3,7 +3,8 @@ import type { Query } from '@/lib/social/store/pg';
 import { calendarDateKey } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { slotTakenKey } from '@/lib/instagram/window';
-import { approveItem, rejectItem } from '@/lib/social-hub/spine';
+import { dailyFill, quotaFilledNote, type DailyFill } from '@/lib/social-hub/fill';
+import { approveItem, bookSlot, rejectItem } from '@/lib/social-hub/spine';
 import { DEFAULT_POSTS_PER_DAY, SOCIAL_TIMEZONE } from './config';
 import { carouselItemId } from './items';
 import { queuePublish } from './publish';
@@ -40,6 +41,24 @@ export async function postsPerDay(query: Query): Promise<number> {
   return Number.isInteger(value) && value >= 1 ? value : DEFAULT_POSTS_PER_DAY;
 }
 
+/**
+ * Today's daily fill (D54): `posts_per_day`, less the carousels people placed
+ * for today (`source = 'user'` slots waiting, posting or posted). What is
+ * left is what the 3 AM run may make and schedule.
+ */
+export async function carouselFill(query: Query, now = new Date()): Promise<DailyFill> {
+  return dailyFill(query, 'carousels', calendarDateKey(now, SOCIAL_TIMEZONE), await postsPerDay(query));
+}
+
+/**
+ * Stories the nightly run makes: the fill's remainder, never more than
+ * `run_stories` (the run's own spend knob, default 2). Zero: the run is skipped.
+ */
+export function nightStories(fill: DailyFill, runStories: number): number {
+  const knob = Number.isFinite(runStories) ? Math.max(0, Math.floor(runStories)) : 0;
+  return Math.min(knob, fill.making);
+}
+
 export type ScheduleOutcome = { scheduled: true; id: string; publishAt: string } | { scheduled: false; note: string };
 
 /**
@@ -70,12 +89,8 @@ export async function schedulePost(
     const choice = chooseCarouselSlots(now, await takenSlots(query, calendarDateKey(now, SOCIAL_TIMEZONE)), busy, await postsPerDay(query), rng, throughDate);
     if (!choice) return { scheduled: false, note: throughDate ? 'Today’s carousel windows are taken or over.' : 'No carousel window is open in the next two weeks.' };
     try {
-      const { rows } = await query(
-        `INSERT INTO social_hub.schedule (content_item_id, vertical, ny_date, slot, publish_at, status, source)
-         VALUES ($1, 'carousels', $2::date, $3, $4::timestamptz, 'scheduled', $5) RETURNING id, publish_at`,
-        [itemId, choice.nyDate, choice.slot, choice.publishAt.toISOString(), source],
-      );
-      return { scheduled: true, id: rows[0].id, publishAt: new Date(rows[0].publish_at).toISOString() };
+      const booked = await bookSlot(query, { vertical: 'carousels', itemId, nyDate: choice.nyDate, slot: choice.slot, publishAt: choice.publishAt, source });
+      return { scheduled: true, id: booked.id, publishAt: booked.publishAt };
     } catch (error) {
       if (!isUniqueViolation(error)) throw error;
       const raced = await active();
@@ -107,14 +122,15 @@ LIMIT $2`;
 /**
  * After a run: the run's best posts that are in review with slides stored go
  * into today's windows, up to `posts_per_day` (SH-48: the top two by
- * default). A story whose finished post was reused (SH-60) is in the ship
- * list at its rank, so its stored post takes the slot. The caller checks
- * publishing_live first.
+ * default) less what people placed for today (daily fill, D54). A story
+ * whose finished post was reused (SH-60) is in the ship list at its rank, so
+ * its stored post takes the slot. The caller checks publishing_live first.
  */
 export async function scheduleRunPosts(query: Query, runId: string, now = new Date(), rng?: (count: number) => number): Promise<ScheduleOutcome[]> {
-  const perDay = await postsPerDay(query);
+  const fill = await carouselFill(query, now);
+  if (fill.making < 1) return [{ scheduled: false, note: quotaFilledNote(fill, 'carousel') }];
   const run = (await query(`SELECT ship_post_ids IS NOT NULL AS listed FROM social.runs WHERE id = $1`, [runId])).rows[0];
-  const { rows } = await query(run?.listed ? RUN_SHIP_LIST : RUN_POSTS_BY_SLUG, [runId, perDay]);
+  const { rows } = await query(run?.listed ? RUN_SHIP_LIST : RUN_POSTS_BY_SLUG, [runId, fill.making]);
   if (!rows[0]) return [{ scheduled: false, note: 'The run shipped no post ready to schedule.' }];
   const out: ScheduleOutcome[] = [];
   for (const row of rows) {

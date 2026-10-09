@@ -3,7 +3,8 @@ import { queuePublish, publishReadiness, type PublishTrigger } from '@/lib/reels
 import { getSetting } from '@/lib/reels/music/store';
 import { calendarDateKey } from '@/lib/reels/schedule';
 import { REEL_SCHEDULE } from '@/lib/reels/spine-tables';
-import { approveReel, reelItemId } from '@/lib/reels/publish/items';
+import { approveReel, reelItemId, reelsSpine } from '@/lib/reels/publish/items';
+import { bookSlot } from '@/lib/social-hub/spine';
 import {
   chooseSlot,
   openMinuteRange,
@@ -168,13 +169,17 @@ export async function schedulePostIdea(
       return { scheduled: false, status: 409, note };
     }
     try {
-      const { rows } = await dbQuery<{ id: string }>(
-        `INSERT INTO social_hub.schedule (content_item_id, vertical, idea_ref, ny_date, slot, publish_at, status, source, approved_at)
-         VALUES ($1, 'reels', $2, $3::date, $4, $5, 'scheduled', $6, CASE WHEN $6::text = 'user' THEN now() END)
-         RETURNING id`,
-        [itemId, postIdeaId, choice.nyDate, choice.slot, choice.publishAt.toISOString(), source],
-      );
-      const schedule = await scheduleById(rows[0]!.id);
+      const booked = await bookSlot(reelsSpine, {
+        vertical: 'reels',
+        itemId,
+        ideaRef: postIdeaId,
+        nyDate: choice.nyDate,
+        slot: choice.slot,
+        publishAt: choice.publishAt,
+        source,
+        approved: source === 'user',
+      });
+      const schedule = await scheduleById(booked.id);
       return { scheduled: true, schedule, note: scheduleNote(schedule) };
     } catch (error) {
       if (!isUniqueViolation(error)) throw error;

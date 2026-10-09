@@ -42,6 +42,7 @@ async function main(): Promise<void> {
   const { claimAndRenderVideo } = await import('@/lib/reels/visual/video-run');
   const { nextRunAt } = await import('@/lib/reels/schedule');
   const { runSongIngest } = await import('@/lib/reels/music/ingest');
+  const { getSetting } = await import('@/lib/reels/music/store');
   const { claimAndPickSong } = await import('@/lib/reels/music/pick');
   const { claimAndPublish } = await import('@/lib/reels/music/publish');
   const { releaseDueSchedules } = await import('@/lib/reels/publish/schedule');
@@ -89,6 +90,12 @@ async function main(): Promise<void> {
 
       // Two ways in: the 1 AM schedule, and whatever the page queued.
       if (Date.now() >= scheduledFor.getTime()) {
+        // Generate is a switch (reels.settings auto_run, on unless set to false); Run now still works.
+        if ((await getSetting<boolean>('auto_run').catch(() => null)) === false) {
+          log('run_skipped', { reason: 'auto_run is off' });
+          scheduledFor = nextRunAt(new Date());
+          continue;
+        }
         const outcome = await runReelsNight('scheduled');
         log('run_complete', { trigger: 'scheduled', status: outcome.status, runId: outcome.runId });
         scheduledFor = nextRunAt(new Date());

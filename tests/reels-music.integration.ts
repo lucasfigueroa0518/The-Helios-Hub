@@ -264,7 +264,7 @@ async function main(): Promise<void> {
       sleep: async () => undefined,
     });
     assert.equal(published?.status, 'published');
-    assert.ok(calls.includes(`create:${song.audioId}:100/60:MANUAL:null`));
+    assert.ok(calls.includes(`create:${song.audioId}:100/60:SS_PERFORMANCE:null`));
     const attempt = await dbQuery<{ caption: string; permalink: string; audio_id: string; song_title: string }>(
       `SELECT caption, permalink, audio_id, song_title FROM ${REEL_ATTEMPTS} a WHERE post_idea_id = $1`,
       [fx.postIdeaId],

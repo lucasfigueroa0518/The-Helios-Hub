@@ -1,7 +1,8 @@
 /**
  * Explainer Reels worker (BUILD_PLAN §4–§6, docs/social-overnight.md). Claims
  * one queued render at a time and runs it; while auto_render is on, also runs
- * the daily idea cycle at 2:00 AM New York. While publishing_live is on,
+ * the daily idea cycle at 2:00 AM New York, which fills the day's
+ * posts_per_day less what people placed (daily fill, D54). While publishing_live is on,
  * approved renders are scheduled into the 1:00–2:30 PM and 3:30–5:00 PM
  * windows and published (by the single publisher once publisher_mode is live).
  * Insights: every 30 minutes while a reel is fresh, and a 5:15 AM sweep.
@@ -143,8 +144,14 @@ async function main(): Promise<void> {
       const today = nyDate(now);
       if (settings.auto_render && hourNy >= IDEA_CYCLE_HOUR_NY && lastCycleDay !== today) {
         lastCycleDay = today;
-        const cycle = await runIdeaCycle({ db, ideaModel: anthropicIdeaModel(anthropic), jevTransport: liveJevTransport });
-        log('idea_cycle', { status: cycle.status, ...('reason' in cycle ? { reason: cycle.reason } : {}) });
+        const cycle = await runIdeaCycle({ db, ideaModel: anthropicIdeaModel(anthropic), jevTransport: liveJevTransport, log });
+        log('idea_cycle', {
+          status: cycle.status,
+          ...('reason' in cycle ? { reason: cycle.reason } : {}),
+          // Daily fill (D54): the day's quota, what people placed, what the night rendered or placed instead.
+          ...('fill' in cycle ? { fill: cycle.fill } : {}),
+          ...(cycle.status === 'ok' ? { renders: cycle.renders, allocated: cycle.allocated.map((a) => ({ topicId: a.topicId, jobId: a.jobId, scheduled: a.scheduled })) } : {}),
+        });
       }
       await renderNext();
       await publishStep().catch((error) => log('publish_failed', { error: errorText(error) }));

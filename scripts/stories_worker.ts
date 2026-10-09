@@ -14,11 +14,17 @@
  *
  * Building a set makes live Claude, Jev and web calls: only for a set Lucas
  * requested (Generate, --request) or a series he switched to auto (rule 0.1).
+ *
+ * Photo bank (DECISIONS_LOG D49): the finder offers its vetted photos to the
+ * bank in the shared database (nothing happens while its `capture` switch is
+ * off); the worker drains the bank's queue after a pass that built or
+ * published, and before it exits.
  */
 import './stories_env';
 import { liveJevTransport } from '@/lib/reels/jev/client';
 import { liveStoriesDb, type StoriesDb } from '@/lib/stories/db';
 import { DEFAULT_LOCAL_DIR, openLocalStoriesDb } from '@/lib/stories/local-db';
+import { createPhotoBank } from '@/lib/media-library/bank';
 import { createLivePhotoFinder } from '@/lib/stories/photos';
 import { createLiveStoryInsightsClient } from '@/lib/stories/publish/insights';
 import { createLiveStoriesMetaClient } from '@/lib/stories/publish/meta';
@@ -40,6 +46,7 @@ async function main() {
   const db: StoriesDb = process.env.STORIES_DB === 'local' ? (await openLocalStoriesDb(DEFAULT_LOCAL_DIR)).db : liveStoriesDb;
   const sourceDb = liveStoriesDb;
   const log = (line: string) => console.log(`${new Date().toISOString()} ${line}`);
+  const bank = createPhotoBank({ query: (text, params) => sourceDb.query(text, params), log: (line) => log(`photo bank: ${line}`) });
 
   if (requestArg > 0) {
     const series = process.argv[requestArg + 1] as Series;
@@ -66,7 +73,7 @@ async function main() {
         sourceDb,
         jevTransport: liveJevTransport,
         write: liveWriterCreate(),
-        photos: createLivePhotoFinder({ create: (p) => client.messages.create(p) }),
+        photos: createLivePhotoFinder({ create: (p) => client.messages.create(p), bank }),
         renderer,
         review: createReviewCall({ create: (p) => client.messages.create(p), model: settings.models.review }),
         storage: createStoriesStorage(),
@@ -83,6 +90,7 @@ async function main() {
       try {
         const r = await tick(deps);
         if (r.built || r.scheduled || r.published || r.insights) log(`pass: ${JSON.stringify(r)}`);
+        if (r.built || r.published) await bank.drain(15_000);
       } catch (err) {
         log(`pass failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
       }
@@ -90,6 +98,7 @@ async function main() {
       await new Promise((r) => setTimeout(r, POLL_MS));
     } while (!stopping);
   } finally {
+    await bank.drain(30_000);
     await (renderer as Renderer | null)?.close();
   }
 }

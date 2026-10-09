@@ -1,0 +1,266 @@
+{
+  "format": "carousel",
+  "storyType": "tech",
+  "source": "Fortune",
+  "sourceUrl": "https://fortune.com/2026/10/07/openai-math-controversy-solutions-370-outstanding-challenges-published-criticisms-celebration/",
+  "publishedAt": "2026-10-08T01:47:45.000Z",
+  "issueNumber": 0,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "headline": [
+        {
+          "text": "OpenAI posted 377 AI-made math results online. Mathematicians are split.",
+          "role": "narrative"
+        }
+      ],
+      "altText": "OpenAI posted 377 AI-made math results online. Mathematicians are split.",
+      "icon": "newspaper",
+      "photoUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/33/Pioneer_Building%2C_San_Francisco_%282019%29_-1.jpg/3840px-Pioneer_Building%2C_San_Francisco_%282019%29_-1.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "photoCredit": "OpenAI headquarters · HaeB, CC BY-SA 4.0 · Wikimedia Commons",
+      "photoKind": "scene",
+      "photoSize": {
+        "w": 5408,
+        "h": 2717
+      },
+      "coverMode": "bleed",
+      "template": "cover-bleed"
+    },
+    {
+      "position": 1,
+      "headline": [
+        {
+          "text": "A mass release of AI-made math",
+          "role": "narrative"
+        }
+      ],
+      "altText": "A mass release of AI-made math",
+      "icon": "file-text",
+      "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/3/3e/%C3%89quations-modifications.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+      "photoCredit": "Luc Comeau-Montasse, CC BY-SA 3.0 · Wikimedia Commons",
+      "photoKind": "scene",
+      "photoSize": {
+        "w": 1883,
+        "h": 1561
+      },
+      "body": [
+        {
+          "text": "OpenAI says an unreleased internal model made them, across about 20 subfields. Sources show no independent verification.",
+          "role": "narrative"
+        }
+      ],
+      "hook": {
+        "text": "Some of the problems have a prize attached.",
+        "position": "below"
+      },
+      "layoutVariant": "split_stat",
+      "title": [
+        {
+          "text": "377",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "math results released",
+      "secondNumber": "722",
+      "secondNote": "papers published",
+      "template": "stat-backdrop"
+    },
+    {
+      "position": 2,
+      "headline": [
+        {
+          "text": "Big problems, no full solutions",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Big problems, no full solutions",
+      "icon": "banknote",
+      "body": [
+        {
+          "text": "OpenAI says it made progress on three Millennium Prize problems, each worth a $1 million award, without fully solving them.",
+          "role": "narrative"
+        }
+      ],
+      "hook": {
+        "text": "OpenAI made a big math claim in September too. That one drew criticism.",
+        "position": "below"
+      },
+      "layoutVariant": "text",
+      "textAnchor": "top",
+      "template": "story-text-top"
+    },
+    {
+      "position": 3,
+      "headline": [
+        {
+          "text": "It follows a September dispute",
+          "role": "narrative"
+        }
+      ],
+      "altText": "It follows a September dispute",
+      "icon": "landmark",
+      "body": [
+        {
+          "text": "OpenAI said its model solved a Navier-Stokes problem. After criticism, it formed an advisory group at the Institute for Advanced Study.",
+          "role": "narrative"
+        }
+      ],
+      "hook": {
+        "text": "So did OpenAI listen to that group this time? Its answer and Fortune's differ.",
+        "position": "below"
+      },
+      "layoutVariant": "text",
+      "textAnchor": "bottom",
+      "template": "story-text-low",
+      "iconSide": "left"
+    },
+    {
+      "position": 4,
+      "headline": [
+        {
+          "text": "OpenAI says it drew on the group’s advice",
+          "role": "narrative"
+        }
+      ],
+      "altText": "OpenAI says it drew on the group’s advice",
+      "icon": "file-text",
+      "photoUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/33/Pioneer_Building%2C_San_Francisco_%282019%29_-1.jpg/3840px-Pioneer_Building%2C_San_Francisco_%282019%29_-1.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "photoCredit": "OpenAI headquarters · HaeB, CC BY-SA 4.0 · Wikimedia Commons",
+      "photoKind": "scene",
+      "photoSize": {
+        "w": 5408,
+        "h": 2717
+      },
+      "body": [
+        {
+          "text": "It published reasoning summaries for 10 problems. Fortune says some steps were skipped; Ynet says OpenAI claims one exception.",
+          "role": "narrative"
+        }
+      ],
+      "hook": {
+        "text": "One request from the group is harder to square with this release.",
+        "position": "below"
+      },
+      "layoutVariant": "image",
+      "panoramaSide": "left",
+      "bleedText": "top",
+      "template": "spread-text-top"
+    },
+    {
+      "position": 5,
+      "headline": [
+        {
+          "text": "A stop request, same model",
+          "role": "narrative"
+        }
+      ],
+      "altText": "A stop request, same model",
+      "icon": "lock",
+      "photoUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/33/Pioneer_Building%2C_San_Francisco_%282019%29_-1.jpg/3840px-Pioneer_Building%2C_San_Francisco_%282019%29_-1.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "photoCredit": "OpenAI headquarters · HaeB, CC BY-SA 4.0 · Wikimedia Commons",
+      "photoKind": "scene",
+      "photoSize": {
+        "w": 5408,
+        "h": 2717
+      },
+      "body": [
+        {
+          "text": "The advisory group asked labs to stop testing on models outsiders can’t use. Gizmodo says the new results used the same unreleased model.",
+          "role": "narrative"
+        }
+      ],
+      "hook": {
+        "text": "Another doubt comes from a mathematician at NYU.",
+        "position": "below"
+      },
+      "layoutVariant": "image",
+      "panoramaSide": "right",
+      "bleedText": "top",
+      "template": "spread-text-top"
+    },
+    {
+      "position": 6,
+      "headline": [
+        {
+          "text": "Are the results original?",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Are the results original?: \"There’s likely to be a bunch of results where they take someone’s work and then take it to completion\" (Tristan Buckmaster)",
+      "icon": "message-square-quote",
+      "body": [
+        {
+          "text": "Tristan Buckmaster of NYU told the New York Times OpenAI hasn’t done due diligence. Whether the results are original is unclear.",
+          "role": "narrative"
+        }
+      ],
+      "hook": {
+        "text": "Two other mathematicians weigh in on what it means for the field.",
+        "position": "below"
+      },
+      "layoutVariant": "quote",
+      "quoteText": [
+        {
+          "text": "There’s likely to be a bunch of results where they take someone’s work and then take it to completion",
+          "role": "narrative"
+        }
+      ],
+      "quoteBy": "Tristan Buckmaster",
+      "quoteRole": "New York University mathematician involved in the earlier Navier-Stokes dispute",
+      "template": "quote-type-led"
+    },
+    {
+      "position": 7,
+      "headline": [
+        {
+          "text": "Mathematicians split on the fallout",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Mathematicians split on the fallout",
+      "icon": "users",
+      "body": [
+        {
+          "text": "Dan Litt: “great for mathematics”, but funders could pull back. Terence Tao: AI prompters solve problems without engaging the field.",
+          "role": "narrative"
+        }
+      ],
+      "hook": {
+        "text": "So who judges whether OpenAI did this right? The advisory group has an answer.",
+        "position": "below"
+      },
+      "layoutVariant": "landing",
+      "template": "story-landing",
+      "iconSide": "left"
+    },
+    {
+      "position": 8,
+      "headline": [
+        {
+          "text": "The verdict is left to mathematicians",
+          "role": "narrative"
+        }
+      ],
+      "altText": "The verdict is left to mathematicians",
+      "icon": "scale",
+      "body": [
+        {
+          "text": "The advisory group reaffirms its advice and says the community must judge how far OpenAI followed it.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text",
+      "textAnchor": "top",
+      "template": "story-text-top"
+    },
+    {
+      "position": 9,
+      "layoutVariant": "follow",
+      "storySpecificLine": "Follow Helios to see how mathematicians rule on OpenAI’s math release.",
+      "altText": "Follow Helios to see how mathematicians rule on OpenAI’s math release."
+    }
+  ],
+  "caption": "OpenAI posted 377 AI-generated math results, covering 722 papers, to GitHub on Tuesday, and mathematicians are split over how they were produced. OpenAI says an unreleased internal model made them, some as full solutions and some as partial ones. The sources show no independent verification.\n\nOpenAI says it made progress on three Millennium Prize problems (seven problems, each carrying a $1 million Clay Mathematics Institute award) but has not fully solved them. The release follows a September dispute over OpenAI’s Navier-Stokes claim, after which it formed an advisory group at the Institute for Advanced Study. OpenAI says it drew on that group’s advice. Fortune says it followed some steps, not all. Gizmodo says the group’s request to stop testing on proprietary models does not look like it was taken up.\n\nDan Litt of the University of Toronto calls the results “great for mathematics” but worries about funders pulling back. Tristan Buckmaster of NYU says OpenAI hasn’t done due diligence, and it is unclear whether the results are original. Terence Tao says AI prompters solve problems without engaging the broader field.\n\nWould you trust a math proof from an AI model that outsiders can’t use?\n\nFollow Helios for the next turn in the fight over AI and mathematics.\n\nSource: Fortune, OpenAI, The Guardian, SiliconANGLE, Ynet, The Hill and AOL.",
+  "attributionBlock": "Photos: OpenAI headquarters · HaeB, CC BY-SA 4.0 · Wikimedia Commons; Luc Comeau-Montasse, CC BY-SA 3.0 · Wikimedia Commons; Jemimus, CC BY 2.0 · Wikimedia Commons"
+}

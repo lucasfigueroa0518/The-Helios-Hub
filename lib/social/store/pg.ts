@@ -207,6 +207,24 @@ export async function storedPostFor(query: Query, storyId: string): Promise<stri
   return newest.id as string;
 }
 
+/**
+ * True when any post of this story already holds a carousel slot that is
+ * waiting or posting (a person placed it, or an earlier run did). The night
+ * passes such a story over (daily fill, D54): it is already on the calendar,
+ * and a person's placement for today is counted in the day's quota.
+ */
+export async function storyOnCalendar(query: Query, storyId: string): Promise<boolean> {
+  const { rows } = await query(
+    `SELECT EXISTS (
+       SELECT 1 FROM social.posts p
+         JOIN social_hub.content_items ci ON ci.vertical = 'carousels' AND ci.native_ref = p.id::text
+         JOIN social_hub.schedule s ON s.content_item_id = ci.id
+        WHERE p.story_id = $1 AND s.status IN ('scheduled', 'publishing')) AS placed`,
+    [storyId],
+  );
+  return rows[0]?.placed === true;
+}
+
 /** The run's ship list, post ids best-ranked first (social.runs.ship_post_ids). */
 export async function recordShipList(query: Query, runId: string, postIds: string[]): Promise<void> {
   await query(`UPDATE social.runs SET ship_post_ids = $2::jsonb WHERE id = $1`, [runId, JSON.stringify(postIds)]);

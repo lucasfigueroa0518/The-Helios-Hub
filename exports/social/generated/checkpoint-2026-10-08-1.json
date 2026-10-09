@@ -1,0 +1,249 @@
+{
+  "format": "carousel",
+  "storyType": "tech",
+  "source": "Anthropic (Introducing Claude Haiku 5.5)",
+  "sourceUrl": "https://www.anthropic.com/claude-haiku-5-5",
+  "publishedAt": "2026-10-08T01:00:05.000Z",
+  "issueNumber": 0,
+  "slides": [
+    {
+      "position": 0,
+      "layoutVariant": "cover",
+      "headline": [
+        {
+          "text": "Anthropic launches Haiku 5.5, a small model priced to match OpenAI’s Luna",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Anthropic launches Haiku 5.5, a small model priced to match OpenAI’s Luna",
+      "icon": "rocket",
+      "photoUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/78/Anthropic_logo.svg/960px-Anthropic_logo.svg.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "photoCredit": "Logo: Anthropic (public domain) · Wikimedia Commons",
+      "photoKind": "logo",
+      "photoSize": {
+        "w": 800,
+        "h": 90
+      },
+      "logoPlate": "light",
+      "logoWide": true,
+      "coverMode": "logo",
+      "template": "cover-logo"
+    },
+    {
+      "position": 1,
+      "headline": [
+        {
+          "text": "Anthropic ships Haiku 5.5",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Anthropic ships Haiku 5.5",
+      "icon": "rocket",
+      "body": [
+        {
+          "text": "Anthropic calls it its cheapest, fastest and most capable small model. The price matches a rival’s.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "text",
+      "textAnchor": "top",
+      "template": "story-text-top"
+    },
+    {
+      "position": 2,
+      "headline": [
+        {
+          "text": "Priced the same as OpenAI’s GPT-6 Luna",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Priced the same as OpenAI’s GPT-6 Luna",
+      "icon": "banknote",
+      "photoUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/00/Stacks_of_Coins.jpg/3840px-Stacks_of_Coins.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "photoCredit": "Kevin Schneider (CC0) · Wikimedia Commons",
+      "photoKind": "scene",
+      "photoSize": {
+        "w": 5184,
+        "h": 3456
+      },
+      "body": [
+        {
+          "text": "Per million tokens (chunks of text). Haiku 4.5 cost $1 / $5.",
+          "role": "narrative"
+        }
+      ],
+      "hook": {
+        "text": "Anthropic has its own figure for how much cheaper that makes it to run.",
+        "position": "below"
+      },
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "$0.10 / $0.50",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "Haiku 5.5 input / output price per million tokens, prompts up to 100K",
+      "template": "stat-backdrop"
+    },
+    {
+      "position": 3,
+      "headline": [
+        {
+          "text": "Running costs fall around 75%, Anthropic says",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Running costs fall around 75%, Anthropic says",
+      "icon": "banknote",
+      "photoUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4d/Server_Room_%2822397102849%29.jpg/3840px-Server_Room_%2822397102849%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "photoCredit": "Carl Lender from Sunrise, USA, CC BY 2.0 · Wikimedia Commons",
+      "photoKind": "scene",
+      "photoSize": {
+        "w": 6000,
+        "h": 4000
+      },
+      "body": [
+        {
+          "text": "That is versus Haiku 4.5, and it includes a new tokenizer that uses slightly more tokens.",
+          "role": "narrative"
+        }
+      ],
+      "hook": {
+        "text": "So what is a cheap small model actually for? Anthropic has a list, and a limit.",
+        "position": "below"
+      },
+      "layoutVariant": "image",
+      "panoramaSide": "left",
+      "bleedText": "top",
+      "template": "spread-text-top"
+    },
+    {
+      "position": 4,
+      "headline": [
+        {
+          "text": "Haiku suits high-volume tasks, Anthropic says",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Haiku suits high-volume tasks, Anthropic says",
+      "icon": "code",
+      "photoUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4d/Server_Room_%2822397102849%29.jpg/3840px-Server_Room_%2822397102849%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+      "photoCredit": "Carl Lender from Sunrise, USA, CC BY 2.0 · Wikimedia Commons",
+      "photoKind": "scene",
+      "photoSize": {
+        "w": 6000,
+        "h": 4000
+      },
+      "body": [
+        {
+          "text": "Summaries, live customer support. Sonnet 5.5 and Opus 5.5 remain better at complex agentic coding, it says.",
+          "role": "narrative"
+        }
+      ],
+      "hook": {
+        "text": "How does it stack up against Luna? Anthropic's own scoreboard has an answer.",
+        "position": "below"
+      },
+      "layoutVariant": "image",
+      "panoramaSide": "right",
+      "bleedText": "top",
+      "template": "spread-text-top"
+    },
+    {
+      "position": 5,
+      "headline": [
+        {
+          "text": "Haiku 5.5 beats Luna in Anthropic’s table",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Haiku 5.5 beats Luna in Anthropic’s table",
+      "icon": "scale",
+      "body": [
+        {
+          "text": "It leads on all six tests both have scores for. Terminal-Bench 4.0, a command-line task test: 39.2% vs 16.4%.",
+          "role": "narrative"
+        }
+      ],
+      "hook": {
+        "text": "One headline computer-use score reads very differently under stricter grading.",
+        "position": "below"
+      },
+      "layoutVariant": "text",
+      "textAnchor": "bottom",
+      "template": "story-text-low"
+    },
+    {
+      "position": 6,
+      "headline": [
+        {
+          "text": "Kingy AI says the computer-use score is partial credit",
+          "role": "narrative"
+        }
+      ],
+      "altText": "Kingy AI says the computer-use score is partial credit",
+      "icon": "triangle-alert",
+      "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/5/5e/Checklist_Noun_project_5166.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+      "photoCredit": "Aaron Dodson from The Noun Project, CC BY 3.0 · Wikimedia Commons",
+      "photoKind": "scene",
+      "photoSize": {
+        "w": 2000,
+        "h": 2083
+      },
+      "body": [
+        {
+          "text": "On OSWorld 2.1, strict pass needs every checkpoint. Haiku 5.5 gets 37.1%, GPT-6 Luna 17.1%.",
+          "role": "narrative"
+        }
+      ],
+      "hook": {
+        "text": "Has anyone outside Anthropic tested Haiku against Luna head to head?",
+        "position": "below"
+      },
+      "layoutVariant": "stat",
+      "title": [
+        {
+          "text": "72.4%",
+          "role": "narrative"
+        }
+      ],
+      "numberNote": "Haiku 5.5 OSWorld 2.1 offline subset partial-credit score (Luna 48.9%, Sonnet 5.5 83.9%)",
+      "template": "stat-backdrop"
+    },
+    {
+      "position": 7,
+      "headline": [
+        {
+          "text": "No independent matched tests yet",
+          "role": "narrative"
+        }
+      ],
+      "altText": "No independent matched tests yet",
+      "icon": "search",
+      "photoUrl": "https://upload.wikimedia.org/wikipedia/commons/8/8b/23_0073561_Convair_Negative_Image_-_Electrical_test_lab_equipment_%2854268432074%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+      "photoCredit": "San Diego Air & Space Museum Archives (public domain) · Wikimedia Commons",
+      "photoKind": "scene",
+      "photoSize": {
+        "w": 1600,
+        "h": 1307
+      },
+      "body": [
+        {
+          "text": "Kingy AI says it ran no matched hands-on benchmark, so the Luna comparison rests on Anthropic’s table.",
+          "role": "narrative"
+        }
+      ],
+      "layoutVariant": "image",
+      "template": "story-full-bleed"
+    },
+    {
+      "position": 8,
+      "layoutVariant": "follow",
+      "storySpecificLine": "Follow Helios for AI news that separates the claim from the proof.",
+      "altText": "Follow Helios for AI news that separates the claim from the proof."
+    }
+  ],
+  "caption": "Anthropic launched Claude Haiku 5.5 on October 7, a small model priced at $0.10 input and $0.50 output per million tokens for prompts up to 100,000 tokens, the same rates as OpenAI’s GPT-6 Luna.\n\nAnthropic says it costs around 75% less to run than Haiku 4.5, though a new tokenizer uses slightly more tokens. Anthropic’s own benchmark table has Haiku 5.5 ahead of Luna on all six tests where both have scores. Kingy AI says the 72.4% OSWorld 2.1 score is partial credit, and the strict pass rate is 37.1%. Prompts longer than 100,000 tokens cost $0.50 input and $2.50 output.\n\nAnthropic also cut Sonnet 5.5 cache-read prices from $0.20 to $0.10 per million tokens. A cache read is a discounted charge for reusing previously processed prompt content. Tokens are the chunks of text a model reads and writes.\n\nWould you trust a price war where the benchmarks come from the seller?\n\nFollow Helios to keep up with the small-model price race between Anthropic and OpenAI.\n\nSource: Anthropic, Kingy AI, SiliconANGLE, The Decoder and The Tech Portal.",
+  "attributionBlock": "Photos: Logo: Anthropic (public domain) · Wikimedia Commons; Kevin Schneider (CC0) · Wikimedia Commons; Carl Lender from Sunrise, USA, CC BY 2.0 · Wikimedia Commons; Kent Madsen, CC BY-SA 2.0 · Wikimedia Commons; Aaron Dodson from The Noun Project, CC BY 3.0 · Wikimedia Commons; San Diego Air & Space Museum Archives (public domain) · Wikimedia Commons"
+}

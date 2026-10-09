@@ -46,6 +46,8 @@ export type FilledSlot = {
   postIdeaId: string;
   passed: boolean;
   locked: boolean;
+  /** Daily fill (D54): the idea's finished, unposted video from an earlier day takes the slot; nothing is written or rendered. */
+  reused?: boolean;
 };
 
 export type SlotAttempt = {
@@ -103,6 +105,11 @@ export function bestGradedLine(lines: readonly GradedLine[]): GradedLine | null 
  * ship only a line that clears the gate, and stop when one does not. Locked
  * slots count toward the count and are not written again. `penalties` is
  * updated in place as general ideas miss.
+ *
+ * `reusable` (daily fill, D54): ideas that already have a finished, unposted
+ * video. They rank in the same order as every other idea; when one comes up
+ * for a slot it takes it as it is, like a lock (no attempt, so no copy and
+ * no render), and counts as passing. One that never comes up is not used.
  */
 export async function fillSlots(input: {
   ideas: readonly SlotIdea[];
@@ -112,6 +119,7 @@ export async function fillSlots(input: {
   attempt: (idea: SlotIdea, rewrite: boolean) => Promise<SlotAttempt>;
   onPenalty: (idea: SlotIdea, penalty: number) => Promise<void> | void;
   onFallback: (idea: SlotIdea, line: GradedLine) => Promise<void> | void;
+  reusable?: ReadonlySet<string>;
 }): Promise<FilledSlot[]> {
   if (!Number.isInteger(input.count) || input.count < 1) {
     throw new Error(`A generation needs a whole number of reels, not ${input.count}.`);
@@ -157,12 +165,18 @@ export async function fillSlots(input: {
     await input.onPenalty(idea, penalty);
   };
 
+  const reuse = (slot: number, idea: SlotIdea): FilledSlot => {
+    used.add(idea.id);
+    return { slot, postIdeaId: idea.id, passed: true, locked: false, reused: true };
+  };
+
   const fillReserved = async (slot: number): Promise<FilledSlot | null> => {
     const tried = new Set<string>();
     let opener = true;
     while (tried.size < input.ideas.length) {
       const idea = pool('reserved', tried)[0];
       if (!idea) return null;
+      if (input.reusable?.has(idea.id)) return reuse(slot, idea);
       tried.add(idea.id);
       const result = await input.attempt(idea, opener);
       opener = false;
@@ -188,6 +202,7 @@ export async function fillSlots(input: {
     for (let index = 0; index < COPY_SLOT_ATTEMPTS; index += 1) {
       const idea = pool('general', triedIds())[0];
       if (!idea) break;
+      if (input.reusable?.has(idea.id)) return reuse(slot, idea);
       const result = await input.attempt(idea, index === 0);
       tried.push({ idea, lines: result.lines });
       if (result.passed) {

@@ -39,10 +39,13 @@ export { META_GRAPH_VERSION } from '@/lib/instagram/graph-version';
 /** Implementation brake: day one only reads past the first page for replacements. */
 export const META_TRENDING_MAX_PAGES = 5;
 /**
- * Trial reels stay on the trial until someone graduates them in the Instagram app.
- * SS_PERFORMANCE would let Instagram put a reel on the grid by itself.
+ * Trial reels graduate by themselves when they perform: Instagram moves a reel
+ * onto the grid once enough non-followers respond (SS_PERFORMANCE, as planned in
+ * D-157 / MUS-22). MANUAL would hold every reel on the trial until someone
+ * graduates it in the Instagram app. A reel's attempt keeps the strategy it was
+ * made with, so reels already scheduled stay as they were.
  */
-export const TRIAL_GRADUATION_STRATEGY = 'MANUAL';
+export const TRIAL_GRADUATION_STRATEGY = 'SS_PERFORMANCE';
 /** Meta cURLs the video itself, so the signed link must outlast container processing. */
 export const PUBLISH_VIDEO_URL_SECONDS = 2 * 3600;
 /** How often and how long the worker waits for a container to reach FINISHED. */

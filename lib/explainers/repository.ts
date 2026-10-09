@@ -523,13 +523,43 @@ export async function saveFeedback(
   return rows[0];
 }
 
+/** Why a render the hub rejected lost its waiting slot. */
+export const REJECTED_SLOT_NOTE = 'This reel was rejected, so it was not posted.';
+
 /**
- * Set a render's verdict from outside the review page (Social Hub actions, D47),
- * keeping the tags and note a reviewer already left.
+ * Set a render's verdict from outside the review page (Social Hub actions,
+ * D47), keeping the tags and note a reviewer already left unless the hub
+ * sends its own (D53: tags from the review page's vocabulary, FAILURE_TAGS).
+ * The spine mirror follows (saveFeedback). A rejection always wins: whatever
+ * approval the item had (a person's, a Hard publish's, a setting's) becomes
+ * a rejection, and its waiting slot is cancelled with the reason, as
+ * Carousels and Trial Reels do.
  */
-export async function setVerdict(db: Queryable, jobId: string, verdict: Verdict, by: string | null): Promise<FeedbackRow> {
+export async function setVerdict(
+  db: Queryable,
+  jobId: string,
+  verdict: Verdict,
+  by: string | null,
+  review: { tags?: readonly string[]; note?: string | null } = {},
+): Promise<FeedbackRow> {
   const existing = await getFeedback(db, jobId);
-  return saveFeedback(db, { jobId, verdict, tags: existing?.tags ?? [], note: existing?.note ?? null, createdBy: by });
+  const row = await saveFeedback(db, {
+    jobId,
+    verdict,
+    tags: review.tags ?? existing?.tags ?? [],
+    note: review.note !== undefined ? review.note : existing?.note ?? null,
+    createdBy: by,
+  });
+  if (verdict === 'rejected') {
+    await db.query(
+      `UPDATE social_hub.schedule SET status = 'cancelled', error = $2
+        WHERE status = 'scheduled'
+          AND content_item_id = (SELECT ci.id FROM social_hub.content_items ci JOIN explainers.jobs j ON ci.native_ref = j.id::text
+                                  WHERE ci.vertical = 'explainers' AND j.id = $1::uuid)`,
+      [jobId, REJECTED_SLOT_NOTE],
+    );
+  }
+  return row;
 }
 
 export async function getFeedback(db: Queryable, jobId: string): Promise<FeedbackRow | null> {
