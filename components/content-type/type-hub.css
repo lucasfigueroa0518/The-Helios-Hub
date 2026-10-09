@@ -1,4 +1,11 @@
 /* Content type pages (Carousels, Stories, Explainers): the few pieces Text on Screen's page doesn't have. */
+.rh-reel__step { position: absolute; z-index: 2; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 999px; background: rgba(0, 0, 0, 0.55); color: #fff; cursor: pointer; }
+.rh-reel__step--prev { left: 8px; }
+.rh-reel__step--next { right: 8px; }
+.rh-reel__pages { position: absolute; z-index: 2; left: 10px; bottom: 10px; padding: 2px 8px; border-radius: 999px; background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 11px; font-weight: 600; }
+.rh-pager { margin: 12px 0; }
+.rh-pager img { display: block; max-height: 420px; width: auto; max-width: 100%; border-radius: 12px; }
+.rh-pager__bar { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 12.5px; }
 .rh-bench-group + .rh-bench-group { margin-top: 22px; }
 .rh-bench-group__title { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 13px; font-weight: 700; }
 .rh-bench-group__title span { color: var(--rh-muted); font-weight: 500; }

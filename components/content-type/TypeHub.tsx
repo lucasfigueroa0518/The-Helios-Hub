@@ -196,20 +196,47 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
   );
 }
 
+function pageList(post: HubPost): Array<{ src: string; label: string; remote: boolean }> {
+  if (post.media.kind === 'slides') {
+    return post.media.slides.flatMap((s, i) => {
+      const src = s.src ?? s.photo;
+      return src ? [{ src, label: s.headline ?? `Slide ${i + 1}`, remote: !s.src && Boolean(s.photo) }] : [];
+    });
+  }
+  if (post.media.kind === 'frames') return post.media.frames.flatMap((f) => (f.src ? [{ src: f.src, label: f.label, remote: false }] : []));
+  return [];
+}
+
 function PostCard({ card, onOpen }: { card: TypeCard; onOpen: () => void }) {
   const { post, offer } = card;
   const when = post.postedAt ?? post.publishAt;
   const views = metricValue(post.metrics, post.format === 'story' ? 'reach' : 'views');
+  const pages = pageList(post);
+  const [page, setPage] = useState(0);
+  const current = pages[page] ?? null;
+  const thumb = current?.src ?? card.thumb;
+  const remote = current ? current.remote : card.remote;
+  const step = (dir: number) => (e: { stopPropagation: () => void }) => {
+    e.stopPropagation();
+    setPage((n) => (n + dir + pages.length) % pages.length);
+  };
   return (
     <article className="rh-reel">
       <div className="rh-reel__media" style={{ aspectRatio: ASPECT[post.format] ?? '4 / 5' }}>
-        {card.thumb ? (
+        {thumb ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img className="rh-media__fill" src={card.thumb} alt="" loading="lazy" {...(card.remote ? { referrerPolicy: 'no-referrer' as const } : {})} />
+          <img className="rh-media__fill" src={thumb} alt={current?.label ?? ''} loading="lazy" {...(remote ? { referrerPolicy: 'no-referrer' as const } : {})} />
         ) : (
-          <span className="rh-reel__state"><ImageIcon size={22} />{post.media.kind === 'none' ? post.media.note : 'No preview yet'}</span>
+          <span className="rh-reel__state"><ImageIcon size={22} />{post.media.kind === 'none' ? post.media.note : post.status === 'generating' ? 'Being made' : 'No preview yet'}</span>
         )}
         <button type="button" className="rh-reel__hit" onClick={onOpen} aria-label={`Open ${displayName(post)}`} />
+        {pages.length > 1 ? (
+          <>
+            <button type="button" className="rh-reel__step rh-reel__step--prev" onClick={step(-1)} aria-label="Previous page"><ChevronLeft size={16} /></button>
+            <button type="button" className="rh-reel__step rh-reel__step--next" onClick={step(1)} aria-label="Next page"><ChevronRight size={16} /></button>
+            <span className="rh-reel__pages">{page + 1} / {pages.length}</span>
+          </>
+        ) : null}
         <span className={`rh-reel__badge${post.status === 'published' ? ' is-done' : ''}`}>{offer.state.label}</span>
       </div>
       <button type="button" className="rh-reel__meta" onClick={onOpen}>
@@ -265,17 +292,21 @@ function PostDetail({ card, fullPostBase, fromPath }: { card: TypeCard; fullPost
 function Media({ post }: { post: HubPost }) {
   const m = post.media;
   if (m.kind === 'video' && m.src) return <FinishedVideo key={m.src} src={m.src} poster={m.poster ?? null} />;
-  const items = m.kind === 'slides' ? m.slides.map((s, i) => ({ key: i, src: s.src ?? s.photo, label: s.headline ?? `Slide ${i + 1}` }))
-    : m.kind === 'frames' ? m.frames.map((f, i) => ({ key: i, src: f.src, label: f.label }))
-    : m.kind === 'video' && m.poster ? [{ key: 0, src: m.poster, label: 'Poster' }] : [];
-  const shown = items.filter((i) => i.src);
-  if (!shown.length) return null;
+  const pages = pageList(post);
+  const [page, setPage] = useState(0);
+  const current = pages[page];
+  if (!current && m.kind === 'video' && m.poster) return <img src={m.poster} alt="" style={{ height: 180, borderRadius: 8 }} />;
+  if (!current) return null;
   return (
-    <div style={{ display: 'flex', gap: 8, overflowX: 'auto', margin: '12px 0' }}>
-      {shown.map((i) => (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img key={i.key} src={i.src!} alt={i.label} loading="lazy" style={{ height: 180, borderRadius: 8, flex: 'none' }} />
-      ))}
+    <div className="rh-pager">
+      <img src={current.src} alt={current.label} />
+      {pages.length > 1 ? (
+        <div className="rh-pager__bar">
+          <button type="button" className="rh-btn" onClick={() => setPage((n) => (n - 1 + pages.length) % pages.length)} aria-label="Previous page"><ChevronLeft size={14} /></button>
+          <span>{current.label} · {page + 1} / {pages.length}</span>
+          <button type="button" className="rh-btn" onClick={() => setPage((n) => (n + 1) % pages.length)} aria-label="Next page"><ChevronRight size={14} /></button>
+        </div>
+      ) : <p className="rh-muted">{current.label}</p>}
     </div>
   );
 }

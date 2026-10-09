@@ -36,10 +36,17 @@ export const DAYS_BACK = 21;
 
 const at = (p: HubPost) => p.publishAt ?? p.postedAt ?? '';
 
-/** A day preview is made content, content being made, or a failed or skipped attempt. An idea is not. */
-function onDayStrip(post: HubPost): boolean {
-  if (post.status === 'generating' || post.status === 'failed' || post.status === 'skipped') return true;
-  return Boolean(post.generatedAt) && (post.status === 'ready' || post.status === 'scheduled' || post.status === 'publishing' || post.status === 'published');
+const MADE = new Set(['ready', 'scheduled', 'publishing', 'published']);
+
+/**
+ * A day preview holds only what is filling that day's quota: generated
+ * content with an idea, or one still being generated. Failed, skipped, and
+ * anything past the quota wait on the bench.
+ */
+function fillsQuota(post: HubPost): boolean {
+  if (!post.idea) return false;
+  if (post.status === 'generating') return true;
+  return Boolean(post.generatedAt) && MADE.has(post.status);
 }
 
 export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date): TypeHubModel {
@@ -53,20 +60,18 @@ export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date)
     if (post.vertical !== vertical) continue;
     const t = thumbOf(post.media);
     const card: TypeCard = { post, offer: o.offer(post), thumb: t.src, remote: t.remote, count: t.count };
-    if (!onDayStrip(post) || !post.nyDate) {
+    if (!fillsQuota(post) || !post.nyDate || post.nyDate < earliest) {
+      if (post.nyDate && post.nyDate < earliest) continue;
       waiting.push(card);
       continue;
     }
-    if (post.nyDate < earliest) continue;
     byDay.set(post.nyDate, [...(byDay.get(post.nyDate) ?? []), card]);
   }
   for (const [date, cards] of byDay) {
     const slots = windowsOn(vertical, date).length;
-    const pinned = cards.filter((c) => c.post.status === 'generating' || c.post.status === 'failed' || c.post.status === 'skipped');
-    const generated = cards.filter((c) => !pinned.includes(c)).sort((a, b) => at(a.post).localeCompare(at(b.post)) || a.post.id.localeCompare(b.post.id));
-    const room = Math.max(0, slots - pinned.length);
-    waiting.push(...generated.slice(room));
-    byDay.set(date, [...pinned, ...generated.slice(0, room)]);
+    const ranked = [...cards].sort((a, b) => at(a.post).localeCompare(at(b.post)) || a.post.id.localeCompare(b.post.id));
+    waiting.push(...ranked.slice(slots));
+    byDay.set(date, ranked.slice(0, slots));
   }
   const days = [...byDay.entries()]
     .map(([date, cards]) => ({ date, cards: cards.sort((a, b) => at(a.post).localeCompare(at(b.post)) || a.post.id.localeCompare(b.post.id)) }))
