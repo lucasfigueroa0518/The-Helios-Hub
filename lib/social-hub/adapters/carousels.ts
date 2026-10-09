@@ -54,9 +54,19 @@ export function checkLines(row: CarouselPostRow): string[] {
     }
     return String(v);
   };
+  const plain = (t: unknown) => String(t ?? '').replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"');
+  // A fact-check fix is { id, where, before, after }. Show where and what it became; a straight-to-curly quote swap is not worth a line.
+  const fixLine = (f: unknown): string | null => {
+    if (f && typeof f === 'object' && 'after' in f) {
+      const o = f as { where?: unknown; before?: unknown; after?: unknown };
+      if (plain(o.before) === plain(o.after)) return null;
+      return `Fixed${o.where ? ` (${String(o.where)})` : ''}: ${String(o.after).slice(0, 200)}`;
+    }
+    return `Fixed: ${say(f)}`;
+  };
   return [
     ...(c.warnings ?? []).map((w) => `Warning: ${say(w)}`),
-    ...(c.fixes ?? []).map((f) => `Fixed: ${say(f)}`),
+    ...(c.fixes ?? []).flatMap((f) => fixLine(f) ?? []),
     ...(c.photoReplacements ?? []).map((p) => `Photo replaced: ${say(p)}`),
     ...(c.renderReview ?? []).map((r) => `Render review: ${say(r)}`),
   ];
