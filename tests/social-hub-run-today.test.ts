@@ -111,4 +111,6 @@ test('a rank move must name a known type, a kind, and an idea of that type', () 
   assert.throws(() => parseRankMove({ vertical: 'reels', ideaId: 'explainers:topic:x', kind: 'promote' }), /Unknown idea/);
   assert.throws(() => parseRankMove({ vertical: 'reels', ideaId: IDEAS[0]!.id, kind: 'boost' }), /promote or demote/);
   assert.ok(parseRankMove({ vertical: 'carousels', ideaId: 'carousels:story:https://www.theverge.com/x', kind: 'demote' }));
+  // Google News story ids are 500-character URLs.
+  assert.ok(parseRankMove({ vertical: 'carousels', ideaId: `carousels:story:https://news.google.com/rss/articles/${'A'.repeat(480)}`, kind: 'promote' }));
 });

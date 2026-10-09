@@ -11,7 +11,7 @@ import type { Vertical } from '@/lib/social-hub/types';
 
 const VERTICALS: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories'];
 /** A hub idea id: `<vertical>:<kind>:<ref>`, refs as the adapters make them. */
-const IDEA_ID = /^(reels|carousels|explainers|stories):[A-Za-z_]+:[^\s]{1,300}$/;
+const IDEA_ID = /^(reels|carousels|explainers|stories):[A-Za-z_]+:[^\s]{1,2000}$/;
 
 export type RankMove = { vertical: Vertical; ideaId: string; kind: 'promote' | 'demote' };
 
