@@ -12,6 +12,7 @@ import {
 } from '@/components/content-type/TypeControls';
 import { ExplainersHub } from '@/components/content-type/ExplainersHub';
 import { GenerationProgress } from '@/components/content-type/GenerationProgress';
+import { RunProgressProvider } from '@/components/content-type/run-progress';
 import { TypeHub } from '@/components/content-type/TypeHub';
 import { LoadError } from '@/components/social-hub/LoadError';
 import { readPosting } from '@/lib/content-type/posting';
@@ -74,18 +75,20 @@ export async function ContentTypePage({ vertical }: { vertical: Exclude<Vertical
 
   const Hub = vertical === 'explainers' ? ExplainersHub : TypeHub;
   return (
-    <Hub
-      model={model}
-      title={TITLE[vertical]}
-      headerActions={
-        <>
-          {generate}
-          <SettingsButton>{settings}</SettingsButton>
-          <LiveToggle type={vertical} initial={live} />
-        </>
-      }
-      progress={<GenerationProgress type={vertical} />}
-      benchNote={BENCH_NOTE[vertical]}
-    />
+    <RunProgressProvider type={vertical}>
+      <Hub
+        model={model}
+        title={TITLE[vertical]}
+        headerActions={
+          <>
+            {generate}
+            <SettingsButton>{settings}</SettingsButton>
+            <LiveToggle type={vertical} initial={live} />
+          </>
+        }
+        progress={<GenerationProgress />}
+        benchNote={BENCH_NOTE[vertical]}
+      />
+    </RunProgressProvider>
   );
 }

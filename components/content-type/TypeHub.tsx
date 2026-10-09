@@ -6,10 +6,13 @@ import { ChevronLeft, ChevronRight, ExternalLink, Film, GalleryHorizontal, Image
 
 import { Drawer } from '@/app/reels/ui';
 import { BackToHub } from '@/components/content-type/BackToHub';
+import { useRunProgress } from '@/components/content-type/run-progress';
 import { ActionBar } from '@/components/social-hub/house/ActionBar';
 import type { TypeBenchItem, TypeCard, TypeHubModel } from '@/lib/content-type/model';
+import type { ProgressItem } from '@/lib/content-type/progress';
+import { runStatusText, type RunSnapshot } from '@/lib/content-type/run-status';
 import { metricValue } from '@/lib/social-hub/metrics';
-import type { HubPost } from '@/lib/social-hub/types';
+import type { HubIdea, HubPost } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
 import { clock, displayName, shortDate } from '@/lib/social-hub/views/format';
 import { IDEA_STATE_LABEL } from '@/lib/social-hub/views/pools';
@@ -57,6 +60,16 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
   fullPostBase?: string;
 }) {
   const { days, today, bench } = model;
+  const live = useRunProgress();
+  const [now, setNow] = useState(() => Date.now());
+  const ticking = live.some((item) => item.state !== 'failed') || bench.some((item) => item.idea.run && item.idea.run.state !== 'failed');
+  useEffect(() => {
+    if (!ticking) return undefined;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [ticking]);
+  const runOf = (idea: HubIdea) => resolveRun(idea, live);
+  const runText = (run: RunSnapshot | null) => (run ? runStatusText(run, now) : null);
   const [dayId, setDayId] = useState<string>(today);
   const [openPost, setOpenPost] = useState<string | null>(null);
   const [openIdea, setOpenIdea] = useState<string | null>(null);
@@ -81,6 +94,8 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
 
   const open = days.flatMap((d) => d.cards).find((c) => c.post.id === openPost) ?? bench.find((b) => b.card?.post.id === openPost)?.card ?? null;
   const idea = bench.find((b) => b.idea.id === openIdea) ?? null;
+  const ideaRun = idea ? runOf(idea.idea) : null;
+  const ideaStatus = runText(ideaRun);
   const posted = day.cards.filter((c) => c.post.status === 'published').length;
 
   return (
@@ -132,7 +147,10 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
           <p className="rh-empty">{day.date > today ? `Nothing is scheduled for this day.` : `No ${info.label.toLowerCase()} posts on this day.`}</p>
         ) : (
           <div className="rh-top">
-            {day.cards.map((card) => <PostCard key={card.post.id} card={card} onOpen={() => setOpenPost(card.post.id)} />)}
+            {day.cards.map((card) => {
+              const run = runForPost(card.post, bench, live);
+              return <PostCard key={card.post.id} card={card} status={run ? runStatusText(run, now) : null} failed={run?.state === 'failed'} onOpen={() => setOpenPost(card.post.id)} />;
+            })}
           </div>
         )}
 
@@ -146,12 +164,16 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
             <div key={section.title ?? 'bench'} className="rh-bench-group">
               {section.title ? <h4 className="rh-bench-group__title">{section.title} <span>{section.items.length}</span></h4> : null}
             <ul className="rh-rest__list">
-              {section.items.map((item) => (
+              {section.items.map((item) => {
+                const run = runOf(item.idea);
+                const status = runText(run);
+                return (
                 <li key={item.idea.id}>
                   <div className="rh-row" role="button" tabIndex={0} onClick={() => (item.card ? setOpenPost(item.card.post.id) : setOpenIdea(item.idea.id))} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (item.card) setOpenPost(item.card.post.id); else setOpenIdea(item.idea.id); } }}>
                     <span className="rh-row__rank">{item.rank}</span>
                     <span className="rh-row__main">
                       <span className="rh-row__headline">{item.idea.title}</span>
+                      {status ? <span className={`rh-row__status${run?.state === 'failed' ? ' is-failed' : ''}`}>{status}</span> : null}
                       {item.idea.detail ? <span className="rh-row__labels">{section.title && item.idea.detail.startsWith(`${section.title} · `) ? item.idea.detail.slice(section.title.length + 3) : item.idea.detail}</span> : null}
                     </span>
                     <span className="rh-row__pills">
@@ -168,7 +190,8 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
                     <ChevronRight size={16} className="rh-row__chev" aria-hidden="true" />
                   </div>
                 </li>
-              ))}
+                );
+              })}
             </ul>
             </div>
             ))
@@ -178,13 +201,15 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
 
       {open ? (
         <Drawer label={`${info.label} details`} onClose={() => setOpenPost(null)}>
-          <PostDetail card={open} fullPostBase={fullPostBase} fromPath={`/${model.vertical}`} />
+          <PostDetail card={open} run={runForPost(open.post, bench, live)} now={now} fullPostBase={fullPostBase} fromPath={`/${model.vertical}`} />
         </Drawer>
       ) : null}
       {idea ? (
         <Drawer label="Idea details" onClose={() => setOpenIdea(null)}>
           <div className="rh-detail">
             <h2 className="rh-detail__title">{idea.idea.title}</h2>
+            {ideaStatus ? <p className={`rh-run-status${ideaRun?.state === 'failed' ? ' is-failed' : ''}`}>{ideaStatus}</p> : null}
+            {ideaRun?.state === 'failed' && ideaRun.error ? <p className="rh-muted">{ideaRun.error}</p> : null}
             <p className="rh-muted">{IDEA_STATE_LABEL[idea.idea.state]} · ranked {idea.rank} of {model.benchTotal}{idea.idea.score != null ? ` · ${model.scoreLabel ?? 'score'} ${idea.idea.score.toFixed(2)}` : ''}</p>
             {idea.idea.detail ? <p>{idea.idea.detail}</p> : null}
             {idea.idea.createdAt ? <p className="rh-muted">Added {shortDate(idea.idea.createdAt)}</p> : null}
@@ -207,7 +232,7 @@ function pageList(post: HubPost): Array<{ src: string; label: string; remote: bo
   return [];
 }
 
-function PostCard({ card, onOpen }: { card: TypeCard; onOpen: () => void }) {
+function PostCard({ card, status, failed, onOpen }: { card: TypeCard; status: string | null; failed?: boolean; onOpen: () => void }) {
   const { post, offer } = card;
   const when = post.postedAt ?? post.publishAt;
   const views = metricValue(post.metrics, post.format === 'story' ? 'reach' : 'views');
@@ -237,27 +262,30 @@ function PostCard({ card, onOpen }: { card: TypeCard; onOpen: () => void }) {
             <span className="rh-reel__pages">{page + 1} / {pages.length}</span>
           </>
         ) : null}
-        <span className={`rh-reel__badge${post.status === 'published' ? ' is-done' : ''}`}>{offer.state.label}</span>
+        <span className={`rh-reel__badge${failed ? ' is-failed' : ''}${post.status === 'published' ? ' is-done' : ''}`}>{status ?? offer.state.label}</span>
       </div>
       <button type="button" className="rh-reel__meta" onClick={onOpen}>
         <span className="rh-reel__score" style={{ fontSize: 22 }}>{when ? clock(when) : '—'}</span>
         <span className="rh-reel__labels">
           <span>{displayName(post)}</span>
-          <span className="rh-reel__cat">{[post.slot?.label, views != null ? `${views.toLocaleString('en-US')} ${post.format === 'story' ? 'reach' : 'views'}` : offer.state.line].filter(Boolean).join(' · ')}</span>
+          <span className={`rh-reel__cat${failed ? ' is-failed' : ''}`}>{status ?? [post.slot?.label, views != null ? `${views.toLocaleString('en-US')} ${post.format === 'story' ? 'reach' : 'views'}` : offer.state.line].filter(Boolean).join(' · ')}</span>
         </span>
       </button>
     </article>
   );
 }
 
-function PostDetail({ card, fullPostBase, fromPath }: { card: TypeCard; fullPostBase: string; fromPath: string }) {
+function PostDetail({ card, run, now, fullPostBase, fromPath }: { card: TypeCard; run: RunSnapshot | null; now: number; fullPostBase: string; fromPath: string }) {
   const { post, offer } = card;
   const when = post.postedAt ?? post.publishAt;
+  const status = run ? runStatusText(run, now) : null;
   return (
     <div className="rh-detail">
       <h2 className="rh-detail__title">{displayName(post)}</h2>
+      {status ? <p className={`rh-run-status${run?.state === 'failed' ? ' is-failed' : ''}`}>{status}</p> : null}
+      {run?.state === 'failed' && run.error ? <p className="rh-muted">{run.error}</p> : null}
       <p className="rh-muted">
-        <span className={`rh-chip${post.status === 'failed' ? ' rh-chip--failed' : ''}`}>{offer.state.label}</span>
+        <span className={`rh-chip${post.status === 'failed' || run?.state === 'failed' ? ' rh-chip--failed' : ''}`}>{status ?? offer.state.label}</span>
         {when ? ` ${shortDate(when)} ${clock(when)}` : ''}
         {post.slot ? ` · ${post.slot.label}` : ''}
       </p>
@@ -312,6 +340,30 @@ function Media({ post }: { post: HubPost }) {
 }
 
 /** The finished video, to watch before approving: the point of opening a post. A record can outlive its file (a render kept on another machine), so say so instead of showing a dead player. */
+function topicKey(id: string): string {
+  const prefix = 'explainers:topic:';
+  return id.startsWith(prefix) ? id.slice(prefix.length) : id;
+}
+
+function snapshot(item: ProgressItem): RunSnapshot {
+  return { state: item.state, stage: item.stage, error: item.error, requestedAt: item.requestedAt, startedAt: item.startedAt };
+}
+
+/** The live poll wins over the dataset snapshot, matched on the explainer topic. */
+function resolveRun(idea: HubIdea, live: readonly ProgressItem[]): RunSnapshot | null {
+  const topicId = topicKey(idea.id);
+  const hit = live.find((item) => item.topicId != null && (item.topicId === topicId || item.topicId === idea.id));
+  return hit ? snapshot(hit) : (idea.run ?? null);
+}
+
+function runForPost(post: HubPost, bench: readonly TypeBenchItem[], live: readonly ProgressItem[]): RunSnapshot | null {
+  const topicId = post.refs.topicId ?? (post.idea ? topicKey(post.idea.id) : null);
+  if (!topicId) return null;
+  const hit = live.find((item) => item.topicId === topicId);
+  if (hit) return snapshot(hit);
+  return bench.find((item) => topicKey(item.idea.id) === topicId)?.idea.run ?? null;
+}
+
 function FinishedVideo({ src, poster }: { src: string; poster: string | null }) {
   const [missing, setMissing] = useState(false);
   if (missing) return <p className="rh-muted">The video file isn’t available here. The render is recorded, but its file isn’t in storage.</p>;

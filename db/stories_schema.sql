@@ -104,6 +104,29 @@ CREATE TABLE IF NOT EXISTS stories.candidates (
 CREATE INDEX IF NOT EXISTS idx_stories_candidates_set
     ON stories.candidates (set_id, score DESC NULLS LAST);
 
+-- ── Pool ───────────────────────────────────────────────────────────────────
+-- The open ideas for each series, refreshed from the other pools (reels,
+-- carousels, catalog). A row leaves when it is used or drops out of the
+-- latest refresh. Same shape as the other tanks: ranked, open, replaced.
+
+CREATE TABLE IF NOT EXISTS stories.pool (
+    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    series          text NOT NULL CHECK (series IN ('morning_download', 'guess_the_number', 'free_vs_paid')),
+    key             text NOT NULL CHECK (length(btrim(key)) > 0),
+    origin          text NOT NULL CHECK (origin IN ('reels', 'carousel', 'catalog', 'github', 'generated')),
+    ref             text NOT NULL,
+    title           text NOT NULL,
+    payload         jsonb NOT NULL DEFAULT '{}'::jsonb,
+    score           numeric(8, 4),
+    refreshed_at    timestamptz NOT NULL DEFAULT now(),
+    used_at         timestamptz,
+    UNIQUE (series, key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_stories_pool_open
+    ON stories.pool (series, score DESC NULLS LAST)
+    WHERE used_at IS NULL;
+
 -- ── History (repeat checks) ────────────────────────────────────────────────
 -- What has been shown: a story key (3 days, Morning Download), a number's
 -- story (30 days, Guess the Number), a tool pair (90 days, Free vs. Paid).

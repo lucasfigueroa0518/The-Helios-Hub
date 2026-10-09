@@ -23,6 +23,11 @@
 .rh-progress { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
 .rh-progress__row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border: 1px solid var(--rh-line); border-radius: 14px; background: var(--rh-surface); }
 .rh-progress__row > svg { margin-top: 3px; color: var(--rh-accent); flex: none; }
+.rh-progress__row.is-failed > svg { color: var(--rh-bad); }
+.rh-row__status { color: var(--rh-muted); font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }
+.rh-row__status.is-failed, .rh-run-status.is-failed, .rh-reel__cat.is-failed { color: var(--rh-bad); }
+.rh-run-status { margin: 0 0 8px; font-size: 14px; font-weight: 600; line-height: 1.35; }
+.rh-reel__badge.is-failed { background: var(--rh-bad); white-space: normal; max-width: calc(100% - 20px); }
 .rh-progress__main { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; font-size: 13px; }
 .rh-progress__bar { display: block; height: 4px; border-radius: 999px; background: var(--rh-bg); overflow: hidden; margin-top: 4px; }
 .rh-progress__bar > span { display: block; height: 100%; background: var(--rh-accent); border-radius: inherit; transition: width 900ms linear; }

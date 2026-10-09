@@ -178,6 +178,7 @@ function explainers(): { read: ExplainersRead; cost: Pick<CostReads, 'explainerE
       topic_id: topicIds[i]!, title, scope: 'One idea, one analogy, one example.', status: i < 8 ? 'rendered' : 'pool',
       origin: pick(['generated', 'seeded', 'manual']), weighted_score: (88 - i * 3.1).toFixed(1), created_at: at('2026-08-20', 600),
       ok_jobs: i < 8 ? 1 : 0, last_render_at: i < 8 ? at('2026-09-20', 400) : null, published: i < 6, scheduled: i === 6,
+      job_id: null, job_status: null, job_stage: null, job_error: null, job_requested_at: null, job_started_at: null,
     });
   });
   let topic = 0;

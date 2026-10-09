@@ -71,6 +71,13 @@ export type ExplainerTopicRow = {
   last_render_at: string | null;
   published: boolean;
   scheduled: boolean;
+  /** Latest render, when it is still queued, running, or the last try failed. */
+  job_id: string | null;
+  job_status: string | null;
+  job_stage: string | null;
+  job_error: string | null;
+  job_requested_at: string | null;
+  job_started_at: string | null;
 };
 
 export type ExplainersRead = {
@@ -111,8 +118,23 @@ SELECT t.id AS topic_id, t.title, t.scope, t.status, t.origin, t.weighted_score,
        EXISTS (SELECT 1 FROM social_hub.publish_attempts a JOIN social_hub.content_items ci ON ci.id = a.content_item_id
                 WHERE ci.vertical = 'explainers' AND ci.idea_ref = t.id::text AND a.status = 'published') AS published,
        EXISTS (SELECT 1 FROM social_hub.schedule s JOIN social_hub.content_items ci ON ci.id = s.content_item_id
-                WHERE ci.vertical = 'explainers' AND ci.idea_ref = t.id::text AND s.status IN ('scheduled', 'publishing')) AS scheduled
+                WHERE ci.vertical = 'explainers' AND ci.idea_ref = t.id::text AND s.status IN ('scheduled', 'publishing')) AS scheduled,
+       latest.job_id, latest.job_status, latest.job_stage, latest.job_error,
+       latest.job_requested_at, latest.job_started_at
   FROM explainers.topics t
+  LEFT JOIN LATERAL (
+    SELECT j.id::text AS job_id, j.status AS job_status, j.stage AS job_stage, j.error AS job_error,
+           j.requested_at::text AS job_requested_at, j.started_at::text AS job_started_at
+      FROM explainers.jobs j
+     WHERE j.topic_id = t.id
+       AND j.status IN ('requested', 'running', 'failed')
+       AND NOT EXISTS (
+             SELECT 1 FROM explainers.jobs newer
+              WHERE newer.topic_id = j.topic_id AND newer.requested_at > j.requested_at AND newer.status = 'ok'
+           )
+     ORDER BY j.requested_at DESC, j.seq DESC
+     LIMIT 1
+  ) latest ON true
  WHERE t.status IN ('pool', 'promoted', 'queued', 'rendered', 'proposed')
  ORDER BY t.weighted_score DESC NULLS LAST, t.created_at DESC
  LIMIT 200`;

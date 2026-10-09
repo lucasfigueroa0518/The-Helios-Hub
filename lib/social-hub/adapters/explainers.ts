@@ -20,6 +20,7 @@ import type {
 } from '@/lib/social-hub/queries/explainers';
 import type { ContentVersion, FactorValue, HubIdea, HubPost, HubStatus, MetricSnapshot, NativeField } from '@/lib/social-hub/types';
 import { EXPLAINER_WINDOWS } from '@/lib/explainers/publish/config';
+import type { RunSnapshot } from '@/lib/content-type/run-status';
 
 const ORIGIN_LABEL: Record<string, string> = { seeded: 'Seeded', generated: 'Generated', manual: 'Manual' };
 const SLOT_LABEL: Record<string, string> = Object.fromEntries(
@@ -203,6 +204,18 @@ export function explainerPosts(read: ExplainersRead): HubPost[] {
   return foldLifecycle('explainers', posts);
 }
 
+function topicRun(row: ExplainerTopicRow): RunSnapshot | null {
+  const status = row.job_status;
+  if (!row.job_id || (status !== 'requested' && status !== 'running' && status !== 'failed')) return null;
+  return {
+    state: status === 'requested' ? 'queued' : status,
+    stage: row.job_stage ?? null,
+    error: row.job_error ?? null,
+    requestedAt: row.job_requested_at ?? '',
+    startedAt: row.job_started_at ?? null,
+  };
+}
+
 export function explainerIdeas(rows: readonly ExplainerTopicRow[]): HubIdea[] {
   return rows.map((row) => ({
     id: `explainers:topic:${row.topic_id}`,
@@ -216,5 +229,6 @@ export function explainerIdeas(rows: readonly ExplainerTopicRow[]): HubIdea[] {
     generatedAt: iso(row.last_render_at),
     createdAt: iso(row.created_at),
     detail: [ORIGIN_LABEL[row.origin] ?? row.origin, text(row.scope)].filter(Boolean).join(' · '),
+    run: topicRun(row),
   }));
 }
