@@ -14,7 +14,7 @@ export function AnalyticsShell({
       <div className="rh__inner">
         <header className="rh__head">
           <div>
-            <p className="rh__kicker">Trial Reels</p>
+            <p className="rh__kicker">Text on Screen</p>
             <AnalyticsTitle current={current} />
           </div>
         </header>

@@ -11,7 +11,7 @@ import './reels.css';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'Trial Reels',
+  title: 'Text on Screen',
   robots: { index: false, follow: false },
 };
 
@@ -28,7 +28,7 @@ export default async function ReelsPage() {
     return (
       <div className="rh">
         <div className="rh__inner">
-          <h1 className="rh__title">Trial Reels <span className="rh-beta">Beta</span></h1>
+          <h1 className="rh__title">Text on Screen <span className="rh-beta">Beta</span></h1>
           <p className="rh-empty">
             Could not load the reels: {initial.error}
           </p>

@@ -9,7 +9,7 @@ import '../reels.css';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'Health · Trial Reels',
+  title: 'Health · Text on Screen',
   robots: { index: false, follow: false },
 };
 
@@ -26,7 +26,7 @@ export default async function HealthPage({ searchParams }: { searchParams: Promi
       <div className="rh__inner">
         <header className="rh__head">
           <div>
-            <p className="rh__kicker">Trial Reels</p>
+            <p className="rh__kicker">Text on Screen</p>
             <h1 className="rh__title">Health</h1>
           </div>
         </header>

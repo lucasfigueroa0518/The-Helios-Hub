@@ -247,7 +247,7 @@ export function PerformanceView({
 
       {data.total > 0 && !data.hasNumbers ? (
         <p className="rh-muted rh-perf-wait">
-          No performance numbers yet. Instagram can take up to 48 hours to return them. Opening Trial Reels asks for reels whose numbers can still change, at most every 30 minutes.
+          No performance numbers yet. Instagram can take up to 48 hours to return them. Opening Text on Screen asks for reels whose numbers can still change, at most every 30 minutes.
         </p>
       ) : null}
 
@@ -284,7 +284,7 @@ export function PerformanceView({
           </div>
         </div>
         {reels.length === 0 ? (
-          <p className="rh-muted">{data.query ? 'No reels match that search.' : 'No trial reels published in this window.'}</p>
+          <p className="rh-muted">{data.query ? 'No reels match that search.' : 'No Text on Screen reels published in this window.'}</p>
         ) : (
           <ul className="rh-perf-list">
             {reels.map((reel) => (
@@ -354,7 +354,7 @@ export function PerformanceView({
           />
         </div>
         {groups.length === 0 ? (
-          <p className="rh-muted">{data.query ? 'No reels match that search.' : 'No trial reels published in this window.'}</p>
+          <p className="rh-muted">{data.query ? 'No reels match that search.' : 'No Text on Screen reels published in this window.'}</p>
         ) : (
           <div className="rh-factor-scroll">
             <div className="rh-factor" role="table" aria-label="Average engagement by factor">
