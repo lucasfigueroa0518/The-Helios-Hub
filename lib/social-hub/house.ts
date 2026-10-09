@@ -168,6 +168,10 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
     // Content ready (P2-M4): approving places it in the earliest open window.
     plans.push({ kind: 'post', action: 'approveCarousel', label: 'Approve', endpoint: '/api/social-hub/actions/approve-carousel', body: { postId: post.refs.postId ?? null }, disabled: post.refs.postId ? null : 'This content can’t be found any more.' });
   }
+  if (post.vertical === 'reels' && post.status === 'ready' && post.refs.postIdeaId && post.refs.videoJobId && !post.approval.approvedAt && !/\brejected\b/i.test(post.approval.note ?? '')) {
+    // A made reel with no slot yet: approving books the earliest open slot and approves it (schedulePostIdea).
+    plans.push({ kind: 'post', action: 'approveTrialReel', label: 'Approve', endpoint: '/api/social-hub/actions/approve-trial-reel', body: { postIdeaId: post.refs.postIdeaId, videoJobId: post.refs.videoJobId }, disabled: null });
+  }
   if (post.status === 'scheduled' && post.approval.required && !post.approval.approvedAt) {
     if (post.vertical === 'carousels' && post.refs.scheduleId) {
       plans.push({ kind: 'post', action: 'approveCarousel', label: 'Approve', endpoint: '/api/social-hub/actions/approve-carousel', body: { scheduleId: post.refs.scheduleId }, disabled: null });
