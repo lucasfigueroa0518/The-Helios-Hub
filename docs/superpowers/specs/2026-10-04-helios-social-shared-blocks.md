@@ -14,11 +14,13 @@
 
 ## 1. VOICE_BLOCK: carried over word for word
 
+**Seventh round (Lucas, 2026-10-08):** the opening line changed from "Direct, dry, confident. A sharp editor, not a press release." to the one below. The lists are unchanged. The Writer now gets this block for its slides too, not only its caption.
+
 **Old:** the `VOICE_BLOCK` string in `voice-block.ts`.
 **New:** identical, byte for byte. No differences.
 
 ```
-Direct, dry, confident. A sharp editor, not a press release.
+Confident, energetic, engaging. A sharp storyteller, not a press release.
 
 Write the way a person talks:
 - Use real names. "Norland Labs says," not "the company says" when you can name it.

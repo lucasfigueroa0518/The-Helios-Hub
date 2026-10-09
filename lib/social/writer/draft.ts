@@ -40,11 +40,6 @@ export const SUBJECT_VISUALS = new Set<VisualKind>(['person', 'company', 'logo']
 /** A line of slide or caption text and the brief IDs it rests on (claim tags). */
 export type TaggedLine = { text: string; facts: string[] };
 
-/** Hook pass (prototype): one short added line; `lead-in` renders above the body, the others below. */
-export const HOOK_KINDS = ['lead-in', 'tease', 'why-it-matters'] as const;
-export type HookKind = (typeof HOOK_KINDS)[number];
-export type SlideHook = { text: string; kind: HookKind; facts: string[] };
-
 export type DraftSlide = {
   type: SlideType;
   headline: TaggedLine;
@@ -69,8 +64,6 @@ export type DraftSlide = {
   icon?: string;
   /** Spread: this slide and the next share one wide photo. Set by code from Jev's pick (slide buckets spec §2), never by the Writer. */
   spread_with_next?: boolean;
-  /** Added by the Hook pass only (never by the Writer or Editor; not in DRAFT_SCHEMA). */
-  hook?: SlideHook | null;
 };
 
 export type DraftSubmission = {
@@ -121,7 +114,7 @@ export const DRAFT_SCHEMA = obj({
     items: optional(obj({
       type: { type: 'string', enum: [...SLIDE_TYPES] },
       headline: tagged('≤60 chars.'),
-      body: { ...tagged('≤220 chars.'), type: ['object', 'null'], description: 'Null on quote and stat slides without a body.' },
+      body: { ...tagged('≤140 chars.'), type: ['object', 'null'], description: 'Null when the headline alone lands the beat (a text slide), and on quote and stat slides without a body.' },
       quote_id: { type: ['string', 'null'], description: 'Quote slides: the QUOTES ID. Null otherwise.' },
       quote_excerpt: { type: ['string', 'null'], description: 'Optional exact excerpt of that quote, with "…" for cuts. Null to use the whole quote.' },
       number_ids: { ...strList, description: 'Stat: one NUMBERS ID, or two for a side-by-side pair. Empty otherwise.' },

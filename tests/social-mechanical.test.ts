@@ -227,7 +227,7 @@ test('mechanical stage: a hard failure after the Fact-checker sets the story asi
 
 const story = { id: 's1', title: 't', url: 'https://techcrunch.com/x', outlets: ['TechCrunch'], publishedAt: new Date('2026-10-04T12:00:00Z') } as ScoredCandidate;
 const designDeps = (fitCheck = async (post: Parameters<typeof fitOkFor>[0]) => fitOkFor(post)) => ({
-  jev: async (req: { state: unknown; questions: Record<string, unknown> }) => ({ answers: Object.fromEntries(Object.keys(req.questions).map((k) => [k, { noul: k.startsWith('people') || k.startsWith('landmark') || k.startsWith('brand') ? 0.05 : 0.95 }])), usage: { input_tokens: 100, output_tokens: 0 }, model: 'stub' }),
+  jev: async (req: { state: unknown; questions: Record<string, unknown> }) => ({ answers: Object.fromEntries(Object.keys(req.questions).map((k) => [k, { noul: k.startsWith('people') || k.startsWith('landmark') || k.startsWith('brand') || k.startsWith('repeats_') ? 0.05 : 0.95 }])), usage: { input_tokens: 100, output_tokens: 0 }, model: 'stub' }),
   http: createFakeHttp(SIF_WEB).http,
   fitCheck,
 });

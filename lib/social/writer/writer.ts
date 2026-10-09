@@ -16,8 +16,9 @@ import type { MessagesCreate, TurnUsage } from '@/lib/social/reporter/reporter';
 
 import { draftTextFailures } from '@/lib/social/mechanical/checks';
 
-import { DraftValidationError, SUBMIT_DRAFT_TOOL, checkDraft, fillDraft, type DraftSubmission, type FilledDraft, type VisualRequest } from './draft';
+import { DraftValidationError, SUBJECT_VISUALS, SUBMIT_DRAFT_TOOL, checkDraft, fillDraft, type DraftSubmission, type FilledDraft, type VisualRequest } from './draft';
 import { WRITER_SYSTEM, writerUserMessage } from './prompt';
+import { rescueOverLength } from './shorten';
 import { MAX_CHECK_RETRIES, runStructuredCall } from './structured-call';
 
 /** Is this subject widely known? Spec §4.1a: yes when it has a Wikidata match. */
@@ -189,36 +190,40 @@ export function visualHandoffFailures(d: DraftSubmission, brief: Brief, view: Ph
     if (!isIcon(p.icon)) errors.push({ section: `${p.where}.icon`, message: p.icon ? `icon "${p.icon}" isn't on the icon list; pick one from the list` : 'name an icon for this slide, from the icon list' });
     errors.push(...visualFailures(p.visual, `${p.where}.visual`, p, brief, view, typeOf));
     errors.push(...visualFailures(p.fallback, `${p.where}.fallback_visual`, p, brief, view, typeOf));
+    // A scene's fallback is a scene too (Lucas, 2026-10-08: a research slide fell back to company: and got the CEO's portrait).
+    if (!SUBJECT_VISUALS.has(p.visual.kind) && SUBJECT_VISUALS.has(p.fallback.kind) && p.fallback.query.trim()) {
+      errors.push({ section: `${p.where}.fallback_visual`, message: `the visual is ${p.visual.kind}, so the fallback is a thematic, setting, product or event visual too, never ${p.fallback.kind}: (it would put a face or logo on a slide that isn't about them)${KEEP_WORDS}` });
+    }
     if (p.visual.kind === p.fallback.kind && p.visual.query.trim().toLowerCase() === p.fallback.query.trim().toLowerCase()) {
       errors.push({ section: `${p.where}.fallback_visual`, message: 'the fallback visual repeats the visual; ask for a different one' });
     }
-    // A quote slide's visual is its speaker when the speaker is a person in SUBJECTS.
+    // A quote slide's visual is its speaker when the speaker is a person in SUBJECTS with a verified
+    // headshot (seventh round: a speaker without one no longer has to be asked for, which the
+    // headshot check would then reject; the slide asks for what the quote is about).
     if (p.kind === 'quote') {
       const q = brief.quotes.find((x) => x.id === p.quoteId);
       const speaker = q?.speaker_id ? brief.subjects.find((x) => x.id === q.speaker_id) ?? null : null;
-      if (speaker && typeOf(speaker.name) !== 'organization' && (p.visual.kind !== 'person' || p.visual.query !== speaker.name)) {
-        errors.push({ section: `${p.where}.visual`, message: `a quote slide's visual is its speaker (person: ${speaker.name}); a speaker without a verified photo still gets a type-led quote slide${KEEP_WORDS}` });
+      const ws = speaker ? view?.subjects?.get(speaker.name) : undefined;
+      const hasPhoto = ws ? ws.headshot_available : true;
+      if (speaker && hasPhoto && typeOf(speaker.name) !== 'organization' && (p.visual.kind !== 'person' || p.visual.query !== speaker.name)) {
+        errors.push({ section: `${p.where}.visual`, message: `a quote slide's visual is its speaker (person: ${speaker.name})${KEEP_WORDS}` });
       }
     }
   }
-  // At most 2 stat slides (Tommy, 2026-10-07): other numbers go in body text.
-  const stats = d.slides.filter((s) => s.type === 'stat').length;
-  if (stats > MAX_STAT_SLIDES) errors.push({ section: 'slides', message: `${stats} stat slides; at most ${MAX_STAT_SLIDES} per post. Keep the strongest numbers as stat slides and put the others in a text slide's body` });
+  // The stat-slide cap is gone (seventh round, Lucas 2026-10-08): variety comes from the Writer's
+  // rules and Jev's layouts, not a count.
   return errors;
 }
 
-/** At most this many stat slides per post (Tommy, 2026-10-07). */
-export const MAX_STAT_SLIDES = 2;
-
 /**
- * A scene (a thematic or setting visual): a plain physical scene of 1–4
- * words, tied to the topic but not necessarily named on the slide (Tommy,
+ * A scene (a thematic or setting visual): a plain physical scene of 1–6
+ * words (seventh round: room for a word that rules out a homonym), tied to the topic but not necessarily named on the slide (Tommy,
  * 2026-10-07: "a circuit board or data centers … a picture of a tree").
  * Never a SUBJECTS name (no people, no companies, no products).
  */
 export function sceneFailures(scene: string, brief: Brief, section: string): BriefError[] {
   const words = scene.trim().split(/\s+/).filter(Boolean);
-  if (words.length < 1 || words.length > 4) return [{ section, message: `scene "${scene}": a plain physical scene of 2–4 words (data center, circuit board, forest canopy)${KEEP_WORDS}` }];
+  if (words.length < 1 || words.length > 6) return [{ section, message: `scene "${scene}": a plain physical scene of 2–6 words that can't be misread without the story${KEEP_WORDS}` }];
   const lower = ` ${scene.toLowerCase()} `;
   // The naming rule's spirit (photo spec §3): a full name, or a person's last name.
   const named = brief.subjects.find((s) => {
@@ -384,6 +389,13 @@ export async function runWriter(brief: Brief, deps: WriterDeps): Promise<WriterR
     },
   });
   const common = { costUsd: r.costUsd, turns: r.turns, draftRetries: r.retries, retryErrors: r.retryErrors, turnUsage: r.turnUsage, visualsDropped };
+  if (!r.ok && r.reason === 'malformed-output') {
+    // Lines still over their limit after the retry: one small call shortens them instead of losing the story.
+    const rescue = await rescueOverLength(r.raw, deps.create, (input) => checkWrittenDraft(input, brief, MAX_CHECK_RETRIES + 1, 'writer', view, { onDropped: (lines) => (visualsDropped = lines) }));
+    const spent = { ...common, costUsd: common.costUsd + rescue.costUsd, turnUsage: [...common.turnUsage, ...rescue.turnUsage], visualsDropped, retryErrors: rescue.note ? [...common.retryErrors, rescue.note] : common.retryErrors };
+    if (rescue.value) return { ok: true, draft: rescue.value, filled: fillDraft(rescue.value, brief), raw: JSON.stringify(rescue.value, null, 2), ...spent };
+    return { ok: false, reason: r.reason, detail: r.detail, raw: r.raw, ...spent };
+  }
   if (!r.ok) return { ok: false, reason: r.reason, detail: r.detail, raw: r.raw, ...common };
   return { ok: true, draft: r.value, filled: fillDraft(r.value, brief), raw: r.raw, ...common };
 }

@@ -62,10 +62,13 @@ export async function fetchEntityP18(
   if (!res.ok) throw new Error(`Wikidata entity fetch failed: HTTP ${res.status}`);
   const body = (await res.json()) as {
     entities?: Record<string, { claims?: Record<string, Array<{
+      rank?: 'preferred' | 'normal' | 'deprecated';
       mainsnak?: { datavalue?: { value?: string } };
     }>> }>;
   };
-  const p18 = body.entities?.[qid]?.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
+  // Preferred rank first, never deprecated (2026-10-08: the first listed photo can be an old one).
+  const claims = (body.entities?.[qid]?.claims?.P18 ?? []).filter((c) => c.rank !== 'deprecated');
+  const p18 = (claims.find((c) => c.rank === 'preferred') ?? claims[0])?.mainsnak?.datavalue?.value;
   if (typeof p18 !== 'string' || !p18) return null;
   return p18; // "Gavin Newsom by Gage Skidmore 3.jpg"
 }

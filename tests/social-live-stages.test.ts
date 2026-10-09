@@ -12,7 +12,7 @@ import { sifDraftHandoff } from '@/fixtures/social/drafts';
 import { createFakeHttp, SIF_WEB } from '@/fixtures/social/photo-http';
 import type { JevAsk } from '@/lib/social/jev/client';
 import * as Identity from '@/lib/social/jev/questions/subject-identity.v1';
-import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v4';
+import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v5';
 import { createCostMeter } from '@/lib/social/pipeline/cost-meter';
 import { BudgetExhausted, createLiveStages, createRunBudget } from '@/lib/social/pipeline/live-stages';
 import { runDay } from '@/lib/social/pipeline/orchestrator';
@@ -41,6 +41,10 @@ function fakeClaude(calls: string[], flags: unknown = { flags: [], main_claim_fa
 }
 
 const identityJev: JevAsk = async (req, meta) => {
+  // The photo decision nodes (photo-slide@2, spread-fit@1): fits, never a repeat.
+  if (meta.version === 'photo-slide@2' || meta.version === 'spread-fit@1') {
+    return { answers: Object.fromEntries(Object.keys(req.questions).map((k) => [k, { noul: k.startsWith('repeats_') ? 0.05 : 0.9 }])), usage: { input_tokens: 300, output_tokens: 0 }, model: 'stub-jev' };
+  }
   if (meta.version === Prescreen.VERSION) {
     const st = req.state as ReturnType<typeof Prescreen.buildState>;
     const a: Record<string, { noul: number }> = {};

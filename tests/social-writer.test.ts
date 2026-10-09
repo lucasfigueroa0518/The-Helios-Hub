@@ -21,6 +21,7 @@ import type { MessagesCreate } from '@/lib/social/reporter/reporter';
 import { DraftValidationError, checkDraft, fillDraft, isExactExcerpt, type DraftSubmission, type VisualRequest } from '@/lib/social/writer/draft';
 import { WRITER_ADDED_RULES, WRITER_MOMENTUM_RULES, WRITER_SYSTEM, writerUserMessage } from '@/lib/social/writer/prompt';
 import { briefForWriter, runWriter } from '@/lib/social/writer/writer';
+import { checkLines } from '@/lib/social/writer/shorten';
 
 const PROMPTS = readFileSync('docs/superpowers/specs/2026-10-04-helios-social-prompts.md', 'utf8');
 const codeBlocks = (from: string) => [...PROMPTS.slice(PROMPTS.indexOf(from)).matchAll(/```\n([\s\S]*?)\n```/g)].map((m) => m[1]!);
@@ -37,7 +38,7 @@ function draft(): DraftSubmission {
     ],
     chosen_cover: 1,
     slides: [
-      { type: 'text', headline: { text: 'Announced on Truth Social', facts: ['F1'] }, body: { text: 'Trump announced the force in a Sunday morning post.', facts: ['F1'] }, quote_id: null, quote_excerpt: null, number_ids: [], visual: v('thematic', 'smartphone screen'), fallback_visual: v('person', 'Donald Trump'), subject_ids: ['S1'], icon: 'smartphone' },
+      { type: 'text', headline: { text: 'Announced on Truth Social', facts: ['F1'] }, body: { text: 'Trump announced the force in a Sunday morning post.', facts: ['F1'] }, quote_id: null, quote_excerpt: null, number_ids: [], visual: v('thematic', 'smartphone screen'), fallback_visual: v('setting', 'press briefing room'), subject_ids: ['S1'], icon: 'smartphone' },
       { type: 'quote', headline: { text: 'His pitch for the force', facts: ['Q1'] }, body: null, quote_id: 'Q1', quote_excerpt: 'The Super Intelligence Force is tasked with coordinating the effort of the Federal Government … of all Americans,', number_ids: [], visual: v('person', 'Donald Trump'), fallback_visual: v('thematic', 'press podium'), subject_ids: ['S1'], icon: 'message-square-quote' },
       { type: 'stat', headline: { text: 'It has a deadline', facts: ['N1'] }, body: null, quote_id: null, quote_excerpt: null, number_ids: ['N1'], visual: v('thematic', 'wall clock'), fallback_visual: v('thematic', 'desk calendar'), subject_ids: [], icon: 'clock' },
       { type: 'text', headline: { text: 'What the charter says', facts: ['F6'] }, body: { text: 'The charter reportedly says it will plan responses to SI-enabled threats.', facts: ['F6'] }, quote_id: null, quote_excerpt: null, number_ids: [], visual: v('thematic', 'stacks of documents'), fallback_visual: v('setting', 'government office'), subject_ids: [], icon: 'file-text' },
@@ -66,15 +67,12 @@ function errorsOf(edit: (d: DraftSubmission) => void): string[] {
 test('Writer prompt = tested intro + RULES (tested lines + 3 additions + shared policy) + submit_draft line + section list + caption section', () => {
   const tested = codeBlocks('## 2. Writer')[0]!;
   const intro = tested.slice(0, tested.indexOf('\n\nRULES\n'));
-  // Sixth round (2026-10-07): VISUAL / FALLBACK VISUAL replace IMAGE.
   const sectionList = tested.slice(tested.indexOf('\n\nOUTPUT\n') + '\n\nOUTPUT\n'.length, tested.indexOf('\n\nBRIEF\n')).replace('/ IMAGE   (repeat)', '/ VISUAL / FALLBACK VISUAL   (repeat)');
   const caption = codeBlocks('## 3. Writer')[0]!
     .replace('${VOICE_BLOCK}', VOICE_BLOCK)
     .replace("${renderRulesFor('caption')}", renderRulesFor('writer'))
-    // Caption wording fixes (2026-10-05).
     .replace('the final SLIDES you were given', 'the slides you wrote')
     .replace("that's the Writer/Editor's decision — respect it.", "that's the Writer/Editor's decision. Respect it.")
-    // Source line built by code (2026-10-06): ending item 3 dropped.
     .replace(/^3\. Source credits, always,.*\n/m, '');
   const expected = [
     intro,
@@ -86,12 +84,11 @@ test('Writer prompt = tested intro + RULES (tested lines + 3 additions + shared 
   assert.equal(WRITER_SYSTEM, expected);
   assert.ok(!WRITER_SYSTEM.includes('{{brief}}') && !WRITER_SYSTEM.includes('\nOUTPUT\n') && !WRITER_SYSTEM.includes('${'));
   assert.equal(WRITER_ADDED_RULES.split('\n').length, 3);
-  // Sixth round (2026-10-07): the stat line, the third block after "**Sixth round" (the spread line is gone).
-  // Copy budget (2026-10-08): the stat line, word for word from the prompts file §8.
   assert.ok(WRITER_ADDED_RULES.endsWith(codeBlocks('- **Copy budget, Writer stat line')[0]!), 'stat line word for word');
   assert.equal(WRITER_MOMENTUM_RULES, codeBlocks('**Writer prompt v2')[0], 'v2 rules word for word from the prompts file');
   assert.ok(!WRITER_SYSTEM.includes('—'), 'no em dashes anywhere in the Writer prompt');
   assert.ok(!WRITER_SYSTEM.includes('Source:'), 'the Source line is built by code, not asked of the Writer');
+  assert.ok(!WRITER_SYSTEM.includes('Hook pass'), 'the Hook pass is gone');
 });
 
 test('the brief goes in the user message as JSON, with SUBJECTS marked well_known by code', async () => {
@@ -250,10 +247,10 @@ test('runDay: the Writer stage drafts each brief; its cost lands under writer', 
 
 // ── Visual requests (sixth round, Tommy 2026-10-07; photo spec §4) ──
 
-import { dropFailingVisuals, visualHandoffFailures } from '@/lib/social/writer/writer';
+import { dropFailingVisuals, photoViewOf, visualHandoffFailures } from '@/lib/social/writer/writer';
 import { sifDraftHandoff } from '@/fixtures/social/drafts';
 
-test('sixth round: visual requests by kind; a fallback that differs; scenes never name a SUBJECT; at most 2 stat slides', () => {
+test('visual requests by kind; a fallback that differs; scenes never name a SUBJECT; no stat-slide cap (seventh round)', () => {
   const brief = briefSuperIntelligenceForce();
   const fails = (edit: (d: DraftSubmission) => void) => {
     const d = sifDraftHandoff();
@@ -274,10 +271,22 @@ test('sixth round: visual requests by kind; a fallback that differs; scenes neve
   // The fallback differs; a quote's visual is its person speaker.
   assert.match(fails((d) => (d.slides[3]!.fallback_visual = { ...d.slides[3]!.visual })), /slide 5\.fallback_visual: the fallback visual repeats the visual/);
   assert.match(fails((d) => (d.slides[2]!.visual = v('thematic', 'flag on a pole'))), /slide 4\.visual: a quote slide's visual is its speaker \(person: Donald Trump\)/);
-  // At most 2 stat slides.
+  // Seventh round: no stat-slide cap (variety comes from the rules and Jev's layouts).
   const stat = () => structuredClone(sifDraftHandoff().slides[3]!);
-  assert.equal(fails((d) => d.slides.splice(4, 0, stat())), '');
-  assert.match(fails((d) => d.slides.splice(4, 0, stat(), stat())), /slides: 3 stat slides; at most 2 per post/);
+  assert.equal(fails((d) => d.slides.splice(4, 0, stat(), stat())), '');
+  // Scenes may be 2–6 words, room for a word that rules out a homonym.
+  assert.equal(fails((d) => (d.slides[0]!.fallback_visual = v('setting', 'university lecture hall with students'))), '');
+  assert.match(fails((d) => (d.slides[0]!.fallback_visual = v('setting', 'a very large university lecture hall today'))), /a plain physical scene of 2–6 words/);
+});
+
+test('seventh round: a quote speaker without a verified headshot need not be the visual', async () => {
+  const brief = briefSuperIntelligenceForce();
+  const forWriter = await briefForWriter(brief, async () => true, async (s) => ({ kind: s.name === 'Super Intelligence Force' ? ('organization' as const) : ('person' as const), headshot: false, logo: false }));
+  const view = photoViewOf(forWriter, { flags: true });
+  const d = sifDraftHandoff();
+  d.slides[2]!.visual = v('thematic', 'press briefing podium');
+  const errs = visualHandoffFailures(d, brief, view).map((e) => `${e.section}: ${e.message}`).join(' | ');
+  assert.doesNotMatch(errs, /a quote slide's visual is its speaker/);
 });
 
 test('final attempt: a failing visual becomes its fallback, else none (the icon); words unchanged; logged as visual-dropped', async () => {
@@ -324,3 +333,46 @@ test('fillDraft: a quote with no speaker_id has no speaker_subject (never the fi
   assert.equal(filled.slides[2]!.quote!.speaker_subject, null);
 });
 
+
+test('a scene\'s fallback is a scene too: never a person, company or logo behind a thematic, setting, product or event visual', () => {
+  const brief = briefSuperIntelligenceForce();
+  const d = sifDraftHandoff();
+  d.slides[0]!.visual = v('thematic', 'smartphone screen');
+  d.slides[0]!.fallback_visual = v('person', 'Donald Trump');
+  const errs = visualHandoffFailures(d, brief, null).map((e) => `${e.section}: ${e.message}`).join(' | ');
+  assert.match(errs, /slide 2\.fallback_visual: the visual is thematic, so the fallback is a thematic, setting, product or event visual too, never person:/);
+  d.slides[0]!.fallback_visual = v('setting', 'press briefing room');
+  assert.doesNotMatch(visualHandoffFailures(d, brief, null).map((e) => e.message).join(), /so the fallback is/);
+});
+
+// ── Over-length rescue (2026-10-08: a story was set aside for a body 4 characters over) ──
+
+test('a draft still over a length limit after the retry: one small call shortens just those lines, and the story survives', async () => {
+  const long = sifDraftHandoff();
+  long.slides[0]!.body = { text: `${'Trump announced the force in a Sunday morning post on Truth Social, and the White House said more details on its members and its budget would come soon '}after.`, facts: ['F1'] };
+  assert.ok(long.slides[0]!.body!.text.length > 140);
+  const calls: string[] = [];
+  const usage = { input_tokens: 1000, output_tokens: 500, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+  const reply = (name: string, input: unknown) => ({ id: 'm', type: 'message', role: 'assistant', model: 'x', stop_reason: 'tool_use', stop_sequence: null, usage, content: [{ type: 'tool_use', id: `t${calls.length}`, name, input }] }) as unknown as Anthropic.Message;
+  const create: MessagesCreate = async (params) => {
+    const tool = (params.tools?.[0] as { name: string }).name;
+    calls.push(tool);
+    if (tool === 'submit_lines') {
+      const lines = JSON.parse(String((params.messages[0]!.content as string).replace(/^LINES\n/, ''))) as Array<{ id: string }>;
+      return reply('submit_lines', { lines: lines.map((l) => ({ id: l.id, text: 'Trump announced the force in a Sunday post on Truth Social.' })) });
+    }
+    return reply('submit_draft', long);
+  };
+  const r = await runWriter(briefSuperIntelligenceForce(), { create, isWellKnown: async () => false });
+  assert.deepEqual(calls, ['submit_draft', 'submit_draft', 'submit_lines']);
+  assert.ok(r.ok, r.ok ? '' : r.detail);
+  assert.equal(r.filled.slides[0]!.body!.text, 'Trump announced the force in a Sunday post on Truth Social.');
+  assert.ok(r.retryErrors.some((x) => /shortened to fit: slide 2 body \d+→\d+/.test(x)));
+});
+
+test('the shorten check: a line still over its limit, or with a new number, goes back', () => {
+  const lines = [{ id: 'L1', where: 'slide 2 body', limit: 20, text: 'It costs $70 over a long stretch of time' }];
+  assert.throws(() => checkLines({ lines: [{ id: 'L1', text: 'It costs $70 over a long stretch' }] }, lines), /limit 20/);
+  assert.throws(() => checkLines({ lines: [{ id: 'L1', text: 'It costs $99' }] }, lines), /the number 99 wasn't in the line/);
+  assert.equal(checkLines({ lines: [{ id: 'L1', text: 'It costs $70 now' }] }, lines).get('L1'), 'It costs $70 now');
+});

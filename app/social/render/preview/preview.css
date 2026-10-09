@@ -236,8 +236,7 @@
   text-decoration-thickness: 0.08em;
   text-underline-offset: 0.12em;
 }
-.helios-slide[data-canvas="orange"] .helios-span--hook,
-.helios-slide[data-canvas="orange"] .helios-hook {
+.helios-slide[data-canvas="orange"] .helios-span--hook {
   color: #FF5E1A;
   background-color: #0A0A0A;
   box-decoration-break: clone;
@@ -530,19 +529,6 @@
   color: var(--brand-narrative);
   text-wrap: pretty;
 }
-
-/* Hook pass line (prototype): smaller, orange, distinct from the body. */
-.helios-hook {
-  font-family: var(--font-body);
-  font-size: 34px;
-  font-weight: 500;
-  line-height: 1.25;
-  color: var(--brand-hook);
-  max-height: 86px; /* two lines at 34px: one short line, never a paragraph */
-  margin: 0;
-}
-.helios-hook--above { margin-bottom: 12px; }
-.helios-hook--below { margin-top: 16px; }
 
 /* ── Cover ───────────────────────────────────────────────────────────── */
 

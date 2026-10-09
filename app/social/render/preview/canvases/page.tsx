@@ -94,7 +94,6 @@ const ROWS: { name: string; post: Post }[] = [
       icon: 'server',
       headline: say(n('Chips '), hook('ran out')),
       body: say(n('The '), pivot('plants'), n(' kept the line '), hook('dark')),
-      hook: { text: 'One week of stock left.', position: 'above' },
     }),
   },
   {

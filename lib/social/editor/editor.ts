@@ -14,6 +14,7 @@ import type { Brief, BriefError } from '@/lib/social/reporter/brief';
 import type { MessagesCreate } from '@/lib/social/reporter/reporter';
 import { DraftValidationError, SUBMIT_DRAFT_TOOL, fillDraft, type DraftSubmission, type VisualRequest } from '@/lib/social/writer/draft';
 import { checkWrittenDraft, defaultIcons, pruneSubjectTags, type SubjectKinds } from '@/lib/social/writer/writer';
+import { rescueOverLength } from '@/lib/social/writer/shorten';
 import { runStructuredCall, type StructuredFailure } from '@/lib/social/writer/structured-call';
 import type { TurnUsage } from '@/lib/social/reporter/reporter';
 import type { FilledDraft } from '@/lib/social/writer/draft';
@@ -71,12 +72,23 @@ export async function runEditor(brief: Brief, writerDraft: DraftSubmission, deps
       return edited;
     },
   });
-  const common = { costUsd: r.costUsd, turns: r.turns, retries: r.retries, retryErrors: r.retryErrors, turnUsage: r.turnUsage };
-  if (!r.ok) return { ok: false, reason: r.reason, detail: r.detail, raw: r.raw, ...common };
+  let common = { costUsd: r.costUsd, turns: r.turns, retries: r.retries, retryErrors: r.retryErrors, turnUsage: r.turnUsage };
+  let value = r.ok ? r.value : null;
+  if (!r.ok && r.reason === 'malformed-output') {
+    // Lines still over their limit after the retry: one small call shortens them instead of losing the story.
+    const rescue = await rescueOverLength(r.raw, deps.create, (input) => {
+      const edited = checkWrittenDraft(input, brief, 2, 'editor');
+      checkEditorPowers(writerDraft, edited);
+      return edited;
+    });
+    common = { ...common, costUsd: common.costUsd + rescue.costUsd, turnUsage: [...common.turnUsage, ...rescue.turnUsage], retryErrors: rescue.note ? [...common.retryErrors, rescue.note] : common.retryErrors };
+    value = rescue.value;
+  }
+  if (!value) return { ok: false, reason: r.ok ? 'malformed-output' : r.reason, detail: r.ok ? 'no draft' : r.detail, raw: r.ok ? null : r.raw, ...common };
   // Tags re-checked right after the Editor (Tommy, 2026-10-07): code, no retry. A tag the edited
   // words no longer name is removed and logged; the words and the requests stay as the Editor left them.
-  const t = pruneSubjectTags(r.value, brief, deps.subjectKinds ?? null);
+  const t = pruneSubjectTags(value, brief, deps.subjectKinds ?? null);
   // An icon the Editor dropped or changed to one not on the list falls back to the default (logged).
   const ic = defaultIcons(t.draft);
-  return { ok: true, draft: ic.draft, filled: fillDraft(ic.draft, brief), raw: r.raw, ...common, tagsDropped: [...t.dropped, ...ic.dropped] };
+  return { ok: true, draft: ic.draft, filled: fillDraft(ic.draft, brief), raw: r.ok ? r.raw : JSON.stringify(value, null, 2), ...common, tagsDropped: [...t.dropped, ...ic.dropped] };
 }

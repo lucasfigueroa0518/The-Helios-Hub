@@ -13,9 +13,9 @@ import { createFakeHttp, SIF_WEB } from '@/fixtures/social/photo-http';
 import { fitOkFor } from '@/fixtures/social/render-text';
 import type { OfferInput, PhotoBank } from '@/lib/media-library/bank';
 import type { JevAnswer, JevAsk } from '@/lib/social/jev/client';
-import * as PhotoFit from '@/lib/social/jev/questions/photo-fit.v1';
+import * as PhotoFit from '@/lib/social/jev/questions/photo-fit.v2';
 import * as Identity from '@/lib/social/jev/questions/subject-identity.v1';
-import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v4';
+import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v5';
 import { createDesignStage, type DesignDeps } from '@/lib/social/pipeline/design-stage';
 import type { Brief as PipelineBrief, Draft, ScoredCandidate } from '@/lib/social/pipeline/types';
 import type { TagSheet, TileTag } from '@/lib/social/photos/tag-sheet';
@@ -49,9 +49,8 @@ const jev: JevAsk = async (req, meta) => {
     const state = req.state as ReturnType<typeof PhotoFit.buildState>;
     state.tiles.forEach((t, k) => (answers[PhotoFit.fitId(k)] = { noul: t.tags.some((x) => /fruit/.test(x)) ? 0.05 : 0.9 }));
   } else {
-    for (const [id, q] of Object.entries(req.questions)) {
-      const labels = Object.keys((q as { criteria: Record<string, unknown> }).criteria);
-      answers[id] = { choice: labels[0], probabilities: Object.fromEntries(labels.map((l, i) => [l, i === 0 ? 0.8 : 0.2 / Math.max(1, labels.length - 1)])) };
+    for (const id of Object.keys(req.questions)) {
+      answers[id] = { noul: id.startsWith('repeats_') ? 0.05 : 0.9 };
     }
   }
   return { answers, usage: { input_tokens: 300, output_tokens: 0 }, model: 'stub-jev' };

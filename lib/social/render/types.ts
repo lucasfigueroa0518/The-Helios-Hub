@@ -1,3 +1,7 @@
+/** Black is the shipped canvas. The other three recolor the same layouts (preview.css data-canvas). */
+export const SLIDE_CANVASES = ['black', 'green', 'orange', 'white'] as const;
+export type SlideCanvas = (typeof SLIDE_CANVASES)[number];
+
 /**
  * Types for the slide renderer. A `Post` is what the compose pipeline hands
  * off to the renderer; a `SlideCopy` is one slide within it.
@@ -192,13 +196,6 @@ export type SlideCopy = {
    */
   photoCaption?: string;
 
-  /**
-   * Hook pass line (Lucas, Tommy 2026-10-06; prototype): one short line in a
-   * smaller, distinct style. `above`: a lead-in, drawn above the body;
-   * `below`: a tease or why-it-matters line, drawn below it.
-   */
-  hook?: { text: string; position: 'above' | 'below' };
-
   /** Required by the validator; drives screen-reader UX + accessibility. */
   altText: string;
 
@@ -208,6 +205,9 @@ export type SlideCopy = {
    * per carousel.
    */
   lightCanvas?: boolean;
+
+  /** The canvas this slide is drawn on (Jev's pick, slide-canvas@1; render/layout.ts). Absent: black. */
+  canvas?: SlideCanvas;
 
   /**
    * Bitmap URL for photo-slot layouts (Supabase Storage path). Cover uses

@@ -13,14 +13,17 @@ import { sifDraft } from '@/fixtures/social/drafts';
 import { commonsUrl, createFakeHttp, SIF_WEB, stockUrl, type FakeWeb } from '@/fixtures/social/photo-http';
 import type { JevAsk, JevAnswer } from '@/lib/social/jev/client';
 import * as Identity from '@/lib/social/jev/questions/subject-identity.v1';
-import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v4';
-import * as PhotoFit from '@/lib/social/jev/questions/photo-fit.v1';
+import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v5';
+import * as PhotoFit from '@/lib/social/jev/questions/photo-fit.v2';
+import * as PhotoSlideQ from '@/lib/social/jev/questions/photo-slide.v2';
+import * as SpreadFitQ from '@/lib/social/jev/questions/spread-fit.v1';
 import { articlePhotosFor } from '@/lib/social/photos/article-list';
 import { photosForDraft } from '@/lib/social/photos/design';
 import { newSearchContext, searchVisual, type Candidate, type PhotoDeps } from '@/lib/social/photos/find';
 import { newPickState, pickForSlide, slotAllows, type Scored } from '@/lib/social/photos/pick';
 import { compareCandidates, dateMs, rankCandidates } from '@/lib/social/photos/rank';
 import { buildSheets, TILES_PER_SHEET } from '@/lib/social/photos/sheet';
+import { stockQueries } from '@/lib/social/photos/sources/stock';
 import { checkTiles, type TagSheet, type TileTag } from '@/lib/social/photos/tag-sheet';
 import type { VisionCheck, VisionVerdict } from '@/lib/social/photos/vision';
 import { TEMPLATES, allowedTemplates, type SlideFacts } from '@/lib/social/render/buckets';
@@ -41,7 +44,7 @@ const IDENTITY: Record<string, { person: number; match: (d: string) => number }>
 const usage = { input_tokens: 300, output_tokens: 0 };
 
 /** Jev for every set the pipeline asks: identity, pre-screen, fit, layout. `calls` records each set's version. */
-function stubJev(calls: string[] = [], choose: (labels: string[], version: string) => string = (l) => l[0]!): JevAsk {
+function stubJev(calls: string[] = [], choose: (labels: string[], version: string) => string = (l) => l[0]!, noulFor: (id: string, state: unknown, version: string) => number = (id) => (id.startsWith('repeats_') ? 0.1 : 0.9)): JevAsk {
   return async (req, meta) => {
     calls.push(meta.version);
     const answers: Record<string, JevAnswer> = {};
@@ -60,6 +63,9 @@ function stubJev(calls: string[] = [], choose: (labels: string[], version: strin
     } else if (meta.version === PhotoFit.VERSION) {
       const state = req.state as ReturnType<typeof PhotoFit.buildState>;
       state.tiles.forEach((t, k) => (answers[PhotoFit.fitId(k)] = { noul: t.tags.some((x) => /fruit|blank/.test(x)) ? 0.05 : 0.9 }));
+    } else if (meta.version === PhotoSlideQ.VERSION || meta.version === SpreadFitQ.VERSION) {
+      // The photo decision nodes (2026-10-08): everything fits and nothing repeats, unless a test says otherwise.
+      for (const id of Object.keys(req.questions)) answers[id] = { noul: noulFor(id, req.state, meta.version) };
     } else {
       for (const [id, q] of Object.entries(req.questions)) {
         const labels = Object.keys((q as { criteria: Record<string, unknown> }).criteria);
@@ -147,6 +153,9 @@ test('person: a failed identity check finds nothing (never another person)', asy
 });
 
 test('thematic: the StockSnap lane first, then Commons search, then Openverse; the metadata pre-screen drops people; at most 2 kept, biggest first', async () => {
+  // The one-pass search these cases pin (keep 2, no deep ladder); the defaults are tested separately.
+  (await import('@/lib/social/photos/tuning')).setTuning({ keep: 2, ladder: 'short' }, true);
+  try {
   const { http, calls } = createFakeHttp(web({ stocksnapCount: { 'server racks': 1 }, stockCount: { 'server racks': 3 } }));
   const jevCalls: string[] = [];
   const r = await searchVisual(v('thematic', 'server racks'), ctxFor(), { jev: stubJev(jevCalls), http }, {});
@@ -155,6 +164,9 @@ test('thematic: the StockSnap lane first, then Commons search, then Openverse; t
   assert.ok(calls.some((c) => /api\.openverse\.org.*source=stocksnap%2Crawpixel/.test(c)), 'the lane searches StockSnap and rawpixel only');
   assert.ok(calls.some((c) => /commons\.wikimedia\.org.*srsearch=server\+racks\+filetype%3Abitmap/.test(c)), 'Commons is searched directly');
   assert.ok(jevCalls.filter((x) => x === Prescreen.VERSION).length >= 2, 'every lane is pre-screened');
+  } finally {
+    (await import('@/lib/social/photos/tuning')).setTuning({}, true);
+  }
 });
 
 test('event and product: article photos naming a tagged subject; the bare query never matches a person by name', async () => {
@@ -166,6 +178,9 @@ test('event and product: article photos naming a tagged subject; the bare query 
 });
 
 test('7-day rule: a stock photo used in the last 7 days is out; a headshot on a story slide is exempt; a cover never repeats one', async () => {
+  // The one-pass search these cases pin (keep 2, no deep ladder); the defaults are tested separately.
+  (await import('@/lib/social/photos/tuning')).setTuning({ keep: 2, ladder: 'short' }, true);
+  try {
   const { http } = createFakeHttp(web({ stockCount: { 'wall clock': 1 } }));
   const recent = new Set([stockUrl('wall clock', 1), commonsUrl('Donald Trump official portrait.jpg')]);
   const stock = await searchVisual(v('thematic', 'wall clock'), ctxFor(briefSuperIntelligenceForce(), false, { recent }), { jev: stubJev(), http }, {});
@@ -174,6 +189,9 @@ test('7-day rule: a stock photo used in the last 7 days is out; a headshot on a 
   assert.equal(story.candidates[0]?.lane, 'headshot');
   const cover = await searchVisual(v('person', 'Donald Trump'), ctxFor(briefSuperIntelligenceForce(), false, { recent }), { jev: stubJev(), http }, { tags: ['S1'], cover: true });
   assert.deepEqual(cover.candidates, [], 'the same photo on both covers (fixed case §7)');
+  } finally {
+    (await import('@/lib/social/photos/tuning')).setTuning({}, true);
+  }
 });
 
 test('a request the Writer check dropped (empty query) searches nothing', async () => {
@@ -224,7 +242,7 @@ test('pick: the best that passes, then the second, then the fallback request, th
   assert.equal(none.via, 'type-led');
 });
 
-test('pick: an unverified winner must pass the close-up check (once per photo per request per post); a flagged verified photo too', async () => {
+test('pick: an unverified winner must pass the close-up check (once per photo per request per post); a verified photo never goes to the stock close-up (2026-10-08)', async () => {
   const asked: string[] = [];
   const vision = stubVision(['bad'], asked);
   const bad = cand({ url: 'https://s/bad.jpg' });
@@ -236,9 +254,26 @@ test('pick: an unverified winner must pass the close-up check (once per photo pe
   state.prev = null;
   await pickForSlide({ slot: { kind: 'story', speaker: null }, requests: [{ request: v('thematic', 'servers'), scored: [scored(bad)] }] }, state, { vision }, [], 0.5);
   assert.equal(asked.length, 2, 'the bad photo is not checked twice');
+  // A verified headshot or HQ photo is the subject by design: tagged person or named place, it still wins, unchecked.
   const verifiedFlagged = cand({ url: 'https://s/bad-hq.jpg', lane: 'hq', source: 'hq', verified: true });
-  const r = await pickForSlide({ slot: { kind: 'story', speaker: null }, requests: [{ request: v('company', 'Acme'), scored: [scored(verifiedFlagged, null, { named_place: true })] }] }, newPickState(), { vision }, [], 0.5);
-  assert.equal(r.winner, null, 'flagged → close-up → fails');
+  const r = await pickForSlide({ slot: { kind: 'story', speaker: null }, requests: [{ request: v('company', 'Acme'), scored: [scored(verifiedFlagged, null, { named_place: true, person: true })] }] }, newPickState(), { vision }, [], 0.5);
+  assert.equal(r.winner?.cand.url, verifiedFlagged.url, 'verified + flagged → no stock close-up → kept');
+  assert.equal(asked.length, 2, 'the stock vision check was never asked');
+  // A verified tile tagged as a text banner is still skipped.
+  const banner = cand({ url: 'https://s/banner.jpg', lane: 'official', source: 'official', verified: true });
+  const rb = await pickForSlide({ slot: { kind: 'story', speaker: null }, requests: [{ request: v('company', 'Acme'), scored: [scored(banner, null, { text_banner: true })] }] }, newPickState(), { vision }, [], 0.5);
+  assert.equal(rb.winner, null);
+  // The story line reaches the close-up check.
+  const seen: Array<string | undefined> = [];
+  await pickForSlide({ slot: { kind: 'story', speaker: null }, requests: [{ request: v('setting', 'computing research lab'), scored: [scored(cand({ url: 'https://s/lab.jpg' }))] }] }, newPickState(), { vision: async (x) => (seen.push(x.story), { ok: true, pass: true, costUsd: 0, verdict: { what_it_shows: 'a lab', shows_requested: true, shows_requested_confidence: 0.9, person_prominent: false, landmark_visible: false, story_logo: false, logo_seen: null, named_institution: false, mostly_text_banner: false } }) }, [], 0.5, 'An AI lab ships a model');
+  assert.deepEqual(seen, ['An AI lab ships a model']);
+});
+
+test('stock retry query keeps the head noun (the last two words), never the first two', () => {
+  assert.deepEqual(stockQueries('AI research lab'), ['AI research lab', 'research lab']);
+  assert.deepEqual(stockQueries('stack of presentation slides and documents'), ['stack of presentation slides and documents', 'documents']);
+  assert.deepEqual(stockQueries('university lecture hall'), ['university lecture hall', 'lecture hall']);
+  assert.deepEqual(stockQueries('servers'), ['servers']);
 });
 
 test('pick: never the previous slide\'s photo; stock never twice in a post; stat slides never a person or logo; quotes never another person', async () => {
@@ -392,4 +427,173 @@ test('framing: full bleed and spreads only within 1.5× enlargement; a small sce
   assert.deepEqual(ids(facts({ bucket: 'cover', sharpBleed: false })), ['cover-split'], 'a small scene: the framed split cover');
   assert.ok(!ids(facts({ sharpBleed: false })).includes('story-full-bleed'));
   assert.deepEqual(ids(facts({ bucket: 'stat', sharpBackdrop: false })), ['stat-plain'], 'too small even for a darkened backdrop');
+});
+
+// ── Recency and rank (2026-10-08: an OpenAI post showed its 2019 building) ──
+
+import { HQ_MAX_AGE_YEARS, currentHeadquarters, tooOld } from '@/lib/social/photos/org-pool';
+
+test('headquarters: a photo more than 5 years older than the story is too old; undated passes; the current P159 wins', () => {
+  assert.equal(HQ_MAX_AGE_YEARS, 5);
+  assert.equal(tooOld('2019-03-01', '2026-10-08'), true);
+  assert.equal(tooOld('2023-06-01', '2026-10-08'), false);
+  assert.equal(tooOld(null, '2026-10-08'), false);
+  assert.equal(tooOld('2019-03-01', null), false);
+  const val = (id: string) => ({ mainsnak: { datavalue: { value: { id } } } });
+  assert.equal(currentHeadquarters([{ ...val('Q1'), qualifiers: { P582: [{}] } }, val('Q2')]), 'Q2', 'an ended headquarters is skipped');
+  assert.equal(currentHeadquarters([val('Q2'), { ...val('Q3'), rank: 'preferred' }]), 'Q3', 'preferred rank first');
+});
+
+// ── Punch slides (seventh round): a text slide may be its headline alone ──
+
+import { checkDraft as checkDraftFn, fillDraft as fillDraftFn } from '@/lib/social/writer/draft';
+
+test('a text slide with no body passes the draft check and renders as a headline-only slide', () => {
+  const brief = briefSuperIntelligenceForce();
+  const d = sifDraft();
+  d.slides[0]!.body = null;
+  const filled = fillDraftFn(checkDraftFn(d, brief), brief);
+  const post = toRenderPost(filled, { cover: null, slides: filled.slides.map(() => null) }, { source: 'TechCrunch', sourceUrl: TC_URL, publishedAt: '2026-10-08T00:00:00Z' });
+  const slide = post.slides[1]!;
+  assert.ok(slide.headline);
+  assert.equal(slide.body, undefined);
+});
+
+// ── Canvas (Lucas, 2026-10-08): Jev picks a colour per slide, the way it picks layouts ──
+
+test('canvas: Jev picks per slide; never one colour on two neighbouring slides; the spread shares one; it reaches the render', async () => {
+  const brief = briefSuperIntelligenceForce();
+  const draft = fillDraft(sifDraft(), brief);
+  const wide = (url: string) => ({ url, credit: 'A, CC BY · via flickr', source: 'stock' as const, width: 3000, height: 1800, qid: null, subject: null });
+  const trace = (photo: ReturnType<typeof wide> | null) => ({ request: v('thematic', 'x'), photo, via: photo ? ('openverse' as const) : ('icon' as const), icon: 'clock', identity: null, steps: [], alternates: [] });
+  const photos = { cover: trace(null), slides: draft.slides.map((_, i) => trace(i === 4 ? wide(`https://s/w${i}.jpg`) : null)) };
+  const calls: string[] = [];
+  // Jev always wants orange: code turns every second one black.
+  const layout = await chooseLayout(draft, photos, stubJev(calls, (labels, version) => (version === 'slide-canvas@1' ? 'orange' : labels[0]!)));
+  assert.equal(layout.canvases.length, layout.templates.length, 'one canvas per slide, cover first');
+  assert.ok(calls.includes('slide-canvas@1'));
+  layout.canvases.forEach((c, i) => {
+    if (i > 0 && c !== 'black') assert.notEqual(c, layout.canvases[i - 1], `slide ${i + 1} repeats a colour`);
+  });
+  assert.ok(layout.canvases.includes('orange') && layout.canvases.includes('black'));
+  assert.ok(layout.log.some((l) => /repeats the previous slide's → black/.test(l)));
+  // The spread (slides 6–7) shares its first slide's canvas.
+  assert.equal(layout.canvases[6], layout.canvases[5]);
+  // The canvas reaches the slide and the template; the follow slide stays black.
+  const post = toRenderPost(draft, { cover: null, slides: photos.slides.map((t) => t.photo) }, { source: 's', sourceUrl: 'u', publishedAt: 'p' }, layout);
+  const orangeAt = layout.canvases.indexOf('orange');
+  assert.equal(post.slides[orangeAt]!.canvas, 'orange');
+  assert.equal(post.slides.at(-1)!.canvas, undefined);
+  const React = await import('react');
+  (globalThis as { React?: unknown }).React = React;
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const { SlideTemplate } = await import('@/lib/social/render/SlideTemplate');
+  assert.match(renderToStaticMarkup(React.createElement(SlideTemplate, { post, position: orangeAt })), /data-canvas="orange"/);
+  // A Jev error is black, logged.
+  const failing = await chooseLayout(draft, photos, async (req, meta) => {
+    if (meta.version === 'slide-canvas@1') throw new Error('down');
+    return stubJev()(req, meta);
+  });
+  assert.ok(failing.canvases.every((c) => c === 'black'));
+});
+
+// ── Photo decision nodes and uniqueness (Lucas, 2026-10-08) ──────────────
+
+const words = (position: number, headline: string, body = '') => ({ position, headline, body });
+
+test('uniqueness: no photo twice in a post, verified included; no person twice; a quote slide\'s speaker is the one exception', async () => {
+  const ceo = cand({ url: 'https://c/amodei.jpg', lane: 'ceo', source: 'ceo', subject: 'Dario Amodei', verified: true });
+  const ceo2 = cand({ url: 'https://c/amodei-2.jpg', lane: 'second', source: 'second', subject: 'Dario Amodei', verified: true });
+  const scene = cand({ url: 'https://s/lab.jpg' });
+  const state = newPickState();
+  const cover = await pickForSlide({ slot: { kind: 'cover', speaker: null }, requests: [{ request: v('company', 'Anthropic'), scored: [scored(ceo)] }] }, state, {}, [], 0.5);
+  assert.equal(cover.winner?.cand.url, ceo.url);
+  state.prev = 'other';
+  // The same CEO photo, and another photo of the same person, are both out on a later slide; the scene wins.
+  const later = await pickForSlide({ slot: { kind: 'story', speaker: null }, requests: [{ request: v('thematic', 'lab'), scored: [scored(scene, 0.9)] }, { request: v('company', 'Anthropic'), scored: [scored(ceo), scored(ceo2)] }] }, state, {}, [], 0.5);
+  assert.equal(later.winner?.cand.url, scene.url);
+  state.prev = 'other';
+  const onlyCeo = await pickForSlide({ slot: { kind: 'story', speaker: null }, requests: [{ request: v('company', 'Anthropic'), scored: [scored(ceo), scored(ceo2)] }] }, state, {}, [], 0.5);
+  assert.equal(onlyCeo.winner, null);
+  assert.ok(onlyCeo.steps.some((x) => /already in the post/.test(x)) && onlyCeo.steps.some((x) => /Dario Amodei is already shown/.test(x)));
+  // A quote slide may show its speaker again, in the round spot.
+  state.prev = 'other';
+  const quote = await pickForSlide({ slot: { kind: 'quote', speaker: 'Dario Amodei' }, requests: [{ request: v('person', 'Dario Amodei'), scored: [scored(ceo2)] }] }, state, {}, [], 0.5);
+  assert.equal(quote.winner?.cand.url, ceo2.url);
+});
+
+test('photo-slide@2: Jev drops a photo that doesn\'t suit the slide (verified ones too) or repeats one in the post; a Jev error leaves the slide ungated', async () => {
+  const ceo = cand({ url: 'https://c/ceo.jpg', lane: 'ceo', source: 'ceo', subject: 'Dario Amodei', title: 'Dario Amodei portrait', verified: true });
+  const lab = cand({ url: 'https://s/lab.jpg', title: 'researchers at monitors' });
+  const servers = cand({ url: 'https://s/servers2.jpg', title: 'server room aisle' });
+  const asked: unknown[] = [];
+  // Jev: the CEO portrait doesn't fit a research slide; the second server room repeats the first.
+  const jev = stubJev([], undefined, (id, state, version) => {
+    if (version !== PhotoSlideQ.VERSION) return 0.9;
+    if (id === PhotoSlideQ.BEST_ID) return 0.5;
+    asked.push(state);
+    const st = state as PhotoSlideQ.SlideState;
+    const c = st.candidates[Number(id.split('_')[1])]!;
+    if (id.startsWith('fits_')) return c.source === 'ceo' ? 0.1 : 0.9;
+    return /server/.test(c.title) && st.photos_already_in_post.some((p) => /server/.test(p.shows)) ? 0.9 : 0.05;
+  });
+  const state = newPickState();
+  const research = await pickForSlide({ slot: { kind: 'story', speaker: null }, requests: [{ request: v('thematic', 'research lab'), scored: [] }, { request: v('company', 'Anthropic'), scored: [scored(ceo)] }], words: words(4, 'Behind it is model welfare research') }, state, { jev }, [], 0.5, 'Anthropic bans cruelty to Claude');
+  assert.equal(research.winner, null, 'the verified CEO portrait is off the slide\'s point');
+  assert.ok(research.steps.some((x) => /doesn't belong under this slide \(photo-slide@2 fit 0\.10\)/.test(x)));
+  const st = asked[0] as PhotoSlideQ.SlideState;
+  assert.equal(st.story, 'Anthropic bans cruelty to Claude');
+  assert.equal(st.slide.headline, 'Behind it is model welfare research');
+  // A first server room, then a second one reads as a repeat; the lab wins.
+  const first = cand({ url: 'https://s/servers1.jpg', title: 'server room racks' });
+  await pickForSlide({ slot: { kind: 'story', speaker: null }, requests: [{ request: v('thematic', 'server racks'), scored: [scored(first, 0.9, { tags: ['server room', 'racks'] })] }], words: words(5, 'It runs in data centers') }, state, { jev }, [], 0.5, 'x');
+  state.prev = 'other';
+  const next = await pickForSlide({ slot: { kind: 'story', speaker: null }, requests: [{ request: v('thematic', 'computing'), scored: [scored(servers, 0.9), scored(lab, 0.9)] }], words: words(6, 'The compute bill') }, state, { jev }, [], 0.5, 'x');
+  assert.equal(next.winner?.cand.url, lab.url);
+  assert.ok(next.steps.some((x) => /reads as a repeat/.test(x)));
+  // Jev down: the slide is picked by the code checks alone, logged.
+  const down: JevAsk = async () => { throw new Error('jev down'); };
+  const ungated = await pickForSlide({ slot: { kind: 'story', speaker: null }, requests: [{ request: v('thematic', 'lab'), scored: [scored(cand({ url: 'https://s/x.jpg' }), 0.9)] }], words: words(7, 'x') }, newPickState(), { jev: down }, [], 0.5);
+  assert.ok(ungated.winner);
+  assert.ok(ungated.steps.some((x) => /error \(jev down\) → not gated/.test(x)));
+});
+
+test('spread-fit@1: a wide photo spreads only when Jev says it suits both slides', async () => {
+  const brief = briefSuperIntelligenceForce();
+  const draft = fillDraft(sifDraft(), brief);
+  const wideP = (url: string) => ({ url, credit: 'A, CC BY · via flickr', source: 'stock' as const, width: 3000, height: 1800, qid: null, subject: null });
+  const trace = (photo: ReturnType<typeof wideP> | null) => ({ request: v('thematic', 'x'), photo, via: photo ? ('openverse' as const) : ('icon' as const), icon: 'clock', identity: null, steps: [], alternates: [] });
+  const photos = { cover: trace(null), slides: draft.slides.map((_, i) => trace(i === 4 ? wideP(`https://s/w${i}.jpg`) : null)) };
+  const no = await chooseLayout(draft, photos, stubJev([], undefined, (id, _s, version) => (version === SpreadFitQ.VERSION ? 0.2 : 0.9)));
+  assert.equal(no.spreadAt, null);
+  assert.ok(no.log.some((l) => /spread check spread-fit@1: slides_6_7 0\.20/.test(l)));
+  const yes = await chooseLayout(draft, photos, stubJev());
+  assert.equal(yes.spreadAt, 4);
+});
+
+test('photo-slide@2: within a request, Jev\'s best-suited candidate is tried first; an everyday scene from the story\'s world can pass', async () => {
+  const generic = cand({ url: 'https://s/desk.jpg', title: 'Home Desk' });
+  const better = cand({ url: 'https://s/receipt.jpg', title: 'Online receipt on laptop' });
+  const jev: JevAsk = async (req, meta) => {
+    const answers: Record<string, JevAnswer> = {};
+    for (const id of Object.keys(req.questions)) {
+      if (id === PhotoSlideQ.BEST_ID) answers[id] = { choice: PhotoSlideQ.candId(1), probabilities: { [PhotoSlideQ.candId(0)]: 0.2, [PhotoSlideQ.candId(1)]: 0.8 } };
+      else answers[id] = { noul: id.startsWith('repeats_') ? 0.05 : 0.7 };
+    }
+    void meta;
+    return { answers, usage: { input_tokens: 100, output_tokens: 0 }, model: 'stub' };
+  };
+  const out = await pickForSlide({ slot: { kind: 'story', speaker: null }, requests: [{ request: v('setting', 'home office desk'), scored: [scored(generic, 0.9), scored(better, 0.9)] }], words: words(2, 'StackSocial is selling lifetime AI access') }, newPickState(), { jev }, [], 0.5, 'A $69.97 lifetime AI deal');
+  assert.equal(out.winner?.cand.url, better.url);
+  assert.ok(out.steps.some((x) => /best 0\.80/.test(x)));
+});
+
+test('tuning: the deep ladder retries a scene with its last two words, then its head noun; icon scenes cover every icon', async () => {
+  const { ladderQueries, ICON_SCENES, setTuning, DEFAULT_TUNING } = await import('@/lib/social/photos/tuning');
+  assert.deepEqual(ladderQueries('padlock on computer keyboard'), ['computer keyboard', 'keyboard']);
+  assert.deepEqual(ladderQueries('stack of presentation slides and documents'), ['documents']);
+  assert.deepEqual(ladderQueries('servers'), []);
+  const { ICON_NAMES } = await import('@/lib/social/render/icons');
+  for (const n of ICON_NAMES) assert.ok(ICON_SCENES[n], `no scene for ${n}`);
+  assert.deepEqual(setTuning({}, true), DEFAULT_TUNING);
 });
