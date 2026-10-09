@@ -21,7 +21,7 @@ import type { Queryable } from '@/lib/stories/db';
 import type { ScoreBreakdown } from '@/lib/social-hub/types';
 import { morningDownloadScore, rankBreakdown } from '@/lib/stories/md-score';
 import type { Series } from '@/lib/stories/render/types';
-import { carouselNumbers, morningDownloadCarousel, shortlistWithoutBrief, type NumberCandidate } from '@/lib/stories/sources/carousel';
+import { carouselNumbers, latestCarouselRunAt, morningDownloadCarousel, shortlistWithoutBrief, type NumberCandidate } from '@/lib/stories/sources/carousel';
 import { dedupe, freeToolLeads, morningDownloadReels, storyKey, theNumberIdeas, type StoryCandidate, type ToolLead } from '@/lib/stories/sources/reels';
 
 export type PoolEntry = { kind: 'story'; story: StoryCandidate } | { kind: 'number'; number: NumberCandidate } | { kind: 'lead'; lead: ToolLead };
@@ -53,6 +53,8 @@ export type PoolReads = {
   morning: () => Promise<{ reels: StoryCandidate[]; carousel: StoryCandidate[] }>;
   numbers: () => Promise<{ numbers: NumberCandidate[]; unbriefed: StoryCandidate[] }>;
   leads: () => Promise<ToolLead[]>;
+  /** When the newest carousel run finished: a run newer than the last refresh saw makes the pool due again. */
+  carouselRunAt?: () => Promise<string | null>;
 };
 
 /** The live reads, all from the shared database (read only). */
@@ -68,6 +70,7 @@ export function livePoolReads(sourceDb: Queryable, now: Date): PoolReads {
       return { numbers, unbriefed: dedupe([...shortlist, ...theNumber]) };
     },
     leads: () => freeToolLeads(sourceDb, ny),
+    carouselRunAt: () => latestCarouselRunAt(sourceDb),
   };
 }
 
@@ -187,12 +190,14 @@ export async function writePool(db: Queryable, gathered: { items: PoolItem[]; re
 }
 
 export async function refreshStoryPool(db: Queryable, reads: PoolReads, now: Date): Promise<{ upserted: number; dropped: number; errors: string[] }> {
+  // Read the carousel marker before gathering: a run that finishes mid-gather is newer than this and refreshes again.
+  const carouselAt = await reads.carouselRunAt?.().catch(() => null) ?? null;
   const gathered = await gatherPool(reads, now);
   const r = await writePool(db, gathered, now);
   await db.query(
     `INSERT INTO stories.settings (key, value, updated_by, updated_at) VALUES ('pool_refreshed', $1::jsonb, 'worker', now())
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-    [JSON.stringify({ day: poolDay(now), at: now.toISOString(), upserted: r.upserted, dropped: r.dropped, errors: gathered.errors })],
+    [JSON.stringify({ day: poolDay(now), at: now.toISOString(), carousel_at: carouselAt, upserted: r.upserted, dropped: r.dropped, errors: gathered.errors })],
   );
   return { ...r, errors: gathered.errors };
 }
@@ -202,11 +207,21 @@ export function poolDay(now: Date): string {
   return nyDateOf(new Date(now.getTime() - POOL_DAY_STARTS_HOUR * 3_600_000));
 }
 
-/** Refresh once per pool day: the first worker pass after 4:00 AM, or the first build before it if the pool has none for the day. */
+/**
+ * Refresh once per pool day (the first worker pass after 4:00 AM, or the first build before it if the
+ * pool has none for the day), and again whenever a carousel run has finished since the last refresh
+ * read the carousel. The second case is how a late or manually started run's stories reach Morning Download.
+ */
 export async function refreshPoolIfDue(db: Queryable, reads: () => PoolReads, now: Date): Promise<Awaited<ReturnType<typeof refreshStoryPool>> | null> {
-  const { rows } = await db.query<{ value: { day?: string } | null }>(`SELECT value FROM stories.settings WHERE key = 'pool_refreshed'`);
-  if (rows[0]?.value?.day === poolDay(now)) return null;
-  return refreshStoryPool(db, reads(), now);
+  const { rows } = await db.query<{ value: { day?: string; carousel_at?: string | null } | null }>(`SELECT value FROM stories.settings WHERE key = 'pool_refreshed'`);
+  const last = rows[0]?.value;
+  const source = reads();
+  if (last?.day === poolDay(now)) {
+    const latest = await source.carouselRunAt?.().catch(() => null);
+    const seen = last.carousel_at ? Date.parse(last.carousel_at) : 0;
+    if (!latest || Date.parse(latest) <= seen) return null;
+  }
+  return refreshStoryPool(db, source, now);
 }
 
 export type OpenPool = { stories: StoryCandidate[]; numbers: NumberCandidate[]; unbriefed: StoryCandidate[]; leads: ToolLead[] };

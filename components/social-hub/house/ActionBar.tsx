@@ -105,7 +105,7 @@ export function ActionBar({ menu, compact = false, showOffNote = true }: { menu:
               <MoreHorizontal size={16} aria-hidden="true" />
             </button>
             {moreOpen ? (
-              <ul role="menu" className="sh-menu__list">
+              <ul role="menu" className={`sh-menu__list${compact ? '' : ' sh-menu__list--left'}`}>
                 {menu.more.map((a) => (
                   <li key={a.key} role="none">
                     <button

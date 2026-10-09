@@ -74,6 +74,17 @@ export async function morningDownloadCarousel(db: Queryable, now: Date): Promise
   return out;
 }
 
+/**
+ * When the newest pipeline carousel run finished (ISO), or null. The pool compares it with
+ * the one its last refresh saw, so a run that lands after the day's refresh (a late or manual
+ * run) brings its stories in instead of waiting for tomorrow.
+ */
+export async function latestCarouselRunAt(db: Queryable): Promise<string | null> {
+  const { rows } = await db.query<{ at: string | Date | null }>(`SELECT max(finished_at) AS at FROM social.runs WHERE trigger <> 'cli' AND finished_at IS NOT NULL`);
+  const at = rows[0]?.at;
+  return at ? new Date(at).toISOString() : null;
+}
+
 export type NumberCandidate = {
   key: string;
   origin: 'carousel' | 'reels' | 'generated';

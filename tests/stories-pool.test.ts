@@ -69,15 +69,36 @@ test('pool refresh: used keys stay used, an unused key the refresh did not retur
 
 test('pool refresh runs once per pool day, which turns over at 4:00 AM New York', async () => {
   const { db } = await openLocalStoriesDb();
-  let calls = 0;
-  const counted = () => (calls++, reads([story('a')]));
+  let refreshes = 0;
+  const counted = () => ({ ...reads([story('a')]), morning: async () => (refreshes++, { reels: [story('a')], carousel: [] }) });
   assert.ok(await refreshPoolIfDue(db, counted, NOW));
   assert.equal(await refreshPoolIfDue(db, counted, new Date(NOW.getTime() + 3_600_000)), null);
-  assert.equal(calls, 1);
+  assert.equal(refreshes, 1);
   assert.equal(poolDay(new Date('2026-10-10T07:30:00Z')), '2026-10-09', '3:30 AM is still the previous pool day');
   assert.equal(poolDay(new Date('2026-10-10T08:30:00Z')), '2026-10-10');
   assert.ok(await refreshPoolIfDue(db, counted, new Date('2026-10-10T08:30:00Z')));
-  assert.equal(calls, 2);
+  assert.equal(refreshes, 2);
+});
+
+test('pool refresh runs again when a carousel run finishes after the day\'s refresh', async () => {
+  const { db } = await openLocalStoriesDb();
+  let runAt: string | null = '2026-10-09T03:07:00Z';
+  const withRun = (morning: StoryCandidate[]): PoolReads => ({ ...reads(morning), carouselRunAt: async () => runAt });
+
+  // The 4 AM refresh sees the 3 AM run, which brought no stories.
+  assert.ok(await refreshPoolIfDue(db, () => withRun([story('a')]), NOW));
+  assert.equal(await refreshPoolIfDue(db, () => withRun([story('a')]), new Date(NOW.getTime() + 60_000)), null, 'nothing new: no refresh');
+
+  // A manual run finishes later with qualified stories: the next check pulls them into Morning Download.
+  runAt = '2026-10-09T13:25:00Z';
+  const later = new Date('2026-10-09T13:30:00Z');
+  assert.ok(await refreshPoolIfDue(db, () => withRun([story('a'), story('c', 'carousel')]), later));
+  assert.deepEqual((await openPool(db, 'morning_download')).stories.map((s) => s.key).sort(), ['news.test/a', 'news.test/c']);
+  assert.equal(await refreshPoolIfDue(db, () => withRun([story('a'), story('c', 'carousel')]), new Date(later.getTime() + 60_000)), null, 'seen once, not again');
+
+  // A source that cannot report its newest run never forces a refresh loop.
+  const broken: PoolReads = { ...reads([]), carouselRunAt: async () => { throw new Error('social.runs unreachable'); } };
+  assert.equal(await refreshPoolIfDue(db, () => broken, new Date(later.getTime() + 120_000)), null);
 });
 
 test('Free vs. Paid: a chosen pair uses up the leads it came from', () => {
