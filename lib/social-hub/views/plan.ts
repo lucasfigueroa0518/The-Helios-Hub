@@ -61,8 +61,8 @@ export function windowsOn(vertical: Vertical, nyDate: string): PlanWindow[] {
   return PLAN[vertical].filter((w) => !w.days || w.days.includes(day));
 }
 
-/** A post occupies a window on its day when it's placed, posting, posted, or failed in it. */
-const PLACED = new Set(['scheduled', 'publishing', 'published', 'failed']);
+/** A post occupies a window when it is placed, posting, or posted. A failed generation gives the slot back. */
+const PLACED = new Set(['scheduled', 'publishing', 'published', 'generating']);
 
 export type TypePlan = {
   vertical: Vertical;

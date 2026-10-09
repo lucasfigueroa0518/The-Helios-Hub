@@ -1,9 +1,9 @@
 import type { HubDataset } from '@/lib/social-hub/dataset';
 import { quotaFrom, type Quota } from '@/lib/social-hub/house';
 import { addDays, nyDateOf } from '@/lib/social-hub/time';
-import { dayPlan, type DayPlan } from '@/lib/social-hub/views/plan';
+import { dayPlan, windowsOn, type DayPlan } from '@/lib/social-hub/views/plan';
 import { needsPerson } from '@/lib/social-hub/views/state';
-import type { HubPost } from '@/lib/social-hub/types';
+import type { HubPost, Vertical } from '@/lib/social-hub/types';
 
 /**
  * The Content page's model (BRIEFS.md §1): what needs a person, today's
@@ -55,6 +55,30 @@ function band(iso: string | null): LineupBand['id'] {
 
 const BAND_LABEL: Record<LineupBand['id'], string> = { morning: 'Morning', afternoon: 'Afternoon', evening: 'Evening' };
 
+const MADE = new Set(['ready', 'scheduled', 'publishing', 'published']);
+
+/**
+ * The day's publishing candidates: a post idea that is holding one of its
+ * type's slots today. Generating counts. A failed or skipped generation does
+ * not, and neither does an idea that was never made.
+ */
+export function publishingCandidates(posts: readonly HubPost[], today: string): HubPost[] {
+  const byType = new Map<Vertical, HubPost[]>();
+  for (const post of posts) {
+    if (post.nyDate !== today || !post.idea) continue;
+    const made = post.status === 'generating' || (Boolean(post.generatedAt) && MADE.has(post.status));
+    if (!made) continue;
+    const list = byType.get(post.vertical) ?? [];
+    list.push(post);
+    byType.set(post.vertical, list);
+  }
+  const out: HubPost[] = [];
+  for (const [vertical, list] of byType) {
+    out.push(...list.sort(bySoonest).slice(0, windowsOn(vertical, today).length));
+  }
+  return out.sort(bySoonest);
+}
+
 export function needsGroups(posts: readonly HubPost[], now: Date): NeedsGroup[] {
   const today = nyDateOf(now)!;
   const tomorrow = addDays(today, 1);
@@ -77,7 +101,7 @@ export function contentModel(dataset: HubDataset, now: Date): ContentModel {
   const today = nyDateOf(now)!;
   const nowIso = now.toISOString();
   const needs = needsGroups(dataset.posts, now);
-  const todays = dataset.posts.filter((p) => p.nyDate === today && p.status !== 'ready').sort(bySoonest);
+  const todays = publishingCandidates(dataset.posts, today);
   const bands = new Map<LineupBand['id'], LineupBand>();
   let nowAfter: string | null = null;
   for (const post of todays) {
@@ -89,9 +113,7 @@ export function contentModel(dataset: HubDataset, now: Date): ContentModel {
     bands.set(id, b);
   }
   const lineup = (['morning', 'afternoon', 'evening'] as const).map((id) => bands.get(id)).filter((b): b is LineupBand => Boolean(b));
-  const unplaced = dataset.posts
-    .filter((p) => p.status === 'ready' && !needsPerson(p, now) && nyDateOf(p.generatedAt) === today)
-    .sort((a, b) => (b.generatedAt ?? '').localeCompare(a.generatedAt ?? ''));
+  const unplaced: HubPost[] = [];
   const next = dataset.posts.filter((p) => (p.status === 'scheduled' || p.status === 'publishing') && (p.publishAt ?? '') > nowIso).sort(bySoonest)[0] ?? null;
   return {
     today,

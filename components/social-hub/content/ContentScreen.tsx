@@ -21,7 +21,7 @@ import { typeHref, verticalInfo } from '@/lib/social-hub/verticals';
 export function ContentScreen({ dataset, base, now, libraries }: { dataset: HubDataset; base: string; now: Date; libraries: LibrariesModel }) {
   const m = contentModel(dataset, now);
   const o = offerer(dataset, now);
-  // Everything being made or posted today, across every type, in the order it goes out; made-but-unplaced content follows.
+  // Post ideas holding today's slots: made or still being made. Failed and never-made ideas stay out.
   const today = [...m.lineup.flatMap((band) => band.entries.map((e) => e.post)), ...m.unplaced];
   // Rows nothing here can act on don't count as waiting on the person (critique 2026-10-08).
   const off = (p: HubPost) => o.offer(p).state.id === 'approval_off';

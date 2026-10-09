@@ -4,7 +4,7 @@ import test from 'node:test';
 import { actionsFor, needsApproval } from '@/lib/social-hub/house';
 import type { HubPost } from '@/lib/social-hub/types';
 import { actionMenu, flagOf } from '@/lib/social-hub/views/actions';
-import { contentModel, needsGroups } from '@/lib/social-hub/views/today';
+import { contentModel, needsGroups, publishingCandidates } from '@/lib/social-hub/views/today';
 import { displayName, relative, when } from '@/lib/social-hub/views/format';
 import { offerer, slotChoices } from '@/lib/social-hub/views/offer';
 import { poolSummaries } from '@/lib/social-hub/views/pools';
@@ -71,6 +71,18 @@ test('slot choices cover the coming week and mark what is taken', () => {
   const offer = o.offer(ready);
   const place = [offer.menu.primary, ...offer.menu.secondary, ...offer.menu.more].find((a) => a?.key === 'place');
   if (place) assert.ok(place.slots?.length, 'place offers the picker');
+});
+
+test('today’s strip is only post ideas holding a slot; failed and never-made ideas are out', () => {
+  const post = (over: Partial<HubPost>): HubPost => ({ nyDate: '2026-10-08', idea: { id: 'i', label: 'Idea' }, generatedAt: '2026-10-08T08:00:00Z', status: 'scheduled', vertical: 'stories', publishAt: '2026-10-08T13:00:00Z', id: 'p', ...over }) as HubPost;
+  const ids = publishingCandidates([
+    post({ id: 'guess-failed', status: 'failed', idea: { id: 'guess', label: 'Guess' } }),
+    post({ id: 'free-skipped', status: 'skipped', generatedAt: null, idea: { id: 'free', label: 'Free' } }),
+    post({ id: 'no-idea', idea: null, status: 'scheduled' }),
+    post({ id: 'making', status: 'generating', generatedAt: null, idea: { id: 'download', label: 'Download' }, publishAt: null }),
+    post({ id: 'made', status: 'scheduled', idea: { id: 'guess2', label: 'Guess 2' } }),
+  ], '2026-10-08').map((p) => p.id);
+  assert.deepEqual(ids, ['made', 'making']);
 });
 
 test('the Content model leads with what needs a person and orders today by time', () => {
