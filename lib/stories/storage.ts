@@ -79,7 +79,10 @@ export function createStoriesStorage(cfg: StorageConfig = liveStorageConfig()): 
             res = await put();
           }
           if (res.ok) return;
-          last = `upload failed (${res.status}): ${(await res.text()).slice(0, 200)}`;
+          const text = (await res.text()).slice(0, 200);
+          last = /Unregistered API key|Invalid Compact JWS/.test(text)
+            ? `storage rejected the Supabase key (${res.status}). The key on this machine is not registered for the project.`
+            : `upload failed (${res.status}): ${text}`;
           if (!isRetryable(res.status)) break;
         } catch (err) {
           last = err instanceof Error ? err.message : String(err);

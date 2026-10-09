@@ -21,6 +21,7 @@ import type { Series } from '@/lib/stories/render/types';
 import {
   approveSet,
   claimNextRequested,
+  releaseStaleBuilds,
   dueSets,
   failSet,
   framesDueForInsights,
@@ -71,6 +72,9 @@ export async function tick(deps: WorkerDeps): Promise<{ built: number; scheduled
     const requested = await requestAutoSets(deps.db, settings, now, { log: (message, fields) => log(`${message} ${JSON.stringify(fields)}`) });
     if (requested.length) log(`auto: requested ${requested.join(', ')}`);
   }
+
+  const released = await releaseStaleBuilds(deps.db);
+  if (released.length) log(`build interrupted, trying again: ${released.join(', ')}`);
 
   // 2. Build one requested set.
   const claimed = await claimNextRequested(deps.db);

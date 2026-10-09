@@ -48,6 +48,7 @@ export function statusLabel(post: HubPost): string {
     case 'cancelled': return post.statusNote ?? 'Cancelled';
     case 'skipped': return 'Skipped';
     case 'ready': return 'Content ready';
+    case 'generating': return 'Being made';
   }
 }
 

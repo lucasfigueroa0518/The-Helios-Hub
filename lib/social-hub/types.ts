@@ -18,6 +18,7 @@ export type HubStatus =
   | 'failed'
   | 'cancelled'
   | 'ready'
+  | 'generating'
   | 'skipped';
 
 export type MetricKey =

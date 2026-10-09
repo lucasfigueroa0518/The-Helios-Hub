@@ -124,6 +124,8 @@ export function postState(post: HubPost, now: Date): PostState {
       return { ...S.published, line: post.postedAt ? `Posted ${whenInline(post.postedAt, now)}` : null };
     case 'publishing':
       return { ...S.posting, line: 'Posting now' };
+    case 'generating':
+      return { ...S.in_production, line: 'Being made' };
     case 'failed':
       return { ...S.failed, line: post.statusNote ?? 'The post didn’t go out.' };
     case 'skipped':

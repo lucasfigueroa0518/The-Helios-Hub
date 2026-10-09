@@ -12,6 +12,8 @@ const ORIGIN_LABEL: Record<string, string> = { reels: 'Text on Screen', carousel
 const STORY_TAG_LABEL: Record<string, string> = { story_choice: 'Story choice', copy: 'Copy', photo: 'Photo', design: 'Design', accuracy: 'Accuracy' };
 
 const STATUS: Record<string, HubStatus> = {
+  requested: 'generating',
+  building: 'generating',
   ready: 'ready',
   approved: 'scheduled',
   scheduled: 'scheduled',
@@ -169,7 +171,7 @@ export function storyPosts(read: StoriesRead): HubPost[] {
       name: headline ? `${series}: ${headline}` : series,
       description: `${frames.length} frame${frames.length === 1 ? '' : 's'}${headline ? ` · ${headline}` : ''}`,
       status,
-      statusNote: status === 'skipped' ? 'Missed its window. Story sets are never reused (SH-53).' : status === 'failed' ? text(set.error) : status === 'ready' ? 'Waiting for approval on /stories' : null,
+      statusNote: status === 'skipped' ? 'Missed its window. Story sets are never reused (SH-53).' : status === 'failed' ? text(set.error) : status === 'generating' ? 'Being made' : status === 'ready' ? 'Waiting for approval on /stories' : null,
       postedAt: iso(set.published_at),
       publishAt: iso(set.publish_at),
       nyDate: set.ny_date.slice(0, 10),
@@ -188,7 +190,7 @@ export function storyPosts(read: StoriesRead): HubPost[] {
       factorValues: factorValues(set, frames),
       // Stories are never auto-approved (docs/social-overnight.md).
       approval: { required: true, approvedAt: iso(set.approved_at), note: set.approved_at ? 'Approved' : 'Needs approval on /stories' },
-      idea: null,
+      idea: { id: `stories:${set.series}:${set.ny_date.slice(0, 10)}`, label: series },
       generatedAt: iso(set.built_at),
       versions: [],
       sources: setSources(set),

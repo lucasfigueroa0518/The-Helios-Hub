@@ -55,6 +55,8 @@ test('type pages: Text on Screen keeps /reels; the others live at /<type>, or un
 test('Supabase service headers: a legacy JWT goes in both headers; a secret key only in apikey (never as Bearer)', () => {
   assert.deepEqual(serviceHeaders('eyJhbGciOi.payload.sig'), { apikey: 'eyJhbGciOi.payload.sig', authorization: 'Bearer eyJhbGciOi.payload.sig' });
   assert.deepEqual(serviceHeaders('sb_secret_abc123'), { apikey: 'sb_secret_abc123' });
+  assert.deepEqual(serviceHeaders('  "sb_secret_abc123"  '), { apikey: 'sb_secret_abc123' });
+  assert.deepEqual(serviceHeaders('eyJhbGciOi.not-a-jwt'), { apikey: 'eyJhbGciOi.not-a-jwt' });
 });
 
 test('posting settings refuse bad input before writing anything', async () => {

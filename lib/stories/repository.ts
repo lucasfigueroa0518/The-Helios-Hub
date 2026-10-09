@@ -129,6 +129,18 @@ export async function claimNextRequested(db: StoriesDb): Promise<StorySet | null
   });
 }
 
+/** A build that died mid-way stays `building` and blocks the day. Hand it back so the next pass tries again. */
+export async function releaseStaleBuilds(db: StoriesDb, olderThanMinutes = 45): Promise<string[]> {
+  const { rows } = await db.query<{ id: string }>(
+    `UPDATE stories.sets
+        SET status = 'requested', error = 'the previous build stopped before it finished; trying again', updated_at = now()
+      WHERE status = 'building' AND claimed_at < now() - ($1::int * interval '1 minute')
+      RETURNING id`,
+    [olderThanMinutes],
+  );
+  return rows.map((r) => r.id);
+}
+
 export async function getSet(db: Queryable, setId: string): Promise<{ set: StorySet; frames: FrameRow[] } | null> {
   const { rows } = await db.query<StorySet>(`SELECT ${SET_COLS} FROM stories.sets WHERE id = $1`, [setId]);
   if (!rows[0]) return null;

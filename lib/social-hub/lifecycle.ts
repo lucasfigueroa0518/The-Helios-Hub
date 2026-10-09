@@ -33,7 +33,7 @@ export function contentKey(post: HubPost): { kind: 'content' | 'idea'; ref: stri
 }
 
 /** Which candidate is the content's current state: live and final states first. */
-const RANK: Record<HubStatus, number> = { published: 0, publishing: 1, scheduled: 2, ready: 3, failed: 4, cancelled: 4, skipped: 4 };
+const RANK: Record<HubStatus, number> = { published: 0, publishing: 1, generating: 1, scheduled: 2, ready: 3, failed: 4, cancelled: 4, skipped: 4 };
 
 const when = (p: HubPost): number => Date.parse(p.postedAt ?? p.publishAt ?? p.generatedAt ?? '') || 0;
 

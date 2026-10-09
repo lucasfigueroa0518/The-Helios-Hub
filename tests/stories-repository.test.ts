@@ -10,6 +10,7 @@ import {
   StaleStatusError,
   approveSet,
   claimNextRequested,
+  releaseStaleBuilds,
   dueSets,
   failSet,
   framesDueForInsights,
@@ -156,6 +157,14 @@ test('insights: poll live frames every 2 hours until a final capture', async () 
   assert.equal((await framesDueForInsights(db, { now: at(25) })).length, 0);
   const { rows } = await db.query<{ reach: number; final: boolean }>(`SELECT reach, final FROM stories.insights WHERE frame_id = $1 ORDER BY captured_at`, [frames[0]!.id]);
   assert.deepEqual(rows, [{ reach: 120, final: false }, { reach: 300, final: true }]);
+});
+
+test('a build that died is handed back to requested', async () => {
+  const { db, set } = await builtSet();
+  await db.query(`UPDATE stories.sets SET claimed_at = now() - interval '2 hours' WHERE id = $1`, [set.id]);
+  assert.deepEqual(await releaseStaleBuilds(db), [set.id]);
+  assert.equal((await getSet(db, set.id))?.set.status, 'requested');
+  assert.deepEqual(await releaseStaleBuilds(db), []);
 });
 
 test('settings: defaults, auto off for every series, overrides persist', async () => {
