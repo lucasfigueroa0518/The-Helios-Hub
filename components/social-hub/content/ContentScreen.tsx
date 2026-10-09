@@ -15,6 +15,7 @@ import type { LibrariesModel } from '@/lib/social-hub/views/libraries';
 import { offerer } from '@/lib/social-hub/views/offer';
 import { poolStale, poolSummaries, type PoolSummary } from '@/lib/social-hub/views/pools';
 import { allQuotaCandidates } from '@/lib/social-hub/views/day-rank';
+import { inFlightKey, runningSummary } from '@/lib/social-hub/views/run-for';
 import { contentModel } from '@/lib/social-hub/views/today';
 import { typeHref, verticalInfo } from '@/lib/social-hub/verticals';
 
@@ -25,6 +26,7 @@ import { typeHref, verticalInfo } from '@/lib/social-hub/verticals';
 export function ContentScreen({ dataset, base, now, libraries, progress, controls = true }: { dataset: HubDataset; base: string; now: Date; libraries: LibrariesModel; progress?: AllProgress; controls?: boolean }) {
   const runs: AllProgress = progress ?? { carousels: [], stories: [], explainers: [] };
   const inFlight = Object.values(runs).some((items) => items.length > 0);
+  const summary = runningSummary(runs);
   const m = contentModel(dataset, now);
   const o = offerer(dataset, now);
   // Every type's quota candidates: what holds today's slots, then the top of today's ranking (Promote / Demote applied).
@@ -52,11 +54,12 @@ export function ContentScreen({ dataset, base, now, libraries, progress, control
             {actNow ? <strong className="sh-needs-count">{actNow} {actNow === 1 ? 'needs' : 'need'} you</strong> : 'nothing needs you today'}
             {later ? <> · {later} later</> : null}
             {parked.length ? <> · {parked.length} can’t be approved here yet</> : null}
+            {summary.length ? <> · <strong>{summary.join(' · ')}</strong></> : null}
           </>
         }
       />
       <DataNotes dataset={dataset} />
-      <RunsRefresh active={inFlight} />
+      <RunsRefresh active={inFlight} known={inFlightKey(runs)} />
 
       <section className="sh-section" aria-labelledby="today-strip">
         <div className="sh-section__head">

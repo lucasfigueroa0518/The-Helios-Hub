@@ -9,6 +9,7 @@ import type { HubPost } from '@/lib/social-hub/types';
 import type { QuotaCandidate } from '@/lib/social-hub/views/day-rank';
 import { clock, displayName } from '@/lib/social-hub/views/format';
 import type { Offerer } from '@/lib/social-hub/views/offer';
+import { runForCandidate } from '@/lib/social-hub/views/run-for';
 
 /**
  * Today's Content: every type's quota candidates in one row that scrolls
@@ -16,16 +17,6 @@ import type { Offerer } from '@/lib/social-hub/views/offer';
  * cover slide, or the video's opening frame) and opens the post; one not
  * made yet shows its idea, which Run now makes.
  */
-/** The run behind a candidate: its own (Explainers name the topic), else the type's run in flight (Carousels and Stories run as a batch). */
-function runFor(c: QuotaCandidate, runs: AllProgress): ProgressItem | null {
-  if (c.vertical === 'reels') return null;
-  const items = runs[c.vertical];
-  const own = items.find((i) => i.topicId && c.idea && (c.idea.id === i.topicId || c.idea.id.endsWith(`:${i.topicId}`)));
-  if (own) return own;
-  if (c.vertical === 'explainers') return null;
-  if (c.vertical === 'stories' && c.series) return items.find((i) => i.label === c.series) ?? null;
-  return c.post && c.post.status !== 'generating' ? null : items.find((i) => i.state === 'running') ?? items[0] ?? null;
-}
 
 function RunChip({ run }: { run: ProgressItem | null }) {
   if (!run) return null;
@@ -40,7 +31,7 @@ function RunChip({ run }: { run: ProgressItem | null }) {
 export function TodayStrip({ candidates, o, runs }: { candidates: QuotaCandidate[]; o: Offerer; runs: AllProgress }) {
   return (
     <ul className="sh-strip sh-gallery" aria-label="Today’s content">
-      {candidates.map((c, i) => (c.post ? <Made key={c.post.id} c={c} post={c.post} o={o} run={runFor(c, runs)} /> : <Pending key={c.idea?.id ?? `${c.vertical}:${c.series ?? i}`} c={c} run={runFor(c, runs)} />))}
+      {candidates.map((c, i) => (c.post ? <Made key={c.post.id} c={c} post={c.post} o={o} run={runForCandidate(c, runs)} /> : <Pending key={c.idea?.id ?? `${c.vertical}:${c.series ?? i}`} c={c} run={runForCandidate(c, runs)} />))}
     </ul>
   );
 }
