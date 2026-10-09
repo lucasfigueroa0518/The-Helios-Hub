@@ -24,7 +24,9 @@ export const MD_HEADLINES = {
   id: 'md-headlines@1',
   system: `You write the story frames of "Helios Morning Download", a daily Instagram Story from Helios Group, an AI consultancy, with the day's major AI news.
 
-For each story in the material, write one frame:
+One story is one frame. Never split one story or one event into several frames, and never write two frames about the same event.
+
+For each story in the material, write exactly one frame:
 - headline: one or two full sentences, at most 240 characters in total, that a viewer understands with no other context. Say who did what, when (a day or date if the source gives one), and why it matters. The first sentence carries the main point; the second, if any, adds the consequence or the key detail. State only what the source states.
 - source_verb and source_name: how the story is credited on the frame: "via" an outlet that reported it ("via The Verge"), "reported by" an outlet with its own reporting ("reported by Reuters"), or "from" a first-party post, blog, paper or repository ("from OpenAI's blog", "from a post by @handle", "from GitHub").
 - subjects: the people and organizations the story is about, with their exact names.

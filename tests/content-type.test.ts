@@ -14,18 +14,17 @@ test('a day holds only posts that have a day; made-but-unplaced content waits on
   for (const vertical of VERTICALS) {
     const model = typeHubModel(dataset, vertical, FIXTURE_NOW);
     const mine = dataset.posts.filter((p) => p.vertical === vertical);
-    const placed = mine.filter((p) => p.nyDate);
     const unplaced = mine.filter((p) => !p.nyDate && (p.status === 'ready' || p.status === 'scheduled'));
-    // Every card on a day belongs to that day.
     for (const day of model.days) for (const card of day.cards) assert.equal(card.post.nyDate, day.date, `${vertical}: ${card.post.id} sits on its own day`);
-    // Placed posts (within the window the strip reaches) are on days; unplaced never are.
     const onDays = new Set(model.days.flatMap((d) => d.cards.map((c) => c.post.id)));
     for (const p of unplaced) assert.equal(onDays.has(p.id), false, `${vertical}: unplaced ${p.id} stays off the days`);
-    // Every unplaced post is reachable from the bench exactly once.
+    for (const card of model.days.flatMap((d) => d.cards)) {
+      const s = card.post.status;
+      assert.ok(s === 'generating' || s === 'failed' || s === 'skipped' || card.post.generatedAt, `${vertical}: ${card.post.id} is an idea on the day strip`);
+    }
     const onBench = model.bench.map((b) => b.card?.post.id).filter(Boolean);
-    assert.deepEqual([...onBench].sort(), unplaced.map((p) => p.id).sort(), `${vertical}: each waiting post is on the bench once`);
+    for (const p of unplaced) assert.ok(onBench.includes(p.id), `${vertical}: unplaced ${p.id} is on the bench`);
     assert.equal(model.benchTotal, model.bench.length);
-    assert.ok(placed.length >= 0);
   }
 });
 

@@ -59,21 +59,26 @@ export async function buildMorningDownload(deps: BuildDeps, sources?: Sources): 
   const [reels, carousel] = await Promise.all([src.reels().catch(() => []), src.carousel().catch(() => [])]);
   let pool = dedupe([...carousel, ...reels]).filter((c) => !shown.has(c.key));
 
-  // Merge the same story across systems (Jev only for pairs that share a name).
-  const merged = new Set<string>();
-  for (const c of pool.filter((x) => x.origin === 'carousel')) {
-    for (const r of pool.filter((x) => x.origin === 'reels' && !merged.has(x.key))) {
-      const shared = [...namesIn(c.headline)].some((n) => namesIn(r.headline).has(n));
+  // One event is one story, from either system. Jev only sees pairs that share a name.
+  const dropped = new Set<string>();
+  for (let i = 0; i < pool.length; i++) {
+    if (dropped.has(pool[i]!.key)) continue;
+    for (let j = i + 1; j < pool.length; j++) {
+      const other = pool[j]!;
+      if (dropped.has(other.key)) continue;
+      const shared = [...namesIn(pool[i]!.headline)].some((n) => namesIn(other.headline).has(n));
       if (!shared) continue;
-      const res = await deps.jev.ask({ component: 'md-merge', set: SAME_EVENT, setId: deps.setId, state: { story_a: { headline: c.headline, untrusted_content: c.body.slice(0, 1200) }, story_b: { headline: r.headline, untrusted_content: r.body.slice(0, 1200) } } });
-      if (res.answers.same_event.noul >= SAME_EVENT_BAR) {
-        merged.add(r.key);
-        c.alsoFrom = [...(c.alsoFrom ?? []), r.sourceName];
-        c.blockbuster = Math.max(c.blockbuster ?? 0, r.blockbuster ?? 0);
-      }
+      const res = await deps.jev.ask({ component: 'md-merge', set: SAME_EVENT, setId: deps.setId, state: { story_a: { headline: pool[i]!.headline, untrusted_content: pool[i]!.body.slice(0, 1200) }, story_b: { headline: other.headline, untrusted_content: other.body.slice(0, 1200) } } });
+      if (res.answers.same_event.noul < SAME_EVENT_BAR) continue;
+      const keepOther = !pool[i]!.photo && Boolean(other.photo);
+      const drop = keepOther ? pool[i]! : other;
+      const keep = keepOther ? other : pool[i]!;
+      dropped.add(drop.key);
+      keep.alsoFrom = [...(keep.alsoFrom ?? []), drop.sourceName];
+      keep.blockbuster = Math.max(keep.blockbuster ?? 0, drop.blockbuster ?? 0);
     }
   }
-  pool = pool.filter((c) => !merged.has(c.key));
+  pool = pool.filter((c) => !dropped.has(c.key));
   const candidates: NewCandidate[] = [];
   if (pool.length < MIN_STORIES) return { ok: false, skip: `only ${pool.length} new stories in the pool`, candidates };
 
@@ -102,7 +107,11 @@ export async function buildMorningDownload(deps: BuildDeps, sources?: Sources): 
     })).value;
   const first = await writeFor(chosen);
   const ok = (h: string) => h.length <= 260 && sentenceCount(h) >= 1 && sentenceCount(h) <= 2;
-  let written = first.stories.filter((s) => byKey.has(s.key));
+  const oneEach = (list: typeof first.stories) => {
+    const seen = new Set<string>();
+    return list.filter((s) => byKey.has(s.key) && !seen.has(s.key) && (seen.add(s.key), true));
+  };
+  let written = oneEach(first.stories);
   const grounded: typeof written = [];
   const ground = async (s: (typeof written)[number]) => {
     const c = byKey.get(s.key)!;
@@ -114,7 +123,7 @@ export async function buildMorningDownload(deps: BuildDeps, sources?: Sources): 
   if (misses.length) {
     log.push(`grounding: ${misses.length} rewrite(s)`);
     const again = await writeFor(misses, 'A previous headline for each of these stories made a claim the source does not support, or ran past two sentences or 240 characters. Write it again, stating only what the source says.');
-    for (const s of again.stories.filter((x) => misses.some((m) => m.key === x.key))) if (await ground(s)) grounded.push(s);
+    for (const s of oneEach(again.stories).filter((x) => misses.some((m) => m.key === x.key))) if (await ground(s)) grounded.push(s);
   }
   written = chosen.map((c) => grounded.find((g) => g.key === c.key)).filter((x): x is (typeof written)[number] => Boolean(x));
   if (written.length < MIN_STORIES) return { ok: false, skip: `only ${written.length} headline(s) passed grounding`, candidates };

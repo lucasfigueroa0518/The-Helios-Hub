@@ -1,5 +1,6 @@
 import type { HubDataset } from '@/lib/social-hub/dataset';
 import { nyDateOf } from '@/lib/social-hub/time';
+import { windowsOn } from '@/lib/social-hub/views/plan';
 import type { HubIdea, HubPost, Vertical } from '@/lib/social-hub/types';
 import { offerer, type Offer } from '@/lib/social-hub/views/offer';
 import { poolList, poolSummary } from '@/lib/social-hub/views/pools';
@@ -35,6 +36,12 @@ export const DAYS_BACK = 21;
 
 const at = (p: HubPost) => p.publishAt ?? p.postedAt ?? '';
 
+/** A day preview is made content, content being made, or a failed or skipped attempt. An idea is not. */
+function onDayStrip(post: HubPost): boolean {
+  if (post.status === 'generating' || post.status === 'failed' || post.status === 'skipped') return true;
+  return Boolean(post.generatedAt) && (post.status === 'ready' || post.status === 'scheduled' || post.status === 'publishing' || post.status === 'published');
+}
+
 export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date): TypeHubModel {
   const today = nyDateOf(now)!;
   const o = offerer(dataset, now);
@@ -46,12 +53,20 @@ export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date)
     if (post.vertical !== vertical) continue;
     const t = thumbOf(post.media);
     const card: TypeCard = { post, offer: o.offer(post), thumb: t.src, remote: t.remote, count: t.count };
-    if (!post.nyDate) {
-      if (post.status === 'ready' || post.status === 'scheduled') waiting.push(card);
+    if (!onDayStrip(post) || !post.nyDate) {
+      waiting.push(card);
       continue;
     }
     if (post.nyDate < earliest) continue;
     byDay.set(post.nyDate, [...(byDay.get(post.nyDate) ?? []), card]);
+  }
+  for (const [date, cards] of byDay) {
+    const slots = windowsOn(vertical, date).length;
+    const pinned = cards.filter((c) => c.post.status === 'generating' || c.post.status === 'failed' || c.post.status === 'skipped');
+    const generated = cards.filter((c) => !pinned.includes(c)).sort((a, b) => at(a.post).localeCompare(at(b.post)) || a.post.id.localeCompare(b.post.id));
+    const room = Math.max(0, slots - pinned.length);
+    waiting.push(...generated.slice(room));
+    byDay.set(date, [...pinned, ...generated.slice(0, room)]);
   }
   const days = [...byDay.entries()]
     .map(([date, cards]) => ({ date, cards: cards.sort((a, b) => at(a.post).localeCompare(at(b.post)) || a.post.id.localeCompare(b.post.id)) }))
