@@ -215,5 +215,9 @@ INSERT INTO stories.cost_events (set_id, vendor, component, usd, created_at) VAL
 INSERT INTO stories.candidates (id, set_id, origin, ref, payload, score, chosen) VALUES
  ('${I.cand1}', '${I.set2}', 'catalog', 'cat-9', '{"question": "How many tokens fit in a context window?"}', 0.71, false),
  ('40000000-0000-4000-8000-000000000022', '${I.set1}', 'reels', 'idea-1', '{"headline": "OpenAI ships a new model"}', 0.9, true);
+
+INSERT INTO stories.pool (series, key, origin, ref, title, payload, score, refreshed_at, used_at) VALUES
+ ('guess_the_number', 'post-9#n1', 'carousel', 'post-9', '128K: How many tokens fit in a context window?', '{"kind": "number", "source": "The Verge"}', 1, '2026-10-09T08:00:00Z', NULL),
+ ('morning_download', 'news.test/used', 'reels', 'idea-1', 'OpenAI ships a new model', '{"kind": "story"}', 1, '2026-10-09T08:00:00Z', '2026-10-09T09:00:00Z');
 `);
 }

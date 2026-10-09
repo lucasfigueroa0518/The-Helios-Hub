@@ -286,7 +286,7 @@ function svgFrame(backdrop: string, label: string): string {
 }
 
 function stories(): { read: StoriesRead; cost: Pick<CostReads, 'storyEvents' | 'storySets'> } {
-  const read: StoriesRead = { sets: [], frames: [], insights: [], candidates: [] };
+  const read: StoriesRead = { sets: [], frames: [], insights: [], pool: [] };
   const cost = { storyEvents: [] as CostReads['storyEvents'], storySets: [] as CostReads['storySets'] };
   const series = (day: string): string[] => {
     const w = new Date(`${day}T12:00:00Z`).getUTCDay();
@@ -325,7 +325,12 @@ function stories(): { read: StoriesRead; cost: Pick<CostReads, 'storyEvents' | '
     }
     cost.storyEvents.push({ id: uuid(4), set_id: null, component: 'sources', usd: '0.030000', ny_date: day });
   }
-  read.candidates = HEADLINES.slice(0, 5).map((title, i) => ({ candidate_id: uuid(4), set_id: read.sets[read.sets.length - 1]!.set_id, series: 'morning_download', ny_date: addDays(TODAY, 1), origin: pick(['reels', 'carousel', 'catalog']), ref: `ref-${i}`, payload: { headline: title }, score: (0.9 - i * 0.07).toFixed(3), created_at: at(TODAY, 250) }));
+  const poolSeries: Array<[string, string[]]> = [
+    ['morning_download', HEADLINES.slice(0, 6)],
+    ['guess_the_number', ['$6.6B: what OpenAI raised in its latest round', '1.2M: GPUs in one training cluster', '40%: share of code now written by models']],
+    ['free_vs_paid', ['Ollama', 'GIMP', 'Obsidian', 'LibreOffice']],
+  ];
+  read.pool = poolSeries.flatMap(([series, titles]) => titles.map((title, i) => ({ pool_id: uuid(4), series, key: `${series}-${i}`, origin: pick(['reels', 'carousel', 'catalog']), ref: `ref-${i}`, title, source: pick(['The Verge', 'TechCrunch', null]), score: ((titles.length - i) / titles.length).toFixed(4), refreshed_at: at(TODAY, 250) })));
   return { read, cost };
 }
 

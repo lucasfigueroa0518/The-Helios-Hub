@@ -134,7 +134,9 @@ test('IG Stories: a set is one post; completion and frame 1–3 exits match the 
   const ready = byId(d, hubId('stories', 'set', IDS.set2));
   assert.equal(ready.status, 'ready');
   assert.equal(ready.approval.required, true);
-  assert.equal(d.ideas.find((i) => i.vertical === 'stories')?.title, 'How many tokens fit in a context window?');
+  // The bench reads the open pool: a used idea is not on it.
+  const storyIdeas = d.ideas.filter((i) => i.vertical === 'stories');
+  assert.deepEqual(storyIdeas.map((i) => [i.title, i.group, i.detail]), [['128K: How many tokens fit in a context window?', 'Guess the Number', 'Carousel · The Verge']]);
 });
 
 test('Stories set metrics: blanks stay blank, single frame, no insight', () => {
@@ -155,7 +157,7 @@ test('Sources: one article used by all four verticals dedupes to one row', async
 });
 
 test('a failing vertical degrades to an error note; the others still load', () => {
-  const d = buildDataset({ reels: new Error('relation "reels.runs" does not exist'), explainers: new Error('x'), carousels: new Error('y'), stories: { sets: [], frames: [], insights: [], candidates: [] } });
+  const d = buildDataset({ reels: new Error('relation "reels.runs" does not exist'), explainers: new Error('x'), carousels: new Error('y'), stories: { sets: [], frames: [], insights: [], pool: [] } });
   assert.equal(d.errors.length, 3);
   assert.deepEqual(d.posts, []);
 });

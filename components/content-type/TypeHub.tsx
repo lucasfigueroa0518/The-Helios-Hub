@@ -2,13 +2,13 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ChevronLeft, ChevronRight, ExternalLink, Film, GalleryHorizontal, ImageIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, Film, GalleryHorizontal, ImageIcon, Layers } from 'lucide-react';
 
 import { Drawer } from '@/app/reels/ui';
 import { BackToHub } from '@/components/content-type/BackToHub';
 import { useRunProgress } from '@/components/content-type/run-progress';
 import { ActionBar } from '@/components/social-hub/house/ActionBar';
-import type { TypeBenchItem, TypeCard, TypeHubModel } from '@/lib/content-type/model';
+import { MADE_LABEL, STORY_SERIES, type MadeKind, type TypeBenchItem, type TypeCard, type TypeHubModel } from '@/lib/content-type/model';
 import type { ProgressItem } from '@/lib/content-type/progress';
 import { runStatusText, type RunSnapshot } from '@/lib/content-type/run-status';
 import { metricValue } from '@/lib/social-hub/metrics';
@@ -29,19 +29,8 @@ import { IDEA_STATE_LABEL } from '@/lib/social-hub/views/pools';
 
 const ASPECT: Record<string, string> = { feed: '4 / 5', reel: '9 / 16', story: '9 / 16' };
 
-const STORY_GROUPS = ['Morning Download', 'Guess the Number', 'Free vs. Paid'];
-
-/** Stories ideas sit in one list per series. Other types stay one list. */
-function benchSections(vertical: string, bench: TypeBenchItem[]): Array<{ title: string | null; items: TypeBenchItem[] }> {
-  if (vertical !== 'stories') return [{ title: null, items: bench }];
-  const by = new Map<string, TypeBenchItem[]>();
-  for (const item of bench) {
-    const title = item.idea.group || 'Other';
-    by.set(title, [...(by.get(title) ?? []), item]);
-  }
-  const titles = [...STORY_GROUPS.filter((t) => by.has(t)), ...[...by.keys()].filter((t) => !STORY_GROUPS.includes(t))];
-  return titles.map((title) => ({ title, items: (by.get(title) ?? []).map((item, i) => ({ ...item, rank: i + 1 })) }));
-}
+const MADE_ICON: Record<MadeKind, typeof Film> = { slides: GalleryHorizontal, frames: Layers, video: Film };
+const MADE_TITLE: Record<MadeKind, string> = { slides: 'Slides are', frames: 'Story frames are', video: 'A video is' };
 
 const dayLabel = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).replace(',', '');
 const longDay = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
@@ -73,6 +62,10 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
   const [dayId, setDayId] = useState<string>(today);
   const [openPost, setOpenPost] = useState<string | null>(null);
   const [openIdea, setOpenIdea] = useState<string | null>(null);
+  // Stories: the bench narrowed to one series. Filtering only hides rows; the pool is the same.
+  const [series, setSeries] = useState<string | null>(null);
+  const seriesTabs = model.vertical === 'stories' ? STORY_SERIES.map((name) => ({ name, n: bench.filter((b) => b.idea.group === name).length })) : [];
+  const shown = series ? bench.filter((b) => b.idea.group === series) : bench;
   const list = useRef<HTMLDivElement>(null);
   const day = days.find((d) => d.date === dayId) ?? days.find((d) => d.date === today) ?? days.at(-1)!;
   const index = days.indexOf(day);
@@ -155,31 +148,46 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
         )}
 
         <section className="rh-rest">
-          <h3 className="rh-rest__title">The bench <span>{model.benchTotal}</span></h3>
-          <p className="rh-muted">{benchNote ?? 'Ideas waiting for the next generation, best first.'}</p>
-          {bench.length === 0 ? (
-            <p className="rh-empty">The pool is empty until its next refill.</p>
+          <h3 className="rh-rest__title">The bench <span>{series ? shown.length : model.benchTotal}</span></h3>
+          <p className="rh-muted">{benchNote ?? (seriesTabs.length ? 'Ideas waiting for the next generation, best first within each series.' : 'Ideas waiting for the next generation, best first.')}</p>
+          {seriesTabs.length ? (
+            <div className="segmented rh-bench-filter" role="group" aria-label="Series">
+              <button type="button" className={`segmented__item${series == null ? ' segmented__item--active' : ''}`} aria-pressed={series == null} onClick={() => setSeries(null)}>All series <span className="rh-bench-filter__n">{bench.length}</span></button>
+              {seriesTabs.map((t) => (
+                <button key={t.name} type="button" className={`segmented__item${series === t.name ? ' segmented__item--active' : ''}`} aria-pressed={series === t.name} onClick={() => setSeries(t.name)}>
+                  {t.name} <span className="rh-bench-filter__n">{t.n}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {shown.length === 0 ? (
+            <p className="rh-empty">{series ? `No ${series} ideas in the pool until its next refill.` : 'The pool is empty until its next refill.'}</p>
           ) : (
-            benchSections(model.vertical, bench).map((section) => (
-            <div key={section.title ?? 'bench'} className="rh-bench-group">
-              {section.title ? <h4 className="rh-bench-group__title">{section.title} <span>{section.items.length}</span></h4> : null}
             <ul className="rh-rest__list">
-              {section.items.map((item) => {
+              {shown.map((item) => {
                 const run = runOf(item.idea);
                 const status = runText(run);
+                const made = item.card ? item.made ?? null : null;
+                const MadeIcon = made ? MADE_ICON[made] : null;
+                const openRow = () => (item.card ? setOpenPost(item.card.post.id) : setOpenIdea(item.idea.id));
                 return (
                 <li key={item.idea.id}>
-                  <div className="rh-row" role="button" tabIndex={0} onClick={() => (item.card ? setOpenPost(item.card.post.id) : setOpenIdea(item.idea.id))} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (item.card) setOpenPost(item.card.post.id); else setOpenIdea(item.idea.id); } }}>
+                  <div className="rh-row" role="button" tabIndex={0} onClick={openRow} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRow(); } }}>
                     <span className="rh-row__rank">{item.rank}</span>
                     <span className="rh-row__main">
                       <span className="rh-row__headline">{item.idea.title}</span>
                       {status ? <span className={`rh-row__status${run?.state === 'failed' ? ' is-failed' : ''}`}>{status}</span> : null}
-                      {item.idea.detail ? <span className="rh-row__labels">{section.title && item.idea.detail.startsWith(`${section.title} · `) ? item.idea.detail.slice(section.title.length + 3) : item.idea.detail}</span> : null}
+                      {item.idea.group || item.idea.detail ? (
+                        <span className="rh-row__labels">
+                          {item.idea.group ? <span className="rh-tag">{item.idea.group}</span> : null}
+                          {item.idea.detail}
+                        </span>
+                      ) : null}
                     </span>
                     <span className="rh-row__pills">
-                      {item.card ? (
-                        <span className="rh-chip rh-chip--ready" title={`${model.vertical === 'carousels' ? 'Slides are' : 'A video is'} made and waiting: ${item.card.offer.state.label.toLowerCase()}`}>
-                          {model.vertical === 'carousels' ? <GalleryHorizontal size={11} /> : <Film size={11} />} {model.vertical === 'carousels' ? 'Slides ready' : 'Video ready'}
+                      {made && MadeIcon && item.card ? (
+                        <span className="rh-chip rh-chip--ready" title={`${MADE_TITLE[made]} made and waiting: ${item.card.offer.state.label.toLowerCase()}`}>
+                          <MadeIcon size={11} /> {MADE_LABEL[made]}
                         </span>
                       ) : (
                         <span className="rh-chip">{IDEA_STATE_LABEL[item.idea.state]}</span>
@@ -193,8 +201,6 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
                 );
               })}
             </ul>
-            </div>
-            ))
           )}
         </section>
       </div>
@@ -210,7 +216,7 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
             <h2 className="rh-detail__title">{idea.idea.title}</h2>
             {ideaStatus ? <p className={`rh-run-status${ideaRun?.state === 'failed' ? ' is-failed' : ''}`}>{ideaStatus}</p> : null}
             {ideaRun?.state === 'failed' && ideaRun.error ? <p className="rh-muted">{ideaRun.error}</p> : null}
-            <p className="rh-muted">{IDEA_STATE_LABEL[idea.idea.state]} · ranked {idea.rank} of {model.benchTotal}{idea.idea.score != null ? ` · ${model.scoreLabel ?? 'score'} ${idea.idea.score.toFixed(2)}` : ''}</p>
+            <p className="rh-muted">{IDEA_STATE_LABEL[idea.idea.state]}{idea.idea.group ? ` · ${idea.idea.group}` : ''} · ranked {idea.rank} of {idea.idea.group ? bench.filter((b) => b.idea.group === idea.idea.group).length : model.benchTotal}{idea.idea.score != null ? ` · ${model.scoreLabel ?? 'score'} ${idea.idea.score.toFixed(2)}` : ''}</p>
             {idea.idea.detail ? <p>{idea.idea.detail}</p> : null}
             {idea.idea.createdAt ? <p className="rh-muted">Added {shortDate(idea.idea.createdAt)}</p> : null}
             {benchAction ? <div style={{ marginTop: 12 }}>{benchAction(idea)}</div> : null}

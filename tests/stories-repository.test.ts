@@ -51,7 +51,7 @@ test('schema applies, and re-applies cleanly', async () => {
   const { pg } = await openLocalStoriesDb();
   await pg.exec(schemaSql());
   const { rows } = await pg.query<{ n: number }>(`SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema = 'stories'`);
-  assert.equal(rows[0]!.n, 9);
+  assert.equal(rows[0]!.n, 10);
 });
 
 test('nyDate is the New York calendar date', () => {

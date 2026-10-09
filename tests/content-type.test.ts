@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { typeHubModel } from '@/lib/content-type/model';
+import { madeKind, typeHubModel } from '@/lib/content-type/model';
 import { windowsOn } from '@/lib/social-hub/views/plan';
 import { writePosting, isPostingType } from '@/lib/content-type/posting';
 import { serviceHeaders } from '@/lib/supabase-service-headers';
@@ -22,15 +22,18 @@ test('a day holds only posts that have a day; made-but-unplaced content waits on
     for (const card of model.days.flatMap((d) => d.cards)) {
       const s = card.post.status;
       assert.ok(card.post.idea, `${vertical}: ${card.post.id} has no idea`);
-      assert.ok(s === 'generating' || (card.post.generatedAt && (s === 'ready' || s === 'scheduled' || s === 'publishing' || s === 'published')), `${vertical}: ${card.post.id} is not filling the day`);
       assert.ok(s !== 'failed' && s !== 'skipped', `${vertical}: ${card.post.id} failed or skipped on the day strip`);
+      assert.ok(s === 'generating' || (card.post.generatedAt && (s === 'ready' || s === 'scheduled' || s === 'publishing' || s === 'published')), `${vertical}: ${card.post.id} is not filling the day`);
+      if (s !== 'generating' && s !== 'published') assert.ok(madeKind(card.post), `${vertical}: ${card.post.id} on the strip with nothing rendered`);
     }
     for (const day of model.days) {
       const slots = windowsOn(vertical, day.date).length;
       assert.ok(day.cards.length <= slots, `${vertical} ${day.date}: ${day.cards.length} cards for ${slots} slots`);
     }
     const onBench = model.bench.map((b) => b.card?.post.id).filter(Boolean);
-    for (const p of unplaced) assert.ok(onBench.includes(p.id), `${vertical}: unplaced ${p.id} is on the bench`);
+    // Unplaced content waits on the bench only when it holds what a made chip would claim.
+    for (const p of unplaced) assert.equal(onBench.includes(p.id), madeKind(p) != null, `${vertical}: unplaced ${p.id} on the bench iff it has made content`);
+    for (const b of model.bench) if (b.card) assert.ok(b.made && madeKind(b.card.post) === b.made, `${vertical}: ${b.card.post.id} carries a chip for what it has`);
     assert.equal(model.benchTotal, model.bench.length);
   }
 });
@@ -44,9 +47,11 @@ test('today always has a day in the strip, days run oldest to newest, and bench 
 
 test('a bench idea matches a waiting post by its idea id, with or without a prefix', () => {
   const dataset = previewDataset();
-  const post = dataset.posts.find((p) => p.vertical === 'explainers' && !p.nyDate && p.idea);
-  if (!post) return; // the fixture has no waiting explainer; the carousel case above covers matching by story id
-  const model = typeHubModel({ ...dataset, ideas: [...dataset.ideas, { id: `explainers:topic:${post.idea!.id}`, vertical: 'explainers', title: 'x', score: 1, scoreLabel: '', state: 'content_ready', hasContent: true, versionCount: 1, generatedAt: null, createdAt: null, detail: null }] }, 'explainers', FIXTURE_NOW);
+  const found = dataset.posts.find((p) => p.vertical === 'explainers' && !p.nyDate && p.idea && (p.status === 'ready' || p.status === 'scheduled'));
+  if (!found) return; // the fixture has no waiting explainer; the carousel case above covers matching by story id
+  // The preview drops video files; give this one its file so it counts as made.
+  const post = { ...found, media: { kind: 'video' as const, src: '/video.mp4' } };
+  const model = typeHubModel({ ...dataset, posts: dataset.posts.map((p) => (p.id === post.id ? post : p)), ideas: [...dataset.ideas, { id: `explainers:topic:${post.idea!.id}`, vertical: 'explainers', title: 'x', score: 1, scoreLabel: '', state: 'content_ready', hasContent: true, versionCount: 1, generatedAt: null, createdAt: null, detail: null }] }, 'explainers', FIXTURE_NOW);
   assert.ok(model.bench.some((b) => b.card?.post.id === post.id && b.idea.id.endsWith(post.idea!.id)));
 });
 

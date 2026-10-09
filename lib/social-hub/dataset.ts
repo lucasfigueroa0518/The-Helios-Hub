@@ -52,7 +52,7 @@ function adapt(reads: VerticalReads, vertical: Vertical): { posts: HubPost[]; id
     }
     case 'stories': {
       const r = reads.stories;
-      return r instanceof Error ? r : { posts: storyPosts(r), ideas: storyIdeas(r.candidates) };
+      return r instanceof Error ? r : { posts: storyPosts(r), ideas: storyIdeas(r.pool) };
     }
   }
 }

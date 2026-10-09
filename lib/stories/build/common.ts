@@ -5,6 +5,7 @@
 import type { StoriesDb } from '@/lib/stories/db';
 import type { StoriesJev } from '@/lib/stories/jev';
 import type { PhotoFinder, PhotoRequest } from '@/lib/stories/photos';
+import type { OpenPool } from '@/lib/stories/pool';
 import { BACKDROPS, type Backdrop, type FrameData, type Photo, type Series } from '@/lib/stories/render/types';
 import type { NewCandidate, NewFrame } from '@/lib/stories/repository';
 import type { StoriesSettings } from '@/lib/stories/settings';
@@ -21,6 +22,8 @@ export type BuildDeps = {
   now: Date;
   setId: string;
   nyDate: string;
+  /** The series' open ideas from stories.pool. Null only when the pool could not be read: the build then reads its sources directly. */
+  pool?: OpenPool | null;
 };
 
 export type BuildResult =

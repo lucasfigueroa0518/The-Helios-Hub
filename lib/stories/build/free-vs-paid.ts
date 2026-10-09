@@ -43,7 +43,8 @@ export async function buildFreeVsPaid(deps: BuildDeps, leads?: () => Promise<Too
   const log: string[] = [];
   const candidates: NewCandidate[] = [];
   const shown = await recentKeys(deps.db, 'free_vs_paid', 90, deps.now);
-  const found = await (leads ?? (() => freeToolLeads(deps.sourceDb, deps.nyDate)))().catch(() => []);
+  const pooled = deps.pool;
+  const found = await (leads ?? (pooled ? async () => pooled.leads : () => freeToolLeads(deps.sourceDb, deps.nyDate)))().catch(() => []);
   if (!found.length) return { ok: false, skip: 'no free-tool leads', candidates };
 
   const call = <T>(prompt: { id: string; system: string; tool: { name: string; description: string; input_schema: Record<string, unknown> } }, user: string, extra: { webSearch?: { maxUses: number }; webFetch?: { maxUses: number }; effort?: 'low' | 'medium' } = {}) =>

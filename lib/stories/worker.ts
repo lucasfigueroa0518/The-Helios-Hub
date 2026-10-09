@@ -2,6 +2,8 @@
  * One pass of the Stories worker (plan §4, §7, M8). scripts/stories_worker.ts
  * runs it every 15 seconds; tests run it against PGlite and stubs.
  *
+ *   0. pool: the first pass after 4:00 AM refreshes stories.pool from the
+ *      reels, carousel and catalog pools (lib/stories/pool.ts; reads only)
  *   1. auto series: request today's set at 4:00 AM (docs/social-overnight.md)
  *   2. build: claim one `requested` set → build, render, review → `ready`;
  *      an auto set approves itself only when require_approval is off and the
@@ -35,6 +37,7 @@ import {
   recordInsights,
   scheduleSet,
 } from '@/lib/stories/repository';
+import { livePoolReads, refreshPoolIfDue, type PoolReads } from '@/lib/stories/pool';
 import { pickPublishAt, requestAutoSets } from '@/lib/stories/schedule';
 import { loadSettings } from '@/lib/stories/settings';
 import { recordPublishedPhoto } from '@/lib/stories/sources/carousel';
@@ -56,6 +59,8 @@ export type WorkerDeps = {
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
   log?: (line: string) => void;
+  /** Tests stub the pool's source reads. */
+  poolReads?: (now: Date) => PoolReads;
 };
 
 const nyClock = (at: Date) => new Intl.DateTimeFormat('en-GB', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(at);
@@ -65,6 +70,16 @@ export async function tick(deps: WorkerDeps): Promise<{ built: number; scheduled
   const log = deps.log ?? (() => {});
   const settings = await loadSettings(deps.db);
   const out = { built: 0, scheduled: 0, published: 0, insights: 0 };
+
+  // 0. The pool, once per pool day, before any auto set is requested or built.
+  if (nyClock(now) >= AUTO_REQUEST_AFTER) {
+    try {
+      const r = await refreshPoolIfDue(deps.db, () => (deps.poolReads ?? ((at) => livePoolReads(deps.sourceDb, at)))(now), now);
+      if (r) log(`pool: refreshed (${r.upserted} in, ${r.dropped} dropped${r.errors.length ? `; ${r.errors.join('; ')}` : ''})`);
+    } catch (err) {
+      log(`pool: refresh failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
 
   // 1. Auto series.
   if (nyClock(now) >= AUTO_REQUEST_AFTER) {
@@ -80,7 +95,7 @@ export async function tick(deps: WorkerDeps): Promise<{ built: number; scheduled
   const claimed = await claimNextRequested(deps.db);
   if (claimed) {
     const b = await deps.builder();
-    const r = await buildSet(b, claimed.id);
+    const r = await buildSet({ log, ...b }, claimed.id);
     out.built++;
     log(`build ${claimed.series} ${claimed.ny_date}: ${r.status}${r.flagged ? ' (flagged)' : ''} ${r.detail.slice(0, 200)}`);
     if (r.status === 'ready' && claimed.trigger === 'auto' && settings.series[claimed.series].auto && !r.flagged && !settings.requireApproval) await approveSet(deps.db, claimed.id);

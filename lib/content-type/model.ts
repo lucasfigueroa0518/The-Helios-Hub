@@ -17,8 +17,29 @@ export type TypeCard = { post: HubPost; offer: Offer; thumb: string | null; remo
 
 export type TypeDay = { date: string; cards: TypeCard[] };
 
-/** A bench row is an idea; one with made content waiting (a finished video or slides that no day has yet) carries that post. */
-export type TypeBenchItem = { idea: HubIdea; rank: number; card: TypeCard | null };
+/**
+ * A bench row is an idea; one with made content waiting (a finished video,
+ * rendered slides, or story frames that no day has yet) carries that post,
+ * and `made` names what it has. A skipped, failed, or empty post never does.
+ */
+export type TypeBenchItem = { idea: HubIdea; rank: number; card: TypeCard | null; made?: MadeKind | null };
+
+/** What a post actually has to show: rendered slides, rendered story frames, or a video file. */
+export type MadeKind = 'slides' | 'frames' | 'video';
+
+export function madeKind(post: HubPost): MadeKind | null {
+  const m = post.media;
+  if (m.kind === 'video') return m.src ? 'video' : null;
+  if (m.kind === 'slides') return m.slides.some((s) => s.src) ? 'slides' : null;
+  if (m.kind === 'frames') return m.frames.some((f) => f.src) ? 'frames' : null;
+  return null;
+}
+
+/** The chip a bench row with made content carries: named for what the post has. */
+export const MADE_LABEL: Record<MadeKind, string> = { slides: 'Slides ready', frames: 'Stories ready', video: 'Video ready' };
+
+/** Stories series, in the order the bench and its filter list them. */
+export const STORY_SERIES = ['Morning Download', 'Guess the Number', 'Free vs. Paid'] as const;
 
 export type TypeHubModel = {
   vertical: Vertical;
@@ -46,8 +67,13 @@ const MADE = new Set(['ready', 'scheduled', 'publishing', 'published']);
 function fillsQuota(post: HubPost): boolean {
   if (!post.idea) return false;
   if (post.status === 'generating') return true;
-  return Boolean(post.generatedAt) && MADE.has(post.status);
+  if (!post.generatedAt || !MADE.has(post.status)) return false;
+  // Nothing rendered (no frames, no slides, no video file) is not generated content. A posted one already went out.
+  return post.status === 'published' || madeKind(post) != null;
 }
+
+/** Content a person still has to look at: made, and holding what it claims to hold. */
+const benchable = (card: TypeCard) => MADE.has(card.post.status) && madeKind(card.post) != null;
 
 export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date): TypeHubModel {
   const today = nyDateOf(now)!;
@@ -78,22 +104,23 @@ export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date)
     .sort((a, b) => a.date.localeCompare(b.date));
   const summary = poolSummary(dataset.ideas, vertical);
   const open = poolList(dataset.ideas, vertical, 'open');
+  // Skipped, failed, still generating, or empty: not content waiting on a person. It gets no row and no chip.
+  const ready = waiting.filter(benchable);
   // Match each waiting post to its idea (a post names its idea by the bare id; an idea's id may carry a prefix).
   const matched = new Set<string>();
   const forIdea = (idea: HubIdea) => {
-    const hit = waiting.find((c) => !matched.has(c.post.id) && c.post.idea && (idea.id === c.post.idea.id || idea.id.endsWith(`:${c.post.idea.id}`)));
+    const hit = ready.find((c) => !matched.has(c.post.id) && c.post.idea && (idea.id === c.post.idea.id || idea.id.endsWith(`:${c.post.idea.id}`)));
     if (hit) matched.add(hit.post.id);
     return hit ?? null;
   };
-  const rows: TypeBenchItem[] = open.slice(0, 50).map((idea, i) => ({ idea, rank: i + 1, card: forIdea(idea) }));
+  const row = (idea: HubIdea, rank: number, card: TypeCard | null): TypeBenchItem => ({ idea, rank, card, made: card ? madeKind(card.post) : null });
+  const rows: TypeBenchItem[] = vertical === 'stories' ? bySeries(open).map(({ idea, rank }) => row(idea, rank, forIdea(idea))) : open.slice(0, 50).map((idea, i) => row(idea, i + 1, forIdea(idea)));
   // Content whose idea is no longer open still needs a person: keep it on the bench under its own name.
-  for (const card of waiting) {
+  for (const card of ready) {
     if (matched.has(card.post.id)) continue;
-    rows.push({
-      rank: rows.length + 1,
-      card,
-      idea: { id: card.post.id, vertical, title: card.post.name, score: null, scoreLabel: '', state: 'content_ready', hasContent: true, versionCount: 1, generatedAt: card.post.generatedAt, createdAt: card.post.generatedAt, detail: null, group: card.post.idea?.label ?? null },
-    });
+    const group = card.post.idea?.label ?? null;
+    const rank = vertical === 'stories' ? rows.filter((r) => r.idea.group === group).length + 1 : rows.length + 1;
+    rows.push(row({ id: card.post.id, vertical, title: card.post.name, score: null, scoreLabel: '', state: 'content_ready', hasContent: true, versionCount: 1, generatedAt: card.post.generatedAt, createdAt: card.post.generatedAt, detail: null, group }, rank, card));
   }
   return {
     vertical,
@@ -105,4 +132,25 @@ export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date)
     lastRefill: summary.lastRefill ?? null,
     poolOpen: summary.open,
   };
+}
+
+/** Per series, at most this many open ideas reach the bench. */
+const PER_SERIES = 50;
+
+/**
+ * Stories: one list, ranked within each series. A series' scores mean
+ * nothing against another's, so the list takes each series' next best in
+ * turn (series order fixed) and each row's rank is its rank in its series.
+ */
+function bySeries(open: readonly HubIdea[]): Array<{ idea: HubIdea; rank: number }> {
+  const groups = new Map<string, HubIdea[]>();
+  for (const idea of open) {
+    const g = idea.group ?? 'Other';
+    groups.set(g, [...(groups.get(g) ?? []), idea]);
+  }
+  const order = [...STORY_SERIES.filter((g) => groups.has(g)), ...[...groups.keys()].filter((g) => !(STORY_SERIES as readonly string[]).includes(g))];
+  const lists = order.map((g) => groups.get(g)!.slice(0, PER_SERIES));
+  const out: Array<{ idea: HubIdea; rank: number }> = [];
+  for (let i = 0; lists.some((l) => i < l.length); i++) for (const l of lists) if (l[i]) out.push({ idea: l[i]!, rank: i + 1 });
+  return out;
 }

@@ -57,7 +57,8 @@ export async function nextFamily(deps: BuildDeps, hasPhoto: boolean): Promise<Gt
 }
 
 export async function buildGuessTheNumber(deps: BuildDeps, sources?: GtnSources): Promise<BuildResult> {
-  const src: GtnSources = sources ?? {
+  const pooled = deps.pool;
+  const src: GtnSources = sources ?? (pooled ? { numbers: async () => pooled.numbers, unbriefed: async () => pooled.unbriefed } : null) ?? {
     numbers: () => carouselNumbers(deps.sourceDb, deps.now),
     unbriefed: async () => [...(await shortlistWithoutBrief(deps.sourceDb, deps.now).catch(() => [])), ...(await theNumberIdeas(deps.sourceDb, deps.nyDate).catch(() => []))],
   };

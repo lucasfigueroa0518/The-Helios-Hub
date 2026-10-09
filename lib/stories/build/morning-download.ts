@@ -1,8 +1,9 @@
 /**
  * Helios Morning Download (plan §5.1; S-03, S-04, S-14, S-15, S-22, S-29).
  *
- *   pool     reels (top 15 by net + blockbusters) + carousel (qualified,
- *            last 30 hours); drop what ran in the last 3 days
+ *   pool     the series' open ideas in stories.pool (lib/stories/pool.ts:
+ *            reels top 15 by net + blockbusters, carousel qualified in the
+ *            last 30 hours, refreshed nightly); drop what ran in the last 3 days
  *   merge    one Jev same-event check per cross-system pair sharing a name
  *   rank     one major-news@1 call per candidate → score; up to 5 clear the
  *            bar, else the top 2 (S-04)
@@ -56,7 +57,12 @@ export function chooseStories<T extends { score: number }>(ranked: T[]): T[] {
 }
 
 export async function buildMorningDownload(deps: BuildDeps, sources?: Sources): Promise<BuildResult> {
-  const src: Sources = sources ?? { reels: () => morningDownloadReels(deps.sourceDb, deps.nyDate), carousel: () => morningDownloadCarousel(deps.sourceDb, deps.now) };
+  const pooled = deps.pool;
+  const src: Sources =
+    sources ??
+    (pooled
+      ? { reels: async () => pooled.stories.filter((c) => c.origin === 'reels'), carousel: async () => pooled.stories.filter((c) => c.origin === 'carousel') }
+      : { reels: () => morningDownloadReels(deps.sourceDb, deps.nyDate), carousel: () => morningDownloadCarousel(deps.sourceDb, deps.now) });
   const log: string[] = [];
   const shown = await recentKeys(deps.db, 'morning_download', 3, deps.now);
   const [reels, carousel] = await Promise.all([src.reels().catch(() => []), src.carousel().catch(() => [])]);

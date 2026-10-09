@@ -57,23 +57,25 @@ export type StoryInsightRow = {
   swipe_forward: number | null;
 };
 
-export type StoryCandidateRow = {
-  candidate_id: string;
-  set_id: string;
+/** One open idea in a series' standing pool (stories.pool, lib/stories/pool.ts). */
+export type StoryPoolRow = {
+  pool_id: string;
   series: string;
-  ny_date: string;
+  key: string;
   origin: string;
   ref: string;
-  payload: Record<string, unknown> | null;
+  title: string;
+  source: string | null;
   score: number | string | null;
-  created_at: string;
+  refreshed_at: string;
 };
 
 export type StoriesRead = {
   sets: StorySetRow[];
   frames: StoryFrameRow[];
   insights: StoryInsightRow[];
-  candidates: StoryCandidateRow[];
+  /** Each series' open pool ideas, best first. Empty while stories.pool is not applied. */
+  pool: StoryPoolRow[];
 };
 
 /** Requested / building sets have no content yet; rejected sets never post. */
@@ -106,22 +108,25 @@ SELECT i.frame_id, i.captured_at::text AS captured_at, i.final, i.reach, i.views
   FROM stories.insights i
  ORDER BY i.frame_id, i.captured_at`;
 
-/** Ideas the builds considered and did not choose, for sets still ahead of their window. */
-export const STORY_CANDIDATES_SQL = `
-SELECT c.id AS candidate_id, c.set_id, s.series, s.ny_date::text AS ny_date, c.origin, c.ref, c.payload,
-       c.score, c.created_at::text AS created_at
-  FROM stories.candidates c
-  JOIN stories.sets s ON s.id = c.set_id
- WHERE s.status IN ('ready', 'approved', 'scheduled')
- ORDER BY c.score DESC NULLS LAST
- LIMIT 200`;
+/** The open pool: what the next build of each series chooses from. */
+export const STORY_POOL_SQL = `
+SELECT p.id AS pool_id, p.series, p.key, p.origin, p.ref, p.title, p.payload->>'source' AS source,
+       p.score, p.refreshed_at::text AS refreshed_at
+  FROM stories.pool p
+ WHERE p.used_at IS NULL
+ ORDER BY p.series, p.score DESC NULLS LAST, p.title
+ LIMIT 600`;
 
 export async function readStories(q: HubQuery): Promise<StoriesRead> {
-  const [sets, frames, insights, candidates] = await Promise.all([
+  const [sets, frames, insights, pool] = await Promise.all([
     q<StorySetRow>(STORY_SETS_SQL),
     q<StoryFrameRow>(STORY_FRAMES_SQL),
     q<StoryInsightRow>(STORY_INSIGHTS_SQL),
-    q<StoryCandidateRow>(STORY_CANDIDATES_SQL),
+    // The pool table arrives with the schema (db/stories_schema.sql); until then the bench is empty, not the vertical broken.
+    q<StoryPoolRow>(STORY_POOL_SQL).catch((err: unknown) => {
+      if (/stories\.pool|does not exist/.test(err instanceof Error ? err.message : String(err))) return { rows: [] as StoryPoolRow[] };
+      throw err;
+    }),
   ]);
-  return { sets: sets.rows, frames: frames.rows, insights: insights.rows, candidates: candidates.rows };
+  return { sets: sets.rows, frames: frames.rows, insights: insights.rows, pool: pool.rows };
 }

@@ -1,6 +1,6 @@
 import { category, iso, num, text, yesNo } from '@/lib/social-hub/adapters/common';
 import { hubId } from '@/lib/social-hub/ids';
-import type { StoriesRead, StoryCandidateRow, StoryFrameRow, StoryInsightRow, StorySetRow } from '@/lib/social-hub/queries/stories';
+import type { StoriesRead, StoryFrameRow, StoryInsightRow, StoryPoolRow, StorySetRow } from '@/lib/social-hub/queries/stories';
 import { nyDateOf, WEEKDAY_SHORT, weekdayOf } from '@/lib/social-hub/time';
 import type { FactorValue, HubIdea, HubMetrics, HubPost, HubStatus, MetricSnapshot, NativeField, SourceRef } from '@/lib/social-hub/types';
 import { SERIES_LABEL } from '@/lib/stories/render/copy';
@@ -201,23 +201,24 @@ export function storyPosts(read: StoriesRead): HubPost[] {
   });
 }
 
-export function storyIdeas(rows: readonly StoryCandidateRow[]): HubIdea[] {
-  return rows.map((row) => {
-    const p = row.payload ?? {};
-    const title = str(p.headline) ?? str(p.title) ?? str(p.question) ?? str(p.name) ?? row.ref;
-    return {
-      id: `stories:candidate:${row.candidate_id}`,
-      vertical: 'stories' as const,
-      title,
-      score: num(row.score),
-      scoreLabel: 'Build score',
-      state: 'idea_only' as const,
-      hasContent: false,
-      versionCount: 0,
-      generatedAt: null,
-      createdAt: iso(row.created_at),
-      detail: `${SERIES[row.series] ?? row.series} · ${row.ny_date.slice(0, 10)} · from ${ORIGIN_LABEL[row.origin] ?? row.origin}`,
-      group: SERIES[row.series] ?? row.series,
-    };
-  });
+/**
+ * The bench: each series' open pool ideas. A score is the idea's rank in its
+ * own source, so it ranks only within its series (`group`); the type page
+ * never orders one series' scores against another's.
+ */
+export function storyIdeas(rows: readonly StoryPoolRow[]): HubIdea[] {
+  return rows.map((row) => ({
+    id: `stories:pool:${row.series}:${row.key}`,
+    vertical: 'stories' as const,
+    title: row.title,
+    score: num(row.score),
+    scoreLabel: 'Source rank',
+    state: 'idea_only' as const,
+    hasContent: false,
+    versionCount: 0,
+    generatedAt: null,
+    createdAt: iso(row.refreshed_at),
+    detail: [ORIGIN_LABEL[row.origin] ?? row.origin, row.source && row.source !== (ORIGIN_LABEL[row.origin] ?? row.origin) ? row.source : null].filter(Boolean).join(' · '),
+    group: SERIES[row.series] ?? row.series,
+  }));
 }
