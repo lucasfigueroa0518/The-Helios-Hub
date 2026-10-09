@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import type { TopicRow } from '@/lib/explainers/types';
@@ -15,7 +16,7 @@ import type { TopicRow } from '@/lib/explainers/types';
  *       assets/{fonts,icons,Helios-logo.png}
  *       node_modules ->     symlink to explainers/runtime/node_modules (pinned CLI)
  *       BRIEF.md, frame.md, capture/extracted/*, source.txt
- *       .tmp/               TMPDIR for the agent's tools
+ *       (TMPDIR is a short /tmp/hx-<id> path, not under the job)
  *     home/                 HOME for the Claude Code process (session transcripts)
  */
 
@@ -53,7 +54,9 @@ export type Workspace = {
 export function workspacePaths(jobsRoot: string, jobId: string): Workspace {
   const jobDir = path.join(jobsRoot, jobId);
   const projectDir = path.join(jobDir, 'project');
-  return { jobDir, projectDir, homeDir: path.join(jobDir, 'home'), tmpDir: path.join(projectDir, '.tmp') };
+  return { jobDir, projectDir, homeDir: path.join(jobDir, 'home'), // Short on purpose: the agent sandbox puts unix sockets in TMPDIR, and a path near the 108-character limit
+    // (a jobs folder plus a job UUID) makes it fail with "Failed to create bridge sockets".
+    tmpDir: path.join(os.tmpdir(), `hx-${jobId.replace(/[^a-z0-9]/gi, '').slice(0, 8)}`) };
 }
 
 function copyDir(from: string, to: string, filter?: (src: string) => boolean): void {
@@ -132,6 +135,7 @@ export function prepareWorkspace(input: {
 
   const env = { ...process.env, ...HYPERFRAMES_ENV, HOME: ws.homeDir };
   run(HYPERFRAMES_BIN, ['init', 'project', '--non-interactive', '--example=blank'], ws.jobDir, env);
+  fs.mkdirSync(ws.projectDir, { recursive: true });
   fs.mkdirSync(ws.tmpDir, { recursive: true });
 
   // Pinned CLI for `npx hyperframes` inside the project.
