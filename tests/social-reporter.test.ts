@@ -57,14 +57,14 @@ test('brief check: sources exist, IDs unique, cited IDs exist', () => {
   assert.deepEqual(errorsOf((b) => { b.numbers[0]!.sources = [' ']; }), ['numbers: N1 has no source']);
   assert.deepEqual(errorsOf((b) => { b.quotes[1]!.via = []; }), ['quotes: Q2 has no source']);
   assert.deepEqual(errorsOf((b) => { b.sources = []; }), ['sources: no sources']);
-  assert.deepEqual(errorsOf((b) => { b.facts[5]!.id = 'F5'; }), ['ids: duplicate id F5', "why_it_matters: cites F6, which isn't in the brief"]);
+  assert.deepEqual(errorsOf((b) => { b.facts[5]!.id = 'F5'; }), ['ids: duplicate id F5', "why_it_matters: cites F6, which isn't in the brief", "plot: cites F6, which isn't in the brief", "tensions: cites F6, which isn't in the brief"]);
   assert.deepEqual(errorsOf((b) => { b.the_news.ids.push('F9'); }), ["the_news: cites F9, which isn't in the brief"]);
 });
 
 test('submit_brief schema mirrors the prompt sections; every object closed and fully required', () => {
   const schema = BRIEF_SCHEMA as { properties: Record<string, any>; required: string[]; additionalProperties: boolean };
   assert.deepEqual(Object.keys(schema.properties), [
-    'single_story', 'the_news', 'why_it_matters', 'facts', 'background', 'quotes', 'numbers',
+    'single_story', 'the_news', 'why_it_matters', 'plot', 'tensions', 'facts', 'background', 'quotes', 'numbers',
     'terms', 'subjects', 'events', 'article_photos', 'not_answered', 'sources', 'fetch_failures',
   ]);
   assert.equal(schema.additionalProperties, false);

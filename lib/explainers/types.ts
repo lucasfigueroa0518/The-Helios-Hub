@@ -118,6 +118,8 @@ export type ArtifactRow = {
   storage_path: string | null;
   content: string | null;
   bytes: number | null;
+  /** 'bucket': also in the `explainers` Supabase bucket under storage_path. */
+  storage_location?: 'local' | 'bucket';
   created_at: string;
 };
 

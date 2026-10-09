@@ -1,0 +1,25 @@
+What is a context window?
+Why does a database need a primary key?
+What is a webhook?
+What does “running locally” actually mean?
+What is a Git branch?
+How does vector search find similar ideas instead of matching words?
+What is the difference between authentication and authorization?
+Why do AI agents need tools?
+What is an API key actually protecting?
+What happens when you type a URL into your browser?
+What is the difference between a frontend and a backend?
+What is a relational database?
+What is a database index?
+What is a many-to-many relationship?
+What does an HTTP request actually contain?
+What is a server?
+What is a cloud worker?
+What does a cron job do?
+What is a runtime?
+What does a package manager actually do?
+What is the difference between a framework and a library?
+What is a vector embedding?
+What does RAG actually add to an LLM?
+What is MCP and why does it exist?
+What is the difference between an AI agent and a workflow?

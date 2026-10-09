@@ -54,9 +54,9 @@ async function main() {
   let claudeUsd = 0;
   const claude = claudeOn
     ? await (async () => {
-        const { default: Anthropic } = await import('@anthropic-ai/sdk');
+        const { newAnthropic } = await import('@/lib/anthropic-client');
         const { liveMessagesCreate } = await import('@/lib/social/reporter/reporter');
-        const live = liveMessagesCreate(new Anthropic());
+        const live = liveMessagesCreate(newAnthropic());
         // Room for one more call (about $0.003–0.006) or none: the cap is never passed.
         const create: typeof live = async (params) => {
           if (claudeUsd + jevTally.costUsd + 0.007 > capUsd) throw new Error(`cap $${capUsd} reached`);

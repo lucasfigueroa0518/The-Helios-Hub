@@ -3,7 +3,10 @@
    inside `.helios-slide` so the same component works when embedded elsewhere
    (Vercel Sandbox, standalone HTML, headless Playwright).
 
-   Dark canvas is the default. Cover stays untouched from the pre-v1 render. */
+   Black is the default canvas. data-canvas="green" | "orange" | "white"
+   recolors the same layouts from the Helios palette (orange #FF5E1A,
+   green #138510, near-black #0A0A0A, white). Accents move when the
+   field would swallow them. Cover stays the same composition. */
 
 /* ── Preview shell (dev-only wrapper, not exported) ───────────────────── */
 
@@ -95,11 +98,34 @@
   /* Design v1 green: brighter than prior #138510. */
   --brand-green:       #1BBF17;
 
-  /* Dark canvas is the default. */
+  /* Black canvas is the default. Themes override this block. */
   --brand-canvas:      #0A0A0A;
   --brand-narrative:   #FFFFFF;
   --brand-narrative-muted: rgba(255, 255, 255, 0.66);
   --brand-narrative-quiet: rgba(255, 255, 255, 0.45);
+  /* Hook and pivot can leave orange/green when that hue disappears into the field. */
+  --brand-hook:        var(--brand-orange);
+  --brand-pivot:       var(--brand-green);
+  /* Scrim rgb channels, so photo fades match the canvas. */
+  --brand-scrim:       10, 10, 10;
+  --brand-icon:        rgba(255, 94, 26, 0.17);
+  --brand-icon-glow:   rgba(255, 94, 26, 0.07);
+  --brand-icon-cover:  rgba(255, 94, 26, 0.26);
+  --brand-icon-glow-cover: rgba(255, 94, 26, 0.10);
+  --brand-frame:       #141414;
+  --brand-frame-line:  rgba(255, 255, 255, 0.07);
+  --brand-matte-line:  rgba(255, 255, 255, 0.08);
+  --brand-credit-fg:   rgba(255, 255, 255, 0.86);
+  --brand-credit-bg:   rgba(10, 10, 10, 0.55);
+  --brand-credit-line: rgba(255, 255, 255, 0.10);
+  --brand-rule:        rgba(255, 255, 255, 0.36);
+  --brand-rule-fade:   rgba(255, 255, 255, 0.06);
+  --brand-hairline:    rgba(255, 255, 255, 0.24);
+  --brand-grid:        rgba(255, 255, 255, 0.035);
+  --brand-disc:        rgba(10, 10, 10, 0.45);
+  --brand-disc-line:   rgba(255, 255, 255, 0.14);
+  --brand-quote-ring:  rgba(255, 255, 255, 0.28);
+  --brand-handle:      rgba(255, 255, 255, 0.7);
 
   --font-heading:      var(--font-pragmatica), 'Pragmatica Extended', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   --font-body:         var(--font-roboto), 'Roboto', 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -133,6 +159,160 @@
   width: 1080px;
   height: 1920px;
   padding: 240px 96px 240px;
+}
+
+/* Green field. White is the only body color that clears #138510 (4.8:1).
+   Orange fails on it, so the hook becomes near-black. The pivot stays
+   white and takes a black underline, so it still separates from the body. */
+.helios-slide[data-canvas="green"] {
+  --brand-canvas: #138510;
+  --brand-narrative: #FFFFFF;
+  --brand-narrative-muted: rgba(255, 255, 255, 0.86);
+  --brand-narrative-quiet: rgba(255, 255, 255, 0.72);
+  --brand-hook: #0A0A0A;
+  --brand-pivot: #FFFFFF;
+  --brand-scrim: 19, 133, 16;
+  --brand-icon: rgba(255, 255, 255, 0.24);
+  --brand-icon-glow: rgba(255, 255, 255, 0.10);
+  --brand-icon-cover: rgba(255, 255, 255, 0.34);
+  --brand-icon-glow-cover: rgba(255, 255, 255, 0.14);
+  --brand-frame: #0E6E0C;
+  --brand-frame-line: rgba(255, 255, 255, 0.18);
+  --brand-matte-line: rgba(255, 255, 255, 0.16);
+  --brand-credit-fg: #FFFFFF;
+  --brand-credit-bg: rgba(6, 40, 5, 0.55);
+  --brand-credit-line: rgba(255, 255, 255, 0.18);
+  --brand-rule: rgba(255, 255, 255, 0.48);
+  --brand-rule-fade: rgba(255, 255, 255, 0.10);
+  --brand-hairline: rgba(255, 255, 255, 0.32);
+  --brand-grid: rgba(255, 255, 255, 0.09);
+  --brand-disc: rgba(6, 40, 5, 0.45);
+  --brand-disc-line: rgba(255, 255, 255, 0.22);
+  --brand-quote-ring: rgba(255, 255, 255, 0.5);
+  --brand-handle: rgba(255, 255, 255, 0.86);
+}
+.helios-slide[data-canvas="green"] .helios-span--pivot {
+  text-decoration: underline;
+  text-decoration-color: #0A0A0A;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.12em;
+}
+
+/* Orange field. Near-black clears it (6.5:1). White type on #FF5E1A
+   only just clears large text, and a photo under the fade knocks it
+   under, so chrome stays black. The hook phrase keeps Helios orange
+   by sitting on a black chip. The pivot keeps black ink and a white
+   underline, since green-on-orange does not. */
+.helios-slide[data-canvas="orange"] {
+  --brand-canvas: #FF5E1A;
+  --brand-narrative: #0A0A0A;
+  --brand-narrative-muted: rgba(10, 10, 10, 0.78);
+  --brand-narrative-quiet: rgba(10, 10, 10, 0.62);
+  --brand-hook: #0A0A0A;
+  --brand-pivot: #0A0A0A;
+  --brand-scrim: 255, 94, 26;
+  --brand-icon: rgba(10, 10, 10, 0.22);
+  --brand-icon-glow: rgba(10, 10, 10, 0.08);
+  --brand-icon-cover: rgba(10, 10, 10, 0.32);
+  --brand-icon-glow-cover: rgba(10, 10, 10, 0.12);
+  --brand-frame: #E4470C;
+  --brand-frame-line: rgba(10, 10, 10, 0.16);
+  --brand-matte-line: rgba(10, 10, 10, 0.14);
+  --brand-credit-fg: #0A0A0A;
+  --brand-credit-bg: rgba(255, 255, 255, 0.86);
+  --brand-credit-line: rgba(10, 10, 10, 0.12);
+  --brand-rule: rgba(10, 10, 10, 0.42);
+  --brand-rule-fade: rgba(10, 10, 10, 0.10);
+  --brand-hairline: rgba(10, 10, 10, 0.28);
+  --brand-grid: rgba(10, 10, 10, 0.08);
+  --brand-disc: rgba(255, 255, 255, 0.32);
+  --brand-disc-line: rgba(10, 10, 10, 0.16);
+  --brand-quote-ring: rgba(10, 10, 10, 0.4);
+  --brand-handle: rgba(10, 10, 10, 0.72);
+}
+.helios-slide[data-canvas="orange"] .helios-span--pivot {
+  text-decoration: underline;
+  text-decoration-color: #FFFFFF;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.12em;
+}
+.helios-slide[data-canvas="orange"] .helios-span--hook {
+  color: #FF5E1A;
+  background-color: #0A0A0A;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  padding: 0.01em 0.08em;
+}
+.helios-slide[data-canvas="orange"] .helios-split-stat__number--right {
+  color: #FFFFFF;
+}
+
+/* Colored fields: the fade behind type reaches solid canvas, so a light
+   photo cannot wash the ink or the accent out. */
+.helios-slide[data-canvas="green"] [data-scrim="gradient"]::before,
+.helios-slide[data-canvas="orange"] [data-scrim="gradient"]::before,
+.helios-slide[data-canvas="white"] [data-scrim="gradient"]::before {
+  background: linear-gradient(to bottom, rgba(var(--brand-scrim), 0) 0, rgba(var(--brand-scrim), 0.4) 60px, rgba(var(--brand-scrim), 0.82) 130px, rgba(var(--brand-scrim), 1) 200px, rgb(var(--brand-scrim)) 100%);
+}
+.helios-slide[data-canvas="green"] .helios-backdrop__shade,
+.helios-slide[data-canvas="orange"] .helios-backdrop__shade {
+  background: linear-gradient(180deg, rgba(var(--brand-scrim), 0.97) 0%, rgba(var(--brand-scrim), 0.86) 18%, rgba(var(--brand-scrim), 0.58) 46%, rgba(var(--brand-scrim), 0.72) 68%, rgba(var(--brand-scrim), 0.97) 100%);
+}
+.helios-slide[data-canvas="white"] .helios-backdrop__shade {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.94) 48%, rgba(255, 255, 255, 0.98) 100%);
+}
+.helios-slide[data-canvas="green"] .helios-fade--strong [data-scrim="gradient"]::before,
+.helios-slide[data-canvas="orange"] .helios-fade--strong [data-scrim="gradient"]::before,
+.helios-slide[data-canvas="white"] .helios-fade--strong [data-scrim="gradient"]::before {
+  background: linear-gradient(to bottom, rgba(var(--brand-scrim), 0) 0, rgb(var(--brand-scrim)) 180px, rgb(var(--brand-scrim)) 100%);
+}
+.helios-slide[data-canvas="green"] .helios-image--text-top [data-scrim="gradient"]::before,
+.helios-slide[data-canvas="orange"] .helios-image--text-top [data-scrim="gradient"]::before,
+.helios-slide[data-canvas="white"] .helios-image--text-top [data-scrim="gradient"]::before {
+  background: linear-gradient(to top, rgba(var(--brand-scrim), 0) 0, rgba(var(--brand-scrim), 0.9) 140px, rgb(var(--brand-scrim)) 100%);
+}
+.helios-slide[data-canvas="orange"] .helios-follow__mark {
+  border-radius: 50%;
+  box-shadow: 0 0 0 10px #0A0A0A;
+}
+.helios-slide[data-canvas="orange"] .helios-follow__cta {
+  color: #FF5E1A;
+  background-color: #0A0A0A;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  padding: 0.01em 0.08em;
+}
+
+/* White field. Ink is near-black. Orange stays the hook (large type).
+   Pivot uses the design-system green #138510; the brighter slide green
+   #1BBF17 does not clear white. */
+.helios-slide[data-canvas="white"] {
+  --brand-canvas: #FFFFFF;
+  --brand-narrative: #0A0A0A;
+  --brand-narrative-muted: #525252;
+  --brand-narrative-quiet: #737373;
+  --brand-green: #138510;
+  --brand-hook: #FF5E1A;
+  --brand-pivot: #138510;
+  --brand-scrim: 255, 255, 255;
+  --brand-icon: rgba(255, 94, 26, 0.30);
+  --brand-icon-glow: rgba(255, 94, 26, 0.12);
+  --brand-icon-cover: rgba(255, 94, 26, 0.42);
+  --brand-icon-glow-cover: rgba(255, 94, 26, 0.16);
+  --brand-frame: #F4F2ED;
+  --brand-frame-line: rgba(10, 10, 10, 0.08);
+  --brand-matte-line: rgba(10, 10, 10, 0.08);
+  --brand-credit-fg: #171717;
+  --brand-credit-bg: rgba(255, 255, 255, 0.88);
+  --brand-credit-line: rgba(10, 10, 10, 0.10);
+  --brand-rule: rgba(10, 10, 10, 0.28);
+  --brand-rule-fade: rgba(10, 10, 10, 0.06);
+  --brand-hairline: rgba(10, 10, 10, 0.16);
+  --brand-grid: rgba(10, 10, 10, 0.06);
+  --brand-disc: rgba(255, 255, 255, 0.78);
+  --brand-disc-line: rgba(10, 10, 10, 0.12);
+  --brand-quote-ring: rgba(10, 10, 10, 0.28);
+  --brand-handle: #525252;
 }
 
 .helios-slide__well {
@@ -174,8 +354,8 @@
 
 .helios-span { color: inherit; }
 .helios-span--narrative { color: var(--brand-narrative); }
-.helios-span--hook      { color: var(--brand-orange); }
-.helios-span--pivot     { color: var(--brand-green); }
+.helios-span--hook      { color: var(--brand-hook); }
+.helios-span--pivot     { color: var(--brand-pivot); }
 
 /* ══ Layout system (M8a, Tommy 2026-10-06) ════════════════════════════════
    Slide 1080×1350, padding 96 → content well 888×1158 at (96, 96).
@@ -214,7 +394,7 @@
   bottom: 0;
   z-index: -1;
   /* An eased fade (premium polish, 2026-10-07): no hard band; 0.84 where the copy starts. */
-  background: linear-gradient(to bottom, rgba(10, 10, 10, 0) 0, rgba(10, 10, 10, 0.18) 70px, rgba(10, 10, 10, 0.48) 140px, rgba(10, 10, 10, 0.72) 196px, rgba(10, 10, 10, 0.84) 240px, rgba(10, 10, 10, 0.92) 100%);
+  background: linear-gradient(to bottom, rgba(var(--brand-scrim), 0) 0, rgba(var(--brand-scrim), 0.18) 70px, rgba(var(--brand-scrim), 0.48) 140px, rgba(var(--brand-scrim), 0.72) 196px, rgba(var(--brand-scrim), 0.84) 240px, rgba(var(--brand-scrim), 0.92) 100%);
   pointer-events: none;
 }
 
@@ -229,7 +409,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 24px;
-  background: #141414;
+  background: var(--brand-frame);
   isolation: isolate;
   box-shadow: 0 48px 90px -48px rgba(0, 0, 0, 0.95);
 }
@@ -238,7 +418,7 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 0 0 1px var(--brand-frame-line);
   pointer-events: none;
   z-index: 2;
 }
@@ -266,7 +446,7 @@
   max-width: calc(100% - 80px);
   max-height: calc(100% - 80px);
   border-radius: 12px;
-  box-shadow: 0 28px 60px -20px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  box-shadow: 0 28px 60px -20px rgba(0, 0, 0, 0.8), 0 0 0 1px var(--brand-matte-line);
 }
 
 /* Photo credit: one position on every layout, bottom-right, white on a dark pill. */
@@ -281,11 +461,11 @@
   font-weight: 500;
   line-height: 1.3;
   letter-spacing: 0.02em;
-  color: rgba(255, 255, 255, 0.86);
-  background: rgba(10, 10, 10, 0.55);
+  color: var(--brand-credit-fg);
+  background: var(--brand-credit-bg);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10);
+  box-shadow: inset 0 0 0 1px var(--brand-credit-line);
   padding: 6px 14px;
   border-radius: 9999px;
   text-align: right;
@@ -305,7 +485,7 @@
 }
 .helios-backdrop__shade {
   /* Darkest where the copy sits (top and bottom), never below 0.7 (rule 2). */
-  background: linear-gradient(180deg, rgba(10, 10, 10, 0.95) 0%, rgba(10, 10, 10, 0.86) 14%, rgba(10, 10, 10, 0.74) 46%, rgba(10, 10, 10, 0.9) 100%);
+  background: linear-gradient(180deg, rgba(var(--brand-scrim), 0.95) 0%, rgba(var(--brand-scrim), 0.86) 14%, rgba(var(--brand-scrim), 0.74) 46%, rgba(var(--brand-scrim), 0.9) 100%);
 }
 /* A shallow depth of field: the photo reads as atmosphere behind the copy, never as competing detail (text, digits). */
 .helios-backdrop__img { filter: saturate(0.85) contrast(1.05) blur(1.5px); transform: scale(1.02); }
@@ -350,19 +530,6 @@
   text-wrap: pretty;
 }
 
-/* Hook pass line (prototype): smaller, orange, distinct from the body. */
-.helios-hook {
-  font-family: var(--font-body);
-  font-size: 34px;
-  font-weight: 500;
-  line-height: 1.25;
-  color: var(--brand-orange);
-  max-height: 86px; /* two lines at 34px: one short line, never a paragraph */
-  margin: 0;
-}
-.helios-hook--above { margin-bottom: 12px; }
-.helios-hook--below { margin-top: 16px; }
-
 /* ── Cover ───────────────────────────────────────────────────────────── */
 
 .helios-cover {
@@ -404,7 +571,7 @@
   top: 0;
   height: 320px;
   z-index: 1;
-  background: linear-gradient(to bottom, rgba(10, 10, 10, 0.5), rgba(10, 10, 10, 0));
+  background: linear-gradient(to bottom, rgba(var(--brand-scrim), 0.5), rgba(var(--brand-scrim), 0));
   pointer-events: none;
 }
 .helios-cover--bleed .helios-cover__headline {
@@ -424,7 +591,7 @@
 .helios-cover__photo.helios-frame { border-radius: 0; box-shadow: none; }
 .helios-cover__photo.helios-frame::after {
   box-shadow: none;
-  background: linear-gradient(to bottom, rgba(10, 10, 10, 0) 58%, rgba(10, 10, 10, 0.7) 86%, rgba(10, 10, 10, 1) 100%);
+  background: linear-gradient(to bottom, rgba(var(--brand-scrim), 0) 58%, rgba(var(--brand-scrim), 0.7) 86%, rgba(var(--brand-scrim), 1) 100%);
 }
 .helios-cover--split .helios-cover__text {
   top: 820px;
@@ -436,8 +603,8 @@
 /* Logo cover card (photo spec §2, §4): a Helios card. Canvas + faint grid + wordmark; the logo whole, on its own plate. */
 .helios-cover--logo {
   background:
-    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px) 0 0 / 54px 54px,
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px) 0 0 / 54px 54px,
+    linear-gradient(var(--brand-grid) 1px, transparent 1px) 0 0 / 54px 54px,
+    linear-gradient(90deg, var(--brand-grid) 1px, transparent 1px) 0 0 / 54px 54px,
     var(--brand-canvas);
 }
 .helios-logo-card { position: absolute; top: 0; left: 0; width: 1080px; height: 780px; z-index: 0; }
@@ -463,27 +630,27 @@
    one large outline icon in faint Helios orange running off the bottom edge, a faint orange glow.
    Behind everything on the slide; text and layout unchanged. */
 .helios-icon-bg { position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
-.helios-icon-bg__glow { position: absolute; inset: 0; background: radial-gradient(circle at 85% 85%, rgba(255, 94, 26, 0.07), transparent 55%); }
-.helios-icon-bg__icon { position: absolute; width: 1150px; height: 1150px; right: -330px; bottom: -260px; color: rgba(255, 94, 26, 0.17); }
+.helios-icon-bg__glow { position: absolute; inset: 0; background: radial-gradient(circle at 85% 85%, var(--brand-icon-glow), transparent 55%); }
+.helios-icon-bg__icon { position: absolute; width: 1150px; height: 1150px; right: -330px; bottom: -260px; color: var(--brand-icon); }
 .helios-icon-bg__icon svg { display: block; }
 /* The layout rotation alternates the side so a run of icon slides doesn't look identical (photo spec §5a). */
-.helios-icon-bg--left .helios-icon-bg__glow { background: radial-gradient(circle at 15% 85%, rgba(255, 94, 26, 0.07), transparent 55%); }
+.helios-icon-bg--left .helios-icon-bg__glow { background: radial-gradient(circle at 15% 85%, var(--brand-icon-glow), transparent 55%); }
 .helios-icon-bg--left .helios-icon-bg__icon { right: auto; left: -330px; }
 /* Cover (photo spec §5, format decided, exact look open): the icon raised, clear of the headline at the bottom, slightly brighter. */
 .helios-cover--icon .helios-icon-bg { z-index: 0; }
-.helios-icon-bg--cover .helios-icon-bg__glow { background: radial-gradient(circle at 78% 24%, rgba(255, 94, 26, 0.10), transparent 55%); }
-.helios-icon-bg--cover .helios-icon-bg__icon { width: 860px; height: 860px; right: -170px; top: -110px; bottom: auto; color: rgba(255, 94, 26, 0.26); }
+.helios-icon-bg--cover .helios-icon-bg__glow { background: radial-gradient(circle at 78% 24%, var(--brand-icon-glow-cover), transparent 55%); }
+.helios-icon-bg--cover .helios-icon-bg__icon { width: 860px; height: 860px; right: -170px; top: -110px; bottom: auto; color: var(--brand-icon-cover); }
 
 /* Render review settings (photo spec §5b): a stronger fade under text; text at the top of a full-bleed slide. */
 .helios-fade--strong [data-scrim="gradient"]::before {
   top: -260px;
-  background: linear-gradient(to bottom, rgba(10, 10, 10, 0) 0, rgba(10, 10, 10, 0.92) 200px, rgba(10, 10, 10, 0.95) 100%);
+  background: linear-gradient(to bottom, rgba(var(--brand-scrim), 0) 0, rgba(var(--brand-scrim), 0.92) 200px, rgba(var(--brand-scrim), 0.95) 100%);
 }
 .helios-image--text-top .helios-image__copy { top: 0; bottom: auto; padding: 96px 96px 0; }
 .helios-image--text-top [data-scrim="gradient"]::before {
   top: 0;
   bottom: -180px;
-  background: linear-gradient(to top, rgba(10, 10, 10, 0) 0, rgba(10, 10, 10, 0.82) 180px, rgba(10, 10, 10, 0.88) 100%);
+  background: linear-gradient(to top, rgba(var(--brand-scrim), 0) 0, rgba(var(--brand-scrim), 0.82) 180px, rgba(var(--brand-scrim), 0.88) 100%);
 }
 
 /* Arrow: top right, 8% down (spec §5.2). On a photo it sits on a dark disc. */
@@ -496,13 +663,13 @@
   font-size: 60px;
   font-weight: 700;
   line-height: 1;
-  color: var(--brand-orange);
+  color: var(--brand-hook);
 }
 .helios-cover__chevron--on-photo {
-  background: rgba(10, 10, 10, 0.45);
+  background: var(--brand-disc);
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 0 0 1px var(--brand-disc-line);
   border-radius: 50%;
   width: 84px;
   height: 84px;
@@ -635,7 +802,7 @@
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.06));
+  background: linear-gradient(90deg, var(--brand-rule), var(--brand-rule-fade));
 }
 .helios-split-stat__col {
   flex: 1;
@@ -647,7 +814,7 @@
 .helios-split-stat__rule {
   width: 1px;
   align-self: stretch;
-  background: rgba(255, 255, 255, 0.24);
+  background: var(--brand-hairline);
 }
 .helios-split-stat__number {
   font-family: var(--font-heading);
@@ -658,7 +825,7 @@
   color: var(--brand-narrative);
   max-height: 300px;
 }
-.helios-split-stat__number--right { color: var(--brand-orange); }
+.helios-split-stat__number--right { color: var(--brand-hook); }
 .helios-split-stat__note {
   font-family: var(--font-body);
   font-size: 34px;
@@ -690,7 +857,7 @@
   border-radius: 50%;
 }
 /* A quiet double ring: canvas gap, then a white hairline. */
-.helios-quote__speaker.helios-frame { box-shadow: 0 0 0 6px var(--brand-canvas), 0 0 0 8px rgba(255, 255, 255, 0.28), 0 36px 70px -24px rgba(0, 0, 0, 0.9); }
+.helios-quote__speaker.helios-frame { box-shadow: 0 0 0 6px var(--brand-canvas), 0 0 0 8px var(--brand-quote-ring), 0 36px 70px -24px rgba(0, 0, 0, 0.9); }
 .helios-quote--speaker .helios-quote__glyph { margin-top: 40px; }
 .helios-quote__glyph {
   font-family: var(--font-heading);
@@ -698,7 +865,7 @@
   font-weight: 700;
   line-height: 0.75;
   height: 110px;
-  color: var(--brand-orange);
+  color: var(--brand-hook);
   letter-spacing: -0.05em;
 }
 .helios-quote__text {
@@ -750,7 +917,7 @@
   top: 0;
   height: 260px;
   z-index: 1;
-  background: linear-gradient(to bottom, rgba(10, 10, 10, 0.4), rgba(10, 10, 10, 0));
+  background: linear-gradient(to bottom, rgba(var(--brand-scrim), 0.4), rgba(var(--brand-scrim), 0));
   pointer-events: none;
 }
 /* Spread (spec §5.4): one 2160-wide photo, left half on slide N, right half on N+1. */
@@ -825,19 +992,59 @@
 }
 
 .helios-follow__cta {
-  color: var(--brand-orange);
+  color: var(--brand-hook);
 }
 
-/* @handle: Roboto 40px, white at 70%. Sits below the story line as
-   part of the same centered group — no auto push to slide bottom. */
+/* @handle: Roboto 40px. Sits below the story line as part of the same
+   centered group — no auto push to slide bottom. */
 .helios-follow__handle {
   margin: 40px 0 0;
   font-family: var(--font-body);
   font-size: 40px;
   font-weight: 400;
   letter-spacing: 0.02em;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--brand-handle);
   line-height: 1;
   text-transform: lowercase;
   text-align: center;
+}
+
+/* Canvas gallery at /social/render/preview/canvases. Not part of a shipped slide. */
+.canvas-gallery {
+  width: min(980px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+.canvas-gallery__row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+.canvas-gallery__label {
+  margin: 0 0 8px;
+  font-family: var(--font-roboto-mono), 'Roboto Mono', ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+  text-align: center;
+}
+.canvas-gallery__name {
+  margin: 0;
+  font-family: var(--font-roboto-mono), 'Roboto Mono', ui-monospace, Menlo, monospace;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.85);
+}
+.canvas-gallery__stage {
+  width: calc(1080px * 0.26);
+  height: calc(1350px * 0.26);
+  position: relative;
+  overflow: hidden;
+  margin: 0 auto;
+  outline: 1px solid rgba(255, 255, 255, 0.12);
 }

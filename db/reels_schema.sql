@@ -667,6 +667,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_reels_song_picks_inflight_video
 -- polls it to FINISHED, and publishes. No FK to post_ideas and the video FK
 -- nulls out, so the record of what posted outlives retention, like
 -- published_status (D-061). A success also upserts published_status.
+--
+-- Frozen: publish_attempts, posting_schedule and media_insights moved to the
+-- lifecycle spine (social_hub, D39). History only; scripts/backfill_spine.ts
+-- reads them and nothing writes them. Dropped in unification Phase 7.
+-- published_status stays here and is still written.
 
 CREATE TABLE IF NOT EXISTS reels.publish_attempts (
     id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -800,6 +805,12 @@ CREATE TABLE IF NOT EXISTS reels.posting_schedule (
     error               text,
     created_at          timestamptz NOT NULL DEFAULT now()
 );
+
+-- A person's approval of the slot (docs/social-overnight.md). With require_approval on, an
+-- auto-scheduled reel posts only once approved; a reel a person scheduled is approved by that act.
+ALTER TABLE reels.posting_schedule ADD COLUMN IF NOT EXISTS approved_at timestamptz;
+
+INSERT INTO reels.settings (key, value) VALUES ('require_approval', 'true'::jsonb) ON CONFLICT (key) DO NOTHING;
 
 CREATE INDEX IF NOT EXISTS idx_reels_posting_schedule_due
     ON reels.posting_schedule (publish_at)

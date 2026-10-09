@@ -31,6 +31,7 @@ import type { IgAudio, MetaClient } from '@/lib/reels/music/meta';
 import { loadReelSongs } from '@/lib/reels/music/overview';
 import { claimAndPickSong, queueSongPick } from '@/lib/reels/music/pick';
 import { claimAndPublish, queuePublish } from '@/lib/reels/music/publish';
+import { REEL_ATTEMPTS } from '@/lib/reels/spine-tables';
 import { listSongs } from '@/lib/reels/music/store';
 import { tagUntagged } from '@/lib/reels/music/tag';
 
@@ -75,6 +76,9 @@ function metaStub(lists: { music: IgAudio[]; original_sound: IgAudio[] }, calls:
     },
     async downloadPreview(url) {
       return { bytes: Buffer.from(url), contentType: 'audio/mpeg' };
+    },
+    async publishingLimit() {
+      return { quotaUsage: 3, quotaTotal: 100 };
     },
     async createReelContainer(input) {
       calls.push(`create:${input.audioId}:${input.audioVolume}/${input.videoVolume}:${input.graduationStrategy}:${input.shareToFeed}`);
@@ -161,7 +165,8 @@ async function fixture(): Promise<Fixture> {
 
 async function cleanup(started: Date, fx: Fixture | null, ingestIds: string[]): Promise<void> {
   if (fx) {
-    await dbQuery(`DELETE FROM reels.publish_attempts WHERE post_idea_id = $1`, [fx.postIdeaId]);
+    // Trial Reels' attempts live on the spine (D39); the media_insights rows go with them (ON DELETE CASCADE).
+    await dbQuery(`DELETE FROM social_hub.publish_attempts WHERE vertical = 'reels' AND payload->>'post_idea_id' = $1`, [fx.postIdeaId]);
     await dbQuery(`DELETE FROM reels.song_picks WHERE post_idea_id = $1`, [fx.postIdeaId]);
     await dbQuery(`DELETE FROM reels.jev_logs WHERE post_idea_id = $1`, [fx.postIdeaId]);
     await dbQuery(`DELETE FROM reels.published_status WHERE post_idea_id = $1`, [fx.postIdeaId]);
@@ -259,9 +264,9 @@ async function main(): Promise<void> {
       sleep: async () => undefined,
     });
     assert.equal(published?.status, 'published');
-    assert.ok(calls.includes(`create:${song.audioId}:100/60:MANUAL:null`));
+    assert.ok(calls.includes(`create:${song.audioId}:100/60:SS_PERFORMANCE:null`));
     const attempt = await dbQuery<{ caption: string; permalink: string; audio_id: string; song_title: string }>(
-      `SELECT caption, permalink, audio_id, song_title FROM reels.publish_attempts WHERE post_idea_id = $1`,
+      `SELECT caption, permalink, audio_id, song_title FROM ${REEL_ATTEMPTS} a WHERE post_idea_id = $1`,
       [fx.postIdeaId],
     );
     assert.equal(attempt.rows[0].caption, 'The caption body.\n\nSave this.\n\n#ai #tech', 'posts the full caption');

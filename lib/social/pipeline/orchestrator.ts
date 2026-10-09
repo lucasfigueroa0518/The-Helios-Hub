@@ -1,7 +1,7 @@
 /**
  * Helios Social rebuild — day orchestrator (spec §3, §2.4, §5B).
  *
- *   Jev scoring → Reporter → Writer → Editor → [Hook pass, when on] → Fact-checker → mechanical → design
+ *   Jev scoring → Reporter → Writer → Editor → Fact-checker → mechanical → design
  *
  * Each stage runs once. A stage that fails sets the story aside (logged
  * with stage + reason) and the next-ranked story takes the slot, until the
@@ -9,6 +9,16 @@
  *
  * Glitch retries (§7.1) live inside each stage (one retry on a failed
  * code check); fresh drafts (§4.2b) loop here.
+ *
+ * A story that already has a finished post (SH-60, P2-M4) is not run again:
+ * when `stored` finds one, the story keeps its rank and counts toward the
+ * day's posts with no stage run and no spend; its stored post is shipped.
+ *
+ * A story whose content is already on the calendar (`onCalendar`: a slot
+ * waiting or posting, e.g. one a person placed) is passed over: it neither
+ * runs nor counts toward the target, because the daily fill (D54) already
+ * counted a person's placement for the day, and a slot on another day isn't
+ * today's post.
  */
 import type { CostMeter } from './cost-meter';
 import type { SetAsideEntry, SetAsideLog } from './set-aside-log';
@@ -37,7 +47,14 @@ export type RunDayInput = {
   log: SetAsideLog;
   now: Date;
   targetPosts?: number;
+  /** The finished post already stored for a story, if any (SH-60). Omitted: every story runs. */
+  stored?: (storyId: string) => Promise<string | null>;
+  /** True when the story's content already holds a slot (daily fill, D54). Omitted: no story is passed over. */
+  onCalendar?: (storyId: string) => Promise<boolean>;
 };
+
+/** One shipped story, in rank order: a post made today, or a stored post reused. */
+export type ShipEntry = { storyId: string; reusedPostId: string | null };
 
 export type RunDayResult = {
   posts: PostObject[];
@@ -47,6 +64,10 @@ export type RunDayResult = {
   costByStage: Partial<Record<StageName, number>>;
   /** Every fresh draft and why it was needed (spec §4.2b: logged). */
   freshDrafts: FreshDraftEntry[];
+  /** What the day ships, best-ranked story first. */
+  shipped: ShipEntry[];
+  /** Stories passed over because their content is already on the calendar (D54), in rank order. */
+  onCalendar: string[];
 };
 
 class SetAside extends Error {
@@ -66,6 +87,8 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
   const posts: PostObject[] = [];
   const setAsides: SetAsideEntry[] = [];
   const freshDrafts: FreshDraftEntry[] = [];
+  const shipped: ShipEntry[] = [];
+  const onCalendar: string[] = [];
 
   const finish = (stopReason: StopReason): RunDayResult => ({
     posts,
@@ -74,6 +97,8 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
     costUsd: meter.spent(),
     costByStage: meter.byStage(),
     freshDrafts,
+    shipped,
+    onCalendar,
   });
 
   const logCap = async (storyId: string, stage: StageName) => {
@@ -131,7 +156,16 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
 
   // ── One story at a time, in rank order ──────────────────────────────
   for (const story of ranked) {
-    if (posts.length >= target) return finish('target-reached');
+    if (shipped.length >= target) return finish('target-reached');
+    if (input.onCalendar && (await input.onCalendar(story.id))) {
+      onCalendar.push(story.id);
+      continue;
+    }
+    const reused = input.stored ? await input.stored(story.id) : null;
+    if (reused) {
+      shipped.push({ storyId: story.id, reusedPostId: reused });
+      continue;
+    }
     const trail: StageName[] = ['jev-scoring'];
     let storyCost = 0;
     let current: StageName = 'reporter';
@@ -150,9 +184,7 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
         try {
           const written = await run('writer', () => stages.write(brief));
           const edited = await run('editor', () => stages.edit(written, brief));
-          // Hook pass only when the run switched it on (prototype, Tommy 2026-10-06).
-          const hooked = stages.hook ? await run('hook', () => stages.hook!(edited, brief)) : edited;
-          checked = await run('fact-checker', () => stages.factCheck(hooked, brief));
+          checked = await run('fact-checker', () => stages.factCheck(edited, brief));
           break;
         } catch (err) {
           if (!(err instanceof FreshDraftNeeded)) throw err;
@@ -169,6 +201,7 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
       const fixed = await run('mechanical', () => stages.mechanical(checked, brief));
       const designed = await run('design', () => stages.design(fixed, brief, story));
       posts.push({ ...designed, stages: trail, costUsd: storyCost });
+      shipped.push({ storyId: story.id, reusedPostId: null });
     } catch (err) {
       if (err instanceof SetAside) {
         setAsides.push(err.entry);
@@ -182,5 +215,5 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
     }
   }
 
-  return finish(posts.length >= target ? 'target-reached' : 'out-of-stories');
+  return finish(shipped.length >= target ? 'target-reached' : 'out-of-stories');
 }

@@ -207,8 +207,8 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
 
   const keep = async (kind: ArtifactKind, file: string, name: string) => {
     if (!fs.existsSync(file)) return false;
-    const { storagePath, bytes } = await store.put(`${prefix}/${name}`, file);
-    await addArtifact(db, { jobId: job.id, kind, storagePath, bytes });
+    const { storagePath, bytes, location } = await store.put(`${prefix}/${name}`, file);
+    await addArtifact(db, { jobId: job.id, kind, storagePath, bytes, storageLocation: location ?? 'local' });
     return true;
   };
   const keepText = async (kind: ArtifactKind, content: string | null) => {

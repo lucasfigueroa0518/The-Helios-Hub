@@ -5,17 +5,17 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/helios-worker/app
-EnvironmentFile=/opt/helios-worker/worker.env
+WorkingDirectory=/opt/helios-social/app
+EnvironmentFile=/opt/helios-social/worker.env
 ExecStart=/usr/bin/npm run reels:worker
 Restart=always
 RestartSec=15
 KillSignal=SIGTERM
 TimeoutStopSec=300
-# Sized to leave the outreach worker its share of the e2-standard-2 (8 GB).
+# Runs on helios-social-worker (e2-medium, 4 GB + 4 GB swap); the other social
+# workers run at other hours (docs/social-overnight.md).
 MemoryMax=1500M
 MemoryHigh=1200M
-# Nice above helios-worker (5) so a nightly scrape never starves drafting.
 Nice=10
 
 [Install]

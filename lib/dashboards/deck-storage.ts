@@ -1,3 +1,4 @@
+import { serviceHeaders } from '@/lib/supabase-service-headers';
 import https from 'node:https';
 
 const DECK_BUCKET = 'dashboards-decks';
@@ -30,10 +31,8 @@ export async function uploadDeckObject(
       url,
       {
         method: 'POST',
-        rejectUnauthorized: false,
         headers: {
-          apikey: serviceRole,
-          authorization: `Bearer ${serviceRole}`,
+          ...serviceHeaders(serviceRole),
           'content-type': contentType,
           'content-length': body.byteLength,
           'x-upsert': 'true',
@@ -70,10 +69,8 @@ export async function downloadDeckObject(path: string): Promise<Buffer> {
       url,
       {
         method: 'GET',
-        rejectUnauthorized: false,
         headers: {
-          apikey: serviceRole,
-          authorization: `Bearer ${serviceRole}`,
+          ...serviceHeaders(serviceRole),
         },
       },
       (response) => {
@@ -102,10 +99,8 @@ export async function removeDeckObject(path: string): Promise<void> {
       url,
       {
         method: 'DELETE',
-        rejectUnauthorized: false,
         headers: {
-          apikey: serviceRole,
-          authorization: `Bearer ${serviceRole}`,
+          ...serviceHeaders(serviceRole),
           'content-type': 'application/json',
           'content-length': Buffer.byteLength(body),
         },

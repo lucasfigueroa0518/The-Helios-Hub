@@ -58,7 +58,8 @@ test('schema applies and re-applies cleanly', async () => {
   const { rows } = await pg.query<{ n: number }>(
     `SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema = 'explainers'`,
   );
-  assert.equal(rows[0].n, 10);
+  // 10 product tables + posting_schedule, publish_attempts, media_insights (docs/social-overnight.md).
+  assert.equal(rows[0].n, 13);
 });
 
 test('a database created before the seq columns upgrades in place', async () => {
@@ -86,7 +87,9 @@ test('seeded settings equal the kickoff defaults', async () => {
   const { db } = await scratchExplainersDb();
   assert.deepEqual(await loadSettings(db), DEFAULT_SETTINGS);
   assert.equal(DEFAULT_SETTINGS.auto_render, false);
-  assert.equal(DEFAULT_SETTINGS.daily_spend_cap_usd, 6);
+  // SH-49 (Social Hub P2-M2): two renders a day under the $5 per-reel cap.
+  assert.equal(DEFAULT_SETTINGS.daily_render_cap, 2);
+  assert.equal(DEFAULT_SETTINGS.daily_spend_cap_usd, 10);
   assert.equal(DEFAULT_SETTINGS.per_reel_cap_usd, 5);
 });
 
@@ -241,13 +244,15 @@ test('cost events move the job total; unknown prices stay unknown', async () => 
   );
 });
 
-test('production caps: one render and $6 per Eastern day; development has neither', async () => {
+test('production caps: two renders and $10 per Eastern day; development has neither', async () => {
   const { db } = await scratchExplainersDb();
   const a = await poolTopic(db, 'a', { weighted_score: 70 });
+  const a2 = await poolTopic(db, 'a2', { weighted_score: 65 });
   const b = await poolTopic(db, 'b', { weighted_score: 60 });
   const c = await poolTopic(db, 'c', { weighted_score: 50 });
 
   assert.ok((await requestRender(db, { topicId: a, trigger: 'click', settings: production })).ok);
+  assert.ok((await requestRender(db, { topicId: a2, trigger: 'click', settings: production })).ok);
   assert.deepEqual(
     await requestRender(db, { topicId: b, trigger: 'click', settings: production }),
     { ok: false, reason: 'daily_render_cap' },
@@ -256,8 +261,8 @@ test('production caps: one render and $6 per Eastern day; development has neithe
 
   // Idea-pipeline spend alone can exhaust the production day (A-4).
   const roomy = { ...production, daily_render_cap: 5 };
-  await recordCost(db, { mode: 'production', vendor: 'anthropic', component: 'idea_generator', usd: 6 });
-  assert.equal(await productionSpendForDay(db, nyDate()), 6);
+  await recordCost(db, { mode: 'production', vendor: 'anthropic', component: 'idea_generator', usd: 10 });
+  assert.equal(await productionSpendForDay(db, nyDate()), 10);
   assert.deepEqual(
     await requestRender(db, { topicId: c, trigger: 'click', settings: roomy }),
     { ok: false, reason: 'daily_spend_cap' },

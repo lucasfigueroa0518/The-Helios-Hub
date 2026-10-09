@@ -4,7 +4,7 @@
  * Runs as its own systemd unit beside `helios-worker` so a long scrape can
  * never starve outreach drafting, and vice versa. Vercel does not run this.
  *
- *   npm run reels:worker        # schedule 1 AM America/New_York (songs at 12:30 AM), then loop
+ *   npm run reels:worker        # schedule 1 AM America/New_York (songs at 12:30 AM, insights at 5 AM), then loop
  *   npm run reels:run           # one run now, then exit
  */
 import fs from 'node:fs';
@@ -42,11 +42,17 @@ async function main(): Promise<void> {
   const { claimAndRenderVideo } = await import('@/lib/reels/visual/video-run');
   const { nextRunAt } = await import('@/lib/reels/schedule');
   const { runSongIngest } = await import('@/lib/reels/music/ingest');
+  const { getSetting } = await import('@/lib/reels/music/store');
   const { claimAndPickSong } = await import('@/lib/reels/music/pick');
   const { claimAndPublish } = await import('@/lib/reels/music/publish');
   const { releaseDueSchedules } = await import('@/lib/reels/publish/schedule');
-  const { SONG_INGEST_HOUR_LOCAL, SONG_INGEST_MINUTE_LOCAL, RUN_TIMEZONE } = await import('@/lib/reels/config');
+  const { publisherOwnsPublishing } = await import('@/lib/publishing/publisher');
+  const { dbQuery } = await import('@/lib/db');
+  /** With publisher_mode 'live' and its heartbeat listing Trial Reels, the single publisher releases and posts (D40, D41). */
+  const standDown = () => publisherOwnsPublishing((text, params) => dbQuery(text, params) as never, 'reels');
+  const { INSIGHTS_HOUR_LOCAL, SONG_INGEST_HOUR_LOCAL, SONG_INGEST_MINUTE_LOCAL, RUN_TIMEZONE } = await import('@/lib/reels/config');
   const nextSongsAt = () => nextRunAt(new Date(), RUN_TIMEZONE, SONG_INGEST_HOUR_LOCAL, SONG_INGEST_MINUTE_LOCAL);
+  const nextInsightsAt = () => nextRunAt(new Date(), RUN_TIMEZONE, INSIGHTS_HOUR_LOCAL, 0);
   const { closeDbPool } = await import('@/lib/db');
 
   let stopping = false;
@@ -67,7 +73,8 @@ async function main(): Promise<void> {
 
     let scheduledFor = nextRunAt(new Date());
     let songsFor = nextSongsAt();
-    log('scheduled', { nextRunAt: scheduledFor.toISOString(), nextSongsAt: songsFor.toISOString(), pollMs: POLL_MS });
+    let insightsFor = nextInsightsAt();
+    log('scheduled', { nextRunAt: scheduledFor.toISOString(), nextSongsAt: songsFor.toISOString(), nextInsightsAt: insightsFor.toISOString(), pollMs: POLL_MS });
 
     while (!stopping) {
       // 12:30 AM song ingest (D-137, D-166). Its own log, so a failure never blocks 1 AM.
@@ -83,8 +90,21 @@ async function main(): Promise<void> {
 
       // Two ways in: the 1 AM schedule, and whatever the page queued.
       if (Date.now() >= scheduledFor.getTime()) {
+        // Generate is a switch (reels.settings auto_run, on unless set to false); Run now still works.
+        if ((await getSetting<boolean>('auto_run').catch(() => null)) === false) {
+          log('run_skipped', { reason: 'auto_run is off' });
+          scheduledFor = nextRunAt(new Date());
+          continue;
+        }
         const outcome = await runReelsNight('scheduled');
         log('run_complete', { trigger: 'scheduled', status: outcome.status, runId: outcome.runId });
+        scheduledFor = nextRunAt(new Date());
+        log('scheduled', { nextRunAt: scheduledFor.toISOString() });
+        continue;
+      }
+
+      // 5:00 AM insights sweep, its own hour so it never overlaps a night run (docs/social-overnight.md).
+      if (Date.now() >= insightsFor.getTime()) {
         const insights = await import('@/lib/reels/media-insights/poll')
           .then((mod) => mod.pollDueInsights({ limit: mod.INSIGHTS_NIGHTLY_BATCH, force: true }))
           .catch((error) => {
@@ -96,12 +116,11 @@ async function main(): Promise<void> {
             blocked: insights.blocked,
             considered: insights.considered,
             written: insights.written,
-            message: insights.message,
+            note: insights.message,
             detail: insights.detail ?? undefined,
           });
         }
-        scheduledFor = nextRunAt(new Date());
-        log('scheduled', { nextRunAt: scheduledFor.toISOString() });
+        insightsFor = nextInsightsAt();
         continue;
       }
 
@@ -153,13 +172,13 @@ async function main(): Promise<void> {
         continue;
       }
 
-      const due = await releaseDueSchedules().catch((error) => {
+      const due = (await standDown()) ? 0 : await releaseDueSchedules().catch((error) => {
         log('schedule_release_failed', { error: error instanceof Error ? error.message : String(error) });
         return 0;
       });
       if (due > 0) log('schedule_due', { released: due });
 
-      const published = await claimAndPublish().catch((error) => {
+      const published = (await standDown()) ? null : await claimAndPublish().catch((error) => {
         log('publish_failed', { error: error instanceof Error ? error.message : String(error) });
         return null;
       });

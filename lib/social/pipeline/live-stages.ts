@@ -20,6 +20,7 @@
  * stopped one cheap design stage early at cap − reserve).
  */
 import { priceAnthropicMessages, type MessageUsageLike } from '@/lib/anthropic-pricing';
+import type { PhotoBank } from '@/lib/media-library/bank';
 import type { JevAsk } from '@/lib/social/jev/client';
 import type { PhotoDeps } from '@/lib/social/photos/find';
 import type { UsedPhotoLog } from '@/lib/social/photos/used-photos';
@@ -33,14 +34,12 @@ import type { FitCheck } from '@/lib/social/render/fit-check';
 import type { PageRead } from '@/lib/social/reporter/read-page';
 import { runReporter, type MessagesCreate, type ReporterResult } from '@/lib/social/reporter/reporter';
 import type { EditorResult } from '@/lib/social/editor/editor';
-import type { HookResult } from '@/lib/social/hook/hook';
 import type { IsWellKnown, WriterResult } from '@/lib/social/writer/writer';
 import { runWriter } from '@/lib/social/writer/writer';
 import { runEditor } from '@/lib/social/editor/editor';
 
 import { createDesignStage } from './design-stage';
 import { createFactCheckStage } from './factcheck-stage';
-import { createHookStage } from './hook-stage';
 import { createMechanicalStage } from './mechanical-stage';
 import { readableDate } from './reporter-stage';
 import type { PipelineStages } from './stages';
@@ -90,8 +89,6 @@ export type StoryLog = {
   writer: WriterResult[];
   editor: EditorResult[];
   factCheck: Array<Awaited<ReturnType<typeof runFactCheck>>>;
-  /** Hook pass results, when the run switched it on (with the measured budgets). */
-  hook?: Array<HookResult & { budgets: number[] }>;
   design?: PostObject;
   designFailure?: string;
 };
@@ -109,6 +106,8 @@ export type LiveStagesDeps = {
   http?: PhotoDeps['http'];
   /** The used-photo log: the 7-day rule (M8c). */
   usedLog?: UsedPhotoLog;
+  /** The photo bank (DECISIONS_LOG D49): vetted photos are offered to it, and its reader joins the finder (both gated by its settings). Absent: neither. */
+  bank?: PhotoBank;
   /** The face detector (photos/faces.ts): second photos, full-bleed framing. Absent: neither. */
   faces?: PhotoDeps['faces'];
   /** Second photos of a person (photos/second-photo.ts). */
@@ -120,8 +119,6 @@ export type LiveStagesDeps = {
   reporterCapUsd: number;
   /** Safety stop on how many stories the Reporter may start. */
   maxReporterRuns: number;
-  /** Hook pass, for this run only (prototype; Tommy 2026-10-06). Absent: the daily default (no Hook pass). Its own fit check (no screenshots). */
-  hook?: { fitCheck: FitCheck };
 };
 
 /** A guard refusal surfaces inside a stage as a service error; report it as the cost cap it is. */
@@ -155,7 +152,7 @@ export function createLiveStages(deps: LiveStagesDeps): { stages: PipelineStages
   };
   // The render review (photo spec §5b): Haiku on the contact sheet, under the same budget guard.
   const review = deps.renderReview ? createRenderReview({ call: createReviewCall({ create }), dir: deps.renderReview.dir }) : undefined;
-  const design = createDesignStage({ jev: deps.jev, http: deps.http, vision, tagSheet, faces: deps.faces, secondPhotos: deps.secondPhotos, fitCheck: deps.fitCheck, usedLog: deps.usedLog, now: () => deps.now, identitiesFor, review });
+  const design = createDesignStage({ jev: deps.jev, http: deps.http, vision, tagSheet, faces: deps.faces, secondPhotos: deps.secondPhotos, fitCheck: deps.fitCheck, usedLog: deps.usedLog, now: () => deps.now, identitiesFor, review, ...(deps.bank ? { bank: deps.bank } : {}) });
 
   const stages: PipelineStages = {
     score: deps.score,
@@ -205,9 +202,5 @@ export function createLiveStages(deps: LiveStagesDeps): { stages: PipelineStages
     },
     mechanical: createMechanicalStage(),
   };
-  if (deps.hook) {
-    const hook = createHookStage({ create, fitCheck: deps.hook.fitCheck, onResult: (id, r) => (log(id).hook ??= []).push(r) });
-    stages.hook = async (draft, brief) => capAware(deps.budget, await hook(draft, brief));
-  }
   return { stages, logs };
 }

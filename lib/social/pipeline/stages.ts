@@ -18,8 +18,6 @@ export type PipelineStages = {
   write(brief: Brief): Promise<StageResult<Draft>>;
   /** Line editor: cut and sharpen only (spec §4.1). */
   edit(draft: Draft, brief: Brief): Promise<StageResult<Draft>>;
-  /** Hook pass (prototype): at most one added line per slide. Optional; only runs when a run switches it on. */
-  hook?(draft: Draft, brief: Brief): Promise<StageResult<Draft>>;
   /** One pass, no loop (spec §4.2). */
   factCheck(draft: Draft, brief: Brief): Promise<StageResult<Draft>>;
   /** Plain-code guarantees on the text (spec §6): silent fixes, then checks. Runs before design. */

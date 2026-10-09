@@ -39,8 +39,18 @@ export const VISUAL_RULE = `- VISUAL and subject tags. Give every cover option a
 export const TESTED_KINDS_LINE = '- Slide kinds: text, stat / split stat (by ID), quote, landing, image. Variety where material supports it.';
 export const KINDS_RULE = '- Slide kinds: text, stat (one or two numbers by ID), quote. You choose what each slide says; its layout is chosen for you.';
 
-/** The Writer rules as used: the tested lines with the IMAGE and slide-kinds lines replaced. */
-export const WRITER_RULES = TESTED_WRITER_RULES.replace(TESTED_IMAGE_RULE, VISUAL_RULE).replace(TESTED_KINDS_LINE, KINDS_RULE);
+/**
+ * Copy budget (Tommy, 2026-10-08): the slide copy limits drop 40% (headline 60 → 45 and body 220 → 140, sharing
+ * 168 = 60% of 280), with room to trade between headline and body; cover, quote and caption limits stay.
+ * The punchy line gains a brevity clause so "the precise version" doesn't pull bodies long. Prompts file §8.
+ */
+export const TESTED_PUNCHY_LINE = '- Headlines may be punchy, but never false. Body states the precise version.';
+export const PUNCHY_RULE = '- Headlines may be punchy, but never false. Body states the precise version, as briefly as precision allows.';
+export const TESTED_LENGTH_LINE = '- 5–8 story slides. Stop when the story is told; never pad to 8. Headline ≤60, body ≤220 chars.';
+export const LENGTH_RULE = '- 5–8 story slides. Stop when the story is told; never pad to 8. Headline and body share 168 characters: the headline 15–45, the body up to 140, together never over 168. Trade between them: a short headline leaves the body more room, a long one asks for a shorter body.';
+
+/** The Writer rules as used: the tested lines with the IMAGE, slide-kinds, punchy and length lines replaced. */
+export const WRITER_RULES = TESTED_WRITER_RULES.replace(TESTED_IMAGE_RULE, VISUAL_RULE).replace(TESTED_KINDS_LINE, KINDS_RULE).replace(TESTED_PUNCHY_LINE, PUNCHY_RULE).replace(TESTED_LENGTH_LINE, LENGTH_RULE);
 
 export const RULES_BLOCK = `## Rules
 
@@ -70,7 +80,7 @@ export type RuleStage = 'reporter' | 'writer' | 'editor' | 'fact-checker';
 export const CHECKED_RULES = `### Checked by code
 
 Code checks the finished draft. A failure comes back to you once, with the exact problem:
-- Length: cover ≤90 characters, headline ≤60, body ≤220, a quote on a quote slide ≤140, caption ≤2,200. Never over.
+- Length: cover ≤90 characters; headline 15–45 and body ≤140, together ≤168; a quote on a quote slide ≤140; caption ≤2,200. Never over.
 - Quotation marks only around words that are a QUOTES entry, word for word, or an exact excerpt of one.
 - None of the voice list's banned words or phrases, no sentence opening with "Meanwhile," "Additionally," "Furthermore" or "That said," no exclamation marks, no emoji. Quoted speech is exempt.
 - No hashtags in the caption.

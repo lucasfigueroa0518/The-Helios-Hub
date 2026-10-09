@@ -16,14 +16,19 @@ import {
   selectFilledIdeas,
 } from '@/lib/reels/locks';
 import { copyPromptApproved, shipStoredCopy, writeTargetCopy, type IdeaCopyOutcome } from '@/lib/reels/pipeline/copy';
+import { placedIdeas, reusableVideos } from '@/lib/reels/pipeline/fill';
 import { requestFinish } from '@/lib/reels/visual/finish';
 import { dbQuery } from '@/lib/db';
 
 export type PassingGeneration = {
   status: 'skipped' | 'ok' | 'partial';
-  filled: Array<{ slot: number; postIdeaId: string; passed: boolean; locked: boolean }>;
+  filled: Array<{ slot: number; postIdeaId: string; passed: boolean; locked: boolean; reused?: boolean }>;
   /** D-245, D-247. Ideas kept out of the slots tonight, and why. */
   heldOut: Array<{ postIdeaId: string; reason: HeldOutReason }>;
+  /** Daily fill (D55): slots taken by an earlier day's finished, unposted video; no copy, no render. */
+  reused?: Array<{ postIdeaId: string; videoJobId: string }>;
+  /** Daily fill (D54): ideas a person already placed, left out of tonight's slots. */
+  placed?: string[];
   usd: number;
   failures: string[];
 };
@@ -35,6 +40,11 @@ export type PassingGeneration = {
  * its slot. Frames are queued only for the reels this run wrote. A story
  * already published, an idea built only from teasers, or an idea whose earlier
  * attempt missed widely never takes a slot (D-245, D-247, D-258).
+ *
+ * With `dailyFill` (the nightly run, D54/D55): an idea a person already
+ * placed sits out, and a carryover idea whose finished video from an
+ * earlier day never posted ranks with the rest and, when it comes up for a
+ * slot, takes it with that video: no copy is written and nothing is queued.
  */
 export async function generatePassingReels(input: {
   runId: string | null;
@@ -43,6 +53,12 @@ export async function generatePassingReels(input: {
   client?: CopyClient;
   signal?: AbortSignal;
   jev?: JevRunner;
+  /**
+   * The nightly daily fill (D54/D55): ideas a person already placed sit out,
+   * and a carryover idea whose finished video never posted takes its slot
+   * with that video (no copy, no render). Off for hand-run generations.
+   */
+  dailyFill?: boolean;
 }): Promise<PassingGeneration> {
   const count = input.count ?? PASSING_REELS_PER_NIGHT;
   if (!copyPromptApproved()) return { status: 'skipped', filled: [], heldOut: [], usd: 0, failures: [] };
@@ -77,7 +93,11 @@ export async function generatePassingReels(input: {
   if (heldOut.length > 0) {
     console.info(`[reels] held out of tonight's slots: ${heldOut.map((row) => `${row.postIdeaId} (${row.reason})`).join(', ')}`);
   }
-  const ideas = slotIdeas.filter((idea) => !held.has(idea.id));
+  // Daily fill (D54/D55): a person's placement isn't made again; a finished, unposted carryover video is reused.
+  const placed = input.dailyFill ? await placedIdeas(slotIdeas.map((idea) => idea.id)) : new Set<string>();
+  const ideas = slotIdeas.filter((idea) => !held.has(idea.id) && !placed.has(idea.id));
+  const reusable = input.dailyFill ? await reusableVideos(input.slateId, ideas.map((idea) => idea.id)) : new Map<string, string>();
+  if (placed.size > 0) console.info(`[reels] placed by a person, not made again tonight: ${[...placed].join(', ')}`);
   const outcomes = new Map<string, IdeaCopyOutcome>();
   let usd = 0;
   const failures: string[] = [];
@@ -103,6 +123,7 @@ export async function generatePassingReels(input: {
       return { passed: outcome.passed, judged: outcome.judged, lines: gradedLines(idea, outcome) };
     },
     onPenalty: (idea, penalty) => saveDayPenalty(input.slateId, nyDate, idea.id, penalty),
+    reusable: new Set(reusable.keys()),
     onFallback: async (idea, line) => {
       penalties.delete(idea.id);
       await clearDayPenalty(input.slateId, nyDate, idea.id);
@@ -127,7 +148,8 @@ export async function generatePassingReels(input: {
     filled.map((slot) => slot.postIdeaId),
   );
   for (const slot of filled) {
-    if (slot.locked) continue;
+    // A lock stays as it is; a reused video is already made (D55).
+    if (slot.locked || slot.reused) continue;
     await requestFinish(slot.postIdeaId, input.slateId, { start: 'frame' }).catch((error) => {
       failures.push(
         `${slot.postIdeaId}: ${error instanceof Error ? error.message : 'could not queue the frame'}`,
@@ -136,10 +158,16 @@ export async function generatePassingReels(input: {
   }
 
   const made = filled.length;
+  const reused = filled.flatMap((slot) => {
+    const videoJobId = slot.reused ? reusable.get(slot.postIdeaId) : undefined;
+    return videoJobId ? [{ postIdeaId: slot.postIdeaId, videoJobId }] : [];
+  });
+  if (reused.length > 0) console.info(`[reels] reused finished videos: ${reused.map((row) => `${row.postIdeaId} (${row.videoJobId})`).join(', ')}`);
   return {
     status: failures.length === 0 && made >= 1 ? 'ok' : 'partial',
     filled,
     heldOut,
+    ...(input.dailyFill ? { reused, placed: [...placed] } : {}),
     usd,
     failures,
   };

@@ -2,9 +2,12 @@
  * Used-photo log and the 7-day rule (spec §5D, Tommy 2026-10-06): no photo
  * is reused within 7 days, from any source, the starter set included.
  *
- * The photo bank (photo spec §2): every entry is tagged so reuse stays
- * correct: its source, the verified subject (Wikidata QID and SUBJECTS name)
- * for subject photos, and its credit. The bank grows from these entries; no
+ * Every entry is tagged so reuse stays correct: its source, the verified
+ * subject (Wikidata QID and SUBJECTS name) for subject photos, and its
+ * credit. This log is the 7-day rule; it is not the photo bank. The photo bank
+ * (photo spec §2; DECISIONS_LOG D49, lib/media-library/) keeps the vetted
+ * images of every finder run, carousels and Stories, and imports these
+ * entries past its watermark (photos published before capture was on). No
  * hand-seeding.
  *
  * A local JSON file until M9 moves it to the database. A photo counts as

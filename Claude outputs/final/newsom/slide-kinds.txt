@@ -1,1 +1,0 @@
-cover, text, stat, text, quote, text, quote, text, follow

@@ -1,5 +1,6 @@
 import type { ExplainersDb, Queryable } from '@/lib/explainers/db';
 import type { ExplainersSettings } from '@/lib/explainers/settings';
+import { syncExplainerApproval } from '@/lib/explainers/publish/items';
 import {
   FAILURE_TAGS,
   SCORE_KEYS,
@@ -426,13 +427,14 @@ export async function addArtifact(
     storagePath?: string | null;
     content?: string | null;
     bytes?: number | null;
+    storageLocation?: 'local' | 'bucket';
   },
 ): Promise<ArtifactRow> {
   const { rows } = await db.query<ArtifactRow>(
-    `INSERT INTO explainers.artifacts (job_id, kind, storage_path, content, bytes)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO explainers.artifacts (job_id, kind, storage_path, content, bytes, storage_location)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [input.jobId, input.kind, input.storagePath ?? null, input.content ?? null, input.bytes ?? null],
+    [input.jobId, input.kind, input.storagePath ?? null, input.content ?? null, input.bytes ?? null, input.storageLocation ?? 'local'],
   );
   return { ...rows[0], bytes: rows[0].bytes === null ? null : num(rows[0].bytes) };
 }
@@ -516,7 +518,48 @@ export async function saveFeedback(
      RETURNING *`,
     [input.jobId, input.verdict, tags, input.note?.trim() || null, input.createdBy ?? null],
   );
+  // The lifecycle spine reads approval from one place for every type (D36).
+  await syncExplainerApproval(db, input.jobId);
   return rows[0];
+}
+
+/** Why a render the hub rejected lost its waiting slot. */
+export const REJECTED_SLOT_NOTE = 'This reel was rejected, so it was not posted.';
+
+/**
+ * Set a render's verdict from outside the review page (Social Hub actions,
+ * D47), keeping the tags and note a reviewer already left unless the hub
+ * sends its own (D53: tags from the review page's vocabulary, FAILURE_TAGS).
+ * The spine mirror follows (saveFeedback). A rejection always wins: whatever
+ * approval the item had (a person's, a Hard publish's, a setting's) becomes
+ * a rejection, and its waiting slot is cancelled with the reason, as
+ * Carousels and Trial Reels do.
+ */
+export async function setVerdict(
+  db: Queryable,
+  jobId: string,
+  verdict: Verdict,
+  by: string | null,
+  review: { tags?: readonly string[]; note?: string | null } = {},
+): Promise<FeedbackRow> {
+  const existing = await getFeedback(db, jobId);
+  const row = await saveFeedback(db, {
+    jobId,
+    verdict,
+    tags: review.tags ?? existing?.tags ?? [],
+    note: review.note !== undefined ? review.note : existing?.note ?? null,
+    createdBy: by,
+  });
+  if (verdict === 'rejected') {
+    await db.query(
+      `UPDATE social_hub.schedule SET status = 'cancelled', error = $2
+        WHERE status = 'scheduled'
+          AND content_item_id = (SELECT ci.id FROM social_hub.content_items ci JOIN explainers.jobs j ON ci.native_ref = j.id::text
+                                  WHERE ci.vertical = 'explainers' AND j.id = $1::uuid)`,
+      [jobId, REJECTED_SLOT_NOTE],
+    );
+  }
+  return row;
 }
 
 export async function getFeedback(db: Queryable, jobId: string): Promise<FeedbackRow | null> {
@@ -525,4 +568,26 @@ export async function getFeedback(db: Queryable, jobId: string): Promise<Feedbac
     [jobId],
   );
   return rows[0] ?? null;
+}
+
+/**
+ * Hard regenerate (Social Hub, SH-15/SH-16/SH-54): render this topic again
+ * now. A topic that already rendered goes back to `promoted` so
+ * `requestRender` accepts it; the daily caps still apply. The new render
+ * becomes the current version when it finishes; earlier ones stay as history.
+ */
+export async function requestRerender(
+  db: ExplainersDb,
+  input: { topicId: string; settings: ExplainersSettings; now?: Date },
+): Promise<RenderRequest> {
+  const reopened = await db.query<{ id: string }>(
+    `UPDATE explainers.topics SET status = 'promoted', updated_at = now() WHERE id = $1 AND status = 'rendered' RETURNING id`,
+    [input.topicId],
+  );
+  const result = await requestRender(db, { topicId: input.topicId, trigger: 'click', settings: input.settings, now: input.now });
+  // A cap refused it: the topic goes back to how it was.
+  if (!result.ok && reopened.rows[0]) {
+    await db.query(`UPDATE explainers.topics SET status = 'rendered', updated_at = now() WHERE id = $1 AND status = 'promoted'`, [input.topicId]);
+  }
+  return result;
 }

@@ -8,7 +8,7 @@ import type { IngestArticle, SkipEntry } from './types';
 const RULES: Array<{ reason: string; re: RegExp }> = [
   { reason: 'listicle', re: /^\s*(the\s+)?\d+\s+(best|top|ways|things|tips|tools|apps|reasons|ai\s+tools)\b/i },
   { reason: 'listicle', re: /\b(best|top)\s+\d+\b/i },
-  { reason: 'deal', re: /(\d+%\s*off|\bpromo code\b|\bcoupon\b|\bdeals?\b.*\b(today|sale)\b|\bon sale\b|\bprime day\b|\bblack friday\b)/i },
+  { reason: 'deal', re: /(\d+%\s*off|\bpromo code\b|\bcoupon\b|\bdeals?\b.*\b(today|sale)\b|\bon sale\b|\bprime day\b|\bblack friday\b|\bdeal days\b)/i },
   { reason: 'tutorial', re: /^\s*how to\b/i },
   { reason: 'promotional', re: /\b(sponsored|partner content|paid post)\b/i },
 ];

@@ -2,6 +2,9 @@ import { dbQuery } from '@/lib/db';
 import { queuePublish, publishReadiness, type PublishTrigger } from '@/lib/reels/music/publish';
 import { getSetting } from '@/lib/reels/music/store';
 import { calendarDateKey } from '@/lib/reels/schedule';
+import { REEL_SCHEDULE } from '@/lib/reels/spine-tables';
+import { approveReel, reelItemId, reelsSpine } from '@/lib/reels/publish/items';
+import { bookSlot } from '@/lib/social-hub/spine';
 import {
   chooseSlot,
   openMinuteRange,
@@ -17,6 +20,11 @@ import {
  * One reel per posting slot per Eastern day. The nightly run fills the slots
  * only while publishing is live. A person can schedule a reel into the next
  * open slot either way. Force post does not use a slot.
+ *
+ * Slots live on the lifecycle spine (social_hub.schedule, vertical 'reels',
+ * D39). A slot belongs to the post idea (idea_ref) and gets its video's item
+ * when the video is attached. Its approval (approved_at) is the slot's; it is
+ * carried onto the video's item when the slot posts it.
  */
 
 export type ScheduleStatus = 'scheduled' | 'publishing' | 'published' | 'cancelled' | 'failed';
@@ -84,10 +92,23 @@ export async function publishingLive(): Promise<boolean> {
   return (await getSetting<boolean>('publishing_live')) === true;
 }
 
+/**
+ * Every content type needs a person's approval before it posts (docs/social-overnight.md).
+ * On unless the setting says false. An auto-scheduled reel then posts only once approved.
+ */
+export async function requireApproval(): Promise<boolean> {
+  return (await getSetting<boolean>('require_approval')) !== false;
+}
+
+export const NOT_APPROVED_NOTE = 'Nobody approved this reel before its slot, so it was not posted.';
+export const REJECTED_NOTE = 'This reel was rejected, so it was not posted.';
+
+const SCHEDULE_COLUMNS = `id, post_idea_id, video_job_id, ny_date::text AS ny_date, slot, publish_at, status, source`;
+
 async function activeSchedule(postIdeaId: string): Promise<StoredSchedule | null> {
   const { rows } = await dbQuery<ScheduleRow>(
-    `SELECT id, post_idea_id, video_job_id, ny_date::text AS ny_date, slot, publish_at, status, source
-       FROM reels.posting_schedule
+    `SELECT ${SCHEDULE_COLUMNS}
+       FROM ${REEL_SCHEDULE} s
       WHERE post_idea_id = $1 AND status IN ('scheduled', 'publishing')
       ORDER BY created_at DESC
       LIMIT 1`,
@@ -96,11 +117,17 @@ async function activeSchedule(postIdeaId: string): Promise<StoredSchedule | null
   return rows[0] ? toSchedule(rows[0]) : null;
 }
 
+async function scheduleById(id: string): Promise<StoredSchedule> {
+  const { rows } = await dbQuery<ScheduleRow>(`SELECT ${SCHEDULE_COLUMNS} FROM ${REEL_SCHEDULE} s WHERE id = $1`, [id]);
+  return toSchedule(rows[0]!);
+}
+
 async function takenSlots(fromDate: string): Promise<Set<string>> {
   const { rows } = await dbQuery<{ ny_date: string; slot: SlotId }>(
     `SELECT ny_date::text AS ny_date, slot
-       FROM reels.posting_schedule
-      WHERE status IN ('scheduled', 'publishing', 'published')
+       FROM social_hub.schedule
+      WHERE vertical = 'reels'
+        AND status IN ('scheduled', 'publishing', 'published')
         AND ny_date >= $1::date`,
     [fromDate],
   );
@@ -120,9 +147,20 @@ export async function schedulePostIdea(
   throughDate?: string,
 ): Promise<ScheduleOutcome> {
   const existing = await activeSchedule(postIdeaId);
-  if (existing) return { scheduled: true, schedule: existing, note: scheduleNote(existing) };
+  if (existing) {
+    // A person scheduling a reel the night already put on the clock approves that slot.
+    if (source === 'user') {
+      await dbQuery(`UPDATE social_hub.schedule SET approved_at = coalesce(approved_at, now()) WHERE id = $1`, [existing.id]);
+      const video = videoJobId ?? existing.videoJobId;
+      if (video) await approveReel(video, 'user');
+    }
+    return { scheduled: true, schedule: existing, note: scheduleNote(existing) };
+  }
+  const itemId = videoJobId ? await reelItemId(videoJobId) : null;
+  if (source === 'user' && videoJobId) await approveReel(videoJobId, 'user');
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
+    // Trial Reels are exempt from the cross-type feed spacing (D33 revises SH-47).
     const choice = chooseSlot(now, await takenSlots(calendarDateKey(now)), uniformIndex, POSTING_TIME_ZONE, throughDate);
     if (!choice) {
       const note = throughDate
@@ -131,13 +169,17 @@ export async function schedulePostIdea(
       return { scheduled: false, status: 409, note };
     }
     try {
-      const { rows } = await dbQuery<ScheduleRow>(
-        `INSERT INTO reels.posting_schedule (post_idea_id, video_job_id, ny_date, slot, publish_at, status, source)
-         VALUES ($1, $2, $3::date, $4, $5, 'scheduled', $6)
-         RETURNING id, post_idea_id, video_job_id, ny_date::text AS ny_date, slot, publish_at, status, source`,
-        [postIdeaId, videoJobId, choice.nyDate, choice.slot, choice.publishAt.toISOString(), source],
-      );
-      const schedule = toSchedule(rows[0]);
+      const booked = await bookSlot(reelsSpine, {
+        vertical: 'reels',
+        itemId,
+        ideaRef: postIdeaId,
+        nyDate: choice.nyDate,
+        slot: choice.slot,
+        publishAt: choice.publishAt,
+        source,
+        approved: source === 'user',
+      });
+      const schedule = await scheduleById(booked.id);
       return { scheduled: true, schedule, note: scheduleNote(schedule) };
     } catch (error) {
       if (!isUniqueViolation(error)) throw error;
@@ -278,38 +320,54 @@ export async function releaseDueSchedules(): Promise<number> {
     post_idea_id: string;
     video_job_id: string | null;
     source: ScheduleSource;
+    approved_at: string | null;
+    decision: 'approved' | 'rejected' | null;
   }>(
-    `SELECT id, post_idea_id, video_job_id, source
-       FROM reels.posting_schedule
-      WHERE status = 'scheduled' AND publish_at <= now()
-      ORDER BY publish_at`,
+    `SELECT s.id, s.post_idea_id, s.video_job_id, s.source, s.approved_at, ap.decision
+       FROM ${REEL_SCHEDULE} s
+       LEFT JOIN social_hub.approvals ap ON ap.content_item_id = s.content_item_id
+      WHERE s.status = 'scheduled' AND s.publish_at <= now()
+      ORDER BY s.publish_at`,
   );
+  const approved = (row: (typeof rows)[number]) => Boolean(row.approved_at) || row.decision === 'approved';
+  const approvalNeeded = rows.some((row) => !approved(row)) && (await requireApproval());
   let released = 0;
   for (const row of rows) {
+    const refusal = row.decision === 'rejected' ? REJECTED_NOTE : approvalNeeded && !approved(row) ? NOT_APPROVED_NOTE : null;
+    if (refusal) {
+      await dbQuery(
+        `UPDATE social_hub.schedule SET status = 'cancelled', error = $2 WHERE id = $1 AND status = 'scheduled'`,
+        [row.id, refusal],
+      );
+      continue;
+    }
     const videoId = await readyVideo(row.post_idea_id, row.video_job_id);
     if (!videoId) continue;
+    const itemId = await reelItemId(videoId);
     const claimed = await dbQuery<{ id: string }>(
-      `UPDATE reels.posting_schedule
-          SET status = 'publishing', video_job_id = $2
+      `UPDATE social_hub.schedule
+          SET status = 'publishing', content_item_id = $2
         WHERE id = $1 AND status = 'scheduled'
         RETURNING id`,
-      [row.id, videoId],
+      [row.id, itemId],
     );
     if (!claimed.rows[0]) continue;
+    // The slot's approval belongs to the video it now posts (D39).
+    if (row.approved_at) await approveReel(videoId, 'user');
     const trigger: PublishTrigger = row.source === 'user' ? 'approve' : 'auto';
     let result: Awaited<ReturnType<typeof queuePublish>>;
     try {
       result = await queuePublish(videoId, trigger);
     } catch (error) {
       await dbQuery(
-        `UPDATE reels.posting_schedule SET status = 'scheduled', error = $2 WHERE id = $1 AND status = 'publishing'`,
+        `UPDATE social_hub.schedule SET status = 'scheduled', error = $2 WHERE id = $1 AND status = 'publishing'`,
         [row.id, error instanceof Error ? error.message : String(error)],
       );
       continue;
     }
     if (result.queued) {
       await dbQuery(
-        `UPDATE reels.posting_schedule SET publish_attempt_id = $2 WHERE id = $1`,
+        `UPDATE social_hub.schedule SET publish_attempt_id = $2 WHERE id = $1`,
         [row.id, result.id],
       );
       released += 1;
@@ -317,7 +375,7 @@ export async function releaseDueSchedules(): Promise<number> {
     }
     if (result.terminal) {
       await dbQuery(
-        `UPDATE reels.posting_schedule
+        `UPDATE social_hub.schedule
             SET status = 'failed', error = $2, publish_attempt_id = COALESCE($3, publish_attempt_id)
           WHERE id = $1 AND status = 'publishing'`,
         [row.id, result.note, result.id ?? null],
@@ -326,14 +384,14 @@ export async function releaseDueSchedules(): Promise<number> {
     }
     if (result.note.includes('already published')) {
       await dbQuery(
-        `UPDATE reels.posting_schedule SET status = 'published', error = NULL WHERE id = $1`,
+        `UPDATE social_hub.schedule SET status = 'published', error = NULL WHERE id = $1`,
         [row.id],
       );
       continue;
     }
     if (result.note.includes('already publishing')) continue;
     await dbQuery(
-      `UPDATE reels.posting_schedule
+      `UPDATE social_hub.schedule
           SET status = 'scheduled', error = $2
         WHERE id = $1 AND status = 'publishing'`,
       [row.id, result.note],
@@ -342,12 +400,29 @@ export async function releaseDueSchedules(): Promise<number> {
   return released;
 }
 
+/**
+ * A person rejects a trial reel (Social Hub Reject, D47): its video is
+ * rejected on the spine, and the idea's waiting slot is cancelled with the
+ * reason. A reel with no video yet just loses its slot.
+ */
+export async function rejectReel(postIdeaId: string, videoJobId: string | null, by: string | null): Promise<{ rejected: boolean; note: string }> {
+  const { rejectReelItem } = await import('@/lib/reels/publish/items');
+  if (videoJobId) await rejectReelItem(videoJobId, by);
+  const { rows } = await dbQuery(
+    `UPDATE social_hub.schedule SET status = 'cancelled', error = $2
+      WHERE vertical = 'reels' AND idea_ref = $1 AND status = 'scheduled' RETURNING id`,
+    [postIdeaId, REJECTED_NOTE],
+  );
+  if (!videoJobId && rows.length === 0) return { rejected: false, note: 'Nothing is waiting to post for this idea.' };
+  return { rejected: true, note: 'Rejected. It will not post.' };
+}
+
 /** Drop a clock time so Force post does not also fire when the slot arrives. */
 export async function cancelScheduledPost(postIdeaId: string): Promise<void> {
   await dbQuery(
-    `UPDATE reels.posting_schedule
+    `UPDATE social_hub.schedule
         SET status = 'cancelled'
-      WHERE post_idea_id = $1 AND status = 'scheduled'`,
+      WHERE vertical = 'reels' AND idea_ref = $1 AND status = 'scheduled'`,
     [postIdeaId],
   );
 }
@@ -358,7 +433,7 @@ export async function markScheduleForAttempt(
   error: string | null,
 ): Promise<void> {
   await dbQuery(
-    `UPDATE reels.posting_schedule
+    `UPDATE social_hub.schedule
         SET status = $2, error = $3
       WHERE publish_attempt_id = $1 AND status = 'publishing'`,
     [attemptId, status, error],
@@ -371,7 +446,7 @@ export async function loadSchedulesForIdeas(postIdeaIds: string[]): Promise<Reco
   const { rows } = await dbQuery<ScheduleRow>(
     `SELECT DISTINCT ON (post_idea_id)
             id, post_idea_id, video_job_id, ny_date::text AS ny_date, slot, publish_at, status, source
-       FROM reels.posting_schedule
+       FROM ${REEL_SCHEDULE} s
       WHERE post_idea_id = ANY($1::uuid[])
         AND status IN ('scheduled', 'publishing', 'published', 'failed')
       ORDER BY post_idea_id,
@@ -382,4 +457,20 @@ export async function loadSchedulesForIdeas(postIdeaIds: string[]): Promise<Reco
   const out: Record<string, StoredSchedule> = {};
   for (const row of rows) out[row.post_idea_id] = toSchedule(row);
   return out;
+}
+
+/**
+ * Force post (the /reels Force button, also the Social Hub's Hard publish):
+ * post now as a trial reel, skipping the slot. The same three steps as the
+ * force branch of POST /api/reels/publish, in one place.
+ */
+export async function forcePost(videoJobId: string): Promise<{ queued: true; id: string; note: string } | { queued: false; status: number; note: string }> {
+  const ready = await publishReadiness(videoJobId, { trigger: 'force' });
+  if (!ready.ok) return { queued: false, status: ready.status, note: ready.note };
+  await cancelScheduledPost(ready.postIdeaId);
+  // Force post is a person's click: it counts as approval (SH-17).
+  await approveReel(videoJobId, 'force');
+  const result = await queuePublish(videoJobId, 'force');
+  if (!result.queued) return { queued: false, status: result.status, note: result.note };
+  return { queued: true, id: result.id, note: 'Posting to Instagram now as a trial reel.' };
 }

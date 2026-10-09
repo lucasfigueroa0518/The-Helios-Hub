@@ -1,15 +1,9 @@
 import type { ReactNode } from 'react';
 
-import { ExplainersNav } from '@/app/explainers/explainers-nav';
-
 import '@/app/reels/reels.css';
 import './explainers.css';
 
+/** Styles only: the Explainers page is a hub content-type page; /explainers/reels (the tagged review) keeps its own bar. */
 export default function ExplainersLayout({ children }: { children: ReactNode }) {
-  return (
-    <div className="rh-shell">
-      <ExplainersNav />
-      {children}
-    </div>
-  );
+  return <>{children}</>;
 }

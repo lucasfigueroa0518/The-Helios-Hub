@@ -67,9 +67,21 @@ test('C1 limits: over the limit fails with the exact overage; never trimmed', ()
   const d = draft((x) => (x.slides[1]!.headline.text = long));
   const f = checkLimits(d);
   assert.deepEqual(ids(f), ['C1']);
-  assert.match(f[0]!.detail, /67 chars, limit 60 \(7 over\)/);
+  assert.match(f[0]!.detail, /52 chars, limit 45 \(7 over\)/);
   assert.equal(d.slides[1]!.headline.text, long);
   assert.deepEqual(checkLimits(draft()), []);
+});
+
+test('C1 copy budget (2026-10-08): headline and body share 168; the split is elastic within headline 15–45 and body ≤140', () => {
+  const set = (h: number, b: number) => draft((x) => { x.slides[0]!.headline.text = 'h'.repeat(h); x.slides[0]!.body!.text = 'b'.repeat(b); });
+  assert.deepEqual(checkLimits(set(28, 140)), [], 'short headline, full body');
+  assert.deepEqual(checkLimits(set(45, 123)), [], 'full headline, shorter body');
+  const both = checkLimits(set(45, 130));
+  assert.deepEqual(both.map((f) => f.where), ['slide 2 headline + body']);
+  assert.match(both[0]!.detail, /175 chars together, limit 168 \(7 over\)/);
+  const tiny = checkLimits(set(10, 50));
+  assert.deepEqual(tiny.map((f) => f.where), ['slide 2 headline']);
+  assert.match(tiny[0]!.detail, /at least 15/);
 });
 
 test('C2 quote marks: allowed only around a QUOTES entry word for word', () => {
@@ -148,7 +160,7 @@ test('C7 dropped text: every draft field must appear on its rendered slide', () 
   rendered[quoteSlide] = `${d.slides[quoteSlide - 1]!.quote!.text} ${d.slides[quoteSlide - 1]!.quote!.speaker}`;
   const f = checkDroppedText(d, rendered);
   assert.deepEqual(ids(f), ['C7']);
-  assert.match(f[0]!.detail, /His pitch/);
+  assert.match(f[0]!.detail, /His pitch for the force/);
 });
 
 // ── Wiring (Tommy, 2026-10-06) ───────────────────────────────────────────
@@ -181,7 +193,7 @@ test('Writer code check: a C1 overage goes back once with the exact problem; fix
   const r = await runWriter(brief(), { create: s.create, isWellKnown: async () => false });
   assert.ok(r.ok);
   assert.equal(r.draftRetries, 1);
-  assert.match(r.retryErrors[0]!, /C1 slide 2 headline: 79 chars, limit 60 \(19 over\)/);
+  assert.match(r.retryErrors[0]!, /C1 slide 2 headline: 79 chars, limit 45 \(34 over\)/);
 });
 
 test('Writer code check: style (C3) blocks only the first submission; a hard failure (C1) on the retry sets it aside', async () => {
@@ -215,7 +227,7 @@ test('mechanical stage: a hard failure after the Fact-checker sets the story asi
 
 const story = { id: 's1', title: 't', url: 'https://techcrunch.com/x', outlets: ['TechCrunch'], publishedAt: new Date('2026-10-04T12:00:00Z') } as ScoredCandidate;
 const designDeps = (fitCheck = async (post: Parameters<typeof fitOkFor>[0]) => fitOkFor(post)) => ({
-  jev: async (req: { state: unknown; questions: Record<string, unknown> }) => ({ answers: Object.fromEntries(Object.keys(req.questions).map((k) => [k, { noul: k.startsWith('people') || k.startsWith('landmark') || k.startsWith('brand') ? 0.05 : 0.95 }])), usage: { input_tokens: 100, output_tokens: 0 }, model: 'stub' }),
+  jev: async (req: { state: unknown; questions: Record<string, unknown> }) => ({ answers: Object.fromEntries(Object.keys(req.questions).map((k) => [k, { noul: k.startsWith('people') || k.startsWith('landmark') || k.startsWith('brand') || k.startsWith('repeats_') ? 0.05 : 0.95 }])), usage: { input_tokens: 100, output_tokens: 0 }, model: 'stub' }),
   http: createFakeHttp(SIF_WEB).http,
   fitCheck,
 });
@@ -223,13 +235,13 @@ const designDeps = (fitCheck = async (post: Parameters<typeof fitOkFor>[0]) => f
 test('design: C7 dropped text fails the render (render-failed)', async () => {
   const fitCheck = async (post: Parameters<typeof fitOkFor>[0]) => {
     const r = fitOkFor(post);
-    r.slideText[3] = r.slideText[3]!.replace('His pitch', '');
+    r.slideText[3] = r.slideText[3]!.replace('His pitch for the force', '');
     return r;
   };
   const r = await createDesignStage(designDeps(fitCheck) as never)(pdraft(), pbrief(), story);
   assert.equal(r.ok, false);
   assert.equal((r as { reasonCode: string }).reasonCode, 'render-failed');
-  assert.match((r as { detail: string }).detail, /C7 slide 4: not on the rendered slide: "His pitch"/);
+  assert.match((r as { detail: string }).detail, /C7 slide 4: not on the rendered slide: "His pitch for the force"/);
 });
 
 test('design: C6 drops a story-slide photo whose credit fails (agency): text-only, logged', async () => {

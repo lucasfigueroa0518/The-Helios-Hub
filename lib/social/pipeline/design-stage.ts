@@ -10,10 +10,14 @@
  *      the split layout first (photo spec §4), and the post re-renders once.
  *   render review (photo spec §5b, optional): one Haiku review of the
  *      contact sheet; its fixes change slide settings only, never text.
+ *   photo bank (DECISIONS_LOG D49, optional): right after C6, the finder's
+ *      vetted photos are offered to the bank. `offer` is synchronous and
+ *      returns nothing; a bank that throws changes nothing here.
  *
  * AI spend here: Jev (identity, stock pre-screen; counted in this stage's
  * cost), the vision checks and the render review (counted by the run budget).
  */
+import type { PhotoBank } from '@/lib/media-library/bank';
 import { createJevTally, jevCostUsd, type JevAsk } from '@/lib/social/jev/client';
 import { checkDroppedText, checkPhotoCredit } from '@/lib/social/mechanical/checks';
 import { photosForDraft } from '@/lib/social/photos/design';
@@ -34,8 +38,10 @@ export type RenderReviewStep = (input: { post: Post; storyId: string; traces: im
  * `fitCheck` is the render-fit check (every element inside the slide);
  * live runs pass `checkRenderFit`, tests a stub.
  */
-export type DesignDeps = PhotoDeps & {
+export type DesignDeps = Omit<PhotoDeps, 'bank'> & {
   fitCheck: FitCheck;
+  /** The photo bank (DECISIONS_LOG D49): vetted photos are offered to it; its reader is a finder source (gated by its settings). */
+  bank?: PhotoBank;
   /** The used-photo log (7-day rule); empty when not given (tests). */
   usedLog?: UsedPhotoLog;
   now?: () => Date;
@@ -61,7 +67,8 @@ export function createDesignStage(deps: DesignDeps): PipelineStages['design'] {
     const recent = new Set([...(deps.usedLog ? await deps.usedLog.recent(now) : []), ...usedThisRun]);
     const lastUsed = deps.usedLog ? await deps.usedLog.lastUsed() : new Map<string, string>();
     // The story's date ranks dated photos (photo spec §4 step 3).
-    const photos = await photosForDraft(draft.filled, brief.parsed, brief.pages, { ...deps, jev }, { recent, lastUsed, identities: deps.identitiesFor?.(draft.storyId), storyDate: story.publishedAt.toISOString().slice(0, 10) });
+    const { bank, ...photoDeps } = deps;
+    const photos = await photosForDraft(draft.filled, brief.parsed, brief.pages, { ...photoDeps, jev, ...(bank?.reader ? { bank: bank.reader } : {}) }, { recent, lastUsed, identities: deps.identitiesFor?.(draft.storyId), storyDate: story.publishedAt.toISOString().slice(0, 10) });
     // The sheet tags and close-up checks are Claude calls (counted by the run budget's guard); shown under design too.
     const photoUsd = photos.costUsd.tags + photos.costUsd.vision;
     // C6: never ship a photo without an allowed, credited licence. A failing photo goes; the slide shows its icon.
@@ -75,6 +82,19 @@ export function createDesignStage(deps: DesignDeps): PipelineStages['design'] {
       t.steps.push(`C6 dropped: ${failures.map((f) => f.detail).join('; ')} → ${to}`);
       t.photo = null;
       t.via = to;
+    }
+    // The photo bank (D49): never blocking, never changing the post.
+    try {
+      bank?.offer({
+        runKind: 'carousel',
+        runRef: draft.storyId,
+        subjects: brief.parsed.subjects.map((s) => s.name),
+        organizations: brief.parsed.subjects.filter((s) => s.type === 'organization').map((s) => s.name),
+        items: photos.vetted,
+        at: now,
+      });
+    } catch {
+      // ignored: the bank is best effort
     }
     const meta = { source: brief.parsed.sources[0]?.outlet ?? story.outlets[0] ?? '', sourceUrl: brief.parsed.sources[0]?.url ?? story.url, publishedAt: story.publishedAt.toISOString() };
     // Jev's layout (slide buckets spec): the spread, then a variant per slide.

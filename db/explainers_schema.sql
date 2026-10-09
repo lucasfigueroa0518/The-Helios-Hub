@@ -314,3 +314,118 @@ Deduplication: Treat two ideas as duplicates when the viewer would learn essenti
 9. How to build a full RAG application — Multi-stage implementation tutorial rather than one concept.
 10. AI is about to change everything — Hype without a concrete learning objective.$brief$)
 ON CONFLICT (version) DO NOTHING;
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- Overnight: storage, schedule, publish, insights (docs/social-overnight.md).
+-- Same shapes as Trial Reels (db/reels_schema.sql). Only a reel a person
+-- approved (explainers.feedback verdict 'approved') is ever scheduled, and
+-- only while publishing_live is on.
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- Where a stored artifact lives: 'local' (the machine that rendered it) or the
+-- private `explainers` Supabase Storage bucket, under the same key.
+ALTER TABLE explainers.artifacts ADD COLUMN IF NOT EXISTS storage_location text NOT NULL DEFAULT 'local';
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'explainers_artifacts_location_check') THEN
+    ALTER TABLE explainers.artifacts ADD CONSTRAINT explainers_artifacts_location_check
+      CHECK (storage_location IN ('local', 'bucket'));
+  END IF;
+END $$;
+
+-- Scheduling and publishing approved reels. Off until a human turns it on.
+INSERT INTO explainers.settings (key, value) VALUES ('publishing_live', 'false'::jsonb) ON CONFLICT (key) DO NOTHING;
+-- A person approves every reel before it posts (the feedback verdict). On unless set to false.
+INSERT INTO explainers.settings (key, value) VALUES ('require_approval', 'true'::jsonb) ON CONFLICT (key) DO NOTHING;
+
+-- One explainer per Eastern-time window per day.
+-- Frozen: posting_schedule, publish_attempts and media_insights moved to the
+-- lifecycle spine (social_hub, D36/D38). History only; scripts/backfill_spine.ts
+-- reads them and nothing writes them. Dropped in unification Phase 7.
+CREATE TABLE IF NOT EXISTS explainers.posting_schedule (
+    id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    job_id              uuid NOT NULL REFERENCES explainers.jobs (id),
+    ny_date             date NOT NULL,
+    slot                text NOT NULL CHECK (slot IN ('afternoon')),
+    publish_at          timestamptz NOT NULL,
+    status              text NOT NULL CHECK (status IN ('scheduled', 'publishing', 'published', 'cancelled', 'failed')),
+    source              text NOT NULL CHECK (source IN ('auto', 'user')),
+    publish_attempt_id  uuid,
+    error               text,
+    created_at          timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_explainers_posting_schedule_due
+    ON explainers.posting_schedule (publish_at) WHERE status = 'scheduled';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_explainers_posting_schedule_slot
+    ON explainers.posting_schedule (ny_date, slot) WHERE status IN ('scheduled', 'publishing', 'published');
+CREATE UNIQUE INDEX IF NOT EXISTS idx_explainers_posting_schedule_job
+    ON explainers.posting_schedule (job_id) WHERE status IN ('scheduled', 'publishing');
+
+-- requested → creating → processing → publishing → published | failed.
+CREATE TABLE IF NOT EXISTS explainers.publish_attempts (
+    id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    job_id              uuid NOT NULL REFERENCES explainers.jobs (id),
+    trigger             text NOT NULL CHECK (trigger IN ('approve', 'auto', 'force')),
+    status              text NOT NULL CHECK (status IN (
+                          'requested', 'creating', 'processing', 'publishing', 'published', 'failed'
+                        )),
+    requested_at        timestamptz NOT NULL DEFAULT now(),
+    started_at          timestamptz,
+    finished_at         timestamptz,
+    caption             text NOT NULL,
+    video_object        text NOT NULL,
+    share_to_feed       boolean NOT NULL DEFAULT true,
+    container_id        text,
+    media_id            text,
+    permalink           text,
+    status_log          jsonb NOT NULL DEFAULT '[]'::jsonb,
+    error               text,
+    insights_checked_at timestamptz,
+    insights_settled_at timestamptz
+);
+
+CREATE INDEX IF NOT EXISTS idx_explainers_publish_recent ON explainers.publish_attempts (requested_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_explainers_publish_inflight_job
+    ON explainers.publish_attempts (job_id) WHERE status IN ('requested', 'creating', 'processing', 'publishing');
+-- A reel posts once.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_explainers_publish_once
+    ON explainers.publish_attempts (job_id) WHERE status = 'published';
+CREATE INDEX IF NOT EXISTS idx_explainers_publish_insights_open
+    ON explainers.publish_attempts (finished_at DESC)
+    WHERE status = 'published' AND insights_settled_at IS NULL AND media_id IS NOT NULL;
+
+-- Lifetime totals, one row per published reel per New York day asked.
+CREATE TABLE IF NOT EXISTS explainers.media_insights (
+    media_id             text NOT NULL,
+    ny_date              date NOT NULL,
+    publish_attempt_id   uuid REFERENCES explainers.publish_attempts (id) ON DELETE CASCADE,
+    captured_at          timestamptz NOT NULL DEFAULT now(),
+    views                double precision,
+    reach                double precision,
+    likes                double precision,
+    comments             double precision,
+    saved                double precision,
+    shares               double precision,
+    total_interactions   double precision,
+    avg_watch_time_ms    double precision,
+    total_watch_time_ms  double precision,
+    skip_rate            double precision,
+    raw                  jsonb NOT NULL DEFAULT '{}'::jsonb,
+    PRIMARY KEY (media_id, ny_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_explainers_media_insights_attempt
+    ON explainers.media_insights (publish_attempt_id, ny_date DESC);
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- Social Hub P2-M2 (SH-46 – SH-49): two windows a day, two renders a day.
+-- ════════════════════════════════════════════════════════════════════════════
+-- afternoon = 1:00–2:30 PM, late = 3:30–5:00 PM (lib/explainers/publish/config.ts).
+ALTER TABLE explainers.posting_schedule DROP CONSTRAINT IF EXISTS posting_schedule_slot_check;
+ALTER TABLE explainers.posting_schedule ADD CONSTRAINT posting_schedule_slot_check CHECK (slot IN ('afternoon', 'late'));
+INSERT INTO explainers.settings (key, value) VALUES ('posts_per_day', '2'::jsonb) ON CONFLICT (key) DO NOTHING;
+-- Raise the old defaults only; a value someone set by hand is kept.
+UPDATE explainers.settings SET value = '2'::jsonb, updated_at = now() WHERE key = 'daily_render_cap' AND value = '1'::jsonb;
+UPDATE explainers.settings SET value = '10'::jsonb, updated_at = now() WHERE key = 'daily_spend_cap_usd' AND value = '6'::jsonb;

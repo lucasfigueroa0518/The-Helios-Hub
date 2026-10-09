@@ -1,4 +1,5 @@
 import { dbQuery, dbTransaction } from '@/lib/db';
+import { REEL_SCHEDULE } from '@/lib/reels/spine-tables';
 import type { InterpretedScore } from '@/lib/reels/scoring/interpret';
 import type { RankedIdea } from '@/lib/reels/scoring/decide';
 import type { MemberRole } from '@/lib/reels/types';
@@ -107,7 +108,7 @@ export async function loadSlateRanked(
                WHERE p.post_idea_id = s.post_idea_id AND p.published
             ) AS published,
             EXISTS (
-              SELECT 1 FROM reels.posting_schedule ps
+              SELECT 1 FROM ${REEL_SCHEDULE} ps
                WHERE ps.post_idea_id = s.post_idea_id
                  AND ps.status IN ('scheduled', 'publishing')
             ) AS on_clock

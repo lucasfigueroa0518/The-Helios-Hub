@@ -14,17 +14,19 @@
 
 ## 1. VOICE_BLOCK: carried over word for word
 
+**Seventh round (Lucas, 2026-10-08):** the opening line changed from "Direct, dry, confident. A sharp editor, not a press release." to the one below. The lists are unchanged. The Writer now gets this block for its slides too, not only its caption.
+
 **Old:** the `VOICE_BLOCK` string in `voice-block.ts`.
 **New:** identical, byte for byte. No differences.
 
 ```
-Direct, dry, confident. A sharp editor, not a press release.
+Confident, energetic, engaging. A sharp storyteller, not a press release.
 
 Write the way a person talks:
 - Use real names. "Norland Labs says," not "the company says" when you can name it.
 - Say who did what. "Norland Labs tested the software," not "the software was tested."
 - Read every line aloud in your head. If nobody would say it in a normal voice, rewrite it.
-- Vary sentence length. Three short sentences in a row is too many.
+- Vary sentence length. In the caption, three short sentences in a row is too many; on a slide, one or two short sentences is normal.
 - Don't open two slides the same way.
 
 Never use:
@@ -122,3 +124,7 @@ The prompts file says: "Where a tested rule repeats one in RULES_BLOCK, keep one
 | 6 | **(f)** `renderRulesFor` is rebuilt in M5 from the real mechanical checks. Until then it renders nothing. |
 
 The §2 text above is the proposal as reviewed. The implemented block is that text with these decisions applied.
+
+## 5. Copy budget (Tommy, 2026-10-08)
+
+The voice line on sentence length (§1) now reads: "Vary sentence length. In the caption, three short sentences in a row is too many; on a slide, one or two short sentences is normal." The old line pushed slide bodies toward longer sentences, against the 40% shorter slide budget (prompts file §8).

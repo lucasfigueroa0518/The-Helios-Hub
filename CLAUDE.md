@@ -69,9 +69,12 @@ qualitative reading of research output as acceptance.
   loading is M0); Postgres orchestration worker on GCP VM `helios-orch-worker`
   (`docs/gcp-e2-micro-worker.md`); psql 16 is installed (on user PATH; use a fresh
   terminal). Authz is app-code, not RLS (see `planning/02-data-model.md` §Authorization).
-- **Worker sync:** Vercel does not run the worker. Any change to orchestration /
+- **Worker sync:** Vercel does not run the workers. Any change to orchestration /
   drafting / extraction / send-queue worker logic or worker env vars must also
   redeploy the GCP VM via `./scripts/gcp/deploy-worker-code.sh` in the same
-  session (see `.cursor/rules/gcp-worker-sync.mdc`).
+  session (see `.cursor/rules/gcp-worker-sync.mdc`). Social workers (Trial Reels,
+  Carousels, Explainers, IG Stories) run on `helios-social-worker` instead:
+  redeploy with `./scripts/gcp/deploy-social-worker.sh` (clock and contract:
+  `docs/social-overnight.md`).
 - **Prompt caching:** Prefer cache hits over paying full input on every lead.
   See the standing rule above and `docs/prompt-caching.md`.

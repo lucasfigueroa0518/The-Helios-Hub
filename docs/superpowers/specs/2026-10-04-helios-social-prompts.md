@@ -391,7 +391,7 @@ You are the Editor for Helios Group's Instagram carousels. You get the Writer's 
 Make sure:
 1. The chosen cover alone says who did what.
 2. Every slide makes the reader want the next; reorder or sharpen headlines to create the pull, without adding facts.
-3. Every slide makes sense to an outsider. Explain unfamiliar terms where they appear, using only the brief's TERMS.
+3. Every slide makes sense to an outsider. Explain unfamiliar terms where they appear, using only the brief's TERMS, within the length limits; a gloss that won't fit goes to the caption.
 4. The reader finishes knowing why it matters.
 
 POWERS: cut and sharpen only. You may tighten wording, reorder slides, cut slides or lines, and explain terms from TERMS. You never add facts, numbers, quotes or descriptors. Keep every hedge, every [CLAIM: X says] attribution, every quote/number ID and every [F#] claim tag on the sentences you keep. You may swap a slide's visual for its fallback visual (a cut); never add or change a visual request.
@@ -422,7 +422,7 @@ OUTPUT: the full edited draft in the Writer's format, then EDIT NOTES: one line 
 ### Checked by code
 
 Code checks the finished draft. A failure comes back to you once, with the exact problem:
-- Length: cover ≤90 characters, headline ≤60, body ≤220, a quote on a quote slide ≤140, caption ≤2,200. Never over.
+- Length: cover ≤90 characters; headline 15–45 and body ≤140, together ≤168; a quote on a quote slide ≤140; caption ≤2,200. Never over.
 - Quotation marks only around words that are a QUOTES entry, word for word, or an exact excerpt of one.
 - None of the voice list's banned words or phrases, no sentence opening with "Meanwhile," "Additionally," "Furthermore" or "That said," no exclamation marks, no emoji. Quoted speech is exempt.
 - No hashtags in the caption.
@@ -520,3 +520,47 @@ When you're done, call submit_hooks with one entry per story slide: slide number
   - These go back to the model on the first attempt: over budget, quotation marks, a number not in the tagged entries, a second why-it-matters line, C8 (the line repeats a number or a 4-word phrase of its own slide). After the retry, a line that still fails is dropped and logged, and the rest stand.
 - **Render:** the line is drawn in a smaller orange style. A lead-in sits above the body; a tease or why-it-matters line sits below it. C7 checks that it reaches the slide.
 - **Model:** its own `hook` setting in STAGE_MODELS (Sonnet 5.5, high effort).
+
+---
+
+## 8. Story shape and copy budget (Tommy, 2026-10-08)
+
+Built on the copy checkpoint (`social-copy-checkpoint-2026-10-07`) after the 2026-10-07 overhaul was rolled back (kept at tag
+`social-copy-overhaul-v1-2026-10-08`). Two things carried over from it: PLOT and TENSIONS in the brief, which the Writer
+sees in the BRIEF it is given (no instructions on what to do with them). New: the slide copy limits drop 40%, with room
+to trade between headline and body. Cover (≤90), quote (≤140) and caption (≤2,200) stay.
+
+- **Story shape, Reporter:** one rule line after the stay-on-the-main-event rule, then two sections after WHY IT MATTERS:
+
+```
+- PLOT and TENSIONS only arrange facts you already listed: every line cites fact IDs (an OPEN beat or an open question may rest on NOT ANSWERED instead) and adds no fact, cause or motive of its own. "After" is order, never "because."
+```
+
+```
+PLOT: 4–6 beats that tell this story in order, one line each with fact IDs, each labelled SETUP (the situation before the news), TRIGGER (what happened), CONFLICT (who pushes back, what's at stake, what doesn't add up), RESPONSE (how the other side answered) or OPEN (what's still unknown or comes next, from NOT ANSWERED). Labels go in that order; skip one the sources don't support, never invent one to fill the shape.
+TENSIONS: each real disagreement or open question in the sources, one line each: who says what vs who says what (with IDs), or the open question. None if the sources show none.
+```
+
+- **Copy budget, Writer rule lines:** the tested punchy-headline and length lines are replaced, in that order:
+
+```
+- Headlines may be punchy, but never false. Body states the precise version, as briefly as precision allows.
+```
+
+```
+- 5–8 story slides. Stop when the story is told; never pad to 8. Headline and body share 168 characters: the headline 15–45, the body up to 140, together never over 168. Trade between them: a short headline leaves the body more room, a long one asks for a shorter body.
+```
+
+- **Copy budget, Writer stat line** (replaces the sixth-round stat line):
+
+```
+- At most 2 stat slides per post. Keep the strongest numbers as stat slides; put the others in a text slide's body when they fit its budget, else leave them for the caption.
+```
+
+- **Conflicts fixed in place** (each pulled copy past the new budget):
+  - Voice: "Vary sentence length. Three short sentences in a row is too many." → "Vary sentence length. In the caption, three short sentences in a row is too many; on a slide, one or two short sentences is normal." (shared blocks §1).
+  - Editor check 3 (§4): explaining a term now stays within the length limits; a gloss that won't fit goes to the caption.
+  - Checked by code (§4 block): headline 15–45 and body ≤140, together ≤168.
+- **Not changed, flagged:** the Hook pass's line budget is the free space on the rendered slide (§6), not the copy budget,
+  so shorter bodies leave it more room. Left as is (Tommy: the hook isn't changed now).
+

@@ -152,10 +152,7 @@ gcloud compute ssh ${IAP} "${INSTANCE}" --zone="${ZONE}" --project="${PROJECT}" 
   sudo npm ci
   sudo systemctl restart helios-worker
   sudo systemctl --no-pager --full status helios-worker || true
-  if [[ -f /etc/systemd/system/helios-reels.service ]]; then
-    sudo systemctl restart helios-reels
-    sudo systemctl --no-pager --full status helios-reels || true
-  fi
+  # Trial Reels moved to helios-social-worker: ./scripts/gcp/deploy-social-worker.sh
 "
 
 echo "Deployed to ${INSTANCE}."

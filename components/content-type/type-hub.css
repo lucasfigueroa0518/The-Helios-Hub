@@ -1,0 +1,21 @@
+/* Content type pages (Carousels, Stories, Explainers): the few pieces Text on Screen's page doesn't have. */
+.rh-detail__title { margin: 0 0 4px; font-size: 20px; letter-spacing: -0.01em; padding-right: 44px; }
+.rh-detail__facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 18px; margin: 0 0 14px; font-size: 12.5px; }
+.rh-detail__facts dt { color: var(--rh-muted); font-size: 11px; font-weight: 600; }
+.rh-detail__facts dd { margin: 0; overflow-wrap: anywhere; }
+.rh-settings { display: flex; flex-direction: column; gap: 14px; max-width: 640px; padding: 18px; border: 1px solid var(--rh-line); border-radius: 18px; background: var(--rh-surface); margin-bottom: 14px; }
+.rh-settings__note { margin: 0; color: var(--rh-muted); font-size: 12.5px; }
+.rh-quota { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; }
+.rh-quota__label { min-width: 110px; }
+.rh-quota__n { min-width: 18px; text-align: center; font-size: 16px; font-variant-numeric: tabular-nums; }
+.rh-series { display: flex; flex-direction: column; gap: 10px; padding-top: 14px; border-top: 1px solid var(--rh-line); }
+.rh-series__days { display: flex; flex-wrap: wrap; gap: 6px; }
+.rh-progress { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+.rh-progress__row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border: 1px solid var(--rh-line); border-radius: 14px; background: var(--rh-surface); }
+.rh-progress__row > svg { margin-top: 3px; color: var(--rh-accent); flex: none; }
+.rh-progress__main { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; font-size: 13px; }
+.rh-progress__bar { display: block; height: 4px; border-radius: 999px; background: var(--rh-bg); overflow: hidden; margin-top: 4px; }
+.rh-progress__bar > span { display: block; height: 100%; background: var(--rh-accent); border-radius: inherit; transition: width 900ms linear; }
+.rh-progress__bar--wait > span { width: 30%; animation: rh-progress-slide 1.4s ease-in-out infinite; }
+@keyframes rh-progress-slide { 0% { margin-left: -30%; } 100% { margin-left: 100%; } }
+.rh-detail__video { display: block; width: 100%; max-width: 320px; aspect-ratio: 9 / 16; margin: 12px 0; border-radius: 16px; background: var(--rh-media); object-fit: contain; }

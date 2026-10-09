@@ -1,4 +1,5 @@
 import { dbQuery } from '@/lib/db';
+import { REEL_ATTEMPTS } from '@/lib/reels/spine-tables';
 import { KLING_CLIP_SECONDS, RUN_TIMEZONE } from '@/lib/reels/config';
 import { monthStart } from '@/lib/reels/schedule';
 
@@ -101,7 +102,7 @@ export async function loadReelsInsights(now = new Date()): Promise<ReelsInsights
            SELECT 'song', finished_at, error, post_idea_id FROM reels.song_picks
             WHERE status = 'failed' AND finished_at >= now() - interval '7 days'
            UNION ALL
-           SELECT 'publish', finished_at, error, post_idea_id FROM reels.publish_attempts
+           SELECT 'publish', finished_at, error, post_idea_id FROM ${REEL_ATTEMPTS} pa
             WHERE status = 'failed' AND finished_at >= now() - interval '7 days'
            UNION ALL
            SELECT 'songs', finished_at, note, NULL::uuid FROM reels.song_ingests

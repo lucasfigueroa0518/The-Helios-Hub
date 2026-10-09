@@ -8,8 +8,13 @@
  *                 founder (P112) when there is exactly one. That person's P18,
  *                 the same usability rule as every headshot (p18.ts).
  *   logo          P154, through logo.ts.
- *   headquarters  the organization's own P18, kept only when the Jev metadata
- *                 question org-hq@1 says the Commons file shows its building.
+ *   headquarters  the current headquarters building's own photo (P159, no end
+ *                 date, when that entity has a P18), else the organization's
+ *                 best P18 (preferred rank first); kept only when the Jev
+ *                 metadata question org-hq@1 says the Commons file shows its
+ *                 building, and only when the photo is no more than
+ *                 HQ_MAX_AGE_YEARS older than the story (2026-10-08: an
+ *                 OpenAI post showed its 2019 building).
  *
  * Twins: Wikidata sometimes splits one company in two (OpenAI: Q124605186,
  * the operating company with 11 claims, "said to be the same as" (P460)
@@ -49,7 +54,11 @@ export type OrgPool = {
   notes: string[];
 };
 
-export type OrgPoolDeps = { jev: JevAsk; http?: typeof fetch };
+/** `storyDate` (YYYY-MM-DD): the headquarters photo must be no older than HQ_MAX_AGE_YEARS before it. */
+export type OrgPoolDeps = { jev: JevAsk; http?: typeof fetch; storyDate?: string | null };
+
+/** A headquarters photo dated more than this many years before the story is not used: buildings and offices change. */
+export const HQ_MAX_AGE_YEARS = 5;
 
 async function entities(ids: string[], props: string, http: typeof fetch): Promise<Record<string, Entity>> {
   const u = new URL(WIKIDATA_API);
@@ -77,10 +86,25 @@ export function soleFounder(claims: Claim[]): string | null {
   return ids.length === 1 ? ids[0]! : null;
 }
 
+/** The best file of a P18 list: preferred rank first, never deprecated. */
 const firstFile = (claims: Claim[] | undefined): string | null => {
-  const v = claims?.find((c) => c.rank !== 'deprecated')?.mainsnak?.datavalue?.value;
+  const live = (claims ?? []).filter((c) => c.rank !== 'deprecated');
+  const v = (live.find((c) => c.rank === 'preferred') ?? live[0])?.mainsnak?.datavalue?.value;
   return typeof v === 'string' && v ? v : null;
 };
+
+/** The current headquarters location (P159): not deprecated, no end date (P582), preferred rank first. */
+export function currentHeadquarters(claims: Claim[]): string | null {
+  return currentChief(claims);
+}
+
+/** Is a photo dated `date` too old for a story dated `storyDate`? Undated photos and stories pass. */
+export function tooOld(date: string | null | undefined, storyDate: string | null | undefined, maxYears = HQ_MAX_AGE_YEARS): boolean {
+  const d = date ? Date.parse(date.slice(0, 10)) : NaN;
+  const s = storyDate ? Date.parse(storyDate.slice(0, 10)) : NaN;
+  if (Number.isNaN(d) || Number.isNaN(s)) return false;
+  return s - d > maxYears * 365.25 * 24 * 3600 * 1000;
+}
 
 async function usableFile(file: string, http: typeof fetch): Promise<{ pick: CommonsCandidate | null; description: string }> {
   const title = `File:${file}`;
@@ -122,16 +146,43 @@ async function logoPhoto({ org, http, notes }: Ctx): Promise<Photo | null> {
   return logo.photo;
 }
 
-/** The organization's own P18, when its file describes the organization's building (org-hq@1). */
-async function hqPhoto({ org, claims, deps, http, notes }: Ctx): Promise<PoolPhoto | null> {
-  const file = firstFile(claims.P18);
-  if (!file) {
-    notes.push('headquarters: no main photo (P18)');
+/** The headquarters files to try, in order: the current headquarters entity's P18, then the organization's own. */
+async function hqFiles({ claims, http, notes }: Ctx): Promise<string[]> {
+  const files: string[] = [];
+  const hq = currentHeadquarters(claims.P159 ?? []);
+  if (hq) {
+    const e = (await entities([hq], 'claims', http).catch(() => ({}) as Record<string, Entity>))[hq];
+    const f = firstFile(e?.claims?.P18);
+    if (f) files.push(f);
+    else notes.push(`headquarters: P159 ${hq} has no main photo (P18)`);
+  }
+  const own = firstFile(claims.P18);
+  if (own && !files.includes(own)) files.push(own);
+  return files;
+}
+
+/** The headquarters photo: the first file that is usable, recent enough and describes the organization's building (org-hq@1). */
+async function hqPhoto(ctx: Ctx): Promise<PoolPhoto | null> {
+  const files = await hqFiles(ctx);
+  if (!files.length) {
+    ctx.notes.push('headquarters: no main photo (P159 or P18)');
     return null;
   }
+  for (const file of files) {
+    const photo = await hqCandidate(ctx, file);
+    if (photo) return photo;
+  }
+  return null;
+}
+
+async function hqCandidate({ org, deps, http, notes }: Ctx, file: string): Promise<PoolPhoto | null> {
   const { pick, description } = await usableFile(file, http);
   if (!pick) {
     notes.push(`headquarters: File:${file} not usable (licence, size or type)`);
+    return null;
+  }
+  if (tooOld(pick.date, deps.storyDate)) {
+    notes.push(`headquarters: File:${file} dated ${pick.date}, more than ${HQ_MAX_AGE_YEARS} years before the story (${deps.storyDate}) → not used`);
     return null;
   }
   const title = file.replace(/\.[a-z0-9]+$/i, '');

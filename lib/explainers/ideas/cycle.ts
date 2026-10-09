@@ -13,24 +13,43 @@ import {
   type NewTopic,
   type RenderRequest,
 } from '@/lib/explainers/repository';
+import { spineOf } from '@/lib/explainers/publish/items';
+import { fillCandidates, postsPerDay, publishingLive, requireApproval, scheduleJob, type ScheduleOutcome } from '@/lib/explainers/publish/schedule';
 import { loadSettings, loadThemeBrief } from '@/lib/explainers/settings';
 import type { JevTransport } from '@/lib/reels/jev/runner';
+import { consoleFillLog, dailyFillOrQuota, reportFill, type DailyFill, type FillLog } from '@/lib/social-hub/fill';
 
 export type IdeaCycleDeps = {
   db: ExplainersDb;
   ideaModel: IdeaModel;
   jevTransport: JevTransport;
   now?: Date;
+  /** Where the daily fill's `fill_reduced` line goes (default: a JSON line on stdout). */
+  log?: FillLog;
+};
+
+/** A surviving render the night placed instead of rendering its topic again (daily fill, D54). */
+export type Allocation = {
+  topicId: string;
+  jobId: string;
+  /** Its slot, when publishing is live; null while it is off (scheduleApproved places it once it is on). */
+  scheduled: ScheduleOutcome | null;
 };
 
 export type IdeaCycleResult =
   | { status: 'skipped'; reason: 'auto_render_off' | 'daily_spend_cap' | 'already_ran_today' }
+  | { status: 'skipped'; reason: 'quota_filled'; fill: DailyFill }
   | {
       status: 'ok';
       cycleId: string;
       evaluations: Evaluation[];
       promotedTopicId: string | null;
       render: RenderRequest | null;
+      /** The day's fill: quota, what people placed, what the night could make. */
+      fill: DailyFill;
+      /** Topics promoted and sent to render, best first. */
+      renders: string[];
+      allocated: Allocation[];
     }
   | { status: 'failed'; cycleId: string; error: string };
 
@@ -47,6 +66,15 @@ function enteredPool(e: Evaluation): boolean {
  * three ideas in one call, dedupe and score each (E-15, A-3), trim the pool to
  * pool_size, then promote the best and queue its render. In production the
  * day's spend so far, including earlier idea runs, must be under the cap (A-4).
+ *
+ * Daily fill (D54): the night fills the day's `posts_per_day`, less the
+ * explainers people placed for that New York day. Nothing left: the cycle is
+ * skipped (no idea call, no spend). Otherwise the top `quota − placed`
+ * candidates, ranked together (pool topics and topics whose approved render
+ * hasn't posted, `fillCandidates`), are taken: a surviving render is placed
+ * (scheduleJob, while publishing is live) instead of rendered again; a pool
+ * topic is promoted and rendered, at most `daily_render_cap` of them, under
+ * the spend caps as before.
  */
 export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult> {
   const { db } = deps;
@@ -54,6 +82,14 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
   if (!settings.auto_render) return { status: 'skipped', reason: 'auto_render_off' };
 
   const day = nyDate(deps.now);
+  const fillLog = deps.log ?? consoleFillLog;
+  // A failed read of the placements never stops the night: it fills the whole quota, as before the rule.
+  const fill = await dailyFillOrQuota(spineOf(db), 'explainers', day, await postsPerDay(db), (error) =>
+    fillLog('fill_failed', { vertical: 'explainers', nyDate: day, error: error instanceof Error ? error.message : String(error) }),
+  );
+  reportFill(fill, fillLog, { dailyRenderCap: settings.daily_render_cap });
+  if (fill.making < 1) return { status: 'skipped', reason: 'quota_filled', fill };
+
   if (
     settings.mode === 'production' &&
     (await productionSpendForDay(db, day)) >= settings.daily_spend_cap_usd
@@ -118,14 +154,33 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
     }
     await trimPool(db, settings.pool_size);
 
-    const [best] = await listPool(db);
+    // Daily fill (D54): the top `quota − placed` candidates, fresh topics and surviving renders ranked together.
+    // A surviving render is placed, not rendered again; at most `daily_render_cap` pool topics are rendered
+    // (SH-49: two a day), and requestRender still enforces both caps.
+    const chosen = (await fillCandidates(db, await requireApproval(db))).slice(0, fill.making);
+    const renderCap = Math.max(1, settings.daily_render_cap);
+    const live = await publishingLive(db);
+    const renders: string[] = [];
+    const allocated: Allocation[] = [];
+    let best: string | null = null;
     let render: RenderRequest | null = null;
-    if (best) {
+    let capped = false;
+    for (const candidate of chosen) {
+      if (candidate.jobId) {
+        const scheduled = live ? await scheduleJob(db, candidate.jobId, 'auto', deps.now ?? new Date()) : null;
+        allocated.push({ topicId: candidate.topicId, jobId: candidate.jobId, scheduled });
+        continue;
+      }
+      if (capped || renders.length >= renderCap) continue;
       await db.query(
         `UPDATE explainers.topics SET status = 'promoted', updated_at = now() WHERE id = $1`,
-        [best.id],
+        [candidate.topicId],
       );
-      render = await requestRender(db, { topicId: best.id, trigger: 'auto', settings, now: deps.now });
+      best ??= candidate.topicId;
+      renders.push(candidate.topicId);
+      const requested = await requestRender(db, { topicId: candidate.topicId, trigger: 'auto', settings, now: deps.now });
+      render ??= requested;
+      if (!requested.ok) capped = true;
     }
 
     await db.query(
@@ -146,10 +201,10 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
         added.length,
         evaluations.filter(survivedDedupe).length,
         evaluations.filter(enteredPool).length,
-        best?.id ?? null,
+        best,
       ],
     );
-    return { status: 'ok', cycleId, evaluations, promotedTopicId: best?.id ?? null, render };
+    return { status: 'ok', cycleId, evaluations, promotedTopicId: best, render, fill, renders, allocated };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await db.query(

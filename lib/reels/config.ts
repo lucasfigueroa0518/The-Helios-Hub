@@ -11,6 +11,9 @@ export const RUN_HOUR_LOCAL = 1;
 export const SONG_INGEST_HOUR_LOCAL = 0;
 export const SONG_INGEST_MINUTE_LOCAL = 30;
 
+/** Nightly insights sweep, its own hour after every social run (docs/social-overnight.md). */
+export const INSIGHTS_HOUR_LOCAL = 5;
+
 /** D-138: top 10 trending `music` and top 20 trending `original_sound`. */
 export const SONG_TRENDING_TOP = { music: 10, original_sound: 20 } as const;
 
@@ -31,18 +34,18 @@ export const SONG_POOL_CAP = 50;
 /** D-148: the narrowing layer hands Jev exactly this many songs. */
 export const SONG_SHORTLIST_SIZE = 12;
 
-/**
- * Pinned rather than unversioned, which would silently follow the app's
- * default. v26.0 shipped 2026-07-29 and is current as of 2026-09-27.
- */
-export const META_GRAPH_VERSION = 'v26.0';
+/** One pinned Graph version for every content type (lib/instagram/graph.ts). */
+export { META_GRAPH_VERSION } from '@/lib/instagram/graph-version';
 /** Implementation brake: day one only reads past the first page for replacements. */
 export const META_TRENDING_MAX_PAGES = 5;
 /**
- * Trial reels stay on the trial until someone graduates them in the Instagram app.
- * SS_PERFORMANCE would let Instagram put a reel on the grid by itself.
+ * Trial reels graduate by themselves when they perform: Instagram moves a reel
+ * onto the grid once enough non-followers respond (SS_PERFORMANCE, as planned in
+ * D-157 / MUS-22). MANUAL would hold every reel on the trial until someone
+ * graduates it in the Instagram app. A reel's attempt keeps the strategy it was
+ * made with, so reels already scheduled stay as they were.
  */
-export const TRIAL_GRADUATION_STRATEGY = 'MANUAL';
+export const TRIAL_GRADUATION_STRATEGY = 'SS_PERFORMANCE';
 /** Meta cURLs the video itself, so the signed link must outlast container processing. */
 export const PUBLISH_VIDEO_URL_SECONDS = 2 * 3600;
 /** How often and how long the worker waits for a container to reach FINISHED. */

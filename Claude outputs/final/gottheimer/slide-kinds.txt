@@ -1,1 +1,0 @@
-cover, text, landing, quote, stat, text, landing, text, follow

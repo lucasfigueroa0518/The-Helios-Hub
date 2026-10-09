@@ -1,0 +1,98 @@
+/* Social Hub: Calendar (month grid, summary strip, day sheet). */
+
+/* Five plain figures in one row, not tiles. */
+.sh-summary { display: flex; flex-wrap: wrap; gap: 8px 40px; margin: 0; }
+.sh-summary div { display: flex; flex-direction: column; gap: 2px; }
+.sh-summary dt { color: var(--color-text-muted); font-size: var(--sh-fs-small); }
+.sh-summary dd { margin: 0; font-size: var(--sh-fs-section); font-weight: var(--font-weight-semibold); font-variant-numeric: tabular-nums; }
+.sh-failed-text { color: var(--sh-failed-ink); }
+
+.sh-month { background: var(--color-surface); border: 1px solid var(--sh-hairline); border-radius: var(--radius-md); overflow: hidden; }
+.sh-month__head, .sh-month__week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.sh-month__head span { padding: 8px 12px; border-bottom: 1px solid var(--sh-hairline); color: var(--color-text-muted); font-size: var(--sh-fs-label); font-weight: var(--font-weight-medium); }
+.sh-month__key { display: flex; flex-direction: column; gap: 6px; margin: -8px 0 0; }
+.sh-key { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; padding: 0; list-style: none; color: var(--color-text-muted); font-size: var(--sh-fs-small); }
+.sh-key li { display: inline-flex; align-items: center; gap: 6px; }
+.sh-key .sh-mark { --sh-color: var(--color-text-muted); }
+.sh-key .sh-cell__needs { margin: 0; }
+.sh-key__heat { width: 16px; height: 12px; border-radius: 0; background: linear-gradient(90deg, color-mix(in srgb, var(--color-text) 3%, var(--color-surface)), color-mix(in srgb, var(--color-text) 10%, var(--color-surface))); box-shadow: inset 0 0 0 1px var(--sh-hairline); }
+.sh-summary__vs { margin: 0; font-size: var(--sh-fs-label); font-weight: var(--font-weight-regular); }
+.sh-summary__vs .sh-delta { font-size: var(--sh-fs-label); }
+
+.sh-cell {
+  --sh-heat: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 104px;
+  padding: 8px 10px;
+  border-right: 1px solid var(--sh-hairline);
+  border-bottom: 1px solid var(--sh-hairline);
+  color: var(--color-text);
+  text-decoration: none;
+  min-width: 0;
+  transition: background 150ms var(--sh-ease);
+}
+.sh-month__week .sh-cell:last-child { border-right: 0; }
+.sh-month__week:last-child .sh-cell { border-bottom: 0; }
+.sh-cell--heat { background: color-mix(in srgb, var(--color-text) calc(var(--sh-heat) * 100%), var(--color-surface)); }
+.sh-cell:hover { background: var(--color-surface-hover); }
+.sh-cell--out { background: var(--color-surface); color: var(--color-text-subtle); }
+/* Fade only the marks: faded text fell to ~2.1:1 (critique R3). Muted Ink alone says "another month". */
+.sh-cell--out .sh-cell__marks { opacity: 0.5; }
+.sh-cell__top { display: flex; align-items: center; gap: 6px; }
+.sh-cell__num { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 4px; border-radius: var(--radius-pill); font-weight: var(--font-weight-semibold); font-variant-numeric: tabular-nums; }
+.sh-cell--today .sh-cell__num { background: var(--color-text); color: var(--color-text-inverse); }
+.sh-cell__needs { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; padding: 0 6px; border-radius: var(--radius-pill); background: var(--sh-needs-wash); color: var(--sh-needs-ink); font-size: var(--sh-fs-label); font-weight: var(--font-weight-semibold); font-variant-numeric: tabular-nums; }
+.sh-cell__failed { color: var(--sh-failed-ink); }
+.sh-cell__needs + .sh-cell__failed { margin-left: 0; }
+.sh-cell__top > .sh-cell__failed:nth-child(2) { margin-left: auto; }
+.sh-cell__total { font-size: var(--sh-fs-section); font-weight: var(--font-weight-semibold); font-variant-numeric: tabular-nums; line-height: 1.2; }
+.sh-cell__marks { display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; }
+
+/* Per-type slot marks: solid = posted or placed, ring = open, struck = didn't post, alert ring = failed. */
+.sh-mark { width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--sh-color); }
+.sh-mark--scheduled { background: color-mix(in srgb, var(--sh-color) 55%, var(--color-surface)); }
+.sh-mark--open { background: transparent; box-shadow: inset 0 0 0 2px var(--sh-color); }
+.sh-mark--missed { background: var(--color-border-strong); }
+.sh-mark--failed { background: var(--color-surface); box-shadow: inset 0 0 0 2px var(--sh-failed-ink); }
+
+/* Day sheet */
+.sh-day-sheet__title { display: flex; flex-direction: column; min-width: 0; }
+.sh-day-sheet__title .sh-muted { font-size: var(--sh-fs-small); }
+.sh-drawer--narrow .sh-item { grid-template-columns: 64px 48px minmax(0, 1fr); }
+.sh-drawer--narrow .sh-item__actions { grid-column: 3; justify-self: start; }
+/* Under the row's text, a quiet link lines up with that text instead of its own padding. */
+.sh-drawer--narrow .sh-item__actions .sh-actions__row > .sh-btn--quiet:first-child { margin-left: -12px; }
+.sh-drawer--narrow .sh-actions { align-items: flex-start; }
+.sh-drawer--narrow .sh-actions__row { justify-content: flex-start; }
+.sh-drawer--narrow .sh-actions__why, .sh-drawer--narrow .sh-actions__note { text-align: left; }
+.sh-item--open { background: transparent; }
+.sh-thumb--open { background: transparent; border: 1.5px dashed color-mix(in srgb, var(--sh-color) 70%, var(--color-surface)); }
+
+@media (max-width: 720px) {
+  .sh-summary { gap: 8px 24px; }
+  .sh-month__head span { padding: 6px 0; text-align: center; }
+  .sh-cell { min-height: 72px; padding: 6px 4px; align-items: center; gap: 4px; }
+  .sh-cell__top { flex-direction: column; gap: 2px; }
+  .sh-cell__needs { margin: 0; }
+  .sh-cell__total { font-size: var(--sh-fs-label); font-weight: var(--font-weight-medium); }
+  .sh-cell__marks { justify-content: center; gap: 2px; }
+  .sh-mark { width: 6px; height: 6px; }
+  .sh-drawer--narrow .sh-item { grid-template-columns: 48px minmax(0, 1fr); }
+  .sh-drawer--narrow .sh-item__actions { grid-column: 1 / -1; }
+}
+
+/* "Schedule something here" under an open slot */
+.sh-item__ready, .sh-item__ready-none { grid-column: 3 / -1; margin: 4px 0 0; }
+.sh-item__ready > summary { cursor: pointer; color: var(--color-text); font-size: var(--sh-fs-small); font-weight: var(--font-weight-medium); }
+.sh-item__ready .sh-count { color: var(--color-text-subtle); font-weight: var(--font-weight-regular); }
+.sh-item__ready > summary { width: fit-content; }
+.sh-item__ready-more { margin: 8px 0 0; font-size: var(--sh-fs-small); }
+.sh-item__ready .sh-list { margin-top: 8px; border: 1px solid var(--sh-hairline); border-radius: var(--radius-md); }
+.sh-item--candidate { grid-template-columns: 48px minmax(0, 1fr) auto; padding: 10px 12px; }
+@media (max-width: 720px) {
+  .sh-item__ready, .sh-item__ready-none { grid-column: 1 / -1; }
+}
+.sh-item__ready-none .sh-link, .sh-item__ready-more .sh-link { color: var(--color-text); text-decoration: underline; text-underline-offset: 2px; }

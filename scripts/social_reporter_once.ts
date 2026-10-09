@@ -15,7 +15,7 @@ async function main() {
   const capAt = process.argv.indexOf('--cap-usd');
   const cap = capAt > 0 ? Number(process.argv[capAt + 1]) : NaN;
   if (!runPath || !Number.isFinite(cap) || cap <= 0) throw new Error('usage: <run.json> <winner index> --cap-usd <amount>');
-  const { default: Anthropic } = await import('@anthropic-ai/sdk');
+  const { newAnthropic } = await import('@/lib/anthropic-client');
   const { runReporter, liveMessagesCreate } = await import('@/lib/social/reporter/reporter');
   const { readPage } = await import('@/lib/social/reporter/read-page');
   const { readableDate } = await import('@/lib/social/pipeline/reporter-stage');
@@ -28,7 +28,7 @@ async function main() {
   const result = await runReporter(
     { story: winner.representative.headline, startingSources, today: readableDate(new Date()) },
     {
-      create: liveMessagesCreate(new Anthropic()),
+      create: liveMessagesCreate(newAnthropic()),
       readPage: async (url) => {
         const page = await readPage(url);
         reads.push(page.ok ? { url, ok: true, chars: page.text.length, resolvedUrl: page.resolvedUrl } : { url, ok: false, error: page.error });

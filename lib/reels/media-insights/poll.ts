@@ -175,8 +175,9 @@ async function runDuePoll(now: Date, limit: number, clientInput?: InsightsClient
 
   const open = await dbQuery<{ id: string; media_id: string; finished_at: Date; insights_checked_at: Date | null }>(
     `SELECT id, media_id, finished_at, insights_checked_at
-       FROM reels.publish_attempts
-      WHERE status = 'published'
+       FROM social_hub.publish_attempts
+      WHERE vertical = 'reels'
+        AND status = 'published'
         AND media_id IS NOT NULL
         AND btrim(media_id) <> ''
         AND trigger <> 'mix_test'
@@ -238,7 +239,7 @@ async function runDuePoll(now: Date, limit: number, clientInput?: InsightsClient
 async function markInsightCheck(attemptId: string, finishedAt: Date, now: Date): Promise<void> {
   const settle = now.getTime() - finishedAt.getTime() > INSIGHTS_WARM_MS;
   await dbQuery(
-    `UPDATE reels.publish_attempts
+    `UPDATE social_hub.publish_attempts
         SET insights_checked_at = $2::timestamptz,
             insights_settled_at = CASE WHEN $3::boolean THEN $2::timestamptz ELSE insights_settled_at END
       WHERE id = $1`,
@@ -248,30 +249,30 @@ async function markInsightCheck(attemptId: string, finishedAt: Date, now: Date):
 
 async function upsertInsight(attemptId: string, mediaId: string, nyDate: string, reading: ReelInsightReading): Promise<void> {
   await dbQuery(
-    `INSERT INTO reels.media_insights (
-        media_id, ny_date, publish_attempt_id, captured_at,
+    `INSERT INTO social_hub.media_insights (
+        media_id, ny_date, vertical, publish_attempt_id, captured_at,
         views, reach, likes, comments, saved, shares, reposts, total_interactions,
-        avg_watch_time_ms, total_watch_time_ms, skip_rate, is_shared_to_feed, raw
+        avg_watch_time_ms, total_watch_time_ms, skip_rate, shared_to_feed, raw
       ) VALUES (
-        $1, $2::date, $3, now(),
+        $1, $2::date, 'reels', $3, now(),
         $4, $5, $6, $7, $8, $9, $10, $11,
         $12, $13, $14, $15, $16::jsonb
       )
       ON CONFLICT (media_id, ny_date) DO UPDATE SET
         publish_attempt_id = EXCLUDED.publish_attempt_id,
         captured_at = now(),
-        views = COALESCE(EXCLUDED.views, reels.media_insights.views),
-        reach = COALESCE(EXCLUDED.reach, reels.media_insights.reach),
-        likes = COALESCE(EXCLUDED.likes, reels.media_insights.likes),
-        comments = COALESCE(EXCLUDED.comments, reels.media_insights.comments),
-        saved = COALESCE(EXCLUDED.saved, reels.media_insights.saved),
-        shares = COALESCE(EXCLUDED.shares, reels.media_insights.shares),
-        reposts = COALESCE(EXCLUDED.reposts, reels.media_insights.reposts),
-        total_interactions = COALESCE(EXCLUDED.total_interactions, reels.media_insights.total_interactions),
-        avg_watch_time_ms = COALESCE(EXCLUDED.avg_watch_time_ms, reels.media_insights.avg_watch_time_ms),
-        total_watch_time_ms = COALESCE(EXCLUDED.total_watch_time_ms, reels.media_insights.total_watch_time_ms),
-        skip_rate = COALESCE(EXCLUDED.skip_rate, reels.media_insights.skip_rate),
-        is_shared_to_feed = COALESCE(EXCLUDED.is_shared_to_feed, reels.media_insights.is_shared_to_feed),
+        views = COALESCE(EXCLUDED.views, social_hub.media_insights.views),
+        reach = COALESCE(EXCLUDED.reach, social_hub.media_insights.reach),
+        likes = COALESCE(EXCLUDED.likes, social_hub.media_insights.likes),
+        comments = COALESCE(EXCLUDED.comments, social_hub.media_insights.comments),
+        saved = COALESCE(EXCLUDED.saved, social_hub.media_insights.saved),
+        shares = COALESCE(EXCLUDED.shares, social_hub.media_insights.shares),
+        reposts = COALESCE(EXCLUDED.reposts, social_hub.media_insights.reposts),
+        total_interactions = COALESCE(EXCLUDED.total_interactions, social_hub.media_insights.total_interactions),
+        avg_watch_time_ms = COALESCE(EXCLUDED.avg_watch_time_ms, social_hub.media_insights.avg_watch_time_ms),
+        total_watch_time_ms = COALESCE(EXCLUDED.total_watch_time_ms, social_hub.media_insights.total_watch_time_ms),
+        skip_rate = COALESCE(EXCLUDED.skip_rate, social_hub.media_insights.skip_rate),
+        shared_to_feed = COALESCE(EXCLUDED.shared_to_feed, social_hub.media_insights.shared_to_feed),
         raw = EXCLUDED.raw`,
     [
       mediaId,

@@ -18,7 +18,6 @@ export const STUB_COST_USD: Record<StageName, number> = {
   reporter: 0.35,
   writer: 0.25,
   editor: 0.12,
-  hook: 0.04,
   'fact-checker': 0.003,
   design: 0.05,
   mechanical: 0,
@@ -81,7 +80,7 @@ export function stubDraft(news: string): DraftSubmission {
     chosen_cover: 1,
     slides: [
       { type: 'text', headline: line(news), body: line('What happened, in one line.'), quote_id: null, quote_excerpt: null, number_ids: [], ...visuals },
-      { type: 'text', headline: line('Why it matters'), body: line('What it means for the reader.'), quote_id: null, quote_excerpt: null, number_ids: [], ...visuals },
+      { type: 'text', headline: line('Why it matters to you'), body: line('What it means for the reader.'), quote_id: null, quote_excerpt: null, number_ids: [], ...visuals },
     ],
     follow: 'Follow Helios for AI news.',
     caption: line(`${news} Source: example.com`),

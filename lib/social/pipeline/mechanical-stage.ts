@@ -2,10 +2,10 @@
  * The `mechanical` stage for runDay (spec §6; plan M7), after the
  * Fact-checker and before design, so the render shows the fixed text:
  *
- *   silent fixes F1–F5 (logged) → text checks C1–C5
+ *   silent fixes F1–F5 (logged) → text checks C1–C4, C8
  *   C1 over a limit → set aside (over-limit)
  *   C2 quotation marks around non-QUOTES text → set aside (malformed-output)
- *   C3 voice list, C4 hashtags, C5 background slides → warnings for the
+ *   C3 voice list, C4 hashtags, C8 repetition → warnings for the
  *     review screen; the post goes on
  *
  * The Writer and the Editor already had one retry on all five (their code

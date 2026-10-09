@@ -1,0 +1,269 @@
+'use client';
+
+import Link from 'next/link';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { ChevronLeft, ChevronRight, ExternalLink, Film, GalleryHorizontal, ImageIcon } from 'lucide-react';
+
+import { Drawer } from '@/app/reels/ui';
+import { BackToHub } from '@/components/content-type/BackToHub';
+import { ActionBar } from '@/components/social-hub/house/ActionBar';
+import type { TypeBenchItem, TypeCard, TypeHubModel } from '@/lib/content-type/model';
+import { metricValue } from '@/lib/social-hub/metrics';
+import type { HubPost } from '@/lib/social-hub/types';
+import { verticalInfo } from '@/lib/social-hub/verticals';
+import { clock, displayName, shortDate } from '@/lib/social-hub/views/format';
+import { IDEA_STATE_LABEL } from '@/lib/social-hub/views/pools';
+
+/**
+ * A content type's page, in the Text on Screen format: title and header
+ * controls, a row of days, that day's posts as cards, and the bench below
+ * (the ideas waiting for the next generation). A card opens a drawer with
+ * everything about the post and every action the hub offers for it.
+ *
+ * Pure display: the writes (Live, Run now, Generate) arrive as `headerActions`
+ * and `benchAction`, built outside the read-only hub code.
+ */
+
+const ASPECT: Record<string, string> = { feed: '4 / 5', reel: '9 / 16', story: '9 / 16' };
+
+const dayLabel = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).replace(',', '');
+const longDay = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
+
+export function TypeHub({ model, title, headerActions, progress, nav, benchAction, benchNote, fullPostBase = '/social' }: {
+  model: TypeHubModel;
+  title: string;
+  headerActions?: ReactNode;
+  /** The "it's working" strip: built outside the read-only hub code because it polls. */
+  progress?: ReactNode;
+  nav?: ReactNode;
+  /** A per-idea button (Explainers: Generate), shown on bench rows and in their drawer. */
+  benchAction?: (item: TypeBenchItem) => ReactNode;
+  benchNote?: string;
+  /** Where "Open the full post" goes: the hub (live) or its preview mirror. */
+  fullPostBase?: string;
+}) {
+  const { days, today, bench } = model;
+  const [dayId, setDayId] = useState<string>(today);
+  const [openPost, setOpenPost] = useState<string | null>(null);
+  const [openIdea, setOpenIdea] = useState<string | null>(null);
+  const list = useRef<HTMLDivElement>(null);
+  const day = days.find((d) => d.date === dayId) ?? days.find((d) => d.date === today) ?? days.at(-1)!;
+  const index = days.indexOf(day);
+  const info = verticalInfo(model.vertical);
+
+  // Days run oldest to newest, left to right; the strip starts on the selected day.
+  useEffect(() => {
+    list.current?.querySelector<HTMLElement>('[aria-current="date"]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  }, [day.date]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setOpenPost(null);
+      setOpenIdea(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const open = days.flatMap((d) => d.cards).find((c) => c.post.id === openPost) ?? bench.find((b) => b.card?.post.id === openPost)?.card ?? null;
+  const idea = bench.find((b) => b.idea.id === openIdea) ?? null;
+  const posted = day.cards.filter((c) => c.post.status === 'published').length;
+
+  return (
+    <div className="rh">
+      <div className="rh__inner">
+        {nav}
+        <header className="rh__head">
+          <div>
+            <BackToHub href={fullPostBase} />
+            <h1 className="rh__title">{title} <span className="rh-beta">Beta</span></h1>
+          </div>
+          <div className="rh__head-actions">{headerActions}</div>
+        </header>
+
+        {progress}
+
+        <nav className="rh-days" aria-label="Days">
+          <button type="button" className="rh-days__step" onClick={() => setDayId(days[index - 1]!.date)} disabled={index <= 0} aria-label="Earlier day">
+            <ChevronLeft size={16} />
+          </button>
+          <div className="rh-days__list" ref={list}>
+            {days.map((d) => {
+              const active = d.date === day.date;
+              const n = d.cards.length;
+              return (
+                <button key={d.date} type="button" className={`rh-day${active ? ' is-active' : ''}`} aria-current={active ? 'date' : undefined} onClick={() => { setDayId(d.date); setOpenPost(null); }}>
+                  <span className="rh-day__date">{dayLabel(d.date)}</span>
+                  <span className="rh-day__sub">{d.date === today ? (n ? `Today · ${n}` : 'Today') : d.date > today ? `Upcoming · ${n}` : n ? `${n} ${n === 1 ? 'post' : 'posts'}` : 'None'}</span>
+                </button>
+              );
+            })}
+          </div>
+          <button type="button" className="rh-days__step" onClick={() => setDayId(days[index + 1]!.date)} disabled={index >= days.length - 1} aria-label="Later day">
+            <ChevronRight size={16} />
+          </button>
+        </nav>
+
+        <section className="rh-day-head">
+          <div>
+            <h2>{longDay(day.date)}</h2>
+            <p>
+              {day.cards.length ? `${day.cards.length} ${day.cards.length === 1 ? 'post' : 'posts'}${posted ? ` · ${posted} posted` : ''}` : 'Nothing posted or scheduled'}
+              {day.date === today ? ` · ${model.poolOpen} ${model.poolOpen === 1 ? 'idea' : 'ideas'} in the pool` : ''}
+            </p>
+          </div>
+        </section>
+
+        {day.cards.length === 0 ? (
+          <p className="rh-empty">{day.date > today ? `Nothing is scheduled for this day.` : `No ${info.label.toLowerCase()} posts on this day.`}</p>
+        ) : (
+          <div className="rh-top">
+            {day.cards.map((card) => <PostCard key={card.post.id} card={card} onOpen={() => setOpenPost(card.post.id)} />)}
+          </div>
+        )}
+
+        <section className="rh-rest">
+          <h3 className="rh-rest__title">The bench <span>{model.benchTotal}</span></h3>
+          <p className="rh-muted">{benchNote ?? 'Ideas waiting for the next generation, best first.'}</p>
+          {bench.length === 0 ? (
+            <p className="rh-empty">The pool is empty until its next refill.</p>
+          ) : (
+            <ul className="rh-rest__list">
+              {bench.map((item) => (
+                <li key={item.idea.id}>
+                  <div className="rh-row" role="button" tabIndex={0} onClick={() => (item.card ? setOpenPost(item.card.post.id) : setOpenIdea(item.idea.id))} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (item.card) setOpenPost(item.card.post.id); else setOpenIdea(item.idea.id); } }}>
+                    <span className="rh-row__rank">{item.rank}</span>
+                    <span className="rh-row__main">
+                      <span className="rh-row__headline">{item.idea.title}</span>
+                      {item.idea.detail ? <span className="rh-row__labels">{item.idea.detail}</span> : null}
+                    </span>
+                    <span className="rh-row__pills">
+                      {item.card ? (
+                        <span className="rh-chip rh-chip--ready" title={`${model.vertical === 'carousels' ? 'Slides are' : 'A video is'} made and waiting: ${item.card.offer.state.label.toLowerCase()}`}>
+                          {model.vertical === 'carousels' ? <GalleryHorizontal size={11} /> : <Film size={11} />} {model.vertical === 'carousels' ? 'Slides ready' : 'Video ready'}
+                        </span>
+                      ) : (
+                        <span className="rh-chip">{IDEA_STATE_LABEL[item.idea.state]}</span>
+                      )}
+                      {benchAction && !item.card ? <span onClick={(e) => e.stopPropagation()}>{benchAction(item)}</span> : null}
+                    </span>
+                    <span className="rh-row__score">{item.idea.score == null ? '—' : item.idea.score.toFixed(item.idea.score >= 10 ? 0 : 2)}</span>
+                    <ChevronRight size={16} className="rh-row__chev" aria-hidden="true" />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+
+      {open ? (
+        <Drawer label={`${info.label} details`} onClose={() => setOpenPost(null)}>
+          <PostDetail card={open} fullPostBase={fullPostBase} fromPath={`/${model.vertical}`} />
+        </Drawer>
+      ) : null}
+      {idea ? (
+        <Drawer label="Idea details" onClose={() => setOpenIdea(null)}>
+          <div className="rh-detail">
+            <h2 className="rh-detail__title">{idea.idea.title}</h2>
+            <p className="rh-muted">{IDEA_STATE_LABEL[idea.idea.state]} · ranked {idea.rank} of {model.benchTotal}{idea.idea.score != null ? ` · ${model.scoreLabel ?? 'score'} ${idea.idea.score.toFixed(2)}` : ''}</p>
+            {idea.idea.detail ? <p>{idea.idea.detail}</p> : null}
+            {idea.idea.createdAt ? <p className="rh-muted">Added {shortDate(idea.idea.createdAt)}</p> : null}
+            {benchAction ? <div style={{ marginTop: 12 }}>{benchAction(idea)}</div> : null}
+          </div>
+        </Drawer>
+      ) : null}
+    </div>
+  );
+}
+
+function PostCard({ card, onOpen }: { card: TypeCard; onOpen: () => void }) {
+  const { post, offer } = card;
+  const when = post.postedAt ?? post.publishAt;
+  const views = metricValue(post.metrics, post.format === 'story' ? 'reach' : 'views');
+  return (
+    <article className="rh-reel">
+      <div className="rh-reel__media" style={{ aspectRatio: ASPECT[post.format] ?? '4 / 5' }}>
+        {card.thumb ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className="rh-media__fill" src={card.thumb} alt="" loading="lazy" {...(card.remote ? { referrerPolicy: 'no-referrer' as const } : {})} />
+        ) : (
+          <span className="rh-reel__state"><ImageIcon size={22} />{post.media.kind === 'none' ? post.media.note : 'No preview yet'}</span>
+        )}
+        <button type="button" className="rh-reel__hit" onClick={onOpen} aria-label={`Open ${displayName(post)}`} />
+        <span className={`rh-reel__badge${post.status === 'published' ? ' is-done' : ''}`}>{offer.state.label}</span>
+      </div>
+      <button type="button" className="rh-reel__meta" onClick={onOpen}>
+        <span className="rh-reel__score" style={{ fontSize: 22 }}>{when ? clock(when) : '—'}</span>
+        <span className="rh-reel__labels">
+          <span>{displayName(post)}</span>
+          <span className="rh-reel__cat">{[post.slot?.label, views != null ? `${views.toLocaleString('en-US')} ${post.format === 'story' ? 'reach' : 'views'}` : offer.state.line].filter(Boolean).join(' · ')}</span>
+        </span>
+      </button>
+    </article>
+  );
+}
+
+function PostDetail({ card, fullPostBase, fromPath }: { card: TypeCard; fullPostBase: string; fromPath: string }) {
+  const { post, offer } = card;
+  const when = post.postedAt ?? post.publishAt;
+  return (
+    <div className="rh-detail">
+      <h2 className="rh-detail__title">{displayName(post)}</h2>
+      <p className="rh-muted">
+        <span className={`rh-chip${post.status === 'failed' ? ' rh-chip--failed' : ''}`}>{offer.state.label}</span>
+        {when ? ` ${shortDate(when)} ${clock(when)}` : ''}
+        {post.slot ? ` · ${post.slot.label}` : ''}
+      </p>
+      {offer.state.line ? <p className="rh-muted">{offer.state.line}</p> : null}
+      <Media post={post} />
+      {post.description ? <p style={{ whiteSpace: 'pre-wrap' }}>{post.description}</p> : null}
+      {post.statusNote ? <p className="rh-muted">{post.statusNote}</p> : null}
+      {post.reviewNotes?.length ? <ul>{post.reviewNotes.map((n) => <li key={n}>{n}</li>)}</ul> : null}
+      <div className="sh" style={{ minHeight: 0, background: 'transparent', margin: '16px 0' }}>
+        <ActionBar menu={offer.menu} />
+      </div>
+      {post.native.length ? (
+        <dl className="rh-detail__facts">
+          {post.native.slice(0, 14).map((f) => (
+            <div key={`${f.group}:${f.label}`}><dt>{f.label}</dt><dd>{f.value}</dd></div>
+          ))}
+        </dl>
+      ) : null}
+      {post.sources.length ? (
+        <p className="rh-muted">Sources: {post.sources.map((s, i) => <span key={s.url}>{i ? ', ' : ''}<a href={s.url} target="_blank" rel="noreferrer">{s.title ?? s.url}</a></span>)}</p>
+      ) : null}
+      <p>
+        <Link className="rh-btn" href={`${fullPostBase}/post/${encodeURIComponent(post.id)}?from=${encodeURIComponent(fromPath)}`}>
+          Open the full post <ExternalLink size={14} />
+        </Link>
+        {post.permalink ? <> <a className="rh-btn" href={post.permalink} target="_blank" rel="noreferrer">View on Instagram <ExternalLink size={14} /></a></> : null}
+      </p>
+    </div>
+  );
+}
+
+function Media({ post }: { post: HubPost }) {
+  const m = post.media;
+  if (m.kind === 'video' && m.src) return <FinishedVideo key={m.src} src={m.src} poster={m.poster ?? null} />;
+  const items = m.kind === 'slides' ? m.slides.map((s, i) => ({ key: i, src: s.src ?? s.photo, label: s.headline ?? `Slide ${i + 1}` }))
+    : m.kind === 'frames' ? m.frames.map((f, i) => ({ key: i, src: f.src, label: f.label }))
+    : m.kind === 'video' && m.poster ? [{ key: 0, src: m.poster, label: 'Poster' }] : [];
+  const shown = items.filter((i) => i.src);
+  if (!shown.length) return null;
+  return (
+    <div style={{ display: 'flex', gap: 8, overflowX: 'auto', margin: '12px 0' }}>
+      {shown.map((i) => (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img key={i.key} src={i.src!} alt={i.label} loading="lazy" style={{ height: 180, borderRadius: 8, flex: 'none' }} />
+      ))}
+    </div>
+  );
+}
+
+/** The finished video, to watch before approving: the point of opening a post. A record can outlive its file (a render kept on another machine), so say so instead of showing a dead player. */
+function FinishedVideo({ src, poster }: { src: string; poster: string | null }) {
+  const [missing, setMissing] = useState(false);
+  if (missing) return <p className="rh-muted">The video file isn’t available here. The render is recorded, but its file isn’t in storage.</p>;
+  return <video className="rh-detail__video" src={src} poster={poster ?? undefined} controls playsInline preload="metadata" onError={() => setMissing(true)} />;
+}

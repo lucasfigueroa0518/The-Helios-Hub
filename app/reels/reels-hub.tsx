@@ -1,6 +1,7 @@
 'use client';
 
-import Link from 'next/link';
+import { BackToHub } from '@/components/content-type/BackToHub';
+import { PostingSettings, SettingsButton } from '@/components/content-type/TypeControls';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
@@ -493,7 +494,6 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
     }
   }
 
-  const health = healthOf(data);
   const reels = view ? view.slate.scores.map((score) => reelFor(view, score)) : [];
   const ranked = [...reels].sort((a, b) => (a.score.rank ?? 999) - (b.score.rank ?? 999));
   const top = ranked.filter((reel) => reel.score.selected);
@@ -506,8 +506,8 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
       <div className="rh__inner">
         <header className="rh__head">
           <div>
-            <p className="rh__kicker">Helios</p>
-            <h1 className="rh__title">Trial Reels <span className="rh-beta">Beta</span></h1>
+            <BackToHub />
+            <h1 className="rh__title">Text on Screen <span className="rh-beta">Beta</span></h1>
           </div>
           <div className="rh__head-actions">
             <div className="rh-review-controls">
@@ -544,6 +544,9 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
                 </button>
               ) : null}
             </div>
+            <SettingsButton>
+              <PostingSettings type="reels" />
+            </SettingsButton>
             <button
               type="button"
               className={`rh-live${data.music.publishingLive ? ' is-on' : ''}`}
@@ -557,9 +560,6 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
               <span className="rh-live__lamp" aria-hidden="true" />
               Live
             </button>
-            <Link href="/reels/health" className="rh-health-link" title={health.label} aria-label={health.label}>
-              <span className={`rh-dot rh-dot--${health.tone}`} aria-hidden="true" />
-            </Link>
           </div>
         </header>
 

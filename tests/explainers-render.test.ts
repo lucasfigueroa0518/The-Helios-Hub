@@ -520,16 +520,15 @@ test('the workspace holds the project, pinned skills, director, recipe, preset, 
 // ── VM deploy files (written now, run only after a validated local run) ─────
 
 test('the explainers deploy script and unit never touch the shared worker directory', () => {
-  const script = fs.readFileSync(path.join(process.cwd(), 'scripts', 'gcp', 'deploy-explainers-worker.sh'), 'utf8');
+  // Explainers runs on helios-social-worker under /opt/helios-social (docs/social-overnight.md);
+  // outreach keeps /opt/helios-worker on helios-orch-worker to itself.
+  const wrapper = fs.readFileSync(path.join(process.cwd(), 'scripts', 'gcp', 'deploy-explainers-worker.sh'), 'utf8');
+  const deploy = fs.readFileSync(path.join(process.cwd(), 'scripts', 'gcp', 'deploy-social-worker.sh'), 'utf8');
   const unit = fs.readFileSync(path.join(process.cwd(), 'scripts', 'gcp', 'helios-explainers.service'), 'utf8');
-  // The only mentions of /opt/helios-worker are comments and the refusal guard.
-  const code = script.split('\n').filter((line) => !line.trim().startsWith('#'));
-  const mentions = code.filter((line) => line.includes('/opt/helios-worker'));
-  assert.deepEqual(mentions.map((l) => l.trim()), [
-    "case \\\"\\$REMOTE_DIR\\\" in /opt/helios-worker*) echo 'refusing to deploy into /opt/helios-worker' >&2; exit 1;; esac",
-  ]);
-  assert.match(script, /REMOTE_DIR="\/opt\/helios-explainers"/);
-  assert.match(unit, /WorkingDirectory=\/opt\/helios-explainers\/app/);
-  assert.match(unit, /EnvironmentFile=\/opt\/helios-explainers\/worker.env/);
-  assert.ok(!/^[^#]*\/opt\/helios-worker/m.test(unit));
+  const code = (text: string) => text.split('\n').filter((line) => !line.trim().startsWith('#')).join('\n');
+  assert.match(wrapper, /deploy-social-worker\.sh/);
+  for (const text of [wrapper, deploy, unit]) assert.ok(!code(text).includes('/opt/helios-worker'));
+  assert.match(deploy, /INSTANCE="\$\{SOCIAL_INSTANCE:-helios-social-worker\}"/);
+  assert.match(unit, /WorkingDirectory=\/opt\/helios-social\/app/);
+  assert.match(unit, /EnvironmentFile=\/opt\/helios-social\/worker.env/);
 });

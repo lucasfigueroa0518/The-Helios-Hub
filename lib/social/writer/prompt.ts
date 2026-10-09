@@ -24,6 +24,8 @@
  *   visual and a fallback per slide, by kind); slide kinds are text, stat and
  *   quote (KINDS_RULE); the spread line and CONCEPT are gone (Jev lays slides
  *   out; slide buckets spec); at most 2 stat slides stays.
+ *   COPY BUDGET (Tommy, 2026-10-08): the stat line's extra numbers go in a
+ *   body only when they fit its budget, else the caption (prompts file §8).
  *   PLACEMENT (caching): "BRIEF\n{{brief}}" moves to the user message;
  *   the brief is the Reporter's JSON, with SUBJECTS marked well_known by code.
  */
@@ -35,7 +37,7 @@ export const WRITER_INTRO = `You are the Writer for Helios Group, an Instagram p
 /** The three "added since the test" rule lines (prompts file §2), in the tested terse style. */
 export const WRITER_ADDED_RULES = `- Claim tags: give every cover, headline, body and caption line the IDs of the brief entries it rests on (F3, B1, Q2, N1) in its facts list; empty if none. Code checks them.
 - Widely known: each SUBJECTS entry has well_known (true/false), set by code from Wikidata. Use it for the COVER rule; don't guess.
-- At most 2 stat slides per post. Keep the strongest numbers as stat slides; put the others in a text slide's body.`;
+- At most 2 stat slides per post. Keep the strongest numbers as stat slides; put the others in a text slide's body when they fit its budget, else leave them for the caption.`;
 
 /** Writer prompt v2 (Tommy, 2026-10-06; Lucas: slides feel isolated): momentum across the post. Word for word from the prompts file. */
 export const WRITER_MOMENTUM_RULES = `- Plan the post as one story, not a list of facts. Outline the arc before writing: the hook (cover) → what happened → why it matters → the turn (the pushback, the catch, the conflict) → what's still unknown or what comes next.

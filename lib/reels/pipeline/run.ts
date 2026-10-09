@@ -1,5 +1,5 @@
 import { derivedAdapters, primaryAdapters } from '@/lib/reels/adapters';
-import { MONTHLY_WATCH_USD, PASSING_REELS_PER_NIGHT } from '@/lib/reels/config';
+import { MONTHLY_WATCH_USD } from '@/lib/reels/config';
 import type { CopyClient } from '@/lib/reels/copy/writer';
 import { createLiveJevRunner } from '@/lib/reels/jev/client';
 import type { JevRunner } from '@/lib/reels/jev/runner';
@@ -71,6 +71,8 @@ export async function claimAndRun(deps?: Partial<RunDeps>): Promise<RunOutcome |
 
 /**
  * One night: ingest, group, score, write the day's two or three reels, clean up.
+ * The reels people placed for today count toward the night's three (daily
+ * fill, D54); a carryover idea's finished, unposted video is reused (D55).
  *
  * The spend watch is checked before any adapter runs (FND-05 / D-023). A run
  * already under way is never aborted partway for budget: a half-ingested night
@@ -116,6 +118,8 @@ export async function executeRun(run: RunRow, deps?: Partial<RunDeps>): Promise<
 
     let scoringNote: string | undefined;
     let copyNote: string | undefined;
+    /** Daily fill (D54): why the night made nothing, when people already placed the day's reels. Not a failure. */
+    let fillNote: string | undefined;
     let scored = 0;
     let selected = 0;
     let copyWritten = 0;
@@ -130,9 +134,17 @@ export async function executeRun(run: RunRow, deps?: Partial<RunDeps>): Promise<
         try {
           const { generatePassingReels } = await import('@/lib/reels/pipeline/slots');
           const { scheduleSelectedSlate, windowsStillOpen } = await import('@/lib/reels/publish/schedule');
-          const { reelsForOpenWindows } = await import('@/lib/reels/publish/slots');
-          const count = reelsForOpenWindows(await windowsStillOpen(), PASSING_REELS_PER_NIGHT);
-          if (count < 1) {
+          const { reelsFill, reelsTonight } = await import('@/lib/reels/pipeline/fill');
+          const { quotaFilledNote, reportFill } = await import('@/lib/social-hub/fill');
+          // Daily fill (D54): reels people placed for today count toward the night's quota.
+          const fill = await reelsFill();
+          const openWindows = await windowsStillOpen();
+          const count = reelsTonight(openWindows, fill);
+          reportFill(fill, log, { runId: run.id, openWindows, count });
+          if (count < 1 && fill.making < 1) {
+            // Not a failure: people filled the day. The ideas carry to tomorrow as on a day with no window left.
+            fillNote = `${quotaFilledNote(fill, 'reel')} No reel was written or rendered; the ideas carry to tomorrow.`;
+          } else if (count < 1) {
             copyNote = 'No posting window is still open today, so no reel was rendered. The ideas carry to tomorrow.';
           } else {
             const copy = await generatePassingReels({
@@ -142,8 +154,9 @@ export async function executeRun(run: RunRow, deps?: Partial<RunDeps>): Promise<
               client: deps?.copyClient,
               signal: deps?.signal,
               jev,
+              dailyFill: true,
             });
-            copyWritten = copy.filled.filter((slot) => !slot.locked).length;
+            copyWritten = copy.filled.filter((slot) => !slot.locked && !slot.reused).length;
             selected = copy.filled.length;
             const notes = [
               copy.status === 'partial' && copy.failures.length === 0
@@ -209,6 +222,7 @@ export async function executeRun(run: RunRow, deps?: Partial<RunDeps>): Promise<
       groupingNote,
       scoringNote,
       copyNote,
+      fillNote,
     ].filter(Boolean).join(' ') || undefined;
 
     await finishRun(run.id, status, sourceResults, stats, note);

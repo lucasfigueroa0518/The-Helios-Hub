@@ -11,7 +11,7 @@ import '../../reels.css';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'Performance analytics · Trial Reels',
+  title: 'Performance analytics · Text on Screen',
   robots: { index: false, follow: false },
 };
 

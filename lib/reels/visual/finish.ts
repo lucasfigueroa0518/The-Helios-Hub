@@ -1,6 +1,7 @@
 import { dbQuery } from '@/lib/db';
 import { queueCopyJob } from '@/lib/reels/copy/jobs';
 import { ideaRankOrderBy } from '@/lib/reels/pipeline/order';
+import { calendarDateKey } from '@/lib/reels/schedule';
 import { queueVideoJob } from '@/lib/reels/visual/video-run';
 import { queueVisualFrame } from '@/lib/reels/visual/run';
 
@@ -73,6 +74,23 @@ export type FinishStart = {
   status: 'active' | 'done' | 'failed';
   note: string;
 };
+
+/**
+ * Today's newest slate that scored this idea, or null when the idea isn't on
+ * today's slate (Social Hub Regenerate rebuilds only today's reel, D52).
+ */
+export async function todaySlateFor(postIdeaId: string, now = new Date()): Promise<string | null> {
+  const { rows } = await dbQuery<{ id: string }>(
+    `SELECT sl.id::text AS id
+       FROM reels.score_slates sl
+       JOIN reels.idea_scores s ON s.slate_id = sl.id AND s.post_idea_id = $1::uuid
+      WHERE sl.ny_date = $2::date
+      ORDER BY sl.scored_at DESC
+      LIMIT 1`,
+    [postIdeaId, calendarDateKey(now)],
+  );
+  return rows[0]?.id ?? null;
+}
 
 /** Record the request and queue whichever stage is still missing. `start: 'frame'` skips copy. */
 export async function requestFinish(

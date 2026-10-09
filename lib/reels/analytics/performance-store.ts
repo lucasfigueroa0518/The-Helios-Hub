@@ -1,4 +1,5 @@
 import { dbQuery } from '@/lib/db';
+import { REEL_ATTEMPTS, REEL_INSIGHTS, REEL_SCHEDULE } from '@/lib/reels/spine-tables';
 import {
   PERFORMANCE_DRILL_LIMIT,
   PERFORMANCE_PAGE_SIZE,
@@ -188,13 +189,13 @@ async function loadPublishedReels(since: Date | null, now: Date, query: string):
             insight.total_watch_time_ms,
             insight.skip_rate,
             insight.is_shared_to_feed
-       FROM reels.publish_attempts a
+       FROM ${REEL_ATTEMPTS} a
        LEFT JOIN reels.video_jobs v ON v.id = a.video_job_id
        LEFT JOIN reels.visual_jobs vis ON vis.id = v.visual_job_id
        LEFT JOIN reels.songs song ON song.audio_id = a.audio_id
        LEFT JOIN LATERAL (
          SELECT slot
-           FROM reels.posting_schedule
+           FROM ${REEL_SCHEDULE} ps
           WHERE publish_attempt_id = a.id
           ORDER BY CASE status WHEN 'published' THEN 0 ELSE 1 END, publish_at DESC
           LIMIT 1
@@ -228,7 +229,7 @@ async function loadPublishedReels(since: Date | null, now: Date, query: string):
          SELECT ny_date::text AS ny_date,
                 views, reach, likes, comments, saved, shares, reposts, total_interactions,
                 avg_watch_time_ms, total_watch_time_ms, skip_rate, is_shared_to_feed
-           FROM reels.media_insights i
+           FROM ${REEL_INSIGHTS} i
           WHERE i.media_id = a.media_id
           ORDER BY i.ny_date DESC
           LIMIT 1
@@ -318,13 +319,13 @@ async function hydrateReelPage(reels: PerformanceReel[]): Promise<PerformanceRee
       `SELECT media_id, ny_date::text AS ny_date,
               views, reach, likes, comments, saved, shares, reposts, total_interactions,
               avg_watch_time_ms, total_watch_time_ms, skip_rate, is_shared_to_feed
-         FROM reels.media_insights
+         FROM ${REEL_INSIGHTS} i
         WHERE media_id = ANY($1::text[])
         ORDER BY media_id, ny_date`,
       [mediaIds],
     ),
     dbQuery<{ id: string; caption: string }>(
-      `SELECT id, caption FROM reels.publish_attempts WHERE id = ANY($1::uuid[])`,
+      `SELECT id, caption FROM social_hub.publish_attempts WHERE vertical = 'reels' AND id = ANY($1::uuid[])`,
       [attemptIds],
     ),
   ]);

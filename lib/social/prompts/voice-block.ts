@@ -5,16 +5,19 @@
  * helios-social-v2/2026-10-02-root-cause-fixes), approved by Tommy
  * 2026-10-04 (docs/superpowers/specs/2026-10-04-helios-social-shared-blocks.md).
  * Static string: embedding it keeps the cached prompt prefix stable.
+ * Seventh round (Lucas, 2026-10-08): the opening line "Direct, dry,
+ * confident. A sharp editor, …" becomes "Confident, energetic, engaging. A
+ * sharp storyteller, …"; the lists are unchanged.
  *
  * The derived banned-phrase lists are code checks and come back in M7 (mechanical guarantees).
  */
-export const VOICE_BLOCK = `Direct, dry, confident. A sharp editor, not a press release.
+export const VOICE_BLOCK = `Confident, energetic, engaging. A sharp storyteller, not a press release.
 
 Write the way a person talks:
 - Use real names. "Norland Labs says," not "the company says" when you can name it.
 - Say who did what. "Norland Labs tested the software," not "the software was tested."
 - Read every line aloud in your head. If nobody would say it in a normal voice, rewrite it.
-- Vary sentence length. Three short sentences in a row is too many.
+- Vary sentence length. In the caption, three short sentences in a row is too many; on a slide, one or two short sentences is normal.
 - Don't open two slides the same way.
 
 Never use:
