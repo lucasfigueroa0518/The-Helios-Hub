@@ -1,11 +1,13 @@
 import Link from 'next/link';
-import { ArrowRight, ImageIcon, Music2, TriangleAlert } from 'lucide-react';
+import { ArrowRight, ImageIcon, Loader2, Music2, TriangleAlert } from 'lucide-react';
 
+import { RunsRefresh } from '@/components/social-hub/content/RunsRefresh';
 import { HubSettingsButton, RunTodayButton } from '@/components/social-hub/content/HubControls';
 import { TodayStrip } from '@/components/social-hub/content/TodayStrip';
 import { DataNotes } from '@/components/social-hub/DataNotes';
 import { PageHead } from '@/components/social-hub/ui/PageHead';
 import { TypeMark } from '@/components/social-hub/ui/marks';
+import type { AllProgress } from '@/lib/content-type/progress';
 import type { HubDataset } from '@/lib/social-hub/dataset';
 import type { HubPost } from '@/lib/social-hub/types';
 import { plural, relative, when } from '@/lib/social-hub/views/format';
@@ -20,7 +22,9 @@ import { typeHref, verticalInfo } from '@/lib/social-hub/verticals';
  * Content (BRIEFS.md §1): the morning check. What needs a person, what's
  * going out today, then how full the tank is.
  */
-export function ContentScreen({ dataset, base, now, libraries, controls = true }: { dataset: HubDataset; base: string; now: Date; libraries: LibrariesModel; controls?: boolean }) {
+export function ContentScreen({ dataset, base, now, libraries, progress, controls = true }: { dataset: HubDataset; base: string; now: Date; libraries: LibrariesModel; progress?: AllProgress; controls?: boolean }) {
+  const runs: AllProgress = progress ?? { carousels: [], stories: [], explainers: [] };
+  const inFlight = Object.values(runs).some((items) => items.length > 0);
   const m = contentModel(dataset, now);
   const o = offerer(dataset, now);
   // Every type's quota candidates: what holds today's slots, then the top of today's ranking (Promote / Demote applied).
@@ -53,6 +57,7 @@ export function ContentScreen({ dataset, base, now, libraries, controls = true }
         }
       />
       <DataNotes dataset={dataset} />
+      <RunsRefresh active={inFlight} />
 
       <section className="sh-section" aria-labelledby="today-strip">
         <div className="sh-section__head">
@@ -66,7 +71,7 @@ export function ContentScreen({ dataset, base, now, libraries, controls = true }
             {controls ? 'Run now makes what today’s quotas still need.' : null}
           </div>
         ) : (
-          <TodayStrip candidates={today} o={o} />
+          <TodayStrip candidates={today} o={o} runs={runs} />
         )}
       </section>
 
@@ -75,7 +80,7 @@ export function ContentScreen({ dataset, base, now, libraries, controls = true }
           <h2 className="sh-title" id="pools">Idea pools</h2>
         </div>
         <div className="sh-pools">
-          {poolSummaries(dataset.ideas).map((p) => <PoolPanel key={p.vertical} pool={p} base={base} now={now} />)}
+          {poolSummaries(dataset.ideas).map((p) => <PoolPanel key={p.vertical} pool={p} base={base} now={now} running={runs[p.vertical as keyof AllProgress] ?? []} />)}
         </div>
       </section>
 
@@ -108,12 +113,15 @@ export function ContentScreen({ dataset, base, now, libraries, controls = true }
   );
 }
 
-function PoolPanel({ pool, base, now }: { pool: PoolSummary; base: string; now: Date }) {
+function PoolPanel({ pool, base, now, running }: { pool: PoolSummary; base: string; now: Date; running: AllProgress[keyof AllProgress] }) {
   const info = verticalInfo(pool.vertical);
   return (
     <Link href={typeHref(pool.vertical, base)} className="sh-panel sh-pool">
       <span className="sh-pool__head">
         <TypeMark vertical={pool.vertical} />
+        {running.length ? (
+          <span className="sh-run-chip" role="status"><Loader2 size={13} className="sh-spin" aria-hidden="true" />{running.some((r) => r.state === 'running') ? 'Running' : 'Queued'}{running.length > 1 ? ` · ${running.length}` : ''}</span>
+        ) : null}
         <ArrowRight size={14} aria-hidden="true" />
       </span>
       <span className="sh-pool__depth">

@@ -15,7 +15,7 @@ import {
   saveDayPenalty,
   selectFilledIdeas,
 } from '@/lib/reels/locks';
-import { copyPromptApproved, shipStoredCopy, writeTargetCopy, type IdeaCopyOutcome } from '@/lib/reels/pipeline/copy';
+import { shipStoredCopy, writeTargetCopy, type IdeaCopyOutcome } from '@/lib/reels/pipeline/copy';
 import { placedIdeas, reusableVideos } from '@/lib/reels/pipeline/fill';
 import { requestFinish } from '@/lib/reels/visual/finish';
 import { dbQuery } from '@/lib/db';
@@ -61,7 +61,6 @@ export async function generatePassingReels(input: {
   dailyFill?: boolean;
 }): Promise<PassingGeneration> {
   const count = input.count ?? PASSING_REELS_PER_NIGHT;
-  if (!copyPromptApproved()) return { status: 'skipped', filled: [], heldOut: [], usd: 0, failures: [] };
   if (!input.client && !process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not set.');
   const client: CopyClient = input.client ?? newAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const model = await resolveCopyModel(() => {

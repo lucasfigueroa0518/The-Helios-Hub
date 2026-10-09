@@ -194,3 +194,7 @@
 .sh-gallery__card.is-pending { border-style: dashed; }
 .sh-gallery__card.is-pending .sh-gallery__frame { opacity: 0.75; }
 .sh-gallery__hint { font-size: var(--sh-fs-small); }
+
+.sh-run-chip { display: inline-flex; align-items: center; gap: 5px; align-self: flex-start; padding: 3px 9px; border-radius: 999px; background: var(--sh-accent-soft, rgba(255, 90, 0, 0.12)); color: var(--sh-accent-ink, #b33d00); font-size: var(--sh-fs-small); font-weight: var(--font-weight-medium); }
+.sh-run-chip .sh-spin { animation: sh-spin 900ms linear infinite; }
+.sh-pool__head .sh-run-chip { margin-left: auto; margin-right: 8px; }

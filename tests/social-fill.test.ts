@@ -606,9 +606,7 @@ test('trial reels: the nightly generation reuses the carried video (no copy, no 
   assert.deepEqual([...(await placedIdeas([R.PLACED, R.CARRY]))], [R.PLACED]);
   let copyCalls = 0;
   const client: CopyClient = { messages: { create: async () => { copyCalls += 1; throw new Error('no live call in tests'); } } };
-  const before = process.env.REELS_COPY_PROMPT_APPROVED;
-  process.env.REELS_COPY_PROMPT_APPROVED = 'true';
-  try {
+  {
     const out = await generatePassingReels({ runId: R.RUN, slateId: R.TODAY, count: 1, client, dailyFill: true });
     assert.deepEqual(out.filled.map((s) => [s.postIdeaId, s.reused === true]), [[R.CARRY, true]]);
     assert.deepEqual(out.reused, [{ postIdeaId: R.CARRY, videoJobId: R.VIDEO }]);
@@ -619,9 +617,6 @@ test('trial reels: the nightly generation reuses the carried video (no copy, no 
     assert.equal((await pg.query(`SELECT 1 FROM reels.video_jobs WHERE slate_id = '${R.TODAY}'`)).rows.length, 0);
     const selected = (await pg.query<{ post_idea_id: string }>(`SELECT post_idea_id FROM reels.idea_scores WHERE slate_id = '${R.TODAY}' AND selected`)).rows;
     assert.deepEqual(selected.map((r) => r.post_idea_id), [R.CARRY], 'the reused idea is today’s pick, so its slot books by idea');
-  } finally {
-    if (before === undefined) delete process.env.REELS_COPY_PROMPT_APPROVED;
-    else process.env.REELS_COPY_PROMPT_APPROVED = before;
   }
 });
 

@@ -138,7 +138,7 @@ export async function loadReelsOverview(): Promise<ReelsOverview> {
     spend: { monthToDateUsd: spend, watchUsd: MONTHLY_WATCH_USD },
     nextRunAt: nextRunAt(new Date()).toISOString(),
     b6Approved: process.env.REELS_B6_PROMPT_APPROVED === 'true',
-    copyApproved: process.env.REELS_COPY_PROMPT_APPROVED === 'true',
+    copyApproved: true,
   };
 }
 

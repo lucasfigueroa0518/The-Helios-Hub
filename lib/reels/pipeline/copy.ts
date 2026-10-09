@@ -33,14 +33,6 @@ import type { JevRunner } from '@/lib/reels/jev/runner';
 import { compareIdeaRank } from '@/lib/reels/pipeline/order';
 import { recordCost } from '@/lib/reels/repository';
 
-/**
- * R6 gate. The writer prompt (P-10) produces nothing until Lucas approves the
- * wording and the flag is set where the run happens.
- */
-export function copyPromptApproved(): boolean {
-  return process.env.REELS_COPY_PROMPT_APPROVED === 'true';
-}
-
 export type CopySummary = {
   status: 'skipped' | 'ok' | 'partial';
   written: number;
@@ -64,9 +56,6 @@ export async function writeSlateCopy(
   slateId: string,
   deps?: { client?: CopyClient; signal?: AbortSignal; jev?: JevRunner },
 ): Promise<CopySummary> {
-  if (!copyPromptApproved()) {
-    return { status: 'skipped', written: 0, failed: 0, usd: 0, failures: [] };
-  }
   if (!deps?.client && !process.env.ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY is not set.');
   }
@@ -143,7 +132,6 @@ export async function writeIdeaCopy(
   postIdeaId: string,
   deps?: { client?: CopyClient; signal?: AbortSignal; jev?: JevRunner },
 ): Promise<IdeaCopyOutcome> {
-  if (!copyPromptApproved()) return failed('The P-10 writer prompt is not approved.');
   const lock = await findReelLock(slateId, postIdeaId);
   if (lock) return failed(`This reel is locked for ${lock.nyDate} and stays as it is.`);
   if (!deps?.client && !process.env.ANTHROPIC_API_KEY) return failed('ANTHROPIC_API_KEY is not set.');

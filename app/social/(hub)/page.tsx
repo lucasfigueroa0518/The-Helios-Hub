@@ -9,6 +9,7 @@ import { HUB_BASE, toParams, type RawSearchParams } from '@/lib/social-hub/links
 import { loadForPage } from '@/lib/social-hub/live';
 import { legacyRootRedirect } from '@/lib/social-hub/views/legacy-routes';
 import { loadLibraries } from '@/lib/social-hub/views/libraries';
+import { readAllProgress } from '@/lib/content-type/progress';
 import { getSession } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
@@ -21,12 +22,12 @@ export default async function Page({ searchParams }: { searchParams: Promise<Raw
   if (legacy) redirect(legacy);
   const session = await getSession();
   if (!session) redirect('/');
-  const [loaded, libraries] = await Promise.all([loadForPage(session.email), loadLibraries(liveHubQuery)]);
+  const [loaded, libraries, progress] = await Promise.all([loadForPage(session.email), loadLibraries(liveHubQuery), readAllProgress()]);
   if ('error' in loaded) return <LoadError message={loaded.error} />;
   return (
     <>
       <RefreshNote refresh={loaded.refresh} />
-      <ContentScreen dataset={loaded} base={HUB_BASE} now={new Date()} libraries={libraries} />
+      <ContentScreen dataset={loaded} base={HUB_BASE} now={new Date()} libraries={libraries} progress={progress} />
     </>
   );
 }

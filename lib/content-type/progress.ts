@@ -88,3 +88,12 @@ export async function readProgress(type: ContentType): Promise<ProgressItem[]> {
   }
   return [];
 }
+
+export type AllProgress = Record<'carousels' | 'stories' | 'explainers', ProgressItem[]>;
+
+/** Every type's runs in flight, for the Content page's cards and tiles. A type that cannot be read shows nothing in flight. */
+export async function readAllProgress(): Promise<AllProgress> {
+  const one = (t: ContentType) => readProgress(t).then((items) => items.filter((i) => i.state !== 'failed')).catch(() => [] as ProgressItem[]);
+  const [carousels, stories, explainers] = await Promise.all([one('carousels'), one('stories'), one('explainers')]);
+  return { carousels, stories, explainers };
+}

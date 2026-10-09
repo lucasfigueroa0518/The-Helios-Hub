@@ -1,3 +1,7 @@
+import { Loader2 } from 'lucide-react';
+
+import type { AllProgress, ProgressItem } from '@/lib/content-type/progress';
+import { stageLabel } from '@/lib/content-type/run-status';
 import { PostLink } from '@/components/social-hub/nav/PostLink';
 import { StateBadge, TYPE_ICON, TypeMark, typeStyle } from '@/components/social-hub/ui/marks';
 import { thumbOf } from '@/components/social-hub/ui/Thumb';
@@ -12,10 +16,31 @@ import type { Offerer } from '@/lib/social-hub/views/offer';
  * cover slide, or the video's opening frame) and opens the post; one not
  * made yet shows its idea, which Run now makes.
  */
-export function TodayStrip({ candidates, o }: { candidates: QuotaCandidate[]; o: Offerer }) {
+/** The run behind a candidate: its own (Explainers name the topic), else the type's run in flight (Carousels and Stories run as a batch). */
+function runFor(c: QuotaCandidate, runs: AllProgress): ProgressItem | null {
+  if (c.vertical === 'reels') return null;
+  const items = runs[c.vertical];
+  const own = items.find((i) => i.topicId && c.idea && (c.idea.id === i.topicId || c.idea.id.endsWith(`:${i.topicId}`)));
+  if (own) return own;
+  if (c.vertical === 'explainers') return null;
+  if (c.vertical === 'stories' && c.series) return items.find((i) => i.label === c.series) ?? null;
+  return c.post && c.post.status !== 'generating' ? null : items.find((i) => i.state === 'running') ?? items[0] ?? null;
+}
+
+function RunChip({ run }: { run: ProgressItem | null }) {
+  if (!run) return null;
+  return (
+    <span className="sh-run-chip" role="status">
+      <Loader2 size={13} className="sh-spin" aria-hidden="true" />
+      {run.state === 'running' ? stageLabel(run.stage) : 'Queued'}
+    </span>
+  );
+}
+
+export function TodayStrip({ candidates, o, runs }: { candidates: QuotaCandidate[]; o: Offerer; runs: AllProgress }) {
   return (
     <ul className="sh-strip sh-gallery" aria-label="Today’s content">
-      {candidates.map((c, i) => (c.post ? <Made key={c.post.id} c={c} post={c.post} o={o} /> : <Pending key={c.idea?.id ?? `${c.vertical}:${c.series ?? i}`} c={c} />))}
+      {candidates.map((c, i) => (c.post ? <Made key={c.post.id} c={c} post={c.post} o={o} run={runFor(c, runs)} /> : <Pending key={c.idea?.id ?? `${c.vertical}:${c.series ?? i}`} c={c} run={runFor(c, runs)} />))}
     </ul>
   );
 }
@@ -25,7 +50,7 @@ function rankTag(c: QuotaCandidate): string | null {
   return `#${c.rank}${c.moved === 'promoted' ? ' · Promoted' : c.moved === 'demoted' ? ' · Demoted' : ''}`;
 }
 
-function Made({ c, post, o }: { c: QuotaCandidate; post: HubPost; o: Offerer }) {
+function Made({ c, post, o, run }: { c: QuotaCandidate; post: HubPost; o: Offerer; run: ProgressItem | null }) {
   const when = post.postedAt ?? post.publishAt;
   const tag = rankTag(c);
   return (
@@ -38,12 +63,12 @@ function Made({ c, post, o }: { c: QuotaCandidate; post: HubPost; o: Offerer }) 
         <span>{when ? clock(when) : post.status === 'generating' ? 'Being made' : 'No slot yet'}{tag ? ` · ${tag}` : ''}</span>
       </div>
       <PostLink id={post.id} className="sh-strip__name">{displayName(post)}</PostLink>
-      <StateBadge state={o.offer(post).state} />
+      {run ? <RunChip run={run} /> : <StateBadge state={o.offer(post).state} />}
     </li>
   );
 }
 
-function Pending({ c }: { c: QuotaCandidate }) {
+function Pending({ c, run }: { c: QuotaCandidate; run: ProgressItem | null }) {
   const Icon = TYPE_ICON[c.vertical];
   const tag = rankTag(c);
   return (
@@ -58,7 +83,7 @@ function Pending({ c }: { c: QuotaCandidate }) {
         <span>{tag ?? (c.series ? c.series : 'Quota candidate')}</span>
       </div>
       <span className="sh-strip__name">{c.idea?.title ?? (c.series ? `${c.series}: today’s set` : 'Open slot: the next run picks its idea')}</span>
-      <span className="sh-muted sh-gallery__hint">Run now makes it.</span>
+      {run ? <RunChip run={run} /> : <span className="sh-muted sh-gallery__hint">Run now makes it.</span>}
     </li>
   );
 }

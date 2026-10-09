@@ -147,6 +147,20 @@ test('source: pasted notes win, URLs are fetched as text, and bad sources fail c
 
 const secrets = { anthropicApiKey: 'sk-ant-test', heygenApiKey: 'hg-test', voiceId: 'voice-123' };
 
+test('the agent names the Anthropic workspace on every request when one is configured', () => {
+  const before = process.env.ANTHROPIC_WORKSPACE_ID;
+  const input = { projectDir: JOB, homeDir: '/jobs/abc/home', tmpDir: `${JOB}/.tmp`, secrets };
+  try {
+    process.env.ANTHROPIC_WORKSPACE_ID = 'wrkspc_test';
+    assert.equal(scrubbedEnv(input).ANTHROPIC_CUSTOM_HEADERS, 'anthropic-workspace-id: wrkspc_test');
+    delete process.env.ANTHROPIC_WORKSPACE_ID;
+    assert.equal(scrubbedEnv(input).ANTHROPIC_CUSTOM_HEADERS, undefined);
+  } finally {
+    if (before === undefined) delete process.env.ANTHROPIC_WORKSPACE_ID;
+    else process.env.ANTHROPIC_WORKSPACE_ID = before;
+  }
+});
+
 test('the agent gets a scrubbed environment, no web tools, project settings only, and a sandbox', () => {
   process.env.DATABASE_URL = 'postgres://supabase-secret';
   const env = scrubbedEnv({ projectDir: JOB, homeDir: '/jobs/abc/home', tmpDir: `${JOB}/.tmp`, secrets });

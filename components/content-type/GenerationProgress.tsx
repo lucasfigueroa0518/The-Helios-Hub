@@ -20,9 +20,10 @@ function asRun(item: ProgressItem): RunSnapshot {
  * a rough time-left while a run is actually going.
  */
 export function GenerationProgress() {
-  const items = useRunProgress();
+  // Failures belong on the idea's own row and card, not in a list above the page.
+  const items = useRunProgress().filter((item) => item.state !== 'failed');
   const [now, setNow] = useState(() => Date.now());
-  const live = items.some((item) => item.state !== 'failed');
+  const live = items.length > 0;
 
   useEffect(() => {
     if (!live) return undefined;
@@ -39,13 +40,15 @@ export function GenerationProgress() {
         const left = item.state === 'running' && item.typicalSeconds != null && elapsed != null ? item.typicalSeconds - elapsed : null;
         const pct = item.typicalSeconds && item.state === 'running' && elapsed != null ? Math.min(95, Math.max(4, (elapsed / item.typicalSeconds) * 100)) : null;
         const extra = item.state === 'running' && left != null ? (left > 15 ? ` · about ${rough(left)} left` : ' · finishing up, longer than usual') : '';
+        const since = item.startedAt ? new Date(item.startedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', timeZone: 'America/New_York' }) : null;
+        const picked = item.state === 'running' && since ? ` · worker picked it up at ${since} ET` : '';
         const history = item.state === 'running' && item.typicalSeconds == null ? ' · no history yet to estimate the time left' : '';
         return (
           <div key={item.id} className={`rh-progress__row${item.state === 'failed' ? ' is-failed' : ''}`}>
             {item.state === 'failed' ? <AlertTriangle size={16} aria-hidden="true" /> : <Loader2 size={16} className="rh-spin" aria-hidden="true" />}
             <div className="rh-progress__main">
               <strong>{item.label}</strong>
-              <span className="rh-muted">{runStatusText(run, now)}{extra}{history}</span>
+              <span className="rh-muted">{runStatusText(run, now)}{picked}{extra}{history}</span>
               {item.state === 'failed' ? null : pct != null ? <span className="rh-progress__bar" aria-hidden="true"><span style={{ width: `${pct}%` }} /></span> : <span className="rh-progress__bar rh-progress__bar--wait" aria-hidden="true"><span /></span>}
             </div>
           </div>

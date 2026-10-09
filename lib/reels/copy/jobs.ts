@@ -1,7 +1,7 @@
 import { dbQuery } from '@/lib/db';
 import { COPY_STALE_MINUTES } from '@/lib/reels/config';
 import { claimNextRankedJob } from '@/lib/reels/pipeline/claim';
-import { copyPromptApproved, writeIdeaCopy } from '@/lib/reels/pipeline/copy';
+import { writeIdeaCopy } from '@/lib/reels/pipeline/copy';
 
 export type CopyJobStatus = 'requested' | 'running' | 'ok' | 'failed';
 
@@ -28,13 +28,6 @@ export async function queueCopyJob(
   const lock = await findReelLock(slateId, postIdeaId);
   if (lock) {
     return { queued: false, status: 409, note: `This reel is locked for ${lock.nyDate} and stays as it is.` };
-  }
-  if (!copyPromptApproved()) {
-    return {
-      queued: false,
-      status: 409,
-      note: 'On-screen copy and captions are off until the P-10 writer prompt is approved.',
-    };
   }
   // The spend watch does not gate a click (fail open). The frame and video jobs warn about it.
   const ready = await dbQuery<{ found: boolean }>(

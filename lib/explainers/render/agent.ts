@@ -96,12 +96,16 @@ export function scrubbedEnv(input: Pick<SessionInput, 'projectDir' | 'homeDir' |
     '/usr/bin',
     '/bin',
   ].filter((d): d is string => Boolean(d));
+  // A key that is not scoped to a workspace is refused (HTTP 400) unless every request names its workspace, as
+  // lib/anthropic-client.ts does for the Messages API. Claude Code takes extra request headers from this variable.
+  const workspace = process.env.ANTHROPIC_WORKSPACE_ID?.trim();
   return {
     PATH: [...new Set(pathDirs)].join(path.delimiter),
     HOME: input.homeDir,
     TMPDIR: input.tmpDir,
     LANG: 'en_US.UTF-8',
     ANTHROPIC_API_KEY: input.secrets.anthropicApiKey,
+    ...(workspace ? { ANTHROPIC_CUSTOM_HEADERS: `anthropic-workspace-id: ${workspace}` } : {}),
     HEYGEN_API_KEY: input.secrets.heygenApiKey,
     HELIOS_VOICE_ID: input.secrets.voiceId,
     HYPERFRAMES_MEDIA_HOME: input.projectDir,

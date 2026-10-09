@@ -178,8 +178,7 @@ as a real line break (D-229). The call to action and the hashtags stay in
 their own fields. An assembled caption over 2,200 characters is shortened
 before Instagram sees it (D-230). The draft does not see Jev's questions. The writer wording matches `copy-caption-v12` (D-235). The copy is written for anyone curious about AI. The whole
 on-screen copy is the hook, and its first job is to be understood, stake
-included, on one read (D-204, D-211, D-212). It makes no call anywhere
-`REELS_COPY_PROMPT_APPROVED=true` is not set, and the page says so.
+included, on one read (D-204, D-211, D-212). The writer is always on; there is no approval flag.
 
 Jev (P-15, `copy-pick-v3`) scores each copy on plain read, stake, loop, care,
 and reward, and a second check (P-18, `copy-story-match-v1`) asks whether the
