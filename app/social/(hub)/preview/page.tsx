@@ -15,5 +15,5 @@ export default async function Page({ searchParams }: { searchParams: Promise<Raw
   assertPreviewAllowed();
   const legacy = legacyRootRedirect(PREVIEW_BASE, toParams(await searchParams));
   if (legacy) redirect(legacy);
-  return <ContentScreen dataset={previewDataset()} base={PREVIEW_BASE} now={FIXTURE_NOW} libraries={previewLibraries()} />;
+  return <ContentScreen dataset={previewDataset()} base={PREVIEW_BASE} now={FIXTURE_NOW} libraries={previewLibraries()} controls={false} />;
 }

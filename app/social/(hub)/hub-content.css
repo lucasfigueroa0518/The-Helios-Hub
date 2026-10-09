@@ -171,3 +171,13 @@
 .sh-strip__art img { width: 100%; height: 100%; object-fit: cover; }
 .sh-strip__name { color: var(--color-text); text-decoration: none; font-size: var(--sh-fs-small); font-weight: var(--font-weight-medium); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .sh-strip__meta { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; color: var(--color-text-muted); font-size: var(--sh-fs-small); }
+
+/* Today's Content: a gallery of the day's quota candidates, the content itself on each card. */
+.sh-gallery__card { width: 196px; }
+.sh-gallery__art { aspect-ratio: 4 / 5; }
+.sh-gallery__art.is-tall { aspect-ratio: 9 / 16; }
+.sh-gallery__frame { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--type-color, var(--color-text-muted)); }
+.sh-gallery__frame img, .sh-gallery__frame video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sh-gallery__empty { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: var(--sh-fs-small); color: var(--color-text-muted); }
+.sh-gallery__meta { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; color: var(--color-text-muted); font-size: var(--sh-fs-small); }
+@media (max-width: 640px) { .sh-gallery__card { width: 160px; } }

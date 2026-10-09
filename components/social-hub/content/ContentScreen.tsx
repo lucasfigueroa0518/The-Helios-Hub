@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight, ImageIcon, Music2, TriangleAlert } from 'lucide-react';
 
+import { HubSettingsButton, RunTodayButton } from '@/components/social-hub/content/HubControls';
 import { TodayStrip } from '@/components/social-hub/content/TodayStrip';
 import { DataNotes } from '@/components/social-hub/DataNotes';
 import { PageHead } from '@/components/social-hub/ui/PageHead';
@@ -11,18 +12,18 @@ import { plural, relative, when } from '@/lib/social-hub/views/format';
 import type { LibrariesModel } from '@/lib/social-hub/views/libraries';
 import { offerer } from '@/lib/social-hub/views/offer';
 import { poolStale, poolSummaries, type PoolSummary } from '@/lib/social-hub/views/pools';
-import { contentModel } from '@/lib/social-hub/views/today';
+import { contentModel, todaysContent } from '@/lib/social-hub/views/today';
 import { typeHref, verticalInfo } from '@/lib/social-hub/verticals';
 
 /**
  * Content (BRIEFS.md §1): the morning check. What needs a person, what's
  * going out today, then how full the tank is.
  */
-export function ContentScreen({ dataset, base, now, libraries }: { dataset: HubDataset; base: string; now: Date; libraries: LibrariesModel }) {
+export function ContentScreen({ dataset, base, now, libraries, controls = true }: { dataset: HubDataset; base: string; now: Date; libraries: LibrariesModel; controls?: boolean }) {
   const m = contentModel(dataset, now);
   const o = offerer(dataset, now);
-  // Post ideas holding today's slots: made or still being made. Failed and never-made ideas stay out.
-  const today = [...m.lineup.flatMap((band) => band.entries.map((e) => e.post)), ...m.unplaced];
+  // Every type's candidates for today's quota: holding a slot, being made, or made and waiting on a person.
+  const today = todaysContent(dataset.posts, now);
   // Rows nothing here can act on don't count as waiting on the person (critique 2026-10-08).
   const off = (p: HubPost) => o.offer(p).state.id === 'approval_off';
   const needs = m.needs.map((g) => ({ ...g, posts: g.posts.filter((p) => !off(p)) })).filter((g) => g.posts.length);
@@ -38,6 +39,7 @@ export function ContentScreen({ dataset, base, now, libraries }: { dataset: HubD
       <PageHead
         title="Today"
         aside={todayLabel}
+        actions={controls ? <><HubSettingsButton /><RunTodayButton /></> : undefined}
         meta={
           <>
             <strong>{m.plan.filled}</strong> of {m.plan.slots} slots filled
@@ -53,13 +55,14 @@ export function ContentScreen({ dataset, base, now, libraries }: { dataset: HubD
 
       <section className="sh-section" aria-labelledby="today-strip">
         <div className="sh-section__head">
-          <h2 className="sh-title" id="today-strip">Being made today<span className="sh-count">{today.length}</span></h2>
+          <h2 className="sh-title" id="today-strip">Today’s Content<span className="sh-count">{today.length}</span></h2>
           <Link className="sh-out" href={`${base}/calendar`}>Calendar <ArrowRight size={14} aria-hidden="true" /></Link>
         </div>
         {today.length === 0 ? (
           <div className="sh-panel sh-empty">
-            <strong>Nothing is scheduled or made today</strong>
-            {m.next ? <>Next post: {when(m.next.publishAt, now)}.</> : 'Nothing is scheduled ahead either.'}
+            <strong>Nothing is made for today yet</strong>
+            {m.next ? <>Next post: {when(m.next.publishAt, now)}. </> : null}
+            {controls ? 'Run now makes what today’s quotas still need.' : null}
           </div>
         ) : (
           <TodayStrip posts={today} o={o} />

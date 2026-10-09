@@ -93,7 +93,7 @@ const TOPICS = [
 const SOURCES = ['https://www.theverge.com/ai/1', 'https://techcrunch.com/ai/2', 'https://arstechnica.com/ai/3', 'https://www.anthropic.com/news/4', 'https://openai.com/index/5', 'https://www.bloomberg.com/tech/6'];
 
 function reels(): { read: ReelsRead; cost: Pick<CostReads, 'reelEvents' | 'reelKling' | 'reelWeights' | 'reelProduced'> } {
-  const read: ReelsRead = { attempts: [], schedules: [], insights: [], ideas: [], sources: [], requireApproval: true };
+  const read: ReelsRead = { attempts: [], schedules: [], made: [], insights: [], ideas: [], sources: [], requireApproval: true };
   const cost = { reelEvents: [] as CostReads['reelEvents'], reelKling: [] as CostReads['reelKling'], reelWeights: [] as CostReads['reelWeights'], reelProduced: [] as CostReads['reelProduced'] };
   const slots: Array<[string, number]> = [['morning', 9 * 60 + 20], ['midday', 11 * 60 + 50], ['evening', 19 * 60 + 15]];
   for (const day of days()) {
@@ -159,6 +159,12 @@ function reels(): { read: ReelsRead; cost: Pick<CostReads, 'reelEvents' | 'reelK
       if (!failed) read.insights.push(...insightHistory(mediaId, day, int(800, 9000), true));
     }
   }
+  // Made tonight, no slot yet (publishing off): waits for Approve.
+  const madeIdea = uuid(1);
+  const madeVideo = uuid(1);
+  const madeHeadline = pick(HEADLINES);
+  read.made.push({ video_job_id: madeVideo, post_idea_id: madeIdea, ny_date: TODAY, video_storage_path: `videos/${madeVideo}.mp4`, video_finished_at: at(TODAY, 80), video_slate_id: uuid(1), chosen_framework: 'curiosity', chosen_bucket: 'the_number', net: '3.10', on_screen_copy: madeHeadline.toUpperCase(), headline: madeHeadline });
+  read.sources.push({ post_idea_id: madeIdea, url: pick(SOURCES), headline: madeHeadline });
   for (let i = 0; i < 18; i++) {
     read.ideas.push({
       post_idea_id: uuid(1), headline: pick(HEADLINES), net: (4.5 - i * 0.2).toFixed(2), rank: i + 1, selected: i < 3,

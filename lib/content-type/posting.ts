@@ -144,6 +144,11 @@ export async function writePosting(type: ContentType, patch: PostingPatch, by: s
     if (patch.generate !== undefined) await setReelsSetting('auto_run', patch.generate);
     if (patch.autoPublish !== undefined) await setReelsSetting('require_approval', !patch.autoPublish);
     if (patch.live !== undefined) await setReelsSetting('publishing_live', patch.live);
+    if (patch.live === true) {
+      // Live after the night already ran: today's selected reels take today's open windows (as /api/reels/settings does).
+      const { scheduleLatestToday } = await import('@/lib/reels/publish/schedule');
+      await scheduleLatestToday();
+    }
     const n = quota(patch, windows('reels'), 0);
     if (n != null) await setReelsSetting('posts_per_day', n);
   } else {

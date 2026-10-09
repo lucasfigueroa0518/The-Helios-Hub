@@ -65,6 +65,25 @@ export type ReelScheduleRow = {
   headline: string | null;
 };
 
+/**
+ * A finished video the night made that holds no slot yet: nothing scheduled
+ * it (publishing off, or no window left) and nobody rejected it. It waits on
+ * a person, so the hub shows it as made content (Today's Content).
+ */
+export type ReelMadeRow = {
+  video_job_id: string;
+  post_idea_id: string;
+  ny_date: string;
+  video_storage_path: string;
+  video_finished_at: string;
+  video_slate_id: string | null;
+  chosen_framework: string | null;
+  chosen_bucket: string | null;
+  net: number | string | null;
+  on_screen_copy: string | null;
+  headline: string | null;
+};
+
 export type InsightRow = { media_id: string; ny_date: string; [metric: string]: unknown };
 
 export type ReelIdeaRow = {
@@ -80,6 +99,24 @@ export type ReelIdeaRow = {
   has_video: boolean;
   video_count: number;
   last_video_at: string | null;
+  /** The net's parts as the night stored them (D-253, D-261). */
+  psychology: number | string | null;
+  bucket_score: number | string | null;
+  value_score: number | string | null;
+  blockbuster: number | string | null;
+  chosen_bucket: string | null;
+  chosen_framework: string | null;
+  components: ReelScoreComponents | null;
+};
+
+/** The parts of `reels.idea_scores.components` the hub reads (lib/reels/scoring/interpret.ts InterpretedScore). */
+export type ReelScoreComponents = {
+  useful?: { score: number } | null;
+  knowledge?: { score: number } | null;
+  entertainment?: { score: number } | null;
+  entertainmentBoosted?: boolean;
+  blockbusterNouls?: { frontierDrop: number; company: number; person: number };
+  ballKnowledge?: number;
 };
 
 export type ReelSourceRow = { post_idea_id: string; url: string; headline: string | null };
@@ -87,6 +124,8 @@ export type ReelSourceRow = { post_idea_id: string; url: string; headline: strin
 export type ReelsRead = {
   attempts: ReelAttemptRow[];
   schedules: ReelScheduleRow[];
+  /** Made videos with no slot, attempt or rejection (newest per idea, last three days). */
+  made: ReelMadeRow[];
   insights: InsightRow[];
   ideas: ReelIdeaRow[];
   sources: ReelSourceRow[];
@@ -136,6 +175,27 @@ SELECT r.idea::text AS post_idea_id, r.video::text AS video_job_id,
   LEFT JOIN reels.visual_jobs vis ON vis.id = v.visual_job_id
   ${SCORE_LATERAL.replaceAll('%IDEA%', 'r.idea')}`;
 
+export const REEL_MADE_SQL = `
+SELECT DISTINCT ON (v.post_idea_id)
+       v.id::text AS video_job_id, v.post_idea_id::text AS post_idea_id,
+       coalesce(sl.ny_date, (v.finished_at AT TIME ZONE 'America/New_York')::date)::text AS ny_date,
+       v.video_storage_path, v.finished_at::text AS video_finished_at, v.slate_id AS video_slate_id,
+       score.chosen_framework, score.chosen_bucket, score.net, copy.on_screen_copy, src.headline
+  FROM reels.video_jobs v
+  LEFT JOIN reels.score_slates sl ON sl.id = v.slate_id
+  ${SCORE_LATERAL.replaceAll('%IDEA%', 'v.post_idea_id')}
+ WHERE v.status = 'ok'
+   AND v.video_storage_path IS NOT NULL
+   AND v.finished_at > now() - interval '3 days'
+   AND NOT EXISTS (SELECT 1 FROM social_hub.schedule x WHERE x.vertical = 'reels' AND x.idea_ref = v.post_idea_id::text)
+   AND NOT EXISTS (
+     SELECT 1 FROM social_hub.publish_attempts a JOIN social_hub.content_items ci ON ci.id = a.content_item_id
+      WHERE a.vertical = 'reels' AND ci.idea_ref = v.post_idea_id::text)
+   AND NOT EXISTS (
+     SELECT 1 FROM social_hub.approvals ap JOIN social_hub.content_items ci ON ci.id = ap.content_item_id
+      WHERE ci.vertical = 'reels' AND ci.native_ref = v.id::text AND ap.decision = 'rejected')
+ ORDER BY v.post_idea_id, v.finished_at DESC`;
+
 /** Each posted song's type and genre (attempts carry the audio id in their payload). */
 export const REEL_SONGS_SQL = `SELECT audio_id, audio_type, genre FROM reels.songs WHERE audio_id = ANY($1::text[])`;
 
@@ -145,6 +205,7 @@ WITH latest AS (
   SELECT id, scored_at FROM reels.score_slates ORDER BY scored_at DESC LIMIT 1
 )
 SELECT s.post_idea_id, src.headline, s.net, s.rank, s.selected, s.origin, latest.scored_at::text AS scored_at,
+       s.psychology, s.bucket_score, s.value_score, s.blockbuster, s.chosen_bucket, s.chosen_framework, s.components,
        ps.published,
        EXISTS (SELECT 1 FROM social_hub.schedule x
                 WHERE x.vertical = 'reels' AND x.idea_ref = s.post_idea_id::text AND x.status IN ('scheduled', 'publishing')) AS scheduled,
@@ -202,13 +263,14 @@ export async function readReels(q: HubQuery, spine: SpineRead): Promise<ReelsRea
   const list = [...pairs.values()];
   const ideaIds = [...new Set(list.map((p) => p.idea))];
   const audioIds = [...new Set(mine.attempts.map((a) => str(a.payload?.audio_id)).filter((x): x is string => Boolean(x)))];
-  const [facts, songs, ideas, sources, approval] = await Promise.all([
+  const [facts, songs, ideas, made, approval] = await Promise.all([
     q<ReelFacts>(REEL_FACTS_SQL, [list.map((p) => p.idea), list.map((p) => p.video)]),
     q<{ audio_id: string; audio_type: string | null; genre: string | null }>(REEL_SONGS_SQL, [audioIds]),
     q<ReelIdeaRow>(REEL_IDEAS_SQL),
-    q<ReelSourceRow>(REEL_SOURCES_SQL, [ideaIds]),
+    q<ReelMadeRow>(REEL_MADE_SQL),
     q<{ value: unknown }>(REEL_REQUIRE_APPROVAL_SQL),
   ]);
+  const sources = await q<ReelSourceRow>(REEL_SOURCES_SQL, [[...new Set([...ideaIds, ...made.rows.map((m) => m.post_idea_id)])]]);
   const factsOf = new Map(facts.rows.map((f) => [`${f.post_idea_id}|${f.video_job_id ?? ''}`, f]));
   const songOf = new Map(songs.rows.map((s) => [s.audio_id, s]));
   const fact = (idea: string | null, video: string | null) => {
@@ -238,6 +300,7 @@ export async function readReels(q: HubQuery, spine: SpineRead): Promise<ReelsRea
         chosen_framework: f.chosen_framework, chosen_bucket: f.chosen_bucket, net: f.net, on_screen_copy: f.on_screen_copy, headline: f.headline,
       };
     }),
+    made: made.rows,
     insights: insightRows(mine.insights, 'reels'),
     ideas: ideas.rows,
     sources: sources.rows,

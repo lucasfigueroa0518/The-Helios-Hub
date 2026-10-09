@@ -168,6 +168,15 @@ const BOUNDARIES = new Set(['lib/session.ts']);
  */
 const ACTION_BUTTONS = 'components/social-hub/house/ActionBar.tsx';
 
+/**
+ * Hub controls (Lucas, 2026-10-09): the Content page's Run now and Settings,
+ * and the type pages' run-progress poll. Client components whose every fetch
+ * goes to the content-type routes (posting switches, Run now, progress), which
+ * live outside the hub's read code. Checked below; their imports are still scanned.
+ */
+const HUB_CONTROLS = new Set(['components/social-hub/content/HubControls.tsx', 'components/content-type/run-progress.tsx']);
+const CONTROL_ENDPOINTS = /^\/api\/content-type\/(posting|run-today|progress)\b/;
+
 /** First network call or foreign SQL write reachable from `start`, with the import chain, or null. */
 export function networkReach(start: string): string | null {
   const seen = new Set<string>();
@@ -177,7 +186,7 @@ export function networkReach(start: string): string | null {
     if (seen.has(file)) continue;
     seen.add(file);
     if (BOUNDARIES.has(file)) continue;
-    if (file === ACTION_BUTTONS) {
+    if (file === ACTION_BUTTONS || HUB_CONTROLS.has(file)) {
       for (const spec of importsOf(readFileSync(path.join(ROOT, file), 'utf8'))) {
         const next = resolveImport(file, spec);
         if (next && !seen.has(next)) queue.push({ file: next, chain: [...chain, next] });
@@ -235,6 +244,18 @@ test('every action route checks its flag before doing anything', () => {
 });
 
 // ── Flags ───────────────────────────────────────────────────────────────────
+
+test('hub controls are client components that only call the content-type routes', () => {
+  for (const file of HUB_CONTROLS) {
+    const text = readFileSync(path.join(ROOT, file), 'utf8');
+    assert.match(text, /^'use client';/, `${file} must be a client component`);
+    const body = code(text);
+    // Every endpoint is a string constant or literal naming a content-type route; fetch only takes those.
+    const urls = [...body.matchAll(/(['`])(\/api\/[^'`?$]*)/g)].map((m) => m[2]!);
+    assert.ok(urls.length > 0, `${file} names its endpoints`);
+    for (const url of urls) assert.match(url, CONTROL_ENDPOINTS, `${file} calls ${url}`);
+  }
+});
 
 test('the action buttons are a client component that only posts to flagged action routes', async () => {
   const text = readFileSync(path.join(ROOT, ACTION_BUTTONS), 'utf8');
