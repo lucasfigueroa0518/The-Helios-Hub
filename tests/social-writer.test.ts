@@ -30,7 +30,7 @@ const v = (kind: VisualRequest['kind'], query: string): VisualRequest => ({ kind
 
 /** A valid draft for the Super Intelligence Force fixture brief. */
 function draft(): DraftSubmission {
-  return {
+  const d: DraftSubmission = {
     cover_options: [
       { text: 'Trump launches a Super Intelligence Force, led by his spy chief', facts: ['F1', 'F2'], visual: v('person', 'Donald Trump'), fallback_visual: v('setting', 'government building'), subject_ids: ['S1', 'S3'], icon: 'landmark' },
       { text: "Trump's new AI task force has 120 days", facts: ['F4'], visual: v('thematic', 'wall clock'), fallback_visual: v('thematic', 'desk calendar'), subject_ids: ['S1'] },
@@ -48,6 +48,11 @@ function draft(): DraftSubmission {
     caption: { text: 'Trump announced a Super Intelligence Force. Source: TechCrunch, October 4, 2026.', facts: ['F1'] },
     edit_notes: ['Led with the spy chief role, not the name.'],
   };
+  // alt_visuals are required (2026-10-09): two plain scenes per place, distinct from every visual and fallback here.
+  const alts = () => [v('thematic', 'server racks'), v('setting', 'empty meeting room')];
+  d.cover_options.forEach((c) => (c.alt_visuals = alts()));
+  d.slides.forEach((x) => (x.alt_visuals = alts()));
+  return d;
 }
 
 function errorsOf(edit: (d: DraftSubmission) => void): string[] {

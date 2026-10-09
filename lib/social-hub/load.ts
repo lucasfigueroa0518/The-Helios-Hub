@@ -9,6 +9,8 @@ import { latestQuotaSnapshot } from '@/lib/social-hub/refresh';
 import { readReels } from '@/lib/social-hub/queries/reels';
 import { readSpine } from '@/lib/social-hub/queries/spine';
 import { readStories } from '@/lib/social-hub/queries/stories';
+import { readAdjustments, readDayQuotas } from '@/lib/social-hub/queries/day';
+import { nyDateOf } from '@/lib/social-hub/time';
 
 function settle<T>(work: Promise<T>): Promise<T | Error> {
   return work.catch((error: unknown) => (error instanceof Error ? error : new Error(String(error))));
@@ -49,15 +51,17 @@ export async function readAll(q: HubQuery = liveHubQuery, explainersQ: Promise<H
 
 export async function loadDataset(q: HubQuery = liveHubQuery, now = new Date()): Promise<HubDataset> {
   const explainersQ = explainersHandle(q);
-  const [reads, costs, quota, snapshot, account] = await Promise.all([
+  const [reads, costs, quota, snapshot, account, adjustments, dayQuotas] = await Promise.all([
     readAll(q, explainersQ),
     settle(readCosts(q, explainersQ)),
     readLatestQuota(q).catch(() => null),
     latestQuotaSnapshot(q, now).catch(() => null),
     readAccount(q).catch((error: unknown) => ({ present: false as const, error: error instanceof Error ? error.message : String(error) })),
+    readAdjustments(q, nyDateOf(now)!).catch(() => []),
+    readDayQuotas(q, explainersQ).catch(() => null),
   ]);
   // The sweep's snapshot wins over a publisher's refusal message when it is newer.
   const newest = [snapshot, quota].filter((x): x is { text: string | null; at: string | null } => Boolean(x?.at))
     .sort((a, b) => Date.parse(b.at!) - Date.parse(a.at!))[0] ?? null;
-  return buildDataset(reads, costs, now, newest, account);
+  return { ...buildDataset(reads, costs, now, newest, account), adjustments, dayQuotas };
 }

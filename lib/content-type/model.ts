@@ -3,7 +3,8 @@ import { nyDateOf } from '@/lib/social-hub/time';
 import { windowsOn } from '@/lib/social-hub/views/plan';
 import type { HubIdea, HubPost, Vertical } from '@/lib/social-hub/types';
 import { offerer, type Offer } from '@/lib/social-hub/views/offer';
-import { poolList, poolSummary } from '@/lib/social-hub/views/pools';
+import { poolSummary } from '@/lib/social-hub/views/pools';
+import { dayRanking, quotaCandidates } from '@/lib/social-hub/views/day-rank';
 import { thumbOf } from '@/components/social-hub/ui/Thumb';
 
 /**
@@ -22,7 +23,17 @@ export type TypeDay = { date: string; cards: TypeCard[] };
  * rendered slides, or story frames that no day has yet) carries that post,
  * and `made` names what it has. A skipped, failed, or empty post never does.
  */
-export type TypeBenchItem = { idea: HubIdea; rank: number; card: TypeCard | null; made?: MadeKind | null };
+export type TypeBenchItem = {
+  idea: HubIdea;
+  /** Its place in today's ranking (Promote / Demote applied; Stories: within its series). */
+  rank: number;
+  card: TypeCard | null;
+  made?: MadeKind | null;
+  /** Today's last move on it, if any. */
+  moved?: 'promoted' | 'demoted' | null;
+  /** One of today's quota candidates: the day is filled with it. */
+  inQuota?: boolean;
+};
 
 /** What a post actually has to show: rendered slides, rendered story frames, or a video file. */
 export type MadeKind = 'slides' | 'frames' | 'video';
@@ -93,7 +104,14 @@ export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date)
     }
     byDay.set(post.nyDate, [...(byDay.get(post.nyDate) ?? []), card]);
   }
+  // Today holds only its quota candidates (lib/social-hub/views/day-rank.ts): the slots, then the top of today's ranking.
+  const candidates = quotaCandidates(dataset, vertical, now);
+  const todayIds = new Set(candidates.flatMap((c) => (c.post ? [c.post.id] : [])));
+  const todays = [...(byDay.get(today) ?? []), ...waiting.filter((c) => todayIds.has(c.post.id))];
+  waiting.splice(0, waiting.length, ...waiting.filter((c) => !todayIds.has(c.post.id)), ...todays.filter((c) => !todayIds.has(c.post.id)));
+  byDay.set(today, todays.filter((c) => todayIds.has(c.post.id)));
   for (const [date, cards] of byDay) {
+    if (date === today) continue;
     const slots = windowsOn(vertical, date).length;
     const ranked = [...cards].sort((a, b) => at(a.post).localeCompare(at(b.post)) || a.post.id.localeCompare(b.post.id));
     waiting.push(...ranked.slice(slots));
@@ -103,7 +121,10 @@ export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date)
     .map(([date, cards]) => ({ date, cards: cards.sort((a, b) => at(a.post).localeCompare(at(b.post)) || a.post.id.localeCompare(b.post.id)) }))
     .sort((a, b) => a.date.localeCompare(b.date));
   const summary = poolSummary(dataset.ideas, vertical);
-  const open = poolList(dataset.ideas, vertical, 'open');
+  const ranking = dayRanking(dataset.ideas, vertical, dataset.adjustments ?? [], today);
+  const open = ranking.map((r) => r.idea);
+  const movedOf = new Map(ranking.map((r) => [r.idea.id, r.moved]));
+  const quotaIdeas = new Set(candidates.flatMap((c) => (c.idea ? [c.idea.id] : [])));
   // Skipped, failed, still generating, or empty: not content waiting on a person. It gets no row and no chip.
   const ready = waiting.filter(benchable);
   // Match each waiting post to its idea (a post names its idea by the bare id; an idea's id may carry a prefix).
@@ -113,7 +134,9 @@ export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date)
     if (hit) matched.add(hit.post.id);
     return hit ?? null;
   };
-  const row = (idea: HubIdea, rank: number, card: TypeCard | null): TypeBenchItem => ({ idea, rank, card, made: card ? madeKind(card.post) : null });
+  const row = (idea: HubIdea, rank: number, card: TypeCard | null): TypeBenchItem => ({
+    idea, rank, card, made: card ? madeKind(card.post) : null, moved: movedOf.get(idea.id) ?? null, inQuota: quotaIdeas.has(idea.id),
+  });
   const rows: TypeBenchItem[] = vertical === 'stories' ? bySeries(open).map(({ idea, rank }) => row(idea, rank, forIdea(idea))) : open.slice(0, 50).map((idea, i) => row(idea, i + 1, forIdea(idea)));
   // Content whose idea is no longer open still needs a person: keep it on the bench under its own name.
   for (const card of ready) {

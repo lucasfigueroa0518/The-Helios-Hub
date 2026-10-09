@@ -136,7 +136,19 @@ export type HubPost = {
   refs: Record<string, string>;
 };
 
-export type IdeaState = 'idea_only' | 'content_ready' | 'on_deck' | 'published' | 'retired' | 'skipped';
+/** One line of where an idea's score comes from. */
+export type ScorePart = {
+  label: string;
+  /** What this part adds to the score (negative takes away). Null for a gate or a note that adds nothing. */
+  points: number | null;
+  /** The answer behind it, in words: "0.82 yes", "3.1 of 4", "#2 of 9". */
+  detail?: string | null;
+};
+
+/** How an idea's score was put together: the rule in one line, then each part. */
+export type ScoreBreakdown = { formula: string; parts: ScorePart[]; note?: string | null };
+
+export type IdeaState ='idea_only' | 'content_ready' | 'on_deck' | 'published' | 'retired' | 'skipped';
 
 export type HubIdea = {
   id: string;
@@ -145,6 +157,8 @@ export type HubIdea = {
   /** Score as the vertical stores it, and what it means. */
   score: number | null;
   scoreLabel: string;
+  /** Where the score comes from. Null when the vertical stored no parts for it. */
+  breakdown?: ScoreBreakdown | null;
   state: IdeaState;
   hasContent: boolean;
   versionCount: number;

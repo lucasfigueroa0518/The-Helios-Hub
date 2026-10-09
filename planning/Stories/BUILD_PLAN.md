@@ -272,12 +272,14 @@ Decisions after kickoff go here, numbered from S-34.
 | S-69 | **Worker rules (M8):** auto sets are requested after 1:30 AM New York; an auto set approves itself only when the review didn't flag it; an approved set whose window has passed stays approved (the Hub offers Publish now or Reject; risk 6). `STORIES_DB=local` keeps the `stories` tables in PGlite until the schema is applied. | Agent, M8 |
 | S-70 | **The photo finder's close-up vision check runs on Haiku 5.5** (`claude-haiku-5-5`): Tommy's `createVisionCheck` is called with that model (his code unchanged), and Stories prices each call itself. Supersedes the vision part of S-67. | Lucas, 2026-10-08 |
 | S-71 | **The `stories` schema is applied to Supabase** (2026-10-08, Lucas's go-ahead; S-61). Verified read-only: 9 tables, every auto switch off. Stories scripts load `.env.local` through `scripts/stories_env.ts`. | Lucas, 2026-10-08 |
+| S-72 | **Morning Download is recent, concrete AI news** (model releases, major-company announcements, government and political developments, advances big or small, big business moves, product launches, pivots and limits), not warnings, forecasts or opinion. (1) The pool score is no longer each source's rank: one 0–1 news score for both sources, in code (`lib/stories/md-score.ts`): news kind +0.45 + major player +0.25 + recency (+0.30 within 24h, +0.15 within 48h) − 0.45 for speculation; the source adds nothing, a story is judged on its own merit; each pool row stores its breakdown. (2) Text on Screen sends its top 10 timely ideas (was 15) plus blockbusters, leaving out The Warning and The Callout. (3) Ranking moves to `major-news@2`: score = 0.30·happened + 0.25·news_kind + 0.20·blockbuster_entity + 0.15·global_relevance + 0.10·political_relevance − 0.35·speculative, no bump for either source; bar stays 0.55. Supersedes S-63's weights. | Lucas, 2026-10-09 |
 
 ### 8.2 Prompt and question-set registry
 
 | ID | Component | Engine | Status |
 |---|---|---|---|
-| `major-news@1` | Morning Download ranking | Jev | Approved by Lucas 2026-10-08 (`lib/stories/questions.ts`) |
+| `major-news@1` | Morning Download ranking | Jev | Approved by Lucas 2026-10-08; superseded by @2 (kept as `MAJOR_NEWS_V1`) |
+| `major-news@2` | Morning Download ranking (S-72) | Jev | DRAFT 2026-10-09, wired in; wording awaits Lucas (`lib/stories/questions.ts`) |
 | `md-headlines@1` | Morning Download story frames | Sonnet 5.5 | Approved by Lucas 2026-10-08 (`lib/stories/prompts.ts`) |
 | `md-grounding@1` | Headline supported by source | Jev | Drafted in M3 ; approved by Lucas 2026-10-08 |
 | `stories-same-event@1` | Cross-system merge | Jev | Drafted in M3 ; approved by Lucas 2026-10-08 |

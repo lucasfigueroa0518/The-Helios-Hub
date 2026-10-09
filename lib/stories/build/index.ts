@@ -13,6 +13,8 @@ import type { PhotoFinder } from '@/lib/stories/photos';
 import type { Renderer } from '@/lib/stories/render/render';
 import type { ReviewCall } from '@/lib/stories/render/review';
 import { leadKeysForPair, livePoolReads, markPoolUsed, openPool, refreshPoolIfDue, type OpenPool } from '@/lib/stories/pool';
+import { applyMoves } from '@/lib/social-hub/views/day-rank';
+import { storyKey } from '@/lib/stories/sources/reels';
 import { runRenderStage } from '@/lib/stories/render-stage';
 import { daySpendUsd, failSet, getSet, markSkipped, monthSpendUsd, recordCost, saveBuild } from '@/lib/stories/repository';
 import { loadSettings } from '@/lib/stories/settings';
@@ -95,9 +97,34 @@ async function seriesPool(deps: SetBuilderDeps, series: 'morning_download' | 'gu
   try {
     const r = await refreshPoolIfDue(deps.db, () => livePoolReads(deps.sourceDb, now), now);
     if (r) deps.log?.(`pool: refreshed before build (${r.upserted} in, ${r.dropped} dropped${r.errors.length ? `; ${r.errors.join('; ')}` : ''})`);
-    return await openPool(deps.db, series);
+    return await inDayOrder(deps.db, series, await openPool(deps.db, series), now);
   } catch (err) {
     deps.log?.(`pool: unavailable, reading sources directly: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
+}
+
+/**
+ * The series' pool in today's order: a person's Promote / Demote moves for
+ * today (social_hub.idea_adjustments, the hub's `stories:pool:<series>:<key>`
+ * ids) applied in order, so a promoted idea is first in the build's list.
+ */
+async function inDayOrder(db: SetBuilderDeps['db'], series: string, pool: OpenPool, now: Date): Promise<OpenPool> {
+  const nyDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(now);
+  const { rows } = await db
+    .query<{ idea_id: string; kind: 'promote' | 'demote' }>(
+      `SELECT idea_id, kind FROM social_hub.idea_adjustments WHERE vertical = 'stories' AND ny_date = $1::date AND idea_id LIKE $2 ORDER BY created_at`,
+      [nyDate, `stories:pool:${series}:%`],
+    )
+    .catch(() => ({ rows: [] as Array<{ idea_id: string; kind: 'promote' | 'demote' }> }));
+  if (!rows.length) return pool;
+  const prefix = `stories:pool:${series}:`;
+  const moves = rows.map((r) => ({ ideaId: r.idea_id.slice(prefix.length), kind: r.kind }));
+  const order = <T>(list: T[], key: (x: T) => string) => applyMoves(list.map((x) => ({ id: key(x), x })), moves).map((w) => w.x);
+  return {
+    stories: order(pool.stories, (c) => c.key),
+    numbers: order(pool.numbers, (n) => n.key),
+    unbriefed: order(pool.unbriefed, (c) => `story:${c.key}`),
+    leads: order(pool.leads, (l) => storyKey(l.url)),
+  };
 }

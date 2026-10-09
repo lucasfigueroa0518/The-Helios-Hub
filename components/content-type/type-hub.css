@@ -34,3 +34,7 @@
 .rh-progress__bar--wait > span { width: 30%; animation: rh-progress-slide 1.4s ease-in-out infinite; }
 @keyframes rh-progress-slide { 0% { margin-left: -30%; } 100% { margin-left: 100%; } }
 .rh-detail__video { display: block; width: 100%; max-width: 320px; aspect-ratio: 9 / 16; margin: 12px 0; border-radius: 16px; background: var(--rh-media); object-fit: contain; }
+.rh-rank { display: inline-flex; align-items: center; gap: 4px; }
+.rh-rank__btn { padding: 2px 8px; min-height: 0; font-size: 12px; }
+.rh-rank__error { color: var(--rh-bad); font-size: 11px; }
+.rh-chip--quota { background: var(--rh-accent-soft); color: var(--rh-accent-ink); }

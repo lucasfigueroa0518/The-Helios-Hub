@@ -31,6 +31,7 @@ For each story in the material, write exactly one frame:
 - source_verb and source_name: how the story is credited on the frame: "via" an outlet that reported it ("via The Verge"), "reported by" an outlet with its own reporting ("reported by Reuters"), or "from" a first-party post, blog, paper or repository ("from OpenAI's blog", "from a post by @handle", "from GitHub").
 - subjects: the people and organizations the story is about, with their exact names.
 - visual: one photo request for the frame. ${VISUAL}
+- alt_visuals: two or three more photo requests for the same frame, each drawn from a different part of that frame's own headline (a person or organization it names, the money, the event, the place, the thing it describes). They are tried, in an order chosen for you, only when visual finds no usable photo, so each must stand alone under the headline and be a different picture from visual and from each other, never the same subject in other words. When visual is a thematic, setting, product or event request, every alt visual is one too (never a person, company or logo).
 
 Then one visual request for the opener (opener_visual): a second photo related to one of the stories, never the same subject and angle a story frame asks for: a place, a building, a product, or a scene.
 
@@ -46,14 +47,14 @@ ${HUMANIZER_TEXT}
     name: 'submit_headlines',
     description: 'Submit every story frame and the opener visual. Call it exactly once.',
     input_schema: obj({
-      stories: { type: 'array', items: obj({ key: { type: 'string' }, headline: { type: 'string' }, source_verb: { type: 'string', enum: ['via', 'reported by', 'from'] }, source_name: { type: 'string' }, subjects, visual }) },
+      stories: { type: 'array', items: obj({ key: { type: 'string' }, headline: { type: 'string' }, source_verb: { type: 'string', enum: ['via', 'reported by', 'from'] }, source_name: { type: 'string' }, subjects, visual, alt_visuals: { type: 'array', items: visual } }) },
       opener_visual: visual,
     }),
   },
 };
 
 export type MdHeadlinesOut = {
-  stories: Array<{ key: string; headline: string; source_verb: 'via' | 'reported by' | 'from'; source_name: string; subjects: Array<{ name: string; type: 'person' | 'organization' }>; visual: { kind: string; query: string } }>;
+  stories: Array<{ key: string; headline: string; source_verb: 'via' | 'reported by' | 'from'; source_name: string; subjects: Array<{ name: string; type: 'person' | 'organization' }>; visual: { kind: string; query: string }; alt_visuals?: Array<{ kind: string; query: string }> }>;
   opener_visual: { kind: string; query: string };
 };
 

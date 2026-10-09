@@ -44,5 +44,10 @@ export function sifDraft(): DraftSubmission {
 
 /** The same draft; kept as the name the handoff tests use (the sixth round has one Writer format). */
 export function sifDraftHandoff(): DraftSubmission {
-  return sifDraft();
+  const d = sifDraft();
+  // alt_visuals are required by the handoff check (2026-10-09): two plain scenes per place, distinct from every visual and fallback.
+  const alts = (): VisualRequest[] => [{ kind: 'thematic', query: 'server racks' }, { kind: 'setting', query: 'empty meeting room' }];
+  d.cover_options.forEach((c) => (c.alt_visuals = alts()));
+  d.slides.forEach((x) => (x.alt_visuals = alts()));
+  return d;
 }

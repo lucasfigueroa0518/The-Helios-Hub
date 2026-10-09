@@ -330,3 +330,21 @@ ALTER TABLE social_hub.publish_attempts ADD CONSTRAINT publish_attempts_trigger_
     OR (vertical = 'reels' AND trigger IN ('approve', 'auto', 'mix_test', 'force'))
     OR (vertical = 'stories' AND trigger IN ('approve', 'auto'))
 );
+
+-- ── Day ranking: Promote / Demote (Lucas, 2026-10-09) ───────────────────────
+-- A person's moves on one type's idea ranking for one New York day, applied in
+-- order on top of that day's score ranking: promote puts the idea first;
+-- demote moves it below the idea right under it. They expire with the day.
+-- The day's quota goes to the top of the adjusted ranking.
+CREATE TABLE IF NOT EXISTS social_hub.idea_adjustments (
+    id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    vertical    text NOT NULL CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories')),
+    idea_id     text NOT NULL CHECK (length(btrim(idea_id)) > 0),
+    ny_date     date NOT NULL,
+    kind        text NOT NULL CHECK (kind IN ('promote', 'demote')),
+    created_by  text,
+    created_at  timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+
+CREATE INDEX IF NOT EXISTS idx_social_hub_idea_adjustments_day
+    ON social_hub.idea_adjustments (ny_date, vertical, created_at);

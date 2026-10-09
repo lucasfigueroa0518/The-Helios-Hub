@@ -35,7 +35,7 @@ function idsOf(d: DraftSubmission) {
     tags,
     quotes: new Set(d.slides.flatMap((s) => (s.quote_id ? [s.quote_id] : []))),
     numbers: new Set(d.slides.flatMap((s) => s.number_ids)),
-    visuals: new Set([...d.cover_options, ...d.slides].flatMap((x) => [visualKey(x.visual), visualKey(x.fallback_visual)])),
+    visuals: new Set([...d.cover_options, ...d.slides].flatMap((x) => [visualKey(x.visual), visualKey(x.fallback_visual), ...(x.alt_visuals ?? []).map(visualKey)])),
   };
 }
 
@@ -50,6 +50,22 @@ export function checkEditorPowers(writer: DraftSubmission, edited: DraftSubmissi
   // The Editor may swap a visual for its fallback (a cut); never ask for one the Writer didn't (Tommy, 2026-10-07).
   for (const key of e.visuals) if (!w.visuals.has(key)) errors.push({ section: 'powers', message: `visual "${key}" wasn't in the Writer's draft (you may only swap a slide's visual for its fallback)` });
   if (errors.length > 0) throw new DraftValidationError(errors);
+}
+
+/**
+ * The Editor cuts and sharpens; it doesn't author photo requests, so a slide it echoes without alt_visuals gets
+ * them back from the Writer's slide with the same visual and fallback (Lucas, 2026-10-09). Pure.
+ */
+export function keepAltVisuals(writer: DraftSubmission, edited: DraftSubmission): DraftSubmission {
+  const pairKey = (x: { visual: VisualRequest; fallback_visual: VisualRequest }) => `${visualKey(x.visual)}|${visualKey(x.fallback_visual)}`;
+  const byPair = new Map<string, VisualRequest[]>();
+  for (const x of [...writer.cover_options, ...writer.slides]) if (x.alt_visuals?.length) byPair.set(pairKey(x), x.alt_visuals);
+  const restore = <T extends { visual: VisualRequest; fallback_visual: VisualRequest; alt_visuals?: VisualRequest[] }>(x: T): T => {
+    if (x.alt_visuals?.length) return x;
+    const alts = byPair.get(pairKey(x));
+    return alts ? { ...x, alt_visuals: structuredClone(alts) } : x;
+  };
+  return { ...edited, cover_options: edited.cover_options.map(restore), slides: edited.slides.map(restore) };
 }
 
 export type EditorResult =
@@ -87,6 +103,7 @@ export async function runEditor(brief: Brief, writerDraft: DraftSubmission, deps
   if (!value) return { ok: false, reason: r.ok ? 'malformed-output' : r.reason, detail: r.ok ? 'no draft' : r.detail, raw: r.ok ? null : r.raw, ...common };
   // Tags re-checked right after the Editor (Tommy, 2026-10-07): code, no retry. A tag the edited
   // words no longer name is removed and logged; the words and the requests stay as the Editor left them.
+  value = keepAltVisuals(writerDraft, value);
   const t = pruneSubjectTags(value, brief, deps.subjectKinds ?? null);
   // An icon the Editor dropped or changed to one not on the list falls back to the default (logged).
   const ic = defaultIcons(t.draft);

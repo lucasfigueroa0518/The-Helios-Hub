@@ -4,8 +4,9 @@ import Link from 'next/link';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, ExternalLink, Film, GalleryHorizontal, ImageIcon, Layers } from 'lucide-react';
 
-import { Drawer } from '@/app/reels/ui';
+import { Drawer, Section } from '@/app/reels/ui';
 import { BackToHub } from '@/components/content-type/BackToHub';
+import { RankButtons } from '@/components/content-type/RankButtons';
 import { useRunProgress } from '@/components/content-type/run-progress';
 import { ActionBar } from '@/components/social-hub/house/ActionBar';
 import { MADE_LABEL, STORY_SERIES, type MadeKind, type TypeBenchItem, type TypeCard, type TypeHubModel } from '@/lib/content-type/model';
@@ -192,9 +193,12 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
                       ) : (
                         <span className="rh-chip">{IDEA_STATE_LABEL[item.idea.state]}</span>
                       )}
+                      {item.inQuota ? <span className="rh-chip rh-chip--quota" title="One of today’s quota candidates">Today</span> : null}
+                      {item.moved ? <span className="rh-chip">{item.moved === 'promoted' ? 'Promoted' : 'Demoted'}</span> : null}
+                      {item.idea.state === 'idea_only' || item.idea.state === 'content_ready' ? <RankButtons vertical={model.vertical} ideaId={item.idea.id} compact /> : null}
                       {benchAction && !item.card ? <span onClick={(e) => e.stopPropagation()}>{benchAction(item)}</span> : null}
                     </span>
-                    <span className="rh-row__score">{item.idea.score == null ? '—' : item.idea.score.toFixed(item.idea.score >= 10 ? 0 : 2)}</span>
+                    <span className="rh-row__score" title={item.idea.breakdown ? 'Open to see where the score comes from' : undefined}>{item.idea.score == null ? '—' : formatScore(item.idea.score)}</span>
                     <ChevronRight size={16} className="rh-row__chev" aria-hidden="true" />
                   </div>
                 </li>
@@ -207,7 +211,7 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
 
       {open ? (
         <Drawer label={`${info.label} details`} onClose={() => setOpenPost(null)}>
-          <PostDetail card={open} run={runForPost(open.post, bench, live)} now={now} fullPostBase={fullPostBase} fromPath={`/${model.vertical}`} />
+          <PostDetail card={open} idea={bench.find((b) => b.card?.post.id === open.post.id)?.idea ?? null} run={runForPost(open.post, bench, live)} now={now} fullPostBase={fullPostBase} fromPath={`/${model.vertical}`} />
         </Drawer>
       ) : null}
       {idea ? (
@@ -216,13 +220,53 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
             <h2 className="rh-detail__title">{idea.idea.title}</h2>
             {ideaStatus ? <p className={`rh-run-status${ideaRun?.state === 'failed' ? ' is-failed' : ''}`}>{ideaStatus}</p> : null}
             {ideaRun?.state === 'failed' && ideaRun.error ? <p className="rh-muted">{ideaRun.error}</p> : null}
-            <p className="rh-muted">{IDEA_STATE_LABEL[idea.idea.state]}{idea.idea.group ? ` · ${idea.idea.group}` : ''} · ranked {idea.rank} of {idea.idea.group ? bench.filter((b) => b.idea.group === idea.idea.group).length : model.benchTotal}{idea.idea.score != null ? ` · ${model.scoreLabel ?? 'score'} ${idea.idea.score.toFixed(2)}` : ''}</p>
+            <p className="rh-muted">{IDEA_STATE_LABEL[idea.idea.state]}{idea.idea.group ? ` · ${idea.idea.group}` : ''} · ranked {idea.rank} of {idea.idea.group ? bench.filter((b) => b.idea.group === idea.idea.group).length : model.benchTotal}{idea.idea.score != null ? ` · ${idea.idea.scoreLabel || model.scoreLabel || 'score'} ${formatScore(idea.idea.score)}` : ''}</p>
             {idea.idea.detail ? <p>{idea.idea.detail}</p> : null}
             {idea.idea.createdAt ? <p className="rh-muted">Added {shortDate(idea.idea.createdAt)}</p> : null}
+            {idea.idea.state === 'idea_only' || idea.idea.state === 'content_ready' ? <div style={{ marginTop: 12 }}><RankButtons vertical={model.vertical} ideaId={idea.idea.id} /></div> : null}
             {benchAction ? <div style={{ marginTop: 12 }}>{benchAction(idea)}</div> : null}
+            <ScoreSection idea={idea.idea} />
           </div>
         </Drawer>
       ) : null}
+    </div>
+  );
+}
+
+const formatScore = (n: number) => n.toFixed(n >= 10 ? 0 : 2);
+
+/** A part's points: signed, since the parts add up to the score. */
+function formatPoints(n: number | null): string {
+  if (n == null) return '—';
+  const digits = Math.abs(n) >= 10 ? 1 : 2;
+  return n > 0 ? `+${n.toFixed(digits)}` : n < 0 ? `−${Math.abs(n).toFixed(digits)}` : n.toFixed(digits);
+}
+
+/** Where an idea's score comes from: the rule, then each part with the answer behind it. */
+function ScoreSection({ idea }: { idea: HubIdea }) {
+  const b = idea.breakdown;
+  if (!b && idea.score == null) return null;
+  return (
+    <div className="rh-detail__sections">
+      <Section title="Where the score comes from" open>
+        <p className="rh-muted rh-why__formula">{b?.formula ?? 'This pipeline stored a score without its parts.'}</p>
+        {b?.parts.length ? (
+          <dl className="rh-parts rh-why">
+            <div className="rh-why__total">
+              <dt>{idea.scoreLabel || 'Score'}</dt>
+              <dd>{idea.score == null ? '—' : formatScore(idea.score)}</dd>
+            </div>
+            {b.parts.map((part, i) => (
+              <div key={`${i}:${part.label}`} className={part.points == null ? 'is-note' : part.points < 0 ? 'is-minus' : part.points === 0 ? 'is-zero' : undefined}>
+                <dt>{part.label}</dt>
+                <dd>{formatPoints(part.points)}</dd>
+                {part.detail ? <small>{part.detail}</small> : null}
+              </div>
+            ))}
+          </dl>
+        ) : null}
+        {b?.note ? <p className="rh-muted rh-why__note">{b.note}</p> : null}
+      </Section>
     </div>
   );
 }
@@ -257,6 +301,9 @@ function PostCard({ card, status, failed, onOpen }: { card: TypeCard; status: st
         {thumb ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img className="rh-media__fill" src={thumb} alt={current?.label ?? ''} loading="lazy" {...(remote ? { referrerPolicy: 'no-referrer' as const } : {})} />
+        ) : post.media.kind === 'video' && post.media.src ? (
+          // No poster: the video's opening frame.
+          <video className="rh-media__fill" src={`${post.media.src}#t=0.5`} muted playsInline preload="metadata" />
         ) : (
           <span className="rh-reel__state"><ImageIcon size={22} />{post.media.kind === 'none' ? post.media.note : post.status === 'generating' ? 'Being made' : 'No preview yet'}</span>
         )}
@@ -281,7 +328,7 @@ function PostCard({ card, status, failed, onOpen }: { card: TypeCard; status: st
   );
 }
 
-function PostDetail({ card, run, now, fullPostBase, fromPath }: { card: TypeCard; run: RunSnapshot | null; now: number; fullPostBase: string; fromPath: string }) {
+function PostDetail({ card, idea, run, now, fullPostBase, fromPath }: { card: TypeCard; idea?: HubIdea | null; run: RunSnapshot | null; now: number; fullPostBase: string; fromPath: string }) {
   const { post, offer } = card;
   const when = post.postedAt ?? post.publishAt;
   const status = run ? runStatusText(run, now) : null;
@@ -310,6 +357,7 @@ function PostDetail({ card, run, now, fullPostBase, fromPath }: { card: TypeCard
           ))}
         </dl>
       ) : null}
+      {idea ? <ScoreSection idea={idea} /> : null}
       {post.sources.length ? (
         <p className="rh-muted">Sources: {post.sources.map((s, i) => <span key={s.url}>{i ? ', ' : ''}<a href={s.url} target="_blank" rel="noreferrer">{s.title ?? s.url}</a></span>)}</p>
       ) : null}

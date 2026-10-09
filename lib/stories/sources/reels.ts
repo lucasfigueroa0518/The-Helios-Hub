@@ -61,15 +61,26 @@ const toCandidate = (r: IdeaRow): StoryCandidate => ({
   blockbuster: r.blockbuster,
 });
 
-/** Morning Download pool, reels side (plan §5.1): the latest slate's timely ideas, top 15 by net, plus every blockbuster. */
+/**
+ * Text on Screen buckets that are an angle, not news: a warning about the
+ * viewer's own behavior, or a stance against a practice. They skew to fear and
+ * opinion, so Morning Download leaves them to Text on Screen (Lucas, 2026-10-09).
+ */
+export const NOT_NEWS_BUCKETS = ['the_warning', 'the_callout'] as const;
+
+/** How many Text on Screen ideas Morning Download takes by net; the carousel is its main news source. */
+export const MD_REELS_TOP = 10;
+
+/** Morning Download pool, reels side (plan §5.1): the latest slate's timely news ideas, top 10 by net, plus every blockbuster. */
 export async function morningDownloadReels(db: Queryable, nyDate: string): Promise<StoryCandidate[]> {
-  const { rows } = await db.query<IdeaRow>(
+  const { rows: all } = await db.query<IdeaRow>(
     `${IDEA_SQL(`s.origin = 'timely' AND sl.id = (SELECT id FROM reels.score_slates WHERE ny_date <= $1 ORDER BY ny_date DESC, scored_at DESC LIMIT 1)`)}
      ORDER BY s.net DESC NULLS LAST`,
     [nyDate],
   );
-  const top = rows.slice(0, 15);
-  const extra = rows.slice(15).filter((r) => r.blockbuster > 0);
+  const rows = all.filter((r) => !(NOT_NEWS_BUCKETS as readonly string[]).includes(r.chosen_bucket ?? ''));
+  const top = rows.slice(0, MD_REELS_TOP);
+  const extra = rows.slice(MD_REELS_TOP).filter((r) => r.blockbuster > 0);
   return [...top, ...extra].map(toCandidate);
 }
 

@@ -35,7 +35,7 @@ const shared = unstable_cache(
     if (dataset.errors.length > 0) throw new PartialRead(dataset);
     return slim(dataset);
   },
-  ['social-hub-dataset', process.env.VERCEL_DEPLOYMENT_ID ?? 'local', 'v2'],
+  ['social-hub-dataset', process.env.VERCEL_DEPLOYMENT_ID ?? 'local', 'v3'],
   { revalidate: 60, tags: [HUB_DATA_TAG] },
 );
 

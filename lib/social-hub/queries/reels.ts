@@ -99,6 +99,24 @@ export type ReelIdeaRow = {
   has_video: boolean;
   video_count: number;
   last_video_at: string | null;
+  /** The net's parts as the night stored them (D-253, D-261). */
+  psychology?: number | string | null;
+  bucket_score?: number | string | null;
+  value_score?: number | string | null;
+  blockbuster?: number | string | null;
+  chosen_bucket?: string | null;
+  chosen_framework?: string | null;
+  components?: ReelScoreComponents | null;
+};
+
+/** The parts of `reels.idea_scores.components` the hub reads (lib/reels/scoring/interpret.ts InterpretedScore). */
+export type ReelScoreComponents = {
+  useful?: { score: number } | null;
+  knowledge?: { score: number } | null;
+  entertainment?: { score: number } | null;
+  entertainmentBoosted?: boolean;
+  blockbusterNouls?: { frontierDrop: number; company: number; person: number };
+  ballKnowledge?: number;
 };
 
 export type ReelSourceRow = { post_idea_id: string; url: string; headline: string | null };
@@ -187,6 +205,7 @@ WITH latest AS (
   SELECT id, scored_at FROM reels.score_slates ORDER BY scored_at DESC LIMIT 1
 )
 SELECT s.post_idea_id, src.headline, s.net, s.rank, s.selected, s.origin, latest.scored_at::text AS scored_at,
+       s.psychology, s.bucket_score, s.value_score, s.blockbuster, s.chosen_bucket, s.chosen_framework, s.components,
        ps.published,
        EXISTS (SELECT 1 FROM social_hub.schedule x
                 WHERE x.vertical = 'reels' AND x.idea_ref = s.post_idea_id::text AND x.status IN ('scheduled', 'publishing')) AS scheduled,

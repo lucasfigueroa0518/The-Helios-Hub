@@ -15,7 +15,7 @@ import {
 import { hubId } from '@/lib/social-hub/ids';
 import { foldLifecycle } from '@/lib/social-hub/lifecycle';
 import type { CarouselIdeaRow, CarouselPostRow, CarouselsRead } from '@/lib/social-hub/queries/carousels';
-import type { ContentVersion, FactorValue, HubIdea, HubPost, HubStatus, MetricSnapshot, NativeField, SourceRef } from '@/lib/social-hub/types';
+import type { ContentVersion, FactorValue, HubIdea, HubPost, HubStatus, MetricSnapshot, NativeField, ScoreBreakdown, ScorePart, SourceRef } from '@/lib/social-hub/types';
 import { CAROUSEL_SLOTS } from '@/lib/social/overnight/config';
 
 const SLOT_LABEL: Record<string, string> = Object.fromEntries(
@@ -231,6 +231,32 @@ export function carouselPosts(read: CarouselsRead): HubPost[] {
   return foldLifecycle('carousels', posts);
 }
 
+const SCORE_QUESTIONS: Array<[string, string]> = [['why_it_matters', 'Why it matters is clear'], ['sourcing', 'Primary or multi-outlet source'], ['photographable_subject', 'Named person, company or product']];
+const GATE_QUESTIONS: Array<[string, string]> = [['ai_main_subject', 'AI is the main subject'], ['substance', 'Enough for 5–8 slides']];
+
+/**
+ * story-scoring@2 THRESHOLDS, copied (not imported: the question module pulls
+ * in the Jev client, and hub read code reaches no network module).
+ */
+const SCORING_BARS = { REQUIRED_MIN: 0.6, BONUS_MIN: 0.5 } as const;
+
+/** story-scoring@2 (lib/social/ingest/select/score.ts): the three score questions add up; the run ranks by passes, then outlets, then that sum. */
+export function carouselBreakdown(row: CarouselIdeaRow): ScoreBreakdown | null {
+  const a = row.answers;
+  if (!a) return null;
+  const t = SCORING_BARS;
+  const parts: ScorePart[] = [
+    ...SCORE_QUESTIONS.map(([id, label]) => ({ label, points: a[id] == null ? null : Number(a[id]!.toFixed(2)), detail: a[id] == null ? 'Not asked' : a[id]! >= t.BONUS_MIN ? 'passes' : `below ${t.BONUS_MIN.toFixed(2)}` })),
+    ...GATE_QUESTIONS.map(([id, label]) => ({ label: `Gate: ${label}`, points: null, detail: a[id] == null ? 'Not asked' : `${a[id]!.toFixed(2)} (needs ${t.REQUIRED_MIN.toFixed(2)})` })),
+  ];
+  const outlets = row.outlet_count ?? 0;
+  return {
+    formula: 'Sum of three judge answers (yes-probabilities, 0 to 1 each).',
+    parts,
+    note: `The 3:00 AM run ranks by questions passed (${row.passes ?? 0} of 3), then outlets (${outlets}), and uses this sum only to break ties.`,
+  };
+}
+
 export function carouselIdeas(rows: readonly CarouselIdeaRow[]): HubIdea[] {
   return rows
     .filter((row) => row.story_id)
@@ -240,6 +266,7 @@ export function carouselIdeas(rows: readonly CarouselIdeaRow[]): HubIdea[] {
       title: text(row.title) ?? row.story_id,
       score: num(row.score),
       scoreLabel: 'Judge score (0–3)',
+      breakdown: carouselBreakdown(row),
       state: row.published ? 'published' : row.scheduled ? 'on_deck' : row.post_count > 0 ? 'content_ready' : 'idea_only',
       hasContent: row.post_count > 0,
       versionCount: row.post_count,

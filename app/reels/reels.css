@@ -405,6 +405,13 @@
 .rh-parts div { padding: 10px 12px; border-radius: 12px; background: var(--rh-bg); }
 .rh-parts dt { color: var(--rh-muted); font-size: 11px; }
 .rh-parts dd { margin: 2px 0 0; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* Where an idea's score comes from (content type drawers): the total, then each signed part with its answer. */
+.rh-why__formula { margin: 0 0 10px; font-size: 12.5px; }
+.rh-why__note { margin: 10px 0 0; font-size: 12.5px; }
+.rh-why small { display: block; margin-top: 3px; color: var(--rh-muted); font-size: 11px; line-height: 1.3; overflow-wrap: anywhere; }
+.rh-why .rh-why__total { background: transparent; border: 1px solid var(--rh-line-strong); }
+.rh-why .is-minus dd { color: var(--rh-bad); }
+.rh-why .is-zero dd, .rh-why .is-note dd { color: var(--rh-muted); }
 .rh-list { margin: 0; padding-left: 18px; color: var(--rh-body); }
 .rh-list li + li { margin-top: 4px; }
 .rh-list--sources { margin-top: 10px; font-size: 12.5px; }

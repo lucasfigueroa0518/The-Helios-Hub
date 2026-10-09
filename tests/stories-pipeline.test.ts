@@ -42,17 +42,20 @@ async function buildDeps(db: Awaited<ReturnType<typeof harnessDb>>['db'], series
 
 /* ── Sources ─────────────────────────────────────────────────────── */
 
-test('reels pool: the latest slate, top 15 by net plus every blockbuster, read only', async () => {
+test('reels pool: the latest slate, top 10 news ideas by net plus every blockbuster, no Warning or Callout, read only', async () => {
   const { db } = await harnessDb();
   const old = await addSlate(db, '2026-10-01');
   await addIdea(db, old, { headline: 'Old news', url: 'https://x.test/old', net: 99 });
   const slate = await addSlate(db, DATE);
-  for (let i = 0; i < 17; i++) await addIdea(db, slate, { headline: `Story ${i}`, url: `https://x.test/${i}`, net: 100 - i, blockbuster: i === 16 ? 0.2 : 0 });
+  await addIdea(db, slate, { headline: 'Your chatbot is leaking your secrets', url: 'https://x.test/w', net: 200, bucket: 'the_warning' });
+  await addIdea(db, slate, { headline: 'Stop paying for AI note-takers', url: 'https://x.test/c', net: 150, blockbuster: 0.2, bucket: 'the_callout' });
+  for (let i = 0; i < 12; i++) await addIdea(db, slate, { headline: `Story ${i}`, url: `https://x.test/${i}`, net: 100 - i, blockbuster: i === 11 ? 0.2 : 0 });
   const pool = await morningDownloadReels(db, DATE);
-  assert.equal(pool.length, 16);
+  assert.equal(pool.length, 11);
   assert.equal(pool[0]!.headline, 'Story 0');
-  assert.equal(pool[15]!.headline, 'Story 16');
+  assert.equal(pool[10]!.headline, 'Story 11');
   assert.ok(!pool.some((c) => c.headline === 'Old news'));
+  assert.ok(!pool.some((c) => /secrets|note-takers/.test(c.headline)), 'Warning and Callout ideas stay with Text on Screen');
   assert.equal(storyKey('https://www.X.test/a/?utm_source=ig#top'), 'x.test/a');
 });
 
@@ -116,7 +119,7 @@ test('Morning Download: merge across systems, rank, write, ground with one rewri
     submit_headlines: (params, n) => {
       const stories = materialOf(params) as Array<{ key: string; headline: string }>;
       return {
-        stories: stories.map((s) => ({ key: s.key, headline: n === 1 && s.headline.includes('Nvidia') ? 'BAD Nvidia made a trillion dollars yesterday.' : `${s.headline} on Wednesday. It matters.`, source_verb: 'via', source_name: 'Bloomberg', subjects: [{ name: 'OpenAI', type: 'organization' }], visual: { kind: 'company', query: s.headline.split(' ')[0] } })),
+        stories: stories.map((s) => ({ key: s.key, headline: n === 1 && s.headline.includes('Nvidia') ? 'BAD Nvidia made a trillion dollars yesterday.' : `${s.headline} on Wednesday. It matters.`, source_verb: 'via', source_name: 'Bloomberg', subjects: [{ name: 'OpenAI', type: 'organization' }], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [{ kind: 'thematic', query: 'banknotes' }, { kind: 'setting', query: 'courtroom' }] })),
         opener_visual: { kind: 'setting', query: 'OpenAI office' },
       };
     },
@@ -136,6 +139,11 @@ test('Morning Download: merge across systems, rank, write, ground with one rewri
   // S-29: the GPT-6 frame uses the carousel's own photo; the other comes from the finder.
   const photosUsed = stories.map((f) => (f.copy as { photo?: { src: string } }).photo?.src);
   assert.ok(photosUsed.includes('https://img.test/openai.jpg'));
+  // Photo pivot (2026-10-09): each story's request carries the model's alt visuals and the frame's own headline; the opener has none.
+  const storyReqs = photos.requests.filter((q) => q.alts !== undefined);
+  assert.equal(storyReqs.length, 1, 'only the story without a carousel photo is asked for');
+  assert.deepEqual(storyReqs[0]!.alts, [{ kind: 'thematic', query: 'banknotes' }, { kind: 'setting', query: 'courtroom' }]);
+  assert.ok(storyReqs[0]!.copy && storyReqs[0]!.copy.includes('Nvidia'));
   // S-14: the opener's photo is none of the story frames' photos.
   const opener = (r.frames[0]!.copy as { photo?: { src: string }; storyCount: number });
   assert.ok(opener.photo && !photosUsed.includes(opener.photo.src));

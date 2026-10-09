@@ -54,6 +54,12 @@ export type DraftSlide = {
   visual: VisualRequest;
   fallback_visual: VisualRequest;
   /**
+   * Other parts of this slide's own words that could carry a picture, tried (in Jev's order,
+   * photo-pivot@1) only when the visual and the fallback find nothing usable (Lucas, 2026-10-09).
+   * Required by the Writer's handoff check; optional in the schema so the Editor's echo never fails on it.
+   */
+  alt_visuals?: VisualRequest[];
+  /**
    * The SUBJECTS IDs this slide is about and names (photo spec §3 rule 3;
    * Tommy, 2026-10-07). The Writer must give them (its handoff check); the
    * schema keeps them optional so the Editor's echo of the draft never fails
@@ -67,7 +73,7 @@ export type DraftSlide = {
 };
 
 export type DraftSubmission = {
-  cover_options: Array<{ text: string; facts: string[]; visual: VisualRequest; fallback_visual: VisualRequest; subject_ids?: string[]; icon?: string }>;
+  cover_options: Array<{ text: string; facts: string[]; visual: VisualRequest; fallback_visual: VisualRequest; alt_visuals?: VisualRequest[]; subject_ids?: string[]; icon?: string }>;
   /** 1-based index into cover_options. */
   chosen_cover: number;
   slides: DraftSlide[];
@@ -99,13 +105,14 @@ const visual = (description: string) => ({
   }),
   description,
 });
+const altVisuals = { type: 'array', maxItems: 3, items: visual('A different visual drawn from another part of this slide\'s own words.'), description: '2–3 other visuals, each from a different part of this slide\'s own words, tried only if the visual and the fallback find nothing usable.' };
 const visuals = { visual: visual('The visual this slide asks for.'), fallback_visual: visual('A different visual, used when the first finds nothing usable.') };
 
 export const DRAFT_SCHEMA = obj({
   cover_options: {
     type: 'array',
     description: 'Exactly 3 cover options.',
-    items: optional(obj({ text: { type: 'string', description: '≤90 chars; says who did what on its own.' }, facts, ...visuals, subject_ids: subjectIds, icon }), 'subject_ids', 'icon'),
+    items: optional(obj({ text: { type: 'string', description: '≤90 chars; says who did what on its own.' }, facts, ...visuals, alt_visuals: altVisuals, subject_ids: subjectIds, icon }), 'subject_ids', 'icon', 'alt_visuals'),
   },
   chosen_cover: { type: 'integer', description: 'Which cover option is chosen: 1, 2 or 3.' },
   slides: {
@@ -119,9 +126,10 @@ export const DRAFT_SCHEMA = obj({
       quote_excerpt: { type: ['string', 'null'], description: 'Optional exact excerpt of that quote, with "…" for cuts. Null to use the whole quote.' },
       number_ids: { ...strList, description: 'Stat: one NUMBERS ID, or two for a side-by-side pair. Empty otherwise.' },
       ...visuals,
+      alt_visuals: altVisuals,
       subject_ids: subjectIds,
       icon,
-    }), 'subject_ids', 'icon'),
+    }), 'subject_ids', 'icon', 'alt_visuals'),
   },
   follow: { type: 'string', description: 'The FOLLOW line.' },
   caption: tagged('The full caption (see the caption section).'),
@@ -189,6 +197,7 @@ export function checkDraft(input: unknown, brief: Brief): DraftSubmission {
     tagCheck(`cover_options[${i}]`, c.facts);
     visualCheck(`cover_options[${i}].visual`, c.visual);
     visualCheck(`cover_options[${i}].fallback_visual`, c.fallback_visual);
+    (c.alt_visuals ?? []).forEach((v, k) => visualCheck(`cover_options[${i}].alt_visuals[${k}]`, v));
   });
 
   d.slides.forEach((s, i) => {
@@ -196,6 +205,7 @@ export function checkDraft(input: unknown, brief: Brief): DraftSubmission {
     tagCheck(`${at}.headline`, s.headline.facts);
     visualCheck(`${at}.visual`, s.visual);
     visualCheck(`${at}.fallback_visual`, s.fallback_visual);
+    (s.alt_visuals ?? []).forEach((v, k) => visualCheck(`${at}.alt_visuals[${k}]`, v));
     if (s.body) tagCheck(`${at}.body`, s.body.facts);
     if (s.type === 'quote') {
       const q = s.quote_id ? quotes.get(s.quote_id) : undefined;

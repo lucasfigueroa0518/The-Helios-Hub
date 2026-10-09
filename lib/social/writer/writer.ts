@@ -105,6 +105,7 @@ type Place = {
   kind: 'cover' | DraftSubmission['slides'][number]['type'];
   visual: VisualRequest;
   fallback: VisualRequest;
+  alts: VisualRequest[] | undefined;
   tags: string[] | undefined;
   /** What the slide shows: headline, body, quote and its speaker, number labels (cover: its text). */
   text: string;
@@ -114,7 +115,7 @@ type Place = {
 function placesOf(d: DraftSubmission, brief: Brief): Place[] {
   const chosen = d.cover_options[d.chosen_cover - 1]!;
   return [
-    { where: 'cover', icon: chosen.icon, kind: 'cover', visual: chosen.visual, fallback: chosen.fallback_visual, tags: chosen.subject_ids, text: chosen.text, quoteId: null },
+    { where: 'cover', icon: chosen.icon, kind: 'cover', visual: chosen.visual, fallback: chosen.fallback_visual, alts: chosen.alt_visuals, tags: chosen.subject_ids, text: chosen.text, quoteId: null },
     ...d.slides.map((s, i): Place => {
       const q = s.quote_id ? brief.quotes.find((x) => x.id === s.quote_id) : undefined;
       const n = s.number_ids.map((id) => brief.numbers.find((x) => x.id === id)?.counts ?? '').join(' ');
@@ -124,6 +125,7 @@ function placesOf(d: DraftSubmission, brief: Brief): Place[] {
         kind: s.type,
         visual: s.visual,
         fallback: s.fallback_visual,
+        alts: s.alt_visuals,
         tags: s.subject_ids,
         text: [s.headline.text, s.body?.text ?? '', q?.text ?? '', q?.speaker ?? '', n].join(' '),
         quoteId: s.quote_id,
@@ -176,6 +178,34 @@ function visualFailures(v: VisualRequest, section: string, p: Place, brief: Brie
   return errors;
 }
 
+const visualKey = (v: VisualRequest) => `${v.kind}:${v.query.trim().toLowerCase()}`;
+export const ALT_VISUALS_MIN = 2;
+export const ALT_VISUALS_MAX = 3;
+
+/**
+ * alt_visuals (Lucas, 2026-10-09): 2–3 more visuals from other parts of the slide's own words, tried (in Jev's
+ * order) only when the visual and the fallback find nothing usable. Each passes the same rules as any visual, a
+ * scene slide's alternatives are scenes too, and none repeats the visual, the fallback or another alternative.
+ */
+function altFailures(p: Place, brief: Brief, view: PhotoView | null, typeOf: (name: string) => SubjectType | null): BriefError[] {
+  const alts = p.alts ?? [];
+  if (alts.length < ALT_VISUALS_MIN || alts.length > ALT_VISUALS_MAX) {
+    return [{ section: `${p.where}.alt_visuals`, message: `give ${ALT_VISUALS_MIN}–${ALT_VISUALS_MAX} alt_visuals: other parts of this slide's own words that could carry a picture (got ${alts.length})${KEEP_WORDS}` }];
+  }
+  const errors: BriefError[] = [];
+  const seen = new Set([visualKey(p.visual), visualKey(p.fallback)]);
+  alts.forEach((alt, k) => {
+    const section = `${p.where}.alt_visuals[${k}]`;
+    errors.push(...visualFailures(alt, section, p, brief, view, typeOf));
+    if (!SUBJECT_VISUALS.has(p.visual.kind) && SUBJECT_VISUALS.has(alt.kind) && alt.query.trim()) {
+      errors.push({ section, message: `the visual is ${p.visual.kind}, so every alternative is a thematic, setting, product or event visual too, never ${alt.kind}: (it would put a face or logo on a slide that isn't about them)${KEEP_WORDS}` });
+    }
+    if (alt.query.trim() && seen.has(visualKey(alt))) errors.push({ section, message: 'this alternative repeats the visual, the fallback or another alternative; ask for a different one' });
+    seen.add(visualKey(alt));
+  });
+  return errors;
+}
+
 /**
  * The Writer's visual requests and subject tags (photo spec §4, sixth round;
  * Tommy 2026-10-07), checked on every attempt. `view` null skips the
@@ -197,6 +227,7 @@ export function visualHandoffFailures(d: DraftSubmission, brief: Brief, view: Ph
     if (p.visual.kind === p.fallback.kind && p.visual.query.trim().toLowerCase() === p.fallback.query.trim().toLowerCase()) {
       errors.push({ section: `${p.where}.fallback_visual`, message: 'the fallback visual repeats the visual; ask for a different one' });
     }
+    errors.push(...altFailures(p, brief, view, typeOf));
     // A quote slide's visual is its speaker when the speaker is a person in SUBJECTS with a verified
     // headshot (seventh round: a speaker without one no longer has to be asked for, which the
     // headshot check would then reject; the slide asks for what the quote is about).
@@ -318,6 +349,13 @@ export function dropFailingVisuals(d: DraftSubmission, failures: BriefError[]): 
       dropped.push(`visual-dropped: ${where} fallback ${t.fallback_visual.kind}: ${t.fallback_visual.query} → none`);
       t.fallback_visual = { ...t.fallback_visual, query: '' };
     }
+    if (t.alt_visuals) {
+      t.alt_visuals = t.alt_visuals.filter((v, k) => {
+        const bad = failing.has(`${where}.alt_visuals[${k}]`);
+        if (bad) dropped.push(`alt-visual-dropped: ${where} ${v.kind}: ${v.query}`);
+        return !bad;
+      }).slice(0, ALT_VISUALS_MAX);
+    }
   }
   return { draft: out, dropped };
 }
@@ -381,7 +419,7 @@ export async function runWriter(brief: Brief, deps: WriterDeps): Promise<WriterR
       } catch (err) {
         if (!(err instanceof DraftValidationError) || err.errors === kept) throw err;
         if (attempt === 1) {
-          const places = [...new Set(err.errors.filter((e) => /\.(visual|fallback_visual|subject_ids)$/.test(e.section)).map((e) => e.section.replace(/\.(visual|fallback_visual|subject_ids)$/, '')))];
+          const places = [...new Set(err.errors.filter((e) => /\.(visual|fallback_visual|subject_ids|alt_visuals(\[\d+\])?)$/.test(e.section)).map((e) => e.section.replace(/\.(visual|fallback_visual|subject_ids|alt_visuals(\[\d+\])?)$/, '')))];
           if (places.length) first = { draft: structuredClone(input as DraftSubmission), places };
         }
         throw kept.length ? new DraftValidationError([...err.errors, ...kept]) : err;

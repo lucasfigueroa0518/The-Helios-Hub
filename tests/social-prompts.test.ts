@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { KINDS_RULE, LENGTH_RULE, PUNCHY_RULE, RULES_BLOCK, TESTED_IMAGE_RULE, TESTED_KINDS_LINE, TESTED_LENGTH_LINE, TESTED_PUNCHY_LINE, TESTED_WRITER_RULES, VISUAL_RULE, WRITER_RULES, renderRulesFor } from '@/lib/social/prompts/rules-block';
+import { ALT_VISUAL_RULE, KINDS_RULE, LENGTH_RULE, PUNCHY_RULE, RULES_BLOCK, TESTED_IMAGE_RULE, TESTED_KINDS_LINE, TESTED_LENGTH_LINE, TESTED_PUNCHY_LINE, TESTED_WRITER_RULES, VISUAL_RULE, WRITER_RULES, renderRulesFor } from '@/lib/social/prompts/rules-block';
 import { REPORTER_SYSTEM, reporterUserMessage } from '@/lib/social/reporter/prompt';
 import { VOICE_BLOCK } from '@/lib/social/prompts/voice-block';
 
@@ -32,11 +32,13 @@ test('RULES_BLOCK carries the tested Writer rules word for word', () => {
   const [visualRule, kindsRule] = codeBlocks(PROMPTS, '- **Sixth round (Tommy, 2026-10-07');
   assert.equal(VISUAL_RULE, visualRule);
   assert.equal(KINDS_RULE, kindsRule);
+  // Alt visuals (2026-10-09): the rule line after the visual line, word for word from the prompts file §8.
+  assert.equal(ALT_VISUAL_RULE, codeBlocks(PROMPTS, '- **Alt visuals, Writer rule line')[0]);
   assert.ok(TESTED_WRITER_RULES.includes(TESTED_IMAGE_RULE) && TESTED_WRITER_RULES.includes(TESTED_KINDS_LINE));
   // Copy budget (2026-10-08): the punchy and length lines, word for word from the prompts file §8.
   assert.deepEqual([PUNCHY_RULE, LENGTH_RULE], codeBlocks(PROMPTS, '- **Copy budget, Writer rule lines').slice(0, 2));
   for (const line of [TESTED_PUNCHY_LINE, TESTED_LENGTH_LINE]) assert.ok(TESTED_WRITER_RULES.includes(line), line);
-  assert.equal(WRITER_RULES, TESTED_WRITER_RULES.replace(TESTED_IMAGE_RULE, VISUAL_RULE).replace(TESTED_KINDS_LINE, KINDS_RULE).replace(TESTED_PUNCHY_LINE, PUNCHY_RULE).replace(TESTED_LENGTH_LINE, LENGTH_RULE));
+  assert.equal(WRITER_RULES, TESTED_WRITER_RULES.replace(TESTED_IMAGE_RULE, `${VISUAL_RULE}\n${ALT_VISUAL_RULE}`).replace(TESTED_KINDS_LINE, KINDS_RULE).replace(TESTED_PUNCHY_LINE, PUNCHY_RULE).replace(TESTED_LENGTH_LINE, LENGTH_RULE));
   assert.ok(RULES_BLOCK.includes(WRITER_RULES) && !RULES_BLOCK.includes('symbolic'));
 });
 

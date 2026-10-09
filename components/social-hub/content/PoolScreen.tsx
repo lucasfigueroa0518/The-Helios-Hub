@@ -9,7 +9,7 @@ import { verticalInfo } from '@/lib/social-hub/verticals';
 import { relative, shortDate, when } from '@/lib/social-hub/views/format';
 import { crumbsFor } from '@/lib/social-hub/views/nav';
 import { IDEA_STATE_LABEL, poolList, poolStale, poolSummary, type PoolFilter } from '@/lib/social-hub/views/pools';
-import type { IdeaState, Vertical } from '@/lib/social-hub/types';
+import type { HubIdea, IdeaState, Vertical } from '@/lib/social-hub/types';
 
 const FILTERS: Array<{ id: PoolFilter; label: string }> = [
   { id: 'open', label: 'Waiting' },
@@ -106,6 +106,7 @@ export function PoolScreen({ dataset, base, vertical, params, now, embeddedIn }:
                       <span className="sh-cell-post__text">
                         <span className="sh-cell-post__name">{idea.title}</span>
                         {detailOf(idea.detail) ? <span className="sh-subtle">{detailOf(idea.detail)}</span> : null}
+                        <ScoreWhy idea={idea} />
                       </span>
                     </td>
                     <td data-label={(summary.scoreLabel ?? 'Score').toLowerCase()}>
@@ -129,5 +130,33 @@ export function PoolScreen({ dataset, base, vertical, params, now, embeddedIn }:
         </div>
       )}
     </>
+  );
+}
+
+const points = (n: number | null) => {
+  if (n == null) return '—';
+  const digits = Math.abs(n) >= 10 ? 1 : 2;
+  return n > 0 ? `+${n.toFixed(digits)}` : n < 0 ? `−${Math.abs(n).toFixed(digits)}` : n.toFixed(digits);
+};
+
+/** Where one idea's score comes from, folded under its title. */
+function ScoreWhy({ idea }: { idea: HubIdea }) {
+  const b = idea.breakdown;
+  if (!b?.parts.length) return null;
+  return (
+    <details className="sh-why">
+      <summary>Where the score comes from</summary>
+      <p className="sh-subtle">{b.formula}</p>
+      <ul className="sh-why__parts">
+        {b.parts.map((part) => (
+          <li key={part.label} className={part.points != null && part.points < 0 ? 'is-minus' : undefined}>
+            <span className="sh-why__label">{part.label}</span>
+            <span className="sh-why__detail">{part.detail ?? ''}</span>
+            <span className="sh-why__points">{points(part.points)}</span>
+          </li>
+        ))}
+      </ul>
+      {b.note ? <p className="sh-subtle">{b.note}</p> : null}
+    </details>
   );
 }

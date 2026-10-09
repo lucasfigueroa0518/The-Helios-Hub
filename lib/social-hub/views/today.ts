@@ -4,7 +4,7 @@ import { addDays, nyDateOf } from '@/lib/social-hub/time';
 import { dayPlan, windowsOn, type DayPlan } from '@/lib/social-hub/views/plan';
 import { needsPerson } from '@/lib/social-hub/views/state';
 import type { HubPost, Vertical } from '@/lib/social-hub/types';
-import { VERTICAL_IDS } from '@/lib/social-hub/verticals';
+import { allQuotaCandidates } from '@/lib/social-hub/views/day-rank';
 
 /**
  * The Content page's model (BRIEFS.md §1): what needs a person, today's
@@ -80,38 +80,12 @@ export function publishingCandidates(posts: readonly HubPost[], today: string): 
   return out.sort(bySoonest);
 }
 
-/** What a post actually has to look at: rendered slides, story frames, or a video file. */
-export function hasMedia(post: HubPost): boolean {
-  const m = post.media;
-  if (m.kind === 'video') return Boolean(m.src || m.poster);
-  if (m.kind === 'slides') return m.slides.some((s) => s.src || s.photo);
-  if (m.kind === 'frames') return m.frames.some((f) => f.src);
-  return false;
-}
-
 /**
- * Today's Content: every type's candidates for today's quota, as one gallery.
- * A type's slots fill first with what holds today (placed, posted, or being
- * made), then with made content still waiting on a person (no slot yet, made
- * in the last few days), newest first. Never more than the type's windows
- * today. Failed, skipped and empty posts never appear.
+ * Today's Content: every type's quota candidates (lib/social-hub/views/day-rank.ts),
+ * the ones that have content. Candidates not made yet show as placeholders on the page.
  */
-export function todaysContent(posts: readonly HubPost[], now: Date): HubPost[] {
-  const today = nyDateOf(now)!;
-  const staleBefore = new Date(now.getTime() - STALE_DAYS * 86_400_000).toISOString();
-  const holding = publishingCandidates(posts, today).filter((p) => p.status === 'generating' || p.status === 'published' || hasMedia(p));
-  const out: HubPost[] = [];
-  for (const vertical of VERTICAL_IDS) {
-    const slots = windowsOn(vertical, today).length;
-    const mine = holding.filter((p) => p.vertical === vertical);
-    const taken = new Set(mine.map((p) => p.id));
-    const waiting = posts
-      .filter((p) => p.vertical === vertical && !taken.has(p.id) && p.status === 'ready' && !p.publishAt && hasMedia(p))
-      .filter((p) => (!p.nyDate || p.nyDate <= today) && (p.generatedAt ?? '') >= staleBefore)
-      .sort((a, b) => (b.generatedAt ?? '').localeCompare(a.generatedAt ?? '') || a.id.localeCompare(b.id));
-    out.push(...[...mine, ...waiting].slice(0, slots));
-  }
-  return out;
+export function todaysContent(data: Parameters<typeof allQuotaCandidates>[0], now: Date): HubPost[] {
+  return allQuotaCandidates(data, now).flatMap((c) => (c.post ? [c.post] : []));
 }
 
 export function needsGroups(posts: readonly HubPost[], now: Date): NeedsGroup[] {

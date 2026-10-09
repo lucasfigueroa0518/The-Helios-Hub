@@ -2,7 +2,8 @@ import { category, iso, num, text, yesNo } from '@/lib/social-hub/adapters/commo
 import { hubId } from '@/lib/social-hub/ids';
 import type { StoriesRead, StoryFrameRow, StoryInsightRow, StoryPoolRow, StorySetRow } from '@/lib/social-hub/queries/stories';
 import { nyDateOf, WEEKDAY_SHORT, weekdayOf } from '@/lib/social-hub/time';
-import type { FactorValue, HubIdea, HubMetrics, HubPost, HubStatus, MetricSnapshot, NativeField, SourceRef } from '@/lib/social-hub/types';
+import type { FactorValue, HubIdea, HubMetrics, HubPost, HubStatus, MetricSnapshot, NativeField, ScoreBreakdown, SourceRef } from '@/lib/social-hub/types';
+import { morningDownloadScore } from '@/lib/stories/md-score';
 import { SERIES_LABEL } from '@/lib/stories/render/copy';
 
 const SERIES: Record<string, string> = SERIES_LABEL as Record<string, string>;
@@ -201,24 +202,39 @@ export function storyPosts(read: StoriesRead): HubPost[] {
   });
 }
 
+/** A Morning Download row from before the news score: score it now, as of its refresh, the way the refresh would have. */
+function morningScore(row: StoryPoolRow): { score: number; breakdown: ScoreBreakdown } | null {
+  const story = row.story;
+  if (row.series !== 'morning_download' || row.breakdown || !story?.headline) return null;
+  return morningDownloadScore(
+    { origin: story.origin === 'carousel' ? 'carousel' : 'reels', headline: story.headline, publishedAt: story.publishedAt ?? null, blockbuster: story.blockbuster },
+    new Date(row.refreshed_at),
+  );
+}
+
 /**
- * The bench: each series' open pool ideas. A score is the idea's rank in its
- * own source, so it ranks only within its series (`group`); the type page
- * never orders one series' scores against another's.
+ * The bench: each series' open pool ideas. Morning Download scores on one news
+ * scale; the other series keep each source's rank. Either way a score ranks only
+ * within its series (`group`); the type page never orders one series' scores
+ * against another's.
  */
 export function storyIdeas(rows: readonly StoryPoolRow[]): HubIdea[] {
-  return rows.map((row) => ({
-    id: `stories:pool:${row.series}:${row.key}`,
-    vertical: 'stories' as const,
-    title: row.title,
-    score: num(row.score),
-    scoreLabel: 'Source rank',
-    state: 'idea_only' as const,
-    hasContent: false,
-    versionCount: 0,
-    generatedAt: null,
-    createdAt: iso(row.refreshed_at),
-    detail: [ORIGIN_LABEL[row.origin] ?? row.origin, row.source && row.source !== (ORIGIN_LABEL[row.origin] ?? row.origin) ? row.source : null].filter(Boolean).join(' · '),
-    group: SERIES[row.series] ?? row.series,
-  }));
+  return rows.map((row) => {
+    const rescored = morningScore(row);
+    return {
+      id: `stories:pool:${row.series}:${row.key}`,
+      vertical: 'stories' as const,
+      title: row.title,
+      score: rescored?.score ?? num(row.score),
+      scoreLabel: row.series === 'morning_download' ? 'News score (0–1)' : 'Source rank',
+      breakdown: rescored?.breakdown ?? row.breakdown ?? null,
+      state: 'idea_only' as const,
+      hasContent: false,
+      versionCount: 0,
+      generatedAt: null,
+      createdAt: iso(row.refreshed_at),
+      detail: [ORIGIN_LABEL[row.origin] ?? row.origin, row.source && row.source !== (ORIGIN_LABEL[row.origin] ?? row.origin) ? row.source : null].filter(Boolean).join(' · '),
+      group: SERIES[row.series] ?? row.series,
+    };
+  });
 }

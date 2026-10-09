@@ -39,8 +39,12 @@ export async function checkAccountQuota(input: {
   const reserve = input.reserve ?? (await quotaReserve(input.query ?? null));
   const limit = await input.ops.publishingLimit();
   if (input.query) {
+    // captured_at is the key: a reading taken in the same clock tick as the last one (two
+    // workers at once, or a coarse clock) gets the next millisecond instead of being dropped.
     await input.query(
-      `INSERT INTO social_hub.publishing_quota (captured_at, quota_usage, quota_total) VALUES (clock_timestamp(), $1, $2) ON CONFLICT DO NOTHING`,
+      `INSERT INTO social_hub.publishing_quota (captured_at, quota_usage, quota_total)
+       SELECT GREATEST(clock_timestamp(), (SELECT max(captured_at) FROM social_hub.publishing_quota) + interval '1 millisecond'), $1, $2
+       ON CONFLICT DO NOTHING`,
       [limit.quotaUsage, limit.quotaTotal],
     ).catch(() => undefined);
   }

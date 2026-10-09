@@ -174,8 +174,8 @@ const ACTION_BUTTONS = 'components/social-hub/house/ActionBar.tsx';
  * goes to the content-type routes (posting switches, Run now, progress), which
  * live outside the hub's read code. Checked below; their imports are still scanned.
  */
-const HUB_CONTROLS = new Set(['components/social-hub/content/HubControls.tsx', 'components/content-type/run-progress.tsx']);
-const CONTROL_ENDPOINTS = /^\/api\/content-type\/(posting|run-today|progress)\b/;
+const HUB_CONTROLS = new Set(['components/social-hub/content/HubControls.tsx', 'components/content-type/run-progress.tsx', 'components/content-type/RankButtons.tsx']);
+const CONTROL_ENDPOINTS = /^\/api\/content-type\/(posting|run-today|progress|idea-rank)\b/;
 
 /** First network call or foreign SQL write reachable from `start`, with the import chain, or null. */
 export function networkReach(start: string): string | null {

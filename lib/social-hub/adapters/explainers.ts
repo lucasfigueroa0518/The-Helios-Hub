@@ -18,8 +18,10 @@ import type {
   ExplainersRead,
   ExplainerTopicRow,
 } from '@/lib/social-hub/queries/explainers';
-import type { ContentVersion, FactorValue, HubIdea, HubPost, HubStatus, MetricSnapshot, NativeField } from '@/lib/social-hub/types';
+import type { ContentVersion, FactorValue, HubIdea, HubPost, HubStatus, MetricSnapshot, NativeField, ScoreBreakdown, ScorePart } from '@/lib/social-hub/types';
 import { EXPLAINER_WINDOWS } from '@/lib/explainers/publish/config';
+import { SCORE_MIN, SCORE_POINTS } from '@/lib/explainers/scoring';
+import type { ScoreKey } from '@/lib/explainers/types';
 import type { RunSnapshot } from '@/lib/content-type/run-status';
 
 const ORIGIN_LABEL: Record<string, string> = { seeded: 'Seeded', generated: 'Generated', manual: 'Manual' };
@@ -216,6 +218,19 @@ function topicRun(row: ExplainerTopicRow): RunSnapshot | null {
   };
 }
 
+/** E-15: each judge score out of 4, times its points, adds to the 0–100 weighted score (lib/explainers/scoring.ts). */
+export function explainerBreakdown(row: ExplainerTopicRow): ScoreBreakdown | null {
+  if (num(row.weighted_score) == null) return null;
+  const parts: ScorePart[] = JEV_SCORES.map((s) => {
+    const key = s.column as ScoreKey;
+    const raw = num(row[key as keyof ExplainerTopicRow]);
+    const min = SCORE_MIN[key];
+    const gate = min != null && raw != null && raw < min ? ` · below the ${min} minimum` : '';
+    return { label: `${s.label} (${SCORE_POINTS[key]} pts)`, points: raw == null ? null : Number(((raw / 4) * SCORE_POINTS[key]).toFixed(2)), detail: raw == null ? 'Not scored' : `${raw.toFixed(2)} of 4${gate}` };
+  });
+  return { formula: 'Each judge score out of 4, times its points; the six add up to 100.', parts };
+}
+
 export function explainerIdeas(rows: readonly ExplainerTopicRow[]): HubIdea[] {
   return rows.map((row) => ({
     id: `explainers:topic:${row.topic_id}`,
@@ -223,6 +238,7 @@ export function explainerIdeas(rows: readonly ExplainerTopicRow[]): HubIdea[] {
     title: row.title,
     score: num(row.weighted_score),
     scoreLabel: 'Weighted score (0–100)',
+    breakdown: explainerBreakdown(row),
     state: row.published ? 'published' : row.scheduled ? 'on_deck' : row.ok_jobs > 0 ? 'content_ready' : 'idea_only',
     hasContent: row.ok_jobs > 0,
     versionCount: row.ok_jobs,

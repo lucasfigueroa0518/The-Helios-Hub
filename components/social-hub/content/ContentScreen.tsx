@@ -12,7 +12,8 @@ import { plural, relative, when } from '@/lib/social-hub/views/format';
 import type { LibrariesModel } from '@/lib/social-hub/views/libraries';
 import { offerer } from '@/lib/social-hub/views/offer';
 import { poolStale, poolSummaries, type PoolSummary } from '@/lib/social-hub/views/pools';
-import { contentModel, todaysContent } from '@/lib/social-hub/views/today';
+import { allQuotaCandidates } from '@/lib/social-hub/views/day-rank';
+import { contentModel } from '@/lib/social-hub/views/today';
 import { typeHref, verticalInfo } from '@/lib/social-hub/verticals';
 
 /**
@@ -22,8 +23,8 @@ import { typeHref, verticalInfo } from '@/lib/social-hub/verticals';
 export function ContentScreen({ dataset, base, now, libraries, controls = true }: { dataset: HubDataset; base: string; now: Date; libraries: LibrariesModel; controls?: boolean }) {
   const m = contentModel(dataset, now);
   const o = offerer(dataset, now);
-  // Every type's candidates for today's quota: holding a slot, being made, or made and waiting on a person.
-  const today = todaysContent(dataset.posts, now);
+  // Every type's quota candidates: what holds today's slots, then the top of today's ranking (Promote / Demote applied).
+  const today = allQuotaCandidates(dataset, now);
   // Rows nothing here can act on don't count as waiting on the person (critique 2026-10-08).
   const off = (p: HubPost) => o.offer(p).state.id === 'approval_off';
   const needs = m.needs.map((g) => ({ ...g, posts: g.posts.filter((p) => !off(p)) })).filter((g) => g.posts.length);
@@ -60,12 +61,12 @@ export function ContentScreen({ dataset, base, now, libraries, controls = true }
         </div>
         {today.length === 0 ? (
           <div className="sh-panel sh-empty">
-            <strong>Nothing is made for today yet</strong>
+            <strong>No candidates for today yet</strong>
             {m.next ? <>Next post: {when(m.next.publishAt, now)}. </> : null}
             {controls ? 'Run now makes what today’s quotas still need.' : null}
           </div>
         ) : (
-          <TodayStrip posts={today} o={o} />
+          <TodayStrip candidates={today} o={o} />
         )}
       </section>
 

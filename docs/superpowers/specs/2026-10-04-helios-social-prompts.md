@@ -557,6 +557,12 @@ TENSIONS: each real disagreement or open question in the sources, one line each:
 - At most 2 stat slides per post. Keep the strongest numbers as stat slides; put the others in a text slide's body when they fit its budget, else leave them for the caption.
 ```
 
+- **Alt visuals, Writer rule line** (Lucas, 2026-10-09; added after the visual line, photo-pivot@1): when a slide's visual and fallback find no usable photo, Jev picks among these other parts of the slide's own words:
+
+```
+- ALT VISUALS. Give every cover option and story slide 2–3 alt_visuals: more visuals, each drawn from a different part of that slide's own words (a person or company it names, the thing a number counts, the event, the place, the money), written like the VISUAL and the FALLBACK VISUAL. They are tried, in an order chosen for you, only when the VISUAL and the FALLBACK VISUAL find no usable photo, so each must stand alone under the slide. Each is a different picture from the VISUAL, the FALLBACK VISUAL and the other alt_visuals: never the same subject in other words. When the VISUAL is a thematic, setting, product or event, every alt_visual is one too. Never change a slide's words to fit an alt_visual.
+```
+
 - **Conflicts fixed in place** (each pulled copy past the new budget):
   - Voice: "Vary sentence length. Three short sentences in a row is too many." → "Vary sentence length. In the caption, three short sentences in a row is too many; on a slide, one or two short sentences is normal." (shared blocks §1).
   - Editor check 3 (§4): explaining a term now stays within the length limits; a gloss that won't fit goes to the caption.

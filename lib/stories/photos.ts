@@ -39,6 +39,10 @@ export type PhotoRequest = {
   subjects: Array<{ name: string; type: 'person' | 'organization' }>;
   storyDate: string | null;
   sourceUrls: string[];
+  /** Other photo requests drawn from the same copy, tried only when `query` finds nothing usable (photo-pivot@1). */
+  alts?: Array<{ kind: string; query: string }>;
+  /** The frame's own words (its headline), so the set's slide and pivot checks judge a photo against what the frame says, not just the request. */
+  copy?: string;
   /** Never pick these (photos used in the last 7 days, or already in this set). */
   exclude: Set<string>;
 };
@@ -154,25 +158,27 @@ export function createLivePhotoFinder(opts: { jev?: JevAsk; http?: typeof fetch;
       const subjects = [...new Map(live.flatMap((r) => r.subjects.map((s) => [s.name, s] as const))).values()];
       const brief = minimalBrief({ ...live[0]!, subjects, sourceUrls: [...seenUrl], storyDate, query: live.map((r) => r.query).join('; '), exclude });
       const visual = (r: PhotoRequest): VisualRequest => ({ kind: r.kind as VisualKind, query: r.query });
+      const altsOf = (r: PhotoRequest): VisualRequest[] => (r.alts ?? []).filter((a) => KINDS.has(a.kind) && a.query.trim()).slice(0, 3).map((a): VisualRequest => ({ kind: a.kind as VisualKind, query: a.query }));
       const fallback = (r: PhotoRequest): VisualRequest =>
         r.kind === 'thematic' || r.kind === 'setting' ? { kind: r.kind === 'thematic' ? 'setting' : 'thematic', query: r.query } : { kind: 'thematic', query: r.query.split(/\s+/).slice(-3).join(' ') || r.query };
       const line = (text: string) => ({ text, facts: [] as string[] });
       const slide = (r: PhotoRequest) => ({
         type: 'text' as const,
-        headline: line(r.query),
+        headline: line(r.copy ?? r.query),
         body: null,
         quote_id: null,
         quote_excerpt: null,
         number_ids: [] as string[],
         visual: visual(r),
         fallback_visual: fallback(r),
+        alt_visuals: altsOf(r),
         quote: null,
         numbers: [] as FilledDraft['slides'][number]['numbers'],
       });
       const first = live[0]!;
       const draft: FilledDraft = {
-        cover: first.query,
-        cover_options: [{ text: first.query, facts: [], visual: visual(first), fallback_visual: fallback(first) }, { text: first.query, facts: [], visual: visual(first), fallback_visual: fallback(first) }, { text: first.query, facts: [], visual: visual(first), fallback_visual: fallback(first) }],
+        cover: first.copy ?? first.query,
+        cover_options: [{ text: first.copy ?? first.query, facts: [], visual: visual(first), fallback_visual: fallback(first), alt_visuals: altsOf(first) }, { text: first.query, facts: [], visual: visual(first), fallback_visual: fallback(first) }, { text: first.query, facts: [], visual: visual(first), fallback_visual: fallback(first) }],
         chosen_cover: 1,
         slides: live.slice(1).map(slide),
         follow: '',

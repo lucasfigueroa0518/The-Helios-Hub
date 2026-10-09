@@ -34,6 +34,7 @@ import { articlePhotosFor } from './article-list';
 import { newSearchContext, searchVisual, type Candidate, type PhotoDeps, type PhotoSlot, type PhotoTrace } from './find';
 import type { SubjectType } from './identity';
 import type { IdentityCache } from './p18';
+import { choosePivots } from './pivot';
 import { newPickState, pickForSlide, type PickSlot, type PickWords, type Scored } from './pick';
 import { buildSheets } from './sheet';
 import { ICON_SCENES, tuning } from './tuning';
@@ -63,7 +64,7 @@ export async function subjectKinds(brief: Brief, identities?: IdentityCache): Pr
   return out;
 }
 
-type Place = { slot: PickSlot; icon: string; tags: string[]; requests: VisualRequest[]; words: PickWords };
+type Place = { slot: PickSlot; icon: string; tags: string[]; requests: VisualRequest[]; alts: VisualRequest[]; words: PickWords };
 
 const errText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
@@ -82,12 +83,13 @@ export async function photosForDraft(
   const icon = (name: string | undefined) => (isIcon(name) ? name : DEFAULT_ICON);
   const chosen = draft.cover_options[draft.chosen_cover - 1]!;
   const places: Place[] = [
-    { slot: { kind: 'cover', speaker: null }, icon: icon(chosen.icon), tags: chosen.subject_ids ?? [], requests: [chosen.visual, chosen.fallback_visual], words: { position: 1, headline: draft.cover, body: '' } },
+    { slot: { kind: 'cover', speaker: null }, icon: icon(chosen.icon), tags: chosen.subject_ids ?? [], requests: [chosen.visual, chosen.fallback_visual], alts: chosen.alt_visuals ?? [], words: { position: 1, headline: draft.cover, body: '' } },
     ...draft.slides.map((s, i): Place => ({
       slot: { kind: s.type === 'stat' ? 'stat' : s.type === 'quote' ? 'quote' : 'story', speaker: s.quote?.speaker_subject ?? null },
       icon: icon(s.icon),
       tags: s.subject_ids ?? [],
       requests: [s.visual, s.fallback_visual],
+      alts: s.alt_visuals ?? [],
       words: { position: i + 2, headline: s.headline.text, body: [s.body?.text, s.quote ? `"${s.quote.text}" (${s.quote.speaker})` : null, ...s.numbers.map((n) => `${n.value} ${n.counts}`)].filter(Boolean).join(' ') },
     })),
   ];
@@ -150,6 +152,30 @@ export async function photosForDraft(
       // The bank's record never changes the post.
     }
     const searchSteps = found[i]!.flatMap((r) => r.steps);
+    // Pivot (tuning.ts): both requests left the slide without a photo → Jev picks which of the Writer's alt visuals
+    // (other parts of the slide's own copy) are worth searching; each is searched and picked like any request.
+    if (!out.winner && tuning().pivot && deps.jev && p.slot.kind !== 'quote' && p.alts.length) {
+      const tried = found[i]!.map((r) => ({ request: r.request, outcome: r.candidates.length ? 'candidates found but none passed the checks' : 'no candidates found' }));
+      const pivot = await choosePivots({ jev: deps.jev, story: brief.the_news.text, slide: { position: p.words.position, kind: p.slot.kind, headline: p.words.headline, body: p.words.body }, alts: p.alts, tried, photosInPost: state.picked });
+      searchSteps.push(...pivot.steps);
+      if (pivot.chosen.length) {
+        const searched = [];
+        for (const request of pivot.chosen) {
+          const r = await searchVisual(request, ctx, deps, { cover: i === 0, tags: p.tags });
+          searchSteps.push(`pivot → ${request.kind}: "${request.query}"`, ...r.steps);
+          searched.push({ request, scored: r.candidates.map((cand): Scored => ({ cand, tags: null, fit: null })) });
+        }
+        const again = await pickForSlide({ slot: p.slot, requests: searched, words: p.words }, state, deps, subjects, PhotoFit.THRESHOLDS.FIT_MIN, brief.the_news.text);
+        visionUsd += again.visionUsd;
+        // The bank also learns what the pivot's checks saw (same shape as the first requests').
+        try {
+          vetted.push(...vettedForSlide({ slide: i + 1, requests: searched.map((r) => ({ request: r.request, candidates: r.scored.map((x) => x.cand) })), winner: again.winner?.cand ?? null, alternates: again.alternates, tagsByUrl, fitByKey, verdicts: recorder.verdicts, fitMin: PhotoFit.THRESHOLDS.FIT_MIN }));
+        } catch {
+          // The bank's record never changes the post.
+        }
+        out = again.winner ? { ...again, steps: [...out.steps, ...again.steps] } : { ...out, steps: [...out.steps, ...again.steps] };
+      }
+    }
     // Icon scene (tuning.ts): both requests left the slide without a photo → one more search for its icon's plain scene.
     const iconScene = ICON_SCENES[p.icon];
     if (!out.winner && tuning().iconScenes && p.slot.kind !== 'quote' && iconScene) {

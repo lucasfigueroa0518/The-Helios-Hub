@@ -1,4 +1,5 @@
 import type { HubQuery } from '@/lib/social-hub/db';
+import type { ScoreBreakdown } from '@/lib/social-hub/types';
 
 /**
  * IG Stories reads (schema `stories`, SELECT only). A set is one post and its
@@ -68,6 +69,10 @@ export type StoryPoolRow = {
   source: string | null;
   score: number | string | null;
   refreshed_at: string;
+  /** Where the score came from, written by the refresh (absent on rows refreshed before 2026-10-09). */
+  breakdown?: ScoreBreakdown | null;
+  /** The story a Morning Download row carries, to score rows that predate the breakdown. */
+  story?: { origin?: string; headline?: string; publishedAt?: string | null; blockbuster?: number } | null;
 };
 
 export type StoriesRead = {
@@ -111,7 +116,8 @@ SELECT i.frame_id, i.captured_at::text AS captured_at, i.final, i.reach, i.views
 /** The open pool: what the next build of each series chooses from. */
 export const STORY_POOL_SQL = `
 SELECT p.id AS pool_id, p.series, p.key, p.origin, p.ref, p.title, p.payload->>'source' AS source,
-       p.score, p.refreshed_at::text AS refreshed_at
+       p.score, p.refreshed_at::text AS refreshed_at, p.payload->'breakdown' AS breakdown,
+       CASE WHEN p.series = 'morning_download' THEN p.payload->'story' END AS story
   FROM stories.pool p
  WHERE p.used_at IS NULL
  ORDER BY p.series, p.score DESC NULLS LAST, p.title

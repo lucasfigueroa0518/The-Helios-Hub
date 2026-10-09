@@ -111,6 +111,16 @@
 .sh-score { font-variant-numeric: tabular-nums; color: var(--color-text); font-weight: var(--font-weight-medium); }
 .sh-bar { position: relative; display: block; width: 72px; height: 6px; border-radius: var(--radius-pill); background: var(--color-surface-2); overflow: hidden; }
 .sh-bar > span { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--color-text-muted); }
+.sh-why { margin-top: 4px; font-size: var(--sh-fs-small); }
+.sh-why summary { width: fit-content; color: var(--color-text-muted); font-size: var(--sh-fs-label); cursor: pointer; }
+.sh-why summary:hover { color: var(--color-text); }
+.sh-why p { margin: 6px 0; }
+.sh-why__parts { display: flex; flex-direction: column; gap: 3px; max-width: 520px; margin: 0; padding: 0; list-style: none; }
+.sh-why__parts li { display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr) auto; gap: 10px; align-items: baseline; }
+.sh-why__label { color: var(--color-text); }
+.sh-why__detail { color: var(--color-text-subtle); overflow-wrap: anywhere; }
+.sh-why__points { font-variant-numeric: tabular-nums; font-weight: var(--font-weight-medium); color: var(--color-text); text-align: right; }
+.sh-why__parts li.is-minus .sh-why__points { color: var(--color-negative); }
 .sh-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .sh-chip { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: var(--radius-pill); background: var(--color-surface-2); color: var(--color-text-muted); font-size: var(--sh-fs-label); white-space: nowrap; }
 .sh-audio { display: flex; align-items: center; gap: 12px; min-width: 260px; }
@@ -181,3 +191,6 @@
 .sh-gallery__empty { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: var(--sh-fs-small); color: var(--color-text-muted); }
 .sh-gallery__meta { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; color: var(--color-text-muted); font-size: var(--sh-fs-small); }
 @media (max-width: 640px) { .sh-gallery__card { width: 160px; } }
+.sh-gallery__card.is-pending { border-style: dashed; }
+.sh-gallery__card.is-pending .sh-gallery__frame { opacity: 0.75; }
+.sh-gallery__hint { font-size: var(--sh-fs-small); }

@@ -15,7 +15,8 @@ import { hubId } from '@/lib/social-hub/ids';
 import { foldLifecycle } from '@/lib/social-hub/lifecycle';
 import { reelItem } from '@/lib/social-hub/queries/costs';
 import type { ReelAttemptRow, ReelIdeaRow, ReelMadeRow, ReelScheduleRow, ReelsRead } from '@/lib/social-hub/queries/reels';
-import type { FactorValue, HubIdea, HubPost, NativeField } from '@/lib/social-hub/types';
+import type { FactorValue, HubIdea, HubPost, NativeField, ScoreBreakdown, ScorePart } from '@/lib/social-hub/types';
+import { BLOCKBUSTER_BAR, ENTERTAINMENT_BOOST, NET_BUCKET_WEIGHT, NET_VALUE_WEIGHT } from '@/lib/reels/config';
 import { parseMotionFactors, reelTitle } from '@/lib/reels/analytics/performance';
 import { resolveSlot, slotCaption } from '@/lib/reels/publish/slots';
 import { colorProfileOrNoir } from '@/lib/reels/visual/color';
@@ -316,6 +317,39 @@ export function reelPosts(read: ReelsRead): HubPost[] {
   return foldLifecycle('reels', posts);
 }
 
+const pts = (n: number) => Number(n.toFixed(3));
+
+/** The net's parts, as Trial Reels' own drawer adds them up (app/reels/reels-hub.tsx netParts). */
+export function reelBreakdown(row: ReelIdeaRow): ScoreBreakdown | null {
+  const net = num(row.net);
+  if (net == null) return { formula: 'Psychology + ½ × bucket fit + 2 × value + blockbuster bonus.', parts: [], note: 'No bucket cleared its bar, so the idea has no net score.' };
+  const psychology = num(row.psychology);
+  const bucket = num(row.bucket_score);
+  const value = num(row.value_score);
+  const blockbuster = num(row.blockbuster) ?? 0;
+  const c = row.components ?? {};
+  const parts: ScorePart[] = [];
+  if (psychology != null) parts.push({ label: 'Psychology', points: pts(psychology), detail: labelOf(row.chosen_framework ?? null, FRAMEWORK_LABEL) });
+  if (bucket != null) parts.push({ label: `Bucket fit ×${NET_BUCKET_WEIGHT}`, points: pts(NET_BUCKET_WEIGHT * bucket), detail: `${labelOf(row.chosen_bucket ?? null, BUCKET_LABEL)}: ${bucket.toFixed(2)}` });
+  if (value != null) {
+    const boost = c.entertainmentBoosted ? ENTERTAINMENT_BOOST : 1;
+    const kinds: Array<[string, number | null]> = [
+      ['Useful', c.useful?.score ?? null],
+      ['Worth knowing', c.knowledge?.score ?? null],
+      [boost > 1 ? `Entertainment ×${ENTERTAINMENT_BOOST}` : 'Entertainment', c.entertainment?.score == null ? null : c.entertainment.score * boost],
+    ];
+    const best = kinds.reduce((top, k) => ((k[1] ?? -1) > (top[1] ?? -1) ? k : top));
+    parts.push({ label: `Value ×${NET_VALUE_WEIGHT}`, points: pts(NET_VALUE_WEIGHT * value), detail: `${best[0]}: ${value.toFixed(2)}` });
+  }
+  if (blockbuster > 0) {
+    const n = c.blockbusterNouls;
+    const why = n ? [n.frontierDrop >= BLOCKBUSTER_BAR ? 'frontier model' : null, n.company >= BLOCKBUSTER_BAR ? 'major company' : null, n.person >= BLOCKBUSTER_BAR ? 'major person' : null].filter(Boolean).join(', ') : '';
+    parts.push({ label: 'Blockbuster', points: pts(blockbuster), detail: why || null });
+  }
+  if ((c.ballKnowledge ?? 0) > 0) parts.push({ label: 'Ball Knowledge bump', points: pts(c.ballKnowledge ?? 0), detail: 'scored before D-261' });
+  return { formula: 'Psychology + ½ × bucket fit + 2 × value + blockbuster bonus.', parts };
+}
+
 export function reelIdeas(rows: readonly ReelIdeaRow[]): HubIdea[] {
   return rows.map((row) => ({
     id: `reels:idea:${row.post_idea_id}`,
@@ -323,6 +357,7 @@ export function reelIdeas(rows: readonly ReelIdeaRow[]): HubIdea[] {
     title: text(row.headline) ?? 'Untitled idea',
     score: num(row.net),
     scoreLabel: 'Net score',
+    breakdown: reelBreakdown(row),
     // Trial Reels content is never reused (SH-59): no Content-ready state.
     state: row.published ? 'published' : row.scheduled ? 'on_deck' : 'idea_only',
     hasContent: row.has_video,

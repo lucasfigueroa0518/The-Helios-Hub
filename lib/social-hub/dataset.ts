@@ -2,6 +2,7 @@ import { carouselIdeas, carouselPosts } from '@/lib/social-hub/adapters/carousel
 import { explainerIdeas, explainerPosts } from '@/lib/social-hub/adapters/explainers';
 import { reelIdeas, reelPosts } from '@/lib/social-hub/adapters/reels';
 import { storyIdeas, storyPosts } from '@/lib/social-hub/adapters/stories';
+import type { DayQuotas, IdeaAdjustment } from '@/lib/social-hub/views/day-rank';
 import type { CarouselsRead } from '@/lib/social-hub/queries/carousels';
 import type { ExplainersRead } from '@/lib/social-hub/queries/explainers';
 import type { ReelsRead } from '@/lib/social-hub/queries/reels';
@@ -33,6 +34,10 @@ export type HubDataset = {
   latestQuota: { text: string | null; at: string | null } | null;
   /** `social_hub` account tables: absent until applied (Phase 2), then filled by the collector. */
   account: AccountRead;
+  /** Today's Promote / Demote moves (lib/social-hub/views/day-rank.ts). */
+  adjustments?: IdeaAdjustment[];
+  /** Each type's posts per day, for its quota candidates. */
+  dayQuotas?: DayQuotas | null;
   loadedAt: string;
 };
 

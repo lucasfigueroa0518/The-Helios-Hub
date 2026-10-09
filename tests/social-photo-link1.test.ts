@@ -48,12 +48,14 @@ const scene = (query: string): VisualRequest => ({ kind: 'thematic', query });
 
 type SlideSpec = { type?: DraftSlide['type']; headline: string; body?: string; quote_id?: string; number_ids?: string[]; visual: VisualRequest; fallback?: VisualRequest; tags?: string[] };
 
+/** alt_visuals are required (2026-10-09): two plain scenes, distinct from the fallbacks here. */
+const ALTS = (): VisualRequest[] => [scene('server racks'), { kind: 'setting', query: 'empty meeting room' }];
 const fallbackFor = (v: VisualRequest) => (v.query === 'office desk' ? scene('city street') : scene('office desk'));
 
 /** A draft for a saved brief: the cover, then the given slides (each with a scene fallback unless given). */
 function draftOf(cover: { text: string; visual: VisualRequest; tags?: string[] }, slides: SlideSpec[]): DraftSubmission {
   return {
-    cover_options: [0, 1, 2].map(() => ({ text: cover.text, facts: [], visual: cover.visual, fallback_visual: fallbackFor(cover.visual), icon: 'newspaper', ...(cover.tags ? { subject_ids: cover.tags } : {}) })),
+    cover_options: [0, 1, 2].map(() => ({ text: cover.text, facts: [], visual: cover.visual, fallback_visual: fallbackFor(cover.visual), alt_visuals: ALTS(), icon: 'newspaper', ...(cover.tags ? { subject_ids: cover.tags } : {}) })),
     chosen_cover: 1,
     slides: slides.map((s) => ({
       type: s.type ?? 'text',
@@ -64,6 +66,7 @@ function draftOf(cover: { text: string; visual: VisualRequest; tags?: string[] }
       number_ids: s.number_ids ?? [],
       visual: s.visual,
       fallback_visual: s.fallback ?? fallbackFor(s.visual),
+      alt_visuals: ALTS(),
       icon: 'newspaper',
       ...(s.tags ? { subject_ids: s.tags } : {}),
     })),

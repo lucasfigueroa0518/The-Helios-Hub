@@ -62,6 +62,9 @@ export type CarouselIdeaRow = {
   url: string | null;
   score: number | string | null;
   outlet_count: number | null;
+  /** story-scoring@2 answers (Jev probabilities by question id) and how many of the three score questions passed. */
+  answers?: Record<string, number> | null;
+  passes?: number | null;
   run_started_at: string | null;
   post_count: number;
   last_post_at: string | null;
@@ -110,6 +113,7 @@ SELECT c->>'id' AS story_id,
        c->'members'->0->>'url' AS url,
        c->>'probSum' AS score,
        (c->>'outletCount')::int AS outlet_count,
+       c->'answers' AS answers, (c->>'passes')::int AS passes,
        latest.started_at::text AS run_started_at,
        (SELECT count(*)::int FROM social.posts p WHERE p.story_id = c->>'id' AND p.origin = 'pipeline') AS post_count,
        (SELECT max(p.created_at)::text FROM social.posts p WHERE p.story_id = c->>'id' AND p.origin = 'pipeline') AS last_post_at,

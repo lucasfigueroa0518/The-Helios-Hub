@@ -66,6 +66,13 @@ export type ExplainerTopicRow = {
   status: string;
   origin: string;
   weighted_score: number | string | null;
+  /** E-15 judge scores, 0–4 (the parts of weighted_score). */
+  audience_fit?: number | string | null;
+  teachability_45s?: number | string | null;
+  analogy_potential?: number | string | null;
+  visual_potential?: number | string | null;
+  accuracy_under_simplification?: number | string | null;
+  hook_strength?: number | string | null;
   created_at: string;
   ok_jobs: number;
   last_render_at: string | null;
@@ -112,6 +119,8 @@ SELECT j.id AS job_id, j.topic_id, j.status, j.trigger, j.mode, j.spend_usd,
 /** The topic pool (spec §7 Ideas): every live topic with its score and content stock. */
 export const EXPLAINER_TOPICS_SQL = `
 SELECT t.id AS topic_id, t.title, t.scope, t.status, t.origin, t.weighted_score,
+       t.audience_fit, t.teachability_45s, t.analogy_potential, t.visual_potential,
+       t.accuracy_under_simplification, t.hook_strength,
        t.created_at::text AS created_at,
        (SELECT count(*)::int FROM explainers.jobs j WHERE j.topic_id = t.id AND j.status = 'ok') AS ok_jobs,
        (SELECT max(j.finished_at)::text FROM explainers.jobs j WHERE j.topic_id = t.id AND j.status = 'ok') AS last_render_at,

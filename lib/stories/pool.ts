@@ -13,10 +13,13 @@
  *
  * The builds (the 4:00 AM auto set and Generate) draw from this pool. This
  * pass only reads the other pools (CLAUDE.md rule 2: nothing else in the
- * database is swept). It does not score with a model: an idea's score is its
- * rank in its own source, so scores compare only within one series.
+ * database is swept). It does not score with a model. Morning Download scores
+ * every story on one news scale (lib/stories/md-score.ts); the other series
+ * keep each source's own rank. Each row carries its breakdown for the hub.
  */
 import type { Queryable } from '@/lib/stories/db';
+import type { ScoreBreakdown } from '@/lib/social-hub/types';
+import { morningDownloadScore, rankBreakdown } from '@/lib/stories/md-score';
 import type { Series } from '@/lib/stories/render/types';
 import { carouselNumbers, morningDownloadCarousel, shortlistWithoutBrief, type NumberCandidate } from '@/lib/stories/sources/carousel';
 import { dedupe, freeToolLeads, morningDownloadReels, storyKey, theNumberIdeas, type StoryCandidate, type ToolLead } from '@/lib/stories/sources/reels';
@@ -30,7 +33,7 @@ export type PoolItem = {
   ref: string;
   title: string;
   /** The source record the build needs, plus `story_key` (what stories.history records for the series). */
-  payload: PoolEntry & { story_key: string | null; source: string | null; url: string | null };
+  payload: PoolEntry & { story_key: string | null; source: string | null; url: string | null; breakdown: ScoreBreakdown | null };
   score: number | null;
 };
 
@@ -68,13 +71,15 @@ export function livePoolReads(sourceDb: Queryable, now: Date): PoolReads {
   };
 }
 
+type Ranked<T> = [T, number, ScoreBreakdown];
+
 /** Rank within one source list: its first item 1, its last near 0. A source's own order is its ranking. */
-function sourceRank<T>(list: T[]): Array<[T, number]> {
-  return list.map((item, i) => [item, Number(((list.length - i) / list.length).toFixed(4))]);
+function sourceRank<T>(list: T[], label: string): Array<Ranked<T>> {
+  return list.map((item, i) => [item, Number(((list.length - i) / list.length).toFixed(4)), rankBreakdown(label, i, list.length)]);
 }
 
 /** Every series' fresh list, and which series were read in full (only those drop what they no longer return). */
-export async function gatherPool(reads: PoolReads): Promise<{ items: PoolItem[]; refreshed: Series[]; errors: string[] }> {
+export async function gatherPool(reads: PoolReads, now: Date = new Date()): Promise<{ items: PoolItem[]; refreshed: Series[]; errors: string[] }> {
   const items: PoolItem[] = [];
   const refreshed: Series[] = [];
   const errors: string[] = [];
@@ -91,45 +96,48 @@ export async function gatherPool(reads: PoolReads): Promise<{ items: PoolItem[];
   };
   await read('morning_download', async () => {
     const { reels, carousel } = await reads.morning();
-    // Carousel first: on a shared key its photo comes along (S-29).
-    return [...sourceRank(carousel), ...sourceRank(reels)].map(([c, score]) => storyItem('morning_download', c, c.key, score));
+    // Carousel first: on a shared key its photo comes along (S-29). One news scale for both sources.
+    return [...carousel, ...reels].map((c) => {
+      const { score, breakdown } = morningDownloadScore(c, now);
+      return storyItem('morning_download', c, c.key, score, breakdown);
+    });
   });
   await read('guess_the_number', async () => {
     const { numbers, unbriefed } = await reads.numbers();
     return [
-      ...sourceRank(numbers).map(([n, score]) => numberItem(n, score)),
-      ...sourceRank(unbriefed).map(([c, score]) => storyItem('guess_the_number', c, `story:${c.key}`, score)),
+      ...sourceRank(numbers, 'Carousel brief numbers').map(([n, score, b]) => numberItem(n, score, b)),
+      ...sourceRank(unbriefed, 'Stories without a brief').map(([c, score, b]) => storyItem('guess_the_number', c, `story:${c.key}`, score, b)),
     ];
   });
   await read('free_vs_paid', async () => {
     const leads = (await reads.leads()).filter((l) => l.url);
     // Each source's own order: reels and GitHub newest first, the catalog a daily sample.
-    const byOrigin = (o: ToolLead['origin']) => sourceRank(leads.filter((l) => l.origin === o));
-    return [...byOrigin('reels'), ...byOrigin('github'), ...byOrigin('catalog')].map(([lead, score]) => ({
+    const byOrigin = (o: ToolLead['origin']) => sourceRank(leads.filter((l) => l.origin === o), originLabel(o));
+    return [...byOrigin('reels'), ...byOrigin('github'), ...byOrigin('catalog')].map(([lead, score, breakdown]) => ({
       series: 'free_vs_paid' as const,
       key: storyKey(lead.url),
       origin: lead.origin,
       ref: lead.ref,
       title: lead.name,
-      payload: { kind: 'lead' as const, lead, story_key: null, source: originLabel(lead.origin), url: lead.url },
+      payload: { kind: 'lead' as const, lead, story_key: null, source: originLabel(lead.origin), url: lead.url, breakdown },
       score,
     }));
   });
   return { items, refreshed, errors };
 }
 
-function storyItem(series: Series, c: StoryCandidate, key: string, score: number): PoolItem {
-  return { series, key, origin: c.origin, ref: c.ref, title: c.headline, payload: { kind: 'story', story: c, story_key: c.key, source: c.sourceName, url: c.url }, score };
+function storyItem(series: Series, c: StoryCandidate, key: string, score: number, breakdown: ScoreBreakdown): PoolItem {
+  return { series, key, origin: c.origin, ref: c.ref, title: c.headline, payload: { kind: 'story', story: c, story_key: c.key, source: c.sourceName, url: c.url, breakdown }, score };
 }
 
-function numberItem(n: NumberCandidate, score: number): PoolItem {
+function numberItem(n: NumberCandidate, score: number, breakdown: ScoreBreakdown): PoolItem {
   return {
     series: 'guess_the_number',
     key: n.key,
     origin: n.origin,
     ref: n.ref,
     title: `${n.value}: ${(n.fact || n.storyHeadline).slice(0, 140)}`,
-    payload: { kind: 'number', number: n, story_key: n.storyKey, source: n.sourceName, url: n.url || null },
+    payload: { kind: 'number', number: n, story_key: n.storyKey, source: n.sourceName, url: n.url || null, breakdown },
     score,
   };
 }
@@ -179,7 +187,7 @@ export async function writePool(db: Queryable, gathered: { items: PoolItem[]; re
 }
 
 export async function refreshStoryPool(db: Queryable, reads: PoolReads, now: Date): Promise<{ upserted: number; dropped: number; errors: string[] }> {
-  const gathered = await gatherPool(reads);
+  const gathered = await gatherPool(reads, now);
   const r = await writePool(db, gathered, now);
   await db.query(
     `INSERT INTO stories.settings (key, value, updated_by, updated_at) VALUES ('pool_refreshed', $1::jsonb, 'worker', now())

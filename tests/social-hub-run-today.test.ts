@@ -1,99 +1,114 @@
 /**
- * Run now's plan and Today's Content (offline, no model calls): only the
- * types whose quota isn't held get a run; Today's Content shows made reels
- * that hold no slot yet, and never failed, skipped or empty posts.
+ * The day's ranking, quota candidates, Run now's plan and Today's Content
+ * (offline, no model calls). Promote makes an idea #1 for the day; Demote
+ * moves it below the next idea; the quota goes to the top of that ranking;
+ * Run now makes only the candidates with no content; only candidates show.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { parseRankMove } from '@/lib/content-type/idea-rank';
 import { reelPosts } from '@/lib/social-hub/adapters/reels';
-import { planFrom, seriesDue, type RunInputs } from '@/lib/social-hub/run-today';
-import type { HubPost } from '@/lib/social-hub/types';
+import { planFrom, typeDay, type RunInputs } from '@/lib/social-hub/run-today';
+import type { HubIdea, HubPost } from '@/lib/social-hub/types';
+import { applyMoves, dayRanking, quotaCandidates, type IdeaAdjustment } from '@/lib/social-hub/views/day-rank';
 import { todaysContent } from '@/lib/social-hub/views/today';
-import { FIXTURE_NOW, previewDataset } from '@/tests/fixtures/social-hub/preview-dataset';
 
-const base: RunInputs = {
-  today: '2026-10-09',
-  quota: { reels: 2, carousels: 2, explainers: 1 },
-  held: { reels: 0, carousels: 0, explainers: 0, stories: 0 },
-  inFlight: { reels: false, carousels: false, explainers: 0 },
-  topics: ['t1', 't2', 't3'],
-  series: [
-    { id: 'morning_download', label: 'Morning Download', due: true, held: false },
-    { id: 'guess_the_number', label: 'Guess the Number', due: false, held: false },
-  ],
-  cost: { reelsNight: 2.5, carouselCap: 2, explainerCap: 5, storySet: 0.45 },
+const NOW = new Date('2026-10-09T14:00:00Z');
+const TODAY = '2026-10-09';
+
+const idea = (n: number, score: number, over: Partial<HubIdea> = {}): HubIdea => ({
+  id: `reels:idea:0000000${n}-0000-4000-8000-000000000000`, vertical: 'reels', title: `Idea ${n}`, score, scoreLabel: 'Net', state: 'idea_only',
+  hasContent: false, versionCount: 0, generatedAt: null, createdAt: null, detail: null, ...over,
+});
+const IDEAS = [idea(1, 4), idea(2, 3), idea(3, 2), idea(4, 1)];
+const move = (n: number, kind: 'promote' | 'demote', at: string): IdeaAdjustment => ({ vertical: 'reels', ideaId: IDEAS[n - 1]!.id, nyDate: TODAY, kind, createdAt: at });
+const titles = (adj: IdeaAdjustment[]) => dayRanking(IDEAS, 'reels', adj, TODAY).map((r) => r.idea.title);
+
+test('Promote makes an idea #1 for the day; Demote moves it below the next one', () => {
+  assert.deepEqual(titles([]), ['Idea 1', 'Idea 2', 'Idea 3', 'Idea 4']);
+  assert.deepEqual(titles([move(3, 'promote', 't1')]), ['Idea 3', 'Idea 1', 'Idea 2', 'Idea 4']);
+  assert.deepEqual(titles([move(1, 'demote', 't1')]), ['Idea 2', 'Idea 1', 'Idea 3', 'Idea 4']);
+  assert.deepEqual(titles([move(3, 'promote', 't1'), move(3, 'demote', 't2')]), ['Idea 1', 'Idea 3', 'Idea 2', 'Idea 4'], 'a demoted promoted idea goes from #1 to #2');
+  assert.deepEqual(titles([{ ...move(3, 'promote', 't1'), nyDate: '2026-10-08' }]), ['Idea 1', 'Idea 2', 'Idea 3', 'Idea 4'], 'yesterday’s moves are gone');
+  assert.deepEqual(applyMoves([{ id: 'a' }, { id: 'b' }], [{ ideaId: 'b', kind: 'demote' }]).map((x) => x.id), ['a', 'b'], 'the last idea stays last');
+});
+
+const reelPost = (n: number, over: Partial<HubPost> = {}): HubPost => {
+  const [post] = reelPosts({
+    attempts: [], schedules: [], insights: [], ideas: [], sources: [], requireApproval: true,
+    made: [{ video_job_id: `1111111${n}-1111-4111-8111-111111111111`, post_idea_id: `0000000${n}-0000-4000-8000-000000000000`, ny_date: TODAY, video_storage_path: 'v.mp4', video_finished_at: '2026-10-09T05:20:00Z', video_slate_id: null, chosen_framework: null, chosen_bucket: null, net: '1', on_screen_copy: `REEL ${n}`, headline: `Reel ${n}` }],
+  });
+  return { ...post!, ...over };
 };
 
+test('the quota goes to the top of the day’s ranking, made or not; promoting changes what fills it', () => {
+  // Ideas 1 and 4 have videos; the quota is 2.
+  const data = { posts: [reelPost(1), reelPost(4)], ideas: IDEAS, dayQuotas: { reels: 2, carousels: 2, explainers: 1 } };
+  const plain = quotaCandidates(data, 'reels', NOW);
+  assert.deepEqual(plain.map((c) => [c.idea?.title, Boolean(c.post)]), [['Idea 1', true], ['Idea 2', false]], 'Idea 4’s video is not a candidate');
+  const promoted = quotaCandidates({ ...data, adjustments: [move(4, 'promote', 't1')] }, 'reels', NOW);
+  assert.deepEqual(promoted.map((c) => [c.idea?.title, Boolean(c.post), c.moved]), [['Idea 4', true, 'promoted'], ['Idea 1', true, null]]);
+  assert.deepEqual(todaysContent({ ...data, adjustments: [move(4, 'promote', 't1')] }, NOW).map((p) => p.name), ['REEL 4', 'REEL 1'], 'only candidates show in the gallery');
+});
+
+test('a slot already scheduled today holds its place ahead of the ranking', () => {
+  const scheduled = reelPost(3, { status: 'scheduled', publishAt: '2026-10-09T13:00:00Z' });
+  const c = quotaCandidates({ posts: [scheduled, reelPost(1)], ideas: IDEAS, dayQuotas: { reels: 2, carousels: 2, explainers: 1 } }, 'reels', NOW);
+  assert.deepEqual(c.map((x) => [x.post?.name ?? x.idea?.title, x.locked]), [['REEL 3', true], ['REEL 1', false]]);
+});
+
+test('failed, skipped and empty posts are never content for a candidate', () => {
+  const data = { posts: [reelPost(1, { status: 'failed' }), reelPost(2, { media: { kind: 'video', src: null } })], ideas: IDEAS, dayQuotas: { reels: 2, carousels: 2, explainers: 1 } };
+  assert.deepEqual(quotaCandidates(data, 'reels', NOW).map((c) => c.post), [null, null]);
+  assert.deepEqual(todaysContent(data, NOW), []);
+});
+
+const base: RunInputs = {
+  today: TODAY,
+  reels: { quota: 2, held: 1, missing: [{ ideaId: 'reels:idea:r2', ref: 'r2', title: 'Idea 2' }], slateToday: true },
+  carousels: { quota: 2, held: 0, missing: [] },
+  explainers: { quota: 1, held: 0, missing: [{ ideaId: 'explainers:topic:t1', ref: 't1', title: 'What is a server?' }] },
+  series: [{ id: 'morning_download', label: 'Morning Download', held: false }],
+  inFlight: { reelsRun: false, reelsBuilding: [], carouselRun: false, explainerTopics: [] },
+  cost: { reelsNight: 2.5, reelBuild: 1, carouselCap: 2, explainerCap: 5, storySet: 0.45 },
+};
 const step = (plan: ReturnType<typeof planFrom>, v: string) => plan.steps.find((s) => s.vertical === v)!;
 
-test('Run now runs every type whose quota is empty, with a spend ceiling', () => {
+test('Run now makes exactly the candidates with no content, each the way its type can', () => {
   const plan = planFrom(base);
-  assert.equal(step(plan, 'reels').action, 'reels_run');
+  assert.deepEqual([step(plan, 'reels').action, step(plan, 'reels').targets], ['reels_build', ['r2']], 'the missing reel idea is built on today’s slate');
   assert.equal(step(plan, 'carousels').action, 'carousel_run');
-  assert.deepEqual(step(plan, 'explainers').targets, ['t1'], 'one render for a quota of one, best topic first');
-  assert.deepEqual(step(plan, 'stories').targets, ['morning_download'], 'only the series due today');
-  assert.equal(plan.estimateUsd, 2.5 + 2 + 5 + 0.45);
-  assert.equal(plan.anything, true);
+  assert.deepEqual(step(plan, 'explainers').targets, ['t1']);
+  assert.deepEqual(step(plan, 'stories').targets, ['morning_download']);
+  assert.equal(plan.estimateUsd, 1 + 2 + 5 + 0.45);
 });
 
-test('a type whose quota is already held, or already running, is left alone', () => {
+test('Run now leaves a full, already-running or slate-less type to the right path', () => {
   const plan = planFrom({
     ...base,
-    held: { reels: 2, carousels: 1, explainers: 0, stories: 0 },
-    inFlight: { reels: false, carousels: true, explainers: 1 },
-    series: base.series.map((s) => ({ ...s, held: s.due })),
+    reels: { ...base.reels, slateToday: false },
+    carousels: { quota: 2, held: 2, missing: [] },
+    explainers: { ...base.explainers },
+    inFlight: { ...base.inFlight, explainerTopics: ['t1'] },
+    series: [{ id: 'morning_download', label: 'Morning Download', held: true }],
   });
-  assert.equal(step(plan, 'reels').action, 'none', 'two reels made for a quota of two');
-  assert.equal(step(plan, 'carousels').action, 'none', 'a carousel run is already queued');
-  assert.equal(step(plan, 'explainers').action, 'none', 'a render in flight holds the slot');
+  assert.equal(step(plan, 'reels').action, 'reels_run', 'no slate today: the night runs');
+  assert.equal(step(plan, 'carousels').action, 'none');
+  assert.equal(step(plan, 'explainers').action, 'none', 'its render is already queued');
   assert.equal(step(plan, 'stories').action, 'none');
-  assert.equal(plan.anything, false);
-  assert.equal(plan.estimateUsd, 0);
 });
 
-test('a partly held quota asks only for the rest', () => {
-  const plan = planFrom({ ...base, quota: { ...base.quota, explainers: 2 }, held: { ...base.held, explainers: 1 } });
-  assert.deepEqual(step(plan, 'explainers').targets, ['t1']);
-  assert.equal(step(plan, 'explainers').needed, 1);
+test('a type’s day counts what holds it and names what is missing', () => {
+  const data = { posts: [reelPost(1)], ideas: IDEAS, dayQuotas: { reels: 2, carousels: 2, explainers: 1 } };
+  const d = typeDay(quotaCandidates(data, 'reels', NOW), 2);
+  assert.equal(d.held, 1);
+  assert.deepEqual(d.missing.map((m) => m.ref), ['00000002-0000-4000-8000-000000000000']);
 });
 
-test('series are due on their own weekdays', () => {
-  // 2026-10-09 is a Friday (5).
-  const due = seriesDue('2026-10-09', [
-    { id: 'morning_download', label: 'MD', enabled: true, days: [0, 1, 2, 3, 4, 5, 6] },
-    { id: 'guess_the_number', label: 'GtN', enabled: true, days: [1, 4] },
-    { id: 'free_vs_paid', label: 'FvP', enabled: false, days: [5] },
-  ], new Set(['morning_download']));
-  assert.deepEqual(due.map((d) => [d.id, d.due, d.held]), [['morning_download', true, true], ['guess_the_number', false, false], ['free_vs_paid', false, false]]);
-});
-
-const MADE_ROW = { video_job_id: '11111111-1111-4111-8111-111111111111', post_idea_id: '22222222-2222-4222-8222-222222222222', ny_date: '2026-10-08', video_storage_path: 'videos/x.mp4', video_finished_at: '2026-10-08T05:20:00Z', video_slate_id: null, chosen_framework: 'curiosity', chosen_bucket: 'the_number', net: '3.1', on_screen_copy: 'BIG NEWS', headline: 'Big news' };
-const madeReel = () => reelPosts({ attempts: [], schedules: [], insights: [], ideas: [], sources: [], requireApproval: true, made: [MADE_ROW] })[0]!;
-
-test('a made reel with no slot is a ready post on its day, with Approve refs', () => {
-  const post = madeReel();
-  assert.equal(post.status, 'ready');
-  assert.equal(post.nyDate, '2026-10-08');
-  assert.equal(post.publishAt, null);
-  assert.equal(post.media.kind === 'video' && Boolean(post.media.src), true);
-  assert.deepEqual(post.refs, { postIdeaId: MADE_ROW.post_idea_id, videoJobId: MADE_ROW.video_job_id });
-  assert.equal(post.id, `reels:${MADE_ROW.video_job_id}`, 'the video’s durable id, kept once it is scheduled');
-});
-
-test('Today’s Content: a made reel with no slot is in it; failed, skipped and empty posts never are', () => {
-  const reel = madeReel();
-  const failed: HubPost = { ...reel, id: 'reels:failed', status: 'failed' };
-  const skipped: HubPost = { ...reel, id: 'stories:skipped', vertical: 'stories', status: 'skipped', media: { kind: 'frames', frames: [] } };
-  const empty: HubPost = { ...reel, id: 'carousels:empty', vertical: 'carousels', media: { kind: 'slides', slides: [] } };
-  const gallery = todaysContent([reel, failed, skipped, empty], FIXTURE_NOW);
-  assert.deepEqual(gallery.map((p) => p.id), [reel.id]);
-});
-
-test('Today’s Content never shows more of a type than its windows today', () => {
-  const dataset = previewDataset();
-  const gallery = todaysContent(dataset.posts, FIXTURE_NOW);
-  assert.ok(gallery.length > 0);
-  for (const p of gallery) assert.ok(!['failed', 'skipped', 'cancelled'].includes(p.status), `${p.id} is ${p.status}`);
-  assert.ok(gallery.filter((p) => p.vertical === 'reels').length <= 3);
+test('a rank move must name a known type, a kind, and an idea of that type', () => {
+  assert.deepEqual(parseRankMove({ vertical: 'reels', ideaId: IDEAS[0]!.id, kind: 'promote' }), { vertical: 'reels', ideaId: IDEAS[0]!.id, kind: 'promote' });
+  assert.throws(() => parseRankMove({ vertical: 'reels', ideaId: 'explainers:topic:x', kind: 'promote' }), /Unknown idea/);
+  assert.throws(() => parseRankMove({ vertical: 'reels', ideaId: IDEAS[0]!.id, kind: 'boost' }), /promote or demote/);
+  assert.ok(parseRankMove({ vertical: 'carousels', ideaId: 'carousels:story:https://www.theverge.com/x', kind: 'demote' }));
 });

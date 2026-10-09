@@ -2,11 +2,12 @@
  * Helios Morning Download (plan §5.1; S-03, S-04, S-14, S-15, S-22, S-29).
  *
  *   pool     the series' open ideas in stories.pool (lib/stories/pool.ts:
- *            reels top 15 by net + blockbusters, carousel qualified in the
- *            last 30 hours, refreshed nightly); drop what ran in the last 3 days
+ *            reels top 10 by net + blockbusters, carousel qualified in the
+ *            last 30 hours, refreshed nightly, Warning and Callout ideas left
+ *            out); drop what ran in the last 3 days
  *   merge    one Jev same-event check per cross-system pair sharing a name
- *   rank     one major-news@1 call per candidate → score; up to 5 clear the
- *            bar, else the top 2 (S-04)
+ *   rank     one major-news@2 call per candidate → score (the source adds
+ *            nothing); up to 5 clear the bar, else the top 2 (S-04)
  *   write    md-headlines@1 (one Sonnet call), length and sentence checks
  *   ground   md-grounding@1 per headline; a miss gets one rewrite, a second
  *            miss drops the story; fewer than 2 left skips the day
@@ -28,7 +29,8 @@ import { writeStructured } from '@/lib/stories/writer';
 import { findSetOrEach } from '@/lib/stories/photos';
 import { nextBackdrop, openerDate, sentenceCount, toFrames, type BuildDeps, type BuildResult } from './common';
 
-export const MAJOR_NEWS_WEIGHTS = { blockbuster_entity: 0.25, political_relevance: 0.15, global_relevance: 0.2, broad_effect: 0.2, headline_news: 0.2 } as const;
+/** major-news@2 (Lucas, 2026-10-09): the positive weights sum to 1; `speculative` takes points away. */
+export const MAJOR_NEWS_WEIGHTS = { happened: 0.3, news_kind: 0.25, blockbuster_entity: 0.2, global_relevance: 0.15, political_relevance: 0.1, speculative: -0.35 } as const;
 export const MAJOR_NEWS_BAR = 0.55;
 export const SAME_EVENT_BAR = 0.7;
 export const GROUNDING_BAR = 0.6;
@@ -45,8 +47,9 @@ export function namesIn(text: string): Set<string> {
   return new Set((text.match(NAME) ?? []).flatMap((n) => n.split(/\s+/)).filter((w) => w.length > 2 && !STOP.has(w)));
 }
 
+/** Judged on the story alone: which system it came from adds nothing. */
 export function majorNewsScore(answers: Record<string, { noul: number }>): number {
-  return Object.entries(MAJOR_NEWS_WEIGHTS).reduce((s, [k, w]) => s + w * (answers[k]?.noul ?? 0), 0);
+  return Math.max(0, Object.entries(MAJOR_NEWS_WEIGHTS).reduce((s, [k, w]) => s + w * (answers[k]?.noul ?? 0), 0));
 }
 
 /** S-04: every story that clears the bar, up to 5; fewer than 2 clear → the top 2 anyway. */
@@ -152,7 +155,7 @@ export async function buildMorningDownload(deps: BuildDeps, sources?: Sources): 
     ...written.flatMap((s, i) =>
       kept[i]
         ? []
-        : [{ kind: s.visual.kind, query: s.visual.query, subjects: s.subjects, storyDate: byKey.get(s.key)!.publishedAt?.slice(0, 10) ?? null, sourceUrls: [byKey.get(s.key)!.url], exclude: held }],
+        : [{ kind: s.visual.kind, query: s.visual.query, subjects: s.subjects, storyDate: byKey.get(s.key)!.publishedAt?.slice(0, 10) ?? null, sourceUrls: [byKey.get(s.key)!.url], exclude: held, alts: s.alt_visuals ?? [], copy: s.headline }],
     ),
     { kind: first.opener_visual.kind, query: first.opener_visual.query, subjects: written[0]!.subjects, storyDate: openerSource.publishedAt?.slice(0, 10) ?? null, sourceUrls: [openerSource.url], exclude: held },
   ];
