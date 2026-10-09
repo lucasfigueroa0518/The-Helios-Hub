@@ -12,6 +12,14 @@
 #
 # Secrets: /opt/helios-social/worker.env lives on the VM. Pass
 # SOCIAL_WORKER_ENV_FILE=path to replace it; otherwise it is left alone.
+#
+# Guards (each restart kills whatever a worker is doing):
+#   - refuses while a run, job or build is in flight (read from DATABASE_URL in
+#     .env.local); FORCE_DEPLOY=1 deploys anyway
+#   - refuses with uncommitted changes to tracked files, since the whole working
+#     tree ships; ALLOW_DIRTY=1 deploys them anyway
+# The units are stopped before /opt/helios-social/app is replaced and started
+# after the install, so no worker runs from a half-installed folder.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -28,6 +36,38 @@ if [[ "${GCP_SSH_IAP:-}" == "1" ]]; then
 fi
 
 command -v gcloud >/dev/null 2>&1 || { echo "gcloud not found. brew install --cask google-cloud-sdk, then gcloud auth login"; exit 1; }
+
+if [[ "${ALLOW_DIRTY:-}" != "1" ]] && [[ -n "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]]; then
+  echo "Uncommitted changes to tracked files would ship to the VM:" >&2
+  git status --short --untracked-files=no >&2
+  echo "Commit them first, or run with ALLOW_DIRTY=1 to deploy them anyway." >&2
+  exit 1
+fi
+
+if [[ "${FORCE_DEPLOY:-}" != "1" ]]; then
+  DB_URL="$(grep -E '^DATABASE_URL=' .env.local 2>/dev/null | head -1 | cut -d= -f2- | sed -e 's/^["'"'"']//' -e 's/["'"'"']$//' || true)"
+  if [[ -n "${DB_URL}" ]] && command -v psql >/dev/null 2>&1; then
+    INFLIGHT="$(psql "${DB_URL}" -Atc "
+      SELECT 'carousel run ' || id FROM social.runs WHERE status = 'running'
+      UNION ALL SELECT 'reels run ' || id FROM reels.runs WHERE status = 'running'
+      UNION ALL SELECT 'reels copy job ' || id FROM reels.copy_jobs WHERE status = 'running'
+      UNION ALL SELECT 'reels visual job ' || id FROM reels.visual_jobs WHERE status = 'running'
+      UNION ALL SELECT 'reels video job ' || id FROM reels.video_jobs WHERE status = 'running'
+      UNION ALL SELECT 'explainer job ' || id FROM explainers.jobs WHERE status = 'running'
+      UNION ALL SELECT 'story set ' || id FROM stories.sets WHERE status = 'building'
+      UNION ALL SELECT 'publish ' || id FROM social_hub.publish_attempts WHERE status IN ('creating', 'processing', 'publishing')" 2>/dev/null || echo 'CHECK_FAILED')"
+    if [[ "${INFLIGHT}" == "CHECK_FAILED" ]]; then
+      echo "Could not check for in-flight work; deploying anyway (FORCE_DEPLOY=1 silences this)." >&2
+    elif [[ -n "${INFLIGHT}" ]]; then
+      echo "Work is in flight; a deploy restarts every worker and kills it:" >&2
+      echo "${INFLIGHT}" >&2
+      echo "Wait for it to finish, or run with FORCE_DEPLOY=1." >&2
+      exit 1
+    fi
+  else
+    echo "No DATABASE_URL in .env.local or no psql: skipping the in-flight check." >&2
+  fi
+fi
 
 echo "Deploying social workers (${UNITS}) → ${INSTANCE} (${ZONE}, project ${PROJECT})"
 
@@ -77,6 +117,10 @@ gcloud compute ssh ${IAP} "${INSTANCE}" --zone="${ZONE}" --project="${PROJECT}" 
   H=/opt/helios-social/home
   PW=/opt/helios-social/ms-playwright
   id -u helios >/dev/null 2>&1 || sudo useradd --system --user-group --home-dir \${H} --shell /usr/sbin/nologin helios
+  # Stop before the folder is replaced: a worker must never run from a half-installed app.
+  for unit in ${UNITS}; do
+    if systemctl is-active --quiet \${unit}; then sudo systemctl stop \${unit}; fi
+  done
   sudo rm -rf /opt/helios-social/app
   sudo mkdir -p /opt/helios-social/app /opt/helios-social/explainers/jobs /opt/helios-social/explainers/storage \${H} \${PW}
   sudo tar -xzf /tmp/helios-social-app.tgz -C /opt/helios-social/app --no-same-owner
