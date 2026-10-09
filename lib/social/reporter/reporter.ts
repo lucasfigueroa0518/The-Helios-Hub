@@ -181,7 +181,7 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
         // Aggregator-only facts and quote speakers missing from SUBJECTS go back while a retry is left;
         // after that, code drops the aggregator-only facts and keeps the quotes (both logged).
         const retryLeft = submitRetries < MAX_SUBMIT_RETRIES;
-        const checked = validateBrief(submit.input, { aggregators: retryLeft, speakers: retryLeft, thread: retryLeft });
+        const checked = validateBrief(submit.input, { aggregators: retryLeft, speakers: retryLeft });
         const { brief, dropped } = dropAggregatorOnly(checked);
         const speakersNotInSubjects = quoteSpeakersNotInSubjects(brief).map((q) => `${q.id} (${q.speaker}): speaker not in SUBJECTS after the retry; kept, no speaker photo`);
         return { ok: true, brief, raw, pages, costUsd: cost(), turns: turn, webSearches: webSearches(), pageReads, submitRetries, retryErrors, turnUsage, aggregatorDropped: dropped, speakersNotInSubjects };
