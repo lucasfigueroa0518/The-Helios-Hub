@@ -9,8 +9,10 @@
  *   write    md-headlines@1 (one Sonnet call), length and sentence checks
  *   ground   md-grounding@1 per headline; a miss gets one rewrite, a second
  *            miss drops the story; fewer than 2 left skips the day
- *   photos   carousel photo first (S-29), else the finder; the opener's
- *            second photo never repeats a story frame's (S-14)
+ *   photos   a carousel item keeps the photo its design stage already
+ *            chose (S-29). Every other frame, including the opener, is found
+ *            together by that stage (search, contact sheet, Jev photo-fit,
+ *            pick). The opener never repeats a story frame's photo (S-14)
  *
  * Weights and the bar are first values (S-63), to calibrate on real runs.
  */
@@ -22,7 +24,8 @@ import { morningDownloadCarousel, recentUsedPhotoUrls } from '@/lib/stories/sour
 import { dedupe, morningDownloadReels, type StoryCandidate } from '@/lib/stories/sources/reels';
 import { writeStructured } from '@/lib/stories/writer';
 
-import { findPhoto, nextBackdrop, openerDate, sentenceCount, toFrames, type BuildDeps, type BuildResult } from './common';
+import { findSetOrEach } from '@/lib/stories/photos';
+import { nextBackdrop, openerDate, sentenceCount, toFrames, type BuildDeps, type BuildResult } from './common';
 
 export const MAJOR_NEWS_WEIGHTS = { blockbuster_entity: 0.25, political_relevance: 0.15, global_relevance: 0.2, broad_effect: 0.2, headline_news: 0.2 } as const;
 export const MAJOR_NEWS_BAR = 0.55;
@@ -128,19 +131,37 @@ export async function buildMorningDownload(deps: BuildDeps, sources?: Sources): 
   written = chosen.map((c) => grounded.find((g) => g.key === c.key)).filter((x): x is (typeof written)[number] => Boolean(x));
   if (written.length < MIN_STORIES) return { ok: false, skip: `only ${written.length} headline(s) passed grounding`, candidates };
 
-  // Photos: the carousel's own photo first (S-29), else the finder; never one used in 7 days.
+  // A carousel item keeps the photo its own design stage already chose (S-29).
+  // Every other frame, including the opener, is found together by that same stage.
   const recent = await recentUsedPhotoUrls(deps.sourceDb, deps.now).catch(() => new Set<string>());
-  const inSet = new Set<string>();
-  const storyFrames: StoryData[] = [];
-  for (const s of written) {
-    const c = byKey.get(s.key)!;
-    let photo: Photo | null = c.photo ? { src: c.photo.url, credit: c.photo.credit, kind: 'scene' } : null;
-    if (!photo) photo = await findPhoto(deps.photos, { kind: s.visual.kind, query: s.visual.query, subjects: s.subjects, storyDate: c.publishedAt?.slice(0, 10) ?? null, sourceUrls: [c.url], exclude: new Set([...recent, ...inSet]) }, log);
-    if (photo) inSet.add(photo.src);
-    storyFrames.push({ role: 'story', headline: s.headline.trim(), source: { verb: s.source_verb, name: s.source_name }, ...(photo ? { photo } : {}) });
-  }
+  const held = new Set(recent);
+  const kept: Array<Photo | null> = written.map((s) => {
+    const stored = byKey.get(s.key)!.photo;
+    if (!stored || held.has(stored.url)) return null;
+    held.add(stored.url);
+    return { src: stored.url, credit: stored.credit, kind: 'scene' };
+  });
   const openerSource = byKey.get(written[0]!.key)!;
-  const openerPhoto = await findPhoto(deps.photos, { kind: first.opener_visual.kind, query: first.opener_visual.query, subjects: written[0]!.subjects, storyDate: openerSource.publishedAt?.slice(0, 10) ?? null, sourceUrls: [openerSource.url], exclude: new Set([...recent, ...inSet]) }, log);
+  const requests = [
+    ...written.flatMap((s, i) =>
+      kept[i]
+        ? []
+        : [{ kind: s.visual.kind, query: s.visual.query, subjects: s.subjects, storyDate: byKey.get(s.key)!.publishedAt?.slice(0, 10) ?? null, sourceUrls: [byKey.get(s.key)!.url], exclude: held }],
+    ),
+    { kind: first.opener_visual.kind, query: first.opener_visual.query, subjects: written[0]!.subjects, storyDate: openerSource.publishedAt?.slice(0, 10) ?? null, sourceUrls: [openerSource.url], exclude: held },
+  ];
+  let designed: Array<Photo | null> = [];
+  try {
+    designed = await findSetOrEach(deps.photos, requests);
+  } catch (err) {
+    log.push(`photo set: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  let n = 0;
+  const storyFrames: StoryData[] = written.map((s, i) => {
+    const photo = kept[i] ?? designed[n++] ?? null;
+    return { role: 'story', headline: s.headline.trim(), source: { verb: s.source_verb, name: s.source_name }, ...(photo ? { photo } : {}) };
+  });
+  const openerPhoto = designed[n] ?? null;
 
   const data: FrameData[] = [{ role: 'opener', date: openerDate(deps.nyDate), storyCount: storyFrames.length, ...(openerPhoto ? { photo: openerPhoto } : {}) }, ...storyFrames, { role: 'closer' }];
   const backdrop = await nextBackdrop(deps.db, 'morning_download', deps.setId);

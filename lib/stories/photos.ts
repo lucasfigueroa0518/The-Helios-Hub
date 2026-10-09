@@ -4,10 +4,10 @@
  * `social.used_photos` log. Builds call `PhotoFinder`; tests stub it.
  *
  * The live finder gets a minimal brief (the story's subjects, its sources and
- * date) and the read pages of its source URLs, then runs `searchVisual` with
- * Jev for identity checks, and Tommy's close-up vision check on Haiku 5.5
- * (S-70; priced by Stories, lib/stories/cost.ts). His face and contact-sheet
- * steps stay inside his design stage.
+ * date) and the read pages of its source URLs. A single find runs
+ * `searchVisual`. A set (Morning Download) runs the carousel design stage:
+ * search, contact sheet, Jev photo-fit, then the slide pick, with the
+ * close-up vision check on Haiku 5.5 (S-70; priced by Stories, lib/stories/cost.ts).
  *
  * Photo bank (DECISIONS_LOG D49): with a `bank`, every find offers its
  * vetted candidates (the pick, and identity-verified headshots, second
@@ -20,13 +20,17 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { PhotoBank } from '@/lib/media-library/bank';
 import { createJevAsk, type JevAsk } from '@/lib/social/jev/client';
+import { photosForDraft } from '@/lib/social/photos/design';
+import { detectFacesLive } from '@/lib/social/photos/faces';
 import { newSearchContext, searchVisual, type Candidate } from '@/lib/social/photos/find';
+import { createSecondPhotos } from '@/lib/social/photos/second-photo';
+import { createTagSheet } from '@/lib/social/photos/tag-sheet';
 import { createVisionCheck } from '@/lib/social/photos/vision';
+import type { FilledDraft, VisualKind, VisualRequest } from '@/lib/social/writer/draft';
 import { IDENTITY_LANES, recordVision, type VettedPhoto } from '@/lib/social/photos/vetted';
 import { priceCall } from '@/lib/stories/cost';
 import type { Brief } from '@/lib/social/reporter/brief';
 import { readPage, type PageReadOk } from '@/lib/social/reporter/read-page';
-import type { VisualKind } from '@/lib/social/writer/draft';
 import type { Photo } from '@/lib/stories/render/types';
 
 export type PhotoRequest = {
@@ -41,8 +45,21 @@ export type PhotoRequest = {
 
 export interface PhotoFinder {
   find(req: PhotoRequest): Promise<Photo | null>;
+  /**
+   * One post's photos together: search, contact sheet, Jev photo-fit, then
+   * the slide pick (the carousel design stage). Absent: each request is found alone.
+   */
+  findSet?(reqs: PhotoRequest[]): Promise<Array<Photo | null>>;
   /** Vision and Jev spend so far, for the set's cost rows. */
   readonly usd: number;
+}
+
+/** The design stage when the finder has it; otherwise one find at a time. */
+export async function findSetOrEach(photos: PhotoFinder, reqs: PhotoRequest[]): Promise<Array<Photo | null>> {
+  if (photos.findSet) return photos.findSet(reqs);
+  const out: Array<Photo | null> = [];
+  for (const req of reqs) out.push(await photos.find(req));
+  return out;
 }
 
 const KINDS = new Set(['person', 'company', 'logo', 'product', 'event', 'thematic', 'setting']);
@@ -111,9 +128,73 @@ export function createLivePhotoFinder(opts: { jev?: JevAsk; http?: typeof fetch;
     usd += (r.usage?.input_tokens ?? 0) * 0.042 / 1_000_000;
     return r;
   };
+  const tagSheet = opts.create ? createTagSheet({ create: async (p) => opts.create!(p) }) : undefined;
+  const faces = detectFacesLive;
+  const secondPhotos = createSecondPhotos({ http: opts.http ?? fetch });
   return {
     get usd() {
       return usd;
+    },
+    async findSet(reqs) {
+      const usable = reqs.map((r) => (KINDS.has(r.kind) && r.query.trim() ? r : null));
+      const live = usable.filter((r): r is PhotoRequest => Boolean(r));
+      if (!live.length) return reqs.map(() => null);
+      const pages: PageReadOk[] = [];
+      const seenUrl = new Set<string>();
+      for (const req of live) {
+        for (const url of req.sourceUrls) {
+          if (seenUrl.has(url) || seenUrl.size >= 6) continue;
+          seenUrl.add(url);
+          const p = await readPage(url).catch(() => null);
+          if (p && p.ok) pages.push(p);
+        }
+      }
+      const exclude = new Set<string>(live.flatMap((r) => [...r.exclude]));
+      const storyDate = live.find((r) => r.storyDate)?.storyDate ?? null;
+      const subjects = [...new Map(live.flatMap((r) => r.subjects.map((s) => [s.name, s] as const))).values()];
+      const brief = minimalBrief({ ...live[0]!, subjects, sourceUrls: [...seenUrl], storyDate, query: live.map((r) => r.query).join('; '), exclude });
+      const visual = (r: PhotoRequest): VisualRequest => ({ kind: r.kind as VisualKind, query: r.query });
+      const fallback = (r: PhotoRequest): VisualRequest =>
+        r.kind === 'thematic' || r.kind === 'setting' ? { kind: r.kind === 'thematic' ? 'setting' : 'thematic', query: r.query } : { kind: 'thematic', query: r.query.split(/\s+/).slice(-3).join(' ') || r.query };
+      const line = (text: string) => ({ text, facts: [] as string[] });
+      const slide = (r: PhotoRequest) => ({
+        type: 'text' as const,
+        headline: line(r.query),
+        body: null,
+        quote_id: null,
+        quote_excerpt: null,
+        number_ids: [] as string[],
+        visual: visual(r),
+        fallback_visual: fallback(r),
+        quote: null,
+        numbers: [] as FilledDraft['slides'][number]['numbers'],
+      });
+      const first = live[0]!;
+      const draft: FilledDraft = {
+        cover: first.query,
+        cover_options: [{ text: first.query, facts: [], visual: visual(first), fallback_visual: fallback(first) }, { text: first.query, facts: [], visual: visual(first), fallback_visual: fallback(first) }, { text: first.query, facts: [], visual: visual(first), fallback_visual: fallback(first) }],
+        chosen_cover: 1,
+        slides: live.slice(1).map(slide),
+        follow: '',
+        caption: line(''),
+        edit_notes: [],
+      };
+      const designed = await photosForDraft(draft, brief, pages, {
+        jev: tallied,
+        http: opts.http ?? fetch,
+        faces,
+        secondPhotos,
+        ...(vision ? { vision } : {}),
+        ...(tagSheet ? { tagSheet } : {}),
+        ...(opts.bank ? { bank: opts.bank.reader } : {}),
+      }, { recent: exclude, storyDate });
+      const traces = [designed.cover, ...designed.slides];
+      let i = 0;
+      return usable.map((r) => {
+        if (!r) return null;
+        const photo = traces[i++]?.photo ?? null;
+        return photo ? toStoryPhoto({ url: photo.url, credit: photo.credit, lane: photo.source === 'logo' ? 'logo' : photo.source === 'second' ? 'second' : photo.source === 'ceo' ? 'ceo' : photo.source === 'commons' ? 'headshot' : 'article' }, r.kind) : null;
+      });
     },
     async find(req) {
       if (!KINDS.has(req.kind) || !req.query.trim()) return null;
