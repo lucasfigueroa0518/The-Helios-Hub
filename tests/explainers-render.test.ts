@@ -254,6 +254,7 @@ const script = ['# SCRIPT', '', '**Voice:** HeyGen', '', '## Line 1 — Hook (Fr
 
 function fakePrepare(jobsRoot: string, jobId: string) {
   const ws = workspacePaths(jobsRoot, jobId);
+  fs.mkdirSync(ws.projectDir, { recursive: true });
   fs.mkdirSync(ws.tmpDir, { recursive: true });
   fs.mkdirSync(ws.homeDir, { recursive: true });
   fs.writeFileSync(path.join(ws.projectDir, 'BRIEF.md'), 'brief');
