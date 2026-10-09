@@ -15,6 +15,11 @@
  * One shared context per post: each subject is identity-checked once (the
  * cache is shared with the Writer's availability flags), each company's pool
  * fetched once, and no photo lands on two neighbouring slides.
+ *
+ * The photo bank (DECISIONS_LOG D49): `vetted` lists what the checks learned
+ * about every candidate they looked at (vetted.ts), as pure data for the
+ * design stage to offer to the bank. The vision check is wrapped in a
+ * recorder for that; the pick is unchanged.
  */
 import * as PhotoFit from '@/lib/social/jev/questions/photo-fit.v1';
 import type { Brief } from '@/lib/social/reporter/brief';
@@ -29,13 +34,20 @@ import type { IdentityCache } from './p18';
 import { newPickState, pickForSlide, type PickSlot, type Scored } from './pick';
 import { buildSheets } from './sheet';
 import type { TileTag } from './tag-sheet';
+import { recordVision, vettedForSlide, type VettedPhoto } from './vetted';
 
 /** Where a slide type draws its photo (the hook budgets and the review). */
 export function slotFor(type: FilledDraft['slides'][number]['type']): PhotoSlot {
   return type === 'stat' ? 'backdrop' : type === 'quote' ? 'quote' : 'split';
 }
 
-export type DraftPhotos = { cover: PhotoTrace; slides: PhotoTrace[]; costUsd: { tags: number; vision: number } };
+export type DraftPhotos = {
+  cover: PhotoTrace;
+  slides: PhotoTrace[];
+  costUsd: { tags: number; vision: number };
+  /** Every candidate a check looked at, with its outcome (the photo bank's input; pure data). */
+  vetted: VettedPhoto[];
+};
 
 /** Each subject's type: the identity check's (already cached by the Writer's lookup), else the Reporter's mark. */
 export async function subjectKinds(brief: Brief, identities?: IdentityCache): Promise<Map<string, SubjectType | null>> {
@@ -59,7 +71,10 @@ export async function photosForDraft(
   history: { recent?: Set<string>; lastUsed?: Map<string, string>; identities?: IdentityCache; storyDate?: string | null } = {},
 ): Promise<DraftPhotos> {
   const kinds = await subjectKinds(brief, history.identities);
-  const ctx = newSearchContext(brief, pages, { recent: history.recent, identities: history.identities, kinds, photos: articlePhotosFor(brief, pages, kinds), storyDate: history.storyDate ?? null });
+  const ctx = newSearchContext(brief, pages, { recent: history.recent, lastUsed: history.lastUsed, identities: history.identities, kinds, photos: articlePhotosFor(brief, pages, kinds), storyDate: history.storyDate ?? null });
+  // The vision check, recorded (same answers) so the bank knows which candidates passed or failed it.
+  const recorder = recordVision(deps.vision);
+  deps = { ...deps, vision: recorder.vision };
   const icon = (name: string | undefined) => (isIcon(name) ? name : DEFAULT_ICON);
   const chosen = draft.cover_options[draft.chosen_cover - 1]!;
   const places: Place[] = [
@@ -116,6 +131,7 @@ export async function photosForDraft(
   const subjects = brief.subjects.map((s) => s.name);
   let visionUsd = ctx.spend.visionUsd;
   const traces: PhotoTrace[] = [];
+  const vetted: VettedPhoto[] = [];
   for (const [i, p] of places.entries()) {
     const requests = found[i]!.map((r) => ({
       request: r.request,
@@ -123,6 +139,11 @@ export async function photosForDraft(
     }));
     const out = await pickForSlide({ slot: p.slot, requests }, state, deps, subjects, PhotoFit.THRESHOLDS.FIT_MIN);
     visionUsd += out.visionUsd;
+    try {
+      vetted.push(...vettedForSlide({ slide: i + 1, requests: found[i]!.map((r) => ({ request: r.request, candidates: r.candidates })), winner: out.winner?.cand ?? null, alternates: out.alternates, tagsByUrl, fitByKey, verdicts: recorder.verdicts, fitMin: PhotoFit.THRESHOLDS.FIT_MIN }));
+    } catch {
+      // The bank's record never changes the post.
+    }
     const searchSteps = found[i]!.flatMap((r) => r.steps);
     const identity = found[i]!.find((r) => r.identity)?.identity ?? null;
     traces.push({
@@ -137,5 +158,5 @@ export async function photosForDraft(
       ...(out.visionUsd ? { visionUsd: out.visionUsd } : {}),
     });
   }
-  return { cover: traces[0]!, slides: traces.slice(1), costUsd: { tags: tagUsd, vision: visionUsd } };
+  return { cover: traces[0]!, slides: traces.slice(1), costUsd: { tags: tagUsd, vision: visionUsd }, vetted };
 }

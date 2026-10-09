@@ -1,3 +1,4 @@
+import { serviceHeaders } from '@/lib/supabase-service-headers';
 import https from 'node:https';
 
 /**
@@ -38,7 +39,7 @@ function request(
       url,
       {
         method,
-        headers: { apikey: serviceRole, authorization: `Bearer ${serviceRole}`, ...headers },
+        headers: { ...serviceHeaders(serviceRole), ...headers },
       },
       (response) => {
         const chunks: Buffer[] = [];

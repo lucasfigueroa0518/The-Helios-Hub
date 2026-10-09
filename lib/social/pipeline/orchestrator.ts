@@ -13,6 +13,12 @@
  * A story that already has a finished post (SH-60, P2-M4) is not run again:
  * when `stored` finds one, the story keeps its rank and counts toward the
  * day's posts with no stage run and no spend; its stored post is shipped.
+ *
+ * A story whose content is already on the calendar (`onCalendar`: a slot
+ * waiting or posting, e.g. one a person placed) is passed over: it neither
+ * runs nor counts toward the target, because the daily fill (D54) already
+ * counted a person's placement for the day, and a slot on another day isn't
+ * today's post.
  */
 import type { CostMeter } from './cost-meter';
 import type { SetAsideEntry, SetAsideLog } from './set-aside-log';
@@ -43,6 +49,8 @@ export type RunDayInput = {
   targetPosts?: number;
   /** The finished post already stored for a story, if any (SH-60). Omitted: every story runs. */
   stored?: (storyId: string) => Promise<string | null>;
+  /** True when the story's content already holds a slot (daily fill, D54). Omitted: no story is passed over. */
+  onCalendar?: (storyId: string) => Promise<boolean>;
 };
 
 /** One shipped story, in rank order: a post made today, or a stored post reused. */
@@ -58,6 +66,8 @@ export type RunDayResult = {
   freshDrafts: FreshDraftEntry[];
   /** What the day ships, best-ranked story first. */
   shipped: ShipEntry[];
+  /** Stories passed over because their content is already on the calendar (D54), in rank order. */
+  onCalendar: string[];
 };
 
 class SetAside extends Error {
@@ -78,6 +88,7 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
   const setAsides: SetAsideEntry[] = [];
   const freshDrafts: FreshDraftEntry[] = [];
   const shipped: ShipEntry[] = [];
+  const onCalendar: string[] = [];
 
   const finish = (stopReason: StopReason): RunDayResult => ({
     posts,
@@ -87,6 +98,7 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
     costByStage: meter.byStage(),
     freshDrafts,
     shipped,
+    onCalendar,
   });
 
   const logCap = async (storyId: string, stage: StageName) => {
@@ -145,6 +157,10 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
   // ── One story at a time, in rank order ──────────────────────────────
   for (const story of ranked) {
     if (shipped.length >= target) return finish('target-reached');
+    if (input.onCalendar && (await input.onCalendar(story.id))) {
+      onCalendar.push(story.id);
+      continue;
+    }
     const reused = input.stored ? await input.stored(story.id) : null;
     if (reused) {
       shipped.push({ storyId: story.id, reusedPostId: reused });

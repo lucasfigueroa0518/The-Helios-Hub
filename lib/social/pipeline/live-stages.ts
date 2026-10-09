@@ -20,6 +20,7 @@
  * stopped one cheap design stage early at cap − reserve).
  */
 import { priceAnthropicMessages, type MessageUsageLike } from '@/lib/anthropic-pricing';
+import type { PhotoBank } from '@/lib/media-library/bank';
 import type { JevAsk } from '@/lib/social/jev/client';
 import type { PhotoDeps } from '@/lib/social/photos/find';
 import type { UsedPhotoLog } from '@/lib/social/photos/used-photos';
@@ -109,6 +110,8 @@ export type LiveStagesDeps = {
   http?: PhotoDeps['http'];
   /** The used-photo log: the 7-day rule (M8c). */
   usedLog?: UsedPhotoLog;
+  /** The photo bank (DECISIONS_LOG D49): vetted photos are offered to it, and its reader joins the finder (both gated by its settings). Absent: neither. */
+  bank?: PhotoBank;
   /** The face detector (photos/faces.ts): second photos, full-bleed framing. Absent: neither. */
   faces?: PhotoDeps['faces'];
   /** Second photos of a person (photos/second-photo.ts). */
@@ -155,7 +158,7 @@ export function createLiveStages(deps: LiveStagesDeps): { stages: PipelineStages
   };
   // The render review (photo spec §5b): Haiku on the contact sheet, under the same budget guard.
   const review = deps.renderReview ? createRenderReview({ call: createReviewCall({ create }), dir: deps.renderReview.dir }) : undefined;
-  const design = createDesignStage({ jev: deps.jev, http: deps.http, vision, tagSheet, faces: deps.faces, secondPhotos: deps.secondPhotos, fitCheck: deps.fitCheck, usedLog: deps.usedLog, now: () => deps.now, identitiesFor, review });
+  const design = createDesignStage({ jev: deps.jev, http: deps.http, vision, tagSheet, faces: deps.faces, secondPhotos: deps.secondPhotos, fitCheck: deps.fitCheck, usedLog: deps.usedLog, now: () => deps.now, identitiesFor, review, ...(deps.bank ? { bank: deps.bank } : {}) });
 
   const stages: PipelineStages = {
     score: deps.score,

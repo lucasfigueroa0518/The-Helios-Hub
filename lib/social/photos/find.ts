@@ -18,11 +18,19 @@
  * Every source lives in sources/. People and logos come only from verified
  * sources: tags never decide who someone is (spec §3).
  *
+ * The photo bank (DECISIONS_LOG D49) is one more source, only when a bank
+ * reader is passed (`deps.bank`) and `media_library.settings.finder_source`
+ * isn't "off": first for person (by verified QID), thematic and setting (by
+ * tags); a fallback for company (headquarters) and logo when the online
+ * sources leave nothing usable; never for product or event (sources/bank.ts).
+ * Without a reader, the search is exactly what it was.
+ *
  * AI calls here: Jev (identity, the stock metadata pre-screen, the
  * headquarters check) and the official-image text check (the vision call's
  * "mostly text or banner" answer). The close-up vision check of a winner is
  * pick.ts's.
  */
+import type { BankReader } from '@/lib/media-library/reader';
 import type { OpenverseCandidate } from '@/lib/social/editorial/v2/image-step/openverse';
 import type { JevAsk } from '@/lib/social/jev/client';
 import type { FaceBox } from '@/lib/social/render/fit-check';
@@ -39,6 +47,7 @@ import { rankCandidates } from './rank';
 import type { SecondPhotos } from './second-photo';
 import type { TagSheet } from './tag-sheet';
 import { articleSource } from './sources/article';
+import { BANK_ROUTE, bankSource } from './sources/bank';
 import { commonsSearchSource, openverseSource, stocksnapSource } from './sources/stock';
 import { companySource, logoSource, personSource } from './sources/wikidata';
 import type { VisionCheck } from './vision';
@@ -144,6 +153,8 @@ export type PhotoDeps = {
   secondPhotos?: SecondPhotos;
   /** The contact-sheet tagging call (tag-sheet.ts). Absent: no tags, no fit check (offline runs). */
   tagSheet?: TagSheet;
+  /** The photo bank as a source (lib/media-library/reader.ts). Absent: not searched (tests, offline runs). */
+  bank?: BankReader;
 };
 
 /** Everything one post's searches share. */
@@ -156,6 +167,8 @@ export type SearchContext = {
   kinds: Map<string, SubjectType | null>;
   /** URLs used in the last 7 days or earlier in this run. Never picked (logos and story-slide headshots aside). */
   recent: Set<string>;
+  /** When each URL was last used (the used-photo log): the bank offers the least recently used first. */
+  lastUsed: Map<string, string>;
   /** Identity results by subject name (p18.ts), shared with the Writer's availability flags. */
   identities: IdentityCache;
   /** Each organization's pool by QID (org-pool.ts), fetched once per post. */
@@ -171,7 +184,7 @@ export type SearchContext = {
 export function newSearchContext(
   brief: Brief,
   pages: PageReadOk[],
-  opts: { recent?: Set<string>; identities?: IdentityCache; photos?: ListedPhoto[]; kinds?: Map<string, SubjectType | null>; storyDate?: string | null } = {},
+  opts: { recent?: Set<string>; lastUsed?: Map<string, string>; identities?: IdentityCache; photos?: ListedPhoto[]; kinds?: Map<string, SubjectType | null>; storyDate?: string | null } = {},
 ): SearchContext {
   return {
     brief,
@@ -179,6 +192,7 @@ export function newSearchContext(
     photos: opts.photos ?? [],
     kinds: opts.kinds ?? new Map(brief.subjects.map((s) => [s.name, s.type ?? null])),
     recent: opts.recent ?? new Set(),
+    lastUsed: opts.lastUsed ?? new Map(),
     identities: opts.identities ?? new Map(),
     orgPools: new Map(),
     officialChecked: new Map(),
@@ -187,8 +201,14 @@ export function newSearchContext(
   };
 }
 
-/** What a source gets: the shared context, the deps, this request's log, and the slide's subject tags. */
-export type SourceRun = { ctx: SearchContext; deps: PhotoDeps; steps: string[]; tags: string[]; identity: IdentityNote | null };
+/**
+ * What a source gets: the shared context, the deps, this request's log, and
+ * the slide's subject tags. `cover`/`wide`: the slide's needs (the bank
+ * applies the 7-day exemptions and the spread rule itself). `stop`: set by
+ * the bank in "first" mode once it has enough; the remaining online sources
+ * are skipped.
+ */
+export type SourceRun = { ctx: SearchContext; deps: PhotoDeps; steps: string[]; tags: string[]; identity: IdentityNote | null; cover?: boolean; wide?: boolean; stop?: boolean };
 
 export type Source = (request: VisualRequest, run: SourceRun) => Promise<Candidate[]>;
 
@@ -222,21 +242,37 @@ export async function searchVisual(
   deps: PhotoDeps,
   slide: { cover?: boolean; tags?: string[]; wide?: boolean } = {},
 ): Promise<{ candidates: Candidate[]; steps: string[]; identity: IdentityNote | null }> {
-  const run: SourceRun = { ctx, deps, steps: [], tags: slide.tags ?? [], identity: null };
+  const run: SourceRun = { ctx, deps, steps: [], tags: slide.tags ?? [], identity: null, cover: Boolean(slide.cover), wide: Boolean(slide.wide) };
   if (!request.query.trim()) {
     run.steps.push(`${request.kind}: no request (dropped by the Writer check)`);
     return { candidates: [], steps: run.steps, identity: null };
   }
   const found: Candidate[] = [];
-  for (const source of ROUTES[request.kind]) {
+  const search = async (source: Source) => {
     try {
       found.push(...(await source(request, run)));
     } catch (err) {
       run.steps.push(`${source.name || 'source'} error: ${errText(err)}`);
     }
+  };
+  // The photo bank (D49): only with a reader; first or as a fallback, by kind (sources/bank.ts).
+  const bankAt = deps.bank ? BANK_ROUTE[request.kind] : undefined;
+  // Asked first (so "first" mode can skip the rest), listed last: the same URL found online keeps its fresh details.
+  let banked: Candidate[] = [];
+  if (bankAt === 'first') {
+    await search(bankSource);
+    banked = found.splice(0);
   }
+  for (const source of ROUTES[request.kind]) {
+    if (run.stop) {
+      run.steps.push(`${source.name || 'source'}: skipped (the photo bank had enough)`);
+      continue;
+    }
+    await search(source);
+  }
+  found.push(...banked);
   const seen = new Set<string>();
-  const usable = found.filter((c) => {
+  const keep = (c: Candidate) => {
     if (seen.has(c.url)) return false;
     seen.add(c.url);
     if (slide.wide && !(c.width && c.height && c.width / c.height >= SPREAD_MIN_ASPECT)) return false;
@@ -246,7 +282,13 @@ export async function searchVisual(
       return false;
     }
     return true;
-  });
+  };
+  const usable = found.filter(keep);
+  if (bankAt === 'fallback' && usable.length === 0) {
+    const from = found.length;
+    await search(bankSource);
+    usable.push(...found.slice(from).filter(keep));
+  }
   const ranked = rankCandidates(usable, request.kind, ctx.storyDate, Boolean(slide.cover)).slice(0, MAX_CANDIDATES);
   run.steps.push(`${request.kind}: "${request.query}" → ${found.length} found, ${ranked.length} kept${ranked.length ? ` (${ranked.map((c) => `${c.lane}${c.date ? ` ${c.date}` : ''} ${c.width ?? '?'}×${c.height ?? '?'}`).join('; ')})` : ''}`);
   return { candidates: ranked, steps: run.steps, identity: run.identity };

@@ -8,11 +8,21 @@
  * Jev for identity checks, and Tommy's close-up vision check on Haiku 5.5
  * (S-70; priced by Stories, lib/stories/cost.ts). His face and contact-sheet
  * steps stay inside his design stage.
+ *
+ * Photo bank (DECISIONS_LOG D49): with a `bank`, every find offers its
+ * vetted candidates (the pick, and identity-verified headshots, second
+ * photos, CEOs, headquarters and logos) with runKind 'story'. Stories run
+ * only the metadata pre-screen, not the close-up vision check, so their
+ * offers carry no close-up pass unless a vision verdict was recorded. The
+ * bank's reader also joins the search (off until its finder_source switch
+ * is flipped). Offering never blocks or fails a find.
  */
 import type Anthropic from '@anthropic-ai/sdk';
+import type { PhotoBank } from '@/lib/media-library/bank';
 import { createJevAsk, type JevAsk } from '@/lib/social/jev/client';
 import { newSearchContext, searchVisual, type Candidate } from '@/lib/social/photos/find';
 import { createVisionCheck } from '@/lib/social/photos/vision';
+import { IDENTITY_LANES, recordVision, type VettedPhoto } from '@/lib/social/photos/vetted';
 import { priceCall } from '@/lib/stories/cost';
 import type { Brief } from '@/lib/social/reporter/brief';
 import { readPage, type PageReadOk } from '@/lib/social/reporter/read-page';
@@ -63,8 +73,24 @@ export function minimalBrief(req: PhotoRequest): Brief {
 
 export const PHOTO_VISION_MODEL = 'claude-haiku-5-5';
 
-export function createLivePhotoFinder(opts: { jev?: JevAsk; http?: typeof fetch; create?: (p: Anthropic.MessageCreateParamsNonStreaming) => Promise<Anthropic.Message> } = {}): PhotoFinder {
+/** A Stories find's vetted candidates for the photo bank: the pick, and the identity-verified ones it didn't pick. Pure. */
+export function storyVetted(seq: number, request: { kind: VisualKind; query: string }, candidates: Candidate[], picked: Candidate | null, verdicts: ReturnType<typeof recordVision>['verdicts']): VettedPhoto[] {
+  const out: VettedPhoto[] = [];
+  for (const c of candidates) {
+    const outcome = c === picked ? 'picked' : c.verified && IDENTITY_LANES.has(c.lane) ? 'verified' : null;
+    if (!outcome) continue;
+    let vision = verdicts.get(`${c.url}|${request.query}`) ?? null;
+    if (!vision) for (const [key, v] of verdicts) if (key.startsWith(`${c.url}|`)) { vision = v; break; }
+    out.push({ slide: seq, request: { ...request }, outcome, candidate: { ...c }, tileTags: null, fit: null, vision });
+  }
+  return out;
+}
+
+export function createLivePhotoFinder(opts: { jev?: JevAsk; http?: typeof fetch; create?: (p: Anthropic.MessageCreateParamsNonStreaming) => Promise<Anthropic.Message>; bank?: PhotoBank; runRef?: string } = {}): PhotoFinder {
   let usd = 0;
+  // The photo bank's run: this finder (one Stories build), its requests numbered in order.
+  const runRef = opts.runRef ?? `stories-build:${new Date().toISOString()}`;
+  let seq = 0;
   // The vision check on Haiku 5.5; its cost counted at Haiku 5.5's price.
   const vision = opts.create
     ? createVisionCheck({
@@ -77,6 +103,8 @@ export function createLivePhotoFinder(opts: { jev?: JevAsk; http?: typeof fetch;
         },
       })
     : undefined;
+  // Vision answers recorded for the bank (same answers); undefined without a vision check.
+  const recorder = recordVision(vision);
   const jev: JevAsk = opts.jev ?? createJevAsk();
   const tallied: JevAsk = async (request, meta) => {
     const r = await jev(request, meta);
@@ -95,8 +123,23 @@ export function createLivePhotoFinder(opts: { jev?: JevAsk; http?: typeof fetch;
         if (p && p.ok) pages.push(p);
       }
       const ctx = newSearchContext(minimalBrief(req), pages, { recent: req.exclude, storyDate: req.storyDate });
-      const { candidates } = await searchVisual({ kind: req.kind as VisualKind, query: req.query }, ctx, { jev: tallied, http: opts.http ?? fetch, ...(vision ? { vision } : {}) });
+      const request = { kind: req.kind as VisualKind, query: req.query };
+      const { candidates } = await searchVisual(request, ctx, { jev: tallied, http: opts.http ?? fetch, ...(recorder.vision ? { vision: recorder.vision } : {}), ...(opts.bank ? { bank: opts.bank.reader } : {}) });
       const pick = candidates.find((c) => !req.exclude.has(c.url));
+      seq++;
+      if (opts.bank) {
+        try {
+          opts.bank.offer({
+            runKind: 'story',
+            runRef,
+            subjects: req.subjects.map((s) => s.name),
+            organizations: req.subjects.filter((s) => s.type === 'organization').map((s) => s.name),
+            items: storyVetted(seq, request, candidates, pick ?? null, recorder.verdicts),
+          });
+        } catch {
+          // The bank is best effort: a find never fails over it.
+        }
+      }
       return pick ? toStoryPhoto(pick, req.kind) : null;
     },
   };

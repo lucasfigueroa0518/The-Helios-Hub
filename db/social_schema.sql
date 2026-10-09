@@ -277,3 +277,33 @@ INSERT INTO social.settings (key, value) VALUES ('posts_per_day', '2'::jsonb) ON
 -- had a finished post. The worker schedules from it. NULL: an older run, whose
 -- own posts are scheduled by slug order.
 ALTER TABLE social.runs ADD COLUMN IF NOT EXISTS ship_post_ids jsonb;
+
+-- ── One-story reruns (Social Hub Regenerate, D51) ──────────────────────────
+-- A person asks for one carousel's news story to be made again. The app
+-- inserts a `requested` row here; only the helios-social worker runs it
+-- (docs/social-overnight.md). The worker claims a request by opening a
+-- social.runs row for it (status `running`, trigger `manual`), so the run
+-- queue's single-running index keeps a rerun and the nightly run apart, the
+-- nightly run's one queued place is never taken by a rerun, and the spend is
+-- recorded and capped like any run's (run_cap_usd, default $2). The rerun
+-- starts from the post's saved brief (Writer onward), like
+-- scripts/social_rewrite_run.ts; its new post is a new `review` post for the
+-- same story, so the newest version wins (SH-60).
+CREATE TABLE IF NOT EXISTS social.rerun_requests (
+    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    post_id         uuid NOT NULL REFERENCES social.posts (id) ON DELETE CASCADE,
+    story_id        text NOT NULL,
+    status          text NOT NULL DEFAULT 'requested' CHECK (status IN ('requested', 'running', 'ok', 'failed')),
+    requested_at    timestamptz NOT NULL DEFAULT now(),
+    requested_by    text,
+    started_at      timestamptz,
+    finished_at     timestamptz,
+    run_id          uuid REFERENCES social.runs (id) ON DELETE SET NULL,
+    new_post_id     uuid REFERENCES social.posts (id) ON DELETE SET NULL,
+    error           text
+);
+
+CREATE INDEX IF NOT EXISTS idx_social_rerun_requests_recent ON social.rerun_requests (requested_at DESC);
+-- One open rerun per news story.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_social_rerun_requests_open_story
+    ON social.rerun_requests (story_id) WHERE status IN ('requested', 'running');
