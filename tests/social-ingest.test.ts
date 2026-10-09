@@ -82,9 +82,13 @@ test('code filters skip listicles, deals and tutorials, and log the reason', () 
   const more = applyCodeFilters([
     { ...A1, headline: 'How to use ChatGPT for email' },
     { ...A1, headline: 'Get 40% off ChatGPT Plus today' },
+    { ...A1, headline: 'During Deal Days, you can get lifetime access to ChatGPT for $70' },
+    { ...A1, headline: 'OpenAI’s deal with Microsoft expands' },
     { ...A1, headline: 'Top 5 AI laptops' },
   ]);
-  assert.deepEqual(more.skipped.map((s) => s.reason), ['tutorial', 'deal', 'listicle']);
+  assert.deepEqual(more.skipped.map((s) => s.reason), ['tutorial', 'deal', 'deal', 'listicle']);
+  assert.equal(more.kept.length, 1);
+  assert.match(more.kept[0]!.headline, /deal with Microsoft/);
 });
 
 // ── Grouping ───────────────────────────────────────────────────────────

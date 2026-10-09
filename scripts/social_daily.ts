@@ -17,7 +17,7 @@
  *
  *   npx tsx scripts/social_daily.ts --stories 2            (cap $2.00)
  *   npx tsx scripts/social_daily.ts --cap-usd 1.50 --stories 2
- *   npx tsx scripts/social_daily.ts --stories 3 --no-hook --preview
+ *   npx tsx scripts/social_daily.ts --stories 3 --preview
  *   npx tsx scripts/social_daily.ts --stories 2 --preview --review   (the render review on; before/after under the run folder, render-review)
  *
  * The social worker passes --run-id for its queued runs, plus --rerun-post
@@ -25,11 +25,11 @@
  * selection, no Reporter; that post's story from its saved brief, Writer
  * onward, one post, under the same cap.
  *
- * The Hook pass runs by default (Tommy, 2026-10-07, fifth round: signed
- * off after the 03:45 preview); --no-hook turns it off for one run. --preview: run.json is labelled PREVIEW (not an acceptance
+ * The Hook pass is gone (Lucas 2026-10-08): the Writer writes the pull
+ * itself. --preview: run.json is labelled PREVIEW (not an acceptance
  * batch), the used-photo log is not written (so the acceptance batch's
  * 7-day rule isn't spent on a preview), and preview-report.md lists per
- * post: photo source and layout per slide, spreads, hook lines,
+ * post: photo source and layout per slide, spreads,
  * Fact-checker flags and cost.
  *
  * Writes runs/daily-<ts>/: run.json (selection, every stage's result,
@@ -66,7 +66,10 @@ async function main() {
   const capUsd = arg('--cap-usd') ?? DEFAULT_CAP_USD;
   if (!Number.isFinite(capUsd) || capUsd <= 0) throw new Error('--cap-usd must be a positive amount');
   const stories = arg('--stories') ?? 2;
-  const hookOn = !process.argv.includes('--no-hook');
+  // Diagnostic only: run just the Nth ranked story (1-based), so parallel
+  // processes can each take a different story. Absent, the day runs as usual.
+  const onlyRank = arg('--only-rank');
+  if (onlyRank !== undefined && (!Number.isInteger(onlyRank) || onlyRank < 1)) throw new Error('--only-rank must be a positive integer');
   // The render review (photo spec §5b), fixes on, before/after saved (Tommy, 2026-10-07: the first end-to-end run is its calibration).
   const reviewOn = process.argv.includes('--review');
   const preview = process.argv.includes('--preview');
@@ -166,9 +169,20 @@ async function main() {
 
     reporterCapUsd: 0.45,
     maxReporterRuns: stories + 2,
-    // The Hook pass (on by default; --no-hook turns it off); its budget renders take no screenshots.
-    ...(hookOn ? { hook: { fitCheck: checkRenderFit } } : {}),
   });
+  if (onlyRank !== undefined) {
+    const score = stages.score;
+    stages.score = async (articles, now) => {
+      const res = await score(articles, now);
+      if (!res.ok) return res;
+      const one = res.value[onlyRank - 1];
+      if (!one) {
+        return { ok: false, reasonCode: 'service-error', detail: `--only-rank ${onlyRank} but selection returned ${res.value.length} stories`, costUsd: res.costUsd };
+      }
+      console.error(`[helios-social] only-rank ${onlyRank}: ${one.title}`);
+      return { ...res, value: [one] };
+    };
+  }
   const design = stages.design;
   stages.design = async (draft, brief, story) => {
     currentStory = toSlug(story.title).slice(0, 40);
@@ -246,14 +260,14 @@ async function main() {
 
   await fsp.writeFile(
     path.join(runDir, 'run.json'),
-    JSON.stringify({ ...(preview ? { label: 'PREVIEW', note: 'Preview run, not the acceptance batch; the used-photo log was not written.' } : {}), ...(rerun ? { rerunOf: rerun.postId } : {}), hookPass: hookOn, startedAt: now.toISOString(), capUsd, alreadyPosted, requestMix, articles: articles.length, jev: jevTally, claudeUsd: budget.claudeUsd(), totalUsd: budget.spent(), result, selection, stories: storyLogs, fit: Object.fromEntries(fitResults) }, null, 2),
+    JSON.stringify({ ...(preview ? { label: 'PREVIEW', note: 'Preview run, not the acceptance batch; the used-photo log was not written.' } : {}), ...(rerun ? { rerunOf: rerun.postId } : {}), hookPass: false, startedAt: now.toISOString(), capUsd, alreadyPosted, requestMix, articles: articles.length, jev: jevTally, claudeUsd: budget.claudeUsd(), totalUsd: budget.spent(), result, selection, stories: storyLogs, fit: Object.fromEntries(fitResults) }, null, 2),
   );
   if (preview) await fsp.writeFile(path.join(runDir, 'preview-report.md'), previewReport());
   // The database record (spec 2026-10-08-social-storage.md): written after the files, so a database failure loses nothing.
   if (store.query) {
     try {
       const finished = {
-        finishedAt: new Date().toISOString(), hookPass: hookOn,
+        finishedAt: new Date().toISOString(), hookPass: false,
         claudeUsd: budget.claudeUsd(), totalUsd: budget.spent(), stopReason: result.stopReason ?? null,
         runDir: path.relative(process.cwd(), runDir), machine: os.hostname(),
         record: JSON.parse(await fsp.readFile(path.join(runDir, 'run.json'), 'utf8')),
@@ -314,10 +328,10 @@ async function main() {
   // The photo bank's queue (D49): at most 90 s; what isn't done stays in its outbox for the next run.
   await bank?.drain(90_000);
 
-  /** Per post (PREVIEW): photo source and layout per slide, spreads, hook lines, Fact-checker flags, cost. */
+  /** Per post (PREVIEW): photo source and layout per slide, spreads, Fact-checker flags, cost. */
   function previewReport(): string {
     const { layoutOf } = layoutRotation;
-    let o = `# PREVIEW run ${stamp} (not the acceptance batch)\n\nHook pass: ${hookOn ? 'on' : 'off (--no-hook)'} · total $${budget.spent().toFixed(4)} of $${capUsd} · stop: ${result.stopReason}\n`;
+    let o = `# PREVIEW run ${stamp} (not the acceptance batch)\n\nTotal $${budget.spent().toFixed(4)} of $${capUsd} · stop: ${result.stopReason}\n`;
     for (const sa of result.setAsides) o += `- Set aside: ${sa.storyId} at ${sa.stage}: ${sa.reasonCode} (${sa.detail.slice(0, 200)})\n`;
     for (const post of result.posts) {
       const l = logs.get(post.storyId)!;
@@ -336,16 +350,7 @@ async function main() {
       const spreads = post.render.slides.filter((sl) => sl.panoramaSide === 'left').length;
       // Jev's layout log: the spread decision and each slide's variant (slide buckets spec).
       const layoutLog = (post.checks as { layout?: string[] }).layout ?? [];
-      o += `\nSpreads: ${spreads}\n\nLayout (Jev):\n${layoutLog.map((x) => `- ${x}`).join('\n') || '- (none logged)'}\n\nHook lines:\n`;
-      const hk = l.hook?.at(-1);
-      if (!hookOn) o += '- (Hook pass off)\n';
-      else if (!hk?.ok) o += `- Hook pass failed: ${hk ? `${hk.reason} ${hk.detail}` : 'no result'}\n`;
-      else {
-        o += `- Budgets: ${hk.budgets.map((b, i) => `S${i + 2} ${b}`).join(' · ')}\n`;
-        hk.hooks.forEach((h, i) => { if (h) o += `- S${i + 2} ${h.kind} [${h.facts.join(', ')}]: ${h.text}\n`; });
-        for (const d of hk.dropped) o += `- ${d}\n`;
-        if (!hk.hooks.some(Boolean)) o += '- (no lines added)\n';
-      }
+      o += `\nSpreads: ${spreads}\n\nLayout (Jev):\n${layoutLog.map((x) => `- ${x}`).join('\n') || '- (none logged)'}\n`;
       o += '\nFact-checker flags:\n';
       const fcs = l.factCheck;
       if (!fcs.length) o += '- (none run)\n';

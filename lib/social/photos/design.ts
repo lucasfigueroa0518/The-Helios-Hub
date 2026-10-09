@@ -8,9 +8,12 @@
  *   3. tags     one Haiku call per sheet: words per tile and the stock-rule
  *               flags, in tile order (tag-sheet.ts)
  *   4. fit      Jev: do an unverified tile's tags show what was asked for
- *               (photo-fit@1; the homonym guard)
+ *               in the story's sense (photo-fit@2; the homonym guard)
  *   5. pick     per slide, in order: the best passing candidate, then the
- *               second, then the fallback's, then the icon (pick.ts)
+ *               second, then the fallback's, then the icon (pick.ts). Jev
+ *               checks each slide's shortlist against what the slide says
+ *               and against the photos already in the post (photo-slide@2);
+ *               no photo or person appears twice.
  *
  * One shared context per post: each subject is identity-checked once (the
  * cache is shared with the Writer's availability flags), each company's pool
@@ -21,7 +24,7 @@
  * design stage to offer to the bank. The vision check is wrapped in a
  * recorder for that; the pick is unchanged.
  */
-import * as PhotoFit from '@/lib/social/jev/questions/photo-fit.v1';
+import * as PhotoFit from '@/lib/social/jev/questions/photo-fit.v2';
 import type { Brief } from '@/lib/social/reporter/brief';
 import type { PageReadOk } from '@/lib/social/reporter/read-page';
 import { DEFAULT_ICON, isIcon } from '@/lib/social/render/icons';
@@ -31,12 +34,13 @@ import { articlePhotosFor } from './article-list';
 import { newSearchContext, searchVisual, type Candidate, type PhotoDeps, type PhotoSlot, type PhotoTrace } from './find';
 import type { SubjectType } from './identity';
 import type { IdentityCache } from './p18';
-import { newPickState, pickForSlide, type PickSlot, type Scored } from './pick';
+import { newPickState, pickForSlide, type PickSlot, type PickWords, type Scored } from './pick';
 import { buildSheets } from './sheet';
+import { ICON_SCENES, tuning } from './tuning';
 import type { TileTag } from './tag-sheet';
 import { recordVision, vettedForSlide, type VettedPhoto } from './vetted';
 
-/** Where a slide type draws its photo (the hook budgets and the review). */
+/** Where a slide type draws its photo (the review). */
 export function slotFor(type: FilledDraft['slides'][number]['type']): PhotoSlot {
   return type === 'stat' ? 'backdrop' : type === 'quote' ? 'quote' : 'split';
 }
@@ -59,7 +63,7 @@ export async function subjectKinds(brief: Brief, identities?: IdentityCache): Pr
   return out;
 }
 
-type Place = { slot: PickSlot; icon: string; tags: string[]; requests: VisualRequest[] };
+type Place = { slot: PickSlot; icon: string; tags: string[]; requests: VisualRequest[]; words: PickWords };
 
 const errText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
@@ -78,12 +82,13 @@ export async function photosForDraft(
   const icon = (name: string | undefined) => (isIcon(name) ? name : DEFAULT_ICON);
   const chosen = draft.cover_options[draft.chosen_cover - 1]!;
   const places: Place[] = [
-    { slot: { kind: 'cover', speaker: null }, icon: icon(chosen.icon), tags: chosen.subject_ids ?? [], requests: [chosen.visual, chosen.fallback_visual] },
-    ...draft.slides.map((s): Place => ({
+    { slot: { kind: 'cover', speaker: null }, icon: icon(chosen.icon), tags: chosen.subject_ids ?? [], requests: [chosen.visual, chosen.fallback_visual], words: { position: 1, headline: draft.cover, body: '' } },
+    ...draft.slides.map((s, i): Place => ({
       slot: { kind: s.type === 'stat' ? 'stat' : s.type === 'quote' ? 'quote' : 'story', speaker: s.quote?.speaker_subject ?? null },
       icon: icon(s.icon),
       tags: s.subject_ids ?? [],
       requests: [s.visual, s.fallback_visual],
+      words: { position: i + 2, headline: s.headline.text, body: [s.body?.text, s.quote ? `"${s.quote.text}" (${s.quote.speaker})` : null, ...s.numbers.map((n) => `${n.value} ${n.counts}`)].filter(Boolean).join(' ') },
     })),
   ];
 
@@ -119,7 +124,7 @@ export async function photosForDraft(
   for (let k = 0; k < toFit.length; k += PhotoFit.MAX_TILES) {
     const batch = toFit.slice(k, k + PhotoFit.MAX_TILES);
     try {
-      const answers = await PhotoFit.photoFitScores(deps.jev, batch.map(({ c, request }) => ({ request_kind: request.kind, request: request.query, tags: tagsByUrl.get(c.url)!.tags })));
+      const answers = await PhotoFit.photoFitScores(deps.jev, batch.map(({ c, request }) => ({ request_kind: request.kind, request: request.query, tags: tagsByUrl.get(c.url)!.tags })), brief.the_news.text);
       batch.forEach(({ c, request }, j) => fitByKey.set(`${c.url}|${request.query}`, answers[j]!));
     } catch (err) {
       sheetSteps.push(`fit check error: ${errText(err)} → those tiles unchecked (their close-up check still runs)`);
@@ -137,7 +142,7 @@ export async function photosForDraft(
       request: r.request,
       scored: r.candidates.map((cand: Candidate): Scored => ({ cand, tags: tagsByUrl.get(cand.url) ?? null, fit: fitByKey.get(`${cand.url}|${r.request.query}`) ?? null })),
     }));
-    const out = await pickForSlide({ slot: p.slot, requests }, state, deps, subjects, PhotoFit.THRESHOLDS.FIT_MIN);
+    let out = await pickForSlide({ slot: p.slot, requests, words: p.words }, state, deps, subjects, PhotoFit.THRESHOLDS.FIT_MIN, brief.the_news.text);
     visionUsd += out.visionUsd;
     try {
       vetted.push(...vettedForSlide({ slide: i + 1, requests: found[i]!.map((r) => ({ request: r.request, candidates: r.candidates })), winner: out.winner?.cand ?? null, alternates: out.alternates, tagsByUrl, fitByKey, verdicts: recorder.verdicts, fitMin: PhotoFit.THRESHOLDS.FIT_MIN }));
@@ -145,6 +150,16 @@ export async function photosForDraft(
       // The bank's record never changes the post.
     }
     const searchSteps = found[i]!.flatMap((r) => r.steps);
+    // Icon scene (tuning.ts): both requests left the slide without a photo → one more search for its icon's plain scene.
+    const iconScene = ICON_SCENES[p.icon];
+    if (!out.winner && tuning().iconScenes && p.slot.kind !== 'quote' && iconScene) {
+      const request: VisualRequest = { kind: 'thematic', query: iconScene };
+      const extra = await searchVisual(request, ctx, deps, { cover: i === 0 });
+      const again = await pickForSlide({ slot: p.slot, requests: [{ request, scored: extra.candidates.map((cand): Scored => ({ cand, tags: null, fit: null })) }], words: p.words }, state, deps, subjects, PhotoFit.THRESHOLDS.FIT_MIN, brief.the_news.text);
+      visionUsd += again.visionUsd;
+      searchSteps.push(`icon scene (${p.icon}) → "${iconScene}"`, ...extra.steps);
+      out = again.winner ? { ...again, steps: [...out.steps, ...again.steps] } : { ...out, steps: [...out.steps, ...again.steps] };
+    }
     const identity = found[i]!.find((r) => r.identity)?.identity ?? null;
     traces.push({
       request: out.request,

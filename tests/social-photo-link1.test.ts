@@ -194,8 +194,8 @@ test('the Writer sees type, headshot_available (people) and logo_available (orga
   assert.ok(!('article_photos' in forWriter), 'article photos are a source the search tries, never asked for by URL (sixth round)');
 });
 
-test('the VISUAL rule tells the Writer the two-tier request (sixth round)', () => {
-  for (const s of ['subject_ids', 'a VISUAL and a different FALLBACK VISUAL', 'person: <SUBJECTS name>', 'headshot_available true', 'company: <SUBJECTS name>', 'logo: <SUBJECTS name> (with logo_available true)', 'product: <1–5 words naming it>', 'event: <1–5 words naming what happened>', 'thematic: <a plain 2–4 word physical scene tied to the topic, never a name>', 'setting: <a plain 2–4 word place type, never a named place>', "Vary the kinds across the post so it isn't the same face and logo on every slide", "On a quote slide, VISUAL is the speaker (person: <the quote's speaker>)", "Never change a slide's words to fit a visual or a tag"]) {
+test('the VISUAL rule tells the Writer the two-tier request and how the search reads it', () => {
+  for (const s of ['subject_ids', 'VISUAL and a different FALLBACK VISUAL', 'person: <SUBJECTS name>', 'headshot_available true', 'company: <SUBJECTS name>', 'logo: <SUBJECTS name> (with logo_available true)', 'product: <1–5 words naming it>', 'event: <1–5 words naming what happened>', 'thematic: <a plain 2–4 word physical scene tied to the topic, never a name>', 'setting: <a plain 2–4 word place type, never a named place>', "On a quote slide, VISUAL is the speaker (person: <the quote's speaker>) when the speaker is a person in SUBJECTS", "Never change a slide's words to fit a visual or a tag"]) {
     assert.ok(VISUAL_RULE.includes(s), s);
   }
 });
@@ -261,13 +261,17 @@ test('person visuals: on any slide that names them (no once-per-post limit); nev
 
 // ── Quote slides ───────────────────────────────────────────────────────
 
-test('quote slides: a person speaker in SUBJECTS is the visual, photo or not (DeSantis, Pierre Stock); never another person or a scene', () => {
+test('quote slides: a person speaker in SUBJECTS with a verified headshot is the visual; without one, the slide asks for what the quote is about (seventh round)', () => {
   const a = story('altman-2117');
-  const view = viewFor(a.brief, { 'Ron DeSantis': person(false), 'Sam Altman': person() });
-  const q = (visual: VisualRequest, fallback?: VisualRequest) => at(errs(draftOf({ text: 'Altman says some bad things will happen', visual: vPerson('Sam Altman'), tags: ['S1'] }, [{ type: 'quote', headline: 'DeSantis responds', quote_id: 'Q5', visual, ...(fallback ? { fallback } : {}), tags: ['S6'] }]), a.brief, view), 'slide 2');
-  assert.doesNotMatch(q(vPerson('Ron DeSantis')), /a quote slide's visual/, 'no verified headshot: still the speaker (a type-led slide if nothing else is found)');
-  assert.match(q(scene('podium')), /a quote slide's visual is its speaker \(person: Ron DeSantis\)/);
-  assert.match(q(vPerson('Sam Altman')), /a quote slide's visual is its speaker \(person: Ron DeSantis\)/);
+  const q = (view: PhotoView, visual: VisualRequest) => at(errs(draftOf({ text: 'Altman says some bad things will happen', visual: vPerson('Sam Altman'), tags: ['S1'] }, [{ type: 'quote', headline: 'DeSantis responds', quote_id: 'Q5', visual, tags: ['S6'] }]), a.brief, view), 'slide 2');
+  const withPhoto = viewFor(a.brief, { 'Ron DeSantis': person(), 'Sam Altman': person() });
+  assert.doesNotMatch(q(withPhoto, vPerson('Ron DeSantis')), /a quote slide's visual/);
+  assert.match(q(withPhoto, scene('podium')), /a quote slide's visual is its speaker \(person: Ron DeSantis\)/);
+  assert.match(q(withPhoto, vPerson('Sam Altman')), /a quote slide's visual is its speaker \(person: Ron DeSantis\)/);
+  // No verified headshot: the speaker can't be asked for (the headshot check would reject it), so no speaker rule.
+  const noPhoto = viewFor(a.brief, { 'Ron DeSantis': person(false), 'Sam Altman': person() });
+  assert.equal(q(noPhoto, scene('podium')), '');
+  assert.doesNotMatch(q(noPhoto, vPerson('Ron DeSantis')), /a quote slide's visual/);
   const m = story('mistral-1600');
   const stockQuote = draftOf({ text: 'Mistral ships Large 4', visual: vCompany('Mistral AI'), tags: ['S1'] }, [{ type: 'quote', headline: 'Stock on the benchmark', quote_id: 'Q5', visual: vPerson('Pierre Stock'), tags: ['S4'] }]);
   assert.doesNotMatch(at(errs(stockQuote, m.brief, viewFor(m.brief, { 'Pierre Stock': person(false), 'Mistral AI': org() })), 'slide 2'), /quote slide/);
@@ -286,7 +290,7 @@ test('quote slides: an organization speaker (Anthropic) or one not in SUBJECTS (
 
 // ── Stat slides and scenes ─────────────────────────────────────────────
 
-test('stat slides: at most 2 per post; scenes (thematic, setting) never name a SUBJECT; conceptual scenes need not be on the slide', () => {
+test('stat slides: no cap since the seventh round; scenes (thematic, setting) never name a SUBJECT; conceptual scenes need not be on the slide', () => {
   const m = story('mistral-1600');
   const d = draftOf({ text: 'Mistral ships Large 4', visual: vCompany('Mistral AI'), tags: ['S1'] }, [
     { type: 'stat', headline: 'A trillion parameters', number_ids: [m.brief.numbers[0]!.id], visual: scene('data center racks'), tags: [] },
@@ -298,7 +302,7 @@ test('stat slides: at most 2 per post; scenes (thematic, setting) never name a S
   const e = errs(d, m.brief, viewFor(m.brief, { 'Mistral AI': org() }));
   assert.equal(at(e, 'slide 2') + at(e, 'slide 3') + at(e, 'slide 4') + at(e, 'slide 5'), '');
   assert.match(at(e, 'slide 6'), /scene "Mistral AI office" names Mistral AI/);
-  assert.match(e.join(' | '), /slides: 3 stat slides; at most 2 per post/);
+  assert.doesNotMatch(e.join(' | '), /stat slides/);
 });
 
 // ── The final attempt: tags pruned, requests dropped, words kept ───────

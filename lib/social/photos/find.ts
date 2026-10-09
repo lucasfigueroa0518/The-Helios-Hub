@@ -31,6 +31,7 @@
  * pick.ts's.
  */
 import type { BankReader } from '@/lib/media-library/reader';
+import { ladderQueries, tuning } from './tuning';
 import type { OpenverseCandidate } from '@/lib/social/editorial/v2/image-step/openverse';
 import type { JevAsk } from '@/lib/social/jev/client';
 import type { FaceBox } from '@/lib/social/render/fit-check';
@@ -131,7 +132,7 @@ export type StockSearch = (query: string, opts: { minShortSide: number; minAspec
  */
 export const SPREAD_MIN_ASPECT = 1.45;
 
-/** Where the photo is drawn: `split` (cover, story), `quote`, `backdrop` (stat). Kept for the hook budgets and the review. */
+/** Where the photo is drawn: `split` (cover, story), `quote`, `backdrop` (stat). Kept for the review. */
 export type PhotoSlot = 'split' | 'backdrop' | 'quote';
 
 /** Commons file search. Injected for tests. */
@@ -223,7 +224,7 @@ export const ROUTES: Record<VisualKind, Source[]> = {
   setting: [stocksnapSource, commonsSearchSource, openverseSource],
 };
 
-/** Up to this many candidates per request (Tommy, 2026-10-07: "up to two … at least one"). */
+/** Up to this many candidates per request by default (Tommy, 2026-10-07: "up to two … at least one"); tuning().keep in use. */
 export const MAX_CANDIDATES = 2;
 
 const errText = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -241,6 +242,27 @@ export async function searchVisual(
   ctx: SearchContext,
   deps: PhotoDeps,
   slide: { cover?: boolean; tags?: string[]; wide?: boolean } = {},
+): Promise<{ candidates: Candidate[]; steps: string[]; identity: IdentityNote | null }> {
+  const first = await searchOnce(request, ctx, deps, slide);
+  // The deep ladder (tuning.ts): a scene that found nothing is retried with its last two words, then its head noun.
+  if (first.candidates.length || tuning().ladder !== 'deep' || !SCENE_KINDS.has(request.kind)) return first;
+  const steps = [...first.steps];
+  for (const query of ladderQueries(request.query)) {
+    const next = await searchOnce({ kind: request.kind, query }, ctx, deps, slide);
+    steps.push(`ladder → "${query}"`, ...next.steps);
+    if (next.candidates.length) return { candidates: next.candidates, steps, identity: first.identity };
+  }
+  return { ...first, steps };
+}
+
+/** Scene kinds: the deep ladder retries these with fewer words. */
+const SCENE_KINDS = new Set<VisualRequest['kind']>(['thematic', 'setting', 'product', 'event']);
+
+async function searchOnce(
+  request: VisualRequest,
+  ctx: SearchContext,
+  deps: PhotoDeps,
+  slide: { cover?: boolean; tags?: string[]; wide?: boolean },
 ): Promise<{ candidates: Candidate[]; steps: string[]; identity: IdentityNote | null }> {
   const run: SourceRun = { ctx, deps, steps: [], tags: slide.tags ?? [], identity: null, cover: Boolean(slide.cover), wide: Boolean(slide.wide) };
   if (!request.query.trim()) {
@@ -289,7 +311,7 @@ export async function searchVisual(
     await search(bankSource);
     usable.push(...found.slice(from).filter(keep));
   }
-  const ranked = rankCandidates(usable, request.kind, ctx.storyDate, Boolean(slide.cover)).slice(0, MAX_CANDIDATES);
+  const ranked = rankCandidates(usable, request.kind, ctx.storyDate, Boolean(slide.cover)).slice(0, tuning().keep);
   run.steps.push(`${request.kind}: "${request.query}" → ${found.length} found, ${ranked.length} kept${ranked.length ? ` (${ranked.map((c) => `${c.lane}${c.date ? ` ${c.date}` : ''} ${c.width ?? '?'}×${c.height ?? '?'}`).join('; ')})` : ''}`);
   return { candidates: ranked, steps: run.steps, identity: run.identity };
 }

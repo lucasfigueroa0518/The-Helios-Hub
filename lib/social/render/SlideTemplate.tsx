@@ -5,11 +5,15 @@ import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { BACKDROP_MAX_UPSCALE, BLEED_MAX_UPSCALE, SHARP_UPSCALE, SLIDE, coverScale, matteBox, panelTreatment, type Size } from '@/lib/social/render/framing';
 import { DEFAULT_ICON, ICONS } from '@/lib/social/render/icons';
 import { fitText } from '@/lib/social/render/text-fit';
-import type { Post, SlideCopy, SpanRun } from '@/lib/social/render/types';
+import type { Post, SlideCanvas, SlideCopy, SpanRun } from '@/lib/social/render/types';
+
+export { SLIDE_CANVASES, type SlideCanvas } from '@/lib/social/render/types';
 
 export type SlideTemplateProps = {
   post: Post;
   position: number;
+  /** Overrides the slide's own canvas (the canvases preview page). Absent: the slide's `canvas`, else black. */
+  canvas?: SlideCanvas;
 };
 
 /**
@@ -47,9 +51,10 @@ export type SlideTemplateProps = {
  *   spread       one wide scene photo across two slides (panoramaSide), text on a scrim
  *   follow       closing slide
  */
-export function SlideTemplate({ post, position }: SlideTemplateProps) {
+export function SlideTemplate({ post, position, canvas: canvasProp }: SlideTemplateProps) {
   const ref = useRef<HTMLDivElement>(null);
   const slide = post.slides[position];
+  const canvas: SlideCanvas = canvasProp ?? slide?.canvas ?? 'black';
 
   // Rule 1 in the browser preview: fit once fonts are in. The render-fit
   // check runs the same fitText headlessly and fails the render on misses.
@@ -90,6 +95,7 @@ export function SlideTemplate({ post, position }: SlideTemplateProps) {
       ref={ref}
       className={`helios-slide helios-slide--${post.format} helios-slide--${kind}`}
       data-slide-ready="true"
+      data-canvas={canvas === 'black' ? undefined : canvas}
       data-variant={slide.variant ?? undefined}
       role="img"
       aria-label={slide.altText}
@@ -141,17 +147,7 @@ function IconBackground({ slide, cover }: { slide: SlideCopy; cover?: boolean })
 const photoKindAttr = (slide: SlideCopy) => (slide.photoKind === 'subject' && slide.photoBleed ? 'person-bleed' : slide.photoKind ?? 'scene');
 
 /** Minimum font sizes (px) per text role: the floor for rule 1. */
-const MIN = { headline: 44, cover: 48, body: 28, number: 52, splitNumber: 40, note: 22, quote: 36, by: 18, landing: 52, hook: 24 } as const;
-
-/** The Hook pass line, when it sits at `at`: a lead-in above the body, a tease below it. */
-function HookLine({ slide, at }: { slide: SlideCopy; at: 'above' | 'below' }) {
-  if (!slide.hook || slide.hook.position !== at) return null;
-  return (
-    <Fit as="p" className={`helios-hook helios-hook--${at}`} min={MIN.hook}>
-      {slide.hook.text}
-    </Fit>
-  );
-}
+const MIN = { headline: 44, cover: 48, body: 28, number: 52, splitNumber: 40, note: 22, quote: 36, by: 18, landing: 52 } as const;
 
 function SpanRunView({ run }: { run: SpanRun | undefined }) {
   if (!run) return null;
@@ -294,13 +290,11 @@ function TextSlide({ slide }: { slide: SlideCopy }) {
             <SpanRunView run={headline} />
           </Fit>
         )}
-        <HookLine slide={slide} at="above" />
         {body && (
           <Fit as="p" className="helios-text__body" min={MIN.body}>
             <SpanRunView run={body} />
           </Fit>
         )}
-        <HookLine slide={slide} at="below" />
       </div>
       {placement === 'below' && <RegionPhoto slide={slide} className="helios-split__photo" />}
     </div>
@@ -318,13 +312,11 @@ function LandingSlide({ slide }: { slide: SlideCopy }) {
             <SpanRunView run={slide.headline} />
           </Fit>
         )}
-        <HookLine slide={slide} at="above" />
         {slide.body && (
           <Fit as="p" className="helios-landing__body" min={MIN.body}>
             <SpanRunView run={slide.body} />
           </Fit>
         )}
-        <HookLine slide={slide} at="below" />
         {slide.note && <Fit className="helios-landing__note" min={MIN.body}>{slide.note}</Fit>}
       </div>
       {slide.photoUrl && <RegionPhoto slide={slide} className="helios-split__photo" />}
@@ -345,13 +337,11 @@ function StatSlide({ slide }: { slide: SlideCopy }) {
             <SpanRunView run={slide.headline} />
           </Fit>
         )}
-        <HookLine slide={slide} at="above" />
         {slide.body && (
           <Fit as="p" className="helios-stat__body" min={MIN.body}>
             <SpanRunView run={slide.body} />
           </Fit>
         )}
-        <HookLine slide={slide} at="below" />
       </div>
       <div className="helios-stat__number-block">
         {slide.title && (
@@ -376,13 +366,11 @@ function SplitStatSlide({ slide }: { slide: SlideCopy }) {
             <SpanRunView run={slide.headline} />
           </Fit>
         )}
-        <HookLine slide={slide} at="above" />
         {slide.body && (
           <Fit as="p" className="helios-split-stat__body" min={MIN.body}>
             <SpanRunView run={slide.body} />
           </Fit>
         )}
-        <HookLine slide={slide} at="below" />
       </div>
       <div className="helios-split-stat__pair">
         <div className="helios-split-stat__col">
@@ -438,13 +426,11 @@ function QuoteSlide({ slide }: { slide: SlideCopy }) {
           {role && <span className="helios-quote__role">, {role}</span>}
         </Fit>
       )}
-      <HookLine slide={slide} at="above" />
       {slide.body && (
         <Fit as="p" className="helios-quote__body" min={MIN.body}>
           <SpanRunView run={slide.body} />
         </Fit>
       )}
-      <HookLine slide={slide} at="below" />
     </div>
   );
 }
@@ -461,13 +447,11 @@ function ImageSlide({ slide, spread }: { slide: SlideCopy; spread?: 'left' | 'ri
             <SpanRunView run={slide.headline} />
           </Fit>
         )}
-        <HookLine slide={slide} at="above" />
         {slide.body && (
           <Fit as="p" className="helios-image__body" min={MIN.body}>
             <SpanRunView run={slide.body} />
           </Fit>
         )}
-        <HookLine slide={slide} at="below" />
       </div>
     </div>
   );

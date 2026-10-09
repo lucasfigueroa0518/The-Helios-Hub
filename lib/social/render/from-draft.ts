@@ -15,7 +15,7 @@ import type { FilledDraft, FilledSlide } from '@/lib/social/writer/draft';
 import { templateById, type TemplateId } from './buckets';
 import { DEFAULT_ICON, isIcon } from './icons';
 import { rotateLayouts } from './layout-rotation';
-import type { Post, SlideCopy, SpanRun } from './types';
+import type { Post, SlideCanvas, SlideCopy, SpanRun } from './types';
 
 const run = (text: string): SpanRun => [{ text, role: 'narrative' }];
 
@@ -56,10 +56,7 @@ const iconOf = (name: string | null | undefined) => (isIcon(name) ? name : DEFAU
 
 function storySlide(s: FilledSlide, position: number, photo: Photo | null, icon: string | null | undefined): SlideCopy {
   const base = { position, headline: run(s.headline.text), altText: s.headline.text, icon: iconOf(icon ?? s.icon), ...photoFields(photo) };
-  const body = {
-    ...(s.body ? { body: run(s.body.text) } : {}),
-    ...(s.hook ? { hook: { text: s.hook.text, position: s.hook.kind === 'lead-in' ? ('above' as const) : ('below' as const) } } : {}),
-  };
+  const body = s.body ? { body: run(s.body.text) } : {};
   switch (s.type) {
     case 'stat': {
       if (s.numbers.length === 2) {
@@ -110,8 +107,8 @@ function applySpreads(slides: SlideCopy[], draft: FilledDraft, photos: Array<Pho
 /** Photos per slide (cover first) and, optionally, the icons the chain settled on (cover first; else the draft's). */
 export type DraftPhotos = { cover: Photo | null; slides: Array<Photo | null>; icons?: Array<string | null> };
 
-/** Jev's layout (render/layout.ts): a template per slide (cover first) and the spread's first slide. */
-export type ChosenLayout = { templates: TemplateId[]; spreadAt: number | null };
+/** Jev's layout (render/layout.ts): a template and a canvas per slide (cover first) and the spread's first slide. */
+export type ChosenLayout = { templates: TemplateId[]; spreadAt: number | null; canvases?: SlideCanvas[] };
 
 /**
  * The slides in draft order. Every slide carries its icon; the renderer draws
@@ -129,7 +126,9 @@ export function draftSlides(draft: FilledDraft, photos: DraftPhotos, layout?: Ch
   if (!layout) return spread;
   return spread.map((s, i) => {
     const id = layout.templates[i];
-    return id ? { ...templateById(id).apply(s), template: id } : s;
+    const canvas = layout.canvases?.[i];
+    const laid = id ? { ...templateById(id).apply(s), template: id } : s;
+    return canvas && canvas !== 'black' ? { ...laid, canvas } : laid;
   });
 }
 

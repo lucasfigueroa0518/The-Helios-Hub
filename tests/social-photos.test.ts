@@ -10,7 +10,7 @@ import { sifDraft } from '@/fixtures/social/drafts';
 import { commonsUrl, createFakeHttp, SIF_WEB, stockUrl } from '@/fixtures/social/photo-http';
 import type { JevAsk } from '@/lib/social/jev/client';
 import * as Identity from '@/lib/social/jev/questions/subject-identity.v1';
-import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v4';
+import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v5';
 import { createDesignStage } from '@/lib/social/pipeline/design-stage';
 import type { Brief as PipelineBrief, Draft, ScoredCandidate } from '@/lib/social/pipeline/types';
 import { classifyCredit } from '@/lib/social/photos/credit';
@@ -477,7 +477,7 @@ test('vision request: own model, cached system + forced tool, the downscaled pho
   const requests: any[] = [];
   const create = async (p: any) => {
     requests.push(p);
-    return { id: 'm', type: 'message', role: 'assistant', model: p.model, stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 900, output_tokens: 80, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, content: [{ type: 'tool_use', id: 't', name: 'submit_verdict', input: verdict({ what_it_shows: 'a blue field' }) }] } as any;
+    return { id: 'm', type: 'message', role: 'assistant', model: p.model, stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 900, output_tokens: 80, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, content: [{ type: 'tool_use', id: 't', name: 'submit_verdict', input: verdict({ what_it_shows: 'a blue field', person_visible: false, person_main: false, face_recognizable: false }) }] } as any;
   };
   const r = await createVisionCheck({ create, http })({ url: 'https://s/x.jpg', scene: 'data center racks', subjects: ['Mistral AI'], title: 'CJ Harris Regional Hospital' });
   assert.ok(r.ok && r.pass && r.costUsd > 0);
@@ -490,7 +490,7 @@ test('vision request: own model, cached system + forced tool, the downscaled pho
   assert.equal(img.type, 'image');
   const meta = await sharp(Buffer.from(img.source.data, 'base64')).metadata();
   assert.equal(Math.max(meta.width!, meta.height!), 768);
-  assert.equal(text.text, 'REQUESTED: data center racks\nSUBJECTS: Mistral AI\nTITLE: CJ Harris Regional Hospital');
+  assert.equal(text.text, 'STORY: (none)\nREQUESTED: data center racks\nSUBJECTS: Mistral AI\nTITLE: CJ Harris Regional Hospital');
 });
 
 
@@ -521,3 +521,13 @@ test("headshot_available agrees with the search: a person has a headshot exactly
   assert.deepEqual(jevCalls.sort(), ['Donald Trump', 'Jay Clayton', 'Nobody Pictured', 'Sam Smith'], 'one identity check per subject, shared by the Writer and the finder');
 });
 
+
+test('vision modes (2026-10-08): strict fails any person; faces passes hands but fails a main-subject person or a recognizable face', () => {
+  const hands = verdict({ person_prominent: true, person_visible: true, person_main: false, face_recognizable: false });
+  assert.equal(passesVision(hands, 'strict'), false);
+  assert.equal(passesVision(hands, 'faces'), true);
+  assert.equal(passesVision(verdict({ person_prominent: true, person_visible: true, person_main: false, face_recognizable: true }), 'faces'), false);
+  assert.equal(passesVision(verdict({ person_prominent: true, person_visible: true, person_main: true, face_recognizable: false }), 'faces'), false);
+  // An older verdict (no split answers) keeps its one person answer in both modes.
+  assert.equal(passesVision(verdict({ person_prominent: true }), 'faces'), false);
+});

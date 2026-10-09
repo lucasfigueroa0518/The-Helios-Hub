@@ -8,7 +8,10 @@
  * is unchanged.
  */
 import type { JevAsk } from '@/lib/social/jev/client';
-import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v4';
+import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v5';
+
+/** The accepted run's steps were saved under v4; v5 asks the same questions with the story added, so its answers replay. */
+const SAVED_PRESCREEN_PREFIX = /^pre-screen stock-prescreen@\d+ /;
 
 import type { PhotoTrace } from './find';
 import { passesVision, type VisionCheck, type VisionVerdict } from './vision';
@@ -19,7 +22,7 @@ export type AcceptedStock = { id: string; steps: string[]; outcome: string };
 /** The pre-screen answers, one map per Jev call, from `pre-screen stock-prescreen@4 "…": "t" fit 0.97 people 0.13 ✓; …` steps. */
 export function prescreenAnswers(steps: string[]): Array<Record<string, { noul: number }>> {
   return steps
-    .filter((s) => s.startsWith(`pre-screen ${Prescreen.VERSION} `))
+    .filter((s) => SAVED_PRESCREEN_PREFIX.test(s))
     .map((s) => {
       const answers: Record<string, { noul: number }> = {};
       [...s.matchAll(/ fit ([\d.]+) people ([\d.]+)/g)].forEach((m, k) => {

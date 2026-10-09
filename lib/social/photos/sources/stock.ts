@@ -15,9 +15,10 @@
  */
 import { buildCredit, fetchImageInfo, toCandidate } from '@/lib/social/editorial/v2/image-step/commons';
 import { buildStockCredit, searchOpenverse, type OpenverseCandidate } from '@/lib/social/editorial/v2/image-step/openverse';
-import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v4';
+import * as Prescreen from '@/lib/social/jev/questions/stock-prescreen.v5';
 import type { VisualRequest } from '@/lib/social/writer/draft';
 
+import { lastTwoWords } from '../tuning';
 import { STOCK_MIN_SHORT_SIDE, type Candidate, type CommonsSearch, type PhotoDeps, type Source, type SourceRun, type StockSearch } from '../find';
 
 const COMMONS_API = 'https://commons.wikimedia.org/w/api.php';
@@ -27,20 +28,26 @@ export const COMMONS_SEARCH_LIMIT = 12;
 /** The StockSnap lane's Openverse providers. */
 export const STOCKSNAP_LANE = ['stocksnap', 'rawpixel'];
 
-/** Search terms for a request: the request, then its first two words (Tommy, 2026-10-06). */
+/**
+ * Search terms for a request: the request, then a shorter retry (Tommy, 2026-10-06). The retry keeps the
+ * last two words (2026-10-08): in an English noun phrase the head noun comes last, so "AI research lab"
+ * retries as "research lab", never "AI research" (the first two words dropped the noun that disambiguates).
+ * A leading and/or/of is dropped ("and documents" → "documents").
+ */
 export function stockQueries(request: string): string[] {
-  const words = request.trim().split(/\s+/);
-  return [...new Set([words.join(' '), words.slice(0, 2).join(' ')])].filter(Boolean);
+  const full = request.trim().split(/\s+/).filter(Boolean).join(' ');
+  return [...new Set([full, lastTwoWords(full)])].filter(Boolean);
 }
 
-/** Jev metadata pre-screen v4 (spec §5A #6): the results whose title and tags fit the request and suggest no person, in order. */
+/** Jev metadata pre-screen v5 (spec §5A #6; story context since 2026-10-08): the results whose title and tags fit the request, in the story's sense, and suggest no person, in order. */
 type Screened = { cand: Candidate; tags: string[]; provider: string };
 
-async function prescreen(scene: string, items: Screened[], deps: PhotoDeps, steps: string[]): Promise<Candidate[]> {
+async function prescreen(scene: string, items: Screened[], run: SourceRun): Promise<Candidate[]> {
+  const { deps, steps } = run;
   const shown = items.slice(0, Prescreen.MAX_CANDIDATES);
   if (!shown.length) return [];
   const meta = shown.map((x) => ({ title: x.cand.title, tags: x.tags, source: x.provider }));
-  const res = await deps.jev({ state: Prescreen.buildState(scene, meta), questions: Prescreen.buildQuestions(shown.length) }, { version: Prescreen.VERSION, subjectId: scene });
+  const res = await deps.jev({ state: Prescreen.buildState(scene, meta, run.ctx.brief.the_news.text), questions: Prescreen.buildQuestions(shown.length) }, { version: Prescreen.VERSION, subjectId: scene });
   const n = (id: string) => res.answers[id]?.noul ?? 0;
   const scored = shown.map((x, k) => ({ c: x.cand, fit: n(Prescreen.fitId(k)), people: n(Prescreen.peopleId(k)) }));
   const passing = scored.filter((x) => x.fit >= Prescreen.THRESHOLDS.FIT_MIN && x.people < Prescreen.THRESHOLDS.PEOPLE_MAX);
@@ -71,7 +78,7 @@ function openverseLane(lane: 'stocksnap' | 'openverse', sources?: string[]): Sou
         run.steps.push(`${lane} "${query}": no results`);
         continue;
       }
-      const passing = await prescreen(request.query, found, run.deps, run.steps);
+      const passing = await prescreen(request.query, found, run);
       if (passing.length) return passing;
       run.steps.push(`${lane} "${query}": nothing passed the pre-screen`);
     }
@@ -109,5 +116,5 @@ export const commonsSearchSource: Source = async function commonsSearch(request:
     run.steps.push(`commons-search "${request.query}": no usable files`);
     return [];
   }
-  return prescreen(request.query, found.map((cand) => ({ cand, tags: [], provider: 'wikimedia' })), run.deps, run.steps);
+  return prescreen(request.query, found.map((cand) => ({ cand, tags: [], provider: 'wikimedia' })), run);
 };

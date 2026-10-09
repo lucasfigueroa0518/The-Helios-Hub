@@ -58,7 +58,7 @@ export type FitResult = {
   problems: string[];
   /** Each rendered slide's text, cover first (M7 C7). */
   slideText: string[];
-  /** Each text region's font size after fitting, per slide in order (the Hook pass budget). Absent from test stubs. */
+  /** Each text region's font size after fitting, per slide in order (for measuring how much room a region has). Absent from test stubs. */
   sizes?: Array<Array<{ element: string; px: number }>>;
   /** Face boxes and crops per photo slide (M8b). Absent from test stubs. */
   focus?: SlideFocus[];
@@ -105,7 +105,7 @@ function localFile(pathname: string): string {
 
 /**
  * Remote photos fetched once per process: repeated renders of one post (the
- * Hook pass budget probes) would otherwise re-download each original and
+ * design stage's re-renders, the render review) would otherwise re-download each original and
  * get throttled by Wikimedia. Only successful responses are kept.
  */
 const remotePhotoCache = new Map<string, { body: Buffer; headers: Record<string, string> }>();
@@ -157,7 +157,7 @@ export const checkRenderFit: FitCheck = async (post, opts = {}) => {
     const problems: string[] = [];
 
     // 1. Text fit, with the preview's own routine.
-    // Per slide, so a failure names its slide (the Hook pass budget measures each slide on its own).
+    // Per slide, so a failure names its slide.
     const textFit = (await page.evaluate(`[...document.querySelectorAll('.fit-frame')].map((frame) => (${fitText.toString()})(frame))`)) as TextFitFailure[][];
     textFit.forEach((fails, i) => {
       for (const f of fails) problems.push(`slide ${i + 1} text fit: ${f.element} "${f.text}" (${f.reason}, min ${f.minPx}px)`);

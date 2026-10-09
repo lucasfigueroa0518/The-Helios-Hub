@@ -63,7 +63,7 @@ export async function poolOf(run: SourceRun, name: string): Promise<OrgPool | nu
   if (!id.ok || id.type !== 'organization') return null;
   let pending = run.ctx.orgPools.get(id.qid);
   if (!pending) {
-    pending = orgPool({ qid: id.qid, label: id.label }, run.deps);
+    pending = orgPool({ qid: id.qid, label: id.label }, { ...run.deps, storyDate: run.ctx.storyDate });
     run.ctx.orgPools.set(id.qid, pending);
     run.steps.push(...(await pending).notes.map((n) => `${id.label} ${n}`));
   }
