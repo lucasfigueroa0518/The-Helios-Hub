@@ -71,22 +71,31 @@ gcloud compute ssh ${IAP} "${INSTANCE}" --zone="${ZONE}" --project="${PROJECT}" 
     echo 'Missing /opt/helios-social/worker.env on the VM. Pass SOCIAL_WORKER_ENV_FILE=… once.' >&2
     exit 1
   fi
+  # Every social unit runs as helios (not root): Claude Code refuses
+  # --dangerously-skip-permissions as root, and the Explainers render agent needs it.
+  # System packages stay root; node_modules, browsers and the venv belong to helios.
+  H=/opt/helios-social/home
+  PW=/opt/helios-social/ms-playwright
+  id -u helios >/dev/null 2>&1 || sudo useradd --system --user-group --home-dir \${H} --shell /usr/sbin/nologin helios
   sudo rm -rf /opt/helios-social/app
-  sudo mkdir -p /opt/helios-social/app
-  sudo tar -xzf /tmp/helios-social-app.tgz -C /opt/helios-social/app
+  sudo mkdir -p /opt/helios-social/app /opt/helios-social/explainers/jobs /opt/helios-social/explainers/storage \${H} \${PW}
+  sudo tar -xzf /tmp/helios-social-app.tgz -C /opt/helios-social/app --no-same-owner
+  sudo chown -R helios:helios /opt/helios-social/app /opt/helios-social/explainers \${H} \${PW}
+  sudo chmod -R go-w /opt/helios-social/app && sudo chmod 755 /opt/helios-social/app
+  AS_HELIOS=\"sudo -u helios env HOME=\${H} PLAYWRIGHT_BROWSERS_PATH=\${PW} HYPERFRAMES_NO_TELEMETRY=1\"
   cd /opt/helios-social/app
-  sudo python3 -m venv helios_text_engine/.venv
+  \${AS_HELIOS} python3 -m venv helios_text_engine/.venv
   # librosa measures song BPM for the Trial Reels song pool (D-175).
-  sudo helios_text_engine/.venv/bin/pip install -q pillow numpy librosa
-  sudo npm ci
-  # Headless Chromium for carousel slide renders.
-  sudo npx playwright install --with-deps chromium
+  \${AS_HELIOS} helios_text_engine/.venv/bin/pip install -q pillow numpy librosa
+  \${AS_HELIOS} npm ci
+  # Headless Chromium for carousel slides and story frames: system libs as root, the browser as helios.
+  sudo npx --no-install playwright install-deps chromium
+  \${AS_HELIOS} npx --no-install playwright install chromium
   # Explainer Reels: pinned HyperFrames CLI + Agent SDK, Chrome for renders, the agent sandbox.
   command -v bwrap >/dev/null && command -v socat >/dev/null && command -v unzip >/dev/null || sudo apt-get install -y -qq bubblewrap socat unzip
   # IG Stories: color emoji for the homemade frames.
   fc-list | grep -qi 'Noto Color Emoji' || sudo apt-get install -y -qq fonts-noto-color-emoji
-  sudo mkdir -p /opt/helios-social/explainers/jobs /opt/helios-social/explainers/storage
-  (cd explainers/runtime && sudo npm ci --no-audit --no-fund && sudo HYPERFRAMES_NO_TELEMETRY=1 npx --no-install hyperframes browser ensure || true)
+  (cd explainers/runtime && \${AS_HELIOS} npm ci --no-audit --no-fund && \${AS_HELIOS} npx --no-install hyperframes browser ensure || true)
   for unit in ${UNITS}; do
     sudo cp /tmp/\${unit}.service /etc/systemd/system/\${unit}.service
   done

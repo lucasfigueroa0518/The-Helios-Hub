@@ -72,8 +72,9 @@ export const SUBMIT_REVIEW_TOOL = {
         out_of_place: { type: 'boolean' },
         broken: { type: 'boolean' },
         change: { type: 'string', enum: [...CHANGES] },
-        backdrop: { type: ['string', 'null'], enum: [...BACKDROPS, null] },
-        family: { type: ['string', 'null'], enum: [...GTN_FAMILIES, null] },
+        // Strict tools reject a union type with an enum holding null; anyOf keeps null out of the string enum.
+        backdrop: { anyOf: [{ type: 'string', enum: [...BACKDROPS] }, { type: 'null' }] },
+        family: { anyOf: [{ type: 'string', enum: [...GTN_FAMILIES] }, { type: 'null' }] },
         crop_x: { type: ['number', 'null'] },
         crop_y: { type: ['number', 'null'] },
         reason: { type: 'string' },

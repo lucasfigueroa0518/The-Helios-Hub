@@ -33,7 +33,12 @@ if ! command -v node >/dev/null || [[ "$(node -v | cut -d. -f1 | tr -d v)" -lt "
   apt-get install -y nodejs
 fi
 
-mkdir -p "${APP_DIR}/app" "${APP_DIR}/explainers/jobs" "${APP_DIR}/explainers/storage"
+# The social units run as helios, never root: Claude Code refuses
+# --dangerously-skip-permissions as root, and the Explainers render agent needs it.
+id -u helios >/dev/null 2>&1 || useradd --system --user-group --home-dir "${APP_DIR}/home" --shell /usr/sbin/nologin helios
+
+mkdir -p "${APP_DIR}/app" "${APP_DIR}/explainers/jobs" "${APP_DIR}/explainers/storage" "${APP_DIR}/home" "${APP_DIR}/ms-playwright"
+chown -R helios:helios "${APP_DIR}/app" "${APP_DIR}/explainers" "${APP_DIR}/home" "${APP_DIR}/ms-playwright"
 chmod 755 "${APP_DIR}"
 
 echo "Bootstrap done: node $(node -v), $(ffmpeg -version | head -1)"

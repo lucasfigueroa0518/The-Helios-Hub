@@ -5,6 +5,13 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+# Non-root: Claude Code refuses --dangerously-skip-permissions as root, and the
+# Explainers render agent needs it (lib/explainers/render/agent.ts). systemd reads
+# EnvironmentFile as root before dropping to helios, so worker.env stays mode 600.
+User=helios
+Group=helios
+Environment=HOME=/opt/helios-social/home
+Environment=PLAYWRIGHT_BROWSERS_PATH=/opt/helios-social/ms-playwright
 WorkingDirectory=/opt/helios-social/app
 EnvironmentFile=/opt/helios-social/worker.env
 ExecStart=/usr/bin/npm run social:worker

@@ -202,3 +202,16 @@ test('the review prompt never invites text changes', () => {
   const props = (SUBMIT_REVIEW_TOOL.input_schema as { properties: { frames: { items: { properties: Record<string, unknown> } } } }).properties.frames.items.properties;
   assert.deepEqual(Object.keys(props).filter((k) => /text|copy|headline|word/.test(k)), []);
 });
+
+test('nullable enums are anyOf, never a union type with null in the enum (strict tools reject it)', () => {
+  const props = (SUBMIT_REVIEW_TOOL.input_schema as { properties: { frames: { items: { properties: Record<string, Record<string, unknown>> } } } }).properties.frames.items.properties;
+  for (const key of ['backdrop', 'family']) {
+    const p = props[key]!;
+    assert.equal(p.type, undefined, `${key} has no top-level type`);
+    assert.equal(p.enum, undefined, `${key} has no top-level enum`);
+    const [str, nul] = p.anyOf as Array<{ type: string; enum?: unknown[] }>;
+    assert.equal(str!.type, 'string');
+    assert.ok(str!.enum!.length > 0 && !str!.enum!.includes(null), `${key} string enum holds no null`);
+    assert.deepEqual(nul, { type: 'null' });
+  }
+});
