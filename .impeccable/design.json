@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-08T16:30:00-04:00",
+  "title": "Design System: Helios Social Hub",
+  "extensions": {
+    "colorMeta": {
+      "helios-orange": { "role": "primary", "displayName": "Helios Signal Orange", "canonical": "oklch(68.7% 0.208 39.4)", "tonalRamp": ["#400000", "#6b0000", "#950000", "#bf1600", "#ea4a00", "#ff7437", "#edccc1", "#ffe6db"] },
+      "helios-orange-ink": { "role": "primary", "displayName": "Signal Orange Ink" },
+      "helios-orange-soft": { "role": "primary", "displayName": "Signal Orange Wash" },
+      "helios-green": { "role": "secondary", "displayName": "Helios Metadata Green", "canonical": "oklch(53.7% 0.175 142.5)", "tonalRamp": ["#001600", "#003700", "#005900", "#007d00", "#3ba236", "#64c95d", "#c6dbc3", "#e0f6dd"] },
+      "type-reels": { "role": "tertiary", "displayName": "Reel Teal", "canonical": "oklch(71.4% 0.119 203.3)", "tonalRamp": ["#001421", "#003440", "#005561", "#007884", "#009da9", "#2dc4d0", "#b7dde0", "#d0f7fb"] },
+      "type-explainers": { "role": "tertiary", "displayName": "Explainer Royal Blue", "canonical": "oklch(56.0% 0.188 266.4)", "tonalRamp": ["#0e005a", "#080080", "#1832a7", "#3459d0", "#547ff9", "#77a6ff", "#c8d4ef", "#e2efff"] },
+      "type-carousels": { "role": "tertiary", "displayName": "Carousel Green", "canonical": "oklch(53.7% 0.175 142.5)", "tonalRamp": ["#001600", "#003700", "#005900", "#007d00", "#3ba236", "#64c95d", "#c6dbc3", "#e0f6dd"] },
+      "type-stories": { "role": "tertiary", "displayName": "Story Orchid", "canonical": "oklch(69.0% 0.167 316.1)", "tonalRamp": ["#230038", "#43005b", "#66187f", "#8a40a5", "#b064cc", "#d78af4", "#dfcde6", "#f9e7ff"] },
+      "failed-ink": { "role": "neutral", "displayName": "Failed Ink" },
+      "failed-soft": { "role": "neutral", "displayName": "Failed Wash" },
+      "positive-ink": { "role": "neutral", "displayName": "Positive Ink" },
+      "canvas": { "role": "neutral", "displayName": "Canvas", "canonical": "oklch(98.5% 0 0)" },
+      "surface": { "role": "neutral", "displayName": "Surface" },
+      "surface-sunken": { "role": "neutral", "displayName": "Sunken Surface" },
+      "surface-hover": { "role": "neutral", "displayName": "Hover Surface" },
+      "hairline": { "role": "neutral", "displayName": "Hairline" },
+      "hairline-strong": { "role": "neutral", "displayName": "Strong Hairline" },
+      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "oklch(20.5% 0 0)", "tonalRamp": ["#0b0b0b", "#262626", "#454545", "#666666", "#898989", "#aeaeae", "#d4d4d4", "#eeeeee"] },
+      "ink-muted": { "role": "neutral", "displayName": "Muted Ink" },
+      "ink-subtle": { "role": "neutral", "displayName": "Subtle Ink" }
+    },
+    "typographyMeta": {
+      "page-title": { "displayName": "Page title", "purpose": "One per page, Pragmatica Extended, the Helios signature." },
+      "section-title": { "displayName": "Section title", "purpose": "Sentence-case section names in Roboto." },
+      "kpi-value": { "displayName": "KPI value", "purpose": "Headline numbers in a KPI strip, tabular figures." },
+      "body": { "displayName": "Body", "purpose": "Descriptions and notes, capped at 70ch." },
+      "label": { "displayName": "Label", "purpose": "Column headers, axis labels, captions; sentence case." },
+      "data": { "displayName": "Data", "purpose": "Table cells and metric lines, tabular figures, numbers right-aligned." }
+    },
+    "shadows": [
+      { "name": "float", "value": "0 8px 24px -8px rgba(0,0,0,0.1)", "purpose": "Menus, popovers, the compare tray." },
+      { "name": "overlay", "value": "0 12px 40px -12px rgba(0,0,0,0.15)", "purpose": "The post drawer and the calendar day panel." }
+    ],
+    "motion": [
+      { "name": "ease-out", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Helios ease-out for every state transition." },
+      { "name": "fast", "value": "150ms", "purpose": "Hover, press, pending dim." },
+      { "name": "base", "value": "250ms", "purpose": "Drawer and panel slide; reduced motion becomes a fade." }
+    ],
+    "breakpoints": [
+      { "name": "phone", "value": "720px" },
+      { "name": "narrow", "value": "960px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one action a person should take in a region. Signal Orange fill, Ink label.",
+      "html": "<button class=\"ds-btn-primary\">Approve</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 14px; border: 1px solid var(--color-primary, #ff5e1a); border-radius: 6px; background: var(--color-primary, #ff5e1a); color: #171717; font: 600 14px/1 Roboto, system-ui, sans-serif; cursor: pointer; transition: background 150ms cubic-bezier(0.16,1,0.3,1); } .ds-btn-primary:hover { background: #e54e0f; } .ds-btn-primary:focus-visible { outline: 2px solid #ff5e1a; outline-offset: 2px; }"
+    },
+    {
+      "name": "Action Button",
+      "kind": "button",
+      "refersTo": "button-action",
+      "description": "Every other action: reject, regenerate, reschedule.",
+      "html": "<button class=\"ds-btn\">Regenerate</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 12px; border: 1px solid #d4d4d4; border-radius: 6px; background: #ffffff; color: #171717; font: 500 14px/1 Roboto, system-ui, sans-serif; cursor: pointer; transition: background 150ms cubic-bezier(0.16,1,0.3,1); } .ds-btn:hover { background: #f0f0f0; } .ds-btn:focus-visible { outline: 2px solid #ff5e1a; outline-offset: 2px; }"
+    },
+    {
+      "name": "Choice Pills",
+      "kind": "chip",
+      "refersTo": "choice-pill",
+      "description": "Choosing, never doing: range, metric, mode.",
+      "html": "<div class=\"ds-pills\"><button class=\"ds-pill\">7 days</button><button class=\"ds-pill\" aria-pressed=\"true\">30 days</button><button class=\"ds-pill\">90 days</button></div>",
+      "css": ".ds-pills { display: inline-flex; gap: 4px; } .ds-pill { height: 28px; padding: 0 12px; border: 1px solid #e5e5e5; border-radius: 9999px; background: #ffffff; color: #525252; font: 500 13px/1 Roboto, system-ui, sans-serif; cursor: pointer; } .ds-pill:hover { background: #f0f0f0; } .ds-pill[aria-pressed=\"true\"] { background: #171717; border-color: #171717; color: #ffffff; } .ds-pill:focus-visible { outline: 2px solid #ff5e1a; outline-offset: 2px; }"
+    },
+    {
+      "name": "Content Type Mark",
+      "kind": "custom",
+      "refersTo": "type-reels",
+      "description": "Dot, icon and name. Color is a mark, never text.",
+      "html": "<span class=\"ds-type\"><span class=\"ds-type__dot\" style=\"background:#14b8c4\"></span><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z\"/><path d=\"m6.2 5.3 3.1 3.9\"/><path d=\"m12.4 3.4 3.1 4\"/><path d=\"M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z\"/></svg>Trial Reels</span>",
+      "css": ".ds-type { display: inline-flex; align-items: center; gap: 6px; color: #525252; font: 500 13px/1 Roboto, system-ui, sans-serif; } .ds-type__dot { width: 8px; height: 8px; border-radius: 9999px; }"
+    },
+    {
+      "name": "State Badge",
+      "kind": "chip",
+      "refersTo": "badge-state",
+      "description": "Icon plus word. Only Needs you and Failed carry color.",
+      "html": "<span class=\"ds-state\">Scheduled</span> <span class=\"ds-state ds-state--needs\">Needs you · 2 h left</span> <span class=\"ds-state ds-state--failed\">Failed</span>",
+      "css": ".ds-state { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid #e5e5e5; border-radius: 9999px; background: #ffffff; color: #525252; font: 500 12px/1.4 Roboto, system-ui, sans-serif; } .ds-state--needs { background: #ffece3; border-color: #ffece3; color: #b8410c; } .ds-state--failed { background: #feeae9; border-color: #feeae9; color: #b42318; }"
+    },
+    {
+      "name": "Panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "Flat at rest: hairline, no shadow.",
+      "html": "<section class=\"ds-panel\"><h3 class=\"ds-panel__title\">Today's lineup</h3><p class=\"ds-panel__body\">6 of 9 slots filled · 2 need you</p></section>",
+      "css": ".ds-panel { background: #ffffff; border: 1px solid #e5e5e5; border-radius: 12px; padding: 16px 24px; } .ds-panel__title { margin: 0 0 8px; font: 600 16px/1.3 Roboto, system-ui, sans-serif; color: #171717; } .ds-panel__body { margin: 0; font: 400 14px/1.5 Roboto, system-ui, sans-serif; color: #525252; }"
+    },
+    {
+      "name": "Hub Tabs",
+      "kind": "nav",
+      "refersTo": "choice-pill-selected",
+      "description": "Three places: Content, Calendar, Analytics.",
+      "html": "<nav class=\"ds-tabs\"><a class=\"ds-tab\" aria-current=\"page\">Content</a><a class=\"ds-tab\">Calendar</a><a class=\"ds-tab\">Analytics</a></nav>",
+      "css": ".ds-tabs { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid #e5e5e5; border-radius: 9999px; background: #f5f5f5; } .ds-tab { padding: 6px 14px; border-radius: 9999px; color: #525252; font: 500 14px/1 Roboto, system-ui, sans-serif; text-decoration: none; cursor: pointer; } .ds-tab:hover { color: #171717; } .ds-tab[aria-current=\"page\"] { background: #171717; color: #ffffff; } .ds-tab:focus-visible { outline: 2px solid #ff5e1a; outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Control Room",
+    "overview": "The Social Hub is a room the team walks into every morning to check on a machine that mostly runs itself. The room is quiet: neutral surfaces, hairline structure, numbers set plainly. Instruments light up only when something needs a person, and the one thing that needs you is the loudest thing on the screen. Calm is the default state; color, weight and motion are spent only on attention and state.\n\nDensity is moderate and earned. A screen leads with its answer (today's lineup, the account's direction, a type's best posts), then supporting detail, then the long tail behind a click. The hierarchy is account, then content type, then post, and moving down never throws away the list you came from. Posts are recognized by their media, the way Instagram's Professional Dashboard shows them, never by an id.\n\nThis system rejects walls of equal tiles, pages that open on a filter form, many tabs of equal rank, and the generic SaaS template of hero metrics, gradient accents, an uppercase eyebrow over every section and identical card grids.",
+    "keyCharacteristics": [
+      "Flat, hairline-structured surfaces; elevation only for things that float.",
+      "One primary action per region, in Helios orange; everything else is quiet.",
+      "Content types are told apart by a solid dot, an icon and a name, never by color alone.",
+      "Lifecycle state is an icon plus a word; only Failed and Needs you carry color.",
+      "Numbers use tabular figures and always travel with a comparison, a trend or a cost."
+    ],
+    "rules": [
+      { "name": "The One Signal Rule", "body": "Orange appears only where a person can act. If orange is on screen and there is nothing to click, it is wrong.", "section": "colors" },
+      { "name": "The Mark, Not Ink Rule", "body": "Content-type hues color marks (dots, lines, bars), never text. Every label, value and legend entry is set in Ink, Muted Ink or Subtle Ink.", "section": "colors" },
+      { "name": "The Quiet State Rule", "body": "A lifecycle state is an icon and a word in Muted Ink. Only Failed (Failed Ink on Failed Wash) and Needs you (Signal Orange Ink on Signal Orange Wash) get color. Published is a check icon, not green.", "section": "colors" },
+      { "name": "The No Eyebrow Rule", "body": "No uppercase tracked kicker above sections. Breadcrumbs say where you are; section titles say what you're looking at.", "section": "typography" },
+      { "name": "The Tabular Rule", "body": "Every number that can sit above another number uses tabular figures and right alignment.", "section": "typography" },
+      { "name": "The Flat-At-Rest Rule", "body": "Panels at rest have no shadow. If every panel on the page has a shadow, none of them are floating.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do lead every page with its answer: today's lineup on Content, the account's direction on Analytics, the month's shape on Calendar.",
+      "Do keep orange to places a person can act, with an Ink label (5.9:1).",
+      "Do show every content type as dot + icon + name, in the fixed order Trial Reels, Explainers, Carousels, IG Stories.",
+      "Do give every number a comparison, a trend or a cost, set in tabular figures.",
+      "Do state the consequence before an expensive or irreversible action (regenerate cost against the daily cap; reject releases the slot).",
+      "Do show disabled reasons as visible text.",
+      "Do keep text at 4.5:1 or better (WCAG AA): Muted Ink for secondary text, Subtle Ink only for captions."
+    ],
+    "donts": [
+      "Don't build walls of equal tiles: dozens of same-weight stat boxes with no headline number and no comparison. A KPI strip has at most six numbers.",
+      "Don't open a page on a filter form. Controls sit in one quiet row above the answer, never before it.",
+      "Don't sprawl tabs. Three top-level places; everything else is a drill.",
+      "Don't use the generic SaaS template: big hero metrics, gradient accents, an uppercase eyebrow over every section, identical card grids.",
+      "Don't use colored side-stripe borders (border-left or border-right over 1px) on rows, cards or callouts.",
+      "Don't color text with a content-type hue, or use green to mean \"published\" or \"good\" anywhere but a delta arrow.",
+      "Don't use native selects, unicode glyphs as icons, or developer copy (SH codes, phase names, table names).",
+      "Don't put shadows on panels at rest."
+    ]
+  }
+}

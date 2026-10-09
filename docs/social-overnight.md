@@ -13,14 +13,35 @@ All times are America/New_York (DST-safe, see `lib/reels/schedule.ts`).
 | Content type | Schema | systemd unit | Run | Posting window(s) | Insights sweep | Status |
 |---|---|---|---|---|---|---|
 | Trial Reels | `reels` | `helios-reels` | 12:30 song ingest, 1:00 night run | 8:45–10:00 AM, 11:15 AM–12:30 PM, 6:00–9:00 PM | 5:00 | live |
-| Explainer Reels | `explainers` | `helios-explainers` | 2:00 idea cycle (only with `auto_render` on; up to `daily_render_cap` = 2 renders) | 1:00–2:30 PM and 3:30–5:00 PM (`posts_per_day` = 2), approved reels only | 5:15 | built; renders need `HEYGEN_API_KEY` on the VM |
-| Carousels | `social` | `helios-social` | 3:00 daily run (only with `auto_run` on); the run's top `posts_per_day` = 2 posts are scheduled | 9:00–10:00 AM and 2:30–3:30 PM | 5:30 | built |
+| Explainer Reels | `explainers` | `helios-explainers` | 2:00 idea cycle (only with `auto_render` on; `posts_per_day` less what people placed, up to `daily_render_cap` = 2 renders; see Daily fill) | 1:00–2:30 PM and 3:30–5:00 PM (`posts_per_day` = 2), approved reels only | 5:15 | built; renders need `HEYGEN_API_KEY` on the VM |
+| Carousels | `social` | `helios-social` | 3:00 daily run (only with `auto_run` on); the run's top `posts_per_day` = 2 posts, less what people placed for the day, are scheduled (see Daily fill) | 9:00–10:00 AM and 2:30–3:30 PM | 5:30 | built |
 | Social Hub | `social_hub` | `helios-social` (same worker) | 5:45 account sweep (account insights, demographics, active times, publishing quota); refreshes the hub queues on visit | none (reads only) | 5:45 | built |
 | IG Stories | `stories` | `helios-stories` | 4:00 sets for series with `auto` on (Morning Download daily, Guess the Number Mon/Thu, Free vs. Paid Tue/Sat) | 8:30–10:00 AM, every series; may overlap other types (Stories are not feed posts) | every 2 hours while live, final read at 23 h | built (Lucas); no live set yet |
 
 One type per hour so no two pipelines call Claude, Jev, or Meta at the same
 time. All workers run on the social worker VM; outreach stays alone on
 `helios-orch-worker`.
+
+## Daily fill (D54, D55)
+
+When a type is on, its night run fills that New York day's quota: Trial
+Reels 3 (`PASSING_REELS_PER_NIGHT`), Explainers and Carousels their
+`posts_per_day`, IG Stories one set per series on each day it runs.
+Whatever a person placed for that day counts toward the quota: a
+`social_hub.schedule` row with `source = 'user'` that is scheduled, posting
+or posted, for that type and `ny_date` (`lib/social-hub/fill.ts`
+`userPlaced`). Cancelled and failed slots, other days and other types don't
+count. The night makes only `quota − placed` (never negative). Zero means it
+makes nothing new and logs why; each worker logs
+`fill_reduced { vertical, nyDate, quota, userPlaced, making }` whenever
+placements cut the count.
+
+| Type | What the night does with what's left |
+|---|---|
+| Trial Reels | `quota − placed` reels, one per window still open. An idea a person placed isn't made again. A **carryover idea whose finished video never posted** (not rejected, never tried on Instagram) ranks with the rest; when it comes up for a slot it takes it with that video, with no new copy or render (D55). With nothing left the run still ingests and scores, so ideas carry to tomorrow. |
+| Explainers | Pool topics and topics with an approved (or, with `require_approval` off, unreviewed), unposted render rank together (pool order). The top `quota − placed` are taken: a render is placed (`scheduleJob`, while publishing is live) instead of rendered again; a pool topic is rendered, at most `daily_render_cap`, under the spend caps. Nothing left: the cycle is skipped before any idea call. |
+| Carousels | The 3 AM run makes `min(run_stories, quota − placed)` stories and schedules at most that many (`scheduleRunPosts`). A stored finished post that ranks in ships without spend (D37). A story whose post already holds a slot is passed over. Nothing left: the run is `skipped` (`stop_reason` `quota-filled`) and makes nothing. |
+| IG Stories | A series' day that a person filled (a set they generated that is approved, scheduled or posted for that day, or their slot for it on the spine) gets no auto set. |
 
 ## The contract
 
@@ -66,6 +87,14 @@ published. Carousels keep that content with its news story (SH-60): when the
 3 AM run selects a story whose newest post is finished and in review, it
 skips the story's stages (no spend) and ships the stored post at the story's
 rank (`social.runs.ship_post_ids`).
+
+One-story reruns (Social Hub Regenerate, D51) follow the same contract: the
+app inserts a `requested` row in `social.rerun_requests`; only the
+`helios-social` worker runs it, after any queued nightly run, by opening its
+own `social.runs` row (so it is capped by `run_cap_usd` and never takes the
+nightly run's queued place). It remakes the story from the post's saved brief
+(Writer onward); the new post waits in review and is not auto-scheduled.
+Trial Reels' Regenerate rebuilds only today's video for an idea (D52).
 
 ## Approval
 
