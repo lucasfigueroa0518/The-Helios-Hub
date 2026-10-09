@@ -590,14 +590,14 @@ export function AnalyticsHub() {
                   <DrillableTile
                     label="Delivery"
                     value={formatUsd(metrics.agentmail_cost_usd)}
-                    sub="M365 seats + verifier + AgentMail"
+                    sub="6 MX hosting plans + verifier + AgentMail"
                     metricKey="agentmail"
                     onClick={() => setDrilldownMetricKey('agentmail')}
                   />
                 </div>
                 {summary?.delivery ? (
                   <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)', marginTop: 'var(--space-2)' }}>
-                    Fixed M365 {formatUsd(summary.delivery.fixedUsd)}
+                    MX hosting {formatUsd(summary.delivery.fixedUsd)}
                     {' · '}Smartlead {formatUsd(summary.delivery.smartleadUsd)}
                     {summary.delivery.smartleadClock === 'prorated' ? ' (prorated)' : ''}
                     {' · '}used {formatUsd(summary.delivery.smartleadUsedUsd)}

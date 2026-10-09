@@ -16,7 +16,8 @@ import { pollCarouselInsights, type CarouselInsightsClient } from '@/lib/social/
 import { carouselItemId } from '@/lib/social/overnight/items';
 import type { CarouselMetaClient } from '@/lib/social/overnight/meta';
 import { carouselCaption, claimAndPublish, queuePublish } from '@/lib/social/overnight/publish';
-import { claimRun, failRun, requestRun } from '@/lib/social/overnight/runs';
+import { claimRun, failRun, requestRun, releaseStaleRuns } from '@/lib/social/overnight/runs';
+import { finishRun } from '@/lib/social/store/pg';
 import { approveSchedule, releaseDueSchedules, scheduleRunPost, scheduleRunPosts } from '@/lib/social/overnight/schedule';
 import { chooseCarouselSlot, chooseCarouselSlots, openMinuteRange } from '@/lib/social/overnight/slots';
 import type { Query } from '@/lib/social/store/pg';
@@ -133,6 +134,32 @@ test('runs: a run running past the stale limit is released', async () => {
   const next = await claimRun(query, new Date('2026-10-08T09:00:00Z'));
   assert.ok(next && next.id !== id);
   assert.equal((await query(`SELECT status FROM social.runs WHERE id = $1`, [id])).rows[0].status, 'failed');
+});
+
+test('runs: a requested run the worker never claimed is released after the stale limit', async () => {
+  const { query } = await scratchDb();
+  const id = await requestRun(query, 'manual', { capUsd: 2, hookPass: true });
+  await query(`UPDATE social.runs SET requested_at = $2::timestamptz WHERE id = $1`, [id, '2026-10-08T07:00:00Z']);
+  assert.equal(await requestRun(query, 'manual', { capUsd: 2, hookPass: true }), null, 'one queued at a time');
+  assert.equal(await releaseStaleRuns(query, new Date('2026-10-08T07:30:00Z')), 0, 'still fresh');
+  assert.equal(await releaseStaleRuns(query, new Date('2026-10-08T09:00:00Z')), 1);
+  assert.equal((await query(`SELECT status FROM social.runs WHERE id = $1`, [id])).rows[0].status, 'failed');
+  assert.match((await query(`SELECT error FROM social.runs WHERE id = $1`, [id])).rows[0].error, /never claimed/);
+  assert.ok(await requestRun(query, 'manual', { capUsd: 2, hookPass: true }), 'a new click can queue again');
+});
+
+test('finishRun: only a running run is closed; a miss throws so the script cannot exit 0 still running', async () => {
+  const { query } = await scratchDb();
+  const id = await requestRun(query, 'manual', { capUsd: 2, hookPass: true });
+  const done = {
+    finishedAt: '2026-10-08T07:20:00Z', hookPass: false, claudeUsd: 0, totalUsd: 0,
+    stopReason: 'target-reached', runDir: 'runs/x', machine: 'm', record: {}, status: 'ok' as const,
+  };
+  await assert.rejects(() => finishRun(query, id!, done), /was not running/);
+  await claimRun(query, new Date('2026-10-08T07:00:00Z'));
+  await finishRun(query, id!, done);
+  assert.equal((await query(`SELECT status FROM social.runs WHERE id = $1`, [id])).rows[0].status, 'ok');
+  await assert.rejects(() => finishRun(query, id!, { ...done, status: 'partial' }), /was not running/);
 });
 
 // ── Schedule + publish ──────────────────────────────────────────────────────

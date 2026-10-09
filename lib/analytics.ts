@@ -938,7 +938,7 @@ export async function getAnalyticsSummary(input: {
       'Enrichment = Claude company research + Apollo enrich credits ($59 / 2,500) + extraction. People search is free.',
       'Drafting includes researching/writing the email and reply Claude spend. Custom message campaigns record $0.00 drafting cost.',
       'Worker spend is GCP VM month-to-date prorated into this window and split across leads. Local worker is unmetered ($0).',
-      'Smartlead is its own line: a monthly (or longer) view takes the full $94 once per month covered; a week or other short range prorates $94 × (days in range / days in that month). Used send capacity (sends / prorated plan emails) is outreach spend; unused capacity stays wasted. Microsoft 365 seats stay as overlapping billing-cycle lumps. Delivery is M365 + verifier checks + historical AgentMail at $0.002 each.',
+      'Smartlead is its own line: a monthly (or longer) view takes the full $94 once per month covered; a week or other short range prorates $94 × (days in range / days in that month). Used send capacity (sends / prorated plan emails) is outreach spend; unused capacity stays wasted. Microsoft MX hosting is 6 plans as overlapping billing-cycle lumps — not one seat per inbox. Delivery is those plans + verifier checks + historical AgentMail at $0.002 each.',
       'Sent count uses drafting_items.delivery_snapshot and email_sends (sent status).',
       'Excluded runs drop leads via campaign_leads.run_id and leads.source_run_id.',
     ],

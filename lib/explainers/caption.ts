@@ -2,54 +2,79 @@ import type Anthropic from '@anthropic-ai/sdk';
 
 import { cachedSystemText } from '@/lib/anthropic-cache';
 import { priceAnthropicUsage, usageBucketsFromMessage, type MessageUsageLike } from '@/lib/anthropic-pricing';
+import {
+  CAPTION_HOOK_PREVIEW,
+  CAPTION_MAX_CHARS,
+  CAPTION_MIN_BODY_CHARS,
+  hookPreviewLimit,
+  parseCaption,
+} from '@/lib/explainers/caption-format';
 import { structuredJson, type StructuredParams } from '@/lib/explainers/ideas/generator';
+
+export {
+  CAPTION_HOOK_PREVIEW,
+  CAPTION_MAX_CHARS,
+  CAPTION_MIN_BODY_CHARS,
+  episodeLine,
+  hookPreviewLimit,
+  parseCaption,
+  reviewCaption,
+  stampCaption,
+  stripEpisodePrefix,
+} from '@/lib/explainers/caption-format';
 
 /**
  * The Instagram caption written beside a finished Explainer Reel.
  * Tracks `.cursor/skills/explainer-caption/SKILL.md`. The burned-in
  * `caption_groups.json` is a different artifact (`captions`).
  *
+ * The writer returns the body only. Code stamps
+ * `AI Brain Break Episode N:` at publish time from the published count.
  * The system prompt is the stable prefix and carries the cache breakpoint.
- * The reel's facts go in the user message.
  */
 
-export const CAPTION_VERSION = 'explainer-caption-v1';
+export const CAPTION_VERSION = 'explainer-caption-v2';
 
-export const CAPTION_INSTRUCTIONS = `You write the Instagram caption for one finished Helios Explainer Reel. The video already taught the concept. The caption does not retell the seven beats.
+export const CAPTION_INSTRUCTIONS = `You write the Instagram caption for one finished Helios Explainer Reel. This is the post text under the video, the same job a strong social caption does for any Reel: stop the scroll, pay out the idea, and give the viewer a reason to save or send it.
+
+Do not write an episode title or an episode number. Code adds the line "AI Brain Break Episode N:" when the reel publishes.
 
 HARD CONSTRAINTS. Every one is required.
-1. Return JSON matching the schema. The caption field is the whole post, nothing else.
-2. The first line is exactly "AI BRAIN BREAK - EPISODE N:" using the episode number in the user message. Nothing else goes on that line.
-3. The next line, after one blank line, is the hook. The episode line, the blank line, and the hook together stay within 125 characters. The hook makes sense with no video playing. It is not the spoken thesis copied out, and it is not a description of the frames.
-4. Then one short paragraph. Add a second sentence only for the catch or the place the viewer meets this. Then stop.
-5. One save line: "Save this for the next time " and the situation this reel is about.
-6. 3 to 5 hashtags, only at the end. One or two broad, the rest specific to this concept.
+1. Return JSON matching the schema. The caption field is the body of the post, nothing else. No episode line.
+2. The first paragraph is the hook, one or two short sentences. After code adds the episode line and a blank line, that opening plus the hook must stay within ${CAPTION_HOOK_PREVIEW} characters. Keep the hook under ${hookPreviewLimit()} characters so episode 999 still fits. The hook makes sense with no video playing. It is not the spoken thesis copied out, and it is not a description of the frames.
+3. After the hook, write a real caption. Short paragraphs with a blank line between them. One block is a failed caption. You need a hook, at least two body paragraphs, and a call to action: four blocks minimum. The body before hashtags must be at least ${CAPTION_MIN_BODY_CHARS} characters. A one-sentence caption is a failed caption.
+4. The body makes the idea useful in the viewer's world. Use the reel's analogy, example, catch, and the place they will meet this. Do not walk the seven beats in order, and do not stop after one restatement of the thesis.
+5. One call to action, specific to this concept: save it for a named situation from the reel, or send it to the person who hits that situation. No "what do you think?", no "double tap", no "comment YES", no offer of Helios services.
+6. 3 to 5 hashtags, only at the end. One or two broad, the rest specific to this concept. Each tag needs a reason in the post.
 7. No emoji. No URLs. Do not speak as "we", "our", "us", or "I". Address the viewer as "you", or write in the third person. Do not sign off with Helios.
 8. Every number, name, and claim comes from the title, scope, script, storyboard, or source in the user message. Do not add one.
-9. Plain words. No "not X, but Y". No one-line closer that repeats the paragraph before it. No dash used for drama.
+9. Plain words. A reader at about a sixth-grade level gets every line on one read. Never talk down. No "not X, but Y". No one-line closer that repeats the paragraph before it. No dash used for drama.
+10. The caption, the call to action, and the hashtags together stay within ${CAPTION_MAX_CHARS} characters.
 
 Shape:
-AI BRAIN BREAK - EPISODE N:
+Hook that stands alone in the preview.
 
-Hook.
+What this is, in the viewer's world, with the reel's concrete example.
 
-One short paragraph.
+The catch, or the place they will meet it. Enough that the idea sticks after the video ends.
 
-Save this for the next time <the situation>.
+Save this for the next time <the situation this reel is about>, or send it to the person who hits that situation.
 
 #specific #specific #broad`;
 
 const CAPTION_SCHEMA = {
   type: 'object',
   properties: {
-    caption: { type: 'string', description: 'The full Instagram caption, including the episode line and hashtags.' },
+    caption: {
+      type: 'string',
+      description: 'The Instagram caption body only: hook, paragraphs, call to action, and hashtags. No episode line.',
+    },
   },
   required: ['caption'],
   additionalProperties: false,
 } as const;
 
 export type CaptionFacts = {
-  episode: number;
   title: string;
   scope: string | null;
   storyboard: string | null;
@@ -77,34 +102,6 @@ export class CaptionError extends Error {
   }
 }
 
-export function episodeLine(episode: number): string {
-  return `AI BRAIN BREAK - EPISODE ${episode}:`;
-}
-
-/** The caption, or a throw that names which rule it broke. */
-export function parseCaption(raw: unknown, episode: number): string {
-  const text = typeof raw === 'string' ? raw.replace(/\r\n/g, '\n').trim() : '';
-  if (!text) throw new Error('caption is empty');
-  if (text.length > 2200) throw new Error('caption is over 2,200 characters');
-  if (/https?:\/\//i.test(text)) throw new Error('caption contains a URL');
-  if (/\p{Extended_Pictographic}/u.test(text)) throw new Error('caption contains an emoji');
-  if (/\b(we|our|ours|us)\b/i.test(text) || /\bI\b/.test(text)) throw new Error('caption speaks as Helios');
-  const line = episodeLine(episode);
-  const parts = text.split('\n');
-  if (parts[0] !== line) throw new Error(`caption must open with "${line}"`);
-  let index = 1;
-  while (parts[index] === '') index += 1;
-  const hook = parts[index] ?? '';
-  if (!hook.trim()) throw new Error('caption is missing a hook');
-  if (`${line}\n\n${hook}`.length > 125) throw new Error('the episode line and the hook are over 125 characters');
-  if (!text.includes('Save this for the next time')) throw new Error('caption is missing the save line');
-  const tags = text.match(/#[\p{L}\p{N}_]+/gu) ?? [];
-  if (tags.length < 3 || tags.length > 5) throw new Error('caption needs 3 to 5 hashtags');
-  const beforeTags = text.slice(0, text.indexOf(tags[0]!));
-  if (beforeTags.includes('#')) throw new Error('hashtags belong at the end');
-  return text;
-}
-
 function clip(value: string | null, max: number): string {
   if (!value) return '';
   return value.length <= max ? value : `${value.slice(0, max)}\n…`;
@@ -112,8 +109,7 @@ function clip(value: string | null, max: number): string {
 
 export function captionUserMessage(facts: CaptionFacts): string {
   return [
-    `Episode number: ${facts.episode}`,
-    `The first line must be exactly: ${episodeLine(facts.episode)}`,
+    'Write the Instagram caption body for this reel. Do not include an episode title or episode number.',
     '',
     `Title: ${facts.title}`,
     `Scope: ${facts.scope ?? ''}`,
@@ -161,7 +157,7 @@ export async function writeExplainerCaption(facts: CaptionFacts, model: string):
   let text: string;
   try {
     const body = structuredJson(message, 'explainer caption') as { caption?: unknown };
-    text = parseCaption(body.caption, facts.episode);
+    text = parseCaption(body.caption);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new CaptionError(detail, priced);

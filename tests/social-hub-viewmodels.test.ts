@@ -4,7 +4,7 @@ import test from 'node:test';
 import { actionsFor, needsApproval } from '@/lib/social-hub/house';
 import type { HubPost } from '@/lib/social-hub/types';
 import { actionMenu, flagOf } from '@/lib/social-hub/views/actions';
-import { contentModel, needsGroups, publishingCandidates } from '@/lib/social-hub/views/today';
+import { contentModel, needsGroups, publishingCandidates, slotsForDay } from '@/lib/social-hub/views/today';
 import { displayName, relative, when } from '@/lib/social-hub/views/format';
 import { offerer, slotChoices } from '@/lib/social-hub/views/offer';
 import { poolSummaries } from '@/lib/social-hub/views/pools';
@@ -83,6 +83,26 @@ test('today’s strip is only post ideas holding a slot; failed and never-made i
     post({ id: 'made', status: 'scheduled', idea: { id: 'guess2', label: 'Guess 2' } }),
   ], '2026-10-08').map((p) => p.id);
   assert.deepEqual(ids, ['made', 'making']);
+});
+
+test('a day’s slots are the sum of that day’s quotas, and only scheduled or published posts fill them', () => {
+  const post = (over: Partial<HubPost>): HubPost => ({ id: 'p', vertical: 'reels', nyDate: '2026-10-09', status: 'ready', ...over }) as HubPost;
+  const quotas = { reels: 1, carousels: 0, explainers: 1 };
+  // Friday: Morning Download is the only Story series due, so 1 + 0 + 1 + 1.
+  const friday = slotsForDay([
+    post({ id: 'ready', status: 'ready' }),
+    post({ id: 'making', status: 'generating' }),
+    post({ id: 'booked', status: 'scheduled' }),
+    post({ id: 'out', status: 'published' }),
+    post({ id: 'yesterday', status: 'published', nyDate: '2026-10-08' }),
+    post({ id: 'carousel', vertical: 'carousels', status: 'scheduled' }),
+    post({ id: 'explainer-failed', vertical: 'explainers', status: 'failed' }),
+    post({ id: 'story', vertical: 'stories', status: 'publishing' }),
+  ], '2026-10-09', quotas);
+  assert.deepEqual(friday, { slots: 3, filled: 2 });
+  // No quotas loaded: each type's windows. Thursday has both Story series; Friday only Morning Download.
+  assert.equal(slotsForDay([], '2026-10-08', null).slots, 9);
+  assert.equal(slotsForDay([], '2026-10-09', null).slots, 8);
 });
 
 test('the Content model leads with what needs a person and orders today by time', () => {

@@ -38,3 +38,17 @@
 .rh-rank__btn { padding: 2px 8px; min-height: 0; font-size: 12px; }
 .rh-rank__error { color: var(--rh-bad); font-size: 11px; }
 .rh-chip--quota { background: var(--rh-accent-soft); color: var(--rh-accent-ink); }
+
+@media (max-width: 640px) {
+  .rh__title { font-size: 22px; }
+  .rh-day-head h2 { font-size: 17px; }
+  .rh__head { align-items: flex-start; }
+  .rh__head-actions { width: 100%; }
+  .rh__head-actions .rh-btn, .rh__head-actions .rh-live { flex: 1 1 auto; }
+  .rh-drawer__panel, .rh-drawer__panel--wide { width: 100%; padding: 20px 16px calc(32px + env(safe-area-inset-bottom, 0px)); }
+  .rh-row__headline { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .rh-detail__facts { grid-template-columns: minmax(0, 1fr); }
+  .rh-detail__title { font-size: 18px; padding-right: 40px; }
+  .rh-detail__video { max-width: 100%; }
+  .rh-quota { flex-wrap: wrap; }
+}

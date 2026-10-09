@@ -9,57 +9,95 @@ description: >-
 
 # Explainer caption
 
-The caption is the Instagram text under a 45-second Explainer Reel. The video already teaches one concept. The caption does not retell it.
+The caption is the Instagram text under a 45-second Explainer Reel. Write a real
+social caption: a hook that stops the scroll, a body that makes the idea stick,
+and one clear ask. The video taught the concept. The caption does not walk the
+seven beats, and it does not stop after one sentence.
 
-This follows the Trial Reels caption skill (`lib/reels/copy/skill.ts`, copy-caption-v27) where the two products share a rule, and changes the job of the caption because the lesson is already in the video.
+Code adds the opening line when the reel publishes. Do not write an episode
+number. `lib/explainers/publish/publish.ts` counts how many explainers have
+`published` and stamps `AI Brain Break Episode N:` on the way to Instagram.
+
+This follows the Trial Reels caption skill (`lib/reels/copy/skill.ts`,
+copy-caption-v27) where the two products share a rule, and changes the job of
+the caption because the lesson is already in the video.
 
 ## Read first
 
-The reel's title, one-sentence scope, `STORYBOARD.md`, and `SCRIPT.md`. If a source was attached, read that too. Those are the only facts you may use.
+The reel's title, one-sentence scope, `STORYBOARD.md`, and `SCRIPT.md`. If a
+source was attached, read that too. Those are the only facts you may use.
 
-Then read `.cursor/skills/humanizer/SKILL.md` and apply it to the draft before you show it.
+Then read `.cursor/skills/humanizer/SKILL.md` and apply it to the draft before
+you show it.
 
 ## What carries over from Trial Reels
 
-- Every caption opens on its own line: `AI BRAIN BREAK - EPISODE N:` N is this reel's number in the series, starting at 1. Nothing else goes on that line.
-- Instagram shows about the first 125 characters, then "more". The episode line and the hook under it both have to fit inside that count. The hook has to make sense if someone never taps "more". Do not spend the hook on a greeting, a hashtag, or "In this video".
+- Instagram shows about the first 125 characters, then "more". Code will put
+  `AI Brain Break Episode N:` and a blank line in front of your hook. The hook
+  has to stay short enough that the episode line, the blank line, and the hook
+  still fit in that count (keep the hook under 96 characters). The hook has to
+  make sense if someone never taps "more". Do not spend it on a greeting, a
+  hashtag, or "In this video".
 - Short paragraphs with a blank line between them. One block is a failed caption.
 - No emoji. No URLs. Instagram does not make them clickable.
-- Helios never speaks as "we", "our", "us", or "I". Address the viewer as "you", or write in the third person.
-- Plain words. A reader at about a sixth-grade level gets every line on one read. Never talk down.
-- Every number, name, and claim comes from the reel's script, storyboard, or attached source. Do not add one from memory. "About 1,000" stays "about 1,000".
-- One call to action, specific to this concept. No "what do you think?", no "double tap", no "comment YES", no offer of Helios services.
-- 3 to 5 hashtags. One or two broad, the rest specific to this concept. Each tag needs a reason in the post.
-- The caption, the call to action, and the hashtags together stay within 2,200 characters.
-- The video already ends on the Helios logo. The caption does not sign off by saying Helios.
+- Helios never speaks as "we", "our", "us", or "I". Address the viewer as "you",
+  or write in the third person.
+- Plain words. A reader at about a sixth-grade level gets every line on one
+  read. Never talk down.
+- Every number, name, and claim comes from the reel's script, storyboard, or
+  attached source. Do not add one from memory. "About 1,000" stays "about 1,000".
+- One call to action, specific to this concept. No "what do you think?", no
+  "double tap", no "comment YES", no offer of Helios services.
+- 3 to 5 hashtags. One or two broad, the rest specific to this concept. Each
+  tag needs a reason in the post.
+- The caption, the call to action, and the hashtags together stay within 2,200
+  characters.
+- The video already ends on the Helios logo. The caption does not sign off by
+  saying Helios.
 
 ## What is different
 
-A Trial Reel caption often carries the story the screen only opened. An Explainer Reel has already taught the thought: hook, analogy, mapping, example, catch, and where you meet it. The caption's job is to make a scroller stop and save the idea, not to teach it a second time.
+A Trial Reel caption often carries the story the screen only opened. An
+Explainer Reel has already taught the thought. The caption's job is still a
+full post: make a scroller stop, keep the idea, and give them a reason to save
+or send it.
 
-- The hook, the line under the episode title, is a second way into the same idea. It is not the spoken thesis copied out, and it is not a description of the frames.
-- The body adds at most one thing the 45 seconds left thin: the catch in one more sentence, or the place the viewer will meet it. Then stop. Do not walk the seven beats.
-- The call to action asks them to save it for the next time they hit this exact situation. Name that situation from the reel.
+- Do not write the episode line. Code fills `AI Brain Break Episode N:` at
+  publish time from the number of explainers already published.
+- The hook, your first paragraph, is a second way into the same idea. It is not
+  the spoken thesis copied out, and it is not a description of the frames.
+- Then write at least two body paragraphs. Use the reel's analogy, its concrete
+  example, the catch, and the place the viewer will meet this. The body before
+  hashtags must be at least 400 characters. A one-sentence caption is a failed
+  caption.
+- The call to action asks them to save it for the next time they hit this exact
+  situation, or to send it to the person who does. Name that situation from the
+  reel.
 
 ## How to write it
 
-1. Name the one idea in a sentence, from the scope. If the script and the scope disagree, the script is what the video said.
-2. Put `AI BRAIN BREAK - EPISODE N:` on the first line. Draft the hook on the next line. The episode line, the blank line, and the hook together stay inside 125 characters, and the hook has to make sense with no video playing.
-3. Draft two or three short paragraphs. Blank line between them.
-4. Add one save line, then the hashtags on their own lines after a blank line.
-5. Run the humanizer pass. Cut anything that restates the video beat by beat.
-6. Show one caption. Above it, note the character count of the episode line, the blank line, and the hook together.
+1. Name the one idea in a sentence, from the scope. If the script and the scope
+   disagree, the script is what the video said.
+2. Draft the hook. It has to make sense with no video playing, and stay under
+   96 characters.
+3. Draft two or three short body paragraphs. Blank line between them. Pay out
+   the idea in the viewer's world.
+4. Add one save or send line, then the hashtags on their own lines after a
+   blank line.
+5. Run the humanizer pass. Cut anything that restates the video beat by beat,
+   and cut a caption that is only a restatement of the thesis.
+6. Show one caption. Above it, note the character count of
+   `AI Brain Break Episode 1:`, the blank line, and the hook together. Do not
+   put that episode line in the caption itself.
 
 ## Shape
 
 ```
-AI BRAIN BREAK - EPISODE N:
+Hook. After the episode line is added, this opening stays under 125 characters.
 
-Hook. The episode line, the blank line, and this line stay under 125 characters.
+What this is, in the viewer's world, with the reel's concrete example.
 
-One short paragraph. The idea, in the viewer's world.
-
-One more sentence only if the reel left a catch or a place worth keeping.
+The catch, or the place they will meet it. Enough that the idea sticks.
 
 Save this for the next time <the situation this reel is about>.
 
@@ -68,18 +106,24 @@ Save this for the next time <the situation this reel is about>.
 
 ## Example
 
-Reel: "What is a context window?" The spoken thesis is "A context window is the text a model can see at once." The example in the reel is a 1,000-token window and a 1,200-token chat, so the oldest 200 drop.
+Reel: "What is a context window?" The spoken thesis is "A context window is the
+text a model can see at once." The example in the reel is a 1,000-token window
+and a 1,200-token chat, so the oldest 200 drop.
 
 ```
-AI BRAIN BREAK - EPISODE 1:
-
 Your AI didn't forget the start of the chat. It fell off the desk.
 
-When a chat runs to 1,200 tokens and the window holds 1,000, the oldest 200 drop out.
+A context window is the text a language model can see at once, measured in tokens. Think of a desk that only holds so much paper. Once the pile is taller than the desk, the oldest pages slide off the edge. Those pages are gone from what the model can use.
+
+The reel's example is a 1,000-token window and a 1,200-token chat. The first 200 tokens of that chat are no longer in view. That is why a long thread starts answering as if the opening never happened.
+
+This shows up any time a chat runs long, a PDF gets pasted in, or a project file is too big to fit. The model is not being careless. The window filled up.
 
 Save this for the next time a long chat loses the beginning.
 
 #contextwindow #tokens #ai
 ```
 
-The episode line and the hook together are 95 characters. The hook does not repeat the thesis, and it does not say Helios.
+When this posts, code puts `AI Brain Break Episode 1:` above the hook. That
+line, the blank line, and the hook are 95 characters. The hook does not repeat
+the thesis, and it does not say Helios.

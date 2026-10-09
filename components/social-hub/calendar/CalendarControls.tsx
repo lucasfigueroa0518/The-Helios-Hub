@@ -23,7 +23,8 @@ export function TypeToggles({ shown }: { shown: Vertical[] }) {
           <button key={v.id} type="button" className="sh-pill" aria-pressed={!all && shown.includes(v.id)} onClick={() => toggle(v.id)} style={typeStyle(v.id)}>
             <span className="sh-type__dot" aria-hidden="true" />
             <Icon size={13} aria-hidden="true" />
-            {v.label}
+            <span className="sh-pill__full">{v.label}</span>
+            <span className="sh-pill__short">{v.short}</span>
           </button>
         );
       })}

@@ -175,7 +175,7 @@ export function classifySpendIdentity(input: {
     reply_usd?: number;
   }>;
   unallocatedWastedUsd?: number;
-  /** Microsoft 365 seats overlapping the window — not per-send. */
+  /** Microsoft MX hosting plans overlapping the window — not per-send. */
   fixedDeliveryUsd?: number;
   /** Smartlead subscription clocked for the window (full month or prorated). */
   smartleadUsd?: number;

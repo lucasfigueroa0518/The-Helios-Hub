@@ -7,6 +7,8 @@ import test from 'node:test';
 
 import {
   LEGACY_AGENTMAIL_USD_PER_SEND,
+  M365_MX_PLAN_COUNT,
+  clockM365Usd,
   clockSmartleadUsd,
   allocateSmartleadByCapacity,
   cycleBounds,
@@ -14,6 +16,7 @@ import {
   cycleStartFor,
   cycleTag,
   leadDeliveryCostUsd,
+  overlappingCycleTags,
   type CycleAmortization,
 } from '@/lib/smartlead/costs';
 import { AGENTMAIL_USD_PER_SEND } from '@/lib/analytics-lead-facts';
@@ -87,6 +90,20 @@ test('a short range that straddles months prorates each month separately', () =>
 
 test('ranges longer than a month take the full fee once per calendar month', () => {
   assert.equal(clockSmartleadUsd(94, '2026-09-01', '2026-10-31'), 188);
+});
+
+test('Microsoft MX hosting is 6 plans, not one seat per inbox', () => {
+  assert.equal(M365_MX_PLAN_COUNT, 6);
+});
+
+test('a window inside one M365 cycle takes the six plans once', () => {
+  assert.deepEqual(overlappingCycleTags('2026-10-01', '2026-10-14', 15), ['2026-09']);
+  assert.equal(clockM365Usd(6, 4.8, '2026-10-01', '2026-10-14', 15), 6 * 4.8);
+});
+
+test('a month that crosses the 15th takes both M365 cycle lumps at 6 plans each', () => {
+  assert.deepEqual(overlappingCycleTags('2026-10-01', '2026-10-31', 15), ['2026-09', '2026-10']);
+  assert.equal(clockM365Usd(6, 4.8, '2026-10-01', '2026-10-31', 15), 2 * 6 * 4.8);
 });
 
 test('used send capacity peels that share of Smartlead out of unused', () => {

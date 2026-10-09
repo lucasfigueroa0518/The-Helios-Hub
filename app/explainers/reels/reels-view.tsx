@@ -6,6 +6,7 @@ import { AlertTriangle, ChevronLeft, ChevronRight, Copy, Loader2, Play } from 'l
 
 import { Drawer, ReelVideo, Section } from '@/app/reels/ui';
 import { requestJson } from '@/lib/client-request';
+import { reviewCaption } from '@/lib/explainers/caption-format';
 import type { JobDetail, JobSummary } from '@/lib/explainers/overview';
 import { FAILURE_TAGS, type FailureTag, type Verdict } from '@/lib/explainers/types';
 
@@ -256,8 +257,9 @@ function ReelDrawer({ jobId, onClose, onChanged }: { jobId: string; onClose: () 
           <Section title="Caption" open>
             {post?.content ? (
               <>
-                <p className="rh-text">{post.content}</p>
-                <CopyButton text={post.content} />
+                <p className="rh-text">{reviewCaption(post.content)}</p>
+                <CopyButton text={reviewCaption(post.content)} />
+                <p className="rh-muted">The episode number is filled in when this posts, in the order explainers have gone out.</p>
               </>
             ) : (
               <p className="rh-muted">{working ? 'Written with the video.' : 'No caption yet.'}</p>

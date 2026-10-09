@@ -116,13 +116,15 @@ async function main(): Promise<void> {
       const child = spawn(tsx, args, {
         cwd: process.cwd(),
         env: process.env,
-        stdio: ['ignore', 'inherit', 'pipe'],
+        stdio: ['ignore', 'pipe', 'pipe'],
       });
       let tail = '';
-      child.stderr.on('data', (chunk: Buffer) => {
-        process.stderr.write(chunk);
+      const keep = (chunk: Buffer, stream: NodeJS.WriteStream) => {
+        stream.write(chunk);
         tail = (tail + chunk.toString('utf8')).slice(-2000);
-      });
+      };
+      child.stdout.on('data', (chunk: Buffer) => keep(chunk, process.stdout));
+      child.stderr.on('data', (chunk: Buffer) => keep(chunk, process.stderr));
       child.on('close', (code) => resolve({ code, tail }));
       child.on('error', (error) => resolve({ code: -1, tail: errorText(error) }));
     });

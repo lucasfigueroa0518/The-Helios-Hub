@@ -110,6 +110,11 @@ test('historical provider rows are never rewritten', () => {
   assert.match(SQL, /ALTER COLUMN provider SET DEFAULT 'smartlead'/);
 });
 
+test('Microsoft pricing is 6 MX hosting plans, not one seat per inbox', () => {
+  assert.match(SQL, /"seat_count": 6/);
+  assert.match(SQL, /jsonb_set\(value, '\{seat_count\}', '6', true\)/);
+});
+
 test('subscription cost rows are addressable without a lead', () => {
   assert.match(SQL, /ALTER TABLE outreach\.lead_cost_events ALTER COLUMN lead_id DROP NOT NULL/);
   // A NULL lead_id would slip past a plain unique index, so it is coalesced.

@@ -403,19 +403,29 @@ function snapshot(item: ProgressItem): RunSnapshot {
   return { state: item.state, stage: item.stage, error: item.error, requestedAt: item.requestedAt, startedAt: item.startedAt };
 }
 
+/** A carousel run is one job for the type, not one idea — same strip the header already shows. */
+function typeRun(vertical: HubPost['vertical'] | HubIdea['vertical'], live: readonly ProgressItem[]): RunSnapshot | null {
+  if (vertical !== 'carousels') return null;
+  const hit = live.find((item) => item.label === 'Carousel run') ?? live[0];
+  return hit ? snapshot(hit) : null;
+}
+
 /** The live poll wins over the dataset snapshot, matched on the explainer topic. */
 function resolveRun(idea: HubIdea, live: readonly ProgressItem[]): RunSnapshot | null {
   const topicId = topicKey(idea.id);
   const hit = live.find((item) => item.topicId != null && (item.topicId === topicId || item.topicId === idea.id));
-  return hit ? snapshot(hit) : (idea.run ?? null);
+  return hit ? snapshot(hit) : typeRun(idea.vertical, live) ?? idea.run ?? null;
 }
 
 function runForPost(post: HubPost, bench: readonly TypeBenchItem[], live: readonly ProgressItem[]): RunSnapshot | null {
   const topicId = post.refs.topicId ?? (post.idea ? topicKey(post.idea.id) : null);
-  if (!topicId) return null;
-  const hit = live.find((item) => item.topicId === topicId);
-  if (hit) return snapshot(hit);
-  return bench.find((item) => topicKey(item.idea.id) === topicId)?.idea.run ?? null;
+  if (topicId) {
+    const hit = live.find((item) => item.topicId === topicId);
+    if (hit) return snapshot(hit);
+    const fromIdea = bench.find((item) => topicKey(item.idea.id) === topicId)?.idea.run;
+    if (fromIdea) return fromIdea;
+  }
+  return typeRun(post.vertical, live);
 }
 
 function FinishedVideo({ src, poster }: { src: string; poster: string | null }) {

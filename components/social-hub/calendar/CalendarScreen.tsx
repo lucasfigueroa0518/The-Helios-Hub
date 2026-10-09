@@ -91,7 +91,7 @@ export function CalendarScreen({ dataset, base, params, now }: { dataset: HubDat
 
       <MonthGrid label={monthLabel(month)}>
         <div className="sh-month__head" role="row">
-          {WEEKDAY_SHORT.map((d) => <span key={d} role="columnheader">{d}</span>)}
+          {WEEKDAY_SHORT.map((d) => <span key={d} role="columnheader">{d[0]}<span className="sh-month__wd-rest">{d.slice(1)}</span></span>)}
         </div>
         {m.weeks.map((week, i) => (
           <div key={i} className="sh-month__week" role="row">

@@ -121,6 +121,7 @@ async function main() {
   const shotDir = path.join(runDir, 'screenshots');
   await fsp.mkdir(runDir, { recursive: true });
 
+  if (runIdArg && !store.query) throw new Error('--run-id needs the Postgres store (DATABASE_URL)');
   if (rerunPostArg && !store.query) throw new Error('--rerun-post needs the Postgres store (DATABASE_URL)');
   const rerunLib = rerunPostArg ? await import('@/lib/social/overnight/rerun') : null;
   const rerun = rerunPostArg && rerunLib ? await rerunLib.loadRerunStory(store.query!, rerunPostArg) : null;
@@ -291,7 +292,11 @@ async function main() {
       const reusedCount = result.shipped.filter((e) => e.reusedPostId).length;
       console.log(`Database: run ${runId}, ${shippedPosts.length} post(s) in social.posts${reusedCount ? `, ${reusedCount} stored post(s) reused` : ''}`);
     } catch (err) {
-      console.error(`Database write failed (the run folder is complete): ${err instanceof Error ? err.message : String(err)}`);
+      const text = `Database write failed (the run folder is complete): ${err instanceof Error ? err.message : String(err)}`;
+      console.error(text);
+      // A worker-queued run must not exit 0 still `running`: the worker then marks it
+      // failed with an empty note, and the next click sits behind that dead row.
+      if (runIdArg) throw new Error(text);
     }
   }
   console.log(JSON.stringify({

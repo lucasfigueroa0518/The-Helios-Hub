@@ -38,7 +38,7 @@ async function renderedJob(db: Queryable, opts: { verdict?: 'approved' | 'reject
     [jobId, `jobs/${jobId}/video.mp4`, opts.location ?? 'bucket'],
   );
   if (opts.caption !== null) {
-    await db.query(`INSERT INTO explainers.artifacts (job_id, kind, content) VALUES ($1, 'post_caption', $2)`, [jobId, opts.caption ?? 'AI BRAIN BREAK - EPISODE 1: APIs']);
+    await db.query(`INSERT INTO explainers.artifacts (job_id, kind, content) VALUES ($1, 'post_caption', $2)`, [jobId, opts.caption ?? 'The door between two programs.']);
   }
   if (opts.verdict !== null) {
     // The review page's own write path: it mirrors the verdict onto the spine.
@@ -50,7 +50,7 @@ async function renderedJob(db: Queryable, opts: { verdict?: 'approved' | 'reject
 function stubMeta(overrides: Partial<ReelMetaClient> = {}) {
   const calls: string[] = [];
   const meta: ReelMetaClient = {
-    async createReel(input) { calls.push(`reel ${input.videoUrl} feed=${input.shareToFeed}`); return 'container-1'; },
+    async createReel(input) { calls.push(`reel ${input.videoUrl} feed=${input.shareToFeed}`); calls.push(`caption ${input.caption}`); return 'container-1'; },
     async containerStatus() { calls.push('status'); return { statusCode: 'FINISHED', status: null }; },
     async publishContainer(id) { calls.push(`publish ${id}`); return 'media-9'; },
     async permalink() { return 'https://instagram.com/reel/xyz'; },
@@ -136,12 +136,34 @@ test('end to end: a due slot is released, published as a feed reel, and marked; 
   const out = await claimAndPublish({ db, meta, signVideo, sleep: async () => undefined });
   assert.equal(out?.status, 'published');
   assert.equal(calls[0], `reel https://signed/jobs/${jobId}/video.mp4 feed=true`);
+  assert.equal(calls[1], 'caption AI Brain Break Episode 1:\n\nThe door between two programs.');
   const attempt = (await db.query<{ status: string; media_id: string; caption: string }>(`SELECT status, media_id, caption FROM social_hub.publish_attempts`)).rows[0]!;
-  assert.deepEqual([attempt.status, attempt.media_id, attempt.caption], ['published', 'media-9', 'AI BRAIN BREAK - EPISODE 1: APIs']);
+  assert.deepEqual([attempt.status, attempt.media_id, attempt.caption], ['published', 'media-9', 'AI Brain Break Episode 1:\n\nThe door between two programs.']);
   assert.equal((await db.query<{ status: string }>(`SELECT status FROM social_hub.schedule`)).rows[0]!.status, 'published');
   const again = await queuePublish(db, jobId, 'force');
   assert.equal(again.queued, false);
   assert.equal(await scheduleApproved(db, new Date(), () => 0), 0);
+});
+
+test('the episode number is how many explainers have published, stamped on the way out', async () => {
+  const { db } = await scratchExplainersDb();
+  const first = await renderedJob(db, { title: 'first', caption: 'First body.' });
+  const second = await renderedJob(db, { title: 'second', caption: 'Second body.' });
+  const captions: string[] = [];
+  const meta = stubMeta({
+    async createReel(input) {
+      captions.push(input.caption);
+      return 'container-1';
+    },
+  }).meta;
+  await queuePublish(db, first, 'approve');
+  assert.equal((await claimAndPublish({ db, meta, signVideo, sleep: async () => undefined }))?.status, 'published');
+  await queuePublish(db, second, 'approve');
+  assert.equal((await claimAndPublish({ db, meta, signVideo, sleep: async () => undefined }))?.status, 'published');
+  assert.deepEqual(captions, [
+    'AI Brain Break Episode 1:\n\nFirst body.',
+    'AI Brain Break Episode 2:\n\nSecond body.',
+  ]);
 });
 
 test('publish: an EXPIRED container and a near-full account quota both fail without posting', async () => {

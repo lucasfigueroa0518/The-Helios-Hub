@@ -8,6 +8,7 @@
 import type { IdentitySlug, LifecycleStage } from '@/lib/delivery-states';
 import { dbQuery } from '@/lib/db';
 import { DEFAULT_STAGE_PLAN, mergeStagePlan } from '@/lib/inboxes/stage-plan';
+import { getOrgSetting } from '@/lib/org-settings';
 
 export type InboxRow = {
   id: string;
@@ -302,10 +303,9 @@ export async function activeDomains(): Promise<string[]> {
   return rows.map((row) => row.domain);
 }
 
-/** Non-retired mailboxes are billable Microsoft 365 seats. */
+/** Paid Microsoft MX hosting plans. Inbox count is not the invoice. */
 export async function countBillableSeats(): Promise<number> {
-  const { rows } = await dbQuery<{ n: string }>(
-    `SELECT count(*)::text AS n FROM outreach.sender_inboxes WHERE lifecycle_stage <> 'retired'`,
-  );
-  return Number(rows[0]?.n ?? 0);
+  const m365 = await getOrgSetting<{ seat_count?: number }>('m365.pricing', {});
+  const configured = Number(m365.seat_count);
+  return configured > 0 ? configured : 6;
 }

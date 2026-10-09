@@ -1,10 +1,12 @@
 import type { HubDataset } from '@/lib/social-hub/dataset';
+import { PLACED_STATUSES } from '@/lib/social-hub/fill';
 import { quotaFrom, type Quota } from '@/lib/social-hub/house';
 import { addDays, nyDateOf } from '@/lib/social-hub/time';
 import { dayPlan, windowsOn, type DayPlan } from '@/lib/social-hub/views/plan';
 import { needsPerson } from '@/lib/social-hub/views/state';
 import type { HubPost, Vertical } from '@/lib/social-hub/types';
-import { allQuotaCandidates } from '@/lib/social-hub/views/day-rank';
+import { allQuotaCandidates, type DayQuotas } from '@/lib/social-hub/views/day-rank';
+import { VERTICAL_IDS } from '@/lib/social-hub/verticals';
 
 /**
  * The Content page's model (BRIEFS.md §1): what needs a person, today's
@@ -57,6 +59,31 @@ function band(iso: string | null): LineupBand['id'] {
 const BAND_LABEL: Record<LineupBand['id'], string> = { morning: 'Morning', afternoon: 'Afternoon', evening: 'Evening' };
 
 const MADE = new Set(['ready', 'scheduled', 'publishing', 'published']);
+const HOLDS_SLOT = new Set<string>(PLACED_STATUSES);
+
+/**
+ * How many posts the day asks for, and how many of those places are taken.
+ *
+ * The total is the sum of each type's quota for that New York day: posts per
+ * day for Text on Screen, Carousels and Explainers (never more than that
+ * day's windows), plus one Story set for each series due that day. With no
+ * quota loaded, a type uses its windows for that day. Only a post that is
+ * scheduled, posting or already published fills a place. Made content still
+ * waiting for approval does not, and neither does something still being generated.
+ */
+export function slotsForDay(posts: readonly HubPost[], nyDate: string, dayQuotas?: DayQuotas | null): { slots: number; filled: number } {
+  let slots = 0;
+  let filled = 0;
+  for (const vertical of VERTICAL_IDS) {
+    const windows = windowsOn(vertical, nyDate).length;
+    const configured = vertical === 'stories' || !dayQuotas ? windows : dayQuotas[vertical];
+    const quota = Math.min(Math.max(0, configured), windows);
+    slots += quota;
+    const held = posts.filter((p) => p.vertical === vertical && p.nyDate === nyDate && HOLDS_SLOT.has(p.status)).length;
+    filled += Math.min(held, quota);
+  }
+  return { slots, filled };
+}
 
 /**
  * The day's publishing candidates: a post idea that is holding one of its
@@ -133,7 +160,7 @@ export function contentModel(dataset: HubDataset, now: Date): ContentModel {
     lineup,
     nowAfter,
     unplaced,
-    plan: dayPlan(dataset.posts, today),
+    plan: { ...dayPlan(dataset.posts, today), ...slotsForDay(dataset.posts, today, dataset.dayQuotas) },
     quota: quotaFrom(dataset.latestQuota, dataset.posts, now),
     next,
   };

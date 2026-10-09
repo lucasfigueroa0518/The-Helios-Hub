@@ -22,13 +22,17 @@ export async function requestRun(query: Query, trigger: RunTrigger, opts: { capU
   return (rows[0]?.id as string | undefined) ?? null;
 }
 
-/** A run that has been `running` longer than any real run is marked failed. */
+/** A run that has been `running` — or left `requested` — longer than any real run is marked failed. */
 export async function releaseStaleRuns(query: Query, now = new Date()): Promise<number> {
   const { rows } = await query(
     `UPDATE social.runs
         SET status = 'failed', finished_at = $1::timestamptz,
-            error = coalesce(error, 'The worker stopped while this run was in progress.')
-      WHERE status = 'running' AND started_at < $1::timestamptz - make_interval(mins => $2)
+            error = coalesce(error, CASE
+              WHEN status = 'requested' THEN 'The worker never claimed this run.'
+              ELSE 'The worker stopped while this run was in progress.'
+            END)
+      WHERE (status = 'running' AND started_at < $1::timestamptz - make_interval(mins => $2))
+         OR (status = 'requested' AND requested_at < $1::timestamptz - make_interval(mins => $2))
       RETURNING id`,
     [now.toISOString(), SOCIAL_STALE_RUN_MINUTES],
   );

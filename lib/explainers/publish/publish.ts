@@ -1,8 +1,9 @@
 import type { Queryable } from '@/lib/explainers/db';
 import { checkAccountQuota } from '@/lib/instagram/account-gate';
 
+import { CAPTION_MAX_CHARS, stampCaption, stripEpisodePrefix } from '@/lib/explainers/caption-format';
+
 import {
-  CAPTION_MAX_CHARS,
   PUBLISH_POLL_SECONDS,
   PUBLISH_POLL_TIMEOUT_MINUTES,
   PUBLISH_STALE_MINUTES,
@@ -28,6 +29,16 @@ export type Queued =
 
 function isUniqueViolation(error: unknown): boolean {
   return (error as { code?: string } | null)?.code === '23505';
+}
+
+/** Next series number: how many explainers have published, plus this one. */
+export async function nextPublishedEpisode(db: Queryable): Promise<number> {
+  const { rows } = await db.query<{ n: number }>(
+    `SELECT count(*)::int AS n
+       FROM social_hub.publish_attempts
+      WHERE vertical = 'explainers' AND status = 'published'`,
+  );
+  return Number(rows[0]?.n ?? 0) + 1;
 }
 
 /** What a job needs before it can go: approved, rendered, video in the bucket, a caption that fits. */
@@ -71,9 +82,11 @@ export async function publishReadiness(
   }
   if (!job.video) return { ok: false, note: 'The render has no video.' };
   if (job.location !== 'bucket') return { ok: false, note: 'The video is only on the machine that rendered it, not in Storage.' };
-  const caption = job.caption?.trim() ?? '';
+  const caption = stripEpisodePrefix(job.caption ?? '');
   if (!caption) return { ok: false, note: 'The render has no post caption.' };
-  if (caption.length > CAPTION_MAX_CHARS) return { ok: false, note: `The caption is ${caption.length} characters; Instagram takes ${CAPTION_MAX_CHARS}.` };
+  if (stampCaption(caption, 999).length > CAPTION_MAX_CHARS) {
+    return { ok: false, note: `The caption is ${caption.length} characters; Instagram takes ${CAPTION_MAX_CHARS}.` };
+  }
   return { ok: true, videoObject: job.video, caption };
 }
 
@@ -181,7 +194,13 @@ export async function carryAttempt(deps: PublishDeps, id: string): Promise<{ id:
     if (!gate.ok) throw new Error(gate.message);
 
     const videoUrl = await deps.signVideo(attempt.video_object, PUBLISH_VIDEO_URL_SECONDS);
-    const containerId = await meta.createReel({ videoUrl, caption: attempt.caption, shareToFeed: attempt.share_to_feed });
+    const episode = await nextPublishedEpisode(db);
+    const caption = stampCaption(attempt.caption, episode);
+    if (caption.length > CAPTION_MAX_CHARS) {
+      throw new Error(`The caption is ${caption.length} characters; Instagram takes ${CAPTION_MAX_CHARS}.`);
+    }
+    await update(db, id, { caption });
+    const containerId = await meta.createReel({ videoUrl, caption, shareToFeed: attempt.share_to_feed });
     await update(db, id, { status: 'processing', container_id: containerId });
 
     const deadline = now() + PUBLISH_POLL_TIMEOUT_MINUTES * 60_000;

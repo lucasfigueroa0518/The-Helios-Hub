@@ -52,7 +52,6 @@ export function ContentScreen({ dataset, base, now, libraries, progress, control
             {actNow ? <strong className="sh-needs-count">{actNow} {actNow === 1 ? 'needs' : 'need'} you</strong> : 'nothing needs you today'}
             {later ? <> · {later} later</> : null}
             {parked.length ? <> · {parked.length} can’t be approved here yet</> : null}
-            {m.quota.left != null ? <> · {m.quota.left} of {m.quota.total} Instagram posts left today</> : null}
           </>
         }
       />

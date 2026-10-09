@@ -5,9 +5,11 @@
  * a monthly (or longer) view takes the full month once per calendar month
  * covered; a shorter view prorates `price × (days in range / days in month)`.
  * Used send capacity (sends / prorated plan emails) is outreach; the unused
- * remainder stays wasted. Microsoft 365 seats stay as overlapping billing-cycle
- * lumps. The only per-event delivery cost is a verifier check. Historical
- * AgentMail sends keep $0.002 each.
+ * remainder stays wasted. Microsoft MX hosting is a fixed plan count (6),
+ * not one seat per inbox — the resting AgentMail mailboxes are not billed.
+ * Those plans stay as overlapping billing-cycle lumps. The only per-event
+ * delivery cost is a verifier check. Historical AgentMail sends keep $0.002
+ * each.
  */
 import { dbQuery } from '@/lib/db';
 import {
@@ -17,12 +19,17 @@ import {
   type PlanLimits,
 } from '@/lib/org-settings';
 
+/** Paid Microsoft MX hosting plans — not the inbox roster count. */
+export const M365_MX_PLAN_COUNT = 6;
+
 export type DeliveryPricing = {
   smartleadPerMonthUsd: number;
   /** Smartlead Pro bills on the 16th. */
   smartleadBillingDay: number;
   m365SeatPerMonthUsd: number;
-  /** Microsoft 365 seats bill on the 15th — a day earlier than Smartlead. */
+  /** Invoice line: MX hosting plans, not one seat per sender inbox. */
+  m365SeatCount: number;
+  /** Microsoft MX hosting bills on the 15th — a day earlier than Smartlead. */
   m365BillingDay: number;
   verifierPerCheckUsd: number;
 };
@@ -40,15 +47,17 @@ export async function loadDeliveryPricing(): Promise<DeliveryPricing> {
   ]);
   const smartlead = settings.get('smartlead.pricing') as { subscription_usd_per_month?: number } | undefined;
   const m365 = settings.get('m365.pricing') as
-    | { seat_usd_per_month?: number; billing_day?: number }
+    | { seat_usd_per_month?: number; seat_count?: number; billing_day?: number }
     | undefined;
   const verifier = settings.get('verifier.pricing') as { usd_per_check?: number } | undefined;
   const smartleadBillingDay = Number(settings.get('smartlead.billing_day') ?? 1);
+  const configuredSeats = Number(m365?.seat_count);
 
   return {
     smartleadPerMonthUsd: Number(smartlead?.subscription_usd_per_month ?? 0),
     smartleadBillingDay,
     m365SeatPerMonthUsd: Number(m365?.seat_usd_per_month ?? 0),
+    m365SeatCount: configuredSeats > 0 ? configuredSeats : M365_MX_PLAN_COUNT,
     // Absent an M365 billing day, follow Smartlead's rather than inventing one.
     m365BillingDay: Number(m365?.billing_day ?? smartleadBillingDay),
     verifierPerCheckUsd: Number(verifier?.usd_per_check ?? 0),
@@ -91,6 +100,35 @@ export function cycleOverlapsWindow(
 ): boolean {
   const { start, endExclusive } = cycleBounds(cycle, billingDay);
   return from < endExclusive && to >= start;
+}
+
+/** Billing-cycle tags (`YYYY-MM`) that share at least one day with the window. */
+export function overlappingCycleTags(from: string, to: string, billingDay: number): string[] {
+  if (to < from) return [];
+  const tags: string[] = [];
+  let start = cycleStartFor(from, billingDay);
+  while (start <= to && tags.length < 120) {
+    const tag = start.slice(0, 7);
+    if (cycleOverlapsWindow(tag, billingDay, from, to)) tags.push(tag);
+    const [year, month, day] = start.split('-').map(Number);
+    start = new Date(Date.UTC(year, month, day)).toISOString().slice(0, 10);
+  }
+  return tags;
+}
+
+/**
+ * Microsoft MX hosting is `plans × price` once per overlapping billing cycle.
+ * Unlike Smartlead, a month that straddles the 15th takes both cycle lumps.
+ */
+export function clockM365Usd(
+  seatCount: number,
+  seatUsd: number,
+  from: string,
+  to: string,
+  billingDay: number,
+): number {
+  if (!(seatCount > 0) || !(seatUsd > 0)) return 0;
+  return overlappingCycleTags(from, to, billingDay).length * seatCount * seatUsd;
 }
 
 const MS_PER_DAY = 86_400_000;
@@ -212,24 +250,19 @@ export async function recordCycleFixedCosts(day: string): Promise<number> {
     });
   }
 
-  if (pricing.m365SeatPerMonthUsd > 0) {
+  if (pricing.m365SeatPerMonthUsd > 0 && pricing.m365SeatCount > 0) {
     const cycle = cycleTag(day, pricing.m365BillingDay);
-    const { rows } = await dbQuery<{ id: string; email: string }>(
-      `SELECT id::text, email FROM outreach.sender_inboxes WHERE lifecycle_stage <> 'retired'`,
-    );
-    for (const inbox of rows) {
-      written += await insertSubscriptionRow({
-        sourceKind: 'm365_seat',
-        sourceId: `${inbox.id}:${cycle}`,
-        amountUsd: pricing.m365SeatPerMonthUsd,
-        usage: {
-          cycle,
-          kind: 'm365_seat',
-          mailbox: inbox.email,
-          billing_day: pricing.m365BillingDay,
-        },
-      });
-    }
+    written += await insertSubscriptionRow({
+      sourceKind: 'm365_seat',
+      sourceId: `mx-plans:${cycle}`,
+      amountUsd: pricing.m365SeatPerMonthUsd * pricing.m365SeatCount,
+      usage: {
+        cycle,
+        kind: 'm365_mx_plans',
+        seat_count: pricing.m365SeatCount,
+        billing_day: pricing.m365BillingDay,
+      },
+    });
   }
 
   return written;
@@ -282,7 +315,8 @@ export type CycleAmortization = {
 };
 
 /**
- * Loads Microsoft 365 seat lumps for overlapping billing cycles.
+ * Loads Microsoft MX hosting lumps for overlapping billing cycles.
+ * The amount is the invoice (plan count × price), never the inbox roster.
  * Smartlead is clocked separately via `clockSmartleadUsd` so it is not
  * mixed into this map.
  */
@@ -292,15 +326,15 @@ export async function loadCycleAmortization(
 ): Promise<Map<string, CycleAmortization>> {
   const pricing = await loadDeliveryPricing();
   const billingDay = pricing.m365BillingDay;
-
-  const { rows: fixedRows } = await dbQuery<{ cycle: string; total: string }>(
-    `SELECT split_part(source_id, ':', 2) AS cycle,
-            sum(actual_cost_usd)::text AS total
-       FROM outreach.lead_cost_events
-      WHERE phase = 'subscription'
-        AND source_kind = 'm365_seat'
-      GROUP BY 1`,
+  const cycleTags = overlappingCycleTags(from, to, billingDay);
+  const billedUsd = clockM365Usd(
+    pricing.m365SeatCount,
+    pricing.m365SeatPerMonthUsd,
+    from,
+    to,
+    billingDay,
   );
+  const cycleUsd = cycleTags.length > 0 ? billedUsd / cycleTags.length : 0;
 
   const { rows: sendRows } = await dbQuery<{ day: string; n: string }>(
     `SELECT (sent_at AT TIME ZONE 'America/New_York')::date::text AS day, count(*)::text AS n
@@ -321,16 +355,13 @@ export async function loadCycleAmortization(
   }
 
   const out = new Map<string, CycleAmortization>();
-  const cycles = new Set([...fixedRows.map((row) => row.cycle), ...sendsByCycle.keys()]);
+  const cycles = new Set([...cycleTags, ...sendsByCycle.keys()]);
   for (const cycle of cycles) {
     if (!cycle || !cycleOverlapsWindow(cycle, billingDay, from, to)) continue;
-    const fixedUsd = fixedRows
-      .filter((row) => row.cycle === cycle)
-      .reduce((sum, row) => sum + Number(row.total), 0);
     const step1Sends = sendsByCycle.get(cycle) ?? 0;
     out.set(cycle, {
       cycle,
-      fixedUsd,
+      fixedUsd: cycleUsd,
       step1Sends,
       perSendUsd: 0,
     });
@@ -340,7 +371,7 @@ export async function loadCycleAmortization(
 }
 
 export type DeliveryCostSummary = {
-  /** Microsoft 365 seat rows overlapping the window. */
+  /** Microsoft MX hosting (6 plans) overlapping the window. */
   fixedUsd: number;
   /** Smartlead subscription clocked for this window (full or prorated). */
   smartleadUsd: number;

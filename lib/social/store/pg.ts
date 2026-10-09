@@ -145,11 +145,13 @@ export async function insertRun(query: Query, r: RunInsert): Promise<string> {
 
 /** The worker's queued run (lib/social/overnight/runs.ts), finished by the daily script. */
 export async function finishRun(query: Query, id: string, r: Omit<RunInsert, 'kind' | 'startedAt' | 'capUsd'> & { status: 'ok' | 'partial' | 'failed' }): Promise<void> {
-  await query(
+  const { rows } = await query(
     `UPDATE social.runs SET status = $2, finished_at = $3, hook_pass = $4, claude_usd = $5, total_usd = $6, stop_reason = $7, run_dir = $8, machine = $9, record = $10::jsonb
-      WHERE id = $1`,
+      WHERE id = $1 AND status = 'running'
+      RETURNING id`,
     [id, r.status, r.finishedAt, r.hookPass, r.claudeUsd, r.totalUsd, r.stopReason, r.runDir, r.machine, JSON.stringify(r.record)],
   );
+  if (!rows[0]) throw new Error(`Run ${id} was not running, so it was not finished.`);
 }
 
 export type PostInsert = {

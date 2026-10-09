@@ -280,13 +280,13 @@ function deps(db: ExplainersDb, query: AgentQuery): RenderDeps {
     secrets: { anthropicApiKey: 'sk', heygenApiKey: 'hg' },
     prepare: ({ jobsRoot, jobId }: { jobsRoot: string; jobId: string }) => fakePrepare(jobsRoot, jobId),
     hyperframesLint: () => [{ source: 'hyperframes' as const, rule: 'studio_missing_editable_id', frame: 2, severity: 'warning' as const, detail: 'no id' }],
-    writeCaption: async (facts) => ({
+    writeCaption: async () => ({
       text: [
-        `AI BRAIN BREAK - EPISODE ${facts.episode}:`,
-        '',
         'The hook stays under the preview limit.',
         '',
-        'One short paragraph from the reel.',
+        'A body paragraph that pays out the idea in the viewer\'s world, with the reel\'s example still attached.',
+        '',
+        'Another paragraph for the catch, and the place they will meet this next.',
         '',
         'Save this for the next time this comes up.',
         '',
@@ -345,7 +345,8 @@ test('a render runs plan → checkpoint → build → collect and keeps every ar
     assert.ok(kinds.includes(k as never), `missing ${k}`);
   }
   const caption = (await listArtifacts(db, job.id)).find((a) => a.kind === 'post_caption');
-  assert.match(caption?.content ?? '', /^AI BRAIN BREAK - EPISODE 1:/);
+  assert.match(caption?.content ?? '', /^The hook stays under the preview limit/);
+  assert.doesNotMatch(caption?.content ?? '', /Episode \d/i);
   const video = (await listArtifacts(db, job.id)).find((a) => a.kind === 'video')!;
   assert.equal(fs.readFileSync(d.store.localPath(video.storage_path!)!, 'utf8'), 'mp4-bytes');
 

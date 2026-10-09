@@ -72,9 +72,11 @@
 .sh-thumb--open { background: transparent; border: 1.5px dashed color-mix(in srgb, var(--sh-color) 70%, var(--color-surface)); }
 
 @media (max-width: 720px) {
-  .sh-summary { gap: 8px 24px; }
+  .sh-summary { gap: 10px 16px; }
+  .sh-summary div { min-width: calc(50% - 16px); }
   .sh-month__head span { padding: 6px 0; text-align: center; }
-  .sh-cell { min-height: 72px; padding: 6px 4px; align-items: center; gap: 4px; }
+  .sh-month__wd-rest { display: none; }
+  .sh-cell { min-height: 64px; padding: 6px 2px; align-items: center; gap: 3px; }
   .sh-cell__top { flex-direction: column; gap: 2px; }
   .sh-cell__needs { margin: 0; }
   .sh-cell__total { font-size: var(--sh-fs-label); font-weight: var(--font-weight-medium); }
@@ -82,6 +84,7 @@
   .sh-mark { width: 6px; height: 6px; }
   .sh-drawer--narrow .sh-item { grid-template-columns: 48px minmax(0, 1fr); }
   .sh-drawer--narrow .sh-item__actions { grid-column: 1 / -1; }
+  .sh-toolbar { align-items: flex-start; }
 }
 
 /* "Schedule something here" under an open slot */

@@ -12,7 +12,6 @@ import {
   addLintViolations,
   finishJob,
   getTopic,
-  nextEpisodeNumber,
   recordCost,
   setJobStage,
 } from '@/lib/explainers/repository';
@@ -330,9 +329,7 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
     }
 
     await stage('caption');
-    const episode = await nextEpisodeNumber(db, job.id);
     const facts: CaptionFacts = {
-      episode,
       title: topic.title,
       scope: topic.scope,
       storyboard: read(path.join(ws.projectDir, 'STORYBOARD.md')) ?? storyboard,

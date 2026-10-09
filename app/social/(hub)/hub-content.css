@@ -123,7 +123,7 @@
 .sh-why__parts li.is-minus .sh-why__points { color: var(--color-negative); }
 .sh-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .sh-chip { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: var(--radius-pill); background: var(--color-surface-2); color: var(--color-text-muted); font-size: var(--sh-fs-label); white-space: nowrap; }
-.sh-audio { display: flex; align-items: center; gap: 12px; min-width: 260px; }
+.sh-audio { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .sh-audio__cover { width: 44px; height: 44px; border-radius: 6px; background: var(--color-surface-2); display: grid; place-items: center; color: var(--color-text-muted); flex: none; overflow: hidden; }
 .sh-audio__cover img { width: 100%; height: 100%; object-fit: cover; }
 .sh-audio audio { height: 32px; width: 220px; max-width: 100%; }
@@ -148,6 +148,12 @@
   .sh-pools { grid-template-columns: minmax(0, 1fr); }
   .sh-libitem__link { padding: 14px 16px; }
   .sh-group__note { padding: 4px 16px 8px; }
+  .sh-why__parts li { grid-template-columns: minmax(0, 1fr) auto; }
+  .sh-why__detail { grid-column: 1 / -1; }
+  .sh-audio { flex-wrap: wrap; }
+  .sh-audio audio { width: 100%; }
+  .sh-strip { margin: 0 -16px; padding: 2px 16px 10px; }
+  .sh-filters { align-items: flex-start; }
 }
 
 /* ---------- photo bank grid */
