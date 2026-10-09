@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 
 import { explainersDb } from '@/lib/explainers/connection';
+import { ExplainersNav } from '@/app/explainers/explainers-nav';
 import { ReelsView } from '@/app/explainers/reels/reels-view';
 import { loadReelsView } from '@/lib/explainers/overview';
 import { getSession } from '@/lib/session';
@@ -21,6 +22,8 @@ export default async function ExplainersReelsPage() {
     .catch((error) => ({ error: error instanceof Error ? error.message : String(error) }));
 
   return (
+    <div className="rh-shell">
+      <ExplainersNav />
     <div className="rh">
       <div className="rh__inner">
         <header className="rh__head">
@@ -35,6 +38,7 @@ export default async function ExplainersReelsPage() {
           <ReelsView jobs={loaded} />
         )}
       </div>
+    </div>
     </div>
   );
 }

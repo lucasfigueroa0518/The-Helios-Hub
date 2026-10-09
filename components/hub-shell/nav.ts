@@ -27,32 +27,17 @@ export const HUB_NAV: HubNavItem[] = [
     match: (path) => path.startsWith('/hub') || path.startsWith('/campaigns'),
   },
   {
-    id: 'reels',
-    href: '/reels',
-    label: 'Trial Reels',
-    badge: 'Beta',
-    match: (path) => path.startsWith('/reels'),
-  },
-  {
-    id: 'stories',
-    href: '/stories',
-    label: 'Stories',
-    badge: 'Beta',
-    match: (path) => path.startsWith('/stories'),
-  },
-  {
-    id: 'explainers',
-    href: '/explainers',
-    label: 'Explainers',
-    badge: 'Beta',
-    match: (path) => path.startsWith('/explainers'),
-  },
-  {
     id: 'social',
     href: '/social',
     label: 'Social Hub',
     badge: 'Beta',
-    match: (path) => path === '/social' || (path.startsWith('/social/') && !path.startsWith('/social/render')),
+    match: (path) =>
+      path === '/social' ||
+      (path.startsWith('/social/') && !path.startsWith('/social/render')) ||
+      path.startsWith('/carousels') ||
+      path.startsWith('/reels') ||
+      path.startsWith('/stories') ||
+      path.startsWith('/explainers'),
   },
   {
     id: 'dashboards',

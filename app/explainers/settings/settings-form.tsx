@@ -68,7 +68,7 @@ function fromDraft(field: Field, value: string | boolean): unknown {
   return String(value).trim();
 }
 
-export function SettingsForm({ initial }: { initial: ExplainersSettings }) {
+export function SettingsForm({ initial, hide = [] }: { initial: ExplainersSettings; /** Settings shown elsewhere (the posting panel owns auto-render and the daily count). */ hide?: SettingKey[] }) {
   const [saved, setSaved] = useState(initial);
   const [draft, setDraft] = useState(() => toDraft(initial));
   const [busy, setBusy] = useState(false);
@@ -148,7 +148,7 @@ export function SettingsForm({ initial }: { initial: ExplainersSettings }) {
           askSave();
         }}
       >
-        {FIELDS.map((field) => {
+        {FIELDS.filter((field) => !hide.includes(field.key)).map((field) => {
           const id = `ex-setting-${field.key}`;
           const value = draft[field.key];
           const set = (next: string | boolean) => setDraft((d) => ({ ...d, [field.key]: next }));

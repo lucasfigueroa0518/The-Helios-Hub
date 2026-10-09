@@ -50,7 +50,7 @@ function statusChip(status: TopicStatus): string {
   return 'rh-chip';
 }
 
-function AddTopics({ onDone }: { onDone: (note: string) => void }) {
+export function AddTopics({ onDone }: { onDone: (note: string) => void }) {
   const [title, setTitle] = useState('');
   const [sourceUrl, setSourceUrl] = useState('');
   const [sourceText, setSourceText] = useState('');
