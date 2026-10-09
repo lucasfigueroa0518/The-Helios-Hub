@@ -53,3 +53,32 @@ export async function rejectItem(query: SpineQuery, itemId: string, by: string |
 export async function clearDecision(query: SpineQuery, itemId: string): Promise<void> {
   await query(`DELETE FROM social_hub.approvals WHERE content_item_id = $1`, [itemId]);
 }
+
+/**
+ * Book one slot on the calendar: the insert every type's scheduler and the
+ * hub's placement (lib/social-hub/placement.ts) share. A Trial Reels slot
+ * belongs to its idea (`ideaRef`) and may have no item yet (D39). The unique
+ * indexes refuse a taken window or a second waiting slot (23505); the caller
+ * decides what that means.
+ */
+export async function bookSlot(
+  query: SpineQuery,
+  slot: {
+    vertical: SpineVertical;
+    itemId: string | null;
+    ideaRef?: string | null;
+    nyDate: string;
+    slot: string;
+    publishAt: Date;
+    source: 'auto' | 'user';
+    /** Trial Reels only: the slot is approved as it is booked (a person scheduling it, D39). */
+    approved?: boolean;
+  },
+): Promise<{ id: string; publishAt: string }> {
+  const { rows } = await query(
+    `INSERT INTO social_hub.schedule (content_item_id, vertical, idea_ref, ny_date, slot, publish_at, status, source, approved_at)
+     VALUES ($1, $2, $3, $4::date, $5, $6::timestamptz, 'scheduled', $7, CASE WHEN $8::boolean THEN now() END) RETURNING id, publish_at`,
+    [slot.itemId, slot.vertical, slot.ideaRef ?? null, slot.nyDate, slot.slot, slot.publishAt.toISOString(), slot.source, slot.approved === true],
+  );
+  return { id: rows[0].id as string, publishAt: new Date(rows[0].publish_at).toISOString() };
+}

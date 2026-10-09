@@ -1,85 +1,97 @@
-import Link from 'next/link';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 
-import { VerticalTag } from '@/components/social-hub/marks';
-import { costOfPosts, formatUsd } from '@/lib/social-hub/cost';
-import { postHref } from '@/lib/social-hub/ids';
+import { ComparePick } from '@/components/social-hub/analytics/CompareTray';
+import { HubLink } from '@/components/social-hub/nav/HubNav';
+import { PostLink } from '@/components/social-hub/nav/PostLink';
+import { TypeMark } from '@/components/social-hub/ui/marks';
+import { Thumb } from '@/components/social-hub/ui/Thumb';
+import { formatUsd } from '@/lib/social-hub/cost';
+import { withParams, type HubParams } from '@/lib/social-hub/links';
 import { formatMetricKey, metricSpec, postMetric } from '@/lib/social-hub/metrics';
-import { verticalInfo } from '@/lib/social-hub/verticals';
-import type { HubPost, MetricKey, Vertical } from '@/lib/social-hub/types';
-
-/** The vertical's key columns (spec §5.3) when one vertical is in view. */
-const KEY_COLUMNS: Record<Vertical, MetricKey[]> = {
-  reels: ['avgWatchTimeMs', 'skipRate', 'shares'],
-  explainers: ['avgWatchTimeMs', 'skipRate', 'saved'],
-  carousels: ['reach', 'saved', 'shares'],
-  stories: ['reach', 'completion', 'exitsFirst3'],
-};
-
-function Thumb({ post }: { post: HubPost }) {
-  const src = post.media.kind === 'frames' ? post.media.frames[0]?.src : post.media.kind === 'slides' ? post.media.slides[0]?.photo : null;
-  return src
-    ? <img className="sh-thumb" src={src} alt="" loading="lazy" referrerPolicy="no-referrer" />
-    : <span className="sh-thumb sh-thumb--blank" style={{ background: `var(${verticalInfo(post.vertical).colorVar})` }} aria-hidden="true" />;
-}
+import type { Query } from '@/lib/social-hub/views/analytics';
+import { sortedPosts } from '@/lib/social-hub/views/analytics';
+import { displayName, shortDate } from '@/lib/social-hub/views/format';
+import type { HubPost, MetricKey } from '@/lib/social-hub/types';
 
 /**
- * Posts table (spec §5.3): thumbnail, vertical, name, posted, the selected
- * metric, cost, key columns. Checkbox → compare (a GET form, 2–6 posts).
+ * Posts in view, sortable by any column, 25 a page; tick to compare (BRIEFS.md §3).
+ * With `limit`, only the top rows show, with one link to the full list.
  */
-export function PostsTable({ posts, metric, vertical, base, compareAction, keep }: {
+export function PostsTable({ posts, q, path, params, columns, showType, limit, moreHref }: {
   posts: HubPost[];
-  metric: MetricKey;
-  vertical: Vertical | null;
-  base: string;
-  compareAction: string;
-  keep: Record<string, string | undefined>;
+  q: Query;
+  path: string;
+  params: HubParams;
+  columns: MetricKey[];
+  showType: boolean;
+  limit?: number;
+  moreHref?: string;
 }) {
-  if (posts.length === 0) {
-    return <div className="sh-empty"><strong>No published posts in this view</strong>Widen the range or clear a filter.</div>;
-  }
-  const extra = vertical ? KEY_COLUMNS[vertical].filter((k) => k !== metric) : [];
-  const total = costOfPosts(posts);
+  const sorted = sortedPosts(posts, limit ? { ...q, page: 1 } : q);
+  const { page, pageCount, total } = sorted;
+  const items = limit ? sorted.items.slice(0, limit) : sorted.items;
+  const href = (changes: Record<string, string | null>) => withParams(path, '', params, changes);
+  const sortHref = (col: string) => href({ sort: col === q.metric ? null : col, dir: q.sort === col && q.dir === 'desc' ? 'asc' : null, page: null });
+  const head = (col: string, label: string, numeric = true) => {
+    const active = q.sort === col;
+    const Icon = q.dir === 'asc' ? ArrowUp : ArrowDown;
+    return (
+      <th scope="col" className={numeric ? 'sh-num' : undefined} aria-sort={active ? (q.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
+        <HubLink href={sortHref(col)} history="replace">{label}{active ? <Icon size={12} aria-hidden="true" /> : null}</HubLink>
+      </th>
+    );
+  };
+  if (total === 0) return <div className="sh-panel sh-empty"><strong>No posts in this range</strong>Try a longer range, or clear a filter.</div>;
   return (
-    <form method="get" action={compareAction} className="sh-table-form">
-      {Object.entries({ ...keep, tab: 'compare', mode: 'side' }).map(([k, v]) => (v ? <input key={k} type="hidden" name={k} value={v} /> : null))}
-      <div className="sh-table-bar">
-        <span className="sh-muted">{posts.length} on this page · cost {formatUsd(total.micros)}{total.unknown ? ` · ${total.unknown} without cost` : ''}</span>
-        <button type="submit" className="sh-btn">Compare selected (2–6)</button>
-      </div>
-      <div className="sh-table-wrap" role="region" aria-label="Posts table" tabIndex={0}>
-        <table className="sh-table">
+    <div className="sh-panel">
+      <div className="sh-table-wrap">
+        <table className="sh-table sh-table--stack">
           <thead>
             <tr>
-              <th scope="col"><span className="sh-sr">Compare</span></th>
+              <th scope="col" className="sh-col-pick"><span className="sh-sr">Compare</span></th>
               <th scope="col">Post</th>
-              <th scope="col">Posted</th>
-              <th scope="col" className="sh-num">{metricSpec(metric).label}</th>
-              <th scope="col" className="sh-num">Cost</th>
-              {extra.map((k) => <th key={k} scope="col" className="sh-num">{metricSpec(k).label}</th>)}
+              {head('posted', 'Posted', false)}
+              {columns.map((c) => <th key={c} scope="col" className="sh-num" aria-sort={q.sort === c ? (q.dir === 'asc' ? 'ascending' : 'descending') : undefined}><HubLink href={sortHref(c)} history="replace">{metricSpec(c).label}{q.sort === c ? (q.dir === 'asc' ? <ArrowUp size={12} aria-hidden="true" /> : <ArrowDown size={12} aria-hidden="true" />) : null}</HubLink></th>)}
+              {head('cost', 'Cost')}
             </tr>
           </thead>
           <tbody>
-            {posts.map((post) => (
+            {items.map((post) => (
               <tr key={post.id}>
-                <td><input type="checkbox" name="cmp" value={post.id} aria-label={`Compare ${post.name}`} /></td>
-                <td>
-                  <span className="sh-table__post">
-                    <Thumb post={post} />
-                    <span className="sh-table__name">
-                      <Link href={postHref(base, post.id)} className="sh-link">{post.name}</Link>
-                      <VerticalTag vertical={post.vertical} />
+                <td className="sh-col-pick"><ComparePick id={post.id} name={displayName(post)} /></td>
+                <td className="sh-stack-lead">
+                  <span className="sh-cell-post">
+                    <PostLink id={post.id} className="sh-item__thumb" decorative><Thumb post={post} /></PostLink>
+                    <span className="sh-cell-post__text">
+                      <PostLink id={post.id} className="sh-cell-post__name">{displayName(post)}</PostLink>
+                      {showType ? <TypeMark vertical={post.vertical} /> : null}
                     </span>
                   </span>
                 </td>
-                <td className="sh-nowrap">{post.nyDate}</td>
-                <td className="sh-num">{formatMetricKey(postMetric(post, metric), metric)}</td>
-                <td className="sh-num">{formatUsd(post.costMicros)}</td>
-                {extra.map((k) => <td key={k} className="sh-num">{formatMetricKey(postMetric(post, k), k)}</td>)}
+                <td className="sh-nowrap sh-muted">{shortDate(post.postedAt)}</td>
+                {columns.map((c) => <td key={c} className={`sh-num${q.sort === c ? ' sh-num--on' : ''}`} data-label={metricSpec(c).label.toLowerCase()}>{formatMetricKey(postMetric(post, c), c)}</td>)}
+                <td className="sh-num sh-muted" data-label="cost">{formatUsd(post.costMicros)}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-    </form>
+      <div className="sh-pager">
+        {limit ? (
+          <>
+            <span className="sh-subtle">Top {items.length} of {total.toLocaleString('en-US')} posts</span>
+            {moreHref && total > items.length ? <HubLink className="sh-pill" href={moreHref} history="replace">Show all {total.toLocaleString('en-US')}</HubLink> : null}
+          </>
+        ) : (
+          <span className="sh-subtle">{(page - 1) * 25 + 1}–{Math.min(page * 25, total)} of {total.toLocaleString('en-US')} posts</span>
+        )}
+        {!limit && pageCount > 1 ? (
+          <span className="sh-pills">
+            {page > 1 ? <HubLink className="sh-pill" href={href({ page: page === 2 ? null : String(page - 1) })} history="replace">Previous</HubLink> : null}
+            {page < pageCount ? <HubLink className="sh-pill" href={href({ page: String(page + 1) })} history="replace">Next</HubLink> : null}
+          </span>
+        ) : null}
+      </div>
+    </div>
   );
 }

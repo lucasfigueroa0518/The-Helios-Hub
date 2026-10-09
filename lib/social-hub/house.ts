@@ -130,7 +130,17 @@ export function typicalCost(posts: readonly HubPost[], vertical: Vertical, today
 // ── Actions (flagged; wired only to existing functions) ──────────────────────
 
 export type ActionPlan =
-  | { kind: 'post'; action: 'approveCarousel' | 'approveTrialReel' | 'hardPublish' | 'hardRegenerate' | 'reject'; label: string; endpoint: string; body: Record<string, unknown>; disabled: string | null; confirm?: string }
+  | {
+      kind: 'post';
+      action: 'approveCarousel' | 'approveTrialReel' | 'approveContent' | 'hardPublish' | 'hardRegenerate' | 'reject' | 'place' | 'reschedule';
+      label: string;
+      endpoint: string;
+      body: Record<string, unknown>;
+      disabled: string | null;
+      confirm?: string;
+      /** The person picks a day and window before it runs (place, reschedule; D50). */
+      pick?: 'slot';
+    }
   | { kind: 'link'; label: string; href: string; note: string };
 
 export type Quota = { left: number | null; total: number | null; source: string; publishedLast24h: number };
@@ -139,10 +149,10 @@ const QUOTA_HEADROOM = 5;
 
 /** What Hard publish does per vertical today (D28): said plainly before the click. */
 const PUBLISH_CONFIRM: Record<'reels' | 'carousels' | 'explainers' | 'stories', string> = {
-  reels: 'Force post this trial reel now, skipping its slot? Same as Force on /reels.',
-  carousels: 'Post this carousel now, skipping its slot? Your click approves it; its waiting slot is closed so it can’t post twice.',
-  explainers: 'Post this reel now, skipping its slot? Your click approves it (recorded as approved unless it was rejected in review).',
-  stories: 'Approve and publish this set now ("Publish now" on /stories)?',
+  reels: 'This trial reel goes out now instead of in its slot. Publishing counts as your approval.',
+  carousels: 'This carousel goes out now instead of in its slot. Publishing counts as your approval, and its waiting slot is released so it can’t post twice.',
+  explainers: 'This reel goes out now instead of in its slot. Publishing counts as your approval unless it was rejected in review.',
+  stories: 'This set is approved and goes out now, frame by frame.',
 };
 
 /** The actions a post offers in Content House, with the reason one is unavailable. */
@@ -151,12 +161,12 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
   const info = verticalInfo(post.vertical);
   const live = post.status !== 'published' && post.status !== 'publishing';
   const quotaLow = ctx.quota?.left != null && ctx.quota.left < QUOTA_HEADROOM
-    ? `Fewer than ${QUOTA_HEADROOM} posts left in the account's 24 h quota.`
+    ? `Fewer than ${QUOTA_HEADROOM} posts left in Instagram’s 24-hour limit, so publishing is paused.`
     : null;
 
   if (post.vertical === 'carousels' && post.status === 'ready') {
     // Content ready (P2-M4): approving places it in the earliest open window.
-    plans.push({ kind: 'post', action: 'approveCarousel', label: 'Approve', endpoint: '/api/social-hub/actions/approve-carousel', body: { postId: post.refs.postId ?? null }, disabled: post.refs.postId ? null : 'No content id.' });
+    plans.push({ kind: 'post', action: 'approveCarousel', label: 'Approve', endpoint: '/api/social-hub/actions/approve-carousel', body: { postId: post.refs.postId ?? null }, disabled: post.refs.postId ? null : 'This content can’t be found any more.' });
   }
   if (post.status === 'scheduled' && post.approval.required && !post.approval.approvedAt) {
     if (post.vertical === 'carousels' && post.refs.scheduleId) {
@@ -176,42 +186,82 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
     const missing = Object.values(refs).some((v) => !v);
     plans.push({
       kind: 'post', action: 'reject', label: 'Reject', endpoint: '/api/social-hub/actions/reject',
-      body: { vertical: post.vertical, refs }, disabled: missing ? 'No content id.' : null,
-      confirm: 'Reject this post? It will not post, and its slot is released.',
+      body: { vertical: post.vertical, refs }, disabled: missing ? 'This content can’t be found any more.' : null,
+      confirm: 'It won’t post, and its slot opens for something else.',
     });
   }
   if ((post.vertical === 'explainers' || post.vertical === 'stories') && post.status === 'ready' && !post.approval.approvedAt) {
-    plans.push({ kind: 'link', label: 'Review', href: info.reviewHref, note: `Approved on ${info.reviewHref}, which keeps its tag-based feedback.` });
+    const ref = post.vertical === 'explainers' ? post.refs.jobId : post.refs.setId;
+    plans.push({
+      kind: 'post', action: 'approveContent', label: 'Approve', endpoint: '/api/social-hub/actions/approve-content',
+      body: { vertical: post.vertical, refs: post.vertical === 'explainers' ? { jobId: ref } : { setId: ref } },
+      disabled: ref ? null : 'This content can’t be found any more.',
+    });
+    plans.push({ kind: 'link', label: 'Review', href: info.reviewHref, note: `Reviewed in ${info.label}, where its tagged feedback lives.` });
+  }
+
+  // Schedule here / move (D50): content with no slot is placed; a waiting slot is moved.
+  const placeRefs = contentRefs(post);
+  const rejected = /\brejected\b/i.test(post.approval.note ?? '') || /\brejected\b/i.test(post.statusNote ?? '');
+  if (post.status === 'ready' && !rejected) {
+    plans.push({ kind: 'post', action: 'place', label: 'Schedule', endpoint: '/api/social-hub/actions/place', body: { vertical: post.vertical, refs: placeRefs }, disabled: Object.values(placeRefs).some((v) => !v) ? 'This content can’t be found any more.' : null, pick: 'slot' });
+  }
+  if (post.status === 'scheduled') {
+    plans.push({ kind: 'post', action: 'reschedule', label: 'Move', endpoint: '/api/social-hub/actions/reschedule', body: { vertical: post.vertical, refs: placeRefs }, disabled: Object.values(placeRefs).some((v) => !v) ? 'This slot can’t be found any more.' : null, pick: 'slot' });
   }
 
   if (live) {
     const noContent = post.media.kind === 'none' || (post.media.kind === 'slides' && post.media.slides.length === 0) || (post.media.kind === 'frames' && post.media.frames.length === 0)
-      ? 'Nothing generated yet. Hard regenerate first.'
+      ? 'Nothing to publish yet. Regenerate first.'
       : null;
     const ref = post.vertical === 'reels' ? post.refs.videoJobId : post.vertical === 'carousels' ? post.refs.postId : post.vertical === 'explainers' ? post.refs.jobId : post.refs.setId;
-    const skipped = post.status === 'skipped' ? 'A Story set that missed its window is never reused (SH-53).' : null;
+    const skipped = post.status === 'skipped' ? 'Story sets that miss their window are never reused.' : null;
     plans.push({
       kind: 'post', action: 'hardPublish', label: 'Hard publish', endpoint: '/api/social-hub/actions/hard-publish',
       body: { vertical: post.vertical, ref: ref ?? null },
-      disabled: !ref ? (post.vertical === 'reels' ? 'No video yet.' : 'No content id.') : skipped ?? noContent ?? quotaLow,
+      disabled: !ref ? (post.vertical === 'reels' ? 'The video isn’t made yet.' : 'This content can’t be found any more.') : skipped ?? noContent ?? quotaLow,
       confirm: PUBLISH_CONFIRM[post.vertical],
     });
   }
 
+  if (post.vertical === 'carousels' || post.vertical === 'reels') {
+    // One-post reruns (D51 carousels: a queued rerun of the same story; D52 Trial Reels: today's video rebuilt).
+    const refs = post.vertical === 'carousels' ? { postId: post.refs.postId } : { postIdeaId: post.refs.postIdeaId };
+    plans.push({
+      kind: 'post', action: 'hardRegenerate', label: 'Hard regenerate', endpoint: '/api/social-hub/actions/hard-regenerate',
+      body: { vertical: post.vertical, refs },
+      disabled: Object.values(refs).some((v) => !v) ? 'The idea behind this can’t be found any more.' : post.status === 'published' ? 'Posted content isn’t rebuilt.' : null,
+      confirm: post.vertical === 'carousels'
+        ? `A new version is made from the same story, up to $2. It lands in Content ready; the current version stays in history and keeps any slot until you move or reject it.`
+        : `Today’s video for this idea is rebuilt: copy, frames and video. Typical cost ${ctx.typicalCostLabel ?? 'unknown'} a reel. It replaces the current one when it finishes.`,
+    });
+  }
   if (post.vertical === 'stories' || post.vertical === 'explainers') {
     const ref = post.vertical === 'stories' ? post.refs.setId : post.refs.topicId;
     plans.push({
       kind: 'post', action: 'hardRegenerate', label: 'Hard regenerate', endpoint: '/api/social-hub/actions/hard-regenerate',
       body: { vertical: post.vertical, ref: ref ?? null },
-      disabled: !ref ? 'No idea id.' : post.vertical === 'stories' && post.status === 'published' ? 'A posted Story set is not regenerated.' : null,
+      disabled: !ref ? 'The idea behind this can’t be found any more.' : post.vertical === 'stories' && post.status === 'published' ? 'A posted Story set isn’t rebuilt.' : null,
       confirm: post.vertical === 'stories'
-        ? `Rebuild this set now? Typical cost ${ctx.typicalCostLabel ?? 'unknown'} a set. The current set is rejected (kept in history) and a new one is requested for the same day.`
-        : `Render this topic again now? Typical cost ${ctx.typicalCostLabel ?? 'unknown'} a reel. The new render replaces the current version when it finishes (old kept in history). The daily render and spend caps still apply.`,
+        ? `A new set is built for the same day. Typical cost ${ctx.typicalCostLabel ?? 'unknown'} a set. The current set is set aside and kept in history.`
+        : `A new version is rendered. Typical cost ${ctx.typicalCostLabel ?? 'unknown'} a reel. It replaces the current one when it finishes, the old one stays in history, and the daily render and spend caps still apply.`,
     });
-  } else {
-    plans.push({ kind: 'link', label: 'Regenerate', href: info.href === '/social' ? '/social/house?tab=ideas' : info.href, note: `${info.label} has no one-post rerun; reruns start from its own page.` });
   }
   return plans;
+}
+
+/** The content a placement or rerun names (D50): the item each type schedules. */
+export function contentRefs(post: HubPost): Record<string, string | undefined> {
+  switch (post.vertical) {
+    case 'carousels':
+      return { postId: post.refs.postId };
+    case 'reels':
+      return { postIdeaId: post.refs.postIdeaId };
+    case 'explainers':
+      return { jobId: post.refs.jobId };
+    case 'stories':
+      return { setId: post.refs.setId };
+  }
 }
 
 // ── Quota (24 h) ─────────────────────────────────────────────────────────────

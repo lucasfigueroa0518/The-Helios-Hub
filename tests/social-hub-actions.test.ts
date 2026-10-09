@@ -16,6 +16,10 @@ import { hardRegenerate } from '@/app/api/social-hub/actions/hard-regenerate/han
 import { POST as hardRegeneratePOST } from '@/app/api/social-hub/actions/hard-regenerate/route';
 import { rejectContent } from '@/app/api/social-hub/actions/reject/handler';
 import { POST as rejectPOST } from '@/app/api/social-hub/actions/reject/route';
+import { placeContent } from '@/app/api/social-hub/actions/place/handler';
+import { POST as placePOST } from '@/app/api/social-hub/actions/place/route';
+import { rescheduleContent } from '@/app/api/social-hub/actions/reschedule/handler';
+import { POST as reschedulePOST } from '@/app/api/social-hub/actions/reschedule/route';
 import { carouselActions } from '@/lib/publishing/actions/carousels';
 import { explainerActions } from '@/lib/publishing/actions/explainers';
 import { reelActions } from '@/lib/publishing/actions/reels';
@@ -63,9 +67,14 @@ function spy<A extends unknown[], R>(result: R) {
  */
 function registry(o: {
   approveSchedule?: unknown; approvePost?: unknown; rejectPost?: unknown; hardPublishPost?: unknown;
+  carouselItemId?: unknown; requestRerun?: unknown;
   setVerdict?: unknown; hardPublishJob?: unknown; loadSettings?: unknown; requestRerender?: unknown;
+  explainerItemId?: unknown; verdictOf?: unknown;
   schedulePostIdea?: unknown; rejectReel?: unknown; forcePost?: unknown;
+  reelItemId?: unknown; todaySlate?: unknown; findReelLock?: unknown; requestFinish?: unknown;
   storyApprove?: unknown; storyReject?: unknown; storyPublishNow?: unknown; storyRegenerate?: unknown;
+  getSet?: unknown; slotOf?: unknown; plan?: unknown; rescheduleSet?: unknown;
+  placeItem?: unknown; rescheduleItem?: unknown;
 } = {}): () => Promise<Record<Vertical, ContentActions>> {
   const never = (name: string) => (async () => { throw new Error(`${name} must not be called`); }) as never;
   const pick = (v: unknown, name: string) => (v ?? never(name)) as never;
@@ -74,16 +83,27 @@ function registry(o: {
       query: async () => 'the-query' as never,
       approveSchedule: pick(o.approveSchedule, 'approveSchedule'), approvePost: pick(o.approvePost, 'approvePost'),
       rejectPost: pick(o.rejectPost, 'rejectPost'), hardPublishPost: pick(o.hardPublishPost, 'hardPublishPost'),
+      itemId: pick(o.carouselItemId, 'carouselItemId'), requestRerun: pick(o.requestRerun, 'requestRerun'),
+      placeItem: pick(o.placeItem, 'placeItem'), rescheduleItem: pick(o.rescheduleItem, 'rescheduleItem'),
     }),
     explainers: explainerActions({
       db: async () => 'explainers-db' as never,
       setVerdict: pick(o.setVerdict, 'setVerdict'), hardPublishJob: pick(o.hardPublishJob, 'hardPublishJob'),
       loadSettings: pick(o.loadSettings, 'loadSettings'), requestRerender: pick(o.requestRerender, 'requestRerender'),
+      itemId: pick(o.explainerItemId, 'explainerItemId'), verdictOf: pick(o.verdictOf, 'verdictOf'),
+      placeItem: pick(o.placeItem, 'placeItem'), rescheduleItem: pick(o.rescheduleItem, 'rescheduleItem'),
     }),
-    reels: reelActions({ schedulePostIdea: pick(o.schedulePostIdea, 'schedulePostIdea'), rejectReel: pick(o.rejectReel, 'rejectReel'), forcePost: pick(o.forcePost, 'forcePost') }),
+    reels: reelActions({
+      schedulePostIdea: pick(o.schedulePostIdea, 'schedulePostIdea'), rejectReel: pick(o.rejectReel, 'rejectReel'), forcePost: pick(o.forcePost, 'forcePost'),
+      query: 'reels-query' as never, itemId: pick(o.reelItemId, 'reelItemId'),
+      placeItem: pick(o.placeItem, 'placeItem'), rescheduleItem: pick(o.rescheduleItem, 'rescheduleItem'),
+      todaySlate: pick(o.todaySlate, 'todaySlate'), findReelLock: pick(o.findReelLock, 'findReelLock'), requestFinish: pick(o.requestFinish, 'requestFinish'),
+    }),
     stories: storyActions({
       approve: pick(o.storyApprove, 'approve'), reject: pick(o.storyReject, 'reject'),
       publishNow: pick(o.storyPublishNow, 'publishNow'), regenerate: pick(o.storyRegenerate, 'regenerate'),
+      query: 'stories-query' as never, getSet: pick(o.getSet, 'getSet'), slotOf: pick(o.slotOf, 'slotOf'),
+      plan: pick(o.plan, 'plan'), rescheduleSet: pick(o.rescheduleSet, 'rescheduleSet'),
     }),
   });
 }
@@ -103,10 +123,10 @@ test('with every flag off, each action spec answers 404 before reading the sessi
   }
 });
 
-test('the live action routes do nothing without their flag or a session', async () => {
-  for (const POST of [approveCarouselPOST, approveTrialReelPOST, hardPublishPOST, hardRegeneratePOST, rejectPOST]) {
-    assert.equal((await POST(req({ scheduleId: U }))).status, 404);
-  }
+test('the live action routes exist; their flag and session checks are covered by the specs below', () => {
+  // The flags are on now (Tommy, 2026-10-08), so a bare route call would reach the session read. Every flag-off
+  // and no-session path is exercised through actionRoute(spec, env) in the tests around this one.
+  for (const POST of [approveCarouselPOST, approveTrialReelPOST, hardPublishPOST, hardRegeneratePOST, rejectPOST]) assert.equal(typeof POST, 'function');
 });
 
 const on = (extra: Partial<ActionEnv> = {}): ActionEnv => ({ flags: ALL_ON, session: async () => ({ email: 'tommy@helios.test' }), ...extra });
@@ -162,7 +182,7 @@ test('hard publish: each type\'s own function with the right arguments', async (
   assert.equal((await POST(req({ vertical: 'nope', ref: U }))).status, 400);
 });
 
-test('hard regenerate: explainers requestRerender with loaded settings, refusals returned; stories regenerate; none for the others', async () => {
+test('hard regenerate: explainers requestRerender with loaded settings, refusals returned; stories regenerate; carousels and trial reels too (D51, D52)', async () => {
   const requestRerender = spy<[unknown, unknown], { ok: boolean; reason?: string }>({ ok: true });
   const loadSettings = spy<[unknown], unknown>({ daily_render_cap: 2 });
   const storyRegenerate = spy<[string, string], unknown>({});
@@ -171,7 +191,7 @@ test('hard regenerate: explainers requestRerender with loaded settings, refusals
   assert.equal((await POST(req({ vertical: 'stories', ref: V }))).status, 200);
   assert.deepEqual(requestRerender.calls, [['explainers-db', { topicId: U, settings: { daily_render_cap: 2 } }]]);
   assert.deepEqual(storyRegenerate.calls, [[V, 'tommy@helios.test']]);
-  for (const vertical of ['carousels', 'reels']) assert.equal((await POST(req({ vertical, ref: U }))).status, 400, vertical);
+  assert.equal((await POST(req({ vertical: 'nope', ref: U }))).status, 400);
   const capped = actionRoute(hardRegenerate(registry({ loadSettings: async () => ({}), requestRerender: async () => ({ ok: false, reason: 'daily_render_cap' }) })), on());
   const res = await capped(req({ vertical: 'explainers', ref: U }));
   assert.equal(res.status, 409, 'a cap refusal is a failure, never "queued"');
@@ -196,6 +216,140 @@ test('reject (D47): every type through its own function; the body names the type
   assert.deepEqual(storyReject.calls, [[V, 'tommy@helios.test']]);
   assert.equal((await POST(req({ vertical: 'carousels', refs: { scheduleId: U } }))).status, 400, 'a missing ref the verb needs is a 400');
   assert.equal((await POST(req({ vertical: 'carousels', refs: { postId: 'x' } }))).status, 400, 'every ref is a uuid');
+});
+
+// ── D50–D53: placement, carousel and Trial Reels regenerate, Explainers reject with tags ──
+
+/** Every flag on, plus the placement routes' `reschedule` (not in flags.ts yet; see content-action.ts). */
+const PLACE_ON: HubFlags = { views: SOCIAL_HUB_FLAGS.views, actions: { ...ALL_ON.actions, reschedule: true } as HubFlags['actions'] };
+const onPlace = (extra: Partial<ActionEnv> = {}): ActionEnv => ({ ...on(), flags: PLACE_ON, ...extra });
+
+test('place and reschedule: 404 while the reschedule flag is off (or not defined yet), before any session read', async () => {
+  for (const POST of [placePOST, reschedulePOST]) assert.equal(typeof POST, 'function');
+  const RESCHEDULE_OFF: HubFlags = { views: SOCIAL_HUB_FLAGS.views, actions: { ...ALL_ON.actions, reschedule: false } as HubFlags['actions'] };
+  for (const spec of [placeContent(async () => { throw new Error('never'); }), rescheduleContent(async () => { throw new Error('never'); })]) {
+    const NOT_DEFINED: HubFlags = { views: SOCIAL_HUB_FLAGS.views, actions: {} as HubFlags['actions'] };
+    for (const flags of [RESCHEDULE_OFF, NOT_DEFINED]) {
+      let sessionRead = false;
+      const POST = actionRoute(spec, { flags, session: async () => { sessionRead = true; return { email: 'x' }; } });
+      assert.equal((await POST(req({ vertical: 'carousels', refs: { postId: U }, nyDate: '2026-10-09', slot: 'morning' }))).status, 404);
+      assert.equal(sessionRead, false);
+    }
+  }
+});
+
+test('place: each type resolves its content, then the placement rules run with the day and slot', async () => {
+  const placeItem = spy<[unknown, Record<string, unknown>], unknown>({ ok: true, note: 'Scheduled for Fri Oct 9, 9:23 AM.', scheduleId: U, publishAt: '2026-10-09T13:23:00.000Z' });
+  const carouselItemId = spy<[unknown, string], string>('item-c');
+  const explainerItemId = spy<[unknown, string], string>('item-e');
+  const verdictOf = spy<[unknown, string], string | null>(null);
+  const reelItemId = spy<[string], string>('item-r');
+  const POST = actionRoute(placeContent(registry({ placeItem, carouselItemId, explainerItemId, verdictOf, reelItemId })), onPlace());
+  const ok = await POST(req({ vertical: 'carousels', refs: { postId: U }, nyDate: '2026-10-09', slot: 'morning' }));
+  assert.equal(ok.status, 200);
+  assert.match((await ok.json()).note, /^Scheduled for Fri Oct 9, 9:23 AM\.$/);
+  assert.equal((await POST(req({ vertical: 'explainers', refs: { jobId: V, topicId: U }, nyDate: '2026-10-09', slot: 'late' }))).status, 200);
+  assert.equal((await POST(req({ vertical: 'reels', refs: { postIdeaId: U, videoJobId: V }, nyDate: '2026-10-10', slot: 'evening' }))).status, 200);
+  assert.deepEqual(carouselItemId.calls, [['the-query', U]]);
+  assert.deepEqual(verdictOf.calls.map((c) => c[1]), [V]);
+  assert.deepEqual(reelItemId.calls, [[V]]);
+  assert.deepEqual(placeItem.calls.map(([q, input]) => [typeof q === 'function' ? 'explainers-spine' : q, input]), [
+    ['the-query', { vertical: 'carousels', itemId: 'item-c', nyDate: '2026-10-09', slot: 'morning' }],
+    ['explainers-spine', { vertical: 'explainers', itemId: 'item-e', nyDate: '2026-10-09', slot: 'late' }],
+    ['reels-query', { vertical: 'reels', itemId: 'item-r', ideaRef: U, nyDate: '2026-10-10', slot: 'evening' }],
+  ]);
+  // Bodies: the day must be a real YYYY-MM-DD, the slot a slot name, refs uuids.
+  for (const body of [
+    { vertical: 'carousels', refs: { postId: U }, nyDate: '2026-13-01', slot: 'morning' },
+    { vertical: 'carousels', refs: { postId: U }, nyDate: '2026-10-09' },
+    { vertical: 'carousels', refs: { postId: U }, nyDate: '2026-10-09', slot: 'DROP TABLE' },
+    { vertical: 'carousels', refs: { postId: 'x' }, nyDate: '2026-10-09', slot: 'morning' },
+    { vertical: 'carousels', refs: { postId: U } },
+  ]) assert.equal((await POST(req(body))).status, 400, JSON.stringify(body));
+  assert.equal(placeItem.calls.length, 3);
+  const refused = actionRoute(placeContent(registry({ carouselItemId, placeItem: async () => ({ ok: false, note: 'That slot is taken.' }) })), onPlace());
+  const r = await refused(req({ vertical: 'carousels', refs: { postId: U }, nyDate: '2026-10-09', slot: 'morning' }));
+  assert.equal(r.status, 409);
+  assert.equal((await r.json()).note, 'That slot is taken.');
+  const rejected = actionRoute(placeContent(registry({ verdictOf: async () => 'rejected' })), onPlace());
+  const rr = await rejected(req({ vertical: 'explainers', refs: { jobId: V }, nyDate: '2026-10-09', slot: 'late' }));
+  assert.equal(rr.status, 409, 'a review-page rejection wins before the spine is asked (D41)');
+});
+
+test('reschedule: each type moves through rescheduleItem; Stories through their own set', async () => {
+  const rescheduleItem = spy<[unknown, Record<string, unknown>], unknown>({ ok: true, note: 'Moved to Sat Oct 10, 2:41 PM.', scheduleId: U, publishAt: '2026-10-10T18:41:00.000Z' });
+  const carouselItemId = spy<[unknown, string], string>('item-c');
+  const getSet = spy<[string], unknown>({ set: { status: 'scheduled', series: 'morning_download', ny_date: '2026-10-09', publish_at: '2026-10-09T13:00:00Z' } });
+  const slotOf = spy<[string], unknown>({ id: V, publishAt: new Date('2026-10-09T13:00:00Z') });
+  const plan = spy<[unknown, Record<string, unknown>], unknown>({ ok: true, nyDate: '2026-10-10', slot: 'morning_download', publishAt: new Date('2026-10-10T13:12:00Z') });
+  const rescheduleSet = spy<[string, string, Date], unknown>({});
+  const POST = actionRoute(rescheduleContent(registry({ rescheduleItem, carouselItemId, getSet, slotOf, plan, rescheduleSet })), onPlace());
+  const moved = await POST(req({ vertical: 'carousels', refs: { postId: U, scheduleId: V }, nyDate: '2026-10-10', slot: 'afternoon' }));
+  assert.equal(moved.status, 200);
+  assert.equal((await moved.json()).note, 'Moved to Sat Oct 10, 2:41 PM.');
+  assert.deepEqual(rescheduleItem.calls, [['the-query', { vertical: 'carousels', itemId: 'item-c', nyDate: '2026-10-10', slot: 'afternoon' }]]);
+  const story = await POST(req({ vertical: 'stories', refs: { setId: U }, nyDate: '2026-10-10', slot: 'morning_download' }));
+  assert.equal(story.status, 200);
+  assert.equal((await story.json()).note, 'Moved to Sat Oct 10, 9:12 AM.');
+  assert.deepEqual(plan.calls, [['stories-query', { vertical: 'stories', nyDate: '2026-10-10', slot: 'morning_download', moving: { scheduleId: V, publishAt: new Date('2026-10-09T13:00:00Z') } }]]);
+  assert.deepEqual(rescheduleSet.calls, [[U, '2026-10-10', new Date('2026-10-10T13:12:00Z')]]);
+  const wrongSeries = await POST(req({ vertical: 'stories', refs: { setId: U }, nyDate: '2026-10-10', slot: 'free_vs_paid' }));
+  assert.equal(wrongSeries.status, 409);
+  assert.match((await wrongSeries.json()).note, /Morning Download set posts only in its own slot/);
+  const posting = actionRoute(rescheduleContent(registry({ getSet: async () => ({ set: { status: 'publishing', series: 'morning_download', ny_date: '2026-10-09', publish_at: null } }) })), onPlace());
+  const p = await posting(req({ vertical: 'stories', refs: { setId: U }, nyDate: '2026-10-10', slot: 'morning_download' }));
+  assert.equal(p.status, 409);
+  assert.match((await p.json()).note, /posting or has posted/);
+});
+
+test('hard regenerate for carousels queues a one-story rerun (D51); for Trial Reels it rebuilds today\'s video (D52)', async () => {
+  const requestRerun = spy<[unknown, string, string], unknown>({ queued: true, id: V });
+  const todaySlate = spy<[string], string | null>(V);
+  const findReelLock = spy<[string, string], unknown>(null);
+  const requestFinish = spy<[string, string], unknown>({ status: 'active', note: 'Generating: copy, then the frame, then the video.' });
+  const POST = actionRoute(hardRegenerate(registry({ requestRerun, todaySlate, findReelLock, requestFinish })), on());
+  const c = await POST(req({ vertical: 'carousels', ref: U }));
+  assert.equal(c.status, 200);
+  assert.match((await c.json()).note, /rerun of this story is queued/);
+  assert.deepEqual(requestRerun.calls, [['the-query', U, 'tommy@helios.test']]);
+  const r = await POST(req({ vertical: 'reels', refs: { postIdeaId: U, videoJobId: V } }));
+  assert.equal(r.status, 200);
+  assert.match((await r.json()).note, /Rebuilding today’s video/);
+  assert.deepEqual(todaySlate.calls, [[U]]);
+  assert.deepEqual(findReelLock.calls, [[V, U]]);
+  assert.deepEqual(requestFinish.calls, [[U, V]], 'requestFinish(idea, today’s slate)');
+
+  const locked = actionRoute(hardRegenerate(registry({ todaySlate: async () => V, findReelLock: async () => ({ nyDate: '2026-10-08', slot: 1 }), requestFinish: async () => { throw new Error('must not be called'); } })), on());
+  const l = await locked(req({ vertical: 'reels', ref: U }));
+  assert.equal(l.status, 409);
+  assert.equal((await l.json()).note, 'This reel is locked for 2026-10-08 and stays as it is.');
+  const notToday = actionRoute(hardRegenerate(registry({ todaySlate: async () => null })), on());
+  const n = await notToday(req({ vertical: 'reels', ref: U }));
+  assert.equal(n.status, 409);
+  assert.match((await n.json()).note, /isn’t on today’s slate/);
+  const queued = actionRoute(hardRegenerate(registry({ requestRerun: async () => ({ queued: false, note: 'A rerun of this story is already queued.' }) })), on());
+  const q = await queued(req({ vertical: 'carousels', ref: U }));
+  assert.equal(q.status, 409);
+  assert.equal((await q.json()).note, 'A rerun of this story is already queued.');
+});
+
+test('reject with a review (D53): tags from the Explainers vocabulary and a note reach setVerdict; anything else is a 400', async () => {
+  const setVerdict = spy<[unknown, string, string, string, unknown?], unknown>({});
+  const POST = actionRoute(rejectContent(registry({ setVerdict })), on());
+  assert.equal((await POST(req({ vertical: 'explainers', refs: { jobId: U }, tags: ['hook', 'pacing', 'hook'], note: 'Slow open.' }))).status, 200);
+  assert.equal((await POST(req({ vertical: 'explainers', refs: { jobId: U }, tags: [] }))).status, 200);
+  assert.deepEqual(setVerdict.calls, [
+    ['explainers-db', U, 'rejected', 'tommy@helios.test', { tags: ['hook', 'pacing'], note: 'Slow open.' }],
+    ['explainers-db', U, 'rejected', 'tommy@helios.test', { tags: [] }],
+  ]);
+  for (const body of [
+    { vertical: 'explainers', refs: { jobId: U }, tags: ['boring'] },
+    { vertical: 'explainers', refs: { jobId: U }, tags: 'hook' },
+    { vertical: 'explainers', refs: { jobId: U }, note: 'x'.repeat(501) },
+    { vertical: 'explainers', refs: { jobId: U }, note: 7 },
+  ]) assert.equal((await POST(req(body))).status, 400, JSON.stringify(body));
+  assert.equal((await POST(req({ vertical: 'explainers', refs: { jobId: U }, note: 'x'.repeat(500) }))).status, 200, '500 characters is fine');
+  assert.equal(setVerdict.calls.length, 3);
 });
 
 test('failure paths: pipeline refusals and thrown errors come back as failures, never as success', async () => {
@@ -258,12 +412,12 @@ test('actions per vertical: flagged posts where an existing function exists, lin
   const ctx = { quota: null, typicalCostLabel: '$3.00' };
   const carousel = find((p) => p.vertical === 'carousels' && p.status === 'scheduled' && !p.approval.approvedAt);
   const cPlans = actionsFor(carousel, ctx);
-  assert.deepEqual(cPlans.map((p) => p.kind === 'post' ? p.action : `link:${p.label}`), ['approveCarousel', 'reject', 'hardPublish', 'link:Regenerate']);
+  assert.deepEqual(cPlans.map((p) => p.kind === 'post' ? p.action : `link:${p.label}`), ['approveCarousel', 'reject', 'reschedule', 'hardPublish', 'hardRegenerate']);
   const cReject = cPlans[1] as Extract<(typeof cPlans)[number], { kind: 'post' }>;
   assert.deepEqual(cReject.body, { vertical: 'carousels', refs: { postId: carousel.refs.postId } }, 'Reject names the type and the content (D47)');
   const reel = find((p) => p.vertical === 'reels' && p.status === 'scheduled' && !p.approval.approvedAt);
   const rPlans = actionsFor(reel, ctx);
-  assert.deepEqual(rPlans.map((p) => p.kind === 'post' ? p.action : `link:${p.label}`), ['approveTrialReel', 'reject', 'hardPublish', 'link:Regenerate']);
+  assert.deepEqual(rPlans.map((p) => p.kind === 'post' ? p.action : `link:${p.label}`), ['approveTrialReel', 'reject', 'reschedule', 'hardPublish', 'hardRegenerate']);
   const rApprove = rPlans[0] as Extract<(typeof rPlans)[number], { kind: 'post' }>;
   assert.deepEqual(rApprove.body, { postIdeaId: reel.refs.postIdeaId, videoJobId: reel.refs.videoJobId ?? null });
   const readyExplainer = find((p) => p.vertical === 'explainers' && p.status === 'ready');

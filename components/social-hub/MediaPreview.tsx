@@ -2,19 +2,19 @@ import type { HubMedia } from '@/lib/social-hub/types';
 
 /**
  * Media preview (spec §6.1): video for reels, swipeable slides for
- * carousels, frames for Stories. Read-only: sources are the pipelines'
- * existing session routes; carousels show the slide outline (OUT_OF_SCOPE #3).
+ * carousels, frames for Stories. Sources are the pipelines' own routes;
+ * a carousel without rendered slides shows its outline.
  */
 export function MediaPreview({ media, title }: { media: HubMedia; title: string }) {
   if (media.kind === 'video') {
     return media.src ? (
       <video className="sh-media__video" controls playsInline preload="none" src={media.src} aria-label={`${title}, video`} />
     ) : (
-      <div className="sh-media__empty">Video not available here. Open it from the content type&apos;s own page.</div>
+      <div className="sh-media__empty sh-media__empty--compact">{media.poster ? <img src={media.poster} alt="" /> : null}<span>The video plays on its own page.</span></div>
     );
   }
   if (media.kind === 'frames') {
-    if (media.frames.length === 0) return <div className="sh-media__empty">No frames rendered yet.</div>;
+    if (media.frames.length === 0) return <div className="sh-media__empty sh-media__empty--compact">No frames made yet.</div>;
     return (
       <ol className="sh-media__strip sh-media__strip--frames" aria-label={`${title}, ${media.frames.length} frames`}>
         {media.frames.map((frame) => (
@@ -27,7 +27,7 @@ export function MediaPreview({ media, title }: { media: HubMedia; title: string 
     );
   }
   if (media.kind === 'slides') {
-    if (media.slides.length === 0) return <div className="sh-media__empty">No slides stored for this post.</div>;
+    if (media.slides.length === 0) return <div className="sh-media__empty sh-media__empty--compact">No slides stored for this post.</div>;
     return (
       <div>
         <ol className="sh-media__strip sh-media__strip--slides" aria-label={`${title}, ${media.slides.length} slides`}>
@@ -46,11 +46,9 @@ export function MediaPreview({ media, title }: { media: HubMedia; title: string 
             </li>
           ))}
         </ol>
-        {media.slides.some((s) => !s.src) ? (
-          <p className="sh-subtle">Slide outline from the stored post. The rendered slide images arrive with Phase 2.</p>
-        ) : null}
+        {media.slides.some((s) => !s.src) ? <p className="sh-subtle">Slide outline from the stored post.</p> : null}
       </div>
     );
   }
-  return <div className="sh-media__empty">{media.note}</div>;
+  return <div className="sh-media__empty sh-media__empty--compact">{media.note}</div>;
 }

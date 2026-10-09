@@ -129,7 +129,7 @@ test('IG Stories: a set is one post; completion and frame 1–3 exits match the 
   assert.equal(set.metrics.views, 257);
   assert.equal(set.history.length, 2, 'one snapshot per New York day');
   assert.equal(set.history[0]!.metrics.reach, 70);
-  assert.deepEqual(set.factorValues.origins, { kind: 'tags', values: [{ key: 'reels', label: 'Trial Reels' }], empty: 'No chosen items' });
+  assert.deepEqual(set.factorValues.origins, { kind: 'tags', values: [{ key: 'reels', label: 'Text on Screen' }], empty: 'No chosen items' });
 
   const ready = byId(d, hubId('stories', 'set', IDS.set2));
   assert.equal(ready.status, 'ready');

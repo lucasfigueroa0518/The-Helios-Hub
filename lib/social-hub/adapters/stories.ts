@@ -8,7 +8,7 @@ import { SERIES_LABEL } from '@/lib/stories/render/copy';
 const SERIES: Record<string, string> = SERIES_LABEL as Record<string, string>;
 const STYLE_LABEL: Record<string, string> = { polished: 'Polished', homemade: 'Homemade' };
 const BACKDROP_LABEL: Record<string, string> = { black: 'Black', white: 'White', orange: 'Orange', green: 'Green' };
-const ORIGIN_LABEL: Record<string, string> = { reels: 'Trial Reels', carousel: 'Carousel', catalog: 'Catalog', github: 'GitHub', generated: 'Generated' };
+const ORIGIN_LABEL: Record<string, string> = { reels: 'Text on Screen', carousel: 'Carousel', catalog: 'Catalog', github: 'GitHub', generated: 'Generated' };
 const STORY_TAG_LABEL: Record<string, string> = { story_choice: 'Story choice', copy: 'Copy', photo: 'Photo', design: 'Design', accuracy: 'Accuracy' };
 
 const STATUS: Record<string, HubStatus> = {

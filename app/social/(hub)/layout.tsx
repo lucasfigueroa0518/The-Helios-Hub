@@ -1,16 +1,25 @@
-import type { ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
 
-import { HubTabs } from '@/components/social-hub/HubTabs';
+import { HubNavProvider } from '@/components/social-hub/nav/HubNav';
+import { HubTabs } from '@/components/social-hub/nav/HubTabs';
 
 import '../../social-hub.css';
-import './hub-sections.css';
+import './hub-content.css';
+import './hub-analytics.css';
+import './hub-post.css';
+import './hub-calendar.css';
 
-/** Social Hub shell (spec §3). Route group, so `/social/render` stays outside it (SH-57). */
-export default function SocialHubLayout({ children }: { children: ReactNode }) {
+/** Social Hub shell: three places (Content · Calendar · Analytics), pending-aware navigation. Route group, so `/social/render` stays outside it (SH-57). */
+export default function SocialHubLayout({ children, drawer }: { children: ReactNode; drawer: ReactNode }) {
   return (
     <div className="sh">
-      <HubTabs />
-      <div className="sh__inner">{children}</div>
+      <Suspense fallback={<div className="sh-hubbar" />}>
+        <HubTabs />
+      </Suspense>
+      <Suspense>
+        <HubNavProvider>{children}</HubNavProvider>
+      </Suspense>
+      {drawer}
     </div>
   );
 }

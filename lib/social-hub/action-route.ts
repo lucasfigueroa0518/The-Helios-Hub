@@ -1,3 +1,5 @@
+import { revalidateTag } from 'next/cache';
+
 import { actionEnabled, SOCIAL_HUB_FLAGS, type ActionFlag, type HubFlags } from '@/lib/social-hub/flags';
 import { getSession } from '@/lib/session';
 
@@ -43,10 +45,20 @@ export function actionRoute<B>(spec: ActionSpec<B>, env: ActionEnv = {}): (req: 
     if (!body) return Response.json({ ok: false, note: 'Bad request' }, { status: 400 });
     try {
       const result = await spec.run(body, { email: session.email });
+      if (result.ok) refreshHubData();
       return Response.json(result, { status: result.status ?? (result.ok ? 200 : 409) });
     } catch (error) {
       const status = typeof (error as { status?: unknown })?.status === 'number' ? (error as { status: number }).status : 500;
       return Response.json({ ok: false, note: error instanceof Error ? error.message : String(error) }, { status });
     }
   };
+}
+
+/** The hub's shared read is cached for a minute (views/cached-dataset.ts); an action makes it stale at once. */
+function refreshHubData(): void {
+  try {
+    revalidateTag('social-hub:data');
+  } catch {
+    // Outside a Next request (tests) there is no cache to revalidate.
+  }
 }

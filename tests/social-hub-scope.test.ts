@@ -259,11 +259,13 @@ test('the action buttons are a client component that only posts to flagged actio
  * state; changing a flag means changing it here too, on purpose.
  */
 const INTENDED: Record<(typeof ACTION_FLAGS)[number], boolean> = {
-  approveCarousel: false,
-  approveTrialReel: false,
-  hardPublish: false,
-  hardRegenerate: false,
-  reject: false,
+  approveCarousel: true,
+  approveTrialReel: true,
+  approveContent: true,
+  hardPublish: true,
+  hardRegenerate: true,
+  reject: true,
+  reschedule: true,
   refreshOnVisit: false,
 };
 

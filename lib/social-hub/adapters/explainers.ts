@@ -215,6 +215,6 @@ export function explainerIdeas(rows: readonly ExplainerTopicRow[]): HubIdea[] {
     versionCount: row.ok_jobs,
     generatedAt: iso(row.last_render_at),
     createdAt: iso(row.created_at),
-    detail: [ORIGIN_LABEL[row.origin] ?? row.origin, `status ${row.status}`, text(row.scope)].filter(Boolean).join(' · '),
+    detail: [ORIGIN_LABEL[row.origin] ?? row.origin, text(row.scope)].filter(Boolean).join(' · '),
   }));
 }
