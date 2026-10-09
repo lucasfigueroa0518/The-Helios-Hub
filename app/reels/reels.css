@@ -197,7 +197,15 @@
 
 /* ---------- top three */
 
-.rh-top { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
+.rh-top {
+  display: flex;
+  gap: 28px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  padding-bottom: 8px;
+}
+.rh-top > .rh-reel { flex: 0 0 calc((100% - 56px) / 3); min-width: 220px; scroll-snap-align: start; }
 
 .rh-reel { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .rh-reel__media {

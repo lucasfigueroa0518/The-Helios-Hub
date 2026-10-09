@@ -163,7 +163,7 @@
 .sh-settings label { display: flex; align-items: center; gap: 8px; font-size: var(--sh-fs-body, 14px); }
 
 /* ── Today strip: a free-floating row of today's posts, every type ── */
-.sh-strip { display: flex; gap: 12px; overflow-x: auto; padding: 2px 2px 10px; scroll-snap-type: x proximity; }
+.sh-strip { display: flex; flex-wrap: nowrap; gap: 12px; overflow-x: auto; padding: 2px 2px 10px; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; }
 .sh-strip__card { flex: none; width: 168px; scroll-snap-align: start; display: flex; flex-direction: column; gap: 8px; padding: 10px; text-decoration: none; color: inherit; }
 .sh-strip__card:hover { border-color: var(--color-border-strong); }
 .sh-strip__art { aspect-ratio: 4 / 5; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: var(--color-surface-sunken, rgba(0, 0, 0, 0.04)); }
