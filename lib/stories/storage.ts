@@ -6,6 +6,8 @@
  * with normal TLS verification.
  */
 
+import { serviceHeaders } from '@/lib/supabase-service-headers';
+
 export const STORIES_BUCKET = 'stories';
 
 export type StorageConfig = { baseUrl: string; serviceRole: string; fetch?: typeof fetch; sleep?: (ms: number) => Promise<void> };
@@ -50,7 +52,7 @@ export function createStoriesStorage(cfg: StorageConfig = liveStorageConfig()): 
   const call = (method: string, pathname: string, body?: Buffer | string, headers: Record<string, string> = {}) =>
     doFetch(new URL(pathname, cfg.baseUrl), {
       method,
-      headers: { apikey: cfg.serviceRole, authorization: `Bearer ${cfg.serviceRole}`, ...headers },
+      headers: { ...serviceHeaders(cfg.serviceRole), ...headers },
       body: body as BodyInit | undefined,
       signal: AbortSignal.timeout(60_000),
     });

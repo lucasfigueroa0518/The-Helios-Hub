@@ -1,3 +1,4 @@
+import { serviceHeaders } from '@/lib/supabase-service-headers';
 import https from 'node:https';
 
 export const UPLOAD_BUCKET = 'outreach-uploads';
@@ -22,8 +23,7 @@ function storageRequest<T>(method: string, pathname: string, body?: unknown): Pr
       {
         method,
         headers: {
-          apikey: serviceRole,
-          authorization: `Bearer ${serviceRole}`,
+          ...serviceHeaders(serviceRole),
           ...(encoded ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(encoded) } : {}),
         },
       },
@@ -67,7 +67,7 @@ export async function downloadStoredObject(path: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const request = https.request(url, {
       method: 'GET',
-      headers: { apikey: serviceRole, authorization: `Bearer ${serviceRole}` },
+      headers: serviceHeaders(serviceRole),
     }, (response) => {
       const chunks: Buffer[] = [];
       response.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -114,8 +114,7 @@ export async function uploadStoredObject(
       {
         method: 'POST',
         headers: {
-          apikey: serviceRole,
-          authorization: `Bearer ${serviceRole}`,
+          ...serviceHeaders(serviceRole),
           'content-type': contentType,
           'content-length': body.byteLength,
           'x-upsert': 'true',
