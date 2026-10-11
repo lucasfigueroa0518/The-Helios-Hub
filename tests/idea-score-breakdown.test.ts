@@ -158,3 +158,17 @@ test('Carousels breakdown: the three score questions add up to the judge score; 
   assert.match(b.note!, /passed \(2 of 3\).*outlets \(3\)/);
   assert.equal(carouselBreakdown({ ...row, answers: null }), null);
 });
+
+test('Carousels breakdown (story-scoring@3): engagement, sourcing and coverage add up to the run\'s score; three gates add nothing', () => {
+  const answers = { big_news: 0.8, surprise: 0.6, everyday_stakes: 0.5, tension_people: 0.7, sourcing: 0.9, ai_main_subject: 0.95, substance: 0.8, news_event: 0.9 };
+  const coverage = 0.5 * Math.min(1, Math.log2(1 + 4) / Math.log2(17));
+  const score = 0.8 + 0.6 + 0.5 + 0.7 + 0.9 + coverage;
+  const row = {
+    story_id: 's', title: 't', url: null, score: String(score), outlet_count: 4, run_started_at: null, post_count: 0, last_post_at: null, published: false, scheduled: false,
+    answers, passes: 4,
+  } satisfies CarouselIdeaRow;
+  const b = carouselBreakdown(row)!;
+  assert.equal(Number(sum(b.parts).toFixed(2)), Number(score.toFixed(2)));
+  assert.equal(b.parts.filter((p) => p.points == null).length, 3, 'gates add nothing');
+  assert.match(b.note!, /at most two stories per company/);
+});

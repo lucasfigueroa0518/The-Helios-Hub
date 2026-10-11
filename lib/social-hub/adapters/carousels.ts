@@ -241,29 +241,50 @@ export function carouselPosts(read: CarouselsRead): HubPost[] {
   return foldLifecycle('carousels', posts);
 }
 
-const SCORE_QUESTIONS: Array<[string, string]> = [['why_it_matters', 'Why it matters is clear'], ['sourcing', 'Primary or multi-outlet source'], ['photographable_subject', 'Named person, company or product']];
-const GATE_QUESTIONS: Array<[string, string]> = [['ai_main_subject', 'AI is the main subject'], ['substance', 'Enough for 5–8 slides']];
+const GATE_QUESTIONS: Array<[string, string]> = [['ai_main_subject', 'AI is the main subject'], ['substance', 'Enough for 5–8 slides'], ['news_event', 'A specific new event']];
 
 /**
- * story-scoring@2 THRESHOLDS, copied (not imported: the question module pulls
- * in the Jev client, and hub read code reaches no network module).
+ * story-scoring@3 and @2 constants, copied (not imported: the question modules
+ * pull in the Jev SDK, and hub read code reaches no network module).
  */
+const V3 = {
+  questions: [['big_news', 'Big news'], ['surprise', 'Surprising'], ['everyday_stakes', 'Stakes for everyday people'], ['tension_people', 'A real fight (conflict, firing, lawsuit)'], ['sourcing', 'Primary or multi-outlet source']] as Array<[string, string]>,
+  coverageFullAt: 16,
+  coverageWeight: 0.5,
+  max: 5.5,
+};
+const V2_QUESTIONS: Array<[string, string]> = [['why_it_matters', 'Why it matters is clear'], ['sourcing', 'Primary or multi-outlet source'], ['photographable_subject', 'Named person, company or product']];
 const SCORING_BARS = { REQUIRED_MIN: 0.6, BONUS_MIN: 0.5 } as const;
 
-/** story-scoring@2 (lib/social/ingest/select/score.ts): the three score questions add up; the run ranks by passes, then outlets, then that sum. */
+const isV3 = (answers: Record<string, number>) => answers.big_news != null;
+
+/** The run's score for an idea: story-scoring@3 (engagement, 0–5.5) or, for older runs, @2 (0–3). */
 export function carouselBreakdown(row: CarouselIdeaRow): ScoreBreakdown | null {
   const a = row.answers;
   if (!a) return null;
   const t = SCORING_BARS;
-  const parts: ScorePart[] = [
-    ...SCORE_QUESTIONS.map(([id, label]) => ({ label, points: a[id] == null ? null : Number(a[id]!.toFixed(2)), detail: a[id] == null ? 'Not asked' : a[id]! >= t.BONUS_MIN ? 'passes' : `below ${t.BONUS_MIN.toFixed(2)}` })),
-    ...GATE_QUESTIONS.map(([id, label]) => ({ label: `Gate: ${label}`, points: null, detail: a[id] == null ? 'Not asked' : `${a[id]!.toFixed(2)} (needs ${t.REQUIRED_MIN.toFixed(2)})` })),
-  ];
   const outlets = row.outlet_count ?? 0;
+  const gates = GATE_QUESTIONS.map(([id, label]) => ({ label: `Gate: ${label}`, points: null, detail: a[id] == null ? 'Not asked' : `${a[id]!.toFixed(2)} (needs ${t.REQUIRED_MIN.toFixed(2)})` }));
+  if (isV3(a)) {
+    const coverage = Math.min(1, Math.log2(1 + outlets) / Math.log2(1 + V3.coverageFullAt)) * V3.coverageWeight;
+    return {
+      formula: 'Four engagement answers plus sourcing (yes-probabilities, 0 to 1 each), plus up to 0.5 for how many outlets report it.',
+      parts: [
+        ...V3.questions.map(([id, label]) => ({ label, points: a[id] == null ? null : Number(a[id]!.toFixed(2)), detail: a[id] == null ? 'Not asked' : a[id]! >= t.BONUS_MIN ? 'yes' : 'no' })),
+        { label: `Coverage (${outlets} outlet${outlets === 1 ? '' : 's'})`, points: Number(coverage.toFixed(2)), detail: `full ${V3.coverageWeight} at ${V3.coverageFullAt}+ outlets` },
+        ...gates,
+      ],
+      note: `The 3:00 AM run ranks by this score (out of ${V3.max}), keeps at most two stories per company in the top 10, and folds duplicate stories together.`,
+    };
+  }
   return {
-    formula: 'Sum of three judge answers (yes-probabilities, 0 to 1 each).',
-    parts,
-    note: `The 3:00 AM run ranks by questions passed (${row.passes ?? 0} of 3), then outlets (${outlets}), and uses this sum only to break ties.`,
+    formula: 'Sum of three judge answers (yes-probabilities, 0 to 1 each). An older run (story-scoring@2).',
+    parts: [
+      ...V2_QUESTIONS.map(([id, label]) => ({ label, points: a[id] == null ? null : Number(a[id]!.toFixed(2)), detail: a[id] == null ? 'Not asked' : a[id]! >= t.BONUS_MIN ? 'passes' : `below ${t.BONUS_MIN.toFixed(2)}` })),
+      // @2 had no news-event gate.
+      ...gates.filter((g) => !g.label.endsWith('A specific new event')),
+    ],
+    note: `That run ranked by questions passed (${row.passes ?? 0} of 3), then outlets (${outlets}), and used this sum only to break ties.`,
   };
 }
 
@@ -275,7 +296,7 @@ export function carouselIdeas(rows: readonly CarouselIdeaRow[]): HubIdea[] {
       vertical: 'carousels' as const,
       title: text(row.title) ?? row.story_id,
       score: num(row.score),
-      scoreLabel: 'Judge score (0–3)',
+      scoreLabel: row.answers && isV3(row.answers) ? 'Engagement score (0–5.5)' : 'Judge score (0–3)',
       breakdown: carouselBreakdown(row),
       state: row.published ? 'published' : row.scheduled ? 'on_deck' : row.post_count > 0 ? 'content_ready' : 'idea_only',
       hasContent: row.post_count > 0,

@@ -3,7 +3,9 @@
  *
  *   freshness window → code filters → group duplicates (Jev same-event)
  *   → thin-body fetch → Jev scoring (1 call per candidate) → rank
- *   → shortlist ≤ 10 → 2 winners (different stories) → backups in order
+ *   → fold same-event duplicates among the top (dedupe.ts) → spread the top
+ *     10 across companies → shortlist ≤ 25 (the hub's idea pool)
+ *   → 2 winners (different stories) → backups in order
  *
  * If fewer than 2 qualify, the window widens to 48h and everything after
  * the window is redone once.
@@ -18,7 +20,8 @@ import { enrichThinBodies, topUpReadSources } from './enrich';
 import { buildFeedHealth, type FeedHealthEntry } from './feed-health';
 import { groupArticles } from './group';
 import type { PostedStories } from './posted';
-import { pickWinners, rankQualified, WINNERS } from './rank';
+import { mergeSameEvent } from './dedupe';
+import { pickWinners, rankQualified, spreadByCompany, WINNERS } from './rank';
 import { scoreGroups } from './score';
 import type { IngestArticle, ScoredGroup, SkipEntry } from './types';
 import { inWindow, windowHours } from './window';
@@ -44,6 +47,8 @@ export type Selection = {
   winners: ScoredGroup[];
   backups: ScoredGroup[];
   sameTopicAsFirst: string[];
+  /** Same-event duplicates folded into a higher-ranked story (dedupe.ts). */
+  merged: Array<{ kept: string; dropped: string }>;
   jevCalls: number;
   jevInputTokens: number;
   costUsd: number;
@@ -73,7 +78,8 @@ export async function selectStories(input: SelectInput): Promise<Selection> {
     pass = await run(true);
   }
 
-  const picks = await pickWinners(pass.ranked, jev);
+  const deduped = await mergeSameEvent(pass.ranked, jev);
+  const picks = await pickWinners(spreadByCompany(deduped.ranked), jev);
   // Shortlist only: read more members so the Reporter gets up to 4 starting sources.
   const topped = new Map(
     (await mapPool(picks.shortlist, 4, (g) => topUpReadSources(g, input.fetchBody))).map((g) => [g.id, g as ScoredGroup]),
@@ -89,6 +95,7 @@ export async function selectStories(input: SelectInput): Promise<Selection> {
     scored: pass.scored,
     skipped: pass.skipped,
     ...picks,
+    merged: deduped.merged,
     jevCalls: tally.calls,
     jevInputTokens: tally.inputTokens,
     costUsd: tally.costUsd,

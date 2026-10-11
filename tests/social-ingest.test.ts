@@ -13,7 +13,7 @@ import {
 import { createJevAsk, jevCostUsd, type JevAsk } from '@/lib/social/jev/client';
 import * as DifferentStory from '@/lib/social/jev/questions/different-story.v1';
 import * as SameEvent from '@/lib/social/jev/questions/same-event.v1';
-import * as Scoring from '@/lib/social/jev/questions/story-scoring.v2';
+import * as Scoring from '@/lib/social/jev/questions/story-scoring.v3';
 import { createStubJev } from '@/lib/social/jev/stub';
 import { applyCodeFilters } from '@/lib/social/ingest/select/code-filters';
 import { enrichGroup, startingSources, THIN_BODY_CHARS, topUpReadSources, type FetchBody } from '@/lib/social/ingest/select/enrich';
@@ -21,7 +21,9 @@ import { createInMemoryFeedHealthLog } from '@/lib/social/ingest/select/feed-hea
 import { buildGroup, groupArticles } from '@/lib/social/ingest/select/group';
 import { outletKey, outletName } from '@/lib/social/ingest/select/outlets';
 import { createInMemoryPosted } from '@/lib/social/ingest/select/posted';
-import { compareScored, SHORTLIST_MAX } from '@/lib/social/ingest/select/rank';
+import { companyKey } from '@/lib/social/ingest/select/companies';
+import { mergeSameEvent } from '@/lib/social/ingest/select/dedupe';
+import { compareScored, SHORTLIST_MAX, spreadByCompany } from '@/lib/social/ingest/select/rank';
 import { judge } from '@/lib/social/ingest/select/score';
 import { selectStories } from '@/lib/social/ingest/select/select';
 import type { ScoredGroup, StoryGroup } from '@/lib/social/ingest/select/types';
@@ -189,7 +191,7 @@ const group = (over: Partial<StoryGroup> = {}): StoryGroup => ({
 });
 
 test('scoring: skip list, already posted, and the required questions', () => {
-  const base = { ai_main_subject: 0.9, substance: 0.9, why_it_matters: 0.9, sourcing: 0.9, photographable_subject: 0.9 };
+  const base = { ai_main_subject: 0.9, substance: 0.9, news_event: 0.9, big_news: 0.9, surprise: 0.9, everyday_stakes: 0.9, tension_people: 0.9, sourcing: 0.9 };
   assert.equal(Scoring.THRESHOLDS.SKIP_MIN, 0.5);
   assert.equal(judge(group(), { ...base, skip_crime_violence: 0.5 }).status, 'skipped');
   assert.equal(judge(group(), { ...base, skip_crime_violence: 0.49 }).status, 'qualified');
@@ -197,16 +199,22 @@ test('scoring: skip list, already posted, and the required questions', () => {
   const nq = judge(group(), { ...base, substance: 0.5 });
   assert.equal(nq.status, 'not-qualified');
   assert.match(nq.reason!, /substance/);
-  const scored = judge(group(), { ...base, sourcing: 0.4 });
-  assert.equal(scored.passes, 2);
-  assert.ok(Math.abs(scored.probSum - 2.2) < 1e-9);
+  // The score: four engagement answers + sourcing + coverage (1 outlet: half a point times log2(2)/log2(17)).
+  const scored = judge(group(), { ...base, surprise: 0.4, sourcing: 0.5 });
+  assert.equal(scored.passes, 3, 'three of the four engagement questions pass');
+  const coverage = 0.5 * (Math.log2(2) / Math.log2(17));
+  assert.ok(Math.abs(scored.probSum - (0.9 * 3 + 0.4 + 0.5 + coverage)) < 1e-9);
+  // More outlets reporting it raise the score, up to half a point at 16.
+  assert.ok(judge(group({ outletCount: 16 }), base).probSum - judge(group({ outletCount: 1 }), base).probSum > 0.3);
+  assert.ok(Math.abs(Scoring.engagementScore(base, 400) - (0.9 * 5 + 0.5)) < 1e-9, 'coverage is capped');
 });
 
 test('scoring: the already-posted question is only asked when something was posted', () => {
   assert.ok(!(Scoring.POSTED_ID in Scoring.buildQuestions([])));
   assert.ok(Scoring.POSTED_ID in Scoring.buildQuestions(['x']));
-  assert.equal(Object.keys(Scoring.buildQuestions(['x'])).length, 10);
-  assert.ok(!('number_or_quote' in Scoring.buildQuestions(['x'])));
+  assert.equal(Object.keys(Scoring.buildQuestions(['x'])).length, 13);
+  assert.equal(judge(group(), { ai_main_subject: 0.9, substance: 0.9, news_event: 0.3 }).reason, 'required: news_event', 'not news (a timeline, an op-ed) does not qualify');
+  assert.ok(!('photographable_subject' in Scoring.buildQuestions(['x'])), 'naming a company no longer scores');
 });
 
 // ── Ranking ────────────────────────────────────────────────────────────
@@ -216,14 +224,61 @@ const scored = (id: string, passes: number, outletCount: number, probSum: number
   answers: {}, status: 'qualified', passes, probSum,
 });
 
-test('ranking: passes beat probability sum; equal passes tie-break by outlets, then sum, then newest', () => {
+test('ranking: the engagement score first, then outlets, then newest', () => {
   const list = [
-    scored('sum-high', 3, 1, 3.9),
-    scored('passes-4', 4, 1, 2.1),
-    scored('outlets-3', 3, 3, 1.6),
-    scored('same-older', 3, 1, 3.9, 5),
+    scored('score-mid', 3, 1, 3.0),
+    scored('score-high', 1, 1, 4.1),
+    scored('tie-more-outlets', 3, 5, 3.0),
+    scored('tie-older', 3, 1, 3.0, 5),
   ].sort(compareScored);
-  assert.deepEqual(list.map((g) => g.id), ['passes-4', 'outlets-3', 'sum-high', 'same-older']);
+  assert.deepEqual(list.map((g) => g.id), ['score-high', 'tie-more-outlets', 'score-mid', 'tie-older']);
+});
+
+const about = (id: string, headline: string, probSum: number): ScoredGroup => ({
+  ...scored(id, 3, 1, probSum),
+  representative: { ...A1, headline, sourceUrl: id },
+});
+
+test('companies: a story maps to the first company it names; products map to their maker', () => {
+  assert.equal(companyKey('Anthropic bans cruelty toward Claude'), 'anthropic');
+  assert.equal(companyKey('Like bullying AI? Claude will give you the cold shoulder'), 'anthropic');
+  assert.equal(companyKey('Satya Nadella says assume all AI models are compromised'), 'microsoft');
+  assert.equal(companyKey('Google Gemini agent rivals OpenAI'), 'google');
+  assert.equal(companyKey('Senator pushes for AI safety guardrails'), null);
+});
+
+test('spread: the top 10 hold at most 2 stories about one company; the rest wait just below, in order, none dropped', () => {
+  const ranked = [
+    about('a1', 'Anthropic story one', 5), about('a2', 'Claude story two', 4.9), about('a3', 'Anthropic story three', 4.8),
+    about('o1', 'OpenAI story', 4.7), about('n1', 'Senate passes AI bill', 4.6), about('a4', 'Anthropic story four', 4.5),
+    ...Array.from({ length: 8 }, (_, i) => about(`x${i}`, `Startup number ${i} raises money`, 4 - i * 0.1)),
+  ];
+  const out = spreadByCompany(ranked).map((g) => g.id);
+  assert.deepEqual(out.slice(0, 4), ['a1', 'a2', 'o1', 'n1']);
+  assert.equal(out.slice(0, 10).filter((id) => id.startsWith('a')).length, 2);
+  assert.deepEqual(out.slice(10, 12), ['a3', 'a4'], 'held stories come right after the top 10, in their order');
+  assert.equal(out.length, ranked.length);
+});
+
+test('dedupe: the same event worded differently folds into the higher-ranked story, which gains its outlets', async () => {
+  const top = { ...about('top', 'Anthropic is banning cruel behavior toward Claude', 4.5), outlets: ['Wired', 'The Verge'], outletCount: 2 };
+  const dupe = { ...about('dupe', 'Like bullying AI? Claude will now give you the cold shoulder', 4.2), outlets: ['PCMag'], outletCount: 1 };
+  const other = about('other', 'Anthropic cuts live internet from internal tests', 4.0);
+  const asked: string[] = [];
+  const jev: JevAsk = async (req, meta) => {
+    asked.push(meta.subjectId);
+    const st = req.state as { article: { headline: string }; neighbours: Array<{ headline: string }> };
+    const answers: Record<string, { noul: number }> = {};
+    st.neighbours.forEach((n, k) => {
+      answers[SameEvent.neighbourId(k)] = { noul: /cold shoulder/.test(st.article.headline) && /cruel/.test(n.headline) ? 0.9 : 0.1 };
+    });
+    return { answers, usage: { input_tokens: 1, output_tokens: 0 }, model: 'stub' };
+  };
+  const { ranked, merged } = await mergeSameEvent([top, dupe, other, about('n', 'Senate passes AI bill', 3)], jev);
+  assert.deepEqual(ranked.map((g) => g.id), ['top', 'other', 'n']);
+  assert.deepEqual(merged, [{ kept: 'top', dropped: 'dupe' }]);
+  assert.equal(ranked[0]!.outletCount, 3, 'coverage counts the folded outlets');
+  assert.deepEqual(asked.sort(), ['dupe', 'other'], 'only stories with a same-company story above are asked; one call each');
 });
 
 // ── Full selection on the fixture day ──────────────────────────────────
@@ -243,7 +298,7 @@ test('selection: winners, backups in order, skips logged, one scoring call per g
   assert.equal(calls[DifferentStory.VERSION]!.length, 1);
   assert.ok(calls[SameEvent.VERSION]!.length > 0);
 
-  // Rank: X (3 passes, 3 outlets) > K (3, 1) > C (2 passes, 2 outlets) > B (2, 1, higher sum).
+  // Rank by engagement score: X (≈3.35) > K (≈3.12) > C (≈2.79) > B (≈2.52).
   assert.deepEqual(s.shortlist.map((g) => g.id), [A1.sourceUrl, K1.sourceUrl, C1.sourceUrl, B1.sourceUrl]);
   // K is OpenAI/GPT-6 like X, so it is passed over for #2 and stays first backup.
   assert.deepEqual(s.winners.map((g) => g.id), [A1.sourceUrl, C1.sourceUrl]);
