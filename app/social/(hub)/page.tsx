@@ -8,6 +8,7 @@ import { SOCIAL_HUB_FLAGS } from '@/lib/social-hub/flags';
 import { HUB_BASE, toParams, type RawSearchParams } from '@/lib/social-hub/links';
 import { loadForPage } from '@/lib/social-hub/live';
 import { legacyRootRedirect } from '@/lib/social-hub/views/legacy-routes';
+import { LOOK_PARAM } from '@/lib/social-hub/views/look-ahead';
 import { loadLibraries } from '@/lib/social-hub/views/libraries';
 import { readAllProgress } from '@/lib/content-type/progress';
 import { getSession } from '@/lib/session';
@@ -18,7 +19,8 @@ export const metadata = { title: 'Today · Social Hub', robots: { index: false, 
 
 export default async function Page({ searchParams }: { searchParams: Promise<RawSearchParams> }) {
   if (!SOCIAL_HUB_FLAGS.views.house) notFound();
-  const legacy = legacyRootRedirect(HUB_BASE, toParams(await searchParams));
+  const params = toParams(await searchParams);
+  const legacy = legacyRootRedirect(HUB_BASE, params);
   if (legacy) redirect(legacy);
   const session = await getSession();
   if (!session) redirect('/');
@@ -27,7 +29,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Raw
   return (
     <>
       <RefreshNote refresh={loaded.refresh} />
-      <ContentScreen dataset={loaded} base={HUB_BASE} now={new Date()} libraries={libraries} progress={progress} />
+      <ContentScreen dataset={loaded} base={HUB_BASE} now={new Date()} libraries={libraries} progress={progress} look={params[LOOK_PARAM]} />
     </>
   );
 }
