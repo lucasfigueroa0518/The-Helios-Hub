@@ -75,6 +75,7 @@ function registry(o: {
   storyApprove?: unknown; storyReject?: unknown; storyPublishNow?: unknown; storyRegenerate?: unknown;
   getSet?: unknown; slotOf?: unknown; plan?: unknown; rescheduleSet?: unknown;
   placeItem?: unknown; rescheduleItem?: unknown;
+  unschedulePost?: unknown; unscheduleJob?: unknown; unscheduleIdea?: unknown; unscheduleSet?: unknown;
 } = {}): () => Promise<Record<Vertical, ContentActions>> {
   const never = (name: string) => (async () => { throw new Error(`${name} must not be called`); }) as never;
   const pick = (v: unknown, name: string) => (v ?? never(name)) as never;
@@ -83,19 +84,19 @@ function registry(o: {
       query: async () => 'the-query' as never,
       approveSchedule: pick(o.approveSchedule, 'approveSchedule'), approvePost: pick(o.approvePost, 'approvePost'),
       rejectPost: pick(o.rejectPost, 'rejectPost'), hardPublishPost: pick(o.hardPublishPost, 'hardPublishPost'),
-      itemId: pick(o.carouselItemId, 'carouselItemId'), requestRerun: pick(o.requestRerun, 'requestRerun'),
+      itemId: pick(o.carouselItemId, 'carouselItemId'), requestRerun: pick(o.requestRerun, 'requestRerun'), unschedulePost: pick(o.unschedulePost, 'unschedulePost'),
       placeItem: pick(o.placeItem, 'placeItem'), rescheduleItem: pick(o.rescheduleItem, 'rescheduleItem'),
     }),
     explainers: explainerActions({
       db: async () => 'explainers-db' as never,
       setVerdict: pick(o.setVerdict, 'setVerdict'), hardPublishJob: pick(o.hardPublishJob, 'hardPublishJob'),
       loadSettings: pick(o.loadSettings, 'loadSettings'), requestRerender: pick(o.requestRerender, 'requestRerender'),
-      itemId: pick(o.explainerItemId, 'explainerItemId'), verdictOf: pick(o.verdictOf, 'verdictOf'),
+      itemId: pick(o.explainerItemId, 'explainerItemId'), verdictOf: pick(o.verdictOf, 'verdictOf'), unscheduleJob: pick(o.unscheduleJob, 'unscheduleJob'),
       placeItem: pick(o.placeItem, 'placeItem'), rescheduleItem: pick(o.rescheduleItem, 'rescheduleItem'),
     }),
     reels: reelActions({
       schedulePostIdea: pick(o.schedulePostIdea, 'schedulePostIdea'), rejectReel: pick(o.rejectReel, 'rejectReel'), forcePost: pick(o.forcePost, 'forcePost'),
-      query: 'reels-query' as never, itemId: pick(o.reelItemId, 'reelItemId'),
+      query: 'reels-query' as never, itemId: pick(o.reelItemId, 'reelItemId'), unscheduleIdea: pick(o.unscheduleIdea, 'unscheduleIdea'),
       placeItem: pick(o.placeItem, 'placeItem'), rescheduleItem: pick(o.rescheduleItem, 'rescheduleItem'),
       todaySlate: pick(o.todaySlate, 'todaySlate'), findReelLock: pick(o.findReelLock, 'findReelLock'), requestFinish: pick(o.requestFinish, 'requestFinish'),
     }),
@@ -103,7 +104,7 @@ function registry(o: {
       approve: pick(o.storyApprove, 'approve'), reject: pick(o.storyReject, 'reject'),
       publishNow: pick(o.storyPublishNow, 'publishNow'), regenerate: pick(o.storyRegenerate, 'regenerate'),
       query: 'stories-query' as never, getSet: pick(o.getSet, 'getSet'), slotOf: pick(o.slotOf, 'slotOf'),
-      plan: pick(o.plan, 'plan'), rescheduleSet: pick(o.rescheduleSet, 'rescheduleSet'),
+      plan: pick(o.plan, 'plan'), rescheduleSet: pick(o.rescheduleSet, 'rescheduleSet'), unscheduleSet: pick(o.unscheduleSet, 'unscheduleSet'),
     }),
   });
 }
@@ -412,12 +413,12 @@ test('actions per vertical: flagged posts where an existing function exists, lin
   const ctx = { quota: null, typicalCostLabel: '$3.00' };
   const carousel = find((p) => p.vertical === 'carousels' && p.status === 'scheduled' && !p.approval.approvedAt);
   const cPlans = actionsFor(carousel, ctx);
-  assert.deepEqual(cPlans.map((p) => p.kind === 'post' ? p.action : `link:${p.label}`), ['approveCarousel', 'reject', 'reschedule', 'hardPublish', 'hardRegenerate']);
+  assert.deepEqual(cPlans.map((p) => p.kind === 'post' ? p.action : `link:${p.label}`), ['approveCarousel', 'reject', 'reschedule', 'unschedule', 'hardPublish', 'hardRegenerate']);
   const cReject = cPlans[1] as Extract<(typeof cPlans)[number], { kind: 'post' }>;
   assert.deepEqual(cReject.body, { vertical: 'carousels', refs: { postId: carousel.refs.postId } }, 'Reject names the type and the content (D47)');
   const reel = find((p) => p.vertical === 'reels' && p.status === 'scheduled' && !p.approval.approvedAt);
   const rPlans = actionsFor(reel, ctx);
-  assert.deepEqual(rPlans.map((p) => p.kind === 'post' ? p.action : `link:${p.label}`), ['approveTrialReel', 'reject', 'reschedule', 'hardPublish', 'hardRegenerate']);
+  assert.deepEqual(rPlans.map((p) => p.kind === 'post' ? p.action : `link:${p.label}`), ['approveTrialReel', 'reject', 'reschedule', 'unschedule', 'hardPublish', 'hardRegenerate']);
   const rApprove = rPlans[0] as Extract<(typeof rPlans)[number], { kind: 'post' }>;
   assert.deepEqual(rApprove.body, { postIdeaId: reel.refs.postIdeaId, videoJobId: reel.refs.videoJobId ?? null });
   const readyExplainer = find((p) => p.vertical === 'explainers' && p.status === 'ready');

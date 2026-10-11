@@ -250,3 +250,29 @@ export async function hardPublishPost(query: Query, postId: string) {
   }
   return queuePublish(query, postId, 'force');
 }
+
+export const UNSCHEDULED_NOTE = 'Taken off the calendar by a person (unscheduled). It is not approved any more.';
+
+/**
+ * Take a carousel off the calendar (the hub's Unschedule): its waiting slot is
+ * cancelled and its approval withdrawn, so it is made and waiting again. A
+ * rejection stays; a post that is posting or has posted can't be unscheduled.
+ */
+export async function unschedulePost(query: Query, postId: string): Promise<{ ok: boolean; note: string }> {
+  const itemId = await carouselItemId(query, postId);
+  if (!itemId) return { ok: false, note: 'The post is gone.' };
+  const { rows: busy } = await query(
+    `SELECT (SELECT count(*) FROM social_hub.schedule WHERE content_item_id = $1 AND status = 'publishing')
+          + (SELECT count(*) FROM social_hub.publish_attempts WHERE content_item_id = $1 AND status IN ('requested', 'creating', 'processing', 'publishing', 'published')) AS n`,
+    [itemId],
+  );
+  if (Number(busy[0]?.n ?? 0) > 0) return { ok: false, note: 'It is posting, or has already posted, so it can’t be unscheduled.' };
+  const cancelled = await query(
+    `UPDATE social_hub.schedule SET status = 'cancelled', error = $2 WHERE content_item_id = $1 AND status = 'scheduled' RETURNING id`,
+    [itemId, UNSCHEDULED_NOTE],
+  );
+  await query(`DELETE FROM social_hub.approvals WHERE content_item_id = $1 AND decision = 'approved'`, [itemId]);
+  return cancelled.rows.length
+    ? { ok: true, note: 'Unscheduled. It is not approved any more; approve and schedule it again when you want it to post.' }
+    : { ok: true, note: 'It had no slot. Its approval is withdrawn.' };
+}

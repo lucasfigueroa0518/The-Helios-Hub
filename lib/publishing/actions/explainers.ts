@@ -36,6 +36,7 @@ export function explainerActions(deps: {
   loadSettings: (db: ExplainersDb) => Promise<unknown>;
   requestRerender: (db: ExplainersDb, input: { topicId: string; settings: never }) => Promise<{ ok: boolean; reason?: string }>;
   itemId: (db: ExplainersDb, jobId: string) => Promise<string | null>;
+  unscheduleJob: (db: ExplainersDb, jobId: string) => Promise<{ ok: boolean; note: string }>;
   verdictOf: (db: ExplainersDb, jobId: string) => Promise<string | null>;
   placeItem: Place;
   rescheduleItem: Place;
@@ -82,6 +83,10 @@ export function explainerActions(deps: {
       return out.ok
         ? { ok: true, note: 'A new render is queued. It replaces the current version when it finishes.' }
         : { ok: false, note: REFUSAL[out.reason ?? ''] ?? `Refused: ${out.reason}` };
+    },
+    async unschedule(t) {
+      const out = await deps.unscheduleJob(await deps.db(), need(t, 'jobId'));
+      return out.ok ? { ok: true, note: out.note } : { ok: false, note: out.note, status: 409 };
     },
     place: placement(deps.placeItem),
     reschedule: placement(deps.rescheduleItem),

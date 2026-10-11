@@ -26,6 +26,7 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
     storiesDb,
     storiesRepo,
     placement,
+    explainersSchedule,
   ] = await Promise.all([
     import('@/lib/social/store'),
     import('@/lib/social/overnight/schedule'),
@@ -44,6 +45,7 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
     import('@/lib/stories/db'),
     import('@/lib/stories/repository'),
     import('@/lib/social-hub/placement'),
+    import('@/lib/explainers/publish/schedule'),
   ]);
   const db = storiesDb.liveStoriesDb;
   const storiesSpine = (text: string, params?: unknown[]) => db.query(text, params) as Promise<{ rows: any[] }>;
@@ -57,6 +59,7 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       itemId: carouselItems.carouselItemId,
       placeItem: placement.placeItem,
       rescheduleItem: placement.rescheduleItem,
+      unschedulePost: carousel.unschedulePost,
       requestRerun: carouselRuns.requestRerun,
     }),
     explainers: explainerActions({
@@ -66,6 +69,7 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       loadSettings: explainersSettings.loadSettings,
       requestRerender: explainersRepo.requestRerender as never,
       itemId: explainersItems.explainerItemId,
+      unscheduleJob: explainersSchedule.unscheduleJob,
       verdictOf: async (d, jobId) => (await explainersRepo.getFeedback(d, jobId))?.verdict ?? null,
       placeItem: placement.placeItem,
       rescheduleItem: placement.rescheduleItem,
@@ -74,6 +78,7 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       schedulePostIdea: reels.schedulePostIdea as never,
       rejectReel: reels.rejectReel,
       forcePost: reels.forcePost,
+      unscheduleIdea: reels.unscheduleIdea,
       query: reelItems.reelsSpine,
       itemId: reelItems.reelItemId,
       placeItem: placement.placeItem,
@@ -87,6 +92,7 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       reject: (id, by) => stories.reject(db, id, {}, by),
       publishNow: (id) => stories.publishNow(db, id),
       regenerate: (id, by) => stories.regenerate(db, id, by),
+      unscheduleSet: (id) => db.transaction((tx) => storiesRepo.unscheduleSet(tx, id)),
       query: storiesSpine,
       getSet: (id) => storiesRepo.getSet(db, id),
       slotOf: (id) => placement.activeSlotByRef(storiesSpine, 'stories', id),

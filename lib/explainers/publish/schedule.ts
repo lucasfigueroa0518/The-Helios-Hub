@@ -6,7 +6,7 @@ import { POOL_ORDER_BY } from '@/lib/explainers/repository';
 import { bookSlot } from '@/lib/social-hub/spine';
 
 import { DEFAULT_POSTS_PER_DAY, EXPLAINER_WINDOWS } from './config';
-import { explainerItemId, spineOf } from './items';
+import { explainerItemId, spineOf, syncExplainerApproval } from './items';
 import { queuePublish } from './publish';
 
 /**
@@ -185,4 +185,35 @@ export async function releaseDueSchedules(db: Queryable): Promise<number> {
     }
   }
   return released;
+}
+
+export const UNSCHEDULED_NOTE = 'Taken off the calendar by a person (unscheduled). It is not approved any more.';
+
+/**
+ * Take a render off the calendar (the hub's Unschedule): its waiting slot is
+ * cancelled and its approval withdrawn, so it is "made, waiting for a person"
+ * again. Both matter: an approved render with no slot is booked again by the
+ * worker (`scheduleApproved`), so cancelling the slot alone would not hold.
+ * A rejection stays a rejection. A render that is posting, or posted, cannot
+ * be unscheduled.
+ */
+export async function unscheduleJob(db: Queryable, jobId: string): Promise<{ ok: boolean; note: string }> {
+  const itemId = await explainerItemId(db, jobId);
+  if (!itemId) return { ok: false, note: 'The render is gone.' };
+  const { rows: busy } = await db.query<{ n: number }>(
+    `SELECT (SELECT count(*) FROM social_hub.schedule WHERE content_item_id = $1 AND status = 'publishing')
+          + (SELECT count(*) FROM social_hub.publish_attempts WHERE content_item_id = $1 AND status IN ('requested', 'creating', 'processing', 'publishing', 'published')) AS n`,
+    [itemId],
+  );
+  if (Number(busy[0]?.n ?? 0) > 0) return { ok: false, note: 'It is posting, or has already posted, so it can’t be unscheduled.' };
+  const cancelled = await db.query<{ id: string }>(
+    `UPDATE social_hub.schedule SET status = 'cancelled', error = $2 WHERE content_item_id = $1 AND status = 'scheduled' RETURNING id`,
+    [itemId, UNSCHEDULED_NOTE],
+  );
+  // Withdraw an approval (the review verdict and the spine's copy of it); a rejection is left alone.
+  await db.query(`DELETE FROM explainers.feedback WHERE job_id = $1 AND verdict = 'approved'`, [jobId]);
+  await syncExplainerApproval(db, jobId);
+  return cancelled.rows.length
+    ? { ok: true, note: 'Unscheduled. It is not approved any more, so it will not be booked again until you approve it.' }
+    : { ok: true, note: 'It had no slot. Its approval is withdrawn.' };
 }

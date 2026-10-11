@@ -18,6 +18,7 @@ export function reelActions(deps: {
   schedulePostIdea: (postIdeaId: string, source: 'user', videoJobId: string | null) => Promise<Outcome>;
   rejectReel: (postIdeaId: string, videoJobId: string | null, by: string | null) => Promise<{ rejected: boolean; note: string }>;
   forcePost: (videoJobId: string) => Promise<Queued>;
+  unscheduleIdea: (postIdeaId: string) => Promise<{ ok: boolean; note: string }>;
   query: SpineQuery;
   itemId: (videoJobId: string) => Promise<string | null>;
   placeItem: Place;
@@ -59,6 +60,10 @@ export function reelActions(deps: {
       const out = await deps.requestFinish(postIdeaId, slateId);
       if (out.status === 'failed') return { ok: false, note: out.note };
       return { ok: true, note: `Rebuilding today’s video for this idea. ${out.note}` };
+    },
+    async unschedule(t) {
+      const out = await deps.unscheduleIdea(need(t, 'postIdeaId'));
+      return out.ok ? { ok: true, note: out.note } : { ok: false, note: out.note, status: 409 };
     },
     place: placement(deps.placeItem),
     reschedule: placement(deps.rescheduleItem),

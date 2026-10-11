@@ -11,7 +11,7 @@ import type { PGlite } from '@electric-sql/pglite';
 
 import { publishReadiness } from '@/lib/explainers/publish/publish';
 import { explainerItemId } from '@/lib/explainers/publish/items';
-import { scheduleApproved } from '@/lib/explainers/publish/schedule';
+import { scheduleApproved, unscheduleJob } from '@/lib/explainers/publish/schedule';
 import { getFeedback, REJECTED_SLOT_NOTE, setVerdict } from '@/lib/explainers/repository';
 import { explainerActions } from '@/lib/publishing/actions/explainers';
 import { storyActions } from '@/lib/publishing/actions/stories';
@@ -266,6 +266,7 @@ function stories(pg: PGlite, q: SpineQuery) {
     slotOf: (id) => activeSlotByRef(q, 'stories', id),
     plan: (query, input) => planPlacement(query, { ...input, now: NOW, rng: first }),
     rescheduleSet: (id, nyDate, at) => db.transaction((tx) => rescheduleSet(tx, id, nyDate, at)),
+    unscheduleSet: async () => ({ ok: false, note: 'not under test' }),
   });
 }
 
@@ -350,6 +351,7 @@ function explainerLayer(pg: PGlite) {
     loadSettings: async () => ({}),
     requestRerender: async () => ({ ok: false }),
     itemId: explainerItemId,
+    unscheduleJob,
     verdictOf: async (d, jobId) => (await getFeedback(d, jobId))?.verdict ?? null,
     placeItem: (query, input) => placeItem(query, { ...input, now: NOW, rng: first }),
     rescheduleItem: (query, input) => rescheduleItem(query, { ...input, now: NOW, rng: first }),
@@ -386,6 +388,44 @@ test('explainers reject with tags: the review keeps them, the spine says rejecte
   const kept = (await getFeedback(explainersDb(pg), e.job))!;
   assert.deepEqual([kept.tags, kept.note], [['hook', 'pacing'], 'Slow open.']);
   await assert.rejects(setVerdict(explainersDb(pg), e.job, 'rejected', 'x', { tags: ['boring'] }), /unknown failure tag/);
+});
+
+test('explainers unschedule: the slot is cancelled, the approval withdrawn, and the worker does not book it again', async () => {
+  const { pg, q } = await spineDb();
+  const e = await explainer(pg);
+  const layer = explainerLayer(pg);
+  const placed = await layer.place!({ jobId: e.job }, 'tommy', { nyDate: '2026-10-09', slot: 'late' });
+  assert.ok(placed.ok, placed.note);
+  await layer.approve!({ jobId: e.job }, 'tommy');
+  const itemId = (await pg.query<{ id: string }>(`SELECT id::text AS id FROM social_hub.content_items WHERE vertical = 'explainers'`)).rows[0]!.id;
+  assert.equal((await pg.query(`SELECT 1 FROM social_hub.approvals WHERE content_item_id = $1 AND decision = 'approved'`, [itemId])).rows.length, 1, 'approved first');
+
+  const out = await layer.unschedule!({ jobId: e.job }, 'tommy', undefined);
+  assert.equal(out.ok, true, out.note);
+  const slot = (await pg.query<{ status: string }>(`SELECT status FROM social_hub.schedule`)).rows[0]!;
+  assert.equal(slot.status, 'cancelled');
+  assert.equal((await pg.query(`SELECT 1 FROM social_hub.approvals WHERE content_item_id = $1`, [itemId])).rows.length, 0, 'no decision on the spine');
+  assert.equal(await getFeedback(explainersDb(pg), e.job), null, 'no review verdict either');
+  // An approved render with no slot would be booked again by the worker; this one is no longer approved, so it is not.
+  assert.equal(await scheduleApproved(explainersDb(pg), NOW), 0, 'the worker leaves it alone');
+  // Nothing left to remove.
+  assert.equal((await layer.unschedule!({ jobId: e.job }, 'tommy', undefined)).note, 'It had no slot. Its approval is withdrawn.');
+});
+
+test('explainers unschedule: a rejection stays a rejection, and a render that posted cannot be unscheduled', async () => {
+  const { pg, q } = await spineDb();
+  const e = await explainer(pg);
+  const layer = explainerLayer(pg);
+  await layer.reject!({ jobId: e.job }, 'tommy', undefined);
+  await layer.unschedule!({ jobId: e.job }, 'tommy', undefined);
+  assert.equal((await getFeedback(explainersDb(pg), e.job))?.verdict, 'rejected', 'the rejection is untouched');
+
+  const p = await explainer(pg);
+  const itemId = await explainerItemId(explainersDb(pg), p.job);
+  await pg.query(`INSERT INTO social_hub.publish_attempts (content_item_id, vertical, trigger, status, caption) VALUES ($1, 'explainers', 'approve', 'published', 'c')`, [itemId]);
+  const out = await layer.unschedule!({ jobId: p.job }, 'tommy', undefined);
+  assert.equal(out.ok, false);
+  assert.match(out.note, /already posted/);
 });
 
 // ── Carousel regenerate: the rerun queue (D51) ──────────────────────────────

@@ -21,6 +21,7 @@ export function carouselActions(deps: {
   itemId: (q: Query, postId: string) => Promise<string | null>;
   placeItem: Place;
   rescheduleItem: Place;
+  unschedulePost: (q: Query, postId: string) => Promise<{ ok: boolean; note: string }>;
   requestRerun: (q: Query, postId: string, by: string) => Promise<{ queued: true; id: string } | { queued: false; note: string }>;
 }): ContentActions {
   async function placement(t: Parameters<typeof need>[0], input: Parameters<typeof needPlacement>[0], fn: Place): Promise<ActionOutcome> {
@@ -53,6 +54,10 @@ export function carouselActions(deps: {
       return out.queued
         ? { ok: true, note: 'A rerun of this story is queued, under the carousel run cap. The new version shows up in Content ready when it finishes; this one stays as it is.' }
         : { ok: false, note: out.note };
+    },
+    async unschedule(t) {
+      const out = await deps.unschedulePost(await deps.query(), need(t, 'postId'));
+      return out.ok ? { ok: true, note: out.note } : { ok: false, note: out.note, status: 409 };
     },
     place: (t, _by, input) => placement(t, input, deps.placeItem),
     reschedule: (t, _by, input) => placement(t, input, deps.rescheduleItem),

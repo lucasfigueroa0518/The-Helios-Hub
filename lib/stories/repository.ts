@@ -388,3 +388,23 @@ export async function framesDueForInsights(db: Queryable, opts: { now?: Date; ev
   );
   return rows;
 }
+
+/**
+ * Take a set off the calendar (the hub's Unschedule): approved or scheduled
+ * goes back to ready, unapproved and with no minute, and its slot on the spine
+ * is cancelled. A set that is posting or has posted can't be unscheduled.
+ */
+export async function unscheduleSet(db: Queryable, setId: string): Promise<{ ok: boolean; note: string }> {
+  const { rows } = await db.query<{ id: string }>(
+    `UPDATE stories.sets SET status = 'ready', approved_at = NULL, publish_at = NULL, updated_at = now()
+      WHERE id = $1 AND status IN ('approved', 'scheduled') RETURNING id`,
+    [setId],
+  );
+  if (!rows[0]) return { ok: false, note: 'It isn’t approved or scheduled, or it is posting or has posted, so there is nothing to unschedule.' };
+  await db.query(
+    `UPDATE social_hub.schedule SET status = 'cancelled', error = $2 WHERE legacy_id = $1::uuid AND status = 'scheduled'`,
+    [setId, 'Taken off the calendar by a person (unscheduled). It is not approved any more.'],
+  );
+  await projectSet(db, setId);
+  return { ok: true, note: 'Unscheduled. It is not approved any more; approve it again when you want it to post.' };
+}

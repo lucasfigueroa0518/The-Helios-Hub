@@ -287,6 +287,7 @@ const INTENDED: Record<(typeof ACTION_FLAGS)[number], boolean> = {
   hardRegenerate: true,
   reject: true,
   reschedule: true,
+  unschedule: true,
   refreshOnVisit: false,
 };
 

@@ -132,7 +132,7 @@ export function typicalCost(posts: readonly HubPost[], vertical: Vertical, today
 export type ActionPlan =
   | {
       kind: 'post';
-      action: 'approveCarousel' | 'approveTrialReel' | 'approveContent' | 'hardPublish' | 'hardRegenerate' | 'reject' | 'place' | 'reschedule';
+      action: 'approveCarousel' | 'approveTrialReel' | 'approveContent' | 'hardPublish' | 'hardRegenerate' | 'reject' | 'place' | 'reschedule' | 'unschedule';
       label: string;
       endpoint: string;
       body: Record<string, unknown>;
@@ -212,6 +212,16 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
   }
   if (post.status === 'scheduled') {
     plans.push({ kind: 'post', action: 'reschedule', label: 'Move', endpoint: '/api/social-hub/actions/reschedule', body: { vertical: post.vertical, refs: placeRefs }, disabled: Object.values(placeRefs).some((v) => !v) ? 'This slot can’t be found any more.' : null, pick: 'slot' });
+  }
+
+  if (post.status === 'scheduled') {
+    // Unschedule: off the calendar, and no longer approved, so nothing books or posts it again until a person decides.
+    plans.push({
+      kind: 'post', action: 'unschedule', label: 'Unschedule', endpoint: '/api/social-hub/actions/unschedule',
+      body: { vertical: post.vertical, refs: placeRefs },
+      disabled: Object.values(placeRefs).some((v) => !v) ? 'This slot can’t be found any more.' : null,
+      confirm: 'It comes off the calendar and is no longer approved. It goes back to made and waiting for you, and won’t post until you approve and schedule it again.',
+    });
   }
 
   if (live) {

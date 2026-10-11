@@ -474,3 +474,29 @@ export async function forcePost(videoJobId: string): Promise<{ queued: true; id:
   if (!result.queued) return { queued: false, status: result.status, note: result.note };
   return { queued: true, id: result.id, note: 'Posting to Instagram now as a trial reel.' };
 }
+
+export const UNSCHEDULED_NOTE = 'Taken off the calendar by a person (unscheduled). It is not approved any more.';
+
+/**
+ * Take a reel's slot off the calendar (the hub's Unschedule): the idea's
+ * waiting slot is cancelled and the slot's and the video's approval withdrawn.
+ * A reel that is posting can't be unscheduled.
+ */
+export async function unscheduleIdea(postIdeaId: string): Promise<{ ok: boolean; note: string }> {
+  const { rows } = await dbQuery<{ id: string; status: string; content_item_id: string | null }>(
+    `SELECT id::text AS id, status, content_item_id::text AS content_item_id
+       FROM social_hub.schedule
+      WHERE vertical = 'reels' AND idea_ref = $1 AND status IN ('scheduled', 'publishing')
+      ORDER BY created_at DESC LIMIT 1`,
+    [postIdeaId],
+  );
+  const slot = rows[0];
+  if (!slot) return { ok: false, note: 'It has no slot to remove.' };
+  if (slot.status === 'publishing') return { ok: false, note: 'It is posting right now, so it can’t be unscheduled.' };
+  await dbQuery(
+    `UPDATE social_hub.schedule SET status = 'cancelled', approved_at = NULL, error = $2 WHERE id = $1::uuid AND status = 'scheduled'`,
+    [slot.id, UNSCHEDULED_NOTE],
+  );
+  if (slot.content_item_id) await dbQuery(`DELETE FROM social_hub.approvals WHERE content_item_id = $1::uuid AND decision = 'approved'`, [slot.content_item_id]);
+  return { ok: true, note: 'Unscheduled. It is not approved any more; approve it again when you want it to post.' };
+}

@@ -55,7 +55,7 @@ function rankFor(state: PostState['id'], action: PostPlan['action']): Rank {
     case 'approved':
       return action === 'place' ? 'primary' : approve ? 'hide' : 'more';
     case 'scheduled':
-      return approve ? 'hide' : action === 'reschedule' ? 'secondary' : 'more';
+      return approve ? 'hide' : action === 'reschedule' || action === 'unschedule' ? 'secondary' : 'more';
     case 'failed':
       return action === 'hardPublish' ? 'primary' : action === 'hardRegenerate' ? 'secondary' : 'more';
     case 'not_approved':
@@ -88,6 +88,8 @@ function labelFor(state: PostState['id'], plan: PostPlan, vertical: HubPost['ver
       return 'Schedule…';
     case 'reschedule':
       return 'Move…';
+    case 'unschedule':
+      return 'Unschedule';
   }
 }
 
@@ -97,6 +99,7 @@ const TITLE: Partial<Record<PostPlan['action'], string>> = {
   reject: 'Reject this post?',
   place: 'Schedule it',
   reschedule: 'Move it',
+  unschedule: 'Take it off the calendar?',
 };
 
 export function actionMenu(post: HubPost, state: PostState, plans: readonly ActionPlan[], enabled: Readonly<Record<ActionFlag, boolean>>, slots?: SlotChoice[]): ActionMenu {

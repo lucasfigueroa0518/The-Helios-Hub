@@ -26,6 +26,7 @@ export function storyActions(deps: {
   reject: (setId: string, by: string) => Promise<unknown>;
   publishNow: (setId: string) => Promise<unknown>;
   regenerate: (setId: string, by: string) => Promise<unknown>;
+  unscheduleSet: (setId: string) => Promise<{ ok: boolean; note: string }>;
   query: SpineQuery;
   getSet: (setId: string) => Promise<{ set: StorySetView } | null>;
   slotOf: (setId: string) => Promise<{ id: string; publishAt: Date } | null>;
@@ -78,6 +79,10 @@ export function storyActions(deps: {
     async regenerate(t, by) {
       await deps.regenerate(need(t, 'setId'), by);
       return { ok: true, note: 'A new set is queued for the same day.' };
+    },
+    async unschedule(t) {
+      const out = await deps.unscheduleSet(need(t, 'setId'));
+      return out.ok ? { ok: true, note: out.note } : { ok: false, note: out.note, status: 409 };
     },
     place: placement('place'),
     reschedule: placement('reschedule'),

@@ -7,7 +7,7 @@
  * person turns each on, one at a time, after checking it on real data.
  */
 
-export type ActionFlag = 'approveCarousel' | 'approveTrialReel' | 'approveContent' | 'hardPublish' | 'hardRegenerate' | 'reject' | 'reschedule' | 'refreshOnVisit';
+export type ActionFlag = 'approveCarousel' | 'approveTrialReel' | 'approveContent' | 'hardPublish' | 'hardRegenerate' | 'reject' | 'reschedule' | 'unschedule' | 'refreshOnVisit';
 
 export type ViewFlag = 'calendar' | 'analytics' | 'house' | 'post';
 
@@ -29,6 +29,8 @@ export const SOCIAL_HUB_FLAGS: HubFlags = Object.freeze({
     reject: true,
     // Schedule here and move (D50): place and reschedule through the user-action layer. Off until Tommy turns it on.
     reschedule: true,
+    // Unschedule: a waiting slot comes off the calendar and the approval is withdrawn.
+    unschedule: true,
     // Needs the social_hub schema applied and the worker redeployed first.
     refreshOnVisit: false,
   }),
@@ -48,6 +50,7 @@ export const ACTION_FLAGS: readonly ActionFlag[] = [
   'hardRegenerate',
   'reject',
   'reschedule',
+  'unschedule',
   'refreshOnVisit',
 ];
 
