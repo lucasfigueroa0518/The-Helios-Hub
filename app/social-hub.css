@@ -167,6 +167,8 @@ p.sh-subtle { max-width: 75ch; }
 .sh-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 .sh-btn--primary { padding: 0 14px; border-color: var(--color-primary); background: var(--color-primary); color: var(--color-text); font-weight: var(--font-weight-semibold); }
 .sh-btn--primary:hover:not(:disabled) { background: var(--color-primary-hover); border-color: var(--color-primary-hover); }
+.sh-btn--danger { color: var(--sh-failed-ink); }
+.sh-btn--danger:hover:not(:disabled) { background: var(--sh-failed-wash); border-color: var(--sh-failed-ink); }
 .sh-btn--quiet { border-color: transparent; background: transparent; color: var(--color-text-muted); }
 .sh-btn--quiet:hover:not(:disabled) { color: var(--color-text); }
 .sh-btn--icon { width: 32px; padding: 0; }

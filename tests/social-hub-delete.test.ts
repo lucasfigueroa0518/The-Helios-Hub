@@ -202,17 +202,18 @@ const keys = (post: HubPost, on = ALL_ON) => {
   return [m.primary, ...m.secondary, ...m.more].filter(Boolean).map((a) => a!.key);
 };
 
-test('Delete is offered under More, as a danger action with a confirm, on content that has not gone live', () => {
+test('Delete is a visible button (not under More), a danger action with a confirm, on content that has not gone live', () => {
   const d = previewDataset();
   const live = d.posts.filter((p) => ['ready', 'scheduled', 'failed', 'cancelled'].includes(p.status));
   assert.ok(live.length > 0, 'fixture has posts to check');
   for (const post of live) {
     const state = postState(post, FIXTURE_NOW);
     const m = menuOf(post);
-    const del = m.more.find((a) => a.key === 'delete');
+    const del = m.secondary.find((a) => a.key === 'delete');
     const ref = post.vertical === 'carousels' ? post.refs.postId : post.vertical === 'explainers' ? post.refs.jobId : post.vertical === 'reels' ? post.refs.videoJobId : post.refs.setId;
     if (!ref) continue;
-    assert.ok(del, `${post.vertical} ${state.id} offers Delete`);
+    assert.ok(del, `${post.vertical} ${state.id} offers Delete as a visible button`);
+    assert.equal(m.more.some((a) => a.key === 'delete'), false, 'not hidden under More');
     assert.equal(del!.danger, true);
     assert.equal(del!.confirmTitle, 'Delete this post?');
     assert.equal(m.primary?.key === 'delete', false, 'never the primary action');

@@ -324,6 +324,10 @@ function PostCard({ card, status, failed, onOpen }: { card: TypeCard; status: st
           <span className={`rh-reel__cat${failed ? ' is-failed' : ''}`}>{status ?? [post.slot?.label, views != null ? `${views.toLocaleString('en-US')} ${post.format === 'story' ? 'reach' : 'views'}` : offer.state.line].filter(Boolean).join(' · ')}</span>
         </span>
       </button>
+      {/* Every action the hub offers for this post, on the card itself (Approve, Reject, Regenerate, Delete, ...). */}
+      <div className="sh" style={{ minHeight: 0, background: 'transparent', marginTop: 8 }}>
+        <ActionBar menu={offer.menu} compact showOffNote={false} />
+      </div>
     </article>
   );
 }
@@ -343,13 +347,13 @@ function PostDetail({ card, idea, run, now, fullPostBase, fromPath }: { card: Ty
         {post.slot ? ` · ${post.slot.label}` : ''}
       </p>
       {offer.state.line ? <p className="rh-muted">{offer.state.line}</p> : null}
+      <div className="sh" style={{ minHeight: 0, background: 'transparent', margin: '16px 0' }}>
+        <ActionBar menu={offer.menu} />
+      </div>
       <Media post={post} />
       {post.description ? <p style={{ whiteSpace: 'pre-wrap' }}>{post.description}</p> : null}
       {post.statusNote ? <p className="rh-muted">{post.statusNote}</p> : null}
       {post.reviewNotes?.length ? <ul>{post.reviewNotes.map((n) => <li key={n}>{n}</li>)}</ul> : null}
-      <div className="sh" style={{ minHeight: 0, background: 'transparent', margin: '16px 0' }}>
-        <ActionBar menu={offer.menu} />
-      </div>
       {post.native.length ? (
         <dl className="rh-detail__facts">
           {post.native.slice(0, 14).map((f) => (

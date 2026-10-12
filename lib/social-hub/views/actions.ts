@@ -44,11 +44,11 @@ const OFF = 'Turned off for now.';
 /** Pipelines with their own review page outside the hub (carousels are reviewed only here). */
 const OWN_PAGE: Partial<Record<HubPost['vertical'], string>> = { reels: '/reels', explainers: '/explainers/reels', stories: '/stories' };
 
-/** Delete is a quiet last resort for anything not live: being made, posting and posted are left out. */
+/** Delete is offered for anything not live (being made, posting and posted are left out), as a visible button so it is never hard to find. */
 const NOT_DELETABLE: ReadonlySet<PostState['id']> = new Set(['in_production', 'posting', 'published']);
 
 function rankFor(state: PostState['id'], action: PostPlan['action']): Rank {
-  if (action === 'delete') return NOT_DELETABLE.has(state) ? 'hide' : 'more';
+  if (action === 'delete') return NOT_DELETABLE.has(state) ? 'hide' : 'secondary';
   const approve = action === 'approveCarousel' || action === 'approveTrialReel' || action === 'approveContent';
   switch (state) {
     case 'needs_you':

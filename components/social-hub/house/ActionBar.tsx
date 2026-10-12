@@ -97,7 +97,7 @@ export function ActionBar({ menu, compact = false, showOffNote = true }: { menu:
     <button
       key={action.key}
       type="button"
-      className={`sh-btn${primary ? ' sh-btn--primary' : ''}`}
+      className={`sh-btn${primary ? ' sh-btn--primary' : ''}${action.danger ? ' sh-btn--danger' : ''}`}
       disabled={Boolean(action.disabled) || busy != null}
       data-busy={busy === action.key ? '' : undefined}
       onClick={() => start(action)}
