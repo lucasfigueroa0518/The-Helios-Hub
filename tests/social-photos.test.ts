@@ -23,7 +23,7 @@ import type { SlideCopy } from '@/lib/social/render/types';
 import { toRenderPost } from '@/lib/social/render/from-draft';
 import type { Brief } from '@/lib/social/reporter/brief';
 import type { PageReadOk } from '@/lib/social/reporter/read-page';
-import { fillDraft, type DraftSubmission } from '@/lib/social/writer/draft';
+import { FOLLOW_LINE, fillDraft, type DraftSubmission } from '@/lib/social/writer/draft';
 
 // ── Stub Jev: answers from the state it is shown ─────────────────────────
 
@@ -203,7 +203,7 @@ test('render: every slide type maps to the renderer fields, quotes and numbers e
   assert.match(stat.numberNote!, /time the task force has/);
   assert.equal(stat.photoUrl, photo.url);
   assert.equal(post.slides.at(-1)!.layoutVariant, 'follow');
-  assert.equal(post.slides.at(-1)!.storySpecificLine, draft.follow);
+  assert.equal(post.slides.at(-1)!.storySpecificLine, FOLLOW_LINE);
   assert.equal(post.caption, draft.caption.text);
   assert.equal(post.attributionBlock, `Photos: ${photo.credit}`, 'each credit once');
   assert.ok(post.slides.every((s) => s.altText));

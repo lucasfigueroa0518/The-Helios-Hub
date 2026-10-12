@@ -18,8 +18,8 @@ import { createWriterStage } from '@/lib/social/pipeline/writer-stage';
 import { RULES_BLOCK, WRITER_RULES, renderRulesFor } from '@/lib/social/prompts/rules-block';
 import { VOICE_BLOCK } from '@/lib/social/prompts/voice-block';
 import type { MessagesCreate } from '@/lib/social/reporter/reporter';
-import { DraftValidationError, checkDraft, fillDraft, isExactExcerpt, type DraftSubmission, type VisualRequest } from '@/lib/social/writer/draft';
-import { WRITER_ADDED_RULES, WRITER_MOMENTUM_RULES, WRITER_SYSTEM, writerUserMessage } from '@/lib/social/writer/prompt';
+import { DraftValidationError, FOLLOW_LINE, checkDraft, fillDraft, isExactExcerpt, type DraftSubmission, type VisualRequest } from '@/lib/social/writer/draft';
+import { WRITER_ADDED_RULES, WRITER_FOLLOW_RULE, WRITER_MOMENTUM_RULES, WRITER_SYSTEM, writerUserMessage } from '@/lib/social/writer/prompt';
 import { briefForWriter, runWriter } from '@/lib/social/writer/writer';
 import { checkLines } from '@/lib/social/writer/shorten';
 
@@ -44,7 +44,7 @@ function draft(): DraftSubmission {
       { type: 'text', headline: { text: 'What the charter says', facts: ['F6'] }, body: { text: 'The charter reportedly says it will plan responses to SI-enabled threats.', facts: ['F6'] }, quote_id: null, quote_excerpt: null, number_ids: [], visual: v('thematic', 'stacks of documents'), fallback_visual: v('setting', 'government office'), subject_ids: [], icon: 'file-text' },
       { type: 'text', headline: { text: 'Why the name matters', facts: ['B2'] }, body: { text: 'Trump signed an executive order seeking to rebrand AI as super intelligence.', facts: ['B2'] }, quote_id: null, quote_excerpt: null, number_ids: [], visual: v('thematic', 'pen and paper'), fallback_visual: v('thematic', 'signed document'), subject_ids: ['S1'], icon: 'file-text' },
     ],
-    follow: 'Follow Helios for AI news without the hype.',
+    follow: FOLLOW_LINE,
     caption: { text: 'Trump announced a Super Intelligence Force. Source: TechCrunch, October 4, 2026.', facts: ['F1'] },
     edit_notes: ['Led with the spy chief role, not the name.'],
   };
@@ -72,7 +72,7 @@ function errorsOf(edit: (d: DraftSubmission) => void): string[] {
 test('Writer prompt = tested intro + RULES (tested lines + 3 additions + shared policy) + submit_draft line + section list + caption section', () => {
   const tested = codeBlocks('## 2. Writer')[0]!;
   const intro = tested.slice(0, tested.indexOf('\n\nRULES\n'));
-  const sectionList = tested.slice(tested.indexOf('\n\nOUTPUT\n') + '\n\nOUTPUT\n'.length, tested.indexOf('\n\nBRIEF\n')).replace('/ IMAGE   (repeat)', '/ VISUAL / FALLBACK VISUAL   (repeat)');
+  const sectionList = tested.slice(tested.indexOf('\n\nOUTPUT\n') + '\n\nOUTPUT\n'.length, tested.indexOf('\n\nBRIEF\n')).replace('/ IMAGE   (repeat)', '/ VISUAL / FALLBACK VISUAL   (repeat)').replace('FOLLOW: …', `FOLLOW: ${FOLLOW_LINE}`);
   const caption = codeBlocks('## 3. Writer')[0]!
     .replace('${VOICE_BLOCK}', VOICE_BLOCK)
     .replace("${renderRulesFor('caption')}", renderRulesFor('writer'))
@@ -81,7 +81,7 @@ test('Writer prompt = tested intro + RULES (tested lines + 3 additions + shared 
     .replace(/^3\. Source credits, always,.*\n/m, '');
   const expected = [
     intro,
-    `## Rules\n\n${WRITER_RULES}\n${WRITER_ADDED_RULES}\n${codeBlocks('**Writer prompt v2')[0]}\n${codeBlocks('**No repetition within a slide')[0]}`,
+    `## Rules\n\n${WRITER_RULES}\n${WRITER_ADDED_RULES}\n${codeBlocks('**Writer prompt v2')[0]}\n${codeBlocks('**No repetition within a slide')[0]}\n${WRITER_FOLLOW_RULE}`,
     RULES_BLOCK.slice(RULES_BLOCK.indexOf('## Context policy')),
     `When you're done, call submit_draft with these sections:\n${sectionList}`,
     caption,
@@ -91,6 +91,7 @@ test('Writer prompt = tested intro + RULES (tested lines + 3 additions + shared 
   assert.equal(WRITER_ADDED_RULES.split('\n').length, 3);
   assert.ok(WRITER_ADDED_RULES.endsWith(codeBlocks('- **Copy budget, Writer stat line')[0]!), 'stat line word for word');
   assert.equal(WRITER_MOMENTUM_RULES, codeBlocks('**Writer prompt v2')[0], 'v2 rules word for word from the prompts file');
+  assert.equal(WRITER_FOLLOW_RULE, codeBlocks('**FOLLOW line')[0], 'FOLLOW rule word for word from the prompts file');
   assert.ok(!WRITER_SYSTEM.includes('—'), 'no em dashes anywhere in the Writer prompt');
   assert.ok(!WRITER_SYSTEM.includes('Source:'), 'the Source line is built by code, not asked of the Writer');
   assert.ok(!WRITER_SYSTEM.includes('Hook pass'), 'the Hook pass is gone');
@@ -109,6 +110,15 @@ test('the brief goes in the user message as JSON, with SUBJECTS marked well_know
 });
 
 // ── Code check and fill-in (spec §4.2a, §5.3) ──────────────────────────
+
+test('FOLLOW is always the fixed account line, even if the Writer customizes it', () => {
+  const brief = briefSuperIntelligenceForce();
+  const customized = draft();
+  customized.follow = 'Follow Helios for the next update on this task force.';
+  const checked = checkDraft(customized, brief);
+  assert.equal(checked.follow, FOLLOW_LINE);
+  assert.equal(fillDraft(customized, brief).follow, FOLLOW_LINE);
+});
 
 test('a valid draft passes; code fills the exact quote excerpt and number value by ID', () => {
   const brief = briefSuperIntelligenceForce();

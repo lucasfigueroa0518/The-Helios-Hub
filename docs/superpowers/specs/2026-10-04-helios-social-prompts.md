@@ -319,6 +319,15 @@ BRIEF
   - At most one spread per post.
 - **Change 4, the Editor:** the POWERS line in §4 now reads "You may change an IMAGE to none (a cut); never add or change one." Its code check allows that and nothing else.
 
+**FOLLOW line (Lucas, 2026-10-12).** `cause · Writer prompt + code · 0 new stages · 0 new AI calls`
+
+- **Why:** the last slide was inventing a story-specific follow line. The closer is a fixed account CTA.
+- **Writer:** one rule line after the slide-repetition rule. The section list's `FOLLOW: …` becomes the sentence. Code overwrites any other line on check, fill, silent fix and render.
+
+```
+- FOLLOW is always exactly "Follow Helios for AI learning, stories, and updates." Do not customize it or tie it to the story.
+```
+
 ---
 
 ## 3. Writer's caption section (carried over verbatim)

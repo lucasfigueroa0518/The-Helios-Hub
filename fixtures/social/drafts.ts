@@ -4,7 +4,7 @@
  * (sixth round: a visual and a fallback visual per cover option and slide;
  * slide types text, stat and quote).
  */
-import type { DraftSubmission, VisualRequest } from '@/lib/social/writer/draft';
+import { FOLLOW_LINE, type DraftSubmission, type VisualRequest } from '@/lib/social/writer/draft';
 
 const v = (kind: VisualRequest['kind'], query: string): VisualRequest => ({ kind, query });
 const text = (headline: string, hFacts: string[], body: string, bFacts: string[]) => ({
@@ -36,7 +36,7 @@ export function sifDraft(): DraftSubmission {
       { ...text('What the charter says', ['F6'], 'The charter reportedly says it will plan responses to SI-enabled threats while preventing overregulation.', ['F6']), visual: v('thematic', 'legal documents'), fallback_visual: v('setting', 'government office'), subject_ids: [], icon: 'file-text' },
       { ...text('Why the name matters', ['B2'], 'Trump signed an executive order seeking to rebrand AI as super intelligence.', ['B2']), visual: v('thematic', 'pen and paper'), fallback_visual: v('thematic', 'signed document'), subject_ids: ['S1'], icon: 'file-text' },
     ],
-    follow: 'Follow Helios for AI news without the hype.',
+    follow: FOLLOW_LINE,
     caption: { text: 'Trump announced a Super Intelligence Force on Sunday. Source: TechCrunch, October 4, 2026.', facts: ['F1'] },
     edit_notes: [],
   };

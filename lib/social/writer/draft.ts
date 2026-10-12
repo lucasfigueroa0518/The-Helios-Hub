@@ -72,6 +72,9 @@ export type DraftSlide = {
   spread_with_next?: boolean;
 };
 
+/** Fixed last-slide CTA. Code writes this; the Writer/Editor never customize it. */
+export const FOLLOW_LINE = 'Follow Helios for AI learning, stories, and updates.';
+
 export type DraftSubmission = {
   cover_options: Array<{ text: string; facts: string[]; visual: VisualRequest; fallback_visual: VisualRequest; alt_visuals?: VisualRequest[]; subject_ids?: string[]; icon?: string }>;
   /** 1-based index into cover_options. */
@@ -131,7 +134,7 @@ export const DRAFT_SCHEMA = obj({
       icon,
     }), 'subject_ids', 'icon', 'alt_visuals'),
   },
-  follow: { type: 'string', description: 'The FOLLOW line.' },
+  follow: { type: 'string', description: `The FOLLOW line. Always exactly: ${FOLLOW_LINE}` },
   caption: tagged('The full caption (see the caption section).'),
   edit_notes: { ...strList, description: 'One line per judgment call.' },
 });
@@ -225,6 +228,7 @@ export function checkDraft(input: unknown, brief: Brief): DraftSubmission {
     for (const id of s.number_ids) if (!numbers.has(id)) errors.push({ section: at, message: `number ${id} isn't in the brief` });
   });
   tagCheck('caption', d.caption.facts);
+  d.follow = FOLLOW_LINE;
 
   if (errors.length > 0) throw new DraftValidationError(errors);
   return d;
@@ -250,6 +254,7 @@ export function fillDraft(d: DraftSubmission, brief: Brief): FilledDraft {
   const numbers = new Map(brief.numbers.map((n) => [n.id, n]));
   return {
     ...d,
+    follow: FOLLOW_LINE,
     cover: d.cover_options[d.chosen_cover - 1]!.text,
     slides: d.slides.map((s) => {
       const q = s.quote_id ? quotes.get(s.quote_id)! : null;

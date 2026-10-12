@@ -26,6 +26,8 @@
  *   out; slide buckets spec); at most 2 stat slides stays.
  *   COPY BUDGET (Tommy, 2026-10-08): the stat line's extra numbers go in a
  *   body only when they fit its budget, else the caption (prompts file §8).
+ *   FOLLOW LINE (Lucas, 2026-10-12): the last slide is a fixed account CTA,
+ *   never story-specific; code overwrites any other line.
  *   PLACEMENT (caching): "BRIEF\n{{brief}}" moves to the user message;
  *   the brief is the Reporter's JSON, with SUBJECTS marked well_known by code.
  */
@@ -50,9 +52,12 @@ export const WRITER_SLIDE_RULE = '- Every element on a slide adds something new:
 /** Shared Context policy + Glossing from RULES_BLOCK (after its tested rule lines). */
 const CONTEXT_AND_GLOSSING = RULES_BLOCK.slice(RULES_BLOCK.indexOf('## Context policy'));
 
+/** Last-slide CTA (Lucas, 2026-10-12): one fixed account line, never story-specific. */
+export const WRITER_FOLLOW_RULE = '- FOLLOW is always exactly "Follow Helios for AI learning, stories, and updates." Do not customize it or tie it to the story.';
+
 export const WRITER_SECTION_LIST = `COVER OPTIONS: 1. 2. 3.  CHOSEN: n
 SLIDE 2 / TYPE / HEADLINE / BODY / (QUOTE or BIG NUMBER by ID) / VISUAL / FALLBACK VISUAL   (repeat)
-FOLLOW: …
+FOLLOW: Follow Helios for AI learning, stories, and updates.
 CAPTION: (see caption section)
 EDIT NOTES: one line per judgment call`;
 
@@ -102,7 +107,7 @@ As long as the story needs and no longer, usually one or two short paragraphs. I
 
 export const WRITER_SYSTEM = [
   WRITER_INTRO,
-  `## Rules\n\n${WRITER_RULES}\n${WRITER_ADDED_RULES}\n${WRITER_MOMENTUM_RULES}\n${WRITER_SLIDE_RULE}`,
+  `## Rules\n\n${WRITER_RULES}\n${WRITER_ADDED_RULES}\n${WRITER_MOMENTUM_RULES}\n${WRITER_SLIDE_RULE}\n${WRITER_FOLLOW_RULE}`,
   CONTEXT_AND_GLOSSING,
   `When you're done, call submit_draft with these sections:\n${WRITER_SECTION_LIST}`,
   WRITER_CAPTION_SECTION,

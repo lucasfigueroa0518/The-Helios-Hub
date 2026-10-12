@@ -82,7 +82,7 @@ export function stubDraft(news: string): DraftSubmission {
       { type: 'text', headline: line(news), body: line('What happened, in one line.'), quote_id: null, quote_excerpt: null, number_ids: [], ...visuals },
       { type: 'text', headline: line('Why it matters to you'), body: line('What it means for the reader.'), quote_id: null, quote_excerpt: null, number_ids: [], ...visuals },
     ],
-    follow: 'Follow Helios for AI news.',
+    follow: 'Follow Helios for AI learning, stories, and updates.',
     caption: line(`${news} Source: example.com`),
     edit_notes: [],
   };

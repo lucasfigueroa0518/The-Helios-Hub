@@ -10,7 +10,7 @@
  *   - story category chip: `tech` until there's a classifier for it.
  */
 import { SPREAD_MIN_ASPECT, type Photo } from '@/lib/social/photos/find';
-import type { FilledDraft, FilledSlide } from '@/lib/social/writer/draft';
+import { FOLLOW_LINE, type FilledDraft, type FilledSlide } from '@/lib/social/writer/draft';
 
 import { templateById, type TemplateId } from './buckets';
 import { DEFAULT_ICON, isIcon } from './icons';
@@ -120,7 +120,7 @@ export function draftSlides(draft: FilledDraft, photos: DraftPhotos, layout?: Ch
   const slides: SlideCopy[] = [
     { position: 0, layoutVariant: 'cover', headline: run(draft.cover), altText: draft.cover, icon: iconOf(photos.icons?.[0] ?? chosen?.icon), ...photoFields(photos.cover) },
     ...draft.slides.map((s, i) => storySlide(s, i + 1, photos.slides[i] ?? null, photos.icons?.[i + 1])),
-    { position: draft.slides.length + 1, layoutVariant: 'follow', storySpecificLine: draft.follow, altText: draft.follow },
+    { position: draft.slides.length + 1, layoutVariant: 'follow', storySpecificLine: FOLLOW_LINE, altText: FOLLOW_LINE },
   ];
   const spread = applySpreads(slides, draft, photos.slides, layout?.spreadAt ?? null);
   if (!layout) return spread;
