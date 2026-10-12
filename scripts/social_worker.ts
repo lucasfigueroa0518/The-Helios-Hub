@@ -109,10 +109,10 @@ async function main(): Promise<void> {
   }
 
   /** The daily script in a child process. Resolves with its exit code and the end of its stderr. */
-  function runDailyScript(runId: string, stories: number, capUsd: number, rerunPostId?: string): Promise<{ code: number | null; tail: string }> {
+  function runDailyScript(runId: string, stories: number, capUsd: number, rerunPostId?: string, storyIds: readonly string[] = []): Promise<{ code: number | null; tail: string }> {
     return new Promise((resolve) => {
       const tsx = path.join(process.cwd(), 'node_modules', '.bin', 'tsx');
-      const args = ['scripts/social_daily.ts', '--run-id', runId, '--stories', String(stories), '--cap-usd', String(capUsd), ...(rerunPostId ? ['--rerun-post', rerunPostId] : [])];
+      const args = ['scripts/social_daily.ts', '--run-id', runId, '--stories', String(stories), '--cap-usd', String(capUsd), ...(rerunPostId ? ['--rerun-post', rerunPostId] : []), ...storyIds.flatMap((id) => ['--story-id', id])];
       const child = spawn(tsx, args, {
         cwd: process.cwd(),
         env: process.env,
@@ -130,10 +130,16 @@ async function main(): Promise<void> {
     });
   }
 
-  /** A queued run, or a one-story rerun (`rerun`: its post; D51) carried out in the same child script. */
-  async function carryOutRun(run: { id: string; capUsd: number }, rerun?: { requestId: string; postId: string }): Promise<void> {
-    let stories = 1;
-    if (!rerun) {
+  /**
+   * A queued run, or a one-story rerun (`rerun`: its post; D51) carried out in the same child script.
+   * `run.storyIds`: Run now named the stories to make (the top of the ranked queue); the run makes exactly those.
+   */
+  async function carryOutRun(run: { id: string; capUsd: number; storyIds?: string[] }, rerun?: { requestId: string; postId: string }): Promise<void> {
+    const pinned = run.storyIds ?? [];
+    let stories = pinned.length || 1;
+    if (!rerun && pinned.length) {
+      log('run_pinned', { runId: run.id, storyIds: pinned });
+    } else if (!rerun) {
       // Daily fill (D54): what people placed for today counts toward posts_per_day; the run makes only the rest.
       const runStories = (await getSocialSetting<number>('run_stories')) ?? cfg.DEFAULT_RUN_STORIES;
       // A failed read never strands the claimed run: it makes run_stories, as before the rule.
@@ -151,7 +157,7 @@ async function main(): Promise<void> {
       }
     }
     log('run_started', { runId: run.id, stories, capUsd: run.capUsd, ...(rerun ? { rerunOf: rerun.postId, rerunRequest: rerun.requestId } : {}) });
-    const { code, tail } = await runDailyScript(run.id, stories, run.capUsd, rerun?.postId);
+    const { code, tail } = await runDailyScript(run.id, stories, run.capUsd, rerun?.postId, pinned);
     // The script finishes the run itself; one still `running` means it died first.
     await runs.failRun(query, run.id, `The daily script exited (${code}) before finishing the run. ${tail}`);
     const status = (await query(`SELECT status FROM social.runs WHERE id = $1`, [run.id])).rows[0]?.status;

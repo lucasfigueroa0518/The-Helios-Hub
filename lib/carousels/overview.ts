@@ -92,9 +92,9 @@ export async function loadCarouselsOverview(): Promise<CarouselsOverview> {
 }
 
 /** Run now: queue one manual run. The social worker claims it. A person clicking is the approval for its spend. */
-export async function requestManualRun(): Promise<{ queued: true; id: string } | { queued: false; note: string }> {
+export async function requestManualRun(storyIds: readonly string[] = []): Promise<{ queued: true; id: string } | { queued: false; note: string }> {
   const settings = await loadSettings();
-  const id = await runs.requestRun((text, params) => dbQuery(text, params), 'manual', { capUsd: settings.runCapUsd, hookPass: true });
+  const id = await runs.requestRun((text, params) => dbQuery(text, params), 'manual', { capUsd: settings.runCapUsd, hookPass: true, storyIds });
   return id ? { queued: true, id } : { queued: false, note: 'A run is already queued.' };
 }
 

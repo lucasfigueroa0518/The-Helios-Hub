@@ -55,7 +55,7 @@ export async function readProgress(type: ContentType): Promise<ProgressItem[]> {
   }
   if (type === 'carousels') {
     const { rows } = await dbQuery(
-      `SELECT id::text, status, requested_at::text AS requested_at, started_at::text AS started_at
+      `SELECT id::text, status, story_ids, requested_at::text AS requested_at, started_at::text AS started_at
          FROM social.runs WHERE kind = 'daily' AND status IN ('requested', 'running') ORDER BY requested_at`,
     );
     if (!rows.length) return [];
@@ -63,7 +63,12 @@ export async function readProgress(type: ContentType): Promise<ProgressItem[]> {
       `SELECT extract(epoch FROM finished_at - started_at) AS secs FROM social.runs
         WHERE kind = 'daily' AND status IN ('ok', 'partial') AND started_at IS NOT NULL AND finished_at IS NOT NULL ORDER BY started_at DESC LIMIT 15`,
     );
-    return rows.map((r) => ({ id: r.id, label: 'Carousel run', state: r.status === 'running' ? 'running' : 'queued', stage: null, error: null, topicId: null, requestedAt: r.requested_at, startedAt: r.started_at, typicalSeconds: secs }) as ProgressItem);
+    // A run asked for particular stories is one item per story, so each card shows its own; otherwise one item for the run.
+    return rows.flatMap((r) => {
+      const ids = (r.story_ids as string[] | null) ?? [];
+      const item = (id: string, topicId: string | null) => ({ id, label: 'Carousel run', state: r.status === 'running' ? 'running' : 'queued', stage: null, error: null, topicId, requestedAt: r.requested_at, startedAt: r.started_at, typicalSeconds: secs }) as ProgressItem;
+      return ids.length ? ids.map((storyId, i) => item(`${r.id}:${i}`, storyId)) : [item(r.id, null)];
+    });
   }
   if (type === 'explainers') {
     const { rows } = await dbQuery(

@@ -88,6 +88,10 @@ async function main() {
   })();
   if (rerunPostArg !== undefined && (!runIdArg || !/^[0-9a-f-]{36}$/i.test(rerunPostArg))) throw new Error('--rerun-post needs a post id and a --run-id');
 
+  // --story-id (repeatable): the stories Run now asked this run to make, in order. They are the whole selection.
+  const pinnedIds = process.argv.flatMap((a, i) => (a === '--story-id' && process.argv[i + 1] ? [process.argv[i + 1]!] : []));
+  if (pinnedIds.length && (!runIdArg || rerunPostArg)) throw new Error('--story-id needs a --run-id and cannot be combined with --rerun-post');
+
   const { newAnthropic } = await import('@/lib/anthropic-client');
   const { HELIOS_SOCIAL_FEEDS } = await import('@/lib/social/feeds');
   const { capped, createJevAsk, createJevTally, tallied } = await import('@/lib/social/jev/client');
@@ -126,8 +130,11 @@ async function main() {
   const rerunLib = rerunPostArg ? await import('@/lib/social/overnight/rerun') : null;
   const rerun = rerunPostArg && rerunLib ? await rerunLib.loadRerunStory(store.query!, rerunPostArg) : null;
   if (rerunPostArg && !rerun) throw new Error(`--rerun-post ${rerunPostArg}: no such post with a saved brief`);
-  // A rerun reads no feeds: its one story is the stored post's.
-  const articles = rerun ? [] : await fetchFeeds(HELIOS_SOCIAL_FEEDS);
+  // Named stories: the stored groups from earlier selections. Not found fails the run; no other story takes its place.
+  const pinnedLib = pinnedIds.length ? await import('@/lib/social/overnight/pinned') : null;
+  const pinned = pinnedLib ? await pinnedLib.loadPinnedCandidates(store.query!, pinnedIds) : null;
+  // A rerun reads no feeds: its one story is the stored post's. Neither does a run of named stories.
+  const articles = rerun || pinned ? [] : await fetchFeeds(HELIOS_SOCIAL_FEEDS);
 
   const jevTally = createJevTally();
   const jev = capped(tallied(createJevAsk(), jevTally), jevTally, capUsd);
@@ -194,12 +201,12 @@ async function main() {
   const result = await runDay({
     articles,
     // A rerun: selection is the stored story and the Reporter's work its saved brief (no spend); the rest runs as usual.
-    stages: rerun && rerunLib ? rerunLib.rerunStages(stages, rerun, rerunLib.rereadPages(rerun, readPage)) : stages,
+    stages: rerun && rerunLib ? rerunLib.rerunStages(stages, rerun, rerunLib.rereadPages(rerun, readPage)) : pinned && pinnedLib ? pinnedLib.pinnedStages(stages, pinned) : stages,
     // The meter stops the day between stages at the full cap; only the Claude-call guard keeps a per-call reserve.
     meter: createCostMeter({ capUsd }),
     log: store.setAsides,
     now,
-    targetPosts: rerun ? 1 : stories,
+    targetPosts: rerun ? 1 : pinned ? pinned.length : stories,
     // The worker's runs reuse a story's finished post instead of making it again (SH-60, P2-M4); a rerun makes it again on purpose.
     // A story whose post already holds a slot (a person placed it) is passed over: the daily fill counted it (D54).
     ...(runIdArg && store.query && !rerun

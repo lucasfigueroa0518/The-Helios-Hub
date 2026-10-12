@@ -94,7 +94,7 @@ export async function runToday(by: string, now = new Date()): Promise<{ plan: Ru
         const run = await requestRun('manual');
         done(Boolean(run), run ? 'Run queued. The reels worker starts it within a minute.' : 'A run was already queued.');
       } else if (step.action === 'carousel_run') {
-        const out = await requestManualRun();
+        const out = await requestManualRun(step.targets);
         done(out.queued, out.queued ? 'Run queued. The social worker starts it within a minute.' : out.note);
       } else if (step.action === 'explainer_renders') {
         const db = await explainersDb();

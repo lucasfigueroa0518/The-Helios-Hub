@@ -48,3 +48,12 @@ test('an explainer run stays on its own topic, and a stories run stays on its se
   assert.equal(inFlightKey(runs), inFlightKey({ ...runs, carousels: [] }));
   assert.notEqual(inFlightKey(runs), inFlightKey(none));
 });
+
+test('a run that was asked for particular carousel stories shows only on those stories’ cards', () => {
+  const amazon = item({ id: 'run-2:0', label: 'Carousel run', topicId: 'https://www.bloomberg.com/news/articles/amazon', state: 'queued' });
+  const runs = { ...none, carousels: [amazon] };
+  const mine = candidate({ post: null, locked: false, idea: { id: 'carousels:story:https://www.bloomberg.com/news/articles/amazon' } as QuotaCandidate['idea'] });
+  const other = candidate({ post: null, locked: false, idea: { id: 'carousels:story:https://www.bloomberg.com/news/videos/philly' } as QuotaCandidate['idea'] });
+  assert.equal(runForCandidate(mine, runs)?.id, 'run-2:0');
+  assert.equal(runForCandidate(other, runs), null, 'a different story’s card does not claim the run');
+});

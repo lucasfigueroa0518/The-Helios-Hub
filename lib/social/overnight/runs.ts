@@ -10,14 +10,18 @@ import { SOCIAL_STALE_RUN_MINUTES } from './config';
 
 export type RunTrigger = 'scheduled' | 'manual';
 
-/** Queue a run. Null when one is already queued (the single-requested index). */
-export async function requestRun(query: Query, trigger: RunTrigger, opts: { capUsd: number; hookPass: boolean }): Promise<string | null> {
+/**
+ * Queue a run. Null when one is already queued (the single-requested index).
+ * `storyIds`: the stories this run must make, in order (Run now sends the top
+ * of the ranked queue). Empty: the run picks its own from fresh news.
+ */
+export async function requestRun(query: Query, trigger: RunTrigger, opts: { capUsd: number; hookPass: boolean; storyIds?: readonly string[] }): Promise<string | null> {
   const { rows } = await query(
-    `INSERT INTO social.runs (kind, trigger, status, hook_pass, cap_usd)
-     VALUES ('daily', $1, 'requested', $2, $3)
+    `INSERT INTO social.runs (kind, trigger, status, hook_pass, cap_usd, story_ids)
+     VALUES ('daily', $1, 'requested', $2, $3, $4::text[])
      ON CONFLICT DO NOTHING
      RETURNING id`,
-    [trigger, opts.hookPass, opts.capUsd],
+    [trigger, opts.hookPass, opts.capUsd, [...(opts.storyIds ?? [])]],
   );
   return (rows[0]?.id as string | undefined) ?? null;
 }
@@ -40,7 +44,7 @@ export async function releaseStaleRuns(query: Query, now = new Date()): Promise<
 }
 
 /** Claim the queued run when nothing else is running. */
-export async function claimRun(query: Query, now = new Date()): Promise<{ id: string; capUsd: number; hookPass: boolean } | null> {
+export async function claimRun(query: Query, now = new Date()): Promise<{ id: string; capUsd: number; hookPass: boolean; storyIds: string[] } | null> {
   await releaseStaleRuns(query, now);
   try {
     const { rows } = await query(
@@ -52,11 +56,11 @@ export async function claimRun(query: Query, now = new Date()): Promise<{ id: st
            ORDER BY requested_at
            FOR UPDATE SKIP LOCKED
            LIMIT 1)
-        RETURNING id, cap_usd, hook_pass`,
+        RETURNING id, cap_usd, hook_pass, story_ids`,
       [now.toISOString()],
     );
     const r = rows[0];
-    return r ? { id: r.id as string, capUsd: Number(r.cap_usd), hookPass: r.hook_pass as boolean } : null;
+    return r ? { id: r.id as string, capUsd: Number(r.cap_usd), hookPass: r.hook_pass as boolean, storyIds: (r.story_ids as string[] | null) ?? [] } : null;
   } catch (error) {
     if ((error as { code?: string }).code === '23505') return null;
     throw error;

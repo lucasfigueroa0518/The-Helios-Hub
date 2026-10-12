@@ -123,6 +123,9 @@ ALTER TABLE social.runs ADD COLUMN IF NOT EXISTS trigger text NOT NULL DEFAULT '
 ALTER TABLE social.runs ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'ok';
 ALTER TABLE social.runs ADD COLUMN IF NOT EXISTS requested_at timestamptz NOT NULL DEFAULT now();
 ALTER TABLE social.runs ADD COLUMN IF NOT EXISTS error text;
+-- The stories a manual run was asked to make (Run now: the top of the ranked queue,
+-- in order). Empty: the run picks its own from fresh news, as the 3:00 AM run does.
+ALTER TABLE social.runs ADD COLUMN IF NOT EXISTS story_ids text[] NOT NULL DEFAULT '{}';
 ALTER TABLE social.runs ALTER COLUMN started_at DROP NOT NULL;
 
 DO $$

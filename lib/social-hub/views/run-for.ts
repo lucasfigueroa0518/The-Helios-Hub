@@ -21,10 +21,11 @@ export function runningSummary(runs: AllProgress): string[] {
 
 /**
  * The run behind a Today's Content card.
- * Explainers name their topic. Stories name their series. A carousel run is
- * one job for the type, and the carousel page stamps it on every card, so
- * today's carousel cards do too — including ones that already have a post.
- * Those posts are never status "generating".
+ * Explainers name their topic. Stories name their series. A carousel run
+ * asked for particular stories (Run now) names them, like an explainer; one
+ * that picks its own is a single job for the type and shows on every card,
+ * including ones that already have a post. Those posts are never status
+ * "generating".
  */
 export function runForCandidate(c: QuotaCandidate, runs: AllProgress): ProgressItem | null {
   if (c.vertical === 'reels') return null;
@@ -33,6 +34,10 @@ export function runForCandidate(c: QuotaCandidate, runs: AllProgress): ProgressI
   if (own) return own;
   if (c.vertical === 'explainers') return null;
   if (c.vertical === 'stories') return c.series ? items.find((i) => i.label === c.series) ?? null : null;
-  if (c.vertical === 'carousels') return items.find((i) => i.state === 'running') ?? items.find((i) => i.state === 'queued') ?? null;
+  // A run that picks its own stories shows on every card; one asked for particular stories (topicId) only on those.
+  if (c.vertical === 'carousels') {
+    const open = items.filter((i) => !i.topicId);
+    return open.find((i) => i.state === 'running') ?? open.find((i) => i.state === 'queued') ?? null;
+  }
   return null;
 }
