@@ -56,7 +56,7 @@ export function HealthView({ data }: { data: HealthPage }) {
     setBusy(true);
     try {
       const result = await requestJson<{ queued: boolean; note?: string }>('/api/reels/run', { method: 'POST' });
-      setNote(result.queued ? 'Run queued.' : result.note ?? 'A run is already pending.');
+      setNote(result.note ?? (result.queued ? 'Run queued.' : 'A run is already pending.'));
       router.refresh();
     } catch (error) {
       setNote(error instanceof Error ? error.message : String(error));

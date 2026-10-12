@@ -14,7 +14,8 @@ import { pendingRun, requestRun } from '@/lib/reels/repository';
 import { requestFinish, todaySlateFor } from '@/lib/reels/visual/finish';
 import { liveHubQuery } from '@/lib/social-hub/db';
 import { loadDataset } from '@/lib/social-hub/load';
-import { planFrom, quotaCandidates, typeDay, type PlanStep, type RunPlan } from '@/lib/social-hub/run-today';
+import { planFrom, quotaCandidates, stepsFor, typeDay, type PlanStep, type RunPlan } from '@/lib/social-hub/run-today';
+import type { Vertical } from '@/lib/social-hub/types';
 import { DEFAULT_DAY_QUOTAS } from '@/lib/social-hub/queries/day';
 import { nyDateOf } from '@/lib/social-hub/time';
 import { windowsOn } from '@/lib/social-hub/views/plan';
@@ -68,11 +69,15 @@ export async function livePlan(now = new Date()): Promise<RunPlan> {
 
 export type StepResult = { vertical: PlanStep['vertical']; label: string; ok: boolean; note: string };
 
-/** Re-plan on the server, then start what today still needs. */
-export async function runToday(by: string, now = new Date()): Promise<{ plan: RunPlan; results: StepResult[] }> {
+/**
+ * Re-plan on the server, then start what today still needs. `only`: a type's
+ * own Run button runs just that type's step, so every Run button makes the
+ * same thing from the same ranked queue.
+ */
+export async function runToday(by: string, now = new Date(), only?: Vertical): Promise<{ plan: RunPlan; results: StepResult[] }> {
   const plan = await livePlan(now);
   const results: StepResult[] = [];
-  for (const step of plan.steps) {
+  for (const step of stepsFor(plan, only)) {
     if (step.action === 'none') continue;
     const done = (ok: boolean, note: string) => results.push({ vertical: step.vertical, label: step.label, ok, note });
     try {
@@ -120,4 +125,13 @@ export async function runToday(by: string, now = new Date()): Promise<{ plan: Ru
     }
   }
   return { plan, results };
+}
+
+/** What a type's own Run button answers: queued or not, and what it is making (or why nothing). */
+export async function runType(by: string, vertical: Vertical, now = new Date()): Promise<{ queued: boolean; note: string }> {
+  const { plan, results } = await runToday(by, now, vertical);
+  const started = results.filter((r) => r.ok);
+  if (started.length) return { queued: true, note: started.map((r) => r.note).join(' ') };
+  if (results.length) return { queued: false, note: results.map((r) => r.note).join(' ') };
+  return { queued: false, note: stepsFor(plan, vertical)[0]?.note ?? 'Nothing to run.' };
 }

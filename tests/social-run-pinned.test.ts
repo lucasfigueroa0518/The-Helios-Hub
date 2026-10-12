@@ -14,7 +14,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { loadPinnedCandidates, pinnedStages } from '@/lib/social/overnight/pinned';
 import { claimRun, requestRun } from '@/lib/social/overnight/runs';
 import type { Query } from '@/lib/social/store/pg';
-import { planFrom, type RunInputs } from '@/lib/social-hub/run-today';
+import { planFrom, stepsFor, type RunInputs } from '@/lib/social-hub/run-today';
 
 const AMAZON = 'https://www.bloomberg.com/news/articles/2026-10-11/amazon-is-in-talks-to-buy-ai-startup-decart';
 const PHILLY = 'https://www.bloomberg.com/news/videos/2026-10-12/anthropic-ai-model-goes-rogue';
@@ -146,4 +146,13 @@ test('stages: selection is replaced by exactly the pinned stories, at no cost, a
     assert.deepEqual(res.value.map((c) => c.id), [AMAZON]);
     assert.equal(res.costUsd, 0);
   }
+});
+
+// ── A type's own Run button follows the same plan ───────────────────────────
+
+test('a type’s own Run now uses that type’s step of the same plan', () => {
+  const plan = planFrom({ ...base, carousels: { quota: 2, held: 0, missing: [idea(AMAZON, 'Amazon to buy Decart')] } });
+  assert.deepEqual(stepsFor(plan, 'carousels').map((s) => s.vertical), ['carousels']);
+  assert.deepEqual(stepsFor(plan, 'carousels')[0]!.targets, [AMAZON]);
+  assert.equal(stepsFor(plan, undefined).length, plan.steps.length, 'no type named: the whole day, as Content’s Run now does');
 });

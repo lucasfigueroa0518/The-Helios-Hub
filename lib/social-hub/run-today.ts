@@ -108,6 +108,11 @@ export function planFrom(i: RunInputs): RunPlan {
   return { today: i.today, steps, estimateUsd, anything: steps.some((s) => s.action !== 'none') };
 }
 
+/** The steps a Run button starts: one type's own button runs that type's step of the plan, Content's Run now every step. */
+export function stepsFor(plan: RunPlan, only?: Vertical): PlanStep[] {
+  return only ? plan.steps.filter((s) => s.vertical === only) : plan.steps;
+}
+
 /** The native id an idea id ends with (`reels:idea:<id>` → `<id>`). */
 export function ideaRef(ideaId: string): string {
   const parts = ideaId.split(':');

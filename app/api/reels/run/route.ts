@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { pendingRun, requestRun } from '@/lib/reels/repository';
+import { runType } from '@/lib/content-type/run-today-live';
 import { getSession } from '@/lib/session';
 
 export const runtime = 'nodejs';
@@ -16,18 +16,8 @@ export async function POST() {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const queued = await requestRun('manual');
-    if (queued) return NextResponse.json({ run: queued, queued: true });
-
-    const existing = await pendingRun();
-    return NextResponse.json({
-      run: existing,
-      queued: false,
-      note:
-        existing?.status === 'running'
-          ? 'A run is already in progress.'
-          : 'A run is already queued.',
-    });
+    // The same plan as the Content page's Run now: today's missing reels are built, or a night runs when there is no slate yet.
+    return NextResponse.json(await runType(session.email, 'reels'));
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : String(error) },

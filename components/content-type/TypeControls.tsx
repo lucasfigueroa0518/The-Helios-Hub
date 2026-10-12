@@ -43,12 +43,12 @@ export function CarouselRunButton() {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   async function run() {
-    if (!confirm('Run carousels now? A run makes live model and web calls, up to the run cap set in Settings (about $2 by default).')) return;
+    if (!confirm('Run carousels now? It makes the top story in today’s queue, with live model and web calls, up to the run cap set in Settings (about $2 by default).')) return;
     setBusy(true);
     try {
       const out = await call<{ queued: boolean; note?: string }>('/api/carousels/run', {});
       window.dispatchEvent(new Event(PROGRESS_EVENT));
-      setNote(out.queued ? 'Run queued. The social worker picks it up within a minute.' : (out.note ?? 'A run is already queued.'));
+      setNote(out.queued ? `${out.note ?? 'Run queued.'} The social worker picks it up within a minute.` : (out.note ?? 'A run is already queued.'));
       router.refresh();
     } catch (e) {
       setNote(msg(e));
