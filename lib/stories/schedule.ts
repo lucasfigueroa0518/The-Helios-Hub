@@ -74,6 +74,32 @@ export async function seriesDayPlaced(db: Queryable, series: Series, date: strin
 const reportedFills = new WeakMap<object, Set<string>>();
 
 /**
+ * How many times the worker asks for an auto set for one series on one day
+ * after its builds ended without a set (2026-10-11). A skipped set (no story
+ * or pair cleared the bar, or the day's spend cap was reached) leaves the
+ * one-live-set-per-day index, so without this the 15-second loop asked again
+ * on every tick: on Sat Oct 10 it made 1,126 skipped Free vs. Paid sets in six
+ * hours, about \$1.95 of builds before the \$2 daily cap held. A skip is
+ * tried once a day (the same pool gives the same answer a minute later); an
+ * error is tried up to three times. A person's Generate click is never held.
+ */
+export const MAX_AUTO_SKIPS_PER_DAY = 1;
+export const MAX_AUTO_FAILURES_PER_DAY = 3;
+
+async function autoAttempts(db: Queryable, series: Series, date: string): Promise<{ skipped: number; failed: number }> {
+  const { rows } = await db.query<{ status: string; n: number }>(
+    `SELECT status, count(*)::int AS n FROM stories.sets
+      WHERE series = $1 AND ny_date = $2::date AND trigger = 'auto' AND status IN ('skipped', 'failed')
+      GROUP BY status`,
+    [series, date],
+  );
+  const n = (status: string) => Number(rows.find((r) => r.status === status)?.n ?? 0);
+  return { skipped: n('skipped'), failed: n('failed') };
+}
+
+const reportedHolds = new WeakMap<object, Set<string>>();
+
+/**
  * Request today's set for every enabled auto series that is due and has none.
  * Returns what was requested. Daily fill (D54): a series' day that a person
  * already filled (a set they generated and approved or scheduled, or placed
@@ -99,6 +125,19 @@ export async function requestAutoSets(db: Queryable, settings: StoriesSettings, 
         if (seen.size > 500) seen.clear();
         seen.add(key);
         reportFill(fill, opts.log ?? consoleFillLog, { series: s });
+      }
+      continue;
+    }
+    // An auto attempt that ended in a skip or errors is not repeated on every tick (see MAX_AUTO_SKIPS_PER_DAY).
+    const tried = await autoAttempts(db, s, date);
+    if (tried.skipped >= MAX_AUTO_SKIPS_PER_DAY || tried.failed >= MAX_AUTO_FAILURES_PER_DAY) {
+      const key = `${s}:${date}`;
+      const seen = reportedHolds.get(db) ?? new Set<string>();
+      reportedHolds.set(db, seen);
+      if (!seen.has(key)) {
+        if (seen.size > 500) seen.clear();
+        seen.add(key);
+        (opts.log ?? consoleFillLog)('auto_held', { series: s, nyDate: date, skipped: tried.skipped, failed: tried.failed, why: 'the day\'s auto attempt ended without a set; Generate (a person) can still ask' });
       }
       continue;
     }

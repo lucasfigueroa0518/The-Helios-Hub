@@ -15,7 +15,7 @@ import { createStoriesJev } from '@/lib/stories/jev';
 import type { StoriesMetaClient } from '@/lib/stories/publish/meta';
 import type { ReviewCall } from '@/lib/stories/render/review';
 import { claimNextRequested, getSet, recentKeys, recordCost, recordHistory, requestSet } from '@/lib/stories/repository';
-import { isDueOn, pickPublishAt, requestAutoSets, windowBounds } from '@/lib/stories/schedule';
+import { isDueOn, MAX_AUTO_FAILURES_PER_DAY, pickPublishAt, requestAutoSets, windowBounds } from '@/lib/stories/schedule';
 import { DEFAULT_SETTINGS, loadSettings, saveSeriesSetting } from '@/lib/stories/settings';
 import { carouselNumbers, morningDownloadCarousel, recentUsedPhotoUrls, recordPublishedPhoto } from '@/lib/stories/sources/carousel';
 import { freeToolLeads, morningDownloadReels, storyKey, theNumberIdeas } from '@/lib/stories/sources/reels';
@@ -318,6 +318,33 @@ test('auto sets: only for series switched to auto, due today, still before the w
   const s = await loadSettings(db);
   assert.deepEqual(await requestAutoSets(db, s, NOW), ['guess_the_number']);
   assert.deepEqual(await requestAutoSets(db, s, NOW), []);
+});
+
+test('auto sets: a skipped auto set is not requested again on every tick (the 1,126-sets-in-six-hours loop); a person can still Generate', async () => {
+  const { db } = await harnessDb();
+  await saveSeriesSetting(db, 'guess_the_number', { auto: true });
+  const s = await loadSettings(db);
+  const count = async () => Number((await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM stories.sets WHERE series = 'guess_the_number' AND ny_date = $1::date`, [DATE])).rows[0]!.n);
+  assert.deepEqual(await requestAutoSets(db, s, NOW), ['guess_the_number']);
+  // The build found nothing that cleared the bar: the set is skipped.
+  await db.query(`UPDATE stories.sets SET status = 'skipped', error = 'no pair cleared the bar and its checks' WHERE series = 'guess_the_number'`);
+  for (let tick = 0; tick < 50; tick++) assert.deepEqual(await requestAutoSets(db, s, NOW), [], 'no new auto set');
+  assert.equal(await count(), 1, 'fifty ticks made no new sets');
+  // The next day the series is due (Monday) is a new day: it is tried again.
+  assert.deepEqual(await requestAutoSets(db, s, new Date('2026-10-12T12:00:00Z')), ['guess_the_number']);
+  assert.equal(await count(), 1, 'Thursday still has its one skipped set');
+});
+
+test('auto sets: errors are retried, but only up to the daily limit', async () => {
+  const { db } = await harnessDb();
+  await saveSeriesSetting(db, 'guess_the_number', { auto: true });
+  const s = await loadSettings(db);
+  for (let attempt = 1; attempt <= MAX_AUTO_FAILURES_PER_DAY; attempt++) {
+    assert.deepEqual(await requestAutoSets(db, s, NOW), ['guess_the_number'], `attempt ${attempt}`);
+    await db.query(`UPDATE stories.sets SET status = 'failed', error = 'render: boom' WHERE series = 'guess_the_number' AND status = 'requested'`);
+  }
+  for (let tick = 0; tick < 20; tick++) assert.deepEqual(await requestAutoSets(db, s, NOW), []);
+  assert.equal(Number((await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM stories.sets WHERE series = 'guess_the_number'`)).rows[0]!.n), MAX_AUTO_FAILURES_PER_DAY);
 });
 
 /* ── The worker loop (M8) ────────────────────────────────────────── */

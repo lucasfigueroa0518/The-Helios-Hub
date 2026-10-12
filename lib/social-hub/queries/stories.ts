@@ -83,7 +83,13 @@ export type StoriesRead = {
   pool: StoryPoolRow[];
 };
 
-/** Requested / building sets have no content yet; rejected sets never post. */
+/**
+ * Requested / building sets have no content yet; rejected sets never post.
+ * Of the skipped sets for one series and day only the newest is read: the
+ * worker once asked again on every tick and made 1,126 skipped sets in one
+ * day (lib/stories/schedule.ts MAX_AUTO_SKIPS_PER_DAY). They are kept in the
+ * database, and a page shows the day's skip once.
+ */
 export const STORY_SETS_SQL = `
 SELECT s.id AS set_id, s.series, s.ny_date::text AS ny_date, s.status, s.trigger, s.style, s.payload,
        s.publish_at::text AS publish_at, s.flagged, s.error, s.spend_usd,
@@ -97,6 +103,10 @@ SELECT s.id AS set_id, s.series, s.ny_date::text AS ny_date, s.status, s.trigger
     SELECT verdict, tags FROM stories.feedback WHERE set_id = s.id ORDER BY created_at DESC LIMIT 1
   ) fb ON true
  WHERE s.status NOT IN ('requested', 'building', 'rejected')
+   AND (s.status <> 'skipped' OR s.id = (
+     SELECT x.id FROM stories.sets x
+      WHERE x.series = s.series AND x.ny_date = s.ny_date AND x.status = 'skipped'
+      ORDER BY x.created_at DESC, x.id DESC LIMIT 1))
  ORDER BY s.ny_date DESC, s.created_at DESC`;
 
 export const STORY_FRAMES_SQL = `
