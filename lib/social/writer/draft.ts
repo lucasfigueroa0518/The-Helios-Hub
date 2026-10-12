@@ -73,7 +73,7 @@ export type DraftSlide = {
 };
 
 /** Fixed last-slide CTA. Code writes this; the Writer/Editor never customize it. */
-export const FOLLOW_LINE = 'Follow Helios for AI learning, stories, and updates.';
+export const FOLLOW_LINE = 'Follow Helios for more AI stories like this.';
 
 export type DraftSubmission = {
   cover_options: Array<{ text: string; facts: string[]; visual: VisualRequest; fallback_visual: VisualRequest; alt_visuals?: VisualRequest[]; subject_ids?: string[]; icon?: string }>;

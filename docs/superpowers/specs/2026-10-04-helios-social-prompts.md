@@ -325,7 +325,7 @@ BRIEF
 - **Writer:** one rule line after the slide-repetition rule. The section list's `FOLLOW: …` becomes the sentence. Code overwrites any other line on check, fill, silent fix and render.
 
 ```
-- FOLLOW is always exactly "Follow Helios for AI learning, stories, and updates." Do not customize it or tie it to the story.
+- FOLLOW is always exactly "Follow Helios for more AI stories like this." Do not customize it or tie it to the story.
 ```
 
 ---

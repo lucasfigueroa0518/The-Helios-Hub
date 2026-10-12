@@ -52,12 +52,12 @@ export const WRITER_SLIDE_RULE = '- Every element on a slide adds something new:
 /** Shared Context policy + Glossing from RULES_BLOCK (after its tested rule lines). */
 const CONTEXT_AND_GLOSSING = RULES_BLOCK.slice(RULES_BLOCK.indexOf('## Context policy'));
 
-/** Last-slide CTA (Lucas, 2026-10-12): one fixed account line, never story-specific. */
-export const WRITER_FOLLOW_RULE = '- FOLLOW is always exactly "Follow Helios for AI learning, stories, and updates." Do not customize it or tie it to the story.';
+/** Last-slide CTA (Lucas, 2026-10-12; wording Tommy, 2026-10-12): one fixed account line that promises more stories of this kind, never the story itself. */
+export const WRITER_FOLLOW_RULE = '- FOLLOW is always exactly "Follow Helios for more AI stories like this." Do not customize it or tie it to the story.';
 
 export const WRITER_SECTION_LIST = `COVER OPTIONS: 1. 2. 3.  CHOSEN: n
 SLIDE 2 / TYPE / HEADLINE / BODY / (QUOTE or BIG NUMBER by ID) / VISUAL / FALLBACK VISUAL   (repeat)
-FOLLOW: Follow Helios for AI learning, stories, and updates.
+FOLLOW: Follow Helios for more AI stories like this.
 CAPTION: (see caption section)
 EDIT NOTES: one line per judgment call`;
 
