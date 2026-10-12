@@ -3,15 +3,17 @@ import { ArrowRight, ChevronLeft, ChevronRight, ImageIcon, Loader2, Music2, Tria
 
 import { RunsRefresh } from '@/components/social-hub/content/RunsRefresh';
 import { HubSettingsButton, RunTodayButton } from '@/components/social-hub/content/HubControls';
+import { NeedsYouMenu } from '@/components/social-hub/content/NeedsYouMenu';
 import { TodayStrip } from '@/components/social-hub/content/TodayStrip';
 import { DataNotes } from '@/components/social-hub/DataNotes';
 import { HubLink } from '@/components/social-hub/nav/HubNav';
+import { PostLink } from '@/components/social-hub/nav/PostLink';
 import { PageHead } from '@/components/social-hub/ui/PageHead';
 import { TypeMark } from '@/components/social-hub/ui/marks';
 import type { AllProgress } from '@/lib/content-type/progress';
 import type { HubDataset } from '@/lib/social-hub/dataset';
 import type { HubPost } from '@/lib/social-hub/types';
-import { plural, relative, when } from '@/lib/social-hub/views/format';
+import { displayName, plural, relative, when } from '@/lib/social-hub/views/format';
 import type { LibrariesModel } from '@/lib/social-hub/views/libraries';
 import { offerer } from '@/lib/social-hub/views/offer';
 import { poolStale, poolSummaries, type PoolSummary } from '@/lib/social-hub/views/pools';
@@ -68,7 +70,26 @@ export function ContentScreen({ dataset, base, now, libraries, progress, control
           <>
             <strong>{m.plan.filled}</strong> of {m.plan.slots} slots filled
             {' · '}
-            {actNow ? <strong className="sh-needs-count">{actNow} {actNow === 1 ? 'needs' : 'need'} you</strong> : 'nothing needs you today'}
+            {actNow ? (
+              <NeedsYouMenu label={`${actNow} ${actNow === 1 ? 'needs' : 'need'} you`}>
+                {needs.filter((g) => ['today', 'tomorrow', 'unplaced'].includes(g.id)).map((g) => (
+                  <section key={g.id} className="sh-needs-group" aria-label={g.label}>
+                    <h3 className="sh-needs-group__label">{g.label}</h3>
+                    <ul className="sh-needs-rows">
+                      {g.posts.map((post) => (
+                        <li key={post.id}>
+                          <PostLink id={post.id} className="sh-needs-row">
+                            <TypeMark vertical={post.vertical} />
+                            <span className="sh-needs-row__name">{displayName(post)}</span>
+                            <span className="sh-muted sh-needs-row__line">{o.offer(post).state.line}</span>
+                          </PostLink>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ))}
+              </NeedsYouMenu>
+            ) : 'nothing needs you today'}
             {later ? <> · {later} later</> : null}
             {parked.length ? <> · {parked.length} can’t be approved here yet</> : null}
             {summary.length ? <> · <strong>{summary.join(' · ')}</strong></> : null}
