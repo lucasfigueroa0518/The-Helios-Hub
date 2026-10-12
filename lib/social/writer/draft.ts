@@ -72,15 +72,47 @@ export type DraftSlide = {
   spread_with_next?: boolean;
 };
 
-/** Fixed last-slide CTA. Code writes this; the Writer/Editor never customize it. */
+/** The last-slide CTA when the Writer gives no clean topic. Code writes the line; the Writer/Editor never write it. */
 export const FOLLOW_LINE = 'Follow Helios for more AI stories like this.';
+
+/**
+ * Words that promise coverage of this story to come, or of anything ongoing
+ * (Tommy, 2026-10-12): the follow slide names the kind of story, never a
+ * follow-up to it.
+ */
+const FOLLOW_PROMISE = /\b(updates?|latest|next|ongoing|developing|unfold\w*|keep(ing)? up|follow(ing)? along|stay tuned|what happens|follow-?ups?|continues?|coming|soon|more to come)\b/i;
+
+/**
+ * A usable follow topic: 2 to 5 plain lowercase words (only "AI" capitalized),
+ * so it cannot name a company, person or product and carries no digits or
+ * punctuation, and promises no follow-up. The Writer's job is only to pick the
+ * kind of story ("AI safety stories"); this is the check.
+ */
+export function validFollowTopic(topic: unknown): topic is string {
+  if (typeof topic !== 'string') return false;
+  const t = topic.trim();
+  if (t.length === 0 || t.length > 40) return false;
+  const words = t.split(/\s+/);
+  if (words.length < 2 || words.length > 5) return false;
+  if (!words.every((w) => w === 'AI' || /^[a-z&'-]+$/.test(w))) return false;
+  if (/\blike this\b/i.test(t) || FOLLOW_PROMISE.test(t)) return false;
+  return true;
+}
+
+/** The follow slide's line: "Follow Helios for more ⟨topic⟩ like this." for a clean topic, else FOLLOW_LINE. */
+export function followLine(topic?: string | null): string {
+  return validFollowTopic(topic) ? `Follow Helios for more ${topic.trim()} like this.` : FOLLOW_LINE;
+}
 
 export type DraftSubmission = {
   cover_options: Array<{ text: string; facts: string[]; visual: VisualRequest; fallback_visual: VisualRequest; alt_visuals?: VisualRequest[]; subject_ids?: string[]; icon?: string }>;
   /** 1-based index into cover_options. */
   chosen_cover: number;
   slides: DraftSlide[];
+  /** The follow line, set by code from `follow_topic` (followLine); whatever the Writer puts here is replaced. */
   follow: string;
+  /** The kind of story this is, 2 to 5 plain words ("AI safety stories"); code builds the follow line from it. */
+  follow_topic?: string;
   caption: TaggedLine;
   edit_notes: string[];
 };
@@ -111,7 +143,7 @@ const visual = (description: string) => ({
 const altVisuals = { type: 'array', maxItems: 3, items: visual('A different visual drawn from another part of this slide\'s own words.'), description: '2–3 other visuals, each from a different part of this slide\'s own words, tried only if the visual and the fallback find nothing usable.' };
 const visuals = { visual: visual('The visual this slide asks for.'), fallback_visual: visual('A different visual, used when the first finds nothing usable.') };
 
-export const DRAFT_SCHEMA = obj({
+export const DRAFT_SCHEMA = optional(obj({
   cover_options: {
     type: 'array',
     description: 'Exactly 3 cover options.',
@@ -134,10 +166,11 @@ export const DRAFT_SCHEMA = obj({
       icon,
     }), 'subject_ids', 'icon', 'alt_visuals'),
   },
-  follow: { type: 'string', description: `The FOLLOW line. Always exactly: ${FOLLOW_LINE}` },
+  follow: { type: 'string', description: `The FOLLOW line. Code sets it from follow_topic; any value is replaced. Write: ${FOLLOW_LINE}` },
+  follow_topic: { type: 'string', description: 'The kind of story this is, 2 to 5 plain lowercase words except "AI", like "AI safety stories", "AI deal news", "AI policy stories". Never a name, never about this story\'s next chapter. The closing line reads "Follow Helios for more [this] like this."' },
   caption: tagged('The full caption (see the caption section).'),
   edit_notes: { ...strList, description: 'One line per judgment call.' },
-});
+}), 'follow_topic');
 
 export const SUBMIT_DRAFT_TOOL = {
   name: 'submit_draft',
@@ -228,7 +261,7 @@ export function checkDraft(input: unknown, brief: Brief): DraftSubmission {
     for (const id of s.number_ids) if (!numbers.has(id)) errors.push({ section: at, message: `number ${id} isn't in the brief` });
   });
   tagCheck('caption', d.caption.facts);
-  d.follow = FOLLOW_LINE;
+  d.follow = followLine(d.follow_topic);
 
   if (errors.length > 0) throw new DraftValidationError(errors);
   return d;
@@ -254,7 +287,7 @@ export function fillDraft(d: DraftSubmission, brief: Brief): FilledDraft {
   const numbers = new Map(brief.numbers.map((n) => [n.id, n]));
   return {
     ...d,
-    follow: FOLLOW_LINE,
+    follow: followLine(d.follow_topic),
     cover: d.cover_options[d.chosen_cover - 1]!.text,
     slides: d.slides.map((s) => {
       const q = s.quote_id ? quotes.get(s.quote_id)! : null;

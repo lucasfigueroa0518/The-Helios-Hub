@@ -298,3 +298,21 @@ test('after the Editor: tags the edited words still name are kept, nothing logge
   assert.deepEqual(r.tagsDropped, []);
   assert.deepEqual(r.draft.slides.map((s) => s.subject_ids), writer.slides.map((s) => s.subject_ids));
 });
+
+test('after the Editor: the follow topic is the Writer’s, whatever the Editor returns', async () => {
+  const writer = sifDraftHandoff();
+  writer.follow_topic = 'AI policy stories';
+  // The Editor drops it.
+  const dropped = structuredClone(writer);
+  delete dropped.follow_topic;
+  const a = await runEditor(brief(), writer, { create: scripted([msg([tool('submit_draft', dropped)])]).create });
+  assert.ok(a.ok);
+  assert.equal(a.draft.follow_topic, 'AI policy stories');
+  assert.equal(a.filled.follow, 'Follow Helios for more AI policy stories like this.');
+  // The Editor changes it (the Writer owns this line).
+  const changed = structuredClone(writer);
+  changed.follow_topic = 'Amazon deal news';
+  const b = await runEditor(brief(), writer, { create: scripted([msg([tool('submit_draft', changed)])]).create });
+  assert.ok(b.ok);
+  assert.equal(b.draft.follow_topic, 'AI policy stories');
+});

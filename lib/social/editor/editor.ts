@@ -104,6 +104,8 @@ export async function runEditor(brief: Brief, writerDraft: DraftSubmission, deps
   // Tags re-checked right after the Editor (Tommy, 2026-10-07): code, no retry. A tag the edited
   // words no longer name is removed and logged; the words and the requests stay as the Editor left them.
   value = keepAltVisuals(writerDraft, value);
+  // The follow line's topic is the Writer's alone (Tommy, 2026-10-12): the Editor's copy of it is ignored.
+  value = { ...value, follow_topic: writerDraft.follow_topic };
   const t = pruneSubjectTags(value, brief, deps.subjectKinds ?? null);
   // An icon the Editor dropped or changed to one not on the list falls back to the default (logged).
   const ic = defaultIcons(t.draft);

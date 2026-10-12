@@ -309,3 +309,12 @@ test('C8 goes back to the Editor only (once), not the Writer; after the Fact-che
   const blocks = [...prompts.slice(prompts.indexOf('**No repetition within a slide')).matchAll(/```\n([\s\S]*?)\n```/g)].map((m) => m[1]);
   assert.equal(EDITOR_CHECKED_RULE, blocks[1], 'Editor line word for word from the prompts file');
 });
+
+test('applySilentFixes: the follow line is built from the Writer’s clean topic, else the fixed line', () => {
+  const clean = applySilentFixes(draft((x) => { x.follow_topic = 'AI deal news'; }));
+  assert.equal(clean.draft.follow, 'Follow Helios for more AI deal news like this.');
+  const named = applySilentFixes(draft((x) => { x.follow_topic = 'Amazon deal news'; }));
+  assert.equal(named.draft.follow, 'Follow Helios for more AI stories like this.');
+  const none = applySilentFixes(draft());
+  assert.equal(none.draft.follow, 'Follow Helios for more AI stories like this.');
+});

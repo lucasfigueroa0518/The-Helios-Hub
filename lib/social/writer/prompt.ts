@@ -26,8 +26,9 @@
  *   out; slide buckets spec); at most 2 stat slides stays.
  *   COPY BUDGET (Tommy, 2026-10-08): the stat line's extra numbers go in a
  *   body only when they fit its budget, else the caption (prompts file §8).
- *   FOLLOW LINE (Lucas, 2026-10-12): the last slide is a fixed account CTA,
- *   never story-specific; code overwrites any other line.
+ *   FOLLOW LINE (Lucas, 2026-10-12; topic Tommy, 2026-10-12): the last slide is
+ *   an account CTA that names the kind of story, never this story or a
+ *   follow-up to it; code builds the line from the Writer's topic or falls back.
  *   PLACEMENT (caching): "BRIEF\n{{brief}}" moves to the user message;
  *   the brief is the Reporter's JSON, with SUBJECTS marked well_known by code.
  */
@@ -53,11 +54,11 @@ export const WRITER_SLIDE_RULE = '- Every element on a slide adds something new:
 const CONTEXT_AND_GLOSSING = RULES_BLOCK.slice(RULES_BLOCK.indexOf('## Context policy'));
 
 /** Last-slide CTA (Lucas, 2026-10-12; wording Tommy, 2026-10-12): one fixed account line that promises more stories of this kind, never the story itself. */
-export const WRITER_FOLLOW_RULE = '- FOLLOW is always exactly "Follow Helios for more AI stories like this." Do not customize it or tie it to the story.';
+export const WRITER_FOLLOW_RULE = '- FOLLOW TOPIC is the kind of story this is, in 2 to 5 plain words, like "AI safety stories", "AI deal news" or "AI policy stories". Code writes the closing line "Follow Helios for more [topic] like this." Never name a company, person or product, and never hint that we will keep covering this story (no "updates", "latest", "next").';
 
 export const WRITER_SECTION_LIST = `COVER OPTIONS: 1. 2. 3.  CHOSEN: n
 SLIDE 2 / TYPE / HEADLINE / BODY / (QUOTE or BIG NUMBER by ID) / VISUAL / FALLBACK VISUAL   (repeat)
-FOLLOW: Follow Helios for more AI stories like this.
+FOLLOW TOPIC: the kind of story this is, 2 to 5 plain words
 CAPTION: (see caption section)
 EDIT NOTES: one line per judgment call`;
 

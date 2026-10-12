@@ -72,7 +72,7 @@ function errorsOf(edit: (d: DraftSubmission) => void): string[] {
 test('Writer prompt = tested intro + RULES (tested lines + 3 additions + shared policy) + submit_draft line + section list + caption section', () => {
   const tested = codeBlocks('## 2. Writer')[0]!;
   const intro = tested.slice(0, tested.indexOf('\n\nRULES\n'));
-  const sectionList = tested.slice(tested.indexOf('\n\nOUTPUT\n') + '\n\nOUTPUT\n'.length, tested.indexOf('\n\nBRIEF\n')).replace('/ IMAGE   (repeat)', '/ VISUAL / FALLBACK VISUAL   (repeat)').replace('FOLLOW: …', `FOLLOW: ${FOLLOW_LINE}`);
+  const sectionList = tested.slice(tested.indexOf('\n\nOUTPUT\n') + '\n\nOUTPUT\n'.length, tested.indexOf('\n\nBRIEF\n')).replace('/ IMAGE   (repeat)', '/ VISUAL / FALLBACK VISUAL   (repeat)').replace('FOLLOW TOPIC: …', 'FOLLOW TOPIC: the kind of story this is, 2 to 5 plain words');
   const caption = codeBlocks('## 3. Writer')[0]!
     .replace('${VOICE_BLOCK}', VOICE_BLOCK)
     .replace("${renderRulesFor('caption')}", renderRulesFor('writer'))
@@ -390,4 +390,19 @@ test('the shorten check: a line still over its limit, or with a new number, goes
   assert.throws(() => checkLines({ lines: [{ id: 'L1', text: 'It costs $70 over a long stretch' }] }, lines), /limit 20/);
   assert.throws(() => checkLines({ lines: [{ id: 'L1', text: 'It costs $99' }] }, lines), /the number 99 wasn't in the line/);
   assert.equal(checkLines({ lines: [{ id: 'L1', text: 'It costs $70 now' }] }, lines).get('L1'), 'It costs $70 now');
+});
+
+test('FOLLOW names the kind of story when the Writer gives a clean topic, and never customizes otherwise', () => {
+  const brief = briefSuperIntelligenceForce();
+  const topical = draft();
+  topical.follow_topic = 'AI policy stories';
+  assert.equal(checkDraft(topical, brief).follow, 'Follow Helios for more AI policy stories like this.');
+  assert.equal(fillDraft(topical, brief).follow, 'Follow Helios for more AI policy stories like this.');
+  // A topic that names the story or promises follow-up is dropped for the fixed line.
+  for (const bad of ['Trump task force news', 'updates on the force']) {
+    const d = draft();
+    d.follow_topic = bad;
+    assert.equal(checkDraft(d, brief).follow, FOLLOW_LINE, bad);
+    assert.equal(fillDraft(d, brief).follow, FOLLOW_LINE, bad);
+  }
 });

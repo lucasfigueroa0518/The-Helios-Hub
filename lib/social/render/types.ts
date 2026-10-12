@@ -344,7 +344,7 @@ export type SlideCopy = {
 
   /**
    * Closing follow slide line above the handle. Code sets this to the
-   * fixed account CTA (FOLLOW_LINE); it is not story-specific.
+   * follow line (followLine): the kind of story, never this story or a follow-up to it.
    */
   storySpecificLine?: string;
 

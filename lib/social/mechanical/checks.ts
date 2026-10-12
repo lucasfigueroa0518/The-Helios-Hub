@@ -29,7 +29,7 @@
 import { classifyCredit } from '@/lib/social/photos/credit';
 import type { Photo } from '@/lib/social/photos/find';
 import type { Brief } from '@/lib/social/reporter/brief';
-import { FOLLOW_LINE, isExactExcerpt, type FilledDraft } from '@/lib/social/writer/draft';
+import { followLine, isExactExcerpt, type FilledDraft } from '@/lib/social/writer/draft';
 
 import { voiceHits } from './voice-lists';
 
@@ -134,7 +134,7 @@ export function applySilentFixes(draft: FilledDraft, brief?: Brief): { draft: Fi
     if (s.body) s.body.text = all(`${at} body`, s.body.text);
     if (s.quote) s.quote.text = fix(`${at} quote`, s.quote.text, fixTrailingComma, 'F4');
   });
-  d.follow = all('follow', FOLLOW_LINE);
+  d.follow = all('follow', followLine(d.follow_topic));
   d.caption.text = all('caption', d.caption.text);
   if (brief) d.caption.text = fix('caption Source line', d.caption.text, (c) => withSourceLine(c, buildSourceLine(d, brief)), 'F5');
   return { draft: d, fixes };

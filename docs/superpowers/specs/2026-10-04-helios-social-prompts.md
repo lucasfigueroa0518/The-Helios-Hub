@@ -162,7 +162,7 @@ RULES
 OUTPUT
 COVER OPTIONS: 1. 2. 3.  CHOSEN: n
 SLIDE 2 / TYPE / HEADLINE / BODY / (QUOTE or BIG NUMBER by ID) / IMAGE   (repeat)
-FOLLOW: …
+FOLLOW TOPIC: …
 CAPTION: (see caption section)
 EDIT NOTES: one line per judgment call
 
@@ -321,11 +321,11 @@ BRIEF
 
 **FOLLOW line (Lucas, 2026-10-12).** `cause · Writer prompt + code · 0 new stages · 0 new AI calls`
 
-- **Why:** the last slide was inventing a story-specific follow line. The closer is a fixed account CTA.
-- **Writer:** one rule line after the slide-repetition rule. The section list's `FOLLOW: …` becomes the sentence. Code overwrites any other line on check, fill, silent fix and render.
+- **Why:** the last slide was inventing a story-specific follow line, promising coverage of this story. Lucas fixed it to one line; Tommy (2026-10-12) then asked for it to name the kind of story, without promising follow-up.
+- **Writer:** one rule line after the slide-repetition rule. The section list's `FOLLOW: …` becomes `FOLLOW TOPIC: …` (a 2 to 5 word topic). Code builds the line "Follow Helios for more [topic] like this." and keeps the topic only if it is plain lowercase words (only AI capitalized), names nothing, and promises no follow-up; otherwise the fixed line "Follow Helios for more AI stories like this." Applied on check, fill, silent fix and render.
 
 ```
-- FOLLOW is always exactly "Follow Helios for more AI stories like this." Do not customize it or tie it to the story.
+- FOLLOW TOPIC is the kind of story this is, in 2 to 5 plain words, like "AI safety stories", "AI deal news" or "AI policy stories". Code writes the closing line "Follow Helios for more [topic] like this." Never name a company, person or product, and never hint that we will keep covering this story (no "updates", "latest", "next").
 ```
 
 ---
