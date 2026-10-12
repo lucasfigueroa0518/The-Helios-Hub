@@ -44,7 +44,11 @@ const OFF = 'Turned off for now.';
 /** Pipelines with their own review page outside the hub (carousels are reviewed only here). */
 const OWN_PAGE: Partial<Record<HubPost['vertical'], string>> = { reels: '/reels', explainers: '/explainers/reels', stories: '/stories' };
 
+/** Delete is a quiet last resort for anything not live: being made, posting and posted are left out. */
+const NOT_DELETABLE: ReadonlySet<PostState['id']> = new Set(['in_production', 'posting', 'published']);
+
 function rankFor(state: PostState['id'], action: PostPlan['action']): Rank {
+  if (action === 'delete') return NOT_DELETABLE.has(state) ? 'hide' : 'more';
   const approve = action === 'approveCarousel' || action === 'approveTrialReel' || action === 'approveContent';
   switch (state) {
     case 'needs_you':
@@ -90,6 +94,8 @@ function labelFor(state: PostState['id'], plan: PostPlan, vertical: HubPost['ver
       return 'Move…';
     case 'unschedule':
       return 'Unschedule';
+    case 'delete':
+      return 'Delete';
   }
 }
 
@@ -97,6 +103,7 @@ const TITLE: Partial<Record<PostPlan['action'], string>> = {
   hardPublish: 'Publish now?',
   hardRegenerate: 'Make a new version?',
   reject: 'Reject this post?',
+  delete: 'Delete this post?',
   place: 'Schedule it',
   reschedule: 'Move it',
   unschedule: 'Take it off the calendar?',
@@ -122,7 +129,7 @@ export function actionMenu(post: HubPost, state: PostState, plans: readonly Acti
       label: labelFor(state.id, plan, post.vertical),
       plan,
       disabled: isOff ? OFF : plan.disabled,
-      danger: plan.action === 'reject',
+      danger: plan.action === 'reject' || plan.action === 'delete',
       confirmTitle: TITLE[plan.action] ?? null,
       ...(plan.pick === 'slot' && slots ? { slots } : {}),
     };

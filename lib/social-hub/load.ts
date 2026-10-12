@@ -10,6 +10,7 @@ import { readReels } from '@/lib/social-hub/queries/reels';
 import { readSpine } from '@/lib/social-hub/queries/spine';
 import { readStories } from '@/lib/social-hub/queries/stories';
 import { readAdjustments, readDayQuotas } from '@/lib/social-hub/queries/day';
+import { readDeleted, withoutDeleted } from '@/lib/social-hub/deleted';
 import { nyDateOf } from '@/lib/social-hub/time';
 
 function settle<T>(work: Promise<T>): Promise<T | Error> {
@@ -51,7 +52,7 @@ export async function readAll(q: HubQuery = liveHubQuery, explainersQ: Promise<H
 
 export async function loadDataset(q: HubQuery = liveHubQuery, now = new Date()): Promise<HubDataset> {
   const explainersQ = explainersHandle(q);
-  const [reads, costs, quota, snapshot, account, adjustments, dayQuotas] = await Promise.all([
+  const [reads, costs, quota, snapshot, account, adjustments, dayQuotas, deleted] = await Promise.all([
     readAll(q, explainersQ),
     settle(readCosts(q, explainersQ)),
     readLatestQuota(q).catch(() => null),
@@ -59,9 +60,11 @@ export async function loadDataset(q: HubQuery = liveHubQuery, now = new Date()):
     readAccount(q).catch((error: unknown) => ({ present: false as const, error: error instanceof Error ? error.message : String(error) })),
     readAdjustments(q, nyDateOf(now)!).catch(() => []),
     readDayQuotas(q, explainersQ).catch(() => null),
+    // Before the column exists (or if the read fails) nothing is hidden, so the hub never fails on it.
+    readDeleted(q).catch(() => []),
   ]);
   // The sweep's snapshot wins over a publisher's refusal message when it is newer.
   const newest = [snapshot, quota].filter((x): x is { text: string | null; at: string | null } => Boolean(x?.at))
     .sort((a, b) => Date.parse(b.at!) - Date.parse(a.at!))[0] ?? null;
-  return { ...buildDataset(reads, costs, now, newest, account), adjustments, dayQuotas };
+  return { ...withoutDeleted(buildDataset(reads, costs, now, newest, account), deleted), adjustments, dayQuotas };
 }

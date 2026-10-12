@@ -49,6 +49,36 @@ export async function rejectItem(query: SpineQuery, itemId: string, by: string |
   );
 }
 
+export const DELETED_NOTE = 'Deleted from the Social Hub.';
+
+/**
+ * Delete an item (soft): it leaves the hub's lists and can never post. Its waiting
+ * slot is cancelled so the day's quota opens, and it is rejected so no publisher
+ * path can pick it up even if a list still shows it. Nothing is removed, so
+ * the item, its attempts and its costs stay on record. False when the item is
+ * unknown or already live (queued, posting, partly posted or published content can't be deleted).
+ */
+export async function deleteItem(query: SpineQuery, itemId: string, by: string | null = null): Promise<boolean> {
+  const live = await query(
+    `SELECT 1 FROM social_hub.schedule WHERE content_item_id = $1 AND status IN ('publishing', 'published')
+     UNION ALL SELECT 1 FROM social_hub.publish_attempts WHERE content_item_id = $1 AND status IN ('requested', 'creating', 'processing', 'publishing', 'published', 'partial')
+     LIMIT 1`,
+    [itemId],
+  );
+  if (live.rows.length) return false;
+  const done = await query(
+    `UPDATE social_hub.content_items SET deleted_at = coalesce(deleted_at, now()), deleted_by = coalesce(deleted_by, $2) WHERE id = $1 RETURNING id`,
+    [itemId, by],
+  );
+  if (!done.rows.length) return false;
+  await rejectItem(query, itemId, by);
+  await query(
+    `UPDATE social_hub.schedule SET status = 'cancelled', error = $2 WHERE content_item_id = $1 AND status = 'scheduled'`,
+    [itemId, DELETED_NOTE],
+  );
+  return true;
+}
+
 /** Withdraw a decision (a review reopened): the item is undecided again. */
 export async function clearDecision(query: SpineQuery, itemId: string): Promise<void> {
   await query(`DELETE FROM social_hub.approvals WHERE content_item_id = $1`, [itemId]);

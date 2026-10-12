@@ -2,6 +2,7 @@ import { formatPlacement, type Planned, type PlacementRules } from '@/lib/social
 import type { SpineQuery } from '@/lib/social-hub/spine';
 import { SERIES_LABEL } from '@/lib/stories/render/copy';
 
+import { deleteVerb } from './delete';
 import { need, needPlacement, type ActionFn, type ActionOutcome, type ContentActions } from './types';
 
 type StorySetView = { status: string; series: string; ny_date: string; publish_at: string | null };
@@ -84,6 +85,11 @@ export function storyActions(deps: {
       const out = await deps.unscheduleSet(need(t, 'setId'));
       return out.ok ? { ok: true, note: out.note } : { ok: false, note: out.note, status: 409 };
     },
+    delete: deleteVerb({
+      refKey: 'setId',
+      query: async () => deps.query,
+      itemOf: async (q, setId) => (await q(`SELECT id FROM social_hub.content_items WHERE vertical = 'stories' AND native_ref = $1`, [setId])).rows[0]?.id ?? null,
+    }),
     place: placement('place'),
     reschedule: placement('reschedule'),
   };

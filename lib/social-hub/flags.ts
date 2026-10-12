@@ -7,7 +7,7 @@
  * person turns each on, one at a time, after checking it on real data.
  */
 
-export type ActionFlag = 'approveCarousel' | 'approveTrialReel' | 'approveContent' | 'hardPublish' | 'hardRegenerate' | 'reject' | 'reschedule' | 'unschedule' | 'refreshOnVisit';
+export type ActionFlag = 'approveCarousel' | 'approveTrialReel' | 'approveContent' | 'hardPublish' | 'hardRegenerate' | 'reject' | 'reschedule' | 'unschedule' | 'delete' | 'refreshOnVisit';
 
 export type ViewFlag = 'calendar' | 'analytics' | 'house' | 'post';
 
@@ -31,6 +31,8 @@ export const SOCIAL_HUB_FLAGS: HubFlags = Object.freeze({
     reschedule: true,
     // Unschedule: a waiting slot comes off the calendar and the approval is withdrawn.
     unschedule: true,
+    // Delete: a post not yet live leaves the hub (soft: the record stays). Needs social_hub.content_items.deleted_at.
+    delete: true,
     // Needs the social_hub schema applied and the worker redeployed first.
     refreshOnVisit: false,
   }),
@@ -51,6 +53,7 @@ export const ACTION_FLAGS: readonly ActionFlag[] = [
   'reject',
   'reschedule',
   'unschedule',
+  'delete',
   'refreshOnVisit',
 ];
 

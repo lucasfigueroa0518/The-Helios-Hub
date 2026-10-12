@@ -142,6 +142,11 @@ ALTER TABLE social_hub.content_items DROP CONSTRAINT IF EXISTS content_items_ver
 ALTER TABLE social_hub.content_items ADD CONSTRAINT content_items_vertical_check CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories'));
 CREATE INDEX IF NOT EXISTS idx_social_hub_items_idea ON social_hub.content_items (vertical, idea_ref);
 
+-- A person's Delete (never a row removal): the post leaves the hub's lists and its idea
+-- returns to the pool, but the item, its approval and its cost history stay.
+ALTER TABLE social_hub.content_items ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
+ALTER TABLE social_hub.content_items ADD COLUMN IF NOT EXISTS deleted_by text;
+
 -- A person's (or a setting's) decision on one item. One current decision per
 -- item: approving content approves it wherever it lands on the calendar.
 CREATE TABLE IF NOT EXISTS social_hub.approvals (

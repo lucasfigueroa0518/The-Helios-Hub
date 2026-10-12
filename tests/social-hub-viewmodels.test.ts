@@ -13,8 +13,8 @@ import { FIXTURE_NOW, previewDataset } from '@/tests/fixtures/social-hub/preview
 
 const d = previewDataset();
 const now = FIXTURE_NOW;
-const ALL_ON = { approveCarousel: true, approveTrialReel: true, approveContent: true, hardPublish: true, hardRegenerate: true, reject: true, reschedule: true, unschedule: true, refreshOnVisit: true } as const;
-const ALL_OFF = { approveCarousel: false, approveTrialReel: false, approveContent: false, hardPublish: false, hardRegenerate: false, reject: false, reschedule: false, unschedule: false, refreshOnVisit: false } as const;
+const ALL_ON = { approveCarousel: true, approveTrialReel: true, approveContent: true, hardPublish: true, hardRegenerate: true, reject: true, reschedule: true, unschedule: true, delete: true, refreshOnVisit: true } as const;
+const ALL_OFF = { approveCarousel: false, approveTrialReel: false, approveContent: false, hardPublish: false, hardRegenerate: false, reject: false, reschedule: false, unschedule: false, delete: false, refreshOnVisit: false } as const;
 const STATES: ReadonlySet<StateId> = new Set(['in_production', 'ready', 'needs_you', 'approval_off', 'slot_booked', 'approved', 'scheduled', 'late', 'posting', 'published', 'failed', 'rejected', 'not_approved', 'cancelled', 'skipped']);
 
 test('every post maps to one state from the matrix; only Needs you, Late and Failed carry color (MATRICES.md §1)', () => {

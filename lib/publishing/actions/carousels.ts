@@ -1,6 +1,7 @@
 import type { Query } from '@/lib/social/store/pg';
 import type { Placement, PlacementOutcome, PlacementTarget } from '@/lib/social-hub/placement';
 
+import { deleteVerb } from './delete';
 import { need, needPlacement, type ActionOutcome, type ContentActions } from './types';
 
 type Queued = { queued: boolean; note?: string; status?: number };
@@ -59,6 +60,7 @@ export function carouselActions(deps: {
       const out = await deps.unschedulePost(await deps.query(), need(t, 'postId'));
       return out.ok ? { ok: true, note: out.note } : { ok: false, note: out.note, status: 409 };
     },
+    delete: deleteVerb({ refKey: 'postId', query: deps.query as never, itemOf: (q, postId) => deps.itemId(q as Query, postId) }),
     place: (t, _by, input) => placement(t, input, deps.placeItem),
     reschedule: (t, _by, input) => placement(t, input, deps.rescheduleItem),
   };

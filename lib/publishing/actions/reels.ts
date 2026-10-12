@@ -1,6 +1,7 @@
 import type { Placement, PlacementOutcome, PlacementTarget } from '@/lib/social-hub/placement';
 import type { SpineQuery } from '@/lib/social-hub/spine';
 
+import { deleteVerb } from './delete';
 import { need, needPlacement, type ActionFn, type ContentActions } from './types';
 
 type Outcome = { scheduled: boolean; note: string; status?: number };
@@ -65,6 +66,8 @@ export function reelActions(deps: {
       const out = await deps.unscheduleIdea(need(t, 'postIdeaId'));
       return out.ok ? { ok: true, note: out.note } : { ok: false, note: out.note, status: 409 };
     },
+    // Only made video can be deleted; a slot booked for an idea with no video yet is unscheduled instead.
+    delete: deleteVerb({ refKey: 'videoJobId', query: async () => deps.query, itemOf: (_q, videoJobId) => deps.itemId(videoJobId) }),
     place: placement(deps.placeItem),
     reschedule: placement(deps.rescheduleItem),
   };

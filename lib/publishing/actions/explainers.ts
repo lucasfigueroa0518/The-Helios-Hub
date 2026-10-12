@@ -2,6 +2,7 @@ import type { ExplainersDb } from '@/lib/explainers/db';
 import type { SpineQuery } from '@/lib/social-hub/spine';
 import type { Placement, PlacementOutcome, PlacementTarget } from '@/lib/social-hub/placement';
 
+import { deleteVerb } from './delete';
 import { need, needPlacement, type ActionFn, type ContentActions } from './types';
 
 type Queued = { queued: boolean; note?: string; status?: number };
@@ -88,6 +89,14 @@ export function explainerActions(deps: {
       const out = await deps.unscheduleJob(await deps.db(), need(t, 'jobId'));
       return out.ok ? { ok: true, note: out.note } : { ok: false, note: out.note, status: 409 };
     },
+    delete: deleteVerb({
+      refKey: 'jobId',
+      query: async () => {
+        const db = await deps.db();
+        return ((text, params) => db.query(text, params)) as SpineQuery;
+      },
+      itemOf: async (_q, jobId) => deps.itemId(await deps.db(), jobId),
+    }),
     place: placement(deps.placeItem),
     reschedule: placement(deps.rescheduleItem),
   };

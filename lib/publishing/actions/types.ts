@@ -13,7 +13,7 @@ export type ActionTarget = Readonly<Record<string, string>>;
 export type ActionOutcome = { ok: boolean; note: string; status?: number };
 
 /** `place` and `reschedule` put content on a chosen day and window (D50). */
-export type ActionVerb = 'approve' | 'reject' | 'publishNow' | 'regenerate' | 'place' | 'reschedule' | 'unschedule';
+export type ActionVerb = 'approve' | 'reject' | 'publishNow' | 'regenerate' | 'place' | 'reschedule' | 'unschedule' | 'delete';
 
 /**
  * What a verb may carry besides its target: the day and window for `place`
