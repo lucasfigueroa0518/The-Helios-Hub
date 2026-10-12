@@ -7,7 +7,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { carouselBreakdown } from '@/lib/social-hub/adapters/carousels';
+import * as Scoring4 from '@/lib/social/jev/questions/story-scoring.v4';
+import { V4, carouselBreakdown } from '@/lib/social-hub/adapters/carousels';
 import { explainerBreakdown } from '@/lib/social-hub/adapters/explainers';
 import { reelBreakdown } from '@/lib/social-hub/adapters/reels';
 import { storyIdeas } from '@/lib/social-hub/adapters/stories';
@@ -171,4 +172,39 @@ test('Carousels breakdown (story-scoring@3): engagement, sourcing and coverage a
   assert.equal(Number(sum(b.parts).toFixed(2)), Number(score.toFixed(2)));
   assert.equal(b.parts.filter((p) => p.points == null).length, 3, 'gates add nothing');
   assert.match(b.note!, /at most two stories per company/);
+});
+
+test('Carousels breakdown (story-scoring@4): impact, must-know, regular person, sourcing and coverage add up to the run\'s score; four gates add nothing', () => {
+  const answers = { field_shift: 0.9, industry_power: 0.3, national_policy: 0.1, must_know: 0.8, common_person: 0.6, sourcing: 0.5, ai_main_subject: 0.95, substance: 0.8, news_event: 0.9, commentary: 0.1 };
+  const outlets = 4;
+  const score = Scoring4.engagementScore(answers, outlets);
+  const row = {
+    story_id: 's', title: 't', url: null, score: String(score), outlet_count: outlets, run_started_at: null, post_count: 0, last_post_at: null, published: false, scheduled: false,
+    answers, passes: 3,
+  } satisfies CarouselIdeaRow;
+  const b = carouselBreakdown(row)!;
+  assert.equal(Number(sum(b.parts).toFixed(2)), Number(score.toFixed(2)));
+  assert.equal(b.parts.filter((p) => p.points == null).length, 4, 'the four gates add nothing');
+  assert.match(b.parts[0]!.label, /Changes what AI can do/, 'the strongest impact axis is named');
+  assert.equal(b.parts[0]!.points, 1.35, 'a launch counts at 1.5 times its answer');
+  assert.match(b.parts.find((p) => /opinion/.test(p.label))!.detail!, /must stay under 0.50/);
+  assert.match(b.note!, /out of 5.5/);
+});
+
+test('Carousels breakdown (story-scoring@4): a government act counts at 1.0, not 1.5', () => {
+  const answers = { field_shift: 0.05, industry_power: 0.05, national_policy: 0.9, must_know: 0, common_person: 0, sourcing: 0, ai_main_subject: 0.9, substance: 0.9, news_event: 0.9, commentary: 0.1 };
+  const b = carouselBreakdown({ story_id: 's', title: 't', url: null, score: String(Scoring4.engagementScore(answers, 0)), outlet_count: 0, run_started_at: null, post_count: 0, last_post_at: null, published: false, scheduled: false, answers, passes: 1 } satisfies CarouselIdeaRow)!;
+  assert.equal(b.parts[0]!.points, 0.9);
+  assert.match(b.parts[0]!.label, /government act/);
+});
+
+test('the hub\'s copy of the story-scoring@4 numbers matches the module', () => {
+  assert.deepEqual({ ...V4.weights }, { impact: Scoring4.WEIGHTS.impact, policy: Scoring4.WEIGHTS.policy, mustKnow: Scoring4.WEIGHTS.mustKnow, commonPerson: Scoring4.WEIGHTS.commonPerson, sourcing: Scoring4.WEIGHTS.sourcing, coverage: Scoring4.WEIGHTS.coverage });
+  assert.equal(V4.coverageFullAt, Scoring4.COVERAGE_FULL_AT);
+  assert.equal(V4.max, Scoring4.SCORE_MAX);
+  assert.equal(V4.REQUIRED_MIN, Scoring4.THRESHOLDS.REQUIRED_MIN);
+  assert.equal(V4.EVENT_MIN, Scoring4.THRESHOLDS.EVENT_MIN);
+  assert.equal(V4.COMMENTARY_MIN, Scoring4.THRESHOLDS.COMMENTARY_MIN);
+  assert.equal(V4.BONUS_MIN, Scoring4.THRESHOLDS.BONUS_MIN);
+  assert.deepEqual(V4.impact.map(([id]) => id), [...Scoring4.IMPACT_IDS]);
 });

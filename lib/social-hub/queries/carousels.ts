@@ -62,7 +62,7 @@ export type CarouselIdeaRow = {
   url: string | null;
   score: number | string | null;
   outlet_count: number | null;
-  /** story-scoring@3 (or @2, older runs) answers: Jev probabilities by question id, and how many score questions passed. */
+  /** story-scoring@4 (or @3, @2 for older runs) answers: Jev probabilities by question id, and how many score questions passed. */
   answers?: Record<string, number> | null;
   passes?: number | null;
   run_started_at: string | null;

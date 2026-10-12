@@ -13,7 +13,7 @@ import {
 import { createJevAsk, jevCostUsd, type JevAsk } from '@/lib/social/jev/client';
 import * as DifferentStory from '@/lib/social/jev/questions/different-story.v1';
 import * as SameEvent from '@/lib/social/jev/questions/same-event.v1';
-import * as Scoring from '@/lib/social/jev/questions/story-scoring.v3';
+import * as Scoring from '@/lib/social/jev/questions/story-scoring.v4';
 import { createStubJev } from '@/lib/social/jev/stub';
 import { applyCodeFilters } from '@/lib/social/ingest/select/code-filters';
 import { enrichGroup, startingSources, THIN_BODY_CHARS, topUpReadSources, type FetchBody } from '@/lib/social/ingest/select/enrich';
@@ -191,7 +191,7 @@ const group = (over: Partial<StoryGroup> = {}): StoryGroup => ({
 });
 
 test('scoring: skip list, already posted, and the required questions', () => {
-  const base = { ai_main_subject: 0.9, substance: 0.9, news_event: 0.9, big_news: 0.9, surprise: 0.9, everyday_stakes: 0.9, tension_people: 0.9, sourcing: 0.9 };
+  const base = { ai_main_subject: 0.9, substance: 0.9, news_event: 0.9, commentary: 0.1, field_shift: 0.9, industry_power: 0.2, national_policy: 0.1, must_know: 0.9, common_person: 0.9, sourcing: 0.9 };
   assert.equal(Scoring.THRESHOLDS.SKIP_MIN, 0.5);
   assert.equal(judge(group(), { ...base, skip_crime_violence: 0.5 }).status, 'skipped');
   assert.equal(judge(group(), { ...base, skip_crime_violence: 0.49 }).status, 'qualified');
@@ -199,20 +199,45 @@ test('scoring: skip list, already posted, and the required questions', () => {
   const nq = judge(group(), { ...base, substance: 0.5 });
   assert.equal(nq.status, 'not-qualified');
   assert.match(nq.reason!, /substance/);
-  // The score: four engagement answers + sourcing + coverage (1 outlet: half a point times log2(2)/log2(17)).
-  const scored = judge(group(), { ...base, surprise: 0.4, sourcing: 0.5 });
-  assert.equal(scored.passes, 3, 'three of the four engagement questions pass');
+  // The score: the strongest impact axis (1.5 for a launch or deal) + must know (1) + common person (1.5) + sourcing (1) + coverage (1 outlet: half a point times log2(2)/log2(17)).
+  const scored = judge(group(), { ...base, must_know: 0.4, sourcing: 0.5 });
+  assert.equal(scored.passes, 2, 'field shift and common person pass; must know (0.4) does not; the other two impact axes are low');
   const coverage = 0.5 * (Math.log2(2) / Math.log2(17));
-  assert.ok(Math.abs(scored.probSum - (0.9 * 3 + 0.4 + 0.5 + coverage)) < 1e-9);
+  assert.ok(Math.abs(scored.probSum - (1.5 * 0.9 + 0.4 + 1.5 * 0.9 + 0.5 + coverage)) < 1e-9);
   // More outlets reporting it raise the score, up to half a point at 16.
   assert.ok(judge(group({ outletCount: 16 }), base).probSum - judge(group({ outletCount: 1 }), base).probSum > 0.3);
-  assert.ok(Math.abs(Scoring.engagementScore(base, 400) - (0.9 * 5 + 0.5)) < 1e-9, 'coverage is capped');
+  assert.ok(Math.abs(Scoring.engagementScore(base, 400) - (1.5 * 0.9 + 0.9 + 1.5 * 0.9 + 0.9 + 0.5)) < 1e-9, 'coverage is capped');
+});
+
+test('scoring: a government act counts at most 1.0 on the impact axis, below a launch or a deal at 1.5', () => {
+  const none = { field_shift: 0, industry_power: 0, national_policy: 0, must_know: 0, common_person: 0, sourcing: 0 };
+  const at = (answers: Record<string, number>) => Scoring.engagementScore({ ...none, ...answers }, 0);
+  assert.equal(at({ field_shift: 1 }), 1.5);
+  assert.equal(at({ industry_power: 1 }), 1.5);
+  assert.equal(at({ national_policy: 1 }), 1);
+  assert.equal(at({ field_shift: 0.5, industry_power: 0.4, national_policy: 0.9 }), 0.9, 'the strongest axis counts, the others add nothing');
+  assert.equal(Scoring.SCORE_MAX, 5.5);
+  assert.equal(at({ field_shift: 1, must_know: 1, common_person: 1, sourcing: 1 }) + Scoring.coverageScore(16), 5.5);
+});
+
+test('scoring: commentary and "nothing happened" disqualify; an event with quotes does not', () => {
+  const base = { ai_main_subject: 0.9, substance: 0.9, news_event: 0.9, commentary: 0.1 };
+  assert.equal(Scoring.THRESHOLDS.COMMENTARY_MIN, 0.5);
+  assert.equal(Scoring.THRESHOLDS.EVENT_MIN, 0.5);
+  assert.deepEqual(Scoring.gate(base), { status: 'qualified' });
+  assert.deepEqual(Scoring.gate({ ...base, commentary: 0.49 }), { status: 'qualified' });
+  assert.deepEqual(Scoring.gate({ ...base, commentary: 0.5 }), { status: 'not-qualified', reason: 'required: commentary' });
+  assert.deepEqual(Scoring.gate({ ...base, news_event: 0.49 }), { status: 'not-qualified', reason: 'required: news_event' });
+  assert.deepEqual(Scoring.gate({ ...base, news_event: 0.5 }), { status: 'qualified' });
+  assert.deepEqual(Scoring.gate({ ...base, ai_main_subject: 0.59, commentary: 0.9 }), { status: 'not-qualified', reason: 'required: ai_main_subject, commentary' });
+  assert.equal(Scoring.gate({ ...base, skip_death_tragedy: 0.6, commentary: 0.9 }).status, 'skipped', 'the skip list wins');
 });
 
 test('scoring: the already-posted question is only asked when something was posted', () => {
   assert.ok(!(Scoring.POSTED_ID in Scoring.buildQuestions([])));
   assert.ok(Scoring.POSTED_ID in Scoring.buildQuestions(['x']));
-  assert.equal(Object.keys(Scoring.buildQuestions(['x'])).length, 13);
+  assert.equal(Object.keys(Scoring.buildQuestions(['x'])).length, 15);
+  assert.ok(!('reach' in Scoring.buildQuestions(['x'])), 'reach was dropped: it tracked must_know and scored government stories high');
   assert.equal(judge(group(), { ai_main_subject: 0.9, substance: 0.9, news_event: 0.3 }).reason, 'required: news_event', 'not news (a timeline, an op-ed) does not qualify');
   assert.ok(!('photographable_subject' in Scoring.buildQuestions(['x'])), 'naming a company no longer scores');
 });

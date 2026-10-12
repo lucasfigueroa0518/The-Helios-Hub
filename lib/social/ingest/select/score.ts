@@ -1,14 +1,16 @@
 /**
- * One Jev call per candidate (story-scoring@3), then plain-code rules:
- *   - any skip-list category ≥ SKIP_MIN, or already posted ≥ POSTED_MIN → skipped;
- *   - relevance and substance both ≥ REQUIRED_MIN → qualified;
- *   - probSum = the engagement score (Scoring.engagementScore, 0 to 5.5) the
- *     pool ranks by; passes = how many of the four engagement questions reach
- *     BONUS_MIN (shown on the hub).
+ * One Jev call per candidate (story-scoring@4), then plain-code rules:
+ *   - Scoring.gate(): any skip-list category ≥ SKIP_MIN, or already posted
+ *     ≥ POSTED_MIN → skipped; AI-is-the-subject and substance ≥ REQUIRED_MIN,
+ *     "something happened" ≥ EVENT_MIN and commentary < COMMENTARY_MIN →
+ *     qualified;
+ *   - probSum = the ranking score (Scoring.engagementScore, 0 to 5.5) the pool
+ *     ranks by; passes = how many of the five impact and audience questions
+ *     reach BONUS_MIN (shown on the hub).
  */
 import { mapPool } from '@/lib/async-pool';
 import type { JevAsk } from '@/lib/social/jev/client';
-import * as Scoring from '@/lib/social/jev/questions/story-scoring.v3';
+import * as Scoring from '@/lib/social/jev/questions/story-scoring.v4';
 
 import type { ScoredGroup, StoryGroup } from './types';
 
@@ -31,16 +33,9 @@ export async function scoreGroups(
 
 export function judge(group: StoryGroup, answers: Record<string, number>): ScoredGroup {
   const t = Scoring.THRESHOLDS;
-  const p = (id: string) => answers[id] ?? 0;
-  const passes = Scoring.ENGAGEMENT_IDS.filter((id) => p(id) >= t.BONUS_MIN).length;
+  const passes = Scoring.ENGAGEMENT_IDS.filter((id) => (answers[id] ?? 0) >= t.BONUS_MIN).length;
   const probSum = Scoring.engagementScore(answers, group.outletCount);
   const base = { ...group, answers, passes, probSum };
-
-  const skipHit = Scoring.SKIP_IDS.find((id) => p(id) >= t.SKIP_MIN);
-  if (skipHit) return { ...base, status: 'skipped', reason: skipHit };
-  if (p(Scoring.POSTED_ID) >= t.POSTED_MIN) return { ...base, status: 'skipped', reason: Scoring.POSTED_ID };
-
-  const missing = Scoring.REQUIRED_IDS.filter((id) => p(id) < t.REQUIRED_MIN);
-  if (missing.length > 0) return { ...base, status: 'not-qualified', reason: `required: ${missing.join(', ')}` };
-  return { ...base, status: 'qualified' };
+  const verdict = Scoring.gate(answers);
+  return verdict.reason === undefined ? { ...base, status: verdict.status } : { ...base, status: verdict.status, reason: verdict.reason };
 }

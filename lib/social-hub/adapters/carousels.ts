@@ -256,15 +256,65 @@ const V3 = {
 const V2_QUESTIONS: Array<[string, string]> = [['why_it_matters', 'Why it matters is clear'], ['sourcing', 'Primary or multi-outlet source'], ['photographable_subject', 'Named person, company or product']];
 const SCORING_BARS = { REQUIRED_MIN: 0.6, BONUS_MIN: 0.5 } as const;
 
+/**
+ * story-scoring@4 constants, copied for the same reason (lib/social/jev/questions/story-scoring.v4.ts).
+ * tests/idea-score-breakdown.test.ts checks this copy against the module, so the two cannot drift.
+ */
+export const V4 = {
+  impact: [['field_shift', 'Changes what AI can do, what it costs, or who leads'], ['industry_power', 'Money or power among the companies that build AI'], ['national_policy', 'A government act on AI']] as Array<[string, string]>,
+  weights: { impact: 1.5, policy: 1, mustKnow: 1, commonPerson: 1.5, sourcing: 1, coverage: 0.5 },
+  coverageFullAt: 16,
+  max: 5.5,
+  REQUIRED_MIN: 0.6,
+  EVENT_MIN: 0.5,
+  COMMENTARY_MIN: 0.5,
+  BONUS_MIN: 0.5,
+};
+
+const isV4 = (answers: Record<string, number>) => answers.field_shift != null;
 const isV3 = (answers: Record<string, number>) => answers.big_news != null;
 
-/** The run's score for an idea: story-scoring@3 (engagement, 0–5.5) or, for older runs, @2 (0–3). */
+const yn = (v: number | undefined, bar: number) => (v == null ? 'Not asked' : v >= bar ? 'yes' : 'no');
+
+/** The strongest impact axis and its weighted points: a launch or a deal can earn 1.5, a government act at most 1.0. */
+export function v4Impact(a: Record<string, number>): { id: string; label: string; points: number } {
+  const w = V4.weights;
+  const axes = V4.impact.map(([id, label]) => ({ id, label, points: (a[id] ?? 0) * (id === 'national_policy' ? w.policy : w.impact) }));
+  return axes.reduce((best, x) => (x.points > best.points ? x : best));
+}
+
+/** The run's score for an idea: story-scoring@4 (0–5.5), @3 (engagement, 0–5.5) or, for the oldest runs, @2 (0–3). */
 export function carouselBreakdown(row: CarouselIdeaRow): ScoreBreakdown | null {
   const a = row.answers;
   if (!a) return null;
   const t = SCORING_BARS;
   const outlets = row.outlet_count ?? 0;
   const gates = GATE_QUESTIONS.map(([id, label]) => ({ label: `Gate: ${label}`, points: null, detail: a[id] == null ? 'Not asked' : `${a[id]!.toFixed(2)} (needs ${t.REQUIRED_MIN.toFixed(2)})` }));
+  if (isV4(a)) {
+    const w = V4.weights;
+    const coverage = Math.min(1, Math.log2(1 + outlets) / Math.log2(1 + V4.coverageFullAt)) * w.coverage;
+    const impact = v4Impact(a);
+    const gate = (id: string, label: string, bar: number, kind: 'min' | 'max') => ({
+      label: `Gate: ${label}`,
+      points: null,
+      detail: a[id] == null ? 'Not asked' : kind === 'min' ? `${a[id]!.toFixed(2)} (needs ${bar.toFixed(2)})` : `${a[id]!.toFixed(2)} (must stay under ${bar.toFixed(2)})`,
+    });
+    return {
+      formula: 'The strongest of three impact answers (a launch or deal up to 1.5, a government act up to 1.0), plus must-know (up to 1), a regular person would care (up to 1.5), sourcing (up to 1), and up to 0.5 for how many outlets report it.',
+      parts: [
+        { label: `Impact: ${impact.label}`, points: Number(impact.points.toFixed(2)), detail: V4.impact.map(([id]) => `${id.replace('_', ' ')} ${(a[id] ?? 0).toFixed(2)}`).join(' · ') },
+        { label: 'Someone who follows AI would feel behind', points: a.must_know == null ? null : Number((a.must_know * w.mustKnow).toFixed(2)), detail: yn(a.must_know, V4.BONUS_MIN) },
+        { label: 'A regular person curious about AI would care', points: a.common_person == null ? null : Number((a.common_person * w.commonPerson).toFixed(2)), detail: yn(a.common_person, V4.BONUS_MIN) },
+        { label: 'Primary or multi-outlet source', points: a.sourcing == null ? null : Number((a.sourcing * w.sourcing).toFixed(2)), detail: yn(a.sourcing, V4.BONUS_MIN) },
+        { label: `Coverage (${outlets} outlet${outlets === 1 ? '' : 's'})`, points: Number(coverage.toFixed(2)), detail: `full ${w.coverage} at ${V4.coverageFullAt}+ outlets` },
+        gate('ai_main_subject', 'AI is the main subject', V4.REQUIRED_MIN, 'min'),
+        gate('substance', 'Enough for 5–8 slides', V4.REQUIRED_MIN, 'min'),
+        gate('news_event', 'Something happened (a report, not an explainer or review)', V4.EVENT_MIN, 'min'),
+        gate('commentary', 'Not mainly opinion, an interview or remarks', V4.COMMENTARY_MIN, 'max'),
+      ],
+      note: `The 3:00 AM run ranks by this score (out of ${V4.max}), keeps at most two stories per company in the top 10, and folds duplicate stories together.`,
+    };
+  }
   if (isV3(a)) {
     const coverage = Math.min(1, Math.log2(1 + outlets) / Math.log2(1 + V3.coverageFullAt)) * V3.coverageWeight;
     return {
@@ -296,7 +346,7 @@ export function carouselIdeas(rows: readonly CarouselIdeaRow[]): HubIdea[] {
       vertical: 'carousels' as const,
       title: text(row.title) ?? row.story_id,
       score: num(row.score),
-      scoreLabel: row.answers && isV3(row.answers) ? 'Engagement score (0–5.5)' : 'Judge score (0–3)',
+      scoreLabel: row.answers && isV4(row.answers) ? 'Score (0–5.5)' : row.answers && isV3(row.answers) ? 'Engagement score (0–5.5)' : 'Judge score (0–3)',
       breakdown: carouselBreakdown(row),
       state: row.published ? 'published' : row.scheduled ? 'on_deck' : row.post_count > 0 ? 'content_ready' : 'idea_only',
       hasContent: row.post_count > 0,

@@ -52,9 +52,9 @@ export type ScoredGroup = StoryGroup & {
   status: ScoreStatus;
   /** Set when skipped or not qualified. */
   reason?: string;
-  /** How many of the four engagement questions pass (story-scoring@3; @2 runs: of its three score questions). */
+  /** How many of the five impact and audience questions pass (story-scoring@4; @3 runs: of its four engagement questions; @2 runs: of its three score questions). */
   passes: number;
-  /** The ranking score: story-scoring@3's engagement score, 0 to 5.5 (@2 runs: the sum of its three answers, a tie-break). */
+  /** The ranking score: story-scoring@4's score, 0 to 5.5 (@3 runs: its engagement score, also 0 to 5.5; @2 runs: the sum of its three answers, a tie-break). */
   probSum: number;
 };
 

@@ -11,7 +11,7 @@
 import { mapPool } from '@/lib/async-pool';
 import type { JevAsk } from '@/lib/social/jev/client';
 import * as SameEvent from '@/lib/social/jev/questions/same-event.v1';
-import { coverageScore } from '@/lib/social/jev/questions/story-scoring.v3';
+import { coverageScore } from '@/lib/social/jev/questions/story-scoring.v4';
 
 import { companyKey } from './companies';
 import { outletKey } from './outlets';

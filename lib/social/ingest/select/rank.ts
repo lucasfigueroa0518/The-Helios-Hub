@@ -1,7 +1,7 @@
 /**
- * Ranking, shortlist and winners (spec §5B; story-scoring@3, 2026-10-11).
+ * Ranking, shortlist and winners (spec §5B; story-scoring@4, 2026-10-12).
  *
- * Order: engagement score desc (probSum, story-scoring@3) → outletCount desc
+ * Order: ranking score desc (probSum, story-scoring@4) → outletCount desc
  * → newest. The shortlist, which the hub shows as the idea pool, is the top
  * SHORTLIST_MAX after duplicates are folded (dedupe.ts) and the top
  * SPREAD_TOP are spread so no company holds more than SPREAD_PER_COMPANY of
