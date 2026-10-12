@@ -30,6 +30,8 @@ type ExtendedItem = {
   'content:encoded'?: string;
   content?: string;
   contentSnippet?: string;
+  /** Atom's body field: some feeds (Simon Willison's) put all their text here and nowhere else. */
+  summary?: string;
   source?: string | { title?: string; _?: string };
 };
 
@@ -50,6 +52,15 @@ const parser: Parser<Record<string, unknown>, ExtendedItem> = new Parser({
 function stripHtml(html: string | undefined): string {
   if (!html) return '';
   return html.replace(HTML_TAG, ' ').replace(WHITESPACE, ' ').trim();
+}
+
+/** An item's plain-text body: the fullest content field, else the summary (Atom). Empty when it has none. */
+export function bodyOf(item: Pick<ExtendedItem, 'content:encoded' | 'content' | 'contentSnippet' | 'summary'>): string {
+  return stripHtml(item['content:encoded'])
+    || stripHtml(item.content)
+    || stripHtml(item.contentSnippet)
+    || stripHtml(item.summary)
+    || '';
 }
 
 function parsePublishedAt(item: { isoDate?: string; pubDate?: string }): Date | null {
@@ -135,11 +146,7 @@ async function fetchOne(feed: FeedConfig): Promise<FetchedArticle[]> {
       const publishedAt = parsePublishedAt(item);
       if (!publishedAt || !isFresh(publishedAt)) continue;
 
-      const body =
-        stripHtml(item['content:encoded'])
-        || stripHtml(item.content)
-        || stripHtml(item.contentSnippet)
-        || '';
+      const body = bodyOf(item);
       if (!body) continue;
 
       results.push({
