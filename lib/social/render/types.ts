@@ -343,9 +343,8 @@ export type SlideCopy = {
   sides?: Array<{ label: string; text: string }>;
 
   /**
-   * F1 Follow layout's story-specific line above the hero — the account
-   * promise tied to THIS story, per the editorial FOLLOW beat. When absent,
-   * F1 falls back to the generic "Follow for more." hero without a lede.
+   * Closing follow slide line above the handle. Code sets this to the
+   * fixed account CTA (FOLLOW_LINE); it is not story-specific.
    */
   storySpecificLine?: string;
 
