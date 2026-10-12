@@ -134,7 +134,21 @@ async function main() {
   const pinnedLib = pinnedIds.length ? await import('@/lib/social/overnight/pinned') : null;
   const pinned = pinnedLib ? await pinnedLib.loadPinnedCandidates(store.query!, pinnedIds) : null;
   // A rerun reads no feeds: its one story is the stored post's. Neither does a run of named stories.
-  const articles = rerun || pinned ? [] : await fetchFeeds(HELIOS_SOCIAL_FEEDS);
+  const ownArticles = rerun || pinned ? [] : await fetchFeeds(HELIOS_SOCIAL_FEEDS);
+  // The reels ingest's sources (Hacker News, papers, GitHub Trending, vendor notes, more outlets) join the pool;
+  // the carousel scoring filters the lot. Never blocks a run: any failure leaves the carousel's own feeds.
+  const hub: import('@/lib/carousels/hub-sources').HubFetch = { articles: [], feeds: [], errors: [] };
+  if (!rerun && !pinned) {
+    try {
+      const hubLib = await import('@/lib/carousels/hub-sources');
+      Object.assign(hub, await hubLib.fetchHubSources(await hubLib.liveHubAdapters(), new Date()));
+    } catch (error) {
+      hub.errors.push({ adapterId: '(all)', error: error instanceof Error ? error.message : String(error) });
+    }
+    console.error(`[helios-social] hub sources: ${hub.articles.length} articles from ${hub.feeds.length} sources${hub.errors.length ? `; failed: ${hub.errors.map((e) => `${e.adapterId} (${e.error})`).join(', ')}` : ''}`);
+  }
+  const articles = [...ownArticles, ...hub.articles];
+  const allFeeds = [...HELIOS_SOCIAL_FEEDS, ...hub.feeds];
 
   const jevTally = createJevTally();
   const jev = capped(tallied(createJevAsk(), jevTally), jevTally, capUsd);
@@ -147,7 +161,7 @@ async function main() {
   const titles = new Map<string, string>();
   const { stages, logs } = createLiveStages({
     score: createSelectionStage({
-      feeds: HELIOS_SOCIAL_FEEDS,
+      feeds: allFeeds,
       jev,
       posted: store.posted,
       fetchBody: fetchBodyLive,
@@ -268,7 +282,7 @@ async function main() {
 
   await fsp.writeFile(
     path.join(runDir, 'run.json'),
-    JSON.stringify({ ...(preview ? { label: 'PREVIEW', note: 'Preview run, not the acceptance batch; the used-photo log was not written.' } : {}), ...(rerun ? { rerunOf: rerun.postId } : {}), hookPass: false, startedAt: now.toISOString(), capUsd, alreadyPosted, requestMix, articles: articles.length, jev: jevTally, claudeUsd: budget.claudeUsd(), totalUsd: budget.spent(), result, selection, stories: storyLogs, fit: Object.fromEntries(fitResults) }, null, 2),
+    JSON.stringify({ ...(preview ? { label: 'PREVIEW', note: 'Preview run, not the acceptance batch; the used-photo log was not written.' } : {}), ...(rerun ? { rerunOf: rerun.postId } : {}), hookPass: false, startedAt: now.toISOString(), capUsd, alreadyPosted, requestMix, articles: articles.length, hubSources: { articles: hub.articles.length, sources: hub.feeds.length, errors: hub.errors }, jev: jevTally, claudeUsd: budget.claudeUsd(), totalUsd: budget.spent(), result, selection, stories: storyLogs, fit: Object.fromEntries(fitResults) }, null, 2),
   );
   if (preview) await fsp.writeFile(path.join(runDir, 'preview-report.md'), previewReport());
   // The database record (spec 2026-10-08-social-storage.md): written after the files, so a database failure loses nothing.
