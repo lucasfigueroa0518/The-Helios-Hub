@@ -58,7 +58,9 @@ export type LayoutVariant =
   | 'image'
   | 'follow'
   | 'story_beat'
-  | 'data_block';
+  | 'data_block'
+  | 'lfd_cover'
+  | 'lfd_story';
 
 /**
  * Design v1 keeps only cover composition codes (C1/C2/C3) and F1 as active.
@@ -123,6 +125,11 @@ export type SlideCopy = {
   /** 0-based ordering within the carousel; always 0 for stories. */
   position: number;
   layoutVariant: LayoutVariant;
+
+  /** Last Few Days cover (spec §6): the story photos for the mosaic, rank order; story 1 takes the large tile. */
+  lfdCover?: { photos: Array<{ url: string; focus?: { x: number; y: number } }> };
+  /** Last Few Days story slide (spec §6). `headline` has no dash; the slide adds "– ". */
+  lfdStory?: { setup: string; headline: string; highlight: string; names: string[]; body: string };
 
   /**
    * Primary display line. Cover uses this as the 3–4-line uppercase headline;
