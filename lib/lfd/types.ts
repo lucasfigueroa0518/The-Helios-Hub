@@ -50,4 +50,4 @@ export type StoryCopy = {
 
 export type Ready = { pick: Pick; copy: StoryCopy; photo: Photo };
 
-export type Drop = { key: string; lane: Lane; reason: 'thin-text' | 'not-grounded' | 'no-photo' };
+export type Drop = { key: string; lane: Lane; reason: 'thin-text' | 'not-grounded' | 'no-photo' | 'write-failed' };

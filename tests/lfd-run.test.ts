@@ -5,7 +5,7 @@ import { beforeEach, test } from 'node:test';
 import type Anthropic from '@anthropic-ai/sdk';
 
 import { runLastFewDays, type LfdRunDeps } from '@/lib/lfd/run';
-import type { JevAsk } from '@/lib/social/jev/client';
+import type { JevAsk, JevResult } from '@/lib/social/jev/client';
 import type { PhotoFinder } from '@/lib/stories/photos';
 
 import { openHubTestDb } from './fixtures/social-hub/pglite';
@@ -16,14 +16,18 @@ beforeEach(() => resetSeed());
 const NOW = new Date('2026-10-13T07:00:00Z'); // Tuesday 3:00 AM NY
 
 /** Writer stub: echoes every story in the material with valid copy; `bad` keys get a headline the fact check rejects. */
-function writerStub(bad: Set<string> = new Set()) {
+function writerStub(opts: { setup?: string; failAfter?: number } = {}) {
   let calls = 0;
+  const bad = new Set<string>();
   const create = async (p: Anthropic.MessageCreateParamsNonStreaming) => {
     calls += 1;
+    if (opts.failAfter !== undefined && calls > opts.failAfter) {
+      return { id: 'm', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', stop_reason: 'refusal', stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }, content: [{ type: 'text', text: 'no' }] } as unknown as Anthropic.Message;
+    }
     const user = String((p.messages.at(-1) as { content: unknown }).content);
     const material = JSON.parse(user.slice(user.indexOf('<material>') + 10, user.indexOf('</material>'))) as { stories: Array<{ key: string; headline: string }> };
     const stories = material.stories.map((s) => ({
-      key: s.key, setup: '', headline: bad.has(s.key) ? `UNSUPPORTED ${s.key}` : `Story ${s.headline.slice(0, 40)}`, highlight: '', names: [],
+      key: s.key, setup: opts.setup ?? '', headline: bad.has(s.key) ? `UNSUPPORTED ${s.key}` : `Story ${s.headline.slice(0, 40)}`, highlight: '', names: [],
       body: 'It happened this week. The company says more is coming', photo: { kind: 'company', query: s.headline, subjects: [], alts: [] },
     }));
     return { id: 'm', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 100, output_tokens: 100, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }, content: [{ type: 'tool_use', id: `t${calls}`, name: 'submit_rundown', input: { stories } }] } as unknown as Anthropic.Message;
@@ -31,7 +35,7 @@ function writerStub(bad: Set<string> = new Set()) {
   return { create, calls: () => calls };
 }
 
-const jev = (major: (headline: string) => number): JevAsk => async (req, meta) => {
+const jev = (major: (headline: string) => number): JevAsk => async (req, meta): Promise<JevResult> => {
   const usage = { input_tokens: 10, output_tokens: 0 };
   if (meta.version.startsWith('major-news')) {
     const s = major((req.state as { headline: string }).headline);
@@ -146,4 +150,67 @@ test('fewer than 5 stories still posts, marked short', async () => {
   const res = await runLastFewDays(d);
   assert.ok(res.ok);
   assert.equal(res.short, true);
+});
+
+const failFirst = (substr: string): JevAsk => async (req, meta) => {
+  if (meta.version.startsWith('md-grounding') && meta.subjectId.includes(substr)) return { answers: { supported: { noul: 0.1 } }, usage: { input_tokens: 1, output_tokens: 0 }, model: 's' };
+  return jev((h) => (h.includes('Haiku') ? 1 : 0))(req, meta);
+};
+
+test('a post carries at most 2 setups, kept on the first two that have one', async () => {
+  const w = writerStub({ setup: 'Setup:' });
+  const d = await deps({ create: w.create, jev: failFirst('n.com/0') });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const { rows } = await d.query<{ stories: Array<{ setup: string }> }>(`SELECT stories FROM lfd.posts`);
+  const withSetup = rows[0]!.stories.map((s, i) => (s.setup ? i : -1)).filter((i) => i >= 0);
+  assert.equal(withSetup.length, 2);
+  assert.deepEqual(withSetup, [...withSetup].sort((a, b) => a - b));
+});
+
+test('a write failure in a replacement round still posts what is ready', async () => {
+  const w = writerStub({ failAfter: 1 });
+  const d = await deps({ create: w.create, jev: failFirst('n.com/0') });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const { rows } = await d.query<{ record: { writeFailure?: string } }>(`SELECT record FROM lfd.runs WHERE id = $1`, [res.runId]);
+  assert.ok(rows[0]!.record.writeFailure);
+  const posts = await d.query<{ n: number }>(`SELECT count(*)::int AS n FROM lfd.posts`);
+  assert.equal(posts.rows[0]!.n, 1);
+});
+
+test('the safety net counts only eligible stories', async () => {
+  const { query } = await openHubTestDb();
+  for (let i = 0; i < 3; i++) {
+    const idea = await seedReelsIdea(query, { headline: `In Window ${i}`, url: `https://w.com/${i}` });
+    await seedScore(query, idea, { nyDate: '2026-10-11', origin: 'timely', net: 0.5 });
+  }
+  for (let i = 0; i < 3; i++) {
+    const idea = await seedReelsIdea(query, { headline: `Earlier ${i}`, url: `https://e.com/${i}` });
+    await seedScore(query, idea, { nyDate: `2026-10-0${9 - i}`, origin: 'timely', net: 0.5 });
+  }
+  await seedCarouselRun(query, '2026-10-12T07:00:00Z', [
+    { id: 'https://c.com/1', headline: 'Minor Carousel One', source: 'The Verge' },
+    { id: 'https://c.com/2', headline: 'Minor Carousel Two', source: 'The Verge' },
+  ]);
+  const d = await deps({ query });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const { rows } = await d.query<{ record: { safetyNet?: boolean } }>(`SELECT record FROM lfd.runs WHERE id = $1`, [res.runId]);
+  assert.equal(rows[0]!.record.safetyNet, true);
+  assert.ok(res.stories >= 5, String(res.stories));
+});
+
+test('a failure while recording a failed run does not throw', async () => {
+  const d = await deps();
+  const q = d.query;
+  const broken = (async (sql: string, params?: unknown[]) => {
+    if (/UPDATE lfd\.runs/.test(sql)) throw new Error('db down');
+    if (/FROM lfd\.posts/.test(sql)) throw new Error('boom');
+    return q(sql, params);
+  }) as typeof q;
+  const res = await runLastFewDays({ ...d, query: broken });
+  assert.equal(res.ok, false);
+  assert.match((res as { error: string }).error, /boom/);
+  assert.match((res as { error: string }).error, /db down/);
 });

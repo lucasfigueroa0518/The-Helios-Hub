@@ -5,6 +5,7 @@
  * fails a step is replaced from its own lane, then the rundown. The post is
  * never skipped: fewer than 5 stories saves it marked short.
  */
+import { MAJOR_NEWS_BAR } from '@/lib/stories/build/morning-download';
 import { nyDateKey } from '@/lib/reels/scoring/decide';
 import type { HubQuery } from '@/lib/social-hub/db';
 import type { FetchedArticle } from '@/lib/social/ingest/fetch-feeds';
@@ -68,6 +69,19 @@ async function gather(d: LfdRunDeps, w: LfdWindow, used: Set<string>) {
   };
 }
 
+/** Distinct stories that could be picked: above-bar majors plus the rundown, deduped by key and shared refs. */
+function distinctEligible(pools: { majors: LfdCandidate[]; rundown: LfdCandidate[] }): number {
+  const seen = new Set<string>();
+  let n = 0;
+  for (const c of [...pools.majors.filter((m) => (m.major ?? 0) >= MAJOR_NEWS_BAR), ...pools.rundown]) {
+    const ids = [c.key, ...c.refs];
+    if (ids.some((id) => seen.has(id))) continue;
+    ids.forEach((id) => seen.add(id));
+    n += 1;
+  }
+  return n;
+}
+
 async function fullText(d: LfdRunDeps, c: LfdCandidate): Promise<string | null> {
   if (c.body.length >= THIN_CHARS) return c.body;
   const fetched = await d.fetchBody(c.url).catch(() => null);
@@ -84,7 +98,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     const used = usedIdeaIds(previous);
     let window = windowFor(nyDate, previous[0]?.nyDate ?? null);
     let pools = await gather(d, window, used);
-    if (pools.majors.length + pools.rundown.length < MIN_STORIES) {
+    if (distinctEligible(pools) < MIN_STORIES) {
       window = extendWindow(window);
       pools = await gather(d, window, used);
       record.safetyNet = true;
@@ -116,7 +130,12 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       if (texts.length === 0) { pending = next; continue; }
 
       const written = await writeStories(d.create, texts);
-      if (!written.ok) throw new Error(`writing failed: ${written.detail}`);
+      if (!written.ok) {
+        if (round === 0) throw new Error(`writing failed: ${written.detail}`);
+        record.writeFailure = written.detail;
+        for (const { pick } of texts) drops.push({ key: pick.key, lane: pick.lane, reason: 'write-failed' });
+        break;
+      }
       const checked: Array<{ pick: Pick; copy: StoryCopy }> = [];
       for (const { pick, body } of texts) {
         let copy = written.stories.find((s) => s.key === pick.key)!;
@@ -140,6 +159,13 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
 
     const order = slideOrder(ready.map((r) => r.pick));
     const final = order.map((p) => ready.find((r) => r.pick.key === p.key)!);
+    // Spec §4.1: at most 2 setups per post; replacement rounds can add more than normalize's per-call cap.
+    let setups = 0;
+    for (const r of final) {
+      if (!r.copy.setup) continue;
+      setups += 1;
+      if (setups > 2) r.copy = { ...r.copy, setup: '' };
+    }
     const short = final.length < MIN_STORIES;
     const render = buildPost(final, d.now);
     const taken = (await d.query<{ n: number }>(`SELECT count(*)::int AS n FROM lfd.posts WHERE slug = $1`, [`lfd-${nyDate}`])).rows[0]!.n > 0;
@@ -170,8 +196,12 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     return { ok: true, runId, postId, stories: final.length, short };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
-    const spend = d.spend();
-    await finishRun(d.query, runId, { status: 'failed', error, claudeUsd: spend.claudeUsd, jevUsd: spend.jevUsd, record });
+    try {
+      const spend = d.spend();
+      await finishRun(d.query, runId, { status: 'failed', error, claudeUsd: spend.claudeUsd, jevUsd: spend.jevUsd, record });
+    } catch (finishErr) {
+      return { ok: false, runId, error: `${error} (recording the failure also failed: ${finishErr instanceof Error ? finishErr.message : String(finishErr)})` };
+    }
     return { ok: false, runId, error };
   }
 }
