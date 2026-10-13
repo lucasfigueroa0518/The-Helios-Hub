@@ -187,10 +187,12 @@ SELECT DISTINCT ON (v.post_idea_id)
  WHERE v.status = 'ok'
    AND v.video_storage_path IS NOT NULL
    AND v.finished_at > now() - interval '3 days'
-   AND NOT EXISTS (SELECT 1 FROM social_hub.schedule x WHERE x.vertical = 'reels' AND x.idea_ref = v.post_idea_id::text)
+   AND NOT EXISTS (SELECT 1 FROM social_hub.schedule x
+                    WHERE x.vertical = 'reels' AND x.idea_ref = v.post_idea_id::text
+                      AND x.status IN ('scheduled', 'publishing', 'published'))
    AND NOT EXISTS (
      SELECT 1 FROM social_hub.publish_attempts a JOIN social_hub.content_items ci ON ci.id = a.content_item_id
-      WHERE a.vertical = 'reels' AND ci.idea_ref = v.post_idea_id::text)
+      WHERE a.vertical = 'reels' AND ci.idea_ref = v.post_idea_id::text AND a.status = 'published')
    AND NOT EXISTS (
      SELECT 1 FROM social_hub.approvals ap JOIN social_hub.content_items ci ON ci.id = ap.content_item_id
       WHERE ci.vertical = 'reels' AND ci.native_ref = v.id::text AND ap.decision = 'rejected')

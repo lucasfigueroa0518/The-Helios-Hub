@@ -310,11 +310,65 @@ async function readyVideo(postIdeaId: string, videoJobId: string | null): Promis
   return rows[0]?.id ?? null;
 }
 
+/** A failed try waits this long before its one retry (Instagram or Storage hiccups usually pass). */
+export const RETRY_AFTER_MINUTES = 4;
+
+/**
+ * Errors a retry cannot fix, or must not repeat: a rejection, a caption the
+ * gate refuses, a missing video, and a worker that died mid-post (it may have
+ * posted; a person checks Instagram first).
+ */
+const NO_RETRY_ERROR = /rejected|caption still has|video for this reel is gone|worker stopped|no finished video|no caption|already published/i;
+
+export function retryableError(error: string | null): boolean {
+  return !NO_RETRY_ERROR.test(error ?? '');
+}
+
+/**
+ * One bounded retry for a slot whose post failed cleanly (D41's clean failure):
+ * the attempt never reached Instagram (no container, no media id), it is the
+ * item's only try, the failure is at least RETRY_AFTER_MINUTES old, and the
+ * slot's window has not ended. The slot goes back to 'scheduled' (its time is
+ * past, so the next release queues a new attempt). A slot taken again in the
+ * meantime, or a second failure, stays failed. Returns how many were reopened.
+ */
+export async function retryFailedSlots(now = new Date()): Promise<number> {
+  const { rows } = await dbQuery<{ id: string; ny_date: string; slot: SlotId; error: string | null }>(
+    `SELECT s.id::text AS id, s.ny_date::text AS ny_date, s.slot, a.error
+       FROM social_hub.schedule s
+       JOIN social_hub.publish_attempts a ON a.id = s.publish_attempt_id
+      WHERE s.vertical = 'reels' AND s.status = 'failed'
+        AND a.status = 'failed' AND a.container_id IS NULL AND a.media_id IS NULL
+        AND a.finished_at IS NOT NULL
+        AND a.finished_at <= $1::timestamptz - ($2::int * interval '1 minute')
+        AND (SELECT count(*) FROM social_hub.publish_attempts t
+              WHERE t.content_item_id = a.content_item_id AND t.trigger <> 'mix_test') = 1`,
+    [now.toISOString(), RETRY_AFTER_MINUTES],
+  );
+  let reopened = 0;
+  for (const row of rows) {
+    if (!retryableError(row.error)) continue;
+    if (openMinuteRange(row.ny_date, row.slot, now) == null) continue;
+    try {
+      const done = await dbQuery(
+        `UPDATE social_hub.schedule SET status = 'scheduled', error = NULL, publish_attempt_id = NULL
+          WHERE id = $1::uuid AND status = 'failed'`,
+        [row.id],
+      );
+      reopened += done.rowCount ?? 0;
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+    }
+  }
+  return reopened;
+}
+
 /**
  * A due slot becomes a normal publish attempt. The worker then posts it as a
  * trial reel. A reel that is not finished yet stays on the clock.
  */
 export async function releaseDueSchedules(): Promise<number> {
+  await retryFailedSlots().catch(() => 0);
   const { rows } = await dbQuery<{
     id: string;
     post_idea_id: string;
