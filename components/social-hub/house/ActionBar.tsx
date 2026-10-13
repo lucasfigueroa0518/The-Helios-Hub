@@ -1,13 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { ArrowUpRight, Loader, MoreHorizontal } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import type { ActionMenu, OfferedAction, SlotChoice } from '@/lib/social-hub/views/actions';
 import { menuSide, type MenuSide } from '@/components/social-hub/house/menu-side';
-import { hubBaseOf } from '@/lib/social-hub/links';
 
 /**
  * Actions on a post (MATRICES.md §2), wherever it appears: one primary, a
@@ -18,7 +17,6 @@ import { hubBaseOf } from '@/lib/social-hub/links';
  */
 export function ActionBar({ menu, compact = false, showOffNote = true }: { menu: ActionMenu; compact?: boolean; showOffNote?: boolean }) {
   const router = useRouter();
-  const pathname = usePathname() ?? '';
   const dialog = useRef<HTMLDialogElement>(null);
   const moreRoot = useRef<HTMLDivElement>(null);
   const moreList = useRef<HTMLUListElement>(null);
@@ -67,11 +65,7 @@ export function ActionBar({ menu, compact = false, showOffNote = true }: { menu:
       const res = await fetch(plan.endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...plan.body, ...extra }) });
       const out = (await res.json().catch(() => ({}))) as { note?: string };
       setNote({ ok: res.ok, text: out.note ?? (res.ok ? 'Done.' : 'That didn’t work. Try again in a moment.') });
-      if (res.ok && action.key === 'delete' && /\/post\/[^/]+$/.test(pathname)) {
-        // The post is gone: leave its drawer or page for where you came from (PostLink's `from`).
-        const from = new URLSearchParams(window.location.search).get('from');
-        router.replace(from && from.startsWith('/') && !from.startsWith('//') ? from : hubBaseOf(pathname));
-      } else if (res.ok) router.refresh();
+      if (res.ok) router.refresh();
     } catch {
       setNote({ ok: false, text: 'Couldn’t reach the hub. Check your connection and try again.' });
     } finally {

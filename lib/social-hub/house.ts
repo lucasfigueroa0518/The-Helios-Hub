@@ -126,7 +126,7 @@ export function typicalCost(posts: readonly HubPost[], vertical: Vertical, today
 export type ActionPlan =
   | {
       kind: 'post';
-      action: 'approveCarousel' | 'approveTrialReel' | 'approveContent' | 'hardPublish' | 'hardRegenerate' | 'reject' | 'place' | 'reschedule' | 'unschedule' | 'delete';
+      action: 'approveCarousel' | 'approveTrialReel' | 'approveContent' | 'hardPublish' | 'hardRegenerate' | 'reject' | 'place' | 'reschedule' | 'unschedule';
       label: string;
       endpoint: string;
       body: Record<string, unknown>;
@@ -173,14 +173,15 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
       plans.push({ kind: 'post', action: 'approveTrialReel', label: 'Approve', endpoint: '/api/social-hub/actions/approve-trial-reel', body: { postIdeaId: post.refs.postIdeaId, videoJobId: post.refs.videoJobId ?? null }, disabled: null });
     }
   }
-  // Reject (D47): content that hasn't posted yet never will. Explainers are rejected on their review
-  // page, which keeps the tag-based feedback (the link below).
-  if (post.vertical !== 'explainers' && (post.status === 'ready' || post.status === 'scheduled')) {
+  // Reject (D47): content that hasn't posted yet never will, for every type (2026-10-13: explainers too).
+  if (post.status === 'ready' || post.status === 'scheduled') {
     const refs = post.vertical === 'carousels'
       ? { postId: post.refs.postId }
       : post.vertical === 'reels'
         ? { postIdeaId: post.refs.postIdeaId, ...(post.refs.videoJobId ? { videoJobId: post.refs.videoJobId } : {}) }
-        : { setId: post.refs.setId };
+        : post.vertical === 'explainers'
+          ? { jobId: post.refs.jobId }
+          : { setId: post.refs.setId };
     const missing = Object.values(refs).some((v) => !v);
     plans.push({
       kind: 'post', action: 'reject', label: 'Reject', endpoint: '/api/social-hub/actions/reject',
@@ -215,25 +216,6 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
       body: { vertical: post.vertical, refs: placeRefs },
       disabled: Object.values(placeRefs).some((v) => !v) ? 'This slot can’t be found any more.' : null,
       confirm: 'It comes off the calendar and is no longer approved. It goes back to made and waiting for you, and won’t post until you approve and schedule it again.',
-    });
-  }
-
-  // Delete: anything not yet live leaves the hub (soft: the record stays, its slot opens). Being made, posting
-  // and posted content is left out: a worker holds it, or it is already on Instagram.
-  if (live && post.status !== 'generating') {
-    const refs = post.vertical === 'carousels'
-      ? { postId: post.refs.postId }
-      : post.vertical === 'explainers'
-        ? { jobId: post.refs.jobId }
-        : post.vertical === 'reels'
-          ? { videoJobId: post.refs.videoJobId }
-          : { setId: post.refs.setId };
-    const missing = Object.values(refs).some((v) => !v);
-    plans.push({
-      kind: 'post', action: 'delete', label: 'Delete', endpoint: '/api/social-hub/actions/delete',
-      body: { vertical: post.vertical, refs },
-      disabled: missing ? (post.vertical === 'reels' ? 'No video is made yet. Unschedule the slot instead.' : 'This content can’t be found any more.') : null,
-      confirm: 'It leaves the hub and its slot opens, so Run now can make something else. It can’t post. The record stays in the database.',
     });
   }
 
