@@ -24,12 +24,25 @@ export async function recentPhotoUrls(q: HubQuery, now: Date, days = 7): Promise
   return new Set(rows.map((r) => r.url));
 }
 
+/** A run still 'running' after this long died without finishing (crash, killed process); it must not block new runs forever. */
+export const ABANDONED_AFTER = '2 hours';
+
 export async function startRun(q: HubQuery, trigger: 'scheduled' | 'manual', capUsd: number, nyDate: string): Promise<string> {
-  const { rows } = await q<{ id: string }>(
-    `INSERT INTO lfd.runs (trigger, status, started_at, cap_usd, ny_date) VALUES ($1, 'running', now(), $2, $3) RETURNING id`,
-    [trigger, capUsd, nyDate],
+  await q(
+    `UPDATE lfd.runs SET status = 'failed', finished_at = now(), stop_reason = 'abandoned'
+      WHERE status = 'running' AND started_at < now() - interval '${ABANDONED_AFTER}'`,
   );
-  return rows[0]!.id;
+  try {
+    const { rows } = await q<{ id: string }>(
+      `INSERT INTO lfd.runs (trigger, status, started_at, cap_usd, ny_date) VALUES ($1, 'running', now(), $2, $3) RETURNING id`,
+      [trigger, capUsd, nyDate],
+    );
+    return rows[0]!.id;
+  } catch (err) {
+    const e = err as { code?: string; message?: string };
+    if (e.code === '23505' || /idx_lfd_runs_single_running|duplicate key/.test(e.message ?? '')) throw new Error('a Last Few Days run is already in progress');
+    throw err;
+  }
 }
 
 export async function finishRun(

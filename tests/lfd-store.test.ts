@@ -49,3 +49,18 @@ test('storeSlideJpegs uploads under a custom prefix', async () => {
   });
   assert.deepEqual(uploads, ['lfd/lfd-2026-10-13/slide-01.jpg']);
 });
+
+test('startRun marks a running run older than 2 hours abandoned, then starts', async () => {
+  const { query } = await openHubTestDb();
+  const old = (await query<{ id: string }>(`INSERT INTO lfd.runs (trigger, status, started_at) VALUES ('manual', 'running', now() - interval '3 hours') RETURNING id`)).rows[0]!.id;
+  const run = await startRun(query, 'manual', 1, '2026-10-13');
+  assert.notEqual(run, old);
+  const { rows } = await query<{ status: string; stop_reason: string; finished: boolean }>(`SELECT status, stop_reason, finished_at IS NOT NULL AS finished FROM lfd.runs WHERE id = $1`, [old]);
+  assert.deepEqual(rows[0], { status: 'failed', stop_reason: 'abandoned', finished: true });
+});
+
+test('startRun refuses while a recent run is still running', async () => {
+  const { query } = await openHubTestDb();
+  await query(`INSERT INTO lfd.runs (trigger, status, started_at) VALUES ('manual', 'running', now() - interval '10 minutes')`);
+  await assert.rejects(startRun(query, 'manual', 1, '2026-10-13'), /a Last Few Days run is already in progress/);
+});

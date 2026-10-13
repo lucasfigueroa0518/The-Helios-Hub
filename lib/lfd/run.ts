@@ -57,7 +57,7 @@ async function gather(d: LfdRunDeps, w: LfdWindow, used: Set<string>) {
   const carousel = withoutUsed(await carouselLane(d.query, windowStartIso(w)), used);
   const last = await lastCarouselRunAt(d.query);
   const since = new Date(last ?? windowStartIso(w));
-  const feed = withoutUsed(await freshFeedLane(d.fetchFeeds, since).catch(() => []), used);
+  const feed = withoutUsed(await freshFeedLane(d.fetchFeeds, since, d.now).catch(() => []), used);
   const judged = await scoreMajor(judgedPool(carousel, reels, feed), d.jev);
   const judgedKeys = new Set(judged.map((c) => c.key));
   const rundownOnly = [...reels].sort(rundownOrder).filter((c) => !judgedKeys.has(c.key)).slice(0, RUNDOWN_POOL);

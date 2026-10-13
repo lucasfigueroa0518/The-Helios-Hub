@@ -82,7 +82,8 @@ type ShortlistEntry = {
 export async function carouselLane(q: HubQuery, sinceIso: string): Promise<LfdCandidate[]> {
   const { rows } = await q<{ shortlist: ShortlistEntry[] | null }>(
     `SELECT record->'selection'->'shortlist' AS shortlist FROM social.runs
-      WHERE trigger <> 'cli' AND status IN ('ok', 'partial') AND finished_at > $1::timestamptz
+      WHERE kind = 'daily' AND trigger <> 'cli' AND status IN ('ok', 'partial') AND finished_at > $1::timestamptz
+        AND jsonb_typeof(record->'selection'->'shortlist') = 'array'
       ORDER BY finished_at DESC`,
     [sinceIso],
   );
@@ -114,19 +115,24 @@ export async function carouselLane(q: HubQuery, sinceIso: string): Promise<LfdCa
 
 export async function lastCarouselRunAt(q: HubQuery): Promise<string | null> {
   const { rows } = await q<{ at: string | null }>(
-    `SELECT max(finished_at)::text AS at FROM social.runs WHERE trigger <> 'cli' AND status IN ('ok', 'partial')`,
+    `SELECT max(finished_at)::text AS at FROM social.runs WHERE kind = 'daily' AND trigger <> 'cli' AND status IN ('ok', 'partial')`,
   );
   return rows[0]?.at ?? null;
 }
 
+/** The fresh feed never reaches back further than this, however long ago the last carousel run was. */
+export const FEED_FLOOR_HOURS = 48;
+
 /**
- * Fresh feed pass (spec §3.2): the carousel feeds since the last carousel run,
- * code filters only (no story-scoring, no writing), newest first.
+ * Fresh feed pass (spec §3.2): the carousel feeds since the last carousel run
+ * (at most 48 hours back), code filters only (no story-scoring, no writing),
+ * newest first.
  */
-export async function freshFeedLane(fetch: () => Promise<FetchedArticle[]>, since: Date, limit = FEED_TOP): Promise<LfdCandidate[]> {
+export async function freshFeedLane(fetch: () => Promise<FetchedArticle[]>, since: Date, now: Date, limit = FEED_TOP): Promise<LfdCandidate[]> {
+  const floor = Math.max(since.getTime(), now.getTime() - FEED_FLOOR_HOURS * 3600_000);
   const { kept } = applyCodeFilters(await fetch());
   return kept
-    .filter((a) => a.publishedAt.getTime() > since.getTime())
+    .filter((a) => a.publishedAt.getTime() > floor)
     .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime())
     .slice(0, limit)
     .map((a) => ({
