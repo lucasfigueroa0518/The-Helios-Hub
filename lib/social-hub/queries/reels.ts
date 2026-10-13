@@ -229,6 +229,22 @@ SELECT s.post_idea_id, src.headline, s.net, s.rank, s.selected, s.origin, latest
  LIMIT 200`;
 
 /** Source articles behind every idea that reached a slot or an attempt (spec §7 Sources); the ideas come from the spine read. */
+/**
+ * The video a booked slot will post when the slot names none yet (an auto slot
+ * waiting for approval has no publish attempt): the idea's newest finished
+ * video that has its song and its own slate's copy, the same pick the publisher
+ * makes (lib/reels/publish/schedule.ts readyVideo). Without it the Content page
+ * showed "Not made yet" for a reel the night had built (2026-10-13).
+ */
+export const REEL_SLOT_VIDEO_SQL = `
+SELECT DISTINCT ON (v.post_idea_id) v.post_idea_id::text AS post_idea_id, v.id::text AS video_job_id
+  FROM reels.video_jobs v
+ WHERE v.post_idea_id = ANY($1::uuid[])
+   AND v.status = 'ok' AND v.video_storage_path IS NOT NULL
+   AND EXISTS (SELECT 1 FROM reels.song_picks p WHERE p.video_job_id = v.id AND p.status = 'ok')
+   AND EXISTS (SELECT 1 FROM reels.idea_copy c WHERE c.post_idea_id = v.post_idea_id AND c.slate_id = v.slate_id AND c.status = 'ok')
+ ORDER BY v.post_idea_id, v.finished_at DESC NULLS LAST, v.created_at DESC`;
+
 export const REEL_SOURCES_SQL = `
 SELECT DISTINCT m.post_idea_id, s.canonical_url AS url, s.headline
   FROM reels.post_idea_members m
@@ -257,10 +273,19 @@ const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : nul
 
 export async function readReels(q: HubQuery, spine: SpineRead): Promise<ReelsRead> {
   const mine = forVertical(spine, 'reels');
+  // A slot that names no video yet shows the one it will post (REEL_SLOT_VIDEO_SQL).
+  const slotIdeas = [...new Set(mine.schedules.filter((r) => !r.content_ref && r.idea_ref).map((r) => r.idea_ref!))];
+  const slotVideo = new Map<string, string>(
+    slotIdeas.length ? (await q<{ post_idea_id: string; video_job_id: string }>(REEL_SLOT_VIDEO_SQL, [slotIdeas])).rows.map((r) => [r.post_idea_id, r.video_job_id] as const) : [],
+  );
+  const videoOf = (r: { idea_ref: string | null; content_ref: string | null }) => r.content_ref ?? (r.idea_ref ? slotVideo.get(r.idea_ref) ?? null : null);
   // The (idea, video) pairs the spine rows name, once each.
   const pairs = new Map<string, { idea: string; video: string | null }>();
-  for (const r of [...mine.attempts, ...mine.schedules]) {
+  for (const r of mine.attempts) {
     if (r.idea_ref) pairs.set(`${r.idea_ref}|${r.content_ref ?? ''}`, { idea: r.idea_ref, video: r.content_ref });
+  }
+  for (const r of mine.schedules) {
+    if (r.idea_ref) pairs.set(`${r.idea_ref}|${videoOf(r) ?? ''}`, { idea: r.idea_ref, video: videoOf(r) });
   }
   const list = [...pairs.values()];
   const ideaIds = [...new Set(list.map((p) => p.idea))];
@@ -294,9 +319,9 @@ export async function readReels(q: HubQuery, spine: SpineRead): Promise<ReelsRea
       };
     }),
     schedules: mine.schedules.map((r) => {
-      const f = fact(r.idea_ref, r.content_ref);
+      const f = fact(r.idea_ref, videoOf(r));
       return {
-        schedule_id: r.schedule_id, post_idea_id: r.idea_ref ?? '', video_job_id: r.content_ref, ny_date: r.ny_date, slot: r.slot,
+        schedule_id: r.schedule_id, post_idea_id: r.idea_ref ?? '', video_job_id: videoOf(r), ny_date: r.ny_date, slot: r.slot,
         publish_at: r.publish_at, status: r.status, source: r.source, error: r.error, approved_at: r.approved_at, created_at: r.created_at,
         video_storage_path: f.video_storage_path, video_finished_at: f.video_finished_at, video_slate_id: f.video_slate_id,
         chosen_framework: f.chosen_framework, chosen_bucket: f.chosen_bucket, net: f.net, on_screen_copy: f.on_screen_copy, headline: f.headline,
