@@ -30,7 +30,13 @@ async function main() {
   const { closeDbPool } = await import('@/lib/db');
   const query = (await socialQuery()) as unknown as HubQuery;
 
-  const cap = Number(((await query<{ value: unknown }>(`SELECT value FROM lfd.settings WHERE key = 'run_cap_usd'`)).rows[0]?.value) ?? 1);
+  const raw = (await query<{ value: unknown }>(`SELECT value FROM lfd.settings WHERE key = 'run_cap_usd'`)).rows[0]?.value ?? 1;
+  const cap = Number(raw);
+  if (!Number.isFinite(cap) || cap <= 0) {
+    console.error(`lfd.settings.run_cap_usd is not a positive number (got ${typeof raw === 'string' ? raw : JSON.stringify(raw)}); refusing to run`);
+    await closeDbPool();
+    process.exit(1);
+  }
   if (!live) {
     console.log(`Dry: a live run would read the window's reels ideas, carousel shortlists and feeds, write and fact-check 5-6 stories, find photos, render 7-8 slides and save a review post. Cap $${cap}. Re-run with --live to do it.`);
     await closeDbPool();
@@ -73,4 +79,9 @@ async function main() {
   process.exit(res.ok ? 0 : 1);
 }
 
-void main();
+main().catch(async (err) => {
+  console.error(err instanceof Error ? err.message : err);
+  const { closeDbPool } = await import('@/lib/db');
+  await closeDbPool().catch(() => undefined);
+  process.exit(1);
+});
