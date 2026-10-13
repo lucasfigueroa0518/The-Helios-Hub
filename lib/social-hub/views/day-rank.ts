@@ -2,6 +2,7 @@ import type { HubIdea, HubPost, Vertical } from '@/lib/social-hub/types';
 import { nyDateOf } from '@/lib/social-hub/time';
 import { windowsOn } from '@/lib/social-hub/views/plan';
 import { rankIdeas } from '@/lib/social-hub/views/pools';
+import { isRejected } from '@/lib/social-hub/views/state';
 
 /**
  * The day's ranking and its quota candidates (Lucas, 2026-10-09).
@@ -13,10 +14,12 @@ import { rankIdeas } from '@/lib/social-hub/views/pools';
  *   Demote   the idea drops below the idea right under it (#1 → #2)
  *
  * Moves are applied in the order they were made, on top of that day's score
- * ranking, and expire with the day. The quota candidates are: what already
- * holds a slot today (scheduled, posting, posted), then the top of the
- * adjusted ranking for the rest of the quota. Only quota candidates appear in
- * Today's Content; Run now makes the candidates that have no content yet.
+ * ranking, and expire with the day. The quota candidates are, in order: what already holds a slot today
+ * (scheduled, posting, posted); then content made today with no slot, for
+ * any idea (the night picks its own, 2026-10-13: made content wins); then the
+ * top of the adjusted ranking for what's left. Rejected content never fills a
+ * card. One card per idea. Only quota candidates appear in Today's Content;
+ * Run now makes the candidates that have no content yet.
  * Pure over plain data, so the page, Run now and the tests agree.
  */
 
@@ -40,6 +43,8 @@ export type QuotaCandidate = {
   moved: RankedIdea['moved'];
   /** Stories: the series this slot is for. */
   series?: string;
+  /** Stories: the series window id (Make it's target). */
+  seriesId?: string;
 };
 
 const OPEN = new Set(['idea_only', 'content_ready']);
@@ -103,7 +108,7 @@ function contentFor(idea: HubIdea, posts: readonly HubPost[]): HubPost | null {
   const making = mine.find((p) => p.status === 'generating');
   if (making) return making;
   return mine
-    .filter((p) => p.status === 'ready' && hasMedia(p))
+    .filter((p) => p.status === 'ready' && hasMedia(p) && !isRejected(p))
     .sort((a, b) => (b.generatedAt ?? '').localeCompare(a.generatedAt ?? '') || a.id.localeCompare(b.id))[0] ?? null;
 }
 
@@ -122,7 +127,7 @@ export function quotaCandidates(
     return windows.map((w) => {
       const sets = data.posts.filter((p) => p.vertical === 'stories' && p.nyDate === today && p.idea?.label === w.label && !['failed', 'skipped', 'cancelled'].includes(p.status));
       const post = sets.find((p) => HOLDS.has(p.status)) ?? sets.find((p) => p.status === 'generating' || hasMedia(p)) ?? null;
-      return { vertical, idea: null, post, locked: Boolean(post && HOLDS.has(post.status)), rank: null, moved: null, series: w.label };
+      return { vertical, idea: null, post, locked: Boolean(post && HOLDS.has(post.status)), rank: null, moved: null, series: w.label, seriesId: w.id };
     });
   }
   const quota = Math.min(data.dayQuotas?.[vertical] ?? windows.length, windows.length);
@@ -133,16 +138,17 @@ export function quotaCandidates(
     .sort((a, b) => at(a).localeCompare(at(b)) || a.id.localeCompare(b.id))
     .slice(0, quota);
   const full = dayRanking(data.ideas, vertical, data.adjustments ?? [], today);
-  // Explainers only (2026-10-13): the nightly cycle picks its own topic, not the page's top-ranked one (it rendered "What is a
-  // webhook?" while the page ranked "What is a database index?" first), so what it made today with no slot yet holds the day's
-  // place ahead of the ranking. Otherwise the page said "Not made yet" and Run now offered to render a second one. Reels,
-  // carousels and Stories keep the Oct 9 rule: the quota goes to the top of the ranking.
-  const madeToday = vertical === 'explainers'
-    ? data.posts
-        .filter((p) => p.vertical === vertical && p.status === 'ready' && hasMedia(p) && !locked.includes(p) && p.generatedAt != null && nyDateOf(new Date(p.generatedAt)) === today)
-        .sort((a, b) => (b.generatedAt ?? '').localeCompare(a.generatedAt ?? '') || a.id.localeCompare(b.id))
-        .slice(0, Math.max(0, quota - locked.length))
-    : [];
+  const sameIdea = (a: HubPost, b: HubPost) => a.idea?.id != null && a.idea.id === b.idea?.id;
+  // Made today with no slot, any idea (2026-10-13): the night picks its own topic, so what it made holds the
+  // day's place ahead of the ranking. Newest first, one per idea, never one already in a slot.
+  const madeToday: HubPost[] = [];
+  for (const p of data.posts
+    .filter((p) => p.vertical === vertical && p.status === 'ready' && hasMedia(p) && !isRejected(p) && p.generatedAt != null && nyDateOf(new Date(p.generatedAt)) === today)
+    .sort((a, b) => (b.generatedAt ?? '').localeCompare(a.generatedAt ?? '') || a.id.localeCompare(b.id))) {
+    if (madeToday.length >= Math.max(0, quota - locked.length)) break;
+    if (locked.includes(p) || locked.some((l) => sameIdea(l, p)) || madeToday.some((m) => sameIdea(m, p))) continue;
+    madeToday.push(p);
+  }
   const held = [...locked, ...madeToday];
   const ranking = full.filter((r) => !held.some((p) => ideaOwns(r.idea, p)));
   const out: QuotaCandidate[] = held.map((post) => {
@@ -157,9 +163,26 @@ export function quotaCandidates(
   return out;
 }
 
+const cardAt = (c: QuotaCandidate) => c.post?.postedAt ?? c.post?.publishAt ?? '';
+
+/** 0 booked or posted, 1 made with no slot, 2 being made, 3 not made yet. */
+function cardTier(c: QuotaCandidate): number {
+  if (!c.post) return 3;
+  if (c.post.status === 'generating') return 2;
+  return c.locked || cardAt(c) ? 0 : 1;
+}
+
+/** Today's cards in posting order: booked slots by time, then made with no slot, then being made, then not made yet (2026-10-13). */
+export function orderCards(cards: readonly QuotaCandidate[]): QuotaCandidate[] {
+  return cards
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => cardTier(a.c) - cardTier(b.c) || cardAt(a.c).localeCompare(cardAt(b.c)) || a.i - b.i)
+    .map((x) => x.c);
+}
+
 export const DAY_TYPES: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories'];
 
-/** Every type's quota candidates for today, in the hub's type order. */
+/** Every type's quota candidates for today, as the day's cards in posting order. */
 export function allQuotaCandidates(data: Parameters<typeof quotaCandidates>[0], now: Date): QuotaCandidate[] {
-  return DAY_TYPES.flatMap((v) => quotaCandidates(data, v, now));
+  return orderCards(DAY_TYPES.flatMap((v) => quotaCandidates(data, v, now)));
 }

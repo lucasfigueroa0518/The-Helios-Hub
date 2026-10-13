@@ -80,7 +80,7 @@ function rejectedNote(note: string | null): boolean {
  * the slot they cancel ("This carousel was rejected, so it was not posted."),
  * not on the post's approval, so the post reads as rejected from its last try.
  */
-function rejected(post: HubPost): boolean {
+export function isRejected(post: HubPost): boolean {
   return rejectedNote(post.approval.note) || rejectedNote(post.tries?.[0]?.note ?? null);
 }
 
@@ -99,7 +99,7 @@ export function needsPerson(post: HubPost, now: Date): boolean {
     return post.approval.required && !post.approval.approvedAt && (post.publishAt ?? '') > now.toISOString();
   }
   if (post.status !== 'ready') return false;
-  if (rejected(post) || pastStorySet(post, now)) return false;
+  if (isRejected(post) || pastStorySet(post, now)) return false;
   return !post.approval.approvedAt;
 }
 
@@ -162,7 +162,7 @@ export function postState(post: HubPost, now: Date): PostState {
       return { ...S.scheduled, line: post.publishAt ? `Posts ${goesOut(post.publishAt, now)}` : null };
     }
     case 'ready': {
-      if (rejected(post)) return { ...S.rejected, line: 'Won’t post.' };
+      if (isRejected(post)) return { ...S.rejected, line: 'Won’t post.' };
       if (pastStorySet(post, now)) return { ...S.ready, line: 'Its day has passed, so approving won’t post it. Publish now still can.' };
       const tried = lastTry(post);
       // The made date tells apart two versions of the same topic (one waiting, one scheduled).
