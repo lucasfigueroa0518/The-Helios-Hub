@@ -15,7 +15,12 @@ import type { StageModelConfig } from '@/lib/social/pipeline/models';
 import type { MessagesCreate, TurnUsage } from '@/lib/social/reporter/reporter';
 
 export const MAX_CHECK_RETRIES = 1;
-const MAX_TOKENS = 16_000;
+/**
+ * Ceiling, not a spend: only tokens used are billed. Raised from 16,000 after a Writer call spent 13,980 of
+ * them thinking and was cut off mid-draft (2026-10-09, 2 of ~25 drafts in 30 days). 20,000 is the most a
+ * non-streaming call can ask (the SDK refuses above 21,333).
+ */
+const MAX_TOKENS = 20_000;
 
 export type StructuredFailure = 'malformed-output' | 'service-error' | 'refused';
 

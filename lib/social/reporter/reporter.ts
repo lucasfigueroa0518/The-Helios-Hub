@@ -104,6 +104,13 @@ export type ReporterDeps = {
 /**
  * Cap rule (Tommy, 2026-10-05): before each turn, stop if actual spend so
  * far ≥ cap − CAP_MARGIN_USD; otherwise run the turn. No prediction.
+ *
+ * One exception (2026-10-12): when the last turn was a brief the code check
+ * sent back, the retry is the one turn that turns the money already spent
+ * into a story, so it runs while spend is still under the cap itself (no
+ * margin). Both cap stops on Oct 11 and Oct 12 were exactly this: $0.37
+ * spent, the brief rejected for aggregator-only facts, the retry (~$0.12)
+ * refused by the margin, the whole $0.37 lost.
  */
 export const CAP_MARGIN_USD = 0.1;
 
@@ -131,9 +138,12 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
   const webSearches = () =>
     responses.reduce((n, r) => n + (r.usage.server_tool_use?.web_search_requests ?? 0), 0);
 
+  /** True while a rejected brief waits for its retry turn. */
+  let retryPending = false;
+
   for (let turn = 1; turn <= MAX_TURNS; turn++) {
-    if (deps.costCapUsd !== undefined && cost() >= deps.costCapUsd - CAP_MARGIN_USD) {
-      return { ok: false, reason: 'cost-cap', detail: `stopped before turn ${turn}: $${cost().toFixed(4)} spent, cap $${deps.costCapUsd} minus $${CAP_MARGIN_USD} margin`, raw: null, costUsd: cost(), turns: turn - 1, webSearches: webSearches(), pageReads, submitRetries, retryErrors, turnUsage };
+    if (deps.costCapUsd !== undefined && cost() >= deps.costCapUsd - (retryPending ? 0 : CAP_MARGIN_USD)) {
+      return { ok: false, reason: 'cost-cap', detail: `stopped before turn ${turn}: $${cost().toFixed(4)} spent, cap $${deps.costCapUsd}${retryPending ? '' : ` minus $${CAP_MARGIN_USD} margin`}`, raw: null, costUsd: cost(), turns: turn - 1, webSearches: webSearches(), pageReads, submitRetries, retryErrors, turnUsage };
     }
     let res: Anthropic.Message;
     try {
@@ -169,6 +179,7 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
 
     // Keep the full content (thinking, server tool blocks) so the next turn continues the same conversation.
     messages.push({ role: 'assistant', content: res.content as Anthropic.ContentBlockParam[] });
+    retryPending = false;
 
     if (res.stop_reason === 'pause_turn') continue; // server tool paused mid-turn: resend as is
 
@@ -199,6 +210,7 @@ export async function runReporter(input: ReporterStoryInput, deps: ReporterDeps)
           ...others.map((u): Anthropic.ToolResultBlockParam => ({ type: 'tool_result', tool_use_id: u.id, is_error: true, content: 'Not run: submit_brief was called in the same turn.' })),
         ];
         messages.push({ role: 'user', content });
+        retryPending = true;
         continue;
       }
     }

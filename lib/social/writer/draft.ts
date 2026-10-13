@@ -217,7 +217,9 @@ export function checkDraft(input: unknown, brief: Brief): DraftSubmission {
   const known = new Set([...brief.facts, ...brief.background, ...brief.quotes, ...brief.numbers].map((x) => x.id));
   const subjects = new Set(brief.subjects.map((s) => s.name));
   const visualCheck = (where: string, v: VisualRequest) => {
-    if (SUBJECT_VISUALS.has(v.kind) && !subjects.has(v.query)) {
+    // A blank query is a request the code dropped on the final attempt (isDroppedVisual); the Writer's own
+    // attempts are told about a blank one by visualFailures, which the final attempt then drops.
+    if (SUBJECT_VISUALS.has(v.kind) && v.query.trim() !== '' && !subjects.has(v.query)) {
       errors.push({ section: where, message: `${v.kind} visual "${v.query}" isn't exactly a SUBJECTS name` });
     }
   };

@@ -51,7 +51,10 @@ export function overLimitLines(d: DraftSubmission): OverLine[] {
   add('cover', d.cover_options[d.chosen_cover - 1]?.text ?? '', LIMITS.cover);
   d.slides.forEach((s, i) => {
     add(`slide ${i + 2} headline`, s.headline.text, LIMITS.headline);
-    if (s.body) add(`slide ${i + 2} body`, s.body.text, LIMITS.body);
+    // Headline and body together may not pass LIMITS.slide (C1): when that is the only overage, the body gives the
+    // difference (the headline is the hook). 2026-10-08/10: two stories lost to 170 and 172 against 168.
+    const room = LIMITS.slide - Math.min(s.headline.text.length, LIMITS.headline);
+    if (s.body) add(`slide ${i + 2} body`, s.body.text, Math.min(LIMITS.body, room));
   });
   add('caption', d.caption.text, LIMITS.caption);
   return out;

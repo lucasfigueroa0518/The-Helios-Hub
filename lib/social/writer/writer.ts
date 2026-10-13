@@ -165,6 +165,7 @@ function visualFailures(v: VisualRequest, section: string, p: Place, brief: Brie
   if (v.kind === 'product' || v.kind === 'event') {
     return words >= 1 && words <= 5 ? [] : [{ section, message: `${v.kind} "${v.query}": name it in 1–5 words${KEEP_WORDS}` }];
   }
+  if (!v.query.trim()) return [{ section, message: `${v.kind} visual is empty: name a SUBJECTS entry the slide names, or ask for a thematic, setting, product or event visual${KEEP_WORDS}` }];
   const s = brief.subjects.find((x) => x.name === v.query);
   if (!s) return []; // checkDraft reports a name that isn't in SUBJECTS
   const errors: BriefError[] = [];
@@ -374,8 +375,10 @@ export function checkWrittenDraft(
   // Every handoff check runs on every attempt, the final one included (Tommy, 2026-10-06).
   if (stage === 'writer') {
     const handoff = visualHandoffFailures(d, brief, view);
-    if (final && handoff.length > 0 && errors.length === 0) {
+    if (final && handoff.length > 0) {
       // Final attempt: drop the failing tags, then the failing requests, instead of failing the story (Tommy, 2026-10-07).
+      // Also when a text check fails: a story that only needs its lines shortened must not be blocked by tags or
+      // photo requests the code drops anyway (2026-10-12: the over-length rescue never ran on drafts with both).
       const t = pruneSubjectTags(d, brief, kindsOf(view));
       const ic = defaultIcons(t.draft);
       const r = dropFailingVisuals(ic.draft, visualHandoffFailures(ic.draft, brief, view));
@@ -400,7 +403,7 @@ const safely = <T,>(fn: () => T[]): T[] => {
 export async function runWriter(brief: Brief, deps: WriterDeps): Promise<WriterResult> {
   const forWriter = await briefForWriter(brief, deps.isWellKnown, deps.availability);
   const view = photoViewOf(forWriter, { flags: Boolean(deps.availability) });
-  let first: { draft: DraftSubmission; places: string[] } | null = null;
+  let first: { draft: DraftSubmission; places: string[]; textPlaces: string[] } | null = null;
   let visualsDropped: string[] = [];
   const r = await runStructuredCall({
     create: deps.create,
@@ -410,7 +413,7 @@ export async function runWriter(brief: Brief, deps: WriterDeps): Promise<WriterR
     user: writerUserMessage(forWriter),
     check: (input, attempt) => {
       // Words stay when a photo request fails: remember the first attempt's failed places.
-      const kept = attempt > 1 && first ? safely(() => wordsChangedForPhoto(input as DraftSubmission, first!.draft, first!.places)) : [];
+      const kept = attempt > 1 && first ? safely(() => wordsChangedForPhoto(input as DraftSubmission, first!.draft, first!.places.filter((p) => !first!.textPlaces.includes(p)))) : [];
       try {
         const final = attempt > MAX_CHECK_RETRIES ? { onDropped: (lines: string[]) => (visualsDropped = lines) } : undefined;
         const d = checkWrittenDraft(input, brief, attempt, 'writer', view, final);
@@ -420,7 +423,9 @@ export async function runWriter(brief: Brief, deps: WriterDeps): Promise<WriterR
         if (!(err instanceof DraftValidationError) || err.errors === kept) throw err;
         if (attempt === 1) {
           const places = [...new Set(err.errors.filter((e) => /\.(visual|fallback_visual|subject_ids|alt_visuals(\[\d+\])?)$/.test(e.section)).map((e) => e.section.replace(/\.(visual|fallback_visual|subject_ids|alt_visuals(\[\d+\])?)$/, '')))];
-          if (places.length) first = { draft: structuredClone(input as DraftSubmission), places };
+          // A slide the text check also sent back (too long, quote marks...) has to change its words: not a photo change.
+          const textPlaces = [...new Set(err.errors.flatMap((e) => { const m = /^C\d (cover|slide \d+)\b/.exec(e.section); return m ? [m[1]!] : []; }))];
+          if (places.length) first = { draft: structuredClone(input as DraftSubmission), places, textPlaces };
         }
         throw kept.length ? new DraftValidationError([...err.errors, ...kept]) : err;
       }
