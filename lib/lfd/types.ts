@@ -50,4 +50,5 @@ export type StoryCopy = {
 
 export type Ready = { pick: Pick; copy: StoryCopy; photo: Photo };
 
-export type Drop = { key: string; lane: Lane; reason: 'thin-text' | 'not-grounded' | 'no-photo' | 'write-failed' };
+/** A story that left the post, and why (the run record, spec §7.1). `unfinished`: still pending when the rounds ran out. */
+export type Drop = { key: string; lane: Lane; headline: string; reason: 'thin-text' | 'not-grounded' | 'no-photo' | 'write-failed' | 'image-failed' | 'unfinished' };

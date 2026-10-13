@@ -30,6 +30,8 @@ export const MIN_TEXT_CHARS = 500;
 export const THIN_CHARS = 1500;
 export const MAX_ROUNDS = 4;
 const PREVIOUS_POSTS = 2;
+/** Each lane queue's head kept in the run record (spec §8 Ideas view). */
+const QUEUE_TOP = 10;
 
 export type LfdRunDeps = {
   query: HubQuery;
@@ -57,7 +59,12 @@ async function gather(d: LfdRunDeps, w: LfdWindow, used: Set<string>, known: Rea
   const carousel = withoutUsed(await carouselLane(d.query, windowStartIso(w)), used);
   const last = await lastCarouselRunAt(d.query);
   const since = new Date(last ?? windowStartIso(w));
-  const feed = withoutUsed(await freshFeedLane(d.fetchFeeds, since, d.now).catch(() => []), used);
+  let feedError: string | undefined;
+  const fresh = await freshFeedLane(d.fetchFeeds, since, d.now).catch((err: unknown) => {
+    feedError = err instanceof Error ? err.message : String(err);
+    return [];
+  });
+  const feed = withoutUsed(fresh, used);
   const judged = await scoreMajor(judgedPool(carousel, reels, feed), d.jev, known);
   const judgedKeys = new Set(judged.map((c) => c.key));
   const rundownOnly = [...reels].sort(rundownOrder).filter((c) => !judgedKeys.has(c.key)).slice(0, RUNDOWN_POOL);
@@ -68,6 +75,7 @@ async function gather(d: LfdRunDeps, w: LfdWindow, used: Set<string>, known: Rea
     counts: { reels: reels.length, carousel: carousel.length, feed: feed.length, judged: judged.length },
     /** Every major-news score judged so far, by key: a re-gather reuses these instead of judging again. */
     scores: new Map([...known, ...judged.map((c) => [c.key, c.major ?? 0] as const)]),
+    feedError,
   };
 }
 
@@ -91,60 +99,119 @@ async function fullText(d: LfdRunDeps, c: LfdCandidate): Promise<string | null> 
   return best.length >= MIN_TEXT_CHARS ? best : null;
 }
 
+/** A story slide whose photo failed to load: by the slide number ("slide 3 image failed to load") or the image src. Cover is slide 1. */
+function brokenImageKeys(fit: FitResult, final: Ready[]): string[] {
+  const keys = new Set<string>();
+  for (const p of fit.problems) {
+    if (!/image failed to load/.test(p)) continue;
+    const slide = p.match(/slide (\d+)/);
+    const bySlide = slide ? final[Number(slide[1]) - 2] : undefined;
+    const bySrc = final.find((r) => p.includes(r.photo.src));
+    const hit = bySlide ?? bySrc;
+    if (hit) keys.add(hit.pick.key);
+  }
+  return [...keys];
+}
+
+/** Everything in a fit result that means a broken slide, apart from text fit (stored in fit_problems). */
+function renderProblemsOf(fit: FitResult | null): string[] {
+  if (!fit) return [];
+  return [
+    ...fit.problems.filter((p) => !/text fit/.test(p)),
+    ...fit.violations.map((v) => `slide ${v.slide} bounds: ${v.element} "${v.text}" over ${JSON.stringify(v.over)}`),
+  ];
+}
+
+class BrokenImages extends Error {
+  constructor(readonly keys: string[]) {
+    super(`story images failed to load: ${keys.join(', ')}`);
+  }
+}
+
 export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: string; postId: string; stories: number; short: boolean } | { ok: false; runId: string; error: string }> {
   const nyDate = nyDateKey(d.now);
   const runId = await startRun(d.query, d.trigger, d.capUsd, nyDate);
   const record: Record<string, unknown> = {};
+  let jevCalls = 0;
+  const jev: JevAsk = (req, meta) => {
+    jevCalls += 1;
+    record.jevCalls = jevCalls;
+    return d.jev(req, meta);
+  };
+  const run: LfdRunDeps = { ...d, jev };
   try {
     const previous = await previousPosts(d.query, PREVIOUS_POSTS);
     const used = usedIdeaIds(previous);
     let window = windowFor(nyDate, previous[0]?.nyDate ?? null);
-    let pools = await gather(d, window, used);
+    let pools = await gather(run, window, used);
     if (distinctEligible(pools) < MIN_STORIES) {
       window = extendWindow(window);
-      pools = await gather(d, window, used, pools.scores);
+      pools = await gather(run, window, used, pools.scores);
       record.safetyNet = true;
     }
     record.window = window;
     record.pool = pools.counts;
+    if (pools.feedError) record.feedError = pools.feedError;
 
-    const selector = new Selector(pools.majors, pools.rundown, previous[0]?.stories ?? [], d.jev);
+    const selector = new Selector(pools.majors, pools.rundown, previous[0]?.stories ?? [], jev);
+    const queueRow = (c: LfdCandidate) => ({ key: c.key, headline: c.headline, major: c.major, net: c.net });
+    record.queues = { major: selector.top('major', QUEUE_TOP).map(queueRow), rundown: selector.top('rundown', QUEUE_TOP).map(queueRow) };
     let pending: Pick[] = await selector.fill();
     const ready: Ready[] = [];
     const drops: Drop[] = [];
+    record.drops = drops;
+    const cache = { readTokens: 0, creationTokens: 0 };
+    record.claudeCache = cache;
     const exclude = await recentPhotoUrls(d.query, d.now);
 
     const replace = async (p: Pick, reason: Drop['reason'], next: Pick[]) => {
-      drops.push({ key: p.key, lane: p.lane, reason });
+      drops.push({ key: p.key, lane: p.lane, headline: p.headline, reason });
       selector.drop(p.key);
       const r = await selector.replace(p.lane);
       if (r) next.push(r);
     };
+    const write = async (items: Array<{ pick: Pick; body: string }>, note?: string) => {
+      const res = await writeStories(d.create, items, note);
+      cache.readTokens += res.cache.readTokens;
+      cache.creationTokens += res.cache.creationTokens;
+      return res;
+    };
 
-    for (let round = 0; round < MAX_ROUNDS && pending.length > 0; round++) {
+    /** Write a round's stories in one call; if that fails, one call per story so one bad story can't sink the rest. */
+    const writeRound = async (texts: Array<{ pick: Pick; body: string }>, round: number, next: Pick[]) => {
+      const batch = await write(texts);
+      if (batch.ok) return texts.map((t) => ({ ...t, copy: batch.stories.find((s) => s.key === t.pick.key)! }));
+      record.writeFailure = batch.detail;
+      const out: Array<{ pick: Pick; body: string; copy: StoryCopy }> = [];
+      const failed: Pick[] = [];
+      for (const t of texts) {
+        const one = texts.length > 1 ? await write([t]) : batch;
+        if (one.ok) out.push({ ...t, copy: one.stories[0]! });
+        else failed.push(t.pick);
+      }
+      if (round === 0 && out.length === 0) throw new Error(`writing failed: ${batch.detail}`);
+      for (const p of failed) await replace(p, 'write-failed', next);
+      return out;
+    };
+
+    const runRound = async (picks: Pick[], round: number): Promise<Pick[]> => {
       const next: Pick[] = [];
       const texts: Array<{ pick: Pick; body: string }> = [];
-      for (const p of pending) {
+      for (const p of picks) {
         const body = await fullText(d, p);
         if (body) texts.push({ pick: p, body });
         else await replace(p, 'thin-text', next);
       }
-      if (texts.length === 0) { pending = next; continue; }
+      if (texts.length === 0) return next;
 
-      const written = await writeStories(d.create, texts);
-      if (!written.ok) {
-        if (round === 0) throw new Error(`writing failed: ${written.detail}`);
-        record.writeFailure = written.detail;
-        for (const { pick } of texts) drops.push({ key: pick.key, lane: pick.lane, reason: 'write-failed' });
-        break;
-      }
+      const written = await writeRound(texts, round, next);
       const checked: Array<{ pick: Pick; copy: StoryCopy }> = [];
-      for (const { pick, body } of texts) {
-        let copy = written.stories.find((s) => s.key === pick.key)!;
-        if (!(await grounded(d.jev, copy, body))) {
-          const again = await writeStories(d.create, [{ pick, body }], REWRITE_NOTE);
+      for (const { pick, body, copy: first } of written) {
+        let copy = first;
+        if (!(await grounded(jev, copy, body))) {
+          const again = await write([{ pick, body }], REWRITE_NOTE);
           const retry = again.ok ? again.stories[0] : undefined;
-          if (!retry || !(await grounded(d.jev, retry, body))) { await replace(pick, 'not-grounded', next); continue; }
+          if (!retry || !(await grounded(jev, retry, body))) { await replace(pick, 'not-grounded', next); continue; }
           copy = retry;
         }
         checked.push({ pick, copy });
@@ -156,29 +223,72 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
         if (photo) ready.push({ ...item, photo });
         else await replace(item.pick, 'no-photo', next);
       }
-      pending = next;
-    }
+      return next;
+    };
 
-    const order = slideOrder(ready.map((r) => r.pick));
-    const final = order.map((p) => ready.find((r) => r.pick.key === p.key)!);
-    // Spec §4.1: at most 2 setups per post; replacement rounds can add more than normalize's per-call cap.
-    let setups = 0;
-    for (const r of final) {
-      if (!r.copy.setup) continue;
-      setups += 1;
-      if (setups > 2) r.copy = { ...r.copy, setup: '' };
-    }
-    const short = final.length < MIN_STORIES;
-    const render = buildPost(final, d.now);
+    const unfinished = (left: Pick[]) => {
+      for (const p of left) drops.push({ key: p.key, lane: p.lane, headline: p.headline, reason: 'unfinished' });
+    };
+    for (let round = 0; round < MAX_ROUNDS && pending.length > 0; round++) pending = await runRound(pending, round);
+    unfinished(pending);
+
+    const finalOrder = (): Ready[] => {
+      const order = slideOrder(ready.map((r) => r.pick));
+      const final = order.map((p) => ready.find((r) => r.pick.key === p.key)!);
+      // Spec §4.1: at most 2 setups per post; replacement rounds can add more than normalize's per-call cap.
+      let setups = 0;
+      for (const r of final) {
+        if (!r.copy.setup) continue;
+        setups += 1;
+        if (setups > 2) r.copy = { ...r.copy, setup: '' };
+      }
+      return final;
+    };
+
     const taken = (await d.query<{ n: number }>(`SELECT count(*)::int AS n FROM lfd.posts WHERE slug = $1`, [`lfd-${nyDate}`])).rows[0]!.n > 0;
     const slug = taken ? `lfd-${nyDate}-${runId.slice(0, 8)}` : `lfd-${nyDate}`;
-    let fit: FitResult | null = null;
-    const slideObjects = await storeSlideJpegs(slug, render, {
-      prefix: 'lfd',
-      fitCheck: async (post, opts) => (fit = await d.fitCheck(post, opts)),
-      upload: d.upload,
-    });
-    const fitProblems = ((fit as FitResult | null)?.problems ?? []).filter((p) => /text fit/.test(p));
+    /** Render and store the JPEGs; with `replaceBroken`, a story slide whose photo failed to load throws before anything is uploaded. */
+    const renderAndStore = async (final: Ready[], replaceBroken: boolean) => {
+      const render = buildPost(final, d.now);
+      let fit: FitResult | null = null;
+      const slideObjects = await storeSlideJpegs(slug, render, {
+        prefix: 'lfd',
+        fitCheck: async (post, opts) => {
+          const result = await d.fitCheck(post, opts);
+          fit = result;
+          const broken = replaceBroken ? brokenImageKeys(result, final) : [];
+          if (broken.length) throw new BrokenImages(broken);
+          return result;
+        },
+        upload: d.upload,
+      });
+      return { render, slideObjects, fit: fit as FitResult | null };
+    };
+
+    let final = finalOrder();
+    if (final.length === 0) throw new Error('no stories survived');
+    let rendered: Awaited<ReturnType<typeof renderAndStore>>;
+    try {
+      rendered = await renderAndStore(final, true);
+    } catch (err) {
+      if (!(err instanceof BrokenImages)) throw err;
+      // One extra round: drop each story whose photo failed to load, replace it, re-render (whatever fails then is recorded).
+      const next: Pick[] = [];
+      for (const key of err.keys) {
+        const i = ready.findIndex((r) => r.pick.key === key);
+        const [gone] = ready.splice(i, 1);
+        exclude.add(gone!.photo.src);
+        await replace(gone!.pick, 'image-failed', next);
+      }
+      if (next.length) unfinished(await runRound(next, MAX_ROUNDS));
+      final = finalOrder();
+      if (final.length === 0) throw new Error('no stories survived');
+      rendered = await renderAndStore(final, false);
+    }
+
+    const { render, slideObjects, fit } = rendered;
+    const short = final.length < MIN_STORIES;
+    const fitProblems = (fit?.problems ?? []).filter((p) => /text fit/.test(p));
     const postId = await insertPost(d.query, {
       runId,
       slug,
@@ -189,9 +299,10 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       caption: render.caption,
       slideObjects,
       fitProblems,
+      renderProblems: renderProblemsOf(fit),
       short,
     });
-    record.drops = drops;
+    record.picks = final.map((r) => ({ key: r.pick.key, lane: r.pick.lane, headline: r.pick.headline, origin: r.pick.origin, major: r.pick.major, net: r.pick.net }));
     record.stories = final.length;
     const spend = d.spend();
     await finishRun(d.query, runId, { status: short ? 'partial' : 'ok', stopReason: short ? `short post: only ${final.length} stories` : undefined, claudeUsd: spend.claudeUsd, jevUsd: spend.jevUsd, record });

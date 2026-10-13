@@ -16,7 +16,7 @@ beforeEach(() => resetSeed());
 const NOW = new Date('2026-10-13T07:00:00Z'); // Tuesday 3:00 AM NY
 
 /** Writer stub: echoes every story in the material with valid copy; `bad` keys get a headline the fact check rejects. */
-function writerStub(opts: { setup?: string; failAfter?: number } = {}) {
+function writerStub(opts: { setup?: string; failAfter?: number; fail?: (urls: string[]) => boolean } = {}) {
   let calls = 0;
   const bad = new Set<string>();
   const create = async (p: Anthropic.MessageCreateParamsNonStreaming) => {
@@ -25,12 +25,15 @@ function writerStub(opts: { setup?: string; failAfter?: number } = {}) {
       return { id: 'm', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', stop_reason: 'refusal', stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }, content: [{ type: 'text', text: 'no' }] } as unknown as Anthropic.Message;
     }
     const user = String((p.messages.at(-1) as { content: unknown }).content);
-    const material = JSON.parse(user.slice(user.indexOf('<material>') + 10, user.indexOf('</material>'))) as { stories: Array<{ key: string; headline: string }> };
+    const material = JSON.parse(user.slice(user.indexOf('<material>') + 10, user.indexOf('</material>'))) as { stories: Array<{ key: string; headline: string; url: string }> };
+    if (opts.fail?.(material.stories.map((s) => s.url))) {
+      return { id: 'm', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', stop_reason: 'refusal', stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }, content: [{ type: 'text', text: 'no' }] } as unknown as Anthropic.Message;
+    }
     const stories = material.stories.map((s) => ({
       key: s.key, setup: opts.setup ?? '', headline: bad.has(s.key) ? `UNSUPPORTED ${s.key}` : `Story ${s.headline.slice(0, 40)}`, highlight: '', names: [],
       body: 'It happened this week. The company says more is coming', photo: { kind: 'company', query: s.headline, subjects: [], alts: [] },
     }));
-    return { id: 'm', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 100, output_tokens: 100, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }, content: [{ type: 'tool_use', id: `t${calls}`, name: 'submit_rundown', input: { stories } }] } as unknown as Anthropic.Message;
+    return { id: 'm', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 100, output_tokens: 100, cache_creation_input_tokens: 5, cache_read_input_tokens: 50 }, content: [{ type: 'tool_use', id: `t${calls}`, name: 'submit_rundown', input: { stories } }] } as unknown as Anthropic.Message;
   };
   return { create, calls: () => calls };
 }
@@ -238,4 +241,118 @@ test('a failure while recording a failed run does not throw', async () => {
   assert.equal(res.ok, false);
   assert.match((res as { error: string }).error, /boom/);
   assert.match((res as { error: string }).error, /db down/);
+});
+
+type Rec = {
+  window: { after: string; through: string };
+  pool: { reels: number; carousel: number; feed: number; judged: number };
+  jevCalls: number;
+  picks: Array<{ key: string; lane: string; headline: string; origin: string; major: number | null; net: number | null }>;
+  queues: { major: Array<{ key: string; headline: string; major: number | null; net: number | null }>; rundown: Array<{ key: string; headline: string; major: number | null; net: number | null }> };
+  drops: Array<{ key: string; lane: string; headline: string; reason: string }>;
+  claudeCache: { readTokens: number; creationTokens: number };
+  writeFailure?: string;
+  feedError?: string;
+};
+const recordOf = async (d: LfdRunDeps, runId: string) => (await d.query<{ record: Rec }>(`SELECT record FROM lfd.runs WHERE id = $1`, [runId])).rows[0]!.record;
+
+test('a failed batch write falls back to one call per story and still saves 6', async () => {
+  const d = await deps({ create: writerStub({ fail: (urls) => urls.length > 1 }).create });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  assert.equal(res.stories, 6);
+  assert.ok((await recordOf(d, res.runId)).writeFailure);
+});
+
+test('a story whose own write keeps failing is replaced; the post is saved', async () => {
+  const d = await deps({ create: writerStub({ fail: (urls) => urls.includes('https://n.com/2') }).create });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  assert.equal(res.stories, 6);
+  const { rows } = await d.query<{ stories: Array<{ url: string }> }>(`SELECT stories FROM lfd.posts`);
+  assert.ok(!rows[0]!.stories.some((s) => s.url === 'https://n.com/2'));
+  const rec = await recordOf(d, res.runId);
+  assert.ok(rec.drops.some((x) => x.reason === 'write-failed' && x.key.endsWith('n.com/2')));
+});
+
+test('nothing written at all in the first round fails the run', async () => {
+  const d = await deps({ create: writerStub({ fail: () => true }).create });
+  const res = await runLastFewDays(d);
+  assert.equal(res.ok, false);
+  assert.match((res as { error: string }).error, /writing failed/);
+});
+
+test('the run record carries what the Ideas view needs', async () => {
+  const d = await deps();
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const rec = await recordOf(d, res.runId);
+  assert.ok(rec.window.after && rec.window.through);
+  assert.deepEqual(Object.keys(rec.pool).sort(), ['carousel', 'feed', 'judged', 'reels']);
+  assert.ok(rec.jevCalls > 0);
+  assert.equal(rec.picks.length, 6);
+  assert.deepEqual(Object.keys(rec.picks[0]!).sort(), ['headline', 'key', 'lane', 'major', 'net', 'origin']);
+  assert.equal(rec.picks[0]!.lane, 'major');
+  assert.ok(rec.queues.major.length >= 1 && rec.queues.major.length <= 10);
+  assert.ok(rec.queues.rundown.length >= 1 && rec.queues.rundown.length <= 10);
+  assert.deepEqual(Object.keys(rec.queues.rundown[0]!).sort(), ['headline', 'key', 'major', 'net']);
+  assert.deepEqual(rec.drops, []);
+  assert.ok(rec.claudeCache.readTokens > 0 && rec.claudeCache.creationTokens > 0);
+  assert.equal(rec.feedError, undefined);
+});
+
+test('a feed fetch failure is recorded, not swallowed', async () => {
+  const d = await deps({ fetchFeeds: async () => { throw new Error('feeds down'); } });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  assert.match((await recordOf(d, res.runId)).feedError ?? '', /feeds down/);
+});
+
+test('stories still pending after the last round are recorded as unfinished; no survivors fails the run', async () => {
+  const { query } = await openHubTestDb();
+  for (let i = 0; i < 30; i++) {
+    const idea = await seedReelsIdea(query, { headline: `Story Number ${i}`, url: `https://m.com/${i}` });
+    await seedScore(query, idea, { nyDate: '2026-10-11', origin: 'timely', net: 0.9 - i / 100 });
+  }
+  const d = await deps({ query, jev: failFirst('m.com/') });
+  const res = await runLastFewDays(d);
+  assert.equal(res.ok, false);
+  assert.match((res as { error: string }).error, /no stories survived/);
+  const rec = await recordOf(d, res.runId);
+  const unfinished = rec.drops.filter((x) => x.reason === 'unfinished');
+  assert.ok(unfinished.length > 0);
+  assert.ok(unfinished.every((x) => x.headline.startsWith('Story Number')));
+  assert.ok(rec.drops.some((x) => x.reason === 'not-grounded' && x.headline));
+  assert.equal((await d.query<{ n: number }>(`SELECT count(*)::int AS n FROM lfd.posts`)).rows[0]!.n, 0);
+});
+
+test('a story slide whose image failed to load is replaced; every render problem is kept', async () => {
+  const base = await deps();
+  let checks = 0;
+  const d: LfdRunDeps = {
+    ...base,
+    fitCheck: async (post, opts) => {
+      checks += 1;
+      const r = await base.fitCheck(post, opts);
+      return {
+        ...r,
+        ok: false,
+        problems: ['slide 3 image failed to load', 'Roboto font did not load', 'slide 2 text fit: p.lfd-body "x" (overflow, min 31px)'],
+        violations: [{ slide: 4, element: 'h2.lfd-headline', text: 'Wide', over: { left: 0, top: 0, right: 12, bottom: 0 } }],
+      };
+    },
+  };
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  assert.equal(checks, 2, 'one re-render after the replacement');
+  assert.equal(res.stories, 6);
+  const rec = await recordOf(d, res.runId);
+  const broken = rec.drops.filter((x) => x.reason === 'image-failed');
+  assert.equal(broken.length, 1);
+  const { rows } = await d.query<{ stories: Array<{ key: string }>; fit_problems: string[]; render_problems: string[] }>(`SELECT stories, fit_problems, render_problems FROM lfd.posts`);
+  assert.ok(!rows[0]!.stories.some((s) => s.key === broken[0]!.key));
+  assert.deepEqual(rows[0]!.fit_problems, ['slide 2 text fit: p.lfd-body "x" (overflow, min 31px)']);
+  assert.ok(rows[0]!.render_problems.includes('slide 3 image failed to load'), rows[0]!.render_problems.join('\n'));
+  assert.ok(rows[0]!.render_problems.includes('Roboto font did not load'));
+  assert.ok(rows[0]!.render_problems.some((p) => /^slide 4 bounds: h2\.lfd-headline/.test(p)));
 });

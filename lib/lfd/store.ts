@@ -58,12 +58,12 @@ export async function finishRun(
 
 export async function insertPost(
   q: HubQuery,
-  p: { runId: string | null; slug: string; nyDate: string; ideaIds: string[]; stories: unknown[]; render: unknown; caption: string; slideObjects: string[]; fitProblems: string[]; short: boolean },
+  p: { runId: string | null; slug: string; nyDate: string; ideaIds: string[]; stories: unknown[]; render: unknown; caption: string; slideObjects: string[]; fitProblems: string[]; renderProblems?: string[]; short: boolean },
 ): Promise<string> {
   const { rows } = await q<{ id: string }>(
-    `INSERT INTO lfd.posts (run_id, slug, ny_date, status, idea_ids, stories, render, caption, slide_objects, fit_problems, short)
-     VALUES ($1, $2, $3, 'review', $4, $5::jsonb, $6::jsonb, $7, $8::jsonb, $9::jsonb, $10) RETURNING id`,
-    [p.runId, p.slug, p.nyDate, p.ideaIds, JSON.stringify(p.stories), JSON.stringify(p.render), p.caption, JSON.stringify(p.slideObjects), JSON.stringify(p.fitProblems), p.short],
+    `INSERT INTO lfd.posts (run_id, slug, ny_date, status, idea_ids, stories, render, caption, slide_objects, fit_problems, render_problems, short)
+     VALUES ($1, $2, $3, 'review', $4, $5::jsonb, $6::jsonb, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11) RETURNING id`,
+    [p.runId, p.slug, p.nyDate, p.ideaIds, JSON.stringify(p.stories), JSON.stringify(p.render), p.caption, JSON.stringify(p.slideObjects), JSON.stringify(p.fitProblems), JSON.stringify(p.renderProblems ?? []), p.short],
   );
   return rows[0]!.id;
 }

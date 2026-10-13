@@ -55,3 +55,6 @@ CREATE TABLE IF NOT EXISTS lfd.posts (
     published_at    timestamptz
 );
 CREATE INDEX IF NOT EXISTS idx_lfd_posts_ny_date ON lfd.posts (ny_date DESC);
+-- Render problems that mean a broken slide (an image that failed to load, a font that did not load, text out of
+-- bounds), kept apart from text fit. Shown on review.
+ALTER TABLE lfd.posts ADD COLUMN IF NOT EXISTS render_problems jsonb NOT NULL DEFAULT '[]'::jsonb;

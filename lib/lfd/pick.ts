@@ -168,6 +168,11 @@ export class Selector {
     return [...this.picks];
   }
 
+  /** The head of a lane's queue, for the run record (spec §8 Ideas view). */
+  top(lane: Lane, n: number): LfdCandidate[] {
+    return (lane === 'major' ? this.majors : this.rundown).slice(0, n);
+  }
+
   drop(key: string): void {
     const i = this.picks.findIndex((p) => p.key === key);
     if (i !== -1) this.picks.splice(i, 1);
