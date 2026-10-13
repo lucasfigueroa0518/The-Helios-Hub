@@ -95,6 +95,9 @@ async function projectFrameSet(db: Queryable, frameId: string): Promise<void> {
 
 /* ── Sets ─────────────────────────────────────────────────────────── */
 
+/** Local test runs set HELIOS_RUN_MODE=development; the VM leaves it unset, so production is the safe default. */
+const runMode = process.env.HELIOS_RUN_MODE === 'development' ? 'development' : 'production';
+
 /**
  * Ask for a set (Generate, or the scheduler for an auto series). One live set
  * per series per day: a second request returns the existing one, `created: false`.
@@ -104,11 +107,11 @@ export async function requestSet(
   input: { series: Series; nyDate: string; trigger: 'click' | 'auto'; style: Style; requestedBy?: string },
 ): Promise<{ set: StorySet; created: boolean }> {
   const { rows } = await db.query<StorySet>(
-    `INSERT INTO stories.sets (series, ny_date, trigger, style, requested_by)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO stories.sets (series, ny_date, trigger, style, requested_by, mode)
+     VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (series, ny_date) WHERE status NOT IN ('rejected', 'failed', 'skipped') DO NOTHING
      RETURNING ${SET_COLS}`,
-    [input.series, input.nyDate, input.trigger, input.style, input.requestedBy ?? null],
+    [input.series, input.nyDate, input.trigger, input.style, input.requestedBy ?? null, runMode],
   );
   if (rows[0]) return { set: rows[0], created: true };
   const existing = await db.query<StorySet>(

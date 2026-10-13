@@ -353,3 +353,12 @@ CREATE TABLE IF NOT EXISTS social_hub.idea_adjustments (
 
 CREATE INDEX IF NOT EXISTS idx_social_hub_idea_adjustments_day
     ON social_hub.idea_adjustments (ny_date, vertical, created_at);
+
+-- Health tab (spec 2026-10-13 §4.3): the 07:30 morning report, one row per night.
+CREATE TABLE IF NOT EXISTS social_hub.health_reports (
+    night       date PRIMARY KEY,
+    built_at    timestamptz NOT NULL,
+    verdict     jsonb NOT NULL,
+    reports     jsonb NOT NULL,
+    failures    jsonb NOT NULL
+);
