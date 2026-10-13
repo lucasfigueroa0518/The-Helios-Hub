@@ -54,7 +54,7 @@ export async function seedCarouselRun(q: HubQuery, finishedAt: string, shortlist
     },
   };
   await q(
-    `INSERT INTO social.runs (kind, started_at, finished_at, hook_pass, cap_usd, record) VALUES ('daily', $1, $1, false, 0, $2::jsonb)`,
+    `INSERT INTO social.runs (kind, trigger, status, started_at, finished_at, hook_pass, cap_usd, record) VALUES ('daily', 'scheduled', 'ok', $1, $1, false, 0, $2::jsonb)`,
     [finishedAt, JSON.stringify(record)],
   );
 }
