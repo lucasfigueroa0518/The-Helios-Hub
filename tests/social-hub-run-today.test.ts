@@ -9,7 +9,7 @@ import test from 'node:test';
 
 import { parseRankMove } from '@/lib/content-type/idea-rank';
 import { reelPosts } from '@/lib/social-hub/adapters/reels';
-import { planFrom, typeDay, type RunInputs } from '@/lib/social-hub/run-today';
+import { narrowStep, planFrom, stepsFor, typeDay, type RunInputs } from '@/lib/social-hub/run-today';
 import type { HubIdea, HubPost } from '@/lib/social-hub/types';
 import { applyMoves, dayRanking, orderCards, quotaCandidates, type IdeaAdjustment } from '@/lib/social-hub/views/day-rank';
 import { todaysContent } from '@/lib/social-hub/views/today';
@@ -202,4 +202,31 @@ test('cards read as the day: booked by time, then made with no slot, then being 
     { vertical: 'reels' as const, idea: null, post: at('2026-10-09T13:00:00Z'), locked: true, rank: null, moved: null },
   ];
   assert.deepEqual(orderCards(cards).map((c) => c.post?.id ?? 'not made'), ['p-2026-10-09T13:00:00Z', 'p-2026-10-09T22:00:00Z', cards[2]!.post!.id, cards[1]!.post!.id, 'not made']);
+});
+
+test('Make it runs only its card: one target, its share of the estimate', () => {
+  const plan = planFrom({ ...base, explainers: { quota: 2, held: 0, missing: [{ ideaId: 'explainers:topic:t1', ref: 't1', title: 'A' }, { ideaId: 'explainers:topic:t2', ref: 't2', title: 'B' }] } });
+  const [one] = stepsFor(plan, 'explainers', 't2');
+  assert.deepEqual([one!.action, one!.targets, one!.estimateUsd], ['explainer_renders', ['t2'], 5]);
+});
+
+test('Make it on a card made meanwhile starts nothing and spends nothing (Review Focus 4)', () => {
+  const plan = planFrom(base);
+  const [step] = stepsFor(plan, 'explainers', 'already-made-topic');
+  assert.deepEqual([step!.action, step!.estimateUsd, step!.targets], ['none', 0, []]);
+  const [stories] = stepsFor(planFrom({ ...base, series: [{ id: 'morning_download', label: 'Morning Download', held: true }] }), 'stories', 'morning_download');
+  assert.equal(stories!.action, 'none');
+});
+
+test('a step that cannot be split (no reels slate yet) runs whole, and says so', () => {
+  const plan = planFrom({ ...base, reels: { ...base.reels, slateToday: false } });
+  const [step] = stepsFor(plan, 'reels', 'r2');
+  assert.equal(step!.action, 'reels_run');
+  assert.equal(step!.estimateUsd, base.cost.reelsNight);
+});
+
+test('a carousel run for one story keeps its run cap as the estimate', () => {
+  const plan = planFrom({ ...base, carousels: { quota: 2, held: 0, missing: [{ ideaId: 'carousels:story:s1', ref: 's1', title: 'S1' }, { ideaId: 'carousels:story:s2', ref: 's2', title: 'S2' }] } });
+  const [step] = stepsFor(plan, 'carousels', 's2');
+  assert.deepEqual([step!.targets, step!.estimateUsd], [['s2'], base.cost.carouselCap]);
 });
