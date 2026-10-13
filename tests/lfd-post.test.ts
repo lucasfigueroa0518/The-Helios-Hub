@@ -41,3 +41,15 @@ test('the caption opens with the hook, lists each headline, ends with follow + c
   assert.doesNotMatch(caption, /#/);
   assert.ok(caption.length <= 2200);
 });
+
+test('an over-long caption drops lowest-ranked headlines and keeps hook, follow and credits whole', () => {
+  const items = [0, 1, 2, 3, 4, 5].map(ready);
+  for (const r of items) r.copy.headline = `${'Very Long Headline '.repeat(20)}${r.copy.key}`;
+  const caption = captionFor(items);
+  assert.ok(caption.length <= 2200);
+  assert.match(caption, /^Do you realize what just happened/);
+  assert.match(caption, /Follow Helios/);
+  assert.match(caption, /Photos: Credit 0; Credit 1; Credit 2; Credit 3; Credit 4; Credit 5$/);
+  assert.match(caption, /k0/);
+  assert.doesNotMatch(caption, /k5/);
+});

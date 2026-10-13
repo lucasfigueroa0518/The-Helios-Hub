@@ -35,3 +35,15 @@ test('over-long body is reported as a text-fit problem (never shrunk)', async ()
   const res = await checkRenderFit(buildPost([long, ready(1), ready(2), ready(3), ready(4)], new Date()));
   assert.ok(res.problems.some((p) => /slide 2 text fit/.test(p)), res.problems.join('\n'));
 });
+
+test('a 3-line headline is reported as a text-fit problem', async () => {
+  const three = ready(0, { headline: 'Anthropic Announces Another Major Update Bringing Faster Smarter Cheaper Models to Every Developer Team Worldwide Today' });
+  const res = await checkRenderFit(buildPost([three, ready(1), ready(2), ready(3), ready(4)], new Date()));
+  assert.ok(res.problems.some((p) => /slide 2 text fit/.test(p)), res.problems.join('\n'));
+});
+
+test('a headline with one extremely long word is reported, not cut off', async () => {
+  const wide = ready(0, { headline: 'Supercalifragilisticexpialidociousagentplatformthingy' });
+  const res = await checkRenderFit(buildPost([wide, ready(1), ready(2), ready(3), ready(4)], new Date()));
+  assert.ok(res.problems.some((p) => /slide 2 text fit/.test(p)) || res.violations.length > 0, res.problems.join('\n'));
+});

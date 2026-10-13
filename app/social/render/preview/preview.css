@@ -1103,7 +1103,7 @@
 .lfd-text { flex: none; }
 .lfd-setup { margin: 0 0 16px; font-weight: 700; font-size: 34px; line-height: 44px; max-height: 88px; overflow-wrap: normal; word-break: normal; }
 .lfd-headline { margin: 0; font-family: var(--font-heading); font-weight: 700; font-size: 42px; line-height: 50px; letter-spacing: -0.02em; max-height: 100px; overflow-wrap: normal; word-break: normal; }
-.lfd-clip { display: block; overflow: clip; } /* Pragmatica's tall content box overflows the last line by ~4px; fitText reads that as scrollHeight, so clip it (ink stays inside the 50px line) */
+.lfd-clip { display: block; overflow-x: visible; overflow-y: clip; } /* Pragmatica's tall content box overflows the last line by ~4px; fitText reads that as scrollHeight, so clip it (ink stays inside the 50px line) */
 .lfd-body { margin: 20px 0 0; font-weight: 400; font-size: 31px; line-height: 42px; max-height: 126px; color: var(--lfd-muted); overflow-wrap: normal; word-break: normal; }
 .lfd-media { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; background: #161616; border-radius: 24px; }
 .lfd-media::after { content: ''; position: absolute; inset: 0; border-radius: 24px; border: 1px solid rgba(255,255,255,0.10); pointer-events: none; }

@@ -15,14 +15,14 @@ export function creditsFor(ready: Ready[]): string {
 }
 
 export function captionFor(ready: Ready[]): string {
-  const lines = ready.map((r) => `– ${r.copy.headline}`);
-  const caption = [
-    'Do you realize what just happened in AI in the last few days? Swipe ⬅️ to catch up.',
-    lines.join('\n'),
-    FOLLOW_LINE,
-    creditsFor(ready),
-  ].join('\n\n');
-  return caption.length <= CAPTION_MAX_CHARS ? caption : caption.slice(0, CAPTION_MAX_CHARS);
+  const hook = 'Do you realize what just happened in AI in the last few days? Swipe ⬅️ to catch up.';
+  const headlines = ready.map((r) => `– ${r.copy.headline}`);
+  const build = (n: number) => [hook, headlines.slice(0, n).join('\n'), FOLLOW_LINE, creditsFor(ready)].filter(Boolean).join('\n\n');
+  // Over the limit: drop the lowest-ranked headline lines; hook, Follow and credits stay whole.
+  let n = headlines.length;
+  let caption = build(n);
+  while (caption.length > CAPTION_MAX_CHARS && n > 0) caption = build(--n);
+  return caption;
 }
 
 export function buildPost(ready: Ready[], now: Date): RenderPost {
