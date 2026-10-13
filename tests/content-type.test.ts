@@ -50,9 +50,21 @@ test('a bench idea matches a waiting post by its idea id, with or without a pref
   const found = dataset.posts.find((p) => p.vertical === 'explainers' && !p.nyDate && p.idea && (p.status === 'ready' || p.status === 'scheduled'));
   if (!found) return; // the fixture has no waiting explainer; the carousel case above covers matching by story id
   // The preview drops video files; give this one its file so it counts as made.
-  const post = { ...found, media: { kind: 'video' as const, src: '/video.mp4' } };
+  // Older than today, so it waits on the bench (an explainer made today fills today's slot instead: the test below).
+  const post = { ...found, generatedAt: '2026-09-01T00:00:00Z', media: { kind: 'video' as const, src: '/video.mp4' } };
   const model = typeHubModel({ ...dataset, posts: dataset.posts.map((p) => (p.id === post.id ? post : p)), ideas: [...dataset.ideas, { id: `explainers:topic:${post.idea!.id}`, vertical: 'explainers', title: 'x', score: 1, scoreLabel: '', state: 'content_ready', hasContent: true, versionCount: 1, generatedAt: null, createdAt: null, detail: null }] }, 'explainers', FIXTURE_NOW);
   assert.ok(model.bench.some((b) => b.card?.post.id === post.id && b.idea.id.endsWith(post.idea!.id)));
+});
+
+test('an explainer the night made today fills today\'s card on the type page, not the bench (2026-10-13)', () => {
+  const dataset = previewDataset();
+  const found = dataset.posts.find((p) => p.vertical === 'explainers' && !p.nyDate && p.idea && (p.status === 'ready' || p.status === 'scheduled'));
+  if (!found) return;
+  const post = { ...found, status: 'ready' as const, generatedAt: FIXTURE_NOW.toISOString(), media: { kind: 'video' as const, src: '/video.mp4' } };
+  const model = typeHubModel({ ...dataset, posts: dataset.posts.map((p) => (p.id === post.id ? post : p)) }, 'explainers', FIXTURE_NOW);
+  const today = model.days.find((d) => d.date === model.today)!;
+  assert.ok(today.cards.some((c) => c.post.id === post.id), 'it is on today\'s card');
+  assert.ok(!model.bench.some((b) => b.card?.post.id === post.id), 'and not also waiting on the bench');
 });
 
 test('type pages: Text on Screen keeps /reels; the others live at /<type>, or under the preview base', () => {
