@@ -214,8 +214,12 @@
 
 /* Card media: controls sit beside the post link, over the image. */
 .sh-cardmedia { position: relative; }
-.sh-cardmedia__open { display: block; width: 100%; height: 100%; }
+.sh-cardmedia__open { display: block; width: 100%; height: 100%; overflow: hidden; }
 .sh-cardmedia__open img, .sh-cardmedia__open video { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* Slides sit side by side on one strip; a step slides it over instead of swapping the image. */
+.sh-cardmedia__track { display: flex; width: 100%; height: 100%; transition: transform 280ms var(--sh-ease); will-change: transform; }
+.sh-cardmedia__track img { flex: 0 0 100%; }
+@media (prefers-reduced-motion: reduce) { .sh-cardmedia__track { transition: none; } }
 .sh-cardmedia__arrow, .sh-cardmedia__sound { position: absolute; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 999px; background: var(--color-surface); color: var(--color-text); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25); cursor: pointer; }
 .sh-cardmedia__arrow { top: 50%; transform: translateY(-50%); opacity: 0; transition: opacity 120ms var(--sh-ease); }
 .sh-cardmedia__arrow--prev { left: 6px; }
@@ -232,3 +236,5 @@
 .sh-actions--card .sh-actions__row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .sh-actions--card .sh-btn { min-width: 0; padding: 0 6px; font-size: var(--sh-fs-small); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sh-actions--card .sh-btn--primary { grid-column: 1 / -1; }
+/* Make it sits alone on its card: full width like Approve. */
+.sh-actions--card .sh-actions__row > .sh-btn:only-child { grid-column: 1 / -1; }

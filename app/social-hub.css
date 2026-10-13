@@ -155,7 +155,7 @@ p.sh-subtle { max-width: 75ch; }
 }
 .sh-btn:hover:not(:disabled) { background: var(--color-surface-hover); }
 .sh-btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.sh-btn--primary { padding: 0 14px; border-color: var(--color-primary); background: var(--color-primary); color: var(--color-text); font-weight: var(--font-weight-semibold); }
+.sh-btn--primary { padding: 0 14px; border-color: var(--color-primary); background: var(--color-primary); color: var(--color-text-inverse); font-weight: var(--font-weight-semibold); }
 .sh-btn--primary:hover:not(:disabled) { background: var(--color-primary-hover); border-color: var(--color-primary-hover); }
 .sh-btn--danger { color: var(--sh-failed-ink); }
 .sh-btn--danger:hover:not(:disabled) { background: var(--sh-failed-wash); border-color: var(--sh-failed-ink); }

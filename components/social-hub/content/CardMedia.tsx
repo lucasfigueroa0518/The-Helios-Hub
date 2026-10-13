@@ -73,7 +73,7 @@ function SlidesPreview({ post, className }: { post: HubPost; className: string }
   const [i, setI] = useState(0);
   const start = useRef<number | null>(null);
   const go = (d: number) => setI((n) => Math.min(frames.length - 1, Math.max(0, n + d)));
-  const frame = frames[Math.min(i, frames.length - 1)]!;
+  const current = Math.min(i, frames.length - 1);
   return (
     <div
       className={`${className} sh-cardmedia`}
@@ -87,8 +87,14 @@ function SlidesPreview({ post, className }: { post: HubPost; className: string }
       }}
     >
       <PostLink id={post.id} className="sh-cardmedia__open" decorative>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={frame.src} alt="" loading="lazy" decoding="async" {...(frame.remote ? { referrerPolicy: 'no-referrer' as const } : {})} />
+        {/* Every slide sits on one strip that slides over, so a step never waits on a fresh image load. A slide
+            gets its src once it's at most one step ahead, so the next one is ready before the click. */}
+        <span className="sh-cardmedia__track" style={{ transform: `translateX(-${current * 100}%)` }}>
+          {frames.map((f, n) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={`${n}-${f.src}`} src={n <= current + 1 ? f.src : undefined} alt="" decoding="async" {...(f.remote ? { referrerPolicy: 'no-referrer' as const } : {})} />
+          ))}
+        </span>
       </PostLink>
       {frames.length > 1 ? (
         <>
