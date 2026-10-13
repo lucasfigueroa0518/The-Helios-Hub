@@ -41,6 +41,7 @@ function VideoPreview({ post, src, poster, className }: { post: HubPost; src: st
     if (!v) return;
     v.pause();
     v.currentTime = 0;
+    setMuted(true);
   };
   return (
     <div

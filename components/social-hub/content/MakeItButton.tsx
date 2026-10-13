@@ -2,7 +2,7 @@
 
 import { Loader } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 
 import { narrowStep, type PlanStep, type RunPlan } from '@/lib/social-hub/run-today';
 import type { Vertical } from '@/lib/social-hub/types';
@@ -17,6 +17,7 @@ const usd = (n: number) => `$${n.toFixed(2)}`;
  */
 export function MakeItButton({ vertical, target }: { vertical: Vertical; target: string | undefined }) {
   const router = useRouter();
+  const titleId = useId();
   const dialog = useRef<HTMLDialogElement>(null);
   const [step, setStep] = useState<PlanStep | null>(null);
   const [busy, setBusy] = useState(false);
@@ -70,8 +71,8 @@ export function MakeItButton({ vertical, target }: { vertical: Vertical; target:
         </button>
       </div>
       {note ? <p className={`sh-actions__note${note.ok ? '' : ' sh-actions__note--failed'}`} role="status">{note.text}</p> : null}
-      <dialog ref={dialog} className="sh-confirm" aria-labelledby="sh-makeit-title" onClose={() => setStep(null)}>
-        <h2 id="sh-makeit-title">Make it?</h2>
+      <dialog ref={dialog} className="sh-confirm" aria-labelledby={titleId} onClose={() => setStep(null)}>
+        <h2 id={titleId}>Make it?</h2>
         <p>{step?.note} Up to {usd(step?.estimateUsd ?? 0)}. Your click approves this spend.</p>
         <div className="sh-confirm__actions">
           <button type="button" className="sh-btn" onClick={() => dialog.current?.close()}>Cancel</button>

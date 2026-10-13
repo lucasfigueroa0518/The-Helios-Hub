@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowUpRight, Loader, MoreHorizontal } from 'lucide-react';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 
 import type { ActionMenu, OfferedAction, SlotChoice } from '@/lib/social-hub/views/actions';
 import { menuSide, type MenuSide } from '@/components/social-hub/house/menu-side';
@@ -17,6 +17,8 @@ import { menuSide, type MenuSide } from '@/components/social-hub/house/menu-side
  */
 export function ActionBar({ menu, compact = false, showOffNote = true, variant = 'bar', readOnly = false }: { menu: ActionMenu; compact?: boolean; showOffNote?: boolean; /** `card`: Today's Content, primary full width over a 2-column grid. */ variant?: 'bar' | 'card'; /** Shown but not clickable (the preview page). */ readOnly?: boolean }) {
   const router = useRouter();
+  const pickerTitleId = useId();
+  const confirmTitleId = useId();
   const dialog = useRef<HTMLDialogElement>(null);
   const moreRoot = useRef<HTMLDivElement>(null);
   const moreList = useRef<HTMLUListElement>(null);
@@ -146,8 +148,8 @@ export function ActionBar({ menu, compact = false, showOffNote = true, variant =
       {reasons.length ? <p className="sh-actions__why">{reasons[0]}</p> : null}
       {showOffNote && menu.offNote ? <p className="sh-actions__why">{menu.offNote}</p> : null}
       {note ? <p className={`sh-actions__note${note.ok ? '' : ' sh-actions__note--failed'}`} role="status">{note.text}</p> : null}
-      <dialog ref={picker} className="sh-confirm sh-picker" aria-labelledby="sh-picker-title" onClose={() => setPicking(null)}>
-        <h2 id="sh-picker-title">{picking?.confirmTitle ?? 'Pick a slot'}</h2>
+      <dialog ref={picker} className="sh-confirm sh-picker" aria-labelledby={pickerTitleId} onClose={() => setPicking(null)}>
+        <h2 id={pickerTitleId}>{picking?.confirmTitle ?? 'Pick a slot'}</h2>
         <p>Pick one of today’s remaining windows.</p>
         {picking?.slots ? <SlotPicker slots={picking.slots} value={choice} onChange={setChoice} /> : null}
         <div className="sh-confirm__actions">
@@ -167,8 +169,8 @@ export function ActionBar({ menu, compact = false, showOffNote = true, variant =
           </button>
         </div>
       </dialog>
-      <dialog ref={dialog} className="sh-confirm" aria-labelledby="sh-confirm-title" onClose={() => setConfirming(null)}>
-        <h2 id="sh-confirm-title">{confirming?.confirmTitle ?? `${confirming?.label ?? ''}?`}</h2>
+      <dialog ref={dialog} className="sh-confirm" aria-labelledby={confirmTitleId} onClose={() => setConfirming(null)}>
+        <h2 id={confirmTitleId}>{confirming?.confirmTitle ?? `${confirming?.label ?? ''}?`}</h2>
         <p>{confirming?.plan.confirm}</p>
         <div className="sh-confirm__actions">
           <button type="button" className="sh-btn" onClick={() => dialog.current?.close()}>Cancel</button>

@@ -12,7 +12,7 @@ import { ideaRef } from '@/lib/social-hub/run-today';
 import type { QuotaCandidate } from '@/lib/social-hub/views/day-rank';
 import { clock, displayName } from '@/lib/social-hub/views/format';
 import type { Offerer } from '@/lib/social-hub/views/offer';
-import { runForCandidate } from '@/lib/social-hub/views/run-for';
+import { canMakeCard, runForCandidate, runOnMadeCard } from '@/lib/social-hub/views/run-for';
 
 /**
  * Today's Content (spec 2026-10-13 §2): the day's cards in one row, in posting
@@ -34,7 +34,7 @@ export function TodayStrip({ candidates, o, runs, controls = true }: { candidate
   return (
     <ul className="sh-strip sh-gallery" aria-label="Today’s content">
       {candidates.map((c, i) => (c.post
-        ? <Made key={c.post.id} post={c.post} o={o} run={runForCandidate(c, runs)} controls={controls} />
+        ? <Made key={c.post.id} post={c.post} o={o} run={runOnMadeCard(c.post, runForCandidate(c, runs))} controls={controls} />
         : <Pending key={c.idea?.id ?? `${c.vertical}:${c.series ?? i}`} c={c} run={runForCandidate(c, runs)} controls={controls} />))}
     </ul>
   );
@@ -79,7 +79,7 @@ function Pending({ c, run, controls }: { c: QuotaCandidate; run: ProgressItem | 
         <span>{tag ?? (c.series ? c.series : 'Open slot')}</span>
       </div>
       <span className="sh-strip__name">{c.idea?.title ?? (c.series ? `${c.series}: today’s set` : 'Open slot: the next run picks its idea')}</span>
-      {run ? <RunChip run={run} /> : controls ? <MakeItButton vertical={c.vertical} target={target} /> : <span className="sh-muted sh-gallery__hint">Make it builds this card.</span>}
+      {run ? <RunChip run={run} /> : !controls ? <span className="sh-muted sh-gallery__hint">Make it builds this card.</span> : canMakeCard(c) ? <MakeItButton vertical={c.vertical} target={target} /> : <span className="sh-muted sh-gallery__hint">Run now makes it.</span>}
     </li>
   );
 }
