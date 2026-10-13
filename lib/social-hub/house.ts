@@ -2,6 +2,7 @@ import { costOfPosts } from '@/lib/social-hub/cost';
 import { mean, metricSpec, postMetric } from '@/lib/social-hub/metrics';
 import { addDays, dateTimeLabel, inRange } from '@/lib/social-hub/time';
 import { VERTICALS, verticalInfo } from '@/lib/social-hub/verticals';
+import { needsPerson } from '@/lib/social-hub/views/state';
 import type { DateRange, HubIdea, HubPost, HubSource, MetricKey, Vertical } from '@/lib/social-hub/types';
 
 /** Content House (spec §7): pure selections over the dataset. */
@@ -36,18 +37,11 @@ function bySoonest(a: HubPost, b: HubPost): number {
 /**
  * Everything waiting on a person, across types, soonest slot first:
  * scheduled slots not yet approved, renders and sets awaiting review, and
- * carousels in review with no slot.
+ * carousels in review with no slot. The rule is needsPerson's, so the House
+ * and the hub's pages count the same posts.
  */
 export function needsApproval(posts: readonly HubPost[], now: Date): HubPost[] {
-  const nowIso = now.toISOString();
-  return posts
-    .filter((p) => {
-      if (p.status === 'scheduled') return p.approval.required && !p.approval.approvedAt && (p.publishAt ?? '') > nowIso;
-      if (p.status !== 'ready') return false;
-      if (p.vertical === 'explainers') return !p.approval.approvedAt && p.approval.note !== 'Rejected';
-      return !p.approval.approvedAt;
-    })
-    .sort(bySoonest);
+  return posts.filter((p) => needsPerson(p, now)).sort(bySoonest);
 }
 
 /** "2 h 15 m left", "slot passed", or null when there's no slot. */

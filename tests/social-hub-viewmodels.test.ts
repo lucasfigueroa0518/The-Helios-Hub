@@ -131,3 +131,19 @@ test('person-facing text: capitals tamed, dates in words', () => {
   assert.equal(relative('2026-10-08T21:00:00Z', now), 'in 2 h');
   assert.equal(relative('2026-10-08T16:00:00Z', now), '3 h ago');
 });
+
+test('a carousel whose last slot was rejected no longer waits on a person (2026-10-13)', () => {
+  const base = d.posts.find((p) => p.vertical === 'carousels' && p.status === 'ready' && needsPerson(p, now))!;
+  const post: HubPost = { ...base, approval: { required: true, approvedAt: null, note: null }, tries: [{ status: 'cancelled', at: '2026-10-08T13:00:00Z', note: 'This carousel was rejected, so it was not posted.' }] };
+  assert.equal(needsPerson(post, now), false);
+  assert.equal(postState(post, now).id, 'rejected');
+  assert.ok(!needsApproval([post], now).length, 'the House agrees');
+});
+
+test('a Stories set for a day already gone no longer waits on a person; today’s still does (2026-10-13)', () => {
+  const base = d.posts.find((p) => p.vertical === 'stories' && p.status === 'ready')!;
+  const set = (nyDate: string): HubPost => ({ ...base, nyDate, approval: { required: true, approvedAt: null, note: null }, tries: [] });
+  assert.equal(needsPerson(set('2026-10-07'), now), false);
+  assert.match(postState(set('2026-10-07'), now).line ?? '', /day has passed/);
+  assert.equal(needsPerson(set('2026-10-08'), now), true);
+});
