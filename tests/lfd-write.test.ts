@@ -57,7 +57,7 @@ test('writeStories sends the cached system prompt and returns normalized copy', 
     return {
       id: 'm', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', stop_reason: 'tool_use', stop_sequence: null,
       usage: { input_tokens: 10, output_tokens: 10, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
-      content: [{ type: 'tool_use', id: 't', name: 'submit_rundown', input: { stories: [copy({ key: 'a', body: 'Done.' })] } }],
+      content: [{ type: 'tool_use', id: 't', name: 'submit_rundown', input: { stories: [copy({ key: 's1', body: 'Done.' })] } }],
     } as unknown as Anthropic.Message;
   };
   const res = await writeStories(create, [{ pick, body: 'source text' }]);
@@ -86,12 +86,46 @@ test('writeStories retries once when the first submission omits names, and retur
     id: 'm', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', stop_reason: 'tool_use', stop_sequence: null, usage,
     content: [{ type: 'tool_use', id: 't', name: 'submit_rundown', input }],
   }) as unknown as Anthropic.Message;
-  const { names: _omit, ...noNames } = copy({ key: 'a', body: 'Done.' });
-  const replies = [reply({ stories: [noNames] }), reply({ stories: [copy({ key: 'a', body: 'Done.' })] })];
+  const { names: _omit, ...noNames } = copy({ key: 's1', body: 'Done.' });
+  const replies = [reply({ stories: [noNames] }), reply({ stories: [copy({ key: 's1', body: 'Done.' })] })];
   let calls = 0;
   const create = async () => replies[calls++]!;
   const res = await writeStories(create, [{ pick, body: 'source text' }]);
   assert.equal(calls, 2, 'the malformed first submission triggers exactly one retry');
   assert.ok(res.ok);
   assert.equal(res.stories[0]!.body, 'Done');
+});
+
+const longPick = (i: number): Pick => ({
+  key: `news.google.com/rss/articles/${'CBMi'.repeat(45)}${i}`, refs: [`r${i}`], origin: 'feed', headline: `H${i}`, sourceName: 'Verge',
+  url: `https://v.com/${i}`, body: 'b', publishedAt: null, net: null, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, lane: 'rundown',
+});
+
+test('writeStories sends short ordinal keys and maps the copy back to the real pick keys', async () => {
+  const picks = [longPick(1), longPick(2)];
+  assert.ok(picks[0]!.key.length > 180);
+  let user = '';
+  const create = async (p: Anthropic.MessageCreateParamsNonStreaming) => {
+    user = String((p.messages[0] as { content: unknown }).content);
+    const material = JSON.parse(user.slice(user.indexOf('<material>') + 10, user.indexOf('</material>'))) as { stories: Array<{ key: string }> };
+    return {
+      id: 'm', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', stop_reason: 'tool_use', stop_sequence: null,
+      usage: { input_tokens: 10, output_tokens: 10, cache_creation_input_tokens: 7, cache_read_input_tokens: 30 },
+      content: [{ type: 'tool_use', id: 't', name: 'submit_rundown', input: { stories: material.stories.map((s) => copy({ key: s.key, headline: `Copy ${s.key}` })) } }],
+    } as unknown as Anthropic.Message;
+  };
+  const res = await writeStories(create, picks.map((pick) => ({ pick, body: 'source text' })));
+  assert.ok(res.ok);
+  assert.doesNotMatch(user, /CBMi/, 'the long keys are not sent to the model');
+  assert.match(user, /"key": "s1"/);
+  assert.deepEqual(res.stories.map((s) => s.key), picks.map((p) => p.key));
+  assert.equal(res.stories[1]!.headline, 'Copy s2');
+  assert.deepEqual(res.cache, { readTokens: 30, creationTokens: 7 });
+});
+
+test('checkSubmission measures lengths after normalize trims a final period, a dash and spaces', () => {
+  const body = `${'x'.repeat(190)}.`;
+  assert.equal(body.length, 191);
+  assert.doesNotThrow(() => checkSubmission({ stories: [copy({ key: 'a', body, headline: ` – ${'H'.repeat(70)} `, setup: ` ${'S'.repeat(89)}: ` })] }, ['a']));
+  assert.throws(() => checkSubmission({ stories: [copy({ key: 'a', body: `${'x'.repeat(191)}.` })] }, ['a']), /body is 191/);
 });
