@@ -97,3 +97,30 @@ test('stories: failed set is a failure, watch-reached skip is a cap warning', as
   assert.deepEqual(r.failures.map((f) => [f.reason, f.severity]).sort(), [['cap_hit', 'warning'], ['timeout', 'failed']]);
   assert.equal(r.spendUsd, 0.4);
 });
+
+test('feed staleness counts distinct days, not rows', async () => {
+  const { pg, query } = await openHubTestDb();
+  await pg.exec(`
+    INSERT INTO social.feed_health (day, slug, name, fetched, in_window, flagged) VALUES
+      ('2026-10-13', 'tc', 'TechCrunch AI', 5, 0, false), ('2026-10-13', 'tc', 'TechCrunch AI', 5, 0, false), ('2026-10-13', 'tc', 'TechCrunch AI', 5, 0, false);
+  `);
+  const r = await reportCarousels(query, { night: NIGHT, posting: posting(), now: NOW });
+  assert.deepEqual(r.feedsStale, []);
+});
+
+test('publishing: a published slot with a non-failed earlier attempt is not healed', async () => {
+  const { pg, query } = await openHubTestDb();
+  await pg.exec(`
+    INSERT INTO social_hub.content_items (id, vertical, format, native_ref, idea_ref) VALUES
+      ('00000000-0000-0000-0000-0000000000b1', 'carousels', 'feed', 'p1', 's1');
+    INSERT INTO social_hub.publish_attempts (content_item_id, vertical, trigger, status, requested_at, caption) VALUES
+      ('00000000-0000-0000-0000-0000000000b1', 'carousels', 'auto', 'requested', '2026-10-12T13:00:00Z', 'c'),
+      ('00000000-0000-0000-0000-0000000000b1', 'carousels', 'auto', 'published', '2026-10-12T13:05:00Z', 'c');
+    INSERT INTO social_hub.schedule (content_item_id, vertical, ny_date, slot, publish_at, status, source) VALUES
+      ('00000000-0000-0000-0000-0000000000b1', 'carousels', '2026-10-12', 'morning', '2026-10-12T13:00:00Z', 'published', 'auto');
+  `);
+  const p = await publishingFor(query, 'carousels', NIGHT);
+  assert.equal(p.postedYesterday, 1);
+  assert.equal(p.retriedOk, 0);
+  assert.equal(p.failures.length, 0);
+});

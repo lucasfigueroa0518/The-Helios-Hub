@@ -28,7 +28,7 @@ export const reportCarousels: Reporter = async (q: HubQuery, { night, posting })
   )).rows;
   const stale = (await q<{ name: string }>(
     `SELECT name FROM social.feed_health WHERE day > $1::date - 3 AND day <= $1::date
-      GROUP BY slug, name HAVING max(in_window) = 0 AND count(*) >= 3 ORDER BY name`,
+      GROUP BY slug, name HAVING max(in_window) = 0 AND count(DISTINCT day) >= 3 ORDER BY name`,
     [night],
   )).rows.map((r) => r.name);
 

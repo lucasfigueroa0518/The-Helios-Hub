@@ -43,13 +43,13 @@ export type Publishing = {
   filledAutoToday: number;
 };
 
-type SlotRow = { id: string; status: string; error: string | null; publish_at: string; content_item_id: string | null; attempts: number; last_error: string | null };
+type SlotRow = { id: string; status: string; error: string | null; publish_at: string; content_item_id: string | null; failed_attempts: number; last_error: string | null };
 
 export async function publishingFor(q: HubQuery, vertical: Vertical, night: string): Promise<Publishing> {
   const yesterday = addDays(night, -1);
   const { rows } = await q<SlotRow>(
     `SELECT s.id::text, s.status, s.error, s.publish_at::text, s.content_item_id::text,
-            (SELECT count(*) FROM social_hub.publish_attempts a WHERE a.content_item_id = s.content_item_id)::int AS attempts,
+            (SELECT count(*) FROM social_hub.publish_attempts a WHERE a.content_item_id = s.content_item_id AND a.status = 'failed')::int AS failed_attempts,
             (SELECT a.error FROM social_hub.publish_attempts a
               WHERE a.content_item_id = s.content_item_id AND a.status = 'failed'
               ORDER BY a.requested_at DESC LIMIT 1) AS last_error
@@ -64,7 +64,7 @@ export async function publishingFor(q: HubQuery, vertical: Vertical, night: stri
     const item = r.content_item_id ? { kind: 'post', id: r.content_item_id, label: `${yesterday} post` } : undefined;
     if (r.status === 'published') {
       posted++;
-      if (r.attempts > 1) {
+      if (r.failed_attempts > 0) {
         retriedOk++;
         failures.push({ vertical, night, at: new Date(r.publish_at).toISOString(), stage: 'publish', reason: reasonFor('publish', r.last_error), severity: 'healed', rawError: r.last_error ?? undefined, item });
       }
