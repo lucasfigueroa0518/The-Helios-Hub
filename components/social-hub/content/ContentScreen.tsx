@@ -3,16 +3,13 @@ import { ArrowRight, ImageIcon, Loader2, Music2, TriangleAlert } from 'lucide-re
 
 import { RunsRefresh } from '@/components/social-hub/content/RunsRefresh';
 import { HubSettingsButton, RunTodayButton } from '@/components/social-hub/content/HubControls';
-import { NeedsYouMenu } from '@/components/social-hub/content/NeedsYouMenu';
 import { TodayStrip } from '@/components/social-hub/content/TodayStrip';
 import { DataNotes } from '@/components/social-hub/DataNotes';
-import { PostLink } from '@/components/social-hub/nav/PostLink';
 import { PageHead } from '@/components/social-hub/ui/PageHead';
 import { TypeMark } from '@/components/social-hub/ui/marks';
 import type { AllProgress } from '@/lib/content-type/progress';
 import type { HubDataset } from '@/lib/social-hub/dataset';
-import type { HubPost } from '@/lib/social-hub/types';
-import { displayName, plural, relative, when } from '@/lib/social-hub/views/format';
+import { plural, relative, when } from '@/lib/social-hub/views/format';
 import type { LibrariesModel } from '@/lib/social-hub/views/libraries';
 import { offerer } from '@/lib/social-hub/views/offer';
 import { poolStale, poolSummaries, type PoolSummary } from '@/lib/social-hub/views/pools';
@@ -33,14 +30,8 @@ export function ContentScreen({ dataset, base, now, libraries, progress, control
   const o = offerer(dataset, now);
   // Every type's quota candidates for today: what holds its slots, then the top of its ranking (Promote / Demote applied).
   const today = allQuotaCandidates(dataset, now);
-  // Rows nothing here can act on don't count as waiting on the person (critique 2026-10-08).
-  const off = (p: HubPost) => o.offer(p).state.id === 'approval_off';
-  const needs = m.needs.map((g) => ({ ...g, posts: g.posts.filter((p) => !off(p)) })).filter((g) => g.posts.length);
-  const parked = m.needs.flatMap((g) => g.posts.filter(off));
-  // The orange count is today's job: due today or tomorrow, or made and waiting. Later is said quietly.
-  const countOf = (ids: string[]) => needs.filter((g) => ids.includes(g.id)).reduce((n, g) => n + g.posts.length, 0);
-  const actNow = countOf(['today', 'tomorrow', 'unplaced']);
-  const later = countOf(['later']);
+  // The count is today's cards still waiting on approval, so it matches the cards' Needs you badges (2026-10-13).
+  const toApprove = today.filter((c) => c.post && o.offer(c.post).state.id === 'needs_you').length;
   const todayLabel = new Date(`${m.today}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).replace(',', '');
 
   return (
@@ -53,28 +44,7 @@ export function ContentScreen({ dataset, base, now, libraries, progress, control
           <>
             <strong>{m.plan.filled}</strong> of {m.plan.slots} slots filled
             {' · '}
-            {actNow ? (
-              <NeedsYouMenu label={`${actNow} ${actNow === 1 ? 'needs' : 'need'} you`}>
-                {needs.filter((g) => ['today', 'tomorrow', 'unplaced'].includes(g.id)).map((g) => (
-                  <section key={g.id} className="sh-needs-group" aria-label={g.label}>
-                    <h3 className="sh-needs-group__label">{g.label}</h3>
-                    <ul className="sh-needs-rows">
-                      {g.posts.map((post) => (
-                        <li key={post.id}>
-                          <PostLink id={post.id} className="sh-needs-row">
-                            <TypeMark vertical={post.vertical} />
-                            <span className="sh-needs-row__name">{displayName(post)}</span>
-                            <span className="sh-muted sh-needs-row__line">{o.offer(post).state.line}</span>
-                          </PostLink>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                ))}
-              </NeedsYouMenu>
-            ) : 'nothing needs you today'}
-            {later ? <> · {later} later</> : null}
-            {parked.length ? <> · {parked.length} can’t be approved here yet</> : null}
+            {toApprove ? <span className="sh-needs-count">{toApprove} to approve</span> : 'nothing to approve'}
             {summary.length ? <> · <strong>{summary.join(' · ')}</strong></> : null}
           </>
         )}

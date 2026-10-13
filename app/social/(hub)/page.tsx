@@ -2,7 +2,6 @@ import { notFound, redirect } from 'next/navigation';
 
 import { ContentScreen } from '@/components/social-hub/content/ContentScreen';
 import { LoadError } from '@/components/social-hub/LoadError';
-import { RefreshNote } from '@/components/social-hub/RefreshNote';
 import { liveHubQuery } from '@/lib/social-hub/db';
 import { SOCIAL_HUB_FLAGS } from '@/lib/social-hub/flags';
 import { HUB_BASE, toParams, type RawSearchParams } from '@/lib/social-hub/links';
@@ -25,10 +24,5 @@ export default async function Page({ searchParams }: { searchParams: Promise<Raw
   if (!session) redirect('/');
   const [loaded, libraries, progress] = await Promise.all([loadForPage(session.email), loadLibraries(liveHubQuery), readAllProgress()]);
   if ('error' in loaded) return <LoadError message={loaded.error} />;
-  return (
-    <>
-      <RefreshNote refresh={loaded.refresh} />
-      <ContentScreen dataset={loaded} base={HUB_BASE} now={new Date()} libraries={libraries} progress={progress} />
-    </>
-  );
+  return <ContentScreen dataset={loaded} base={HUB_BASE} now={new Date()} libraries={libraries} progress={progress} />;
 }
