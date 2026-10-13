@@ -14,9 +14,12 @@ export type LoadedPage = HubDataset & { refresh: RefreshState };
  */
 export async function loadForPage(by = 'visit'): Promise<LoadedPage | { error: string }> {
   try {
-    const refresh = await (actionEnabled('refreshOnVisit') ? queueRefreshIfStale(liveHubQuery, by) : refreshState(liveHubQuery))
-      .catch((): RefreshState => ({ available: false, lastRefresh: null, pending: false }));
-    return { ...(await loadHubDataset()), refresh };
+    const [refresh, dataset] = await Promise.all([
+      (actionEnabled('refreshOnVisit') ? queueRefreshIfStale(liveHubQuery, by) : refreshState(liveHubQuery))
+        .catch((): RefreshState => ({ available: false, lastRefresh: null, pending: false })),
+      loadHubDataset(),
+    ]);
+    return { ...dataset, refresh };
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) };
   }

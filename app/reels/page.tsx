@@ -18,11 +18,14 @@ export const metadata = {
 export default async function ReelsPage() {
   const session = await getSession();
   if (!session) redirect('/');
-  await beginInsightsRefresh().catch(() => undefined);
-
-  const initial = await loadReelsOverview().catch((error) => ({
-    error: error instanceof Error ? error.message : String(error),
-  }));
+  // Independent reads: run them together rather than one after another.
+  const [, initial, reviewToken] = await Promise.all([
+    beginInsightsRefresh().catch(() => undefined),
+    loadReelsOverview().catch((error) => ({
+      error: error instanceof Error ? error.message : String(error),
+    })),
+    ensureReviewToken().catch(() => null),
+  ]);
 
   if ('error' in initial) {
     return (
@@ -40,6 +43,5 @@ export default async function ReelsPage() {
     );
   }
 
-  const reviewToken = await ensureReviewToken();
-  return <ReelsHub initial={initial} reviewPath={`/watch/${reviewToken}`} />;
+  return <ReelsHub initial={initial} reviewPath={`/watch/${reviewToken ?? await ensureReviewToken()}`} />;
 }

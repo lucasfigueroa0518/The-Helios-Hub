@@ -12,8 +12,11 @@ export async function GET(request: NextRequest) {
 
   try {
     const { searchParams } = new URL(request.url);
-    const property = await getPropertyByIdOrUrl(searchParams.get('property'));
-    const properties = await listProperties();
+    const [property, properties, sync] = await Promise.all([
+      getPropertyByIdOrUrl(searchParams.get('property')),
+      listProperties(),
+      latestSyncRun(),
+    ]);
     const searchType = parseSearchType(searchParams.get('type'));
     const latest = property ? await latestAvailableDate(property.id) : await latestAvailableDate();
     const range = resolveSeoRange({
@@ -25,7 +28,6 @@ export async function GET(request: NextRequest) {
     const summary = property
       ? await getSummary({ propertyId: property.id, from: range.from, to: range.to, searchType })
       : { totals: { clicks: 0, impressions: 0, ctr: 0, position: 0 }, series: [] };
-    const sync = await latestSyncRun();
     return NextResponse.json({
       property,
       properties,

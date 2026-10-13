@@ -594,6 +594,9 @@ export type SmartleadDetectResult = {
   unassigned: number;
 };
 
+/** An unforced detect (every Inboxes load) lists Smartlead at most this often. */
+const DETECT_FRESH_MS = 5 * 60 * 1000;
+
 /**
  * Pair hub mailboxes to Smartlead accounts by email. Needs the API key, not
  * the send kill switch — otherwise the Inboxes tab stays "not in Smartlead"
@@ -604,11 +607,22 @@ export async function detectAndLinkSmartleadAccounts(
 ): Promise<SmartleadDetectResult> {
   if (!hasSmartleadApiKey()) return { linked: 0, matched: 0, unassigned: 0 };
 
-  const inboxes = await listInboxes();
-  if (!options.force && !inboxes.some((row) => row.smartlead_email_account_id === null)) {
+  const [inboxes, cache] = await Promise.all([
+    listInboxes(),
+    options.force ? null : getOrgSetting<AccountsCache | null>('smartlead.accounts_cache', null),
+  ]);
+  // A mailbox that has no Smartlead account yet would otherwise make every
+  // Inboxes load list Smartlead and rewrite every mirror. A mailbox added since
+  // the last listing is still matched on the next load; Sync forces it.
+  const listedAt = cache?.fetched_at ? Date.parse(cache.fetched_at) : NaN;
+  const unlinked = inboxes.filter((row) => row.smartlead_email_account_id === null);
+  const listedRecently = Number.isFinite(listedAt)
+    && Date.now() - listedAt < DETECT_FRESH_MS
+    && unlinked.every((row) => Date.parse(row.created_at) <= listedAt);
+  if (!options.force && (unlinked.length === 0 || listedRecently)) {
     return {
       linked: 0,
-      matched: inboxes.filter((row) => row.smartlead_email_account_id !== null).length,
+      matched: inboxes.length - unlinked.length,
       unassigned: 0,
     };
   }

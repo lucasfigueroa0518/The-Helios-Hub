@@ -31,9 +31,10 @@ export function HubHome({ data }: { data: HomePayload }) {
 
   useEffect(() => {
     setDateTimeText(formatWelcomeDateTime(new Date()));
+    // The text has minute resolution; re-rendering the whole home every second bought nothing.
     const timer = setInterval(() => {
       setDateTimeText(formatWelcomeDateTime(new Date()));
-    }, 1000);
+    }, 10_000);
     return () => clearInterval(timer);
   }, []);
 

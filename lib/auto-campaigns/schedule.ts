@@ -10,11 +10,13 @@ export const THIN_DAYS_BEFORE_EXHAUST = 2;
 
 const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
+const NY_WEEKDAY_FORMAT = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York',
+  weekday: 'short',
+});
+
 export function nyWeekdayIndex(date: Date = new Date()): number {
-  const label = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    weekday: 'short',
-  }).format(date);
+  const label = NY_WEEKDAY_FORMAT.format(date);
   const index = WEEKDAY_SHORT.indexOf(label as (typeof WEEKDAY_SHORT)[number]);
   return index < 0 ? date.getUTCDay() : index;
 }

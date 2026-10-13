@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { usePoll } from '@/lib/use-poll';
 
 type TabKey = 'review' | 'draft' | 'prospect';
 
@@ -46,25 +47,15 @@ export function CampaignTabs({
     setDraftEnabled(draftEnabledInitial);
   }, [draftEnabledInitial]);
 
-  useEffect(() => {
-    if (mode === 'auto' || !showReview || reviewEnabled) return;
-    let cancelled = false;
-    const poll = async () => {
-      try {
-        const response = await fetch(`/api/campaigns/${campaignId}/uploads`);
-        const data = await response.json();
-        if (!cancelled && data.review_enabled) setReviewEnabled(true);
-      } catch {
-        // Ignore transient fetch errors; next poll will retry.
-      }
-    };
-    void poll();
-    const timer = window.setInterval(() => void poll(), 2_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [campaignId, reviewEnabled, showReview, mode]);
+  usePoll(
+    async () => {
+      const response = await fetch(`/api/campaigns/${campaignId}/uploads`);
+      const data = await response.json();
+      if (data.review_enabled) setReviewEnabled(true);
+    },
+    mode === 'auto' || !showReview || reviewEnabled ? null : 2_000,
+    { immediate: true },
+  );
 
   const blockNavigation = useCallback(
     (key: TabKey, message: string) => {

@@ -7,6 +7,7 @@ import { Plus, Settings } from 'lucide-react';
 import { AddTopics } from '@/app/explainers/topics-view';
 import { PROGRESS_EVENT } from '@/components/content-type/GenerationProgress';
 import { Drawer } from '@/app/reels/ui';
+import { refreshHubPage } from '@/lib/content-type/refresh-client';
 
 /**
  * The per-type generate buttons and settings panels on a content type's page.
@@ -49,7 +50,7 @@ export function CarouselRunButton() {
       const out = await call<{ queued: boolean; note?: string }>('/api/carousels/run', {});
       window.dispatchEvent(new Event(PROGRESS_EVENT));
       setNote(out.queued ? `${out.note ?? 'Run queued.'} The social worker picks it up within a minute.` : (out.note ?? 'A run is already queued.'));
-      router.refresh();
+      void refreshHubPage(router);
     } catch (e) {
       setNote(msg(e));
     } finally {
@@ -79,7 +80,7 @@ export function StoriesGenerate() {
       await call('/api/stories/generate', { series });
       window.dispatchEvent(new Event(PROGRESS_EVENT));
       setNote(`${SERIES_LABEL[series]}: requested. The worker picks it up within a minute.`);
-      router.refresh();
+      void refreshHubPage(router);
     } catch (e) {
       setNote(msg(e));
     } finally {
@@ -111,7 +112,7 @@ export function LiveToggle({ type, initial }: { type: 'carousels' | 'stories' | 
       const out = await call<{ live: boolean }>('/api/content-type/posting', { type, live: value });
       setOn(out.live);
       setNote(out.live ? 'Live is on.' : 'Live is off. Posts already on the clock still go out.');
-      router.refresh();
+      void refreshHubPage(router);
     } catch (e) {
       setNote(msg(e));
     }
@@ -158,7 +159,7 @@ export function ExplainerGenerate({ ideaId, title }: { ideaId: string; title: st
       await call(`/api/explainers/topics/${topicId}/generate`, {});
       window.dispatchEvent(new Event(PROGRESS_EVENT));
       setNote('Render queued.');
-      router.refresh();
+      void refreshHubPage(router);
     } catch (e) {
       setNote(msg(e));
     } finally {
@@ -200,7 +201,7 @@ export function AddTopicsButton() {
       </button>
       {open ? (
         <Drawer label="Add a topic" onClose={() => setOpen(false)}>
-          <AddTopics onDone={(text) => { setOpen(false); setNote(text); router.refresh(); }} />
+          <AddTopics onDone={(text) => { setOpen(false); setNote(text); void refreshHubPage(router); }} />
         </Drawer>
       ) : null}
       {note ? <p className="rh-toast" role="status">{note}</p> : null}

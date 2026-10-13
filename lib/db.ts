@@ -66,9 +66,13 @@ function runtimeConnectionString(choice: DbConnectionChoice): string {
   return `${url}${url.includes('?') ? '&' : '?'}sslmode=disable`;
 }
 
-/** Session mode is clamped to 2 clients per process so several processes fit under pool_size 15. */
+/**
+ * Session mode is clamped to 2 clients per process so several processes fit under pool_size 15.
+ * Transaction mode multiplexes clients, so it defaults to 6: a page that fans out
+ * a dozen queries (analytics, roster) should not queue them two at a time.
+ */
 export function resolvePoolMax(mode: 'session' | 'transaction', env: DbEnv = process.env): number {
-  const fallback = 2;
+  const fallback = mode === 'session' ? 2 : 6;
   const parsed = Number(env.PG_POOL_MAX ?? fallback);
   const requested = Number.isFinite(parsed) ? Math.floor(parsed) : fallback;
   const cap = mode === 'session' ? 2 : 8;

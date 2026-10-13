@@ -4,6 +4,12 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Play, Settings, X } from 'lucide-react';
 
+/** Mark the shared hub read stale, then re-render (see POST /api/content-type/progress). */
+async function refreshHubPage(router: { refresh: () => void }): Promise<void> {
+  await fetch('/api/content-type/progress', { method: 'POST' }).catch(() => undefined);
+  router.refresh();
+}
+
 /**
  * The Content page's two controls: Run now (complete today's runs across
  * every type) and Settings (each type's Live and nightly-run switches).
@@ -75,7 +81,7 @@ export function RunTodayButton() {
       const out = await postJson<{ plan: Plan; results: Result[] }>(RUN_TODAY, {});
       setPlan(out.plan);
       setResults(out.results);
-      router.refresh();
+      void refreshHubPage(router);
     } catch (e) {
       setError(msg(e));
     } finally {
@@ -173,7 +179,7 @@ export function HubSettingsButton() {
     try {
       const next = await postJson<Posting>(POSTING, { type, ...patch });
       setState((s) => ({ ...s, [type]: next }));
-      router.refresh();
+      void refreshHubPage(router);
     } catch (e) {
       setError(msg(e));
     } finally {

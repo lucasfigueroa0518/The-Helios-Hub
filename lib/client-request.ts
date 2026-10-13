@@ -20,8 +20,29 @@ export class RequestError extends Error {
   }
 }
 
+/** Reads that hang (a stalled connection, a cold function) give up instead of spinning forever. */
+const GET_TIMEOUT_MS = 30_000;
+
+function withReadTimeout(init?: RequestInit): RequestInit | undefined {
+  const method = (init?.method ?? 'GET').toUpperCase();
+  // Only reads: a mutation that times out on the client may still land on the server.
+  if ((method !== 'GET' && method !== 'HEAD') || typeof AbortSignal.timeout !== 'function') return init;
+  const timeout = AbortSignal.timeout(GET_TIMEOUT_MS);
+  if (!init?.signal) return { ...init, signal: timeout };
+  if (typeof AbortSignal.any !== 'function') return init;
+  return { ...init, signal: AbortSignal.any([init.signal, timeout]) };
+}
+
 export async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
+  let response: Response;
+  try {
+    response = await fetch(url, withReadTimeout(init));
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      throw new RequestError('The server took too long to answer - please retry', 0);
+    }
+    throw error;
+  }
   const contentType = response.headers.get('content-type') || '';
 
   if (!contentType.includes('application/json')) {
