@@ -50,6 +50,18 @@ export type DesignDeps = Omit<PhotoDeps, 'bank'> & {
   review?: RenderReviewStep;
 };
 
+/** The image URLs the render check could not load, each once (its `image failed to load: <src>` problems). */
+export function failedImageUrls(problems: readonly string[]): string[] {
+  const urls = problems.flatMap((p) => {
+    const m = /^image failed to load: (.+)$/.exec(p);
+    return m ? [m[1]!] : [];
+  });
+  return [...new Set(urls)];
+}
+
+/** Photos the render check may swap out before it gives up on a story: a bad photo costs a slide's photo, never the post. */
+const MAX_IMAGE_SWAP_ROUNDS = 2;
+
 const facesUnderText = (fit: FitResult) => new Set(fit.problems.flatMap((p) => { const m = /^slide (\d+) faces: .* covers a face$/.exec(p); return m ? [Number(m[1])] : []; }));
 
 export function createDesignStage(deps: DesignDeps): PipelineStages['design'] {
@@ -102,6 +114,33 @@ export function createDesignStage(deps: DesignDeps): PipelineStages['design'] {
     const layout = await chooseLayout(draft.filled, { cover: photos.cover, slides: photos.slides }, jev);
     let render = toRenderPost(draft.filled, drawn, meta, layout);
     let fit = await deps.fitCheck(render);
+    // A photo the render check could not load (a host refusing a hotlink, a slow one; 2026-10-12: a Wikimedia headshot
+    // set a whole story aside and used up the night's attempts) goes, and its slide takes its next runner-up that
+    // passed every check, else its icon background (a quote slide: type-led). Checked again, at most twice; nothing
+    // here costs a model call.
+    for (let round = 0; round < MAX_IMAGE_SWAP_ROUNDS; round++) {
+      const failed = new Set(failedImageUrls(fit.problems));
+      if (failed.size === 0) break;
+      const swapped = new Set<number>();
+      for (const [i, t] of traces.entries()) {
+        if (!t.photo || !failed.has(t.photo.url)) continue;
+        const gone = t.photo;
+        const inPost = new Set(traces.flatMap((x) => (x.photo ? [x.photo.url] : [])));
+        const next = t.alternates.find((c) => !failed.has(c.url) && !inPost.has(c.url) && checkPhotoCredit(c, i === 0 ? 'cover' : `slide ${i + 1}`, brief.parsed).length === 0) ?? null;
+        const to = next ? next.source : draft.filled.slides[i - 1]?.type === 'quote' ? 'type-led' : 'icon';
+        photoReplacements.push(`${i === 0 ? 'cover' : `slide ${i + 1}`}: image failed to load at render (${gone.url.slice(0, 80)}) → ${next ? `the next runner-up (${next.source})` : to}`);
+        t.steps.push(`render check: image failed to load → ${next ? `next runner-up (${next.source}) ${next.credit.slice(0, 40)}` : to}`);
+        t.photo = next;
+        t.via = next ? (next.source as typeof t.via) : (to as typeof t.via);
+        swapped.add(i + 1);
+      }
+      if (swapped.size === 0) break;
+      // The swapped slides take the default layout (the chosen one was for the photo that went); the rest stay.
+      const redrawn = { cover: photos.cover.photo, slides: photos.slides.map((t) => t.photo), icons: traces.map((t) => t.icon) };
+      const plain = toRenderPost(draft.filled, redrawn, meta);
+      render = { ...render, slides: render.slides.map((sl, i) => (swapped.has(i + 1) ? plain.slides[i]! : sl)) };
+      fit = await deps.fitCheck(render);
+    }
     // A person photo full bleed whose face ends up under text: the split layout instead (photo spec §4), one re-render.
     const bleedFaces = [...facesUnderText(fit)].filter((n) => render.slides[n - 1]?.photoBleed);
     if (bleedFaces.length) {

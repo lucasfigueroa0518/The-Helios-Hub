@@ -84,13 +84,13 @@ function designDeps(): Omit<DesignDeps, 'bank'> {
   return { jev, http: sharpHttp, tagSheet, vision, fitCheck: async (post) => fitOkFor(post) };
 }
 
-async function runDesign(bank?: PhotoBank) {
+async function runDesign(bank?: PhotoBank, fitCheck?: DesignDeps['fitCheck']) {
   const parsed = briefSuperIntelligenceForce();
   const submission = sifDraft();
   const draft: Draft = { storyId: 's1', submission, filled: fillDraft(submission, parsed) };
   const brief: PipelineBrief = { storyId: 's1', parsed, raw: '', pages: pages() };
   const story = { id: 's1', title: 't', url: TC_URL, outlets: ['TechCrunch'], publishedAt: new Date('2026-10-04T12:00:00Z') } as ScoredCandidate;
-  return createDesignStage({ ...designDeps(), now: () => new Date('2026-10-05T03:00:00Z'), ...(bank ? { bank } : {}) })(draft, brief, story);
+  return createDesignStage({ ...designDeps(), ...(fitCheck ? { fitCheck } : {}), now: () => new Date('2026-10-05T03:00:00Z'), ...(bank ? { bank } : {}) })(draft, brief, story);
 }
 
 const offReader = { mode: async () => 'off' as const, find: async () => [] };
@@ -147,4 +147,55 @@ test('vetted: a verified headshot the slide could not use is still offered (veri
   });
   assert.deepEqual(out.map((i) => [i.candidate.url, i.outcome]), [['https://c/head.jpg', 'verified'], ['https://s/scene.jpg', 'picked']]);
   assert.notEqual(out[0]!.candidate, head, 'a copy, not the finder\'s object');
+});
+
+
+// ── A photo that fails to load at render time (2026-10-13) ──────────────────
+// Last night a Wikimedia headshot would not load in the render check and the whole
+// story was set aside (`render-failed`), the run's 3 attempts used up. A bad photo now
+// costs only that slide's photo: its next runner-up, else its icon background.
+
+import { failedImageUrls } from '@/lib/social/pipeline/design-stage';
+
+test('failedImageUrls: reads the render check\'s image problems, nothing else', () => {
+  assert.deepEqual(failedImageUrls(['image failed to load: https://x/a.jpg', 'slide 2 faces: covers a face', 'Roboto font did not load', 'image failed to load: https://x/b.jpg', 'image failed to load: https://x/a.jpg']), ['https://x/a.jpg', 'https://x/b.jpg']);
+  assert.deepEqual(failedImageUrls([]), []);
+});
+
+test('a photo that fails to load at render takes the slide\'s next runner-up or icon and the post still ships', async () => {
+  let calls = 0;
+  let failed = '';
+  const seen: string[][] = [];
+  const fitCheck: DesignDeps['fitCheck'] = async (post) => {
+    calls++;
+    seen.push(post.slides.map((sl) => sl.photoUrl ?? '').filter(Boolean));
+    const ok = fitOkFor(post);
+    if (calls === 1) {
+      failed = post.slides.find((sl) => sl.photoUrl)!.photoUrl!;
+      return { ...ok, ok: false, problems: [`image failed to load: ${failed}`] };
+    }
+    return ok;
+  };
+  const r = await runDesign(undefined, fitCheck);
+  assert.ok(r.ok, 'the story is not set aside for one bad photo');
+  assert.ok(calls >= 2, 'checked again after the swap');
+  assert.ok(failed, 'a photo was picked to fail');
+  assert.ok(r.value.render.slides.every((sl) => sl.photoUrl !== failed), 'the failed photo is gone from the post');
+  assert.ok(!seen.slice(1).some((urls) => urls.includes(failed)), 'the second check never sees it');
+  assert.ok(r.value.checks.photoReplacements.some((x) => /image failed to load/.test(x)), 'logged');
+  const traces = [r.value.photos[0]!, ...r.value.photos.slice(1)];
+  assert.ok(traces.every((t) => t.photo?.url !== failed));
+});
+
+test('a photo that keeps failing is not retried forever: after two swaps the story is set aside as before', async () => {
+  let calls = 0;
+  const fitCheck: DesignDeps['fitCheck'] = async (post) => {
+    calls++;
+    const url = post.slides.find((sl) => sl.photoUrl)?.photoUrl;
+    return url ? { ...fitOkFor(post), ok: false, problems: [`image failed to load: ${url}`] } : fitOkFor(post);
+  };
+  const r = await runDesign(undefined, fitCheck);
+  assert.ok(calls <= 4, `bounded (${calls} checks)`);
+  // Either every photo was swapped out until the post had none (it ships on icons), or it was set aside: never a loop.
+  assert.ok(r.ok || r.reasonCode === 'render-failed');
 });
