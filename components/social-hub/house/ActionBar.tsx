@@ -15,7 +15,7 @@ import { menuSide, type MenuSide } from '@/components/social-hub/house/menu-side
  * Pending shows on the button; the outcome note stays inline; then the hub
  * refreshes (the route revalidates the shared read).
  */
-export function ActionBar({ menu, compact = false, showOffNote = true }: { menu: ActionMenu; compact?: boolean; showOffNote?: boolean }) {
+export function ActionBar({ menu, compact = false, showOffNote = true, variant = 'bar', readOnly = false }: { menu: ActionMenu; compact?: boolean; showOffNote?: boolean; /** `card`: Today's Content, primary full width over a 2-column grid. */ variant?: 'bar' | 'card'; /** Shown but not clickable (the preview page). */ readOnly?: boolean }) {
   const router = useRouter();
   const dialog = useRef<HTMLDialogElement>(null);
   const moreRoot = useRef<HTMLDivElement>(null);
@@ -92,7 +92,7 @@ export function ActionBar({ menu, compact = false, showOffNote = true }: { menu:
       key={action.key}
       type="button"
       className={`sh-btn${primary ? ' sh-btn--primary' : ''}${action.danger ? ' sh-btn--danger' : ''}`}
-      disabled={Boolean(action.disabled) || busy != null}
+      disabled={readOnly || Boolean(action.disabled) || busy != null}
       data-busy={busy === action.key ? '' : undefined}
       onClick={() => start(action)}
     >
@@ -106,7 +106,7 @@ export function ActionBar({ menu, compact = false, showOffNote = true }: { menu:
   if (!hasButtons && !(showOffNote && menu.offNote) && menu.links.length === 0) return null;
 
   return (
-    <div className={`sh-actions${compact ? ' sh-actions--compact' : ''}`}>
+    <div className={`sh-actions${compact ? ' sh-actions--compact' : ''}${variant === 'card' ? ' sh-actions--card' : ''}`}>
       <div className="sh-actions__row">
         {menu.primary ? button(menu.primary, true) : null}
         {menu.secondary.map((a) => button(a, false))}
