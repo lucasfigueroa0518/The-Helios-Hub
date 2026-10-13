@@ -157,15 +157,19 @@ const failFirst = (substr: string): JevAsk => async (req, meta) => {
   return jev((h) => (h.includes('Haiku') ? 1 : 0))(req, meta);
 };
 
-test('a post carries at most 2 setups, kept on the first two that have one', async () => {
+test('a post carries at most 2 setups across rounds, on the two earliest slides', async () => {
+  // n.com/4 is not among the first two picks (so it holds no setup) and fails the fact check twice,
+  // so round 2 writes a replacement that also comes back with a setup: 3 raw setups, 2 allowed.
   const w = writerStub({ setup: 'Setup:' });
-  const d = await deps({ create: w.create, jev: failFirst('n.com/0') });
+  const d = await deps({ create: w.create, jev: failFirst('n.com/4') });
   const res = await runLastFewDays(d);
   assert.ok(res.ok, JSON.stringify(res));
-  const { rows } = await d.query<{ stories: Array<{ setup: string }> }>(`SELECT stories FROM lfd.posts`);
-  const withSetup = rows[0]!.stories.map((s, i) => (s.setup ? i : -1)).filter((i) => i >= 0);
-  assert.equal(withSetup.length, 2);
-  assert.deepEqual(withSetup, [...withSetup].sort((a, b) => a - b));
+  assert.ok(w.calls() >= 3, `expected a replacement round, got ${w.calls()} writer calls`);
+  const { rows } = await d.query<{ stories: Array<{ key: string; setup: string }> }>(`SELECT stories FROM lfd.posts`);
+  const stories = rows[0]!.stories;
+  assert.ok(!stories.some((s) => s.key.endsWith('n.com/4')));
+  assert.deepEqual(stories.map((s) => s.setup !== ''), stories.map((_, i) => i < 2));
+  assert.equal(stories.at(-1)!.setup, '');
 });
 
 test('a write failure in a replacement round still posts what is ready', async () => {
