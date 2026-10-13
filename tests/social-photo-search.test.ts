@@ -468,15 +468,17 @@ test('canvas: Jev picks per slide; never one colour on two neighbouring slides; 
   const trace = (photo: ReturnType<typeof wide> | null) => ({ request: v('thematic', 'x'), photo, via: photo ? ('openverse' as const) : ('icon' as const), icon: 'clock', identity: null, steps: [], alternates: [] });
   const photos = { cover: trace(null), slides: draft.slides.map((_, i) => trace(i === 4 ? wide(`https://s/w${i}.jpg`) : null)) };
   const calls: string[] = [];
-  // Jev always wants orange: code turns every second one black.
-  const layout = await chooseLayout(draft, photos, stubJev(calls, (labels, version) => (version === 'slide-canvas@1' ? 'orange' : labels[0]!)));
+  // Jev always wants orange: when it isn't in play, code takes the least-used colour.
+  const layout = await chooseLayout(draft, photos, stubJev(calls, (labels, version) => (version === 'slide-canvas@2' ? 'orange' : labels[0]!)));
   assert.equal(layout.canvases.length, layout.templates.length, 'one canvas per slide, cover first');
-  assert.ok(calls.includes('slide-canvas@1'));
+  assert.ok(calls.includes('slide-canvas@2'));
+  const spreadSecond = layout.spreadAt === null ? -1 : layout.spreadAt + 2;
   layout.canvases.forEach((c, i) => {
-    if (i > 0 && c !== 'black') assert.notEqual(c, layout.canvases[i - 1], `slide ${i + 1} repeats a colour`);
+    if (i > 0 && i !== spreadSecond) assert.notEqual(c, layout.canvases[i - 1], `slide ${i + 1} repeats a colour`);
   });
-  assert.ok(layout.canvases.includes('orange') && layout.canvases.includes('black'));
-  assert.ok(layout.log.some((l) => /repeats the previous slide's → black/.test(l)));
+  assert.ok(layout.canvases.includes('orange'));
+  assert.ok(layout.canvases.some((c) => c !== 'orange'), 'a favourite colour does not paint the whole post');
+  assert.ok(layout.log.some((l) => /not in play/.test(l)));
   // The spread (slides 6–7) shares its first slide's canvas.
   assert.equal(layout.canvases[6], layout.canvases[5]);
   // The canvas reaches the slide and the template; the follow slide stays black.
@@ -491,10 +493,30 @@ test('canvas: Jev picks per slide; never one colour on two neighbouring slides; 
   assert.match(renderToStaticMarkup(React.createElement(SlideTemplate, { post, position: orangeAt })), /data-canvas="orange"/);
   // A Jev error is black, logged.
   const failing = await chooseLayout(draft, photos, async (req, meta) => {
-    if (meta.version === 'slide-canvas@1') throw new Error('down');
+    if (meta.version === 'slide-canvas@2') throw new Error('down');
     return stubJev()(req, meta);
   });
   assert.ok(failing.canvases.every((c) => c === 'black'));
+});
+
+test('canvas: a first-label pick still uses at least three colours across the post', async () => {
+  const brief = briefSuperIntelligenceForce();
+  const draft = fillDraft(sifDraft(), brief);
+  const trace = () => ({ request: v('thematic', 'x'), photo: null, via: 'icon' as const, icon: 'clock', identity: null, steps: [], alternates: [] });
+  const photos = { cover: trace(), slides: draft.slides.map(() => trace()) };
+  const layout = await chooseLayout(draft, photos, stubJev());
+  assert.ok(new Set(layout.canvases).size >= 3, `got ${layout.canvases.join(', ')}`);
+});
+
+test('canvas: Jev always picking black still uses green, orange and white', async () => {
+  const brief = briefSuperIntelligenceForce();
+  const draft = fillDraft(sifDraft(), brief);
+  const trace = () => ({ request: v('thematic', 'x'), photo: null, via: 'icon' as const, icon: 'clock', identity: null, steps: [], alternates: [] });
+  const photos = { cover: trace(), slides: draft.slides.map(() => trace()) };
+  const layout = await chooseLayout(draft, photos, stubJev([], (labels, version) => (version === 'slide-canvas@2' ? 'black' : labels[0]!)));
+  const used = new Set(layout.canvases);
+  assert.ok(used.has('green') && used.has('orange') && used.has('white'), `got ${layout.canvases.join(', ')}`);
+  assert.ok(layout.canvases.filter((c) => c === 'black').length < layout.canvases.length / 2, `black still dominates: ${layout.canvases.join(', ')}`);
 });
 
 // ── Photo decision nodes and uniqueness (Lucas, 2026-10-08) ──────────────
