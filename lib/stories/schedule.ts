@@ -46,6 +46,33 @@ export function pickPublishAt(w: PostingWindow, date: string, notBefore: Date, r
   return new Date(from + rand(span) * 60_000);
 }
 
+const clock12 = (hhmm: string) => {
+  const m = minutes(hhmm);
+  const h = Math.floor(m / 60);
+  return `${h % 12 || 12}:${String(m % 60).padStart(2, '0')}`;
+};
+/** "8:30-10:00 AM" for a window, as the Hub says it to a person. */
+export function windowLabel(w: PostingWindow): string {
+  const ampm = (hhmm: string) => (minutes(hhmm) >= 720 ? 'PM' : 'AM');
+  const [a, b] = [ampm(w.start), ampm(w.end)];
+  return `${clock12(w.start)}${a === b ? '' : ` ${a}`}-${clock12(w.end)} ${b}`;
+}
+
+/**
+ * What a person should be told when they approve a set: does the worker still
+ * have a minute to schedule it? The worker never posts a set late
+ * (worker.ts: a passed window is skipped), so after the window only
+ * Publish now moves it.
+ */
+export function approvalNote(w: PostingWindow, date: string, now: Date, publishingLive = true): string {
+  const label = windowLabel(w);
+  if (pickPublishAt(w, date, now, () => 0) === null) {
+    return `Approved, but the ${label} window has passed for ${date}, so this will not be scheduled and will not post unless you press Publish now.`;
+  }
+  if (!publishingLive) return `Approved. Publishing is switched off in Settings, so it will wait there and is only scheduled once publishing is back on (the ${label} window still has to be open).`;
+  return `Approved. It posts at a random minute in its ${label} window.`;
+}
+
 /** Each series posts one set per due day: the daily fill's quota for a series (D54). */
 export const SERIES_DAY_QUOTA = 1;
 

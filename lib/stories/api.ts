@@ -17,6 +17,7 @@ import {
   type SetStatus,
   type StorySet,
 } from '@/lib/stories/repository';
+import { approvalNote as approvalNoteFor } from '@/lib/stories/schedule';
 import { SERIES, loadSettings, saveSeriesSetting } from '@/lib/stories/settings';
 
 export class ApiError extends Error {
@@ -86,7 +87,22 @@ const guard = async <T>(fn: () => Promise<T>): Promise<T> => {
   }
 };
 
-export const approve = (db: Queryable, id: string) => guard(() => approveSet(db, id));
+/**
+ * Approve. The returned set carries `approvalNote`: plain words on whether the
+ * worker can still schedule it (the window may have closed; then only Publish
+ * now posts it).
+ */
+export async function approve(db: Queryable, id: string, now = new Date()): Promise<StorySet & { approvalNote: string }> {
+  const set = await guard(() => approveSet(db, id));
+  let approvalNote = 'Approved.';
+  try {
+    const settings = await loadSettings(db);
+    approvalNote = approvalNoteFor(settings.series[set.series].window, set.ny_date, now, settings.publishingLive);
+  } catch {
+    // The note is advice; the approval already happened.
+  }
+  return { ...set, approvalNote };
+}
 
 export function reject(db: StoriesDb, id: string, body: { tags?: unknown; note?: unknown }, by: string) {
   const tags = Array.isArray(body.tags) ? body.tags.filter((t): t is string => typeof t === 'string' && TAGS.has(t)) : [];

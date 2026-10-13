@@ -66,8 +66,9 @@ export function storyActions(deps: {
   return {
     vertical: 'stories',
     async approve(t) {
-      await deps.approve(need(t, 'setId'));
-      return { ok: true, note: 'Approved. It posts in its window.' };
+      const done = await deps.approve(need(t, 'setId'));
+      const note = (done as { approvalNote?: unknown } | null)?.approvalNote;
+      return { ok: true, note: typeof note === 'string' && note ? note : 'Approved. It posts in its window.' };
     },
     async reject(t, by) {
       await deps.reject(need(t, 'setId'), by);
