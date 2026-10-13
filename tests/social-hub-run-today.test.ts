@@ -9,7 +9,7 @@ import test from 'node:test';
 
 import { parseRankMove } from '@/lib/content-type/idea-rank';
 import { reelPosts } from '@/lib/social-hub/adapters/reels';
-import { narrowStep, planFrom, stepsFor, typeDay, type RunInputs } from '@/lib/social-hub/run-today';
+import { narrowStep, parseRunBody, planFrom, stepsFor, typeDay, type RunInputs } from '@/lib/social-hub/run-today';
 import type { HubIdea, HubPost } from '@/lib/social-hub/types';
 import { applyMoves, dayRanking, orderCards, quotaCandidates, type IdeaAdjustment } from '@/lib/social-hub/views/day-rank';
 import { todaysContent } from '@/lib/social-hub/views/today';
@@ -229,4 +229,14 @@ test('a carousel run for one story keeps its run cap as the estimate', () => {
   const plan = planFrom({ ...base, carousels: { quota: 2, held: 0, missing: [{ ideaId: 'carousels:story:s1', ref: 's1', title: 'S1' }, { ideaId: 'carousels:story:s2', ref: 's2', title: 'S2' }] } });
   const [step] = stepsFor(plan, 'carousels', 's2');
   assert.deepEqual([step!.targets, step!.estimateUsd], [['s2'], base.cost.carouselCap]);
+});
+
+test('the run body: no body is Run now, a type is its button, a card needs a type and a usable id', () => {
+  assert.deepEqual(parseRunBody(null), {});
+  assert.deepEqual(parseRunBody({ only: 'carousels' }), { only: 'carousels' });
+  assert.deepEqual(parseRunBody({ only: 'explainers', target: 't2' }), { only: 'explainers', target: 't2' });
+  for (const bad of [{ target: 't2' }, { only: 'reels', target: '' }, { only: 'reels', target: 5 }, { only: 'reels', target: 'x'.repeat(2049) }, { only: 'nope' }, { only: 'nope', target: 't' }]) {
+    assert.ok('error' in parseRunBody(bad), JSON.stringify(bad));
+  }
+  assert.deepEqual(parseRunBody({ only: 'reels', target: 'x'.repeat(2048) }), { only: 'reels', target: 'x'.repeat(2048) });
 });

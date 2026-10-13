@@ -128,6 +128,28 @@ export function stepsFor(plan: RunPlan, only?: Vertical, target?: string): PlanS
   return only && target ? steps.map((s) => narrowStep(s, target)) : steps;
 }
 
+const RUN_TYPES: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories'];
+const TARGET_MAX = 2048;
+
+/**
+ * The run-today POST body. No body is Run now; `{ only }` a type's own button;
+ * `{ only, target }` one card's Make it. A target that cannot be honored is an
+ * error, never a wider run: Make it must not spend more than its card.
+ */
+export function parseRunBody(body: unknown): { only?: Vertical; target?: string } | { error: string } {
+  if (body === null || body === undefined) return {};
+  if (typeof body !== 'object' || Array.isArray(body)) return { error: 'Unknown content type.' };
+  const { only, target } = body as { only?: unknown; target?: unknown };
+  if (only !== undefined && !RUN_TYPES.includes(only as Vertical)) return { error: 'Unknown content type.' };
+  if (target !== undefined) {
+    if (only === undefined || typeof target !== 'string' || target.length === 0 || target.length > TARGET_MAX) {
+      return { error: 'That card can’t be made from here.' };
+    }
+    return { only: only as Vertical, target };
+  }
+  return only === undefined ? {} : { only: only as Vertical };
+}
+
 /** The native id an idea id ends with (`reels:idea:<id>` → `<id>`). */
 export function ideaRef(ideaId: string): string {
   const parts = ideaId.split(':');
