@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import type { ProgressItem } from '@/lib/content-type/progress';
 import type { QuotaCandidate } from '@/lib/social-hub/views/day-rank';
-import { inFlightKey, runForCandidate, runningSummary } from '@/lib/social-hub/views/run-for';
+import { canMakeCard, inFlightKey, runForCandidate, runningSummary, runOnMadeCard } from '@/lib/social-hub/views/run-for';
 
 const none = { carousels: [], stories: [], explainers: [] };
 
@@ -56,4 +56,25 @@ test('a run that was asked for particular carousel stories shows only on those s
   const other = candidate({ post: null, locked: false, idea: { id: 'carousels:story:https://www.bloomberg.com/news/videos/philly' } as QuotaCandidate['idea'] });
   assert.equal(runForCandidate(mine, runs)?.id, 'run-2:0');
   assert.equal(runForCandidate(other, runs), null, 'a different story’s card does not claim the run');
+});
+
+test('a made card shows a run only when it is being made or the run names its idea (2026-10-13)', () => {
+  const picksItsOwn = item();
+  assert.equal(runOnMadeCard({ status: 'generating', idea: null }, picksItsOwn)?.id, 'run-1', 'being made: the chip shows');
+  assert.equal(runOnMadeCard({ status: 'ready', idea: { id: 'carousels:story:s1' } }, picksItsOwn), null, 'a run picking its own stories leaves a made card its buttons');
+  const named = item({ topicId: 's1' });
+  assert.equal(runOnMadeCard({ status: 'ready', idea: { id: 'carousels:story:s1' } }, named)?.id, 'run-1', 'the idea id ends with the run topic');
+  assert.equal(runOnMadeCard({ status: 'ready', idea: { id: 's1' } }, named)?.id, 'run-1', 'a bare idea id matches too');
+  assert.equal(runOnMadeCard({ status: 'ready', idea: { id: 'carousels:story:s2' } }, named), null, 'another idea’s run');
+  assert.equal(runOnMadeCard({ status: 'generating', idea: null }, null), null);
+});
+
+test('Make it only on a card it can make alone (2026-10-13)', () => {
+  const open = { idea: null, post: null, locked: false, rank: null };
+  assert.equal(canMakeCard(candidate({ ...open, vertical: 'stories', seriesId: 'morning_download' })), true);
+  assert.equal(canMakeCard(candidate({ ...open, vertical: 'stories' })), false);
+  assert.equal(canMakeCard(candidate({ vertical: 'explainers', post: null })), true, 'an idea card');
+  assert.equal(canMakeCard(candidate({ ...open, vertical: 'explainers' })), false, 'an open explainer slot waits for Run now');
+  assert.equal(canMakeCard(candidate({ ...open, vertical: 'reels' })), false, 'an open reels slot waits for Run now');
+  assert.equal(canMakeCard(candidate({ ...open, vertical: 'carousels' })), true, 'a carousel run picks its own story');
 });
