@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { PostingState } from '@/lib/content-type/posting';
+import { reportExplainers } from '@/lib/social-hub/health/reporters/explainers';
 import { reportCarousels } from '@/lib/social-hub/health/reporters/carousels';
 import { funnelFrom, publishingFor, quotaFor } from '@/lib/social-hub/health/reporters/shared';
+import { reportReels } from '@/lib/social-hub/health/reporters/reels';
 import { reportStories } from '@/lib/social-hub/health/reporters/stories';
 
 import { openHubTestDb } from './fixtures/social-hub/pglite';
@@ -123,4 +125,42 @@ test('publishing: a published slot with a non-failed earlier attempt is not heal
   assert.equal(p.postedYesterday, 1);
   assert.equal(p.retriedOk, 0);
   assert.equal(p.failures.length, 0);
+});
+
+test('text on screen: made = ok videos; failed frame is a failure; a failed then ok video is healed', async () => {
+  const { pg, query } = await openHubTestDb();
+  const { rows: [idea] } = await query<{ id: string }>(`INSERT INTO reels.post_ideas DEFAULT VALUES RETURNING id::text`);
+  const { rows: [idea2] } = await query<{ id: string }>(`INSERT INTO reels.post_ideas DEFAULT VALUES RETURNING id::text`);
+  await pg.exec(`
+    INSERT INTO reels.runs (trigger, status, requested_at, started_at, finished_at) VALUES ('scheduled', 'ok', '2026-10-13T05:00:00Z', '2026-10-13T05:00:00Z', '2026-10-13T06:00:00Z');
+    INSERT INTO reels.visual_jobs (post_idea_id, status, error, finished_at) VALUES ('${idea!.id}', 'copy_does_not_fit', 'copy_does_not_fit', '2026-10-13T05:20:00Z');
+    INSERT INTO reels.video_jobs (post_idea_id, status, error, finished_at) VALUES
+      ('${idea2!.id}', 'failed', 'Kling request timed out', '2026-10-13T05:30:00Z'),
+      ('${idea2!.id}', 'ok', NULL, '2026-10-13T05:45:00Z');
+  `);
+  const r = await reportReels(query, { night: NIGHT, posting: posting({ type: 'reels', perDay: 3 }), now: NOW });
+  assert.equal(r.made, 1);
+  assert.equal(r.target, 3);
+  assert.deepEqual(r.failures.map((f) => [f.stage, f.reason, f.severity]).sort(), [['frame', 'too_long', 'failed'], ['video', 'timeout', 'healed']]);
+  assert.equal(r.retriedOk, 1);
+});
+
+test('explainers: capped job is cap_hit; unknown-cost HeyGen rows are counted, not priced', async () => {
+  const { pg, query } = await openHubTestDb();
+  await pg.exec(`
+    INSERT INTO explainers.topics (id, title, scope, source_url, origin, status, audience_fit, teachability_45s, analogy_potential, visual_potential, accuracy_under_simplification, hook_strength, weighted_score)
+      VALUES ('00000000-0000-0000-0000-0000000000e1', 'Webhooks', NULL, NULL, 'generated', 'queued', 3, 3, 3, 3, 3, 3, 70);
+    INSERT INTO explainers.idea_cycles (status, mode, ny_date, ideas_generated, ideas_entering_pool) VALUES ('ok', 'production', '2026-10-13', 12, 6);
+    INSERT INTO explainers.jobs (id, topic_id, status, stage, trigger, mode, spend_usd, spend_cap_usd, capped, error, orchestrator_model, frame_worker_model, requested_at, finished_at) VALUES
+      ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000e1', 'failed', 'render', 'auto', 'production', 5, 5, true, 'spend cap reached', 'claude-opus-5-5', 'claude-sonnet-5-5', '2026-10-13T06:00:00Z', '2026-10-13T06:40:00Z');
+    INSERT INTO explainers.cost_events (job_id, mode, vendor, component, usd, usd_known, created_at) VALUES
+      ('00000000-0000-0000-0000-0000000000f1', 'production', 'anthropic', 'session_a', 4.5, true, '2026-10-13T06:10:00Z'),
+      ('00000000-0000-0000-0000-0000000000f1', 'production', 'heygen', 'tts+bgm+sfx', 0, false, '2026-10-13T06:20:00Z');
+  `);
+  const r = await reportExplainers(query, { night: NIGHT, posting: posting({ type: 'explainers', perDay: 2 }), now: NOW });
+  assert.equal(r.made, 0);
+  assert.equal(r.failures[0]!.reason, 'cap_hit');
+  assert.equal(r.unknownCostCalls, 1);
+  assert.equal(r.spendUsd, 4.5);
+  assert.equal(r.funnel[0]!.in, 12);
 });
