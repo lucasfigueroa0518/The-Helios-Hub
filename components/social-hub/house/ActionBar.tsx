@@ -154,7 +154,7 @@ export function ActionBar({ menu, compact = false, showOffNote = true }: { menu:
       {note ? <p className={`sh-actions__note${note.ok ? '' : ' sh-actions__note--failed'}`} role="status">{note.text}</p> : null}
       <dialog ref={picker} className="sh-confirm sh-picker" aria-labelledby="sh-picker-title" onClose={() => setPicking(null)}>
         <h2 id="sh-picker-title">{picking?.confirmTitle ?? 'Pick a slot'}</h2>
-        <p>Pick a window in the next week. It counts toward that day’s posts, so the overnight run makes one fewer.</p>
+        <p>Pick one of today’s remaining windows.</p>
         {picking?.slots ? <SlotPicker slots={picking.slots} value={choice} onChange={setChoice} /> : null}
         <div className="sh-confirm__actions">
           <button type="button" className="sh-btn" onClick={() => picker.current?.close()}>Cancel</button>
@@ -209,10 +209,10 @@ function clipBox(el: HTMLElement): { left: number; right: number } {
   return { left, right };
 }
 
-/** Next week's windows for the type, by day; taken ones show who holds them by being unavailable. */
+/** Today's remaining windows for the type; taken ones are shown unavailable. */
 function SlotPicker({ slots, value, onChange }: { slots: SlotChoice[]; value: SlotChoice | null; onChange: (s: SlotChoice) => void }) {
   const days = [...new Set(slots.map((s) => s.nyDate))];
-  if (days.length === 0) return <p className="sh-subtle">No windows left this week.</p>;
+  if (days.length === 0) return <p className="sh-subtle">No windows left today. Post now or Reject instead.</p>;
   return (
     <div className="sh-picker__days" role="radiogroup" aria-label="Windows">
       {days.map((day) => {

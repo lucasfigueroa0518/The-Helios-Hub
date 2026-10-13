@@ -1,12 +1,11 @@
 import Link from 'next/link';
-import { ArrowRight, ChevronLeft, ChevronRight, ImageIcon, Loader2, Music2, TriangleAlert } from 'lucide-react';
+import { ArrowRight, ImageIcon, Loader2, Music2, TriangleAlert } from 'lucide-react';
 
 import { RunsRefresh } from '@/components/social-hub/content/RunsRefresh';
 import { HubSettingsButton, RunTodayButton } from '@/components/social-hub/content/HubControls';
 import { NeedsYouMenu } from '@/components/social-hub/content/NeedsYouMenu';
 import { TodayStrip } from '@/components/social-hub/content/TodayStrip';
 import { DataNotes } from '@/components/social-hub/DataNotes';
-import { HubLink } from '@/components/social-hub/nav/HubNav';
 import { PostLink } from '@/components/social-hub/nav/PostLink';
 import { PageHead } from '@/components/social-hub/ui/PageHead';
 import { TypeMark } from '@/components/social-hub/ui/marks';
@@ -19,27 +18,21 @@ import { offerer } from '@/lib/social-hub/views/offer';
 import { poolStale, poolSummaries, type PoolSummary } from '@/lib/social-hub/views/pools';
 import { allQuotaCandidates } from '@/lib/social-hub/views/day-rank';
 import { inFlightKey, runningSummary } from '@/lib/social-hub/views/run-for';
-import { contentDay, LOOK_PARAM, LOOK_TOMORROW } from '@/lib/social-hub/views/look-ahead';
-import { contentModel, slotsForDay } from '@/lib/social-hub/views/today';
+import { contentModel } from '@/lib/social-hub/views/today';
 import { typeHref, verticalInfo } from '@/lib/social-hub/verticals';
 
 /**
  * Content (BRIEFS.md §1): the morning check. What needs a person, what's
  * going out today, then how full the tank is.
  */
-export function ContentScreen({ dataset, base, now, libraries, progress, controls = true, look }: { dataset: HubDataset; base: string; now: Date; libraries: LibrariesModel; progress?: AllProgress; controls?: boolean; /** `tomorrow`: the look-ahead (lib/social-hub/views/look-ahead.ts). */ look?: string }) {
+export function ContentScreen({ dataset, base, now, libraries, progress, controls = true }: { dataset: HubDataset; base: string; now: Date; libraries: LibrariesModel; progress?: AllProgress; controls?: boolean }) {
   const runs: AllProgress = progress ?? { carousels: [], stories: [], explainers: [] };
   const inFlight = Object.values(runs).some((items) => items.length > 0);
   const summary = runningSummary(runs);
   const m = contentModel(dataset, now);
   const o = offerer(dataset, now);
-  // The day on show: today, or tomorrow's look-ahead. Everything below reads its day from `view.at`.
-  const view = contentDay(now, look);
-  // Every type's quota candidates for that day: what holds its slots, then the top of its ranking (Promote / Demote applied).
-  const today = allQuotaCandidates(dataset, view.at);
-  const ahead = slotsForDay(dataset.posts, view.day, dataset.dayQuotas);
-  const dayLabel = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).replace(',', '');
-  const aheadHref = `${base}?${LOOK_PARAM}=${LOOK_TOMORROW}`;
+  // Every type's quota candidates for today: what holds its slots, then the top of its ranking (Promote / Demote applied).
+  const today = allQuotaCandidates(dataset, now);
   // Rows nothing here can act on don't count as waiting on the person (critique 2026-10-08).
   const off = (p: HubPost) => o.offer(p).state.id === 'approval_off';
   const needs = m.needs.map((g) => ({ ...g, posts: g.posts.filter((p) => !off(p)) })).filter((g) => g.posts.length);
@@ -53,20 +46,10 @@ export function ContentScreen({ dataset, base, now, libraries, progress, control
   return (
     <>
       <PageHead
-        title={view.ahead ? 'Tomorrow' : 'Today'}
-        aside={view.ahead ? dayLabel(view.day) : todayLabel}
-        // Arrows step between today and tomorrow's look-ahead; the one with nowhere to go is dimmed.
-        before={<DayArrow dir="prev" href={view.ahead ? base : null} label="Back to today" />}
-        after={<DayArrow dir="next" href={view.ahead ? null : aheadHref} label="Look ahead to tomorrow" />}
-        // Run now fills today's quotas, so it isn't offered on tomorrow's view; tonight's runs fill tomorrow.
-        actions={controls ? <><HubSettingsButton />{view.ahead ? null : <RunTodayButton />}</> : undefined}
-        meta={view.ahead ? (
-          <>
-            <strong>{ahead.filled}</strong> of {ahead.slots} slots scheduled for tomorrow
-            {' · '}
-            {ahead.slots - ahead.filled > 0 ? `${ahead.slots - ahead.filled} still open: tonight’s runs make what’s missing` : 'every slot is planned'}
-          </>
-        ) : (
+        title="Today"
+        aside={todayLabel}
+        actions={controls ? <><HubSettingsButton /><RunTodayButton /></> : undefined}
+        meta={(
           <>
             <strong>{m.plan.filled}</strong> of {m.plan.slots} slots filled
             {' · '}
@@ -101,19 +84,17 @@ export function ContentScreen({ dataset, base, now, libraries, progress, control
 
       <section className="sh-section" aria-labelledby="today-strip">
         <div className="sh-section__head">
-          <h2 className="sh-title" id="today-strip">{view.ahead ? 'Tomorrow’s Content' : 'Today’s Content'}<span className="sh-count">{today.length}</span></h2>
+          <h2 className="sh-title" id="today-strip">Today’s Content<span className="sh-count">{today.length}</span></h2>
           <Link className="sh-out" href={`${base}/calendar`}>Calendar <ArrowRight size={14} aria-hidden="true" /></Link>
         </div>
         {today.length === 0 ? (
           <div className="sh-panel sh-empty">
-            <strong>{view.ahead ? 'Nothing is planned for tomorrow yet' : 'No candidates for today yet'}</strong>
-            {view.ahead ? 'Tonight’s runs fill tomorrow’s quotas from the idea pools.' : <>
-              {m.next ? <>Next post: {when(m.next.publishAt, now)}. </> : null}
-              {controls ? 'Run now makes what today’s quotas still need.' : null}
-            </>}
+            <strong>No candidates for today yet</strong>
+            {m.next ? <>Next post: {when(m.next.publishAt, now)}. </> : null}
+            {controls ? 'Run now makes what today’s quotas still need.' : null}
           </div>
         ) : (
-          <TodayStrip candidates={today} o={o} runs={runs} ahead={view.ahead} />
+          <TodayStrip candidates={today} o={o} runs={runs} />
         )}
       </section>
 
@@ -152,18 +133,6 @@ export function ContentScreen({ dataset, base, now, libraries, progress, control
         </div>
       </section>
     </>
-  );
-}
-
-/** One day arrow beside the page title. A direction with nowhere to go (nothing before today, nothing past tomorrow) is shown dimmed and isn't a link. */
-function DayArrow({ dir, href, label }: { dir: 'prev' | 'next'; href: string | null; label: string }) {
-  const Icon = dir === 'prev' ? ChevronLeft : ChevronRight;
-  return href ? (
-    <HubLink className={`sh-daynav sh-daynav--${dir}`} href={href} history="push" aria-label={label} title={label}>
-      <Icon size={18} aria-hidden="true" />
-    </HubLink>
-  ) : (
-    <span className={`sh-daynav sh-daynav--${dir} is-off`} aria-hidden="true"><Icon size={18} /></span>
   );
 }
 

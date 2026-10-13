@@ -9,6 +9,7 @@ import { displayName, relative, when } from '@/lib/social-hub/views/format';
 import { offerer, slotChoices } from '@/lib/social-hub/views/offer';
 import { poolSummaries } from '@/lib/social-hub/views/pools';
 import { needsPerson, postState, type StateId } from '@/lib/social-hub/views/state';
+import { nyDateOf } from '@/lib/social-hub/time';
 import { FIXTURE_NOW, previewDataset } from '@/tests/fixtures/social-hub/preview-dataset';
 
 const d = previewDataset();
@@ -61,16 +62,23 @@ test('place and move share the reschedule flag; every plan names a flag that exi
   assert.equal(flagOf('reject'), 'reject');
 });
 
-test('slot choices cover the coming week and mark what is taken', () => {
+test('slot choices are today’s open windows for the type', () => {
   const ready = d.posts.find((p) => p.vertical === 'carousels' && p.status === 'ready')!;
   const slots = slotChoices(d, ready, now);
   assert.ok(slots.length > 0);
   assert.ok(slots.every((s) => s.slot === 'morning' || s.slot === 'afternoon'));
-  assert.ok(slots.some((s) => s.state === 'taken'), 'the fixture has carousels booked this week');
   const o = offerer(d, now);
   const offer = o.offer(ready);
   const place = [offer.menu.primary, ...offer.menu.secondary, ...offer.menu.more].find((a) => a?.key === 'place');
   if (place) assert.ok(place.slots?.length, 'place offers the picker');
+});
+
+test('Schedule and Reschedule offer only today’s remaining windows (D12, Review Focus 3)', () => {
+  const ready = d.posts.find((p) => p.vertical === 'carousels' && p.status === 'ready')!;
+  const today = nyDateOf(now)!;
+  assert.ok(slotChoices(d, ready, now).every((s) => s.nyDate === today), 'never tomorrow');
+  const lateNight = new Date(`${today}T23:30:00-04:00`);
+  assert.deepEqual(slotChoices(d, ready, lateNight), [], 'after the last window, nothing is offered');
 });
 
 test('today’s strip is only post ideas holding a slot; failed and never-made ideas are out', () => {

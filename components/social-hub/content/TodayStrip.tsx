@@ -28,10 +28,10 @@ function RunChip({ run }: { run: ProgressItem | null }) {
   );
 }
 
-export function TodayStrip({ candidates, o, runs, ahead = false }: { candidates: QuotaCandidate[]; o: Offerer; runs: AllProgress; /** Tomorrow's look-ahead: what isn't made yet is planned, and tonight's runs make it. */ ahead?: boolean }) {
+export function TodayStrip({ candidates, o, runs }: { candidates: QuotaCandidate[]; o: Offerer; runs: AllProgress }) {
   return (
-    <ul className="sh-strip sh-gallery" aria-label={ahead ? 'Tomorrow’s content' : 'Today’s content'}>
-      {candidates.map((c, i) => (c.post ? <Made key={c.post.id} c={c} post={c.post} o={o} run={runForCandidate(c, runs)} /> : <Pending key={c.idea?.id ?? `${c.vertical}:${c.series ?? i}`} c={c} run={runForCandidate(c, runs)} ahead={ahead} />))}
+    <ul className="sh-strip sh-gallery" aria-label="Today’s content">
+      {candidates.map((c, i) => (c.post ? <Made key={c.post.id} c={c} post={c.post} o={o} run={runForCandidate(c, runs)} /> : <Pending key={c.idea?.id ?? `${c.vertical}:${c.series ?? i}`} c={c} run={runForCandidate(c, runs)} />))}
     </ul>
   );
 }
@@ -59,22 +59,22 @@ function Made({ c, post, o, run }: { c: QuotaCandidate; post: HubPost; o: Offere
   );
 }
 
-function Pending({ c, run, ahead }: { c: QuotaCandidate; run: ProgressItem | null; ahead: boolean }) {
+function Pending({ c, run }: { c: QuotaCandidate; run: ProgressItem | null }) {
   const Icon = TYPE_ICON[c.vertical];
   const tag = rankTag(c);
   return (
     <li className="sh-panel sh-strip__card sh-gallery__card is-pending" style={{ listStyle: 'none' }}>
       <span className={`sh-strip__art sh-gallery__art${c.vertical === 'carousels' ? '' : ' is-tall'}`}>
         <span className="sh-gallery__frame" style={typeStyle(c.vertical)} aria-hidden="true">
-          <span className="sh-gallery__empty"><Icon size={22} />{ahead ? 'Planned' : 'Not made yet'}</span>
+          <span className="sh-gallery__empty"><Icon size={22} />Not made yet</span>
         </span>
       </span>
       <div className="sh-gallery__meta">
         <TypeMark vertical={c.vertical} />
         <span>{tag ?? (c.series ? c.series : 'Quota candidate')}</span>
       </div>
-      <span className="sh-strip__name">{c.idea?.title ?? (c.series ? `${c.series}: ${ahead ? 'tomorrow’s' : 'today’s'} set` : 'Open slot: the next run picks its idea')}</span>
-      {run ? <RunChip run={run} /> : <span className="sh-muted sh-gallery__hint">{ahead ? 'Planned: tonight’s run makes it.' : 'Run now makes it.'}</span>}
+      <span className="sh-strip__name">{c.idea?.title ?? (c.series ? `${c.series}: today’s set` : 'Open slot: the next run picks its idea')}</span>
+      {run ? <RunChip run={run} /> : <span className="sh-muted sh-gallery__hint">Run now makes it.</span>}
     </li>
   );
 }

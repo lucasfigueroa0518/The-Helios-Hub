@@ -8,7 +8,6 @@ import { SOCIAL_HUB_FLAGS } from '@/lib/social-hub/flags';
 import { HUB_BASE, toParams, type RawSearchParams } from '@/lib/social-hub/links';
 import { loadForPage } from '@/lib/social-hub/live';
 import { legacyRootRedirect } from '@/lib/social-hub/views/legacy-routes';
-import { LOOK_PARAM } from '@/lib/social-hub/views/look-ahead';
 import { loadLibraries } from '@/lib/social-hub/views/libraries';
 import { readAllProgress } from '@/lib/content-type/progress';
 import { getSession } from '@/lib/session';
@@ -29,7 +28,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Raw
   return (
     <>
       <RefreshNote refresh={loaded.refresh} />
-      <ContentScreen dataset={loaded} base={HUB_BASE} now={new Date()} libraries={libraries} progress={progress} look={params[LOOK_PARAM]} />
+      <ContentScreen dataset={loaded} base={HUB_BASE} now={new Date()} libraries={libraries} progress={progress} />
     </>
   );
 }

@@ -21,11 +21,11 @@ export type Offerer = { offer: (post: HubPost) => Offer; placeHere: (post: HubPo
 const ACTIVE = new Set(['scheduled', 'publishing', 'published']);
 
 /**
- * The next week of a type's posting windows (place and reschedule, D50): what's
+ * Today's remaining posting windows for the type (place and reschedule, D50; today only, D12): what's
  * free, what's taken, and where this post already sits. The server checks
  * again when the move is made (spacing, quota, a slot taken meanwhile).
  */
-export function slotChoices(dataset: HubDataset, post: HubPost, now: Date, days = 7): SlotChoice[] {
+export function slotChoices(dataset: HubDataset, post: HubPost, now: Date, days = 1): SlotChoice[] {
   const today = nyDateOf(now)!;
   const placed = dataset.posts.filter((p) => p.vertical === post.vertical && ACTIVE.has(p.status) && p.nyDate);
   const out: SlotChoice[] = [];
