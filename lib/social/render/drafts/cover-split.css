@@ -1,0 +1,105 @@
+/* Cover · split — stark. Face region across the top, claim below on the canvas. Scoped under .helios-v2-cover-split (a .helios-cover at the slide origin). */
+.helios-v2-cover-split {
+  isolation: isolate;
+  overflow: hidden;
+  font-family: var(--font-body, 'Roboto', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+  color: var(--brand-narrative);
+}
+
+/* The face region: full width, square edges, no scrim, no fade. */
+.helios-v2-cover-split .helios-v2-cover-split__photo.helios-cover__photo {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: auto;
+  bottom: auto;
+  width: 1080px;
+  height: 740px;
+  margin: 0;
+  border-radius: 0;
+  box-shadow: none;
+  filter: none;
+  transform: none;
+  -webkit-mask-image: none;
+  mask-image: none;
+  overflow: hidden;
+  z-index: 0;
+}
+.helios-v2-cover-split .helios-v2-cover-split__photo::before,
+.helios-v2-cover-split .helios-v2-cover-split__photo::after {
+  content: none;
+}
+
+.helios-v2-cover-split .helios-v2-cover-split__claim {
+  position: absolute;
+  left: 96px;
+  top: 784px;
+  width: 888px;
+  height: 340px;
+  display: flex;
+  align-items: flex-start;
+}
+.helios-v2-cover-split .helios-v2-cover-split__headline {
+  margin: 0;
+  width: 100%;
+  max-height: 340px;
+  overflow: hidden;
+  font-family: var(--font-heading, 'Pragmatica Extended', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+  font-weight: 700;
+  font-size: 108px;
+  line-height: 0.96;
+  letter-spacing: -0.012em;
+  text-transform: uppercase;
+  text-wrap: balance;
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+  color: var(--brand-narrative);
+}
+
+/* Footer row: mark left, name line middle, swipe arrow right. Sits above the credit pill. */
+.helios-v2-cover-split .helios-v2-cover-split__foot {
+  position: absolute;
+  left: 96px;
+  top: 1176px;
+  width: 888px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+.helios-v2-cover-split .helios-v2-cover-split__mark {
+  flex: none;
+  font-weight: 700;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: 0.36em;
+  text-transform: uppercase;
+  color: var(--brand-narrative);
+}
+.helios-v2-cover-split .helios-v2-cover-split__caption {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  max-height: 40px;
+  overflow: hidden;
+  font-family: var(--font-mono, 'Roboto Mono', ui-monospace, Menlo, monospace);
+  font-weight: 500;
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-overflow: clip;
+  color: var(--brand-narrative-muted);
+}
+.helios-v2-cover-split .helios-v2-cover-split__gap {
+  flex: 1 1 auto;
+}
+.helios-v2-cover-split .helios-v2-cover-split__swipe {
+  flex: none;
+  margin-left: auto;
+  width: 56px;
+  height: 56px;
+  color: var(--brand-narrative);
+}

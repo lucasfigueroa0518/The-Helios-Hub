@@ -284,7 +284,7 @@ test('render: a photo-on-top text slide renders', async () => {
   const post = { format: 'carousel', storyType: 'tech', source: 's', sourceUrl: 'u', publishedAt: 'p', issueNumber: 0, caption: 'c',
     slides: [{ position: 0, layoutVariant: 'cover', headline: [{ text: 'X', role: 'narrative' }], altText: 'x' }, { ...textSlide(1), photoPlacement: 'top' }] } as const;
   const html = renderToStaticMarkup(React.createElement(SlideTemplate, { post: post as never, position: 1 }));
-  assert.match(html, /helios-text--photo-top/);
+  assert.match(html, /helios-v2-text--photo-top/);
 });
 
 test('design stage: a render that does not fit is set aside as render-failed', async () => {
@@ -350,13 +350,13 @@ test('M8a: the quote layout shows its headline and body; the landing layout show
 test('M8a rule 3: a subject photo never goes full bleed under text; it renders in its own region', async () => {
   const img: SlideCopy = { position: 0, layoutVariant: 'image', headline: span('H'), altText: 'a', photoUrl: '/p.jpg', photoKind: 'subject' };
   const html = await renderSlideHtml(basePost([img]), 0);
-  assert.ok(!html.includes('helios-image'), 'not the full-bleed layout');
-  assert.ok(html.includes('helios-split__photo'));
+  assert.ok(!html.includes('helios-v2-image'), 'not the full-bleed layout');
+  assert.ok(html.includes('helios-v2-split__photo'));
   const cover: SlideCopy = { position: 0, layoutVariant: 'cover', headline: span('H'), altText: 'a', photoUrl: '/p.jpg', photoKind: 'subject' };
-  assert.ok((await renderSlideHtml(basePost([cover]), 0)).includes('helios-cover--split'));
+  assert.ok((await renderSlideHtml(basePost([cover]), 0)).includes('helios-v2-cover-split'));
   const scene: SlideCopy = { ...cover, photoKind: 'scene' };
   const sceneHtml = await renderSlideHtml(basePost([scene]), 0);
-  assert.ok(sceneHtml.includes('helios-cover--bleed') && sceneHtml.includes('data-scrim="gradient"'), 'scene full bleed, on a scrim');
+  assert.ok(sceneHtml.includes('helios-v2-cover-bleed') && sceneHtml.includes('data-scrim="gradient"'), 'scene full bleed, on a scrim');
 });
 
 test('M8a rule 3 in rotation: a subject photo is never rotated to full bleed', () => {

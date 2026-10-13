@@ -4,6 +4,7 @@ import { SlideTemplate, type SlideCanvas } from '@/lib/social/render/SlideTempla
 import type { Post, SlideCopy, SpanRun } from '@/lib/social/render/types';
 
 import '../preview.css';
+import '@/lib/social/render/drafts/index.css';
 
 const CANVASES: SlideCanvas[] = ['green', 'orange', 'white'];
 

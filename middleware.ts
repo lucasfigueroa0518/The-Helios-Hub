@@ -28,6 +28,8 @@ function isPublicPath(pathname: string): boolean {
   // Private reel review. The token in the path is the gate. No Auth.js session.
   if (pathname.startsWith('/watch/')) return true;
   if (pathname.startsWith('/api/watch/')) return true;
+  // Local carousel template review (same as /social/render: no Auth.js session).
+  if (pathname === '/api/social/template-reviews') return true;
   return false;
 }
 
