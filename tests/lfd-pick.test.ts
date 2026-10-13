@@ -27,12 +27,21 @@ function jevStub(o: { major?: Record<string, number>; same?: (a: string, b: stri
 }
 
 test('judged pool: carousel tops, reels top 10 per night plus blockbusters, then feed, capped at 60', () => {
-  const reels = Array.from({ length: 15 }, (_, i) => cand({ headline: `R${i}`, firstSeen: '2026-10-12', blockbuster: i === 14 ? 1 : 0 }));
+  const reels = Array.from({ length: 15 }, (_, i) => cand({ headline: `R${i}`, firstSeen: '2026-10-12', net: i === 14 ? 0.01 : 0.5, blockbuster: i === 14 ? 1 : 0 }));
   const pool = judgedPool([cand({ headline: 'C0', origin: 'carousel' })], reels, [cand({ headline: 'F0', origin: 'feed' })]);
   assert.equal(pool[0]!.headline, 'C0');
   assert.ok(pool.some((c) => c.headline === 'R14'), 'a blockbuster is always judged');
-  assert.equal(pool.filter((c) => c.origin === 'reels').length, 10, 'top 10 per night');
+  assert.equal(pool.filter((c) => c.origin === 'reels').length, 11, 'top 10 by net per night plus the blockbuster');
   assert.equal(pool.at(-1)!.headline, 'F0');
+});
+
+test('judged pool: the 60 cap never cuts the fresh feed', () => {
+  const carousel = Array.from({ length: 40 }, (_, i) => cand({ headline: `C${i}`, origin: 'carousel' }));
+  const reels = Array.from({ length: 40 }, (_, i) => cand({ headline: `R${i}`, firstSeen: `2026-10-${String(1 + (i % 4)).padStart(2, '0')}` }));
+  const feed = Array.from({ length: 3 }, (_, i) => cand({ headline: `F${i}`, origin: 'feed' }));
+  const pool = judgedPool(carousel, reels, feed);
+  assert.ok(pool.length <= 60);
+  for (const f of feed) assert.ok(pool.some((c) => c.key === f.key), f.headline);
 });
 
 test('scoreMajor sets the major-news@2 score on each candidate', async () => {
@@ -86,6 +95,19 @@ test('selector: replacing a dropped major takes the next major, then falls to th
   await sel2.fill(); // Big One + Niche 0..4
   sel2.drop(majors[0]!.key);
   assert.equal((await sel2.replace('major'))!.headline, 'Niche 5', 'no major left, so the rundown fills the slot');
+});
+
+test('selector: a major skipped for the company cap is reconsidered after a drop frees the company', async () => {
+  const majors = [
+    cand({ headline: 'OpenAI Ships A', major: 0.9 }),
+    cand({ headline: 'OpenAI Ships B', major: 0.8 }),
+    cand({ headline: 'OpenAI Ships C', major: 0.7 }),
+  ];
+  const sel = new Selector(majors, [], [], jevStub({}));
+  const picks = await sel.fill();
+  assert.deepEqual(picks.map((p) => p.headline), ['OpenAI Ships A', 'OpenAI Ships B']);
+  sel.drop(majors[0]!.key);
+  assert.equal((await sel.replace('major'))!.headline, 'OpenAI Ships C');
 });
 
 test('slideOrder: majors by score first, then rundown in rank order', () => {

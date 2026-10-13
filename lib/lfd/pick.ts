@@ -28,23 +28,30 @@ export function rundownOrder(a: LfdCandidate, b: LfdCandidate): number {
   return b.blockbuster - a.blockbuster || (b.net ?? -1) - (a.net ?? -1);
 }
 
-/** Lane 1 candidates (spec §3.2): carousel tops, reels top 10 per night plus every blockbuster, then feed; about 60. */
+/** Lane 1 candidates (spec §3.2): carousel tops, reels top 10 by net per night plus every blockbuster, then the fresh feed. About 60; the cap never cuts the feed. */
 export function judgedPool(carousel: LfdCandidate[], reels: LfdCandidate[], feed: LfdCandidate[]): LfdCandidate[] {
-  const byNight = new Map<string, LfdCandidate[]>();
-  for (const c of [...reels].sort(rundownOrder)) {
+  const byNet = (a: LfdCandidate, b: LfdCandidate) => (b.net ?? -1) - (a.net ?? -1);
+  const nights = new Map<string, LfdCandidate[]>();
+  for (const c of reels) {
     const night = c.firstSeen ?? '';
-    const list = byNight.get(night) ?? [];
-    if (list.length < REELS_PER_NIGHT || c.blockbuster > 0) list.push(c);
-    byNight.set(night, list);
+    nights.set(night, [...(nights.get(night) ?? []), c]);
+  }
+  const reelsPicked: LfdCandidate[] = [];
+  for (const list of nights.values()) {
+    const top = [...list].sort(byNet).slice(0, REELS_PER_NIGHT);
+    const extra = list.filter((c) => c.blockbuster > 0 && !top.includes(c));
+    reelsPicked.push(...top, ...extra);
   }
   const seen = new Set<string>();
-  const out: LfdCandidate[] = [];
-  for (const c of [...carousel, ...[...byNight.values()].flat(), ...feed]) {
-    if (seen.has(c.key)) continue;
-    seen.add(c.key);
-    out.push(c);
-  }
-  return out.slice(0, JUDGED_MAX);
+  const dedupe = (list: LfdCandidate[]) =>
+    list.filter((c) => {
+      if (seen.has(c.key)) return false;
+      seen.add(c.key);
+      return true;
+    });
+  const head = dedupe([...carousel, ...reelsPicked]);
+  const tail = dedupe(feed);
+  return [...head.slice(0, Math.max(0, JUDGED_MAX - tail.length)), ...tail];
 }
 
 /** Drop anything an earlier Last Few Days post used, by any of its source ids or its key. */
@@ -159,9 +166,13 @@ export class Selector {
     const queue = lane === 'major' ? this.majors : this.rundown;
     for (const c of queue) {
       if (this.tried.has(c.key)) continue;
-      this.tried.add(c.key);
-      if (this.picks.some((p) => p.key === c.key || p.refs.some((r) => c.refs.includes(r)))) continue;
+      if (this.picks.some((p) => p.key === c.key || p.refs.some((r) => c.refs.includes(r)))) {
+        this.tried.add(c.key);
+        continue;
+      }
+      // Skipped only for a full company: stay eligible, a drop may free the slot (spec §3.4).
       if (this.companyFull(c)) continue;
+      this.tried.add(c.key);
       if (await this.coveredLastTime(c)) continue;
       const pick: Pick = { ...c, lane };
       this.picks.push(pick);
