@@ -18,12 +18,38 @@ export const MAX_SETUPS = 2;
 export const WRITER_MODEL: StageModelConfig = { model: 'claude-sonnet-5-5', effort: 'high' };
 const SOURCE_CHARS = 9000;
 
+const isStringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === 'string');
+
+/** Shape problems for one story; a story with any shape problem skips the length checks. */
+function shapeProblems(s: Record<string, unknown>, label: string): string[] {
+  const out: string[] = [];
+  for (const field of ['key', 'setup', 'headline', 'highlight', 'body'] as const) {
+    if (typeof s[field] !== 'string') out.push(`story ${label}: ${field} is missing or the wrong type`);
+  }
+  if (!isStringArray(s.names)) out.push(`story ${label}: names is missing or the wrong type`);
+  const p = s.photo as Record<string, unknown> | null | undefined;
+  if (!p || typeof p !== 'object' || typeof p.kind !== 'string' || typeof p.query !== 'string' || !Array.isArray(p.subjects) || !Array.isArray(p.alts)) {
+    out.push(`story ${label}: photo is missing or the wrong type`);
+  }
+  return out;
+}
+
 export function checkSubmission(input: unknown, keys: string[]): StoryCopy[] {
-  const stories = (input as { stories?: StoryCopy[] })?.stories;
+  const stories = (input as { stories?: unknown })?.stories;
   if (!Array.isArray(stories)) throw new Error('stories is missing');
   const problems: string[] = [];
-  for (const key of keys) if (!stories.some((s) => s.key === key)) problems.push(`missing story ${key}`);
-  for (const s of stories) {
+  for (const key of keys) if (!stories.some((s) => (s as { key?: unknown } | null)?.key === key)) problems.push(`missing story ${key}`);
+  for (const raw of stories) {
+    if (!raw || typeof raw !== 'object') {
+      problems.push('a story is not an object');
+      continue;
+    }
+    const s = raw as StoryCopy;
+    const shape = shapeProblems(raw as Record<string, unknown>, String((raw as { key?: unknown }).key));
+    if (shape.length) {
+      problems.push(...shape);
+      continue;
+    }
     const headline = s.headline.replace(/^[–-]\s*/, '');
     if (headline.length > LIMITS.headline) problems.push(`story ${s.key}: headline is ${headline.length} characters, the most is ${LIMITS.headline}`);
     if (s.body.length > LIMITS.body) problems.push(`story ${s.key}: body is ${s.body.length} characters, the most is ${LIMITS.body}`);
@@ -31,7 +57,7 @@ export function checkSubmission(input: unknown, keys: string[]): StoryCopy[] {
     if (s.setup && !s.setup.trim().endsWith(':')) problems.push(`story ${s.key}: setup must end with ":"`);
   }
   if (problems.length) throw new Error(problems.join('\n'));
-  return stories.filter((s) => keys.includes(s.key));
+  return (stories as StoryCopy[]).filter((s) => keys.includes(s.key));
 }
 
 export function normalize(copies: StoryCopy[], rank: string[]): StoryCopy[] {
