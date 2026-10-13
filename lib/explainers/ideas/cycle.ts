@@ -1,6 +1,7 @@
 import type { ExplainersDb } from '@/lib/explainers/db';
 import { evaluateTopic, topicRef, trimPool, type Evaluation } from '@/lib/explainers/ideas/evaluate';
 import { ideaUsd, type IdeaModel } from '@/lib/explainers/ideas/generator';
+import { cycleRetryGate } from '@/lib/explainers/ideas/retry';
 import { RecordingExplainersJevRunner } from '@/lib/explainers/jev/runner';
 import {
   addTopics,
@@ -37,7 +38,7 @@ export type Allocation = {
 };
 
 export type IdeaCycleResult =
-  | { status: 'skipped'; reason: 'auto_render_off' | 'daily_spend_cap' | 'already_ran_today' }
+  | { status: 'skipped'; reason: 'auto_render_off' | 'daily_spend_cap' | 'already_ran_today' | 'retry_wait' | 'retry_exhausted' | 'render_already_requested' }
   | { status: 'skipped'; reason: 'quota_filled'; fill: DailyFill }
   | {
       status: 'ok';
@@ -96,6 +97,10 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
   ) {
     return { status: 'skipped', reason: 'daily_spend_cap' };
   }
+
+  // A failed night may run once more (bounded, delayed; see retry.ts). Failed rows stay as history.
+  const gate = await cycleRetryGate(db, day, deps.now);
+  if (!gate.run) return { status: 'skipped', reason: gate.reason };
 
   const { rows } = await db.query<{ id: string }>(
     `INSERT INTO explainers.idea_cycles (status, mode, ny_date)

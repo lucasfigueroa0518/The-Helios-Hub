@@ -72,6 +72,7 @@ async function main(): Promise<void> {
   const { nextRunAt } = await import('@/lib/instagram/clock');
   const { loadSettings } = await import('@/lib/explainers/settings');
   const { runIdeaCycle } = await import('@/lib/explainers/ideas/cycle');
+  const { nextCycleTry } = await import('@/lib/explainers/ideas/retry');
   const { anthropicIdeaModel } = await import('@/lib/explainers/ideas/generator');
   const { anthropic } = await import('@/lib/anthropic');
   const { liveJevTransport } = await import('@/lib/reels/jev/client');
@@ -132,6 +133,9 @@ async function main(): Promise<void> {
   };
 
   let lastCycleDay = '';
+  // A failed night may retry once (retry.ts): when, and how many tries the worker made today.
+  let cycleRetryAt = 0;
+  let cycleAttempts = { day: '', n: 0 };
   let lastInsights = 0;
   const nextSweep = () => nextRunAt(new Date(), EXPLAINERS_INSIGHTS_HOUR_NY, EXPLAINERS_INSIGHTS_MINUTE_NY);
   let sweepAt = nextSweep();
@@ -142,16 +146,33 @@ async function main(): Promise<void> {
       const now = new Date();
       const hourNy = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }).format(now));
       const today = nyDate(now);
-      if (settings.auto_render && hourNy >= IDEA_CYCLE_HOUR_NY && lastCycleDay !== today) {
+      if (settings.auto_render && hourNy >= IDEA_CYCLE_HOUR_NY && lastCycleDay !== today && Date.now() >= cycleRetryAt) {
         lastCycleDay = today;
-        const cycle = await runIdeaCycle({ db, ideaModel: anthropicIdeaModel(anthropic), jevTransport: liveJevTransport, log });
-        log('idea_cycle', {
-          status: cycle.status,
-          ...('reason' in cycle ? { reason: cycle.reason } : {}),
-          // Daily fill (D54): the day's quota, what people placed, what the night rendered or placed instead.
-          ...('fill' in cycle ? { fill: cycle.fill } : {}),
-          ...(cycle.status === 'ok' ? { renders: cycle.renders, allocated: cycle.allocated.map((a) => ({ topicId: a.topicId, jobId: a.jobId, scheduled: a.scheduled })) } : {}),
-        });
+        if (cycleAttempts.day !== today) cycleAttempts = { day: today, n: 0 };
+        cycleAttempts.n += 1;
+        let cycle: Awaited<ReturnType<typeof runIdeaCycle>> | null = null;
+        try {
+          cycle = await runIdeaCycle({ db, ideaModel: anthropicIdeaModel(anthropic), jevTransport: liveJevTransport, log });
+        } catch (error) {
+          log('idea_cycle_threw', { error: errorText(error), attempt: cycleAttempts.n });
+        }
+        // A failed or thrown night tries again no sooner than 10 minutes later, at most twice a day.
+        const retryAt = nextCycleTry(cycle ?? 'threw', cycleAttempts.n, Date.now());
+        if (retryAt !== null) {
+          lastCycleDay = '';
+          cycleRetryAt = retryAt;
+          log('idea_cycle_retry_scheduled', { at: new Date(retryAt).toISOString(), attempt: cycleAttempts.n });
+        }
+        if (cycle) {
+          log('idea_cycle', {
+            status: cycle.status,
+            ...('reason' in cycle ? { reason: cycle.reason } : {}),
+            ...('error' in cycle ? { error: cycle.error } : {}),
+            // Daily fill (D54): the day's quota, what people placed, what the night rendered or placed instead.
+            ...('fill' in cycle ? { fill: cycle.fill } : {}),
+            ...(cycle.status === 'ok' ? { renders: cycle.renders, allocated: cycle.allocated.map((a) => ({ topicId: a.topicId, jobId: a.jobId, scheduled: a.scheduled })) } : {}),
+          });
+        }
       }
       await renderNext();
       await publishStep().catch((error) => log('publish_failed', { error: errorText(error) }));
