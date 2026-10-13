@@ -30,7 +30,7 @@ export function buildPost(ready: Ready[], now: Date): RenderPost {
     position: 0,
     layoutVariant: 'lfd_cover',
     altText: `${LFD_HOOK_LINES.join(' ')} ${LFD_KICKER}.`,
-    lfdCover: { photos: ready.map((r) => ({ url: r.photo.src, ...(r.photo.focus ? { focus: r.photo.focus } : {}) })) },
+    lfdCover: { photos: ready.map((r) => ({ url: r.photo.src, kind: r.photo.kind, ...(r.photo.focus ? { focus: r.photo.focus } : {}) })) },
   };
   const stories: SlideCopy[] = ready.map((r, i) => ({
     position: i + 1,
@@ -39,6 +39,8 @@ export function buildPost(ready: Ready[], now: Date): RenderPost {
     lfdStory: { setup: r.copy.setup, headline: r.copy.headline, highlight: r.copy.highlight, names: r.copy.names, body: r.copy.body },
     photoUrl: r.photo.src,
     photoCredit: r.photo.credit,
+    // A logo is shown whole on a plate, never cropped like a photo (photo spec §4).
+    ...(r.photo.kind === 'logo' ? { photoKind: 'logo' as const } : {}),
     ...(r.photo.focus ? { photoFocus: { x: r.photo.focus.x, y: r.photo.focus.y } } : {}),
   }));
   const follow: SlideCopy = { position: ready.length + 1, layoutVariant: 'follow', altText: FOLLOW_LINE, storySpecificLine: FOLLOW_LINE };

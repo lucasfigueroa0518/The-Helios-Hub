@@ -47,3 +47,22 @@ test('a headline with one extremely long word is reported, not cut off', async (
   const res = await checkRenderFit(buildPost([wide, ready(1), ready(2), ready(3), ready(4)], new Date()));
   assert.ok(res.problems.some((p) => /slide 2 text fit/.test(p)) || res.violations.length > 0, res.problems.join('\n'));
 });
+
+const logo = `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300"><rect width="1200" height="300" fill="#fff"/><text x="40" y="200" font-size="160" fill="#c00">ACME</text></svg>')}`;
+
+test('a logo story renders whole on its plate with no new problems', async () => {
+  const items = [0, 1, 2, 3, 4].map((i) => ready(i));
+  const scene = await checkRenderFit(buildPost(items, new Date()));
+  items[0]!.photo = { src: logo, credit: 'Acme', kind: 'logo' };
+  const withLogo = await checkRenderFit(buildPost(items, new Date()));
+  assert.deepEqual(withLogo.violations, []);
+  assert.deepEqual(withLogo.problems, scene.problems);
+});
+
+test('short posts (1 to 3 stories) render their cover mosaic with no problems', async () => {
+  for (const count of [1, 2, 3]) {
+    const res = await checkRenderFit(buildPost(Array.from({ length: count }, (_, i) => ready(i)), new Date()));
+    assert.deepEqual(res.violations, [], `count ${count}`);
+    assert.deepEqual(res.problems.filter((p) => /text fit|image failed/.test(p)), [], `count ${count}`);
+  }
+});

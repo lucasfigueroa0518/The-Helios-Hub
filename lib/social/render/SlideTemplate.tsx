@@ -524,6 +524,15 @@ function LfdMarked({ text, highlight, names }: { text: string; highlight: string
   );
 }
 
+/** A logo, whole, on a light plate (mirrors RegionPhoto's logo treatment): never cropped like a photo. */
+function LfdLogo({ src }: { src: string }) {
+  return (
+    <div className="lfd-logo-plate">
+      <img className="lfd-logo" src={src} alt="" data-photo-kind="logo" />
+    </div>
+  );
+}
+
 function LfdCoverSlide({ slide }: { slide: SlideCopy }) {
   const photos = (slide.lfdCover?.photos ?? []).slice(0, 6);
   return (
@@ -531,7 +540,7 @@ function LfdCoverSlide({ slide }: { slide: SlideCopy }) {
       <div className="lfd-mosaic" data-count={photos.length}>
         {photos.map((p, i) => (
           <div className="lfd-tile" key={i}>
-            <img className="lfd-img" src={p.url} alt="" style={p.focus ? { objectPosition: `${Math.round(p.focus.x * 100)}% ${Math.round(p.focus.y * 100)}%` } : undefined} />
+            {p.kind === 'logo' ? <LfdLogo src={p.url} /> : <img className="lfd-img" src={p.url} alt="" style={p.focus ? { objectPosition: `${Math.round(p.focus.x * 100)}% ${Math.round(p.focus.y * 100)}%` } : undefined} />}
           </div>
         ))}
       </div>
@@ -558,7 +567,7 @@ function LfdStorySlide({ slide }: { slide: SlideCopy }) {
           <Fit as="p" className="lfd-body" min={LFD_MIN.body}><LfdMarked text={s.body} highlight="" names={s.names} /></Fit>
         </div>
         <div className="lfd-media">
-          {slide.photoUrl && <img className="lfd-img" src={slide.photoUrl} alt="" style={focusStyle(slide)} />}
+          {slide.photoUrl && (slide.photoKind === 'logo' ? <LfdLogo src={slide.photoUrl} /> : <img className="lfd-img" src={slide.photoUrl} alt="" style={focusStyle(slide)} />)}
         </div>
       </div>
       <LfdArrow />

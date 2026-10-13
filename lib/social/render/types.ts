@@ -127,7 +127,7 @@ export type SlideCopy = {
   layoutVariant: LayoutVariant;
 
   /** Last Few Days cover (spec §6): the story photos for the mosaic, rank order; story 1 takes the large tile. */
-  lfdCover?: { photos: Array<{ url: string; focus?: { x: number; y: number } }> };
+  lfdCover?: { photos: Array<{ url: string; kind?: 'person' | 'scene' | 'logo'; focus?: { x: number; y: number } }> };
   /** Last Few Days story slide (spec §6). `headline` has no dash; the slide adds "– ". */
   lfdStory?: { setup: string; headline: string; highlight: string; names: string[]; body: string };
 

@@ -53,3 +53,22 @@ test('an over-long caption drops lowest-ranked headlines and keeps hook, follow 
   assert.match(caption, /k0/);
   assert.doesNotMatch(caption, /k5/);
 });
+
+test('buildPost passes the photo kind through: logos render as logos on the story slide and in the cover mosaic', () => {
+  const items = [0, 1, 2, 3, 4].map(ready);
+  items[1]!.photo = { src: 'https://img/logo.png', credit: 'Logo', kind: 'logo' };
+  const post = buildPost(items, new Date('2026-10-13T07:00:00Z'));
+  assert.equal(post.slides[2]!.photoKind, 'logo');
+  assert.equal(post.slides[1]!.photoKind, undefined, 'a scene photo stays the default');
+  assert.deepEqual(post.slides[0]!.lfdCover!.photos.map((p) => p.kind), ['scene', 'logo', 'scene', 'scene', 'scene']);
+});
+
+test('the cover mosaic has a layout for every story count from 1 to 6', async () => {
+  const fs = await import('node:fs/promises');
+  const css = await fs.readFile('app/social/render/preview/preview.css', 'utf8');
+  for (let count = 1; count <= 6; count++) {
+    for (let tile = 1; tile <= count; tile++) {
+      assert.match(css, new RegExp(`\\.lfd-mosaic\\[data-count="${count}"\\] \\.lfd-tile:nth-child\\(${tile}\\)`), `count ${count} tile ${tile}`);
+    }
+  }
+});

@@ -1071,7 +1071,14 @@
 .lfd-cover { position: absolute; inset: 0; display: flex; flex-direction: column; }
 .lfd-cover .lfd-swipe { width: 64px; height: 64px; }
 .lfd-mosaic { flex: none; height: 742px; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: repeat(10, minmax(0, 1fr)); gap: 6px; }
-.lfd-tile { overflow: hidden; background: #1A1A1A; }
+.lfd-tile { position: relative; overflow: hidden; background: #1A1A1A; }
+/* Short posts (fewer than 4 stories): simple mosaics so the cover never has empty grid cells. */
+.lfd-mosaic[data-count="1"] .lfd-tile:nth-child(1) { grid-column: 1 / 13; grid-row: 1 / 11; }
+.lfd-mosaic[data-count="2"] .lfd-tile:nth-child(1) { grid-column: 1 / 8;  grid-row: 1 / 11; }
+.lfd-mosaic[data-count="2"] .lfd-tile:nth-child(2) { grid-column: 8 / 13; grid-row: 1 / 11; }
+.lfd-mosaic[data-count="3"] .lfd-tile:nth-child(1) { grid-column: 1 / 8;  grid-row: 1 / 11; }
+.lfd-mosaic[data-count="3"] .lfd-tile:nth-child(2) { grid-column: 8 / 13; grid-row: 1 / 6; }
+.lfd-mosaic[data-count="3"] .lfd-tile:nth-child(3) { grid-column: 8 / 13; grid-row: 6 / 11; }
 .lfd-mosaic[data-count="4"] .lfd-tile:nth-child(1) { grid-column: 1 / 8;  grid-row: 1 / 11; }
 .lfd-mosaic[data-count="4"] .lfd-tile:nth-child(2) { grid-column: 8 / 13; grid-row: 1 / 7; }
 .lfd-mosaic[data-count="4"] .lfd-tile:nth-child(3) { grid-column: 8 / 10; grid-row: 7 / 11; }
@@ -1106,4 +1113,8 @@
 .lfd-clip { display: block; overflow-x: visible; overflow-y: clip; } /* Pragmatica's tall content box overflows the last line by ~4px; fitText reads that as scrollHeight, so clip it (ink stays inside the 50px line) */
 .lfd-body { margin: 20px 0 0; font-weight: 400; font-size: 31px; line-height: 42px; max-height: 126px; color: var(--lfd-muted); overflow-wrap: normal; word-break: normal; }
 .lfd-media { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; background: #161616; border-radius: 24px; }
+/* A logo (photo spec §4, mirrors .helios-logo-region): whole on a light plate, never cropped. In the story media box and the cover tiles. */
+.lfd-logo-plate { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 48px; box-sizing: border-box; background: #F4F2ED; }
+.lfd-tile .lfd-logo-plate { padding: 28px; }
+.lfd-logo { display: block; width: 100%; height: 100%; object-fit: contain; object-position: 50% 50%; }
 .lfd-media::after { content: ''; position: absolute; inset: 0; border-radius: 24px; border: 1px solid rgba(255,255,255,0.10); pointer-events: none; }
