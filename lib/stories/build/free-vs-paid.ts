@@ -39,22 +39,72 @@ async function devToolAllowed(deps: BuildDeps): Promise<boolean> {
   return !rows.some((r) => r.dev);
 }
 
+/**
+ * What a skipped Free vs. Paid build leaves behind (payload.fvpSkip on the set,
+ * plus one log line): a skip saves no candidate rows, so without this the cause
+ * is unrecoverable. Recording only; it never changes what the build decides.
+ */
+export type FvpSkipRecord = {
+  gate: 'no-leads' | 'model-proposed-none' | 'all-proposals-already-shown' | 'no-pair-cleared';
+  leadsOffered: number;
+  leadsByOrigin: Record<string, number>;
+  alreadyShownKeys: number;
+  proposed: Array<{ pair: string; devTool: boolean }>;
+  droppedAsShown: string[];
+  /** Pairs past the first 3, never scored. */
+  notScored: string[];
+  bar: number;
+  considered: Array<{ pair: string; score: number | null; answers: Record<string, number> | null; failedGate: string | null }>;
+};
+
+async function recordFvpSkip(deps: BuildDeps, rec: FvpSkipRecord): Promise<void> {
+  try {
+    console.log(`fvp-skip ${deps.setId} ${JSON.stringify(rec)}`);
+  } catch {
+    /* logging is best effort */
+  }
+  try {
+    await deps.db.query(`UPDATE stories.sets SET payload = payload || $2::jsonb WHERE id = $1`, [deps.setId, JSON.stringify({ fvpSkip: rec })]);
+  } catch {
+    /* recording is best effort: a failed write must not turn a skip into a failure */
+  }
+}
+
 export async function buildFreeVsPaid(deps: BuildDeps, leads?: () => Promise<ToolLead[]>): Promise<BuildResult> {
   const log: string[] = [];
   const candidates: NewCandidate[] = [];
   const shown = await recentKeys(deps.db, 'free_vs_paid', 90, deps.now);
   const pooled = deps.pool;
   const found = await (leads ?? (pooled ? async () => pooled.leads : () => freeToolLeads(deps.sourceDb, deps.nyDate)))().catch(() => []);
-  if (!found.length) return { ok: false, skip: 'no free-tool leads', candidates };
+  const rec: FvpSkipRecord = {
+    gate: 'no-leads',
+    leadsOffered: found.length,
+    leadsByOrigin: found.reduce<Record<string, number>>((m, l) => ({ ...m, [l.origin]: (m[l.origin] ?? 0) + 1 }), {}),
+    alreadyShownKeys: shown.size,
+    proposed: [],
+    droppedAsShown: [],
+    notScored: [],
+    bar: FVP_BAR,
+    considered: [],
+  };
+  if (!found.length) {
+    await recordFvpSkip(deps, rec);
+    return { ok: false, skip: 'no free-tool leads', candidates };
+  }
 
   const call = <T>(prompt: { id: string; system: string; tool: { name: string; description: string; input_schema: Record<string, unknown> } }, user: string, extra: { webSearch?: { maxUses: number }; webFetch?: { maxUses: number }; effort?: 'low' | 'medium' } = {}) =>
     writeStructured<T>({ create: deps.write, db: deps.db, setId: deps.setId, component: prompt.id, model: deps.settings.models.copy, system: prompt.system, tool: prompt.tool, user, ...extra });
 
   const proposed = (await call<FvpPairOut>(FVP_PAIR, material({ already_shown: [...shown], leads: found.slice(0, 40).map((l) => ({ name: l.name, url: l.url, description: l.description.slice(0, 400) })) }), { webSearch: { maxUses: 5 } })).value.pairs;
+  rec.proposed = proposed.map((p) => ({ pair: pairKey(p), devTool: !!p.dev_tool }));
+  rec.notScored = proposed.slice(3).map(pairKey);
   const devOk = await devToolAllowed(deps);
   const scored: Array<FvpPair & { score: number; answers: Record<string, number> }> = [];
   for (const p of proposed.slice(0, 3)) {
-    if (shown.has(pairKey(p))) continue;
+    if (shown.has(pairKey(p))) {
+      rec.droppedAsShown.push(pairKey(p));
+      continue;
+    }
     const res = await deps.jev.ask({ component: 'fvp-score', set: FVP_PAIR_SCORE, setId: deps.setId, state: { paid_tool: p.paid_tool, paid_price: `${p.paid_price} ${p.price_period}`, free_tool: p.free_tool, what_it_does: { untrusted_content: p.what_it_does }, how_to_get: p.how_to_get, platforms: p.platforms } });
     scored.push({ ...p, score: pairScore(res.answers as Record<string, { noul: number }>), answers: Object.fromEntries(Object.entries(res.answers).map(([k, v]) => [k, (v as { noul: number }).noul])) });
   }
@@ -72,7 +122,12 @@ export async function buildFreeVsPaid(deps: BuildDeps, leads?: () => Promise<Too
     } else reason = 'a better pair was chosen';
     candidates.push({ origin: 'generated', ref: pairKey(p), payload: { ...p }, jev: p.answers, score: p.score, chosen: chosen === p, reason: chosen === p ? null : reason });
   }
-  if (!chosen) return { ok: false, skip: 'no pair cleared the bar and its checks', candidates };
+  if (!chosen) {
+    rec.gate = !proposed.length ? 'model-proposed-none' : !scored.length ? 'all-proposals-already-shown' : 'no-pair-cleared';
+    rec.considered = candidates.map((c) => ({ pair: c.ref, score: c.score ?? null, answers: (c.jev as Record<string, number> | null) ?? null, failedGate: c.reason ?? null }));
+    await recordFvpSkip(deps, rec);
+    return { ok: false, skip: 'no pair cleared the bar and its checks', candidates };
+  }
 
   const tease = (await call<FvpCopyOut>(FVP_COPY, material({ paid_tool: chosen.paid_tool, price: `${chosen.paid_price} ${chosen.price_period}`, free_tool_kind: chosen.what_it_does }), { effort: 'low' })).value.tease.trim();
   const logo = (name: string, url: string) => findPhoto(deps.photos, { kind: 'logo', query: name, subjects: [{ name, type: 'organization' }], storyDate: null, sourceUrls: [url], exclude: new Set() }, log);
