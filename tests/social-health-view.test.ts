@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { briefFor } from '@/lib/social-hub/health/brief';
-import { healthModel } from '@/lib/social-hub/health/view';
+import { healthModel, ordinal } from '@/lib/social-hub/health/view';
 
 import { previewHealth } from './fixtures/social-hub/health-fixture';
 
@@ -56,4 +56,26 @@ test('brief carries type, stage, reason, raw error, nights and files', () => {
   const m = healthModel({ ...previewHealth(), windowNights: 14 });
   const brief = briefFor(m.problems.find((p) => p.key === 'carousels|writer|too_long')!);
   for (const s of ['Carousels', 'Writer', 'too_long', 'slide 3 over 40 words', '2026-10-03', 'lib/social/']) assert.ok(brief.includes(s), s);
+});
+
+test('date formats: eyebrow has no year; card titles are short', () => {
+  const m = healthModel({ ...previewHealth(), windowNights: 14 });
+  assert.equal(m.eyebrow, 'Morning report · Thursday, October 8 · 7:30 AM');
+  assert.equal(m.rows[2]!.blocks.at(-1)!.card.title, 'Carousels · Thu Oct 8');
+  assert.equal(m.rows[4]!.blocks.at(-1)!.card.title, 'Publisher · Thu Oct 8');
+});
+
+test('publisher-only failure names the publisher', () => {
+  const h = previewHealth();
+  const stored = h.stored.slice(0, -1).map((r, i, a) => (i === a.length - 1 ? { ...r, verdict: { ...r.verdict, publisher: 'failed' as const } } : r));
+  const m = healthModel({ ...h, stored, now: new Date('2026-10-07T19:00:00Z'), windowNights: 14 });
+  assert.equal(m.headline.emphasis, 'The publisher stopped.');
+  assert.equal(m.lede, "Posts can't go out until the publisher is running again.");
+});
+
+test('ordinals past seventh are correct English', () => {
+  assert.equal(ordinal(21), '21st');
+  assert.equal(ordinal(12), '12th');
+  assert.equal(ordinal(22), '22nd');
+  assert.equal(ordinal(3), 'third');
 });

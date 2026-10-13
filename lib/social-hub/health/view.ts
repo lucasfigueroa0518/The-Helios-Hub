@@ -3,7 +3,6 @@ import type { Readiness } from '@/lib/social-hub/health/readiness';
 import { REASON_LABEL, stageLabel } from '@/lib/social-hub/health/reasons';
 import { nightsEnding, reportNightFor } from '@/lib/social-hub/health/time';
 import type { NightReport, StoredReport, Tone, TypeVerdict } from '@/lib/social-hub/health/types';
-import { dayLabel } from '@/lib/social-hub/time';
 import type { Vertical } from '@/lib/social-hub/types';
 import { VERTICALS, verticalInfo } from '@/lib/social-hub/verticals';
 
@@ -20,7 +19,20 @@ export type HealthModel = {
 
 const WORD: Record<Tone, string> = { worked: 'Worked', short: 'Short', failed: 'Failed', none: "Didn't run" };
 const ORDINAL = ['', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh'];
-const ordinal = (n: number) => ORDINAL[n] ?? `${n}th`;
+export function ordinal(n: number): string {
+  if (ORDINAL[n]) return ORDINAL[n]!;
+  const mod100 = n % 100;
+  const suffix = mod100 >= 11 && mod100 <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th';
+  return `${n}${suffix}`;
+}
+const noonUtc = (night: string) => new Date(`${night}T12:00:00Z`);
+/** "Thursday, October 8" (no year). */
+export const eyebrowDay = (night: string) => noonUtc(night).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
+/** "Thu Oct 8" (no comma, no year). */
+export const cardDay = (night: string) => {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).formatToParts(noonUtc(night)).map((x) => [x.type, x.value]));
+  return `${parts.weekday} ${parts.month} ${parts.day}`;
+};
 const money = (n: number) => `$${n.toFixed(2)}`;
 
 function cleanNight(r: StoredReport | undefined): boolean {
@@ -30,7 +42,7 @@ function cleanNight(r: StoredReport | undefined): boolean {
 }
 
 function card(v: Vertical, night: string, t: TypeVerdict | undefined, rep: NightReport | undefined): HealthBlock['card'] {
-  const title = `${verticalInfo(v).label} · ${dayLabel(night)}`;
+  const title = `${verticalInfo(v).label} · ${cardDay(night)}`;
   if (!t || !rep || t.tone === 'none') return { title, status: WORD.none, lines: [], why: rep?.reportError ? "Couldn't read this type's data" : 'No run that night' };
   return {
     title,
@@ -66,7 +78,7 @@ export function healthModel(input: { stored: StoredReport[]; live: StoredReport 
   });
   const pubBlocks = window.map((night): HealthBlock => {
     const tone = byNight.get(night)?.verdict.publisher ?? 'none';
-    return { night, tone, live: false, card: { title: `Publisher · ${dayLabel(night)}`, status: tone === 'none' ? 'No heartbeat recorded' : tone === 'worked' ? 'Alive' : 'Stopped', lines: [], why: null } };
+    return { night, tone, live: false, card: { title: `Publisher · ${cardDay(night)}`, status: tone === 'none' ? 'No heartbeat recorded' : tone === 'worked' ? 'Alive' : 'Stopped', lines: [], why: null } };
   });
   const pubStatus = pubBlocks.at(-1)!.tone;
   rows.push({ id: 'publisher', label: 'Publisher', colorVar: null, blocks: pubBlocks, status: pubStatus, statusWord: pubStatus === 'failed' ? 'Stopped' : pubStatus === 'worked' ? 'Alive' : 'Unknown', sub: '' });
@@ -82,11 +94,13 @@ export function healthModel(input: { stored: StoredReport[]; live: StoredReport 
     ? { lead: 'No morning report yet.', emphasis: null, rest: null }
     : clean
       ? { lead: 'Clean night.', emphasis: null, rest: `All ${latest!.verdict.total} worked.` }
-      : { lead: `Last night, ${latest!.verdict.worked} of ${latest!.verdict.total} worked.`, emphasis: labels.length ? `${labels.join(' and ')} didn't.` : null, rest: null };
+      : { lead: `Last night, ${latest!.verdict.worked} of ${latest!.verdict.total} worked.`, emphasis: labels.length ? `${labels.join(' and ')} didn't.` : latest!.verdict.publisher === 'failed' ? 'The publisher stopped.' : null, rest: null };
 
   let lede = empty ? 'The first report is written at 7:30 AM.' : '';
   if (!empty && clean) lede = `All ${latest!.verdict.total} types made what they needed and every post went out.`;
-  if (!empty && !clean) {
+  if (!empty && !clean && !failed.length && !latest!.verdict.types.some((t) => t.tone === 'short') && latest!.verdict.publisher === 'failed') {
+    lede = "Posts can't go out until the publisher is running again.";
+  } else if (!empty && !clean) {
     const first = failed[0] ?? latest!.verdict.types.find((t) => t.tone === 'short');
     const rep = first && latest!.reports.find((r) => r.vertical === first.vertical);
     const lead = rep?.failures.find((f) => f.severity === 'failed') ?? rep?.failures[0];
@@ -108,7 +122,7 @@ export function healthModel(input: { stored: StoredReport[]; live: StoredReport 
   if (monthClean.nights) chips.push({ id: 'month', text: `Clean nights this month ${monthClean.clean} of ${monthClean.nights}` });
 
   return {
-    reportNight, eyebrow: `Morning report · ${dayLabel(reportNight)} · 7:30 AM`, clean, headline, lede, chips, monthClean,
+    reportNight, eyebrow: `Morning report · ${eyebrowDay(reportNight)} · 7:30 AM`, clean, headline, lede, chips, monthClean,
     rows, problems, fixed, readiness: input.readiness, windowNights: input.windowNights, empty,
   };
 }
