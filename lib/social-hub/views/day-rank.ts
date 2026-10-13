@@ -132,12 +132,24 @@ export function quotaCandidates(
     .filter((p) => p.vertical === vertical && p.nyDate === today && HOLDS.has(p.status) && (p.status === 'published' || hasMedia(p)))
     .sort((a, b) => at(a).localeCompare(at(b)) || a.id.localeCompare(b.id))
     .slice(0, quota);
-  const ranking = dayRanking(data.ideas, vertical, data.adjustments ?? [], today).filter((r) => !locked.some((p) => ideaOwns(r.idea, p)));
-  const out: QuotaCandidate[] = locked.map((post) => {
-    const r = dayRanking(data.ideas, vertical, data.adjustments ?? [], today).find((x) => ideaOwns(x.idea, post));
-    return { vertical, idea: r?.idea ?? null, post, locked: true, rank: r?.rank ?? null, moved: r?.moved ?? null };
+  const full = dayRanking(data.ideas, vertical, data.adjustments ?? [], today);
+  // Explainers only (2026-10-13): the nightly cycle picks its own topic, not the page's top-ranked one (it rendered "What is a
+  // webhook?" while the page ranked "What is a database index?" first), so what it made today with no slot yet holds the day's
+  // place ahead of the ranking. Otherwise the page said "Not made yet" and Run now offered to render a second one. Reels,
+  // carousels and Stories keep the Oct 9 rule: the quota goes to the top of the ranking.
+  const madeToday = vertical === 'explainers'
+    ? data.posts
+        .filter((p) => p.vertical === vertical && p.status === 'ready' && hasMedia(p) && !locked.includes(p) && p.generatedAt != null && nyDateOf(new Date(p.generatedAt)) === today)
+        .sort((a, b) => (b.generatedAt ?? '').localeCompare(a.generatedAt ?? '') || a.id.localeCompare(b.id))
+        .slice(0, Math.max(0, quota - locked.length))
+    : [];
+  const held = [...locked, ...madeToday];
+  const ranking = full.filter((r) => !held.some((p) => ideaOwns(r.idea, p)));
+  const out: QuotaCandidate[] = held.map((post) => {
+    const r = full.find((x) => ideaOwns(x.idea, post));
+    return { vertical, idea: r?.idea ?? null, post, locked: locked.includes(post), rank: r?.rank ?? null, moved: r?.moved ?? null };
   });
-  for (const r of ranking.slice(0, quota - locked.length)) {
+  for (const r of ranking.slice(0, quota - held.length)) {
     out.push({ vertical, idea: r.idea, post: contentFor(r.idea, data.posts), locked: false, rank: r.rank, moved: r.moved });
   }
   // Fewer open ideas than the quota (a pool not refilled yet): the rest are open slots the next run fills.

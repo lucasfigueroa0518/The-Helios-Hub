@@ -114,3 +114,59 @@ test('a rank move must name a known type, a kind, and an idea of that type', () 
   // Google News story ids are 500-character URLs.
   assert.ok(parseRankMove({ vertical: 'carousels', ideaId: `carousels:story:https://news.google.com/rss/articles/${'A'.repeat(480)}`, kind: 'promote' }));
 });
+
+// ── Explainers: what the night made today holds the day's place (2026-10-13) ──
+// The nightly cycle picks its own topic, not the page's top-ranked one. On Oct 13 it rendered
+// "What is a webhook?" while the page ranked "What is a database index?" first, so the Content
+// page said "Not made yet" and Run now offered to render (and pay for) a second explainer.
+
+const exIdea = (id: string, title: string, score: number, over: Partial<HubIdea> = {}): HubIdea => ({
+  id: `explainers:topic:${id}`, vertical: 'explainers', title, score, scoreLabel: 'Score', state: 'idea_only',
+  hasContent: false, versionCount: 0, generatedAt: null, createdAt: null, detail: null, ...over,
+});
+const EX_IDEAS = [exIdea('t1', 'What is a database index?', 5), exIdea('t2', 'What is a webhook?', 4, { state: 'content_ready', hasContent: true })];
+const exPost = (topic: string, over: Partial<HubPost> = {}): HubPost => ({
+  ...reelPost(1),
+  id: `explainers:job-${topic}`, vertical: 'explainers', format: 'reel', status: 'ready', nyDate: null, slot: null, publishAt: null,
+  media: { kind: 'video', src: 'v.mp4' }, idea: { id: topic, label: topic }, generatedAt: '2026-10-09T06:14:00Z', refs: { jobId: topic },
+  ...over,
+});
+const exQuotas = { reels: 2, carousels: 1, explainers: 1 };
+
+test('explainers: a render the night made today, for a topic the page ranks lower, fills today\'s slot', () => {
+  const c = quotaCandidates({ posts: [exPost('t2')], ideas: EX_IDEAS, dayQuotas: exQuotas }, 'explainers', NOW);
+  assert.equal(c.length, 1);
+  assert.equal(c[0]!.post?.id, 'explainers:job-t2');
+  assert.equal(c[0]!.idea?.title, 'What is a webhook?');
+  assert.equal(c[0]!.locked, false);
+});
+
+test('explainers: Run now does not render again when the night already made today\'s explainer', () => {
+  const day = typeDay(quotaCandidates({ posts: [exPost('t2')], ideas: EX_IDEAS, dayQuotas: exQuotas }, 'explainers', NOW), 1);
+  assert.equal(day.held, 1);
+  assert.deepEqual(day.missing, []);
+});
+
+test('explainers: yesterday\'s render, a rejected one and one with nothing to show do not hold today', () => {
+  for (const post of [
+    exPost('t2', { generatedAt: '2026-10-08T06:14:00Z' }),
+    exPost('t2', { status: 'cancelled' }),
+    exPost('t2', { media: { kind: 'none', note: 'x' } as HubPost['media'] }),
+  ]) {
+    const c = quotaCandidates({ posts: [post], ideas: EX_IDEAS, dayQuotas: exQuotas }, 'explainers', NOW);
+    assert.equal(c[0]!.post, null);
+    assert.equal(c[0]!.idea?.title, 'What is a database index?', 'the top-ranked idea fills it as before');
+  }
+});
+
+test('explainers: a slot already scheduled today still comes first', () => {
+  const scheduled = exPost('t1', { status: 'scheduled', publishAt: '2026-10-09T18:00:00Z', nyDate: TODAY });
+  const c = quotaCandidates({ posts: [exPost('t2'), scheduled], ideas: EX_IDEAS, dayQuotas: exQuotas }, 'explainers', NOW);
+  assert.deepEqual(c.map((x) => [x.post?.id, x.locked]), [['explainers:job-t1', true]], 'quota 1: the scheduled one holds it');
+});
+
+test('only explainers get this: a reel made today for a lower-ranked idea is still not a candidate (the Oct 9 rule)', () => {
+  const data = { posts: [reelPost(4)], ideas: IDEAS, dayQuotas: { reels: 1, carousels: 1, explainers: 1 } };
+  const c = quotaCandidates(data, 'reels', NOW);
+  assert.deepEqual(c.map((x) => [x.idea?.title, Boolean(x.post)]), [['Idea 1', false]]);
+});
