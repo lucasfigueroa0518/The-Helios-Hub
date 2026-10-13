@@ -46,8 +46,9 @@ function VideoPreview({ post, src, poster, className }: { post: HubPost; src: st
     <div
       className={`${className} sh-cardmedia`}
       style={typeStyle(post.vertical)}
-      onMouseEnter={play}
-      onMouseLeave={stop}
+      // Touch browsers emulate mouseenter before click; ignore hover there so only the tap handler controls playback.
+      onMouseEnter={() => { if (!touchOnly()) play(); }}
+      onMouseLeave={() => { if (!touchOnly()) stop(); }}
       onClickCapture={(e) => {
         // Touch: a tap plays or pauses instead of opening the post. Next's Link skips a prevented click.
         if (!touchOnly() || (e.target as HTMLElement).closest('button')) return;
