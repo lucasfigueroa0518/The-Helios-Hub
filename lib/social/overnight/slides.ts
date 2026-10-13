@@ -15,7 +15,7 @@ import { CAROUSEL_MAX_ITEMS } from './config';
 export async function storeSlideJpegs(
   slug: string,
   render: RenderPost,
-  deps: { fitCheck: FitCheck; upload: (objectPath: string, body: Buffer) => Promise<void> },
+  deps: { fitCheck: FitCheck; upload: (objectPath: string, body: Buffer) => Promise<void>; prefix?: string },
 ): Promise<string[]> {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'social-slides-'));
   try {
@@ -27,7 +27,7 @@ export async function storeSlideJpegs(
     const objects: string[] = [];
     for (const [i, file] of pngs.entries()) {
       const jpeg = await sharp(path.join(dir, file)).flatten({ background: '#000000' }).jpeg({ quality: 92, mozjpeg: true }).toBuffer();
-      const objectPath = `posts/${slug}/slide-${String(i + 1).padStart(2, '0')}.jpg`;
+      const objectPath = `${deps.prefix ?? 'posts'}/${slug}/slide-${String(i + 1).padStart(2, '0')}.jpg`;
       await deps.upload(objectPath, jpeg);
       objects.push(objectPath);
     }
