@@ -52,13 +52,13 @@ function windowStartIso(w: LfdWindow): string {
   return `${w.after}T04:00:00Z`;
 }
 
-async function gather(d: LfdRunDeps, w: LfdWindow, used: Set<string>) {
+async function gather(d: LfdRunDeps, w: LfdWindow, used: Set<string>, known: ReadonlyMap<string, number> = new Map()) {
   const reels = withoutUsed(await reelsLane(d.query, w), used);
   const carousel = withoutUsed(await carouselLane(d.query, windowStartIso(w)), used);
   const last = await lastCarouselRunAt(d.query);
   const since = new Date(last ?? windowStartIso(w));
   const feed = withoutUsed(await freshFeedLane(d.fetchFeeds, since, d.now).catch(() => []), used);
-  const judged = await scoreMajor(judgedPool(carousel, reels, feed), d.jev);
+  const judged = await scoreMajor(judgedPool(carousel, reels, feed), d.jev, known);
   const judgedKeys = new Set(judged.map((c) => c.key));
   const rundownOnly = [...reels].sort(rundownOrder).filter((c) => !judgedKeys.has(c.key)).slice(0, RUNDOWN_POOL);
   const merged = await mergeSameEvent([...judged.sort((a, b) => (b.major ?? 0) - (a.major ?? 0)), ...rundownOnly], d.jev);
@@ -66,6 +66,8 @@ async function gather(d: LfdRunDeps, w: LfdWindow, used: Set<string>) {
     majors: merged.filter((c) => c.major !== null),
     rundown: merged.filter((c) => c.origin === 'reels' || c.refs.some((r) => reels.some((x) => x.refs.includes(r)))),
     counts: { reels: reels.length, carousel: carousel.length, feed: feed.length, judged: judged.length },
+    /** Every major-news score judged so far, by key: a re-gather reuses these instead of judging again. */
+    scores: new Map([...known, ...judged.map((c) => [c.key, c.major ?? 0] as const)]),
   };
 }
 
@@ -100,7 +102,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     let pools = await gather(d, window, used);
     if (distinctEligible(pools) < MIN_STORIES) {
       window = extendWindow(window);
-      pools = await gather(d, window, used);
+      pools = await gather(d, window, used, pools.scores);
       record.safetyNet = true;
     }
     record.window = window;

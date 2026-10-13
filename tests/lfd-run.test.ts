@@ -205,6 +205,27 @@ test('the safety net counts only eligible stories', async () => {
   assert.ok(res.stories >= 5, String(res.stories));
 });
 
+test('the safety net re-gather never judges the same story twice', async () => {
+  const { query } = await openHubTestDb();
+  for (let i = 0; i < 3; i++) {
+    const idea = await seedReelsIdea(query, { headline: `In Window ${i}`, url: `https://w.com/${i}` });
+    await seedScore(query, idea, { nyDate: '2026-10-11', origin: 'timely', net: 0.5 });
+  }
+  for (let i = 0; i < 3; i++) {
+    const idea = await seedReelsIdea(query, { headline: `Earlier ${i}`, url: `https://e.com/${i}` });
+    await seedScore(query, idea, { nyDate: `2026-10-0${9 - i}`, origin: 'timely', net: 0.5 });
+  }
+  const judged: string[] = [];
+  const base = jev(() => 0);
+  const d = await deps({ query, jev: async (req, meta) => { if (meta.version.startsWith('major-news')) judged.push(meta.subjectId); return base(req, meta); } });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const { rows } = await d.query<{ record: { safetyNet?: boolean } }>(`SELECT record FROM lfd.runs WHERE id = $1`, [res.runId]);
+  assert.equal(rows[0]!.record.safetyNet, true);
+  assert.equal(judged.length, new Set(judged).size, `repeat judgments: ${judged.join(', ')}`);
+  assert.ok(judged.some((k) => k.includes('e.com')), 'the widened window judges its new stories');
+});
+
 test('a failure while recording a failed run does not throw', async () => {
   const d = await deps();
   const q = d.query;

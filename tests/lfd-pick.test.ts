@@ -119,3 +119,44 @@ test('slideOrder: majors by score first, then rundown in rank order', () => {
   ];
   assert.deepEqual(slideOrder(picks).map((p) => p.headline), ['M1', 'M2', 'R0', 'R1']);
 });
+
+test('scoreMajor runs up to 8 judgments at once and keeps the input order', async () => {
+  const list = Array.from({ length: 20 }, (_, i) => cand({ headline: `Story ${i}` }));
+  let inFlight = 0;
+  let peak = 0;
+  const base = jevStub({ major: Object.fromEntries(list.map((c, i) => [c.key, i / 20])) });
+  const slow: JevAsk = async (req, meta) => {
+    inFlight += 1;
+    peak = Math.max(peak, inFlight);
+    await new Promise((r) => setTimeout(r, 20 - (Number(meta.subjectId.slice(1)) % 7) * 2));
+    inFlight -= 1;
+    return base(req, meta);
+  };
+  const scored = await scoreMajor(list, slow);
+  assert.deepEqual(scored.map((c) => c.key), list.map((c) => c.key));
+  assert.ok(scored[19]!.major! > scored[1]!.major!);
+  assert.ok(peak > 1 && peak <= 8, `peak concurrency ${peak}`);
+});
+
+test('scoreMajor reuses scores it already has instead of asking Jev again', async () => {
+  const a = cand({ headline: 'Already Judged' });
+  const b = cand({ headline: 'Not Yet Judged' });
+  const asked: string[] = [];
+  const base = jevStub({ major: { [b.key]: 1 } });
+  const counting: JevAsk = async (req, meta) => { asked.push(meta.subjectId); return base(req, meta); };
+  const scored = await scoreMajor([a, b], counting, new Map([[a.key, 0.42]]));
+  assert.deepEqual(asked, [b.key]);
+  assert.equal(scored[0]!.major, 0.42);
+});
+
+test('a shared common headline word alone does not trigger a same-event check', async () => {
+  let calls = 0;
+  const base = jevStub({ same: () => true });
+  const counting: JevAsk = async (req, meta) => { calls += 1; return base(req, meta); };
+  const merged = await mergeSameEvent([
+    cand({ headline: 'Startup Launches New Model For Lawyers' }),
+    cand({ headline: 'Retailer Launches Model Shopping Assistant' }),
+  ], counting);
+  assert.equal(calls, 0);
+  assert.equal(merged.length, 2);
+});

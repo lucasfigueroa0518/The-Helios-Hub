@@ -6,6 +6,7 @@
  * repeats from earlier Last Few Days posts. A dropped story is replaced from
  * its own lane, then from the rundown.
  */
+import { mapPool } from '@/lib/async-pool';
 import { MAJOR_NEWS_BAR, SAME_EVENT_BAR, majorNewsScore, namesIn } from '@/lib/stories/build/morning-download';
 import { MAJOR_NEWS, SAME_EVENT } from '@/lib/stories/questions';
 import { companyKey } from '@/lib/social/ingest/select/companies';
@@ -59,20 +60,39 @@ export function withoutUsed(list: LfdCandidate[], used: Set<string>): LfdCandida
   return list.filter((c) => !used.has(c.key) && !c.refs.some((r) => used.has(r)));
 }
 
-export async function scoreMajor(list: LfdCandidate[], jev: JevAsk): Promise<LfdCandidate[]> {
-  const out: LfdCandidate[] = [];
-  for (const c of list) {
+export const JEV_CONCURRENCY = 8;
+
+/**
+ * major-news@2 for each candidate, up to 8 at once, in input order. `known`
+ * holds scores already judged this run (the safety net's re-gather) so a
+ * story is never judged twice.
+ */
+export async function scoreMajor(list: LfdCandidate[], jev: JevAsk, known: ReadonlyMap<string, number> = new Map()): Promise<LfdCandidate[]> {
+  return mapPool(list, JEV_CONCURRENCY, async (c) => {
+    const hit = known.get(c.key);
+    if (hit !== undefined) return { ...c, major: hit };
     const res = await jev(
       { state: { headline: c.headline, outlets: [c.sourceName, ...c.alsoFrom], published: c.publishedAt, story: { untrusted_content: c.body.slice(0, BODY_CHARS) } }, questions: MAJOR_NEWS.questions },
       { version: MAJOR_NEWS.version, subjectId: c.key },
     );
-    out.push({ ...c, major: majorNewsScore(res.answers as Record<string, { noul: number }>) });
-  }
-  return out;
+    return { ...c, major: majorNewsScore(res.answers as Record<string, { noul: number }>) };
+  });
+}
+
+/** Title-Case headline words that are not names: sharing only these never makes two stories a same-event pair. */
+const COMMON_HEADLINE_WORDS = new Set([
+  'Launches', 'Launch', 'Model', 'Models', 'Says', 'Said', 'New', 'Just', 'Now', 'Will', 'Is', 'Here', 'Releases', 'Release',
+  'Raises', 'Announces', 'Wants', 'AI', 'Ships', 'Unveils', 'Adds', 'Gets', 'Makes', 'Can', 'Could', 'After', 'Update',
+]);
+
+/** Proper names in a headline that can pair two stories (namesIn minus common headline words). */
+function pairNames(headline: string): Set<string> {
+  return new Set([...namesIn(headline)].filter((n) => !COMMON_HEADLINE_WORDS.has(n)));
 }
 
 async function sameEvent(jev: JevAsk, a: { headline: string; body: string }, b: { headline: string; body: string }, subjectId: string): Promise<boolean> {
-  const shared = [...namesIn(a.headline)].some((name) => namesIn(b.headline).has(name));
+  const bNames = pairNames(b.headline);
+  const shared = [...pairNames(a.headline)].some((name) => bNames.has(name));
   if (!shared) return false;
   const res = await jev(
     { state: { story_a: { headline: a.headline, untrusted_content: a.body.slice(0, MERGE_BODY_CHARS) }, story_b: { headline: b.headline, untrusted_content: b.body.slice(0, MERGE_BODY_CHARS) } }, questions: SAME_EVENT.questions },
