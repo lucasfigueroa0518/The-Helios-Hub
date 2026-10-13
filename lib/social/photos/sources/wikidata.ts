@@ -85,8 +85,8 @@ export const companySource: Source = async function companySource(request: Visua
   return out;
 };
 
-/** A company's logo card (logo.ts through the pool). */
+/** A company's logo cards: every mark in its pool (logo.ts through org-pool.ts); the finder's repeat rule and rotation choose among them. */
 export const logoSource: Source = async function logoSource(request: VisualRequest, run: SourceRun) {
   const pool = await poolOf(run, request.query);
-  return pool?.logo ? [fromPool(pool.logo, 'logo')] : [];
+  return (pool?.logos ?? []).map((l) => fromPool(l, 'logo'));
 };

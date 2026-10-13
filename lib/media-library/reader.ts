@@ -90,8 +90,8 @@ export function planFor(kind: VisualKind): Plan | null {
   }
 }
 
-/** By the offered lane, as searchVisual does: logos never fall under the 7-day rule; headshots only on a cover (photo spec §4). */
-export const exemptFromSevenDays = (lane: string, cover: boolean) => lane === 'logo' || (lane === 'headshot' && !cover);
+/** By the offered lane, as searchVisual does: logos and headshots skip the 7-day rule except on a cover, where neither repeats (photo spec §4; logos since 2026-10-12). */
+export const exemptFromSevenDays = (lane: string, cover: boolean) => (lane === 'logo' || lane === 'headshot') && !cover;
 
 export function createBankReader(deps: { query: Query; settings?: () => Promise<BankSettings>; now?: () => Date }): BankReader {
   const settings = deps.settings ?? cachedBankSettings(deps.query);

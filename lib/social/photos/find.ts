@@ -229,7 +229,11 @@ export const MAX_CANDIDATES = 2;
 
 const errText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
-/** Logos skip the 7-day rule; headshots too on story slides (a person has one main photo). A cover never repeats a headshot (photo spec §4). */
+/**
+ * Logos skip the 7-day rule on story slides; headshots too (a person has one main photo). A cover never repeats a
+ * headshot (photo spec §4), and, since 2026-10-12, never repeats a logo either: Anthropic stories all opened with
+ * the one wordmark. A company's other marks, then its other looks, take the cover's place (design.ts).
+ */
 const SKIPS_SEVEN_DAYS = new Set<Lane>(['logo', 'headshot', 'ceo']);
 
 /**
@@ -298,7 +302,7 @@ async function searchOnce(
     if (seen.has(c.url)) return false;
     seen.add(c.url);
     if (slide.wide && !(c.width && c.height && c.width / c.height >= SPREAD_MIN_ASPECT)) return false;
-    const exempt = c.lane === 'logo' || (SKIPS_SEVEN_DAYS.has(c.lane) && !slide.cover);
+    const exempt = SKIPS_SEVEN_DAYS.has(c.lane) && !slide.cover;
     if (!exempt && ctx.recent.has(c.url)) {
       run.steps.push(`${c.lane} ${c.title.slice(0, 40)}: used in the last 7 days or earlier in this run`);
       return false;
@@ -311,7 +315,12 @@ async function searchOnce(
     await search(bankSource);
     usable.push(...found.slice(from).filter(keep));
   }
-  const ranked = rankCandidates(usable, request.kind, ctx.storyDate, Boolean(slide.cover)).slice(0, tuning().keep);
+  // A cover's logos rotate: the least recently used mark first, a never-used one before any used (the 7-day rule above
+  // already took out the ones used this week). Everything else ranks as before.
+  const ordered = rankCandidates(usable, request.kind, ctx.storyDate, Boolean(slide.cover));
+  const rotating = request.kind === 'logo' && Boolean(slide.cover);
+  const lru = (c: Candidate) => ctx.lastUsed.get(c.url) ?? '';
+  const ranked = (rotating ? ordered.map((c, i) => ({ c, i })).sort((a, b) => lru(a.c).localeCompare(lru(b.c)) || a.i - b.i).map((x) => x.c) : ordered).slice(0, tuning().keep);
   run.steps.push(`${request.kind}: "${request.query}" → ${found.length} found, ${ranked.length} kept${ranked.length ? ` (${ranked.map((c) => `${c.lane}${c.date ? ` ${c.date}` : ''} ${c.width ?? '?'}×${c.height ?? '?'}`).join('; ')})` : ''}`);
   return { candidates: ranked, steps: run.steps, identity: run.identity };
 }

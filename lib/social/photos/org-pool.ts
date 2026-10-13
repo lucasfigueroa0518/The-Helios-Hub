@@ -7,7 +7,10 @@
  *   CEO           P169 (preferred rank first, no end date P582); none: the
  *                 founder (P112) when there is exactly one. That person's P18,
  *                 the same usability rule as every headshot (p18.ts).
- *   logo          P154, through logo.ts.
+ *   logos         its own current logos and icon (P154, P8972, P2910) and the
+ *                 logos of up to four linked products (P1056, P1830), through
+ *                 logo.ts (Tommy, 2026-10-12: Anthropic stories all opened
+ *                 with the one wordmark). `logo` is the first of them.
  *   headquarters  the current headquarters building's own photo (P159, no end
  *                 date, when that entity has a P18), else the organization's
  *                 best P18 (preferred rank first); kept only when the Jev
@@ -30,7 +33,7 @@ import type { JevAsk } from '@/lib/social/jev/client';
 import * as OrgHq from '@/lib/social/jev/questions/org-hq.v1';
 
 import type { Photo } from './find';
-import { fetchLogo } from './logo';
+import { fetchLogos } from './logo';
 import { P18_MIN_SHORT_SIDE } from './p18';
 
 const WIKIDATA_API = 'https://www.wikidata.org/w/api.php';
@@ -48,7 +51,10 @@ export type PoolPhoto = Photo & { date?: string | null };
 
 export type OrgPool = {
   ceo: PoolPhoto | null;
+  /** The first of `logos`, or null. */
   logo: PoolPhoto | null;
+  /** Every logo card the company has, best first (own marks, icon, then its products' marks). */
+  logos: PoolPhoto[];
   hq: PoolPhoto | null;
   /** One line per source, for the run log. */
   notes: string[];
@@ -140,10 +146,11 @@ async function ceoPhoto({ org, claims, http, notes }: Ctx): Promise<PoolPhoto | 
   return { url: pick.url, credit: `${name}, ${org.label} ${role} · ${buildCredit(pick)} · Wikimedia Commons`, source: 'ceo', width: pick.width, height: pick.height, qid: person, subject: name, date: pick.date ?? null };
 }
 
-async function logoPhoto({ org, http, notes }: Ctx): Promise<Photo | null> {
-  const logo = await fetchLogo(org.qid, org.label, { http });
-  notes.push(logo.photo ? `logo: File:${logo.file} (${logo.photo.plate} plate)` : `logo: ${logo.reason}`);
-  return logo.photo;
+async function logoPhotos({ org, http, notes }: Ctx): Promise<PoolPhoto[]> {
+  const { logos, reasons } = await fetchLogos(org.qid, org.label, { http });
+  for (const l of logos) notes.push(`logo: File:${l.file} (${l.photo.plate} plate)`);
+  for (const r of reasons) notes.push(`logo: ${r}`);
+  return logos.map((l) => l.photo);
 }
 
 /** The headquarters files to try, in order: the current headquarters entity's P18, then the organization's own. */
@@ -208,20 +215,23 @@ export async function orgPool(org: { qid: string; label: string }, deps: OrgPool
       notes.push(`${label} error: ${errText(err)}`);
       return null;
     });
-  const pool = async (ctx: Ctx, have: Partial<Record<'ceo' | 'logo' | 'hq', PoolPhoto | null>> = {}) => ({
+  const pool = async (ctx: Ctx, have: { ceo?: PoolPhoto | null; logos?: PoolPhoto[]; hq?: PoolPhoto | null } = {}) => ({
     ceo: have.ceo ?? (await safely(ctx, 'CEO', ceoPhoto)),
-    logo: have.logo ?? (await safely(ctx, 'logo', logoPhoto)),
+    logos: have.logos?.length ? have.logos : await logoPhotos(ctx).catch((err) => {
+      notes.push(`logo error: ${errText(err)}`);
+      return [] as PoolPhoto[];
+    }),
     hq: have.hq ?? (await safely(ctx, 'headquarters', hqPhoto)),
   });
   let found = await pool({ org, claims, deps, http, notes });
-  if (!found.ceo || !found.logo || !found.hq) {
+  if (!found.ceo || !found.logos.length || !found.hq) {
     const twin = await sameNameTwin(org, claims, http).catch(() => null);
     if (twin) {
       notes.push(`twin: ${twin.qid} (P460, same name "${org.label}") fills what ${org.qid} lacks`);
       found = await pool({ org: { qid: twin.qid, label: org.label }, claims: twin.claims, deps, http, notes }, found);
     }
   }
-  return { ...found, notes };
+  return { ceo: found.ceo, logo: found.logos[0] ?? null, logos: found.logos, hq: found.hq, notes };
 }
 
 /** A P460 ("said to be the same as") entry with the same English name, and its claims. */

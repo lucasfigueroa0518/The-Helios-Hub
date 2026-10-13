@@ -91,10 +91,14 @@ test("person: the person's P18; a logo request for a person finds nothing (never
   assert.equal(acme.candidates[0]?.qid, 'Q1', "Acme's logo, never one for Jane Doe");
 });
 
-test('logos skip the 7-day rule, on covers too', async () => {
+test('logos skip the 7-day rule on story slides, but a cover never repeats one (2026-10-12)', async () => {
   const b = briefWith({ name: 'Acme', role: 'company' });
-  const t = await search(b, { kind: 'logo', query: 'Acme' }, await fakeLogoWeb(), [verified('Acme', 'Q1', 'organization')], { recent: new Set(['https://upload.wikimedia.org/thumb/acme-logo.png']) });
-  assert.equal(t.candidates[0]?.lane, 'logo');
+  const ids: Array<[string, Promise<IdentityResult>]> = [verified('Acme', 'Q1', 'organization')];
+  const recent = new Set(['https://upload.wikimedia.org/thumb/acme-logo.png']);
+  const cover = await search(b, { kind: 'logo', query: 'Acme' }, await fakeLogoWeb(), ids, { recent });
+  assert.deepEqual(cover.candidates, [], 'the cover has used this logo this week: no logo');
+  const slide = await searchVisual({ kind: 'logo', query: 'Acme' }, newSearchContext(b, [], { identities: new Map(ids), recent, photos: [] }), { jev: noJev, http: await fakeLogoWeb() }, { cover: false, tags: ['S9'] });
+  assert.equal(slide.candidates[0]?.lane, 'logo', 'a logo on a story slide is still allowed');
 });
 
 test('render: a logo card (Helios canvas with the faint grid; plate; wide logos sized by width); a cover without a photo shows its icon', async () => {

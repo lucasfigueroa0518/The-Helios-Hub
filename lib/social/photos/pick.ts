@@ -177,7 +177,9 @@ export async function pickForSlide(input: PickInput, state: PickState, deps: { v
   state.usedUrls.add(c.url);
   if (PERSON_LANES.has(c.lane) && c.subject) state.usedPeople.add(c.subject);
   state.picked.push({ slide: input.words?.position ?? state.picked.length + 1, shows: describeCandidate(c, winner.s.tags) });
-  steps.push(`picked ${c.lane}${winner.request === input.requests[0]!.request ? '' : ' (the fallback request)'}: ${c.title.slice(0, 60) || c.url}`);
+  const first = input.requests[0]!.request;
+  const via = winner.request === first ? '' : first.kind === 'logo' && winner.request.kind === 'company' ? ' (the cover rotation)' : ' (the fallback request)';
+  steps.push(`picked ${c.lane}${via}: ${c.title.slice(0, 60) || c.url}`);
   return { winner: winner.s, request, via: c.lane, steps, alternates: passing.slice(0, 3), visionUsd };
 }
 

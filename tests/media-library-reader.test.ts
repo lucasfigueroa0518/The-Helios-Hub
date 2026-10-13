@@ -99,3 +99,12 @@ test('companies: headquarters by QID; logos exempt from 7 days but only when see
   assert.deepEqual((await reader.find(ask({ kind: 'logo', query: 'OpenAI', qid: 'Q9' }))).map((h) => h.photoId), [logo], 'used yesterday, still a logo');
   assert.deepEqual(await reader.find(ask({ kind: 'logo', query: 'Old Co', qid: 'Q8' })), [], 'not seen within 90 days');
 });
+
+test('a logo used yesterday is out on a cover but still offered elsewhere (2026-10-12)', async () => {
+  const { query } = await openBankTestDb();
+  const logo = await photo(query, { urls: [{ url: 'https://c/logo.png', lane: 'logo', source: 'logo' }], qids: ['Q9'] });
+  await query(`INSERT INTO social.used_photos (url, used_at, story_id, slide) VALUES ('https://c/logo.png', now() - interval '1 day', 's', 1)`);
+  const reader = createBankReader({ query });
+  assert.deepEqual((await reader.find({ ...ask({ kind: 'logo', query: 'OpenAI', qid: 'Q9' }), cover: true })).map((h) => h.photoId), [], 'a cover never repeats a logo');
+  assert.deepEqual((await reader.find({ ...ask({ kind: 'logo', query: 'OpenAI', qid: 'Q9' }), cover: false })).map((h) => h.photoId), [logo], 'a story slide still can');
+});

@@ -68,6 +68,16 @@ type Place = { slot: PickSlot; icon: string; tags: string[]; requests: VisualReq
 
 const errText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
+/**
+ * Cover rotation (Tommy, 2026-10-12): a cover whose logo request found nothing, because every logo the company has
+ * was a cover in the last 7 days, tries the same company's other looks (its CEO, headquarters, official and article
+ * images) before the Writer's fallback, so a company that is in the news every day does not open every post the same
+ * way. Only a logo request on a cover; null otherwise.
+ */
+export function companyRung(request: VisualRequest, result: { candidates: readonly unknown[] }): VisualRequest | null {
+  return request.kind === 'logo' && result.candidates.length === 0 ? { kind: 'company', query: request.query } : null;
+}
+
 export async function photosForDraft(
   draft: FilledDraft,
   brief: Brief,
@@ -99,6 +109,12 @@ export async function photosForDraft(
   for (const [i, p] of places.entries()) {
     const perRequest = [];
     for (const request of p.requests) perRequest.push({ request, ...(await searchVisual(request, ctx, deps, { cover: i === 0, tags: p.tags })) });
+    // The cover's company rotation: between the logo request and the Writer's fallback.
+    const rung = i === 0 ? companyRung(p.requests[0]!, perRequest[0]!) : null;
+    if (rung) {
+      const r = await searchVisual(rung, ctx, deps, { cover: true, tags: p.tags });
+      perRequest.splice(1, 0, { request: rung, ...r, steps: [`cover rotation: every ${rung.query} logo was a cover in the last 7 days → its other looks (CEO, headquarters, official images) before the fallback`, ...r.steps] });
+    }
     found.push(perRequest);
   }
 
