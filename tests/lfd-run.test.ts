@@ -209,7 +209,7 @@ test('a failure while recording a failed run does not throw', async () => {
   const d = await deps();
   const q = d.query;
   const broken = (async (sql: string, params?: unknown[]) => {
-    if (/UPDATE lfd\.runs/.test(sql)) throw new Error('db down');
+    if (/UPDATE lfd\.runs SET status = \$2/.test(sql)) throw new Error('db down');
     if (/FROM lfd\.posts/.test(sql)) throw new Error('boom');
     return q(sql, params);
   }) as typeof q;
