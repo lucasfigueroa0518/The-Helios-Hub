@@ -10,7 +10,7 @@ import path from 'node:path';
 
 import type { HubQuery } from '@/lib/social-hub/db';
 
-const SCHEMAS = ['reels', 'explainers', 'social', 'stories'] as const;
+const SCHEMAS = ['reels', 'explainers', 'social', 'stories', 'lfd'] as const;
 
 function schemaSql(file: string): string {
   return readFileSync(path.join(process.cwd(), 'db', file), 'utf8')
