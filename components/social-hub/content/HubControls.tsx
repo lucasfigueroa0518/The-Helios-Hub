@@ -194,7 +194,8 @@ export function HubSettingsButton() {
   }
 
   function setNightly(type: string, label: string, on: boolean) {
-    if (on && !window.confirm(`Run ${label} automatically every night? Each night’s run makes live model calls to fill the day’s quota.`)) return;
+    const when = type === 'last_few_days' ? 'on Tuesdays and Fridays at 3:00 AM' : 'every night';
+    if (on && !window.confirm(`Run ${label} automatically ${when}? Each run makes live model calls to fill the day’s quota.`)) return;
     void save(type, { generate: on });
   }
 
