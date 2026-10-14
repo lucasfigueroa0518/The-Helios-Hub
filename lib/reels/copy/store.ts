@@ -251,7 +251,15 @@ export type StoredCopy = {
 };
 
 export async function loadSlateCopy(slateId: string): Promise<Record<string, StoredCopy>> {
+  return (await loadSlatesCopy([slateId])).get(slateId) ?? {};
+}
+
+/** Copy for several slates in one query, keyed by slate id. */
+export async function loadSlatesCopy(slateIds: string[]): Promise<Map<string, Record<string, StoredCopy>>> {
+  const bySlate = new Map<string, Record<string, StoredCopy>>(slateIds.map((id) => [id, {}]));
+  if (slateIds.length === 0) return bySlate;
   const { rows } = await dbQuery<{
+    slate_id: string;
     post_idea_id: string;
     status: 'ok' | 'failed';
     prompt_version: string;
@@ -267,15 +275,16 @@ export async function loadSlateCopy(slateId: string): Promise<Record<string, Sto
     usd: string;
     created_at: string;
   }>(
-    `SELECT post_idea_id, status, prompt_version, bucket, framework, on_screen_copy,
+    `SELECT slate_id, post_idea_id, status, prompt_version, bucket, framework, on_screen_copy,
             caption, call_to_action, hashtags, sources, checks, error, usd::text AS usd,
             created_at
        FROM reels.idea_copy
-      WHERE slate_id = $1`,
-    [slateId],
+      WHERE slate_id = ANY($1::uuid[])`,
+    [slateIds],
   );
-  const out: Record<string, StoredCopy> = {};
   for (const row of rows) {
+    const out = bySlate.get(row.slate_id);
+    if (!out) continue;
     out[row.post_idea_id] = {
       postIdeaId: row.post_idea_id,
       status: row.status,
@@ -293,5 +302,5 @@ export async function loadSlateCopy(slateId: string): Promise<Record<string, Sto
       createdAt: row.created_at,
     };
   }
-  return out;
+  return bySlate;
 }

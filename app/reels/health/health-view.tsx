@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { requestJson } from '@/lib/client-request';
 import type { HealthPage, HealthSource } from '@/lib/reels/health';
 import { barsInView, chartYMax, formatNy, visibleIndexRange } from '@/lib/reels/health-status';
+import { usePoll } from '@/lib/use-poll';
 
 const TONE: Record<HealthSource['tone'], string> = {
   fresh: 'Fresh',
@@ -27,22 +28,10 @@ export function HealthView({ data }: { data: HealthPage }) {
     setPage(data);
   }, [data]);
 
-  useEffect(() => {
-    if (!watching) return;
-    let cancelled = false;
-    const tick = () => {
-      void requestJson<HealthPage>(`/api/reels/health?days=${page.windowDays}`)
-        .then((next) => {
-          if (!cancelled) setPage(next);
-        })
-        .catch(() => undefined);
-    };
-    const id = setInterval(tick, 4000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [watching, page.windowDays]);
+  usePoll(
+    () => requestJson<HealthPage>(`/api/reels/health?days=${page.windowDays}`).then(setPage),
+    watching ? 4000 : null,
+  );
 
   const flight = [
     page.inFlight.copy > 0 && `${page.inFlight.copy} copy`,

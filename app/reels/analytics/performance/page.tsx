@@ -23,10 +23,12 @@ export default async function PerformanceAnalyticsPage({
   const session = await getSession();
   if (!session) redirect('/');
   const params = await searchParams;
-  const refresh = await beginInsightsRefresh().catch(() => ({ pending: false, startedAt: null }));
-  const loaded = await loadPerformancePage(params).catch((error) => ({
-    error: error instanceof Error ? error.message : String(error),
-  }));
+  const [refresh, loaded] = await Promise.all([
+    beginInsightsRefresh().catch(() => ({ pending: false, startedAt: null })),
+    loadPerformancePage(params).catch((error) => ({
+      error: error instanceof Error ? error.message : String(error),
+    })),
+  ]);
 
   return (
     <AnalyticsShell current="performance">

@@ -42,5 +42,6 @@ test('session mode clamps a worker-sized pool to 2 clients', () => {
   assert.equal(resolvePoolMax('session', { PG_POOL_MAX: '8' }), 2);
   assert.equal(resolvePoolMax('transaction', { PG_POOL_MAX: '8' }), 8);
   assert.equal(resolvePoolMax('transaction', { PG_POOL_MAX: '40' }), 8);
-  assert.equal(resolvePoolMax('transaction', {}), 2);
+  assert.equal(resolvePoolMax('transaction', {}), 6);
+  assert.equal(resolvePoolMax('session', {}), 2);
 });

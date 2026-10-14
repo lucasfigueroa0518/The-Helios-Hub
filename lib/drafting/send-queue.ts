@@ -400,18 +400,20 @@ type CapacitySnapshot = {
 };
 
 async function loadCapacity(today: string): Promise<CapacitySnapshot> {
-  const settings = await getOrgSettings([
-    'stage_plan.default',
-    'smartlead.plan_limits',
-    'smartlead.usage_cache',
-    'smartlead.billing_day',
+  const [settings, rows] = await Promise.all([
+    getOrgSettings([
+      'stage_plan.default',
+      'smartlead.plan_limits',
+      'smartlead.usage_cache',
+      'smartlead.billing_day',
+    ]),
+    listInboxes({ enabledOnly: true }),
   ]);
   const orgPlan = settings.get('stage_plan.default') ?? DEFAULT_STAGE_PLAN;
   const limits = (settings.get('smartlead.plan_limits') ?? DEFAULT_PLAN_LIMITS) as PlanLimits;
   const usage = (settings.get('smartlead.usage_cache') ?? {}) as UsageCache;
   const billingDay = Number(settings.get('smartlead.billing_day') ?? 1);
 
-  const rows = await listInboxes({ enabledOnly: true });
   const inboxes: CapacityInbox[] = [];
   const byIdentity = new Map<IdentitySlug, CapacityInbox[]>();
   const meta = new Map<string, { email: string; stage: string; identitySlug: IdentitySlug }>();
@@ -472,7 +474,6 @@ export async function listSendQueue(input: {
   inboxEmails?: string[] | null;
 }): Promise<SendQueueBoard> {
   const today = formatNyDate();
-  const capacity = await loadCapacity(today);
   const campaignIds = listed(input.campaignIds, input.campaignId);
   const identitySlugs = listed(input.identitySlugs, input.identitySlug);
   const inboxEmails = listed(input.inboxEmails, input.inboxEmail);
@@ -489,7 +490,10 @@ export async function listSendQueue(input: {
   }
   const filter = clauses.length ? ` AND ${clauses.join(' AND ')}` : '';
 
-  const { rows } = await dbQuery<QueueListItem & { sent_at: string | null; bounced_at: string | null; replied_at: string | null }>(
+  // Independent reads: run them together instead of one round trip after another.
+  const [capacity, { rows }, claims, actuals, variance] = await Promise.all([
+    loadCapacity(today),
+    dbQuery<QueueListItem & { sent_at: string | null; bounced_at: string | null; replied_at: string | null }>(
     `SELECT ${QUEUE_ROW_SELECT.split(',').map((col) => `q.${col.trim()}`).join(', ')},
             c.name AS campaign_name,
             c.queue_color,
@@ -518,8 +522,12 @@ export async function listSendQueue(input: {
             )
         ${filter}
       ORDER BY q.handoff_date NULLS FIRST, q.created_at ASC`,
-    params,
-  );
+      params,
+    ),
+    loadActivatedClaims(),
+    actualsByDay(input.from, input.to),
+    varianceByInbox(input.from, input.to),
+  ]);
 
   const items: QueueListItem[] = rows
     .filter((row) => inboxEmails.length === 0 || (row.inbox_email != null && inboxEmails.includes(row.inbox_email)))
@@ -529,15 +537,15 @@ export async function listSendQueue(input: {
       overdue: isOverdue(row, today),
     }));
 
-  const claims = await loadActivatedClaims();
-
-  const days = await buildDays({
+  const days = buildDays({
     from: input.from,
     to: input.to,
     today,
     items,
     capacity,
     claims,
+    actuals,
+    variance,
     campaignIds,
     identitySlugs,
   });
@@ -590,18 +598,19 @@ function isOverdue(row: { status: EmailSendQueueStatus; handoff_date: string | n
   return row.status === 'queued' && Boolean(row.handoff_date) && row.handoff_date! < today;
 }
 
-async function buildDays(input: {
+function buildDays(input: {
   from: string;
   to: string;
   today: string;
   items: QueueListItem[];
   capacity: CapacitySnapshot;
   claims: CapacityClaim[];
+  actuals: Map<string, number>;
+  variance: Map<string, boolean>;
   campaignIds: string[];
   identitySlugs: string[];
-}): Promise<QueueDayBucket[]> {
-  const actuals = await actualsByDay(input.from, input.to);
-  const variance = await varianceByInbox(input.from, input.to);
+}): QueueDayBucket[] {
+  const { actuals, variance } = input;
 
   const days: QueueDayBucket[] = [];
   for (let date = input.from; date <= input.to; date = addCalendarDays(date, 1)) {

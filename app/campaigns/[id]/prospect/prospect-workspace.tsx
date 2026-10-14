@@ -10,6 +10,7 @@ import { expansionLabel } from '@/lib/auto-campaigns/expansion';
 import { requestJson } from '@/lib/client-request';
 import type { Campaign } from '@/lib/campaigns';
 import type { CampaignSheetViewRow } from '@/lib/campaign-sheet';
+import { usePoll } from '@/lib/use-poll';
 
 type ProspectLogEntry = {
   at: string;
@@ -112,27 +113,15 @@ export function ProspectWorkspace({
     void load(day).catch((err) => setError(err instanceof Error ? err.message : 'Unable to load prospecting'));
   }, [load, day]);
 
-  useEffect(() => {
-    const live = data?.campaign.auto_status === 'live';
-    const running = data?.active_run?.status === 'prospecting'
-      || data?.cycle_job === 'pending'
-      || data?.cycle_job === 'in_flight';
-    if (data && !live && !running) return undefined;
-    const busy = !data || !data.campaign.last_cycle_at || running;
-    const timer = window.setInterval(() => {
-      if (document.hidden) return;
-      void load(day).catch(() => undefined);
-    }, busy ? 1000 : 2500);
-    return () => window.clearInterval(timer);
-  }, [
-    data,
-    data?.campaign.auto_status,
-    data?.campaign.last_cycle_at,
-    data?.active_run?.status,
-    data?.cycle_job,
-    load,
-    day,
-  ]);
+  const prospectLive = data?.campaign.auto_status === 'live';
+  const prospectRunning = data?.active_run?.status === 'prospecting'
+    || data?.cycle_job === 'pending'
+    || data?.cycle_job === 'in_flight';
+  const prospectBusy = !data || !data.campaign.last_cycle_at || prospectRunning;
+  usePoll(
+    () => load(day),
+    data && !prospectLive && !prospectRunning ? null : prospectBusy ? 1000 : 2500,
+  );
 
   const campaign = data?.campaign;
   const days = data?.days ?? [];

@@ -19,6 +19,7 @@ import type {
   ConversationStats,
   ConversationThread,
 } from '@/lib/drafting/conversations';
+import { usePoll } from '@/lib/use-poll';
 
 type ListResponse = {
   stats: ConversationStats;
@@ -225,11 +226,7 @@ export function ConversationsHub() {
     return list;
   }, [data, now]);
 
-  useEffect(() => {
-    if (!waitingActive) return;
-    const timer = setInterval(() => void load(), 15_000);
-    return () => clearInterval(timer);
-  }, [waitingActive, load]);
+  usePoll(load, waitingActive ? 15_000 : null);
 
   if (loading && !data) {
     return <HubLoadingSpinner label="Loading conversations" />;

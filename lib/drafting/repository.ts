@@ -1335,6 +1335,63 @@ function emptyWorkspaceActivity(): WorkspaceActivity {
 
 // ── Workspace snapshot ──────────────────────────────────────────────────────
 
+type WorkspaceSendAggregate = {
+  sent: number;
+  delivered: number;
+  opened: number;
+  replied: number;
+  bounced: number;
+  pending_send: number;
+  non_live_approved: number;
+  non_live_sendable: number;
+};
+
+async function loadWorkspaceSendAggregate(workspaceId: string): Promise<WorkspaceSendAggregate[]> {
+  const { rows } = await dbQuery<WorkspaceSendAggregate>(
+    `SELECT
+       count(*) FILTER (WHERE s.status = 'sent')::int AS sent,
+       count(*) FILTER (WHERE s.status = 'sent' AND s.bounced_at IS NULL)::int AS delivered,
+       count(*) FILTER (WHERE s.opened_at IS NOT NULL)::int AS opened,
+       count(*) FILTER (WHERE s.replied_at IS NOT NULL)::int AS replied,
+       count(*) FILTER (WHERE s.bounced_at IS NOT NULL)::int AS bounced,
+       count(*) FILTER (
+         WHERE i.state IN ('ready_for_review', 'approved')
+           AND d.drafting_item_id IS NOT NULL
+           AND coalesce(s.status, '') NOT IN ('sent', 'queued', 'sending')
+           AND NOT EXISTS (
+             SELECT 1
+               FROM outreach.email_send_queue q
+              WHERE q.drafting_item_id = i.id
+                AND q.status IN ('queued', 'sending')
+           )
+           AND NOT EXISTS (
+             SELECT 1
+               FROM jsonb_array_elements(coalesce(d.lint_result -> 'hard', '[]'::jsonb)) AS finding
+              WHERE finding->>'code' = 'OVERLOADED_SENTENCE'
+           )
+       )::int AS pending_send,
+       count(*) FILTER (
+         WHERE i.state = 'approved' AND d.generation_mode IN ('stub', 'legacy')
+       )::int AS non_live_approved,
+       count(*) FILTER (
+         WHERE i.state IN ('generated', 'approved', 'sent')
+           AND d.generation_mode IN ('stub', 'legacy')
+       )::int AS non_live_sendable
+     FROM outreach.drafting_items i
+     LEFT JOIN outreach.email_drafts d ON d.drafting_item_id = i.id
+     LEFT JOIN LATERAL (
+       SELECT status, delivered_at, opened_at, replied_at, bounced_at
+         FROM outreach.email_sends es
+        WHERE es.drafting_item_id = i.id
+        ORDER BY es.created_at DESC
+        LIMIT 1
+     ) s ON true
+     WHERE i.workspace_id = $1 AND i.removed_at IS NULL AND i.state <> 'removed'`,
+    [workspaceId],
+  );
+  return rows;
+}
+
 export async function getWorkspaceSnapshot(
   campaignId: string,
   ownerId: string,
@@ -1346,8 +1403,10 @@ export async function getWorkspaceSnapshot(
     offset?: number;
   } = {},
 ): Promise<WorkspaceSnapshot> {
-  await assertCampaignOwned(campaignId, ownerId);
-  const workspace = await getOwnedWorkspace(campaignId, ownerId);
+  const [, workspace] = await Promise.all([
+    assertCampaignOwned(campaignId, ownerId),
+    getOwnedWorkspace(campaignId, ownerId),
+  ]);
 
   if (!workspace) {
     return {
@@ -1420,7 +1479,8 @@ export async function getWorkspaceSnapshot(
 
   // Warm stale temporal audits before summarizing so review UI / Download see
   // a recent gate result without waiting for a cold click-time recompute.
-  await warmStaleDraftTimeliness({
+  // Only the drafts read below depends on it; everything else reads alongside.
+  const warmed = warmStaleDraftTimeliness({
     workspaceId: workspace.id,
     limit: GATE_WARM_BATCH_LIMIT,
   }).catch(() => 0);
@@ -1431,7 +1491,15 @@ export async function getWorkspaceSnapshot(
   const pageOffset = Math.max(0, options.offset ?? 0);
 
   // Counters over all items (light select); full rows only for the current page.
-  const allStates = await loadWorkspaceItemStates(workspace.id);
+  // This page polls every few seconds, so its independent reads run together
+  // instead of a dozen round trips one after another.
+  const [allStates, items] = await Promise.all([
+    loadWorkspaceItemStates(workspace.id),
+    loadWorkspaceItems(
+      workspace.id,
+      pageLimit == null ? {} : { limit: pageLimit, offset: pageOffset },
+    ),
+  ]);
   const counterInputs = allStates.map((item) => ({
     state: item.state,
     deliverySnapshot: parseDeliverySnapshot(item.delivery_snapshot),
@@ -1439,14 +1507,20 @@ export async function getWorkspaceSnapshot(
   }));
   const counters = computeDraftingCounters(counterInputs);
 
-  const items = await loadWorkspaceItems(
-    workspace.id,
-    pageLimit == null ? {} : { limit: pageLimit, offset: pageOffset },
-  );
-  const drafts = await loadDraftsForItems(items.map((item) => item.id));
   const itemIds = items.map((item) => item.id);
-  const sendStatuses = await loadLatestEmailSendStatuses(itemIds);
-  const queueStatuses = await loadActiveQueueByItemIds(itemIds);
+  // Dynamic import avoids a runtime cycle (rescue → reconcileDraftingWorkspaceQueue).
+  const [drafts, sendStatuses, queueStatuses, sendAggRows, messageSettings, activity, rescue, queueStats] =
+    await Promise.all([
+      warmed.then(() => loadDraftsForItems(itemIds)),
+      loadLatestEmailSendStatuses(itemIds),
+      loadActiveQueueByItemIds(itemIds),
+      loadWorkspaceSendAggregate(workspace.id).catch(() => null),
+      loadCampaignMessageSettings(campaignId),
+      loadWorkspaceActivity(workspace.id, counters.running),
+      import('@/lib/drafting/rescue').then(({ resolveRescueForUi }) =>
+        resolveRescueForUi(campaignId, ownerId, workspace.id)),
+      ownerQueueStats(ownerId),
+    ]);
 
   const summaries = items.map((item) =>
     summarizeItem(
@@ -1468,8 +1542,9 @@ export async function getWorkspaceSnapshot(
     'failed_write',
     'failed_rewrite',
   ]);
+  const itemsById = new Map(items.map((item) => [item.id, item]));
   const leadsRows = summaries.filter((row) => {
-    const item = items.find((entry) => entry.id === row.id)!;
+    const item = itemsById.get(row.id)!;
     // Stay in Leads mode until Approve for drafting moves the item into a
     // running/generated state — including failed jobs that need a retry.
     if (leadsState.has(item.state)) return true;
@@ -1495,57 +1570,7 @@ export async function getWorkspaceSnapshot(
     }
   }
 
-  const { rows: sendAgg } = await dbQuery<{
-    sent: number;
-    delivered: number;
-    opened: number;
-    replied: number;
-    bounced: number;
-    pending_send: number;
-    non_live_approved: number;
-    non_live_sendable: number;
-  }>(
-    `SELECT
-       count(*) FILTER (WHERE s.status = 'sent')::int AS sent,
-       count(*) FILTER (WHERE s.status = 'sent' AND s.bounced_at IS NULL)::int AS delivered,
-       count(*) FILTER (WHERE s.opened_at IS NOT NULL)::int AS opened,
-       count(*) FILTER (WHERE s.replied_at IS NOT NULL)::int AS replied,
-       count(*) FILTER (WHERE s.bounced_at IS NOT NULL)::int AS bounced,
-       count(*) FILTER (
-         WHERE i.state IN ('ready_for_review', 'approved')
-           AND d.drafting_item_id IS NOT NULL
-           AND coalesce(s.status, '') NOT IN ('sent', 'queued', 'sending')
-           AND NOT EXISTS (
-             SELECT 1
-               FROM outreach.email_send_queue q
-              WHERE q.drafting_item_id = i.id
-                AND q.status IN ('queued', 'sending')
-           )
-           AND NOT EXISTS (
-             SELECT 1
-               FROM jsonb_array_elements(coalesce(d.lint_result -> 'hard', '[]'::jsonb)) AS finding
-              WHERE finding->>'code' = 'OVERLOADED_SENTENCE'
-           )
-       )::int AS pending_send,
-       count(*) FILTER (
-         WHERE i.state = 'approved' AND d.generation_mode IN ('stub', 'legacy')
-       )::int AS non_live_approved,
-       count(*) FILTER (
-         WHERE i.state IN ('generated', 'approved', 'sent')
-           AND d.generation_mode IN ('stub', 'legacy')
-       )::int AS non_live_sendable
-     FROM outreach.drafting_items i
-     LEFT JOIN outreach.email_drafts d ON d.drafting_item_id = i.id
-     LEFT JOIN LATERAL (
-       SELECT status, delivered_at, opened_at, replied_at, bounced_at
-         FROM outreach.email_sends es
-        WHERE es.drafting_item_id = i.id
-        ORDER BY es.created_at DESC
-        LIMIT 1
-     ) s ON true
-     WHERE i.workspace_id = $1 AND i.removed_at IS NULL AND i.state <> 'removed'`,
-    [workspace.id],
-  ).catch(async () => {
+  const sendAgg = sendAggRows ?? (() => {
     // Fallback when email_sends shape differs — page-local counts.
     return {
       rows: [{
@@ -1574,7 +1599,7 @@ export async function getWorkspaceSnapshot(
         }).length,
       }],
     };
-  });
+  })().rows;
   const sentCount = sendAgg[0]?.sent ?? 0;
   const deliveredCount = sendAgg[0]?.delivered ?? 0;
   const openedCount = sendAgg[0]?.opened ?? 0;
@@ -1607,12 +1632,6 @@ export async function getWorkspaceSnapshot(
     && !nonLiveSendable
     && pendingSendCount > 0;
 
-  const messageSettings = await loadCampaignMessageSettings(campaignId);
-  const activity = await loadWorkspaceActivity(workspace.id, counters.running);
-  // Dynamic import avoids a runtime cycle (rescue → reconcileDraftingWorkspaceQueue).
-  const { resolveRescueForUi } = await import('@/lib/drafting/rescue');
-  const rescue = await resolveRescueForUi(campaignId, ownerId, workspace.id);
-  const queueStats = await ownerQueueStats(ownerId);
 
   return {
     workspace: {

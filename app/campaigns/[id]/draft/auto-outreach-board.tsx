@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 
 import { LivePulse } from '@/app/components/live-pulse';
 import type { DraftingSnapshot } from '@/app/campaigns/[id]/draft/types';
@@ -14,6 +14,7 @@ import {
 import { expansionLabel as describeExpansion } from '@/lib/auto-campaigns/expansion';
 import { requestJson } from '@/lib/client-request';
 import { formatNyDate, formatNyDateLabel } from '@/lib/drafting/send-queue-schedule';
+import { usePoll } from '@/lib/use-poll';
 
 export type { OutreachCarouselFocus };
 
@@ -116,23 +117,11 @@ export function AutoOutreachBoard({
   const [stats, setStats] = useState<OutreachStatsPayload | null>(null);
   const [paceOpen, setPaceOpen] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    const load = () => {
-      if (document.hidden) return;
-      void requestJson<OutreachStatsPayload>(`/api/campaigns/${campaignId}/outreach-stats`)
-        .then((data) => {
-          if (!cancelled) setStats(data);
-        })
-        .catch(() => undefined);
-    };
-    load();
-    const timer = window.setInterval(load, 8000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [campaignId]);
+  usePoll(
+    () => requestJson<OutreachStatsPayload>(`/api/campaigns/${campaignId}/outreach-stats`).then(setStats),
+    8000,
+    { immediate: true },
+  );
 
   const quota = stats?.emails_per_day ?? emailsPerDay;
   const status = stats?.auto_status ?? autoStatus;

@@ -300,57 +300,72 @@ export async function loadSlate(
   slateId: string,
   options?: { selectedOnly?: boolean },
 ): Promise<StoredSlate | null> {
-  const { rows } = await dbQuery<SlateRow>(
-    `SELECT id, run_id, ny_date::text AS ny_date, scored_at, pass1_version, pass2_version
-       FROM reels.score_slates
-      WHERE id = $1`,
-    [slateId],
-  );
-  const slate = rows[0];
-  if (!slate) return null;
+  return (await loadSlates([slateId], options)).get(slateId) ?? null;
+}
 
-  const { rows: scores } = await dbQuery<{
-    post_idea_id: string;
-    origin: 'timely' | 'carryover';
-    net: number | null;
-    rank: number | null;
-    selected: boolean;
-    chosen_bucket: string | null;
-    chosen_framework: string | null;
-    psychology: number | null;
-    bucket_score: number | null;
-    value_score: number | null;
-    blockbuster: number;
-    confidence: number | null;
-    components: InterpretedScore;
-    headlines: string[] | null;
-  }>(
-    `SELECT s.post_idea_id, s.origin, s.net, s.rank, s.selected,
-            s.chosen_bucket, s.chosen_framework, s.psychology, s.bucket_score,
-            s.value_score, s.blockbuster, s.confidence, s.components,
-            (
-              SELECT jsonb_agg(src.headline ORDER BY
-                       CASE m.role WHEN 'primary' THEN 0 WHEN 'supporting' THEN 1 ELSE 2 END,
-                       m.joined_at)
-                FROM reels.post_idea_members m
-                JOIN reels.sources src ON src.id = m.source_id
-               WHERE m.post_idea_id = s.post_idea_id
-            ) AS headlines
-       FROM reels.idea_scores s
-      WHERE s.slate_id = $1
-        AND ($2::boolean = false OR s.selected)
-      ORDER BY s.rank NULLS LAST, s.net DESC NULLS LAST`,
-    [slate.id, options?.selectedOnly === true],
-  );
+/** Several slates in two queries (the archive reads every past day at once). */
+export async function loadSlates(
+  slateIds: string[],
+  options?: { selectedOnly?: boolean },
+): Promise<Map<string, StoredSlate>> {
+  const out = new Map<string, StoredSlate>();
+  if (slateIds.length === 0) return out;
+  const [{ rows }, { rows: scores }] = await Promise.all([
+    dbQuery<SlateRow>(
+      `SELECT id, run_id, ny_date::text AS ny_date, scored_at, pass1_version, pass2_version
+         FROM reels.score_slates
+        WHERE id = ANY($1::uuid[])`,
+      [slateIds],
+    ),
+    dbQuery<{
+      slate_id: string;
+      post_idea_id: string;
+      origin: 'timely' | 'carryover';
+      net: number | null;
+      rank: number | null;
+      selected: boolean;
+      chosen_bucket: string | null;
+      chosen_framework: string | null;
+      psychology: number | null;
+      bucket_score: number | null;
+      value_score: number | null;
+      blockbuster: number;
+      confidence: number | null;
+      components: InterpretedScore;
+      headlines: string[] | null;
+    }>(
+      `SELECT s.slate_id, s.post_idea_id, s.origin, s.net, s.rank, s.selected,
+              s.chosen_bucket, s.chosen_framework, s.psychology, s.bucket_score,
+              s.value_score, s.blockbuster, s.confidence, s.components,
+              (
+                SELECT jsonb_agg(src.headline ORDER BY
+                         CASE m.role WHEN 'primary' THEN 0 WHEN 'supporting' THEN 1 ELSE 2 END,
+                         m.joined_at)
+                  FROM reels.post_idea_members m
+                  JOIN reels.sources src ON src.id = m.source_id
+                 WHERE m.post_idea_id = s.post_idea_id
+              ) AS headlines
+         FROM reels.idea_scores s
+        WHERE s.slate_id = ANY($1::uuid[])
+          AND ($2::boolean = false OR s.selected)
+        ORDER BY s.rank NULLS LAST, s.net DESC NULLS LAST`,
+      [slateIds, options?.selectedOnly === true],
+    ),
+  ]);
 
-  return {
-    id: slate.id,
-    runId: slate.run_id,
-    nyDate: slate.ny_date,
-    scoredAt: slate.scored_at,
-    pass1Version: slate.pass1_version,
-    pass2Version: slate.pass2_version,
-    scores: scores.map((row) => ({
+  for (const slate of rows) {
+    out.set(slate.id, {
+      id: slate.id,
+      runId: slate.run_id,
+      nyDate: slate.ny_date,
+      scoredAt: slate.scored_at,
+      pass1Version: slate.pass1_version,
+      pass2Version: slate.pass2_version,
+      scores: [],
+    });
+  }
+  for (const row of scores) {
+    out.get(row.slate_id)?.scores.push({
       postIdeaId: row.post_idea_id,
       origin: row.origin,
       net: row.net,
@@ -365,6 +380,7 @@ export async function loadSlate(
       confidence: row.confidence,
       components: row.components,
       headlines: row.headlines ?? [],
-    })),
-  };
+    });
+  }
+  return out;
 }

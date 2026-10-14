@@ -9,6 +9,7 @@ import { requestJson } from '@/lib/client-request';
 import { reviewCaption } from '@/lib/explainers/caption-format';
 import type { JobDetail, JobSummary } from '@/lib/explainers/overview';
 import { FAILURE_TAGS, type FailureTag, type Verdict } from '@/lib/explainers/types';
+import { usePoll } from '@/lib/use-poll';
 
 const usd = (v: number) => `$${v.toFixed(2)}`;
 const fileUrl = (artifactId: string) => `/api/explainers/artifacts/${artifactId}`;
@@ -195,11 +196,7 @@ function ReelDrawer({ jobId, onClose, onChanged }: { jobId: string; onClose: () 
     load();
   }, [load]);
 
-  useEffect(() => {
-    if (!detail || (detail.job.status !== 'running' && detail.job.status !== 'requested')) return undefined;
-    const t = setInterval(load, 5000);
-    return () => clearInterval(t);
-  }, [detail, load]);
+  usePoll(load, detail && (detail.job.status === 'running' || detail.job.status === 'requested') ? 5000 : null);
 
   const artifact = (kind: string) => detail?.artifacts.filter((a) => a.kind === kind) ?? [];
   const latest = (kind: string) => artifact(kind).at(-1);
@@ -430,11 +427,7 @@ export function ReelsView({ jobs }: { jobs: JobSummary[] }) {
     if (list) list.scrollLeft = list.scrollWidth;
   }, [days.length]);
 
-  useEffect(() => {
-    if (!live) return undefined;
-    const t = setInterval(() => router.refresh(), 10_000);
-    return () => clearInterval(t);
-  }, [live, router]);
+  usePoll(() => router.refresh(), live ? 10_000 : null);
 
   useEffect(() => {
     if (!open) return undefined;

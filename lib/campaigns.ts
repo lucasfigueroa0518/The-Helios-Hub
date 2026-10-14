@@ -182,13 +182,7 @@ const campaignSelect = `
        ORDER BY CASE WHEN l.identity_slug = c.sender_identity_slug THEN 0 ELSE 1 END, l.updated_at DESC
        LIMIT 1
     ) AS lane_status,
-    (
-      SELECT count(*)::int
-        FROM outreach.email_send_queue q
-       WHERE q.campaign_id = c.id
-         AND q.status IN ('queued', 'handing_off', 'handed_off')
-         AND q.handoff_date = ((now() AT TIME ZONE 'America/New_York')::date + 1)
-    ) AS tomorrow_forecast,
+    qs.tomorrow_forecast,
     COALESCE(c.message_mode, 'ai') AS message_mode,
     c.message_subject_template,
     c.message_body_template,
@@ -196,22 +190,16 @@ const campaignSelect = `
     c.lead_attributes, COALESCE(c.expansion_step, 0) AS expansion_step,
     c.queue_color, c.next_cycle_at, c.last_cycle_at,
     c.created_at, c.updated_at,
-    count(DISTINCT cl.lead_id)::int AS lead_count,
-    (
-      SELECT count(*)::int FROM outreach.email_send_queue q
-       WHERE q.campaign_id = c.id AND q.status = 'sent'
-    ) AS sent_count,
-    (
-      SELECT GREATEST(0, (
-        (SELECT count(*)::int FROM outreach.email_send_queue q WHERE q.campaign_id = c.id AND q.status = 'sent') -
-        (SELECT count(*)::int
-           FROM outreach.email_sends s
-           JOIN outreach.drafting_items i ON i.id = s.drafting_item_id
-           JOIN outreach.drafting_workspaces w ON w.id = i.workspace_id
-          WHERE w.campaign_id = c.id AND (s.status = 'bounced' OR s.bounced_at IS NOT NULL))
-      ))
-    ) AS delivered_count,
-    max(r.started_at) AS last_run_at,
+    (SELECT count(*)::int FROM outreach.campaign_leads cl WHERE cl.campaign_id = c.id) AS lead_count,
+    qs.sent_count,
+    GREATEST(0, qs.sent_count - (
+      SELECT count(*)::int
+        FROM outreach.email_sends s
+        JOIN outreach.drafting_items i ON i.id = s.drafting_item_id
+        JOIN outreach.drafting_workspaces w ON w.id = i.workspace_id
+       WHERE w.campaign_id = c.id AND (s.status = 'bounced' OR s.bounced_at IS NOT NULL)
+    )) AS delivered_count,
+    (SELECT max(r.started_at) FROM outreach.runs r WHERE r.campaign_id = c.id) AS last_run_at,
     COALESCE(
       (SELECT array_agg(ct.tag ORDER BY ct.tag)
        FROM outreach.campaign_tags ct
@@ -226,18 +214,28 @@ const campaignSelect = `
     ) AS tag_details,
     ${campaignDraftingActivitySelect}
   FROM outreach.campaigns c
-  LEFT JOIN outreach.campaign_leads cl ON cl.campaign_id = c.id
-  LEFT JOIN outreach.runs r ON r.campaign_id = c.id
+  -- Per-campaign subqueries, not joins: joining leads and runs multiplied rows
+  -- (leads x runs) before the GROUP BY and grew with every run.
+  CROSS JOIN LATERAL (
+    SELECT
+      count(*) FILTER (WHERE q.status = 'sent')::int AS sent_count,
+      count(*) FILTER (
+        WHERE q.status IN ('queued', 'handing_off', 'handed_off')
+          AND q.handoff_date = ((now() AT TIME ZONE 'America/New_York')::date + 1)
+      )::int AS tomorrow_forecast
+      FROM outreach.email_send_queue q
+     WHERE q.campaign_id = c.id
+  ) qs
   WHERE ${CAMPAIGN_VISIBILITY_WHERE}`;
 
 export async function listCampaigns(ownerId: string): Promise<Campaign[]> {
   const { rows } = await dbQuery<CampaignQueryRow>(
     `${campaignSelect}
-     GROUP BY c.id
      ORDER BY
        (c.status = 'active' AND COALESCE(c.kind, 'manual') = 'auto' AND c.auto_status = 'live') DESC,
        (c.status = 'active') DESC,
-       c.updated_at DESC`,
+       c.updated_at DESC,
+       c.name ASC`,
     [ownerId],
   );
   return rows.map(mapCampaignRow);
@@ -245,7 +243,7 @@ export async function listCampaigns(ownerId: string): Promise<Campaign[]> {
 
 export async function getCampaign(ownerId: string, campaignId: string): Promise<Campaign | null> {
   const { rows } = await dbQuery<CampaignQueryRow>(
-    `${campaignSelect} AND c.id = $2 GROUP BY c.id`,
+    `${campaignSelect} AND c.id = $2`,
     [ownerId, campaignId],
   );
   const row = rows.find((candidate) => candidate.id === campaignId);

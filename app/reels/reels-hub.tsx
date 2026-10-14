@@ -29,6 +29,7 @@ import type { StoredSchedule } from '@/lib/reels/publish/schedule';
 import type { StoredScore, StoredSlate } from '@/lib/reels/scoring/store';
 import type { StoredFrame } from '@/lib/reels/visual/run';
 import type { StoredVideo } from '@/lib/reels/visual/video-run';
+import { usePoll } from '@/lib/use-poll';
 
 /* ------------------------------------------------------------------ labels */
 
@@ -392,11 +393,7 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
     });
 
   // While a night or a reel is in flight the page follows it.
-  useEffect(() => {
-    if (!nightInFlight && !reelInFlight) return undefined;
-    const timer = setInterval(() => void refresh(), reelInFlight ? 4_000 : 10_000);
-    return () => clearInterval(timer);
-  }, [nightInFlight, reelInFlight, refresh]);
+  usePoll(refresh, reelInFlight ? 4_000 : nightInFlight ? 10_000 : null);
 
   useEffect(() => {
     if (!message) return undefined;

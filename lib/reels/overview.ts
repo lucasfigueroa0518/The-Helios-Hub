@@ -1,12 +1,13 @@
 import { MONTHLY_WATCH_USD } from '@/lib/reels/config';
 import { copyInFlight, loadCopyJobsForIdeas, type StoredCopyJob } from '@/lib/reels/copy/jobs';
-import { loadSlateCopy, type StoredCopy } from '@/lib/reels/copy/store';
+import { loadSlateCopy, loadSlatesCopy, type StoredCopy } from '@/lib/reels/copy/store';
 import { loadReelsInsights, type ReelsInsights } from '@/lib/reels/insights';
 import { listRuns, monthToDateUsd, type RunRow } from '@/lib/reels/repository';
 import { nextRunAt } from '@/lib/reels/schedule';
 import {
   listSlateDays,
   loadSlate,
+  loadSlates,
   type SlateDay,
   type StoredSlate,
 } from '@/lib/reels/scoring/store';
@@ -88,7 +89,7 @@ export async function loadReelsOverview(): Promise<ReelsOverview> {
   const [currentDay, ...pastDays] = slateDays;
   const [slate, archive] = await Promise.all([
     currentDay ? loadSlate(currentDay.id) : Promise.resolve(null),
-    Promise.all(pastDays.map((day) => loadArchivedSlate(day.id))),
+    loadArchive(pastDays.map((day) => day.id)),
   ]);
   const ideaIds = slate ? slate.scores.map((score) => score.postIdeaId) : [];
   const [copy, frames, copyJobs, videos, finishes] = slate
@@ -142,18 +143,45 @@ export async function loadReelsOverview(): Promise<ReelsOverview> {
   };
 }
 
-async function loadArchivedSlate(slateId: string): Promise<ArchivedSlate | null> {
-  const slate = await loadSlate(slateId, { selectedOnly: true });
-  if (!slate) return null;
-  const ideaIds = slate.scores.map((score) => score.postIdeaId);
-  const [copy, frames, copyJobs, videos, finishes] = await Promise.all([
-    loadSlateCopy(slate.id),
+/**
+ * Every earlier day at once. The per-idea loaders key on post idea, not slate,
+ * so one call over all archived ideas returns what a call per day did, in a
+ * handful of queries instead of ~8 per day (the day list only grows).
+ */
+async function loadArchive(slateIds: string[]): Promise<Array<ArchivedSlate | null>> {
+  if (slateIds.length === 0) return [];
+  const [slates, copies] = await Promise.all([
+    loadSlates(slateIds, { selectedOnly: true }),
+    loadSlatesCopy(slateIds),
+  ]);
+  const ideaIds = [...new Set([...slates.values()].flatMap((slate) => slate.scores.map((score) => score.postIdeaId)))];
+  const [frames, copyJobs, videos, finishes] = await Promise.all([
     loadFramesForIdeas(ideaIds),
     loadCopyJobsForIdeas(ideaIds),
     loadVideosForIdeas(ideaIds),
     loadFinishStatus(ideaIds),
   ]);
-  return { slate, copy, frames, videos, copyJobs, finishes, songs: await songsByIdea(videos) };
+  const songs = await songsByIdea(videos);
+  return slateIds.map((slateId) => {
+    const slate = slates.get(slateId);
+    if (!slate) return null;
+    const ids = slate.scores.map((score) => score.postIdeaId);
+    return {
+      slate,
+      copy: copies.get(slateId) ?? {},
+      frames: pick(frames, ids),
+      videos: pick(videos, ids),
+      copyJobs: pick(copyJobs, ids),
+      finishes: pick(finishes, ids),
+      songs: pick(songs, ids),
+    };
+  });
+}
+
+function pick<T>(byIdea: Record<string, T>, ideaIds: string[]): Record<string, T> {
+  const out: Record<string, T> = {};
+  for (const id of ideaIds) if (id in byIdea) out[id] = byIdea[id];
+  return out;
 }
 
 /** Song state is keyed by video job; the hub reads reels by post idea. */
