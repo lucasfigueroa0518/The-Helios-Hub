@@ -29,7 +29,7 @@ On Instagram it is a multi-image ("carousel") feed post:
 |---|---|---|
 | LFD-01 | Posts every Tuesday and Friday in a morning window (9:00–10:00 AM NY). | DECIDED |
 | LFD-02 | Carousels do **not** run or post on Tuesday and Friday. Last Few Days replaces them on those days, so those days have 1 feed post. | DECIDED |
-| LFD-03 | Stories enter two ways. **Major headlines** (both pools, judged by Jev `major-news@2`) are guaranteed a place, **up to 3**, and go first. The remaining slots are filled from the **Text on Screen (reels) idea pool**, which runs punchier and more niche. Niche is fine for this format. | DECIDED |
+| LFD-03 | Stories enter two ways. **Major headlines** (both pools, judged by Jev `major-news@2`) are guaranteed a place, **up to 3**. Jev decides the slide order (§4.2; Tommy, 2026-10-14). The remaining slots are filled from the **Text on Screen (reels) idea pool**, which runs punchier and more niche. Niche is fine for this format. | DECIDED |
 | LFD-04 | Repeats are checked **only against earlier Last Few Days posts**. A story that had its own carousel can still appear. | DECIDED |
 | LFD-05 | **5–6 stories** per post. The post is **never skipped**. | DECIDED |
 | LFD-06 | No score floor. Stories are taken in rank order, and when one drops out the next one in line replaces it. | DECIDED |
@@ -72,8 +72,8 @@ scroll-stopping stories. So a story can get in two ways.
 - **Cap:** about 60 candidates in total.
 - **Judgment:** each candidate gets one Jev `major-news@2` judgment (`lib/stories/questions.ts`). The score uses Morning
   Download's weights (`MAJOR_NEWS_WEIGHTS`) and bar (`MAJOR_NEWS_BAR`, 0.55).
-- **Placement:** the stories that clear the bar take **up to 3 slots**, highest score first, and lead the post. Story 1 gets
-  the big tile on the cover mosaic.
+- **Placement:** the stories that clear the bar take **up to 3 slots**, highest score first. Where they sit is Jev's call
+  (§4.2 slide order); story 1 gets the big tile on the cover mosaic.
 - **None clear the bar:** none are forced in, and lane 2 fills the post.
 
 **Lane 2: the punchy rundown (fills the remaining slots)**
@@ -144,7 +144,12 @@ These patterns come from the reference post, where about 10 of the 13 headlines 
 - **Body:** 2 sentences. First what happened, then one hard detail (a number, who, when), credited where natural
   ("Anthropic says…").
 - The same anti-hype and anti-AI-tell rules as the carousel Writer.
-- Slides appear in rank order.
+- **Slide order is Jev's call** (Tommy, 2026-10-14). After writing, each story gets one Jev `lfd-lead@1` judgment
+  (`lib/lfd/questions.ts`; draft wording until Lucas approves it) on its written headline, blurb, the outlets that
+  reported it and the source text: `stop_scroll`, `talked_about` and `human_drama` add a third each, `routine` takes a
+  third away. The highest score leads, whatever lane picked the story; ties keep the lane order. A story is judged once
+  per run. If any judgment fails, the lane order stands (majors by score, then the rundown) and the run record says
+  `lead.by = 'fallback'`. Each story's score is saved on the post and in the run record.
 
 ### 4.3 Code checks (free)
 
@@ -289,7 +294,7 @@ Applied with `node scripts/apply_lfd_schema.js`. There is no npm script, because
 
 | Step | Estimate per post |
 |---|---|
-| Picking stories (SQL, free feed fetch, about 60 Jev `major-news@2` judgments, Jev same-event checks) | a few cents (Jev, metered) |
+| Picking stories (SQL, free feed fetch, about 60 Jev `major-news@2` judgments, Jev same-event checks, 5–7 Jev `lfd-lead@1` judgments) | a few cents (Jev, metered) |
 | Writing call plus the occasional one-story rewrite (Sonnet 5.5, cached prefix) | ~$0.10–0.20 |
 | Photos (Haiku tag and vision checks, Jev photo-fit) | ~$0.10–0.30 |
 | Post-render vision check (Haiku 5.5, one call per story slide, 5–6 slides plus replacements) | ~$0.002–0.01 per slide |

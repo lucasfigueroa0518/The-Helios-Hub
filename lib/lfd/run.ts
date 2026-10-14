@@ -22,6 +22,7 @@ import { leadImage } from './lead-image';
 import { findPhotos, REFUSED_ICON_SCENE } from './photos';
 import { judgedPool, MIN_STORIES, mergeSameEvent, RUNDOWN_POOL, rundownOrder, scoreMajor, Selector, slideOrder, withoutUsed } from './pick';
 import { buildPost } from './post';
+import { leadOrder } from './lead';
 import { carouselLane, freshFeedLane, lastCarouselRunAt, reelsLane } from './sources';
 import { adoptRun, finishRun, insertPost, previousPosts, recentPhotoUrls, startRun, usedIdeaIds } from './store';
 import type { Drop, LfdCandidate, LfdWindow, Pick, Ready, StoryCopy } from './types';
@@ -285,9 +286,13 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     for (let round = 0; round < MAX_ROUNDS && pending.length > 0; round++) pending = await runRound(pending, round);
     unfinished(pending);
 
-    const finalOrder = (): Ready[] => {
-      const order = slideOrder(ready.map((r) => r.pick));
-      const final = order.map((p) => ready.find((r) => r.pick.key === p.key)!);
+    /** Lead scores by story key, judged once per story this run (spec §4.2). */
+    const leadScores = new Map<string, number>();
+    const finalOrder = async (): Promise<Ready[]> => {
+      const base = slideOrder(ready.map((r) => r.pick)).map((p) => ready.find((r) => r.pick.key === p.key)!);
+      const lead = await leadOrder(base, jev, leadScores);
+      record.lead = lead.error ? { by: lead.by, error: lead.error } : { by: lead.by };
+      const final = lead.order;
       // Spec §4.1: at most 2 setups per post; replacement rounds can add more than normalize's per-call cap.
       let setups = 0;
       for (const r of final) {
@@ -346,7 +351,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       return { render, slideObjects, fit: fit as FitResult | null, visionProblems };
     };
 
-    let final = finalOrder();
+    let final = await finalOrder();
     if (final.length === 0) throw new Error('no stories survived');
     let rendered: Awaited<ReturnType<typeof renderAndStore>>;
     try {
@@ -375,7 +380,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
         }
       }
       if (next.length) unfinished(await runRound(next, MAX_ROUNDS));
-      final = finalOrder();
+      final = await finalOrder();
       if (final.length === 0) throw new Error('no stories survived');
       rendered = await renderAndStore(final, false);
     }
@@ -390,7 +395,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       ideaIds: [...new Set(final.flatMap((r) => [r.pick.key, ...r.pick.refs]))],
       // `photo` is the result; the writer's request (copy.photo) is kept as `photoAsk` so the review screen sees both.
       stories: final.map((r) => ({
-        lane: r.pick.lane, origin: r.pick.origin, url: r.pick.url, outlet: r.pick.sourceName, major: r.pick.major, net: r.pick.net,
+        lane: r.pick.lane, origin: r.pick.origin, url: r.pick.url, outlet: r.pick.sourceName, major: r.pick.major, net: r.pick.net, lead: leadScores.get(r.pick.key) ?? null,
         ...r.copy,
         photoAsk: r.copy.photo,
         photo: r.photo,
@@ -404,7 +409,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       renderProblems: [...renderProblemsOf(fit), ...visionProblems],
       short,
     });
-    record.picks = final.map((r) => ({ key: r.pick.key, lane: r.pick.lane, headline: r.pick.headline, origin: r.pick.origin, major: r.pick.major, net: r.pick.net }));
+    record.picks = final.map((r) => ({ key: r.pick.key, lane: r.pick.lane, headline: r.pick.headline, origin: r.pick.origin, major: r.pick.major, net: r.pick.net, lead: leadScores.get(r.pick.key) ?? null }));
     record.stories = final.length;
     const spend = d.spend();
     // recorded false: the run row was no longer running (the worker timed it out); it stays failed.

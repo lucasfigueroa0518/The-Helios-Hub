@@ -320,7 +320,7 @@ test('the run record carries what the Ideas view needs', async () => {
   assert.deepEqual(Object.keys(rec.pool).sort(), ['carousel', 'feed', 'judged', 'reels']);
   assert.ok(rec.jevCalls > 0);
   assert.equal(rec.picks.length, 6);
-  assert.deepEqual(Object.keys(rec.picks[0]!).sort(), ['headline', 'key', 'lane', 'major', 'net', 'origin']);
+  assert.deepEqual(Object.keys(rec.picks[0]!).sort(), ['headline', 'key', 'lane', 'lead', 'major', 'net', 'origin']);
   assert.equal(rec.picks[0]!.lane, 'major');
   assert.ok(rec.queues.major.length >= 1 && rec.queues.major.length <= 10);
   assert.ok(rec.queues.rundown.length >= 1 && rec.queues.rundown.length <= 10);
@@ -586,4 +586,43 @@ test('a run the worker claimed is adopted, never inserted twice', async () => {
   assert.equal(res.runId, claimed.id);
   const runs = (await d.query<{ n: number; status: string }>(`SELECT count(*)::int AS n, max(status) AS status FROM lfd.runs`)).rows[0]!;
   assert.deepEqual([runs.n, runs.status], [1, 'ok']);
+});
+
+test('Jev decides the slide order: a rundown story it scores highest leads the major headline; scores are saved', async () => {
+  const base = jev((h) => (h.includes('Haiku') ? 1 : 0));
+  const d = await deps({
+    jev: async (req, meta) => {
+      if (meta.version.startsWith('lfd-lead')) {
+        const s = meta.subjectId.endsWith('n.com/3') ? 0.9 : meta.subjectId.includes('haiku') ? 0.6 : 0.1;
+        return { answers: { stop_scroll: { noul: s }, talked_about: { noul: s }, human_drama: { noul: s }, routine: { noul: 0 } }, usage: { input_tokens: 1, output_tokens: 0 }, model: 's' };
+      }
+      return base(req, meta);
+    },
+  });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const { rows } = await d.query<{ stories: Array<{ headline: string; lane: string; lead: number | null }> }>(`SELECT stories FROM lfd.posts`);
+  assert.equal(rows[0]!.stories[0]!.lane, 'rundown');
+  assert.match(rows[0]!.stories[1]!.headline, /Haiku/);
+  assert.ok(Math.abs(rows[0]!.stories[0]!.lead! - 0.9) < 1e-9);
+  const run = (await d.query<{ record: { lead: { by: string }; picks: Array<{ lead: number | null }> } }>(`SELECT record FROM lfd.runs`)).rows[0]!.record;
+  assert.equal(run.lead.by, 'jev');
+  assert.ok(run.picks.every((p) => typeof p.lead === 'number'));
+});
+
+test('if a lead judgment fails, the post keeps the lane order and the run record says so', async () => {
+  const base = jev((h) => (h.includes('Haiku') ? 1 : 0));
+  const d = await deps({
+    jev: async (req, meta) => {
+      if (meta.version.startsWith('lfd-lead') && meta.subjectId.endsWith('n.com/2')) throw new Error('jev down');
+      return base(req, meta);
+    },
+  });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const { rows } = await d.query<{ stories: Array<{ headline: string; lane: string }> }>(`SELECT stories FROM lfd.posts`);
+  assert.match(rows[0]!.stories[0]!.headline, /Haiku/);
+  const run = (await d.query<{ record: { lead: { by: string; error: string } } }>(`SELECT record FROM lfd.runs`)).rows[0]!.record;
+  assert.equal(run.lead.by, 'fallback');
+  assert.match(run.lead.error, /jev down/);
 });
