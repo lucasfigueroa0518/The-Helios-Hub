@@ -104,14 +104,18 @@ test('a rejected post is refused by approve and Publish now, and the hub offers 
   const q = query as unknown as Query;
   const a = actionsOn(q, WED_8);
   const id = await seedLfdPost(query, { slug: 'lfd-rej' });
+  await scheduleLfdPost(q, id, 'auto', TUE_330, '2026-10-13', () => 0);
   assert.equal((await a.reject!({ lfdPostId: id }, 'tommy')).ok, true);
   const approve = await a.approve!({ lfdPostId: id }, 'tommy');
   assert.equal(approve.ok, false);
   assert.match(approve.note, /rejected/);
+  assert.equal(approve.status, 409);
   const publish = await a.publishNow!({ lfdPostId: id }, 'tommy');
   assert.equal(publish.ok, false);
   assert.match(publish.note, /rejected/);
+  assert.equal(publish.status, 409);
   const posts = buildDataset(await readAll(query), null, TUE_330).posts.filter((p) => p.vertical === 'last_few_days');
+  assert.equal(posts.length, 1, 'the rejected card exists');
   for (const p of posts) {
     const actions = actionsFor(p, { quota: null, typicalCostLabel: null }).filter((x): x is PostPlan => x.kind === 'post').map((x) => x.action);
     assert.equal(actions.includes('approveContent'), false);
