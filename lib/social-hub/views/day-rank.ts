@@ -26,7 +26,13 @@ import { isRejected } from '@/lib/social-hub/views/state';
 export type IdeaAdjustment = { vertical: Vertical; ideaId: string; nyDate: string; kind: 'promote' | 'demote'; createdAt: string };
 
 /** Posts per day for the types with a quota (Stories go by series days). */
-export type DayQuotas = { reels: number; carousels: number; explainers: number };
+export type DayQuotas = {
+  reels: number;
+  carousels: number;
+  explainers: number;
+  /** One post on each of its days (spec §7.4); missing reads as one. */
+  last_few_days?: number;
+};
 
 export type RankedIdea = { idea: HubIdea; rank: number; moved: 'promoted' | 'demoted' | null };
 
@@ -130,6 +136,16 @@ export function quotaCandidates(
       return { vertical, idea: null, post, locked: Boolean(post && HOLDS.has(post.status)), rank: null, moved: null, series: w.label, seriesId: w.id };
     });
   }
+  if (vertical === 'last_few_days') {
+    // One card on its days: the post holding today's window, else today's made post (it has no idea pool to rank).
+    const quota = Math.min(data.dayQuotas?.last_few_days ?? 1, windows.length);
+    if (quota <= 0) return [];
+    const mine = data.posts.filter((p) => p.vertical === 'last_few_days' && !isRejected(p));
+    const post = mine.find((p) => p.nyDate === today && HOLDS.has(p.status))
+      ?? mine.find((p) => p.idea?.id === `lfd:${today}` && (p.status === 'generating' || (p.status === 'ready' && hasMedia(p))))
+      ?? null;
+    return [{ vertical, idea: null, post, locked: Boolean(post && HOLDS.has(post.status)), rank: null, moved: null }];
+  }
   const quota = Math.min(data.dayQuotas?.[vertical] ?? windows.length, windows.length);
   if (quota <= 0) return [];
   const locked = data.posts
@@ -180,7 +196,7 @@ export function orderCards(cards: readonly QuotaCandidate[]): QuotaCandidate[] {
     .map((x) => x.c);
 }
 
-export const DAY_TYPES: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories'];
+export const DAY_TYPES: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days'];
 
 /** Every type's quota candidates for today, as the day's cards in posting order. */
 export function allQuotaCandidates(data: Parameters<typeof quotaCandidates>[0], now: Date): QuotaCandidate[] {

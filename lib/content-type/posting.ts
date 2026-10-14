@@ -9,6 +9,8 @@ import { liveStoriesDb } from '@/lib/stories/db';
 import { loadSettings as loadStories, saveSeriesSetting, SERIES } from '@/lib/stories/settings';
 import type { Series } from '@/lib/stories/render/types';
 import { PLAN } from '@/lib/social-hub/views/plan';
+import { dbQuery } from '@/lib/db';
+import { readLfdSettings } from '@/lib/lfd/settings';
 
 /**
  * How each content type makes and posts, in the two switches a person thinks
@@ -23,9 +25,9 @@ import { PLAN } from '@/lib/social-hub/views/plan';
  * posted; it can't pass the type's posting windows. Stories have no quota:
  * each series has its own days of the week.
  */
-export type ContentType = 'reels' | 'carousels' | 'explainers' | 'stories';
+export type ContentType = 'reels' | 'carousels' | 'explainers' | 'stories' | 'last_few_days';
 
-export const POSTING_TYPES: readonly ContentType[] = ['reels', 'carousels', 'explainers', 'stories'];
+export const POSTING_TYPES: readonly ContentType[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days'];
 export const isPostingType = (v: unknown): v is ContentType => POSTING_TYPES.includes(v as ContentType);
 
 export type SeriesState = { id: Series; label: string; enabled: boolean; generate: boolean; days: number[] };
@@ -38,6 +40,8 @@ export type PostingState = {
   perDay: number | null;
   maxPerDay: number | null;
   series: SeriesState[] | null;
+  /** Last Few Days: the weekdays it posts once (0 = Sunday). Absent for the other types. */
+  days?: number[] | null;
 };
 
 export type PostingPatch = {
@@ -79,6 +83,11 @@ export async function readPosting(type: ContentType): Promise<PostingState> {
     const per2 = count(per);
     return { type, live: live === true, generate: run !== false, autoPublish: approval === false, perDay: Number.isInteger(per2) && per2 >= 0 ? per2 : PASSING_REELS_PER_NIGHT, maxPerDay: windows('reels'), series: null };
   }
+  if (type === 'last_few_days') {
+    const s = await readLfdSettings((text, params) => dbQuery(text, params));
+    // One post on each of its days (spec §7.4): no per-day quota to set.
+    return { type, live: s.publishingLive, generate: s.autoRun, autoPublish: !s.requireApproval, perDay: null, maxPerDay: null, series: null, days: s.days };
+  }
   const s = await loadStories(liveStoriesDb);
   return {
     type,
@@ -103,6 +112,7 @@ function validate(type: ContentType, patch: PostingPatch): void {
   for (const k of ['live', 'generate', 'autoPublish'] as const) if (patch[k] !== undefined && typeof patch[k] !== 'boolean') throw new Error(`${k} must be true or false.`);
   if (patch.perDay !== undefined) {
     if (type === 'stories') throw new Error('Stories have no daily quota; each series has its own days.');
+    if (type === 'last_few_days') throw new Error('Last Few Days has no daily quota; it posts once on each of its days.');
     quota(patch, type === 'carousels' ? carouselCfg.CAROUSEL_SLOTS.length : type === 'explainers' ? EXPLAINER_WINDOWS.length : windows('reels'), type === 'explainers' ? 1 : 0);
   }
   if (patch.series) {
@@ -151,6 +161,16 @@ export async function writePosting(type: ContentType, patch: PostingPatch, by: s
     }
     const n = quota(patch, windows('reels'), 0);
     if (n != null) await setReelsSetting('posts_per_day', n);
+  } else if (type === 'last_few_days') {
+    const set = (key: string, value: unknown) =>
+      dbQuery(
+        `INSERT INTO lfd.settings (key, value, updated_at) VALUES ($1, $2::jsonb, now())
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+        [key, JSON.stringify(value)],
+      );
+    if (patch.generate !== undefined) await set('auto_run', patch.generate);
+    if (patch.autoPublish !== undefined) await set('require_approval', !patch.autoPublish);
+    if (patch.live !== undefined) await set('publishing_live', patch.live);
   } else {
     const upsert = (key: string, value: unknown) =>
       liveStoriesDb.query(

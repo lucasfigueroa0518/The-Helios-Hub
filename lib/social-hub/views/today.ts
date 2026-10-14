@@ -76,7 +76,7 @@ export function slotsForDay(posts: readonly HubPost[], nyDate: string, dayQuotas
   let filled = 0;
   for (const vertical of VERTICAL_IDS) {
     const windows = windowsOn(vertical, nyDate).length;
-    const configured = vertical === 'stories' || !dayQuotas ? windows : dayQuotas[vertical];
+    const configured = vertical === 'stories' || !dayQuotas ? windows : dayQuotas[vertical] ?? windows;
     const quota = Math.min(Math.max(0, configured), windows);
     slots += quota;
     const held = posts.filter((p) => p.vertical === vertical && p.nyDate === nyDate && HOLDS_SLOT.has(p.status)).length;

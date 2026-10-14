@@ -142,11 +142,12 @@ export type Quota = { left: number | null; total: number | null; source: string;
 const QUOTA_HEADROOM = 5;
 
 /** What Hard publish does per vertical today (D28): said plainly before the click. */
-const PUBLISH_CONFIRM: Record<'reels' | 'carousels' | 'explainers' | 'stories', string> = {
+const PUBLISH_CONFIRM: Record<Vertical, string> = {
   reels: 'This trial reel goes out now instead of in its slot. Publishing counts as your approval.',
   carousels: 'This carousel goes out now instead of in its slot. Publishing counts as your approval, and its waiting slot is released so it can’t post twice.',
   explainers: 'This reel goes out now instead of in its slot. Publishing counts as your approval unless it was rejected in review.',
   stories: 'This set is approved and goes out now, frame by frame.',
+  last_few_days: 'This Last Few Days post goes out now instead of in its slot. Publishing counts as your approval, and its waiting slot is released so it can’t post twice.',
 };
 
 /** The actions a post offers in Content House, with the reason one is unavailable. */
@@ -270,6 +271,8 @@ export function contentRefs(post: HubPost): Record<string, string | undefined> {
       return { jobId: post.refs.jobId };
     case 'stories':
       return { setId: post.refs.setId };
+    case 'last_few_days':
+      return { lfdPostId: post.refs.lfdPostId };
   }
 }
 

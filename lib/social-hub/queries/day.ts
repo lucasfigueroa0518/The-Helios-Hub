@@ -8,7 +8,7 @@ import type { DayQuotas, IdeaAdjustment } from '@/lib/social-hub/views/day-rank'
  */
 
 /** Each type's default when its posts_per_day row is missing (lib/reels/config.ts, lib/social/overnight/config.ts, lib/explainers/publish/config.ts). */
-export const DEFAULT_DAY_QUOTAS: DayQuotas = { reels: 3, carousels: 2, explainers: 2 };
+export const DEFAULT_DAY_QUOTAS: DayQuotas = { reels: 3, carousels: 2, explainers: 2, last_few_days: 1 };
 
 export async function readAdjustments(q: HubQuery, nyDate: string): Promise<IdeaAdjustment[]> {
   const { rows } = await q<{ vertical: IdeaAdjustment['vertical']; idea_id: string; ny_date: string; kind: IdeaAdjustment['kind']; created_at: string }>(
@@ -36,5 +36,6 @@ export async function readDayQuotas(q: HubQuery, explainersQ: Promise<HubQuery>)
     reels: perDay(reels.rows, DEFAULT_DAY_QUOTAS.reels),
     carousels: perDay(carousels.rows, DEFAULT_DAY_QUOTAS.carousels),
     explainers: perDay(explainers.rows, DEFAULT_DAY_QUOTAS.explainers, 1),
+    last_few_days: DEFAULT_DAY_QUOTAS.last_few_days,
   };
 }

@@ -32,8 +32,11 @@ import './type-hub.css';
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-const TITLE: Record<Exclude<Vertical, 'reels'>, string> = { carousels: 'Carousels', stories: 'Stories', explainers: 'Explainers' };
-const BENCH_NOTE: Record<Exclude<Vertical, 'reels'>, string> = {
+/** The types this page draws (Text on Screen has its own app page; Last Few Days joins with its Run button and settings). */
+type PageVertical = Exclude<Vertical, 'reels' | 'last_few_days'>;
+
+const TITLE: Record<PageVertical, string> = { carousels: 'Carousels', stories: 'Stories', explainers: 'Explainers' };
+const BENCH_NOTE: Record<PageVertical, string> = {
   carousels: 'Stories the 3:00 AM run shortlisted, best first. The top two become carousels.',
   stories: 'Ideas drawn from the other pools. A set is built for each series that is due.',
   explainers: 'Topics waiting to be rendered, best score first. Generate renders one reel.',
@@ -45,7 +48,7 @@ const BENCH_NOTE: Record<Exclude<Vertical, 'reels'>, string> = {
  * posts, and the bench. The generate buttons, Live and settings write, so they
  * are built here, outside the read-only hub code.
  */
-export async function ContentTypePage({ vertical }: { vertical: Exclude<Vertical, 'reels'> }) {
+export async function ContentTypePage({ vertical }: { vertical: PageVertical }) {
   const session = await getSession();
   if (!session) redirect('/');
   // Independent reads: run them together rather than one after another.

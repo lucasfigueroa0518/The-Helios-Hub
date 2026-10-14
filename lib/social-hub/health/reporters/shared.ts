@@ -10,6 +10,8 @@ export type ReportContext = { night: string; posting: PostingState; now: Date };
 export type Reporter = (q: HubQuery, ctx: ReportContext) => Promise<NightReport>;
 
 export function quotaFor(posting: PostingState, night: string): number {
+  // Last Few Days: one post on each of its days (spec §7.4).
+  if (posting.days) return posting.days.includes(weekdayIndex(night)) ? 1 : 0;
   if (posting.series) {
     const day = weekdayIndex(night);
     return posting.series.filter((s) => s.enabled && s.generate && s.days.includes(day)).length;

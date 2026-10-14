@@ -133,7 +133,7 @@ function PoolPanel({ pool, base, now, running }: { pool: PoolSummary; base: stri
         <span className="sh-muted">The pool is empty.</span>
       )}
       {/* A pool that stopped refilling is a pipeline problem: say so in the failed tone, not quiet gray (critique 2026-10-08). */}
-      {poolStale(pool.lastRefill, now) ? (
+      {poolStale(pool.lastRefill, now, pool.vertical) ? (
         <span className="sh-pool__stale"><TriangleAlert size={13} aria-hidden="true" />No refill in {relative(pool.lastRefill, now).replace(/ ago$/, '')}</span>
       ) : (
         <span className="sh-subtle">{pool.lastRefill ? `Refilled ${relative(pool.lastRefill, now)}` : 'No refill recorded'}</span>

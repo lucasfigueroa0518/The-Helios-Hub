@@ -2,6 +2,8 @@ import { carouselIdeas, carouselPosts } from '@/lib/social-hub/adapters/carousel
 import { explainerIdeas, explainerPosts } from '@/lib/social-hub/adapters/explainers';
 import { reelIdeas, reelPosts } from '@/lib/social-hub/adapters/reels';
 import { storyIdeas, storyPosts } from '@/lib/social-hub/adapters/stories';
+import { lfdIdeas, lfdPosts } from '@/lib/social-hub/adapters/last-few-days';
+import type { LfdRead } from '@/lib/social-hub/queries/last-few-days';
 import type { DayQuotas, IdeaAdjustment } from '@/lib/social-hub/views/day-rank';
 import type { CarouselsRead } from '@/lib/social-hub/queries/carousels';
 import type { ExplainersRead } from '@/lib/social-hub/queries/explainers';
@@ -18,6 +20,8 @@ export type VerticalReads = {
   explainers: ExplainersRead | Error;
   carousels: CarouselsRead | Error;
   stories: StoriesRead | Error;
+  /** Optional: a caller that reads only the first four types (older fixtures) shows no Last Few Days posts. */
+  last_few_days?: LfdRead | Error;
 };
 
 export type HubDataset = {
@@ -59,10 +63,15 @@ function adapt(reads: VerticalReads, vertical: Vertical): { posts: HubPost[]; id
       const r = reads.stories;
       return r instanceof Error ? r : { posts: storyPosts(r), ideas: storyIdeas(r.pool) };
     }
+    case 'last_few_days': {
+      const r = reads.last_few_days;
+      if (!r) return { posts: [], ideas: [] };
+      return r instanceof Error ? r : { posts: lfdPosts(r), ideas: lfdIdeas(r.latestRun) };
+    }
   }
 }
 
-const ORDER: Vertical[] = ['reels', 'explainers', 'carousels', 'stories'];
+const ORDER: Vertical[] = ['reels', 'explainers', 'carousels', 'stories', 'last_few_days'];
 
 export function buildDataset(
   reads: VerticalReads,

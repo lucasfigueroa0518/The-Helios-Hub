@@ -23,6 +23,7 @@ const HOW: Record<Vertical, string> = {
   explainers: 'Refilled at 2:00 AM; the two best topics are rendered when auto-render is on.',
   carousels: 'The 3:00 AM run shortlists stories; the top two become posts. A finished post keeps its rank and is reused.',
   stories: 'Built at 4:00 AM from the other pools, one set per series that is due.',
+  last_few_days: 'Picked at 3:00 AM on Tuesdays and Fridays: up to 3 major headlines, then the best Text on Screen ideas. This is the latest post’s queue, its picks and what it dropped.',
 };
 
 const ALL_ARE: Record<IdeaState, string> = {
@@ -52,7 +53,7 @@ export function PoolScreen({ dataset, base, vertical, params, now, embeddedIn }:
   const stateVaries = new Set(ideas.map((i) => `${i.state}:${i.versionCount > 1}`)).size > 1;
   const addedVaries = new Set(ideas.map(addedOf)).size > 1;
   const info = verticalInfo(vertical);
-  const stale = poolStale(summary.lastRefill, now);
+  const stale = poolStale(summary.lastRefill, now, vertical);
 
   return (
     <>

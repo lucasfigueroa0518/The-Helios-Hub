@@ -100,5 +100,7 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       // The set's move and its re-projection onto the spine commit together.
       rescheduleSet: (id, nyDate, publishAt) => db.transaction((tx) => storiesRepo.rescheduleSet(tx, id, nyDate, publishAt)),
     }),
+    // Its verbs land with the hub actions (lib/publishing/actions/last-few-days.ts); none is offered until then.
+    last_few_days: { vertical: 'last_few_days' },
   };
 }

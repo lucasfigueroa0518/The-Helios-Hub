@@ -11,6 +11,7 @@ import {
   GalleryHorizontal,
   Hand,
   Loader,
+  Newspaper,
   Presentation,
   SkipForward,
   Sparkles,
@@ -29,6 +30,7 @@ export const TYPE_ICON: Record<Vertical, LucideIcon> = {
   explainers: Presentation,
   carousels: GalleryHorizontal,
   stories: Sparkles,
+  last_few_days: Newspaper,
 };
 
 const STATE_ICON: Record<StateIcon, LucideIcon> = {

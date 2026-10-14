@@ -28,7 +28,8 @@ export function runningSummary(runs: AllProgress): string[] {
  * "generating".
  */
 export function runForCandidate(c: QuotaCandidate, runs: AllProgress): ProgressItem | null {
-  if (c.vertical === 'reels') return null;
+  // Last Few Days runs aren't in AllProgress yet (their progress strip lands with the type page).
+  if (c.vertical === 'reels' || c.vertical === 'last_few_days') return null;
   const items = runs[c.vertical] ?? [];
   const own = items.find((i) => i.topicId && c.idea && (c.idea.id === i.topicId || c.idea.id.endsWith(`:${i.topicId}`)));
   if (own) return own;

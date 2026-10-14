@@ -1,6 +1,7 @@
 import { explainersHubQuery, liveHubQuery, type HubQuery } from '@/lib/social-hub/db';
 import { buildDataset, type HubDataset, type VerticalReads } from '@/lib/social-hub/dataset';
 import { readCarousels } from '@/lib/social-hub/queries/carousels';
+import { readLastFewDays } from '@/lib/social-hub/queries/last-few-days';
 import { readAccount } from '@/lib/social-hub/queries/account';
 import { readCosts } from '@/lib/social-hub/queries/costs';
 import { readExplainers } from '@/lib/social-hub/queries/explainers';
@@ -38,16 +39,17 @@ function explainersShareMain(q: HubQuery): boolean {
  */
 export async function readAll(q: HubQuery = liveHubQuery, explainersQ: Promise<HubQuery> = explainersHandle(q)): Promise<VerticalReads> {
   const shared = explainersShareMain(q);
-  const mainSpine = readSpine(q, shared ? ['carousels', 'reels', 'explainers'] : ['carousels', 'reels']);
+  const mainSpine = readSpine(q, shared ? ['carousels', 'reels', 'explainers', 'last_few_days'] : ['carousels', 'reels', 'last_few_days']);
   mainSpine.catch(() => undefined); // each reader reports the failure itself
   const explainersSpine = (eq: HubQuery) => (shared ? mainSpine : readSpine(eq, ['explainers']));
-  const [reels, explainers, carousels, stories] = await Promise.all([
+  const [reels, explainers, carousels, stories, lastFewDays] = await Promise.all([
     settle(mainSpine.then((spine) => readReels(q, spine))),
     settle(explainersQ.then(async (eq) => readExplainers(eq, await explainersSpine(eq)))),
     settle(mainSpine.then((spine) => readCarousels(q, spine))),
     settle(readStories(q)),
+    settle(mainSpine.then((spine) => readLastFewDays(q, spine))),
   ]);
-  return { reels, explainers, carousels, stories };
+  return { reels, explainers, carousels, stories, last_few_days: lastFewDays };
 }
 
 export async function loadDataset(q: HubQuery = liveHubQuery, now = new Date()): Promise<HubDataset> {
