@@ -601,3 +601,15 @@ test('scheduleJob through today never reaches tomorrow; without a limit it does'
   assert.equal(next.scheduled, true);
   assert.deepEqual((await explainerSlots(pg)).map((s) => s.ny_date), ['2026-10-09']);
 });
+
+test('Reschedule on a failed post books a new slot today beside the failed one, as a person’s slot (B7)', async () => {
+  const { pg, q } = await spineDb();
+  const c = await carousel(pg, q);
+  const booked = await placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-08', slot: 'morning', now: NOW, rng: first });
+  assert.ok(booked.ok, booked.note);
+  await pg.query(`UPDATE social_hub.schedule SET status = 'failed', error = 'Container never reached FINISHED' WHERE id = $1`, [(booked as { scheduleId: string }).scheduleId]);
+  const again = await placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-08', slot: 'morning', now: NOW, rng: last });
+  assert.ok(again.ok, again.note);
+  const rows = (await pg.query<{ status: string; source: string }>(`SELECT status, source FROM social_hub.schedule WHERE content_item_id = $1 ORDER BY created_at`, [c.itemId])).rows;
+  assert.deepEqual(rows.map((r) => [r.status, r.source]), [['failed', 'user'], ['scheduled', 'user']]);
+});

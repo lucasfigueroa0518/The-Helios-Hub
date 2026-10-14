@@ -149,6 +149,11 @@ const PUBLISH_CONFIRM: Record<'reels' | 'carousels' | 'explainers' | 'stories', 
   stories: 'This set is approved and goes out now, frame by frame.',
 };
 
+/** Something to post: a video, slides or frames. A render that failed has none. */
+function hasContent(post: HubPost): boolean {
+  return !(post.media.kind === 'none' || (post.media.kind === 'slides' && post.media.slides.length === 0) || (post.media.kind === 'frames' && post.media.frames.length === 0));
+}
+
 /** The actions a post offers in Content House, with the reason one is unavailable. */
 export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCostLabel: string | null }): ActionPlan[] {
   const plans: ActionPlan[] = [];
@@ -173,8 +178,11 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
       plans.push({ kind: 'post', action: 'approveTrialReel', label: 'Approve', endpoint: '/api/social-hub/actions/approve-trial-reel', body: { postIdeaId: post.refs.postIdeaId, videoJobId: post.refs.videoJobId ?? null }, disabled: null });
     }
   }
+  // A failed post can go again (Phase B, B7): Reschedule into one of today's windows, or Reject.
+  // Not a Story set (a failed set is final; Regenerate builds a new one), and not a render with nothing to post.
+  const failedRetry = post.status === 'failed' && post.vertical !== 'stories' && hasContent(post);
   // Reject (D47): content that hasn't posted yet never will, for every type (2026-10-13: explainers too).
-  if (post.status === 'ready' || post.status === 'scheduled') {
+  if (post.status === 'ready' || post.status === 'scheduled' || failedRetry) {
     const refs = post.vertical === 'carousels'
       ? { postId: post.refs.postId }
       : post.vertical === 'reels'
@@ -202,8 +210,9 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
   // Schedule here / move (D50): content with no slot is placed; a waiting slot is moved.
   const placeRefs = contentRefs(post);
   const rejected = /\brejected\b/i.test(post.approval.note ?? '') || /\brejected\b/i.test(post.statusNote ?? '');
-  if (post.status === 'ready' && !rejected) {
-    plans.push({ kind: 'post', action: 'place', label: 'Schedule', endpoint: '/api/social-hub/actions/place', body: { vertical: post.vertical, refs: placeRefs }, disabled: Object.values(placeRefs).some((v) => !v) ? 'This content can’t be found any more.' : null, pick: 'slot' });
+  // A failed post's Reschedule books a new slot beside the failed one (placeItem, source 'user': a person picked it).
+  if ((post.status === 'ready' || failedRetry) && !rejected) {
+    plans.push({ kind: 'post', action: 'place', label: post.status === 'failed' ? 'Reschedule' : 'Schedule', endpoint: '/api/social-hub/actions/place', body: { vertical: post.vertical, refs: placeRefs }, disabled: Object.values(placeRefs).some((v) => !v) ? 'This content can’t be found any more.' : null, pick: 'slot' });
   }
   if (post.status === 'scheduled') {
     plans.push({ kind: 'post', action: 'reschedule', label: 'Move', endpoint: '/api/social-hub/actions/reschedule', body: { vertical: post.vertical, refs: placeRefs }, disabled: Object.values(placeRefs).some((v) => !v) ? 'This slot can’t be found any more.' : null, pick: 'slot' });
@@ -220,9 +229,7 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
   }
 
   if (live) {
-    const noContent = post.media.kind === 'none' || (post.media.kind === 'slides' && post.media.slides.length === 0) || (post.media.kind === 'frames' && post.media.frames.length === 0)
-      ? 'Nothing to publish yet. Regenerate first.'
-      : null;
+    const noContent = hasContent(post) ? null : 'Nothing to publish yet. Regenerate first.';
     const ref = post.vertical === 'reels' ? post.refs.videoJobId : post.vertical === 'carousels' ? post.refs.postId : post.vertical === 'explainers' ? post.refs.jobId : post.refs.setId;
     const skipped = post.status === 'skipped' ? 'Story sets that miss their window are never reused.' : null;
     plans.push({

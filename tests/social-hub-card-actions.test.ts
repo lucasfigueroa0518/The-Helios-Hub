@@ -85,3 +85,27 @@ test('explainers can be rejected from the card', () => {
   assert.ok(reject);
   assert.deepEqual((reject!.plan.body as { refs: Record<string, string> }).refs, { jobId: post.refs.jobId });
 });
+
+const published = (vertical: HubPost['vertical']) => find((p) => p.vertical === vertical && p.status === 'published' && p.media.kind !== 'none');
+
+test('failed: Try again, then Reschedule (one of today’s windows), Regenerate, Reject (B7)', () => {
+  const base = published('reels');
+  const post: HubPost = { ...base, status: 'failed', postedAt: null, permalink: null, statusNote: 'Container never reached FINISHED' };
+  const c = card(post);
+  assert.equal(c.primary?.label, 'Try again');
+  assert.deepEqual(c.grid.map((a) => [a.key, a.label]), [['place', 'Reschedule'], ['hardRegenerate', 'Regenerate'], ['reject', 'Reject']]);
+  assert.equal(c.grid[0]!.plan.pick, 'slot');
+  assert.deepEqual((c.grid[0]!.plan.body as { refs: Record<string, string> }).refs, { postIdeaId: post.refs.postIdeaId });
+});
+
+test('a failed Story set offers no Reschedule or Reject: a failed set is final, Regenerate builds a new one', () => {
+  const base = published('stories');
+  const c = card({ ...base, status: 'failed', postedAt: null, permalink: null });
+  assert.ok(!c.grid.some((a) => a.key === 'place' || a.key === 'reject'));
+});
+
+test('a failed render with nothing to post offers no Reschedule', () => {
+  const base = find((p) => p.vertical === 'explainers');
+  const c = card({ ...base, status: 'failed', postedAt: null, publishAt: null, permalink: null, media: { kind: 'none', note: 'The render failed.' } });
+  assert.ok(!c.grid.some((a) => a.key === 'place'));
+});
