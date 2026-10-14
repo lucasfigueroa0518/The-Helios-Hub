@@ -15,18 +15,21 @@
  *               2+ (slide-variant@1). A bucket with none left reuses its least
  *               recently used variant that the slide can take, never the
  *               previous slide's (logged).
- *   3. canvas   per slide, right after its variant (Lucas, 2026-10-08): Jev
- *               picks black, green, orange or white (slide-canvas@1). Code
- *               gives a spread's second slide its first slide's canvas and
- *               never lets one colour sit on two neighbouring slides (a
- *               repeat becomes black, logged). The follow slide stays black.
+ *   3. canvas   per slide, right after its variant (Lucas, 2026-10-08;
+ *               even mix 2026-10-12): Jev picks black, green, orange or
+ *               white (slide-canvas@2). Code gives a spread's second slide
+ *               its first slide's canvas, drops the previous slide's colour
+ *               from the options, and drops a colour that has pulled more
+ *               than one ahead of the least-used option still in play. A
+ *               pick that isn't in play becomes the least-used colour
+ *               (logged). The follow slide stays black.
  *
  * Jev reads text only (the copy, lengths, the photo's kind and Haiku tags).
  */
 import type { JevAsk } from '@/lib/social/jev/client';
 import * as SlideBucket from '@/lib/social/jev/questions/slide-bucket.v1';
 import * as SpreadFit from '@/lib/social/jev/questions/spread-fit.v1';
-import * as SlideCanvasQ from '@/lib/social/jev/questions/slide-canvas.v1';
+import * as SlideCanvasQ from '@/lib/social/jev/questions/slide-canvas.v2';
 import * as SlideVariant from '@/lib/social/jev/questions/slide-variant.v1';
 import { SPREAD_MIN_ASPECT, type Photo, type PhotoTrace } from '@/lib/social/photos/find';
 import type { FilledDraft } from '@/lib/social/writer/draft';
@@ -35,7 +38,7 @@ import { TEMPLATES, allowedTemplates, type Bucket, type PhotoShape, type SlideFa
 import { BACKDROP_MAX_UPSCALE, SLIDE, SPREAD, fillsSharp } from './framing';
 import { canBleedPerson, photoKindOf } from './from-draft';
 import { tuning } from '@/lib/social/photos/tuning';
-import { SLIDE_CANVASES, type SlideCanvas } from './types';
+import type { SlideCanvas } from './types';
 
 export type Layout = {
   /** The template per slide, cover first (no entry for the follow slide). */
@@ -125,23 +128,30 @@ export async function chooseLayout(draft: FilledDraft, photos: { cover: PhotoTra
   /** Decision 3: the slide's canvas, after its variant. */
   const pickCanvas = async (n: number, p: (typeof places)[number], layoutId: TemplateId) => {
     const previous = canvases[n - 1] ?? null;
-    const state: SlideCanvasQ.CanvasState = {
-      slide: { position: n + 1, content: p.content, headline: p.headline, body: p.body || p.quote, layout: TEMPLATES.find((t) => t.id === layoutId)?.look ?? layoutId, photo: photoShape(p.photo) },
-      previous_canvas: previous,
-      canvases_so_far: [...canvases],
-    };
-    let picked: SlideCanvas = 'black';
+    const options = SlideCanvasQ.optionsFor(previous, canvases);
+    const state = SlideCanvasQ.buildState(
+      { position: n + 1, content: p.content, headline: p.headline, body: p.body || p.quote, layout: TEMPLATES.find((t) => t.id === layoutId)?.look ?? layoutId, photo: photoShape(p.photo) },
+      previous,
+      canvases,
+    );
+    let picked: SlideCanvas = SlideCanvasQ.leastUsed(canvases, previous);
     try {
-      const res = await jev({ state, questions: SlideCanvasQ.buildQuestions() }, { version: SlideCanvasQ.VERSION, subjectId: `${draft.cover.slice(0, 60)} #${n + 1}` });
+      const res = await jev({ state, questions: SlideCanvasQ.buildQuestions(options) }, { version: SlideCanvasQ.VERSION, subjectId: `${draft.cover.slice(0, 60)} #${n + 1}` });
       const a = res.answers[SlideCanvasQ.QUESTION_ID];
-      picked = (SLIDE_CANVASES as readonly string[]).includes(a?.choice ?? '') ? (a!.choice as SlideCanvas) : 'black';
-      log.push(`slide ${n + 1}: canvas ${picked} (Jev of ${SLIDE_CANVASES.map((c) => `${c} ${(a?.probabilities?.[c] ?? 0).toFixed(2)}`).join(', ')})`);
+      const choice = a?.choice ?? '';
+      if (options.includes(choice as SlideCanvas)) {
+        picked = choice as SlideCanvas;
+        log.push(`slide ${n + 1}: canvas ${picked} (Jev of ${options.map((c) => `${c} ${(a?.probabilities?.[c] ?? 0).toFixed(2)}`).join(', ')})`);
+      } else {
+        log.push(`slide ${n + 1}: canvas ${choice || 'none'} not in play (${options.join(', ')}) → ${picked}`);
+      }
+      if (picked === previous && options.length) {
+        picked = SlideCanvasQ.leastUsed(canvases, previous);
+        log.push(`slide ${n + 1}: canvas repeats the previous slide's → ${picked}`);
+      }
     } catch (err) {
-      log.push(`slide ${n + 1}: canvas Jev error (${errText(err)}) → black`);
-    }
-    if (picked !== 'black' && picked === previous) {
-      log.push(`slide ${n + 1}: canvas ${picked} repeats the previous slide's → black`);
       picked = 'black';
+      log.push(`slide ${n + 1}: canvas Jev error (${errText(err)}) → black`);
     }
     canvases.push(picked);
   };
