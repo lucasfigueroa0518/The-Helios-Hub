@@ -39,7 +39,7 @@ export async function carryOutLfdRun(w: CarryOutDeps, claimed: ClaimedRun): Prom
     const cap = settings.runCapUsd;
     if (cap == null) {
       const error = `lfd.settings.run_cap_usd is not a positive number (got ${JSON.stringify(settings.runCapRaw)}); refusing to run`;
-      await finishRun(w.query, claimed.id, { status: 'failed', error, claudeUsd: 0, jevUsd: 0, record: {} });
+      if (!(await finishRun(w.query, claimed.id, { status: 'failed', error, claudeUsd: 0, jevUsd: 0, record: {} }))) w.log('lfd_run_finish_ignored', { runId: claimed.id, status: 'failed' });
       w.log('lfd_run_failed', { runId: claimed.id, error });
       return { runId: claimed.id, status: 'failed', note: error };
     }
@@ -48,7 +48,9 @@ export async function carryOutLfdRun(w: CarryOutDeps, claimed: ClaimedRun): Prom
       const fill = await dailyFill(w.query, 'last_few_days', nyDate, 1);
       if (fill.making < 1) {
         const note = quotaFilledNote(fill, 'Last Few Days post');
-        await finishRun(w.query, claimed.id, { status: 'skipped', stopReason: `quota-filled: ${note}`, claudeUsd: 0, jevUsd: 0, record: { fill } });
+        if (!(await finishRun(w.query, claimed.id, { status: 'skipped', stopReason: `quota-filled: ${note}`, claudeUsd: 0, jevUsd: 0, record: { fill } }))) {
+          w.log('lfd_run_finish_ignored', { runId: claimed.id, status: 'skipped' });
+        }
         w.log('lfd_run_skipped', { runId: claimed.id, reason: 'quota_filled', note });
         return { runId: claimed.id, status: 'skipped', note };
       }
@@ -60,6 +62,8 @@ export async function carryOutLfdRun(w: CarryOutDeps, claimed: ClaimedRun): Prom
       w.log('lfd_run_failed', { runId: claimed.id, error: res.error });
       return { runId: claimed.id, status: 'failed', note: res.error };
     }
+    // A run that finished after the worker timed it out: its row stays failed (lib/lfd/store.ts finishRun).
+    if (res.recorded === false) w.log('lfd_run_finish_ignored', { runId: claimed.id, status: res.short ? 'partial' : 'ok', postId: res.postId });
     await lfdItemId(w.query, res.postId);
     let scheduled: string | null = null;
     if (settings.publishingLive) {

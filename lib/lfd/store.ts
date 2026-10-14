@@ -49,11 +49,14 @@ export async function finishRun(
   q: HubQuery,
   id: string,
   o: { status: 'ok' | 'partial' | 'failed' | 'skipped'; stopReason?: string; error?: string; claudeUsd: number; jevUsd: number; record: unknown },
-): Promise<void> {
-  await q(
-    `UPDATE lfd.runs SET status = $2, finished_at = now(), stop_reason = $3, error = $4, claude_usd = $5, jev_usd = $6, total_usd = $5::double precision + $6::double precision, record = $7::jsonb WHERE id = $1`,
+): Promise<boolean> {
+  // Only a running run: one the worker already failed (the 30-minute timeout) keeps its failed row.
+  const { rows } = await q<{ id: string }>(
+    `UPDATE lfd.runs SET status = $2, finished_at = now(), stop_reason = $3, error = $4, claude_usd = $5, jev_usd = $6, total_usd = $5::double precision + $6::double precision, record = $7::jsonb
+      WHERE id = $1 AND status = 'running' RETURNING id`,
     [id, o.status, o.stopReason ?? null, o.error ?? null, o.claudeUsd, o.jevUsd, JSON.stringify(o.record)],
   );
+  return rows.length > 0;
 }
 
 export async function insertPost(

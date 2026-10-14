@@ -64,3 +64,17 @@ test('startRun refuses while a recent run is still running', async () => {
   await query(`INSERT INTO lfd.runs (trigger, status, started_at) VALUES ('manual', 'running', now() - interval '10 minutes')`);
   await assert.rejects(startRun(query, 'manual', 1, '2026-10-13'), /a Last Few Days run is already in progress/);
 });
+
+test('finishRun only finishes a running run: a stray finish after the timeout keeps the failed row', async () => {
+  const { query } = await openHubTestDb();
+  const id = await startRun(query, 'manual', 1, '2026-10-13');
+  await query(`UPDATE lfd.runs SET status = 'failed', error = 'timed out after 30 minutes' WHERE id = $1`, [id]);
+  const late = await finishRun(query, id, { status: 'ok', claudeUsd: 0.4, jevUsd: 0.1, record: { stories: 6 } });
+  assert.equal(late, false);
+  const row = (await query<{ status: string; error: string | null }>(`SELECT status, error FROM lfd.runs WHERE id = $1`, [id])).rows[0]!;
+  assert.deepEqual([row.status, row.error], ['failed', 'timed out after 30 minutes']);
+
+  const live = await startRun(query, 'manual', 1, '2026-10-13');
+  assert.equal(await finishRun(query, live, { status: 'ok', claudeUsd: 0.4, jevUsd: 0.1, record: {} }), true);
+  assert.equal((await query<{ status: string }>(`SELECT status FROM lfd.runs WHERE id = $1`, [live])).rows[0]!.status, 'ok');
+});

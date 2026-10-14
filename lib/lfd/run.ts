@@ -150,7 +150,7 @@ async function inPool<T>(items: T[], n: number, fn: (item: T) => Promise<void>):
   await Promise.all(Array.from({ length: Math.min(n, items.length) }, worker));
 }
 
-export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: string; postId: string; stories: number; short: boolean } | { ok: false; runId: string; error: string }> {
+export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: string; postId: string; stories: number; short: boolean; recorded?: boolean } | { ok: false; runId: string; error: string }> {
   const nyDate = nyDateKey(d.now);
   const runId = d.runId ? await adoptRun(d.query, d.runId, d.capUsd, nyDate) : await startRun(d.query, d.trigger, d.capUsd, nyDate);
   const record: Record<string, unknown> = {};
@@ -407,8 +407,9 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     record.picks = final.map((r) => ({ key: r.pick.key, lane: r.pick.lane, headline: r.pick.headline, origin: r.pick.origin, major: r.pick.major, net: r.pick.net }));
     record.stories = final.length;
     const spend = d.spend();
-    await finishRun(d.query, runId, { status: short ? 'partial' : 'ok', stopReason: short ? `short post: only ${final.length} stories` : undefined, claudeUsd: spend.claudeUsd, jevUsd: spend.jevUsd, record });
-    return { ok: true, runId, postId, stories: final.length, short };
+    // recorded false: the run row was no longer running (the worker timed it out); it stays failed.
+    const recorded = await finishRun(d.query, runId, { status: short ? 'partial' : 'ok', stopReason: short ? `short post: only ${final.length} stories` : undefined, claudeUsd: spend.claudeUsd, jevUsd: spend.jevUsd, record });
+    return { ok: true, runId, postId, stories: final.length, short, recorded };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     try {

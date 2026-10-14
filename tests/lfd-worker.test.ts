@@ -184,3 +184,19 @@ test('the in-process run limit is 30 minutes', async () => {
   const { LFD_RUN_TIMEOUT_MS } = await import('@/lib/lfd/config');
   assert.equal(LFD_RUN_TIMEOUT_MS, 30 * 60_000);
 });
+
+test('a run whose finish was ignored (the worker already timed it out) is logged, and its row stays failed', async () => {
+  const { query } = await openHubTestDb();
+  const run = await claimed(query, 'manual');
+  const { w, logs } = worker(query, {
+    run: async (d) => {
+      const postId = await seedLfdPost(query, { nyDate: '2026-10-13' });
+      await query(`UPDATE lfd.runs SET status = 'failed', error = 'timed out after 30 minutes' WHERE id = $1`, [d.runId]);
+      const recorded = await finishRun(query, d.runId!, { status: 'ok', claudeUsd: 0.2, jevUsd: 0.05, record: {} });
+      return { ok: true as const, runId: d.runId!, postId, stories: 6, short: false, recorded };
+    },
+  });
+  await carryOutLfdRun(w, run);
+  assert.ok(logs.includes('lfd_run_finish_ignored'), logs.join(', '));
+  assert.equal((await query<{ status: string }>(`SELECT status FROM lfd.runs WHERE id = $1`, [run.id])).rows[0]!.status, 'failed');
+});
