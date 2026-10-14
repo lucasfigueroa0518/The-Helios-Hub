@@ -128,6 +128,19 @@ test('run budget: the guard refuses before calling when spend + reserve passes t
   assert.equal(called, 0);
 });
 
+test('run budget: with wiggle the guard lets a call through past the cap and refuses one that could pass the ceiling', async () => {
+  let called = 0;
+  const create = async () => { called++; return msg('x', {}); };
+  const params = { model: 'claude-sonnet-5-5', max_tokens: 10, messages: [] };
+  const past = createRunBudget({ capUsd: 1.5, wiggleUsd: 0.5, otherSpendUsd: () => 1.6 });
+  assert.equal(past.ceilingUsd, 2);
+  await past.guard(create)(params);
+  assert.equal(called, 1);
+  const near = createRunBudget({ capUsd: 1.5, wiggleUsd: 0.5, otherSpendUsd: () => 1.85 });
+  await assert.rejects(() => near.guard(create)(params), /run ceiling \$2 \(cap \$1\.5 \+ wiggle\)/);
+  assert.equal(called, 1);
+});
+
 test('cap: between stages the day stops only at the full cap, so a no-Claude stage (design) still runs near it', async () => {
   const { stages } = setup({ capUsd: 1.5 });
   const meter = createCostMeter({ capUsd: 1.5, alreadySpentUsd: 1.38 });
