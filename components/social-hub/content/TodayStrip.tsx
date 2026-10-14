@@ -10,7 +10,8 @@ import { StateBadge, TYPE_ICON, TypeMark, typeStyle } from '@/components/social-
 import type { HubPost } from '@/lib/social-hub/types';
 import { ideaRef } from '@/lib/social-hub/run-today';
 import type { QuotaCandidate } from '@/lib/social-hub/views/day-rank';
-import { clock, displayName } from '@/lib/social-hub/views/format';
+import { cardTimeLine } from '@/lib/social-hub/views/card-time';
+import { displayName } from '@/lib/social-hub/views/format';
 import type { Offerer } from '@/lib/social-hub/views/offer';
 import { canMakeCard, runForCandidate, runOnMadeCard } from '@/lib/social-hub/views/run-for';
 
@@ -41,7 +42,6 @@ export function TodayStrip({ candidates, o, runs, controls = true }: { candidate
 }
 
 function Made({ post, o, run, controls }: { post: HubPost; o: Offerer; run: ProgressItem | null; controls: boolean }) {
-  const when = post.postedAt ?? post.publishAt;
   const offer = o.offer(post);
   const { primary, grid } = offer.card;
   return (
@@ -49,7 +49,7 @@ function Made({ post, o, run, controls }: { post: HubPost; o: Offerer; run: Prog
       <CardMedia post={post} />
       <div className="sh-gallery__meta">
         <TypeMark vertical={post.vertical} />
-        <span>{when ? clock(when) : post.status === 'generating' ? 'Being made' : 'No slot yet'}</span>
+        <span>{cardTimeLine(post)}</span>
       </div>
       <PostLink id={post.id} className="sh-strip__name">{displayName(post)}</PostLink>
       {run ? <RunChip run={run} /> : <StateBadge state={offer.state} />}
