@@ -183,6 +183,8 @@ export type ReleaseRules = {
   queue: (nativeRef: string, trigger: PublishTrigger) => Promise<Queued>;
   notApprovedNote: string;
   rejectedNote: string;
+  /** Optional (Last Few Days only): a slot more than `afterMinutes` past due is cancelled with `note`, never posted late. */
+  missed?: { afterMinutes: number; note: string };
 };
 
 /**
@@ -192,7 +194,7 @@ export type ReleaseRules = {
  */
 export async function releaseDueFor(query: Query, rules: ReleaseRules): Promise<number> {
   const { rows } = await query(
-    `SELECT s.id, ci.native_ref, s.source, a.decision
+    `SELECT s.id, ci.native_ref, s.source, a.decision, s.publish_at
        FROM social_hub.schedule s
        JOIN social_hub.content_items ci ON ci.id = s.content_item_id
        LEFT JOIN social_hub.approvals a ON a.content_item_id = s.content_item_id
@@ -210,6 +212,10 @@ export async function releaseDueFor(query: Query, rules: ReleaseRules): Promise<
     }
     if (rules.requireApproval && row.decision !== 'approved') {
       await cancel(row.id, rules.notApprovedNote);
+      continue;
+    }
+    if (rules.missed && new Date(row.publish_at).getTime() < Date.now() - rules.missed.afterMinutes * 60_000) {
+      await cancel(row.id, rules.missed.note);
       continue;
     }
     const claimed = await query(

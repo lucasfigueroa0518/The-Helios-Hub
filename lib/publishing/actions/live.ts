@@ -30,6 +30,7 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
     explainersSchedule,
     lfdSchedule,
     lfdItems,
+    lfdSettings,
   ] = await Promise.all([
     import('@/lib/social/store'),
     import('@/lib/social/overnight/schedule'),
@@ -51,6 +52,7 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
     import('@/lib/explainers/publish/schedule'),
     import('@/lib/lfd/schedule'),
     import('@/lib/lfd/items'),
+    import('@/lib/lfd/settings'),
   ]);
   const db = storiesDb.liveStoriesDb;
   const storiesSpine = (text: string, params?: unknown[]) => db.query(text, params) as Promise<{ rows: any[] }>;
@@ -110,6 +112,7 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       approvePost: (q, postId) => lfdSchedule.approveLfdPost(q, postId),
       rejectPost: lfdSchedule.rejectLfdPost,
       hardPublishPost: lfdSchedule.hardPublishLfdPost,
+      publishingLive: async (q) => (await lfdSettings.readLfdSettings(q)).publishingLive,
       unschedulePost: lfdSchedule.unscheduleLfdPost,
       itemId: lfdItems.lfdItemId,
       placeItem: placement.placeItem,

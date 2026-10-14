@@ -11,6 +11,7 @@ import { readReels } from '@/lib/social-hub/queries/reels';
 import { readSpine } from '@/lib/social-hub/queries/spine';
 import { readStories } from '@/lib/social-hub/queries/stories';
 import { readAdjustments, readDayQuotas } from '@/lib/social-hub/queries/day';
+import { readLfdSettings } from '@/lib/lfd/settings';
 import { readDeleted, withoutDeleted } from '@/lib/social-hub/deleted';
 import { nyDateOf } from '@/lib/social-hub/time';
 
@@ -54,7 +55,7 @@ export async function readAll(q: HubQuery = liveHubQuery, explainersQ: Promise<H
 
 export async function loadDataset(q: HubQuery = liveHubQuery, now = new Date()): Promise<HubDataset> {
   const explainersQ = explainersHandle(q);
-  const [reads, costs, quota, snapshot, account, adjustments, dayQuotas, deleted] = await Promise.all([
+  const [reads, costs, quota, snapshot, account, adjustments, dayQuotas, deleted, lfdPublishingLive] = await Promise.all([
     readAll(q, explainersQ),
     settle(readCosts(q, explainersQ)),
     readLatestQuota(q).catch(() => null),
@@ -64,9 +65,11 @@ export async function loadDataset(q: HubQuery = liveHubQuery, now = new Date()):
     readDayQuotas(q, explainersQ).catch(() => null),
     // Before the column exists (or if the read fails) nothing is hidden, so the hub never fails on it.
     readDeleted(q).catch(() => []),
+    // SELECT only (lib/lfd/settings.ts); an unreadable lfd schema reads as off.
+    readLfdSettings(q).then((s) => s.publishingLive).catch(() => false),
   ]);
   // The sweep's snapshot wins over a publisher's refusal message when it is newer.
   const newest = [snapshot, quota].filter((x): x is { text: string | null; at: string | null } => Boolean(x?.at))
     .sort((a, b) => Date.parse(b.at!) - Date.parse(a.at!))[0] ?? null;
-  return { ...withoutDeleted(buildDataset(reads, costs, now, newest, account), deleted), adjustments, dayQuotas };
+  return { ...withoutDeleted(buildDataset(reads, costs, now, newest, account), deleted), adjustments, dayQuotas, lfdPublishingLive };
 }

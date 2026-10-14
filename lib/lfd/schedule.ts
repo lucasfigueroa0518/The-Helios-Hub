@@ -84,9 +84,35 @@ export async function scheduleLfdPost(
   return { scheduled: false, note: 'That window was just taken.' };
 }
 
-/** A person approves a post: approved, and booked in its day's window or the next open one (like Carousels, P2-M4). */
-export function approveLfdPost(query: Query, postId: string, now = new Date()): Promise<ScheduleOutcome> {
-  return scheduleLfdPost(query, postId, 'user', now);
+export const LFD_APPROVED_OFF_NOTE = 'Approved. It will be scheduled when Last Few Days publishing is on.';
+export const LFD_DAY_PASSED_NOTE = 'Its day has passed; use Place to pick a Tuesday or Friday.';
+export const LFD_PUBLISHING_OFF_NOTE = 'Last Few Days publishing is off. Turn it on before publishing.';
+export const LFD_MISSED_NOTE = 'Missed its window; place it again to post.';
+/** A due LFD slot later than this is cancelled, not posted late. */
+export const LFD_MISSED_AFTER_MINUTES = 60;
+
+/** Approve's outcome: booked, approved without a slot (with why), or refused. */
+export type LfdApproveOutcome = ScheduleOutcome | { scheduled: false; approved: true; note: string };
+
+const publishingLive = (query: Query) => readLfdSettings(query).then((s) => s.publishingLive).catch(() => false);
+
+/**
+ * A person approves a post. While lfd publishing_live is on it is booked in
+ * its own day's 9–10 AM window only (lfd.posts.ny_date); when that window has
+ * passed or is taken it is approved without a slot (Place picks another day).
+ * While publishing is off it is approved and nothing is booked.
+ */
+export async function approveLfdPost(query: Query, postId: string, now = new Date()): Promise<LfdApproveOutcome> {
+  const itemId = await lfdItemId(query, postId);
+  if (!itemId) return { scheduled: false, note: 'The post is gone.' };
+  if (!(await publishingLive(query))) {
+    await approveItem(query, itemId, 'user');
+    return { scheduled: false, approved: true, note: LFD_APPROVED_OFF_NOTE };
+  }
+  const ownDay = (await query(`SELECT ny_date::text AS d FROM lfd.posts WHERE id = $1`, [postId])).rows[0]?.d as string | undefined;
+  if (!ownDay) return { scheduled: false, note: 'The post is gone.' };
+  const out = await scheduleLfdPost(query, postId, 'user', now, ownDay.slice(0, 10));
+  return out.scheduled ? out : { scheduled: false, approved: true, note: LFD_DAY_PASSED_NOTE };
 }
 
 /**
@@ -110,12 +136,18 @@ export async function unscheduleLfdPost(query: Query, postId: string): Promise<{
 
 /** Hard publish (SH-15/SH-17): approved by the click, its waiting slot closed, a force attempt queued. */
 export async function hardPublishLfdPost(query: Query, postId: string): Promise<Queued> {
+  // While lfd publishing_live is off nothing is approved, closed or queued: a force attempt would wait unclaimed.
+  if (!(await publishingLive(query))) return { queued: false, note: LFD_PUBLISHING_OFF_NOTE, terminal: true };
   const itemId = await lfdItemId(query, postId);
   if (itemId) await forceApproveItem(query, itemId, LFD_HARD_PUBLISH_NOTE);
   return queueLfdPublish(query, postId, 'force');
 }
 
-/** Due LFD slots become publish attempts (Carousels' rule, LFD's queue and notes). */
+/**
+ * Due LFD slots become publish attempts (Carousels' rule, LFD's queue and
+ * notes). A slot more than LFD_MISSED_AFTER_MINUTES past its time (publishing
+ * was off, the worker was down) is cancelled instead of posting late.
+ */
 export function releaseDueLfd(query: Query, opts: { requireApproval: boolean } = { requireApproval: true }): Promise<number> {
   return releaseDueFor(query, {
     vertical: 'last_few_days',
@@ -123,5 +155,6 @@ export function releaseDueLfd(query: Query, opts: { requireApproval: boolean } =
     queue: (postId, trigger) => queueLfdPublish(query, postId, trigger),
     notApprovedNote: LFD_NOT_APPROVED_NOTE,
     rejectedNote: LFD_REJECTED_NOTE,
+    missed: { afterMinutes: LFD_MISSED_AFTER_MINUTES, note: LFD_MISSED_NOTE },
   });
 }

@@ -5,15 +5,17 @@ import type { Query } from '@/lib/social/store/pg';
 import { deleteVerb } from './delete';
 import { need, needPlacement, type ActionInput, type ActionOutcome, type ActionTarget, type ContentActions } from './types';
 
-type Placed = { scheduled: true; id: string; publishAt: string } | { scheduled: false; note: string };
+type Placed = { scheduled: true; id: string; publishAt: string } | { scheduled: false; note: string; approved?: true };
 type Queued = { queued: boolean; note?: string };
 type Place = (q: Query, input: PlacementTarget & Placement) => Promise<PlacementOutcome>;
 
 const REJECTED_NOTE = 'This post was rejected, so it can’t be approved or published. Its stories are back in the pool.';
+const PUBLISHING_OFF_NOTE = 'Last Few Days publishing is off. Turn it on before publishing.';
 
 /**
- * Last Few Days (lib/lfd/schedule.ts): approve (approved and booked in its
- * day's window or the next one), reject, Publish now, unschedule, delete, and
+ * Last Few Days (lib/lfd/schedule.ts): approve (approved, and booked in its own
+ * day's window while lfd publishing_live is on; otherwise approved without a
+ * slot), reject, Publish now (refused while publishing is off), unschedule, delete, and
  * place or move on the calendar (D50). No regenerate: a post is a whole run's
  * work; the type page's "Make Last Few Days now" makes a new one. A rejected
  * post (lfd.posts.status 'rejected') is refused by approve and Publish now.
@@ -23,6 +25,8 @@ export function lastFewDaysActions(deps: {
   approvePost: (q: Query, postId: string) => Promise<Placed>;
   rejectPost: (q: Query, postId: string, by: string | null) => Promise<boolean>;
   hardPublishPost: (q: Query, postId: string) => Promise<Queued>;
+  /** lfd.settings publishing_live: Publish now is refused while it is off. */
+  publishingLive: (q: Query) => Promise<boolean>;
   unschedulePost: (q: Query, postId: string) => Promise<{ ok: boolean; note: string }>;
   itemId: (q: Query, postId: string) => Promise<string | null>;
   placeItem: Place;
@@ -44,7 +48,8 @@ export function lastFewDaysActions(deps: {
       const postId = need(t, 'lfdPostId');
       if (await isRejected(q, postId)) return { ok: false, note: REJECTED_NOTE, status: 409 };
       const placed = await deps.approvePost(q, postId);
-      return placed.scheduled ? { ok: true, note: `Approved and scheduled for ${placed.publishAt}.` } : { ok: false, note: placed.note };
+      if (placed.scheduled) return { ok: true, note: `Approved and scheduled for ${placed.publishAt}.` };
+      return placed.approved ? { ok: true, note: placed.note } : { ok: false, note: placed.note };
     },
     async reject(t, by) {
       return (await deps.rejectPost(await deps.query(), need(t, 'lfdPostId'), by)) ? { ok: true, note: 'Rejected. It will not post.' } : { ok: false, note: 'The post is gone.' };
@@ -53,6 +58,7 @@ export function lastFewDaysActions(deps: {
       const q = await deps.query();
       const postId = need(t, 'lfdPostId');
       if (await isRejected(q, postId)) return { ok: false, note: REJECTED_NOTE, status: 409 };
+      if (!(await deps.publishingLive(q).catch(() => false))) return { ok: false, note: PUBLISHING_OFF_NOTE, status: 409 };
       const out = await deps.hardPublishPost(q, postId);
       return out.queued ? { ok: true, note: 'Queued to publish now.' } : { ok: false, note: out.note ?? 'Not queued.' };
     },

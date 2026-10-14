@@ -42,6 +42,8 @@ export type HubDataset = {
   adjustments?: IdeaAdjustment[];
   /** Each type's posts per day, for its quota candidates. */
   dayQuotas?: DayQuotas | null;
+  /** lfd.settings publishing_live (false when unreadable): Last Few Days offers Hard publish only while it is on. */
+  lfdPublishingLive?: boolean;
   loadedAt: string;
 };
 

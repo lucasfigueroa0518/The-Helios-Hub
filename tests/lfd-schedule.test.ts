@@ -8,6 +8,10 @@ import {
   hardPublishLfdPost,
   LFD_HARD_PUBLISH_NOTE,
   LFD_NOT_APPROVED_NOTE,
+  LFD_APPROVED_OFF_NOTE,
+  LFD_DAY_PASSED_NOTE,
+  LFD_MISSED_NOTE,
+  LFD_PUBLISHING_OFF_NOTE,
   LFD_REJECTED_NOTE,
   rejectLfdPost,
   releaseDueLfd,
@@ -25,8 +29,9 @@ const TUE_330 = new Date('2026-10-13T07:30:00Z');
 /** Wednesday 2026-10-14, 8:00 AM New York. */
 const WED_8 = new Date('2026-10-14T12:00:00Z');
 
-async function db() {
+async function db(o: { publishingLive?: boolean } = { publishingLive: true }) {
   const { query } = await openHubTestDb();
+  if (o.publishingLive) await query(`UPDATE lfd.settings SET value = 'true'::jsonb WHERE key = 'publishing_live'`);
   return { query, q: query as unknown as Query };
 }
 
@@ -50,18 +55,77 @@ test('auto-booking on a day that is not a Last Few Days day books nothing', asyn
   assert.deepEqual(out, { scheduled: false, note: 'No Last Few Days window is open on that day (it posts on its days only, 9:00–10:00 AM).' });
 });
 
-test('approving on a Wednesday approves the post and books Friday', async () => {
+test('approving books only the post\'s own day: on its Tuesday it books Tuesday 9–10 AM', async () => {
   const { query, q } = await db();
-  const id = await seedLfdPost(query, { nyDate: '2026-10-14' });
-  const out = await approveLfdPost(q, id, WED_8);
+  const id = await seedLfdPost(query);
+  const out = await approveLfdPost(q, id, TUE_330);
   assert.equal(out.scheduled, true);
-  assert.equal((await q(`SELECT ny_date::text AS d FROM social_hub.schedule`)).rows[0].d, '2026-10-16');
+  assert.equal((await q(`SELECT ny_date::text AS d FROM social_hub.schedule`)).rows[0].d, '2026-10-13');
   const ap = (await q(`SELECT decision, via FROM social_hub.approvals`)).rows[0];
   assert.deepEqual([ap.decision, ap.via], ['approved', 'user']);
-  const again = await approveLfdPost(q, id, WED_8);
+  const again = await approveLfdPost(q, id, TUE_330);
   assert.equal(again.scheduled ? again.id : '', out.scheduled ? out.id : 'x', 'a post already booked keeps its slot');
 });
 
+test('approving after the post\'s day approves it without booking a later day', async () => {
+  const { query, q } = await db();
+  const id = await seedLfdPost(query); // Tuesday's post, approved on Wednesday
+  const out = await approveLfdPost(q, id, WED_8);
+  assert.deepEqual(out, { scheduled: false, approved: true, note: LFD_DAY_PASSED_NOTE });
+  assert.equal(LFD_DAY_PASSED_NOTE, 'Its day has passed; use Place to pick a Tuesday or Friday.');
+  assert.equal((await q(`SELECT count(*)::int AS n FROM social_hub.schedule`)).rows[0].n, 0, 'never auto-books Friday');
+  assert.equal((await q(`SELECT decision FROM social_hub.approvals`)).rows[0].decision, 'approved');
+});
+
+test('approving when its day\'s window is already taken approves without booking', async () => {
+  const { query, q } = await db();
+  const first = await seedLfdPost(query, { slug: 'lfd-first' });
+  const second = await seedLfdPost(query, { slug: 'lfd-second' });
+  assert.equal((await approveLfdPost(q, first, TUE_330)).scheduled, true);
+  const out = await approveLfdPost(q, second, TUE_330);
+  assert.deepEqual(out, { scheduled: false, approved: true, note: LFD_DAY_PASSED_NOTE });
+  assert.equal((await q(`SELECT count(*)::int AS n FROM social_hub.schedule`)).rows[0].n, 1);
+});
+
+test('with Last Few Days publishing off, Approve approves without booking a slot', async () => {
+  const { query, q } = await db({ publishingLive: false });
+  const id = await seedLfdPost(query);
+  const out = await approveLfdPost(q, id, TUE_330);
+  assert.deepEqual(out, { scheduled: false, approved: true, note: LFD_APPROVED_OFF_NOTE });
+  assert.equal(LFD_APPROVED_OFF_NOTE, 'Approved. It will be scheduled when Last Few Days publishing is on.');
+  assert.equal((await q(`SELECT count(*)::int AS n FROM social_hub.schedule`)).rows[0].n, 0);
+  assert.equal((await q(`SELECT decision FROM social_hub.approvals`)).rows[0].decision, 'approved');
+});
+
+test('with Last Few Days publishing off, Hard publish refuses: no approval, no attempt, the slot stays', async () => {
+  const { query, q } = await db({ publishingLive: false });
+  const id = await seedLfdPost(query);
+  await scheduleLfdPost(q, id, 'auto', TUE_330, '2026-10-13', () => 0);
+  const out = await hardPublishLfdPost(q, id);
+  assert.deepEqual(out, { queued: false, note: LFD_PUBLISHING_OFF_NOTE, terminal: true });
+  assert.equal(LFD_PUBLISHING_OFF_NOTE, 'Last Few Days publishing is off. Turn it on before publishing.');
+  assert.equal((await q(`SELECT count(*)::int AS n FROM social_hub.publish_attempts`)).rows[0].n, 0);
+  assert.equal((await q(`SELECT count(*)::int AS n FROM social_hub.approvals`)).rows[0].n, 0);
+  assert.equal((await q(`SELECT status FROM social_hub.schedule`)).rows[0].status, 'scheduled');
+});
+
+test('a due LFD slot more than 60 minutes late is cancelled, not released; a fresh one still goes out', async () => {
+  const { query, q } = await db();
+  const late = await seedLfdPost(query, { slug: 'lfd-late' });
+  const fresh = await seedLfdPost(query, { slug: 'lfd-fresh', nyDate: '2026-10-16' });
+  await scheduleLfdPost(q, late, 'user', TUE_330, '2026-10-13', () => 0);
+  await scheduleLfdPost(q, fresh, 'user', TUE_330, undefined, () => 0);
+  const lateItem = (await lfdItemId(q, late))!;
+  const freshItem = (await lfdItemId(q, fresh))!;
+  await q(`UPDATE social_hub.schedule SET publish_at = now() - interval '61 minutes' WHERE content_item_id = $1`, [lateItem]);
+  await q(`UPDATE social_hub.schedule SET publish_at = now() - interval '59 minutes' WHERE content_item_id = $1`, [freshItem]);
+  assert.equal(await releaseDueLfd(q, { requireApproval: true }), 1);
+  const lateSlot = (await q(`SELECT status, error FROM social_hub.schedule WHERE content_item_id = $1`, [lateItem])).rows[0];
+  assert.deepEqual([lateSlot.status, lateSlot.error], ['cancelled', LFD_MISSED_NOTE]);
+  assert.equal(LFD_MISSED_NOTE, 'Missed its window; place it again to post.');
+  const attempts = (await q(`SELECT content_item_id FROM social_hub.publish_attempts`)).rows;
+  assert.deepEqual(attempts.map((r) => r.content_item_id), [freshItem]);
+});
 test('a due slot: approved goes out, unapproved is cancelled with the reason', async () => {
   const { query, q } = await db();
   const a = await seedLfdPost(query, { slug: 'lfd-a' });

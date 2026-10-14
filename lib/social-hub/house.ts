@@ -150,8 +150,12 @@ const PUBLISH_CONFIRM: Record<Vertical, string> = {
   last_few_days: 'This Last Few Days post goes out now instead of in its slot. Publishing counts as your approval, and its waiting slot is released so it can’t post twice.',
 };
 
-/** The actions a post offers in Content House, with the reason one is unavailable. */
-export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCostLabel: string | null }): ActionPlan[] {
+/**
+ * The actions a post offers in Content House, with the reason one is unavailable.
+ * `lfdPublishingLive`: lfd.settings publishing_live. Last Few Days offers Hard
+ * publish only while it is on (unknown counts as off).
+ */
+export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCostLabel: string | null; lfdPublishingLive?: boolean }): ActionPlan[] {
   const plans: ActionPlan[] = [];
   const info = verticalInfo(post.vertical);
   const live = post.status !== 'published' && post.status !== 'publishing';
@@ -230,8 +234,9 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
     });
   }
 
-  // A rejected LFD post already returned its stories to the pool: Hard publish is not offered for it.
-  if (live && !(post.vertical === 'last_few_days' && rejected)) {
+  // A rejected LFD post already returned its stories to the pool: Hard publish is not offered for it,
+  // and none is offered while Last Few Days publishing is off (the attempt would wait unclaimed).
+  if (live && !(post.vertical === 'last_few_days' && (rejected || ctx.lfdPublishingLive !== true))) {
     const noContent = post.media.kind === 'none' || (post.media.kind === 'slides' && post.media.slides.length === 0) || (post.media.kind === 'frames' && post.media.frames.length === 0)
       ? 'Nothing to publish yet. Regenerate first.'
       : null;
