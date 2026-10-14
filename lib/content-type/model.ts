@@ -121,7 +121,7 @@ export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date)
     .map(([date, cards]) => ({ date, cards: cards.sort((a, b) => at(a.post).localeCompare(at(b.post)) || a.post.id.localeCompare(b.post.id)) }))
     .sort((a, b) => a.date.localeCompare(b.date));
   const summary = poolSummary(dataset.ideas, vertical);
-  const ranking = dayRanking(dataset.ideas, vertical, dataset.adjustments ?? [], today);
+  const ranking = dayRanking(dataset.ideas, vertical, dataset.adjustments ?? []);
   const open = ranking.map((r) => r.idea);
   const movedOf = new Map(ranking.map((r) => [r.idea.id, r.moved]));
   const quotaIdeas = new Set(candidates.flatMap((c) => (c.idea ? [c.idea.id] : [])));
