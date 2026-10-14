@@ -16,14 +16,21 @@ import { carouselItemId } from './items';
 import type { CarouselMetaClient } from './meta';
 
 /**
- * Carousel publish attempts on the lifecycle spine (social_hub.publish_attempts,
- * vertical 'carousels'): requested → creating (item + parent containers) →
- * processing (status poll) → publishing (media_publish) → published | failed.
- * A carousel posts once. One publish at a time across every type already on
- * the spine: they share one Instagram account (D36).
+ * Feed-carousel publish attempts on the lifecycle spine (social_hub.publish_attempts):
+ * requested → creating (item + parent containers) → processing (status poll) →
+ * publishing (media_publish) → published | failed. Carousels and Last Few Days
+ * post the same way (an image set as one CAROUSEL container); each type keeps
+ * its own queue rule and its own "mark published" step (`onPublished`). A post
+ * posts once. One publish at a time across every type already on the spine:
+ * they share one Instagram account (D36).
  */
 
 export type PublishTrigger = 'approve' | 'auto' | 'force';
+
+/** The spine verticals that post an image set as a feed carousel. */
+export type FeedVertical = 'carousels' | 'last_few_days';
+
+const NOUN: Record<FeedVertical, string> = { carousels: 'carousel', last_few_days: 'Last Few Days post' };
 
 export type Queued =
   | { queued: true; id: string }
@@ -38,6 +45,34 @@ function isUniqueViolation(error: unknown): boolean {
   return (error as { code?: string } | null)?.code === '23505';
 }
 
+/** Why an image set can't go to Instagram, or null: 2–10 images in Storage and a caption within the limit. */
+export function checkFeedPayload(imageObjects: readonly string[], caption: string): string | null {
+  if (imageObjects.length < CAROUSEL_MIN_ITEMS || imageObjects.length > CAROUSEL_MAX_ITEMS) {
+    return `The post needs ${CAROUSEL_MIN_ITEMS}–${CAROUSEL_MAX_ITEMS} slide images in Storage (has ${imageObjects.length}).`;
+  }
+  if (!caption) return 'The post has no caption.';
+  if (caption.length > CAPTION_MAX_CHARS) return `The caption with credits is ${caption.length} characters; Instagram takes ${CAPTION_MAX_CHARS}.`;
+  return null;
+}
+
+/** One requested attempt for an item. A second attempt in flight or published is refused by the spine's indexes. */
+export async function queueFeedAttempt(
+  query: Query,
+  a: { vertical: FeedVertical; itemId: string; trigger: PublishTrigger; caption: string; imageObjects: readonly string[] },
+): Promise<Queued> {
+  try {
+    const inserted = await query(
+      `INSERT INTO social_hub.publish_attempts (content_item_id, vertical, trigger, status, caption, payload)
+       VALUES ($1, $2, $3, 'requested', $4, $5::jsonb) RETURNING id`,
+      [a.itemId, a.vertical, a.trigger, a.caption, JSON.stringify({ image_objects: a.imageObjects })],
+    );
+    return { queued: true, id: inserted.rows[0].id as string };
+  } catch (error) {
+    if (isUniqueViolation(error)) return { queued: false, note: `This ${NOUN[a.vertical]} is already publishing or published.`, terminal: false };
+    throw error;
+  }
+}
+
 /** Queue one post for Instagram. Only a finished pipeline post in review, with its slides in Storage, can go. */
 export async function queuePublish(query: Query, postId: string, trigger: PublishTrigger): Promise<Queued> {
   const { rows } = await query(
@@ -50,53 +85,39 @@ export async function queuePublish(query: Query, postId: string, trigger: Publis
   if (post.status !== 'review') return { queued: false, note: `Only posts in review publish (this one is ${post.status}).`, terminal: true };
   if (post.origin !== 'pipeline') return { queued: false, note: 'Development posts never publish.', terminal: true };
   const objects = (post.slide_objects ?? []) as string[];
-  if (objects.length < CAROUSEL_MIN_ITEMS || objects.length > CAROUSEL_MAX_ITEMS) {
-    return { queued: false, note: `The post needs ${CAROUSEL_MIN_ITEMS}–${CAROUSEL_MAX_ITEMS} slide images in Storage (has ${objects.length}).`, terminal: true };
-  }
   const caption = carouselCaption(post.render as RenderPost);
-  if (!caption) return { queued: false, note: 'The post has no caption.', terminal: true };
-  if (caption.length > CAPTION_MAX_CHARS) {
-    return { queued: false, note: `The caption with credits is ${caption.length} characters; Instagram takes ${CAPTION_MAX_CHARS}.`, terminal: true };
-  }
+  const problem = checkFeedPayload(objects, caption);
+  if (problem) return { queued: false, note: problem, terminal: true };
   const itemId = await carouselItemId(query, postId);
   if (!itemId) return { queued: false, note: 'The post is gone.', terminal: true };
-  try {
-    const inserted = await query(
-      `INSERT INTO social_hub.publish_attempts (content_item_id, vertical, trigger, status, caption, payload)
-       VALUES ($1, 'carousels', $2, 'requested', $3, $4::jsonb) RETURNING id`,
-      [itemId, trigger, caption, JSON.stringify({ image_objects: objects })],
-    );
-    return { queued: true, id: inserted.rows[0].id as string };
-  } catch (error) {
-    if (isUniqueViolation(error)) return { queued: false, note: 'This carousel is already publishing or published.', terminal: false };
-    throw error;
-  }
+  return queueFeedAttempt(query, { vertical: 'carousels', itemId, trigger, caption, imageObjects: objects });
 }
 
 /** Fail this type's attempts a dead worker left mid-publish. */
-export async function failStaleAttempts(query: Query): Promise<void> {
+export async function failStaleAttempts(query: Query, vertical: FeedVertical = 'carousels'): Promise<void> {
   await query(
     `UPDATE social_hub.publish_attempts
-        SET status = 'failed', finished_at = now(),
-            error = 'The worker stopped while this carousel was publishing. Check Instagram before trying again.'
-      WHERE vertical = 'carousels' AND status IN ('creating', 'processing', 'publishing')
+        SET status = 'failed', finished_at = now(), error = $3
+      WHERE vertical = $2 AND status IN ('creating', 'processing', 'publishing')
         AND started_at < now() - make_interval(mins => $1)`,
-    [PUBLISH_STALE_MINUTES],
+    [PUBLISH_STALE_MINUTES, vertical, `The worker stopped while this ${NOUN[vertical]} was publishing. Check Instagram before trying again.`],
   );
 }
 
-async function claimPublish(query: Query): Promise<string | null> {
-  await failStaleAttempts(query);
+/** Claim this type's oldest queued attempt while nothing is in flight on the account. */
+export async function claimFeedAttempt(query: Query, vertical: FeedVertical = 'carousels'): Promise<string | null> {
+  await failStaleAttempts(query, vertical);
   const { rows } = await query(
     `UPDATE social_hub.publish_attempts SET status = 'creating', started_at = now()
       WHERE id = (
         SELECT id FROM social_hub.publish_attempts
-         WHERE vertical = 'carousels' AND status = 'requested'
+         WHERE vertical = $1 AND status = 'requested'
            AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts a WHERE a.status IN ('creating', 'processing', 'publishing') AND a.started_at > now() - interval '30 minutes')
          ORDER BY requested_at
          FOR UPDATE SKIP LOCKED
          LIMIT 1)
       RETURNING id`,
+    [vertical],
   );
   return (rows[0]?.id as string | undefined) ?? null;
 }
@@ -122,27 +143,32 @@ export type PublishDeps = {
   now?: () => number;
 };
 
-/** Claim one queued carousel and carry it to Instagram. */
-export async function claimAndPublish(deps: PublishDeps): Promise<{ id: string; status: 'published' | 'failed' } | null> {
-  const id = await claimPublish(deps.query);
-  if (!id) return null;
-  return carryAttempt(deps, id);
-}
+/** A type's own step once Instagram has the post: mark its content row published (`nativeRef` = content_items.native_ref). */
+export type FeedPublishHooks = {
+  vertical: FeedVertical;
+  onPublished: (query: Query, nativeRef: string, finishedAt: string) => Promise<void>;
+};
 
-/** Carry one claimed attempt (status `creating`) to Instagram: the account gate, the containers, the poll, the publish. */
-export async function carryAttempt(deps: PublishDeps, id: string): Promise<{ id: string; status: 'published' | 'failed' }> {
+/**
+ * Carry one claimed attempt (status `creating`) to Instagram: the rejection
+ * check (D41), the account gate, one image container per slide, the CAROUSEL
+ * parent with the caption, the status poll, the publish, then the type's hook
+ * and the slot. Any failure fails the attempt and its slot, with the reason.
+ */
+export async function carryFeedAttempt(deps: PublishDeps, id: string, hooks: FeedPublishHooks): Promise<{ id: string; status: 'published' | 'failed' }> {
   const { query, meta } = deps;
+  const noun = NOUN[hooks.vertical];
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const now = deps.now ?? Date.now;
   const statusLog: Array<{ at: string; statusCode: string; status: string | null }> = [];
   try {
     const { rows } = await query(
-      `SELECT ci.native_ref AS post_id, a.caption, a.payload->'image_objects' AS image_objects
+      `SELECT ci.native_ref, a.caption, a.payload->'image_objects' AS image_objects
          FROM social_hub.publish_attempts a JOIN social_hub.content_items ci ON ci.id = a.content_item_id
         WHERE a.id = $1`,
       [id],
     );
-    const attempt = rows[0] as { post_id: string; caption: string; image_objects: string[] };
+    const attempt = rows[0] as { native_ref: string; caption: string; image_objects: string[] };
 
     // Rejected after its slot opened: never posts (D41).
     const { rows: rejected } = await query(
@@ -150,7 +176,7 @@ export async function carryAttempt(deps: PublishDeps, id: string): Promise<{ id:
         WHERE a.id = $1 AND ap.decision = 'rejected'`,
       [id],
     );
-    if (rejected[0]) throw new Error('This carousel was rejected after its slot opened; nothing was posted.');
+    if (rejected[0]) throw new Error(`This ${noun} was rejected after its slot opened; nothing was posted.`);
 
     // The account is shared by every content type (lib/instagram/account-gate.ts).
     const gate = await checkAccountQuota({ ops: meta, query });
@@ -170,7 +196,7 @@ export async function carryAttempt(deps: PublishDeps, id: string): Promise<{ id:
       statusLog.push({ at: new Date(now()).toISOString(), ...status });
       if (status.statusCode === 'FINISHED') break;
       if (status.statusCode === 'ERROR' || status.statusCode === 'EXPIRED') {
-        throw new Error(`Instagram could not process the carousel (${status.statusCode}): ${status.status ?? 'no detail'}`);
+        throw new Error(`Instagram could not process the ${noun} (${status.statusCode}): ${status.status ?? 'no detail'}`);
       }
       if (now() >= deadline) throw new Error(`The container was still ${status.statusCode} after ${PUBLISH_POLL_TIMEOUT_MINUTES} minutes.`);
       await sleep(PUBLISH_POLL_SECONDS * 1000);
@@ -181,7 +207,7 @@ export async function carryAttempt(deps: PublishDeps, id: string): Promise<{ id:
     const permalink = await meta.permalink(mediaId).catch(() => null);
     const finishedAt = new Date(now()).toISOString();
     await update(query, id, { status: 'published', media_id: mediaId, permalink, finished_at: finishedAt, status_log: JSON.stringify(statusLog) });
-    await query(`UPDATE social.posts SET status = 'published', published_at = $2::timestamptz WHERE id = $1`, [attempt.post_id, finishedAt]);
+    await hooks.onPublished(query, attempt.native_ref, finishedAt);
     await markScheduleForAttempt(query, id, 'published', null).catch(() => undefined);
     return { id, status: 'published' };
   } catch (error) {
@@ -190,4 +216,21 @@ export async function carryAttempt(deps: PublishDeps, id: string): Promise<{ id:
     await markScheduleForAttempt(query, id, 'failed', message).catch(() => undefined);
     return { id, status: 'failed' };
   }
+}
+
+/** Carry one claimed carousel attempt; on success the social.posts row is marked published. */
+export async function carryAttempt(deps: PublishDeps, id: string): Promise<{ id: string; status: 'published' | 'failed' }> {
+  return carryFeedAttempt(deps, id, {
+    vertical: 'carousels',
+    onPublished: async (query, postId, finishedAt) => {
+      await query(`UPDATE social.posts SET status = 'published', published_at = $2::timestamptz WHERE id = $1`, [postId, finishedAt]);
+    },
+  });
+}
+
+/** Claim one queued carousel and carry it to Instagram. */
+export async function claimAndPublish(deps: PublishDeps): Promise<{ id: string; status: 'published' | 'failed' } | null> {
+  const id = await claimFeedAttempt(deps.query, 'carousels');
+  if (!id) return null;
+  return carryAttempt(deps, id);
 }
