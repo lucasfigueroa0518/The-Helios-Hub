@@ -3,6 +3,8 @@ import { InsightsBlockedError, createInsightsClient, safeMessage, type InsightsC
 import { INSIGHTS_WARM_MS, insightIsDue } from '@/lib/instagram/insights-rules';
 import type { Query } from '@/lib/social/store/pg';
 
+import type { FeedVertical } from './publish';
+
 /**
  * Lifetime insights for published carousels, into social_hub.media_insights, on
  * the Trial Reels due/settle rules (lib/instagram/insights-rules.ts): every
@@ -22,14 +24,20 @@ export function createCarouselInsightsClient(options: { token: string; fetchImpl
 
 export type CarouselInsightsResult = { considered: number; written: number; blocked: 'permission' | 'token' | null; detail: string | null };
 
-/** Ask Instagram about every published carousel that is due. */
-export async function pollCarouselInsights(query: Query, client: CarouselInsightsClient, now = new Date(), limit = 200): Promise<CarouselInsightsResult> {
+/** Ask Instagram about every published feed carousel of `vertical` (Carousels, or Last Few Days) that is due. */
+export async function pollCarouselInsights(
+  query: Query,
+  client: CarouselInsightsClient,
+  now = new Date(),
+  limit = 200,
+  vertical: FeedVertical = 'carousels',
+): Promise<CarouselInsightsResult> {
   const { rows: open } = await query(
     `SELECT id, media_id, finished_at, insights_checked_at FROM social_hub.publish_attempts
-      WHERE vertical = 'carousels' AND status = 'published' AND media_id IS NOT NULL AND finished_at IS NOT NULL
+      WHERE vertical = $2 AND status = 'published' AND media_id IS NOT NULL AND finished_at IS NOT NULL
         AND finished_at <= $1::timestamptz AND insights_settled_at IS NULL
       ORDER BY (insights_checked_at IS NULL) DESC, finished_at DESC`,
-    [now.toISOString()],
+    [now.toISOString(), vertical],
   );
   const due = open
     .filter((r) => insightIsDue({ finishedAt: new Date(r.finished_at), checkedAt: r.insights_checked_at ? new Date(r.insights_checked_at) : null, now }))
@@ -49,7 +57,7 @@ export async function pollCarouselInsights(query: Query, client: CarouselInsight
     if (CAROUSEL_METRICS.some((m) => reading[m] != null)) {
       await query(
         `INSERT INTO social_hub.media_insights (media_id, ny_date, vertical, publish_attempt_id, views, reach, likes, comments, saved, shares, total_interactions, follows, profile_visits, raw)
-         VALUES ($1, $2::date, 'carousels', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)
+         VALUES ($1, $2::date, $14, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)
          ON CONFLICT (media_id, ny_date) DO UPDATE SET
            publish_attempt_id = EXCLUDED.publish_attempt_id, captured_at = now(),
            views = COALESCE(EXCLUDED.views, social_hub.media_insights.views),
@@ -62,7 +70,7 @@ export async function pollCarouselInsights(query: Query, client: CarouselInsight
            follows = COALESCE(EXCLUDED.follows, social_hub.media_insights.follows),
            profile_visits = COALESCE(EXCLUDED.profile_visits, social_hub.media_insights.profile_visits),
            raw = EXCLUDED.raw`,
-        [row.media_id, nyDate, row.id, reading.views, reading.reach, reading.likes, reading.comments, reading.saved, reading.shares, reading.total_interactions, reading.follows, reading.profile_visits, JSON.stringify(reading.raw ?? {})],
+        [row.media_id, nyDate, row.id, reading.views, reading.reach, reading.likes, reading.comments, reading.saved, reading.shares, reading.total_interactions, reading.follows, reading.profile_visits, JSON.stringify(reading.raw ?? {}), vertical],
       );
       written += 1;
     }
