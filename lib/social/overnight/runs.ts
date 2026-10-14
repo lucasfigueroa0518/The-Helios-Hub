@@ -44,7 +44,7 @@ export async function releaseStaleRuns(query: Query, now = new Date()): Promise<
 }
 
 /** Claim the queued run when nothing else is running. */
-export async function claimRun(query: Query, now = new Date()): Promise<{ id: string; capUsd: number; hookPass: boolean; storyIds: string[] } | null> {
+export async function claimRun(query: Query, now = new Date()): Promise<{ id: string; capUsd: number; hookPass: boolean; storyIds: string[]; trigger: string } | null> {
   await releaseStaleRuns(query, now);
   try {
     const { rows } = await query(
@@ -56,11 +56,11 @@ export async function claimRun(query: Query, now = new Date()): Promise<{ id: st
            ORDER BY requested_at
            FOR UPDATE SKIP LOCKED
            LIMIT 1)
-        RETURNING id, cap_usd, hook_pass, story_ids`,
+        RETURNING id, cap_usd, hook_pass, story_ids, trigger`,
       [now.toISOString()],
     );
     const r = rows[0];
-    return r ? { id: r.id as string, capUsd: Number(r.cap_usd), hookPass: r.hook_pass as boolean, storyIds: (r.story_ids as string[] | null) ?? [] } : null;
+    return r ? { id: r.id as string, capUsd: Number(r.cap_usd), hookPass: r.hook_pass as boolean, storyIds: (r.story_ids as string[] | null) ?? [], trigger: String(r.trigger) } : null;
   } catch (error) {
     if ((error as { code?: string }).code === '23505') return null;
     throw error;

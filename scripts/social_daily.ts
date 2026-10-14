@@ -91,6 +91,16 @@ async function main() {
   // --story-id (repeatable): the stories Run now asked this run to make, in order. They are the whole selection.
   const pinnedIds = process.argv.flatMap((a, i) => (a === '--story-id' && process.argv[i + 1] ? [process.argv[i + 1]!] : []));
   if (pinnedIds.length && (!runIdArg || rerunPostArg)) throw new Error('--story-id needs a --run-id and cannot be combined with --rerun-post');
+  // --promote-id / --demote-id (repeatable): the 3 AM run's shared queue (social_worker reads the moves). The promoted
+  // story goes ahead of the fresh candidates and takes one of the usual posts; demoted stories rank last.
+  const promoteId = (() => {
+    const i = process.argv.indexOf('--promote-id');
+    return i > 0 ? process.argv[i + 1] : undefined;
+  })();
+  const demoteIds = process.argv.flatMap((a, i) => (a === '--demote-id' && process.argv[i + 1] ? [process.argv[i + 1]!] : []));
+  if ((promoteId || demoteIds.length) && (!runIdArg || rerunPostArg || pinnedIds.length)) {
+    throw new Error('--promote-id and --demote-id need a --run-id and cannot be combined with --rerun-post or --story-id');
+  }
 
   const { newAnthropic } = await import('@/lib/anthropic-client');
   const { HELIOS_SOCIAL_FEEDS } = await import('@/lib/social/feeds');
@@ -133,6 +143,9 @@ async function main() {
   // Named stories: the stored groups from earlier selections. Not found fails the run; no other story takes its place.
   const pinnedLib = pinnedIds.length ? await import('@/lib/social/overnight/pinned') : null;
   const pinned = pinnedLib ? await pinnedLib.loadPinnedCandidates(store.query!, pinnedIds) : null;
+  // Tonight's promote: its newest shortlist entry. Already posted or not found: skipped, with why on the move.
+  const promoteLib = promoteId || demoteIds.length ? await import('@/lib/social/overnight/promote') : null;
+  const promoted = promoteLib && promoteId ? await promoteLib.pickPromoted(store.query!, promoteId) : null;
   // A rerun reads no feeds: its one story is the stored post's. Neither does a run of named stories.
   const ownArticles = rerun || pinned ? [] : await fetchFeeds(HELIOS_SOCIAL_FEEDS);
   // The reels ingest's sources (Hacker News, papers, GitHub Trending, vendor notes, more outlets) join the pool;
@@ -217,7 +230,13 @@ async function main() {
   const result = await runDay({
     articles,
     // A rerun: selection is the stored story and the Reporter's work its saved brief (no spend); the rest runs as usual.
-    stages: rerun && rerunLib ? rerunLib.rerunStages(stages, rerun, rerunLib.rereadPages(rerun, readPage)) : pinned && pinnedLib ? pinnedLib.pinnedStages(stages, pinned) : stages,
+    stages: rerun && rerunLib
+      ? rerunLib.rerunStages(stages, rerun, rerunLib.rereadPages(rerun, readPage))
+      : pinned && pinnedLib
+        ? pinnedLib.pinnedStages(stages, pinned)
+        : promoteLib
+          ? promoteLib.promotedStages(stages, promoted, new Set(demoteIds))
+          : stages,
     // The meter stops the day between stages at the full cap; only the Claude-call guard keeps a per-call reserve.
     meter: createCostMeter({ capUsd }),
     log: store.setAsides,
@@ -229,6 +248,9 @@ async function main() {
       ? { stored: (storyId: string) => storedPostFor(store.query!, storyId), onCalendar: (storyId: string) => storyOnCalendar(store.query!, storyId) }
       : {}),
   });
+
+  // Shared queue: a promote the run shipped is used; one it didn't is skipped with why (it stays promoted).
+  if (promoteLib && promoted) await promoteLib.settlePromote(store.query!, promoted.id, result);
 
   // 7-day rule: a photo counts as used once its post reaches the review queue (today: the preview).
   // A PREVIEW run doesn't count (Tommy, 2026-10-06: not the acceptance batch).
