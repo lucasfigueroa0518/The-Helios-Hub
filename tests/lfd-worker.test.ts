@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { threeAmQueue } from '@/lib/lfd/clock';
+import { liveLfdDeps } from '@/lib/lfd/live';
 import type { LfdRunDeps } from '@/lib/lfd/run';
 import { parseLfdSettings } from '@/lib/lfd/settings';
 import { claimRun, finishRun, requestRun, type ClaimedRun } from '@/lib/lfd/store';
@@ -38,11 +39,15 @@ async function claimed(query: HubQuery, trigger: 'scheduled' | 'manual'): Promis
 function worker(query: HubQuery, over: Partial<CarryOutDeps> = {}) {
   const logs: string[] = [];
   const ran: Array<{ runId?: string; capUsd: number; trigger: string }> = [];
+  const calls = { engine: 0 };
   const w: CarryOutDeps = {
     query,
     now: () => TUE_3,
     log: (message) => { logs.push(message); },
-    engine: async () => ({ query }) as unknown as LfdRunDeps,
+    engine: async () => {
+      calls.engine += 1;
+      return { query } as unknown as LfdRunDeps;
+    },
     run: async (d) => {
       ran.push({ runId: d.runId, capUsd: d.capUsd, trigger: d.trigger });
       const postId = await seedLfdPost(query, { nyDate: '2026-10-13' });
@@ -51,7 +56,7 @@ function worker(query: HubQuery, over: Partial<CarryOutDeps> = {}) {
     },
     ...over,
   };
-  return { w, logs, ran };
+  return { w, logs, ran, calls };
 }
 
 test('a claimed run is carried out with the settings cap; its post joins the spine and, when live, takes today’s window', async () => {
@@ -88,6 +93,7 @@ test('daily fill: a scheduled run on a day a person already placed a post is ski
   const out = await carryOutLfdRun(a.w, scheduled);
   assert.equal(out.status, 'skipped');
   assert.deepEqual(a.ran, []);
+  assert.equal(a.calls.engine, 0, 'a skipped run never builds the engine');
   const row = (await query<{ status: string; stop_reason: string }>(`SELECT status, stop_reason FROM lfd.runs WHERE id = $1`, [scheduled.id])).rows[0]!;
   assert.equal(row.status, 'skipped');
   assert.match(row.stop_reason, /^quota-filled: Daily fill: people placed 1 Last Few Days post for 2026-10-13/);
@@ -103,6 +109,7 @@ test('a bad cap or a throwing engine fails the run before any spend, and the wor
   const out = await carryOutLfdRun(bad.w, run);
   assert.equal(out.status, 'failed');
   assert.deepEqual(bad.ran, []);
+  assert.equal(bad.calls.engine, 0, 'a bad cap never builds the engine');
   assert.match((await query<{ error: string }>(`SELECT error FROM lfd.runs WHERE id = $1`, [run.id])).rows[0]!.error, /run_cap_usd is not a positive number/);
 
   await query(`UPDATE lfd.settings SET value = '1'::jsonb WHERE key = 'run_cap_usd'`);
@@ -111,4 +118,47 @@ test('a bad cap or a throwing engine fails the run before any spend, and the wor
   assert.equal((await carryOutLfdRun(boom.w, second)).status, 'failed');
   const row = (await query<{ status: string; error: string }>(`SELECT status, error FROM lfd.runs WHERE id = $1`, [second.id])).rows[0]!;
   assert.deepEqual([row.status, row.error], ['failed', 'ANTHROPIC_API_KEY is not set']);
+});
+
+test('the live factory refuses a cap that is not a positive number before it builds anything', async () => {
+  const query = (async () => {
+    throw new Error('no query expected');
+  }) as unknown as HubQuery;
+  for (const capUsd of [Number.NaN, Number.POSITIVE_INFINITY, 0, -1]) {
+    await assert.rejects(liveLfdDeps(query, { capUsd, trigger: 'manual' }), /Last Few Days run cap must be a positive number \(got (NaN|Infinity|0|-1)\)/);
+  }
+});
+
+/** A run that starts at 3:00 and finishes at `finishedAt` (the clock moves while the engine works). */
+function slowRun(query: HubQuery, finishedAt: Date) {
+  let clock = TUE_3;
+  return worker(query, {
+    now: () => clock,
+    run: async (d) => {
+      const postId = await seedLfdPost(query, { nyDate: '2026-10-13' });
+      await finishRun(query, d.runId!, { status: 'ok', claudeUsd: 0, jevUsd: 0, record: {} });
+      clock = finishedAt;
+      return { ok: true as const, runId: d.runId!, postId, stories: 6, short: false };
+    },
+  });
+}
+
+test('booking reads the clock after the run: a run finishing after 10:00 books nothing in the past; one finishing at 9:20 books 9:20–10:00', async () => {
+  const late = await openHubTestDb();
+  await late.query(`UPDATE lfd.settings SET value = 'true'::jsonb WHERE key = 'publishing_live'`);
+  const a = slowRun(late.query, new Date('2026-10-13T14:05:00Z')); // 10:05 AM New York
+  const outLate = await carryOutLfdRun(a.w, await claimed(late.query, 'manual'));
+  assert.equal(outLate.status, 'ok');
+  assert.equal(outLate.scheduled, null);
+  assert.equal((await late.query<{ n: number }>(`SELECT count(*)::int AS n FROM social_hub.schedule`)).rows[0]!.n, 0);
+
+  const onTime = await openHubTestDb();
+  await onTime.query(`UPDATE lfd.settings SET value = 'true'::jsonb WHERE key = 'publishing_live'`);
+  const b = slowRun(onTime.query, new Date('2026-10-13T13:20:00Z')); // 9:20 AM New York
+  const out = await carryOutLfdRun(b.w, await claimed(onTime.query, 'manual'));
+  assert.equal(out.status, 'ok');
+  const at = new Date(out.scheduled!).getTime();
+  assert.ok(at >= Date.parse('2026-10-13T13:20:00Z') && at < Date.parse('2026-10-13T14:00:00Z'), `booked ${out.scheduled}`);
+  const slot = (await onTime.query<{ d: string; slot: string }>(`SELECT ny_date::text AS d, slot FROM social_hub.schedule`)).rows[0]!;
+  assert.deepEqual([slot.d, slot.slot], ['2026-10-13', 'morning']);
 });

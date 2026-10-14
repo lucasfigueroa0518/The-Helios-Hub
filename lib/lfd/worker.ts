@@ -63,7 +63,9 @@ export async function carryOutLfdRun(w: CarryOutDeps, claimed: ClaimedRun): Prom
     await lfdItemId(w.query, res.postId);
     let scheduled: string | null = null;
     if (settings.publishingLive) {
-      const out = await scheduleLfdPost(w.query, res.postId, 'auto', now, nyDate);
+      // A fresh clock: the run took time, and a window that closed while it ran must not be booked in the past.
+      // throughDate stays the run's own day.
+      const out = await scheduleLfdPost(w.query, res.postId, 'auto', w.now(), nyDate);
       scheduled = out.scheduled ? out.publishAt : null;
       w.log('lfd_schedule', out.scheduled ? { runId: claimed.id, publishAt: out.publishAt } : { runId: claimed.id, note: out.note });
     }

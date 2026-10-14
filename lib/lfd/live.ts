@@ -15,6 +15,8 @@ export async function liveLfdDeps(
   query: HubQuery,
   o: { capUsd: number; trigger: 'scheduled' | 'manual'; runId?: string; now?: Date },
 ): Promise<{ deps: LfdRunDeps; spentUsd: () => number }> {
+  // A NaN or Infinity cap would silently switch off both the run budget and the Jev cap: refuse it before anything is built.
+  if (!Number.isFinite(o.capUsd) || o.capUsd <= 0) throw new Error(`Last Few Days run cap must be a positive number (got ${String(o.capUsd)})`);
   const { mediaBucket } = await import('@/lib/media-bucket');
   const { SLIDE_BUCKET } = await import('@/lib/social/overnight/config');
   const { newAnthropic } = await import('@/lib/anthropic-client');
