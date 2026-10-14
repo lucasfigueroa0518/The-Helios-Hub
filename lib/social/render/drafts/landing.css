@@ -1,0 +1,159 @@
+/* Landing — one punch line. The verb dwarfs the line and stands on a ground; then black; then the small coda. Well = 888x1158, slide offset 96,96. */
+.helios-v2-landing {
+  --ground: 604px; /* well y of the ground: slide y 700 */
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 888px;
+  height: 1158px;
+}
+
+.helios-v2-landing__stage {
+  position: absolute;
+  left: 0;
+  width: 888px;
+  bottom: calc(1158px - var(--ground));
+}
+
+.helios-v2-landing__headline {
+  box-sizing: border-box;
+  width: 888px;
+  max-height: 520px;
+  overflow: hidden;
+  margin: 0;
+  font-family: var(--font-heading, 'Pragmatica Extended', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+  font-weight: 700;
+  font-size: 120px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  text-align: left;
+  text-wrap: balance;
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+  /* the verb's glyph box is taller than its line box: pad the bottom to hold it, shift the box down by the same amount so the baseline still meets the ground */
+  padding-bottom: 0.7em;
+  transform: translateY(0.85em);
+}
+
+.helios-v2-landing[data-verb='false'] .helios-v2-landing__headline {
+  font-size: 150px;
+  line-height: 0.98;
+}
+
+.helios-v2-landing__lead {
+  font-weight: 700;
+}
+
+.helios-v2-landing__verb {
+  display: block;
+  width: fit-content;
+  line-height: 0.86;
+  letter-spacing: -0.035em;
+  margin-left: -0.04em;
+  margin-top: 0.02em;
+  white-space: nowrap;
+}
+
+.helios-v2-landing[data-verb-last='true'] .helios-v2-landing__verb[data-descender='true'] {
+  margin-bottom: 0.2em;
+}
+
+/* The ground: a slim, wide strip, or one hairline. Edge to edge, 1080 wide. */
+.helios-v2-landing__strip {
+  position: absolute;
+  top: var(--ground);
+  left: -96px;
+  width: 1080px;
+  height: 264px;
+  border-radius: 0;
+  box-shadow: none;
+  box-sizing: border-box;
+}
+
+/* A fade at the top of the strip: the headline's glyph box reaches into it, so it sits on a scrim (rule 2). Full width, like the strip. */
+.helios-v2-landing [data-scrim]::before,
+.helios-v2-landing [data-scrim]::after {
+  content: none;
+}
+.helios-v2-landing__strip-scrim {
+  position: absolute;
+  top: var(--ground);
+  left: -96px;
+  width: 1080px;
+  height: 168px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(var(--brand-scrim), 0.62) 0, rgba(var(--brand-scrim), 0.3) 55%, rgba(var(--brand-scrim), 0) 100%);
+}
+
+.helios-v2-landing__strip.helios-frame--matte .helios-frame__img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+}
+
+.helios-v2-landing__ground {
+  position: absolute;
+  top: var(--ground);
+  left: -96px;
+  width: 1080px;
+  height: 2px;
+  background: var(--brand-rule);
+}
+
+/* The small beat, after the pause. */
+.helios-v2-landing__coda {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 600px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.helios-v2-landing__body {
+  box-sizing: border-box;
+  max-height: 112px;
+  overflow: hidden;
+  margin: 0;
+  font-family: var(--font-body, Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif);
+  font-weight: 500;
+  font-size: 44px;
+  line-height: 1.2;
+  text-wrap: pretty;
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+}
+
+.helios-v2-landing__stress {
+  font-weight: 700;
+}
+
+.helios-v2-landing__note {
+  box-sizing: border-box;
+  max-height: 64px;
+  overflow: hidden;
+  margin: 0;
+  font-family: var(--font-body, Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif);
+  font-weight: 400;
+  font-size: 24px;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+  color: var(--brand-narrative-quiet);
+  text-wrap: pretty;
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+}
+
+/* On the orange canvas the hook is a black chip: keep it tight to the word and flush with the margin. */
+[data-canvas='orange'] .helios-v2-landing__verb {
+  padding-inline: 0.05em;
+  margin-left: 0;
+}
+
+[data-canvas='orange'] .helios-v2-landing__note {
+  color: var(--brand-narrative-muted);
+}

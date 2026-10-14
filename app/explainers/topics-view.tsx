@@ -8,6 +8,7 @@ import { Drawer } from '@/app/reels/ui';
 import { requestJson } from '@/lib/client-request';
 import type { TopicsView as TopicsData } from '@/lib/explainers/overview';
 import { SCORE_KEYS, type ScoreKey, type TopicRow, type TopicStatus } from '@/lib/explainers/types';
+import { refreshHubPage } from '@/lib/content-type/refresh-client';
 
 const SCORE_LABELS: Record<ScoreKey, string> = {
   audience_fit: 'Aud',
@@ -211,7 +212,7 @@ export function TopicsView({ view }: { view: TopicsData }) {
         body: '{}',
       });
       setNote(action === 'generate' ? `Render queued for "${topic.title}".` : `Rejected "${topic.title}".`);
-      router.refresh();
+      void refreshHubPage(router);
     } catch (error) {
       setNote(message(error));
     } finally {
@@ -296,7 +297,7 @@ export function TopicsView({ view }: { view: TopicsData }) {
             onDone={(text) => {
               setAdding(false);
               setNote(text);
-              router.refresh();
+              void refreshHubPage(router);
             }}
           />
         </Drawer>

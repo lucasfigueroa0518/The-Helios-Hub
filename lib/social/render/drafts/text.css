@@ -1,0 +1,185 @@
+/*
+ * Text family (story beat), premium draft.
+ * One idea: a hard scale cliff (monumental headline, small body) with the body
+ * hung on the page axis (x = 540, the canvas centre) like a footnote to the
+ * headline. The photo is a cropped band: one edge bleeds off the canvas, the
+ * other lands on a type margin.
+ *
+ * 1080 space. Well = 888x1158 inset 96. Axis offset inside the well = 444.
+ */
+
+.helios-v2-text {
+  --text-axis: 444px;
+  --text-hang: 28px;
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  width: 888px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: 32px 0 24px;
+  color: var(--brand-narrative);
+}
+
+.helios-v2-text .helios-v2-text__copy {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.helios-v2-text .helios-v2-text__headline {
+  margin: 0;
+  max-height: 420px; /* three lines at 152 / .92 */
+  font-family: var(--font-heading), 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-weight: 700;
+  font-size: 152px;
+  line-height: 0.92;
+  letter-spacing: -0.04em;
+  text-align: left;
+  text-align-last: right;
+  text-wrap: balance;
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+}
+
+.helios-v2-text .helios-v2-text__body {
+  margin: 28px 0 0 var(--text-axis);
+  width: 444px;
+  box-sizing: border-box;
+  padding-left: var(--text-hang);
+  border-left: 2px solid var(--brand-rule);
+  max-height: 230px; /* five lines at 40 / 1.3 */
+  font-family: var(--font-body), 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-weight: 400;
+  font-size: 40px;
+  line-height: 1.3;
+  letter-spacing: -0.005em;
+  text-wrap: pretty;
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+}
+
+.helios-v2-text .helios-v2-text__body.helios-v2-text__body--second {
+  margin-top: 24px;
+  max-height: 150px;
+}
+
+/* ------------------------------------------------------------------ photo band */
+
+.helios-v2-text .helios-v2-text__plate {
+  position: relative;
+  z-index: 1;
+  flex: 0 1 460px;
+  min-height: 240px;
+  min-width: 0;
+}
+
+.helios-v2-text .helios-v2-text__photo.helios-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.helios-v2-text .helios-v2-text__scrim {
+  display: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 230px;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(var(--brand-scrim), 0) 0%, rgba(var(--brand-scrim), 0.5) 50%, rgba(var(--brand-scrim), 0.9) 100%);
+}
+
+/* photo below: copy up top, the band bleeds off the right edge (and the bottom edge when nothing follows it) */
+.helios-v2-text--photo-below .helios-v2-text__plate {
+  margin: auto -96px -96px 0;
+  flex-basis: 640px;
+  min-height: 200px;
+}
+
+.helios-v2-text--photo-below.helios-v2-text--has-bottom .helios-v2-text__plate {
+  margin: auto -96px 0 0;
+  flex-basis: 440px;
+  min-height: 200px;
+}
+
+.helios-v2-text .helios-v2-text__body.helios-v2-text__body--foot {
+  flex: none;
+  margin: 32px 0 0 var(--text-axis);
+  max-height: 156px;
+}
+
+/* photo on top: the band bleeds off the left edge, its right edge lands on the right margin */
+.helios-v2-text--photo-top {
+  padding-top: 16px;
+}
+
+.helios-v2-text--photo-top .helios-v2-text__plate {
+  margin: 0 0 0 -96px;
+  flex-basis: 668px;
+}
+
+.helios-v2-text--photo-top .helios-v2-text__copy {
+  margin-top: 48px;
+}
+
+.helios-v2-text--photo-top .helios-v2-text__headline {
+  max-height: 420px;
+}
+
+.helios-v2-text--photo-top .helios-v2-text__body {
+  max-height: 260px;
+}
+
+.helios-v2-text--photo-below .helios-v2-text__copy {
+  margin-bottom: 40px;
+}
+
+.helios-v2-text--photo-below .helios-v2-text__headline {
+  max-height: 388px;
+}
+
+.helios-v2-text--photo-top.helios-v2-text--lap .helios-v2-text__scrim {
+  display: block;
+}
+
+.helios-v2-text--photo-top.helios-v2-text--lap .helios-v2-text__copy {
+  margin-top: -104px;
+}
+
+/* ------------------------------------------------------------------ type only */
+
+.helios-v2-text--only-top .helios-v2-text__headline,
+.helios-v2-text--only-low .helios-v2-text__headline {
+  max-height: 600px; /* three and a half lines at 200 / .88 */
+  font-size: 200px;
+  line-height: 0.88;
+}
+
+.helios-v2-text--only-top .helios-v2-text__body,
+.helios-v2-text--only-low .helios-v2-text__body {
+  margin-top: 40px;
+  max-height: 288px; /* five lines at 44 / 1.3 */
+  font-size: 44px;
+}
+
+.helios-v2-text--only-top .helios-v2-text__body.helios-v2-text__body--second,
+.helios-v2-text--only-low .helios-v2-text__body.helios-v2-text__body--second {
+  margin-top: 28px;
+  max-height: 150px;
+}
+
+.helios-v2-text--only-low {
+  justify-content: flex-end;
+}
+

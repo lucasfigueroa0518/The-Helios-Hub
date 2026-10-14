@@ -48,7 +48,7 @@ export async function loadWorkspace(): Promise<LoadedWorkspace> {
   const meId = session.userId;
   await ensureTrelloProfile(meId, session.email);
 
-  const usersRows = await dbQuery<{
+  const usersRowsQuery = dbQuery<{
     id: string;
     email: string;
     display_name: string;
@@ -64,7 +64,7 @@ export async function loadWorkspace(): Promise<LoadedWorkspace> {
       ORDER BY u.display_name ASC, u.email ASC`,
   );
 
-  const workspaceMembersRows = await dbQuery<{
+  const workspaceMembersRowsQuery = dbQuery<{
     id: string;
     workspace_id: string;
     user_id: string;
@@ -72,7 +72,7 @@ export async function loadWorkspace(): Promise<LoadedWorkspace> {
     joined_at: Date;
   }>('SELECT id, workspace_id, user_id, role, joined_at FROM boards.workspace_members');
 
-  const workspacesRows = await dbQuery<{
+  const workspacesRowsQuery = dbQuery<{
     id: string;
     name: string;
     slug: string;
@@ -83,7 +83,7 @@ export async function loadWorkspace(): Promise<LoadedWorkspace> {
     created_at: Date;
   }>('SELECT id, name, slug, owner_id, description, accent, visibility, created_at FROM boards.workspaces');
 
-  const boardsRows = await dbQuery<{
+  const boardsRowsQuery = dbQuery<{
     id: string;
     name: string;
     workspace_id: string;
@@ -94,9 +94,148 @@ export async function loadWorkspace(): Promise<LoadedWorkspace> {
     archived: boolean;
   }>(`SELECT id, name, workspace_id, background, canvas, theme, visibility, archived FROM boards.boards`);
 
-  const boardMembersRows = await dbQuery<{ board_id: string; user_id: string }>(
+  const boardMembersRowsQuery = dbQuery<{ board_id: string; user_id: string }>(
     'SELECT board_id, user_id FROM boards.board_members',
   );
+
+  const labelsRowsQuery = dbQuery<{ id: string; board_id: string; name: string; color: string }>(
+    'SELECT id, board_id, name, color FROM boards.labels',
+  );
+  const listsRowsQuery = dbQuery<{ id: string; board_id: string; name: string; position: number }>(
+    'SELECT id, board_id, name, position FROM boards.lists ORDER BY position',
+  );
+  const cardsRowsQuery = dbQuery<{
+    id: string;
+    board_id: string;
+    list_id: string;
+    title: string;
+    description: string | null;
+    position: number;
+    due_date: Date | string | null;
+    due_completed: boolean;
+    created_by: string;
+    created_at: Date;
+  }>(
+    `SELECT id, board_id, list_id, title, description, position, due_date, due_completed, created_by, created_at
+       FROM boards.cards
+      ORDER BY position`,
+  );
+
+  const cardMembersRowsQuery = dbQuery<{ card_id: string; user_id: string }>(
+    'SELECT card_id, user_id FROM boards.card_members',
+  );
+  const cardLabelsRowsQuery = dbQuery<{ card_id: string; label_id: string }>(
+    'SELECT card_id, label_id FROM boards.card_labels',
+  );
+  const cardTrackersRowsQuery = dbQuery<{ card_id: string; user_id: string }>(
+    'SELECT card_id, user_id FROM boards.card_trackers',
+  );
+  const checklistsRowsQuery = dbQuery<{
+    id: string;
+    card_id: string;
+    title: string;
+    position: number;
+  }>('SELECT id, card_id, title, position FROM boards.checklists ORDER BY position');
+  const checklistItemsRowsQuery = dbQuery<{
+    id: string;
+    checklist_id: string;
+    text: string;
+    completed: boolean;
+    position: number;
+    due_date: Date | null;
+  }>('SELECT id, checklist_id, text, completed, position, due_date FROM boards.checklist_items ORDER BY position');
+  const commentsRowsQuery = dbQuery<{
+    id: string;
+    card_id: string;
+    user_id: string;
+    body: string;
+    created_at: Date;
+  }>('SELECT id, card_id, user_id, body, created_at FROM boards.comments WHERE deleted_at IS NULL ORDER BY created_at');
+  const attachmentsRowsQuery = dbQuery<{
+    id: string;
+    card_id: string;
+    file_name: string;
+    mime_type: string;
+    file_url: string;
+    created_at: Date;
+  }>('SELECT id, card_id, file_name, mime_type, file_url, created_at FROM boards.attachments ORDER BY created_at');
+  const activityRowsQuery = dbQuery<{
+    id: string;
+    user_id: string;
+    card_id: string | null;
+    action_type: string;
+    data: { detail?: string } | string | null;
+    created_at: Date;
+  }>('SELECT id, user_id, card_id, action_type, data, created_at FROM boards.activity ORDER BY created_at DESC');
+  const favoriteRowsQuery = dbQuery<{ board_id: string }>(
+    'SELECT board_id FROM boards.favorite_boards WHERE user_id = $1',
+    [meId],
+  );
+  const readRowsQuery = dbQuery<{ notification_id: string }>(
+    'SELECT notification_id FROM boards.notification_reads WHERE user_id = $1',
+    [meId],
+  );
+  const myProfileQuery = dbQuery<{
+    tagline: string;
+    bio: string;
+    timezone: string;
+    pronouns: string | null;
+    availability: UserProfile['availability'];
+    hue: number | null;
+    notify_mentions: boolean;
+    notify_assignments: boolean;
+    notify_due_soon: boolean;
+    notify_digest: boolean;
+    joined_at: Date;
+  }>(
+    `SELECT tagline, bio, timezone, pronouns, availability, hue,
+            notify_mentions, notify_assignments, notify_due_soon, notify_digest, joined_at
+       FROM boards.user_profiles WHERE user_id = $1 LIMIT 1`,
+    [meId],
+  );
+
+  // Every read is independent (whole tables, filtered below), so they run together.
+  const [
+    usersRows,
+    workspaceMembersRows,
+    workspacesRows,
+    boardsRows,
+    boardMembersRows,
+    labelsRows,
+    listsRows,
+    cardsRows,
+    cardMembersRows,
+    cardLabelsRows,
+    cardTrackersRows,
+    checklistsRows,
+    checklistItemsRows,
+    commentsRows,
+    attachmentsRows,
+    activityRows,
+    favoriteRows,
+    readRows,
+    myProfile,
+  ] = await Promise.all([
+    usersRowsQuery,
+    workspaceMembersRowsQuery,
+    workspacesRowsQuery,
+    boardsRowsQuery,
+    boardMembersRowsQuery,
+    labelsRowsQuery,
+    listsRowsQuery,
+    cardsRowsQuery,
+    cardMembersRowsQuery,
+    cardLabelsRowsQuery,
+    cardTrackersRowsQuery,
+    checklistsRowsQuery,
+    checklistItemsRowsQuery,
+    commentsRowsQuery,
+    attachmentsRowsQuery,
+    activityRowsQuery,
+    favoriteRowsQuery,
+    readRowsQuery,
+    myProfileQuery,
+  ]);
 
   const myWorkspaceIds = new Set(
     workspaceMembersRows.rows.filter((m) => m.user_id === meId).map((m) => m.workspace_id),
@@ -116,104 +255,9 @@ export async function loadWorkspace(): Promise<LoadedWorkspace> {
     if (visibleBoardIds.has(b.id)) visibleWorkspaceIds.add(b.workspace_id);
   }
 
-  const labelsRows = await dbQuery<{ id: string; board_id: string; name: string; color: string }>(
-    'SELECT id, board_id, name, color FROM boards.labels',
-  );
-  const listsRows = await dbQuery<{ id: string; board_id: string; name: string; position: number }>(
-    'SELECT id, board_id, name, position FROM boards.lists ORDER BY position',
-  );
-  const cardsRows = await dbQuery<{
-    id: string;
-    board_id: string;
-    list_id: string;
-    title: string;
-    description: string | null;
-    position: number;
-    due_date: Date | string | null;
-    due_completed: boolean;
-    created_by: string;
-    created_at: Date;
-  }>(
-    `SELECT id, board_id, list_id, title, description, position, due_date, due_completed, created_by, created_at
-       FROM boards.cards
-      ORDER BY position`,
-  );
-
   const visibleCards = cardsRows.rows.filter((c) => visibleBoardIds.has(c.board_id));
   const visibleCardIds = new Set(visibleCards.map((c) => c.id));
 
-  const cardMembersRows = await dbQuery<{ card_id: string; user_id: string }>(
-    'SELECT card_id, user_id FROM boards.card_members',
-  );
-  const cardLabelsRows = await dbQuery<{ card_id: string; label_id: string }>(
-    'SELECT card_id, label_id FROM boards.card_labels',
-  );
-  const cardTrackersRows = await dbQuery<{ card_id: string; user_id: string }>(
-    'SELECT card_id, user_id FROM boards.card_trackers',
-  );
-  const checklistsRows = await dbQuery<{
-    id: string;
-    card_id: string;
-    title: string;
-    position: number;
-  }>('SELECT id, card_id, title, position FROM boards.checklists ORDER BY position');
-  const checklistItemsRows = await dbQuery<{
-    id: string;
-    checklist_id: string;
-    text: string;
-    completed: boolean;
-    position: number;
-    due_date: Date | null;
-  }>('SELECT id, checklist_id, text, completed, position, due_date FROM boards.checklist_items ORDER BY position');
-  const commentsRows = await dbQuery<{
-    id: string;
-    card_id: string;
-    user_id: string;
-    body: string;
-    created_at: Date;
-  }>('SELECT id, card_id, user_id, body, created_at FROM boards.comments WHERE deleted_at IS NULL ORDER BY created_at');
-  const attachmentsRows = await dbQuery<{
-    id: string;
-    card_id: string;
-    file_name: string;
-    mime_type: string;
-    file_url: string;
-    created_at: Date;
-  }>('SELECT id, card_id, file_name, mime_type, file_url, created_at FROM boards.attachments ORDER BY created_at');
-  const activityRows = await dbQuery<{
-    id: string;
-    user_id: string;
-    card_id: string | null;
-    action_type: string;
-    data: { detail?: string } | string | null;
-    created_at: Date;
-  }>('SELECT id, user_id, card_id, action_type, data, created_at FROM boards.activity ORDER BY created_at DESC');
-  const favoriteRows = await dbQuery<{ board_id: string }>(
-    'SELECT board_id FROM boards.favorite_boards WHERE user_id = $1',
-    [meId],
-  );
-  const readRows = await dbQuery<{ notification_id: string }>(
-    'SELECT notification_id FROM boards.notification_reads WHERE user_id = $1',
-    [meId],
-  );
-  const myProfile = await dbQuery<{
-    tagline: string;
-    bio: string;
-    timezone: string;
-    pronouns: string | null;
-    availability: UserProfile['availability'];
-    hue: number | null;
-    notify_mentions: boolean;
-    notify_assignments: boolean;
-    notify_due_soon: boolean;
-    notify_digest: boolean;
-    joined_at: Date;
-  }>(
-    `SELECT tagline, bio, timezone, pronouns, availability, hue,
-            notify_mentions, notify_assignments, notify_due_soon, notify_digest, joined_at
-       FROM boards.user_profiles WHERE user_id = $1 LIMIT 1`,
-    [meId],
-  );
 
   const users: User[] = usersRows.rows.map((u) => {
     const first = u.first_name || u.display_name.split(' ')[0] || '';

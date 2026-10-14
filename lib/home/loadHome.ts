@@ -64,15 +64,15 @@ async function loadWeekStats(email: string): Promise<WeekEmailTotals> {
 }
 
 export async function loadHome(userId: string, email: string): Promise<HomePayload> {
-  const [boards, projects, campaigns, displayName] = await Promise.all([
+  const [boards, projects, campaigns, displayName, weekStats] = await Promise.all([
     listHomeBoards(userId),
     getAdminProjects().catch(() => [] as AdminProject[]),
     listCampaigns(userId).catch(() => [] as Campaign[]),
     loadDisplayName(userId, email),
+    loadWeekStats(email),
   ]);
 
   const activeCampaigns = campaigns.filter((campaign) => campaign.status === 'active');
-  const weekStats = await loadWeekStats(email);
   const outreachStats = computeOutreachStats(campaigns, userId, email, weekStats);
 
   return {

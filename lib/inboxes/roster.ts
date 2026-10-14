@@ -108,19 +108,21 @@ export async function buildInboxRoster(today = formatNyDate()): Promise<InboxRos
     // Listing Smartlead is best-effort; the roster still renders from hub rows.
   }
 
-  const settings = await getOrgSettings([
-    'stage_plan.default',
-    'smartlead.plan_limits',
-    'smartlead.usage_cache',
-    'smartlead.accounts_cache',
+  const [settings, restClock, inboxes] = await Promise.all([
+    getOrgSettings([
+      'stage_plan.default',
+      'smartlead.plan_limits',
+      'smartlead.usage_cache',
+      'smartlead.accounts_cache',
+    ]),
+    getDomainRestClock(),
+    listInboxes(),
   ]);
   const orgPlan = settings.get('stage_plan.default') ?? DEFAULT_STAGE_PLAN;
   const planLimits = (settings.get('smartlead.plan_limits') ?? DEFAULT_PLAN_LIMITS) as PlanLimits;
   const usage = (settings.get('smartlead.usage_cache') ?? {}) as UsageCache;
   const accountsCache = (settings.get('smartlead.accounts_cache') ?? {}) as AccountsCache;
-  const restClock = await getDomainRestClock();
 
-  const inboxes = await listInboxes();
   try {
     const { syncWarmupHealthIfStale } = await import('@/lib/inboxes/warmup-sync');
     await syncWarmupHealthIfStale(inboxes);
@@ -145,9 +147,8 @@ export async function buildInboxRoster(today = formatNyDate()): Promise<InboxRos
   }
 
   const windowStart = addCalendarDays(today, -HEALTH_WINDOW_DAYS);
-  const rendered: RosterInbox[] = [];
-
-  for (const inbox of inboxes) {
+  // Each inbox's signals need their own bounce-rate read; run them together.
+  const rendered: RosterInbox[] = await Promise.all(inboxes.map(async (inbox): Promise<RosterInbox> => {
     const plan = resolveStagePlan(orgPlan, inbox.stage_plan);
     const own = (byScope.get(inbox.id) ?? []).filter((row) => row.day >= windowStart);
     const domainRows = byScope.get(inbox.domain) ?? [];
@@ -167,7 +168,7 @@ export async function buildInboxRoster(today = formatNyDate()): Promise<InboxRos
     const capacity = buildCapacityWindow(capacityInbox, today);
     const postmasterRow = latest.get(inbox.domain)?.postmaster;
 
-    rendered.push({
+    return {
       id: inbox.id,
       email: inbox.email,
       domain: inbox.domain,
@@ -211,8 +212,8 @@ export async function buildInboxRoster(today = formatNyDate()): Promise<InboxRos
       capacity_7d_total: capacity.reduce((sum, day) => sum + day.cap, 0),
       domain_rest: domainRestFor(restClock, inbox.domain),
       stage_plan_override: inbox.stage_plan,
-    });
-  }
+    };
+  }));
 
   return {
     today,

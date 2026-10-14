@@ -15,6 +15,7 @@ import {
 import { SenderSetupModal } from '@/app/campaigns/[id]/draft/sender-setup-modal';
 import type { SenderProfile } from '@/app/campaigns/[id]/draft/types';
 import { isSenderProfileSignatureReady } from '@/lib/drafting/email-signature';
+import { usePoll } from '@/lib/use-poll';
 
 /** Parallel storage PUTs — stays under typical browser per-host connection limits. */
 const UPLOAD_PUT_CONCURRENCY = 6;
@@ -256,11 +257,7 @@ export function CampaignUploads({
     void loadUploads();
   }, [campaignId]);
 
-  useEffect(() => {
-    if (!activeRunId) return;
-    const timer = window.setInterval(() => void loadUploads(), 1_500);
-    return () => window.clearInterval(timer);
-  }, [activeRunId, campaignId]);
+  usePoll(loadUploads, activeRunId ? 1_500 : null);
 
   async function uploadFiles(files: FileList | File[]) {
     if (uploadsBlockedByCap) {

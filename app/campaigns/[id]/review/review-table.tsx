@@ -118,8 +118,17 @@ export function ReviewTable({
     };
 
     setLoading(true);
-    void load();
-    const timer = window.setInterval(() => void load(), 5_000);
+    let inFlight: Promise<void> | null = null;
+    const poll = (force = false) => {
+      // Never abort a slow poll with the next one: a sheet that takes longer
+      // than the interval would otherwise never finish loading.
+      if (inFlight || (!force && document.hidden)) return;
+      inFlight = load().finally(() => {
+        inFlight = null;
+      });
+    };
+    poll(true);
+    const timer = window.setInterval(() => poll(), 5_000);
     return () => {
       window.clearInterval(timer);
       activeRequest.current?.abort();

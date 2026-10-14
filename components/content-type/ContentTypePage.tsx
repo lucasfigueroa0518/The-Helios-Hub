@@ -48,11 +48,17 @@ const BENCH_NOTE: Record<Exclude<Vertical, 'reels'>, string> = {
 export async function ContentTypePage({ vertical }: { vertical: Exclude<Vertical, 'reels'> }) {
   const session = await getSession();
   if (!session) redirect('/');
-  const loaded = await loadForPage(session.email);
+  // Independent reads: run them together rather than one after another.
+  const [loaded, live, explainersView] = await Promise.all([
+    loadForPage(session.email),
+    readPosting(vertical).then((p) => p.live).catch(() => false),
+    vertical === 'explainers'
+      ? explainersDb().then(loadSettingsView).catch((error) => ({ error: message(error) }))
+      : null,
+  ]);
   if ('error' in loaded) return <div className="rh"><div className="rh__inner"><LoadError message={loaded.error} /></div></div>;
 
   const model = typeHubModel(loaded, vertical, new Date());
-  const live = await readPosting(vertical).then((p) => p.live).catch(() => false);
 
   let generate: ReactNode;
   let settings: ReactNode;
@@ -64,7 +70,7 @@ export async function ContentTypePage({ vertical }: { vertical: Exclude<Vertical
     settings = <PostingSettings type="stories" />;
   } else {
     generate = <AddTopicsButton />;
-    const view = await explainersDb().then(loadSettingsView).catch((error) => ({ error: message(error) }));
+    const view = explainersView!;
     settings = (
       <>
         <PostingSettings type="explainers" />

@@ -370,13 +370,13 @@ test("type-led quote slide: no verified speaker photo → quote mark, quote, the
   const typeLed = toRenderPost(filled, { cover: null, slides: filled.slides.map(() => null) }, meta);
   const at = typeLed.slides.findIndex((s) => s.layoutVariant === 'quote');
   const html = renderToStaticMarkup(React.createElement(SlideTemplate, { post: typeLed, position: at }));
-  assert.match(html, /helios-quote__glyph/);
-  assert.match(html, /Donald Trump<span class="helios-quote__role">, President of the United States<\/span>/);
+  assert.match(html, /helios-v2-quote__mark/);
+  assert.match(html, /Donald Trump<\/span><span class="helios-v2-quote__role">President of the United States<\/span>/);
   const photo = { url: 'https://upload.wikimedia.org/trump.jpg', credit: 'x', source: 'commons' as const, width: 800, height: 1000, qid: 'Q22686', subject: 'Donald Trump' };
   const withPhoto = toRenderPost(filled, { cover: null, slides: filled.slides.map((s) => (s.type === 'quote' ? photo : null)) }, meta);
   const photoHtml = renderToStaticMarkup(React.createElement(SlideTemplate, { post: withPhoto, position: at }));
-  assert.match(photoHtml, /helios-quote--speaker/);
-  assert.doesNotMatch(photoHtml, /helios-quote__role/, 'the accepted speaker layout is unchanged');
+  assert.match(photoHtml, /helios-v2-quote--speaker/);
+  assert.doesNotMatch(photoHtml, /helios-v2-quote__role/, 'the accepted speaker layout is unchanged');
 });
 
 // ── Icons (photo spec §5; Tommy, 2026-10-07: the Writer picks) ─────────

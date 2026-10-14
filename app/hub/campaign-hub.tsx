@@ -26,6 +26,7 @@ import { parseMessageTemplate, parseSubjectTemplate } from '@/lib/drafting/messa
 import { isLiveAutoCampaign } from '@/lib/auto-campaigns/status';
 import { CapacityShareField, ChoiceCards } from '@/app/hub/campaign-setup-fields';
 import type { InboxRoster } from '@/lib/inboxes/roster';
+import { usePoll } from '@/lib/use-poll';
 
 const DRAFTING_POLL_MS = 5_000;
 
@@ -150,14 +151,7 @@ export function CampaignHub({ email }: { email: string }) {
       .catch(() => setRoster(null));
   }, [dialog]);
 
-  useEffect(() => {
-    if (!anyDrafting) return undefined;
-    const timer = window.setInterval(() => {
-      if (document.hidden) return;
-      void loadCampaignsRef.current(true);
-    }, DRAFTING_POLL_MS);
-    return () => window.clearInterval(timer);
-  }, [anyDrafting]);
+  usePoll(() => loadCampaignsRef.current(true), anyDrafting ? DRAFTING_POLL_MS : null);
 
   function openCreate() {
     setName(`Campaign #${campaigns.length + 1}`);

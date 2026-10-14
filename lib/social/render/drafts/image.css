@@ -1,0 +1,215 @@
+/* Image / spread family: scene first, type as caption.
+   Root sits on the slide (0,0 1080x1350) via the well's -96px offset. */
+
+.helios-v2-image {
+  --v2i-inset: 96px;
+  --v2i-lift: 180px;
+  --v2i-col: 720px;
+  --v2i-rise: 640px;
+  --v2i-run: 264px;
+  --v2i-s0: 0.9;
+  --v2i-s1: 0.8;
+  --v2i-s2: 0.46;
+  --v2i-s3: 0.16;
+  position: absolute;
+  top: -96px;
+  left: -96px;
+  width: 1080px;
+  height: 1350px;
+  overflow: hidden;
+  background: var(--brand-canvas);
+  color: var(--brand-narrative);
+}
+
+.helios-v2-image[data-fade='strong'] {
+  --v2i-rise: 760px;
+  --v2i-s0: 0.96;
+  --v2i-s1: 0.9;
+  --v2i-s2: 0.62;
+  --v2i-s3: 0.24;
+}
+
+/* ---- photo ---- */
+.helios-v2-image .helios-bleed__photo {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1080px;
+  height: 1350px;
+  max-width: none;
+  object-fit: cover;
+  z-index: 0;
+}
+.helios-v2-image--spread-left .helios-bleed__photo,
+.helios-v2-image--spread-right .helios-bleed__photo {
+  width: 2160px;
+  height: 1350px;
+  object-position: 50% 50%;
+}
+.helios-v2-image--spread-left .helios-bleed__photo {
+  left: 0;
+}
+.helios-v2-image--spread-right .helios-bleed__photo {
+  left: -1080px;
+}
+
+/* ---- plumb line: one rule on the outer margin, thick where the headline is ---- */
+.helios-v2-image__rail {
+  position: absolute;
+  z-index: 1;
+  left: var(--v2i-inset);
+  width: 2px;
+  background: var(--brand-rule);
+}
+.helios-v2-image--bottom .helios-v2-image__rail {
+  top: 0;
+  bottom: var(--v2i-lift);
+}
+.helios-v2-image--top .helios-v2-image__rail {
+  top: var(--v2i-lift);
+  bottom: 0;
+}
+.helios-v2-image--spread-right .helios-v2-image__rail {
+  left: auto;
+  right: var(--v2i-inset);
+}
+
+/* ---- caption ---- */
+.helios-v2-image__caption {
+  position: absolute;
+  z-index: 2;
+  isolation: isolate;
+  left: var(--v2i-inset);
+  width: var(--v2i-col);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.helios-v2-image--bottom .helios-v2-image__caption {
+  bottom: var(--v2i-lift);
+  justify-content: flex-end;
+}
+.helios-v2-image--top .helios-v2-image__caption {
+  top: var(--v2i-lift);
+  justify-content: flex-start;
+}
+.helios-v2-image--spread-right .helios-v2-image__caption {
+  left: auto;
+  right: var(--v2i-inset);
+  text-align: right;
+}
+
+/* scrim runs the full width of the slide, edge to edge, solid across the text and
+   falling away smoothly above it. __fade is the full-bleed band; __scrim carries the vertical gradient. */
+.helios-v2-image__fade {
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  left: calc(var(--v2i-inset) * -1);
+  right: calc(var(--v2i-run) * -1);
+}
+.helios-v2-image--bottom .helios-v2-image__fade {
+  top: calc(var(--v2i-rise) * -1);
+  bottom: calc(var(--v2i-lift) * -1);
+}
+.helios-v2-image--top .helios-v2-image__fade {
+  bottom: calc(var(--v2i-rise) * -1);
+  top: calc(var(--v2i-lift) * -1);
+}
+.helios-v2-image--spread-right .helios-v2-image__fade {
+  left: calc(var(--v2i-run) * -1);
+  right: calc(var(--v2i-inset) * -1);
+}
+.helios-v2-image__scrim {
+  position: absolute;
+  inset: 0;
+}
+/* the global [data-scrim] helper paints its own tall ::before; this scrim is self-contained */
+.helios-v2-image [data-scrim]::before,
+.helios-v2-image [data-scrim]::after {
+  content: none;
+}
+.helios-v2-image--bottom .helios-v2-image__scrim {
+  background: linear-gradient(
+    to top,
+    rgba(var(--brand-scrim), var(--v2i-s0)) 0,
+    rgba(var(--brand-scrim), var(--v2i-s1)) calc(100% - var(--v2i-rise)),
+    rgba(var(--brand-scrim), var(--v2i-s2)) calc(100% - var(--v2i-rise) * 0.62),
+    rgba(var(--brand-scrim), var(--v2i-s3)) calc(100% - var(--v2i-rise) * 0.26),
+    rgba(var(--brand-scrim), 0) 100%
+  );
+}
+.helios-v2-image--top .helios-v2-image__scrim {
+  background: linear-gradient(
+    to bottom,
+    rgba(var(--brand-scrim), var(--v2i-s0)) 0,
+    rgba(var(--brand-scrim), var(--v2i-s1)) calc(100% - var(--v2i-rise)),
+    rgba(var(--brand-scrim), var(--v2i-s2)) calc(100% - var(--v2i-rise) * 0.62),
+    rgba(var(--brand-scrim), var(--v2i-s3)) calc(100% - var(--v2i-rise) * 0.26),
+    rgba(var(--brand-scrim), 0) 100%
+  );
+}
+
+.helios-v2-image__head {
+  border-left: 8px solid var(--brand-narrative);
+  padding-left: 24px;
+}
+.helios-v2-image--spread-right .helios-v2-image__head {
+  border-left: 0;
+  border-right: 8px solid var(--brand-narrative);
+  padding-left: 0;
+  padding-right: 24px;
+}
+
+.helios-v2-image .helios-v2-image__headline {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 96px;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  max-height: 416px;
+  overflow: hidden;
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+  color: var(--brand-narrative);
+}
+
+.helios-v2-image .helios-v2-image__body {
+  margin: 0 0 0 32px;
+  max-width: 600px;
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 40px;
+  line-height: 1.28;
+  letter-spacing: 0.004em;
+  text-wrap: pretty;
+  max-height: 154px;
+  overflow: hidden;
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+  color: var(--brand-narrative);
+}
+.helios-v2-image.helios-v2-image--spread-right .helios-v2-image__body {
+  margin: 0 32px 0 auto;
+}
+
+/* ---- the swipe: one arrow riding the seam edge of the left half ---- */
+.helios-v2-image__swipe {
+  position: absolute;
+  z-index: 3;
+  right: 48px;
+  width: 72px;
+  height: 72px;
+  color: var(--brand-narrative);
+  filter: drop-shadow(0 0 14px rgba(var(--brand-scrim), 0.7));
+}
+.helios-v2-image--bottom .helios-v2-image__swipe {
+  bottom: var(--v2i-lift);
+}
+.helios-v2-image--top .helios-v2-image__swipe {
+  top: var(--v2i-lift);
+}

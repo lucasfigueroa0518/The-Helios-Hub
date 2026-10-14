@@ -1,4 +1,5 @@
 import { unstable_cache } from 'next/cache';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import { cache } from 'react';
 
 import type { HubDataset } from '@/lib/social-hub/dataset';
@@ -29,20 +30,33 @@ function slim(dataset: HubDataset): HubDataset {
   return dataset.cost ? { ...dataset, cost: { rows: [], allocations: [], unattributed: [] } } : dataset;
 }
 
+/**
+ * Even slimmed, the dataset is ~3 MB, and the data cache silently refuses any
+ * entry over 2 MB, so it was never stored and every request re-read every
+ * schema. Stored gzipped it is ~230 KB (packing and unpacking take ~20 ms).
+ */
+function pack(dataset: HubDataset): string {
+  return gzipSync(JSON.stringify(dataset)).toString('base64');
+}
+
+function unpack(packed: string): HubDataset {
+  return JSON.parse(gunzipSync(Buffer.from(packed, 'base64')).toString('utf8')) as HubDataset;
+}
+
 const shared = unstable_cache(
   async () => {
     const dataset = await loadDataset();
     if (dataset.errors.length > 0) throw new PartialRead(dataset);
-    return slim(dataset);
+    return pack(slim(dataset));
   },
-  ['social-hub-dataset', process.env.VERCEL_DEPLOYMENT_ID ?? 'local', 'v3'],
+  ['social-hub-dataset', process.env.VERCEL_DEPLOYMENT_ID ?? 'local', 'v4-gzip'],
   { revalidate: 60, tags: [HUB_DATA_TAG] },
 );
 
 /** Once per request (layout, page and drawer share it). */
 export const loadHubDataset = cache(async (): Promise<HubDataset> => {
   try {
-    return await shared();
+    return unpack(await shared());
   } catch (error) {
     if (error instanceof PartialRead) return slim(error.dataset);
     throw error;

@@ -18,6 +18,7 @@ import {
   type ReelSort,
 } from '@/lib/reels/analytics/performance';
 import { useRouter } from 'next/navigation';
+import { usePoll } from '@/lib/use-poll';
 
 const PERIODS: Array<{ id: PerformancePage['period']; label: string }> = [
   { id: '7d', label: '7 days' },
@@ -131,19 +132,11 @@ export function PerformanceView({
     setDraft(data.query);
   }, [data.query]);
 
-  useEffect(() => {
-    if (!pollPending || !pollStartedAt) return undefined;
-    const started = new Date(pollStartedAt).getTime();
-    if (!Number.isFinite(started) || Date.now() - started > 45_000) return undefined;
-    const timer = setInterval(() => {
-      if (Date.now() - started > 45_000) {
-        clearInterval(timer);
-        return;
-      }
-      router.refresh();
-    }, 4_000);
-    return () => clearInterval(timer);
-  }, [pollPending, pollStartedAt, router]);
+  const pollStarted = pollPending && pollStartedAt ? new Date(pollStartedAt).getTime() : NaN;
+  const pollFresh = Number.isFinite(pollStarted) && Date.now() - pollStarted <= 45_000;
+  usePoll(() => {
+    if (Date.now() - pollStarted <= 45_000) router.refresh();
+  }, pollFresh ? 4_000 : null);
 
   function openList(patch: { sort?: ReelSort; query?: string; page?: number; period?: PerformancePage['period'] }) {
     router.push(performanceHref(patch.period ?? data.period, {

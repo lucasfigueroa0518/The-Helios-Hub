@@ -113,19 +113,19 @@ test('render: a logo card (Helios canvas with the faint grid; plate; wide logos 
   const wide = toRenderPost(d, { cover: logo(800, 90), slides: d.slides.map(() => null) }, meta);
   assert.equal(wide.slides[0]!.logoWide, true);
   const html = renderToStaticMarkup(React.createElement(SlideTemplate, { post: wide, position: 0 }));
-  assert.match(html, /helios-cover--logo/);
+  assert.match(html, /helios-v2-cover-logo/);
   assert.match(html, /helios-logo-card__plate--dark/);
   assert.match(html, /helios-logo-card__logo--wide/);
   assert.equal(toRenderPost(d, { cover: logo(800, 800), slides: d.slides.map(() => null) }, meta).slides[0]!.logoWide, undefined);
 
   const iconCover = toRenderPost(d, { cover: null, slides: d.slides.map(() => null) }, meta);
   const iconHtml = renderToStaticMarkup(React.createElement(SlideTemplate, { post: iconCover, position: 0 }));
-  assert.match(iconHtml, /helios-cover--icon/);
+  assert.match(iconHtml, /helios-v2-cover-icon/);
   assert.match(iconHtml, /helios-icon-bg helios-icon-bg--cover" aria-hidden="true" data-icon="landmark"/, "the Writer's cover icon");
   assert.doesNotMatch(iconHtml, /helios-cover-card/, 'the Helios-logo cover card is out (photo spec §6)');
-  const css = (await import('node:fs')).readFileSync('app/social/render/preview/preview.css', 'utf8');
-  // The faint grid stays: its removal was never decided (Tommy, 2026-10-07).
-  assert.ok(/\.helios-cover--logo \{[^}]*linear-gradient/.test(css), 'the faint grid behind the logo card');
+  // The approved cover-logo design (2026-10-12) replaces the old logo card and its faint grid: the logo sits whole on its plate, bleeding off two edges.
+  const css = (await import('node:fs')).readFileSync('lib/social/render/drafts/cover-logo.css', 'utf8');
+  assert.ok(/\.helios-v2-cover-logo__plate \{[^}]*position: absolute/.test(css), 'the logo plate');
 });
 
 test('company: a usable article photo naming it is a candidate (dated by its page), next to its CEO and building', async () => {

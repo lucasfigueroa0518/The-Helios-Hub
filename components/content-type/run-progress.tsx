@@ -4,6 +4,13 @@ import { useCallback, useContext, useEffect, useRef, useState, createContext, ty
 import { useRouter } from 'next/navigation';
 
 import type { ProgressItem } from '@/lib/content-type/progress';
+import { usePoll } from '@/lib/use-poll';
+
+/** Mark the shared hub read stale, then re-render (see POST /api/content-type/progress). */
+async function refreshHubPage(router: { refresh: () => void }): Promise<void> {
+  await fetch('/api/content-type/progress', { method: 'POST' }).catch(() => undefined);
+  router.refresh();
+}
 
 /** Pressing a generate button tells the strip to look now, instead of waiting for the next poll. */
 export const PROGRESS_EVENT = 'content-type:progress';
@@ -33,7 +40,7 @@ export function RunProgressProvider({ type, children }: { type: 'carousels' | 's
       if (!res.ok) throw new Error(json.error ?? 'Could not read progress.');
       const next = json.items ?? [];
       const inFlight = (list: ProgressItem[]) => list.filter((item) => item.state !== 'failed').length;
-      if (had.current > 0 && inFlight(next) < had.current) router.refresh();
+      if (had.current > 0 && inFlight(next) < had.current) void refreshHubPage(router);
       had.current = inFlight(next);
       setItems(next);
     } catch {
@@ -47,10 +54,7 @@ export function RunProgressProvider({ type, children }: { type: 'carousels' | 's
     window.addEventListener(PROGRESS_EVENT, onEvent);
     return () => window.removeEventListener(PROGRESS_EVENT, onEvent);
   }, [load]);
-  useEffect(() => {
-    const t = setInterval(() => void load(), active ? 4000 : 20000);
-    return () => clearInterval(t);
-  }, [load, active]);
+  usePoll(load, active ? 4000 : 20000);
 
   return <RunProgressContext.Provider value={items}>{children}</RunProgressContext.Provider>;
 }

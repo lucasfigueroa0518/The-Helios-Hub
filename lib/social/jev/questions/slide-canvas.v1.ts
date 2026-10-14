@@ -8,6 +8,9 @@
  *
  * Jev reads text only: the slide's copy, its layout and photo kind, and the
  * canvases chosen so far.
+ *
+ * Superseded by slide-canvas@2: v1's "keep most slides black" made black
+ * win almost every live pick.
  */
 import { choice, type Questions } from '@typesafe-ai/sdk';
 

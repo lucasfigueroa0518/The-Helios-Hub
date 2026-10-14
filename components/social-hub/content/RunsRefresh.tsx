@@ -1,12 +1,16 @@
 'use client';
 
-import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-import type { ProgressItem } from '@/lib/content-type/progress';
+import type { AllProgress } from '@/lib/content-type/progress';
 import { inFlightKey } from '@/lib/social-hub/views/run-for';
+import { usePoll } from '@/lib/use-poll';
 
-const TYPES = ['carousels', 'stories', 'explainers'] as const;
+/** Mark the shared hub read stale, then re-render (see POST /api/content-type/progress). */
+async function refreshHubPage(router: { refresh: () => void }): Promise<void> {
+  await fetch('/api/content-type/progress', { method: 'POST' }).catch(() => undefined);
+  router.refresh();
+}
 
 /**
  * Re-read the Content page while a run is in flight, and also when one
@@ -15,32 +19,21 @@ const TYPES = ['carousels', 'stories', 'explainers'] as const;
  */
 export function RunsRefresh({ active, known }: { active: boolean; known: string }) {
   const router = useRouter();
-  useEffect(() => {
-    let stop = false;
-    const tick = async () => {
-      if (active) {
-        router.refresh();
-        return;
-      }
-      try {
-        const lists = await Promise.all(TYPES.map(async (type) => {
-          const res = await fetch(`/api/content-type/progress?type=${type}`, { cache: 'no-store' });
-          if (!res.ok) return [] as ProgressItem[];
-          const json = (await res.json()) as { items?: ProgressItem[] };
-          return (json.items ?? []).filter((item) => item.state !== 'failed');
-        }));
-        const next = inFlightKey({ carousels: lists[0] ?? [], stories: lists[1] ?? [], explainers: lists[2] ?? [] });
-        if (!stop && next !== known) router.refresh();
-      } catch {
-        // A missed poll leaves the page as it is.
-      }
-    };
-    if (!active) void tick();
-    const t = setInterval(() => void tick(), active ? 5000 : 8000);
-    return () => {
-      stop = true;
-      clearInterval(t);
-    };
-  }, [active, known, router]);
+  const tick = async () => {
+    if (active) {
+      await refreshHubPage(router);
+      return;
+    }
+    const res = await fetch('/api/content-type/progress?type=all', { cache: 'no-store' });
+    if (!res.ok) return;
+    const json = (await res.json()) as { all?: AllProgress };
+    const next = inFlightKey({
+      carousels: json.all?.carousels ?? [],
+      stories: json.all?.stories ?? [],
+      explainers: json.all?.explainers ?? [],
+    });
+    if (next !== known) await refreshHubPage(router);
+  };
+  usePoll(tick, active ? 5000 : 8000, { immediate: !active });
   return null;
 }

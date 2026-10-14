@@ -15,14 +15,33 @@ function pad2(n: number): string {
   return String(n).padStart(2, '0');
 }
 
+// Building an Intl.DateTimeFormat is far slower than using one, and these
+// helpers run inside per-day, per-inbox loops. Build each formatter once.
+const NY_DATE_FORMAT = new Intl.DateTimeFormat('en-CA', {
+  timeZone: SEND_QUEUE_TIMEZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+const NY_PARTS_FORMAT = new Intl.DateTimeFormat('en-US', {
+  timeZone: SEND_QUEUE_TIMEZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+const UTC_MONTH_DAY_FORMAT = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'UTC',
+});
+const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+
 /** Calendar date YYYY-MM-DD in America/New_York for an instant. */
 export function formatNyDate(date: Date = new Date()): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: SEND_QUEUE_TIMEZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(date);
+  return NY_DATE_FORMAT.format(date);
 }
 
 /** User-facing label like "Aug 12" for a YYYY-MM-DD calendar date. */
@@ -30,11 +49,7 @@ export function formatNyDateLabel(dateStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number);
   if (!y || !m || !d) return dateStr;
   const utc = new Date(Date.UTC(y, m - 1, d, 12));
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  }).format(utc);
+  return UTC_MONTH_DAY_FORMAT.format(utc);
 }
 
 export function addCalendarDays(dateStr: string, days: number): string {
@@ -56,17 +71,8 @@ export function sendQueueBoardWindow(today: string): { from: string; to: string 
 }
 
 function nyParts(date: Date): { dateStr: string; hour: number; minute: number } {
-  const fmt = new Intl.DateTimeFormat('en-US', {
-    timeZone: SEND_QUEUE_TIMEZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  });
   const parts = Object.fromEntries(
-    fmt.formatToParts(date).filter((p) => p.type !== 'literal').map((p) => [p.type, p.value]),
+    NY_PARTS_FORMAT.formatToParts(date).filter((p) => p.type !== 'literal').map((p) => [p.type, p.value]),
   );
   return {
     dateStr: `${parts.year}-${parts.month}-${parts.day}`,
@@ -75,22 +81,25 @@ function nyParts(date: Date): { dateStr: string; hour: number; minute: number } 
   };
 }
 
+/**
+ * Day of week (0 = Sunday) of a YYYY-MM-DD calendar date. Noon in New York on
+ * date D is always D in New York, so no time-zone conversion is needed.
+ */
+function calendarWeekday(dateStr: string): number {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const day = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  if (Number.isNaN(day)) throw new RangeError(`Invalid calendar date: ${dateStr}`);
+  return day;
+}
+
 /** User-facing weekday like "Thu" for a YYYY-MM-DD NY calendar date. */
 export function formatNyWeekday(dateStr: string): string {
-  const utc = nyWallTimeToUtc(dateStr, 12, 0);
-  return new Intl.DateTimeFormat('en-US', {
-    weekday: 'short',
-    timeZone: SEND_QUEUE_TIMEZONE,
-  }).format(utc);
+  return WEEKDAY_SHORT[calendarWeekday(dateStr)];
 }
 
 export function isNyCalendarWeekend(dateStr: string): boolean {
-  const utc = nyWallTimeToUtc(dateStr, 12, 0);
-  const weekday = new Intl.DateTimeFormat('en-US', {
-    weekday: 'short',
-    timeZone: SEND_QUEUE_TIMEZONE,
-  }).format(utc);
-  return weekday === 'Sat' || weekday === 'Sun';
+  const day = calendarWeekday(dateStr);
+  return day === 0 || day === 6;
 }
 
 function calendarDayDiff(from: string, to: string): number {
