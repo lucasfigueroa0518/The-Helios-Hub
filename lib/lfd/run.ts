@@ -25,6 +25,7 @@ import { buildPost } from './post';
 import { carouselLane, freshFeedLane, lastCarouselRunAt, reelsLane } from './sources';
 import { finishRun, insertPost, previousPosts, recentPhotoUrls, startRun, usedIdeaIds } from './store';
 import type { Drop, LfdCandidate, LfdWindow, Pick, Ready, StoryCopy } from './types';
+import { checkSlide, VISION_UNAVAILABLE, type SlideVerdict } from './vision';
 import { extendWindow, windowFor } from './window';
 import { writeStories } from './write';
 
@@ -126,10 +127,25 @@ function renderProblemsOf(fit: FitResult | null): string[] {
   ];
 }
 
+/** Story slides to replace before anything is uploaded: photos that failed to load, and photos the vision check rejected. */
 class BrokenImages extends Error {
-  constructor(readonly keys: string[]) {
-    super(`story images failed to load: ${keys.join(', ')}`);
+  constructor(
+    readonly keys: string[],
+    readonly rejected: Array<{ key: string; reason: string }> = [],
+  ) {
+    super(`story slides to replace: ${[...keys.map((k) => `${k} (image failed)`), ...rejected.map((r) => `${r.key} (vision: ${r.reason})`)].join(', ')}`);
   }
+}
+
+/** At most this many vision calls at once. */
+const VISION_PARALLEL = 3;
+
+async function inPool<T>(items: T[], n: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) await fn(items[next++]!);
+  };
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, worker));
 }
 
 export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: string; postId: string; stories: number; short: boolean } | { ok: false; runId: string; error: string }> {
@@ -166,6 +182,10 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     record.drops = drops;
     const cache = { readTokens: 0, creationTokens: 0 };
     record.claudeCache = cache;
+    const vision = { checked: 0, rejected: 0, unavailable: 0, usd: 0 };
+    record.vision = vision;
+    /** Verdicts by story key + photo: a slide unchanged since the last render is not looked at again. */
+    const verdicts = new Map<string, SlideVerdict>();
     const exclude = await recentPhotoUrls(d.query, d.now);
 
     const replace = async (p: Pick, reason: Drop['reason'], next: Pick[], detail?: string) => {
@@ -268,22 +288,50 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
 
     const taken = (await d.query<{ n: number }>(`SELECT count(*)::int AS n FROM lfd.posts WHERE slug = $1`, [`lfd-${nyDate}`])).rows[0]!.n > 0;
     const slug = taken ? `lfd-${nyDate}-${runId.slice(0, 8)}` : `lfd-${nyDate}`;
-    /** Render and store the JPEGs; with `replaceBroken`, a story slide whose photo failed to load throws before anything is uploaded. */
+    /** Vision-check each story slide's photo (story i is slide i + 2; the cover is slide 1). Returns the rejected ones. */
+    const visionCheck = async (final: Ready[], dir: string, skip: Set<string>) => {
+      const fs = await import('node:fs/promises');
+      const rejected: Array<{ r: Ready; reason: string }> = [];
+      const todo = final.map((r, i) => ({ r, i })).filter(({ r }) => !skip.has(r.pick.key));
+      await inPool(todo, VISION_PARALLEL, async ({ r, i }) => {
+        const id = `${r.pick.key}\n${r.photo.src}`;
+        let v = verdicts.get(id);
+        if (!v) {
+          const png = await fs.readFile(`${dir}/slide-slide-${String(i + 2).padStart(2, '0')}.png`).catch(() => null);
+          v = png ? await checkSlide(d.create, png, { headline: r.copy.headline, body: r.copy.body, names: r.copy.names }) : { ok: true, reason: VISION_UNAVAILABLE, costUsd: 0 };
+          vision.checked += 1;
+          vision.usd += v.costUsd;
+          if (v.reason === VISION_UNAVAILABLE) vision.unavailable += 1;
+          else verdicts.set(id, v);
+          if (!v.ok) vision.rejected += 1;
+        }
+        if (!v.ok) rejected.push({ r, reason: v.reason });
+      });
+      return final.flatMap((r) => rejected.filter((x) => x.r === r));
+    };
+
+    /**
+     * Render and store the JPEGs. With `replaceBroken`, a story slide whose photo failed to load or that the
+     * vision check rejected throws before anything is uploaded; without it, vision rejections are only recorded.
+     */
     const renderAndStore = async (final: Ready[], replaceBroken: boolean) => {
       const render = buildPost(final, d.now);
       let fit: FitResult | null = null;
+      const visionProblems: string[] = [];
       const slideObjects = await storeSlideJpegs(slug, render, {
         prefix: 'lfd',
         fitCheck: async (post, opts) => {
           const result = await d.fitCheck(post, opts);
           fit = result;
           const broken = replaceBroken ? brokenImageKeys(result, final) : [];
-          if (broken.length) throw new BrokenImages(broken);
+          const rejected = opts?.screenshotDir ? await visionCheck(final, opts.screenshotDir, new Set(broken)) : [];
+          if (replaceBroken && (broken.length || rejected.length)) throw new BrokenImages(broken, rejected.map((x) => ({ key: x.r.pick.key, reason: x.reason })));
+          visionProblems.push(...rejected.map((x) => `vision: ${x.r.copy.headline}: ${x.reason}`));
           return result;
         },
         upload: d.upload,
       });
-      return { render, slideObjects, fit: fit as FitResult | null };
+      return { render, slideObjects, fit: fit as FitResult | null, visionProblems };
     };
 
     let final = finalOrder();
@@ -293,13 +341,14 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       rendered = await renderAndStore(final, true);
     } catch (err) {
       if (!(err instanceof BrokenImages)) throw err;
-      // One extra round: drop each story whose photo failed to load, replace it, re-render (whatever fails then is recorded).
+      // One extra round: drop each story whose photo failed to load or was rejected, replace it, re-render (whatever fails then is recorded).
       const next: Pick[] = [];
-      for (const key of err.keys) {
+      const leave = [...err.keys.map((key) => ({ key, reason: 'image-failed' as const, detail: undefined })), ...err.rejected.map((x) => ({ key: x.key, reason: 'vision-rejected' as const, detail: x.reason }))];
+      for (const { key, reason, detail } of leave) {
         const i = ready.findIndex((r) => r.pick.key === key);
         const [gone] = ready.splice(i, 1);
         exclude.add(gone!.photo.src);
-        await replace(gone!.pick, 'image-failed', next);
+        await replace(gone!.pick, reason, next, detail);
       }
       if (next.length) unfinished(await runRound(next, MAX_ROUNDS));
       final = finalOrder();
@@ -307,7 +356,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       rendered = await renderAndStore(final, false);
     }
 
-    const { render, slideObjects, fit } = rendered;
+    const { render, slideObjects, fit, visionProblems } = rendered;
     const short = final.length < MIN_STORIES;
     const fitProblems = (fit?.problems ?? []).filter((p) => /text fit/.test(p));
     const postId = await insertPost(d.query, {
@@ -328,7 +377,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       caption: render.caption,
       slideObjects,
       fitProblems,
-      renderProblems: renderProblemsOf(fit),
+      renderProblems: [...renderProblemsOf(fit), ...visionProblems],
       short,
     });
     record.picks = final.map((r) => ({ key: r.pick.key, lane: r.pick.lane, headline: r.pick.headline, origin: r.pick.origin, major: r.pick.major, net: r.pick.net }));

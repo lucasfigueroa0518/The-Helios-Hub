@@ -15,11 +15,25 @@ beforeEach(() => resetSeed());
 
 const NOW = new Date('2026-10-13T07:00:00Z'); // Tuesday 3:00 AM NY
 
-/** Writer stub: echoes every story in the material with valid copy; `bad` keys get a headline the fact check rejects. */
-function writerStub(opts: { setup?: string; failAfter?: number; fail?: (urls: string[]) => boolean } = {}) {
+type VisionStory = { headline: string; body: string; names: string[] };
+
+/**
+ * Writer stub: echoes every story in the material with valid copy; `bad` keys get a headline the fact check rejects.
+ * Vision calls (submit_verdict) are answered by `vision` (default: the photo passes) and counted apart.
+ */
+function writerStub(opts: { setup?: string; failAfter?: number; fail?: (urls: string[]) => boolean; vision?: (s: VisionStory) => string | null } = {}) {
   let calls = 0;
+  const seen: VisionStory[] = [];
   const bad = new Set<string>();
   const create = async (p: Anthropic.MessageCreateParamsNonStreaming) => {
+    if ((p.tools?.[0] as { name?: string } | undefined)?.name === 'submit_verdict') {
+      const blocks = p.messages[0]!.content as Array<{ type: string; text?: string }>;
+      const s = JSON.parse(blocks.find((b) => b.type === 'text')!.text!) as VisionStory;
+      seen.push(s);
+      const rejected = opts.vision?.(s) ?? null;
+      const input = rejected ? { shows_story_subject: false, generic_stock: true, reason: rejected } : { shows_story_subject: true, generic_stock: false, reason: 'shows the subject' };
+      return { id: 'v', type: 'message', role: 'assistant', model: 'claude-haiku-5-5', stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 1000, output_tokens: 40, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }, content: [{ type: 'tool_use', id: 'v', name: 'submit_verdict', input }] } as unknown as Anthropic.Message;
+    }
     calls += 1;
     if (opts.failAfter !== undefined && calls > opts.failAfter) {
       return { id: 'm', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', stop_reason: 'refusal', stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }, content: [{ type: 'text', text: 'no' }] } as unknown as Anthropic.Message;
@@ -35,7 +49,7 @@ function writerStub(opts: { setup?: string; failAfter?: number; fail?: (urls: st
     }));
     return { id: 'm', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 100, output_tokens: 100, cache_creation_input_tokens: 5, cache_read_input_tokens: 50 }, content: [{ type: 'tool_use', id: `t${calls}`, name: 'submit_rundown', input: { stories } }] } as unknown as Anthropic.Message;
   };
-  return { create, calls: () => calls };
+  return { create, calls: () => calls, vision: () => seen };
 }
 
 const jev = (major: (headline: string) => number): JevAsk => async (req, meta): Promise<JevResult> => {
@@ -437,4 +451,55 @@ test('the same lead image is never used twice in one post', async () => {
   const { rows } = await d.query<{ stories: Array<{ photo: { src: string }; photoSource: string }> }>(`SELECT stories FROM lfd.posts`);
   assert.equal(rows[0]!.stories.filter((s) => s.photo.src === shared.src).length, 1);
   assert.equal(rows[0]!.stories.filter((s) => s.photoSource === 'lead').length, 1);
+});
+
+type VisionRec = { vision: { checked: number; rejected: number; usd: number } };
+
+test('a story slide the vision check rejects is replaced and re-rendered; the drop says why', async () => {
+  const w = writerStub({ vision: (s) => (s.headline.includes('Niche Thing 0') ? 'a stack of newspapers' : null) });
+  const base = await deps({ create: w.create });
+  let renders = 0;
+  const res = await runLastFewDays({ ...base, fitCheck: async (post, opts) => { renders += 1; return base.fitCheck(post, opts); } });
+  assert.ok(res.ok, JSON.stringify(res));
+  assert.equal(renders, 2, 'one re-render after the replacement');
+  assert.equal(res.stories, 6);
+  const rec = await recordOf(base, res.runId) as unknown as Rec & VisionRec;
+  const drop = rec.drops.find((x) => x.reason === 'vision-rejected') as { key: string; detail?: string } | undefined;
+  assert.ok(drop && drop.key.endsWith('n.com/0'), JSON.stringify(rec.drops));
+  assert.equal(drop.detail, 'a stack of newspapers');
+  const { rows } = await base.query<{ stories: Array<{ url: string }>; render_problems: string[] }>(`SELECT stories, render_problems FROM lfd.posts`);
+  assert.ok(!rows[0]!.stories.some((s) => s.url === 'https://n.com/0'));
+  assert.deepEqual(rows[0]!.render_problems, []);
+  assert.equal(rec.vision.rejected, 1);
+  // 6 checked on the first render; the second render checks only the replacement (unchanged slides keep their verdict).
+  assert.equal(rec.vision.checked, 7);
+  assert.equal(w.vision().length, 7);
+  assert.ok(rec.vision.usd > 0);
+});
+
+test('a vision failure on the re-render is recorded in render_problems, not replaced again', async () => {
+  const w = writerStub({ vision: (s) => (s.headline.includes('Niche Thing 0') || s.headline.includes('Niche Thing 5') ? 'generic office scene' : null) });
+  const base = await deps({ create: w.create });
+  let renders = 0;
+  const res = await runLastFewDays({ ...base, fitCheck: async (post, opts) => { renders += 1; return base.fitCheck(post, opts); } });
+  assert.ok(res.ok, JSON.stringify(res));
+  assert.equal(renders, 2);
+  const rec = await recordOf(base, res.runId) as unknown as Rec & VisionRec;
+  assert.equal(rec.drops.filter((x) => x.reason === 'vision-rejected').length, 1);
+  const { rows } = await base.query<{ stories: Array<{ url: string; headline: string }>; render_problems: string[] }>(`SELECT stories, render_problems FROM lfd.posts`);
+  const kept = rows[0]!.stories.find((s) => s.url === 'https://n.com/5');
+  assert.ok(kept, 'the replacement stays in the post');
+  assert.deepEqual(rows[0]!.render_problems, [`vision: ${kept.headline}: generic office scene`]);
+  assert.equal(rec.vision.rejected, 2);
+});
+
+test('every run records its vision check', async () => {
+  const w = writerStub();
+  const d = await deps({ create: w.create });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const rec = await recordOf(d, res.runId) as unknown as Rec & VisionRec;
+  assert.deepEqual({ checked: rec.vision.checked, rejected: rec.vision.rejected }, { checked: 6, rejected: 0 });
+  assert.ok(rec.vision.usd > 0);
+  assert.deepEqual(w.vision().map((s) => Object.keys(s).sort()), Array.from({ length: 6 }, () => ['body', 'headline', 'names']));
 });
