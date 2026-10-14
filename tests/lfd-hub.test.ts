@@ -113,3 +113,11 @@ test('posting: Last Few Days is a posting type with no daily quota; its pool goe
   assert.equal(poolStale(fourDaysAgo, TUE_8), true);
   assert.equal(poolStale(fourDaysAgo, TUE_8, 'last_few_days'), false);
 });
+
+test('Last Few Days copy: the nightly switch names its days and its 3:00 AM run', async () => {
+  const { readFileSync } = await import('node:fs');
+  const type = readFileSync('components/content-type/TypeControls.tsx', 'utf8');
+  assert.ok(type.includes('Make Last Few Days posts on Tuesdays and Fridays at 3:00 AM? Each run makes live model and web calls (up to the run cap).'));
+  const hub = readFileSync('components/social-hub/content/HubControls.tsx', 'utf8');
+  assert.ok(hub.includes('Makes one recap at 3:00 AM on its days (Tue/Fri).'));
+});

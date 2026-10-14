@@ -295,7 +295,10 @@ export function PostingSettings({ type }: { type: Posting['type'] }) {
         <Switch
           checked={data.generate}
           onChange={(on) => {
-            if (on && !confirm(`Make ${noun} every morning? Each run makes live model and web calls.`)) return;
+            const ask = type === 'last_few_days'
+              ? 'Make Last Few Days posts on Tuesdays and Fridays at 3:00 AM? Each run makes live model and web calls (up to the run cap).'
+              : `Make ${noun} every morning? Each run makes live model and web calls.`;
+            if (on && !confirm(ask)) return;
             void save({ generate: on });
           }}
           hint={type === 'last_few_days' ? 'Makes a Last Few Days post at 3:00 AM on its days (Tuesday and Friday), in place of that day’s carousel run.' : `Makes ${noun} every morning to fill the day's quota.`}

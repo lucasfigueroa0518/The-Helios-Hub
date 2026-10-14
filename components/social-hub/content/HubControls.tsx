@@ -223,7 +223,7 @@ export function HubSettingsButton() {
                     <>
                       <Switch on={p.live} label="Live" hint={p.live ? 'Scheduling and posting to Instagram.' : 'Off: nothing is scheduled or posted.'} disabled={saving === t.id} onChange={(v) => setLive(t.id, t.label, v)} />
                       {p.generate != null ? (
-                        <Switch on={p.generate} label="Nightly run" hint={p.generate ? 'Fills the day’s quota every night.' : 'Off: runs only when you click Run now.'} disabled={saving === t.id} onChange={(v) => setNightly(t.id, t.label, v)} />
+                        <Switch on={p.generate} label="Nightly run" hint={p.generate ? (t.id === 'last_few_days' ? 'Makes one recap at 3:00 AM on its days (Tue/Fri).' : 'Fills the day’s quota every night.') : 'Off: runs only when you click Run now.'} disabled={saving === t.id} onChange={(v) => setNightly(t.id, t.label, v)} />
                       ) : null}
                       {p.series?.map((s) => (
                         <Switch key={s.id} on={s.generate} label={`${s.label}: nightly`} hint={s.enabled ? `Made at 4:00 AM on its days.` : 'This series is turned off.'} disabled={saving === t.id || !s.enabled}
