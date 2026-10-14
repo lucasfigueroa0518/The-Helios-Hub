@@ -19,6 +19,7 @@
  * guard keeps the per-call reserve (Tommy, 2026-10-06: the checkpoint
  * stopped one cheap design stage early at cap − reserve).
  */
+import { createSizeProbe } from '@/lib/social/photos/size';
 import { priceAnthropicMessages, type MessageUsageLike } from '@/lib/anthropic-pricing';
 import type { PhotoBank } from '@/lib/media-library/bank';
 import type { JevAsk } from '@/lib/social/jev/client';
@@ -152,7 +153,8 @@ export function createLiveStages(deps: LiveStagesDeps): { stages: PipelineStages
   };
   // The render review (photo spec §5b): Haiku on the contact sheet, under the same budget guard.
   const review = deps.renderReview ? createRenderReview({ call: createReviewCall({ create }), dir: deps.renderReview.dir }) : undefined;
-  const design = createDesignStage({ jev: deps.jev, http: deps.http, vision, tagSheet, faces: deps.faces, secondPhotos: deps.secondPhotos, fitCheck: deps.fitCheck, usedLog: deps.usedLog, now: () => deps.now, identitiesFor, review, ...(deps.bank ? { bank: deps.bank } : {}) });
+  // The size floors (size.ts) read a photo's size when its source doesn't state one.
+  const design = createDesignStage({ jev: deps.jev, http: deps.http, vision, tagSheet, faces: deps.faces, secondPhotos: deps.secondPhotos, size: createSizeProbe(deps.http ?? fetch), fitCheck: deps.fitCheck, usedLog: deps.usedLog, now: () => deps.now, identitiesFor, review, ...(deps.bank ? { bank: deps.bank } : {}) });
 
   const stages: PipelineStages = {
     score: deps.score,

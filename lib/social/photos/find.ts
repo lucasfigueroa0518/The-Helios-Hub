@@ -30,6 +30,7 @@
  * "mostly text or banner" answer). The close-up vision check of a winner is
  * pick.ts's.
  */
+import type { SizeProbe } from './size';
 import type { BankReader } from '@/lib/media-library/reader';
 import { ladderQueries, tuning } from './tuning';
 import type { OpenverseCandidate } from '@/lib/social/editorial/v2/image-step/openverse';
@@ -156,6 +157,8 @@ export type PhotoDeps = {
   tagSheet?: TagSheet;
   /** The photo bank as a source (lib/media-library/reader.ts). Absent: not searched (tests, offline runs). */
   bank?: BankReader;
+  /** Reads a photo's pixel size when its source doesn't state it (size.ts). Absent: unknown sizes pass (tests, offline runs). */
+  size?: SizeProbe;
 };
 
 /** Everything one post's searches share. */

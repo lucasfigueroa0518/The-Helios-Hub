@@ -293,7 +293,7 @@ test('pick: never the previous slide\'s photo; stock never twice in a post; stat
   assert.equal(slotAllows({ kind: 'stat', speaker: null }, logoC), false);
   assert.equal(slotAllows({ kind: 'quote', speaker: 'Jane Doe' }, head), true);
   assert.equal(slotAllows({ kind: 'quote', speaker: 'Someone Else' }, head), false);
-  assert.equal(slotAllows({ kind: 'cover', speaker: null }, logoC), true);
+  assert.equal(slotAllows({ kind: 'cover', speaker: null }, logoC), false);
 });
 
 // ── The whole post (photosForDraft) ───────────────────────────────────────
@@ -525,7 +525,7 @@ test('canvas: Jev always picking black still uses green, orange and white', asyn
 const words = (position: number, headline: string, body = '') => ({ position, headline, body });
 
 test('uniqueness: no photo twice in a post, verified included; no person twice; a quote slide\'s speaker is the one exception', async () => {
-  const ceo = cand({ url: 'https://c/amodei.jpg', lane: 'ceo', source: 'ceo', subject: 'Dario Amodei', verified: true });
+  const ceo = cand({ url: 'https://c/amodei.jpg', lane: 'ceo', source: 'ceo', subject: 'Dario Amodei', verified: true, width: 1600, height: 2000 });
   const ceo2 = cand({ url: 'https://c/amodei-2.jpg', lane: 'second', source: 'second', subject: 'Dario Amodei', verified: true });
   const scene = cand({ url: 'https://s/lab.jpg' });
   const state = newPickState();
