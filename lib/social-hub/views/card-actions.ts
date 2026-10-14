@@ -21,7 +21,7 @@ const BOOKED: ReadonlySet<StateId> = new Set(['scheduled', 'late']);
 const GRID: Record<'needs' | 'booked' | 'failed', PostPlan['action'][]> = {
   needs: ['place', 'reschedule', 'hardPublish', 'hardRegenerate', 'reject'],
   booked: ['reschedule', 'unschedule', 'hardPublish', 'reject'],
-  failed: ['hardRegenerate', 'reschedule', 'reject'],
+  failed: ['place', 'hardRegenerate', 'reject'],
 };
 
 const LABEL: Partial<Record<PostPlan['action'], string>> = {
@@ -67,7 +67,8 @@ export function cardActions(state: PostState, plans: readonly ActionPlan[], enab
     .filter((a) => !(group === 'failed' && a === 'hardPublish'))
     .flatMap((a) => {
       const p = usable.find((x) => x.action === a);
-      return p ? [offered(p, LABEL[a]!)] : [];
+      // On a failed card, placing it again is a Reschedule (B7).
+      return p ? [offered(p, group === 'failed' && a === 'place' ? 'Reschedule' : LABEL[a]!)] : [];
     });
   return { primary, grid };
 }

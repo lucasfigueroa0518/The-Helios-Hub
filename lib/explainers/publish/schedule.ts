@@ -1,8 +1,8 @@
 import type { Queryable } from '@/lib/explainers/db';
-import { calendarDateKey } from '@/lib/instagram/clock';
+import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { chooseFromWindows, slotTakenKey, uniformIndex } from '@/lib/instagram/window';
-import { POOL_ORDER_BY } from '@/lib/explainers/repository';
+import { POOL_ORDER_BY, REJECTED_SLOT_NOTE } from '@/lib/explainers/repository';
 import { bookSlot } from '@/lib/social-hub/spine';
 
 import { DEFAULT_POSTS_PER_DAY, EXPLAINER_WINDOWS } from './config';
@@ -43,11 +43,18 @@ export async function postsPerDay(db: Queryable): Promise<number> {
 
 export type ScheduleOutcome = { scheduled: true; id: string; publishAt: string } | { scheduled: false; note: string };
 
+/**
+ * Book a render into the next free explainer window, or return its waiting
+ * slot. `throughDate` (a New York day, YYYY-MM-DD) is the last day it may
+ * book: Approve and the finish booking pass today (B1, B2); without it the
+ * search runs two weeks ahead (the worker's scheduleApproved, the 2 AM fill).
+ */
 export async function scheduleJob(
   db: Queryable,
   jobId: string,
   source: 'auto' | 'user',
   now = new Date(),
+  throughDate?: string,
   rng: (count: number) => number = uniformIndex,
 ): Promise<ScheduleOutcome> {
   const itemId = await explainerItemId(db, jobId);
@@ -69,8 +76,10 @@ export async function scheduleJob(
     const spacing = (text: string, params?: unknown[]) => db.query<Record<string, unknown>>(text, params);
     const busy = [...(await busyFeedTimes(spacing, now, 'explainers')), ...(await ownFeedTimes(spacing, 'explainers', now))];
     const windows = EXPLAINER_WINDOWS.slice(0, Math.max(1, Math.min(await postsPerDay(db), EXPLAINER_WINDOWS.length)));
-    const choice = chooseFromWindows(windows, now, new Set(takenRows.map((r) => slotTakenKey(r.d, r.slot))), busy, rng);
-    if (!choice) return { scheduled: false, note: 'No explainer window is open in the next two weeks.' };
+    const choice = chooseFromWindows(windows, now, new Set(takenRows.map((r) => slotTakenKey(r.d, r.slot))), busy, rng, throughDate);
+    if (!choice) {
+      return { scheduled: false, note: throughDate ? `No explainer window is open through ${throughDate}.` : 'No explainer window is open in the next two weeks.' };
+    }
     try {
       const booked = await bookSlot(spineOf(db), { vertical: 'explainers', itemId, nyDate: choice.nyDate, slot: choice.slot, publishAt: choice.publishAt, source });
       return { scheduled: true, id: booked.id, publishAt: booked.publishAt };
@@ -81,6 +90,26 @@ export async function scheduleJob(
     }
   }
   return { scheduled: false, note: 'That window was just taken.' };
+}
+
+/**
+ * B2: when the 2 AM run (trigger 'auto') finishes a render, it takes today's
+ * next open window as a system slot (source 'auto'), unapproved: it still
+ * needs Approve, and without one releaseDueSchedules cancels it at its time.
+ * Today only; nothing left today books nothing. A person's render
+ * (Regenerate, Make it) waits for Approve, which books it. Only while
+ * publishing is live, like every other booking. Booking only, never
+ * queuePublish. Null: not booked by rule.
+ */
+export async function bookFinishedRender(
+  db: Queryable,
+  job: { id: string; trigger: string },
+  now = new Date(),
+  rng?: (count: number) => number,
+): Promise<ScheduleOutcome | null> {
+  if (job.trigger !== 'auto') return null;
+  if (!(await publishingLive(db))) return null;
+  return scheduleJob(db, job.id, 'auto', now, calendarDateKey(now, SOCIAL_TIMEZONE), rng);
 }
 
 /**
@@ -115,7 +144,7 @@ export async function scheduleApproved(db: Queryable, now = new Date(), rng?: (c
   );
   let scheduled = 0;
   for (const row of rows) {
-    const result = await scheduleJob(db, row.id, 'auto', now, rng);
+    const result = await scheduleJob(db, row.id, 'auto', now, undefined, rng);
     if (!result.scheduled) break;
     scheduled += 1;
   }
@@ -157,16 +186,40 @@ export async function fillCandidates(db: Queryable, approvalNeeded: boolean): Pr
   return rows.map((r) => ({ topicId: r.topic_id, title: r.title, jobId: r.job_id }));
 }
 
-/** Due slots become publish attempts. A failing readiness check fails the slot, with the reason. */
+/** The note on a slot cancelled because nobody approved its render in time (B3; carousels and reels say the same). */
+export const NOT_APPROVED_NOTE = 'Nobody approved this explainer before its slot, so it was not posted.';
+
+/**
+ * Due slots become publish attempts (B3, like carousels and reels): a
+ * rejected render's slot is cancelled (a rejection in either place wins,
+ * D41); with require_approval on (the default), so is one nobody approved.
+ * Only the rest reach queuePublish, whose readiness check stays as a second
+ * guard and fails the slot, with the reason.
+ */
 export async function releaseDueSchedules(db: Queryable): Promise<number> {
-  const { rows } = await db.query<{ id: string; job_id: string; source: string }>(
-    `SELECT s.id, ci.native_ref AS job_id, s.source
-       FROM social_hub.schedule s JOIN social_hub.content_items ci ON ci.id = s.content_item_id
+  const { rows } = await db.query<{ id: string; job_id: string; source: string; decision: string | null }>(
+    `SELECT s.id, ci.native_ref AS job_id, s.source,
+            CASE WHEN f.verdict = 'rejected' OR ap.decision = 'rejected' THEN 'rejected' ELSE ap.decision END AS decision
+       FROM social_hub.schedule s
+       JOIN social_hub.content_items ci ON ci.id = s.content_item_id
+       LEFT JOIN social_hub.approvals ap ON ap.content_item_id = ci.id
+       LEFT JOIN explainers.feedback f ON f.job_id::text = ci.native_ref
       WHERE s.vertical = 'explainers' AND s.status = 'scheduled' AND s.publish_at <= now()
       ORDER BY s.publish_at`,
   );
+  const cancel = (id: string, note: string) =>
+    db.query(`UPDATE social_hub.schedule SET status = 'cancelled', error = $2 WHERE id = $1 AND status = 'scheduled'`, [id, note]);
+  const approvalNeeded = rows.some((row) => row.decision !== 'approved') && (await requireApproval(db));
   let released = 0;
   for (const row of rows) {
+    if (row.decision === 'rejected') {
+      await cancel(row.id, REJECTED_SLOT_NOTE);
+      continue;
+    }
+    if (approvalNeeded && row.decision !== 'approved') {
+      await cancel(row.id, NOT_APPROVED_NOTE);
+      continue;
+    }
     const claimed = await db.query(
       `UPDATE social_hub.schedule SET status = 'publishing' WHERE id = $1 AND status = 'scheduled' RETURNING id`,
       [row.id],

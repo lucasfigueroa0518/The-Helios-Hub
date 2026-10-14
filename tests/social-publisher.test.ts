@@ -46,7 +46,7 @@ test('gate: the reserve is an account setting, and every reading is recorded for
 function stubDriver(vertical: PublishDriver['vertical'], opts: { live?: boolean; carried?: string[] } = {}): PublishDriver {
   return {
     vertical,
-    refusesAtRelease: vertical === 'carousels' ? 'cancel' : 'fail',
+    refusesAtRelease: 'cancel',
     live: async () => opts.live ?? true,
     requireApproval: async () => true,
     failStale: async () => undefined,

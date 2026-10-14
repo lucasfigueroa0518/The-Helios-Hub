@@ -1,7 +1,8 @@
 /**
  * Overnight check: is the Social Hub ready to post, and did the night work?
  * Read only: it reads settings, runs, the schedule and the hub's own view of
- * each post. It writes nothing, calls no model and posts nothing.
+ * each post. It calls no model and posts nothing; its one write is loadDataset()'s consumeMoves,
+ * which sets idea_adjustments.consumed_at (idempotent).
  *
  *   npx tsx scripts/overnight_check.ts
  *

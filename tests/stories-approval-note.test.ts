@@ -60,3 +60,35 @@ test('storyActions.approve passes the note through, and keeps the old line when 
   const plain = storyActions({ ...base, approve: async () => undefined });
   assert.deepEqual(await plain.approve!({ setId: 's' }, 'tommy', {}), { ok: true, note: 'Approved. It posts in its window.' });
 });
+
+async function publishingOn(db: Awaited<ReturnType<typeof ready>>['db']) {
+  await db.query(`INSERT INTO stories.settings (key, value) VALUES ('publishing_live', 'true'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+}
+
+test('approve with publishing live books today’s window at once (B1); the spine slot follows the set', async () => {
+  const s = await ready(at('2026-10-10T08:00:00Z'));
+  await publishingOn(s.db);
+  const done = await approve(s.db, s.id, at('2026-10-10T12:00:00Z')); // 8:00 AM NY, Saturday
+  assert.equal(done.status, 'scheduled');
+  const t = new Date(done.publish_at as unknown as string).getTime();
+  assert.ok(t >= Date.parse('2026-10-10T12:30:00Z') && t <= Date.parse('2026-10-10T14:00:00Z'), 'inside 8:30–10:00 AM');
+  assert.match(done.approvalNote, /^Approved\. It posts at \d{1,2}:\d{2} AM\.$/);
+  const slots = (await s.db.query<{ status: string }>(`SELECT status FROM social_hub.schedule WHERE vertical = 'stories'`)).rows;
+  assert.deepEqual(slots.map((r) => r.status), ['scheduled']);
+  assert.equal((await s.db.query<{ n: number }>(`SELECT count(*)::int AS n FROM social_hub.publish_attempts`)).rows[0]!.n, 0, 'booking only');
+});
+
+test('approve after the window, or with publishing off, approves without a minute (Review Focus 1)', async () => {
+  const late = await ready(at('2026-10-10T08:00:00Z'));
+  await publishingOn(late.db);
+  const lateDone = await approve(late.db, late.id, at('2026-10-10T15:00:00Z')); // 11:00 AM NY
+  assert.equal(lateDone.status, 'approved');
+  assert.equal(lateDone.publish_at, null);
+  assert.match(lateDone.approvalNote, /window has passed/);
+
+  const off = await ready(at('2026-10-10T08:00:00Z'));
+  const offDone = await approve(off.db, off.id, at('2026-10-10T12:00:00Z'));
+  assert.equal(offDone.status, 'approved');
+  assert.equal(offDone.publish_at, null);
+  assert.match(offDone.approvalNote, /Publishing is switched off/);
+});
