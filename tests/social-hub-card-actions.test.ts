@@ -109,3 +109,15 @@ test('a failed render with nothing to post offers no Reschedule', () => {
   const c = card({ ...base, status: 'failed', postedAt: null, publishAt: null, permalink: null, media: { kind: 'none', note: 'The render failed.' } });
   assert.ok(!c.grid.some((a) => a.key === 'place'));
 });
+
+for (const vertical of ['carousels', 'reels'] as const) {
+  test(`a failed ${vertical} post that was rejected reads Rejected and offers no Try again, Reschedule or Reject (B7)`, () => {
+    const base = published(vertical);
+    const post: HubPost = { ...base, status: 'failed', postedAt: null, permalink: null, statusNote: 'boom', approval: { ...base.approval, approvedAt: null, note: 'Rejected' } };
+    assert.equal(postState(post, FIXTURE_NOW).id, 'rejected');
+    const c = card(post);
+    assert.equal(c.primary, null);
+    assert.ok(!c.grid.some((a) => a.key === 'place' || a.key === 'hardPublish' || a.key === 'reject'));
+    assert.ok(!actionsFor(post, { quota: null, typicalCostLabel: null }).some((p) => p.kind === 'post' && (p.action === 'place' || p.action === 'reject')));
+  });
+}

@@ -180,7 +180,7 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
   }
   // A failed post can go again (Phase B, B7): Reschedule into one of today's windows, or Reject.
   // Not a Story set (a failed set is final; Regenerate builds a new one), and not a render with nothing to post.
-  const failedRetry = post.status === 'failed' && post.vertical !== 'stories' && hasContent(post);
+  const failedRetry = post.status === 'failed' && post.vertical !== 'stories' && hasContent(post) && !/\brejected\b/i.test(post.approval.note ?? '');
   // Reject (D47): content that hasn't posted yet never will, for every type (2026-10-13: explainers too).
   if (post.status === 'ready' || post.status === 'scheduled' || failedRetry) {
     const refs = post.vertical === 'carousels'

@@ -34,6 +34,10 @@ import {
   rescheduleItem,
   STORY_WINDOW_DEFAULTS,
 } from '@/lib/social-hub/placement';
+import type { HubQuery } from '@/lib/social-hub/db';
+import type { HubDataset } from '@/lib/social-hub/dataset';
+import { readRejected, withRejections } from '@/lib/social-hub/rejected';
+import type { HubPost } from '@/lib/social-hub/types';
 import { userPlaced } from '@/lib/social-hub/fill';
 import { approveItem, bookSlot, ensureContentItem, rejectItem, type SpineQuery } from '@/lib/social-hub/spine';
 import { getSet, rescheduleSet } from '@/lib/stories/repository';
@@ -612,4 +616,30 @@ test('Reschedule on a failed post books a new slot today beside the failed one, 
   assert.ok(again.ok, again.note);
   const rows = (await pg.query<{ status: string; source: string }>(`SELECT status, source FROM social_hub.schedule WHERE content_item_id = $1 ORDER BY created_at`, [c.itemId])).rows;
   assert.deepEqual(rows.map((r) => [r.status, r.source]), [['failed', 'user'], ['scheduled', 'user']]);
+});
+
+test('Reschedule of a failed, never-approved post leaves the new slot unapproved: Reschedule alone does not publish (B7)', async () => {
+  const { pg, q } = await spineDb();
+  const c = await carousel(pg, q);
+  const booked = await placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-08', slot: 'morning', now: NOW, rng: first });
+  assert.ok(booked.ok, booked.note);
+  await pg.query(`UPDATE social_hub.schedule SET status = 'failed', error = 'boom' WHERE id = $1`, [(booked as { scheduleId: string }).scheduleId]);
+  const again = await placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-08', slot: 'morning', now: NOW, rng: last });
+  assert.ok(again.ok, again.note);
+  const slot = (await pg.query<{ approved_at: string | null }>(`SELECT approved_at FROM social_hub.schedule WHERE status = 'scheduled' AND content_item_id = $1`, [c.itemId])).rows;
+  assert.equal(slot.length, 1);
+  assert.equal(slot[0]!.approved_at, null, 'the new slot is not approved');
+  assert.equal((await pg.query(`SELECT 1 FROM social_hub.approvals WHERE content_item_id = $1 AND decision = 'approved'`, [c.itemId])).rows.length, 0, 'nothing approved the item');
+});
+
+test('a rejected failed post is read as rejected: readRejected finds it, withRejections stamps the failed post (B7)', async () => {
+  const { pg, q } = await spineDb();
+  const c = await carousel(pg, q);
+  await rejectItem(q, c.itemId);
+  const gone = await readRejected(q as unknown as HubQuery);
+  assert.ok(gone.some((r) => r.vertical === 'carousels'), 'the rejection is read');
+  const post = { vertical: 'carousels', status: 'failed', approval: { required: true, approvedAt: null, note: null }, refs: { postId: gone.find((r) => r.vertical === 'carousels')!.nativeRef } } as unknown as HubPost;
+  const next = withRejections({ posts: [post] } as unknown as HubDataset, gone);
+  assert.equal(next.posts[0]!.approval.note, 'Rejected');
+  assert.equal(withRejections({ posts: [{ ...post, status: 'ready' }] } as unknown as HubDataset, gone).posts[0]!.approval.note, null, 'only failed posts are stamped');
 });
