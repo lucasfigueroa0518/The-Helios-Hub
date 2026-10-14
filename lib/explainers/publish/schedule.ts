@@ -43,11 +43,18 @@ export async function postsPerDay(db: Queryable): Promise<number> {
 
 export type ScheduleOutcome = { scheduled: true; id: string; publishAt: string } | { scheduled: false; note: string };
 
+/**
+ * Book a render into the next free explainer window, or return its waiting
+ * slot. `throughDate` (a New York day, YYYY-MM-DD) is the last day it may
+ * book: Approve and the finish booking pass today (B1, B2); without it the
+ * search runs two weeks ahead (the worker's scheduleApproved, the 2 AM fill).
+ */
 export async function scheduleJob(
   db: Queryable,
   jobId: string,
   source: 'auto' | 'user',
   now = new Date(),
+  throughDate?: string,
   rng: (count: number) => number = uniformIndex,
 ): Promise<ScheduleOutcome> {
   const itemId = await explainerItemId(db, jobId);
@@ -69,8 +76,10 @@ export async function scheduleJob(
     const spacing = (text: string, params?: unknown[]) => db.query<Record<string, unknown>>(text, params);
     const busy = [...(await busyFeedTimes(spacing, now, 'explainers')), ...(await ownFeedTimes(spacing, 'explainers', now))];
     const windows = EXPLAINER_WINDOWS.slice(0, Math.max(1, Math.min(await postsPerDay(db), EXPLAINER_WINDOWS.length)));
-    const choice = chooseFromWindows(windows, now, new Set(takenRows.map((r) => slotTakenKey(r.d, r.slot))), busy, rng);
-    if (!choice) return { scheduled: false, note: 'No explainer window is open in the next two weeks.' };
+    const choice = chooseFromWindows(windows, now, new Set(takenRows.map((r) => slotTakenKey(r.d, r.slot))), busy, rng, throughDate);
+    if (!choice) {
+      return { scheduled: false, note: throughDate ? `No explainer window is open through ${throughDate}.` : 'No explainer window is open in the next two weeks.' };
+    }
     try {
       const booked = await bookSlot(spineOf(db), { vertical: 'explainers', itemId, nyDate: choice.nyDate, slot: choice.slot, publishAt: choice.publishAt, source });
       return { scheduled: true, id: booked.id, publishAt: booked.publishAt };
@@ -115,7 +124,7 @@ export async function scheduleApproved(db: Queryable, now = new Date(), rng?: (c
   );
   let scheduled = 0;
   for (const row of rows) {
-    const result = await scheduleJob(db, row.id, 'auto', now, rng);
+    const result = await scheduleJob(db, row.id, 'auto', now, undefined, rng);
     if (!result.scheduled) break;
     scheduled += 1;
   }
