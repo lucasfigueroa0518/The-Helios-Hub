@@ -144,9 +144,9 @@ export const BRIEF_SCHEMA = obj({
   numbers: list(
     obj({
       id: { type: 'string', description: 'N1, N2, …' },
-      value: { type: 'string', description: 'Exactly as the source writes it.' },
+      value: { type: 'string', description: 'The figure exactly as the source writes it, with its unit or currency. No hedges or rates: those go in counts.' },
       type: { type: 'string', enum: [...NUMBER_TYPES] },
-      counts: { type: 'string', description: 'What it counts.' },
+      counts: { type: 'string', description: 'What it counts, with any hedge (about, up to) or rate (per month).' },
       sources: strList,
       notes: strList,
     }),
