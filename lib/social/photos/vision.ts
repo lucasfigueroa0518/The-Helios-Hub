@@ -94,7 +94,8 @@ export type VisionVerdict = {
   mostly_text_banner: boolean;
 };
 
-export type VisionResult = { ok: true; verdict: VisionVerdict; pass: boolean; costUsd: number } | { ok: false; error: string; costUsd: number };
+/** `photo`: the photo itself could not be loaded (it can't be shown either); otherwise the model call or its answer failed. */
+export type VisionResult = { ok: true; verdict: VisionVerdict; pass: boolean; costUsd: number } | { ok: false; error: string; costUsd: number; photo?: boolean };
 
 /**
  * `title`: the candidate's title, as context (it can name the institution shown). `story`: the news in one
@@ -102,14 +103,20 @@ export type VisionResult = { ok: true; verdict: VisionVerdict; pass: boolean; co
  */
 export type VisionCheck = (input: { url: string; scene: string; subjects: string[]; title?: string; story?: string }) => Promise<VisionResult>;
 
+/** Requests whose right answer can be a logo: a story logo is what they asked for, not a stray mark (2026-10-13). */
+export const LOGO_REQUEST_KINDS: ReadonlySet<string> = new Set(['logo', 'product', 'company']);
+
 /**
  * Pass: shows the thing (with confidence), no landmark, no outside logo, no named institution, and on people:
  * 'strict' fails any person at all; 'faces' fails only a person as the main subject or a recognizable face
  * (hands on a keyboard, people far in the background pass). Older verdicts have only person_prominent.
+ * `kind`: the request's kind. A logo, product or company request may show a story logo (Tommy, 2026-10-13:
+ * the Claude Code logo, found by a Commons search for "Claude Code", failed as a "story logo").
  */
-export function passesVision(v: VisionVerdict, mode: 'strict' | 'faces' = 'strict'): boolean {
+export function passesVision(v: VisionVerdict, mode: 'strict' | 'faces' = 'strict', kind?: string): boolean {
   const people = v.person_main === undefined ? v.person_prominent : mode === 'strict' ? v.person_prominent : Boolean(v.person_main || v.face_recognizable);
-  return v.shows_requested && v.shows_requested_confidence >= SHOWS_MIN_CONFIDENCE && !people && !v.landmark_visible && !v.story_logo && !v.named_institution;
+  const logoOk = kind !== undefined && LOGO_REQUEST_KINDS.has(kind);
+  return v.shows_requested && v.shows_requested_confidence >= SHOWS_MIN_CONFIDENCE && !people && !v.landmark_visible && (logoOk || !v.story_logo) && !v.named_institution;
 }
 
 export function describeVerdict(v: VisionVerdict): string {
@@ -140,7 +147,7 @@ export function createVisionCheck(deps: { create: MessagesCreate; http?: typeof 
     try {
       data = await loadImage(url, deps.http ?? fetch);
     } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err), costUsd: 0 };
+      return { ok: false, error: err instanceof Error ? err.message : String(err), costUsd: 0, photo: true };
     }
     let res: Anthropic.Message;
     try {

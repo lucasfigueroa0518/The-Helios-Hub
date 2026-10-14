@@ -1,6 +1,6 @@
 /**
  * Replay one Morning Download set's photo stage with its trace (diagnosis only).
- * Re-writes the set's chosen stories (md-headlines@1, for their photo requests,
+ * Re-writes the set's chosen stories (md-headlines@2, for their photo requests,
  * which the set never saved) and runs the live photo set on them, printing each
  * frame's design-stage steps. Saves nothing but the cost rows, against the set.
  *

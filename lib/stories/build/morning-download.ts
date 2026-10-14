@@ -8,7 +8,7 @@
  *   merge    one Jev same-event check per cross-system pair sharing a name
  *   rank     one major-news@2 call per candidate → score (the source adds
  *            nothing); up to 5 clear the bar, else the top 2 (S-04)
- *   write    md-headlines@1 (one Sonnet call), length and sentence checks
+ *   write    md-headlines@2 (one Sonnet call), length and sentence checks
  *   ground   md-grounding@1 per headline; a miss gets one rewrite, a second
  *            miss drops the story; fewer than 2 left skips the day
  *   photos   a carousel item keeps the photo its design stage already

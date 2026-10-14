@@ -280,7 +280,7 @@ Decisions after kickoff go here, numbered from S-34.
 |---|---|---|---|
 | `major-news@1` | Morning Download ranking | Jev | Approved by Lucas 2026-10-08; superseded by @2 (kept as `MAJOR_NEWS_V1`) |
 | `major-news@2` | Morning Download ranking (S-72) | Jev | DRAFT 2026-10-09, wired in; wording awaits Lucas (`lib/stories/questions.ts`) |
-| `md-headlines@1` | Morning Download story frames | Sonnet 5.5 | Approved by Lucas 2026-10-08 (`lib/stories/prompts.ts`) |
+| `md-headlines@2` | Morning Download story frames | Sonnet 5.5 | @1 approved by Lucas 2026-10-08. @2 (Tommy, 2026-10-13): a named organization's building or headquarters is asked as a company request, never a setting (the opener asked for "Anthropic headquarters" as a setting and found only random offices); wording needs Lucas's review (`lib/stories/prompts.ts`) |
 | `md-grounding@1` | Headline supported by source | Jev | Drafted in M3 ; approved by Lucas 2026-10-08 |
 | `stories-same-event@1` | Cross-system merge | Jev | Drafted in M3 ; approved by Lucas 2026-10-08 |
 | `gtn-extract@1` | Numbers from shortlisted stories | Sonnet 5.5 | Drafted in M6 ; approved by Lucas 2026-10-08 |
