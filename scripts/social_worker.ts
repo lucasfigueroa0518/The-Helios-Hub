@@ -90,7 +90,8 @@ async function main(): Promise<void> {
   const { publisherOwnsPublishing } = await import('@/lib/publishing/publisher');
   const lfdSettings = await import('@/lib/lfd/settings');
   const lfdStore = await import('@/lib/lfd/store');
-  const { carryOutLfdRun } = await import('@/lib/lfd/worker');
+  const { carryOutLfdRun, withLfdTimeout } = await import('@/lib/lfd/worker');
+  const { LFD_RUN_TIMEOUT_MS } = await import('@/lib/lfd/config');
   const { threeAmQueue } = await import('@/lib/lfd/clock');
   const { liveLfdDeps } = await import('@/lib/lfd/live');
   const { claimAndPublishLfd } = await import('@/lib/lfd/publish');
@@ -318,15 +319,26 @@ async function main(): Promise<void> {
       });
       if (lfdClaimed) {
         // The engine is built with the cap carryOutLfdRun read and validated (lfd.settings.run_cap_usd).
-        const out = await carryOutLfdRun(
-          {
-            query: lfdQuery,
-            now: () => new Date(),
-            log,
-            engine: (run, capUsd) => liveLfdDeps(lfdQuery, { capUsd, trigger: run.trigger, runId: run.id }).then((r) => r.deps),
+        // A hung run must not stall this loop (3:00, publishing, insights, hub sweeps): past LFD_RUN_TIMEOUT_MS
+        // it is failed and the loop goes on. The cut-off promise is not cancelled and may keep running in the
+        // background (accepted; real runs take 3–8 minutes).
+        const out = await withLfdTimeout(
+          carryOutLfdRun(
+            {
+              query: lfdQuery,
+              now: () => new Date(),
+              log,
+              engine: (run, capUsd) => liveLfdDeps(lfdQuery, { capUsd, trigger: run.trigger, runId: run.id }).then((r) => r.deps),
+            },
+            lfdClaimed,
+          ).catch((error) => ({ runId: lfdClaimed.id, status: 'failed' as const, note: errorText(error) })),
+          LFD_RUN_TIMEOUT_MS,
+          async () => {
+            log('lfd_run_timeout', { runId: lfdClaimed.id });
+            await lfdStore.failRun(lfdQuery, lfdClaimed.id, 'timed out after 30 minutes').catch((error) => log('lfd_fail_failed', { runId: lfdClaimed.id, error: errorText(error) }));
+            return { runId: lfdClaimed.id, status: 'failed' as const, note: 'timed out after 30 minutes' };
           },
-          lfdClaimed,
-        ).catch((error) => ({ runId: lfdClaimed.id, status: 'failed' as const, note: errorText(error) }));
+        );
         log('lfd_run_result', { ...out });
         continue;
       }

@@ -79,3 +79,21 @@ export async function carryOutLfdRun(w: CarryOutDeps, claimed: ClaimedRun): Prom
     return { runId: claimed.id, status: 'failed', note: message };
   }
 }
+
+/**
+ * `work`, or `onTimeout()` once `ms` pass first. The worker runs a Last Few
+ * Days run in its own loop, so a hung await must not stall carousels,
+ * publishing or insights. The cut-off promise is not cancelled: it may keep
+ * running in the background (accepted; the run row is already failed).
+ */
+export function withLfdTimeout<T>(work: Promise<T>, ms: number, onTimeout: () => Promise<T> | T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<T>((resolve, reject) => {
+    timer = setTimeout(() => {
+      Promise.resolve()
+        .then(onTimeout)
+        .then(resolve, reject);
+    }, ms);
+  });
+  return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
+}

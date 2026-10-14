@@ -13,3 +13,6 @@ export const LFD_WINDOW: PostingWindow = { id: LFD_SLOT, label: '9:00–10:00 AM
 
 /** social.used_photos `story_id` prefix for a published post's photos (spec §5, the shared 7-day rule). */
 export const LFD_PHOTO_STORY_PREFIX = 'lfd:';
+
+/** Wall-clock limit on one in-process run in the helios-social loop (real runs take 3–8 minutes); past it the run is failed and the loop goes on. */
+export const LFD_RUN_TIMEOUT_MS = 30 * 60_000;

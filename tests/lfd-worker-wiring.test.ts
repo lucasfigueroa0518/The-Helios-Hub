@@ -12,6 +12,11 @@ test('the social worker runs Last Few Days in its own loop: the 3:00 slot, claim
   assert.match(text, /lfdStore\.requestRun\(lfdQuery, 'scheduled'/);
   assert.match(text, /lfdStore\.claimRun\(lfdQuery\)/);
   assert.match(text, /carryOutLfdRun\(/);
+  // A hung run can't stall the loop: it is cut off at LFD_RUN_TIMEOUT_MS and failed.
+  assert.match(text, /withLfdTimeout\(/);
+  assert.match(text, /LFD_RUN_TIMEOUT_MS/);
+  assert.match(text, /lfd_run_timeout/);
+  assert.match(text, /failRun\(lfdQuery, lfdClaimed\.id, 'timed out after 30 minutes'\)/);
   assert.match(text, /liveLfdDeps\(lfdQuery, \{ capUsd, trigger: run\.trigger, runId: run\.id \}\)/);
   assert.match(text, /publisherOwnsPublishing\(query, 'last_few_days'\)/);
   assert.match(text, /claimAndPublishLfd\(/);
