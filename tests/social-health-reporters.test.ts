@@ -181,3 +181,15 @@ test('explainers: capped job is cap_hit; unknown-cost HeyGen rows are counted, n
   assert.equal(r.spendUsd, 4.5);
   assert.equal(r.funnel[0]!.in, 12);
 });
+
+test('carousels: no quota on a Last Few Days night while Last Few Days auto_run is on', async () => {
+  const { query } = await openHubTestDb();
+  // NIGHT 2026-10-13 is a Tuesday, one of Last Few Days' days ([2, 5]).
+  const off = await reportCarousels(query, { night: NIGHT, posting: posting(), now: NOW });
+  assert.deepEqual([off.needed, off.due], [1, true], 'Last Few Days off: Tuesday is an ordinary carousel night');
+  await query(`UPDATE lfd.settings SET value = 'true'::jsonb WHERE key = 'auto_run'`);
+  const on = await reportCarousels(query, { night: NIGHT, posting: posting(), now: NOW });
+  assert.deepEqual([on.needed, on.target, on.due], [0, 0, false], 'Carousels gave the night to Last Few Days: not "did not run"');
+  const wed = await reportCarousels(query, { night: '2026-10-14', posting: posting(), now: NOW });
+  assert.equal(wed.needed, 1, 'a Wednesday keeps its carousel quota');
+});
