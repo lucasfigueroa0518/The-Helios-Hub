@@ -52,6 +52,7 @@ async function main() {
   const { HELIOS_SOCIAL_FEEDS } = await import('@/lib/social/feeds');
   const { fetchBodyLive } = await import('@/lib/social/ingest/select/enrich');
   const { checkRenderFit } = await import('@/lib/social/render/fit-check');
+  const { readPage } = await import('@/lib/social/reporter/read-page');
   const { runLastFewDays } = await import('@/lib/lfd/run');
 
   const tally = createJevTally();
@@ -67,6 +68,7 @@ async function main() {
     photos: createLivePhotoFinder({ jev, create, runRef: `lfd:${new Date().toISOString()}` }),
     fetchFeeds: () => fetchAllFeeds(HELIOS_SOCIAL_FEEDS),
     fetchBody: fetchBodyLive,
+    readPage: (url) => readPage(url),
     fitCheck: checkRenderFit,
     upload: (p, b) => bucket.upload(p, b, 'image/jpeg'),
     now: new Date(),

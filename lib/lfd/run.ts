@@ -13,10 +13,12 @@ import type { FetchBody } from '@/lib/social/ingest/select/enrich';
 import type { JevAsk } from '@/lib/social/jev/client';
 import { storeSlideJpegs } from '@/lib/social/overnight/slides';
 import type { FitCheck, FitResult } from '@/lib/social/render/fit-check';
+import type { PageRead } from '@/lib/social/reporter/read-page';
 import type { MessagesCreate } from '@/lib/social/reporter/reporter';
 import type { PhotoFinder } from '@/lib/stories/photos';
 
 import { grounded, REWRITE_NOTE } from './ground';
+import { leadImage } from './lead-image';
 import { findPhotos, REFUSED_ICON_SCENE } from './photos';
 import { judgedPool, MIN_STORIES, mergeSameEvent, RUNDOWN_POOL, rundownOrder, scoreMajor, Selector, slideOrder, withoutUsed } from './pick';
 import { buildPost } from './post';
@@ -40,6 +42,8 @@ export type LfdRunDeps = {
   photos: PhotoFinder;
   fetchFeeds: () => Promise<FetchedArticle[]>;
   fetchBody: FetchBody;
+  /** Reads a story's article page for its lead image (live: readPage). */
+  readPage: (url: string) => Promise<PageRead>;
   fitCheck: FitCheck;
   upload: (path: string, body: Buffer) => Promise<void>;
   now: Date;
@@ -217,10 +221,26 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
         checked.push({ pick, copy });
       }
 
-      const found = await findPhotos(d.photos, checked, new Set([...exclude, ...ready.map((r) => r.photo.src)]));
+      // The article's own lead image first; only stories without one go to the finder. One set: no photo twice.
+      const taken = new Set([...exclude, ...ready.map((r) => r.photo.src)]);
+      const leads: Array<Awaited<ReturnType<typeof leadImage>>> = [];
+      for (const item of checked) {
+        const lead = await leadImage(d.readPage, item.pick, taken);
+        if (lead) taken.add(lead.photo.src);
+        leads.push(lead);
+      }
+      const rest = checked.filter((_, i) => !leads[i]);
+      const found = await findPhotos(d.photos, rest, taken);
+      let k = 0;
       for (const [i, item] of checked.entries()) {
-        const photo = found.photos[i];
-        const photoTrace = found.traces[i] ?? [];
+        const lead = leads[i];
+        if (lead) {
+          ready.push({ ...item, photo: lead.photo, photoSource: 'lead', photoTrace: [lead.note] });
+          continue;
+        }
+        const photo = found.photos[k];
+        const photoTrace = found.traces[k] ?? [];
+        k += 1;
         if (photo) ready.push({ ...item, photo, photoSource: 'finder', photoTrace });
         else await replace(item.pick, 'no-photo', next, photoTrace.includes(REFUSED_ICON_SCENE) ? REFUSED_ICON_SCENE : undefined);
       }

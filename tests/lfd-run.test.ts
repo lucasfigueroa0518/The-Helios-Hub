@@ -74,6 +74,7 @@ async function deps(over: Partial<LfdRunDeps> = {}): Promise<LfdRunDeps> {
     photos: photos(),
     fetchFeeds: async () => [],
     fetchBody: async () => null,
+    readPage: async (url) => ({ ok: false, url, error: 'stub: no page' }),
     fitCheck: async (_p, opts) => {
       if (opts?.screenshotDir) {
         const fs = await import('node:fs/promises');
@@ -400,4 +401,40 @@ test('a story whose only photo is the icon-scene fallback is replaced as no-phot
   assert.ok(drop && drop.key.endsWith('n.com/0'), JSON.stringify(rec.drops));
   const { rows } = await d.query<{ stories: Array<{ url: string }> }>(`SELECT stories FROM lfd.posts`);
   assert.ok(!rows[0]!.stories.some((s) => s.url === 'https://n.com/0'));
+});
+
+test('a story whose article has a usable lead image uses it; the finder only sees the others', async () => {
+  const asked: string[] = [];
+  const d = await deps({
+    readPage: async (url) => (url === 'https://n.com/2'
+      ? { ok: true, url, resolvedUrl: url, title: 'T', byline: null, publishedTime: null, text: 'x', truncated: false, photos: [{ src: 'https://n.com/2/lead.jpg', caption: null, credit: 'Reuters', alt: null, from: 'figure', width: 1400 }] }
+      : { ok: false, url, error: 'stub' }),
+    photos: {
+      usd: 0,
+      find: async () => null,
+      findSet: async (reqs) => {
+        asked.push(...reqs.map((r) => r.sourceUrls[0]!));
+        return reqs.map((r, i) => ({ src: `https://p/${i}-${encodeURIComponent(r.query)}.jpg`, credit: 'C', kind: 'scene' }));
+      },
+    },
+  });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  assert.ok(!asked.includes('https://n.com/2'), 'the finder is not asked for the story with a lead image');
+  const { rows } = await d.query<{ stories: Array<{ url: string; photo: { src: string; credit: string }; photoSource: string; photoTrace: string[] }> }>(`SELECT stories FROM lfd.posts`);
+  const lead = rows[0]!.stories.find((s) => s.url === 'https://n.com/2')!;
+  assert.deepEqual(lead.photo, { src: 'https://n.com/2/lead.jpg', credit: 'Reuters', kind: 'scene' });
+  assert.equal(lead.photoSource, 'lead');
+  assert.match(lead.photoTrace[0]!, /^lead image: article figure/);
+  assert.ok(rows[0]!.stories.filter((s) => s.url !== 'https://n.com/2').every((s) => s.photoSource === 'finder'));
+});
+
+test('the same lead image is never used twice in one post', async () => {
+  const shared = { src: 'https://cdn.com/same.jpg', caption: null, credit: 'AP', alt: null, from: 'figure' as const, width: 1400 };
+  const d = await deps({ readPage: async (url) => ({ ok: true, url, resolvedUrl: url, title: 'T', byline: null, publishedTime: null, text: 'x', truncated: false, photos: [shared] }) });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const { rows } = await d.query<{ stories: Array<{ photo: { src: string }; photoSource: string }> }>(`SELECT stories FROM lfd.posts`);
+  assert.equal(rows[0]!.stories.filter((s) => s.photo.src === shared.src).length, 1);
+  assert.equal(rows[0]!.stories.filter((s) => s.photoSource === 'lead').length, 1);
 });
