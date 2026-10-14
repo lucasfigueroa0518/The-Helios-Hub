@@ -128,13 +128,6 @@
 p.sh-subtle { max-width: 75ch; }
 .sh-lead { margin: 0; max-width: 70ch; font-size: var(--sh-fs-section); line-height: 1.45; text-wrap: pretty; }
 .sh-note--failed { background: var(--sh-failed-wash); color: var(--sh-failed-ink); }
-/* Needs you (DESIGN.md §2): Signal Orange Ink on Signal Orange Wash; each row is a link, so orange marks something to act on. */
-.sh-note--needs { background: var(--sh-needs-wash); color: var(--sh-needs-ink); }
-.sh-deadlines { margin-top: 8px; }
-.sh-deadlines summary { display: flex; align-items: baseline; gap: 8px; cursor: pointer; }
-.sh-deadlines summary svg { flex: none; align-self: center; }
-.sh-deadlines ul { margin: 8px 0 0; padding-left: 22px; display: grid; gap: 4px; }
-.sh-deadlines .sh-link { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .sh-empty { padding: 28px 24px; text-align: center; color: var(--color-text-muted); }
 .sh-empty strong { display: block; margin-bottom: 4px; color: var(--color-text); font-size: var(--sh-fs-section); font-weight: var(--font-weight-semibold); }
 

@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { ArrowRight, ImageIcon, Loader2, Music2, TriangleAlert } from 'lucide-react';
 
-import { ApprovalDeadlines } from '@/components/social-hub/content/ApprovalDeadlines';
 import { RunsRefresh } from '@/components/social-hub/content/RunsRefresh';
 import { HubSettingsButton, RunTodayButton } from '@/components/social-hub/content/HubControls';
 import { TodayStrip } from '@/components/social-hub/content/TodayStrip';
@@ -10,8 +9,8 @@ import { PageHead } from '@/components/social-hub/ui/PageHead';
 import { TypeMark } from '@/components/social-hub/ui/marks';
 import type { AllProgress } from '@/lib/content-type/progress';
 import type { HubDataset } from '@/lib/social-hub/dataset';
-import { approvalsDue, waitingForApproval } from '@/lib/social-hub/health/approvals';
-import { plural, relative, when } from '@/lib/social-hub/views/format';
+import { firstDeadline } from '@/lib/social-hub/health/approvals';
+import { clock, plural, relative, when } from '@/lib/social-hub/views/format';
 import type { LibrariesModel } from '@/lib/social-hub/views/libraries';
 import { offerer } from '@/lib/social-hub/views/offer';
 import { poolStale, poolSummaries, type PoolSummary } from '@/lib/social-hub/views/pools';
@@ -32,8 +31,11 @@ export function ContentScreen({ dataset, base, now, libraries, progress, control
   const o = offerer(dataset, now);
   // Every type's quota candidates for today: what holds its slots, then the top of its ranking (Promote / Demote applied).
   const today = allQuotaCandidates(dataset, now);
-  // Every post waiting on an approval with its deadline (the same rule as scripts/approval_alert.ts).
-  const due = approvalsDue(waitingForApproval(dataset.posts, (p) => o.offer(p).state.tone === 'needs', m.today), m.today, now);
+  // The count is today's cards still waiting on approval, so it matches the cards' Needs you badges (2026-10-13).
+  const waiting = today.flatMap((c) => (c.post && o.offer(c.post).state.id === 'needs_you' ? [c.post] : []));
+  const toApprove = waiting.length;
+  // The soonest of those deadlines (a slot's time, else the type's last window today), so the morning check says how long there is.
+  const first = firstDeadline(waiting, now);
   const todayLabel = new Date(`${m.today}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).replace(',', '');
 
   return (
@@ -45,13 +47,12 @@ export function ContentScreen({ dataset, base, now, libraries, progress, control
         meta={(
           <>
             <strong>{m.plan.filled}</strong> of {m.plan.slots} slots filled
-            {/* What waits on an approval is the deadlines line below, so the page gives one count (2026-10-14). */}
-            {due.length ? null : ' · nothing to approve'}
+            {' · '}
+            {toApprove ? <><span className="sh-needs-count">{toApprove} to approve</span>{first ? ` · first by ${clock(first.toISOString())}` : null}</> : 'nothing to approve'}
             {summary.length ? <> · <strong>{summary.join(' · ')}</strong></> : null}
           </>
         )}
       />
-      <ApprovalDeadlines due={due} base={base} />
       <DataNotes dataset={dataset} />
       <RunsRefresh active={inFlight} known={inFlightKey(runs)} />
 

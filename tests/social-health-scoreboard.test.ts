@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { approvalAlertLines, approvalsDue } from '@/lib/social-hub/health/approvals';
+import { approvalAlertLines, approvalDeadline, firstDeadline, lastWindowToday } from '@/lib/social-hub/health/approvals';
 import { scoreboardLines } from '@/lib/social-hub/health/scoreboard';
 import type { NightReport, StoredReport } from '@/lib/social-hub/health/types';
 import { nightVerdict } from '@/lib/social-hub/health/verdict';
 import type { HubPost, Vertical } from '@/lib/social-hub/types';
+import { postState } from '@/lib/social-hub/views/state';
 
 const label = (v: Vertical) => ({ reels: 'Text on Screen', explainers: 'Explainers', carousels: 'Carousels', stories: 'IG Stories' })[v];
 
@@ -48,30 +49,34 @@ const post = (vertical: Vertical, name: string, over: Partial<HubPost> = {}): Hu
 // 7:59 AM New York, Oct 14 (EDT, UTC-4).
 const NOW = new Date('2026-10-14T11:59:00Z');
 
-test('approval alert: a scheduled post is due at its slot, an unscheduled one at its type\'s last window, soonest first', () => {
-  const due = approvalsDue(
-    [
-      post('carousels', 'Gemini agent'),
-      post('stories', 'Morning Download'),
-      post('reels', 'Coding AIs', { status: 'scheduled', publishAt: '2026-10-14T12:45:00Z' }),
-    ],
-    '2026-10-14',
-    NOW,
-  );
-  assert.deepEqual(due.map((d) => d.post.name), ['Coding AIs', 'Morning Download', 'Gemini agent']);
-  assert.equal(due[0]!.consequence, 'its slot is cancelled');
-  assert.equal(due[1]!.deadline.toISOString(), '2026-10-14T14:00:00.000Z');
-  assert.equal(due[1]!.consequence, 'the set is never scheduled');
-  assert.equal(due[2]!.deadline.toISOString(), '2026-10-14T19:30:00.000Z');
-  const lines = approvalAlertLines(due, label);
-  assert.equal(lines[0], '3 posts waiting for approval; the first deadline is 8:45 AM.');
-  assert.equal(lines[1], '⚠ Text on Screen · by 8:45 AM or its slot is cancelled: Coding AIs');
+test("approval deadlines: a scheduled post's is its slot; an unscheduled one's is its type's last window today", () => {
+  assert.equal(approvalDeadline(post('reels', 'a', { status: 'scheduled', publishAt: '2026-10-14T12:45:00Z' }), NOW)!.toISOString(), '2026-10-14T12:45:00.000Z');
+  assert.equal(approvalDeadline(post('stories', 'b'), NOW)!.toISOString(), '2026-10-14T14:00:00.000Z');
+  assert.equal(approvalDeadline(post('carousels', 'c'), NOW)!.toISOString(), '2026-10-14T19:30:00.000Z');
+  assert.equal(firstDeadline([post('carousels', 'c'), post('stories', 'b')], NOW)!.toISOString(), '2026-10-14T14:00:00.000Z');
 });
 
-test('approval alert: a passed deadline is marked missed; nothing waiting means no alert', () => {
+test('approval deadlines: past the last window (or the slot) there is none left', () => {
   const late = new Date('2026-10-14T14:30:00Z');
-  const due = approvalsDue([post('stories', 'Morning Download')], '2026-10-14', late);
-  assert.equal(due[0]!.overdue, true);
-  assert.match(approvalAlertLines(due, label)[1]!, /^✖ IG Stories · missed 10:00 AM/);
-  assert.deepEqual(approvalAlertLines([], label), []);
+  assert.equal(lastWindowToday('stories', late), null);
+  assert.equal(approvalDeadline(post('reels', 'a', { status: 'scheduled', publishAt: '2026-10-14T12:45:00Z' }), late), null);
+  assert.equal(firstDeadline([post('stories', 'b')], late), null);
+});
+
+test('approval alert lines: soonest first, with what is lost; nothing waiting means no alert', () => {
+  const lines = approvalAlertLines([post('carousels', 'Gemini agent'), post('stories', 'Morning Download'), post('reels', 'Coding AIs', { status: 'scheduled', publishAt: '2026-10-14T12:45:00Z' })], NOW, label);
+  assert.deepEqual(lines, [
+    "3 to approve in today's lineup; the first deadline is 8:45 AM.",
+    '⚠ Text on Screen · by 8:45 AM or its slot is cancelled: Coding AIs',
+    '⚠ IG Stories · by 10:00 AM or the set is never scheduled: Morning Download',
+    "⚠ Carousels · by 3:30 PM or it misses today's windows: Gemini agent",
+  ]);
+  assert.deepEqual(approvalAlertLines([], NOW, label), []);
+});
+
+test('a made-but-unscheduled card says when to approve it to post today, and stops once the windows close', () => {
+  const ready = post('stories', 'Morning Download', { nyDate: '2026-10-14', generatedAt: '2026-10-14T08:00:00Z' } as Partial<HubPost>);
+  assert.match(postState(ready, NOW).line ?? '', /approve by 10:00 AM to post today$/);
+  const carousel = post('carousels', 'Gemini agent', { generatedAt: '2026-10-14T07:00:00Z' } as Partial<HubPost>);
+  assert.match(postState(carousel, new Date('2026-10-14T20:00:00Z')).line ?? '', /approve to schedule it$/);
 });
