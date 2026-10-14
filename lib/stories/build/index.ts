@@ -13,7 +13,7 @@ import type { PhotoFinder } from '@/lib/stories/photos';
 import type { Renderer } from '@/lib/stories/render/render';
 import type { ReviewCall } from '@/lib/stories/render/review';
 import { leadKeysForPair, livePoolReads, markPoolUsed, openPool, refreshPoolIfDue, type OpenPool } from '@/lib/stories/pool';
-import { applyMoves } from '@/lib/social-hub/views/day-rank';
+import { applyMoves } from '@/lib/social-hub/views/moves';
 import { storyKey } from '@/lib/stories/sources/reels';
 import { runRenderStage } from '@/lib/stories/render-stage';
 import { daySpendUsd, failSet, getSet, markSkipped, monthSpendUsd, recordCost, saveBuild } from '@/lib/stories/repository';
@@ -122,7 +122,7 @@ export async function activeStoryMoves(db: SetBuilderDeps['db'], series: string,
   return rows.map((r) => ({ ideaId: r.idea_id.slice(prefix.length), kind: r.kind }));
 }
 
-/** The series' pool in the hub's order: its active moves applied in order, so a promoted idea is first in the build's list. */
+/** The series' pool in the shared queue's order (views/moves.ts): its oldest promote first, demoted ideas last. */
 async function inDayOrder(db: SetBuilderDeps['db'], series: string, pool: OpenPool, now: Date): Promise<OpenPool> {
   const moves = await activeStoryMoves(db, series, now);
   if (!moves.length) return pool;

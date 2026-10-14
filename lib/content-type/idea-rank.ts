@@ -5,8 +5,9 @@ import type { Vertical } from '@/lib/social-hub/types';
 /**
  * Promote / Demote (Lucas, 2026-10-09): a person's move on one type's idea
  * ranking for today, recorded in social_hub.idea_adjustments and applied in
- * order by lib/social-hub/views/day-rank.ts. Promote puts the idea at #1;
- * Demote moves it below the idea right under it. A move lasts until its idea is made (B8; lib/social-hub/queries/day.ts consumeMoves).
+ * by the shared queue (lib/social-hub/views/moves.ts). Promote makes the idea
+ * next (one a night per type, oldest first); Demote sinks it below every other
+ * idea. A move lasts until its idea is made (B8; lib/social-hub/queries/day.ts consumeMoves).
  */
 
 const VERTICALS: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories'];

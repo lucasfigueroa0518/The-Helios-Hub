@@ -3,6 +3,7 @@ import { nyDateOf } from '@/lib/social-hub/time';
 import { windowsOn } from '@/lib/social-hub/views/plan';
 import { rankIdeas } from '@/lib/social-hub/views/pools';
 import { isRejected } from '@/lib/social-hub/views/state';
+import { applyMoves, movesFor, type IdeaAdjustment } from '@/lib/social-hub/views/moves';
 
 /**
  * The day's ranking and its quota candidates (Lucas, 2026-10-09).
@@ -10,11 +11,12 @@ import { isRejected } from '@/lib/social-hub/views/state';
  * Each type's day is filled by its highest-ranked ideas, not by whatever
  * content happens to be made. A person can move ideas for one day:
  *
- *   Promote  the idea goes to #1 (a manual bump above everything else)
- *   Demote   the idea drops below the idea right under it (#1 → #2)
+ *   Promote  "make this next": the type's oldest promote goes first tonight;
+ *            other promotes wait in their score place (views/moves.ts)
+ *   Demote   the idea sinks below every idea that isn't demoted
  *
- * Moves are applied in the order they were made, on top of that day's score
- * ranking, and last until their idea is made (B8). The quota candidates are, in order: what already holds a slot today
+ * The shared rule sits on top of that day's score ranking; moves last until
+ * their idea is made (B8). The quota candidates are, in order: what already holds a slot today
  * (scheduled, posting, posted); then content made today with no slot, for
  * any idea (the night picks its own, 2026-10-13: made content wins); then the
  * top of the adjusted ranking for what's left. Rejected content never fills a
@@ -23,8 +25,8 @@ import { isRejected } from '@/lib/social-hub/views/state';
  * Pure over plain data, so the page, Run now and the tests agree.
  */
 
-/** A person's Promote / Demote. `nyDate` is the day it was made; it steers until used (consumed_at, B8). `createdAt` is ISO. */
-export type IdeaAdjustment = { id: string; vertical: Vertical; ideaId: string; nyDate: string; kind: 'promote' | 'demote'; createdAt: string };
+export { applyMoves, movesFor };
+export type { IdeaAdjustment };
 
 /** Posts per day for the types with a quota (Stories go by series days). */
 export type DayQuotas = { reels: number; carousels: number; explainers: number };
@@ -50,23 +52,6 @@ export type QuotaCandidate = {
 
 const OPEN = new Set(['idea_only', 'content_ready']);
 const HOLDS = new Set(['scheduled', 'publishing', 'published']);
-
-/** Apply one day's moves, in order, to a ranked list. */
-export function applyMoves<T extends { id: string }>(ranked: readonly T[], moves: ReadonlyArray<Pick<IdeaAdjustment, 'ideaId' | 'kind'>>): T[] {
-  const list = [...ranked];
-  for (const move of moves) {
-    const i = list.findIndex((x) => x.id === move.ideaId);
-    if (i < 0) continue;
-    if (move.kind === 'promote') list.unshift(...list.splice(i, 1));
-    else if (i < list.length - 1) [list[i], list[i + 1]] = [list[i + 1]!, list[i]!];
-  }
-  return list;
-}
-
-/** A type's active moves (not used yet, any day), oldest first. */
-export function movesFor(adjustments: readonly IdeaAdjustment[], vertical: Vertical): IdeaAdjustment[] {
-  return adjustments.filter((a) => a.vertical === vertical).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-}
 
 /**
  * A type's open ideas in today's order: score order, then today's moves.
