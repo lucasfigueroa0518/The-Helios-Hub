@@ -96,11 +96,14 @@ export async function theNumberIdeas(db: Queryable, nyDate: string): Promise<Sto
 export type ToolLead = { origin: 'reels' | 'catalog' | 'github'; ref: string; name: string; url: string; description: string };
 
 /**
- * Free vs. Paid leads (plan §5.3): Ball Knowledge ideas from the last 14 days,
- * GitHub Trending sources, and a sample of the curated-list catalog. Read only:
- * the catalog's own `last_considered` is the reels pipeline's, never touched.
+ * Free vs. Paid hints (plan §5.3): Ball Knowledge ideas from the last 14 days
+ * and GitHub Trending sources. They are optional hints for fvp-pair@2, which
+ * mostly pairs well-known paid tools with established free ones it already
+ * knows. The curated-list catalog is not read here (2026-10-13): it is mostly
+ * awesome-selfhosted and ML research lists, so every pair drawn from it failed
+ * "accessible" or was never proposed.
  */
-export async function freeToolLeads(db: Queryable, nyDate: string, opts: { catalogSample?: number } = {}): Promise<ToolLead[]> {
+export async function freeToolLeads(db: Queryable, nyDate: string): Promise<ToolLead[]> {
   const ideas = await db.query<IdeaRow>(
     `${IDEA_SQL(`s.chosen_bucket = 'ball_knowledge' AND sl.ny_date > $1::date - 14 AND sl.ny_date <= $1::date`)} ORDER BY sl.ny_date DESC LIMIT 15`,
     [nyDate],
@@ -110,15 +113,9 @@ export async function freeToolLeads(db: Queryable, nyDate: string, opts: { catal
       WHERE adapter_id = 'github-trending' AND ingest_time > $1::date - 14 ORDER BY ingest_time DESC LIMIT 15`,
     [nyDate],
   );
-  const catalog = await db.query<{ id: string; entry_name: string; entry_url: string; description: string | null }>(
-    `SELECT id, entry_name, entry_url, description FROM reels.list_catalog
-      WHERE description IS NOT NULL ORDER BY md5(id::text || $1) LIMIT $2`,
-    [nyDate, opts.catalogSample ?? 30],
-  );
   return [
     ...ideas.rows.map((r) => ({ origin: 'reels' as const, ref: r.post_idea_id, name: r.headline, url: r.canonical_url, description: r.body.slice(0, 600) })),
     ...trending.rows.map((r) => ({ origin: 'github' as const, ref: r.id, name: r.headline, url: r.canonical_url, description: r.body })),
-    ...catalog.rows.map((r) => ({ origin: 'catalog' as const, ref: r.id, name: r.entry_name, url: r.entry_url, description: r.description ?? '' })),
   ];
 }
 

@@ -60,7 +60,7 @@ test('reels pool: the latest slate, top 10 news ideas by net plus every blockbus
   assert.equal(storyKey('https://www.X.test/a/?utm_source=ig#top'), 'x.test/a');
 });
 
-test('reels: The Number ideas (7 days) and free-tool leads (Ball Knowledge, GitHub Trending, catalog)', async () => {
+test('reels: The Number ideas (7 days) and free-tool hints (Ball Knowledge, GitHub Trending; never the catalog)', async () => {
   const { db } = await harnessDb();
   const slate = await addSlate(db, '2026-10-06');
   await addIdea(db, slate, { headline: 'ChatGPT hits 800M weekly users', url: 'https://x.test/n', net: 5, bucket: 'the_number' });
@@ -69,7 +69,7 @@ test('reels: The Number ideas (7 days) and free-tool leads (Ball Knowledge, GitH
   await db.query(`INSERT INTO reels.list_catalog (list_id, entry_name, entry_url, description) VALUES ('awesome', 'GIMP', 'https://gimp.org', 'Image editor')`);
   assert.deepEqual((await theNumberIdeas(db, DATE)).map((c) => c.headline), ['ChatGPT hits 800M weekly users']);
   const leads = await freeToolLeads(db, DATE);
-  assert.deepEqual(leads.map((l) => l.origin).sort(), ['catalog', 'github', 'reels']);
+  assert.deepEqual(leads.map((l) => l.origin).sort(), ['github', 'reels']);
 });
 
 test('carousel: qualified stories from the last 30 hours with their post photo; brief numbers; used photos', async () => {
