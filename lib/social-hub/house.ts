@@ -167,6 +167,15 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
     // A made reel with no slot yet: approving books the earliest open slot and approves it (schedulePostIdea).
     plans.push({ kind: 'post', action: 'approveTrialReel', label: 'Approve', endpoint: '/api/social-hub/actions/approve-trial-reel', body: { postIdeaId: post.refs.postIdeaId, videoJobId: post.refs.videoJobId }, disabled: null });
   }
+  const rejected = /\brejected\b/i.test(post.approval.note ?? '') || /\brejected\b/i.test(post.statusNote ?? '');
+  if (post.vertical === 'last_few_days' && !rejected && !post.approval.approvedAt && (post.status === 'ready' || (post.status === 'scheduled' && post.approval.required))) {
+    // A post in review is approved and booked in its day's window (or the next one); a waiting slot is approved where it is.
+    plans.push({
+      kind: 'post', action: 'approveContent', label: 'Approve', endpoint: '/api/social-hub/actions/approve-content',
+      body: { vertical: 'last_few_days', refs: { lfdPostId: post.refs.lfdPostId ?? null } },
+      disabled: post.refs.lfdPostId ? null : 'This content can’t be found any more.',
+    });
+  }
   if (post.status === 'scheduled' && post.approval.required && !post.approval.approvedAt) {
     if (post.vertical === 'carousels' && post.refs.scheduleId) {
       plans.push({ kind: 'post', action: 'approveCarousel', label: 'Approve', endpoint: '/api/social-hub/actions/approve-carousel', body: { scheduleId: post.refs.scheduleId }, disabled: null });
@@ -182,7 +191,9 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
         ? { postIdeaId: post.refs.postIdeaId, ...(post.refs.videoJobId ? { videoJobId: post.refs.videoJobId } : {}) }
         : post.vertical === 'explainers'
           ? { jobId: post.refs.jobId }
-          : { setId: post.refs.setId };
+          : post.vertical === 'last_few_days'
+            ? { lfdPostId: post.refs.lfdPostId }
+            : { setId: post.refs.setId };
     const missing = Object.values(refs).some((v) => !v);
     plans.push({
       kind: 'post', action: 'reject', label: 'Reject', endpoint: '/api/social-hub/actions/reject',
@@ -202,7 +213,6 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
 
   // Schedule here / move (D50): content with no slot is placed; a waiting slot is moved.
   const placeRefs = contentRefs(post);
-  const rejected = /\brejected\b/i.test(post.approval.note ?? '') || /\brejected\b/i.test(post.statusNote ?? '');
   if (post.status === 'ready' && !rejected) {
     plans.push({ kind: 'post', action: 'place', label: 'Schedule', endpoint: '/api/social-hub/actions/place', body: { vertical: post.vertical, refs: placeRefs }, disabled: Object.values(placeRefs).some((v) => !v) ? 'This content can’t be found any more.' : null, pick: 'slot' });
   }
@@ -220,11 +230,16 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
     });
   }
 
-  if (live) {
+  // A rejected LFD post already returned its stories to the pool: Hard publish is not offered for it.
+  if (live && !(post.vertical === 'last_few_days' && rejected)) {
     const noContent = post.media.kind === 'none' || (post.media.kind === 'slides' && post.media.slides.length === 0) || (post.media.kind === 'frames' && post.media.frames.length === 0)
       ? 'Nothing to publish yet. Regenerate first.'
       : null;
-    const ref = post.vertical === 'reels' ? post.refs.videoJobId : post.vertical === 'carousels' ? post.refs.postId : post.vertical === 'explainers' ? post.refs.jobId : post.refs.setId;
+    const ref = post.vertical === 'reels' ? post.refs.videoJobId
+      : post.vertical === 'carousels' ? post.refs.postId
+        : post.vertical === 'explainers' ? post.refs.jobId
+          : post.vertical === 'last_few_days' ? post.refs.lfdPostId
+            : post.refs.setId;
     const skipped = post.status === 'skipped' ? 'Story sets that miss their window are never reused.' : null;
     plans.push({
       kind: 'post', action: 'hardPublish', label: 'Hard publish', endpoint: '/api/social-hub/actions/hard-publish',
