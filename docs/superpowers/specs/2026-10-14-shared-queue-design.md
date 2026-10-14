@@ -63,19 +63,19 @@ Already reads moves (`activeStoryMoves`). Only change: it uses the shared `apply
 ### 6. Marking a promote used, and "can't be made"
 
 - **Used:** when a worker makes the promoted idea, it sets `consumed_at` on that move (same narrow `UPDATE … WHERE id = $1 AND consumed_at IS NULL`). The hub's own consumption (Phase B) stays as a second path.
-- **Can't be made:** when a worker skips a promote, it records why in a small table `social_hub.move_skips (move_id uuid, vertical text, reason text, at timestamptz)` (one row per skip), so the page can say it. The move stays active (you can demote or leave it).
+- **Can't be made:** when a worker skips a promote, it records why on the move itself: two new columns on `social_hub.idea_adjustments`, `skip_reason text` and `skipped_at timestamptz` (overwritten on each skip). The move stays active (you can demote or leave it).
 
 ### 7. The page
 
 - The pool and the type page show the promoted idea first with a **"Tonight"** tag (the one `tonightPromote` picks). Other active promotes show "Promoted · waiting".
-- If the latest `move_skips` row for that move is from the last run, the tag reads "Can't be made: <reason>" instead.
+- If the move's `skipped_at` is from the last night's run, the tag reads "Can't be made: <reason>" instead.
 - Demoted ideas sit at the bottom with "Demoted".
 - Pool order otherwise unchanged (L2).
 
 ## Build order
 
 1. Shared rule module + tests; switch `dayRanking` and the Stories build to it.
-2. Schema: `social_hub.move_skips`; worker helpers to read moves, mark used, record a skip.
+2. Schema: `skip_reason`, `skipped_at` on `social_hub.idea_adjustments`; worker helpers to read moves, mark used, record a skip.
 3. Explainers ordering.
 4. Reels ordering (+ older idea onto tonight's slate).
 5. Carousels `--promote-id`.
@@ -83,7 +83,7 @@ Already reads moves (`activeStoryMoves`). Only change: it uses the shared `apply
 
 ## Deploy
 
-Schema first (`node scripts/apply_social_hub_schema.js --apply`), then the web PR, then `./scripts/gcp/deploy-social-worker.sh`, daytime only (never 12:30–5 AM ET; avoid ~7:30 AM). Every order is safe: workers that can't read moves or the new table fall back to today's behaviour.
+Schema first (`node scripts/apply_social_hub_schema.js --apply`), then the web PR, then `./scripts/gcp/deploy-social-worker.sh`, daytime only (never 12:30–5 AM ET; avoid ~7:30 AM). Every order is safe: workers that can't read moves or the new columns fall back to today's behaviour.
 
 ## Testing
 
