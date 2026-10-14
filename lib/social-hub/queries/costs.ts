@@ -14,23 +14,27 @@ import { klingClipUsdSql } from '@/lib/reels/insights';
 const NY = `'America/New_York'`;
 const day = (column: string) => `to_char((${column} AT TIME ZONE ${NY})::date, 'YYYY-MM-DD')`;
 
+/** Spend before this instant is Text on Screen development (lib/reels/analytics/rollups.ts defaultProdSpendSince). */
+const REEL_PROD_SINCE = `COALESCE((SELECT (value #>> '{}')::timestamptz FROM reels.settings WHERE key = 'prod_spend_since'), '2026-09-30T04:00:00Z'::timestamptz)`;
+
 export type CostReads = {
-  reelEvents: Array<{ id: string; run_id: string | null; component: string; usd: string; ny_date: string }>;
-  reelKling: Array<{ id: string; post_idea_id: string; slate_id: string | null; usd: string; ny_date: string }>;
+  reelEvents: Array<{ id: string; run_id: string | null; component: string; vendor: string; production: boolean; usd: string; ny_date: string }>;
+  reelKling: Array<{ id: string; post_idea_id: string; slate_id: string | null; production: boolean; usd: string; ny_date: string }>;
   reelWeights: Array<{ run_id: string; post_idea_id: string; slate_id: string; usd: string }>;
   reelProduced: Array<{ run_id: string; run_day: string; post_idea_id: string; slate_id: string }>;
-  explainerEvents: Array<{ id: string; job_id: string | null; component: string; usd: string; ny_date: string }>;
+  explainerEvents: Array<{ id: string; job_id: string | null; component: string; vendor: string; production: boolean; unknown: boolean; usd: string; ny_date: string }>;
   explainerRendered: Array<{ job_id: string; ny_date: string; spend_usd: string }>;
   carouselRuns: Array<{
     id: string;
     kind: string;
+    production: boolean;
     total_usd: string;
     claude_usd: string;
     jev_usd: string | null;
     ny_date: string;
     posts: Array<{ storyId?: string; costUsd?: number }> | null;
   }>;
-  storyEvents: Array<{ id: string; set_id: string | null; component: string; usd: string; ny_date: string }>;
+  storyEvents: Array<{ id: string; set_id: string | null; component: string; vendor: string; production: boolean; usd: string; ny_date: string }>;
   storySets: Array<{ set_id: string; ny_date: string; spend_usd: string }>;
 };
 
@@ -43,8 +47,8 @@ export const REEL_DIRECT_COMPONENTS = [
 ];
 
 export const COST_SQL = {
-  reelEvents: `SELECT id, run_id, component, usd::text AS usd, ${day('created_at')} AS ny_date FROM reels.cost_events`,
-  reelKling: `SELECT id, post_idea_id, slate_id, (${klingClipUsdSql('finished_at')})::text AS usd, ${day('finished_at')} AS ny_date
+  reelEvents: `SELECT id, run_id, component, vendor, (created_at >= ${REEL_PROD_SINCE}) AS production, usd::text AS usd, ${day('created_at')} AS ny_date FROM reels.cost_events`,
+  reelKling: `SELECT id, post_idea_id, slate_id, (finished_at >= ${REEL_PROD_SINCE}) AS production, (${klingClipUsdSql('finished_at')})::text AS usd, ${day('finished_at')} AS ny_date
                 FROM reels.video_jobs WHERE higgsfield_job_id IS NOT NULL AND finished_at IS NOT NULL`,
   reelWeights: `SELECT sl.run_id, j.post_idea_id, j.slate_id, sum(j.usd)::text AS usd
                   FROM (SELECT post_idea_id, slate_id, usd FROM reels.copy_jobs
@@ -57,13 +61,13 @@ export const COST_SQL = {
                    JOIN reels.score_slates sl ON sl.id = v.slate_id
                    JOIN reels.runs r ON r.id = sl.run_id
                   WHERE v.status = 'ok'`,
-  explainerEvents: `SELECT e.id, e.job_id, e.component, e.usd::text AS usd,
+  explainerEvents: `SELECT e.id, e.job_id, e.component, e.vendor, (e.mode = 'production') AS production, (NOT e.usd_known) AS unknown, e.usd::text AS usd,
                            COALESCE(c.ny_date::text, ${day('e.created_at')}) AS ny_date
                       FROM explainers.cost_events e
                       LEFT JOIN explainers.idea_cycles c ON c.id = e.idea_cycle_id`,
   explainerRendered: `SELECT id AS job_id, ${day('finished_at')} AS ny_date, spend_usd::text AS spend_usd
                         FROM explainers.jobs WHERE status = 'ok' AND finished_at IS NOT NULL`,
-  carouselRuns: `SELECT id, kind, total_usd::text AS total_usd, claude_usd::text AS claude_usd,
+  carouselRuns: `SELECT id, kind, (trigger <> 'cli') AS production, total_usd::text AS total_usd, claude_usd::text AS claude_usd,
                         record->'jev'->>'costUsd' AS jev_usd,
                         ${day('COALESCE(started_at, requested_at)')} AS ny_date,
                         CASE WHEN jsonb_typeof(record->'result'->'posts') = 'array'
@@ -71,7 +75,9 @@ export const COST_SQL = {
                                      FROM jsonb_array_elements(record->'result'->'posts') e)
                         END AS posts
                    FROM social.runs WHERE status IN ('ok', 'partial', 'failed')`,
-  storyEvents: `SELECT id, set_id, component, usd::text AS usd, ${day('created_at')} AS ny_date FROM stories.cost_events`,
+  storyEvents: `SELECT e.id, e.set_id, e.component, e.vendor, e.usd::text AS usd, ${day('e.created_at')} AS ny_date,
+                       (COALESCE(s.mode, 'production') = 'production') AS production
+                  FROM stories.cost_events e LEFT JOIN stories.sets s ON s.id = e.set_id`,
   storySets: `SELECT id AS set_id, ny_date::text AS ny_date, spend_usd::text AS spend_usd
                 FROM stories.sets WHERE status NOT IN ('requested', 'building')`,
 } as const;
@@ -105,6 +111,7 @@ export function reelItem(postIdeaId: string, slateId: string | null): string {
 export function buildLedger(r: CostReads): { rows: LedgerRow[]; pools: Pool[] } {
   const rows: LedgerRow[] = [];
   const pools: Pool[] = [];
+  const mode = (p: boolean): 'production' | 'development' => (p ? 'production' : 'development');
 
   // ── Trial Reels: direct activities split by each idea's job spend that night; the rest equally per reel made.
   const producedByRun = new Map<string, string[]>();
@@ -130,10 +137,10 @@ export function buildLedger(r: CostReads): { rows: LedgerRow[]; pools: Pool[] } 
   for (const e of r.reelEvents) {
     const direct = REEL_DIRECT_COMPONENTS.includes(e.component);
     const pool = e.run_id ? `reels:${direct ? 'direct' : 'night'}:${e.run_id}` : `reels:day:${e.ny_date}`;
-    rows.push({ id: `reels:ce:${e.id}`, vertical: 'reels', nyDate: e.ny_date, micros: toMicros(e.usd), target: { kind: 'pool', pool }, label: e.component });
+    rows.push({ id: `reels:ce:${e.id}`, vertical: 'reels', nyDate: e.ny_date, micros: toMicros(e.usd), target: { kind: 'pool', pool }, label: e.component, vendor: e.vendor, mode: mode(e.production) });
   }
   for (const k of r.reelKling) {
-    rows.push({ id: `reels:kling:${k.id}`, vertical: 'reels', nyDate: k.ny_date, micros: toMicros(k.usd), target: { kind: 'item', item: reelItem(k.post_idea_id, k.slate_id) }, label: 'Kling clip' });
+    rows.push({ id: `reels:kling:${k.id}`, vertical: 'reels', nyDate: k.ny_date, micros: toMicros(k.usd), target: { kind: 'item', item: reelItem(k.post_idea_id, k.slate_id) }, label: 'Kling clip', vendor: 'kling', mode: mode(k.production) });
   }
 
   // ── Explainers: rows with a job are direct; the day's idea-cycle rows split across that day's renders.
@@ -148,6 +155,9 @@ export function buildLedger(r: CostReads): { rows: LedgerRow[]; pools: Pool[] } 
       micros: toMicros(e.usd),
       target: e.job_id ? { kind: 'item', item: `explainers:${e.job_id}` } : { kind: 'pool', pool: `explainers:day:${e.ny_date}` },
       label: e.component,
+      vendor: e.vendor,
+      mode: mode(e.production),
+      ...(e.unknown ? { unknown: true } : {}),
     });
   }
 
@@ -162,12 +172,12 @@ export function buildLedger(r: CostReads): { rows: LedgerRow[]; pools: Pool[] } 
     for (const p of stories) {
       const micros = toMicros(p.costUsd ?? 0);
       direct += micros;
-      rows.push({ id: `carousels:run:${run.id}:${p.storyId}`, vertical: 'carousels', nyDate: run.ny_date, micros, target: { kind: 'item', item: itemOf(p.storyId) }, label: 'story stages' });
+      rows.push({ id: `carousels:run:${run.id}:${p.storyId}`, vertical: 'carousels', nyDate: run.ny_date, micros, target: { kind: 'item', item: itemOf(p.storyId) }, label: 'story stages', vendor: 'carousel', mode: mode(run.production) });
     }
     pools.push({ key: `carousels:run:${run.id}`, items: stories.map((p) => ({ item: itemOf(p.storyId) })) });
     // Σ story costs above total_usd (rounding, or a failed run with total 0) is reported by agreement(), never allocated as negative money.
     if (total - direct > 0) {
-      rows.push({ id: `carousels:run:${run.id}:shared`, vertical: 'carousels', nyDate: run.ny_date, micros: total - direct, target: { kind: 'pool', pool: `carousels:run:${run.id}` }, label: 'run (feeds, selection, set-aside stories)' });
+      rows.push({ id: `carousels:run:${run.id}:shared`, vertical: 'carousels', nyDate: run.ny_date, micros: total - direct, target: { kind: 'pool', pool: `carousels:run:${run.id}` }, label: 'run (feeds, selection, set-aside stories)', vendor: 'carousel', mode: mode(run.production) });
     }
   }
 
@@ -183,6 +193,8 @@ export function buildLedger(r: CostReads): { rows: LedgerRow[]; pools: Pool[] } 
       micros: toMicros(e.usd),
       target: e.set_id ? { kind: 'item', item: `stories:${e.set_id}` } : { kind: 'pool', pool: `stories:day:${e.ny_date}` },
       label: e.component,
+      vendor: e.vendor,
+      mode: mode(e.production),
     });
   }
   return { rows, pools };

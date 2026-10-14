@@ -8,8 +8,9 @@ import './hub-content.css';
 import './hub-analytics.css';
 import './hub-post.css';
 import './hub-calendar.css';
+import './hub-ops.css';
 
-/** Social Hub shell: three places (Content · Calendar · Analytics), pending-aware navigation. Route group, so `/social/render` stays outside it (SH-57). */
+/** Social Hub shell: four places (Content · Calendar · Analytics · Health), pending-aware navigation. Route group, so `/social/render` stays outside it (SH-57). */
 export default function SocialHubLayout({ children, drawer }: { children: ReactNode; drawer: ReactNode }) {
   return (
     <div className="sh">

@@ -18,6 +18,8 @@ All times are America/New_York (DST-safe, see `lib/reels/schedule.ts`).
 | Social Hub | `social_hub` | `helios-social` (same worker) | 5:45 account sweep (account insights, demographics, active times, publishing quota); refreshes the hub queues on visit | none (reads only) | 5:45 | built |
 | IG Stories | `stories` | `helios-stories` | 4:00 sets for series with `auto` on (Morning Download daily, Guess the Number Mon/Thu, Free vs. Paid Tue/Sat) | 8:30–10:00 AM, every series; may overlap other types (Stories are not feed posts) | every 2 hours while live, final read at 23 h | built (Lucas); no live set yet |
 
+Last Few Days (spec `docs/superpowers/specs/2026-10-13-last-few-days-design.md`): engine built (`lib/lfd`, schema `lfd`); runs by hand only (`npx tsx scripts/lfd_run.ts --live`, Tommy). Its clock row (3:00 Tue/Fri in the carousel run's place) lands with Plan 2.
+
 One type per hour so no two pipelines call Claude, Jev, or Meta at the same
 time. All workers run on the social worker VM; outreach stays alone on
 `helios-orch-worker`.

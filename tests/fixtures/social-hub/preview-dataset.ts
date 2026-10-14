@@ -101,10 +101,10 @@ function reels(): { read: ReelsRead; cost: Pick<CostReads, 'reelEvents' | 'reelK
     const slateId = uuid(1);
     const count = rand() < 0.4 ? 3 : 2;
     cost.reelEvents.push(
-      { id: uuid(1), run_id: runId, component: 'scoring-pass1', usd: (0.4 + rand() * 0.3).toFixed(6), ny_date: day },
-      { id: uuid(1), run_id: runId, component: 'grouping', usd: (0.1 + rand() * 0.1).toFixed(6), ny_date: day },
-      { id: uuid(1), run_id: runId, component: 'copy-caption', usd: (0.15 + rand() * 0.1).toFixed(6), ny_date: day },
-      { id: uuid(1), run_id: runId, component: 'reel-scene', usd: (0.05 + rand() * 0.05).toFixed(6), ny_date: day },
+      { id: uuid(1), run_id: runId, component: 'scoring-pass1', vendor: 'anthropic', production: true, usd: (0.4 + rand() * 0.3).toFixed(6), ny_date: day },
+      { id: uuid(1), run_id: runId, component: 'grouping', vendor: 'anthropic', production: true, usd: (0.1 + rand() * 0.1).toFixed(6), ny_date: day },
+      { id: uuid(1), run_id: runId, component: 'copy-caption', vendor: 'anthropic', production: true, usd: (0.15 + rand() * 0.1).toFixed(6), ny_date: day },
+      { id: uuid(1), run_id: runId, component: 'reel-scene', vendor: 'anthropic', production: true, usd: (0.05 + rand() * 0.05).toFixed(6), ny_date: day },
     );
     for (let i = 0; i < count; i++) {
       const [slot, minute] = slots[i]!;
@@ -120,7 +120,7 @@ function reels(): { read: ReelsRead; cost: Pick<CostReads, 'reelEvents' | 'reelK
       };
       cost.reelWeights.push({ run_id: runId, post_idea_id: ideaId, slate_id: slateId, usd: (0.1 + rand() * 0.2).toFixed(6) });
       cost.reelProduced.push({ run_id: runId, run_day: day, post_idea_id: ideaId, slate_id: slateId });
-      cost.reelKling.push({ id: videoId, post_idea_id: ideaId, slate_id: slateId, usd: '0.560000', ny_date: day });
+      cost.reelKling.push({ id: videoId, post_idea_id: ideaId, slate_id: slateId, production: true, usd: '0.560000', ny_date: day });
       read.sources.push({ post_idea_id: ideaId, url: pick(SOURCES), headline });
       const future = publishAt > FIXTURE_NOW.toISOString();
       const roll = rand();
@@ -203,8 +203,8 @@ function explainers(): { read: ExplainersRead; cost: Pick<CostReads, 'explainerE
       verdict: 'approved', tags: rand() < 0.6 ? [pick(['hook', 'pacing', 'visuals', 'voice'])] : [], feedback_at: at(renderDay, 700),
       video_artifact_id: uuid(2), video_location: 'bucket',
     });
-    cost.explainerEvents.push({ id: uuid(2), job_id: jobId, component: 'render', usd: spend, ny_date: renderDay });
-    cost.explainerEvents.push({ id: uuid(2), job_id: null, component: 'idea-generator', usd: (0.2 + rand() * 0.2).toFixed(6), ny_date: renderDay });
+    cost.explainerEvents.push({ id: uuid(2), job_id: jobId, component: 'render', vendor: 'anthropic', production: true, unknown: false, usd: spend, ny_date: renderDay });
+    cost.explainerEvents.push({ id: uuid(2), job_id: null, component: 'idea-generator', vendor: 'anthropic', production: true, unknown: false, usd: (0.2 + rand() * 0.2).toFixed(6), ny_date: renderDay });
     cost.explainerRendered.push({ job_id: jobId, ny_date: renderDay, spend_usd: spend });
     const publishAt = at(day, 15 * 60 + int(5, 85));
     if (publishAt > FIXTURE_NOW.toISOString()) {
@@ -227,7 +227,7 @@ function explainers(): { read: ExplainersRead; cost: Pick<CostReads, 'explainerE
       ...read.jobs[0]!, job_id: jobId, topic_id: topicIds[k]!, title: TOPICS[k]!, requested_at: at(TODAY, 360), finished_at: at(TODAY, 420),
       verdict, tags: [], feedback_at: verdict ? at(TODAY, 500) : null, video_artifact_id: uuid(2),
     });
-    cost.explainerEvents.push({ id: uuid(2), job_id: jobId, component: 'render', usd: '2.900000', ny_date: TODAY });
+    cost.explainerEvents.push({ id: uuid(2), job_id: jobId, component: 'render', vendor: 'anthropic', production: true, unknown: false, usd: '2.900000', ny_date: TODAY });
     cost.explainerRendered.push({ job_id: jobId, ny_date: TODAY, spend_usd: '2.900000' });
   }
   return { read, cost };
@@ -256,7 +256,7 @@ function carousels(): { read: CarouselsRead; cost: Pick<CostReads, 'carouselRuns
     });
     const storyCost = 0.5 + rand() * 0.4;
     const total = (storyCost + 0.25).toFixed(6);
-    cost.carouselRuns.push({ id: runId, kind: 'daily', total_usd: total, claude_usd: (Number(total) - 0.02).toFixed(6), jev_usd: '0.02', ny_date: day, posts: [{ storyId, costUsd: Number(storyCost.toFixed(6)) }] });
+    cost.carouselRuns.push({ id: runId, kind: 'daily', production: true, total_usd: total, claude_usd: (Number(total) - 0.02).toFixed(6), jev_usd: '0.02', ny_date: day, posts: [{ storyId, costUsd: Number(storyCost.toFixed(6)) }] });
     const publishAt = at(day, 7 * 60 + int(5, 70));
     if (day === TODAY) continue; // today's carousel waits in review (Content ready)
     if (day > TODAY) {
@@ -316,7 +316,7 @@ function stories(): { read: StoriesRead; cost: Pick<CostReads, 'storyEvents' | '
         chosen_origins: [pick(['reels', 'carousel', 'catalog', 'github'])],
       });
       cost.storySets.push({ set_id: setId, ny_date: day, spend_usd: '0.140000' });
-      cost.storyEvents.push({ id: uuid(4), set_id: setId, component: 'writer', usd: '0.140000', ny_date: day });
+      cost.storyEvents.push({ id: uuid(4), set_id: setId, component: 'writer', vendor: 'anthropic', production: true, usd: '0.140000', ny_date: day });
       let reach = int(300, 1600);
       for (let seq = 1; seq <= frames; seq++) {
         const frameId = uuid(4);
@@ -329,7 +329,7 @@ function stories(): { read: StoriesRead; cost: Pick<CostReads, 'storyEvents' | '
         }
       }
     }
-    cost.storyEvents.push({ id: uuid(4), set_id: null, component: 'sources', usd: '0.030000', ny_date: day });
+    cost.storyEvents.push({ id: uuid(4), set_id: null, component: 'sources', vendor: 'web_search', production: true, usd: '0.030000', ny_date: day });
   }
   const poolSeries: Array<[string, string[]]> = [
     ['morning_download', HEADLINES.slice(0, 6)],

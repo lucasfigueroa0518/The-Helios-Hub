@@ -360,3 +360,12 @@ CREATE INDEX IF NOT EXISTS idx_social_hub_idea_adjustments_day
 ALTER TABLE social_hub.idea_adjustments ADD COLUMN IF NOT EXISTS consumed_at timestamptz;
 CREATE INDEX IF NOT EXISTS idx_social_hub_idea_adjustments_active
     ON social_hub.idea_adjustments (vertical, created_at) WHERE consumed_at IS NULL;
+
+-- Health tab (spec 2026-10-13 §4.3): the 07:30 morning report, one row per night.
+CREATE TABLE IF NOT EXISTS social_hub.health_reports (
+    night       date PRIMARY KEY,
+    built_at    timestamptz NOT NULL,
+    verdict     jsonb NOT NULL,
+    reports     jsonb NOT NULL,
+    failures    jsonb NOT NULL
+);

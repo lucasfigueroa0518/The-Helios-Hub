@@ -150,10 +150,10 @@ Restrained neutrals carry the room; one action color, one metadata color, four c
 ### Secondary
 - **Helios Metadata Green** (#138510) on **Green Wash** (#e7f3e7): structural metadata only in Helios brand work; inside the hub it doubles as the Carousels type hue (see Tertiary). It is never used for success or "published".
 
-### Tertiary: content types (fixed order: Trial Reels, Explainers, Carousels, IG Stories)
+### Tertiary: content types (fixed order: Text on Screen, Explainers, Carousels, IG Stories)
 
-Trial Reels moved to teal (decided 2026-10-08) so red stays free for Failed; Carousels green and Story purple keep the hub's existing hues, and blue is the Networking blue.
-- **Reel Teal** (#14b8c4): Trial Reels.
+Text on Screen moved to teal (decided 2026-10-08) so red stays free for Failed; Carousels green and Story purple keep the hub's existing hues, and blue is the Networking blue.
+- **Reel Teal** (#14b8c4): Text on Screen.
 - **Explainer Royal Blue** (#4169e1): Explainer Reels (the hub's Networking blue).
 - **Carousel Green** (#138510): Carousels.
 - **Story Orchid** (#c377e0): IG Stories (the hub's Website Hub purple).
@@ -179,6 +179,8 @@ This order passes the categorical validator (worst adjacent colorblind separatio
 
 **The Quiet State Rule.** A lifecycle state is an icon and a word in Muted Ink. Only Failed (Failed Ink on Failed Wash) and Needs you (Signal Orange Ink on Signal Orange Wash) get color. Published is a check icon, not green.
 
+**The Health and Cost Exception (2026-10-13).** On the Health tab and the Cost page only, Helios Green (#138510) is the highlight and the success color: the active toggle, "worked" night blocks, check marks, reward chips, progress fills and "under pace" states. Short uses amber ink (#a15c07) on amber wash (#fdf3e1); Failed keeps Failed Ink on Failed Wash. Carousels keep green as their type mark in charts. Every other hub screen keeps The Quiet State Rule. Rewards (streaks, new bests, fixed problems, clean-night glow) appear only for real good news; a bad morning stays calm.
+
 ## 3. Typography
 
 **Display Font:** Pragmatica Extended (with Roboto fallback), page titles only
@@ -187,7 +189,7 @@ This order passes the categorical validator (worst adjacent colorblind separatio
 **Character:** One working family, Roboto, carries every label, number and sentence; Pragmatica Extended appears once per page, in the page title, as the Helios signature.
 
 ### Hierarchy
-- **Page title** (700, 24px, 1.2): one per page ("Today · Thu Oct 8", "Trial Reels"). Pragmatica Extended.
+- **Page title** (700, 24px, 1.2): one per page ("Today · Thu Oct 8", "Text on Screen"). Pragmatica Extended.
 - **Section title** (600, 16px, 1.3): "Needs you", "Today's lineup", "By content type". Sentence case, Roboto.
 - **KPI value** (600, 28px, 1.1, tabular figures): headline numbers in a KPI strip. Roboto, never Pragmatica.
 - **Body** (400, 14px, 1.5): descriptions and notes; cap prose at 70ch. Never smaller than 12px anywhere.
@@ -228,7 +230,7 @@ Flat by default. Surfaces are separated by hairlines and by the step from Canvas
 - Pills never perform actions, and action buttons are never pills.
 
 ### Content Type Mark (signature)
-- A solid 8px dot in the type hue, a 14px Lucide icon (Trial Reels: clapperboard; Explainers: presentation; Carousels: gallery-horizontal; IG Stories: sparkles; circle-dashed is reserved for the Ready state) and the type name in Muted Ink. In dense rows the name may drop, the dot and icon never do.
+- A solid 8px dot in the type hue, a 14px Lucide icon (Text on Screen: clapperboard; Explainers: presentation; Carousels: gallery-horizontal; IG Stories: sparkles; circle-dashed is reserved for the Ready state) and the type name in Muted Ink. In dense rows the name may drop, the dot and icon never do.
 
 ### State Badge (signature)
 - Pill, 2px by 8px, icon plus word. Default: Surface fill, Hairline border, Muted Ink.
@@ -248,7 +250,7 @@ Flat by default. Surfaces are separated by hairlines and by the step from Canvas
 - Date range: pills for 7 / 30 / 90 days and All, with Custom opening a popover.
 
 ### Navigation
-- Three tabs (Content, Calendar, Analytics) as a segmented control under the hub header; the active tab is Ink-filled. Below it, breadcrumbs (Analytics › Trial Reels) in Muted Ink with the current page in Ink.
+- Four tabs (Content, Calendar, Analytics, Health) as a segmented control under the hub header; the active tab is Ink-filled. Below it, breadcrumbs (Analytics › Text on Screen) in Muted Ink with the current page in Ink.
 - The post drawer slides in from the right over 250ms with the Helios ease-out (cubic-bezier(0.16, 1, 0.3, 1)); with reduced motion it fades in. It closes with Escape, Back, or the backdrop.
 
 ## 6. Do's and Don'ts
@@ -256,7 +258,7 @@ Flat by default. Surfaces are separated by hairlines and by the step from Canvas
 ### Do:
 - **Do** lead every page with its answer: today's lineup on Content, the account's direction on Analytics, the month's shape on Calendar.
 - **Do** keep orange to places a person can act, with an Ink label (5.9:1).
-- **Do** show every content type as dot + icon + name, in the fixed order Trial Reels, Explainers, Carousels, IG Stories.
+- **Do** show every content type as dot + icon + name, in the fixed order Text on Screen, Explainers, Carousels, IG Stories.
 - **Do** give every number a comparison, a trend or a cost, set in tabular figures.
 - **Do** state the consequence before an expensive or irreversible action (regenerate cost against the daily cap; reject releases the slot).
 - **Do** show disabled reasons as visible text.

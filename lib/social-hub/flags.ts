@@ -9,7 +9,7 @@
 
 export type ActionFlag = 'approveCarousel' | 'approveTrialReel' | 'approveContent' | 'hardPublish' | 'hardRegenerate' | 'reject' | 'reschedule' | 'unschedule' | 'refreshOnVisit';
 
-export type ViewFlag = 'calendar' | 'analytics' | 'house' | 'post';
+export type ViewFlag = 'calendar' | 'analytics' | 'house' | 'post' | 'health' | 'cost';
 
 export type HubFlags = {
   actions: Readonly<Record<ActionFlag, boolean>>;
@@ -39,6 +39,8 @@ export const SOCIAL_HUB_FLAGS: HubFlags = Object.freeze({
     analytics: true,
     house: true,
     post: true,
+    health: true,
+    cost: true,
   }),
 });
 

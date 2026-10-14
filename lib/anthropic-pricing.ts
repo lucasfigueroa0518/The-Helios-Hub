@@ -107,7 +107,7 @@ export function ratesForModel(modelId: string, asOf: Date = new Date()) {
  * Older Opus ids stay on 0.1×. Fable 5.1 and Mythos 5.1 are 0.025×, and we
  * do not price those families here.
  */
-function cacheReadMultiplier(modelId: string): number {
+export function cacheReadMultiplier(modelId: string): number {
   const id = modelId.toLowerCase();
   if (id.includes('opus-5-5') || id.includes('opus-5.5')) return OPUS_PRICE_SNAPSHOT.cacheReadMultiplier;
   return DRAFTING_PRICE_SNAPSHOT.cacheReadMultiplier;

@@ -52,15 +52,17 @@ export interface PhotoFinder {
   /**
    * One post's photos together: search, contact sheet, Jev photo-fit, then
    * the slide pick (the carousel design stage). Absent: each request is found alone.
+   * `trace`, when passed, receives each request's design-stage steps (same order as `reqs`),
+   * so a frame without a photo says which check left it empty.
    */
-  findSet?(reqs: PhotoRequest[]): Promise<Array<Photo | null>>;
+  findSet?(reqs: PhotoRequest[], trace?: string[][]): Promise<Array<Photo | null>>;
   /** Vision and Jev spend so far, for the set's cost rows. */
   readonly usd: number;
 }
 
 /** The design stage when the finder has it; otherwise one find at a time. */
-export async function findSetOrEach(photos: PhotoFinder, reqs: PhotoRequest[]): Promise<Array<Photo | null>> {
-  if (photos.findSet) return photos.findSet(reqs);
+export async function findSetOrEach(photos: PhotoFinder, reqs: PhotoRequest[], trace?: string[][]): Promise<Array<Photo | null>> {
+  if (photos.findSet) return photos.findSet(reqs, trace);
   const out: Array<Photo | null> = [];
   for (const req of reqs) out.push(await photos.find(req));
   return out;
@@ -139,10 +141,14 @@ export function createLivePhotoFinder(opts: { jev?: JevAsk; http?: typeof fetch;
     get usd() {
       return usd;
     },
-    async findSet(reqs) {
+    async findSet(reqs, trace) {
       const usable = reqs.map((r) => (KINDS.has(r.kind) && r.query.trim() ? r : null));
       const live = usable.filter((r): r is PhotoRequest => Boolean(r));
-      if (!live.length) return reqs.map(() => null);
+      const notSearched = (r: PhotoRequest) => [`not searched: ${r.query.trim() ? `kind "${r.kind}" is not one the finder serves` : 'empty query'}`];
+      if (!live.length) {
+        trace?.push(...reqs.map(notSearched));
+        return reqs.map(() => null);
+      }
       const pages: PageReadOk[] = [];
       const seenUrl = new Set<string>();
       for (const req of live) {
@@ -196,9 +202,14 @@ export function createLivePhotoFinder(opts: { jev?: JevAsk; http?: typeof fetch;
       }, { recent: exclude, storyDate });
       const traces = [designed.cover, ...designed.slides];
       let i = 0;
-      return usable.map((r) => {
-        if (!r) return null;
-        const photo = traces[i++]?.photo ?? null;
+      return usable.map((r, k) => {
+        if (!r) {
+          trace?.push(notSearched(reqs[k]!));
+          return null;
+        }
+        const t = traces[i++];
+        trace?.push(t ? [`${r.kind}: "${r.query}"`, ...t.steps] : ['no trace from the design stage']);
+        const photo = t?.photo ?? null;
         return photo ? toStoryPhoto({ url: photo.url, credit: photo.credit, lane: photo.source === 'logo' ? 'logo' : photo.source === 'second' ? 'second' : photo.source === 'ceo' ? 'ceo' : photo.source === 'commons' ? 'headshot' : 'article' }, r.kind) : null;
       });
     },

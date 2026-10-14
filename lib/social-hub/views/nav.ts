@@ -8,12 +8,13 @@ import { monthLabel } from '@/lib/social-hub/time';
  * through `?from=`, so its tab, breadcrumb and Back all point there.
  */
 
-export type HubTab = 'content' | 'calendar' | 'analytics';
+export type HubTab = 'content' | 'calendar' | 'analytics' | 'health';
 
 export const HUB_TABS: ReadonlyArray<{ id: HubTab; label: string; path: string }> = [
   { id: 'content', label: 'Content', path: '' },
   { id: 'calendar', label: 'Calendar', path: '/calendar' },
   { id: 'analytics', label: 'Analytics', path: '/analytics' },
+  { id: 'health', label: 'Health', path: '/health' },
 ];
 
 /** The path after the base: "/social/preview/analytics/reels" → "/analytics/reels". */
@@ -26,6 +27,7 @@ export function sectionOf(rest: string): HubTab | 'post' {
   if (rest.startsWith('/post/')) return 'post';
   if (rest.startsWith('/calendar')) return 'calendar';
   if (rest.startsWith('/analytics')) return 'analytics';
+  if (rest.startsWith('/health')) return 'health';
   return 'content';
 }
 
@@ -75,7 +77,11 @@ export function crumbsFor(base: string, href: string): Crumb[] {
   } else if (parts[0] === 'analytics') {
     push('Analytics', '/analytics');
     if (parts[1] === 'compare') push('Compare', '/analytics/compare');
+    else if (parts[1] === 'cost') push('Cost', '/analytics/cost');
     else if (isVertical(parts[1])) push(verticalInfo(parts[1]).label, `/analytics/${parts[1]}`);
+  } else if (parts[0] === 'health') {
+    push('Health', '/health');
+    if (parts[1] === 'night' && parts[2]) push(`Night of ${new Date(`${parts[2]}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}`, `/health/night/${parts[2]}`);
   } else if (isTypePage(parts[0])) {
     // A content type's own page lives outside the hub base (/carousels …): Content › its name.
     trail.push({ label: 'Content', href: base }, { label: verticalInfo(parts[0]).label, href: `/${parts[0]}` });

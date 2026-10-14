@@ -25,7 +25,8 @@ import { compareCandidates, dateMs, rankCandidates } from '@/lib/social/photos/r
 import { buildSheets, TILES_PER_SHEET } from '@/lib/social/photos/sheet';
 import { stockQueries } from '@/lib/social/photos/sources/stock';
 import { checkTiles, type TagSheet, type TileTag } from '@/lib/social/photos/tag-sheet';
-import type { VisionCheck, VisionVerdict } from '@/lib/social/photos/vision';
+import { passesVision, type VisionCheck, type VisionVerdict } from '@/lib/social/photos/vision';
+import { tuning } from '@/lib/social/photos/tuning';
 import { TEMPLATES, allowedTemplates, type SlideFacts } from '@/lib/social/render/buckets';
 import { toRenderPost } from '@/lib/social/render/from-draft';
 import { chooseLayout } from '@/lib/social/render/layout';
@@ -578,6 +579,37 @@ test('photo-slide@2: Jev drops a photo that doesn\'t suit the slide (verified on
   const ungated = await pickForSlide({ slot: { kind: 'story', speaker: null }, requests: [{ request: v('thematic', 'lab'), scored: [scored(cand({ url: 'https://s/x.jpg' }), 0.9)] }], words: words(7, 'x') }, newPickState(), { jev: down }, [], 0.5);
   assert.ok(ungated.winner);
   assert.ok(ungated.steps.some((x) => /error \(jev down\) → not gated/.test(x)));
+});
+
+test('2026-10-13: a logo, product or company request may show its story logo; a close-up model error leaves the photo unchecked; the icon scene has its own slide-fit bar', async () => {
+  const verdictWith = (over: Record<string, unknown>) => ({ what_it_shows: 'x', shows_requested: true, shows_requested_confidence: 0.9, person_prominent: false, person_visible: false, person_main: false, face_recognizable: false, landmark_visible: false, story_logo: false, logo_seen: null, named_institution: false, mostly_text_banner: false, ...over });
+  const logoVerdict: VisionCheck = async () => ({ ok: true, verdict: verdictWith({ story_logo: true, logo_seen: 'Claude Code logo' }), pass: false, costUsd: 0.003 });
+  const logo = cand({ url: 'https://s/claude-code-logo.png', lane: 'commons-search', title: 'Claude Code loGO' });
+  const asProduct = await pickForSlide({ slot: { kind: 'story', speaker: null }, requests: [{ request: v('product', 'Claude Code'), scored: [scored(logo)] }] }, newPickState(), { vision: logoVerdict }, [], 0.5);
+  assert.equal(asProduct.winner?.cand.url, logo.url, 'the product\'s own logo is what a product request asked for');
+  const asScene = await pickForSlide({ slot: { kind: 'story', speaker: null }, requests: [{ request: v('thematic', 'code on a monitor'), scored: [scored(logo)] }] }, newPickState(), { vision: logoVerdict }, [], 0.5);
+  assert.equal(asScene.winner, null, 'a scene request still fails a story logo');
+  for (const kind of ['logo', 'product', 'company']) assert.ok(passesVision(verdictWith({ story_logo: true }) as never, 'faces', kind));
+  assert.ok(!passesVision(verdictWith({ story_logo: true }) as never, 'faces'), 'no kind: as before');
+
+  const grok = cand({ url: 'https://s/grok.png', lane: 'commons-search', title: 'Logo Grok AI (xAI) 2025' });
+  const modelError: VisionCheck = async () => ({ ok: false, error: 'no valid verdict', costUsd: 0.002 });
+  const unchecked = await pickForSlide({ slot: { kind: 'story', speaker: null }, requests: [{ request: v('logo', 'xAI'), scored: [scored(grok)] }] }, newPickState(), { vision: modelError }, [], 0.5);
+  assert.equal(unchecked.winner?.cand.url, grok.url);
+  assert.ok(unchecked.steps.some((x) => /error \(no valid verdict\) → unchecked, used/.test(x)));
+  const brokenPhoto: VisionCheck = async () => ({ ok: false, error: 'photo fetch 404', costUsd: 0, photo: true });
+  const broken = await pickForSlide({ slot: { kind: 'story', speaker: null }, requests: [{ request: v('logo', 'xAI'), scored: [scored(grok)] }] }, newPickState(), { vision: brokenPhoto }, [], 0.5);
+  assert.equal(broken.winner, null, 'a photo that will not load is never used');
+
+  // Stacked newspapers scored 0.38 to 0.45 under a headline: out at the usual 0.5, in at the icon scene's own bar.
+  assert.equal(tuning().iconSceneFitMin, 0.3);
+  const papers = cand({ url: 'https://s/newspapers.jpg', title: 'Stacked newspapers' });
+  const jev = stubJev([], undefined, (id, _s, version) => (version !== PhotoSlideQ.VERSION ? 0.9 : id.startsWith('fits_') ? 0.42 : id === PhotoSlideQ.BEST_ID ? 0.5 : 0.05));
+  const pass = () => async () => ({ ok: true as const, verdict: verdictWith({}) as never, pass: true, costUsd: 0 });
+  const usual = await pickForSlide({ slot: { kind: 'story', speaker: null }, requests: [{ request: v('thematic', 'stack of newspapers'), scored: [scored(papers)] }], words: words(2, 'xAI launched a bundle') }, newPickState(), { jev, vision: pass() }, [], 0.5, 'x');
+  assert.equal(usual.winner, null);
+  const iconScene = await pickForSlide({ slot: { kind: 'story', speaker: null }, requests: [{ request: v('thematic', 'stack of newspapers'), scored: [scored(papers)] }], words: words(2, 'xAI launched a bundle'), slideFitMin: tuning().iconSceneFitMin }, newPickState(), { jev, vision: pass() }, [], 0.5, 'x');
+  assert.equal(iconScene.winner?.cand.url, papers.url);
 });
 
 test('spread-fit@1: a wide photo spreads only when Jev says it suits both slides', async () => {

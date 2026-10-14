@@ -37,6 +37,11 @@ export type LedgerRow = {
   target: LedgerTarget;
   /** What it was (component, stage), for drills. */
   label: string;
+  /** anthropic | openai | jev | huggingface | heygen | web_search | kling | carousel-claude | carousel-jev | carousel-other */
+  vendor?: string;
+  mode?: 'production' | 'development';
+  /** Cost not known (HeyGen usd_known=false): micros is 0 and must not read as free. */
+  unknown?: boolean;
 };
 
 /** The items a shared row splits across. No weights = equal split. */

@@ -242,3 +242,8 @@ CREATE INDEX IF NOT EXISTS idx_stories_feedback_set
 -- publishing off. lib/stories/settings.ts reads both; missing rows mean the same.
 INSERT INTO stories.settings (key, value) VALUES ('require_approval', 'true'::jsonb) ON CONFLICT (key) DO NOTHING;
 INSERT INTO stories.settings (key, value) VALUES ('publishing_live', 'false'::jsonb) ON CONFLICT (key) DO NOTHING;
+
+-- Cost page Production | Development split (spec 2026-10-13 §7). Older rows count as production.
+ALTER TABLE stories.sets ADD COLUMN IF NOT EXISTS mode text NOT NULL DEFAULT 'production';
+ALTER TABLE stories.sets DROP CONSTRAINT IF EXISTS stories_sets_mode_check;
+ALTER TABLE stories.sets ADD CONSTRAINT stories_sets_mode_check CHECK (mode IN ('development', 'production'));

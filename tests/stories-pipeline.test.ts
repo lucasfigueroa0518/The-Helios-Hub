@@ -21,6 +21,7 @@ import { carouselNumbers, morningDownloadCarousel, recentUsedPhotoUrls, recordPu
 import { freeToolLeads, morningDownloadReels, storyKey, theNumberIdeas } from '@/lib/stories/sources/reels';
 import type { StoriesStorage } from '@/lib/stories/storage';
 import { tick } from '@/lib/stories/worker';
+import type { PhotoRequest } from '@/lib/stories/photos';
 import { writeStructured } from '@/lib/stories/writer';
 
 import { addIdea, addSlate, harnessDb, stubJev, stubPhotos, stubRenderer, stubWriter } from './stories-harness';
@@ -107,6 +108,8 @@ test('Morning Download: merge across systems, rank, write, ground with one rewri
   await addIdea(db, slate, { headline: 'A small startup raises seed money', url: 'https://r.test/seed', net: 7 });
   await db.query(`INSERT INTO social.runs (finished_at, record) VALUES ($1, $2)`, ['2026-10-08T02:00:00Z', JSON.stringify({ selection: { scored: [{ id: 'https://c.test/openai', status: 'qualified', outlets: ['Bloomberg'], members: [{ title: 'OpenAI releases GPT-6 to everyone' }], representative: { title: 'OpenAI releases GPT-6 to everyone' }, body: 'OpenAI released GPT-6.' }], shortlist: [] } })]);
   await db.query(`INSERT INTO social.posts (slug, story_id, status, render) VALUES ('gpt6', 'https://c.test/openai', 'review', $1)`, [JSON.stringify({ slides: [{ photoUrl: 'https://img.test/openai.jpg', photoCredit: 'Photo: OpenAI', photoKind: 'scene' }] })]);
+  // The carousel logs its own photo as used when it renders (2026-10-13: this row made Morning Download drop the photo).
+  await db.query(`INSERT INTO social.used_photos (url, used_at, story_id, slide, source) VALUES ('https://img.test/openai.jpg', '2026-10-08T02:00:00Z', 'https://c.test/openai', 1, 'stock')`);
   await recordHistory(db, 'morning_download', [], null);
 
   const jev = stubJev((k, state) => {
@@ -148,6 +151,11 @@ test('Morning Download: merge across systems, rank, write, ground with one rewri
   const opener = (r.frames[0]!.copy as { photo?: { src: string }; storyCount: number });
   assert.ok(opener.photo && !photosUsed.includes(opener.photo.src));
   assert.equal(opener.storyCount, 2);
+  // Every frame says how it got its photo (2026-10-13: a day with no photos left no record of why).
+  const photoLog = r.payload.photo_log as Array<{ frame: string; picked?: string; steps: string[] }>;
+  assert.deepEqual(photoLog.map((p) => p.frame), ['opener', 'story 1', 'story 2']);
+  assert.ok(photoLog.some((p) => p.picked === 'https://img.test/openai.jpg' && /kept the carousel/.test(p.steps[0]!)));
+  assert.equal(photoLog[0]!.picked, opener.photo!.src);
   assert.equal(r.candidates.filter((c) => c.chosen).length, 2);
   // Every Jev call and the writer calls were costed against the set.
   const { rows } = await db.query<{ vendor: string; n: number }>(`SELECT vendor, count(*)::int AS n FROM stories.cost_events WHERE set_id = $1 GROUP BY vendor ORDER BY vendor`, [deps.setId]);
@@ -159,6 +167,62 @@ test('Morning Download: merge across systems, rank, write, ground with one rewri
   assert.ok(req.tools.at(-1)!.cache_control);
   assert.deepEqual(req.tool_choice, { type: 'auto' });
   assert.equal(req.model, 'claude-sonnet-5-5');
+});
+
+test('Morning Download: a carousel photo another story used this week is not kept; the finder is asked instead', async () => {
+  const { db } = await harnessDb();
+  const slate = await addSlate(db, DATE);
+  await addIdea(db, slate, { headline: 'Nvidia posts record revenue', url: 'https://r.test/nvidia', net: 8 });
+  await db.query(`INSERT INTO social.runs (finished_at, record) VALUES ($1, $2)`, ['2026-10-08T02:00:00Z', JSON.stringify({ selection: { scored: [{ id: 'https://c.test/openai', status: 'qualified', outlets: ['Bloomberg'], members: [{ title: 'OpenAI releases GPT-6' }], representative: { title: 'OpenAI releases GPT-6' }, body: 'OpenAI released GPT-6.' }], shortlist: [] } })]);
+  await db.query(`INSERT INTO social.posts (slug, story_id, status, render, origin) VALUES ('gpt6', 'https://c.test/openai', 'review', $1, 'pipeline')`, [JSON.stringify({ slides: [{ photoUrl: 'https://img.test/openai.jpg', photoCredit: 'Photo: OpenAI', photoKind: 'scene' }] })]);
+  await db.query(`INSERT INTO social.used_photos (url, used_at, story_id, slide) VALUES ('https://img.test/openai.jpg', '2026-10-07T02:00:00Z', 'https://c.test/other-story', 1)`);
+  const write = stubWriter({
+    submit_headlines: (params) => ({
+      stories: (materialOf(params) as Array<{ key: string; headline: string }>).map((s) => ({ key: s.key, headline: `${s.headline} on Monday.`, source_verb: 'via', source_name: 'Wired', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
+      opener_visual: { kind: 'setting', query: 'data center' },
+    }),
+  });
+  const photos = stubPhotos();
+  const deps = await buildDeps(db, 'morning_download', { write, photos });
+  const r = await buildMorningDownload(deps);
+  assert.equal(r.ok, true);
+  if (!r.ok) return;
+  const srcs = r.frames.map((f) => (f.copy as { photo?: { src: string } }).photo?.src);
+  assert.ok(!srcs.includes('https://img.test/openai.jpg'));
+  assert.ok(photos.requests.some((q) => q.query === 'OpenAI'), 'the OpenAI frame was searched');
+});
+
+test('Morning Download: the photo set\'s trace is saved by frame, so an empty frame says which check emptied it', async () => {
+  const { db } = await harnessDb();
+  const slate = await addSlate(db, DATE);
+  await addIdea(db, slate, { headline: 'Anthropic ships a model', url: 'https://r.test/a', net: 9 });
+  await addIdea(db, slate, { headline: 'Mistral raises money', url: 'https://r.test/b', net: 8 });
+  const write = stubWriter({
+    submit_headlines: (params) => ({
+      stories: (materialOf(params) as Array<{ key: string; headline: string }>).map((s) => ({ key: s.key, headline: `${s.headline} on Monday.`, source_verb: 'via', source_name: 'Wired', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
+      opener_visual: { kind: 'setting', query: 'data center' },
+    }),
+  });
+  const photos = {
+    usd: 0,
+    async find() {
+      return null;
+    },
+    async findSet(reqs: PhotoRequest[], trace?: string[][]) {
+      trace?.push(...reqs.map((r) => [`${r.kind}: "${r.query}"`, r.kind === 'setting' ? 'picked stock' : 'no photo → icon background']));
+      return reqs.map((r) => (r.kind === 'setting' ? { src: 'https://p.test/dc.jpg', credit: 'C', kind: 'scene' as const } : null));
+    },
+  };
+  const deps = await buildDeps(db, 'morning_download', { write, photos: photos as unknown as ReturnType<typeof stubPhotos> });
+  const r = await buildMorningDownload(deps, { reels: () => morningDownloadReels(db, DATE), carousel: async () => [] });
+  assert.equal(r.ok, true);
+  if (!r.ok) return;
+  const photoLog = r.payload.photo_log as Array<{ frame: string; picked?: string; steps: string[] }>;
+  assert.deepEqual(photoLog, [
+    { frame: 'opener', picked: 'https://p.test/dc.jpg', steps: ['setting: "data center"', 'picked stock'] },
+    { frame: 'story 1', steps: ['company: "Anthropic"', 'no photo → icon background'] },
+    { frame: 'story 2', steps: ['company: "Mistral"', 'no photo → icon background'] },
+  ]);
 });
 
 test('Morning Download: stories shown in the last 3 days are dropped; fewer than 2 left skips the day', async () => {

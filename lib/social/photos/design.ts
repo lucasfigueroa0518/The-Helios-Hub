@@ -197,7 +197,7 @@ export async function photosForDraft(
     if (!out.winner && tuning().iconScenes && p.slot.kind !== 'quote' && iconScene) {
       const request: VisualRequest = { kind: 'thematic', query: iconScene };
       const extra = await searchVisual(request, ctx, deps, { cover: i === 0 });
-      const again = await pickForSlide({ slot: p.slot, requests: [{ request, scored: extra.candidates.map((cand): Scored => ({ cand, tags: null, fit: null })) }], words: p.words }, state, deps, subjects, PhotoFit.THRESHOLDS.FIT_MIN, brief.the_news.text);
+      const again = await pickForSlide({ slot: p.slot, requests: [{ request, scored: extra.candidates.map((cand): Scored => ({ cand, tags: null, fit: null })) }], words: p.words, slideFitMin: tuning().iconSceneFitMin }, state, deps, subjects, PhotoFit.THRESHOLDS.FIT_MIN, brief.the_news.text);
       visionUsd += again.visionUsd;
       searchSteps.push(`icon scene (${p.icon}) → "${iconScene}"`, ...extra.steps);
       out = again.winner ? { ...again, steps: [...out.steps, ...again.steps] } : { ...out, steps: [...out.steps, ...again.steps] };

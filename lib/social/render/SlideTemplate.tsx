@@ -2,10 +2,12 @@
 
 import { useEffect, useRef } from 'react';
 
+import { markRuns } from '@/lib/lfd/marks';
+import { LFD_HOOK_LINES, LFD_KICKER } from '@/lib/lfd/post';
 import { fitText } from '@/lib/social/render/text-fit';
-import type { Post, SlideCanvas } from '@/lib/social/render/types';
+import type { Post, SlideCanvas, SlideCopy } from '@/lib/social/render/types';
 
-import { IconBackground, PhotoCredit } from './drafts/blocks';
+import { Fit, IconBackground, PhotoCredit, focusStyle } from './drafts/blocks';
 import { CoverSlidePremium } from './drafts/cover';
 import { FollowSlidePremium } from './drafts/follow';
 import { ImageSlidePremium } from './drafts/image';
@@ -91,7 +93,8 @@ export function SlideTemplate({ post, position, canvas: canvasProp }: SlideTempl
   const textFromImage = kind === 'image' && !scenePhoto;
   if (textFromImage) kind = 'text';
   const fullBleed = kind === 'image' || kind === 'spread' || (kind === 'cover' && scenePhoto);
-  const showWordmark = kind !== 'cover' && kind !== 'follow' && !fullBleed;
+  const lfd = kind === 'lfd_cover' || kind === 'lfd_story';
+  const showWordmark = kind !== 'cover' && kind !== 'follow' && !fullBleed && !lfd;
   // A subject photo that cannot go full bleed becomes a text slide with the photo on top; the legacy `title` is the headline when there is none.
   const textSlide = { ...slide, headline: slide.headline ?? slide.title, ...(textFromImage ? { photoPlacement: 'top' as const } : {}) };
 
@@ -105,7 +108,7 @@ export function SlideTemplate({ post, position, canvas: canvasProp }: SlideTempl
       role="img"
       aria-label={slide.altText}
     >
-      {!slide.photoUrl && kind !== 'cover' && kind !== 'follow' && <IconBackground slide={slide} />}
+      {!slide.photoUrl && kind !== 'cover' && kind !== 'follow' && !lfd && <IconBackground slide={slide} />}
       {showWordmark && (
         <div className="helios-masthead helios-masthead--minimal" aria-hidden="true">
           <div className="helios-masthead__wordmark">HELIOS</div>
@@ -121,8 +124,82 @@ export function SlideTemplate({ post, position, canvas: canvasProp }: SlideTempl
         {kind === 'image' && <ImageSlidePremium slide={slide} />}
         {kind === 'spread' && <ImageSlidePremium slide={slide} spread={slide.panoramaSide} />}
         {kind === 'follow' && <FollowSlidePremium slide={slide} />}
+        {kind === 'lfd_cover' && <LfdCoverSlide slide={slide} />}
+        {kind === 'lfd_story' && <LfdStorySlide slide={slide} />}
       </div>
-      {slide.photoUrl && kind !== 'follow' && <PhotoCredit credit={slide.photoCredit} />}
+      {slide.photoUrl && kind !== 'follow' && !lfd && <PhotoCredit credit={slide.photoCredit} />}
+    </div>
+  );
+}
+
+/* ── Last Few Days (spec §6; template: Claude outputs/last-few-days-template/) ── */
+
+const LFD_MIN = { setup: 34, headline: 42, body: 31 } as const;
+
+function LfdArrow() {
+  return (
+    <svg className="lfd-swipe" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 12h14" />
+      <path d="m12 5 7 7-7 7" />
+    </svg>
+  );
+}
+
+function LfdMarked({ text, highlight, names }: { text: string; highlight: string; names: string[] }) {
+  return (
+    <>
+      {markRuns(text, highlight, names).map((r, i) => (r.mark ? <span key={i} className={r.mark === 'hl' ? 'lfd-hl' : 'lfd-name'}>{r.text}</span> : <span key={i}>{r.text}</span>))}
+    </>
+  );
+}
+
+/** A logo, whole, on a light plate (mirrors RegionPhoto's logo treatment): never cropped like a photo. */
+function LfdLogo({ src }: { src: string }) {
+  return (
+    <div className="lfd-logo-plate">
+      <img className="lfd-logo" src={src} alt="" data-photo-kind="logo" />
+    </div>
+  );
+}
+
+function LfdCoverSlide({ slide }: { slide: SlideCopy }) {
+  const photos = (slide.lfdCover?.photos ?? []).slice(0, 6);
+  return (
+    <div className="lfd-cover">
+      <div className="lfd-mosaic" data-count={photos.length}>
+        {photos.map((p, i) => (
+          <div className="lfd-tile" key={i}>
+            {p.kind === 'logo' ? <LfdLogo src={p.url} /> : <img className="lfd-img" src={p.url} alt="" style={p.focus ? { objectPosition: `${Math.round(p.focus.x * 100)}% ${Math.round(p.focus.y * 100)}%` } : undefined} />}
+          </div>
+        ))}
+      </div>
+      <div className="lfd-brand-rule"><span>HELIOS</span></div>
+      <div className="lfd-cover-copy">
+        <h1 className="lfd-hook">{LFD_HOOK_LINES.map((line) => <span key={line}>{line}</span>)}</h1>
+        <p className="lfd-kicker">{LFD_KICKER}</p>
+      </div>
+      <LfdArrow />
+    </div>
+  );
+}
+
+function LfdStorySlide({ slide }: { slide: SlideCopy }) {
+  const s = slide.lfdStory;
+  if (!s) return null;
+  return (
+    <div className="lfd-story">
+      <div className="lfd-chip"><img src="/social/helios-mark.png" alt="" /><span>Helios</span></div>
+      <div className="lfd-story-body">
+        <div className="lfd-text">
+          {s.setup && <Fit as="p" className="lfd-setup" min={LFD_MIN.setup}><LfdMarked text={s.setup} highlight="" names={s.names} /></Fit>}
+          <Fit as="h2" className="lfd-headline" min={LFD_MIN.headline}><span className="lfd-clip">– <LfdMarked text={s.headline} highlight={s.highlight} names={s.names} /></span></Fit>
+          <Fit as="p" className="lfd-body" min={LFD_MIN.body}><LfdMarked text={s.body} highlight="" names={s.names} /></Fit>
+        </div>
+        <div className="lfd-media">
+          {slide.photoUrl && (slide.photoKind === 'logo' ? <LfdLogo src={slide.photoUrl} /> : <img className="lfd-img" src={slide.photoUrl} alt="" style={focusStyle(slide)} />)}
+        </div>
+      </div>
+      <LfdArrow />
     </div>
   );
 }
