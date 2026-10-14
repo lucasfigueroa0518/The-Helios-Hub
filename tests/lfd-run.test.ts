@@ -575,3 +575,15 @@ test('a rejected lead image with no finder photo drops the story as vision-rejec
   const { rows } = await base.query<{ stories: Array<{ url: string }> }>(`SELECT stories FROM lfd.posts`);
   assert.ok(!rows[0]!.stories.some((s) => s.url === 'https://n.com/2'));
 });
+
+test('a run the worker claimed is adopted, never inserted twice', async () => {
+  const d = await deps();
+  const { claimRun, requestRun } = await import('@/lib/lfd/store');
+  await requestRun(d.query, 'manual', 1);
+  const claimed = (await claimRun(d.query))!;
+  const res = await runLastFewDays({ ...d, runId: claimed.id });
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.equal(res.runId, claimed.id);
+  const runs = (await d.query<{ n: number; status: string }>(`SELECT count(*)::int AS n, max(status) AS status FROM lfd.runs`)).rows[0]!;
+  assert.deepEqual([runs.n, runs.status], [1, 'ok']);
+});

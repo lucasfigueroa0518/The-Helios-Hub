@@ -23,7 +23,7 @@ import { findPhotos, REFUSED_ICON_SCENE } from './photos';
 import { judgedPool, MIN_STORIES, mergeSameEvent, RUNDOWN_POOL, rundownOrder, scoreMajor, Selector, slideOrder, withoutUsed } from './pick';
 import { buildPost } from './post';
 import { carouselLane, freshFeedLane, lastCarouselRunAt, reelsLane } from './sources';
-import { finishRun, insertPost, previousPosts, recentPhotoUrls, startRun, usedIdeaIds } from './store';
+import { adoptRun, finishRun, insertPost, previousPosts, recentPhotoUrls, startRun, usedIdeaIds } from './store';
 import type { Drop, LfdCandidate, LfdWindow, Pick, Ready, StoryCopy } from './types';
 import { checkSlide, VISION_UNAVAILABLE, type SlideVerdict } from './vision';
 import { extendWindow, windowFor } from './window';
@@ -52,6 +52,8 @@ export type LfdRunDeps = {
   capUsd: number;
   /** Claude and Jev spend so far (the CLI wires the run budget and Jev tally here). */
   spend: () => { claudeUsd: number; jevUsd: number };
+  /** A run the worker already claimed (lfd.runs status running): it is adopted instead of inserting a new row. */
+  runId?: string;
 };
 
 /** Window start as an instant: midnight NY after `after` is close enough for "runs finished since". */
@@ -150,7 +152,7 @@ async function inPool<T>(items: T[], n: number, fn: (item: T) => Promise<void>):
 
 export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: string; postId: string; stories: number; short: boolean } | { ok: false; runId: string; error: string }> {
   const nyDate = nyDateKey(d.now);
-  const runId = await startRun(d.query, d.trigger, d.capUsd, nyDate);
+  const runId = d.runId ? await adoptRun(d.query, d.runId, d.capUsd, nyDate) : await startRun(d.query, d.trigger, d.capUsd, nyDate);
   const record: Record<string, unknown> = {};
   let jevCalls = 0;
   const jev: JevAsk = (req, meta) => {
