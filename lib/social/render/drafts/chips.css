@@ -1,0 +1,39 @@
+/*
+ * The hook chip on the orange canvas, for every slide design.
+ *
+ * preview.css paints the hook word as an ink chip with a plain inline background, which fills the
+ * font's whole content area: 1.41em tall in Pragmatica (ascent 1.01 + descent 0.40), 1.17em in Roboto.
+ * Display type is set at line-height ~1, so that chip ran into the line above and below. Here the chip
+ * is cut to the glyphs instead: from just above the tallest letter (the `$` and the ascenders) to just
+ * below the baseline, or just below the descenders in mixed case. The text itself is untouched.
+ *
+ * Measured at 100px (canvas measureText, 2026-10-12):
+ *   Pragmatica Extended Bold  ascent 1.01  caps 0.72  ascenders 0.71  `$` 0.80  descenders 0.20
+ *   Roboto                    ascent 0.93  caps 0.72  ascenders 0.76  `$` 0.83  descenders 0.21
+ *
+ * --chip-asc: where the baseline sits below the top of the font box. --chip-top / --chip-bottom: the
+ * chip's reach above and below the baseline. Landing's verb is a block with its own tight box; it keeps it.
+ */
+.helios-slide[data-canvas='orange'] .helios-span--hook:not(.helios-v2-landing__verb) {
+  --chip-asc: 0.93em;
+  --chip-top: 0.8em;
+  --chip-bottom: 0.26em;
+  padding: 0 0.08em;
+  background-color: transparent;
+  background-image: linear-gradient(var(--brand-narrative), var(--brand-narrative));
+  background-repeat: no-repeat;
+  background-size: 100% calc(var(--chip-top) + var(--chip-bottom));
+  background-position: 0 calc(var(--chip-asc) - var(--chip-top));
+}
+
+/* Display type (headline 44, cover 48, number 52, split number 40, quote 36) is Pragmatica. */
+.helios-slide[data-canvas='orange'] :is([data-fit-min='36'], [data-fit-min='40'], [data-fit-min='44'], [data-fit-min='48'], [data-fit-min='52']) .helios-span--hook:not(.helios-v2-landing__verb) {
+  --chip-asc: 1.01em;
+  --chip-top: 0.78em;
+  --chip-bottom: 0.24em;
+}
+
+/* All-caps lines (covers, the stat label) have no descenders: the chip stops just under the baseline. */
+.helios-slide[data-canvas='orange'] :is([data-fit-min='48'], .helios-v2-stat__label) .helios-span--hook:not(.helios-v2-landing__verb) {
+  --chip-bottom: 0.06em;
+}

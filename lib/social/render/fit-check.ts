@@ -1,12 +1,13 @@
 /**
  * Render-fit check (M7, pulled forward; M8a layout rules; M8b framing):
- * renders the real SlideTemplate + preview.css in headless Chromium
+ * renders the real SlideTemplate + preview.css + the drafts' slide CSS in headless Chromium
  * (Playwright) and fails the render when any rule breaks. Code only, no AI.
  *
  *   1. Text fit (text-fit.ts, the same code the preview runs): every text
  *      region fits at or above its minimum size, no mid-word breaks.
  *   2. Bounds: every element sits inside the 1080×1350 slide.
- *   3. Contrast: text over a photo has a scrim (data-scrim or the
+ *   3. Contrast: text over a photo has a scrim (data-scrim, on the text's
+ *      ancestor or a layer covering where text meets photo, or the
  *      background shade).
  *   4. Faces clear: no text over a subject photo, and no text over a face
  *      the detector found in any photo.
@@ -71,7 +72,13 @@ async function slideHtml(post: Post): Promise<string> {
   (globalThis as { React?: unknown }).React = React;
   const { renderToStaticMarkup } = await import('react-dom/server');
   const { SlideTemplate } = await import('./SlideTemplate');
-  const css = await fsp.readFile(path.join(process.cwd(), 'app/social/render/preview/preview.css'), 'utf8');
+  // preview.css, then the slide designs' own CSS (drafts/index.css lists them, in order).
+  const draftsDir = path.join(process.cwd(), 'lib/social/render/drafts');
+  const draftFiles = [...(await fsp.readFile(path.join(draftsDir, 'index.css'), 'utf8')).matchAll(/@import\s+['"]\.\/([^'"]+)['"]/g)].map((m) => m[1]!);
+  const css = [
+    await fsp.readFile(path.join(process.cwd(), 'app/social/render/preview/preview.css'), 'utf8'),
+    ...(await Promise.all(draftFiles.map((f) => fsp.readFile(path.join(draftsDir, f), 'utf8')))),
+  ].join('\n');
   const slides = post.slides
     .map((_, i) => {
       const inner = renderToStaticMarkup(React.createElement(SlideTemplate, { post, position: i }));
@@ -294,13 +301,19 @@ window.__faces = (async () => {
         const photos = [...slideEl.querySelectorAll<HTMLImageElement>('img.helios-photo')];
         const shaded = Boolean(slideEl.querySelector('.helios-backdrop__shade'));
         const clip = (r: DOMRect): R => ({ left: Math.max(r.left, b.left), top: Math.max(r.top, b.top), right: Math.min(r.right, b.right), bottom: Math.min(r.bottom, b.bottom) });
+        // A scrim is either the text's own ancestor or a layer under it: a [data-scrim] box that covers where the text meets the photo.
+        const scrims = [...slideEl.querySelectorAll<HTMLElement>('[data-scrim]')].map((el) => el.getBoundingClientRect());
+        const covered = (tr: DOMRect, ir: R) => {
+          const ov = { left: Math.max(tr.left, ir.left), top: Math.max(tr.top, ir.top), right: Math.min(tr.right, ir.right), bottom: Math.min(tr.bottom, ir.bottom) };
+          return scrims.some((s) => s.left <= ov.left + tol && s.top <= ov.top + tol && s.right >= ov.right - tol && s.bottom >= ov.bottom - tol);
+        };
         for (const t of texts) {
           const tr = t.getBoundingClientRect();
           const label = `${t.className.split(' ')[0]} "${(t.textContent ?? '').trim().slice(0, 50)}"`;
           for (const img of photos) {
             const ir = clip(img.getBoundingClientRect());
             if (!hit(tr, ir)) continue;
-            if (!t.closest('[data-scrim]') && !shaded) problems.push(`slide ${slide} contrast: ${label} sits on a photo with no scrim`);
+            if (!t.closest('[data-scrim]') && !covered(tr, ir) && !shaded) problems.push(`slide ${slide} contrast: ${label} sits on a photo with no scrim`);
             if (img.dataset.photoKind === 'subject') problems.push(`slide ${slide} faces: ${label} covers a subject photo`);
             // Faces the detector found, in rendered coordinates.
             const f = facesData.find((x) => x.slide === slide && x.photo === (img.currentSrc || img.src));

@@ -8,6 +8,7 @@ import { SlideTemplate } from '@/lib/social/render/SlideTemplate';
 import type { Post } from '@/lib/social/render/types';
 
 import './preview.css';
+import '@/lib/social/render/drafts/index.css';
 
 /**
  * Slide preview route. Used by developers to eyeball a slide layout, and

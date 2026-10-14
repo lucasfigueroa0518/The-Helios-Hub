@@ -1,0 +1,207 @@
+/* Quote family (premium draft). The words are the slide: a hairline hangs from an
+   oversized opening mark, the quote sits against it, the attribution closes it. */
+
+.helios-v2-quote {
+  --v2q-font-display: var(--font-heading, 'Pragmatica Extended', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+  --v2q-font-mono: var(--font-mono, 'Roboto Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace);
+  --v2q-font-body: var(--font-body, 'Roboto', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+  --v2q-indent: 48px;
+  position: relative;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+}
+
+.helios-v2-quote > * { position: relative; z-index: 1; }
+.helios-v2-quote > .helios-backdrop__img,
+.helios-v2-quote > .helios-backdrop__shade { position: absolute; z-index: 0; }
+
+/* ---- headline: the framing line, clearly under the quote ---- */
+.helios-v2-quote .helios-v2-quote__headline {
+  flex: none;
+  margin: 0;
+  width: 680px;
+  max-height: 116px;
+  overflow: hidden;
+  font-family: var(--v2q-font-display);
+  font-weight: 700;
+  font-size: 52px;
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+  color: var(--brand-narrative);
+}
+
+/* ---- stage: holds mark + quote + attribution (+ face) ---- */
+.helios-v2-quote .helios-v2-quote__stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 16px 0 72px;
+}
+
+.helios-v2-quote .helios-v2-quote__main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* ---- the opening mark: the one place unicode is ornament ---- */
+.helios-v2-quote .helios-v2-quote__mark {
+  flex: none;
+  height: 0.33em;
+  margin: 0 0 24px -0.046em;
+  font-family: 'Times New Roman', Georgia, 'Liberation Serif', serif;
+  font-weight: 700;
+  font-size: 560px;
+  line-height: 1;
+  color: var(--brand-narrative-quiet);
+  overflow: visible;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+}
+/* the serif glyph sits low in its em box: lift it so the box is the glyph */
+.helios-v2-quote .helios-v2-quote__mark > span { display: block; transform: translateY(-0.165em); }
+.helios-v2-quote .helios-v2-quote__mark--hook { color: var(--brand-hook); }
+
+/* ---- the hairline: hangs from the mark, ends at the attribution ---- */
+.helios-v2-quote .helios-v2-quote__group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding-left: var(--v2q-indent);
+  border-left: 2px solid var(--brand-rule);
+}
+
+/* ---- the quote ---- */
+.helios-v2-quote .helios-v2-quote__text {
+  margin: 0;
+  max-height: 600px;
+  overflow: hidden;
+  font-family: var(--v2q-font-display);
+  font-weight: 700;
+  line-height: 1.06;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+  color: var(--brand-narrative);
+}
+.helios-v2-quote .helios-v2-quote__text--t1 { font-size: 148px; }
+.helios-v2-quote .helios-v2-quote__text--t2 { font-size: 120px; }
+.helios-v2-quote .helios-v2-quote__text--t3 { font-size: 100px; }
+.helios-v2-quote .helios-v2-quote__text--t4 { font-size: 84px; }
+.helios-v2-quote .helios-v2-quote__text--t5 { font-size: 70px; }
+.helios-v2-quote .helios-v2-quote__text--t6 { font-size: 60px; }
+
+/* ---- attribution: mono, tied to the hairline by a short rule ---- */
+.helios-v2-quote .helios-v2-quote__by {
+  margin: 40px 0 0;
+  max-height: 84px;
+  overflow: hidden;
+  font-family: var(--v2q-font-mono);
+  font-weight: 500;
+  font-size: 26px;
+  line-height: 1.35;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+  color: var(--brand-narrative);
+}
+.helios-v2-quote .helios-v2-quote__by::before {
+  content: '';
+  display: inline-block;
+  width: 56px;
+  height: 2px;
+  margin-right: 20px;
+  vertical-align: middle;
+  background: var(--brand-pivot);
+}
+.helios-v2-quote .helios-v2-quote__role { color: var(--brand-narrative-muted); }
+.helios-v2-quote .helios-v2-quote__role::before { content: '\00B7'; display: inline-block; margin: 0 0.9em; }
+
+/* ---- context line (speaker mode body) ---- */
+.helios-v2-quote .helios-v2-quote__context {
+  margin: 24px 0 0;
+  max-height: 80px;
+  overflow: hidden;
+  font-family: var(--v2q-font-body);
+  font-weight: 400;
+  font-size: 32px;
+  line-height: 1.25;
+  text-wrap: pretty;
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+  color: var(--brand-narrative-muted);
+}
+
+/* ================= mode: speaker ================= */
+.helios-v2-quote--speaker .helios-v2-quote__stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 296px;
+  column-gap: 48px;
+  align-content: center;
+}
+.helios-v2-quote--speaker .helios-v2-quote__text { max-height: 520px; }
+.helios-v2-quote--speaker .helios-v2-quote__text--t1 { font-size: 96px; }
+.helios-v2-quote--speaker .helios-v2-quote__text--t2 { font-size: 80px; }
+.helios-v2-quote--speaker .helios-v2-quote__text--t3 { font-size: 68px; }
+.helios-v2-quote--speaker .helios-v2-quote__text--t4 { font-size: 58px; }
+.helios-v2-quote--speaker .helios-v2-quote__text--t5 { font-size: 50px; }
+.helios-v2-quote--speaker .helios-v2-quote__text--t6 { font-size: 44px; }
+.helios-v2-quote--speaker .helios-v2-quote__mark { font-size: 440px; margin-bottom: 20px; }
+.helios-v2-quote--speaker .helios-v2-quote__by { font-size: 22px; letter-spacing: 0.12em; margin-top: 32px; }
+.helios-v2-quote--speaker .helios-v2-quote__by::before { width: 32px; margin-right: 14px; }
+.helios-v2-quote--speaker .helios-v2-quote__context { font-size: 30px; }
+
+.helios-v2-quote .helios-v2-quote__face {
+  position: relative;
+  align-self: stretch;
+  min-height: 560px;
+  max-height: 800px;
+  min-width: 0;
+}
+.helios-v2-quote .helios-v2-quote__face .helios-v2-quote__speaker.helios-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* ================= mode: backdrop ================= */
+.helios-v2-quote .helios-v2-quote__scrim {
+  position: absolute;
+  z-index: 0;
+  left: -96px;
+  width: 1080px;
+  top: 40px;
+  bottom: -40px;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(var(--brand-scrim), 0) 0%,
+    rgba(var(--brand-scrim), 0.84) 24%,
+    rgba(var(--brand-scrim), 0.84) 78%,
+    rgba(var(--brand-scrim), 0) 100%
+  );
+}
+
+/* the photo is mood only: lift the global shade a little and let the band carry the text */
+.helios-v2-quote--backdrop > .helios-backdrop__shade { opacity: 0.7; }

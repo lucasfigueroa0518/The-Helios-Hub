@@ -1,0 +1,184 @@
+{
+  "reviews": {
+    "cover-bleed": {
+      "id": "cover-bleed",
+      "choice": "revise",
+      "notes": "Clean-slate redesign. Do not inherit the stale draft.",
+      "updatedAt": "2026-10-12T23:44:18.000Z",
+      "work": "ready",
+      "step": "Draft updated",
+      "generation": 3
+    },
+    "cover-split": {
+      "id": "cover-split",
+      "choice": "revise",
+      "notes": "Clean-slate redesign. Do not inherit the stale draft.",
+      "updatedAt": "2026-10-12T23:44:18.000Z",
+      "work": "ready",
+      "step": "Draft updated",
+      "generation": 4
+    },
+    "cover-logo": {
+      "id": "cover-logo",
+      "choice": "revise",
+      "notes": "This is REALLY BORING. Needs to be more dynamic.",
+      "updatedAt": "2026-10-12T23:39:29.735Z",
+      "work": "idle",
+      "step": "Draft updated",
+      "generation": 3
+    },
+    "cover-icon": {
+      "id": "cover-icon",
+      "choice": "revise",
+      "notes": "Clean-slate redesign. Do not inherit the stale draft.",
+      "updatedAt": "2026-10-12T23:44:18.000Z",
+      "work": "ready",
+      "step": "Draft updated",
+      "generation": 3
+    },
+    "text-photo-below": {
+      "id": "text-photo-below",
+      "choice": "revise",
+      "notes": "Clean-slate redesign. Do not inherit the stale draft.",
+      "updatedAt": "2026-10-12T23:33:09.000Z",
+      "work": "ready",
+      "step": "Draft updated",
+      "generation": 2
+    },
+    "text-photo-top": {
+      "id": "text-photo-top",
+      "choice": "revise",
+      "notes": "Clean-slate redesign. Do not inherit the stale draft.",
+      "updatedAt": "2026-10-12T23:33:09.000Z",
+      "work": "ready",
+      "step": "Draft updated",
+      "generation": 2
+    },
+    "text-only-top": {
+      "id": "text-only-top",
+      "choice": "revise",
+      "notes": "Clean-slate redesign. Do not inherit the stale draft.",
+      "updatedAt": "2026-10-12T23:33:09.000Z",
+      "work": "ready",
+      "step": "Draft updated",
+      "generation": 2
+    },
+    "text-only-low": {
+      "id": "text-only-low",
+      "choice": "revise",
+      "notes": "Clean-slate redesign. Do not inherit the stale draft.",
+      "updatedAt": "2026-10-12T23:33:09.000Z",
+      "work": "ready",
+      "step": "Draft updated",
+      "generation": 2
+    },
+    "landing": {
+      "id": "landing",
+      "choice": "revise",
+      "notes": "Clean-slate redesign. Do not inherit the stale draft.",
+      "updatedAt": "2026-10-12T23:29:03.000Z",
+      "work": "ready",
+      "step": "Draft updated",
+      "generation": 2
+    },
+    "landing-type": {
+      "id": "landing-type",
+      "choice": "revise",
+      "notes": "Clean-slate redesign. Do not inherit the stale draft.",
+      "updatedAt": "2026-10-12T23:29:03.000Z",
+      "work": "ready",
+      "step": "Draft updated",
+      "generation": 2
+    },
+    "stat": {
+      "id": "stat",
+      "choice": "revise",
+      "notes": "Clean-slate redesign. Do not inherit the stale draft.",
+      "updatedAt": "2026-10-12T23:24:27.000Z",
+      "work": "ready",
+      "step": "Draft updated",
+      "generation": 2
+    },
+    "stat-backdrop": {
+      "id": "stat-backdrop",
+      "choice": "revise",
+      "notes": "Clean-slate redesign. Do not inherit the stale draft.",
+      "updatedAt": "2026-10-12T23:24:27.000Z",
+      "work": "ready",
+      "step": "Draft updated",
+      "generation": 2
+    },
+    "split-stat": {
+      "id": "split-stat",
+      "choice": "revise",
+      "notes": "Clean-slate redesign. Do not inherit the stale draft.",
+      "updatedAt": "2026-10-12T23:27:17.000Z",
+      "work": "ready",
+      "step": "Draft updated",
+      "generation": 2
+    },
+    "quote-speaker": {
+      "id": "quote-speaker",
+      "choice": "revise",
+      "notes": "Clean-slate redesign. Do not inherit the stale draft.",
+      "updatedAt": "2026-10-12T23:28:01.000Z",
+      "work": "ready",
+      "step": "Draft updated",
+      "generation": 2
+    },
+    "quote-backdrop": {
+      "id": "quote-backdrop",
+      "choice": "revise",
+      "notes": "Clean-slate redesign. Do not inherit the stale draft.",
+      "updatedAt": "2026-10-12T23:28:01.000Z",
+      "work": "ready",
+      "step": "Draft updated",
+      "generation": 2
+    },
+    "quote-type": {
+      "id": "quote-type",
+      "choice": "revise",
+      "notes": "Clean-slate redesign. Do not inherit the stale draft.",
+      "updatedAt": "2026-10-12T23:28:01.000Z",
+      "work": "ready",
+      "step": "Draft updated",
+      "generation": 2
+    },
+    "image": {
+      "id": "image",
+      "choice": "revise",
+      "notes": "Clean-slate redesign. Do not inherit the stale draft.",
+      "updatedAt": "2026-10-12T23:44:18.000Z",
+      "work": "ready",
+      "step": "Draft updated",
+      "generation": 3
+    },
+    "spread-left": {
+      "id": "spread-left",
+      "choice": "revise",
+      "notes": "Clean-slate redesign. Do not inherit the stale draft.",
+      "updatedAt": "2026-10-12T23:44:18.000Z",
+      "work": "ready",
+      "step": "Draft updated",
+      "generation": 3
+    },
+    "spread-right": {
+      "id": "spread-right",
+      "choice": "revise",
+      "notes": "Clean-slate redesign. Do not inherit the stale draft.",
+      "updatedAt": "2026-10-12T23:44:18.000Z",
+      "work": "ready",
+      "step": "Draft updated",
+      "generation": 3
+    },
+    "follow": {
+      "id": "follow",
+      "choice": "revise",
+      "notes": "Clean-slate redesign. Do not inherit the stale draft.",
+      "updatedAt": "2026-10-12T23:26:22.000Z",
+      "work": "ready",
+      "step": "Draft updated",
+      "generation": 2
+    }
+  }
+}

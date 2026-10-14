@@ -1,0 +1,136 @@
+/* Stat — one number is the story. Rules are scoped under .helios-v2-stat. */
+
+.helios-v2-stat {
+  --stat-font-display: var(--font-heading, 'pragmatica', 'Pragmatica Extended', 'Helvetica Neue', Helvetica, Arial, sans-serif);
+  position: relative;
+  flex: 1 1 auto;
+  width: 888px;
+  height: 1158px;
+  display: block;
+  color: var(--brand-narrative);
+}
+
+.helios-v2-stat > * {
+  position: absolute;
+  z-index: 1;
+  margin: 0;
+}
+
+/* Scene photo: Backdrop supplies the shade; this adds the text scrim. */
+.helios-v2-stat__scrim {
+  top: -96px;
+  left: -96px;
+  width: 1080px;
+  height: 1350px;
+  z-index: 0 !important;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(var(--brand-scrim), 0.62) 0%, rgba(var(--brand-scrim), 0.38) 22%, rgba(var(--brand-scrim), 0.5) 52%, rgba(var(--brand-scrim), 0.82) 100%);
+}
+
+/* Label: small, cold, parked top-left, clear of the masthead. */
+.helios-v2-stat__label {
+  top: 0;
+  left: 0;
+  width: 640px;
+  max-height: 152px;
+  overflow: hidden;
+  font-family: var(--stat-font-display);
+  font-weight: 700;
+  font-size: 56px;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  text-wrap: balance;
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+}
+
+/* The figure: number + scale + caption read as one instrument. */
+.helios-v2-stat__figure {
+  top: 392px;
+  left: 0;
+  width: 888px;
+}
+
+.helios-v2-stat__number {
+  width: 888px;
+  max-height: 520px;
+  display: block;
+  white-space: nowrap;
+  font-family: var(--stat-font-display);
+  font-weight: 700;
+  font-size: 400px;
+  line-height: 0.9;
+  letter-spacing: -0.055em;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+  margin-left: -0.065em;
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+}
+
+/* Measuring scale: ticks every 24px, a taller tick every fifth, full-height end caps. */
+.helios-v2-stat__scale {
+  position: relative;
+  margin-top: 24px;
+  width: 888px;
+  height: 40px;
+  border-top: 2px solid var(--brand-rule);
+  background:
+    repeating-linear-gradient(90deg, var(--brand-hairline) 0 2px, transparent 2px 24px) left top / 100% 12px no-repeat,
+    repeating-linear-gradient(90deg, var(--brand-rule) 0 2px, transparent 2px 120px) left top / 100% 24px no-repeat;
+}
+
+.helios-v2-stat__scale::before,
+.helios-v2-stat__scale::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 40px;
+  background: var(--brand-rule);
+}
+
+.helios-v2-stat__scale::before {
+  left: 0;
+}
+
+.helios-v2-stat__scale::after {
+  right: 0;
+}
+
+.helios-v2-stat__note {
+  margin-top: 16px;
+  width: 760px;
+  max-height: 100px;
+  overflow: hidden;
+  font-family: Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-weight: 500;
+  font-size: 36px;
+  line-height: 1.25;
+  color: var(--brand-narrative-muted);
+  text-wrap: pretty;
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+}
+
+/* Context sentence: the quiet settle, a wide gap below the figure. */
+.helios-v2-stat__body {
+  left: 0;
+  bottom: 0;
+  width: 640px;
+  max-height: 168px;
+  overflow: hidden;
+  font-family: Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-weight: 400;
+  font-size: 44px;
+  line-height: 1.2;
+  text-wrap: pretty;
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+}

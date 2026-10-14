@@ -1,0 +1,109 @@
+/* Follow close: story above a hard rule, the ask hung below it. Canvas coords (1080x1350). */
+.helios-v2-follow {
+  position: absolute;
+  top: -96px;
+  left: -96px;
+  width: 1080px;
+  height: 1350px;
+  overflow: visible;
+}
+
+/* Story: bottom-anchored so the last baseline always sits on the rule. */
+.helios-v2-follow .helios-v2-follow__story {
+  position: absolute;
+  left: 96px;
+  width: 888px;
+  top: 232px;
+  height: 548px;
+  display: flex;
+  align-items: flex-end;
+}
+
+.helios-v2-follow .helios-v2-follow__line {
+  margin: 0;
+  width: 100%;
+  max-height: 548px;
+  padding-bottom: 0.1em;
+  box-sizing: border-box;
+  overflow: hidden;
+  font-family: var(--font-heading), 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-weight: 700;
+  font-size: 88px;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--brand-narrative);
+  text-wrap: balance;
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+}
+
+/* Rule: bleeds off the left edge on purpose, turns into the arrow at the right margin. */
+.helios-v2-follow .helios-v2-follow__rule {
+  position: absolute;
+  left: 0;
+  top: 830px;
+  width: 1080px;
+  height: 120px;
+  color: var(--brand-narrative);
+}
+
+.helios-v2-follow .helios-v2-follow__rule-bar {
+  position: absolute;
+  left: 0;
+  top: 16px;
+  width: 930px;
+  height: 8px;
+  background: currentColor;
+}
+
+.helios-v2-follow .helios-v2-follow__elbow {
+  position: absolute;
+  left: 884px;
+  top: 0;
+  display: block;
+  stroke-linecap: butt;
+  stroke-linejoin: miter;
+}
+
+/* Ask: the handle at full measure, hung below the rule. */
+.helios-v2-follow .helios-v2-follow__ask {
+  position: absolute;
+  left: 96px;
+  width: 888px;
+  top: 940px;
+  height: 160px;
+}
+
+.helios-v2-follow .helios-v2-follow__handle {
+  margin: 0;
+  width: 100%;
+  max-height: 160px;
+  padding-bottom: 0.08em;
+  box-sizing: border-box;
+  overflow: hidden;
+  white-space: nowrap;
+  font-family: var(--font-heading), 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-weight: 700;
+  font-size: 126px;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  color: var(--brand-hook);
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+}
+
+/* Signature: HELIOS wordmark, fully on canvas, clear space well over the H height. */
+.helios-v2-follow .helios-v2-follow__sign {
+  position: absolute;
+  left: 96px;
+  bottom: 96px;
+  font-family: var(--font-body), Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--brand-narrative);
+}

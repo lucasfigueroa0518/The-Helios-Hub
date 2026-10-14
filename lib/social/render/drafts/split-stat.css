@@ -1,0 +1,161 @@
+/* Split stat: two counts on one measuring line. First small, second ~2x and nearly edge to edge. */
+
+.helios-v2-split-stat {
+  position: relative;
+  width: 888px;
+  height: 1158px;
+  flex: none;
+  --v2-split-a: 200px;
+  --v2-split-b: 360px;
+  --v2-split-display: var(--font-heading, 'Pragmatica Extended'), 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+.helios-v2-split-stat * {
+  box-sizing: border-box;
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+}
+
+/* Measuring line: one rule down the gutter, a tick at each number's baseline. */
+.helios-v2-split-stat__axis {
+  position: absolute;
+  left: -48px;
+  top: 192px;
+  height: 490px;
+  width: 0;
+  border-left: 2px solid var(--brand-rule);
+}
+.helios-v2-split-stat__tick {
+  position: absolute;
+  left: -2px;
+  width: 28px;
+  height: 0;
+  border-top: 2px solid var(--brand-rule);
+}
+.helios-v2-split-stat__tick--a { top: 122px; }
+.helios-v2-split-stat__tick--b { top: 489px; }
+
+/* First count */
+.helios-v2-split-stat__first {
+  position: absolute;
+  left: 0;
+  top: 134px;
+  width: 888px;
+  height: 200px;
+  display: grid;
+  grid-template-columns: 420px minmax(0, 1fr);
+  column-gap: 32px;
+  align-items: end;
+}
+.helios-v2-split-stat__num-a {
+  margin: 0;
+  position: relative;
+  left: -22px;
+  width: 420px;
+  max-height: 240px;
+  font-family: var(--v2-split-display);
+  font-weight: 700;
+  font-size: var(--v2-split-a);
+  line-height: 0.84;
+  letter-spacing: -0.045em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--brand-narrative);
+}
+.helios-v2-split-stat__note-a,
+.helios-v2-split-stat__note-b {
+  margin: 0;
+  font-family: var(--font-body, Roboto), 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-weight: 500;
+  font-size: 34px;
+  line-height: 1.2;
+  text-wrap: balance;
+  color: var(--brand-narrative-muted);
+}
+.helios-v2-split-stat__note-a {
+  max-height: 124px;
+  padding-bottom: 8px;
+  align-self: end;
+}
+
+/* Second count */
+.helios-v2-split-stat__second {
+  position: absolute;
+  left: 0;
+  top: 366px;
+  width: 888px;
+  height: 440px;
+}
+.helios-v2-split-stat__num-b {
+  position: absolute;
+  left: -6px;
+  top: 40px;
+  margin: 0;
+  width: 924px;
+  max-height: 460px;
+  font-family: var(--v2-split-display);
+  font-weight: 700;
+  font-size: var(--v2-split-b);
+  line-height: 0.84;
+  letter-spacing: -0.045em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--brand-hook);
+}
+.helios-v2-split-stat__note-b {
+  position: absolute;
+  left: 0;
+  top: 358px;
+  width: 640px;
+  max-height: 84px;
+}
+
+/* On the orange canvas the hook cannot be orange: set it as the hook chip does, orange on an ink slab. */
+[data-canvas='orange'] .helios-v2-split-stat__second::before {
+  content: '';
+  position: absolute;
+  left: -96px;
+  top: 0;
+  width: 1080px;
+  height: 440px;
+  background: var(--brand-narrative);
+}
+[data-canvas='orange'] .helios-v2-split-stat__num-b,
+[data-canvas='orange'] .helios-v2-split-stat__note-b {
+  color: var(--brand-canvas);
+}
+
+/* Framing line and context, anchored to the foot */
+.helios-v2-split-stat__foot {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 888px;
+  height: 300px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 24px;
+}
+.helios-v2-split-stat__headline {
+  margin: 0;
+  max-height: 200px;
+  font-family: var(--v2-split-display);
+  font-weight: 700;
+  font-size: 92px;
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  color: var(--brand-narrative);
+}
+.helios-v2-split-stat__body {
+  margin: 0;
+  max-height: 116px;
+  font-family: var(--font-body, Roboto), 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-weight: 400;
+  font-size: 34px;
+  line-height: 1.3;
+  text-wrap: pretty;
+  color: var(--brand-narrative-muted);
+}

@@ -8,7 +8,8 @@ import { HubShell } from '@/components/hub-shell/HubShell';
 function isPublicClientDashboard(pathname: string) {
   return pathname.startsWith('/d/')
     || pathname.startsWith('/dashboards/d/')
-    || pathname.startsWith('/watch');
+    || pathname.startsWith('/watch')
+    || pathname.startsWith('/social/render/templates-review');
 }
 
 export function HubChrome({ children, email }: { children: ReactNode; email: string }) {
