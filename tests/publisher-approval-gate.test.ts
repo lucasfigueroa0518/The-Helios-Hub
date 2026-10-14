@@ -14,8 +14,8 @@ import { PGlite } from '@electric-sql/pglite';
 
 import type { Queryable } from '@/lib/explainers/db';
 import { explainerItemId, spineOf } from '@/lib/explainers/publish/items';
-import { releaseDueSchedules as releaseExplainers } from '@/lib/explainers/publish/schedule';
-import { saveFeedback } from '@/lib/explainers/repository';
+import { NOT_APPROVED_NOTE as EXPLAINER_NOT_APPROVED, releaseDueSchedules as releaseExplainers } from '@/lib/explainers/publish/schedule';
+import { REJECTED_SLOT_NOTE, saveFeedback } from '@/lib/explainers/repository';
 import { reelItemId } from '@/lib/reels/publish/items';
 import {
   NOT_APPROVED_NOTE as REEL_NOT_APPROVED,
@@ -171,22 +171,36 @@ const explainerSlot = async (db: Queryable) =>
 const explainerAttempts = async (db: Queryable) =>
   Number((await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM social_hub.publish_attempts`)).rows[0]!.n);
 
-test('explainers: a due slot nobody approved never becomes a publish attempt', async () => {
+test('explainers: a due slot nobody approved is cancelled and never queued (B3)', async () => {
   const { db } = await scratchExplainersDb();
   await dueExplainerSlot(db, await explainerRender(db, null));
   assert.equal(await releaseExplainers(db), 0);
+  const slot = await explainerSlot(db);
+  assert.deepEqual([slot.status, slot.error], ['cancelled', EXPLAINER_NOT_APPROVED]);
   assert.equal(await explainerAttempts(db), 0);
-  assert.ok(!['publishing', 'published'].includes((await explainerSlot(db)).status));
 });
 
-test('explainers: a slot rejected on the review page only (spine still approved, D41) never becomes a publish attempt', async () => {
+test('explainers: a slot rejected on the review page only (spine still approved, D41) is cancelled, never queued (Review Focus 2)', async () => {
   const { db } = await scratchExplainersDb();
   const jobId = await explainerRender(db, 'approved');
   await dueExplainerSlot(db, jobId);
   await db.query(`UPDATE explainers.feedback SET verdict = 'rejected' WHERE job_id = $1`, [jobId]);
   assert.equal(await releaseExplainers(db), 0);
+  const slot = await explainerSlot(db);
+  assert.deepEqual([slot.status, slot.error], ['cancelled', REJECTED_SLOT_NOTE]);
   assert.equal(await explainerAttempts(db), 0);
-  assert.ok(!['publishing', 'published'].includes((await explainerSlot(db)).status));
+});
+
+test('explainers: an approved due slot is still released; with require_approval off an unreviewed one is too', async () => {
+  const { db } = await scratchExplainersDb();
+  await dueExplainerSlot(db, await explainerRender(db, 'approved'));
+  assert.equal(await releaseExplainers(db), 1);
+  assert.equal(await explainerAttempts(db), 1);
+
+  const off = (await scratchExplainersDb()).db;
+  await off.query(`UPDATE explainers.settings SET value = 'false'::jsonb WHERE key = 'require_approval'`);
+  await dueExplainerSlot(off, await explainerRender(off, null));
+  assert.equal(await releaseExplainers(off), 1);
 });
 
 // ── Stories ─────────────────────────────────────────────────────────────────

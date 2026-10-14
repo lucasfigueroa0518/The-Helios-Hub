@@ -2,7 +2,7 @@ import type { Queryable } from '@/lib/explainers/db';
 import { calendarDateKey } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { chooseFromWindows, slotTakenKey, uniformIndex } from '@/lib/instagram/window';
-import { POOL_ORDER_BY } from '@/lib/explainers/repository';
+import { POOL_ORDER_BY, REJECTED_SLOT_NOTE } from '@/lib/explainers/repository';
 import { bookSlot } from '@/lib/social-hub/spine';
 
 import { DEFAULT_POSTS_PER_DAY, EXPLAINER_WINDOWS } from './config';
@@ -157,16 +157,40 @@ export async function fillCandidates(db: Queryable, approvalNeeded: boolean): Pr
   return rows.map((r) => ({ topicId: r.topic_id, title: r.title, jobId: r.job_id }));
 }
 
-/** Due slots become publish attempts. A failing readiness check fails the slot, with the reason. */
+/** The note on a slot cancelled because nobody approved its render in time (B3; carousels and reels say the same). */
+export const NOT_APPROVED_NOTE = 'Nobody approved this explainer before its slot, so it was not posted.';
+
+/**
+ * Due slots become publish attempts (B3, like carousels and reels): a
+ * rejected render's slot is cancelled (a rejection in either place wins,
+ * D41); with require_approval on (the default), so is one nobody approved.
+ * Only the rest reach queuePublish, whose readiness check stays as a second
+ * guard and fails the slot, with the reason.
+ */
 export async function releaseDueSchedules(db: Queryable): Promise<number> {
-  const { rows } = await db.query<{ id: string; job_id: string; source: string }>(
-    `SELECT s.id, ci.native_ref AS job_id, s.source
-       FROM social_hub.schedule s JOIN social_hub.content_items ci ON ci.id = s.content_item_id
+  const { rows } = await db.query<{ id: string; job_id: string; source: string; decision: string | null }>(
+    `SELECT s.id, ci.native_ref AS job_id, s.source,
+            CASE WHEN f.verdict = 'rejected' OR ap.decision = 'rejected' THEN 'rejected' ELSE ap.decision END AS decision
+       FROM social_hub.schedule s
+       JOIN social_hub.content_items ci ON ci.id = s.content_item_id
+       LEFT JOIN social_hub.approvals ap ON ap.content_item_id = ci.id
+       LEFT JOIN explainers.feedback f ON f.job_id::text = ci.native_ref
       WHERE s.vertical = 'explainers' AND s.status = 'scheduled' AND s.publish_at <= now()
       ORDER BY s.publish_at`,
   );
+  const cancel = (id: string, note: string) =>
+    db.query(`UPDATE social_hub.schedule SET status = 'cancelled', error = $2 WHERE id = $1 AND status = 'scheduled'`, [id, note]);
+  const approvalNeeded = rows.some((row) => row.decision !== 'approved') && (await requireApproval(db));
   let released = 0;
   for (const row of rows) {
+    if (row.decision === 'rejected') {
+      await cancel(row.id, REJECTED_SLOT_NOTE);
+      continue;
+    }
+    if (approvalNeeded && row.decision !== 'approved') {
+      await cancel(row.id, NOT_APPROVED_NOTE);
+      continue;
+    }
     const claimed = await db.query(
       `UPDATE social_hub.schedule SET status = 'publishing' WHERE id = $1 AND status = 'scheduled' RETURNING id`,
       [row.id],
