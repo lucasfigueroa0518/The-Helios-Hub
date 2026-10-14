@@ -35,7 +35,7 @@ export function RangeControls({ params }: { params: CostParams }) {
           {RANGES.map((r) => (
             <HubLink key={r.id} href={hrefWith(r.changes)} history="replace" aria-current={current(params.range === r.id)} onClick={() => setCustom(false)}>{r.label}</HubLink>
           ))}
-          <button type="button" aria-expanded={custom} aria-pressed={params.range === 'custom' || custom} onClick={() => setCustom((c) => !c)}>Custom</button>
+          <button type="button" aria-expanded={custom} aria-pressed={params.range === 'custom'} onClick={() => setCustom((c) => !c)}>Custom</button>
         </nav>
         <nav className="sh-ops-seg" aria-label="Mode">
           <HubLink href={hrefWith({ mode: null })} history="replace" aria-current={current(params.mode === 'production')}>Production</HubLink>

@@ -44,7 +44,7 @@ export function WorthDrill({ byType, posts, base }: { byType: WorthModel['byType
           >
             <span className="sh-cost-list__name">
               <i className="sh-ops-mark" style={{ background: `var(${verticalInfo(t.vertical).colorVar})` }} aria-hidden />
-              {t.label} <span className="sh-ops-meta">· {t.interactions.toLocaleString('en-US')} {t.vertical === 'stories' ? 'replies + taps' : 'interactions'}</span>
+              {t.label} <span className="sh-ops-meta">· {t.interactions.toLocaleString('en-US')} {t.vertical === 'stories' ? 'replies, shares, follows, profile visits' : 'interactions'}</span>
             </span>
             <span className="sh-ops-num">{perUnit(t.cpiMicros)}</span>
           </button>

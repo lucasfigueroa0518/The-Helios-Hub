@@ -6,6 +6,8 @@ import { parseCostParams } from '@/lib/social-hub/cost-page/load';
 import { costModel, dailySeries, hoverCompare, pace, spikeDrivers } from '@/lib/social-hub/cost-page/model';
 import { stageOf, vendorOf } from '@/lib/social-hub/cost-page/normalize';
 import type { CostRow } from '@/lib/social-hub/cost-page/rows';
+import { scopedItems, scopedMonthTotals, scopedSpend, scopedUnattributed } from '@/lib/social-hub/cost-page/scope';
+import type { CostLedger } from '@/lib/social-hub/cost';
 import { classifyWaste } from '@/lib/social-hub/cost-page/waste';
 
 import { previewCost } from './fixtures/social-hub/cost-fixture';
@@ -174,4 +176,57 @@ test('cost params: defaults to this month, production, all types; custom needs v
   assert.equal(parseCostParams(new URLSearchParams('range=custom&from=2026-09-01&to=2026-09-30'), now).to, '2026-09-30');
   assert.equal(parseCostParams(new URLSearchParams('range=custom&from=nope'), now).range, 'month');
   assert.equal(parseCostParams(new URLSearchParams('type=carousels&mode=development'), now).vertical, 'carousels');
+});
+
+test('waste chip: equal percentages read "same as last month"; otherwise down or up', () => {
+  const base = previewCost();
+  const spend = 91_900_000;
+  const chip = (prevWastePct: number, wasteMicros: number) => costModel({ ...base, prevWastePct, waste: { rejected: wasteMicros, failed: 0, expired: 0, selection: 0, spend } }).chips.find((c) => c.id === 'waste')!.text;
+  assert.equal(chip(21, Math.round(spend * 0.21)), 'Waste 21%, same as last month');
+  assert.equal(chip(30, Math.round(spend * 0.21)), 'Waste 21%, down from 30%');
+  assert.equal(chip(10, Math.round(spend * 0.21)), 'Waste 21%, up from 10%');
+});
+
+test('cost scope: items, unattributed spend, spend and months follow the type and mode filters', () => {
+  const ledger: CostLedger = {
+    rows: [
+      { id: 'r1', vertical: 'carousels', nyDate: '2026-10-02', micros: 3, target: { kind: 'item', item: 'carousels:a' }, label: 'w', mode: 'production' },
+      { id: 'r2', vertical: 'reels', nyDate: '2026-10-02', micros: 5, target: { kind: 'item', item: 'reels:b' }, label: 'w', mode: 'production' },
+      { id: 'r3', vertical: 'carousels', nyDate: '2026-10-03', micros: 7, target: { kind: 'item', item: 'carousels:c' }, label: 'w', mode: 'development' },
+      { id: 'r4', vertical: 'carousels', nyDate: '2026-09-28', micros: 2, target: { kind: 'item', item: 'carousels:a' }, label: 'w' },
+      { id: 'r5', vertical: 'carousels', nyDate: '2026-10-04', micros: 11, target: { kind: 'pool', pool: 'p' }, label: 'w', mode: 'production' },
+      { id: 'r6', vertical: 'reels', nyDate: '2026-10-04', micros: 13, target: { kind: 'pool', pool: 'q' }, label: 'w', mode: 'production' },
+    ],
+    allocations: [
+      { rowId: 'r1', item: 'carousels:a', vertical: 'carousels', nyDate: '2026-10-02', micros: 3, direct: true },
+      { rowId: 'r2', item: 'reels:b', vertical: 'reels', nyDate: '2026-10-02', micros: 5, direct: true },
+      { rowId: 'r3', item: 'carousels:c', vertical: 'carousels', nyDate: '2026-10-03', micros: 7, direct: true },
+      { rowId: 'r4', item: 'carousels:a', vertical: 'carousels', nyDate: '2026-09-28', micros: 2, direct: true },
+    ],
+    unattributed: [
+      { rowId: 'r5', vertical: 'carousels', nyDate: '2026-10-04', micros: 11, label: 'w' },
+      { rowId: 'r6', vertical: 'reels', nyDate: '2026-10-04', micros: 13, label: 'w' },
+    ],
+  };
+  const carProd = { vertical: 'carousels' as const, mode: 'production' as const };
+  // carousels:a was first spent on in September (mode-less row counts as production), so October excludes it.
+  assert.deepEqual([...scopedItems(ledger, carProd, '2026-10-01', '2026-10-31').itemMicros], []);
+  assert.deepEqual([...scopedItems(ledger, carProd, '2026-09-01', '2026-10-31').itemMicros], [['carousels:a', 5]]);
+  assert.deepEqual([...scopedItems(ledger, { vertical: null, mode: 'production' }, '2026-10-01', '2026-10-31').itemMicros], [['reels:b', 5]]);
+  assert.deepEqual([...scopedItems(ledger, { vertical: 'carousels', mode: 'development' }, '2026-10-01', '2026-10-31').itemMicros], [['carousels:c', 7]]);
+  assert.equal(scopedUnattributed(ledger, carProd, '2026-10-01', '2026-10-31'), 11);
+  assert.equal(scopedUnattributed(ledger, { vertical: null, mode: 'production' }, '2026-10-01', '2026-10-31'), 24);
+  assert.equal(scopedUnattributed(ledger, { vertical: null, mode: 'development' }, '2026-10-01', '2026-10-31'), 0);
+
+  const rows = [
+    row('2026-09-30', 1_000_000, { vertical: 'carousels' }),
+    row('2026-10-01', 2_000_000, { vertical: 'carousels' }),
+    row('2026-10-01', 4_000_000, { vertical: 'reels' }),
+    row('2026-10-02', 8_000_000, { vertical: 'carousels', mode: 'development' }),
+  ];
+  assert.equal(scopedSpend(rows, carProd, '2026-10-01', '2026-10-31'), 2_000_000);
+  assert.equal(scopedSpend(rows, { vertical: null, mode: 'production' }, '2026-10-01', '2026-10-31'), 6_000_000);
+  assert.equal(scopedSpend(rows, { vertical: null, mode: 'development' }, '2026-10-01', '2026-10-31'), 8_000_000);
+  assert.deepEqual(scopedMonthTotals(rows, carProd), [{ month: '2026-09', micros: 1_000_000 }, { month: '2026-10', micros: 2_000_000 }]);
+  assert.deepEqual(scopedMonthTotals(rows, { vertical: null, mode: 'development' }), [{ month: '2026-10', micros: 8_000_000 }]);
 });

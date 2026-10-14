@@ -186,7 +186,10 @@ export function costModel(i: CostInput): CostModel {
   }
   if (streak >= 2) chips.push({ id: 'pace', text: `🔥 ${streak} days in a row under daily pace` });
   const pct = totalMicros > 0 ? Math.round((wasteMicros / totalMicros) * 100) : 0;
-  if (i.prevWastePct !== null) chips.push({ id: 'waste', text: `Waste ${pct}%, ${pct <= i.prevWastePct ? 'down' : 'up'} from ${i.prevWastePct}%` });
+  if (i.prevWastePct !== null) {
+    const text = pct === i.prevWastePct ? `Waste ${pct}%, same as last month` : `Waste ${pct}%, ${pct < i.prevWastePct ? 'down' : 'up'} from ${i.prevWastePct}%`;
+    chips.push({ id: 'waste', text });
+  }
 
   const months = i.monthTotals.slice(-3).map((m) => ({
     month: m.month,

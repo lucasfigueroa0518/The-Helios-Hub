@@ -1,7 +1,8 @@
-import { allocate, itemFirstDay, itemTotals } from '@/lib/social-hub/cost';
+import { allocate } from '@/lib/social-hub/cost';
 import { cacheSavings, readCacheRows } from '@/lib/social-hub/cost-page/caching';
 import { interactionsOf, type CostInput } from '@/lib/social-hub/cost-page/model';
 import { parseCostParams } from '@/lib/social-hub/cost-page/params';
+import { scopedItems, scopedMonthTotals, scopedSpend, scopedUnattributed } from '@/lib/social-hub/cost-page/scope';
 import { toCostRows, type CarouselStageSplit, type CarouselVendorSplit } from '@/lib/social-hub/cost-page/rows';
 import { classifyWaste, wasteSets } from '@/lib/social-hub/cost-page/waste';
 import { explainersHubQuery, liveHubQuery, type HubQuery } from '@/lib/social-hub/db';
@@ -73,29 +74,19 @@ export async function loadCostPage(email: string, params: Params, now: Date): Pr
     const loaded = await loadForPage(email);
     const posts = 'error' in loaded ? [] : loaded.posts;
     const sets = await wasteSets(liveHubQuery, eq);
-    const totals = itemTotals(ledger);
-    const firstDay = itemFirstDay(ledger);
-    const itemsBetween = (from: string, to: string) => new Map([...totals].filter(([k]) => {
-      const d = firstDay.get(k);
-      return d !== undefined && d >= from && d <= to;
-    }));
-    const spendBetween = (mode: 'production' | 'development', from: string, to: string) =>
-      cRows.filter((r) => r.mode === mode && r.nyDate >= from && r.nyDate <= to).reduce((n, r) => n + r.micros, 0);
+    const scope = { vertical: p.vertical, mode: p.mode };
 
-    const spendMicros = spendBetween(p.mode, p.from, p.to);
+    const spendMicros = scopedSpend(cRows, scope, p.from, p.to);
     const published = new Set(posts.filter((x) => x.status === 'published' && x.costItemKey).map((x) => x.costItemKey!));
     const inFlight = new Set(posts.filter((x) => ['ready', 'scheduled', 'publishing', 'generating'].includes(x.status) && x.costItemKey).map((x) => x.costItemKey!));
-    const unattributed = ledger.unattributed.filter((u) => u.nyDate >= p.from && u.nyDate <= p.to).reduce((n, u) => n + u.micros, 0);
-    const waste = classifyWaste({ itemMicros: itemsBetween(p.from, p.to), firstDay, published, inFlight, unattributedMicros: unattributed, now, spendMicros, ...sets });
+    const inRange = scopedItems(ledger, scope, p.from, p.to);
+    const waste = classifyWaste({ ...inRange, published, inFlight, unattributedMicros: scopedUnattributed(ledger, scope, p.from, p.to), now, spendMicros, ...sets });
 
     const prevTo = addDays(p.from, -1);
     const prevFrom = `${prevTo.slice(0, 7)}-01`;
-    const prevSpend = spendBetween('production', prevFrom, prevTo);
-    const prevWaste = classifyWaste({ itemMicros: itemsBetween(prevFrom, prevTo), firstDay, published, inFlight: new Set(), unattributedMicros: 0, now, spendMicros: prevSpend, ...sets });
+    const prevSpend = scopedSpend(cRows, scope, prevFrom, prevTo);
+    const prevWaste = classifyWaste({ ...scopedItems(ledger, scope, prevFrom, prevTo), published, inFlight: new Set(), unattributedMicros: 0, now, spendMicros: prevSpend, ...sets });
     const prevWastePct = prevSpend > 0 ? Math.round(((prevWaste.rejected + prevWaste.failed + prevWaste.expired) / prevSpend) * 100) : null;
-
-    const months = new Map<string, number>();
-    for (const r of cRows) if (r.mode === 'production') months.set(r.nyDate.slice(0, 7), (months.get(r.nyDate.slice(0, 7)) ?? 0) + r.micros);
 
     const bestEverCpi: Partial<Record<Vertical, number>> = {};
     for (const v of VERTICAL_IDS) {
@@ -114,7 +105,7 @@ export async function loadCostPage(email: string, params: Params, now: Date): Pr
     return {
       rows: cRows, from: p.from, to: p.to, now, vertical: p.vertical, mode: p.mode, watchUsd: await watches(eq, p.to), posts, waste, prevWastePct,
       readiness: await readinessFor(liveHubQuery, now), caching,
-      monthTotals: [...months.entries()].sort().map(([month, micros]) => ({ month, micros })), bestEverCpi,
+      monthTotals: scopedMonthTotals(cRows, scope), bestEverCpi,
     };
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) };

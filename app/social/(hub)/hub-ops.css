@@ -289,8 +289,13 @@
 .sh-cost-chartsec .sh-ops-sechead { margin-bottom: 12px; flex-wrap: wrap; }
 .sh-cost-chart { display: block; overflow: visible; }
 .sh-cost-grid { stroke: var(--color-surface-2); }
-.sh-cost-axis { fill: var(--color-text-subtle); font-size: 12px; font-variant-numeric: tabular-nums; }
-.sh-cost-day { cursor: pointer; outline: none; transition: opacity 200ms var(--sh-ease); }
+.sh-cost-scroll { overflow-x: auto; }
+.sh-cost-plot { position: relative; min-width: 520px; }
+.sh-cost-labels { position: absolute; inset: 0; pointer-events: none; }
+.sh-cost-axis { position: absolute; color: var(--color-text-subtle); font-size: 12px; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sh-cost-axis.is-y { left: 0; transform: translateY(-50%); }
+.sh-cost-axis.is-x { bottom: 2px; transform: translateX(-50%); }
+.sh-cost-day { cursor: pointer; outline: none; }
 .sh-cost-day.is-dim { opacity: 0.35; }
 .sh-cost-day:focus-visible rect[data-j] { stroke: var(--sh-focus); stroke-width: 2px; }
 .sh-cost-bar { transform-box: fill-box; transform-origin: bottom; }
@@ -412,6 +417,7 @@
   .sh-ops-ck__wipe { animation: sh-ops-wipe 600ms 900ms var(--sh-ease) both; }
   .sh-ops-ring svg { animation: sh-ops-fade 600ms var(--sh-ease) both; }
   .sh-cost-bar { animation: sh-ops-grow 600ms var(--sh-ease) both; }
+  .sh-cost-day { transition: opacity 200ms var(--sh-ease); }
   .sh-cost-pace__fill, .sh-cost-mini i, .sh-cost-rej__t i { animation: sh-cost-gx 900ms 200ms var(--sh-ease) both; }
   .sh-cost-wbar > div { animation: sh-ops-fade 600ms 200ms var(--sh-ease) both; }
   .sh-cost-spike { animation: sh-ops-rise 260ms var(--sh-ease) both; }

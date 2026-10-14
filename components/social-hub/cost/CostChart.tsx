@@ -40,13 +40,15 @@ type Hover = { i: number; j: number | null; x: number; y: number; on: boolean };
  */
 export function CostChart({ series, rows, base }: { series: Record<By, Series>; rows: CostRow[]; base: string }) {
   const [by, setBy] = useState<By>('type');
-  const [sel, setSel] = useState<number | null>(null);
+  const [picked, setSel] = useState<number | null>(null);
   const [hover, setHover] = useState<Hover | null>(null);
   const tipRef = useRef<HTMLDivElement>(null);
   const tipId = useId();
   const s = series[by];
   const idx = useMemo(() => s.days.map((_, i) => i).slice(s.lead), [s]);
   const totals = useMemo(() => s.values.map((d) => d.reduce((a, b) => a + b, 0)), [s]);
+  // A selection only counts while it points at a rendered day (the range can change under it).
+  const sel = picked !== null && picked >= s.lead && picked < s.days.length ? picked : null;
 
   const maxUsd = Math.max(1, ...idx.map((i) => totals[i]! / 1e6));
   const step = niceStep(maxUsd);
@@ -88,7 +90,7 @@ export function CostChart({ series, rows, base }: { series: Record<By, Series>; 
     const r = e.currentTarget.getBoundingClientRect();
     setHover({ i, j: null, x: r.right, y: r.top + r.height / 2, on: true });
   };
-  const toggle = (i: number) => setSel((cur) => (cur === i ? null : i));
+  const toggle = (i: number) => setSel(sel === i ? null : i);
   const onKey = (i: number) => (e: KeyboardEvent<SVGGElement>) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
@@ -96,8 +98,9 @@ export function CostChart({ series, rows, base }: { series: Record<By, Series>; 
     }
   };
 
-  const h = hover ? hoverCompare(s, hover.i) : null;
-  const prev = hover ? totals.slice(Math.max(0, hover.i - 7), hover.i) : [];
+  const hv = hover && hover.i >= s.lead && hover.i < s.days.length ? hover : null;
+  const h = hv ? hoverCompare(s, hv.i) : null;
+  const prev = hv ? totals.slice(Math.max(0, hv.i - 7), hv.i) : [];
   const prevAvg = prev.length ? prev.reduce((a, b) => a + b, 0) / prev.length : 0;
   const drivers = sel !== null ? spikeDrivers(rows, s.days[sel]!, s.days) : [];
   const driverMax = Math.max(1, ...drivers.map((d) => d.micros));
@@ -116,12 +119,11 @@ export function CostChart({ series, rows, base }: { series: Record<By, Series>; 
         <span className="sh-ops-meta">Click a bar to see what drove it</span>
       </div>
       <div className="sh-cost-panel">
+        <div className="sh-cost-scroll">
+        <div className="sh-cost-plot">
         <svg key={by} className="sh-cost-chart" viewBox={`0 0 ${W} ${H}`} width="100%" role="group" aria-label={`Daily spend, ${BYS.find((b) => b.id === by)!.label.toLowerCase()}`} onMouseLeave={hide}>
           {Array.from({ length: Math.round(top / step) + 1 }, (_, k) => k * step).map((v) => (
-            <g key={v} aria-hidden>
-              <line x1={PAD_L} x2={W} y1={y(v)} y2={y(v)} className="sh-cost-grid" />
-              <text x={0} y={y(v) + 4} className="sh-cost-axis">${v}</text>
-            </g>
+            <line key={v} x1={PAD_L} x2={W} y1={y(v)} y2={y(v)} className="sh-cost-grid" aria-hidden />
           ))}
           {idx.map((i, n) => {
             const x = PAD_L + n * slot + (slot - bw) / 2;
@@ -164,11 +166,21 @@ export function CostChart({ series, rows, base }: { series: Record<By, Series>; 
                     />
                   );
                 })}
-                {n % labelEvery === 0 && <text x={x + bw / 2} y={H - 8} textAnchor="middle" className="sh-cost-axis" aria-hidden>{Number(day.slice(8))}</text>}
               </g>
             );
           })}
         </svg>
+        {/* Axis labels are HTML over the plot so they stay 12px however small the chart scales. */}
+        <div className="sh-cost-labels" aria-hidden>
+          {Array.from({ length: Math.round(top / step) + 1 }, (_, k) => k * step).map((v) => (
+            <span key={`y${v}`} className="sh-cost-axis is-y" style={{ top: `${(y(v) / H) * 100}%` }}>${v}</span>
+          ))}
+          {idx.map((i, n) => (n % labelEvery === 0 ? (
+            <span key={s.days[i]} className="sh-cost-axis is-x" style={{ left: `${((PAD_L + n * slot + slot / 2) / W) * 100}%` }}>{Number(s.days[i]!.slice(8))}</span>
+          ) : null))}
+        </div>
+        </div>
+        </div>
         <ul className="sh-cost-legend" aria-label="Legend">
           {s.keys.filter((_, j) => idx.some((i) => s.values[i]![j]! > 0)).map((k) => <li key={k.id}><i style={{ background: k.color }} aria-hidden />{k.label}</li>)}
         </ul>
@@ -197,11 +209,11 @@ export function CostChart({ series, rows, base }: { series: Record<By, Series>; 
       )}
 
       <div ref={tipRef} id={tipId} role="tooltip" className={`sh-ops-tip sh-cost-tip${on ? ' is-on' : ''}`} aria-hidden={!on}>
-        {hover && h ? (
+        {hv && h ? (
           <>
-            <div className="sh-ops-tip__hd"><span>{shortDay(s.days[hover.i]!)}</span><span className="sh-ops-num">{money(h.total.micros, 1)}</span></div>
+            <div className="sh-ops-tip__hd"><span>{shortDay(s.days[hv.i]!)}</span><span className="sh-ops-num">{money(h.total.micros, 1)}</span></div>
             {h.parts.map((p, j) => (p.micros === 0 && p.change === 'same' ? null : (
-              <div key={s.keys[j]!.id} className={`sh-cost-tip__r${hover.j === j ? ' is-hot' : ''}`}>
+              <div key={s.keys[j]!.id} className={`sh-cost-tip__r${hv.j === j ? ' is-hot' : ''}`}>
                 <i style={{ background: s.keys[j]!.color }} aria-hidden />
                 <span>{p.label}</span>
                 <span className="sh-ops-num">{money(p.micros, 1)}</span>

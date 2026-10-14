@@ -64,11 +64,13 @@ export function CostScreen({ model, params, posts, base }: { model: CostModel; p
       && (!params.vertical || p.vertical === params.vertical))
     .map((p) => ({ id: p.id, vertical: p.vertical, name: p.name, costMicros: p.costMicros!, metrics: p.metrics }));
   const wasteDelta = model.waste.prevPct === null ? null : model.waste.prevPct - model.waste.pct;
+  // Same-route navigation keeps client state; a new filter key remounts the client parts so nothing points at a stale day or type.
+  const viewKey = `${params.range}|${params.from}|${params.to}|${params.vertical ?? ''}|${params.mode}`;
   const rejection = [...model.rejection].sort((a, b) => (a.rate ?? Infinity) - (b.rate ?? Infinity));
 
   return (
     <div className="sh-ops sh-cost">
-      <RangeControls params={params} />
+      <RangeControls key={`ctrls|${viewKey}`} params={params} />
 
       <header className="sh-ops-hero">
         <p className="sh-ops-eyebrow">{eyebrow(params, model.monthClosed)}</p>
@@ -105,7 +107,7 @@ export function CostScreen({ model, params, posts, base }: { model: CostModel; p
         )}
       </header>
 
-      <CostChart series={model.series} rows={model.historyRows} base={base} />
+      <CostChart key={`chart|${viewKey}`} series={model.series} rows={model.historyRows} base={base} />
 
       <section aria-labelledby="h-budget">
         <div className="sh-ops-sechead is-start">
@@ -143,7 +145,7 @@ export function CostScreen({ model, params, posts, base }: { model: CostModel; p
           <InfoPop title="Worth">What it cost to make the posts published in this range, divided by their interactions. Stories count replies, shares, follows and profile visits; the other types count total interactions.</InfoPop>
         </div>
         <p className="sh-ops-sub">What each interaction costs. Click a type for the breakdown by kind, then see its posts ranked by cost.</p>
-        <WorthDrill byType={model.worth.byType} posts={worthPosts} base={base} />
+        <WorthDrill key={`worth|${viewKey}`} byType={model.worth.byType} posts={worthPosts} base={base} />
         {best && (
           <div className="sh-cost-best">
             <Thumb post={best.post} size="lg" />
