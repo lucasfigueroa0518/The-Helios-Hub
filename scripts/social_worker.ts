@@ -89,6 +89,10 @@ async function main(): Promise<void> {
   const nextRun = () => nextRunAt(new Date(), cfg.SOCIAL_RUN_HOUR_LOCAL, cfg.SOCIAL_RUN_MINUTE_LOCAL);
   const nextSweep = () => nextRunAt(new Date(), cfg.SOCIAL_INSIGHTS_HOUR_LOCAL, cfg.SOCIAL_INSIGHTS_MINUTE_LOCAL);
   const nextHubSweep = () => nextRunAt(new Date(), cfg.HUB_SWEEP_HOUR_LOCAL, cfg.HUB_SWEEP_MINUTE_LOCAL);
+  const nextHealthReport = () => nextRunAt(new Date(), cfg.HEALTH_REPORT_HOUR_LOCAL, cfg.HEALTH_REPORT_MINUTE_LOCAL);
+  const health = await import('@/lib/social-hub/health/job');
+  const { explainersHubQuery } = await import('@/lib/social-hub/db');
+  const { readPosting } = await import('@/lib/content-type/posting');
 
   /** Account sweep for the Social Hub; `id` is the refresh row it reports into. */
   async function hubSweep(id: string, withPostPolls: boolean): Promise<void> {
@@ -192,6 +196,7 @@ async function main(): Promise<void> {
     let runAt = nextRun();
     let sweepAt = nextSweep();
     let hubSweepAt = nextHubSweep();
+    let healthAt = nextHealthReport();
     let lastInsights = 0;
     let lastRerunError: string | null = null;
     log('scheduled', { nextRunAt: runAt.toISOString(), nextInsightsAt: sweepAt.toISOString(), pollMs: POLL_MS });
@@ -228,6 +233,15 @@ async function main(): Promise<void> {
           if (id) await hubSweep(id, false);
         }
         hubSweepAt = nextHubSweep();
+        continue;
+      }
+
+      if (Date.now() >= healthAt.getTime()) {
+        await health
+          .runMorningReport({ q: query, explainersQ: explainersHubQuery, posting: (v) => readPosting(v) }, new Date())
+          .then((r) => log('health_report_complete', r))
+          .catch((error) => log('health_report_failed', { error: errorText(error) }));
+        healthAt = nextHealthReport();
         continue;
       }
 
