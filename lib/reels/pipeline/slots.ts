@@ -191,7 +191,8 @@ export async function generatePassingReels(input: {
 
   if (tonight.promote && promoteId) {
     const made = filled.some((slot) => slot.postIdeaId === promoteId);
-    const why = outcomes.has(promoteId) ? REEL_SKIP.missed : REEL_SKIP.full;
+    const tried = outcomes.get(promoteId);
+    const why = !tried ? REEL_SKIP.full : tried.judged ? REEL_SKIP.missed : REEL_SKIP.notWritten;
     if (made) await markPromoteUsed(reelsMovesQuery, 'reels', tonight.promote.ideaId);
     else await recordPromoteSkip(reelsMovesQuery, 'reels', tonight.promote.ideaId, why);
     console.info(`[reels] tonight's promote ${promoteId}: ${made ? 'made' : `skipped (${why})`}`);

@@ -152,12 +152,21 @@ export async function fillSlots(input: {
     else passingGeneral += 1;
   }
 
+  // The promote leads only until it has been attempted; after a miss it sinks like any penalized idea, so it never
+  // gets a second full attempt in a later slot.
+  let promoteAttempted = false;
+  const attempt: typeof input.attempt = (idea, rewrite) => {
+    if (idea.id === input.moves?.promote) promoteAttempted = true;
+    return input.attempt(idea, rewrite);
+  };
+  const liveMoves = (): SlotMoves | undefined => (input.moves && promoteAttempted ? { ...input.moves, promote: null } : input.moves);
+
   const pool = (mode: 'reserved' | 'general', tried: ReadonlySet<string>): SlotIdea[] => {
-    const available = orderedForSlots(input.ideas, penaltyOf, input.moves).filter(
+    const available = orderedForSlots(input.ideas, penaltyOf, liveMoves()).filter(
       (idea) => !used.has(idea.id) && !tried.has(idea.id),
     );
     // Shared queue (Q4): tonight's promoted idea leads either pool, in the knowledge lane or not.
-    const promoted = input.moves?.promote ? available.find((idea) => idea.id === input.moves!.promote) : undefined;
+    const promoted = liveMoves()?.promote ? available.find((idea) => idea.id === input.moves!.promote) : undefined;
     const first = (list: SlotIdea[]) => (promoted ? [promoted, ...list.filter((idea) => idea !== promoted)] : list);
     if (mode === 'reserved') {
       const lane = available.filter(inKnowledgeLane);
@@ -189,7 +198,7 @@ export async function fillSlots(input: {
       if (!idea) return null;
       if (input.reusable?.has(idea.id)) return reuse(slot, idea);
       tried.add(idea.id);
-      const result = await input.attempt(idea, opener);
+      const result = await attempt(idea, opener);
       opener = false;
       // A promoted idea outside the lane that misses falls through like a general idea (penalized, never shipped
       // on its best line); the lane idea after it opens fresh.
@@ -221,7 +230,7 @@ export async function fillSlots(input: {
       const idea = pool('general', triedIds())[0];
       if (!idea) break;
       if (input.reusable?.has(idea.id)) return reuse(slot, idea);
-      const result = await input.attempt(idea, index === 0);
+      const result = await attempt(idea, index === 0);
       tried.push({ idea, lines: result.lines });
       if (result.passed) {
         passed = idea;

@@ -11,10 +11,11 @@ import type { MovesQuery } from '@/lib/social-hub/moves-store';
 export const reelsMovesQuery: MovesQuery = (text, params) => dbQuery(text, params);
 
 /** Why tonight's promoted reel wasn't made (shown on the page as “Can’t be made: …”). */
-export const REEL_SKIP: Record<HeldOutReason | 'gone' | 'placed' | 'missed' | 'full', string> = {
+export const REEL_SKIP: Record<HeldOutReason | 'gone' | 'placed' | 'missed' | 'notWritten' | 'full', string> = {
   gone: 'It isn’t in the reels pool any more.',
   placed: 'A person already put it on the calendar.',
   missed: 'Its copy missed the bar tonight.',
+  notWritten: 'Its copy could not be written tonight.',
   full: 'Tonight’s reels were already locked.',
   already_published: 'This story already posted.',
   published_url: 'This story already posted.',

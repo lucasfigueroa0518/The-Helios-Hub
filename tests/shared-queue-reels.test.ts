@@ -186,3 +186,11 @@ test('step aside in the same run: two promotes, the older one gone: it gets a sk
   assert.deepEqual(await moveRow(pg, R.OLD), { used: true, skip_reason: null });
   assert.ok(await onToday(pg, R.OLD));
 });
+
+test('a promote that misses slot 1 sinks: it is not attempted first in slot 2, and only one slot’s worth of attempts is spent on it', async () => {
+  const ideas = [idea('know', 5, 'identity', 'ball_knowledge'), idea('saga', 4, 'arousal', 'the_saga'), idea('low', 1, 'arousal', 'the_warning')];
+  const r = recorder((id) => (id === 'low' ? miss(id) : pass(id)));
+  const filled = await fillSlots({ ideas, locks: [], count: 2, penalties: new Map(), attempt: r.attempt, onPenalty: () => undefined, onFallback: () => undefined, moves: { promote: 'low', demoted: new Set() } });
+  assert.deepEqual(filled.map((s) => [s.slot, s.postIdeaId]), [[1, 'know'], [2, 'saga']]);
+  assert.deepEqual(r.tried.map(([id]) => id), ['low', 'know', 'saga']);
+});
