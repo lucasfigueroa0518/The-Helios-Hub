@@ -156,6 +156,18 @@ export async function recentUsedPhotoUrls(db: Queryable, now: Date, days = 7): P
   return new Set(rows.map((r) => r.url));
 }
 
+/** Photos used in the last `days`, each with the stories that used it (story_id), so a story's own photo isn't held against it. */
+export async function recentPhotoUses(db: Queryable, now: Date, days = 7): Promise<Map<string, Set<string>>> {
+  const { rows } = await db.query<{ url: string; story_id: string | null }>(`SELECT DISTINCT url, story_id FROM social.used_photos WHERE used_at > $1::timestamptz - make_interval(days => $2)`, [now.toISOString(), days]);
+  const out = new Map<string, Set<string>>();
+  for (const r of rows) {
+    const set = out.get(r.url) ?? new Set<string>();
+    set.add(r.story_id ?? '');
+    out.set(r.url, set);
+  }
+  return out;
+}
+
 /** The one write into Tommy's tables (plan rule 6): a photo Stories actually published. */
 export async function recordPublishedPhoto(
   db: Queryable,

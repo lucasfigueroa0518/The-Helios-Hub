@@ -46,7 +46,8 @@ export type Scored = { cand: Candidate; tags: TileTag | null; fit: number | null
 /** What the slide says, for Jev's slide-fit check. Absent (tests): no Jev check. */
 export type PickWords = { position: number; headline: string; body: string };
 
-export type PickInput = { slot: PickSlot; requests: Array<{ request: VisualRequest; scored: Scored[] }>; words?: PickWords };
+/** `slideFitMin`: this pick's own photo-slide fit bar (the icon scene's); absent: tuning().slideFitMin. */
+export type PickInput = { slot: PickSlot; requests: Array<{ request: VisualRequest; scored: Scored[] }>; words?: PickWords; slideFitMin?: number };
 
 /** What a picked photo shows, in words, for the repeat check. */
 export const describeCandidate = (c: Candidate, tags: TileTag | null): string =>
@@ -92,9 +93,15 @@ async function closeUp(c: Candidate, request: VisualRequest, vision: VisionCheck
     return { ok: seen, usd: 0 };
   }
   const v = await vision({ url: c.url, scene: request.query, subjects, title: c.title || undefined, ...(story ? { story } : {}) });
-  const ok = v.ok && passesVision(v.verdict, tuning().vision);
-  steps.push(v.ok ? `close-up "${c.title.slice(0, 40)}": ${describeVerdict(v.verdict)} → ${ok ? 'PASS' : 'fail'} ($${v.costUsd.toFixed(4)})` : `close-up "${c.title.slice(0, 40)}": error (${v.error}) → not used`);
-  if (v.ok) state.closeUps.set(key, ok);
+  if (!v.ok) {
+    // A photo that won't load can't be shown. A model error says nothing about the photo, which already passed
+    // the fit and slide checks, so it goes on unchecked (2026-10-13: a Grok logo, best 0.91, was lost to one).
+    steps.push(`close-up "${c.title.slice(0, 40)}": error (${v.error}) → ${v.photo ? 'not used' : 'unchecked, used'}`);
+    return { ok: !v.photo, usd: v.costUsd };
+  }
+  const ok = passesVision(v.verdict, tuning().vision, request.kind);
+  steps.push(`close-up "${c.title.slice(0, 40)}": ${describeVerdict(v.verdict)} → ${ok ? 'PASS' : 'fail'} ($${v.costUsd.toFixed(4)})`);
+  state.closeUps.set(key, ok);
   return { ok, usd: v.costUsd };
 }
 
@@ -133,7 +140,7 @@ export async function pickForSlide(input: PickInput, state: PickState, deps: { v
         continue;
       }
       const j = judged.get(c.url);
-      if (j && j.fit < tuning().slideFitMin) {
+      if (j && j.fit < (input.slideFitMin ?? tuning().slideFitMin)) {
         steps.push(`${label}: doesn't belong under this slide (${PhotoSlide.VERSION} fit ${j.fit.toFixed(2)})`);
         continue;
       }

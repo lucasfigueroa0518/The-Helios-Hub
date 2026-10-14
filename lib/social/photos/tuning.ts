@@ -16,6 +16,10 @@
  *                 Writer gave it alt_visuals, Jev (photo-pivot@1) picks the
  *                 ones worth searching before the icon scene
  *   slideFitMin   photo-slide fit below this: the photo doesn't belong
+ *   iconSceneFitMin  the same bar for the icon scene, the last search before
+ *                 the icon: a plain generic scene by design, so it is out only
+ *                 when it clearly doesn't belong (2026-10-13: stacked
+ *                 newspapers scored 0.38 to 0.45 and every one was cut)
  *   repeatMax     photo-slide repeat at or above this: a repeat
  *   spreadMin     spread-fit at or above this: the spread may run
  *   vision        'strict': the stock close-up fails any person or face.
@@ -28,6 +32,7 @@ export type PhotoTuning = {
   iconScenes: boolean;
   pivot: boolean;
   slideFitMin: number;
+  iconSceneFitMin: number;
   repeatMax: number;
   spreadMin: number;
   vision: 'strict' | 'faces';
@@ -39,7 +44,7 @@ export type PhotoTuning = {
  * C (B + 'faces' vision + looser Jev gates 0.35/0.65) 73%. The looser gates added one photo and let weaker
  * ones through (a banquet hall for "rivals"), so the Jev gates stay at 0.5; 'faces' vision kept.
  */
-export const DEFAULT_TUNING: PhotoTuning = { keep: 4, ladder: 'deep', iconScenes: true, pivot: true, slideFitMin: 0.5, repeatMax: 0.5, spreadMin: 0.65, vision: 'faces' };
+export const DEFAULT_TUNING: PhotoTuning = { keep: 4, ladder: 'deep', iconScenes: true, pivot: true, slideFitMin: 0.5, iconSceneFitMin: 0.3, repeatMax: 0.5, spreadMin: 0.65, vision: 'faces' };
 
 let current: PhotoTuning = { ...DEFAULT_TUNING };
 

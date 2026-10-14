@@ -48,6 +48,19 @@ export type StoryCopy = {
   photo: StoryPhotoRequest;
 };
 
-export type Ready = { pick: Pick; copy: StoryCopy; photo: Photo };
+/**
+ * A story with its photo. `photoSource`: the article's own lead image, or the
+ * Stories finder. `photoTrace`: how that photo was chosen (finder steps, or the
+ * lead-image note), saved on the post for the review screen.
+ */
+export type Ready = { pick: Pick; copy: StoryCopy; photo: Photo; photoSource?: 'lead' | 'finder'; photoTrace?: string[] };
 
-export type Drop = { key: string; lane: Lane; reason: 'thin-text' | 'not-grounded' | 'no-photo' };
+/** A story that left the post, and why (the run record, spec §7.1). `unfinished`: still pending when the rounds ran out. */
+export type Drop = {
+  key: string;
+  lane: Lane;
+  headline: string;
+  reason: 'thin-text' | 'not-grounded' | 'no-photo' | 'write-failed' | 'image-failed' | 'vision-rejected' | 'unfinished';
+  /** Why, when there is more to say (the vision check's reason, a refused fallback photo). */
+  detail?: string;
+};

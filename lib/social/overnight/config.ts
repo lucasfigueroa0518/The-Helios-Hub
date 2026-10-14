@@ -17,6 +17,10 @@ export const SOCIAL_INSIGHTS_MINUTE_LOCAL = 30;
 export const HUB_SWEEP_HOUR_LOCAL = 5;
 export const HUB_SWEEP_MINUTE_LOCAL = 45;
 
+/** Health tab morning report (spec 2026-10-13 §4.3): after Stories (4:00) and the 5:45 sweep. */
+export const HEALTH_REPORT_HOUR_LOCAL = 7;
+export const HEALTH_REPORT_MINUTE_LOCAL = 30;
+
 /**
  * Two carousel windows a day (SH-46, Social Hub P2-M2). Windows may overlap
  * other types; any two feed posts stay ≥ 30 minutes apart (SH-47).
