@@ -153,3 +153,20 @@ test('step aside in the same run: an older promote that is gone is skipped, the 
   assert.deepEqual(await moveRow(db, `explainers:topic:${gone}`), { used: false, skip_reason: EXPLAINER_GONE });
   assert.deepEqual(await moveRow(db, `explainers:topic:${p}`), { used: true, skip_reason: null });
 });
+
+test('a promote whose render does not start tonight is transient: no skip is recorded and it stays active for next night', async () => {
+  const db = await explainersOn();
+  await saveSetting(db, 'mode', 'production');
+  await saveSetting(db, 'daily_render_cap', 1);
+  const earlier = await topic(db, 'Earlier', 50, 'rendered');
+  await db.query(
+    `INSERT INTO explainers.jobs (topic_id, status, trigger, mode, spend_cap_usd, orchestrator_model, frame_worker_model, requested_at)
+     VALUES ($1, 'ok', 'auto', 'production', 5, 'm', 'm', '2026-10-08T05:00:00Z')`,
+    [earlier],
+  );
+  const p = await topic(db, 'P', 10);
+  await addMove(db, `explainers:topic:${p}`, 'promote', '2026-10-07T20:00:00Z');
+  const result = await runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT, moves: movesOf(db) });
+  assert.equal(result.status, 'ok');
+  assert.deepEqual(await moveRow(db, `explainers:topic:${p}`), { used: false, skip_reason: null });
+});

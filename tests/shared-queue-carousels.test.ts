@@ -126,6 +126,26 @@ test('settlePromote: shipped uses the move; on the calendar or set aside records
   assert.equal((await moveRow(query, OLD)).used, true);
 });
 
+test('settlePromote: a run that stopped before the promote is transient: no skip recorded, not used', async () => {
+  const query = await carouselDb();
+  await promote(query, OLD);
+  await settlePromote(query, OLD, { shipped: [], onCalendar: [], setAsides: [] });
+  assert.deepEqual(await moveRow(query, OLD), { used: false, skip_reason: null });
+});
+
+test('a fresh candidate sharing a member URL with the promoted story (different id) is dropped; an unrelated one stays', async () => {
+  const [a, b, c] = stubCandidates(STUB_ARTICLES);
+  const member = (url: string) => ({ url, title: 't', outlet: 'o', feedSlug: 'x', publishedAt: '2026-10-05T12:00:00.000Z' }) as never;
+  const promoted = { ...a!, id: 'promoted-id', url: 'https://x.test/u1', members: [member('https://x.test/u1'), member('https://x.test/u2')], score: 0 };
+  const dupe = { ...b!, id: 'other-id', url: 'https://x.test/u3', members: [member('https://x.test/u3'), member('https://x.test/u2')] };
+  const unrelated = { ...c!, id: 'unrelated-id', url: 'https://x.test/u9', members: [member('https://x.test/u9')] };
+  const base = createStubStages();
+  const stages = promotedStages({ ...base, score: async () => ({ ok: true, value: [dupe, unrelated] }) as never }, promoted, new Set());
+  const res = await stages.score(STUB_ARTICLES, NIGHT);
+  assert.ok(res.ok);
+  if (res.ok) assert.deepEqual(res.value.map((x) => x.id), ['promoted-id', 'unrelated-id']);
+});
+
 test('claimRun says which trigger queued the run (only the scheduled run reads moves)', async () => {
   const query = await carouselDb();
   await requestRun(query, 'scheduled', { capUsd: 2, hookPass: true });

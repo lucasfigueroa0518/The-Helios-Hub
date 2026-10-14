@@ -194,3 +194,13 @@ test('a promote that misses slot 1 sinks: it is not attempted first in slot 2, a
   assert.deepEqual(filled.map((s) => [s.slot, s.postIdeaId]), [[1, 'know'], [2, 'saga']]);
   assert.deepEqual(r.tried.map(([id]) => id), ['low', 'know', 'saga']);
 });
+
+test('a promote that tonight’s locked slots never reached is transient: no skip recorded, stays active; a permanent skip (gone) still is', async () => {
+  const pg = await reelsDb();
+  await seed(pg);
+  await promote(pg, R.OLD);
+  await pg.query(`INSERT INTO reels.reel_locks (ny_date, slot, post_idea_id, slate_id) VALUES ('2026-10-08', 1, $1, $2)`, [R.CARRY, R.TODAY]);
+  const out = await generatePassingReels({ runId: R.RUN, slateId: R.TODAY, count: 1, client: noCopyClient(), dailyFill: true });
+  assert.deepEqual(out.filled.map((s) => s.postIdeaId), [R.CARRY]);
+  assert.deepEqual(await moveRow(pg, R.OLD), { used: false, skip_reason: null });
+});

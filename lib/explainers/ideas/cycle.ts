@@ -187,9 +187,6 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
     const usePromote = async () => {
       if (deps.moves && promoteIdea) await markPromoteUsed(deps.moves, 'explainers', promoteIdea);
     };
-    const skipPromote = async (reason: string) => {
-      if (deps.moves && promoteIdea) await recordPromoteSkip(deps.moves, 'explainers', promoteIdea, reason);
-    };
     await trimPool(db, settings.pool_size, promoteTopic);
 
     // Daily fill (D54): the top `quota − placed` candidates, fresh topics and surviving renders ranked together.
@@ -228,8 +225,9 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
       if (!requested.ok) capped = true;
       if (candidate.topicId === promoteTopic) {
         if (requested.ok) await usePromote();
-        // A render that doesn't start caps the night, so no other topic is tried; the promote is skipped with why.
-        else await skipPromote(`The render didn’t start (${requested.reason.replace(/_/g, ' ')}).`);
+        // A render that doesn't start caps the night, so no other topic is tried. That is transient: no skip is
+        // recorded, so the promote stays active for next night.
+        else console.info(`[explainers] promote ${promoteTopic} not rendered tonight (${requested.reason.replace(/_/g, ' ')}); kept for next night`);
       }
     }
 

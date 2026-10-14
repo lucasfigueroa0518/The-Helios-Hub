@@ -88,7 +88,11 @@ export function promotedStages(stages: PipelineStages, promoted: ScoredCandidate
     async score(articles, now) {
       const res = await stages.score(articles, now);
       if (!res.ok) return res;
-      const fresh = res.value.filter((c) => c.id !== promoted?.id);
+      // Same story under another id: group ids are a representative URL, which can change night to night,
+      // so a fresh group that shares any member URL with the promoted story is that story, not a new one.
+      const promotedUrls = new Set(promoted ? [promoted.url, ...promoted.members.map((m) => m.url)] : []);
+      const sameStory = (c: ScoredCandidate) => c.id === promoted?.id || [c.url, ...c.members.map((m) => m.url)].some((u) => promotedUrls.has(u));
+      const fresh = res.value.filter((c) => !sameStory(c));
       const scores = fresh.map((c) => c.score);
       const top = Math.max(0, ...scores);
       const bottom = Math.min(0, ...scores);
@@ -107,10 +111,11 @@ export async function settlePromote(query: Query, storyId: string, result: Pick<
     return;
   }
   const aside = result.setAsides.find((s) => s.storyId === storyId);
+  // The run stopping before it is transient: no skip is recorded, so the promote is tried again next night.
   const reason = result.onCalendar.includes(storyId)
     ? ON_CALENDAR
     : aside
       ? `The pipeline set it aside at ${aside.stage} (${aside.reasonCode}).`
-      : 'Tonight’s run stopped before it.';
-  await recordPromoteSkip(query, 'carousels', ideaId, reason);
+      : null;
+  if (reason) await recordPromoteSkip(query, 'carousels', ideaId, reason);
 }

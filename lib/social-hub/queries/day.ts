@@ -51,8 +51,9 @@ export async function readAdjustments(q: HubQuery, nyDate: string): Promise<Idea
  * Use up moves (B8), the one place it happens: a move whose idea got content
  * after it (madeMoveIds, from the posts the hub just loaded, whichever
  * database they live in), or a Stories move whose pool entry the build used
- * (stories.pool.used_at). Marks them consumed and returns the rest. No worker
- * writes consumed_at.
+ * (stories.pool.used_at). Marks them consumed and returns the rest. Workers also
+ * write consumed_at when a promote is made (markPromoteUsed); this is the
+ * catch-all for moves whose idea got content some other way.
  */
 export async function consumeMoves(q: HubQuery, adjustments: readonly IdeaAdjustment[], posts: readonly HubPost[]): Promise<IdeaAdjustment[]> {
   if (!adjustments.length) return [];
