@@ -76,6 +76,8 @@ async function main(): Promise<void> {
   const { anthropicIdeaModel } = await import('@/lib/explainers/ideas/generator');
   const { anthropic } = await import('@/lib/anthropic');
   const { liveJevTransport } = await import('@/lib/reels/jev/client');
+  // Promote / Demote live in the main database (social_hub.idea_adjustments), whichever database explainers use.
+  const { dbQuery } = await import('@/lib/db');
 
   const db = await explainersDb();
   const query = await loadAgentQuery();
@@ -161,7 +163,7 @@ async function main(): Promise<void> {
         cycleAttempts.n += 1;
         let cycle: Awaited<ReturnType<typeof runIdeaCycle>> | null = null;
         try {
-          cycle = await runIdeaCycle({ db, ideaModel: anthropicIdeaModel(anthropic), jevTransport: liveJevTransport, log });
+          cycle = await runIdeaCycle({ db, ideaModel: anthropicIdeaModel(anthropic), jevTransport: liveJevTransport, log, moves: (text, params) => dbQuery(text, params) });
         } catch (error) {
           log('idea_cycle_threw', { error: errorText(error), attempt: cycleAttempts.n });
         }

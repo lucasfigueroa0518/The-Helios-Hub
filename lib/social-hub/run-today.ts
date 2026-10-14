@@ -19,6 +19,7 @@
 import type { Vertical } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
 import { quotaCandidates, type QuotaCandidate } from '@/lib/social-hub/views/day-rank';
+import { ideaRef } from '@/lib/social-hub/views/moves';
 
 /** One type's day: its quota and the candidates that still need content. */
 export type TypeDay = { quota: number; held: number; missing: Array<{ ideaId: string; ref: string; title: string }> };
@@ -161,11 +162,7 @@ export function parseRunBody(body: unknown): { only?: Vertical; target?: string 
   return only === undefined ? {} : { only: only as Vertical };
 }
 
-/** The native id an idea id ends with (`reels:idea:<id>` → `<id>`). */
-export function ideaRef(ideaId: string): string {
-  const parts = ideaId.split(':');
-  return parts.slice(2).join(':');
-}
+export { ideaRef };
 
 /** One type's day from its quota candidates: held = has content (made, being made, or in its slot). */
 export function typeDay(candidates: readonly QuotaCandidate[], quota: number): TypeDay {
