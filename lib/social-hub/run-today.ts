@@ -31,8 +31,10 @@ export type RunInputs = {
   explainers: TypeDay;
   /** Series due today and whether each already has today's set. */
   series: Array<{ id: string; label: string; held: boolean }>;
-  inFlight: { reelsRun: boolean; reelsBuilding: string[]; carouselRun: boolean; explainerTopics: string[] };
-  cost: { reelsNight: number; reelBuild: number; carouselCap: number; explainerCap: number; storySet: number };
+  /** Last Few Days: due today (its days; any day from its own button) and whether today's post exists. Missing: no step. */
+  lastFewDays?: { due: boolean; made: boolean };
+  inFlight: { reelsRun: boolean; reelsBuilding: string[]; carouselRun: boolean; explainerTopics: string[]; lfdRun?: boolean };
+  cost: { reelsNight: number; reelBuild: number; carouselCap: number; explainerCap: number; storySet: number; lfdCap?: number };
 };
 
 export type PlanStep = {
@@ -41,7 +43,7 @@ export type PlanStep = {
   quota: number;
   held: number;
   needed: number;
-  action: 'none' | 'reels_build' | 'reels_run' | 'carousel_run' | 'explainer_renders' | 'story_sets';
+  action: 'none' | 'reels_build' | 'reels_run' | 'carousel_run' | 'explainer_renders' | 'story_sets' | 'lfd_run';
   /** Idea refs (reel post ideas, explainer topics) or Stories series ids to act on. */
   targets: string[];
   note: string;
@@ -105,6 +107,15 @@ export function planFrom(i: RunInputs): RunPlan {
     else steps.push({ ...base, action: 'story_sets', targets: missing.map((s) => s.id), note: `Makes ${missing.map((s) => s.label).join(', ')}.`, estimateUsd: missing.length * i.cost.storySet });
   }
 
+  if (i.lastFewDays) {
+    const d = i.lastFewDays;
+    const base = { vertical: 'last_few_days' as const, label: label('last_few_days'), quota: d.due ? 1 : 0, held: d.made ? 1 : 0, needed: d.due && !d.made ? 1 : 0 };
+    if (!d.due) steps.push({ ...base, action: 'none', targets: [], note: 'Last Few Days posts on its days; today isn’t one. Its page’s button makes one anyway.', estimateUsd: 0 });
+    else if (d.made) steps.push({ ...base, action: 'none', targets: [], note: 'Today’s post is made.', estimateUsd: 0 });
+    else if (i.inFlight.lfdRun) steps.push({ ...base, action: 'none', targets: [], note: 'A Last Few Days run is already queued or running.', estimateUsd: 0 });
+    else steps.push({ ...base, action: 'lfd_run', targets: [], note: 'Makes today’s Last Few Days post: 5–6 stories, written, fact-checked and photographed. It waits for your approval.', estimateUsd: i.cost.lfdCap ?? 1 });
+  }
+
   const estimateUsd = Number(steps.reduce((s, x) => s + x.estimateUsd, 0).toFixed(2));
   return { today: i.today, steps, estimateUsd, anything: steps.some((s) => s.action !== 'none') };
 }
@@ -129,7 +140,7 @@ export function stepsFor(plan: RunPlan, only?: Vertical, target?: string): PlanS
   return only && target ? steps.map((s) => narrowStep(s, target)) : steps;
 }
 
-const RUN_TYPES: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories'];
+const RUN_TYPES: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days'];
 const TARGET_MAX = 2048;
 
 /**

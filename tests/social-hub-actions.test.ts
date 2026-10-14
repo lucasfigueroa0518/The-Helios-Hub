@@ -107,6 +107,7 @@ function registry(o: {
       query: 'stories-query' as never, getSet: pick(o.getSet, 'getSet'), slotOf: pick(o.slotOf, 'slotOf'),
       plan: pick(o.plan, 'plan'), rescheduleSet: pick(o.rescheduleSet, 'rescheduleSet'), unscheduleSet: pick(o.unscheduleSet, 'unscheduleSet'),
     }),
+    last_few_days: { vertical: 'last_few_days' },
   });
 }
 
@@ -400,8 +401,9 @@ test('today, on deck, types and sources', () => {
   const deck = onDeck(d.posts);
   assert.ok(deck.length > 0 && deck.every((p) => p.status === 'scheduled' || p.status === 'publishing'));
   const rows = typeRows(d.posts, 'views', parseRange({}, FIXTURE_NOW));
-  assert.deepEqual(rows.map((r) => r.vertical), ['reels', 'explainers', 'carousels', 'stories']);
-  assert.ok(rows.every((r) => r.posts > 0 && r.costPerPost != null && r.value != null));
+  assert.deepEqual(rows.map((r) => r.vertical), ['reels', 'explainers', 'carousels', 'stories', 'last_few_days']);
+  // The preview fixture has no Last Few Days posts.
+  assert.ok(rows.filter((r) => r.vertical !== 'last_few_days').every((r) => r.posts > 0 && r.costPerPost != null && r.value != null));
   const skip = typeRows(d.posts, 'skipRate', parseRange({}, FIXTURE_NOW));
   assert.equal(skip.find((r) => r.vertical === 'stories')!.value, null, 'a reel-only metric is n/a for Stories');
   const src = sourceRows(d.sources, d.posts, 'views');

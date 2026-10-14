@@ -8,9 +8,10 @@ import type { Vertical } from '@/lib/social-hub/types';
 import { FIXTURE_NOW } from './preview-dataset';
 
 const LAST = '2026-10-08';
-const QUOTA: Record<Vertical, number> = { reels: 3, explainers: 2, carousels: 1, stories: 1 };
+/** The fixture's four original types; Last Few Days has no stored nights here (its row reads as "didn't run"). */
+const QUOTA: Record<Exclude<Vertical, 'last_few_days'>, number> = { reels: 3, explainers: 2, carousels: 1, stories: 1 };
 
-function report(v: Vertical, night: string): NightReport {
+function report(v: keyof typeof QUOTA, night: string): NightReport {
   const q = QUOTA[v];
   const r: NightReport = { ...emptyReport(v, night), due: true, ran: true, target: q, made: q, needed: q, ready: q, scheduledYesterday: q, postedYesterday: q, spendUsd: q * 0.9 };
   const fail = (over: Partial<FailureEvent>): FailureEvent => ({ vertical: v, night, at: `${night}T07:14:00Z`, stage: 'run', reason: 'other', severity: 'failed', ...over });
@@ -30,14 +31,14 @@ function report(v: Vertical, night: string): NightReport {
 
 export function previewHealth(): { stored: StoredReport[]; live: null; readiness: Readiness[]; now: Date } {
   const stored = nightsEnding(LAST, 30).map((night): StoredReport => {
-    const reports = (['reels', 'explainers', 'carousels', 'stories'] as Vertical[]).map((v) => report(v, night));
+    const reports = (['reels', 'explainers', 'carousels', 'stories'] as Array<keyof typeof QUOTA>).map((v) => report(v, night));
     return { night, builtAt: `${night}T11:30:00Z`, verdict: nightVerdict(night, reports, 'worked'), reports, failures: reports.flatMap((r) => r.failures) };
   });
   const readiness: Readiness[] = [
-    { vertical: 'reels', approved: 46, rejected: 2, rate: 46 / 48 },
-    { vertical: 'explainers', approved: 22, rejected: 8, rate: 22 / 30 },
-    { vertical: 'carousels', approved: 27, rejected: 6, rate: 27 / 33 },
-    { vertical: 'stories', approved: 20, rejected: 2, rate: 20 / 22 },
+    { vertical: 'reels', approved: 46, rejected: 2, rate: 46 / 48, previous: { approved: 40, rejected: 4, rate: 40 / 44 } },
+    { vertical: 'explainers', approved: 22, rejected: 8, rate: 22 / 30, previous: { approved: 21, rejected: 7, rate: 21 / 28 } },
+    { vertical: 'carousels', approved: 27, rejected: 6, rate: 27 / 33, previous: { approved: 20, rejected: 7, rate: 20 / 27 } },
+    { vertical: 'stories', approved: 20, rejected: 2, rate: 20 / 22, previous: { approved: 0, rejected: 0, rate: null } },
   ];
   return { stored, live: null, readiness, now: FIXTURE_NOW };
 }

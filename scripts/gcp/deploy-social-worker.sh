@@ -55,6 +55,7 @@ if [[ "${FORCE_DEPLOY:-}" != "1" ]]; then
       UNION ALL SELECT 'reels video job ' || id FROM reels.video_jobs WHERE status = 'running'
       UNION ALL SELECT 'explainer job ' || id FROM explainers.jobs WHERE status = 'running'
       UNION ALL SELECT 'story set ' || id FROM stories.sets WHERE status = 'building'
+      UNION ALL SELECT 'last few days run ' || id FROM lfd.runs WHERE status = 'running'
       UNION ALL SELECT 'publish ' || id FROM social_hub.publish_attempts WHERE status IN ('creating', 'processing', 'publishing')" 2>/dev/null || echo 'CHECK_FAILED')"
     if [[ "${INFLIGHT}" == "CHECK_FAILED" ]]; then
       echo "Could not check for in-flight work; deploying anyway (FORCE_DEPLOY=1 silences this)." >&2

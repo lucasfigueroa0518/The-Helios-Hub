@@ -10,7 +10,7 @@
  *     is strict, and the system prompt says to call it once.
  *   - fallbacks: "default" (beta server-side-fallback-2026-07-01): a refusal is
  *     retried server-side on the model the category routes to.
- *   - Web search (fvp-pair@1 only) is a server tool; a `pause_turn` is resumed.
+ *   - Web search (fvp-pair@2 only) is a server tool; a `pause_turn` is resumed.
  *
  * Tests pass a stubbed `create`; nothing here runs offline against the API.
  */

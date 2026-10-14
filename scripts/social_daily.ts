@@ -6,9 +6,11 @@
  *   photos, credit check, render-fit and dropped-text checks) → local preview
  *
  * LIVE: Claude (Sonnet 5.5), web search, Jev, Wikidata / Commons /
- * Openverse. Needs Tommy's OK. --cap-usd (default $2.00) is a hard total
- * cap on Claude (tokens + web search fees) + Jev: no call starts that
- * could pass it. No Storage, no Instagram.
+ * Openverse. Needs Tommy's OK. --cap-usd (default $2.00) is the target on
+ * Claude (tokens + web search fees) + Jev: past it no new story starts. A
+ * story in progress may finish up to the ceiling, the cap + $0.50 wiggle
+ * (Tommy, 2026-10-14): no call starts that could pass the ceiling. No Storage,
+ * no Instagram.
  *
  * Storage (spec 2026-10-08-social-storage.md): with DATABASE_URL set (and
  * SOCIAL_STORE not "file"), the used-photo log, posted stories, set-asides
@@ -56,6 +58,8 @@ try {
 }
 
 const DEFAULT_CAP_USD = 2;
+/** Room above the cap for a story already in progress to finish (Tommy, 2026-10-14; cost-meter.ts). */
+const WIGGLE_USD = 0.5;
 
 async function main() {
   const arg = (name: string) => {
@@ -165,7 +169,7 @@ async function main() {
 
   const jevTally = createJevTally();
   const jev = capped(tallied(createJevAsk(), jevTally), jevTally, capUsd);
-  const budget = createRunBudget({ capUsd, otherSpendUsd: () => jevTally.costUsd });
+  const budget = createRunBudget({ capUsd, wiggleUsd: WIGGLE_USD, otherSpendUsd: () => jevTally.costUsd });
   let selection: Selection | null = null;
 
   // Screenshots and fit results per story: the design stage doesn't know the story name, so the wrapper sets it.
@@ -237,8 +241,9 @@ async function main() {
         : promoteLib
           ? promoteLib.promotedStages(stages, promoted, new Set(demoteIds))
           : stages,
-    // The meter stops the day between stages at the full cap; only the Claude-call guard keeps a per-call reserve.
-    meter: createCostMeter({ capUsd }),
+    // The meter stops the day between stages: no new story past the cap, a story in progress stops at the ceiling.
+    // Only the Claude-call guard keeps a per-call reserve.
+    meter: createCostMeter({ capUsd, wiggleUsd: WIGGLE_USD }),
     log: store.setAsides,
     now,
     targetPosts: rerun ? 1 : pinned ? pinned.length : stories,
@@ -306,7 +311,7 @@ async function main() {
 
   await fsp.writeFile(
     path.join(runDir, 'run.json'),
-    JSON.stringify({ ...(preview ? { label: 'PREVIEW', note: 'Preview run, not the acceptance batch; the used-photo log was not written.' } : {}), ...(rerun ? { rerunOf: rerun.postId } : {}), hookPass: false, startedAt: now.toISOString(), capUsd, alreadyPosted, requestMix, articles: articles.length, hubSources: { articles: hub.articles.length, sources: hub.feeds.length, errors: hub.errors }, jev: jevTally, claudeUsd: budget.claudeUsd(), totalUsd: budget.spent(), result, selection, stories: storyLogs, fit: Object.fromEntries(fitResults) }, null, 2),
+    JSON.stringify({ ...(preview ? { label: 'PREVIEW', note: 'Preview run, not the acceptance batch; the used-photo log was not written.' } : {}), ...(rerun ? { rerunOf: rerun.postId } : {}), hookPass: false, startedAt: now.toISOString(), capUsd, ceilingUsd: budget.ceilingUsd, alreadyPosted, requestMix, articles: articles.length, hubSources: { articles: hub.articles.length, sources: hub.feeds.length, errors: hub.errors }, jev: jevTally, claudeUsd: budget.claudeUsd(), totalUsd: budget.spent(), result, selection, stories: storyLogs, fit: Object.fromEntries(fitResults) }, null, 2),
   );
   if (preview) await fsp.writeFile(path.join(runDir, 'preview-report.md'), previewReport());
   // The database record (spec 2026-10-08-social-storage.md): written after the files, so a database failure loses nothing.

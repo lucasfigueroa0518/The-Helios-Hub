@@ -77,7 +77,7 @@ function labelFor(state: PostState['id'], plan: PostPlan, vertical: HubPost['ver
     case 'approveTrialReel':
     case 'approveContent':
       if (state === 'slot_booked') return 'Approve slot';
-      return vertical === 'carousels' && state === 'ready' ? 'Approve and schedule' : 'Approve';
+      return (vertical === 'carousels' || vertical === 'last_few_days') && state === 'ready' ? 'Approve and schedule' : 'Approve';
     case 'hardPublish':
       return state === 'failed' ? 'Try again' : 'Publish now';
     case 'hardRegenerate':

@@ -14,11 +14,16 @@ All times are America/New_York (DST-safe, see `lib/reels/schedule.ts`).
 |---|---|---|---|---|---|---|
 | Trial Reels | `reels` | `helios-reels` | 12:30 song ingest, 1:00 night run | 8:45–10:00 AM, 11:15 AM–12:30 PM, 6:00–9:00 PM | 5:00 | live |
 | Explainer Reels | `explainers` | `helios-explainers` | 2:00 idea cycle (only with `auto_render` on; `posts_per_day` less what people placed, up to `daily_render_cap` = 2 renders; see Daily fill) | 1:00–2:30 PM and 3:30–5:00 PM (`posts_per_day` = 2), approved reels only | 5:15 | built; renders need `HEYGEN_API_KEY` on the VM |
-| Carousels | `social` | `helios-social` | 3:00 daily run (only with `auto_run` on); the run's top `posts_per_day` = 2 posts, less what people placed for the day, are scheduled (see Daily fill) | 9:00–10:00 AM and 2:30–3:30 PM | 5:30 | built |
+| Carousels | `social` | `helios-social` | 3:00 daily run (only with `auto_run` on; not on Last Few Days days while its `auto_run` is on, LFD-02); the run's top `posts_per_day` = 2 posts, less what people placed for the day, are scheduled (see Daily fill) | 9:00–10:00 AM and 2:30–3:30 PM (none on Last Few Days days while its `auto_run` is on) | 5:30 | built |
+| Last Few Days | `lfd` | `helios-social` (the same process as Carousels; no unit of its own) | 3:00 on its days (`lfd.settings.days`, Tue/Fri), only with `lfd.settings.auto_run` on, in the carousel run's place; a manual run from the hub's "Make Last Few Days now" on any day | 9:00–10:00 AM on its days | read with Carousels: every 30 minutes while fresh and the 5:30 sweep | built |
 | Social Hub | `social_hub` | `helios-social` (same worker) | 5:45 account sweep (account insights, demographics, active times, publishing quota); refreshes the hub queues on visit | none (reads only) | 5:45 | built |
 | IG Stories | `stories` | `helios-stories` | 4:00 sets for series with `auto` on (Morning Download daily, Guess the Number Mon/Thu, Free vs. Paid Tue/Sat) | 8:30–10:00 AM, every series; may overlap other types (Stories are not feed posts) | every 2 hours while live, final read at 23 h | built (Lucas); no live set yet |
 
-Last Few Days (spec `docs/superpowers/specs/2026-10-13-last-few-days-design.md`): engine built (`lib/lfd`, schema `lfd`); runs by hand only (`npx tsx scripts/lfd_run.ts --live`, Tommy). Its clock row (3:00 Tue/Fri in the carousel run's place) lands with Plan 2.
+Last Few Days (spec `docs/superpowers/specs/2026-10-13-last-few-days-design.md`) runs inside the `helios-social` worker
+instead of a systemd unit of its own (step 3 of "Adding a content type" does not apply): one process carries out one run at a
+time, so its 3:00 run can never overlap a carousel run, and "one type per hour" holds because it takes the carousel run's
+slot on its days. Engine `lib/lfd`, schema `lfd`; its posts are spine items (`vertical 'last_few_days'`). A human-only CLI
+run stays available (`npx tsx scripts/lfd_run.ts --live`, Tommy).
 
 One type per hour so no two pipelines call Claude, Jev, or Meta at the same
 time. All workers run on the social worker VM; outreach stays alone on
@@ -43,6 +48,7 @@ placements cut the count.
 | Trial Reels | `quota − placed` reels, one per window still open. An idea a person placed isn't made again. A **carryover idea whose finished video never posted** (not rejected, never tried on Instagram) ranks with the rest; when it comes up for a slot it takes it with that video, with no new copy or render (D55). With nothing left the run still ingests and scores, so ideas carry to tomorrow. |
 | Explainers | Pool topics and topics with an approved (or, with `require_approval` off, unreviewed), unposted render rank together (pool order). The top `quota − placed` are taken: a render is placed (`scheduleJob`, while publishing is live) instead of rendered again; a pool topic is rendered, at most `daily_render_cap`, under the spend caps. Nothing left: the cycle is skipped before any idea call. |
 | Carousels | The 3 AM run makes `min(run_stories, quota − placed)` stories and schedules at most that many (`scheduleRunPosts`). A stored finished post that ranks in ships without spend (D37). A story whose post already holds a slot is passed over. Nothing left: the run is `skipped` (`stop_reason` `quota-filled`) and makes nothing. |
+| Last Few Days | One post on each of its days. A post a person placed for that day means the 3:00 run is skipped (`stop_reason` `quota-filled: …`). A manual run from the hub is never skipped. |
 | IG Stories | A series' day that a person filled (a set they generated that is approved, scheduled or posted for that day, or their slot for it on the spine) gets no auto set. |
 
 ## The contract

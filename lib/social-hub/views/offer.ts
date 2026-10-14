@@ -33,7 +33,7 @@ export function slotChoices(dataset: HubDataset, post: HubPost, now: Date, days 
   for (let i = 0; i < days; i++) {
     const day = addDays(today, i);
     const onDay = placed.filter((p) => p.nyDate === day);
-    windowsOn(post.vertical, day).forEach((w, index) => {
+    windowsOn(post.vertical, day, dataset.dayQuotas?.lfdDays ?? []).forEach((w, index) => {
       const closes = nyDayStart(day).getTime() + w.endMinute * 60_000;
       if (closes <= now.getTime()) return;
       const holder = post.vertical === 'stories' ? onDay[index] : onDay.find((p) => p.slot?.id === w.id);
@@ -75,7 +75,7 @@ export function offerer(dataset: HubDataset, now: Date, flags: HubFlags = SOCIAL
 
   function build(post: HubPost): Offer {
       const state = postState(post, now);
-      const plans = actionsFor(post, { quota, typicalCostLabel: label(post.vertical) });
+      const plans = actionsFor(post, { quota, typicalCostLabel: label(post.vertical), lfdPublishingLive: dataset.lfdPublishingLive === true });
       const slots = plans.some((p) => p.kind === 'post' && p.pick === 'slot') ? slotChoices(dataset, post, now) : undefined;
       const menu = actionMenu(post, state, plans, enabled, slots);
       const card = cardActions(state, plans, enabled, slots);

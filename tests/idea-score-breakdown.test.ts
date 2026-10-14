@@ -186,15 +186,15 @@ test('Carousels breakdown (story-scoring@4): impact, must-know, regular person, 
   assert.equal(Number(sum(b.parts).toFixed(2)), Number(score.toFixed(2)));
   assert.equal(b.parts.filter((p) => p.points == null).length, 4, 'the four gates add nothing');
   assert.match(b.parts[0]!.label, /Changes what AI can do/, 'the strongest impact axis is named');
-  assert.equal(b.parts[0]!.points, 1.35, 'a launch counts at 1.5 times its answer');
+  assert.equal(b.parts[0]!.points, 1.8, 'a launch counts at 2 times its answer');
   assert.match(b.parts.find((p) => /opinion/.test(p.label))!.detail!, /must stay under 0.50/);
   assert.match(b.note!, /out of 5.5/);
 });
 
-test('Carousels breakdown (story-scoring@4): a government act counts at 1.0, not 1.5', () => {
+test('Carousels breakdown (story-scoring@4): a government act counts at 1.3, not 2', () => {
   const answers = { field_shift: 0.05, industry_power: 0.05, national_policy: 0.9, must_know: 0, common_person: 0, sourcing: 0, ai_main_subject: 0.9, substance: 0.9, news_event: 0.9, commentary: 0.1 };
   const b = carouselBreakdown({ story_id: 's', title: 't', url: null, score: String(Scoring4.engagementScore(answers, 0)), outlet_count: 0, run_started_at: null, post_count: 0, last_post_at: null, published: false, scheduled: false, answers, passes: 1 } satisfies CarouselIdeaRow)!;
-  assert.equal(b.parts[0]!.points, 0.9);
+  assert.ok(Math.abs(b.parts[0]!.points! - 1.17) < 0.006, 'rounded to two places');
   assert.match(b.parts[0]!.label, /government act/);
 });
 

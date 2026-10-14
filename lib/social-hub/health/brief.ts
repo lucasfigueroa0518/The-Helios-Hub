@@ -9,6 +9,7 @@ const FILES: Record<Vertical, string[]> = {
   explainers: ['lib/explainers/render/job.ts', 'lib/explainers/'],
   carousels: ['lib/social/pipeline/', 'lib/social/writer/prompt.ts'],
   stories: ['lib/stories/build/'],
+  last_few_days: ['lib/lfd/run.ts', 'lib/lfd/'],
 };
 
 export function briefFor(p: Problem): string {

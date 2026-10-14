@@ -56,3 +56,13 @@ test('no page, a failed read, or a page with no photos gives null', async () => 
   assert.equal(await leadImage(async () => { throw new Error('network'); }, pick, new Set()), null);
   assert.equal(await leadImage(reader(page([])).read, pick, new Set()), null);
 });
+
+test('logo/icon/avatar/sprite match whole path segments, not substrings', async () => {
+  const pass = ['https://s.com/img/silicon-valley.jpg', 'https://s.com/img/iconic-photo.jpg'];
+  for (const src of pass) {
+    const out = await leadImage(reader(page([fig(src, 'AP', 1200)])).read, pick, new Set());
+    assert.equal(out?.photo.src, src, src);
+  }
+  const skip = ['https://s.com/img/logo.png', 'https://s.com/icons/x.png', 'https://s.com/img/site_logo-2.jpg', 'https://s.com/avatars/a.jpg', 'https://s.com/img/sprite.png'];
+  for (const src of skip) assert.equal(await leadImage(reader(page([fig(src, 'AP', 1200)])).read, pick, new Set()), null, src);
+});

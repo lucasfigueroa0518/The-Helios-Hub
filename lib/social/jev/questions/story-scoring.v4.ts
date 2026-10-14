@@ -21,19 +21,23 @@
  *
  * The score takes the strongest of the first three (a story is big on one
  * axis, it need not be big on all), then adds must_know, common_person,
- * sourcing and coverage. common_person is worth more than must_know on
- * purpose (Tommy, 2026-10-12: announce the Haiku release before a White House
- * statement; officials and executives are who a government story affects, not
- * the common person). A famous name in the story does not make it matter to a
- * regular person. There was a `reach` question ("who must react"); it tracked
- * must_know (0.69) and scored government stories high, so it was dropped.
- * A launch or a deal can earn the full
- * 1.5 on its axis; a government act earns at most 1.0 (Tommy, 2026-10-12: it
- * should rank just below launches and deals, not crowd them out). A government
- * act means a binding or formal one (a law, rule, ruling, order, enforcement,
- * an official testing or access arrangement) by the US federal government, the
- * EU, the UK, China, the G7 or the UN; statements, demands and plans do not
- * count. The maximum is still 5.5, so the hub's scale does not change.
+ * sourcing and coverage. A launch or a deal can earn the full 2.0 on its axis;
+ * a government act earns at most 1.3 (Tommy, 2026-10-12: it should rank just
+ * below launches and deals, not crowd them out). A government act means a
+ * binding or formal one (a law, rule, ruling, order, enforcement, an official
+ * testing or access arrangement) by the US federal government, the EU, the UK,
+ * China, the G7 or the UN; statements, demands and plans do not count.
+ *
+ * common_person asks about a regular person curious about AI, not an official
+ * or an executive; a famous name in the story does not make it matter to them
+ * (Tommy, 2026-10-12: announce the Haiku release before a White House
+ * statement). It first carried 1.5 (what reach 1.0 and everyday_stakes 0.5
+ * were worth together); two days of saved runs showed a consumer tweak (a
+ * Gemini model picker) outranking OpenAI missing revenue by $20 billion, so
+ * the impact axis went to 2.0 and common_person to 1.0 (2026-10-14). There was
+ * a `reach` question ("who must react"); it tracked must_know (0.69) and scored
+ * government stories high, so it was dropped. The maximum is still 5.5, so the
+ * hub's scale does not change.
  *
  * The news gate is two questions, not one (2026-10-12): news_event asks
  * whether something happened, and commentary asks whether the story is
@@ -77,11 +81,12 @@ export const SKIP_IDS = ['skip_weapons_war', 'skip_death_tragedy', 'skip_crime_v
 export const POSTED_ID = 'already_posted';
 
 /**
- * The ranking score, 0 to 5.5: the strongest impact axis (0 to 1.5), must_know
- * (0 to 1), common_person (0 to 1.5), sourcing (0 to 1) and coverage (0 to 0.5,
- * half a point at 16 or more outlets, on a log scale).
+ * The ranking score, 0 to 5.5: the strongest impact axis (0 to 2, or 0 to 1.3
+ * for a government act), must_know (0 to 1), common_person (0 to 1), sourcing
+ * (0 to 1) and coverage (0 to 0.5, half a point at 16 or more outlets, on a
+ * log scale).
  */
-export const WEIGHTS = { impact: 1.5, policy: 1, mustKnow: 1, commonPerson: 1.5, sourcing: 1, coverage: 0.5 } as const;
+export const WEIGHTS = { impact: 2, policy: 1.3, mustKnow: 1, commonPerson: 1, sourcing: 1, coverage: 0.5 } as const;
 export const COVERAGE_FULL_AT = 16;
 
 /** The coverage part of the score, 0 to WEIGHTS.coverage. */

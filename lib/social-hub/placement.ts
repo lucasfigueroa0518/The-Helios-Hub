@@ -36,6 +36,8 @@ import {
 import { EXPLAINER_WINDOWS } from '@/lib/explainers/publish/config';
 import { POSTING_SLOTS } from '@/lib/reels/publish/slots';
 import { CAROUSEL_SLOTS } from '@/lib/social/overnight/config';
+import { DEFAULT_LFD_DAYS, LFD_WINDOW } from '@/lib/lfd/config';
+import { carouselOffDays, readLfdSettings } from '@/lib/lfd/settings';
 import { bookSlot, type SpineQuery, type SpineVertical } from '@/lib/social-hub/spine';
 import { isDayKey } from '@/lib/social-hub/time';
 import { SERIES_LABEL } from '@/lib/stories/render/copy';
@@ -62,7 +64,10 @@ const TYPE_NAME: Record<SpineVertical, string> = {
   explainers: 'Explainers',
   reels: 'Text on Screen',
   stories: 'Stories',
+  last_few_days: 'Last Few Days posts',
 };
+
+const EVERY_DAY = [0, 1, 2, 3, 4, 5, 6];
 
 const WEEKDAY = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -119,8 +124,17 @@ async function storyWindows(query: SpineQuery): Promise<SlotWindow[]> {
 /** Each type's windows, from its own config. */
 export async function placementRules(query: SpineQuery, vertical: SpineVertical): Promise<PlacementRules> {
   switch (vertical) {
-    case 'carousels':
-      return { vertical, spaced: true, windows: named(CAROUSEL_SLOTS, { morning: 'Morning', afternoon: 'Afternoon' }) };
+    case 'carousels': {
+      // LFD-02: while Last Few Days' auto_run is on, its days have no carousel windows.
+      const off = await carouselOffDays(query);
+      const windows = named(CAROUSEL_SLOTS, { morning: 'Morning', afternoon: 'Afternoon' });
+      return { vertical, spaced: true, windows: off.length ? windows.map((w) => ({ ...w, days: EVERY_DAY.filter((d) => !off.includes(d)) })) : windows };
+    }
+    case 'last_few_days': {
+      // One 9:00–10:00 AM window on its days (spec §7.4); a feed post, so spaced.
+      const days = await readLfdSettings(query).then((s) => s.days).catch(() => [...DEFAULT_LFD_DAYS]);
+      return { vertical, spaced: true, windows: [{ ...LFD_WINDOW, name: 'Morning', days }] };
+    }
     case 'explainers':
       return { vertical, spaced: true, windows: named(EXPLAINER_WINDOWS, { afternoon: 'Afternoon', late: 'Late afternoon' }) };
     case 'reels':

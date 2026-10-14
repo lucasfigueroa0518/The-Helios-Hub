@@ -23,9 +23,9 @@ import { STAGE_ORDER, type StageName } from '@/lib/social/pipeline/types';
 
 const NOW = new Date('2026-10-04T15:00:00Z');
 
-function day(stubOpts: StubOptions = {}, extra: { capUsd?: number; targetPosts?: number } = {}) {
+function day(stubOpts: StubOptions = {}, extra: { capUsd?: number; wiggleUsd?: number; targetPosts?: number } = {}) {
   const log = createInMemorySetAsideLog();
-  const meter = createCostMeter({ capUsd: extra.capUsd });
+  const meter = createCostMeter({ capUsd: extra.capUsd, wiggleUsd: extra.wiggleUsd });
   return {
     log,
     meter,
@@ -106,6 +106,48 @@ test('the cost cap stops the day and logs cost-cap', async () => {
   assert.equal(cap.stage, 'writer');
   assert.ok(!calls.some((c) => c.storyId === 'story-b' && c.stage === 'writer'));
   assert.ok(meter.capReached());
+});
+
+// Target and ceiling (Tommy, 2026-10-14). Reporter at $1.70: story-a reaches ~$2.07 at its Editor,
+// past the $2 target, with Fact-checker, mechanical and design still to go (~$2.13 done).
+test('wiggle: a story in progress past the cap finishes under the ceiling; the next story does not start', async () => {
+  const calls: Array<{ stage: StageName; storyId: string }> = [];
+  const { result, meter } = day({ calls, costUsd: { reporter: 1.7 } }, { capUsd: 2, wiggleUsd: 0.5 });
+  const r = await result;
+  assert.deepEqual(r.posts.map((p) => p.storyId), ['story-a']);
+  assert.equal(r.stopReason, 'cost-cap');
+  const cap = r.setAsides.at(-1)!;
+  assert.equal(cap.storyId, 'story-b');
+  assert.equal(cap.stage, 'reporter');
+  assert.ok(!calls.some((c) => c.storyId === 'story-b'), 'story-b never starts past the target');
+  assert.ok(meter.targetReached() && !meter.capReached());
+  assert.ok(r.costUsd > 2 && r.costUsd < 2.5, `spent ${r.costUsd}`);
+});
+
+test('wiggle: without it the same day cuts story-a off mid-way (the old single line)', async () => {
+  const r = await day({ costUsd: { reporter: 1.7 } }, { capUsd: 2 }).result;
+  assert.equal(r.posts.length, 0);
+  assert.equal(r.setAsides.at(-1)!.storyId, 'story-a');
+  assert.equal(r.setAsides.at(-1)!.stage, 'fact-checker');
+});
+
+test('wiggle: the ceiling is a hard stop mid-story, and the set-aside names it', async () => {
+  const r = await day({ costUsd: { reporter: 1.7 } }, { capUsd: 2, wiggleUsd: 0.05 }).result;
+  assert.equal(r.posts.length, 0);
+  const cap = r.setAsides.at(-1)!;
+  assert.equal(cap.reasonCode, 'cost-cap');
+  assert.equal(cap.stage, 'fact-checker');
+  assert.match(cap.detail, /ceiling \$2\.05 \(cap \$2\.00 \+ wiggle\) reached mid-story/);
+});
+
+test('wiggle: the meter reports the ceiling and refuses a bad wiggle', () => {
+  const meter = createCostMeter({ capUsd: 2.5, wiggleUsd: 0.5 });
+  assert.equal(meter.capUsd, 2.5);
+  assert.equal(meter.ceilingUsd, 3);
+  assert.equal(meter.remaining(), 3);
+  assert.equal(createCostMeter({ capUsd: 2 }).ceilingUsd, 2);
+  assert.throws(() => createCostMeter({ capUsd: 2, wiggleUsd: -0.1 }));
+  assert.throws(() => createCostMeter({ capUsd: 2, wiggleUsd: Number.NaN }));
 });
 
 test('cost cap before scoring logs against the day', async () => {

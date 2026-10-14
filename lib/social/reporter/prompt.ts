@@ -38,6 +38,12 @@
  *   is given; its prompt doesn't tell it what to do with them. (TIMELINE,
  *   from the 2026-10-07 overhaul, was dropped with the rest of that attempt.)
  *
+ *   NUMBER VALUE (Tommy, 2026-10-14): a NUMBERS value is the figure with its
+ *   unit or currency; hedges and rates move to "what it counts". The value is
+ *   the stat slide's big number, and "approximately $8-9 million per month"
+ *   failed the render fit (the 10-14 run). Hedges still reach the slide: the
+ *   counts line is the number's caption.
+ *
  *   ADDED SINCE THE TEST (prompts file §1, "Added since the test"):
  *     [A1] pages are read through the raw-text page reader (spec §4.2c);
  *     [A2] NUMBERS entries carry a number type (plan M2; format approved
@@ -71,7 +77,7 @@ TENSIONS: each real disagreement or open question in the sources, one line each:
 FACTS: F1, F2, … each one sentence + (sources)
 BACKGROUND: B1, B2 (max 2) — earlier events a reader needs, each sourced
 QUOTES: Q1… exact text — speaker, where (via outlet) [⚠ if single source] [cut off if cut off in every source] — speaker's SUBJECTS ID (S1…)
-NUMBERS: N1: value | type | what it counts | source (type is one of: money, count, percent, duration, date, other; value exactly as the source writes it)
+NUMBERS: N1: value | type | what it counts | source (type is one of: money, count, percent, duration, date, other; value is the figure exactly as the source writes it, with its unit or currency ("$8-9 million", "40%"); hedges like "about" and rates like "per month" go in what it counts)
 TERMS: plain-language definitions taken from sources
 SUBJECTS: S1, S2, … people/companies/products in the story (with role), each marked person or organization (a product counts as an organization)
 EVENTS: photographable events with date/place, if any

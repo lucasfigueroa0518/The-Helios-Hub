@@ -11,8 +11,12 @@ import { applyMoves, movesFor, type IdeaAdjustment } from '@/lib/social-hub/view
 /** Every pool refills at least nightly; three days without one means its run has stopped. */
 export const POOL_STALE_MS = 3 * 86_400_000;
 
-export function poolStale(lastRefill: string | null | undefined, now: Date): boolean {
-  return Boolean(lastRefill) && now.getTime() - Date.parse(lastRefill!) > POOL_STALE_MS;
+/** Last Few Days refills twice a week (Friday to Tuesday is four days), so its pool is stale only after five. */
+const LFD_STALE_MS = 5 * 86_400_000;
+
+export function poolStale(lastRefill: string | null | undefined, now: Date, vertical?: Vertical): boolean {
+  const limit = vertical === 'last_few_days' ? LFD_STALE_MS : POOL_STALE_MS;
+  return Boolean(lastRefill) && now.getTime() - Date.parse(lastRefill!) > limit;
 }
 
 export const IDEA_STATE_LABEL: Record<IdeaState, string> = {

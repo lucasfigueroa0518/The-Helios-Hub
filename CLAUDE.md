@@ -49,6 +49,14 @@ stable prefix. Helpers: `lib/anthropic-cache.ts`. Full guide:
 `docs/prompt-caching.md` (official API:
 https://platform.claude.com/docs/en/build-with-claude/prompt-caching).
 
+### Read-only DB checks (standing rule, 2026-10-14)
+Never run a session-level `SET` (e.g. `set default_transaction_read_only=on`)
+through `DATABASE_URL`. It is Supabase's transaction-mode pooler (port 6543):
+the setting sticks to a shared server connection, and the workers that get it
+next fail every write ("cannot execute UPDATE in a read-only transaction"),
+for hours. Wrap the check in one read-only transaction instead:
+`psql "$DATABASE_URL" -X -c "BEGIN READ ONLY; SELECT …; ROLLBACK;"`.
+
 ## Testing
 Automated tests are **light and never call the live Claude API or `web_search`**
 — test pure functions + SQL + plumbing offline, stubbing the model with canned

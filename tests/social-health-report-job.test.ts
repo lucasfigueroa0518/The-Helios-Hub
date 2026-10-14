@@ -5,7 +5,7 @@ import type { PostingState } from '@/lib/content-type/posting';
 import type { HubQuery } from '@/lib/social-hub/db';
 import { MORNING_REPORT_TIMEOUT_MS, runMorningReport, withTimeout } from '@/lib/social-hub/health/job';
 import { buildNight, publisherTone } from '@/lib/social-hub/health/night';
-import { readinessFor } from '@/lib/social-hub/health/readiness';
+import { readinessCard, readinessFor } from '@/lib/social-hub/health/readiness';
 import { readReports } from '@/lib/social-hub/health/store';
 
 import { openHubTestDb } from './fixtures/social-hub/pglite';
@@ -22,7 +22,7 @@ test('a reporter that throws does not break the night: that type reads as unknow
   const exp = night.reports.find((r) => r.vertical === 'explainers')!;
   assert.match(exp.reportError ?? '', /unreachable/);
   assert.equal(night.verdict.types.find((t) => t.vertical === 'explainers')!.tone, 'short');
-  assert.equal(night.reports.length, 4);
+  assert.equal(night.reports.length, 5);
 });
 
 test('failures on a type that met its target are downgraded to warnings', async () => {
@@ -75,6 +75,42 @@ test('readiness: approved-as-is rate per type over 30 days', async () => {
   `);
   const r = (await readinessFor(query, NOW)).find((x) => x.vertical === 'reels')!;
   assert.equal(r.rate, 0.75);
+});
+
+test('readiness: the previous 30 days are counted separately for the trend', async () => {
+  const { pg, query } = await openHubTestDb();
+  await pg.exec(`
+    INSERT INTO social_hub.content_items (id, vertical, format, native_ref) VALUES
+      ('00000000-0000-0000-0000-0000000000c1', 'carousels', 'feed', 'p1'), ('00000000-0000-0000-0000-0000000000c2', 'carousels', 'feed', 'p2'),
+      ('00000000-0000-0000-0000-0000000000c3', 'carousels', 'feed', 'p3'), ('00000000-0000-0000-0000-0000000000c4', 'carousels', 'feed', 'p4');
+    INSERT INTO social_hub.approvals (content_item_id, decision, decided_at, via) VALUES
+      ('00000000-0000-0000-0000-0000000000c1', 'approved', '2026-10-10T12:00:00Z', 'user'),
+      ('00000000-0000-0000-0000-0000000000c2', 'approved', '2026-09-01T12:00:00Z', 'user'),
+      ('00000000-0000-0000-0000-0000000000c3', 'rejected', '2026-09-02T12:00:00Z', 'user'),
+      ('00000000-0000-0000-0000-0000000000c4', 'approved', '2026-07-01T12:00:00Z', 'user');
+  `);
+  const r = (await readinessFor(query, NOW)).find((x) => x.vertical === 'carousels')!;
+  assert.deepEqual([r.approved, r.rejected, r.rate], [1, 0, 1]);
+  assert.deepEqual(r.previous, { approved: 1, rejected: 1, rate: 0.5 }); // 07-01 is outside both windows
+});
+
+test('readiness card: counts, trend vs the previous 30 days, distance to the bar', () => {
+  const card = readinessCard({ vertical: 'carousels', approved: 27, rejected: 6, rate: 27 / 33, previous: { approved: 20, rejected: 7, rate: 20 / 27 } });
+  assert.equal(card.title, 'Carousels · last 30 days');
+  assert.equal(card.rate, '82%');
+  assert.deepEqual(card.lines, [['Approved as-is', '27'], ['Rejected', '6'], ['Previous 30 days', '74% ▲ 8 pts']]);
+  assert.equal(card.note, '13 pts below the 95% auto-publish bar');
+  assert.equal(card.meets, false);
+
+  const top = readinessCard({ vertical: 'reels', approved: 46, rejected: 2, rate: 46 / 48, previous: { approved: 0, rejected: 0, rate: null } });
+  assert.deepEqual(top.lines[2], ['Previous 30 days', 'No decisions']);
+  assert.equal(top.note, 'At or above the 95% auto-publish bar');
+  assert.equal(top.meets, true);
+
+  const flat = readinessCard({ vertical: 'stories', approved: 9, rejected: 1, rate: 0.9, previous: { approved: 18, rejected: 2, rate: 0.9 } });
+  assert.deepEqual(flat.lines[2], ['Previous 30 days', '90% · no change']);
+  const down = readinessCard({ vertical: 'explainers', approved: 7, rejected: 3, rate: 0.7, previous: { approved: 8, rejected: 2, rate: 0.8 } });
+  assert.deepEqual(down.lines[2], ['Previous 30 days', '80% ▼ 10 pts']);
 });
 
 test('worker cap: a hung report rejects with a timeout; a quick one passes its result through', async () => {

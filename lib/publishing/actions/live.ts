@@ -4,6 +4,7 @@ import { carouselActions } from './carousels';
 import { explainerActions } from './explainers';
 import { reelActions } from './reels';
 import { storyActions } from './stories';
+import { lastFewDaysActions } from './last-few-days';
 import type { ContentActions } from './types';
 
 /** Every type's actions with their live functions (the hub's action routes use this). */
@@ -27,6 +28,9 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
     storiesRepo,
     placement,
     explainersSchedule,
+    lfdSchedule,
+    lfdItems,
+    lfdSettings,
   ] = await Promise.all([
     import('@/lib/social/store'),
     import('@/lib/social/overnight/schedule'),
@@ -46,6 +50,9 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
     import('@/lib/stories/repository'),
     import('@/lib/social-hub/placement'),
     import('@/lib/explainers/publish/schedule'),
+    import('@/lib/lfd/schedule'),
+    import('@/lib/lfd/items'),
+    import('@/lib/lfd/settings'),
   ]);
   const db = storiesDb.liveStoriesDb;
   const storiesSpine = (text: string, params?: unknown[]) => db.query(text, params) as Promise<{ rows: any[] }>;
@@ -101,6 +108,17 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       plan: placement.planPlacement,
       // The set's move and its re-projection onto the spine commit together.
       rescheduleSet: (id, nyDate, publishAt) => db.transaction((tx) => storiesRepo.rescheduleSet(tx, id, nyDate, publishAt)),
+    }),
+    last_few_days: lastFewDaysActions({
+      query: socialQuery,
+      approvePost: (q, postId) => lfdSchedule.approveLfdPost(q, postId),
+      rejectPost: lfdSchedule.rejectLfdPost,
+      hardPublishPost: lfdSchedule.hardPublishLfdPost,
+      publishingLive: async (q) => (await lfdSettings.readLfdSettings(q)).publishingLive,
+      unschedulePost: lfdSchedule.unscheduleLfdPost,
+      itemId: lfdItems.lfdItemId,
+      placeItem: placement.placeItem,
+      rescheduleItem: placement.rescheduleItem,
     }),
   };
 }

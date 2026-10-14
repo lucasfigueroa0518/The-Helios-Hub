@@ -22,8 +22,9 @@ import { leadImage } from './lead-image';
 import { findPhotos, REFUSED_ICON_SCENE } from './photos';
 import { judgedPool, MIN_STORIES, mergeSameEvent, RUNDOWN_POOL, rundownOrder, scoreMajor, Selector, slideOrder, withoutUsed } from './pick';
 import { buildPost } from './post';
+import { leadOrder } from './lead';
 import { carouselLane, freshFeedLane, lastCarouselRunAt, reelsLane } from './sources';
-import { finishRun, insertPost, previousPosts, recentPhotoUrls, startRun, usedIdeaIds } from './store';
+import { adoptRun, finishRun, insertPost, previousPosts, recentPhotoUrls, startRun, usedIdeaIds } from './store';
 import type { Drop, LfdCandidate, LfdWindow, Pick, Ready, StoryCopy } from './types';
 import { checkSlide, VISION_UNAVAILABLE, type SlideVerdict } from './vision';
 import { extendWindow, windowFor } from './window';
@@ -52,6 +53,8 @@ export type LfdRunDeps = {
   capUsd: number;
   /** Claude and Jev spend so far (the CLI wires the run budget and Jev tally here). */
   spend: () => { claudeUsd: number; jevUsd: number };
+  /** A run the worker already claimed (lfd.runs status running): it is adopted instead of inserting a new row. */
+  runId?: string;
 };
 
 /** Window start as an instant: midnight NY after `after` is close enough for "runs finished since". */
@@ -148,9 +151,9 @@ async function inPool<T>(items: T[], n: number, fn: (item: T) => Promise<void>):
   await Promise.all(Array.from({ length: Math.min(n, items.length) }, worker));
 }
 
-export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: string; postId: string; stories: number; short: boolean } | { ok: false; runId: string; error: string }> {
+export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: string; postId: string; stories: number; short: boolean; recorded?: boolean } | { ok: false; runId: string; error: string }> {
   const nyDate = nyDateKey(d.now);
-  const runId = await startRun(d.query, d.trigger, d.capUsd, nyDate);
+  const runId = d.runId ? await adoptRun(d.query, d.runId, d.capUsd, nyDate) : await startRun(d.query, d.trigger, d.capUsd, nyDate);
   const record: Record<string, unknown> = {};
   let jevCalls = 0;
   const jev: JevAsk = (req, meta) => {
@@ -158,7 +161,17 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     record.jevCalls = jevCalls;
     return d.jev(req, meta);
   };
-  const run: LfdRunDeps = { ...d, jev };
+  // One read per article page per run: leadImage and any later use share it.
+  const pages = new Map<string, Promise<PageRead>>();
+  const readPage = (url: string): Promise<PageRead> => {
+    let page = pages.get(url);
+    if (!page) {
+      page = d.readPage(url);
+      pages.set(url, page);
+    }
+    return page;
+  };
+  const run: LfdRunDeps = { ...d, jev, readPage };
   try {
     const previous = await previousPosts(d.query, PREVIOUS_POSTS);
     const used = usedIdeaIds(previous);
@@ -245,7 +258,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       const taken = new Set([...exclude, ...ready.map((r) => r.photo.src)]);
       const leads: Array<Awaited<ReturnType<typeof leadImage>>> = [];
       for (const item of checked) {
-        const lead = await leadImage(d.readPage, item.pick, taken);
+        const lead = await leadImage(readPage, item.pick, taken);
         if (lead) taken.add(lead.photo.src);
         leads.push(lead);
       }
@@ -273,9 +286,13 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     for (let round = 0; round < MAX_ROUNDS && pending.length > 0; round++) pending = await runRound(pending, round);
     unfinished(pending);
 
-    const finalOrder = (): Ready[] => {
-      const order = slideOrder(ready.map((r) => r.pick));
-      const final = order.map((p) => ready.find((r) => r.pick.key === p.key)!);
+    /** Lead scores by story key, judged once per story this run (spec §4.2). */
+    const leadScores = new Map<string, number>();
+    const finalOrder = async (): Promise<Ready[]> => {
+      const base = slideOrder(ready.map((r) => r.pick)).map((p) => ready.find((r) => r.pick.key === p.key)!);
+      const lead = await leadOrder(base, jev, leadScores);
+      record.lead = lead.error ? { by: lead.by, error: lead.error } : { by: lead.by };
+      const final = lead.order;
       // Spec §4.1: at most 2 setups per post; replacement rounds can add more than normalize's per-call cap.
       let setups = 0;
       for (const r of final) {
@@ -298,7 +315,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
         let v = verdicts.get(id);
         if (!v) {
           const png = await fs.readFile(`${dir}/slide-slide-${String(i + 2).padStart(2, '0')}.png`).catch(() => null);
-          v = png ? await checkSlide(d.create, png, { headline: r.copy.headline, body: r.copy.body, names: r.copy.names }) : { ok: true, reason: VISION_UNAVAILABLE, costUsd: 0 };
+          v = png ? await checkSlide(d.create, png, { headline: r.copy.headline, body: r.copy.body, names: r.copy.names, outlet: r.pick.sourceName }) : { ok: true, reason: VISION_UNAVAILABLE, costUsd: 0 };
           vision.checked += 1;
           vision.usd += v.costUsd;
           if (v.reason === VISION_UNAVAILABLE) vision.unavailable += 1;
@@ -334,7 +351,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       return { render, slideObjects, fit: fit as FitResult | null, visionProblems };
     };
 
-    let final = finalOrder();
+    let final = await finalOrder();
     if (final.length === 0) throw new Error('no stories survived');
     let rendered: Awaited<ReturnType<typeof renderAndStore>>;
     try {
@@ -342,16 +359,28 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     } catch (err) {
       if (!(err instanceof BrokenImages)) throw err;
       // One extra round: drop each story whose photo failed to load or was rejected, replace it, re-render (whatever fails then is recorded).
+      // A rejected article lead image first gets one finder search for the same story; only if that finds nothing is the story dropped.
       const next: Pick[] = [];
-      const leave = [...err.keys.map((key) => ({ key, reason: 'image-failed' as const, detail: undefined })), ...err.rejected.map((x) => ({ key: x.key, reason: 'vision-rejected' as const, detail: x.reason }))];
-      for (const { key, reason, detail } of leave) {
-        const i = ready.findIndex((r) => r.pick.key === key);
-        const [gone] = ready.splice(i, 1);
+      const take = (key: string) => {
+        const [gone] = ready.splice(ready.findIndex((r) => r.pick.key === key), 1);
         exclude.add(gone!.photo.src);
-        await replace(gone!.pick, reason, next, detail);
+        return gone!;
+      };
+      const isLead = (key: string) => ready.find((r) => r.pick.key === key)?.photoSource === 'lead';
+      const leadRejected = err.rejected.filter((x) => isLead(x.key)).map((x) => ({ gone: take(x.key), reason: x.reason }));
+      const leave = [...err.keys.map((key) => ({ key, reason: 'image-failed' as const, detail: undefined })), ...err.rejected.filter((x) => !leadRejected.some((l) => l.gone.pick.key === x.key)).map((x) => ({ key: x.key, reason: 'vision-rejected' as const, detail: x.reason }))];
+      for (const { key, reason, detail } of leave) await replace(take(key).pick, reason, next, detail);
+      if (leadRejected.length) {
+        const again = await findPhotos(d.photos, leadRejected.map(({ gone }) => ({ pick: gone.pick, copy: gone.copy })), new Set([...exclude, ...ready.map((r) => r.photo.src)]));
+        for (const [j, { gone, reason }] of leadRejected.entries()) {
+          const photo = again.photos[j];
+          const photoTrace = [`lead image rejected by vision: ${reason}: ${gone.photo.src}`, ...(again.traces[j] ?? [])];
+          if (photo) ready.push({ pick: gone.pick, copy: gone.copy, photo, photoSource: 'finder', photoTrace });
+          else await replace(gone.pick, 'vision-rejected', next, photoTrace.includes(REFUSED_ICON_SCENE) ? `${reason}; finder: ${REFUSED_ICON_SCENE}` : `${reason}; the finder found no photo`);
+        }
       }
       if (next.length) unfinished(await runRound(next, MAX_ROUNDS));
-      final = finalOrder();
+      final = await finalOrder();
       if (final.length === 0) throw new Error('no stories survived');
       rendered = await renderAndStore(final, false);
     }
@@ -366,7 +395,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       ideaIds: [...new Set(final.flatMap((r) => [r.pick.key, ...r.pick.refs]))],
       // `photo` is the result; the writer's request (copy.photo) is kept as `photoAsk` so the review screen sees both.
       stories: final.map((r) => ({
-        lane: r.pick.lane, origin: r.pick.origin, url: r.pick.url, outlet: r.pick.sourceName, major: r.pick.major, net: r.pick.net,
+        lane: r.pick.lane, origin: r.pick.origin, url: r.pick.url, outlet: r.pick.sourceName, major: r.pick.major, net: r.pick.net, lead: leadScores.get(r.pick.key) ?? null,
         ...r.copy,
         photoAsk: r.copy.photo,
         photo: r.photo,
@@ -380,11 +409,12 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       renderProblems: [...renderProblemsOf(fit), ...visionProblems],
       short,
     });
-    record.picks = final.map((r) => ({ key: r.pick.key, lane: r.pick.lane, headline: r.pick.headline, origin: r.pick.origin, major: r.pick.major, net: r.pick.net }));
+    record.picks = final.map((r) => ({ key: r.pick.key, lane: r.pick.lane, headline: r.pick.headline, origin: r.pick.origin, major: r.pick.major, net: r.pick.net, lead: leadScores.get(r.pick.key) ?? null }));
     record.stories = final.length;
     const spend = d.spend();
-    await finishRun(d.query, runId, { status: short ? 'partial' : 'ok', stopReason: short ? `short post: only ${final.length} stories` : undefined, claudeUsd: spend.claudeUsd, jevUsd: spend.jevUsd, record });
-    return { ok: true, runId, postId, stories: final.length, short };
+    // recorded false: the run row was no longer running (the worker timed it out); it stays failed.
+    const recorded = await finishRun(d.query, runId, { status: short ? 'partial' : 'ok', stopReason: short ? `short post: only ${final.length} stories` : undefined, claudeUsd: spend.claudeUsd, jevUsd: spend.jevUsd, record });
+    return { ok: true, runId, postId, stories: final.length, short, recorded };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     try {

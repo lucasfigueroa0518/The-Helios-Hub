@@ -3,7 +3,7 @@
  * its own rows to `HubPost`; native metadata stays per vertical (SH-04).
  */
 
-export type Vertical = 'reels' | 'explainers' | 'carousels' | 'stories';
+export type Vertical = 'reels' | 'explainers' | 'carousels' | 'stories' | 'last_few_days';
 
 export type Format = 'reel' | 'feed' | 'story';
 

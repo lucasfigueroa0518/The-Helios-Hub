@@ -2,6 +2,7 @@ import type { PostingState } from '@/lib/content-type/posting';
 import { HEARTBEAT_STALE_MS } from '@/lib/publishing/publisher';
 import type { HubQuery } from '@/lib/social-hub/db';
 import { reportCarousels } from '@/lib/social-hub/health/reporters/carousels';
+import { reportLastFewDays } from '@/lib/social-hub/health/reporters/last-few-days';
 import { makeExplainersReporter } from '@/lib/social-hub/health/reporters/explainers';
 import { reportReels } from '@/lib/social-hub/health/reporters/reels';
 import { emptyReport, type Reporter } from '@/lib/social-hub/health/reporters/shared';
@@ -18,6 +19,7 @@ export const REPORTERS: Record<Vertical, (h: Handles) => Promise<{ q: HubQuery; 
   reels: async (h) => ({ q: h.q, run: reportReels }),
   carousels: async (h) => ({ q: h.q, run: reportCarousels }),
   stories: async (h) => ({ q: h.q, run: reportStories }),
+  last_few_days: async (h) => ({ q: h.q, run: reportLastFewDays }),
   explainers: async (h) => ({ q: await h.explainersQ(), run: makeExplainersReporter(h.q) }),
 };
 

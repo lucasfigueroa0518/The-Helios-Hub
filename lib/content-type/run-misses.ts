@@ -21,7 +21,7 @@ import { SERIES_LABEL } from '@/lib/stories/render/copy';
 export type RunMiss = { key: string | null; title: string; detail: string | null };
 export type RunMisses = Record<Vertical, RunMiss[]>;
 
-export const NO_MISSES: RunMisses = { reels: [], carousels: [], explainers: [], stories: [] };
+export const NO_MISSES: RunMisses = { reels: [], carousels: [], explainers: [], stories: [], last_few_days: [] };
 export const MISS_TITLE = 'Run didn’t finish';
 
 const DETAIL_MAX = 140;
@@ -82,6 +82,8 @@ export async function readRunMisses(q: HubQuery, now = new Date()): Promise<RunM
         title: r.trigger === 'scheduled' ? 'Tonight’s carousel run didn’t finish' : 'The carousel run didn’t finish',
         detail: short(r.reason),
       })),
+    // Last Few Days has no "run didn't finish" line yet (its runs live in lfd.runs); an empty card keeps "Not made yet".
+    last_few_days: [],
   };
 }
 

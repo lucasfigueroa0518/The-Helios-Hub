@@ -60,7 +60,7 @@ test('reels pool: the latest slate, top 10 news ideas by net plus every blockbus
   assert.equal(storyKey('https://www.X.test/a/?utm_source=ig#top'), 'x.test/a');
 });
 
-test('reels: The Number ideas (7 days) and free-tool leads (Ball Knowledge, GitHub Trending, catalog)', async () => {
+test('reels: The Number ideas (7 days) and free-tool hints (Ball Knowledge, GitHub Trending; never the catalog)', async () => {
   const { db } = await harnessDb();
   const slate = await addSlate(db, '2026-10-06');
   await addIdea(db, slate, { headline: 'ChatGPT hits 800M weekly users', url: 'https://x.test/n', net: 5, bucket: 'the_number' });
@@ -69,7 +69,7 @@ test('reels: The Number ideas (7 days) and free-tool leads (Ball Knowledge, GitH
   await db.query(`INSERT INTO reels.list_catalog (list_id, entry_name, entry_url, description) VALUES ('awesome', 'GIMP', 'https://gimp.org', 'Image editor')`);
   assert.deepEqual((await theNumberIdeas(db, DATE)).map((c) => c.headline), ['ChatGPT hits 800M weekly users']);
   const leads = await freeToolLeads(db, DATE);
-  assert.deepEqual(leads.map((l) => l.origin).sort(), ['catalog', 'github', 'reels']);
+  assert.deepEqual(leads.map((l) => l.origin).sort(), ['github', 'reels']);
 });
 
 test('carousel: qualified stories from the last 30 hours with their post photo; brief numbers; used photos', async () => {
@@ -190,6 +190,44 @@ test('Morning Download: a carousel photo another story used this week is not kep
   const srcs = r.frames.map((f) => (f.copy as { photo?: { src: string } }).photo?.src);
   assert.ok(!srcs.includes('https://img.test/openai.jpg'));
   assert.ok(photos.requests.some((q) => q.query === 'OpenAI'), 'the OpenAI frame was searched');
+});
+
+test('Morning Download: the opener is the photo set\'s cover (searched first); a kept carousel photo under 600 is searched instead (2026-10-14)', async () => {
+  const { db } = await harnessDb();
+  const slate = await addSlate(db, DATE);
+  await addIdea(db, slate, { headline: 'Nvidia posts record revenue', url: 'https://r.test/nvidia', net: 8 });
+  await db.query(`INSERT INTO social.runs (finished_at, record) VALUES ($1, $2)`, ['2026-10-08T02:00:00Z', JSON.stringify({ selection: { scored: [{ id: 'https://c.test/openai', status: 'qualified', outlets: ['Bloomberg'], members: [{ title: 'OpenAI releases GPT-6' }], representative: { title: 'OpenAI releases GPT-6' }, body: 'OpenAI released GPT-6.' }], shortlist: [] } })]);
+  await db.query(`INSERT INTO social.posts (slug, story_id, status, render, origin) VALUES ('gpt6', 'https://c.test/openai', 'review', $1, 'pipeline')`, [JSON.stringify({ slides: [{ photoUrl: 'https://img.test/small.jpg', photoCredit: 'Photo: OpenAI', photoKind: 'scene' }] })]);
+  const write = stubWriter({
+    submit_headlines: (params) => ({
+      stories: (materialOf(params) as Array<{ key: string; headline: string }>).map((s) => ({ key: s.key, headline: `${s.headline} on Monday.`, source_verb: 'via', source_name: 'Wired', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
+      opener_visual: { kind: 'setting', query: 'data center' },
+    }),
+  });
+  const asked: PhotoRequest[] = [];
+  const photos = {
+    usd: 0,
+    size: async (url: string) => (url === 'https://img.test/small.jpg' ? { w: 868, h: 488 } : { w: 2000, h: 1400 }),
+    async find() {
+      return null;
+    },
+    async findSet(reqs: PhotoRequest[], trace?: string[][]) {
+      asked.push(...reqs);
+      trace?.push(...reqs.map(() => ['searched']));
+      return reqs.map((r) => ({ src: `https://p.test/${r.query.replace(/\s+/g, '-')}.jpg`, credit: 'C', kind: 'scene' as const }));
+    },
+  };
+  const deps = await buildDeps(db, 'morning_download', { write, photos: photos as unknown as ReturnType<typeof stubPhotos> });
+  const r = await buildMorningDownload(deps);
+  assert.equal(r.ok, true);
+  if (!r.ok) return;
+  assert.equal(asked[0]!.query, 'data center', 'the opener is the first request (the cover)');
+  assert.ok(asked.some((q) => q.query === 'OpenAI'), 'the small kept photo was searched instead');
+  const srcs = r.frames.map((f) => (f.copy as { photo?: { src: string } }).photo?.src);
+  assert.equal(srcs[0], 'https://p.test/data-center.jpg');
+  assert.ok(!srcs.includes('https://img.test/small.jpg'));
+  const log = r.payload.photo_log as Array<{ frame: string; steps: string[] }>;
+  assert.ok(log.some((p) => /too small \(868×488; needs 600\)/.test(p.steps[0] ?? '')));
 });
 
 test('Morning Download: the photo set\'s trace is saved by frame, so an empty frame says which check emptied it', async () => {

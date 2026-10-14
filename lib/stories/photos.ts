@@ -17,6 +17,7 @@
  * bank's reader also joins the search (off until its finder_source switch
  * is flipped). Offering never blocks or fails a find.
  */
+import { createSizeProbe, type SizeProbe } from '@/lib/social/photos/size';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { PhotoBank } from '@/lib/media-library/bank';
 import { createJevAsk, type JevAsk } from '@/lib/social/jev/client';
@@ -45,6 +46,11 @@ export type PhotoRequest = {
   copy?: string;
   /** Never pick these (photos used in the last 7 days, or already in this set). */
   exclude: Set<string>;
+  /**
+   * This frame is the set's cover (a Morning Download opener): only on the first request of a set, it gets the
+   * cover rules (no logo, the 1080 floor, promotion; size.ts). Absent: the first frame is a story like the rest.
+   */
+  cover?: boolean;
 };
 
 export interface PhotoFinder {
@@ -58,6 +64,8 @@ export interface PhotoFinder {
   findSet?(reqs: PhotoRequest[], trace?: string[][]): Promise<Array<Photo | null>>;
   /** Vision and Jev spend so far, for the set's cost rows. */
   readonly usd: number;
+  /** Reads a photo's pixel size (size.ts), so a photo kept from elsewhere is held to the same floor. Absent: not checked. */
+  readonly size?: SizeProbe;
 }
 
 /** The design stage when the finder has it; otherwise one find at a time. */
@@ -137,10 +145,13 @@ export function createLivePhotoFinder(opts: { jev?: JevAsk; http?: typeof fetch;
   const tagSheet = opts.create ? createTagSheet({ create: async (p) => opts.create!(p) }) : undefined;
   const faces = detectFacesLive;
   const secondPhotos = createSecondPhotos({ http: opts.http ?? fetch });
+  // The size floors (size.ts): read a photo's size when its source doesn't state one; kept photos are checked too.
+  const size = createSizeProbe(opts.http ?? fetch);
   return {
     get usd() {
       return usd;
     },
+    size,
     async findSet(reqs, trace) {
       const usable = reqs.map((r) => (KINDS.has(r.kind) && r.query.trim() ? r : null));
       const live = usable.filter((r): r is PhotoRequest => Boolean(r));
@@ -194,12 +205,13 @@ export function createLivePhotoFinder(opts: { jev?: JevAsk; http?: typeof fetch;
       const designed = await photosForDraft(draft, brief, pages, {
         jev: tallied,
         http: opts.http ?? fetch,
+        size,
         faces,
         secondPhotos,
         ...(vision ? { vision } : {}),
         ...(tagSheet ? { tagSheet } : {}),
         ...(opts.bank ? { bank: opts.bank.reader } : {}),
-      }, { recent: exclude, storyDate });
+      }, { recent: exclude, storyDate, plainCover: !live[0]!.cover });
       const traces = [designed.cover, ...designed.slides];
       let i = 0;
       return usable.map((r, k) => {

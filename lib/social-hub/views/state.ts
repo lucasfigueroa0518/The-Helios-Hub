@@ -1,6 +1,7 @@
 import { nyDateOf } from '@/lib/social-hub/time';
 import { clock, relative, timeLeft, whenInline } from '@/lib/social-hub/views/format';
 import type { HubPost } from '@/lib/social-hub/types';
+import { lastWindowToday } from '@/lib/social-hub/health/approvals';
 
 /**
  * The lifecycle state a person sees (planning/Social Hub/REDESIGN/MATRICES.md
@@ -170,7 +171,12 @@ export function postState(post: HubPost, now: Date): PostState {
       // The made date tells apart two versions of the same topic (one waiting, one scheduled).
       // Never a made time in the future (a set built for tomorrow can carry tomorrow's date).
       const made = post.generatedAt && post.generatedAt <= now.toISOString() ? `Made ${whenInline(post.generatedAt, now)}` : null;
-      if (needsPerson(post, now)) return { ...S.needs_you, line: tried ?? [made, 'approve to schedule it'].filter(Boolean).join(' · ').replace(/^a/, 'A') };
+      if (needsPerson(post, now)) {
+        // Today's last window is its deadline (Stories: 10 AM); once it has closed, approving schedules it for another day.
+        const end = lastWindowToday(post.vertical, now);
+        const ask = end ? `approve by ${clock(end.toISOString())} to post today` : 'approve to schedule it';
+        return { ...S.needs_you, line: tried ?? [made, ask].filter(Boolean).join(' · ').replace(/^a/, 'A') };
+      }
       if (post.approval.approvedAt) return { ...S.approved, line: tried ?? 'Waiting for the next open slot' };
       return { ...S.ready, line: tried ?? (made ? `${made} · not scheduled` : 'Not scheduled') };
     }

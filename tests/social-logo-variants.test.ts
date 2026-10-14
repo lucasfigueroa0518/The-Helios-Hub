@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { briefSuperIntelligenceForce } from '@/fixtures/social/briefs';
-import { companyRung } from '@/lib/social/photos/design';
+import { coverRequest } from '@/lib/social/photos/design';
 import { newSearchContext, searchVisual } from '@/lib/social/photos/find';
 import type { IdentityResult } from '@/lib/social/photos/identity';
 import { MAX_PRODUCT_LOGOS, fetchLogos } from '@/lib/social/photos/logo';
@@ -185,13 +185,12 @@ test('covers take the least recently used mark first, never-used before any used
 
 // ── The cover step ──────────────────────────────────────────────────────────
 
-test('companyRung: a cover whose logo request found nothing tries the same company’s other looks', () => {
-  assert.deepEqual(companyRung({ kind: 'logo', query: 'Acme' }, { candidates: [] }), { kind: 'company', query: 'Acme' });
+test('coverRequest: a cover that asks for a logo searches the company instead (no logo-only covers)', () => {
+  assert.deepEqual(coverRequest({ kind: 'logo', query: 'Acme' }), { kind: 'company', query: 'Acme' });
 });
 
-test('companyRung: not when the logo found something, and not for any other kind of request', () => {
-  assert.equal(companyRung({ kind: 'logo', query: 'Acme' }, { candidates: [{ url: 'x' } as never] }), null);
-  for (const kind of ['person', 'company', 'product', 'event', 'thematic', 'setting'] as const) assert.equal(companyRung({ kind, query: 'Acme' }, { candidates: [] }), null, kind);
+test('coverRequest: every other kind of request is unchanged', () => {
+  for (const kind of ['person', 'company', 'product', 'event', 'thematic', 'setting'] as const) assert.deepEqual(coverRequest({ kind, query: 'Acme' }), { kind, query: 'Acme' }, kind);
 });
 
 // ── The photo bank keeps every variant ──────────────────────────────────────

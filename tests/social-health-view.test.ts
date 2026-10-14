@@ -24,7 +24,7 @@ test('headline names the type that failed and how often', () => {
 
 test('rows: one per type plus publisher, labels from VERTICALS, 14 blocks each', () => {
   const m = healthModel({ ...previewHealth(), windowNights: 14 });
-  assert.deepEqual(m.rows.map((r) => r.label), ['Text on Screen', 'Explainer Reels', 'Carousels', 'IG Stories', 'Publisher']);
+  assert.deepEqual(m.rows.map((r) => r.label), ['Text on Screen', 'Explainer Reels', 'Carousels', 'IG Stories', 'Last Few Days', 'Publisher']);
   assert.ok(m.rows.every((r) => r.blocks.length === 14));
   const car = m.rows[2]!;
   assert.equal(car.blocks.at(-1)!.tone, 'failed');
@@ -67,7 +67,7 @@ test('date formats: eyebrow has no year; card titles are short', () => {
   const m = healthModel({ ...previewHealth(), windowNights: 14 });
   assert.equal(m.eyebrow, 'Morning report · Thursday, October 8 · 7:30 AM');
   assert.equal(m.rows[2]!.blocks.at(-1)!.card.title, 'Carousels · Thu Oct 8');
-  assert.equal(m.rows[4]!.blocks.at(-1)!.card.title, 'Publisher · Thu Oct 8');
+  assert.equal(m.rows.at(-1)!.blocks.at(-1)!.card.title, 'Publisher · Thu Oct 8');
 });
 
 test('publisher-only failure names the publisher', () => {

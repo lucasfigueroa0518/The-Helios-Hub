@@ -290,7 +290,8 @@ window.__faces = (async () => {
           const over = { left: Math.max(0, b.left - r.left), top: Math.max(0, b.top - r.top), right: Math.max(0, r.right - b.right), bottom: Math.max(0, r.bottom - b.bottom) };
           // Full-bleed photos are clipped by the slide; they may extend past it (spreads by design).
           // A framed photo's blurred copy is scaled past its frame and clipped by it (adaptive framing).
-          if (el.matches('img.helios-photo, .helios-backdrop__shade, .helios-cover, .helios-image, .helios-frame__blur')) return;
+          // The image layout's scrim band bleeds to the slide edges and its root clips it (drafts/image.css).
+          if (el.matches('img.helios-photo, .helios-backdrop__shade, .helios-cover, .helios-image, .helios-frame__blur, .helios-v2-image__fade, .helios-v2-image__scrim')) return;
           // Icon backgrounds run off the edge by design (photo spec §5) and carry no text.
           if (el.closest('.helios-icon-bg')) return;
           if (Object.values(over).some((v) => v > tol)) {
