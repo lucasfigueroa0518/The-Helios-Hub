@@ -81,7 +81,7 @@ export function monthModel(posts: readonly HubPost[], month: string, now: Date, 
     if (day >= today && day <= addDays(today, 1)) {
       // Open slots, today and tomorrow only: past that the nightly run fills them,
       // so rings would only repeat the predictable (critique 2026-10-08, P2-D).
-      for (const t of dayPlan(shown, day, carouselOff).types) {
+      for (const t of dayPlan(shown, day, carouselOff, today).types) {
         if (!types.has(t.vertical)) continue;
         for (let i = 0; i < t.open.length; i++) marks.push({ vertical: t.vertical, kind: 'open' });
       }
@@ -138,7 +138,7 @@ export function daySlots(posts: readonly HubPost[], day: string, types: Readonly
   const placed: DaySlot[] = shown
     .filter((p) => p.nyDate === day && p.status !== 'ready')
     .map((p) => ({ kind: 'post', post: p, at: p.postedAt ?? p.publishAt }));
-  const open: DaySlot[] = day < today ? [] : dayPlan(shown, day, carouselOff).types
+  const open: DaySlot[] = day < today ? [] : dayPlan(shown, day, carouselOff, today).types
     .filter((t) => types.has(t.vertical))
     .flatMap((t) => t.open
       // A window that has already closed today isn't a slot anyone can fill.

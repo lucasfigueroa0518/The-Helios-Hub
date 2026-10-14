@@ -45,3 +45,65 @@ test('readDayQuotas carries the carousel days off from lfd.settings', async () =
   const q = await readDayQuotas(query, Promise.resolve(query));
   assert.deepEqual([q.lfdDays, q.last_few_days], [[2, 5], 1]);
 });
+
+// Closing Carousels on Last Few Days days only removes OPEN capacity; content already on a day keeps its place.
+import { typeHubModel } from '@/lib/content-type/model';
+import type { HubDataset } from '@/lib/social-hub/dataset';
+import type { HubPost } from '@/lib/social-hub/types';
+import { monthModel } from '@/lib/social-hub/views/calendar';
+import { slotChoices } from '@/lib/social-hub/views/offer';
+import { contentModel } from '@/lib/social-hub/views/today';
+import { previewDataset } from '@/tests/fixtures/social-hub/preview-dataset';
+
+const NOW = new Date('2026-10-13T15:00:00Z'); // Tuesday 11:00 AM New York
+
+function lfdOn(carousels: Array<[string, string, string, string]>): HubDataset {
+  const d = previewDataset();
+  const tpl = d.posts.find((p) => p.vertical === 'carousels' && p.idea && p.generatedAt && p.status === 'published')!;
+  const mk = ([id, nyDate, status, at]: [string, string, string, string]): HubPost =>
+    ({ ...tpl, id, nyDate, status, idea: { ...tpl.idea!, id: `idea-${id}` }, media: { kind: 'slides', slides: (tpl.media as { slides: Array<{ src: string | null }> }).slides.map((x) => ({ ...x, src: '/s.png' })) } as HubPost['media'], publishAt: at, postedAt: status === 'published' ? at : null, slot: { id: 'afternoon', label: 'Afternoon' } }) as HubPost;
+  return {
+    ...d,
+    posts: [...d.posts.filter((p) => p.vertical !== 'carousels' && p.vertical !== 'last_few_days'), ...carousels.map(mk)],
+    dayQuotas: { reels: 3, carousels: 2, explainers: 2, last_few_days: 1, lfdDays: [2, 5] },
+    adjustments: [],
+  } as HubDataset;
+}
+const cardIds = (d: HubDataset, date: string) => typeHubModel(d, 'carousels', NOW).days.find((x) => x.date === date)?.cards.map((c) => c.post.id) ?? [];
+
+test('with auto_run on, a published carousel from last Tuesday and a booked one next Friday keep their days', () => {
+  const d = lfdOn([
+    ['last-tue', '2026-10-06', 'published', '2026-10-06T19:00:00Z'],
+    ['next-fri', '2026-10-16', 'scheduled', '2026-10-16T19:00:00Z'],
+  ]);
+  assert.deepEqual(cardIds(d, '2026-10-06'), ['last-tue']);
+  assert.deepEqual(cardIds(d, '2026-10-16'), ['next-fri']);
+  const m = monthModel(d.posts, '2026-10', NOW, 'views' as never, new Set<Vertical>(['carousels']), () => true, [2, 5]);
+  const cell = (day: string) => m.weeks.flat().find((c) => c.day === day)!;
+  assert.equal(cell('2026-10-06').posts, 1);
+  assert.equal(cell('2026-10-16').posts, 1);
+  assert.deepEqual(daySlots(d.posts, '2026-10-16', new Set<Vertical>(['carousels']), NOW, [2, 5]).map((s) => s.kind), ['post']);
+});
+
+test('with auto_run on, a carousel placed today (Tuesday) stays in the plan and takes no second slot', () => {
+  const d = lfdOn([['today', '2026-10-13', 'scheduled', '2026-10-13T19:00:00Z']]);
+  assert.deepEqual(cardIds(d, '2026-10-13'), ['today']);
+  const plan = contentModel(d, NOW).plan;
+  const car = plan.types.find((t) => t.vertical === 'carousels')!;
+  assert.equal(car.placed.length, 1);
+  assert.equal(car.open.length, 0);
+  assert.equal(quotaCandidates(d, 'carousels', NOW).length, 1);
+  assert.equal(quotaCandidates(d, 'carousels', NOW)[0].post?.id, 'today');
+});
+
+test('with auto_run on, a Tuesday with no carousel offers and shows no carousel slot', () => {
+  const d = lfdOn([]);
+  assert.deepEqual(quotaCandidates(d, 'carousels', NOW), []);
+  assert.equal(contentModel(d, NOW).plan.types.find((t) => t.vertical === 'carousels')!.windows.length, 0);
+  assert.deepEqual(daySlots(d.posts, '2026-10-13', new Set<Vertical>(['carousels']), NOW, [2, 5]), []);
+  // A Tuesday carousel gets no slot choices.
+  const ready = { ...d.posts[0], vertical: 'carousels' } as HubPost;
+  assert.deepEqual(slotChoices(d, ready, NOW), []);
+  // Wednesday still offers both.
+  assert.equal(slotChoices(d, ready, new Date('2026-10-14T12:00:00Z')).length, 2);
+});

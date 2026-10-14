@@ -1,6 +1,6 @@
 import type { HubIdea, HubPost, Vertical } from '@/lib/social-hub/types';
 import { nyDateOf } from '@/lib/social-hub/time';
-import { windowsOn } from '@/lib/social-hub/views/plan';
+import { capacityWindows, placedCount } from '@/lib/social-hub/views/plan';
 import { rankIdeas } from '@/lib/social-hub/views/pools';
 import { isRejected } from '@/lib/social-hub/views/state';
 
@@ -129,7 +129,7 @@ export function quotaCandidates(
   now: Date,
 ): QuotaCandidate[] {
   const today = nyDateOf(now)!;
-  const windows = windowsOn(vertical, today, data.dayQuotas?.lfdDays ?? []);
+  const windows = capacityWindows(vertical, today, data.dayQuotas?.lfdDays ?? [], placedCount(data.posts, vertical, today), today);
   if (vertical === 'stories') {
     // A Stories slot is one series' set for the day; its ideas feed the build.
     return windows.map((w) => {

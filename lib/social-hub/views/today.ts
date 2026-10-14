@@ -2,7 +2,7 @@ import type { HubDataset } from '@/lib/social-hub/dataset';
 import { PLACED_STATUSES } from '@/lib/social-hub/fill';
 import { quotaFrom, type Quota } from '@/lib/social-hub/house';
 import { addDays, nyDateOf } from '@/lib/social-hub/time';
-import { dayPlan, windowsOn, type DayPlan } from '@/lib/social-hub/views/plan';
+import { capacityWindows, dayPlan, placedCount, type DayPlan } from '@/lib/social-hub/views/plan';
 import { needsPerson } from '@/lib/social-hub/views/state';
 import type { HubPost, Vertical } from '@/lib/social-hub/types';
 import { allQuotaCandidates, type DayQuotas } from '@/lib/social-hub/views/day-rank';
@@ -75,7 +75,7 @@ export function slotsForDay(posts: readonly HubPost[], nyDate: string, dayQuotas
   let slots = 0;
   let filled = 0;
   for (const vertical of VERTICAL_IDS) {
-    const windows = windowsOn(vertical, nyDate, dayQuotas?.lfdDays ?? []).length;
+    const windows = capacityWindows(vertical, nyDate, dayQuotas?.lfdDays ?? [], placedCount(posts, vertical, nyDate)).length;
     const configured = vertical === 'stories' || !dayQuotas ? windows : dayQuotas[vertical] ?? windows;
     const quota = Math.min(Math.max(0, configured), windows);
     slots += quota;
@@ -102,7 +102,7 @@ export function publishingCandidates(posts: readonly HubPost[], today: string, c
   }
   const out: HubPost[] = [];
   for (const [vertical, list] of byType) {
-    out.push(...list.sort(bySoonest).slice(0, windowsOn(vertical, today, carouselOff).length));
+    out.push(...list.sort(bySoonest).slice(0, capacityWindows(vertical, today, carouselOff, placedCount(posts, vertical, today), today).length));
   }
   return out.sort(bySoonest);
 }
@@ -161,7 +161,7 @@ export function contentModel(dataset: HubDataset, now: Date): ContentModel {
     lineup,
     nowAfter,
     unplaced,
-    plan: { ...dayPlan(dataset.posts, today, carouselOff), ...slotsForDay(dataset.posts, today, dataset.dayQuotas) },
+    plan: { ...dayPlan(dataset.posts, today, carouselOff, today), ...slotsForDay(dataset.posts, today, dataset.dayQuotas) },
     quota: quotaFrom(dataset.latestQuota, dataset.posts, now),
     next,
   };

@@ -18,7 +18,7 @@ import { planFrom, quotaCandidates, stepsFor, typeDay, type PlanStep, type RunPl
 import type { Vertical } from '@/lib/social-hub/types';
 import { DEFAULT_DAY_QUOTAS } from '@/lib/social-hub/queries/day';
 import { nyDateOf } from '@/lib/social-hub/time';
-import { windowsOn } from '@/lib/social-hub/views/plan';
+import { capacityWindows, placedCount } from '@/lib/social-hub/views/plan';
 import { generate as requestStorySet } from '@/lib/stories/api';
 import { liveStoriesDb } from '@/lib/stories/db';
 
@@ -46,7 +46,7 @@ export async function livePlan(now = new Date()): Promise<RunPlan> {
   ]);
   const quotas = dataset.dayQuotas ?? DEFAULT_DAY_QUOTAS;
   // A type's quota is its posts per day, never more than its windows today (the candidates use the same rule).
-  const day = (v: 'reels' | 'carousels' | 'explainers') => typeDay(quotaCandidates(dataset, v, now), Math.min(quotas[v], windowsOn(v, today, dataset.dayQuotas?.lfdDays ?? []).length));
+  const day = (v: 'reels' | 'carousels' | 'explainers') => typeDay(quotaCandidates(dataset, v, now), Math.min(quotas[v], capacityWindows(v, today, dataset.dayQuotas?.lfdDays ?? [], placedCount(dataset.posts, v, today), today).length));
   // Stories: each series due today by its own settings.
   const weekday = new Date(`${today}T12:00:00Z`).getUTCDay();
   const held = new Set(sets.rows.map((r) => r.series));
