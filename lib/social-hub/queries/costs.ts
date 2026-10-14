@@ -6,8 +6,9 @@ import { klingClipUsdSql } from '@/lib/reels/insights';
  * Ledger reads for the cost model (§8a), SELECT only. The only money
  * sources: reels.cost_events (+ Kling clips, priced exactly as Trial Reels
  * cost analytics prices them), explainers.cost_events, carousel run costs
- * (social.runs.total_usd split by the run record's per-story costs), and
- * stories.cost_events. Denormalized totals (jobs.spend_usd, sets.spend_usd)
+ * (social.runs.total_usd split by the run record's per-story costs),
+ * stories.cost_events, and Last Few Days runs (lfd.runs Claude and Jev spend,
+ * on the post each run made). Denormalized totals (jobs.spend_usd, sets.spend_usd)
  * are never added; they are only checked against the rows (`agreement`).
  */
 
@@ -36,6 +37,8 @@ export type CostReads = {
   }>;
   storyEvents: Array<{ id: string; set_id: string | null; component: string; vendor: string; production: boolean; usd: string; ny_date: string }>;
   storySets: Array<{ set_id: string; ny_date: string; spend_usd: string }>;
+  /** Last Few Days runs with the post each made (null: it made none). Optional: older callers build reads without it. */
+  lfdRuns?: Array<{ id: string; claude_usd: string; jev_usd: string; ny_date: string; post_id: string | null }>;
 };
 
 /** Trial Reels activities whose spend belongs to one post idea (lib/reels/analytics/rollups.ts). */
@@ -80,6 +83,10 @@ export const COST_SQL = {
                   FROM stories.cost_events e LEFT JOIN stories.sets s ON s.id = e.set_id`,
   storySets: `SELECT id AS set_id, ny_date::text AS ny_date, spend_usd::text AS spend_usd
                 FROM stories.sets WHERE status NOT IN ('requested', 'building')`,
+  lfdRuns: `SELECT r.id::text AS id, r.claude_usd::text AS claude_usd, r.jev_usd::text AS jev_usd,
+                   ${day('COALESCE(r.started_at, r.requested_at)')} AS ny_date,
+                   (SELECT p.id::text FROM lfd.posts p WHERE p.run_id = r.id ORDER BY p.created_at DESC LIMIT 1) AS post_id
+              FROM lfd.runs r WHERE r.status IN ('ok', 'partial', 'failed')`,
 } as const;
 
 const EXPLAINER_KEYS = new Set<keyof typeof COST_SQL>(['explainerEvents', 'explainerRendered']);
@@ -96,6 +103,8 @@ export async function readCosts(q: HubQuery, explainersQ: Promise<HubQuery> | Hu
     return null;
   });
   const results = await Promise.all(keys.map((key) => {
+    // A database without the lfd schema reads as no Last Few Days spend, never as a cost-read failure.
+    if (key === 'lfdRuns') return q(COST_SQL[key]).catch(() => ({ rows: [] }));
     if (!EXPLAINER_KEYS.has(key)) return q(COST_SQL[key]);
     return eq ? eq(COST_SQL[key]) : Promise.resolve({ rows: [] });
   }));
@@ -196,6 +205,16 @@ export function buildLedger(r: CostReads): { rows: LedgerRow[]; pools: Pool[] } 
       vendor: e.vendor,
       mode: mode(e.production),
     });
+  }
+  // ── Last Few Days: a run's Claude and Jev spend belongs to the post it made; a run with no post stays unattributed.
+  for (const run of r.lfdRuns ?? []) {
+    const pool = `last_few_days:run:${run.id}`;
+    const target: LedgerRow['target'] = run.post_id ? { kind: 'item', item: `last_few_days:${run.post_id}` } : { kind: 'pool', pool };
+    if (!run.post_id) pools.push({ key: pool, items: [] });
+    const claude = toMicros(run.claude_usd);
+    const jev = toMicros(run.jev_usd);
+    if (claude > 0) rows.push({ id: `${pool}:claude`, vertical: 'last_few_days', nyDate: run.ny_date, micros: claude, target, label: 'writing and rewrites', vendor: 'anthropic', mode: 'production' });
+    if (jev > 0) rows.push({ id: `${pool}:jev`, vertical: 'last_few_days', nyDate: run.ny_date, micros: jev, target, label: 'story picking and fact check (jev)', vendor: 'jev', mode: 'production' });
   }
   return { rows, pools };
 }
