@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import type { PostingState } from '@/lib/content-type/posting';
 import type { HubQuery } from '@/lib/social-hub/db';
-import { runMorningReport } from '@/lib/social-hub/health/job';
+import { MORNING_REPORT_TIMEOUT_MS, runMorningReport, withTimeout } from '@/lib/social-hub/health/job';
 import { buildNight, publisherTone } from '@/lib/social-hub/health/night';
 import { readinessFor } from '@/lib/social-hub/health/readiness';
 import { readReports } from '@/lib/social-hub/health/store';
@@ -75,4 +75,19 @@ test('readiness: approved-as-is rate per type over 30 days', async () => {
   `);
   const r = (await readinessFor(query, NOW)).find((x) => x.vertical === 'reels')!;
   assert.equal(r.rate, 0.75);
+});
+
+test('worker cap: a hung report rejects with a timeout; a quick one passes its result through', async () => {
+  assert.equal(MORNING_REPORT_TIMEOUT_MS, 600_000);
+  await assert.rejects(withTimeout(new Promise(() => {}), 20, 'health report'), /health report timed out/);
+  assert.deepEqual(await withTimeout(Promise.resolve({ night: '2026-10-13', backfilled: 0 }), 1000, 'health report'), { night: '2026-10-13', backfilled: 0 });
+  await assert.rejects(withTimeout(Promise.reject(new Error('db down')), 1000, 'health report'), /db down/);
+});
+
+test('worker: the 07:30 report call is wrapped in the timeout and logged at startup', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync('scripts/social_worker.ts', 'utf8');
+  assert.match(src, /health\s*\.withTimeout\(\s*health\.runMorningReport\(/);
+  assert.match(src, /nextHealthReportAt: healthAt\.toISOString\(\)/);
+  assert.match(src, /7:30 AM morning report/);
 });

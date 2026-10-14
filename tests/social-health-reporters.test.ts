@@ -5,7 +5,8 @@ import test from 'node:test';
 import type { PostingState } from '@/lib/content-type/posting';
 import { reportExplainers } from '@/lib/social-hub/health/reporters/explainers';
 import { reportCarousels } from '@/lib/social-hub/health/reporters/carousels';
-import { funnelFrom, publishingFor, quotaFor } from '@/lib/social-hub/health/reporters/shared';
+import { emptyReport, funnelFrom, publishingFor, quotaFor, withPublishing } from '@/lib/social-hub/health/reporters/shared';
+import { typeVerdict } from '@/lib/social-hub/health/verdict';
 import { reportReels } from '@/lib/social-hub/health/reporters/reels';
 import { reportStories } from '@/lib/social-hub/health/reporters/stories';
 
@@ -24,6 +25,22 @@ test('quota: perDay for most types; enabled series that run that weekday for Sto
     { id: 'free_vs_paid', label: 'FP', enabled: false, generate: true, days: [2] },
   ];
   assert.equal(quotaFor(posting({ type: 'stories', perDay: null, series } as never), NIGHT), 1); // Tue: MD only (FP disabled)
+});
+
+test('due follows generate, not the publishing switch; a run is always due', () => {
+  const pub = { scheduledYesterday: 0, postedYesterday: 0, retriedOk: 0, failures: [], placedToday: 0, filledAutoToday: 0 };
+  // Publishing off, generating on, the run crashed after making 0 of 1.
+  const crashed = withPublishing({ ...emptyReport('carousels', NIGHT), ran: true, made: 0 }, posting({ live: false, generate: true }), pub);
+  assert.equal(crashed.due, true);
+  assert.equal(typeVerdict(crashed, 'worked').tone, 'failed');
+  // Generation off and nothing ran: not due (grey).
+  const off = withPublishing(emptyReport('carousels', NIGHT), posting({ live: true, generate: false }), pub);
+  assert.equal(off.due, false);
+  // Generation off but a run happened anyway: still judged.
+  assert.equal(withPublishing({ ...emptyReport('carousels', NIGHT), ran: true }, posting({ generate: false }), pub).due, true);
+  // Stories (generate null) follow each series' own switch through the quota.
+  const series = [{ id: 'morning_download', label: 'MD', enabled: true, generate: false, days: [0, 1, 2, 3, 4, 5, 6] }];
+  assert.equal(withPublishing(emptyReport('stories', NIGHT), posting({ type: 'stories', generate: null, perDay: null, series } as never), pub).due, false);
 });
 
 test('funnel subtracts drops stage by stage', () => {

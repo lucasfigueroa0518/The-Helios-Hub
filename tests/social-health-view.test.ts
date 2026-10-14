@@ -3,7 +3,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { briefFor } from '@/lib/social-hub/health/brief';
-import { healthModel, ordinal } from '@/lib/social-hub/health/view';
+import { healthModel, nightRecurrence, ordinal } from '@/lib/social-hub/health/view';
+import { emptyReport } from '@/lib/social-hub/health/reporters/shared';
+import { historyNights, nightsEnding } from '@/lib/social-hub/health/time';
+import type { StoredReport } from '@/lib/social-hub/health/types';
+import { nightVerdict } from '@/lib/social-hub/health/verdict';
+import type { Vertical } from '@/lib/social-hub/types';
 
 import { previewHealth } from './fixtures/social-hub/health-fixture';
 
@@ -78,4 +83,52 @@ test('ordinals past seventh are correct English', () => {
   assert.equal(ordinal(12), '12th');
   assert.equal(ordinal(22), '22nd');
   assert.equal(ordinal(3), 'third');
+});
+
+// ── History beyond the visible window (month count, New best) ────────────────
+
+function storedNights(last: string, n: number, failedNights: readonly string[]): StoredReport[] {
+  return nightsEnding(last, n).map((night) => {
+    const bad = failedNights.includes(night);
+    const reports = (['reels', 'explainers', 'carousels', 'stories'] as Vertical[]).map((v) => ({
+      ...emptyReport(v, night), due: true, ran: true, target: 1, made: bad && v === 'carousels' ? 0 : 1, needed: 1, ready: 1,
+    }));
+    return { night, builtAt: `${night}T11:30:00Z`, verdict: nightVerdict(night, reports, 'worked'), reports, failures: [] };
+  });
+}
+
+test('history: loads at least 30 nights and back to the 1st of the month', () => {
+  assert.equal(historyNights('2026-10-08'), 30);
+  assert.equal(historyNights('2026-10-31'), 31);
+});
+
+test('month count uses loaded nights beyond the 14-night window', () => {
+  const stored = storedNights('2026-10-20', 30, ['2026-10-02']);
+  const m = healthModel({ stored, live: null, readiness: [], now: new Date('2026-10-20T12:00:00Z'), windowNights: 14 });
+  assert.ok(m.rows.every((r) => r.blocks.length === 14));
+  assert.deepEqual(m.monthClean, { clean: 19, nights: 20 }); // Oct 1–20, Oct 2 failed (outside the window)
+  assert.ok(m.chips.some((c) => c.text === 'Clean nights this month 19 of 20'));
+});
+
+test('New best does not fire when an older, longer streak sits outside the window', () => {
+  // 09-11..09-25 clean (15), 09-26 and 09-27 failed, 09-28..10-10 clean (13).
+  const stored = storedNights('2026-10-10', 30, ['2026-09-26', '2026-09-27']);
+  const now = new Date('2026-10-10T12:00:00Z');
+  const m = healthModel({ stored, live: null, readiness: [], now, windowNights: 14 });
+  assert.equal(m.chips.some((c) => c.id === 'best'), false);
+  // Only the 14 visible nights would have wrongly called 13 a new best.
+  const narrow = healthModel({ stored: stored.slice(-14), live: null, readiness: [], now, windowNights: 14 });
+  assert.equal(narrow.chips.some((c) => c.id === 'best'), true);
+});
+
+test('night detail: a failure says how often it was seen in 14 nights and links the others', () => {
+  const { stored } = previewHealth();
+  const seen = nightRecurrence('2026-10-08', stored); // 30 nights passed; only the 14 ending 10-08 count
+  const writer = seen.get('carousels|writer|too_long')!;
+  assert.equal(writer.count, 3);
+  assert.deepEqual(writer.others, ['2026-09-28', '2026-10-03']);
+  for (const n of ['2026-09-28', '2026-10-03', '2026-10-08', 'slide 3 over 40 words']) assert.ok(writer.brief.includes(n), n);
+  assert.equal(seen.get('explainers|publish|service_5xx')!.count, 1);
+  // Viewed from 10-03, the 10-08 occurrence is in the future and not counted.
+  assert.deepEqual(nightRecurrence('2026-10-03', stored).get('carousels|writer|too_long')!.others, ['2026-09-28']);
 });

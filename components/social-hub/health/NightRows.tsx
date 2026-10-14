@@ -61,6 +61,8 @@ export function NightRows({ rows, base }: { rows: HealthRow[]; base: string }) {
                 <Link
                   key={b.night}
                   href={`${base}/health/night/${b.night}`}
+                  // Night pages are force-dynamic; 14-30 blocks per row would each prefetch one.
+                  prefetch={false}
                   className={`sh-ops-b is-${b.tone}${i === row.blocks.length - 1 ? ' is-last' : ''}`}
                   style={{ animationDelay: `${ri * 60 + i * 28}ms` }}
                   aria-label={`${b.card.title}: ${b.card.status}`}

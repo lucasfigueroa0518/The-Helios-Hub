@@ -1,7 +1,7 @@
 import { liveHubQuery } from '@/lib/social-hub/db';
 import { readinessFor, type Readiness } from '@/lib/social-hub/health/readiness';
 import { readReports } from '@/lib/social-hub/health/store';
-import { nightsEnding, reportNightFor } from '@/lib/social-hub/health/time';
+import { historyNights, nightsEnding, reportNightFor } from '@/lib/social-hub/health/time';
 import type { StoredReport } from '@/lib/social-hub/health/types';
 
 /**
@@ -14,7 +14,9 @@ import type { StoredReport } from '@/lib/social-hub/health/types';
 export async function loadHealthPage(now: Date, windowNights: 14 | 30): Promise<{ stored: StoredReport[]; live: StoredReport | null; readiness: Readiness[] } | { error: string }> {
   try {
     const night = reportNightFor(now);
-    const window = nightsEnding(night, windowNights);
+    // Load the month and streak history, not just the visible window; healthModel
+    // slices rows and problems back down to `windowNights`.
+    const window = nightsEnding(night, Math.max(windowNights, historyNights(night)));
     const [stored, readiness] = await Promise.all([readReports(liveHubQuery, window[0]!, night), readinessFor(liveHubQuery, now)]);
     return { stored, live: null, readiness };
   } catch (error) {

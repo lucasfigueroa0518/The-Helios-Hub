@@ -27,6 +27,10 @@
  * any refresh the hub queued (refresh-on-visit): account pull, carousel
  * insights, and the Trial Reels insights poll (its own claim and cooldown).
  *
+ * Social Hub Health: a 7:30 AM morning report (read-only) into
+ * social_hub.health_reports, capped at 10 minutes so a hung query can't stall
+ * this loop (a timeout logs health_report_failed).
+ *
  * LIVE when auto_run is on: Claude, web search, Jev (~$2 a night, capped by
  * the run's cap_usd). The worker never turns either switch on.
  */
@@ -199,7 +203,7 @@ async function main(): Promise<void> {
     let healthAt = nextHealthReport();
     let lastInsights = 0;
     let lastRerunError: string | null = null;
-    log('scheduled', { nextRunAt: runAt.toISOString(), nextInsightsAt: sweepAt.toISOString(), pollMs: POLL_MS });
+    log('scheduled', { nextRunAt: runAt.toISOString(), nextInsightsAt: sweepAt.toISOString(), nextHealthReportAt: healthAt.toISOString(), pollMs: POLL_MS });
 
     while (!stopping) {
       if (Date.now() >= runAt.getTime()) {
@@ -238,7 +242,11 @@ async function main(): Promise<void> {
 
       if (Date.now() >= healthAt.getTime()) {
         await health
-          .runMorningReport({ q: query, explainersQ: explainersHubQuery, posting: (v) => readPosting(v) }, new Date())
+          .withTimeout(
+            health.runMorningReport({ q: query, explainersQ: explainersHubQuery, posting: (v) => readPosting(v) }, new Date()),
+            health.MORNING_REPORT_TIMEOUT_MS,
+            'health report',
+          )
           .then((r) => log('health_report_complete', r))
           .catch((error) => log('health_report_failed', { error: errorText(error) }));
         healthAt = nextHealthReport();

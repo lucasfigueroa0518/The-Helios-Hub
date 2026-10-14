@@ -21,3 +21,19 @@ export async function runMorningReport(h: Handles, now: Date, backfill = 30): Pr
   }
   return { night, backfilled };
 }
+
+/** The worker's cap on one morning report, so a hung query can't stall its loop. */
+export const MORNING_REPORT_TIMEOUT_MS = 10 * 60_000;
+
+/**
+ * Rejects with a timeout error when `work` hasn't settled in `ms`. The work
+ * itself is not cancelled (a stuck query finishes or fails on its own); the
+ * caller just stops waiting for it.
+ */
+export function withTimeout<T>(work: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)), ms);
+  });
+  return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
+}

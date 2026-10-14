@@ -19,6 +19,15 @@ export function reportNightFor(now: Date): string {
   return now.getTime() >= cycleBounds(today).end.getTime() ? today : addDays(today, -1);
 }
 
+/**
+ * How many nights the Health page loads: at least 30 (the "New best" streak
+ * history) and at least back to the 1st of the report night's month (the
+ * "Clean nights this month" count), whatever the visible 14/30 window is.
+ */
+export function historyNights(night: string): number {
+  return Math.max(30, Number(night.slice(8, 10)));
+}
+
 export function nightsEnding(night: string, n: number): string[] {
   return Array.from({ length: n }, (_, i) => addDays(night, i - (n - 1)));
 }

@@ -1,7 +1,8 @@
+import { briefFor } from '@/lib/social-hub/health/brief';
 import { bestStreak, cleanStreak, groupProblems, type Problem } from '@/lib/social-hub/health/problems';
 import type { Readiness } from '@/lib/social-hub/health/readiness';
 import { REASON_LABEL, stageLabel } from '@/lib/social-hub/health/reasons';
-import { nightsEnding, reportNightFor } from '@/lib/social-hub/health/time';
+import { historyNights, nightsEnding, reportNightFor } from '@/lib/social-hub/health/time';
 import type { NightReport, StoredReport, Tone, TypeVerdict } from '@/lib/social-hub/health/types';
 import type { Vertical } from '@/lib/social-hub/types';
 import { VERTICALS, verticalInfo } from '@/lib/social-hub/verticals';
@@ -113,7 +114,8 @@ export function healthModel(input: { stored: StoredReport[]; live: StoredReport 
   const month = reportNight.slice(0, 7);
   const monthNights = [...byNight.values()].filter((r) => r.night.startsWith(month) && r.night <= reportNight);
   const monthClean = { clean: monthNights.filter(cleanNight).length, nights: monthNights.length };
-  const allTones = nightsEnding(reportNight, 30).map((n): Tone => (byNight.has(n) ? (cleanNight(byNight.get(n)) ? 'worked' : 'failed') : 'none'));
+  // Rows and problems use the visible window; month count and best streak use every loaded night.
+  const allTones = nightsEnding(reportNight, historyNights(reportNight)).map((n): Tone => (byNight.has(n) ? (cleanNight(byNight.get(n)) ? 'worked' : 'failed') : 'none'));
   const chips: HealthModel['chips'] = [];
   const top = rows.filter((r) => r.id !== 'publisher').map((r) => ({ r, s: cleanStreak(r.blocks.map((b) => b.tone)) })).sort((a, b) => b.s - a.s)[0];
   if (top && top.s >= 2) chips.push({ id: 'streak', text: `🔥 ${top.r.label} ${top.s} clean nights` });
@@ -125,4 +127,23 @@ export function healthModel(input: { stored: StoredReport[]; live: StoredReport 
     reportNight, eyebrow: `Morning report · ${eyebrowDay(reportNight)} · 7:30 AM`, clean, headline, lede, chips, monthClean,
     rows, problems, fixed, readiness: input.readiness, windowNights: input.windowNights, empty,
   };
+}
+
+export const NIGHT_LOOKBACK = 14;
+export type Recurrence = { count: number; others: string[]; brief: string };
+
+/**
+ * Night detail: for each failure kind on `night`, how often it was seen in the
+ * 14 nights ending there, the other nights it happened, and the Copy for Claude
+ * brief built over all of them (spec §5). `history` may include nights outside
+ * the 14; they are ignored.
+ */
+export function nightRecurrence(night: string, history: readonly StoredReport[]): Map<string, Recurrence> {
+  const window = nightsEnding(night, NIGHT_LOOKBACK);
+  const out = new Map<string, Recurrence>();
+  for (const p of groupProblems(history.flatMap((r) => r.failures), window)) {
+    if (!p.nights.includes(night)) continue;
+    out.set(p.key, { count: p.count, others: p.nights.filter((n) => n !== night), brief: briefFor(p) });
+  }
+  return out;
 }

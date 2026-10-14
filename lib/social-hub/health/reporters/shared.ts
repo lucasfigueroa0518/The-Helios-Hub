@@ -85,7 +85,11 @@ export async function publishingFor(q: HubQuery, vertical: Vertical, night: stri
 /** Fills target/needed/ready/posted from the quota and publishing reads. */
 export function withPublishing(r: NightReport, posting: PostingState, p: Publishing): NightReport {
   const quota = quotaFor(posting, r.night);
-  const due = posting.live && posting.generate !== false && quota > 0;
+  // Due follows the GENERATE switch, not `live` (live only gates publishing).
+  // `generate === null` (Stories) means each series carries its own switch,
+  // which quotaFor already applies. A run that actually happened is always due,
+  // so a crash on a night generation was meant to be off still shows.
+  const due = (posting.generate !== false && quota > 0) || r.ran;
   return {
     ...r,
     due,
