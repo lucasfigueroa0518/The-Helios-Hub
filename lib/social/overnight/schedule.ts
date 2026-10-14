@@ -5,7 +5,9 @@ import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { slotTakenKey } from '@/lib/instagram/window';
 import { dailyFill, quotaFilledNote, type DailyFill } from '@/lib/social-hub/fill';
 import { approveItem, bookSlot, rejectItem } from '@/lib/social-hub/spine';
-import { DEFAULT_POSTS_PER_DAY, SOCIAL_TIMEZONE } from './config';
+import { datesByWeekday } from '@/lib/lfd/days';
+import { carouselOffDays } from '@/lib/lfd/settings';
+import { CAROUSEL_SLOTS, DEFAULT_POSTS_PER_DAY, SOCIAL_TIMEZONE } from './config';
 import { carouselItemId } from './items';
 import { queuePublish } from './publish';
 import { chooseCarouselSlots, uniformIndex } from './slots';
@@ -84,9 +86,14 @@ export async function schedulePost(
   const existing = await active();
   if (existing) return { scheduled: true, id: existing.id, publishAt: new Date(existing.publish_at).toISOString() };
 
+  // LFD-02: while Last Few Days' auto_run is on, its days have no carousel windows.
+  const off = await carouselOffDays(query);
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const busy = [...(await busyFeedTimes(query, now, 'social')), ...(await ownFeedTimes(query, 'social', now))];
-    const choice = chooseCarouselSlots(now, await takenSlots(query, calendarDateKey(now, SOCIAL_TIMEZONE)), busy, await postsPerDay(query), rng, throughDate);
+    const today = calendarDateKey(now, SOCIAL_TIMEZONE);
+    const taken = await takenSlots(query, today);
+    for (const day of datesByWeekday(today, 14, off, true)) for (const w of CAROUSEL_SLOTS) taken.add(slotTakenKey(day, w.id));
+    const choice = chooseCarouselSlots(now, taken, busy, await postsPerDay(query), rng, throughDate);
     if (!choice) return { scheduled: false, note: throughDate ? 'Today’s carousel windows are taken or over.' : 'No carousel window is open in the next two weeks.' };
     try {
       const booked = await bookSlot(query, { vertical: 'carousels', itemId, nyDate: choice.nyDate, slot: choice.slot, publishAt: choice.publishAt, source });
