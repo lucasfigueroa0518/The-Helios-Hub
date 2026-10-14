@@ -42,7 +42,7 @@ export function PoolScreen({ dataset, base, vertical, params, now, embeddedIn }:
   const filter: PoolFilter = params.show === 'ready' || params.show === 'all' ? params.show : 'open';
   const summary = poolSummary(dataset.ideas, vertical);
   const ideas = poolList(dataset.ideas, vertical, filter, dataset.adjustments ?? []);
-  const tags = moveTags(dataset.adjustments ?? [], vertical, now);
+  const tags = moveTags(dataset.adjustments ?? [], vertical, now, new Set(dataset.ideas.filter((i) => i.vertical === vertical).map((i) => i.id)));
   const top = Math.max(...ideas.map((i) => i.score ?? 0), 0) || 1;
   // A detail every row shares says nothing about any one idea; dates read as dates, not ISO.
   const parts = (d: string | null | undefined) => (d ? d.split(' · ') : []);
@@ -102,12 +102,14 @@ export function PoolScreen({ dataset, base, vertical, params, now, embeddedIn }:
                 </tr>
               </thead>
               <tbody>
-                {ideas.map((idea) => (
+                {ideas.map((idea) => {
+                  const tag = tags.get(idea.id);
+                  return (
                   <tr key={idea.id}>
                     <td className="sh-stack-lead">
                       <span className="sh-cell-post__text">
                         <span className="sh-cell-post__name">{idea.title}</span>
-                        {tags.get(idea.id) ? <span className="sh-chip">{tags.get(idea.id)!.text}</span> : null}
+                        {tag ? <span className="sh-chip">{tag.text}</span> : null}
                         {detailOf(idea.detail) ? <span className="sh-subtle">{detailOf(idea.detail)}</span> : null}
                         <ScoreWhy idea={idea} />
                       </span>
@@ -126,7 +128,8 @@ export function PoolScreen({ dataset, base, vertical, params, now, embeddedIn }:
                     ) : null}
                     {addedVaries ? <td className="sh-nowrap sh-muted" data-prefix="Added">{addedOf(idea)}</td> : null}
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

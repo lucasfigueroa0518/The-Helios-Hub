@@ -61,3 +61,13 @@ test('the pool puts the promote first and demoted last; otherwise score order (L
   assert.deepEqual(poolList(IDEAS, 'reels', 'open').map((i) => i.title), ['Idea 1', 'Idea 2', 'Idea 3', 'Idea 4']);
   assert.deepEqual(poolList(IDEAS, 'reels', 'open', MOVES).map((i) => i.title), ['Idea 3', 'Idea 2', 'Idea 4', 'Idea 1']);
 });
+
+test('an older promote whose idea is gone does not hold Tonight; the newer present promote is Tonight', () => {
+  const present = new Set(['reels:idea:2', 'reels:idea:4']);
+  const moves = [mv(9, 'promote', '2026-10-13T10:00:00.000Z'), mv(4, 'promote', '2026-10-13T13:00:00.000Z')];
+  const tags = moveTags(moves, 'reels', NOW, present);
+  assert.equal(tags.get('reels:idea:4')?.text, 'Tonight');
+  assert.equal(tags.has('reels:idea:9'), false);
+  const ranked = dayRanking(IDEAS, 'reels', moves, NOW);
+  assert.equal(ranked.find((r) => r.idea.id === 'reels:idea:4')?.tag?.text, 'Tonight');
+});

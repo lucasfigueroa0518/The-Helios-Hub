@@ -126,10 +126,11 @@ export type MoveTag = { kind: 'tonight' | 'waiting' | 'cant' | 'demoted'; text: 
  * "Promoted · waiting"; a promote a worker skipped has stepped aside and reads
  * "Can’t be made: <reason>" until a person re-promotes or demotes it; demoted
  * ideas are "Demoted". Stories get one "Tonight" per series.
- * `now` is kept for callers; a recorded skip stands until the idea is re-moved.
+ * `present` (idea ids of the type) drops moves on ideas that are gone. `now` is kept for callers; a recorded skip stands until the idea is re-moved.
  */
-export function moveTags(moves: readonly IdeaAdjustment[], vertical: Vertical, _now: Date): Map<string, MoveTag> {
-  const mine = moves.filter((m) => m.vertical === vertical);
+export function moveTags(moves: readonly IdeaAdjustment[], vertical: Vertical, _now: Date, present?: ReadonlySet<string>): Map<string, MoveTag> {
+  // Only moves on ideas the hub knows count (as applyMoves): an absent promote must not hold Tonight.
+  const mine = moves.filter((m) => m.vertical === vertical && (!present || present.has(m.ideaId)));
   const tonight = new Set(tonightPromotes(mine).map((m) => m.ideaId));
   const tags = new Map<string, MoveTag>();
   for (const m of latestMoves(mine)) {

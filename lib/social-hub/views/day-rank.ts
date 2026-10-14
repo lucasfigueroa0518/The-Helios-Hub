@@ -64,7 +64,7 @@ const HOLDS = new Set(['scheduled', 'publishing', 'published']);
 export function dayRanking(ideas: readonly HubIdea[], vertical: Vertical, adjustments: readonly IdeaAdjustment[], now = new Date()): RankedIdea[] {
   const open = ideas.filter((i) => i.vertical === vertical && OPEN.has(i.state));
   const moves = movesFor(adjustments, vertical);
-  const tags = moveTags(moves, vertical, now);
+  const tags = moveTags(moves, vertical, now, new Set(open.map((i) => i.id)));
   const lastMove = new Map(moves.map((m) => [m.ideaId, m.kind === 'promote' ? ('promoted' as const) : ('demoted' as const)]));
   const groups = new Map<string, HubIdea[]>();
   for (const idea of open) {
