@@ -134,3 +134,22 @@ test('Review Focus 3: a moves read that fails leaves the night exactly as before
   if (result.status !== 'ok') return;
   assert.deepEqual(result.renders, [a, b]);
 });
+
+test('step aside in the same run: an older promote that is gone is skipped, the newer makeable one is rendered first, used, and spared by the trim', async () => {
+  const db = await explainersOn();
+  await saveSetting(db, 'pool_size', 2);
+  const a = await topic(db, 'A', 90);
+  const b = await topic(db, 'B', 80);
+  const p = await topic(db, 'P', 10);
+  const gone = await topic(db, 'Gone', 95, 'displaced');
+  await addMove(db, `explainers:topic:${gone}`, 'promote', '2026-10-07T20:00:00Z');
+  await addMove(db, `explainers:topic:${p}`, 'promote', '2026-10-07T20:05:00Z');
+  const result = await runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT, moves: movesOf(db) });
+  assert.equal(result.status, 'ok');
+  if (result.status !== 'ok') return;
+  assert.deepEqual(result.renders, [p, a], 'the newer promote leads, then the best of the rest');
+  assert.notEqual(await statusOf(db, p), 'displaced', 'the trim spared it');
+  assert.equal(await statusOf(db, b), 'pool', 'the exempt topic is simply not cut; nothing else is');
+  assert.deepEqual(await moveRow(db, `explainers:topic:${gone}`), { used: false, skip_reason: EXPLAINER_GONE });
+  assert.deepEqual(await moveRow(db, `explainers:topic:${p}`), { used: true, skip_reason: null });
+});

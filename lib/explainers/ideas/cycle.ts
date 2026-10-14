@@ -228,6 +228,7 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
       if (!requested.ok) capped = true;
       if (candidate.topicId === promoteTopic) {
         if (requested.ok) await usePromote();
+        // A render that doesn't start caps the night, so no other topic is tried; the promote is skipped with why.
         else await skipPromote(`The render didn’t start (${requested.reason.replace(/_/g, ' ')}).`);
       }
     }
