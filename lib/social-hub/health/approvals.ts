@@ -31,6 +31,15 @@ const at = (nyDate: string, [h, m]: [number, number]) => {
 };
 
 /**
+ * What is waiting on an approval today: ready, or scheduled today without an
+ * approval, that the hub marks as needing a person (overnight_check.ts's rule).
+ * A scheduled post from another day is not today's deadline.
+ */
+export function waitingForApproval(posts: readonly HubPost[], needsYou: (p: HubPost) => boolean, today: string): HubPost[] {
+  return posts.filter((p) => (p.status === 'ready' || (p.status === 'scheduled' && !p.approval.approvedAt && p.nyDate === today)) && needsYou(p));
+}
+
+/**
  * `waiting` is what the hub already marks as needing approval (overnight_check's
  * rule: ready, or scheduled without an approval, whose offer tone is 'needs').
  * A scheduled post's deadline is its slot; an unscheduled one's is the end of

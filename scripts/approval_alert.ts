@@ -21,7 +21,7 @@ async function main(): Promise<number> {
   const { closeDbPool } = await import('@/lib/db');
   const { loadDataset } = await import('@/lib/social-hub/load');
   const { offerer } = await import('@/lib/social-hub/views/offer');
-  const { approvalAlertLines, approvalsDue } = await import('@/lib/social-hub/health/approvals');
+  const { approvalAlertLines, approvalsDue, waitingForApproval } = await import('@/lib/social-hub/health/approvals');
   const { nyDateOf } = await import('@/lib/social-hub/time');
   const { VERTICALS } = await import('@/lib/social-hub/verticals');
 
@@ -29,10 +29,7 @@ async function main(): Promise<number> {
   const today = nyDateOf(now)!;
   const data = await loadDataset();
   const o = offerer(data, now);
-  // The same rule overnight_check.ts uses: ready, or scheduled without an approval, that the hub marks as needing one.
-  const waiting = data.posts.filter(
-    (p) => (p.status === 'ready' || (p.status === 'scheduled' && !p.approval.approvedAt)) && (p.status === 'ready' || p.nyDate === today) && o.offer(p).state.tone === 'needs',
-  );
+  const waiting = waitingForApproval(data.posts, (p) => o.offer(p).state.tone === 'needs', today);
   const lines = approvalAlertLines(approvalsDue(waiting, today, now), (v) => VERTICALS.find((x) => x.id === v)?.label ?? v);
   if (data.errors.length) lines.push(`(the hub could not read: ${data.errors.map((e: { vertical: string }) => e.vertical).join(', ')}, so this list may be short)`);
   console.log(lines.length ? lines.join('\n') : 'Nothing is waiting for approval.');
