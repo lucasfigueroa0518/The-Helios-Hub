@@ -1,9 +1,9 @@
 import { NightRows } from '@/components/social-hub/health/NightRows';
 import { ProblemsList } from '@/components/social-hub/health/ProblemsList';
+import { ReadinessRings } from '@/components/social-hub/health/ReadinessRings';
 import { HubLink } from '@/components/social-hub/nav/HubNav';
 import { briefFor } from '@/lib/social-hub/health/brief';
 import type { HealthModel } from '@/lib/social-hub/health/view';
-import { verticalInfo } from '@/lib/social-hub/verticals';
 
 /** Health (spec: social health and cost): last night's verdict, each type night by night, what keeps going wrong, what got fixed. */
 export function HealthScreen({ model, base }: { model: HealthModel; base: string }) {
@@ -40,16 +40,7 @@ export function HealthScreen({ model, base }: { model: HealthModel; base: string
 
       <ProblemsList problems={model.problems} fixed={model.fixed} briefs={briefs} base={base} clean={model.clean} nights={nights} />
 
-      {model.readiness.some((r) => r.rate !== null) && (
-        <section className="sh-ops-ready" aria-label="Auto-publish readiness">
-          {model.readiness.filter((r) => r.rate !== null).map((r) => (
-            <figure key={r.vertical} className="sh-ops-ring" style={{ ['--pct' as string]: String(r.rate) }}>
-              <svg viewBox="0 0 60 60" aria-hidden><circle className="bg" cx="30" cy="30" r="24" /><circle className="fg" cx="30" cy="30" r="24" /></svg>
-              <figcaption><b>{Math.round(r.rate! * 100)}%</b> approved as-is · {verticalInfo(r.vertical).label}</figcaption>
-            </figure>
-          ))}
-        </section>
-      )}
+      <ReadinessRings readiness={model.readiness} />
     </div>
   );
 }

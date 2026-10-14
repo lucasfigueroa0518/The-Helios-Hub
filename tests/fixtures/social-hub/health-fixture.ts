@@ -34,10 +34,10 @@ export function previewHealth(): { stored: StoredReport[]; live: null; readiness
     return { night, builtAt: `${night}T11:30:00Z`, verdict: nightVerdict(night, reports, 'worked'), reports, failures: reports.flatMap((r) => r.failures) };
   });
   const readiness: Readiness[] = [
-    { vertical: 'reels', approved: 46, rejected: 2, rate: 46 / 48 },
-    { vertical: 'explainers', approved: 22, rejected: 8, rate: 22 / 30 },
-    { vertical: 'carousels', approved: 27, rejected: 6, rate: 27 / 33 },
-    { vertical: 'stories', approved: 20, rejected: 2, rate: 20 / 22 },
+    { vertical: 'reels', approved: 46, rejected: 2, rate: 46 / 48, previous: { approved: 40, rejected: 4, rate: 40 / 44 } },
+    { vertical: 'explainers', approved: 22, rejected: 8, rate: 22 / 30, previous: { approved: 21, rejected: 7, rate: 21 / 28 } },
+    { vertical: 'carousels', approved: 27, rejected: 6, rate: 27 / 33, previous: { approved: 20, rejected: 7, rate: 20 / 27 } },
+    { vertical: 'stories', approved: 20, rejected: 2, rate: 20 / 22, previous: { approved: 0, rejected: 0, rate: null } },
   ];
   return { stored, live: null, readiness, now: FIXTURE_NOW };
 }

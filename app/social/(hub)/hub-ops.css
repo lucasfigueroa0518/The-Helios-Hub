@@ -216,6 +216,10 @@
 .sh-ops-ring .fg { stroke: var(--sh-ops-good); stroke-linecap: round; stroke-dasharray: var(--circ); stroke-dashoffset: calc(var(--circ) * (1 - var(--pct, 0))); }
 .sh-ops-ring figcaption { color: var(--color-text-muted); font-size: var(--sh-fs-small); font-variant-numeric: tabular-nums; }
 .sh-ops-ring figcaption b { color: var(--color-text); font-size: var(--sh-fs-body); }
+.sh-ops-ring { cursor: default; }
+.sh-ops-ring:hover, .sh-ops-ring:focus-visible { border-color: var(--sh-ops-good); }
+.sh-ops-tip--ready { width: 260px; }
+.sh-ops-tip--ready .sh-ops-tip__hd span:last-child { font-variant-numeric: tabular-nums; }
 
 /* ---------- night detail */
 
