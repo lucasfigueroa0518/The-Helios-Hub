@@ -22,7 +22,7 @@ import { MAJOR_NEWS, MD_GROUNDING, SAME_EVENT } from '@/lib/stories/questions';
 import { MD_HEADLINES, material, type MdHeadlinesOut } from '@/lib/stories/prompts';
 import type { FrameData, Photo, StoryData } from '@/lib/stories/render/types';
 import { recentKeys, type NewCandidate } from '@/lib/stories/repository';
-import { morningDownloadCarousel, recentUsedPhotoUrls } from '@/lib/stories/sources/carousel';
+import { morningDownloadCarousel, recentPhotoUses } from '@/lib/stories/sources/carousel';
 import { dedupe, morningDownloadReels, type StoryCandidate } from '@/lib/stories/sources/reels';
 import { writeStructured } from '@/lib/stories/writer';
 
@@ -142,11 +142,19 @@ export async function buildMorningDownload(deps: BuildDeps, sources?: Sources): 
 
   // A carousel item keeps the photo its own design stage already chose (S-29).
   // Every other frame, including the opener, is found together by that same stage.
-  const recent = await recentUsedPhotoUrls(deps.sourceDb, deps.now).catch(() => new Set<string>());
-  const held = new Set(recent);
+  // The carousel logs its photos as used when it renders, so the 7-day rule only
+  // holds a kept photo back when another story used it (2026-10-13: every kept photo
+  // was being dropped as "used" by its own carousel post).
+  const uses = await recentPhotoUses(deps.sourceDb, deps.now).catch(() => new Map<string, Set<string>>());
+  const held = new Set(uses.keys());
+  const keptUrls = new Set<string>();
   const kept: Array<Photo | null> = written.map((s) => {
-    const stored = byKey.get(s.key)!.photo;
-    if (!stored || held.has(stored.url)) return null;
+    const c = byKey.get(s.key)!;
+    const stored = c.photo;
+    if (!stored) return null;
+    const otherStory = [...(uses.get(stored.url) ?? [])].some((id) => id !== c.ref);
+    if (otherStory || keptUrls.has(stored.url)) return null;
+    keptUrls.add(stored.url);
     held.add(stored.url);
     return { src: stored.url, credit: stored.credit, kind: 'scene' };
   });
@@ -160,8 +168,9 @@ export async function buildMorningDownload(deps: BuildDeps, sources?: Sources): 
     { kind: first.opener_visual.kind, query: first.opener_visual.query, subjects: written[0]!.subjects, storyDate: openerSource.publishedAt?.slice(0, 10) ?? null, sourceUrls: [openerSource.url], exclude: held },
   ];
   let designed: Array<Photo | null> = [];
+  const trace: string[][] = [];
   try {
-    designed = await findSetOrEach(deps.photos, requests);
+    designed = await findSetOrEach(deps.photos, requests, trace);
   } catch (err) {
     log.push(`photo set: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -171,12 +180,18 @@ export async function buildMorningDownload(deps: BuildDeps, sources?: Sources): 
     return { role: 'story', headline: s.headline.trim(), source: { verb: s.source_verb, name: s.source_name }, ...(photo ? { photo } : {}) };
   });
   const openerPhoto = designed[n] ?? null;
+  // Why each frame has the photo it has (or none): the design stage's steps, by frame.
+  let t = 0;
+  const photoLog = [
+    { frame: 'opener', ...(openerPhoto ? { picked: openerPhoto.src } : {}), steps: trace[requests.length - 1] ?? [] },
+    ...written.map((s, i) => (kept[i] ? { frame: `story ${i + 1}`, picked: kept[i]!.src, steps: ["kept the carousel post's photo (S-29)"] } : { frame: `story ${i + 1}`, ...(storyFrames[i]!.photo ? { picked: storyFrames[i]!.photo!.src } : {}), steps: trace[t++] ?? [] })),
+  ];
 
   const data: FrameData[] = [{ role: 'opener', date: openerDate(deps.nyDate), storyCount: storyFrames.length, ...(openerPhoto ? { photo: openerPhoto } : {}) }, ...storyFrames, { role: 'closer' }];
   const backdrop = await nextBackdrop(deps.db, 'morning_download', deps.setId);
   return {
     ok: true,
-    payload: { stories: written.map((s) => ({ key: s.key, headline: s.headline, url: byKey.get(s.key)!.url, source: s.source_name, score: ranked.find((r) => r.key === s.key)!.score })), pool: pool.length, log },
+    payload: { stories: written.map((s) => ({ key: s.key, headline: s.headline, url: byKey.get(s.key)!.url, source: s.source_name, score: ranked.find((r) => r.key === s.key)!.score })), pool: pool.length, log, photo_log: photoLog },
     frames: toFrames(data, backdrop),
     candidates,
     historyKeys: written.map((s) => s.key),
