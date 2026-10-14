@@ -1,5 +1,5 @@
 import type { Queryable } from '@/lib/explainers/db';
-import { calendarDateKey } from '@/lib/instagram/clock';
+import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { chooseFromWindows, slotTakenKey, uniformIndex } from '@/lib/instagram/window';
 import { POOL_ORDER_BY, REJECTED_SLOT_NOTE } from '@/lib/explainers/repository';
@@ -90,6 +90,26 @@ export async function scheduleJob(
     }
   }
   return { scheduled: false, note: 'That window was just taken.' };
+}
+
+/**
+ * B2: when the 2 AM run (trigger 'auto') finishes a render, it takes today's
+ * next open window as a system slot (source 'auto'), unapproved: it still
+ * needs Approve, and without one releaseDueSchedules cancels it at its time.
+ * Today only; nothing left today books nothing. A person's render
+ * (Regenerate, Make it) waits for Approve, which books it. Only while
+ * publishing is live, like every other booking. Booking only, never
+ * queuePublish. Null: not booked by rule.
+ */
+export async function bookFinishedRender(
+  db: Queryable,
+  job: { id: string; trigger: string },
+  now = new Date(),
+  rng?: (count: number) => number,
+): Promise<ScheduleOutcome | null> {
+  if (job.trigger !== 'auto') return null;
+  if (!(await publishingLive(db))) return null;
+  return scheduleJob(db, job.id, 'auto', now, calendarDateKey(now, SOCIAL_TIMEZONE), rng);
 }
 
 /**
