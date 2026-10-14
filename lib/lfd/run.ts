@@ -158,7 +158,17 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     record.jevCalls = jevCalls;
     return d.jev(req, meta);
   };
-  const run: LfdRunDeps = { ...d, jev };
+  // One read per article page per run: leadImage and any later use share it.
+  const pages = new Map<string, Promise<PageRead>>();
+  const readPage = (url: string): Promise<PageRead> => {
+    let page = pages.get(url);
+    if (!page) {
+      page = d.readPage(url);
+      pages.set(url, page);
+    }
+    return page;
+  };
+  const run: LfdRunDeps = { ...d, jev, readPage };
   try {
     const previous = await previousPosts(d.query, PREVIOUS_POSTS);
     const used = usedIdeaIds(previous);
@@ -245,7 +255,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       const taken = new Set([...exclude, ...ready.map((r) => r.photo.src)]);
       const leads: Array<Awaited<ReturnType<typeof leadImage>>> = [];
       for (const item of checked) {
-        const lead = await leadImage(d.readPage, item.pick, taken);
+        const lead = await leadImage(readPage, item.pick, taken);
         if (lead) taken.add(lead.photo.src);
         leads.push(lead);
       }
@@ -298,7 +308,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
         let v = verdicts.get(id);
         if (!v) {
           const png = await fs.readFile(`${dir}/slide-slide-${String(i + 2).padStart(2, '0')}.png`).catch(() => null);
-          v = png ? await checkSlide(d.create, png, { headline: r.copy.headline, body: r.copy.body, names: r.copy.names }) : { ok: true, reason: VISION_UNAVAILABLE, costUsd: 0 };
+          v = png ? await checkSlide(d.create, png, { headline: r.copy.headline, body: r.copy.body, names: r.copy.names, outlet: r.pick.sourceName }) : { ok: true, reason: VISION_UNAVAILABLE, costUsd: 0 };
           vision.checked += 1;
           vision.usd += v.costUsd;
           if (v.reason === VISION_UNAVAILABLE) vision.unavailable += 1;
@@ -342,13 +352,25 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     } catch (err) {
       if (!(err instanceof BrokenImages)) throw err;
       // One extra round: drop each story whose photo failed to load or was rejected, replace it, re-render (whatever fails then is recorded).
+      // A rejected article lead image first gets one finder search for the same story; only if that finds nothing is the story dropped.
       const next: Pick[] = [];
-      const leave = [...err.keys.map((key) => ({ key, reason: 'image-failed' as const, detail: undefined })), ...err.rejected.map((x) => ({ key: x.key, reason: 'vision-rejected' as const, detail: x.reason }))];
-      for (const { key, reason, detail } of leave) {
-        const i = ready.findIndex((r) => r.pick.key === key);
-        const [gone] = ready.splice(i, 1);
+      const take = (key: string) => {
+        const [gone] = ready.splice(ready.findIndex((r) => r.pick.key === key), 1);
         exclude.add(gone!.photo.src);
-        await replace(gone!.pick, reason, next, detail);
+        return gone!;
+      };
+      const isLead = (key: string) => ready.find((r) => r.pick.key === key)?.photoSource === 'lead';
+      const leadRejected = err.rejected.filter((x) => isLead(x.key)).map((x) => ({ gone: take(x.key), reason: x.reason }));
+      const leave = [...err.keys.map((key) => ({ key, reason: 'image-failed' as const, detail: undefined })), ...err.rejected.filter((x) => !leadRejected.some((l) => l.gone.pick.key === x.key)).map((x) => ({ key: x.key, reason: 'vision-rejected' as const, detail: x.reason }))];
+      for (const { key, reason, detail } of leave) await replace(take(key).pick, reason, next, detail);
+      if (leadRejected.length) {
+        const again = await findPhotos(d.photos, leadRejected.map(({ gone }) => ({ pick: gone.pick, copy: gone.copy })), new Set([...exclude, ...ready.map((r) => r.photo.src)]));
+        for (const [j, { gone, reason }] of leadRejected.entries()) {
+          const photo = again.photos[j];
+          const photoTrace = [`lead image rejected by vision: ${reason}: ${gone.photo.src}`, ...(again.traces[j] ?? [])];
+          if (photo) ready.push({ pick: gone.pick, copy: gone.copy, photo, photoSource: 'finder', photoTrace });
+          else await replace(gone.pick, 'vision-rejected', next, photoTrace.includes(REFUSED_ICON_SCENE) ? `${reason}; finder: ${REFUSED_ICON_SCENE}` : `${reason}; the finder found no photo`);
+        }
       }
       if (next.length) unfinished(await runRound(next, MAX_ROUNDS));
       final = finalOrder();

@@ -13,10 +13,12 @@ import type { Pick } from './types';
 
 export const LEAD_MIN_WIDTH = 600;
 
-const NOT_A_PHOTO = /\.(svg|gif)(?:$|[?#])|logo|icon|avatar|sprite/i;
+const NOT_A_PHOTO_EXT = /\.(svg|gif)(?:$|[?#])/i;
+/** logo/icon/avatar/sprite as a whole path segment or name part ("site_logo-2.jpg", "/icons/"), never inside a word ("silicon", "iconic"). */
+const NOT_A_PHOTO_NAME = /(?:^|[/_.-])(?:logo|icon|avatar|sprite)s?(?:[/_.-]|$)/i;
 
 function usable(p: ArticlePhoto, exclude: Set<string>): boolean {
-  return Boolean(p.src) && !exclude.has(p.src) && !NOT_A_PHOTO.test(p.src);
+  return Boolean(p.src) && !exclude.has(p.src) && !NOT_A_PHOTO_EXT.test(p.src) && !NOT_A_PHOTO_NAME.test(p.src);
 }
 
 export async function leadImage(
