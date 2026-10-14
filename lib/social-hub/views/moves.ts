@@ -105,8 +105,11 @@ export function orderTonight<T>(list: readonly T[], idOf: (x: T) => string, prom
 
 /** A ranked list in tonight's order: each queue's promote first, demoted ideas last. */
 export function applyMoves<T extends { id: string }>(ranked: readonly T[], moves: readonly Move[]): T[] {
-  const demoted = new Set(latestMoves(moves).filter((m) => m.kind === 'demote').map((m) => m.ideaId));
-  return orderTonight(ranked, (x) => x.id, new Set(tonightPromotes(moves).map((m) => m.ideaId)), demoted);
+  // Only moves on ideas in this list count: an absent promote must not hold its queue's slot.
+  const present = new Set(ranked.map((x) => x.id));
+  const here = moves.filter((m) => present.has(m.ideaId));
+  const demoted = new Set(latestMoves(here).filter((m) => m.kind === 'demote').map((m) => m.ideaId));
+  return orderTonight(ranked, (x) => x.id, new Set(tonightPromotes(here).map((m) => m.ideaId)), demoted);
 }
 
 /** The native id an idea id ends with (`reels:idea:<id>` → `<id>`; colons inside the ref are kept). */

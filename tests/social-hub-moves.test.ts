@@ -31,7 +31,7 @@ test('one promote a night per type: the oldest goes first; the others wait in th
   assert.equal(tonightPromote(moves, 'carousels'), null, 'per type');
 });
 
-test('Review Focus 2: the latest move on an idea wins', () => {
+test('the latest move on an idea wins', () => {
   const sunk = [mv('reels', 'c', 'promote', '2026-10-12T10:00:00Z'), mv('reels', 'c', 'demote', '2026-10-12T11:00:00Z')];
   assert.equal(tonightPromote(sunk, 'reels'), null);
   assert.deepEqual([...demotedIds(sunk, 'reels')], ['c']);
@@ -134,4 +134,9 @@ test('step aside: Stories apply it per series', () => {
     skipped(mv('stories', 'stories:pool:morning_download:m1', 'promote', '2026-10-12T12:00:00Z')),
   ];
   assert.deepEqual(tonightPromotes(moves).map((m) => m.ideaId), ['stories:pool:free_vs_paid:k2']);
+});
+
+test('an absent promote does not block a present one: the oldest eligible promote in the list wins', () => {
+  const moves = [mv('reels', 'zz', 'promote', '2026-10-11T10:00:00Z'), mv('reels', 'c', 'promote', '2026-10-12T10:00:00Z')];
+  assert.deepEqual(ids(applyMoves(LIST, moves)), ['c', 'a', 'b', 'd', 'e']);
 });

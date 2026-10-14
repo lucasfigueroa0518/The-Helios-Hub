@@ -16,7 +16,9 @@ import { applyMoves, movesFor, type IdeaAdjustment } from '@/lib/social-hub/view
  *   Demote   the idea sinks below every idea that isn't demoted
  *
  * The shared rule sits on top of that day's score ranking; moves last until
- * their idea is made (B8). The quota candidates are, in order: what already holds a slot today
+ * their idea is made (B8).
+ *
+ * The quota candidates are, in order: what already holds a slot today
  * (scheduled, posting, posted); then content made today with no slot, for
  * any idea (the night picks its own, 2026-10-13: made content wins); then the
  * top of the adjusted ranking for what's left. Rejected content never fills a
