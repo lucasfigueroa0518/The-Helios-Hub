@@ -9,9 +9,9 @@ import test from 'node:test';
 
 import { parseRankMove } from '@/lib/content-type/idea-rank';
 import { reelPosts } from '@/lib/social-hub/adapters/reels';
-import { planFrom, typeDay, type RunInputs } from '@/lib/social-hub/run-today';
+import { narrowStep, parseRunBody, planFrom, stepsFor, typeDay, type RunInputs } from '@/lib/social-hub/run-today';
 import type { HubIdea, HubPost } from '@/lib/social-hub/types';
-import { applyMoves, dayRanking, quotaCandidates, type IdeaAdjustment } from '@/lib/social-hub/views/day-rank';
+import { applyMoves, dayRanking, orderCards, quotaCandidates, type IdeaAdjustment } from '@/lib/social-hub/views/day-rank';
 import { todaysContent } from '@/lib/social-hub/views/today';
 
 const NOW = new Date('2026-10-09T14:00:00Z');
@@ -42,14 +42,15 @@ const reelPost = (n: number, over: Partial<HubPost> = {}): HubPost => {
   return { ...post!, ...over };
 };
 
-test('the quota goes to the top of the day’s ranking, made or not; promoting changes what fills it', () => {
-  // Ideas 1 and 4 have videos; the quota is 2.
+test('made content fills the day ahead of the ranking; Promote only reorders what is not made yet', () => {
+  // Ideas 1 and 4 have videos made today; the quota is 2.
   const data = { posts: [reelPost(1), reelPost(4)], ideas: IDEAS, dayQuotas: { reels: 2, carousels: 2, explainers: 1 } };
   const plain = quotaCandidates(data, 'reels', NOW);
-  assert.deepEqual(plain.map((c) => [c.idea?.title, Boolean(c.post)]), [['Idea 1', true], ['Idea 2', false]], 'Idea 4’s video is not a candidate');
-  const promoted = quotaCandidates({ ...data, adjustments: [move(4, 'promote', 't1')] }, 'reels', NOW);
-  assert.deepEqual(promoted.map((c) => [c.idea?.title, Boolean(c.post), c.moved]), [['Idea 4', true, 'promoted'], ['Idea 1', true, null]]);
-  assert.deepEqual(todaysContent({ ...data, adjustments: [move(4, 'promote', 't1')] }, NOW).map((p) => p.name), ['REEL 4', 'REEL 1'], 'only candidates show in the gallery');
+  assert.deepEqual(plain.map((c) => [c.idea?.title, Boolean(c.post)]).sort(), [['Idea 1', true], ['Idea 4', true]], 'both made reels fill the day');
+  const one = { ...data, posts: [reelPost(4)], dayQuotas: { reels: 2, carousels: 2, explainers: 1 } };
+  const promoted = quotaCandidates({ ...one, adjustments: [move(3, 'promote', 't1')] }, 'reels', NOW);
+  assert.deepEqual(promoted.map((c) => [c.idea?.title, Boolean(c.post)]), [['Idea 4', true], ['Idea 3', false]], 'the made reel holds; the promoted idea takes the open card');
+  assert.deepEqual(todaysContent(data, NOW).map((p) => p.name).sort(), ['REEL 1', 'REEL 4']);
 });
 
 test('a slot already scheduled today holds its place ahead of the ranking', () => {
@@ -165,8 +166,77 @@ test('explainers: a slot already scheduled today still comes first', () => {
   assert.deepEqual(c.map((x) => [x.post?.id, x.locked]), [['explainers:job-t1', true]], 'quota 1: the scheduled one holds it');
 });
 
-test('only explainers get this: a reel made today for a lower-ranked idea is still not a candidate (the Oct 9 rule)', () => {
+test('every type: a reel made today for a lower-ranked idea fills the day (2026-10-13)', () => {
   const data = { posts: [reelPost(4)], ideas: IDEAS, dayQuotas: { reels: 1, carousels: 1, explainers: 1 } };
   const c = quotaCandidates(data, 'reels', NOW);
+  assert.deepEqual(c.map((x) => [x.idea?.title, Boolean(x.post)]), [['Idea 4', true]]);
+});
+
+test('two versions of one idea made today show once, the newest (Review Focus 1)', () => {
+  const older = reelPost(4, { generatedAt: '2026-10-09T05:00:00Z' });
+  const newer = reelPost(4, { id: 'reels:video:newer', generatedAt: '2026-10-09T07:00:00Z' });
+  const c = quotaCandidates({ posts: [older, newer], ideas: IDEAS, dayQuotas: { reels: 2, carousels: 1, explainers: 1 } }, 'reels', NOW);
+  assert.deepEqual(c.map((x) => x.post?.id ?? x.idea?.title), ['reels:video:newer', 'Idea 1']);
+});
+
+test('more made than slots: only the quota shows (Review Focus 2)', () => {
+  const posts = [reelPost(1), reelPost(2), reelPost(3)];
+  const c = quotaCandidates({ posts, ideas: IDEAS, dayQuotas: { reels: 2, carousels: 1, explainers: 1 } }, 'reels', NOW);
+  assert.equal(c.length, 2);
+  assert.ok(c.every((x) => x.post));
+});
+
+test('a rejected post never fills a card; its slot falls back to the ranking', () => {
+  const rejected = reelPost(4, { tries: [{ status: 'cancelled', at: '2026-10-09T06:00:00Z', note: 'This reel was rejected, so it was not posted.' }] });
+  const c = quotaCandidates({ posts: [rejected], ideas: IDEAS, dayQuotas: { reels: 1, carousels: 1, explainers: 1 } }, 'reels', NOW);
   assert.deepEqual(c.map((x) => [x.idea?.title, Boolean(x.post)]), [['Idea 1', false]]);
+});
+
+test('cards read as the day: booked by time, then made with no slot, then being made, then not made yet', () => {
+  const at = (iso: string) => reelPost(1, { id: `p-${iso}`, status: 'scheduled', publishAt: iso, nyDate: TODAY });
+  const cards = [
+    { vertical: 'reels' as const, idea: null, post: null, locked: false, rank: 1, moved: null },
+    { vertical: 'reels' as const, idea: null, post: reelPost(2, { status: 'generating' }), locked: false, rank: null, moved: null },
+    { vertical: 'reels' as const, idea: null, post: reelPost(3), locked: false, rank: null, moved: null },
+    { vertical: 'reels' as const, idea: null, post: at('2026-10-09T22:00:00Z'), locked: true, rank: null, moved: null },
+    { vertical: 'reels' as const, idea: null, post: at('2026-10-09T13:00:00Z'), locked: true, rank: null, moved: null },
+  ];
+  assert.deepEqual(orderCards(cards).map((c) => c.post?.id ?? 'not made'), ['p-2026-10-09T13:00:00Z', 'p-2026-10-09T22:00:00Z', cards[2]!.post!.id, cards[1]!.post!.id, 'not made']);
+});
+
+test('Make it runs only its card: one target, its share of the estimate', () => {
+  const plan = planFrom({ ...base, explainers: { quota: 2, held: 0, missing: [{ ideaId: 'explainers:topic:t1', ref: 't1', title: 'A' }, { ideaId: 'explainers:topic:t2', ref: 't2', title: 'B' }] } });
+  const [one] = stepsFor(plan, 'explainers', 't2');
+  assert.deepEqual([one!.action, one!.targets, one!.estimateUsd], ['explainer_renders', ['t2'], 5]);
+});
+
+test('Make it on a card made meanwhile starts nothing and spends nothing (Review Focus 4)', () => {
+  const plan = planFrom(base);
+  const [step] = stepsFor(plan, 'explainers', 'already-made-topic');
+  assert.deepEqual([step!.action, step!.estimateUsd, step!.targets], ['none', 0, []]);
+  const [stories] = stepsFor(planFrom({ ...base, series: [{ id: 'morning_download', label: 'Morning Download', held: true }] }), 'stories', 'morning_download');
+  assert.equal(stories!.action, 'none');
+});
+
+test('a step that cannot be split (no reels slate yet) runs whole, and says so', () => {
+  const plan = planFrom({ ...base, reels: { ...base.reels, slateToday: false } });
+  const [step] = stepsFor(plan, 'reels', 'r2');
+  assert.equal(step!.action, 'reels_run');
+  assert.equal(step!.estimateUsd, base.cost.reelsNight);
+});
+
+test('a carousel run for one story keeps its run cap as the estimate', () => {
+  const plan = planFrom({ ...base, carousels: { quota: 2, held: 0, missing: [{ ideaId: 'carousels:story:s1', ref: 's1', title: 'S1' }, { ideaId: 'carousels:story:s2', ref: 's2', title: 'S2' }] } });
+  const [step] = stepsFor(plan, 'carousels', 's2');
+  assert.deepEqual([step!.targets, step!.estimateUsd], [['s2'], base.cost.carouselCap]);
+});
+
+test('the run body: no body is Run now, a type is its button, a card needs a type and a usable id', () => {
+  assert.deepEqual(parseRunBody(null), {});
+  assert.deepEqual(parseRunBody({ only: 'carousels' }), { only: 'carousels' });
+  assert.deepEqual(parseRunBody({ only: 'explainers', target: 't2' }), { only: 'explainers', target: 't2' });
+  for (const bad of [{ target: 't2' }, { only: 'reels', target: '' }, { only: 'reels', target: 5 }, { only: 'reels', target: 'x'.repeat(2049) }, { only: 'nope' }, { only: 'nope', target: 't' }]) {
+    assert.ok('error' in parseRunBody(bad), JSON.stringify(bad));
+  }
+  assert.deepEqual(parseRunBody({ only: 'reels', target: 'x'.repeat(2048) }), { only: 'reels', target: 'x'.repeat(2048) });
 });

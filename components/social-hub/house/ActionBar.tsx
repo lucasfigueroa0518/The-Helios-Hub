@@ -1,13 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { ArrowUpRight, Loader, MoreHorizontal } from 'lucide-react';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 
 import type { ActionMenu, OfferedAction, SlotChoice } from '@/lib/social-hub/views/actions';
 import { menuSide, type MenuSide } from '@/components/social-hub/house/menu-side';
-import { hubBaseOf } from '@/lib/social-hub/links';
 
 /**
  * Actions on a post (MATRICES.md §2), wherever it appears: one primary, a
@@ -16,9 +15,10 @@ import { hubBaseOf } from '@/lib/social-hub/links';
  * Pending shows on the button; the outcome note stays inline; then the hub
  * refreshes (the route revalidates the shared read).
  */
-export function ActionBar({ menu, compact = false, showOffNote = true }: { menu: ActionMenu; compact?: boolean; showOffNote?: boolean }) {
+export function ActionBar({ menu, compact = false, showOffNote = true, variant = 'bar', readOnly = false }: { menu: ActionMenu; compact?: boolean; showOffNote?: boolean; /** `card`: Today's Content, primary full width over a 2-column grid. */ variant?: 'bar' | 'card'; /** Shown but not clickable (the preview page). */ readOnly?: boolean }) {
   const router = useRouter();
-  const pathname = usePathname() ?? '';
+  const pickerTitleId = useId();
+  const confirmTitleId = useId();
   const dialog = useRef<HTMLDialogElement>(null);
   const moreRoot = useRef<HTMLDivElement>(null);
   const moreList = useRef<HTMLUListElement>(null);
@@ -67,11 +67,7 @@ export function ActionBar({ menu, compact = false, showOffNote = true }: { menu:
       const res = await fetch(plan.endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...plan.body, ...extra }) });
       const out = (await res.json().catch(() => ({}))) as { note?: string };
       setNote({ ok: res.ok, text: out.note ?? (res.ok ? 'Done.' : 'That didn’t work. Try again in a moment.') });
-      if (res.ok && action.key === 'delete' && /\/post\/[^/]+$/.test(pathname)) {
-        // The post is gone: leave its drawer or page for where you came from (PostLink's `from`).
-        const from = new URLSearchParams(window.location.search).get('from');
-        router.replace(from && from.startsWith('/') && !from.startsWith('//') ? from : hubBaseOf(pathname));
-      } else if (res.ok) router.refresh();
+      if (res.ok) router.refresh();
     } catch {
       setNote({ ok: false, text: 'Couldn’t reach the hub. Check your connection and try again.' });
     } finally {
@@ -98,7 +94,7 @@ export function ActionBar({ menu, compact = false, showOffNote = true }: { menu:
       key={action.key}
       type="button"
       className={`sh-btn${primary ? ' sh-btn--primary' : ''}${action.danger ? ' sh-btn--danger' : ''}`}
-      disabled={Boolean(action.disabled) || busy != null}
+      disabled={readOnly || Boolean(action.disabled) || busy != null}
       data-busy={busy === action.key ? '' : undefined}
       onClick={() => start(action)}
     >
@@ -112,7 +108,7 @@ export function ActionBar({ menu, compact = false, showOffNote = true }: { menu:
   if (!hasButtons && !(showOffNote && menu.offNote) && menu.links.length === 0) return null;
 
   return (
-    <div className={`sh-actions${compact ? ' sh-actions--compact' : ''}`}>
+    <div className={`sh-actions${compact ? ' sh-actions--compact' : ''}${variant === 'card' ? ' sh-actions--card' : ''}`}>
       <div className="sh-actions__row">
         {menu.primary ? button(menu.primary, true) : null}
         {menu.secondary.map((a) => button(a, false))}
@@ -152,9 +148,9 @@ export function ActionBar({ menu, compact = false, showOffNote = true }: { menu:
       {reasons.length ? <p className="sh-actions__why">{reasons[0]}</p> : null}
       {showOffNote && menu.offNote ? <p className="sh-actions__why">{menu.offNote}</p> : null}
       {note ? <p className={`sh-actions__note${note.ok ? '' : ' sh-actions__note--failed'}`} role="status">{note.text}</p> : null}
-      <dialog ref={picker} className="sh-confirm sh-picker" aria-labelledby="sh-picker-title" onClose={() => setPicking(null)}>
-        <h2 id="sh-picker-title">{picking?.confirmTitle ?? 'Pick a slot'}</h2>
-        <p>Pick a window in the next week. It counts toward that day’s posts, so the overnight run makes one fewer.</p>
+      <dialog ref={picker} className="sh-confirm sh-picker" aria-labelledby={pickerTitleId} onClose={() => setPicking(null)}>
+        <h2 id={pickerTitleId}>{picking?.confirmTitle ?? 'Pick a slot'}</h2>
+        <p>Pick one of today’s remaining windows.</p>
         {picking?.slots ? <SlotPicker slots={picking.slots} value={choice} onChange={setChoice} /> : null}
         <div className="sh-confirm__actions">
           <button type="button" className="sh-btn" onClick={() => picker.current?.close()}>Cancel</button>
@@ -173,8 +169,8 @@ export function ActionBar({ menu, compact = false, showOffNote = true }: { menu:
           </button>
         </div>
       </dialog>
-      <dialog ref={dialog} className="sh-confirm" aria-labelledby="sh-confirm-title" onClose={() => setConfirming(null)}>
-        <h2 id="sh-confirm-title">{confirming?.confirmTitle ?? `${confirming?.label ?? ''}?`}</h2>
+      <dialog ref={dialog} className="sh-confirm" aria-labelledby={confirmTitleId} onClose={() => setConfirming(null)}>
+        <h2 id={confirmTitleId}>{confirming?.confirmTitle ?? `${confirming?.label ?? ''}?`}</h2>
         <p>{confirming?.plan.confirm}</p>
         <div className="sh-confirm__actions">
           <button type="button" className="sh-btn" onClick={() => dialog.current?.close()}>Cancel</button>
@@ -209,10 +205,10 @@ function clipBox(el: HTMLElement): { left: number; right: number } {
   return { left, right };
 }
 
-/** Next week's windows for the type, by day; taken ones show who holds them by being unavailable. */
+/** Today's remaining windows for the type; taken ones are shown unavailable. */
 function SlotPicker({ slots, value, onChange }: { slots: SlotChoice[]; value: SlotChoice | null; onChange: (s: SlotChoice) => void }) {
   const days = [...new Set(slots.map((s) => s.nyDate))];
-  if (days.length === 0) return <p className="sh-subtle">No windows left this week.</p>;
+  if (days.length === 0) return <p className="sh-subtle">No windows left today. Post now or Reject instead.</p>;
   return (
     <div className="sh-picker__days" role="radiogroup" aria-label="Windows">
       {days.map((day) => {

@@ -9,6 +9,7 @@ import { displayName, relative, when } from '@/lib/social-hub/views/format';
 import { offerer, slotChoices } from '@/lib/social-hub/views/offer';
 import { poolSummaries } from '@/lib/social-hub/views/pools';
 import { needsPerson, postState, type StateId } from '@/lib/social-hub/views/state';
+import { nyDateOf } from '@/lib/social-hub/time';
 import { FIXTURE_NOW, previewDataset } from '@/tests/fixtures/social-hub/preview-dataset';
 
 const d = previewDataset();
@@ -61,16 +62,23 @@ test('place and move share the reschedule flag; every plan names a flag that exi
   assert.equal(flagOf('reject'), 'reject');
 });
 
-test('slot choices cover the coming week and mark what is taken', () => {
+test('slot choices are today’s open windows for the type', () => {
   const ready = d.posts.find((p) => p.vertical === 'carousels' && p.status === 'ready')!;
   const slots = slotChoices(d, ready, now);
   assert.ok(slots.length > 0);
   assert.ok(slots.every((s) => s.slot === 'morning' || s.slot === 'afternoon'));
-  assert.ok(slots.some((s) => s.state === 'taken'), 'the fixture has carousels booked this week');
   const o = offerer(d, now);
   const offer = o.offer(ready);
   const place = [offer.menu.primary, ...offer.menu.secondary, ...offer.menu.more].find((a) => a?.key === 'place');
   if (place) assert.ok(place.slots?.length, 'place offers the picker');
+});
+
+test('Schedule and Reschedule offer only today’s remaining windows (D12, Review Focus 3)', () => {
+  const ready = d.posts.find((p) => p.vertical === 'carousels' && p.status === 'ready')!;
+  const today = nyDateOf(now)!;
+  assert.ok(slotChoices(d, ready, now).every((s) => s.nyDate === today), 'never tomorrow');
+  const lateNight = new Date(`${today}T23:30:00-04:00`);
+  assert.deepEqual(slotChoices(d, ready, lateNight), [], 'after the last window, nothing is offered');
 });
 
 test('today’s strip is only post ideas holding a slot; failed and never-made ideas are out', () => {
@@ -130,4 +138,20 @@ test('person-facing text: capitals tamed, dates in words', () => {
   assert.match(when('2026-10-09T13:23:00Z', now), /^Tomorrow 9:23\sAM$/);
   assert.equal(relative('2026-10-08T21:00:00Z', now), 'in 2 h');
   assert.equal(relative('2026-10-08T16:00:00Z', now), '3 h ago');
+});
+
+test('a carousel whose last slot was rejected no longer waits on a person (2026-10-13)', () => {
+  const base = d.posts.find((p) => p.vertical === 'carousels' && p.status === 'ready' && needsPerson(p, now))!;
+  const post: HubPost = { ...base, approval: { required: true, approvedAt: null, note: null }, tries: [{ status: 'cancelled', at: '2026-10-08T13:00:00Z', note: 'This carousel was rejected, so it was not posted.' }] };
+  assert.equal(needsPerson(post, now), false);
+  assert.equal(postState(post, now).id, 'rejected');
+  assert.ok(!needsApproval([post], now).length, 'the House agrees');
+});
+
+test('a Stories set for a day already gone no longer waits on a person; today’s still does (2026-10-13)', () => {
+  const base = d.posts.find((p) => p.vertical === 'stories' && p.status === 'ready')!;
+  const set = (nyDate: string): HubPost => ({ ...base, nyDate, approval: { required: true, approvedAt: null, note: null }, tries: [] });
+  assert.equal(needsPerson(set('2026-10-07'), now), false);
+  assert.match(postState(set('2026-10-07'), now).line ?? '', /day has passed/);
+  assert.equal(needsPerson(set('2026-10-08'), now), true);
 });

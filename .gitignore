@@ -74,3 +74,6 @@ exports/stories/m1/
 exports/stories/m1-homemade/*/
 !exports/stories/m1-homemade/sheets/
 explainers/smoke/.out/
+
+# Brainstorming companion mockups (superpowers)
+.superpowers/

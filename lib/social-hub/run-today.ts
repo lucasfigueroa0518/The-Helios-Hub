@@ -108,9 +108,46 @@ export function planFrom(i: RunInputs): RunPlan {
   return { today: i.today, steps, estimateUsd, anything: steps.some((s) => s.action !== 'none') };
 }
 
-/** The steps a Run button starts: one type's own button runs that type's step of the plan, Content's Run now every step. */
-export function stepsFor(plan: RunPlan, only?: Vertical): PlanStep[] {
-  return only ? plan.steps.filter((s) => s.vertical === only) : plan.steps;
+/**
+ * One card's share of a type's step (Make it, 2026-10-13): only that target,
+ * with its share of the estimate. A carousel run's cap is per run, so it
+ * stays whole. A step with no targets to split (a reels night with no slate,
+ * a carousel run picking from fresh news) runs as a whole. A target the plan
+ * no longer needs (made meanwhile) is `none`.
+ */
+export function narrowStep(step: PlanStep, target: string | undefined): PlanStep {
+  if (!target || step.action === 'none' || step.targets.length === 0) return step;
+  if (!step.targets.includes(target)) return { ...step, action: 'none', targets: [], needed: 0, note: 'Already made or being made.', estimateUsd: 0 };
+  const share = step.action === 'carousel_run' ? step.estimateUsd : step.estimateUsd / step.targets.length;
+  return { ...step, targets: [target], needed: 1, note: 'Makes this card only.', estimateUsd: Number(share.toFixed(2)) };
+}
+
+/** The steps a Run button starts: Content's Run now every step, a type's own button its step, a card's Make it that step narrowed to the card. */
+export function stepsFor(plan: RunPlan, only?: Vertical, target?: string): PlanStep[] {
+  const steps = only ? plan.steps.filter((s) => s.vertical === only) : plan.steps;
+  return only && target ? steps.map((s) => narrowStep(s, target)) : steps;
+}
+
+const RUN_TYPES: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories'];
+const TARGET_MAX = 2048;
+
+/**
+ * The run-today POST body. No body is Run now; `{ only }` a type's own button;
+ * `{ only, target }` one card's Make it. A target that cannot be honored is an
+ * error, never a wider run: Make it must not spend more than its card.
+ */
+export function parseRunBody(body: unknown): { only?: Vertical; target?: string } | { error: string } {
+  if (body === null || body === undefined) return {};
+  if (typeof body !== 'object' || Array.isArray(body)) return { error: 'Unknown content type.' };
+  const { only, target } = body as { only?: unknown; target?: unknown };
+  if (only !== undefined && !RUN_TYPES.includes(only as Vertical)) return { error: 'Unknown content type.' };
+  if (target !== undefined) {
+    if (only === undefined || typeof target !== 'string' || target.length === 0 || target.length > TARGET_MAX) {
+      return { error: 'That card can’t be made from here.' };
+    }
+    return { only: only as Vertical, target };
+  }
+  return only === undefined ? {} : { only: only as Vertical };
 }
 
 /** The native id an idea id ends with (`reels:idea:<id>` → `<id>`). */

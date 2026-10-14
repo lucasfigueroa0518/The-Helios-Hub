@@ -413,16 +413,12 @@ test('actions per vertical: flagged posts where an existing function exists, lin
   const ctx = { quota: null, typicalCostLabel: '$3.00' };
   const carousel = find((p) => p.vertical === 'carousels' && p.status === 'scheduled' && !p.approval.approvedAt);
   const cPlans = actionsFor(carousel, ctx);
-  assert.deepEqual(cPlans.map((p) => p.kind === 'post' ? p.action : `link:${p.label}`), ['approveCarousel', 'reject', 'reschedule', 'unschedule', 'delete', 'hardPublish', 'hardRegenerate']);
+  assert.deepEqual(cPlans.map((p) => p.kind === 'post' ? p.action : `link:${p.label}`), ['approveCarousel', 'reject', 'reschedule', 'unschedule', 'hardPublish', 'hardRegenerate']);
   const cReject = cPlans[1] as Extract<(typeof cPlans)[number], { kind: 'post' }>;
   assert.deepEqual(cReject.body, { vertical: 'carousels', refs: { postId: carousel.refs.postId } }, 'Reject names the type and the content (D47)');
-  const cDelete = cPlans.find((p) => p.kind === 'post' && p.action === 'delete') as Extract<(typeof cPlans)[number], { kind: 'post' }>;
-  assert.deepEqual(cDelete.body, { vertical: 'carousels', refs: { postId: carousel.refs.postId } }, 'Delete names the type and the content');
-  assert.equal(cDelete.endpoint, '/api/social-hub/actions/delete');
-  assert.match(cDelete.confirm!, /slot opens/);
   const reel = find((p) => p.vertical === 'reels' && p.status === 'scheduled' && !p.approval.approvedAt);
   const rPlans = actionsFor(reel, ctx);
-  assert.deepEqual(rPlans.map((p) => p.kind === 'post' ? p.action : `link:${p.label}`), ['approveTrialReel', 'reject', 'reschedule', 'unschedule', 'delete', 'hardPublish', 'hardRegenerate']);
+  assert.deepEqual(rPlans.map((p) => p.kind === 'post' ? p.action : `link:${p.label}`), ['approveTrialReel', 'reject', 'reschedule', 'unschedule', 'hardPublish', 'hardRegenerate']);
   const rApprove = rPlans[0] as Extract<(typeof rPlans)[number], { kind: 'post' }>;
   assert.deepEqual(rApprove.body, { postIdeaId: reel.refs.postIdeaId, videoJobId: reel.refs.videoJobId ?? null });
   const readyExplainer = find((p) => p.vertical === 'explainers' && p.status === 'ready');

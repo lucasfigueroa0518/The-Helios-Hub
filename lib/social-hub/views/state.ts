@@ -1,3 +1,4 @@
+import { nyDateOf } from '@/lib/social-hub/time';
 import { clock, relative, timeLeft, whenInline } from '@/lib/social-hub/views/format';
 import type { HubPost } from '@/lib/social-hub/types';
 
@@ -75,17 +76,30 @@ function rejectedNote(note: string | null): boolean {
 }
 
 /**
+ * Rejected, on the post or on its last slot. Carousels keep the rejection on
+ * the slot they cancel ("This carousel was rejected, so it was not posted."),
+ * not on the post's approval, so the post reads as rejected from its last try.
+ */
+export function isRejected(post: HubPost): boolean {
+  return rejectedNote(post.approval.note) || rejectedNote(post.tries?.[0]?.note ?? null);
+}
+
+/** A Stories set built for a day already gone: approving it can't post it (the worker never schedules a past day). */
+function pastStorySet(post: HubPost, now: Date): boolean {
+  return post.vertical === 'stories' && post.nyDate != null && post.nyDate < nyDateOf(now)!;
+}
+
+/**
  * Does this post wait on a person? Scheduled slots not yet approved (and not
- * yet past), plus content in review. Matches lib/social-hub/house.ts
- * needsApproval so counts agree everywhere.
+ * yet past), plus content in review that approving can still post. The
+ * Content House's needsApproval uses this rule, so counts agree everywhere.
  */
 export function needsPerson(post: HubPost, now: Date): boolean {
   if (post.status === 'scheduled') {
     return post.approval.required && !post.approval.approvedAt && (post.publishAt ?? '') > now.toISOString();
   }
   if (post.status !== 'ready') return false;
-  if (rejectedNote(post.approval.note)) return false;
-  if (post.vertical === 'explainers') return !post.approval.approvedAt;
+  if (isRejected(post) || pastStorySet(post, now)) return false;
   return !post.approval.approvedAt;
 }
 
@@ -148,7 +162,8 @@ export function postState(post: HubPost, now: Date): PostState {
       return { ...S.scheduled, line: post.publishAt ? `Posts ${goesOut(post.publishAt, now)}` : null };
     }
     case 'ready': {
-      if (rejectedNote(post.approval.note)) return { ...S.rejected, line: 'Won’t post.' };
+      if (isRejected(post)) return { ...S.rejected, line: 'Won’t post.' };
+      if (pastStorySet(post, now)) return { ...S.ready, line: 'Its day has passed, so approving won’t post it. Publish now still can.' };
       const tried = lastTry(post);
       // The made date tells apart two versions of the same topic (one waiting, one scheduled).
       // Never a made time in the future (a set built for tomorrow can carry tomorrow's date).

@@ -41,3 +41,28 @@ export function runForCandidate(c: QuotaCandidate, runs: AllProgress): ProgressI
   }
   return null;
 }
+
+/**
+ * The run chip on a made card. A carousel run that picks its own stories is a
+ * job for the type, not for this post, so it only shows here when the post is
+ * being made or the run names this post's idea. Otherwise the card keeps its
+ * state badge and buttons.
+ */
+export function runOnMadeCard(post: { status: string; idea?: { id: string } | null }, run: ProgressItem | null): ProgressItem | null {
+  if (!run) return null;
+  if (post.status === 'generating') return run;
+  const id = post.idea?.id;
+  if (id && run.topicId && (id === run.topicId || id.endsWith(`:${run.topicId}`))) return run;
+  return null;
+}
+
+/**
+ * Whether Make it can target this card alone. A card with a target (Stories
+ * series, or an idea) can; a carousel can too (the fresh-news run picks its own
+ * story, one run at its cap). An idea-less Open slot of another type would run
+ * the whole type step, so it waits for Run now.
+ */
+export function canMakeCard(c: QuotaCandidate): boolean {
+  if (c.vertical === 'stories') return Boolean(c.seriesId);
+  return Boolean(c.idea) || c.vertical === 'carousels';
+}

@@ -2,20 +2,22 @@ import { Loader2 } from 'lucide-react';
 
 import type { AllProgress, ProgressItem } from '@/lib/content-type/progress';
 import { stageLabel } from '@/lib/content-type/run-status';
+import { CardMedia } from '@/components/social-hub/content/CardMedia';
+import { MakeItButton } from '@/components/social-hub/content/MakeItButton';
+import { ActionBar } from '@/components/social-hub/house/ActionBar';
 import { PostLink } from '@/components/social-hub/nav/PostLink';
 import { StateBadge, TYPE_ICON, TypeMark, typeStyle } from '@/components/social-hub/ui/marks';
-import { thumbOf } from '@/components/social-hub/ui/Thumb';
 import type { HubPost } from '@/lib/social-hub/types';
+import { ideaRef } from '@/lib/social-hub/run-today';
 import type { QuotaCandidate } from '@/lib/social-hub/views/day-rank';
 import { clock, displayName } from '@/lib/social-hub/views/format';
 import type { Offerer } from '@/lib/social-hub/views/offer';
-import { runForCandidate } from '@/lib/social-hub/views/run-for';
+import { canMakeCard, runForCandidate, runOnMadeCard } from '@/lib/social-hub/views/run-for';
 
 /**
- * Today's Content: every type's quota candidates in one row that scrolls
- * sideways. A candidate with content shows the content itself (first frame,
- * cover slide, or the video's opening frame) and opens the post; one not
- * made yet shows its idea, which Run now makes.
+ * Today's Content (spec 2026-10-13 §2): the day's cards in one row, in posting
+ * order. A made card shows the content itself (hover to play or step through)
+ * and its buttons; a card not made yet shows its idea and Make it.
  */
 
 function RunChip({ run }: { run: ProgressItem | null }) {
@@ -28,73 +30,56 @@ function RunChip({ run }: { run: ProgressItem | null }) {
   );
 }
 
-export function TodayStrip({ candidates, o, runs, ahead = false }: { candidates: QuotaCandidate[]; o: Offerer; runs: AllProgress; /** Tomorrow's look-ahead: what isn't made yet is planned, and tonight's runs make it. */ ahead?: boolean }) {
+export function TodayStrip({ candidates, o, runs, controls = true }: { candidates: QuotaCandidate[]; o: Offerer; runs: AllProgress; /** False on the preview page: buttons show but can't be clicked, and Make it is hidden. */ controls?: boolean }) {
   return (
-    <ul className="sh-strip sh-gallery" aria-label={ahead ? 'Tomorrow’s content' : 'Today’s content'}>
-      {candidates.map((c, i) => (c.post ? <Made key={c.post.id} c={c} post={c.post} o={o} run={runForCandidate(c, runs)} /> : <Pending key={c.idea?.id ?? `${c.vertical}:${c.series ?? i}`} c={c} run={runForCandidate(c, runs)} ahead={ahead} />))}
+    <ul className="sh-strip sh-gallery" aria-label="Today’s content">
+      {candidates.map((c, i) => (c.post
+        ? <Made key={c.post.id} post={c.post} o={o} run={runOnMadeCard(c.post, runForCandidate(c, runs))} controls={controls} />
+        : <Pending key={c.idea?.id ?? `${c.vertical}:${c.series ?? i}`} c={c} run={runForCandidate(c, runs)} controls={controls} />))}
     </ul>
   );
 }
 
-function rankTag(c: QuotaCandidate): string | null {
-  if (c.rank == null) return null;
-  return `#${c.rank}${c.moved === 'promoted' ? ' · Promoted' : c.moved === 'demoted' ? ' · Demoted' : ''}`;
-}
-
-function Made({ c, post, o, run }: { c: QuotaCandidate; post: HubPost; o: Offerer; run: ProgressItem | null }) {
+function Made({ post, o, run, controls }: { post: HubPost; o: Offerer; run: ProgressItem | null; controls: boolean }) {
   const when = post.postedAt ?? post.publishAt;
-  const tag = rankTag(c);
+  const offer = o.offer(post);
+  const { primary, grid } = offer.card;
   return (
     <li className="sh-panel sh-strip__card sh-gallery__card" style={{ listStyle: 'none' }}>
-      <PostLink id={post.id} className={`sh-strip__art sh-gallery__art${post.format === 'feed' ? '' : ' is-tall'}`} decorative>
-        <Art post={post} />
-      </PostLink>
+      <CardMedia post={post} />
       <div className="sh-gallery__meta">
         <TypeMark vertical={post.vertical} />
-        <span>{when ? clock(when) : post.status === 'generating' ? 'Being made' : 'No slot yet'}{tag ? ` · ${tag}` : ''}</span>
+        <span>{when ? clock(when) : post.status === 'generating' ? 'Being made' : 'No slot yet'}</span>
       </div>
       <PostLink id={post.id} className="sh-strip__name">{displayName(post)}</PostLink>
-      {run ? <RunChip run={run} /> : <StateBadge state={o.offer(post).state} />}
+      {run ? <RunChip run={run} /> : <StateBadge state={offer.state} />}
+      {post.status === 'published' && post.permalink ? (
+        <a className="sh-out sh-gallery__view" href={post.permalink} target="_blank" rel="noreferrer">View on Instagram</a>
+      ) : null}
+      {!run && (primary || grid.length) ? (
+        <ActionBar menu={{ primary, secondary: grid, more: [], links: [], offNote: null }} variant="card" showOffNote={false} readOnly={!controls} />
+      ) : null}
     </li>
   );
 }
 
-function Pending({ c, run, ahead }: { c: QuotaCandidate; run: ProgressItem | null; ahead: boolean }) {
+function Pending({ c, run, controls }: { c: QuotaCandidate; run: ProgressItem | null; controls: boolean }) {
   const Icon = TYPE_ICON[c.vertical];
-  const tag = rankTag(c);
+  const tag = c.rank == null ? null : `#${c.rank} in the queue${c.moved === 'promoted' ? ' · Promoted' : c.moved === 'demoted' ? ' · Demoted' : ''}`;
+  const target = c.vertical === 'stories' ? c.seriesId : c.idea ? ideaRef(c.idea.id) : undefined;
   return (
     <li className="sh-panel sh-strip__card sh-gallery__card is-pending" style={{ listStyle: 'none' }}>
       <span className={`sh-strip__art sh-gallery__art${c.vertical === 'carousels' ? '' : ' is-tall'}`}>
         <span className="sh-gallery__frame" style={typeStyle(c.vertical)} aria-hidden="true">
-          <span className="sh-gallery__empty"><Icon size={22} />{ahead ? 'Planned' : 'Not made yet'}</span>
+          <span className="sh-gallery__empty"><Icon size={22} />Not made yet</span>
         </span>
       </span>
       <div className="sh-gallery__meta">
         <TypeMark vertical={c.vertical} />
-        <span>{tag ?? (c.series ? c.series : 'Quota candidate')}</span>
+        <span>{tag ?? (c.series ? c.series : 'Open slot')}</span>
       </div>
-      <span className="sh-strip__name">{c.idea?.title ?? (c.series ? `${c.series}: ${ahead ? 'tomorrow’s' : 'today’s'} set` : 'Open slot: the next run picks its idea')}</span>
-      {run ? <RunChip run={run} /> : <span className="sh-muted sh-gallery__hint">{ahead ? 'Planned: tonight’s run makes it.' : 'Run now makes it.'}</span>}
+      <span className="sh-strip__name">{c.idea?.title ?? (c.series ? `${c.series}: today’s set` : 'Open slot: the next run picks its idea')}</span>
+      {run ? <RunChip run={run} /> : !controls ? <span className="sh-muted sh-gallery__hint">Make it builds this card.</span> : canMakeCard(c) ? <MakeItButton vertical={c.vertical} target={target} /> : <span className="sh-muted sh-gallery__hint">Run now makes it.</span>}
     </li>
-  );
-}
-
-function Art({ post }: { post: HubPost }) {
-  const { src, count, remote } = thumbOf(post.media);
-  const Icon = TYPE_ICON[post.vertical];
-  const video = post.media.kind === 'video' && !src ? post.media.src : null;
-  return (
-    <span className="sh-gallery__frame" style={typeStyle(post.vertical)} aria-hidden="true">
-      {src ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="" loading="lazy" decoding="async" {...(remote ? { referrerPolicy: 'no-referrer' as const } : {})} />
-      ) : video ? (
-        // No poster: the browser shows the video's opening frame.
-        <video src={`${video}#t=0.5`} muted playsInline preload="metadata" />
-      ) : (
-        <span className="sh-gallery__empty"><Icon size={22} />{post.status === 'generating' ? 'Being made' : 'No preview'}</span>
-      )}
-      {count && count > 1 ? <span className="sh-thumb__count">{count}</span> : null}
-    </span>
   );
 }

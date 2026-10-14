@@ -3,6 +3,7 @@ import type { HubDataset } from '@/lib/social-hub/dataset';
 import { ACTION_FLAGS, actionEnabled, SOCIAL_HUB_FLAGS, type ActionFlag, type HubFlags } from '@/lib/social-hub/flags';
 import { actionsFor, contentRefs, quotaFrom, typicalCost } from '@/lib/social-hub/house';
 import { actionMenu, placeHereMenu, type ActionMenu, type SlotChoice } from '@/lib/social-hub/views/actions';
+import { cardActions, type CardActions } from '@/lib/social-hub/views/card-actions';
 import { dayWord } from '@/lib/social-hub/views/format';
 import { windowRange, windowsOn } from '@/lib/social-hub/views/plan';
 import { addDays, nyDateOf, nyDayStart } from '@/lib/social-hub/time';
@@ -14,18 +15,18 @@ import type { HubPost } from '@/lib/social-hub/types';
  * Everything a screen needs to show one post consistently: its state and
  * its ranked actions, computed once per request on the server.
  */
-export type Offer = { state: PostState; menu: ActionMenu };
+export type Offer = { state: PostState; menu: ActionMenu; card: CardActions };
 
 export type Offerer = { offer: (post: HubPost) => Offer; placeHere: (post: HubPost, nyDate: string, slot: string) => ActionMenu; typical: Typicals; now: Date };
 
 const ACTIVE = new Set(['scheduled', 'publishing', 'published']);
 
 /**
- * The next week of a type's posting windows (place and reschedule, D50): what's
+ * Today's remaining posting windows for the type (place and reschedule, D50; today only, D12): what's
  * free, what's taken, and where this post already sits. The server checks
  * again when the move is made (spacing, quota, a slot taken meanwhile).
  */
-export function slotChoices(dataset: HubDataset, post: HubPost, now: Date, days = 7): SlotChoice[] {
+export function slotChoices(dataset: HubDataset, post: HubPost, now: Date, days = 1): SlotChoice[] {
   const today = nyDateOf(now)!;
   const placed = dataset.posts.filter((p) => p.vertical === post.vertical && ACTIVE.has(p.status) && p.nyDate);
   const out: SlotChoice[] = [];
@@ -77,9 +78,10 @@ export function offerer(dataset: HubDataset, now: Date, flags: HubFlags = SOCIAL
       const plans = actionsFor(post, { quota, typicalCostLabel: label(post.vertical) });
       const slots = plans.some((p) => p.kind === 'post' && p.pick === 'slot') ? slotChoices(dataset, post, now) : undefined;
       const menu = actionMenu(post, state, plans, enabled, slots);
+      const card = cardActions(state, plans, enabled, slots);
       const reachable = Boolean(menu.primary || menu.secondary.length || menu.more.length || menu.links.length);
       // Orange only where a person can act: with every path off, the row goes quiet (critique P1-A).
-      if (state.id === 'needs_you' && !reachable) return { state: approvalOffState(post, now), menu: { ...menu, offNote: null } };
-      return { state, menu };
+      if (state.id === 'needs_you' && !reachable) return { state: approvalOffState(post, now), menu: { ...menu, offNote: null }, card: { primary: null, grid: [] } };
+      return { state, menu, card };
   }
 }

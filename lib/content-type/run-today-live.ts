@@ -72,12 +72,13 @@ export type StepResult = { vertical: PlanStep['vertical']; label: string; ok: bo
 /**
  * Re-plan on the server, then start what today still needs. `only`: a type's
  * own Run button runs just that type's step, so every Run button makes the
- * same thing from the same ranked queue.
+ * same thing from the same ranked queue. `only` + `target`: a card's Make it
+ * runs just that card.
  */
-export async function runToday(by: string, now = new Date(), only?: Vertical): Promise<{ plan: RunPlan; results: StepResult[] }> {
+export async function runToday(by: string, now = new Date(), only?: Vertical, target?: string): Promise<{ plan: RunPlan; results: StepResult[] }> {
   const plan = await livePlan(now);
   const results: StepResult[] = [];
-  for (const step of stepsFor(plan, only)) {
+  for (const step of stepsFor(plan, only, target)) {
     if (step.action === 'none') continue;
     const done = (ok: boolean, note: string) => results.push({ vertical: step.vertical, label: step.label, ok, note });
     try {
