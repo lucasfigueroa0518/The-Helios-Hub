@@ -113,10 +113,10 @@ const ok = (answers: [number, number, number], sourcing = 0.6, extra: Record<str
 
 /** Story scoring answers, keyed by group id (= representative URL). Scores: impact + must know + common person + sourcing + coverage (outlets). */
 export const SCORING: StubTable = {
-  [stubKey(Scoring.VERSION, A1.sourceUrl)]: ok([0.7, 0.6, 0.6]), // 1.05 + 0.6 + 0.9 + 0.6 + 3 outlets → ≈3.39
-  [stubKey(Scoring.VERSION, K1.sourceUrl)]: ok([0.6, 0.6, 0.6]), // 0.9 + 0.6 + 0.9 + 0.6 + 1 outlet → ≈3.12
-  [stubKey(Scoring.VERSION, C1.sourceUrl)]: ok([0.6, 0.5, 0.5], 0.6, { skip_weapons_war: 0.2 }), // 0.9 + 0.5 + 0.75 + 0.6 + 2 outlets → ≈2.94
-  [stubKey(Scoring.VERSION, B1.sourceUrl)]: ok([0.5, 0.5, 0.5]), // 0.75 + 0.5 + 0.75 + 0.6 + 1 outlet → ≈2.72
+  [stubKey(Scoring.VERSION, A1.sourceUrl)]: ok([0.7, 0.6, 0.6]), // 1.4 + 0.6 + 0.6 + 0.6 + 3 outlets → ≈3.45
+  [stubKey(Scoring.VERSION, K1.sourceUrl)]: ok([0.6, 0.6, 0.6]), // 1.2 + 0.6 + 0.6 + 0.6 + 1 outlet → ≈3.12
+  [stubKey(Scoring.VERSION, C1.sourceUrl)]: ok([0.6, 0.5, 0.5], 0.6, { skip_weapons_war: 0.2 }), // 1.2 + 0.5 + 0.5 + 0.6 + 2 outlets → ≈2.99
+  [stubKey(Scoring.VERSION, B1.sourceUrl)]: ok([0.5, 0.5, 0.5]), // 1.0 + 0.5 + 0.5 + 0.6 + 1 outlet → ≈2.72
   [stubKey(Scoring.VERSION, D1.sourceUrl)]: ok([0.9, 0.9, 0.9], 0.9, { skip_weapons_war: 0.95 }),
   [stubKey(Scoring.VERSION, E1.sourceUrl)]: ok([0.9, 0.9, 0.9], 0.9, { already_posted: 0.9 }),
   [stubKey(Scoring.VERSION, G1.sourceUrl)]: ok([0.9, 0.9, 0.9], 0.9, { ai_main_subject: 0.3 }),

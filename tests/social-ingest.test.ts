@@ -199,23 +199,23 @@ test('scoring: skip list, already posted, and the required questions', () => {
   const nq = judge(group(), { ...base, substance: 0.5 });
   assert.equal(nq.status, 'not-qualified');
   assert.match(nq.reason!, /substance/);
-  // The score: the strongest impact axis (1.5 for a launch or deal) + must know (1) + common person (1.5) + sourcing (1) + coverage (1 outlet: half a point times log2(2)/log2(17)).
+  // The score: the strongest impact axis (2 for a launch or deal) + must know (1) + common person (1) + sourcing (1) + coverage (1 outlet: half a point times log2(2)/log2(17)).
   const scored = judge(group(), { ...base, must_know: 0.4, sourcing: 0.5 });
   assert.equal(scored.passes, 2, 'field shift and common person pass; must know (0.4) does not; the other two impact axes are low');
   const coverage = 0.5 * (Math.log2(2) / Math.log2(17));
-  assert.ok(Math.abs(scored.probSum - (1.5 * 0.9 + 0.4 + 1.5 * 0.9 + 0.5 + coverage)) < 1e-9);
+  assert.ok(Math.abs(scored.probSum - (2 * 0.9 + 0.4 + 0.9 + 0.5 + coverage)) < 1e-9);
   // More outlets reporting it raise the score, up to half a point at 16.
   assert.ok(judge(group({ outletCount: 16 }), base).probSum - judge(group({ outletCount: 1 }), base).probSum > 0.3);
-  assert.ok(Math.abs(Scoring.engagementScore(base, 400) - (1.5 * 0.9 + 0.9 + 1.5 * 0.9 + 0.9 + 0.5)) < 1e-9, 'coverage is capped');
+  assert.ok(Math.abs(Scoring.engagementScore(base, 400) - (2 * 0.9 + 0.9 + 0.9 + 0.9 + 0.5)) < 1e-9, 'coverage is capped');
 });
 
-test('scoring: a government act counts at most 1.0 on the impact axis, below a launch or a deal at 1.5', () => {
+test('scoring: a government act counts at most 1.3 on the impact axis, below a launch or a deal at 2', () => {
   const none = { field_shift: 0, industry_power: 0, national_policy: 0, must_know: 0, common_person: 0, sourcing: 0 };
   const at = (answers: Record<string, number>) => Scoring.engagementScore({ ...none, ...answers }, 0);
-  assert.equal(at({ field_shift: 1 }), 1.5);
-  assert.equal(at({ industry_power: 1 }), 1.5);
-  assert.equal(at({ national_policy: 1 }), 1);
-  assert.equal(at({ field_shift: 0.5, industry_power: 0.4, national_policy: 0.9 }), 0.9, 'the strongest axis counts, the others add nothing');
+  assert.equal(at({ field_shift: 1 }), 2);
+  assert.equal(at({ industry_power: 1 }), 2);
+  assert.ok(Math.abs(at({ national_policy: 1 }) - 1.3) < 1e-9);
+  assert.ok(Math.abs(at({ field_shift: 0.5, industry_power: 0.4, national_policy: 0.9 }) - 1.17) < 1e-9, 'the strongest axis counts (policy 0.9 × 1.3), the others add nothing');
   assert.equal(Scoring.SCORE_MAX, 5.5);
   assert.equal(at({ field_shift: 1, must_know: 1, common_person: 1, sourcing: 1 }) + Scoring.coverageScore(16), 5.5);
 });
