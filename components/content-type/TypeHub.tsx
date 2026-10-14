@@ -194,7 +194,7 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
                         <span className="rh-chip">{IDEA_STATE_LABEL[item.idea.state]}</span>
                       )}
                       {item.inQuota ? <span className="rh-chip rh-chip--quota" title="One of today’s quota candidates">Today</span> : null}
-                      {item.moved ? <span className="rh-chip">{item.moved === 'promoted' ? 'Promoted' : 'Demoted'}</span> : null}
+                      {item.tag ? <span className="rh-chip" title={item.tag.text}>{item.tag.text}</span> : null}
                       {item.idea.state === 'idea_only' || item.idea.state === 'content_ready' ? <RankButtons vertical={model.vertical} ideaId={item.idea.id} compact /> : null}
                       {benchAction && !item.card ? <span onClick={(e) => e.stopPropagation()}>{benchAction(item)}</span> : null}
                     </span>

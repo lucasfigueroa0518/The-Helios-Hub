@@ -5,6 +5,7 @@ import type { HubIdea, HubPost, Vertical } from '@/lib/social-hub/types';
 import { offerer, type Offer } from '@/lib/social-hub/views/offer';
 import { poolSummary } from '@/lib/social-hub/views/pools';
 import { dayRanking, quotaCandidates } from '@/lib/social-hub/views/day-rank';
+import type { MoveTag } from '@/lib/social-hub/views/moves';
 import { thumbOf } from '@/components/social-hub/ui/Thumb';
 
 /**
@@ -31,6 +32,8 @@ export type TypeBenchItem = {
   made?: MadeKind | null;
   /** Today's last move on it, if any. */
   moved?: 'promoted' | 'demoted' | null;
+  /** The shared queue's tag (Tonight, Promoted · waiting, Can’t be made: …, Demoted). */
+  tag?: MoveTag | null;
   /** One of today's quota candidates: the day is filled with it. */
   inQuota?: boolean;
 };
@@ -121,9 +124,10 @@ export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date)
     .map(([date, cards]) => ({ date, cards: cards.sort((a, b) => at(a.post).localeCompare(at(b.post)) || a.post.id.localeCompare(b.post.id)) }))
     .sort((a, b) => a.date.localeCompare(b.date));
   const summary = poolSummary(dataset.ideas, vertical);
-  const ranking = dayRanking(dataset.ideas, vertical, dataset.adjustments ?? []);
+  const ranking = dayRanking(dataset.ideas, vertical, dataset.adjustments ?? [], now);
   const open = ranking.map((r) => r.idea);
   const movedOf = new Map(ranking.map((r) => [r.idea.id, r.moved]));
+  const tagOf = new Map(ranking.map((r) => [r.idea.id, r.tag]));
   const quotaIdeas = new Set(candidates.flatMap((c) => (c.idea ? [c.idea.id] : [])));
   // Skipped, failed, still generating, or empty: not content waiting on a person. It gets no row and no chip.
   const ready = waiting.filter(benchable);
@@ -135,7 +139,7 @@ export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date)
     return hit ?? null;
   };
   const row = (idea: HubIdea, rank: number, card: TypeCard | null): TypeBenchItem => ({
-    idea, rank, card, made: card ? madeKind(card.post) : null, moved: movedOf.get(idea.id) ?? null, inQuota: quotaIdeas.has(idea.id),
+    idea, rank, card, made: card ? madeKind(card.post) : null, moved: movedOf.get(idea.id) ?? null, tag: tagOf.get(idea.id) ?? null, inQuota: quotaIdeas.has(idea.id),
   });
   const rows: TypeBenchItem[] = vertical === 'stories' ? bySeries(open).map(({ idea, rank }) => row(idea, rank, forIdea(idea))) : open.slice(0, 50).map((idea, i) => row(idea, i + 1, forIdea(idea)));
   // Content whose idea is no longer open still needs a person: keep it on the bench under its own name.

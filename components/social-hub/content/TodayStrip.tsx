@@ -70,7 +70,7 @@ function Made({ post, o, now, run, controls }: { post: HubPost; o: Offerer; now:
 
 function Pending({ c, run, miss, controls }: { c: QuotaCandidate; run: ProgressItem | null; miss: RunMiss | null; controls: boolean }) {
   const Icon = TYPE_ICON[c.vertical];
-  const tag = c.rank == null ? null : `#${c.rank} in the queue${c.moved === 'promoted' ? ' · Promoted' : c.moved === 'demoted' ? ' · Demoted' : ''}`;
+  const tag = c.rank == null ? null : `#${c.rank} in the queue${c.tag ? ` · ${c.tag.text}` : ''}`;
   const target = c.vertical === 'stories' ? c.seriesId : c.idea ? ideaRef(c.idea.id) : undefined;
   return (
     <li className="sh-panel sh-strip__card sh-gallery__card is-pending" style={{ listStyle: 'none' }}>

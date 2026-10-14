@@ -116,3 +116,27 @@ export function applyMoves<T extends { id: string }>(ranked: readonly T[], moves
 export function ideaRef(ideaId: string): string {
   return ideaId.split(':').slice(2).join(':');
 }
+
+/** What the page says about a moved idea. */
+export type MoveTag = { kind: 'tonight' | 'waiting' | 'cant' | 'demoted'; text: string };
+
+/**
+ * One tag per moved idea of a type (spec §7), latest move per idea:
+ * the promote the night makes first is "Tonight"; other promotes are
+ * "Promoted · waiting"; a promote a worker skipped has stepped aside and reads
+ * "Can’t be made: <reason>" until a person re-promotes or demotes it; demoted
+ * ideas are "Demoted". Stories get one "Tonight" per series.
+ * `now` is kept for callers; a recorded skip stands until the idea is re-moved.
+ */
+export function moveTags(moves: readonly IdeaAdjustment[], vertical: Vertical, _now: Date): Map<string, MoveTag> {
+  const mine = moves.filter((m) => m.vertical === vertical);
+  const tonight = new Set(tonightPromotes(mine).map((m) => m.ideaId));
+  const tags = new Map<string, MoveTag>();
+  for (const m of latestMoves(mine)) {
+    if (m.kind === 'demote') tags.set(m.ideaId, { kind: 'demoted', text: 'Demoted' });
+    else if (m.skipReason != null) tags.set(m.ideaId, { kind: 'cant', text: `Can’t be made: ${m.skipReason}` });
+    else if (tonight.has(m.ideaId)) tags.set(m.ideaId, { kind: 'tonight', text: 'Tonight' });
+    else tags.set(m.ideaId, { kind: 'waiting', text: 'Promoted · waiting' });
+  }
+  return tags;
+}

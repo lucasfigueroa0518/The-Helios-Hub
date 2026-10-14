@@ -9,6 +9,7 @@ import { verticalInfo } from '@/lib/social-hub/verticals';
 import { relative, shortDate, when } from '@/lib/social-hub/views/format';
 import { crumbsFor } from '@/lib/social-hub/views/nav';
 import { IDEA_STATE_LABEL, poolList, poolStale, poolSummary, type PoolFilter } from '@/lib/social-hub/views/pools';
+import { moveTags } from '@/lib/social-hub/views/moves';
 import type { HubIdea, IdeaState, Vertical } from '@/lib/social-hub/types';
 
 const FILTERS: Array<{ id: PoolFilter; label: string }> = [
@@ -40,7 +41,8 @@ export function PoolScreen({ dataset, base, vertical, params, now, embeddedIn }:
   const path = embeddedIn ?? `${base}/content/pools/${vertical}`;
   const filter: PoolFilter = params.show === 'ready' || params.show === 'all' ? params.show : 'open';
   const summary = poolSummary(dataset.ideas, vertical);
-  const ideas = poolList(dataset.ideas, vertical, filter);
+  const ideas = poolList(dataset.ideas, vertical, filter, dataset.adjustments ?? []);
+  const tags = moveTags(dataset.adjustments ?? [], vertical, now);
   const top = Math.max(...ideas.map((i) => i.score ?? 0), 0) || 1;
   // A detail every row shares says nothing about any one idea; dates read as dates, not ISO.
   const parts = (d: string | null | undefined) => (d ? d.split(' · ') : []);
@@ -105,6 +107,7 @@ export function PoolScreen({ dataset, base, vertical, params, now, embeddedIn }:
                     <td className="sh-stack-lead">
                       <span className="sh-cell-post__text">
                         <span className="sh-cell-post__name">{idea.title}</span>
+                        {tags.get(idea.id) ? <span className="sh-chip">{tags.get(idea.id)!.text}</span> : null}
                         {detailOf(idea.detail) ? <span className="sh-subtle">{detailOf(idea.detail)}</span> : null}
                         <ScoreWhy idea={idea} />
                       </span>
@@ -127,6 +130,7 @@ export function PoolScreen({ dataset, base, vertical, params, now, embeddedIn }:
               </tbody>
             </table>
           </div>
+          <p className="sh-muted">Other slots go to the best ideas found overnight.</p>
         </div>
       )}
     </>
