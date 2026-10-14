@@ -65,7 +65,7 @@ export function ContentScreen({ dataset, base, now, libraries, progress, misses,
             {controls ? 'Run now makes what today’s quotas still need.' : null}
           </div>
         ) : (
-          <TodayStrip candidates={today} o={o} runs={runs} misses={misses} controls={controls} />
+          <TodayStrip candidates={today} o={o} now={now} runs={runs} misses={misses} controls={controls} />
         )}
       </section>
 

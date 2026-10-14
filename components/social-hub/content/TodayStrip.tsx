@@ -33,20 +33,20 @@ function RunChip({ run }: { run: ProgressItem | null }) {
   );
 }
 
-export function TodayStrip({ candidates, o, runs, misses = NO_MISSES, controls = true }: { candidates: QuotaCandidate[]; o: Offerer; runs: AllProgress; misses?: RunMisses; /** False on the preview page: buttons show but can't be clicked, and Make it is hidden. */ controls?: boolean }) {
+export function TodayStrip({ candidates, o, runs, now, misses = NO_MISSES, controls = true }: { candidates: QuotaCandidate[]; o: Offerer; now: Date; runs: AllProgress; misses?: RunMisses; /** False on the preview page: buttons show but can't be clicked, and Make it is hidden. */ controls?: boolean }) {
   return (
     <ul className="sh-strip sh-gallery" aria-label="Today’s content">
       {candidates.map((c, i) => {
         const run = runForCandidate(c, runs);
         return c.post
-          ? <Made key={c.post.id} post={c.post} o={o} run={runOnMadeCard(c.post, run)} controls={controls} />
+          ? <Made key={c.post.id} post={c.post} o={o} now={now} run={runOnMadeCard(c.post, run)} controls={controls} />
           : <Pending key={c.idea?.id ?? `${c.vertical}:${c.series ?? i}`} c={c} run={run} miss={missFor(c, misses, run)} controls={controls} />;
       })}
     </ul>
   );
 }
 
-function Made({ post, o, run, controls }: { post: HubPost; o: Offerer; run: ProgressItem | null; controls: boolean }) {
+function Made({ post, o, now, run, controls }: { post: HubPost; o: Offerer; now: Date; run: ProgressItem | null; controls: boolean }) {
   const offer = o.offer(post);
   const { primary, grid } = offer.card;
   return (
@@ -54,7 +54,7 @@ function Made({ post, o, run, controls }: { post: HubPost; o: Offerer; run: Prog
       <CardMedia post={post} />
       <div className="sh-gallery__meta">
         <TypeMark vertical={post.vertical} />
-        <span>{cardTimeLine(post)}</span>
+        <span>{cardTimeLine(post, now)}</span>
       </div>
       <PostLink id={post.id} className="sh-strip__name">{displayName(post)}</PostLink>
       {run ? <RunChip run={run} /> : <StateBadge state={offer.state} />}
