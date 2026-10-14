@@ -22,7 +22,7 @@ test('a reporter that throws does not break the night: that type reads as unknow
   const exp = night.reports.find((r) => r.vertical === 'explainers')!;
   assert.match(exp.reportError ?? '', /unreachable/);
   assert.equal(night.verdict.types.find((t) => t.vertical === 'explainers')!.tone, 'short');
-  assert.equal(night.reports.length, 4);
+  assert.equal(night.reports.length, 5);
 });
 
 test('failures on a type that met its target are downgraded to warnings', async () => {
