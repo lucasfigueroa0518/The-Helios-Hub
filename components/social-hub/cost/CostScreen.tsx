@@ -6,6 +6,7 @@ import { RangeControls } from '@/components/social-hub/cost/RangeControls';
 import { WorthDrill, type WorthPost } from '@/components/social-hub/cost/WorthDrill';
 import { HubLink } from '@/components/social-hub/nav/HubNav';
 import { Thumb } from '@/components/social-hub/ui/Thumb';
+import { CACHE_COVERED } from '@/lib/social-hub/cost-page/caching';
 import type { CostModel } from '@/lib/social-hub/cost-page/model';
 import type { CostParams } from '@/lib/social-hub/cost-page/params';
 import type { HubPost, Vertical } from '@/lib/social-hub/types';
@@ -162,13 +163,24 @@ export function CostScreen({ model, params, posts, base }: { model: CostModel; p
             </div>
           </div>
         )}
-        <div className="sh-cost-save">
-          <b className="sh-cost-save__n sh-ops-num"><CountUp micros={model.caching.savedMicros} ms={1300} /></b>
-          <div>
-            <b>saved by prompt caching {params.range === 'month' ? 'this month' : 'in this range'}</b>
-            <p className="sh-ops-meta">Explainers and Stories, where cache use is recorded. Without caching, this range would have cost about {money(model.totalMicros + model.caching.savedMicros)}.</p>
+        {model.caching.covered.length ? (
+          <div className="sh-cost-save">
+            <b className="sh-cost-save__n sh-ops-num"><CountUp micros={model.caching.savedMicros} ms={1300} /></b>
+            <div>
+              <b>saved by prompt caching {params.range === 'month' ? 'this month' : 'in this range'}</b>
+              <p className="sh-ops-meta">
+                {model.caching.covered.map((v) => verticalInfo(v).label).join(' and ')}, where cache use is recorded. Without caching, this range would have cost about {money(model.totalMicros + model.caching.savedMicros)}.
+              </p>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="sh-cost-save">
+            <div>
+              <b>Prompt caching savings</b>
+              <p className="sh-ops-meta">Not recorded for this type. Only {CACHE_COVERED.map((v) => verticalInfo(v).label).join(' and ')} record cache use.</p>
+            </div>
+          </div>
+        )}
       </section>
 
       <section aria-labelledby="h-waste">

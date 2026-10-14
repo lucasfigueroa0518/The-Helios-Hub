@@ -250,7 +250,7 @@ Flat by default. Surfaces are separated by hairlines and by the step from Canvas
 - Date range: pills for 7 / 30 / 90 days and All, with Custom opening a popover.
 
 ### Navigation
-- Three tabs (Content, Calendar, Analytics) as a segmented control under the hub header; the active tab is Ink-filled. Below it, breadcrumbs (Analytics › Text on Screen) in Muted Ink with the current page in Ink.
+- Four tabs (Content, Calendar, Analytics, Health) as a segmented control under the hub header; the active tab is Ink-filled. Below it, breadcrumbs (Analytics › Text on Screen) in Muted Ink with the current page in Ink.
 - The post drawer slides in from the right over 250ms with the Helios ease-out (cubic-bezier(0.16, 1, 0.3, 1)); with reduced motion it fades in. It closes with Escape, Back, or the backdrop.
 
 ## 6. Do's and Don'ts

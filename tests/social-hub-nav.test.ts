@@ -63,3 +63,13 @@ test('Health is the fourth hub tab with its own section and crumb', () => {
   assert.deepEqual(crumbsFor('/social', '/social/health/night/2026-10-13').map((c) => c.label), ['Health', 'Night of Oct 13']);
   assert.deepEqual(crumbsFor('/social', '/social/analytics/cost').map((c) => c.label), ['Analytics', 'Cost']);
 });
+
+test('links into force-dynamic Health night pages and the Cost page never prefetch', async () => {
+  const { readFileSync } = await import('node:fs');
+  const rows = readFileSync('components/social-hub/health/NightRows.tsx', 'utf8');
+  assert.match(rows, /href=\{`\$\{base\}\/health\/night\/\$\{b\.night\}`\}\s*\n(?:\s*\/\/.*\n)?\s*prefetch=\{false\}/);
+  const subnav = readFileSync('components/social-hub/cost/AnalyticsSubnav.tsx', 'utf8');
+  assert.match(subnav, /analytics\/cost`\}[^>]*prefetch=\{false\}>Cost</);
+  const detail = readFileSync('components/social-hub/health/NightDetail.tsx', 'utf8');
+  assert.match(detail, /health\/night\/\$\{n\}`\} prefetch=\{false\}/);
+});

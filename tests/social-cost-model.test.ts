@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { cacheSavings } from '@/lib/social-hub/cost-page/caching';
+import { cacheCovered, cacheSavings, readCacheRows } from '@/lib/social-hub/cost-page/caching';
 import { parseCostParams } from '@/lib/social-hub/cost-page/load';
 import { costModel, dailySeries, hoverCompare, pace, spikeDrivers } from '@/lib/social-hub/cost-page/model';
 import { stageOf, vendorOf } from '@/lib/social-hub/cost-page/normalize';
@@ -11,6 +11,7 @@ import type { CostLedger } from '@/lib/social-hub/cost';
 import { classifyWaste } from '@/lib/social-hub/cost-page/waste';
 
 import { previewCost } from './fixtures/social-hub/cost-fixture';
+import { openHubTestDb } from './fixtures/social-hub/pglite';
 
 const row = (nyDate: string, micros: number, over: Partial<CostRow> = {}): CostRow => ({
   nyDate, vertical: 'explainers', vendor: 'claude', stage: 'writing', micros, mode: 'production', unknown: false, runId: null, ...over,
@@ -73,6 +74,33 @@ test('caching savings: reads saved minus the write premium, per model', () => {
   const s = cacheSavings([{ vertical: 'stories', model: 'claude-sonnet-5-5', readTokens: 1_000_000, writeTokens: 100_000 }]);
   // sonnet-5-5 input $2/Mtok: reads would cost $2, cost $0.20 → saved $1.80; writes premium 0.25 × $0.20 = $0.05
   assert.equal(Math.round(s.savedMicros), 1_750_000);
+});
+
+test('caching follows the type and mode filters; Reels and Carousels are not covered', async () => {
+  const { pg, query } = await openHubTestDb();
+  await pg.exec(`
+    INSERT INTO stories.sets (id, series, ny_date, trigger, style, mode) VALUES
+      ('00000000-0000-0000-0000-0000000000d1', 'morning_download', '2026-10-05', 'click', 'polished', 'production'),
+      ('00000000-0000-0000-0000-0000000000d2', 'guess_the_number', '2026-10-05', 'click', 'polished', 'development');
+    INSERT INTO stories.cost_events (set_id, vendor, component, model, cache_read_tokens, cache_write_tokens, created_at) VALUES
+      ('00000000-0000-0000-0000-0000000000d1', 'anthropic', 'writer', 'claude-sonnet-5-5', 100, 10, '2026-10-05T12:00:00Z'),
+      ('00000000-0000-0000-0000-0000000000d2', 'anthropic', 'writer', 'claude-sonnet-5-5', 200, 20, '2026-10-05T12:00:00Z');
+    INSERT INTO explainers.cost_events (mode, vendor, component, cache_read_tokens, cache_write_tokens, created_at) VALUES
+      ('production', 'anthropic', 'session_a', 1000, 0, '2026-10-05T12:00:00Z'),
+      ('development', 'anthropic', 'session_a', 2000, 0, '2026-10-05T12:00:00Z');
+  `);
+  const read = (vertical: 'stories' | 'explainers' | 'reels' | null, mode: 'production' | 'development') =>
+    readCacheRows(query, query, '2026-10-01T04:00:00Z', '2026-10-31T04:00:00Z', { vertical, mode });
+  const sum = (rows: Awaited<ReturnType<typeof read>>) => rows.map((r) => `${r.vertical}:${r.readTokens}`).sort();
+  assert.deepEqual(sum(await read(null, 'production')), ['explainers:1000', 'stories:100']);
+  assert.deepEqual(sum(await read(null, 'development')), ['explainers:2000', 'stories:200']);
+  assert.deepEqual(sum(await read('stories', 'development')), ['stories:200']);
+  assert.deepEqual(sum(await read('explainers', 'production')), ['explainers:1000']);
+  assert.deepEqual(await read('reels', 'production'), []);
+  assert.deepEqual(cacheCovered('carousels'), []);
+  assert.deepEqual(costModel({ ...previewCost(), vertical: 'reels' }).caching.covered, []);
+  assert.deepEqual(costModel({ ...previewCost(), vertical: 'stories' }).caching.covered, ['stories']);
+  assert.deepEqual(costModel(previewCost()).caching.covered, ['explainers', 'stories']);
 });
 
 test('model: unknown-cost calls are surfaced, never priced as $0 savings', () => {
@@ -176,6 +204,16 @@ test('cost params: defaults to this month, production, all types; custom needs v
   assert.equal(parseCostParams(new URLSearchParams('range=custom&from=2026-09-01&to=2026-09-30'), now).to, '2026-09-30');
   assert.equal(parseCostParams(new URLSearchParams('range=custom&from=nope'), now).range, 'month');
   assert.equal(parseCostParams(new URLSearchParams('type=carousels&mode=development'), now).vertical, 'carousels');
+});
+
+test('cost params: a custom range longer than 366 days is clamped to the 366 days ending at `to`', () => {
+  const now = new Date('2026-10-13T16:00:00Z');
+  const long = parseCostParams(new URLSearchParams('range=custom&from=2020-01-01&to=2026-09-30'), now);
+  assert.deepEqual([long.range, long.from, long.to], ['custom', '2025-09-30', '2026-09-30']);
+  const exact = parseCostParams(new URLSearchParams('range=custom&from=2025-09-30&to=2026-09-30'), now);
+  assert.equal(exact.from, '2025-09-30'); // exactly 366 days: unchanged
+  const shorter = parseCostParams(new URLSearchParams('range=custom&from=2025-10-01&to=2026-09-30'), now);
+  assert.equal(shorter.from, '2025-10-01');
 });
 
 test('waste chip: equal percentages read "same as last month"; otherwise down or up', () => {

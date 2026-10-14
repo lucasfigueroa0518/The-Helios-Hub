@@ -1,3 +1,4 @@
+import { cacheCovered } from '@/lib/social-hub/cost-page/caching';
 import { VENDOR_META, STAGE_META, type Stage, type VendorGroup } from '@/lib/social-hub/cost-page/normalize';
 import type { CostRow } from '@/lib/social-hub/cost-page/rows';
 import type { Waste } from '@/lib/social-hub/cost-page/waste';
@@ -202,6 +203,6 @@ export function costModel(i: CostInput): CostModel {
     series: { type: dailySeries(historyRows, histDays, 'type', LEAD), vendor: dailySeries(historyRows, histDays, 'vendor', LEAD), stage: dailySeries(historyRows, histDays, 'stage', LEAD) },
     budget, worth: { byType, best: bestPost }, waste: { ...i.waste, pct, prevPct: i.prevWastePct },
     rejection: i.readiness.map((r) => ({ vertical: r.vertical, label: verticalInfo(r.vertical).label, rate: r.rate === null ? null : 1 - r.rate })),
-    caching: { ...i.caching, covered: ['explainers', 'stories'] },
+    caching: { ...i.caching, covered: cacheCovered(i.vertical) },
   };
 }

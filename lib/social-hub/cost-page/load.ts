@@ -101,7 +101,7 @@ export async function loadCostPage(email: string, params: Params, now: Date): Pr
       if (cpis.length) bestEverCpi[v] = Math.min(...cpis);
     }
 
-    const caching = cacheSavings(await readCacheRows(liveHubQuery, eq, nyDayStart(p.from).toISOString(), nyDayStart(addDays(p.to, 1)).toISOString()));
+    const caching = cacheSavings(await readCacheRows(liveHubQuery, eq, nyDayStart(p.from).toISOString(), nyDayStart(addDays(p.to, 1)).toISOString(), scope));
     return {
       rows: cRows, from: p.from, to: p.to, now, vertical: p.vertical, mode: p.mode, watchUsd: await watches(eq, p.to), posts, waste, prevWastePct,
       readiness: await readinessFor(liveHubQuery, now), caching,
