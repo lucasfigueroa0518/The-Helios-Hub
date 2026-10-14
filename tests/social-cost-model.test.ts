@@ -94,3 +94,74 @@ test('wasteSets SQL runs against the real schema: rejected stories set and faile
   assert.ok(w.rejected.has(`stories:${storySet}`));
   assert.ok(w.failed.has(`reels:${IDS.idea2}:${IDS.slate}`));
 });
+
+test('wasteSets: an in-flight newest slate marks the earlier attempt rejected, not itself', async () => {
+  const { wasteSets } = await import('@/lib/social-hub/cost-page/waste');
+  const { openHubTestDb } = await import('./fixtures/social-hub/pglite');
+  const { IDS, seedHubFixture } = await import('./fixtures/social-hub/seed');
+  const { pg, query } = await openHubTestDb();
+  await seedHubFixture(pg);
+  const run2 = (await pg.query<{ id: string }>(`INSERT INTO reels.runs (trigger, status, requested_at) VALUES ('scheduled', 'ok', '2026-10-07T05:00:00Z') RETURNING id::text`)).rows[0]!.id;
+  const slate2 = (await pg.query<{ id: string }>(
+    `INSERT INTO reels.score_slates (run_id, ny_date, scored_at, pass1_version, pass2_version) VALUES ($1, '2026-10-07', now(), 'p1', 'p2') RETURNING id::text`, [run2],
+  )).rows[0]!.id;
+  await pg.query(`UPDATE reels.video_jobs SET requested_at = '2026-10-06T07:00:00Z' WHERE post_idea_id = $1`, [IDS.idea1]);
+  await pg.query(`INSERT INTO reels.video_jobs (post_idea_id, slate_id, status, requested_at) VALUES ($1, $2, 'running', '2026-10-07T07:00:00Z')`, [IDS.idea1, slate2]);
+  const w = await wasteSets(query, null);
+  assert.ok(w.rejected.has(`reels:${IDS.idea1}:${IDS.slate}`), 'earlier attempt');
+  assert.ok(!w.rejected.has(`reels:${IDS.idea1}:${slate2}`), 'in-flight current attempt is not waste');
+});
+
+test('stage maps: every recorded component per type lands on its intended stage', async () => {
+  const { REELS_STAGES } = await import('@/lib/social-hub/cost-page/stages/reels');
+  const { EXPLAINERS_STAGES } = await import('@/lib/social-hub/cost-page/stages/explainers');
+  const { STORIES_STAGES } = await import('@/lib/social-hub/cost-page/stages/stories');
+  for (const [name, stage] of Object.entries(REELS_STAGES)) assert.equal(stageOf('reels', name), stage, `reels ${name}`);
+  for (const [name, stage] of Object.entries(EXPLAINERS_STAGES)) assert.equal(stageOf('explainers', name), stage, `explainers ${name}`);
+  for (const [name, stage] of Object.entries(STORIES_STAGES)) assert.equal(stageOf('stories', name), stage, `stories ${name}`);
+  // the misfiled cases
+  assert.equal(stageOf('stories', 'md-merge'), 'research');
+  assert.equal(stageOf('stories', 'md-grounding'), 'research');
+  assert.equal(stageOf('stories', 'stories-render-review@1'), 'visuals');
+  assert.equal(stageOf('stories', 'md-headlines@1'), 'writing');
+  assert.equal(stageOf('reels', 'grouping'), 'research');
+  assert.equal(stageOf('reels', 'reels-generate'), 'video');
+  assert.equal(stageOf('explainers', 'repair:claude-sonnet-5-5'), 'video');
+  assert.equal(stageOf('explainers', 'session_a:estimate'), 'writing');
+  assert.equal(stageOf('explainers', 'post_caption:claude-sonnet-5-5'), 'writing');
+  // keyword fallback: /tag/ no longer matches inside other words
+  assert.notEqual(stageOf('carousels', 'hashtags'), 'visuals');
+  assert.equal(stageOf('carousels', 'stage'), 'other');
+  assert.equal(stageOf('reels', 'song-tag'), 'video');
+});
+
+test('history before the range feeds hover: the first in-range day compares to the week before, not "new"', () => {
+  const lookback = ['2026-09-24', '2026-09-25', '2026-09-26', '2026-09-27', '2026-09-28', '2026-09-29', '2026-09-30'];
+  const input = previewCost();
+  const steady = lookback.map((d) => row(d, 3_000_000));
+  const m = costModel({ ...input, rows: [...steady, row('2026-10-01', 3_000_000), ...input.rows.filter((r) => r.nyDate > '2026-10-01')], from: '2026-10-01', to: '2026-10-08' });
+  assert.equal(m.series.type.lead, 7);
+  assert.equal(m.series.type.days[7], '2026-10-01');
+  const h = hoverCompare(m.series.type, 7);
+  assert.equal(h.parts.find((p) => p.label === 'Explainer Reels')!.change, 'same');
+  assert.ok(m.rows.every((r) => r.nyDate >= '2026-10-01'), 'rows stay in range');
+  assert.ok(m.historyRows.some((r) => r.nyDate === '2026-09-30'));
+});
+
+test('a closed month is not projected: headline says "came to"', () => {
+  const p = pace(280_000_000, new Date('2026-10-13T16:00:00Z'), 360_000_000, '2026-09');
+  assert.equal(p.projectedMicros, 280_000_000);
+  const m = costModel({ ...previewCost(), from: '2026-09-01', to: '2026-09-30', now: new Date('2026-10-13T16:00:00Z'),
+    rows: [row('2026-09-10', 100_000_000), row('2026-09-30', 4_000_000)] });
+  assert.match(m.headline, /^Came to \$104 in the month/);
+  assert.equal(m.pace.projectedMicros, 104_000_000);
+  assert.ok(m.budget.every((b) => b.projectedMicros === b.spentMicros));
+});
+
+test('"New low" chip needs a prior best to beat; a type with none gets no chip', () => {
+  const input = previewCost();
+  const none = costModel({ ...input, bestEverCpi: {} });
+  assert.equal(none.chips.some((c) => c.id === 'low'), false);
+  const some = costModel({ ...input, bestEverCpi: { carousels: 1e12, reels: 1e12 } });
+  assert.equal(some.chips.some((c) => c.id === 'low'), some.worth.byType.some((t) => t.cpiMicros !== null && (t.vertical === 'carousels' || t.vertical === 'reels')));
+});

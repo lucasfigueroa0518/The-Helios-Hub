@@ -7,7 +7,7 @@ import type { HubPost, MetricKey, Vertical } from '@/lib/social-hub/types';
 import { VERTICALS, verticalInfo } from '@/lib/social-hub/verticals';
 
 export type By = 'type' | 'vendor' | 'stage';
-export type Series = { days: string[]; keys: Array<{ id: string; label: string; color: string }>; values: number[][] };
+export type Series = { days: string[]; lead: number; keys: Array<{ id: string; label: string; color: string }>; values: number[][] };
 export type Compare = { label: string; micros: number; change: 'new' | 'same' | 'up' | 'down'; pct: number | null };
 export type Pace = { spentMicros: number; projectedMicros: number; watchMicros: number; underWatch: boolean };
 
@@ -20,7 +20,8 @@ function keysFor(by: By) {
 }
 const keyOf = (r: CostRow, by: By) => (by === 'type' ? r.vertical : by === 'vendor' ? r.vendor : r.stage);
 
-export function dailySeries(rows: readonly CostRow[], days: readonly string[], by: By): Series {
+/** `lead` is how many leading entries of `days` are look-back days before the range; the UI renders from index `lead`. */
+export function dailySeries(rows: readonly CostRow[], days: readonly string[], by: By, lead = 0): Series {
   const keys = keysFor(by);
   const di = new Map(days.map((d, i) => [d, i]));
   const ki = new Map(keys.map((k, i) => [k.id, i]));
@@ -30,7 +31,7 @@ export function dailySeries(rows: readonly CostRow[], days: readonly string[], b
     const k = ki.get(keyOf(r, by));
     if (d !== undefined && k !== undefined) values[d]![k]! += r.micros;
   }
-  return { days: [...days], keys, values };
+  return { days: [...days], lead, keys, values };
 }
 
 function compare(label: string, micros: number, history: number[]): Compare {
@@ -67,14 +68,17 @@ export function spikeDrivers(rows: readonly CostRow[], day: string, days: readon
     .slice(0, 4);
 }
 
-export function pace(spentMicros: number, now: Date, watchMicros: number): Pace {
+/** `month` ('YYYY-MM'): when it is not the current New York month the month is over, so there is nothing to project. */
+export function pace(spentMicros: number, now: Date, watchMicros: number, month?: string): Pace {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', hourCycle: 'h23' })
       .formatToParts(now).map((x) => [x.type, Number(x.value)]),
   ) as Record<string, number>;
   const daysInMonth = new Date(Date.UTC(parts.year!, parts.month!, 0)).getUTCDate();
   const elapsed = Math.max(1, parts.day! - 1 + (parts.hour! % 24) / 24);
-  const projectedMicros = Math.round((spentMicros / elapsed) * daysInMonth);
+  const nyMonth = `${parts.year}-${String(parts.month).padStart(2, '0')}`;
+  const closed = month !== undefined && month !== nyMonth;
+  const projectedMicros = closed ? spentMicros : Math.round((spentMicros / elapsed) * daysInMonth);
   return { spentMicros, projectedMicros, watchMicros, underWatch: projectedMicros <= watchMicros };
 }
 
@@ -104,7 +108,7 @@ export type CostModel = {
   totalMicros: number; unknownCalls: number; headline: string; pace: Pace;
   chips: Array<{ id: string; text: string; best?: boolean }>;
   months: Array<{ month: string; label: string; under: boolean | null }>;
-  series: Record<By, Series>; rows: CostRow[];
+  series: Record<By, Series>; rows: CostRow[]; historyRows: CostRow[]; monthClosed: boolean;
   budget: Array<{ vertical: Vertical; label: string; spentMicros: number; watchMicros: number; projectedMicros: number; onPace: boolean }>;
   worth: WorthModel; waste: Waste & { pct: number; prevPct: number | null };
   rejection: Array<{ vertical: Vertical; label: string; rate: number | null }>;
@@ -113,6 +117,11 @@ export type CostModel = {
 
 const usd0 = (m: number) => `$${Math.round(m / 1e6)}`;
 const usd2 = (m: number) => `$${(m / 1e6).toFixed(2)}`;
+
+function nyMonthOf(now: Date): string {
+  const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit' }).formatToParts(now);
+  return `${p.find((x) => x.type === 'year')!.value}-${p.find((x) => x.type === 'month')!.value}`;
+}
 
 function daysBetween(from: string, to: string): string[] {
   const out: string[] = [];
@@ -123,6 +132,9 @@ function daysBetween(from: string, to: string): string[] {
 export function costModel(i: CostInput): CostModel {
   const rows = i.rows.filter((r) => r.mode === i.mode && (!i.vertical || r.vertical === i.vertical));
   const days = daysBetween(i.from, i.to);
+  const LEAD = 7;
+  const histDays = daysBetween(addDays(i.from, -LEAD), i.to);
+  const historyRows = rows.filter((r) => r.nyDate >= histDays[0]! && r.nyDate <= i.to);
   const inRange = rows.filter((r) => r.nyDate >= i.from && r.nyDate <= i.to);
   const totalMicros = inRange.reduce((n, r) => n + r.micros, 0);
   const unknownCalls = inRange.filter((r) => r.unknown).length;
@@ -132,17 +144,18 @@ export function costModel(i: CostInput): CostModel {
   const daysInMonth = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
   const watch = (v: Vertical) => Math.round(i.watchUsd[v] * 1e6);
   const totalWatch = types.reduce((n, v) => n + watch(v.id), 0);
-  const p = pace(monthMicros(i.vertical ?? undefined), i.now, totalWatch);
+  const p = pace(monthMicros(i.vertical ?? undefined), i.now, totalWatch, month);
+  const monthClosed = month !== nyMonthOf(i.now);
   const last = rows.filter((r) => r.nyDate === i.to).reduce((n, r) => n + r.micros, 0);
-  const prior7 = days.slice(-8, -1).map((d) => rows.filter((r) => r.nyDate === d).reduce((n, r) => n + r.micros, 0));
+  const prior7 = histDays.slice(-8, -1).map((d) => rows.filter((r) => r.nyDate === d).reduce((n, r) => n + r.micros, 0));
   const avg7 = prior7.length ? prior7.reduce((a, b) => a + b, 0) / prior7.length : 0;
   const lastWord = avg7 <= 0 ? '' : Math.abs(last - avg7) / avg7 <= 0.15 ? ', about normal' : last > avg7 ? `, ${(last / avg7).toFixed(1)}× a normal day` : ', below normal';
   const wasteMicros = i.waste.rejected + i.waste.failed + i.waste.expired;
-  const headline = `On pace for ${usd0(p.projectedMicros)} this month, ${p.underWatch ? 'under' : 'over'} the ${usd0(totalWatch)} watch. Last night cost ${usd2(last)}${lastWord}. ${usd0(wasteMicros)} went to drafts that never posted.`;
+  const headline = `${monthClosed ? 'Came to' : 'On pace for'} ${usd0(p.projectedMicros)} ${monthClosed ? 'in the month' : 'this month'}, ${p.underWatch ? 'under' : 'over'} the ${usd0(totalWatch)} watch. Last night cost ${usd2(last)}${lastWord}. ${usd0(wasteMicros)} went to drafts that never posted.`;
 
   const budget = types.map((v) => {
     const spent = monthMicros(v.id);
-    const proj = pace(spent, i.now, watch(v.id)).projectedMicros;
+    const proj = pace(spent, i.now, watch(v.id), month).projectedMicros;
     return { vertical: v.id, label: v.label, spentMicros: spent, watchMicros: watch(v.id), projectedMicros: proj, onPace: proj <= watch(v.id) };
   });
 
@@ -163,7 +176,7 @@ export function costModel(i: CostInput): CostModel {
     .sort((a, b) => a.cpiMicros - b.cpiMicros)[0] ?? null;
 
   const chips: CostModel['chips'] = [];
-  const low = byType.find((t) => t.cpiMicros !== null && (i.bestEverCpi[t.vertical] === undefined || t.cpiMicros! < i.bestEverCpi[t.vertical]!));
+  const low = byType.find((t) => t.cpiMicros !== null && i.bestEverCpi[t.vertical] !== undefined && t.cpiMicros! < i.bestEverCpi[t.vertical]!);
   if (low) chips.push({ id: 'low', text: `✦ New low: ${low.label} at $${(low.cpiMicros! / 1e6).toFixed(3)} per interaction`, best: true });
   const dailyPace = totalWatch / daysInMonth;
   let streak = 0;
@@ -182,8 +195,8 @@ export function costModel(i: CostInput): CostModel {
   }));
 
   return {
-    totalMicros, unknownCalls, headline, pace: p, chips, months, rows: inRange,
-    series: { type: dailySeries(inRange, days, 'type'), vendor: dailySeries(inRange, days, 'vendor'), stage: dailySeries(inRange, days, 'stage') },
+    totalMicros, unknownCalls, headline, pace: p, chips, months, rows: inRange, historyRows, monthClosed,
+    series: { type: dailySeries(historyRows, histDays, 'type', LEAD), vendor: dailySeries(historyRows, histDays, 'vendor', LEAD), stage: dailySeries(historyRows, histDays, 'stage', LEAD) },
     budget, worth: { byType, best: bestPost }, waste: { ...i.waste, pct, prevPct: i.prevWastePct },
     rejection: i.readiness.map((r) => ({ vertical: r.vertical, label: verticalInfo(r.vertical).label, rate: r.rate === null ? null : 1 - r.rate })),
     caching: { ...i.caching, covered: ['explainers', 'stories'] },

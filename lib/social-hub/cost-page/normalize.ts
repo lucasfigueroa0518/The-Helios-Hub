@@ -1,3 +1,6 @@
+import { EXPLAINERS_STAGES } from '@/lib/social-hub/cost-page/stages/explainers';
+import { REELS_STAGES } from '@/lib/social-hub/cost-page/stages/reels';
+import { STORIES_STAGES } from '@/lib/social-hub/cost-page/stages/stories';
 import type { Vertical } from '@/lib/social-hub/types';
 
 export type Stage = 'research' | 'writing' | 'visuals' | 'video' | 'other';
@@ -21,11 +24,19 @@ export const VENDOR_META: Record<VendorGroup, { label: string; color: string }> 
 /** Ordered keyword rules; first match wins. One table for every type (component names differ, words don't). */
 const STAGE_RULES: ReadonlyArray<[RegExp, Stage]> = [
   [/kling|video|render|motion|heygen|tts|bgm|sfx|song|music/i, 'video'],
-  [/background|image|frame|photo|visual|color|scene|design|vision|tag/i, 'visuals'],
+  [/background|image|frame|photo|visual|color|scene|design|vision|\btag\b|song-tag/i, 'visuals'],
   [/score|rank|idea|research|search|dedupe|duplicate|select|jev|generator|feed|story-match|reporter/i, 'research'],
   [/copy|writ|caption|script|hook|line|edit|fact|session|cue|story|draft/i, 'writing'],
 ];
-export function stageOf(_vertical: Vertical, label: string): Stage {
+const BY_TYPE: Partial<Record<Vertical, Record<string, Stage>>> = { reels: REELS_STAGES, explainers: EXPLAINERS_STAGES, stories: STORIES_STAGES };
+
+/** Exact name, then the name before a `:` or `@` suffix, then the keyword table. */
+export function stageOf(vertical: Vertical, label: string): Stage {
+  const map = BY_TYPE[vertical];
+  if (map) {
+    const hit = map[label] ?? map[label.split(/[:@]/)[0]!];
+    if (hit) return hit;
+  }
   for (const [re, stage] of STAGE_RULES) if (re.test(label)) return stage;
   return 'other';
 }

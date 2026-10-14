@@ -53,7 +53,7 @@ export async function wasteSets(q: HubQuery, eq: HubQuery | null): Promise<{ rej
   // Regenerated reels: an idea with more than one slate; every slate but the newest is an earlier attempt.
   for (const r of (await q<{ i: string; s: string | null }>(
     `SELECT post_idea_id::text AS i, slate_id::text AS s FROM (
-       SELECT post_idea_id, slate_id, row_number() OVER (PARTITION BY post_idea_id ORDER BY max(finished_at) DESC NULLS LAST) AS rn
+       SELECT post_idea_id, slate_id, row_number() OVER (PARTITION BY post_idea_id ORDER BY max(requested_at) DESC) AS rn
          FROM reels.video_jobs GROUP BY post_idea_id, slate_id) x WHERE rn > 1`,
   )).rows) rejected.add(`reels:${r.i}:${r.s ?? 'none'}`);
   for (const r of (await q<{ story_id: string; kind: string }>(`SELECT DISTINCT story_id, kind FROM social.set_asides`)).rows) {
