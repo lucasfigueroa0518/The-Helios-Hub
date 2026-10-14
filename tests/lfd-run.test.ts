@@ -356,3 +356,48 @@ test('a story slide whose image failed to load is replaced; every render problem
   assert.ok(rows[0]!.render_problems.includes('Roboto font did not load'));
   assert.ok(rows[0]!.render_problems.some((p) => /^slide 4 bounds: h2\.lfd-headline/.test(p)));
 });
+
+test('a saved story keeps the writer photo ask apart from the photo, with where the photo came from and its trail', async () => {
+  const d = await deps({
+    photos: {
+      usd: 0,
+      find: async () => null,
+      findSet: async (reqs, trace) => {
+        trace?.push(...reqs.map((r) => [`company: "${r.query}"`, 'article photo → winner']));
+        return reqs.map((r, i) => ({ src: `https://p/${i}-${encodeURIComponent(r.query)}.jpg`, credit: 'C', kind: 'scene' }));
+      },
+    },
+  });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  type Saved = { headline: string; photoAsk: { kind: string; query: string }; photo: { src: string }; photoSource: string; photoTrace: string[] };
+  const { rows } = await d.query<{ stories: Saved[] }>(`SELECT stories FROM lfd.posts`);
+  for (const s of rows[0]!.stories) {
+    assert.equal(s.photoAsk.kind, 'company');
+    assert.ok(s.photoAsk.query, 'the ask keeps its query');
+    assert.ok(s.photo.src.startsWith('https://p/'), 'photo is the result, not the ask');
+    assert.equal(s.photoSource, 'finder');
+    assert.equal(s.photoTrace[0], `company: "${s.photoAsk.query}"`);
+  }
+});
+
+test('a story whose only photo is the icon-scene fallback is replaced as no-photo', async () => {
+  const d = await deps({
+    photos: {
+      usd: 0,
+      find: async () => null,
+      findSet: async (reqs, trace) => {
+        trace?.push(...reqs.map((r) => (r.sourceUrls[0] === 'https://n.com/0' ? ['icon scene (newspaper) → "stack of newspapers"'] : ['article photo → winner'])));
+        return reqs.map((r, i) => ({ src: `https://p/${i}-${encodeURIComponent(r.query)}.jpg`, credit: 'C', kind: 'scene' }));
+      },
+    },
+  });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  assert.equal(res.stories, 6);
+  const rec = await recordOf(d, res.runId);
+  const drop = rec.drops.find((x) => x.reason === 'no-photo');
+  assert.ok(drop && drop.key.endsWith('n.com/0'), JSON.stringify(rec.drops));
+  const { rows } = await d.query<{ stories: Array<{ url: string }> }>(`SELECT stories FROM lfd.posts`);
+  assert.ok(!rows[0]!.stories.some((s) => s.url === 'https://n.com/0'));
+});

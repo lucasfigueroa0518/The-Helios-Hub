@@ -23,6 +23,37 @@ test('findPhotos finds the set together and returns null for a story with no usa
   };
   const out = await findPhotos(finder, [{ pick, copy }, { pick: { ...pick, key: 'b' }, copy: { ...copy, key: 'b' } }], new Set());
   assert.equal(seen.length, 1, 'one set call');
-  assert.equal(out[0]!.src, 'https://p.jpg');
-  assert.equal(out[1], null);
+  assert.equal(out.photos[0]!.src, 'https://p.jpg');
+  assert.equal(out.photos[1], null);
+});
+
+/** A finder whose set call fills the trace like the live finder does. */
+const tracing = (steps: string[][]): PhotoFinder => ({
+  usd: 0,
+  find: async () => null,
+  findSet: async (reqs, trace) => {
+    trace?.push(...steps);
+    return reqs.map((_, i) => ({ src: `https://p/${i}.jpg`, credit: 'C', kind: 'scene' }));
+  },
+});
+
+test('findPhotos returns each story trace; a normal trace keeps its photo', async () => {
+  const out = await findPhotos(tracing([['product: "Bose wired earbuds"', 'article photo → winner']]), [{ pick, copy }], new Set());
+  assert.equal(out.photos[0]!.src, 'https://p/0.jpg');
+  assert.deepEqual(out.traces, [['product: "Bose wired earbuds"', 'article photo → winner']]);
+});
+
+test('a photo won by the icon-scene fallback is refused, and the trace says so', async () => {
+  const steps = [['company: "Bose"', 'icon scene (newspaper) → "stack of newspapers"', 'stock → winner'], ['product: "x"', 'article photo → winner']];
+  const out = await findPhotos(tracing(steps), [{ pick, copy }, { pick: { ...pick, key: 'b' }, copy: { ...copy, key: 'b' } }], new Set());
+  assert.equal(out.photos[0], null);
+  assert.equal(out.traces[0]!.at(-1), 'lfd: refused icon-scene fallback');
+  assert.equal(out.photos[1]!.src, 'https://p/1.jpg');
+});
+
+test('a finder that leaves no trace still yields one (empty) trace per story', async () => {
+  const finder: PhotoFinder = { usd: 0, find: async () => ({ src: 'https://f.jpg', credit: 'C', kind: 'scene' }) };
+  const out = await findPhotos(finder, [{ pick, copy }], new Set());
+  assert.equal(out.photos[0]!.src, 'https://f.jpg');
+  assert.deepEqual(out.traces, [[]]);
 });

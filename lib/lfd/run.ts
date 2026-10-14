@@ -17,7 +17,7 @@ import type { MessagesCreate } from '@/lib/social/reporter/reporter';
 import type { PhotoFinder } from '@/lib/stories/photos';
 
 import { grounded, REWRITE_NOTE } from './ground';
-import { findPhotos } from './photos';
+import { findPhotos, REFUSED_ICON_SCENE } from './photos';
 import { judgedPool, MIN_STORIES, mergeSameEvent, RUNDOWN_POOL, rundownOrder, scoreMajor, Selector, slideOrder, withoutUsed } from './pick';
 import { buildPost } from './post';
 import { carouselLane, freshFeedLane, lastCarouselRunAt, reelsLane } from './sources';
@@ -164,8 +164,8 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     record.claudeCache = cache;
     const exclude = await recentPhotoUrls(d.query, d.now);
 
-    const replace = async (p: Pick, reason: Drop['reason'], next: Pick[]) => {
-      drops.push({ key: p.key, lane: p.lane, headline: p.headline, reason });
+    const replace = async (p: Pick, reason: Drop['reason'], next: Pick[], detail?: string) => {
+      drops.push({ key: p.key, lane: p.lane, headline: p.headline, reason, ...(detail ? { detail } : {}) });
       selector.drop(p.key);
       const r = await selector.replace(p.lane);
       if (r) next.push(r);
@@ -219,9 +219,10 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
 
       const found = await findPhotos(d.photos, checked, new Set([...exclude, ...ready.map((r) => r.photo.src)]));
       for (const [i, item] of checked.entries()) {
-        const photo = found[i];
-        if (photo) ready.push({ ...item, photo });
-        else await replace(item.pick, 'no-photo', next);
+        const photo = found.photos[i];
+        const photoTrace = found.traces[i] ?? [];
+        if (photo) ready.push({ ...item, photo, photoSource: 'finder', photoTrace });
+        else await replace(item.pick, 'no-photo', next, photoTrace.includes(REFUSED_ICON_SCENE) ? REFUSED_ICON_SCENE : undefined);
       }
       return next;
     };
@@ -294,7 +295,15 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       slug,
       nyDate,
       ideaIds: [...new Set(final.flatMap((r) => [r.pick.key, ...r.pick.refs]))],
-      stories: final.map((r) => ({ lane: r.pick.lane, origin: r.pick.origin, url: r.pick.url, outlet: r.pick.sourceName, major: r.pick.major, net: r.pick.net, ...r.copy, photo: r.photo })),
+      // `photo` is the result; the writer's request (copy.photo) is kept as `photoAsk` so the review screen sees both.
+      stories: final.map((r) => ({
+        lane: r.pick.lane, origin: r.pick.origin, url: r.pick.url, outlet: r.pick.sourceName, major: r.pick.major, net: r.pick.net,
+        ...r.copy,
+        photoAsk: r.copy.photo,
+        photo: r.photo,
+        photoSource: r.photoSource ?? 'finder',
+        photoTrace: r.photoTrace ?? [],
+      })),
       render,
       caption: render.caption,
       slideObjects,
