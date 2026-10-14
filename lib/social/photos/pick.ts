@@ -11,7 +11,11 @@
  *   - the slide can show it: a stat slide never a person or a logo (the
  *     number would cover a face; a logo can't be a darkened backdrop); a quote
  *     slide never a person other than the speaker (they'd pass for the
- *     speaker), nor a logo;
+ *     speaker), nor a logo; the cover never a logo (Tommy and Lucas,
+ *     2026-10-14: only good photos on covers; 10 of 13 covers were logos);
+ *   - it clears its size floor (size.ts): 1080 on the short side for the
+ *     cover, 600 elsewhere (a logo exempt). Checked before the close-up, so a
+ *     photo too small to use never costs a vision call;
  *   - an unverified winner passes the close-up vision check (the frozen stock
  *     prompt), once per photo and request per post.
  *
@@ -34,6 +38,7 @@ import type { VisualRequest } from '@/lib/social/writer/draft';
 
 import type { Candidate, ChainStep } from './find';
 import type { TileTag } from './tag-sheet';
+import { clearsFloor, minShortSide, type SizeProbe } from './size';
 import { tuning } from './tuning';
 import { describeVerdict, passesVision, type VisionCheck } from './vision';
 
@@ -61,6 +66,7 @@ const PERSON_LANES = new Set(['headshot', 'second', 'ceo']);
 export function slotAllows(slot: PickSlot, c: Candidate): boolean {
   if (slot.kind === 'stat') return !PERSON_LANES.has(c.lane) && c.lane !== 'logo';
   if (slot.kind === 'quote') return c.lane !== 'logo' && (!PERSON_LANES.has(c.lane) || (!!slot.speaker && c.subject === slot.speaker));
+  if (slot.kind === 'cover') return c.lane !== 'logo';
   return true;
 }
 
@@ -106,7 +112,7 @@ async function closeUp(c: Candidate, request: VisualRequest, vision: VisionCheck
 }
 
 /** `story`: the news in one line, so the close-up judges the request in the story's sense (homonyms). */
-export async function pickForSlide(input: PickInput, state: PickState, deps: { vision?: VisionCheck; jev?: JevAsk }, subjects: string[], fitMin: number, story?: string): Promise<PickOutcome> {
+export async function pickForSlide(input: PickInput, state: PickState, deps: { vision?: VisionCheck; jev?: JevAsk; size?: SizeProbe }, subjects: string[], fitMin: number, story?: string): Promise<PickOutcome> {
   const steps: string[] = [];
   let visionUsd = 0;
   const repeatOf = (c: Candidate): string | null => {
@@ -152,6 +158,12 @@ export async function pickForSlide(input: PickInput, state: PickState, deps: { v
         steps.push(`${label}: tags [${s.tags?.tags.join(', ') ?? ''}] don't fit "${request.query}" (${s.fit.toFixed(2)})`);
         continue;
       }
+      const min = minShortSide(input.slot.kind, c.lane);
+      const floor = await clearsFloor(c, min, deps.size);
+      if (!floor.ok) {
+        steps.push(`${label}: too small for a ${input.slot.kind === 'cover' ? 'cover' : 'slide'} (${floor.size}; needs ${min} on the short side)`);
+        continue;
+      }
       if (winner) {
         // Runner-ups (the render review's next photo) only when nothing more needs checking.
         if (c.verified || state.closeUps.get(`${c.url}|${request.query}`) === true) passing.push(c);
@@ -185,7 +197,7 @@ export async function pickForSlide(input: PickInput, state: PickState, deps: { v
   if (PERSON_LANES.has(c.lane) && c.subject) state.usedPeople.add(c.subject);
   state.picked.push({ slide: input.words?.position ?? state.picked.length + 1, shows: describeCandidate(c, winner.s.tags) });
   const first = input.requests[0]!.request;
-  const via = winner.request === first ? '' : first.kind === 'logo' && winner.request.kind === 'company' ? ' (the cover rotation)' : ' (the fallback request)';
+  const via = winner.request === first ? '' : ' (the fallback request)';
   steps.push(`picked ${c.lane}${via}: ${c.title.slice(0, 60) || c.url}`);
   return { winner: winner.s, request, via: c.lane, steps, alternates: passing.slice(0, 3), visionUsd };
 }

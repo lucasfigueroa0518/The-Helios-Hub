@@ -47,6 +47,7 @@ async function main(): Promise<void> {
   const { createLiveReelClient } = await import('@/lib/explainers/publish/meta');
   const { signArtifact } = await import('@/lib/explainers/storage');
   const { carouselsDriver } = await import('@/lib/publishing/drivers/carousels');
+  const { lastFewDaysDriver } = await import('@/lib/publishing/drivers/last-few-days');
   const { explainersDriver } = await import('@/lib/publishing/drivers/explainers');
   const { reelsDriver } = await import('@/lib/publishing/drivers/reels');
   const { createLiveMetaClient } = await import('@/lib/reels/music/meta');
@@ -58,6 +59,7 @@ async function main(): Promise<void> {
   const token = () => process.env.META_USER_ACCESS_TOKEN!;
   const drivers: PublishDriver[] = [
     carouselsDriver({ query, meta: createLiveCarouselClient, signImage: (p, s) => slideBucket.sign(p, s), token }),
+    lastFewDaysDriver({ query, meta: createLiveCarouselClient, signImage: (p, s) => slideBucket.sign(p, s), token }),
     reelsDriver({ meta: createLiveMetaClient }),
   ];
 

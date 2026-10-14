@@ -29,6 +29,8 @@ export const PLAN: Record<Vertical, readonly PlanWindow[]> = {
     { id: 'morning', label: 'Morning', startMinute: 9 * 60, endMinute: 10 * 60 },
     { id: 'afternoon', label: 'Afternoon', startMinute: 14 * 60 + 30, endMinute: 15 * 60 + 30 },
   ],
+  // lib/lfd/config.ts LFD_WINDOW on DEFAULT_LFD_DAYS (Tue, Fri); tests/lfd-hub.test.ts pins the copy.
+  last_few_days: [{ id: 'morning', label: 'Morning', startMinute: 9 * 60, endMinute: 10 * 60, days: [2, 5] }],
   stories: [
     { id: 'morning_download', label: 'Morning Download', startMinute: 8 * 60 + 30, endMinute: 10 * 60, days: EVERY_DAY },
     { id: 'guess_the_number', label: 'Guess the Number', startMinute: 8 * 60 + 30, endMinute: 10 * 60, days: [1, 4] },
@@ -56,13 +58,35 @@ export function windowRange(w: PlanWindow): string {
   return `${fmt(w.startMinute, !samePeriod)}–${fmt(w.endMinute, true)}`;
 }
 
-export function windowsOn(vertical: Vertical, nyDate: string): PlanWindow[] {
+/**
+ * A type's windows on a day. `carouselOff`: the weekdays Carousels give up to
+ * Last Few Days while its auto_run is on (LFD-02; DayQuotas.lfdDays).
+ */
+export function windowsOn(vertical: Vertical, nyDate: string, carouselOff: readonly number[] = []): PlanWindow[] {
   const day = weekdayOf(nyDate);
+  if (vertical === 'carousels' && carouselOff.includes(day)) return [];
   return PLAN[vertical].filter((w) => !w.days || w.days.includes(day));
 }
 
 /** A post occupies a window when it is placed, posting, or posted. A failed generation gives the slot back. */
 const PLACED = new Set(['scheduled', 'publishing', 'published', 'generating']);
+
+/** How many posts of a type hold a place on a day. */
+export function placedCount(posts: readonly HubPost[], vertical: Vertical, nyDate: string): number {
+  return posts.filter((p) => p.vertical === vertical && p.nyDate === nyDate && PLACED.has(p.status)).length;
+}
+
+/**
+ * The windows that COUNT on a day. Closing Carousels on Last Few Days days only removes open capacity:
+ * a past day keeps every window, and a day keeps as many as the content already on it (`held`), so nothing
+ * placed there is hidden or benched. No new open slot is offered (windowsOn stays the offer rule).
+ */
+export function capacityWindows(vertical: Vertical, nyDate: string, carouselOff: readonly number[], held: number, today?: string): PlanWindow[] {
+  const all = windowsOn(vertical, nyDate);
+  const open = windowsOn(vertical, nyDate, carouselOff);
+  if (open.length === all.length || (today !== undefined && nyDate < today)) return all;
+  return all.slice(0, Math.max(open.length, Math.min(held, all.length)));
+}
 
 export type TypePlan = {
   vertical: Vertical;
@@ -89,9 +113,9 @@ function windowOf(post: HubPost, windows: readonly PlanWindow[], nyDate: string)
   return post.slot?.id ?? null;
 }
 
-export function dayPlan(posts: readonly HubPost[], nyDate: string): DayPlan {
+export function dayPlan(posts: readonly HubPost[], nyDate: string, carouselOff: readonly number[] = [], today?: string): DayPlan {
   const types = VERTICAL_IDS.map((vertical): TypePlan => {
-    const windows = windowsOn(vertical, nyDate);
+    const windows = capacityWindows(vertical, nyDate, carouselOff, placedCount(posts, vertical, nyDate), today);
     const placed = posts.filter((p) => p.vertical === vertical && p.nyDate === nyDate && PLACED.has(p.status));
     const taken = new Set(placed.map((p) => windowOf(p, windows, nyDate)).filter((id): id is string => Boolean(id)));
     // Stories record one generic window, so count instead of matching ids.

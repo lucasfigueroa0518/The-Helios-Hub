@@ -1,4 +1,5 @@
 import type { HubQuery } from '@/lib/social-hub/db';
+import { insertPost } from '@/lib/lfd/store';
 
 const slates = new Map<string, string>();
 
@@ -57,4 +58,44 @@ export async function seedCarouselRun(q: HubQuery, finishedAt: string, shortlist
     `INSERT INTO social.runs (kind, trigger, status, started_at, finished_at, hook_pass, cap_usd, record) VALUES ('daily', 'scheduled', 'ok', $1, $1, false, 0, $2::jsonb)`,
     [finishedAt, JSON.stringify(record)],
   );
+}
+
+/**
+ * A finished Last Few Days post (3 stories; 8 slide objects in Storage) for
+ * spine, publish and hub tests. Story 2's photo is a logo (never recorded as used).
+ */
+export async function seedLfdPost(
+  q: HubQuery,
+  o: { nyDate?: string; slug?: string; status?: string; slides?: number; short?: boolean; fitProblems?: string[]; renderProblems?: string[] } = {},
+): Promise<string> {
+  const nyDate = o.nyDate ?? '2026-10-13';
+  const slug = o.slug ?? `lfd-${nyDate}`;
+  const stories = [
+    { lane: 'major', origin: 'carousel', url: 'https://big.com/haiku', outlet: 'The Verge', headline: 'Anthropic Releases Claude Haiku 5.5', body: 'It is out today', photo: { src: 'https://p/haiku.jpg', credit: 'Anthropic', kind: 'scene' } },
+    { lane: 'rundown', origin: 'reels', url: 'https://n.com/1', outlet: 'Wired', headline: 'Niche Thing 1 Happens', body: 'It happened', photo: { src: 'https://p/logo.png', credit: 'Logo', kind: 'logo' } },
+    { lane: 'rundown', origin: 'reels', url: 'https://n.com/2', outlet: 'Wired', headline: 'Niche Thing 2 Happens', body: 'It happened', photo: { src: 'https://p/person.jpg', credit: 'Jane Doe / CC BY', kind: 'person' } },
+  ];
+  const render = {
+    caption: 'Caption',
+    slides: [
+      { position: 0, layoutVariant: 'lfd_cover', altText: 'Do you realize what just happened in AI in the last few days? Trending in AI.' },
+      ...stories.map((s, i) => ({ position: i + 1, layoutVariant: 'lfd_story', altText: s.headline, lfdStory: { setup: '', headline: s.headline, highlight: '', names: [], body: s.body }, photoUrl: s.photo.src })),
+      { position: stories.length + 1, layoutVariant: 'follow', altText: 'Follow Helios' },
+    ],
+  };
+  const id = await insertPost(q, {
+    runId: null,
+    slug,
+    nyDate,
+    ideaIds: stories.map((s) => s.url),
+    stories,
+    render,
+    caption: 'Do you realize what just happened in AI in the last few days? Swipe ⬅️ to catch up.',
+    slideObjects: Array.from({ length: o.slides ?? 8 }, (_, i) => `lfd/${slug}/slide-${String(i + 1).padStart(2, '0')}.jpg`),
+    fitProblems: o.fitProblems ?? [],
+    renderProblems: o.renderProblems ?? [],
+    short: o.short ?? false,
+  });
+  if (o.status && o.status !== 'review') await q(`UPDATE lfd.posts SET status = $2 WHERE id = $1`, [id, o.status]);
+  return id;
 }

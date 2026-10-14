@@ -108,21 +108,26 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
           storyId,
           stage,
           reasonCode: 'cost-cap',
-          detail: `daily cap $${meter.capUsd.toFixed(2)} reached ($${meter.spent().toFixed(4)} spent)`,
+          detail: meter.capReached() && meter.ceilingUsd > meter.capUsd
+            ? `ceiling $${meter.ceilingUsd.toFixed(2)} (cap $${meter.capUsd.toFixed(2)} + wiggle) reached mid-story ($${meter.spent().toFixed(4)} spent)`
+            : `daily cap $${meter.capUsd.toFixed(2)} reached ($${meter.spent().toFixed(4)} spent)`,
         },
         now,
       ),
     );
   };
 
-  /** Run one stage: check the cap, charge its cost, unwrap or throw. */
+  /** Run one stage: check the cap, charge its cost, unwrap or throw.
+   *  Scoring and a story's Reporter start new work: they stop at the target. A story's
+   *  later stages finish what it started: they stop only at the ceiling (cost-meter.ts). */
   async function step<T>(
     storyId: string,
     stage: StageName,
     trail: StageName[] | null,
     run: () => Promise<StageResult<T>>,
   ): Promise<{ value: T; costUsd: number }> {
-    if (meter.capReached()) throw new CostCapReached(stage);
+    const startsNew = stage === 'jev-scoring' || stage === 'reporter';
+    if (startsNew ? meter.targetReached() : meter.capReached()) throw new CostCapReached(stage);
     const res = await run();
     meter.charge(stage, res.costUsd);
     trail?.push(stage);

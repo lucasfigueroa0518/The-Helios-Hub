@@ -68,6 +68,12 @@ export const VERTICAL_FACTORS: Record<Vertical, FactorDef[]> = {
     { id: 'flagged', label: 'Flagged by review' },
     { id: 'trigger', label: 'Trigger' },
   ],
+  last_few_days: [
+    { id: 'stories', label: 'Story count' },
+    { id: 'short', label: 'Short post' },
+    { id: 'slot', label: 'Posting slot' },
+    { id: 'approval', label: 'Approval' },
+  ],
 };
 
 /** Factors on offer: shared ones always; a vertical's native ones only when it alone is in view. */

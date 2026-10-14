@@ -6,7 +6,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { checkSlide, VISION_MODEL, VISION_SYSTEM, VISION_TOOL } from '@/lib/lfd/vision';
 
 const png = Buffer.from('fake-png-bytes');
-const story = { headline: 'Bose Brought Back Wired Earbuds', body: 'They plug into USB-C', names: ['Bose'] };
+const story = { headline: 'Bose Brought Back Wired Earbuds', body: 'They plug into USB-C', names: ['Bose'], outlet: 'The Verge' };
 const usage = { input_tokens: 1000, output_tokens: 50, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
 const reply = (content: unknown[]): Anthropic.Message => ({ id: 'm', type: 'message', role: 'assistant', model: VISION_MODEL, stop_reason: 'tool_use', stop_sequence: null, usage, content } as unknown as Anthropic.Message);
 const verdict = (input: Record<string, unknown>) => reply([{ type: 'tool_use', id: 't', name: 'submit_verdict', input }]);
@@ -29,7 +29,7 @@ test('the request is one cached-prefix Haiku call with the image and the story i
   const content = p.messages[0]!.content as Anthropic.ContentBlockParam[];
   assert.deepEqual(content[0], { type: 'image', source: { type: 'base64', media_type: 'image/png', data: png.toString('base64') } });
   assert.equal(content[1]!.type, 'text');
-  assert.deepEqual(JSON.parse((content[1] as Anthropic.TextBlockParam).text), story);
+  assert.deepEqual(JSON.parse((content[1] as Anthropic.TextBlockParam).text), { headline: story.headline, body: story.body, names: story.names, outlet: 'The Verge' });
   assert.ok(content.every((b) => !('cache_control' in b)), 'no breakpoint on the per-slide suffix');
 });
 
@@ -39,6 +39,8 @@ test('the verdict tool is strict-shaped', () => {
   assert.deepEqual([...schema.required].sort(), ['generic_stock', 'reason', 'shows_story_subject']);
   assert.equal(schema.additionalProperties, false);
   assert.match(VISION_SYSTEM, /untrusted/);
+  assert.match(VISION_SYSTEM, /mostly text or publisher branding/);
+  assert.match(VISION_SYSTEM, /The outlet that published the article is not the story's company/);
 });
 
 test('subject shown and not generic stock passes', async () => {

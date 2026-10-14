@@ -142,11 +142,12 @@ export type Quota = { left: number | null; total: number | null; source: string;
 const QUOTA_HEADROOM = 5;
 
 /** What Hard publish does per vertical today (D28): said plainly before the click. */
-const PUBLISH_CONFIRM: Record<'reels' | 'carousels' | 'explainers' | 'stories', string> = {
+const PUBLISH_CONFIRM: Record<Vertical, string> = {
   reels: 'This trial reel goes out now instead of in its slot. Publishing counts as your approval.',
   carousels: 'This carousel goes out now instead of in its slot. Publishing counts as your approval, and its waiting slot is released so it can’t post twice.',
   explainers: 'This reel goes out now instead of in its slot. Publishing counts as your approval unless it was rejected in review.',
   stories: 'This set is approved and goes out now, frame by frame.',
+  last_few_days: 'This Last Few Days post goes out now instead of in its slot. Publishing counts as your approval, and its waiting slot is released so it can’t post twice.',
 };
 
 /** Something to post: a video, slides or frames. A render that failed has none. */
@@ -154,8 +155,12 @@ function hasContent(post: HubPost): boolean {
   return !(post.media.kind === 'none' || (post.media.kind === 'slides' && post.media.slides.length === 0) || (post.media.kind === 'frames' && post.media.frames.length === 0));
 }
 
-/** The actions a post offers in Content House, with the reason one is unavailable. */
-export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCostLabel: string | null }): ActionPlan[] {
+/**
+ * The actions a post offers in Content House, with the reason one is unavailable.
+ * `lfdPublishingLive`: lfd.settings publishing_live. Last Few Days offers Hard
+ * publish only while it is on (unknown counts as off).
+ */
+export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCostLabel: string | null; lfdPublishingLive?: boolean }): ActionPlan[] {
   const plans: ActionPlan[] = [];
   const info = verticalInfo(post.vertical);
   const live = post.status !== 'published' && post.status !== 'publishing';
@@ -170,6 +175,15 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
   if (post.vertical === 'reels' && post.status === 'ready' && post.refs.postIdeaId && post.refs.videoJobId && !post.approval.approvedAt && !/\brejected\b/i.test(post.approval.note ?? '')) {
     // A made reel with no slot yet: approving books the earliest open slot and approves it (schedulePostIdea).
     plans.push({ kind: 'post', action: 'approveTrialReel', label: 'Approve', endpoint: '/api/social-hub/actions/approve-trial-reel', body: { postIdeaId: post.refs.postIdeaId, videoJobId: post.refs.videoJobId }, disabled: null });
+  }
+  const rejected = /\brejected\b/i.test(post.approval.note ?? '') || /\brejected\b/i.test(post.statusNote ?? '');
+  if (post.vertical === 'last_few_days' && !rejected && !post.approval.approvedAt && (post.status === 'ready' || (post.status === 'scheduled' && post.approval.required))) {
+    // A post in review is approved and booked in its day's window (or the next one); a waiting slot is approved where it is.
+    plans.push({
+      kind: 'post', action: 'approveContent', label: 'Approve', endpoint: '/api/social-hub/actions/approve-content',
+      body: { vertical: 'last_few_days', refs: { lfdPostId: post.refs.lfdPostId ?? null } },
+      disabled: post.refs.lfdPostId ? null : 'This content can’t be found any more.',
+    });
   }
   if (post.status === 'scheduled' && post.approval.required && !post.approval.approvedAt) {
     if (post.vertical === 'carousels' && post.refs.scheduleId) {
@@ -189,7 +203,9 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
         ? { postIdeaId: post.refs.postIdeaId, ...(post.refs.videoJobId ? { videoJobId: post.refs.videoJobId } : {}) }
         : post.vertical === 'explainers'
           ? { jobId: post.refs.jobId }
-          : { setId: post.refs.setId };
+          : post.vertical === 'last_few_days'
+            ? { lfdPostId: post.refs.lfdPostId }
+            : { setId: post.refs.setId };
     const missing = Object.values(refs).some((v) => !v);
     plans.push({
       kind: 'post', action: 'reject', label: 'Reject', endpoint: '/api/social-hub/actions/reject',
@@ -209,7 +225,6 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
 
   // Schedule here / move (D50): content with no slot is placed; a waiting slot is moved.
   const placeRefs = contentRefs(post);
-  const rejected = /\brejected\b/i.test(post.approval.note ?? '') || /\brejected\b/i.test(post.statusNote ?? '');
   // A failed post's Reschedule books a new slot beside the failed one (placeItem, source 'user': a person picked it).
   if ((post.status === 'ready' || failedRetry) && !rejected) {
     plans.push({ kind: 'post', action: 'place', label: post.status === 'failed' ? 'Reschedule' : 'Schedule', endpoint: '/api/social-hub/actions/place', body: { vertical: post.vertical, refs: placeRefs }, disabled: Object.values(placeRefs).some((v) => !v) ? 'This content can’t be found any more.' : null, pick: 'slot' });
@@ -228,9 +243,15 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
     });
   }
 
-  if (live) {
+  // A rejected LFD post already returned its stories to the pool: Hard publish is not offered for it,
+  // and none is offered while Last Few Days publishing is off (the attempt would wait unclaimed).
+  if (live && !(post.vertical === 'last_few_days' && (rejected || ctx.lfdPublishingLive !== true))) {
     const noContent = hasContent(post) ? null : 'Nothing to publish yet. Regenerate first.';
-    const ref = post.vertical === 'reels' ? post.refs.videoJobId : post.vertical === 'carousels' ? post.refs.postId : post.vertical === 'explainers' ? post.refs.jobId : post.refs.setId;
+    const ref = post.vertical === 'reels' ? post.refs.videoJobId
+      : post.vertical === 'carousels' ? post.refs.postId
+        : post.vertical === 'explainers' ? post.refs.jobId
+          : post.vertical === 'last_few_days' ? post.refs.lfdPostId
+            : post.refs.setId;
     const skipped = post.status === 'skipped' ? 'Story sets that miss their window are never reused.' : null;
     plans.push({
       kind: 'post', action: 'hardPublish', label: 'Hard publish', endpoint: '/api/social-hub/actions/hard-publish',
@@ -277,6 +298,8 @@ export function contentRefs(post: HubPost): Record<string, string | undefined> {
       return { jobId: post.refs.jobId };
     case 'stories':
       return { setId: post.refs.setId };
+    case 'last_few_days':
+      return { lfdPostId: post.refs.lfdPostId };
   }
 }
 

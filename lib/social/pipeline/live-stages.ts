@@ -19,6 +19,7 @@
  * guard keeps the per-call reserve (Tommy, 2026-10-06: the checkpoint
  * stopped one cheap design stage early at cap − reserve).
  */
+import { createSizeProbe } from '@/lib/social/photos/size';
 import { priceAnthropicMessages, type MessageUsageLike } from '@/lib/anthropic-pricing';
 import type { PhotoBank } from '@/lib/media-library/bank';
 import type { JevAsk } from '@/lib/social/jev/client';
@@ -52,29 +53,35 @@ export class BudgetExhausted extends Error {}
 
 export type RunBudget = {
   readonly capUsd: number;
+  /** The guard's hard stop: cap + wiggle (cost-meter.ts, target and ceiling). */
+  readonly ceilingUsd: number;
   /** Claude + Jev spend so far. */
   spent(): number;
   claudeUsd(): number;
   /** True once the guard refused a call. */
   exhausted(): boolean;
-  /** Wrap a Claude client: refuse a call that could pass the cap; price every response. */
+  /** Wrap a Claude client: refuse a call that could pass the ceiling; price every response.
+   *  Starting no new story past the cap is the orchestrator's check, not the guard's. */
   guard(create: MessagesCreate): MessagesCreate;
 };
 
-export function createRunBudget(opts: { capUsd: number; otherSpendUsd: () => number; reserveUsd?: number }): RunBudget {
+export function createRunBudget(opts: { capUsd: number; otherSpendUsd: () => number; reserveUsd?: number; wiggleUsd?: number }): RunBudget {
   const reserve = opts.reserveUsd ?? CALL_RESERVE_USD;
+  const ceilingUsd = opts.capUsd + (opts.wiggleUsd ?? 0);
   let claude = 0;
   let refused = false;
   const spent = () => claude + opts.otherSpendUsd();
   return {
     capUsd: opts.capUsd,
+    ceilingUsd,
     spent,
     claudeUsd: () => claude,
     exhausted: () => refused,
     guard: (create) => async (params) => {
-      if (spent() + reserve > opts.capUsd) {
+      if (spent() + reserve > ceilingUsd) {
         refused = true;
-        throw new BudgetExhausted(`run cap $${opts.capUsd}: $${spent().toFixed(4)} spent, a call could pass it`);
+        const line = ceilingUsd > opts.capUsd ? `run ceiling $${ceilingUsd} (cap $${opts.capUsd} + wiggle)` : `run cap $${opts.capUsd}`;
+        throw new BudgetExhausted(`${line}: $${spent().toFixed(4)} spent, a call could pass it`);
       }
       const res = await create(params);
       claude += Number(priceAnthropicMessages([res as unknown as MessageUsageLike], { modelId: params.model }).costUsd);
@@ -123,7 +130,7 @@ export type LiveStagesDeps = {
 
 /** A guard refusal surfaces inside a stage as a service error; report it as the cost cap it is. */
 function capAware<T>(budget: RunBudget, r: StageResult<T>): StageResult<T> {
-  return !r.ok && budget.exhausted() ? { ...r, reasonCode: 'cost-cap', detail: `${r.detail} (run cap $${budget.capUsd})` } : r;
+  return !r.ok && budget.exhausted() ? { ...r, reasonCode: 'cost-cap', detail: `${r.detail} (run ${budget.ceilingUsd > budget.capUsd ? `ceiling $${budget.ceilingUsd}` : `cap $${budget.capUsd}`})` } : r;
 }
 
 export function createLiveStages(deps: LiveStagesDeps): { stages: PipelineStages; logs: Map<string, StoryLog> } {
@@ -152,7 +159,8 @@ export function createLiveStages(deps: LiveStagesDeps): { stages: PipelineStages
   };
   // The render review (photo spec §5b): Haiku on the contact sheet, under the same budget guard.
   const review = deps.renderReview ? createRenderReview({ call: createReviewCall({ create }), dir: deps.renderReview.dir }) : undefined;
-  const design = createDesignStage({ jev: deps.jev, http: deps.http, vision, tagSheet, faces: deps.faces, secondPhotos: deps.secondPhotos, fitCheck: deps.fitCheck, usedLog: deps.usedLog, now: () => deps.now, identitiesFor, review, ...(deps.bank ? { bank: deps.bank } : {}) });
+  // The size floors (size.ts) read a photo's size when its source doesn't state one.
+  const design = createDesignStage({ jev: deps.jev, http: deps.http, vision, tagSheet, faces: deps.faces, secondPhotos: deps.secondPhotos, size: createSizeProbe(deps.http ?? fetch), fitCheck: deps.fitCheck, usedLog: deps.usedLog, now: () => deps.now, identitiesFor, review, ...(deps.bank ? { bank: deps.bank } : {}) });
 
   const stages: PipelineStages = {
     score: deps.score,

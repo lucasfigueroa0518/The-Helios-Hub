@@ -26,6 +26,7 @@ import { morningDownloadCarousel, recentPhotoUses } from '@/lib/stories/sources/
 import { dedupe, morningDownloadReels, type StoryCandidate } from '@/lib/stories/sources/reels';
 import { writeStructured } from '@/lib/stories/writer';
 
+import { clearsFloor, SLIDE_MIN_SHORT_SIDE } from '@/lib/social/photos/size';
 import { findSetOrEach } from '@/lib/stories/photos';
 import { nextBackdrop, openerDate, sentenceCount, toFrames, type BuildDeps, type BuildResult } from './common';
 
@@ -140,8 +141,10 @@ export async function buildMorningDownload(deps: BuildDeps, sources?: Sources): 
   written = chosen.map((c) => grounded.find((g) => g.key === c.key)).filter((x): x is (typeof written)[number] => Boolean(x));
   if (written.length < MIN_STORIES) return { ok: false, skip: `only ${written.length} headline(s) passed grounding`, candidates };
 
-  // A carousel item keeps the photo its own design stage already chose (S-29).
-  // Every other frame, including the opener, is found together by that same stage.
+  // A carousel item keeps the photo its own design stage already chose (S-29), when it
+  // clears a slide's size floor (size.ts, 2026-10-14). Every other frame, including the
+  // opener, is found together by that same stage; the opener goes first, so it is the
+  // set's cover and gets the cover's rules (no logo, 1080, promotion).
   // The carousel logs its photos as used when it renders, so the 7-day rule only
   // holds a kept photo back when another story used it (2026-10-13: every kept photo
   // was being dropped as "used" by its own carousel post).
@@ -158,14 +161,22 @@ export async function buildMorningDownload(deps: BuildDeps, sources?: Sources): 
     held.add(stored.url);
     return { src: stored.url, credit: stored.credit, kind: 'scene' };
   });
+  const keptNote: Array<string | null> = written.map(() => null);
+  for (const [i, k] of kept.entries()) {
+    if (!k || !deps.photos.size) continue;
+    const floor = await clearsFloor({ url: k.src, width: null, height: null }, SLIDE_MIN_SHORT_SIDE, deps.photos.size);
+    if (floor.ok) continue;
+    keptNote[i] = `the carousel post's photo is too small (${floor.size}; needs ${SLIDE_MIN_SHORT_SIDE}) → searched instead`;
+    kept[i] = null;
+  }
   const openerSource = byKey.get(written[0]!.key)!;
   const requests = [
+    { kind: first.opener_visual.kind, query: first.opener_visual.query, subjects: written[0]!.subjects, storyDate: openerSource.publishedAt?.slice(0, 10) ?? null, sourceUrls: [openerSource.url], exclude: held, cover: true },
     ...written.flatMap((s, i) =>
       kept[i]
         ? []
         : [{ kind: s.visual.kind, query: s.visual.query, subjects: s.subjects, storyDate: byKey.get(s.key)!.publishedAt?.slice(0, 10) ?? null, sourceUrls: [byKey.get(s.key)!.url], exclude: held, alts: s.alt_visuals ?? [], copy: s.headline }],
     ),
-    { kind: first.opener_visual.kind, query: first.opener_visual.query, subjects: written[0]!.subjects, storyDate: openerSource.publishedAt?.slice(0, 10) ?? null, sourceUrls: [openerSource.url], exclude: held },
   ];
   let designed: Array<Photo | null> = [];
   const trace: string[][] = [];
@@ -174,17 +185,17 @@ export async function buildMorningDownload(deps: BuildDeps, sources?: Sources): 
   } catch (err) {
     log.push(`photo set: ${err instanceof Error ? err.message : String(err)}`);
   }
-  let n = 0;
+  const openerPhoto = designed[0] ?? null;
+  let n = 1;
   const storyFrames: StoryData[] = written.map((s, i) => {
     const photo = kept[i] ?? designed[n++] ?? null;
     return { role: 'story', headline: s.headline.trim(), source: { verb: s.source_verb, name: s.source_name }, ...(photo ? { photo } : {}) };
   });
-  const openerPhoto = designed[n] ?? null;
   // Why each frame has the photo it has (or none): the design stage's steps, by frame.
-  let t = 0;
+  let t = 1;
   const photoLog = [
-    { frame: 'opener', ...(openerPhoto ? { picked: openerPhoto.src } : {}), steps: trace[requests.length - 1] ?? [] },
-    ...written.map((s, i) => (kept[i] ? { frame: `story ${i + 1}`, picked: kept[i]!.src, steps: ["kept the carousel post's photo (S-29)"] } : { frame: `story ${i + 1}`, ...(storyFrames[i]!.photo ? { picked: storyFrames[i]!.photo!.src } : {}), steps: trace[t++] ?? [] })),
+    { frame: 'opener', ...(openerPhoto ? { picked: openerPhoto.src } : {}), steps: trace[0] ?? [] },
+    ...written.map((s, i) => (kept[i] ? { frame: `story ${i + 1}`, picked: kept[i]!.src, steps: ["kept the carousel post's photo (S-29)"] } : { frame: `story ${i + 1}`, ...(storyFrames[i]!.photo ? { picked: storyFrames[i]!.photo!.src } : {}), steps: [...(keptNote[i] ? [keptNote[i]!] : []), ...(trace[t++] ?? [])] })),
   ];
 
   const data: FrameData[] = [{ role: 'opener', date: openerDate(deps.nyDate), storyCount: storyFrames.length, ...(openerPhoto ? { photo: openerPhoto } : {}) }, ...storyFrames, { role: 'closer' }];

@@ -5,9 +5,11 @@ import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { slotTakenKey } from '@/lib/instagram/window';
 import { dailyFill, quotaFilledNote, type DailyFill } from '@/lib/social-hub/fill';
 import { approveItem, bookSlot, rejectItem } from '@/lib/social-hub/spine';
-import { DEFAULT_POSTS_PER_DAY, SOCIAL_TIMEZONE } from './config';
+import { datesByWeekday } from '@/lib/lfd/days';
+import { carouselOffDays } from '@/lib/lfd/settings';
+import { CAROUSEL_SLOTS, DEFAULT_POSTS_PER_DAY, SOCIAL_TIMEZONE } from './config';
 import { carouselItemId } from './items';
-import { queuePublish } from './publish';
+import { queuePublish, type FeedVertical, type PublishTrigger, type Queued } from './publish';
 import { chooseCarouselSlots, uniformIndex } from './slots';
 
 /**
@@ -84,9 +86,14 @@ export async function schedulePost(
   const existing = await active();
   if (existing) return { scheduled: true, id: existing.id, publishAt: new Date(existing.publish_at).toISOString() };
 
+  // LFD-02: while Last Few Days' auto_run is on, its days have no carousel windows.
+  const off = await carouselOffDays(query);
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const busy = [...(await busyFeedTimes(query, now, 'social')), ...(await ownFeedTimes(query, 'social', now))];
-    const choice = chooseCarouselSlots(now, await takenSlots(query, calendarDateKey(now, SOCIAL_TIMEZONE)), busy, await postsPerDay(query), rng, throughDate);
+    const today = calendarDateKey(now, SOCIAL_TIMEZONE);
+    const taken = await takenSlots(query, today);
+    for (const day of datesByWeekday(today, 14, off, true)) for (const w of CAROUSEL_SLOTS) taken.add(slotTakenKey(day, w.id));
+    const choice = chooseCarouselSlots(now, taken, busy, await postsPerDay(query), rng, throughDate);
     if (!choice) return { scheduled: false, note: throughDate ? 'Today’s carousel windows are taken or over.' : 'No carousel window is open in the next two weeks.' };
     try {
       const booked = await bookSlot(query, { vertical: 'carousels', itemId, nyDate: choice.nyDate, slot: choice.slot, publishAt: choice.publishAt, source });
@@ -169,30 +176,46 @@ export async function approvePost(query: Query, postId: string, now = new Date()
 export const NOT_APPROVED_NOTE = 'Nobody approved this carousel before its slot, so it was not posted.';
 export const REJECTED_NOTE = 'This carousel was rejected, so it was not posted.';
 
+/** What a due feed slot turns into: the type's queue rule, and the notes a refused slot keeps. */
+export type ReleaseRules = {
+  vertical: FeedVertical;
+  requireApproval: boolean;
+  queue: (nativeRef: string, trigger: PublishTrigger) => Promise<Queued>;
+  notApprovedNote: string;
+  rejectedNote: string;
+  /** Optional (Last Few Days only): a slot more than `afterMinutes` past due is cancelled with `note`, never posted late. */
+  missed?: { afterMinutes: number; note: string };
+};
+
 /**
  * Due slots become publish attempts. With require_approval on (the default),
  * an unapproved slot is cancelled instead. A failing queue check fails the
- * slot, with the reason.
+ * slot, with the reason. Carousels and Last Few Days share this rule.
  */
-export async function releaseDueSchedules(query: Query, opts: { requireApproval: boolean } = { requireApproval: true }): Promise<number> {
+export async function releaseDueFor(query: Query, rules: ReleaseRules): Promise<number> {
   const { rows } = await query(
-    `SELECT s.id, ci.native_ref AS post_id, s.source, a.decision
+    `SELECT s.id, ci.native_ref, s.source, a.decision, s.publish_at
        FROM social_hub.schedule s
        JOIN social_hub.content_items ci ON ci.id = s.content_item_id
        LEFT JOIN social_hub.approvals a ON a.content_item_id = s.content_item_id
-      WHERE s.vertical = 'carousels' AND s.status = 'scheduled' AND s.publish_at <= now()
+      WHERE s.vertical = $1 AND s.status = 'scheduled' AND s.publish_at <= now()
       ORDER BY s.publish_at`,
+    [rules.vertical],
   );
   const cancel = (id: string, note: string) =>
     query(`UPDATE social_hub.schedule SET status = 'cancelled', error = $2 WHERE id = $1 AND status = 'scheduled'`, [id, note]);
   let released = 0;
   for (const row of rows) {
     if (row.decision === 'rejected') {
-      await cancel(row.id, REJECTED_NOTE);
+      await cancel(row.id, rules.rejectedNote);
       continue;
     }
-    if (opts.requireApproval && row.decision !== 'approved') {
-      await cancel(row.id, NOT_APPROVED_NOTE);
+    if (rules.requireApproval && row.decision !== 'approved') {
+      await cancel(row.id, rules.notApprovedNote);
+      continue;
+    }
+    if (rules.missed && new Date(row.publish_at).getTime() < Date.now() - rules.missed.afterMinutes * 60_000) {
+      await cancel(row.id, rules.missed.note);
       continue;
     }
     const claimed = await query(
@@ -200,7 +223,7 @@ export async function releaseDueSchedules(query: Query, opts: { requireApproval:
       [row.id],
     );
     if (!claimed.rows[0]) continue;
-    const result = await queuePublish(query, row.post_id, row.source === 'user' ? 'approve' : 'auto');
+    const result = await rules.queue(row.native_ref, row.source === 'user' ? 'approve' : 'auto');
     if (result.queued) {
       await query(`UPDATE social_hub.schedule SET publish_attempt_id = $2 WHERE id = $1`, [row.id, result.id]);
       released += 1;
@@ -215,6 +238,35 @@ export async function releaseDueSchedules(query: Query, opts: { requireApproval:
   return released;
 }
 
+/** Carousels' due slots (the carousel queue rule and notes). */
+export async function releaseDueSchedules(query: Query, opts: { requireApproval: boolean } = { requireApproval: true }): Promise<number> {
+  return releaseDueFor(query, {
+    vertical: 'carousels',
+    requireApproval: opts.requireApproval,
+    queue: (postId, trigger) => queuePublish(query, postId, trigger),
+    notApprovedNote: NOT_APPROVED_NOTE,
+    rejectedNote: REJECTED_NOTE,
+  });
+}
+
+/** Reject an item (it never posts, D47) and cancel its waiting slot with `note`. */
+export async function rejectItemAndSlot(query: Query, itemId: string, by: string | null, note: string): Promise<void> {
+  await rejectItem(query, itemId, by);
+  await query(
+    `UPDATE social_hub.schedule SET status = 'cancelled', error = $2 WHERE content_item_id = $1 AND status = 'scheduled'`,
+    [itemId, note],
+  );
+}
+
+/** Hard publish's first half (SH-17): the click approves the item, and its waiting slot is closed so it can't post twice. */
+export async function forceApproveItem(query: Query, itemId: string, note: string): Promise<void> {
+  await approveItem(query, itemId, 'force');
+  await query(
+    `UPDATE social_hub.schedule SET status = 'cancelled', error = $2 WHERE content_item_id = $1 AND status = 'scheduled'`,
+    [itemId, note],
+  );
+}
+
 /**
  * A person rejects a carousel (Social Hub Reject, D47): its item is rejected on
  * the spine, so it never posts and is never reused (SH-60), and its waiting slot
@@ -223,11 +275,7 @@ export async function releaseDueSchedules(query: Query, opts: { requireApproval:
 export async function rejectPost(query: Query, postId: string, by: string | null = null): Promise<boolean> {
   const itemId = await carouselItemId(query, postId);
   if (!itemId) return false;
-  await rejectItem(query, itemId, by);
-  await query(
-    `UPDATE social_hub.schedule SET status = 'cancelled', error = $2 WHERE content_item_id = $1 AND status = 'scheduled'`,
-    [itemId, REJECTED_NOTE],
-  );
+  await rejectItemAndSlot(query, itemId, by, REJECTED_NOTE);
   return true;
 }
 
@@ -241,26 +289,18 @@ export const HARD_PUBLISH_NOTE = 'Hard published from the Social Hub (posted now
  */
 export async function hardPublishPost(query: Query, postId: string) {
   const itemId = await carouselItemId(query, postId);
-  if (itemId) {
-    await approveItem(query, itemId, 'force');
-    await query(
-      `UPDATE social_hub.schedule SET status = 'cancelled', error = $2 WHERE content_item_id = $1 AND status = 'scheduled'`,
-      [itemId, HARD_PUBLISH_NOTE],
-    );
-  }
+  if (itemId) await forceApproveItem(query, itemId, HARD_PUBLISH_NOTE);
   return queuePublish(query, postId, 'force');
 }
 
 export const UNSCHEDULED_NOTE = 'Taken off the calendar by a person (unscheduled). It is not approved any more.';
 
 /**
- * Take a carousel off the calendar (the hub's Unschedule): its waiting slot is
+ * Take an item off the calendar (the hub's Unschedule): its waiting slot is
  * cancelled and its approval withdrawn, so it is made and waiting again. A
- * rejection stays; a post that is posting or has posted can't be unscheduled.
+ * rejection stays; content that is posting or has posted can't be unscheduled.
  */
-export async function unschedulePost(query: Query, postId: string): Promise<{ ok: boolean; note: string }> {
-  const itemId = await carouselItemId(query, postId);
-  if (!itemId) return { ok: false, note: 'The post is gone.' };
+export async function unscheduleItem(query: Query, itemId: string): Promise<{ ok: boolean; note: string }> {
   const { rows: busy } = await query(
     `SELECT (SELECT count(*) FROM social_hub.schedule WHERE content_item_id = $1 AND status = 'publishing')
           + (SELECT count(*) FROM social_hub.publish_attempts WHERE content_item_id = $1 AND status IN ('requested', 'creating', 'processing', 'publishing', 'published')) AS n`,
@@ -275,4 +315,11 @@ export async function unschedulePost(query: Query, postId: string): Promise<{ ok
   return cancelled.rows.length
     ? { ok: true, note: 'Unscheduled. It is not approved any more; approve and schedule it again when you want it to post.' }
     : { ok: true, note: 'It had no slot. Its approval is withdrawn.' };
+}
+
+/** Take a carousel off the calendar (the hub's Unschedule). */
+export async function unschedulePost(query: Query, postId: string): Promise<{ ok: boolean; note: string }> {
+  const itemId = await carouselItemId(query, postId);
+  if (!itemId) return { ok: false, note: 'The post is gone.' };
+  return unscheduleItem(query, itemId);
 }

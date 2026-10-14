@@ -1,6 +1,7 @@
 import type { HubQuery } from '@/lib/social-hub/db';
 import type { HubPost } from '@/lib/social-hub/types';
 import { madeMoveIds, type DayQuotas, type IdeaAdjustment } from '@/lib/social-hub/views/day-rank';
+import { readLfdSettings } from '@/lib/lfd/settings';
 
 /**
  * The day's ranking inputs: a person's Promote / Demote moves still in force
@@ -9,7 +10,7 @@ import { madeMoveIds, type DayQuotas, type IdeaAdjustment } from '@/lib/social-h
  */
 
 /** Each type's default when its posts_per_day row is missing (lib/reels/config.ts, lib/social/overnight/config.ts, lib/explainers/publish/config.ts). */
-export const DEFAULT_DAY_QUOTAS: DayQuotas = { reels: 3, carousels: 2, explainers: 2 };
+export const DEFAULT_DAY_QUOTAS: DayQuotas = { reels: 3, carousels: 2, explainers: 2, last_few_days: 1, lfdDays: [] };
 
 type AdjustmentRow = { id: string; vertical: IdeaAdjustment['vertical']; idea_id: string; ny_date: string; kind: IdeaAdjustment['kind']; created_at: string };
 
@@ -64,14 +65,20 @@ const perDay = (rows: Array<{ value: unknown }>, fallback: number, min = 0) => {
 export async function readDayQuotas(q: HubQuery, explainersQ: Promise<HubQuery>): Promise<DayQuotas> {
   const sql = (schema: string) => `SELECT value FROM ${schema}.settings WHERE key = 'posts_per_day'`;
   const safe = (p: Promise<{ rows: Array<{ value: unknown }> }>) => p.catch(() => ({ rows: [] as Array<{ value: unknown }> }));
-  const [reels, carousels, explainers] = await Promise.all([
+  const [reels, carousels, explainers, lfd] = await Promise.all([
     safe(q<{ value: unknown }>(sql('reels'))),
     safe(q<{ value: unknown }>(sql('social'))),
     safe(explainersQ.then((eq) => eq<{ value: unknown }>(sql('explainers')))),
+    // An unreadable lfd schema reads as Last Few Days off: Carousels keep every day.
+    readLfdSettings(q).catch(() => null),
   ]);
+  // Last Few Days asks for its post (and Carousels give up its days, LFD-02) only while its auto_run is on.
+  const lfdOn = lfd?.autoRun === true;
   return {
     reels: perDay(reels.rows, DEFAULT_DAY_QUOTAS.reels),
     carousels: perDay(carousels.rows, DEFAULT_DAY_QUOTAS.carousels),
     explainers: perDay(explainers.rows, DEFAULT_DAY_QUOTAS.explainers, 1),
+    last_few_days: lfdOn ? DEFAULT_DAY_QUOTAS.last_few_days : 0,
+    lfdDays: lfdOn ? lfd!.days : [],
   };
 }

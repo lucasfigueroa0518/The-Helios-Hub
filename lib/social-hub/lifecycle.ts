@@ -29,6 +29,8 @@ export function contentKey(post: HubPost): { kind: 'content' | 'idea'; ref: stri
       return r.postIdeaId ? { kind: 'idea', ref: r.postIdeaId } : null;
     case 'stories':
       return r.setId ? { kind: 'content', ref: r.setId } : null;
+    case 'last_few_days':
+      return r.lfdPostId ? { kind: 'content', ref: r.lfdPostId } : null;
   }
 }
 

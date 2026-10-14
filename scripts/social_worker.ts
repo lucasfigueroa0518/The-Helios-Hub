@@ -18,6 +18,15 @@
  * the same child script carries it out (--rerun-post), under the run cap;
  * its new post is not auto-scheduled.
  *
+ * Last Few Days (docs/superpowers/specs/2026-10-13-last-few-days-design.md
+ * §7.3) shares this process instead of a unit of its own: at 3:00 on its days
+ * (lfd.settings.days, Tue/Fri) with its auto_run on, a Last Few Days run is
+ * queued instead of the carousel run. Its runs (3:00, or the hub's "Make Last
+ * Few Days now") are claimed in this loop, so they never overlap a carousel
+ * run; a finished post joins the spine and, while lfd publishing_live is on,
+ * takes its day's 9:00–10:00 AM window. Its posts publish and its insights are
+ * read here like carousels until the single publisher drives the type.
+ *
  * Nothing is scheduled or published unless social.settings.publishing_live is
  * on. Insights: every 30 minutes while a carousel is fresh, and a 5:30 AM sweep.
  * Once social_hub.settings publisher_mode is 'live', releasing, posting and
@@ -37,6 +46,8 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+
+import type { HubQuery } from '@/lib/social-hub/db';
 
 function loadEnvFile(envPath: string): void {
   if (!fs.existsSync(envPath)) return;
@@ -58,7 +69,7 @@ const POLL_MS = 15_000;
 const INSIGHTS_EVERY_MS = 30 * 60_000;
 
 async function main(): Promise<void> {
-  const { nextRunAt } = await import('@/lib/instagram/clock');
+  const { calendarDateKey, nextRunAt } = await import('@/lib/instagram/clock');
   const cfg = await import('@/lib/social/overnight/config');
   const { socialQuery } = await import('@/lib/social/store');
   const { autoRunOn, getSocialSetting, publishingLive, requireApproval } = await import('@/lib/social/overnight/settings');
@@ -77,7 +88,17 @@ async function main(): Promise<void> {
   const { createGraph } = await import('@/lib/instagram/graph');
   const { pollDueInsights } = await import('@/lib/reels/media-insights/poll');
   const { publisherOwnsPublishing } = await import('@/lib/publishing/publisher');
+  const lfdSettings = await import('@/lib/lfd/settings');
+  const lfdStore = await import('@/lib/lfd/store');
+  const { carryOutLfdRun, withLfdTimeout } = await import('@/lib/lfd/worker');
+  const { LFD_RUN_TIMEOUT_MS } = await import('@/lib/lfd/config');
+  const { threeAmQueue } = await import('@/lib/lfd/clock');
+  const { liveLfdDeps } = await import('@/lib/lfd/live');
+  const { claimAndPublishLfd } = await import('@/lib/lfd/publish');
+  const { releaseDueLfd } = await import('@/lib/lfd/schedule');
   const query = await socialQuery();
+  /** The same connection, typed for lib/lfd (it takes the hub's query shape). */
+  const lfdQuery = query as unknown as HubQuery;
   /** With publisher_mode 'live' the single publisher releases, posts and reads insights (D40). */
   const standDown = () => publisherOwnsPublishing(query, 'carousels');
 
@@ -192,8 +213,12 @@ async function main(): Promise<void> {
 
   async function insights(force: boolean): Promise<void> {
     if (!metaConfigured()) return;
-    const result = await pollCarouselInsights(query, createCarouselInsightsClient({ token: process.env.META_USER_ACCESS_TOKEN! }));
+    const client = createCarouselInsightsClient({ token: process.env.META_USER_ACCESS_TOKEN! });
+    const result = await pollCarouselInsights(query, client);
     if (force || result.considered > 0) log('insights_complete', { ...result });
+    // Last Few Days posts are feed carousels too: the same reads on the same cadence (spec §7.3).
+    const lfd = await pollCarouselInsights(query, client, new Date(), 200, 'last_few_days');
+    if (force || lfd.considered > 0) log('lfd_insights_complete', { ...lfd });
   }
 
   try {
@@ -203,11 +228,24 @@ async function main(): Promise<void> {
     let healthAt = nextHealthReport();
     let lastInsights = 0;
     let lastRerunError: string | null = null;
+    let lastLfdError: string | null = null;
     log('scheduled', { nextRunAt: runAt.toISOString(), nextInsightsAt: sweepAt.toISOString(), nextHealthReportAt: healthAt.toISOString(), pollMs: POLL_MS });
 
     while (!stopping) {
       if (Date.now() >= runAt.getTime()) {
-        if (await autoRunOn().catch(() => false)) {
+        // 3:00 AM: on a Last Few Days day with its auto_run on, its run takes the carousel run's slot (LFD-02).
+        const lfd = await lfdSettings.readLfdSettings(lfdQuery).catch((error) => {
+          log('lfd_settings_failed', { error: errorText(error) });
+          return null;
+        });
+        const slot = threeAmQueue(calendarDateKey(new Date()), lfd, await autoRunOn().catch(() => false));
+        if (slot.queue === 'last_few_days' && lfd?.runCapUsd != null) {
+          const id = await lfdStore.requestRun(lfdQuery, 'scheduled', lfd.runCapUsd).catch((error) => {
+            log('lfd_request_failed', { error: errorText(error) });
+            return null;
+          });
+          log('lfd_run_requested', { runId: id, trigger: 'scheduled' });
+        } else if (slot.queue === 'carousels') {
           const capUsd = (await getSocialSetting<number>('run_cap_usd')) ?? cfg.DEFAULT_RUN_CAP_USD;
           const id = await runs.requestRun(query, 'scheduled', { capUsd, hookPass: true }).catch((error) => {
             log('request_failed', { error: errorText(error) });
@@ -215,7 +253,7 @@ async function main(): Promise<void> {
           });
           log('run_requested', { runId: id, trigger: 'scheduled' });
         } else {
-          log('run_skipped', { reason: 'auto_run is off' });
+          log('run_skipped', { reason: slot.reason });
         }
         runAt = nextRun();
         continue;
@@ -271,6 +309,40 @@ async function main(): Promise<void> {
         continue;
       }
 
+      // Last Few Days runs (3:00 Tue/Fri, or the hub's button), in this same process: never beside a carousel run.
+      const lfdClaimed = await lfdStore.claimRun(lfdQuery).catch((error) => {
+        // Logged once per distinct error (e.g. before the lfd schema is applied), not every poll.
+        const text = errorText(error);
+        if (text !== lastLfdError) log('lfd_claim_failed', { error: text });
+        lastLfdError = text;
+        return null;
+      });
+      if (lfdClaimed) {
+        // The engine is built with the cap carryOutLfdRun read and validated (lfd.settings.run_cap_usd).
+        // A hung run must not stall this loop (3:00, publishing, insights, hub sweeps): past LFD_RUN_TIMEOUT_MS
+        // it is failed and the loop goes on. The cut-off promise is not cancelled and may keep running in the
+        // background (accepted; real runs take 3–8 minutes).
+        const out = await withLfdTimeout(
+          carryOutLfdRun(
+            {
+              query: lfdQuery,
+              now: () => new Date(),
+              log,
+              engine: (run, capUsd) => liveLfdDeps(lfdQuery, { capUsd, trigger: run.trigger, runId: run.id }).then((r) => r.deps),
+            },
+            lfdClaimed,
+          ).catch((error) => ({ runId: lfdClaimed.id, status: 'failed' as const, note: errorText(error) })),
+          LFD_RUN_TIMEOUT_MS,
+          async () => {
+            log('lfd_run_timeout', { runId: lfdClaimed.id });
+            await lfdStore.failRun(lfdQuery, lfdClaimed.id, 'timed out after 30 minutes').catch((error) => log('lfd_fail_failed', { runId: lfdClaimed.id, error: errorText(error) }));
+            return { runId: lfdClaimed.id, status: 'failed' as const, note: 'timed out after 30 minutes' };
+          },
+        );
+        log('lfd_run_result', { ...out });
+        continue;
+      }
+
       // One-story reruns the Social Hub queued (D51), when no run is queued or running.
       const capUsd = (await getSocialSetting<number>('run_cap_usd').catch(() => null)) ?? cfg.DEFAULT_RUN_CAP_USD;
       const rerun = await runs.claimRerun(query, { capUsd, hookPass: true }).catch((error) => {
@@ -302,6 +374,26 @@ async function main(): Promise<void> {
           });
           if (published) {
             log('publish_complete', { ...published });
+            continue;
+          }
+        }
+      }
+
+      // Last Few Days posts the same way while the single publisher doesn't drive it (D40, D41).
+      const lfdNow = await lfdSettings.readLfdSettings(lfdQuery).catch(() => null);
+      if (lfdNow?.publishingLive && !(await publisherOwnsPublishing(query, 'last_few_days'))) {
+        const due = await releaseDueLfd(query, { requireApproval: lfdNow.requireApproval }).catch((error) => {
+          log('lfd_schedule_release_failed', { error: errorText(error) });
+          return 0;
+        });
+        if (due > 0) log('lfd_schedule_due', { released: due });
+        if (metaConfigured()) {
+          const published = await claimAndPublishLfd({ query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs) }).catch((error) => {
+            log('lfd_publish_failed', { error: errorText(error) });
+            return null;
+          });
+          if (published) {
+            log('lfd_publish_complete', { ...published });
             continue;
           }
         }

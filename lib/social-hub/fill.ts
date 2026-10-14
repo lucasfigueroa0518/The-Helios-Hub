@@ -18,7 +18,7 @@
 /** The query shape every type's database handle already offers. */
 export type FillQuery = (text: string, params?: unknown[]) => Promise<{ rows: any[] }>;
 
-export type FillVertical = 'carousels' | 'explainers' | 'reels' | 'stories';
+export type FillVertical = 'carousels' | 'explainers' | 'reels' | 'stories' | 'last_few_days';
 
 /** Slot statuses that hold a day's place: waiting, posting, or posted. Cancelled and failed never count. */
 export const PLACED_STATUSES = ['scheduled', 'publishing', 'published'] as const;

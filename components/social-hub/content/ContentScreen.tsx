@@ -10,7 +10,8 @@ import { TypeMark } from '@/components/social-hub/ui/marks';
 import type { AllProgress } from '@/lib/content-type/progress';
 import type { RunMisses } from '@/lib/content-type/run-misses';
 import type { HubDataset } from '@/lib/social-hub/dataset';
-import { plural, relative, when } from '@/lib/social-hub/views/format';
+import { firstDeadline } from '@/lib/social-hub/health/approvals';
+import { clock, plural, relative, when } from '@/lib/social-hub/views/format';
 import type { LibrariesModel } from '@/lib/social-hub/views/libraries';
 import { offerer } from '@/lib/social-hub/views/offer';
 import { poolStale, poolSummaries, type PoolSummary } from '@/lib/social-hub/views/pools';
@@ -24,7 +25,7 @@ import { typeHref, verticalInfo } from '@/lib/social-hub/verticals';
  * going out today, then how full the tank is.
  */
 export function ContentScreen({ dataset, base, now, libraries, progress, misses, controls = true }: { dataset: HubDataset; base: string; now: Date; libraries: LibrariesModel; progress?: AllProgress; misses?: RunMisses; controls?: boolean }) {
-  const runs: AllProgress = progress ?? { carousels: [], stories: [], explainers: [] };
+  const runs: AllProgress = progress ?? { carousels: [], stories: [], explainers: [], last_few_days: [] };
   const inFlight = Object.values(runs).some((items) => items.length > 0);
   const summary = runningSummary(runs);
   const m = contentModel(dataset, now);
@@ -32,7 +33,10 @@ export function ContentScreen({ dataset, base, now, libraries, progress, misses,
   // Every type's quota candidates for today: what holds its slots, then the top of its ranking (Promote / Demote applied).
   const today = allQuotaCandidates(dataset, now);
   // The count is today's cards still waiting on approval, so it matches the cards' Needs you badges (2026-10-13).
-  const toApprove = today.filter((c) => c.post && o.offer(c.post).state.id === 'needs_you').length;
+  const waiting = today.flatMap((c) => (c.post && o.offer(c.post).state.id === 'needs_you' ? [c.post] : []));
+  const toApprove = waiting.length;
+  // The soonest of those deadlines (a slot's time, else the type's last window today), so the morning check says how long there is.
+  const first = firstDeadline(waiting, now);
   const todayLabel = new Date(`${m.today}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).replace(',', '');
 
   return (
@@ -45,7 +49,7 @@ export function ContentScreen({ dataset, base, now, libraries, progress, misses,
           <>
             <strong>{m.plan.filled}</strong> of {m.plan.slots} slots filled
             {' · '}
-            {toApprove ? <span className="sh-needs-count">{toApprove} to approve</span> : 'nothing to approve'}
+            {toApprove ? <><span className="sh-needs-count">{toApprove} to approve</span>{first ? ` · first by ${clock(first.toISOString())}` : null}</> : 'nothing to approve'}
             {summary.length ? <> · <strong>{summary.join(' · ')}</strong></> : null}
           </>
         )}
@@ -107,7 +111,7 @@ export function ContentScreen({ dataset, base, now, libraries, progress, misses,
   );
 }
 
-function PoolPanel({ pool, base, now, running }: { pool: PoolSummary; base: string; now: Date; running: AllProgress[keyof AllProgress] }) {
+function PoolPanel({ pool, base, now, running }: { pool: PoolSummary; base: string; now: Date; running: NonNullable<AllProgress[keyof AllProgress]> }) {
   const info = verticalInfo(pool.vertical);
   return (
     <Link href={typeHref(pool.vertical, base)} className="sh-panel sh-pool">
@@ -130,7 +134,7 @@ function PoolPanel({ pool, base, now, running }: { pool: PoolSummary; base: stri
         <span className="sh-muted">The pool is empty.</span>
       )}
       {/* A pool that stopped refilling is a pipeline problem: say so in the failed tone, not quiet gray (critique 2026-10-08). */}
-      {poolStale(pool.lastRefill, now) ? (
+      {poolStale(pool.lastRefill, now, pool.vertical) ? (
         <span className="sh-pool__stale"><TriangleAlert size={13} aria-hidden="true" />No refill in {relative(pool.lastRefill, now).replace(/ ago$/, '')}</span>
       ) : (
         <span className="sh-subtle">{pool.lastRefill ? `Refilled ${relative(pool.lastRefill, now)}` : 'No refill recorded'}</span>

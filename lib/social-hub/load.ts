@@ -1,6 +1,7 @@
 import { explainersHubQuery, liveHubQuery, type HubQuery } from '@/lib/social-hub/db';
 import { buildDataset, type HubDataset, type VerticalReads } from '@/lib/social-hub/dataset';
 import { readCarousels } from '@/lib/social-hub/queries/carousels';
+import { readLastFewDays } from '@/lib/social-hub/queries/last-few-days';
 import { readAccount } from '@/lib/social-hub/queries/account';
 import { readCosts } from '@/lib/social-hub/queries/costs';
 import { readExplainers } from '@/lib/social-hub/queries/explainers';
@@ -10,6 +11,7 @@ import { readReels } from '@/lib/social-hub/queries/reels';
 import { readSpine } from '@/lib/social-hub/queries/spine';
 import { readStories } from '@/lib/social-hub/queries/stories';
 import { consumeMoves, readAdjustments, readDayQuotas } from '@/lib/social-hub/queries/day';
+import { readLfdSettings } from '@/lib/lfd/settings';
 import { readDeleted, withoutDeleted } from '@/lib/social-hub/deleted';
 import { readRejected, withRejections } from '@/lib/social-hub/rejected';
 import { nyDateOf } from '@/lib/social-hub/time';
@@ -39,21 +41,22 @@ function explainersShareMain(q: HubQuery): boolean {
  */
 export async function readAll(q: HubQuery = liveHubQuery, explainersQ: Promise<HubQuery> = explainersHandle(q)): Promise<VerticalReads> {
   const shared = explainersShareMain(q);
-  const mainSpine = readSpine(q, shared ? ['carousels', 'reels', 'explainers'] : ['carousels', 'reels']);
+  const mainSpine = readSpine(q, shared ? ['carousels', 'reels', 'explainers', 'last_few_days'] : ['carousels', 'reels', 'last_few_days']);
   mainSpine.catch(() => undefined); // each reader reports the failure itself
   const explainersSpine = (eq: HubQuery) => (shared ? mainSpine : readSpine(eq, ['explainers']));
-  const [reels, explainers, carousels, stories] = await Promise.all([
+  const [reels, explainers, carousels, stories, lastFewDays] = await Promise.all([
     settle(mainSpine.then((spine) => readReels(q, spine))),
     settle(explainersQ.then(async (eq) => readExplainers(eq, await explainersSpine(eq)))),
     settle(mainSpine.then((spine) => readCarousels(q, spine))),
     settle(readStories(q)),
+    settle(mainSpine.then((spine) => readLastFewDays(q, spine))),
   ]);
-  return { reels, explainers, carousels, stories };
+  return { reels, explainers, carousels, stories, last_few_days: lastFewDays };
 }
 
 export async function loadDataset(q: HubQuery = liveHubQuery, now = new Date()): Promise<HubDataset> {
   const explainersQ = explainersHandle(q);
-  const [reads, costs, quota, snapshot, account, adjustments, dayQuotas, deleted, rejected] = await Promise.all([
+  const [reads, costs, quota, snapshot, account, adjustments, dayQuotas, deleted, lfdPublishingLive, rejected] = await Promise.all([
     readAll(q, explainersQ),
     settle(readCosts(q, explainersQ)),
     readLatestQuota(q).catch(() => null),
@@ -63,6 +66,8 @@ export async function loadDataset(q: HubQuery = liveHubQuery, now = new Date()):
     readDayQuotas(q, explainersQ).catch(() => null),
     // Before the column exists (or if the read fails) nothing is hidden, so the hub never fails on it.
     readDeleted(q).catch(() => []),
+    // SELECT only (lib/lfd/settings.ts); an unreadable lfd schema reads as off.
+    readLfdSettings(q).then((s) => s.publishingLive).catch(() => false),
     readRejected(q).catch(() => []),
   ]);
   // The sweep's snapshot wins over a publisher's refusal message when it is newer.
@@ -71,5 +76,5 @@ export async function loadDataset(q: HubQuery = liveHubQuery, now = new Date()):
   const dataset = withRejections(withoutDeleted(buildDataset(reads, costs, now, newest, account), deleted), rejected);
   // B8: moves last until their idea is made; used ones are marked here and drop out. A failure never fails the page.
   const active = await consumeMoves(q, adjustments, dataset.posts).catch(() => adjustments);
-  return { ...dataset, adjustments: active, dayQuotas };
+  return { ...dataset, adjustments: active, dayQuotas, lfdPublishingLive };
 }

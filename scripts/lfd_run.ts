@@ -25,8 +25,6 @@ loadEnvFile(path.join(process.cwd(), '.env.local'));
 async function main() {
   const live = process.argv.includes('--live');
   const { socialQuery } = await import('@/lib/social/store');
-  const { mediaBucket } = await import('@/lib/media-bucket');
-  const { SLIDE_BUCKET } = await import('@/lib/social/overnight/config');
   const { closeDbPool } = await import('@/lib/db');
   const query = (await socialQuery()) as unknown as HubQuery;
 
@@ -43,40 +41,11 @@ async function main() {
     return;
   }
 
-  const { newAnthropic } = await import('@/lib/anthropic-client');
-  const { liveMessagesCreate } = await import('@/lib/social/reporter/reporter');
-  const { capped, createJevAsk, createJevTally, tallied } = await import('@/lib/social/jev/client');
-  const { createRunBudget } = await import('@/lib/social/pipeline/live-stages');
-  const { createLivePhotoFinder } = await import('@/lib/stories/photos');
-  const { fetchAllFeeds } = await import('@/lib/social/ingest/fetch-feeds');
-  const { HELIOS_SOCIAL_FEEDS } = await import('@/lib/social/feeds');
-  const { fetchBodyLive } = await import('@/lib/social/ingest/select/enrich');
-  const { checkRenderFit } = await import('@/lib/social/render/fit-check');
-  const { readPage } = await import('@/lib/social/reporter/read-page');
+  const { liveLfdDeps } = await import('@/lib/lfd/live');
   const { runLastFewDays } = await import('@/lib/lfd/run');
-
-  const tally = createJevTally();
-  const jev = capped(tallied(createJevAsk(), tally), tally, cap);
-  const budget = createRunBudget({ capUsd: cap, otherSpendUsd: () => tally.costUsd });
-  const create = budget.guard(liveMessagesCreate(newAnthropic()));
-  const bucket = mediaBucket(SLIDE_BUCKET);
-
-  const res = await runLastFewDays({
-    query,
-    jev,
-    create,
-    photos: createLivePhotoFinder({ jev, create, runRef: `lfd:${new Date().toISOString()}` }),
-    fetchFeeds: () => fetchAllFeeds(HELIOS_SOCIAL_FEEDS),
-    fetchBody: fetchBodyLive,
-    readPage: (url) => readPage(url),
-    fitCheck: checkRenderFit,
-    upload: (p, b) => bucket.upload(p, b, 'image/jpeg'),
-    now: new Date(),
-    trigger: 'manual',
-    capUsd: cap,
-    spend: () => ({ claudeUsd: budget.claudeUsd(), jevUsd: tally.costUsd }),
-  });
-  console.log(JSON.stringify({ ...res, spentUsd: budget.spent() }, null, 2));
+  const { deps, spentUsd } = await liveLfdDeps(query, { capUsd: cap, trigger: 'manual' });
+  const res = await runLastFewDays(deps);
+  console.log(JSON.stringify({ ...res, spentUsd: spentUsd() }, null, 2));
   await closeDbPool();
   process.exit(res.ok ? 0 : 1);
 }

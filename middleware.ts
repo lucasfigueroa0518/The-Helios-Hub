@@ -58,6 +58,8 @@ function isProtectedPage(pathname: string): boolean {
     || pathname.startsWith('/stories/')
     || pathname === '/carousels'
     || pathname.startsWith('/carousels/')
+    || pathname === '/last-few-days'
+    || pathname.startsWith('/last-few-days/')
     // Social Hub pages (the carousel render preview at /social/render stays as it was).
     || pathname === '/social'
     || (pathname.startsWith('/social/') && !pathname.startsWith('/social/render')

@@ -7,9 +7,10 @@
  */
 export type SpacingQuery = (text: string, params?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }>;
 
-export type FeedSchema = 'explainers' | 'social';
+/** Feed-posting types by their schema: `social` is Carousels, `lfd` is Last Few Days. */
+export type FeedSchema = 'explainers' | 'social' | 'lfd';
 
-const FEED_SCHEMAS: readonly FeedSchema[] = ['explainers', 'social'];
+const FEED_SCHEMAS: readonly FeedSchema[] = ['explainers', 'social', 'lfd'];
 
 const ACTIVE = `status IN ('scheduled', 'publishing', 'published')
    AND publish_at >= $1::timestamptz AND publish_at < $2::timestamptz`;
@@ -18,6 +19,7 @@ const ACTIVE = `status IN ('scheduled', 'publishing', 'published')
 const BOOKED: Record<FeedSchema, string> = {
   explainers: `SELECT publish_at FROM social_hub.schedule WHERE vertical = 'explainers' AND ${ACTIVE}`,
   social: `SELECT publish_at FROM social_hub.schedule WHERE vertical = 'carousels' AND ${ACTIVE}`,
+  lfd: `SELECT publish_at FROM social_hub.schedule WHERE vertical = 'last_few_days' AND ${ACTIVE}`,
 };
 
 /** Feed post instants from `from` through two weeks ahead, in every schema but `except`. */

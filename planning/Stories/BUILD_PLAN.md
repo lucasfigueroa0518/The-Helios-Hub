@@ -191,7 +191,7 @@ Carousel candidates carry a source weight above reels candidates (S-10); its siz
 
 **Pool:** Ball Knowledge ideas from the last 14 days (their copy names what a tool replaces), GitHub Trending sources, and `reels.list_catalog`, filtered to tools a general user can install (S-08).
 
-**Pairing** (`fvp-pair@1`, DRAFT, cached Sonnet with `web_search`, at most 5 searches): proposes up to 3 pairs, each with the paid tool's current price page, the free tool's official page, platforms, and the install path. Then a verification pass checks the price and the install path on the pages found (S-22).
+**Pairing** (`fvp-pair@2`, cached Sonnet with `web_search`, at most 5 searches): proposes 3 pairs, mostly well-known paid tools and established free ones a normal person can install or open (no self-hosted or server software); Ball Knowledge ideas and GitHub Trending are optional hints, and no hints is no reason to skip (2026-10-13: the curated-list catalog is no longer read, since every pair drawn from it failed `accessible` or was never proposed). Each pair comes with the paid tool's current price page, the free tool's official page, platforms, and the install path. Then a verification pass checks the price and the install path on the pages found (S-22).
 
 **Scoring** (`fvp-pair-score@1`, DRAFT, needs R6): `paid_known` (do most people know or pay for the paid tool?), `does_the_job` (does the free tool do the paid tool's core job, per its own page?), `accessible` (no setup beyond install or sign-up; a developer tool is marked as one, and at most one in four sets is a developer tool), `viewer_value` (would the viewer act on it?). Drop a pair shown in the last 90 days.
 
@@ -286,7 +286,7 @@ Decisions after kickoff go here, numbered from S-34.
 | `gtn-extract@1` | Numbers from shortlisted stories | Sonnet 5.5 | Drafted in M6 ; approved by Lucas 2026-10-08 |
 | `gtn-candidate@1` | Guess the Number scoring | Jev | Drafted in M6 ; approved by Lucas 2026-10-08 |
 | `gtn-question@1` | Question, answer, label, meaning, topic | Sonnet 5.5 | Drafted in M6 ; approved by Lucas 2026-10-08 |
-| `fvp-pair@1` | Pair finding (web search, at most 5) | Sonnet 5.5 + web_search | Drafted in M7 ; approved by Lucas 2026-10-08 |
+| `fvp-pair@2` | Pair finding (web search, at most 5) | Sonnet 5.5 + web_search | @1 approved by Lucas 2026-10-08; @2 revised 2026-10-13 (Tommy) after 18 straight skips |
 | `fvp-verify@1` | Price and install path re-check | Sonnet 5.5 + web_fetch | Drafted in M7 ; approved by Lucas 2026-10-08 |
 | `fvp-pair-score@1` | Pair scoring | Jev | Drafted in M7 ; approved by Lucas 2026-10-08 |
 | `fvp-copy@1` | The tease line | Sonnet 5.5 | Drafted in M7 ; approved by Lucas 2026-10-08 |

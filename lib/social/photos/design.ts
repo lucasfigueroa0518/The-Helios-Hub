@@ -31,7 +31,7 @@ import { DEFAULT_ICON, isIcon } from '@/lib/social/render/icons';
 import type { FilledDraft, VisualRequest } from '@/lib/social/writer/draft';
 
 import { articlePhotosFor } from './article-list';
-import { newSearchContext, searchVisual, type Candidate, type PhotoDeps, type PhotoSlot, type PhotoTrace } from './find';
+import { newSearchContext, searchVisual, type Candidate, type ChainStep, type PhotoDeps, type PhotoSlot, type PhotoTrace } from './find';
 import type { SubjectType } from './identity';
 import type { IdentityCache } from './p18';
 import { choosePivots } from './pivot';
@@ -69,13 +69,12 @@ type Place = { slot: PickSlot; icon: string; tags: string[]; requests: VisualReq
 const errText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 /**
- * Cover rotation (Tommy, 2026-10-12): a cover whose logo request found nothing, because every logo the company has
- * was a cover in the last 7 days, tries the same company's other looks (its CEO, headquarters, official and article
- * images) before the Writer's fallback, so a company that is in the news every day does not open every post the same
- * way. Only a logo request on a cover; null otherwise.
+ * No logo-only covers (Tommy and Lucas, 2026-10-14): a cover that asks for a logo searches the company's other looks
+ * instead (its CEO, headquarters, official and article images). Replaces the 2026-10-12 cover rotation, which did the
+ * same only once every logo had been a cover that week. Every other request is unchanged.
  */
-export function companyRung(request: VisualRequest, result: { candidates: readonly unknown[] }): VisualRequest | null {
-  return request.kind === 'logo' && result.candidates.length === 0 ? { kind: 'company', query: request.query } : null;
+export function coverRequest(request: VisualRequest): VisualRequest {
+  return request.kind === 'logo' ? { kind: 'company', query: request.query } : request;
 }
 
 export async function photosForDraft(
@@ -83,8 +82,12 @@ export async function photosForDraft(
   brief: Brief,
   pages: PageReadOk[],
   deps: PhotoDeps,
-  history: { recent?: Set<string>; lastUsed?: Map<string, string>; identities?: IdentityCache; storyDate?: string | null } = {},
+  history: { recent?: Set<string>; lastUsed?: Map<string, string>; identities?: IdentityCache; storyDate?: string | null; plainCover?: boolean } = {},
 ): Promise<DraftPhotos> {
+  // `plainCover`: the first place is a frame like the others, not a cover (a Stories set whose first frame is a story),
+  // so the cover rules (no logo, the 1080 floor, promotion) don't apply to it.
+  const coverRules = !history.plainCover;
+  const asCover = (r: VisualRequest) => (coverRules ? coverRequest(r) : r);
   const kinds = await subjectKinds(brief, history.identities);
   const ctx = newSearchContext(brief, pages, { recent: history.recent, lastUsed: history.lastUsed, identities: history.identities, kinds, photos: articlePhotosFor(brief, pages, kinds), storyDate: history.storyDate ?? null });
   // The vision check, recorded (same answers) so the bank knows which candidates passed or failed it.
@@ -93,7 +96,7 @@ export async function photosForDraft(
   const icon = (name: string | undefined) => (isIcon(name) ? name : DEFAULT_ICON);
   const chosen = draft.cover_options[draft.chosen_cover - 1]!;
   const places: Place[] = [
-    { slot: { kind: 'cover', speaker: null }, icon: icon(chosen.icon), tags: chosen.subject_ids ?? [], requests: [chosen.visual, chosen.fallback_visual], alts: chosen.alt_visuals ?? [], words: { position: 1, headline: draft.cover, body: '' } },
+    { slot: { kind: coverRules ? 'cover' : 'story', speaker: null }, icon: icon(chosen.icon), tags: chosen.subject_ids ?? [], requests: [asCover(chosen.visual), asCover(chosen.fallback_visual)], alts: (chosen.alt_visuals ?? []).map(asCover), words: { position: 1, headline: draft.cover, body: '' } },
     ...draft.slides.map((s, i): Place => ({
       slot: { kind: s.type === 'stat' ? 'stat' : s.type === 'quote' ? 'quote' : 'story', speaker: s.quote?.speaker_subject ?? null },
       icon: icon(s.icon),
@@ -109,12 +112,6 @@ export async function photosForDraft(
   for (const [i, p] of places.entries()) {
     const perRequest = [];
     for (const request of p.requests) perRequest.push({ request, ...(await searchVisual(request, ctx, deps, { cover: i === 0, tags: p.tags })) });
-    // The cover's company rotation: between the logo request and the Writer's fallback.
-    const rung = i === 0 ? companyRung(p.requests[0]!, perRequest[0]!) : null;
-    if (rung) {
-      const r = await searchVisual(rung, ctx, deps, { cover: true, tags: p.tags });
-      perRequest.splice(1, 0, { request: rung, ...r, steps: [`cover rotation: every ${rung.query} logo was a cover in the last 7 days → its other looks (CEO, headquarters, official images) before the fallback`, ...r.steps] });
-    }
     found.push(perRequest);
   }
 
@@ -214,6 +211,35 @@ export async function photosForDraft(
       ...(out.winner?.tags ? { tags: out.winner.tags.tags } : {}),
       ...(out.visionUsd ? { visionUsd: out.visionUsd } : {}),
     });
+  }
+  // Promotion (Tommy and Lucas, 2026-10-14): a cover nothing could fill takes the best inner photo that clears the
+  // cover's floor and suits the cover's words (the same pick: size, close-up, photo-slide@2), and that slide takes its
+  // next runner-up, else its icon. Measured over a week: every carousel had an inner photo of at least 1080.
+  const cover = traces[0]!;
+  const inner = traces.slice(1).flatMap((t, k) => (t.photo && (t.photo as Candidate).lane !== 'logo' ? [{ at: k + 1, cand: t.photo as Candidate }] : []));
+  if (coverRules && !cover.photo && inner.length) {
+    const out = await pickForSlide(
+      { slot: places[0]!.slot, requests: [{ request: cover.request, scored: inner.map(({ cand }): Scored => ({ cand, tags: null, fit: null })) }], words: places[0]!.words },
+      { ...newPickState(), closeUps: state.closeUps },
+      deps,
+      subjects,
+      PhotoFit.THRESHOLDS.FIT_MIN,
+      brief.the_news.text,
+    );
+    visionUsd += out.visionUsd;
+    const from = out.winner ? inner.find((x) => x.cand.url === out.winner!.cand.url) : undefined;
+    if (from) {
+      const slide = traces[from.at]!;
+      const inPost = new Set(traces.flatMap((t) => (t.photo ? [t.photo.url] : [])));
+      const next = slide.alternates.find((c) => !inPost.has(c.url)) ?? null;
+      const to = next ? (next.source as ChainStep) : places[from.at]!.slot.kind === 'quote' ? 'type-led' : 'icon';
+      traces[0] = { ...cover, photo: from.cand, via: from.cand.lane, steps: [...cover.steps, `promotion: nothing passed for the cover → slide ${from.at + 1}'s photo`, ...out.steps] };
+      slide.steps.push(`promotion: this photo went to the cover → ${next ? `next runner-up (${next.source})` : to}`);
+      slide.photo = next;
+      slide.via = to;
+    } else {
+      cover.steps.push('promotion: no inner photo clears the cover', ...out.steps);
+    }
   }
   return { cover: traces[0]!, slides: traces.slice(1), costUsd: { tags: tagUsd, vision: visionUsd }, vetted };
 }

@@ -1,9 +1,10 @@
 /**
  * Free vs. Paid (plan §5.3; S-07, S-08, S-22, S-46, S-50).
  *
- *   leads    Ball Knowledge ideas (14 days), GitHub Trending, a catalog sample
- *   pair     fvp-pair@1: Sonnet with web search (at most 5 searches) proposes
- *            up to 3 pairs with their official pages
+ *   hints    Ball Knowledge ideas (14 days) and GitHub Trending, optional
+ *   pair     fvp-pair@2: Sonnet with web search (at most 5 searches) proposes
+ *            3 pairs, mostly well-known paid tools and established free ones,
+ *            with their official pages; no hints is no reason to skip
  *   score    fvp-pair-score@1 per pair; pairs shown in 90 days dropped; a
  *            developer tool only when none of the last 3 sets had one (S-08)
  *   verify   fvp-verify@1 re-reads the price and free pages (web fetch); a
@@ -45,7 +46,7 @@ async function devToolAllowed(deps: BuildDeps): Promise<boolean> {
  * is unrecoverable. Recording only; it never changes what the build decides.
  */
 export type FvpSkipRecord = {
-  gate: 'no-leads' | 'model-proposed-none' | 'all-proposals-already-shown' | 'no-pair-cleared';
+  gate: 'model-proposed-none' | 'all-proposals-already-shown' | 'no-pair-cleared';
   leadsOffered: number;
   leadsByOrigin: Record<string, number>;
   alreadyShownKeys: number;
@@ -77,7 +78,7 @@ export async function buildFreeVsPaid(deps: BuildDeps, leads?: () => Promise<Too
   const pooled = deps.pool;
   const found = await (leads ?? (pooled ? async () => pooled.leads : () => freeToolLeads(deps.sourceDb, deps.nyDate)))().catch(() => []);
   const rec: FvpSkipRecord = {
-    gate: 'no-leads',
+    gate: 'model-proposed-none',
     leadsOffered: found.length,
     leadsByOrigin: found.reduce<Record<string, number>>((m, l) => ({ ...m, [l.origin]: (m[l.origin] ?? 0) + 1 }), {}),
     alreadyShownKeys: shown.size,
@@ -87,11 +88,6 @@ export async function buildFreeVsPaid(deps: BuildDeps, leads?: () => Promise<Too
     bar: FVP_BAR,
     considered: [],
   };
-  if (!found.length) {
-    await recordFvpSkip(deps, rec);
-    return { ok: false, skip: 'no free-tool leads', candidates };
-  }
-
   const call = <T>(prompt: { id: string; system: string; tool: { name: string; description: string; input_schema: Record<string, unknown> } }, user: string, extra: { webSearch?: { maxUses: number }; webFetch?: { maxUses: number }; effort?: 'low' | 'medium' } = {}) =>
     writeStructured<T>({ create: deps.write, db: deps.db, setId: deps.setId, component: prompt.id, model: deps.settings.models.copy, system: prompt.system, tool: prompt.tool, user, ...extra });
 

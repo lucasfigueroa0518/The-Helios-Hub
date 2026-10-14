@@ -262,7 +262,7 @@ const SCORING_BARS = { REQUIRED_MIN: 0.6, BONUS_MIN: 0.5 } as const;
  */
 export const V4 = {
   impact: [['field_shift', 'Changes what AI can do, what it costs, or who leads'], ['industry_power', 'Money or power among the companies that build AI'], ['national_policy', 'A government act on AI']] as Array<[string, string]>,
-  weights: { impact: 1.5, policy: 1, mustKnow: 1, commonPerson: 1.5, sourcing: 1, coverage: 0.5 },
+  weights: { impact: 2, policy: 1.3, mustKnow: 1, commonPerson: 1, sourcing: 1, coverage: 0.5 },
   coverageFullAt: 16,
   max: 5.5,
   REQUIRED_MIN: 0.6,
@@ -276,7 +276,7 @@ const isV3 = (answers: Record<string, number>) => answers.big_news != null;
 
 const yn = (v: number | undefined, bar: number) => (v == null ? 'Not asked' : v >= bar ? 'yes' : 'no');
 
-/** The strongest impact axis and its weighted points: a launch or a deal can earn 1.5, a government act at most 1.0. */
+/** The strongest impact axis and its weighted points: a launch or a deal can earn 2, a government act at most 1.3. */
 export function v4Impact(a: Record<string, number>): { id: string; label: string; points: number } {
   const w = V4.weights;
   const axes = V4.impact.map(([id, label]) => ({ id, label, points: (a[id] ?? 0) * (id === 'national_policy' ? w.policy : w.impact) }));
@@ -300,7 +300,7 @@ export function carouselBreakdown(row: CarouselIdeaRow): ScoreBreakdown | null {
       detail: a[id] == null ? 'Not asked' : kind === 'min' ? `${a[id]!.toFixed(2)} (needs ${bar.toFixed(2)})` : `${a[id]!.toFixed(2)} (must stay under ${bar.toFixed(2)})`,
     });
     return {
-      formula: 'The strongest of three impact answers (a launch or deal up to 1.5, a government act up to 1.0), plus must-know (up to 1), a regular person would care (up to 1.5), sourcing (up to 1), and up to 0.5 for how many outlets report it.',
+      formula: 'The strongest of three impact answers (a launch or deal up to 2, a government act up to 1.3), plus must-know (up to 1), a regular person would care (up to 1), sourcing (up to 1), and up to 0.5 for how many outlets report it.',
       parts: [
         { label: `Impact: ${impact.label}`, points: Number(impact.points.toFixed(2)), detail: V4.impact.map(([id]) => `${id.replace('_', ' ')} ${(a[id] ?? 0).toFixed(2)}`).join(' · ') },
         { label: 'Someone who follows AI would feel behind', points: a.must_know == null ? null : Number((a.must_know * w.mustKnow).toFixed(2)), detail: yn(a.must_know, V4.BONUS_MIN) },

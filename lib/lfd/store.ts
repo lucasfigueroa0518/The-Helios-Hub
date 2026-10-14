@@ -49,11 +49,14 @@ export async function finishRun(
   q: HubQuery,
   id: string,
   o: { status: 'ok' | 'partial' | 'failed' | 'skipped'; stopReason?: string; error?: string; claudeUsd: number; jevUsd: number; record: unknown },
-): Promise<void> {
-  await q(
-    `UPDATE lfd.runs SET status = $2, finished_at = now(), stop_reason = $3, error = $4, claude_usd = $5, jev_usd = $6, total_usd = $5::double precision + $6::double precision, record = $7::jsonb WHERE id = $1`,
+): Promise<boolean> {
+  // Only a running run: one the worker already failed (the 30-minute timeout) keeps its failed row.
+  const { rows } = await q<{ id: string }>(
+    `UPDATE lfd.runs SET status = $2, finished_at = now(), stop_reason = $3, error = $4, claude_usd = $5, jev_usd = $6, total_usd = $5::double precision + $6::double precision, record = $7::jsonb
+      WHERE id = $1 AND status = 'running' RETURNING id`,
     [id, o.status, o.stopReason ?? null, o.error ?? null, o.claudeUsd, o.jevUsd, JSON.stringify(o.record)],
   );
+  return rows.length > 0;
 }
 
 export async function insertPost(
@@ -66,4 +69,62 @@ export async function insertPost(
     [p.runId, p.slug, p.nyDate, p.ideaIds, JSON.stringify(p.stories), JSON.stringify(p.render), p.caption, JSON.stringify(p.slideObjects), JSON.stringify(p.fitProblems), JSON.stringify(p.renderProblems ?? []), p.short],
   );
   return rows[0]!.id;
+}
+
+export type ClaimedRun = { id: string; trigger: 'scheduled' | 'manual' };
+
+/**
+ * Queue a run: the 3:00 clock or the hub's "Make Last Few Days now" (docs/social-overnight.md
+ * contract item 1). Null when one is already queued (the single-requested index). Only the worker runs it.
+ */
+export async function requestRun(q: HubQuery, trigger: 'scheduled' | 'manual', capUsd: number): Promise<string | null> {
+  const { rows } = await q<{ id: string }>(
+    `INSERT INTO lfd.runs (trigger, status, cap_usd) VALUES ($1, 'requested', $2) ON CONFLICT DO NOTHING RETURNING id::text AS id`,
+    [trigger, capUsd],
+  );
+  return rows[0]?.id ?? null;
+}
+
+/** Claim the queued run when none is running. A run left running past ABANDONED_AFTER is failed first, as in startRun. */
+export async function claimRun(q: HubQuery, now = new Date()): Promise<ClaimedRun | null> {
+  await q(
+    `UPDATE lfd.runs SET status = 'failed', finished_at = now(), stop_reason = 'abandoned'
+      WHERE status = 'running' AND started_at < now() - interval '${ABANDONED_AFTER}'`,
+  );
+  try {
+    const { rows } = await q<{ id: string; trigger: 'scheduled' | 'manual' }>(
+      `UPDATE lfd.runs SET status = 'running', started_at = $1::timestamptz
+        WHERE id = (
+          SELECT id FROM lfd.runs
+           WHERE status = 'requested'
+             AND NOT EXISTS (SELECT 1 FROM lfd.runs r WHERE r.status = 'running')
+           ORDER BY requested_at
+           FOR UPDATE SKIP LOCKED
+           LIMIT 1)
+        RETURNING id::text AS id, trigger`,
+      [now.toISOString()],
+    );
+    return rows[0] ? { id: rows[0].id, trigger: rows[0].trigger } : null;
+  } catch (err) {
+    if ((err as { code?: string }).code === '23505') return null;
+    throw err;
+  }
+}
+
+/** The claimed run becomes this run: its cap and day are set, nothing new is inserted (spec §7.1 queue). */
+export async function adoptRun(q: HubQuery, id: string, capUsd: number, nyDate: string): Promise<string> {
+  const { rows } = await q<{ id: string }>(
+    `UPDATE lfd.runs SET cap_usd = $2, ny_date = $3::date WHERE id = $1 AND status = 'running' RETURNING id::text AS id`,
+    [id, capUsd, nyDate],
+  );
+  if (!rows[0]) throw new Error(`Last Few Days run ${id} is not running: it was not claimed, or it already finished`);
+  return rows[0].id;
+}
+
+/** The worker's last word on a claimed run that threw before the engine finished it. */
+export async function failRun(q: HubQuery, id: string, error: string): Promise<void> {
+  await q(
+    `UPDATE lfd.runs SET status = 'failed', finished_at = now(), error = $2 WHERE id = $1 AND status = 'running'`,
+    [id, error.slice(0, 2000)],
+  );
 }

@@ -14,6 +14,7 @@ import type { CommonsCandidate } from '@/lib/social/editorial/v2/image-step/comm
 import type { ListedPhoto } from '@/lib/social/photos/article-list';
 import type { DetectFaces } from '@/lib/social/photos/faces';
 import { newSearchContext, searchVisual, type Photo, type PhotoDeps } from '@/lib/social/photos/find';
+import { photosForDraft } from '@/lib/social/photos/design';
 import { newPickState, pickForSlide } from '@/lib/social/photos/pick';
 import type { IdentityResult } from '@/lib/social/photos/identity';
 import { titleNamesPerson } from '@/lib/social/photos/second-photo';
@@ -198,9 +199,23 @@ test('design stage: a full-bleed person photo whose face lands under text goes b
   const sc = { id: 's1', title: 't', url: 'https://x', outlets: ['TechCrunch'], publishedAt: new Date('2026-10-04T12:00:00Z') } as ScoredCandidate;
   const r = await stage(draft, { storyId: 's1', parsed: b, raw: '', pages: [] } as PipelineBrief, sc);
   assert.ok(r.ok, r.ok ? '' : r.detail);
-  assert.deepEqual(renders, ['bleed 3', 'no bleed']);
-  assert.ok(r.value.checks.photoReplacements.includes('slide 3: a face under text on the full-bleed photo → split layout'));
-  assert.equal(r.value.render.slides[2]!.layoutVariant, 'text');
+  // The cover found nothing offline, so slide 3's portrait was promoted to it (2026-10-14); the face check then
+  // sends the cover back to the split layout, the same fallback as on any slide.
+  assert.ok(r.value.photos[0]!.steps.some((x) => /promotion: nothing passed for the cover → slide 3/.test(x)));
+  assert.deepEqual(renders, ['bleed 1', 'no bleed']);
+  assert.ok(r.value.checks.photoReplacements.includes('slide 1: a face under text on the full-bleed photo → split layout'));
+  assert.equal(r.value.render.slides[0]!.photoBleed, false);
+});
+
+test('photosForDraft: a set whose first frame is a story (plainCover: Last Few Days) gets no cover rules and no promotion', async () => {
+  const b = briefSuperIntelligenceForce();
+  const filled = fillDraft(sifDraftHandoff(), b);
+  const http = await fakeWeb({ Q9: { p18: 'Jay Clayton portrait.jpg' } });
+  const identities = new Map([verified('Jay Clayton', 'Q9', 'person'), verified('Donald Trump', 'Q8', 'person')]);
+  const deps = { jev: noJev, http, faces: facesBy({ 'Jay Clayton': 1 }) };
+  const plain = await photosForDraft(filled, b, [], deps, { identities, plainCover: true });
+  assert.ok(!plain.cover.steps.some((x) => /promotion/.test(x)));
+  assert.equal(plain.slides[1]!.photo?.subject, 'Jay Clayton', 'slide 3 keeps its own portrait');
 });
 
 // ── Icon backgrounds (photo spec §5, §5a) ────────────────────────────

@@ -40,7 +40,7 @@ export function CalendarScreen({ dataset, base, params, now }: { dataset: HubDat
   const shown: Vertical[] = params.types ? params.types.split(',').filter(isVertical) : [...VERTICAL_IDS];
   const types = new Set(shown.length ? shown : VERTICAL_IDS);
   const o = offerer(dataset, now);
-  const m = monthModel(dataset.posts, month, now, metric, types, (p) => o.offer(p).state.id === 'needs_you');
+  const m = monthModel(dataset.posts, month, now, metric, types, (p) => o.offer(p).state.id === 'needs_you', dataset.dayQuotas?.lfdDays ?? []);
   const keep: HubParams = { month: params.month, types: params.types, metric: params.metric };
   const href = (changes: Record<string, string | null>) => withParams(path, '', keep, changes);
   const metricLabel = metricSpec(metric).label.toLowerCase();
@@ -119,7 +119,7 @@ export function CalendarScreen({ dataset, base, params, now }: { dataset: HubDat
           prevHref={href({ day: addDays(day, -1), month: null })}
           nextHref={href({ day: addDays(day, 1), month: null })}
         >
-          <DayList posts={dataset.posts} day={day} types={types} now={now} o={o} base={base} />
+          <DayList posts={dataset.posts} day={day} types={types} now={now} o={o} base={base} carouselOff={dataset.dayQuotas?.lfdDays ?? []} />
         </DaySheet>
       ) : null}
     </>
@@ -162,8 +162,8 @@ function Cell({ cell, href, metric }: { cell: DayCell; href: string; metric: Met
   );
 }
 
-function DayList({ posts, day, types, now, o, base }: { posts: HubDataset['posts']; day: string; types: ReadonlySet<Vertical>; now: Date; o: ReturnType<typeof offerer>; base: string }) {
-  const slots = daySlots(posts, day, types, now);
+function DayList({ posts, day, types, now, o, base, carouselOff }: { posts: HubDataset['posts']; day: string; types: ReadonlySet<Vertical>; now: Date; o: ReturnType<typeof offerer>; base: string; carouselOff: readonly number[] }) {
+  const slots = daySlots(posts, day, types, now, carouselOff);
   if (slots.length === 0) return <div className="sh-empty"><strong>Nothing on this day</strong>No content was placed and no slots are open.</div>;
   return (
     <ul className="sh-list">

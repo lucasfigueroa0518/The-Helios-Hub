@@ -4,7 +4,7 @@
  *
  *   Morning Download   the reels slate's timely ideas + the carousel run's qualified stories
  *   Guess the Number   carousel brief numbers + shortlisted stories without a brief + reels The Number ideas
- *   Free vs. Paid      Ball Knowledge ideas, GitHub Trending, a catalog sample
+ *   Free vs. Paid      Ball Knowledge ideas and GitHub Trending (optional hints)
  *
  * Used ideas stay used. An unused idea the latest refresh did not bring back
  * leaves, the way a reels slate replaces the night before. A series whose
@@ -114,7 +114,7 @@ export async function gatherPool(reads: PoolReads, now: Date = new Date()): Prom
   });
   await read('free_vs_paid', async () => {
     const leads = (await reads.leads()).filter((l) => l.url);
-    // Each source's own order: reels and GitHub newest first, the catalog a daily sample.
+    // Each source's own order: reels and GitHub newest first.
     const byOrigin = (o: ToolLead['origin']) => sourceRank(leads.filter((l) => l.origin === o), originLabel(o));
     return [...byOrigin('reels'), ...byOrigin('github'), ...byOrigin('catalog')].map(([lead, score, breakdown]) => ({
       series: 'free_vs_paid' as const,

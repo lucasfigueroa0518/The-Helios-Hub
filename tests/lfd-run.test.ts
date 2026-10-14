@@ -1,6 +1,6 @@
 // tests/lfd-run.test.ts
 import assert from 'node:assert/strict';
-import { beforeEach, test } from 'node:test';
+import { afterEach, beforeEach, test } from 'node:test';
 
 import type Anthropic from '@anthropic-ai/sdk';
 
@@ -11,26 +11,35 @@ import type { PhotoFinder } from '@/lib/stories/photos';
 import { openHubTestDb } from './fixtures/social-hub/pglite';
 import { resetSeed, seedCarouselRun, seedReelsIdea, seedScore } from './fixtures/lfd/seed';
 
-beforeEach(() => resetSeed());
+/**
+ * What each rendered PNG shows: the stub fitCheck writes distinct bytes per slide and records the slide's story
+ * headline and photo here, so the vision stub can check it was handed the slide of the story it is judging.
+ */
+const shown = new Map<string, { headline: string | null; photo: string | null }>();
+const mismatches: string[] = [];
+beforeEach(() => { resetSeed(); shown.clear(); mismatches.length = 0; });
+afterEach(() => assert.deepEqual(mismatches, [], 'every vision call got its own story slide'));
 
 const NOW = new Date('2026-10-13T07:00:00Z'); // Tuesday 3:00 AM NY
 
-type VisionStory = { headline: string; body: string; names: string[] };
+type VisionStory = { headline: string; body: string; names: string[]; outlet: string };
 
 /**
  * Writer stub: echoes every story in the material with valid copy; `bad` keys get a headline the fact check rejects.
  * Vision calls (submit_verdict) are answered by `vision` (default: the photo passes) and counted apart.
  */
-function writerStub(opts: { setup?: string; failAfter?: number; fail?: (urls: string[]) => boolean; vision?: (s: VisionStory) => string | null } = {}) {
+function writerStub(opts: { setup?: string; failAfter?: number; fail?: (urls: string[]) => boolean; vision?: (s: VisionStory, photo: string | null) => string | null } = {}) {
   let calls = 0;
   const seen: VisionStory[] = [];
   const bad = new Set<string>();
   const create = async (p: Anthropic.MessageCreateParamsNonStreaming) => {
     if ((p.tools?.[0] as { name?: string } | undefined)?.name === 'submit_verdict') {
-      const blocks = p.messages[0]!.content as Array<{ type: string; text?: string }>;
+      const blocks = p.messages[0]!.content as Array<{ type: string; text?: string; source?: { data: string } }>;
       const s = JSON.parse(blocks.find((b) => b.type === 'text')!.text!) as VisionStory;
+      const slide = shown.get(blocks.find((b) => b.type === 'image')!.source!.data);
+      if (slide?.headline !== s.headline) mismatches.push(`judging "${s.headline}" but the image is ${slide ? `"${slide.headline}"` : 'unknown'}`);
       seen.push(s);
-      const rejected = opts.vision?.(s) ?? null;
+      const rejected = opts.vision?.(s, slide?.photo ?? null) ?? null;
       const input = rejected ? { shows_story_subject: false, generic_stock: true, reason: rejected } : { shows_story_subject: true, generic_stock: false, reason: 'shows the subject' };
       return { id: 'v', type: 'message', role: 'assistant', model: 'claude-haiku-5-5', stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 1000, output_tokens: 40, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }, content: [{ type: 'tool_use', id: 'v', name: 'submit_verdict', input }] } as unknown as Anthropic.Message;
     }
@@ -93,8 +102,13 @@ async function deps(over: Partial<LfdRunDeps> = {}): Promise<LfdRunDeps> {
       if (opts?.screenshotDir) {
         const fs = await import('node:fs/promises');
         const sharp = (await import('sharp')).default;
-        const png = await sharp({ create: { width: 4, height: 4, channels: 3, background: '#000' } }).png().toBuffer();
-        for (let i = 1; i <= _p.slides.length; i++) await fs.writeFile(`${opts.screenshotDir}/slide-slide-${String(i).padStart(2, '0')}.png`, png);
+        for (let i = 1; i <= _p.slides.length; i++) {
+          // Distinct bytes per slide: the slide index is the red channel.
+          const png = await sharp({ create: { width: 4, height: 4, channels: 3, background: { r: i * 20, g: 0, b: 0 } } }).png().toBuffer();
+          const slide = _p.slides[i - 1]!;
+          shown.set(png.toString('base64'), { headline: slide.lfdStory?.headline ?? null, photo: slide.photoUrl ?? null });
+          await fs.writeFile(`${opts.screenshotDir}/slide-slide-${String(i).padStart(2, '0')}.png`, png);
+        }
       }
       return { ok: true, violations: [], problems: [], slideText: [] };
     },
@@ -306,7 +320,7 @@ test('the run record carries what the Ideas view needs', async () => {
   assert.deepEqual(Object.keys(rec.pool).sort(), ['carousel', 'feed', 'judged', 'reels']);
   assert.ok(rec.jevCalls > 0);
   assert.equal(rec.picks.length, 6);
-  assert.deepEqual(Object.keys(rec.picks[0]!).sort(), ['headline', 'key', 'lane', 'major', 'net', 'origin']);
+  assert.deepEqual(Object.keys(rec.picks[0]!).sort(), ['headline', 'key', 'lane', 'lead', 'major', 'net', 'origin']);
   assert.equal(rec.picks[0]!.lane, 'major');
   assert.ok(rec.queues.major.length >= 1 && rec.queues.major.length <= 10);
   assert.ok(rec.queues.rundown.length >= 1 && rec.queues.rundown.length <= 10);
@@ -445,9 +459,11 @@ test('a story whose article has a usable lead image uses it; the finder only see
 
 test('the same lead image is never used twice in one post', async () => {
   const shared = { src: 'https://cdn.com/same.jpg', caption: null, credit: 'AP', alt: null, from: 'figure' as const, width: 1400 };
-  const d = await deps({ readPage: async (url) => ({ ok: true, url, resolvedUrl: url, title: 'T', byline: null, publishedTime: null, text: 'x', truncated: false, photos: [shared] }) });
+  const reads: string[] = [];
+  const d = await deps({ readPage: async (url) => { reads.push(url); return { ok: true, url, resolvedUrl: url, title: 'T', byline: null, publishedTime: null, text: 'x', truncated: false, photos: [shared] }; } });
   const res = await runLastFewDays(d);
   assert.ok(res.ok, JSON.stringify(res));
+  assert.equal(reads.length, new Set(reads).size, 'each article page is read once per run');
   const { rows } = await d.query<{ stories: Array<{ photo: { src: string }; photoSource: string }> }>(`SELECT stories FROM lfd.posts`);
   assert.equal(rows[0]!.stories.filter((s) => s.photo.src === shared.src).length, 1);
   assert.equal(rows[0]!.stories.filter((s) => s.photoSource === 'lead').length, 1);
@@ -458,6 +474,7 @@ type VisionRec = { vision: { checked: number; rejected: number; usd: number } };
 test('a story slide the vision check rejects is replaced and re-rendered; the drop says why', async () => {
   const w = writerStub({ vision: (s) => (s.headline.includes('Niche Thing 0') ? 'a stack of newspapers' : null) });
   const base = await deps({ create: w.create });
+  const before = ['https://big.com/haiku', ...[0, 1, 2, 3, 4].map((i) => `https://n.com/${i}`)];
   let renders = 0;
   const res = await runLastFewDays({ ...base, fitCheck: async (post, opts) => { renders += 1; return base.fitCheck(post, opts); } });
   assert.ok(res.ok, JSON.stringify(res));
@@ -467,9 +484,13 @@ test('a story slide the vision check rejects is replaced and re-rendered; the dr
   const drop = rec.drops.find((x) => x.reason === 'vision-rejected') as { key: string; detail?: string } | undefined;
   assert.ok(drop && drop.key.endsWith('n.com/0'), JSON.stringify(rec.drops));
   assert.equal(drop.detail, 'a stack of newspapers');
-  const { rows } = await base.query<{ stories: Array<{ url: string }>; render_problems: string[] }>(`SELECT stories, render_problems FROM lfd.posts`);
+  const { rows } = await base.query<{ stories: Array<{ url: string; photo: { src: string } }>; render_problems: string[]; render: { slides: Array<{ lfdCover?: { photos: Array<{ url: string }> } }> } }>(`SELECT stories, render_problems, render FROM lfd.posts`);
   assert.ok(!rows[0]!.stories.some((s) => s.url === 'https://n.com/0'));
   assert.deepEqual(rows[0]!.render_problems, []);
+  // The cover mosaic is rebuilt from the final stories: it shows every story photo, the replacement's included.
+  const cover = rows[0]!.render.slides[0]!.lfdCover!.photos.map((p) => p.url);
+  assert.deepEqual(cover, rows[0]!.stories.map((s) => s.photo.src));
+  assert.ok(cover.includes(rows[0]!.stories.find((s) => !before.includes(s.url))!.photo.src), 'the replacement photo is on the cover');
   assert.equal(rec.vision.rejected, 1);
   // 6 checked on the first render; the second render checks only the replacement (unchanged slides keep their verdict).
   assert.equal(rec.vision.checked, 7);
@@ -501,5 +522,107 @@ test('every run records its vision check', async () => {
   const rec = await recordOf(d, res.runId) as unknown as Rec & VisionRec;
   assert.deepEqual({ checked: rec.vision.checked, rejected: rec.vision.rejected }, { checked: 6, rejected: 0 });
   assert.ok(rec.vision.usd > 0);
-  assert.deepEqual(w.vision().map((s) => Object.keys(s).sort()), Array.from({ length: 6 }, () => ['body', 'headline', 'names']));
+  assert.deepEqual(w.vision().map((s) => Object.keys(s).sort()), Array.from({ length: 6 }, () => ['body', 'headline', 'names', 'outlet']));
+});
+
+/** n.com/2's article has a credited lead image; everything else has no page. */
+const leadFor2 = async (url: string) => (url === 'https://n.com/2'
+  ? { ok: true as const, url, resolvedUrl: url, title: 'T', byline: null, publishedTime: null, text: 'x', truncated: false, photos: [{ src: 'https://n.com/2/lead.jpg', caption: null, credit: 'Reuters', alt: null, from: 'figure' as const, width: 1400 }] }
+  : { ok: false as const, url, error: 'stub' });
+
+test('a lead image the vision check rejects falls back to the finder for the same story', async () => {
+  const asked: string[][] = [];
+  const w = writerStub({ vision: (_s, photo) => (photo?.endsWith('/lead.jpg') ? 'a headline card from the outlet' : null) });
+  const base = await deps({
+    create: w.create,
+    readPage: leadFor2,
+    photos: {
+      usd: 0,
+      find: async () => null,
+      findSet: async (reqs) => {
+        asked.push(reqs.map((r) => r.sourceUrls[0]!));
+        for (const r of reqs) assert.ok(r.exclude.has('https://n.com/2/lead.jpg') || r.sourceUrls[0] !== 'https://n.com/2', 'the rejected lead is excluded');
+        return reqs.map((r, i) => ({ src: `https://p/${i}-${encodeURIComponent(r.query)}.jpg`, credit: 'C', kind: 'scene' }));
+      },
+    },
+  });
+  let renders = 0;
+  const res = await runLastFewDays({ ...base, fitCheck: async (post, opts) => { renders += 1; return base.fitCheck(post, opts); } });
+  assert.ok(res.ok, JSON.stringify(res));
+  assert.equal(renders, 2);
+  assert.deepEqual(asked.at(-1), ['https://n.com/2'], 'the extra round asks the finder for that story only');
+  const rec = await recordOf(base, res.runId);
+  assert.deepEqual(rec.drops, []);
+  const { rows } = await base.query<{ stories: Array<{ url: string; photo: { src: string }; photoSource: string; photoTrace: string[] }>; render_problems: string[] }>(`SELECT stories, render_problems FROM lfd.posts`);
+  const story = rows[0]!.stories.find((s) => s.url === 'https://n.com/2');
+  assert.ok(story, 'the story stays in the post');
+  assert.equal(story.photoSource, 'finder');
+  assert.ok(story.photo.src.startsWith('https://p/'));
+  assert.match(story.photoTrace[0]!, /lead image rejected by vision: a headline card from the outlet/);
+  assert.deepEqual(rows[0]!.render_problems, []);
+});
+
+test('a rejected lead image with no finder photo drops the story as vision-rejected and replaces it', async () => {
+  const w = writerStub({ vision: (_s, photo) => (photo?.endsWith('/lead.jpg') ? 'the outlet logo' : null) });
+  const base = await deps({ create: w.create, readPage: leadFor2, photos: photos((q) => q.includes('Niche Thing 2')) });
+  const res = await runLastFewDays(base);
+  assert.ok(res.ok, JSON.stringify(res));
+  assert.equal(res.stories, 6);
+  const rec = await recordOf(base, res.runId);
+  const drop = rec.drops.find((x) => x.reason === 'vision-rejected') as { key: string; detail?: string } | undefined;
+  assert.ok(drop && drop.key.endsWith('n.com/2'), JSON.stringify(rec.drops));
+  assert.match(drop.detail ?? '', /the outlet logo/);
+  const { rows } = await base.query<{ stories: Array<{ url: string }> }>(`SELECT stories FROM lfd.posts`);
+  assert.ok(!rows[0]!.stories.some((s) => s.url === 'https://n.com/2'));
+});
+
+test('a run the worker claimed is adopted, never inserted twice', async () => {
+  const d = await deps();
+  const { claimRun, requestRun } = await import('@/lib/lfd/store');
+  await requestRun(d.query, 'manual', 1);
+  const claimed = (await claimRun(d.query))!;
+  const res = await runLastFewDays({ ...d, runId: claimed.id });
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.equal(res.runId, claimed.id);
+  const runs = (await d.query<{ n: number; status: string }>(`SELECT count(*)::int AS n, max(status) AS status FROM lfd.runs`)).rows[0]!;
+  assert.deepEqual([runs.n, runs.status], [1, 'ok']);
+});
+
+test('Jev decides the slide order: a rundown story it scores highest leads the major headline; scores are saved', async () => {
+  const base = jev((h) => (h.includes('Haiku') ? 1 : 0));
+  const d = await deps({
+    jev: async (req, meta) => {
+      if (meta.version.startsWith('lfd-lead')) {
+        const s = meta.subjectId.endsWith('n.com/3') ? 0.9 : meta.subjectId.includes('haiku') ? 0.6 : 0.1;
+        return { answers: { stop_scroll: { noul: s }, talked_about: { noul: s }, human_drama: { noul: s }, routine: { noul: 0 } }, usage: { input_tokens: 1, output_tokens: 0 }, model: 's' };
+      }
+      return base(req, meta);
+    },
+  });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const { rows } = await d.query<{ stories: Array<{ headline: string; lane: string; lead: number | null }> }>(`SELECT stories FROM lfd.posts`);
+  assert.equal(rows[0]!.stories[0]!.lane, 'rundown');
+  assert.match(rows[0]!.stories[1]!.headline, /Haiku/);
+  assert.ok(Math.abs(rows[0]!.stories[0]!.lead! - 0.9) < 1e-9);
+  const run = (await d.query<{ record: { lead: { by: string }; picks: Array<{ lead: number | null }> } }>(`SELECT record FROM lfd.runs`)).rows[0]!.record;
+  assert.equal(run.lead.by, 'jev');
+  assert.ok(run.picks.every((p) => typeof p.lead === 'number'));
+});
+
+test('if a lead judgment fails, the post keeps the lane order and the run record says so', async () => {
+  const base = jev((h) => (h.includes('Haiku') ? 1 : 0));
+  const d = await deps({
+    jev: async (req, meta) => {
+      if (meta.version.startsWith('lfd-lead') && meta.subjectId.endsWith('n.com/2')) throw new Error('jev down');
+      return base(req, meta);
+    },
+  });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const { rows } = await d.query<{ stories: Array<{ headline: string; lane: string }> }>(`SELECT stories FROM lfd.posts`);
+  assert.match(rows[0]!.stories[0]!.headline, /Haiku/);
+  const run = (await d.query<{ record: { lead: { by: string; error: string } } }>(`SELECT record FROM lfd.runs`)).rows[0]!.record;
+  assert.equal(run.lead.by, 'fallback');
+  assert.match(run.lead.error, /jev down/);
 });

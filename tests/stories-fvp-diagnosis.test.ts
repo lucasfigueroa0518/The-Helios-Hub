@@ -130,3 +130,17 @@ test('which gate binds: lifting "accessible" alone, or the bar alone, on the thr
   assert.deepEqual(pass(0.6, 0.5), ['SurveyMonkey']); // accessible fixed only: still one of three
   assert.deepEqual(pass(0.5, 0.5), ['MindMeister', 'Dropbox Plus', 'SurveyMonkey']);
 });
+
+test('no hints is no reason to skip: the pairing call still runs and its pair is built', async () => {
+  const { db, set } = await setup();
+  const write = stubWriter({
+    submit_pairs: () => ({ pairs: [pair('Adobe Photoshop', 'GIMP')] }),
+    submit_check: () => ({ price_confirmed: true, price_seen: '$10', free_confirmed: true, note: '' }),
+    submit_tease: () => ({ tease: 'There is a free one.' }),
+  });
+  const r = await buildFreeVsPaid(depsFor(db, set.id, write), async () => []);
+  assert.equal(r.ok, true);
+  assert.equal((write.calls[0]!.tools as Array<{ name: string }>).at(-1)!.name, 'submit_pairs');
+  const user = (write.calls[0]!.messages as Array<{ content: string }>)[0]!.content;
+  assert.match(user, /"leads": \[\]/);
+});

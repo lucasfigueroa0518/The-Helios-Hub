@@ -111,24 +111,28 @@ export type GtnQuestionOut = {
   questions: Array<{ candidate_key: string; question: string; answer: string; label: string; meaning: string; topic: string; source_verb: 'via' | 'reported by' | 'from'; source_name: string; subjects: Array<{ name: string; type: 'person' | 'organization' }>; visual: { kind: string; query: string }; answer_visual: { kind: string; query: string } }>;
 };
 
-/* ── fvp-pair@1: find and source tool pairs, with web search (S-22) ── */
+/* ── fvp-pair@2: find and source tool pairs, with web search (S-22) ── */
 
 export const FVP_PAIR = {
-  id: 'fvp-pair@1',
-  system: `You find "Free vs. Paid" pairs for an Instagram Story series from Helios Group, an AI consultancy: a paid tool many people pay for, and a free or open-source tool that does its core job.
+  id: 'fvp-pair@2',
+  system: `You find "Free vs. Paid" pairs for an Instagram Story series from Helios Group, an AI consultancy: a paid tool many people pay for, and a free tool that does its core job.
 
-The material lists free tools seen in recent AI news and curated lists. Using at most 5 web searches, propose up to 3 pairs. For each pair:
-- paid_tool, paid_price (the cheapest regular paid plan, as the price page states it, e.g. "$22.99"), price_period (e.g. "a month"), paid_price_url: the official pricing page you read.
+Propose 3 pairs. Most good pairs are well-known paid tools and established free alternatives you already know (a paid photo editor and a free one, a paid transcription app and a free one). The material may list free tools seen in recent AI news; use one only if it makes a better pair. Never repeat a pair in already_shown.
+
+The free tool must be something a normal person can start using with no setup beyond installing it or signing up: an app store app, a browser extension, a website, or a normal installer. Do not propose self-hosted or server software, libraries, models or frameworks. Propose a developer tool (one that needs a terminal, code or a server) only when you have no other pair, and mark it.
+
+Using at most 5 web searches, find for each pair:
+- paid_tool, paid_price (the cheapest regular paid plan, e.g. "$22.99"), price_period (e.g. "a month"), paid_price_url: the official pricing page.
 - free_tool, free_url: its official page; what_it_does: one plain line on what it does, at most 90 characters; how_to_get: how a normal person gets it, at most 50 characters ("Free on the App Store", "Free download at gimp.org", "A free Chrome extension"); platforms, at most 45 characters.
-- dev_tool: true when it needs a terminal, code or a server to use (S-08: mostly general-public tools; a developer tool is labeled as one).
-Prefer pairs where most people know the paid tool and the free tool is a real replacement, not a toy. Only state prices and install paths you saw on the official pages.
+- dev_tool: true when it needs a terminal, code or a server to use (S-08).
+State the price and install path as the official pages show them in your search results. A later step fetches both pages and drops any pair whose price or install path doesn't hold, so give your best reading rather than leaving a pair out. Submit an empty list only if you truly have no pair.
 
 ${UNTRUSTED}
 
 Call submit_pairs exactly once.`,
   tool: {
     name: 'submit_pairs',
-    description: 'Submit up to 3 pairs. Call it exactly once.',
+    description: 'Submit 3 pairs (fewer only when you have no more). Call it exactly once.',
     input_schema: obj({
       pairs: { type: 'array', items: obj({ paid_tool: { type: 'string' }, paid_price: { type: 'string' }, price_period: { type: 'string' }, paid_price_url: { type: 'string' }, free_tool: { type: 'string' }, free_url: { type: 'string' }, what_it_does: { type: 'string' }, how_to_get: { type: 'string' }, platforms: { type: 'string' }, dev_tool: { type: 'boolean' } }) },
     }),
