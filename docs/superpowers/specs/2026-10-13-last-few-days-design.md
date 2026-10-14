@@ -170,7 +170,17 @@ No hashtags. Hard cap `CAPTION_MAX_CHARS` (2,200).
 
 ## 5. Photos
 
-- Each story's photo request goes to the existing finder (`lib/stories/photos.ts`, `createLivePhotoFinder`). The whole post
+- **Article lead image first** (Tommy approved 2026-10-13, after the first live run put a generic "stack of newspapers"
+  photo on 4 of 5 story slides; `lib/lfd/lead-image.ts`). The story's own article page is read once per run. Its largest
+  in-body figure that has a credit and is at least 600px wide is used, credited as the page shows it. Otherwise the page's
+  og:image is used, credited "Image via <outlet>" (a known width under 600px is not). SVGs, GIFs and images named as logos,
+  icons, avatars or sprites are skipped, as are photos already in the post or used in the last 7 days. Only stories
+  without a lead image go to the finder.
+- **The generic icon-scene fallback is refused.** The finder's last resort is a plain scene for the slide's icon; Last Few
+  Days slides have no icon, so it falls to the default (a stack of newspapers). A photo found that way is treated as no
+  photo, and the story is replaced. Each saved story keeps the writer's request (`photoAsk`), the photo (`photo`), where it
+  came from (`photoSource`: `lead` or `finder`) and how it was chosen (`photoTrace`).
+- Each story's photo request (when it has no lead image) goes to the existing finder (`lib/stories/photos.ts`, `createLivePhotoFinder`). The whole post
   is found as one set (`findSet`), so no two slides share a photo.
 - **Article images:** the article's own images (announcement cards, benchmark charts) reach the finder because it reads the
   source page, which is passed in `sourceUrls`. `reels.sources.media_urls` is not needed (corrected 2026-10-13: the finder
@@ -199,6 +209,18 @@ No hashtags. Hard cap `CAPTION_MAX_CHARS` (2,200).
   - Text never shrinks and is never cut off: each text region's minimum size equals its design size.
 - **JPEGs:** `storeSlideJpegs` gains an optional `prefix`, so these upload to `lfd/{slug}/slide-NN.jpg` in the `social-slides`
   bucket. Carousels keep `posts/`.
+- **Post-render vision check** (approved 2026-10-13; `lib/lfd/vision.ts`): one Haiku 5.5 call per rendered story slide
+  (cached system and tool; the slide PNG and the story's headline, body, names and outlet in the user turn). The photo
+  passes when it shows the story's subject (company, product, person, place or a directly related scene; a logo or
+  official product shot of the named company counts) and is not generic stock. A graphic that is mostly text or publisher
+  branding (headline card, a news site's share image or logo, an article screenshot) counts as generic.
+  - A rejected slide gets one replacement round before anything is uploaded. A rejected article lead image first falls
+    back to the finder for the same story; a finder photo that is rejected (or a lead with no finder photo) drops the
+    story as `vision-rejected` and the next one in line replaces it. Then the post is re-rendered once.
+  - On the re-render, rejections are not replaced again; they are recorded in `lfd.posts.render_problems` as
+    `vision: <headline>: <reason>`.
+  - The check is a backstop and fails open: no verdict (a failed or refused call) passes the slide as "vision
+    unavailable". The run record carries `vision: { checked, rejected, unavailable, usd }`.
 - **Two template fixes during the port:**
   - replace the avatar, whose "HELIOS" lettering is unreadable at 44px;
   - try the hook one size larger, since there's spare room under the kicker.
@@ -270,6 +292,7 @@ Applied with `node scripts/apply_lfd_schema.js`. There is no npm script, because
 | Picking stories (SQL, free feed fetch, about 60 Jev `major-news@2` judgments, Jev same-event checks) | a few cents (Jev, metered) |
 | Writing call plus the occasional one-story rewrite (Sonnet 5.5, cached prefix) | ~$0.10–0.20 |
 | Photos (Haiku tag and vision checks, Jev photo-fit) | ~$0.10–0.30 |
+| Post-render vision check (Haiku 5.5, one call per story slide, 5–6 slides plus replacements) | ~$0.002–0.01 per slide |
 | Fact checks (Jev) | a few cents |
 | **Total** | **≤ ~$0.50 per post, about $1 a week** |
 
