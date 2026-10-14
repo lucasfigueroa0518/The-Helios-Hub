@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { cacheSavings } from '@/lib/social-hub/cost-page/caching';
+import { parseCostParams } from '@/lib/social-hub/cost-page/load';
 import { costModel, dailySeries, hoverCompare, pace, spikeDrivers } from '@/lib/social-hub/cost-page/model';
 import { stageOf, vendorOf } from '@/lib/social-hub/cost-page/normalize';
 import type { CostRow } from '@/lib/social-hub/cost-page/rows';
@@ -164,4 +165,13 @@ test('"New low" chip needs a prior best to beat; a type with none gets no chip',
   assert.equal(none.chips.some((c) => c.id === 'low'), false);
   const some = costModel({ ...input, bestEverCpi: { carousels: 1e12, reels: 1e12 } });
   assert.equal(some.chips.some((c) => c.id === 'low'), some.worth.byType.some((t) => t.cpiMicros !== null && (t.vertical === 'carousels' || t.vertical === 'reels')));
+});
+
+test('cost params: defaults to this month, production, all types; custom needs valid days', () => {
+  const now = new Date('2026-10-13T16:00:00Z');
+  assert.deepEqual(parseCostParams(new URLSearchParams(''), now), { range: 'month', from: '2026-10-01', to: '2026-10-13', vertical: null, mode: 'production' });
+  assert.equal(parseCostParams(new URLSearchParams('range=7d'), now).from, '2026-10-07');
+  assert.equal(parseCostParams(new URLSearchParams('range=custom&from=2026-09-01&to=2026-09-30'), now).to, '2026-09-30');
+  assert.equal(parseCostParams(new URLSearchParams('range=custom&from=nope'), now).range, 'month');
+  assert.equal(parseCostParams(new URLSearchParams('type=carousels&mode=development'), now).vertical, 'carousels');
 });
