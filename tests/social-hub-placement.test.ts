@@ -11,7 +11,7 @@ import type { PGlite } from '@electric-sql/pglite';
 
 import { publishReadiness } from '@/lib/explainers/publish/publish';
 import { explainerItemId } from '@/lib/explainers/publish/items';
-import { scheduleApproved, unscheduleJob } from '@/lib/explainers/publish/schedule';
+import { publishingLive, scheduleApproved, scheduleJob, unscheduleJob } from '@/lib/explainers/publish/schedule';
 import { getFeedback, REJECTED_SLOT_NOTE, setVerdict } from '@/lib/explainers/repository';
 import { explainerActions } from '@/lib/publishing/actions/explainers';
 import { storyActions } from '@/lib/publishing/actions/stories';
@@ -34,6 +34,11 @@ import {
   rescheduleItem,
   STORY_WINDOW_DEFAULTS,
 } from '@/lib/social-hub/placement';
+import type { HubQuery } from '@/lib/social-hub/db';
+import type { HubDataset } from '@/lib/social-hub/dataset';
+import { readRejected, withRejections } from '@/lib/social-hub/rejected';
+import type { HubPost } from '@/lib/social-hub/types';
+import { userPlaced } from '@/lib/social-hub/fill';
 import { approveItem, bookSlot, ensureContentItem, rejectItem, type SpineQuery } from '@/lib/social-hub/spine';
 import { getSet, rescheduleSet } from '@/lib/stories/repository';
 import { pgliteDb } from '@/lib/stories/local-db';
@@ -342,7 +347,7 @@ function explainersDb(pg: PGlite) {
   return { query: run, transaction: <R,>(fn: (tx: { query: typeof run }) => Promise<R>) => fn({ query: run }) } as never;
 }
 
-function explainerLayer(pg: PGlite) {
+function explainerLayer(pg: PGlite, at: Date = NOW) {
   const db = explainersDb(pg);
   return explainerActions({
     db: async () => db,
@@ -355,6 +360,9 @@ function explainerLayer(pg: PGlite) {
     verdictOf: async (d, jobId) => (await getFeedback(d, jobId))?.verdict ?? null,
     placeItem: (query, input) => placeItem(query, { ...input, now: NOW, rng: first }),
     rescheduleItem: (query, input) => rescheduleItem(query, { ...input, now: NOW, rng: first }),
+    scheduleJob: (d, jobId, source, now, through) => scheduleJob(d, jobId, source, now, through, first),
+    publishingLive,
+    now: () => at,
   });
 }
 
@@ -537,4 +545,101 @@ test('Trial Reels regenerate: today’s slate for the idea, and its lock', async
   assert.equal(await findReelLock(TODAY, IDEA), null);
   await pg.exec(`INSERT INTO reels.reel_locks (ny_date, slot, post_idea_id, slate_id, note) VALUES ('2026-10-08', 1, '${IDEA}', '${TODAY}', 'Lucas')`);
   assert.deepEqual(await findReelLock(TODAY, IDEA), { nyDate: '2026-10-08', slot: 1 });
+});
+
+const publishingOn = (pg: PGlite) =>
+  pg.query(`INSERT INTO explainers.settings (key, value) VALUES ('publishing_live', 'true'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+const explainerSlots = async (pg: PGlite) =>
+  (await pg.query<{ id: string; ny_date: string; slot: string; source: string }>(
+    `SELECT id::text AS id, ny_date::text AS ny_date, slot, source FROM social_hub.schedule WHERE vertical = 'explainers' AND status = 'scheduled'`,
+  )).rows;
+
+test('explainers Approve books today’s next open window as a system slot; tonight’s quota is untouched; nothing is queued (B1)', async () => {
+  const { pg, q } = await spineDb();
+  await publishingOn(pg);
+  const e = await explainer(pg);
+  const out = await explainerLayer(pg).approve!({ jobId: e.job }, 'tommy', {});
+  assert.deepEqual(out, { ok: true, note: 'Approved. It posts Thu Oct 8, 1:00 PM.' });
+  assert.deepEqual((await explainerSlots(pg)).map((s) => [s.ny_date, s.slot, s.source]), [['2026-10-08', 'afternoon', 'auto']]);
+  assert.equal(await userPlaced(q, 'explainers', '2026-10-08'), 0, 'source auto: the night still makes its full quota');
+  assert.equal((await pg.query<{ n: number }>(`SELECT count(*)::int AS n FROM social_hub.publish_attempts`)).rows[0]!.n, 0, 'booking only');
+  assert.equal((await getFeedback(explainersDb(pg), e.job))?.verdict, 'approved');
+});
+
+test('explainers Approve after today’s last window approves, books nothing, never tomorrow, and says so (Review Focus 1)', async () => {
+  const { pg } = await spineDb();
+  await publishingOn(pg);
+  const e = await explainer(pg);
+  const out = await explainerLayer(pg, new Date('2026-10-08T21:30:00Z')).approve!({ jobId: e.job }, 'tommy', {}); // 5:30 PM New York
+  assert.deepEqual(out, { ok: true, note: 'Approved. No window is left today, so it takes the next open window after today; Post now can still post it today.' });
+  assert.deepEqual(await explainerSlots(pg), []);
+  assert.equal((await getFeedback(explainersDb(pg), e.job))?.verdict, 'approved', 'the approval stands');
+});
+
+test('explainers Approve with publishing off approves and books nothing (Review Focus 1)', async () => {
+  const { pg } = await spineDb();
+  const e = await explainer(pg);
+  const out = await explainerLayer(pg).approve!({ jobId: e.job }, 'tommy', {});
+  assert.deepEqual(out, { ok: true, note: 'Approved. Publishing is switched off, so it gets a time once publishing is back on.' });
+  assert.deepEqual(await explainerSlots(pg), []);
+});
+
+test('explainers Approve on a render that already has a slot keeps that slot', async () => {
+  const { pg } = await spineDb();
+  await publishingOn(pg);
+  const e = await explainer(pg);
+  const layer = explainerLayer(pg);
+  const placed = await layer.place!({ jobId: e.job }, 'tommy', { nyDate: '2026-10-08', slot: 'late' });
+  assert.ok(placed.ok, placed.note);
+  const out = await layer.approve!({ jobId: e.job }, 'tommy', {});
+  assert.deepEqual(out, { ok: true, note: 'Approved. It posts Thu Oct 8, 3:30 PM.' });
+  assert.deepEqual((await explainerSlots(pg)).map((s) => [s.slot, s.source]), [['late', 'user']]);
+});
+
+test('scheduleJob through today never reaches tomorrow; without a limit it does', async () => {
+  const { pg } = await spineDb();
+  const e = await explainer(pg);
+  const late = new Date('2026-10-08T21:30:00Z');
+  assert.deepEqual(await scheduleJob(explainersDb(pg), e.job, 'auto', late, '2026-10-08', first), { scheduled: false, note: 'No explainer window is open through 2026-10-08.' });
+  const next = await scheduleJob(explainersDb(pg), e.job, 'auto', late, undefined, first);
+  assert.equal(next.scheduled, true);
+  assert.deepEqual((await explainerSlots(pg)).map((s) => s.ny_date), ['2026-10-09']);
+});
+
+test('Reschedule on a failed post books a new slot today beside the failed one, as a person’s slot (B7)', async () => {
+  const { pg, q } = await spineDb();
+  const c = await carousel(pg, q);
+  const booked = await placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-08', slot: 'morning', now: NOW, rng: first });
+  assert.ok(booked.ok, booked.note);
+  await pg.query(`UPDATE social_hub.schedule SET status = 'failed', error = 'Container never reached FINISHED' WHERE id = $1`, [(booked as { scheduleId: string }).scheduleId]);
+  const again = await placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-08', slot: 'morning', now: NOW, rng: last });
+  assert.ok(again.ok, again.note);
+  const rows = (await pg.query<{ status: string; source: string }>(`SELECT status, source FROM social_hub.schedule WHERE content_item_id = $1 ORDER BY created_at`, [c.itemId])).rows;
+  assert.deepEqual(rows.map((r) => [r.status, r.source]), [['failed', 'user'], ['scheduled', 'user']]);
+});
+
+test('Reschedule of a failed, never-approved post leaves the new slot unapproved: Reschedule alone does not publish (B7)', async () => {
+  const { pg, q } = await spineDb();
+  const c = await carousel(pg, q);
+  const booked = await placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-08', slot: 'morning', now: NOW, rng: first });
+  assert.ok(booked.ok, booked.note);
+  await pg.query(`UPDATE social_hub.schedule SET status = 'failed', error = 'boom' WHERE id = $1`, [(booked as { scheduleId: string }).scheduleId]);
+  const again = await placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-08', slot: 'morning', now: NOW, rng: last });
+  assert.ok(again.ok, again.note);
+  const slot = (await pg.query<{ approved_at: string | null }>(`SELECT approved_at FROM social_hub.schedule WHERE status = 'scheduled' AND content_item_id = $1`, [c.itemId])).rows;
+  assert.equal(slot.length, 1);
+  assert.equal(slot[0]!.approved_at, null, 'the new slot is not approved');
+  assert.equal((await pg.query(`SELECT 1 FROM social_hub.approvals WHERE content_item_id = $1 AND decision = 'approved'`, [c.itemId])).rows.length, 0, 'nothing approved the item');
+});
+
+test('a rejected failed post is read as rejected: readRejected finds it, withRejections stamps the failed post (B7)', async () => {
+  const { pg, q } = await spineDb();
+  const c = await carousel(pg, q);
+  await rejectItem(q, c.itemId);
+  const gone = await readRejected(q as unknown as HubQuery);
+  assert.ok(gone.some((r) => r.vertical === 'carousels'), 'the rejection is read');
+  const post = { vertical: 'carousels', status: 'failed', approval: { required: true, approvedAt: null, note: null }, refs: { postId: gone.find((r) => r.vertical === 'carousels')!.nativeRef } } as unknown as HubPost;
+  const next = withRejections({ posts: [post] } as unknown as HubDataset, gone);
+  assert.equal(next.posts[0]!.approval.note, 'Rejected');
+  assert.equal(withRejections({ posts: [{ ...post, status: 'ready' }] } as unknown as HubDataset, gone).posts[0]!.approval.note, null, 'only failed posts are stamped');
 });

@@ -109,7 +109,7 @@ export async function shadowPlan(query: SpineQuery, drivers: readonly PublishDri
     for (const row of rows) {
       const driver = live.find((d) => d.vertical === row.vertical)!;
       const needs = await driver.requireApproval();
-      // Each type's own outcome for content it may not post: Carousels cancel the slot, Explainers fail it.
+      // Each type's own outcome for content it may not post: every driver cancels the slot (Explainers' releaseDueSchedules cancels it too).
       const refuse = driver.refusesAtRelease;
       if (row.decision === 'rejected') due.push({ vertical: row.vertical, scheduleId: row.id, action: refuse, why: 'rejected' });
       else if (needs && row.decision !== 'approved') due.push({ vertical: row.vertical, scheduleId: row.id, action: refuse, why: 'not approved' });

@@ -10,9 +10,10 @@ import { latestQuotaSnapshot } from '@/lib/social-hub/refresh';
 import { readReels } from '@/lib/social-hub/queries/reels';
 import { readSpine } from '@/lib/social-hub/queries/spine';
 import { readStories } from '@/lib/social-hub/queries/stories';
-import { readAdjustments, readDayQuotas } from '@/lib/social-hub/queries/day';
+import { consumeMoves, readAdjustments, readDayQuotas } from '@/lib/social-hub/queries/day';
 import { readLfdSettings } from '@/lib/lfd/settings';
 import { readDeleted, withoutDeleted } from '@/lib/social-hub/deleted';
+import { readRejected, withRejections } from '@/lib/social-hub/rejected';
 import { nyDateOf } from '@/lib/social-hub/time';
 
 function settle<T>(work: Promise<T>): Promise<T | Error> {
@@ -55,7 +56,7 @@ export async function readAll(q: HubQuery = liveHubQuery, explainersQ: Promise<H
 
 export async function loadDataset(q: HubQuery = liveHubQuery, now = new Date()): Promise<HubDataset> {
   const explainersQ = explainersHandle(q);
-  const [reads, costs, quota, snapshot, account, adjustments, dayQuotas, deleted, lfdPublishingLive] = await Promise.all([
+  const [reads, costs, quota, snapshot, account, adjustments, dayQuotas, deleted, lfdPublishingLive, rejected] = await Promise.all([
     readAll(q, explainersQ),
     settle(readCosts(q, explainersQ)),
     readLatestQuota(q).catch(() => null),
@@ -67,9 +68,13 @@ export async function loadDataset(q: HubQuery = liveHubQuery, now = new Date()):
     readDeleted(q).catch(() => []),
     // SELECT only (lib/lfd/settings.ts); an unreadable lfd schema reads as off.
     readLfdSettings(q).then((s) => s.publishingLive).catch(() => false),
+    readRejected(q).catch(() => []),
   ]);
   // The sweep's snapshot wins over a publisher's refusal message when it is newer.
   const newest = [snapshot, quota].filter((x): x is { text: string | null; at: string | null } => Boolean(x?.at))
     .sort((a, b) => Date.parse(b.at!) - Date.parse(a.at!))[0] ?? null;
-  return { ...withoutDeleted(buildDataset(reads, costs, now, newest, account), deleted), adjustments, dayQuotas, lfdPublishingLive };
+  const dataset = withRejections(withoutDeleted(buildDataset(reads, costs, now, newest, account), deleted), rejected);
+  // B8: moves last until their idea is made; used ones are marked here and drop out. A failure never fails the page.
+  const active = await consumeMoves(q, adjustments, dataset.posts).catch(() => adjustments);
+  return { ...dataset, adjustments: active, dayQuotas, lfdPublishingLive };
 }

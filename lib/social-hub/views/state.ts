@@ -142,6 +142,8 @@ export function postState(post: HubPost, now: Date): PostState {
     case 'generating':
       return { ...S.in_production, line: 'Being made' };
     case 'failed':
+      // Rejected after it failed: it won't go again (the failed slot stays failed; the rejection rides the approval note).
+      if (isRejected(post)) return { ...S.rejected, line: 'Won’t post.' };
       return { ...S.failed, line: post.statusNote ?? 'The post didn’t go out.' };
     case 'skipped':
       return { ...S.skipped, line: 'Missed its window. Story sets aren’t reused.' };

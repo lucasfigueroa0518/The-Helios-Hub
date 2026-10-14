@@ -105,21 +105,27 @@ async function seriesPool(deps: SetBuilderDeps, series: 'morning_download' | 'gu
 }
 
 /**
- * The series' pool in today's order: a person's Promote / Demote moves for
- * today (social_hub.idea_adjustments, the hub's `stories:pool:<series>:<key>`
- * ids) applied in order, so a promoted idea is first in the build's list.
+ * A series' active Promote / Demote moves (social_hub.idea_adjustments, the
+ * hub's `stories:pool:<series>:<key>` ids), oldest first, as pool keys. A
+ * move steers until its pool entry is used (B8; the hub marks it consumed),
+ * not until midnight. Before consumed_at exists: today's moves, as before.
  */
-async function inDayOrder(db: SetBuilderDeps['db'], series: string, pool: OpenPool, now: Date): Promise<OpenPool> {
-  const nyDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(now);
-  const { rows } = await db
-    .query<{ idea_id: string; kind: 'promote' | 'demote' }>(
-      `SELECT idea_id, kind FROM social_hub.idea_adjustments WHERE vertical = 'stories' AND ny_date = $1::date AND idea_id LIKE $2 ORDER BY created_at`,
-      [nyDate, `stories:pool:${series}:%`],
-    )
-    .catch(() => ({ rows: [] as Array<{ idea_id: string; kind: 'promote' | 'demote' }> }));
-  if (!rows.length) return pool;
+export async function activeStoryMoves(db: SetBuilderDeps['db'], series: string, now = new Date()): Promise<Array<{ ideaId: string; kind: 'promote' | 'demote' }>> {
   const prefix = `stories:pool:${series}:`;
-  const moves = rows.map((r) => ({ ideaId: r.idea_id.slice(prefix.length), kind: r.kind }));
+  type Row = { idea_id: string; kind: 'promote' | 'demote' };
+  const read = (where: string, params: unknown[]) =>
+    db.query<Row>(`SELECT idea_id, kind FROM social_hub.idea_adjustments WHERE vertical = 'stories' AND idea_id LIKE $1 ${where} ORDER BY created_at`, [`${prefix}%`, ...params]);
+  const { rows } = await read('AND consumed_at IS NULL', []).catch(() => {
+    const nyDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(now);
+    return read('AND ny_date = $2::date', [nyDate]).catch(() => ({ rows: [] as Row[] }));
+  });
+  return rows.map((r) => ({ ideaId: r.idea_id.slice(prefix.length), kind: r.kind }));
+}
+
+/** The series' pool in the hub's order: its active moves applied in order, so a promoted idea is first in the build's list. */
+async function inDayOrder(db: SetBuilderDeps['db'], series: string, pool: OpenPool, now: Date): Promise<OpenPool> {
+  const moves = await activeStoryMoves(db, series, now);
+  if (!moves.length) return pool;
   const order = <T>(list: T[], key: (x: T) => string) => applyMoves(list.map((x) => ({ id: key(x), x })), moves).map((w) => w.x);
   return {
     stories: order(pool.stories, (c) => c.key),

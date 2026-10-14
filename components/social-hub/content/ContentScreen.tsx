@@ -8,6 +8,7 @@ import { DataNotes } from '@/components/social-hub/DataNotes';
 import { PageHead } from '@/components/social-hub/ui/PageHead';
 import { TypeMark } from '@/components/social-hub/ui/marks';
 import type { AllProgress } from '@/lib/content-type/progress';
+import type { RunMisses } from '@/lib/content-type/run-misses';
 import type { HubDataset } from '@/lib/social-hub/dataset';
 import { firstDeadline } from '@/lib/social-hub/health/approvals';
 import { clock, plural, relative, when } from '@/lib/social-hub/views/format';
@@ -23,7 +24,7 @@ import { typeHref, verticalInfo } from '@/lib/social-hub/verticals';
  * Content (BRIEFS.md §1): the morning check. What needs a person, what's
  * going out today, then how full the tank is.
  */
-export function ContentScreen({ dataset, base, now, libraries, progress, controls = true }: { dataset: HubDataset; base: string; now: Date; libraries: LibrariesModel; progress?: AllProgress; controls?: boolean }) {
+export function ContentScreen({ dataset, base, now, libraries, progress, misses, controls = true }: { dataset: HubDataset; base: string; now: Date; libraries: LibrariesModel; progress?: AllProgress; misses?: RunMisses; controls?: boolean }) {
   const runs: AllProgress = progress ?? { carousels: [], stories: [], explainers: [], last_few_days: [] };
   const inFlight = Object.values(runs).some((items) => items.length > 0);
   const summary = runningSummary(runs);
@@ -68,7 +69,7 @@ export function ContentScreen({ dataset, base, now, libraries, progress, control
             {controls ? 'Run now makes what today’s quotas still need.' : null}
           </div>
         ) : (
-          <TodayStrip candidates={today} o={o} runs={runs} controls={controls} />
+          <TodayStrip candidates={today} o={o} now={now} runs={runs} misses={misses} controls={controls} />
         )}
       </section>
 

@@ -1,6 +1,7 @@
 import type { ExplainersDb } from '@/lib/explainers/db';
 import type { SpineQuery } from '@/lib/social-hub/spine';
-import type { Placement, PlacementOutcome, PlacementTarget } from '@/lib/social-hub/placement';
+import { formatPlacement, type Placement, type PlacementOutcome, type PlacementTarget } from '@/lib/social-hub/placement';
+import { nyDateOf } from '@/lib/social-hub/time';
 
 import { deleteVerb } from './delete';
 import { need, needPlacement, type ActionFn, type ContentActions } from './types';
@@ -17,7 +18,7 @@ const REFUSAL: Record<string, string> = {
 };
 
 /**
- * Explainers (lib/explainers): approve and reject set the review verdict
+ * Explainers (lib/explainers): approve sets the review verdict and books today's next open window (B1); reject sets it too
  * (mirrored onto the spine; a hub Reject may carry the review page's tags and
  * a note, D53), Hard publish counts as approval (SH-17), regenerate queues a
  * rerender under the caps, place and reschedule put the render on the
@@ -41,6 +42,17 @@ export function explainerActions(deps: {
   verdictOf: (db: ExplainersDb, jobId: string) => Promise<string | null>;
   placeItem: Place;
   rescheduleItem: Place;
+  /** Today's next open window (B1): lib/explainers/publish/schedule.ts scheduleJob, through `throughDate`. */
+  scheduleJob: (
+    db: ExplainersDb,
+    jobId: string,
+    source: 'auto',
+    now: Date,
+    throughDate: string,
+  ) => Promise<{ scheduled: true; publishAt: string } | { scheduled: false; note: string }>;
+  publishingLive: (db: ExplainersDb) => Promise<boolean>;
+  /** The clock (tests pin it). */
+  now?: () => Date;
 }): ContentActions {
   const placement =
     (fn: Place): ActionFn =>
@@ -58,8 +70,20 @@ export function explainerActions(deps: {
   return {
     vertical: 'explainers',
     async approve(t, by) {
-      await deps.setVerdict(await deps.db(), need(t, 'jobId'), 'approved', by);
-      return { ok: true, note: 'Approved. It gets the next free window.' };
+      const db = await deps.db();
+      const jobId = need(t, 'jobId');
+      await deps.setVerdict(db, jobId, 'approved', by);
+      // Never while publishing is off: a slot booked then would post late once it is switched back on.
+      if (!(await deps.publishingLive(db))) {
+        return { ok: true, note: 'Approved. Publishing is switched off, so it gets a time once publishing is back on.' };
+      }
+      // B1: today's next open window, as a system slot (source 'auto', so tonight's quota is untouched).
+      // A render that already has a slot keeps it. Booking only: the slot posts at its time, never now.
+      const now = deps.now?.() ?? new Date();
+      const booked = await deps.scheduleJob(db, jobId, 'auto', now, nyDateOf(now)!);
+      return booked.scheduled
+        ? { ok: true, note: `Approved. It posts ${formatPlacement(new Date(booked.publishAt))}.` }
+        : { ok: true, note: 'Approved. No window is left today, so it takes the next open window after today; Post now can still post it today.' };
     },
     async reject(t, by, input) {
       const review = {
