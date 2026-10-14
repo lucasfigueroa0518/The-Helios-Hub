@@ -141,6 +141,7 @@ const TYPES: Array<{ id: string; label: string; min: number }> = [
   { id: 'carousels', label: 'Carousels', min: 0 },
   { id: 'explainers', label: 'Explainer Reels', min: 1 },
   { id: 'stories', label: 'IG Stories', min: 0 },
+  { id: 'last_few_days', label: 'Last Few Days', min: 0 },
 ];
 
 function Switch({ on, label, hint, onChange, disabled }: { on: boolean; label: string; hint: string; onChange: (v: boolean) => void; disabled?: boolean }) {

@@ -65,6 +65,34 @@ export function CarouselRunButton() {
   );
 }
 
+// ── Last Few Days ───────────────────────────────────────────────────────────
+
+export function LfdRunButton() {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  async function run() {
+    if (!confirm('Make Last Few Days now? It picks 5–6 stories, writes and fact-checks them and finds photos, with live model and web calls, up to the run cap in Settings ($1 by default). The post waits for your approval.')) return;
+    setBusy(true);
+    try {
+      const out = await call<{ queued: boolean; note?: string }>('/api/last-few-days/run', {});
+      window.dispatchEvent(new Event(PROGRESS_EVENT));
+      setNote(out.queued ? (out.note ?? 'Run queued.') : (out.note ?? 'A run is already queued.'));
+      void refreshHubPage(router);
+    } catch (e) {
+      setNote(msg(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div>
+      <button type="button" className="rh-btn rh-btn--primary" disabled={busy} onClick={run}>Make Last Few Days now</button>
+      <Note text={note} />
+    </div>
+  );
+}
+
 // ── Stories ─────────────────────────────────────────────────────────────────
 
 const SERIES_LABEL: Record<string, string> = { morning_download: 'Morning Download', guess_the_number: 'Guess the Number', free_vs_paid: 'Free vs. Paid' };
@@ -102,7 +130,7 @@ export function StoriesGenerate() {
 // ── Header: the Live switch, shared by every type ───────────────────────────
 
 /** Live: while on, the type schedules and posts on its own. Turning it on asks first. */
-export function LiveToggle({ type, initial }: { type: 'carousels' | 'stories' | 'explainers'; initial: boolean }) {
+export function LiveToggle({ type, initial }: { type: 'carousels' | 'stories' | 'explainers' | 'last_few_days'; initial: boolean }) {
   const router = useRouter();
   const [on, setOn] = useState(initial);
   const [asking, setAsking] = useState(false);
@@ -212,7 +240,7 @@ export function AddTopicsButton() {
 // ── Settings: generate, auto-publish and the daily quota, the same on every type ──
 
 type Posting = {
-  type: 'reels' | 'carousels' | 'explainers' | 'stories';
+  type: 'reels' | 'carousels' | 'explainers' | 'stories' | 'last_few_days';
   live: boolean;
   generate: boolean | null;
   autoPublish: boolean;
@@ -222,7 +250,7 @@ type Posting = {
 };
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const NOUN: Record<Posting['type'], string> = { reels: 'reels', carousels: 'carousels', explainers: 'explainers', stories: 'story sets' };
+const NOUN: Record<Posting['type'], string> = { reels: 'reels', carousels: 'carousels', explainers: 'explainers', stories: 'story sets', last_few_days: 'Last Few Days posts' };
 
 function Switch({ checked, onChange, children, hint }: { checked: boolean; onChange: (on: boolean) => void; children: ReactNode; hint?: string }) {
   return (
@@ -270,9 +298,9 @@ export function PostingSettings({ type }: { type: Posting['type'] }) {
             if (on && !confirm(`Make ${noun} every morning? Each run makes live model and web calls.`)) return;
             void save({ generate: on });
           }}
-          hint={`Makes ${noun} every morning to fill the day's quota.`}
+          hint={type === 'last_few_days' ? 'Makes a Last Few Days post at 3:00 AM on its days (Tuesday and Friday), in place of that day’s carousel run.' : `Makes ${noun} every morning to fill the day's quota.`}
         >
-          Generate every morning
+          {type === 'last_few_days' ? 'Generate on its days' : 'Generate every morning'}
         </Switch>
       ) : null}
       <Switch

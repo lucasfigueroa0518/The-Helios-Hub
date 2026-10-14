@@ -24,7 +24,7 @@ import { typeHref, verticalInfo } from '@/lib/social-hub/verticals';
  * going out today, then how full the tank is.
  */
 export function ContentScreen({ dataset, base, now, libraries, progress, controls = true }: { dataset: HubDataset; base: string; now: Date; libraries: LibrariesModel; progress?: AllProgress; controls?: boolean }) {
-  const runs: AllProgress = progress ?? { carousels: [], stories: [], explainers: [] };
+  const runs: AllProgress = progress ?? { carousels: [], stories: [], explainers: [], last_few_days: [] };
   const inFlight = Object.values(runs).some((items) => items.length > 0);
   const summary = runningSummary(runs);
   const m = contentModel(dataset, now);
@@ -110,7 +110,7 @@ export function ContentScreen({ dataset, base, now, libraries, progress, control
   );
 }
 
-function PoolPanel({ pool, base, now, running }: { pool: PoolSummary; base: string; now: Date; running: AllProgress[keyof AllProgress] }) {
+function PoolPanel({ pool, base, now, running }: { pool: PoolSummary; base: string; now: Date; running: NonNullable<AllProgress[keyof AllProgress]> }) {
   const info = verticalInfo(pool.vertical);
   return (
     <Link href={typeHref(pool.vertical, base)} className="sh-panel sh-pool">

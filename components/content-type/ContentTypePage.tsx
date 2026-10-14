@@ -5,6 +5,7 @@ import { SettingsForm } from '@/app/explainers/settings/settings-form';
 import {
   AddTopicsButton,
   CarouselRunButton,
+  LfdRunButton,
   LiveToggle,
   PostingSettings,
   SettingsButton,
@@ -32,11 +33,12 @@ import './type-hub.css';
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-/** The types this page draws (Text on Screen has its own app page; Last Few Days joins with its Run button and settings). */
-type PageVertical = Exclude<Vertical, 'reels' | 'last_few_days'>;
+/** The types this page draws (Text on Screen has its own app page). */
+type PageVertical = Exclude<Vertical, 'reels'>;
 
-const TITLE: Record<PageVertical, string> = { carousels: 'Carousels', stories: 'Stories', explainers: 'Explainers' };
+const TITLE: Record<PageVertical, string> = { carousels: 'Carousels', stories: 'Stories', explainers: 'Explainers', last_few_days: 'Last Few Days' };
 const BENCH_NOTE: Record<PageVertical, string> = {
+  last_few_days: 'The latest run’s queue: the stories in its post, the ones it dropped and why, and what was next in line. Major headlines lead; Text on Screen ideas fill the rest.',
   carousels: 'Stories the 3:00 AM run shortlisted, best first. The top two become carousels.',
   stories: 'Ideas drawn from the other pools. A set is built for each series that is due.',
   explainers: 'Topics waiting to be rendered, best score first. Generate renders one reel.',
@@ -71,6 +73,9 @@ export async function ContentTypePage({ vertical }: { vertical: PageVertical }) 
   } else if (vertical === 'stories') {
     generate = <StoriesGenerate />;
     settings = <PostingSettings type="stories" />;
+  } else if (vertical === 'last_few_days') {
+    generate = <LfdRunButton />;
+    settings = <PostingSettings type="last_few_days" />;
   } else {
     generate = <AddTopicsButton />;
     const view = explainersView!;

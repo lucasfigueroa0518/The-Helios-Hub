@@ -1,19 +1,19 @@
 import type { AllProgress, ProgressItem } from '@/lib/content-type/progress';
 import type { QuotaCandidate } from '@/lib/social-hub/views/day-rank';
 
-const TYPES = ['carousels', 'stories', 'explainers'] as const;
+const TYPES = ['carousels', 'stories', 'explainers', 'last_few_days'] as const;
 
-const TYPE_LABEL = { carousels: 'Carousels', stories: 'Stories', explainers: 'Explainers' } as const;
+const TYPE_LABEL = { carousels: 'Carousels', stories: 'Stories', explainers: 'Explainers', last_few_days: 'Last Few Days' } as const;
 
 /** Stable id of what the Content page already knows is in flight, so a poll can tell when that changed. */
 export function inFlightKey(runs: AllProgress): string {
-  return TYPES.flatMap((v) => runs[v].map((i) => `${v}:${i.id}:${i.state}:${i.stage ?? ''}`)).sort().join('|');
+  return TYPES.flatMap((v) => (runs[v] ?? []).map((i) => `${v}:${i.id}:${i.state}:${i.stage ?? ''}`)).sort().join('|');
 }
 
 /** One line per type that is queued or running, for the top of the Content page. */
 export function runningSummary(runs: AllProgress): string[] {
   return TYPES.flatMap((v) => {
-    const items = runs[v];
+    const items = runs[v] ?? [];
     if (!items.length) return [];
     return [`${TYPE_LABEL[v]} ${items.some((i) => i.state === 'running') ? 'running' : 'queued'}`];
   });
@@ -28,15 +28,15 @@ export function runningSummary(runs: AllProgress): string[] {
  * "generating".
  */
 export function runForCandidate(c: QuotaCandidate, runs: AllProgress): ProgressItem | null {
-  // Last Few Days runs aren't in AllProgress yet (their progress strip lands with the type page).
-  if (c.vertical === 'reels' || c.vertical === 'last_few_days') return null;
+  if (c.vertical === 'reels') return null;
   const items = runs[c.vertical] ?? [];
   const own = items.find((i) => i.topicId && c.idea && (c.idea.id === i.topicId || c.idea.id.endsWith(`:${i.topicId}`)));
   if (own) return own;
   if (c.vertical === 'explainers') return null;
   if (c.vertical === 'stories') return c.series ? items.find((i) => i.label === c.series) ?? null : null;
   // A run that picks its own stories shows on every card; one asked for particular stories (topicId) only on those.
-  if (c.vertical === 'carousels') {
+  // A Last Few Days run is always the type's own job: it shows on its card.
+  if (c.vertical === 'carousels' || c.vertical === 'last_few_days') {
     const open = items.filter((i) => !i.topicId);
     return open.find((i) => i.state === 'running') ?? open.find((i) => i.state === 'queued') ?? null;
   }
@@ -65,5 +65,5 @@ export function runOnMadeCard(post: { status: string; idea?: { id: string } | nu
  */
 export function canMakeCard(c: QuotaCandidate): boolean {
   if (c.vertical === 'stories') return Boolean(c.seriesId);
-  return Boolean(c.idea) || c.vertical === 'carousels';
+  return Boolean(c.idea) || c.vertical === 'carousels' || c.vertical === 'last_few_days';
 }

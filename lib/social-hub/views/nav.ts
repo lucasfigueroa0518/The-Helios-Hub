@@ -46,7 +46,7 @@ export function activeHubTab(base: string, path: string, from: string | null): H
 export function safeFrom(base: string, raw: string | null | undefined): string | null {
   if (!raw || raw.length > 500) return null;
   // A content type's own page (live hub only) is a place a post can be opened from.
-  const typePage = base === '/social' && /^\/(carousels|stories|explainers)(\?|$)/.test(raw);
+  const typePage = base === '/social' && /^\/(carousels|stories|explainers|last-few-days)(\?|$)/.test(raw);
   if (!typePage && !(raw === base || raw.startsWith(`${base}/`) || raw.startsWith(`${base}?`))) return null;
   if (typePage) return raw.includes('\\') ? null : raw;
   if (raw.includes('\\') || raw.slice(base.length).includes('//') || /[a-z][a-z0-9+.-]*:/i.test(raw.slice(0, raw.indexOf('?') === -1 ? raw.length : raw.indexOf('?')))) return null;
@@ -59,7 +59,9 @@ export type Crumb = { label: string; href: string | null };
 const LIBRARY_LABEL: Record<string, string> = { music: 'Music pool', photos: 'Photo bank' };
 
 /** The trail for a hub path; the last crumb is the current page (no href). */
-const isTypePage = (part: string | undefined): part is Exclude<Vertical, 'reels'> => part === 'carousels' || part === 'stories' || part === 'explainers';
+/** A content type's own page by its path segment (the hub-hosted ones; Text on Screen is a separate app). */
+const TYPE_PAGES: Record<string, Exclude<Vertical, 'reels'>> = { carousels: 'carousels', stories: 'stories', explainers: 'explainers', 'last-few-days': 'last_few_days' };
+const typePageOf = (part: string | undefined): Exclude<Vertical, 'reels'> | null => (part && Object.hasOwn(TYPE_PAGES, part) ? TYPE_PAGES[part]! : null);
 
 export function crumbsFor(base: string, href: string): Crumb[] {
   const rest = restOf(base, href);
@@ -82,9 +84,9 @@ export function crumbsFor(base: string, href: string): Crumb[] {
   } else if (parts[0] === 'health') {
     push('Health', '/health');
     if (parts[1] === 'night' && parts[2]) push(`Night of ${new Date(`${parts[2]}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}`, `/health/night/${parts[2]}`);
-  } else if (isTypePage(parts[0])) {
-    // A content type's own page lives outside the hub base (/carousels …): Content › its name.
-    trail.push({ label: 'Content', href: base }, { label: verticalInfo(parts[0]).label, href: `/${parts[0]}` });
+  } else if (typePageOf(parts[0])) {
+    // A content type's own page lives outside the hub base (/carousels, /last-few-days …): Content › its name.
+    trail.push({ label: 'Content', href: base }, { label: verticalInfo(typePageOf(parts[0])!).label, href: `/${parts[0]}` });
   } else {
     push('Content', '');
     if (parts[0] === 'content' && parts[1] === 'pools' && isVertical(parts[2])) push(`${verticalInfo(parts[2]).label} pool`, `/content/pools/${parts[2]}`);

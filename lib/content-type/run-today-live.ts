@@ -14,21 +14,45 @@ import { pendingRun, requestRun } from '@/lib/reels/repository';
 import { requestFinish, todaySlateFor } from '@/lib/reels/visual/finish';
 import { liveHubQuery } from '@/lib/social-hub/db';
 import { loadDataset } from '@/lib/social-hub/load';
-import { planFrom, quotaCandidates, stepsFor, typeDay, type PlanStep, type RunPlan } from '@/lib/social-hub/run-today';
+import { planFrom, quotaCandidates, stepsFor, typeDay, type PlanStep, type RunInputs, type RunPlan } from '@/lib/social-hub/run-today';
 import type { Vertical } from '@/lib/social-hub/types';
 import { DEFAULT_DAY_QUOTAS } from '@/lib/social-hub/queries/day';
 import { nyDateOf } from '@/lib/social-hub/time';
 import { capacityWindows, placedCount } from '@/lib/social-hub/views/plan';
 import { generate as requestStorySet } from '@/lib/stories/api';
 import { liveStoriesDb } from '@/lib/stories/db';
+import { DEFAULT_LFD_RUN_CAP_USD } from '@/lib/lfd/config';
+import { queueManualLfdRun } from '@/lib/lfd/manual';
+import { readLfdSettings } from '@/lib/lfd/settings';
 
 /** Typical spend, for the confirm line: a reels night ran $1.40–2.80 this month; one reel (copy, frame, video, song) about $1. */
 const REELS_NIGHT_USD = 2.5;
 const REEL_BUILD_USD = 1;
 const STORY_SET_USD = 0.45;
 
-export async function livePlan(now = new Date()): Promise<RunPlan> {
+/**
+ * Last Few Days for Run now: due on its days (any day from its own button),
+ * made when today already has a post that wasn't rejected, in flight when a
+ * run is queued or running. Unreadable (schema not applied): no step.
+ */
+async function liveLfd(today: string, anyDay: boolean): Promise<{ day: RunInputs['lastFewDays']; inFlight: boolean; cap: number }> {
+  try {
+    const [s, made, flight] = await Promise.all([
+      readLfdSettings(liveHubQuery),
+      dbQuery<{ n: number }>(`SELECT count(*)::int AS n FROM lfd.posts WHERE ny_date = $1::date AND status <> 'rejected'`, [today]),
+      dbQuery<{ n: number }>(`SELECT count(*)::int AS n FROM lfd.runs WHERE status IN ('requested', 'running')`),
+    ]);
+    const weekday = new Date(`${today}T12:00:00Z`).getUTCDay();
+    return { day: { due: anyDay || s.days.includes(weekday), made: Number(made.rows[0]?.n ?? 0) > 0 }, inFlight: Number(flight.rows[0]?.n ?? 0) > 0, cap: s.runCapUsd ?? DEFAULT_LFD_RUN_CAP_USD };
+  } catch {
+    return { day: undefined, inFlight: false, cap: DEFAULT_LFD_RUN_CAP_USD };
+  }
+}
+
+/** `lfdAnyDay`: the Last Few Days page's own button may make a post on any day (spec §8 Run button). */
+export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean } = {}): Promise<RunPlan> {
   const today = nyDateOf(now)!;
+  const lfd = await liveLfd(today, opts.lfdAnyDay === true);
   const [dataset, stories, reelsPending, building, slate, carouselRuns, carouselSettings, exDb] = await Promise.all([
     loadDataset(liveHubQuery, now),
     readPosting('stories'),
@@ -57,13 +81,15 @@ export async function livePlan(now = new Date()): Promise<RunPlan> {
     carousels: day('carousels'),
     explainers: day('explainers'),
     series,
+    ...(lfd.day ? { lastFewDays: lfd.day } : {}),
     inFlight: {
       reelsRun: Boolean(reelsPending),
       reelsBuilding: building.rows.map((r) => r.post_idea_id),
       carouselRun: Number(carouselRuns.rows[0]?.n ?? 0) > 0,
       explainerTopics: jobs.rows.map((r) => r.topic_id),
+      lfdRun: lfd.inFlight,
     },
-    cost: { reelsNight: REELS_NIGHT_USD, reelBuild: REEL_BUILD_USD, carouselCap: carouselSettings.runCapUsd, explainerCap: exSettings.per_reel_cap_usd, storySet: STORY_SET_USD },
+    cost: { reelsNight: REELS_NIGHT_USD, reelBuild: REEL_BUILD_USD, carouselCap: carouselSettings.runCapUsd, explainerCap: exSettings.per_reel_cap_usd, storySet: STORY_SET_USD, lfdCap: lfd.cap },
   });
 }
 
@@ -76,7 +102,7 @@ export type StepResult = { vertical: PlanStep['vertical']; label: string; ok: bo
  * runs just that card.
  */
 export async function runToday(by: string, now = new Date(), only?: Vertical, target?: string): Promise<{ plan: RunPlan; results: StepResult[] }> {
-  const plan = await livePlan(now);
+  const plan = await livePlan(now, { lfdAnyDay: only === 'last_few_days' });
   const results: StepResult[] = [];
   for (const step of stepsFor(plan, only, target)) {
     if (step.action === 'none') continue;
@@ -113,6 +139,10 @@ export async function runToday(by: string, now = new Date(), only?: Vertical, ta
           else refused.push(r.reason.replaceAll('_', ' '));
         }
         done(queued > 0, `${queued} render${queued === 1 ? '' : 's'} queued${refused.length ? `; refused: ${[...new Set(refused)].join(', ')}` : ''}.`);
+      } else if (step.action === 'lfd_run') {
+        // The click approves this run's spend, up to the cap (CLAUDE.md Rule 1); only the social worker runs it.
+        const out = await queueManualLfdRun(liveHubQuery);
+        done(out.ok, out.note);
       } else if (step.action === 'story_sets') {
         const made: string[] = [];
         for (const series of step.targets) {
