@@ -17,6 +17,9 @@ import {
 } from '@/lib/reels/locks';
 import { shipStoredCopy, writeTargetCopy, type IdeaCopyOutcome } from '@/lib/reels/pipeline/copy';
 import { placedIdeas, reusableVideos } from '@/lib/reels/pipeline/fill';
+import { putOnSlate, reelsMovesQuery, REEL_SKIP } from '@/lib/reels/pipeline/promote';
+import { markPromoteUsed, readTonightMoves, recordPromoteSkip } from '@/lib/social-hub/moves-store';
+import { ideaRef, NO_MOVES } from '@/lib/social-hub/views/moves';
 import { requestFinish } from '@/lib/reels/visual/finish';
 import { dbQuery } from '@/lib/db';
 
@@ -76,6 +79,12 @@ export async function generatePassingReels(input: {
   const nyDate = rows[0]?.ny_date;
   if (!nyDate) throw new Error('That slate does not exist.');
 
+  // Shared queue (nightly run only): tonight's Promote goes first, Demotes go last. An older promoted idea joins
+  // tonight's slate from its stored scores (no re-scoring). A failed read is no moves: the night runs as before.
+  const tonight = input.dailyFill ? await readTonightMoves(reelsMovesQuery, 'reels') : NO_MOVES;
+  const promoteId = tonight.promote ? ideaRef(tonight.promote.ideaId) : null;
+  const promoteOnSlate = promoteId ? await putOnSlate(input.slateId, promoteId) : false;
+
   const [slotIdeas, locks, penalties, published, wideMisses] = await Promise.all([
     loadSlotIdeas(input.slateId),
     locksForSlate(input.slateId),
@@ -123,6 +132,7 @@ export async function generatePassingReels(input: {
     },
     onPenalty: (idea, penalty) => saveDayPenalty(input.slateId, nyDate, idea.id, penalty),
     reusable: new Set(reusable.keys()),
+    moves: { promote: promoteOnSlate ? promoteId : null, demoted: new Set([...tonight.demoted].map(ideaRef)) },
     onFallback: async (idea, line) => {
       penalties.delete(idea.id);
       await clearDayPenalty(input.slateId, nyDate, idea.id);
@@ -141,6 +151,22 @@ export async function generatePassingReels(input: {
       if (!shipped.ok) failures.push(`${idea.id}: ${shipped.error ?? 'could not ship the best line'}`);
     },
   });
+
+  if (tonight.promote && promoteId) {
+    const made = filled.some((slot) => slot.postIdeaId === promoteId);
+    const why = !promoteOnSlate
+      ? REEL_SKIP.gone
+      : held.has(promoteId)
+        ? REEL_SKIP[held.get(promoteId)!]
+        : placed.has(promoteId)
+          ? REEL_SKIP.placed
+          : outcomes.has(promoteId)
+            ? REEL_SKIP.missed
+            : REEL_SKIP.full;
+    if (made) await markPromoteUsed(reelsMovesQuery, 'reels', tonight.promote.ideaId);
+    else await recordPromoteSkip(reelsMovesQuery, 'reels', tonight.promote.ideaId, why);
+    console.info(`[reels] tonight's promote ${promoteId}: ${made ? 'made' : `skipped (${why})`}`);
+  }
 
   await selectFilledIdeas(
     input.slateId,

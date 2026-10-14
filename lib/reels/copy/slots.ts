@@ -1,5 +1,6 @@
 import { rankCopyLines, type CopyLineJudgment } from '@/lib/reels/copy/pick';
 import { rankForSlate, type BucketId, type FrameworkId, type RankedIdea } from '@/lib/reels/scoring/decide';
+import { orderTonight } from '@/lib/social-hub/views/moves';
 
 /**
  * A night posts two or three reels. Slot 1 is the knowledge lane: the
@@ -39,6 +40,9 @@ export type SlotIdea = {
 
 export type SlotLock = { slot: number; postIdeaId: string };
 
+/** Shared queue: tonight's promoted idea (post idea id) and the demoted ones. */
+export type SlotMoves = { promote: string | null; demoted: ReadonlySet<string> };
+
 export type GradedLine = CopyLineJudgment & { inRange: boolean; ideaId: string; lineIndex: number };
 
 export type FilledSlot = {
@@ -67,7 +71,7 @@ export function inKnowledgeLane(idea: { framework?: FrameworkId | null; bucket?:
   return idea.framework === 'curiosity' && idea.bucket === 'the_number';
 }
 
-export function orderedForSlots(ideas: readonly SlotIdea[], penaltyOf: (id: string) => number): SlotIdea[] {
+export function orderedForSlots(ideas: readonly SlotIdea[], penaltyOf: (id: string) => number, moves?: SlotMoves): SlotIdea[] {
   const byId = new Map(ideas.map((idea) => [idea.id, idea]));
   const ranked: RankedIdea[] = ideas.map((idea) => ({
     id: idea.id,
@@ -77,9 +81,11 @@ export function orderedForSlots(ideas: readonly SlotIdea[], penaltyOf: (id: stri
     lastJoinedMs: idea.lastJoinedMs,
     confidence: idea.confidence,
   }));
-  return rankForSlate(ranked)
+  const ordered = rankForSlate(ranked)
     .map((idea) => byId.get(idea.id))
     .filter((idea): idea is SlotIdea => idea != null);
+  // Shared queue: tonight's promoted idea first, demoted ideas last; the rest keep net − penalty order.
+  return moves ? orderTonight(ordered, (idea) => idea.id, new Set(moves.promote ? [moves.promote] : []), moves.demoted) : ordered;
 }
 
 /**
@@ -120,6 +126,8 @@ export async function fillSlots(input: {
   onPenalty: (idea: SlotIdea, penalty: number) => Promise<void> | void;
   onFallback: (idea: SlotIdea, line: GradedLine) => Promise<void> | void;
   reusable?: ReadonlySet<string>;
+  /** Shared queue (nightly run): tonight's promote leads either pool (Q4); demoted ideas come last. */
+  moves?: SlotMoves;
 }): Promise<FilledSlot[]> {
   if (!Number.isInteger(input.count) || input.count < 1) {
     throw new Error(`A generation needs a whole number of reels, not ${input.count}.`);
@@ -145,15 +153,18 @@ export async function fillSlots(input: {
   }
 
   const pool = (mode: 'reserved' | 'general', tried: ReadonlySet<string>): SlotIdea[] => {
-    const available = orderedForSlots(input.ideas, penaltyOf).filter(
+    const available = orderedForSlots(input.ideas, penaltyOf, input.moves).filter(
       (idea) => !used.has(idea.id) && !tried.has(idea.id),
     );
+    // Shared queue (Q4): tonight's promoted idea leads either pool, in the knowledge lane or not.
+    const promoted = input.moves?.promote ? available.find((idea) => idea.id === input.moves!.promote) : undefined;
+    const first = (list: SlotIdea[]) => (promoted ? [promoted, ...list.filter((idea) => idea !== promoted)] : list);
     if (mode === 'reserved') {
       const lane = available.filter(inKnowledgeLane);
-      return lane.length > 0 ? lane : available;
+      return first(lane.length > 0 ? lane : available);
     }
     const general = available.filter((idea) => !inKnowledgeLane(idea));
-    return general.length > 0 ? general : available;
+    return first(general.length > 0 ? general : available);
   };
 
   const penalize = async (idea: SlotIdea, tried: ReadonlySet<string>, mode: 'reserved' | 'general') => {
@@ -180,6 +191,13 @@ export async function fillSlots(input: {
       tried.add(idea.id);
       const result = await input.attempt(idea, opener);
       opener = false;
+      // A promoted idea outside the lane that misses falls through like a general idea (penalized, never shipped
+      // on its best line); the lane idea after it opens fresh.
+      if (!result.passed && idea.id === input.moves?.promote && !inKnowledgeLane(idea)) {
+        if (result.judged) await penalize(idea, tried, 'general');
+        opener = true;
+        continue;
+      }
       if (!result.judged) continue;
       if (result.passed) {
         used.add(idea.id);
