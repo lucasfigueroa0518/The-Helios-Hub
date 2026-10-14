@@ -17,7 +17,7 @@ import {
   type SetStatus,
   type StorySet,
 } from '@/lib/stories/repository';
-import { approvalNote as approvalNoteFor } from '@/lib/stories/schedule';
+import { approvalNote as approvalNoteFor, pickPublishAt } from '@/lib/stories/schedule';
 import { SERIES, loadSettings, saveSeriesSetting } from '@/lib/stories/settings';
 
 export class ApiError extends Error {
@@ -87,21 +87,33 @@ const guard = async <T>(fn: () => Promise<T>): Promise<T> => {
   }
 };
 
+const NY_TIME = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' });
+
 /**
- * Approve. The returned set carries `approvalNote`: plain words on whether the
- * worker can still schedule it (the window may have closed; then only Publish
- * now posts it).
+ * Approve. While publishing is live and the set is today's with its window
+ * still open, it gets its minute now (B1), the same draw the worker makes
+ * (worker.ts step 3), so the Content page shows its time at once. The
+ * returned set carries `approvalNote`: when it posts, or why it won't (the
+ * window has passed: only Publish now posts it; publishing is off: it waits).
+ * The spine slot's source follows the set's trigger (spine.ts projectSet).
  */
 export async function approve(db: Queryable, id: string, now = new Date()): Promise<StorySet & { approvalNote: string }> {
   const set = await guard(() => approveSet(db, id));
+  let out: StorySet = set;
   let approvalNote = 'Approved.';
   try {
     const settings = await loadSettings(db);
-    approvalNote = approvalNoteFor(settings.series[set.series].window, set.ny_date, now, settings.publishingLive);
+    const window = settings.series[set.series].window;
+    approvalNote = approvalNoteFor(window, set.ny_date, now, settings.publishingLive);
+    const minute = settings.publishingLive && set.ny_date === nyDate(now) ? pickPublishAt(window, set.ny_date, now) : null;
+    if (minute) {
+      out = await scheduleSet(db, id, minute);
+      approvalNote = `Approved. It posts at ${NY_TIME.format(minute)}.`;
+    }
   } catch {
-    // The note is advice; the approval already happened.
+    // The note and the minute are conveniences: the approval already happened, and the worker books an approved set within 15 seconds.
   }
-  return { ...set, approvalNote };
+  return { ...out, approvalNote };
 }
 
 export function reject(db: StoriesDb, id: string, body: { tags?: unknown; note?: unknown }, by: string) {

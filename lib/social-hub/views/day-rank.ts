@@ -14,7 +14,7 @@ import { isRejected } from '@/lib/social-hub/views/state';
  *   Demote   the idea drops below the idea right under it (#1 → #2)
  *
  * Moves are applied in the order they were made, on top of that day's score
- * ranking, and expire with the day. The quota candidates are, in order: what already holds a slot today
+ * ranking, and last until their idea is made (B8). The quota candidates are, in order: what already holds a slot today
  * (scheduled, posting, posted); then content made today with no slot, for
  * any idea (the night picks its own, 2026-10-13: made content wins); then the
  * top of the adjusted ranking for what's left. Rejected content never fills a
@@ -23,7 +23,8 @@ import { isRejected } from '@/lib/social-hub/views/state';
  * Pure over plain data, so the page, Run now and the tests agree.
  */
 
-export type IdeaAdjustment = { vertical: Vertical; ideaId: string; nyDate: string; kind: 'promote' | 'demote'; createdAt: string };
+/** A person's Promote / Demote. `nyDate` is the day it was made; it steers until used (consumed_at, B8). `createdAt` is ISO. */
+export type IdeaAdjustment = { id: string; vertical: Vertical; ideaId: string; nyDate: string; kind: 'promote' | 'demote'; createdAt: string };
 
 /** Posts per day for the types with a quota (Stories go by series days). */
 export type DayQuotas = {
@@ -70,18 +71,18 @@ export function applyMoves<T extends { id: string }>(ranked: readonly T[], moves
   return list;
 }
 
-/** Today's moves for one type, oldest first. */
-export function movesFor(adjustments: readonly IdeaAdjustment[], vertical: Vertical, nyDate: string): IdeaAdjustment[] {
-  return adjustments.filter((a) => a.vertical === vertical && a.nyDate === nyDate).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+/** A type's active moves (not used yet, any day), oldest first. */
+export function movesFor(adjustments: readonly IdeaAdjustment[], vertical: Vertical): IdeaAdjustment[] {
+  return adjustments.filter((a) => a.vertical === vertical).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
 /**
  * A type's open ideas in today's order: score order, then today's moves.
  * Stories rank within each series (`group`), never across series.
  */
-export function dayRanking(ideas: readonly HubIdea[], vertical: Vertical, adjustments: readonly IdeaAdjustment[], nyDate: string): RankedIdea[] {
+export function dayRanking(ideas: readonly HubIdea[], vertical: Vertical, adjustments: readonly IdeaAdjustment[]): RankedIdea[] {
   const open = ideas.filter((i) => i.vertical === vertical && OPEN.has(i.state));
-  const moves = movesFor(adjustments, vertical, nyDate);
+  const moves = movesFor(adjustments, vertical);
   const lastMove = new Map(moves.map((m) => [m.ideaId, m.kind === 'promote' ? ('promoted' as const) : ('demoted' as const)]));
   const groups = new Map<string, HubIdea[]>();
   for (const idea of open) {
@@ -95,10 +96,32 @@ export function dayRanking(ideas: readonly HubIdea[], vertical: Vertical, adjust
   return out;
 }
 
+/** A post belongs to an idea id when it names it (bare, or as the id's last part). */
+export function ownsIdeaId(ideaId: string, post: HubPost): boolean {
+  const ref = post.idea?.id;
+  return Boolean(ref) && (ideaId === ref || ideaId.endsWith(`:${ref}`));
+}
+
 /** A post belongs to an idea when it names it (bare, or as the idea id's last part). */
 export function ideaOwns(idea: HubIdea, post: HubPost): boolean {
-  const ref = post.idea?.id;
-  return Boolean(ref) && (idea.id === ref || idea.id.endsWith(`:${ref}`));
+  return ownsIdeaId(idea.id, post);
+}
+
+/**
+ * Moves used up (B8): the idea got content made after the move (anything but
+ * still being made; a rejection follows a making, so it counts too). Content
+ * made before the move doesn't use it: a person promoted an idea that already
+ * had content on purpose. Stories go by their pool entry (queries/day.ts).
+ */
+export function madeMoveIds(adjustments: readonly IdeaAdjustment[], posts: readonly HubPost[]): string[] {
+  return adjustments
+    .filter((a) => a.vertical !== 'stories' && posts.some((p) =>
+      p.vertical === a.vertical
+      && p.status !== 'generating'
+      && ownsIdeaId(a.ideaId, p)
+      && p.generatedAt != null
+      && Date.parse(p.generatedAt) >= Date.parse(a.createdAt)))
+    .map((a) => a.id);
 }
 
 /** What a post actually has to look at: rendered slides, story frames, or a video file. */
@@ -155,7 +178,7 @@ export function quotaCandidates(
     .filter((p) => p.vertical === vertical && p.nyDate === today && HOLDS.has(p.status) && (p.status === 'published' || hasMedia(p)))
     .sort((a, b) => at(a).localeCompare(at(b)) || a.id.localeCompare(b.id))
     .slice(0, quota);
-  const full = dayRanking(data.ideas, vertical, data.adjustments ?? [], today);
+  const full = dayRanking(data.ideas, vertical, data.adjustments ?? []);
   const sameIdea = (a: HubPost, b: HubPost) => a.idea?.id != null && a.idea.id === b.idea?.id;
   // Made today with no slot, any idea (2026-10-13): the night picks its own topic, so what it made holds the
   // day's place ahead of the ranking. Newest first, one per idea, never one already in a slot.

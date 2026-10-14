@@ -64,7 +64,7 @@ async function main(): Promise<void> {
   const { loadAgentQuery } = await import('@/lib/explainers/render/agent');
   const { artifactStoreFromEnv, signArtifact } = await import('@/lib/explainers/storage');
   const { IDEA_CYCLE_HOUR_NY, EXPLAINERS_INSIGHTS_HOUR_NY, EXPLAINERS_INSIGHTS_MINUTE_NY } = await import('@/lib/explainers/publish/config');
-  const { publishingLive, releaseDueSchedules, scheduleApproved } = await import('@/lib/explainers/publish/schedule');
+  const { bookFinishedRender, publishingLive, releaseDueSchedules, scheduleApproved } = await import('@/lib/explainers/publish/schedule');
   const { claimAndPublish } = await import('@/lib/explainers/publish/publish');
   const { createLiveReelClient, metaConfigured } = await import('@/lib/explainers/publish/meta');
   const { createExplainerInsightsClient, pollExplainerInsights } = await import('@/lib/explainers/publish/insights');
@@ -102,6 +102,15 @@ async function main(): Promise<void> {
     log('job_claimed', { jobId: job.id, topicId: job.topic_id, trigger: job.trigger, capUsd: job.spend_cap_usd });
     const outcome = await runRenderJob({ db, query, store, jobsRoot, secrets, log: (event, fields) => log(event, fields) }, job);
     log('job_finished', { jobId: job.id, ...outcome });
+    if (outcome.status === 'ok') {
+      // B2: the night's own render takes today's next open window (booking only; it still needs Approve).
+      try {
+        const booked = await bookFinishedRender(db, job);
+        if (booked) log('render_booked', { jobId: job.id, ...booked });
+      } catch (error) {
+        log('render_book_failed', { jobId: job.id, error: errorText(error) });
+      }
+    }
     return true;
   };
 

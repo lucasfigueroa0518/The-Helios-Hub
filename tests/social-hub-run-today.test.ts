@@ -11,7 +11,7 @@ import { parseRankMove } from '@/lib/content-type/idea-rank';
 import { reelPosts } from '@/lib/social-hub/adapters/reels';
 import { narrowStep, parseRunBody, planFrom, stepsFor, typeDay, type RunInputs } from '@/lib/social-hub/run-today';
 import type { HubIdea, HubPost } from '@/lib/social-hub/types';
-import { applyMoves, dayRanking, orderCards, quotaCandidates, type IdeaAdjustment } from '@/lib/social-hub/views/day-rank';
+import { applyMoves, dayRanking, madeMoveIds, orderCards, quotaCandidates, type IdeaAdjustment } from '@/lib/social-hub/views/day-rank';
 import { todaysContent } from '@/lib/social-hub/views/today';
 
 const NOW = new Date('2026-10-09T14:00:00Z');
@@ -22,15 +22,15 @@ const idea = (n: number, score: number, over: Partial<HubIdea> = {}): HubIdea =>
   hasContent: false, versionCount: 0, generatedAt: null, createdAt: null, detail: null, ...over,
 });
 const IDEAS = [idea(1, 4), idea(2, 3), idea(3, 2), idea(4, 1)];
-const move = (n: number, kind: 'promote' | 'demote', at: string): IdeaAdjustment => ({ vertical: 'reels', ideaId: IDEAS[n - 1]!.id, nyDate: TODAY, kind, createdAt: at });
-const titles = (adj: IdeaAdjustment[]) => dayRanking(IDEAS, 'reels', adj, TODAY).map((r) => r.idea.title);
+const move = (n: number, kind: 'promote' | 'demote', at: string): IdeaAdjustment => ({ id: `m-${n}-${kind}-${at}`, vertical: 'reels', ideaId: IDEAS[n - 1]!.id, nyDate: TODAY, kind, createdAt: at });
+const titles = (adj: IdeaAdjustment[]) => dayRanking(IDEAS, 'reels', adj).map((r) => r.idea.title);
 
 test('Promote makes an idea #1 for the day; Demote moves it below the next one', () => {
   assert.deepEqual(titles([]), ['Idea 1', 'Idea 2', 'Idea 3', 'Idea 4']);
   assert.deepEqual(titles([move(3, 'promote', 't1')]), ['Idea 3', 'Idea 1', 'Idea 2', 'Idea 4']);
   assert.deepEqual(titles([move(1, 'demote', 't1')]), ['Idea 2', 'Idea 1', 'Idea 3', 'Idea 4']);
   assert.deepEqual(titles([move(3, 'promote', 't1'), move(3, 'demote', 't2')]), ['Idea 1', 'Idea 3', 'Idea 2', 'Idea 4'], 'a demoted promoted idea goes from #1 to #2');
-  assert.deepEqual(titles([{ ...move(3, 'promote', 't1'), nyDate: '2026-10-08' }]), ['Idea 1', 'Idea 2', 'Idea 3', 'Idea 4'], 'yesterday’s moves are gone');
+  assert.deepEqual(titles([{ ...move(3, 'promote', 't1'), nyDate: '2026-10-08' }]), ['Idea 3', 'Idea 1', 'Idea 2', 'Idea 4'], 'a move from yesterday still steers until its idea is made (B8)');
   assert.deepEqual(applyMoves([{ id: 'a' }, { id: 'b' }], [{ ideaId: 'b', kind: 'demote' }]).map((x) => x.id), ['a', 'b'], 'the last idea stays last');
 });
 
@@ -41,6 +41,18 @@ const reelPost = (n: number, over: Partial<HubPost> = {}): HubPost => {
   });
   return { ...post!, ...over };
 };
+
+test('a move is used up when its idea gets content made after it; content made before it, or still being made, keeps it (B8)', () => {
+  const m = move(1, 'promote', '2026-10-09T06:00:00.000Z');
+  const madeAfter = reelPost(1, { generatedAt: '2026-10-09T07:00:00Z' });
+  assert.deepEqual(madeMoveIds([m], [madeAfter]), [m.id]);
+  assert.deepEqual(madeMoveIds([m], [reelPost(1, { generatedAt: '2026-10-09T05:00:00Z' })]), [], 'Review Focus 4: content made before the move keeps it');
+  assert.deepEqual(madeMoveIds([m], [reelPost(1, { status: 'generating', generatedAt: '2026-10-09T07:00:00Z' })]), [], 'still being made');
+  assert.deepEqual(madeMoveIds([m], [reelPost(2, { generatedAt: '2026-10-09T07:00:00Z' })]), [], 'another idea');
+  const rejected = reelPost(1, { generatedAt: '2026-10-09T07:00:00Z', tries: [{ status: 'cancelled', at: '2026-10-09T08:00:00Z', note: 'This reel was rejected, so it was not posted.' }] });
+  assert.deepEqual(madeMoveIds([m], [rejected]), [m.id], 'made, then rejected: used up');
+  assert.deepEqual(madeMoveIds([{ ...m, vertical: 'stories', ideaId: 'stories:pool:free_vs_paid:k' }], [madeAfter]), [], 'Stories go by their pool entry');
+});
 
 test('made content fills the day ahead of the ranking; Promote only reorders what is not made yet', () => {
   // Ideas 1 and 4 have videos made today; the quota is 2.

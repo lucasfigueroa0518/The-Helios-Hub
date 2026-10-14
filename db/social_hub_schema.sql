@@ -343,7 +343,8 @@ ALTER TABLE social_hub.publish_attempts ADD CONSTRAINT publish_attempts_trigger_
 -- ── Day ranking: Promote / Demote (Lucas, 2026-10-09) ───────────────────────
 -- A person's moves on one type's idea ranking for one New York day, applied in
 -- order on top of that day's score ranking: promote puts the idea first;
--- demote moves it below the idea right under it. They expire with the day.
+-- demote moves it below the idea right under it. Since Phase B (B8) a move lasts
+-- until its idea is made (or its Stories pool entry is used): consumed_at.
 -- The day's quota goes to the top of the adjusted ranking.
 CREATE TABLE IF NOT EXISTS social_hub.idea_adjustments (
     id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -363,6 +364,12 @@ CREATE INDEX IF NOT EXISTS idx_social_hub_idea_adjustments_day
 ALTER TABLE social_hub.idea_adjustments DROP CONSTRAINT IF EXISTS idea_adjustments_vertical_check;
 ALTER TABLE social_hub.idea_adjustments ADD CONSTRAINT idea_adjustments_vertical_check
     CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days'));
+
+-- Content page Phase B (B8, 2026-10-14): a move steers until it is used, not until midnight.
+-- ny_date stays the day it was made. The hub sets consumed_at when it loads (lib/social-hub/queries/day.ts).
+ALTER TABLE social_hub.idea_adjustments ADD COLUMN IF NOT EXISTS consumed_at timestamptz;
+CREATE INDEX IF NOT EXISTS idx_social_hub_idea_adjustments_active
+    ON social_hub.idea_adjustments (vertical, created_at) WHERE consumed_at IS NULL;
 
 -- Health tab (spec 2026-10-13 §4.3): the 07:30 morning report, one row per night.
 CREATE TABLE IF NOT EXISTS social_hub.health_reports (

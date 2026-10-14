@@ -80,6 +80,8 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       verdictOf: async (d, jobId) => (await explainersRepo.getFeedback(d, jobId))?.verdict ?? null,
       placeItem: placement.placeItem,
       rescheduleItem: placement.rescheduleItem,
+      scheduleJob: (d, jobId, source, now, through) => explainersSchedule.scheduleJob(d, jobId, source, now, through),
+      publishingLive: explainersSchedule.publishingLive,
     }),
     reels: reelActions({
       schedulePostIdea: reels.schedulePostIdea as never,

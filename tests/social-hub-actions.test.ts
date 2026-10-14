@@ -69,7 +69,7 @@ function registry(o: {
   approveSchedule?: unknown; approvePost?: unknown; rejectPost?: unknown; hardPublishPost?: unknown;
   carouselItemId?: unknown; requestRerun?: unknown;
   setVerdict?: unknown; hardPublishJob?: unknown; loadSettings?: unknown; requestRerender?: unknown;
-  explainerItemId?: unknown; verdictOf?: unknown;
+  explainerItemId?: unknown; verdictOf?: unknown; scheduleJob?: unknown; publishingLive?: unknown;
   schedulePostIdea?: unknown; rejectReel?: unknown; forcePost?: unknown;
   reelItemId?: unknown; todaySlate?: unknown; findReelLock?: unknown; requestFinish?: unknown;
   storyApprove?: unknown; storyReject?: unknown; storyPublishNow?: unknown; storyRegenerate?: unknown;
@@ -93,6 +93,7 @@ function registry(o: {
       loadSettings: pick(o.loadSettings, 'loadSettings'), requestRerender: pick(o.requestRerender, 'requestRerender'),
       itemId: pick(o.explainerItemId, 'explainerItemId'), verdictOf: pick(o.verdictOf, 'verdictOf'), unscheduleJob: pick(o.unscheduleJob, 'unscheduleJob'),
       placeItem: pick(o.placeItem, 'placeItem'), rescheduleItem: pick(o.rescheduleItem, 'rescheduleItem'),
+      scheduleJob: pick(o.scheduleJob, 'scheduleJob'), publishingLive: pick(o.publishingLive, 'publishingLive'),
     }),
     reels: reelActions({
       schedulePostIdea: pick(o.schedulePostIdea, 'schedulePostIdea'), rejectReel: pick(o.rejectReel, 'rejectReel'), forcePost: pick(o.forcePost, 'forcePost'),
