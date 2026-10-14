@@ -32,6 +32,8 @@ export type DayQuotas = {
   explainers: number;
   /** One post on each of its days (spec §7.4); missing reads as one. */
   last_few_days?: number;
+  /** The weekdays Carousels give up to Last Few Days while its auto_run is on (LFD-02); none when missing. */
+  lfdDays?: readonly number[];
 };
 
 export type RankedIdea = { idea: HubIdea; rank: number; moved: 'promoted' | 'demoted' | null };
@@ -127,7 +129,7 @@ export function quotaCandidates(
   now: Date,
 ): QuotaCandidate[] {
   const today = nyDateOf(now)!;
-  const windows = windowsOn(vertical, today);
+  const windows = windowsOn(vertical, today, data.dayQuotas?.lfdDays ?? []);
   if (vertical === 'stories') {
     // A Stories slot is one series' set for the day; its ideas feed the build.
     return windows.map((w) => {

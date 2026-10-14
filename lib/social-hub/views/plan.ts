@@ -58,8 +58,13 @@ export function windowRange(w: PlanWindow): string {
   return `${fmt(w.startMinute, !samePeriod)}–${fmt(w.endMinute, true)}`;
 }
 
-export function windowsOn(vertical: Vertical, nyDate: string): PlanWindow[] {
+/**
+ * A type's windows on a day. `carouselOff`: the weekdays Carousels give up to
+ * Last Few Days while its auto_run is on (LFD-02; DayQuotas.lfdDays).
+ */
+export function windowsOn(vertical: Vertical, nyDate: string, carouselOff: readonly number[] = []): PlanWindow[] {
   const day = weekdayOf(nyDate);
+  if (vertical === 'carousels' && carouselOff.includes(day)) return [];
   return PLAN[vertical].filter((w) => !w.days || w.days.includes(day));
 }
 
@@ -91,9 +96,9 @@ function windowOf(post: HubPost, windows: readonly PlanWindow[], nyDate: string)
   return post.slot?.id ?? null;
 }
 
-export function dayPlan(posts: readonly HubPost[], nyDate: string): DayPlan {
+export function dayPlan(posts: readonly HubPost[], nyDate: string, carouselOff: readonly number[] = []): DayPlan {
   const types = VERTICAL_IDS.map((vertical): TypePlan => {
-    const windows = windowsOn(vertical, nyDate);
+    const windows = windowsOn(vertical, nyDate, carouselOff);
     const placed = posts.filter((p) => p.vertical === vertical && p.nyDate === nyDate && PLACED.has(p.status));
     const taken = new Set(placed.map((p) => windowOf(p, windows, nyDate)).filter((id): id is string => Boolean(id)));
     // Stories record one generic window, so count instead of matching ids.

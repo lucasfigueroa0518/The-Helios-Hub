@@ -75,7 +75,7 @@ export function slotsForDay(posts: readonly HubPost[], nyDate: string, dayQuotas
   let slots = 0;
   let filled = 0;
   for (const vertical of VERTICAL_IDS) {
-    const windows = windowsOn(vertical, nyDate).length;
+    const windows = windowsOn(vertical, nyDate, dayQuotas?.lfdDays ?? []).length;
     const configured = vertical === 'stories' || !dayQuotas ? windows : dayQuotas[vertical] ?? windows;
     const quota = Math.min(Math.max(0, configured), windows);
     slots += quota;
@@ -90,7 +90,7 @@ export function slotsForDay(posts: readonly HubPost[], nyDate: string, dayQuotas
  * type's slots today. Generating counts. A failed or skipped generation does
  * not, and neither does an idea that was never made.
  */
-export function publishingCandidates(posts: readonly HubPost[], today: string): HubPost[] {
+export function publishingCandidates(posts: readonly HubPost[], today: string, carouselOff: readonly number[] = []): HubPost[] {
   const byType = new Map<Vertical, HubPost[]>();
   for (const post of posts) {
     if (post.nyDate !== today || !post.idea) continue;
@@ -102,7 +102,7 @@ export function publishingCandidates(posts: readonly HubPost[], today: string): 
   }
   const out: HubPost[] = [];
   for (const [vertical, list] of byType) {
-    out.push(...list.sort(bySoonest).slice(0, windowsOn(vertical, today).length));
+    out.push(...list.sort(bySoonest).slice(0, windowsOn(vertical, today, carouselOff).length));
   }
   return out.sort(bySoonest);
 }
@@ -137,7 +137,8 @@ export function contentModel(dataset: HubDataset, now: Date): ContentModel {
   const today = nyDateOf(now)!;
   const nowIso = now.toISOString();
   const needs = needsGroups(dataset.posts, now);
-  const todays = publishingCandidates(dataset.posts, today);
+  const carouselOff = dataset.dayQuotas?.lfdDays ?? [];
+  const todays = publishingCandidates(dataset.posts, today, carouselOff);
   const bands = new Map<LineupBand['id'], LineupBand>();
   let nowAfter: string | null = null;
   for (const post of todays) {
@@ -160,7 +161,7 @@ export function contentModel(dataset: HubDataset, now: Date): ContentModel {
     lineup,
     nowAfter,
     unplaced,
-    plan: { ...dayPlan(dataset.posts, today), ...slotsForDay(dataset.posts, today, dataset.dayQuotas) },
+    plan: { ...dayPlan(dataset.posts, today, carouselOff), ...slotsForDay(dataset.posts, today, dataset.dayQuotas) },
     quota: quotaFrom(dataset.latestQuota, dataset.posts, now),
     next,
   };
