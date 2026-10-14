@@ -1,6 +1,6 @@
 import type { HubQuery } from '@/lib/social-hub/db';
 import type { DayQuotas, IdeaAdjustment } from '@/lib/social-hub/views/day-rank';
-import { carouselOffDays } from '@/lib/lfd/settings';
+import { readLfdSettings } from '@/lib/lfd/settings';
 
 /**
  * The day's ranking inputs (SELECT only): a person's Promote / Demote moves
@@ -28,18 +28,20 @@ const perDay = (rows: Array<{ value: unknown }>, fallback: number, min = 0) => {
 export async function readDayQuotas(q: HubQuery, explainersQ: Promise<HubQuery>): Promise<DayQuotas> {
   const sql = (schema: string) => `SELECT value FROM ${schema}.settings WHERE key = 'posts_per_day'`;
   const safe = (p: Promise<{ rows: Array<{ value: unknown }> }>) => p.catch(() => ({ rows: [] as Array<{ value: unknown }> }));
-  const [reels, carousels, explainers, lfdDays] = await Promise.all([
+  const [reels, carousels, explainers, lfd] = await Promise.all([
     safe(q<{ value: unknown }>(sql('reels'))),
     safe(q<{ value: unknown }>(sql('social'))),
     safe(explainersQ.then((eq) => eq<{ value: unknown }>(sql('explainers')))),
-    // Never throws: an unreadable lfd schema means Carousels keep every day.
-    carouselOffDays(q),
+    // An unreadable lfd schema reads as Last Few Days off: Carousels keep every day.
+    readLfdSettings(q).catch(() => null),
   ]);
+  // Last Few Days asks for its post (and Carousels give up its days, LFD-02) only while its auto_run is on.
+  const lfdOn = lfd?.autoRun === true;
   return {
     reels: perDay(reels.rows, DEFAULT_DAY_QUOTAS.reels),
     carousels: perDay(carousels.rows, DEFAULT_DAY_QUOTAS.carousels),
     explainers: perDay(explainers.rows, DEFAULT_DAY_QUOTAS.explainers, 1),
-    last_few_days: DEFAULT_DAY_QUOTAS.last_few_days,
-    lfdDays,
+    last_few_days: lfdOn ? DEFAULT_DAY_QUOTAS.last_few_days : 0,
+    lfdDays: lfdOn ? lfd!.days : [],
   };
 }

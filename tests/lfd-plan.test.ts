@@ -40,7 +40,8 @@ test('the calendar’s open slots on a Tuesday follow the same rule', () => {
 
 test('readDayQuotas carries the carousel days off from lfd.settings', async () => {
   const { query } = await openHubTestDb();
-  assert.deepEqual((await readDayQuotas(query, Promise.resolve(query))).lfdDays, []);
+  const offQ = await readDayQuotas(query, Promise.resolve(query));
+  assert.deepEqual([offQ.lfdDays, offQ.last_few_days], [[], 0], 'Last Few Days off: no carousel days off, no LFD quota');
   await query(`UPDATE lfd.settings SET value = 'true'::jsonb WHERE key = 'auto_run'`);
   const q = await readDayQuotas(query, Promise.resolve(query));
   assert.deepEqual([q.lfdDays, q.last_few_days], [[2, 5], 1]);
@@ -106,4 +107,34 @@ test('with auto_run on, a Tuesday with no carousel offers and shows no carousel 
   assert.deepEqual(slotChoices(d, ready, NOW), []);
   // Wednesday still offers both.
   assert.equal(slotChoices(d, ready, new Date('2026-10-14T12:00:00Z')).length, 2);
+});
+
+test('a Tuesday with Last Few Days off has no LFD card, slot or Run now step; with it on, all three', async () => {
+  const { query } = await openHubTestDb();
+  const { lfdDueOn, readLfdSettings } = await import('@/lib/lfd/settings');
+  const { planFrom } = await import('@/lib/social-hub/run-today');
+  const base = {
+    today: '2026-10-13',
+    reels: { quota: 0, held: 0, missing: [], slateToday: true },
+    carousels: { quota: 0, held: 0, missing: [] },
+    explainers: { quota: 0, held: 0, missing: [] },
+    series: [],
+    inFlight: { reelsRun: false, reelsBuilding: [], carouselRun: false, explainerTopics: [] },
+    cost: { reelsNight: 2.5, reelBuild: 1, carouselCap: 2, explainerCap: 5, storySet: 0.45, lfdCap: 1 },
+  };
+  const look = async () => {
+    const dayQuotas = await readDayQuotas(query, Promise.resolve(query));
+    const s = await readLfdSettings(query);
+    const step = planFrom({ ...base, lastFewDays: { due: lfdDueOn(s, '2026-10-13'), made: false } }).steps.find((x) => x.vertical === 'last_few_days');
+    return {
+      cards: quotaCandidates({ posts: [], ideas: [], dayQuotas }, 'last_few_days', TUE_8).length,
+      slots: slotsForDay([], '2026-10-13', { ...dayQuotas, reels: 0, explainers: 0, carousels: 0 }).slots,
+      step: step?.action,
+      makeNow: planFrom({ ...base, lastFewDays: { due: lfdDueOn(s, '2026-10-13', true), made: false } }).steps.find((x) => x.vertical === 'last_few_days')?.action,
+    };
+  };
+  // Tuesday: Morning Download + Free vs. Paid series are the 2 Stories slots.
+  assert.deepEqual(await look(), { cards: 0, slots: 2, step: 'none', makeNow: 'lfd_run' }, 'off: no card, no slot, no run step; the page button still makes one');
+  await query(`UPDATE lfd.settings SET value = 'true'::jsonb WHERE key = 'auto_run'`);
+  assert.deepEqual(await look(), { cards: 1, slots: 3, step: 'lfd_run', makeNow: 'lfd_run' });
 });

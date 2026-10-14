@@ -57,3 +57,13 @@ export async function carouselOffDays(q: LfdQuery): Promise<number[]> {
     return [];
   }
 }
+
+/**
+ * Whether Last Few Days makes a post on `nyDate`: on its days while auto_run
+ * is on. `anyDay`: its own page's button (Make Last Few Days now) makes one on
+ * any day, auto_run on or off.
+ */
+export function lfdDueOn(s: Pick<LfdSettings, 'autoRun' | 'days'>, nyDate: string, anyDay = false): boolean {
+  const weekday = new Date(`${nyDate}T12:00:00Z`).getUTCDay();
+  return anyDay || (s.autoRun && s.days.includes(weekday));
+}

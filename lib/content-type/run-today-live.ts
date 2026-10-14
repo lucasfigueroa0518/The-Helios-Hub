@@ -23,7 +23,7 @@ import { generate as requestStorySet } from '@/lib/stories/api';
 import { liveStoriesDb } from '@/lib/stories/db';
 import { DEFAULT_LFD_RUN_CAP_USD } from '@/lib/lfd/config';
 import { queueManualLfdRun } from '@/lib/lfd/manual';
-import { readLfdSettings } from '@/lib/lfd/settings';
+import { lfdDueOn, readLfdSettings } from '@/lib/lfd/settings';
 
 /** Typical spend, for the confirm line: a reels night ran $1.40–2.80 this month; one reel (copy, frame, video, song) about $1. */
 const REELS_NIGHT_USD = 2.5;
@@ -31,7 +31,7 @@ const REEL_BUILD_USD = 1;
 const STORY_SET_USD = 0.45;
 
 /**
- * Last Few Days for Run now: due on its days (any day from its own button),
+ * Last Few Days for Run now: due on its days while its auto_run is on (any day from its own button),
  * made when today already has a post that wasn't rejected, in flight when a
  * run is queued or running. Unreadable (schema not applied): no step.
  */
@@ -42,8 +42,7 @@ async function liveLfd(today: string, anyDay: boolean): Promise<{ day: RunInputs
       dbQuery<{ n: number }>(`SELECT count(*)::int AS n FROM lfd.posts WHERE ny_date = $1::date AND status <> 'rejected'`, [today]),
       dbQuery<{ n: number }>(`SELECT count(*)::int AS n FROM lfd.runs WHERE status IN ('requested', 'running')`),
     ]);
-    const weekday = new Date(`${today}T12:00:00Z`).getUTCDay();
-    return { day: { due: anyDay || s.days.includes(weekday), made: Number(made.rows[0]?.n ?? 0) > 0 }, inFlight: Number(flight.rows[0]?.n ?? 0) > 0, cap: s.runCapUsd ?? DEFAULT_LFD_RUN_CAP_USD };
+    return { day: { due: lfdDueOn(s, today, anyDay), made: Number(made.rows[0]?.n ?? 0) > 0 }, inFlight: Number(flight.rows[0]?.n ?? 0) > 0, cap: s.runCapUsd ?? DEFAULT_LFD_RUN_CAP_USD };
   } catch {
     return { day: undefined, inFlight: false, cap: DEFAULT_LFD_RUN_CAP_USD };
   }
