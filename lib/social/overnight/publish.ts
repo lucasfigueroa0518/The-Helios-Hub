@@ -60,6 +60,13 @@ export async function queueFeedAttempt(
   query: Query,
   a: { vertical: FeedVertical; itemId: string; trigger: PublishTrigger; caption: string; imageObjects: readonly string[] },
 ): Promise<Queued> {
+  // publish_once (D36): an item that already has a published attempt never queues again, even when its own
+  // row was not marked published (a failure after Instagram took the post).
+  const { rows: published } = await query(
+    `SELECT 1 FROM social_hub.publish_attempts WHERE content_item_id = $1 AND status = 'published' LIMIT 1`,
+    [a.itemId],
+  );
+  if (published[0]) return { queued: false, note: `This ${NOUN[a.vertical]} is already published.`, terminal: true, alreadyPublished: true };
   try {
     const inserted = await query(
       `INSERT INTO social_hub.publish_attempts (content_item_id, vertical, trigger, status, caption, payload)
@@ -153,7 +160,11 @@ export type FeedPublishHooks = {
  * Carry one claimed attempt (status `creating`) to Instagram: the rejection
  * check (D41), the account gate, one image container per slide, the CAROUSEL
  * parent with the caption, the status poll, the publish, then the type's hook
- * and the slot. Any failure fails the attempt and its slot, with the reason.
+ * and the slot. Any failure before Instagram returns a media id fails the
+ * attempt and its slot, with the reason. Once it returns one the post is live:
+ * a later failure never marks the attempt failed (that would let it post
+ * again); the attempt is kept published with its media id, the error goes in
+ * its status log, and the type's hook and the slot are still tried.
  */
 export async function carryFeedAttempt(deps: PublishDeps, id: string, hooks: FeedPublishHooks): Promise<{ id: string; status: 'published' | 'failed' }> {
   const { query, meta } = deps;
@@ -161,6 +172,7 @@ export async function carryFeedAttempt(deps: PublishDeps, id: string, hooks: Fee
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const now = deps.now ?? Date.now;
   const statusLog: Array<{ at: string; statusCode: string; status: string | null }> = [];
+  let posted: { mediaId: string; permalink: string | null; nativeRef: string; hookDone: boolean } | null = null;
   try {
     const { rows } = await query(
       `SELECT ci.native_ref, a.caption, a.payload->'image_objects' AS image_objects
@@ -204,14 +216,32 @@ export async function carryFeedAttempt(deps: PublishDeps, id: string, hooks: Fee
 
     await update(query, id, { status: 'publishing', status_log: JSON.stringify(statusLog) });
     const mediaId = await meta.publishContainer(containerId);
+    // Instagram has the post from here on: nothing below may mark it failed.
+    posted = { mediaId, permalink: null, nativeRef: attempt.native_ref, hookDone: false };
     const permalink = await meta.permalink(mediaId).catch(() => null);
+    posted.permalink = permalink;
     const finishedAt = new Date(now()).toISOString();
     await update(query, id, { status: 'published', media_id: mediaId, permalink, finished_at: finishedAt, status_log: JSON.stringify(statusLog) });
     await hooks.onPublished(query, attempt.native_ref, finishedAt);
+    posted.hookDone = true;
     await markScheduleForAttempt(query, id, 'published', null).catch(() => undefined);
     return { id, status: 'published' };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    if (posted) {
+      // Posted, then the bookkeeping failed. Keep it published (publish_once then refuses a second post).
+      const finishedAt = new Date(now()).toISOString();
+      statusLog.push({ at: finishedAt, statusCode: 'POSTED_BOOKKEEPING_ERROR', status: message });
+      console.warn(`[publish] ${noun} attempt ${id} posted as ${posted.mediaId}, then failed to record: ${message}`);
+      await update(query, id, { status: 'published', media_id: posted.mediaId, permalink: posted.permalink, finished_at: finishedAt, status_log: JSON.stringify(statusLog) })
+        .catch((e) => console.warn(`[publish] could not record attempt ${id} as published: ${e instanceof Error ? e.message : String(e)}`));
+      if (!posted.hookDone) {
+        await hooks.onPublished(query, posted.nativeRef, finishedAt)
+          .catch((e) => console.warn(`[publish] could not mark ${noun} ${posted?.nativeRef} published: ${e instanceof Error ? e.message : String(e)}`));
+      }
+      await markScheduleForAttempt(query, id, 'published', null).catch(() => undefined);
+      return { id, status: 'published' };
+    }
     await update(query, id, { status: 'failed', error: message, finished_at: new Date(now()).toISOString(), status_log: JSON.stringify(statusLog) }).catch(() => undefined);
     await markScheduleForAttempt(query, id, 'failed', message).catch(() => undefined);
     return { id, status: 'failed' };

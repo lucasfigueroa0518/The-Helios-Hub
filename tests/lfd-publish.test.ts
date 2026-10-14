@@ -89,3 +89,32 @@ test('a rejected item fails at carry without making containers', async () => {
   assert.match((await q(`SELECT error FROM social_hub.publish_attempts`)).rows[0].error, /This Last Few Days post was rejected after its slot opened/);
   assert.equal((await q(`SELECT status FROM lfd.posts WHERE id = $1`, [id])).rows[0].status, 'review');
 });
+
+test('when marking the lfd post published throws after Instagram took it, the attempt stays published and it never re-queues', async () => {
+  const { query } = await openHubTestDb();
+  const q = query as unknown as Query;
+  const id = await seedLfdPost(query);
+  await queueLfdPublish(q, id, 'approve');
+  let thrown = false;
+  const flaky: Query = async (text, params) => {
+    if (!thrown && text.startsWith(`UPDATE lfd.posts SET status = 'published'`)) {
+      thrown = true;
+      throw new Error('database blip');
+    }
+    return q(text, params);
+  };
+  const { meta, calls } = stubMeta();
+  const out = await claimAndPublishLfd({ query: flaky, meta, signImage: sign, sleep: async () => undefined });
+  assert.equal(out?.status, 'published');
+  assert.equal(calls.filter((c) => c.startsWith('publish')).length, 1);
+  const attempt = (await q(`SELECT status, media_id, permalink FROM social_hub.publish_attempts`)).rows[0];
+  assert.deepEqual([attempt.status, attempt.media_id, attempt.permalink], ['published', 'media-1', 'https://instagram.com/p/lfd']);
+  assert.equal((await q(`SELECT status FROM lfd.posts WHERE id = $1`, [id])).rows[0].status, 'published', 'the retry marked it');
+
+  // Even with the lfd row still in review, a published attempt refuses a new one (publish_once holds).
+  await q(`UPDATE lfd.posts SET status = 'review' WHERE id = $1`, [id]);
+  const again = await queueLfdPublish(q, id, 'force');
+  assert.equal(again.queued, false);
+  assert.equal(again.queued ? false : again.alreadyPublished, true);
+  assert.equal((await q(`SELECT count(*)::int AS n FROM social_hub.publish_attempts`)).rows[0].n, 1);
+});

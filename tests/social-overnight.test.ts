@@ -251,6 +251,57 @@ test('publish: Instagram ERROR fails the attempt and the slot; a near-full quota
   assert.equal(full.calls.filter((c) => c.startsWith('item')).length, 0);
 });
 
+test('a due carousel slot hours late is still released (Last Few Days\' missed-window rule does not apply)', async () => {
+  const { query } = await scratchDb();
+  const runId = await requestRun(query, 'scheduled', { capUsd: 2, hookPass: true });
+  await insertPost(query, { runId, slug: 'post-late-1' });
+  await scheduleRunPost(query, runId!, new Date('2026-10-08T07:30:00Z'), () => 0);
+  await query(`UPDATE social_hub.schedule SET publish_at = now() - interval '3 hours'`);
+  assert.equal(await releaseDueSchedules(query, { requireApproval: false }), 1);
+  assert.equal((await query(`SELECT status FROM social_hub.schedule`)).rows[0].status, 'publishing');
+});
+
+/** A query that throws once on the first statement matching `match`, then behaves. */
+function failOnce(query: Query, match: (text: string, params?: unknown[]) => boolean): Query {
+  let thrown = false;
+  return async (text, params) => {
+    if (!thrown && match(text, params)) {
+      thrown = true;
+      throw new Error('database blip');
+    }
+    return query(text, params);
+  };
+}
+
+for (const [label, match] of [
+  ['marking the carousel row published', (t: string) => t.startsWith('UPDATE social.posts SET status = \'published\'')],
+  ['recording the published attempt', (t: string, p?: unknown[]) => t.startsWith('UPDATE social_hub.publish_attempts SET status = $2, media_id') && p?.[1] === 'published'],
+] as const) {
+  test(`publish: when ${label} throws after Instagram took the post, the attempt stays published and the post never re-queues`, async () => {
+    const { query } = await scratchDb();
+    const runId = await requestRun(query, 'scheduled', { capUsd: 2, hookPass: true });
+    const postId = await insertPost(query, { runId, slug: 'posted-once' });
+    await scheduleRunPost(query, runId!, new Date('2026-10-08T07:30:00Z'), () => 0);
+    await query(`UPDATE social_hub.schedule SET publish_at = now() - interval '1 minute'`);
+    assert.equal(await releaseDueSchedules(query, { requireApproval: false }), 1);
+    const { meta, calls } = stubMeta();
+    const out = await claimAndPublish({ query: failOnce(query, match), meta, signImage: sign, sleep: async () => undefined });
+    assert.equal(out?.status, 'published');
+    assert.equal(calls.filter((c) => c.startsWith('publish')).length, 1);
+    const attempt = (await query(`SELECT status, media_id, permalink, error, status_log FROM social_hub.publish_attempts`)).rows[0];
+    assert.deepEqual([attempt.status, attempt.media_id, attempt.permalink], ['published', 'media-1', 'https://instagram.com/p/abc']);
+    assert.ok((attempt.status_log as Array<{ status: string | null }>).some((e) => /database blip/.test(e.status ?? '')), 'the error is kept, not fatal');
+    assert.equal((await query(`SELECT status FROM social_hub.schedule`)).rows[0].status, 'published');
+    // publish_once holds: nothing queues it again, even with the carousel row still in review.
+    await query(`UPDATE social.posts SET status = 'review' WHERE id = $1`, [postId]);
+    const again = await queuePublish(query, postId, 'force');
+    assert.equal(again.queued, false);
+    assert.equal(await releaseDueSchedules(query, { requireApproval: false }), 0);
+    assert.equal((await query(`SELECT count(*)::int AS n FROM social_hub.publish_attempts`)).rows[0].n, 1);
+    assert.equal(await claimAndPublish({ query, meta, signImage: sign, sleep: async () => undefined }), null);
+  });
+}
+
 // ── Insights ────────────────────────────────────────────────────────────────
 
 test('insights: a fresh carousel is read and stored; blanks never overwrite a stored number', async () => {
