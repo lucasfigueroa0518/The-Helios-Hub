@@ -174,3 +174,15 @@ test('Review Focus 3: no moves table: the night runs as before; a hand-run gener
   const out = await generatePassingReels({ runId: R.RUN, slateId: R.TODAY, count: 1, client: noCopyClient(), dailyFill: true });
   assert.deepEqual(out.filled.map((s) => [s.postIdeaId, s.reused === true]), [[R.CARRY, true]]);
 });
+
+test('step aside in the same run: two promotes, the older one gone: it gets a skip with why, the newer goes on tonight’s slate first and is attempted', async () => {
+  const pg = await reelsDb();
+  await seed(pg);
+  await pg.query(`INSERT INTO social_hub.idea_adjustments (vertical, idea_id, ny_date, kind, created_at) VALUES ('reels', $1, '2026-10-07', 'promote', '2026-10-07T19:00:00Z')`, [`reels:idea:${R.GONE}`]);
+  await promote(pg, R.OLD);
+  const out = await generatePassingReels({ runId: R.RUN, slateId: R.TODAY, count: 1, client: noCopyClient(), dailyFill: true });
+  assert.deepEqual(out.filled.map((s) => [s.postIdeaId, s.reused === true]), [[R.OLD, true]]);
+  assert.deepEqual(await moveRow(pg, R.GONE), { used: false, skip_reason: REEL_SKIP.gone });
+  assert.deepEqual(await moveRow(pg, R.OLD), { used: true, skip_reason: null });
+  assert.ok(await onToday(pg, R.OLD));
+});
