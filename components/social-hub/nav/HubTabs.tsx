@@ -6,7 +6,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { hubBaseOf } from '@/lib/social-hub/links';
 import { activeHubTab, HUB_TABS, safeFrom } from '@/lib/social-hub/views/nav';
 
-/** The three places (REVISIONS G17): real links, so cmd-click opens a tab; the active one follows where a post came from. */
+/** The four places (REVISIONS G17): real links, so cmd-click opens a tab; the active one follows where a post came from. */
 export function HubTabs() {
   const path = usePathname() ?? '/social';
   const search = useSearchParams();

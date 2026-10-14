@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { legacyAnalyticsRedirect, legacyHouseRedirect, legacyRootRedirect } from '@/lib/social-hub/views/legacy-routes';
-import { activeHubTab, crumbsFor, postCrumbs, safeFrom } from '@/lib/social-hub/views/nav';
+import { activeHubTab, crumbsFor, HUB_TABS, postCrumbs, safeFrom, sectionOf } from '@/lib/social-hub/views/nav';
 
 const B = '/social';
 
@@ -54,4 +54,12 @@ test('old hub URLs redirect to their new places', () => {
   assert.equal(legacyAnalyticsRedirect(B, { v: 'reels', range: '7d', 'f.slot': 'morning' }), '/social/analytics/reels?range=7d&f.slot=morning');
   assert.equal(legacyAnalyticsRedirect(B, { tab: 'compare', cmp: 'a,b' }), '/social/analytics/compare?ids=a%2Cb');
   assert.equal(legacyAnalyticsRedirect(B, { tab: 'profile', metric: 'shares' }), '/social/analytics?metric=shares');
+});
+
+test('Health is the fourth hub tab with its own section and crumb', () => {
+  assert.deepEqual(HUB_TABS.map((t) => t.label), ['Content', 'Calendar', 'Analytics', 'Health']);
+  assert.equal(sectionOf('/health'), 'health');
+  assert.equal(sectionOf('/health/night/2026-10-13'), 'health');
+  assert.deepEqual(crumbsFor('/social', '/social/health/night/2026-10-13').map((c) => c.label), ['Health', 'Night of Oct 13']);
+  assert.deepEqual(crumbsFor('/social', '/social/analytics/cost').map((c) => c.label), ['Analytics', 'Cost']);
 });
