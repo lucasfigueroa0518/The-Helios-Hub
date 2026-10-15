@@ -289,6 +289,7 @@ const INTENDED: Record<(typeof ACTION_FLAGS)[number], boolean> = {
   reschedule: true,
   unschedule: true,
   refreshOnVisit: false,
+  editSlots: true,
 };
 
 test('action flags match their intended Phase 2 state', () => {
