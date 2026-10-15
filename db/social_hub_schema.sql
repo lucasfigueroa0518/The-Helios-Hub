@@ -379,3 +379,68 @@ CREATE TABLE IF NOT EXISTS social_hub.health_reports (
     reports     jsonb NOT NULL,
     failures    jsonb NOT NULL
 );
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- Weekly slot calendar (docs/superpowers/specs/2026-10-14-weekly-slot-calendar-design.md).
+-- The calendar owns when: a standing week of slots (a type in one of its own
+-- windows) plus single-date overrides. Read only while slot_source = 'template'.
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- The same (vertical, window) pairs schedule_slot_check allows.
+CREATE TABLE IF NOT EXISTS social_hub.slot_template (
+    weekday     smallint NOT NULL CHECK (weekday BETWEEN 0 AND 6),
+    vertical    text NOT NULL,
+    window_id   text NOT NULL,
+    feed_mode   text,
+    updated_by  text,
+    updated_at  timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (weekday, vertical, window_id),
+    CONSTRAINT slot_template_window_check CHECK (
+        (vertical = 'carousels' AND window_id IN ('morning', 'afternoon'))
+        OR (vertical = 'explainers' AND window_id IN ('afternoon', 'late'))
+        OR (vertical = 'reels' AND window_id IN ('morning', 'midday', 'evening'))
+        OR (vertical = 'stories' AND window_id IN ('morning_download', 'guess_the_number', 'free_vs_paid'))
+        OR (vertical = 'last_few_days' AND window_id IN ('morning'))
+    ),
+    -- Trial / Main feed exists only for reel types.
+    CONSTRAINT slot_template_feed_mode_check CHECK (
+        (vertical IN ('reels', 'explainers') AND feed_mode IS NOT NULL AND feed_mode IN ('trial', 'main'))
+        OR (vertical NOT IN ('reels', 'explainers') AND feed_mode IS NULL)
+    )
+);
+
+-- One date's exceptions. An 'add' on a template key replaces it for that date
+-- (that is how a single-date Trial/Main flip is stored).
+CREATE TABLE IF NOT EXISTS social_hub.slot_override (
+    ny_date     date NOT NULL,
+    vertical    text NOT NULL,
+    window_id   text NOT NULL,
+    action      text NOT NULL CHECK (action IN ('add', 'remove')),
+    feed_mode   text,
+    updated_by  text,
+    updated_at  timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (ny_date, vertical, window_id),
+    CONSTRAINT slot_override_window_check CHECK (
+        (vertical = 'carousels' AND window_id IN ('morning', 'afternoon'))
+        OR (vertical = 'explainers' AND window_id IN ('afternoon', 'late'))
+        OR (vertical = 'reels' AND window_id IN ('morning', 'midday', 'evening'))
+        OR (vertical = 'stories' AND window_id IN ('morning_download', 'guess_the_number', 'free_vs_paid'))
+        OR (vertical = 'last_few_days' AND window_id IN ('morning'))
+    ),
+    CONSTRAINT slot_override_feed_mode_check CHECK (
+        (action = 'remove' AND feed_mode IS NULL)
+        OR (action = 'add' AND vertical IN ('reels', 'explainers') AND feed_mode IS NOT NULL AND feed_mode IN ('trial', 'main'))
+        OR (action = 'add' AND vertical NOT IN ('reels', 'explainers') AND feed_mode IS NULL)
+    )
+);
+CREATE INDEX IF NOT EXISTS idx_social_hub_slot_override_date ON social_hub.slot_override (ny_date);
+
+-- A booking keeps the slot's Trial/Main as it was when placed; posting reads it.
+ALTER TABLE social_hub.schedule ADD COLUMN IF NOT EXISTS feed_mode text;
+ALTER TABLE social_hub.schedule DROP CONSTRAINT IF EXISTS schedule_feed_mode_check;
+ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_feed_mode_check CHECK (
+    feed_mode IS NULL OR (vertical IN ('reels', 'explainers') AND feed_mode IN ('trial', 'main'))
+);
+
+-- Who decides cadence: 'legacy' (each type's settings, as before) or 'template' (the calendar).
+INSERT INTO social_hub.settings (key, value) VALUES ('slot_source', '"legacy"'::jsonb) ON CONFLICT (key) DO NOTHING;
