@@ -36,7 +36,8 @@ export function parseChanges(body: unknown): SlotChange[] | string {
   const list = (body as { changes?: unknown } | null)?.changes;
   if (!Array.isArray(list) || list.length === 0 || list.length > MAX_CHANGES) return `Send 1 to ${MAX_CHANGES} changes.`;
   const out: SlotChange[] = [];
-  for (const c of list as Array<Record<string, unknown>>) {
+  for (const c of list as Array<Record<string, unknown> | null>) {
+    if (typeof c !== 'object' || c === null) return 'Each change must be an object.';
     if (!isVertical(c.vertical) || !hasWindow(c.vertical, c.windowId)) return 'Pick a content type and one of its windows.';
     const base = { vertical: c.vertical, windowId: c.windowId as string };
     if (c.scope === 'template') {

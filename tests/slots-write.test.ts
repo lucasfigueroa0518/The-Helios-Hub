@@ -58,14 +58,16 @@ test('LFD on Wednesday plus removing that day\'s Carousels in one request is acc
 
 test('a template edit that breaks a future override date is refused', async () => {
   const { q } = await seeded();
-  await applySlotChanges(q, [
+  const setup = await applySlotChanges(q, [
     { scope: 'date', op: 'put', nyDate: '2026-10-28', vertical: 'last_few_days', windowId: 'morning', action: 'add', feedMode: null },
     { scope: 'date', op: 'put', nyDate: '2026-10-28', vertical: 'carousels', windowId: 'morning', action: 'remove', feedMode: null },
     { scope: 'date', op: 'put', nyDate: '2026-10-28', vertical: 'carousels', windowId: 'afternoon', action: 'remove', feedMode: null },
   ], { by: 't', now: NOW, keepBooked: false });
+  assert.deepEqual(setup, { ok: true });
   // Deleting the override that removed Oct 28's morning Carousel brings it back on an LFD day: refused.
   const out = await applySlotChanges(q, [{ scope: 'date', op: 'delete', nyDate: '2026-10-28', vertical: 'carousels', windowId: 'morning' }], { by: 't', now: NOW, keepBooked: false });
-  assert.equal(out.ok, false);
+  assert.equal((out as { status: number }).status, 422);
+  assert.ok((out as { errors: string[] }).errors.some((e) => e.includes(LFD_CAROUSEL_CONFLICT)));
 });
 
 test('removing a slot with a booked post 13 days out returns 409 with its refs (Review Focus 2)', async () => {
@@ -107,6 +109,8 @@ test('parseChanges rejects junk with a 400 message', () => {
   assert.equal(typeof parseChanges({ changes: [{ scope: 'template', op: 'put', weekday: 9, vertical: 'reels', windowId: 'morning', feedMode: 'trial' }] }), 'string');
   assert.equal(typeof parseChanges({ changes: [{ scope: 'date', op: 'put', nyDate: 'tomorrow', vertical: 'reels', windowId: 'morning', action: 'add', feedMode: 'trial' }] }), 'string');
   assert.equal(typeof parseChanges({ changes: [] }), 'string');
+  assert.equal(typeof parseChanges({ changes: [null] }), 'string');
+  assert.equal(typeof parseChanges({ changes: [1] }), 'string');
   assert.ok(Array.isArray(parseChanges({ changes: [{ scope: 'template', op: 'delete', weekday: 1, vertical: 'stories', windowId: 'guess_the_number' }] })));
 });
 
