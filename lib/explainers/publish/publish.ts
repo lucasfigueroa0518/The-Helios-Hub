@@ -9,6 +9,9 @@ import {
   PUBLISH_STALE_MINUTES,
   PUBLISH_VIDEO_URL_SECONDS,
 } from './config';
+import { TRIAL_GRADUATION_STRATEGY } from '@/lib/reels/config';
+import { bookingFeedMode } from '@/lib/social-hub/slots';
+import type { FeedMode } from '@/lib/social-hub/slots/types';
 import { explainerItemId, syncExplainerApproval } from './items';
 import type { ReelMetaClient } from './meta';
 
@@ -90,6 +93,11 @@ export async function publishReadiness(
   return { ok: true, videoObject: job.video, caption };
 }
 
+/** The booking's Trial / Main: Explainers share to the feed either way; a Trial slot adds trial params. */
+export function explainerPayloadFlags(mode: FeedMode): { share_to_feed: true; graduation_strategy: string | null } {
+  return { share_to_feed: true, graduation_strategy: mode === 'trial' ? TRIAL_GRADUATION_STRATEGY : null };
+}
+
 export async function queuePublish(db: Queryable, jobId: string, trigger: PublishTrigger): Promise<Queued> {
   const ready = await publishReadiness(db, jobId);
   if (!ready.ok) return { queued: false, note: ready.note, terminal: true, ...(ready.alreadyPublished ? { alreadyPublished: true as const } : {}) };
@@ -99,7 +107,7 @@ export async function queuePublish(db: Queryable, jobId: string, trigger: Publis
     const { rows } = await db.query<{ id: string }>(
       `INSERT INTO social_hub.publish_attempts (content_item_id, vertical, trigger, status, caption, payload)
        VALUES ($1, 'explainers', $2, 'requested', $3, $4::jsonb) RETURNING id`,
-      [itemId, trigger, ready.caption, JSON.stringify({ video_object: ready.videoObject, share_to_feed: true })],
+      [itemId, trigger, ready.caption, JSON.stringify({ video_object: ready.videoObject, ...explainerPayloadFlags(await bookingFeedMode((t, p) => db.query(t, p), itemId, 'explainers')) })],
     );
     return { queued: true, id: rows[0]!.id };
   } catch (error) {
@@ -171,8 +179,9 @@ export async function carryAttempt(deps: PublishDeps, id: string): Promise<{ id:
   const now = deps.now ?? Date.now;
   const statusLog: Array<{ at: string; statusCode: string; status: string | null }> = [];
   try {
-    const { rows } = await db.query<{ caption: string; video_object: string; share_to_feed: boolean }>(
-      `SELECT caption, payload->>'video_object' AS video_object, coalesce((payload->>'share_to_feed')::boolean, true) AS share_to_feed
+    const { rows } = await db.query<{ caption: string; video_object: string; share_to_feed: boolean; graduation_strategy: string | null }>(
+      `SELECT caption, payload->>'video_object' AS video_object, coalesce((payload->>'share_to_feed')::boolean, true) AS share_to_feed,
+              payload->>'graduation_strategy' AS graduation_strategy
          FROM social_hub.publish_attempts WHERE id = $1`,
       [id],
     );
@@ -200,7 +209,7 @@ export async function carryAttempt(deps: PublishDeps, id: string): Promise<{ id:
       throw new Error(`The caption is ${caption.length} characters; Instagram takes ${CAPTION_MAX_CHARS}.`);
     }
     await update(db, id, { caption });
-    const containerId = await meta.createReel({ videoUrl, caption, shareToFeed: attempt.share_to_feed });
+    const containerId = await meta.createReel({ videoUrl, caption, shareToFeed: attempt.share_to_feed, graduationStrategy: attempt.graduation_strategy ?? null });
     await update(db, id, { status: 'processing', container_id: containerId });
 
     const deadline = now() + PUBLISH_POLL_TIMEOUT_MINUTES * 60_000;

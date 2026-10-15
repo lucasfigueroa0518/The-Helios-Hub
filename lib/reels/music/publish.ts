@@ -12,6 +12,8 @@ import { CAPTION_MAX_CHARS, fullCaption, shortenAssembledCaption } from '@/lib/r
 import { setPublished } from '@/lib/reels/repository';
 import { createLiveMetaClient, metaConfigured, type MetaClient } from '@/lib/reels/music/meta';
 import { getSetting, publishMix, type MixSetting } from '@/lib/reels/music/store';
+import { bookingFeedMode } from '@/lib/social-hub/slots';
+import type { FeedMode } from '@/lib/social-hub/slots/types';
 import { reelItemId } from '@/lib/reels/publish/items';
 import { REEL_ATTEMPTS } from '@/lib/reels/spine-tables';
 import { signFrameObject } from '@/lib/reels/visual/storage';
@@ -43,6 +45,19 @@ async function shareToFeed(): Promise<boolean | null> {
   const value = await getSetting<boolean>('share_to_feed');
   return typeof value === 'boolean' ? value : null;
 }
+
+/**
+ * The booking's Trial / Main (weekly slot calendar): trial keeps today's
+ * trial params and the OPEN-3 share_to_feed setting; main posts as a normal
+ * reel, shared to the feed, with no trial params.
+ */
+export function reelPayloadFlags(mode: FeedMode, trialShareToFeed: boolean | null): { graduation_strategy: string | null; share_to_feed: boolean | null } {
+  return mode === 'main'
+    ? { graduation_strategy: null, share_to_feed: true }
+    : { graduation_strategy: TRIAL_GRADUATION_STRATEGY, share_to_feed: trialShareToFeed };
+}
+
+const dbQueryHandle = (text: string, params?: unknown[]) => dbQuery(text, params) as Promise<{ rows: any[] }>;
 
 type PublishReel = {
   postIdeaId: string;
@@ -151,8 +166,7 @@ export async function queuePublish(
     song_artist: reel.artist,
     audio_volume: mix.audioVolume,
     video_volume: mix.videoVolume,
-    graduation_strategy: TRIAL_GRADUATION_STRATEGY,
-    share_to_feed: await shareToFeed(),
+    ...reelPayloadFlags(await bookingFeedMode(dbQueryHandle, itemId, 'reels', reel.postIdeaId), await shareToFeed()),
     song_pick_id: reel.pickId,
     post_idea_id: reel.postIdeaId,
   };
@@ -241,7 +255,7 @@ export async function carryAttempt(deps: PublishDeps, id: string): Promise<{ id:
       audio_volume: number;
       video_volume: number;
       caption: string;
-      graduation_strategy: string;
+      graduation_strategy: string | null;
       share_to_feed: boolean | null;
     }>(
       `SELECT a.post_idea_id, v.video_storage_path, a.audio_id, a.audio_volume, a.video_volume, a.caption,

@@ -37,7 +37,8 @@ export type ContainerInput = {
   audioId: string;
   audioVolume: number;
   videoVolume: number;
-  graduationStrategy: string;
+  /** Null on a Main-feed slot: the container is a normal reel with no trial_params. */
+  graduationStrategy: string | null;
   /** OPEN-3 is undecided, so null leaves the field off the request. */
   shareToFeed: boolean | null;
 };
@@ -95,7 +96,7 @@ export function createLiveMetaClient(fetchImpl: typeof fetch = fetch): MetaClien
           audio_volume: input.audioVolume,
           video_volume: input.videoVolume,
         }),
-        trial_params: JSON.stringify({ graduation_strategy: input.graduationStrategy }),
+        ...(input.graduationStrategy ? { trial_params: JSON.stringify({ graduation_strategy: input.graduationStrategy }) } : {}),
       };
       if (input.shareToFeed != null) params.share_to_feed = String(input.shareToFeed);
       const body = await call<{ id?: string }>('POST', `/${igUserId}/media`, params);

@@ -3,24 +3,30 @@
  * rule (SH-47). Each schema is read on its own and a missing one is skipped
  * (Explainers may run on their own database locally). Stories are exempt, and
  * so are Trial Reels (D33): they go to non-followers, not the follower feed,
- * so they neither wait for other posts nor make other posts wait.
+ * so they neither wait for other posts nor make other posts wait. A reel
+ * booked on a Main-feed slot (weekly slot calendar) is a feed post; an
+ * Explainer on a Trial slot is not.
  */
 export type SpacingQuery = (text: string, params?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }>;
 
-/** Feed-posting types by their schema: `social` is Carousels, `lfd` is Last Few Days. */
-export type FeedSchema = 'explainers' | 'social' | 'lfd';
+/** Feed-posting types by their schema: `social` is Carousels, `lfd` is Last Few Days, `reels` is Text on Screen on a Main-feed slot. */
+export type FeedSchema = 'explainers' | 'social' | 'lfd' | 'reels';
 
-const FEED_SCHEMAS: readonly FeedSchema[] = ['explainers', 'social', 'lfd'];
+const FEED_SCHEMAS: readonly FeedSchema[] = ['explainers', 'social', 'lfd', 'reels'];
 
 const ACTIVE = `status IN ('scheduled', 'publishing', 'published')
    AND publish_at >= $1::timestamptz AND publish_at < $2::timestamptz`;
 
-/** Each type's bookings, on the lifecycle spine (D36). */
+/** Each type's bookings, on the lifecycle spine (D36). Explainers with no feed_mode are Main, as before. */
 const BOOKED: Record<FeedSchema, string> = {
-  explainers: `SELECT publish_at FROM social_hub.schedule WHERE vertical = 'explainers' AND ${ACTIVE}`,
+  explainers: `SELECT publish_at FROM social_hub.schedule WHERE vertical = 'explainers' AND coalesce(feed_mode, 'main') = 'main' AND ${ACTIVE}`,
   social: `SELECT publish_at FROM social_hub.schedule WHERE vertical = 'carousels' AND ${ACTIVE}`,
   lfd: `SELECT publish_at FROM social_hub.schedule WHERE vertical = 'last_few_days' AND ${ACTIVE}`,
+  reels: `SELECT publish_at FROM social_hub.schedule WHERE vertical = 'reels' AND feed_mode = 'main' AND ${ACTIVE}`,
 };
+
+/** Explainers before the feed_mode column exists: every booking is Main. */
+const EXPLAINERS_NO_FEED_MODE = `SELECT publish_at FROM social_hub.schedule WHERE vertical = 'explainers' AND ${ACTIVE}`;
 
 /** Feed post instants from `from` through two weeks ahead, in every schema but `except`. */
 export async function busyFeedTimes(query: SpacingQuery, from: Date, except: FeedSchema | null = null): Promise<Date[]> {
@@ -30,7 +36,14 @@ export async function busyFeedTimes(query: SpacingQuery, from: Date, except: Fee
   for (const schema of FEED_SCHEMAS) {
     if (schema === except) continue;
     try {
-      const { rows } = await query(BOOKED[schema], [fromIso, toIso]);
+      let rows: Array<Record<string, unknown>>;
+      try {
+        ({ rows } = await query(BOOKED[schema], [fromIso, toIso]));
+      } catch (error) {
+        // A database without feed_mode yet must not drop Explainers from spacing.
+        if (schema !== 'explainers') throw error;
+        ({ rows } = await query(EXPLAINERS_NO_FEED_MODE, [fromIso, toIso]));
+      }
       for (const row of rows) out.push(new Date(String(row.publish_at)));
     } catch {
       // That schema isn't reachable from this handle: its own scheduler spaces against us.
