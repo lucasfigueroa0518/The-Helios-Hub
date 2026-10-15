@@ -1,7 +1,7 @@
 // lib/social-hub/slots/seed.ts
 import { PLAN } from '@/lib/social-hub/views/plan';
 
-import type { TemplateRow } from './types';
+import type { SlotQuery, TemplateRow } from './types';
 
 /**
  * The template that behaves exactly like today (spec §1 Seed): every-day
@@ -39,4 +39,24 @@ export function seedTemplate(input: SeedInputs): TemplateRow[] {
     }
   }
   return rows;
+}
+
+const isDays = (v: unknown): v is number[] => Array.isArray(v) && v.length > 0 && v.every((d) => Number.isInteger(d) && d >= 0 && d <= 6);
+
+/** Today's LFD days and Stories series days, read the way their own loaders read them; defaults on any error. SELECT only. */
+export async function readSeedInputs(q: SlotQuery): Promise<SeedInputs> {
+  const out: SeedInputs = { lfdDays: [...DEFAULT_SEED_INPUTS.lfdDays], storyDays: { ...DEFAULT_SEED_INPUTS.storyDays } };
+  try {
+    const { rows } = await q(`SELECT value FROM lfd.settings WHERE key = 'days'`);
+    if (isDays(rows[0]?.value)) out.lfdDays = [...new Set(rows[0].value as number[])].sort((a, b) => a - b);
+  } catch { /* no lfd schema on this handle */ }
+  try {
+    const { rows } = await q(`SELECT value FROM stories.settings WHERE key = 'series'`);
+    const series = rows[0]?.value as Partial<Record<StorySeries, { window?: { days?: unknown } }>> | undefined;
+    for (const s of Object.keys(out.storyDays) as StorySeries[]) {
+      const days = series?.[s]?.window?.days;
+      if (isDays(days)) out.storyDays[s] = days;
+    }
+  } catch { /* no stories schema on this handle */ }
+  return out;
 }
