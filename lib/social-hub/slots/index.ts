@@ -76,7 +76,7 @@ export async function bookingFeedMode(q: SlotQuery, itemId: string | null, verti
       `SELECT feed_mode FROM social_hub.schedule
         WHERE vertical = $1 AND status IN ('scheduled', 'publishing') AND feed_mode IS NOT NULL
           AND (content_item_id = $2::uuid OR ($3::text IS NOT NULL AND idea_ref = $3::text))
-        ORDER BY publish_at LIMIT 1`,
+        ORDER BY (status = 'publishing') DESC, publish_at LIMIT 1`,
       [vertical, itemId, ideaRef],
     );
     const mode = rows[0]?.feed_mode;

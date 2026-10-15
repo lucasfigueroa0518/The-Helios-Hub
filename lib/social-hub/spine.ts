@@ -107,10 +107,18 @@ export async function bookSlot(
     feedMode?: 'trial' | 'main' | null;
   },
 ): Promise<{ id: string; publishAt: string }> {
-  const { rows } = await query(
-    `INSERT INTO social_hub.schedule (content_item_id, vertical, idea_ref, ny_date, slot, publish_at, status, source, approved_at, feed_mode)
-     VALUES ($1, $2, $3, $4::date, $5, $6::timestamptz, 'scheduled', $7, CASE WHEN $8::boolean THEN now() END, $9) RETURNING id, publish_at`,
-    [slot.itemId, slot.vertical, slot.ideaRef ?? null, slot.nyDate, slot.slot, slot.publishAt.toISOString(), slot.source, slot.approved === true, slot.feedMode ?? null],
-  );
+  // With no feed mode the INSERT is the old one, so a database without the column still books.
+  const base = [slot.itemId, slot.vertical, slot.ideaRef ?? null, slot.nyDate, slot.slot, slot.publishAt.toISOString(), slot.source, slot.approved === true];
+  const { rows } = slot.feedMode
+    ? await query(
+        `INSERT INTO social_hub.schedule (content_item_id, vertical, idea_ref, ny_date, slot, publish_at, status, source, approved_at, feed_mode)
+         VALUES ($1, $2, $3, $4::date, $5, $6::timestamptz, 'scheduled', $7, CASE WHEN $8::boolean THEN now() END, $9) RETURNING id, publish_at`,
+        [...base, slot.feedMode],
+      )
+    : await query(
+        `INSERT INTO social_hub.schedule (content_item_id, vertical, idea_ref, ny_date, slot, publish_at, status, source, approved_at)
+         VALUES ($1, $2, $3, $4::date, $5, $6::timestamptz, 'scheduled', $7, CASE WHEN $8::boolean THEN now() END) RETURNING id, publish_at`,
+        base,
+      );
   return { id: rows[0].id as string, publishAt: new Date(rows[0].publish_at).toISOString() };
 }

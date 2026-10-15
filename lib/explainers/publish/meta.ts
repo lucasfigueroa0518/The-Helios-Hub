@@ -4,8 +4,8 @@ export { metaConfigured } from '@/lib/instagram/graph';
 
 /**
  * Explainer Reels go out as regular reels (shared to the feed) unless their
- * slot is a Trial slot, which adds trial_params: music and voice are already in the MP4, so there is no
- * audio_configuration. Then the shared status poll and `media_publish`.
+ * slot is a Trial slot, which adds trial_params. Music and voice are already
+ * in the MP4, so there is no audio_configuration. Then the shared status poll and `media_publish`.
  */
 export interface ReelMetaClient extends InstagramContainerOps {
   createReel(input: { videoUrl: string; caption: string; shareToFeed: boolean; graduationStrategy?: string | null }): Promise<string>;

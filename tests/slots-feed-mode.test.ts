@@ -88,3 +88,10 @@ test('a database without the feed_mode column still spaces explainers', async ()
   const busy = (await busyFeedTimes(q, new Date('2026-10-20T04:00:00Z'))).map((d) => d.toISOString());
   assert.deepEqual(busy, ['2026-10-20T23:30:00.000Z']);
 });
+
+test('bookSlot with no feed mode still inserts on a database without the feed_mode column', async () => {
+  const { pg, query } = await openHubTestDb();
+  await pg.exec(`ALTER TABLE social_hub.schedule DROP COLUMN feed_mode CASCADE`);
+  const out = await bookSlot(query as never, { vertical: 'reels', itemId: null, ideaRef: 'idea-x', nyDate: '2026-10-20', slot: 'morning', publishAt: new Date('2026-10-20T13:00:00Z'), source: 'auto' });
+  assert.ok(out.id);
+});

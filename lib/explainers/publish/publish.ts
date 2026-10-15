@@ -1,7 +1,9 @@
 import type { Queryable } from '@/lib/explainers/db';
-import { checkAccountQuota } from '@/lib/instagram/account-gate';
-
 import { CAPTION_MAX_CHARS, stampCaption, stripEpisodePrefix } from '@/lib/explainers/caption-format';
+import { checkAccountQuota } from '@/lib/instagram/account-gate';
+import { TRIAL_GRADUATION_STRATEGY } from '@/lib/reels/config';
+import { bookingFeedMode } from '@/lib/social-hub/slots';
+import type { FeedMode } from '@/lib/social-hub/slots/types';
 
 import {
   PUBLISH_POLL_SECONDS,
@@ -9,9 +11,6 @@ import {
   PUBLISH_STALE_MINUTES,
   PUBLISH_VIDEO_URL_SECONDS,
 } from './config';
-import { TRIAL_GRADUATION_STRATEGY } from '@/lib/reels/config';
-import { bookingFeedMode } from '@/lib/social-hub/slots';
-import type { FeedMode } from '@/lib/social-hub/slots/types';
 import { explainerItemId, syncExplainerApproval } from './items';
 import type { ReelMetaClient } from './meta';
 
