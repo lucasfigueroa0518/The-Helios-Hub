@@ -11,7 +11,7 @@ import { WEEKDAY_SHORT } from '@/lib/social-hub/time';
 import type { Vertical } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
 import { minuteLabel, PLAN } from '@/lib/social-hub/views/plan';
-import { chipNames, ROWS, type WeekCell, type WeekChip } from '@/lib/social-hub/views/week';
+import { chipNames, ROWS, switchOnCopy, type SwitchFacts, type WeekCell, type WeekChip } from '@/lib/social-hub/views/week';
 
 /**
  * One slot on the week grid (spec §3): the chip (or "+") opens a dialog to
@@ -326,7 +326,7 @@ function Errors({ errors }: { errors: string[] }) {
  * The cutover switch (spec §5): in legacy mode a notice with Switch on; in
  * template mode a small Switch back. Both confirm their consequence first.
  */
-export function SourceSwitch({ source, readOnly = false }: { source: SlotSource; readOnly?: boolean }) {
+export function SourceSwitch({ source, readOnly = false, facts }: { source: SlotSource; readOnly?: boolean; /** What switching on changes (read on the server). */ facts: SwitchFacts }) {
   const router = useRouter();
   const titleId = useId();
   const dialog = useRef<HTMLDialogElement>(null);
@@ -366,7 +366,7 @@ export function SourceSwitch({ source, readOnly = false }: { source: SlotSource;
         <p>
           {on
             ? 'Each content type goes back to deciding from its own settings. Your calendar stays saved for when you switch it on again.'
-            : 'From now on the calendar decides what posts when. Today’s pattern is copied in, so nothing changes until you edit it.'}
+            : switchOnCopy(facts)}
         </p>
         {note ? <p className="sh-note sh-note--failed" role="alert">{note}</p> : null}
         <div className="sh-confirm__actions">

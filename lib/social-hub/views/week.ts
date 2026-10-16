@@ -44,6 +44,38 @@ export function carouselsByWeekday(template: readonly TemplateRow[]): Record<num
   return out;
 }
 
+/** What the "Switch on" confirm needs to say (ruling R8): read on the server before the switch. */
+export type SwitchFacts = {
+  /** No saved template yet: the first flip copies today's pattern in. */
+  templateEmpty: boolean;
+  /** Last Few Days' auto_run is off. */
+  lfdPaused: boolean;
+  /** The weekdays (0 = Sunday) that will have an LFD slot after the switch. */
+  lfdDays: readonly number[];
+};
+
+const WEEKDAY_PLURAL = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
+
+function listOf(words: readonly string[]): string {
+  return words.length <= 1 ? (words[0] ?? '') : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
+}
+
+/** The "Switch on" confirm text: what the calendar does from now on, and what changes the moment it's on. */
+export function switchOnCopy(facts: SwitchFacts): string {
+  const parts = ['From now on the calendar decides what posts when.'];
+  parts.push(facts.templateEmpty ? 'Today’s pattern is copied in.' : 'Your saved calendar from last time comes back, not a fresh copy of today’s settings.');
+  if (facts.lfdPaused && facts.lfdDays.length) {
+    const days = listOf([...facts.lfdDays].sort((a, b) => a - b).map((d) => WEEKDAY_PLURAL[d]!));
+    parts.push(`Last Few Days is paused, so ${days} (its days) will have no Carousels until you edit the calendar.`);
+  }
+  return parts.join(' ');
+}
+
+/** The weekdays a template gives Last Few Days. */
+export function lfdWeekdays(template: readonly TemplateRow[]): number[] {
+  return [...new Set(template.filter((r) => r.vertical === 'last_few_days').map((r) => r.weekday))].sort((a, b) => a - b);
+}
+
 export type WeekChip = { vertical: Vertical; windowId: string; feedMode: FeedMode | null; origin: 'template' | 'override'; booked: HubPost | null };
 
 export type WeekCell = {

@@ -211,9 +211,9 @@ orchestration VM. `slot_source` stays `'legacy'` after deploy.
 
 **Cutover checklist (Tommy flips the switch):**
 1. Parity test green; the deploy is done.
-2. Look over the seeded template in the Template view.
-3. If LFD is paused, decide whether Tue/Fri should go back to Carousels, and edit the template first if so (decision 7).
-4. Set `slot_source = 'template'` (a toggle on the Calendar, admin only).
+2. Read the Switch on confirm: it says whether today's pattern is copied in or a saved calendar from last time comes back, and, if LFD is paused, which days lose their Carousels.
+3. Set `slot_source = 'template'` (Switch on, on the Calendar, admin only). The grid is read-only until then.
+4. Review the Template view right away, before the next night runs. If LFD is paused, decide whether Tue/Fri should go back to Carousels and edit the template if so (decision 7).
 5. Watch one night's run. Rollback: set it back to `'legacy'`.
 
 ## 6. Testing

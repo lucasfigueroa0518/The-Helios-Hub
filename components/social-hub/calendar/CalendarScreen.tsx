@@ -27,7 +27,7 @@ import { daySlots, monthModel, totalLabel, type DayCell, type DaySlot } from '@/
 import { displayName, plural, shortDate, whenInline } from '@/lib/social-hub/views/format';
 import { offerer } from '@/lib/social-hub/views/offer';
 import { minuteLabel, windowRange } from '@/lib/social-hub/views/plan';
-import { mondayOf, weekLabel, weekModel, type WeekDayInput } from '@/lib/social-hub/views/week';
+import { mondayOf, weekLabel, weekModel, type SwitchFacts, type WeekDayInput } from '@/lib/social-hub/views/week';
 import type { MetricKey, Vertical } from '@/lib/social-hub/types';
 
 const METRICS: MetricKey[] = ['views', 'reach', 'shares', 'totalInteractions'];
@@ -35,7 +35,7 @@ const METRICS: MetricKey[] = ['views', 'reach', 'shares', 'totalInteractions'];
 const MARK_LABEL = { posted: 'posted', scheduled: 'scheduled', failed: 'failed', missed: 'didn’t post', open: 'open slot' } as const;
 
 /** The week view's input (the page loads it; the preview builds it from the seed). */
-export type CalendarWeek = { mode: 'week' | 'template'; monday: string; days: WeekDayInput[]; source: SlotSource; readOnly?: boolean; /** The template's Carousel windows by weekday ("Every <weekday>" LFD switch). */ templateCarousels: Record<number, string[]> };
+export type CalendarWeek = { mode: 'week' | 'template'; monday: string; days: WeekDayInput[]; source: SlotSource; readOnly?: boolean; /** The template's Carousel windows by weekday ("Every <weekday>" LFD switch). */ templateCarousels: Record<number, string[]>; /** What switching on changes, for the confirm. */ switchFacts: SwitchFacts };
 
 /** Calendar (BRIEFS.md §2): the week's slots to edit (spec §3), or the month's shape, gaps ahead, and a day panel to act from. */
 export function CalendarScreen({ dataset, base, params, now, week, weekFailed = false }: { dataset: HubDataset; base: string; params: HubParams; now: Date; week?: CalendarWeek | null; /** The week was asked for but its slots didn't load: say so above the month. */ weekFailed?: boolean }) {
@@ -96,7 +96,7 @@ function WeekScreen({ dataset, base, params, now, week }: { dataset: HubDataset;
         }
       />
       <DataNotes dataset={dataset} />
-      {actionEnabled('editSlots') ? <SourceSwitch source={week.source} readOnly={week.readOnly} /> : null}
+      {actionEnabled('editSlots') ? <SourceSwitch source={week.source} readOnly={week.readOnly} facts={week.switchFacts} /> : null}
       {dim ? (
         <p className="sh-subtle sh-week__focus">
           Showing {verticalInfo(dim).label} first. <HubLink className="sh-link" href={href({ type: null })} history="replace">Show every type</HubLink>
