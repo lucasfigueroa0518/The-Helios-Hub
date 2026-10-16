@@ -14,7 +14,7 @@ All times are America/New_York (DST-safe, see `lib/reels/schedule.ts`).
 |---|---|---|---|---|---|---|
 | Trial Reels | `reels` | `helios-reels` | 12:30 song ingest, 1:00 night run | 8:45–10:00 AM, 11:15 AM–12:30 PM, 6:00–9:00 PM | 5:00 | live |
 | Explainer Reels | `explainers` | `helios-explainers` | 2:00 idea cycle (only with `auto_render` on; `posts_per_day` less what people placed, up to `daily_render_cap` = 2 renders; see Daily fill) | 1:00–2:30 PM and 3:30–5:00 PM (`posts_per_day` = 2), approved reels only | 5:15 | built; renders need `HEYGEN_API_KEY` on the VM |
-| Carousels | `social` | `helios-social` | 3:00 daily run (only with `auto_run` on; not on Last Few Days days while its `auto_run` is on, LFD-02; in template mode, never on a day with an LFD slot, paused or not); the run's top `posts_per_day` = 2 posts, less what people placed for the day, are scheduled (see Daily fill) | 9:00–10:00 AM and 2:30–3:30 PM (none on Last Few Days days while its `auto_run` is on) | 5:30 | built |
+| Carousels | `social` | `helios-social` | 3:00 daily run (only with `auto_run` on; not on Last Few Days days while its `auto_run` is on, LFD-02; see the template-mode paragraph below); the run's top `posts_per_day` = 2 posts, less what people placed for the day, are scheduled (see Daily fill) | 9:00–10:00 AM and 2:30–3:30 PM (none on Last Few Days days while its `auto_run` is on) | 5:30 | built |
 | Last Few Days | `lfd` | `helios-social` (the same process as Carousels; no unit of its own) | 3:00 on its days (`lfd.settings.days`, Tue/Fri), only with `lfd.settings.auto_run` on, in the carousel run's place; a manual run from the hub's "Make Last Few Days now" on any day | 9:00–10:00 AM on its days | read with Carousels: every 30 minutes while fresh and the 5:30 sweep | built |
 | Social Hub | `social_hub` | `helios-social` (same worker) | 5:45 account sweep (account insights, demographics, active times, publishing quota); refreshes the hub queues on visit | none (reads only) | 5:45 | built |
 | IG Stories | `stories` | `helios-stories` | 4:00 sets for series with `auto` on (Morning Download daily, Guess the Number Mon/Thu, Free vs. Paid Tue/Sat) | 8:30–10:00 AM, every series; may overlap other types (Stories are not feed posts) | every 2 hours while live, final read at 23 h | built (Lucas); no live set yet |
@@ -36,6 +36,7 @@ time. All workers run on the social worker VM; outreach stays alone on
 When a type is on, its night run fills that New York day's quota: Trial
 Reels 3 (`PASSING_REELS_PER_NIGHT`), Explainers and Carousels their
 `posts_per_day`, IG Stories one set per series on each day it runs.
+In template mode the quota is that day's calendar slots instead of `posts_per_day`.
 Whatever a person placed for that day counts toward the quota: a
 `social_hub.schedule` row with `source = 'user'` that is scheduled, posting
 or posted, for that type and `ny_date` (`lib/social-hub/fill.ts`
