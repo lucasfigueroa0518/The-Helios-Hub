@@ -170,12 +170,12 @@ const ACTION_BUTTONS = 'components/social-hub/house/ActionBar.tsx';
 
 /**
  * Hub controls (Lucas, 2026-10-09): the Content page's Run now and Settings,
- * and the type pages' run-progress poll. Client components whose every fetch
- * goes to the content-type routes (posting switches, Run now, progress), which
- * live outside the hub's read code. Checked below; their imports are still scanned.
+ * and the type pages' run-progress poll, plus the Calendar's slot editor (its
+ * slot writes and the unschedule it offers on a booked slot). Client components
+ * whose every fetch goes to those routes, which live outside the hub's read code. Checked below; their imports are still scanned.
  */
-const HUB_CONTROLS = new Set(['components/social-hub/content/HubControls.tsx', 'components/social-hub/content/RunsRefresh.tsx', 'components/social-hub/content/MakeItButton.tsx', 'components/content-type/run-progress.tsx', 'components/content-type/RankButtons.tsx']);
-const CONTROL_ENDPOINTS = /^\/api\/content-type\/(posting|run-today|progress|idea-rank)\b/;
+const HUB_CONTROLS = new Set(['components/social-hub/content/HubControls.tsx', 'components/social-hub/content/RunsRefresh.tsx', 'components/social-hub/content/MakeItButton.tsx', 'components/content-type/run-progress.tsx', 'components/content-type/RankButtons.tsx', 'components/social-hub/calendar/SlotEditor.tsx']);
+const CONTROL_ENDPOINTS = /^\/api\/(content-type\/(posting|run-today|progress|idea-rank)|social-hub\/(slots|actions\/unschedule))\b/;
 
 /** First network call or foreign SQL write reachable from `start`, with the import chain, or null. */
 export function networkReach(start: string): string | null {
@@ -245,12 +245,12 @@ test('every action route checks its flag before doing anything', () => {
 
 // ── Flags ───────────────────────────────────────────────────────────────────
 
-test('hub controls are client components that only call the content-type routes', () => {
+test('hub controls are client components that only call their own routes', () => {
   for (const file of HUB_CONTROLS) {
     const text = readFileSync(path.join(ROOT, file), 'utf8');
     assert.match(text, /^'use client';/, `${file} must be a client component`);
     const body = code(text);
-    // Every endpoint is a string constant or literal naming a content-type route; fetch only takes those.
+    // Every endpoint is a string constant or literal naming one of CONTROL_ENDPOINTS; fetch only takes those.
     const urls = [...body.matchAll(/(['`])(\/api\/[^'`?$]*)/g)].map((m) => m[2]!);
     assert.ok(urls.length > 0, `${file} names its endpoints`);
     for (const url of urls) assert.match(url, CONTROL_ENDPOINTS, `${file} calls ${url}`);
