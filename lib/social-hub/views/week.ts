@@ -2,6 +2,8 @@ import { addDays, nyDateOf, nyDayStart, weekdayOf } from '@/lib/social-hub/time'
 import { resolveDay } from '@/lib/social-hub/slots/resolve';
 import type { FeedMode, ResolvedSlot, TemplateRow } from '@/lib/social-hub/slots/types';
 import type { HubPost, Vertical } from '@/lib/social-hub/types';
+import { verticalInfo } from '@/lib/social-hub/verticals';
+import { SERIES_LABEL } from '@/lib/stories/render/copy';
 import { PLAN } from '@/lib/social-hub/views/plan';
 
 /** The week grid (spec §3, layout A): rows are shared time windows, columns are days. Pure. */
@@ -20,6 +22,27 @@ export const ROWS: readonly WeekRow[] = [
   { id: 'explainer-late', label: 'Explainer', startMinute: at('explainers', 'late'), windows: [{ vertical: 'explainers', windowId: 'late' }] },
   { id: 'reel-evening', label: 'Reel', startMinute: at('reels', 'evening'), windows: [{ vertical: 'reels', windowId: 'evening' }] },
 ];
+
+/** Stories run three series in one cell, so each chip names its series. */
+const SERIES_SHORT: Record<keyof typeof SERIES_LABEL, string> = { morning_download: 'Morning Dl', guess_the_number: 'Guess #', free_vs_paid: 'Free/Paid' };
+
+/** A chip's visible name and its full name (for the aria-label). */
+export function chipNames(vertical: Vertical, windowId: string): { short: string; full: string } {
+  if (vertical === 'stories' && windowId in SERIES_LABEL) {
+    const id = windowId as keyof typeof SERIES_LABEL;
+    return { short: SERIES_SHORT[id], full: SERIES_LABEL[id] };
+  }
+  const info = verticalInfo(vertical);
+  return { short: info.short, full: info.label };
+}
+
+/** Each weekday's Carousel windows in the template ("Every <weekday>" edits change the template, not a date). */
+export function carouselsByWeekday(template: readonly TemplateRow[]): Record<number, string[]> {
+  const out: Record<number, string[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+  for (const r of template) if (r.vertical === 'carousels') out[r.weekday]!.push(r.windowId);
+  for (const w of Object.values(out)) w.sort((a, b) => PLAN.carousels.findIndex((p) => p.id === a) - PLAN.carousels.findIndex((p) => p.id === b));
+  return out;
+}
 
 export type WeekChip = { vertical: Vertical; windowId: string; feedMode: FeedMode | null; origin: 'template' | 'override'; booked: HubPost | null };
 
@@ -66,7 +89,16 @@ export function weekLabel(monday: string): string {
 
 export function weekModel(input: { mode: 'week' | 'template'; days: WeekDayInput[]; posts: readonly HubPost[]; now: Date }) {
   const today = nyDateOf(input.now)!;
-  const columns = input.days.map((d) => ({ nyDate: d.nyDate, weekday: d.weekday, past: d.nyDate != null && d.nyDate < today, isToday: d.nyDate === today }));
+  const startedAt = (nyDate: string | null, minute: number) => nyDate === today && nyDayStart(today).getTime() + minute * 60_000 <= input.now.getTime();
+  // Making a date an LFD day adds its 9:00 window, so it closes when that window starts.
+  const lfdStart = PLAN.last_few_days[0]!.startMinute;
+  const columns = input.days.map((d) => ({
+    nyDate: d.nyDate,
+    weekday: d.weekday,
+    past: d.nyDate != null && d.nyDate < today,
+    isToday: d.nyDate === today,
+    lfdOpen: input.mode === 'template' || (d.nyDate != null && d.nyDate >= today && !startedAt(d.nyDate, lfdStart)),
+  }));
   const rows = ROWS.map((row) => ({
     row,
     cells: input.days.map((d): WeekCell => {
@@ -80,7 +112,7 @@ export function weekModel(input: { mode: 'week' | 'template'; days: WeekDayInput
       }));
       const lfdDay = d.slots.some((s) => s.vertical === 'last_few_days');
       const carouselDay = d.slots.some((s) => s.vertical === 'carousels');
-      const started = d.nyDate === today && nyDayStart(today).getTime() + row.startMinute * 60_000 <= input.now.getTime();
+      const started = startedAt(d.nyDate, row.startMinute);
       const editable = input.mode === 'template' || (d.nyDate != null && d.nyDate >= today && !started);
       // The plain "+" never offers a save the writer will refuse: no Carousel on an LFD day, no LFD on a Carousel day.
       const addable = !editable ? [] : row.windows.filter((w) =>

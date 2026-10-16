@@ -1,13 +1,12 @@
 import { SlotEditor } from '@/components/social-hub/calendar/SlotEditor';
 import { WEEKDAY_SHORT } from '@/lib/social-hub/time';
 import type { Vertical } from '@/lib/social-hub/types';
-import { verticalInfo } from '@/lib/social-hub/verticals';
 import { minuteLabel } from '@/lib/social-hub/views/plan';
-import type { WeekModel } from '@/lib/social-hub/views/week';
+import { chipNames, type WeekModel } from '@/lib/social-hub/views/week';
 
 /** The window grid (spec §3): rows are time windows, columns are days; click a chip or + to edit. */
-export function WeekGrid({ model, scope, dim, readOnly }: { model: WeekModel; scope: 'date' | 'template'; dim: Vertical | null; readOnly: boolean }) {
-  // Each day's Carousel windows, for a Carousel chip's "Make this a Last Few Days day".
+export function WeekGrid({ model, scope, dim, readOnly, templateCarousels }: { model: WeekModel; scope: 'date' | 'template'; dim: Vertical | null; readOnly: boolean; /** The template's Carousel windows by weekday. */ templateCarousels: Record<number, string[]> }) {
+  // Each date's resolved Carousel windows, for a Carousel chip's "Make this a Last Few Days day".
   const carousels = model.columns.map((_, i) => model.rows.flatMap(({ cells }) => cells[i]!.chips.filter((c) => c.vertical === 'carousels').map((c) => c.windowId)));
   return (
     <div className="sh-week">
@@ -35,9 +34,11 @@ export function WeekGrid({ model, scope, dim, readOnly }: { model: WeekModel; sc
                     chip={chip}
                     scope={scope}
                     readOnly={readOnly || !cell.editable}
-                    label={`${verticalInfo(chip.vertical).short}${chip.feedMode ? ` · ${chip.feedMode === 'trial' ? 'Trial' : 'Main'}` : ''}`}
+                    label={`${chipNames(chip.vertical, chip.windowId).short}${chip.feedMode ? ` · ${chip.feedMode === 'trial' ? 'Trial' : 'Main'}` : ''}`}
                     dimmed={dim !== null && dim !== chip.vertical}
                     dayCarousels={carousels[i]}
+                    weekdayCarousels={templateCarousels[cell.weekday] ?? []}
+                    lfdOpen={model.columns[i]!.lfdOpen}
                   />
                 ))}
                 {cell.chips.length === 0 && cell.blockedReason ? <span className="sh-week__blocked">{cell.blockedReason}</span> : null}

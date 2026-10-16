@@ -11,7 +11,7 @@ import { loadSlots, readSlotSource, readTemplate } from '@/lib/social-hub/slots/
 import { readSeedInputs, seedTemplate } from '@/lib/social-hub/slots/seed';
 import type { SlotQuery } from '@/lib/social-hub/slots/types';
 import { addDays, isDayKey, nyDateOf, weekdayOf } from '@/lib/social-hub/time';
-import { datedWeek, mondayOf, templateWeek } from '@/lib/social-hub/views/week';
+import { carouselsByWeekday, datedWeek, mondayOf, templateWeek } from '@/lib/social-hub/views/week';
 import { getSession } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
@@ -24,16 +24,15 @@ const q: SlotQuery = (text, params) => liveHubQuery(text, params) as Promise<{ r
 async function loadWeek(params: HubParams, now: Date): Promise<CalendarWeek> {
   const source = await readSlotSource(q);
   const monday = mondayOf(isDayKey(params.week) ? params.week : nyDateOf(now)!);
-  if (params.scope === 'template') {
-    const template = source === 'template' ? await readTemplate(q) : seedTemplate(await readSeedInputs(q));
-    return { mode: 'template', monday, days: templateWeek(template, monday), source };
-  }
+  const template = source === 'template' ? await readTemplate(q) : seedTemplate(await readSeedInputs(q));
+  const templateCarousels = carouselsByWeekday(template);
+  if (params.scope === 'template') return { mode: 'template', monday, days: templateWeek(template, monday), source, templateCarousels };
   if (source === 'template') {
     const map = await loadSlots(q, monday, addDays(monday, 6));
-    return { mode: 'week', monday, days: [...map].map(([nyDate, slots]) => ({ nyDate, weekday: weekdayOf(nyDate), slots })), source };
+    return { mode: 'week', monday, days: [...map].map(([nyDate, slots]) => ({ nyDate, weekday: weekdayOf(nyDate), slots })), source, templateCarousels };
   }
   // Legacy: show today's pattern so the view isn't empty before the switch; editing waits for it.
-  return { mode: 'week', monday, days: datedWeek(seedTemplate(await readSeedInputs(q)), monday), source };
+  return { mode: 'week', monday, days: datedWeek(template, monday), source, templateCarousels };
 }
 
 export default async function Page({ searchParams }: { searchParams: Promise<RawSearchParams> }) {
@@ -42,15 +41,21 @@ export default async function Page({ searchParams }: { searchParams: Promise<Raw
   if (!session) redirect('/');
   const params = toParams(await searchParams);
   const now = new Date();
+  const wantsWeek = calendarView(params) === 'week';
   const [loaded, week] = await Promise.all([
     loadForPage(session.email),
-    calendarView(params) === 'week' ? loadWeek(params, now).catch(() => null) : Promise.resolve(null),
+    wantsWeek
+      ? loadWeek(params, now).catch((err: unknown) => {
+          console.error('[social-hub] calendar week failed to load', err);
+          return null;
+        })
+      : Promise.resolve(null),
   ]);
   if ('error' in loaded) return <LoadError message={loaded.error} />;
   return (
     <>
       <RefreshNote refresh={loaded.refresh} />
-      <CalendarScreen dataset={loaded} base={HUB_BASE} params={params} now={now} week={week} />
+      <CalendarScreen dataset={loaded} base={HUB_BASE} params={params} now={now} week={week} weekFailed={wantsWeek && !week} />
     </>
   );
 }

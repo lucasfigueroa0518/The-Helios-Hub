@@ -35,12 +35,12 @@ const METRICS: MetricKey[] = ['views', 'reach', 'shares', 'totalInteractions'];
 const MARK_LABEL = { posted: 'posted', scheduled: 'scheduled', failed: 'failed', missed: 'didn’t post', open: 'open slot' } as const;
 
 /** The week view's input (the page loads it; the preview builds it from the seed). */
-export type CalendarWeek = { mode: 'week' | 'template'; monday: string; days: WeekDayInput[]; source: SlotSource; readOnly?: boolean };
+export type CalendarWeek = { mode: 'week' | 'template'; monday: string; days: WeekDayInput[]; source: SlotSource; readOnly?: boolean; /** The template's Carousel windows by weekday ("Every <weekday>" LFD switch). */ templateCarousels: Record<number, string[]> };
 
 /** Calendar (BRIEFS.md §2): the week's slots to edit (spec §3), or the month's shape, gaps ahead, and a day panel to act from. */
-export function CalendarScreen({ dataset, base, params, now, week }: { dataset: HubDataset; base: string; params: HubParams; now: Date; week?: CalendarWeek | null }) {
+export function CalendarScreen({ dataset, base, params, now, week, weekFailed = false }: { dataset: HubDataset; base: string; params: HubParams; now: Date; week?: CalendarWeek | null; /** The week was asked for but its slots didn't load: say so above the month. */ weekFailed?: boolean }) {
   if (week && calendarView(params) === 'week') return <WeekScreen dataset={dataset} base={base} params={params} now={now} week={week} />;
-  return <MonthScreen dataset={dataset} base={base} params={params} now={now} />;
+  return <MonthScreen dataset={dataset} base={base} params={params} now={now} weekFailed={weekFailed} />;
 }
 
 /**
@@ -88,7 +88,7 @@ function WeekScreen({ dataset, base, params, now, week }: { dataset: HubDataset;
             {template ? null : (
               <div className="sh-pills" role="group" aria-label="Week">
                 <HubLink className="sh-btn sh-btn--icon" href={href({ week: addDays(week.monday, -7) })} aria-label="Previous week" history="replace"><ChevronLeft size={16} aria-hidden="true" /></HubLink>
-                <HubLink className="sh-btn" href={href({ week: null })} aria-current={week.monday === thisMonday ? 'page' : undefined} history="replace">This week</HubLink>
+                <HubLink className="sh-btn" href={href({ week: null })} aria-current={week.monday === thisMonday ? 'page' : undefined} history="replace">Today</HubLink>
                 <HubLink className="sh-btn sh-btn--icon" href={href({ week: addDays(week.monday, 7) })} aria-label="Next week" history="replace"><ChevronRight size={16} aria-hidden="true" /></HubLink>
               </div>
             )}
@@ -102,7 +102,7 @@ function WeekScreen({ dataset, base, params, now, week }: { dataset: HubDataset;
           Showing {verticalInfo(dim).label} first. <HubLink className="sh-link" href={href({ type: null })} history="replace">Show every type</HubLink>
         </p>
       ) : null}
-      <WeekGrid model={model} scope={template ? 'template' : 'date'} dim={dim} readOnly={!canEdit || legacy} />
+      <WeekGrid model={model} scope={template ? 'template' : 'date'} dim={dim} readOnly={!canEdit || legacy} templateCarousels={week.templateCarousels} />
       <div className="sh-month__key">
         <ul className="sh-key" aria-label="Key">
           <li><span className="sh-week__chip sh-week__chip--key" aria-hidden="true"><span className="sh-week__dot" /></span>slot</li>
@@ -120,7 +120,7 @@ function WeekScreen({ dataset, base, params, now, week }: { dataset: HubDataset;
   );
 }
 
-function MonthScreen({ dataset, base, params, now }: { dataset: HubDataset; base: string; params: HubParams; now: Date }) {
+function MonthScreen({ dataset, base, params, now, weekFailed = false }: { dataset: HubDataset; base: string; params: HubParams; now: Date; weekFailed?: boolean }) {
   const path = `${base}/calendar`;
   const today = nyDateOf(now)!;
   const day = isDayKey(params.day) ? params.day : null;
@@ -159,6 +159,7 @@ function MonthScreen({ dataset, base, params, now }: { dataset: HubDataset; base
           </>
         }
       />
+      {weekFailed ? <p className="sh-note sh-note--failed" role="status">The week couldn’t load, so this is the month. Try again in a moment.</p> : null}
       <DataNotes dataset={dataset} />
 
       <dl className="sh-summary" aria-label={`${monthLabel(month)} at a glance`}>

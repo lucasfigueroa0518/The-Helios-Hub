@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import { resolveDay } from '@/lib/social-hub/slots/resolve';
 import { DEFAULT_SEED_INPUTS, seedTemplate } from '@/lib/social-hub/slots/seed';
-import { datedWeek, mondayOf, ROWS, templateWeek, weekLabel, weekModel } from '@/lib/social-hub/views/week';
+import { carouselsByWeekday, chipNames, datedWeek, mondayOf, ROWS, templateWeek, weekLabel, weekModel } from '@/lib/social-hub/views/week';
 import { addDays, weekdayOf } from '@/lib/social-hub/time';
 import type { HubPost } from '@/lib/social-hub/types';
 
@@ -73,4 +73,26 @@ test('weekLabel names the week; templateWeek drops dates, Monday first', () => {
   assert.deepEqual(t.map((d) => d.weekday), [1, 2, 3, 4, 5, 6, 0]);
   assert.ok(t.every((d) => d.nyDate === null));
   assert.deepEqual(datedWeek(tpl, '2026-10-19'), week('2026-10-19'));
+});
+
+test('each Stories chip names its series; other types use their short name', () => {
+  assert.deepEqual(chipNames('stories', 'morning_download'), { short: 'Morning Dl', full: 'Morning Download' });
+  assert.deepEqual(chipNames('stories', 'guess_the_number'), { short: 'Guess #', full: 'Guess the Number' });
+  assert.deepEqual(chipNames('stories', 'free_vs_paid'), { short: 'Free/Paid', full: 'Free vs. Paid' });
+  assert.deepEqual(chipNames('reels', 'morning'), { short: 'Text', full: 'Text on Screen' });
+});
+
+test('the LFD switch is open until today\'s 9:00 starts; always in template mode', () => {
+  const m = weekModel({ mode: 'week', days: week('2026-10-19'), posts: [], now: NOW }); // Tue 10:00 AM
+  assert.deepEqual(m.columns.map((c) => c.lfdOpen), [false, false, true, true, true, true, true]);
+  const early = weekModel({ mode: 'week', days: week('2026-10-19'), posts: [], now: new Date('2026-10-20T12:00:00Z') }); // Tue 8:00 AM
+  assert.equal(early.columns[1]!.lfdOpen, true);
+  const t = weekModel({ mode: 'template', days: templateWeek(tpl, '2026-10-19'), posts: [], now: NOW });
+  assert.ok(t.columns.every((c) => c.lfdOpen));
+});
+
+test('carouselsByWeekday reads the template, not a date', () => {
+  const by = carouselsByWeekday(tpl);
+  assert.deepEqual(by[1], ['morning', 'afternoon']); // Monday
+  assert.deepEqual(by[2], []); // Tuesday is an LFD day
 });

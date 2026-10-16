@@ -11,7 +11,7 @@ import { WEEKDAY_SHORT } from '@/lib/social-hub/time';
 import type { Vertical } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
 import { minuteLabel, PLAN } from '@/lib/social-hub/views/plan';
-import { ROWS, type WeekCell, type WeekChip } from '@/lib/social-hub/views/week';
+import { chipNames, ROWS, type WeekCell, type WeekChip } from '@/lib/social-hub/views/week';
 
 /**
  * One slot on the week grid (spec §3): the chip (or "+") opens a dialog to
@@ -37,14 +37,23 @@ function dateShort(nyDate: string): string {
   return new Date(Date.UTC(y!, m! - 1, d!, 12)).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
+/** "Morning Download (IG Stories)", "Text on Screen": the chip's full name. */
+const slotName = (w: Window) => {
+  const { full } = chipNames(w.vertical, w.windowId);
+  return w.vertical === 'stories' ? `${full} (${verticalInfo('stories').label})` : full;
+};
+
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/** After a failed unschedule: earlier ones already went through. */
+const movedNote = (n: number) => (n === 0 ? 'Nothing moved, and the slot didn’t change.' : `${plural(n, 'post')} already moved back to ready. The slot didn’t change.`);
 
 async function post(url: string, body: unknown): Promise<{ status: number; out: Record<string, unknown> }> {
   const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   return { status: res.status, out: (await res.json().catch(() => ({}))) as Record<string, unknown> };
 }
 
-export function SlotEditor({ cell, chip, scope, readOnly = false, label, dimmed = false, dayCarousels = [] }: {
+export function SlotEditor({ cell, chip, scope, readOnly = false, label, dimmed = false, dayCarousels = [], weekdayCarousels = [], lfdOpen = false }: {
   cell: WeekCell;
   chip: WeekChip | null;
   scope: 'date' | 'template';
@@ -53,8 +62,12 @@ export function SlotEditor({ cell, chip, scope, readOnly = false, label, dimmed 
   label: string;
   /** Another type is in focus (`?type=`). */
   dimmed?: boolean;
-  /** That day's Carousel windows, for "Make this a Last Few Days day". */
+  /** That date's resolved Carousel windows, for "Make this a Last Few Days day" on just this date. */
   dayCarousels?: readonly string[];
+  /** The template's Carousel windows on this weekday, for the same switch on every such weekday. */
+  weekdayCarousels?: readonly string[];
+  /** The date's 9:00 LFD window hasn't started (always true in template mode). */
+  lfdOpen?: boolean;
 }) {
   const router = useRouter();
   const titleId = useId();
@@ -75,7 +88,7 @@ export function SlotEditor({ cell, chip, scope, readOnly = false, label, dimmed 
     ? [
         day,
         minuteLabel(start),
-        verticalInfo(chip.vertical).label,
+        slotName(chip),
         chip.feedMode ? `${modeLabel(chip.feedMode)} feed` : null,
         chip.origin === 'override' ? 'override' : null,
         chip.booked ? '1 post booked' : null,
@@ -147,17 +160,19 @@ export function SlotEditor({ cell, chip, scope, readOnly = false, label, dimmed 
     if (!booked) return;
     setBusy('move');
     setErrors([]);
+    let moved = 0;
     try {
       for (const b of booked.list) {
         const { status, out } = await post('/api/social-hub/actions/unschedule', { vertical: b.vertical, refs: b.refs });
         if (status < 200 || status >= 300) {
-          setErrors([typeof out.note === 'string' ? out.note : 'That post couldn’t move back to ready. Nothing else changed.']);
+          setErrors([typeof out.note === 'string' ? out.note : 'That post couldn’t move back to ready.', movedNote(moved)]);
           setBusy(null);
           return;
         }
+        moved += 1;
       }
     } catch {
-      setErrors(['Couldn’t reach the hub. Check your connection and try again.']);
+      setErrors(['Couldn’t reach the hub. Check your connection and try again.', movedNote(moved)]);
       setBusy(null);
       return;
     }
@@ -168,13 +183,15 @@ export function SlotEditor({ cell, chip, scope, readOnly = false, label, dimmed 
 
   const reel = pick ? isReelType(pick.vertical) : false;
   const modeChanged = chip ? mode !== chip.feedMode : false;
-  const lfdOffer = chip?.vertical === 'carousels' && dayCarousels.length > 0;
+  // "Every <weekday>" changes the template, so it removes the template's Carousels; a date removes that date's.
+  const lfdCarousels = everyWeekday ? weekdayCarousels : dayCarousels;
+  const lfdOffer = chip?.vertical === 'carousels' && lfdCarousels.length > 0 && (everyWeekday || lfdOpen);
   const weekdays = `${WEEKDAY_LONG[cell.weekday]}s`;
   const lfdChanges = (): Change[] => [
     change({ vertical: 'last_few_days', windowId: PLAN.last_few_days[0]!.id }, true, null),
-    ...dayCarousels.map((id) => change({ vertical: 'carousels', windowId: id }, false, null)),
+    ...lfdCarousels.map((id) => change({ vertical: 'carousels', windowId: id }, false, null)),
   ];
-  const title = chip ? `${verticalInfo(chip.vertical).label}, ${day}, ${minuteLabel(start)}` : `Add a slot, ${day}`;
+  const title = chip ? `${slotName(chip)}, ${day}, ${minuteLabel(start)}` : `Add a slot, ${day}`;
 
   return (
     <>
@@ -220,7 +237,7 @@ export function SlotEditor({ cell, chip, scope, readOnly = false, label, dimmed 
                       const on = pick?.vertical === w.vertical && pick.windowId === w.windowId;
                       return (
                         <button key={`${w.vertical}-${w.windowId}`} type="button" className="sh-pill" aria-pressed={on} onClick={() => { setPick(w); setMode(defaultMode(w.vertical)); }}>
-                          {verticalInfo(w.vertical).label} <span className="sh-muted">{windowOf(w.vertical, w.windowId)?.label}</span>
+                          {w.vertical === 'stories' ? slotName(w) : <>{verticalInfo(w.vertical).label} <span className="sh-muted">{windowOf(w.vertical, w.windowId)?.label}</span></>}
                         </button>
                       );
                     })}
@@ -256,8 +273,8 @@ export function SlotEditor({ cell, chip, scope, readOnly = false, label, dimmed 
                   <>
                     <p>
                       {everyWeekday
-                        ? `This also removes the ${plural(dayCarousels.length, 'Carousel slot')} on ${weekdays}.`
-                        : `This also removes ${dateShort(cell.nyDate!)}’s ${plural(dayCarousels.length, 'Carousel slot')}.`}
+                        ? `This also removes the ${plural(lfdCarousels.length, 'Carousel slot')} on ${weekdays}.`
+                        : `This also removes ${dateShort(cell.nyDate!)}’s ${plural(lfdCarousels.length, 'Carousel slot')}.`}
                     </p>
                     <button type="button" className="sh-btn" disabled={busy != null} data-busy={busy === 'lfd' ? '' : undefined} onClick={() => void save('lfd', lfdChanges())}>
                       {busy === 'lfd' ? <Loader size={14} aria-hidden="true" /> : null}Make it a Last Few Days day
