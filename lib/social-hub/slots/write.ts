@@ -6,6 +6,7 @@ import type { Vertical } from '@/lib/social-hub/types';
 import { isVertical } from '@/lib/social-hub/verticals';
 import { PLAN } from '@/lib/social-hub/views/plan';
 
+import { legacyFeedMode } from './index';
 import { readOverrides, readTemplate } from './load';
 import { resolveDay, validateDay } from './resolve';
 import { readSeedInputs, seedTemplate, type SeedInputs } from './seed';
@@ -109,11 +110,16 @@ async function bookedIn(q: SlotQuery, dates: readonly string[]): Promise<BookedP
   });
 }
 
-/** A booking is in the way when its slot is gone, or its slot's Trial/Main no longer matches the booking. */
+/**
+ * A booking is in the way when its slot is gone, or its slot's Trial/Main no
+ * longer matches the booking. A booking with no feed_mode (made before the
+ * cutover) posts as its type always did, so that is its mode here.
+ */
 function inTheWay(b: BookedPost, slots: readonly ResolvedSlot[]): boolean {
   const s = slots.find((x) => x.vertical === b.vertical && x.windowId === b.windowId);
   if (!s) return true;
-  return s.feedMode != null && b.feedMode != null && s.feedMode !== b.feedMode;
+  const mode = b.feedMode ?? legacyFeedMode(b.vertical);
+  return s.feedMode != null && mode != null && s.feedMode !== mode;
 }
 
 export async function applySlotChanges(q: SlotQuery, changes: readonly SlotChange[], opts: { by: string; now: Date; keepBooked: boolean }): Promise<ApplyResult> {

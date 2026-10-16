@@ -94,6 +94,18 @@ test('flipping Trial to Main asks about a booked reel; a carousel edit elsewhere
   assert.deepEqual(other, { ok: true });
 });
 
+test('a booking from before the cutover (no feed_mode) reads as its type\'s old mode: flipping its slot asks first', async () => {
+  const { pg, q } = await seeded();
+  await book(pg, 'explainers', '2026-10-20', 'afternoon', null, '33333333-3333-3333-3333-333333333333');
+  await book(pg, 'reels', '2026-10-20', 'evening', null, '44444444-4444-4444-4444-444444444444');
+  const explainer = await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: '2026-10-20', vertical: 'explainers', windowId: 'afternoon', action: 'add', feedMode: 'trial' }], { by: 't', now: NOW, keepBooked: false });
+  assert.equal((explainer as { status: number }).status, 409, 'a legacy explainer booking is Main');
+  const reelToMain = await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: '2026-10-20', vertical: 'reels', windowId: 'evening', action: 'add', feedMode: 'main' }], { by: 't', now: NOW, keepBooked: false });
+  assert.equal((reelToMain as { status: number }).status, 409, 'a legacy reel booking is Trial');
+  const reelSame = await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: '2026-10-20', vertical: 'reels', windowId: 'evening', action: 'add', feedMode: 'trial' }], { by: 't', now: NOW, keepBooked: false });
+  assert.deepEqual(reelSame, { ok: true }, 'the same mode is not in the way');
+});
+
 test('past dates and windows already started today are read-only (Review Focus 4)', async () => {
   const { q } = await seeded();
   const past = await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: '2026-10-14', vertical: 'reels', windowId: 'evening', action: 'remove', feedMode: null }], { by: 't', now: NOW, keepBooked: false });
