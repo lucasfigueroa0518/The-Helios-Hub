@@ -28,23 +28,40 @@ const BOOKED: Record<FeedSchema, string> = {
 /** Explainers before the feed_mode column exists: every booking is Main. */
 const EXPLAINERS_NO_FEED_MODE = `SELECT publish_at FROM social_hub.schedule WHERE vertical = 'explainers' AND ${ACTIVE}`;
 
+function isMissingColumn(error: unknown): boolean {
+  return (error as { code?: string } | null)?.code === '42703';
+}
+
+/**
+ * One schema's booked feed instants in [fromIso, toIso). A database without
+ * schedule.feed_mode yet (worker deployed before the schema apply) reads as
+ * legacy: every Explainer is Main, and no reel is Main.
+ */
+async function bookedIn(query: SpacingQuery, schema: FeedSchema, fromIso: string, toIso: string): Promise<Date[]> {
+  let rows: Array<Record<string, unknown>>;
+  try {
+    ({ rows } = await query(BOOKED[schema], [fromIso, toIso]));
+  } catch (error) {
+    if (!isMissingColumn(error) || (schema !== 'explainers' && schema !== 'reels')) throw error;
+    if (schema === 'reels') return [];
+    ({ rows } = await query(EXPLAINERS_NO_FEED_MODE, [fromIso, toIso]));
+  }
+  return rows.map((row) => new Date(String(row.publish_at)));
+}
+
+const range = (from: Date): [string, string] => [
+  new Date(from.getTime() - 60 * 60_000).toISOString(),
+  new Date(from.getTime() + 15 * 86_400_000).toISOString(),
+];
+
 /** Feed post instants from `from` through two weeks ahead, in every schema but `except`. */
 export async function busyFeedTimes(query: SpacingQuery, from: Date, except: FeedSchema | null = null): Promise<Date[]> {
-  const fromIso = new Date(from.getTime() - 60 * 60_000).toISOString();
-  const toIso = new Date(from.getTime() + 15 * 86_400_000).toISOString();
+  const [fromIso, toIso] = range(from);
   const out: Date[] = [];
   for (const schema of FEED_SCHEMAS) {
     if (schema === except) continue;
     try {
-      let rows: Array<Record<string, unknown>>;
-      try {
-        ({ rows } = await query(BOOKED[schema], [fromIso, toIso]));
-      } catch (error) {
-        // A database without feed_mode yet must not drop Explainers from spacing.
-        if (schema !== 'explainers') throw error;
-        ({ rows } = await query(EXPLAINERS_NO_FEED_MODE, [fromIso, toIso]));
-      }
-      for (const row of rows) out.push(new Date(String(row.publish_at)));
+      out.push(...(await bookedIn(query, schema, fromIso, toIso)));
     } catch {
       // That schema isn't reachable from this handle: its own scheduler spaces against us.
     }
@@ -54,6 +71,6 @@ export async function busyFeedTimes(query: SpacingQuery, from: Date, except: Fee
 
 /** The scheduler's own schema: other slots of the same type also count as feed posts. */
 export async function ownFeedTimes(query: SpacingQuery, schema: FeedSchema, from: Date): Promise<Date[]> {
-  const { rows } = await query(BOOKED[schema], [new Date(from.getTime() - 60 * 60_000).toISOString(), new Date(from.getTime() + 15 * 86_400_000).toISOString()]);
-  return rows.map((r) => new Date(String(r.publish_at)));
+  const [fromIso, toIso] = range(from);
+  return bookedIn(query, schema, fromIso, toIso);
 }
