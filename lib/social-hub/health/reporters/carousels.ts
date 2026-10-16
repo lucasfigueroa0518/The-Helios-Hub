@@ -3,6 +3,7 @@ import { carouselReason, reasonFor } from '@/lib/social-hub/health/reasons';
 import { emptyReport, funnelFrom, publishingFor, withPublishing, type Reporter } from '@/lib/social-hub/health/reporters/shared';
 import { cycleBounds, weekdayIndex } from '@/lib/social-hub/health/time';
 import { carouselOffDays } from '@/lib/lfd/settings';
+import { isLfdDay, slotPlan } from '@/lib/social-hub/slots';
 import type { FailureEvent } from '@/lib/social-hub/health/types';
 
 const STAGE_ORDER = ['jev-scoring', 'reporter', 'writer', 'editor', 'fact-checker', 'mechanical', 'design'];
@@ -58,7 +59,9 @@ export const reportCarousels: Reporter = async (q: HubQuery, { night, posting })
     feedsStale: stale,
     nearCap: runs.some((r) => r.cap_usd > 0 && r.total_usd >= 0.9 * r.cap_usd),
   };
-  // A night Carousels give to Last Few Days (its days, while its auto_run is on, LFD-02) asks for no carousel.
-  const off = (await carouselOffDays(q)).includes(weekdayIndex(night));
+  // A night Carousels give to Last Few Days asks for no carousel: LFD-02 in legacy (its days, while its
+  // auto_run is on), the calendar's LFD slot in template mode (paused or not, Decision 7).
+  const plan = await slotPlan(q, night, 1);
+  const off = plan ? isLfdDay(plan, night) : (await carouselOffDays(q)).includes(weekdayIndex(night));
   return withPublishing(base, off ? { ...posting, perDay: 0 } : posting, await publishingFor(q, 'carousels', night));
 };

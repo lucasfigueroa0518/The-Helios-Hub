@@ -13,6 +13,7 @@ import { loadSettings as loadExplainerSettings } from '@/lib/explainers/settings
 import { pendingRun, requestRun } from '@/lib/reels/repository';
 import { requestFinish, todaySlateFor } from '@/lib/reels/visual/finish';
 import { liveHubQuery } from '@/lib/social-hub/db';
+import { isLfdDay, slotPlan } from '@/lib/social-hub/slots';
 import { loadDataset } from '@/lib/social-hub/load';
 import { planFrom, quotaCandidates, stepsFor, typeDay, type PlanStep, type RunInputs, type RunPlan } from '@/lib/social-hub/run-today';
 import type { Vertical } from '@/lib/social-hub/types';
@@ -31,18 +32,21 @@ const REEL_BUILD_USD = 1;
 const STORY_SET_USD = 0.45;
 
 /**
- * Last Few Days for Run now: due on its days while its auto_run is on (any day from its own button),
+ * Last Few Days for Run now: due on its days while its auto_run is on (any day from its own button;
+ * in template mode its days are the calendar's LFD slots),
  * made when today already has a post that wasn't rejected, in flight when a
  * run is queued or running. Unreadable (schema not applied): no step.
  */
 async function liveLfd(today: string, anyDay: boolean): Promise<{ day: RunInputs['lastFewDays']; inFlight: boolean; cap: number }> {
   try {
-    const [s, made, flight] = await Promise.all([
+    const [s, plan, made, flight] = await Promise.all([
       readLfdSettings(liveHubQuery),
+      slotPlan(liveHubQuery, today, 1).catch(() => null),
       dbQuery<{ n: number }>(`SELECT count(*)::int AS n FROM lfd.posts WHERE ny_date = $1::date AND status <> 'rejected'`, [today]),
       dbQuery<{ n: number }>(`SELECT count(*)::int AS n FROM lfd.runs WHERE status IN ('requested', 'running')`),
     ]);
-    return { day: { due: lfdDueOn(s, today, anyDay), made: Number(made.rows[0]?.n ?? 0) > 0 }, inFlight: Number(flight.rows[0]?.n ?? 0) > 0, cap: s.runCapUsd ?? DEFAULT_LFD_RUN_CAP_USD };
+    const due = plan ? anyDay || (s.autoRun && isLfdDay(plan, today)) : lfdDueOn(s, today, anyDay);
+    return { day: { due, made: Number(made.rows[0]?.n ?? 0) > 0 }, inFlight: Number(flight.rows[0]?.n ?? 0) > 0, cap: s.runCapUsd ?? DEFAULT_LFD_RUN_CAP_USD };
   } catch {
     return { day: undefined, inFlight: false, cap: DEFAULT_LFD_RUN_CAP_USD };
   }

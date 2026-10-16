@@ -1,4 +1,4 @@
-// tests/slots-schedulers.test.ts (part 1: reels and explainers)
+// tests/slots-schedulers.test.ts (part 1: reels and explainers; part 2: carousels, Last Few Days, the 3 AM switch, Stories)
 /** The schedulers follow the calendar in template mode and are unchanged in legacy mode (spec §5). Offline. */
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -8,15 +8,25 @@ import type { PGlite } from '@electric-sql/pglite';
 import type { Queryable } from '@/lib/explainers/db';
 import { scheduleJob } from '@/lib/explainers/publish/schedule';
 import { slotTakenKey } from '@/lib/instagram/window';
+import { threeAmQueue } from '@/lib/lfd/clock';
+import { scheduleLfdPost } from '@/lib/lfd/schedule';
+import { parseLfdSettings } from '@/lib/lfd/settings';
 import { reelsPerDay } from '@/lib/reels/pipeline/fill';
 import { reelTaken, schedulePostIdea, toTakenKey, windowsStillOpen } from '@/lib/reels/publish/schedule';
 import { POSTING_SLOTS, slotKey } from '@/lib/reels/publish/slots';
-import { quotaFromSlots, slotPlan } from '@/lib/social-hub/slots';
+import { reportCarousels } from '@/lib/social-hub/health/reporters/carousels';
+import { quotaFromSlots, slotPlan, storiesDueOn } from '@/lib/social-hub/slots';
 import { chooseByFeedMode } from '@/lib/social-hub/slots/choose';
 import { applySlotChanges, setSlotSource } from '@/lib/social-hub/slots/write';
+import type { PostingState } from '@/lib/content-type/posting';
+import { carouselFill, schedulePost } from '@/lib/social/overnight/schedule';
+import { requestAutoSets } from '@/lib/stories/schedule';
+import { loadSettings, saveSeriesSetting } from '@/lib/stories/settings';
 
 import { scratchExplainersDb } from './explainers-pglite';
+import { seedLfdPost } from './fixtures/lfd/seed';
 import { openHubTestDb } from './fixtures/social-hub/pglite';
+import { harnessDb } from './stories-harness';
 
 const NOW = new Date('2026-10-20T04:00:00Z'); // Tue Oct 20, midnight New York
 const first = () => 0;
@@ -202,4 +212,156 @@ test('explainers template: a started window still takes a post today (Review Foc
   const [row] = await explainerSlots(db);
   assert.deepEqual([row!.d, row!.slot, row!.feed_mode], ['2026-10-20', 'afternoon', 'main']);
   assert.ok(new Date(row!.publish_at).getTime() > inAfternoon.getTime());
+});
+
+// ---- Part 2: the 3 AM switch ----
+
+const lfd = (autoRun: boolean) => parseLfdSettings([{ key: 'auto_run', value: autoRun }, { key: 'days', value: [2, 5] }]);
+
+test('3 AM legacy is unchanged', () => {
+  assert.equal(threeAmQueue('2026-10-20', lfd(true), true).queue, 'last_few_days');
+  assert.equal(threeAmQueue('2026-10-20', lfd(false), true).queue, 'carousels');
+  assert.equal(threeAmQueue('2026-10-21', lfd(true), false).queue, 'none');
+});
+
+test('3 AM template: the calendar decides; a paused LFD on its day runs nothing (Review Focus 5)', () => {
+  assert.equal(threeAmQueue('2026-10-21', lfd(true), true, true).queue, 'last_few_days'); // Wednesday LFD override
+  assert.equal(threeAmQueue('2026-10-20', lfd(true), true, false).queue, 'carousels'); // Tuesday with LFD removed
+  const paused = threeAmQueue('2026-10-20', lfd(false), true, true);
+  assert.equal(paused.queue, 'none');
+  assert.match(paused.reason, /paused/);
+});
+
+// ---- Carousels and Last Few Days: the hub fixture (social, lfd and social_hub schemas) ----
+
+const WED = '2026-10-21';
+const WED_MORNING = new Date('2026-10-21T11:00:00Z'); // Wed Oct 21, 7:00 AM New York
+
+/** Wednesday as a Last Few Days day: its LFD slot, and the Carousel windows taken off (the calendar refuses both on one day). */
+const wednesdayLfd = [
+  { scope: 'date', op: 'put', nyDate: WED, vertical: 'last_few_days', windowId: 'morning', action: 'add', feedMode: null },
+  { scope: 'date', op: 'put', nyDate: WED, vertical: 'carousels', windowId: 'morning', action: 'remove', feedMode: null },
+  { scope: 'date', op: 'put', nyDate: WED, vertical: 'carousels', windowId: 'afternoon', action: 'remove', feedMode: null },
+] as const;
+
+async function carouselDb(): Promise<{ q: never; postId: string }> {
+  const { query } = await openHubTestDb();
+  const { rows } = await query<{ id: string }>(
+    `INSERT INTO social.posts (slug, title, status, render, origin, slide_objects)
+     VALUES ('c-wed', 't', 'review', '{"caption":"A caption.","slides":[]}'::jsonb, 'pipeline', '["posts/c-wed/a.jpg"]'::jsonb) RETURNING id`,
+  );
+  return { q: query as never, postId: rows[0]!.id };
+}
+
+const slotsOf = async (q: never, vertical: string) =>
+  ((await (q as (t: string, p?: unknown[]) => Promise<{ rows: Array<{ d: string; slot: string }> }>)(
+    `SELECT ny_date::text AS d, slot FROM social_hub.schedule WHERE vertical = $1 AND status = 'scheduled'`,
+    [vertical],
+  )).rows).map((r) => [r.d, r.slot]);
+
+test('carousels legacy: unchanged booking (the first open window)', async () => {
+  const { q, postId } = await carouselDb();
+  const out = await schedulePost(q, postId, 'auto', LATE_TUESDAY, WED, first);
+  assert.ok(out.scheduled);
+  assert.deepEqual(await slotsOf(q, 'carousels'), [[WED, 'morning']]);
+  assert.equal((await carouselFill(q, WED_MORNING)).quota, 2, 'the posts_per_day default');
+});
+
+test('carousels template: a removed window is never booked', async () => {
+  const { q, postId } = await carouselDb();
+  await setSlotSource(q, 'template', 't');
+  await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: WED, vertical: 'carousels', windowId: 'morning', action: 'remove', feedMode: null }], { by: 't', now: LATE_TUESDAY, keepBooked: false });
+  const out = await schedulePost(q, postId, 'auto', LATE_TUESDAY, WED, first);
+  assert.ok(out.scheduled);
+  assert.deepEqual(await slotsOf(q, 'carousels'), [[WED, 'afternoon']]);
+});
+
+test('carousels template: a Last Few Days day has no carousel window', async () => {
+  const { q, postId } = await carouselDb();
+  await setSlotSource(q, 'template', 't');
+  assert.equal((await applySlotChanges(q, [...wednesdayLfd], { by: 't', now: LATE_TUESDAY, keepBooked: false })).ok, true);
+  const out = await schedulePost(q, postId, 'auto', LATE_TUESDAY, WED, first);
+  assert.equal(out.scheduled, false);
+  assert.deepEqual(await slotsOf(q, 'carousels'), []);
+});
+
+test('carousels template: the day\'s quota is its slot count (2, 1, 0)', async () => {
+  const { q } = await carouselDb();
+  await (q as (t: string) => Promise<unknown>)(`INSERT INTO social.settings (key, value) VALUES ('posts_per_day', '5'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+  await setSlotSource(q, 'template', 't');
+  assert.equal((await carouselFill(q, WED_MORNING)).quota, 2, 'posts_per_day no longer counts');
+  await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: WED, vertical: 'carousels', windowId: 'morning', action: 'remove', feedMode: null }], { by: 't', now: LATE_TUESDAY, keepBooked: false });
+  assert.equal((await carouselFill(q, WED_MORNING)).quota, 1);
+  await applySlotChanges(q, [...wednesdayLfd], { by: 't', now: LATE_TUESDAY, keepBooked: false });
+  assert.equal((await carouselFill(q, WED_MORNING)).quota, 0);
+});
+
+test('last few days legacy: unchanged (Tuesday books, Wednesday refused)', async () => {
+  const { query } = await openHubTestDb();
+  const q = query as never;
+  const tue = await seedLfdPost(query, { nyDate: '2026-10-20' });
+  assert.ok((await scheduleLfdPost(q, tue, 'auto', NOW, '2026-10-20', first)).scheduled);
+  const wed = await seedLfdPost(query, { nyDate: WED });
+  assert.equal((await scheduleLfdPost(q, wed, 'auto', LATE_TUESDAY, WED, first)).scheduled, false);
+});
+
+test('last few days template: a Wednesday LFD slot books; Tuesday without its template row is refused', async () => {
+  const { query } = await openHubTestDb();
+  const q = query as never;
+  await setSlotSource(q, 'template', 't');
+  await applySlotChanges(q, [...wednesdayLfd], { by: 't', now: LATE_TUESDAY, keepBooked: false });
+  const wed = await seedLfdPost(query, { nyDate: WED });
+  assert.ok((await scheduleLfdPost(q, wed, 'auto', LATE_TUESDAY, WED, first)).scheduled);
+  assert.deepEqual(await slotsOf(q, 'last_few_days'), [[WED, 'morning']]);
+
+  assert.equal((await applySlotChanges(q, [{ scope: 'template', op: 'delete', weekday: 2, vertical: 'last_few_days', windowId: 'morning' }], { by: 't', now: NOW, keepBooked: false })).ok, true);
+  const tue = await seedLfdPost(query, { nyDate: '2026-10-20' });
+  const out = await scheduleLfdPost(q, tue, 'auto', NOW, '2026-10-20', first);
+  assert.equal(out.scheduled, false);
+});
+
+// ---- The carousel health reporter ----
+
+const carouselPosting = { type: 'carousels', live: true, generate: true, autoPublish: false, perDay: 1, maxPerDay: 2, series: null } as unknown as PostingState;
+
+test('carousel health: legacy gives Tuesday to LFD only while its auto_run is on; template follows the calendar, paused or not', async () => {
+  const { query } = await openHubTestDb();
+  const report = (night: string) => reportCarousels(query, { night, posting: carouselPosting, now: NOW });
+  assert.equal((await report('2026-10-20')).needed, 1, 'legacy, LFD paused: Tuesday is an ordinary carousel night');
+  await setSlotSource(query as never, 'template', 't');
+  assert.equal((await report('2026-10-20')).needed, 0, 'template: Tuesday has the LFD slot (Decision 7)');
+  assert.equal((await report(WED)).needed, 1, 'template: Wednesday keeps its carousels');
+});
+
+// ---- Stories: the stories harness (stories and social_hub schemas) ----
+
+const THU = '2026-10-08';
+const THU_NOW = new Date('2026-10-08T05:00:00Z'); // 1:00 AM New York, Thursday Oct 8
+
+test('stories legacy: storiesDueOn is null and auto sets follow the series\' own days', async () => {
+  const { db } = await harnessDb();
+  const q = ((t: string, p?: unknown[]) => db.query(t, p)) as never;
+  assert.equal(await storiesDueOn(q, THU), null);
+  await saveSeriesSetting(db, 'guess_the_number', { auto: true });
+  await saveSeriesSetting(db, 'free_vs_paid', { auto: true });
+  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_NOW), ['guess_the_number']);
+});
+
+test('stories template: a series is due on its slot\'s dates only, and auto sets follow the calendar', async () => {
+  const { db } = await harnessDb();
+  const q = ((t: string, p?: unknown[]) => db.query(t, p)) as never;
+  await saveSeriesSetting(db, 'guess_the_number', { auto: true });
+  await saveSeriesSetting(db, 'free_vs_paid', { auto: true });
+  await setSlotSource(q, 'template', 't');
+  let dueOn = (await storiesDueOn(q, THU))!;
+  assert.equal(dueOn('guess_the_number', THU), true, 'seeded from the series\' own days');
+  assert.equal(dueOn('free_vs_paid', THU), false);
+  await applySlotChanges(q, [
+    { scope: 'date', op: 'put', nyDate: THU, vertical: 'stories', windowId: 'guess_the_number', action: 'remove', feedMode: null },
+    { scope: 'date', op: 'put', nyDate: THU, vertical: 'stories', windowId: 'free_vs_paid', action: 'add', feedMode: null },
+  ], { by: 't', now: THU_NOW, keepBooked: false });
+  dueOn = (await storiesDueOn(q, THU))!;
+  assert.equal(dueOn('guess_the_number', THU), false, 'removed for the day');
+  assert.equal(dueOn('free_vs_paid', THU), true, 'added for the day');
+  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_NOW, { dueOn }), ['free_vs_paid']);
 });

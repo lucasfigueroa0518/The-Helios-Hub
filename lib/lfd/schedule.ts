@@ -8,6 +8,7 @@
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { chooseFromWindows, slotTakenKey, uniformIndex } from '@/lib/instagram/window';
+import { nonSlotKeys, slotPlan, type SlotPlan } from '@/lib/social-hub/slots';
 import { approveItem, bookSlot } from '@/lib/social-hub/spine';
 import type { Queued } from '@/lib/social/overnight/publish';
 import { forceApproveItem, rejectItemAndSlot, releaseDueFor, unscheduleItem, type ScheduleOutcome } from '@/lib/social/overnight/schedule';
@@ -37,6 +38,13 @@ async function takenSlots(query: Query, fromDate: string, days: readonly number[
   return taken;
 }
 
+/** Template mode: booked LFD windows, plus every date in the plan with no LFD slot. */
+async function calendarTaken(query: Query, fromDate: string, plan: SlotPlan): Promise<Set<string>> {
+  const taken = await takenSlots(query, fromDate, [0, 1, 2, 3, 4, 5, 6]); // every weekday "on": only real bookings
+  for (const k of nonSlotKeys(plan, 'last_few_days', [LFD_SLOT], slotTakenKey)) taken.add(k);
+  return taken;
+}
+
 /**
  * Put a post into the earliest open LFD window (through `throughDate` when
  * given: the worker passes the post's own day). A post already on the clock
@@ -62,10 +70,12 @@ export async function scheduleLfdPost(
   if (existing) return { scheduled: true, id: existing.id, publishAt: new Date(existing.publish_at).toISOString() };
 
   const days = await readLfdSettings(query).then((s) => s.days).catch(() => [...DEFAULT_LFD_DAYS]);
+  // Template mode: the calendar's LFD slots replace lfd.settings.days.
+  const plan = await slotPlan(query, calendarDateKey(now, SOCIAL_TIMEZONE));
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const today = calendarDateKey(now, SOCIAL_TIMEZONE);
     const busy = [...(await busyFeedTimes(query, now, 'lfd')), ...(await ownFeedTimes(query, 'lfd', now))];
-    const choice = chooseFromWindows([LFD_WINDOW], now, await takenSlots(query, today, days), busy, rng, throughDate);
+    const choice = chooseFromWindows([LFD_WINDOW], now, plan ? await calendarTaken(query, today, plan) : await takenSlots(query, today, days), busy, rng, throughDate);
     if (!choice) {
       return {
         scheduled: false,
@@ -85,7 +95,7 @@ export async function scheduleLfdPost(
 }
 
 export const LFD_APPROVED_OFF_NOTE = 'Approved. It will be scheduled when Last Few Days publishing is on.';
-export const LFD_DAY_PASSED_NOTE = 'Its day has passed; use Place to pick a Tuesday or Friday.';
+export const LFD_DAY_PASSED_NOTE = 'Its day has passed; use Place to pick a day with a Last Few Days slot.';
 export const LFD_PUBLISHING_OFF_NOTE = 'Last Few Days publishing is off. Turn it on before publishing.';
 export const LFD_MISSED_NOTE = 'Missed its window; place it again to post.';
 /** A due LFD slot later than this is cancelled, not posted late. */

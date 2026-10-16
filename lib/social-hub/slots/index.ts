@@ -92,3 +92,10 @@ export async function quotaFromSlots(q: SlotQuery, vertical: Vertical, nyDate: s
   const plan = await slotPlan(q, nyDate, 1);
   return plan ? slotsOn(plan, vertical, nyDate).length : null;
 }
+
+/** Template mode: whether a Stories series has its slot on a date. Null while legacy (the series' own days stand). */
+export async function storiesDueOn(q: SlotQuery, from: string): Promise<((series: string, nyDate: string) => boolean) | null> {
+  const plan = await slotPlan(q, from);
+  if (!plan) return null;
+  return (series, nyDate) => slotsOn(plan, 'stories', nyDate).some((s) => s.windowId === series);
+}

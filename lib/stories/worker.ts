@@ -14,6 +14,7 @@
  *      Steps 3 and 4 run only while publishing_live is on.
  *   5. insights: poll published frames every 2 hours until the final capture
  */
+import { storiesDueOn } from '@/lib/social-hub/slots';
 import type { StoriesDb } from '@/lib/stories/db';
 import { buildSet, type SetBuilderDeps } from '@/lib/stories/build';
 import { isFinalCapture, type StoryInsightsClient } from '@/lib/stories/publish/insights';
@@ -31,6 +32,7 @@ import {
   listSets,
   markPublished,
   markPublishing,
+  nyDate,
   recordFrameContainer,
   recordFramePublished,
   recordHistory,
@@ -84,7 +86,9 @@ export async function tick(deps: WorkerDeps): Promise<{ built: number; scheduled
   // 1. Auto series.
   if (nyClock(now) >= AUTO_REQUEST_AFTER) {
     // Daily fill (D54): a series day someone already filled gets no auto set; logged once as fill_reduced.
-    const requested = await requestAutoSets(deps.db, settings, now, { log: (message, fields) => log(`${message} ${JSON.stringify(fields)}`) });
+    // Template mode: the calendar's Stories slots say which series are due (null while legacy: each series' own days).
+    const dueOn = await storiesDueOn((t, p) => deps.db.query(t, p), nyDate(now)).catch(() => null);
+    const requested = await requestAutoSets(deps.db, settings, now, { log: (message, fields) => log(`${message} ${JSON.stringify(fields)}`), ...(dueOn ? { dueOn } : {}) });
     if (requested.length) log(`auto: requested ${requested.join(', ')}`);
   }
 

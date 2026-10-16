@@ -72,7 +72,7 @@ test('approving after the post\'s day approves it without booking a later day', 
   const id = await seedLfdPost(query); // Tuesday's post, approved on Wednesday
   const out = await approveLfdPost(q, id, WED_8);
   assert.deepEqual(out, { scheduled: false, approved: true, note: LFD_DAY_PASSED_NOTE });
-  assert.equal(LFD_DAY_PASSED_NOTE, 'Its day has passed; use Place to pick a Tuesday or Friday.');
+  assert.equal(LFD_DAY_PASSED_NOTE, 'Its day has passed; use Place to pick a day with a Last Few Days slot.');
   assert.equal((await q(`SELECT count(*)::int AS n FROM social_hub.schedule`)).rows[0].n, 0, 'never auto-books Friday');
   assert.equal((await q(`SELECT decision FROM social_hub.approvals`)).rows[0].decision, 'approved');
 });
