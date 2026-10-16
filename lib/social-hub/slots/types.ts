@@ -21,6 +21,9 @@ export type ResolvedSlot = {
   origin: 'template' | 'override';
 };
 
+/** Resolved slots by New York date, as the hub's dataset carries them. */
+export type SlotsByDate = Readonly<Record<string, readonly ResolvedSlot[]>>;
+
 /** Who decides cadence: each type's own settings (as before) or the calendar. */
 export type SlotSource = 'legacy' | 'template';
 

@@ -99,7 +99,7 @@ test('the health report counts its scheduled runs; its quota is one on its days 
   const { query } = await openHubTestDb();
   await query(`INSERT INTO lfd.runs (trigger, status, requested_at, started_at, finished_at, total_usd, cap_usd, error)
                VALUES ('scheduled', 'failed', '2026-10-13T07:00:00Z', '2026-10-13T07:00:05Z', '2026-10-13T07:10:00Z', 0.3, 1, 'writing failed: refusal')`);
-  const posting: PostingState = { type: 'last_few_days', live: false, generate: true, autoPublish: false, perDay: null, maxPerDay: null, series: null, days: [2, 5] };
+  const posting: PostingState = { type: 'last_few_days', live: false, generate: true, autoPublish: false, perDay: null, maxPerDay: null, series: null, days: [2, 5], schedule: null };
   const tue = await reportLastFewDays(query, { night: '2026-10-13', posting, now: TUE_8 });
   assert.deepEqual([tue.vertical, tue.due, tue.ran, tue.made, tue.needed, tue.failures.length, tue.failures[0]!.stage], ['last_few_days', true, true, 0, 1, 1, 'run']);
   const wed = await reportLastFewDays(query, { night: '2026-10-14', posting, now: new Date('2026-10-14T12:00:00Z') });

@@ -15,6 +15,7 @@ import { Menu } from '@/components/social-hub/ui/Menu';
 import { PageHead } from '@/components/social-hub/ui/PageHead';
 import { TypeMark, typeStyle } from '@/components/social-hub/ui/marks';
 import type { HubDataset } from '@/lib/social-hub/dataset';
+import type { SlotsByDate } from '@/lib/social-hub/slots/types';
 import { actionEnabled } from '@/lib/social-hub/flags';
 import { withParams, type HubParams } from '@/lib/social-hub/links';
 import { metricSpec } from '@/lib/social-hub/metrics';
@@ -40,7 +41,7 @@ export function CalendarScreen({ dataset, base, params, now }: { dataset: HubDat
   const shown: Vertical[] = params.types ? params.types.split(',').filter(isVertical) : [...VERTICAL_IDS];
   const types = new Set(shown.length ? shown : VERTICAL_IDS);
   const o = offerer(dataset, now);
-  const m = monthModel(dataset.posts, month, now, metric, types, (p) => o.offer(p).state.id === 'needs_you', dataset.dayQuotas?.lfdDays ?? []);
+  const m = monthModel(dataset.posts, month, now, metric, types, (p) => o.offer(p).state.id === 'needs_you', dataset.dayQuotas?.lfdDays ?? [], dataset.dayQuotas?.slots ?? null);
   const keep: HubParams = { month: params.month, types: params.types, metric: params.metric };
   const href = (changes: Record<string, string | null>) => withParams(path, '', keep, changes);
   const metricLabel = metricSpec(metric).label.toLowerCase();
@@ -119,7 +120,7 @@ export function CalendarScreen({ dataset, base, params, now }: { dataset: HubDat
           prevHref={href({ day: addDays(day, -1), month: null })}
           nextHref={href({ day: addDays(day, 1), month: null })}
         >
-          <DayList posts={dataset.posts} day={day} types={types} now={now} o={o} base={base} carouselOff={dataset.dayQuotas?.lfdDays ?? []} />
+          <DayList posts={dataset.posts} day={day} types={types} now={now} o={o} base={base} carouselOff={dataset.dayQuotas?.lfdDays ?? []} slots={dataset.dayQuotas?.slots ?? null} />
         </DaySheet>
       ) : null}
     </>
@@ -162,8 +163,8 @@ function Cell({ cell, href, metric }: { cell: DayCell; href: string; metric: Met
   );
 }
 
-function DayList({ posts, day, types, now, o, base, carouselOff }: { posts: HubDataset['posts']; day: string; types: ReadonlySet<Vertical>; now: Date; o: ReturnType<typeof offerer>; base: string; carouselOff: readonly number[] }) {
-  const slots = daySlots(posts, day, types, now, carouselOff);
+function DayList({ posts, day, types, now, o, base, carouselOff, slots: calendarSlots }: { posts: HubDataset['posts']; day: string; types: ReadonlySet<Vertical>; now: Date; o: ReturnType<typeof offerer>; base: string; carouselOff: readonly number[]; slots: SlotsByDate | null }) {
+  const slots = daySlots(posts, day, types, now, carouselOff, calendarSlots);
   if (slots.length === 0) return <div className="sh-empty"><strong>Nothing on this day</strong>No content was placed and no slots are open.</div>;
   return (
     <ul className="sh-list">

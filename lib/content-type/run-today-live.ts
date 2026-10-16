@@ -73,7 +73,7 @@ export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean } =
   ]);
   const quotas = dataset.dayQuotas ?? DEFAULT_DAY_QUOTAS;
   // A type's quota is its posts per day, never more than its windows today (the candidates use the same rule).
-  const day = (v: 'reels' | 'carousels' | 'explainers') => typeDay(quotaCandidates(dataset, v, now), Math.min(quotas[v], capacityWindows(v, today, dataset.dayQuotas?.lfdDays ?? [], placedCount(dataset.posts, v, today), today).length));
+  const day = (v: 'reels' | 'carousels' | 'explainers') => typeDay(quotaCandidates(dataset, v, now), Math.min(quotas[v], capacityWindows(v, today, dataset.dayQuotas?.lfdDays ?? [], placedCount(dataset.posts, v, today), today, dataset.dayQuotas?.slots ?? null).length));
   // Stories: each series due today by its own settings.
   const weekday = new Date(`${today}T12:00:00Z`).getUTCDay();
   const held = new Set(sets.rows.map((r) => r.series));

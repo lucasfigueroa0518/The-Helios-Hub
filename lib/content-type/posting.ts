@@ -11,6 +11,10 @@ import type { Series } from '@/lib/stories/render/types';
 import { PLAN } from '@/lib/social-hub/views/plan';
 import { dbQuery } from '@/lib/db';
 import { readLfdSettings } from '@/lib/lfd/settings';
+import { slotPlan } from '@/lib/social-hub/slots';
+import { readSlotSource } from '@/lib/social-hub/slots/load';
+import type { SlotQuery } from '@/lib/social-hub/slots/types';
+import { addDays, nyDateOf, weekdayOf } from '@/lib/social-hub/time';
 
 /**
  * How each content type makes and posts, in the two switches a person thinks
@@ -24,11 +28,18 @@ import { readLfdSettings } from '@/lib/lfd/settings';
  * The quota (`perDay`) is how many a day are generated, scheduled and
  * posted; it can't pass the type's posting windows. Stories have no quota:
  * each series has its own days of the week.
+ *
+ * With the calendar (slot_source 'template') the calendar owns when: the
+ * quota and series days can't be set here, and `schedule` shows this week's
+ * slots for the type instead.
  */
 export type ContentType = 'reels' | 'carousels' | 'explainers' | 'stories' | 'last_few_days';
 
 export const POSTING_TYPES: readonly ContentType[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days'];
 export const isPostingType = (v: unknown): v is ContentType => POSTING_TYPES.includes(v as ContentType);
+
+/** One day of a type's week on the calendar: its slot count, Trial / Main split (reel types), Stories' series, and whether a date override touched it. */
+export type ScheduleDay = { nyDate: string; count: number; trial: number; main: number; series: string[]; override: boolean };
 
 export type SeriesState = { id: Series; label: string; enabled: boolean; generate: boolean; days: number[] };
 
@@ -42,6 +53,8 @@ export type PostingState = {
   series: SeriesState[] | null;
   /** Last Few Days: the weekdays it posts once (0 = Sunday). Absent for the other types. */
   days?: number[] | null;
+  /** Template mode: this Monday–Sunday week's slots for the type. Null while legacy (the controls above decide). */
+  schedule: ScheduleDay[] | null;
 };
 
 export type PostingPatch = {
@@ -66,7 +79,33 @@ async function exDb() {
   return explainersDb();
 }
 
+const appQuery: SlotQuery = (text, params) => dbQuery(text, params);
+
+/** This week's calendar slots for a type (Monday through Sunday, New York), or null while legacy. SELECT only. */
+async function weekSchedule(type: ContentType, now = new Date()): Promise<ScheduleDay[] | null> {
+  const today = nyDateOf(now)!;
+  const monday = addDays(today, -((weekdayOf(today) + 6) % 7));
+  const plan = await slotPlan(appQuery, monday, 7).catch(() => null);
+  if (!plan) return null;
+  return [...plan.byDate].map(([nyDate, all]) => {
+    const slots = all.filter((s) => s.vertical === type);
+    return {
+      nyDate,
+      count: slots.length,
+      trial: slots.filter((s) => s.feedMode === 'trial').length,
+      main: slots.filter((s) => s.feedMode === 'main').length,
+      series: type === 'stories' ? slots.map((s) => s.windowId) : [],
+      override: slots.some((s) => s.origin === 'override'),
+    };
+  });
+}
+
 export async function readPosting(type: ContentType): Promise<PostingState> {
+  const [state, schedule] = await Promise.all([readTypePosting(type), weekSchedule(type)]);
+  return { ...state, schedule };
+}
+
+async function readTypePosting(type: ContentType): Promise<Omit<PostingState, 'schedule'>> {
   if (type === 'carousels') {
     const [auto, approval, live, per] = await Promise.all(['auto_run', 'require_approval', 'publishing_live', 'posts_per_day'].map((k) => getSocialSetting<unknown>(k)));
     const per2 = count(per);
@@ -125,6 +164,10 @@ function validate(type: ContentType, patch: PostingPatch): void {
 
 export async function writePosting(type: ContentType, patch: PostingPatch, by: string): Promise<PostingState> {
   validate(type, patch);
+  // The calendar owns when in template mode; legacy keeps these controls, since they still drive the workers.
+  if ((patch.perDay !== undefined || patch.series?.days !== undefined) && (await readSlotSource(appQuery)) === 'template') {
+    throw new Error('Cadence moved to the calendar.');
+  }
   if (type === 'carousels') {
     if (patch.generate !== undefined) await setSocialSetting('auto_run', patch.generate);
     if (patch.autoPublish !== undefined) await setSocialSetting('require_approval', !patch.autoPublish);

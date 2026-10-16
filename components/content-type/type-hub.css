@@ -18,6 +18,13 @@
 .rh-quota { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; }
 .rh-quota__label { min-width: 110px; }
 .rh-quota__n { min-width: 18px; text-align: center; font-size: 16px; font-variant-numeric: tabular-nums; }
+.rh-schedule { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.rh-schedule__days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; width: 100%; margin: 0; padding: 0; list-style: none; }
+.rh-schedule__day { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; padding: 8px 4px; border: 1px solid var(--rh-line); border-radius: 12px; background: var(--rh-bg); font-size: 13px; text-align: center; font-variant-numeric: tabular-nums; }
+.rh-schedule__day strong { overflow-wrap: anywhere; }
+.rh-schedule__day--override { border-color: var(--rh-accent); }
+.rh-schedule__weekday { color: var(--rh-muted); font-size: 11px; font-weight: 600; }
+.rh-schedule__mode { color: var(--rh-muted); font-size: 10.5px; line-height: 1.3; }
 .rh-series { display: flex; flex-direction: column; gap: 10px; padding-top: 14px; border-top: 1px solid var(--rh-line); }
 .rh-series__days { display: flex; flex-wrap: wrap; gap: 6px; }
 .rh-progress { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
