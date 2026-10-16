@@ -11,9 +11,9 @@ import type { Series } from '@/lib/stories/render/types';
 import { PLAN } from '@/lib/social-hub/views/plan';
 import { dbQuery } from '@/lib/db';
 import { readLfdSettings } from '@/lib/lfd/settings';
-import { slotPlan } from '@/lib/social-hub/slots';
+import { slotPlan, slotsOn, type SlotPlan } from '@/lib/social-hub/slots';
 import { readSlotSource } from '@/lib/social-hub/slots/load';
-import type { SlotQuery } from '@/lib/social-hub/slots/types';
+import type { ResolvedSlot, SlotQuery } from '@/lib/social-hub/slots/types';
 import { addDays, nyDateOf, weekdayOf } from '@/lib/social-hub/time';
 
 /**
@@ -30,8 +30,9 @@ import { addDays, nyDateOf, weekdayOf } from '@/lib/social-hub/time';
  * each series has its own days of the week.
  *
  * With the calendar (slot_source 'template') the calendar owns when: the
- * quota and series days can't be set here, and `schedule` shows this week's
- * slots for the type instead.
+ * quota and series days can't be set here, `schedule` shows this week's
+ * slots for the type instead, and perDay / days / series days are read from
+ * those slots so older readers keep working.
  */
 export type ContentType = 'reels' | 'carousels' | 'explainers' | 'stories' | 'last_few_days';
 
@@ -81,12 +82,16 @@ async function exDb() {
 
 const appQuery: SlotQuery = (text, params) => dbQuery(text, params);
 
-/** This week's calendar slots for a type (Monday through Sunday, New York), or null while legacy. SELECT only. */
-async function weekSchedule(type: ContentType, now = new Date()): Promise<ScheduleDay[] | null> {
+/** This Monday–Sunday week (New York) on the calendar, or null while legacy or when the slots can't be read. SELECT only. */
+async function weekPlan(now: Date): Promise<{ today: string; plan: SlotPlan } | null> {
   const today = nyDateOf(now)!;
   const monday = addDays(today, -((weekdayOf(today) + 6) % 7));
   const plan = await slotPlan(appQuery, monday, 7).catch(() => null);
-  if (!plan) return null;
+  return plan ? { today, plan } : null;
+}
+
+/** This week's calendar slots for a type. */
+function weekSchedule(type: ContentType, plan: SlotPlan): ScheduleDay[] {
   return [...plan.byDate].map(([nyDate, all]) => {
     const slots = all.filter((s) => s.vertical === type);
     return {
@@ -100,9 +105,31 @@ async function weekSchedule(type: ContentType, now = new Date()): Promise<Schedu
   });
 }
 
-export async function readPosting(type: ContentType): Promise<PostingState> {
-  const [state, schedule] = await Promise.all([readTypePosting(type), weekSchedule(type)]);
-  return { ...state, schedule };
+/** The weekdays (0 = Sunday) of this week that have a slot matching `has`, in order. */
+function weekdaysWith(plan: SlotPlan, has: (s: ResolvedSlot) => boolean): number[] {
+  const days = [...plan.byDate].filter(([, slots]) => slots.some(has)).map(([nyDate]) => weekdayOf(nyDate));
+  return [...new Set(days)].sort((a, b) => a - b);
+}
+
+/**
+ * Template mode (spec §4): the cadence fields come from the calendar, so
+ * every reader that still uses them sees the slots. perDay is today's slot
+ * count; Last Few Days' days and each Stories series' days are this week's
+ * weekdays with that slot.
+ */
+function withCalendar(state: Omit<PostingState, 'schedule'>, plan: SlotPlan, today: string): Omit<PostingState, 'schedule'> {
+  const type = state.type;
+  if (type === 'last_few_days') return { ...state, days: weekdaysWith(plan, (s) => s.vertical === 'last_few_days') };
+  if (type === 'stories') {
+    return { ...state, series: (state.series ?? []).map((x) => ({ ...x, days: weekdaysWith(plan, (s) => s.vertical === 'stories' && s.windowId === x.id) })) };
+  }
+  return { ...state, perDay: slotsOn(plan, type, today).length };
+}
+
+export async function readPosting(type: ContentType, now = new Date()): Promise<PostingState> {
+  const [state, week] = await Promise.all([readTypePosting(type), weekPlan(now)]);
+  if (!week) return { ...state, schedule: null };
+  return { ...withCalendar(state, week.plan, week.today), schedule: weekSchedule(type, week.plan) };
 }
 
 async function readTypePosting(type: ContentType): Promise<Omit<PostingState, 'schedule'>> {

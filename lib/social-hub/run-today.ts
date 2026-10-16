@@ -52,6 +52,22 @@ export type PlanStep = {
 
 export type RunPlan = { today: string; steps: PlanStep[]; estimateUsd: number; anything: boolean };
 
+/**
+ * The Stories series due today, the way the 4 AM worker decides: enabled,
+ * and on its own days, or (template mode, `dueOn` given) with its slot today.
+ */
+export function seriesDueToday(
+  series: ReadonlyArray<{ id: string; label: string; enabled: boolean; days: readonly number[] }>,
+  today: string,
+  held: ReadonlySet<string>,
+  dueOn: ((series: string, nyDate: string) => boolean) | null,
+): RunInputs['series'] {
+  const weekday = new Date(`${today}T12:00:00Z`).getUTCDay();
+  return series
+    .filter((s) => s.enabled && (dueOn ? dueOn(s.id, today) : s.days.includes(weekday)))
+    .map((s) => ({ id: s.id, label: s.label, held: held.has(s.id) }));
+}
+
 const label = (v: Vertical) => verticalInfo(v).label;
 const n = (x: number, one: string, many = `${one}s`) => `${x} ${x === 1 ? one : many}`;
 const titles = (list: Array<{ title: string }>) => list.map((m) => `“${m.title.length > 48 ? `${m.title.slice(0, 47)}…` : m.title}”`).join(', ');

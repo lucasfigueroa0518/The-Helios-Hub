@@ -4,6 +4,8 @@ import test from 'node:test';
 
 import { typeHubModel } from '@/lib/content-type/model';
 import { readPosting, writePosting } from '@/lib/content-type/posting';
+import { seriesDueToday } from '@/lib/social-hub/run-today';
+import { storiesDueOn } from '@/lib/social-hub/slots';
 import { openSlots, placeItem, planPlacement, rescheduleItem } from '@/lib/social-hub/placement';
 import { readDayQuotas } from '@/lib/social-hub/queries/day';
 import { resolveDay } from '@/lib/social-hub/slots/resolve';
@@ -230,4 +232,43 @@ test('readPosting carries this week\'s schedule in template mode, and null in le
   const monday = stories[0]!;
   assert.deepEqual(monday.series, ['morning_download', 'guess_the_number']);
   assert.equal(stories.some((d) => d.override), false);
+});
+
+test('readPosting in template mode works out perDay, LFD days and series days from the calendar (spec §4)', async () => {
+  const { query } = await appDb();
+  const q = query as never;
+  const TUE = new Date('2026-10-20T14:00:00Z'); // Tue Oct 20, 10:00 AM New York
+  const legacyCarousels = await readPosting('carousels', TUE);
+  const legacyStories = await readPosting('stories', TUE);
+  assert.equal(legacyCarousels.perDay, 2, 'legacy: the posts_per_day default');
+  await setSlotSource(q, 'template', 't');
+  assert.equal((await readPosting('carousels', TUE)).perDay, 0, 'Tuesday is an LFD day on the seeded calendar');
+  assert.equal((await readPosting('carousels', new Date('2026-10-21T14:00:00Z'))).perDay, 2);
+  assert.equal((await readPosting('reels', TUE)).perDay, 3);
+  await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: '2026-10-20', vertical: 'reels', windowId: 'evening', action: 'remove', feedMode: null }], { by: 't', now: TUE, keepBooked: false });
+  assert.equal((await readPosting('reels', TUE)).perDay, 2, 'today\'s slots, not posts_per_day');
+  assert.deepEqual((await readPosting('last_few_days', TUE)).days, [2, 5]);
+  // Seeded from the series' own days, so they match legacy; then a Thursday add shows up.
+  const daysOf = (state: Awaited<ReturnType<typeof readPosting>>) => Object.fromEntries((state.series ?? []).map((x) => [x.id, x.days]));
+  assert.deepEqual(daysOf(await readPosting('stories', TUE)), daysOf(legacyStories));
+  await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: '2026-10-22', vertical: 'stories', windowId: 'free_vs_paid', action: 'add', feedMode: null }], { by: 't', now: TUE, keepBooked: false });
+  assert.ok(daysOf(await readPosting('stories', TUE)).free_vs_paid!.includes(4));
+});
+
+test('Run now\'s Stories due list follows the calendar in template mode, like the 4 AM worker', async () => {
+  const { query } = await appDb();
+  const q = query as never;
+  const series = [
+    { id: 'morning_download', label: 'MD', enabled: true, days: [4] },
+    { id: 'free_vs_paid', label: 'FP', enabled: true, days: [1] },
+  ];
+  const THU = '2026-10-22';
+  assert.deepEqual(seriesDueToday(series, THU, new Set(), await storiesDueOn(q, THU)).map((s) => s.id), ['morning_download'], 'legacy: own days');
+  await setSlotSource(q, 'template', 't');
+  await applySlotChanges(q, [
+    { scope: 'date', op: 'put', nyDate: THU, vertical: 'stories', windowId: 'morning_download', action: 'remove', feedMode: null },
+    { scope: 'date', op: 'put', nyDate: THU, vertical: 'stories', windowId: 'free_vs_paid', action: 'add', feedMode: null },
+  ], { by: 't', now: new Date('2026-10-20T14:00:00Z'), keepBooked: false });
+  const due = seriesDueToday(series, THU, new Set(['free_vs_paid']), await storiesDueOn(q, THU));
+  assert.deepEqual(due, [{ id: 'free_vs_paid', label: 'FP', held: true }]);
 });

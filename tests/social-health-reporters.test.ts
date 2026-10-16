@@ -27,6 +27,23 @@ test('quota: perDay for most types; enabled series that run that weekday for Sto
   assert.equal(quotaFor(posting({ type: 'stories', perDay: null, series } as never), NIGHT), 1); // Tue: MD only (FP disabled)
 });
 
+test('quota in template mode: the night\'s own slots from the week schedule, else the derived fields', () => {
+  const day = (nyDate: string, count: number, series: string[] = []) => ({ nyDate, count, trial: 0, main: 0, series, override: false });
+  const schedule = [day('2026-10-12', 2), day(NIGHT, 1, ['guess_the_number', 'free_vs_paid'])];
+  // perDay is today's count (say 2); the night reads its own day.
+  assert.equal(quotaFor(posting({ perDay: 2, schedule }), NIGHT), 1);
+  assert.equal(quotaFor(posting({ perDay: 2, schedule }), '2026-10-20'), 2, 'outside the week: perDay');
+  assert.equal(quotaFor(posting({ type: 'last_few_days', perDay: null, days: [], schedule } as never), NIGHT), 1);
+  assert.equal(quotaFor(posting({ type: 'last_few_days', perDay: null, days: [2], schedule: [day(NIGHT, 0)] } as never), NIGHT), 0, 'no LFD slot that night');
+  const series = [
+    { id: 'morning_download', label: 'MD', enabled: true, generate: true, days: [2] },
+    { id: 'guess_the_number', label: 'GN', enabled: true, generate: true, days: [] },
+    { id: 'free_vs_paid', label: 'FP', enabled: false, generate: true, days: [] },
+  ];
+  // Tuesday's slots are GN and FP: GN counts, FP is disabled, MD has no slot that night.
+  assert.equal(quotaFor(posting({ type: 'stories', perDay: null, series, schedule } as never), NIGHT), 1);
+});
+
 test('due follows generate, not the publishing switch; a run is always due', () => {
   const pub = { scheduledYesterday: 0, postedYesterday: 0, retriedOk: 0, failures: [], placedToday: 0, filledAutoToday: 0 };
   // Publishing off, generating on, the run crashed after making 0 of 1.
