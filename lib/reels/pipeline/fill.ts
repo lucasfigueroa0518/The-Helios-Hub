@@ -5,6 +5,7 @@ import { reelsSpine } from '@/lib/reels/publish/items';
 import { reelsForOpenWindows } from '@/lib/reels/publish/slots';
 import { calendarDateKey } from '@/lib/reels/schedule';
 import { dailyFill, type DailyFill } from '@/lib/social-hub/fill';
+import { quotaFromSlots } from '@/lib/social-hub/slots';
 
 /**
  * Trial Reels' daily fill (D54). The 1:00 AM run fills the day's quota
@@ -17,11 +18,13 @@ import { dailyFill, type DailyFill } from '@/lib/social-hub/fill';
 
 /** Tonight's fill: the quota, the reels people placed for today, what is left. */
 export async function reelsFill(now = new Date()): Promise<DailyFill> {
-  return dailyFill(reelsSpine, 'reels', calendarDateKey(now), await reelsPerDay());
+  return dailyFill(reelsSpine, 'reels', calendarDateKey(now), await reelsPerDay(now));
 }
 
-/** The day's quota: the `posts_per_day` row of reels.settings, else the default of three. */
-export async function reelsPerDay(): Promise<number> {
+/** The day's quota: the calendar's reels slots for that day in template mode, else the `posts_per_day` row of reels.settings, else three. */
+export async function reelsPerDay(now = new Date()): Promise<number> {
+  const fromSlots = await quotaFromSlots((text, params) => dbQuery(text, params) as never, 'reels', calendarDateKey(now));
+  if (fromSlots != null) return fromSlots;
   const raw = await getSetting<unknown>('posts_per_day');
   // A missing row is the default, not zero (Number(null) is 0).
   const value = raw == null ? NaN : Number(raw);

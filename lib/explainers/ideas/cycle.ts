@@ -18,6 +18,7 @@ import { spineOf } from '@/lib/explainers/publish/items';
 import { fillCandidates, postsPerDay, publishingLive, requireApproval, scheduleJob, type ScheduleOutcome } from '@/lib/explainers/publish/schedule';
 import { loadSettings, loadThemeBrief } from '@/lib/explainers/settings';
 import type { JevTransport } from '@/lib/reels/jev/runner';
+import { quotaFromSlots } from '@/lib/social-hub/slots';
 import { consoleFillLog, dailyFillOrQuota, reportFill, type DailyFill, type FillLog } from '@/lib/social-hub/fill';
 
 export type IdeaCycleDeps = {
@@ -62,6 +63,11 @@ function enteredPool(e: Evaluation): boolean {
   return e.outcome === 'entered_pool' || e.outcome === 'won_head_to_head';
 }
 
+/** The day's quota: the calendar's explainers slots in template mode, else `posts_per_day`. */
+async function explainersQuota(db: ExplainersDb, day: string): Promise<number> {
+  return (await quotaFromSlots((text, params) => db.query(text, params) as never, 'explainers', day)) ?? (await postsPerDay(db));
+}
+
 /**
  * E-16 daily lifecycle. Runs only while auto_render is on (A-5, A-7): generate
  * three ideas in one call, dedupe and score each (E-15, A-3), trim the pool to
@@ -85,7 +91,7 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
   const day = nyDate(deps.now);
   const fillLog = deps.log ?? consoleFillLog;
   // A failed read of the placements never stops the night: it fills the whole quota, as before the rule.
-  const fill = await dailyFillOrQuota(spineOf(db), 'explainers', day, await postsPerDay(db), (error) =>
+  const fill = await dailyFillOrQuota(spineOf(db), 'explainers', day, await explainersQuota(db, day), (error) =>
     fillLog('fill_failed', { vertical: 'explainers', nyDate: day, error: error instanceof Error ? error.message : String(error) }),
   );
   reportFill(fill, fillLog, { dailyRenderCap: settings.daily_render_cap });

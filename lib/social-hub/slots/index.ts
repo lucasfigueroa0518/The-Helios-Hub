@@ -86,3 +86,9 @@ export async function bookingFeedMode(q: SlotQuery, itemId: string | null, verti
   }
   return legacyFeedMode(vertical)!;
 }
+
+/** A type's posts for a date in template mode (its slot count); null while legacy, so the caller keeps posts_per_day. */
+export async function quotaFromSlots(q: SlotQuery, vertical: Vertical, nyDate: string): Promise<number | null> {
+  const plan = await slotPlan(q, nyDate, 1);
+  return plan ? slotsOn(plan, vertical, nyDate).length : null;
+}
