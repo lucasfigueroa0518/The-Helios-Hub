@@ -31,8 +31,9 @@ test('reel payload flags: trial keeps today\'s trial params, main drops them and
   assert.deepEqual(reelPayloadFlags('trial', null), { graduation_strategy: TRIAL_GRADUATION_STRATEGY, share_to_feed: null });
   assert.deepEqual(reelPayloadFlags('trial', false), { graduation_strategy: TRIAL_GRADUATION_STRATEGY, share_to_feed: false });
   assert.deepEqual(reelPayloadFlags('main', null), { graduation_strategy: null, share_to_feed: true });
-  assert.deepEqual(explainerPayloadFlags('main'), { share_to_feed: true, graduation_strategy: null });
-  assert.deepEqual(explainerPayloadFlags('trial'), { share_to_feed: true, graduation_strategy: TRIAL_GRADUATION_STRATEGY });
+  // Main is today's Explainer payload; Trial sends trial params and leaves share_to_feed out (spec §5).
+  assert.deepEqual(explainerPayloadFlags('main'), { share_to_feed: true });
+  assert.deepEqual(explainerPayloadFlags('trial'), { graduation_strategy: TRIAL_GRADUATION_STRATEGY });
 });
 
 test('a Text on Screen main-feed container has no trial_params', async () => {
@@ -47,17 +48,19 @@ test('a Text on Screen main-feed container has no trial_params', async () => {
   assert.equal(sent[1]!.share_to_feed, undefined);
 });
 
-test('an Explainer trial container carries trial_params', async () => {
+test('an Explainer trial container carries trial_params and no share_to_feed; main shares to the feed', async () => {
   withMetaEnv();
   const { sent, fetchImpl } = recorder();
   const meta = createLiveReelClient(fetchImpl);
-  await meta.createReel({ videoUrl: 'https://x/v.mp4', caption: 'c', shareToFeed: true, graduationStrategy: TRIAL_GRADUATION_STRATEGY });
+  await meta.createReel({ videoUrl: 'https://x/v.mp4', caption: 'c', shareToFeed: null, graduationStrategy: TRIAL_GRADUATION_STRATEGY });
   await meta.createReel({ videoUrl: 'https://x/v.mp4', caption: 'c', shareToFeed: true, graduationStrategy: null });
   await meta.createReel({ videoUrl: 'https://x/v.mp4', caption: 'c', shareToFeed: true });
   assert.deepEqual(JSON.parse(sent[0]!.trial_params!), { graduation_strategy: TRIAL_GRADUATION_STRATEGY });
-  assert.equal(sent[0]!.share_to_feed, 'true');
+  assert.equal(sent[0]!.share_to_feed, undefined);
   assert.equal(sent[1]!.trial_params, undefined);
+  assert.equal(sent[1]!.share_to_feed, 'true');
   assert.equal(sent[2]!.trial_params, undefined);
+  assert.equal(sent[2]!.share_to_feed, 'true');
 });
 
 test('bookSlot stores feed_mode; spacing counts main-feed reels and skips trial explainers', async () => {

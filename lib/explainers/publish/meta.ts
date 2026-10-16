@@ -4,11 +4,12 @@ export { metaConfigured } from '@/lib/instagram/graph';
 
 /**
  * Explainer Reels go out as regular reels (shared to the feed) unless their
- * slot is a Trial slot, which adds trial_params. Music and voice are already
- * in the MP4, so there is no audio_configuration. Then the shared status poll and `media_publish`.
+ * slot is a Trial slot: trial_params, and no share_to_feed (null leaves it
+ * off). Music and voice are already in the MP4, so there is no
+ * audio_configuration. Then the shared status poll and `media_publish`.
  */
 export interface ReelMetaClient extends InstagramContainerOps {
-  createReel(input: { videoUrl: string; caption: string; shareToFeed: boolean; graduationStrategy?: string | null }): Promise<string>;
+  createReel(input: { videoUrl: string; caption: string; shareToFeed: boolean | null; graduationStrategy?: string | null }): Promise<string>;
 }
 
 export function createLiveReelClient(fetchImpl: typeof fetch = fetch): ReelMetaClient {
@@ -20,7 +21,7 @@ export function createLiveReelClient(fetchImpl: typeof fetch = fetch): ReelMetaC
         media_type: 'REELS',
         video_url: input.videoUrl,
         caption: input.caption,
-        share_to_feed: String(input.shareToFeed),
+        ...(input.shareToFeed != null ? { share_to_feed: String(input.shareToFeed) } : {}),
         ...(input.graduationStrategy ? { trial_params: JSON.stringify({ graduation_strategy: input.graduationStrategy }) } : {}),
       });
       if (!body.id) throw new Error('Meta created no reel container id.');

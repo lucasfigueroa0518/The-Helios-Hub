@@ -92,9 +92,13 @@ export async function publishReadiness(
   return { ok: true, videoObject: job.video, caption };
 }
 
-/** The booking's Trial / Main: Explainers share to the feed either way; a Trial slot adds trial params. */
-export function explainerPayloadFlags(mode: FeedMode): { share_to_feed: true; graduation_strategy: string | null } {
-  return { share_to_feed: true, graduation_strategy: mode === 'trial' ? TRIAL_GRADUATION_STRATEGY : null };
+/**
+ * The booking's Trial / Main (spec §5): Main is today's Explainer payload
+ * (shared to the feed, no trial params); a Trial slot sends trial params and
+ * leaves `share_to_feed` out, like a Text on Screen trial reel.
+ */
+export function explainerPayloadFlags(mode: FeedMode): { share_to_feed: true } | { graduation_strategy: string } {
+  return mode === 'trial' ? { graduation_strategy: TRIAL_GRADUATION_STRATEGY } : { share_to_feed: true };
 }
 
 export async function queuePublish(db: Queryable, jobId: string, trigger: PublishTrigger): Promise<Queued> {
@@ -178,8 +182,11 @@ export async function carryAttempt(deps: PublishDeps, id: string): Promise<{ id:
   const now = deps.now ?? Date.now;
   const statusLog: Array<{ at: string; statusCode: string; status: string | null }> = [];
   try {
-    const { rows } = await db.query<{ caption: string; video_object: string; share_to_feed: boolean; graduation_strategy: string | null }>(
-      `SELECT caption, payload->>'video_object' AS video_object, coalesce((payload->>'share_to_feed')::boolean, true) AS share_to_feed,
+    // A trial attempt leaves share_to_feed out (null: not sent); any other attempt without it is an older Main one (true).
+    const { rows } = await db.query<{ caption: string; video_object: string; share_to_feed: boolean | null; graduation_strategy: string | null }>(
+      `SELECT caption, payload->>'video_object' AS video_object,
+              CASE WHEN payload->>'graduation_strategy' IS NOT NULL THEN (payload->>'share_to_feed')::boolean
+                   ELSE coalesce((payload->>'share_to_feed')::boolean, true) END AS share_to_feed,
               payload->>'graduation_strategy' AS graduation_strategy
          FROM social_hub.publish_attempts WHERE id = $1`,
       [id],
