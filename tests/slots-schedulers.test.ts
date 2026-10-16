@@ -232,6 +232,13 @@ test('3 AM template: the calendar decides; a paused LFD on its day runs nothing 
   assert.match(paused.reason, /paused/);
 });
 
+test('3 AM template: an LFD day whose settings could not be read says so, not "paused"', () => {
+  const unread = threeAmQueue('2026-10-20', null, true, true);
+  assert.equal(unread.queue, 'none');
+  assert.match(unread.reason, /settings could not be read/);
+  assert.doesNotMatch(unread.reason, /paused/);
+});
+
 // ---- Carousels and Last Few Days: the hub fixture (social, lfd and social_hub schemas) ----
 
 const WED = '2026-10-21';

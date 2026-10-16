@@ -12,10 +12,14 @@ export type ThreeAm = { queue: 'last_few_days' | 'carousels' | 'none'; reason: s
  * ordinary carousel days. A bad run cap on an LFD day queues nothing at all.
  * In template mode (`lfdDay` given) the calendar says whether today is an LFD
  * day, and the calendar is literal: an LFD day with LFD paused runs neither
- * Last Few Days nor Carousels (Decision 7).
+ * Last Few Days nor Carousels (Decision 7). On an LFD day whose settings
+ * could not be read (`lfd` null), nothing runs and the reason says so.
  */
 export function threeAmQueue(nyDate: string, lfd: LfdSettings | null, carouselAutoRun: boolean, lfdDay: boolean | null = null): ThreeAm {
   const isLfdDay = lfdDay ?? Boolean(lfd?.autoRun && lfd.days.includes(weekdayOfDate(nyDate)));
+  if (isLfdDay && lfdDay !== null && !lfd) {
+    return { queue: 'none', reason: 'a Last Few Days day on the calendar, but the Last Few Days settings could not be read; no Last Few Days run and no carousel run' };
+  }
   if (isLfdDay && lfdDay !== null && !lfd?.autoRun) {
     return { queue: 'none', reason: 'a Last Few Days day on the calendar, and Last Few Days is paused; no carousel run (the calendar is literal)' };
   }
