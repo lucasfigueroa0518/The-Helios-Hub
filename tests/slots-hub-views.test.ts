@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { typeHubModel } from '@/lib/content-type/model';
 import { readPosting, writePosting } from '@/lib/content-type/posting';
 import { openSlots, placeItem, planPlacement, rescheduleItem } from '@/lib/social-hub/placement';
 import { readDayQuotas } from '@/lib/social-hub/queries/day';
@@ -12,6 +13,7 @@ import { applySlotChanges, setSlotSource } from '@/lib/social-hub/slots/write';
 import { capacityWindows, dayPlan, windowsOn } from '@/lib/social-hub/views/plan';
 
 import { openHubTestDb } from './fixtures/social-hub/pglite';
+import { FIXTURE_NOW, previewDataset } from './fixtures/social-hub/preview-dataset';
 
 const tpl = seedTemplate(DEFAULT_SEED_INPUTS);
 const slotsFor = (dates: string[], overrides = [] as Parameters<typeof resolveDay>[1]): SlotsByDate =>
@@ -28,7 +30,7 @@ test('windowsOn follows the day\'s slots when given, and the old rule when not',
   // Last Few Days on a Wednesday the template gives it (an added slot) counts; Stories follow their series slots.
   const lfdWed = slotsFor(['2026-10-21'], [{ nyDate: '2026-10-21', vertical: 'last_few_days', windowId: 'morning', action: 'add', feedMode: null }]);
   assert.deepEqual(windowsOn('last_few_days', '2026-10-21', [], lfdWed).map((w) => w.id), ['morning']);
-  assert.deepEqual(capacityWindows('carousels', '2026-10-21', [3], 2, '2026-10-20', slots).map((w) => w.id), ['afternoon']);
+  assert.deepEqual(capacityWindows('carousels', '2026-10-21', [3], 1, '2026-10-20', slots).map((w) => w.id), ['afternoon']);
 });
 
 test('dayPlan offers only slot windows as open', () => {
@@ -37,6 +39,40 @@ test('dayPlan offers only slot windows as open', () => {
   assert.deepEqual(reels.open.map((w) => w.id), ['morning', 'midday']);
   const legacy = dayPlan([], '2026-10-21', [], '2026-10-20').types.find((t) => t.vertical === 'reels')!;
   assert.deepEqual(legacy.open.map((w) => w.id), ['morning', 'midday', 'evening']);
+});
+
+test('a booking kept in a slot the calendar removed still holds its place until it posts', () => {
+  // Wednesday: only the reels evening slot is left; two reels stay booked (keepBooked) in the removed morning and midday.
+  const removed = (windowId: string) => ({ nyDate: '2026-10-21', vertical: 'reels' as const, windowId, action: 'remove' as const, feedMode: null });
+  const slots = slotsFor(['2026-10-21'], [removed('morning'), removed('midday')]);
+  assert.deepEqual(capacityWindows('reels', '2026-10-21', [], 0, '2026-10-20', slots).map((w) => w.id), ['evening']);
+  assert.deepEqual(capacityWindows('reels', '2026-10-21', [], 2, '2026-10-20', slots).map((w) => w.id), ['morning', 'evening']);
+  assert.deepEqual(capacityWindows('reels', '2026-10-21', [], 5, '2026-10-20', slots).map((w) => w.id), ['morning', 'midday', 'evening']);
+  // Offers stay slot-only.
+  assert.deepEqual(windowsOn('reels', '2026-10-21', [], slots).map((w) => w.id), ['evening']);
+  // A past day keeps every window it had, even with the calendar's slots gone.
+  assert.deepEqual(capacityWindows('reels', '2026-10-19', [], 0, '2026-10-20', slotsFor(['2026-10-19'], [{ ...removed('morning'), nyDate: '2026-10-19' }])).map((w) => w.id), ['morning', 'midday', 'evening']);
+
+  // The type page: both kept reels sit on their day, neither waits for a slot.
+  const base = previewDataset();
+  const today = '2026-10-08'; // FIXTURE_NOW
+  const later = '2026-10-12';
+  const moved = base.posts.filter((p) => p.vertical === 'reels' && p.nyDate === '2026-10-07').slice(0, 2);
+  assert.equal(moved.length, 2);
+  const ids = new Set(moved.map((p) => p.id));
+  // Booked and made (a rendered video).
+  const media = { kind: 'video', src: '/reel.mp4', poster: null } as never;
+  // Only the two kept reels hold that day.
+  const posts = base.posts.filter((p) => !(p.vertical === 'reels' && p.nyDate === later)).map((p) => (ids.has(p.id) ? { ...p, nyDate: later, status: 'scheduled' as const, publishAt: '2026-10-12T13:30:00.000Z', postedAt: null, media } : p));
+  const onlyEvening = slotsFor([today, later], [{ ...removed('morning'), nyDate: later }, { ...removed('midday'), nyDate: later }]);
+  const dataset = { ...base, posts, dayQuotas: { reels: 3, carousels: 2, explainers: 2, lfdDays: [], slots: onlyEvening } };
+  const model = typeHubModel(dataset, 'reels', FIXTURE_NOW);
+  const day = model.days.find((d) => d.date === later)!;
+  assert.deepEqual(new Set(day.cards.map((c) => c.post.id)), ids);
+  assert.equal(model.bench.some((b) => b.card && ids.has(b.card.post.id)), false, 'not waiting for a slot');
+  const plan = dayPlan(posts, later, [], today, onlyEvening).types.find((t) => t.vertical === 'reels')!;
+  assert.equal(plan.windows.length, 2);
+  assert.equal(plan.placed.length, 2);
 });
 
 test('readDayQuotas: today\'s slot counts and the slot map in template mode; the old settings in legacy', async () => {
@@ -103,6 +139,44 @@ test('a Main reel slot is spaced from feed posts and stores its feed mode; a Tri
   const moved = await rescheduleItem(q, { vertical: 'reels', itemId: reel, nyDate: '2026-10-21', slot: 'morning', now: NOW, rng: first });
   assert.ok(moved.ok, moved.note);
   assert.deepEqual(await mode(), { feed_mode: 'main', slot: 'morning' });
+});
+
+test('a Trial Explainer slot is not spaced; a Main one is', async () => {
+  const { pg, query } = await openHubTestDb();
+  const q = query as never;
+  await setSlotSource(q, 'template', 't');
+  await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'explainers', windowId: 'afternoon', action: 'add', feedMode: 'trial' }], { by: 't', now: NOW, keepBooked: false });
+  // Carousels booked at 1:10 PM and 3:40 PM New York on Wednesday.
+  const carousel = await itemFor(pg, 'carousels', 'c1');
+  const carousel2 = await itemFor(pg, 'carousels', 'c2');
+  await pg.query(`INSERT INTO social_hub.schedule (content_item_id, vertical, ny_date, slot, publish_at, status, source) VALUES
+    ($1, 'carousels', '2026-10-21', 'morning', '2026-10-21T17:10:00Z', 'scheduled', 'auto'),
+    ($2, 'carousels', '2026-10-21', 'afternoon', '2026-10-21T19:40:00Z', 'scheduled', 'auto')`, [carousel, carousel2]);
+  const first = () => 0;
+  const trial = await planPlacement(q, { vertical: 'explainers', nyDate: '2026-10-21', slot: 'afternoon', now: NOW, rng: first });
+  assert.ok(trial.ok);
+  assert.equal(trial.publishAt.toISOString(), '2026-10-21T17:00:00.000Z', '1:00 PM, ten minutes from the carousel');
+  assert.equal(trial.feedMode, 'trial');
+  const main = await planPlacement(q, { vertical: 'explainers', nyDate: '2026-10-21', slot: 'late', now: NOW, rng: first });
+  assert.ok(main.ok);
+  assert.equal(main.publishAt.toISOString(), '2026-10-21T20:10:00.000Z', '4:10 PM, thirty minutes after the carousel');
+  assert.equal(main.feedMode, 'main');
+});
+
+test('template mode with an unreadable calendar keeps the legacy days (Carousels give up Last Few Days days)', async () => {
+  const { pg, query } = await openHubTestDb();
+  await pg.query(`INSERT INTO lfd.settings (key, value) VALUES ('auto_run', 'true'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+  await setSlotSource(query as never, 'template', 't');
+  // slot_source reads 'template', but the template itself can't be read.
+  const broken = (async (text: string, params?: unknown[]) => {
+    if (/slot_template|slot_override/.test(text)) throw new Error('relation does not exist');
+    return query(text, params);
+  }) as never;
+  const tuesday = await planPlacement(broken, { vertical: 'carousels', nyDate: '2026-10-20', slot: 'afternoon', now: NOW });
+  assert.equal(tuesday.ok, false);
+  assert.match((tuesday as { note: string }).note, /doesn’t post on Tuesdays/);
+  const picker = await openSlots(broken, 'carousels', '2026-10-20', { now: NOW });
+  assert.deepEqual(picker.map((s) => s.state), ['off', 'off']);
 });
 
 test('legacy placement is unchanged: no feed mode stored, old weekday rule', async () => {

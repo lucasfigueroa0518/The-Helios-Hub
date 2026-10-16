@@ -88,9 +88,17 @@ export function placedCount(posts: readonly HubPost[], vertical: Vertical, nyDat
  * The windows that COUNT on a day. Closing Carousels on Last Few Days days only removes open capacity:
  * a past day keeps every window, and a day keeps as many as the content already on it (`held`), so nothing
  * placed there is hidden or benched. No new open slot is offered (windowsOn stays the offer rule).
- * With the calendar (`slots`), all and open are the same: it has no closed-but-held windows.
+ * With the calendar (`slots`): the day's slot windows, and a booking kept in a slot the calendar later
+ * removed still holds its place until it posts, so the day keeps as many windows as it holds (the type's
+ * other windows, in day order). A past day also keeps the windows it had before the calendar.
  */
 export function capacityWindows(vertical: Vertical, nyDate: string, carouselOff: readonly number[], held: number, today?: string, slots?: SlotsByDate | null): PlanWindow[] {
+  if (slots?.[nyDate]) {
+    const on = new Set(windowsOn(vertical, nyDate, [], slots).map((w) => w.id));
+    if (today !== undefined && nyDate < today) for (const w of windowsOn(vertical, nyDate)) on.add(w.id);
+    let extra = Math.min(held, PLAN[vertical].length) - on.size;
+    return PLAN[vertical].filter((w) => on.has(w.id) || extra-- > 0);
+  }
   const all = windowsOn(vertical, nyDate, [], slots);
   const open = windowsOn(vertical, nyDate, carouselOff, slots);
   if (open.length === all.length || (today !== undefined && nyDate < today)) return all;

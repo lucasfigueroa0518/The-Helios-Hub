@@ -42,7 +42,6 @@ import { DEFAULT_LFD_DAYS, LFD_WINDOW } from '@/lib/lfd/config';
 import { carouselOffDays, readLfdSettings } from '@/lib/lfd/settings';
 import { bookSlot, type SpineQuery, type SpineVertical } from '@/lib/social-hub/spine';
 import { legacyFeedMode, slotPlan, slotsOn, type SlotPlan } from '@/lib/social-hub/slots';
-import { readSlotSource } from '@/lib/social-hub/slots/load';
 import type { FeedMode, SlotQuery } from '@/lib/social-hub/slots/types';
 import { isDayKey } from '@/lib/social-hub/time';
 import { SERIES_LABEL } from '@/lib/stories/render/copy';
@@ -126,14 +125,14 @@ async function storyWindows(query: SpineQuery): Promise<SlotWindow[]> {
   });
 }
 
-/** Each type's windows, from its own config. */
+/**
+ * Each type's windows, from its own config. Their `days` are the legacy rule:
+ * planPlacement and openSlots ignore them on a day whose calendar slots load
+ * (the slots decide), and fall back to them when that read fails.
+ */
 export async function placementRules(query: SpineQuery, vertical: SpineVertical): Promise<PlacementRules> {
-  // With the calendar, Carousels and Last Few Days windows carry no days: the day's slots decide (planPlacement).
-  const template = (vertical === 'carousels' || vertical === 'last_few_days')
-    && (await readSlotSource(query as SlotQuery).catch(() => 'legacy' as const)) === 'template';
   switch (vertical) {
     case 'carousels': {
-      if (template) return { vertical, spaced: true, windows: named(CAROUSEL_SLOTS, { morning: 'Morning', afternoon: 'Afternoon' }) };
       // LFD-02: while Last Few Days' auto_run is on, its days have no carousel windows.
       const off = await carouselOffDays(query);
       const windows = named(CAROUSEL_SLOTS, { morning: 'Morning', afternoon: 'Afternoon' });
@@ -141,7 +140,6 @@ export async function placementRules(query: SpineQuery, vertical: SpineVertical)
     }
     case 'last_few_days': {
       // One 9:00–10:00 AM window on its days (spec §7.4); a feed post, so spaced.
-      if (template) return { vertical, spaced: true, windows: [{ ...LFD_WINDOW, name: 'Morning' }] };
       const days = await readLfdSettings(query).then((s) => s.days).catch(() => [...DEFAULT_LFD_DAYS]);
       return { vertical, spaced: true, windows: [{ ...LFD_WINDOW, name: 'Morning', days }] };
     }
