@@ -315,8 +315,8 @@ export async function writeTargetCopy(
   /**
    * D-246. A report that still carries escape sequences or tool syntax after
    * repair fails, and that one call is tried once more. Both calls are billed.
-   * v28: so does a builder's read that is missing from the caption or leaves
-   * out Helios.
+   * v28: so does a builder's read that leaves out Helios (v29: the Helios
+   * line, posted after the call to action, always names Helios).
    */
   const writeOnce = async (callInput: CopyInput, component: 'copy-caption' | 'copy-rewrite'): Promise<CopyResult> => {
     let result = await writeCopy(client, callInput, deps?.signal, model);

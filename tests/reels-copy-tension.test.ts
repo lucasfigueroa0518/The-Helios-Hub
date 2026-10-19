@@ -15,7 +15,7 @@ import { COPY_PROMPT_VERSION, COPY_SKILL, FRAMEWORK_WRITING_LOGIC } from '@/lib/
 import { BUCKET_SPEC_TEXT } from '@/lib/reels/copy/source-text.generated';
 
 test('the copy is defined as a complete thought with tension, as a hard constraint', () => {
-  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v28');
+  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v29');
   assert.match(COPY_SKILL, /HARD CONSTRAINT\. The whole on-screen copy is the hook, and it is a complete thought with tension, never a fact that stops\./);
   assert.match(COPY_SKILL, /a reversal, a contradiction, an escalation, an absurd detail, or a stake out of proportion to its cause/);
   assert.match(COPY_SKILL, /These are kinds to choose from, never a template/);

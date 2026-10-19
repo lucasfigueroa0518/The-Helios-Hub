@@ -1,4 +1,7 @@
 /**
+ * v29 (Task 8b, per-format comps): the Helios line leaves the caption body and
+ * posts last, after the call to action and before the hashtags.
+ *
  * Offline tests for copy-caption-v28 (social captions redesign, 2026-10-19):
  * every Reel caption closes on a builder's read that names Helios once, a Jev
  * fit call plus a ceiling over recent closings decides the build line, and the
@@ -38,7 +41,8 @@ import type { ClosingsLog } from '@/lib/social/captions/closings-store';
 import { CAPTION_SHARED_RULES, HELIOS_CONTEXT } from '@/lib/social/captions/helios-context';
 
 const READ = 'For a dental practice, this means the front desk stops retyping intake forms. Helios builds that kind of handoff.';
-const CAPTION = `Story first line.\n\nMore detail, per TechCrunch.\n\n${READ}`;
+const CAPTION = 'Story first line.\n\nMore detail, per TechCrunch.';
+const CTA = 'Send this to the friend who built an app.';
 
 function reportInput(extra: Record<string, unknown> = {}) {
   return {
@@ -52,7 +56,7 @@ function reportInput(extra: Record<string, unknown> = {}) {
     on_screen_copies: ['Strong line one here', 'Strong line two here'],
     caption: CAPTION,
     builder_read: READ,
-    call_to_action: 'Send this to the friend who built an app.',
+    call_to_action: CTA,
     outcome_note: '',
     hashtags: ['#AI', '#Security', '#Apps'],
     sources: [],
@@ -60,61 +64,85 @@ function reportInput(extra: Record<string, unknown> = {}) {
   };
 }
 
-// ── v28 pins ────────────────────────────────────────────────────────────────
+// ── v29 pins ────────────────────────────────────────────────────────────────
 
-test('v28 pins: the version, the Helios context and the shared rules in the cached prefix', () => {
-  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v28');
+test('v29 pins: the version, the Helios context and the shared rules in the cached prefix', () => {
+  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v29');
   const statics = copyStaticSystem();
   assert.ok(statics.includes(HELIOS_CONTEXT));
   assert.ok(statics.includes(CAPTION_SHARED_RULES));
   assert.doesNotMatch(COPY_SKILL, /Helios is an AI consulting firm/);
   assert.doesNotMatch(COPY_SKILL, /no offer of Helios services/);
   assert.match(COPY_SKILL, /no sales pitch, no list of Helios services, and no claim about Helios clients or results/);
-  assert.match(COPY_SKILL, /The builder's read is the one place "we" is allowed/);
-  assert.match(COPY_SKILL, /just before the call to action/);
+  assert.match(COPY_SKILL, /The Helios line is the one place "we" is allowed/);
   assert.match(COPY_SKILL, /builder_read field/);
-  assert.match(COPY_SKILL, /it is the caption's one ask\. It meets the shared rule on varied endings, so the builder's read ends on the take\./);
-  assert.match(COPY_SKILL, /so the read ends on the take: never on a question such as "what do you think\?", and never on an ask of its own\./);
-  assert.match(FRAMEWORK_WRITING_LOGIC.arousal.caption, /does not name Helios a second time/);
-  assert.doesNotMatch(FRAMEWORK_WRITING_LOGIC.arousal.caption, /End the caption on one line that names Helios/);
   assert.ok(REPORT_COPY_TOOL.input_schema.required.includes('builder_read'));
   const properties = Object.keys(REPORT_COPY_TOOL.input_schema.properties);
   assert.ok(properties.indexOf('caption') < properties.indexOf('builder_read'));
 });
 
+test('v29: the Helios line ends the post, after the call to action, and leaves the caption body', () => {
+  assert.doesNotMatch(COPY_SKILL, /just before the call to action/);
+  assert.match(COPY_SKILL, /The Helios line ends the post, after the call to action and before the hashtags/);
+  assert.match(COPY_SKILL, /Leave the call to action, the Helios line, and the hashtags out of the caption/);
+  assert.match(COPY_SKILL, /call to action, the Helios line, and the hashtags together stay within 2,200 characters/);
+  assert.match(COPY_SKILL, /Lead it with a number, a quote, or a vivid claim when the story has one/);
+  const tool = REPORT_COPY_TOOL.input_schema.properties;
+  assert.doesNotMatch(tool.caption.description, /builder's read as its last paragraph/);
+  assert.match(tool.caption.description, /Leave out the call to action, the Helios line, and the hashtags/);
+  assert.match(tool.builder_read.description, /after the call to action and before the hashtags/);
+  assert.match(tool.builder_read.description, /not part of the caption field/i);
+});
+
+test('v29 arousal: the call to action and the Helios line never both name Helios', () => {
+  assert.match(COPY_SKILL, /The call to action never names Helios/);
+  assert.doesNotMatch(COPY_SKILL, /the call to action names Helios and the read does not name it again/);
+  assert.match(FRAMEWORK_WRITING_LOGIC.arousal.caption, /ask to follow for the next story like this one, without naming Helios/);
+  assert.doesNotMatch(FRAMEWORK_WRITING_LOGIC.arousal.caption, /does not name Helios a second time/);
+  for (const logic of Object.values(FRAMEWORK_WRITING_LOGIC)) {
+    assert.doesNotMatch(logic.caption, /follow Helios|ask to save the post instead/);
+  }
+});
+
 // ── The report check ────────────────────────────────────────────────────────
 
-test('builder_read must appear in the caption and name Helios', () => {
+test('builder_read is the Helios line: it names Helios and stays out of the caption body', () => {
   const call = parseCopyReport(reportInput());
   assert.equal(call.builderRead, READ);
   assert.equal(call.working.builderRead, READ);
+  assert.equal(call.caption, CAPTION);
 
-  assert.throws(
-    () => parseCopyReport(reportInput({ builder_read: 'A read that the caption never carries. Helios builds it.' })),
-    (error: Error) => error instanceof CopyReportError && /builder_read is not a paragraph of the caption/.test(error.message),
-  );
+  // A read the model also wrote into the caption is moved out, so it posts once.
+  const repeated = parseCopyReport(reportInput({ caption: `${CAPTION}\n\n${READ}` }));
+  assert.equal(repeated.caption, CAPTION);
+  const beforeCta = parseCopyReport(reportInput({ caption: `${CAPTION}\n\n${CTA}\n\n${READ}` }));
+  assert.equal(beforeCta.caption, CAPTION);
+
   const noHelios = 'For a dental practice, this means the front desk stops retyping intake forms.';
   assert.throws(
-    () => parseCopyReport(reportInput({ caption: `Story.\n\n${noHelios}`, builder_read: noHelios })),
-    /builder_read does not name Helios/,
+    () => parseCopyReport(reportInput({ builder_read: noHelios })),
+    (error: Error) => error instanceof CopyReportError && /builder_read does not name Helios/.test(error.message),
   );
   // "Heliosphere" is not Helios.
-  const lookalike = 'For a dental practice, the heliosphere changes nothing.';
-  assert.throws(
-    () => parseCopyReport(reportInput({ caption: `Story.\n\n${lookalike}`, builder_read: lookalike })),
-    /builder_read does not name Helios/,
-  );
+  assert.throws(() => parseCopyReport(reportInput({ builder_read: 'For a dental practice, the heliosphere changes nothing.' })), /builder_read does not name Helios/);
   assert.throws(() => parseCopyReport(reportInput({ builder_read: '' })), /missing builder_read/);
 
-  // Arousal fallback: the call to action already asks to follow Helios, so the read may leave it out.
-  const followed = parseCopyReport(
-    reportInput({
-      caption: `Story.\n\n${noHelios}`,
-      builder_read: noHelios,
-      call_to_action: 'Follow Helios for the next story like this one.',
-    }),
+  // v29: no exemption when the call to action names Helios. The Helios line always carries the name.
+  assert.throws(
+    () => parseCopyReport(reportInput({ builder_read: noHelios, call_to_action: 'Follow Helios for the next story like this one.' })),
+    /builder_read does not name Helios/,
   );
-  assert.equal(followed.builderRead, noHelios);
+});
+
+test('fullCaption posts the body, the call to action, the Helios line, then the hashtags', () => {
+  const posted = fullCaption(publishCopy(parseCopyReport(reportInput()), 'Strong line one here'));
+  assert.equal(posted, `${CAPTION}\n\n${CTA}\n\n${READ}\n\n#AI #Security #Apps`);
+
+  // A v28 row stored the read as the caption's last paragraph: it moves after the call to action and posts once.
+  const v28 = fullCaption({ caption: `${CAPTION}\n\n${READ}`, builderRead: READ, callToAction: CTA, hashtags: ['#AI'] });
+  assert.equal(v28, `${CAPTION}\n\n${CTA}\n\n${READ}\n\n#AI`);
+  // No read (rows before v28): body, call to action, hashtags, as before.
+  assert.equal(fullCaption({ caption: CAPTION, callToAction: CTA, hashtags: ['#AI'] }), `${CAPTION}\n\n${CTA}\n\n#AI`);
 });
 
 // ── The task block ──────────────────────────────────────────────────────────
@@ -326,7 +354,7 @@ test('a full ceiling skips Jev, and a log that cannot be read counts as empty', 
 
 test('a builder read without Helios is rejected once and the retry is billed', async () => {
   const noHelios = 'For a dental practice, this means the front desk stops retyping intake forms.';
-  const bad = reportInput({ caption: `Story.\n\n${noHelios}`, builder_read: noHelios });
+  const bad = reportInput({ builder_read: noHelios });
   const sent: Anthropic.MessageCreateParamsNonStreaming[] = [];
   const costs: string[] = [];
   const outcome = await writeTargetCopy(scriptedClient([bad, reportInput(), reportInput()], sent), 'run-1', 'slate-1', TARGET, {
@@ -343,26 +371,30 @@ test('a builder read without Helios is rejected once and the retry is billed', a
 
 // ── Review round 1 ──────────────────────────────────────────────────────────
 
-test('an over-limit caption keeps the builder read and cuts before it', () => {
-  const long = 'This paragraph is long enough to cut. '.repeat(30).trim();
-  const call = parseCopyReport(reportInput({ caption: [long, long, long, READ].join('\n\n') }));
+test('an over-limit caption keeps the Helios line and the call to action, and drops body paragraphs from just before them', () => {
+  const first = 'The first paragraph stays in the caption. '.repeat(30).trim();
+  const middle = 'The middle paragraph goes after the last. '.repeat(30).trim();
+  const last = 'The last body paragraph goes first. '.repeat(30).trim();
+  const call = parseCopyReport(reportInput({ caption: [first, middle, last].join('\n\n') }));
   const posted = fullCaption(publishCopy(call, 'Strong line one here'));
   assert.ok(posted.length <= 2_200);
-  assert.ok(posted.includes(`\n\n${READ}\n\nSend this to the friend who built an app.\n\n#AI #Security #Apps`));
-  assert.match(posted, /^This paragraph is long enough to cut\./);
+  assert.ok(posted.endsWith(`\n\n${CTA}\n\n${READ}\n\n#AI #Security #Apps`));
+  assert.ok(posted.startsWith(first));
+  assert.equal(posted.includes(last), false);
 
-  // An assembled caption (body, read, call to action, hashtags) keeps the read too.
-  const assembled = [long, long, long, READ, 'Send this to a friend.', '#AI #Apps'].join('\n\n');
+  // An assembled caption (body, call to action, Helios line, hashtags) keeps both too.
+  const assembled = [first, middle, last, 'Send this to a friend.', READ, '#AI #Apps'].join('\n\n');
   const shortened = shortenAssembledCaption(assembled);
   assert.ok(shortened.length <= 2_200);
-  assert.ok(shortened.endsWith(`${READ}\n\nSend this to a friend.\n\n#AI #Apps`));
+  assert.ok(shortened.startsWith(first));
+  assert.ok(shortened.endsWith(`Send this to a friend.\n\n${READ}\n\n#AI #Apps`));
 });
 
-test('first person in the builder read is not flagged; outside it, it still is', () => {
+test('first person in the Helios line is not flagged; outside it, it still is', () => {
   const read = 'For a dental practice, we would start with the intake form. Helios builds that kind of handoff.';
-  const clean = parseCopyReport(reportInput({ caption: `Story.\n\n${read}`, builder_read: read }));
+  const clean = parseCopyReport(reportInput({ builder_read: read }));
   assert.deepEqual(checkCopy(publishCopy(clean, 'Strong line one here'), 'the_number', []).firstPersonWords, []);
-  const leaky = parseCopyReport(reportInput({ caption: `Our story.\n\n${read}`, builder_read: read }));
+  const leaky = parseCopyReport(reportInput({ caption: 'Our story.\n\nMore detail.', builder_read: read }));
   assert.deepEqual(checkCopy(publishCopy(leaky, 'Strong line one here'), 'the_number', []).firstPersonWords, ['Our']);
 });
 
@@ -390,4 +422,38 @@ test('shipStoredCopy (ship-a-miss) records the closing with the attempt build-li
   assert.equal(shipped.ok, true);
   assert.equal(saved[0].report?.builderRead, READ);
   assert.deepEqual(recorded, [['idea-1', READ, true]]);
+});
+
+// ── v29: the posting path reads the Helios line from the stored row ─────────
+
+test('publishReadiness posts a stored v29 row as body, call to action, Helios line, hashtags', async () => {
+  const { openHubTestDb } = await import('./fixtures/social-hub/pglite');
+  const { publishReadiness } = await import('@/lib/reels/music/publish');
+  const { pg } = await openHubTestDb();
+  (globalThis as { __outreachHubPool?: unknown }).__outreachHubPool = {
+    query: (text: string, params?: unknown[]) => pg.query(text, params as unknown[]),
+  };
+  const [idea, slate, video, run] = [1, 2, 3, 4].map((n) => `72900000-0000-4000-8000-00000000000${n}`);
+  await pg.query(`INSERT INTO reels.runs (id, trigger, status) VALUES ($1, 'scheduled', 'ok')`, [run]);
+  await pg.query(`INSERT INTO reels.post_ideas (id) VALUES ($1)`, [idea]);
+  await pg.query(
+    `INSERT INTO reels.score_slates (id, run_id, ny_date, scored_at, pass1_version, pass2_version) VALUES ($1, $2, '2026-10-19', now(), 'p1', 'p2')`,
+    [slate, run],
+  );
+  await pg.query(
+    `INSERT INTO reels.idea_copy (slate_id, post_idea_id, prompt_version, model, bucket, framework, status, caption, call_to_action, hashtags, working)
+     VALUES ($1, $2, 'copy-caption-v29', 'm', 'b', 'f', 'ok', $3, $4, ARRAY['#AI'], $5::jsonb)`,
+    [slate, idea, CAPTION, CTA, JSON.stringify({ builderRead: READ })],
+  );
+  await pg.query(
+    `INSERT INTO reels.video_jobs (id, post_idea_id, slate_id, status, finished_at, video_storage_path) VALUES ($1, $2, $3, 'ok', now(), 'videos/x.mp4')`,
+    [video, idea, slate],
+  );
+  await pg.query(
+    `INSERT INTO reels.song_picks (video_job_id, post_idea_id, status, finished_at, picked_audio_id, picked_title, picked_artist) VALUES ($1, $2, 'ok', now(), 'aud-7', 'Song', 'Artist')`,
+    [video, idea],
+  );
+  const ready = await publishReadiness(video, { mixOverride: { audioVolume: 100, videoVolume: 100 } });
+  assert.ok(ready.ok, ready.ok ? '' : ready.note);
+  assert.equal(ready.reel.caption, `${CAPTION}\n\n${CTA}\n\n${READ}\n\n#AI`);
 });

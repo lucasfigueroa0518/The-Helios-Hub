@@ -80,6 +80,8 @@ export async function publishReadiness(
     video_storage_path: string | null;
     caption: string | null;
     call_to_action: string | null;
+    /** v28+. The Helios line, kept in the copy row's working JSON. */
+    builder_read: string | null;
     hashtags: string[] | null;
     pick_id: string | null;
     picked_audio_id: string | null;
@@ -87,7 +89,8 @@ export async function publishReadiness(
     picked_artist: string | null;
     published: boolean;
   }>(
-    `SELECT v.post_idea_id, v.status, v.video_storage_path, c.caption, c.call_to_action, c.hashtags,
+    `SELECT v.post_idea_id, v.status, v.video_storage_path, c.caption, c.call_to_action,
+            c.working->>'builderRead' AS builder_read, c.hashtags,
             p.id AS pick_id, p.picked_audio_id, p.picked_title, p.picked_artist,
             EXISTS (SELECT 1 FROM social_hub.publish_attempts a
                       JOIN social_hub.content_items ci ON ci.id = a.content_item_id
@@ -123,6 +126,7 @@ export async function publishReadiness(
     fullCaption({
       caption: reel.caption,
       callToAction: reel.call_to_action ?? '',
+      builderRead: reel.builder_read,
       hashtags: reel.hashtags ?? [],
     }),
   );

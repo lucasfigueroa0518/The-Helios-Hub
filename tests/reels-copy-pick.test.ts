@@ -331,7 +331,7 @@ test('the same-story check reads the line and the caption opening only', async (
 
 // ── The whole idea: drafts, rewrite, pick, save ─────────────────────────────
 
-/** v28: every caption closes on a builder's read that names Helios. */
+/** v28: every post closes on a builder's read that names Helios; v29 posts it last, after the call to action. */
 const READ = 'For a dental practice, the front desk stops retyping intake forms. Helios builds that kind of handoff.';
 
 function reportInput(lines: [string, string], caption: string) {
@@ -343,7 +343,7 @@ function reportInput(lines: [string, string], caption: string) {
     viewer_stake: 'Your passwords could be open to anyone.',
     tension: 'A deputy chased plates and a judge threw the case out.',
     on_screen_copies: lines,
-    caption: `${caption}\n\n${READ}`,
+    caption,
     builder_read: READ,
     call_to_action: 'Send this to the friend who built an app.',
     hashtags: ['#AI', '#Security', '#Apps'],
@@ -439,7 +439,7 @@ test('when no draft line clears the gate, one rewrite sees the scores and the pi
 
   assert.equal(outcome.ok, true);
   assert.equal(outcome.onScreenCopy, 'Strong rewrite line');
-  assert.equal(outcome.caption, `Rewrite caption.\n\nMore.\n\n${READ}`);
+  assert.equal(outcome.caption, `Rewrite caption.\n\nMore.`);
   assert.equal(saved.length, 1);
   const variants = saved[0].variants;
   assert.equal(variants?.rewrote, true);

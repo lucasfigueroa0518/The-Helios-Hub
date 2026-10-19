@@ -268,10 +268,10 @@ function statusNotes(reel: Reel): Array<{ tone: 'bad' | 'warn'; text: string }> 
   return notes;
 }
 
-/** The caption as it posts (D-158): body, call to action, hashtags. */
+/** The caption as it posts (D-158): body, call to action, the Helios line (v29), hashtags. */
 function captionText(copy: StoredCopy | null): string {
   if (!copy || copy.status !== 'ok' || !copy.caption) return '';
-  return fullCaption({ caption: copy.caption, callToAction: copy.callToAction ?? '', hashtags: copy.hashtags });
+  return fullCaption({ caption: copy.caption, callToAction: copy.callToAction ?? '', builderRead: copy.builderRead, hashtags: copy.hashtags });
 }
 
 /* ------------------------------------------------------------ publishing */
