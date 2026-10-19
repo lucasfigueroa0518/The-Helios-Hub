@@ -121,6 +121,12 @@ test('CAPTIONER_SYSTEM retires the wire framing', () => {
   assert.match(CAPTIONER_SYSTEM, /builder's read/);
   assert.ok(!CAPTIONER_SYSTEM.includes('—'), 'no em dashes');
   assert.ok(!CAPTIONER_SYSTEM.includes('${'), 'no unrendered template');
+  // Review fixes (2026-10-19): the caption's sentence-length rule lives here, not in the shared VOICE_BLOCK.
+  assert.ok(CAPTIONER_CAROUSEL_RULES.includes('three short sentences in a row is too many'));
+  assert.ok(!/caption/i.test(VOICE_BLOCK), 'the Writer and Editor get no caption voice rule');
+  // Hedges only where they change belief (spec shared rule 3); background capped at one clause.
+  assert.doesNotMatch(CAPTIONER_SYSTEM, /Keep every hedge/);
+  assert.match(CAPTIONER_CAROUSEL_RULES, /at most one clause about an earlier event/);
 });
 
 test('CAPTIONER_SYSTEM = intro, Helios context, shared rules, carousel rules, voice, checked rules, closing; pinned to the prompts file', () => {

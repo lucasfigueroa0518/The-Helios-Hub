@@ -2,7 +2,7 @@
  * Model per Claude-backed stage: one setting each, never hardcoded at the
  * call site (Tommy, 2026-10-04; spec §7 decisions table).
  *
- * All four start on Claude Sonnet 5.5. After the first end-to-end run, the
+ * Every stage runs on Claude Sonnet 5.5. After the first end-to-end run, the
  * output is compared against the reference posts; if a stage falls short
  * (the Writer is the likely one), only that stage's setting changes.
  */

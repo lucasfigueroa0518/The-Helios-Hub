@@ -382,7 +382,7 @@ Code checks the finished draft. A failure comes back to you once, with the exact
 - At most 2 background slides (slides resting only on BACKGROUND entries).
 ```
 
-**Caption lines moved to the captioner (social-captions redesign, 2026-10-19).** The Writer and Editor no longer write the caption, so the block above drops "caption ≤2,200" from the Length line and the "No hashtags in the caption." line. The captioner gets its own list (§9, `renderRulesFor('captioner')`). The shared Glossing rule (RULES_BLOCK) now says "give the definition a dedicated slide" instead of "move the definition to the caption or a dedicated slide". The Context policy keeps "The Fact-checker and the caption follow the same policy"; the captioner is told the policy in its own rules.
+**Caption lines moved to the captioner (social-captions redesign, 2026-10-19).** The Writer and Editor no longer write the caption, so the block above drops "caption ≤2,200" from the Length line and the "No hashtags in the caption." line. The captioner gets its own list (§9, `renderRulesFor('captioner')`). The shared Glossing rule (RULES_BLOCK) now says "give the definition a dedicated slide" instead of "move the definition to the caption or a dedicated slide". The shared Context policy (RULES_BLOCK, which the Writer §2 and Editor §4 get) is now stage-neutral: "The Fact-checker follows the same policy. A slide clause that fits (1) or (2) is not a flag; anything beyond that is." (was "The Fact-checker and the caption follow the same policy. A slide or caption clause…"). The captioner gets its own background line (§9). The voice block's sentence-length line keeps only its slide half; the caption half moved to the captioner's rules (§9; shared blocks §1).
 
 ---
 
@@ -519,8 +519,8 @@ TENSIONS: each real disagreement or open question in the sources, one line each:
 ```
 
 - **Conflicts fixed in place** (each pulled copy past the new budget):
-  - Voice: "Vary sentence length. Three short sentences in a row is too many." → "Vary sentence length. In the caption, three short sentences in a row is too many; on a slide, one or two short sentences is normal." (shared blocks §1).
-  - Editor check 3 (§4): explaining a term now stays within the length limits; a gloss that won't fit goes to the caption.
+  - Voice: "Vary sentence length. Three short sentences in a row is too many." → "Vary sentence length. In the caption, three short sentences in a row is too many; on a slide, one or two short sentences is normal." (shared blocks §1). (Superseded 2026-10-19: the caption half moved to the captioner, §9.)
+  - Editor check 3 (§4): explaining a term now stays within the length limits; a gloss that won't fit goes to the caption. (Superseded 2026-10-19: the Editor no longer touches the caption; see §4.)
   - Checked by code (§4 block): headline 15–45 and body ≤140, together ≤168.
 - **Not changed, flagged:** the Hook pass's line budget is the free space on the rendered slide (§6), not the copy budget,
   so shorter bodies leave it more room. Left as is (Tommy: the hook isn't changed now).
@@ -542,7 +542,7 @@ You are the Captioner for Helios Group's Instagram carousels. The slides are fin
 ```
 ## The carousel caption
 
-The slides tell the story. The caption is the take on top of them: what makes this surprising or what is at stake, and what it changes for a business. Someone who reads only the caption still gets the news, but never as a slide-by-slide retelling, and never in the slides' own lines. The whole caption runs about 4 to 6 short paragraphs with a blank line between them.
+The slides tell the story. The caption is the take on top of them: what makes this surprising or what is at stake, and what it changes for a business. Someone who reads only the caption still gets the news, but never as a slide-by-slide retelling, and never in the slides' own lines. The whole caption runs about 4 to 6 short paragraphs with a blank line between them. Vary sentence length: three short sentences in a row is too many.
 
 Submit it in two parts. Code joins them, news first, with a blank line between.
 
@@ -550,9 +550,9 @@ news: the hook and the story, usually 3 or 4 short paragraphs.
 - The first line carries the news on its own, through its tension, its stake or its most surprising fact, in under 125 characters. Instagram hides the rest behind "more," so many people read only that line.
 - Name the people, companies and products plainly, in the words people would search for.
 - Every fact comes from the slides or the BRIEF. Nothing new: no dates, numbers, names, mechanisms or descriptors of your own. When the slides left a BRIEF fact out, leave it out unless the caption can't make sense without it.
-- Keep every hedge and attribution ("says," "reportedly," "up to"). Describe people, organizations and products only with words the slides or the BRIEF use.
+- Keep a hedge or attribution ("says," "reportedly," "up to") wherever dropping it would change what a reader believes. Describe people, organizations and products only with words the slides or the BRIEF use.
 - Gloss a term a reader who doesn't follow AI wouldn't know, from the BRIEF's TERMS only.
-- Context policy: one sourced clause about an earlier event, or the background beats the slides carry ("why now," "what stands in the way"). Nothing beyond that.
+- Background: at most one clause about an earlier event, sourced from the slides or the BRIEF, and only when the hook needs it to land. No background paragraph.
 - Third person, no opinion, no "we." No paragraph about who reported what or whose figures they are.
 - Put the IDs of every BRIEF entry the news rests on (F3, B1, Q2, N1) in news.facts.
 

@@ -13,7 +13,9 @@
  * write the caption, so Glossing's overflow goes to a dedicated slide (was
  * "the caption or a dedicated slide"), and the caption-only checked lines
  * (caption length, no hashtags) moved to CAPTIONER_CHECKED_RULES. The
- * Context policy still names the caption: the captioner follows it.
+ * Context policy no longer names the caption ("The Fact-checker follows the
+ * same policy. A slide clause that fits…"); the captioner has its own
+ * context line in CAPTIONER_CAROUSEL_RULES.
  * Static string: embedding it keeps the cached prompt prefix stable.
  */
 
@@ -75,7 +77,7 @@ Stay on this one event. Earlier events, other companies or other people appear i
 1. **One sourced clause**, embedded in a slide that is otherwise about the main event (e.g. "the bill would make a voluntary process mandatory").
 2. **Background slides** on "why now" (an earlier event that triggered this news), "what stands in the way" (an earlier action by another party that constrains this one), or a relevant earlier event that a reader needs to grasp the significance of the main event. Each background slide must tell the reader something new and relevant (not restatement, not filler), must name the outside event, and must cite a source. The post is still about the main event, not a history lesson.
 
-Not allowed: repeating a competitor's prior announcement as coverage of this story; recycling the same subject's earlier statements as if they're new; a market-context paragraph. The Fact-checker and the caption follow the same policy. A slide or caption clause that fits (1) or (2) is not a flag; anything beyond that is.
+Not allowed: repeating a competitor's prior announcement as coverage of this story; recycling the same subject's earlier statements as if they're new; a market-context paragraph. The Fact-checker follows the same policy. A slide clause that fits (1) or (2) is not a flag; anything beyond that is.
 
 ## Glossing (advisory, not required)
 

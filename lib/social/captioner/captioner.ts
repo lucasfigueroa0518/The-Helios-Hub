@@ -61,6 +61,7 @@ export function checkCaptionSubmission(input: unknown, brief: Brief, filled: Fil
   return { news: { text: parts.news.text, facts: parts.news.facts }, read: { text: parts.read.text, facts: parts.read.facts } };
 }
 
+/** `draft.submission` is unused here; Task 5's caption stage passes the draft through whole and sets its caption fields from the result. */
 export async function runCaptioner(
   brief: Brief,
   draft: { submission: DraftSubmission; filled: FilledDraft },

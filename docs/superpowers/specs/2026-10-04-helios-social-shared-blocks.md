@@ -16,6 +16,8 @@
 
 **Seventh round (Lucas, 2026-10-08):** the opening line changed from "Direct, dry, confident. A sharp editor, not a press release." to the one below. The lists are unchanged. The Writer now gets this block for its slides too, not only its caption.
 
+**Social-captions redesign (2026-10-19):** the sentence-length line keeps only its slide half ("Vary sentence length. On a slide, one or two short sentences is normal."). The caption half ("In the caption, three short sentences in a row is too many") moved to the captioner's carousel rules (prompts file §9), so it no longer reaches the Writer and Editor, which don't write the caption.
+
 **Old:** the `VOICE_BLOCK` string in `voice-block.ts`.
 **New:** identical, byte for byte. No differences.
 
@@ -26,7 +28,7 @@ Write the way a person talks:
 - Use real names. "Norland Labs says," not "the company says" when you can name it.
 - Say who did what. "Norland Labs tested the software," not "the software was tested."
 - Read every line aloud in your head. If nobody would say it in a normal voice, rewrite it.
-- Vary sentence length. In the caption, three short sentences in a row is too many; on a slide, one or two short sentences is normal.
+- Vary sentence length. On a slide, one or two short sentences is normal.
 - Don't open two slides the same way.
 
 Never use:

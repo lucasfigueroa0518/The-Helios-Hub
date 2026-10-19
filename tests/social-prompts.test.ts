@@ -51,7 +51,9 @@ test("RULES_BLOCK applies Tommy's review decisions (a)-(c)", () => {
   assert.ok(!/TWO background slides|more than two background slides|Two is the ceiling/.test(RULES_BLOCK), 'count trimmed from Context policy (a)');
   assert.ok(RULES_BLOCK.includes('Max 2 background slides.'), 'the tested line carries the count');
   assert.ok(RULES_BLOCK.includes('**Background slides** on "why now"'), 'definition kept (a)');
-  assert.ok(RULES_BLOCK.includes('The Fact-checker and the caption follow the same policy.'), '(b)');
+  // (b) superseded 2026-10-19: the Writer and Editor no longer write the caption, so the policy is stage-neutral.
+  assert.ok(RULES_BLOCK.includes('The Fact-checker follows the same policy. A slide clause that fits (1) or (2) is not a flag'), '(b)');
+  assert.ok(!/caption/i.test(RULES_BLOCK), 'no caption instructions reach the Writer or Editor');
   assert.ok(RULES_BLOCK.includes('## Glossing (advisory, not required)'));
 });
 
