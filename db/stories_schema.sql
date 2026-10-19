@@ -247,3 +247,8 @@ INSERT INTO stories.settings (key, value) VALUES ('publishing_live', 'false'::js
 ALTER TABLE stories.sets ADD COLUMN IF NOT EXISTS mode text NOT NULL DEFAULT 'production';
 ALTER TABLE stories.sets DROP CONSTRAINT IF EXISTS stories_sets_mode_check;
 ALTER TABLE stories.sets ADD CONSTRAINT stories_sets_mode_check CHECK (mode IN ('development', 'production'));
+
+-- Candidates may come from the model's own ideas (Guess the Number redesign). The pool keeps its narrower list.
+ALTER TABLE stories.candidates DROP CONSTRAINT IF EXISTS candidates_origin_check;
+ALTER TABLE stories.candidates ADD CONSTRAINT candidates_origin_check
+    CHECK (origin IN ('reels', 'carousel', 'catalog', 'github', 'generated', 'model'));

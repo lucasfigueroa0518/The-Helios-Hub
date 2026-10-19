@@ -184,3 +184,16 @@ test('settings: defaults, auto off for every series, overrides persist', async (
   assert.equal(s.requireApproval, true);
   assert.equal(s.publishingLive, false);
 });
+
+test('candidates accept origin model; the pool still rejects it', async () => {
+  const { db, pg } = await openLocalStoriesDb();
+  const { set } = await requestSet(db, { series: 'guess_the_number', nyDate: '2026-10-10', trigger: 'click', style: 'homemade' });
+  await claimNextRequested(db);
+  await saveBuild(db, set.id, { payload: {}, frames: FRAMES, candidates: [{ origin: 'model', ref: 'idea-1', score: 0.7, chosen: true }] });
+  const rows = await pg.query<{ origin: string }>(`SELECT origin FROM stories.candidates WHERE set_id = $1`, [set.id]);
+  assert.deepEqual(rows.rows.map((r) => r.origin), ['model']);
+  await assert.rejects(
+    pg.query(`INSERT INTO stories.pool (series, key, origin, ref, title) VALUES ('guess_the_number', 'k', 'model', 'r', 't')`),
+    /check/i,
+  );
+});
