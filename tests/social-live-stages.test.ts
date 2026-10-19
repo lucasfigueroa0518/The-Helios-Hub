@@ -256,7 +256,8 @@ test('captioner stage records the closing', async () => {
   assert.deepEqual(closings.recorded, [['sif', READ.text, true]]);
 });
 
-test('captioner stage: a closings log that fails to read or write never fails the caption', async () => {
+test('captioner stage: a closings log that fails to read or write never fails the caption', async (t) => {
+  const warn = t.mock.method(console, 'warn', () => {});
   const { draft, brief } = captionerSetup();
   const stage = createCaptionerStage({
     create: async () => msg('submit_caption', { news: NEWS, read: READ }),
@@ -265,6 +266,19 @@ test('captioner stage: a closings log that fails to read or write never fails th
   });
   const r = await stage(draft, brief);
   assert.ok(r.ok);
+  assert.equal(warn.mock.callCount(), 2, 'one warning for the read, one for the write');
+  assert.match(String(warn.mock.calls[0]!.arguments[0]), /could not read carousel closings/);
+  assert.match(String(warn.mock.calls[1]!.arguments[0]), /could not record the carousel closing/);
+});
+
+test('captioner stage: a fresh-caption rerun reuses the story\'s Jev fit (Jev called once, charged once)', async () => {
+  const { stage, draft, brief, jevCalls, lastUser } = captionerSetup();
+  const first = await stage(draft, brief);
+  const second = await stage(draft, brief);
+  assert.ok(first.ok && second.ok);
+  assert.equal(jevCalls.length, 1);
+  assert.ok(lastUser().includes(buildLineInstruction(true)), 'the cached fit still decides the build line');
+  assert.ok(Math.abs(first.costUsd - second.costUsd - jevCostUsd({ input_tokens: 1000, output_tokens: 0 })) < 1e-9);
 });
 
 test('captioner stage: a captioner failure is a set-aside reason with its cost', async () => {

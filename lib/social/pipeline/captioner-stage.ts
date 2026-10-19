@@ -7,7 +7,8 @@
  *   closing recorded
  *
  * A failed Jev call or closings read never fails the caption: no Jev answer
- * means no build line, an unreadable log reads as empty. The two parts stay
+ * means no build line, an unreadable log reads as empty. The fit is asked
+ * once per story: a fresh-caption rerun reuses it (and its cost isn't charged twice). The two parts stay
  * separate until the mechanical stage joins them, so the Fact-checker can
  * judge the read on its own rules.
  */
@@ -34,6 +35,7 @@ export type CaptionerStageDeps = {
 };
 
 export function createCaptionerStage(deps: CaptionerStageDeps): PipelineStages['caption'] {
+  const fits = new Map<string, { fit: number | null; jevError?: string }>();
   return async (draft, brief) => {
     let recent: RecentClosing[] = [];
     try {
@@ -45,7 +47,11 @@ export function createCaptionerStage(deps: CaptionerStageDeps): PipelineStages['
     let fit: number | null = null;
     let jevUsd = 0;
     let jevError: string | undefined;
-    if (ceilingAllows(recent)) {
+    const known = fits.get(draft.storyId);
+    if (known) {
+      fit = known.fit;
+      jevError = known.jevError;
+    } else if (ceilingAllows(recent)) {
       const p = brief.parsed;
       const text = [p.the_news.text, ...p.facts.map((f) => f.text)].join('\n');
       try {
@@ -58,6 +64,7 @@ export function createCaptionerStage(deps: CaptionerStageDeps): PipelineStages['
       } catch (err) {
         jevError = err instanceof Error ? err.message : String(err);
       }
+      fits.set(draft.storyId, { fit, ...(jevError ? { jevError } : {}) });
     }
     const include = decideBuildLine(fit, recent);
 

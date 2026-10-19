@@ -7,8 +7,9 @@
  *   fresh draft when:   cuts leave < 5 story slides, the key slide is cut,
  *                       or every cover option fails
  *   fresh caption when: the caption (the news) or caption_read (the
- *                       builder's read) is cut to nothing; only the
- *                       captioner reruns (social-captions redesign, 2026-10-19)
+ *                       builder's read) is cut to nothing, or the read no
+ *                       longer names Helios; only the captioner reruns
+ *                       (social-captions redesign, 2026-10-19)
  *   set aside when:     the story's main claim is false
  */
 import type Anthropic from '@anthropic-ai/sdk';
@@ -137,6 +138,8 @@ export function checkFlags(input: unknown, draft: FilledDraft, brief: Brief): Fl
 
 export const MIN_STORY_SLIDES = 5;
 
+const HELIOS = /\bHelios\b/i;
+
 export type FixOutcome =
   | { kind: 'ok'; draft: DraftSubmission; applied: string[] }
   | { kind: 'fresh-draft'; why: string; applied: string[] }
@@ -228,6 +231,8 @@ export function applyFlags(draft: DraftSubmission, flags: FlagsSubmission, brief
   // one that was empty going in (a draft checked before the captioner runs) passes through.
   if (draft.caption.text && !d.caption.text) return { kind: 'fresh-caption', why: 'the caption was cut to nothing', applied };
   if (draft.caption_read?.text && !d.caption_read?.text) return { kind: 'fresh-caption', why: "the builder's read was cut to nothing", applied };
+  // Every caption ties back to Helios (spec hard requirement): a cut that removed the read's Helios mention reruns the captioner.
+  if (HELIOS.test(draft.caption_read?.text ?? '') && !HELIOS.test(d.caption_read?.text ?? '')) return { kind: 'fresh-caption', why: "the builder's read no longer names Helios", applied };
   if (cover !== d.chosen_cover) applied.push(`chosen cover ${d.chosen_cover} failed → cover option ${cover}`);
   d.chosen_cover = cover;
   d.slides = d.slides.filter((_, i) => !dropped.has(i));

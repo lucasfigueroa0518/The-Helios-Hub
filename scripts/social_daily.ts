@@ -62,10 +62,10 @@ const DEFAULT_CAP_USD = 2;
 const WIGGLE_USD = 0.5;
 
 /** A caption closings log for one run, when there is no Postgres (the file store): later posts still see earlier ones. */
-function memoryClosings(): import('@/lib/social/captions/closings-store').ClosingsLog {
+function memoryClosings(window: number): import('@/lib/social/captions/closings-store').ClosingsLog {
   const rows: Array<import('@/lib/social/captions/build-line').RecentClosing> = [];
   return {
-    recent: async () => rows.slice(0, 6), // CLOSINGS_WINDOW
+    recent: async () => rows.slice(0, window),
     record: async (_subjectId, closing, buildLine) => void rows.unshift({ closing, buildLine, createdAt: new Date() }),
   };
 }
@@ -125,6 +125,7 @@ async function main() {
   const { createCostMeter } = await import('@/lib/social/pipeline/cost-meter');
   const { createLiveStages, createRunBudget } = await import('@/lib/social/pipeline/live-stages');
   const { closingsLog } = await import('@/lib/social/captions/closings-store');
+  const { CLOSINGS_WINDOW } = await import('@/lib/social/captions/build-line');
   const { runDay } = await import('@/lib/social/pipeline/orchestrator');
   const { createSelectionStage } = await import('@/lib/social/pipeline/selection-stage');
   const { checkRenderFit } = await import('@/lib/social/render/fit-check');
@@ -200,7 +201,7 @@ async function main() {
     create: liveMessagesCreate(newAnthropic()),
     jev,
     // The caption closings log lives in Postgres; a run on the file store keeps one in memory for the run.
-    closings: store.query ? closingsLog(store.query, 'carousel') : memoryClosings(),
+    closings: store.query ? closingsLog(store.query, 'carousel') : memoryClosings(CLOSINGS_WINDOW),
     budget,
     readPage,
     isWellKnown: isWellKnownLive,

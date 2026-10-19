@@ -197,7 +197,7 @@ test('cutting the read to nothing asks for a fresh caption; so does emptying the
 });
 
 test('fact-check can flag the read: checkFlags accepts caption_read and applyFlags cuts inside it', () => {
-  const cut = flag({ where: { part: 'caption_read', number: null }, quoted_text: 'Helios builds systems you own.', fact_id: null, type: 5 });
+  const cut = flag({ where: { part: 'caption_read', number: null }, quoted_text: 'For a law firm, the rules on AI tools may get looser first.', fact_id: null, type: 4 });
   assert.deepEqual(flagErrors({ flags: [cut], main_claim_false: false }), []);
   assert.match(String(flagErrors({ flags: [{ ...cut, quoted_text: 'Helios cut costs 40%' }], main_claim_false: false })), /quoted text isn't in caption_read/);
   const noRead = { ...filled(), caption_read: undefined };
@@ -205,9 +205,18 @@ test('fact-check can flag the read: checkFlags accepts caption_read and applyFla
   const o = apply([cut]);
   assert.equal(o.kind, 'ok');
   if (o.kind !== 'ok') return;
-  assert.equal(o.draft.caption_read!.text, 'For a law firm, the rules on AI tools may get looser first.');
+  // A partial cut that leaves the Helios mention is a free fix.
+  assert.equal(o.draft.caption_read!.text, 'Helios builds systems you own.');
   assert.equal(o.draft.caption.text, captioned().caption.text, 'the news part is untouched');
-  assert.match(o.applied[0]!, /CUT type 5 in caption_read/);
+  assert.match(o.applied[0]!, /CUT type 4 in caption_read/);
+});
+
+test('a partial cut that removes the read\'s Helios sentence asks for a fresh caption', () => {
+  const o = apply([flag({ where: { part: 'caption_read', number: null }, quoted_text: 'Helios builds systems you own.', fact_id: null, type: 5 })]);
+  assert.deepEqual(o.kind === 'fresh-caption' && o.why, "the builder's read no longer names Helios");
+  // Slide problems still come first.
+  const both = apply([flag({ quoted_text: 'Announced on Truth Social' }), flag({ where: { part: 'caption_read', number: null }, quoted_text: 'Helios builds systems you own.', fact_id: null })]);
+  assert.equal(both.kind, 'fresh-draft');
 });
 
 test('the Fact-checker stage maps fresh-caption to needs-fresh-caption', async () => {
