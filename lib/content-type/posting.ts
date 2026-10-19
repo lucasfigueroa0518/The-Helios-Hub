@@ -56,7 +56,16 @@ export type PostingState = {
   days?: number[] | null;
   /** Template mode: this Monday–Sunday week's slots for the type. Null while legacy (the controls above decide). */
   schedule: ScheduleDay[] | null;
+  /**
+   * Template mode: the type's slots on each of the last NIGHT_DAYS dates
+   * through today, so the health reports (the morning one and the 30-night
+   * backfill) check each night against its own day. Null while legacy.
+   */
+  nights: ScheduleDay[] | null;
 };
+
+/** How many dates through today `nights` covers: every night the Health page can ask about (historyNights ≤ 31). */
+export const NIGHT_DAYS = 31;
 
 export type PostingPatch = {
   live?: boolean;
@@ -80,17 +89,30 @@ async function exDb() {
   return explainersDb();
 }
 
+type TypeFields = Omit<PostingState, 'schedule' | 'nights'>;
+
 const appQuery: SlotQuery = (text, params) => dbQuery(text, params);
 
-/** This Monday–Sunday week (New York) on the calendar, or null while legacy or when the slots can't be read. SELECT only. */
-async function weekPlan(now: Date): Promise<{ today: string; plan: SlotPlan } | null> {
-  const today = nyDateOf(now)!;
-  const monday = addDays(today, -((weekdayOf(today) + 6) % 7));
-  const plan = await slotPlan(appQuery, monday, 7).catch(() => null);
-  return plan ? { today, plan } : null;
+/** The dates from..to of a plan, as a plan of their own. */
+function slice(plan: SlotPlan, from: string, to: string): SlotPlan {
+  return { from, to, byDate: new Map([...plan.byDate].filter(([d]) => d >= from && d <= to)) };
 }
 
-/** This week's calendar slots for a type. */
+/**
+ * The calendar from NIGHT_DAYS back through this Monday–Sunday week (New
+ * York), in one read, split into this week and the recent nights. Null while
+ * legacy or when the slots can't be read. SELECT only.
+ */
+async function calendarPlan(now: Date): Promise<{ today: string; week: SlotPlan; nights: SlotPlan } | null> {
+  const today = nyDateOf(now)!;
+  const monday = addDays(today, -((weekdayOf(today) + 6) % 7));
+  const sunday = addDays(monday, 6);
+  const first = addDays(today, -(NIGHT_DAYS - 1));
+  const plan = await slotPlan(appQuery, first, NIGHT_DAYS + (6 - ((weekdayOf(today) + 6) % 7))).catch(() => null);
+  return plan ? { today, week: slice(plan, monday, sunday), nights: slice(plan, first, today) } : null;
+}
+
+/** A plan's calendar slots for a type, one entry per date. */
 function weekSchedule(type: ContentType, plan: SlotPlan): ScheduleDay[] {
   return [...plan.byDate].map(([nyDate, all]) => {
     const slots = all.filter((s) => s.vertical === type);
@@ -117,7 +139,7 @@ function weekdaysWith(plan: SlotPlan, has: (s: ResolvedSlot) => boolean): number
  * count; Last Few Days' days and each Stories series' days are this week's
  * weekdays with that slot.
  */
-function withCalendar(state: Omit<PostingState, 'schedule'>, plan: SlotPlan, today: string): Omit<PostingState, 'schedule'> {
+function withCalendar(state: TypeFields, plan: SlotPlan, today: string): TypeFields {
   const type = state.type;
   if (type === 'last_few_days') return { ...state, days: weekdaysWith(plan, (s) => s.vertical === 'last_few_days') };
   if (type === 'stories') {
@@ -127,12 +149,12 @@ function withCalendar(state: Omit<PostingState, 'schedule'>, plan: SlotPlan, tod
 }
 
 export async function readPosting(type: ContentType, now = new Date()): Promise<PostingState> {
-  const [state, week] = await Promise.all([readTypePosting(type), weekPlan(now)]);
-  if (!week) return { ...state, schedule: null };
-  return { ...withCalendar(state, week.plan, week.today), schedule: weekSchedule(type, week.plan) };
+  const [state, cal] = await Promise.all([readTypePosting(type), calendarPlan(now)]);
+  if (!cal) return { ...state, schedule: null, nights: null };
+  return { ...withCalendar(state, cal.week, cal.today), schedule: weekSchedule(type, cal.week), nights: weekSchedule(type, cal.nights) };
 }
 
-async function readTypePosting(type: ContentType): Promise<Omit<PostingState, 'schedule'>> {
+async function readTypePosting(type: ContentType): Promise<TypeFields> {
   if (type === 'carousels') {
     const [auto, approval, live, per] = await Promise.all(['auto_run', 'require_approval', 'publishing_live', 'posts_per_day'].map((k) => getSocialSetting<unknown>(k)));
     const per2 = count(per);
