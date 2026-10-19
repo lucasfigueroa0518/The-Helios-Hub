@@ -1,6 +1,8 @@
 import type { Questions } from '@typesafe-ai/sdk';
 
 import type { ExplainersDb } from '@/lib/explainers/db';
+import { chooseAnalogySafely } from '@/lib/explainers/ideas/analogy';
+import type { IdeaModel } from '@/lib/explainers/ideas/generator';
 import type { ExplainersJevRunner } from '@/lib/explainers/jev/runner';
 import {
   DUPLICATE_GATE,
@@ -12,7 +14,7 @@ import { IDEA_SCORING, IDEA_SCORING_FIELDS } from '@/lib/explainers/jev/question
 import { getTopic, listPool, listRecentlyRendered } from '@/lib/explainers/repository';
 import { failedGates, weightedScore, type TopicScores } from '@/lib/explainers/scoring';
 import type { ExplainersSettings } from '@/lib/explainers/settings';
-import { SCORE_KEYS, type ScoreKey, type TopicRow } from '@/lib/explainers/types';
+import { IDEA_SCORE_KEYS, type IdeaScoreKey, type ScoreKey, type TopicRow } from '@/lib/explainers/types';
 import { untrusted } from '@/lib/reels/jev/state';
 
 export type EvaluateDeps = {
@@ -21,6 +23,9 @@ export type EvaluateDeps = {
   settings: ExplainersSettings;
   themeBrief: string;
   now?: Date;
+  /** Writes the analogy candidates for a topic that makes the pool (EX3-30). Without it, the render picks one. */
+  ideaModel?: IdeaModel;
+  ideaCycleId?: string | null;
 };
 
 export type TopicRef = { topic_title: string; topic_scope: string | null };
@@ -34,7 +39,7 @@ export function topicRef(topic: Pick<TopicRow, 'title' | 'scope'>): TopicRef {
 type StateValue = string | { untrusted_content: string } | null;
 
 function fieldValue(
-  field: (typeof IDEA_SCORING_FIELDS)[ScoreKey][number],
+  field: (typeof IDEA_SCORING_FIELDS)[IdeaScoreKey][number],
   topic: Pick<TopicRow, 'title' | 'scope' | 'source_text'>,
   themeBrief: string,
 ): [string, StateValue] | null {
@@ -51,7 +56,7 @@ function fieldValue(
   }
 }
 
-export type ScoringCall = { keys: ScoreKey[]; state: Record<string, StateValue> };
+export type ScoringCall = { keys: IdeaScoreKey[]; state: Record<string, StateValue> };
 
 /**
  * Each E-15 question sees only the state fields the packet lists for it.
@@ -63,7 +68,7 @@ export function scoringCalls(
   themeBrief: string,
 ): ScoringCall[] {
   const calls = new Map<string, ScoringCall>();
-  for (const key of SCORE_KEYS) {
+  for (const key of IDEA_SCORE_KEYS) {
     const state: Record<string, StateValue> = {};
     for (const field of IDEA_SCORING_FIELDS[key]) {
       const entry = fieldValue(field, topic, themeBrief);
@@ -208,7 +213,9 @@ async function saveScores(
     `UPDATE explainers.topics
         SET audience_fit = $2, teachability_45s = $3, analogy_potential = $4,
             visual_potential = $5, accuracy_under_simplification = $6, hook_strength = $7,
-            weighted_score = $8, scored_at = now(), updated_at = now()
+            weighted_score = $8,
+            jev_notes = COALESCE(jev_notes, '{}'::jsonb) || jsonb_build_object('ai_focus', $9::numeric),
+            scored_at = now(), updated_at = now()
       WHERE id = $1`,
     [
       topicId,
@@ -219,6 +226,7 @@ async function saveScores(
       scores.accuracy_under_simplification,
       scores.hook_strength,
       score,
+      scores.ai_focus ?? null,
     ],
   );
 }
@@ -240,6 +248,8 @@ async function setStatus(
 /**
  * E-15 processing order for one proposed topic: duplicate logic, the six
  * scores, the gates, then the E-16 head-to-head if it duplicates a pool topic.
+ * A topic that makes the pool then gets its analogy picked (EX3-30); a failed
+ * pick is recorded on the topic and never changes the evaluation.
  */
 export async function evaluateTopic(deps: EvaluateDeps, topicId: string): Promise<Evaluation> {
   const candidate = await getTopic(deps.db, topicId);
@@ -274,6 +284,7 @@ export async function evaluateTopic(deps: EvaluateDeps, topicId: string): Promis
 
   if (!match) {
     await setStatus(deps, topicId, 'pool');
+    await pickAnalogyFor(deps, candidate);
     return { outcome: 'entered_pool', score };
   }
 
@@ -284,6 +295,7 @@ export async function evaluateTopic(deps: EvaluateDeps, topicId: string): Promis
       duplicateOf: topicId,
     });
     await setStatus(deps, topicId, 'pool');
+    await pickAnalogyFor(deps, candidate);
     return { outcome: 'won_head_to_head', score, displacedId: match.id };
   }
   await setStatus(deps, topicId, 'displaced', {
@@ -293,10 +305,27 @@ export async function evaluateTopic(deps: EvaluateDeps, topicId: string): Promis
   return { outcome: 'lost_head_to_head', score, winnerId: match.id };
 }
 
-/** Keep the best `poolSize`; displace the rest (E-16 step 7). `keep` (tonight's promoted topic, shared queue) is never cut. Returns how many. */
-export async function trimPool(db: ExplainersDb, poolSize: number, keep: string | null = null): Promise<number> {
+async function pickAnalogyFor(deps: EvaluateDeps, topic: TopicRow): Promise<void> {
+  if (!deps.ideaModel) return;
+  await chooseAnalogySafely(
+    {
+      db: deps.db,
+      jev: deps.jev,
+      ideaModel: deps.ideaModel,
+      model: deps.settings.idea_model,
+      mode: deps.settings.mode,
+      themeBrief: deps.themeBrief,
+      ideaCycleId: deps.ideaCycleId ?? null,
+      now: deps.now,
+    },
+    topic,
+  );
+}
+
+/** Keep the best `poolSize`; displace the rest (E-16 step 7). Returns how many. */
+export async function trimPool(db: ExplainersDb, poolSize: number): Promise<number> {
   const pool = await listPool(db);
-  const cut = pool.slice(poolSize).filter((topic) => topic.id !== keep);
+  const cut = pool.slice(poolSize);
   for (const topic of cut) {
     await db.query(
       `UPDATE explainers.topics

@@ -33,8 +33,9 @@ export type SettingKey = keyof ExplainersSettings;
 export const DEFAULT_SETTINGS: ExplainersSettings = {
   mode: 'development',
   auto_render: false,
-  per_reel_cap_usd: 5,
-  // SH-49: two renders a day under the $5 per-reel cap.
+  // Explainers 3.1 (EX3-72): $8 per reel (Lucas, 2026-10-13).
+  per_reel_cap_usd: 8,
+  // SH-49: two renders a day.
   daily_render_cap: 2,
   daily_spend_cap_usd: 10,
   pool_size: 25,
@@ -47,7 +48,8 @@ export const DEFAULT_SETTINGS: ExplainersSettings = {
   idea_model: 'claude-sonnet-5-5',
   music_enabled: true,
   sfx_enabled: true,
-  theme_brief_version: 'v1',
+  // Explainers 3.1 (EX3-34). An existing database keeps its stored version until Lucas flips it.
+  theme_brief_version: 'v3',
 };
 
 type Parser<K extends SettingKey> = (value: unknown) => ExplainersSettings[K];

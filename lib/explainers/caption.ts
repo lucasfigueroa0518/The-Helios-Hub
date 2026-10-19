@@ -33,7 +33,9 @@ export {
  * The system prompt is the stable prefix and carries the cache breakpoint.
  */
 
-export const CAPTION_VERSION = 'explainer-caption-v2';
+// v3 (Explainers 3.0): rule 4 and the shape follow the eight-beat reel. Drafted 2026-10-13,
+// awaiting Lucas's approval (R6).
+export const CAPTION_VERSION = 'explainer-caption-v3';
 
 export const CAPTION_INSTRUCTIONS = `You write the Instagram caption for one finished Helios Explainer Reel. This is the post text under the video, the same job a strong social caption does for any Reel: stop the scroll, pay out the idea, and give the viewer a reason to save or send it.
 
@@ -43,7 +45,7 @@ HARD CONSTRAINTS. Every one is required.
 1. Return JSON matching the schema. The caption field is the body of the post, nothing else. No episode line.
 2. The first paragraph is the hook, one or two short sentences. After code adds the episode line and a blank line, that opening plus the hook must stay within ${CAPTION_HOOK_PREVIEW} characters. Keep the hook under ${hookPreviewLimit()} characters so episode 999 still fits. The hook makes sense with no video playing. It is not the spoken thesis copied out, and it is not a description of the frames.
 3. After the hook, write a real caption. Short paragraphs with a blank line between them. One block is a failed caption. You need a hook, at least two body paragraphs, and a call to action: four blocks minimum. The body before hashtags must be at least ${CAPTION_MIN_BODY_CHARS} characters. A one-sentence caption is a failed caption.
-4. The body makes the idea useful in the viewer's world. Use the reel's analogy, example, catch, and the place they will meet this. Do not walk the seven beats in order, and do not stop after one restatement of the thesis.
+4. The body makes the idea useful in the viewer's world. Use the reel's curiosity gap, analogy, example, and the place they will meet this. Do not walk the eight beats in order, and do not stop after one restatement of the thesis.
 5. One call to action, specific to this concept: save it for a named situation from the reel, or send it to the person who hits that situation. No "what do you think?", no "double tap", no "comment YES", no offer of Helios services.
 6. 3 to 5 hashtags, only at the end. One or two broad, the rest specific to this concept. Each tag needs a reason in the post.
 7. No emoji. No URLs. Do not speak as "we", "our", "us", or "I". Address the viewer as "you", or write in the third person. Do not sign off with Helios.
@@ -56,7 +58,7 @@ Hook that stands alone in the preview.
 
 What this is, in the viewer's world, with the reel's concrete example.
 
-The catch, or the place they will meet it. Enough that the idea sticks after the video ends.
+The place they will meet it, or what the example shows. Enough that the idea sticks after the video ends.
 
 Save this for the next time <the situation this reel is about>, or send it to the person who hits that situation.
 

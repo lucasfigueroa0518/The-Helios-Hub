@@ -7,6 +7,7 @@ import { Loader2, Plus, Sparkles, X } from 'lucide-react';
 import { Drawer } from '@/app/reels/ui';
 import { requestJson } from '@/lib/client-request';
 import type { TopicsView as TopicsData } from '@/lib/explainers/overview';
+import { topicAiFocus } from '@/lib/explainers/scoring';
 import { SCORE_KEYS, type ScoreKey, type TopicRow, type TopicStatus } from '@/lib/explainers/types';
 import { refreshHubPage } from '@/lib/content-type/refresh-client';
 
@@ -19,7 +20,7 @@ const SCORE_LABELS: Record<ScoreKey, string> = {
   hook_strength: 'Hook',
 };
 
-const SCORE_NAMES = SCORE_KEYS.map((key) => `${SCORE_LABELS[key]} = ${key.replaceAll('_', ' ')}`).join(', ');
+const SCORE_NAMES = `${SCORE_KEYS.map((key) => `${SCORE_LABELS[key]} = ${key.replaceAll('_', ' ')}`).join(', ')}, AI = ai focus`;
 
 const OUTCOMES: Record<string, string> = {
   not_proposed: 'skipped',
@@ -35,10 +36,14 @@ function score(value: number | null) {
 }
 
 function scoreLine(topic: TopicRow): string {
-  return SCORE_KEYS.map((key) => {
-    const value = topic[key];
-    return `${SCORE_LABELS[key]} ${value == null ? '·' : value.toFixed(1)}`;
-  }).join(' · ');
+  const ai = topicAiFocus(topic);
+  return [
+    ...SCORE_KEYS.map((key) => {
+      const value = topic[key];
+      return `${SCORE_LABELS[key]} ${value == null ? '·' : value.toFixed(1)}`;
+    }),
+    `AI ${ai == null ? '·' : ai.toFixed(1)}`,
+  ].join(' · ');
 }
 
 function message(error: unknown) {

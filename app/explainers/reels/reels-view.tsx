@@ -256,7 +256,7 @@ function ReelDrawer({ jobId, onClose, onChanged }: { jobId: string; onClose: () 
               <>
                 <p className="rh-text">{reviewCaption(post.content)}</p>
                 <CopyButton text={reviewCaption(post.content)} />
-                <p className="rh-muted">The episode number is filled in when this posts, in the order explainers have gone out.</p>
+                <p className="rh-muted">The episode number is filled in when this posts: one more than the explainers still on the profile (archived posts don't count).</p>
               </>
             ) : (
               <p className="rh-muted">{working ? 'Written with the video.' : 'No caption yet.'}</p>

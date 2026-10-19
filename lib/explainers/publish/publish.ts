@@ -31,14 +31,27 @@ function isUniqueViolation(error: unknown): boolean {
   return (error as { code?: string } | null)?.code === '23505';
 }
 
-/** Next series number: how many explainers have published, plus this one. */
-export async function nextPublishedEpisode(db: Queryable): Promise<number> {
-  const { rows } = await db.query<{ n: number }>(
-    `SELECT count(*)::int AS n
+/**
+ * Next series number: how many explainers are still on the profile, plus this one. An explainer
+ * Lucas archives (or deletes) on Instagram no longer counts (2026-10-13): `liveMediaIds` reads
+ * the account's media list, which leaves archived posts out, so archiving resets the count and
+ * unarchiving brings a post back. Without that read (no client, or Instagram fails) every
+ * published explainer counts, as before, so a failed read never resets the series by accident.
+ */
+export async function nextPublishedEpisode(db: Queryable, meta?: Pick<ReelMetaClient, 'liveMediaIds'> | null): Promise<number> {
+  const { rows } = await db.query<{ media_id: string | null; finished_at: Date | string | null }>(
+    `SELECT media_id, finished_at
        FROM social_hub.publish_attempts
       WHERE vertical = 'explainers' AND status = 'published'`,
   );
-  return Number(rows[0]?.n ?? 0) + 1;
+  if (rows.length === 0 || !meta?.liveMediaIds) return rows.length + 1;
+  const oldest = Math.min(...rows.map((r) => (r.finished_at ? new Date(r.finished_at).getTime() : Date.now())));
+  try {
+    const live = await meta.liveMediaIds(new Date(oldest - 24 * 60 * 60 * 1000));
+    return rows.filter((r) => !r.media_id || live.has(r.media_id)).length + 1;
+  } catch {
+    return rows.length + 1;
+  }
 }
 
 /** What a job needs before it can go: approved, rendered, video in the bucket, a caption that fits. */
@@ -194,7 +207,7 @@ export async function carryAttempt(deps: PublishDeps, id: string): Promise<{ id:
     if (!gate.ok) throw new Error(gate.message);
 
     const videoUrl = await deps.signVideo(attempt.video_object, PUBLISH_VIDEO_URL_SECONDS);
-    const episode = await nextPublishedEpisode(db);
+    const episode = await nextPublishedEpisode(db, meta);
     const caption = stampCaption(attempt.caption, episode);
     if (caption.length > CAPTION_MAX_CHARS) {
       throw new Error(`The caption is ${caption.length} characters; Instagram takes ${CAPTION_MAX_CHARS}.`);

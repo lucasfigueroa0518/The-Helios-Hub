@@ -28,7 +28,8 @@ export const OFFICIAL_DOMAINS: OfficialDomains[] = [
   { company: 'Microsoft', names: ['Microsoft'], paths: [{ host: 'blogs.microsoft.com' }, { host: 'news.microsoft.com' }] },
   { company: 'Nvidia', names: ['Nvidia', 'NVIDIA'], paths: [{ host: 'nvidianews.nvidia.com' }, { host: 'blogs.nvidia.com' }] },
   { company: 'Mistral AI', names: ['Mistral AI', 'Mistral'], paths: [{ host: 'mistral.ai' }] },
-  { company: 'xAI', names: ['xAI'], paths: [{ host: 'x.ai' }] },
+  // xAI is now SpaceXAI (Lucas, 2026-10-13); a brief may still say xAI.
+  { company: 'SpaceXAI', names: ['SpaceXAI', 'xAI', 'SpaceXSI'], paths: [{ host: 'x.ai' }] },
 ];
 
 const partsOf = (url: string): { host: string; path: string } | null => {

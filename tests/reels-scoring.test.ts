@@ -341,7 +341,7 @@ test('value needs a viewer stake, and a Callout needs something the viewer choos
 });
 
 test('scoring judges for the AI-curious viewer with a builder minority (D-206)', () => {
-  assert.equal(SCORING_PASS_1.version, 'scoring-pass1-v4');
+  assert.equal(SCORING_PASS_1.version, 'scoring-pass1-v5');
   assert.equal(SCORING_PASS_2.version, 'scoring-pass2-v4');
   const wording = JSON.stringify([SCORING_PASS_1.questions, SCORING_PASS_2.questions]);
   assert.match(wording, /curious about AI/);

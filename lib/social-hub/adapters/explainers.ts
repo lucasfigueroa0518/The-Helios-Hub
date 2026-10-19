@@ -228,7 +228,14 @@ export function explainerBreakdown(row: ExplainerTopicRow): ScoreBreakdown | nul
     const gate = min != null && raw != null && raw < min ? ` · below the ${min} minimum` : '';
     return { label: `${s.label} (${SCORE_POINTS[key]} pts)`, points: raw == null ? null : Number(((raw / 4) * SCORE_POINTS[key]).toFixed(2)), detail: raw == null ? 'Not scored' : `${raw.toFixed(2)} of 4${gate}` };
   });
-  return { formula: 'Each judge score out of 4, times its points; the six add up to 100.', parts };
+  // Idea scoring v3 (EX3-73): ai_focus lives in jev_notes, with no gate.
+  const ai = num(row.ai_focus);
+  parts.push({
+    label: `AI focus (${SCORE_POINTS.ai_focus} pts)`,
+    points: ai == null ? null : Number(((ai / 4) * SCORE_POINTS.ai_focus).toFixed(2)),
+    detail: ai == null ? 'Not scored (scored before AI focus existed)' : `${ai.toFixed(2)} of 4`,
+  });
+  return { formula: 'Each judge score out of 4, times its points; the seven add up to 100.', parts };
 }
 
 export function explainerIdeas(rows: readonly ExplainerTopicRow[]): HubIdea[] {

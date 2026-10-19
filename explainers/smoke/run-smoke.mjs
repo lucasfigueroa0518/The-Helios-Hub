@@ -1,17 +1,19 @@
 #!/usr/bin/env node
-// Zero-cost smoke test for Explainer Reels (BUILD_PLAN §10, M4).
+// Zero-cost smoke test for Explainer Reels (BUILD_PLAN §10, M4; Explainers 3.3, EX3-50 to EX3-98).
 //
-// Builds a two-frame fixture project with the Helios preset and runs the real
-// HyperFrames pipeline: build-frame → assemble-index → transitions → lint →
-// check → snapshot → render. No model, no HeyGen, no audio. Reports render
-// wall time, peak memory (/usr/bin/time), and the MP4's size and bitrate.
+// Builds a three-frame fixture project with the Helios preset and the world kit, and runs the
+// real pipeline: build-frame → synthetic voice timings → pace → [music] → opener sounds → mount →
+// try → bounds → sound design → captions → assemble-index → transitions → lint → check → snapshot →
+// render. No model, no voice audio, and no HeyGen unless --music asks for the real music search
+// (then run it with the HeyGen key: node --env-file=.env.local …). Reports render wall time, peak
+// memory (/usr/bin/time), and the MP4's size and bitrate.
 //
-//   node explainers/smoke/run-smoke.mjs [--out <dir>]
+//   node explainers/smoke/run-smoke.mjs [--out <dir>] [--music]
 //
-// Needs: `npm install` in explainers/runtime (pinned hyperframes CLI), ffprobe,
-// and network access for the GSAP CDN script the frames load.
+// Needs: `npm install` in explainers/runtime (pinned hyperframes CLI), ffmpeg and ffprobe, and
+// network access for the GSAP and perfect-freehand CDN scripts the frames load.
 
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -59,15 +61,17 @@ rmSync(workDir, { recursive: true, force: true });
 mkdirSync(workDir, { recursive: true });
 run('init', cli, ['init', 'proj', '--non-interactive', '--example=blank'], { cwd: workDir });
 
-// 2. Helios assets: fonts, logo, icons. tokens.json names no colors and no fonts,
-//    so build-frame keeps the Helios preset as authored (its remix would collapse
-//    Pragmatica + Roboto into one face). The preset carries its own @font-face block.
+// 2. Helios assets: fonts, logo, the world kit, the opener sounds. tokens.json names no colors
+//    and no fonts, so build-frame keeps the Helios preset as authored.
 cpSync(join(explainers, 'design', 'fonts'), join(project, 'assets', 'fonts'), {
   recursive: true,
   filter: (src) => !/\.(md|txt)$/.test(src),
 });
 cpSync(join(explainers, 'design', 'helios-design-system', 'assets', 'Helios-logo.png'), join(project, 'assets', 'Helios-logo.png'));
-cpSync(join(explainers, 'frame-presets', 'helios', 'icons'), join(project, 'assets', 'icons'), { recursive: true });
+cpSync(join(explainers, 'world-kit'), join(project, 'assets', 'kit'), { recursive: true });
+mkdirSync(join(project, 'assets', 'sfx'), { recursive: true });
+for (const f of ['riser.mp3', 'impact-bass-1.mp3']) cpSync(join(explainers, 'design', 'sfx', f), join(project, 'assets', 'sfx', f));
+symlinkSync(join(explainers, 'design', 'sfx'), join(project, 'assets', 'sfx-library'), 'dir');
 mkdirSync(join(project, 'capture', 'extracted'), { recursive: true });
 writeFileSync(
   join(project, 'capture', 'extracted', 'tokens.json'),
@@ -89,17 +93,30 @@ if (!faces) {
 }
 console.log(`  @font-face rules: ${faces.split('\n').length}`);
 
-// 4. Fixture storyboard + frames, with fonts and icons injected the way a worker would.
+// 4. Fixture storyboard, world and scene modules, and synthetic voice timings (no audio files).
+//    Then the deterministic kit steps the orchestrator runs in a real job.
 cpSync(join(here, 'fixture'), project, { recursive: true });
-const framesDir = join(project, 'compositions', 'frames');
-for (const file of readdirSync(framesDir)) {
-  const path = join(framesDir, file);
-  let html = readFileSync(path, 'utf8').replace('/* FONT_FACES */', faces);
-  html = html.replace(/<!-- ICON:([a-z0-9-]+) -->/g, (_, name) =>
-    readFileSync(join(project, 'assets', 'icons', `${name}.svg`), 'utf8').replace(/<!--[\s\S]*?-->\s*/, ''),
-  );
-  writeFileSync(path, html);
+const words = (frame, line, from, step) => {
+  const list = line.split(' ').map((text, i) => ({ text, start: from + i * step, end: from + i * step + step * 0.8 }));
+  return { frame, duration_s: Number((list[list.length - 1].end + 0.06).toFixed(3)), words: list };
+};
+writeFileSync(join(project, 'audio_meta.json'), `${JSON.stringify({ bgm: null, voices: [
+  words(1, 'In the next 30 seconds, this busy writer will teach you an AI concept.', 0.15, 0.25),
+  words(2, 'Picture a pen copying the same long instructions onto every sheet, one costly line at a time.', 0.2, 0.36),
+  words(3, 'Prompt caching is when a model provider saves the repeated start of your prompt, so later requests reuse it instead of reading it again.', 0.2, 0.33),
+], sfx: [] }, null, 2)}\n`);
+run('pace', 'node', ['assets/kit/pace.mjs']);
+if (process.argv.includes('--music')) {
+  // music.mjs reaches HeyGen through the pinned CLI's library, as in a job's project.
+  if (!existsSync(join(project, 'node_modules'))) symlinkSync(join(explainers, 'runtime', 'node_modules'), join(project, 'node_modules'), 'dir');
+  run('music', 'node', ['assets/kit/music.mjs']);
 }
+run('opener sounds', 'node', ['assets/kit/opener-sfx.mjs']);
+run('kit mount', 'node', ['assets/kit/mount.mjs']);
+run('kit try', 'node', ['assets/kit/try.mjs', 'all']);
+run('kit bounds', 'node', ['assets/kit/bounds.mjs', 'all']);
+run('sound design', 'node', ['assets/kit/sound.mjs']);
+run('captions', 'node', [script('captions.mjs'), 'build', '--storyboard', './STORYBOARD.md', '--audio-meta', './audio_meta.json', '--hyperframes', '.', '--out', './caption_groups.json']);
 
 // 5. Assemble, transitions, gates.
 run('assemble-index', 'node', [script('assemble-index.mjs'), '--storyboard', './STORYBOARD.md', '--hyperframes', '.']);
@@ -107,7 +124,7 @@ run('transitions inject', 'node', [script('transitions.mjs'), 'inject', '--story
 run('transitions verify', 'node', [script('transitions.mjs'), 'verify', '--storyboard', './STORYBOARD.md', '--index', './index.html']);
 const lint = run('lint', cli, ['lint'], { allowFail: true });
 const check = run('check', cli, ['check'], { allowFail: true });
-run('snapshot', cli, ['snapshot', '--at', '1.5,4.5'], { allowFail: true });
+run('snapshot', cli, ['snapshot', '--at', '0.1,0.5,1.6,3.3,4.6,8.0,11.5,15.0,17.8,18.6,19.4,20.4'], { allowFail: true });
 
 // 6. Render under /usr/bin/time for wall time and peak RSS.
 const timeArgs = process.platform === 'darwin' ? ['-l'] : ['-v'];

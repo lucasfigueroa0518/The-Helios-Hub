@@ -12,7 +12,7 @@ description: >-
 The caption is the Instagram text under a 45-second Explainer Reel. Write a real
 social caption: a hook that stops the scroll, a body that makes the idea stick,
 and one clear ask. The video taught the concept. The caption does not walk the
-seven beats, and it does not stop after one sentence.
+eight beats (Explainers 3.0), and it does not stop after one sentence.
 
 Code adds the opening line when the reel publishes. Do not write an episode
 number. `lib/explainers/publish/publish.ts` counts how many explainers have
@@ -66,8 +66,8 @@ or send it.
   publish time from the number of explainers already published.
 - The hook, your first paragraph, is a second way into the same idea. It is not
   the spoken thesis copied out, and it is not a description of the frames.
-- Then write at least two body paragraphs. Use the reel's analogy, its concrete
-  example, the catch, and the place the viewer will meet this. The body before
+- Then write at least two body paragraphs. Use the reel's curiosity gap, its
+  analogy, its concrete example, and the place the viewer will meet this. The body before
   hashtags must be at least 400 characters. A one-sentence caption is a failed
   caption.
 - The call to action asks them to save it for the next time they hit this exact
@@ -97,7 +97,7 @@ Hook. After the episode line is added, this opening stays under 125 characters.
 
 What this is, in the viewer's world, with the reel's concrete example.
 
-The catch, or the place they will meet it. Enough that the idea sticks.
+The place they will meet it, or what the example shows. Enough that the idea sticks.
 
 Save this for the next time <the situation this reel is about>.
 

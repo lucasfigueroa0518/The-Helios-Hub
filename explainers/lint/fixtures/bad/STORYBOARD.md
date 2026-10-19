@@ -1,7 +1,16 @@
 ---
 format: 1080x1920
 duration: 60s
+concept: How Webhooks Work Between Apps
+music: calm corporate underscore
 ---
+
+## Anchor scene
+
+- metaphor: a mailbox
+- entities:
+  - mailbox — stands for the webhook URL
+  - hand — a hand that drops the letter in — stands for the sending app
 
 ## Frame 1 — Hook
 
@@ -12,41 +21,31 @@ duration: 60s
 - status: outline
 - type: hook
 - persuasion: Rhetorical question
+- ground: paper
+- anchor: scene
 
-## Frame 2 — Analogy
+## Frame 2 — Gap
 
-- voiceover: "Like a waiter."
-- duration: 10s
-- transition_in: zoom-through
-- status: outline
-- type: feature_showcase
-
-## Frame 3 — Mapping
-
-- scene: Nodes 🚀
-- voiceover: "The app is the diner and the server is the kitchen and the API is the waiter who carries every single order back and forth all day long."
+- voiceover: "Ever wonder how the SDK gets a callback?"
 - duration: 10s
 - transition_in: push-slide LEFT
 - status: outline
 - type: feature_showcase
-- persuasion: Progressive disclosure
+- engagement: Curiosity gap
+- ground: paper
+- anchor: scene
+- sfx: a whoosh as the phone slides in
 
-## Frame 4 — Example
+## Frame 3 — Define
 
-- scene: A table
-- voiceover: "Order forty-two returns in two hundred milliseconds today."
-- duration: 10s
-- transition_in: squeeze
-- status: outline
-- type: social_proof
-- persuasion: Worked example with real numbers
-
-## Frame 5 — Catch
-
-- scene: A queue
-- voiceover: "One waiter can only carry so many orders."
+- scene: Nodes 🚀
+- voiceover: "Short."
 - duration: 10s
 - transition_in: cut
 - status: outline
-- type: benefit_highlight
-- persuasion: Common-belief vs reality
+- type: product_intro
+- engagement: Grounding definition
+- ground: white
+- anchor: own
+- anchor_why: a diagram
+- blueprint: grid-card-assemble
