@@ -59,7 +59,7 @@ export function parseChanges(body: unknown): SlotChange[] | string {
 const keyOf = (v: string, w: string) => `${v}|${w}`;
 
 /** Apply changes to in-memory copies, so validation sees the result before anything is written. */
-function applyInMemory(template: TemplateRow[], overrides: OverrideRow[], changes: readonly SlotChange[]): { template: TemplateRow[]; overrides: OverrideRow[] } {
+function applyInMemory(template: readonly TemplateRow[], overrides: readonly OverrideRow[], changes: readonly SlotChange[]): { template: TemplateRow[]; overrides: OverrideRow[] } {
   let t = [...template];
   let o = [...overrides];
   for (const c of changes) {
@@ -93,17 +93,26 @@ function startedNote(c: SlotChange, today: string, now: Date): string | null {
  * An "every <weekday>" edit made on that weekday still changes the template,
  * but a window that already started today keeps today's state: one override
  * per such key that pins what today resolves to now (add with its feed mode,
- * or remove). A key that already has an override today is left as it is.
+ * or remove). A key that already has an override today, or whose state
+ * today the edit doesn't change, is left as it is.
  */
 function holdStartedToday(changes: readonly SlotChange[], template: readonly TemplateRow[], overrides: readonly OverrideRow[], today: string, now: Date): SlotChange[] {
   const weekday = weekdayOf(today);
   const current = resolveDay(template, overrides, today);
+  // What today would resolve to under the new template: no hold where nothing changes (a no-op edit).
+  const after = resolveDay(applyInMemory(template, overrides, changes.filter((c) => c.scope === 'template')).template, overrides, today);
+  const same = (key: string) => {
+    const a = current.find((x) => keyOf(x.vertical, x.windowId) === key);
+    const b = after.find((x) => keyOf(x.vertical, x.windowId) === key);
+    return (!a && !b) || (a != null && b != null && a.feedMode === b.feedMode);
+  };
   const held = new Map<string, SlotChange>();
   for (const c of changes) {
     if (c.scope !== 'template' || c.weekday !== weekday) continue;
     const key = keyOf(c.vertical, c.windowId);
     if (held.has(key) || !hasStarted(c.vertical, c.windowId, today, now)) continue;
     if (overrides.some((o) => o.nyDate === today && keyOf(o.vertical, o.windowId) === key)) continue;
+    if (same(key)) continue;
     const slot = current.find((x) => keyOf(x.vertical, x.windowId) === key);
     held.set(key, { scope: 'date', op: 'put', nyDate: today, vertical: c.vertical, windowId: c.windowId, action: slot ? 'add' : 'remove', feedMode: slot ? slot.feedMode : null });
   }

@@ -182,3 +182,14 @@ test('a booking in today\'s started window is not "in the way" of an "Every Tues
   const out = await applySlotChanges(q, [{ scope: 'template', op: 'delete', weekday: 2, vertical: 'reels', windowId: 'morning' }], { by: 't', now: TUE_10AM, keepBooked: false });
   assert.deepEqual(out, { ok: true });
 });
+
+test('a no-op "Every Tuesday" edit on a started window writes no hold for today', async () => {
+  const { q } = await seeded();
+  // Re-putting reels morning as Trial (it already is), and deleting a Carousel Tuesday (an LFD day) doesn't have.
+  const out = await applySlotChanges(q, [
+    { scope: 'template', op: 'put', weekday: 2, vertical: 'reels', windowId: 'morning', feedMode: 'trial' },
+    { scope: 'template', op: 'delete', weekday: 2, vertical: 'carousels', windowId: 'morning' },
+  ], { by: 't', now: TUE_10AM, keepBooked: false });
+  assert.deepEqual(out, { ok: true });
+  assert.deepEqual(await readOverrides(q, '2026-10-20', '2026-10-20'), []);
+});
