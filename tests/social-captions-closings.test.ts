@@ -3,18 +3,20 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 
+import { PGlite } from '@electric-sql/pglite';
+
 import { CLOSINGS_WINDOW } from '@/lib/social/captions/build-line';
 import { closingsLog, recentClosings, recordClosing, type Query } from '@/lib/social/captions/closings-store';
 
-import { scratchExplainersDb } from './explainers-pglite';
 
 /** Scratch DB with only the caption_closings block of the real schema file applied. */
 async function scratch(): Promise<Query> {
-  const { pg: db } = await scratchExplainersDb();
+  const db = new PGlite();
   const sql = fs.readFileSync(path.join(process.cwd(), 'db', 'social_hub_schema.sql'), 'utf8');
   const start = sql.indexOf('CREATE TABLE IF NOT EXISTS social_hub.caption_closings');
   assert.ok(start >= 0, 'caption_closings block missing from schema');
   await db.query('CREATE SCHEMA IF NOT EXISTS social_hub');
+  // The slice splits on ';' and assumes no semicolons inside literals.
   const block = sql.slice(start);
   for (const stmt of block.split(';').map((s) => s.trim()).filter(Boolean)) await db.query(stmt);
   return (text, params) => db.query(text, params as any[]);
