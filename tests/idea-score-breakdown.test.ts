@@ -137,15 +137,20 @@ test('Text on Screen breakdown: parts add up to the net', () => {
   assert.equal(b.parts[3]!.detail, 'frontier model');
 });
 
-test('Explainers breakdown: six judge scores add up to the weighted score', () => {
+test('Explainers breakdown: seven judge scores (six E-15 and ai_focus) add up to the weighted score', () => {
   const row = {
     topic_id: 't', title: 'How attention works', scope: null, status: 'pool', origin: 'generated', weighted_score: '75', created_at: NOW.toISOString(), ok_jobs: 0, last_render_at: null, published: false, scheduled: false,
     job_id: null, job_status: null, job_stage: null, job_error: null, job_requested_at: null, job_started_at: null,
-    audience_fit: 3, teachability_45s: 3, analogy_potential: 3, visual_potential: 3, accuracy_under_simplification: 3, hook_strength: '3',
+    audience_fit: 3, teachability_45s: 3, analogy_potential: 3, visual_potential: 3, accuracy_under_simplification: 3, hook_strength: '3', ai_focus: '3',
   } satisfies ExplainerTopicRow;
   const b = explainerBreakdown(row)!;
-  assert.equal(b.parts.length, 6);
+  assert.equal(b.parts.length, 7);
   assert.ok(Math.abs(sum(b.parts) - 75) < 0.02, `parts add to ${sum(b.parts)}`);
+  assert.equal(b.parts[6].label, 'AI focus (10 pts)');
+  // Scored before v3: the AI part shows as not scored and adds nothing.
+  const old = explainerBreakdown({ ...row, ai_focus: null, weighted_score: '67.5' })!;
+  assert.equal(old.parts[6].points, null);
+  assert.ok(Math.abs(sum(old.parts) - 67.5) < 0.02);
 });
 
 test('Carousels breakdown: the three score questions add up to the judge score; the gates and the real ranking order are explained', () => {

@@ -89,6 +89,7 @@ export async function loadReelsView(db: Queryable, limit = 50): Promise<JobSumma
        FROM explainers.jobs j
        JOIN explainers.topics t ON t.id = j.topic_id
        LEFT JOIN explainers.feedback f ON f.job_id = j.id
+      WHERE t.status <> 'archived'
       ORDER BY j.requested_at DESC, j.seq DESC
       LIMIT $1`,
     [limit],

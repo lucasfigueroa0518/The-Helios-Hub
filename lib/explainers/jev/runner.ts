@@ -34,7 +34,8 @@ export class RecordingExplainersJevRunner implements ExplainersJevRunner {
   constructor(
     private readonly transport: JevTransport,
     private readonly db: Queryable,
-    private readonly context: { mode: Mode; ideaCycleId?: string | null },
+    /** jobId: a render's own Jev calls (the analogy pass for a topic that has none, EX3-31). */
+    private readonly context: { mode: Mode; ideaCycleId?: string | null; jobId?: string | null },
   ) {}
 
   get callCount(): number {
@@ -74,6 +75,7 @@ export class RecordingExplainersJevRunner implements ExplainersJevRunner {
       ],
     );
     await recordCost(this.db, {
+      jobId: this.context.jobId ?? null,
       ideaCycleId: this.context.ideaCycleId ?? null,
       mode: this.context.mode,
       vendor: 'jev',

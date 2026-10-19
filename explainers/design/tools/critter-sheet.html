@@ -1,0 +1,47 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Critter sheet</title><style>
+body{margin:0;background:#E2DACB;font-family:Helvetica,Arial,sans-serif}
+h2{margin:18px 14px 4px;font-size:22px;color:#171717}
+.grid{display:grid;grid-template-columns:repeat(8,220px);gap:10px;padding:8px 14px}
+.cell{background:#F3F0EA;border-radius:6px;overflow:hidden}
+.cell h4{margin:6px 8px 0;font-size:14px;color:#171717}
+svg{display:block}
+</style></head><body><div id="root"></div>
+<script type="module">
+// The expanded critter cast (Explainers 3.2, EX3-77): poses, moods, role accessories, holding props.
+import { scope, defs } from '../../world-kit/draw.js';
+import { critter, handAt, walk, ARM_POSES, MOODS } from '../../world-kit/cast.js';
+import { prop } from '../../world-kit/props.js';
+let n = 0;
+const cell = (label, draw, dark = false) => {
+  scope(`k${++n}-`, dark ? 'night' : 'paper');
+  return `<div class="cell"><h4>${label}</h4><svg width="220" height="250" viewBox="0 0 220 250" style="background:${dark ? '#171717' : '#F3F0EA'}">${defs()}${draw()}</svg></div>`;
+};
+const section = (title, cells) => `<h2>${title}</h2><div class="grid">${cells.join('')}</div>`;
+const html = [];
+html.push(section('Arm poses', Object.keys(ARM_POSES).map((a) => cell(a, () => critter(96, 220, { arms: a, s: 0.7, mood: 'happy' })))));
+html.push(section('Moods', Object.keys(MOODS).map((m) => cell(m, () => critter(110, 220, { mood: m, s: 0.8 })))));
+html.push(section('Role accessories', [
+  ['student: gradcap + backpack', { wear: ['gradcap', 'backpack'] }],
+  ['chef: chef hat + apron', { wear: ['chef', 'apron'] }],
+  ['support: headset', { wear: ['headset'], mood: 'happy' }],
+  ['reader: glasses', { wear: ['glasses'], mood: 'focused' }],
+  ['host: top hat + bowtie', { wear: ['tophat', 'bowtie'], mood: 'proud' }],
+  ['courier: cap + scarf', { wear: ['cap', 'scarf'] }],
+  ['paper critter + glasses', { body: 'paper', wear: ['glasses'], mood: 'confused' }],
+  ['focal (orange) + cap', { body: 'orange', wear: ['cap'], mood: 'confident' }],
+].map(([label, o]) => cell(label, () => critter(110, 222, { s: 0.72, ...o })))));
+const holding = [
+  ['writes on a laptop', () => { const o = { s: 0.7, arms: 'write', mood: 'focused', look: [0.6, 0.6] }; return prop('laptop', 150, 240, { s: 0.45 }) + critter(80, 215, o); }],
+  ['holds a jar', () => { const o = { s: 0.8, arms: 'hold', mood: 'happy' }; const h = handAt(110, 225, o); return critter(110, 225, o) + prop('jar', (h.l[0] + h.r[0]) / 2, h.l[1] + 22, { s: 0.24 }); }],
+  ['offers a jar', () => { const o = { s: 0.75, arms: 'offer', mood: 'proud' }; const h = handAt(80, 225, o); return critter(80, 225, o) + prop('jar', h.r[0] + 4, h.r[1] + 30, { s: 0.3, focal: true }); }],
+  ['feels in the dark', () => critter(70, 220, { s: 0.7, arms: 'feel', mood: 'worried', look: [0.8, 0] }), true],
+  ['reaches the switch', () => { const o = { s: 0.7, arms: 'reach', mood: 'surprised', look: [0.8, -0.2] }; return prop('light switch', 178, 150, { s: 0.4, state: 'on', focal: true }) + critter(60, 222, o); }],
+  ['sits on a chair', () => prop('chair', 110, 230, { s: 0.6 }) + critter(98, 172, { s: 0.68, legs: 'sit', mood: 'happy' })],
+  ['walking (t = 0.2s)', () => { const w = walk(0.2); return critter(110, 222 - w.bob, { s: 0.8, legs: w.legs, arms: w.arms, mood: 'confident' }); }],
+  ['walking (t = 0.4s)', () => { const w = walk(0.4); return critter(110, 222 - w.bob, { s: 0.8, legs: w.legs, arms: w.arms, mood: 'confident' }); }],
+];
+html.push(section('Doing things (critters act; never a hand on its own)', holding.map(([label, f, dark]) => cell(label, f, dark))));
+html.push(section('On a dark ground', ['panicked', 'happy', 'sly', 'surprised'].map((m) => cell(m, () => critter(110, 220, { mood: m, s: 0.8, wear: m === 'happy' ? ['cap'] : [] }), true))));
+document.getElementById('root').innerHTML = html.join('');
+document.body.dataset.done = '1';
+</script></body></html>

@@ -1,0 +1,11 @@
+[
+ { "t": 0.62, "kind": "pop" },
+ { "t": 0.92, "kind": "foley", "what": "pen click" },
+ { "t": 3.2, "kind": "whoosh" },
+ { "t": 3.6, "kind": "tick" },
+ { "t": 3.8, "kind": "foley", "what": "sheet of paper drop" },
+ { "t": 4.84, "kind": "foley", "what": "pencil writing", "dur": 1.4 },
+ { "t": 5.2, "kind": "foley", "what": "coins drop" },
+ { "t": 5.67, "kind": "foley", "what": "coins drop" },
+ { "t": 6.13, "kind": "foley", "what": "coins drop" }
+]

@@ -69,7 +69,7 @@ Interview with Lucas, 2026-10-07. "Default" rows were stated to Lucas at the end
 **Verified facts behind these decisions (2026-10-07):**
 
 - **The carousel system has no blockbuster bump.** It ranks by how many of three Jev checks pass (`why_it_matters`, `sourcing`, `photographable_subject`), then outlet count, then probability sum, then recency (`lib/social/ingest/select/rank.ts`, `story-scoring@2`). Shortlist ≤ 10, two winners.
-- **Trial Reels' blockbuster bump** is three Nouls in `scoring-pass1-v4`: `frontierDrop`, `blueChipCompany`, `blueChipPerson`, over the 15 companies and 15 people in `lib/reels/jev/questions/scoring-shared.ts` (`BLUE_CHIP_COMPANIES`, `BLUE_CHIP_PEOPLE`). Any at or above 0.8 (`BLOCKBUSTER_BAR`) adds +0.10, or +0.20 when value is at least 0.70 (D-077, D-217, D-254). Stored in `reels.idea_scores.blockbuster`.
+- **Trial Reels' blockbuster bump** is three Nouls in `scoring-pass1-v5`: `frontierDrop`, `blueChipCompany`, `blueChipPerson`, over the shared list `BLUE_CHIP_PLAYERS` (`lib/social-hub/blue-chip-players.ts`, one list for the whole social hub since 2026-10-13). `scoring-pass1-v5` names roster 2 (`jevBlueChips(2)`): D-077's 15 companies and 15 people, then Palantir (D-273). Any at or above 0.8 (`BLOCKBUSTER_BAR`) adds +0.10, or +0.20 when value is at least 0.70 (D-077, D-217, D-254). Stored in `reels.idea_scores.blockbuster`.
 - **The Graph API cannot add stickers to Stories** ("Publishing stickers (i.e., link, poll, location) is not supported"). All three series are designed without stickers. Image stories are JPEG, 8 MB max, sRGB, 9:16 recommended.
 - **The API key is organization-level.** `ANTHROPIC_WORKSPACE_ID` is set locally and on the VM; every client must send the header (`a4a5186`).
 
@@ -191,7 +191,7 @@ Carousel candidates carry a source weight above reels candidates (S-10); its siz
 
 **Pool:** Ball Knowledge ideas from the last 14 days (their copy names what a tool replaces), GitHub Trending sources, and `reels.list_catalog`, filtered to tools a general user can install (S-08).
 
-**Pairing** (`fvp-pair@2`, cached Sonnet with `web_search`, at most 5 searches): proposes 3 pairs, mostly well-known paid tools and established free ones a normal person can install or open (no self-hosted or server software); Ball Knowledge ideas and GitHub Trending are optional hints, and no hints is no reason to skip (2026-10-13: the curated-list catalog is no longer read, since every pair drawn from it failed `accessible` or was never proposed). Each pair comes with the paid tool's current price page, the free tool's official page, platforms, and the install path. Then a verification pass checks the price and the install path on the pages found (S-22).
+**Pairing** (`fvp-pair@1`, DRAFT, cached Sonnet with `web_search`, at most 5 searches): proposes up to 3 pairs, each with the paid tool's current price page, the free tool's official page, platforms, and the install path. Then a verification pass checks the price and the install path on the pages found (S-22).
 
 **Scoring** (`fvp-pair-score@1`, DRAFT, needs R6): `paid_known` (do most people know or pay for the paid tool?), `does_the_job` (does the free tool do the paid tool's core job, per its own page?), `accessible` (no setup beyond install or sign-up; a developer tool is marked as one, and at most one in four sets is a developer tool), `viewer_value` (would the viewer act on it?). Drop a pair shown in the last 90 days.
 
@@ -273,20 +273,22 @@ Decisions after kickoff go here, numbered from S-34.
 | S-70 | **The photo finder's close-up vision check runs on Haiku 5.5** (`claude-haiku-5-5`): Tommy's `createVisionCheck` is called with that model (his code unchanged), and Stories prices each call itself. Supersedes the vision part of S-67. | Lucas, 2026-10-08 |
 | S-71 | **The `stories` schema is applied to Supabase** (2026-10-08, Lucas's go-ahead; S-61). Verified read-only: 9 tables, every auto switch off. Stories scripts load `.env.local` through `scripts/stories_env.ts`. | Lucas, 2026-10-08 |
 | S-72 | **Morning Download is recent, concrete AI news** (model releases, major-company announcements, government and political developments, advances big or small, big business moves, product launches, pivots and limits), not warnings, forecasts or opinion. (1) The pool score is no longer each source's rank: one 0–1 news score for both sources, in code (`lib/stories/md-score.ts`): news kind +0.45 + major player +0.25 + recency (+0.30 within 24h, +0.15 within 48h) − 0.45 for speculation; the source adds nothing, a story is judged on its own merit; each pool row stores its breakdown. (2) Text on Screen sends its top 10 timely ideas (was 15) plus blockbusters, leaving out The Warning and The Callout. (3) Ranking moves to `major-news@2`: score = 0.30·happened + 0.25·news_kind + 0.20·blockbuster_entity + 0.15·global_relevance + 0.10·political_relevance − 0.35·speculative, no bump for either source; bar stays 0.55. Supersedes S-63's weights. | Lucas, 2026-10-09 |
+| S-73 | **Palantir is a blue-chip company.** `major-news@3` is `@2` with the blockbuster question over roster 2 of the shared list (`BLUE_CHIP_PLAYERS`, `lib/social-hub/blue-chip-players.ts`), which adds Palantir; the weights and the other five questions are unchanged. `@2` is kept as `MAJOR_NEWS_V2` on roster 1. The headline score (`md-score.ts`) reads the same list, so Palantir also counts as a major player there. | Lucas, 2026-10-13 |
 
 ### 8.2 Prompt and question-set registry
 
 | ID | Component | Engine | Status |
 |---|---|---|---|
 | `major-news@1` | Morning Download ranking | Jev | Approved by Lucas 2026-10-08; superseded by @2 (kept as `MAJOR_NEWS_V1`) |
-| `major-news@2` | Morning Download ranking (S-72) | Jev | DRAFT 2026-10-09, wired in; wording awaits Lucas (`lib/stories/questions.ts`) |
-| `md-headlines@2` | Morning Download story frames | Sonnet 5.5 | @1 approved by Lucas 2026-10-08. @2 (Tommy, 2026-10-13): a named organization's building or headquarters is asked as a company request, never a setting (the opener asked for "Anthropic headquarters" as a setting and found only random offices); wording needs Lucas's review (`lib/stories/prompts.ts`) |
+| `major-news@2` | Morning Download ranking (S-72) | Jev | DRAFT 2026-10-09; superseded by @3 (kept as `MAJOR_NEWS_V2`) |
+| `major-news@3` | Morning Download ranking (S-73) | Jev | 2026-10-13, wired in: @2 plus Palantir in the blockbuster roster (Lucas); @2's wording still awaits Lucas (`lib/stories/questions.ts`) |
+| `md-headlines@1` | Morning Download story frames | Sonnet 5.5 | Approved by Lucas 2026-10-08 (`lib/stories/prompts.ts`) |
 | `md-grounding@1` | Headline supported by source | Jev | Drafted in M3 ; approved by Lucas 2026-10-08 |
 | `stories-same-event@1` | Cross-system merge | Jev | Drafted in M3 ; approved by Lucas 2026-10-08 |
 | `gtn-extract@1` | Numbers from shortlisted stories | Sonnet 5.5 | Drafted in M6 ; approved by Lucas 2026-10-08 |
 | `gtn-candidate@1` | Guess the Number scoring | Jev | Drafted in M6 ; approved by Lucas 2026-10-08 |
 | `gtn-question@1` | Question, answer, label, meaning, topic | Sonnet 5.5 | Drafted in M6 ; approved by Lucas 2026-10-08 |
-| `fvp-pair@2` | Pair finding (web search, at most 5) | Sonnet 5.5 + web_search | @1 approved by Lucas 2026-10-08; @2 revised 2026-10-13 (Tommy) after 18 straight skips |
+| `fvp-pair@1` | Pair finding (web search, at most 5) | Sonnet 5.5 + web_search | Drafted in M7 ; approved by Lucas 2026-10-08 |
 | `fvp-verify@1` | Price and install path re-check | Sonnet 5.5 + web_fetch | Drafted in M7 ; approved by Lucas 2026-10-08 |
 | `fvp-pair-score@1` | Pair scoring | Jev | Drafted in M7 ; approved by Lucas 2026-10-08 |
 | `fvp-copy@1` | The tease line | Sonnet 5.5 | Drafted in M7 ; approved by Lucas 2026-10-08 |

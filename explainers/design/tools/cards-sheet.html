@@ -1,0 +1,28 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Cards sheet</title><style>
+@font-face{font-family:'Roboto';font-weight:500;src:url('/design/fonts/Roboto-500.woff2')}
+@font-face{font-family:'Roboto';font-weight:700;src:url('/design/fonts/Roboto-700.woff2')}
+@font-face{font-family:'Pragmatica Extended';font-weight:700;src:url('/design/fonts/PragmaticaExtended-Bold.otf')}
+body{margin:0;background:#E2DACB;font-family:Helvetica,Arial,sans-serif;display:flex;gap:16px;padding:16px;flex-wrap:wrap}
+.f{display:flex;flex-direction:column;gap:4px}.f b{font-size:15px}
+svg{width:405px;height:720px;display:block}
+</style></head><body>
+<script type="module">
+// The kit's text cards at reel size (Explainers 3.2, EX3-80): the dictionary card and the title card.
+import { scope, defs, ground, grid } from '../../world-kit/draw.js';
+import { dictionaryCard, titleCard } from '../../world-kit/cards.js';
+await document.fonts.load("500 20px Roboto"); await document.fonts.load("700 20px Roboto"); await document.fonts.load("700 20px 'Pragmatica Extended'");
+const defn = 'An agent loop is the cycle an AI agent repeats: choose a step, take an action, read the result, and decide again until its goal is met.'.split(' ').map((text, i) => ({ text, start: 0.3 + i * 0.27 }));
+const frames = [
+  ['Dictionary card, mid-fill (t = 3s)', (t) => dictionaryCard(t, { headword: 'agent loop', words: defn }).svg, 3],
+  ['Dictionary card, filled (t = 8s)', (t) => dictionaryCard(t, { headword: 'agent loop', words: defn }).svg, 8],
+  ['Title card, writing (t = 1.6s)', (t) => titleCard(t, { term: 'agent loop', from: 0.6, to: 3.2 }), 1.6],
+  ['Title card, done (t = 3.3s)', (t) => titleCard(t, { term: 'agent loop', from: 0.6, to: 3.2 }), 3.3],
+  ['Title card, long term', (t) => titleCard(t, { term: 'retrieval-augmented generation', from: 0.6, to: 3.2 }), 3.3],
+];
+let n = 0;
+for (const [label, draw, t] of frames) {
+  scope(`f${++n}-`, 'paper');
+  document.body.insertAdjacentHTML('beforeend', `<div class="f"><b>${label}</b><svg viewBox="0 0 1080 1920">${defs()}${ground('paper')}${grid()}${draw(t)}</svg></div>`);
+}
+document.body.dataset.done = '1';
+</script></body></html>

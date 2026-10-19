@@ -1,0 +1,9 @@
+[
+ { "t": 0.0, "kind": "foley", "what": "paper slide" },
+ { "t": 0.2, "kind": "foley", "what": "typewriter key" },
+ { "t": 2.31, "kind": "whoosh" },
+ { "t": 2.51, "kind": "foley", "what": "rubber stamp" },
+ { "t": 5.61, "kind": "whoosh" },
+ { "t": 5.81, "kind": "foley", "what": "rubber stamp" },
+ { "t": 6.3, "kind": "foley", "what": "page turn" }
+]

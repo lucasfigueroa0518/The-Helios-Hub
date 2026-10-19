@@ -14,6 +14,9 @@ export const TOPIC_STATUSES = [
   'promoted',
   'queued',
   'rendered',
+  // Explainers 3.1 pool reset: off the site and out of every list, the scheduler, and duplicate
+  // history; kept whole so a topic (and its reels) can be brought back by setting its status.
+  'archived',
 ] as const;
 export type TopicStatus = (typeof TOPIC_STATUSES)[number];
 
@@ -66,10 +69,61 @@ export const SCORE_KEYS = [
 ] as const;
 export type ScoreKey = (typeof SCORE_KEYS)[number];
 
+/**
+ * Idea scoring v3 (EX3-73) adds `ai_focus`, scored with the six in the same Jev calls. It has no
+ * column: it lives in the topic's `jev_notes.ai_focus` and counts in `weighted_score`.
+ */
+export const IDEA_SCORE_KEYS = [...SCORE_KEYS, 'ai_focus'] as const;
+export type IdeaScoreKey = (typeof IDEA_SCORE_KEYS)[number];
+
+/**
+ * Explainers 3.0 (EX3-30): the idea phase picks each pool topic's analogy from three candidates
+ * scored by Jev. Stored on the topic as `jev_notes.analogy`.
+ */
+export type AnalogyElement = { name: string; stands_for: string };
+/** One step of the process: what happens in the scene, and the real step's name (EX3-66). */
+export type AnalogyStep = { analogy: string; technical: string };
+export type AnalogyCandidate = {
+  scene: string;
+  elements: AnalogyElement[];
+  process: string;
+  payoff: string;
+  visual: string;
+  /** The opener's moment in this world (EX3-62). Absent on analogy-writer-v1 candidates. */
+  hook?: string;
+  /** The process as 3–5 steps (EX3-66). Absent on analogy-writer-v1 candidates. */
+  steps?: AnalogyStep[];
+  /** The ladder of simplicity (EX3-85): 1 object, 2 an action by a critter, 3 a familiar situation. v3 on. */
+  rung?: 1 | 2 | 3;
+  /** Rules the viewer would have to be told for the analogy to work (EX3-85); empty when finished. */
+  invented_rules?: string[];
+  /** The critter's role, or "none" when no one acts (EX3-77). */
+  actor?: string;
+};
+
+/** The seven analogy-scoring keys (v3, EX3-85), in question order. */
+export const ANALOGY_KEYS = ['simplicity', 'reach', 'mapping_fidelity', 'visual_strength', 'visual_payoff', 'familiarity', 'hook_clarity'] as const;
+export type AnalogyKey = (typeof ANALOGY_KEYS)[number];
+export type AnalogyScores = Record<AnalogyKey, number>;
+
+export type AnalogyNote =
+  | {
+      version: string;
+      candidates: AnalogyCandidate[];
+      scores: AnalogyScores[];
+      totals: number[];
+      /** Index into `candidates`. */
+      pick: number;
+      picked_at: string;
+    }
+  | { version: string; error: string; failed_at: string };
+
 export type TopicRow = {
   id: string;
   title: string;
   scope: string | null;
+  /** The exact phrase the reel defines (EX3-86). Null on topics written before 3.2 until backfilled. */
+  term: string | null;
   source_url: string | null;
   source_text: string | null;
   origin: TopicOrigin;

@@ -13,6 +13,7 @@
  * refresh stays free). The build still ranks the open pool with major-news;
  * this score orders the pool and shows where the points came from.
  */
+import { BLUE_CHIP_HEADLINE_MATCH } from '@/lib/social-hub/blue-chip-players';
 import type { ScoreBreakdown, ScorePart } from '@/lib/social-hub/types';
 import type { StoryCandidate } from '@/lib/stories/sources/reels';
 
@@ -57,9 +58,8 @@ export const NEWS_KINDS: Array<{ label: string; test: RegExp }> = [
 export const SPECULATIVE =
   /\b(?:warns?|warning|could|might|fears?|doom\w*|existential|\w*ocalyp\w*|extinction|threat\w*|dangers?|dangerous|scar(?:y|e|ed|iest)|terrif\w*|nightmare|end of|will replace|replac\w* (?:all|your|human|workers|jobs)|(?:take|steal)s? (?:your|our|their) jobs?|wipe out|godfather|predicts?|prediction|opinion|op-ed|here'?s why|why you should|is coming for|crisis|collapse|bubble|rogue|superintelligen\w*)\b|\?\s*$/i;
 
-/** Companies, labs and people whose moves count as major AI news. */
-export const MAJOR_PLAYERS =
-  /\b(?:OpenAI|ChatGPT|Anthropic|Claude|Google|DeepMind|Gemini|Meta|Llama|Microsoft|Copilot|Nvidia|Apple|Amazon|AWS|xAI|Grok|Mistral|DeepSeek|Perplexity|Hugging Face|Alibaba|Qwen|Tesla|SpaceX|Samsung|IBM|Oracle|TSMC|AMD|Intel|Altman|Musk|Amodei|Zuckerberg|Jensen Huang|Nadella|Hassabis|Pichai|Sutskever|Karpathy)\b/;
+/** Companies, labs and people whose moves count as major AI news: the shared blue-chip list (lib/social-hub/blue-chip-players.ts), exact case. */
+export const MAJOR_PLAYERS = BLUE_CHIP_HEADLINE_MATCH;
 
 const HOUR = 3_600_000;
 const round = (n: number) => Number(n.toFixed(4));

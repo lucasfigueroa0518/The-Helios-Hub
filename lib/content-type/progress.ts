@@ -81,6 +81,7 @@ export async function readProgress(type: ContentType): Promise<ProgressItem[]> {
                  ORDER BY topic_id, requested_at DESC, seq DESC
               )
           AND j.status IN ('requested', 'running', 'failed')
+          AND t.status <> 'archived'
         ORDER BY j.requested_at`,
     );
     if (!rows.length) return [];

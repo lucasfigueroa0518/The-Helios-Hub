@@ -87,10 +87,10 @@ test('seeded settings equal the kickoff defaults', async () => {
   const { db } = await scratchExplainersDb();
   assert.deepEqual(await loadSettings(db), DEFAULT_SETTINGS);
   assert.equal(DEFAULT_SETTINGS.auto_render, false);
-  // SH-49 (Social Hub P2-M2): two renders a day under the $5 per-reel cap.
+  // SH-49 (Social Hub P2-M2): two renders a day; Explainers 3.1 (EX3-72): $8 per reel.
   assert.equal(DEFAULT_SETTINGS.daily_render_cap, 2);
   assert.equal(DEFAULT_SETTINGS.daily_spend_cap_usd, 10);
-  assert.equal(DEFAULT_SETTINGS.per_reel_cap_usd, 5);
+  assert.equal(DEFAULT_SETTINGS.per_reel_cap_usd, 8);
 });
 
 test('theme brief v1 is the E-14 text verbatim', async () => {
@@ -102,6 +102,25 @@ test('theme brief v1 is the E-14 text verbatim', async () => {
   const start = kickoff.indexOf('**Explainer Reels — Idea Generation Theme Brief**');
   const expected = kickoff.slice(start, kickoff.indexOf('### E-15')).trim();
   assert.equal(await loadThemeBrief(db, 'v1'), expected);
+});
+
+test('theme briefs v2 and v3 are the register text verbatim, and a new database starts on v3 (EX3-34)', async () => {
+  const { db } = await scratchExplainersDb();
+  const register = fs.readFileSync(path.join(process.cwd(), 'planning', 'Explainer Reels', 'DECISIONS.md'), 'utf8');
+  const between = (from: string, to: string) => {
+    const start = register.indexOf(from);
+    assert.ok(start >= 0, from);
+    return register.slice(start + from.length, register.indexOf(to, start)).trim();
+  };
+  const v3 = between('### Theme brief v3\n\n', '\n\n### Theme brief v2');
+  const v2 = between('### Theme brief v2 (superseded by v3; kept because existing databases still hold it)\n\n', '\n\n### Idea scoring v3');
+  assert.equal(await loadThemeBrief(db, 'v3'), v3);
+  assert.equal(await loadThemeBrief(db, 'v2'), v2);
+  assert.match(v3, /Prefer beginner concepts/);
+  assert.match(v3, /Skew toward AI\./);
+  assert.match(v3, /about a minute/);
+  assert.doesNotMatch(v3, /caveat|45-second|accurately in 45 seconds/);
+  assert.equal((await loadSettings(db)).theme_brief_version, 'v3');
 });
 
 test('settings validate before they are stored', async () => {
@@ -187,7 +206,7 @@ test('Generate renders a pool candidate; auto renders only a promoted one', asyn
 
   const first = await requestRender(db, { topicId: pooled, trigger: 'click', settings: DEFAULT_SETTINGS });
   assert.ok(first.ok);
-  assert.equal(first.job.spend_cap_usd, 5);
+  assert.equal(first.job.spend_cap_usd, 8);
   assert.equal(first.job.orchestrator_model, 'claude-sonnet-5-5');
   assert.equal(first.job.mode, 'development');
   assert.equal((await getTopic(db, pooled))?.status, 'queued');

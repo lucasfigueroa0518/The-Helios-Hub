@@ -3,14 +3,13 @@ import { noul, score } from '@typesafe-ai/sdk';
 import { defineQuestionSet } from '@/lib/reels/jev/question-set';
 import {
   AUDIENCE_RULE,
-  BLUE_CHIP_COMPANIES,
-  BLUE_CHIP_PEOPLE,
   BUCKETS,
   ELEMENT_RULE,
   FRAMEWORKS,
   PEOPLE_RULE,
   SOURCE_RULE,
 } from '@/lib/reels/jev/questions/scoring-shared';
+import { jevBlueChips } from '@/lib/social-hub/blue-chip-players';
 
 /**
  * P-08. Psychology, bucket fit, and blockbuster (D-073 through D-075, D-077,
@@ -19,6 +18,8 @@ import {
  * v3 (D-218): a Callout needs a position on something the viewer chooses.
  * v4 (D-257): the top two levels of every score need the charge or the
  * consequence to land on people (PEOPLE_RULE).
+ * v5 (D-273): the blue-chip Nouls name roster 2, which adds Palantir to the
+ * companies. Nothing else in the wording changed.
  *
  * One request. The questions are independent, so a bucket score cannot see the
  * psychology scores. Code applies the 0.60 / 0.25 gate and ignores a bucket
@@ -30,12 +31,13 @@ import {
  * 0.75 (strong). A framework clears 0.60 only when the score leans strong.
  */
 
-const companies = BLUE_CHIP_COMPANIES.join('; ');
-const people = BLUE_CHIP_PEOPLE.join('; ');
+const roster = jevBlueChips(2);
+const companies = roster.companies.join('; ');
+const people = roster.people.join('; ');
 
 export const SCORING_PASS_1 = defineQuestionSet({
   id: 'scoring-pass1',
-  version: 'scoring-pass1-v4',
+  version: 'scoring-pass1-v5',
   questions: {
     curiosity: score(
       {

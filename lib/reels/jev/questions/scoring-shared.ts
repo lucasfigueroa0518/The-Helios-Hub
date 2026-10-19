@@ -72,39 +72,9 @@ export const BUCKETS = {
   },
 } as const;
 
-/** D-077. "Grok / SpaceX" is two entries: xAI (Grok) and SpaceX. */
-export const BLUE_CHIP_COMPANIES = [
-  'Anthropic',
-  'Nvidia',
-  'Microsoft',
-  'Google',
-  'Meta',
-  'OpenAI',
-  'Hugging Face',
-  'xAI (Grok counts as xAI)',
-  'SpaceX',
-  'Higgsfield',
-  'Google DeepMind',
-  'AWS',
-  'DeepSeek',
-  'Mistral AI',
-  'Perplexity',
-] as const;
-
-export const BLUE_CHIP_PEOPLE = [
-  'Sam Altman',
-  'Elon Musk',
-  'Dario Amodei',
-  'Jeff Bezos',
-  'Mark Zuckerberg',
-  'Eric Schmidt',
-  'Alex Karp',
-  'Jensen Huang',
-  'John Ternus',
-  'Donald Trump',
-  'Demis Hassabis',
-  'Ilya Sutskever',
-  'Andrej Karpathy',
-  'Liang Wenfeng',
-  'Satya Nadella',
-] as const;
+/**
+ * D-077. The blue-chip companies and people the blockbuster Nouls name live in
+ * one list for the whole social hub: `jevBlueChips(roster)` in
+ * lib/social-hub/blue-chip-players.ts. Roster 1 is D-077's wording and order;
+ * roster 2 adds Palantir (D-273, scoring-pass1-v5).
+ */
