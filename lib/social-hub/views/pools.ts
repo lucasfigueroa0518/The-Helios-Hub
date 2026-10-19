@@ -1,5 +1,6 @@
 import { VERTICAL_IDS } from '@/lib/social-hub/verticals';
 import type { HubIdea, IdeaState, Vertical } from '@/lib/social-hub/types';
+import { applyMoves, movesFor, type IdeaAdjustment } from '@/lib/social-hub/views/moves';
 
 /**
  * Idea pools (BRIEFS.md §1, REVISIONS C6): how full each type's tank is and
@@ -63,8 +64,9 @@ export function poolSummaries(ideas: readonly HubIdea[]): PoolSummary[] {
 
 export type PoolFilter = 'open' | 'ready' | 'all';
 
-export function poolList(ideas: readonly HubIdea[], vertical: Vertical, filter: PoolFilter): HubIdea[] {
+/** A type's pool in score order, with the shared queue on top: tonight's promote first, demoted ideas last (L2). */
+export function poolList(ideas: readonly HubIdea[], vertical: Vertical, filter: PoolFilter, adjustments: readonly IdeaAdjustment[] = []): HubIdea[] {
   const mine = ideas.filter((i) => i.vertical === vertical);
   const kept = filter === 'all' ? mine : filter === 'ready' ? mine.filter((i) => i.state === 'content_ready') : mine.filter((i) => OPEN.has(i.state));
-  return rankIdeas(kept);
+  return applyMoves(rankIdeas(kept), movesFor(adjustments, vertical));
 }

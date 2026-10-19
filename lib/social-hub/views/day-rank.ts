@@ -4,6 +4,7 @@ import { capacityWindows, placedCount } from '@/lib/social-hub/views/plan';
 import type { SlotsByDate } from '@/lib/social-hub/slots/types';
 import { rankIdeas } from '@/lib/social-hub/views/pools';
 import { isRejected } from '@/lib/social-hub/views/state';
+import { applyMoves, movesFor, moveTags, type IdeaAdjustment, type MoveTag } from '@/lib/social-hub/views/moves';
 
 /**
  * The day's ranking and its quota candidates (Lucas, 2026-10-09).
@@ -11,11 +12,14 @@ import { isRejected } from '@/lib/social-hub/views/state';
  * Each type's day is filled by its highest-ranked ideas, not by whatever
  * content happens to be made. A person can move ideas for one day:
  *
- *   Promote  the idea goes to #1 (a manual bump above everything else)
- *   Demote   the idea drops below the idea right under it (#1 → #2)
+ *   Promote  "make this next": the type's oldest promote goes first tonight;
+ *            other promotes wait in their score place (views/moves.ts)
+ *   Demote   the idea sinks below every idea that isn't demoted
  *
- * Moves are applied in the order they were made, on top of that day's score
- * ranking, and last until their idea is made (B8). The quota candidates are, in order: what already holds a slot today
+ * The shared rule sits on top of that day's score ranking; moves last until
+ * their idea is made (B8).
+ *
+ * The quota candidates are, in order: what already holds a slot today
  * (scheduled, posting, posted); then content made today with no slot, for
  * any idea (the night picks its own, 2026-10-13: made content wins); then the
  * top of the adjusted ranking for what's left. Rejected content never fills a
@@ -24,8 +28,8 @@ import { isRejected } from '@/lib/social-hub/views/state';
  * Pure over plain data, so the page, Run now and the tests agree.
  */
 
-/** A person's Promote / Demote. `nyDate` is the day it was made; it steers until used (consumed_at, B8). `createdAt` is ISO. */
-export type IdeaAdjustment = { id: string; vertical: Vertical; ideaId: string; nyDate: string; kind: 'promote' | 'demote'; createdAt: string };
+export { applyMoves, movesFor };
+export type { IdeaAdjustment, MoveTag };
 
 /** Posts per day for the types with a quota (Stories go by series days). */
 export type DayQuotas = {
@@ -40,7 +44,7 @@ export type DayQuotas = {
   slots?: SlotsByDate | null;
 };
 
-export type RankedIdea = { idea: HubIdea; rank: number; moved: 'promoted' | 'demoted' | null };
+export type RankedIdea = { idea: HubIdea; rank: number; moved: 'promoted' | 'demoted' | null; tag: MoveTag | null };
 
 export type QuotaCandidate = {
   vertical: Vertical;
@@ -53,6 +57,8 @@ export type QuotaCandidate = {
   /** Its place in today's adjusted ranking. */
   rank: number | null;
   moved: RankedIdea['moved'];
+  /** The shared queue's tag: Tonight, Promoted · waiting, Can’t be made: …, Demoted. */
+  tag?: MoveTag | null;
   /** Stories: the series this slot is for. */
   series?: string;
   /** Stories: the series window id (Make it's target). */
@@ -62,30 +68,14 @@ export type QuotaCandidate = {
 const OPEN = new Set(['idea_only', 'content_ready']);
 const HOLDS = new Set(['scheduled', 'publishing', 'published']);
 
-/** Apply one day's moves, in order, to a ranked list. */
-export function applyMoves<T extends { id: string }>(ranked: readonly T[], moves: ReadonlyArray<Pick<IdeaAdjustment, 'ideaId' | 'kind'>>): T[] {
-  const list = [...ranked];
-  for (const move of moves) {
-    const i = list.findIndex((x) => x.id === move.ideaId);
-    if (i < 0) continue;
-    if (move.kind === 'promote') list.unshift(...list.splice(i, 1));
-    else if (i < list.length - 1) [list[i], list[i + 1]] = [list[i + 1]!, list[i]!];
-  }
-  return list;
-}
-
-/** A type's active moves (not used yet, any day), oldest first. */
-export function movesFor(adjustments: readonly IdeaAdjustment[], vertical: Vertical): IdeaAdjustment[] {
-  return adjustments.filter((a) => a.vertical === vertical).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-}
-
 /**
  * A type's open ideas in today's order: score order, then today's moves.
  * Stories rank within each series (`group`), never across series.
  */
-export function dayRanking(ideas: readonly HubIdea[], vertical: Vertical, adjustments: readonly IdeaAdjustment[]): RankedIdea[] {
+export function dayRanking(ideas: readonly HubIdea[], vertical: Vertical, adjustments: readonly IdeaAdjustment[], now = new Date()): RankedIdea[] {
   const open = ideas.filter((i) => i.vertical === vertical && OPEN.has(i.state));
   const moves = movesFor(adjustments, vertical);
+  const tags = moveTags(moves, vertical, now, new Set(open.map((i) => i.id)));
   const lastMove = new Map(moves.map((m) => [m.ideaId, m.kind === 'promote' ? ('promoted' as const) : ('demoted' as const)]));
   const groups = new Map<string, HubIdea[]>();
   for (const idea of open) {
@@ -94,7 +84,7 @@ export function dayRanking(ideas: readonly HubIdea[], vertical: Vertical, adjust
   }
   const out: RankedIdea[] = [];
   for (const list of groups.values()) {
-    applyMoves(rankIdeas(list), moves).forEach((idea, i) => out.push({ idea, rank: i + 1, moved: lastMove.get(idea.id) ?? null }));
+    applyMoves(rankIdeas(list), moves).forEach((idea, i) => out.push({ idea, rank: i + 1, moved: lastMove.get(idea.id) ?? null, tag: tags.get(idea.id) ?? null }));
   }
   return out;
 }
@@ -181,7 +171,7 @@ export function quotaCandidates(
     .filter((p) => p.vertical === vertical && p.nyDate === today && HOLDS.has(p.status) && (p.status === 'published' || hasMedia(p)))
     .sort((a, b) => at(a).localeCompare(at(b)) || a.id.localeCompare(b.id))
     .slice(0, quota);
-  const full = dayRanking(data.ideas, vertical, data.adjustments ?? []);
+  const full = dayRanking(data.ideas, vertical, data.adjustments ?? [], now);
   const sameIdea = (a: HubPost, b: HubPost) => a.idea?.id != null && a.idea.id === b.idea?.id;
   // Made today with no slot, any idea (2026-10-13): the night picks its own topic, so what it made holds the
   // day's place ahead of the ranking. Newest first, one per idea, never one already in a slot.
@@ -197,10 +187,10 @@ export function quotaCandidates(
   const ranking = full.filter((r) => !held.some((p) => ideaOwns(r.idea, p)));
   const out: QuotaCandidate[] = held.map((post) => {
     const r = full.find((x) => ideaOwns(x.idea, post));
-    return { vertical, idea: r?.idea ?? null, post, locked: locked.includes(post), rank: r?.rank ?? null, moved: r?.moved ?? null };
+    return { vertical, idea: r?.idea ?? null, post, locked: locked.includes(post), rank: r?.rank ?? null, moved: r?.moved ?? null, tag: r?.tag ?? null };
   });
   for (const r of ranking.slice(0, quota - held.length)) {
-    out.push({ vertical, idea: r.idea, post: contentFor(r.idea, data.posts), locked: false, rank: r.rank, moved: r.moved });
+    out.push({ vertical, idea: r.idea, post: contentFor(r.idea, data.posts), locked: false, rank: r.rank, moved: r.moved, tag: r.tag });
   }
   // Fewer open ideas than the quota (a pool not refilled yet): the rest are open slots the next run fills.
   while (out.length < quota) out.push({ vertical, idea: null, post: null, locked: false, rank: null, moved: null });

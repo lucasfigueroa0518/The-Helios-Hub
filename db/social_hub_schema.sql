@@ -371,6 +371,11 @@ ALTER TABLE social_hub.idea_adjustments ADD COLUMN IF NOT EXISTS consumed_at tim
 CREATE INDEX IF NOT EXISTS idx_social_hub_idea_adjustments_active
     ON social_hub.idea_adjustments (vertical, created_at) WHERE consumed_at IS NULL;
 
+-- Shared queue (2026-10-14): why the last night couldn't make a promote, and when.
+-- A worker overwrites them on each skip; the move stays active (consumed_at stays NULL).
+ALTER TABLE social_hub.idea_adjustments ADD COLUMN IF NOT EXISTS skip_reason text;
+ALTER TABLE social_hub.idea_adjustments ADD COLUMN IF NOT EXISTS skipped_at timestamptz;
+
 -- Health tab (spec 2026-10-13 §4.3): the 07:30 morning report, one row per night.
 CREATE TABLE IF NOT EXISTS social_hub.health_reports (
     night       date PRIMARY KEY,

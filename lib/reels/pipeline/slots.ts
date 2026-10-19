@@ -17,6 +17,9 @@ import {
 } from '@/lib/reels/locks';
 import { shipStoredCopy, writeTargetCopy, type IdeaCopyOutcome } from '@/lib/reels/pipeline/copy';
 import { placedIdeas, reusableVideos } from '@/lib/reels/pipeline/fill';
+import { putOnSlate, reelsMovesQuery, REEL_SKIP } from '@/lib/reels/pipeline/promote';
+import { markPromoteUsed, readMoves, recordPromoteSkip, withSkip } from '@/lib/social-hub/moves-store';
+import { ideaRef, NO_MOVES, tonightMoves, type TonightMoves } from '@/lib/social-hub/views/moves';
 import { requestFinish } from '@/lib/reels/visual/finish';
 import { dbQuery } from '@/lib/db';
 
@@ -76,24 +79,67 @@ export async function generatePassingReels(input: {
   const nyDate = rows[0]?.ny_date;
   if (!nyDate) throw new Error('That slate does not exist.');
 
-  const [slotIdeas, locks, penalties, published, wideMisses] = await Promise.all([
-    loadSlotIdeas(input.slateId),
-    locksForSlate(input.slateId),
-    loadDayPenalties(nyDate),
-    loadPublishedStoryKeys(),
-    loadWideCopyMisses(nyDate),
-  ]);
-  const targets = new Map<string, CopyTarget>();
-  for (const target of await loadCopyTargets(input.slateId, { all: true })) {
-    targets.set(target.postIdeaId, target);
+  // Shared queue (nightly run only): tonight's Promote goes first, Demotes go last. An older promoted idea joins
+  // tonight's slate from its stored scores (no re-scoring). A promote that can't be made (gone, held out, placed
+  // by a person, no scores) steps aside in the same run, with why on the move, and the next promote is picked.
+  // A failed read is no moves: the night runs as before.
+  let moveList = input.dailyFill ? await readMoves(reelsMovesQuery, 'reels') : [];
+  let tonight: TonightMoves = moveList.length ? tonightMoves(moveList, 'reels') : NO_MOVES;
+  const stepAside = async (reason: string) => {
+    const ideaId = tonight.promote!.ideaId;
+    await recordPromoteSkip(reelsMovesQuery, 'reels', ideaId, reason);
+    moveList = withSkip(moveList, ideaId, reason);
+    tonight = tonightMoves(moveList, 'reels');
+    console.info(`[reels] promote ${ideaRef(ideaId)} stepped aside (${reason})`);
+  };
+  let promoteId: string | null = null;
+  let slotIdeas: Awaited<ReturnType<typeof loadSlotIdeas>>;
+  let locks: Awaited<ReturnType<typeof locksForSlate>>;
+  let penalties: Awaited<ReturnType<typeof loadDayPenalties>>;
+  let targets: Map<string, CopyTarget>;
+  let held: ReturnType<typeof holdOutReasons>;
+  let placed: Set<string>;
+  for (;;) {
+    promoteId = tonight.promote ? ideaRef(tonight.promote.ideaId) : null;
+    if (promoteId && !(await putOnSlate(input.slateId, promoteId))) {
+      await stepAside(REEL_SKIP.gone);
+      continue;
+    }
+    let published: Awaited<ReturnType<typeof loadPublishedStoryKeys>>;
+    let wideMisses: Awaited<ReturnType<typeof loadWideCopyMisses>>;
+    [slotIdeas, locks, penalties, published, wideMisses] = await Promise.all([
+      loadSlotIdeas(input.slateId),
+      locksForSlate(input.slateId),
+      loadDayPenalties(nyDate),
+      loadPublishedStoryKeys(),
+      loadWideCopyMisses(nyDate),
+    ]);
+    targets = new Map<string, CopyTarget>();
+    for (const target of await loadCopyTargets(input.slateId, { all: true })) {
+      targets.set(target.postIdeaId, target);
+    }
+    held = holdOutReasons(targets.values(), published, wideMisses);
+    // Daily fill (D54/D55): a person's placement isn't made again; a finished, unposted carryover video is reused.
+    placed = input.dailyFill ? await placedIdeas(slotIdeas.map((idea) => idea.id)) : new Set<string>();
+    if (promoteId) {
+      const reason = !slotIdeas.some((idea) => idea.id === promoteId)
+        ? REEL_SKIP.gone
+        : held.has(promoteId)
+          ? REEL_SKIP[held.get(promoteId)!]
+          : placed.has(promoteId)
+            ? REEL_SKIP.placed
+            : null;
+      if (reason) {
+        await stepAside(reason);
+        continue;
+      }
+    }
+    break;
   }
-  const held = holdOutReasons(targets.values(), published, wideMisses);
   const heldOut = [...held].map(([postIdeaId, reason]) => ({ postIdeaId, reason }));
   if (heldOut.length > 0) {
     console.info(`[reels] held out of tonight's slots: ${heldOut.map((row) => `${row.postIdeaId} (${row.reason})`).join(', ')}`);
   }
-  // Daily fill (D54/D55): a person's placement isn't made again; a finished, unposted carryover video is reused.
-  const placed = input.dailyFill ? await placedIdeas(slotIdeas.map((idea) => idea.id)) : new Set<string>();
   const ideas = slotIdeas.filter((idea) => !held.has(idea.id) && !placed.has(idea.id));
   const reusable = input.dailyFill ? await reusableVideos(input.slateId, ideas.map((idea) => idea.id)) : new Map<string, string>();
   if (placed.size > 0) console.info(`[reels] placed by a person, not made again tonight: ${[...placed].join(', ')}`);
@@ -123,6 +169,7 @@ export async function generatePassingReels(input: {
     },
     onPenalty: (idea, penalty) => saveDayPenalty(input.slateId, nyDate, idea.id, penalty),
     reusable: new Set(reusable.keys()),
+    moves: { promote: promoteId, demoted: new Set([...tonight.demoted].map(ideaRef)) },
     onFallback: async (idea, line) => {
       penalties.delete(idea.id);
       await clearDayPenalty(input.slateId, nyDate, idea.id);
@@ -141,6 +188,17 @@ export async function generatePassingReels(input: {
       if (!shipped.ok) failures.push(`${idea.id}: ${shipped.error ?? 'could not ship the best line'}`);
     },
   });
+
+  if (tonight.promote && promoteId) {
+    const made = filled.some((slot) => slot.postIdeaId === promoteId);
+    const tried = outcomes.get(promoteId);
+    // Never attempted (slots already locked/full) is transient: no skip, so it is tried again next night.
+    // A copy that missed or couldn't be written is a lasting skip.
+    const why = !tried ? REEL_SKIP.full : tried.judged ? REEL_SKIP.missed : REEL_SKIP.notWritten;
+    if (made) await markPromoteUsed(reelsMovesQuery, 'reels', tonight.promote.ideaId);
+    else if (tried) await recordPromoteSkip(reelsMovesQuery, 'reels', tonight.promote.ideaId, why);
+    console.info(`[reels] tonight's promote ${promoteId}: ${made ? 'made' : `skipped (${why})`}`);
+  }
 
   await selectFilledIdeas(
     input.slateId,

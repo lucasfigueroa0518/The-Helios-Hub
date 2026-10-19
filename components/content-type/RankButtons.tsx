@@ -6,9 +6,9 @@ import { ArrowDown, ArrowUp } from 'lucide-react';
 
 /**
  * Promote / Demote one idea in today's ranking (lib/content-type/idea-rank.ts).
- * Promote makes it #1 for today; Demote moves it below the idea right under
- * it. Today's quota goes to the top of the ranking, so this decides what
- * today's content is. Moves expire with the day.
+ * Promote makes it next: the night makes one promote per type, oldest first
+ * (lib/social-hub/views/moves.ts). Demote sinks it below every other idea.
+ * A move lasts until its idea is made.
  */
 export function RankButtons({ vertical, ideaId, compact = false }: { vertical: string; ideaId: string; compact?: boolean }) {
   const router = useRouter();
@@ -30,10 +30,10 @@ export function RankButtons({ vertical, ideaId, compact = false }: { vertical: s
   }
   return (
     <span className="rh-rank" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-      <button type="button" className="rh-btn rh-rank__btn" disabled={busy} onClick={() => move('promote')} title="Promote: #1 for today" aria-label="Promote to #1 for today">
+      <button type="button" className="rh-btn rh-rank__btn" disabled={busy} onClick={() => move('promote')} title="Promote: the night makes it next (one a night, oldest first)" aria-label="Promote: make it next">
         <ArrowUp size={13} />{compact ? null : ' Promote'}
       </button>
-      <button type="button" className="rh-btn rh-rank__btn" disabled={busy} onClick={() => move('demote')} title="Demote: below the next idea, for today" aria-label="Demote one place for today">
+      <button type="button" className="rh-btn rh-rank__btn" disabled={busy} onClick={() => move('demote')} title="Demote: below every other idea" aria-label="Demote below every other idea">
         <ArrowDown size={13} />{compact ? null : ' Demote'}
       </button>
       {error ? <span className="rh-rank__error" role="alert">{error}</span> : null}

@@ -9,6 +9,8 @@ import test from 'node:test';
 
 import type { HubQuery } from '@/lib/social-hub/db';
 import { consumeMoves, readAdjustments } from '@/lib/social-hub/queries/day';
+import { markPromoteUsed, readMoves, readTonightMoves, recordPromoteSkip, withSkip } from '@/lib/social-hub/moves-store';
+import { tonightMoves } from '@/lib/social-hub/views/moves';
 import type { HubPost } from '@/lib/social-hub/types';
 import { activeStoryMoves } from '@/lib/stories/build';
 
@@ -76,4 +78,57 @@ test('the Stories build before the consumed_at column exists: today’s moves, a
   await ins('today', '2026-10-14');
   await db.query(`ALTER TABLE social_hub.idea_adjustments DROP COLUMN consumed_at`);
   assert.deepEqual(await activeStoryMoves(db, 'free_vs_paid', now), [{ ideaId: 'today', kind: 'promote' }]);
+});
+
+test('workers read a type’s active moves: tonight’s promote (the oldest) and the demoted ideas; used moves and other types are left out', async () => {
+  const { query: q } = await openHubTestDb();
+  await addMove(q, 'reels', 'reels:idea:a', YESTERDAY, 'promote', '2026-10-13T15:00:00Z');
+  await addMove(q, 'reels', 'reels:idea:b', TODAY, 'promote', '2026-10-14T13:00:00Z');
+  await addMove(q, 'reels', 'reels:idea:c', TODAY, 'demote', '2026-10-14T13:05:00Z');
+  const used = await addMove(q, 'reels', 'reels:idea:z', YESTERDAY, 'promote', '2026-10-13T09:00:00Z');
+  await q(`UPDATE social_hub.idea_adjustments SET consumed_at = now() WHERE id = $1`, [used]);
+  await addMove(q, 'carousels', 'carousels:story:s1', YESTERDAY, 'promote', '2026-10-13T08:00:00Z');
+  const tonight = await readTonightMoves(q, 'reels');
+  assert.equal(tonight.promote?.ideaId, 'reels:idea:a');
+  assert.deepEqual([...tonight.demoted], ['reels:idea:c']);
+});
+
+test('a skip is written on the idea’s promote and keeps it active (the hub reads why); used marks every active move of the idea', async () => {
+  const { query: q } = await openHubTestDb();
+  await addMove(q, 'reels', 'reels:idea:a', YESTERDAY, 'promote', '2026-10-13T15:00:00Z');
+  await addMove(q, 'reels', 'reels:idea:b', TODAY, 'promote', '2026-10-14T13:00:00Z');
+  assert.equal(await recordPromoteSkip(q, 'reels', 'reels:idea:a', 'It isn’t in the reels pool any more.'), true);
+  const read = await readAdjustments(q, TODAY);
+  const a = read.find((m) => m.ideaId === 'reels:idea:a')!;
+  assert.equal(a.skipReason, 'It isn’t in the reels pool any more.');
+  assert.match(a.skippedAt ?? '', /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+  assert.equal(read.find((m) => m.ideaId === 'reels:idea:b')!.skipReason, null);
+  assert.equal((await readTonightMoves(q, 'reels')).promote?.ideaId, 'reels:idea:b', 'a skipped promote steps aside for the next');
+
+  assert.equal(await markPromoteUsed(q, 'reels', 'reels:idea:b'), true);
+  assert.equal((await readTonightMoves(q, 'reels')).promote, null, 'used: gone; the skipped one still steps aside');
+});
+
+test('a worker loop: skip an unmakeable promote, mark it in memory, re-pick the next in the same run', async () => {
+  const { query: q } = await openHubTestDb();
+  await addMove(q, 'reels', 'reels:idea:a', YESTERDAY, 'promote', '2026-10-13T15:00:00Z');
+  await addMove(q, 'reels', 'reels:idea:b', TODAY, 'promote', '2026-10-14T13:00:00Z');
+  let moves = await readMoves(q, 'reels');
+  assert.equal(tonightMoves(moves, 'reels').promote?.ideaId, 'reels:idea:a');
+  await recordPromoteSkip(q, 'reels', 'reels:idea:a', 'gone');
+  moves = withSkip(moves, 'reels:idea:a', 'gone');
+  assert.equal(tonightMoves(moves, 'reels').promote?.ideaId, 'reels:idea:b');
+});
+
+test('Review Focus 3: before the skip columns or the table exist, workers read no moves or their moves as before, and writes are ignored, never thrown', async () => {
+  const { pg, query: q } = await openHubTestDb();
+  await addMove(q, 'reels', 'reels:idea:a', TODAY, 'promote', '2026-10-14T13:00:00Z');
+  await pg.exec(`ALTER TABLE social_hub.idea_adjustments DROP COLUMN skip_reason`);
+  assert.equal(await recordPromoteSkip(q, 'reels', 'reels:idea:a', 'x'), false);
+  assert.equal((await readTonightMoves(q, 'reels')).promote?.ideaId, 'reels:idea:a', 'reading never needs the new columns');
+  assert.deepEqual((await readAdjustments(q, TODAY)).map((m) => [m.ideaId, m.skipReason ?? null]), [['reels:idea:a', null]], 'the hub still reads its moves');
+  await pg.exec(`DROP TABLE social_hub.idea_adjustments`);
+  const none = await readTonightMoves(q, 'reels');
+  assert.deepEqual([none.promote, none.demoted.size], [null, 0]);
+  assert.equal(await markPromoteUsed(q, 'reels', 'reels:idea:a'), false);
 });

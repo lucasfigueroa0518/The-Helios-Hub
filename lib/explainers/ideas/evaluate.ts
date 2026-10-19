@@ -293,10 +293,10 @@ export async function evaluateTopic(deps: EvaluateDeps, topicId: string): Promis
   return { outcome: 'lost_head_to_head', score, winnerId: match.id };
 }
 
-/** Keep the best `poolSize`; displace the rest (E-16 step 7). Returns how many. */
-export async function trimPool(db: ExplainersDb, poolSize: number): Promise<number> {
+/** Keep the best `poolSize`; displace the rest (E-16 step 7). `keep` (tonight's promoted topic, shared queue) is never cut. Returns how many. */
+export async function trimPool(db: ExplainersDb, poolSize: number, keep: string | null = null): Promise<number> {
   const pool = await listPool(db);
-  const cut = pool.slice(poolSize);
+  const cut = pool.slice(poolSize).filter((topic) => topic.id !== keep);
   for (const topic of cut) {
     await db.query(
       `UPDATE explainers.topics

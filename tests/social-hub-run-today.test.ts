@@ -25,11 +25,12 @@ const IDEAS = [idea(1, 4), idea(2, 3), idea(3, 2), idea(4, 1)];
 const move = (n: number, kind: 'promote' | 'demote', at: string): IdeaAdjustment => ({ id: `m-${n}-${kind}-${at}`, vertical: 'reels', ideaId: IDEAS[n - 1]!.id, nyDate: TODAY, kind, createdAt: at });
 const titles = (adj: IdeaAdjustment[]) => dayRanking(IDEAS, 'reels', adj).map((r) => r.idea.title);
 
-test('Promote makes an idea #1 for the day; Demote moves it below the next one', () => {
+test('Promote makes an idea next (one a night, oldest first); Demote sinks it below every other idea', () => {
   assert.deepEqual(titles([]), ['Idea 1', 'Idea 2', 'Idea 3', 'Idea 4']);
   assert.deepEqual(titles([move(3, 'promote', 't1')]), ['Idea 3', 'Idea 1', 'Idea 2', 'Idea 4']);
-  assert.deepEqual(titles([move(1, 'demote', 't1')]), ['Idea 2', 'Idea 1', 'Idea 3', 'Idea 4']);
-  assert.deepEqual(titles([move(3, 'promote', 't1'), move(3, 'demote', 't2')]), ['Idea 1', 'Idea 3', 'Idea 2', 'Idea 4'], 'a demoted promoted idea goes from #1 to #2');
+  assert.deepEqual(titles([move(1, 'demote', 't1')]), ['Idea 2', 'Idea 3', 'Idea 4', 'Idea 1']);
+  assert.deepEqual(titles([move(3, 'promote', 't1'), move(3, 'demote', 't2')]), ['Idea 1', 'Idea 2', 'Idea 4', 'Idea 3'], 'the latest move wins: promoted, then demoted, sinks');
+  assert.deepEqual(titles([move(3, 'promote', 't1'), move(4, 'promote', 't2')]), ['Idea 3', 'Idea 1', 'Idea 2', 'Idea 4'], 'one promote a night: the newer one waits in its place');
   assert.deepEqual(titles([{ ...move(3, 'promote', 't1'), nyDate: '2026-10-08' }]), ['Idea 3', 'Idea 1', 'Idea 2', 'Idea 4'], 'a move from yesterday still steers until its idea is made (B8)');
   assert.deepEqual(applyMoves([{ id: 'a' }, { id: 'b' }], [{ ideaId: 'b', kind: 'demote' }]).map((x) => x.id), ['a', 'b'], 'the last idea stays last');
 });

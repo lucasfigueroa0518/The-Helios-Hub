@@ -16,21 +16,36 @@ import type { Vertical } from '@/lib/social-hub/types';
 /** Each type's default when its posts_per_day row is missing (lib/reels/config.ts, lib/social/overnight/config.ts, lib/explainers/publish/config.ts). */
 export const DEFAULT_DAY_QUOTAS: DayQuotas = { reels: 3, carousels: 2, explainers: 2, last_few_days: 1, lfdDays: [] };
 
-type AdjustmentRow = { id: string; vertical: IdeaAdjustment['vertical']; idea_id: string; ny_date: string; kind: IdeaAdjustment['kind']; created_at: string };
+type AdjustmentRow = {
+  id: string; vertical: IdeaAdjustment['vertical']; idea_id: string; ny_date: string; kind: IdeaAdjustment['kind']; created_at: string;
+  skip_reason?: string | null; skipped_at?: string | null;
+};
 
 const ADJUSTMENT_COLS = `id::text AS id, vertical, idea_id, ny_date::text AS ny_date, kind,
        to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at`;
 
-const toAdjustment = (r: AdjustmentRow): IdeaAdjustment => ({ id: r.id, vertical: r.vertical, ideaId: r.idea_id, nyDate: r.ny_date.slice(0, 10), kind: r.kind, createdAt: r.created_at });
+/** The shared queue's skip columns (2026-10-14): why the last night couldn't make a promote. */
+const SKIP_COLS = `, skip_reason, to_char(skipped_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS skipped_at`;
+
+const toAdjustment = (r: AdjustmentRow): IdeaAdjustment => ({
+  id: r.id, vertical: r.vertical, ideaId: r.idea_id, nyDate: r.ny_date.slice(0, 10), kind: r.kind, createdAt: r.created_at,
+  skipReason: r.skip_reason ?? null, skippedAt: r.skipped_at ?? null,
+});
 
 /**
  * The moves still steering (B8): not used yet, from any day, oldest first.
  * Before the consumed_at column is applied, today's moves, as before Phase B.
+ * Before the skip columns are applied, the same moves without a skip reason.
  */
 export async function readAdjustments(q: HubQuery, nyDate: string): Promise<IdeaAdjustment[]> {
+  const active = (cols: string) => q<AdjustmentRow>(`SELECT ${cols} FROM social_hub.idea_adjustments WHERE consumed_at IS NULL ORDER BY created_at`);
   try {
-    const { rows } = await q<AdjustmentRow>(`SELECT ${ADJUSTMENT_COLS} FROM social_hub.idea_adjustments WHERE consumed_at IS NULL ORDER BY created_at`);
-    return rows.map(toAdjustment);
+    return (await active(ADJUSTMENT_COLS + SKIP_COLS)).rows.map(toAdjustment);
+  } catch {
+    // The skip columns are not applied yet: the moves without them.
+  }
+  try {
+    return (await active(ADJUSTMENT_COLS)).rows.map(toAdjustment);
   } catch {
     const { rows } = await q<AdjustmentRow>(`SELECT ${ADJUSTMENT_COLS} FROM social_hub.idea_adjustments WHERE ny_date = $1::date ORDER BY created_at`, [nyDate]);
     return rows.map(toAdjustment);
@@ -41,8 +56,9 @@ export async function readAdjustments(q: HubQuery, nyDate: string): Promise<Idea
  * Use up moves (B8), the one place it happens: a move whose idea got content
  * after it (madeMoveIds, from the posts the hub just loaded, whichever
  * database they live in), or a Stories move whose pool entry the build used
- * (stories.pool.used_at). Marks them consumed and returns the rest. No worker
- * writes consumed_at.
+ * (stories.pool.used_at). Marks them consumed and returns the rest. Workers also
+ * write consumed_at when a promote is made (markPromoteUsed); this is the
+ * catch-all for moves whose idea got content some other way.
  */
 export async function consumeMoves(q: HubQuery, adjustments: readonly IdeaAdjustment[], posts: readonly HubPost[]): Promise<IdeaAdjustment[]> {
   if (!adjustments.length) return [];
