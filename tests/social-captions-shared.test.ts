@@ -16,6 +16,18 @@ test('CAPTION_SHARED_RULES bans pitches', () => {
   assert.match(CAPTION_SHARED_RULES, /Helios once/);
 });
 
+test('CAPTION_SHARED_RULES: every caption ends on the Helios line (Task 8b, per-format comps)', () => {
+  assert.match(CAPTION_SHARED_RULES, /the body, then the question or call to action, then the Helios line, then any credits, Source line or hashtags/i);
+  assert.match(CAPTION_SHARED_RULES, /one or two sentences/);
+  assert.match(CAPTION_SHARED_RULES, /may end by inviting the reader to follow/);
+  assert.match(CAPTION_SHARED_RULES, /A short, specific question is the usual choice/);
+  assert.match(CAPTION_SHARED_RULES, /never "what do you think\?"/i);
+  assert.match(CAPTION_SHARED_RULES, /so-what line in the body is fine, but it does not name Helios/);
+  assert.match(CAPTION_SHARED_RULES, /Name Helios once, in the Helios line/);
+  assert.doesNotMatch(CAPTION_SHARED_RULES, /Close with the builder's read/);
+  assert.ok(!CAPTION_SHARED_RULES.includes('\u2014'), 'no em dashes');
+});
+
 test('ceilingAllows counts only the 6 most recent closings', () => {
   assert.equal(ceilingAllows([]), true);
   assert.equal(ceilingAllows([row(true, 0), row(false, 1), row(true, 2), row(false, 3)]), false);
@@ -41,6 +53,8 @@ test('recentClosingsBlock lists closings and tells the model not to reuse them',
 test('buildLineInstruction switches on include', () => {
   assert.match(buildLineInstruction(true), /what Helios builds/);
   assert.match(buildLineInstruction(true), /only place Helios is named/i);
+  assert.match(buildLineInstruction(true), /In the Helios line/);
+  assert.match(buildLineInstruction(false), /In the Helios line/);
   assert.match(buildLineInstruction(false), /do not describe what Helios builds/i);
 });
 

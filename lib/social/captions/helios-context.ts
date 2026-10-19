@@ -35,8 +35,9 @@ export const CAPTION_SHARED_RULES = `## Caption rules
 
 - Put the hook in the first 125 characters, and do not open with "X announced Y".
 - Keep paragraphs short.
-- Keep the news part factual and third-person, hedged only where it matters, with no paragraph about sourcing; state only what the source supports and keep its hedges.
-- Close with the builder's read: say what the story changes for someone running marketing, sales or ops at a business like the ones above, naming a concrete business type from the context when it fits; opinion and "we" belong only in the read.
-- Name Helios once, lightly, worded fresh each time; "we" is allowed only in the builder's read.
-- Vary the ending (a question, a share prompt or just the take) and do not default to "Would you...?".
+- Keep the factual part third-person, hedged only where it matters, with no paragraph about sourcing; state only what the source supports and keep its hedges.
+- Build the caption in this order: the body, then the question or call to action, then the Helios line, then any credits, Source line or hashtags the format adds.
+- Close the body on a question or a call to action. A short, specific question is the usual choice, one a reader can answer from their own work or life. Word it fresh each time, never "what do you think?" and never engagement bait.
+- The Helios line ends the caption: one or two sentences, a builder's take on this story. Say what it changes for someone running marketing, sales or ops at a business like the ones above, and name a business type from the context when it fits. It reads like a builder talking, never like a product line, and it may end by inviting the reader to follow. It is the only place for "we" and for opinion.
+- A casual so-what line in the body is fine, but it does not name Helios. Name Helios once, in the Helios line, worded fresh each time.
 - Never write "DM us", never list services, never claim client results, never invent anecdotes, and never use engagement bait.`;

@@ -15,6 +15,8 @@ import { buildLineInstruction, type RecentClosing } from '@/lib/social/captions/
 import { CAPTION_SHARED_RULES, HELIOS_CONTEXT } from '@/lib/social/captions/helios-context';
 import { joinCaption, runCaptioner } from '@/lib/social/captioner/captioner';
 import { CAPTIONER_CAROUSEL_RULES, CAPTIONER_CLOSING, CAPTIONER_INTRO, CAPTIONER_SYSTEM, SUBMIT_CAPTION_TOOL, captionerUserMessage } from '@/lib/social/captioner/prompt';
+import { applySilentFixes } from '@/lib/social/mechanical/checks';
+import { withJoinedCaption } from '@/lib/social/pipeline/mechanical-stage';
 import { STAGE_MODELS } from '@/lib/social/pipeline/models';
 import { CAPTIONER_CHECKED_RULES, renderRulesFor } from '@/lib/social/prompts/rules-block';
 import { VOICE_BLOCK } from '@/lib/social/prompts/voice-block';
@@ -47,7 +49,7 @@ function draft() {
 }
 
 const NEWS = {
-  text: "The White House now has a task force for super intelligence, and it has 120 days to say what that means.\n\nTrump announced the Super Intelligence Force in a Sunday post on Truth Social. National intelligence director Jay Clayton will lead it, the Wall Street Journal reports.\n\nIts charter reportedly asks for plans against SI-enabled threats while preventing overregulation.",
+  text: "The White House now has a task force for super intelligence, and it has 120 days to say what that means.\n\nTrump announced the Super Intelligence Force in a Sunday post on Truth Social. National intelligence director Jay Clayton will lead it, the Wall Street Journal reports.\n\nIts charter reportedly asks for plans against SI-enabled threats while preventing overregulation.\n\nThat is a short clock for a big question.\n\nWhat would you want that report to settle first?",
   facts: ['F1', 'F2', 'F3', 'N1', 'F6'],
 };
 const READ = {
@@ -118,7 +120,7 @@ test('captionerUserMessage: slides, the BRIEF as the Writer sees it, closings, t
 test('CAPTIONER_SYSTEM retires the wire framing', () => {
   assert.doesNotMatch(CAPTIONER_SYSTEM, /Reuters/);
   assert.doesNotMatch(CAPTIONER_SYSTEM, /No opinions/);
-  assert.match(CAPTIONER_SYSTEM, /builder's read/);
+  assert.match(CAPTIONER_SYSTEM, /the Helios line/);
   assert.ok(!CAPTIONER_SYSTEM.includes('—'), 'no em dashes');
   assert.ok(!CAPTIONER_SYSTEM.includes('${'), 'no unrendered template');
   // Review fixes (2026-10-19): the caption's sentence-length rule lives here, not in the shared VOICE_BLOCK.
@@ -140,6 +142,31 @@ test('CAPTIONER_SYSTEM = intro, Helios context, shared rules, carousel rules, vo
   assert.equal(CAPTIONER_CHECKED_RULES, checked);
   assert.equal(CAPTIONER_CLOSING, closing);
   assert.equal(renderRulesFor('captioner'), CAPTIONER_CHECKED_RULES);
+});
+
+test('carousel shape (Task 8b): news ends on a specific question, read is the one-or-two-sentence Helios line', () => {
+  assert.match(CAPTIONER_CAROUSEL_RULES, /news: everything before the Helios line/);
+  assert.match(CAPTIONER_CAROUSEL_RULES, /one plain, surprising sentence/);
+  assert.match(CAPTIONER_CAROUSEL_RULES, /2 to 4 short paragraphs/);
+  assert.match(CAPTIONER_CAROUSEL_RULES, /so-what line/);
+  assert.match(CAPTIONER_CAROUSEL_RULES, /Last, one short, specific question/);
+  assert.match(CAPTIONER_CAROUSEL_RULES, /read: the Helios line, one or two sentences that close the caption/);
+  assert.doesNotMatch(CAPTIONER_CAROUSEL_RULES, /1 or 2 short paragraphs that close the caption/);
+  assert.doesNotMatch(CAPTIONER_CAROUSEL_RULES, /End where the story wants/);
+  const schema = SUBMIT_CAPTION_TOOL.input_schema as any;
+  assert.match(schema.properties.news.properties.text.description, /question/);
+  assert.match(schema.properties.read.properties.text.description, /Helios line/);
+});
+
+test('the posted carousel caption ends on the question, then the Helios line, then the Source line', () => {
+  const { filled } = draft();
+  const joined = withJoinedCaption({ ...filled, caption: structuredClone(NEWS), caption_read: structuredClone(READ) });
+  const text = applySilentFixes(joined, brief).draft.caption.text;
+  const at = text.indexOf(READ.text);
+  assert.ok(at > 0, 'the read is in the caption');
+  assert.ok(text.slice(0, at).trimEnd().endsWith('settle first?'), 'the question ends the news part');
+  assert.ok(text.slice(0, at).endsWith('?\n\n'));
+  assert.match(text.slice(at + READ.text.length), /^\n\nSource: [^\n]+\.$/);
 });
 
 test('SUBMIT_CAPTION_TOOL: news and read, each text plus facts', () => {
