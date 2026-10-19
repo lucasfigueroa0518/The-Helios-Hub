@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { applySlotChanges, parseChanges, setSlotSource } from '@/lib/social-hub/slots/write';
-import { readTemplate } from '@/lib/social-hub/slots/load';
+import { loadSlots, readOverrides, readTemplate } from '@/lib/social-hub/slots/load';
 import { LFD_CAROUSEL_CONFLICT } from '@/lib/social-hub/slots/resolve';
 
 import { openHubTestDb } from './fixtures/social-hub/pglite';
@@ -133,4 +133,52 @@ test('a booked reel reports its idea as the ref (native_ref is the video job)', 
   const out = await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: '2026-10-22', vertical: 'reels', windowId: 'evening', action: 'remove', feedMode: null }], { by: 't', now: NOW, keepBooked: false });
   assert.equal((out as { status: number }).status, 409);
   assert.deepEqual((out as { booked: Array<{ refs: unknown }> }).booked.map((b) => b.refs), [{ postIdeaId: '44444444-4444-4444-4444-444444444444' }]);
+});
+
+// ── A weekly edit made today leaves today's started windows alone ──
+
+const TUE_10AM = new Date('2026-10-20T14:00:00Z'); // Tue Oct 20, 10:00 AM New York: reels morning (8:45) started, evening (6:00 PM) not
+const reelsOn = async (q: never, nyDate: string) => ((await loadSlots(q, nyDate, nyDate)).get(nyDate) ?? []).filter((x) => x.vertical === 'reels').map((x) => [x.windowId, x.feedMode]);
+
+test('"Every Tuesday" removing a started window today: the template changes, today keeps it, next Tuesday does not', async () => {
+  const { q } = await seeded();
+  const out = await applySlotChanges(q, [{ scope: 'template', op: 'delete', weekday: 2, vertical: 'reels', windowId: 'morning' }], { by: 't', now: TUE_10AM, keepBooked: false });
+  assert.deepEqual(out, { ok: true });
+  assert.equal((await readTemplate(q)).some((r) => r.weekday === 2 && r.vertical === 'reels' && r.windowId === 'morning'), false, 'template row gone');
+  assert.deepEqual(await readOverrides(q, '2026-10-20', '2026-10-20'), [{ nyDate: '2026-10-20', vertical: 'reels', windowId: 'morning', action: 'add', feedMode: 'trial' }]);
+  assert.deepEqual((await reelsOn(q, '2026-10-20'))[0], ['morning', 'trial'], 'today still has its morning reel');
+  assert.equal((await reelsOn(q, '2026-10-27')).some(([w]) => w === 'morning'), false, 'next Tuesday follows the template');
+});
+
+test('"Every Tuesday" adding a started window today writes a remove for today', async () => {
+  const { pg, q } = await seeded();
+  await pg.query(`DELETE FROM social_hub.slot_template WHERE weekday = 2 AND vertical = 'reels' AND window_id = 'morning'`);
+  const out = await applySlotChanges(q, [{ scope: 'template', op: 'put', weekday: 2, vertical: 'reels', windowId: 'morning', feedMode: 'main' }], { by: 't', now: TUE_10AM, keepBooked: false });
+  assert.deepEqual(out, { ok: true });
+  assert.deepEqual(await readOverrides(q, '2026-10-20', '2026-10-20'), [{ nyDate: '2026-10-20', vertical: 'reels', windowId: 'morning', action: 'remove', feedMode: null }]);
+  assert.deepEqual((await reelsOn(q, '2026-10-27'))[0], ['morning', 'main']);
+});
+
+test('"Every Tuesday" flipping a window that has not started today: today follows the template, no override', async () => {
+  const { q } = await seeded();
+  const out = await applySlotChanges(q, [{ scope: 'template', op: 'put', weekday: 2, vertical: 'reels', windowId: 'evening', feedMode: 'main' }], { by: 't', now: TUE_10AM, keepBooked: false });
+  assert.deepEqual(out, { ok: true });
+  assert.deepEqual(await readOverrides(q, '2026-10-20', '2026-10-20'), []);
+  assert.deepEqual((await reelsOn(q, '2026-10-20')).find(([w]) => w === 'evening'), ['evening', 'main']);
+});
+
+test('an override already on today\'s started window is left untouched by an "Every Tuesday" edit', async () => {
+  const { pg, q } = await seeded();
+  await pg.query(`INSERT INTO social_hub.slot_override (ny_date, vertical, window_id, action, feed_mode, updated_by) VALUES ('2026-10-20', 'reels', 'morning', 'add', 'main', 'earlier')`);
+  const out = await applySlotChanges(q, [{ scope: 'template', op: 'delete', weekday: 2, vertical: 'reels', windowId: 'morning' }], { by: 't', now: TUE_10AM, keepBooked: false });
+  assert.deepEqual(out, { ok: true });
+  const rows = await pg.query<{ action: string; feed_mode: string; updated_by: string }>(`SELECT action, feed_mode, updated_by FROM social_hub.slot_override WHERE ny_date = '2026-10-20'`);
+  assert.deepEqual(rows.rows, [{ action: 'add', feed_mode: 'main', updated_by: 'earlier' }]);
+});
+
+test('a booking in today\'s started window is not "in the way" of an "Every Tuesday" remove', async () => {
+  const { pg, q } = await seeded();
+  await book(pg, 'reels', '2026-10-20', 'morning', 'trial', '55555555-5555-5555-5555-555555555555');
+  const out = await applySlotChanges(q, [{ scope: 'template', op: 'delete', weekday: 2, vertical: 'reels', windowId: 'morning' }], { by: 't', now: TUE_10AM, keepBooked: false });
+  assert.deepEqual(out, { ok: true });
 });

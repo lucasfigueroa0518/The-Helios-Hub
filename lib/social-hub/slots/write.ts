@@ -74,13 +74,40 @@ function applyInMemory(template: TemplateRow[], overrides: OverrideRow[], change
   return { template: t, overrides: o };
 }
 
+/** Whether a type's window has begun on `nyDate` by `now`. */
+function hasStarted(vertical: Vertical, windowId: string, nyDate: string, now: Date): boolean {
+  const w = PLAN[vertical].find((p) => p.id === windowId)!;
+  return windowMinuteInstant({ ...w, label: w.label }, nyDate, 0).getTime() <= now.getTime();
+}
+
 /** A window that has begun (or a past day) can't be edited: something may already be posting. */
 function startedNote(c: SlotChange, today: string, now: Date): string | null {
   if (c.scope !== 'date') return null;
   if (c.nyDate < today) return 'That day has passed.';
   if (c.nyDate > today) return null;
   const w = PLAN[c.vertical].find((p) => p.id === c.windowId)!;
-  return windowMinuteInstant({ ...w, label: w.label }, c.nyDate, 0).getTime() <= now.getTime() ? `Today’s ${w.label.toLowerCase()} window has started, so it can’t change now.` : null;
+  return hasStarted(c.vertical, c.windowId, c.nyDate, now) ? `Today’s ${w.label.toLowerCase()} window has started, so it can’t change now.` : null;
+}
+
+/**
+ * An "every <weekday>" edit made on that weekday still changes the template,
+ * but a window that already started today keeps today's state: one override
+ * per such key that pins what today resolves to now (add with its feed mode,
+ * or remove). A key that already has an override today is left as it is.
+ */
+function holdStartedToday(changes: readonly SlotChange[], template: readonly TemplateRow[], overrides: readonly OverrideRow[], today: string, now: Date): SlotChange[] {
+  const weekday = weekdayOf(today);
+  const current = resolveDay(template, overrides, today);
+  const held = new Map<string, SlotChange>();
+  for (const c of changes) {
+    if (c.scope !== 'template' || c.weekday !== weekday) continue;
+    const key = keyOf(c.vertical, c.windowId);
+    if (held.has(key) || !hasStarted(c.vertical, c.windowId, today, now)) continue;
+    if (overrides.some((o) => o.nyDate === today && keyOf(o.vertical, o.windowId) === key)) continue;
+    const slot = current.find((x) => keyOf(x.vertical, x.windowId) === key);
+    held.set(key, { scope: 'date', op: 'put', nyDate: today, vertical: c.vertical, windowId: c.windowId, action: slot ? 'add' : 'remove', feedMode: slot ? slot.feedMode : null });
+  }
+  return [...held.values()];
 }
 
 /** Where bookings can sit: the next two weeks, plus any override date. */
@@ -122,12 +149,14 @@ function inTheWay(b: BookedPost, slots: readonly ResolvedSlot[]): boolean {
   return s.feedMode != null && mode != null && s.feedMode !== mode;
 }
 
-export async function applySlotChanges(q: SlotQuery, changes: readonly SlotChange[], opts: { by: string; now: Date; keepBooked: boolean }): Promise<ApplyResult> {
+export async function applySlotChanges(q: SlotQuery, requested: readonly SlotChange[], opts: { by: string; now: Date; keepBooked: boolean }): Promise<ApplyResult> {
   const today = calendarDateKey(opts.now, SOCIAL_TIMEZONE);
-  const started = changes.map((c) => startedNote(c, today, opts.now)).filter((n): n is string => Boolean(n));
+  const started = requested.map((c) => startedNote(c, today, opts.now)).filter((n): n is string => Boolean(n));
   if (started.length) return { ok: false, status: 422, errors: [...new Set(started)] };
 
   const [template, overridesAll] = await Promise.all([readTemplate(q), readOverrides(q, today, '9999-12-31')]);
+  // Validation, the booked check and the writes all run on the changes plus today's holds.
+  const changes = [...requested, ...holdStartedToday(requested, template, overridesAll, today, opts.now)];
   const next = applyInMemory(template, overridesAll, changes);
 
   const errors = new Set<string>();
