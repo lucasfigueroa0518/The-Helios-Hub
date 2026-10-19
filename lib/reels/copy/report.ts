@@ -362,7 +362,7 @@ export function fullCaption(report: Pick<CopyReport, 'caption' | 'callToAction' 
   // D-246: a call to action or hashtag line written with different spacing or
   // a "CTA:" label is still posted once.
   body = stripCaptionTail(body, callToAction, 1);
-  return fitCaptionParts(body, callToAction, hashtags, CAPTION_MAX_CHARS);
+  return fitCaptionParts(body, callToAction, hashtags, CAPTION_MAX_CHARS, 1);
 }
 
 /** Cut an already assembled caption down to the limit. Keeps a trailing hashtag line. */
@@ -373,7 +373,8 @@ export function shortenAssembledCaption(caption: string, limit = CAPTION_MAX_CHA
   const hashtags = paragraphs.length > 0 && /^#\S/.test(paragraphs[paragraphs.length - 1] ?? '')
     ? paragraphs.pop() ?? ''
     : '';
-  return fitCaptionParts(paragraphs.join('\n\n'), '', hashtags, limit);
+  // The body's last two paragraphs are the builder's read and the call to action (v28).
+  return fitCaptionParts(paragraphs.join('\n\n'), '', hashtags, limit, 2);
 }
 
 function stripTrailing(body: string, ending: string): string {
@@ -404,15 +405,33 @@ function cutToFit(text: string, budget: number): string {
   return slice;
 }
 
-function fitCaptionParts(body: string, callToAction: string, hashtags: string, limit: number): string {
+/**
+ * v28. The last `keep` body paragraphs are the caption's ending (the builder's
+ * read, the one Helios mention). Paragraphs drop from just before that ending,
+ * backwards; then the opening is cut at a sentence to leave room for it. The
+ * ending is cut only when it cannot fit beside anything else.
+ */
+function fitCaptionParts(body: string, callToAction: string, hashtags: string, limit: number, keep = 0): string {
   const tails = [callToAction, hashtags].filter((part) => part.length > 0);
   const assemble = (nextBody: string, nextTails: string[]) => joinParts([nextBody, ...nextTails]);
   if (assemble(body, tails).length <= limit) return assemble(body, tails);
 
   const paragraphs = body.split(/\n[ \t]*\n/).map((part) => part.trim()).filter(Boolean);
-  while (paragraphs.length > 1 && assemble(paragraphs.join('\n\n'), tails).length > limit) paragraphs.pop();
-  body = paragraphs.join('\n\n');
+  const ending = keep > 0 && paragraphs.length > keep ? paragraphs.splice(paragraphs.length - keep) : [];
+  const withEnding = () => [...paragraphs, ...ending].join('\n\n');
+  while (paragraphs.length > 1 && assemble(withEnding(), tails).length > limit) paragraphs.pop();
+  body = withEnding();
   if (assemble(body, tails).length <= limit) return assemble(body, tails);
+
+  if (ending.length > 0) {
+    const endingText = ending.join('\n\n');
+    const roomForLead = limit - assemble(endingText, tails).length - 2;
+    if (roomForLead > 0) {
+      const lead = cutToFit(paragraphs.join('\n\n'), roomForLead);
+      const fitted = assemble(joinParts([lead, endingText]), tails);
+      if (lead && fitted.length <= limit) return fitted;
+    }
+  }
 
   const tailText = tails.join('\n\n');
   const roomForBody = tailText ? limit - tailText.length - 2 : limit;
@@ -469,6 +488,8 @@ export function checkCopy(
   const stakeWords = countWords(report.viewerStake);
   const foldChars = (report.caption.split('\n').find((line) => line.trim()) ?? '').trim().length;
   const published = `${report.onScreenCopy}\n${caption}`;
+  // v28: "we" is allowed in the builder's read, so only the rest is flagged.
+  const outsideRead = report.builderRead ? published.split(report.builderRead).join('\n') : published;
   const known = new Set(knownUrls.map((url) => url.trim()));
 
   return {
@@ -486,7 +507,7 @@ export function checkCopy(
       report.hashtags.length >= HASHTAG_RANGE.min && report.hashtags.length <= HASHTAG_RANGE.max,
     dashes: published.match(DASH)?.length ?? 0,
     urlsInCaption: caption.match(URL_PATTERN)?.length ?? 0,
-    firstPersonWords: [...new Set(published.match(FIRST_PERSON) ?? [])],
+    firstPersonWords: [...new Set(outsideRead.match(FIRST_PERSON) ?? [])],
     unknownSourceUrls: report.sources.map((source) => source.url).filter((url) => !known.has(url)),
     textArtifacts: [...textArtifacts(report.onScreenCopy), ...textArtifacts(caption)],
   };

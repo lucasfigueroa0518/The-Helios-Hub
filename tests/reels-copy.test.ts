@@ -441,6 +441,8 @@ test('an assembled caption over 2,200 characters is shortened to the limit', () 
   assert.ok(posted.length <= 2_200);
   assert.ok(posted.length > 2_000);
   assert.match(posted, /^This paragraph is long enough to cut\./);
+  // v28: the builder's read is the one Helios mention, so it survives the cut.
+  assert.ok(posted.includes(`\n\n${READ}\n\nSend this to the person who owns your AI pilot.`));
   assert.match(posted, /Send this to the person who owns your AI pilot\.\n\n#AI #enterprise #MLOps$/);
   assert.equal(posted.includes(paragraph), false);
 });

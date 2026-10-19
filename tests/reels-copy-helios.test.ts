@@ -12,12 +12,21 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { Questions, SystemOneResult } from '@typesafe-ai/sdk';
 
 import { assembleCopyPrompt, buildCopyTaskBlock, copyStaticSystem, type CopyInput } from '@/lib/reels/copy/assemble';
-import { CopyReportError, REPORT_COPY_TOOL, parseCopyReport } from '@/lib/reels/copy/report';
+import { buildCopyVariants } from '@/lib/reels/copy/pick';
+import {
+  CopyReportError,
+  REPORT_COPY_TOOL,
+  checkCopy,
+  fullCaption,
+  parseCopyReport,
+  publishCopy,
+  shortenAssembledCaption,
+} from '@/lib/reels/copy/report';
 import { COPY_PROMPT_VERSION, COPY_SKILL, FRAMEWORK_WRITING_LOGIC } from '@/lib/reels/copy/skill';
 import type { CopyTarget, saveIdeaCopy } from '@/lib/reels/copy/store';
 import type { CopyClient } from '@/lib/reels/copy/writer';
 import type { JevRequest, JevRunner } from '@/lib/reels/jev/runner';
-import { writeTargetCopy } from '@/lib/reels/pipeline/copy';
+import { shipStoredCopy, writeTargetCopy } from '@/lib/reels/pipeline/copy';
 import {
   BUILD_FIT,
   buildFitState,
@@ -64,6 +73,8 @@ test('v28 pins: the version, the Helios context and the shared rules in the cach
   assert.match(COPY_SKILL, /The builder's read is the one place "we" is allowed/);
   assert.match(COPY_SKILL, /just before the call to action/);
   assert.match(COPY_SKILL, /builder_read field/);
+  assert.match(COPY_SKILL, /it is the caption's one ask\. It meets the shared rule on varied endings, so the builder's read ends on the take\./);
+  assert.match(COPY_SKILL, /so the read ends on the take: never on a question such as "what do you think\?", and never on an ask of its own\./);
   assert.match(FRAMEWORK_WRITING_LOGIC.arousal.caption, /does not name Helios a second time/);
   assert.doesNotMatch(FRAMEWORK_WRITING_LOGIC.arousal.caption, /End the caption on one line that names Helios/);
   assert.ok(REPORT_COPY_TOOL.input_schema.required.includes('builder_read'));
@@ -328,4 +339,55 @@ test('a builder read without Helios is rejected once and the retry is billed', a
   assert.equal(sent.length, 3, 'two draft calls plus one retry');
   assert.deepEqual(costs, ['copy-caption', 'copy-caption', 'copy-caption']);
   assert.equal(outcome.ok, true);
+});
+
+// ── Review round 1 ──────────────────────────────────────────────────────────
+
+test('an over-limit caption keeps the builder read and cuts before it', () => {
+  const long = 'This paragraph is long enough to cut. '.repeat(30).trim();
+  const call = parseCopyReport(reportInput({ caption: [long, long, long, READ].join('\n\n') }));
+  const posted = fullCaption(publishCopy(call, 'Strong line one here'));
+  assert.ok(posted.length <= 2_200);
+  assert.ok(posted.includes(`\n\n${READ}\n\nSend this to the friend who built an app.\n\n#AI #Security #Apps`));
+  assert.match(posted, /^This paragraph is long enough to cut\./);
+
+  // An assembled caption (body, read, call to action, hashtags) keeps the read too.
+  const assembled = [long, long, long, READ, 'Send this to a friend.', '#AI #Apps'].join('\n\n');
+  const shortened = shortenAssembledCaption(assembled);
+  assert.ok(shortened.length <= 2_200);
+  assert.ok(shortened.endsWith(`${READ}\n\nSend this to a friend.\n\n#AI #Apps`));
+});
+
+test('first person in the builder read is not flagged; outside it, it still is', () => {
+  const read = 'For a dental practice, we would start with the intake form. Helios builds that kind of handoff.';
+  const clean = parseCopyReport(reportInput({ caption: `Story.\n\n${read}`, builder_read: read }));
+  assert.deepEqual(checkCopy(publishCopy(clean, 'Strong line one here'), 'the_number', []).firstPersonWords, []);
+  const leaky = parseCopyReport(reportInput({ caption: `Our story.\n\n${read}`, builder_read: read }));
+  assert.deepEqual(checkCopy(publishCopy(leaky, 'Strong line one here'), 'the_number', []).firstPersonWords, ['Our']);
+});
+
+test('shipStoredCopy (ship-a-miss) records the closing with the attempt build-line flag', async () => {
+  const call = parseCopyReport(reportInput());
+  const { variants } = buildCopyVariants([{ call, error: null }], null, 'the_number');
+  const { log, recorded } = recorder([]);
+  const saved: Array<Parameters<typeof saveIdeaCopy>[0]> = [];
+  const shipped = await shipStoredCopy(
+    'run-1',
+    'slate-1',
+    TARGET,
+    variants,
+    0,
+    { promptVersion: 'copy-caption-v28', model: 'm', inputTokens: 1, outputTokens: 1, usd: 0, buildLine: true },
+    {
+      jev: stubJev([], () => ({ builds: { type: 'noul', noul: 0.9 } })),
+      save: async (row) => {
+        saved.push(row);
+        return true;
+      },
+      closings: log,
+    },
+  );
+  assert.equal(shipped.ok, true);
+  assert.equal(saved[0].report?.builderRead, READ);
+  assert.deepEqual(recorded, [['idea-1', READ, true]]);
 });
