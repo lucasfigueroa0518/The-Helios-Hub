@@ -363,7 +363,7 @@ async function gtnDeps(db: Awaited<ReturnType<typeof harnessDb>>['db'], cands: P
   return { deps: { ...deps, readSource: reader }, write, reader };
 }
 
-test('Guess the Number: one pick call, the top candidate that passes wins, pool photo reused', async () => {
+test('Guess the Number: one pick call, the top candidate that passes wins, every candidate gated and recorded', async () => {
   const { db } = await harnessDb();
   await CHATGPT_POST(db);
   const { deps, write, reader } = await gtnDeps(db, [EMBED, POOLED, THIRD]);
@@ -410,6 +410,73 @@ test('Guess the Number: a page that will not load is unreadable; the next rank w
   assert.equal(q.photo?.src, 'https://img.test/altman.jpg');
   assert.deepEqual(r.historyKeys, [storyKey('https://openai.test/devday')]);
   assert.equal((r.payload.gtn as { considered: Array<{ fetch: string }> }).considered[0]!.fetch, 'fetch failed');
+});
+
+test('Guess the Number: Jev throws only for rank 2 → rank 1 still wins, rank 2 is jev-error', async () => {
+  const { db } = await harnessDb();
+  await CHATGPT_POST(db);
+  const jev = stubJev((k, s) => {
+    if (gateState(s).question === POOLED.question) throw new Error('jev down');
+    return DEFAULT_GATE(k);
+  });
+  const { deps } = await gtnDeps(db, [EMBED, POOLED, THIRD], { jev });
+  const r = await buildGuessTheNumber(deps, { numbers: () => carouselNumbers(db, NOW), unbriefed: async () => [] });
+  assert.equal(r.ok, true, !r.ok ? r.skip : '');
+  if (!r.ok) return;
+  assert.deepEqual(r.candidates.map((c) => [c.chosen, c.reason]), [[true, null], [false, 'jev-error'], [false, 'lower rank']]);
+  const considered = (r.payload.gtn as { considered: Array<{ fetch: string; error?: string; failedGate: string | null }> }).considered;
+  assert.equal(considered[1]!.failedGate, 'jev-error');
+  assert.equal(considered[1]!.fetch, 'article');
+  assert.match(considered[1]!.error ?? '', /jev down/);
+});
+
+test('Guess the Number: Jev throws for rank 1 → rank 2 wins', async () => {
+  const { db } = await harnessDb();
+  await CHATGPT_POST(db);
+  const jev = stubJev((k, s) => {
+    if (gateState(s).question === EMBED.question) throw new Error('jev down');
+    return DEFAULT_GATE(k);
+  });
+  const { deps } = await gtnDeps(db, [EMBED, POOLED, THIRD], { jev });
+  const r = await buildGuessTheNumber(deps, { numbers: () => carouselNumbers(db, NOW), unbriefed: async () => [] });
+  assert.equal(r.ok, true, !r.ok ? r.skip : '');
+  if (!r.ok) return;
+  assert.deepEqual(r.candidates.map((c) => [c.chosen, c.reason]), [[false, 'jev-error'], [true, null], [false, 'lower rank']]);
+});
+
+test('Guess the Number: a same-subject answer that is missing fails the same-subject gate', async () => {
+  const { db } = await harnessDb();
+  await CHATGPT_POST(db);
+  const { rows } = await db.query<{ id: string }>(`INSERT INTO stories.sets (series, ny_date, status, trigger, style) VALUES ('guess_the_number', '2026-10-01', 'published', 'click', 'polished') RETURNING id`);
+  const copies: Array<[number, string, Record<string, string>]> = [[1, 'intro', { topic: 'Other' }], [2, 'question', { question: 'Something else entirely?' }], [3, 'answer', { number: '1', label: 'Other' }]];
+  for (const [seq, role, copy] of copies) await db.query(`INSERT INTO stories.frames (set_id, seq, role, template, backdrop, copy) VALUES ($1, $2, $3, 't', 'black', $4::jsonb)`, [rows[0]!.id, seq, role, JSON.stringify(copy)]);
+  const jev = stubJev(DEFAULT_GATE);
+  const orig = jev.systemOne.bind(jev);
+  jev.systemOne = (async (state: unknown, questions: Record<string, unknown>) => {
+    const res = await orig(state as never, questions as never);
+    if ('same_subject' in questions) return { ...res, answers: {} } as typeof res;
+    return res;
+  }) as typeof jev.systemOne;
+  const { deps } = await gtnDeps(db, [EMBED, POOLED, THIRD], { jev });
+  const r = await buildGuessTheNumber(deps, { numbers: () => carouselNumbers(db, NOW), unbriefed: async () => [] });
+  assert.equal(r.ok, false);
+  if (r.ok) return;
+  assert.ok(r.candidates.every((c) => c.reason === 'same-subject'));
+});
+
+test('Guess the Number: a reader that throws (not {ok:false}) makes that candidate unreadable', async () => {
+  const { db } = await harnessDb();
+  await CHATGPT_POST(db);
+  const good = readerFor([POOLED, THIRD]);
+  const reader = Object.assign(async (url: string, figure?: string) => {
+    if (url === EMBED.source_url) throw new Error('socket hang up');
+    return good(url, figure);
+  }, { calls: good.calls });
+  const { deps } = await gtnDeps(db, [EMBED, POOLED, THIRD], { reader });
+  const r = await buildGuessTheNumber(deps, { numbers: () => carouselNumbers(db, NOW), unbriefed: async () => [] });
+  assert.equal(r.ok, true, !r.ok ? r.skip : '');
+  if (!r.ok) return;
+  assert.deepEqual(r.candidates.map((c) => [c.chosen, c.reason]), [[false, 'unreadable'], [true, null], [false, 'lower rank']]);
 });
 
 test('Guess the Number: a new figure the copy does not call new fails not-said-new', async () => {

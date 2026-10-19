@@ -83,3 +83,36 @@ test('readSourcePage: with a figure, a table Readability dropped is recovered fr
   const without = await readSourcePage('https://example.com/p', async () => html);
   assert.equal(without.ok && without.via, 'article');
 });
+
+test('readSourcePage: a Google News wrapper link is resolved before fetching', async () => {
+  const html = `<html><body><article><p>${'Real article text. '.repeat(30)}</p></article></body></html>`;
+  const fetched: string[] = [];
+  const wrapper = 'https://news.google.com/rss/articles/CBMiabc';
+  const r = await readSourcePage(
+    wrapper,
+    async (u) => {
+      fetched.push(u);
+      return html;
+    },
+    undefined,
+    async (u) => ({ originalUrl: u, resolvedUrl: 'https://publisher.example.com/story' }),
+  );
+  assert.deepEqual(fetched, ['https://publisher.example.com/story']);
+  assert.equal(r.ok, true);
+});
+
+test('readSourcePage: an unresolvable Google News link is not ok and nothing is fetched', async () => {
+  let fetched = 0;
+  const r = await readSourcePage(
+    'https://news.google.com/rss/articles/CBMiabc',
+    async () => {
+      fetched++;
+      return '<html></html>';
+    },
+    undefined,
+    async () => null,
+  );
+  assert.equal(fetched, 0);
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.equal(r.error, 'could not resolve Google News link');
+});

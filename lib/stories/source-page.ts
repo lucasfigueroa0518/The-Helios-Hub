@@ -7,6 +7,7 @@
  */
 import { JSDOM } from 'jsdom';
 
+import { isGoogleNewsUrl, resolveGoogleNewsUrl, type ResolvedGoogleNewsUrl } from '@/lib/social/ingest/resolve-google-news';
 import {
   fetchHtmlLive,
   MAX_TEXT_CHARS,
@@ -67,9 +68,18 @@ export async function readSourcePage(
   url: string,
   fetchHtml: FetchHtml = fetchHtmlLive,
   figure?: string,
+  resolveNews: (url: string) => Promise<ResolvedGoogleNewsUrl | null> = resolveGoogleNewsUrl,
 ): Promise<SourcePage> {
-  const html = await fetchHtml(url);
+  // Google News wrapper links are resolved to the publisher page first, as readPage does.
+  let target = url;
+  if (isGoogleNewsUrl(url)) {
+    const resolved = await resolveNews(url);
+    if (!resolved) return { ok: false, url, error: 'could not resolve Google News link' };
+    target = resolved.resolvedUrl;
+  }
+  const html = await fetchHtml(target);
   if (!html) return { ok: false, url, error: 'fetch failed' };
+  url = target;
   try {
     const article = parseArticleHtml(html, url, url);
     const needle = figure ? figureNeedle(figure) : null;

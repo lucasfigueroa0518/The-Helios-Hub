@@ -40,12 +40,12 @@ export const GATE_FLOORS = { verifiable: 0.7, want_to_guess: 0.6, newly_changed:
 
 export type GtnSources = { numbers: () => Promise<NumberCandidate[]>; unbriefed: () => Promise<StoryCandidate[]> };
 
-export type GtnGate = 'too-long' | 'unreadable' | 'verifiable' | 'want_to_guess' | 'not-said-new' | 'same-subject';
+export type GtnGate = 'too-long' | 'unreadable' | 'verifiable' | 'want_to_guess' | 'not-said-new' | 'same-subject' | 'jev-error';
 export type GtnRecord = {
   poolOffered: number;
   recentTopics: number;
   contract: string[];
-  considered: Array<{ rank: number; origin: string; question: string; answer: string; sourceUrl: string; fetch: 'article' | 'plain' | string; answers: Record<string, number> | null; failedGate: GtnGate | null }>;
+  considered: Array<{ rank: number; origin: string; question: string; answer: string; sourceUrl: string; fetch: 'article' | 'plain' | string; answers: Record<string, number> | null; failedGate: GtnGate | null; error?: string }>;
   floors: typeof GATE_FLOORS;
 };
 
@@ -103,7 +103,7 @@ const poolPhoto = (p: PoolItem) => (p.kind === 'number' ? p.n.photo : p.s.photo)
 /** History key for the model's own idea: its label, lower-cased, runs of non-alphanumerics as '-'. */
 const modelKey = (label: string) => `model:${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 
-type Gated = { c: GtnPickCandidate; item: PoolItem | null; fetch: string; answers: Record<string, number> | null; failedGate: GtnGate | null };
+type Gated = { c: GtnPickCandidate; item: PoolItem | null; fetch: string; answers: Record<string, number> | null; failedGate: GtnGate | null; error?: string };
 
 async function recordGtnSkip(deps: BuildDeps, rec: GtnRecord): Promise<void> {
   try {
@@ -173,18 +173,26 @@ export async function buildGuessTheNumber(deps: BuildDeps, sources?: GtnSources)
       gated.push({ c, item, fetch: page.error, answers: null, failedGate: 'unreadable' });
       continue;
     }
-    const res = await deps.jev.ask({
-      component: 'gtn-gate', set: GTN_GATE, setId: deps.setId,
-      state: { today: deps.nyDate, question: c.question, answer: c.answer, label: c.label, meaning: c.meaning, topic: c.topic, page_published: page.publishedTime, page: { untrusted_content: gateExcerpt(page.text, c.answer) } },
-    });
-    const answers: Record<string, number> = Object.fromEntries(Object.entries(res.answers).map(([k, v]) => [k, (v as { noul: number }).noul]));
-    if (recent.length) {
-      let same = 0;
-      for (const r of recent) {
-        const s = await deps.jev.ask({ component: 'gtn-same-subject', set: GTN_SAME_SUBJECT, setId: deps.setId, state: { candidate: { question: c.question, label: c.label }, recent: { question: r.question, label: r.label } } });
-        same = Math.max(same, (s.answers.same_subject as { noul: number }).noul);
+    let answers: Record<string, number> = {};
+    try {
+      const res = await deps.jev.ask({
+        component: 'gtn-gate', set: GTN_GATE, setId: deps.setId,
+        state: { today: deps.nyDate, question: c.question, answer: c.answer, label: c.label, meaning: c.meaning, topic: c.topic, page_published: page.publishedTime?.trim().slice(0, 40) || null, page: { untrusted_content: gateExcerpt(page.text, c.answer) } },
+      });
+      answers = Object.fromEntries(Object.entries(res.answers).map(([k, v]) => [k, (v as { noul: number }).noul]));
+      if (recent.length) {
+        let same = 0;
+        for (const r of recent) {
+          const s = await deps.jev.ask({ component: 'gtn-same-subject', set: GTN_SAME_SUBJECT, setId: deps.setId, state: { candidate: { question: c.question, label: c.label }, recent: { question: r.question, label: r.label } } });
+          // A missing key is a failed gate, never a default pass.
+          const v = (s.answers.same_subject as { noul: number } | undefined)?.noul;
+          same = Math.max(same, typeof v === 'number' ? v : 1);
+        }
+        answers.same_subject = same;
       }
-      answers.same_subject = same;
+    } catch (err) {
+      gated.push({ c, item, fetch: page.via, answers: Object.keys(answers).length ? answers : null, failedGate: 'jev-error', error: err instanceof Error ? err.message : String(err) });
+      continue;
     }
     const f = GATE_FLOORS;
     const failedGate: GtnGate | null =
@@ -201,13 +209,13 @@ export async function buildGuessTheNumber(deps: BuildDeps, sources?: GtnSources)
     poolOffered: pool.items.length,
     recentTopics: recent.length,
     contract,
-    considered: gated.map((g) => ({ rank: g.c.rank, origin: g.item ? poolOrigin(g.item) : 'model', question: g.c.question, answer: g.c.answer, sourceUrl: g.c.source_url, fetch: g.fetch, answers: g.answers, failedGate: g.failedGate })),
+    considered: gated.map((g) => ({ rank: g.c.rank, origin: g.item ? poolOrigin(g.item) : 'model', question: g.c.question, answer: g.c.answer, sourceUrl: g.c.source_url, fetch: g.fetch, answers: g.answers, failedGate: g.failedGate, ...(g.error ? { error: g.error } : {}) })),
     floors: GATE_FLOORS,
   };
   const candidates: NewCandidate[] = gated.map((g) => ({
     origin: g.item ? poolOrigin(g.item) : 'model',
     ref: g.item ? poolRef(g.item) : g.c.source_url,
-    payload: { ...g.c, fetch: g.fetch },
+    payload: { ...g.c, fetch: g.fetch, ...(g.error ? { error: g.error } : {}) },
     jev: g.answers,
     score: null,
     chosen: g === best,
