@@ -28,7 +28,7 @@ import { writeStructured } from '@/lib/stories/writer';
 
 import { clearsFloor, SLIDE_MIN_SHORT_SIDE } from '@/lib/social/photos/size';
 import { findSetOrEach } from '@/lib/stories/photos';
-import { nextBackdrop, openerDate, sentenceCount, toFrames, type BuildDeps, type BuildResult } from './common';
+import { nextBackdrop, openerDate, sentenceCount, shortIds, toFrames, type BuildDeps, type BuildResult } from './common';
 
 /** major-news@2 (Lucas, 2026-10-09): the positive weights sum to 1; `speculative` takes points away. */
 export const MAJOR_NEWS_WEIGHTS = { happened: 0.3, news_kind: 0.25, blockbuster_entity: 0.2, global_relevance: 0.15, political_relevance: 0.1, speculative: -0.35 } as const;
@@ -113,11 +113,15 @@ export async function buildMorningDownload(deps: BuildDeps, sources?: Sources): 
 
   // Write, check lengths, ground.
   const byKey = new Map(chosen.map((c) => [c.key, c]));
-  const writeFor = async (list: typeof chosen, note?: string) =>
-    (await writeStructured<MdHeadlinesOut>({
+  // The writer sees short ids, never the story keys (shortIds); its stories come back under their keys.
+  const writeFor = async (list: typeof chosen, note?: string) => {
+    const { items, byId } = shortIds(list, 's');
+    const out = (await writeStructured<MdHeadlinesOut>({
       create: deps.write, db: deps.db, setId: deps.setId, component: MD_HEADLINES.id, model: deps.settings.models.copy, system: MD_HEADLINES.system, tool: MD_HEADLINES.tool,
-      user: `${note ? `${note}\n\n` : ''}${material(list.map((c) => ({ key: c.key, headline: c.headline, outlet: c.sourceName, also_reported_by: c.alsoFrom ?? [], published: c.publishedAt, url: c.url, text: c.body.slice(0, BODY_CHARS) })))}`,
+      user: `${note ? `${note}\n\n` : ''}${material(items.map(({ id, item: c }) => ({ key: id, headline: c.headline, outlet: c.sourceName, also_reported_by: c.alsoFrom ?? [], published: c.publishedAt, url: c.url, text: c.body.slice(0, BODY_CHARS) })))}`,
     })).value;
+    return { ...out, stories: out.stories.flatMap((s) => (byId.has(s.key) ? [{ ...s, key: byId.get(s.key)!.key }] : [])) };
+  };
   const first = await writeFor(chosen);
   const ok = (h: string) => h.length <= 260 && sentenceCount(h) >= 1 && sentenceCount(h) <= 2;
   const oneEach = (list: typeof first.stories) => {
@@ -131,11 +135,13 @@ export async function buildMorningDownload(deps: BuildDeps, sources?: Sources): 
     const res = await deps.jev.ask({ component: 'md-grounding', set: MD_GROUNDING, setId: deps.setId, state: { headline: s.headline, source: { untrusted_content: c.body.slice(0, BODY_CHARS) } } });
     return ok(s.headline) && res.answers.supported.noul >= GROUNDING_BAR;
   };
-  const misses: typeof chosen = [];
+  // A story the writer left out gets the same one rewrite as a grounding miss.
+  const misses: typeof chosen = chosen.filter((c) => !written.some((s) => s.key === c.key));
+  if (misses.length) log.push(`writer: ${misses.length} story(ies) left out`);
   for (const s of written) (await ground(s)) ? grounded.push(s) : misses.push(byKey.get(s.key)!);
   if (misses.length) {
     log.push(`grounding: ${misses.length} rewrite(s)`);
-    const again = await writeFor(misses, 'A previous headline for each of these stories made a claim the source does not support, or ran past two sentences or 240 characters. Write it again, stating only what the source says.');
+    const again = await writeFor(misses, 'Each of these stories had no headline last time, or its headline made a claim the source does not support, or ran past two sentences or 240 characters. Write one headline for each, stating only what the source says.');
     for (const s of oneEach(again.stories).filter((x) => misses.some((m) => m.key === x.key))) if (await ground(s)) grounded.push(s);
   }
   written = chosen.map((c) => grounded.find((g) => g.key === c.key)).filter((x): x is (typeof written)[number] => Boolean(x));

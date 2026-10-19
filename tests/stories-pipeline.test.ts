@@ -263,6 +263,52 @@ test('Morning Download: the photo set\'s trace is saved by frame, so an empty fr
   ]);
 });
 
+/** A Google News key is a ~300-character random slug; the model does not echo one back intact (2026-10-19). */
+const garble = (key: string) => (key.length > 40 ? `${key.slice(0, 40)}x` : key);
+const GNEWS = (tag: string) => `https://news.google.com/rss/articles/CBMi${tag}${'AbCdEfGhIjKlMnOpQrStUvWxYz0123456789'.repeat(8)}?oc=5`;
+
+test('Morning Download: the writer gets short ids, so long Google News keys cannot drop a story (2026-10-19)', async () => {
+  const { db } = await harnessDb();
+  const slate = await addSlate(db, DATE);
+  await addIdea(db, slate, { headline: 'Anthropic commits shares to a fund', url: GNEWS('anth'), net: 9 });
+  await addIdea(db, slate, { headline: 'Mistral raises money', url: GNEWS('mist'), net: 8 });
+  await addIdea(db, slate, { headline: 'Google ships Gemini 4', url: GNEWS('goog'), net: 8 });
+  await recordHistory(db, 'morning_download', [], null);
+  const write = stubWriter({
+    submit_headlines: (params) => ({
+      stories: (materialOf(params) as Array<{ key: string; headline: string }>).map((s) => ({ key: garble(s.key), headline: `${s.headline} on Sunday.`, source_verb: 'via', source_name: 'Reuters', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
+      opener_visual: { kind: 'setting', query: 'data center' },
+    }),
+  });
+  const deps = await buildDeps(db, 'morning_download', { jev: stubJev(() => 0.9), write });
+  const r = await buildMorningDownload(deps);
+  assert.equal(r.ok, true, !r.ok ? r.skip : '');
+  if (!r.ok) return;
+  assert.equal(r.frames.filter((f) => f.role === 'story').length, 3);
+  assert.ok((materialOf(write.calls[0]!) as Array<{ key: string }>).every((s) => s.key.length < 8));
+  assert.equal(write.calls.length, 1);
+  assert.deepEqual([...r.historyKeys].sort(), [GNEWS('anth'), GNEWS('goog'), GNEWS('mist')].map(storyKey).sort());
+});
+
+test('Morning Download: a story the writer leaves out gets the one rewrite, like a grounding miss', async () => {
+  const { db } = await harnessDb();
+  const slate = await addSlate(db, DATE);
+  await addIdea(db, slate, { headline: 'Anthropic commits shares to a fund', url: 'https://r.test/a', net: 9 });
+  await addIdea(db, slate, { headline: 'Mistral raises money', url: 'https://r.test/m', net: 8 });
+  await recordHistory(db, 'morning_download', [], null);
+  const write = stubWriter({
+    submit_headlines: (params, n) => ({
+      stories: (materialOf(params) as Array<{ key: string; headline: string }>).filter((s) => n > 1 || !s.headline.startsWith('Mistral')).map((s) => ({ key: s.key, headline: `${s.headline} on Sunday.`, source_verb: 'via', source_name: 'Reuters', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
+      opener_visual: { kind: 'setting', query: 'data center' },
+    }),
+  });
+  const deps = await buildDeps(db, 'morning_download', { jev: stubJev(() => 0.9), write });
+  const r = await buildMorningDownload(deps);
+  assert.equal(r.ok, true, !r.ok ? r.skip : '');
+  assert.equal(write.calls.length, 2);
+  assert.deepEqual((materialOf(write.calls[1]!) as Array<{ headline: string }>).map((s) => s.headline), ['Mistral raises money']);
+});
+
 test('Morning Download: stories shown in the last 3 days are dropped; fewer than 2 left skips the day', async () => {
   const { db } = await harnessDb();
   const slate = await addSlate(db, DATE);
@@ -304,6 +350,23 @@ test('Guess the Number: pre-score, write the top 4, re-score, intro with difficu
   assert.equal(r.frames[1]!.template, 'photo');
   assert.deepEqual(r.historyKeys, [storyKey('https://openai.test/devday')]);
   assert.equal(r.candidates.find((c) => c.chosen)!.payload!.value, '800 million');
+});
+
+test('Guess the Number: extraction and questions use short ids, so a long story key cannot drop a number (2026-10-19)', async () => {
+  const { db } = await harnessDb();
+  const url = GNEWS('num');
+  const story = { key: storyKey(url), origin: 'reels' as const, ref: 'idea-1', headline: 'ChatGPT reaches 800 million weekly users', sourceName: 'Reuters', url, body: 'ChatGPT has 800 million weekly users.', publishedAt: null, nativeScore: 9 };
+  const write = stubWriter({
+    submit_numbers: (params) => ({ numbers: (materialOf(params) as Array<{ story_key: string }>).map((s) => ({ story_key: garble(s.story_key), value: '800 million', fact: 'ChatGPT has 800 million weekly users.', counts: 'weekly users' })) }),
+    submit_questions: (params) => ({
+      questions: (materialOf(params) as Array<{ candidate_key: string }>).map((c) => ({ candidate_key: garble(c.candidate_key), question: 'How many people use ChatGPT every week?', answer: '800M', label: 'weekly users', meaning: 'm', topic: 't', source_verb: 'via', source_name: 'Reuters', subjects: [], visual: { kind: 'thematic', query: 'x' }, answer_visual: { kind: 'thematic', query: 'y' } })),
+    }),
+  });
+  const deps = await buildDeps(db, 'guess_the_number', { jev: stubJev(() => 0.9), write });
+  const r = await buildGuessTheNumber(deps, { numbers: async () => [], unbriefed: async () => [story] });
+  assert.equal(r.ok, true, !r.ok ? r.skip : '');
+  if (!r.ok) return;
+  assert.deepEqual(r.historyKeys, [story.key]);
 });
 
 test('Guess the Number: nothing clears the bar → skipped; difficulty bands (O-10, provisional)', async () => {

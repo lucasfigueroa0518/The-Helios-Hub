@@ -57,6 +57,17 @@ export async function findPhoto(photos: PhotoFinder, req: PhotoRequest, log: str
   }
 }
 
+/**
+ * Short ids for the writer to echo back ("s1", "s2", …), and the way back to
+ * the item. A story's key is its URL, and the model does not copy a
+ * 300-character Google News slug intact: on 2026-10-19 every story but one
+ * came back with a garbled key and was dropped before grounding.
+ */
+export function shortIds<T>(list: T[], prefix: string): { items: Array<{ id: string; item: T }>; byId: Map<string, T> } {
+  const items = list.map((item, i) => ({ id: `${prefix}${i + 1}`, item }));
+  return { items, byId: new Map(items.map((x) => [x.id, x.item])) };
+}
+
 /** Sentences in a line, skipping abbreviations (the same rule the template uses). */
 export function sentenceCount(text: string): number {
   return text.split(/(?<=[.!?])\s+(?=[A-Z0-9"“$])/).filter((s) => !/\b(Gov|Sen|Rep|Dr|Mr|Mrs|Ms|St|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|U\.S|Inc|Corp|No)\.$/.test(s.trim())).length;

@@ -24,7 +24,7 @@ import { carouselNumbers, recentUsedPhotoUrls, shortlistWithoutBrief, type Numbe
 import { theNumberIdeas, type StoryCandidate } from '@/lib/stories/sources/reels';
 import { writeStructured } from '@/lib/stories/writer';
 
-import { findPhoto, nextBackdrop, toFrames, type BuildDeps, type BuildResult } from './common';
+import { findPhoto, nextBackdrop, shortIds, toFrames, type BuildDeps, type BuildResult } from './common';
 
 export const CAROUSEL_WEIGHT = 1.15;
 export const GTN_BAR = 0.6;
@@ -70,13 +70,14 @@ export async function buildGuessTheNumber(deps: BuildDeps, sources?: GtnSources)
   // Numbers from stories with no brief: one extraction call over up to 6 stories.
   const unbriefed = (await src.unbriefed().catch(() => [])).filter((s) => !shown.has(s.key)).slice(0, 6);
   if (unbriefed.length) {
+    // The writer sees short ids, never the story keys (shortIds).
+    const stories = shortIds(unbriefed, 's');
     const out = (await writeStructured<GtnExtractOut>({
       create: deps.write, db: deps.db, setId: deps.setId, component: GTN_EXTRACT.id, model: deps.settings.models.copy, system: GTN_EXTRACT.system, tool: GTN_EXTRACT.tool, effort: 'low',
-      user: material(unbriefed.map((s) => ({ story_key: s.key, headline: s.headline, outlet: s.sourceName, text: s.body.slice(0, 9000) }))),
+      user: material(stories.items.map(({ id, item: s }) => ({ story_key: id, headline: s.headline, outlet: s.sourceName, text: s.body.slice(0, 9000) }))),
     })).value;
-    const byKey = new Map(unbriefed.map((s) => [s.key, s]));
     for (const [i, n] of out.numbers.slice(0, 18).entries()) {
-      const s = byKey.get(n.story_key);
+      const s = stories.byId.get(n.story_key);
       if (s && n.value.trim()) pool.push({ key: `${s.key}#x${i}`, origin: s.origin === 'reels' ? 'reels' : 'generated', ref: s.ref, value: n.value, fact: n.fact, counts: n.counts, storyHeadline: s.headline, sourceName: s.sourceName, url: s.url, storyKey: s.key, photo: s.photo ?? null });
     }
   }
@@ -94,13 +95,14 @@ export async function buildGuessTheNumber(deps: BuildDeps, sources?: GtnSources)
   const top = scored.slice(0, WRITE_TOP);
 
   // Write the top 4, then re-score each written question.
+  const topIds = shortIds(top, 'n');
   const written = (await writeStructured<GtnQuestionOut>({
     create: deps.write, db: deps.db, setId: deps.setId, component: GTN_QUESTION.id, model: deps.settings.models.copy, system: GTN_QUESTION.system, tool: GTN_QUESTION.tool,
-    user: material(top.map((n) => ({ candidate_key: n.key, number: n.value, counts: n.counts, fact: n.fact, story: n.storyHeadline, outlet: n.sourceName, url: n.url }))),
-  })).value.questions.filter((q) => top.some((t) => t.key === q.candidate_key) && q.question.length <= 90 && q.answer.length <= 12);
+    user: material(topIds.items.map(({ id, item: n }) => ({ candidate_key: id, number: n.value, counts: n.counts, fact: n.fact, story: n.storyHeadline, outlet: n.sourceName, url: n.url }))),
+  })).value.questions.filter((q) => topIds.byId.has(q.candidate_key) && q.question.length <= 90 && q.answer.length <= 12);
   const finals: Array<{ q: GtnQuestionOut['questions'][number]; n: (typeof top)[number]; score: number; answers: Answers }> = [];
   for (const q of written) {
-    const n = top.find((t) => t.key === q.candidate_key)!;
+    const n = topIds.byId.get(q.candidate_key)!;
     const res = await deps.jev.ask({ component: 'gtn-rescore', set: GTN_CANDIDATE, setId: deps.setId, state: { question: q.question, answer: q.answer, what_it_is: q.label, meaning: q.meaning, fact: { untrusted_content: n.fact } } });
     finals.push({ q, n, score: candidateScore(res.answers as Answers) * (n.origin === 'carousel' ? CAROUSEL_WEIGHT : 1), answers: res.answers as Answers });
   }
