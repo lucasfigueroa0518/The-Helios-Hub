@@ -9,6 +9,11 @@
  *       "Max 2 background slides." carries it); its definition kept;
  *   (b) "and Caption" → "and the caption";
  *   (c) em dashes swapped for periods.
+ * Social-captions redesign (2026-10-19): the Writer and Editor no longer
+ * write the caption, so Glossing's overflow goes to a dedicated slide (was
+ * "the caption or a dedicated slide"), and the caption-only checked lines
+ * (caption length, no hashtags) moved to CAPTIONER_CHECKED_RULES. The
+ * Context policy still names the caption: the captioner follows it.
  * Static string: embedding it keeps the cached prompt prefix stable.
  */
 
@@ -74,29 +79,45 @@ Not allowed: repeating a competitor's prior announcement as coverage of this sto
 
 ## Glossing (advisory, not required)
 
-A term needs a gloss only if the slide doesn't make sense without it. If a gloss would eat more than about a fifth of a slide's body, move the definition to the caption or a dedicated slide instead of shrinking the fact. Glosses always come from the TERMS list in the brief; never invent a definition. TERMS explanations count as sourced by the Fact-checker.`;
+A term needs a gloss only if the slide doesn't make sense without it. If a gloss would eat more than about a fifth of a slide's body, give the definition a dedicated slide instead of shrinking the fact. Glosses always come from the TERMS list in the brief; never invent a definition. TERMS explanations count as sourced by the Fact-checker.`;
 
-export type RuleStage = 'reporter' | 'writer' | 'editor' | 'fact-checker';
+export type RuleStage = 'reporter' | 'writer' | 'editor' | 'captioner' | 'fact-checker';
 
 /**
  * Rules the automated checks enforce, per stage (decision (f)), from the
  * M7 checks that actually run (lib/social/mechanical/checks.ts C1–C5;
  * approved by Tommy 2026-10-06). The Writer and the Editor are told them;
- * the other stages aren't checked on these, so they get nothing.
+ * the captioner gets the caption's lines (CAPTIONER_CHECKED_RULES); the
+ * other stages aren't checked on these, so they get nothing.
  */
 export const CHECKED_RULES = `### Checked by code
 
 Code checks the finished draft. A failure comes back to you once, with the exact problem:
-- Length: cover ≤90 characters; headline 15–45 and body ≤140, together ≤168; a quote on a quote slide ≤140; caption ≤2,200. Never over.
+- Length: cover ≤90 characters; headline 15–45 and body ≤140, together ≤168; a quote on a quote slide ≤140. Never over.
 - Quotation marks only around words that are a QUOTES entry, word for word, or an exact excerpt of one.
 - None of the voice list's banned words or phrases, no sentence opening with "Meanwhile," "Additionally," "Furthermore" or "That said," no exclamation marks, no emoji. Quoted speech is exempt.
-- No hashtags in the caption.
 - At most 2 background slides (slides resting only on BACKGROUND entries).`;
+
+/**
+ * The captioner's checks (social-captions redesign, 2026-10-19; lib/social/captioner/captioner.ts):
+ * C1 on the caption with room for the code-built Source and Photos lines, C2, C3, C4, the claim tags,
+ * and the Helios mention in the read.
+ */
+export const CAPTIONER_CHECKED_RULES = `### Checked by code
+
+Code checks your caption. A failure comes back to you once, with the exact problem:
+- Length: news and read together ≤1,900 characters, which leaves room for the Source and Photos lines code adds under the 2,200 limit. Never over.
+- Quotation marks only around words that are a QUOTES entry, word for word, or an exact excerpt of one.
+- None of the voice list's banned words or phrases, no sentence opening with "Meanwhile," "Additionally," "Furthermore" or "That said," no exclamation marks, no emoji. Quoted speech is exempt.
+- No hashtags, and no Source or Photos line of your own.
+- Every ID in news.facts and read.facts is in the BRIEF.
+- read names Helios.`;
 
 /** C8, the Editor's alone (Tommy, 2026-10-06): a repeat sends the draft back to it once. */
 export const EDITOR_CHECKED_RULE = '- No repetition on a slide: the same number, or a phrase of four or more words, never appears in two of its headline, body, quote, big number and label.';
 
 export function renderRulesFor(stage: RuleStage): string {
   if (stage === 'editor') return `${CHECKED_RULES}\n${EDITOR_CHECKED_RULE}`;
+  if (stage === 'captioner') return CAPTIONER_CHECKED_RULES;
   return stage === 'writer' ? CHECKED_RULES : '';
 }

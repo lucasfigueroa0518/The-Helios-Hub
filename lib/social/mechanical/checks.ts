@@ -354,12 +354,15 @@ export function textChecks(d: FilledDraft, brief: Brief): Failure[] {
 export const HARD_CHECKS: ReadonlySet<CheckId> = new Set(['C1', 'C2']);
 
 /**
- * The Writer's and Editor's code check (one retry, spec §7.1): on the first
+ * The Writer's, Editor's and captioner's code check (one retry, spec §7.1): on the first
  * submission every C1–C5 failure goes back to the model; on the retry only
  * the hard ones block, so style can't sink a draft.
  */
-export function draftTextFailures(filled: FilledDraft, brief: Brief, attempt: number, stage: 'writer' | 'editor' = 'writer'): Failure[] {
+export function draftTextFailures(filled: FilledDraft, brief: Brief, attempt: number, stage: 'writer' | 'editor' | 'captioner' = 'writer'): Failure[] {
   // C8 sends the draft back to the Editor once (Tommy, 2026-10-06); the Writer is told the rule in its prompt.
-  const all = textChecks(applySilentFixes(filled, brief).draft, brief).filter((f) => f.id !== 'C8' || stage === 'editor');
+  // The captioner (2026-10-19) is held only to the caption: the slides are final and not its to fix.
+  const all = textChecks(applySilentFixes(filled, brief).draft, brief)
+    .filter((f) => f.id !== 'C8' || stage === 'editor')
+    .filter((f) => stage !== 'captioner' || f.where === 'caption');
   return attempt <= 1 ? all : all.filter((f) => HARD_CHECKS.has(f.id));
 }

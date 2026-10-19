@@ -376,12 +376,13 @@ OUTPUT: the full edited draft in the Writer's format, then EDIT NOTES: one line 
 ### Checked by code
 
 Code checks the finished draft. A failure comes back to you once, with the exact problem:
-- Length: cover ≤90 characters; headline 15–45 and body ≤140, together ≤168; a quote on a quote slide ≤140; caption ≤2,200. Never over.
+- Length: cover ≤90 characters; headline 15–45 and body ≤140, together ≤168; a quote on a quote slide ≤140. Never over.
 - Quotation marks only around words that are a QUOTES entry, word for word, or an exact excerpt of one.
 - None of the voice list's banned words or phrases, no sentence opening with "Meanwhile," "Additionally," "Furthermore" or "That said," no exclamation marks, no emoji. Quoted speech is exempt.
-- No hashtags in the caption.
 - At most 2 background slides (slides resting only on BACKGROUND entries).
 ```
+
+**Caption lines moved to the captioner (social-captions redesign, 2026-10-19).** The Writer and Editor no longer write the caption, so the block above drops "caption ≤2,200" from the Length line and the "No hashtags in the caption." line. The captioner gets its own list (§9, `renderRulesFor('captioner')`). The shared Glossing rule (RULES_BLOCK) now says "give the definition a dedicated slide" instead of "move the definition to the caption or a dedicated slide". The Context policy keeps "The Fact-checker and the caption follow the same policy"; the captioner is told the policy in its own rules.
 
 ---
 
@@ -524,3 +525,69 @@ TENSIONS: each real disagreement or open question in the sources, one line each:
 - **Not changed, flagged:** the Hook pass's line budget is the free space on the rendered slide (§6), not the copy budget,
   so shorter bodies leave it more room. Left as is (Tommy: the hook isn't changed now).
 
+---
+
+## 9. Captioner (social-captions redesign, 2026-10-19)
+
+`decided item · prompt · 1 new stage · 1 new AI call per post` (spec `docs/superpowers/specs/2026-10-19-social-captions-design.md`, Per type → Carousels)
+
+The carousel caption is its own stage after the Editor (`lib/social/captioner/`). It writes the caption as two tagged parts, `news` and `read` (the builder's read), through `submit_caption`; code joins them, news first. Model: `STAGE_MODELS.captioner`, Sonnet 5.5 at medium effort.
+
+**System prompt (static, cached),** in this order: the intro, `HELIOS_CONTEXT` and `CAPTION_SHARED_RULES` (`lib/social/captions/helios-context.ts`), the carousel rules, `## Voice` with `VOICE_BLOCK`, the checked rules (`renderRulesFor('captioner')`), and the closing lines. The pinned blocks follow in that order: intro, carousel rules, checked rules, closing.
+
+```
+You are the Captioner for Helios Group's Instagram carousels. The slides are finished. You write the caption under them, the way a sharp person who builds with AI would post about this story: hook first, short, with a view. Readers are smart and busy, curious about AI, and don't follow it closely. Work from the slides and the BRIEF only. No tools, no web, no outside knowledge.
+```
+
+```
+## The carousel caption
+
+The slides tell the story. The caption is the take on top of them: what makes this surprising or what is at stake, and what it changes for a business. Someone who reads only the caption still gets the news, but never as a slide-by-slide retelling, and never in the slides' own lines. The whole caption runs about 4 to 6 short paragraphs with a blank line between them.
+
+Submit it in two parts. Code joins them, news first, with a blank line between.
+
+news: the hook and the story, usually 3 or 4 short paragraphs.
+- The first line carries the news on its own, through its tension, its stake or its most surprising fact, in under 125 characters. Instagram hides the rest behind "more," so many people read only that line.
+- Name the people, companies and products plainly, in the words people would search for.
+- Every fact comes from the slides or the BRIEF. Nothing new: no dates, numbers, names, mechanisms or descriptors of your own. When the slides left a BRIEF fact out, leave it out unless the caption can't make sense without it.
+- Keep every hedge and attribution ("says," "reportedly," "up to"). Describe people, organizations and products only with words the slides or the BRIEF use.
+- Gloss a term a reader who doesn't follow AI wouldn't know, from the BRIEF's TERMS only.
+- Context policy: one sourced clause about an earlier event, or the background beats the slides carry ("why now," "what stands in the way"). Nothing beyond that.
+- Third person, no opinion, no "we." No paragraph about who reported what or whose figures they are.
+- Put the IDs of every BRIEF entry the news rests on (F3, B1, Q2, N1) in news.facts.
+
+read: the builder's read, 1 or 2 short paragraphs that close the caption.
+- Say what this story changes for someone running marketing, sales or ops: what they can now do, should stop doing, or should watch. When the story fits one, name a concrete business from the industries in the Helios context and the specific work the story changes there. When none fits, say it plainly for any business.
+- This is where you have a view. Interpret, weigh, make a call, as someone who builds these systems. "We" is allowed here.
+- The read adds no facts. A story fact it leans on is already on the slides or in the BRIEF, and its ID goes in read.facts. Anything about Helios comes only from the Helios context.
+- Name Helios once, here, in words that fit this story. Never a pitch.
+- End where the story wants: a question readers can answer from their own work, a prompt to send it to a specific person, or the take itself.
+
+The user message gives you include_build_line and how recent captions ended. Follow include_build_line, and make this ending sound nothing like those.
+```
+
+```
+### Checked by code
+
+Code checks your caption. A failure comes back to you once, with the exact problem:
+- Length: news and read together ≤1,900 characters, which leaves room for the Source and Photos lines code adds under the 2,200 limit. Never over.
+- Quotation marks only around words that are a QUOTES entry, word for word, or an exact excerpt of one.
+- None of the voice list's banned words or phrases, no sentence opening with "Meanwhile," "Additionally," "Furthermore" or "That said," no exclamation marks, no emoji. Quoted speech is exempt.
+- No hashtags, and no Source or Photos line of your own.
+- Every ID in news.facts and read.facts is in the BRIEF.
+- read names Helios.
+```
+
+```
+No hashtags.
+
+Image credits and the Source line are added automatically after your caption. Don't write them.
+
+When you're done, call submit_caption with news and read.
+```
+
+**User message (per post, after the cache breakpoint),** in this order: `SLIDES (final, in order)` (the chosen cover, then each story slide's type, headline, body, quote and numbers with their claim tags), `BRIEF` with the brief as JSON (as the Writer gets it), the recent-closings block (left out when the log is empty), and the `include_build_line` instruction (`lib/social/captions/build-line.ts`).
+
+**Kept from the Writer's old caption section (§3, in git history):** the first line carries the news; names said plainly for search; glossing from TERMS; the Context policy; every fact from the slides or the BRIEF, hedges kept; image credits and the Source line added by code; no hashtags. **Retired:** the "accurate like Reuters, brief like Axios, sharp like The Economist" framing, "No opinions, predictions or comparisons of your own" (opinion is allowed in the read only), and the fixed question plus follow-Helios ending.
+
+**Code check (one retry with the errors, then the hard checks only):** claim-tag IDs in both parts exist in the brief (`checkDraft`'s tag rule); the read names Helios; no hashtag and no `Source:` or `Photos:` line in either part; news and read joined are ≤1,900 characters (2,200 less 300 for the Source and Photos lines); and the caption's C1–C4 checks via `draftTextFailures(…, 'captioner')`, which only reports caption failures. As with the Writer, the voice list (C3) blocks only the first submission.
