@@ -449,3 +449,16 @@ ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_feed_mode_check CHECK (
 
 -- Who decides cadence: 'legacy' (each type's settings, as before) or 'template' (the calendar).
 INSERT INTO social_hub.settings (key, value) VALUES ('slot_source', '"legacy"'::jsonb) ON CONFLICT (key) DO NOTHING;
+
+-- Every caption type logs its closing paragraph here; it feeds recent-closings and the
+-- build-line ceiling (social captions redesign, 2026-10-19).
+CREATE TABLE IF NOT EXISTS social_hub.caption_closings (
+    id          bigserial PRIMARY KEY,
+    type        text NOT NULL CHECK (type IN ('carousel','reel','explainer','lfd')),
+    subject_id  text NOT NULL,
+    closing     text NOT NULL,
+    build_line  boolean NOT NULL,
+    created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS caption_closings_type_created
+    ON social_hub.caption_closings (type, created_at DESC);
