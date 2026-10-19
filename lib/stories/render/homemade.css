@@ -1,7 +1,8 @@
 /*
  * Homemade style (S-53, exploration): Instagram's own story editor.
  * Classic text is Inter Medium (Trial Reels' stand-in for San Francisco);
- * emoji come from the system emoji font. Fills are flat, the way the pen
+ * emoji are Apple's own images (emoji.ts), so the Linux worker draws the
+ * same emoji a Mac does. Fills are flat, the way the pen
  * tool's long-press fill paints them. Highlight boxes follow the editor:
  * one rounded box per line, lines touching.
  */
@@ -17,6 +18,7 @@
   -webkit-font-smoothing: antialiased;
 }
 .hm-frame *, .hm-frame *::before, .hm-frame *::after { box-sizing: border-box; }
+.hm-emoji { display: inline-block; width: 1.12em; height: 1.12em; vertical-align: -0.2em; margin: 0 0.02em; }
 .hm-frame [data-fit-min] { overflow-wrap: normal; word-break: normal; hyphens: none; }
 
 .hm-fill { position: absolute; inset: 0; }
