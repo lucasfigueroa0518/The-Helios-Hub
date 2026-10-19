@@ -1,0 +1,14 @@
+[
+ { "t": 0.0, "kind": "foley", "what": "pencil writing", "dur": 3.0 },
+ { "t": 1.708, "kind": "foley", "what": "coins drop" },
+ { "t": 2.116, "kind": "foley", "what": "coins drop" },
+ { "t": 2.402, "kind": "foley", "what": "coins drop" },
+ { "t": 2.629, "kind": "foley", "what": "coins drop" },
+ { "t": 2.822, "kind": "foley", "what": "coins drop" },
+ { "t": 2.99, "kind": "foley", "what": "coins drop" },
+ { "t": 3.14, "kind": "foley", "what": "coins drop" },
+ { "t": 0.1, "kind": "foley", "what": "paper slide" },
+ { "t": 0.25, "kind": "foley", "what": "pen writing", "dur": 1.3 },
+ { "t": 1.7, "kind": "foley", "what": "marker writing", "dur": 1.5 },
+ { "t": 3.1, "kind": "foley", "what": "pencil drop on desk" }
+]

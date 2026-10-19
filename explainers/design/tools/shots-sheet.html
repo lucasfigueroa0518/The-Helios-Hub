@@ -1,0 +1,40 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Shots sheet</title><style>
+body{margin:0;background:#E2DACB;font-family:Helvetica,Arial,sans-serif;display:flex;gap:12px;padding:12px;flex-wrap:wrap}
+.f{display:flex;flex-direction:column;gap:4px}.f b{font-size:14px}
+svg{width:270px;height:480px;display:block}
+</style></head><body>
+<script type="module">
+// One scene, seven shots (Explainers 3.2, EX3-83): same scene ≠ same shot.
+import { scope, ground } from '../../world-kit/draw.js';
+import { shotFrame, SHOT_KINDS } from '../../world-kit/shots.js';
+import { critter } from '../../world-kit/cast.js';
+import { prop } from '../../world-kit/props.js';
+const CRIT = [380, 1240];
+const SWITCH = [800, 1000];
+const CHAIR = [560, 1330];
+const scene = (shot) => {
+  if (shot.kind === 'insert') return prop('light switch', SWITCH[0], SWITCH[1] + 70, { s: 1, state: 'off', focal: true });
+  const fg = shot.kind === 'ots' ? critter(150, 1900, { s: 3.2, look: [0.8, -0.6] }) : '';
+  return { front: fg, world: [
+    prop('light switch', SWITCH[0], SWITCH[1] + 70, { s: 1, state: 'off', focal: true }),
+    prop('chair', CHAIR[0], CHAIR[1], { s: 0.9 }),
+    critter(CRIT[0], CRIT[1], { arms: 'feel', mood: 'worried', look: [0.8, 0] }),
+  ].join('') };
+};
+const shots = [
+  ['wide', { at: 0, kind: 'wide', on: [560, 1150] }],
+  ['medium', { at: 0, kind: 'medium', on: [480, 1200] }],
+  ['close (the switch)', { at: 0, kind: 'close', on: SWITCH }],
+  ['insert (switch alone)', { at: 0, kind: 'insert', on: SWITCH }],
+  ['reaction', { at: 0, kind: 'reaction', on: [CRIT[0], CRIT[1] - 90] }],
+  ['over the shoulder', { at: 0, kind: 'ots', on: [600, 1150] }],
+  ['reverse', { at: 0, kind: 'reverse', on: [560, 1150] }],
+];
+let n = 0;
+for (const [label, shot] of shots) {
+  scope(`s${++n}-`, 'paper');
+  const svg = ground('paper') + shotFrame(0.5, [shot], scene);
+  document.body.insertAdjacentHTML('beforeend', `<div class="f"><b>${label}</b><svg viewBox="0 0 1080 1920">${svg}</svg></div>`);
+}
+document.body.dataset.done = '1';
+</script></body></html>

@@ -63,6 +63,14 @@ export async function plateFor(png: Buffer): Promise<'light' | 'dark' | null> {
 
 export type LogoResult = { photo: Photo; file: string } | { photo: null; reason: string };
 
+/**
+ * Software licences Commons logos sometimes carry (Nvidia: Apache 2.0,
+ * DeepSeek: MIT). Free to reuse with credit, but not in the photo tiers, so
+ * only a caller that opts in accepts them: the logo bank does (Lucas,
+ * 2026-10-13); the cover card's own lookups do not.
+ */
+export const SOFTWARE_LOGO_LICENCE = /^(?:mit(?: license)?|apache(?: license)?[- ]2\.0)$/i;
+
 const HEADERS = { 'User-Agent': USER_AGENT, Accept: 'application/json' };
 
 /**
@@ -72,7 +80,14 @@ const HEADERS = { 'User-Agent': USER_AGENT, Accept: 'application/json' };
  * credit; the photo itself is always tied to the verified company (`qid`,
  * `company`), so the repeat rule and the photo bank see every mark as its own.
  */
-async function logoFromFile(file: string, owner: string, qid: string, company: string, http: typeof fetch): Promise<LogoResult> {
+async function logoFromFile(
+  file: string,
+  owner: string,
+  qid: string,
+  company: string,
+  http: typeof fetch,
+  opts: { softwareLicences?: boolean } = {},
+): Promise<LogoResult> {
   const ii = new URL(COMMONS_API);
   for (const [k, v] of Object.entries({ action: 'query', titles: `File:${file}`, prop: 'imageinfo', iiprop: 'url|size|mime|extmetadata', iiurlwidth: String(LOGO_PX), iiextmetadatalanguage: 'en', format: 'json', origin: '*' })) ii.searchParams.set(k, v);
   const ir = await http(ii.toString(), { headers: HEADERS });
@@ -82,7 +97,8 @@ async function logoFromFile(file: string, owner: string, qid: string, company: s
   if (!info?.thumburl) return { photo: null, reason: `logo file not on Commons: ${file}` };
   const licence = info.extmetadata?.LicenseShortName?.value ?? '';
   const tier = classifyLicense(licence);
-  if (!tier) return { photo: null, reason: `logo licence not allowed: "${licence || 'none'}" (${file})` };
+  const software = !tier && opts.softwareLicences === true && SOFTWARE_LOGO_LICENCE.test(licence.trim());
+  if (!tier && !software) return { photo: null, reason: `logo licence not allowed: "${licence || 'none'}" (${file})` };
   const w = info.thumbwidth ?? 0;
   const h = info.thumbheight ?? 0;
   if (!w || !h || w / h > LOGO_MAX_ASPECT) return { photo: null, reason: `logo too wide for a card (${w}×${h}) (${file})` };
@@ -110,7 +126,7 @@ async function wikidata(ids: string[], props: string, http: typeof fetch): Promi
 }
 
 /** The company's single current logo card, or why there is none. */
-export async function fetchLogo(qid: string, company: string, opts: { http?: typeof fetch } = {}): Promise<LogoResult> {
+export async function fetchLogo(qid: string, company: string, opts: { http?: typeof fetch; softwareLicences?: boolean } = {}): Promise<LogoResult> {
   const http = opts.http ?? fetch;
   let claims: ClaimsByProp | undefined;
   try {
@@ -120,7 +136,7 @@ export async function fetchLogo(qid: string, company: string, opts: { http?: typ
   }
   const file = currentLogoFile(claims?.P154 ?? []);
   if (!file) return { photo: null, reason: 'no current Wikidata logo (P154)' };
-  return logoFromFile(file, company, qid, company, http);
+  return logoFromFile(file, company, qid, company, http, { softwareLicences: opts.softwareLicences });
 }
 
 /** At most this many of a company's products add their logo to its pool. */

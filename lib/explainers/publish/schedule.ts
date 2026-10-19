@@ -138,6 +138,7 @@ SELECT j.id, j.topic_id, f.created_at AS reviewed_at, j.finished_at
   LEFT JOIN social_hub.content_items ci ON ci.vertical = 'explainers' AND ci.native_ref = j.id::text
   LEFT JOIN social_hub.approvals ap ON ap.content_item_id = ci.id
  WHERE j.status = 'ok'
+   AND NOT EXISTS (SELECT 1 FROM explainers.topics ta WHERE ta.id = j.topic_id AND ta.status = 'archived')
    AND (ap.decision = 'approved' OR (NOT $1::boolean AND ap.decision IS NULL))
    AND f.verdict IS DISTINCT FROM 'rejected'
    AND EXISTS (SELECT 1 FROM explainers.artifacts a WHERE a.job_id = j.id AND a.kind = 'video' AND a.storage_location = 'bucket')

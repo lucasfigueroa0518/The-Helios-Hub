@@ -95,6 +95,7 @@ function toJob(row: Record<string, unknown>): JobRow {
 export type NewTopic = {
   title: string;
   scope?: string | null;
+  term?: string | null;
   sourceUrl?: string | null;
   sourceText?: string | null;
   origin: TopicOrigin;
@@ -107,12 +108,13 @@ export async function addTopics(db: ExplainersDb, topics: NewTopic[]): Promise<T
       const title = topic.title.trim();
       if (!title) throw new Error('topic title is empty');
       const { rows } = await tx.query<Record<string, unknown>>(
-        `INSERT INTO explainers.topics (title, scope, source_url, source_text, origin)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO explainers.topics (title, scope, term, source_url, source_text, origin)
+         VALUES ($1, $2, $3, $4, $5, $6)
          RETURNING *`,
         [
           title,
           topic.scope?.trim() || null,
+          topic.term?.trim() || null,
           topic.sourceUrl?.trim() || null,
           topic.sourceText?.trim() || null,
           topic.origin,

@@ -1,17 +1,23 @@
 <!--
-  Helios — caption skin (preset-local source for explainers/frame-presets/helios).
+  Helios — caption skin (preset-local source for explainers/frame-presets/helios), Explainers 3.0.
 
-  Structure, hooks, and the timeline script are the cartesian reference skin's, unchanged
-  (HyperFrames v0.8.140): captions.mjs fills GROUPS / DURATION / size and injects the
-  :root tokens from frame.md.   Token contract: --cap-ink · --cap-canvas · --cap-accent ·
-  --cap-accent-2 · --font-display · --font-body.
-  Position is NOT --cap-band-top. captions.mjs still injects that variable at the
-  bottom of the frame. This skin places the pill under Instagram's Reels header.
+  Structure, hooks, and the timeline contract are the cartesian reference skin's (HyperFrames
+  v0.8.140): captions.mjs fills GROUPS / DURATION / size and injects the :root tokens from
+  frame.md. Token contract: --cap-ink · --cap-canvas · --cap-accent · --cap-accent-2 ·
+  --font-display · --font-body. Position is NOT --cap-band-top: captions.mjs injects that
+  variable at the bottom of the frame; this skin sits in the band under Instagram's Reels header.
 
-  Visual (BUILD_PLAN §8, E-12): a white pill with ink text in Roboto Medium, so it reads
-  on the white frames and on the beat-5 night ground alike. No orange: the frame's single
-  orange focal mark must not compete with the captions. Upcoming words are faint ink, the
-  current word is solid ink on a light neutral wash, spoken words settle to solid ink.
+  Visual (EX3-45, from Explainer 2.0 X-36; paging from 3.1): big lowercase Pragmatica Extended
+  Bold, top-left of the caption band (y 250–570), no plate. The engine's small groups are
+  re-paged here into readable pages: up to 7 words on two lines, broken at sentence ends, never
+  across a frame. A page stays until the next one starts or 1.2s after its last word; pages
+  switch instantly. Typewriter (EX3-98, Lucas 2026-10-13): each word types in letter by letter
+  across the time it is spoken (its voice start to its end), so the letters keep pace with the
+  voice; no fade, no rise. Ink on
+  paper and white grounds, paper-lit on night and forest. Two Helios holes that
+  assets/kit/mount.mjs fills from STORYBOARD.md before captions.mjs runs: `var DARK = [];` (the
+  dark-ground windows) and `var QUIET = [];` (the title card and the dictionary card, where
+  captions step aside).
 -->
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
 
@@ -30,67 +36,47 @@
     z-index: 20;
     pointer-events: none;
   }
-  /* Under Instagram's Reels header (top 250px of 1080×1920), above the picture.
-     Hardcoded on purpose: --cap-band-top is the old bottom band. */
+  /* The caption band: under Instagram's Reels header (top 250px of 1080×1920), above the
+     picture, inside the side margins (x 96–940). Hardcoded on purpose. */
   .caption-stage {
     position: absolute;
-    left: 0;
-    right: 0;
-    top: 250px;
-    height: 320px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    left: 96px;
+    width: 844px;
+    top: 292px;
+    height: 250px;
   }
   .caption-group {
     position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    left: 0;
+    top: 0;
+    width: 100%;
     opacity: 0;
-  }
-
-  /* the white pill — Helios pill radius, soft card shadow so it lifts off a white frame */
-  .caption-pill {
-    max-width: 76%;
-    padding: 22px 40px 24px;
-    background: #ffffff;
-    border: 1px solid #e5e5e5;
-    border-radius: 9999px;
-    box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.22);
   }
   .caption-line {
     display: flex;
     flex-wrap: wrap;
-    justify-content: center;
-    gap: 0.08em 0.3em;
-    font-family: var(--font-body, "Roboto"), Helvetica, Arial, sans-serif;
-    font-weight: 500;
-    font-size: 56px;
-    line-height: 1.15;
-    letter-spacing: 0;
+    justify-content: flex-start;
+    gap: 0.04em 0.26em;
+    font-family: var(--font-display, "Pragmatica Extended"), Helvetica, Arial, sans-serif;
+    font-weight: 700;
+    font-size: 74px;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    text-transform: lowercase;
+    color: #171717;
   }
-
-  /* upcoming — faint ink */
+  .caption-stage.on-dark .caption-line {
+    color: #fbfaf6;
+  }
+  .caption-stage.is-quiet {
+    visibility: hidden;
+  }
   .caption-word {
     display: inline-block;
-    padding: 0 0.08em;
-    border-radius: 0.2em;
-    color: rgba(23, 23, 23, 0.4);
   }
-  /* current word — solid ink on a light neutral wash */
-  .caption-word.is-active {
-    color: #171717;
-    background: #f5f5f5;
+  .caption-char {
+    opacity: 0;
   }
-  /* already spoken — solid ink */
-  .caption-word.is-spoken {
-    color: #171717;
-    background: transparent;
-  }
-
-  /* optional per-word accents (dormant until a word-classer tags them) — ink only */
   .caption-word.cap-num {
     font-variant-numeric: tabular-nums;
   }
@@ -115,65 +101,105 @@
   // captions.mjs injects the engine's scene-aware groups + real duration here.
   var GROUPS = [];
   var DURATION = 0;
+  // mount.mjs injects the dark-ground windows here: [[start, end], …] in seconds.
+  var DARK = [];
+  // mount.mjs injects the quiet windows here (title card, dictionary card).
+  var QUIET = [];
 
   (function () {
-    var stage = document.getElementById("caption-stage");
+    var MAX_WORDS = 7;
+    var MAX_CHARS = 34; // two lines of about 17 characters at 74px in 844px
+    var HOLD_AFTER = 1.2;
+    // A word types across its spoken span; one this short (or with no span) types at this pace.
+    var MIN_CHAR = 0.025;
+    var SENTENCE_END = /[.?!]["')\]]*$/;
 
-    // build DOM: one .caption-group per group, .caption-word per word
-    GROUPS.forEach(function (group, g) {
-      var groupEl = document.createElement("div");
-      groupEl.className = "caption-group";
-      groupEl.id = "caption-group-" + g;
-      var pill = document.createElement("div");
-      pill.className = "caption-pill";
+    // Re-page the engine's groups: one flat word list, then pages.
+    var words = [];
+    GROUPS.forEach(function (group) {
+      (group.words || []).forEach(function (w) {
+        words.push({ text: String(w.text), start: Number(w.start), end: Number(w.end), frame: group.frame });
+      });
+    });
+    words.sort(function (a, b) { return a.start - b.start; });
+    var pages = [];
+    var page = null;
+    words.forEach(function (w, i) {
+      var prev = i > 0 ? words[i - 1] : null;
+      var chars = page ? page.chars + 1 + w.text.length : w.text.length;
+      var newPage = !page
+        || w.frame !== page.frame
+        || page.words.length >= MAX_WORDS
+        || chars > MAX_CHARS
+        || (prev && SENTENCE_END.test(prev.text))
+        || (prev && w.start - prev.end > 0.8);
+      if (newPage) {
+        page = { frame: w.frame, words: [], chars: w.text.length };
+        pages.push(page);
+      } else {
+        page.chars = chars;
+      }
+      page.words.push(w);
+    });
+
+    var stage = document.getElementById("caption-stage");
+    pages.forEach(function (pg, p) {
+      var pageEl = document.createElement("div");
+      pageEl.className = "caption-group";
+      pageEl.id = "caption-group-" + p;
       var line = document.createElement("div");
       line.className = "caption-line";
-      (group.words || []).forEach(function (w, i) {
+      pg.words.forEach(function (w, i) {
         var span = document.createElement("span");
-        span.className = "caption-word";
-        span.id = "caption-word-" + g + "-" + i;
-        span.textContent = String(w.text);
+        span.className = /\d/.test(w.text) ? "caption-word cap-num" : "caption-word";
+        span.id = "caption-word-" + p + "-" + i;
+        // One span per letter, laid out from the start (hidden), so typing never reflows the line.
+        Array.from(w.text).forEach(function (ch, k) {
+          var c = document.createElement("span");
+          c.className = "caption-char";
+          c.id = "caption-char-" + p + "-" + i + "-" + k;
+          c.textContent = ch;
+          span.appendChild(c);
+        });
         line.appendChild(span);
       });
-      pill.appendChild(line);
-      groupEl.appendChild(pill);
-      stage.appendChild(groupEl);
+      pageEl.appendChild(line);
+      stage.appendChild(pageEl);
     });
 
     window.__timelines = window.__timelines || {};
     var tl = gsap.timeline({ paused: true });
 
-    GROUPS.forEach(function (group, g) {
-      var groupEl = document.getElementById("caption-group-" + g);
-      var words = group.words || [];
-      var next = GROUPS[g + 1];
-      var isLast = g === GROUPS.length - 1;
-      var start = Math.max(0, Number(group.start));
-      var end = isLast ? DURATION : Math.min(Number(next.start), Number(group.end) + 0.3);
+    // Ground-aware color and quiet windows, by seek-safe class sets.
+    var marks = [];
+    DARK.forEach(function (win) { marks.push(Number(win[0]), Number(win[1])); });
+    QUIET.forEach(function (win) { marks.push(Number(win[0]), Number(win[1])); });
+    marks = marks.filter(function (t, i, a) { return a.indexOf(t) === i; }).sort(function (a, b) { return a - b; });
+    var inside = function (wins, t) { return wins.some(function (w) { return t >= Number(w[0]) && t < Number(w[1]); }); };
+    [0].concat(marks).forEach(function (t) {
+      var cls = "caption-stage" + (inside(DARK, t) ? " on-dark" : "") + (inside(QUIET, t) ? " is-quiet" : "");
+      tl.set(stage, { className: cls }, Math.max(0, t));
+    });
+
+    pages.forEach(function (pg, p) {
+      var pageEl = document.getElementById("caption-group-" + p);
+      var next = pages[p + 1];
+      var start = Math.max(0, pg.words[0].start);
+      var lastEnd = pg.words[pg.words.length - 1].end;
+      var end = Math.min(next ? next.words[0].start : DURATION, lastEnd + HOLD_AFTER);
       if (end <= start) end = start + 0.01;
-
-      // group on/off — exactly one group visible at a time
-      tl.set(groupEl, { opacity: 1 }, start);
-      tl.set(groupEl, { opacity: 0 }, end);
-
-      // 3-state karaoke via className SETS — seek-safe (gsap.set applies on the
-      // engine's frame-by-frame seek; .call callbacks would NOT fire).
-      words.forEach(function (w, i) {
-        var el = document.getElementById("caption-word-" + g + "-" + i);
-        var at = Math.max(start, Number(w.start));
-        tl.set(el, { className: "caption-word" }, start); // upcoming (also resets on reverse-seek)
-        tl.set(el, { className: "caption-word is-active" }, at); // current
-        tl.fromTo(el, { scale: 0.985 }, { scale: 1, duration: 0.2, ease: "power1.out" }, at);
-        if (i + 1 < words.length) {
-          var nextAt = Math.max(start, Number(words[i + 1].start));
-          tl.set(el, { className: "caption-word is-spoken" }, nextAt); // demote when next activates
-        }
+      tl.set(pageEl, { opacity: 1 }, start);
+      tl.set(pageEl, { opacity: 0 }, end);
+      pg.words.forEach(function (w, i) {
+        var letters = Array.from(w.text);
+        var at = Math.max(start, w.start);
+        var span = Math.max(letters.length * MIN_CHAR, Math.max(0, w.end - at));
+        letters.forEach(function (ch, k) {
+          var el = document.getElementById("caption-char-" + p + "-" + i + "-" + k);
+          tl.set(el, { opacity: 0 }, start);
+          tl.set(el, { opacity: 1 }, at + (span * k) / letters.length);
+        });
       });
-      if (words.length) {
-        var lastEl = document.getElementById("caption-word-" + g + "-" + (words.length - 1));
-        var lastSpoken = Math.min(end, Number(words[words.length - 1].end) + 0.1);
-        tl.set(lastEl, { className: "caption-word is-spoken" }, lastSpoken);
-      }
     });
 
     // full-span anchor so the sub-comp timeline spans the whole video

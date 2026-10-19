@@ -78,6 +78,25 @@ test('episode numbers count published explainers, not finished renders', async (
   assert.equal(queued.queued, true);
   assert.equal(await nextPublishedEpisode(db), 1, 'queued is not published');
 
-  await db.query(`UPDATE social_hub.publish_attempts SET status = 'published' WHERE vertical = 'explainers'`);
+  await db.query(`UPDATE social_hub.publish_attempts SET status = 'published', media_id = 'm1', finished_at = now() WHERE vertical = 'explainers'`);
   assert.equal(await nextPublishedEpisode(db), 2);
+
+  // Archived on Instagram (gone from the account's media list): it no longer counts, and an
+  // unarchived post counts again (Lucas, 2026-10-13).
+  const since: Date[] = [];
+  const profile = (ids: string[]) => ({ liveMediaIds: async (d: Date) => (since.push(d), new Set(ids)) });
+  assert.equal(await nextPublishedEpisode(db, profile([])), 1, 'archived: the series restarts');
+  assert.equal(await nextPublishedEpisode(db, profile(['m1', 'other'])), 2, 'still on the profile');
+  assert.ok(since[0].getTime() < Date.now() - 23 * 60 * 60 * 1000, 'the read reaches back past the oldest post');
+  // A failed read never resets the series.
+  assert.equal(await nextPublishedEpisode(db, { liveMediaIds: async () => { throw new Error('Meta returned 500'); } }), 2);
+  assert.equal(await nextPublishedEpisode(db, {}), 2, 'no read: every published explainer counts');
+});
+
+test('the post caption follows the eight-beat reel (explainer-caption-v3)', async () => {
+  const { CAPTION_INSTRUCTIONS, CAPTION_VERSION } = await import('@/lib/explainers/caption');
+  assert.equal(CAPTION_VERSION, 'explainer-caption-v3');
+  assert.match(CAPTION_INSTRUCTIONS, /curiosity gap, analogy, example, and the place they will meet this/);
+  assert.match(CAPTION_INSTRUCTIONS, /Do not walk the eight beats in order/);
+  assert.doesNotMatch(CAPTION_INSTRUCTIONS, /catch|seven/);
 });

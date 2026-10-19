@@ -1,0 +1,4 @@
+{
+  "//": "The world kit is ES modules, in Node (pace, mount, try, music) and in the browser (frames).",
+  "type": "module"
+}

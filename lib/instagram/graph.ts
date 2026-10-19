@@ -19,6 +19,12 @@ export interface InstagramContainerOps {
   permalink(mediaId: string): Promise<string | null>;
   /** The account's rolling 24-hour publishing quota, shared by every content type. */
   publishingLimit(): Promise<PublishingLimit>;
+  /**
+   * The ids of the account's media still on the profile, back to `since`. Archived and deleted
+   * posts are not in this list (checked 2026-10-13: archived reels drop out and their ids no
+   * longer load). Read only.
+   */
+  liveMediaIds?(since: Date): Promise<Set<string>>;
 }
 
 export class MetaNotConfiguredError extends Error {
@@ -83,6 +89,19 @@ export function createGraph(
     async permalink(mediaId) {
       const body = await call<{ permalink?: string }>('GET', `/${mediaId}`, { fields: 'permalink' });
       return body.permalink ?? null;
+    },
+    async liveMediaIds(since) {
+      const ids = new Set<string>();
+      let next: string | null = `/${igUserId}/media`;
+      // Newest first; stop once a page reaches back past `since` (or after 20 pages).
+      for (let page = 0; next && page < 20; page += 1) {
+        const body: { data?: { id: string; timestamp?: string }[]; paging?: { next?: string } } = await call('GET', next, next.startsWith('http') ? {} : { fields: 'id,timestamp', limit: '100' });
+        const data = body.data ?? [];
+        for (const m of data) ids.add(m.id);
+        const oldest = data.length ? Date.parse(data[data.length - 1].timestamp ?? '') : NaN;
+        next = Number.isFinite(oldest) && oldest < since.getTime() ? null : body.paging?.next ?? null;
+      }
+      return ids;
     },
     async publishingLimit() {
       const body = await call<{ data?: Array<{ quota_usage?: number; config?: { quota_total?: number } }> }>(

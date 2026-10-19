@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { checkToolCall, FRAME_WORKER_TOOLS, SESSION_TOOLS } from '@/lib/explainers/render/policy';
+import { checkToolCall, FRAME_WORKER_TOOLS, SCENE_BUILDER_TOOLS, SESSION_TOOLS } from '@/lib/explainers/render/policy';
 import type { SpendMeter } from '@/lib/explainers/render/meter';
 import { HYPERFRAMES_ENV, RUNTIME_DIR } from '@/lib/explainers/render/workspace';
 
@@ -14,13 +14,14 @@ import { HYPERFRAMES_ENV, RUNTIME_DIR } from '@/lib/explainers/render/workspace'
  *
  * Guard rails, outermost first:
  *   env        — replaced entirely: only the keys this render needs.
- *   tools      — no web fetch, no web search, no MCP.
+ *   tools      — web search and fetch for research (EX3-03), no MCP.
  *   settings   — project only; the operator's ~/.claude never loads.
  *   PreToolUse — every call (orchestrator and frame workers) through policy.ts.
  *   sandbox    — OS-level: writes confined to the project, network to HeyGen +
  *                the GSAP CDN, localhost bind allowed so check/render can listen.
- *                `npx hyperframes <args>` runs outside the sandbox (prefix rule)
- *                so it can drive Chrome; it still passes the policy check.
+ *                `npx hyperframes <args>` and the kit's bounds check run outside the
+ *                sandbox (prefix rule) so they can drive Chrome; they still pass the
+ *                policy check.
  *   spend      — live meter aborts past the per-reel cap; maxBudgetUsd backs it up.
  *
  * Prompt caching on this path is the SDK's responsibility (E-13).
@@ -43,14 +44,57 @@ export const UNSANDBOXED_HYPERFRAMES = [
   'npx hyperframes *',
   'npx --no-install hyperframes *',
   'hyperframes *',
+  // The kit's text-bounds check drives the same headless Chrome (EX3-92): `… bounds.mjs all`.
+  'node assets/kit/bounds.mjs *',
 ];
 
 export const FRAME_WORKER_AGENT = 'frame-worker';
 const FRAME_WORKER_PROMPT = [
-  'You are a HyperFrames frame worker for one Helios Explainer Reel frame.',
+  'You are a frame worker for one Helios Explainer Reel frame (Explainers 3.3).',
   'Your dispatch message names your role file (.hyperframes/frame-packets/_role.md) and your frame packet.',
-  'Read both first, then frame.md, and follow them exactly.',
-  'Write only your assigned compositions/frames/<frame_id>.html. Never edit STORYBOARD.md, never run commands, never ask questions.',
+  'Read both first, then frame.md, assets/world/world.js, and the kit in assets/kit/, and follow them exactly.',
+  'A shot is only a camera: draw the same scene, with every critter, in every shot. Text inside a shape is textBox().',
+  'Write only your assigned assets/frames/<frame_id>.js and its .events.json. Never write compositions, never edit STORYBOARD.md or world.js, never run commands, never ask questions.',
+].join(' ');
+
+export const SCENE_BUILDER_AGENT = 'scene-builder';
+const SCENE_BUILDER_PROMPT = [
+  "You are the scene builder for one Helios Explainer Reel (Explainers 3.3): you draw the reel's anchor scene once.",
+  'Read .claude/skills/helios-explainer-director/scene-builder.md first and follow it exactly.',
+  'Write only assets/world/world.js. Never edit STORYBOARD.md, never write frames, never run commands, never ask questions.',
+].join(' ');
+
+/**
+ * The blind picture check (EX3-84): a subagent with no storyboard context names what it sees on
+ * the snapshot contact sheets, so the orchestrator's own knowledge of what each box is meant to
+ * be cannot make it "see" a hand. It runs the cheapest way (Lucas, 2026-10-13): the cheapest
+ * model, Read only, one or two composited sheets per check.
+ */
+export const PICTURE_CHECKER_AGENT = 'picture-checker';
+export const PICTURE_CHECKER_MODEL = 'claude-haiku-5-5';
+export const PICTURE_CHECKER_TOOLS = ['Read', 'SubagentHandback'];
+const PICTURE_CHECKER_PROMPT = [
+  'You look at pictures for a short animated video without knowing what they are meant to show.',
+  'Read only the contact sheet images your dispatch message names; each has numbered tiles labeled with a time.',
+  'For each tile, say in plain words what a stranger sees: every character and object you can name (call anything you cannot name at a glance an "unclear shape" and describe it),',
+  'what is happening, any words you can read, and anything cut off at the frame edge or too small to read.',
+  'Never guess what the video is about and never assume an object is something it does not clearly look like.',
+  'Reply with JSON only: [{"tile": 1, "at": "0.5s", "sees": "...", "unclear": ["..."], "cut_off": "", "text": ""}].',
+].join(' ');
+
+/**
+ * The first-time-viewer test (EX3-101): a subagent with no context reads only what a viewer has
+ * met by the end of beat 2 (the opener line, the hook's picture, the gap's picture and line) and
+ * says what it understood and whether it wants to keep watching. A gap that confuses a stranger
+ * is rewritten. Cheapest model, Read only, like the picture check.
+ */
+export const FIRST_VIEWER_AGENT = 'first-viewer';
+const FIRST_VIEWER_PROMPT = [
+  'You are a first-time viewer scrolling short videos. You have seen only what the file your dispatch message names describes: the first seconds of one video (what was on screen and what the voice said).',
+  'You know nothing else about the video. Never guess what it is about beyond what is there.',
+  'Answer honestly, as a busy stranger would: (1) what is happening; (2) what the character wants and what is in the way; (3) what question you are left with; (4) what you expect to learn;',
+  '(5) would you keep watching, 1 to 5; (6) anything that confused you or that you could not picture (words you did not understand, things you could not tell why you were shown).',
+  'Reply with JSON only: {"happening": "...", "want": "...", "obstacle": "...", "question": "...", "expect_to_learn": "...", "keep_watching": 1, "confused": ["..."]}.',
 ].join(' ');
 
 export type SessionResult = {
@@ -137,11 +181,29 @@ export function sessionOptions(input: SessionInput, abort: AbortController, onDe
     settingSources: ['project'],
     skills: 'all',
     agents: {
+      [SCENE_BUILDER_AGENT]: {
+        description: "Draws the reel's anchor scene once, as assets/world/world.js, from STORYBOARD.md's ## Anchor scene.",
+        prompt: SCENE_BUILDER_PROMPT,
+        tools: SCENE_BUILDER_TOOLS,
+        model: input.frameWorkerModel,
+      },
       [FRAME_WORKER_AGENT]: {
-        description: 'Builds exactly one HyperFrames frame composition from its role file and packet.',
+        description: 'Writes exactly one frame scene module (assets/frames/<frame_id>.js) from its role file and packet.',
         prompt: FRAME_WORKER_PROMPT,
         tools: FRAME_WORKER_TOOLS,
         model: input.frameWorkerModel,
+      },
+      [PICTURE_CHECKER_AGENT]: {
+        description: 'Blind picture check: says what a stranger sees on the snapshot contact sheets, knowing nothing of the storyboard.',
+        prompt: PICTURE_CHECKER_PROMPT,
+        tools: PICTURE_CHECKER_TOOLS,
+        model: PICTURE_CHECKER_MODEL,
+      },
+      [FIRST_VIEWER_AGENT]: {
+        description: "First-time-viewer test of the curiosity gap: says what a stranger understood from the reel's first seconds and whether they would keep watching.",
+        prompt: FIRST_VIEWER_PROMPT,
+        tools: PICTURE_CHECKER_TOOLS,
+        model: PICTURE_CHECKER_MODEL,
       },
     },
     hooks: { PreToolUse: [{ hooks: [policyHook] }] },

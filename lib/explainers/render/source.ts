@@ -1,7 +1,7 @@
 /**
- * Topic source material (E-09). The worker fetches a source URL itself,
- * outside the agent (which has no network tools), with a timeout and a size
- * limit, and keeps only readable text. The result is untrusted data.
+ * Topic source material (E-09). The worker fetches a topic's source URL itself,
+ * before the agent starts, with a timeout and a size limit, and keeps only
+ * readable text. The result is untrusted data.
  */
 
 export const SOURCE_MAX_BYTES = 2_000_000;

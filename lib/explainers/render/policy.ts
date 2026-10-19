@@ -15,19 +15,39 @@ export type PolicyDecision = { allow: true } | { allow: false; reason: string };
 const allow: PolicyDecision = { allow: true };
 const deny = (reason: string): PolicyDecision => ({ allow: false, reason });
 
-/** Tools the session may have at all. No web fetch, no web search, no MCP. */
-// The subagent tool is `Agent` in this SDK (`Task` in older ones); frame workers need it.
-// SubagentHandback is how a frame worker returns its report. Denying it drops the
+/**
+ * Tools the session may have at all. Web search and fetch are allowed for research (Explainers
+ * 3.0, EX3-03); what they return is data, never instructions. No MCP.
+ */
+// The subagent tool is `Agent` in this SDK (`Task` in older ones); the scene builder and frame
+// workers need it. SubagentHandback is how a subagent returns its report. Denying it drops the
 // report; the file is still written, and the orchestrator waits out the silence.
-export const SESSION_TOOLS = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash', 'Agent', 'Task', 'Skill', 'TodoWrite', 'SubagentHandback'];
+export const SESSION_TOOLS = [
+  'Read',
+  'Write',
+  'Edit',
+  'Glob',
+  'Grep',
+  'Bash',
+  'Agent',
+  'Task',
+  'Skill',
+  'TodoWrite',
+  'SubagentHandback',
+  'WebSearch',
+  'WebFetch',
+];
 
-/** Tools a frame worker may use: read its packet and frame.md, write its one file, hand the report back. */
+/** Tools a frame worker may use: read its packet, frame.md, the world and the kit, write its one module, hand the report back. */
 export const FRAME_WORKER_TOOLS = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'SubagentHandback'];
+
+/** The scene builder: the same reach, writing assets/world/world.js. */
+export const SCENE_BUILDER_TOOLS = FRAME_WORKER_TOOLS;
 
 const PATH_KEYS = ['file_path', 'path', 'notebook_path'];
 
-/** Inside the project but never writable: the pinned skills and the CLI install. */
-const READ_ONLY_DIRS = ['.claude', 'node_modules', '.media'];
+/** Inside the project but never writable by the file tools: the pinned skills, the CLI install, the world kit, the lint. */
+const READ_ONLY_DIRS = ['.claude', 'node_modules', '.media', '.helios-lint', path.join('assets', 'kit')];
 const WRITE_TOOLS = new Set(['Write', 'Edit', 'NotebookEdit']);
 
 /** True when `target` resolves inside `root` (symlink-free lexical check). */
