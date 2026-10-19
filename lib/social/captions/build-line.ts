@@ -5,8 +5,6 @@
  */
 import { noul, type EntryType } from '@typesafe-ai/sdk';
 
-import { defineQuestionSet } from '@/lib/reels/jev/question-set';
-
 import { HELIOS_CONTEXT } from './helios-context';
 
 export const BUILD_FIT_THRESHOLD = 0.6;
@@ -17,7 +15,8 @@ const STORY_CHARS = 6000;
 
 export type RecentClosing = { closing: string; buildLine: boolean; createdAt: Date };
 
-export const BUILD_FIT = defineQuestionSet({
+/** Same shape as a QuestionSet; defined inline so lib/social stays free of Trial Reels imports. */
+export const BUILD_FIT = {
   id: 'helios-build-fit',
   version: 'helios-build-fit@1',
   questions: {
@@ -29,7 +28,7 @@ export const BUILD_FIT = defineQuestionSet({
       },
     ),
   },
-});
+} as const;
 
 export function buildFitState(story: { headline: string; text: string }): EntryType {
   return {
