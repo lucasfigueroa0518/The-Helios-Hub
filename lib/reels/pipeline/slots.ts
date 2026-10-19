@@ -15,7 +15,7 @@ import {
   saveDayPenalty,
   selectFilledIdeas,
 } from '@/lib/reels/locks';
-import { shipStoredCopy, writeTargetCopy, type IdeaCopyOutcome } from '@/lib/reels/pipeline/copy';
+import { reelClosings, shipStoredCopy, writeTargetCopy, type IdeaCopyOutcome } from '@/lib/reels/pipeline/copy';
 import { placedIdeas, reusableVideos } from '@/lib/reels/pipeline/fill';
 import { putOnSlate, reelsMovesQuery, REEL_SKIP } from '@/lib/reels/pipeline/promote';
 import { markPromoteUsed, readMoves, recordPromoteSkip, withSkip } from '@/lib/social-hub/moves-store';
@@ -144,6 +144,7 @@ export async function generatePassingReels(input: {
   const reusable = input.dailyFill ? await reusableVideos(input.slateId, ideas.map((idea) => idea.id)) : new Map<string, string>();
   if (placed.size > 0) console.info(`[reels] placed by a person, not made again tonight: ${[...placed].join(', ')}`);
   const outcomes = new Map<string, IdeaCopyOutcome>();
+  const closings = reelClosings();
   let usd = 0;
   const failures: string[] = [];
 
@@ -161,6 +162,7 @@ export async function generatePassingReels(input: {
         model: model || COPY_MODEL,
         rewrite,
         shipMiss: false,
+        closings,
       });
       outcomes.set(idea.id, outcome);
       usd += outcome.usd;
@@ -183,7 +185,7 @@ export async function generatePassingReels(input: {
         outcome.variants,
         line.lineIndex,
         outcome,
-        { jev: input.jev },
+        { jev: input.jev, closings },
       );
       if (!shipped.ok) failures.push(`${idea.id}: ${shipped.error ?? 'could not ship the best line'}`);
     },

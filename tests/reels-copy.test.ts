@@ -163,7 +163,11 @@ test('the skill writes for an AI-curious general reader and treats the whole cop
 
 test('the account grows an audience, and the copy has two jobs in order (D-211)', () => {
   assert.match(COPY_SKILL, /## The account's job/);
-  assert.match(COPY_SKILL, /There is no pitch and no offer of Helios services/);
+  // v28: "no sales pitch" stays; the offer ban becomes no service list and no client-result claim.
+  assert.match(COPY_SKILL, /There is no sales pitch, no list of Helios services, and no claim about Helios clients or results/);
+  assert.match(COPY_SKILL, /no sales pitch, no list of Helios services, and no claim about Helios clients or results\./);
+  assert.match(COPY_SKILL, /The caption ends on the builder's read: one short paragraph, the last one in the caption, just before the call to action\./);
+  assert.match(COPY_SKILL, /Helios never speaks in the first person in the on-screen copy or in the news part of the caption/);
   assert.match(COPY_SKILL, /it is a complete thought with tension, never a fact that stops/);
   assert.match(COPY_SKILL, /A first-time viewer understands the copy on one read/);
   assert.match(COPY_SKILL, /The stake stays on screen/);
@@ -199,7 +203,7 @@ test('the writer states a viewer stake, and both copies and the caption tell one
   const properties = Object.keys(REPORT_COPY_TOOL.input_schema.properties);
   assert.ok(properties.indexOf('viewer_stake') < properties.indexOf('on_screen_copies'));
   assert.ok(REPORT_COPY_TOOL.input_schema.required.includes('viewer_stake'));
-  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v27');
+  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v28');
 });
 
 test('the pre-limit writer is preserved as a Threads candidate and stays off the reel path', () => {
@@ -397,6 +401,9 @@ test('cited URLs are shown and count as known', () => {
 const screen = 'Ninety five percent of pilots stall.\nThe model is rarely why.';
 const otherScreen = 'Enterprise pilots stall before launch.\nThe model is rarely why.';
 
+/** v28: every caption closes on a builder's read that names Helios. */
+const READ = 'For a law firm, intake that answers itself is now a weekend job. Helios builds that kind of handoff.';
+
 const goodInput = {
   hook_drafts: ['a', 'b', 'c'],
   copy_draft: 'draft',
@@ -405,7 +412,8 @@ const goodInput = {
   viewer_stake: 'Your company may be paying for an AI pilot that never ships.',
   tension: 'A deputy chased plates and a judge threw the case out.',
   on_screen_copies: [screen, otherScreen],
-  caption: 'First line that fits the fold.\n\nMore detail, per TechCrunch.',
+  caption: `First line that fits the fold.\n\nMore detail, per TechCrunch.\n\n${READ}`,
+  builder_read: READ,
   call_to_action: 'Send this to the person who owns your AI pilot.',
   hashtags: ['#AI', 'enterprise', '#MLOps'],
   sources: [{ name: 'TechCrunch', url: 'https://techcrunch.com/a' }],
@@ -414,7 +422,7 @@ const goodInput = {
 test('a call to action already at the end of the caption is posted once', () => {
   const call = parseCopyReport({
     ...goodInput,
-    caption: 'First line that fits the fold.\n\nSend this to the person who owns your AI pilot.',
+    caption: `First line that fits the fold.\n\n${READ}\n\nSend this to the person who owns your AI pilot.`,
     call_to_action: 'Send this to the person who owns your AI pilot.',
   });
   const posted = fullCaption(publishCopy(call, screen));
@@ -426,7 +434,7 @@ test('an assembled caption over 2,200 characters is shortened to the limit', () 
   const paragraph = 'This paragraph is long enough to cut. '.repeat(80).trim();
   const call = parseCopyReport({
     ...goodInput,
-    caption: [paragraph, paragraph, paragraph].join('\n\n'),
+    caption: [paragraph, paragraph, paragraph, READ].join('\n\n'),
     call_to_action: 'Send this to the person who owns your AI pilot.',
   });
   const posted = fullCaption(publishCopy(call, screen));
@@ -452,11 +460,12 @@ test('a well-formed report parses and hashtags gain a #', () => {
 test('a caption written with escaped breaks is stored with real blank lines', () => {
   const call = parseCopyReport({
     ...goodInput,
-    caption: 'paragraph one\\n\\nparagraph two',
+    caption: 'paragraph one\\n\\nHelios paragraph two',
+    builder_read: 'Helios paragraph two',
     on_screen_copies: ['Line one\\nLine two', otherScreen],
     call_to_action: 'Send this\\r\\n to the owner.',
   });
-  assert.equal(call.caption, 'paragraph one\n\nparagraph two');
+  assert.equal(call.caption, 'paragraph one\n\nHelios paragraph two');
   assert.equal(call.onScreenCopies[0], 'Line one\nLine two');
   assert.equal(call.callToAction, 'Send this\n to the owner.');
   assert.equal(parseCopyReport(goodInput).caption, goodInput.caption);
@@ -484,7 +493,7 @@ test('a report without exactly two on-screen copies is an error', () => {
 test('checks measure the winning line against the bucket and flag what review should look at', () => {
   const call = parseCopyReport({
     ...goodInput,
-    caption: `${'x'.repeat(130)}\n\nWe think this matters — a lot. https://example.com`,
+    caption: `${'x'.repeat(130)}\n\nWe think this matters — a lot. https://example.com\n\n${READ}`,
     sources: [{ name: 'Nowhere', url: 'https://not-in-idea.com' }],
   });
   const checks = checkCopy(publishCopy(call, screen), 'the_number', ['https://techcrunch.com/a']);

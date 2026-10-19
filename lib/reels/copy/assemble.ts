@@ -26,6 +26,8 @@ import {
   type FrameworkId,
 } from '@/lib/reels/scoring/decide';
 import type { MemberRole } from '@/lib/reels/types';
+import { buildLineInstruction, recentClosingsBlock, type RecentClosing } from '@/lib/social/captions/build-line';
+import { CAPTION_SHARED_RULES, HELIOS_CONTEXT } from '@/lib/social/captions/helios-context';
 
 /**
  * Builds the P-10 writer prompt for one post idea from five inputs: the
@@ -34,11 +36,13 @@ import type { MemberRole } from '@/lib/reels/types';
  * with that framework's writing logic.
  *
  * Cache layout (tools, then system, then messages):
- *   system[0]  skill + humanizer. Identical for every idea, every night.
+ *   system[0]  skill + Helios context + shared caption rules + humanizer.
+ *              Identical for every idea, every night.
  *   system[1]  bucket + framework. Identical for every idea with that pair.
  *   user[0]    the idea's sources. Cached, so the second call and the rewrite
  *              reuse them (D-220). Never in the system prompt (D-030).
- *   user[1]    the task. Changes between the draft calls and the rewrite.
+ *   user[1]    the task. Changes between the draft calls and the rewrite. It
+ *              also holds the recent closings and include_build_line (v28).
  */
 
 export type CopyMember = {
@@ -66,6 +70,10 @@ export type CopyInput = {
   earlierLines?: readonly EarlierCopyLine[];
   /** Iteration round 4: the near misses a blind polish call builds on. Scores are never shown. */
   polishOf?: readonly CopyRewriteLine[];
+  /** v28. The last Reel closings, newest first, so this read does not repeat them. */
+  recentClosings?: readonly RecentClosing[];
+  /** v28. Set by code from the Jev fit and the ceiling; absent means false. The writer never judges fit. */
+  includeBuildLine?: boolean;
 };
 
 export type EarlierCopyLine = { nyDate: string; onScreenCopy: string; plain: number; stake: number };
@@ -90,7 +98,7 @@ const ROLE_LABEL: Record<MemberRole, string> = {
 
 /** The stable prefix, shared by every idea. */
 export function copyStaticSystem(): string {
-  return `${COPY_SKILL}\n\n${HUMANIZER_PREAMBLE}\n\n${HUMANIZER_TEXT}`;
+  return `${COPY_SKILL}\n\n${HELIOS_CONTEXT}\n\n${CAPTION_SHARED_RULES}\n\n${HUMANIZER_PREAMBLE}\n\n${HUMANIZER_TEXT}`;
 }
 
 /** The bucket and the winning framework only, with that framework's writing logic. */
@@ -176,10 +184,21 @@ function earlierLinesBlock(lines: readonly EarlierCopyLine[]): string[] {
   ];
 }
 
+/**
+ * v28. Per-post caption inputs for the builder's read. Like the earlier lines,
+ * they sit in the uncached task block so the cached prefix stays the same. An
+ * empty log adds no closings block; the build-line flag is always stated.
+ */
+function builderReadBlock(input: CopyInput): string[] {
+  const closings = recentClosingsBlock([...(input.recentClosings ?? [])]);
+  return [...(closings ? ['', closings] : []), '', buildLineInstruction(input.includeBuildLine === true)];
+}
+
 function draftTask(input: CopyInput): string {
   return [
     'Write four on-screen copies and one caption for this post idea, from the source material above. All four open differently and carry the same stake, and the one caption pays all of them out.',
     ...earlierLinesBlock(input.earlierLines ?? []),
+    ...builderReadBlock(input),
     '',
     `Bucket: ${BUCKET_SPEC_TEXT[input.bucket].title}`,
     `Framework: ${FRAMEWORK_SPEC_TEXT[input.framework].title}`,
@@ -245,6 +264,7 @@ function rewriteTask(input: CopyInput, lines: readonly CopyRewriteLine[]): strin
     ...lines.flatMap((line, index) => [`<copy index="${index + 1}">`, neutralize(line.onScreenCopy), '</copy>']),
     '',
     `Use them as material, not as drafts to edit. Write four new on-screen copies and one caption for the same story, from the source material above. ${opening} Keep the tension and the plain read: one read, everyday words, and no names the viewer would not know. Every copy tells the story the caption's first paragraph opens on. Every rule in this prompt still applies.`,
+    ...builderReadBlock(input),
     '',
     `Bucket: ${BUCKET_SPEC_TEXT[input.bucket].title}`,
     `Framework: ${FRAMEWORK_SPEC_TEXT[input.framework].title}`,
@@ -269,6 +289,7 @@ function polishTask(input: CopyInput, lines: readonly CopyRewriteLine[]): string
     ...lines.flatMap((line, index) => [`<copy index="${index + 1}">`, neutralize(line.onScreenCopy), '</copy>']),
     '',
     `Write ${lines.length} new on-screen copies, one close variation of each, in the same order. For each one, keep its idea and its tension, ${keep}, and say it in fewer, plainer words a first-time viewer gets on one read. Cut any name or figure that does not carry what is at stake. Write one caption that pays all of them out, from the source material above. Every copy tells the story the caption's first paragraph opens on. Every rule in this prompt still applies.`,
+    ...builderReadBlock(input),
     '',
     `Bucket: ${BUCKET_SPEC_TEXT[input.bucket].title}`,
     `Framework: ${FRAMEWORK_SPEC_TEXT[input.framework].title}`,

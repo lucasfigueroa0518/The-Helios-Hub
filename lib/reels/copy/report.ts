@@ -89,7 +89,12 @@ export const REPORT_COPY_TOOL = {
       caption: {
         type: 'string',
         description:
-          'The final caption, ending where the bucket structure ends. Leave out the call to action and the hashtags. They are posted from their own fields, so writing them here posts them twice. This one caption pays out every on-screen copy. Short paragraphs, with a real blank line between them. A caption that is one block is a failed report. The caption, the call to action, and the hashtags together must stay within 2,200 characters.',
+          'The final caption, ending where the bucket structure ends, with the builder\'s read as its last paragraph. Leave out the call to action and the hashtags. They are posted from their own fields, so writing them here posts them twice. This one caption pays out every on-screen copy. Short paragraphs, with a real blank line between them. A caption that is one block is a failed report. The caption, the call to action, and the hashtags together must stay within 2,200 characters.',
+      },
+      builder_read: {
+        type: 'string',
+        description:
+          'The builder\'s read, word for word as it stands in the caption: its last paragraph, just before the call to action. What this story changes for someone running marketing, sales, or ops at a business like the ones in the Helios context. It names Helios once, unless the call to action already asks the viewer to follow Helios.',
       },
       call_to_action: {
         type: 'string',
@@ -129,6 +134,7 @@ export const REPORT_COPY_TOOL = {
       'tension',
       'on_screen_copies',
       'caption',
+      'builder_read',
       'call_to_action',
       'outcome_note',
       'hashtags',
@@ -142,6 +148,8 @@ export type CopyCall = {
   onScreenCopies: string[];
   viewerStake: string;
   caption: string;
+  /** v28. The caption's closing paragraph, the one place Helios is named. */
+  builderRead: string;
   callToAction: string;
   hashtags: string[];
   sources: Array<{ name: string; url: string }>;
@@ -156,6 +164,8 @@ export type CopyCall = {
     stakeOptions?: string[];
     /** D-238. The Saga's note on whether an outcome already happened. Empty elsewhere; absent on rows before v17. */
     outcomeNote?: string;
+    /** v28. Kept here too so the JSON working column and the stored variants carry it. Absent before v28. */
+    builderRead?: string;
   };
 };
 
@@ -164,6 +174,7 @@ export type CopyReport = {
   onScreenCopy: string;
   viewerStake: string;
   caption: string;
+  builderRead: string;
   callToAction: string;
   hashtags: string[];
   sources: Array<{ name: string; url: string }>;
@@ -199,6 +210,34 @@ export const TEXT_ARTIFACT_ERROR = 'report_copy text still carries';
 
 export function isTextArtifactError(error: string | null | undefined): boolean {
   return typeof error === 'string' && error.startsWith(TEXT_ARTIFACT_ERROR);
+}
+
+/** v28. The prefix that marks a report failed for its builder's read, so the call can be retried. */
+export const BUILDER_READ_ERROR = 'report_copy builder_read';
+
+export function isBuilderReadError(error: string | null | undefined): boolean {
+  return typeof error === 'string' && error.startsWith(BUILDER_READ_ERROR);
+}
+
+const HELIOS = /\bHelios\b/;
+
+function squash(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * v28. The read is one of the caption's paragraphs and names Helios. When the
+ * call to action already names Helios (the arousal follow-Helios fallback),
+ * the read may leave it out so Helios is named once.
+ */
+function checkBuilderRead(read: string, caption: string, callToAction: string): void {
+  const paragraphs = caption.split(/\n[ \t]*\n/).map(squash);
+  if (!paragraphs.includes(squash(read))) {
+    throw new CopyReportError(`${BUILDER_READ_ERROR} is not a paragraph of the caption. End the caption on the read, word for word.`);
+  }
+  if (!HELIOS.test(read) && !HELIOS.test(callToAction)) {
+    throw new CopyReportError(`${BUILDER_READ_ERROR} does not name Helios. Name Helios once, lightly, in the read.`);
+  }
 }
 
 /** At least two paragraphs with a blank line between them. A single line break is not enough. */
@@ -254,6 +293,7 @@ export function parseCopyReport(input: unknown): CopyCall {
     onScreenCopies: onScreenCopies(record.on_screen_copies),
     viewerStake: text(record, 'viewer_stake', true),
     caption: captionWithBreaks(stripCaptionTail(text(record, 'caption', true), callToAction, 2)),
+    builderRead: text(record, 'builder_read', true),
     callToAction,
     hashtags: list(record.hashtags).map((tag) => (tag.startsWith('#') ? tag : `#${tag}`)),
     sources: sourceList(record.sources),
@@ -267,10 +307,12 @@ export function parseCopyReport(input: unknown): CopyCall {
       tension: text(record, 'tension', true),
     },
   };
+  call.working.builderRead = call.builderRead;
   const leftovers = reportArtifacts(call);
   if (leftovers.length > 0) {
     throw new CopyReportError(`${TEXT_ARTIFACT_ERROR} ${leftovers.join('; ')}.`);
   }
+  checkBuilderRead(call.builderRead, call.caption, call.callToAction);
   return call;
 }
 
@@ -297,6 +339,7 @@ export function publishCopy(call: CopyCall, onScreenCopy: string): CopyReport {
     onScreenCopy,
     viewerStake: call.viewerStake,
     caption: call.caption,
+    builderRead: call.builderRead,
     callToAction: call.callToAction,
     hashtags: call.hashtags,
     sources: call.sources,

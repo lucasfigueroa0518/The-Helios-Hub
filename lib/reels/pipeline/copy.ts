@@ -19,6 +19,7 @@ import {
 import { decideFullStory } from '@/lib/reels/copy/full-story';
 import {
   checkCopy,
+  isBuilderReadError,
   isTextArtifactError,
   publishCopy,
   type CopyCall,
@@ -32,6 +33,15 @@ import { createLiveJevRunner } from '@/lib/reels/jev/client';
 import type { JevRunner } from '@/lib/reels/jev/runner';
 import { compareIdeaRank } from '@/lib/reels/pipeline/order';
 import { recordCost } from '@/lib/reels/repository';
+import { dbQuery } from '@/lib/db';
+import {
+  BUILD_FIT,
+  buildFitState,
+  ceilingAllows,
+  decideBuildLine,
+  type RecentClosing,
+} from '@/lib/social/captions/build-line';
+import { closingsLog, type ClosingsLog } from '@/lib/social/captions/closings-store';
 
 export type CopySummary = {
   status: 'skipped' | 'ok' | 'partial';
@@ -67,8 +77,9 @@ export async function writeSlateCopy(
   let usd = 0;
   const failures: string[] = [];
 
+  const closings = reelClosings();
   for (const target of targets) {
-    const outcome = await writeTargetCopy(client, runId, slateId, target, deps);
+    const outcome = await writeTargetCopy(client, runId, slateId, target, { ...deps, closings });
     usd += outcome.usd;
     if (outcome.ok) {
       written += 1;
@@ -105,6 +116,8 @@ export type IdeaCopyOutcome = {
   model: string;
   inputTokens: number;
   outputTokens: number;
+  /** v28. Whether the captions were asked for the build line, for recording a closing shipped later. */
+  buildLine?: boolean;
 };
 
 /**
@@ -139,7 +152,12 @@ export async function writeIdeaCopy(
   const target = targets[0];
   if (!target) return failed('This post idea has no winning bucket and framework to write from.');
   const client: CopyClient = deps?.client ?? newAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  return writeTargetCopy(client, runId, slateId, target, deps);
+  return writeTargetCopy(client, runId, slateId, target, { ...deps, closings: reelClosings() });
+}
+
+/** v28. The live Reel closings log. Every caller that saves copy for posting passes it. */
+export function reelClosings(): ClosingsLog {
+  return closingsLog(dbQuery, 'reel');
 }
 
 function messageCost(message: Anthropic.Message, model: string): { inputTokens: number; outputTokens: number; usd: number } {
@@ -157,6 +175,47 @@ function messageCost(message: Anthropic.Message, model: string): { inputTokens: 
 
 function knownUrls(target: CopyTarget): string[] {
   return [...new Set(target.members.flatMap((member) => [member.url, ...member.citationUrls]))];
+}
+
+/**
+ * v28. The recent Reel closings and whether this idea's read gets the build
+ * line. An unreadable log counts as empty. Jev is asked only when the ceiling
+ * leaves room, and a failed fit call means no build line; the copy still ships.
+ */
+async function captionClosings(
+  jev: JevRunner,
+  closings: ClosingsLog | undefined,
+  target: CopyTarget,
+  runId: string | null,
+): Promise<{ recent: RecentClosing[]; include: boolean }> {
+  let recent: RecentClosing[] = [];
+  if (closings) {
+    try {
+      recent = await closings.recent();
+    } catch (error) {
+      console.warn(`[reels] could not read recent caption closings for ${target.postIdeaId}:`, error);
+    }
+  }
+  if (!ceilingAllows(recent)) return { recent, include: false };
+  const primary = target.members.find((member) => member.role === 'primary') ?? target.members[0];
+  let fit: number | null = null;
+  if (primary) {
+    try {
+      const result = await jev.ask({
+        component: 'copy-build-fit',
+        state: buildFitState({ headline: primary.headline, text: primary.body }),
+        sets: [BUILD_FIT],
+        questions: BUILD_FIT.questions,
+        runId,
+        postIdeaId: target.postIdeaId,
+      });
+      const value = result.answers.builds?.noul;
+      fit = typeof value === 'number' && Number.isFinite(value) ? value : null;
+    } catch {
+      fit = null;
+    }
+  }
+  return { recent, include: decideBuildLine(fit, recent) };
 }
 
 /** Last step of a saved copy. A failed judgment leaves the cue off. */
@@ -198,6 +257,8 @@ export async function writeTargetCopy(
      * generation slot does not: a miss is demoted and the next idea tries.
      */
     shipMiss?: boolean;
+    /** v28. The Reel closings log. Absent in offline tests: no recent closings, nothing recorded. */
+    closings?: ClosingsLog;
   },
 ): Promise<IdeaCopyOutcome> {
   const jev = deps?.jev ?? createLiveJevRunner();
@@ -211,11 +272,14 @@ export async function writeTargetCopy(
   let cost = 0;
   const drafts: DraftCall[] = [];
   let promptVersion = '';
+  const closing = await captionClosings(jev, deps?.closings, target, runId);
   const input: CopyInput = {
     bucket: target.bucket,
     framework: target.framework,
     members: target.members,
     earlierLines: target.earlierLines,
+    recentClosings: closing.recent,
+    includeBuildLine: closing.include,
   };
 
   const account = async (result: CopyResult, component: 'copy-caption' | 'copy-rewrite') => {
@@ -251,11 +315,13 @@ export async function writeTargetCopy(
   /**
    * D-246. A report that still carries escape sequences or tool syntax after
    * repair fails, and that one call is tried once more. Both calls are billed.
+   * v28: so does a builder's read that is missing from the caption or leaves
+   * out Helios.
    */
   const writeOnce = async (callInput: CopyInput, component: 'copy-caption' | 'copy-rewrite'): Promise<CopyResult> => {
     let result = await writeCopy(client, callInput, deps?.signal, model);
     await account(result, component);
-    if (!result.call && isTextArtifactError(result.error)) {
+    if (!result.call && (isTextArtifactError(result.error) || isBuilderReadError(result.error))) {
       result = await writeCopy(client, callInput, deps?.signal, model);
       await account(result, component);
     }
@@ -296,6 +362,7 @@ export async function writeTargetCopy(
       model,
       inputTokens,
       outputTokens,
+      buildLine: closing.include,
     };
   };
 
@@ -378,6 +445,7 @@ export async function writeTargetCopy(
     fullStoryBelow: fullStoryCue != null,
     fullStoryCue,
   });
+  await deps?.closings?.record(target.postIdeaId, report.builderRead, closing.include);
   return {
     ok: true,
     passed: winner.eligible,
@@ -391,6 +459,7 @@ export async function writeTargetCopy(
     model,
     inputTokens,
     outputTokens,
+    buildLine: closing.include,
   };
 }
 
@@ -401,8 +470,8 @@ export async function shipStoredCopy(
   target: CopyTarget,
   variants: CopyVariants,
   lineIndex: number,
-  accounting: Pick<IdeaCopyOutcome, 'promptVersion' | 'model' | 'inputTokens' | 'outputTokens' | 'usd'>,
-  deps?: { jev?: JevRunner; save?: typeof saveIdeaCopy },
+  accounting: Pick<IdeaCopyOutcome, 'promptVersion' | 'model' | 'inputTokens' | 'outputTokens' | 'usd' | 'buildLine'>,
+  deps?: { jev?: JevRunner; save?: typeof saveIdeaCopy; closings?: ClosingsLog },
 ): Promise<IdeaCopyOutcome> {
   const line = variants.lines[lineIndex];
   if (!line) return failed('The graded line is not in the copy that was judged.');
@@ -416,6 +485,7 @@ export async function shipStoredCopy(
     onScreenCopies: [line.onScreenCopy, line.onScreenCopy],
     viewerStake: line.viewerStake,
     caption: line.caption,
+    builderRead: working.builderRead ?? '',
     callToAction: line.callToAction,
     hashtags: line.hashtags,
     sources: line.sources,
@@ -448,6 +518,7 @@ export async function shipStoredCopy(
     fullStoryBelow: fullStoryCue != null,
     fullStoryCue,
   });
+  if (report.builderRead) await deps?.closings?.record(target.postIdeaId, report.builderRead, accounting.buildLine === true);
   return {
     ok: true,
     passed: line.eligible === true,
