@@ -16,10 +16,11 @@
  * Difficulty (O-10, provisional until Lucas decides): code maps it from the
  * written question's `guessable` and `surprise` answers.
  */
+import type { StoriesDb } from '@/lib/stories/db';
 import { GTN_CANDIDATE } from '@/lib/stories/questions';
 import { GTN_EXTRACT, GTN_QUESTION, material, type GtnExtractOut, type GtnQuestionOut } from '@/lib/stories/prompts';
 import { GTN_FAMILIES, type Difficulty, type FrameData, type GtnFamily, type Photo } from '@/lib/stories/render/types';
-import { recentKeys, type NewCandidate } from '@/lib/stories/repository';
+import { nyDate, recentKeys, type NewCandidate } from '@/lib/stories/repository';
 import { carouselNumbers, recentUsedPhotoUrls, shortlistWithoutBrief, type NumberCandidate } from '@/lib/stories/sources/carousel';
 import { theNumberIdeas, type StoryCandidate } from '@/lib/stories/sources/reels';
 import { writeStructured } from '@/lib/stories/writer';
@@ -54,6 +55,29 @@ export async function nextFamily(deps: BuildDeps, hasPhoto: boolean): Promise<Gt
   const order: GtnFamily[] = ['photo', 'marquee'];
   const last = rows[0]?.template as GtnFamily | undefined;
   return last && order.includes(last) ? order[(order.indexOf(last) + 1) % order.length]! : 'photo';
+}
+
+export type RecentGtnTopic = { date: string; question: string; answer: string; label: string; topic: string };
+
+/**
+ * Guess the Number sets of the last `days` New York days (other than `setId`) that were posted or are on their way,
+ * newest first. The pick call shows them as "don't repeat" and the same-subject check compares against them.
+ */
+export async function recentGtnTopics(db: StoriesDb, setId: string, now: Date, days = 30): Promise<RecentGtnTopic[]> {
+  const since = nyDate(new Date(now.getTime() - days * 86_400_000));
+  const { rows } = await db.query<RecentGtnTopic>(
+    `SELECT to_char(s.ny_date, 'YYYY-MM-DD') AS date,
+            q.copy->>'question' AS question, a.copy->>'number' AS answer, a.copy->>'label' AS label, i.copy->>'topic' AS topic
+       FROM stories.sets s
+       JOIN stories.frames q ON q.set_id = s.id AND q.role = 'question'
+       JOIN stories.frames a ON a.set_id = s.id AND a.role = 'answer'
+       JOIN stories.frames i ON i.set_id = s.id AND i.role = 'intro'
+      WHERE s.series = 'guess_the_number' AND s.id <> $1 AND s.ny_date >= $2::date
+        AND s.status IN ('ready', 'approved', 'scheduled', 'publishing', 'published')
+      ORDER BY s.ny_date DESC, s.created_at DESC`,
+    [setId, since],
+  );
+  return rows;
 }
 
 export async function buildGuessTheNumber(deps: BuildDeps, sources?: GtnSources): Promise<BuildResult> {

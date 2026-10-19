@@ -9,7 +9,7 @@ import test from 'node:test';
 import type { BuildDeps } from '@/lib/stories/build/common';
 import { buildSet } from '@/lib/stories/build';
 import { buildFreeVsPaid, pairKey, struckPrice } from '@/lib/stories/build/free-vs-paid';
-import { buildGuessTheNumber, difficultyFrom } from '@/lib/stories/build/guess-the-number';
+import { buildGuessTheNumber, difficultyFrom, recentGtnTopics } from '@/lib/stories/build/guess-the-number';
 import { MAJOR_NEWS_BAR, buildMorningDownload, chooseStories, namesIn } from '@/lib/stories/build/morning-download';
 import { createStoriesJev } from '@/lib/stories/jev';
 import type { StoriesMetaClient } from '@/lib/stories/publish/meta';
@@ -655,4 +655,31 @@ test('writer: a paused web-search turn is resumed; a refusal throws; costs land 
   assert.equal((await getSet(db, set.id))!.set.spend_usd, 0.0006);
   const refusing = async () => ({ id: 'r', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', stop_reason: 'refusal', stop_sequence: null, usage: { input_tokens: 1, output_tokens: 0 }, content: [] }) as never;
   await assert.rejects(writeStructured({ create: refusing, db, setId: null, component: 'x', model: 'claude-sonnet-5-5', system: 'S', tool: { name: 't', description: 'd', input_schema: {} }, user: 'U' }), /refused/);
+});
+
+test('recentGtnTopics: posted-type sets of the last 30 days only', async () => {
+  const { db } = await harnessDb();
+  const seed = async (nyDate: string, status: string, tag: string) => {
+    const { rows } = await db.query<{ id: string }>(
+      `INSERT INTO stories.sets (series, ny_date, status, trigger, style) VALUES ('guess_the_number', $1::date, $2, 'click', 'polished') RETURNING id`,
+      [nyDate, status],
+    );
+    const id = rows[0]!.id;
+    const copies: Array<[number, string, Record<string, string>]> = [
+      [1, 'intro', { topic: `topic ${tag}` }],
+      [2, 'question', { question: `question ${tag}` }],
+      [3, 'answer', { number: `answer ${tag}`, label: `label ${tag}` }],
+    ];
+    for (const [seq, role, copy] of copies) {
+      await db.query(`INSERT INTO stories.frames (set_id, seq, role, template, backdrop, copy) VALUES ($1, $2, $3, 't', 'black', $4::jsonb)`, [id, seq, role, JSON.stringify(copy)]);
+    }
+    return id;
+  };
+  await seed('2026-10-01', 'published', 'recent');
+  await seed('2026-10-06', 'skipped', 'skipped');
+  await seed('2026-09-01', 'published', 'old');
+  const current = await seed('2026-10-10', 'ready', 'current');
+  assert.deepEqual(await recentGtnTopics(db, current, new Date('2026-10-11T16:00:00Z')), [
+    { date: '2026-10-01', question: 'question recent', answer: 'answer recent', label: 'label recent', topic: 'topic recent' },
+  ]);
 });
