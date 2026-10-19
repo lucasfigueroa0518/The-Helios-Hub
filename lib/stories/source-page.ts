@@ -40,16 +40,49 @@ function plainText(html: string, url: string): { text: string; publishedTime: st
   return { text: text.slice(0, MAX_TEXT_CHARS), publishedTime };
 }
 
-export async function readSourcePage(url: string, fetchHtml: FetchHtml = fetchHtmlLive): Promise<SourcePage> {
+/** Drops commas between digits so "3,072" and "3072" compare equal. */
+function stripDigitCommas(text: string): { stripped: string; map: number[] } {
+  let stripped = '';
+  const map: number[] = [];
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === ',' && /\d/.test(text[i - 1] ?? '') && /\d/.test(text[i + 1] ?? '')) continue;
+    stripped += ch;
+    map.push(i);
+  }
+  return { stripped, map };
+}
+
+/**
+ * The first number in an answer, written the way a page would most plainly
+ * print it: commas between digits removed, a decimal point between digits kept.
+ * "$30.9B" -> "30.9", "3,072" -> "3072", "$200/mo" -> "200". No digits -> null.
+ */
+export function figureNeedle(answer: string): string | null {
+  const m = /\d+(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?/.exec(answer);
+  return m ? m[0].replace(/,/g, '') : null;
+}
+
+export async function readSourcePage(
+  url: string,
+  fetchHtml: FetchHtml = fetchHtmlLive,
+  figure?: string,
+): Promise<SourcePage> {
   const html = await fetchHtml(url);
   if (!html) return { ok: false, url, error: 'fetch failed' };
   try {
     const article = parseArticleHtml(html, url, url);
-    if (article && article.text.length >= MIN_TEXT_CHARS) {
+    const needle = figure ? figureNeedle(figure) : null;
+    const articleHasFigure = !needle || (article ? stripDigitCommas(article.text).stripped.includes(needle) : false);
+    if (article && article.text.length >= MIN_TEXT_CHARS && articleHasFigure) {
       return { ok: true, url, text: article.text, publishedTime: article.publishedTime, via: 'article' };
     }
     const plain = plainText(html, url);
     if (plain.text.length < MIN_TEXT_CHARS) return { ok: false, url, error: 'no readable text' };
+    // Readability read the page but dropped the figure (a table beside the prose): prefer plain text if it has it.
+    if (article && article.text.length >= MIN_TEXT_CHARS && needle && !stripDigitCommas(plain.text).stripped.includes(needle)) {
+      return { ok: true, url, text: article.text, publishedTime: article.publishedTime, via: 'article' };
+    }
     return { ok: true, url, text: plain.text, publishedTime: plain.publishedTime, via: 'plain' };
   } catch (err) {
     return { ok: false, url, error: err instanceof Error ? err.message : String(err) };
@@ -63,17 +96,9 @@ export async function readSourcePage(url: string, fetchHtml: FetchHtml = fetchHt
  */
 export function gateExcerpt(text: string, answer: string, max: number = GATE_EXCERPT_CHARS): string {
   if (text.length <= max) return text;
-  const needle = answer.replace(/\D/g, '');
+  const needle = figureNeedle(answer);
   if (!needle) return text.slice(0, max);
-  // Search a copy with commas between digits removed, mapping hits back to `text`.
-  let stripped = '';
-  const map: number[] = [];
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (ch === ',' && /\d/.test(text[i - 1] ?? '') && /\d/.test(text[i + 1] ?? '')) continue;
-    stripped += ch;
-    map.push(i);
-  }
+  const { stripped, map } = stripDigitCommas(text);
   const hit = stripped.indexOf(needle);
   if (hit < 0) return text.slice(0, max);
   const centre = map[hit] + Math.floor(needle.length / 2);

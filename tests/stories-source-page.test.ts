@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { gateExcerpt, readSourcePage } from '@/lib/stories/source-page';
+import { figureNeedle, gateExcerpt, readSourcePage } from '@/lib/stories/source-page';
 
 const PARA = 'Embedding models turn text into vectors and this paragraph says so at some length. '.repeat(6);
 
@@ -54,4 +54,32 @@ test('gateExcerpt: centres on the figure however it is written', () => {
   const t4 = filler(60_000);
   assert.equal(gateExcerpt(t4, 'no digits here'), t4.slice(0, 24_000));
   assert.equal(gateExcerpt(t4, '777'), t4.slice(0, 24_000));
+});
+
+test('gateExcerpt: a decimal figure is found as written', () => {
+  const filler = 'lorem ipsum '.repeat(5_000);
+  const text = filler.slice(0, 40_000) + 'raised 30.9 billion' + filler;
+  assert.ok(gateExcerpt(text, '$30.9B').includes('30.9 billion'));
+});
+
+test('figureNeedle: first number, commas out, decimal point kept', () => {
+  assert.equal(figureNeedle('$30.9B'), '30.9');
+  assert.equal(figureNeedle('0.13'), '0.13');
+  assert.equal(figureNeedle('3,072'), '3072');
+  assert.equal(figureNeedle('$200/mo'), '200');
+  assert.equal(figureNeedle('50%'), '50');
+  assert.equal(figureNeedle('no digits'), null);
+});
+
+test('readSourcePage: with a figure, a table Readability dropped is recovered from plain text', async () => {
+  const html = `<html><body><article><h1>Embeddings</h1><p>${PARA}</p><p>${PARA}</p></article>
+    <table><tr><td>text-embedding-3-large</td><td>3,072 dimensions</td></tr></table></body></html>`;
+  const withFigure = await readSourcePage('https://example.com/p', async () => html, '3,072');
+  assert.equal(withFigure.ok, true);
+  if (withFigure.ok) {
+    assert.equal(withFigure.via, 'plain');
+    assert.ok(withFigure.text.includes('3,072'));
+  }
+  const without = await readSourcePage('https://example.com/p', async () => html);
+  assert.equal(without.ok && without.via, 'article');
 });
