@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import { resolveDay } from '@/lib/social-hub/slots/resolve';
 import { DEFAULT_SEED_INPUTS, seedTemplate } from '@/lib/social-hub/slots/seed';
-import { carouselsByWeekday, chipNames, datedWeek, lfdWeekdays, mondayOf, ROWS, switchOnCopy, templateWeek, weekLabel, weekModel } from '@/lib/social-hub/views/week';
+import { carouselsByWeekday, chipAction, chipNames, datedWeek, lfdWeekdays, mondayOf, ROWS, switchOnCopy, templateWeek, weekLabel, weekModel } from '@/lib/social-hub/views/week';
 import { addDays, weekdayOf } from '@/lib/social-hub/time';
 import type { HubPost } from '@/lib/social-hub/types';
 
@@ -112,4 +112,17 @@ test('the Switch on confirm says what changes the moment it is on (ruling R8)', 
   assert.doesNotMatch(switchOnCopy({ templateEmpty: true, lfdPaused: true, lfdDays: [] }), /Carousels/, 'no LFD days, nothing lost');
   assert.match(switchOnCopy({ templateEmpty: false, lfdPaused: true, lfdDays: [1, 3, 5] }), /Mondays, Wednesdays and Fridays/);
   assert.doesNotMatch(switchOnCopy({ templateEmpty: true, lfdPaused: true, lfdDays }), /nothing changes/);
+});
+
+test('chipAction: an editable chip edits; a read-only booked chip opens its post; a read-only empty one is plain', () => {
+  const post = { id: 'p', vertical: 'reels', nyDate: '2026-10-20', status: 'published', slot: { id: 'morning', label: '' } } as unknown as HubPost;
+  const chip = { vertical: 'reels' as const, windowId: 'morning', feedMode: 'trial' as const, origin: 'template' as const, booked: null };
+  assert.equal(chipAction(chip, true), 'edit');
+  assert.equal(chipAction({ ...chip, booked: post }, true), 'edit', 'booked but still editable: the editor (with Open post)');
+  assert.equal(chipAction({ ...chip, booked: post }, false), 'open');
+  assert.equal(chipAction(chip, false), 'none');
+  // Today's 8:45 reel at 10:00 AM is read-only in the grid; booked, it becomes a link.
+  const m = weekModel({ mode: 'week', days: week('2026-10-19'), posts: [post], now: NOW });
+  const cell = m.rows.find((r) => r.row.id === 'reel-morning')!.cells[1]!;
+  assert.equal(chipAction(cell.chips[0]!, cell.editable), 'open');
 });

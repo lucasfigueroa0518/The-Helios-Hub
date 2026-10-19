@@ -139,6 +139,10 @@
 }
 button.sh-week__chip { cursor: pointer; }
 button.sh-week__chip:hover { background: color-mix(in srgb, var(--sh-color) 24%, var(--color-surface)); }
+/* A read-only booked slot links to its post: the whole chip is the link. */
+.sh-week__chip--post:hover { background: color-mix(in srgb, var(--sh-color) 24%, var(--color-surface)); }
+.sh-week__link { display: inline-flex; align-items: center; gap: 5px; min-height: 24px; margin: 0 -8px; padding: 0 8px; color: inherit; text-decoration: none; }
+.sh-slot__post { margin: -4px 0 14px; font-size: var(--sh-fs-small); }
 .sh-week__dot { flex: none; width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--sh-color); }
 .sh-week__chip[data-origin='override'] { box-shadow: inset 0 0 0 1.5px var(--sh-focus); }
 .sh-week__chip[data-booked='true'] { box-shadow: inset 3px 0 0 var(--color-text); }

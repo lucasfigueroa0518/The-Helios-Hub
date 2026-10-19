@@ -78,6 +78,16 @@ export function lfdWeekdays(template: readonly TemplateRow[]): number[] {
 
 export type WeekChip = { vertical: Vertical; windowId: string; feedMode: FeedMode | null; origin: 'template' | 'override'; booked: HubPost | null };
 
+/**
+ * What clicking a chip does: an editable chip opens the slot editor (with an
+ * "Open post" link when booked); a read-only one (past day, started window,
+ * legacy grid, preview) links straight to its booked post, or is plain text.
+ */
+export function chipAction(chip: Pick<WeekChip, 'booked'>, editable: boolean): 'edit' | 'open' | 'none' {
+  if (editable) return 'edit';
+  return chip.booked ? 'open' : 'none';
+}
+
 export type WeekCell = {
   nyDate: string | null;
   weekday: number;

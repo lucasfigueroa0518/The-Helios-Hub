@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { Loader, Plus } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 
+import { PostLink } from '@/components/social-hub/nav/PostLink';
 import { typeStyle } from '@/components/social-hub/ui/marks';
 import type { FeedMode, SlotSource } from '@/lib/social-hub/slots/types';
 import { isReelType } from '@/lib/social-hub/slots/types';
@@ -11,7 +12,7 @@ import { WEEKDAY_SHORT } from '@/lib/social-hub/time';
 import type { Vertical } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
 import { minuteLabel, PLAN } from '@/lib/social-hub/views/plan';
-import { chipNames, ROWS, switchOnCopy, type SwitchFacts, type WeekCell, type WeekChip } from '@/lib/social-hub/views/week';
+import { chipAction, chipNames, ROWS, switchOnCopy, type SwitchFacts, type WeekCell, type WeekChip } from '@/lib/social-hub/views/week';
 
 /**
  * One slot on the week grid (spec §3): the chip (or "+") opens a dialog to
@@ -101,6 +102,16 @@ export function SlotEditor({ cell, chip, scope, readOnly = false, label, dimmed 
 
   if (readOnly) {
     if (!chip) return null;
+    if (chipAction(chip, false) === 'open') {
+      return (
+        <span className="sh-week__chip sh-week__chip--post" {...chipAttrs} title={described}>
+          <PostLink id={chip.booked!.id} className="sh-week__link" label={`${described}, opens the post`}>
+            <span className="sh-week__dot" aria-hidden="true" />
+            <span aria-hidden="true">{label}</span>
+          </PostLink>
+        </span>
+      );
+    }
     return (
       <span className="sh-week__chip" {...chipAttrs} title={described}>
         <span className="sh-week__dot" aria-hidden="true" />
@@ -208,6 +219,12 @@ export function SlotEditor({ cell, chip, scope, readOnly = false, label, dimmed 
       </button>
       <dialog ref={dialog} className="sh-confirm sh-slot" aria-labelledby={titleId} onClose={() => trigger.current?.focus()}>
         <h2 id={titleId}>{title}</h2>
+        {chip?.booked ? (
+          // Bubbles after PostLink's own click: close the dialog and hand focus-return to the chip.
+          <p className="sh-slot__post" onClick={() => { (window as unknown as { __shOpener?: HTMLElement }).__shOpener = trigger.current ?? undefined; dialog.current?.close(); }}>
+            <PostLink id={chip.booked.id}>Open post →</PostLink>
+          </p>
+        ) : null}
 
         {booked ? (
           <>
