@@ -7,6 +7,8 @@ import {
   stampCaption,
   stripEpisodePrefix,
 } from '@/lib/explainers/caption';
+import { buildLineInstruction, recentClosingsBlock } from '@/lib/social/captions/build-line';
+import { CAPTION_SHARED_RULES, HELIOS_CONTEXT } from '@/lib/social/captions/helios-context';
 import { nextPublishedEpisode, queuePublish } from '@/lib/explainers/publish/publish';
 import { saveFeedback } from '@/lib/explainers/repository';
 
@@ -39,11 +41,32 @@ test('a caption is rejected when the hook, length, or tags are wrong', () => {
   assert.throws(() => parseCaption(`${base} #extra #tags #too #many`), /3 to 5/);
   assert.throws(() => parseCaption(`${base} 🔥`), /emoji/);
   assert.throws(() => parseCaption(base.replace('the chat', 'https://example.com')), /URL/);
-  assert.throws(() => parseCaption(base.replace('Your AI', 'We')), /speaks as Helios/);
   assert.throws(
     () => parseCaption('A short hook.\n\nToo thin.\n\nSave this for later.\n\n#a #b #c'),
-    /at least 400/,
+    /at least 200/,
   );
+});
+
+test('v4 loosens the padding gates: three paragraphs and 200 characters are enough', () => {
+  const hook = 'Your AI did not forget the chat. It ran out of desk.';
+  const read = 'A law firm pasting a long contract into a chat hits this first, and splitting the file before a model reads it is the kind of step Helios builds.';
+  const cta = 'Save this for the next long contract.';
+  const body = [hook, read, cta].join('\n\n');
+  assert.ok(body.length >= 200 && body.length <= 260, `body is ${body.length}`);
+  const caption = `${body}\n\n#contextwindow #tokens #ai`;
+  assert.equal(parseCaption(caption), caption);
+  assert.throws(
+    () => parseCaption(`${hook} ${read}\n\n${cta}\n\n#contextwindow #tokens #ai`),
+    /hook, the builder's read, and a call to action/,
+  );
+});
+
+test('we is allowed: the builder\'s read may speak as Helios', () => {
+  const withWe = CONTEXT_WINDOW.replace(
+    'The model is not being careless. The window filled up.',
+    'At Helios we build the step that trims a long file before the model sees it.',
+  );
+  assert.equal(parseCaption(withWe), withWe);
 });
 
 test('publish strips a baked-in episode line and stamps the published count', () => {
@@ -93,10 +116,79 @@ test('episode numbers count published explainers, not finished renders', async (
   assert.equal(await nextPublishedEpisode(db, {}), 2, 'no read: every published explainer counts');
 });
 
-test('the post caption follows the eight-beat reel (explainer-caption-v3)', async () => {
-  const { CAPTION_INSTRUCTIONS, CAPTION_VERSION } = await import('@/lib/explainers/caption');
-  assert.equal(CAPTION_VERSION, 'explainer-caption-v3');
-  assert.match(CAPTION_INSTRUCTIONS, /curiosity gap, analogy, example, and the place they will meet this/);
+test('the post caption follows the eight-beat reel and closes on a builder\'s read (explainer-caption-v4)', async () => {
+  const { CAPTION_INSTRUCTIONS, CAPTION_VERSION, captionParams } = await import('@/lib/explainers/caption');
+  assert.equal(CAPTION_VERSION, 'explainer-caption-v4');
   assert.match(CAPTION_INSTRUCTIONS, /Do not walk the eight beats in order/);
   assert.doesNotMatch(CAPTION_INSTRUCTIONS, /catch|seven/);
+  assert.ok(CAPTION_INSTRUCTIONS.includes(HELIOS_CONTEXT), 'the Helios context is in the cached prefix');
+  assert.ok(CAPTION_INSTRUCTIONS.includes(CAPTION_SHARED_RULES), 'the shared caption rules are in the cached prefix');
+  assert.match(CAPTION_INSTRUCTIONS, /builder's read/);
+  assert.doesNotMatch(CAPTION_INSTRUCTIONS, /no offer of Helios services/);
+  assert.doesNotMatch(CAPTION_INSTRUCTIONS, /Do not speak as "we"/);
+  assert.doesNotMatch(CAPTION_INSTRUCTIONS, /Do not sign off with Helios/);
+  assert.match(CAPTION_INSTRUCTIONS, /No emoji\. No URLs\./);
+
+  const facts = { title: 'Context window', scope: 'What a model can see.', storyboard: 'sb', script: 'sc', source: null };
+  const recent = [{ closing: 'A dental practice hits this when Helios wires the front desk.', buildLine: true, createdAt: new Date() }];
+  const params = captionParams(facts, 'claude-sonnet-5-5', { recent, includeBuildLine: true });
+  const system = JSON.stringify(params.system);
+  assert.match(system, /cache_control/);
+  assert.doesNotMatch(system, /dental practice|include_build_line/, 'per-post inputs stay out of the cached prefix');
+  const user = String(params.messages[0]!.content);
+  assert.ok(user.includes(recentClosingsBlock(recent)));
+  assert.ok(user.includes(buildLineInstruction(true)));
+  const schema = params.output_config.format.schema as { required: string[] };
+  assert.deepEqual(schema.required, ['caption', 'builder_read']);
+
+  const empty = String(captionParams(facts, 'm', { recent: [], includeBuildLine: false }).messages[0]!.content);
+  assert.doesNotMatch(empty, /Recent captions ended like this/);
+  assert.ok(empty.includes(buildLineInstruction(false)));
+});
+
+function stubClient(replies: { caption: string; builder_read: string }[]) {
+  const calls: unknown[] = [];
+  return {
+    calls,
+    client: {
+      messages: {
+        create: async (params: unknown) => {
+          calls.push(params);
+          const reply = replies[calls.length - 1]!;
+          return {
+            model: 'claude-sonnet-5-5',
+            stop_reason: 'end_turn',
+            content: [{ type: 'text', text: JSON.stringify(reply) }],
+            usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+          };
+        },
+      },
+    },
+  };
+}
+
+test('builder_read must be in the caption and name Helios', async () => {
+  const { writeExplainerCaption, CaptionError } = await import('@/lib/explainers/caption');
+  const facts = { title: 'Context window', scope: null, storyboard: null, script: null, source: null };
+  const read = 'An accounting firm feeding a year of receipts to a model hits this wall first, and that split is the kind of step Helios builds.';
+  const LAST_BODY = 'This shows up any time a chat runs long, a PDF gets pasted in, or a project file is too big to fit. The model is not being careless. The window filled up.';
+  const caption = CONTEXT_WINDOW.replace(LAST_BODY, read);
+
+  const good = stubClient([{ caption, builder_read: read }]);
+  const draft = await writeExplainerCaption(facts, 'm', { recent: [], includeBuildLine: true, client: good.client as never });
+  assert.equal(draft.text, caption);
+  assert.equal(draft.builderRead, read);
+
+  const noHelios = 'An accounting firm feeding a year of receipts to a model hits this wall first.';
+  const missing = stubClient([{ caption: CONTEXT_WINDOW.replace(LAST_BODY, noHelios), builder_read: noHelios }]);
+  await assert.rejects(
+    writeExplainerCaption(facts, 'm', { recent: [], includeBuildLine: false, client: missing.client as never }),
+    (error: unknown) => error instanceof CaptionError && /does not name Helios/.test(error.message) && error.spent !== undefined,
+  );
+
+  const outside = stubClient([{ caption: CONTEXT_WINDOW, builder_read: read }]);
+  await assert.rejects(
+    writeExplainerCaption(facts, 'm', { recent: [], includeBuildLine: false, client: outside.client as never }),
+    /not a paragraph of the caption/,
+  );
 });

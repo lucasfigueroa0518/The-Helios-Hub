@@ -7,9 +7,11 @@
  */
 
 export const CAPTION_MAX_CHARS = 2200;
-export const CAPTION_MIN_BODY_CHARS = 400;
+/** v4: loosened from 400 and 4 so the writer stops padding (social captions redesign, 2026-10-19). */
+export const CAPTION_MIN_BODY_CHARS = 200;
 export const CAPTION_HOOK_PREVIEW = 125;
-export const CAPTION_MIN_PARAGRAPHS = 4;
+/** The hook, the builder's read, and the call to action. */
+export const CAPTION_MIN_PARAGRAPHS = 3;
 export const CAPTION_MIN_TAGS = 3;
 export const CAPTION_MAX_TAGS = 5;
 
@@ -66,7 +68,6 @@ export function parseCaption(raw: unknown): string {
   }
   if (/https?:\/\//i.test(text)) throw new Error('caption contains a URL');
   if (/\p{Extended_Pictographic}/u.test(text)) throw new Error('caption contains an emoji');
-  if (/\b(we|our|ours|us)\b/i.test(text) || /\bI\b/.test(text)) throw new Error('caption speaks as Helios');
 
   const tags = text.match(/#[\p{L}\p{N}_]+/gu) ?? [];
   if (tags.length < CAPTION_MIN_TAGS || tags.length > CAPTION_MAX_TAGS) {
@@ -83,7 +84,7 @@ export function parseCaption(raw: unknown): string {
 
   const blocks = paragraphs(body);
   if (blocks.length < CAPTION_MIN_PARAGRAPHS) {
-    throw new Error('caption needs a hook, at least two body paragraphs, and a call to action');
+    throw new Error("caption needs the hook, the builder's read, and a call to action");
   }
 
   const hook = blocks[0] ?? '';

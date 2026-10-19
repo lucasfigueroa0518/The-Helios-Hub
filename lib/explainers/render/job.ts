@@ -22,7 +22,9 @@ import {
 import { loadSettings, loadThemeBrief } from '@/lib/explainers/settings';
 import type { ArtifactStore } from '@/lib/explainers/storage';
 import type { ArtifactKind, JobRow, LintViolation, Mode, TopicRow } from '@/lib/explainers/types';
-import { CaptionError, writeExplainerCaption, type CaptionDraft, type CaptionFacts } from '@/lib/explainers/caption';
+import { CaptionError, writeExplainerCaption, type CaptionDraft, type CaptionFacts, type CaptionOptions } from '@/lib/explainers/caption';
+import { ceilingAllows, decideBuildLine, type RecentClosing } from '@/lib/social/captions/build-line';
+import type { ClosingsLog } from '@/lib/social/captions/closings-store';
 import type { JevTransport } from '@/lib/reels/jev/runner';
 import { eventsFromDir, lintStoryboard } from '../../../explainers/lint/lint-storyboard.mjs';
 import { mountFrames } from '../../../explainers/world-kit/mount.mjs';
@@ -73,7 +75,14 @@ export type RenderDeps = {
    */
   renderVideo?: (projectDir: string) => void;
   /** Swappable for tests. The real one calls Sonnet. A finished video always gets one. */
-  writeCaption?: (facts: CaptionFacts) => Promise<CaptionDraft>;
+  writeCaption?: (facts: CaptionFacts, opts: CaptionOptions) => Promise<CaptionDraft>;
+  /**
+   * v4 captions: Jev's fit score for the build line (`liveExplainerBuildFit`), null on failure.
+   * Absent: no build line. Asked only when the closings ceiling leaves room.
+   */
+  buildFit?: (facts: CaptionFacts) => Promise<number | null>;
+  /** v4 captions: the explainer closings log. Absent: no recent closings, nothing recorded. */
+  closings?: ClosingsLog;
   /**
    * The analogy pass for a topic that has no picked analogy (EX3-31): the analogy writer and
    * Jev. Without it, such a topic fails with that reason.
@@ -112,6 +121,38 @@ function recordCaptionCost(db: ExplainersDb, jobId: string, mode: Mode, draft: C
     cacheWriteTokens: draft.cacheWriteTokens,
     usd: draft.usd,
   });
+}
+
+/**
+ * v4 captions. The recent explainer closings and whether this caption gets the build line.
+ * An unreadable log counts as empty. Jev is asked only when the ceiling leaves room, and a
+ * failed fit call means no build line; the caption still ships with its light Helios mention.
+ */
+async function captionBuildLine(
+  deps: RenderDeps,
+  facts: CaptionFacts,
+  jobId: string,
+  log: (event: string, fields?: Record<string, unknown>) => void,
+): Promise<CaptionOptions> {
+  let recent: RecentClosing[] = [];
+  if (deps.closings) {
+    try {
+      recent = await deps.closings.recent();
+    } catch (error) {
+      log('caption_closings_unread', { jobId, error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  let fit: number | null = null;
+  if (ceilingAllows(recent) && deps.buildFit) {
+    try {
+      fit = await deps.buildFit(facts);
+    } catch {
+      fit = null;
+    }
+  }
+  const includeBuildLine = decideBuildLine(fit, recent);
+  log('caption_build_line', { jobId, fit, includeBuildLine, recent: recent.length });
+  return { recent, includeBuildLine };
 }
 
 function read(file: string): string | null {
@@ -548,12 +589,13 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
       script: read(path.join(ws.projectDir, 'SCRIPT.md')) ?? script,
       source: topic.source_text,
     };
-    const writer = deps.writeCaption ?? ((input) => writeExplainerCaption(input, job.orchestrator_model));
+    const captionOpts = await captionBuildLine(deps, facts, job.id, log);
+    const writer = deps.writeCaption ?? ((input, opts) => writeExplainerCaption(input, job.orchestrator_model, opts));
     let draft: CaptionDraft | null = null;
     let captionError: unknown = null;
     for (let attempt = 0; attempt < 2 && !draft; attempt += 1) {
       try {
-        draft = await writer(facts);
+        draft = await writer(facts, captionOpts);
       } catch (error) {
         captionError = error;
         const spent = error instanceof CaptionError ? error.spent : undefined;
@@ -567,6 +609,7 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
     }
     await recordCaptionCost(db, job.id, job.mode, draft);
     await keepText('post_caption', draft.text);
+    await deps.closings?.record(job.id, draft.builderRead, captionOpts.includeBuildLine);
 
     await finishJob(db, job.id, { status: 'ok' });
     log('job_ok', { jobId: job.id });
