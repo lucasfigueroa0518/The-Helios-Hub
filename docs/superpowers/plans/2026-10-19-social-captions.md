@@ -691,6 +691,96 @@ CREATE INDEX IF NOT EXISTS caption_closings_type_created
 
 ---
 
+### Task 8b: Revision — every caption ends on the Helios line; per-format shapes from comps
+
+Spec: the "Revision (2026-10-19): per-format comps" section and revised rules 4, 5, 7 plus
+the revised per-type bullets in `docs/superpowers/specs/2026-10-19-social-captions-design.md`.
+Version bumps for wording changes:
+- Reels: `copy-caption-v29`, with a registry row in `planning/Trial Reels/BUILD_PLAN.md`.
+- Explainers: `explainer-caption-v5`.
+- Shared: `HELIOS_CONTEXT_VERSION` stays; `CAPTION_SHARED_RULES` text changes.
+
+**Files:**
+- Modify: `lib/social/captions/helios-context.ts` (`CAPTION_SHARED_RULES`)
+- Modify: `lib/social/captions/build-line.ts` (`buildLineInstruction` wording only, if it
+  refers to "read" placement)
+- Modify: `lib/social/captioner/prompt.ts` and the prompts doc §9
+- Modify the Reels files:
+  - `lib/reels/copy/skill.ts`
+  - `lib/reels/copy/report.ts` (`fullCaption`, `fitCaptionParts`,
+    `shortenAssembledCaption`, `checkBuilderRead`, first-person split)
+  - `lib/reels/copy/assemble.ts` (if the order text lives there)
+  - `planning/Trial Reels/BUILD_PLAN.md`
+- Modify the Explainers files:
+  - `lib/explainers/caption.ts`
+  - `lib/explainers/caption-format.ts` (`parseCaption`)
+  - `.cursor/skills/explainer-caption/SKILL.md`
+- Tests:
+  - `tests/social-captions-shared.test.ts`
+  - `tests/social-captioner.test.ts`
+  - `tests/reels-copy*.test.ts`
+  - `tests/explainers-caption.test.ts`
+  - `tests/explainers-render.test.ts`
+
+**Interfaces:** unchanged signatures. Order changes only.
+
+**Rules to implement:**
+1. **`CAPTION_SHARED_RULES`:**
+   - The order is body, then the question or call to action, then the Helios line (one or
+     two sentences, a builder's take tied to the story, may end as a follow invite, the
+     only place for "we" and opinion).
+   - Then credits, Source and hashtags where the format uses them.
+   - A short specific question is the normal choice; never "what do you think?" or
+     engagement bait.
+   - A so-what line in the body is fine but does not name Helios.
+   - Helios is named once, in the Helios line.
+2. **Carousel captioner:**
+   - The shape is: surprising first sentence, 2–4 short body paragraphs, a so-what line,
+     a specific question.
+   - All of that is the `news` part, so the question ends `news`.
+   - `read` is the one-or-two-sentence Helios line.
+   - The code join (news, read, Source) already puts it last. Assert this in a test.
+3. **Reels:**
+   - **Order:** `fullCaption` assembles body, CTA, Helios line, hashtags.
+   - **The read leaves the body.** `builder_read` is no longer required to be a body
+     paragraph. It is the last line after the CTA. Either give it its own position or
+     keep it in the report field and assemble it after the CTA, whichever is cleaner.
+     The `caption` field instruction changes to match.
+   - **Trimming:** the over-length trimmer protects the Helios line and the CTA, and
+     drops body paragraphs from just before the CTA backwards.
+   - **Arousal framework:** when its follow-Helios CTA exists, the CTA and the Helios line
+     must not both name Helios. Pick the cleaner rule: the CTA drops its Helios name and
+     the line carries it, or the line becomes the follow invite.
+   - **Hooks** lead with a number, a quote or a vivid claim where the story has one.
+   - **First-person check:** still exempts the Helios line.
+4. **Explainers:**
+   - **Shape:** the hook names a problem or situation the reader has that the concept
+     explains; then 2–3 short paragraphs; then a save prompt and/or a "which would you use
+     first"-style question; then the Helios line; then 3–5 hashtags.
+   - **`parseCaption`:** the paragraph before the hashtags must be the Helios line, and
+     it must name Helios.
+   - **Minimums:** keep the minimum paragraph and body-length checks as relaxed in Task 8
+     (3 paragraphs and 200 characters), counting the Helios line.
+5. **No emoji change.** The voice rules still ban emoji. That is open for Tommy and Lucas.
+
+- [ ] **Step 1:** Update the pins and tests to the new order (they fail).
+  - Carousel: the joined caption ends `…question\n\nREAD\n\nSource: …`.
+  - Reels: `fullCaption` gives `body\n\nCTA\n\nREAD\n\n#tags`; the trimmer keeps
+    READ and CTA.
+  - Explainers: `parseCaption` rejects a caption whose last paragraph before the
+    hashtags lacks Helios.
+  - Shared: the rules match `/question or call to action, then the Helios line/i` (your
+    exact wording, pinned).
+  - Arousal: no double Helios between the CTA and the line.
+- [ ] **Step 2:** Run them and confirm they fail.
+- [ ] **Step 3:** Implement the copy and ordering changes, then mirror them in the
+  prompts doc §9 and SKILL.md.
+- [ ] **Step 4:** Run the focused tests, `npm test` once, and tsc.
+- [ ] **Step 5:** Commit with
+  `git commit -m "feat(captions): every caption ends on the Helios line; per-format shapes from comps"`.
+
+---
+
 ### Task 9: Last Few Days caption opener and Helios line
 
 **Files:**
@@ -709,18 +799,28 @@ CREATE INDEX IF NOT EXISTS caption_closings_type_created
   - `writeLfdCaptionLines(ready: Ready[], recent: RecentClosing[], create: MessagesCreate): Promise<{ lines: LfdCaptionLines | null; costUsd: number }>`
   - `captionFor(ready: Ready[], lines?: LfdCaptionLines | null): string`
 
-**Behaviour:**
-- The call is one cached-system Sonnet call (`claude-sonnet-5-5`, effort low) with a
-  json_schema output `{ opener, helios_line }`.
-- **The opener** has fresh wording about this week's stories, is ≤125 characters, has no
-  emoji, and ends by pointing to the swipe.
-- **`helios_line`** is one sentence. It gives a builder's read on the week and names
-  Helios once. LFD never gets a build line, so `buildLineInstruction(false)`.
-- **Validation.** Code checks the opener length, the absence of emoji and the presence of
-  `/\bHelios\b/` in `helios_line`. Any failure or throw gives `lines: null`.
-- **The caption** is opener, headlines, `heliosLine`, credits. With `null`, it is today's
-  exact template (hook, headlines, `FOLLOW_LINE`, credits).
-- **The over-limit headline-drop loop** stays.
+**Behaviour (revised 2026-10-19 after comps; supersedes the opener-only design):**
+- **The call:** one cached-system Sonnet call (`claude-sonnet-5-5`, effort low), with a
+  json_schema output `{ opener, body, question, helios_line }`.
+  - **`opener`** is a swipe cue plus a preview of the topics. It is ≤125 characters, has
+    no emoji, and starts by pointing to the swipe.
+  - **`body`** is 2–3 prose paragraphs on the week's highlights, wildest story first.
+    Facts come only from the stories' own `copy` fields (headline, body).
+  - **`question`** is one short "which caught your attention"-style question, worded
+    fresh against recent closings.
+  - **`helios_line`** is one or two sentences. It gives a builder's read on the week,
+    names Helios once, and may end as a follow invite. LFD never gets a build line, so
+    the call uses `buildLineInstruction(false)`.
+- **Validation:** opener length, no emoji anywhere, `/\bHelios\b/` in `helios_line`, no
+  Helios in opener/body/question, and a non-empty body. Any failure or throw gives
+  `lines: null`.
+- **Caption order:** opener, body, question, `heliosLine`, credits. With `null`, the
+  caption is today's exact template (hook, headlines, `FOLLOW_LINE`, credits).
+- **Over the limit:** trim body paragraphs from the end first, and never the Helios line
+  or the question. The template fallback keeps its existing headline-drop loop.
+- **Interface change:**
+  - `LfdCaptionLines = { opener: string; body: string; question: string; heliosLine: string }`
+  - `writeLfdCaptionLines` has the same signature.
 
 - [ ] **Step 1: Write the failing tests:**
   - `lfd-caption-lines.test.ts`:
