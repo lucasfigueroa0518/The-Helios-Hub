@@ -9,6 +9,7 @@ import type { OpenPool } from '@/lib/stories/pool';
 import { BACKDROPS, type Backdrop, type FrameData, type Photo, type Series } from '@/lib/stories/render/types';
 import type { NewCandidate, NewFrame } from '@/lib/stories/repository';
 import type { StoriesSettings } from '@/lib/stories/settings';
+import type { SourcePage } from '@/lib/stories/source-page';
 import type { WriterCreate } from '@/lib/stories/writer';
 
 export type BuildDeps = {
@@ -24,6 +25,8 @@ export type BuildDeps = {
   nyDate: string;
   /** The series' open ideas from stories.pool. Null only when the pool could not be read: the build then reads its sources directly. */
   pool?: OpenPool | null;
+  /** Reads a cited page (Guess the Number gates). Defaults to readSourcePage; tests stub it by URL. */
+  readSource?: (url: string, figure?: string) => Promise<SourcePage>;
 };
 
 export type BuildResult =

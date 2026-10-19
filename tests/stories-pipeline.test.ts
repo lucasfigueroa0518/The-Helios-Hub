@@ -9,7 +9,7 @@ import test from 'node:test';
 import type { BuildDeps } from '@/lib/stories/build/common';
 import { buildSet } from '@/lib/stories/build';
 import { buildFreeVsPaid, pairKey, struckPrice } from '@/lib/stories/build/free-vs-paid';
-import { buildGuessTheNumber, difficultyFrom, recentGtnTopics } from '@/lib/stories/build/guess-the-number';
+import { buildGuessTheNumber, difficultyFrom, GATE_FLOORS, recentGtnTopics, UNBRIEFED_TEXT_CHARS } from '@/lib/stories/build/guess-the-number';
 import { MAJOR_NEWS_BAR, buildMorningDownload, chooseStories, namesIn } from '@/lib/stories/build/morning-download';
 import { createStoriesJev } from '@/lib/stories/jev';
 import type { StoriesMetaClient } from '@/lib/stories/publish/meta';
@@ -22,6 +22,8 @@ import { freeToolLeads, morningDownloadReels, storyKey, theNumberIdeas } from '@
 import type { StoriesStorage } from '@/lib/stories/storage';
 import { tick } from '@/lib/stories/worker';
 import type { PhotoRequest } from '@/lib/stories/photos';
+import type { GtnPickCandidate, GtnPickMaterial } from '@/lib/stories/prompts';
+import { gateExcerpt, type SourcePage } from '@/lib/stories/source-page';
 import { writeStructured } from '@/lib/stories/writer';
 
 import { addIdea, addSlate, harnessDb, stubJev, stubPhotos, stubRenderer, stubWriter } from './stories-harness';
@@ -322,59 +324,199 @@ test('Morning Download: stories shown in the last 3 days are dropped; fewer than
 
 /* ── Guess the Number (M6) ───────────────────────────────────────── */
 
-test('Guess the Number: pre-score, write the top 4, re-score, intro with difficulty, photo reuse (S-12)', async () => {
-  const { db } = await harnessDb();
-  await db.query(`INSERT INTO social.posts (slug, story_id, status, brief, render, created_at) VALUES ('chatgpt', 's1', 'published', $1, $2, '2026-10-06T12:00:00Z')`, [
-    JSON.stringify({ the_news: { text: 'OpenAI shared ChatGPT usage.' }, facts: [{ text: 'ChatGPT has 800 million weekly users.', ids: ['N1'] }, { text: 'It launched in 2022.', ids: ['N2'] }], numbers: [{ id: 'N1', value: '800 million', counts: 'weekly users' }, { id: 'N2', value: '2022', counts: 'launch year' }], sources: [{ outlet: 'OpenAI', url: 'https://openai.test/devday' }] }),
+const CHATGPT_POST = async (db: Awaited<ReturnType<typeof harnessDb>>['db']) =>
+  db.query(`INSERT INTO social.posts (slug, story_id, status, brief, render, created_at) VALUES ('chatgpt', 's1', 'published', $1, $2, '2026-10-06T12:00:00Z')`, [
+    JSON.stringify({ the_news: { text: 'OpenAI shared ChatGPT usage.' }, facts: [{ text: 'ChatGPT has 800 million weekly users.', ids: ['N1'] }], numbers: [{ id: 'N1', value: '800 million', counts: 'weekly users' }], sources: [{ outlet: 'OpenAI', url: 'https://openai.test/devday' }] }),
     JSON.stringify({ slides: [{ photoUrl: 'https://img.test/altman.jpg', photoCredit: 'Photo: TechCrunch', photoKind: 'subject' }] }),
   ]);
-  const jev = stubJev((k, state) => (JSON.stringify(state).includes('2022') ? 0.2 : k === 'guessable' ? 0.3 : k === 'surprise' ? 0.9 : 0.85));
-  const write = stubWriter({
-    submit_questions: (params) => ({
-      questions: (materialOf(params) as Array<{ candidate_key: string; number: string }>).map((c) => ({ candidate_key: c.candidate_key, question: 'How many people use ChatGPT every week?', answer: '800M', label: 'people use ChatGPT every week', meaning: 'About one in ten people on Earth.', topic: 'How many people use ChatGPT', source_verb: 'from', source_name: 'OpenAI', subjects: [{ name: 'Sam Altman', type: 'person' }], visual: { kind: 'person', query: 'Sam Altman' }, answer_visual: { kind: 'setting', query: 'OpenAI office' } })),
-    }),
-  });
-  const deps = await buildDeps(db, 'guess_the_number', { jev, write, photos: stubPhotos() });
+
+type PickCand = GtnPickCandidate;
+const pick = (rank: number, o: Partial<PickCand> = {}): PickCand => ({
+  rank, origin: 'model', pool_id: '', question: `Question number ${rank}?`, answer: `${rank}0M`, label: `Label ${rank}`, meaning: 'It means something.', topic: `Topic ${rank}`,
+  source_url: `https://docs.test/c${rank}`, source_quote: `The figure is ${rank}0M.`, source_verb: 'from', source_name: 'Docs', subjects: [], visual: { kind: 'thematic', query: `visual ${rank}` }, answer_visual: { kind: 'thematic', query: `answer visual ${rank}` }, ...o,
+});
+const EMBED = pick(1, { question: 'How many dimensions does the embedding model output?', answer: '3,072', label: 'Embedding Dimensions, Large Model', source_url: 'https://docs.test/embeddings', topic: 'Embedding size' });
+const POOLED = pick(2, { origin: 'pool', pool_id: 'p1', question: 'How many people use ChatGPT every week?', answer: '800M', label: 'people use ChatGPT every week', topic: 'How many people use ChatGPT', source_url: 'https://openai.test/devday', source_name: 'OpenAI', subjects: [{ name: 'Sam Altman', type: 'person' }], visual: { kind: 'person', query: 'Sam Altman' }, answer_visual: { kind: 'setting', query: 'OpenAI office' } });
+const THIRD = pick(3);
+const PAGE_TEXT = (c: PickCand) => `A page that states the figure plainly. The figure is ${c.answer} for this. ${'More text. '.repeat(30)}`;
+
+/** The page reader, stubbed by URL; every call is recorded. */
+function stubReader(pages: Record<string, SourcePage | string>) {
+  const calls: Array<{ url: string; figure?: string }> = [];
+  const read = async (url: string, figure?: string): Promise<SourcePage> => {
+    calls.push({ url, figure });
+    const p = pages[url];
+    if (p === undefined) return { ok: false, url, error: 'fetch failed' };
+    return typeof p === 'string' ? { ok: true, url, text: p, publishedTime: null, via: 'article' } : p;
+  };
+  return Object.assign(read, { calls });
+}
+const readerFor = (cands: PickCand[]) => stubReader(Object.fromEntries(cands.map((c) => [c.source_url, PAGE_TEXT(c)])));
+
+const gateState = (s: unknown) => s as { question?: string; candidate?: { question: string } };
+const DEFAULT_GATE = (k: string) => (k === 'newly_changed' || k === 'same_subject' ? 0.1 : 0.8);
+
+async function gtnDeps(db: Awaited<ReturnType<typeof harnessDb>>['db'], cands: PickCand[], o: { jev?: ReturnType<typeof stubJev>; reader?: ReturnType<typeof stubReader> } = {}) {
+  const write = stubWriter({ submit_candidates: () => ({ candidates: cands }) });
+  const reader = o.reader ?? readerFor(cands);
+  const deps = await buildDeps(db, 'guess_the_number', { jev: o.jev ?? stubJev(DEFAULT_GATE), write, photos: stubPhotos() });
+  return { deps: { ...deps, readSource: reader }, write, reader };
+}
+
+test('Guess the Number: one pick call, the top candidate that passes wins, pool photo reused', async () => {
+  const { db } = await harnessDb();
+  await CHATGPT_POST(db);
+  const { deps, write, reader } = await gtnDeps(db, [EMBED, POOLED, THIRD]);
   const r = await buildGuessTheNumber(deps, { numbers: () => carouselNumbers(db, NOW), unbriefed: async () => [] });
-  assert.equal(r.ok, true);
+  assert.equal(r.ok, true, !r.ok ? r.skip : '');
   if (!r.ok) return;
+  assert.equal(write.calls.length, 1);
+  const tools = write.calls[0]!.tools as Array<{ name: string; type?: string; max_uses?: number }>;
+  assert.equal(tools.find((t) => t.name === 'web_search')?.max_uses, 5);
+  assert.equal(tools.find((t) => t.name === 'web_fetch')?.max_uses, 3);
+  const m = materialOf(write.calls[0]!) as GtnPickMaterial;
+  assert.equal(m.today, DATE);
+  assert.equal(m.pool[0]!.id, 'p1');
+  assert.equal((m.pool[0] as { kind: string; value: string }).value, '800 million');
+  assert.equal(r.payload.origin, 'model');
+  const chosen = r.candidates.find((c) => c.chosen)!;
+  assert.equal(chosen.origin, 'model');
+  assert.equal(chosen.ref, 'https://docs.test/embeddings');
+  assert.deepEqual(r.candidates.map((c) => c.reason), [null, 'lower rank', 'lower rank']);
+  assert.deepEqual(r.historyKeys, ['model:embedding-dimensions-large-model']);
   assert.deepEqual(r.frames.map((f) => f.role), ['intro', 'question', 'answer']);
-  const intro = r.frames[0]!.copy as { difficulty: string; topic: string };
-  assert.equal(intro.topic, 'How many people use ChatGPT');
-  assert.equal(intro.difficulty, 'high');
-  const q = r.frames[1]!.copy as { family: string; photo?: { src: string }; question: string };
-  assert.equal(q.family, 'photo');
-  assert.equal(q.photo?.src, 'https://img.test/altman.jpg');
-  // No hint on the question frame (S-51).
-  assert.equal('hint' in q, false);
-  assert.equal(r.frames[1]!.template, 'photo');
-  assert.deepEqual(r.historyKeys, [storyKey('https://openai.test/devday')]);
-  assert.equal(r.candidates.find((c) => c.chosen)!.payload!.value, '800 million');
+  assert.equal((r.frames[1]!.copy as { question: string }).question, EMBED.question);
+  assert.equal((r.frames[2]!.copy as { number: string }).number, '3,072');
+  // Every candidate is gated (calibration data), each page read with its answer as the figure.
+  assert.deepEqual(reader.calls, [EMBED, POOLED, THIRD].map((c) => ({ url: c.source_url, figure: c.answer })));
+  const gtn = r.payload.gtn as { poolOffered: number; considered: Array<{ rank: number; fetch: string; failedGate: string | null }>; floors: Record<string, number> };
+  assert.equal(gtn.poolOffered, 1);
+  assert.deepEqual(gtn.considered.map((c) => [c.rank, c.fetch, c.failedGate]), [[1, 'article', null], [2, 'article', null], [3, 'article', null]]);
+  assert.deepEqual(gtn.floors, GATE_FLOORS);
 });
 
-test('Guess the Number: extraction and questions use short ids, so a long story key cannot drop a number (2026-10-19)', async () => {
+test('Guess the Number: a page that will not load is unreadable; the next rank wins', async () => {
+  const { db } = await harnessDb();
+  await CHATGPT_POST(db);
+  const reader = stubReader({ [POOLED.source_url]: PAGE_TEXT(POOLED), [THIRD.source_url]: PAGE_TEXT(THIRD) });
+  const { deps } = await gtnDeps(db, [EMBED, POOLED, THIRD], { reader });
+  const r = await buildGuessTheNumber(deps, { numbers: () => carouselNumbers(db, NOW), unbriefed: async () => [] });
+  assert.equal(r.ok, true, !r.ok ? r.skip : '');
+  if (!r.ok) return;
+  assert.deepEqual(r.candidates.map((c) => [c.origin, c.chosen, c.reason]), [['model', false, 'unreadable'], ['carousel', true, null], ['model', false, 'lower rank']]);
+  assert.equal(r.payload.origin, 'carousel');
+  const q = r.frames[1]!.copy as { family: string; photo?: { src: string } };
+  assert.equal(q.family, 'photo');
+  assert.equal(q.photo?.src, 'https://img.test/altman.jpg');
+  assert.deepEqual(r.historyKeys, [storyKey('https://openai.test/devday')]);
+  assert.equal((r.payload.gtn as { considered: Array<{ fetch: string }> }).considered[0]!.fetch, 'fetch failed');
+});
+
+test('Guess the Number: a new figure the copy does not call new fails not-said-new', async () => {
+  const { db } = await harnessDb();
+  await CHATGPT_POST(db);
+  const jev = stubJev((k, s) => (gateState(s).question === EMBED.question && k === 'newly_changed' ? 0.9 : gateState(s).question === EMBED.question && k === 'copy_says_new' ? 0.1 : DEFAULT_GATE(k)));
+  const { deps } = await gtnDeps(db, [EMBED, POOLED, THIRD], { jev });
+  const r = await buildGuessTheNumber(deps, { numbers: () => carouselNumbers(db, NOW), unbriefed: async () => [] });
+  assert.equal(r.ok, true, !r.ok ? r.skip : '');
+  if (!r.ok) return;
+  assert.deepEqual(r.candidates.map((c) => c.reason), ['not-said-new', null, 'lower rank']);
+});
+
+test('Guess the Number: the same subject as a recent set fails same-subject', async () => {
+  const { db } = await harnessDb();
+  await CHATGPT_POST(db);
+  const { rows } = await db.query<{ id: string }>(`INSERT INTO stories.sets (series, ny_date, status, trigger, style) VALUES ('guess_the_number', '2026-10-01', 'published', 'click', 'polished') RETURNING id`);
+  const copies: Array<[number, string, Record<string, string>]> = [[1, 'intro', { topic: 'Embeddings' }], [2, 'question', { question: 'How long is an embedding vector?' }], [3, 'answer', { number: '3072', label: 'Embedding length' }]];
+  for (const [seq, role, copy] of copies) await db.query(`INSERT INTO stories.frames (set_id, seq, role, template, backdrop, copy) VALUES ($1, $2, $3, 't', 'black', $4::jsonb)`, [rows[0]!.id, seq, role, JSON.stringify(copy)]);
+  const jev = stubJev((k, s) => (k === 'same_subject' ? (gateState(s).candidate?.question === EMBED.question ? 0.9 : 0.1) : DEFAULT_GATE(k)));
+  const { deps, write } = await gtnDeps(db, [EMBED, POOLED, THIRD], { jev });
+  const r = await buildGuessTheNumber(deps, { numbers: () => carouselNumbers(db, NOW), unbriefed: async () => [] });
+  assert.equal(r.ok, true, !r.ok ? r.skip : '');
+  if (!r.ok) return;
+  assert.deepEqual(r.candidates.map((c) => c.reason), ['same-subject', null, 'lower rank']);
+  assert.deepEqual((materialOf(write.calls[0]!) as GtnPickMaterial).recent, [{ date: '2026-10-01', question: 'How long is an embedding vector?', answer: '3072', topic: 'Embeddings' }]);
+  const same = jev.calls.filter((c) => c.keys.includes('same_subject'));
+  assert.equal(same.length, 3);
+  assert.deepEqual(same[0]!.state, { candidate: { question: EMBED.question, label: EMBED.label }, recent: { question: 'How long is an embedding vector?', label: 'Embedding length' } });
+});
+
+test('Guess the Number: nothing passes → skipped, gtnSkip recorded on the set', async () => {
+  const { db } = await harnessDb();
+  await CHATGPT_POST(db);
+  const { deps } = await gtnDeps(db, [EMBED, POOLED, THIRD], { jev: stubJev((k) => (k === 'verifiable' ? 0.2 : DEFAULT_GATE(k))) });
+  const r = await buildGuessTheNumber(deps, { numbers: () => carouselNumbers(db, NOW), unbriefed: async () => [] });
+  assert.equal(r.ok, false);
+  if (r.ok) return;
+  assert.match(r.skip, /no candidate passed the gates/);
+  assert.equal(r.candidates.length, 3);
+  assert.ok(r.candidates.every((c) => !c.chosen && c.reason === 'verifiable'));
+  const { rows } = await db.query<{ considered: Array<{ failedGate: string }> }>(`SELECT payload->'gtnSkip'->'considered' AS considered FROM stories.sets WHERE id = $1`, [deps.setId]);
+  assert.deepEqual(rows[0]!.considered.map((c) => c.failedGate), ['verifiable', 'verifiable', 'verifiable']);
+});
+
+test('Guess the Number: contract breaks are logged, not fatal', async () => {
+  const { db } = await harnessDb();
+  await CHATGPT_POST(db);
+  const long = pick(1, { question: `${'x'.repeat(119)}?` });
+  const unknown = pick(2, { origin: 'pool', pool_id: 'p9', label: 'Unknown Pool Item' });
+  const { deps, reader } = await gtnDeps(db, [long, unknown]);
+  const r = await buildGuessTheNumber(deps, { numbers: () => carouselNumbers(db, NOW), unbriefed: async () => [] });
+  assert.equal(r.ok, true, !r.ok ? r.skip : '');
+  if (!r.ok) return;
+  const contract = (r.payload.gtn as { contract: string[] }).contract;
+  for (const want of [/fewer than 3/, /no pool item/, /unknown pool id p9/]) assert.ok(contract.some((c) => want.test(c)), `${want} in ${JSON.stringify(contract)}`);
+  assert.ok(!contract.some((c) => /no model idea/.test(c)));
+  assert.deepEqual(reader.calls.map((c) => c.url), [unknown.source_url]);
+  assert.deepEqual(r.candidates.map((c) => [c.origin, c.chosen, c.reason]), [['model', false, 'too-long'], ['model', true, null]]);
+  assert.deepEqual(r.historyKeys, ['model:unknown-pool-item']);
+});
+
+test('Guess the Number: empty pool, three model ideas are fine', async () => {
+  const { db } = await harnessDb();
+  const cands = [pick(1), pick(2), pick(3)];
+  const { deps, write } = await gtnDeps(db, cands);
+  const r = await buildGuessTheNumber(deps, { numbers: async () => [], unbriefed: async () => [] });
+  assert.equal(r.ok, true, !r.ok ? r.skip : '');
+  if (!r.ok) return;
+  assert.deepEqual((materialOf(write.calls[0]!) as GtnPickMaterial).pool, []);
+  assert.deepEqual((r.payload.gtn as { contract: string[] }).contract, []);
+});
+
+test('Guess the Number: unbriefed stories join the pool with short ids and their text cut', async () => {
   const { db } = await harnessDb();
   const url = GNEWS('num');
-  const story = { key: storyKey(url), origin: 'reels' as const, ref: 'idea-1', headline: 'ChatGPT reaches 800 million weekly users', sourceName: 'Reuters', url, body: 'ChatGPT has 800 million weekly users.', publishedAt: null, nativeScore: 9 };
-  const write = stubWriter({
-    submit_numbers: (params) => ({ numbers: (materialOf(params) as Array<{ story_key: string }>).map((s) => ({ story_key: garble(s.story_key), value: '800 million', fact: 'ChatGPT has 800 million weekly users.', counts: 'weekly users' })) }),
-    submit_questions: (params) => ({
-      questions: (materialOf(params) as Array<{ candidate_key: string }>).map((c) => ({ candidate_key: garble(c.candidate_key), question: 'How many people use ChatGPT every week?', answer: '800M', label: 'weekly users', meaning: 'm', topic: 't', source_verb: 'via', source_name: 'Reuters', subjects: [], visual: { kind: 'thematic', query: 'x' }, answer_visual: { kind: 'thematic', query: 'y' } })),
-    }),
-  });
-  const deps = await buildDeps(db, 'guess_the_number', { jev: stubJev(() => 0.9), write });
+  const story = { key: storyKey(url), origin: 'reels' as const, ref: 'idea-1', headline: 'ChatGPT reaches 800 million weekly users', sourceName: 'Reuters', url, body: 'y'.repeat(UNBRIEFED_TEXT_CHARS + 500), publishedAt: null, nativeScore: 9 };
+  const cands = [pick(1, { origin: 'pool', pool_id: 'p1', source_url: url }), pick(2), pick(3)];
+  const { deps, write } = await gtnDeps(db, cands);
   const r = await buildGuessTheNumber(deps, { numbers: async () => [], unbriefed: async () => [story] });
   assert.equal(r.ok, true, !r.ok ? r.skip : '');
   if (!r.ok) return;
+  const pool = (materialOf(write.calls[0]!) as GtnPickMaterial).pool as Array<{ id: string; kind: string; text: string }>;
+  assert.deepEqual(pool.map((p) => [p.id, p.kind, p.text.length]), [['p1', 'story', UNBRIEFED_TEXT_CHARS]]);
   assert.deepEqual(r.historyKeys, [story.key]);
+  assert.equal(r.candidates[0]!.origin, 'reels');
+  assert.equal(r.candidates[0]!.ref, 'idea-1');
 });
 
-test('Guess the Number: nothing clears the bar → skipped; difficulty bands (O-10, provisional)', async () => {
+test('Guess the Number: the gate reads the page we fetched, not the model\'s quote', async () => {
   const { db } = await harnessDb();
-  const deps = await buildDeps(db, 'guess_the_number', { jev: stubJev(() => 0.3), write: stubWriter({ submit_questions: (p) => ({ questions: (materialOf(p) as Array<{ candidate_key: string }>).map((c) => ({ candidate_key: c.candidate_key, question: 'Q?', answer: '1', label: 'l', meaning: 'm', topic: 't', source_verb: 'via', source_name: 's', subjects: [], visual: { kind: 'thematic', query: 'x' }, answer_visual: { kind: 'thematic', query: 'y' } })) }) }) });
-  const r = await buildGuessTheNumber(deps, { numbers: async () => [{ key: 'k', origin: 'carousel', ref: 'p', value: '42', fact: 'f', counts: 'c', storyHeadline: 'h', sourceName: 's', url: 'https://x.test', storyKey: 'x.test' }], unbriefed: async () => [] });
-  assert.equal(r.ok, false);
-  assert.match(!r.ok ? r.skip : '', /no written question cleared the bar/);
+  const quoted = pick(1, { answer: '3,072', source_quote: 'A QUOTE THE MODEL MADE UP' });
+  const fetched = `Intro. ${'Filler text. '.repeat(3000)} The large model outputs 3072 dimensions. ${'Tail text. '.repeat(3000)}`;
+  const reader = stubReader({ [quoted.source_url]: fetched, [pick(2).source_url]: PAGE_TEXT(pick(2)), [pick(3).source_url]: PAGE_TEXT(pick(3)) });
+  const jev = stubJev(DEFAULT_GATE);
+  const { deps } = await gtnDeps(db, [quoted, pick(2), pick(3)], { jev, reader });
+  await buildGuessTheNumber(deps, { numbers: async () => [], unbriefed: async () => [] });
+  const gate = jev.calls.find((c) => c.keys.includes('verifiable') && gateState(c.state).question === quoted.question)!;
+  const state = gate.state as { today: string; answer: string; page_published: string | null; page: { untrusted_content: string } };
+  assert.equal(state.today, DATE);
+  assert.equal(state.page_published, null);
+  assert.equal(state.page.untrusted_content, gateExcerpt(fetched, '3,072'));
+  assert.ok(state.page.untrusted_content.includes('3072 dimensions'));
+  assert.ok(!JSON.stringify(gate.state).includes('A QUOTE THE MODEL MADE UP'));
+});
+
+test('Guess the Number: difficulty bands (O-10, provisional)', () => {
   assert.equal(difficultyFrom({ guessable: { noul: 0.9 }, surprise: { noul: 0.1 } }), 'low');
   assert.equal(difficultyFrom({ guessable: { noul: 0.5 }, surprise: { noul: 0.6 } }), 'medium');
 });
