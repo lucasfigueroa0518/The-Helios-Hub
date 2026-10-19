@@ -35,8 +35,8 @@ export const CAPTION_SHARED_RULES = `## Caption rules
 
 - Put the hook in the first 125 characters, and do not open with "X announced Y".
 - Keep paragraphs short.
-- Keep the news part factual and third-person, hedged only where it matters, with no paragraph about sourcing.
-- Close with the builder's read: say what the story changes for someone running marketing, sales or ops at a business like the ones above.
+- Keep the news part factual and third-person, hedged only where it matters, with no paragraph about sourcing; state only what the source supports and keep its hedges.
+- Close with the builder's read: say what the story changes for someone running marketing, sales or ops at a business like the ones above, naming a concrete business type from the context when it fits; opinion and "we" belong only in the read.
 - Name Helios once, lightly, worded fresh each time; "we" is allowed only in the builder's read.
 - Vary the ending (a question, a share prompt or just the take) and do not default to "Would you...?".
 - Never write "DM us", never list services, never claim client results, never invent anecdotes, and never use engagement bait.`;

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildLineInstruction, ceilingAllows, decideBuildLine, recentClosingsBlock, type RecentClosing } from '@/lib/social/captions/build-line';
+import { BUILD_FIT, buildFitState, buildLineInstruction, ceilingAllows, decideBuildLine, recentClosingsBlock, type RecentClosing } from '@/lib/social/captions/build-line';
 import { CAPTION_SHARED_RULES, HELIOS_CONTEXT } from '@/lib/social/captions/helios-context';
 
 const row = (buildLine: boolean, i = 0): RecentClosing => ({ closing: `closing ${i}`, buildLine, createdAt: new Date(2026, 9, 19 - i) });
@@ -40,5 +40,20 @@ test('recentClosingsBlock lists closings and tells the model not to reuse them',
 
 test('buildLineInstruction switches on include', () => {
   assert.match(buildLineInstruction(true), /what Helios builds/);
+  assert.match(buildLineInstruction(true), /only place Helios is named/i);
   assert.match(buildLineInstruction(false), /do not describe what Helios builds/i);
+});
+
+test('exactly one build-line row in the window still allows', () => {
+  assert.equal(ceilingAllows([row(true, 0), row(false, 1), row(false, 2)]), true);
+});
+
+test('buildFitState slices story text to 6000 under untrusted_content', () => {
+  const st = buildFitState({ headline: 'H', text: 'x'.repeat(7000) }) as { helios: string; story: { untrusted_content: string } };
+  assert.equal(st.story.untrusted_content.length, 6000);
+  assert.ok(st.helios.includes('forward-deployed'));
+});
+
+test('BUILD_FIT version', () => {
+  assert.equal(BUILD_FIT.version, 'helios-build-fit@1');
 });
