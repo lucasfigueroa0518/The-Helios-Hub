@@ -1,6 +1,6 @@
 # Social captions redesign — design
 
-Date: 2026-10-19 · Owner: Tommy (task from Lucas) · Status: draft for approval
+Date: 2026-10-19 · Owner: Tommy (task from Lucas) · Status: approved, revised 2026-10-19 after per-format comps (see "Revision")
 
 ## Why
 
@@ -40,6 +40,38 @@ Comparable accounts checked live on 2026-10-19 were @metav3rse, @therundownai an
 - Endings vary: sometimes a question, often just the take.
 - Where a sign-off exists (Rundown's "Follow us…"), it is short boilerplate and reads
   human.
+
+### Revision (2026-10-19): per-format comps
+
+After the first build, Tommy asked for a per-format comparison against successful and
+trending pages. Captions checked live, with like counts: @evolving.ai, @theaipage,
+@airesearches, @chatgptricks, @therundownai, @metav3rse (AI news); @hubspot and @zapier
+(brand accounts). Findings that change this design:
+
+- **News posts and carousels** (2K–40K likes): one plain, surprising first sentence;
+  3–5 paragraphs of one or two sentences; a casual so-what line; then almost always a
+  short, specific question. No hedging or sourcing meta-paragraphs.
+- **Weekly recaps** (our Last Few Days; evolving.ai 19K, chatgptricks 1.8K): a swipe cue
+  plus a preview of the topics; 2–3 prose paragraphs on the highlights, wildest first (not
+  a headline list); a "which caught your attention" question.
+- **Explainers and tips** (chatgptricks 9K–24K): the hook names a problem the reader has;
+  2–3 short paragraphs on why; a save prompt plus a "which would you use first" question.
+- **Reels** (theaipage 141K–233K, airesearches 595K): like news posts but more story and
+  emotion; hooks lead with a number, a quote or a vivid claim; endings are a reflective
+  line, a question or a share prompt.
+- **Where the account points back at itself:** when a page does it, it is always the last
+  line, after the question or call to action and before credits or hashtags (Rundown,
+  theaipage, airesearches, chatgptricks tips, HubSpot). Never mid-caption.
+- **Brand pitches fail:** HubSpot and Zapier product captions get 20–150 likes; the hits
+  are a customer story and first-person "I built X" posts. The Helios line must read like
+  a builder talking, never a product line.
+- **Questions are normal.** The stale part of our old captions was the wire tone and the
+  sourcing paragraph, not the question.
+- **Emoji:** the big news pages use one or two (before the hook, after the question). Our
+  voice rules ban them. Open for Tommy and Lucas; unchanged in this revision.
+
+Decision (Tommy, 2026-10-19): **every format ends on the Helios line**, after the question
+or call to action and before credits, Source and hashtags.
 
 ## Goals
 
@@ -115,12 +147,15 @@ in one place updates every type.
 3. **The news stays factual and third-person,** with today's sourcing discipline. Drop
    the source-skeptic meta paragraph. Keep a hedge only where it changes what the reader
    should believe.
-4. **The builder's read closes every caption.** It says what this news changes for
-   someone running marketing, sales or ops at a business like the ones Helios serves,
-   naming a business type when it fits. This is the only place opinion and "we" are
-   allowed.
-5. **Helios is named once in every caption, lightly.** It is either woven into the
-   builder's read or given as a short closing line, worded differently each time.
+4. **The Helios line closes every caption** (Tommy, 2026-10-19, revised). Order: body,
+   then the question or call to action, then the Helios line, then credits, Source and
+   hashtags (each where the format uses them). The Helios line is one or two sentences: a
+   builder's take tied to this story (what it changes for someone running marketing,
+   sales or ops at a business like the ones Helios serves, naming a business type when it
+   fits). It may end as a follow invite. It is the only place opinion and "we" are
+   allowed. A casual so-what line in the body is still fine, but it does not name Helios.
+5. **Helios is named once in every caption, in the Helios line,** worded differently from
+   recent closings.
 6. **Some captions add a "here's what we build" statement, chosen by context plus a
    ceiling, not a fixed quota.** It may use only facts in the context block.
    (Tommy, 2026-10-19: fit is a Jev question.)
@@ -138,8 +173,10 @@ in one place updates every type.
    - **Rate:** some weeks may have none, which is expected. The threshold and ceiling are
      constants, tuned once Tommy and Lucas have seen real output.
    - **Every caption still gets** the builder's read and a light Helios mention (rule 5).
-7. **Endings vary.** A question, a share prompt or just the take are all valid, chosen to
-   fit the story. "Would you…?" is no longer the default.
+7. **The question or call to action comes right before the Helios line.** A short,
+   specific question is the normal choice (comps end this way almost every time); a save
+   or share prompt where the format calls for it. Vary the wording against recent
+   closings; never "what do you think?" or engagement bait.
 8. **The prompt gets the last N closing paragraphs for that type** and is told not to
    reuse their shape or wording. This is guidance only, not a gate. (Claude's call
    during design, 2026-10-19; Tommy to confirm.) "Recent" covers:
@@ -164,6 +201,9 @@ in one place updates every type.
 - **Retire the old framing.** The caption is the take on top of the slides, not the
   "Reuters/Axios/Economist" summary.
 - **Length** is about 4–6 short paragraphs.
+- **Shape (revised):** surprising first sentence, 2–4 short body paragraphs, a so-what
+  line, a specific question, then the Helios line (`read`). The code join is already
+  news, then read, then Source, so the question goes at the end of the news part.
 - **Facts:** news facts still come only from the slides or the BRIEF. The builder's read
   may interpret, but it may not add facts.
 - **Kept:** the code-built `Source:` line and the `Photos:` attribution, the no-hashtags
@@ -187,7 +227,9 @@ in one place updates every type.
 
 - The caption still supports the video, and the framework and bucket CTAs (save, send,
   follow) stay.
-- The builder's read with the Helios mention goes before the CTA.
+- **Order (revised):** body, then the CTA, then the Helios line last, then hashtags. The
+  over-length trimmer protects the Helios line and the CTA.
+- Hooks lead with a number, a quote or a vivid claim where the story has one.
 - Lift "no offer of Helios services / no we" only for that read. "No pitch" stays.
 - Where the arousal framework's follow-Helios CTA already names Helios, the read must not
   name it a second time.
@@ -195,8 +237,10 @@ in one place updates every type.
 
 **Explainers** (`lib/explainers/caption.ts`, AI Brain Break):
 
-- The builder's read shows where the episode's concept shows up in a real business, using
-  one of the context-block business types.
+- **Shape (revised):** the hook names a problem or situation the reader has that the
+  concept explains; 2–3 short paragraphs on why; a save prompt and/or a "which would you
+  use first"-style question; then the Helios line last (where the concept shows up in a
+  real business of a context-block type), then the hashtags.
 - In `parseCaption`:
   - Remove the "speaks as Helios" throw.
   - Lower or remove `CAPTION_MIN_BODY_CHARS` (400) and `CAPTION_MIN_PARAGRAPHS` (4) so the
@@ -208,10 +252,13 @@ in one place updates every type.
 
 **Last Few Days** (`lib/lfd/post.ts`, currently fully code-built):
 
-- Replace the fixed emoji opener and the fixed `FOLLOW_LINE` in the caption with one
-  cheap model call that writes a fresh opener and one Helios builder's-read line about
-  the week. That costs about a cent per weekly post.
-- The headline bullets, Sources and Photos lines stay code-built.
+- **Revised:** one cheap model call writes the caption body in the recap shape: a swipe
+  cue with a preview of the topics (within 125 characters), 2–3 prose paragraphs on the
+  week's highlights with the wildest story first (facts only from the stories' own copy),
+  a "which caught your attention" question, then the Helios line about the week. That
+  costs about a cent per weekly post. It replaces the fixed opener, the headline bullets
+  and `FOLLOW_LINE`.
+- Sources and Photos lines stay code-built.
 - On failure, fall back to the current template so the post still ships.
 
 ### Standing constraints
