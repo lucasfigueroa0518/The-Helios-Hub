@@ -67,8 +67,10 @@ trending pages. Captions checked live, with like counts: @evolving.ai, @theaipag
   a builder talking, never a product line.
 - **Questions are normal.** The stale part of our old captions was the wire tone and the
   sourcing paragraph, not the question.
-- **Emoji:** the big news pages use one or two (before the hook, after the question). Our
-  voice rules ban them. Open for Tommy and Lucas; unchanged in this revision.
+- **Emoji:** the big news pages use one or two (before the hook, after the question).
+  Decision (Tommy, 2026-10-19): allow **at most two per caption**, one leading the hook and
+  one after the question or call to action. Never in the Helios line, credits or
+  hashtags. Explainer captions keep the episode stamp first, so the emoji follows it.
 
 Decision (Tommy, 2026-10-19): **every format ends on the Helios line**, after the question
 or call to action and before credits, Source and hashtags.
@@ -152,7 +154,12 @@ in one place updates every type.
    hashtags (each where the format uses them). The Helios line is one or two sentences: a
    builder's take tied to this story (what it changes for someone running marketing,
    sales or ops at a business like the ones Helios serves, naming a business type when it
-   fits). It may end as a follow invite. It is the only place opinion and "we" are
+   fits). **Prefer naming a specific industry** from the context block (real estate, law
+   firm, med spa, HVAC, a CPG brand…) whenever there's a reasonable match, and fall back to
+   a general marketing/sales line only when none fits (Tommy, 2026-10-19). The example
+   must stay inside what Helios builds (marketing and sales work, connecting tools, data);
+   no invented clients or results. Recent closings keep the industry from repeating. It
+   may end as a follow invite. It is the only place opinion and "we" are
    allowed. A casual so-what line in the body is still fine, but it does not name Helios.
 5. **Helios is named once in every caption, in the Helios line,** worded differently from
    recent closings.
