@@ -8,7 +8,7 @@ import test from 'node:test';
 import { briefSuperIntelligenceForce } from '@/fixtures/social/briefs';
 import { sifDraft, sifDraftHandoff } from '@/fixtures/social/drafts';
 import {
-  applySilentFixes, buildSourceLine, checkBackground, checkCaption, checkDroppedText, checkLimits, checkPhotoCredit, checkQuoteMarks, checkVoice,
+  applySilentFixes, buildSourceLine, checkBackground, citedIds, checkCaption, checkDroppedText, checkLimits, checkPhotoCredit, checkQuoteMarks, checkVoice,
   expectedSlideText, fixDashes, fixQuoteMarks, fixTrailingComma, fixWhitespace, LIMITS, quotedSpans,
 } from '@/lib/social/mechanical/checks';
 import { voiceHits } from '@/lib/social/mechanical/voice-lists';
@@ -215,6 +215,29 @@ test('mechanical stage: fixes applied and logged, Source line built, style failu
   assert.ok(r.value.filled.caption.text.endsWith('\n\nSource: TechCrunch and The Wall Street Journal.'), r.value.filled.caption.text);
   assert.deepEqual(r.value.mechanical!.warnings.map((w) => w.id), ['C3']);
   assert.ok(r.value.mechanical!.fixes.some((f) => f.id === 'F1') && r.value.mechanical!.fixes.some((f) => f.id === 'F5'));
+});
+
+test('mechanical joins read before Source: news, a blank line, the read, then the code-built Source line', async () => {
+  const N = 'Trump announced a Super Intelligence Force on Sunday.';
+  const R = 'For a law firm, the rules may get looser first \u2014 Helios builds for both.';
+  const r = await createMechanicalStage()(pdraft((x) => {
+    x.caption = { text: N, facts: [] };
+    x.caption_read = { text: R, facts: ['F1'] };
+  }), pbrief());
+  assert.ok(r.ok);
+  // F1 (dash) runs on the joined caption; the read's claim tags count toward the Source line.
+  assert.equal(r.value.filled.caption.text, `${N}\n\nFor a law firm, the rules may get looser first, Helios builds for both.\n\nSource: TechCrunch and The Wall Street Journal.`);
+  assert.deepEqual(r.value.filled.caption.facts, ['F1']);
+  assert.equal(r.value.filled.caption_read, undefined, 'the read is folded into the caption');
+  assert.ok(r.value.mechanical!.fixes.some((f) => f.id === 'F1' && f.where === 'caption'));
+});
+
+test('citedIds includes the read\'s claim tags', () => {
+  const d = draft((x) => {
+    x.caption = { text: 'N', facts: [] };
+    x.caption_read = { text: 'R', facts: ['F4'] };
+  });
+  assert.ok(citedIds(d).includes('F4'));
 });
 
 test('mechanical stage: a hard failure after the Fact-checker sets the story aside (C1 over-limit, C2 malformed-output)', async () => {

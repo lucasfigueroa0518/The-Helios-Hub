@@ -21,6 +21,12 @@ import { STUB_ARTICLES, createStubStages } from '@/lib/social/pipeline/stubs';
 import type { FitCheck } from '@/lib/social/render/fit-check';
 import { fitOkFor } from '@/fixtures/social/render-text';
 import type { MessagesCreate } from '@/lib/social/reporter/reporter';
+import { BUILD_FIT, buildLineInstruction, type RecentClosing } from '@/lib/social/captions/build-line';
+import type { ClosingsLog } from '@/lib/social/captions/closings-store';
+import { jevCostUsd } from '@/lib/social/jev/client';
+import { createCaptionerStage } from '@/lib/social/pipeline/captioner-stage';
+import type { Brief as PipelineBrief, Draft } from '@/lib/social/pipeline/types';
+import { checkDraft, fillDraft } from '@/lib/social/writer/draft';
 
 const usage = { input_tokens: 4000, output_tokens: 3000, cache_read_input_tokens: 0, cache_creation_input_tokens: 2000 };
 const msg = (name: string, input: unknown) =>
@@ -29,11 +35,22 @@ const msg = (name: string, input: unknown) =>
     content: [{ type: 'tool_use', id: `t_${Math.random()}`, name, input }],
   }) as unknown as Anthropic.Message;
 
+/** A caption for the Super Intelligence Force fixtures that passes the captioner's check. */
+const NEWS = {
+  text: "The White House now has a task force for super intelligence, and it has 120 days to say what that means.\n\nTrump announced the Super Intelligence Force in a Sunday post on Truth Social. National intelligence director Jay Clayton will lead it, the Wall Street Journal reports.\n\nIts charter reportedly asks for plans against SI-enabled threats while preventing overregulation.",
+  facts: ['F1', 'F2', 'F3', 'N1', 'F6'],
+};
+const READ = {
+  text: 'For a law firm or an insurance broker, the rules on AI tools may get looser before they get tighter. At Helios we would build for both: systems you own, ready for whichever way the report lands.',
+  facts: ['F6'],
+};
+
 /** Answers whichever submit tool the request offers. */
 function fakeClaude(calls: string[], flags: unknown = { flags: [], main_claim_false: false }): MessagesCreate {
   return async (params) => {
     const names = (params.tools ?? []).map((t) => (t as { name?: string }).name);
     if (names.includes('submit_brief')) { calls.push('reporter'); return msg('submit_brief', briefSuperIntelligenceForce()); }
+    if (names.includes('submit_caption')) { calls.push('captioner'); return msg('submit_caption', { news: NEWS, read: READ }); }
     if (names.includes('submit_flags')) { calls.push('fact-checker'); return msg('submit_flags', flags); }
     if (names.includes('submit_draft')) { calls.push('draft'); return msg('submit_draft', sifDraftHandoff()); }
     throw new Error(`unexpected request: ${names.join(',')}`);
@@ -59,6 +76,20 @@ const identityJev: JevAsk = async (req, meta) => {
 
 const fitOk: FitCheck = async (post) => fitOkFor(post);
 
+/** An in-memory closings log for tests: `rows` newest first. */
+function memoryClosings(rows: RecentClosing[] = []): ClosingsLog & { rows: RecentClosing[]; recorded: Array<[string, string, boolean]> } {
+  const recorded: Array<[string, string, boolean]> = [];
+  return {
+    rows,
+    recorded,
+    recent: async () => rows,
+    async record(subjectId, closing, buildLine) {
+      recorded.push([subjectId, closing, buildLine]);
+      rows.unshift({ closing, buildLine, createdAt: new Date() });
+    },
+  };
+}
+
 function setup(opts: { capUsd?: number; fitCheck?: FitCheck; flags?: unknown } = {}) {
   const calls: string[] = [];
   const budget = createRunBudget({ capUsd: opts.capUsd ?? 1.5, otherSpendUsd: () => 0 });
@@ -66,6 +97,7 @@ function setup(opts: { capUsd?: number; fitCheck?: FitCheck; flags?: unknown } =
     score: createStubStages({ costUsd: Object.fromEntries(['jev-scoring'].map((k) => [k, 0])) }).score,
     create: fakeClaude(calls, opts.flags),
     jev: identityJev,
+    closings: memoryClosings(),
     budget,
     readPage: async (url) => ({ ok: false, url, error: 'offline' }),
     isWellKnown: async () => false,
@@ -78,13 +110,13 @@ function setup(opts: { capUsd?: number; fitCheck?: FitCheck; flags?: unknown } =
   return { calls, budget, stages, logs };
 }
 
-test('live stages: two stories run Reporter → Writer → Editor → Fact-checker → mechanical → design', async () => {
+test('live stages: two stories run Reporter → Writer → Editor → captioner → Fact-checker → mechanical → design', async () => {
   const { calls, budget, stages, logs } = setup();
   const meter = createCostMeter({ capUsd: 1.5 });
   const r = await runDay({ articles: STUB_ARTICLES, stages, meter, log: createInMemorySetAsideLog(), now: new Date('2026-10-06T15:00:00Z'), targetPosts: 2 });
   assert.equal(r.posts.length, 2);
-  assert.deepEqual(r.posts[0]!.stages, ['jev-scoring', 'reporter', 'writer', 'editor', 'fact-checker', 'mechanical', 'design']);
-  assert.deepEqual(calls, ['reporter', 'draft', 'draft', 'fact-checker', 'reporter', 'draft', 'draft', 'fact-checker']);
+  assert.deepEqual(r.posts[0]!.stages, ['jev-scoring', 'reporter', 'writer', 'editor', 'captioner', 'fact-checker', 'mechanical', 'design']);
+  assert.deepEqual(calls, ['reporter', 'draft', 'draft', 'captioner', 'fact-checker', 'reporter', 'draft', 'draft', 'captioner', 'fact-checker']);
   const post = r.posts[0]!;
   assert.ok(post.render.slides.length > 0);
   assert.ok(post.photos[0]!.photo, 'the cover has a photo');
@@ -94,9 +126,13 @@ test('live stages: two stories run Reporter → Writer → Editor → Fact-check
   const l = logs.get(post.storyId)!;
   assert.equal(l.writer.length, 1);
   assert.equal(l.factCheck.length, 1);
+  assert.equal(l.captioner.length, 1);
+  assert.ok(l.captioner[0]!.ok);
+  // The rendered caption is the news, the read, then the code-built Source line.
+  assert.ok(post.render.caption!.startsWith(`${NEWS.text}\n\n${READ.text}\n\nSource: `), post.render.caption);
   assert.ok(l.design);
   assert.ok(budget.claudeUsd() > 0);
-  assert.ok((r.costByStage.reporter ?? 0) > 0 && (r.costByStage.writer ?? 0) > 0 && (r.costByStage.editor ?? 0) > 0 && (r.costByStage['fact-checker'] ?? 0) > 0);
+  assert.ok((r.costByStage.reporter ?? 0) > 0 && (r.costByStage.writer ?? 0) > 0 && (r.costByStage.editor ?? 0) > 0 && (r.costByStage.captioner ?? 0) > 0 && (r.costByStage['fact-checker'] ?? 0) > 0);
 });
 
 test('live stages: a render that still fails the fit check after the default layout is set aside, and the next story fills the slot', async () => {
@@ -148,8 +184,100 @@ test('cap: between stages the day stops only at the full cap, so a no-Claude sta
   const design = stages.design;
   stages.design = async (d, b, s) => { designed.push(d.storyId); return design(d, b, s); };
   // Reporter, Writer, Editor, Fact-checker stubbed through as zero-cost so only the meter matters here.
-  const free = createStubStages({ costUsd: Object.fromEntries(['jev-scoring', 'reporter', 'writer', 'editor', 'fact-checker'].map((k) => [k, 0])) });
+  const free = createStubStages({ costUsd: Object.fromEntries(['jev-scoring', 'reporter', 'writer', 'editor', 'captioner', 'fact-checker'].map((k) => [k, 0])) });
   const r = await runDay({ articles: STUB_ARTICLES, stages: { ...free, design: stages.design, mechanical: stages.mechanical }, meter, log: createInMemorySetAsideLog(), now: new Date('2026-10-06T15:00:00Z'), targetPosts: 1 });
   assert.equal(designed.length, 1, 'design ran at $1.38 of $1.50');
   assert.notEqual(r.stopReason, 'cost-cap');
+});
+
+// ── Captioner stage (social-captions redesign, 2026-10-19) ─────────────
+
+function captionerSetup(opts: { recent?: RecentClosing[]; jev?: JevAsk } = {}) {
+  const requests: Array<Parameters<MessagesCreate>[0]> = [];
+  const create: MessagesCreate = async (params) => {
+    requests.push(params);
+    return msg('submit_caption', { news: NEWS, read: READ });
+  };
+  const jevCalls: string[] = [];
+  const jev: JevAsk = opts.jev ?? (async (_req, meta) => {
+    jevCalls.push(meta.version);
+    return { answers: { builds: { noul: 0.9 } }, usage: { input_tokens: 1000, output_tokens: 0 }, model: 'stub-jev' };
+  });
+  const closings = memoryClosings(opts.recent ?? []);
+  const stage = createCaptionerStage({ create, jev, closings });
+  const parsed = briefSuperIntelligenceForce();
+  const submission = checkDraft(sifDraftHandoff(), parsed);
+  const draft: Draft = { storyId: 'sif', submission, filled: fillDraft(submission, parsed) };
+  const brief: PipelineBrief = { storyId: 'sif', parsed, raw: '', pages: [] };
+  const lastUser = () => {
+    const m = requests.at(-1)!.messages[0]!.content;
+    return typeof m === 'string' ? m : JSON.stringify(m);
+  };
+  return { stage, draft, brief, requests, jevCalls, closings, lastUser };
+}
+
+const built = (n: number): RecentClosing[] => Array.from({ length: n }, (_, i) => ({ closing: `closing ${i}`, buildLine: true, createdAt: new Date(`2026-10-1${i}T02:00:00Z`) }));
+
+test('captioner stage sets the news and the read, asks Jev for the build fit, and charges Claude + Jev', async () => {
+  const { stage, draft, brief, jevCalls, lastUser } = captionerSetup();
+  const r = await stage(draft, brief);
+  assert.ok(r.ok, r.ok ? '' : r.detail);
+  assert.deepEqual(r.value.submission.caption, NEWS);
+  assert.deepEqual(r.value.submission.caption_read, READ);
+  assert.deepEqual(r.value.filled.caption, NEWS);
+  assert.deepEqual(r.value.filled.caption_read, READ);
+  assert.deepEqual(r.value.submission.slides, draft.submission.slides, 'the slides pass through');
+  assert.deepEqual(jevCalls, [BUILD_FIT.version]);
+  assert.ok(lastUser().includes(buildLineInstruction(true)));
+  assert.ok(r.costUsd > jevCostUsd({ input_tokens: 1000, output_tokens: 0 }));
+});
+
+test('captioner stage skips Jev when the ceiling is hit', async () => {
+  const { stage, draft, brief, jevCalls, lastUser, closings } = captionerSetup({ recent: built(2) });
+  const r = await stage(draft, brief);
+  assert.ok(r.ok);
+  assert.equal(jevCalls.length, 0);
+  assert.ok(lastUser().includes(buildLineInstruction(false)));
+  assert.deepEqual(closings.recorded, [['sif', READ.text, false]]);
+});
+
+test('captioner stage survives a Jev failure', async () => {
+  const { stage, draft, brief, lastUser, closings } = captionerSetup({ jev: async () => { throw new Error('jev down'); } });
+  const r = await stage(draft, brief);
+  assert.ok(r.ok);
+  assert.ok(lastUser().includes(buildLineInstruction(false)));
+  assert.equal(closings.recorded[0]![2], false, 'include is false');
+});
+
+test('captioner stage records the closing', async () => {
+  const { stage, draft, brief, closings } = captionerSetup();
+  const r = await stage(draft, brief);
+  assert.ok(r.ok);
+  assert.deepEqual(closings.recorded, [['sif', READ.text, true]]);
+});
+
+test('captioner stage: a closings log that fails to read or write never fails the caption', async () => {
+  const { draft, brief } = captionerSetup();
+  const stage = createCaptionerStage({
+    create: async () => msg('submit_caption', { news: NEWS, read: READ }),
+    jev: async () => ({ answers: { builds: { noul: 0.9 } }, usage: { input_tokens: 10, output_tokens: 0 }, model: 'stub-jev' }),
+    closings: { recent: async () => { throw new Error('db down'); }, record: async () => { throw new Error('db down'); } },
+  });
+  const r = await stage(draft, brief);
+  assert.ok(r.ok);
+});
+
+test('captioner stage: a captioner failure is a set-aside reason with its cost', async () => {
+  const { draft, brief } = captionerSetup();
+  const stage = createCaptionerStage({
+    create: async () => msg('submit_caption', { news: NEWS, read: { text: 'No brand name here.', facts: [] } }),
+    jev: async () => ({ answers: { builds: { noul: 0.1 } }, usage: { input_tokens: 10, output_tokens: 0 }, model: 'stub-jev' }),
+    closings: memoryClosings(),
+  });
+  const r = await stage(draft, brief);
+  assert.equal(r.ok, false);
+  if (!r.ok) {
+    assert.equal(r.reasonCode, 'malformed-output');
+    assert.ok(r.costUsd > 0);
+  }
 });

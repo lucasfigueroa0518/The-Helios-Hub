@@ -18,6 +18,7 @@ export const STUB_COST_USD: Record<StageName, number> = {
   reporter: 0.35,
   writer: 0.25,
   editor: 0.12,
+  captioner: 0.05,
   'fact-checker': 0.003,
   design: 0.05,
   mechanical: 0,
@@ -83,10 +84,14 @@ export function stubDraft(news: string): DraftSubmission {
       { type: 'text', headline: line('Why it matters to you'), body: line('What it means for the reader.'), quote_id: null, quote_excerpt: null, number_ids: [], ...visuals },
     ],
     follow: 'Follow Helios for more AI stories like this.',
-    caption: line(`${news} Source: example.com`),
+    // The Writer and Editor leave the caption empty; the captioner writes it.
+    caption: { text: '', facts: [] },
     edit_notes: [],
   };
 }
+
+/** The stub captioner's builder's read. */
+export const STUB_READ = 'At Helios we would watch what this changes for a small marketing team.';
 
 /** Minimal brief for stub runs. */
 export function stubBrief(news: string): ParsedBrief {
@@ -134,6 +139,10 @@ export function createStubStages(opts: StubOptions = {}): PipelineStages {
     },
     async edit(draft) {
       return result('editor', draft.storyId, draft);
+    },
+    async caption(draft, brief) {
+      const submission = { ...draft.submission, caption: { text: brief.parsed.the_news.text, facts: ['F1'] }, caption_read: { text: STUB_READ, facts: [] } };
+      return result('captioner', draft.storyId, { storyId: draft.storyId, submission, filled: fillDraft(submission, brief.parsed) });
     },
     async factCheck(draft) {
       return result('fact-checker', draft.storyId, draft);

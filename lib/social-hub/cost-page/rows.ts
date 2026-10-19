@@ -10,7 +10,7 @@ export type CarouselVendorSplit = { runId: string; claude: number; jev: number; 
 
 const CAROUSEL_STAGE: Record<string, Stage> = {
   'jev-scoring': 'research', selection: 'research', reporter: 'research', feeds: 'research',
-  writer: 'writing', editor: 'writing', 'fact-checker': 'writing', mechanical: 'writing', hook: 'writing',
+  writer: 'writing', editor: 'writing', captioner: 'writing', 'fact-checker': 'writing', mechanical: 'writing', hook: 'writing',
   design: 'visuals', photos: 'visuals', render: 'visuals',
 };
 

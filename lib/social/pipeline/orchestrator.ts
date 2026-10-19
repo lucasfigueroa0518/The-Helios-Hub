@@ -1,14 +1,18 @@
 /**
  * Helios Social rebuild — day orchestrator (spec §3, §2.4, §5B).
  *
- *   Jev scoring → Reporter → Writer → Editor → Fact-checker → mechanical → design
+ *   Jev scoring → Reporter → Writer → Editor → captioner → Fact-checker →
+ *   mechanical → design
  *
  * Each stage runs once. A stage that fails sets the story aside (logged
  * with stage + reason) and the next-ranked story takes the slot, until the
  * day's posts are done, the stories run out, or the cost cap is hit.
  *
  * Glitch retries (§7.1) live inside each stage (one retry on a failed
- * code check); fresh drafts (§4.2b) loop here.
+ * code check); fresh drafts (§4.2b) and fresh captions loop here. A fresh
+ * caption (the Fact-checker cut the caption or the builder's read to
+ * nothing) reruns only captioner → Fact-checker, MAX_FRESH_CAPTIONS times
+ * per draft; after that it counts as a fresh draft.
  *
  * A story that already has a finished post (SH-60, P2-M4) is not run again:
  * when `stored` finds one, the story keeps its rank and counts toward the
@@ -31,6 +35,9 @@ export const DEFAULT_TARGET_POSTS = 2;
 
 /** Spec §4.2b: at most 2 fresh drafts per story, then the next story. */
 export const MAX_FRESH_DRAFTS = 2;
+
+/** Social-captions redesign (2026-10-19): one caption-only rerun per draft, then the fresh-draft path. */
+export const MAX_FRESH_CAPTIONS = 1;
 
 export type FreshDraftEntry = { storyId: string; attempt: number; detail: string; at: string };
 
@@ -64,6 +71,8 @@ export type RunDayResult = {
   costByStage: Partial<Record<StageName, number>>;
   /** Every fresh draft and why it was needed (spec §4.2b: logged). */
   freshDrafts: FreshDraftEntry[];
+  /** Every caption-only rerun and why; `attempt` counts within one draft. */
+  freshCaptions: FreshDraftEntry[];
   /** What the day ships, best-ranked story first. */
   shipped: ShipEntry[];
   /** Stories passed over because their content is already on the calendar (D54), in rank order. */
@@ -81,12 +90,16 @@ class CostCapReached extends Error {}
 /** The Fact-checker asked for a fresh draft; not logged as a set-aside. */
 class FreshDraftNeeded extends Error {}
 
+/** The Fact-checker asked for a fresh caption only; not logged as a set-aside. */
+class FreshCaptionNeeded extends Error {}
+
 export async function runDay(input: RunDayInput): Promise<RunDayResult> {
   const { stages, meter, log, now } = input;
   const target = input.targetPosts ?? DEFAULT_TARGET_POSTS;
   const posts: PostObject[] = [];
   const setAsides: SetAsideEntry[] = [];
   const freshDrafts: FreshDraftEntry[] = [];
+  const freshCaptions: FreshDraftEntry[] = [];
   const shipped: ShipEntry[] = [];
   const onCalendar: string[] = [];
 
@@ -97,6 +110,7 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
     costUsd: meter.spent(),
     costByStage: meter.byStage(),
     freshDrafts,
+    freshCaptions,
     shipped,
     onCalendar,
   });
@@ -133,6 +147,7 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
     trail?.push(stage);
     if (!res.ok) {
       if (res.reasonCode === 'needs-fresh-draft') throw new FreshDraftNeeded(res.detail);
+      if (res.reasonCode === 'needs-fresh-caption') throw new FreshCaptionNeeded(res.detail);
       const entry = await log.record(
         { storyId, stage, reasonCode: res.reasonCode, detail: res.detail },
         now,
@@ -182,14 +197,28 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
     };
     try {
       const brief = await run('reporter', () => stages.report(story));
-      // Writer → Editor → Fact-checker, once; up to MAX_FRESH_DRAFTS fresh drafts
+      // Captioner → Fact-checker on the edited draft; a fresh caption reruns just these two,
+      // up to MAX_FRESH_CAPTIONS times, then asks for a fresh draft.
+      const captionAndCheck = async (edited: Draft): Promise<Draft> => {
+        for (let attempt = 0; ; attempt++) {
+          const captioned = await run('captioner', () => stages.caption(edited, brief));
+          try {
+            return await run('fact-checker', () => stages.factCheck(captioned, brief));
+          } catch (err) {
+            if (!(err instanceof FreshCaptionNeeded)) throw err;
+            if (attempt >= MAX_FRESH_CAPTIONS) throw new FreshDraftNeeded(`fresh caption limit (${MAX_FRESH_CAPTIONS}) used; last: ${err.message}`);
+            freshCaptions.push({ storyId: story.id, attempt: attempt + 1, detail: err.message, at: now.toISOString() });
+          }
+        }
+      };
+      // Writer → Editor → captioner → Fact-checker, once; up to MAX_FRESH_DRAFTS fresh drafts
       // from the same brief, with no notes fed back (spec §4.2b).
       let checked!: Draft;
       for (let attempt = 0; ; attempt++) {
         try {
           const written = await run('writer', () => stages.write(brief));
           const edited = await run('editor', () => stages.edit(written, brief));
-          checked = await run('fact-checker', () => stages.factCheck(edited, brief));
+          checked = await captionAndCheck(edited);
           break;
         } catch (err) {
           if (!(err instanceof FreshDraftNeeded)) throw err;

@@ -15,13 +15,15 @@ import { EDITOR_SYSTEM } from '@/lib/social/editor/prompt';
 import { runFactCheck } from '@/lib/social/factcheck/factcheck';
 import { applyFlags, checkFlags, cutText, keySlideIndex, type Flag, type FlagsSubmission } from '@/lib/social/factcheck/flags';
 import { FACTCHECK_SYSTEM } from '@/lib/social/factcheck/prompt';
+import { HELIOS_CONTEXT } from '@/lib/social/captions/helios-context';
 import { createCostMeter } from '@/lib/social/pipeline/cost-meter';
 import { createEditorStage } from '@/lib/social/pipeline/editor-stage';
 import { createFactCheckStage } from '@/lib/social/pipeline/factcheck-stage';
 import { STAGE_MODELS } from '@/lib/social/pipeline/models';
-import { MAX_FRESH_DRAFTS, runDay } from '@/lib/social/pipeline/orchestrator';
+import { MAX_FRESH_CAPTIONS, MAX_FRESH_DRAFTS, runDay } from '@/lib/social/pipeline/orchestrator';
 import { createInMemorySetAsideLog } from '@/lib/social/pipeline/set-aside-log';
-import { STUB_ARTICLES, createStubStages } from '@/lib/social/pipeline/stubs';
+import { STUB_ARTICLES, STUB_READ, createStubStages } from '@/lib/social/pipeline/stubs';
+import type { StageName } from '@/lib/social/pipeline/types';
 import { RULES_BLOCK, renderRulesFor } from '@/lib/social/prompts/rules-block';
 import { VOICE_BLOCK } from '@/lib/social/prompts/voice-block';
 import type { MessagesCreate } from '@/lib/social/reporter/reporter';
@@ -50,9 +52,16 @@ test('Editor prompt = §4 text with the submit_draft OUTPUT line, then RULES_BLO
   assert.doesNotMatch(EDITOR_SYSTEM, /cover options, slides, caption/);
 });
 
-test('Fact-checker prompt = §5 text with OUTPUT → submit_flags; section list unchanged', () => {
+test('Fact-checker prompt = §5 text with OUTPUT → submit_flags, then the Helios context', () => {
   const tested = block('## 5. Fact-checker');
-  assert.equal(FACTCHECK_SYSTEM, tested.replace('\nOUTPUT\n', "\nWhen you're done, call submit_flags with these sections:\n"));
+  assert.equal(FACTCHECK_SYSTEM, `${tested.replace('\nOUTPUT\n', "\nWhen you're done, call submit_flags with these sections:\n")}\n\n${HELIOS_CONTEXT}`);
+});
+
+test('FACTCHECK prompt includes Helios context and the caption_read rules', () => {
+  assert.ok(FACTCHECK_SYSTEM.includes(HELIOS_CONTEXT));
+  assert.match(FACTCHECK_SYSTEM, /opinion is allowed/i);
+  assert.match(FACTCHECK_SYSTEM, /caption_read/);
+  assert.match(FACTCHECK_SYSTEM, /where \(cover n \/ slide n \/ caption \/ caption_read\)/);
 });
 
 // ── Editor powers (code) ───────────────────────────────────────────────
@@ -117,8 +126,13 @@ test('Editor: gets the draft and the brief, returns submit_draft; a powers viola
 const flag = (over: Partial<Flag> = {}): Flag => ({
   where: { part: 'slide', number: 2 }, quoted_text: 'on Truth Social', type: 2, fact_id: 'F1', fix: { kind: 'cut', replacement: null }, ...over,
 });
-/** What the Fact-checker sees: the Editor's draft after the captioner has written the news part (the Writer and Editor leave it empty). */
-const captioned = () => ({ ...sifDraft(), caption: { text: 'Trump announced a Super Intelligence Force on Sunday. Source: TechCrunch, October 4, 2026.', facts: ['F1'] } });
+/** What the Fact-checker sees: the Editor's draft after the captioner has written the news part and the read (the Writer and Editor leave both empty). */
+const READ_TEXT = 'For a law firm, the rules on AI tools may get looser first. Helios builds systems you own.';
+const captioned = () => ({
+  ...sifDraft(),
+  caption: { text: 'Trump announced a Super Intelligence Force on Sunday. Source: TechCrunch, October 4, 2026.', facts: ['F1'] },
+  caption_read: { text: READ_TEXT, facts: [] as string[] },
+});
 
 const filled = () => fillDraft(captioned(), brief());
 const flagErrors = (f: FlagsSubmission) => {
@@ -168,13 +182,42 @@ test('apply: a cut that empties a headline drops the slide; a flag inside the fi
   }
 });
 
-test('apply: an empty caption passes through; a caption the flags cut to nothing is a fresh draft', () => {
+test('cutting the read to nothing asks for a fresh caption; so does emptying the news part (no longer a fresh draft)', () => {
   const f = [flag({ where: { part: 'slide', number: 3 }, quoted_text: ', with three vice chairs', fact_id: 'F3' })];
-  assert.equal(applyFlags(sifDraft(), { flags: f, main_claim_false: false }, brief()).kind, 'ok'); // pre-captioner: caption is ''
+  assert.equal(applyFlags(sifDraft(), { flags: f, main_claim_false: false }, brief()).kind, 'ok'); // pre-captioner: caption is '', no read
+  const read = apply([flag({ where: { part: 'caption_read', number: null }, quoted_text: READ_TEXT, fact_id: null, type: 5 })]);
+  assert.deepEqual(read.kind === 'fresh-caption' && read.why, "the builder's read was cut to nothing");
   const cap = captioned();
   cap.caption.text = 'Trump announced it.';
   const o = applyFlags(cap, { flags: [flag({ where: { part: 'caption', number: null }, quoted_text: 'Trump announced it.', fix: { kind: 'cut', replacement: null } })], main_claim_false: false }, brief());
-  assert.deepEqual(o.kind === 'fresh-draft' && o.why, 'the caption was cut to nothing');
+  assert.deepEqual(o.kind === 'fresh-caption' && o.why, 'the caption was cut to nothing');
+  // A slide problem a fresh caption can't fix still asks for a fresh draft.
+  const both = apply([flag({ quoted_text: 'Announced on Truth Social' }), flag({ where: { part: 'caption_read', number: null }, quoted_text: READ_TEXT, fact_id: null })]);
+  assert.equal(both.kind, 'fresh-draft');
+});
+
+test('fact-check can flag the read: checkFlags accepts caption_read and applyFlags cuts inside it', () => {
+  const cut = flag({ where: { part: 'caption_read', number: null }, quoted_text: 'Helios builds systems you own.', fact_id: null, type: 5 });
+  assert.deepEqual(flagErrors({ flags: [cut], main_claim_false: false }), []);
+  assert.match(String(flagErrors({ flags: [{ ...cut, quoted_text: 'Helios cut costs 40%' }], main_claim_false: false })), /quoted text isn't in caption_read/);
+  const noRead = { ...filled(), caption_read: undefined };
+  assert.throws(() => checkFlags({ flags: [cut], main_claim_false: false }, noRead, brief()), /caption_read null doesn't exist/);
+  const o = apply([cut]);
+  assert.equal(o.kind, 'ok');
+  if (o.kind !== 'ok') return;
+  assert.equal(o.draft.caption_read!.text, 'For a law firm, the rules on AI tools may get looser first.');
+  assert.equal(o.draft.caption.text, captioned().caption.text, 'the news part is untouched');
+  assert.match(o.applied[0]!, /CUT type 5 in caption_read/);
+});
+
+test('the Fact-checker stage maps fresh-caption to needs-fresh-caption', async () => {
+  const stage = createFactCheckStage({ create: async () => msg([tool('submit_flags', { flags: [flag({ where: { part: 'caption_read', number: null }, quoted_text: READ_TEXT, fact_id: null })], main_claim_false: false })]) });
+  const r = await stage({ storyId: 's1', submission: captioned(), filled: filled() }, { storyId: 's1', parsed: brief(), raw: '', pages: [] });
+  assert.equal(r.ok, false);
+  if (!r.ok) {
+    assert.equal(r.reasonCode, 'needs-fresh-caption');
+    assert.equal(r.detail, "the builder's read was cut to nothing");
+  }
 });
 
 test('apply: a draft that is short as written is not a fresh-draft trigger (only cuts are)', () => {
@@ -218,19 +261,23 @@ test('Fact-checker: reads all 3 covers with quotes and numbers filled; returns f
 
 // ── runDay: fresh drafts (spec §4.2b) ──────────────────────────────────
 
-function factCheckScript(outcomes: Array<'clean' | 'fresh' | 'false'>) {
+type Outcome = 'clean' | 'fresh' | 'false' | 'fresh-caption';
+
+function factCheckScript(outcomes: Outcome[]) {
   return async () => {
     const o = outcomes.shift() ?? 'clean';
     const flags = o === 'false' ? { flags: [], main_claim_false: true }
       : o === 'fresh' ? { flags: [flag({ quoted_text: 'x', where: { part: 'cover', number: 1 } }), flag({ quoted_text: 'x', where: { part: 'cover', number: 2 } }), flag({ quoted_text: 'x', where: { part: 'cover', number: 3 } })], main_claim_false: false }
+      // The stub captioner's whole read is cut (e.g. an unsupported Helios claim).
+      : o === 'fresh-caption' ? { flags: [flag({ quoted_text: STUB_READ, where: { part: 'caption_read', number: null }, type: 5 })], main_claim_false: false }
       : { flags: [], main_claim_false: false };
     return msg([tool('submit_flags', flags)]);
   };
 }
 
-function dayWith(outcomes: Array<'clean' | 'fresh' | 'false'>) {
+function dayWith(outcomes: Outcome[], calls?: Array<{ stage: StageName; storyId: string }>) {
   // Stub stages produce stubBrief/stubDraft; the Fact-checker checks against those.
-  const stub = createStubStages();
+  const stub = createStubStages({ calls });
   return runDay({
     articles: STUB_ARTICLES.slice(0, 1),
     targetPosts: 1,
@@ -241,7 +288,7 @@ function dayWith(outcomes: Array<'clean' | 'fresh' | 'false'>) {
           const res = await factCheckScript(outcomes)();
           // Point the cover flags at text that exists in the stub draft's covers.
           const input = (res.content[0] as any).input;
-          input.flags = input.flags.map((f: Flag) => ({ ...f, quoted_text: 'Lab ships new model', fact_id: null }));
+          input.flags = input.flags.map((f: Flag) => (f.where.part === 'cover' ? { ...f, quoted_text: 'Lab ships new model' } : f)).map((f: Flag) => ({ ...f, fact_id: null }));
           return res;
         },
       }),
@@ -268,6 +315,39 @@ test(`runDay: after ${MAX_FRESH_DRAFTS} fresh drafts the story is set aside; a f
   const f = await dayWith(['false']);
   assert.equal(f.setAsides[0]!.reasonCode, 'main-claim-false');
   assert.equal(f.setAsides[0]!.kind, 'should-not-run');
+});
+
+test('orchestrator reruns only the captioner: one fresh caption, then the post ships', async () => {
+  assert.equal(MAX_FRESH_CAPTIONS, 1);
+  const calls: Array<{ stage: StageName; storyId: string }> = [];
+  const r = await dayWith(['fresh-caption', 'clean'], calls);
+  assert.equal(r.posts.length, 1);
+  const count = (stage: StageName) => calls.filter((c) => c.stage === stage).length;
+  assert.equal(count('writer'), 1);
+  assert.equal(count('editor'), 1);
+  assert.equal(count('captioner'), 2);
+  assert.deepEqual(r.freshDrafts, []);
+  assert.equal(r.freshCaptions.length, 1);
+  assert.equal(r.freshCaptions[0]!.detail, "the builder's read was cut to nothing");
+  assert.deepEqual(r.posts[0]!.stages.slice(3, 8), ['editor', 'captioner', 'fact-checker', 'captioner', 'fact-checker']);
+});
+
+test('orchestrator: a second fresh caption falls through to the fresh-draft path', async () => {
+  const calls: Array<{ stage: StageName; storyId: string }> = [];
+  const r = await dayWith(['fresh-caption', 'fresh-caption', 'clean'], calls);
+  assert.equal(r.posts.length, 1);
+  assert.equal(calls.filter((c) => c.stage === 'writer').length, 2);
+  assert.equal(calls.filter((c) => c.stage === 'captioner').length, 3);
+  assert.equal(r.freshCaptions.length, 1);
+  assert.equal(r.freshDrafts.length, 1);
+  assert.match(r.freshDrafts[0]!.detail, /fresh caption.*the builder's read was cut to nothing/);
+});
+
+test('orchestrator: fresh captions never outlast the fresh-draft limit', async () => {
+  const r = await dayWith(Array<Outcome>(10).fill('fresh-caption'));
+  assert.equal(r.posts.length, 0);
+  assert.equal(r.freshDrafts.length, MAX_FRESH_DRAFTS);
+  assert.equal(r.setAsides[0]!.reasonCode, 'unfixable-draft');
 });
 
 test('runDay: the Editor stage passes its draft on in the same shape', async () => {

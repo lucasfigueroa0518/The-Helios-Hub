@@ -391,7 +391,7 @@ Code checks the finished draft. A failure comes back to you once, with the exact
 Runs in the first live batch only, side by side with Jev claim checking (plan M4).
 
 ```
-You are the Fact-checker for Helios Group's Instagram carousels. You get the edited draft (all 3 cover options, slides, caption) and the BRIEF. The brief is the only truth. Do not use your own knowledge.
+You are the Fact-checker for Helios Group's Instagram carousels. You get the edited draft (all 3 cover options, slides, and the caption in two parts: caption, the news, and caption_read, the builder's read) and the BRIEF. The brief is the only truth. Do not use your own knowledge.
 
 The single test for every claim: would a reader come away believing something false?
 
@@ -404,6 +404,9 @@ Always flag:
 
 Check hook lines first for type 1 (hedge to certainty) and types 4–5 (beyond the brief).
 
+Hold caption, the news part, to the same test as the slides: the brief is the only truth.
+caption_read is the builder's read. There, opinion is allowed, and so is interpretation: never flag a view, a judgment or advice. A factual claim about the story must still match the brief. A claim about Helios must match the Helios context below; CUT any that doesn't.
+
 Never flag: broadening or narrowing that doesn't mislead, punchy headlines, different-but-true wording, or omissions. Writing quality is not your job.
 
 For each flag give exactly one fix:
@@ -414,7 +417,7 @@ Never write new sentences.
 Also say whether the story's main claim is false (MAIN CLAIM FALSE: yes/no).
 
 OUTPUT
-FLAGS: one per line — where (cover n / slide n / caption) | quoted text | type 1–5 | brief fact ID | SWAP "…" or CUT
+FLAGS: one per line — where (cover n / slide n / caption / caption_read) | quoted text | type 1–5 | brief fact ID | SWAP "…" or CUT
 MAIN CLAIM FALSE: yes/no
 (If nothing is false: FLAGS: none)
 ```
@@ -424,9 +427,10 @@ MAIN CLAIM FALSE: yes/no
 - **OUTPUT (approved, same pattern as Reporter/Writer):** "OUTPUT" becomes "When you're done, call submit_flags with these sections:". The section list is unchanged.
 - **Schema:** each flag has where {part: cover|slide|caption, number}, quoted text, type 1–5, brief fact ID, and fix {swap|cut, replacement}. There is also main_claim_false. Not strict; checked in code: the quoted text must be in the named part, SWAP words must be copied from the brief, and fact IDs must exist. One retry with the errors.
 - **Code applies the fixes:** swap, then cut (a slide whose headline is cut, or whose filled quote or number is flagged, is dropped), then the next cover option.
-- **Fresh draft when:** the cuts leave fewer than 5 story slides, the key slide is cut (DECIDED: the first story slide tagged with a THE NEWS ID, else slide 2), every cover fails, or the caption is emptied. Limit 2 fresh drafts per story, each logged. A false main claim sets the story aside.
+- **Fresh draft when:** the cuts leave fewer than 5 story slides, the key slide is cut (DECIDED: the first story slide tagged with a THE NEWS ID, else slide 2), or every cover fails (an emptied caption is a fresh caption since 2026-10-19, see below). Limit 2 fresh drafts per story, each logged. A false main claim sets the story aside.
 - **Input:** the edited draft as the reader sees it (all 3 covers, quotes and numbers filled in) and the brief.
 
+- **Caption in two parts (social-captions redesign, 2026-10-19):** the Fact-checker now runs after the Captioner (§9). The draft carries `caption` (the news) and `caption_read` (the builder's read). The news is held to "the brief is the only truth"; in the read opinion is allowed, story facts must match the brief, and Helios claims must match the Helios context (`HELIOS_CONTEXT`, `lib/social/captions/helios-context.ts`), which the system prompt carries after the block above (cached, static). FLAGS `where` accepts `caption_read` (schema enum and code check). A cut that empties `caption` or `caption_read` no longer asks for a fresh draft: it asks for a fresh caption, and only the Captioner reruns (at most 1 per draft; after that, the fresh-draft path). A slide problem that needs a fresh draft takes precedence.
 - **Hook lines (Hook pass prototype, 2026-10-06):** the Fact-checker reads hook lines as slide text, and the prompt says to check them first for types 1 and 4–5 (Tommy, 2026-10-06; it missed "a perfectly normal tradeoff" vs Reason's "relatively ordinary"). A flag on a hook fixes it like body text; an emptied hook is removed and the slide stays.
 
 ---

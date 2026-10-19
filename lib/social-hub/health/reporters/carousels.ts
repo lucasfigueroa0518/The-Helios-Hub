@@ -6,7 +6,7 @@ import { carouselOffDays } from '@/lib/lfd/settings';
 import { isLfdDay, slotPlan } from '@/lib/social-hub/slots';
 import type { FailureEvent } from '@/lib/social-hub/health/types';
 
-const STAGE_ORDER = ['jev-scoring', 'reporter', 'writer', 'editor', 'fact-checker', 'mechanical', 'design'];
+const STAGE_ORDER = ['jev-scoring', 'reporter', 'writer', 'editor', 'captioner', 'fact-checker', 'mechanical', 'design'];
 
 type RunRow = { id: string; status: string; stop_reason: string | null; error: string | null; total_usd: number; cap_usd: number; posts: number; at: string };
 type SetAside = { story_id: string; stage: string; reason_code: string; kind: string; detail: string; at: string };

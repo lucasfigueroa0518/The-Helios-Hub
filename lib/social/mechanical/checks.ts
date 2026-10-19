@@ -77,12 +77,13 @@ export function fixTrailingComma(s: string): string {
 const displayOutlet = (s: string) => s.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
 const nameKey = (s: string) => displayOutlet(s).toLowerCase().replace(/[^a-z0-9]+/g, '');
 
-/** Every brief ID the final post's claim tags rest on (chosen cover, slides, quote and number IDs, caption). */
+/** Every brief ID the final post's claim tags rest on (chosen cover, slides, quote and number IDs, caption and the builder's read). */
 export function citedIds(d: FilledDraft): string[] {
   const ids = [
     ...d.cover_options[d.chosen_cover - 1]!.facts,
     ...d.slides.flatMap((s) => [...s.headline.facts, ...(s.body?.facts ?? []), ...(s.quote_id ? [s.quote_id] : []), ...s.number_ids]),
     ...d.caption.facts,
+    ...(d.caption_read?.facts ?? []),
   ];
   return [...new Set(ids)];
 }
