@@ -46,6 +46,8 @@ test('Editor prompt = §4 text with the submit_draft OUTPUT line, then RULES_BLO
   ].join('\n\n');
   assert.equal(EDITOR_SYSTEM, expected);
   assert.ok(EDITOR_SYSTEM.includes('### Checked by code'));
+  assert.doesNotMatch(EDITOR_SYSTEM, /goes to the caption/);
+  assert.doesNotMatch(EDITOR_SYSTEM, /cover options, slides, caption/);
 });
 
 test('Fact-checker prompt = §5 text with OUTPUT → submit_flags; section list unchanged', () => {
@@ -115,7 +117,10 @@ test('Editor: gets the draft and the brief, returns submit_draft; a powers viola
 const flag = (over: Partial<Flag> = {}): Flag => ({
   where: { part: 'slide', number: 2 }, quoted_text: 'on Truth Social', type: 2, fact_id: 'F1', fix: { kind: 'cut', replacement: null }, ...over,
 });
-const filled = () => fillDraft(sifDraft(), brief());
+/** What the Fact-checker sees: the Editor's draft after the captioner has written the news part (the Writer and Editor leave it empty). */
+const captioned = () => ({ ...sifDraft(), caption: { text: 'Trump announced a Super Intelligence Force on Sunday. Source: TechCrunch, October 4, 2026.', facts: ['F1'] } });
+
+const filled = () => fillDraft(captioned(), brief());
 const flagErrors = (f: FlagsSubmission) => {
   try {
     checkFlags(f, filled(), brief());
@@ -136,7 +141,7 @@ test('flags check: quoted text must be in the named part; SWAP words must be cop
 
 // ── Flags: apply (spec §4.2b) ──────────────────────────────────────────
 
-const apply = (flags: Flag[], main = false) => applyFlags(sifDraft(), { flags, main_claim_false: main }, brief());
+const apply = (flags: Flag[], main = false) => applyFlags(captioned(), { flags, main_claim_false: main }, brief());
 
 test('apply: SWAP and CUT are applied by code; nothing else changes', () => {
   const o = apply([
@@ -163,8 +168,17 @@ test('apply: a cut that empties a headline drops the slide; a flag inside the fi
   }
 });
 
+test('apply: an empty caption passes through; a caption the flags cut to nothing is a fresh draft', () => {
+  const f = [flag({ where: { part: 'slide', number: 3 }, quoted_text: ', with three vice chairs', fact_id: 'F3' })];
+  assert.equal(applyFlags(sifDraft(), { flags: f, main_claim_false: false }, brief()).kind, 'ok'); // pre-captioner: caption is ''
+  const cap = captioned();
+  cap.caption.text = 'Trump announced it.';
+  const o = applyFlags(cap, { flags: [flag({ where: { part: 'caption', number: null }, quoted_text: 'Trump announced it.', fix: { kind: 'cut', replacement: null } })], main_claim_false: false }, brief());
+  assert.deepEqual(o.kind === 'fresh-draft' && o.why, 'the caption was cut to nothing');
+});
+
 test('apply: a draft that is short as written is not a fresh-draft trigger (only cuts are)', () => {
-  const short = sifDraft();
+  const short = captioned();
   short.slides = short.slides.slice(0, 3);
   assert.equal(applyFlags(short, { flags: [], main_claim_false: false }, brief()).kind, 'ok');
 });
@@ -191,7 +205,7 @@ test('apply: fewer than 5 slides, or the key slide cut → fresh draft; main cla
 
 test('Fact-checker: reads all 3 covers with quotes and numbers filled; returns flags and the outcome', async () => {
   const { create, requests } = scripted([msg([tool('submit_flags', { flags: [flag({ where: { part: 'slide', number: 3 }, quoted_text: ', with three vice chairs', fact_id: 'F3' })], main_claim_false: false })])]);
-  const r = await runFactCheck(brief(), { submission: sifDraft(), filled: filled() }, { create });
+  const r = await runFactCheck(brief(), { submission: captioned(), filled: filled() }, { create });
   assert.ok(r.ok);
   assert.equal(r.outcome.kind, 'ok');
   const sent = JSON.parse(requests[0].messages[0].content.split('\n\nBRIEF\n')[0].slice('DRAFT\n'.length));

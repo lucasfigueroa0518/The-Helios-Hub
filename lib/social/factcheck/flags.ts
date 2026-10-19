@@ -206,7 +206,8 @@ export function applyFlags(draft: DraftSubmission, flags: FlagsSubmission, brief
     }
   }
 
-  if (!d.caption.text) return { kind: 'fresh-draft', why: 'the caption was cut to nothing', applied };
+  // Only a caption the flags emptied counts; one that was empty going in (before the captioner runs) passes through.
+  if (draft.caption.text && !d.caption.text) return { kind: 'fresh-draft', why: 'the caption was cut to nothing', applied };
   if (dropped.has(keyIndex)) return { kind: 'fresh-draft', why: `the key slide (slide ${keyIndex + 2}) was cut`, applied };
   const remaining = d.slides.length - dropped.size;
   // Spec §4.2b: only when the cuts leave too few; a short draft as written is not the Fact-checker's to fix.

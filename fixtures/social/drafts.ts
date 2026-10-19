@@ -37,7 +37,7 @@ export function sifDraft(): DraftSubmission {
       { ...text('Why the name matters', ['B2'], 'Trump signed an executive order seeking to rebrand AI as super intelligence.', ['B2']), visual: v('thematic', 'pen and paper'), fallback_visual: v('thematic', 'signed document'), subject_ids: ['S1'], icon: 'file-text' },
     ],
     follow: FOLLOW_LINE,
-    caption: { text: 'Trump announced a Super Intelligence Force on Sunday. Source: TechCrunch, October 4, 2026.', facts: ['F1'] },
+    caption: { text: '', facts: [] },
     edit_notes: [],
   };
 }

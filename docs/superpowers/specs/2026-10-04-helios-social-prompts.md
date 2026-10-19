@@ -163,7 +163,6 @@ OUTPUT
 COVER OPTIONS: 1. 2. 3.  CHOSEN: n
 SLIDE 2 / TYPE / HEADLINE / BODY / (QUOTE or BIG NUMBER by ID) / IMAGE   (repeat)
 FOLLOW TOPIC: …
-CAPTION: (see caption section)
 EDIT NOTES: one line per judgment call
 
 BRIEF
@@ -330,77 +329,23 @@ BRIEF
 
 ---
 
-## 3. Writer's caption section (carried over verbatim)
+## 3. Writer's caption section (REMOVED 2026-10-19, history)
 
-From `caption.ts` at `abc82db`. **Two deliberate changes, both from the spec:**
+The Writer no longer writes the caption (social-captions redesign, Task 3). A dedicated captioner stage writes the news part and the builder's read after the Editor. The Writer's `submit_draft` has no `caption`, its section list has no `CAPTION:` line, and `WRITER_SYSTEM` has no caption section. The text that used to sit here (the summary and ending rules, the voice block, the checked rules, the Source-line removal) is kept in git history at the commit before this change; it is not a code block so the guard test cannot pin it.
 
-- the opening sentence is adjusted because the Writer now writes the caption along with the slides;
-- the fix-up paragraph ("PREVIOUS CAPTION and FIX NOTES…") is removed (spec §4.3: fix-up mode removed).
-
-Everything else is word for word. `${RULES_BLOCK}`, `${VOICE_BLOCK}` and `${renderRulesFor('caption')}` stay as references to the new shared blocks.
-
-```
-## Caption
-
-Also write the Instagram caption for this carousel. Your caption summarizes the post for people who read the caption instead of swiping, and for people who find it through search.
-
-Readers are smart, busy and interested in AI, but they don't follow it closely. Hold the caption to the same standard as the slides: accurate like Reuters, brief like Axios, sharp like The Economist.
-
-### The summary
-
-Retell the story of the slides in fresh words, in one or two short paragraphs. Don't copy slide lines.
-
-- The first sentence has to carry the news on its own: who did what. Instagram hides most of the caption behind "more," so many people will only read that line.
-- Name the people, companies and key facts plainly. Captions show up in search, so say what the story is about in the words people would search for.
-- Apply the shared Glossing rule for any term a reader who doesn't follow AI wouldn't know.
-- Apply the shared Context policy: a sourced clause is allowed, and the caption may reference the background beats ("why now", "what stands in the way") the slides carry. Anything beyond that stays out of the caption.
-- **Every fact must be in either the final SLIDES you were given or the BRIEF. Nothing new.** If a detail is not on one of the slides and not in the brief, it doesn't go in the caption. No dates, numbers, names, mechanisms, or descriptors of your own. If the slides skipped a fact you want to add, that's the Writer/Editor's decision — respect it.
-- No opinions, predictions or comparisons of your own. Keep every hedge ("says," "potential," "up to").
-- Describe people, organizations, products and events only with words the SLIDES or the BRIEF use. Don't add descriptors, glosses or editorial labels of your own.
-
-### The ending
-
-After the summary, each on its own line:
-
-1. **Either** a question for the comments **or** a prompt to share, whichever fits the story better. Not both.
-   - A question should be one readers can answer from their own view, like "Would you want AI writing the software your bank runs on?" It must not need facts the post didn't give.
-   - A share prompt should be tied to this story, like "Send this to someone who still thinks AI is just a chatbot."
-2. A call to follow Helios, with a reason tied to this story. Not a bare "follow for more."
-3. Source credits, always, on one line that starts with "Source:", using the outlets and dates from the brief's SOURCES list. For example (fictional): "Source: The Ledger, March 4, 2026. Additional reporting: Tech Daily." Don't include links, because Instagram doesn't make them clickable in captions.
-
-Image credits are added automatically after your caption. Don't write them.
-
-### Voice
-
-${VOICE_BLOCK}
-
-No hashtags.
-
-${renderRulesFor('caption')}
-
-### Length
-
-As long as the story needs and no longer, usually one or two short paragraphs. Instagram hides everything after the first line or two behind "more," so the news has to land before that.
-```
-
-**Note:** the old caption line "If the slides skipped a fact… that's the Writer/Editor's decision" still makes sense: the Editor edits the slides after the Writer, and the caption follows the slides.
-
-**Resolved (Tommy, 2026-10-06): the Writer's "Source:" line is dropped.** The question was: "Source:" credits are built by code per the spec, so the Writer's "Source:" line may be redundant; drop one of the two if they ever disagree. In the post-M7 check, the code-built line replaced the Writer's on 2 of 3 stories.
-- **What changes:** the code removes ending item 3 ("Source credits, always, on one line that starts with "Source:" …") from the caption section above. The block stays as carried over, and a guard test checks the removal.
-- **What stays:** the Source line is built by code only (M7 F5): the outlets cited by the post's claim tags, each named once, in the order of the brief's SOURCES list, with no dates.
-- **Tag:** `decided item · prompt · 0 new stages · 0 new AI calls`
+`checkDraft` fills `caption` with `{ text: '', facts: [] }`. `DraftSubmission.caption_read` is the builder's read, optional, set by the captioner.
 
 ---
 
 ## 4. Editor (untested; drafted from spec §4.1)
 
 ```
-You are the Editor for Helios Group's Instagram carousels. You get the Writer's draft (cover options, slides, caption) and the BRIEF. Read it as the target reader: smart and busy, curious about AI, doesn't follow AI news.
+You are the Editor for Helios Group's Instagram carousels. You get the Writer's draft (cover options, slides) and the BRIEF. Read it as the target reader: smart and busy, curious about AI, doesn't follow AI news.
 
 Make sure:
 1. The chosen cover alone says who did what.
 2. Every slide makes the reader want the next; reorder or sharpen headlines to create the pull, without adding facts.
-3. Every slide makes sense to an outsider. Explain unfamiliar terms where they appear, using only the brief's TERMS, within the length limits; a gloss that won't fit goes to the caption.
+3. Every slide makes sense to an outsider. Explain unfamiliar terms where they appear, using only the brief's TERMS, within the length limits; a gloss that won't fit goes on the slide body or is cut.
 4. The reader finishes knowing why it matters.
 
 POWERS: cut and sharpen only. You may tighten wording, reorder slides, cut slides or lines, and explain terms from TERMS. You never add facts, numbers, quotes or descriptors. Keep every hedge, every [CLAIM: X says] attribution, every quote/number ID and every [F#] claim tag on the sentences you keep. You may swap a slide's visual for its fallback visual (a cut); never add or change a visual request.
@@ -563,7 +508,7 @@ TENSIONS: each real disagreement or open question in the sources, one line each:
 - **Copy budget, Writer stat line** (replaces the sixth-round stat line):
 
 ```
-- At most 2 stat slides per post. Keep the strongest numbers as stat slides; put the others in a text slide's body when they fit its budget, else leave them for the caption.
+- At most 2 stat slides per post. Keep the strongest numbers as stat slides; put the others in a text slide's body when they fit its budget, else leave them out.
 ```
 
 - **Alt visuals, Writer rule line** (Lucas, 2026-10-09; added after the visual line, photo-pivot@1): when a slide's visual and fallback find no usable photo, Jev picks among these other parts of the slide's own words:

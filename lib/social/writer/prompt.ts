@@ -8,9 +8,9 @@
  *   lines, then the shared Context policy and Glossing sections.
  *   OUTPUT (Tommy, 2026-10-05): "OUTPUT" → "When you're done, call
  *   submit_draft with these sections:"; the section list is unchanged.
- *   CAPTION: the tested caption section (prompts file §3) follows, as
- *   carried over; its check-rules placeholder renders the M7 checks
- *   (C1–C5, renderRulesFor('writer'); Tommy, 2026-10-06).
+ *   CAPTION REMOVED (social-captions redesign, 2026-10-19): the Writer no longer
+ *   writes the caption (the captioner stage does); the CAPTION section line and
+ *   the caption section are gone, and the prompts file keeps the old text as history.
  *   SOURCE LINE REMOVED (Tommy, 2026-10-06): ending item 3 ("Source credits,
  *   always, …") is dropped; code builds the Source line (M7 F5).
  *   CAPTION WORDING (Tommy, 2026-10-05; known-wrong carry-overs): "— respect it"
@@ -25,22 +25,21 @@
  *   quote (KINDS_RULE); the spread line and CONCEPT are gone (Jev lays slides
  *   out; slide buckets spec); at most 2 stat slides stays.
  *   COPY BUDGET (Tommy, 2026-10-08): the stat line's extra numbers go in a
- *   body only when they fit its budget, else the caption (prompts file §8).
+ *   body only when they fit its budget, else left out (prompts file §8).
  *   FOLLOW LINE (Lucas, 2026-10-12; topic Tommy, 2026-10-12): the last slide is
  *   an account CTA that names the kind of story, never this story or a
  *   follow-up to it; code builds the line from the Writer's topic or falls back.
  *   PLACEMENT (caching): "BRIEF\n{{brief}}" moves to the user message;
  *   the brief is the Reporter's JSON, with SUBJECTS marked well_known by code.
  */
-import { RULES_BLOCK, WRITER_RULES, renderRulesFor } from '@/lib/social/prompts/rules-block';
-import { VOICE_BLOCK } from '@/lib/social/prompts/voice-block';
+import { RULES_BLOCK, WRITER_RULES } from '@/lib/social/prompts/rules-block';
 
 export const WRITER_INTRO = `You are the Writer for Helios Group, an Instagram page that turns one AI news story into a carousel for smart, busy readers interested in AI who don't follow it closely. Write from the BRIEF only. No tools, no web, no outside knowledge.`;
 
 /** The three "added since the test" rule lines (prompts file §2), in the tested terse style. */
-export const WRITER_ADDED_RULES = `- Claim tags: give every cover, headline, body and caption line the IDs of the brief entries it rests on (F3, B1, Q2, N1) in its facts list; empty if none. Code checks them.
+export const WRITER_ADDED_RULES = `- Claim tags: give every cover, headline and body line the IDs of the brief entries it rests on (F3, B1, Q2, N1) in its facts list; empty if none. Code checks them.
 - Widely known: each SUBJECTS entry has well_known (true/false), set by code from Wikidata. Use it for the COVER rule; don't guess.
-- At most 2 stat slides per post. Keep the strongest numbers as stat slides; put the others in a text slide's body when they fit its budget, else leave them for the caption.`;
+- At most 2 stat slides per post. Keep the strongest numbers as stat slides; put the others in a text slide's body when they fit its budget, else leave them out.`;
 
 /** Writer prompt v2 (Tommy, 2026-10-06; Lucas: slides feel isolated): momentum across the post. Word for word from the prompts file. */
 export const WRITER_MOMENTUM_RULES = `- Plan the post as one story, not a list of facts. Outline the arc before writing: the hook (cover) → what happened → why it matters → the turn (the pushback, the catch, the conflict) → what's still unknown or what comes next.
@@ -59,59 +58,13 @@ export const WRITER_FOLLOW_RULE = '- FOLLOW TOPIC is the kind of story this is, 
 export const WRITER_SECTION_LIST = `COVER OPTIONS: 1. 2. 3.  CHOSEN: n
 SLIDE 2 / TYPE / HEADLINE / BODY / (QUOTE or BIG NUMBER by ID) / VISUAL / FALLBACK VISUAL   (repeat)
 FOLLOW TOPIC: the kind of story this is, 2 to 5 plain words
-CAPTION: (see caption section)
 EDIT NOTES: one line per judgment call`;
-
-const CAPTION_CHECK_RULES = renderRulesFor('writer');
-
-/** Prompts file §3, as carried over (verbatim apart from its two listed changes). */
-export const WRITER_CAPTION_SECTION = `## Caption
-
-Also write the Instagram caption for this carousel. Your caption summarizes the post for people who read the caption instead of swiping, and for people who find it through search.
-
-Readers are smart, busy and interested in AI, but they don't follow it closely. Hold the caption to the same standard as the slides: accurate like Reuters, brief like Axios, sharp like The Economist.
-
-### The summary
-
-Retell the story of the slides in fresh words, in one or two short paragraphs. Don't copy slide lines.
-
-- The first sentence has to carry the news on its own: who did what. Instagram hides most of the caption behind "more," so many people will only read that line.
-- Name the people, companies and key facts plainly. Captions show up in search, so say what the story is about in the words people would search for.
-- Apply the shared Glossing rule for any term a reader who doesn't follow AI wouldn't know.
-- Apply the shared Context policy: a sourced clause is allowed, and the caption may reference the background beats ("why now", "what stands in the way") the slides carry. Anything beyond that stays out of the caption.
-- **Every fact must be in either the slides you wrote or the BRIEF. Nothing new.** If a detail is not on one of the slides and not in the brief, it doesn't go in the caption. No dates, numbers, names, mechanisms, or descriptors of your own. If the slides skipped a fact you want to add, that's the Writer/Editor's decision. Respect it.
-- No opinions, predictions or comparisons of your own. Keep every hedge ("says," "potential," "up to").
-- Describe people, organizations, products and events only with words the SLIDES or the BRIEF use. Don't add descriptors, glosses or editorial labels of your own.
-
-### The ending
-
-After the summary, each on its own line:
-
-1. **Either** a question for the comments **or** a prompt to share, whichever fits the story better. Not both.
-   - A question should be one readers can answer from their own view, like "Would you want AI writing the software your bank runs on?" It must not need facts the post didn't give.
-   - A share prompt should be tied to this story, like "Send this to someone who still thinks AI is just a chatbot."
-2. A call to follow Helios, with a reason tied to this story. Not a bare "follow for more."
-
-Image credits are added automatically after your caption. Don't write them.
-
-### Voice
-
-${VOICE_BLOCK}
-
-No hashtags.
-
-${CAPTION_CHECK_RULES}
-
-### Length
-
-As long as the story needs and no longer, usually one or two short paragraphs. Instagram hides everything after the first line or two behind "more," so the news has to land before that.`;
 
 export const WRITER_SYSTEM = [
   WRITER_INTRO,
   `## Rules\n\n${WRITER_RULES}\n${WRITER_ADDED_RULES}\n${WRITER_MOMENTUM_RULES}\n${WRITER_SLIDE_RULE}\n${WRITER_FOLLOW_RULE}`,
   CONTEXT_AND_GLOSSING,
   `When you're done, call submit_draft with these sections:\n${WRITER_SECTION_LIST}`,
-  WRITER_CAPTION_SECTION,
 ].join('\n\n').replace(/\n{3,}/g, '\n\n');
 
 /** The user message: the tested "BRIEF" heading and the brief as JSON. */

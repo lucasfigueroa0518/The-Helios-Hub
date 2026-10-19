@@ -113,7 +113,10 @@ export type DraftSubmission = {
   follow: string;
   /** The kind of story this is, 2 to 5 plain words ("AI safety stories"); code builds the follow line from it. */
   follow_topic?: string;
+  /** The news part of the caption. The Writer and Editor don't write it: it is `{ text: '', facts: [] }` until the captioner runs. */
   caption: TaggedLine;
+  /** The builder's read, written by the captioner. Absent until then. */
+  caption_read?: TaggedLine;
   edit_notes: string[];
 };
 
@@ -168,7 +171,6 @@ export const DRAFT_SCHEMA = optional(obj({
   },
   follow: { type: 'string', description: `The FOLLOW line. Code sets it from follow_topic; any value is replaced. Write: ${FOLLOW_LINE}` },
   follow_topic: { type: 'string', description: 'The kind of story this is, 2 to 5 plain lowercase words except "AI", like "AI safety stories", "AI deal news", "AI policy stories". Never a name, never about this story\'s next chapter. The closing line reads "Follow Helios for more [this] like this."' },
-  caption: tagged('The full caption (see the caption section).'),
   edit_notes: { ...strList, description: 'One line per judgment call.' },
 }), 'follow_topic');
 
@@ -206,11 +208,15 @@ export function isExactExcerpt(excerpt: string, quote: string): boolean {
  * cover in range, quote/number IDs exist (never a cut-off quote), excerpts
  * exact, stat slides carry the right number of IDs, claim-tag IDs exist.
  * Writing quality, lengths and voice are not checked here.
+ * It ignores any caption in the tool input and returns an empty one: the captioner owns the caption.
  */
 export function checkDraft(input: unknown, brief: Brief): DraftSubmission {
-  const shape = checkShape(input, DRAFT_SCHEMA, 'draft');
+  // The Writer and Editor don't write the caption (the captioner does, later). A draft echoed back with the
+  // caption fields (the Editor sees the draft as JSON) is not an error: they are dropped and the caption is emptied.
+  const { caption: _caption, caption_read: _read, ...written } = (input !== null && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  const shape = checkShape(input !== null && typeof input === 'object' ? written : input, DRAFT_SCHEMA, 'draft');
   if (shape.length > 0) throw new DraftValidationError(shape);
-  const d = input as DraftSubmission;
+  const d = { ...written, caption: { text: '', facts: [] } } as unknown as DraftSubmission;
   const errors: BriefError[] = [];
   const quotes = new Map(brief.quotes.map((q) => [q.id, q]));
   const numbers = new Set(brief.numbers.map((n) => n.id));
@@ -262,7 +268,7 @@ export function checkDraft(input: unknown, brief: Brief): DraftSubmission {
     }
     for (const id of s.number_ids) if (!numbers.has(id)) errors.push({ section: at, message: `number ${id} isn't in the brief` });
   });
-  tagCheck('caption', d.caption.facts);
+  tagCheck('caption', d.caption.facts); // empty until the captioner runs
   d.follow = followLine(d.follow_topic);
 
   if (errors.length > 0) throw new DraftValidationError(errors);
