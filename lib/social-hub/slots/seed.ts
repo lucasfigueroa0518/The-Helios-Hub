@@ -3,12 +3,6 @@ import { PLAN } from '@/lib/social-hub/views/plan';
 
 import type { SlotQuery, TemplateRow } from './types';
 
-/**
- * The template that behaves exactly like today (spec §1 Seed): every-day
- * windows from PLAN, Carousels on every day but Last Few Days', LFD's one
- * window on its days, each Stories series on its days. Reels Trial,
- * Explainers Main. tests/slots-resolve.test.ts pins it to windowsOn.
- */
 export type StorySeries = 'morning_download' | 'guess_the_number' | 'free_vs_paid';
 export type SeedInputs = { lfdDays: readonly number[]; storyDays: Record<StorySeries, readonly number[]> };
 
@@ -24,6 +18,12 @@ export const DEFAULT_SEED_INPUTS: SeedInputs = {
   },
 };
 
+/**
+ * The template that behaves exactly like today (spec §1 Seed): every-day
+ * windows from PLAN, Carousels on every day but Last Few Days', LFD's one
+ * window on its days, each Stories series on its days. Reels Trial,
+ * Explainers Main. tests/slots-resolve.test.ts pins it to windowsOn.
+ */
 export function seedTemplate(input: SeedInputs): TemplateRow[] {
   const rows: TemplateRow[] = [];
   for (const weekday of EVERY_DAY) {
