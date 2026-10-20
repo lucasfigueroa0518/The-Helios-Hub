@@ -3,11 +3,16 @@ import type { HubQuery } from '@/lib/social-hub/db';
 
 export type PreviousPost = { nyDate: string; ideaIds: string[]; stories: Array<{ headline: string; body: string }> };
 
-/** The last n posts that weren't rejected, newest first. Their stories feed the repeat check (spec §3.3). */
-export async function previousPosts(q: HubQuery, n: number): Promise<PreviousPost[]> {
+/**
+ * The last n posts that weren't rejected, newest first. Their stories feed the repeat check (spec §3.3).
+ * `beforeNyDate` (a replay in the meme lab's LFD simulation) keeps only posts dated before that day.
+ */
+export async function previousPosts(q: HubQuery, n: number, beforeNyDate?: string): Promise<PreviousPost[]> {
   const { rows } = await q<{ ny_date: string; idea_ids: string[]; stories: Array<{ headline: string; body: string }> }>(
-    `SELECT ny_date::text AS ny_date, idea_ids, stories FROM lfd.posts WHERE status <> 'rejected' ORDER BY ny_date DESC, created_at DESC LIMIT $1`,
-    [n],
+    beforeNyDate
+      ? `SELECT ny_date::text AS ny_date, idea_ids, stories FROM lfd.posts WHERE status <> 'rejected' AND ny_date < $2::date ORDER BY ny_date DESC, created_at DESC LIMIT $1`
+      : `SELECT ny_date::text AS ny_date, idea_ids, stories FROM lfd.posts WHERE status <> 'rejected' ORDER BY ny_date DESC, created_at DESC LIMIT $1`,
+    beforeNyDate ? [n, beforeNyDate] : [n],
   );
   return rows.map((r) => ({ nyDate: r.ny_date, ideaIds: r.idea_ids, stories: r.stories.map((s) => ({ headline: s.headline, body: s.body })) }));
 }
@@ -126,5 +131,14 @@ export async function failRun(q: HubQuery, id: string, error: string): Promise<v
   await q(
     `UPDATE lfd.runs SET status = 'failed', finished_at = now(), error = $2 WHERE id = $1 AND status = 'running'`,
     [id, error.slice(0, 2000)],
+  );
+}
+
+/** The meme stage's spend and outcome on the run (lib/lfd/worker.ts): added to its total, kept in its record. */
+export async function recordMemesSpend(q: HubQuery, runId: string, o: { placed: number; gated: number; costUsd: number; skipped?: string }): Promise<void> {
+  await q(
+    `UPDATE lfd.runs SET total_usd = total_usd + $2::double precision, claude_usd = claude_usd + $2::double precision,
+            record = record || jsonb_build_object('memes', $3::jsonb) WHERE id = $1`,
+    [runId, o.costUsd, JSON.stringify(o)],
   );
 }

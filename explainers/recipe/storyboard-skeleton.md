@@ -34,7 +34,7 @@ music: none
 - anchor: scene
 - shots: <fill in: usually one shot (kind — subject); two if the frame runs past 6s>
 
-<fill in: the picked hook, in motion at frame 0 and clear on its own; the title card ("today's brain break:" + the term) starts writing itself in the top band on the first frame. The line is the opener template; its slot names what the hook shows ("this little shop", "this soggy forecaster").>
+<fill in: the picked hook, in motion at frame 0 and clear on its own, and its critter (the hero the bank's opener will cut out, circle or zoom into). The opener, "AI BRAIN BREAK" and the title card are code's (EX3-102). The line is the opener template; its slot names what the hook shows ("this little shop", "this soggy forecaster").>
 
 ## Frame 2 — Curiosity gap
 

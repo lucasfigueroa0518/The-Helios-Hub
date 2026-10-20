@@ -1,0 +1,2952 @@
+{
+ "regime": "fd22b427977c",
+ "taggerVersion": "meme-story-tags@3",
+ "threshold": 0.92,
+ "createdAt": "2026-10-20T01:59:25.052Z",
+ "rows": [
+  {
+   "storyId": "alpha-nist.github.io",
+   "tags": {
+    "irony": false,
+    "launch": true,
+    "scores": {
+     "launch": 0.54,
+     "backfire": 0.09,
+     "conflict": 0.07,
+     "reversal": 0.08,
+     "hypocrisy": 0.06,
+     "ironic_gap": 0.13,
+     "number_story": 0.12,
+     "contradiction": 0.06
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 9,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "theguardian.com/world/2026/oct/09/flock-job-cuts",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.43,
+     "conflict": 0.34,
+     "reversal": 0.24,
+     "hypocrisy": 0.08,
+     "ironic_gap": 0.33,
+     "number_story": 0.86,
+     "contradiction": 0.12
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 84,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbminwfbvv95cuxoeglnvxvmsxjks1llv1jdt1p5zlrjr3jwthdtsuy1qlnqtfrocwz0ck81cupxwfl4y20ybtvvvknfaudzotixvwpwefp2mxviuvjwqnayanlbcgq1y0nurfvhbxdnm3bprml6b3vjddbgchkwrhdtzfjqtgt4wvrnrm9fnjd0nhjbztfkwgrnag82qu1jv0iwshm1zxzrum8?oc=5",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.11,
+     "backfire": 0.04,
+     "conflict": 0.05,
+     "reversal": 0.03,
+     "hypocrisy": 0.1,
+     "ironic_gap": 0.24,
+     "number_story": 0.03,
+     "contradiction": 0.05
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 51,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "theverge.com/tech/1011938/muse-ai-data-friends-consent",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.04,
+     "backfire": 0.09,
+     "conflict": 0.06,
+     "reversal": 0.04,
+     "hypocrisy": 0.09,
+     "ironic_gap": 0.19,
+     "number_story": 0.03,
+     "contradiction": 0.06
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 54,
+    "shortHeadline": true
+   },
+   "anyGood": false
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmihafbvv95cuxnewfiswdkdm9anf9stuh3swl4a2tqemjabev5q1zzamvznnhpmtbuzvnsrwu1tevmsgdoafrxvkzkvmxytgs5rtbqv2xrsjbgvepyqwg3snrfenc5qtjca0o0bgetcxj0quy5wgn5ynuyvwh6cxaxa2d3rdvqylhuq05pdwk?oc=5",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.04,
+     "backfire": 0.26,
+     "conflict": 0.54,
+     "reversal": 0.04,
+     "hypocrisy": 0.12,
+     "ironic_gap": 0.42,
+     "number_story": 0.04,
+     "contradiction": 0.12
+    },
+    "version": "meme-story-tags@3",
+    "conflict": true,
+    "numberStory": false,
+    "headlineChars": 70,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmiuafbvv95cuxqoe1zd2vlsedval90mdi1mw1revdswthotjzfn3b6lvzfcgttexhwmufkm21jbdfkclrpqxhystk1rdnxd1pscuiydjnobvjrt25pvu51t2xfchqyn2c3ykjbmhn0bgfzn2r6luo0svm5zkjwvtrbanr0zvrbww5mrw9psgpqmwywztzwrtjmnghcv3bnzef4tfmyrkg2vhk1m3btv3fkttmzzdrkenvamfbla0d5ujrp?oc=5",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.55,
+     "conflict": 0.83,
+     "reversal": 0.07,
+     "hypocrisy": 0.15,
+     "ironic_gap": 0.84,
+     "number_story": 0.03,
+     "contradiction": 0.15
+    },
+    "version": "meme-story-tags@3",
+    "conflict": true,
+    "numberStory": false,
+    "headlineChars": 116,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "futurism.com/future-society/mark-zuckerberg-meta-muse-ai-agent-safety-issues",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.14,
+     "backfire": 0.73,
+     "conflict": 0.55,
+     "reversal": 0.13,
+     "hypocrisy": 0.18,
+     "ironic_gap": 0.76,
+     "number_story": 0.04,
+     "contradiction": 0.29
+    },
+    "version": "meme-story-tags@3",
+    "conflict": true,
+    "numberStory": false,
+    "headlineChars": 65,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmiwafbvv95cuxnc2rid0utukp2cffkevreym5poc1os3pfrevrqtf3amtjmnrfdgzatlywrvfvnlfhrk1sawgznmpuqwoydhjfbllrew9wdlrsbfmynjjfy045cdlhzhlcnwvhrnpfczbjtl8zwndzmufkshc2rzl6ahrdqm1qr2rrnxljas1oa1jsqkdpohlprlzhv3zibxmzlty4tmxfqji2u3dvujjyuw9wvutkwelqunh2rzzuymfhb0twtdv3dje?oc=5",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.21,
+     "backfire": 0.03,
+     "conflict": 0.02,
+     "reversal": 0.03,
+     "hypocrisy": 0.04,
+     "ironic_gap": 0.25,
+     "number_story": 0.9,
+     "contradiction": 0.05
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 99,
+    "shortHeadline": false
+   },
+   "anyGood": false
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmiekfvx3lxtfbyv25fvgdiuu92qvbhagzjmzfqujutsfp1b3zjdfpfv0x4ai1va1qwbku3s3venvphz3znouswynnub2h4vnjtd1byaw0ys3pqrzdpmzuzy0l0rkztsuzpuvh0qkpisvbttuxrue5ozfd1mdvqynh1mupr?oc=5",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.37,
+     "backfire": 0.12,
+     "conflict": 0.34,
+     "reversal": 0.05,
+     "hypocrisy": 0.08,
+     "ironic_gap": 0.21,
+     "number_story": 0.05,
+     "contradiction": 0.12
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 81,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "techcrunch.com/podcast/call-it-ai-call-it-super-intelligence-only-2-of-consumers-are-buying-it",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.08,
+     "backfire": 0.17,
+     "conflict": 0.11,
+     "reversal": 0.09,
+     "hypocrisy": 0.2,
+     "ironic_gap": 0.73,
+     "number_story": 0.56,
+     "contradiction": 0.23
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 74,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "futurism.com/artificial-intelligence/federal-reserve-ai-data-center-buildout-more-expensive",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.18,
+     "conflict": 0.06,
+     "reversal": 0.09,
+     "hypocrisy": 0.08,
+     "ironic_gap": 0.29,
+     "number_story": 0.07,
+     "contradiction": 0.08
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 80,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmi3gfbvv95cuxpz1y3nta5svjzmgzpq1hna0tuzw5owevucnrfvzfhy0hguehjzhzxws0ttk5neejzb0fkwk1uqlbtrti2welouey2stqtbho3zxznwxrja3joy2xyvgvkyzhzrevnoutcdukyqwf0ovfdy3l4ddg1sfnmzmtvms1renzts3vun0lssdjbdlm2zv9loutvntvkvdi3agxdyu5guxjmlvb4de5er2jmbgnmtzlrrmn6czhmrmnaeddgdlcwazy5wfixz1zfnmdcsdnkdheyn0j6t2f6v09md1e?oc=5",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.1,
+     "backfire": 0.05,
+     "conflict": 0.1,
+     "reversal": 0.05,
+     "hypocrisy": 0.08,
+     "ironic_gap": 0.22,
+     "number_story": 0.04,
+     "contradiction": 0.07
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 116,
+    "shortHeadline": false
+   },
+   "anyGood": false
+  },
+  {
+   "storyId": "futurism.com/artificial-intelligence/director-slop-movie-savings",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.26,
+     "backfire": 0.68,
+     "conflict": 0.05,
+     "reversal": 0.08,
+     "hypocrisy": 0.17,
+     "ironic_gap": 0.91,
+     "number_story": 0.59,
+     "contradiction": 0.55
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 108,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "futurism.com/future-society/police-upset-flock-camera-alpr-surveillance-canada",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.07,
+     "backfire": 0.42,
+     "conflict": 0.55,
+     "reversal": 0.04,
+     "hypocrisy": 0.26,
+     "ironic_gap": 0.8,
+     "number_story": 0.03,
+     "contradiction": 0.1
+    },
+    "version": "meme-story-tags@3",
+    "conflict": true,
+    "numberStory": false,
+    "headlineChars": 83,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "techcrunch.com/2026/10/06/ex-ramp-engineers-raise-20m-for-platform-melius-after-scrapping-their-first-product",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.13,
+     "backfire": 0.23,
+     "conflict": 0.04,
+     "reversal": 0.57,
+     "hypocrisy": 0.06,
+     "ironic_gap": 0.51,
+     "number_story": 0.88,
+     "contradiction": 0.48
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 84,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmidkfvx3lxte9jqwhkclnlsmv2tezzy19jyw8wq3pkzvhfnzflaelxdhh2bfprtgwyywxivmtmd2temew3bjvamfjfqu9xu0lvq2q1s2owb185yxfpdelfzzvxtnj6b1fmswdzafjstffwb1dtrzbqbjjjcngyb0e?oc=5",
+   "tags": {
+    "irony": false,
+    "launch": true,
+    "scores": {
+     "launch": 0.98,
+     "backfire": 0.05,
+     "conflict": 0.47,
+     "reversal": 0.03,
+     "hypocrisy": 0.04,
+     "ironic_gap": 0.15,
+     "number_story": 0.04,
+     "contradiction": 0.09
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 87,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "bbc.co.uk/news/articles/c687z8127302o?at_medium=rss&amp;at_campaign=rss",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.05,
+     "backfire": 0.03,
+     "conflict": 0.15,
+     "reversal": 0.03,
+     "hypocrisy": 0.03,
+     "ironic_gap": 0.1,
+     "number_story": 0.91,
+     "contradiction": 0.11
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 51,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "bbc.co.uk/news/articles/c1wxdjx27ypo?at_medium=rss&amp;at_campaign=rss",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.04,
+     "backfire": 0.1,
+     "conflict": 0.12,
+     "reversal": 0.05,
+     "hypocrisy": 0.05,
+     "ironic_gap": 0.37,
+     "number_story": 0.05,
+     "contradiction": 0.12
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 47,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "futurism.com/artificial-intelligence/man-shows-up-ai-job-interview-own-ai",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.04,
+     "backfire": 0.22,
+     "conflict": 0.06,
+     "reversal": 0.04,
+     "hypocrisy": 0.15,
+     "ironic_gap": 0.94,
+     "number_story": 0.13,
+     "contradiction": 0.15
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 80,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "futurism.com/future-society/mark-zuckerberg-meta-muse-ai-agent-safety-issues",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.14,
+     "backfire": 0.73,
+     "conflict": 0.55,
+     "reversal": 0.13,
+     "hypocrisy": 0.18,
+     "ironic_gap": 0.76,
+     "number_story": 0.04,
+     "contradiction": 0.29
+    },
+    "version": "meme-story-tags@3",
+    "conflict": true,
+    "numberStory": false,
+    "headlineChars": 65,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "arstechnica.com/ai/2026/10/inside-amazons-robotic-arms-race-and-what-it-means-for-the-future-of-human-work",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.07,
+     "backfire": 0.07,
+     "conflict": 0.06,
+     "reversal": 0.05,
+     "hypocrisy": 0.06,
+     "ironic_gap": 0.44,
+     "number_story": 0.55,
+     "contradiction": 0.12
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 73,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmiiwfbvv95cuxotlb6bdhzbk9gvvvsazvnbwfomu9hadfhtnrnzmdyv21wvdr6c0ppvgf4q2xmcwk0nllqumfhuvjpa0czt2h2dw9xv00ywunkc1vfu1ctxzheuujsm0u5uwhyzvnabm51quu4s1rcmtjbvet6znnoqzbpntrnaw1iqlpjd2p1afbrbgzv?oc=5",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.1,
+     "backfire": 0.05,
+     "conflict": 0.04,
+     "reversal": 0.05,
+     "hypocrisy": 0.06,
+     "ironic_gap": 0.11,
+     "number_story": 0.04,
+     "contradiction": 0.05
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 57,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "theverge.com/news/1010365/shopify-opens-its-catalog-up-to-more-ai-agents",
+   "tags": {
+    "irony": true,
+    "launch": true,
+    "scores": {
+     "launch": 0.95,
+     "backfire": 0.06,
+     "conflict": 0.03,
+     "reversal": 0.04,
+     "hypocrisy": 0.05,
+     "ironic_gap": 0.63,
+     "number_story": 0.09,
+     "contradiction": 0.08
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 46,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "futurism.com/artificial-intelligence/meta-ai-generated-videos-graphic-child-abuse",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.31,
+     "conflict": 0.63,
+     "reversal": 0.05,
+     "hypocrisy": 0.23,
+     "ironic_gap": 0.71,
+     "number_story": 0.45,
+     "contradiction": 0.17
+    },
+    "version": "meme-story-tags@3",
+    "conflict": true,
+    "numberStory": false,
+    "headlineChars": 60,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "theverge.com/tech/1013409/meta-removes-language-that-may-have-allowed-it-to-scrape-news-sites",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.1,
+     "backfire": 0.11,
+     "conflict": 0.16,
+     "reversal": 0.06,
+     "hypocrisy": 0.19,
+     "ironic_gap": 0.64,
+     "number_story": 0.04,
+     "contradiction": 0.59
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 66,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "wired.com/story/mistral-new-model-le-chonk-open-source-china-us-frontier",
+   "tags": {
+    "irony": false,
+    "launch": true,
+    "scores": {
+     "launch": 0.97,
+     "backfire": 0.06,
+     "conflict": 0.07,
+     "reversal": 0.03,
+     "hypocrisy": 0.05,
+     "ironic_gap": 0.37,
+     "number_story": 0.28,
+     "contradiction": 0.16
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 60,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "github.com/xtool-org/xtool",
+   "tags": {
+    "irony": false,
+    "launch": true,
+    "scores": {
+     "launch": 0.91,
+     "backfire": 0.04,
+     "conflict": 0.04,
+     "reversal": 0.03,
+     "hypocrisy": 0.03,
+     "ironic_gap": 0.27,
+     "number_story": 0.07,
+     "contradiction": 0.08
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 115,
+    "shortHeadline": false
+   },
+   "anyGood": false
+  },
+  {
+   "storyId": "theguardian.com/technology/2026/oct/13/ai-companies-rushed-workers-fallout",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.04,
+     "backfire": 0.75,
+     "conflict": 0.05,
+     "reversal": 0.97,
+     "hypocrisy": 0.1,
+     "ironic_gap": 0.55,
+     "number_story": 0.05,
+     "contradiction": 0.14
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 52,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "wired.com/story/openai-and-anthropic-tell-british-lawmakers-regulate-us",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.07,
+     "conflict": 0.38,
+     "reversal": 0.06,
+     "hypocrisy": 0.16,
+     "ironic_gap": 0.46,
+     "number_story": 0.03,
+     "contradiction": 0.1
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 56,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "theverge.com/news/1009465/microsoft-maia-300-chip-improvements-rollout",
+   "tags": {
+    "irony": false,
+    "launch": true,
+    "scores": {
+     "launch": 0.98,
+     "backfire": 0.04,
+     "conflict": 0.25,
+     "reversal": 0.04,
+     "hypocrisy": 0.04,
+     "ironic_gap": 0.16,
+     "number_story": 0.05,
+     "contradiction": 0.07
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 62,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "futurism.com/artificial-intelligence/meta-facebook-ai-generated-videos-sobbing-children-begging-arrested",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.25,
+     "conflict": 0.21,
+     "reversal": 0.07,
+     "hypocrisy": 0.18,
+     "ironic_gap": 0.64,
+     "number_story": 0.06,
+     "contradiction": 0.24
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 59,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "wired.com/story/muse-wonder-puts-meta-back-at-the-ai-frontier",
+   "tags": {
+    "irony": false,
+    "launch": true,
+    "scores": {
+     "launch": 0.96,
+     "backfire": 0.06,
+     "conflict": 0.41,
+     "reversal": 0.04,
+     "hypocrisy": 0.05,
+     "ironic_gap": 0.15,
+     "number_story": 0.09,
+     "contradiction": 0.1
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 64,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmirafbvv95cuxony1kbum5wneyoxrqnuj5vghtndhfa3f1u0huuufysfjocgvheg1kwxbdvhzdrez6vnljdeiytw9xzhvvq0cway1deunid0jznulfn3njdfzhcxpdn19huex3a2jdaljsv1bubervdhlody1pzu04cdgwmuv6lvyxvkwwrjbkzjb5y0xwyu85m2vituyzvmkwx3a2yk50y3jnlvhcaexhcenwnlln?oc=5",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.13,
+     "conflict": 0.21,
+     "reversal": 0.13,
+     "hypocrisy": 0.04,
+     "ironic_gap": 0.29,
+     "number_story": 0.36,
+     "contradiction": 0.1
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 80,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "theconversation.com/whos-paying-whom-the-circular-money-machine-behind-the-ai-boom-or-bubble-293938",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.04,
+     "conflict": 0.03,
+     "reversal": 0.03,
+     "hypocrisy": 0.04,
+     "ironic_gap": 0.26,
+     "number_story": 0.95,
+     "contradiction": 0.04
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 57,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "heliosgroup.tech/reels/story/2026-10-11-a-canadian-man-used-chatgpt-to-find-the-birth-mother-he-sear",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.02,
+     "backfire": 0.11,
+     "conflict": 0.02,
+     "reversal": 0.03,
+     "hypocrisy": 0.03,
+     "ironic_gap": 0.66,
+     "number_story": 0.05,
+     "contradiction": 0.12
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 85,
+    "shortHeadline": false
+   },
+   "anyGood": false
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmiqwfbvv95cuxpwvuyduw1ohzyefa5vxnwnfoxy1axcfq0rtrjr3vub2npn0xnqwdenmn5bjbnluzhd29wmtb1u1e2afdka1jozzd6d1lzwjfxtwzttk15wkxhnjljbgfrwepju0zuzuf4zmdxstfgeu9ttnppznhnlufouvf3vlbotjhtmxbjufprzgn5tmwtn05yajbprli2r21jas13lxnnsdn2wxpfcuvnzjtsababqvvfexfmtmztrmplrtfhsdbxbuvjmunkq1rbzgnsruvbnvporvj4cgg2ee9pb0ppvtfbavnurxvuaexgoeetv0vrrw9tvf93nunpejq1qzzndwvuazr6clh2rs1iwdruc3vyogzmwf9zzgvcqwzsd3nsr25ut3lvdtezy2rzstbowv9bskhleelkx0hpwjlwyvnsuljooup6d0xit0e0nnrfzgxxawhhburvwhj4new?oc=5",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.63,
+     "conflict": 0.9,
+     "reversal": 0.16,
+     "hypocrisy": 0.17,
+     "ironic_gap": 0.74,
+     "number_story": 0.05,
+     "contradiction": 0.18
+    },
+    "version": "meme-story-tags@3",
+    "conflict": true,
+    "numberStory": false,
+    "headlineChars": 66,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmi0afbvv95cuxnr0dmcdq0anp5u3hhsfgznlq1d3pzekf4c1nlqmh0zg9ky0z4rmzyafzoczfodld6bhhlsne3ethtsmtavjzuz0rwc1pivxezqunka1hyohfzmdbvlww3aufwz3n1qvqyz0hrelp1z3m0y042vxdtznblqznudkt4cjr0mjh3mvvhykhynzjuwjnfa0fscwk3egh4ahvgnzflyjgxqv9ny1pcewvpaduxqjfizkxfrthjvmdeymttx0etb0llsgplenhfav80yulz?oc=5",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.02,
+     "backfire": 0.3,
+     "conflict": 0.4,
+     "reversal": 0.05,
+     "hypocrisy": 0.08,
+     "ironic_gap": 0.48,
+     "number_story": 0.03,
+     "contradiction": 0.07
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 66,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "pulseos.finance",
+   "tags": {
+    "irony": false,
+    "launch": true,
+    "scores": {
+     "launch": 0.94,
+     "backfire": 0.05,
+     "conflict": 0.03,
+     "reversal": 0.03,
+     "hypocrisy": 0.05,
+     "ironic_gap": 0.16,
+     "number_story": 0.05,
+     "contradiction": 0.05
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 77,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmiqwfbvv95cuxqdln4m2jprzdlvevpcdlhltzqrfzosuq3qk1hvgpmovnitvhwn25uetbbqtjwwedqwvzjz0thzjiyovzwmxv5mm9ltmlos3n2m0nxvfn3bupsrkprrv9ftfpcc3a5m0tgrg1lthq1yvlxsvlnv0jsmurmvhviz3hobkl3nnzjvy1pauvhb1fqse5ka0vkx0hrq3npyjfqbmnynkzos21rc21eovk?oc=5",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.1,
+     "backfire": 0.06,
+     "conflict": 0.11,
+     "reversal": 0.05,
+     "hypocrisy": 0.13,
+     "ironic_gap": 0.66,
+     "number_story": 0.06,
+     "contradiction": 0.58
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 71,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "techcrunch.com/2026/10/13/cerebras-ceo-says-were-nearing-a-future-where-everyone-has-a-personal-ai-assistant-at-home",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.08,
+     "backfire": 0.03,
+     "conflict": 0.03,
+     "reversal": 0.03,
+     "hypocrisy": 0.05,
+     "ironic_gap": 0.14,
+     "number_story": 0.03,
+     "contradiction": 0.06
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 91,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "openai.com/index/introducing-gpt-6-1-sol",
+   "tags": {
+    "irony": false,
+    "launch": true,
+    "scores": {
+     "launch": 0.98,
+     "backfire": 0.05,
+     "conflict": 0.03,
+     "reversal": 0.04,
+     "hypocrisy": 0.04,
+     "ironic_gap": 0.17,
+     "number_story": 0.52,
+     "contradiction": 0.13
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 23,
+    "shortHeadline": true
+   },
+   "anyGood": false
+  },
+  {
+   "storyId": "techcrunch.com/2026/10/01/musks-ai-chatbot-grok-reportedly-encouraged-trump-to-capture-venezuelas-president",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.09,
+     "conflict": 0.12,
+     "reversal": 0.03,
+     "hypocrisy": 0.09,
+     "ironic_gap": 0.6,
+     "number_story": 0.08,
+     "contradiction": 0.1
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 62,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "techcrunch.com/2026/10/01/photon-held-a-funeral-for-mobile-apps-now-it-has-4-5m-to-help-replace-them-with-agents",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.16,
+     "backfire": 0.06,
+     "conflict": 0.04,
+     "reversal": 0.04,
+     "hypocrisy": 0.13,
+     "ironic_gap": 0.73,
+     "number_story": 0.51,
+     "contradiction": 0.1
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 89,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "404media.co/humans-reading-copilot-prompts-images",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.04,
+     "backfire": 0.39,
+     "conflict": 0.07,
+     "reversal": 0.05,
+     "hypocrisy": 0.16,
+     "ironic_gap": 0.71,
+     "number_story": 0.04,
+     "contradiction": 0.1
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 65,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "deepmind.google/blog/introducing-synthid-bio",
+   "tags": {
+    "irony": false,
+    "launch": true,
+    "scores": {
+     "launch": 0.97,
+     "backfire": 0.04,
+     "conflict": 0.03,
+     "reversal": 0.03,
+     "hypocrisy": 0.05,
+     "ironic_gap": 0.19,
+     "number_story": 0.05,
+     "contradiction": 0.06
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 62,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "wired.com/story/mistral-new-model-le-chonk-open-source-china-us-frontier",
+   "tags": {
+    "irony": false,
+    "launch": true,
+    "scores": {
+     "launch": 0.97,
+     "backfire": 0.06,
+     "conflict": 0.07,
+     "reversal": 0.03,
+     "hypocrisy": 0.05,
+     "ironic_gap": 0.37,
+     "number_story": 0.28,
+     "contradiction": 0.16
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 60,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "bbc.co.uk/news/articles/cqzjx448vxkgo?at_medium=rss&amp;at_campaign=rss",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.06,
+     "backfire": 0.04,
+     "conflict": 0.04,
+     "reversal": 0.03,
+     "hypocrisy": 0.04,
+     "ironic_gap": 0.13,
+     "number_story": 0.82,
+     "contradiction": 0.09
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 70,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmikwfbvv95cuxnak91svnpzkcxalq3m2rinkfzmxdqy19uqvzsytnyek9hwc03aflscdvmzdrma0rtvkc4ytjtcdcwzdnqvevhsfpumzbdvk1pu2c2vdfungxmzjy4nhc4rmpisxuxufzstkdpctg3vmfytutivlbfthh4c1rtag5fbvfleeftwkzkegrxou1qv2fprgs?oc=5",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.04,
+     "backfire": 0.45,
+     "conflict": 0.12,
+     "reversal": 0.07,
+     "hypocrisy": 0.14,
+     "ironic_gap": 0.78,
+     "number_story": 0.03,
+     "contradiction": 0.13
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 65,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmiskfvx3lxte05zvhon0nkx3dmrnjrmgtrbdrqb1nlavretlkzzmvylwfrt1jnwkfhwg4xynlrqwqzbmh5rs1eu01nyv92zumxr1l3?oc=5",
+   "tags": {
+    "irony": false,
+    "launch": true,
+    "scores": {
+     "launch": 0.97,
+     "backfire": 0.04,
+     "conflict": 0.03,
+     "reversal": 0.03,
+     "hypocrisy": 0.03,
+     "ironic_gap": 0.07,
+     "number_story": 0.04,
+     "contradiction": 0.04
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 21,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "arstechnica.com/google/2026/09/google-is-paying-100-websites-for-contributions-to-ai-overviews-but-the-amounts-are-tiny",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.12,
+     "backfire": 0.56,
+     "conflict": 0.38,
+     "reversal": 0.16,
+     "hypocrisy": 0.1,
+     "ironic_gap": 0.57,
+     "number_story": 0.48,
+     "contradiction": 0.14
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 67,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "futurism.com/future-society/flock-axon-alpr-police-surveillance-cameras",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.1,
+     "backfire": 0.08,
+     "conflict": 0.07,
+     "reversal": 0.05,
+     "hypocrisy": 0.09,
+     "ironic_gap": 0.17,
+     "number_story": 0.04,
+     "contradiction": 0.07
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 88,
+    "shortHeadline": false
+   },
+   "anyGood": false
+  },
+  {
+   "storyId": "techcrunch.com/2026/10/13/judge-orders-openai-to-turn-over-hiring-records-in-apple-trade-secrets-case",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.02,
+     "backfire": 0.12,
+     "conflict": 0.98,
+     "reversal": 0.03,
+     "hypocrisy": 0.07,
+     "ironic_gap": 0.22,
+     "number_story": 0.04,
+     "contradiction": 0.07
+    },
+    "version": "meme-story-tags@3",
+    "conflict": true,
+    "numberStory": false,
+    "headlineChars": 75,
+    "shortHeadline": false
+   },
+   "anyGood": false
+  },
+  {
+   "storyId": "heliosgroup.tech/reels/story/2026-10-18-mississippi-poet-s-ai-generated-singer-signs-3-million-recor",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.07,
+     "backfire": 0.25,
+     "conflict": 0.44,
+     "reversal": 0.04,
+     "hypocrisy": 0.11,
+     "ironic_gap": 0.8,
+     "number_story": 0.51,
+     "contradiction": 0.1
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 67,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "heliosgroup.tech/reels/story/2026-10-05-ai-agents-linked-to-openai-made-failed-hacking-attempts-on-g",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.17,
+     "conflict": 0.26,
+     "reversal": 0.04,
+     "hypocrisy": 0.09,
+     "ironic_gap": 0.59,
+     "number_story": 0.07,
+     "contradiction": 0.09
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 66,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "news.ycombinator.com/item?id=48968606",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.35,
+     "backfire": 0.12,
+     "conflict": 0.03,
+     "reversal": 0.04,
+     "hypocrisy": 0.04,
+     "ironic_gap": 0.64,
+     "number_story": 0.49,
+     "contradiction": 0.15
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 71,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "nbcnews.com/tech/tech-news/openai-sued-eight-states-alleged-harm-chatgpt-rcna603614",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.02,
+     "backfire": 0.31,
+     "conflict": 0.98,
+     "reversal": 0.04,
+     "hypocrisy": 0.08,
+     "ironic_gap": 0.49,
+     "number_story": 0.09,
+     "contradiction": 0.09
+    },
+    "version": "meme-story-tags@3",
+    "conflict": true,
+    "numberStory": false,
+    "headlineChars": 61,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "heliosgroup.tech/reels/story/2026-10-14-a-chatgpt-prompt-solved-a-family-mystery-that-archives-and-d",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.05,
+     "conflict": 0.04,
+     "reversal": 0.04,
+     "hypocrisy": 0.04,
+     "ironic_gap": 0.79,
+     "number_story": 0.03,
+     "contradiction": 0.09
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 78,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "techcrunch.com/2026/10/13/cerebras-ceo-pushes-back-on-ai-doomsday-warnings",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.04,
+     "conflict": 0.15,
+     "reversal": 0.04,
+     "hypocrisy": 0.07,
+     "ironic_gap": 0.25,
+     "number_story": 0.03,
+     "contradiction": 0.05
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 48,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "thepointsguy.com/travel/rental-car-ai-scanner-mistake",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.48,
+     "conflict": 0.67,
+     "reversal": 0.14,
+     "hypocrisy": 0.11,
+     "ironic_gap": 0.68,
+     "number_story": 0.43,
+     "contradiction": 0.08
+    },
+    "version": "meme-story-tags@3",
+    "conflict": true,
+    "numberStory": false,
+    "headlineChars": 62,
+    "shortHeadline": true
+   },
+   "anyGood": false
+  },
+  {
+   "storyId": "theverge.com/ai-artificial-intelligence/1011311/the-ai-race-is-back-on",
+   "tags": {
+    "irony": false,
+    "launch": true,
+    "scores": {
+     "launch": 0.95,
+     "backfire": 0.05,
+     "conflict": 0.74,
+     "reversal": 0.04,
+     "hypocrisy": 0.05,
+     "ironic_gap": 0.19,
+     "number_story": 0.04,
+     "contradiction": 0.11
+    },
+    "version": "meme-story-tags@3",
+    "conflict": true,
+    "numberStory": false,
+    "headlineChars": 22,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmigafbvv95cuxonmzoatj0sghpehi3vnztz3rjugrrvlm5mkvnq2voutm3s1v2bvbprupydgzzal9xz1jpb1rotlj4owzwz282mjfbee5awwr2bdu3wkvytuzir01px3nwc2tvemp5mwzkmml5sxrnntfyrtfpqnjlu21vm1pvqve4bdibhgfbvv95cuxpt25fd3i3wwtqee1zqnjpneiwstlmtkzjvhvmbgfvngfnmm5itjjaotjavkowcee3amtamnpkmvdmrgffy3zwu3zluuc1zgy4slliodhqt1zgclpsagxprkjicge3d0l1lwpbynbqv1hcujvzumrjnei1nmnnnzhjuxvodwq2zw?oc=5",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.08,
+     "backfire": 0.36,
+     "conflict": 0.07,
+     "reversal": 0.04,
+     "hypocrisy": 0.11,
+     "ironic_gap": 0.57,
+     "number_story": 0.04,
+     "contradiction": 0.08
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 64,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "nbcnews.com/business/energy/oil-prices-hormuz-iran-ukraine-rcna603919",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.27,
+     "conflict": 0.05,
+     "reversal": 0.56,
+     "hypocrisy": 0.04,
+     "ironic_gap": 0.27,
+     "number_story": 0.86,
+     "contradiction": 0.09
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 90,
+    "shortHeadline": false
+   },
+   "anyGood": false
+  },
+  {
+   "storyId": "techcrunch.com/2026/09/28/amd-will-acquire-fei-fei-lis-world-labs-for-8-2-billion",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.04,
+     "backfire": 0.04,
+     "conflict": 0.03,
+     "reversal": 0.03,
+     "hypocrisy": 0.05,
+     "ironic_gap": 0.17,
+     "number_story": 0.53,
+     "contradiction": 0.09
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 57,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "nbcnews.com/tech/tech-news/romance-scammers-congressional-investigation-match-group-tinder-rcna602411",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.1,
+     "backfire": 0.18,
+     "conflict": 0.16,
+     "reversal": 0.12,
+     "hypocrisy": 0.1,
+     "ironic_gap": 0.52,
+     "number_story": 0.06,
+     "contradiction": 0.12
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 74,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "bbc.co.uk/news/articles/cvj6jkx6g1r0o?at_medium=rss&amp;at_campaign=rss",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.56,
+     "conflict": 0.82,
+     "reversal": 0.34,
+     "hypocrisy": 0.2,
+     "ironic_gap": 0.62,
+     "number_story": 0.09,
+     "contradiction": 0.32
+    },
+    "version": "meme-story-tags@3",
+    "conflict": true,
+    "numberStory": false,
+    "headlineChars": 54,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "theverge.com/ai-artificial-intelligence/1009051/privacy-ai-agent-promises-openai-meta-muse-dots",
+   "tags": {
+    "irony": false,
+    "launch": true,
+    "scores": {
+     "launch": 0.95,
+     "backfire": 0.11,
+     "conflict": 0.17,
+     "reversal": 0.06,
+     "hypocrisy": 0.15,
+     "ironic_gap": 0.32,
+     "number_story": 0.04,
+     "contradiction": 0.11
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 62,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "kpbs.org/news/health/2025/12/11/lawsuit-claims-sharp-healthcare-secretly-recorded-exam-room-conversations-without-patient-consent",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.02,
+     "backfire": 0.5,
+     "conflict": 0.93,
+     "reversal": 0.04,
+     "hypocrisy": 0.1,
+     "ironic_gap": 0.52,
+     "number_story": 0.03,
+     "contradiction": 0.1
+    },
+    "version": "meme-story-tags@3",
+    "conflict": true,
+    "numberStory": false,
+    "headlineChars": 97,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "techcrunch.com/2026/10/08/chinas-manus-raises-over-500m-in-first-funding-round-since-split-with-meta",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.04,
+     "backfire": 0.25,
+     "conflict": 0.44,
+     "reversal": 0.41,
+     "hypocrisy": 0.04,
+     "ironic_gap": 0.36,
+     "number_story": 0.93,
+     "contradiction": 0.13
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 76,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "jobs.lever.co/postera/c7d50a36-db0a-4574-bfe4-8700b74a22c0",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.05,
+     "backfire": 0.03,
+     "conflict": 0.02,
+     "reversal": 0.03,
+     "hypocrisy": 0.04,
+     "ironic_gap": 0.14,
+     "number_story": 0.48,
+     "contradiction": 0.07
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 60,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "theguardian.com/technology/2026/oct/14/openai-london-staff-earnings-2million-per-person",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.02,
+     "backfire": 0.05,
+     "conflict": 0.03,
+     "reversal": 0.03,
+     "hypocrisy": 0.06,
+     "ironic_gap": 0.27,
+     "number_story": 0.96,
+     "contradiction": 0.07
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 66,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "techcrunch.com/2026/10/09/an-anthropic-ai-model-sent-a-false-homicide-tip-to-philadelphia-police",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.02,
+     "backfire": 0.29,
+     "conflict": 0.1,
+     "reversal": 0.07,
+     "hypocrisy": 0.07,
+     "ironic_gap": 0.79,
+     "number_story": 0.04,
+     "contradiction": 0.13
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 70,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "bbc.co.uk/news/articles/cvj6jkx6g1r0o?at_medium=rss&amp;at_campaign=rss",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.56,
+     "conflict": 0.82,
+     "reversal": 0.34,
+     "hypocrisy": 0.2,
+     "ironic_gap": 0.62,
+     "number_story": 0.09,
+     "contradiction": 0.32
+    },
+    "version": "meme-story-tags@3",
+    "conflict": true,
+    "numberStory": false,
+    "headlineChars": 54,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "pi.website/blog/api-beta",
+   "tags": {
+    "irony": false,
+    "launch": true,
+    "scores": {
+     "launch": 0.98,
+     "backfire": 0.04,
+     "conflict": 0.03,
+     "reversal": 0.03,
+     "hypocrisy": 0.03,
+     "ironic_gap": 0.1,
+     "number_story": 0.04,
+     "contradiction": 0.06
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 63,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "techcrunch.com/2026/10/13/spacexsi-bundles-x-premium-grok-and-cursor-into-one-subscription",
+   "tags": {
+    "irony": false,
+    "launch": true,
+    "scores": {
+     "launch": 0.89,
+     "backfire": 0.05,
+     "conflict": 0.05,
+     "reversal": 0.04,
+     "hypocrisy": 0.04,
+     "ironic_gap": 0.25,
+     "number_story": 0.05,
+     "contradiction": 0.09
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 66,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmiuajbvv95cuxoalvinhbvvhpfoxbkaw5lukmtclbyauputkviajdome8tvgg4wwwxoghqzgvmxznaznh2r1vqvvnka05wv3rxymszyvhom0nkekrfexbidhnfownkc0rmbgdxmf81c2p2nu1ibgm1tjdhb2piekpizxlfmzqzenjiyvpna3jfwljftueyr1p4vw5obtzflwrpsw5qze1znhnnwg8tc0wwzxrpodljufb6t09nnmnvx3j3mjdzvfvnqzn4m2hinfawmkn0ukswtxjszmhuajjnti0zds1dnmtpyv9ouwjvzuxiegtreulsmvfryw1ytu9uzf9ld3n6tnjtvnbzd1haz0pvannvt3m3txk1aleyadnutxpxdlvmlwhzuujvvwlkvfjvv0puwwvfswf3b0lxbjxsab4cqvvfexfmtxztz2hrn0syajhvsnneowzzzfyzaxdpmvz1dephy3fcslvqb3rnwfpix051qthuz2nolwmya2vdwgtuc3zftluxvvhlafzus2i4yzbkvujoaulxwc1ycmpzaexhvlbzchhvmti2nuu5ekzgm1hrsvhsq0h3tghncfqtak1rauvpofnyymrvvwtrm3f1rk1ux3dpq3hsvg9itvzldgxpy0vremjyvudytwfsaetvv2fdsjlrdnzwtwvuqxnmznlpt29eqtvsvw9qejhwbnnvs05rlwrfskhyv3hlukhttzg2ofjizehyrxzjwwlmnk5erznjbxzjbgs3tk5mn1vmmvnnzu5nevfkrg5svwxvbs1iqtjnrdnlrelvz1biul9tszfvszk4shpgrjz0wg5ccvc2ngvydgf3?oc=5",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.04,
+     "backfire": 0.09,
+     "conflict": 0.06,
+     "reversal": 0.06,
+     "hypocrisy": 0.09,
+     "ironic_gap": 0.24,
+     "number_story": 0.92,
+     "contradiction": 0.11
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 105,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmi2gjbvv95cuxnsldfyjiwsfbfr1jzy0g2egrdde9nag94nwjdchdioghic21vdvbzq2x3tm1uc3kxswu1d0nubxbozlheqvnishpsq2lrrdzizy1wtndgalj0yvblm3nxtulom1r5dmvrcjnkcupgzvotaesta2k4mvzgbdy3x1viten6ykvjmwxsqw9ts1dvq1pmnlrqtkphcnkwm2rtskhvdmtvyuvbakrtedzgdl9lqvh6cfvsvvjscwdiyzdgwge0wedhee0zovmtzmhpos1wtjlxnfhsx1fiuhjktnvwz0h0dtbkwnnvv2fvswxdau9uve1rclzayu9xtdzfdko0z2zjeefhcjdbcvfcsgpts3lkzlfjbklpnwlizu5hbjg0rtnsvc1qsmuyddryd2tfnnnvunoynxzvtddjyvruys1hqjjnnwxkcvfvwunpaurtuerhemlhdjrn0ghfakfvx3lxte5pddlyrxdxujlvbfi5ck1cegzmv1lknljretrfykzksxhfn2durun4b2xidxphx1d1twvolv9yc0q3tfnvbxpjtuqzbnhttlztws1nselrag5qujbslxbedxpbudngrwpxdutzrufnzklgohbxzgrqtlexztm1yxfwcvnpnfvha1jwwnzzajdnb3bjouywd3q1x0zjtw8wqk8zt1jcs0hfy0lbbvrnnw85nfrprxztmfvnbwtjrjvjodjurwpbdhfvvlfvetnncjjluhbboutitg1fs0yyqjzpsjzkbgldmwsxmee3eflwakzym0htbud6nuj4tkmxohmxu1r5djnodli3wunbsnh3su9nrdnxcxetlxrgmzb2m2pbohhyv3y2tjbnqjvzmnm5cffzqwp2bkhitnpqqvvuthl2oda1wmpmcwdsmvo4evazsenbrhzovwjgujjpwq?oc=5",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.14,
+     "conflict": 0.14,
+     "reversal": 0.05,
+     "hypocrisy": 0.19,
+     "ironic_gap": 0.54,
+     "number_story": 0.04,
+     "contradiction": 0.32
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 105,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "theverge.com/ai-artificial-intelligence/1010642/openai-employee-arrested-recording-device",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.02,
+     "backfire": 0.41,
+     "conflict": 0.69,
+     "reversal": 0.04,
+     "hypocrisy": 0.08,
+     "ironic_gap": 0.58,
+     "number_story": 0.03,
+     "contradiction": 0.1
+    },
+    "version": "meme-story-tags@3",
+    "conflict": true,
+    "numberStory": false,
+    "headlineChars": 74,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "arstechnica.com/tech-policy/2026/10/amazons-1b-plan-to-combat-data-center-backlash-draws-more-backlash",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.08,
+     "backfire": 0.7,
+     "conflict": 0.31,
+     "reversal": 0.06,
+     "hypocrisy": 0.21,
+     "ironic_gap": 0.77,
+     "number_story": 0.64,
+     "contradiction": 0.18
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 68,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "huggingface.co/deepseek-ai/deepseek-v4.1-flash-1017",
+   "tags": {
+    "irony": false,
+    "launch": true,
+    "scores": {
+     "launch": 0.98,
+     "backfire": 0.03,
+     "conflict": 0.03,
+     "reversal": 0.03,
+     "hypocrisy": 0.03,
+     "ironic_gap": 0.07,
+     "number_story": 0.04,
+     "contradiction": 0.08
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 24,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmihafbvv95cuxpb29nsepyrfjfcjzhb19pt2zxrwhdwggtbc1sdw1rwdbvclk3vly4nws1bdfpahdgdhzscnb2djzuuul0zu10zw1uthbntldddwlcs3nym1ywtelmmvrvqmzhruluu25trtvowwv2uxr3x083lujwz0v2mjfeegr5wfftaei?oc=5",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.54,
+     "conflict": 0.05,
+     "reversal": 0.84,
+     "hypocrisy": 0.04,
+     "ironic_gap": 0.17,
+     "number_story": 0.96,
+     "contradiction": 0.11
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 64,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "futurism.com/artificial-intelligence/openai-shut-down-interviewer-suicide-sam-altman",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.02,
+     "backfire": 0.6,
+     "conflict": 0.66,
+     "reversal": 0.06,
+     "hypocrisy": 0.17,
+     "ironic_gap": 0.68,
+     "number_story": 0.03,
+     "contradiction": 0.19
+    },
+    "version": "meme-story-tags@3",
+    "conflict": true,
+    "numberStory": false,
+    "headlineChars": 60,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "techcrunch.com/2026/09/28/meta-launches-enterprise-ai-platform-hires-mongodb-ceo-to-lead-new-initiative",
+   "tags": {
+    "irony": true,
+    "launch": true,
+    "scores": {
+     "launch": 0.79,
+     "backfire": 0.38,
+     "conflict": 0.11,
+     "reversal": 0.11,
+     "hypocrisy": 0.06,
+     "ironic_gap": 0.67,
+     "number_story": 0.11,
+     "contradiction": 0.11
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 65,
+    "shortHeadline": true
+   },
+   "anyGood": false
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmihafbvv95cuxnegjhcy11mf9bykzodjhdbehysljvc3rnswtvr2znr0himv9ndmpiaentbk4wmnrvb3d5evy0thzlckdrb09hanrsexzfejngewdqzxrna1fluznrnefcvs1tuy1qtkoycmldqmfjavhzofzvclfdu2lvlxfym1kwqmvvm2c?oc=5",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.04,
+     "backfire": 0.55,
+     "conflict": 0.09,
+     "reversal": 0.36,
+     "hypocrisy": 0.1,
+     "ironic_gap": 0.6,
+     "number_story": 0.04,
+     "contradiction": 0.09
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 95,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "futurism.com/artificial-intelligence/google-character-ai-bankruptcy",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.15,
+     "conflict": 0.05,
+     "reversal": 0.95,
+     "hypocrisy": 0.04,
+     "ironic_gap": 0.56,
+     "number_story": 0.19,
+     "contradiction": 0.14
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 75,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "anitab.org/press-release",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.14,
+     "conflict": 0.03,
+     "reversal": 0.59,
+     "hypocrisy": 0.04,
+     "ironic_gap": 0.32,
+     "number_story": 0.17,
+     "contradiction": 0.06
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 34,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "blumify.io/people",
+   "tags": {
+    "irony": false,
+    "launch": true,
+    "scores": {
+     "launch": 0.77,
+     "backfire": 0.06,
+     "conflict": 0.03,
+     "reversal": 0.03,
+     "hypocrisy": 0.07,
+     "ironic_gap": 0.28,
+     "number_story": 0.11,
+     "contradiction": 0.09
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 79,
+    "shortHeadline": false
+   },
+   "anyGood": false
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmiggfbvv95cuxnmgpic3bwakr3ctjumnfjttdfbm1zqjhpnvbprnvvltzgn2u5qmzutullq3ffvy1qb3e0qur3qmm2mzvwti1byze4wvjgt2j2ztjfmfk1bmrmbvmwz1houlpmb1doowhwlxq1d2z3ag9qmhixrm8xr2xmdmlgrm9in0v3?oc=5",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.07,
+     "conflict": 0.06,
+     "reversal": 0.04,
+     "hypocrisy": 0.09,
+     "ironic_gap": 0.62,
+     "number_story": 0.05,
+     "contradiction": 0.1
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 57,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "openai.com/index/how-we-will-do-better-for-australia",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.3,
+     "conflict": 0.22,
+     "reversal": 0.09,
+     "hypocrisy": 0.09,
+     "ironic_gap": 0.53,
+     "number_story": 0.04,
+     "contradiction": 0.11
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 62,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "techcrunch.com/2026/10/08/cal-ais-19-year-old-founder-just-raised-10m-for-his-new-ai-startup",
+   "tags": {
+    "irony": true,
+    "launch": true,
+    "scores": {
+     "launch": 0.53,
+     "backfire": 0.05,
+     "conflict": 0.07,
+     "reversal": 0.06,
+     "hypocrisy": 0.05,
+     "ironic_gap": 0.51,
+     "number_story": 0.79,
+     "contradiction": 0.28
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 68,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "cphiri.dev/presentations/recreational-programming",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.19,
+     "backfire": 0.08,
+     "conflict": 0.05,
+     "reversal": 0.06,
+     "hypocrisy": 0.06,
+     "ironic_gap": 0.1,
+     "number_story": 0.09,
+     "contradiction": 0.06
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 24,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "arstechnica.com/gadgets/2026/10/the-7-year-old-nvidia-shield-tv-is-now-100-more-expensive-thanks-to-ai",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.35,
+     "backfire": 0.15,
+     "conflict": 0.04,
+     "reversal": 0.06,
+     "hypocrisy": 0.1,
+     "ironic_gap": 0.76,
+     "number_story": 0.88,
+     "contradiction": 0.2
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 68,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "blog.faav.net/how-i-couldve-accessed-17-trillion-microsoft-records",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.4,
+     "conflict": 0.17,
+     "reversal": 0.04,
+     "hypocrisy": 0.06,
+     "ironic_gap": 0.84,
+     "number_story": 0.45,
+     "contradiction": 0.14
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 59,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "heliosgroup.tech/reels/story/2026-10-18-klarna-fired-700-workers-for-ai-then-reversed-course-and-sta",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.07,
+     "backfire": 0.92,
+     "conflict": 0.05,
+     "reversal": 0.97,
+     "hypocrisy": 0.13,
+     "ironic_gap": 0.85,
+     "number_story": 0.41,
+     "contradiction": 0.71
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 85,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmikafbvv95cuxqa0vhzhflzkyyszv6a2fqwui5yth3ulzzvuhbnhjfn0m2nufjwlrxdhb2ylj5nc1ryjhycvdvdzhlsjv4nhdmenc1bextmwg3mnn2a0v3vuq1dkdpow44vedytjrwykx1b0plbnzlzfbkr2jhowo1mnlowmtfb1zzrhrmyziynhjftxpbq0o5nxo?oc=5",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.15,
+     "backfire": 0.14,
+     "conflict": 0.07,
+     "reversal": 0.06,
+     "hypocrisy": 0.13,
+     "ironic_gap": 0.62,
+     "number_story": 0.04,
+     "contradiction": 0.51
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 60,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmirwfbvv95cuxpywpreddgzdlxn1ctcehfwfvov2x6evhnug92ce0xwi1xctzwr1j2tvlwnupmr2m2mxvex1fjeui3rwrnq1e2uvlmeuywmefluvh3bzl2ntl4ehjxdkdutzbxt1pumzzmcmfzu2dyzjvewetiaw1rsnfiahlirktrvs1swkvhx0dhrgzotjfcx2lnwthly1k3vui5rth0txmtrelsqtjrtddpcwfjvc1v?oc=5",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.14,
+     "conflict": 0.27,
+     "reversal": 0.1,
+     "hypocrisy": 0.19,
+     "ironic_gap": 0.36,
+     "number_story": 0.04,
+     "contradiction": 0.09
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 67,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "corbt.com/posts/it-aint-agi-until-h100s-go-for-30-an-hour",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.04,
+     "backfire": 0.05,
+     "conflict": 0.03,
+     "reversal": 0.04,
+     "hypocrisy": 0.06,
+     "ironic_gap": 0.56,
+     "number_story": 0.76,
+     "contradiction": 0.1
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 43,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "404media.co/accenture-tells-employees-they-can-now-spend-only-29-on-claude-per-month",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.05,
+     "backfire": 0.17,
+     "conflict": 0.06,
+     "reversal": 0.16,
+     "hypocrisy": 0.1,
+     "ironic_gap": 0.45,
+     "number_story": 0.91,
+     "contradiction": 0.1
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 73,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "theguardian.com/technology/2026/oct/14/use-of-ai-job-interviews-on-rise-uk-recruiters-cheats",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.28,
+     "conflict": 0.17,
+     "reversal": 0.04,
+     "hypocrisy": 0.17,
+     "ironic_gap": 0.71,
+     "number_story": 0.34,
+     "contradiction": 0.37
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 88,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmic0fvx3lxtfatnmktr3vjmu11wm9ndmhwnmzjy3bqblzpuvnhdfzjuvlschdjz2looddxofzgv3n2rxpibzmyrxlkyurxdm80bgxxazjtsks3axlon1d6m0xvzzhymkcxt0c3ns01mednc25mehfisvzkc2s?oc=5",
+   "tags": {
+    "irony": false,
+    "launch": true,
+    "scores": {
+     "launch": 0.98,
+     "backfire": 0.04,
+     "conflict": 0.04,
+     "reversal": 0.03,
+     "hypocrisy": 0.04,
+     "ironic_gap": 0.3,
+     "number_story": 0.03,
+     "contradiction": 0.05
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 72,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "futurism.com/artificial-intelligence/meta-ai-generated-videos-graphic-child-abuse",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.31,
+     "conflict": 0.63,
+     "reversal": 0.05,
+     "hypocrisy": 0.23,
+     "ironic_gap": 0.71,
+     "number_story": 0.45,
+     "contradiction": 0.17
+    },
+    "version": "meme-story-tags@3",
+    "conflict": true,
+    "numberStory": false,
+    "headlineChars": 60,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "theconversation.com/a-biologist-queries-whether-ai-borrowed-his-work-to-make-major-discovery-an-expert-explains-the-rules-293529",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.08,
+     "backfire": 0.44,
+     "conflict": 0.73,
+     "reversal": 0.06,
+     "hypocrisy": 0.17,
+     "ironic_gap": 0.68,
+     "number_story": 0.04,
+     "contradiction": 0.26
+    },
+    "version": "meme-story-tags@3",
+    "conflict": true,
+    "numberStory": false,
+    "headlineChars": 70,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "theconversation.com/voters-want-stronger-action-on-ai-can-nz-afford-to-keep-taking-a-soft-approach-292978",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.12,
+     "conflict": 0.09,
+     "reversal": 0.05,
+     "hypocrisy": 0.06,
+     "ironic_gap": 0.15,
+     "number_story": 0.03,
+     "contradiction": 0.09
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 80,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "heliosgroup.tech/reels/story/2026-10-09-a-cloned-voice-and-a-fake-whatsapp-message-drained-95-millio",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.02,
+     "backfire": 0.11,
+     "conflict": 0.07,
+     "reversal": 0.1,
+     "hypocrisy": 0.06,
+     "ironic_gap": 0.59,
+     "number_story": 0.76,
+     "contradiction": 0.15
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 88,
+    "shortHeadline": false
+   },
+   "anyGood": false
+  },
+  {
+   "storyId": "wired.com/story/elon-musk-bragged-about-his-grok-lego-star-wars-haul-then-x-users-punked-him",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.04,
+     "backfire": 0.94,
+     "conflict": 0.61,
+     "reversal": 0.15,
+     "hypocrisy": 0.11,
+     "ironic_gap": 0.9,
+     "number_story": 0.04,
+     "contradiction": 0.2
+    },
+    "version": "meme-story-tags@3",
+    "conflict": true,
+    "numberStory": false,
+    "headlineChars": 77,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "404media.co/ai-company-lets-cops-pinpoint-specific-houses-based-on-a-single-interior-photo",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.44,
+     "backfire": 0.14,
+     "conflict": 0.1,
+     "reversal": 0.05,
+     "hypocrisy": 0.1,
+     "ironic_gap": 0.45,
+     "number_story": 0.04,
+     "contradiction": 0.07
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 78,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "theguardian.com/commentisfree/2026/oct/13/dystopian-and-dehumanising-thats-what-it-felt-like-when-i-was-interviewed-by-an-ai-assistant",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.49,
+     "conflict": 0.15,
+     "reversal": 0.1,
+     "hypocrisy": 0.13,
+     "ironic_gap": 0.67,
+     "number_story": 0.03,
+     "contradiction": 0.08
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 120,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmiu0fvx3lxte9vc2r5cgrvdgjaag40ek9dvulfrw9ib2nxagpelxe5uvm0udzwevdydkmyz2xlqtbwmlrpyk53cnpkm2pvc0dfsxcwbw12vzhmywjj?oc=5",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.04,
+     "backfire": 0.15,
+     "conflict": 0.05,
+     "reversal": 0.74,
+     "hypocrisy": 0.05,
+     "ironic_gap": 0.23,
+     "number_story": 0.87,
+     "contradiction": 0.11
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 90,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "techcrunch.com/2026/10/13/science-corporation-implants-its-vision-restoring-chip-in-its-first-stargardt-disease-patient",
+   "tags": {
+    "irony": false,
+    "launch": true,
+    "scores": {
+     "launch": 0.77,
+     "backfire": 0.04,
+     "conflict": 0.03,
+     "reversal": 0.03,
+     "hypocrisy": 0.03,
+     "ironic_gap": 0.1,
+     "number_story": 0.08,
+     "contradiction": 0.05
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 93,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmitgfbvv95cuxps3forc0wdzflewdotwzrbfatoud0d19mwdbuvvrrnhh3ouczttzxow9fv1hxbzz2r3zrdupnmm4wtzr0c24tel90bjhfzfhzze12ohzfvklywxrnr1v6qul6ekniddrszc1tau80chvkmznaufdyvmfuzzlrrmkzyuhjnmnrmvv2cktjtgjbt01omtrdmms2b3p6bxdvnnlvt0jzrg9pvzflteuzmhqtcetpsu1rdw?oc=5",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.02,
+     "backfire": 0.26,
+     "conflict": 0.94,
+     "reversal": 0.06,
+     "hypocrisy": 0.32,
+     "ironic_gap": 0.63,
+     "number_story": 0.09,
+     "contradiction": 0.53
+    },
+    "version": "meme-story-tags@3",
+    "conflict": true,
+    "numberStory": false,
+    "headlineChars": 59,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "deepmind.google/blog/on-device-ai-scam-detection-mddi",
+   "tags": {
+    "irony": false,
+    "launch": true,
+    "scores": {
+     "launch": 0.97,
+     "backfire": 0.03,
+     "conflict": 0.02,
+     "reversal": 0.03,
+     "hypocrisy": 0.04,
+     "ironic_gap": 0.18,
+     "number_story": 0.04,
+     "contradiction": 0.05
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 95,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "bbc.co.uk/news/articles/cm2kez327gdko?at_medium=rss&amp;at_campaign=rss",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.05,
+     "backfire": 0.05,
+     "conflict": 0.04,
+     "reversal": 0.04,
+     "hypocrisy": 0.09,
+     "ironic_gap": 0.27,
+     "number_story": 0.74,
+     "contradiction": 0.08
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 71,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "futurism.com/artificial-intelligence/openai-sued-children-fears-hopes-secrets",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.02,
+     "backfire": 0.31,
+     "conflict": 0.94,
+     "reversal": 0.04,
+     "hypocrisy": 0.11,
+     "ironic_gap": 0.35,
+     "number_story": 0.05,
+     "contradiction": 0.08
+    },
+    "version": "meme-story-tags@3",
+    "conflict": true,
+    "numberStory": false,
+    "headlineChars": 61,
+    "shortHeadline": true
+   },
+   "anyGood": false
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmir0fvx3lxte1xshzsr1pnauw0lxbebhzky0owdtz3n1hstlq1mgj5cm9nykrcoxgytkhfuhvmavphz1fnu0xfwkfmn29jmnpn?oc=5",
+   "tags": {
+    "irony": false,
+    "launch": true,
+    "scores": {
+     "launch": 0.98,
+     "backfire": 0.05,
+     "conflict": 0.04,
+     "reversal": 0.03,
+     "hypocrisy": 0.04,
+     "ironic_gap": 0.16,
+     "number_story": 0.05,
+     "contradiction": 0.08
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 30,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "theverge.com/news/1010406/xbox-labs-game-decompiling-emulation-exploration",
+   "tags": {
+    "irony": true,
+    "launch": true,
+    "scores": {
+     "launch": 0.69,
+     "backfire": 0.06,
+     "conflict": 0.05,
+     "reversal": 0.05,
+     "hypocrisy": 0.11,
+     "ironic_gap": 0.56,
+     "number_story": 0.04,
+     "contradiction": 0.1
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 63,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "theverge.com/ai-artificial-intelligence/1009051/privacy-ai-agent-promises-openai-meta-muse-dots",
+   "tags": {
+    "irony": false,
+    "launch": true,
+    "scores": {
+     "launch": 0.95,
+     "backfire": 0.11,
+     "conflict": 0.17,
+     "reversal": 0.06,
+     "hypocrisy": 0.15,
+     "ironic_gap": 0.32,
+     "number_story": 0.04,
+     "contradiction": 0.11
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 62,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "bbc.co.uk/news/articles/c623dnkn8pkyo?at_medium=rss&amp;at_campaign=rss",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.15,
+     "conflict": 0.1,
+     "reversal": 0.04,
+     "hypocrisy": 0.08,
+     "ironic_gap": 0.32,
+     "number_story": 0.15,
+     "contradiction": 0.1
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 47,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "theguardian.com/us-news/ng-interactive/2026/oct/17/california-datacenter-imperial",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.41,
+     "conflict": 0.8,
+     "reversal": 0.36,
+     "hypocrisy": 0.09,
+     "ironic_gap": 0.24,
+     "number_story": 0.04,
+     "contradiction": 0.1
+    },
+    "version": "meme-story-tags@3",
+    "conflict": true,
+    "numberStory": false,
+    "headlineChars": 99,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "futurism.com/artificial-intelligence/meta-muse-data-breach-bank-accounts-email-archives",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.15,
+     "backfire": 0.55,
+     "conflict": 0.1,
+     "reversal": 0.19,
+     "hypocrisy": 0.08,
+     "ironic_gap": 0.54,
+     "number_story": 0.04,
+     "contradiction": 0.21
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 50,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "heliosgroup.tech/reels/story/2026-10-14-tokyo-court-rules-an-ai-cloned-voice-can-be-protected-even-a",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.02,
+     "backfire": 0.3,
+     "conflict": 0.77,
+     "reversal": 0.08,
+     "hypocrisy": 0.14,
+     "ironic_gap": 0.69,
+     "number_story": 0.03,
+     "contradiction": 0.3
+    },
+    "version": "meme-story-tags@3",
+    "conflict": true,
+    "numberStory": false,
+    "headlineChars": 101,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "brookslybrand.com/posts/do-frameworks-matter-anymore",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.06,
+     "conflict": 0.03,
+     "reversal": 0.06,
+     "hypocrisy": 0.06,
+     "ironic_gap": 0.29,
+     "number_story": 0.03,
+     "contradiction": 0.15
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 29,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmiz0fvx3lxte9zmuszwjzjsllxvlm2t2uyujj2njhoq3hpz0zuwffov2v5nglszuxtrv80bxnjvuvkdhh5m0d6vi1wytlkdwh6sc1st2nftkvxwvjjeu9tag5nvfbfz084qjhmvlzqtu0?oc=5",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.16,
+     "backfire": 0.04,
+     "conflict": 0.03,
+     "reversal": 0.04,
+     "hypocrisy": 0.04,
+     "ironic_gap": 0.1,
+     "number_story": 0.83,
+     "contradiction": 0.05
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 60,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "techcrunch.com/2026/09/29/openai-reportedly-in-talks-to-raise-30b-round-at-1-4t-valuation",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.04,
+     "conflict": 0.24,
+     "reversal": 0.04,
+     "hypocrisy": 0.03,
+     "ironic_gap": 0.13,
+     "number_story": 0.94,
+     "contradiction": 0.08
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": true,
+    "headlineChars": 65,
+    "shortHeadline": true
+   },
+   "anyGood": false
+  },
+  {
+   "storyId": "heliosgroup.tech/reels/story/2026-10-15-engineer-who-warned-xai-about-grok-s-safety-risks-sues-days-",
+   "tags": {
+    "irony": true,
+    "launch": false,
+    "scores": {
+     "launch": 0.03,
+     "backfire": 0.36,
+     "conflict": 0.98,
+     "reversal": 0.05,
+     "hypocrisy": 0.11,
+     "ironic_gap": 0.66,
+     "number_story": 0.06,
+     "contradiction": 0.1
+    },
+    "version": "meme-story-tags@3",
+    "conflict": true,
+    "numberStory": false,
+    "headlineChars": 86,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "news.google.com/rss/articles/cbmipwfbvv95cuxob3jodknvsmnxegnmnudla2w4svpweuxzmzfkvurxowt0mlzsv3zsvdzutlnnowp5wjznx3ply295mdk0yxl2rkflcezmufjbennur2vysehls2j2vfnqv09zehfgb002cc14eepsd25fynrzvglhrw1ttelyzv9qn1u4otvqqvpirgnpukrnr25sc3z3mfvoadbpvudusuxkewxdrkutc9ibrafbvv95cuxnwkluvxhmlu9vukxwc1rmqnlfa2frwwhpzxnhuu91c2viuuhwcuq5btrjug53n2dnbhjtvgzxx0xuaeu2uel0wxy0ue5myzdzzjnxmtgzq2xkv2rfwuozmudodzjxtfk3cg1yvuftvkrccmznevaxx2tsm1pbzvfjs3v4ovd2rf9ibklzu3nrsgdyaktiz1zyzdhza2lmqvrfwmz5dfjjeexwazbp?oc=5",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.02,
+     "backfire": 0.08,
+     "conflict": 0.95,
+     "reversal": 0.05,
+     "hypocrisy": 0.06,
+     "ironic_gap": 0.17,
+     "number_story": 0.03,
+     "contradiction": 0.06
+    },
+    "version": "meme-story-tags@3",
+    "conflict": true,
+    "numberStory": false,
+    "headlineChars": 83,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "research.meta.ai/blog/muse-spark-open",
+   "tags": {
+    "irony": false,
+    "launch": true,
+    "scores": {
+     "launch": 0.98,
+     "backfire": 0.05,
+     "conflict": 0.04,
+     "reversal": 0.04,
+     "hypocrisy": 0.05,
+     "ironic_gap": 0.3,
+     "number_story": 0.07,
+     "contradiction": 0.1
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 15,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "techcrunch.com/2026/10/13/industrial-next-wants-factory-robots-to-switch-tasks-in-minutes-not-weeks",
+   "tags": {
+    "irony": false,
+    "launch": true,
+    "scores": {
+     "launch": 0.64,
+     "backfire": 0.04,
+     "conflict": 0.03,
+     "reversal": 0.03,
+     "hypocrisy": 0.04,
+     "ironic_gap": 0.2,
+     "number_story": 0.08,
+     "contradiction": 0.07
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 74,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "techcrunch.com/2026/10/05/openai-will-start-watermarking-chatgpts-text-in-the-eu",
+   "tags": {
+    "irony": false,
+    "launch": true,
+    "scores": {
+     "launch": 0.69,
+     "backfire": 0.44,
+     "conflict": 0.08,
+     "reversal": 0.05,
+     "hypocrisy": 0.1,
+     "ironic_gap": 0.49,
+     "number_story": 0.09,
+     "contradiction": 0.11
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 48,
+    "shortHeadline": true
+   },
+   "anyGood": true
+  },
+  {
+   "storyId": "citizenlab.ca/research/how-discover-tech-turned-targeted-ads-into-a-pipeline-for-spyware",
+   "tags": {
+    "irony": false,
+    "launch": false,
+    "scores": {
+     "launch": 0.07,
+     "backfire": 0.21,
+     "conflict": 0.18,
+     "reversal": 0.06,
+     "hypocrisy": 0.12,
+     "ironic_gap": 0.45,
+     "number_story": 0.04,
+     "contradiction": 0.1
+    },
+    "version": "meme-story-tags@3",
+    "conflict": false,
+    "numberStory": false,
+    "headlineChars": 79,
+    "shortHeadline": false
+   },
+   "anyGood": true
+  }
+ ]
+}

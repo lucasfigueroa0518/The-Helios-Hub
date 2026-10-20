@@ -96,6 +96,7 @@ async function main(): Promise<void> {
   const { LFD_RUN_TIMEOUT_MS } = await import('@/lib/lfd/config');
   const { threeAmQueue } = await import('@/lib/lfd/clock');
   const { liveLfdDeps } = await import('@/lib/lfd/live');
+  const { liveMemesForPost } = await import('@/lib/memes/lfd-post-live');
   const { claimAndPublishLfd } = await import('@/lib/lfd/publish');
   const { releaseDueLfd } = await import('@/lib/lfd/schedule');
   const query = await socialQuery();
@@ -351,6 +352,8 @@ async function main(): Promise<void> {
               now: () => new Date(),
               log,
               engine: (run, capUsd) => liveLfdDeps(lfdQuery, { capUsd, trigger: run.trigger, runId: run.id }).then((r) => r.deps),
+              // Memes in the post (lib/memes/lfd-post.ts), while lfd.settings.memes is on.
+              memes: liveMemesForPost(lfdQuery, log),
             },
             lfdClaimed,
           ).catch((error) => ({ runId: lfdClaimed.id, status: 'failed' as const, note: errorText(error) })),

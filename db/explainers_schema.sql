@@ -538,3 +538,7 @@ ALTER TABLE explainers.topics ADD CONSTRAINT topics_status_check CHECK (status I
 
 -- ── Explainers 3.2 (EX3-86): the exact phrase each reel defines ────────────────
 ALTER TABLE explainers.topics ADD COLUMN IF NOT EXISTS term text;
+
+-- ── Explainers 3.4 (EX3-102): the opener each reel drew from the bank ────────────
+-- explainers/world-kit/openers/bank.js; the next reel never repeats one of the last 8 (HISTORY).
+ALTER TABLE explainers.jobs ADD COLUMN IF NOT EXISTS opener text;

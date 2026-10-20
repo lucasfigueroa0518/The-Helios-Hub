@@ -1118,3 +1118,25 @@
 .lfd-tile .lfd-logo-plate { padding: 28px; }
 .lfd-logo { display: block; width: 100%; height: 100%; object-fit: contain; object-position: 50% 50%; }
 .lfd-media::after { content: ''; position: absolute; inset: 0; border-radius: 24px; border: 1px solid rgba(255,255,255,0.10); pointer-events: none; }
+/* A meme (the meme lab's LFD simulation): whole, never cropped, on the meme's own white. */
+.lfd-meme { display: block; width: 100%; height: 100%; object-fit: contain; object-position: 50% 50%; }
+.lfd-meme-plate { position: absolute; inset: 0; background: #FFFFFF; }
+/* A meme with a known shape (photoAspect / lfdCover.meme.aspect): the box takes the meme's shape, no plate or bands.
+   The cover's sizes come from lfdCoverMemeBox (SlideTemplate.tsx): full bleed when the meme is wide enough, else a card. */
+.lfd-cover--meme .lfd-cover-meme { flex: none; display: flex; justify-content: center; align-items: flex-start; }
+.lfd-cover--meme .lfd-cover-meme .lfd-meme { flex: none; object-fit: fill; }
+.lfd-cover--meme[data-meme-fit="card"] .lfd-cover-meme { box-sizing: border-box; padding-top: var(--lfd-margin); align-items: center; }
+.lfd-cover--meme[data-meme-fit="card"] .lfd-cover-meme .lfd-meme { border-radius: 24px; }
+.lfd-cover--meme .lfd-swipe { width: 56px; height: 56px; }
+.lfd-cover--meme[data-copy="m"] .lfd-brand-rule { padding-top: 32px; }
+.lfd-cover--meme[data-copy="m"] .lfd-cover-copy { padding: 0 96px 72px; }
+.lfd-cover--meme[data-copy="m"] .lfd-hook { font-size: 60px; line-height: 60px; }
+.lfd-cover--meme[data-copy="m"] .lfd-kicker { margin-top: 22px; font-size: 20px; }
+.lfd-cover--meme[data-copy="s"] .lfd-brand-rule { padding-top: 28px; }
+.lfd-cover--meme[data-copy="s"] .lfd-cover-copy { padding: 0 128px 40px; }
+.lfd-cover--meme[data-copy="s"] .lfd-hook { font-size: 48px; line-height: 50px; }
+.lfd-cover--meme[data-copy="s"] .lfd-kicker { margin-top: 16px; font-size: 18px; }
+.lfd-story-body--meme { justify-content: center; }
+.lfd-media--meme { flex: 0 1 auto; width: 100%; aspect-ratio: var(--meme-aspect); min-height: 0; background: none; border-radius: 0; overflow: visible; container-type: size; display: flex; align-items: center; justify-content: center; }
+.lfd-media--meme::after { content: none; }
+.lfd-media--meme .lfd-meme { flex: none; width: min(100cqw, 100cqh * var(--meme-aspect)); height: min(100cqh, 100cqw / var(--meme-aspect)); border-radius: 24px; object-fit: fill; }

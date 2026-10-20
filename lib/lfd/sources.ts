@@ -79,13 +79,19 @@ type ShortlistEntry = {
 };
 
 /** Carousel shortlists (spec §3.2 lane 1): runs finished since the window start, top 10 each, newest run first. */
-export async function carouselLane(q: HubQuery, sinceIso: string): Promise<LfdCandidate[]> {
+export async function carouselLane(q: HubQuery, sinceIso: string, untilIso?: string): Promise<LfdCandidate[]> {
+  // untilIso: a replay in the meme lab's LFD simulation sees only runs finished by then.
   const { rows } = await q<{ shortlist: ShortlistEntry[] | null }>(
-    `SELECT record->'selection'->'shortlist' AS shortlist FROM social.runs
+    untilIso
+      ? `SELECT record->'selection'->'shortlist' AS shortlist FROM social.runs
+      WHERE kind = 'daily' AND trigger <> 'cli' AND status IN ('ok', 'partial') AND finished_at > $1::timestamptz AND finished_at <= $2::timestamptz
+        AND jsonb_typeof(record->'selection'->'shortlist') = 'array'
+      ORDER BY finished_at DESC`
+      : `SELECT record->'selection'->'shortlist' AS shortlist FROM social.runs
       WHERE kind = 'daily' AND trigger <> 'cli' AND status IN ('ok', 'partial') AND finished_at > $1::timestamptz
         AND jsonb_typeof(record->'selection'->'shortlist') = 'array'
       ORDER BY finished_at DESC`,
-    [sinceIso],
+    untilIso ? [sinceIso, untilIso] : [sinceIso],
   );
   const out: LfdCandidate[] = [];
   for (const row of rows) {
@@ -113,9 +119,12 @@ export async function carouselLane(q: HubQuery, sinceIso: string): Promise<LfdCa
   return out.filter((c) => c.headline);
 }
 
-export async function lastCarouselRunAt(q: HubQuery): Promise<string | null> {
+export async function lastCarouselRunAt(q: HubQuery, untilIso?: string): Promise<string | null> {
   const { rows } = await q<{ at: string | null }>(
-    `SELECT max(finished_at)::text AS at FROM social.runs WHERE kind = 'daily' AND trigger <> 'cli' AND status IN ('ok', 'partial')`,
+    untilIso
+      ? `SELECT max(finished_at)::text AS at FROM social.runs WHERE kind = 'daily' AND trigger <> 'cli' AND status IN ('ok', 'partial') AND finished_at <= $1::timestamptz`
+      : `SELECT max(finished_at)::text AS at FROM social.runs WHERE kind = 'daily' AND trigger <> 'cli' AND status IN ('ok', 'partial')`,
+    untilIso ? [untilIso] : undefined,
   );
   return rows[0]?.at ?? null;
 }

@@ -23,7 +23,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { isClose, projectFrames, seconds, writeClose } from './frames.mjs';
+import { HOOK_ID, isBankOpener, isClose, projectFrames, seconds, writeClose, writeOpener } from './frames.mjs';
 
 export const GROUND_NAMES = ['paper', 'night', 'forest', 'white'];
 const DARK_GROUNDS = new Set(['night', 'forest']);
@@ -94,6 +94,12 @@ export function mountFrames(root, only = null) {
     }
     // The close is the kit's (EX3-95): always its canonical module and sounds.
     if (isClose(f)) writeClose(root, f);
+    // Frame 1 is the bank's opener over the worker's hook (EX3-102): ready once the hook is.
+    const opener = isBankOpener(root, f) && writeOpener(root, f);
+    if (opener && !existsSync(join(root, 'assets', 'frames', `${HOOK_ID}.js`))) {
+      skipped.push(f.id);
+      continue;
+    }
     if (!existsSync(join(root, 'assets', 'frames', `${f.id}.js`))) {
       skipped.push(f.id);
       continue;

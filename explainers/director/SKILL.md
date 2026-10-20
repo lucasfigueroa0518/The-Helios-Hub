@@ -111,8 +111,8 @@ Continue the workflow from Step 3.1 through Step 6, in the workflow's order:
 - **Music:** run `node assets/kit/music.mjs` right after the pacing. It picks and fits the bed;
   never choose music yourself.
 - **Sound effects are designed per frame.** Frame workers write each frame's sound events;
-  `node assets/kit/sound.mjs` mixes them. The opener's riser and hit come from
-  `node assets/kit/opener-sfx.mjs`. Never run `fetch-sfx`.
+  `node assets/kit/sound.mjs` mixes them. The opener's sound (the bank opener's
+  stem, EX3-102) and the hit on the 1→2 cut come from `node assets/kit/opener-sfx.mjs`. Never run `fetch-sfx`.
 - **Captions on**, from the preset's caption skin, built after `mount.mjs`.
 - **Step 4:** follow `frame.md`'s Frame Treatments for each beat and the workflow's
   `visual-design.md`.
@@ -130,7 +130,7 @@ Continue the workflow from Step 3.1 through Step 6, in the workflow's order:
 
 | # | Nominal | Beat | `type` | `engagement` (default) | Words | `hold` |
 |---|---|---|---|---|---|---|
-| 1 | 3.5s | Series opener: the picked hook in motion, clear on its own; the opener template line while the title card writes itself in the top band from the first frame ("today's brain break:" + the term); a riser into the cut | `hook` | Open loop + visual hook + audio ramp | template | 0.15s |
+| 1 | 4–5s | Series opener: the picked hook in motion, clear on its own, under the bank's opener (code, EX3-102: an animated pattern break, "AI BRAIN BREAK", then the title card with the term); the opener template line | `hook` | Open loop + visual hook + audio ramp | template | 0.15s |
 | 2 | 9s | Curiosity gap: a stuck character in the hook's scene, the viewer's own question, and a promise tying the answer to their life; opens on a sound hit and an attention reset | `pain_point` | Attention reset + curiosity gap | 18–36 | 0.15s |
 | 3 | 7s | Define the term: the kit's dictionary card filling in and staying, with a visual below | `product_intro` | Grounding definition | 12–26 | 0.15s |
 | 4 | 12s | Everyday analogy: continue the scene in the one wide establishing shot, introduce each new element, then play the steps to the payoff in closer shots | `feature_showcase` | Scene setting + analogy anchor + anticipation | 20–36 | 0.15s |
