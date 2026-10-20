@@ -597,3 +597,11 @@ The plan is `UPGRADE_V5_PLAN.md` and the decisions are ME-122 to ME-129. The cha
 - **Shipped from a clean checkout:** branch `feat/lfd-memes`, made from `origin/main` plus only the memes and LFD work, so unrelated in-progress Explainers changes stay out of production.
 - **Tests:** `tests/lfd-memes-post.test.ts` (4) cover placement, the post update, the 90-day ledger from posts, the regime guard, and the worker hook (order, spend, failure isolation, off switch). LFD and meme suites: 301 of 301.
 - **Full suite in the release checkout:** 2,470 of 2,478; the 8 failures fail the same way on pristine `main` (`shared-queue-explainers`, `explainers-render`, `reels-visual`).
+
+## 2026-10-20: meme slides take the meme's shape (ME-141)
+- **Why:** memes sat in a fixed box on a white plate, so most showed white bands (trimmed memes range from 0.45 to 2.15 width / height, median 1.23).
+- **Cover:** `lfdCoverMemeBox` picks full bleed or a rounded card from the meme's shape and sizes the hook (`data-copy` l / m / s).
+- **Story slides:** `photoAspect` on the slide; the box takes the meme's aspect ratio (CSS container units), centred with the text.
+- **Trim:** `trimLetterbox` cuts clean template frames (This is fine, Drake, Two Buttons) and gives white-ground memes (Buff Doge, Marked Safe) breathing room where their text touches the edge.
+- **Checked:** 10 past lab posts re-rendered offline, fit check ok on all; tests in `memes-lfd-lab.test.ts` for the cover box and the trim.
+
