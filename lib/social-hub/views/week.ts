@@ -76,6 +76,21 @@ export function lfdWeekdays(template: readonly TemplateRow[]): number[] {
   return [...new Set(template.filter((r) => r.vertical === 'last_few_days').map((r) => r.weekday))].sort((a, b) => a - b);
 }
 
+/**
+ * A 409's booked posts split for Move back to ready: the ones with an action
+ * ref go to the unschedule action; one with none (a reel booked with no idea)
+ * would only 400, so the editor names it instead.
+ */
+export function splitBooked<T extends { refs: Readonly<Record<string, string>> }>(list: readonly T[]): { movable: T[]; stuck: T[] } {
+  const movable: T[] = [];
+  const stuck: T[] = [];
+  for (const b of list) (Object.keys(b.refs).length ? movable : stuck).push(b);
+  return { movable, stuck };
+}
+
+export const stuckNote = (n: number): string =>
+  `${n} post${n === 1 ? '' : 's'} couldn’t be moved here. Unschedule ${n === 1 ? 'it' : 'them'} from the post page.`;
+
 export type WeekChip = { vertical: Vertical; windowId: string; feedMode: FeedMode | null; origin: 'template' | 'override'; booked: HubPost | null };
 
 /**

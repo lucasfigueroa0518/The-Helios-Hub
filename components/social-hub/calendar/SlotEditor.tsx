@@ -12,7 +12,7 @@ import { WEEKDAY_SHORT } from '@/lib/social-hub/time';
 import type { Vertical } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
 import { minuteLabel, PLAN } from '@/lib/social-hub/views/plan';
-import { chipAction, chipNames, ROWS, switchOnCopy, type SwitchFacts, type WeekCell, type WeekChip } from '@/lib/social-hub/views/week';
+import { chipAction, chipNames, ROWS, splitBooked, stuckNote, switchOnCopy, type SwitchFacts, type WeekCell, type WeekChip } from '@/lib/social-hub/views/week';
 
 /**
  * One slot on the week grid (spec §3): the chip (or "+") opens a dialog to
@@ -166,14 +166,19 @@ export function SlotEditor({ cell, chip, scope, readOnly = false, label, dimmed 
     }
   }
 
-  /** Booked posts go back to ready (the unschedule action), then the same save runs again. */
+  /**
+   * Booked posts go back to ready (the unschedule action), then the same save
+   * runs again. A post with no action ref can't be unscheduled here: the rest
+   * move, it stays listed, and the slot doesn't change.
+   */
   async function moveBack() {
     if (!booked) return;
     setBusy('move');
     setErrors([]);
+    const { movable, stuck } = splitBooked(booked.list);
     let moved = 0;
     try {
-      for (const b of booked.list) {
+      for (const b of movable) {
         const { status, out } = await post('/api/social-hub/actions/unschedule', { vertical: b.vertical, refs: b.refs });
         if (status < 200 || status >= 300) {
           setErrors([typeof out.note === 'string' ? out.note : 'That post couldn’t move back to ready.', movedNote(moved)]);
@@ -188,6 +193,12 @@ export function SlotEditor({ cell, chip, scope, readOnly = false, label, dimmed 
       return;
     }
     const changes = booked.changes;
+    if (stuck.length) {
+      setBooked({ list: stuck, changes });
+      setErrors([stuckNote(stuck.length), ...(moved ? [movedNote(moved)] : [])]);
+      setBusy(null);
+      return;
+    }
     setBooked(null);
     await save('move', changes);
   }

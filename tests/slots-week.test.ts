@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import { resolveDay } from '@/lib/social-hub/slots/resolve';
 import { DEFAULT_SEED_INPUTS, seedTemplate } from '@/lib/social-hub/slots/seed';
-import { carouselsByWeekday, chipAction, chipNames, datedWeek, lfdWeekdays, mondayOf, ROWS, switchOnCopy, templateWeek, weekLabel, weekModel } from '@/lib/social-hub/views/week';
+import { carouselsByWeekday, chipAction, chipNames, datedWeek, lfdWeekdays, mondayOf, ROWS, splitBooked, stuckNote, switchOnCopy, templateWeek, weekLabel, weekModel } from '@/lib/social-hub/views/week';
 import { addDays, weekdayOf } from '@/lib/social-hub/time';
 import type { HubPost } from '@/lib/social-hub/types';
 
@@ -125,4 +125,17 @@ test('chipAction: an editable chip edits; a read-only booked chip opens its post
   const m = weekModel({ mode: 'week', days: week('2026-10-19'), posts: [post], now: NOW });
   const cell = m.rows.find((r) => r.row.id === 'reel-morning')!.cells[1]!;
   assert.equal(chipAction(cell.chips[0]!, cell.editable), 'open');
+});
+
+test('Move back to ready: a booking with no action ref is not sent; the editor says where to unschedule it', () => {
+  const list: Array<{ scheduleId: string; refs: Record<string, string> }> = [
+    { scheduleId: 'a', refs: { postId: 'p-1' } },
+    { scheduleId: 'b', refs: {} },
+    { scheduleId: 'c', refs: { postIdeaId: 'i-1' } },
+  ];
+  const { movable, stuck } = splitBooked(list);
+  assert.deepEqual(movable.map((b) => b.scheduleId), ['a', 'c']);
+  assert.deepEqual(stuck.map((b) => b.scheduleId), ['b']);
+  assert.equal(stuckNote(1), '1 post couldn’t be moved here. Unschedule it from the post page.');
+  assert.equal(stuckNote(2), '2 posts couldn’t be moved here. Unschedule them from the post page.');
 });

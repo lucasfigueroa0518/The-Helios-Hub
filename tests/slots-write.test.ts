@@ -135,6 +135,14 @@ test('a booked reel reports its idea as the ref (native_ref is the video job)', 
   assert.deepEqual((out as { booked: Array<{ refs: unknown }> }).booked.map((b) => b.refs), [{ postIdeaId: '44444444-4444-4444-4444-444444444444' }]);
 });
 
+test('a booked reel with no idea_ref comes back with no refs (the editor leaves it to the post page)', async () => {
+  const { pg, q } = await seeded();
+  await book(pg, 'reels', '2026-10-22', 'evening', 'trial', '33333333-3333-3333-3333-333333333333');
+  const out = await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: '2026-10-22', vertical: 'reels', windowId: 'evening', action: 'remove', feedMode: null }], { by: 't', now: NOW, keepBooked: false });
+  assert.equal((out as { status: number }).status, 409);
+  assert.deepEqual((out as { booked: Array<{ refs: unknown }> }).booked.map((b) => b.refs), [{}]);
+});
+
 // ── A weekly edit made today leaves today's started windows alone ──
 
 const TUE_10AM = new Date('2026-10-20T14:00:00Z'); // Tue Oct 20, 10:00 AM New York: reels morning (8:45) started, evening (6:00 PM) not
