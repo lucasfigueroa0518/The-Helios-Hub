@@ -17,7 +17,7 @@ import {
   type SetStatus,
   type StorySet,
 } from '@/lib/stories/repository';
-import { approvalNote as approvalNoteFor, pickPublishAt } from '@/lib/stories/schedule';
+import { approvalNote as approvalNoteFor, pickSetPublishAt, setWindow } from '@/lib/stories/schedule';
 import { SERIES, loadSettings, saveSeriesSetting } from '@/lib/stories/settings';
 
 export class ApiError extends Error {
@@ -104,8 +104,9 @@ export async function approve(db: Queryable, id: string, now = new Date()): Prom
   try {
     const settings = await loadSettings(db);
     const window = settings.series[set.series].window;
-    approvalNote = approvalNoteFor(window, set.ny_date, now, settings.publishingLive);
-    const minute = settings.publishingLive && set.ny_date === nyDate(now) ? pickPublishAt(window, set.ny_date, now) : null;
+    // A set with a slot (template mode) posts in [slot, slot + 15]; one without, in its series' window.
+    approvalNote = approvalNoteFor(setWindow(window, set.slot_minute), set.ny_date, now, settings.publishingLive);
+    const minute = settings.publishingLive && set.ny_date === nyDate(now) ? pickSetPublishAt(window, set, now) : null;
     if (minute) {
       out = await scheduleSet(db, id, minute);
       approvalNote = `Approved. It posts at ${NY_TIME.format(minute)}.`;

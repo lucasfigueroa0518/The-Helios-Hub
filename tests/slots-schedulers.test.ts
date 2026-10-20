@@ -416,7 +416,7 @@ test('carousel health: a failed slot read falls back to legacy (ruling P2)', asy
 const THU = '2026-10-08';
 const THU_NOW = new Date('2026-10-08T05:00:00Z'); // 1:00 AM New York, Thursday Oct 8
 
-/** requestAutoSets' dueOn from the calendar's Stories slots on one date (Task 6 moves this into the worker). */
+/** Which series have a Stories slot on one date (the Run now list's rule). */
 const dueFrom = (slots: Awaited<ReturnType<typeof storiesSlotsOn>>, date: string) => (series: string, nyDate: string) =>
   nyDate === date && (slots ?? []).some((s) => s.series === series);
 
@@ -445,5 +445,5 @@ test('stories template: a series has slots on its dates only, and auto sets foll
   dueOn = dueFrom(await storiesSlotsOn(q, THU), THU);
   assert.equal(dueOn('guess_the_number', THU), false, 'removed for the day');
   assert.equal(dueOn('free_vs_paid', THU), true, 'added for the day');
-  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_NOW, { dueOn }), ['free_vs_paid']);
+  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_NOW, { slots: await storiesSlotsOn(q, THU) }), ['free_vs_paid']);
 });

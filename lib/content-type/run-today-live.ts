@@ -13,7 +13,7 @@ import { loadSettings as loadExplainerSettings } from '@/lib/explainers/settings
 import { pendingRun, requestRun } from '@/lib/reels/repository';
 import { requestFinish, todaySlateFor } from '@/lib/reels/visual/finish';
 import { liveHubQuery } from '@/lib/social-hub/db';
-import { isLfdDay, slotPlan, storiesDueOn } from '@/lib/social-hub/slots';
+import { isLfdDay, slotPlan, storiesSlotsOn } from '@/lib/social-hub/slots';
 import { loadDataset } from '@/lib/social-hub/load';
 import { lfdDueToday, planFrom, quotaCandidates, seriesDueToday, stepsFor, typeDay, type PlanStep, type RunInputs, type RunPlan } from '@/lib/social-hub/run-today';
 import type { Vertical } from '@/lib/social-hub/types';
@@ -56,10 +56,10 @@ async function liveLfd(today: string, anyDay: boolean): Promise<{ day: RunInputs
 export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean } = {}): Promise<RunPlan> {
   const today = nyDateOf(now)!;
   const lfd = await liveLfd(today, opts.lfdAnyDay === true);
-  const [dataset, stories, dueOn, reelsPending, building, slate, carouselRuns, carouselSettings, exDb] = await Promise.all([
+  const [dataset, stories, storySlots, reelsPending, building, slate, carouselRuns, carouselSettings, exDb] = await Promise.all([
     loadDataset(liveHubQuery, now),
     readPosting('stories', now),
-    storiesDueOn(liveHubQuery, today).catch(() => null),
+    storiesSlotsOn(liveHubQuery, today).catch(() => null),
     pendingRun(),
     dbQuery<{ post_idea_id: string }>(`SELECT post_idea_id::text FROM reels.finish_requests WHERE status = 'active'`),
     dbQuery<{ n: number }>(`SELECT count(*)::int AS n FROM reels.score_slates WHERE ny_date = $1::date`, [today]),
@@ -75,7 +75,8 @@ export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean } =
   const quotas = dataset.dayQuotas ?? DEFAULT_DAY_QUOTAS;
   // A type's quota is its posts per day, never more than its windows today (the candidates use the same rule).
   const day = (v: 'reels' | 'carousels' | 'explainers') => typeDay(quotaCandidates(dataset, v, now), Math.min(quotas[v], capacityWindows(v, today, dataset.dayQuotas?.lfdDays ?? [], placedCount(dataset.posts, v, today), today, dataset.dayQuotas?.slots ?? null).length));
-  // Stories: each series due today by its own settings, or (template mode) by its slot today, as the 4 AM worker decides.
+  // Stories: each series due today by its own settings, or (template mode) the series with a Stories slot today, as the 4 AM worker decides.
+  const dueOn = storySlots ? (id: string, nyDate: string) => nyDate === today && storySlots.some((s) => s.series === id) : null;
   const series = seriesDueToday(stories.series ?? [], today, new Set(sets.rows.map((r) => r.series)), dueOn);
   return planFrom({
     today,

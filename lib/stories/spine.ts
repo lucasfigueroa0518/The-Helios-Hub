@@ -6,7 +6,8 @@
  *
  *   item       native_ref = set id, idea_ref = 'series:ny_date', format 'story'
  *   approval   approved_at → approved (auto series: 'auto'); rejected → rejected
- *   slot       one per set once it has a minute (slot = the series)
+ *   slot       one per set once it has a minute (slot = the series; a set with
+ *              a slot_minute, template mode, books its slot id t0510:series)
  *   attempt    one per set once it starts publishing; frames are the child
  *              containers; a set that stopped with frames live is 'partial'
  *   insights   each frame's latest capture of the day; navigation and `final`
@@ -17,6 +18,7 @@
  * while a Story set is publishing, and the hub reads one identity per post.
  */
 import type { Queryable } from '@/lib/stories/db';
+import { isStorySeries, slotId } from '@/lib/social-hub/slots/types';
 import { approveItem, clearDecision, ensureContentItem, rejectItem, type SpineQuery } from '@/lib/social-hub/spine';
 
 const spineOf = (db: Queryable): SpineQuery => (text, params) => db.query(text, params) as ReturnType<SpineQuery>;
@@ -38,8 +40,9 @@ export async function projectSet(db: Queryable, setId: string): Promise<void> {
   const { rows } = await db.query<{
     id: string; series: string; ny_date: string; status: string; trigger: string;
     publish_at: string | null; approved_at: string | null; published_at: string | null; updated_at: string; error: string | null;
+    slot_minute: number | null;
   }>(
-    `SELECT id::text AS id, series, to_char(ny_date, 'YYYY-MM-DD') AS ny_date, status, trigger,
+    `SELECT id::text AS id, series, to_char(ny_date, 'YYYY-MM-DD') AS ny_date, status, trigger, slot_minute,
             publish_at::text AS publish_at, approved_at::text AS approved_at, published_at::text AS published_at,
             updated_at::text AS updated_at, error
        FROM stories.sets WHERE id = $1`,
@@ -82,13 +85,15 @@ export async function projectSet(db: Queryable, setId: string): Promise<void> {
   }
 
   const slotStatus = SLOT_STATUS[set.status];
+  // Legacy and hand-made sets book under the series name; a template set books its slot.
+  const slot = set.slot_minute != null && isStorySeries(set.series) ? slotId(set.slot_minute, set.series) : set.series;
   if (set.publish_at && slotStatus) {
     await db.query(
       `INSERT INTO social_hub.schedule (content_item_id, vertical, ny_date, slot, publish_at, status, source, publish_attempt_id, error, legacy_id)
        VALUES ($1, 'stories', $2::date, $3, $4::timestamptz, $5, $6, $7, $8, $9::uuid)
        ON CONFLICT (legacy_id) DO UPDATE SET ny_date = excluded.ny_date, publish_at = excluded.publish_at, status = excluded.status,
               publish_attempt_id = excluded.publish_attempt_id, error = excluded.error`,
-      [itemId, set.ny_date, set.series, set.publish_at, slotStatus, set.trigger === 'auto' ? 'auto' : 'user', attemptId,
+      [itemId, set.ny_date, slot, set.publish_at, slotStatus, set.trigger === 'auto' ? 'auto' : 'user', attemptId,
         slotStatus === 'failed' || slotStatus === 'cancelled' ? set.error : null, set.id],
     );
   }

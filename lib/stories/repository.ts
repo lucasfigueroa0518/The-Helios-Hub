@@ -22,6 +22,8 @@ export type StorySet = {
   style: Style;
   payload: Record<string, unknown>;
   publish_at: string | null;
+  /** Template mode: the Stories slot (minute of the New York day) this set fills; null for a legacy or hand-made set. */
+  slot_minute: number | null;
   flagged: boolean;
   error: string | null;
   spend_usd: number;
@@ -58,7 +60,7 @@ export type NewCandidate = {
   reason?: string | null;
 };
 
-const SET_COLS = `id, series, to_char(ny_date, 'YYYY-MM-DD') AS ny_date, status, trigger, style, payload, publish_at, flagged, error,
+const SET_COLS = `id, series, to_char(ny_date, 'YYYY-MM-DD') AS ny_date, status, trigger, style, payload, publish_at, slot_minute, flagged, error,
   spend_usd::float8 AS spend_usd, created_at, updated_at`;
 const FRAME_COLS = `id, set_id, seq, role, template, backdrop, copy, photo, storage_path, jpeg_bytes, review, flagged,
   ig_container_id, ig_media_id, published_at`;
@@ -100,24 +102,27 @@ const runMode = process.env.HELIOS_RUN_MODE === 'development' ? 'development' : 
 
 /**
  * Ask for a set (Generate, or the scheduler for an auto series). One live set
- * per series per day: a second request returns the existing one, `created: false`.
+ * per series per day and slot (`slotMinute`, template mode; null is the
+ * series' one set of the day): a second request returns the existing one,
+ * `created: false`.
  */
 export async function requestSet(
   db: Queryable,
-  input: { series: Series; nyDate: string; trigger: 'click' | 'auto'; style: Style; requestedBy?: string },
+  input: { series: Series; nyDate: string; trigger: 'click' | 'auto'; style: Style; requestedBy?: string; slotMinute?: number | null },
 ): Promise<{ set: StorySet; created: boolean }> {
+  const slotMinute = input.slotMinute ?? null;
   const { rows } = await db.query<StorySet>(
-    `INSERT INTO stories.sets (series, ny_date, trigger, style, requested_by, mode)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO stories.sets (series, ny_date, trigger, style, requested_by, mode, slot_minute)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      ON CONFLICT DO NOTHING
      RETURNING ${SET_COLS}`,
-    [input.series, input.nyDate, input.trigger, input.style, input.requestedBy ?? null, runMode],
+    [input.series, input.nyDate, input.trigger, input.style, input.requestedBy ?? null, runMode, slotMinute],
   );
   if (rows[0]) return { set: rows[0], created: true };
   const existing = await db.query<StorySet>(
     `SELECT ${SET_COLS} FROM stories.sets WHERE series = $1 AND ny_date = $2 AND coalesce(slot_minute, -1) = coalesce($3::smallint, -1)
         AND status NOT IN ('rejected', 'failed', 'skipped')`,
-    [input.series, input.nyDate, null],
+    [input.series, input.nyDate, slotMinute],
   );
   return { set: existing.rows[0]!, created: false };
 }
