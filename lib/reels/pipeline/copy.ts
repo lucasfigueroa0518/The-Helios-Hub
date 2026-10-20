@@ -179,8 +179,9 @@ function knownUrls(target: CopyTarget): string[] {
 
 /**
  * v28. The recent Reel closings and whether this idea's read gets the build
- * line. An unreadable log counts as empty. Jev is asked only when the ceiling
- * leaves room, and a failed fit call means no build line; the copy still ships.
+ * line. An unreadable log fails closed: no Jev call, no build line, and an
+ * empty recent-closings list. Jev is asked only when the ceiling leaves room,
+ * and a failed fit call means no build line; the copy still ships.
  */
 async function captionClosings(
   jev: JevRunner,
@@ -193,7 +194,8 @@ async function captionClosings(
     try {
       recent = await closings.recent();
     } catch (error) {
-      console.warn(`[reels] could not read recent caption closings for ${target.postIdeaId}:`, error);
+      console.warn(`[reels] could not read recent caption closings for ${target.postIdeaId}; no build line this time:`, error);
+      return { recent: [], include: false };
     }
   }
   if (!ceilingAllows(recent)) return { recent, include: false };

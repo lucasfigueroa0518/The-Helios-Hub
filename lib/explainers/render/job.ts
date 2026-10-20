@@ -125,8 +125,9 @@ function recordCaptionCost(db: ExplainersDb, jobId: string, mode: Mode, draft: C
 
 /**
  * v4 captions. The recent explainer closings and whether this caption gets the build line.
- * An unreadable log counts as empty. Jev is asked only when the ceiling leaves room, and a
- * failed fit call means no build line; the caption still ships with its light Helios mention.
+ * An unreadable log fails closed: no Jev call, no build line, an empty recent-closings list.
+ * Jev is asked only when the ceiling leaves room, and a failed fit call means no build line;
+ * the caption still ships with its light Helios mention.
  */
 async function captionBuildLine(
   deps: RenderDeps,
@@ -140,6 +141,8 @@ async function captionBuildLine(
       recent = await deps.closings.recent();
     } catch (error) {
       log('caption_closings_unread', { jobId, error: error instanceof Error ? error.message : String(error) });
+      log('caption_build_line', { jobId, fit: null, includeBuildLine: false, recent: 0 });
+      return { recent: [], includeBuildLine: false };
     }
   }
   let fit: number | null = null;

@@ -271,6 +271,32 @@ test('captioner stage: a closings log that fails to read or write never fails th
   assert.match(String(warn.mock.calls[1]!.arguments[0]), /could not record the carousel closing/);
 });
 
+test('captioner stage: an unreadable closings log fails closed (no Jev call, no build line, caption still ships)', async (t) => {
+  t.mock.method(console, 'warn', () => {});
+  const { draft, brief } = captionerSetup();
+  const requests: Array<Parameters<MessagesCreate>[0]> = [];
+  let jevCalls = 0;
+  const recorded: boolean[] = [];
+  const stage = createCaptionerStage({
+    create: async (params) => {
+      requests.push(params);
+      return msg('submit_caption', { news: NEWS, read: READ });
+    },
+    jev: async () => {
+      jevCalls += 1;
+      return { answers: { builds: { noul: 0.9 } }, usage: { input_tokens: 10, output_tokens: 0 }, model: 'stub-jev' };
+    },
+    closings: { recent: async () => { throw new Error('db down'); }, record: async (_id, _c, b) => { recorded.push(b); } },
+  });
+  const r = await stage(draft, brief);
+  assert.ok(r.ok);
+  assert.equal(jevCalls, 0, 'Jev is not asked when the ceiling cannot be read');
+  const user = requests[0]!.messages[0]!.content as string;
+  assert.ok(user.includes(buildLineInstruction(false)));
+  assert.ok(!user.includes('Recent captions'), 'an empty recent-closings list');
+  assert.deepEqual(recorded, [false]);
+});
+
 test('captioner stage: a fresh-caption rerun reuses the story\'s Jev fit (Jev called once, charged once)', async () => {
   const { stage, draft, brief, jevCalls, lastUser } = captionerSetup();
   const first = await stage(draft, brief);

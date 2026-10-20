@@ -440,7 +440,7 @@ test('job records closing and skips Jev at the ceiling', async () => {
   const cases: { name: string; recent: () => Promise<RecentClosing[]>; fit: () => Promise<number | null>; asked: boolean; include: boolean }[] = [
     { name: 'at the ceiling', recent: async () => [closing(true), closing(false), closing(true)], fit: async () => 0.95, asked: false, include: false },
     { name: 'under the ceiling, a good fit', recent: async () => [closing(false)], fit: async () => 0.95, asked: true, include: true },
-    { name: 'an unreadable log counts as empty', recent: async () => { throw new Error('no table'); }, fit: async () => 0.95, asked: true, include: true },
+    { name: 'an unreadable log fails closed', recent: async () => { throw new Error('no table'); }, fit: async () => 0.95, asked: false, include: false },
     { name: 'a failed fit call means no build line', recent: async () => [], fit: async () => { throw new Error('Jev down'); }, asked: true, include: false },
     { name: 'a weak fit', recent: async () => [], fit: async () => 0.2, asked: true, include: false },
   ];
@@ -463,6 +463,7 @@ test('job records closing and skips Jev at the ceiling', async () => {
     if (c.asked) assert.deepEqual(fitSubjects, [job.id], `${c.name}: Jev keyed by the job id`);
     assert.equal(writeCalls.length, 1);
     assert.equal(writeCalls[0]!.includeBuildLine, c.include, `${c.name}: include_build_line`);
+    if (c.name === 'an unreadable log fails closed') assert.deepEqual(writeCalls[0]!.recent, [], `${c.name}: an empty recent-closings list`);
     assert.deepEqual(recorded, [[job.id, READ, c.include]], `${c.name}: closing recorded`);
   }
 });

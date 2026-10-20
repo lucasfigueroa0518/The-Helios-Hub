@@ -7,7 +7,8 @@
  *   closing recorded
  *
  * A failed Jev call or closings read never fails the caption: no Jev answer
- * means no build line, an unreadable log reads as empty. The fit is asked
+ * means no build line, and an unreadable log fails closed (no Jev call, no
+ * build line, an empty recent-closings list). The fit is asked
  * once per story: a fresh-caption rerun reuses it (and its cost isn't charged twice). The two parts stay
  * separate until the mechanical stage joins them, so the Fact-checker can
  * judge the read on its own rules.
@@ -38,10 +39,12 @@ export function createCaptionerStage(deps: CaptionerStageDeps): PipelineStages['
   const fits = new Map<string, { fit: number | null; jevError?: string }>();
   return async (draft, brief) => {
     let recent: RecentClosing[] = [];
+    let logRead = true;
     try {
       recent = await deps.closings.recent();
     } catch (err) {
-      console.warn(`[captions] could not read carousel closings for ${draft.storyId}; treating the log as empty:`, err);
+      logRead = false;
+      console.warn(`[captions] could not read carousel closings for ${draft.storyId}; no build line this time:`, err);
     }
 
     let fit: number | null = null;
@@ -51,7 +54,7 @@ export function createCaptionerStage(deps: CaptionerStageDeps): PipelineStages['
     if (known) {
       fit = known.fit;
       jevError = known.jevError;
-    } else if (ceilingAllows(recent)) {
+    } else if (logRead && ceilingAllows(recent)) {
       const p = brief.parsed;
       const text = [p.the_news.text, ...p.facts.map((f) => f.text)].join('\n');
       try {
@@ -66,7 +69,7 @@ export function createCaptionerStage(deps: CaptionerStageDeps): PipelineStages['
       }
       fits.set(draft.storyId, { fit, ...(jevError ? { jevError } : {}) });
     }
-    const include = decideBuildLine(fit, recent);
+    const include = logRead && decideBuildLine(fit, recent);
 
     const r = await runCaptioner(brief.parsed, draft, recent, include, { create: deps.create, config: deps.config });
     deps.onResult?.(draft.storyId, { ...r, fit, includeBuildLine: include, ...(jevError ? { jevError } : {}) });

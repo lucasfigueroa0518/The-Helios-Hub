@@ -321,7 +321,7 @@ test('closing recorded, after a fit Jev asked once on the primary member', async
   assert.deepEqual(recorded, [['idea-1', READ, true]]);
 });
 
-test('a full ceiling skips Jev, and a log that cannot be read counts as empty', async () => {
+test('a full ceiling skips Jev, and a log that cannot be read fails closed (no Jev, no build line)', async () => {
   const full: RecentClosing[] = [
     { closing: 'One.', buildLine: true, createdAt: new Date() },
     { closing: 'Two.', buildLine: true, createdAt: new Date() },
@@ -341,15 +341,18 @@ test('a full ceiling skips Jev, and a log that cannot be read counts as empty', 
 
   const broken = recorder(new Error('relation social_hub.caption_closings does not exist'));
   const brokenSent: Anthropic.MessageCreateParamsNonStreaming[] = [];
+  const brokenSeen: JevRequest<Questions>[] = [];
   const outcome = await writeTargetCopy(scriptedClient([reportInput(), reportInput()], brokenSent), 'run-1', 'slate-1', TARGET, {
-    jev: stubJev([], () => ({ builds: { type: 'noul', noul: 0.9 } })),
+    jev: stubJev(brokenSeen, () => ({ builds: { type: 'noul', noul: 0.9 } })),
     closings: broken.log,
     save: async () => true,
     cost: async () => {},
   });
   assert.equal(outcome.ok, true);
   assert.equal(taskText(brokenSent[0]).includes('Recent captions ended like this'), false);
-  assert.ok(taskText(brokenSent[0]).includes(buildLineInstruction(true)));
+  assert.equal(brokenSeen.some((request) => request.component === 'copy-build-fit'), false, 'no Jev fit call');
+  assert.ok(taskText(brokenSent[0]).includes(buildLineInstruction(false)));
+  assert.equal(taskText(brokenSent[0]).includes(buildLineInstruction(true)), false);
 });
 
 test('a builder read without Helios is rejected once and the retry is billed', async () => {
