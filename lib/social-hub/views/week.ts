@@ -1,7 +1,7 @@
-import { addDays, nyDateOf, nyDayStart, WEEKDAY_SHORT, weekdayOf } from '@/lib/social-hub/time';
+import { addDays, nyDateOf, WEEKDAY_SHORT, weekdayOf } from '@/lib/social-hub/time';
 import { resolveDay } from '@/lib/social-hub/slots/resolve';
 import { isLocked } from '@/lib/social-hub/slots/rules';
-import { DAY_END, DAY_START, DEFAULT_CAPS, isUsual, RUN_HOUR_LABEL } from '@/lib/social-hub/slots/times';
+import { DAY_END, DAY_START, DEFAULT_CAPS, isUsual, nyMinuteOf, RUN_HOUR_LABEL } from '@/lib/social-hub/slots/times';
 import { slotId, slotKeyString, type FeedMode, type ResolvedSlot, type StorySeries, type TemplateRow } from '@/lib/social-hub/slots/types';
 import type { HubPost, Vertical } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
@@ -184,7 +184,7 @@ export function boardModel(input: {
 }): { columns: BoardColumn[]; cards: BoardCard[] } {
   const caps = input.caps ?? DEFAULT_CAPS;
   const today = nyDateOf(input.now)!;
-  const nowMinute = Math.floor((input.now.getTime() - nyDayStart(today).getTime()) / 60_000);
+  const nowMinute = nyMinuteOf(input.now);
   const columns: BoardColumn[] = [];
   const cards: BoardCard[] = [];
 
@@ -249,11 +249,13 @@ export function boardModel(input: {
 /** The axis runs 8 AM to 9 PM. */
 const SPAN = DAY_END - DAY_START;
 
-/** Y (0..height) for a minute of the day; the inverse of minuteForY. */
-export const yForMinute = (minute: number, height: number): number => ((minute - DAY_START) / SPAN) * height;
+const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+
+/** Y (0..height) for a minute of the day, held to 8 AM–9 PM; the inverse of minuteForY. */
+export const yForMinute = (minute: number, height: number): number => ((clamp(minute, DAY_START, DAY_END) - DAY_START) / SPAN) * height;
 
 /** The raw minute at a y; the caller snaps it (snapMinute). */
-export const minuteForY = (y: number, height: number): number => DAY_START + (y / height) * SPAN;
+export const minuteForY = (y: number, height: number): number => DAY_START + (clamp(y, 0, height) / height) * SPAN;
 
 /**
  * How tall a card is, in minutes of the axis. A card is a one-line chip a bit

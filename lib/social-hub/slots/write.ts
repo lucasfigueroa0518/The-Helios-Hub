@@ -18,7 +18,7 @@ import { rebookSlot } from '@/lib/social-hub/placement';
 
 import { driftMinute } from './book';
 import { OVERRIDE_INSERT, OVERRIDE_UPSERT, overrideKeyWhere } from './override';
-import { DEFAULT_FEED_MODE, DEFAULT_TIMES, FEED_GAP, isFeedSlot } from './times';
+import { DEFAULT_FEED_MODE, DEFAULT_TIMES, FEED_GAP, isFeedSlot, nyMinuteOf } from './times';
 import {
   isReelType, isSlotMinute, isStorySeries, parseSlotId, sameSlotKey, slotId, slotKeyString,
   type FeedMode, type OverrideRow, type ResolvedSlot, type SlotKey, type SlotQuery, type SlotSource, type StorySeries, type TemplateRow,
@@ -155,11 +155,7 @@ type State = { template: TemplateRow[]; overrides: OverrideRow[] };
 
 const keyOf = (s: Key): SlotKey => ({ vertical: s.vertical, startMinute: s.startMinute, series: s.series });
 
-/** Minute of the New York day of an instant. */
-function nyMinuteOf(at: Date): number {
-  const local = new Date(at.getTime() + zoneOffsetMinutes(at, SOCIAL_TIMEZONE) * 60_000);
-  return local.getUTCHours() * 60 + local.getUTCMinutes();
-}
+export { nyMinuteOf };
 
 /** The Standard week's slots for a weekday. */
 function templateDay(t: readonly TemplateRow[], weekday: number): ResolvedSlot[] {

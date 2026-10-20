@@ -1,4 +1,5 @@
 // lib/social-hub/slots/times.ts
+import { SOCIAL_TIMEZONE, zoneOffsetMinutes } from '@/lib/instagram/clock';
 import type { Vertical } from '@/lib/social-hub/types';
 
 import type { FeedMode, ResolvedSlot, StorySeries } from './types';
@@ -118,4 +119,10 @@ export function isFeedSlot(s: Pick<ResolvedSlot, 'vertical' | 'feedMode'>): bool
   if (s.vertical === 'stories') return false;
   if (s.vertical === 'reels' || s.vertical === 'explainers') return s.feedMode === 'main';
   return true;
+}
+
+/** Minute of the New York day (wall clock) of an instant; a DST day's minutes skip or repeat the changed hour. */
+export function nyMinuteOf(at: Date): number {
+  const local = new Date(at.getTime() + zoneOffsetMinutes(at, SOCIAL_TIMEZONE) * 60_000);
+  return local.getUTCHours() * 60 + local.getUTCMinutes();
 }

@@ -141,6 +141,36 @@ test('time and y round-trip over 8 AM to 9 PM', () => {
   }
 });
 
+test('lanes: Stories at one minute in different series split the width, in key order', () => {
+  const l = lanes([
+    { key: '1|stories|t0510:morning_download', day: 1, startMinute: 510 },
+    { key: '1|stories|t0510:free_vs_paid', day: 1, startMinute: 510 },
+  ]);
+  assert.deepEqual(l.get('1|stories|t0510:free_vs_paid'), { lane: 0, of: 2 });
+  assert.deepEqual(l.get('1|stories|t0510:morning_download'), { lane: 1, of: 2 });
+});
+
+test('y and minute are held to the 8 AM-9 PM axis', () => {
+  assert.equal(yForMinute(400, 780), 0);
+  assert.equal(yForMinute(1400, 780), 780);
+  assert.equal(minuteForY(-20, 780), 480);
+  assert.equal(minuteForY(900, 780), 1260);
+});
+
+test('now is New York wall-clock, so DST days lock the right cards', () => {
+  // Fall back Sun Nov 1 2026: 10:00 EST = 15:00Z. Spring forward Sun Mar 14 2027: 10:00 EDT = 14:00Z.
+  for (const [date, iso] of [['2026-11-01', '2026-11-01T15:00:00Z'], ['2027-03-14', '2027-03-14T14:00:00Z']] as const) {
+    const days = [{ nyDate: date, weekday: 0, slots: [slot('carousels', 540), slot('carousels', 660)] }];
+    const m = boardModel({ mode: 'week', days, posts: [], now: new Date(iso), caps: DEFAULT_CAPS });
+    const nine = m.cards.find((c) => c.startMinute === 540)!;
+    const eleven = m.cards.find((c) => c.startMinute === 660)!;
+    assert.equal(nine.status, 'started', date);
+    assert.equal(nine.locked, true, date);
+    assert.equal(eleven.locked, false, date);
+    assert.equal(eleven.status, 'empty', date);
+  }
+});
+
 const cmd = (label: string, tab: Command['tab'], undoable = true): Command => ({ label, tab, undoable, changes: [], inverse: [] });
 
 test('history: undo is scoped to the tab', () => {
