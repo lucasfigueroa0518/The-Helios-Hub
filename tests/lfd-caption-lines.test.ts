@@ -18,7 +18,7 @@ const VALID = {
   opener: '⬅️ Swipe for a robot that folds laundry, a new Claude model and a chip fight.',
   body: 'A robot folded a full load of laundry on its own this week.\n\nAnthropic also put out a new Claude model.',
   question: 'Which one caught your attention? 👇',
-  helios_line: 'For a real estate team, a faster model means listing follow-ups that go out in minutes. At Helios we wire those replies into the CRM so none sit overnight.',
+  helios_line: 'A faster model means a real estate team can answer a new listing lead in minutes, and Helios would tell any agent to stop letting those sit until morning.',
 };
 
 function stub(reply: unknown | Error, opts: { noUsage?: boolean } = {}) {

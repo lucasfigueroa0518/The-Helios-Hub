@@ -15,9 +15,10 @@
  *
  * Copy fix after the first live check (Tommy, 2026-10-20; the captioner has no
  * version string, so amended in place): about 500 to 900
- * characters, 2 or 3 short paragraphs, secondary facts cut, at most one
- * attribution clause; the read is one concrete point with Helios doing something
- * specific, the stock tags are banned, and a follow invite is rare.
+ * characters, 2 or 3 short paragraphs, secondary facts cut, attribution only
+ * where a claim is contested or single-source; the read is one concrete point in
+ * Helios's view (what Helios builds only under include_build_line), no handed-over
+ * opener, the stock tags are banned, and a follow invite is rare.
  *
  * Pinned to the prompts file §9 (tests/social-captioner.test.ts).
  * Prompt caching: everything in CAPTIONER_SYSTEM is static; the slides, the
@@ -48,7 +49,7 @@ news: everything before the Helios line, in this order.
 - Last, one short, specific question a reader can answer from their own work or life. Ask about this story, word it nothing like the recent closings, and never ask "what do you think?"
 - Name the people, companies and products plainly, in the words people would search for.
 - Every fact comes from the slides or the BRIEF. Nothing new: no dates, numbers, names, mechanisms or descriptors of your own. When the slides left a BRIEF fact out, leave it out unless the caption can't make sense without it.
-- Keep a hedge ("says," "reportedly," "up to") wherever dropping it would change what a reader believes. At most one attribution clause naming who reported the story, in the whole caption. Describe people, organizations and products only with words the slides or the BRIEF use.
+- Attribute a claim only where it is contested or comes from a single source. Keep any hedge ("says," "reportedly," "up to") whose removal would change what a reader believes. Describe people, organizations and products only with words the slides or the BRIEF use.
 - Gloss a term a reader who doesn't follow AI wouldn't know, from the BRIEF's TERMS only.
 - Background: at most one clause about an earlier event, sourced from the slides or the BRIEF, and only when the hook needs it to land. No background paragraph.
 - Third person, no opinion and no "we." The so-what line is the news part's one casual aside; opinion and "we" live in read. No paragraph about who reported what or whose figures they are.
@@ -56,11 +57,11 @@ news: everything before the Helios line, in this order.
 
 read: the Helios line, one or two plain sentences that close the caption.
 - One concrete point about this story for the industry it names: what it changes for someone running marketing, sales or ops there, what they can now do, should stop doing, or should watch. Name the industry from the Helios context that best matches this story, any of them, and not one the recent closings used, with the specific work the story changes there. Fall back to marketing or sales work in general only when none fits.
-- Helios is the subject doing something specific it builds for that work: "Helios builds ..." or "At Helios we ..." with a concrete action, kept inside what Helios builds. Never a generic tag such as "the kind of thing we think about at Helios" or "that's how we think about it at Helios".
-- This is where you have a view. Interpret, weigh, make a call, the way someone who builds these systems talks about them, never like a product line. "We" is allowed here.
+- It gives Helios's view: a concrete call or piece of advice for that industry, the way someone who builds these systems talks, never like a product line. "We" is allowed here. include_build_line says whether it may also say what Helios builds.
+- Do not start it the way any recent closing starts, and vary where "Helios" sits in the sentence. No stock tag from the shared rules.
 - The read adds no facts. A story fact it leans on is already on the slides or in the BRIEF, and its ID goes in read.facts. Anything about Helios comes only from the Helios context.
 - Name Helios once, here, in words that fit this story. Never a pitch.
-- It never asks a second question, and it ends on the point. A follow invite is rare: at most a short clause, never the default, and never "we post more takes like this."
+- It never asks a second question, and it ends on the point. A follow invite is rare: at most a short clause, never the default.
 
 Emoji: the voice list bans them on the slides. The caption may use at most two emoji, and none is required. Usually one comes before the hook, at the start of the first line of news, and one right after the closing question. Never in read.
 
@@ -97,7 +98,7 @@ export const SUBMIT_CAPTION_TOOL = {
     type: 'object',
     properties: {
       news: part('Everything before the Helios line: the hook, 2 or 3 short paragraphs separated by a blank line, a so-what line, and a closing question; with read, about 500 to 900 characters. Third person, every fact from the slides or the BRIEF.'),
-      read: part('The Helios line that closes the caption: one or two sentences making one concrete point about this story for a named industry, with Helios doing something specific it builds; names Helios once.'),
+      read: part("The Helios line that closes the caption: one or two sentences making one concrete point about this story for a named industry, in Helios's view; names Helios once."),
     },
     required: ['news', 'read'],
     additionalProperties: false,

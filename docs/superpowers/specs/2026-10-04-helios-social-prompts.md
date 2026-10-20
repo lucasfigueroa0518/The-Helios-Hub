@@ -535,7 +535,7 @@ TENSIONS: each real disagreement or open question in the sources, one line each:
 
 `decided item · prompt · 1 new stage · 1 new AI call per post` (spec `docs/superpowers/specs/2026-10-19-social-captions-design.md`, Per type → Carousels)
 
-The carousel caption is its own stage after the Editor (`lib/social/captioner/`). It writes the caption as two tagged parts, `news` and `read` (the builder's read, also called the Helios line), through `submit_caption`; code joins them, news first, so the posted caption runs: hook, short paragraphs, a so-what line, a specific question, the Helios line, then the code-built Source line (revised 2026-10-19 after the per-format comps). Copy fix after the first live check (Tommy, 2026-10-20; amended in place, the captioner has no version string): about 500 to 900 characters before the credits and Source line, 2 or 3 short paragraphs with secondary facts cut, at most one attribution clause, and a read that makes one concrete point with Helios doing something specific; the stock Helios tags are banned and a follow invite is rare. Model: `STAGE_MODELS.captioner`, Sonnet 5.5 at medium effort.
+The carousel caption is its own stage after the Editor (`lib/social/captioner/`). It writes the caption as two tagged parts, `news` and `read` (the builder's read, also called the Helios line), through `submit_caption`; code joins them, news first, so the posted caption runs: hook, short paragraphs, a so-what line, a specific question, the Helios line, then the code-built Source line (revised 2026-10-19 after the per-format comps). Copy fix after the first live check (Tommy, 2026-10-20; amended in place, the captioner has no version string): about 500 to 900 characters before the credits and Source line, 2 or 3 short paragraphs with secondary facts cut, attribution only where a claim is contested or single-source, and a read that makes one concrete point in Helios's view (what Helios builds only when include_build_line is true), with no handed-over opener; the stock Helios tags are banned and a follow invite is rare. Model: `STAGE_MODELS.captioner`, Sonnet 5.5 at medium effort.
 
 **System prompt (static, cached),** in this order: the intro, `HELIOS_CONTEXT` and `CAPTION_SHARED_RULES` (`lib/social/captions/helios-context.ts`), the carousel rules, `## Voice` with `VOICE_BLOCK`, the checked rules (`renderRulesFor('captioner')`), and the closing lines. The pinned blocks follow in that order: intro, carousel rules, checked rules, closing.
 
@@ -557,7 +557,7 @@ news: everything before the Helios line, in this order.
 - Last, one short, specific question a reader can answer from their own work or life. Ask about this story, word it nothing like the recent closings, and never ask "what do you think?"
 - Name the people, companies and products plainly, in the words people would search for.
 - Every fact comes from the slides or the BRIEF. Nothing new: no dates, numbers, names, mechanisms or descriptors of your own. When the slides left a BRIEF fact out, leave it out unless the caption can't make sense without it.
-- Keep a hedge ("says," "reportedly," "up to") wherever dropping it would change what a reader believes. At most one attribution clause naming who reported the story, in the whole caption. Describe people, organizations and products only with words the slides or the BRIEF use.
+- Attribute a claim only where it is contested or comes from a single source. Keep any hedge ("says," "reportedly," "up to") whose removal would change what a reader believes. Describe people, organizations and products only with words the slides or the BRIEF use.
 - Gloss a term a reader who doesn't follow AI wouldn't know, from the BRIEF's TERMS only.
 - Background: at most one clause about an earlier event, sourced from the slides or the BRIEF, and only when the hook needs it to land. No background paragraph.
 - Third person, no opinion and no "we." The so-what line is the news part's one casual aside; opinion and "we" live in read. No paragraph about who reported what or whose figures they are.
@@ -565,11 +565,11 @@ news: everything before the Helios line, in this order.
 
 read: the Helios line, one or two plain sentences that close the caption.
 - One concrete point about this story for the industry it names: what it changes for someone running marketing, sales or ops there, what they can now do, should stop doing, or should watch. Name the industry from the Helios context that best matches this story, any of them, and not one the recent closings used, with the specific work the story changes there. Fall back to marketing or sales work in general only when none fits.
-- Helios is the subject doing something specific it builds for that work: "Helios builds ..." or "At Helios we ..." with a concrete action, kept inside what Helios builds. Never a generic tag such as "the kind of thing we think about at Helios" or "that's how we think about it at Helios".
-- This is where you have a view. Interpret, weigh, make a call, the way someone who builds these systems talks about them, never like a product line. "We" is allowed here.
+- It gives Helios's view: a concrete call or piece of advice for that industry, the way someone who builds these systems talks, never like a product line. "We" is allowed here. include_build_line says whether it may also say what Helios builds.
+- Do not start it the way any recent closing starts, and vary where "Helios" sits in the sentence. No stock tag from the shared rules.
 - The read adds no facts. A story fact it leans on is already on the slides or in the BRIEF, and its ID goes in read.facts. Anything about Helios comes only from the Helios context.
 - Name Helios once, here, in words that fit this story. Never a pitch.
-- It never asks a second question, and it ends on the point. A follow invite is rare: at most a short clause, never the default, and never "we post more takes like this."
+- It never asks a second question, and it ends on the point. A follow invite is rare: at most a short clause, never the default.
 
 Emoji: the voice list bans them on the slides. The caption may use at most two emoji, and none is required. Usually one comes before the hook, at the start of the first line of news, and one right after the closing question. Never in read.
 

@@ -55,6 +55,6 @@ export function recentClosingsBlock(closings: RecentClosing[]): string {
 
 export function buildLineInstruction(include: boolean): string {
   return include
-    ? "include_build_line: true. In the Helios line that ends the caption, add one plain sentence on what Helios builds that this story touches, drawn only from the Helios context. That sentence is the only place Helios is named in the caption; do not name Helios anywhere else."
-    : "include_build_line: false. In the Helios line that ends the caption, keep to its one concrete point about this story, with Helios doing that one specific thing; add no separate sentence on what Helios builds or offers in general.";
+    ? "include_build_line: true. In the Helios line that ends the caption, you may say what Helios builds that this story touches, in one plain sentence drawn only from the Helios context. That sentence is the only place Helios is named in the caption; do not name Helios anywhere else."
+    : "include_build_line: false. In the Helios line that ends the caption, do not say what Helios builds or does for clients. Give Helios's view on what this story means for the industry it names, as opinion or advice in Helios's voice with \"we\": what we would tell a business there, or what we would do in its place, and vary the shape from the recent closings. No service claims.";
 }

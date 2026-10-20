@@ -132,7 +132,7 @@ test('the post caption names the viewer\'s problem and ends on the Helios line (
   assert.match(CAPTION_INSTRUCTIONS, /which of the reel's options they would use first/);
   assert.match(CAPTION_INSTRUCTIONS, /The Helios line is the last paragraph before the hashtags/);
   assert.doesNotMatch(CAPTION_INSTRUCTIONS, /may end by inviting the viewer to follow/);
-  // Copy fix (2026-10-20): one concrete point, Helios doing something specific, a follow clause only now and then.
+  // Copy fix (2026-10-20): one concrete point, Helios's view, a follow clause only now and then.
   assert.match(CAPTION_INSTRUCTIONS, /one or two plain sentences that make one concrete point about this episode's concept for the industry it names/);
   assert.match(CAPTION_INSTRUCTIONS, /a short clause inviting the viewer to follow for the next episode is rare, never the default/);
   assert.match(CAPTION_INSTRUCTIONS, /Short paragraphs of one or two sentences with a blank line between them/);

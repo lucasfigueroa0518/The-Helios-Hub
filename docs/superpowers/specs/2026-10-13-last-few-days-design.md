@@ -188,7 +188,7 @@ closing is recorded in `social_hub.caption_closings` (type `lfd`) only when the 
 
 | Prompt | File | Version | Status |
 |---|---|---|---|
-| Caption | `lib/lfd/caption-lines.ts` | `lfd-caption-v1` | draft, awaiting Lucas. Amended before it shipped (Tommy, 2026-10-20, after the first live check): the Helios line makes one concrete point with Helios as the subject of a specific action, a follow clause is rare, body paragraphs are one or two sentences with secondary details cut. |
+| Caption | `lib/lfd/caption-lines.ts` | `lfd-caption-v1` | draft, awaiting Lucas. Amended before it shipped (Tommy, 2026-10-20, after the first live check): the Helios line makes one concrete point in Helios's view (no build line, so never what Helios builds), never a recent closing's opening, a follow clause is rare, body paragraphs are one or two sentences with secondary details cut. |
 
 ## 5. Photos
 

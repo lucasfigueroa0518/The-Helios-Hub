@@ -522,7 +522,7 @@ test('fix round 1: the publishReadiness test leaves no test pool behind', () => 
   assert.equal('__outreachHubPool' in globalThis, false);
 });
 
-test('copy fix (v29 amended, 2026-10-20): the Helios line is one concrete point with Helios doing something specific; a follow clause is rare', () => {
+test("copy fix (v29 amended, 2026-10-20): the Helios line is one concrete point in Helios's view; a follow clause is rare", () => {
   assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v29');
   assert.match(COPY_SKILL, /one or two plain sentences that make one concrete point about this story for the industry it names/);
   assert.match(COPY_SKILL, /It ends on the point/);

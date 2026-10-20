@@ -60,8 +60,14 @@ test('buildLineInstruction switches on include', () => {
   assert.match(buildLineInstruction(true), /only place Helios is named/i);
   assert.match(buildLineInstruction(true), /In the Helios line/);
   assert.match(buildLineInstruction(false), /In the Helios line/);
-  assert.match(buildLineInstruction(false), /no separate sentence on what Helios builds or offers in general/i);
-  assert.match(buildLineInstruction(false), /one concrete point/);
+  // Fix round 1 (controller, 2026-10-20): the build-line distinction stays. False: Helios's view, no build or service claim.
+  assert.match(buildLineInstruction(false), /do not say what Helios builds or does for clients/i);
+  assert.match(buildLineInstruction(false), /Helios's view on what this story means for the industry it names/);
+  assert.match(buildLineInstruction(false), /opinion or advice/);
+  assert.match(buildLineInstruction(false), /vary the shape/);
+  assert.match(buildLineInstruction(false), /No service claims/);
+  assert.match(buildLineInstruction(true), /may say what Helios builds/);
+  assert.match(buildLineInstruction(true), /drawn only from the Helios context/);
 });
 
 test('exactly one build-line row in the window still allows', () => {
@@ -89,7 +95,7 @@ test('Task 8b part 2: at most two emoji, never in the Helios line; the Helios li
   assert.match(CAPTION_SHARED_RULES, /Never put one in the Helios line, the credits, the Source line or the hashtags/);
   assert.match(CAPTION_SHARED_RULES, /Name the industry from the context above that best matches this story/);
   assert.match(CAPTION_SHARED_RULES, /only when none (fits|does)/);
-  assert.match(CAPTION_SHARED_RULES, /inside what Helios builds/);
+  assert.match(CAPTION_SHARED_RULES, /inside the work Helios knows/);
   assert.equal(CAPTION_EMOJI_MAX, 2);
   assert.equal(countEmoji('No emoji here.'), 0);
   assert.equal(countEmoji('🚀 Launch. Which would you pick? 👇'), 2);
@@ -127,12 +133,16 @@ test('prompt registries name the caption versions in code', () => {
 // stock tags ("the kind of thing we think about at Helios", a trailing follow invite).
 const STOCK_TAGS = ['the kind of thing we think about', 'how we think about it', 'we post more takes like this', "that's where Helios comes in"];
 
-test('copy fix: the shared Helios line makes one concrete point with Helios doing something specific, and bans the stock tags', () => {
+test("copy fix: the shared Helios line makes one concrete point as Helios's view, hands over no opener, and bans the stock tags", () => {
   assert.match(CAPTION_SHARED_RULES, /one or two plain sentences that make one concrete point about this story for the industry it names/);
-  assert.match(CAPTION_SHARED_RULES, /Helios is the subject and does something specific it builds/);
-  assert.match(CAPTION_SHARED_RULES, /"Helios builds \.\.\." or "At Helios we \.\.\." followed by a concrete action/);
-  assert.match(CAPTION_SHARED_RULES, /Never a generic tag about how Helios thinks/);
-  for (const tag of STOCK_TAGS) assert.ok(CAPTION_SHARED_RULES.includes(`"${tag}"`), tag);
+  assert.match(CAPTION_SHARED_RULES, /It gives Helios's view: a concrete call or piece of advice for that industry about this story/);
+  assert.match(CAPTION_SHARED_RULES, /The task says whether it may also say what Helios builds/);
+  assert.match(CAPTION_SHARED_RULES, /Do not start it the way any recent closing starts, and vary where "Helios" sits in the sentence/);
+  // Fix round 1: describe the content, never hand the model an opener.
+  assert.doesNotMatch(CAPTION_SHARED_RULES, /"Helios builds|"At Helios we/);
+  const tagLine = CAPTION_SHARED_RULES.split('\n').find((l) => l.includes('No stock tags'));
+  assert.ok(tagLine, 'one compact stock-tag line');
+  for (const tag of STOCK_TAGS) assert.ok(tagLine!.includes(`"${tag}"`), tag);
   assert.match(CAPTION_SHARED_RULES, /A follow invite is rare: at most a short clause, now and then, never the default/);
   assert.doesNotMatch(CAPTION_SHARED_RULES, /lightly/);
 });
@@ -148,9 +158,12 @@ test('copy fix: every caption prompt describes the Helios line as one concrete p
   for (const [name, text] of Object.entries({ CAPTIONER_CAROUSEL_RULES, COPY_SKILL, explainerOwn, lfdOwn, skill })) {
     const flat = text.replace(/\s+/g, ' ');
     assert.match(flat, /one concrete point/i, name);
-    assert.match(flat, /Helios is the subject doing something specific it builds/, name);
-    assert.match(flat, /"At Helios we \.\.\." with a concrete action/, name);
-    assert.match(flat, /never a generic tag|Never a generic tag/, name);
+    assert.match(flat, /Helios's view: a concrete call or piece of advice/, name);
+    assert.match(flat, /says whether it may also say what Helios builds/, name);
+    assert.match(flat, /the way any recent closing starts/, name);
+    assert.match(flat, /vary where "Helios" sits in the sentence/, name);
+    assert.match(flat, /stock tag/i, name);
+    assert.doesNotMatch(flat, /"Helios builds \.\.\."|"At Helios we \.\.\."|Helios is the subject/, name);
     assert.match(flat, /never the default|never by default/, name);
     assert.doesNotMatch(flat, /may end by inviting|It may end by inviting|may close it by inviting/, name);
     assert.doesNotMatch(flat, /names Helios once, lightly|Name Helios once, lightly|Helios is named once, lightly/, name);

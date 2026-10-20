@@ -346,14 +346,15 @@ test('copy fix (2026-10-20): the carousel caption is the take, about 500 to 900 
   assert.match(CAPTIONER_CAROUSEL_RULES, /Then 2 or 3 short paragraphs on what happened, one or two sentences each/);
   assert.match(CAPTIONER_CAROUSEL_RULES, /Cut secondary facts the slides already carry/);
   assert.match(CAPTIONER_CAROUSEL_RULES, /The caption is the take, not a recap/);
-  assert.match(CAPTIONER_CAROUSEL_RULES, /At most one attribution clause/);
+  assert.doesNotMatch(CAPTIONER_CAROUSEL_RULES, /At most one attribution clause/);
+  assert.match(CAPTIONER_CAROUSEL_RULES, /Attribute a claim only where it is contested or comes from a single source/);
+  assert.match(CAPTIONER_CAROUSEL_RULES, /Keep any hedge \("says," "reportedly," "up to"\) whose removal would change what a reader believes/);
   assert.doesNotMatch(CAPTIONER_CAROUSEL_RULES, /4 to 6 short paragraphs|2 to 4 short paragraphs/);
   assert.match(CAPTIONER_CAROUSEL_RULES, /Usually one comes before the hook, at the start of the first line of news, and one right after the closing question/);
   assert.match(CAPTIONER_CAROUSEL_RULES, /read: the Helios line, one or two plain sentences that close the caption/);
-  assert.match(CAPTIONER_CAROUSEL_RULES, /A follow invite is rare: at most a short clause, never the default, and never "we post more takes like this\."/);
+  assert.match(CAPTIONER_CAROUSEL_RULES, /A follow invite is rare: at most a short clause, never the default\./);
   const schema = SUBMIT_CAPTION_TOOL.input_schema as any;
   assert.match(schema.properties.news.properties.text.description, /500 to 900 characters/);
   assert.match(schema.properties.read.properties.text.description, /one concrete point/);
-  // The good-read fixture follows the new rule: Helios as the subject of a concrete action.
-  assert.match(READ.text, /At Helios we would build/);
+  assert.doesNotMatch(schema.properties.read.properties.text.description, /doing something specific it builds/);
 });

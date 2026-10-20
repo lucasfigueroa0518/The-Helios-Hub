@@ -3,9 +3,10 @@
  * (carousels, Reels, explainers, Last Few Days). Static text: it belongs in the
  * cached system prefix. Bump HELIOS_CONTEXT_VERSION on any wording change.
  * CAPTION_SHARED_RULES copy fix (Tommy, 2026-10-20, after the first live check):
- * the Helios line makes one concrete point with Helios as the subject of a
- * specific action; the stock tags are named and banned; a follow invite is rare.
- * Prompt-only: no code gate on phrasing.
+ * the Helios line makes one concrete point, Helios's view for the named
+ * industry (what Helios builds only when include_build_line says so); no
+ * handed-over opener, vary where "Helios" sits; the stock tags are named and
+ * banned; a follow invite is rare. Prompt-only: no code gate on phrasing.
  */
 export const HELIOS_CONTEXT_VERSION = 'helios-context-v1';
 
@@ -45,7 +46,8 @@ export const CAPTION_SHARED_RULES = `## Caption rules
 - Keep the factual part third-person, hedged only where it matters, with no paragraph about sourcing; state only what the source supports and keep its hedges.
 - Build the caption in this order: the body, then the question or call to action, then the Helios line, then any credits, Source line or hashtags the format adds.
 - Close the body on a question or a call to action. A short, specific question is the usual choice, one a reader can answer from their own work or life. Word it fresh each time, never "what do you think?" and never engagement bait.
-- The Helios line ends the caption: one or two plain sentences that make one concrete point about this story for the industry it names. Name the industry from the context above that best matches this story, any of them, and not one the recent closings used; speak to marketing or sales work in general only when none fits. Helios is the subject and does something specific it builds, kept inside what Helios builds (marketing and sales work, connecting tools, data): "Helios builds ..." or "At Helios we ..." followed by a concrete action. Never a generic tag about how Helios thinks: never "the kind of thing we think about", "how we think about it", "we post more takes like this" or "that's where Helios comes in". It reads like a builder talking, never like a product line or a pitch, and it is the only place for "we" and for opinion. A follow invite is rare: at most a short clause, now and then, never the default.
+- The Helios line ends the caption: one or two plain sentences that make one concrete point about this story for the industry it names. Name the industry from the context above that best matches this story, any of them, and not one the recent closings used; speak to marketing or sales work in general only when none fits. It gives Helios's view: a concrete call or piece of advice for that industry about this story, kept inside the work Helios knows (marketing and sales work, connecting tools, data). The task says whether it may also say what Helios builds. Do not start it the way any recent closing starts, and vary where "Helios" sits in the sentence. It reads like a builder talking, never like a product line or a pitch, and it is the only place for "we" and for opinion. A follow invite is rare: at most a short clause, now and then, never the default.
+- No stock tags in the Helios line: "the kind of thing we think about", "how we think about it", "we post more takes like this", "that's where Helios comes in".
 - A casual so-what line in the body is fine, but it does not name Helios. Name Helios once, in the Helios line, worded fresh each time.
 - Use at most two emoji, and none is required. Usually one comes before the hook and one after the question or call to action. Never put one in the Helios line, the credits, the Source line or the hashtags.
 - Never write "DM us", never list services, never claim client results, never invent anecdotes, and never use engagement bait.`;

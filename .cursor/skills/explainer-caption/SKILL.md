@@ -100,12 +100,13 @@ or send it.
   show where this episode's concept turns up in its marketing, sales or
   operations: the moment it helps, or the moment it gets in the way. Fall back
   to marketing or sales work in general only when none fits. Do not cycle
-  through a short list of favourite industries. Helios is the subject doing
-  something specific it builds there, such as "Helios builds ..." or
-  "At Helios we ..." with a concrete action, kept inside what Helios builds.
-  Never a generic tag such as "the kind of thing we think about at Helios",
-  "that's how we think about it", "we post more takes like this" or "that's
-  where Helios comes in". Name Helios once. It ends on the point; a short
+  through a short list of favourite industries. It gives Helios's view: a
+  concrete call or piece of advice for that industry about this concept.
+  `include_build_line` says whether it may also say what Helios builds.
+  Do not start it the way any recent closing starts, and vary where "Helios"
+  sits in the sentence. No stock tags: "the kind of thing we think about",
+  "how we think about it", "we post more takes like this", "that's where
+  Helios comes in". Name Helios once. It ends on the point; a short
   clause inviting the viewer to follow for the next episode is rare, never the
   default. It adds no new fact about the concept. Code rejects a caption whose
   paragraph before the hashtags does not name Helios.
@@ -124,8 +125,8 @@ or send it.
    out the idea in the viewer's world.
 4. Add the ask: a save line, a "which would you use first" question, or both.
 5. Draft the Helios line: one business type from the Helios context, one
-   concrete point about where the concept shows up there, and Helios doing
-   something specific about it, named once. Then the hashtags after a blank
+   concrete point about where the concept shows up there, in Helios's view,
+   Helios named once and not where a recent closing put it. Then the hashtags after a blank
    line.
 6. Run the humanizer pass. Cut anything that restates the video beat by beat,
    and cut a caption that is only a restatement of the thesis.
@@ -144,7 +145,7 @@ One more short paragraph on why, when the idea needs it.
 
 Save this for the next time <the situation this reel is about>. Or ask which of the reel's options they would try first.
 
-The Helios line: one concrete point about where this concept shows up in one kind of business, with Helios doing something specific there, named once.
+The Helios line: one concrete point about where this concept shows up in one kind of business, in Helios's view, with Helios named once.
 
 #specific #specific #broad
 ```
