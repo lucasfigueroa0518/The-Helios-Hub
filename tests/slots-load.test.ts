@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { isLfdDay, slotPlan, slotsOn } from '@/lib/social-hub/slots';
+import { isLfdDay, quotaFromSlots, slotPlan, slotsOn, storiesSlotsOn } from '@/lib/social-hub/slots';
 import { loadSlots, readCaps, readOverrides, readSlotSource, readTemplate } from '@/lib/social-hub/slots/load';
 import { readSeedInputs, seedTemplate, DEFAULT_SEED_INPUTS } from '@/lib/social-hub/slots/seed';
 import { DEFAULT_CAPS } from '@/lib/social-hub/slots/times';
@@ -75,4 +75,25 @@ test('readSeedInputs reads LFD and Stories days, defaults on missing rows', asyn
   assert.deepEqual(got.lfdDays, [3]);
   assert.deepEqual(got.storyDays.free_vs_paid, [0]);
   assert.deepEqual(got.storyDays.guess_the_number, DEFAULT_SEED_INPUTS.storyDays.guess_the_number);
+});
+
+test('quotaFromSlots: null while legacy; template gives min(count, cap), following daily_caps', async () => {
+  const legacy = await db('legacy');
+  assert.equal(await quotaFromSlots(legacy.q, 'reels', '2026-10-20'), null);
+  assert.equal(await storiesSlotsOn(legacy.q, '2026-10-20'), null);
+  const { pg, q } = await db('template');
+  assert.equal(await quotaFromSlots(q, 'reels', '2026-10-20'), 3); // 3 slots, cap 5
+  await pg.query(`UPDATE social_hub.settings SET value = '{"reels":2}'::jsonb WHERE key = 'daily_caps'`);
+  assert.equal(await quotaFromSlots(q, 'reels', '2026-10-20'), 2);
+  assert.equal(await quotaFromSlots(q, 'explainers', '2026-10-20'), 2);
+});
+
+test('storiesSlotsOn: Stories slots on the date, capped at 2 per series', async () => {
+  const { pg, q } = await db('template');
+  const base = (await storiesSlotsOn(q, '2026-10-20'))!;
+  await pg.query(`INSERT INTO social_hub.slot_override (ny_date, vertical, start_minute, series, action, feed_mode) VALUES
+    ('2026-10-20', 'stories', 900, 'morning_download', 'add', NULL), ('2026-10-20', 'stories', 960, 'morning_download', 'add', NULL), ('2026-10-20', 'stories', 1020, 'morning_download', 'add', NULL)`);
+  const got = (await storiesSlotsOn(q, '2026-10-20'))!;
+  assert.equal(got.filter((s) => s.series === 'morning_download').length, 2);
+  assert.equal(got.length, base.filter((s) => s.series !== 'morning_download').length + 2);
 });

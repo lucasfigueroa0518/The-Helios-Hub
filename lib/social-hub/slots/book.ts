@@ -1,6 +1,6 @@
 // lib/social-hub/slots/book.ts
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
-import { addCalendarDays, openWindowRange, spacedOffsets, windowMinuteInstant, type PostingWindow } from '@/lib/instagram/window';
+import { openWindowRange, spacedOffsets, windowMinuteInstant, type PostingWindow } from '@/lib/instagram/window';
 
 import { DAY_END, DRIFT, FEED_GAP, isFeedSlot } from './times';
 import { slotId, type FeedMode, type ResolvedSlot } from './types';
@@ -41,30 +41,31 @@ export function driftMinute(nyDate: string, slot: ResolvedSlot, now: Date, busy:
 
 export type SlotChoice = { nyDate: string; slot: string; publishAt: Date; feedMode: FeedMode | null };
 
+/** Slots in day order: by start minute, then series. */
+export const bySlotTime = (a: ResolvedSlot, b: ResolvedSlot): number => a.startMinute - b.startMinute || (a.series ?? '').localeCompare(b.series ?? '');
+
 /**
- * The earliest untaken slot, looking `days` days ahead of today (New York),
- * stopping at `throughDate`. `slots` are the type's slots, the same on every
- * day searched. `taken` holds slotIds; a taken `${nyDate}|${slotId}` blocks
- * one day, a bare slotId blocks that slot on every day. Slots that cannot
- * book (past, or boxed in by feed posts) are skipped.
+ * The earliest untaken slot. `byDate` holds the type's slots per New York
+ * date (they differ by weekday and override); dates are read ascending, those
+ * before today (NY) are skipped, and the search stops after `throughDate`.
+ * `taken` holds `${nyDate}|${slotId}`. Slots that cannot book (past, or boxed
+ * in by feed posts) are skipped.
  */
 export function chooseSlotTime(
-  slots: ResolvedSlot[],
+  byDate: ReadonlyMap<string, readonly ResolvedSlot[]>,
   now: Date,
   taken: ReadonlySet<string>,
   busy: readonly Date[],
   rng: (n: number) => number,
   throughDate?: string,
-  days = 14,
 ): SlotChoice | null {
-  const ordered = [...slots].sort((a, b) => a.startMinute - b.startMinute || (a.series ?? '').localeCompare(b.series ?? ''));
-  const start = calendarDateKey(now, SOCIAL_TIMEZONE);
-  for (let d = 0; d < days; d += 1) {
-    const nyDate = addCalendarDays(start, d);
+  const today = calendarDateKey(now, SOCIAL_TIMEZONE);
+  for (const nyDate of [...byDate.keys()].sort()) {
+    if (nyDate < today) continue;
     if (throughDate && nyDate > throughDate) break;
-    for (const slot of ordered) {
+    for (const slot of [...byDate.get(nyDate)!].sort(bySlotTime)) {
       const id = slotId(slot.startMinute, slot.series);
-      if (taken.has(id) || taken.has(`${nyDate}|${id}`)) continue;
+      if (taken.has(`${nyDate}|${id}`)) continue;
       const publishAt = driftMinute(nyDate, slot, now, busy, rng);
       if (publishAt) return { nyDate, slot: id, publishAt, feedMode: slot.feedMode };
     }

@@ -2,6 +2,7 @@
 import { addCalendarDays } from '@/lib/instagram/window';
 import type { Vertical } from '@/lib/social-hub/types';
 
+import { bySlotTime } from './book';
 import { loadSlots, readCaps, readSlotSource } from './load';
 import type { FeedMode, ResolvedSlot, SlotQuery } from './types';
 
@@ -64,7 +65,7 @@ export async function bookingFeedMode(q: SlotQuery, itemId: string | null, verti
  * time are made, the rest are over. Stories pass the cap per series.
  */
 export function slotsWithinCap(plan: SlotPlan, vertical: Vertical, nyDate: string, cap: number): { made: ResolvedSlot[]; over: ResolvedSlot[] } {
-  const all = slotsOn(plan, vertical, nyDate).sort((a, b) => a.startMinute - b.startMinute || (a.series ?? '').localeCompare(b.series ?? ''));
+  const all = slotsOn(plan, vertical, nyDate).sort(bySlotTime);
   if (vertical !== 'stories') return { made: all.slice(0, Math.max(0, cap)), over: all.slice(Math.max(0, cap)) };
   const seen = new Map<string, number>();
   const made: ResolvedSlot[] = [];
