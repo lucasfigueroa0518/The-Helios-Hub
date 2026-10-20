@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { BUILD_FIT, buildFitState, buildLineInstruction, ceilingAllows, decideBuildLine, recentClosingsBlock, type RecentClosing } from '@/lib/social/captions/build-line';
 import { CAPTION_EMOJI_MAX, countEmoji } from '@/lib/social/captions/emoji';
+import { CAPTION_VERSION as EXPLAINER_CAPTION_VERSION } from '@/lib/explainers/caption';
+import { LFD_CAPTION_VERSION } from '@/lib/lfd/caption-lines';
 import { CAPTION_SHARED_RULES, HELIOS_CONTEXT, HELIOS_NAME } from '@/lib/social/captions/helios-context';
 
 const row = (buildLine: boolean, i = 0): RecentClosing => ({ closing: `closing ${i}`, buildLine, createdAt: new Date(2026, 9, 19 - i) });
@@ -108,4 +111,12 @@ test('HELIOS_NAME: one case-sensitive brand check for every caption type', () =>
   assert.ok(HELIOS_NAME.test('At Helios we build.'));
   assert.ok(!HELIOS_NAME.test('at helios we build.'));
   assert.ok(!HELIOS_NAME.test('the heliosphere'));
+});
+
+test('prompt registries name the caption versions in code', () => {
+  const explainers = readFileSync('planning/Explainer Reels/DECISIONS.md', 'utf8');
+  const current = explainers.split('\n').find((l) => l.startsWith('| Post caption | `lib/explainers/caption.ts`'));
+  assert.ok(current?.includes(`\`${EXPLAINER_CAPTION_VERSION}\``), current);
+  const lfd = readFileSync('docs/superpowers/specs/2026-10-13-last-few-days-design.md', 'utf8');
+  assert.match(lfd, new RegExp(`\\| Caption \\| \`lib/lfd/caption-lines\\.ts\` \\| \`${LFD_CAPTION_VERSION}\` \\|`));
 });
