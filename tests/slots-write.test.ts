@@ -6,6 +6,7 @@ import test from 'node:test';
 import { applySlotChanges, parseChanges, setSlotSource } from '@/lib/social-hub/slots/write';
 import { loadSlots, readOverrides, readTemplate } from '@/lib/social-hub/slots/load';
 import { LFD_CAROUSEL_CONFLICT } from '@/lib/social-hub/slots/resolve';
+import { DEFAULT_SEED_INPUTS, seedTemplate } from '@/lib/social-hub/slots/seed';
 
 import { openHubTestDb } from './fixtures/social-hub/pglite';
 
@@ -27,6 +28,23 @@ async function book(pg: Awaited<ReturnType<typeof openHubTestDb>>['pg'], vertica
     [item.rows[0]!.id, vertical, nyDate, slot, feedMode],
   );
 }
+
+test('seeded counts the rows actually inserted, not the attempts', async () => {
+  const { pg, query } = await openHubTestDb();
+  const rows = seedTemplate(DEFAULT_SEED_INPUTS);
+  // Another flip lands the first seed row between the empty check and this one's insert.
+  let raced = false;
+  const q = (async (text: string, params?: unknown[]) => {
+    if (!raced && text.includes('INSERT INTO social_hub.slot_template')) {
+      raced = true;
+      await pg.query(`INSERT INTO social_hub.slot_template (weekday, vertical, window_id, feed_mode, updated_by) VALUES ($1, $2, $3, $4, 'other')`, [rows[0]!.weekday, rows[0]!.vertical, rows[0]!.windowId, rows[0]!.feedMode]);
+    }
+    return query(text, params);
+  }) as never;
+  const out = await setSlotSource(q, 'template', 'tommy@example.com', DEFAULT_SEED_INPUTS);
+  assert.equal(out.seeded, rows.length - 1);
+  assert.equal((await readTemplate(query as never)).length, rows.length);
+});
 
 test('the first flip to template seeds from current settings; later flips do not reseed', async () => {
   const { pg, query } = await openHubTestDb();

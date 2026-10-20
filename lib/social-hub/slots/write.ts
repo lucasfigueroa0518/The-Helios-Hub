@@ -223,11 +223,12 @@ export async function setSlotSource(q: SlotQuery, source: SlotSource, by: string
     const { rows } = await q(`SELECT count(*)::int AS n FROM social_hub.slot_template`);
     if (Number(rows[0]?.n ?? 0) === 0) {
       for (const r of seedTemplate(seed ?? (await readSeedInputs(q)))) {
-        await q(
-          `INSERT INTO social_hub.slot_template (weekday, vertical, window_id, feed_mode, updated_by) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
+        // Counts rows inserted: a row another flip already wrote is not seeded here.
+        const { rows: inserted } = await q(
+          `INSERT INTO social_hub.slot_template (weekday, vertical, window_id, feed_mode, updated_by) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING RETURNING 1`,
           [r.weekday, r.vertical, r.windowId, r.feedMode, by],
         );
-        seeded += 1;
+        seeded += inserted.length;
       }
     }
   }
