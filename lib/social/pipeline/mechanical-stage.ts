@@ -20,7 +20,8 @@
  * Fact-checker: on a caption still empty, the Source line would stand alone.
  */
 import { joinCaption } from '@/lib/social/captioner/captioner';
-import { applySilentFixes, HARD_CHECKS, textChecks } from '@/lib/social/mechanical/checks';
+import { applySilentFixes, HARD_CHECKS, textChecks, type Fix } from '@/lib/social/mechanical/checks';
+import type { Brief as ParsedBrief } from '@/lib/social/reporter/brief';
 import type { FilledDraft } from '@/lib/social/writer/draft';
 
 import type { PipelineStages } from './stages';
@@ -32,9 +33,17 @@ export function withJoinedCaption(d: FilledDraft): FilledDraft {
   return { ...rest, caption: { text: joinCaption({ news: d.caption, read }), facts: [...new Set([...d.caption.facts, ...read.facts])] } };
 }
 
+/**
+ * The caption join and the silent fixes, exactly as the stage applies them.
+ * Scripts that render a stored draft use this so they show the posted caption.
+ */
+export function joinAndFix(filled: FilledDraft, brief: ParsedBrief): { draft: FilledDraft; fixes: Fix[] } {
+  return applySilentFixes(withJoinedCaption(filled), brief);
+}
+
 export function createMechanicalStage(): PipelineStages['mechanical'] {
   return async (draft, brief) => {
-    const { draft: filled, fixes } = applySilentFixes(withJoinedCaption(draft.filled), brief.parsed);
+    const { draft: filled, fixes } = joinAndFix(draft.filled, brief.parsed);
     const failures = textChecks(filled, brief.parsed);
     const hard = failures.filter((f) => HARD_CHECKS.has(f.id));
     if (hard.length > 0) {

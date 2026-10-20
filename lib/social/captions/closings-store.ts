@@ -49,7 +49,7 @@ export type ClosingsLog = {
 /**
  * A log bound to one caption type. `record` catches and console.warns: a failed
  * write must never fail the caption. `recent` lets errors propagate so the caller
- * decides how to degrade (an empty log allows the build line).
+ * decides how to degrade (an unreadable log fails closed: no build line).
  */
 export function closingsLog(query: Query, type: CaptionType): ClosingsLog {
   return {
@@ -61,5 +61,18 @@ export function closingsLog(query: Query, type: CaptionType): ClosingsLog {
         console.warn(`[captions] could not record ${type} closing for ${subjectId}:`, err);
       }
     },
+  };
+}
+
+/**
+ * A log for one run that lives in memory, newest first: later captions in the run
+ * still see earlier ones, and nothing reaches social_hub.caption_closings. For the
+ * file store and dev scripts, so a test run never moves the live build-line ceiling.
+ */
+export function memoryClosings(window: number = CLOSINGS_WINDOW): ClosingsLog {
+  const rows: RecentClosing[] = [];
+  return {
+    recent: async () => rows.slice(0, window),
+    record: async (_subjectId, closing, buildLine) => void rows.unshift({ closing, buildLine, createdAt: new Date() }),
   };
 }

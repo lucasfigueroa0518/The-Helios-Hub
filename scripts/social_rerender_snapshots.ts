@@ -6,6 +6,9 @@
  * the render adapter (with layout rotation) writes the preview posts, and
  * the render-fit check measures every slide and writes screenshots to
  * <run dir>/screenshots. A post that doesn't fit is reported as FAILED.
+ * The saved final goes through the mechanical stage's join (joinAndFix) as a
+ * live run does, so the caption is the one that posts: the stored news and
+ * builder's read, then the Source line. No captioner call: words never change.
  *
  *   npx tsx scripts/social_rerender_snapshots.ts runs/photos-<ts> <name> …
  */
@@ -13,6 +16,7 @@ import { promises as fsp } from 'node:fs';
 import path from 'node:path';
 
 import type { PhotoTrace } from '@/lib/social/photos/find';
+import { joinAndFix } from '@/lib/social/pipeline/mechanical-stage';
 import { checkRenderFit } from '@/lib/social/render/fit-check';
 import { draftSlides, toRenderPost } from '@/lib/social/render/from-draft';
 import { rotateLayouts } from '@/lib/social/render/layout-rotation';
@@ -27,7 +31,7 @@ async function main() {
     const log = JSON.parse(await fsp.readFile(path.join(runDir, `${name}.json`), 'utf8')) as { draftFile: string; photos: { cover: PhotoTrace; slides: PhotoTrace[] } };
     const saved = JSON.parse(await fsp.readFile(log.draftFile, 'utf8'));
     const brief = validateBrief(JSON.parse(await fsp.readFile(saved.brief, 'utf8')));
-    const draft = fillDraft(saved.final, brief);
+    const draft = joinAndFix(fillDraft(saved.final, brief), brief).draft;
     const traces = [log.photos.cover, ...log.photos.slides];
     const used = new Set(traces.flatMap((t) => (t.photo ? [t.photo.url] : [])));
     for (const [i, t] of traces.entries()) {

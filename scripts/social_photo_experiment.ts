@@ -10,6 +10,10 @@
  *
  * Costs: Wikidata, Commons, Openverse free; Jev a fraction of a cent; Claude
  * (sheet tags, close-up checks) a few cents, under --cap-usd.
+ *
+ * No captioner call: each stored final draft (news + builder's read) goes
+ * through the mechanical stage's join (joinAndFix) as a live run does, so the
+ * render carries the caption that posted, Source line included.
  */
 import { promises as fsp } from 'node:fs';
 import path from 'node:path';
@@ -42,6 +46,7 @@ async function main() {
   const { chooseLayout } = await import('@/lib/social/render/layout');
   const { toSlug } = await import('@/lib/social/render/local-store');
   const { fillDraft } = await import('@/lib/social/writer/draft');
+  const { joinAndFix } = await import('@/lib/social/pipeline/mechanical-stage');
   const { newAnthropic } = await import('@/lib/anthropic-client');
   const { liveMessagesCreate } = await import('@/lib/social/reporter/reporter');
 
@@ -68,7 +73,7 @@ async function main() {
       if (!l.design) continue;
       const brief = l.reporter.brief;
       const sub = structuredClone(l.factCheck.at(-1).outcome.draft);
-      const filled = fillDraft(sub, brief);
+      const filled = joinAndFix(fillDraft(sub, brief), brief).draft;
       const storyDate = run.startedAt.slice(0, 10);
       const photos = await photosForDraft(filled, brief, l.reporter.pages ?? [], { jev, http: fetch, faces: detectFacesLive, secondPhotos: createSecondPhotos(), vision, tagSheet }, { storyDate });
       const layout = await chooseLayout(filled, photos, jev);
