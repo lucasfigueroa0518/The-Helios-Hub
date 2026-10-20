@@ -109,7 +109,7 @@ export async function requestSet(
   const { rows } = await db.query<StorySet>(
     `INSERT INTO stories.sets (series, ny_date, trigger, style, requested_by, mode)
      VALUES ($1, $2, $3, $4, $5, $6)
-     ON CONFLICT (series, ny_date) WHERE status NOT IN ('rejected', 'failed', 'skipped') DO NOTHING
+     ON CONFLICT (series, ny_date, (coalesce(slot_minute, -1))) WHERE status NOT IN ('rejected', 'failed', 'skipped') DO NOTHING
      RETURNING ${SET_COLS}`,
     [input.series, input.nyDate, input.trigger, input.style, input.requestedBy ?? null, runMode],
   );

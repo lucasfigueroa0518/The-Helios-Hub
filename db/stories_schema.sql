@@ -44,8 +44,12 @@ CREATE TABLE IF NOT EXISTS stories.sets (
     updated_at      timestamptz NOT NULL DEFAULT now()
 );
 
+-- Free-time slots (2026-10-20): the minute of the New York day a set is booked at, so a
+-- series can run twice a day. NULL for legacy window-based sets.
+ALTER TABLE stories.sets ADD COLUMN IF NOT EXISTS slot_minute smallint;
+DROP INDEX IF EXISTS stories.uq_stories_sets_live_day;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_stories_sets_live_day
-    ON stories.sets (series, ny_date)
+    ON stories.sets (series, ny_date, (coalesce(slot_minute, -1)))
     WHERE status NOT IN ('rejected', 'failed', 'skipped');
 CREATE INDEX IF NOT EXISTS idx_stories_sets_status
     ON stories.sets (status, created_at);

@@ -391,54 +391,97 @@ CREATE TABLE IF NOT EXISTS social_hub.health_reports (
 -- windows) plus single-date overrides. Read only while slot_source = 'template'.
 -- ════════════════════════════════════════════════════════════════════════════
 
--- The same (vertical, window) pairs schedule_slot_check allows.
+-- Free-time slots (calendar week board redesign, 2026-10-20): a slot is a vertical at a
+-- minute of the New York day (start_minute, a multiple of 15). Stories also carry their
+-- series, so one series can run twice a day. The slot tables were empty in production
+-- (slot_source = 'legacy'), so the old window_id shape is dropped in place, once.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_schema = 'social_hub' AND table_name = 'slot_template' AND column_name = 'window_id') THEN
+        DELETE FROM social_hub.slot_template;
+        ALTER TABLE social_hub.slot_template DROP CONSTRAINT IF EXISTS slot_template_window_check;
+        ALTER TABLE social_hub.slot_template DROP COLUMN window_id;
+        ALTER TABLE social_hub.slot_template ADD COLUMN IF NOT EXISTS start_minute smallint NOT NULL;
+        ALTER TABLE social_hub.slot_template ADD COLUMN IF NOT EXISTS series text;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_schema = 'social_hub' AND table_name = 'slot_override' AND column_name = 'window_id') THEN
+        DELETE FROM social_hub.slot_override;
+        ALTER TABLE social_hub.slot_override DROP CONSTRAINT IF EXISTS slot_override_window_check;
+        ALTER TABLE social_hub.slot_override DROP COLUMN window_id;
+        ALTER TABLE social_hub.slot_override ADD COLUMN IF NOT EXISTS start_minute smallint NOT NULL;
+        ALTER TABLE social_hub.slot_override ADD COLUMN IF NOT EXISTS series text;
+    END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS social_hub.slot_template (
-    weekday     smallint NOT NULL CHECK (weekday BETWEEN 0 AND 6),
-    vertical    text NOT NULL,
-    window_id   text NOT NULL,
-    feed_mode   text,
-    updated_by  text,
-    updated_at  timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (weekday, vertical, window_id),
-    CONSTRAINT slot_template_window_check CHECK (
-        (vertical = 'carousels' AND window_id IN ('morning', 'afternoon'))
-        OR (vertical = 'explainers' AND window_id IN ('afternoon', 'late'))
-        OR (vertical = 'reels' AND window_id IN ('morning', 'midday', 'evening'))
-        OR (vertical = 'stories' AND window_id IN ('morning_download', 'guess_the_number', 'free_vs_paid'))
-        OR (vertical = 'last_few_days' AND window_id IN ('morning'))
-    ),
-    -- Trial / Main feed exists only for reel types.
-    CONSTRAINT slot_template_feed_mode_check CHECK (
-        (vertical IN ('reels', 'explainers') AND feed_mode IS NOT NULL AND feed_mode IN ('trial', 'main'))
-        OR (vertical NOT IN ('reels', 'explainers') AND feed_mode IS NULL)
-    )
+    weekday      smallint NOT NULL CHECK (weekday BETWEEN 0 AND 6),
+    vertical     text NOT NULL,
+    start_minute smallint NOT NULL,
+    series       text,
+    feed_mode    text,
+    updated_by   text,
+    updated_at   timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE social_hub.slot_template DROP CONSTRAINT IF EXISTS slot_template_start_minute_check;
+ALTER TABLE social_hub.slot_template ADD CONSTRAINT slot_template_start_minute_check
+    CHECK (start_minute BETWEEN 0 AND 1439 AND start_minute % 15 = 0);
+ALTER TABLE social_hub.slot_template DROP CONSTRAINT IF EXISTS slot_template_series_check;
+ALTER TABLE social_hub.slot_template ADD CONSTRAINT slot_template_series_check CHECK (
+    (vertical = 'stories' AND series IS NOT NULL AND series IN ('morning_download', 'guess_the_number', 'free_vs_paid'))
+    OR (vertical <> 'stories' AND series IS NULL)
+);
+-- Trial / Main feed exists only for reel types.
+ALTER TABLE social_hub.slot_template DROP CONSTRAINT IF EXISTS slot_template_feed_mode_check;
+ALTER TABLE social_hub.slot_template ADD CONSTRAINT slot_template_feed_mode_check CHECK (
+    (vertical IN ('reels', 'explainers') AND feed_mode IS NOT NULL AND feed_mode IN ('trial', 'main'))
+    OR (vertical NOT IN ('reels', 'explainers') AND feed_mode IS NULL)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_social_hub_slot_template_key
+    ON social_hub.slot_template (weekday, vertical, start_minute, (coalesce(series, '')));
 
 -- One date's exceptions. An 'add' on a template key replaces it for that date
 -- (that is how a single-date Trial/Main flip is stored).
 CREATE TABLE IF NOT EXISTS social_hub.slot_override (
-    ny_date     date NOT NULL,
-    vertical    text NOT NULL,
-    window_id   text NOT NULL,
-    action      text NOT NULL CHECK (action IN ('add', 'remove')),
-    feed_mode   text,
-    updated_by  text,
-    updated_at  timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (ny_date, vertical, window_id),
-    CONSTRAINT slot_override_window_check CHECK (
-        (vertical = 'carousels' AND window_id IN ('morning', 'afternoon'))
-        OR (vertical = 'explainers' AND window_id IN ('afternoon', 'late'))
-        OR (vertical = 'reels' AND window_id IN ('morning', 'midday', 'evening'))
-        OR (vertical = 'stories' AND window_id IN ('morning_download', 'guess_the_number', 'free_vs_paid'))
-        OR (vertical = 'last_few_days' AND window_id IN ('morning'))
-    ),
-    CONSTRAINT slot_override_feed_mode_check CHECK (
-        (action = 'remove' AND feed_mode IS NULL)
-        OR (action = 'add' AND vertical IN ('reels', 'explainers') AND feed_mode IS NOT NULL AND feed_mode IN ('trial', 'main'))
-        OR (action = 'add' AND vertical NOT IN ('reels', 'explainers') AND feed_mode IS NULL)
-    )
+    ny_date      date NOT NULL,
+    vertical     text NOT NULL,
+    start_minute smallint NOT NULL,
+    series       text,
+    action       text NOT NULL CHECK (action IN ('add', 'remove')),
+    feed_mode    text,
+    updated_by   text,
+    updated_at   timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE social_hub.slot_override DROP CONSTRAINT IF EXISTS slot_override_start_minute_check;
+ALTER TABLE social_hub.slot_override ADD CONSTRAINT slot_override_start_minute_check
+    CHECK (start_minute BETWEEN 0 AND 1439 AND start_minute % 15 = 0);
+ALTER TABLE social_hub.slot_override DROP CONSTRAINT IF EXISTS slot_override_series_check;
+ALTER TABLE social_hub.slot_override ADD CONSTRAINT slot_override_series_check CHECK (
+    (vertical = 'stories' AND series IS NOT NULL AND series IN ('morning_download', 'guess_the_number', 'free_vs_paid'))
+    OR (vertical <> 'stories' AND series IS NULL)
+);
+ALTER TABLE social_hub.slot_override DROP CONSTRAINT IF EXISTS slot_override_feed_mode_check;
+ALTER TABLE social_hub.slot_override ADD CONSTRAINT slot_override_feed_mode_check CHECK (
+    (action = 'remove' AND feed_mode IS NULL)
+    OR (action = 'add' AND vertical IN ('reels', 'explainers') AND feed_mode IS NOT NULL AND feed_mode IN ('trial', 'main'))
+    OR (action = 'add' AND vertical NOT IN ('reels', 'explainers') AND feed_mode IS NULL)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_social_hub_slot_override_key
+    ON social_hub.slot_override (ny_date, vertical, start_minute, (coalesce(series, '')));
 CREATE INDEX IF NOT EXISTS idx_social_hub_slot_override_date ON social_hub.slot_override (ny_date);
+
+-- Free-time booking ids: t + the start minute (4 digits), Stories add :series. They sit
+-- beside the window ids, which legacy mode still books.
+ALTER TABLE social_hub.schedule DROP CONSTRAINT IF EXISTS schedule_slot_check;
+ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_slot_check CHECK (
+    (vertical = 'carousels' AND slot IN ('morning', 'afternoon'))
+    OR (vertical = 'explainers' AND slot IN ('afternoon', 'late'))
+    OR (vertical = 'reels' AND slot IN ('morning', 'midday', 'evening'))
+    OR (vertical = 'stories' AND slot IN ('morning_download', 'guess_the_number', 'free_vs_paid'))
+    OR (vertical = 'last_few_days' AND slot IN ('morning'))
+    OR slot ~ '^t[0-9]{4}(:[a-z_]+)?$'
+);
 
 -- A booking keeps the slot's Trial/Main as it was when placed; posting reads it.
 ALTER TABLE social_hub.schedule ADD COLUMN IF NOT EXISTS feed_mode text;
@@ -449,6 +492,11 @@ ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_feed_mode_check CHECK (
 
 -- Who decides cadence: 'legacy' (each type's settings, as before) or 'template' (the calendar).
 INSERT INTO social_hub.settings (key, value) VALUES ('slot_source', '"legacy"'::jsonb) ON CONFLICT (key) DO NOTHING;
+
+-- Daily caps per type (calendar week board): the most a day may book.
+INSERT INTO social_hub.settings (key, value) VALUES
+    ('daily_caps', '{"reels":5,"explainers":3,"carousels":3,"last_few_days":1,"stories":2}'::jsonb)
+ON CONFLICT (key) DO NOTHING;
 
 -- Every caption type logs its closing paragraph here; it feeds recent-closings and the
 -- build-line ceiling (social captions redesign, 2026-10-19).
