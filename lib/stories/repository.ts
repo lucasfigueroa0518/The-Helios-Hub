@@ -264,9 +264,13 @@ export const scheduleSet = (db: Queryable, setId: string, publishAt: Date) => mo
  * Schedule here / move, D50). Its day moves with it, so the series' one
  * live set per day still holds (a clash is the unique index's 23505).
  * Never a set that is posting or posted. Re-projected like every move.
+ * `slotMinute` (template mode, R15): the calendar slot it now sits in, so
+ * the set's slot stays its time's; the column is named only then (R12).
  */
-export const rescheduleSet = (db: Queryable, setId: string, nyDate: string, publishAt: Date) =>
-  move(db, setId, ['approved', 'scheduled'], 'scheduled', 'ny_date = $4::date, publish_at = $5', [nyDate, publishAt.toISOString()]);
+export const rescheduleSet = (db: Queryable, setId: string, nyDate: string, publishAt: Date, slotMinute: number | null = null) =>
+  slotMinute === null
+    ? move(db, setId, ['approved', 'scheduled'], 'scheduled', 'ny_date = $4::date, publish_at = $5', [nyDate, publishAt.toISOString()])
+    : move(db, setId, ['approved', 'scheduled'], 'scheduled', 'ny_date = $4::date, publish_at = $5, slot_minute = $6', [nyDate, publishAt.toISOString(), slotMinute]);
 
 /** Scheduled sets whose minute has come, oldest first. */
 export async function dueSets(db: Queryable, now: Date = new Date()): Promise<StorySet[]> {

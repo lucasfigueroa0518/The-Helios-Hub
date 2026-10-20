@@ -1,4 +1,5 @@
 import { formatPlacement, type Planned, type PlacementRules } from '@/lib/social-hub/placement';
+import { parseSlotId } from '@/lib/social-hub/slots/types';
 import type { SpineQuery } from '@/lib/social-hub/spine';
 import { SERIES_LABEL } from '@/lib/stories/render/copy';
 
@@ -32,7 +33,8 @@ export function storyActions(deps: {
   getSet: (setId: string) => Promise<{ set: StorySetView } | null>;
   slotOf: (setId: string) => Promise<{ id: string; publishAt: Date } | null>;
   plan: Plan;
-  rescheduleSet: (setId: string, nyDate: string, publishAt: Date) => Promise<unknown>;
+  /** `slotMinute`: the calendar slot the set moves into (template mode); null while legacy. */
+  rescheduleSet: (setId: string, nyDate: string, publishAt: Date, slotMinute?: number | null) => Promise<unknown>;
 }): ContentActions {
   const placement =
     (mode: 'place' | 'reschedule'): ActionFn =>
@@ -50,12 +52,16 @@ export function storyActions(deps: {
       } else if (set.status !== 'scheduled') {
         return { ok: false, note: 'It isn’t scheduled, so there is nothing to move.' };
       }
-      if (at.slot !== set.series) return { ok: false, note: `A ${SERIES_NAME[set.series] ?? set.series} set posts only in its own slot (${set.series}).` };
+      // Its series' slot: the series id, or (the calendar's free times) a slot id of that series, `t0900:morning_download`.
+      if (at.slot !== set.series && parseSlotId(at.slot)?.series !== set.series) return { ok: false, note: `A ${SERIES_NAME[set.series] ?? set.series} set posts only in its own slot (${set.series}).` };
       const own = mode === 'reschedule' ? await deps.slotOf(setId) : null;
       const plan = await deps.plan(deps.query, { vertical: 'stories', ...at, moving: own ? { scheduleId: own.id, publishAt: own.publishAt } : null });
       if (!plan.ok) return plan;
       try {
-        await deps.rescheduleSet(setId, plan.nyDate, plan.publishAt);
+        const slotMinute = plan.calendar ? (parseSlotId(plan.slot)?.startMinute ?? null) : null;
+        // Legacy calls it exactly as before; on the calendar the set's slot moves with its time (R15).
+        if (slotMinute === null) await deps.rescheduleSet(setId, plan.nyDate, plan.publishAt);
+        else await deps.rescheduleSet(setId, plan.nyDate, plan.publishAt, slotMinute);
       } catch (error) {
         if (isUniqueViolation(error)) return { ok: false, note: `That day already has a ${SERIES_NAME[set.series] ?? set.series} set.` };
         if ((error as { name?: string } | null)?.name === 'StaleStatusError') return { ok: false, note: 'This set has moved on; refresh to see where it is.' };

@@ -6,7 +6,7 @@ import { need, needPlacement, type ActionOutcome, type ContentActions } from './
 
 type Queued = { queued: boolean; note?: string; status?: number };
 type Placed = { scheduled: true; id: string; publishAt: string } | { scheduled: false; note: string };
-type Place = (q: Query, input: PlacementTarget & Placement) => Promise<PlacementOutcome>;
+type Place = (q: Query, input: PlacementTarget & Placement & { by?: string }) => Promise<PlacementOutcome>;
 
 /**
  * Carousels (lib/social/overnight): approve a slot or a post in review, reject,
@@ -25,12 +25,12 @@ export function carouselActions(deps: {
   unschedulePost: (q: Query, postId: string) => Promise<{ ok: boolean; note: string }>;
   requestRerun: (q: Query, postId: string, by: string) => Promise<{ queued: true; id: string } | { queued: false; note: string }>;
 }): ContentActions {
-  async function placement(t: Parameters<typeof need>[0], input: Parameters<typeof needPlacement>[0], fn: Place): Promise<ActionOutcome> {
+  async function placement(t: Parameters<typeof need>[0], input: Parameters<typeof needPlacement>[0], fn: Place, by?: string): Promise<ActionOutcome> {
     const at = needPlacement(input);
     const q = await deps.query();
     const itemId = await deps.itemId(q, need(t, 'postId'));
     if (!itemId) return { ok: false, note: 'The post is gone.' };
-    return fn(q, { vertical: 'carousels', itemId, ...at });
+    return fn(q, { vertical: 'carousels', itemId, ...at, ...(by ? { by } : {}) });
   }
   return {
     vertical: 'carousels',
@@ -61,7 +61,7 @@ export function carouselActions(deps: {
       return out.ok ? { ok: true, note: out.note } : { ok: false, note: out.note, status: 409 };
     },
     delete: deleteVerb({ refKey: 'postId', query: deps.query as never, itemOf: (q, postId) => deps.itemId(q as Query, postId) }),
-    place: (t, _by, input) => placement(t, input, deps.placeItem),
-    reschedule: (t, _by, input) => placement(t, input, deps.rescheduleItem),
+    place: (t, by, input) => placement(t, input, deps.placeItem, by),
+    reschedule: (t, by, input) => placement(t, input, deps.rescheduleItem, by),
   };
 }

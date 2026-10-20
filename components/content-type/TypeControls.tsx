@@ -10,6 +10,7 @@ import { Drawer } from '@/app/reels/ui';
 import { refreshHubPage } from '@/lib/content-type/refresh-client';
 import { ScheduleStrip } from '@/components/content-type/ScheduleStrip';
 import type { ScheduleDay } from '@/lib/content-type/posting';
+import { maxCapFor } from '@/lib/content-type/caps';
 import { formatUsd } from '@/lib/social-hub/cost';
 
 /**
@@ -274,9 +275,6 @@ function Switch({ checked, onChange, children, hint }: { checked: boolean; onCha
   );
 }
 
-/** Last Few Days runs once a day; the rest up to 10 (lib/content-type/posting.ts maxCapFor). */
-const MAX_CAP: Record<Posting['type'], number> = { reels: 10, carousels: 10, explainers: 10, stories: 10, last_few_days: 1 };
-
 /**
  * The daily limit (week board spec §Safety cap): the most the overnight run
  * makes a day, whatever the calendar holds. A person's decision; each step
@@ -290,7 +288,7 @@ function DailyLimit({ type, cap, costMicros, onSave }: { type: Posting['type']; 
         <span className="rh-quota__label">Daily limit</span>
         <button type="button" className="rh-btn rh-btn--xs" disabled={cap <= 0} onClick={() => onSave(cap - 1)} aria-label="One fewer a night">−</button>
         <strong className="rh-quota__n">{cap}</strong>
-        <button type="button" className="rh-btn rh-btn--xs" disabled={cap >= MAX_CAP[type]} onClick={() => onSave(cap + 1)} aria-label="One more a night">+</button>
+        <button type="button" className="rh-btn rh-btn--xs" disabled={cap >= maxCapFor(type)} onClick={() => onSave(cap + 1)} aria-label="One more a night">+</button>
       </div>
       <p className="rh-settings__note">The most {noun} the overnight run makes a day{type === 'stories' ? ', per series' : ''}, however many slots the calendar has.</p>
       {costMicros != null ? <p className="rh-settings__note">One more a night costs about {formatUsd(costMicros)}.</p> : null}

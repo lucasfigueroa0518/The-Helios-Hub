@@ -1,13 +1,13 @@
 import type { NextRequest } from 'next/server';
 
-import { generate } from '@/lib/stories/api';
+import { generateNow } from '@/lib/stories/api';
 import { storiesRoute } from '@/lib/stories/route';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-/** Generate: Lucas's click asks the worker for today's set (the approval boundary for its live calls). */
+/** Generate: Lucas's click asks the worker for today's set (the approval boundary for its live calls); with the calendar, for the series' first open Stories slot. */
 export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => ({}))) as { series?: unknown };
-  return storiesRoute(({ db, email }) => generate(db, body.series, email));
+  return storiesRoute(({ db, email }) => generateNow(db, body.series, email));
 }

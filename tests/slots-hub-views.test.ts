@@ -17,7 +17,12 @@ import type { OverrideRow, SlotsByDate } from '@/lib/social-hub/slots/types';
 import { applySlotChanges, setSlotSource, writeCaps } from '@/lib/social-hub/slots/write';
 import type { HubPost } from '@/lib/social-hub/types';
 import { capacityWindows, dayPlan, windowsOn } from '@/lib/social-hub/views/plan';
+import { storyActions } from '@/lib/publishing/actions/stories';
+import { activeSlotByRef } from '@/lib/social-hub/placement';
+import { ApiError, generateNow, NO_OPEN_SLOT } from '@/lib/stories/api';
 import { liveStoriesDb } from '@/lib/stories/db';
+import { pgliteDb } from '@/lib/stories/local-db';
+import { getSet, rescheduleSet } from '@/lib/stories/repository';
 import { openStorySlots } from '@/lib/stories/schedule';
 
 import { openHubTestDb } from './fixtures/social-hub/pglite';
@@ -374,6 +379,9 @@ test('costPerPost: the average cost of a type\'s posts over the last 14 days, ea
     post({ costItemKey: 'd', costMicros: null }),
     post({ costItemKey: 'e', vertical: 'reels', costMicros: 5_000_000 }),
     post({ costItemKey: 'f', nyDate: null, generatedAt: '2026-10-20T08:00:00Z', costMicros: 200_000 }),
+    // Counted by the day it was made: last night's post booked for tomorrow counts; one made 20 days ago doesn't.
+    post({ costItemKey: 'g', nyDate: '2026-10-21', generatedAt: '2026-10-20T06:00:00Z', costMicros: 400_000 }),
+    post({ costItemKey: 'h', nyDate: '2026-10-20', generatedAt: '2026-09-30T06:00:00Z', costMicros: 9_000_000 }),
   ];
   assert.equal(costPerPost(posts, 'explainers', now), 400_000);
   assert.equal(costPerPost(posts, 'carousels', now), null);
@@ -463,4 +471,117 @@ test('Run now\'s Stories Generate makes the set for the first open Stories slot 
   assert.deepEqual(await minutes(), [510, 900]);
   assert.deepEqual(await requestStorySets(['morning_download'], 't', TUE_7AM), [], 'every slot has its set');
   assert.deepEqual(await minutes(), [510, 900]);
+});
+
+// ── Fix round 1: a move takes its slot along, atomically (R15, R16) ──
+
+const slotsOf = async (q: never, nyDate: string, vertical: string) =>
+  ((await loadSlots(q, nyDate, nyDate)).get(nyDate) ?? []).filter((x) => x.vertical === vertical).map((x) => [x.startMinute, x.feedMode]);
+
+test('template: a reschedule to a new time moves its slot (no empty slot left), keeps its Trial / Main, and repeated moves don\'t pile up', async () => {
+  const { pg, query } = await openHubTestDb();
+  const q = query as never;
+  await setSlotSource(q, 'template', 't');
+  await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: WED, vertical: 'explainers', startMinute: 780, series: null, action: 'add', feedMode: 'trial' }], { by: 't', now: NOW });
+  const item = await itemFor(pg, 'explainers', 'e1');
+  assert.ok((await placeItem(q, { vertical: 'explainers', itemId: item, nyDate: WED, slot: 't0780', now: NOW })).ok);
+  const moved = await rescheduleItem(q, { vertical: 'explainers', itemId: item, nyDate: WED, slot: 't0720', now: NOW, by: 'tommy' });
+  assert.ok(moved.ok, moved.note);
+  assert.deepEqual(await slotsOf(q, WED, 'explainers'), [[720, 'trial'], [930, 'main']], '1:00 PM left with its post, as Trial');
+  const row = async () => (await pg.query<{ slot: string; feed_mode: string }>(`SELECT slot, feed_mode FROM social_hub.schedule WHERE content_item_id = $1`, [item])).rows[0]!;
+  assert.deepEqual(await row(), { slot: 't0720', feed_mode: 'trial' });
+  assert.ok((await rescheduleItem(q, { vertical: 'explainers', itemId: item, nyDate: WED, slot: 't0840', now: NOW, by: 'tommy' })).ok);
+  assert.deepEqual(await slotsOf(q, WED, 'explainers'), [[840, 'trial'], [930, 'main']]);
+  const overrides = (await pg.query<{ start_minute: number; action: string; updated_by: string }>(`SELECT start_minute, action, updated_by FROM social_hub.slot_override WHERE vertical = 'explainers' ORDER BY start_minute`)).rows;
+  assert.deepEqual(overrides.map((o) => [o.start_minute, o.action]), [[780, 'remove'], [840, 'add']], 'the 12:00 add is gone, not left behind');
+  assert.equal(overrides.find((o) => o.start_minute === 840)!.updated_by, 'tommy');
+  // Into a slot the calendar already has: the post moves, the slots stay as they are.
+  assert.ok((await rescheduleItem(q, { vertical: 'explainers', itemId: item, nyDate: WED, slot: 't0930', now: NOW })).ok);
+  assert.deepEqual(await slotsOf(q, WED, 'explainers'), [[840, 'trial'], [930, 'main']]);
+  // Across days: Wednesday's 11:15 Text on Screen slot goes to Thursday at 11:45.
+  const reel = await itemFor(pg, 'reels', 'r1');
+  assert.ok((await placeItem(q, { vertical: 'reels', itemId: reel, nyDate: WED, slot: 't0675', now: NOW })).ok);
+  assert.ok((await rescheduleItem(q, { vertical: 'reels', itemId: reel, nyDate: '2026-10-22', slot: 't0705', now: NOW })).ok);
+  assert.deepEqual((await slotsOf(q, WED, 'reels')).map(([m]) => m), [525, 1080]);
+  assert.deepEqual((await slotsOf(q, '2026-10-22', 'reels')).map(([m]) => m), [525, 675, 705, 1080]);
+});
+
+test('template: the booking and its calendar slot land together; a failed override rolls the booking back', async () => {
+  const { pg, query } = await openHubTestDb();
+  const q = query as never;
+  await setSlotSource(q, 'template', 't');
+  const item = await itemFor(pg, 'explainers', 'e1');
+  assert.ok((await placeItem(q, { vertical: 'explainers', itemId: item, nyDate: WED, slot: 't0780', now: NOW })).ok);
+  await pg.exec(`CREATE FUNCTION social_hub.no_override() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'override write failed'; END $$;
+    CREATE TRIGGER no_override BEFORE INSERT OR UPDATE OR DELETE ON social_hub.slot_override FOR EACH ROW EXECUTE FUNCTION social_hub.no_override();`);
+  await assert.rejects(() => rescheduleItem(q, { vertical: 'explainers', itemId: item, nyDate: WED, slot: 't0720', now: NOW }), /override write failed/);
+  assert.equal((await pg.query<{ slot: string }>(`SELECT slot FROM social_hub.schedule WHERE content_item_id = $1`, [item])).rows[0]!.slot, 't0780', 'the move rolled back');
+  const fresh = await itemFor(pg, 'explainers', 'e2');
+  await assert.rejects(() => placeItem(q, { vertical: 'explainers', itemId: fresh, nyDate: WED, slot: 't0720', now: NOW }), /override write failed/);
+  assert.equal((await pg.query(`SELECT 1 FROM social_hub.schedule WHERE content_item_id = $1`, [fresh])).rows.length, 0, 'no booking without its slot');
+});
+
+test('template: placing into a Standard-week time the date removed brings it back with the Standard week\'s Trial / Main, as no override', async () => {
+  const { pg, query } = await openHubTestDb();
+  const q = query as never;
+  await setSlotSource(q, 'template', 't');
+  await applySlotChanges(q, [{ scope: 'template', op: 'put', weekday: 3, vertical: 'explainers', startMinute: 780, series: null, feedMode: 'trial' }], { by: 't', now: NOW });
+  await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: WED, vertical: 'explainers', startMinute: 780, series: null, action: 'remove' }], { by: 't', now: NOW });
+  const item = await itemFor(pg, 'explainers', 'e1');
+  const placed = await placeItem(q, { vertical: 'explainers', itemId: item, nyDate: WED, slot: 't0780', now: NOW });
+  assert.ok(placed.ok, placed.note);
+  assert.deepEqual(await slotsOf(q, WED, 'explainers'), [[780, 'trial'], [930, 'main']]);
+  assert.equal((await pg.query(`SELECT 1 FROM social_hub.slot_override WHERE ny_date = $1 AND vertical = 'explainers'`, [WED])).rows.length, 0, 'the date matches its Standard week again');
+  assert.equal((await pg.query<{ feed_mode: string }>(`SELECT feed_mode FROM social_hub.schedule WHERE content_item_id = $1`, [item])).rows[0]!.feed_mode, 'trial');
+});
+
+test('R15: the type page\'s Stories Generate books into the first open Stories slot in template mode, says so when none is open, and is unchanged in legacy', async () => {
+  const { pg, query } = await appDb();
+  const q = query as never;
+  const db = pgliteDb(pg);
+  const TUE_7AM = new Date('2026-10-20T11:00:00Z');
+  const minutes = async () => (await pg.query<{ m: number | null }>(`SELECT slot_minute AS m FROM stories.sets WHERE series = 'morning_download' ORDER BY slot_minute NULLS FIRST`)).rows.map((r) => r.m);
+  assert.equal((await generateNow(db, 'morning_download', 't', TUE_7AM)).created, true);
+  assert.deepEqual(await minutes(), [null], 'legacy: a set with no slot');
+  await pg.query(`DELETE FROM stories.sets`);
+  await setSlotSource(q, 'template', 't');
+  await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: '2026-10-20', vertical: 'stories', startMinute: 900, series: 'morning_download', action: 'add' }], { by: 't', now: TUE_7AM });
+  assert.equal((await generateNow(db, 'morning_download', 't', TUE_7AM)).created, true);
+  assert.equal((await generateNow(db, 'morning_download', 't', TUE_7AM)).created, true, 'the second slot is not "already requested"');
+  assert.deepEqual(await minutes(), [510, 900]);
+  await assert.rejects(() => generateNow(db, 'morning_download', 't', TUE_7AM), (e: unknown) => e instanceof ApiError && e.status === 409 && e.message === NO_OPEN_SLOT);
+});
+
+test('R15: moving a Story set on the calendar keeps its slot_minute with its time, takes t####:series ids, and refuses a time with no Stories slot', async () => {
+  const { pg, query } = await openHubTestDb();
+  const q = query as never;
+  const db = pgliteDb(pg);
+  await setSlotSource(q, 'template', 't');
+  await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: WED, vertical: 'stories', startMinute: 900, series: 'morning_download', action: 'add' }], { by: 't', now: NOW });
+  const SET = '70000000-0000-4000-8000-000000000001';
+  await pg.query(`INSERT INTO stories.sets (id, series, ny_date, status, trigger, style, approved_at, slot_minute) VALUES ($1, 'morning_download', $2, 'approved', 'click', 'polished', now(), 510)`, [SET, WED]);
+  const act = storyActions({
+    approve: async () => undefined, reject: async () => undefined, publishNow: async () => undefined, regenerate: async () => undefined,
+    query: q,
+    getSet: (id) => getSet(db, id),
+    slotOf: (id) => activeSlotByRef(q, 'stories', id),
+    plan: (h, input) => planPlacement(h, { ...input, now: NOW, rng: first }),
+    rescheduleSet: (id, nyDate, at, minute) => db.transaction((tx) => rescheduleSet(tx, id, nyDate, at, minute)),
+    unscheduleSet: async () => ({ ok: false, note: 'not under test' }),
+  });
+  assert.ok((await act.place!({ setId: SET }, 'tommy', { nyDate: WED, slot: 'morning_download' })).ok);
+  const set = async () => (await pg.query<{ slot_minute: number; publish_at: string }>(`SELECT slot_minute, publish_at FROM stories.sets WHERE id = $1`, [SET])).rows[0]!;
+  const spineSlot = async () => (await pg.query<{ slot: string }>(`SELECT s.slot FROM social_hub.schedule s WHERE s.vertical = 'stories' AND s.status = 'scheduled'`)).rows.map((r) => r.slot);
+  assert.equal((await set()).slot_minute, 510);
+  const moved = await act.reschedule!({ setId: SET }, 'tommy', { nyDate: WED, slot: 't0900:morning_download' });
+  assert.ok(moved.ok, moved.note);
+  assert.equal((await set()).slot_minute, 900);
+  assert.equal(nyMinute((await set()).publish_at), 900);
+  assert.deepEqual(await spineSlot(), ['t0900:morning_download'], 'the spine follows the set\'s slot');
+  const none = await act.reschedule!({ setId: SET }, 'tommy', { nyDate: WED, slot: 't1200:morning_download' });
+  assert.equal(none.ok, false);
+  assert.match(none.note, /Add it on the calendar first/);
+  const other = await act.reschedule!({ setId: SET }, 'tommy', { nyDate: WED, slot: 't0510:free_vs_paid' });
+  assert.equal(other.ok, false, 'another series\' slot');
+  assert.equal((await set()).slot_minute, 900);
 });

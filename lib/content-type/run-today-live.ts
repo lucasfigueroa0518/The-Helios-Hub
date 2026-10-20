@@ -20,7 +20,7 @@ import type { Vertical } from '@/lib/social-hub/types';
 import { DEFAULT_DAY_QUOTAS } from '@/lib/social-hub/queries/day';
 import { nyDateOf } from '@/lib/social-hub/time';
 import { capacityWindows, placedCount } from '@/lib/social-hub/views/plan';
-import { generate as requestStorySet } from '@/lib/stories/api';
+import { generate as requestStorySet, openSlotMinute } from '@/lib/stories/api';
 import { liveStoriesDb } from '@/lib/stories/db';
 import type { Series } from '@/lib/stories/render/types';
 import { openStorySlots } from '@/lib/stories/schedule';
@@ -113,16 +113,11 @@ export type StepResult = { vertical: PlanStep['vertical']; label: string; ok: bo
  * new set.
  */
 export async function requestStorySets(series: readonly string[], by: string, now: Date): Promise<string[]> {
-  const slots = await storiesSlotsOn(liveHubQuery, nyDateOf(now)!).catch(() => null);
-  const open = slots ? await openStorySlots(liveStoriesDb, slots, now) : null;
   const made: string[] = [];
   for (const s of series) {
-    let slotMinute: number | null = null;
-    if (open) {
-      const next = open.get(s as Series)?.open[0];
-      if (!next) continue;
-      slotMinute = next.startMinute;
-    }
+    // The same slot choice as the type page's Generate (lib/stories/api.ts openSlotMinute, R15).
+    const slotMinute = await openSlotMinute(liveStoriesDb, s as Series, now);
+    if (slotMinute === 'none') continue;
     const { created } = await requestStorySet(liveStoriesDb, s, by, now, slotMinute);
     if (created) made.push(s);
   }

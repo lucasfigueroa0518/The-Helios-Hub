@@ -17,6 +17,7 @@ import type { ResolvedSlot, SlotQuery } from '@/lib/social-hub/slots/types';
 import { writeCaps } from '@/lib/social-hub/slots/write';
 import type { HubPost } from '@/lib/social-hub/types';
 import { addDays, nyDateOf, weekdayOf } from '@/lib/social-hub/time';
+import { MAX_CAP, maxCapFor } from '@/lib/content-type/caps';
 
 /**
  * How each content type makes and posts, in the two switches a person thinks
@@ -75,9 +76,7 @@ export type PostingState = {
 /** The days costPerPost averages over. */
 export const COST_DAYS = 14;
 
-/** The highest daily limit a person can set (slots/write.ts writeCaps takes 0–10); Last Few Days runs once a day. */
-export const MAX_CAP = 10;
-export const maxCapFor = (type: ContentType): number => (type === 'last_few_days' ? 1 : MAX_CAP);
+export { MAX_CAP, maxCapFor };
 
 /** How many dates through today `nights` covers: every night the Health page can ask about (historyNights ≤ 31). */
 export const NIGHT_DAYS = 31;
@@ -166,9 +165,10 @@ function withCalendar(state: TypeFields, plan: SlotPlan, today: string, cap: num
 }
 
 /**
- * The average cost of one of the type's posts over the last COST_DAYS days
- * (its posting day, or the day it was made when it has none), each content
- * item once (posts sharing an item share its cost). Null with none. Pure.
+ * The average cost of one of the type's posts made in the last COST_DAYS
+ * days (the day it was made; its posting day only when that is unknown),
+ * each content item once (posts sharing an item share its cost). Null with
+ * none. Pure.
  */
 export function costPerPost(posts: readonly HubPost[], type: ContentType, now: Date): number | null {
   const today = nyDateOf(now)!;
@@ -176,7 +176,7 @@ export function costPerPost(posts: readonly HubPost[], type: ContentType, now: D
   const seen = new Map<string, number>();
   for (const p of posts) {
     if (p.vertical !== type || p.costMicros == null) continue;
-    const day = p.nyDate ?? nyDateOf(p.generatedAt);
+    const day = nyDateOf(p.generatedAt) ?? p.nyDate;
     if (!day || day < from || day > today) continue;
     seen.set(p.costItemKey ?? p.id, p.costMicros);
   }

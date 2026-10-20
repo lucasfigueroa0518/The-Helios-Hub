@@ -17,6 +17,7 @@ import { CAROUSEL_SLOTS } from '@/lib/social/overnight/config';
 import { rebookSlot } from '@/lib/social-hub/placement';
 
 import { driftMinute } from './book';
+import { OVERRIDE_INSERT, OVERRIDE_UPSERT, overrideKeyWhere } from './override';
 import { DEFAULT_FEED_MODE, DEFAULT_TIMES, FEED_GAP, isFeedSlot } from './times';
 import {
   isReelType, isSlotMinute, isStorySeries, parseSlotId, sameSlotKey, slotId, slotKeyString,
@@ -502,14 +503,14 @@ async function writeDiff(q: SlotQuery, before: State, s: State, by: string): Pro
   const oNew = new Map(s.overrides.map((r) => [rowKey(r.nyDate, r), r]));
   for (const [k, r] of oOld) {
     if (oNew.has(k)) continue;
-    await q(`DELETE FROM social_hub.slot_override WHERE ny_date = $1::date AND vertical = $2 AND start_minute = $3 AND coalesce(series, '') = coalesce($4, '')`, [r.nyDate, r.vertical, r.startMinute, r.series]);
+    await q(`DELETE FROM social_hub.slot_override WHERE ${overrideKeyWhere(1)}`, [r.nyDate, r.vertical, r.startMinute, r.series]);
   }
   for (const [k, r] of oNew) {
     const old = oOld.get(k);
     if (old && old.action === r.action && old.feedMode === r.feedMode) continue;
     await q(
-      `INSERT INTO social_hub.slot_override (ny_date, vertical, start_minute, series, action, feed_mode, updated_by, updated_at) VALUES ($1::date, $2, $3, $4, $5, $6, $7, now())
-       ON CONFLICT (ny_date, vertical, start_minute, (coalesce(series, ''))) DO UPDATE SET action = EXCLUDED.action, feed_mode = EXCLUDED.feed_mode, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+      `${OVERRIDE_INSERT} VALUES ($1::date, $2, $3, $4, $5, $6, $7, now())
+       ${OVERRIDE_UPSERT}`,
       [r.nyDate, r.vertical, r.startMinute, r.series, r.action, r.feedMode, by],
     );
   }

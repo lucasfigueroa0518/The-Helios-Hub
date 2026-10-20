@@ -257,9 +257,10 @@ test('place: each type resolves its content, then the placement rules run with t
   assert.deepEqual(verdictOf.calls.map((c) => c[1]), [V]);
   assert.deepEqual(reelItemId.calls, [[V]]);
   assert.deepEqual(placeItem.calls.map(([q, input]) => [typeof q === 'function' ? 'explainers-spine' : q, input]), [
-    ['the-query', { vertical: 'carousels', itemId: 'item-c', nyDate: '2026-10-09', slot: 'morning' }],
-    ['explainers-spine', { vertical: 'explainers', itemId: 'item-e', nyDate: '2026-10-09', slot: 'late' }],
-    ['reels-query', { vertical: 'reels', itemId: 'item-r', ideaRef: U, nyDate: '2026-10-10', slot: 'evening' }],
+    // `by`: who placed it, recorded on a calendar slot a placement adds (template mode).
+    ['the-query', { vertical: 'carousels', itemId: 'item-c', nyDate: '2026-10-09', slot: 'morning', by: 'tommy@helios.test' }],
+    ['explainers-spine', { vertical: 'explainers', itemId: 'item-e', nyDate: '2026-10-09', slot: 'late', by: 'tommy@helios.test' }],
+    ['reels-query', { vertical: 'reels', itemId: 'item-r', ideaRef: U, nyDate: '2026-10-10', slot: 'evening', by: 'tommy@helios.test' }],
   ]);
   // Bodies: the day must be a real YYYY-MM-DD, the slot a slot name, refs uuids.
   for (const body of [
@@ -290,7 +291,7 @@ test('reschedule: each type moves through rescheduleItem; Stories through their 
   const moved = await POST(req({ vertical: 'carousels', refs: { postId: U, scheduleId: V }, nyDate: '2026-10-10', slot: 'afternoon' }));
   assert.equal(moved.status, 200);
   assert.equal((await moved.json()).note, 'Moved to Sat Oct 10, 2:41 PM.');
-  assert.deepEqual(rescheduleItem.calls, [['the-query', { vertical: 'carousels', itemId: 'item-c', nyDate: '2026-10-10', slot: 'afternoon' }]]);
+  assert.deepEqual(rescheduleItem.calls, [['the-query', { vertical: 'carousels', itemId: 'item-c', nyDate: '2026-10-10', slot: 'afternoon', by: 'tommy@helios.test' }]]);
   const story = await POST(req({ vertical: 'stories', refs: { setId: U }, nyDate: '2026-10-10', slot: 'morning_download' }));
   assert.equal(story.status, 200);
   assert.equal((await story.json()).note, 'Moved to Sat Oct 10, 9:12 AM.');

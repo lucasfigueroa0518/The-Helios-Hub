@@ -17,7 +17,8 @@ import {
   type SetStatus,
   type StorySet,
 } from '@/lib/stories/repository';
-import { approvalNote as approvalNoteFor, pickSetPublishAt, setWindow } from '@/lib/stories/schedule';
+import { storiesSlotsOn } from '@/lib/social-hub/slots';
+import { approvalNote as approvalNoteFor, openStorySlots, pickSetPublishAt, setWindow } from '@/lib/stories/schedule';
 import { SERIES, loadSettings, saveSeriesSetting } from '@/lib/stories/settings';
 
 export class ApiError extends Error {
@@ -79,6 +80,30 @@ export async function generate(db: Queryable, series: unknown, by: string, now =
   const settings = await loadSettings(db);
   if (!settings.series[series].enabled) throw new ApiError(409, 'This series is turned off in Settings.');
   return requestSet(db, { series, nyDate: nyDate(now), trigger: 'click', style: settings.series[series].style, requestedBy: by, slotMinute });
+}
+
+export const NO_OPEN_SLOT = 'No open Stories slot today.';
+
+/**
+ * The slot a person's Generate fills (R15, one Stories behaviour everywhere):
+ * null while legacy (a set with no slot, as before); in template mode the
+ * series' first open Stories slot today (openStorySlots, the slots the 4 AM
+ * worker would still request), or 'none' when every slot has its set. The
+ * type page's Generate and Run now both ask here. SELECT only.
+ */
+export async function openSlotMinute(db: Queryable, series: Series, now = new Date()): Promise<number | null | 'none'> {
+  const slots = await storiesSlotsOn((text, params) => db.query(text, params), nyDate(now)).catch(() => null);
+  if (!slots) return null;
+  const next = (await openStorySlots(db, slots, now)).get(series)?.open[0];
+  return next ? next.startMinute : 'none';
+}
+
+/** Generate as a person's click (the type page's button): into the series' first open slot in template mode. */
+export async function generateNow(db: Queryable, series: unknown, by: string, now = new Date()): Promise<{ set: StorySet; created: boolean }> {
+  if (!isSeries(series)) throw new ApiError(400, 'Unknown series.');
+  const minute = await openSlotMinute(db, series, now);
+  if (minute === 'none') throw new ApiError(409, NO_OPEN_SLOT);
+  return generate(db, series, by, now, minute);
 }
 
 const guard = async <T>(fn: () => Promise<T>): Promise<T> => {

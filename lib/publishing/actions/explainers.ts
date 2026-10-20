@@ -7,7 +7,7 @@ import { deleteVerb } from './delete';
 import { need, needPlacement, type ActionFn, type ContentActions } from './types';
 
 type Queued = { queued: boolean; note?: string; status?: number };
-type Place = (q: SpineQuery, input: PlacementTarget & Placement) => Promise<PlacementOutcome>;
+type Place = (q: SpineQuery, input: PlacementTarget & Placement & { by?: string }) => Promise<PlacementOutcome>;
 
 const REFUSAL: Record<string, string> = {
   daily_render_cap: 'Today’s explainer render cap is used up.',
@@ -56,7 +56,7 @@ export function explainerActions(deps: {
 }): ContentActions {
   const placement =
     (fn: Place): ActionFn =>
-    async (t, _by, input) => {
+    async (t, by, input) => {
       const at = needPlacement(input);
       const db = await deps.db();
       const jobId = need(t, 'jobId');
@@ -65,7 +65,7 @@ export function explainerActions(deps: {
       const itemId = await deps.itemId(db, jobId);
       if (!itemId) return { ok: false, note: 'The render is gone.' };
       const spine: SpineQuery = (text, params) => db.query(text, params) as ReturnType<SpineQuery>;
-      return fn(spine, { vertical: 'explainers', itemId, ...at });
+      return fn(spine, { vertical: 'explainers', itemId, ...at, ...(by ? { by } : {}) });
     };
   return {
     vertical: 'explainers',

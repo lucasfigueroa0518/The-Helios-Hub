@@ -18,7 +18,10 @@
  * takes the content; any other time is a new slot checked by
  * slots/rules.ts canPlace (the one placement rule set: duplicates, LFD /
  * Carousels, 8 AM–9 PM, a time already passed today moves to the next
- * 15-minute mark), added to that date's calendar when the booking is made.
+ * 15-minute mark), put on that date's calendar in the same statement as the
+ * booking (R16). A move to a new time moves the post's slot with it, as the
+ * board does: its old slot leaves its date and the new one keeps its Trial /
+ * Main, so a move never leaves an empty slot behind for the night to fill.
  * The minute is the slot's drift minute in [slot, slot + 15] (slots/book.ts
  * driftMinute), 30 minutes from other feed posts when it is one. Stories
  * never add a slot here (their time lives in stories.sets).
@@ -49,11 +52,13 @@ import { POSTING_SLOTS } from '@/lib/reels/publish/slots';
 import { CAROUSEL_SLOTS } from '@/lib/social/overnight/config';
 import { DEFAULT_LFD_DAYS, LFD_WINDOW } from '@/lib/lfd/config';
 import { carouselOffDays, readLfdSettings } from '@/lib/lfd/settings';
-import { bookSlot, type SpineQuery, type SpineVertical } from '@/lib/social-hub/spine';
+import { bookSlotStatement, type SpineQuery, type SpineVertical } from '@/lib/social-hub/spine';
 import { legacyFeedMode, slotPlan, slotsOn, type SlotPlan } from '@/lib/social-hub/slots';
 import { driftMinute } from '@/lib/social-hub/slots/book';
+import { readTemplate } from '@/lib/social-hub/slots/load';
+import { OVERRIDE_INSERT, OVERRIDE_UPSERT, overrideFor, overrideKeyWhere, type OverrideOp } from '@/lib/social-hub/slots/override';
 import { sortSlots } from '@/lib/social-hub/slots/resolve';
-import { canPlace, type DayCtx } from '@/lib/social-hub/slots/rules';
+import { canPlace, isLocked, type DayCtx } from '@/lib/social-hub/slots/rules';
 import { clockLabel as slotClock, DEFAULT_FEED_MODE, DRIFT, isFeedSlot, SERIES_NAME } from '@/lib/social-hub/slots/times';
 import { isReelType, isStorySeries, parseSlotId, slotId, type FeedMode, type ResolvedSlot, type SlotQuery, type StorySeries } from '@/lib/social-hub/slots/types';
 import { isDayKey, nyDayStart } from '@/lib/social-hub/time';
@@ -192,13 +197,17 @@ function windowList(rules: PlacementRules): string {
  * `feedMode`: the calendar slot's Trial / Main for a reel type in template
  * mode; null while legacy (and for other types), so bookings keep the old SQL.
  * `calendar`: planned on the calendar's free times (template mode); the
- * booking then moves with rebookSlot. `addSlot`: a new slot this booking
- * puts on that date's calendar (addCalendarSlot), null when it takes one the
- * calendar already has.
+ * booking then moves with rebookSlot. `slotOps`: the calendar overrides the
+ * booking writes with it, in one statement (a new slot at that time, and on
+ * a move the post's old slot leaving its date); empty when it takes a slot
+ * the calendar already has.
  */
 export type Planned =
-  | { ok: true; nyDate: string; slot: string; publishAt: Date; window: SlotWindow; feedMode: FeedMode | null; calendar?: boolean; addSlot?: ResolvedSlot | null }
+  | { ok: true; nyDate: string; slot: string; publishAt: Date; window: SlotWindow; feedMode: FeedMode | null; calendar?: boolean; slotOps?: OverrideOp[] }
   | { ok: false; note: string };
+
+/** The booking being moved: its row and minute, and where it sits now (nyDate, slot id) when known. */
+export type Moving = { scheduleId: string; publishAt: Date; nyDate?: string; slot?: string };
 
 /** The day's calendar slots, or null while legacy. A failed read falls back to legacy. */
 const daySlotPlan = (query: SpineQuery, nyDate: string): Promise<SlotPlan | null> =>
@@ -207,7 +216,8 @@ const daySlotPlan = (query: SpineQuery, nyDate: string): Promise<SlotPlan | null
 /**
  * The minute this content would post at in (nyDate, slot), or why it can't go
  * there. Reads only. `moving` is the slot being moved: it is not "taken" by
- * itself, and its own time doesn't count against the spacing.
+ * itself, and its own time doesn't count against the spacing. With its date
+ * and slot id (rescheduleItem), a move to a new time takes its slot along.
  */
 export async function planPlacement(
   query: SpineQuery,
@@ -216,7 +226,7 @@ export async function planPlacement(
     now?: Date;
     rng?: (count: number) => number;
     rules?: PlacementRules;
-    moving?: { scheduleId: string; publishAt: Date } | null;
+    moving?: Moving | null;
   },
 ): Promise<Planned> {
   const now = input.now ?? new Date();
@@ -328,7 +338,7 @@ async function planOnCalendar(
   query: SpineQuery,
   plan: SlotPlan,
   rules: PlacementRules,
-  input: Placement & { vertical: SpineVertical; rng?: (count: number) => number; moving?: { scheduleId: string; publishAt: Date } | null },
+  input: Placement & { vertical: SpineVertical; rng?: (count: number) => number; moving?: Moving | null },
   now: Date,
 ): Promise<Planned> {
   const vertical = input.vertical;
@@ -344,7 +354,7 @@ async function planOnCalendar(
 
   const existing = mine.find((s) => s.startMinute === key.startMinute && s.series === key.series);
   let slot: ResolvedSlot;
-  let addSlot: ResolvedSlot | null = null;
+  const slotOps: OverrideOp[] = [];
   if (existing && free(existing)) {
     slot = existing;
   } else if (vertical === 'stories') {
@@ -352,13 +362,20 @@ async function planOnCalendar(
     if (existing) return { ok: false, note: held.has(slotId(existing.startMinute, existing.series)) ? 'That slot is taken.' : `Today’s ${slotClock(existing.startMinute)} slot is over.` };
     return { ok: false, note: `${slotClock(key.startMinute)} isn’t a ${key.series ? SERIES_NAME[key.series].one : 'Stories'} slot on ${WEEKDAY[weekdayOf(input.nyDate)]}, ${input.nyDate}. Add it on the calendar first.` };
   } else {
+    const template = await readTemplate(query as SlotQuery);
+    const baseOf = (nyDate: string, k: { startMinute: number }) =>
+      template.find((r) => r.weekday === weekdayOf(nyDate) && r.vertical === vertical && r.startMinute === k.startMinute && r.series === null);
+    // A move takes its slot along: the slot it leaves (on its own date, not started, held by nobody else).
+    const source = await movingSlot(query, rules, input.moving ?? null, input.nyDate, day, today, now);
     const ctx: DayCtx = { nyDate: input.nyDate, weekday: weekdayOf(input.nyDate), slots: day, today, nowMinute: nyMinuteOf(now, today) };
-    const r = canPlace(ctx, { vertical, startMinute: key.startMinute, series: null });
+    const r = canPlace(ctx, { vertical, startMinute: key.startMinute, series: null, ...(source && source.nyDate === input.nyDate ? { ignore: source.slot } : {}) });
     if (!r.ok) return { ok: false, note: r.reason };
-    slot = { vertical, startMinute: r.minute, series: null, feedMode: DEFAULT_FEED_MODE[vertical], origin: 'override' };
+    const feedMode = isReelType(vertical) ? (source?.slot.feedMode ?? baseOf(input.nyDate, { startMinute: r.minute })?.feedMode ?? DEFAULT_FEED_MODE[vertical]) : null;
+    slot = { vertical, startMinute: r.minute, series: null, feedMode, origin: 'override' };
     // A booking kept at that time after its slot left the calendar still holds it.
     if (held.has(slotId(slot.startMinute, null))) return { ok: false, note: 'That slot is taken.' };
-    addSlot = slot;
+    slotOps.push(overrideFor(input.nyDate, slot, baseOf(input.nyDate, slot), { feedMode }));
+    if (source) slotOps.push(overrideFor(source.nyDate, source.slot, baseOf(source.nyDate, source.slot), null));
   }
 
   let busy: Date[] = [];
@@ -370,21 +387,59 @@ async function planOnCalendar(
   }
   const publishAt = driftMinute(input.nyDate, slot, now, busy, input.rng ?? uniformIndex);
   if (!publishAt) return { ok: false, note: `Every minute left after ${slotClock(slot.startMinute)} is within ${FEED_GAP_MINUTES} minutes of another feed post.` };
-  const feedMode = isReelType(vertical) ? (slot.feedMode ?? legacyFeedMode(vertical)) : null;
-  return { ok: true, nyDate: input.nyDate, slot: slotId(slot.startMinute, slot.series), publishAt, window: slotWindow(slot), feedMode, calendar: true, addSlot };
+  const mode = isReelType(vertical) ? (slot.feedMode ?? legacyFeedMode(vertical)) : null;
+  return { ok: true, nyDate: input.nyDate, slot: slotId(slot.startMinute, slot.series), publishAt, window: slotWindow(slot), feedMode: mode, calendar: true, slotOps };
 }
 
 /**
- * Put a free time a placement asked for on that date's calendar (an 'add'
- * override, the calendar's own row shape; slots/write.ts writeDiff). Only
- * after canPlace allowed it.
+ * The calendar slot a moved booking leaves, or null: its slot id read on its
+ * date, a slot the calendar has there that hasn't started and no other
+ * booking holds. Pre-calendar window ids read as their window's start.
  */
-async function addCalendarSlot(query: SpineQuery, nyDate: string, s: ResolvedSlot, by: string): Promise<void> {
-  await query(
-    `INSERT INTO social_hub.slot_override (ny_date, vertical, start_minute, series, action, feed_mode, updated_by, updated_at) VALUES ($1::date, $2, $3, $4, 'add', $5, $6, now())
-     ON CONFLICT (ny_date, vertical, start_minute, (coalesce(series, ''))) DO UPDATE SET action = EXCLUDED.action, feed_mode = EXCLUDED.feed_mode, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-    [nyDate, s.vertical, s.startMinute, s.series, isReelType(s.vertical) ? s.feedMode : null, by],
-  );
+async function movingSlot(
+  query: SpineQuery,
+  rules: PlacementRules,
+  moving: Moving | null,
+  nyDate: string,
+  day: readonly ResolvedSlot[],
+  today: string,
+  now: Date,
+): Promise<{ nyDate: string; slot: ResolvedSlot } | null> {
+  if (!moving?.nyDate || !moving.slot || moving.nyDate < today) return null;
+  const id = asSlotId(rules, moving.slot);
+  const key = id ? parseSlotId(id) : null;
+  if (!key) return null;
+  const slots = moving.nyDate === nyDate ? day : ((await daySlotPlan(query, moving.nyDate))?.byDate.get(moving.nyDate) ?? []);
+  const slot = slots.find((s) => s.vertical === rules.vertical && s.startMinute === key.startMinute && s.series === key.series);
+  if (!slot) return null;
+  if (isLocked({ nyDate: moving.nyDate, weekday: weekdayOf(moving.nyDate), slots: [...slots], today, nowMinute: nyMinuteOf(now, today) }, slot)) return null;
+  const others = await heldSlots(query, rules, moving.nyDate, moving.scheduleId);
+  return others.has(slotId(slot.startMinute, slot.series)) ? null : { nyDate: moving.nyDate, slot };
+}
+
+/**
+ * Run a booking's write (`main`, RETURNING id, publish_at) and its calendar
+ * overrides as ONE statement (R16), so neither lands without the other: a
+ * failed override rolls the booking back, and a booking that wrote no row
+ * (it started posting) writes no override. Callers hand a bare query, not a
+ * transaction, so this is the atomic unit. Overrides use write.ts's SQL.
+ */
+async function withSlotOps(query: SpineQuery | SlotQuery, main: { text: string; params: unknown[] }, ops: readonly OverrideOp[], by: string): Promise<any[]> {
+  const run = query as SlotQuery;
+  if (!ops.length) return (await run(main.text, main.params)).rows;
+  const params = [...main.params];
+  const parts = [`main AS (${main.text})`];
+  ops.forEach((o, i) => {
+    const n = params.length + 1;
+    if (o.op === 'upsert') {
+      params.push(o.nyDate, o.vertical, o.startMinute, o.series, o.action, o.feedMode, by);
+      parts.push(`o${i} AS (${OVERRIDE_INSERT} SELECT $${n}::date, $${n + 1}::text, $${n + 2}::smallint, $${n + 3}::text, $${n + 4}::text, $${n + 5}::text, $${n + 6}::text, now() FROM main ${OVERRIDE_UPSERT} RETURNING 1)`);
+    } else {
+      params.push(o.nyDate, o.vertical, o.startMinute, o.series);
+      parts.push(`o${i} AS (DELETE FROM social_hub.slot_override WHERE EXISTS (SELECT 1 FROM main) AND ${overrideKeyWhere(n)} RETURNING 1)`);
+    }
+  });
+  return (await run(`WITH ${parts.join(',\n')}\nSELECT id, publish_at FROM main`, params)).rows;
 }
 
 export type Rebooked = { ok: true; id: string; publishAt: string } | { ok: false; why: 'taken' | 'started' };
@@ -394,18 +449,25 @@ export type Rebooked = { ok: true; id: string; publishAt: string } | { ok: false
  * UPDATE (rescheduleItem in template mode, and the calendar's slot moves in
  * slots/write.ts). The row stays (source, approval); a reel slot's Trial /
  * Main moves with it, other types keep theirs. `taken`: another booking holds
- * that slot (the unique index); `started`: it began posting first.
+ * that slot (the unique index); `started`: it began posting first. `ops`:
+ * calendar overrides written in the same statement (withSlotOps).
  */
 export async function rebookSlot(
   query: SpineQuery | SlotQuery,
   b: { scheduleId: string; nyDate: string; slot: string; publishAt: Date; feedMode: FeedMode | null },
+  opts: { ops?: readonly OverrideOp[]; by?: string } = {},
 ): Promise<Rebooked> {
   try {
-    const { rows } = await (query as SlotQuery)(
-      `UPDATE social_hub.schedule SET ny_date = $2::date, slot = $3, publish_at = $4::timestamptz, error = NULL, feed_mode = coalesce($5, feed_mode)
+    const rows = await withSlotOps(
+      query,
+      {
+        text: `UPDATE social_hub.schedule SET ny_date = $2::date, slot = $3, publish_at = $4::timestamptz, error = NULL, feed_mode = coalesce($5, feed_mode)
         WHERE id = $1::uuid AND status = 'scheduled'
         RETURNING id, publish_at`,
-      [b.scheduleId, b.nyDate, b.slot, b.publishAt.toISOString(), b.feedMode],
+        params: [b.scheduleId, b.nyDate, b.slot, b.publishAt.toISOString(), b.feedMode],
+      },
+      opts.ops ?? [],
+      opts.by ?? 'placement',
     );
     if (!rows[0]) return { ok: false, why: 'started' };
     return { ok: true, id: String(rows[0].id), publishAt: new Date(rows[0].publish_at).toISOString() };
@@ -494,7 +556,7 @@ export async function placeItem(query: SpineQuery, input: PlaceInput): Promise<P
   const plan = await planPlacement(query, input);
   if (!plan.ok) return plan;
   try {
-    const booked = await bookSlot(query, {
+    const statement = bookSlotStatement({
       vertical: input.vertical,
       itemId: input.itemId,
       ideaRef: input.vertical === 'reels' ? input.ideaRef : null,
@@ -505,8 +567,9 @@ export async function placeItem(query: SpineQuery, input: PlaceInput): Promise<P
       // Template mode only (R3): legacy books with the old INSERT.
       ...(plan.feedMode ? { feedMode: plan.feedMode } : {}),
     });
-    if (plan.addSlot) await addCalendarSlot(query, plan.nyDate, plan.addSlot, input.by ?? 'placement');
-    return { ok: true, note: `Scheduled for ${formatPlacement(plan.publishAt)}.`, scheduleId: booked.id, publishAt: booked.publishAt };
+    // The booking and a new slot at its time land together (R16).
+    const [booked] = await withSlotOps(query, statement, plan.slotOps ?? [], input.by ?? 'placement');
+    return { ok: true, note: `Scheduled for ${formatPlacement(plan.publishAt)}.`, scheduleId: booked.id as string, publishAt: new Date(booked.publish_at).toISOString() };
   } catch (error) {
     if (isUniqueViolation(error)) return { ok: false, note: 'That slot is taken.' };
     throw error;
@@ -520,13 +583,12 @@ export async function rescheduleItem(query: SpineQuery, input: PlaceInput): Prom
   if (active.status === 'publishing') return { ok: false, note: 'It is posting right now, so it can’t move.' };
   const refusal = await itemRefusal(query, input);
   if (refusal) return { ok: false, note: refusal };
-  const plan = await planPlacement(query, { ...input, moving: { scheduleId: active.id, publishAt: active.publishAt } });
+  const plan = await planPlacement(query, { ...input, moving: { scheduleId: active.id, publishAt: active.publishAt, nyDate: active.nyDate, slot: active.slot } });
   if (!plan.ok) return plan;
   if (plan.calendar) {
-    // Template mode: the one booking-move UPDATE; the slot's Trial / Main moves with it.
-    const moved = await rebookSlot(query, { scheduleId: active.id, nyDate: plan.nyDate, slot: plan.slot, publishAt: plan.publishAt, feedMode: plan.feedMode });
+    // Template mode: the one booking-move UPDATE, with its slot moving along in the same statement (R16).
+    const moved = await rebookSlot(query, { scheduleId: active.id, nyDate: plan.nyDate, slot: plan.slot, publishAt: plan.publishAt, feedMode: plan.feedMode }, { ops: plan.slotOps ?? [], by: input.by ?? 'placement' });
     if (!moved.ok) return { ok: false, note: moved.why === 'taken' ? 'That slot is taken.' : 'It started posting before it could move.' };
-    if (plan.addSlot) await addCalendarSlot(query, plan.nyDate, plan.addSlot, input.by ?? 'placement');
     return { ok: true, note: `Moved to ${formatPlacement(plan.publishAt)}.`, scheduleId: moved.id, publishAt: moved.publishAt };
   }
   try {

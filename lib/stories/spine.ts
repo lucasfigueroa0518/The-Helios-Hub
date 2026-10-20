@@ -86,13 +86,13 @@ export async function projectSet(db: Queryable, setId: string): Promise<void> {
   }
 
   const slotStatus = SLOT_STATUS[set.status];
-  // Legacy and hand-made sets book under the series name; a template set books its slot.
+  // Legacy and hand-made sets book under the series name; a template set books its slot, and follows it when the set moves (R15).
   const slot = set.slot_minute != null && isStorySeries(set.series) ? slotId(set.slot_minute, set.series) : set.series;
   if (set.publish_at && slotStatus) {
     await db.query(
       `INSERT INTO social_hub.schedule (content_item_id, vertical, ny_date, slot, publish_at, status, source, publish_attempt_id, error, legacy_id)
        VALUES ($1, 'stories', $2::date, $3, $4::timestamptz, $5, $6, $7, $8, $9::uuid)
-       ON CONFLICT (legacy_id) DO UPDATE SET ny_date = excluded.ny_date, publish_at = excluded.publish_at, status = excluded.status,
+       ON CONFLICT (legacy_id) DO UPDATE SET ny_date = excluded.ny_date, slot = excluded.slot, publish_at = excluded.publish_at, status = excluded.status,
               publish_attempt_id = excluded.publish_attempt_id, error = excluded.error`,
       [itemId, set.ny_date, slot, set.publish_at, slotStatus, set.trigger === 'auto' ? 'auto' : 'user', attemptId,
         slotStatus === 'failed' || slotStatus === 'cancelled' ? set.error : null, set.id],
