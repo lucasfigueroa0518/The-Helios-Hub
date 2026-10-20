@@ -24,8 +24,8 @@ import { generateBriefs } from './brief-from-body';
 import { openLocalMemesDb, type MemesDb } from './db';
 import type { MemeFill } from './fill';
 import { placeMemes, type Placement } from './lfd-placement';
-import { postWithMemes, type SavedStory } from './lfd-sim/post';
-import { trimLetterbox } from './lfd-sim/run';
+import { postWithMemes, type MemeImage, type SavedStory } from './lfd-sim/post';
+import { memeImageOf, trimLetterbox } from './lfd-sim/run';
 import { loadLabStory } from './lfd-source';
 import { fitOdds, gate, type OddsRow } from './odds';
 import { evidenceRegimes, regimeId } from './regime';
@@ -162,21 +162,21 @@ export async function addMemesToPost(d: PostMemesDeps, postId: string): Promise<
 
   // 5. Placement, uploads, re-render, the post row.
   const placement: Placement = placeMemes(stories.map((s) => ({ key: s.key, memeId: picks.get(s.key)?.memeId ?? null })));
-  const images = new Map<string, string>();
+  const images = new Map<string, MemeImage>();
   const objects = new Map<string, string>();
   for (const p of placement.placed) {
     const pick = picks.get(p.key)!;
     const png = await trimLetterbox(fs.readFileSync(pick.imagePath));
     const object = `lfd/${post.slug}/meme-${p.rank}.png`;
     await d.upload(object, png, 'image/png');
-    images.set(p.memeId, `data:image/png;base64,${png.toString('base64')}`);
+    images.set(p.memeId, await memeImageOf(png));
     objects.set(p.memeId, object);
   }
   fs.rmSync(renderDir, { recursive: true, force: true });
-  const render = postWithMemes(stories, placement, (id) => images.get(id) ?? '', d.now());
+  const render = postWithMemes(stories, placement, (id) => images.get(id) ?? { url: '' }, d.now());
   const slideObjects = await d.storeSlides(post.slug, render);
   // The saved render keeps each meme's storage object, not the image: the hub lists posts with their render.
-  const savedRender = postWithMemes(stories, placement, (id) => `storage:${objects.get(id) ?? ''}`, d.now());
+  const savedRender = postWithMemes(stories, placement, (id) => ({ ...images.get(id), url: `storage:${objects.get(id) ?? ''}` }), d.now());
   const byKey = new Map(stories.map((s) => [s.key, s]));
   const newStories = placement.order.map((key) => {
     const s = byKey.get(key)!;

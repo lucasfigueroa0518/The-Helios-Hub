@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 
 import { markRuns } from '@/lib/lfd/marks';
 import { LFD_HOOK_LINES, LFD_KICKER } from '@/lib/lfd/post';
+import { lfdCoverMemeBox } from '@/lib/social/render/lfd-meme-box';
 import { fitText } from '@/lib/social/render/text-fit';
 import type { Post, SlideCanvas, SlideCopy } from '@/lib/social/render/types';
 
@@ -162,12 +163,16 @@ function LfdLogo({ src }: { src: string }) {
   );
 }
 
+
 function LfdCoverSlide({ slide }: { slide: SlideCopy }) {
   const meme = slide.lfdCover?.meme;
   if (meme) {
+    const box = lfdCoverMemeBox(meme.aspect);
     return (
-      <div className="lfd-cover lfd-cover--meme">
-        <div className="lfd-cover-meme"><img className="lfd-meme" src={meme.url} alt="" data-photo-kind="meme" /></div>
+      <div className="lfd-cover lfd-cover--meme" data-meme-fit={box.fit} data-copy={box.copy}>
+        <div className="lfd-cover-meme" style={{ height: box.areaH }}>
+          <img className="lfd-meme" src={meme.url} alt="" data-photo-kind="meme" style={{ width: box.w, height: box.h }} />
+        </div>
         <div className="lfd-brand-rule"><span>HELIOS</span></div>
         <div className="lfd-cover-copy">
           <h1 className="lfd-hook">{LFD_HOOK_LINES.map((line) => <span key={line}>{line}</span>)}</h1>
@@ -200,19 +205,26 @@ function LfdCoverSlide({ slide }: { slide: SlideCopy }) {
 function LfdStorySlide({ slide }: { slide: SlideCopy }) {
   const s = slide.lfdStory;
   if (!s) return null;
+  // A meme with a known shape gets a box of that shape (no plate around it); the text and meme sit centred together.
+  const memeShaped = slide.photoKind === 'meme' && !!slide.photoAspect;
   return (
     <div className="lfd-story">
       <div className="lfd-chip"><img src="/social/helios-mark.png" alt="" /><span>Helios</span></div>
-      <div className="lfd-story-body">
+      <div className={memeShaped ? 'lfd-story-body lfd-story-body--meme' : 'lfd-story-body'}>
         <div className="lfd-text">
           {s.setup && <Fit as="p" className="lfd-setup" min={LFD_MIN.setup}><LfdMarked text={s.setup} highlight="" names={s.names} /></Fit>}
           <Fit as="h2" className="lfd-headline" min={LFD_MIN.headline}><span className="lfd-clip">– <LfdMarked text={s.headline} highlight={s.highlight} names={s.names} /></span></Fit>
           <Fit as="p" className="lfd-body" min={LFD_MIN.body}><LfdMarked text={s.body} highlight="" names={s.names} /></Fit>
         </div>
-        <div className="lfd-media">
+        <div
+          className={memeShaped ? 'lfd-media lfd-media--meme' : 'lfd-media'}
+          style={memeShaped ? ({ '--meme-aspect': slide.photoAspect } as CSSProperties) : undefined}
+        >
           {slide.photoUrl &&
             (slide.photoKind === 'logo' ? (
               <LfdLogo src={slide.photoUrl} />
+            ) : memeShaped ? (
+              <img className="lfd-meme" src={slide.photoUrl} alt="" data-photo-kind="meme" />
             ) : slide.photoKind === 'meme' ? (
               <div className="lfd-meme-plate"><img className="lfd-meme" src={slide.photoUrl} alt="" data-photo-kind="meme" /></div>
             ) : (

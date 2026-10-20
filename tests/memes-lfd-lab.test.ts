@@ -5,6 +5,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 
 import type Anthropic from '@anthropic-ai/sdk';
+import sharp from 'sharp';
 
 import { buildPost } from '@/lib/lfd/post';
 import type { LfdRunDeps } from '@/lib/lfd/run';
@@ -14,8 +15,9 @@ import { openLocalMemesDb, type MemesDb } from '@/lib/memes/db';
 import { faultSubject, MEME_FAULTS, scoreFaults, tooLong } from '@/lib/memes/faults';
 import { placeMemes } from '@/lib/memes/lfd-placement';
 import { postWithMemes, readyFromSaved, type SavedStory } from '@/lib/memes/lfd-sim/post';
+import { lfdCoverMemeBox } from '@/lib/social/render/lfd-meme-box';
 import { readOnly, simQuery, splitSql, ensureLfdSchema } from '@/lib/memes/lfd-sim/router';
-import { claimSim, inProcessEngine, requestSim, runSim, SIM_DIR, type SimDeps } from '@/lib/memes/lfd-sim/run';
+import { claimSim, inProcessEngine, requestSim, runSim, SIM_DIR, trimLetterbox, type SimDeps } from '@/lib/memes/lfd-sim/run';
 import { fitOdds, gate, oddsFor, SHRINK_K, type OddsRow } from '@/lib/memes/odds';
 import { getSettings, oddsRows, saveSettings, saveStoryTags } from '@/lib/memes/odds-store';
 import { EQUIVALENT_REGIMES, evidenceRegimes, regimeId } from '@/lib/memes/regime';
@@ -153,18 +155,20 @@ const saved = (key: string, i: number): SavedStory => ({
 test('the post with memes: the meme cover keeps the mosaic photos; meme slides show the meme whole', () => {
   const stories = keys.map(saved);
   const p = placeMemes(withMemes({ b: 'mb', e: 'me' }));
-  const post = postWithMemes(stories, p, (id) => `data:image/png;base64,${id}`, new Date('2026-10-13T07:00:00Z'));
+  const post = postWithMemes(stories, p, (id) => ({ url: `data:image/png;base64,${id}`, aspect: id === 'mb' ? 1.5 : 0.8 }), new Date('2026-10-13T07:00:00Z'));
   const cover = post.slides[0]!;
-  assert.equal(cover.lfdCover?.meme?.url, 'data:image/png;base64,mb');
+  assert.deepEqual(cover.lfdCover?.meme, { url: 'data:image/png;base64,mb', aspect: 1.5 });
   assert.deepEqual(cover.lfdCover?.photos.map((x) => x.url), p.order.map((k) => `https://p/${k}.jpg`));
   const slideOf = (k: string) => post.slides.find((s) => s.lfdStory?.headline === `Headline ${k}`)!;
   assert.equal(slideOf('b').position, 1);
   assert.equal(slideOf('b').photoUrl, 'https://p/b.jpg');
   assert.equal(slideOf('e').photoUrl, 'data:image/png;base64,me');
   assert.equal(slideOf('e').photoKind, 'meme');
+  assert.equal(slideOf('e').photoAspect, 0.8, 'the slide box takes the meme\'s shape');
+  assert.equal(slideOf('b').photoAspect, undefined);
   assert.match(post.caption, /– Headline b\n– Headline a/);
   // Without memes it is exactly Tommy's post.
-  const plain = postWithMemes(stories, placeMemes(withMemes({})), () => '', new Date('2026-10-13T07:00:00Z'));
+  const plain = postWithMemes(stories, placeMemes(withMemes({})), () => ({ url: '' }), new Date('2026-10-13T07:00:00Z'));
   assert.deepEqual(plain, buildPost(stories.map(readyFromSaved), new Date('2026-10-13T07:00:00Z')));
 });
 
@@ -388,4 +392,39 @@ test('a simulation runs the engine with local writes, gates on the graded eviden
   // The engine's own run and post live in the lab database.
   assert.equal((await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM lfd.posts`)).rows[0]!.n, 1);
   fs.rmSync(path.join(SIM_DIR, id), { recursive: true, force: true });
+});
+
+test('the meme cover takes the meme\'s shape: wide memes run full bleed, squarer ones sit whole as a card, no bands', () => {
+  const wide = lfdCoverMemeBox(2);
+  assert.deepEqual({ fit: wide.fit, w: wide.w, h: wide.h, copy: wide.copy }, { fit: 'bleed', w: 1080, h: 540, copy: 'l' });
+  const mid = lfdCoverMemeBox(1.25);
+  assert.deepEqual({ fit: mid.fit, w: mid.w, h: mid.h, copy: mid.copy }, { fit: 'bleed', w: 1080, h: 864, copy: 'm' });
+  const square = lfdCoverMemeBox(1);
+  assert.equal(square.fit, 'card');
+  assert.ok(square.w <= 1080 - 96 && square.h <= 1350 - 330 - 48);
+  const tall = lfdCoverMemeBox(0.5);
+  assert.equal(tall.fit, 'card');
+  assert.ok(Math.abs(tall.w / tall.h - 0.5) < 0.01, 'never stretched');
+  for (const a of [0.45, 0.75, 1, 1.06, 1.3, 2.2]) {
+    const b = lfdCoverMemeBox(a);
+    assert.ok(b.areaH <= 1350 - 330, `the hook keeps its room at ${a}`);
+    assert.ok(Math.abs(b.w / b.h - a) < 0.01, `the meme keeps its shape at ${a}`);
+  }
+});
+
+test('a placed meme loses the white canvas and a thin template frame; white-ground text touching an edge gets room', async () => {
+  const box = (w: number, h: number, bg: string) => sharp({ create: { width: w, height: h, channels: 3, background: bg } });
+  // A 400×300 picture with its own 8px off-white frame, on the white render canvas.
+  const framed = await box(416, 316, '#f7f6f2').composite([{ input: await box(400, 300, '#336699').png().toBuffer(), left: 8, top: 8 }]).png().toBuffer();
+  const canvas = await box(1080, 1350, '#ffffff').composite([{ input: framed, left: 332, top: 517 }]).png().toBuffer();
+  const out = await sharp(await trimLetterbox(canvas)).metadata();
+  assert.deepEqual([out.width, out.height], [400, 300]);
+  // A white-ground meme whose dark text runs to the left edge: white comes back on that side only.
+  const text = await box(40, 20, '#111111').png().toBuffer();
+  const whiteGround = await box(1080, 1350, '#ffffff').composite([
+    { input: await box(500, 400, '#fdfdfd').composite([{ input: text, left: 0, top: 190 }]).png().toBuffer(), left: 290, top: 475 },
+    { input: await box(4, 4, '#999999').png().toBuffer(), left: 785, top: 870 },
+  ]).png().toBuffer();
+  const padded = await sharp(await trimLetterbox(whiteGround)).metadata();
+  assert.ok(padded.width! > 500, 'room on the touched side');
 });

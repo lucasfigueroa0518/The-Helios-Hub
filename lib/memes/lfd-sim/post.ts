@@ -38,24 +38,29 @@ export function readyFromSaved(s: SavedStory): Ready {
   return { pick, copy, photo: s.photo };
 }
 
+/** A placed meme's image: a URL the renderer can load, and its width / height so the slide takes the meme's shape. */
+export type MemeImage = { url: string; aspect?: number };
+
 /**
- * The post with memes placed. `memeUrl` turns a meme id into an image URL the renderer can load (a data URL in the
- * simulation). Mosaic photos stay the stories' own photos, in the new order.
+ * The post with memes placed. `memeImage` turns a meme id into its image (a data URL in the simulation). Mosaic
+ * photos stay the stories' own photos, in the new order.
  */
-export function postWithMemes(stories: SavedStory[], placement: Placement, memeUrl: (memeId: string) => string, now: Date): RenderPost {
+export function postWithMemes(stories: SavedStory[], placement: Placement, memeImage: (memeId: string) => MemeImage, now: Date): RenderPost {
   const byKey = new Map(stories.map((s) => [s.key, s]));
   const ready = placement.order.map((k) => readyFromSaved(byKey.get(k)!));
   const post = buildPost(ready, now);
   const slides = post.slides.map((slide) => {
     if (slide.layoutVariant === 'lfd_cover' && placement.cover.kind === 'meme') {
-      return { ...slide, lfdCover: { photos: slide.lfdCover?.photos ?? [], meme: { url: memeUrl(placement.cover.memeId) } } };
+      const m = memeImage(placement.cover.memeId);
+      return { ...slide, lfdCover: { photos: slide.lfdCover?.photos ?? [], meme: { url: m.url, ...(m.aspect ? { aspect: m.aspect } : {}) } } };
     }
     if (slide.layoutVariant !== 'lfd_story') return slide;
     const key = placement.order[slide.position - 1];
     const image = key ? placement.slideImage[key] : undefined;
     if (!image || image.kind !== 'meme') return slide;
     const { photoFocus: _f, ...rest } = slide;
-    return { ...rest, photoUrl: memeUrl(image.memeId), photoKind: 'meme' as const };
+    const m = memeImage(image.memeId);
+    return { ...rest, photoUrl: m.url, photoKind: 'meme' as const, ...(m.aspect ? { photoAspect: m.aspect } : {}) };
   });
   return { ...post, slides };
 }

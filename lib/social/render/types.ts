@@ -130,7 +130,7 @@ export type SlideCopy = {
   lfdCover?: {
     photos: Array<{ url: string; kind?: 'person' | 'scene' | 'logo'; focus?: { x: number; y: number } }>;
     /** A meme as the whole cover, the hook banner below it (the meme lab's LFD simulation; photos are then not drawn). */
-    meme?: { url: string };
+    meme?: { url: string; aspect?: number };
   };
   /** Last Few Days story slide (spec §6). `headline` has no dash; the slide adds "– ". */
   lfdStory?: { setup: string; headline: string; highlight: string; names: string[]; body: string };
@@ -277,6 +277,8 @@ export type SlideCopy = {
    * simulation): a finished meme, fit whole into the photo box, never cropped.
    */
   photoKind?: 'subject' | 'scene' | 'logo' | 'meme';
+  /** A meme's width / height (LFD posts): its slide box takes the meme's own shape instead of a fixed box. */
+  photoAspect?: number;
 
   /**
    * Logo cover card (spec §5.1 (b)): the plate behind the logo, chosen by

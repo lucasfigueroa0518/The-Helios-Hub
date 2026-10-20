@@ -28,7 +28,7 @@ import { fitOdds, gate } from '../odds';
 import { getSettings, loadFaults, loadStoryTags, oddsRows, saveFaults, saveStoryTags } from '../odds-store';
 import { tagStories, TAGGER_VERSION } from '../story-tags';
 
-import { postWithMemes, type SavedStory } from './post';
+import { postWithMemes, type MemeImage, type SavedStory } from './post';
 import { reporter, tap, type Progress } from './report';
 import { simQuery } from './router';
 
@@ -175,10 +175,82 @@ async function waitForRequests(d: SimDeps, ids: string[], onChange: (r: { id: st
   }
 }
 
-/** A meme render is the template on a white 1080×1350 canvas (render.ts); placed in a post, only the template shows. */
+/**
+ * A meme render is the template on a white 1080×1350 canvas (render.ts); placed in a post, only the template shows.
+ * Two per-side cleanups so the meme sits on the slide's dark ground without a stray white edge:
+ *  - a clean off-white frame (a solid light band, then a sharp edge into the picture) that some template images
+ *    carry, which JPEG noise keeps past the trim, is cut;
+ *  - a side where content on a white ground touches the edge (a white-background template's text, a caption strip)
+ *    gets a little of its own white back, so the text breathes.
+ */
 export async function trimLetterbox(png: Buffer): Promise<Buffer> {
   const sharp = (await import('sharp')).default;
-  return sharp(png).trim({ background: '#ffffff', threshold: 8 }).png().toBuffer().catch(() => png);
+  const trimmed = await sharp(png).trim({ background: '#ffffff', threshold: 8 }).png().toBuffer().catch(() => png);
+  const { data, info } = await sharp(trimmed).raw().toBuffer({ resolveWithObject: true });
+  const { width: w, height: h, channels: c } = info;
+  const light = (x: number, y: number) => {
+    const i = (y * w + x) * c;
+    return Math.min(data[i]!, data[i + 1]!, data[i + 2]!) >= FRAME_LIGHT;
+  };
+  const share = (n: number, at: (k: number) => boolean) => {
+    let hits = 0;
+    for (let k = 0; k < n; k++) if (at(k)) hits++;
+    return hits / n;
+  };
+  const lines = {
+    top: (i: number) => share(w, (x) => light(x, i)),
+    bottom: (i: number) => share(w, (x) => light(x, h - 1 - i)),
+    left: (i: number) => share(h, (y) => light(i, y)),
+    right: (i: number) => share(h, (y) => light(w - 1 - i, y)),
+  };
+  type Side = keyof typeof lines;
+  const sides = Object.keys(lines) as Side[];
+  const cap = (k: Side) => Math.round((k === 'top' || k === 'bottom' ? h : w) * FRAME_MAX);
+  /** The frame's depth on a side: solid light lines, then the picture within FRAME_EDGE lines; else 0. */
+  const frameDepth = (k: Side) => {
+    let band = 0;
+    while (band <= cap(k) && lines[k](band) >= 0.98) band++;
+    if (band === 0) return 0;
+    for (let i = band; i < band + FRAME_EDGE && i <= cap(k); i++) if (lines[k](i) < 0.5) return i;
+    return 0;
+  };
+  const cut = Object.fromEntries(sides.map((k) => [k, frameDepth(k)])) as Record<Side, number>;
+  const padBy = Math.round(WHITE_PAD * Math.max(w, h));
+  // Content touches the edge: a mostly light edge with a few inked pixels in its outer two lines (noise-white has none).
+  const inked = (x: number, y: number) => {
+    const i = (y * w + x) * c;
+    return Math.min(data[i]!, data[i + 1]!, data[i + 2]!) < 240;
+  };
+  const inkOn = {
+    top: (i: number) => share(w, (x) => inked(x, i)) * w,
+    bottom: (i: number) => share(w, (x) => inked(x, h - 1 - i)) * w,
+    left: (i: number) => share(h, (y) => inked(i, y)) * h,
+    right: (i: number) => share(h, (y) => inked(w - 1 - i, y)) * h,
+  };
+  const touches = (k: Side) => lines[k](0) >= 0.6 && inkOn[k](0) + inkOn[k](1) >= 3;
+  const pad = Object.fromEntries(sides.map((k) => [k, !cut[k] && touches(k) ? padBy : 0])) as Record<Side, number>;
+  if (sides.every((k) => !cut[k] && !pad[k])) return trimmed;
+  let img = sharp(trimmed);
+  if (sides.some((k) => cut[k])) {
+    img = sharp(await img.extract({ left: cut.left, top: cut.top, width: w - cut.left - cut.right, height: h - cut.top - cut.bottom }).png().toBuffer());
+  }
+  if (sides.some((k) => pad[k])) img = img.extend({ ...pad, background: '#ffffff' });
+  return img.png().toBuffer();
+}
+/** A frame pixel: every channel at least this light. */
+const FRAME_LIGHT = 225;
+/** The deepest frame cut, as a share of the side. */
+const FRAME_MAX = 0.04;
+/** A frame ends in a sharp edge: the picture starts within this many lines of the solid band. */
+const FRAME_EDGE = 3;
+/** The white given back on a side where white-ground content touches the edge, as a share of the longer side. */
+const WHITE_PAD = 0.03;
+
+/** A trimmed meme as the post renders it: a data URL and its width / height. */
+export async function memeImageOf(png: Buffer): Promise<{ url: string; aspect?: number }> {
+  const sharp = (await import('sharp')).default;
+  const { width, height } = await sharp(png).metadata().catch(() => ({ width: undefined, height: undefined }));
+  return { url: `data:image/png;base64,${png.toString('base64')}`, ...(width && height ? { aspect: width / height } : {}) };
 }
 
 const textOf = (s: SavedStory) => [s.setup, s.body].filter(Boolean).join(' ');
@@ -332,13 +404,13 @@ export async function runSim(d: SimDeps, sim: SimRow): Promise<void> {
       say('render', p.role === 'cover' ? `Meme #${p.rank} "${h}" becomes the cover; its story moves to slide 1` : `Meme #${p.rank} "${h}" goes on story slide ${p.position}`);
     }
     if (placement.placed.length) say('render', 'Rendering the post with memes');
-    const images = new Map<string, string>();
+    const images = new Map<string, MemeImage>();
     for (const id of placement.placed.map((p) => p.memeId)) {
       const { rows: m } = await d.db.query<{ image_path: string | null }>(`SELECT image_path FROM memes.memes WHERE id = $1`, [id]);
       const file = m[0]?.image_path ? path.join(process.cwd(), m[0].image_path) : null;
-      if (file && fs.existsSync(file)) images.set(id, `data:image/png;base64,${(await trimLetterbox(fs.readFileSync(file))).toString('base64')}`);
+      if (file && fs.existsSync(file)) images.set(id, await memeImageOf(await trimLetterbox(fs.readFileSync(file))));
     }
-    const render = postWithMemes(stories, placement, (id) => images.get(id) ?? '', asOf);
+    const render = postWithMemes(stories, placement, (id) => images.get(id) ?? { url: '' }, asOf);
     let finalSlides: string[] = [];
     let finalProblems: string[] = [];
     if (placement.placed.length) {
