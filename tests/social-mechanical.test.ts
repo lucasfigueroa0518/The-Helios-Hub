@@ -9,7 +9,7 @@ import { briefSuperIntelligenceForce } from '@/fixtures/social/briefs';
 import { sifDraft, sifDraftHandoff } from '@/fixtures/social/drafts';
 import {
   applySilentFixes, buildSourceLine, checkBackground, citedIds, checkCaption, checkDroppedText, checkLimits, checkPhotoCredit, checkQuoteMarks, checkVoice,
-  expectedSlideText, fixDashes, fixQuoteMarks, fixTrailingComma, fixWhitespace, LIMITS, quotedSpans,
+  expectedSlideText, fixDashes, fixQuoteMarks, fixTrailingComma, fixWhitespace, LIMITS, quotedSpans, stripCaptionStrays,
 } from '@/lib/social/mechanical/checks';
 import { voiceHits } from '@/lib/social/mechanical/voice-lists';
 import type { Photo } from '@/lib/social/photos/find';
@@ -348,4 +348,12 @@ test('C3 caption emoji (2026-10-19): up to two pass, a third is flagged; slides 
   assert.deepEqual(three.map((f) => [f.where, f.detail]), [['caption', 'emoji: 3 in the caption, at most 2']]);
   const slide = checkVoice(draft((x) => (x.slides[0]!.body!.text = 'A big step 🚀')));
   assert.deepEqual(slide.map((f) => f.detail), ['emoji: "🚀"']);
+});
+
+test('F6 stripCaptionStrays: credit lines and trailing hashtags go, an inline hashtag keeps its word', () => {
+  assert.equal(
+    stripCaptionStrays('Firms adopt #AI tools fast. #agents #AI\n#policy\n\nSource: TechCrunch.\nPhotos: Getty.\n\nAt Helios we build them.'),
+    'Firms adopt AI tools fast.\n\nAt Helios we build them.',
+  );
+  assert.equal(stripCaptionStrays('No strays here.\n\nHelios builds.'), 'No strays here.\n\nHelios builds.');
 });

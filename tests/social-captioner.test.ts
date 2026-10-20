@@ -262,6 +262,41 @@ test('a style problem (voice) only blocks the first attempt; a missing Helios st
   assert.match(h.detail, /Helios/);
 });
 
+test('hashtags and Source/Photos lines block only the first attempt; the retry passes and the mechanical stage strips them', async () => {
+  const bad = good();
+  bad.news.text = `${NEWS.text} #AI\n#policy #agents\nSource: TechCrunch.\nPhotos: Getty.`;
+  bad.read.text = `${READ.text} #Helios`;
+  const { s, result } = run([msg('tool_use', [submit(bad)]), msg('tool_use', [submit(bad)])]);
+  const r = await result;
+  assert.ok(r.ok, r.ok ? '' : r.detail);
+  assert.equal(s.requests.length, 2, 'the first attempt still goes back once');
+  assert.match(s.requests[1].messages.at(-1).content[0].content, /no hashtags/);
+
+  const { filled } = draft();
+  const joined = withJoinedCaption({ ...filled, caption: r.value.news, caption_read: r.value.read });
+  const { draft: fixed, fixes } = applySilentFixes(joined, brief);
+  const text = fixed.caption.text;
+  assert.doesNotMatch(text, /#/, 'no hashtag survives');
+  assert.doesNotMatch(text, /TechCrunch\.|Photos:/, 'the model-written credit lines are gone');
+  assert.equal(text.match(/^Source: /gm)?.length, 1, 'one Source line, the code-built one');
+  assert.ok(text.includes(`settle first?\n\n${READ.text}\n\nSource: `), text);
+  assert.ok(fixes.some((f) => f.id === 'F6'), 'the strip is logged');
+});
+
+test('Helios in the read, claim tags and the length limit stay hard on the retry', async () => {
+  const tag = good();
+  tag.news.facts = ['F99'];
+  const t = await run([msg('tool_use', [submit(tag)]), msg('tool_use', [submit(tag)])]).result;
+  assert.ok(!t.ok);
+  assert.match(t.detail, /F99/);
+
+  const long = good();
+  long.news.text = `${NEWS.text}\n\n${'Trump announced the force on Truth Social. '.repeat(60)}`;
+  const l = await run([msg('tool_use', [submit(long)]), msg('tool_use', [submit(long)])]).result;
+  assert.ok(!l.ok);
+  assert.match(l.detail, /length/);
+});
+
 test('a malformed submission is rejected with the shape errors', async () => {
   const { s, result } = run([msg('tool_use', [submit({ news: 'just text' })]), msg('tool_use', [submit(good())])]);
   assert.ok((await result).ok);

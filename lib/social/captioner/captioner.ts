@@ -6,7 +6,8 @@
  * The call is runStructuredCall (cached tool and system, one retry with the
  * check errors). The check holds the caption to the Writer's rules for it:
  * claim tags exist in the BRIEF (checkDraft's tag rule), the read names
- * Helios, no hashtags or Source/Photos line, and the caption's C1–C4 text
+ * Helios, no hashtags or Source/Photos line (first attempt only: on the
+ * retry they pass and the mechanical stage's F6 strips them), and the caption's C1–C4 text
  * checks (draftTextFailures, stage 'captioner'), with room left under the
  * 2,200 limit for the code-built Source and Photos lines.
  * Wiring into the pipeline is the orchestrator's (not here).
@@ -49,8 +50,9 @@ export function checkCaptionSubmission(input: unknown, brief: Brief, filled: Fil
   for (const key of ['news', 'read'] as const) {
     const { text, facts } = parts[key];
     for (const id of facts) if (!known.has(id)) errors.push(`${key}.facts: claim tag ${id} isn't in the brief`);
-    if (HASHTAG.test(text)) errors.push(`${key}: no hashtags`);
-    if (CREDIT_LINE.test(text)) errors.push(`${key}: no Source or Photos line; code adds them`);
+    // Style, not safety: on the retry these pass and the mechanical stage strips them (F6).
+    if (attempt <= 1 && HASHTAG.test(text)) errors.push(`${key}: no hashtags`);
+    if (attempt <= 1 && CREDIT_LINE.test(text)) errors.push(`${key}: no Source or Photos line; code adds them`);
   }
   if (!HELIOS_NAME.test(parts.read.text)) errors.push("read: name Helios once in the builder's read");
   // Like the rest of C3, an emoji in the Helios line blocks only the first submission.

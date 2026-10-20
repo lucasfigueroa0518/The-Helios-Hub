@@ -10,6 +10,9 @@
  *        F3 whitespace and markdown leftovers removed
  *        F4 trailing comma stripped from a displayed quote (punctuation only)
  *        F5 the caption's "Source:" line built by code (spec §6 #5)
+ *        F6 stray hashtags and model-written Source/Photos lines removed
+ *           from the caption, before F5 (the captioner's retry lets them
+ *           through; social-captions final fixes, 2026-10-19)
  *   B. Pass/fail checks (each failure carries what happens next; see
  *      FAILURE_ACTION):
  *        C1 character limits
@@ -37,7 +40,7 @@ import { voiceHits } from './voice-lists';
 
 // ── A. Silent fixes ───────────────────────────────────────────────────
 
-export type Fix = { id: 'F1' | 'F2' | 'F3' | 'F4' | 'F5'; where: string; before: string; after: string };
+export type Fix = { id: 'F1' | 'F2' | 'F3' | 'F4' | 'F5' | 'F6'; where: string; before: string; after: string };
 
 /** F1: em dash → comma; en dash in a range → hyphen, otherwise a comma; spaced double hyphen → comma. */
 export function fixDashes(s: string): string {
@@ -112,6 +115,26 @@ export function buildSourceLine(d: FilledDraft, brief: Brief): string | null {
   return `Source: ${joined}.`;
 }
 
+const HASHTAG_RUN = /(?:^|[ \t]+)#[\p{L}_][\p{L}\p{N}_]*(?:[ \t]+#[\p{L}_][\p{L}\p{N}_]*)*[ \t]*$/gmu;
+const HASHTAG_MARK = /(^|\s)#([\p{L}_][\p{L}\p{N}_]*)/gu;
+
+/**
+ * F6: model-written Source/Photos lines go (code builds both), hashtags that
+ * end a line go, and a hashtag inside a sentence keeps its word ("#AI tools"
+ * → "AI tools"), so no meaning is cut.
+ */
+export function stripCaptionStrays(caption: string): string {
+  return caption
+    .split('\n')
+    .filter((l) => !/^\s*(Sources?|Photos?):/i.test(l))
+    .join('\n')
+    .replace(HASHTAG_RUN, '')
+    .replace(HASHTAG_MARK, '$1$2')
+    .replace(/[ \t]+$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 /** Replace any "Source:" line the Writer wrote with the code-built one. */
 export function withSourceLine(caption: string, line: string | null): string {
   const kept = caption.split('\n').filter((l) => !/^\s*Sources?:/i.test(l)).join('\n').replace(/\n{3,}/g, '\n\n').trimEnd();
@@ -139,6 +162,7 @@ export function applySilentFixes(draft: FilledDraft, brief?: Brief): { draft: Fi
   });
   d.follow = all('follow', followLine(d.follow_topic));
   d.caption.text = all('caption', d.caption.text);
+  d.caption.text = fix('caption strays', d.caption.text, stripCaptionStrays, 'F6');
   if (brief) d.caption.text = fix('caption Source line', d.caption.text, (c) => withSourceLine(c, buildSourceLine(d, brief)), 'F5');
   return { draft: d, fixes };
 }
