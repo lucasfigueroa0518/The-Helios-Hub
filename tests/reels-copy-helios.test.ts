@@ -21,8 +21,10 @@ import {
   REPORT_COPY_TOOL,
   checkCopy,
   fullCaption,
+  isTextArtifactError,
   parseCopyReport,
   publishCopy,
+  reportArtifacts,
   shortenAssembledCaption,
 } from '@/lib/reels/copy/report';
 import { COPY_PROMPT_VERSION, COPY_SKILL, FRAMEWORK_WRITING_LOGIC } from '@/lib/reels/copy/skill';
@@ -132,6 +134,14 @@ test('builder_read is the Helios line: it names Helios and stays out of the capt
     () => parseCopyReport(reportInput({ builder_read: noHelios, call_to_action: 'Follow Helios for the next story like this one.' })),
     /builder_read does not name Helios/,
   );
+});
+
+test('tool syntax or a leftover escape in the Helios line is a text artifact, so the copy-time retry fires', () => {
+  const leak = `${READ} "call_to_action": "Follow for more"`;
+  assert.throws(() => parseCopyReport(reportInput({ builder_read: leak })), (error: Error) => isTextArtifactError(error.message) && /tool syntax in Helios line/.test(error.message));
+  const base = parseCopyReport(reportInput());
+  assert.deepEqual(reportArtifacts({ ...base, builderRead: `${READ}\\n` }), ['escape sequence in Helios line']);
+  assert.deepEqual(reportArtifacts(base), []);
 });
 
 test('fullCaption posts the body, the call to action, the Helios line, then the hashtags', () => {

@@ -329,13 +329,14 @@ export function parseCopyReport(input: unknown): CopyCall {
 
 /** D-246. Every artifact still in the fields that get posted or rendered, named by field. */
 export function reportArtifacts(
-  call: Pick<CopyCall, 'onScreenCopies' | 'viewerStake' | 'caption' | 'callToAction' | 'hashtags'>,
+  call: Pick<CopyCall, 'onScreenCopies' | 'viewerStake' | 'caption' | 'builderRead' | 'callToAction' | 'hashtags'>,
 ): string[] {
   const named = (field: string, found: string[]) => found.map((artifact) => `${artifact} in ${field}`);
   return [
     ...call.onScreenCopies.flatMap((copy, index) => named(`on-screen copy ${index + 1}`, textArtifacts(copy))),
     ...named('viewer stake', textArtifacts(call.viewerStake)),
     ...named('caption', captionBodyArtifacts(call.caption, call.callToAction)),
+    ...named('Helios line', textArtifacts(call.builderRead)),
     ...named('call to action', textArtifacts(call.callToAction)),
     ...named('hashtags', textArtifacts(call.hashtags.join(' '))),
   ];
