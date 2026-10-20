@@ -10,16 +10,14 @@ import type { PGlite } from '@electric-sql/pglite';
 import type { Queryable } from '@/lib/explainers/db';
 import { explainersQuota } from '@/lib/explainers/ideas/cycle';
 import { scheduleJob } from '@/lib/explainers/publish/schedule';
-import { slotTakenKey } from '@/lib/instagram/window';
 import { threeAmQueue } from '@/lib/lfd/clock';
 import { scheduleLfdPost } from '@/lib/lfd/schedule';
 import { parseLfdSettings } from '@/lib/lfd/settings';
 import { reelsPerDay } from '@/lib/reels/pipeline/fill';
-import { reelTaken, schedulePostIdea, toTakenKey, windowsStillOpen } from '@/lib/reels/publish/schedule';
-import { POSTING_SLOTS, slotKey } from '@/lib/reels/publish/slots';
+import { schedulePostIdea, windowsStillOpen } from '@/lib/reels/publish/schedule';
 import { reportCarousels } from '@/lib/social-hub/health/reporters/carousels';
-import { quotaFromSlots, slotPlan, storiesDueOn } from '@/lib/social-hub/slots';
-import { chooseByFeedMode } from '@/lib/social-hub/slots/choose';
+import { quotaFromSlots, slotPlan, storiesSlotsOn } from '@/lib/social-hub/slots';
+import { templateSlots } from '@/lib/social-hub/slots/scheduler';
 import { applySlotChanges, setSlotSource } from '@/lib/social-hub/slots/write';
 import type { PostingState } from '@/lib/content-type/posting';
 import { carouselFill, nightStoriesFor, schedulePost } from '@/lib/social/overnight/schedule';
@@ -42,33 +40,19 @@ afterEach(() => {
 const NOW = new Date('2026-10-20T04:00:00Z'); // Tue Oct 20, midnight New York
 const first = () => 0;
 
-test('chooseByFeedMode: a trial slot is picked with no spacing, a main slot avoids busy feed times', () => {
-  const trialOnly = { trial: new Set(['2026-10-20|morning']), main: new Set<string>() };
-  const taken = new Set(['2026-10-20|midday', '2026-10-20|evening']);
-  // Busy at 8:45 does not stop a trial reel at 8:45 (D33).
-  const busy = [new Date('2026-10-20T12:45:00Z')];
-  const t = chooseByFeedMode(POSTING_SLOTS, NOW, taken, trialOnly, busy, first, '2026-10-20')!;
-  assert.equal(t.publishAt.toISOString(), '2026-10-20T12:45:00.000Z');
-  // The same window as Main moves ≥ 30 minutes off the busy instant.
-  const mainOnly = { trial: new Set<string>(), main: new Set(['2026-10-20|morning']) };
-  const m = chooseByFeedMode(POSTING_SLOTS, NOW, taken, mainOnly, busy, first, '2026-10-20')!;
-  assert.ok(m.publishAt.getTime() - busy[0]!.getTime() >= 30 * 60_000);
-});
-
-test('chooseByFeedMode picks the earliest across modes', () => {
-  const modes = { trial: new Set(['2026-10-20|evening']), main: new Set(['2026-10-20|morning']) };
-  const c = chooseByFeedMode(POSTING_SLOTS, NOW, new Set(['2026-10-20|midday']), modes, [], first, '2026-10-20')!;
-  assert.equal(c.slot, 'morning');
-});
-
-test('reelTaken: every reels window that is not a slot is taken, on top of the booked ones', async () => {
-  const { query } = await openHubTestDb();
+test('templateSlots: a removed slot is not bookable, and a legacy window booking blocks the free-time slot it became', async () => {
+  const { pg, query } = await openHubTestDb();
   const q = query as never;
   await setSlotSource(q, 'template', 't');
-  await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'reels', windowId: 'morning', action: 'remove', feedMode: null }], { by: 't', now: NOW, keepBooked: false });
+  await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'reels', startMinute: 525, series: null, action: 'remove', feedMode: null }], { by: 't', now: NOW });
+  // Booked before the cutover: the 'evening' window id is the 6:00 PM slot.
+  await pg.query(
+    `INSERT INTO social_hub.schedule (vertical, idea_ref, ny_date, slot, publish_at, status, source) VALUES ('reels', 'idea-old', '2026-10-20', 'evening', '2026-10-20T22:30:00Z', 'scheduled', 'auto')`,
+  );
   const plan = (await slotPlan(q, '2026-10-20'))!;
-  const taken = reelTaken(plan, new Set([toTakenKey(slotKey('2026-10-20', 'evening'))]), slotTakenKey);
-  assert.deepEqual([...taken].sort(), ['2026-10-20|evening', '2026-10-21|morning']);
+  const { byDate, taken } = await templateSlots(q, plan, 'reels');
+  assert.deepEqual(byDate.get('2026-10-21')!.map((s) => s.startMinute), [675, 1080]);
+  assert.deepEqual([...taken], ['2026-10-20|t1080']);
 });
 
 // ---- Text on Screen (reels): the app pool, pointed at PGlite like tests/reels-autopublish.test.ts ----
@@ -111,15 +95,16 @@ test('reels template: a removed window is never booked, and the slot\'s feed mod
   const { pg, q } = await reelsDb();
   await setSlotSource(q, 'template', 't');
   await applySlotChanges(q, [
-    { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'reels', windowId: 'morning', action: 'remove', feedMode: null },
-    { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'reels', windowId: 'midday', action: 'add', feedMode: 'main' },
-  ], { by: 't', now: LATE_TUESDAY, keepBooked: false });
+    { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'reels', startMinute: 525, series: null, action: 'remove', feedMode: null },
+    { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'reels', startMinute: 675, series: null, action: 'remove', feedMode: null },
+    { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'reels', startMinute: 720, series: null, action: 'add', feedMode: 'main' },
+  ], { by: 't', now: LATE_TUESDAY });
   const out = await schedulePostIdea(IDEA, 'auto', null, LATE_TUESDAY, '2026-10-21');
   assert.ok(out.scheduled);
   const [row] = await reelSlots(pg);
-  assert.deepEqual([row!.d, row!.slot, row!.feed_mode], ['2026-10-21', 'midday', 'main']);
+  assert.deepEqual([row!.d, row!.slot, row!.feed_mode], ['2026-10-21', 't0720', 'main']);
   assert.match(out.note, /It posts to the main feed\.$/);
-  // The quota is the day's slot count: midday and evening.
+  // The quota is the day's slot count: noon and 6 PM.
   assert.equal(await reelsPerDay(new Date('2026-10-21T12:00:00Z')), 2);
   assert.equal(await quotaFromSlots(q, 'reels', '2026-10-21'), 2);
 });
@@ -128,8 +113,9 @@ test('reels template: a main slot keeps 30 minutes from a feed post', async () =
   const { pg, q } = await reelsDb();
   await setSlotSource(q, 'template', 't');
   await applySlotChanges(q, [
-    { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'reels', windowId: 'morning', action: 'add', feedMode: 'main' },
-  ], { by: 't', now: LATE_TUESDAY, keepBooked: false });
+    { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'reels', startMinute: 525, series: null, action: 'remove', feedMode: null },
+    { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'reels', startMinute: 540, series: null, action: 'add', feedMode: 'main' },
+  ], { by: 't', now: LATE_TUESDAY });
   // A carousel at 8:45 AM on Oct 21.
   const item = await pg.query<{ id: string }>(`INSERT INTO social_hub.content_items (vertical, format, native_ref) VALUES ('carousels', 'feed', 'c-1') RETURNING id`);
   await pg.query(
@@ -139,26 +125,28 @@ test('reels template: a main slot keeps 30 minutes from a feed post', async () =
   const out = await schedulePostIdea(IDEA, 'auto', null, LATE_TUESDAY, '2026-10-21');
   assert.ok(out.scheduled);
   const [row] = await reelSlots(pg);
-  assert.equal(row!.slot, 'morning');
+  assert.equal(row!.slot, 't0540');
   assert.ok(new Date(row!.publish_at).getTime() - new Date('2026-10-21T12:45:00Z').getTime() >= 30 * 60_000);
 });
 
-test('reels template: a started window still takes a post today (Review Focus 4)', async () => {
+test('reels template: a started slot still takes a post today, inside [slot, slot + 15]', async () => {
   const { pg, q } = await reelsDb();
   await setSlotSource(q, 'template', 't');
-  const inMorning = new Date('2026-10-20T13:00:00Z'); // 9:00 AM New York
+  const inMorning = new Date('2026-10-20T12:50:00Z'); // 8:50 AM New York: the 8:45 slot runs to 9:00
   assert.equal(await windowsStillOpen(inMorning), 3);
+  assert.equal(await windowsStillOpen(new Date('2026-10-20T13:00:00Z')), 2, '9:00 AM: the 8:45 slot is over');
   const out = await schedulePostIdea(IDEA, 'auto', null, inMorning, '2026-10-20');
   assert.ok(out.scheduled);
   const [row] = await reelSlots(pg);
-  assert.deepEqual([row!.d, row!.slot, row!.feed_mode], ['2026-10-20', 'morning', 'trial']);
+  assert.deepEqual([row!.d, row!.slot, row!.feed_mode], ['2026-10-20', 't0525', 'trial']);
+  assert.ok(new Date(row!.publish_at).getTime() <= new Date('2026-10-20T13:00:00Z').getTime());
   assert.ok(new Date(row!.publish_at).getTime() > inMorning.getTime());
 });
 
 test('reels template: windowsStillOpen counts only today\'s slots', async () => {
   const { q } = await reelsDb();
   await setSlotSource(q, 'template', 't');
-  await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: '2026-10-20', vertical: 'reels', windowId: 'evening', action: 'remove', feedMode: null }], { by: 't', now: NOW, keepBooked: false });
+  await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: '2026-10-20', vertical: 'reels', startMinute: 1080, series: null, action: 'remove', feedMode: null }], { by: 't', now: NOW });
   assert.equal(await windowsStillOpen(NOW), 2);
 });
 
@@ -194,13 +182,14 @@ test('explainers template: a removed window is never booked, and the slot\'s fee
   const { db, q, jobId } = await explainersDb();
   await setSlotSource(q, 'template', 't');
   await applySlotChanges(q, [
-    { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'explainers', windowId: 'afternoon', action: 'remove', feedMode: null },
-    { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'explainers', windowId: 'late', action: 'add', feedMode: 'trial' },
-  ], { by: 't', now: LATE_TUESDAY, keepBooked: false });
+    { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'explainers', startMinute: 780, series: null, action: 'remove', feedMode: null },
+    { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'explainers', startMinute: 930, series: null, action: 'remove', feedMode: null },
+    { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'explainers', startMinute: 960, series: null, action: 'add', feedMode: 'trial' },
+  ], { by: 't', now: LATE_TUESDAY });
   const out = await scheduleJob(db, jobId, 'auto', LATE_TUESDAY, '2026-10-21', first);
   assert.ok(out.scheduled);
   const [row] = await explainerSlots(db);
-  assert.deepEqual([row!.d, row!.slot, row!.feed_mode], ['2026-10-21', 'late', 'trial']);
+  assert.deepEqual([row!.d, row!.slot, row!.feed_mode], ['2026-10-21', 't0960', 'trial']);
   assert.equal(await quotaFromSlots(q, 'explainers', '2026-10-21'), 1);
 });
 
@@ -208,9 +197,10 @@ test('explainers template: the booking takes the feed mode of the plan it was ch
   const { db, q, jobId } = await explainersDb();
   await setSlotSource(q, 'template', 't');
   await applySlotChanges(q, [
-    { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'explainers', windowId: 'afternoon', action: 'remove', feedMode: null },
-    { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'explainers', windowId: 'late', action: 'add', feedMode: 'trial' },
-  ], { by: 't', now: LATE_TUESDAY, keepBooked: false });
+    { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'explainers', startMinute: 780, series: null, action: 'remove', feedMode: null },
+    { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'explainers', startMinute: 930, series: null, action: 'remove', feedMode: null },
+    { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'explainers', startMinute: 960, series: null, action: 'add', feedMode: 'trial' },
+  ], { by: 't', now: LATE_TUESDAY });
   // Flip the switch back to legacy right after the scheduler reads it once.
   let reads = 0;
   const flipping: Queryable = {
@@ -223,27 +213,27 @@ test('explainers template: the booking takes the feed mode of the plan it was ch
   const out = await scheduleJob(flipping, jobId, 'auto', LATE_TUESDAY, '2026-10-21', first);
   assert.ok(out.scheduled);
   const [row] = await explainerSlots(db);
-  assert.deepEqual([row!.slot, row!.feed_mode], ['late', 'trial'], 'not the legacy main');
+  assert.deepEqual([row!.slot, row!.feed_mode], ['t0960', 'trial'], 'not the legacy main');
 });
 
 test('explainers template: every window is a slot, whatever posts_per_day says', async () => {
   const { db, q, jobId } = await explainersDb();
   await db.query(`INSERT INTO explainers.settings (key, value) VALUES ('posts_per_day', '1'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
   await setSlotSource(q, 'template', 't');
-  const afterFirst = new Date('2026-10-20T18:45:00Z'); // 2:45 PM New York: the afternoon window is over
+  const afterFirst = new Date('2026-10-20T18:45:00Z'); // 2:45 PM New York: the 1:00 PM slot is over
   const out = await scheduleJob(db, jobId, 'auto', afterFirst, '2026-10-20', first);
   assert.ok(out.scheduled);
-  assert.equal((await explainerSlots(db))[0]!.slot, 'late');
+  assert.equal((await explainerSlots(db))[0]!.slot, 't0930');
 });
 
-test('explainers template: a started window still takes a post today (Review Focus 4)', async () => {
+test('explainers template: a started slot still takes a post today', async () => {
   const { db, q, jobId } = await explainersDb();
   await setSlotSource(q, 'template', 't');
-  const inAfternoon = new Date('2026-10-20T17:30:00Z'); // 1:30 PM New York
+  const inAfternoon = new Date('2026-10-20T17:05:00Z'); // 1:05 PM New York: the 1:00 PM slot runs to 1:15
   const out = await scheduleJob(db, jobId, 'auto', inAfternoon, '2026-10-20', first);
   assert.ok(out.scheduled);
   const [row] = await explainerSlots(db);
-  assert.deepEqual([row!.d, row!.slot, row!.feed_mode], ['2026-10-20', 'afternoon', 'main']);
+  assert.deepEqual([row!.d, row!.slot, row!.feed_mode], ['2026-10-20', 't0780', 'main']);
   assert.ok(new Date(row!.publish_at).getTime() > inAfternoon.getTime());
 });
 
@@ -254,12 +244,12 @@ test('explainersQuota: legacy is posts_per_day; template is the day\'s explainer
   assert.equal(await explainersQuota(db, '2026-10-21'), 1, 'legacy: posts_per_day');
   await setSlotSource(q, 'template', 't');
   const seeded = await quotaFromSlots(q, 'explainers', '2026-10-21');
-  assert.equal(await explainersQuota(db, '2026-10-21'), seeded, 'template: the slot count');
+  assert.equal(seeded, 2, 'the seeded 1:00 and 3:30 PM slots, whatever posts_per_day says');
+  assert.equal(await explainersQuota(db, '2026-10-21'), 2, 'template: the slot count');
   await applySlotChanges(q, [
-    { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'explainers', windowId: 'afternoon', action: 'add', feedMode: 'main' },
-    { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'explainers', windowId: 'late', action: 'add', feedMode: 'trial' },
-  ], { by: 't', now: LATE_TUESDAY, keepBooked: false });
-  assert.equal(await explainersQuota(db, '2026-10-21'), 2, 'template: both windows are slots, whatever posts_per_day says');
+    { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'explainers', startMinute: 1140, series: null, action: 'add', feedMode: 'trial' },
+  ], { by: 't', now: LATE_TUESDAY });
+  assert.equal(await explainersQuota(db, '2026-10-21'), 3, 'template: an added slot counts');
 });
 
 // ---- Part 2: the 3 AM switch ----
@@ -307,9 +297,9 @@ const WED_MORNING = new Date('2026-10-21T11:00:00Z'); // Wed Oct 21, 7:00 AM New
 
 /** Wednesday as a Last Few Days day: its LFD slot, and the Carousel windows taken off (the calendar refuses both on one day). */
 const wednesdayLfd = [
-  { scope: 'date', op: 'put', nyDate: WED, vertical: 'last_few_days', windowId: 'morning', action: 'add', feedMode: null },
-  { scope: 'date', op: 'put', nyDate: WED, vertical: 'carousels', windowId: 'morning', action: 'remove', feedMode: null },
-  { scope: 'date', op: 'put', nyDate: WED, vertical: 'carousels', windowId: 'afternoon', action: 'remove', feedMode: null },
+  { scope: 'date', op: 'put', nyDate: WED, vertical: 'carousels', startMinute: 540, series: null, action: 'remove', feedMode: null },
+  { scope: 'date', op: 'put', nyDate: WED, vertical: 'carousels', startMinute: 870, series: null, action: 'remove', feedMode: null },
+  { scope: 'date', op: 'put', nyDate: WED, vertical: 'last_few_days', startMinute: 540, series: null, action: 'add', feedMode: null },
 ] as const;
 
 async function carouselDb(): Promise<{ q: never; postId: string }> {
@@ -338,16 +328,16 @@ test('carousels legacy: unchanged booking (the first open window)', async () => 
 test('carousels template: a removed window is never booked', async () => {
   const { q, postId } = await carouselDb();
   await setSlotSource(q, 'template', 't');
-  await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: WED, vertical: 'carousels', windowId: 'morning', action: 'remove', feedMode: null }], { by: 't', now: LATE_TUESDAY, keepBooked: false });
+  await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: WED, vertical: 'carousels', startMinute: 540, series: null, action: 'remove', feedMode: null }], { by: 't', now: LATE_TUESDAY });
   const out = await schedulePost(q, postId, 'auto', LATE_TUESDAY, WED, first);
   assert.ok(out.scheduled);
-  assert.deepEqual(await slotsOf(q, 'carousels'), [[WED, 'afternoon']]);
+  assert.deepEqual(await slotsOf(q, 'carousels'), [[WED, 't0870']]);
 });
 
 test('carousels template: a Last Few Days day has no carousel window', async () => {
   const { q, postId } = await carouselDb();
   await setSlotSource(q, 'template', 't');
-  assert.equal((await applySlotChanges(q, [...wednesdayLfd], { by: 't', now: LATE_TUESDAY, keepBooked: false })).ok, true);
+  assert.equal((await applySlotChanges(q, [...wednesdayLfd], { by: 't', now: LATE_TUESDAY })).ok, true);
   const out = await schedulePost(q, postId, 'auto', LATE_TUESDAY, WED, first);
   assert.equal(out.scheduled, false);
   assert.deepEqual(await slotsOf(q, 'carousels'), []);
@@ -358,9 +348,9 @@ test('carousels template: the day\'s quota is its slot count (2, 1, 0)', async (
   await (q as (t: string) => Promise<unknown>)(`INSERT INTO social.settings (key, value) VALUES ('posts_per_day', '5'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
   await setSlotSource(q, 'template', 't');
   assert.equal((await carouselFill(q, WED_MORNING)).quota, 2, 'posts_per_day no longer counts');
-  await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: WED, vertical: 'carousels', windowId: 'morning', action: 'remove', feedMode: null }], { by: 't', now: LATE_TUESDAY, keepBooked: false });
+  await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: WED, vertical: 'carousels', startMinute: 540, series: null, action: 'remove', feedMode: null }], { by: 't', now: LATE_TUESDAY });
   assert.equal((await carouselFill(q, WED_MORNING)).quota, 1);
-  await applySlotChanges(q, [...wednesdayLfd], { by: 't', now: LATE_TUESDAY, keepBooked: false });
+  await applySlotChanges(q, [...wednesdayLfd], { by: 't', now: LATE_TUESDAY });
   assert.equal((await carouselFill(q, WED_MORNING)).quota, 0);
 });
 
@@ -377,12 +367,12 @@ test('last few days template: a Wednesday LFD slot books; Tuesday without its te
   const { query } = await openHubTestDb();
   const q = query as never;
   await setSlotSource(q, 'template', 't');
-  await applySlotChanges(q, [...wednesdayLfd], { by: 't', now: LATE_TUESDAY, keepBooked: false });
+  await applySlotChanges(q, [...wednesdayLfd], { by: 't', now: LATE_TUESDAY });
   const wed = await seedLfdPost(query, { nyDate: WED });
   assert.ok((await scheduleLfdPost(q, wed, 'auto', LATE_TUESDAY, WED, first)).scheduled);
-  assert.deepEqual(await slotsOf(q, 'last_few_days'), [[WED, 'morning']]);
+  assert.deepEqual(await slotsOf(q, 'last_few_days'), [[WED, 't0540']]);
 
-  assert.equal((await applySlotChanges(q, [{ scope: 'template', op: 'delete', weekday: 2, vertical: 'last_few_days', windowId: 'morning' }], { by: 't', now: NOW, keepBooked: false })).ok, true);
+  assert.equal((await applySlotChanges(q, [{ scope: 'template', op: 'delete', weekday: 2, vertical: 'last_few_days', startMinute: 540, series: null }], { by: 't', now: NOW })).ok, true);
   const tue = await seedLfdPost(query, { nyDate: '2026-10-20' });
   const out = await scheduleLfdPost(q, tue, 'auto', NOW, '2026-10-20', first);
   assert.equal(out.scheduled, false);
@@ -426,31 +416,33 @@ test('carousel health: a failed slot read falls back to legacy (ruling P2)', asy
 const THU = '2026-10-08';
 const THU_NOW = new Date('2026-10-08T05:00:00Z'); // 1:00 AM New York, Thursday Oct 8
 
-test('stories legacy: storiesDueOn is null and auto sets follow the series\' own days', async () => {
+/** requestAutoSets' dueOn from the calendar's Stories slots on one date (Task 6 moves this into the worker). */
+const dueFrom = (slots: Awaited<ReturnType<typeof storiesSlotsOn>>, date: string) => (series: string, nyDate: string) =>
+  nyDate === date && (slots ?? []).some((s) => s.series === series);
+
+test('stories legacy: storiesSlotsOn is null and auto sets follow the series\' own days', async () => {
   const { db } = await harnessDb();
   const q = ((t: string, p?: unknown[]) => db.query(t, p)) as never;
-  assert.equal(await storiesDueOn(q, THU), null);
+  assert.equal(await storiesSlotsOn(q, THU), null);
   await saveSeriesSetting(db, 'guess_the_number', { auto: true });
   await saveSeriesSetting(db, 'free_vs_paid', { auto: true });
   assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_NOW), ['guess_the_number']);
 });
 
-test('stories template: a series is due on its slot\'s dates only, and auto sets follow the calendar', async () => {
+test('stories template: a series has slots on its dates only, and auto sets follow the calendar', async () => {
   const { db } = await harnessDb();
   const q = ((t: string, p?: unknown[]) => db.query(t, p)) as never;
   await saveSeriesSetting(db, 'guess_the_number', { auto: true });
   await saveSeriesSetting(db, 'free_vs_paid', { auto: true });
   await setSlotSource(q, 'template', 't');
-  let dueOn = (await storiesDueOn(q, THU))!;
+  let dueOn = dueFrom(await storiesSlotsOn(q, THU), THU);
   assert.equal(dueOn('guess_the_number', THU), true, 'seeded from the series\' own days');
   assert.equal(dueOn('free_vs_paid', THU), false);
-  // One day is read: a later date (next Thursday has the same seeded slot) answers false.
-  assert.equal(dueOn('guess_the_number', '2026-10-15'), false, 'only the asked date is read');
   await applySlotChanges(q, [
-    { scope: 'date', op: 'put', nyDate: THU, vertical: 'stories', windowId: 'guess_the_number', action: 'remove', feedMode: null },
-    { scope: 'date', op: 'put', nyDate: THU, vertical: 'stories', windowId: 'free_vs_paid', action: 'add', feedMode: null },
-  ], { by: 't', now: THU_NOW, keepBooked: false });
-  dueOn = (await storiesDueOn(q, THU))!;
+    { scope: 'date', op: 'put', nyDate: THU, vertical: 'stories', startMinute: 510, series: 'guess_the_number', action: 'remove', feedMode: null },
+    { scope: 'date', op: 'put', nyDate: THU, vertical: 'stories', startMinute: 510, series: 'free_vs_paid', action: 'add', feedMode: null },
+  ], { by: 't', now: THU_NOW });
+  dueOn = dueFrom(await storiesSlotsOn(q, THU), THU);
   assert.equal(dueOn('guess_the_number', THU), false, 'removed for the day');
   assert.equal(dueOn('free_vs_paid', THU), true, 'added for the day');
   assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_NOW, { dueOn }), ['free_vs_paid']);
