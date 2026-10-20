@@ -13,8 +13,10 @@ import { explainersQuota } from '@/lib/explainers/ideas/cycle';
 import { scheduleJob } from '@/lib/explainers/publish/schedule';
 import { scheduleLfdPost } from '@/lib/lfd/schedule';
 import { reelsPerDay } from '@/lib/reels/pipeline/fill';
-import { schedulePostIdea } from '@/lib/reels/publish/schedule';
+import { freeRetryAt, retryFailedSlots, schedulePostIdea } from '@/lib/reels/publish/schedule';
 import { carouselFill, schedulePost } from '@/lib/social/overnight/schedule';
+import { slotPlan } from '@/lib/social-hub/slots';
+import { templateSlots } from '@/lib/social-hub/slots/scheduler';
 import { applySlotChanges, setSlotSource, writeCaps, type SlotChange } from '@/lib/social-hub/slots/write';
 
 import { scratchExplainersDb } from './explainers-pglite';
@@ -98,6 +100,50 @@ test('reels template: 6 slots under a cap of 5 make 5 and never book the 6th', a
   assert.equal(third.scheduled, false, 'the 780 slot is over the cap of 2');
 });
 
+// ---- Text on Screen retries in template mode (ruling R11): until slot + 60, on its own day ----
+
+/** A Wednesday t0720 reel booking whose one try failed cleanly at 12:10 PM. */
+async function failedNoonReel(feedMode: 'trial' | 'main') {
+  const { q } = await reelsDb();
+  const item = (await q(`INSERT INTO social_hub.content_items (vertical, format, native_ref) VALUES ('reels', 'reel', 'v-noon') RETURNING id`)).rows[0].id;
+  const attempt = (await q(
+    `INSERT INTO social_hub.publish_attempts (content_item_id, vertical, trigger, status, finished_at, caption, error)
+     VALUES ($1, 'reels', 'auto', 'failed', '2026-10-21T16:10:00Z', 'c', 'Frame sign failed (400)') RETURNING id`,
+    [item],
+  )).rows[0].id;
+  await q(
+    `INSERT INTO social_hub.schedule (content_item_id, vertical, idea_ref, ny_date, slot, publish_at, status, source, feed_mode, publish_attempt_id)
+     VALUES ($1, 'reels', $2, $3, 't0720', '2026-10-21T16:05:00Z', 'failed', 'auto', $4, $5)`,
+    [item, IDEAS[0], WED, feedMode, attempt],
+  );
+  const row = async () => (await q(`SELECT status, publish_at FROM social_hub.schedule WHERE vertical = 'reels'`)).rows[0];
+  return { q, row };
+}
+
+test('reels template retry: a t0720 failure at 12:10 reopens at 12:40, not at 1:21 PM, never on a later day', async () => {
+  let t = await failedNoonReel('trial');
+  assert.equal(await retryFailedSlots(new Date('2026-10-21T16:40:00Z')), 1, '12:40 PM: before 12:00 + 60');
+  assert.equal((await t.row()).status, 'scheduled');
+  assert.equal(new Date((await t.row()).publish_at).toISOString(), '2026-10-21T16:05:00.000Z', 'a trial reel keeps its time');
+  t = await failedNoonReel('trial');
+  assert.equal(await retryFailedSlots(new Date('2026-10-21T17:21:00Z')), 0, '1:21 PM: past slot + 60');
+  t = await failedNoonReel('trial');
+  assert.equal(await retryFailedSlots(new Date('2026-10-22T16:40:00Z')), 0, 'Thursday: never on a later day');
+  assert.equal((await t.row()).status, 'failed');
+});
+
+test('reels template retry: a Main reel takes a minute that keeps 30 minutes from feed posts, or waits', async () => {
+  const t = await failedNoonReel('main');
+  const item = (await t.q(`INSERT INTO social_hub.content_items (vertical, format, native_ref) VALUES ('carousels', 'feed', 'c-1230') RETURNING id`)).rows[0].id;
+  await t.q(`INSERT INTO social_hub.schedule (content_item_id, vertical, ny_date, slot, publish_at, status, source) VALUES ($1, 'carousels', $2, 't0750', '2026-10-21T16:30:00Z', 'scheduled', 'auto')`, [item, WED]);
+  assert.equal(await retryFailedSlots(new Date('2026-10-21T16:40:00Z')), 1);
+  assert.equal(new Date((await t.row()).publish_at).toISOString(), '2026-10-21T17:00:00.000Z', '1:00 PM: 30 minutes after the 12:30 carousel');
+  // Pure: a feed post at 12:50 leaves no minute before 1:00 PM, so nothing reopens.
+  assert.equal(freeRetryAt(WED, 720, new Date('2026-10-21T16:40:00Z'), true, [new Date('2026-10-21T16:50:00Z')]), null);
+  assert.equal(freeRetryAt(WED, 1230, new Date('2026-10-22T00:50:00Z'), false, []), undefined, '8:50 PM: open until 9 PM (DAY_END), not 9:30');
+  assert.equal(freeRetryAt(WED, 1230, new Date('2026-10-22T01:01:00Z'), false, []), null, '9:01 PM: past the day');
+});
+
 // ---- Explainers ----
 
 async function explainersDb(n: number): Promise<{ db: Queryable; q: never; jobs: string[] }> {
@@ -133,6 +179,8 @@ test('explainers template: 4 slots on Wednesday make 3 (the cap); the 4th is nev
   // Seeded 1:00 and 3:30 PM; add 11:00 AM and 7:00 PM. By time: 11:00, 1:00, 3:30 are made; 7:00 PM is over.
   assert.equal((await applySlotChanges(q, [add('explainers', 660), add('explainers', 1140)], opts)).ok, true);
   assert.equal(await explainersQuota(db as never, WED), 3);
+  const { byDate } = await templateSlots(q, (await slotPlan(q, '2026-10-20'))!, 'explainers');
+  assert.deepEqual(byDate.get(WED)!.map((s) => s.startMinute), [660, 780, 930], 'the 7:00 PM slot is over the cap and not bookable');
   for (const job of jobs.slice(0, 3)) assert.ok((await scheduleJob(db, job, 'auto', LATE_TUESDAY, WED, first)).scheduled);
   const fourth = await scheduleJob(db, jobs[3]!, 'auto', LATE_TUESDAY, WED, first);
   assert.equal(fourth.scheduled, false);

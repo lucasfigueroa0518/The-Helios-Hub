@@ -70,11 +70,6 @@ export async function scheduleJob(
   if (existing) return { scheduled: true, id: existing.id, publishAt: new Date(existing.publish_at).toISOString() };
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const { rows: takenRows } = await db.query<{ d: string; slot: string }>(
-      `SELECT ny_date::text AS d, slot FROM social_hub.schedule
-        WHERE vertical = 'explainers' AND status IN ('scheduled', 'publishing', 'published') AND ny_date >= $1::date`,
-      [calendarDateKey(now)],
-    );
     const spacing = (text: string, params?: unknown[]) => db.query<Record<string, unknown>>(text, params);
     const busy = [...(await busyFeedTimes(spacing, now, 'explainers')), ...(await ownFeedTimes(spacing, 'explainers', now))];
     // A failed slot read throws: it must not silently book by the old rules (ruling P2).
@@ -84,6 +79,11 @@ export async function scheduleJob(
     // Template: the mode of the slot chosen, from the plan in hand (no second read).
     let feedMode: 'trial' | 'main' | null = null;
     if (!plan) {
+      const { rows: takenRows } = await db.query<{ d: string; slot: string }>(
+        `SELECT ny_date::text AS d, slot FROM social_hub.schedule
+          WHERE vertical = 'explainers' AND status IN ('scheduled', 'publishing', 'published') AND ny_date >= $1::date`,
+        [calendarDateKey(now)],
+      );
       const takenKeys = new Set(takenRows.map((r) => slotTakenKey(r.d, r.slot)));
       const windows = EXPLAINER_WINDOWS.slice(0, Math.max(1, Math.min(await postsPerDay(db), EXPLAINER_WINDOWS.length)));
       choice = chooseFromWindows(windows, now, takenKeys, busy, rng, throughDate);

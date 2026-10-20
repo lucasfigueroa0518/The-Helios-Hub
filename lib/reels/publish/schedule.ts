@@ -6,9 +6,10 @@ import { REEL_SCHEDULE } from '@/lib/reels/spine-tables';
 import { approveReel, reelItemId, reelsSpine } from '@/lib/reels/publish/items';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { bookingFeedMode, slotPlan } from '@/lib/social-hub/slots';
+import { openWindowRange, spacedOffsets, windowMinuteInstant, type PostingWindow } from '@/lib/instagram/window';
 import { driftMinute } from '@/lib/social-hub/slots/book';
 import { chooseTemplateSlot, templateSlots } from '@/lib/social-hub/slots/scheduler';
-import { clockLabel } from '@/lib/social-hub/slots/times';
+import { clockLabel, DAY_END, FEED_GAP } from '@/lib/social-hub/slots/times';
 import { parseSlotId, slotId, type FeedMode } from '@/lib/social-hub/slots/types';
 import { bookSlot } from '@/lib/social-hub/spine';
 import {
@@ -380,14 +381,34 @@ export function retryableError(error: string | null): boolean {
   return !NO_RETRY_ERROR.test(error ?? '');
 }
 
+/** Template mode (ruling R11): a free-time slot retries until its start + 60 minutes, never past the day's end. */
+export const FREE_RETRY_MINUTES = 60;
+
 /**
- * Whether a booking's slot has not ended: a legacy window's range, or a
- * free-time slot's [slot, slot + 15] (template mode).
+ * When a failed free-time booking may post again, or null: only on its own
+ * day (NY), while now is before min(slot + FREE_RETRY_MINUTES, DAY_END). A
+ * Main-feed reel takes the first minute ahead that keeps FEED_GAP from every
+ * other feed post; a Trial reel keeps its time (it is released at once).
+ * `undefined` means "keep publish_at".
  */
-function slotStillOpen(nyDate: string, slot: string, now: Date): boolean {
-  const free = parseSlotId(slot);
-  if (!free) return POSTING_SLOTS.some((w) => w.id === slot) && openMinuteRange(nyDate, slot as SlotId, now) != null;
-  return driftMinute(nyDate, { vertical: 'reels', ...free, feedMode: null, origin: 'template' }, now, [], () => 0) != null;
+export function freeRetryAt(nyDate: string, startMinute: number, now: Date, main: boolean, busy: readonly Date[]): Date | undefined | null {
+  if (calendarDateKey(now) !== nyDate) return null;
+  const w: PostingWindow = { id: 'retry', label: '', startMinute, endMinute: Math.min(startMinute + FREE_RETRY_MINUTES, DAY_END) };
+  const open = openWindowRange(w, nyDate, now);
+  if (!open) return null;
+  if (!main) return undefined;
+  const at = spacedOffsets((o) => windowMinuteInstant(w, nyDate, o), open.startOffset, open.count, busy, FEED_GAP);
+  return at.length ? windowMinuteInstant(w, nyDate, at[0]!) : null;
+}
+
+/** The booking's Trial / Main; null on a database without the column (no reel is Main there). */
+async function rowFeedMode(id: string): Promise<FeedMode | null> {
+  try {
+    const { rows } = await dbQuery<{ feed_mode: FeedMode | null }>(`SELECT feed_mode FROM social_hub.schedule WHERE id = $1::uuid`, [id]);
+    return rows[0]?.feed_mode ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -414,13 +435,30 @@ export async function retryFailedSlots(now = new Date()): Promise<number> {
   let reopened = 0;
   for (const row of rows) {
     if (!retryableError(row.error)) continue;
-    if (!slotStillOpen(row.ny_date, row.slot, now)) continue;
+    // A free-time slot (template mode, R11): its own day, until slot + 60, a Main reel spaced from feed posts.
+    const free = parseSlotId(row.slot);
+    let retryAt: Date | undefined;
+    if (free) {
+      const main = (await rowFeedMode(row.id)) === 'main';
+      const busy = main ? [...(await busyFeedTimes(hubQ, now, 'reels')), ...(await ownFeedTimes(hubQ, 'reels', now))] : [];
+      const at = freeRetryAt(row.ny_date, free.startMinute, now, main, busy);
+      if (at === null) continue;
+      retryAt = at;
+    } else if (!POSTING_SLOTS.some((w) => w.id === row.slot) || openMinuteRange(row.ny_date, row.slot, now) == null) {
+      continue;
+    }
     try {
-      const done = await dbQuery(
-        `UPDATE social_hub.schedule SET status = 'scheduled', error = NULL, publish_attempt_id = NULL
-          WHERE id = $1::uuid AND status = 'failed'`,
-        [row.id],
-      );
+      const done = retryAt
+        ? await dbQuery(
+            `UPDATE social_hub.schedule SET status = 'scheduled', error = NULL, publish_attempt_id = NULL, publish_at = $2::timestamptz
+              WHERE id = $1::uuid AND status = 'failed'`,
+            [row.id, retryAt.toISOString()],
+          )
+        : await dbQuery(
+            `UPDATE social_hub.schedule SET status = 'scheduled', error = NULL, publish_attempt_id = NULL
+              WHERE id = $1::uuid AND status = 'failed'`,
+            [row.id],
+          );
       reopened += done.rowCount ?? 0;
     } catch (error) {
       if (!isUniqueViolation(error)) throw error;
