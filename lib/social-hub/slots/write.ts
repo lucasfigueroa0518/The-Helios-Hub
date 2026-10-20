@@ -1,7 +1,7 @@
 // lib/social-hub/slots/write.ts
 import { busyFeedTimes } from '@/lib/instagram/feed-spacing';
 import { calendarDateKey, SOCIAL_TIMEZONE, zoneOffsetMinutes } from '@/lib/instagram/clock';
-import { addCalendarDays, openWindowRange, spacedOffsets, uniformIndex, windowMinuteInstant, type PostingWindow } from '@/lib/instagram/window';
+import { addCalendarDays, uniformIndex } from '@/lib/instagram/window';
 import { isDayKey, weekdayOf } from '@/lib/social-hub/time';
 import type { Vertical } from '@/lib/social-hub/types';
 import { isVertical } from '@/lib/social-hub/verticals';
@@ -15,7 +15,8 @@ import { LFD_WINDOW } from '@/lib/lfd/config';
 import { POSTING_SLOTS } from '@/lib/reels/publish/slots';
 import { CAROUSEL_SLOTS } from '@/lib/social/overnight/config';
 
-import { DAY_END, DEFAULT_FEED_MODE, DEFAULT_TIMES, DRIFT, FEED_GAP, isFeedSlot } from './times';
+import { driftMinute } from './book';
+import { DEFAULT_FEED_MODE, DEFAULT_TIMES, FEED_GAP, isFeedSlot } from './times';
 import {
   isReelType, isSlotMinute, isStorySeries, parseSlotId, sameSlotKey, slotId, slotKeyString,
   type FeedMode, type OverrideRow, type ResolvedSlot, type SlotKey, type SlotQuery, type SlotSource, type StorySeries, type TemplateRow,
@@ -361,33 +362,6 @@ function followTarget(follows: readonly Follow[], b: Booking): { nyDate: string;
 }
 
 type Plan = { b: Booking; nyDate: string; slot: ResolvedSlot };
-
-/**
- * The minute a moved post goes out: drift over [slot, slot + 15] after now; a
- * feed post keeps FEED_GAP from `busy`, pushed later when none clears, but
- * never past the slot's own day (last minute 8:59 PM). Null when nothing fits.
- */
-function driftMinute(nyDate: string, slot: ResolvedSlot, now: Date, busy: readonly Date[], rng: (n: number) => number): Date | null {
-  const w: PostingWindow = { id: slotId(slot.startMinute, slot.series), label: '', startMinute: slot.startMinute, endMinute: slot.startMinute + DRIFT };
-  const open = openWindowRange(w, nyDate, now);
-  if (!open) return null;
-  const spaced = isFeedSlot(slot) ? busy : [];
-  const offsets = spacedOffsets((o) => windowMinuteInstant(w, nyDate, o), open.startOffset, open.count, spaced);
-  if (offsets.length) {
-    const i = rng(offsets.length);
-    if (!Number.isInteger(i) || i < 0 || i >= offsets.length) throw new Error(`Slot draw returned ${i} for ${offsets.length} open minutes.`);
-    return windowMinuteInstant(w, nyDate, offsets[i]!);
-  }
-  // Every drift minute is too close to another feed post: the smallest push later that clears them all.
-  const gap = FEED_GAP * 60_000;
-  const rest: PostingWindow = { id: w.id, label: '', startMinute: w.endMinute + 1, endMinute: DAY_END - 1 };
-  if (rest.startMinute > rest.endMinute) return null;
-  for (let o = 0; o <= rest.endMinute - rest.startMinute; o += 1) {
-    const t = windowMinuteInstant(rest, nyDate, o).getTime();
-    if (busy.every((b) => Math.abs(b.getTime() - t) >= gap)) return new Date(t);
-  }
-  return null;
-}
 
 const TAKEN = 'That slot is taken.';
 const isUniqueViolation = (error: unknown) => (error as { code?: string } | null)?.code === '23505';
