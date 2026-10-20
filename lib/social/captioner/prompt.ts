@@ -19,6 +19,10 @@
  * where a claim is contested or single-source; the read is one concrete point in
  * Helios's view (what Helios builds only under include_build_line), no handed-over
  * opener, the stock tags are banned, and a follow invite is rare.
+ * Fix round 3 (Tommy, 2026-10-20, live Reels check; still no version string):
+ * the read is described by content, said in Helios's voice, with no label noun
+ * to echo; it never opens on a label or framing phrase; a reasonable industry
+ * match never stretches to an adjacent one.
  *
  * Pinned to the prompts file §9 (tests/social-captioner.test.ts).
  * Prompt caching: everything in CAPTIONER_SYSTEM is static; the slides, the
@@ -56,9 +60,9 @@ news: everything before the Helios line, in this order.
 - Put the IDs of every BRIEF entry the news rests on (F3, B1, Q2, N1) in news.facts.
 
 read: the Helios line, one or two plain sentences that close the caption.
-- One concrete point about this story for the industry it names: what it changes for someone running marketing, sales or ops there, what they can now do, should stop doing, or should watch. Name the industry from the Helios context that best matches this story, any of them, and not one the recent closings used, with the specific work the story changes there. Fall back to marketing or sales work in general only when none fits.
-- It gives Helios's view: a concrete call or piece of advice for that industry, the way someone who builds these systems talks, never like a product line. "We" is allowed here. include_build_line says whether it may also say what Helios builds.
-- Do not start it the way any recent closing starts, and vary where "Helios" sits in the sentence. No stock tag from the shared rules.
+- One concrete point about this story for the industry it names: what it changes for someone running marketing, sales or ops there, what they can now do, should stop doing, or should watch. Name the industry from the Helios context that best matches this story, any of them, and not one the recent closings used, with the specific work the story changes there. A reasonable match means the story's own business is in, or plainly close to, that industry; never stretch to an adjacent one. If none fits, speak to marketing or sales teams in general.
+- It says what a business in that industry should start, stop, or watch because of this story, said in Helios's voice, the way someone who builds these systems talks, never like a product line. "We" is allowed here. include_build_line says whether it may also say what Helios builds.
+- Do not start it the way any recent closing starts, and vary where "Helios" sits in the sentence. Do not open it with a label or framing phrase; open on the industry, the action, or the stakes. No stock tag from the shared rules.
 - The read adds no facts. A story fact it leans on is already on the slides or in the BRIEF, and its ID goes in read.facts. Anything about Helios comes only from the Helios context.
 - Name Helios once, here, in words that fit this story. Never a pitch.
 - It never asks a second question, and it ends on the point. A follow invite is rare: at most a short clause, never the default.
@@ -98,7 +102,7 @@ export const SUBMIT_CAPTION_TOOL = {
     type: 'object',
     properties: {
       news: part('Everything before the Helios line: the hook, 2 or 3 short paragraphs separated by a blank line, a so-what line, and a closing question; with read, about 500 to 900 characters. Third person, every fact from the slides or the BRIEF.'),
-      read: part("The Helios line that closes the caption: one or two sentences making one concrete point about this story for a named industry, in Helios's view; names Helios once."),
+      read: part("The Helios line that closes the caption: one or two sentences making one concrete point about this story for a named industry, said in Helios's voice; names Helios once."),
     },
     required: ['news', 'read'],
     additionalProperties: false,

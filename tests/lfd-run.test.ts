@@ -659,7 +659,7 @@ test('the caption is written once by the model, ends on the Helios line, and its
   assert.deepEqual(recorded, [[res.runId, CAPTION_REPLY.helios_line, false]]);
   const rec = (await recordOf(d, res.runId)) as unknown as { caption: { by: string; version: string; usd: number } };
   assert.equal(rec.caption.by, 'model');
-  assert.equal(rec.caption.version, 'lfd-caption-v1');
+  assert.equal(rec.caption.version, 'lfd-caption-v2');
   assert.ok(rec.caption.usd > 0);
 });
 

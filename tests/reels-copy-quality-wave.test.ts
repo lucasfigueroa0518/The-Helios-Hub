@@ -248,7 +248,7 @@ test('earlier copies go into the uncached task block only when the idea returns'
 // ── D-238 to D-244, D-249: wording lives where it should ───────────────────
 
 test('the v17 tests stay in copy-caption-v18 and the precedence order is unchanged', () => {
-  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v29');
+  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v30');
   assert.match(COPY_SKILL, /2\. The bucket's other rules: its caption structure, its resolution, and any guardrail\./);
   assert.match(COPY_SKILL, /5\. Everything else in this skill\./);
   assert.doesNotMatch(COPY_SKILL, /Apply the framework's hook formulas/);
