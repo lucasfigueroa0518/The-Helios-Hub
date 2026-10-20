@@ -1,9 +1,10 @@
 // lib/social-hub/slots/seed.ts
 import { PLAN } from '@/lib/social-hub/views/plan';
 
-import type { SlotQuery, TemplateRow } from './types';
+import { DEFAULT_FEED_MODE, DEFAULT_TIMES } from './times';
+import type { SlotQuery, StorySeries, TemplateRow } from './types';
 
-export type StorySeries = 'morning_download' | 'guess_the_number' | 'free_vs_paid';
+export type { StorySeries } from './types';
 export type SeedInputs = { lfdDays: readonly number[]; storyDays: Record<StorySeries, readonly number[]> };
 
 const EVERY_DAY = [0, 1, 2, 3, 4, 5, 6] as const;
@@ -19,23 +20,23 @@ export const DEFAULT_SEED_INPUTS: SeedInputs = {
 };
 
 /**
- * The template that behaves exactly like today (spec §1 Seed): every-day
- * windows from PLAN, Carousels on every day but Last Few Days', LFD's one
- * window on its days, each Stories series on its days. Reels Trial,
- * Explainers Main. tests/slots-resolve.test.ts pins it to windowsOn.
+ * The first template (spec §Seeding): today's pattern at the default times
+ * (times.ts DEFAULT_TIMES). Text on Screen and Explainers every day,
+ * Carousels on every day but Last Few Days', LFD on its days, each Stories
+ * series on its days. Reels Trial, Explainers Main.
+ * tests/slots-resolve.test.ts pins Monday to the default times list.
  */
 export function seedTemplate(input: SeedInputs): TemplateRow[] {
   const rows: TemplateRow[] = [];
+  const add = (weekday: number, vertical: TemplateRow['vertical'], series: StorySeries | null = null) => {
+    for (const startMinute of DEFAULT_TIMES[vertical]) rows.push({ weekday, vertical, startMinute, series, feedMode: DEFAULT_FEED_MODE[vertical] });
+  };
   for (const weekday of EVERY_DAY) {
-    for (const w of PLAN.reels) rows.push({ weekday, vertical: 'reels', windowId: w.id, feedMode: 'trial' });
-    for (const w of PLAN.explainers) rows.push({ weekday, vertical: 'explainers', windowId: w.id, feedMode: 'main' });
-    if (input.lfdDays.includes(weekday)) {
-      rows.push({ weekday, vertical: 'last_few_days', windowId: PLAN.last_few_days[0]!.id, feedMode: null });
-    } else {
-      for (const w of PLAN.carousels) rows.push({ weekday, vertical: 'carousels', windowId: w.id, feedMode: null });
-    }
+    add(weekday, 'reels');
+    add(weekday, 'explainers');
+    add(weekday, input.lfdDays.includes(weekday) ? 'last_few_days' : 'carousels');
     for (const series of Object.keys(input.storyDays) as StorySeries[]) {
-      if (input.storyDays[series].includes(weekday)) rows.push({ weekday, vertical: 'stories', windowId: series, feedMode: null });
+      if (input.storyDays[series].includes(weekday)) add(weekday, 'stories', series);
     }
   }
   return rows;
