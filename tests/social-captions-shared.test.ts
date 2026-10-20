@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { BUILD_FIT, buildFitState, buildLineInstruction, ceilingAllows, decideBuildLine, recentClosingsBlock, type RecentClosing } from '@/lib/social/captions/build-line';
 import { CAPTION_EMOJI_MAX, countEmoji } from '@/lib/social/captions/emoji';
-import { CAPTION_SHARED_RULES, HELIOS_CONTEXT } from '@/lib/social/captions/helios-context';
+import { CAPTION_SHARED_RULES, HELIOS_CONTEXT, HELIOS_NAME } from '@/lib/social/captions/helios-context';
 
 const row = (buildLine: boolean, i = 0): RecentClosing => ({ closing: `closing ${i}`, buildLine, createdAt: new Date(2026, 9, 19 - i) });
 
@@ -100,4 +100,12 @@ test('fix round 1: no fixed list of example industries in any caption prompt', a
     assert.match(text, /best matches this story/, name);
     assert.match(text, /not (the one|one) (the )?recent closings used/, name);
   }
+});
+
+test('HELIOS_NAME: one case-sensitive brand check for every caption type', () => {
+  assert.equal(HELIOS_NAME.source, '\\bHelios\\b');
+  assert.equal(HELIOS_NAME.flags, '', 'case-sensitive and stateless (no g flag)');
+  assert.ok(HELIOS_NAME.test('At Helios we build.'));
+  assert.ok(!HELIOS_NAME.test('at helios we build.'));
+  assert.ok(!HELIOS_NAME.test('the heliosphere'));
 });

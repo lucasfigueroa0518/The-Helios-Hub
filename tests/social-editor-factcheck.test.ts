@@ -219,6 +219,11 @@ test('a partial cut that removes the read\'s Helios sentence asks for a fresh ca
   assert.equal(both.kind, 'fresh-draft');
 });
 
+test('the read keeps Helios only when the capitalised brand survives (one HELIOS_NAME check for every caption type)', () => {
+  const o = apply([flag({ where: { part: 'caption_read', number: null }, quoted_text: 'Helios builds', fact_id: null, fix: { kind: 'swap', replacement: 'helios builds' } })]);
+  assert.deepEqual(o.kind === 'fresh-caption' && o.why, "the builder's read no longer names Helios");
+});
+
 test('the Fact-checker stage maps fresh-caption to needs-fresh-caption', async () => {
   const stage = createFactCheckStage({ create: async () => msg([tool('submit_flags', { flags: [flag({ where: { part: 'caption_read', number: null }, quoted_text: READ_TEXT, fact_id: null })], main_claim_false: false })]) });
   const r = await stage({ storyId: 's1', submission: captioned(), filled: filled() }, { storyId: 's1', parsed: brief(), raw: '', pages: [] });

@@ -13,6 +13,7 @@
  */
 import { STAGE_MODELS, type StageModelConfig } from '@/lib/social/pipeline/models';
 import { countEmoji } from '@/lib/social/captions/emoji';
+import { HELIOS_NAME } from '@/lib/social/captions/helios-context';
 import { draftTextFailures, LIMITS } from '@/lib/social/mechanical/checks';
 import type { RecentClosing } from '@/lib/social/captions/build-line';
 import { checkShape, type Brief } from '@/lib/social/reporter/brief';
@@ -51,7 +52,7 @@ export function checkCaptionSubmission(input: unknown, brief: Brief, filled: Fil
     if (HASHTAG.test(text)) errors.push(`${key}: no hashtags`);
     if (CREDIT_LINE.test(text)) errors.push(`${key}: no Source or Photos line; code adds them`);
   }
-  if (!/\bHelios\b/.test(parts.read.text)) errors.push("read: name Helios once in the builder's read");
+  if (!HELIOS_NAME.test(parts.read.text)) errors.push("read: name Helios once in the builder's read");
   // Like the rest of C3, an emoji in the Helios line blocks only the first submission.
   if (attempt <= 1 && countEmoji(parts.read.text) > 0) errors.push('C3 read: no emoji in the Helios line');
   const joined = joinCaption(parts);

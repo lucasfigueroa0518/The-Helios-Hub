@@ -18,7 +18,7 @@ import {
   recentClosingsBlock,
   type RecentClosing,
 } from '@/lib/social/captions/build-line';
-import { CAPTION_SHARED_RULES, HELIOS_CONTEXT } from '@/lib/social/captions/helios-context';
+import { CAPTION_SHARED_RULES, HELIOS_CONTEXT, HELIOS_NAME } from '@/lib/social/captions/helios-context';
 import { createJevAsk, type JevAsk } from '@/lib/social/jev/client';
 
 export {
@@ -195,8 +195,6 @@ function draftFrom(message: Anthropic.Message, text: string): CaptionDraft {
   };
 }
 
-const HELIOS = /\bHelios\b/;
-
 function squash(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
@@ -208,7 +206,7 @@ export function checkBuilderRead(raw: unknown, caption: string): string {
   if (squash(read) !== squash(heliosLine(caption))) {
     throw new Error("builder_read is not the caption's last paragraph before the hashtags. End the caption on the Helios line and repeat it word for word.");
   }
-  if (!HELIOS.test(read)) throw new Error('builder_read does not name Helios. Name Helios once, lightly, in the Helios line.');
+  if (!HELIOS_NAME.test(read)) throw new Error('builder_read does not name Helios. Name Helios once, lightly, in the Helios line.');
   return read;
 }
 

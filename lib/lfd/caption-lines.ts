@@ -20,7 +20,7 @@ import { priceAnthropicMessages, type MessageUsageLike } from '@/lib/anthropic-p
 import { structuredJson } from '@/lib/explainers/ideas/generator';
 import { buildLineInstruction, recentClosingsBlock, type RecentClosing } from '@/lib/social/captions/build-line';
 import { CAPTION_EMOJI_MAX, countEmoji } from '@/lib/social/captions/emoji';
-import { CAPTION_SHARED_RULES, HELIOS_CONTEXT } from '@/lib/social/captions/helios-context';
+import { CAPTION_SHARED_RULES, HELIOS_CONTEXT, HELIOS_NAME } from '@/lib/social/captions/helios-context';
 import type { MessagesCreate } from '@/lib/social/reporter/reporter';
 
 import type { Ready } from './types';
@@ -95,8 +95,6 @@ export function lfdCaptionUserMessage(ready: Ready[], recent: RecentClosing[]): 
   ].join('\n');
 }
 
-const HELIOS = /\bHelios\b/;
-
 /** The reply's fields, trimmed and checked. Throws the first broken rule. */
 export function checkLfdCaptionLines(raw: unknown): LfdCaptionLines {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
@@ -107,9 +105,9 @@ export function checkLfdCaptionLines(raw: unknown): LfdCaptionLines {
   };
   const lines: LfdCaptionLines = { opener: field('opener'), body: field('body'), question: field('question'), heliosLine: field('helios_line') };
   if (lines.opener.length > OPENER_MAX_CHARS) throw new Error(`opener is ${lines.opener.length} characters (max ${OPENER_MAX_CHARS})`);
-  if (!HELIOS.test(lines.heliosLine)) throw new Error('helios_line does not name Helios');
+  if (!HELIOS_NAME.test(lines.heliosLine)) throw new Error('helios_line does not name Helios');
   for (const name of ['opener', 'body', 'question'] as const) {
-    if (HELIOS.test(lines[name])) throw new Error(`${name} names Helios; only the Helios line may`);
+    if (HELIOS_NAME.test(lines[name])) throw new Error(`${name} names Helios; only the Helios line may`);
   }
   if (countEmoji(lines.body) > 0) throw new Error('body has an emoji');
   if (countEmoji(lines.heliosLine) > 0) throw new Error('helios_line has an emoji');

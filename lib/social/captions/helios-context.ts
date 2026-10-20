@@ -5,6 +5,9 @@
  */
 export const HELIOS_CONTEXT_VERSION = 'helios-context-v1';
 
+/** The one "names Helios" check every caption type uses: case-sensitive, since the brand is capitalised. */
+export const HELIOS_NAME = /\bHelios\b/;
+
 export const HELIOS_CONTEXT = `## Who Helios is
 
 Helios is a team of forward-deployed AI engineers who build and ship, not advise from the sidelines. Helios integrates systems and builds proprietary tools when off-the-shelf doesn't cut it. The focus is agentic marketing and sales: automating repetitive work while improving conversion, connecting the stack, and surfacing the intelligence buried in a company's data.

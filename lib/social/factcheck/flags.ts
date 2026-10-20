@@ -14,6 +14,7 @@
  */
 import type Anthropic from '@anthropic-ai/sdk';
 
+import { HELIOS_NAME } from '@/lib/social/captions/helios-context';
 import { checkShape, type Brief, type BriefError } from '@/lib/social/reporter/brief';
 import type { DraftSubmission, FilledDraft } from '@/lib/social/writer/draft';
 
@@ -138,8 +139,6 @@ export function checkFlags(input: unknown, draft: FilledDraft, brief: Brief): Fl
 
 export const MIN_STORY_SLIDES = 5;
 
-const HELIOS = /\bHelios\b/i;
-
 export type FixOutcome =
   | { kind: 'ok'; draft: DraftSubmission; applied: string[] }
   | { kind: 'fresh-draft'; why: string; applied: string[] }
@@ -232,7 +231,7 @@ export function applyFlags(draft: DraftSubmission, flags: FlagsSubmission, brief
   if (draft.caption.text && !d.caption.text) return { kind: 'fresh-caption', why: 'the caption was cut to nothing', applied };
   if (draft.caption_read?.text && !d.caption_read?.text) return { kind: 'fresh-caption', why: "the builder's read was cut to nothing", applied };
   // Every caption ties back to Helios (spec hard requirement): a cut that removed the read's Helios mention reruns the captioner.
-  if (HELIOS.test(draft.caption_read?.text ?? '') && !HELIOS.test(d.caption_read?.text ?? '')) return { kind: 'fresh-caption', why: "the builder's read no longer names Helios", applied };
+  if (HELIOS_NAME.test(draft.caption_read?.text ?? '') && !HELIOS_NAME.test(d.caption_read?.text ?? '')) return { kind: 'fresh-caption', why: "the builder's read no longer names Helios", applied };
   if (cover !== d.chosen_cover) applied.push(`chosen cover ${d.chosen_cover} failed → cover option ${cover}`);
   d.chosen_cover = cover;
   d.slides = d.slides.filter((_, i) => !dropped.has(i));

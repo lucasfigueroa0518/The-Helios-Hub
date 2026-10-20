@@ -5,6 +5,7 @@ import {
   textArtifacts,
 } from '@/lib/reels/copy/clean-text';
 import type { BucketId } from '@/lib/reels/scoring/decide';
+import { HELIOS_NAME } from '@/lib/social/captions/helios-context';
 
 /**
  * The writer's tool, and the checks code runs on what comes back. Checks are
@@ -219,8 +220,6 @@ export function isBuilderReadError(error: string | null | undefined): boolean {
   return typeof error === 'string' && error.startsWith(BUILDER_READ_ERROR);
 }
 
-const HELIOS = /\bHelios\b/;
-
 function squash(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
@@ -230,7 +229,7 @@ function squash(value: string): string {
  * and the call to action never names Helios, so there is no exemption.
  */
 function checkBuilderRead(read: string): void {
-  if (!HELIOS.test(read)) {
+  if (!HELIOS_NAME.test(read)) {
     throw new CopyReportError(`${BUILDER_READ_ERROR} does not name Helios. Name Helios once, lightly, in the Helios line.`);
   }
 }
