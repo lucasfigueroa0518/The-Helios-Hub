@@ -33,7 +33,7 @@ export function WeekGrid({ model, scope, dim, readOnly, templateCarousels }: { m
                     cell={cell}
                     chip={chip}
                     scope={scope}
-                    readOnly={readOnly || !cell.editable}
+                    readOnly={readOnly || !chip.editable}
                     label={`${chipNames(chip.vertical, chip.windowId).short}${chip.feedMode ? ` · ${chip.feedMode === 'trial' ? 'Trial' : 'Main'}` : ''}`}
                     dimmed={dim !== null && dim !== chip.vertical}
                     dayCarousels={carousels[i]}

@@ -4,9 +4,10 @@ import test from 'node:test';
 
 import { resolveDay } from '@/lib/social-hub/slots/resolve';
 import { DEFAULT_SEED_INPUTS, seedTemplate } from '@/lib/social-hub/slots/seed';
-import { carouselsByWeekday, chipAction, chipNames, datedWeek, lfdWeekdays, mondayOf, ROWS, splitBooked, stuckNote, switchOnCopy, templateWeek, weekLabel, weekModel } from '@/lib/social-hub/views/week';
+import { canMoveBack, carouselsByWeekday, chipAction, chipNames, datedWeek, lfdWeekdays, mondayOf, ROWS, splitBooked, stuckNote, switchOnCopy, templateWeek, weekLabel, weekModel } from '@/lib/social-hub/views/week';
 import { addDays, weekdayOf } from '@/lib/social-hub/time';
 import type { HubPost } from '@/lib/social-hub/types';
+import { PLAN } from '@/lib/social-hub/views/plan';
 
 const tpl = seedTemplate(DEFAULT_SEED_INPUTS);
 const NOW = new Date('2026-10-20T14:00:00Z'); // Tue Oct 20, 10:00 AM New York
@@ -114,6 +115,40 @@ test('the Switch on confirm says what changes the moment it is on (ruling R8)', 
   assert.doesNotMatch(switchOnCopy({ templateEmpty: true, lfdPaused: true, lfdDays }), /nothing changes/);
 });
 
+test('switchOnCopy: when the template couldn’t be read it says neither "copied in" nor "comes back" as fact', () => {
+  assert.equal(
+    switchOnCopy({ templateEmpty: null, lfdPaused: false, lfdDays: [] }),
+    'From now on the calendar decides what posts when. If a calendar was saved before, it comes back; otherwise today’s pattern is copied in.',
+  );
+  const text = switchOnCopy({ templateEmpty: null, lfdPaused: false, lfdDays: [] });
+  assert.doesNotMatch(text, /Today’s pattern is copied in\./);
+  assert.doesNotMatch(text, /Your saved calendar from last time comes back/);
+});
+
+test('each Stories series locks at its own window start, not the row\'s', () => {
+  const series = PLAN.stories.find((w) => w.id === 'guess_the_number')! as { startMinute: number };
+  const was = series.startMinute;
+  series.startMinute = 11 * 60; // moved to 11:00; the row still starts at 8:30
+  try {
+    // Mon Oct 19, 10:00 AM New York: 8:30 has started, 11:00 hasn't.
+    const m = weekModel({ mode: 'week', days: week('2026-10-19'), posts: [], now: new Date('2026-10-19T14:00:00Z') });
+    const monday = m.rows.find((r) => r.row.id === 'stories')!.cells[0]!;
+    const by = Object.fromEntries(monday.chips.map((c) => [c.windowId, c.editable]));
+    assert.deepEqual(by, { morning_download: false, guess_the_number: true });
+    assert.equal(monday.editable, true, 'a window in the cell is still open');
+    assert.equal(chipAction(monday.chips[0]!, monday.chips[0]!.editable), 'none');
+    assert.equal(chipAction(monday.chips[1]!, monday.chips[1]!.editable), 'edit');
+  } finally {
+    series.startMinute = was;
+  }
+  // Today's PLAN: all three share 8:30, so the whole cell locks together.
+  const m = weekModel({ mode: 'week', days: week('2026-10-19'), posts: [], now: new Date('2026-10-19T14:00:00Z') });
+  const monday = m.rows.find((r) => r.row.id === 'stories')!.cells[0]!;
+  assert.ok(monday.chips.every((c) => !c.editable));
+  assert.equal(monday.editable, false);
+  assert.deepEqual(monday.addable, []);
+});
+
 test('chipAction: an editable chip edits; a read-only booked chip opens its post; a read-only empty one is plain', () => {
   const post = { id: 'p', vertical: 'reels', nyDate: '2026-10-20', status: 'published', slot: { id: 'morning', label: '' } } as unknown as HubPost;
   const chip = { vertical: 'reels' as const, windowId: 'morning', feedMode: 'trial' as const, origin: 'template' as const, booked: null };
@@ -138,4 +173,6 @@ test('Move back to ready: a booking with no action ref is not sent; the editor s
   assert.deepEqual(stuck.map((b) => b.scheduleId), ['b']);
   assert.equal(stuckNote(1), '1 post couldn’t be moved here. Unschedule it from the post page.');
   assert.equal(stuckNote(2), '2 posts couldn’t be moved here. Unschedule them from the post page.');
+  assert.equal(canMoveBack(list), true, 'some can move');
+  assert.equal(canMoveBack(stuck), false, 'every post is stuck: Move back to ready is disabled');
 });

@@ -12,7 +12,7 @@ import { WEEKDAY_SHORT } from '@/lib/social-hub/time';
 import type { Vertical } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
 import { minuteLabel, PLAN } from '@/lib/social-hub/views/plan';
-import { chipAction, chipNames, ROWS, splitBooked, stuckNote, switchOnCopy, type SwitchFacts, type WeekCell, type WeekChip } from '@/lib/social-hub/views/week';
+import { canMoveBack, chipAction, chipNames, ROWS, splitBooked, stuckNote, switchOnCopy, type SwitchFacts, type WeekCell, type WeekChip } from '@/lib/social-hub/views/week';
 
 /**
  * One slot on the week grid (spec §3): the chip (or "+") opens a dialog to
@@ -100,9 +100,11 @@ export function SlotEditor({ cell, chip, scope, readOnly = false, label, dimmed 
     ? { 'data-origin': chip.origin, 'data-booked': chip.booked ? 'true' : undefined, 'data-dimmed': dimmed ? 'true' : undefined, style: typeStyle(chip.vertical) }
     : {};
 
-  if (readOnly) {
+  // chipAction is the one decider for an existing chip; the "+" (no chip) edits unless read-only.
+  const action = chip ? chipAction(chip, !readOnly) : readOnly ? 'none' : 'edit';
+  if (action !== 'edit') {
     if (!chip) return null;
-    if (chipAction(chip, false) === 'open') {
+    if (action === 'open') {
       return (
         <span className="sh-week__chip sh-week__chip--post" {...chipAttrs} title={described}>
           <PostLink id={chip.booked!.id} className="sh-week__link" label={`${described}, opens the post`}>
@@ -249,7 +251,7 @@ export function SlotEditor({ cell, chip, scope, readOnly = false, label, dimmed 
               <button type="button" className="sh-btn" disabled={busy != null} onClick={() => void save('keep', booked.changes, true)}>
                 {busy === 'keep' ? <Loader size={14} aria-hidden="true" /> : null}Keep it
               </button>
-              <button type="button" className="sh-btn sh-btn--primary" autoFocus disabled={busy != null} data-busy={busy === 'move' ? '' : undefined} onClick={() => void moveBack()}>
+              <button type="button" className="sh-btn sh-btn--primary" autoFocus={canMoveBack(booked.list)} disabled={busy != null || !canMoveBack(booked.list)} data-busy={busy === 'move' ? '' : undefined} onClick={() => void moveBack()}>
                 {busy === 'move' ? <Loader size={14} aria-hidden="true" /> : null}Move back to ready
               </button>
             </div>

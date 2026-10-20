@@ -46,8 +46,8 @@ export function carouselsByWeekday(template: readonly TemplateRow[]): Record<num
 
 /** What the "Switch on" confirm needs to say (ruling R8): read on the server before the switch. */
 export type SwitchFacts = {
-  /** No saved template yet: the first flip copies today's pattern in. */
-  templateEmpty: boolean;
+  /** No saved template yet: the first flip copies today's pattern in. null: the template couldn't be read, so it's unknown. */
+  templateEmpty: boolean | null;
   /** Last Few Days' auto_run is off. */
   lfdPaused: boolean;
   /** The weekdays (0 = Sunday) that will have an LFD slot after the switch. */
@@ -63,7 +63,13 @@ function listOf(words: readonly string[]): string {
 /** The "Switch on" confirm text: what the calendar does from now on, and what changes the moment it's on. */
 export function switchOnCopy(facts: SwitchFacts): string {
   const parts = ['From now on the calendar decides what posts when.'];
-  parts.push(facts.templateEmpty ? 'Today’s pattern is copied in.' : 'Your saved calendar from last time comes back, not a fresh copy of today’s settings.');
+  parts.push(
+    facts.templateEmpty == null
+      ? 'If a calendar was saved before, it comes back; otherwise today’s pattern is copied in.'
+      : facts.templateEmpty
+        ? 'Today’s pattern is copied in.'
+        : 'Your saved calendar from last time comes back, not a fresh copy of today’s settings.',
+  );
   if (facts.lfdPaused && facts.lfdDays.length) {
     const days = listOf([...facts.lfdDays].sort((a, b) => a - b).map((d) => WEEKDAY_PLURAL[d]!));
     parts.push(`Last Few Days is paused, so ${days} (its days) will have no Carousels until you edit the calendar.`);
@@ -88,10 +94,21 @@ export function splitBooked<T extends { refs: Readonly<Record<string, string>> }
   return { movable, stuck };
 }
 
+/** Move back to ready only helps when at least one booked post can go to the unschedule action; Keep it always can. */
+export const canMoveBack = (list: ReadonlyArray<{ refs: Readonly<Record<string, string>> }>): boolean => splitBooked(list).movable.length > 0;
+
 export const stuckNote = (n: number): string =>
   `${n} post${n === 1 ? '' : 's'} couldn’t be moved here. Unschedule ${n === 1 ? 'it' : 'them'} from the post page.`;
 
-export type WeekChip = { vertical: Vertical; windowId: string; feedMode: FeedMode | null; origin: 'template' | 'override'; booked: HubPost | null };
+export type WeekChip = {
+  vertical: Vertical;
+  windowId: string;
+  feedMode: FeedMode | null;
+  origin: 'template' | 'override';
+  booked: HubPost | null;
+  /** This chip's own window hasn't started (rows share a time, but each window locks at its own start). */
+  editable: boolean;
+};
 
 /**
  * What clicking a chip does: an editable chip opens the slot editor (with an
@@ -160,20 +177,25 @@ export function weekModel(input: { mode: 'week' | 'template'; days: WeekDayInput
     row,
     cells: input.days.map((d): WeekCell => {
       const inRow = (v: Vertical, id: string) => row.windows.some((w) => w.vertical === v && w.windowId === id);
+      // Each window locks at its own PLAN start, so a series moved to a later window doesn't lock with the row.
+      const open = (v: Vertical, id: string) => input.mode === 'template'
+        || (d.nyDate != null && d.nyDate >= today && !startedAt(d.nyDate, PLAN[v].find((w) => w.id === id)?.startMinute ?? row.startMinute));
       const chips = d.slots.filter((s) => inRow(s.vertical, s.windowId)).map((s): WeekChip => ({
         vertical: s.vertical,
         windowId: s.windowId,
         feedMode: s.feedMode,
         origin: s.origin,
         booked: d.nyDate ? input.posts.find((p) => p.vertical === s.vertical && p.nyDate === d.nyDate && p.slot?.id === s.windowId && HOLDS.has(p.status)) ?? null : null,
+        editable: open(s.vertical, s.windowId),
       }));
       const lfdDay = d.slots.some((s) => s.vertical === 'last_few_days');
       const carouselDay = d.slots.some((s) => s.vertical === 'carousels');
-      const started = startedAt(d.nyDate, row.startMinute);
-      const editable = input.mode === 'template' || (d.nyDate != null && d.nyDate >= today && !started);
+      // The cell is editable while any of its windows is still open.
+      const editable = row.windows.some((w) => open(w.vertical, w.windowId));
       // The plain "+" never offers a save the writer will refuse: no Carousel on an LFD day, no LFD on a Carousel day.
-      const addable = !editable ? [] : row.windows.filter((w) =>
-        !chips.some((c) => c.vertical === w.vertical && c.windowId === w.windowId)
+      const addable = row.windows.filter((w) =>
+        open(w.vertical, w.windowId)
+        && !chips.some((c) => c.vertical === w.vertical && c.windowId === w.windowId)
         && !(w.vertical === 'carousels' && lfdDay)
         && !(w.vertical === 'last_few_days' && (carouselDay || chips.length > 0)));
       const blockedReason = chips.length === 0 && lfdDay && row.windows.some((w) => w.vertical === 'carousels') ? 'LFD day' : null;

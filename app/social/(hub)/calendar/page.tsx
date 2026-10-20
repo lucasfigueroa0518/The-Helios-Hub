@@ -21,7 +21,6 @@ export const metadata = { title: 'Calendar · Social Hub', robots: { index: fals
 
 const q: SlotQuery = (text, params) => liveHubQuery(text, params) as Promise<{ rows: any[] }>;
 
-/** The week view's slots: the template, the live calendar, or (before the switch) today's pattern, read only. */
 /** Last Few Days paused (auto_run off); unreadable reads as not paused, so the confirm doesn't warn on a guess. */
 async function lfdPaused(): Promise<boolean> {
   try {
@@ -31,14 +30,17 @@ async function lfdPaused(): Promise<boolean> {
   }
 }
 
+/** The week view's slots: the template, the live calendar, or (before the switch) today's pattern, read only. */
 async function loadWeek(params: HubParams, now: Date): Promise<CalendarWeek> {
   const source = await readSlotSource(q);
   const monday = mondayOf(isDayKey(params.week) ? params.week : nyDateOf(now)!);
-  const [saved, paused] = await Promise.all([source === 'template' ? readTemplate(q) : readTemplate(q).catch(() => []), lfdPaused()]);
+  // In legacy mode an unreadable template is null (unknown), so the confirm doesn't promise "copied in" on a guess.
+  const [read, paused] = await Promise.all([source === 'template' ? readTemplate(q) : readTemplate(q).catch(() => null), lfdPaused()]);
+  const saved = read ?? [];
   // Legacy shows today's pattern; switching on brings back a saved template, or copies today's pattern into an empty one.
   const shown = source === 'template' ? saved : seedTemplate(await readSeedInputs(q));
   const templateCarousels = carouselsByWeekday(shown);
-  const switchFacts = { templateEmpty: saved.length === 0, lfdPaused: paused, lfdDays: lfdWeekdays(saved.length ? saved : shown) };
+  const switchFacts = { templateEmpty: read ? read.length === 0 : null, lfdPaused: paused, lfdDays: lfdWeekdays(saved.length ? saved : shown) };
   if (params.scope === 'template') return { mode: 'template', monday, days: templateWeek(shown, monday), source, templateCarousels, switchFacts };
   if (source === 'template') {
     const map = await loadSlots(q, monday, addDays(monday, 6));
