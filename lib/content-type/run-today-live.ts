@@ -15,7 +15,7 @@ import { requestFinish, todaySlateFor } from '@/lib/reels/visual/finish';
 import { liveHubQuery } from '@/lib/social-hub/db';
 import { isLfdDay, slotPlan, storiesDueOn } from '@/lib/social-hub/slots';
 import { loadDataset } from '@/lib/social-hub/load';
-import { planFrom, quotaCandidates, seriesDueToday, stepsFor, typeDay, type PlanStep, type RunInputs, type RunPlan } from '@/lib/social-hub/run-today';
+import { lfdDueToday, planFrom, quotaCandidates, seriesDueToday, stepsFor, typeDay, type PlanStep, type RunInputs, type RunPlan } from '@/lib/social-hub/run-today';
 import type { Vertical } from '@/lib/social-hub/types';
 import { DEFAULT_DAY_QUOTAS } from '@/lib/social-hub/queries/day';
 import { nyDateOf } from '@/lib/social-hub/time';
@@ -24,7 +24,7 @@ import { generate as requestStorySet } from '@/lib/stories/api';
 import { liveStoriesDb } from '@/lib/stories/db';
 import { DEFAULT_LFD_RUN_CAP_USD } from '@/lib/lfd/config';
 import { queueManualLfdRun } from '@/lib/lfd/manual';
-import { lfdDueOn, readLfdSettings } from '@/lib/lfd/settings';
+import { readLfdSettings } from '@/lib/lfd/settings';
 
 /** Typical spend, for the confirm line: a reels night ran $1.40–2.80 this month; one reel (copy, frame, video, song) about $1. */
 const REELS_NIGHT_USD = 2.5;
@@ -45,7 +45,7 @@ async function liveLfd(today: string, anyDay: boolean): Promise<{ day: RunInputs
       dbQuery<{ n: number }>(`SELECT count(*)::int AS n FROM lfd.posts WHERE ny_date = $1::date AND status <> 'rejected'`, [today]),
       dbQuery<{ n: number }>(`SELECT count(*)::int AS n FROM lfd.runs WHERE status IN ('requested', 'running')`),
     ]);
-    const due = plan ? anyDay || (s.autoRun && isLfdDay(plan, today)) : lfdDueOn(s, today, anyDay);
+    const due = lfdDueToday(s, today, anyDay, plan ? isLfdDay(plan, today) : null);
     return { day: { due, made: Number(made.rows[0]?.n ?? 0) > 0 }, inFlight: Number(flight.rows[0]?.n ?? 0) > 0, cap: s.runCapUsd ?? DEFAULT_LFD_RUN_CAP_USD };
   } catch {
     return { day: undefined, inFlight: false, cap: DEFAULT_LFD_RUN_CAP_USD };

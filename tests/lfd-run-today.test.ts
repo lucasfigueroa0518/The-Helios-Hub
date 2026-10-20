@@ -1,11 +1,13 @@
 // tests/lfd-run-today.test.ts
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
 
 import { lfdRunRoute } from '@/app/api/last-few-days/run/handler';
 import type { AllProgress } from '@/lib/content-type/progress';
 import { queueManualLfdRun } from '@/lib/lfd/manual';
-import { parseRunBody, planFrom, stepsFor, type RunInputs } from '@/lib/social-hub/run-today';
+import { lfdDueToday, parseRunBody, planFrom, stepsFor, type RunInputs } from '@/lib/social-hub/run-today';
 import type { QuotaCandidate } from '@/lib/social-hub/views/day-rank';
 import { crumbsFor, safeFrom } from '@/lib/social-hub/views/nav';
 import { canMakeCard, inFlightKey, runForCandidate, runningSummary } from '@/lib/social-hub/views/run-for';
@@ -88,4 +90,24 @@ test('a run cap that is not a positive number refuses the run before queueing', 
   assert.equal(out.ok, false);
   assert.match(out.note, /run_cap_usd is not a positive number/);
   assert.equal((await query(`SELECT 1 FROM lfd.runs`)).rows.length, 0);
+});
+
+test('Last Few Days due today: legacy by its own days; template by the calendar\'s LFD slot (Run now)', () => {
+  const on = { autoRun: true, days: [2, 5] };
+  const off = { autoRun: false, days: [2, 5] };
+  const TUE = '2026-10-13';
+  const WED = '2026-10-14';
+  // Legacy (no plan): its days while auto_run is on, any day from its own button.
+  assert.equal(lfdDueToday(on, TUE, false, null), true);
+  assert.equal(lfdDueToday(on, WED, false, null), false);
+  assert.equal(lfdDueToday(off, TUE, false, null), false);
+  assert.equal(lfdDueToday(off, WED, true, null), true, 'its own button: any day');
+  // Template: an LFD slot today with auto_run on is due; no slot today is not, whatever its days say.
+  assert.equal(lfdDueToday(on, WED, false, true), true, 'an LFD slot on a non-LFD weekday');
+  assert.equal(lfdDueToday(on, TUE, false, false), false, 'no LFD slot on its own weekday');
+  assert.equal(lfdDueToday(off, WED, false, true), false, 'paused');
+  assert.equal(lfdDueToday(on, TUE, true, false), true, 'its own button: any day');
+  // The live layer decides with this helper.
+  const live = fs.readFileSync(path.join(process.cwd(), 'lib/content-type/run-today-live.ts'), 'utf8');
+  assert.match(live, /lfdDueToday\(s, today, anyDay, plan \? isLfdDay\(plan, today\) : null\)/);
 });
