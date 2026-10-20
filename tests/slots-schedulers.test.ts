@@ -363,6 +363,8 @@ test('stories template: a series is due on its slot\'s dates only, and auto sets
   let dueOn = (await storiesDueOn(q, THU))!;
   assert.equal(dueOn('guess_the_number', THU), true, 'seeded from the series\' own days');
   assert.equal(dueOn('free_vs_paid', THU), false);
+  // One day is read: a later date (next Thursday has the same seeded slot) answers false.
+  assert.equal(dueOn('guess_the_number', '2026-10-15'), false, 'only the asked date is read');
   await applySlotChanges(q, [
     { scope: 'date', op: 'put', nyDate: THU, vertical: 'stories', windowId: 'guess_the_number', action: 'remove', feedMode: null },
     { scope: 'date', op: 'put', nyDate: THU, vertical: 'stories', windowId: 'free_vs_paid', action: 'add', feedMode: null },
