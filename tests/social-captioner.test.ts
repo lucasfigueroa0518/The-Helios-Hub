@@ -147,10 +147,10 @@ test('CAPTIONER_SYSTEM = intro, Helios context, shared rules, carousel rules, vo
 test('carousel shape (Task 8b): news ends on a specific question, read is the one-or-two-sentence Helios line', () => {
   assert.match(CAPTIONER_CAROUSEL_RULES, /news: everything before the Helios line/);
   assert.match(CAPTIONER_CAROUSEL_RULES, /one plain, surprising sentence/);
-  assert.match(CAPTIONER_CAROUSEL_RULES, /2 to 4 short paragraphs/);
+  assert.match(CAPTIONER_CAROUSEL_RULES, /2 or 3 short paragraphs/);
   assert.match(CAPTIONER_CAROUSEL_RULES, /so-what line/);
   assert.match(CAPTIONER_CAROUSEL_RULES, /Last, one short, specific question/);
-  assert.match(CAPTIONER_CAROUSEL_RULES, /read: the Helios line, one or two sentences that close the caption/);
+  assert.match(CAPTIONER_CAROUSEL_RULES, /read: the Helios line, one or two plain sentences that close the caption/);
   assert.doesNotMatch(CAPTIONER_CAROUSEL_RULES, /1 or 2 short paragraphs that close the caption/);
   assert.doesNotMatch(CAPTIONER_CAROUSEL_RULES, /End where the story wants/);
   const schema = SUBMIT_CAPTION_TOOL.input_schema as any;
@@ -338,4 +338,22 @@ test('two emoji in news pass; an emoji in read, or a third, goes back once', asy
 
 test('fix round 1: the news part has no opinion; the so-what line is its one casual aside', () => {
   assert.match(CAPTIONER_CAROUSEL_RULES, /Third person, no opinion and no "we\." The so-what line is the news part's one casual aside; opinion and "we" live in read\./);
+});
+
+test('copy fix (2026-10-20): the carousel caption is the take, about 500 to 900 characters, not a recap', () => {
+  assert.match(CAPTIONER_CAROUSEL_RULES, /about 500 to 900 characters in all, the Helios line included, before the credits and Source line/);
+  assert.match(CAPTIONER_CAROUSEL_RULES, /Every paragraph is one or two sentences/);
+  assert.match(CAPTIONER_CAROUSEL_RULES, /Then 2 or 3 short paragraphs on what happened, one or two sentences each/);
+  assert.match(CAPTIONER_CAROUSEL_RULES, /Cut secondary facts the slides already carry/);
+  assert.match(CAPTIONER_CAROUSEL_RULES, /The caption is the take, not a recap/);
+  assert.match(CAPTIONER_CAROUSEL_RULES, /At most one attribution clause/);
+  assert.doesNotMatch(CAPTIONER_CAROUSEL_RULES, /4 to 6 short paragraphs|2 to 4 short paragraphs/);
+  assert.match(CAPTIONER_CAROUSEL_RULES, /Usually one comes before the hook, at the start of the first line of news, and one right after the closing question/);
+  assert.match(CAPTIONER_CAROUSEL_RULES, /read: the Helios line, one or two plain sentences that close the caption/);
+  assert.match(CAPTIONER_CAROUSEL_RULES, /A follow invite is rare: at most a short clause, never the default, and never "we post more takes like this\."/);
+  const schema = SUBMIT_CAPTION_TOOL.input_schema as any;
+  assert.match(schema.properties.news.properties.text.description, /500 to 900 characters/);
+  assert.match(schema.properties.read.properties.text.description, /one concrete point/);
+  // The good-read fixture follows the new rule: Helios as the subject of a concrete action.
+  assert.match(READ.text, /At Helios we would build/);
 });

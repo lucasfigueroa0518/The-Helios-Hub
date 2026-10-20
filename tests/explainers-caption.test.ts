@@ -131,7 +131,11 @@ test('the post caption names the viewer\'s problem and ends on the Helios line (
   assert.match(CAPTION_INSTRUCTIONS, /the hook, two or three short paragraphs on why, the save prompt or question, the Helios line, then the hashtags/);
   assert.match(CAPTION_INSTRUCTIONS, /which of the reel's options they would use first/);
   assert.match(CAPTION_INSTRUCTIONS, /The Helios line is the last paragraph before the hashtags/);
-  assert.match(CAPTION_INSTRUCTIONS, /may end by inviting the viewer to follow/);
+  assert.doesNotMatch(CAPTION_INSTRUCTIONS, /may end by inviting the viewer to follow/);
+  // Copy fix (2026-10-20): one concrete point, Helios doing something specific, a follow clause only now and then.
+  assert.match(CAPTION_INSTRUCTIONS, /one or two plain sentences that make one concrete point about this episode's concept for the industry it names/);
+  assert.match(CAPTION_INSTRUCTIONS, /a short clause inviting the viewer to follow for the next episode is rare, never the default/);
+  assert.match(CAPTION_INSTRUCTIONS, /Short paragraphs of one or two sentences with a blank line between them/);
   assert.doesNotMatch(CAPTION_INSTRUCTIONS, /just before the call to action/);
   assert.ok(!CAPTION_INSTRUCTIONS.includes('\u2014'), 'no em dashes');
   assert.match(CAPTION_INSTRUCTIONS, /Do not walk the eight beats in order/);
@@ -241,7 +245,7 @@ test('Task 8b part 2 (v5 amended): at most two emoji, one leading the hook and o
   const { CAPTION_INSTRUCTIONS, CAPTION_VERSION } = await import('@/lib/explainers/caption');
   assert.equal(CAPTION_VERSION, 'explainer-caption-v5');
   assert.doesNotMatch(CAPTION_INSTRUCTIONS, /No emoji\./);
-  assert.match(CAPTION_INSTRUCTIONS, /At most two emoji/);
+  assert.match(CAPTION_INSTRUCTIONS, /At most two emoji, and none is required: usually one leads the hook/);
   assert.match(CAPTION_INSTRUCTIONS, /code puts the episode line above it/);
   assert.match(CAPTION_INSTRUCTIONS, /None in the Helios line or the hashtags/);
   assert.match(CAPTION_INSTRUCTIONS, /the industry from the Helios context that best matches this story/);

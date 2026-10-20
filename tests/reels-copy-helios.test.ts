@@ -503,7 +503,7 @@ test('publishReadiness posts a stored v29 row (and a v28 row) as body, call to a
 test('Task 8b part 2 (v29 amended): at most two emoji, none in the Helios line; the line prefers a named industry', () => {
   assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v29');
   assert.doesNotMatch(COPY_SKILL, /No emoji\./);
-  assert.match(COPY_SKILL, /At most two emoji, and none is required: one may lead the caption's first line, and one may end the call to action/);
+  assert.match(COPY_SKILL, /At most two emoji, and none is required: usually one leads the caption's first line and one ends the call to action/);
   assert.match(COPY_SKILL, /Never put one in the Helios line or the hashtags/);
   assert.match(COPY_SKILL, /the industry from the Helios context that best matches this story/);
 });
@@ -520,4 +520,13 @@ test('a v28 row cannot post its read twice: the body copy is dropped even when s
 
 test('fix round 1: the publishReadiness test leaves no test pool behind', () => {
   assert.equal('__outreachHubPool' in globalThis, false);
+});
+
+test('copy fix (v29 amended, 2026-10-20): the Helios line is one concrete point with Helios doing something specific; a follow clause is rare', () => {
+  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v29');
+  assert.match(COPY_SKILL, /one or two plain sentences that make one concrete point about this story for the industry it names/);
+  assert.match(COPY_SKILL, /It ends on the point/);
+  assert.match(COPY_SKILL, /a short follow clause may close it now and then, never by default/);
+  assert.doesNotMatch(COPY_SKILL, /the line may end by inviting the viewer to follow Helios/);
+  assert.match(COPY_SKILL, /Keep each paragraph to one or two sentences, and cut a secondary fact no part needs/);
 });

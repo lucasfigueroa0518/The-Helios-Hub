@@ -521,7 +521,7 @@ Levels:
 | Idea generator | `lib/explainers/ideas/generator.ts` | `idea-generator-v4` | approved in the 3.2 plan |
 | Scope writer | `lib/explainers/ideas/generator.ts` | `scope-writer-v4` | approved in the 3.2 plan |
 | Analogy writer | `lib/explainers/ideas/generator.ts` | `analogy-writer-v3` | approved in the 3.2 plan |
-| Post caption | `lib/explainers/caption.ts` | `explainer-caption-v5` | draft, awaiting Lucas. Social captions redesign (2026-10-19): the Helios line closes the caption, at most 2 emoji (none in the Helios line or hashtags), and a rejected caption is retried once with the rejection reason. v4 was superseded before it shipped. |
+| Post caption | `lib/explainers/caption.ts` | `explainer-caption-v5` | draft, awaiting Lucas. Social captions redesign (2026-10-19): the Helios line closes the caption, at most 2 emoji (none in the Helios line or hashtags), and a rejected caption is retried once with the rejection reason. v4 was superseded before it shipped. Amended before v5 shipped (Tommy, 2026-10-20, after the first live check): the Helios line makes one concrete point with Helios as the subject of a specific action, never a generic "how we think about it" tag, and a follow clause is rare; paragraphs are one or two sentences; usually one emoji leads the hook and one follows the ask. |
 | Director | `explainers/director/SKILL.md` | `director-v7` | approved in the curiosity-gap plan (EX3-101) |
 | Design truth | `explainers/frame-presets/helios/FRAME.md` = `explainers/recipe/frame.md` | `helios-explainer-v6` | approved in the 3.3 plan |
 

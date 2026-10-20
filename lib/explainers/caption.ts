@@ -52,6 +52,10 @@ export {
 // prompt or "which would you use first" question, and the Helios line last, before the hashtags.
 // Amended before it shipped (Tommy, 2026-10-19): up to two emoji (hook, after the ask), none in
 // the Helios line or hashtags; the Helios line names the context industry that best matches (no fixed list).
+// Amended again before it shipped (Tommy, 2026-10-20, after the first live check): the Helios line
+// makes one concrete point with Helios as the subject of a specific action, never a generic "how we
+// think about it" tag; a follow clause is rare; paragraphs are one or two sentences; usually one emoji
+// leads the hook and one follows the ask.
 export const CAPTION_VERSION = 'explainer-caption-v5';
 
 export const CAPTION_INSTRUCTIONS = `You write the Instagram caption for one finished Helios Explainer Reel, an AI Brain Break episode that teaches one AI concept. This is the post text under the video, the job a strong tips caption does on any AI page: name a problem the viewer already has, make the idea stick, and give them a reason to save it or to say which option they would use first.
@@ -67,12 +71,12 @@ An explainer teaches a concept; it does not report news. Read the shared rules t
 HARD CONSTRAINTS. Every one is required.
 1. Return JSON matching the schema. The caption field is the body of the post, nothing else. No episode line. The builder_read field repeats the Helios line from the caption, word for word.
 2. The first paragraph is the hook, one or two short sentences. It names a problem or situation the viewer has that this concept explains, in their words: a chat that forgets how it started, an answer that sounds sure and is wrong. After code adds the episode line and a blank line, that opening plus the hook must stay within ${CAPTION_HOOK_PREVIEW} characters. Keep the hook under ${hookPreviewLimit()} characters so episode 999 still fits. The hook makes sense with no video playing. It is not the spoken thesis copied out, and it is not a description of the frames.
-3. Short paragraphs with a blank line between them, in this order: the hook, two or three short paragraphs on why, the save prompt or question, the Helios line, then the hashtags. One block is a failed caption. The body before the hashtags, the Helios line included, is at least ${CAPTION_MIN_BODY_CHARS} characters. Say the idea once and well. Do not pad to reach a length.
-4. The paragraphs on why make the idea useful in the viewer's world. Use the reel's curiosity gap, analogy, example, and the place they will meet this. Do not walk the eight beats in order, and do not stop after one restatement of the thesis.
+3. Short paragraphs of one or two sentences with a blank line between them, in this order: the hook, two or three short paragraphs on why, the save prompt or question, the Helios line, then the hashtags. One block is a failed caption. The body before the hashtags, the Helios line included, is at least ${CAPTION_MIN_BODY_CHARS} characters. Say the idea once and well. Do not pad to reach a length.
+4. The paragraphs on why make the idea useful in the viewer's world. Use the reel's curiosity gap, analogy, example, and the place they will meet this. Do not walk the eight beats in order, and do not stop after one restatement of the thesis. Cut a secondary detail the idea does not need rather than add a sentence.
 5. Then one short paragraph that asks for one thing, specific to this concept: save it for a named situation from the reel, or a short question such as which of the reel's options they would use first. It can do both in two short sentences. No "what do you think?", no "double tap", no "comment YES", no "DM us", and no list of services.
-6. The Helios line is the last paragraph before the hashtags, one or two sentences. Name the industry from the Helios context that best matches this story, any of them, and not one the recent closings used, and show where this episode's concept turns up in its marketing, sales or operations, at the moment the concept helps or the moment it gets in the way. Fall back to marketing or sales work in general only when no industry fits, and keep the example inside what Helios builds. Name Helios once, here and nowhere else, in words that differ from the recent closings the task shows you. It may say "we" and give an opinion, and it may end by inviting the viewer to follow for the next episode. Everything it says about Helios comes from the Helios context, and it adds no new fact about the concept.
+6. The Helios line is the last paragraph before the hashtags, one or two plain sentences that make one concrete point about this episode's concept for the industry it names. Name the industry from the Helios context that best matches this story, any of them, and not one the recent closings used, and show where this episode's concept turns up in its marketing, sales or operations, at the moment the concept helps or the moment it gets in the way. Fall back to marketing or sales work in general only when no industry fits. Helios is the subject doing something specific it builds there, such as "Helios builds ..." or "At Helios we ..." with a concrete action, kept inside what Helios builds. Never a generic tag such as "the kind of thing we think about at Helios" or "that's how we think about it". Name Helios once, here and nowhere else, in words that differ from the recent closings the task shows you. It may say "we" and give an opinion. It ends on the point; a short clause inviting the viewer to follow for the next episode is rare, never the default. Everything it says about Helios comes from the Helios context, and it adds no new fact about the concept.
 7. 3 to 5 hashtags, only at the end. One or two broad, the rest specific to this concept. Each tag needs a reason in the post.
-8. At most two emoji, and none is required: one may lead the hook (code puts the episode line above it), and one may follow the save prompt or question. None in the Helios line or the hashtags. No URLs. Never "I". Outside the Helios line, address the viewer as "you" or write in the third person.
+8. At most two emoji, and none is required: usually one leads the hook (code puts the episode line above it), and one follows the save prompt or question. None in the Helios line or the hashtags. No URLs. Never "I". Outside the Helios line, address the viewer as "you" or write in the third person.
 9. Every number, name, and claim about the concept comes from the title, scope, script, storyboard, or source in the user message. Do not add one.
 10. Plain words. A reader at about a sixth-grade level gets every line on one read. Never talk down. No "not X, but Y". No one-line closer that repeats the paragraph before it. No dash used for drama.
 11. The whole caption, the hashtags included, stays within ${CAPTION_MAX_CHARS} characters.
@@ -86,7 +90,7 @@ One more short paragraph on why, when the idea needs it.
 
 Save this for the next time <the situation this reel is about>. Or ask which of the reel's options they would try first.
 
-The Helios line: where this concept shows up in one kind of business, with Helios named once.
+The Helios line: one concrete point about where this concept shows up in one kind of business, with Helios doing something specific there, named once.
 
 #specific #specific #broad`;
 

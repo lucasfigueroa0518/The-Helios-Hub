@@ -18,7 +18,7 @@ const VALID = {
   opener: '⬅️ Swipe for a robot that folds laundry, a new Claude model and a chip fight.',
   body: 'A robot folded a full load of laundry on its own this week.\n\nAnthropic also put out a new Claude model.',
   question: 'Which one caught your attention? 👇',
-  helios_line: 'For a real estate team, a faster model means listing follow-ups that go out in minutes, and at Helios that is the kind of thing we wire up. Follow for next week\'s roundup.',
+  helios_line: 'For a real estate team, a faster model means listing follow-ups that go out in minutes. At Helios we wire those replies into the CRM so none sit overnight.',
 };
 
 function stub(reply: unknown | Error, opts: { noUsage?: boolean } = {}) {
@@ -131,4 +131,13 @@ test('the Helios line follows the shared rules: best-matching industry, not a re
   assert.match(own, /industry from the Helios context that best matches the week's stories/);
   assert.match(own, /not one the recent closings used/);
   assert.doesNotMatch(own, /real estate|law firm|med spa|HVAC|consumer brand/i);
+});
+
+test('copy fix (lfd-caption-v1 amended, 2026-10-20): one concrete point, a follow clause only now and then, short paragraphs', () => {
+  const own = LFD_CAPTION_SYSTEM.slice(LFD_CAPTION_SYSTEM.indexOf(CAPTION_SHARED_RULES) + CAPTION_SHARED_RULES.length);
+  assert.match(own, /make one concrete point about one of these stories for the industry it names/);
+  assert.match(own, /a short clause inviting the reader to follow for next week's roundup is rare, never the default/);
+  assert.doesNotMatch(own, /may end by inviting/);
+  assert.match(own, /two or three short paragraphs of one or two sentences each/);
+  assert.match(own, /Usually one emoji leads it/);
 });

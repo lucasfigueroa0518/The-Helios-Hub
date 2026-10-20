@@ -17,7 +17,9 @@ shows where the concept turns up in a real business. The Helios line is always
 the last paragraph before the hashtags. The video taught the concept. The
 caption does not walk the eight beats (Explainers 3.0), and it does not pad.
 
-Code version: `explainer-caption-v5` in `lib/explainers/caption.ts`. The live
+Code version: `explainer-caption-v5` in `lib/explainers/caption.ts`
+(amended before it shipped, 2026-10-20: the Helios line is one concrete point,
+and a follow clause is rare). The live
 prompt also carries the shared Helios context and caption rules
 (`lib/social/captions/helios-context.ts`), the same block every Helios caption
 type uses.
@@ -48,9 +50,10 @@ you show it.
   still fit in that count (keep the hook under 96 characters). The hook has to
   make sense if someone never taps "more". Do not spend it on a greeting, a
   hashtag, or "In this video".
-- Short paragraphs with a blank line between them. One block is a failed caption.
-- At most two emoji, and none is required: one may lead the hook (code puts
-  the episode line above it, so the emoji follows the stamp), and one may follow
+- Short paragraphs of one or two sentences with a blank line between them. One
+  block is a failed caption. Cut a secondary detail the idea does not need.
+- At most two emoji, and none is required: usually one leads the hook (code puts
+  the episode line above it, so the emoji follows the stamp), and one follows
   the save prompt or question. None in the Helios line or the hashtags. Code
   rejects a third, or one in either place. No URLs; Instagram does not make
   them clickable.
@@ -66,8 +69,8 @@ you show it.
   tag needs a reason in the post.
 - The whole caption, the Helios line and the hashtags included, stays within 2,200
   characters.
-- Helios is named once, lightly, in the Helios line, in words that differ from
-  the recent closings. No client results, no invented Helios anecdotes.
+- Helios is named once, in the Helios line, in words that differ from the
+  recent closings. No client results, no invented Helios anecdotes.
 
 ## What is different
 
@@ -90,16 +93,22 @@ or send it.
 - The ask asks them to save it for the next time they hit this exact situation,
   or asks which of the reel's options they would use first, or both in two
   short sentences. Name that situation from the reel.
-- The Helios line is the last paragraph before the hashtags, one or two
-  sentences. Name the industry from the Helios context that best matches this
-  story, any of them, and not one the recent closings used, and show where
-  this episode's concept turns up in its marketing, sales or operations: the
-  moment it helps, or the moment it gets in the way. Fall back to marketing or
-  sales work in general only when none fits, and stay inside what Helios
-  builds. Do not cycle through a short list of favourite industries. Name Helios once. It may
-  end by inviting the viewer to follow for the next episode. It adds no new
-  fact about the concept. Code rejects a caption whose paragraph before the
-  hashtags does not name Helios.
+- The Helios line is the last paragraph before the hashtags, one or two plain
+  sentences that make one concrete point about this episode's concept for the
+  industry it names. Name the industry from the Helios context that best
+  matches this story, any of them, and not one the recent closings used, and
+  show where this episode's concept turns up in its marketing, sales or
+  operations: the moment it helps, or the moment it gets in the way. Fall back
+  to marketing or sales work in general only when none fits. Do not cycle
+  through a short list of favourite industries. Helios is the subject doing
+  something specific it builds there, such as "Helios builds ..." or
+  "At Helios we ..." with a concrete action, kept inside what Helios builds.
+  Never a generic tag such as "the kind of thing we think about at Helios",
+  "that's how we think about it", "we post more takes like this" or "that's
+  where Helios comes in". Name Helios once. It ends on the point; a short
+  clause inviting the viewer to follow for the next episode is rare, never the
+  default. It adds no new fact about the concept. Code rejects a caption whose
+  paragraph before the hashtags does not name Helios.
 - Code decides whether the Helios line also says what Helios builds that this
   concept touches (`include_build_line`: a Jev fit score plus a ceiling of about
   1 in 3 recent explainer captions). Follow it; never add that sentence on your
@@ -114,8 +123,9 @@ or send it.
 3. Draft two or three short paragraphs on why. Blank line between them. Pay
    out the idea in the viewer's world.
 4. Add the ask: a save line, a "which would you use first" question, or both.
-5. Draft the Helios line: one business type from the Helios context, where the
-   concept shows up there, Helios named once. Then the hashtags after a blank
+5. Draft the Helios line: one business type from the Helios context, one
+   concrete point about where the concept shows up there, and Helios doing
+   something specific about it, named once. Then the hashtags after a blank
    line.
 6. Run the humanizer pass. Cut anything that restates the video beat by beat,
    and cut a caption that is only a restatement of the thesis.
@@ -134,7 +144,7 @@ One more short paragraph on why, when the idea needs it.
 
 Save this for the next time <the situation this reel is about>. Or ask which of the reel's options they would try first.
 
-The Helios line: where this concept shows up in one kind of business, with Helios named once.
+The Helios line: one concrete point about where this concept shows up in one kind of business, with Helios doing something specific there, named once.
 
 #specific #specific #broad
 ```

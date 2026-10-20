@@ -56,5 +56,5 @@ export function recentClosingsBlock(closings: RecentClosing[]): string {
 export function buildLineInstruction(include: boolean): string {
   return include
     ? "include_build_line: true. In the Helios line that ends the caption, add one plain sentence on what Helios builds that this story touches, drawn only from the Helios context. That sentence is the only place Helios is named in the caption; do not name Helios anywhere else."
-    : "include_build_line: false. In the Helios line that ends the caption, do not describe what Helios builds; the single light Helios mention is enough.";
+    : "include_build_line: false. In the Helios line that ends the caption, keep to its one concrete point about this story, with Helios doing that one specific thing; add no separate sentence on what Helios builds or offers in general.";
 }
