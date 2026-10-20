@@ -362,6 +362,15 @@ test('carousel health: legacy gives Tuesday to LFD only while its auto_run is on
   assert.equal((await report(WED)).needed, 1, 'template: Wednesday keeps its carousels');
 });
 
+test('carousel health: a failed slot read falls back to legacy (ruling P2)', async () => {
+  const { pg, query } = await openHubTestDb();
+  await setSlotSource(query as never, 'template', 't');
+  // The switch reads 'template', but the template itself can't be read.
+  await pg.exec(`ALTER TABLE social_hub.slot_template RENAME TO slot_template_gone`);
+  const out = await reportCarousels(query, { night: '2026-10-20', posting: carouselPosting, now: NOW });
+  assert.equal(out.needed, 1, 'legacy, LFD paused: Tuesday is an ordinary carousel night');
+});
+
 // ---- Stories: the stories harness (stories and social_hub schemas) ----
 
 const THU = '2026-10-08';

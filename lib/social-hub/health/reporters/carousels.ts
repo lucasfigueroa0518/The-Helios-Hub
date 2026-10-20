@@ -61,7 +61,8 @@ export const reportCarousels: Reporter = async (q: HubQuery, { night, posting })
   };
   // A night Carousels give to Last Few Days asks for no carousel: LFD-02 in legacy (its days, while its
   // auto_run is on), the calendar's LFD slot in template mode (paused or not, Decision 7).
-  const plan = await slotPlan(q, night, 1);
+  // A failed slot read reports by the old rules (ruling P2): the report is a view, not a booking.
+  const plan = await slotPlan(q, night, 1).catch(() => null);
   const off = plan ? isLfdDay(plan, night) : (await carouselOffDays(q)).includes(weekdayIndex(night));
   return withPublishing(base, off ? { ...posting, perDay: 0 } : posting, await publishingFor(q, 'carousels', night));
 };

@@ -77,6 +77,7 @@ export async function scheduleJob(
     );
     const spacing = (text: string, params?: unknown[]) => db.query<Record<string, unknown>>(text, params);
     const busy = [...(await busyFeedTimes(spacing, now, 'explainers')), ...(await ownFeedTimes(spacing, 'explainers', now))];
+    // A failed slot read throws: it must not silently book by the old rules (ruling P2).
     const plan = await slotPlan(spacing, calendarDateKey(now));
     const takenKeys = new Set(takenRows.map((r) => slotTakenKey(r.d, r.slot)));
     let choice;

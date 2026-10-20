@@ -52,6 +52,7 @@ export async function postsPerDay(query: Query): Promise<number> {
 export async function carouselFill(query: Query, now = new Date()): Promise<DailyFill> {
   const day = calendarDateKey(now, SOCIAL_TIMEZONE);
   // Template mode: the day's quota is its carousel slots; legacy keeps posts_per_day.
+  // A failed slot read throws: it must not silently book by the old rules (ruling P2).
   return dailyFill(query, 'carousels', day, (await quotaFromSlots(query, 'carousels', day)) ?? (await postsPerDay(query)));
 }
 
@@ -91,6 +92,7 @@ export async function schedulePost(
 
   // Template mode: every carousel window that is not a slot is taken. Legacy (LFD-02): while Last
   // Few Days' auto_run is on, its days have no carousel windows.
+  // A failed slot read throws: it must not silently book by the old rules (ruling P2).
   const plan = await slotPlan(query, calendarDateKey(now, SOCIAL_TIMEZONE));
   const off = plan ? [] : await carouselOffDays(query);
   for (let attempt = 0; attempt < 3; attempt += 1) {

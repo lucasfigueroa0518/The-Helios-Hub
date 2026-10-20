@@ -197,6 +197,7 @@ export async function schedulePostIdea(
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const fromDate = calendarDateKey(now);
+    // A failed slot read throws: it must not silently book by the old rules (ruling P2).
     const plan = await slotPlan(hubQ, fromDate);
     const takenNow = await takenSlots(fromDate);
     let choice: { nyDate: string; slot: SlotId; publishAt: Date } | null;
@@ -271,6 +272,7 @@ export async function windowsStillOpen(now = new Date()): Promise<number> {
   const today = calendarDateKey(now);
   const taken = await takenSlots(today);
   // Template mode: only today's reels slots count.
+  // A failed slot read throws: it must not silently book by the old rules (ruling P2).
   const plan = await slotPlan(hubQ, today, 1);
   const on = plan ? new Set(slotsOn(plan, 'reels', today).map((s) => s.windowId)) : null;
   const slots = on ? POSTING_SLOTS.filter((slot) => on.has(slot.id)) : POSTING_SLOTS;

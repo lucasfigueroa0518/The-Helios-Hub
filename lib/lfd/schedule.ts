@@ -71,6 +71,7 @@ export async function scheduleLfdPost(
 
   const days = await readLfdSettings(query).then((s) => s.days).catch(() => [...DEFAULT_LFD_DAYS]);
   // Template mode: the calendar's LFD slots replace lfd.settings.days.
+  // A failed slot read throws: it must not silently book by the old rules (ruling P2).
   const plan = await slotPlan(query, calendarDateKey(now, SOCIAL_TIMEZONE));
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const today = calendarDateKey(now, SOCIAL_TIMEZONE);
