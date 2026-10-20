@@ -14,6 +14,7 @@ import { EXPLAINER_WINDOWS } from '@/lib/explainers/publish/config';
 import { LFD_WINDOW } from '@/lib/lfd/config';
 import { POSTING_SLOTS } from '@/lib/reels/publish/slots';
 import { CAROUSEL_SLOTS } from '@/lib/social/overnight/config';
+import { rebookSlot } from '@/lib/social-hub/placement';
 
 import { driftMinute } from './book';
 import { DEFAULT_FEED_MODE, DEFAULT_TIMES, FEED_GAP, isFeedSlot } from './times';
@@ -31,8 +32,8 @@ import {
  *
  * Bookings (social_hub.schedule) follow their slot:
  *  - a move whose source holds a waiting post moves that post to the slot's new
- *    day and minute in the same transaction (spec §Calls I made): the same
- *    UPDATE as placement.rescheduleItem, at a minute in [slot, slot + DRIFT]
+ *    day and minute in the same transaction (spec §Calls I made): the one
+ *    booking move, placement.rebookSlot (rescheduleItem's), at a minute in [slot, slot + DRIFT]
  *    after now, 30 minutes from other feed posts when it is one;
  *  - a change that removes a booked slot (or flips its Trial / Main) always
  *    returns 409 { booked } with each post's refs. This route never
@@ -364,7 +365,6 @@ function followTarget(follows: readonly Follow[], b: Booking): { nyDate: string;
 type Plan = { b: Booking; nyDate: string; slot: ResolvedSlot };
 
 const TAKEN = 'That slot is taken.';
-const isUniqueViolation = (error: unknown) => (error as { code?: string } | null)?.code === '23505';
 
 const bookedPost = (b: Booking, why: BookedPost['why']): BookedPost => ({
   scheduleId: b.id, vertical: b.vertical, nyDate: b.nyDate, slot: b.slot, feedMode: b.feedMode, publishAt: b.publishAt.toISOString(), refs: b.refs, why,
@@ -469,21 +469,11 @@ export async function applySlotChanges(q: SlotQuery, changes: readonly SlotChang
   for (const [i, p] of moves.entries()) {
     const at = times[i]!;
     const slot = slotId(p.slot.startMinute, p.slot.series);
-    // placement.rescheduleItem's UPDATE: the row stays (source, approval); the slot's Trial / Main moves with it.
-    let rows: unknown[];
-    try {
-      ({ rows } = await q(
-        `UPDATE social_hub.schedule SET ny_date = $2::date, slot = $3, publish_at = $4::timestamptz, error = NULL, feed_mode = coalesce($5, feed_mode)
-          WHERE id = $1::uuid AND status = 'scheduled'
-          RETURNING id`,
-        [p.b.id, p.nyDate, slot, at.toISOString(), isReelType(p.b.vertical) ? p.slot.feedMode : null],
-      ));
-    } catch (error) {
-      // A race past the check above; the route's transaction rolls back on this result's status.
-      if (isUniqueViolation(error)) return { ok: false, status: 409, error: TAKEN };
-      throw error;
-    }
-    if (!rows[0]) throw new Error(`Booking ${p.b.id} started posting before it could move.`);
+    // The one booking move (placement.rebookSlot, as rescheduleItem): the row stays (source, approval); the slot's Trial / Main moves with it.
+    const moved = await rebookSlot(q, { scheduleId: p.b.id, nyDate: p.nyDate, slot, publishAt: at, feedMode: isReelType(p.b.vertical) ? p.slot.feedMode : null });
+    // A race past the check above; the route's transaction rolls back on this result's status.
+    if (!moved.ok && moved.why === 'taken') return { ok: false, status: 409, error: TAKEN };
+    if (!moved.ok) throw new Error(`Booking ${p.b.id} started posting before it could move.`);
     rescheduled.push({ scheduleId: p.b.id, nyDate: p.nyDate, slot, publishAt: at.toISOString() });
   }
 

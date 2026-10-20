@@ -104,6 +104,32 @@ export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean } =
 export type StepResult = { vertical: PlanStep['vertical']; label: string; ok: boolean; note: string };
 
 /**
+ * Run now's Stories Generate: a set per series, the type's own Generate
+ * (lib/stories/api.ts generate, one per series and slot). In template mode
+ * the set is for the series' first open Stories slot today (openStorySlots,
+ * the slots the 4 AM worker would still request), so a second open slot
+ * isn't "Already requested"; a series with no open slot makes nothing.
+ * Legacy: one set per series a day, as before. Returns the series that got a
+ * new set.
+ */
+export async function requestStorySets(series: readonly string[], by: string, now: Date): Promise<string[]> {
+  const slots = await storiesSlotsOn(liveHubQuery, nyDateOf(now)!).catch(() => null);
+  const open = slots ? await openStorySlots(liveStoriesDb, slots, now) : null;
+  const made: string[] = [];
+  for (const s of series) {
+    let slotMinute: number | null = null;
+    if (open) {
+      const next = open.get(s as Series)?.open[0];
+      if (!next) continue;
+      slotMinute = next.startMinute;
+    }
+    const { created } = await requestStorySet(liveStoriesDb, s, by, now, slotMinute);
+    if (created) made.push(s);
+  }
+  return made;
+}
+
+/**
  * Re-plan on the server, then start what today still needs. `only`: a type's
  * own Run button runs just that type's step, so every Run button makes the
  * same thing from the same ranked queue. `only` + `target`: a card's Make it
@@ -152,11 +178,7 @@ export async function runToday(by: string, now = new Date(), only?: Vertical, ta
         const out = await queueManualLfdRun(liveHubQuery);
         done(out.ok, out.note);
       } else if (step.action === 'story_sets') {
-        const made: string[] = [];
-        for (const series of step.targets) {
-          const { created } = await requestStorySet(liveStoriesDb, series, by, now);
-          if (created) made.push(series);
-        }
+        const made = await requestStorySets(step.targets, by, now);
         done(made.length > 0, made.length ? `${made.length} set${made.length === 1 ? '' : 's'} requested. The Stories worker builds them in order.` : 'Already requested.');
       }
     } catch (error) {

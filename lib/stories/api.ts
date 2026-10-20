@@ -70,12 +70,15 @@ export async function setDetail(db: Queryable, id: string) {
   return { ...got, candidates, costs, feedback };
 }
 
-/** Generate (S-05): Lucas's click is the approval boundary for the build's live calls. */
-export async function generate(db: Queryable, series: unknown, by: string, now = new Date()): Promise<{ set: StorySet; created: boolean }> {
+/**
+ * Generate (S-05): Lucas's click is the approval boundary for the build's live calls.
+ * `slotMinute`: template mode's Run now asks for one of today's open Stories slots (lib/stories/schedule.ts openStorySlots).
+ */
+export async function generate(db: Queryable, series: unknown, by: string, now = new Date(), slotMinute: number | null = null): Promise<{ set: StorySet; created: boolean }> {
   if (!isSeries(series)) throw new ApiError(400, 'Unknown series.');
   const settings = await loadSettings(db);
   if (!settings.series[series].enabled) throw new ApiError(409, 'This series is turned off in Settings.');
-  return requestSet(db, { series, nyDate: nyDate(now), trigger: 'click', style: settings.series[series].style, requestedBy: by });
+  return requestSet(db, { series, nyDate: nyDate(now), trigger: 'click', style: settings.series[series].style, requestedBy: by, slotMinute });
 }
 
 const guard = async <T>(fn: () => Promise<T>): Promise<T> => {

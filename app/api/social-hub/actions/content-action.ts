@@ -51,7 +51,8 @@ export function parseTarget(body: unknown, allowed: readonly Vertical[] = VERTIC
   };
 }
 
-const SLOT = /^[a-z][a-z_]{0,39}$/;
+/** A window id (`afternoon`, a Stories series) or, on the calendar's free times, a slot id (`t0780`, `t0510:morning_download`). */
+const SLOT = /^(?:[a-z][a-z_]{0,39}|t[0-9]{4}(?::[a-z][a-z_]{0,39})?)$/;
 
 /** `{ vertical, refs, nyDate: 'YYYY-MM-DD', slot }` (place and reschedule, D50). */
 export function parsePlacement(body: unknown, allowed: readonly Vertical[] = VERTICALS): Parsed | null {

@@ -43,6 +43,11 @@ test('quota in template mode: the night\'s own slots from the week schedule, els
   ];
   // Tuesday's slots are GN and FP: GN counts, FP is disabled, MD has no slot that night.
   assert.equal(quotaFor(posting({ type: 'stories', perDay: null, series, schedule } as never), NIGHT), 1);
+  // The daily limit: the night makes no more than it, whatever the slots (Stories: per series).
+  assert.equal(quotaFor(posting({ perDay: 1, cap: 1, schedule: [day(NIGHT, 3)] }), NIGHT), 1);
+  assert.equal(quotaFor(posting({ perDay: 1, cap: 0, schedule: [day(NIGHT, 3)] }), NIGHT), 0);
+  const twice = [day(NIGHT, 3, ['guess_the_number', 'guess_the_number', 'guess_the_number'])];
+  assert.equal(quotaFor(posting({ type: 'stories', perDay: null, series, schedule: twice, cap: 2 } as never), NIGHT), 2);
 });
 
 test('due follows generate, not the publishing switch; a run is always due', () => {
@@ -229,8 +234,10 @@ async function withAppDb<T>(fn: (db: Awaited<ReturnType<typeof openHubTestDb>>) 
   }
 }
 
+/** The seeded reels slots' start minutes (slots/times.ts DEFAULT_TIMES): 8:45 AM, 11:15 AM, 6:00 PM. */
+const REEL_MINUTE: Record<string, number> = { morning: 525, midday: 675, evening: 1080 };
 const removeReels = (nyDate: string, windows: string[]) =>
-  windows.map((w) => `INSERT INTO social_hub.slot_override (ny_date, vertical, window_id, action, updated_by) VALUES ('${nyDate}', 'reels', '${w}', 'remove', 't');`).join('\n');
+  windows.map((w) => `INSERT INTO social_hub.slot_override (ny_date, vertical, start_minute, action, updated_by) VALUES ('${nyDate}', 'reels', ${REEL_MINUTE[w]}, 'remove', 't');`).join('\n');
 
 test('template mode: a Sunday night reported on Monday uses Sunday\'s slots, not this week\'s or today\'s', async () => {
   await withAppDb(async ({ pg, query }) => {

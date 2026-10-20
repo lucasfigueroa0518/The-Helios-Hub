@@ -1,6 +1,7 @@
 import { nyDayStart, weekdayOf } from '@/lib/social-hub/time';
 import { VERTICAL_IDS } from '@/lib/social-hub/verticals';
-import type { SlotsByDate } from '@/lib/social-hub/slots/types';
+import { clockLabel, DRIFT, SERIES_NAME } from '@/lib/social-hub/slots/times';
+import { slotId, type ResolvedSlot, type SlotsByDate } from '@/lib/social-hub/slots/types';
 import type { HubPost, Vertical } from '@/lib/social-hub/types';
 
 /**
@@ -60,16 +61,27 @@ export function windowRange(w: PlanWindow): string {
 }
 
 /**
+ * A calendar slot as a plan window: its id is the booking slot id (`t0780`,
+ * `t0510:morning_download`) and it runs over the slot's drift minutes
+ * [slot, slot + DRIFT]. Stories are labeled by series, the rest by time.
+ */
+export function slotPlanWindow(s: Pick<ResolvedSlot, 'startMinute' | 'series'>): PlanWindow {
+  return { id: slotId(s.startMinute, s.series), label: s.series ? SERIES_NAME[s.series].one : clockLabel(s.startMinute), startMinute: s.startMinute, endMinute: s.startMinute + DRIFT };
+}
+
+/**
  * A type's windows on a day. With the calendar (`slots` covers the date),
- * exactly that day's slots for the type. Otherwise the old rule:
- * `carouselOff` holds the weekdays Carousels give up to Last Few Days while
- * its auto_run is on (LFD-02; DayQuotas.lfdDays).
+ * exactly that day's slot times for the type, in time order. Otherwise the
+ * old rule: `carouselOff` holds the weekdays Carousels give up to Last Few
+ * Days while its auto_run is on (LFD-02; DayQuotas.lfdDays).
  */
 export function windowsOn(vertical: Vertical, nyDate: string, carouselOff: readonly number[] = [], slots?: SlotsByDate | null): PlanWindow[] {
   const slotDay = slots?.[nyDate];
   if (slotDay) {
-    const ids = new Set(slotDay.filter((s) => s.vertical === vertical).map((s) => s.windowId));
-    return PLAN[vertical].filter((w) => ids.has(w.id));
+    return slotDay
+      .filter((s) => s.vertical === vertical)
+      .sort((a, b) => a.startMinute - b.startMinute || (a.series ?? '').localeCompare(b.series ?? ''))
+      .map(slotPlanWindow);
   }
   const day = weekdayOf(nyDate);
   if (vertical === 'carousels' && carouselOff.includes(day)) return [];
@@ -88,16 +100,16 @@ export function placedCount(posts: readonly HubPost[], vertical: Vertical, nyDat
  * The windows that COUNT on a day. Closing Carousels on Last Few Days days only removes open capacity:
  * a past day keeps every window, and a day keeps as many as the content already on it (`held`), so nothing
  * placed there is hidden or benched. No new open slot is offered (windowsOn stays the offer rule).
- * With the calendar (`slots`): the day's slot windows, and a booking kept in a slot the calendar later
- * removed still holds its place until it posts, so the day keeps as many windows as it holds (the type's
- * other windows, in day order). A past day also keeps the windows it had before the calendar.
+ * With the calendar (`slots`): the day's slot times, and a booking kept after its slot left the calendar
+ * still holds its place until it posts, so the day keeps as many windows as it holds (padded with the
+ * type's old windows, at most all of them). A past day also keeps as many as it had before the calendar.
  */
 export function capacityWindows(vertical: Vertical, nyDate: string, carouselOff: readonly number[], held: number, today?: string, slots?: SlotsByDate | null): PlanWindow[] {
   if (slots?.[nyDate]) {
-    const on = new Set(windowsOn(vertical, nyDate, [], slots).map((w) => w.id));
-    if (today !== undefined && nyDate < today) for (const w of windowsOn(vertical, nyDate)) on.add(w.id);
-    let extra = Math.min(held, PLAN[vertical].length) - on.size;
-    return PLAN[vertical].filter((w) => on.has(w.id) || extra-- > 0);
+    const on = windowsOn(vertical, nyDate, [], slots);
+    const before = today !== undefined && nyDate < today ? windowsOn(vertical, nyDate).length : 0;
+    const pad = PLAN[vertical].slice(0, Math.max(0, Math.max(held, before) - on.length));
+    return [...on, ...pad].sort((a, b) => a.startMinute - b.startMinute);
   }
   const all = windowsOn(vertical, nyDate, [], slots);
   const open = windowsOn(vertical, nyDate, carouselOff, slots);
