@@ -271,7 +271,7 @@ test('a malformed submission is rejected with the shape errors', async () => {
 test('Task 8b part 2: carousel emoji and industry rules', () => {
   assert.match(CAPTIONER_CAROUSEL_RULES, /at most two emoji/i);
   assert.match(CAPTIONER_CAROUSEL_RULES, /never in read/i);
-  assert.match(CAPTIONER_CAROUSEL_RULES, /Prefer naming a specific industry from the Helios context/);
+  assert.match(CAPTIONER_CAROUSEL_RULES, /the industry from the Helios context that best matches this story/);
   assert.match(CAPTIONER_CHECKED_RULES, /at most two emoji, none in read/);
   assert.doesNotMatch(CAPTIONER_CHECKED_RULES, /no emoji/);
   // The Writer's and Editor's checked rules keep the ban.
@@ -299,4 +299,8 @@ test('two emoji in news pass; an emoji in read, or a third, goes back once', asy
   const t = run([msg('tool_use', [submit(three)]), msg('tool_use', [submit(good())])]);
   assert.ok((await t.result).ok);
   assert.match(t.s.requests[1].messages.at(-1).content[0].content, /emoji: 3 in the caption, at most 2/);
+});
+
+test('fix round 1: the news part has no opinion; the so-what line is its one casual aside', () => {
+  assert.match(CAPTIONER_CAROUSEL_RULES, /Third person, no opinion and no "we\." The so-what line is the news part's one casual aside; opinion and "we" live in read\./);
 });

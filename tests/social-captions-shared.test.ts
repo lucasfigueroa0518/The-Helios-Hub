@@ -77,12 +77,22 @@ test('Task 8b part 2: at most two emoji, never in the Helios line; the Helios li
   assert.match(CAPTION_SHARED_RULES, /at most two emoji/i);
   assert.match(CAPTION_SHARED_RULES, /one may lead the hook, and one may follow the question or call to action/);
   assert.match(CAPTION_SHARED_RULES, /Never put one in the Helios line, the credits, the Source line or the hashtags/);
-  assert.match(CAPTION_SHARED_RULES, /Prefer naming a specific industry from the context/);
+  assert.match(CAPTION_SHARED_RULES, /Name the industry from the context above that best matches this story/);
   assert.match(CAPTION_SHARED_RULES, /only when none (fits|does)/);
   assert.match(CAPTION_SHARED_RULES, /inside what Helios builds/);
-  assert.match(CAPTION_SHARED_RULES, /industry the recent closings did not use/);
   assert.equal(CAPTION_EMOJI_MAX, 2);
   assert.equal(countEmoji('No emoji here.'), 0);
   assert.equal(countEmoji('🚀 Launch. Which would you pick? 👇'), 2);
   assert.equal(countEmoji('👩‍💻 one joined emoji, ❤️ one with a selector, 👍🏽 one with a skin tone'), 3);
+});
+
+test('fix round 1: no fixed list of example industries in any caption prompt', async () => {
+  const { CAPTION_INSTRUCTIONS } = await import('@/lib/explainers/caption');
+  const { COPY_SKILL } = await import('@/lib/reels/copy/skill');
+  const { CAPTIONER_SYSTEM } = await import('@/lib/social/captioner/prompt');
+  for (const [name, text] of Object.entries({ CAPTION_SHARED_RULES, CAPTION_INSTRUCTIONS, COPY_SKILL, CAPTIONER_SYSTEM })) {
+    assert.doesNotMatch(text, /a real estate team|a med spa|an HVAC company|a consumer brand\)/, name);
+    assert.match(text, /best matches this story/, name);
+    assert.match(text, /not (the one|one) (the )?recent closings used/, name);
+  }
 });

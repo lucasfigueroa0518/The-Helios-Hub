@@ -485,6 +485,22 @@ test('a rejected caption is retried once with the reason, and the second request
   assert.equal(seen[1]!.retryReason, reason, 'the retry carries the rejection reason');
 });
 
+test('a transport or API failure retries without a rejection reason', async () => {
+  const { db } = await scratchExplainersDb();
+  const job = await queuedJob(db);
+  const d = deps(db, happyQuery());
+  const stubbed = d.writeCaption!;
+  const seen: CaptionOptions[] = [];
+  d.writeCaption = async (facts, opts) => {
+    seen.push(opts);
+    if (seen.length === 1) throw new Error('529 Overloaded: the API is busy');
+    return stubbed(facts, opts);
+  };
+  assert.deepEqual(await runRenderJob(d, job), { status: 'ok' });
+  assert.equal(seen.length, 2);
+  assert.equal(seen[1]!.retryReason, undefined, 'an API error is not a caption the model wrote');
+});
+
 test('a resumed job reuses its workspace and plan: no preparation, no session A, the resume prompt', async () => {
   const { db } = await scratchExplainersDb();
   const job = await queuedJob(db);

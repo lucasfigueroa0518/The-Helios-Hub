@@ -600,7 +600,8 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
         draft = await writer(facts, retryReason ? { ...captionOpts, retryReason } : captionOpts);
       } catch (error) {
         captionError = error;
-        retryReason = error instanceof Error ? error.message : String(error);
+        // Only a caption the model wrote and code rejected tells the retry why; an API or transport failure does not.
+        retryReason = error instanceof CaptionError ? error.message : undefined;
         const spent = error instanceof CaptionError ? error.spent : undefined;
         if (spent) await recordCaptionCost(db, job.id, job.mode, spent);
         log('caption_failed', { jobId: job.id, attempt, error: error instanceof Error ? error.message : String(error) });

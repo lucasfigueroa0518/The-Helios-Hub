@@ -560,11 +560,11 @@ news: everything before the Helios line, in this order.
 - Keep a hedge or attribution ("says," "reportedly," "up to") wherever dropping it would change what a reader believes. Describe people, organizations and products only with words the slides or the BRIEF use.
 - Gloss a term a reader who doesn't follow AI wouldn't know, from the BRIEF's TERMS only.
 - Background: at most one clause about an earlier event, sourced from the slides or the BRIEF, and only when the hook needs it to land. No background paragraph.
-- Third person and no "we." No paragraph about who reported what or whose figures they are.
+- Third person, no opinion and no "we." The so-what line is the news part's one casual aside; opinion and "we" live in read. No paragraph about who reported what or whose figures they are.
 - Put the IDs of every BRIEF entry the news rests on (F3, B1, Q2, N1) in news.facts.
 
 read: the Helios line, one or two sentences that close the caption.
-- A builder's take on this story: what it changes for someone running marketing, sales or ops, what they can now do, should stop doing, or should watch. Prefer naming a specific industry from the Helios context (a real estate team, a law firm, a med spa, an HVAC company, a consumer brand) whenever one is a reasonable match, and the specific work the story changes there. Fall back to marketing or sales work in general only when none fits. Keep the example inside what Helios builds, and pick an industry the recent closings did not use.
+- A builder's take on this story: what it changes for someone running marketing, sales or ops, what they can now do, should stop doing, or should watch. Name the industry from the Helios context that best matches this story, any of them, and not one the recent closings used, with the specific work the story changes there. Fall back to marketing or sales work in general only when none fits. Keep the example inside what Helios builds.
 - This is where you have a view. Interpret, weigh, make a call, the way someone who builds these systems talks about them, never like a product line. "We" is allowed here.
 - The read adds no facts. A story fact it leans on is already on the slides or in the BRIEF, and its ID goes in read.facts. Anything about Helios comes only from the Helios context.
 - Name Helios once, here, in words that fit this story. Never a pitch.

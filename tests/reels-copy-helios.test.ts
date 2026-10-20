@@ -426,11 +426,19 @@ test('shipStoredCopy (ship-a-miss) records the closing with the attempt build-li
 
 // ── v29: the posting path reads the Helios line from the stored row ─────────
 
-test('publishReadiness posts a stored v29 row (and a v28 row) as body, call to action, Helios line, hashtags', async () => {
+test('publishReadiness posts a stored v29 row (and a v28 row) as body, call to action, Helios line, hashtags', async (t) => {
   const { openHubTestDb } = await import('./fixtures/social-hub/pglite');
   const { publishReadiness } = await import('@/lib/reels/music/publish');
   const { pg } = await openHubTestDb();
-  (globalThis as { __outreachHubPool?: unknown }).__outreachHubPool = {
+  const g = globalThis as { __outreachHubPool?: unknown };
+  const hadPool = '__outreachHubPool' in g;
+  const previousPool = g.__outreachHubPool;
+  // Put the pool back for the tests that run after this one.
+  t.after(() => {
+    if (hadPool) g.__outreachHubPool = previousPool;
+    else delete g.__outreachHubPool;
+  });
+  g.__outreachHubPool = {
     query: (text: string, params?: unknown[]) => pg.query(text, params as unknown[]),
   };
   const [idea, slate, video, run] = [1, 2, 3, 4].map((n) => `72900000-0000-4000-8000-00000000000${n}`);
@@ -484,8 +492,7 @@ test('Task 8b part 2 (v29 amended): at most two emoji, none in the Helios line; 
   assert.doesNotMatch(COPY_SKILL, /No emoji\./);
   assert.match(COPY_SKILL, /At most two emoji, and none is required: one may lead the caption's first line, and one may end the call to action/);
   assert.match(COPY_SKILL, /Never put one in the Helios line or the hashtags/);
-  assert.match(COPY_SKILL, /Prefer naming a specific industry from the Helios context/);
-  assert.match(COPY_SKILL, /industry the recent closings did not use/);
+  assert.match(COPY_SKILL, /the industry from the Helios context that best matches this story/);
 });
 
 test('a v28 row cannot post its read twice: the body copy is dropped even when spacing differs', () => {
@@ -496,4 +503,8 @@ test('a v28 row cannot post its read twice: the body copy is dropped even when s
   // The read the model also wrote before the call to action in the caption is dropped too.
   const both = fullCaption({ caption: `${CAPTION}\n\n${READ}\n\n${CTA}`, builderRead: READ, callToAction: CTA, hashtags: ['#AI'] });
   assert.equal(both, `${CAPTION}\n\n${CTA}\n\n${READ}\n\n#AI`);
+});
+
+test('fix round 1: the publishReadiness test leaves no test pool behind', () => {
+  assert.equal('__outreachHubPool' in globalThis, false);
 });

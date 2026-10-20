@@ -244,5 +244,5 @@ test('Task 8b part 2 (v5 amended): at most two emoji, one leading the hook and o
   assert.match(CAPTION_INSTRUCTIONS, /At most two emoji/);
   assert.match(CAPTION_INSTRUCTIONS, /code puts the episode line above it/);
   assert.match(CAPTION_INSTRUCTIONS, /None in the Helios line or the hashtags/);
-  assert.match(CAPTION_INSTRUCTIONS, /Prefer naming a specific industry from the Helios context/);
+  assert.match(CAPTION_INSTRUCTIONS, /the industry from the Helios context that best matches this story/);
 });
