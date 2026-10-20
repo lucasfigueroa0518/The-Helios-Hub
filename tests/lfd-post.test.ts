@@ -72,3 +72,46 @@ test('the cover mosaic has a layout for every story count from 1 to 6', async ()
     }
   }
 });
+
+const LINES = {
+  opener: '⬅️ Swipe for a laundry robot, a new Claude model and a chip fight.',
+  body: 'A robot folded a full load of laundry this week.\n\nAnthropic put out a new Claude model.\n\nAnd two chip makers went to court.',
+  question: 'Which one caught your attention? 👇',
+  heliosLine: 'For a med spa, faster replies to booking questions is the part we at Helios would build first.',
+};
+
+test('captionFor with lines uses opener and heliosLine, not the template hook or FOLLOW_LINE', () => {
+  const caption = captionFor([0, 1].map(ready), LINES);
+  assert.equal(
+    caption,
+    [LINES.opener, LINES.body, LINES.question, LINES.heliosLine, 'Sources: Outlet 0, Outlet 1\nPhotos: Credit 0; Credit 1'].join('\n\n'),
+  );
+  assert.doesNotMatch(caption, /Do you realize what just happened/);
+  assert.doesNotMatch(caption, /Follow Helios/);
+  assert.doesNotMatch(caption, /– Story 0/);
+});
+
+test('falls back to template when lines is null', () => {
+  const items = [0, 1].map(ready);
+  assert.equal(captionFor(items, null), captionFor(items));
+  assert.match(captionFor(items, null), /^Do you realize what just happened in AI in the last few days\?/);
+  assert.equal(buildPost(items, new Date('2026-10-13T07:00:00Z'), null).caption, captionFor(items));
+  assert.equal(buildPost(items, new Date('2026-10-13T07:00:00Z'), LINES).caption, captionFor(items, LINES));
+});
+
+test('an over-long model caption trims body paragraphs from the end, never the question or the Helios line', () => {
+  const items = [0, 1].map(ready);
+  const para = (n: number) => `Paragraph ${n} ${'word '.repeat(150)}`.trim();
+  const lines = { ...LINES, body: [para(1), para(2), para(3)].join('\n\n') };
+  const caption = captionFor(items, lines);
+  assert.ok(caption.length <= 2200, String(caption.length));
+  assert.match(caption, /Paragraph 1/);
+  assert.doesNotMatch(caption, /Paragraph 3/);
+  assert.ok(caption.includes(`${LINES.question}\n\n${LINES.heliosLine}\n\nSources:`));
+});
+
+test('a model caption that cannot fit even with one body paragraph falls back to the template', () => {
+  const items = [0, 1].map(ready);
+  const caption = captionFor(items, { ...LINES, body: 'x'.repeat(2200) });
+  assert.equal(caption, captionFor(items));
+});
