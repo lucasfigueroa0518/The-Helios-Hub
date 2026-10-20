@@ -1,11 +1,14 @@
 // tests/slots-schedulers.test.ts (part 1: reels and explainers; part 2: carousels, Last Few Days, the 3 AM switch, Stories)
 /** The schedulers follow the calendar in template mode and are unchanged in legacy mode (spec §5). Offline. */
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
 
 import type { PGlite } from '@electric-sql/pglite';
 
 import type { Queryable } from '@/lib/explainers/db';
+import { explainersQuota } from '@/lib/explainers/ideas/cycle';
 import { scheduleJob } from '@/lib/explainers/publish/schedule';
 import { slotTakenKey } from '@/lib/instagram/window';
 import { threeAmQueue } from '@/lib/lfd/clock';
@@ -19,7 +22,7 @@ import { quotaFromSlots, slotPlan, storiesDueOn } from '@/lib/social-hub/slots';
 import { chooseByFeedMode } from '@/lib/social-hub/slots/choose';
 import { applySlotChanges, setSlotSource } from '@/lib/social-hub/slots/write';
 import type { PostingState } from '@/lib/content-type/posting';
-import { carouselFill, schedulePost } from '@/lib/social/overnight/schedule';
+import { carouselFill, nightStoriesFor, schedulePost } from '@/lib/social/overnight/schedule';
 import { requestAutoSets } from '@/lib/stories/schedule';
 import { loadSettings, saveSeriesSetting } from '@/lib/stories/settings';
 
@@ -236,6 +239,21 @@ test('explainers template: a started window still takes a post today (Review Foc
   assert.ok(new Date(row!.publish_at).getTime() > inAfternoon.getTime());
 });
 
+test('explainersQuota: legacy is posts_per_day; template is the day\'s explainers slot count', async () => {
+  const { db } = await scratchExplainersDb();
+  const q = ((text: string, params?: unknown[]) => db.query(text, params)) as never;
+  await db.query(`INSERT INTO explainers.settings (key, value) VALUES ('posts_per_day', '1'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+  assert.equal(await explainersQuota(db, '2026-10-21'), 1, 'legacy: posts_per_day');
+  await setSlotSource(q, 'template', 't');
+  const seeded = await quotaFromSlots(q, 'explainers', '2026-10-21');
+  assert.equal(await explainersQuota(db, '2026-10-21'), seeded, 'template: the slot count');
+  await applySlotChanges(q, [
+    { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'explainers', windowId: 'afternoon', action: 'add', feedMode: 'main' },
+    { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'explainers', windowId: 'late', action: 'add', feedMode: 'trial' },
+  ], { by: 't', now: LATE_TUESDAY, keepBooked: false });
+  assert.equal(await explainersQuota(db, '2026-10-21'), 2, 'template: both windows are slots, whatever posts_per_day says');
+});
+
 // ---- Part 2: the 3 AM switch ----
 
 const lfd = (autoRun: boolean) => parseLfdSettings([{ key: 'auto_run', value: autoRun }, { key: 'days', value: [2, 5] }]);
@@ -360,6 +378,17 @@ test('last few days template: a Wednesday LFD slot books; Tuesday without its te
   const tue = await seedLfdPost(query, { nyDate: '2026-10-20' });
   const out = await scheduleLfdPost(q, tue, 'auto', NOW, '2026-10-20', first);
   assert.equal(out.scheduled, false);
+});
+
+test('nightly carousel stories: legacy caps the fill at run_stories; template makes the whole fill', async () => {
+  const fill = { vertical: 'carousels' as const, nyDate: '2026-10-21', quota: 3, userPlaced: 0, making: 3 };
+  assert.equal(nightStoriesFor(fill, 2, 'legacy'), 2, 'legacy: run_stories caps it');
+  assert.equal(nightStoriesFor(fill, 2, 'template'), 3, 'template: the slots are the knob');
+  assert.equal(nightStoriesFor({ ...fill, making: 1 }, 2, 'template'), 1, 'never more than the fill');
+  assert.equal(nightStoriesFor({ ...fill, making: 0 }, 2, 'template'), 0, 'a filled day makes nothing');
+  // The worker uses the helper, not its own copy of the rule.
+  const worker = fs.readFileSync(path.join(process.cwd(), 'scripts/social_worker.ts'), 'utf8');
+  assert.match(worker, /nightStoriesFor\(fill, runStories, await readSlotSource\(query\)\)/);
 });
 
 // ---- The carousel health reporter ----

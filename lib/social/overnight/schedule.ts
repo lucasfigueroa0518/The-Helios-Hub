@@ -5,6 +5,7 @@ import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { slotTakenKey } from '@/lib/instagram/window';
 import { dailyFill, quotaFilledNote, type DailyFill } from '@/lib/social-hub/fill';
 import { nonSlotKeys, quotaFromSlots, slotPlan } from '@/lib/social-hub/slots';
+import type { SlotSource } from '@/lib/social-hub/slots/types';
 import { approveItem, bookSlot, rejectItem } from '@/lib/social-hub/spine';
 import { datesByWeekday } from '@/lib/lfd/days';
 import { carouselOffDays } from '@/lib/lfd/settings';
@@ -63,6 +64,14 @@ export async function carouselFill(query: Query, now = new Date()): Promise<Dail
 export function nightStories(fill: DailyFill, runStories: number): number {
   const knob = Number.isFinite(runStories) ? Math.max(0, Math.floor(runStories)) : 0;
   return Math.min(knob, fill.making);
+}
+
+/**
+ * The nightly carousel run's story count. Template mode: the day's carousel
+ * slots are the knob, so run_stories never cuts the fill. Legacy: nightStories.
+ */
+export function nightStoriesFor(fill: DailyFill, runStories: number, source: SlotSource): number {
+  return nightStories(fill, source === 'template' ? Math.max(runStories, fill.making) : runStories);
 }
 
 export type ScheduleOutcome = { scheduled: true; id: string; publishAt: string } | { scheduled: false; note: string };

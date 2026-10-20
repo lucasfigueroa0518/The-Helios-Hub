@@ -74,7 +74,7 @@ async function main(): Promise<void> {
   const { socialQuery } = await import('@/lib/social/store');
   const { autoRunOn, getSocialSetting, publishingLive, requireApproval } = await import('@/lib/social/overnight/settings');
   const runs = await import('@/lib/social/overnight/runs');
-  const { carouselFill, nightStories, releaseDueSchedules, scheduleRunPosts } = await import('@/lib/social/overnight/schedule');
+  const { carouselFill, nightStoriesFor, releaseDueSchedules, scheduleRunPosts } = await import('@/lib/social/overnight/schedule');
   const { quotaFilledNote, reportFill } = await import('@/lib/social-hub/fill');
   const { readTonightMoves } = await import('@/lib/social-hub/moves-store');
   const { ideaRef } = await import('@/lib/social-hub/views/moves');
@@ -195,8 +195,7 @@ async function main(): Promise<void> {
         return null;
       });
       // Template mode: the day's carousel slots are the knob, so run_stories never cuts the fill.
-      const template = (await readSlotSource(query)) === 'template';
-      stories = fill ? nightStories(fill, template ? Math.max(runStories, fill.making) : runStories) : runStories;
+      stories = fill ? nightStoriesFor(fill, runStories, await readSlotSource(query)) : runStories;
       if (fill) reportFill(fill, log, { runId: run.id, runStories, stories });
       if (fill && stories < 1) {
         const note = `${quotaFilledNote(fill, 'carousel')} The run made nothing new.`;
