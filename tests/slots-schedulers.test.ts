@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import test from 'node:test';
+import test, { afterEach } from 'node:test';
 
 import type { PGlite } from '@electric-sql/pglite';
 
@@ -30,6 +30,14 @@ import { scratchExplainersDb } from './explainers-pglite';
 import { seedLfdPost } from './fixtures/lfd/seed';
 import { openHubTestDb } from './fixtures/social-hub/pglite';
 import { harnessDb } from './stories-harness';
+
+// Tests here point lib/db.ts's shared pool at PGlite; put the previous one back after each.
+const poolHolder = globalThis as { __outreachHubPool?: unknown };
+const poolBefore = poolHolder.__outreachHubPool;
+afterEach(() => {
+  if (poolBefore === undefined) delete poolHolder.__outreachHubPool;
+  else poolHolder.__outreachHubPool = poolBefore;
+});
 
 const NOW = new Date('2026-10-20T04:00:00Z'); // Tue Oct 20, midnight New York
 const first = () => 0;

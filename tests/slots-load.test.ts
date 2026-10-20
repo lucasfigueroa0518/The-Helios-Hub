@@ -55,7 +55,7 @@ test('feedModeFor and bookingFeedMode fall back to each type\'s old behavior (Re
   // No booking at all (a force post): legacy.
   assert.equal(await bookingFeedMode(q, null, 'explainers'), 'main');
   assert.equal(await bookingFeedMode(q, null, 'reels', 'idea-1'), 'trial');
-  // A booking that says main wins.
+  // A booking's own feed mode wins: this one says 'trial', beating the legacy default 'main' for explainers.
   const item = await pg.query<{ id: string }>(`INSERT INTO social_hub.content_items (vertical, format, native_ref) VALUES ('explainers', 'reel', 'job-1') RETURNING id`);
   await pg.query(
     `INSERT INTO social_hub.schedule (content_item_id, vertical, ny_date, slot, publish_at, status, source, feed_mode)

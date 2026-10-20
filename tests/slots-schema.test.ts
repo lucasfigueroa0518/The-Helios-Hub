@@ -20,6 +20,25 @@ test('slot_override: remove carries no feed_mode, add on a reel type needs one',
   await pg.query(`INSERT INTO social_hub.slot_override (ny_date, vertical, window_id, action, feed_mode) VALUES ('2026-10-25', 'carousels', 'morning', 'remove', NULL)`);
   await assert.rejects(pg.query(`INSERT INTO social_hub.slot_override (ny_date, vertical, window_id, action, feed_mode) VALUES ('2026-10-21', 'reels', 'morning', 'remove', 'main')`), /feed_mode/);
   await assert.rejects(pg.query(`INSERT INTO social_hub.slot_override (ny_date, vertical, window_id, action, feed_mode) VALUES ('2026-10-21', 'explainers', 'late', 'add', NULL)`), /feed_mode/);
+  // An add on a non-reel type carries no feed_mode.
+  await assert.rejects(pg.query(`INSERT INTO social_hub.slot_override (ny_date, vertical, window_id, action, feed_mode) VALUES ('2026-10-22', 'carousels', 'morning', 'add', 'main')`), /slot_override_feed_mode_check/);
+  // Only add and remove are actions.
+  await assert.rejects(pg.query(`INSERT INTO social_hub.slot_override (ny_date, vertical, window_id, action, feed_mode) VALUES ('2026-10-22', 'carousels', 'afternoon', 'move', NULL)`), /slot_override_action_check/);
+});
+
+test('schedule_feed_mode_check: only reel types carry a feed mode', async () => {
+  const { pg } = await openHubTestDb();
+  const item = async (vertical: string, ref: string) =>
+    (await pg.query<{ id: string }>(`INSERT INTO social_hub.content_items (vertical, format, native_ref) VALUES ($1, 'feed', $2) RETURNING id`, [vertical, ref])).rows[0]!.id;
+  const book = (id: string, vertical: string, mode: string | null) => pg.query(
+    `INSERT INTO social_hub.schedule (content_item_id, vertical, ny_date, slot, publish_at, status, source, feed_mode)
+     VALUES ($1, $2, '2026-10-21', 'morning', '2026-10-21T13:00:00Z', 'scheduled', 'auto', $3)`,
+    [id, vertical, mode],
+  );
+  const carousel = await item('carousels', 'c-1');
+  await book(carousel, 'carousels', null);
+  await book(await item('reels', 'r-1'), 'reels', 'trial');
+  await assert.rejects(book(await item('carousels', 'c-2'), 'carousels', 'trial'), /schedule_feed_mode_check/);
 });
 
 test('schedule has feed_mode, and slot_source starts at legacy', async () => {

@@ -69,7 +69,7 @@ test('explainers: scheduleJob and queuePublish work without feed_mode (legacy)',
 
   const booked = await scheduleJob(db, jobId, 'auto', NOW, undefined, first);
   assert.equal(booked.scheduled, true, booked.scheduled ? '' : booked.note);
-  // A second booking attempt reads the explainers' own spacing again (ownFeedTimes).
+  // A second booking attempt returns early on the existing booking (it doesn't book or read spacing again).
   assert.equal((await scheduleJob(db, jobId, 'auto', NOW, undefined, first)).scheduled, true);
 
   const queued = await queueExplainer(db, jobId, 'approve');

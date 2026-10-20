@@ -1,6 +1,6 @@
 /** Hub views, placement and type-page posting settings in template mode (weekly slot calendar spec §3, §4). Offline. */
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { afterEach } from 'node:test';
 
 import { typeHubModel } from '@/lib/content-type/model';
 import { readPosting, writePosting } from '@/lib/content-type/posting';
@@ -16,6 +16,14 @@ import { capacityWindows, dayPlan, windowsOn } from '@/lib/social-hub/views/plan
 
 import { openHubTestDb } from './fixtures/social-hub/pglite';
 import { FIXTURE_NOW, previewDataset } from './fixtures/social-hub/preview-dataset';
+
+// Tests here point lib/db.ts's shared pool at PGlite; put the previous one back after each.
+const poolHolder = globalThis as { __outreachHubPool?: unknown };
+const poolBefore = poolHolder.__outreachHubPool;
+afterEach(() => {
+  if (poolBefore === undefined) delete poolHolder.__outreachHubPool;
+  else poolHolder.__outreachHubPool = poolBefore;
+});
 
 const tpl = seedTemplate(DEFAULT_SEED_INPUTS);
 const slotsFor = (dates: string[], overrides = [] as Parameters<typeof resolveDay>[1]): SlotsByDate =>

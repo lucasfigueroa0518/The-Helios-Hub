@@ -45,8 +45,8 @@ test('validateDay: LFD and Carousels never share a day; feed_mode only on reel t
   const day = (tpl: TemplateRow[]) => resolveDay(tpl, [], '2026-10-20');
   assert.deepEqual(validateDay(day([T(2, 'last_few_days', 'morning'), T(2, 'carousels', 'afternoon')])), [LFD_CAROUSEL_CONFLICT]);
   assert.deepEqual(validateDay(day([T(2, 'last_few_days', 'morning'), T(2, 'reels', 'morning', 'trial')])), []);
-  assert.equal(validateDay(day([T(2, 'reels', 'morning', null)])).length, 1);
-  assert.equal(validateDay(day([T(2, 'stories', 'morning_download', 'main')])).length, 1);
+  assert.deepEqual(validateDay(day([T(2, 'reels', 'morning', null)])), ['Text on Screen (morning) needs Trial or Main feed.']);
+  assert.deepEqual(validateDay(day([T(2, 'stories', 'morning_download', 'main')])), ['IG Stories posts aren’t reels, so they have no Trial or Main feed.']);
 });
 
 test('parity: the seeded template gives exactly today\'s windows on every weekday', () => {
