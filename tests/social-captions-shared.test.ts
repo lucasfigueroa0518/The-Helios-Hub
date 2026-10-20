@@ -63,9 +63,14 @@ test('exactly one build-line row in the window still allows', () => {
   assert.equal(ceilingAllows([row(true, 0), row(false, 1), row(false, 2)]), true);
 });
 
-test('buildFitState slices story text to 6000 under untrusted_content', () => {
-  const st = buildFitState({ headline: 'H', text: 'x'.repeat(7000) }) as { helios: string; story: { untrusted_content: string } };
-  assert.equal(st.story.untrusted_content.length, 6000);
+test('buildFitState puts the headline and the text under untrusted_content, each capped', () => {
+  const st = buildFitState({ headline: 'H'.repeat(500), text: 'x'.repeat(7000) }) as {
+    helios: string;
+    story: { untrusted_content: { headline: string; text: string } };
+  };
+  assert.deepEqual(Object.keys(st.story), ['untrusted_content'], 'nothing from the story sits outside untrusted_content');
+  assert.equal(st.story.untrusted_content.text.length, 6000);
+  assert.equal(st.story.untrusted_content.headline.length, 300);
   assert.ok(st.helios.includes('forward-deployed'));
 });
 
