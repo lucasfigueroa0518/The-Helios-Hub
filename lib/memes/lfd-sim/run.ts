@@ -180,8 +180,8 @@ async function waitForRequests(d: SimDeps, ids: string[], onChange: (r: { id: st
  * Two per-side cleanups so the meme sits on the slide's dark ground without a stray white edge:
  *  - a clean off-white frame (a solid light band, then a sharp edge into the picture) that some template images
  *    carry, which JPEG noise keeps past the trim, is cut;
- *  - a side where content on a white ground touches the edge (a white-background template's text, a caption strip)
- *    gets a little of its own white back, so the text breathes.
+ *  - a white-ground meme (a white-background template such as Buff Doge) gets a little of its own white back on
+ *    each side its text touches, so the text breathes.
  */
 export async function trimLetterbox(png: Buffer): Promise<Buffer> {
   const sharp = (await import('sharp')).default;
@@ -227,7 +227,23 @@ export async function trimLetterbox(png: Buffer): Promise<Buffer> {
     left: (i: number) => share(h, (y) => inked(i, y)) * h,
     right: (i: number) => share(h, (y) => inked(w - 1 - i, y)) * h,
   };
-  const touches = (k: Side) => lines[k](0) >= 0.6 && inkOn[k](0) + inkOn[k](1) >= 3;
+  // Only a meme on a white ground (its outer ring nearly all light, as Buff Doge or Marked Safe) gets white back; a
+  // picture meme whose light edge is touched by art (Bike Fall, Drake) would read as a white border.
+  const ringW = Math.max(1, Math.round(Math.min(w, h) * WHITE_RING));
+  let ringLight = 0;
+  let ringAll = 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (x >= ringW && x < w - ringW && y >= ringW && y < h - ringW) {
+        x = w - ringW - 1;
+        continue;
+      }
+      ringAll++;
+      if (light(x, y)) ringLight++;
+    }
+  }
+  const whiteGround = ringLight / ringAll >= WHITE_GROUND;
+  const touches = (k: Side) => whiteGround && inkOn[k](0) + inkOn[k](1) >= 3;
   const pad = Object.fromEntries(sides.map((k) => [k, !cut[k] && touches(k) ? padBy : 0])) as Record<Side, number>;
   if (sides.every((k) => !cut[k] && !pad[k])) return trimmed;
   let img = sharp(trimmed);
@@ -245,6 +261,9 @@ const FRAME_MAX = 0.04;
 const FRAME_EDGE = 3;
 /** The white given back on a side where white-ground content touches the edge, as a share of the longer side. */
 const WHITE_PAD = 0.03;
+/** The outer ring read to tell a white-ground meme, as a share of the shorter side, and how light it must be. */
+const WHITE_RING = 0.03;
+const WHITE_GROUND = 0.85;
 
 /** A trimmed meme as the post renders it: a data URL and its width / height. */
 export async function memeImageOf(png: Buffer): Promise<{ url: string; aspect?: number }> {
