@@ -3,11 +3,13 @@
  * aside for one body 4 characters over the limit after the Writer's retry).
  *
  * When a Writer or Editor draft still fails after its retry, and the only
- * failures are lines over their character limit (C1: cover, headline, body,
- * caption; a quote is exact text and is never shortened), one small Claude
+ * failures are lines over their character limit (C1: cover, headline, body;
+ * a quote is exact text and is never shortened), one small Claude
  * call shortens just those lines. Code checks the result: every line at or
  * under its limit, nothing empty, no number that wasn't in the line before.
- * The patched draft then goes through the stage's full check again.
+ * The patched draft then goes through the stage's full check again. The
+ * caption is not here: it is empty at the Writer and the Editor, and the
+ * captioner checks its own length (social-captions redesign, 2026-10-19).
  *
  *   classification: AI call · shorten · 0 stages · +1 call, only when a draft would be set aside for length
  *
@@ -41,7 +43,7 @@ export const LINES_SCHEMA = obj({
 
 export const SUBMIT_LINES_TOOL = { name: 'submit_lines', description: 'Submit the shortened lines. Call it once.', input_schema: LINES_SCHEMA } as unknown as Anthropic.Tool;
 
-/** A line to shorten: where it is ("slide 7 body", "cover", "caption"), its limit and text. */
+/** A line to shorten: where it is ("slide 7 body", "cover"), its limit and text. */
 export type OverLine = { id: string; where: string; limit: number; text: string };
 
 /** The draft lines over their limit (C1), quotes excepted; null when anything else is wrong. */
@@ -56,7 +58,6 @@ export function overLimitLines(d: DraftSubmission): OverLine[] {
     const room = LIMITS.slide - Math.min(s.headline.text.length, LIMITS.headline);
     if (s.body) add(`slide ${i + 2} body`, s.body.text, Math.min(LIMITS.body, room));
   });
-  add('caption', d.caption.text, LIMITS.caption);
   return out;
 }
 
@@ -69,7 +70,6 @@ export function applyLines(d: DraftSubmission, lines: OverLine[], texts: Map<str
   for (const l of lines) {
     const t = texts.get(l.id)!;
     if (l.where === 'cover') out.cover_options[out.chosen_cover - 1]!.text = t;
-    else if (l.where === 'caption') out.caption.text = t;
     else {
       const m = /^slide (\d+) (headline|body)$/.exec(l.where)!;
       const s = out.slides[Number(m[1]) - 2]!;

@@ -99,6 +99,12 @@ test('overLimitLines: headline + body over 168 with each in its own limit → th
   assert.equal(lines[0]!.limit, LIMITS.slide - d.slides[0]!.headline.text.length);
 });
 
+test('overLimitLines: slides and cover only; the caption is the captioner\'s, never the shortener\'s', () => {
+  const d = sifDraftHandoff();
+  d.caption = { text: 'x'.repeat(LIMITS.caption + 50), facts: [] };
+  assert.deepEqual(overLimitLines(d), []);
+});
+
 test('Writer: 172 chars together beside photo-request errors on the final attempt → rescued by the shorten call, visuals dropped', async () => {
   const bad = sifDraftHandoff();
   overCombined(bad, 172);
