@@ -102,7 +102,9 @@ or send it.
   to marketing or sales work in general only when none fits. Do not cycle
   through a short list of favourite industries. It gives Helios's view: a
   concrete call or piece of advice for that industry about this concept.
-  `include_build_line` says whether it may also say what Helios builds.
+  `include_build_line` says whether it may also say what Helios builds (code
+  sets it from a Jev fit score and a ceiling of about 1 in 3 recent explainer
+  captions); never add that on your own.
   Do not start it the way any recent closing starts, and vary where "Helios"
   sits in the sentence. No stock tags: "the kind of thing we think about",
   "how we think about it", "we post more takes like this", "that's where
@@ -110,10 +112,6 @@ or send it.
   clause inviting the viewer to follow for the next episode is rare, never the
   default. It adds no new fact about the concept. Code rejects a caption whose
   paragraph before the hashtags does not name Helios.
-- Code decides whether the Helios line also says what Helios builds that this
-  concept touches (`include_build_line`: a Jev fit score plus a ceiling of about
-  1 in 3 recent explainer captions). Follow it; never add that sentence on your
-  own.
 
 ## How to write it
 

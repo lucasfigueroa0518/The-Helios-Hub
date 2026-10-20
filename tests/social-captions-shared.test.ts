@@ -61,13 +61,14 @@ test('buildLineInstruction switches on include', () => {
   assert.match(buildLineInstruction(true), /In the Helios line/);
   assert.match(buildLineInstruction(false), /In the Helios line/);
   // Fix round 1 (controller, 2026-10-20): the build-line distinction stays. False: Helios's view, no build or service claim.
-  assert.match(buildLineInstruction(false), /do not say what Helios builds or does for clients/i);
-  assert.match(buildLineInstruction(false), /Helios's view on what this story means for the industry it names/);
-  assert.match(buildLineInstruction(false), /opinion or advice/);
-  assert.match(buildLineInstruction(false), /vary the shape/);
+  // Fix round 2: a content description, no example shapes (they become templates and invite service claims).
+  assert.match(buildLineInstruction(false), /Helios's call for this industry about this story: something to start, stop, or watch/);
+  assert.match(buildLineInstruction(false), /with no description of anything Helios builds or does for clients/);
+  assert.doesNotMatch(buildLineInstruction(false), /what we would tell|in its place/);
   assert.match(buildLineInstruction(false), /No service claims/);
   assert.match(buildLineInstruction(true), /may say what Helios builds/);
   assert.match(buildLineInstruction(true), /drawn only from the Helios context/);
+  assert.match(buildLineInstruction(true), /If you do, that sentence is the only place Helios is named/);
 });
 
 test('exactly one build-line row in the window still allows', () => {

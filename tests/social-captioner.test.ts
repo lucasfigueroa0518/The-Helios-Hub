@@ -53,7 +53,7 @@ const NEWS = {
   facts: ['F1', 'F2', 'F3', 'N1', 'F6'],
 };
 const READ = {
-  text: 'For a law firm or an insurance broker, the rules on AI tools may get looser before they get tighter. At Helios we would build for both: systems you own, ready for whichever way the report lands.',
+  text: 'For a law firm, the rules on AI tools may get looser before they get tighter, and Helios would tell its partners to keep client files out of any tool they could not switch off tomorrow.',
   facts: ['F6'],
 };
 const good = () => ({ news: structuredClone(NEWS), read: structuredClone(READ) });
@@ -357,4 +357,7 @@ test('copy fix (2026-10-20): the carousel caption is the take, about 500 to 900 
   assert.match(schema.properties.news.properties.text.description, /500 to 900 characters/);
   assert.match(schema.properties.read.properties.text.description, /one concrete point/);
   assert.doesNotMatch(schema.properties.read.properties.text.description, /doing something specific it builds/);
+  // Fix round 2: the good-read fixture follows the rules itself: one industry, no build or service claim.
+  assert.doesNotMatch(READ.text, /At Helios we would build|insurance|systems you own/);
+  assert.match(READ.text, /^For a law firm,/);
 });
