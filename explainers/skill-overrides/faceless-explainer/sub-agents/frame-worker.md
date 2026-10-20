@@ -39,14 +39,26 @@ it (`anchor: scene`: frames 1, 2, 4 and 5; frame 6 may cut back to it once):
   the rest falls out of frame by itself. When the voice names a critter doing something, it is
   in view doing it.
 
-## Frame 1
+## Frame 1 (HARD CONSTRAINT: write `assets/frames/01-hook.js`, never `01-opener.js`)
 
-The storyboard's picked **hook** (`## Hook`), already moving at t=0 (first visible change by
-0.3s), clear on its own, building with the riser (`ramp-up`). Never a slow pan over a still scene.
-Over it, drawn after the scene: `titleCard(t, { term, to: VOICE_END - 0.1 })` with the
-storyboard's `term:`; it slides in from the first frame and starts writing at 0.25s (EX3-93).
-Sounds: the hook's motion, `paper slide` at 0.1s for the card, a `pen writing` foley with `dur`
-under "today's brain break:" and a `marker writing` one under the term.
+Frame 1 is the bank's opener (EX3-102): code wrote `01-opener.js`, which plays the opener named
+in `assets/opener.json` over **your hook**. You write only the hook, `assets/frames/01-hook.js`,
+to the contract in frame.md § 1:
+
+- the storyboard's picked **hook** (`## Hook`), already moving at t=0 (first visible change by
+  0.3s), clear on its own, building (`ramp-up`), under `shotFrame(t, shots, draw)`; never a slow
+  pan over a still scene;
+- `export const hero = { at, s, who, critter }`: the hook's critter (the one the voice's slot
+  names, or the one in charge), `at` its feet on the page (the world's `LAYOUT` spot, before any
+  camera), `s` the scale it is drawn at, `who` its world id, `critter` the `critter()` options
+  that make it itself (`wear`, `body`);
+- `draw(t, { hideHero = false, heroPose = {} } = {})`: leave the hero out when `hideHero` is
+  true, and pass `heroPose` last into its options (`look`, `arms`, `mood`), so an opener can cut
+  it out, zoom into its eye or make it look at the viewer;
+- no title card, no text, no events file: the opener draws "AI BRAIN BREAK" and the title card,
+  and its stem is the frame's sound.
+
+Try it with `node assets/kit/try.mjs frame 01-opener` (the opener over your hook).
 
 ## Frame 2
 

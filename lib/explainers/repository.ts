@@ -352,6 +352,26 @@ export async function listJobs(db: Queryable, limit = 50): Promise<JobRow[]> {
   return rows.map(toJob);
 }
 
+/**
+ * The openers of the latest reels before job `exceptJobId`, newest first (EX3-102): every job
+ * that drew one, except failed ones (they never became a video).
+ */
+export async function recentOpeners(db: Queryable, exceptJobId: string, limit: number): Promise<string[]> {
+  const { rows } = await db.query<{ opener: string }>(
+    `SELECT opener FROM explainers.jobs
+      WHERE opener IS NOT NULL AND id <> $1 AND status <> 'failed'
+      ORDER BY seq DESC
+      LIMIT $2`,
+    [exceptJobId, limit],
+  );
+  return rows.map((r) => r.opener);
+}
+
+/** Record the opener job `id` drew. */
+export async function setJobOpener(db: Queryable, id: string, opener: string): Promise<void> {
+  await db.query('UPDATE explainers.jobs SET opener = $2 WHERE id = $1', [id, opener]);
+}
+
 export async function setJobStage(
   db: Queryable,
   id: string,

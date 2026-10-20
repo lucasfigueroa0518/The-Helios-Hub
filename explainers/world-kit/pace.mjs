@@ -31,7 +31,9 @@ import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { CLOSE } from './close-timing.js';
-import { CLOSE_FRAME, isClose, parseFrames, seconds, writeClose } from './frames.mjs';
+import { CLOSE_FRAME, isClose, parseFrames, seconds, writeClose, writeOpener } from './frames.mjs';
+import { openerByKey } from './openers/bank.js';
+import { ensureOpener } from './openers/sound.mjs';
 
 export { CLOSE_FRAME, isClose };
 
@@ -227,8 +229,28 @@ function probeDuration(file) {
   return Number.isFinite(d) && d > 0 ? d : null;
 }
 
+/**
+ * Put `lead` seconds of silence before a voice file (the opener's wait before its line, EX3-102),
+ * shifting its words; records it as `lead_s`. A voice already led is left alone.
+ */
+export function leadVoice(root, v, lead) {
+  if (!(lead > 0) || Number(v.lead_s) > 0) return null;
+  const wav = join(root, v.path);
+  const tmp = `${wav}.lead.wav`;
+  const ms = Math.round(lead * 1000);
+  const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-i', wav, '-af', `adelay=${ms}:all=1`, tmp], { encoding: 'utf8' });
+  if (r.status !== 0) return `frame ${v.frame}: the opener's lead failed: ${String(r.stderr).trim().slice(0, 200)}`;
+  renameSync(tmp, wav);
+  Object.assign(v, {
+    lead_s: r3(lead),
+    duration_s: r3(v.duration_s + lead),
+    words: (v.words ?? []).map((w) => ({ ...w, start: r3(w.start + lead), end: r3(w.end + lead) })),
+  });
+  return null;
+}
+
 /** Tighten every voice in audio_meta.json in place; returns the per-frame seconds removed. */
-export function tightenVoices(root, meta, { detect = detectSilences } = {}) {
+export function tightenVoices(root, meta, { detect = detectSilences, lead = 0 } = {}) {
   const removed = [];
   const errors = [];
   for (const v of meta.voices ?? []) {
@@ -250,7 +272,7 @@ export function tightenVoices(root, meta, { detect = detectSilences } = {}) {
     const cuts = silenceCuts(words, duration, silences, { lead: opener ? OPENER_LEAD : null });
     const untightened = (fallback) => {
       copyFileSync(orig, wav);
-      Object.assign(v, { words_orig: words, duration_orig: r3(duration), words: shiftWords(words, [], silences), duration_s: r3(duration) });
+      Object.assign(v, { words_orig: words, duration_orig: r3(duration), words: shiftWords(words, [], silences), duration_s: r3(duration), lead_s: 0 });
       removed.push({ frame: v.frame, removed: 0, cuts: 0, ...(fallback ? { fallback } : {}) });
     };
     if (!cuts.length && !opener) {
@@ -283,8 +305,15 @@ export function tightenVoices(root, meta, { detect = detectSilences } = {}) {
       } else errors.push(`frame ${v.frame}: the opener speed-up failed: ${String(t.stderr).trim().slice(0, 200)}`);
     }
     renameSync(tmp, wav);
-    Object.assign(v, { words_orig: words, duration_orig: r3(duration), words: tightWords, duration_s: r3(final) });
+    Object.assign(v, { words_orig: words, duration_orig: r3(duration), words: tightWords, duration_s: r3(final), lead_s: 0 });
     removed.push({ frame: v.frame, removed: r3(duration - v.duration_s), cuts: cuts.length, ...(opener ? { tempo: OPENER_TEMPO } : {}) });
+  }
+  // The opener waits `lead` before its line (EX3-102): silence in front of frame 1's voice, so
+  // frame 1's length and every later frame's start take it in.
+  for (const v of meta.voices ?? []) {
+    if (Number(v.frame) !== OPENER_FRAME || !v.path || !existsSync(join(root, v.path))) continue;
+    const err = leadVoice(root, v, lead);
+    if (err) errors.push(err);
   }
   return { removed, errors };
 }
@@ -350,7 +379,8 @@ export function pace(root, { tighten = true } = {}) {
   const meta = JSON.parse(readFileSync(metaFile, 'utf8'));
   let tightened = [];
   if (tighten) {
-    const t = tightenVoices(root, meta);
+    const key = ensureOpener(root);
+    const t = tightenVoices(root, meta, { lead: key ? openerByKey(key).voiceAt : 0 });
     tightened = t.removed;
     errors.push(...t.errors);
     writeFileSync(metaFile, `${JSON.stringify(meta, null, 1)}\n`);
@@ -362,6 +392,8 @@ export function pace(root, { tighten = true } = {}) {
   for (const f of frames) if (!paced.some((p) => p.frame === f.number)) errors.push(`frame ${f.number} has no voice in audio_meta.json`);
   // The close is code's, not a worker's (EX3-95): its module and sounds exist from here on.
   for (const f of frames) if (isClose(f) && f.id) writeClose(root, f);
+  // So is frame 1 when the job chose an opener (EX3-102): the bank's opener over the hook.
+  for (const f of frames) if (f.number === OPENER_FRAME && f.id) writeOpener(root, f);
   mkdirSync(join(root, 'assets', 'timing'), { recursive: true });
   for (const f of frames) {
     const voice = (meta.voices ?? []).find((v) => Number(v.frame) === f.number);

@@ -41,7 +41,7 @@ in real life. Then write the eight beats around it.
 
 | # | Nominal | Beat | `type` | Default `engagement` | Words | `hold` | Anchor |
 |---|---|---|---|---|---|---|---|
-| 1 | 3.5s | Series opener: the picked hook, the opener template line, the title card writing itself from the first frame | `hook` | Open loop + visual hook + audio ramp | template (12–14) | 0.15s | the picked hook |
+| 1 | 4–5s | Series opener: the bank's opener over the picked hook, the opener template line, then the title card (code) | `hook` | Open loop + visual hook + audio ramp | template (12–14) | 0.15s | the picked hook |
 | 2 | 9s | Curiosity gap: a stuck character in the hook's scene, the viewer's question, a promise | `pain_point` | Attention reset + curiosity gap | 18–36 | 0.15s | the scene (required) |
 | 3 | 7s | Define the term: dictionary card + a visual | `product_intro` | Grounding definition | 12–26 | 0.15s | own (the card) |
 | 4 | 12s | Everyday analogy: continue the scene, then play it | `feature_showcase` | Scene setting + analogy anchor + anticipation | 20–36 | 0.15s | the scene |
@@ -66,10 +66,12 @@ words; a reel past 65s only draws a warning.
   in one second they must know what they are looking at (a familiar situation, recognizable
   critters and props) and see something worth a second look (a problem, a surprise, a near-miss).
   A hook that is niche, strange, or needs the analogy explained first fails, however clever.
-- **From the first frame, the title card** slides in and writes itself in the top band: "today's brain break:"
-  and the term (the frontmatter's `term:`, the name a viewer would search for: "agent loop",
-  "webhooks", "context window").
-- **Sound:** a riser builds under the opener and crests on the cut to beat 2 (placed by code).
+- **The opener is the bank's** (EX3-102, placed by code): an animated intro drawn at random
+  (never one of the last 8 reels'), an audio and visual pattern break built over your hook. It
+  shows "AI BRAIN BREAK" first, then the title card writes "today's brain break:" and the term
+  (the frontmatter's `term:`, the name a viewer would search for: "agent loop", "webhooks",
+  "context window"). Plan the hook and the line; never plan the opener's text, sound or timing.
+- **Sound:** the opener's own, and the hit on the cut to beat 2 (placed by code).
 
 ### The 1→2 break
 

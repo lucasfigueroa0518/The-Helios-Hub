@@ -160,6 +160,8 @@ export type JobRow = {
   frame_worker_model: string;
   session_a_id: string | null;
   session_b_id: string | null;
+  /** The bank opener frame 1 drew (EX3-102); null before the render picks one. */
+  opener?: string | null;
   requested_at: string;
   started_at: string | null;
   finished_at: string | null;

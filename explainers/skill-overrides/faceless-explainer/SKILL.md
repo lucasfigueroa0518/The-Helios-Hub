@@ -67,8 +67,10 @@ Wait for the Step 3.1 audio to finish. Then, in this order:
    - `node assets/kit/music.mjs`: the bed (groovy funk, driving indie, or hip-hop instrumental,
      fitted to the reel's length). It must print `"ok": true`; on an error, run it once more,
      then continue without music and say so in your last message.
-   - `node assets/kit/opener-sfx.mjs` (the riser into the 1→2 cut and the hit on it; frame 1's
-     real length is now known). It must print `"ok": true`.
+   - `node assets/kit/opener-sfx.mjs` (the bank opener's own sound, the bed held back until its
+     drop, and the hit on the 1→2 cut; frame 1's real length is now known, EX3-102). It must
+     print `"ok": true`. `pace.mjs` has already written frame 1's module (`01-opener.js`, the
+     opener named in `assets/opener.json`); frame 1's worker writes only the hook, `01-hook.js`.
    - Never run `audio.mjs fetch-sfx`: sound effects are designed per frame (item 6).
 2. **Packets.** `node <SKILL_DIR>/scripts/frame-packets.mjs --project . --storyboard ./STORYBOARD.md`
    writes one packet per frame and `_role.md` under `.hyperframes/frame-packets/`.
@@ -122,7 +124,8 @@ You know what every drawing is meant to be, so you cannot judge whether a strang
 A `picture-checker` agent, which knows nothing of the storyboard, looks instead.
 
 1. **Snapshot** these moments in reel time (frame starts are the running sum of the storyboard
-   durations): frame 1 at 0.5s (the hook); 0.3s before the end of every shot in frames 1, 2, 4,
+   durations): frame 1 0.3s before its end (the hook, after the opener's break); 0.3s before the
+   end of every shot in frames 2, 4,
    5, 6 and 7 (after its write-ons, so every picture the viewer sees is looked at once; a frame
    of one shot is one moment); frame 3 0.3s before its end (the dictionary card); the close 0.2s
    before its end:
