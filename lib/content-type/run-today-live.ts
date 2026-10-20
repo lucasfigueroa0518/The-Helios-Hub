@@ -22,6 +22,8 @@ import { nyDateOf } from '@/lib/social-hub/time';
 import { capacityWindows, placedCount } from '@/lib/social-hub/views/plan';
 import { generate as requestStorySet } from '@/lib/stories/api';
 import { liveStoriesDb } from '@/lib/stories/db';
+import type { Series } from '@/lib/stories/render/types';
+import { openStorySlots } from '@/lib/stories/schedule';
 import { DEFAULT_LFD_RUN_CAP_USD } from '@/lib/lfd/config';
 import { queueManualLfdRun } from '@/lib/lfd/manual';
 import { readLfdSettings } from '@/lib/lfd/settings';
@@ -75,9 +77,12 @@ export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean } =
   const quotas = dataset.dayQuotas ?? DEFAULT_DAY_QUOTAS;
   // A type's quota is its posts per day, never more than its windows today (the candidates use the same rule).
   const day = (v: 'reels' | 'carousels' | 'explainers') => typeDay(quotaCandidates(dataset, v, now), Math.min(quotas[v], capacityWindows(v, today, dataset.dayQuotas?.lfdDays ?? [], placedCount(dataset.posts, v, today), today, dataset.dayQuotas?.slots ?? null).length));
-  // Stories: each series due today by its own settings, or (template mode) the series with a Stories slot today, as the 4 AM worker decides.
-  const dueOn = storySlots ? (id: string, nyDate: string) => nyDate === today && storySlots.some((s) => s.series === id) : null;
-  const series = seriesDueToday(stories.series ?? [], today, new Set(sets.rows.map((r) => r.series)), dueOn);
+  // Stories: each series due today by its own settings, or (template mode) a series while it has an
+  // open slot today (capped, not passed, not held), the slots the 4 AM worker would still request.
+  const open = storySlots ? await openStorySlots(liveStoriesDb, storySlots, now).catch(() => null) : null;
+  const dueOn = open ? (id: string) => (open.get(id as Series)?.open.length ?? 0) > 0 : null;
+  const held = open ? new Set<string>() : new Set(sets.rows.map((r) => r.series));
+  const series = seriesDueToday(stories.series ?? [], today, held, dueOn);
   return planFrom({
     today,
     reels: { ...day('reels'), slateToday: Number(slate.rows[0]?.n ?? 0) > 0 },

@@ -15,11 +15,11 @@
 import { FVP_PAIR_SCORE } from '@/lib/stories/questions';
 import { FVP_COPY, FVP_PAIR, FVP_VERIFY, material, type FvpCopyOut, type FvpPair, type FvpPairOut, type FvpVerifyOut } from '@/lib/stories/prompts';
 import type { FrameData } from '@/lib/stories/render/types';
-import { recentKeys, type NewCandidate } from '@/lib/stories/repository';
+import type { NewCandidate } from '@/lib/stories/repository';
 import { freeToolLeads, type ToolLead } from '@/lib/stories/sources/reels';
 import { writeStructured } from '@/lib/stories/writer';
 
-import { findPhoto, nextBackdrop, toFrames, type BuildDeps, type BuildResult } from './common';
+import { findPhoto, keysToAvoid, nextBackdrop, toFrames, type BuildDeps, type BuildResult } from './common';
 
 export const FVP_BAR = 0.6;
 /** The paid price as struck on the free frame: "$22.99/mo", "$99/yr", else price and period. */
@@ -74,7 +74,7 @@ async function recordFvpSkip(deps: BuildDeps, rec: FvpSkipRecord): Promise<void>
 export async function buildFreeVsPaid(deps: BuildDeps, leads?: () => Promise<ToolLead[]>): Promise<BuildResult> {
   const log: string[] = [];
   const candidates: NewCandidate[] = [];
-  const shown = await recentKeys(deps.db, 'free_vs_paid', 90, deps.now);
+  const shown = await keysToAvoid(deps, 'free_vs_paid', 90);
   const pooled = deps.pool;
   const found = await (leads ?? (pooled ? async () => pooled.leads : () => freeToolLeads(deps.sourceDb, deps.nyDate)))().catch(() => []);
   const rec: FvpSkipRecord = {

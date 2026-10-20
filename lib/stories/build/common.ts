@@ -7,7 +7,7 @@ import type { StoriesJev } from '@/lib/stories/jev';
 import type { PhotoFinder, PhotoRequest } from '@/lib/stories/photos';
 import type { OpenPool } from '@/lib/stories/pool';
 import { BACKDROPS, type Backdrop, type FrameData, type Photo, type Series } from '@/lib/stories/render/types';
-import type { NewCandidate, NewFrame } from '@/lib/stories/repository';
+import { recentKeys, sameDayKeys, type NewCandidate, type NewFrame } from '@/lib/stories/repository';
 import type { StoriesSettings } from '@/lib/stories/settings';
 import type { SourcePage } from '@/lib/stories/source-page';
 import type { WriterCreate } from '@/lib/stories/writer';
@@ -28,6 +28,18 @@ export type BuildDeps = {
   /** Reads a cited page (Guess the Number gates). Defaults to readSourcePage; tests stub it by URL. */
   readSource?: (url: string, figure?: string) => Promise<SourcePage>;
 };
+
+/**
+ * Keys a build must not use: what the series showed in the last `days` days
+ * (stories.history, written at publish) and what its other live sets of the
+ * same New York date already hold (ruling R13: two sets of one day never
+ * repeat a story, even before either posts).
+ */
+export async function keysToAvoid(deps: Pick<BuildDeps, 'db' | 'now' | 'nyDate' | 'setId'>, series: Series, days: number): Promise<Set<string>> {
+  const shown = await recentKeys(deps.db, series, days, deps.now);
+  for (const k of await sameDayKeys(deps.db, series, deps.nyDate, deps.setId)) shown.add(k);
+  return shown;
+}
 
 export type BuildResult =
   | { ok: true; payload: Record<string, unknown>; frames: NewFrame[]; candidates: NewCandidate[]; historyKeys: string[] }

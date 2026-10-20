@@ -20,7 +20,7 @@ import { DRIFT } from '@/lib/social-hub/slots/times';
 import type { ResolvedSlot } from '@/lib/social-hub/slots/types';
 import type { Queryable } from '@/lib/stories/db';
 import type { Series } from '@/lib/stories/render/types';
-import { nyDate, requestSet, type StorySet } from '@/lib/stories/repository';
+import { nyDate, requestSet, SLOT_MINUTE_SQL, type StorySet } from '@/lib/stories/repository';
 import { SERIES, type PostingWindow, type StoriesSettings } from '@/lib/stories/settings';
 
 const minutes = (hhmm: string) => {
@@ -56,9 +56,11 @@ const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${St
  * slot, [slot, slot + 15]; otherwise its series' own window, as before.
  */
 export function setWindow(seriesWindow: PostingWindow, slotMinute: number | null | undefined): PostingWindow {
-  if (slotMinute == null) return seriesWindow;
-  return { start: hhmm(slotMinute), end: hhmm(slotMinute + DRIFT), days: [0, 1, 2, 3, 4, 5, 6] };
+  return slotMinute == null ? seriesWindow : slotWindow(slotMinute);
 }
+
+/** A Stories slot as a posting window: [slot, slot + 15], any day. */
+export const slotWindow = (slotMinute: number): PostingWindow => ({ start: hhmm(slotMinute), end: hhmm(slotMinute + DRIFT), days: [0, 1, 2, 3, 4, 5, 6] });
 
 /**
  * The minute a set posts, never before `notBefore`; null when its time has
@@ -115,11 +117,11 @@ export const SERIES_DAY_QUOTA = 1;
  * count. An auto set already holding its day is the night's own work: it
  * isn't a placement, and the one-live-set-per-day index keeps a second one out.
  */
-export async function seriesDayPlaced(db: Queryable, series: Series, date: string, opts: { withoutSlot?: boolean } = {}): Promise<number> {
+export async function seriesDayPlaced(db: Queryable, series: Series, date: string): Promise<number> {
   const { rows } = await db.query<{ n: number }>(
     `SELECT count(*)::int AS n FROM stories.sets
       WHERE series = $1 AND ny_date = $2::date AND trigger = 'click'
-        AND status IN ('approved', 'scheduled', 'publishing', 'published')${opts.withoutSlot ? ' AND slot_minute IS NULL' : ''}`,
+        AND status IN ('approved', 'scheduled', 'publishing', 'published')`,
     [series, date],
   );
   const sets = Number(rows[0]?.n ?? 0);
@@ -146,12 +148,13 @@ export const MAX_AUTO_FAILURES_PER_DAY = 3;
 
 /** Ended auto attempts for a series day; in template mode for one slot of it (null: the series' one set of the day). */
 async function autoAttempts(db: Queryable, series: Series, date: string, slotMinute: number | null): Promise<{ skipped: number; failed: number }> {
+  // Legacy (no slot) never names the slot column, so it runs before the schema has it (R12).
   const { rows } = await db.query<{ status: string; n: number }>(
     `SELECT status, count(*)::int AS n FROM stories.sets
       WHERE series = $1 AND ny_date = $2::date AND trigger = 'auto' AND status IN ('skipped', 'failed')
-        AND coalesce(slot_minute, -1) = coalesce($3::smallint, -1)
+        ${slotMinute === null ? '' : `AND ${SLOT_MINUTE_SQL} = $3::smallint`}
       GROUP BY status`,
-    [series, date, slotMinute],
+    slotMinute === null ? [series, date] : [series, date, slotMinute],
   );
   const n = (status: string) => Number(rows.find((r) => r.status === status)?.n ?? 0);
   return { skipped: n('skipped'), failed: n('failed') };
@@ -179,19 +182,29 @@ async function autoHeld(db: Queryable, s: Series, date: string, slotMinute: numb
   return true;
 }
 
+/** Live (not rejected, failed or skipped) sets of a series day, any trigger, any slot. */
+async function liveSetsOn(db: Queryable, s: Series, date: string): Promise<number> {
+  const { rows } = await db.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM stories.sets WHERE series = $1 AND ny_date = $2::date AND status NOT IN ('rejected', 'failed', 'skipped')`,
+    [s, date],
+  );
+  return Number(rows[0]?.n ?? 0);
+}
+
 /**
  * Request today's set for every enabled auto series that is due and has none.
- * Returns what was requested (a series once per set). Daily fill (D54): a
+ * Returns what was requested, a series once per set. Daily fill (D54): a
  * series' day that a person already filled (a set they generated and
  * approved or scheduled, or placed there) gets no auto set; logged once as
- * `fill_reduced`. Any other live set for the day (in the making, or the auto
- * set itself) holds it as before (one live set per series per day).
+ * `fill_reduced`. Any other live set for the day (in the making, the auto set
+ * itself, or a template set with a slot) holds it (one live set per series
+ * per day).
  *
  * `slots` (template mode, from storiesSlotsOn: today's Stories slots within
- * the per-series cap): one set per slot, `slot_minute` = the slot, so a
- * series can post more than once a day; a slot whose [slot, slot + 15] has
- * passed gets none. A person's set without a slot fills the series' earliest
- * slot. Null or absent: each series' own days and window, as before.
+ * the per-series cap): one set per open slot (openStorySlots), `slot_minute`
+ * = the slot, so a series can post more than once a day; each is logged as
+ * `auto_requested` with its minute. Null or absent: each series' own days and
+ * window, as before.
  */
 export async function requestAutoSets(db: Queryable, settings: StoriesSettings, now: Date, opts: { log?: FillLog; slots?: readonly ResolvedSlot[] | null } = {}): Promise<Series[]> {
   if (opts.slots) return requestSlotSets(db, settings, now, opts.slots, opts.log ?? consoleFillLog);
@@ -209,6 +222,8 @@ export async function requestAutoSets(db: Queryable, settings: StoriesSettings, 
       once(reportedFills, db, `${s}:${date}`, () => reportFill(fill, log, { series: s }));
       continue;
     }
+    // Any live set holds the day, a template one with a slot too (a slot read that failed lands here).
+    if ((await liveSetsOn(db, s, date)) > 0) continue;
     // An auto attempt that ended in a skip or errors is not repeated on every tick (see MAX_AUTO_SKIPS_PER_DAY).
     if (await autoHeld(db, s, date, null, log)) continue;
     const { created } = await requestSet(db, { series: s, nyDate: date, trigger: 'auto', style: cfg.style });
@@ -217,39 +232,60 @@ export async function requestAutoSets(db: Queryable, settings: StoriesSettings, 
   return out;
 }
 
-async function slotHeld(db: Queryable, s: Series, date: string, slotMinute: number): Promise<boolean> {
-  const { rows } = await db.query<{ n: number }>(
-    `SELECT count(*)::int AS n FROM stories.sets
-      WHERE series = $1 AND ny_date = $2::date AND slot_minute = $3 AND status NOT IN ('rejected', 'failed', 'skipped')`,
-    [s, date, slotMinute],
-  );
-  return Number(rows[0]?.n ?? 0) > 0;
+/** `morning_download@09:00`, for logs. */
+export const slotLabel = (series: Series, minute: number) => `${series}@${hhmm(minute)}`;
+
+/** One series' day in template mode: the slots still to make, and the day's fill. */
+export type SeriesSlotDay = { open: ResolvedSlot[]; fill: DailyFill; slotted: number; loose: number };
+
+/**
+ * Template mode: which of each series' capped Stories slots on today's date
+ * still need a set (the worker requests exactly these; Run now lists a
+ * series while it has one). A slot is held by a live set at its minute. Every
+ * other live set of the series day (no slot: Generate, a placement under the
+ * series name; any status, any trigger) fills the earliest free slot. No more
+ * than the series' slot count is ever live, and a slot whose [slot, slot + 15]
+ * has passed is not open. Enabled and auto switches are the caller's.
+ */
+export async function openStorySlots(db: Queryable, slots: readonly ResolvedSlot[], now: Date): Promise<Map<Series, SeriesSlotDay>> {
+  const date = nyDate(now);
+  const out = new Map<Series, SeriesSlotDay>();
+  for (const s of SERIES) {
+    const mine = slots.filter((x) => x.vertical === 'stories' && x.series === s).sort((a, b) => a.startMinute - b.startMinute);
+    if (!mine.length) continue;
+    const { rows } = await db.query<{ m: number | null }>(
+      `SELECT ${SLOT_MINUTE_SQL} AS m FROM stories.sets WHERE series = $1 AND ny_date = $2::date AND status NOT IN ('rejected', 'failed', 'skipped')`,
+      [s, date],
+    );
+    const minutes = new Set(rows.flatMap((r) => (r.m === null ? [] : [Number(r.m)])));
+    const looseSets = rows.filter((r) => r.m === null).length;
+    // The spine is a projection (D44): a placement under the series name counts like a set without a slot.
+    const spine = await userPlaced((text, params) => db.query(text, params), 'stories', date, { slot: s }).catch(() => 0);
+    const loose = Math.max(looseSets, spine);
+    const live = minutes.size + loose;
+    const allowance = Math.max(0, mine.length - live);
+    const free = mine.filter((x) => !minutes.has(x.startMinute)).slice(loose);
+    const open = free.filter((x) => now <= windowBounds(slotWindow(x.startMinute), date).end).slice(0, allowance);
+    out.set(s, { open, slotted: minutes.size, loose, fill: { vertical: 'stories', nyDate: date, quota: mine.length, userPlaced: loose, making: allowance } });
+  }
+  return out;
 }
 
 async function requestSlotSets(db: Queryable, settings: StoriesSettings, now: Date, slots: readonly ResolvedSlot[], log: FillLog): Promise<Series[]> {
   const date = nyDate(now);
   const out: Series[] = [];
-  for (const s of SERIES) {
+  for (const [s, day] of await openStorySlots(db, slots, now)) {
     const cfg = settings.series[s];
     if (!cfg.enabled || !cfg.auto) continue;
-    const mine = slots.filter((x) => x.vertical === 'stories' && x.series === s).sort((a, b) => a.startMinute - b.startMinute);
-    if (!mine.length) continue;
-    // A person's set without a slot (Generate, or placed under the series name) fills the earliest slots.
-    let loose = await seriesDayPlaced(db, s, date, { withoutSlot: true });
-    for (const slot of mine) {
+    // A person's set without a slot took one of the day's slots: logged once with the series day's totals.
+    if (day.loose > 0) once(reportedFills, db, `${s}:${date}`, () => reportFill(day.fill, log, { series: s, slotted: day.slotted }));
+    for (const slot of day.open) {
       const minute = slot.startMinute;
-      if (await slotHeld(db, s, date, minute)) continue;
-      if (loose > 0) {
-        loose -= 1;
-        const fill: DailyFill = { vertical: 'stories', nyDate: date, quota: mine.length, userPlaced: 1, making: 0 };
-        once(reportedFills, db, `${s}:${date}:${minute}`, () => reportFill(fill, log, { series: s, slotMinute: minute }));
-        continue;
-      }
-      // Too late to build and post in this slot: skip, not post late.
-      if (now > windowBounds(setWindow(cfg.window, minute), date).end) continue;
       if (await autoHeld(db, s, date, minute, log)) continue;
       const { created } = await requestSet(db, { series: s, nyDate: date, trigger: 'auto', style: cfg.style, slotMinute: minute });
-      if (created) out.push(s);
+      if (!created) continue;
+      out.push(s);
+      log('auto_requested', { series: s, nyDate: date, slotMinute: minute, slot: slotLabel(s, minute) });
     }
   }
   return out;

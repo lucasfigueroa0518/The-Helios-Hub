@@ -42,7 +42,8 @@ export async function projectSet(db: Queryable, setId: string): Promise<void> {
     publish_at: string | null; approved_at: string | null; published_at: string | null; updated_at: string; error: string | null;
     slot_minute: number | null;
   }>(
-    `SELECT id::text AS id, series, to_char(ny_date, 'YYYY-MM-DD') AS ny_date, status, trigger, slot_minute,
+    `SELECT id::text AS id, series, to_char(ny_date, 'YYYY-MM-DD') AS ny_date, status, trigger,
+            (to_jsonb(sets)->>'slot_minute')::smallint AS slot_minute, -- through the row: runs before the column exists (R12)
             publish_at::text AS publish_at, approved_at::text AS approved_at, published_at::text AS published_at,
             updated_at::text AS updated_at, error
        FROM stories.sets WHERE id = $1`,

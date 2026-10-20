@@ -60,7 +60,14 @@ export type NewCandidate = {
   reason?: string | null;
 };
 
-const SET_COLS = `id, series, to_char(ny_date, 'YYYY-MM-DD') AS ny_date, status, trigger, style, payload, publish_at, slot_minute, flagged, error,
+/**
+ * `stories.sets.slot_minute` read through the row's JSON, so every query
+ * still runs on a database where db/stories_schema.sql has not added the
+ * column yet (ruling R12: code may deploy first); there it reads null.
+ */
+export const SLOT_MINUTE_SQL = `(to_jsonb(sets)->>'slot_minute')::smallint`;
+
+const SET_COLS = `id, series, to_char(ny_date, 'YYYY-MM-DD') AS ny_date, status, trigger, style, payload, publish_at, ${SLOT_MINUTE_SQL} AS slot_minute, flagged, error,
   spend_usd::float8 AS spend_usd, created_at, updated_at`;
 const FRAME_COLS = `id, set_id, seq, role, template, backdrop, copy, photo, storage_path, jpeg_bytes, review, flagged,
   ig_container_id, ig_media_id, published_at`;
@@ -111,16 +118,23 @@ export async function requestSet(
   input: { series: Series; nyDate: string; trigger: 'click' | 'auto'; style: Style; requestedBy?: string; slotMinute?: number | null },
 ): Promise<{ set: StorySet; created: boolean }> {
   const slotMinute = input.slotMinute ?? null;
+  // The column is named only for a slot set (template mode), so a legacy request runs before the schema has it (R12).
+  const params: unknown[] = [input.series, input.nyDate, input.trigger, input.style, input.requestedBy ?? null, runMode];
   const { rows } = await db.query<StorySet>(
-    `INSERT INTO stories.sets (series, ny_date, trigger, style, requested_by, mode, slot_minute)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
-     ON CONFLICT DO NOTHING
-     RETURNING ${SET_COLS}`,
-    [input.series, input.nyDate, input.trigger, input.style, input.requestedBy ?? null, runMode, slotMinute],
+    slotMinute === null
+      ? `INSERT INTO stories.sets (series, ny_date, trigger, style, requested_by, mode)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT DO NOTHING
+         RETURNING ${SET_COLS}`
+      : `INSERT INTO stories.sets (series, ny_date, trigger, style, requested_by, mode, slot_minute)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT DO NOTHING
+         RETURNING ${SET_COLS}`,
+    slotMinute === null ? params : [...params, slotMinute],
   );
   if (rows[0]) return { set: rows[0], created: true };
   const existing = await db.query<StorySet>(
-    `SELECT ${SET_COLS} FROM stories.sets WHERE series = $1 AND ny_date = $2 AND coalesce(slot_minute, -1) = coalesce($3::smallint, -1)
+    `SELECT ${SET_COLS} FROM stories.sets WHERE series = $1 AND ny_date = $2 AND coalesce(${SLOT_MINUTE_SQL}, -1) = coalesce($3::smallint, -1)
         AND status NOT IN ('rejected', 'failed', 'skipped')`,
     [input.series, input.nyDate, slotMinute],
   );
@@ -286,6 +300,23 @@ export async function recentKeys(db: Queryable, series: Series, days: number, no
   const { rows } = await db.query<{ key: string }>(
     `SELECT DISTINCT key FROM stories.history WHERE series = $1 AND shown_at > $2::timestamptz - make_interval(days => $3)`,
     [series, now.toISOString(), days],
+  );
+  return new Set(rows.map((r) => r.key));
+}
+
+/**
+ * Keys other live sets of this series hold on the same New York date (their
+ * build's `payload.historyKeys`), so two sets of one day never repeat a story
+ * before either has posted (ruling R13). Rejected, failed and skipped sets
+ * free their keys.
+ */
+export async function sameDayKeys(db: Queryable, series: Series, nyDate: string, exceptSetId: string): Promise<Set<string>> {
+  const { rows } = await db.query<{ key: string }>(
+    `SELECT DISTINCT k.key FROM stories.sets s
+       CROSS JOIN LATERAL jsonb_array_elements_text(
+         CASE WHEN jsonb_typeof(s.payload->'historyKeys') = 'array' THEN s.payload->'historyKeys' ELSE '[]'::jsonb END) AS k(key)
+      WHERE s.series = $1 AND s.ny_date = $2::date AND s.id <> $3::uuid AND s.status NOT IN ('rejected', 'failed', 'skipped')`,
+    [series, nyDate, exceptSetId],
   );
   return new Set(rows.map((r) => r.key));
 }
