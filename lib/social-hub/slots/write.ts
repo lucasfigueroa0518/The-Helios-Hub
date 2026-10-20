@@ -10,7 +10,12 @@ import { readCaps, readOverrides, readTemplate } from './load';
 import { resolveDay, sortSlots, validateDay } from './resolve';
 import { applyMove, applyPlace, applyRemove, canPlace, isLocked, ALREADY_STARTED, PAST_DAY, type DayCtx, type Refusal } from './rules';
 import { readSeedInputs, seedTemplate, type SeedInputs } from './seed';
-import { DEFAULT_FEED_MODE, DRIFT, FEED_GAP, isFeedSlot } from './times';
+import { EXPLAINER_WINDOWS } from '@/lib/explainers/publish/config';
+import { LFD_WINDOW } from '@/lib/lfd/config';
+import { POSTING_SLOTS } from '@/lib/reels/publish/slots';
+import { CAROUSEL_SLOTS } from '@/lib/social/overnight/config';
+
+import { DAY_END, DEFAULT_FEED_MODE, DEFAULT_TIMES, DRIFT, FEED_GAP, isFeedSlot } from './times';
 import {
   isReelType, isSlotMinute, isStorySeries, parseSlotId, sameSlotKey, slotId, slotKeyString,
   type FeedMode, type OverrideRow, type ResolvedSlot, type SlotKey, type SlotQuery, type SlotSource, type StorySeries, type TemplateRow,
@@ -28,17 +33,18 @@ import {
  *    day and minute in the same transaction (spec §Calls I made): the same
  *    UPDATE as placement.rescheduleItem, at a minute in [slot, slot + DRIFT]
  *    after now, 30 minutes from other feed posts when it is one;
- *  - a change that removes a booked slot (or flips its Trial / Main) returns
- *    409 { booked } unless resolveBooked is 'unschedule', which cancels the
- *    booking and withdraws its approval, so the post is made and waiting again
- *    (the client's "Move it back to ready"; "Keep it" sends nothing).
+ *  - a change that removes a booked slot (or flips its Trial / Main) always
+ *    returns 409 { booked } with each post's refs. This route never
+ *    unschedules (ruling R7): for "Move it back to ready" the client calls
+ *    /api/social-hub/actions/unschedule (it has the in-flight publish guard
+ *    and each type's own steps), then sends the change again; "Keep it"
+ *    sends nothing. Stories' minute lives in stories.sets, so a booked
+ *    Stories slot's move is a 409 too (why 'cannot-move').
  *
- * Hub code may write only social_hub.* (tests/social-hub-scope.test.ts).
- * Explainers' and Stories' own unschedule also write explainers.feedback and
- * stories.sets, and Stories' minute lives in stories.sets, so those come back
- * as 409 with `unscheduleHere: false`: the client unschedules them through
- * /api/social-hub/actions/unschedule first, then sends the change again.
- * Writes: social_hub.slot_template, slot_override, settings, schedule, approvals.
+ * Bookings made before the cutover carry a legacy window id ('afternoon',
+ * 'morning_download'); they read as that window's start minute, so they are
+ * in the way and move like any other, and a moved one gets slot = slotId(...).
+ * Writes: social_hub.slot_template, slot_override, settings, schedule.
  */
 
 type Key = { vertical: Vertical; startMinute: number; series: StorySeries | null };
@@ -54,26 +60,24 @@ export type SlotChange =
 /**
  * A waiting post a change would leave without its slot. `why`: its slot is
  * removed, its slot's Trial / Main changes, or its slot moves but the post
- * can't move from here (Stories). `unscheduleHere`: resolveBooked
- * 'unschedule' can take it off on this route.
+ * can't move from here (Stories).
  */
 export type BookedPost = {
   scheduleId: string; vertical: Vertical; nyDate: string; slot: string; feedMode: FeedMode | null; publishAt: string;
-  refs: Record<string, string>; why: 'removed' | 'feed-mode' | 'cannot-move'; unscheduleHere: boolean;
+  refs: Record<string, string>; why: 'removed' | 'feed-mode' | 'cannot-move';
 };
 
 export type Rescheduled = { scheduleId: string; nyDate: string; slot: string; publishAt: string };
 
 export type ApplyResult =
-  | { ok: true; minutes: Array<number | null>; rescheduled: Rescheduled[]; unscheduled: string[] }
+  | { ok: true; minutes: Array<number | null>; rescheduled: Rescheduled[] }
   | { ok: false; status: 400 | 422; errors: string[]; confirm?: 'remove-carousels' }
-  | { ok: false; status: 409; booked: BookedPost[] };
+  | { ok: false; status: 409; booked: BookedPost[] }
+  | { ok: false; status: 409; error: string };
 
 export type ApplyOpts = {
   by: string;
   now: Date;
-  /** 'move' (the default) moves booked posts with their slot; 'unschedule' also takes posts off removed slots. */
-  resolveBooked?: 'move' | 'unschedule';
   /** The drift draw over [slot, slot + 15], for tests; uniform by default. */
   rng?: (count: number) => number;
 };
@@ -287,18 +291,34 @@ function holdStartedToday(before: State, s: State, today: string, nowMinute: num
 
 const REF_KEY: Record<Vertical, string> = { carousels: 'postId', explainers: 'jobId', last_few_days: 'lfdPostId', stories: 'setId', reels: 'postIdeaId' };
 
-/** Types whose unschedule is social_hub only (lib/social/overnight/schedule.ts unscheduleItem, lib/reels/publish/schedule.ts unscheduleIdea). */
-const UNSCHEDULE_HERE: ReadonlySet<Vertical> = new Set(['carousels', 'last_few_days', 'reels']);
 /** Types whose booking is the social_hub.schedule row (placement.rescheduleItem); Stories' minute lives in stories.sets. */
 const MOVE_HERE: ReadonlySet<Vertical> = new Set(['carousels', 'last_few_days', 'reels', 'explainers']);
 
-type Booking = { id: string; itemId: string | null; vertical: Vertical; nyDate: string; slot: string; key: SlotKey; feedMode: FeedMode | null; publishAt: Date; refs: Record<string, string> };
+type Booking = { id: string; vertical: Vertical; nyDate: string; slot: string; key: SlotKey; feedMode: FeedMode | null; publishAt: Date; refs: Record<string, string> };
 
-/** Waiting posts on these dates, on free-time slot ids, locked for this transaction. */
+/**
+ * A pre-cutover booking's window id as its free-time key: the window's start
+ * minute from each type's window constants, Stories' series at the Stories
+ * default time. Null for anything else.
+ */
+const LEGACY_START: Record<Exclude<Vertical, 'stories'>, ReadonlyArray<{ id: string; startMinute: number }>> = {
+  reels: POSTING_SLOTS,
+  explainers: EXPLAINER_WINDOWS,
+  carousels: CAROUSEL_SLOTS,
+  last_few_days: [LFD_WINDOW],
+};
+
+export function legacyKey(vertical: Vertical, slot: string): { startMinute: number; series: StorySeries | null } | null {
+  if (vertical === 'stories') return isStorySeries(slot) ? { startMinute: DEFAULT_TIMES.stories[0]!, series: slot } : null;
+  const w = LEGACY_START[vertical]?.find((x) => x.id === slot);
+  return w ? { startMinute: w.startMinute, series: null } : null;
+}
+
+/** Waiting posts on these dates (free-time or legacy window slot ids), locked for this transaction. */
 async function bookingsOn(q: SlotQuery, dates: readonly string[]): Promise<Booking[]> {
   if (!dates.length) return [];
   const { rows } = await q(
-    `SELECT s.id::text AS id, s.content_item_id::text AS item_id, s.vertical, s.ny_date::text AS ny_date, s.slot, s.feed_mode, s.publish_at, s.idea_ref, ci.native_ref
+    `SELECT s.id::text AS id, s.vertical, s.ny_date::text AS ny_date, s.slot, s.feed_mode, s.publish_at, s.idea_ref, ci.native_ref
        FROM social_hub.schedule s LEFT JOIN social_hub.content_items ci ON ci.id = s.content_item_id
       WHERE s.status = 'scheduled' AND s.ny_date = ANY($1::date[])
       ORDER BY s.publish_at
@@ -307,12 +327,12 @@ async function bookingsOn(q: SlotQuery, dates: readonly string[]): Promise<Booki
   );
   const out: Booking[] = [];
   for (const r of rows) {
-    const parsed = parseSlotId(String(r.slot));
-    if (!parsed) continue; // A legacy window booking: not on a free-time slot.
     const v = r.vertical as Vertical;
+    const parsed = parseSlotId(String(r.slot)) ?? legacyKey(v, String(r.slot));
+    if (!parsed) continue;
     const ref = v === 'reels' ? r.idea_ref : r.native_ref;
     out.push({
-      id: r.id, itemId: r.item_id ?? null, vertical: v, nyDate: String(r.ny_date).slice(0, 10), slot: String(r.slot), key: { vertical: v, ...parsed },
+      id: r.id, vertical: v, nyDate: String(r.ny_date).slice(0, 10), slot: String(r.slot), key: { vertical: v, ...parsed },
       feedMode: r.feed_mode ?? null, publishAt: new Date(r.publish_at), refs: ref ? { [REF_KEY[v]]: String(ref) } : {},
     });
   }
@@ -340,9 +360,13 @@ function followTarget(follows: readonly Follow[], b: Booking): { nyDate: string;
   return null;
 }
 
-type Plan = { kind: 'move'; b: Booking; nyDate: string; slot: ResolvedSlot } | { kind: 'unschedule'; b: Booking };
+type Plan = { b: Booking; nyDate: string; slot: ResolvedSlot };
 
-/** The minute a moved post goes out: drift over [slot, slot + 15] after now; a feed post keeps FEED_GAP from `busy`, pushed later when none clears. */
+/**
+ * The minute a moved post goes out: drift over [slot, slot + 15] after now; a
+ * feed post keeps FEED_GAP from `busy`, pushed later when none clears, but
+ * never past the slot's own day (last minute 8:59 PM). Null when nothing fits.
+ */
 function driftMinute(nyDate: string, slot: ResolvedSlot, now: Date, busy: readonly Date[], rng: (n: number) => number): Date | null {
   const w: PostingWindow = { id: slotId(slot.startMinute, slot.series), label: '', startMinute: slot.startMinute, endMinute: slot.startMinute + DRIFT };
   const open = openWindowRange(w, nyDate, now);
@@ -356,31 +380,20 @@ function driftMinute(nyDate: string, slot: ResolvedSlot, now: Date, busy: readon
   }
   // Every drift minute is too close to another feed post: the smallest push later that clears them all.
   const gap = FEED_GAP * 60_000;
-  const last = windowMinuteInstant(w, nyDate, DRIFT).getTime();
-  for (let t = last + 60_000; t <= last + 6 * 60 * 60_000; t += 60_000) {
+  const rest: PostingWindow = { id: w.id, label: '', startMinute: w.endMinute + 1, endMinute: DAY_END - 1 };
+  if (rest.startMinute > rest.endMinute) return null;
+  for (let o = 0; o <= rest.endMinute - rest.startMinute; o += 1) {
+    const t = windowMinuteInstant(rest, nyDate, o).getTime();
     if (busy.every((b) => Math.abs(b.getTime() - t) >= gap)) return new Date(t);
   }
   return null;
 }
 
-const UNSCHEDULED_NOTE = 'Taken off the calendar by a person (unscheduled). It is not approved any more.';
-
-/**
- * The same social_hub steps as the type's own unschedule (unscheduleItem /
- * unscheduleIdea): the slot is cancelled and the approval withdrawn, so the
- * post is made and waiting again. Reels also clear the slot's approval.
- */
-async function unscheduleBooking(q: SlotQuery, b: Booking): Promise<void> {
-  await q(
-    `UPDATE social_hub.schedule SET status = 'cancelled', error = $2${b.vertical === 'reels' ? ', approved_at = NULL' : ''} WHERE id = $1::uuid AND status = 'scheduled'`,
-    [b.id, UNSCHEDULED_NOTE],
-  );
-  if (b.itemId) await q(`DELETE FROM social_hub.approvals WHERE content_item_id = $1::uuid AND decision = 'approved'`, [b.itemId]);
-}
+const TAKEN = 'That slot is taken.';
+const isUniqueViolation = (error: unknown) => (error as { code?: string } | null)?.code === '23505';
 
 const bookedPost = (b: Booking, why: BookedPost['why']): BookedPost => ({
   scheduleId: b.id, vertical: b.vertical, nyDate: b.nyDate, slot: b.slot, feedMode: b.feedMode, publishAt: b.publishAt.toISOString(), refs: b.refs, why,
-  unscheduleHere: why !== 'cannot-move' && UNSCHEDULE_HERE.has(b.vertical),
 });
 
 // ── Apply ──
@@ -427,14 +440,14 @@ export async function applySlotChanges(q: SlotQuery, changes: readonly SlotChang
   if (errors.size) return { ok: false, status: 422, errors: [...errors] };
 
   // Bookings: those whose slot this change set moves, removes or flips.
-  const booked: Array<{ b: Booking; post: BookedPost }> = [];
+  const booked: BookedPost[] = [];
   const plans: Plan[] = [];
   for (const b of await bookingsOn(q, bookedDates(today, touchedDates))) {
     const was = resolveDay(before.template, before.overrides, b.nyDate).find((x) => sameSlotKey(x, b.key));
     if (!was || modeClash(b, was)) continue; // Already out of step before this change: not this change's doing.
     const is = resolveDay(s.template, s.overrides, b.nyDate).find((x) => sameSlotKey(x, b.key));
     if (is) {
-      if (modeClash(b, is)) booked.push({ b, post: bookedPost(b, 'feed-mode') });
+      if (modeClash(b, is)) booked.push(bookedPost(b, 'feed-mode'));
       continue;
     }
     // A target that is past or already started (a cross-weekday template move) can't take the post: it counts as removed.
@@ -442,19 +455,17 @@ export async function applySlotChanges(q: SlotQuery, changes: readonly SlotChang
     const target = found && (found.nyDate > today || (found.nyDate === today && found.minute > nowMinute)) ? found : null;
     const slot = target && resolveDay(s.template, s.overrides, target.nyDate).find((x) => sameSlotKey(x, { ...b.key, startMinute: target.minute }));
     if (target && slot) {
-      if (MOVE_HERE.has(b.vertical)) plans.push({ kind: 'move', b, nyDate: target.nyDate, slot });
-      else booked.push({ b, post: bookedPost(b, 'cannot-move') });
+      if (MOVE_HERE.has(b.vertical)) plans.push({ b, nyDate: target.nyDate, slot });
+      else booked.push(bookedPost(b, 'cannot-move'));
       continue;
     }
-    booked.push({ b, post: bookedPost(b, 'removed') });
+    booked.push(bookedPost(b, 'removed'));
   }
-  const blocking = booked.filter((x) => opts.resolveBooked !== 'unschedule' || !x.post.unscheduleHere).map((x) => x.post);
-  if (blocking.length) return { ok: false, status: 409, booked: blocking };
-  for (const x of booked) plans.push({ kind: 'unschedule', b: x.b });
+  if (booked.length) return { ok: false, status: 409, booked };
 
   // Moved posts: drift minutes, spaced from every other feed post (not from their own old times).
   const rescheduled: Rescheduled[] = [];
-  const moves = plans.filter((p): p is Extract<Plan, { kind: 'move' }> => p.kind === 'move');
+  const moves = plans;
   let busy: Date[] = [];
   if (moves.some((p) => isFeedSlot(p.slot))) {
     busy = await busyFeedTimes(q as never, opts.now);
@@ -471,28 +482,39 @@ export async function applySlotChanges(q: SlotQuery, changes: readonly SlotChang
     if (isFeedSlot(p.slot)) busy.push(at);
     times.push(at);
   }
+  // A target slot id another waiting or posted post already holds (or two moves onto one): refused before any write.
+  const targets = moves.map((p) => `${p.b.vertical}|${p.nyDate}|${slotId(p.slot.startMinute, p.slot.series)}`);
+  if (new Set(targets).size < targets.length) return { ok: false, status: 409, error: TAKEN };
+  for (const p of moves) {
+    const { rows } = await q(
+      `SELECT 1 FROM social_hub.schedule WHERE vertical = $1 AND ny_date = $2::date AND slot = $3 AND status IN ('scheduled', 'publishing', 'published') AND id <> ALL($4::uuid[]) LIMIT 1`,
+      [p.b.vertical, p.nyDate, slotId(p.slot.startMinute, p.slot.series), moves.map((m) => m.b.id)],
+    );
+    if (rows[0]) return { ok: false, status: 409, error: TAKEN };
+  }
   for (const [i, p] of moves.entries()) {
     const at = times[i]!;
     const slot = slotId(p.slot.startMinute, p.slot.series);
     // placement.rescheduleItem's UPDATE: the row stays (source, approval); the slot's Trial / Main moves with it.
-    const { rows } = await q(
-      `UPDATE social_hub.schedule SET ny_date = $2::date, slot = $3, publish_at = $4::timestamptz, error = NULL, feed_mode = coalesce($5, feed_mode)
-        WHERE id = $1::uuid AND status = 'scheduled'
-        RETURNING id`,
-      [p.b.id, p.nyDate, slot, at.toISOString(), isReelType(p.b.vertical) ? p.slot.feedMode : null],
-    );
+    let rows: unknown[];
+    try {
+      ({ rows } = await q(
+        `UPDATE social_hub.schedule SET ny_date = $2::date, slot = $3, publish_at = $4::timestamptz, error = NULL, feed_mode = coalesce($5, feed_mode)
+          WHERE id = $1::uuid AND status = 'scheduled'
+          RETURNING id`,
+        [p.b.id, p.nyDate, slot, at.toISOString(), isReelType(p.b.vertical) ? p.slot.feedMode : null],
+      ));
+    } catch (error) {
+      // A race past the check above; the route's transaction rolls back on this result's status.
+      if (isUniqueViolation(error)) return { ok: false, status: 409, error: TAKEN };
+      throw error;
+    }
     if (!rows[0]) throw new Error(`Booking ${p.b.id} started posting before it could move.`);
     rescheduled.push({ scheduleId: p.b.id, nyDate: p.nyDate, slot, publishAt: at.toISOString() });
   }
-  const unscheduled: string[] = [];
-  for (const p of plans) {
-    if (p.kind !== 'unschedule') continue;
-    await unscheduleBooking(q, p.b);
-    unscheduled.push(p.b.id);
-  }
 
   await writeDiff(q, before, s, opts.by);
-  return { ok: true, minutes, rescheduled, unscheduled };
+  return { ok: true, minutes, rescheduled };
 }
 
 /** Write only what changed: deleted rows go, new or changed rows are upserted, untouched rows keep their updated_by. */
@@ -535,7 +557,7 @@ async function writeDiff(q: SlotQuery, before: State, s: State, by: string): Pro
  * Change daily caps (a person's decision, spec §Safety cap). Each value is an
  * integer 0–10; anything else throws before writing. Merged over the stored caps.
  */
-export async function writeCaps(q: SlotQuery, patch: Partial<Record<Vertical, number>>, by: string): Promise<Record<Vertical, number>> {
+export async function writeCaps(q: SlotQuery, patch: Partial<Record<Vertical, number>>): Promise<Record<Vertical, number>> {
   for (const [v, n] of Object.entries(patch)) {
     if (!isVertical(v)) throw new Error(`Unknown content type “${v}”.`);
     if (!Number.isInteger(n) || (n as number) < 0 || (n as number) > 10) throw new Error('A daily limit is a whole number from 0 to 10.');
@@ -546,7 +568,6 @@ export async function writeCaps(q: SlotQuery, patch: Partial<Record<Vertical, nu
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
     [JSON.stringify(next)],
   );
-  void by; // social_hub.settings has no updated_by column; kept for the call shape the type pages use.
   return next;
 }
 

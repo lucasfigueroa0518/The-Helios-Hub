@@ -13,7 +13,7 @@ import { LFD_CAROUSEL_CONFLICT } from '@/lib/social-hub/slots/resolve';
 import { ALREADY_STARTED, PAST_DAY } from '@/lib/social-hub/slots/rules';
 import { DEFAULT_SEED_INPUTS, seedTemplate, type SeedInputs } from '@/lib/social-hub/slots/seed';
 import { DEFAULT_CAPS } from '@/lib/social-hub/slots/times';
-import { applySlotChanges, parseChanges, setSlotSource, writeCaps, type SlotChange } from '@/lib/social-hub/slots/write';
+import { applySlotChanges, legacyKey, parseChanges, setSlotSource, writeCaps, type SlotChange } from '@/lib/social-hub/slots/write';
 
 import { openHubTestDb } from './fixtures/social-hub/pglite';
 
@@ -274,31 +274,26 @@ test('a booked Stories slot can\'t move from here: 409, nothing changes', async 
   const b = await book(pg, 'stories', '2026-10-20', 't0510:morning_download', null, '77777777-7777-7777-7777-777777777777');
   const out = await applySlotChanges(q, [dateMove('2026-10-20', 'stories', 510, { startMinute: 600 }, 'morning_download')], opts);
   assert.equal((out as { status: number }).status, 409);
-  const booked = (out as { booked: Array<{ scheduleId: string; why: string; unscheduleHere: boolean }> }).booked;
-  assert.deepEqual(booked.map((x) => [x.scheduleId, x.why, x.unscheduleHere]), [[b.scheduleId, 'cannot-move', false]]);
+  const booked = (out as { booked: Array<{ scheduleId: string; why: string }> }).booked;
+  assert.deepEqual(booked.map((x) => [x.scheduleId, x.why]), [[b.scheduleId, 'cannot-move']]);
   assert.equal((await scheduleRow(pg, b.scheduleId)).slot, 't0510:morning_download');
   assert.deepEqual(await readOverrides(q, '2026-10-20', '2026-10-20'), []);
 });
 
 // ── Removing a booked slot asks first (decision 14) ──
 
-test('removing a booked slot returns 409; resolveBooked "unschedule" cancels the booking and the item is back to ready', async () => {
+test('removing a booked slot returns 409 with its refs, and nothing changes (booking and approval intact)', async () => {
   const { pg, q } = await seeded();
   const b = await book(pg, 'carousels', '2026-10-21', 't0540', null, '11111111-1111-1111-1111-111111111111');
   await pg.query(`INSERT INTO social_hub.approvals (content_item_id, decision, via) VALUES ($1, 'approved', 'user')`, [b.itemId]);
-  const change: SlotChange = { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'carousels', startMinute: 540, series: null, action: 'remove' };
-  const ask = await applySlotChanges(q, [change], opts);
-  assert.equal((ask as { status: number }).status, 409);
-  const booked = (ask as { booked: Array<{ nyDate: string; slot: string; refs: Record<string, string>; unscheduleHere: boolean }> }).booked;
-  assert.deepEqual(booked.map((x) => [x.nyDate, x.slot, x.refs, x.unscheduleHere]), [['2026-10-21', 't0540', { postId: '11111111-1111-1111-1111-111111111111' }, true]]);
-  assert.deepEqual(await readOverrides(q, '2026-10-21', '2026-10-21'), [], 'nothing written on a 409');
-
-  const out = await applySlotChanges(q, [change], { ...opts, resolveBooked: 'unschedule' });
-  assert.equal(out.ok, true, JSON.stringify(out));
-  assert.deepEqual((out as { unscheduled: string[] }).unscheduled, [b.scheduleId]);
-  assert.equal((await scheduleRow(pg, b.scheduleId)).status, 'cancelled');
-  assert.equal((await pg.query(`SELECT 1 FROM social_hub.approvals WHERE content_item_id = $1`, [b.itemId])).rows.length, 0, 'approval withdrawn: made and waiting again');
-  assert.deepEqual(await dayOf(q, '2026-10-21', 'carousels'), [870]);
+  const out = await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'carousels', startMinute: 540, series: null, action: 'remove' }], opts);
+  assert.equal((out as { status: number }).status, 409);
+  const booked = (out as { booked: Array<{ scheduleId: string; nyDate: string; slot: string; refs: Record<string, string>; why: string }> }).booked;
+  assert.deepEqual(booked.map((x) => [x.scheduleId, x.nyDate, x.slot, x.refs, x.why]), [[b.scheduleId, '2026-10-21', 't0540', { postId: '11111111-1111-1111-1111-111111111111' }, 'removed']]);
+  assert.equal((await scheduleRow(pg, b.scheduleId)).status, 'scheduled');
+  assert.equal((await pg.query(`SELECT 1 FROM social_hub.approvals WHERE content_item_id = $1 AND decision = 'approved'`, [b.itemId])).rows.length, 1);
+  assert.deepEqual(await readOverrides(q, '2026-10-21', '2026-10-21'), []);
+  assert.deepEqual(await dayOf(q, '2026-10-21', 'carousels'), [540, 870]);
 });
 
 test('a template delete with a booked post 13 days out returns 409 with its refs', async () => {
@@ -309,13 +304,80 @@ test('a template delete with a booked post 13 days out returns 409 with its refs
   assert.deepEqual((out as { booked: Array<{ nyDate: string; refs: unknown }> }).booked.map((x) => [x.nyDate, x.refs]), [['2026-10-28', { postId: '11111111-1111-1111-1111-111111111111' }]]);
 });
 
-test('an Explainer\'s unschedule needs its own action: resolveBooked "unschedule" still returns 409 for it', async () => {
+// ── Bookings made before the cutover (legacy window ids) ──
+
+test('a legacy "afternoon" Explainer booking is in the way when the 1:00 PM slot goes, and moves (slot t0720) when it moves', async () => {
+  const { pg, q } = await seeded();
+  const b = await book(pg, 'explainers', '2026-10-20', 'afternoon', null, '22222222-2222-2222-2222-222222222222', '2026-10-20T17:05:00Z');
+  const removed = await applySlotChanges(q, [{ scope: 'template', op: 'delete', weekday: 2, vertical: 'explainers', startMinute: 780, series: null }], opts);
+  assert.equal((removed as { status: number }).status, 409);
+  assert.deepEqual((removed as { booked: Array<{ scheduleId: string; slot: string; why: string; refs: unknown }> }).booked.map((x) => [x.scheduleId, x.slot, x.why, x.refs]), [[b.scheduleId, 'afternoon', 'removed', { jobId: '22222222-2222-2222-2222-222222222222' }]]);
+  const moved = await applySlotChanges(q, [dateMove('2026-10-20', 'explainers', 780, { startMinute: 720 })], opts);
+  assert.equal(moved.ok, true, JSON.stringify(moved));
+  const row = await scheduleRow(pg, b.scheduleId);
+  assert.deepEqual([row.ny_date, row.slot], ['2026-10-20', 't0720']);
+  const m = nyMinute(row.publish_at);
+  assert.ok(m >= 720 && m <= 735, `publish_at minute ${m}`);
+});
+
+test('legacyKey maps each type\'s window ids to their start minutes', () => {
+  assert.deepEqual(['morning', 'midday', 'evening'].map((w) => legacyKey('reels', w)!.startMinute), [525, 675, 1080]);
+  assert.deepEqual(['afternoon', 'late'].map((w) => legacyKey('explainers', w)!.startMinute), [780, 930]);
+  assert.deepEqual(['morning', 'afternoon'].map((w) => legacyKey('carousels', w)!.startMinute), [540, 870]);
+  assert.deepEqual(legacyKey('last_few_days', 'morning'), { startMinute: 540, series: null });
+  assert.deepEqual(legacyKey('stories', 'free_vs_paid'), { startMinute: 510, series: 'free_vs_paid' });
+  assert.equal(legacyKey('reels', 'late'), null);
+  assert.equal(legacyKey('stories', 'morning'), null);
+});
+
+test('a cross-weekday "every" move takes a booking to that weekday\'s date in the same week (Tue Oct 27 → Thu Oct 29)', async () => {
+  const { pg, q } = await seeded();
+  const b = await book(pg, 'explainers', '2026-10-27', 't0780', 'main', '22222222-2222-2222-2222-222222222222');
+  const out = await applySlotChanges(q, [{ scope: 'template', op: 'move', from: { weekday: 2, vertical: 'explainers', startMinute: 780, series: null }, to: { weekday: 4, startMinute: 720 } }], opts);
+  assert.equal(out.ok, true, JSON.stringify(out));
+  const row = await scheduleRow(pg, b.scheduleId);
+  assert.deepEqual([row.ny_date, row.slot], ['2026-10-29', 't0720']);
+});
+
+test('a feed-gap push stays on the slot\'s own day: nothing clears before 9 PM → 422, nothing written', async () => {
+  const { pg, q } = await seeded();
+  const b = await book(pg, 'explainers', '2026-10-20', 't0780', 'main', '22222222-2222-2222-2222-222222222222');
+  // A feed post at 8:50 PM: every minute from 8:45 to 8:59 PM is within 30 minutes of it.
+  await book(pg, 'carousels', '2026-10-20', 't1245', null, '66666666-6666-6666-6666-666666666666', '2026-10-21T00:50:00Z');
+  const out = await applySlotChanges(q, [dateMove('2026-10-20', 'explainers', 780, { startMinute: 1245 })], opts);
+  assert.equal((out as { status: number }).status, 422, JSON.stringify(out));
+  assert.match((out as { errors: string[] }).errors[0]!, /within 30 minutes of another feed post/);
+  assert.equal((await scheduleRow(pg, b.scheduleId)).slot, 't0780');
+  assert.deepEqual(await dayOf(q, '2026-10-20', 'explainers'), [780, 930]);
+});
+
+test('a moved post whose new slot id another post already holds returns 409 "That slot is taken." and writes nothing', async () => {
+  const { pg, q } = await seeded();
+  const b = await book(pg, 'explainers', '2026-10-20', 't0780', 'main', '22222222-2222-2222-2222-222222222222');
+  await book(pg, 'explainers', '2026-10-20', 't0720', 'main', '88888888-8888-8888-8888-888888888888');
+  const out = await applySlotChanges(q, [dateMove('2026-10-20', 'explainers', 780, { startMinute: 720 })], opts);
+  assert.deepEqual(out, { ok: false, status: 409, error: 'That slot is taken.' });
+  assert.equal((await scheduleRow(pg, b.scheduleId)).slot, 't0780');
+  assert.deepEqual(await readOverrides(q, '2026-10-20', '2026-10-20'), []);
+});
+
+test('a batch that fails part-way writes nothing (an earlier valid change is not kept)', async () => {
   const { pg, q } = await seeded();
   const b = await book(pg, 'explainers', '2026-10-21', 't0780', 'main', '22222222-2222-2222-2222-222222222222');
-  const out = await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'explainers', startMinute: 780, series: null, action: 'remove' }], { ...opts, resolveBooked: 'unschedule' });
-  assert.equal((out as { status: number }).status, 409);
-  assert.deepEqual((out as { booked: Array<{ refs: unknown; unscheduleHere: boolean }> }).booked.map((x) => [x.refs, x.unscheduleHere]), [[{ jobId: '22222222-2222-2222-2222-222222222222' }, false]]);
-  assert.equal((await scheduleRow(pg, b.scheduleId)).status, 'scheduled');
+  const snapshot = async () => [
+    (await pg.query(`SELECT weekday, vertical, start_minute, series, feed_mode FROM social_hub.slot_template ORDER BY 1, 2, 3, 4`)).rows,
+    (await pg.query(`SELECT * FROM social_hub.slot_override ORDER BY ny_date, vertical, start_minute`)).rows,
+    (await pg.query(`SELECT id, ny_date, slot, publish_at, status FROM social_hub.schedule ORDER BY id`)).rows,
+  ];
+  const before = await snapshot();
+  const out = await applySlotChanges(q, [
+    { scope: 'template', op: 'put', weekday: 1, vertical: 'explainers', startMinute: 720, series: null, feedMode: 'main' },
+    dateMove('2026-10-21', 'explainers', 780, { startMinute: 720 }),
+    { scope: 'date', op: 'put', nyDate: '2026-10-14', vertical: 'reels', startMinute: 1080, series: null, action: 'remove' },
+  ], opts);
+  assert.deepEqual(out, { ok: false, status: 422, errors: [PAST_DAY] });
+  assert.deepEqual(await snapshot(), before);
+  assert.equal((await scheduleRow(pg, b.scheduleId)).slot, 't0780');
 });
 
 test('flipping Trial / Main on a booked reel asks first; the same mode does not', async () => {
@@ -399,13 +461,13 @@ test('a no-op "Every Tuesday" edit on a started slot writes no hold for today', 
 test('readCaps returns the defaults; writeCaps merges and validates 0–10', async () => {
   const { q } = await seeded();
   assert.deepEqual(await readCaps(q), DEFAULT_CAPS);
-  await writeCaps(q, { explainers: 4 }, 't');
+  await writeCaps(q, { explainers: 4 });
   assert.deepEqual(await readCaps(q), { ...DEFAULT_CAPS, explainers: 4 });
-  await writeCaps(q, { stories: 1 }, 't');
+  await writeCaps(q, { stories: 1 });
   assert.deepEqual(await readCaps(q), { ...DEFAULT_CAPS, explainers: 4, stories: 1 });
-  await assert.rejects(() => writeCaps(q, { explainers: 11 }, 't'));
-  await assert.rejects(() => writeCaps(q, { explainers: 1.5 }, 't'));
-  await assert.rejects(() => writeCaps(q, { nope: 2 } as never, 't'));
+  await assert.rejects(() => writeCaps(q, { explainers: 11 }));
+  await assert.rejects(() => writeCaps(q, { explainers: 1.5 }));
+  await assert.rejects(() => writeCaps(q, { nope: 2 } as never));
   assert.equal((await readCaps(q)).explainers, 4);
 });
 
@@ -430,5 +492,7 @@ test('parseChanges reads the new keys and rejects junk with a 400 message', () =
   ]) assert.equal(typeof parseChanges({ changes: [bad] }), 'string', JSON.stringify(bad));
   assert.equal(typeof parseChanges({ changes: [] }), 'string');
   assert.equal(typeof parseChanges({ changes: [null] }), 'string');
+  assert.equal(typeof parseChanges({ changes: [1] }), 'string');
+  assert.equal(typeof parseChanges({ changes: [{ scope: 'date', op: 'put', nyDate: '2026-10-20', vertical: 'reels', startMinute: 541, series: null, action: 'add' }] }), 'string', 'off the 15-minute grid');
   assert.equal(typeof parseChanges(null), 'string');
 });

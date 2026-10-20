@@ -26,12 +26,15 @@ export async function GET(request: Request) {
 }
 
 /**
- * Body `{ changes, resolveBooked? }`; a change is put / delete / move, for the
- * template or a date. A person's click is the decision. A moved slot's waiting
- * post moves with it; 409 lists booked posts a removal (or a Trial / Main flip)
- * would leave without a slot, and `resolveBooked: 'unschedule'` sends them
- * back to ready. 422 carries `confirm: 'remove-carousels'` when Last Few Days
- * needs a yes (retry with `clearCarousels: true`).
+ * Body `{ changes }`; a change is put / delete / move, for the template or a
+ * date. A person's click is the decision. A moved slot's waiting post moves
+ * with it. 409 `{ booked }` lists waiting posts a removal (or a Trial / Main
+ * flip) would leave without a slot: this route never unschedules (ruling R7),
+ * so the client sends them back to ready through
+ * /api/social-hub/actions/unschedule and then sends the change again. 409
+ * `{ error }`: a moved post's new slot is taken. 422 carries
+ * `confirm: 'remove-carousels'` when Last Few Days needs a yes (retry with
+ * `clearCarousels: true`).
  */
 export async function POST(request: Request) {
   const session = await getSession();
@@ -40,12 +43,11 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const changes = parseChanges(body);
   if (typeof changes === 'string') return NextResponse.json({ error: changes }, { status: 400 });
-  const asked = (body as { resolveBooked?: unknown }).resolveBooked;
-  if (asked !== undefined && asked !== 'move' && asked !== 'unschedule') return NextResponse.json({ error: 'resolveBooked is move or unschedule.' }, { status: 400 });
   const out = await dbTransaction((client) =>
-    applySlotChanges((t, p) => client.query(t, p as unknown[]), changes, { by: session.email, now: new Date(), ...(asked ? { resolveBooked: asked } : {}) }),
+    applySlotChanges((t, p) => client.query(t, p as unknown[]), changes, { by: session.email, now: new Date() }),
   );
   if (out.ok) return NextResponse.json(out);
-  if (out.status === 409) return NextResponse.json({ booked: out.booked }, { status: 409 });
+  if ('booked' in out) return NextResponse.json({ booked: out.booked }, { status: 409 });
+  if ('error' in out) return NextResponse.json({ error: out.error }, { status: 409 });
   return NextResponse.json(out.confirm ? { errors: out.errors, confirm: out.confirm } : { errors: out.errors }, { status: out.status });
 }
