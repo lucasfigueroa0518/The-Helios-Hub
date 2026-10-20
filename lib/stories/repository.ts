@@ -109,14 +109,15 @@ export async function requestSet(
   const { rows } = await db.query<StorySet>(
     `INSERT INTO stories.sets (series, ny_date, trigger, style, requested_by, mode)
      VALUES ($1, $2, $3, $4, $5, $6)
-     ON CONFLICT (series, ny_date, (coalesce(slot_minute, -1))) WHERE status NOT IN ('rejected', 'failed', 'skipped') DO NOTHING
+     ON CONFLICT DO NOTHING
      RETURNING ${SET_COLS}`,
     [input.series, input.nyDate, input.trigger, input.style, input.requestedBy ?? null, runMode],
   );
   if (rows[0]) return { set: rows[0], created: true };
   const existing = await db.query<StorySet>(
-    `SELECT ${SET_COLS} FROM stories.sets WHERE series = $1 AND ny_date = $2 AND status NOT IN ('rejected', 'failed', 'skipped')`,
-    [input.series, input.nyDate],
+    `SELECT ${SET_COLS} FROM stories.sets WHERE series = $1 AND ny_date = $2 AND coalesce(slot_minute, -1) = coalesce($3::smallint, -1)
+        AND status NOT IN ('rejected', 'failed', 'skipped')`,
+    [input.series, input.nyDate, null],
   );
   return { set: existing.rows[0]!, created: false };
 }

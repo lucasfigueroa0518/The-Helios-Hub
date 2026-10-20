@@ -387,8 +387,8 @@ CREATE TABLE IF NOT EXISTS social_hub.health_reports (
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- Weekly slot calendar (docs/superpowers/specs/2026-10-14-weekly-slot-calendar-design.md).
--- The calendar owns when: a standing week of slots (a type in one of its own
--- windows) plus single-date overrides. Read only while slot_source = 'template'.
+-- The calendar owns when: a standing week of free-time slots (a type at a minute of the
+-- New York day) plus single-date overrides. Read only while slot_source = 'template'.
 -- ════════════════════════════════════════════════════════════════════════════
 
 -- Free-time slots (calendar week board redesign, 2026-10-20): a slot is a vertical at a
@@ -399,6 +399,7 @@ DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.columns
                WHERE table_schema = 'social_hub' AND table_name = 'slot_template' AND column_name = 'window_id') THEN
+        LOCK TABLE social_hub.slot_template, social_hub.slot_override IN ACCESS EXCLUSIVE MODE;
         DELETE FROM social_hub.slot_template;
         ALTER TABLE social_hub.slot_template DROP CONSTRAINT IF EXISTS slot_template_window_check;
         ALTER TABLE social_hub.slot_template DROP COLUMN window_id;

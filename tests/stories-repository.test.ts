@@ -197,3 +197,24 @@ test('candidates accept origin model; the pool still rejects it', async () => {
     /check/i,
   );
 });
+
+test('the live-day index swaps once from the old shape; a live set survives; requestSet works on either shape', async () => {
+  const { db, pg } = await openLocalStoriesDb();
+  const old = `DROP INDEX stories.uq_stories_sets_live_day;
+    CREATE UNIQUE INDEX uq_stories_sets_live_day ON stories.sets (series, ny_date) WHERE status NOT IN ('rejected', 'failed', 'skipped');`;
+  await pg.exec(old);
+  const first = await requestSet(db, { series: 'morning_download', nyDate: '2026-10-21', trigger: 'auto', style: 'polished' });
+  assert.equal(first.created, true);
+  const again = await requestSet(db, { series: 'morning_download', nyDate: '2026-10-21', trigger: 'auto', style: 'polished' });
+  assert.equal(again.created, false);
+  assert.equal(again.set.id, first.set.id);
+  await pg.exec(schemaSql());
+  await pg.exec(schemaSql());
+  const idx = await pg.query<{ indexdef: string }>(`SELECT indexdef FROM pg_indexes WHERE schemaname = 'stories' AND indexname = 'uq_stories_sets_live_day'`);
+  assert.equal(idx.rows.length, 1);
+  assert.match(idx.rows[0]!.indexdef, /slot_minute/);
+  assert.equal((await pg.query(`SELECT 1 FROM stories.sets WHERE id = $1`, [first.set.id])).rows.length, 1);
+  const third = await requestSet(db, { series: 'morning_download', nyDate: '2026-10-21', trigger: 'auto', style: 'polished' });
+  assert.equal(third.created, false);
+  assert.equal(third.set.id, first.set.id);
+});

@@ -112,9 +112,16 @@ test('an old window_id slot table is migrated in place, rows cleared', async () 
   await pg.exec(`DROP TABLE social_hub.slot_template; CREATE TABLE social_hub.slot_template (
     weekday smallint NOT NULL, vertical text NOT NULL, window_id text NOT NULL, feed_mode text, updated_by text,
     updated_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (weekday, vertical, window_id));
-    INSERT INTO social_hub.slot_template (weekday, vertical, window_id) VALUES (1, 'carousels', 'morning');`);
+    INSERT INTO social_hub.slot_template (weekday, vertical, window_id) VALUES (1, 'carousels', 'morning');
+    DROP TABLE social_hub.slot_override;
+    CREATE TABLE social_hub.slot_override (
+      ny_date date NOT NULL, vertical text NOT NULL, window_id text NOT NULL, action text NOT NULL, feed_mode text,
+      updated_by text, updated_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (ny_date, vertical, window_id));
+    INSERT INTO social_hub.slot_override (ny_date, vertical, window_id, action) VALUES ('2026-10-25', 'carousels', 'morning', 'remove');`);
   const sql = readFileSync('db/social_hub_schema.sql', 'utf8').split(/\r?\n/).filter((l) => !l.startsWith('\\')).join('\n');
   await pg.exec(sql);
   assert.equal((await pg.query(`SELECT 1 FROM social_hub.slot_template`)).rows.length, 0);
+  assert.equal((await pg.query(`SELECT 1 FROM social_hub.slot_override`)).rows.length, 0);
   await pg.query(`${TPL} (1, 'carousels', 540, NULL, NULL)`);
+  await pg.query(`${OVR} ('2026-10-25', 'carousels', 540, NULL, 'remove', NULL)`);
 });
