@@ -198,7 +198,7 @@
 
 **Files:**
 - Create: `lib/social-hub/slots/book.ts`
-- Modify: `lib/social-hub/slots/index.ts`; remove `choose.ts` (replaced)
+- Modify: `lib/social-hub/slots/index.ts`; remove `choose.ts` (replaced). Update every import of the removed `nonSlotKeys` / `feedModeKeys` / `feedModeFor` / `chooseByFeedMode` / `storiesDueOn` (tests included) in this task, so the tree type-checks after each task
 - Test: `tests/slots-book.test.ts`; update `tests/slots-schedulers.test.ts` imports
 
 **Interfaces:**
@@ -350,6 +350,9 @@
   - **After each change**, a toast reads "{what}. Just this date." with "Make it every {Weekday}" (template put of only that change) and "Undo" (`history`).
   - **Keyboard and touch:** every card is a button. The details panel has "Move to" (day select) and "Time" (15-minute select) that do everything a drag does.
   - **Legacy mode:** read-only board plus the `SourceSwitch` notice, as today.
+  - **Ready to place** is hidden on the Standard week tab.
+  - **Reset day** asks first when it would touch booked slots ("Move it back to ready" puts the post back in Ready to place). It never touches posted or started slots.
+  - **Removing a booked slot** asks "Move it back to ready" / "Keep it" (Keep cancels).
 - Uses the hub's existing tokens and type color variables (`--sh-v-*`), not the prototype's colors.
 
 - [ ] **Step 1:** Add any extracted pure helpers (e.g. `toastFor(change)`, `dropState(...)`) with tests, then make them pass.
