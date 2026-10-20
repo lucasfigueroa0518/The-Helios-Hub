@@ -267,3 +267,36 @@ test('a malformed submission is rejected with the shape errors', async () => {
   assert.ok((await result).ok);
   assert.match(s.requests[1].messages.at(-1).content[0].content, /news|read/);
 });
+
+test('Task 8b part 2: carousel emoji and industry rules', () => {
+  assert.match(CAPTIONER_CAROUSEL_RULES, /at most two emoji/i);
+  assert.match(CAPTIONER_CAROUSEL_RULES, /never in read/i);
+  assert.match(CAPTIONER_CAROUSEL_RULES, /Prefer naming a specific industry from the Helios context/);
+  assert.match(CAPTIONER_CHECKED_RULES, /at most two emoji, none in read/);
+  assert.doesNotMatch(CAPTIONER_CHECKED_RULES, /no emoji/);
+  // The Writer's and Editor's checked rules keep the ban.
+  assert.match(renderRulesFor('writer'), /no emoji/);
+  assert.match(renderRulesFor('editor'), /no emoji/);
+  assert.match(VOICE_BLOCK, /emoji/);
+});
+
+test('two emoji in news pass; an emoji in read, or a third, goes back once', async () => {
+  const two = good();
+  two.news.text = `🚨 ${NEWS.text} 👇`;
+  const ok = run([msg('tool_use', [submit(two)])]);
+  assert.ok((await ok.result).ok);
+  assert.equal(ok.s.requests.length, 1);
+
+  const inRead = good();
+  inRead.read.text = `${READ.text} 🚀`;
+  const r = run([msg('tool_use', [submit(inRead)]), msg('tool_use', [submit(good())])]);
+  assert.ok((await r.result).ok);
+  assert.equal(r.s.requests.length, 2);
+  assert.match(r.s.requests[1].messages.at(-1).content[0].content, /read: no emoji in the Helios line/);
+
+  const three = good();
+  three.news.text = `🚨 ${NEWS.text} 🔥 👇`;
+  const t = run([msg('tool_use', [submit(three)]), msg('tool_use', [submit(good())])]);
+  assert.ok((await t.result).ok);
+  assert.match(t.s.requests[1].messages.at(-1).content[0].content, /emoji: 3 in the caption, at most 2/);
+});

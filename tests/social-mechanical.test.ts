@@ -341,3 +341,11 @@ test('applySilentFixes: the follow line is built from the Writer’s clean topic
   const none = applySilentFixes(draft());
   assert.equal(none.draft.follow, 'Follow Helios for more AI stories like this.');
 });
+
+test('C3 caption emoji (2026-10-19): up to two pass, a third is flagged; slides keep the ban', () => {
+  assert.deepEqual(checkVoice(draft((x) => (x.caption.text = '🚨 Trump announced it.\n\nWhat would you ask first? 👇'))), []);
+  const three = checkVoice(draft((x) => (x.caption.text = '🚨 Trump announced it. 🔥\n\nWhat would you ask first? 👇')));
+  assert.deepEqual(three.map((f) => [f.where, f.detail]), [['caption', 'emoji: 3 in the caption, at most 2']]);
+  const slide = checkVoice(draft((x) => (x.slides[0]!.body!.text = 'A big step 🚀')));
+  assert.deepEqual(slide.map((f) => f.detail), ['emoji: "🚀"']);
+});

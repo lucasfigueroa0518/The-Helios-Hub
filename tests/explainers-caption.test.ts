@@ -41,7 +41,7 @@ test('a caption is rejected when the hook, length, or tags are wrong', () => {
   assert.throws(() => parseCaption(`AI Brain Break Episode 1:\n\n${'x'.repeat(120)}\n\n${base}`), /125/);
   assert.throws(() => parseCaption(base.replace('#ai', '')), /3 to 5/);
   assert.throws(() => parseCaption(`${base} #extra #tags #too #many`), /3 to 5/);
-  assert.throws(() => parseCaption(`${base} 🔥`), /emoji/);
+  assert.throws(() => parseCaption(`${base} 🔥`), /no emoji in the hashtags/);
   assert.throws(() => parseCaption(base.replace('that chat', 'https://example.com')), /URL/);
   assert.throws(
     () => parseCaption('A short hook.\n\nToo thin.\n\nSave this for later.\n\n#a #b #c'),
@@ -142,7 +142,7 @@ test('the post caption names the viewer\'s problem and ends on the Helios line (
   assert.doesNotMatch(CAPTION_INSTRUCTIONS, /no offer of Helios services/);
   assert.doesNotMatch(CAPTION_INSTRUCTIONS, /Do not speak as "we"/);
   assert.doesNotMatch(CAPTION_INSTRUCTIONS, /Do not sign off with Helios/);
-  assert.match(CAPTION_INSTRUCTIONS, /No emoji\. No URLs\./);
+  assert.match(CAPTION_INSTRUCTIONS, /No URLs\./);
 
   const facts = { title: 'Context window', scope: 'What a model can see.', storyboard: 'sb', script: 'sc', source: null };
   const recent = [{ closing: 'A dental practice hits this when Helios wires the front desk.', buildLine: true, createdAt: new Date() }];
@@ -229,4 +229,20 @@ test('the build-fit Jev call is keyed by the subject id it is given, not the tit
   const fit = liveExplainerBuildFit(ask);
   assert.equal(await fit({ title: 'Context window', scope: null, storyboard: null, script: 'sc', source: null }, 'job-42'), 0.7);
   assert.deepEqual(metas, [{ version: 'helios-build-fit@1', subjectId: 'job-42' }]);
+});
+
+test('Task 8b part 2 (v5 amended): at most two emoji, one leading the hook and one after the ask; none in the Helios line or hashtags', async () => {
+  const withTwo = CONTEXT_WINDOW.replace('Your long chat', '🧠 Your long chat').replace('loses the beginning.', 'loses the beginning. 👇');
+  assert.equal(parseCaption(withTwo), withTwo);
+  // The emoji follows the episode stamp that code adds.
+  assert.ok(stampCaption(withTwo, 3).startsWith(`${episodeLine(3)}\n\n🧠 Your long chat`));
+  assert.throws(() => parseCaption(withTwo.replace('desk.', 'desk. 🔥')), /3 emoji; at most 2/);
+  assert.throws(() => parseCaption(CONTEXT_WINDOW.replace("one section at a time.", 'one section at a time. 🚀')), /no emoji in the Helios line/);
+  const { CAPTION_INSTRUCTIONS, CAPTION_VERSION } = await import('@/lib/explainers/caption');
+  assert.equal(CAPTION_VERSION, 'explainer-caption-v5');
+  assert.doesNotMatch(CAPTION_INSTRUCTIONS, /No emoji\./);
+  assert.match(CAPTION_INSTRUCTIONS, /At most two emoji/);
+  assert.match(CAPTION_INSTRUCTIONS, /code puts the episode line above it/);
+  assert.match(CAPTION_INSTRUCTIONS, /None in the Helios line or the hashtags/);
+  assert.match(CAPTION_INSTRUCTIONS, /Prefer naming a specific industry from the Helios context/);
 });

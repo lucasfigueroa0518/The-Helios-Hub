@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { BUILD_FIT, buildFitState, buildLineInstruction, ceilingAllows, decideBuildLine, recentClosingsBlock, type RecentClosing } from '@/lib/social/captions/build-line';
+import { CAPTION_EMOJI_MAX, countEmoji } from '@/lib/social/captions/emoji';
 import { CAPTION_SHARED_RULES, HELIOS_CONTEXT } from '@/lib/social/captions/helios-context';
 
 const row = (buildLine: boolean, i = 0): RecentClosing => ({ closing: `closing ${i}`, buildLine, createdAt: new Date(2026, 9, 19 - i) });
@@ -70,4 +71,18 @@ test('buildFitState slices story text to 6000 under untrusted_content', () => {
 
 test('BUILD_FIT version', () => {
   assert.equal(BUILD_FIT.version, 'helios-build-fit@1');
+});
+
+test('Task 8b part 2: at most two emoji, never in the Helios line; the Helios line prefers a named industry', () => {
+  assert.match(CAPTION_SHARED_RULES, /at most two emoji/i);
+  assert.match(CAPTION_SHARED_RULES, /one may lead the hook, and one may follow the question or call to action/);
+  assert.match(CAPTION_SHARED_RULES, /Never put one in the Helios line, the credits, the Source line or the hashtags/);
+  assert.match(CAPTION_SHARED_RULES, /Prefer naming a specific industry from the context/);
+  assert.match(CAPTION_SHARED_RULES, /only when none (fits|does)/);
+  assert.match(CAPTION_SHARED_RULES, /inside what Helios builds/);
+  assert.match(CAPTION_SHARED_RULES, /industry the recent closings did not use/);
+  assert.equal(CAPTION_EMOJI_MAX, 2);
+  assert.equal(countEmoji('No emoji here.'), 0);
+  assert.equal(countEmoji('🚀 Launch. Which would you pick? 👇'), 2);
+  assert.equal(countEmoji('👩‍💻 one joined emoji, ❤️ one with a selector, 👍🏽 one with a skin tone'), 3);
 });

@@ -31,6 +31,8 @@ import type { Photo } from '@/lib/social/photos/find';
 import type { Brief } from '@/lib/social/reporter/brief';
 import { followLine, isExactExcerpt, type FilledDraft } from '@/lib/social/writer/draft';
 
+import { CAPTION_EMOJI_MAX, countEmoji } from '@/lib/social/captions/emoji';
+
 import { voiceHits } from './voice-lists';
 
 // ── A. Silent fixes ───────────────────────────────────────────────────
@@ -213,8 +215,8 @@ function withoutQuotes(text: string): string {
 /** C3: the voice list, on the stages' own words (quoted speech exempt). */
 export function checkVoice(d: FilledDraft): Failure[] {
   const out: Failure[] = [];
-  const scan = (where: string, text: string) => {
-    for (const h of voiceHits(withoutQuotes(text))) out.push({ id: 'C3', where, detail: `${h.kind}: "${h.match}"` });
+  const scan = (where: string, text: string, emoji = true) => {
+    for (const h of voiceHits(withoutQuotes(text), { emoji })) out.push({ id: 'C3', where, detail: `${h.kind}: "${h.match}"` });
   };
   scan('cover', d.cover);
   d.slides.forEach((s, i) => {
@@ -222,7 +224,10 @@ export function checkVoice(d: FilledDraft): Failure[] {
     if (s.body) scan(`slide ${i + 2} body`, s.body.text);
   });
   scan('follow', d.follow);
-  scan('caption', d.caption.text);
+  // The caption may carry up to two emoji (2026-10-19); the slides and the follow line keep the ban.
+  scan('caption', d.caption.text, false);
+  const emoji = countEmoji(withoutQuotes(d.caption.text));
+  if (emoji > CAPTION_EMOJI_MAX) out.push({ id: 'C3', where: 'caption', detail: `emoji: ${emoji} in the caption, at most ${CAPTION_EMOJI_MAX}` });
   return out;
 }
 

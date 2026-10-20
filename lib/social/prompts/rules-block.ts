@@ -110,7 +110,7 @@ export const CAPTIONER_CHECKED_RULES = `### Checked by code
 Code checks your caption. A failure comes back to you once, with the exact problem:
 - Length: news and read together ≤1,900 characters, which leaves room for the Source and Photos lines code adds under the 2,200 limit. Never over.
 - Quotation marks only around words that are a QUOTES entry, word for word, or an exact excerpt of one.
-- None of the voice list's banned words or phrases, no sentence opening with "Meanwhile," "Additionally," "Furthermore" or "That said," no exclamation marks, no emoji. Quoted speech is exempt.
+- None of the voice list's banned words or phrases, no sentence opening with "Meanwhile," "Additionally," "Furthermore" or "That said," no exclamation marks, and at most two emoji, none in read. Quoted speech is exempt.
 - No hashtags, and no Source or Photos line of your own.
 - Every ID in news.facts and read.facts is in the BRIEF.
 - read names Helios.`;

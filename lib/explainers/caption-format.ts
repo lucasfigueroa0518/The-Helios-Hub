@@ -6,6 +6,8 @@
  * how many explainers have gone out, plus this one.
  */
 
+import { CAPTION_EMOJI_MAX, countEmoji } from '@/lib/social/captions/emoji';
+
 export const CAPTION_MAX_CHARS = 2200;
 /** v4: loosened from 400 and 4 so the writer stops padding (social captions redesign, 2026-10-19). Counts the Helios line. */
 export const CAPTION_MIN_BODY_CHARS = 200;
@@ -78,7 +80,9 @@ export function parseCaption(raw: unknown): string {
     throw new Error(`caption is over ${CAPTION_MAX_CHARS} characters`);
   }
   if (/https?:\/\//i.test(text)) throw new Error('caption contains a URL');
-  if (/\p{Extended_Pictographic}/u.test(text)) throw new Error('caption contains an emoji');
+  // v5 (2026-10-19): at most two emoji, one leading the hook and one after the ask; none in the Helios line or hashtags.
+  const emoji = countEmoji(text);
+  if (emoji > CAPTION_EMOJI_MAX) throw new Error(`caption has ${emoji} emoji; at most ${CAPTION_EMOJI_MAX}`);
 
   const tags = text.match(/#[\p{L}\p{N}_]+/gu) ?? [];
   if (tags.length < CAPTION_MIN_TAGS || tags.length > CAPTION_MAX_TAGS) {
@@ -87,6 +91,7 @@ export function parseCaption(raw: unknown): string {
   const tagAt = text.indexOf(tags[0]!);
   const beforeTags = text.slice(0, tagAt);
   if (beforeTags.includes('#')) throw new Error('hashtags belong at the end');
+  if (countEmoji(text.slice(tagAt)) > 0) throw new Error('no emoji in the hashtags');
 
   const body = beforeTags.trim();
   if (body.length < CAPTION_MIN_BODY_CHARS) {
@@ -101,6 +106,7 @@ export function parseCaption(raw: unknown): string {
   if (!/\bHelios\b/.test(blocks.at(-1) ?? '')) {
     throw new Error('the paragraph before the hashtags does not name Helios. End on the Helios line, with Helios named once.');
   }
+  if (countEmoji(blocks.at(-1) ?? '') > 0) throw new Error('no emoji in the Helios line');
 
   const hook = blocks[0] ?? '';
   if (!hook) throw new Error('caption is missing a hook');

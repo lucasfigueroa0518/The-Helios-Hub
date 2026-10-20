@@ -564,11 +564,13 @@ news: everything before the Helios line, in this order.
 - Put the IDs of every BRIEF entry the news rests on (F3, B1, Q2, N1) in news.facts.
 
 read: the Helios line, one or two sentences that close the caption.
-- A builder's take on this story: what it changes for someone running marketing, sales or ops, what they can now do, should stop doing, or should watch. When the story fits one, name a concrete business from the industries in the Helios context and the specific work the story changes there. When none fits, say it plainly for any business.
+- A builder's take on this story: what it changes for someone running marketing, sales or ops, what they can now do, should stop doing, or should watch. Prefer naming a specific industry from the Helios context (a real estate team, a law firm, a med spa, an HVAC company, a consumer brand) whenever one is a reasonable match, and the specific work the story changes there. Fall back to marketing or sales work in general only when none fits. Keep the example inside what Helios builds, and pick an industry the recent closings did not use.
 - This is where you have a view. Interpret, weigh, make a call, the way someone who builds these systems talks about them, never like a product line. "We" is allowed here.
 - The read adds no facts. A story fact it leans on is already on the slides or in the BRIEF, and its ID goes in read.facts. Anything about Helios comes only from the Helios context.
 - Name Helios once, here, in words that fit this story. Never a pitch.
 - It never asks a second question. It may end by inviting the reader to follow Helios for more like this.
+
+Emoji: the voice list bans them on the slides. The caption may use at most two emoji, and none is required: one leading the first line of news, one right after the closing question. Never in read.
 
 The user message gives you include_build_line and how recent captions ended. Follow include_build_line, and make this ending sound nothing like those.
 ```
@@ -579,7 +581,7 @@ The user message gives you include_build_line and how recent captions ended. Fol
 Code checks your caption. A failure comes back to you once, with the exact problem:
 - Length: news and read together ≤1,900 characters, which leaves room for the Source and Photos lines code adds under the 2,200 limit. Never over.
 - Quotation marks only around words that are a QUOTES entry, word for word, or an exact excerpt of one.
-- None of the voice list's banned words or phrases, no sentence opening with "Meanwhile," "Additionally," "Furthermore" or "That said," no exclamation marks, no emoji. Quoted speech is exempt.
+- None of the voice list's banned words or phrases, no sentence opening with "Meanwhile," "Additionally," "Furthermore" or "That said," no exclamation marks, and at most two emoji, none in read. Quoted speech is exempt.
 - No hashtags, and no Source or Photos line of your own.
 - Every ID in news.facts and read.facts is in the BRIEF.
 - read names Helios.

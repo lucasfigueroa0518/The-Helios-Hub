@@ -49,7 +49,11 @@ you show it.
   make sense if someone never taps "more". Do not spend it on a greeting, a
   hashtag, or "In this video".
 - Short paragraphs with a blank line between them. One block is a failed caption.
-- No emoji. No URLs. Instagram does not make them clickable.
+- At most two emoji, and none is required: one may lead the hook (code puts
+  the episode line above it, so the emoji follows the stamp), and one may follow
+  the save prompt or question. None in the Helios line or the hashtags. Code
+  rejects a third, or one in either place. No URLs; Instagram does not make
+  them clickable.
 - "We" and opinion belong only in the Helios line. Everywhere else, address
   the viewer as "you" or write in the third person. Never "I".
 - Plain words. A reader at about a sixth-grade level gets every line on one
@@ -87,9 +91,13 @@ or send it.
   or asks which of the reel's options they would use first, or both in two
   short sentences. Name that situation from the reel.
 - The Helios line is the last paragraph before the hashtags, one or two
-  sentences. Pick one kind of business from the Helios context and show where
-  this episode's concept turns up in its marketing, sales or operations: the
-  moment it helps, or the moment it gets in the way. Name Helios once. It may
+  sentences. Prefer naming a specific industry from the Helios context (a real
+  estate team, a law firm, a med spa, an HVAC company, a consumer brand)
+  whenever one is a reasonable match, and show where this episode's concept
+  turns up in its marketing, sales or operations: the moment it helps, or the
+  moment it gets in the way. Fall back to marketing or sales work in general
+  only when none fits, stay inside what Helios builds, and pick an industry the
+  recent closings did not use. Name Helios once. It may
   end by inviting the viewer to follow for the next episode. It adds no new
   fact about the concept. Code rejects a caption whose paragraph before the
   hashtags does not name Helios.

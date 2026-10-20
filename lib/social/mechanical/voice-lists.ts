@@ -35,8 +35,11 @@ const EMOJI_RE = /\p{Extended_Pictographic}/u;
 
 export type VoiceHit = { kind: 'word' | 'phrase' | 'opener' | 'exclamation' | 'emoji'; match: string };
 
-/** Voice-list hits in one piece of text the stage wrote (never a filled quote). */
-export function voiceHits(text: string): VoiceHit[] {
+/**
+ * Voice-list hits in one piece of text the stage wrote (never a filled quote).
+ * `emoji: false` skips the emoji rule (the caption counts its own, CAPTION_EMOJI_MAX).
+ */
+export function voiceHits(text: string, opts: { emoji?: boolean } = {}): VoiceHit[] {
   const hits: VoiceHit[] = [];
   const w = WORD_RE.exec(text);
   if (w) hits.push({ kind: 'word', match: w[1]! });
@@ -45,7 +48,7 @@ export function voiceHits(text: string): VoiceHit[] {
   const o = OPENER_RE.exec(text);
   if (o) hits.push({ kind: 'opener', match: o[1]! });
   if (text.includes('!')) hits.push({ kind: 'exclamation', match: '!' });
-  const e = EMOJI_RE.exec(text);
+  const e = opts.emoji === false ? null : EMOJI_RE.exec(text);
   if (e) hits.push({ kind: 'emoji', match: e[0] });
   return hits;
 }

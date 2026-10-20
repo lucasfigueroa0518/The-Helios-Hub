@@ -426,7 +426,7 @@ test('shipStoredCopy (ship-a-miss) records the closing with the attempt build-li
 
 // ── v29: the posting path reads the Helios line from the stored row ─────────
 
-test('publishReadiness posts a stored v29 row as body, call to action, Helios line, hashtags', async () => {
+test('publishReadiness posts a stored v29 row (and a v28 row) as body, call to action, Helios line, hashtags', async () => {
   const { openHubTestDb } = await import('./fixtures/social-hub/pglite');
   const { publishReadiness } = await import('@/lib/reels/music/publish');
   const { pg } = await openHubTestDb();
@@ -456,4 +456,44 @@ test('publishReadiness posts a stored v29 row as body, call to action, Helios li
   const ready = await publishReadiness(video, { mixOverride: { audioVolume: 100, videoVolume: 100 } });
   assert.ok(ready.ok, ready.ok ? '' : ready.note);
   assert.equal(ready.reel.caption, `${CAPTION}\n\n${CTA}\n\n${READ}\n\n#AI`);
+
+  // A v28 row already in review: the read is the caption's last paragraph and in working. It posts once, after the call to action.
+  const [idea28, video28] = ['72900000-0000-4000-8000-000000000005', '72900000-0000-4000-8000-000000000006'];
+  await pg.query(`INSERT INTO reels.post_ideas (id) VALUES ($1)`, [idea28]);
+  await pg.query(
+    `INSERT INTO reels.idea_copy (slate_id, post_idea_id, prompt_version, model, bucket, framework, status, caption, call_to_action, hashtags, working)
+     VALUES ($1, $2, 'copy-caption-v28', 'm', 'b', 'f', 'ok', $3, $4, ARRAY['#AI'], $5::jsonb)`,
+    [slate, idea28, `${CAPTION}\n\n${READ}`, CTA, JSON.stringify({ builderRead: READ })],
+  );
+  await pg.query(
+    `INSERT INTO reels.video_jobs (id, post_idea_id, slate_id, status, finished_at, video_storage_path) VALUES ($1, $2, $3, 'ok', now(), 'videos/y.mp4')`,
+    [video28, idea28, slate],
+  );
+  await pg.query(
+    `INSERT INTO reels.song_picks (video_job_id, post_idea_id, status, finished_at, picked_audio_id, picked_title, picked_artist) VALUES ($1, $2, 'ok', now(), 'aud-8', 'Song', 'Artist')`,
+    [video28, idea28],
+  );
+  const v28 = await publishReadiness(video28, { mixOverride: { audioVolume: 100, videoVolume: 100 } });
+  assert.ok(v28.ok, v28.ok ? '' : v28.note);
+  assert.equal(v28.reel.caption, `${CAPTION}\n\n${CTA}\n\n${READ}\n\n#AI`);
+  assert.equal(v28.reel.caption.split(READ).length - 1, 1, 'the read posts once');
+});
+
+test('Task 8b part 2 (v29 amended): at most two emoji, none in the Helios line; the line prefers a named industry', () => {
+  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v29');
+  assert.doesNotMatch(COPY_SKILL, /No emoji\./);
+  assert.match(COPY_SKILL, /At most two emoji, and none is required: one may lead the caption's first line, and one may end the call to action/);
+  assert.match(COPY_SKILL, /Never put one in the Helios line or the hashtags/);
+  assert.match(COPY_SKILL, /Prefer naming a specific industry from the Helios context/);
+  assert.match(COPY_SKILL, /industry the recent closings did not use/);
+});
+
+test('a v28 row cannot post its read twice: the body copy is dropped even when spacing differs', () => {
+  const spaced = READ.replace('. Helios', '.\nHelios');
+  const posted = fullCaption({ caption: `${CAPTION}\n\n${spaced}`, builderRead: READ, callToAction: CTA, hashtags: ['#AI'] });
+  assert.equal(posted, `${CAPTION}\n\n${CTA}\n\n${READ}\n\n#AI`);
+  assert.equal(posted.split('Helios builds').length - 1, 1);
+  // The read the model also wrote before the call to action in the caption is dropped too.
+  const both = fullCaption({ caption: `${CAPTION}\n\n${READ}\n\n${CTA}`, builderRead: READ, callToAction: CTA, hashtags: ['#AI'] });
+  assert.equal(both, `${CAPTION}\n\n${CTA}\n\n${READ}\n\n#AI`);
 });

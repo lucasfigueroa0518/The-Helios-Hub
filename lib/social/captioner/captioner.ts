@@ -12,6 +12,7 @@
  * Wiring into the pipeline is the orchestrator's (not here).
  */
 import { STAGE_MODELS, type StageModelConfig } from '@/lib/social/pipeline/models';
+import { countEmoji } from '@/lib/social/captions/emoji';
 import { draftTextFailures, LIMITS } from '@/lib/social/mechanical/checks';
 import type { RecentClosing } from '@/lib/social/captions/build-line';
 import { checkShape, type Brief } from '@/lib/social/reporter/brief';
@@ -51,6 +52,8 @@ export function checkCaptionSubmission(input: unknown, brief: Brief, filled: Fil
     if (CREDIT_LINE.test(text)) errors.push(`${key}: no Source or Photos line; code adds them`);
   }
   if (!/\bHelios\b/.test(parts.read.text)) errors.push("read: name Helios once in the builder's read");
+  // Like the rest of C3, an emoji in the Helios line blocks only the first submission.
+  if (attempt <= 1 && countEmoji(parts.read.text) > 0) errors.push('C3 read: no emoji in the Helios line');
   const joined = joinCaption(parts);
   if (joined.length > CAPTION_MAX_WRITTEN) {
     errors.push(`length: news and read are ${joined.length} characters together, limit ${CAPTION_MAX_WRITTEN.toLocaleString('en-US')} (${joined.length - CAPTION_MAX_WRITTEN} over); code adds the Source and Photos lines under the ${LIMITS.caption.toLocaleString('en-US')} cap`);
