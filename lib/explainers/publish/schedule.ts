@@ -3,7 +3,7 @@ import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { chooseFromWindows, slotTakenKey, uniformIndex } from '@/lib/instagram/window';
 import { POOL_ORDER_BY, REJECTED_SLOT_NOTE } from '@/lib/explainers/repository';
-import { feedModeFor, feedModeKeys, nonSlotKeys, slotPlan } from '@/lib/social-hub/slots';
+import { feedModeKeys, nonSlotKeys, slotPlan, slotsOn } from '@/lib/social-hub/slots';
 import { chooseByFeedMode } from '@/lib/social-hub/slots/choose';
 import { bookSlot } from '@/lib/social-hub/spine';
 
@@ -93,7 +93,8 @@ export async function scheduleJob(
     }
     try {
       // Legacy books exactly as before (no feed_mode written; it reads as main).
-      const feedMode = plan ? await feedModeFor(spacing, 'explainers', choice.nyDate, choice.slot) : undefined;
+      // Template: the mode of the slot chosen, from the plan in hand (no second read).
+      const feedMode = plan ? (slotsOn(plan, 'explainers', choice.nyDate).find((s) => s.windowId === choice.slot)?.feedMode ?? null) : null;
       const booked = await bookSlot(spineOf(db), { vertical: 'explainers', itemId, nyDate: choice.nyDate, slot: choice.slot, publishAt: choice.publishAt, source, ...(feedMode ? { feedMode } : {}) });
       return { scheduled: true, id: booked.id, publishAt: booked.publishAt };
     } catch (error) {

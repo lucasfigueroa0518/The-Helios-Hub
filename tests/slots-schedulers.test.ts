@@ -193,6 +193,28 @@ test('explainers template: a removed window is never booked, and the slot\'s fee
   assert.equal(await quotaFromSlots(q, 'explainers', '2026-10-21'), 1);
 });
 
+test('explainers template: the booking takes the feed mode of the plan it was chosen from, even if the source flips mid-booking', async () => {
+  const { db, q, jobId } = await explainersDb();
+  await setSlotSource(q, 'template', 't');
+  await applySlotChanges(q, [
+    { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'explainers', windowId: 'afternoon', action: 'remove', feedMode: null },
+    { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'explainers', windowId: 'late', action: 'add', feedMode: 'trial' },
+  ], { by: 't', now: LATE_TUESDAY, keepBooked: false });
+  // Flip the switch back to legacy right after the scheduler reads it once.
+  let reads = 0;
+  const flipping: Queryable = {
+    async query<T>(text: string, params?: unknown[]) {
+      const out = await db.query<T>(text, params);
+      if (text.includes("key = 'slot_source'") && ++reads === 1) await setSlotSource(q, 'legacy', 't');
+      return out;
+    },
+  };
+  const out = await scheduleJob(flipping, jobId, 'auto', LATE_TUESDAY, '2026-10-21', first);
+  assert.ok(out.scheduled);
+  const [row] = await explainerSlots(db);
+  assert.deepEqual([row!.slot, row!.feed_mode], ['late', 'trial'], 'not the legacy main');
+});
+
 test('explainers template: every window is a slot, whatever posts_per_day says', async () => {
   const { db, q, jobId } = await explainersDb();
   await db.query(`INSERT INTO explainers.settings (key, value) VALUES ('posts_per_day', '1'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);

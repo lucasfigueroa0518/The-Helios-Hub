@@ -6,7 +6,7 @@ import { REEL_SCHEDULE } from '@/lib/reels/spine-tables';
 import { approveReel, reelItemId, reelsSpine } from '@/lib/reels/publish/items';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { slotTakenKey } from '@/lib/instagram/window';
-import { bookingFeedMode, feedModeFor, feedModeKeys, nonSlotKeys, slotPlan, slotsOn, type SlotPlan } from '@/lib/social-hub/slots';
+import { bookingFeedMode, feedModeKeys, nonSlotKeys, slotPlan, slotsOn, type SlotPlan } from '@/lib/social-hub/slots';
 import { chooseByFeedMode } from '@/lib/social-hub/slots/choose';
 import type { FeedMode } from '@/lib/social-hub/slots/types';
 import { bookSlot } from '@/lib/social-hub/spine';
@@ -216,6 +216,8 @@ export async function schedulePostIdea(
         : 'No posting slot is open in the next two weeks.';
       return { scheduled: false, status: 409, note };
     }
+    // Template: the mode of the slot chosen, from the plan in hand (no second read).
+    const feedMode = plan ? (slotsOn(plan, 'reels', choice.nyDate).find((s) => s.windowId === choice.slot)?.feedMode ?? null) : null;
     try {
       const booked = await bookSlot(reelsSpine, {
         vertical: 'reels',
@@ -227,7 +229,7 @@ export async function schedulePostIdea(
         source,
         approved: source === 'user',
         // Legacy books exactly as before (no feed_mode written; it reads as trial).
-        ...(plan ? { feedMode: await feedModeFor(hubQ, 'reels', choice.nyDate, choice.slot) } : {}),
+        ...(feedMode ? { feedMode } : {}),
       });
       return outcome(await scheduleById(booked.id));
     } catch (error) {
