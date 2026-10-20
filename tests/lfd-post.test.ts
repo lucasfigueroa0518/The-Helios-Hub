@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { markRuns } from '@/lib/lfd/marks';
-import { buildPost, captionFor, LFD_HOOK_LINES } from '@/lib/lfd/post';
+import { buildPost, captionFor, composeCaption, LFD_HOOK_LINES } from '@/lib/lfd/post';
 import type { Ready } from '@/lib/lfd/types';
 
 const ready = (i: number): Ready => ({
@@ -114,4 +114,13 @@ test('a model caption that cannot fit even with one body paragraph falls back to
   const items = [0, 1].map(ready);
   const caption = captionFor(items, { ...LINES, body: 'x'.repeat(2200) });
   assert.equal(caption, captionFor(items));
+});
+
+test('composeCaption reports the path that shipped', () => {
+  const items = [0, 1].map(ready);
+  assert.equal(composeCaption(items, LINES).by, 'model');
+  assert.equal(composeCaption(items, null).by, 'template');
+  const tooLong = composeCaption(items, { ...LINES, body: 'x'.repeat(2200) });
+  assert.equal(tooLong.by, 'template');
+  assert.equal(tooLong.caption, captionFor(items));
 });

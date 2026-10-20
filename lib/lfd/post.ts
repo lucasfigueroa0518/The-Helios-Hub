@@ -28,19 +28,24 @@ function templateCaption(ready: Ready[]): string {
 }
 
 /**
- * The caption: the model-written lines (caption-lines.ts) then credits, or the template when
- * `lines` is null. Over the limit, body paragraphs go from the end first; the opener, question
- * and Helios line stay whole. If even one body paragraph will not fit, the template ships.
+ * The caption and the path that produced it: the model-written lines (caption-lines.ts) then
+ * credits, or the template when `lines` is null. Over the limit, body paragraphs go from the end
+ * first; the opener, question and Helios line stay whole. If even one body paragraph will not
+ * fit, the template ships and `by` says so (the run records the closing only for 'model').
  */
-export function captionFor(ready: Ready[], lines?: LfdCaptionLines | null): string {
-  if (!lines) return templateCaption(ready);
+export function composeCaption(ready: Ready[], lines?: LfdCaptionLines | null): { caption: string; by: 'model' | 'template' } {
+  if (!lines) return { caption: templateCaption(ready), by: 'template' };
   const paragraphs = lines.body.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
   const build = (n: number) => [lines.opener, paragraphs.slice(0, n).join('\n\n'), lines.question, lines.heliosLine, creditsFor(ready)].filter(Boolean).join('\n\n');
   for (let n = paragraphs.length; n >= 1; n--) {
     const caption = build(n);
-    if (caption.length <= CAPTION_MAX_CHARS) return caption;
+    if (caption.length <= CAPTION_MAX_CHARS) return { caption, by: 'model' };
   }
-  return templateCaption(ready);
+  return { caption: templateCaption(ready), by: 'template' };
+}
+
+export function captionFor(ready: Ready[], lines?: LfdCaptionLines | null): string {
+  return composeCaption(ready, lines).caption;
 }
 
 export function buildPost(ready: Ready[], now: Date, lines?: LfdCaptionLines | null): RenderPost {

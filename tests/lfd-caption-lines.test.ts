@@ -6,7 +6,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 
 import { LFD_CAPTION_MODEL, LFD_CAPTION_SYSTEM, writeLfdCaptionLines } from '@/lib/lfd/caption-lines';
 import type { Ready } from '@/lib/lfd/types';
-import { HELIOS_CONTEXT } from '@/lib/social/captions/helios-context';
+import { CAPTION_SHARED_RULES, HELIOS_CONTEXT } from '@/lib/social/captions/helios-context';
 
 const ready = (i: number): Ready => ({
   pick: { key: `k${i}`, refs: [`r${i}`], origin: 'reels', headline: `H${i}`, sourceName: `Outlet ${i}`, url: `https://o${i}.com/a`, body: '', publishedAt: null, net: 1, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, lane: 'rundown' },
@@ -21,14 +21,14 @@ const VALID = {
   helios_line: 'For a real estate team, a faster model means listing follow-ups that go out in minutes, and at Helios that is the kind of thing we wire up. Follow for next week\'s roundup.',
 };
 
-function stub(reply: unknown | Error) {
+function stub(reply: unknown | Error, opts: { noUsage?: boolean } = {}) {
   const calls: Anthropic.MessageCreateParamsNonStreaming[] = [];
   const create = async (p: Anthropic.MessageCreateParamsNonStreaming) => {
     calls.push(p);
     if (reply instanceof Error) throw reply;
     return {
       id: 'm', type: 'message', role: 'assistant', model: LFD_CAPTION_MODEL, stop_reason: 'end_turn', stop_sequence: null,
-      usage: { input_tokens: 2000, output_tokens: 300, cache_creation_input_tokens: 0, cache_read_input_tokens: 3000 },
+      ...(opts.noUsage ? {} : { usage: { input_tokens: 2000, output_tokens: 300, cache_creation_input_tokens: 0, cache_read_input_tokens: 3000 } }),
       content: [{ type: 'text', text: JSON.stringify(reply) }],
     } as unknown as Anthropic.Message;
   };
@@ -116,4 +116,19 @@ test('no closings block when the log is empty', async () => {
 
 test('the prompt is plain product copy: no em dashes', () => {
   assert.doesNotMatch(LFD_CAPTION_SYSTEM, /—/);
+});
+
+test('a reply with no usage never throws: the lines still come back, priced at 0', async () => {
+  const res = await writeLfdCaptionLines([ready(0)], [], stub(VALID, { noUsage: true }).create);
+  assert.ok(res.lines, res.reason);
+  assert.ok(Number.isFinite(res.costUsd));
+  const bad = await writeLfdCaptionLines([ready(0)], [], stub({ ...VALID, helios_line: 'no brand' }, { noUsage: true }).create);
+  assert.equal(bad.lines, null);
+});
+
+test('the Helios line follows the shared rules: best-matching industry, not a recent one, no example list of its own', () => {
+  const own = LFD_CAPTION_SYSTEM.slice(LFD_CAPTION_SYSTEM.indexOf(CAPTION_SHARED_RULES) + CAPTION_SHARED_RULES.length);
+  assert.match(own, /industry from the Helios context that best matches the week's stories/);
+  assert.match(own, /not one the recent closings used/);
+  assert.doesNotMatch(own, /real estate|law firm|med spa|HVAC|consumer brand/i);
 });

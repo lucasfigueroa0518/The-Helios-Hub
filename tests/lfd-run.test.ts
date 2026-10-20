@@ -28,7 +28,7 @@ type VisionStory = { headline: string; body: string; names: string[]; outlet: st
  * Writer stub: echoes every story in the material with valid copy; `bad` keys get a headline the fact check rejects.
  * Vision calls (submit_verdict) are answered by `vision` (default: the photo passes) and counted apart.
  */
-function writerStub(opts: { setup?: string; failAfter?: number; fail?: (urls: string[]) => boolean; vision?: (s: VisionStory, photo: string | null) => string | null; caption?: () => unknown } = {}) {
+function writerStub(opts: { setup?: string; failAfter?: number; fail?: (urls: string[]) => boolean; vision?: (s: VisionStory, photo: string | null) => string | null; caption?: () => unknown; captionNoUsage?: boolean } = {}) {
   let calls = 0;
   const seen: VisionStory[] = [];
   const bad = new Set<string>();
@@ -39,7 +39,7 @@ function writerStub(opts: { setup?: string; failAfter?: number; fail?: (urls: st
       captionCalls.push(p);
       const reply = opts.caption ? opts.caption() : CAPTION_REPLY;
       if (reply instanceof Error) throw reply;
-      return { id: 'c', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 500, output_tokens: 200, cache_creation_input_tokens: 0, cache_read_input_tokens: 3000 }, content: [{ type: 'text', text: JSON.stringify(reply) }] } as unknown as Anthropic.Message;
+      return { id: 'c', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', stop_reason: 'end_turn', stop_sequence: null, ...(opts.captionNoUsage ? {} : { usage: { input_tokens: 500, output_tokens: 200, cache_creation_input_tokens: 0, cache_read_input_tokens: 3000 } }), content: [{ type: 'text', text: JSON.stringify(reply) }] } as unknown as Anthropic.Message;
     }
     if ((p.tools?.[0] as { name?: string } | undefined)?.name === 'submit_verdict') {
       const blocks = p.messages[0]!.content as Array<{ type: string; text?: string; source?: { data: string } }>;
@@ -679,4 +679,26 @@ test('a failed caption call or a rejected reply ships the template caption and r
     assert.equal(rec.caption.by, 'template');
     assert.ok(rec.caption.reason);
   }
+});
+
+test('model lines that cannot fit ship the template: telemetry says template and no closing is recorded', async () => {
+  const recorded: string[] = [];
+  const closings = { recent: async () => [], record: async (_id: string, c: string) => { recorded.push(c); } };
+  const d = await deps({ create: writerStub({ caption: () => ({ ...CAPTION_REPLY, body: 'x'.repeat(2200) }) }).create, closings });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const { rows } = await d.query<{ caption: string }>(`SELECT caption FROM lfd.posts`);
+  assert.match(rows[0]!.caption, /^Do you realize what just happened/);
+  assert.deepEqual(recorded, []);
+  const rec = (await recordOf(d, res.runId)) as unknown as { caption: { by: string; reason: string } };
+  assert.equal(rec.caption.by, 'template');
+  assert.match(rec.caption.reason, /did not fit/);
+});
+
+test('a caption reply with no usage does not fail the run', async () => {
+  const d = await deps({ create: writerStub({ captionNoUsage: true }).create });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const { rows } = await d.query<{ caption: string }>(`SELECT caption FROM lfd.posts`);
+  assert.match(rows[0]!.caption, /^⬅️ Swipe for a new Claude Haiku/);
 });

@@ -23,7 +23,7 @@ import { leadImage } from './lead-image';
 import { findPhotos, REFUSED_ICON_SCENE } from './photos';
 import { judgedPool, MIN_STORIES, mergeSameEvent, RUNDOWN_POOL, rundownOrder, scoreMajor, Selector, slideOrder, withoutUsed } from './pick';
 import { LFD_CAPTION_VERSION, writeLfdCaptionLines } from './caption-lines';
-import { buildPost, captionFor } from './post';
+import { buildPost, composeCaption } from './post';
 import { leadOrder } from './lead';
 import { carouselLane, freshFeedLane, lastCarouselRunAt, reelsLane } from './sources';
 import { adoptRun, finishRun, insertPost, previousPosts, recentPhotoUrls, startRun, usedIdeaIds } from './store';
@@ -394,11 +394,13 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     // Any failure ships the template caption. The call goes through d.create, so the run budget prices it.
     const recent = d.closings ? await d.closings.recent().catch(() => []) : [];
     const caption = await writeLfdCaptionLines(final, recent, d.create);
-    record.caption = caption.lines
+    // Telemetry and the closings log follow what shipped: model lines that cannot fit fall back to the template.
+    const shipped = composeCaption(final, caption.lines);
+    record.caption = shipped.by === 'model'
       ? { by: 'model', version: LFD_CAPTION_VERSION, usd: caption.costUsd }
-      : { by: 'template', usd: caption.costUsd, reason: caption.reason };
-    if (caption.lines) await d.closings?.record(runId, caption.lines.heliosLine, false);
-    const render = { ...rendered.render, caption: captionFor(final, caption.lines) };
+      : { by: 'template', usd: caption.costUsd, reason: caption.reason ?? 'the model caption did not fit the limit' };
+    if (shipped.by === 'model' && caption.lines) await d.closings?.record(runId, caption.lines.heliosLine, false);
+    const render = { ...rendered.render, caption: shipped.caption };
     const short = final.length < MIN_STORIES;
     const fitProblems = (fit?.problems ?? []).filter((p) => /text fit/.test(p));
     const postId = await insertPost(d.query, {
