@@ -7,10 +7,10 @@
  */
 
 export const CAPTION_MAX_CHARS = 2200;
-/** v4: loosened from 400 and 4 so the writer stops padding (social captions redesign, 2026-10-19). */
+/** v4: loosened from 400 and 4 so the writer stops padding (social captions redesign, 2026-10-19). Counts the Helios line. */
 export const CAPTION_MIN_BODY_CHARS = 200;
 export const CAPTION_HOOK_PREVIEW = 125;
-/** The hook, the builder's read, and the call to action. */
+/** The hook, the save prompt or question, and the Helios line (v5). */
 export const CAPTION_MIN_PARAGRAPHS = 3;
 export const CAPTION_MIN_TAGS = 3;
 export const CAPTION_MAX_TAGS = 5;
@@ -59,6 +59,17 @@ function paragraphs(text: string): string[] {
     .filter(Boolean);
 }
 
+/** The caption's paragraphs before the hashtags. */
+function bodyParagraphs(text: string): string[] {
+  const at = text.search(/#[\p{L}\p{N}_]/u);
+  return paragraphs(at >= 0 ? text.slice(0, at) : text);
+}
+
+/** v5. The Helios line: the last paragraph before the hashtags. Empty when there is none. */
+export function heliosLine(text: string): string {
+  return bodyParagraphs(text).at(-1) ?? '';
+}
+
 /** The caption body, or a throw that names which rule it broke. */
 export function parseCaption(raw: unknown): string {
   const text = stripEpisodePrefix(typeof raw === 'string' ? raw : '');
@@ -84,7 +95,11 @@ export function parseCaption(raw: unknown): string {
 
   const blocks = paragraphs(body);
   if (blocks.length < CAPTION_MIN_PARAGRAPHS) {
-    throw new Error("caption needs the hook, the builder's read, and a call to action");
+    throw new Error('caption needs at least the hook, the save prompt or question, and the Helios line');
+  }
+  // v5 (per-format comps, 2026-10-19): every caption ends on the Helios line, just before the hashtags.
+  if (!/\bHelios\b/.test(blocks.at(-1) ?? '')) {
+    throw new Error('the paragraph before the hashtags does not name Helios. End on the Helios line, with Helios named once.');
   }
 
   const hook = blocks[0] ?? '';

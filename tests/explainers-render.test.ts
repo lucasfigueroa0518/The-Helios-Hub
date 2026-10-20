@@ -21,7 +21,7 @@ import { fetchSourceText, htmlToText, resolveSource, type FetchLike } from '@/li
 import { briefMarkdown, PROJECT_INSTRUCTIONS, prepareWorkspace, SFX_DIR, workspacePaths } from '@/lib/explainers/render/workspace';
 import { addTopics, getJob, getTopic, listArtifacts, listLintViolations, requestRender, claimNextJob } from '@/lib/explainers/repository';
 import type { AnalogyCandidate } from '@/lib/explainers/types';
-import type { CaptionFacts } from '@/lib/explainers/caption';
+import { CaptionError, type CaptionFacts, type CaptionOptions } from '@/lib/explainers/caption';
 import type { RecentClosing } from '@/lib/social/captions/build-line';
 import type { JevTransport } from '@/lib/reels/jev/runner';
 import { DEFAULT_SETTINGS, saveSetting } from '@/lib/explainers/settings';
@@ -329,13 +329,13 @@ function deps(db: ExplainersDb, query: AgentQuery): RenderDeps {
         '',
         'A body paragraph that pays out the idea in the viewer\'s world, with the reel\'s example still attached.',
         '',
-        'Another paragraph for the place they will meet this next.',
-        '',
         'Save this for the next time this comes up.',
+        '',
+        'A dental practice meets this at the front desk, and Helios builds that kind of step.',
         '',
         '#one #two #three',
       ].join('\n'),
-      builderRead: 'A body paragraph that pays out the idea in the viewer\'s world, with the reel\'s example still attached.',
+      builderRead: 'A dental practice meets this at the front desk, and Helios builds that kind of step.',
       usd: 0,
       model: 'claude-sonnet-5-5',
       inputTokens: 0,
@@ -449,20 +449,40 @@ test('job records closing and skips Jev at the ceiling', async () => {
     const job = await queuedJob(db);
     const d = deps(db, happyQuery());
     const fitCalls: CaptionFacts[] = [];
+    const fitSubjects: string[] = [];
     const writeCalls: { recent: RecentClosing[]; includeBuildLine: boolean }[] = [];
     const recorded: [string, string, boolean][] = [];
     const stubbed = d.writeCaption!;
-    d.buildFit = async (facts) => (fitCalls.push(facts), c.fit());
+    d.buildFit = async (facts, subjectId) => (fitCalls.push(facts), fitSubjects.push(subjectId), c.fit());
     d.closings = { recent: c.recent, record: async (...row) => void recorded.push(row) };
     d.writeCaption = async (facts, opts) => (writeCalls.push(opts), { ...(await stubbed(facts, opts)), builderRead: READ });
 
     assert.deepEqual(await runRenderJob(d, job), { status: 'ok' }, c.name);
     assert.equal(fitCalls.length, c.asked ? 1 : 0, `${c.name}: Jev asked`);
     if (c.asked) assert.equal(fitCalls[0]!.title, 'What is an API?');
+    if (c.asked) assert.deepEqual(fitSubjects, [job.id], `${c.name}: Jev keyed by the job id`);
     assert.equal(writeCalls.length, 1);
     assert.equal(writeCalls[0]!.includeBuildLine, c.include, `${c.name}: include_build_line`);
     assert.deepEqual(recorded, [[job.id, READ, c.include]], `${c.name}: closing recorded`);
   }
+});
+
+test('a rejected caption is retried once with the reason, and the second request carries it', async () => {
+  const { db } = await scratchExplainersDb();
+  const job = await queuedJob(db);
+  const d = deps(db, happyQuery());
+  const stubbed = d.writeCaption!;
+  const seen: CaptionOptions[] = [];
+  const reason = 'the paragraph before the hashtags does not name Helios. End on the Helios line, with Helios named once.';
+  d.writeCaption = async (facts, opts) => {
+    seen.push(opts);
+    if (seen.length === 1) throw new CaptionError(reason);
+    return stubbed(facts, opts);
+  };
+  assert.deepEqual(await runRenderJob(d, job), { status: 'ok' });
+  assert.equal(seen.length, 2);
+  assert.equal(seen[0]!.retryReason, undefined, 'the first request has no reason');
+  assert.equal(seen[1]!.retryReason, reason, 'the retry carries the rejection reason');
 });
 
 test('a resumed job reuses its workspace and plan: no preparation, no session A, the resume prompt', async () => {

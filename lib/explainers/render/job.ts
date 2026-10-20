@@ -80,7 +80,7 @@ export type RenderDeps = {
    * v4 captions: Jev's fit score for the build line (`liveExplainerBuildFit`), null on failure.
    * Absent: no build line. Asked only when the closings ceiling leaves room.
    */
-  buildFit?: (facts: CaptionFacts) => Promise<number | null>;
+  buildFit?: (facts: CaptionFacts, subjectId: string) => Promise<number | null>;
   /** v4 captions: the explainer closings log. Absent: no recent closings, nothing recorded. */
   closings?: ClosingsLog;
   /**
@@ -145,7 +145,7 @@ async function captionBuildLine(
   let fit: number | null = null;
   if (ceilingAllows(recent) && deps.buildFit) {
     try {
-      fit = await deps.buildFit(facts);
+      fit = await deps.buildFit(facts, jobId);
     } catch {
       fit = null;
     }
@@ -593,11 +593,14 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
     const writer = deps.writeCaption ?? ((input, opts) => writeExplainerCaption(input, job.orchestrator_model, opts));
     let draft: CaptionDraft | null = null;
     let captionError: unknown = null;
+    // The retry is told why the first caption was rejected (after the cache breakpoint).
+    let retryReason: string | undefined;
     for (let attempt = 0; attempt < 2 && !draft; attempt += 1) {
       try {
-        draft = await writer(facts, captionOpts);
+        draft = await writer(facts, retryReason ? { ...captionOpts, retryReason } : captionOpts);
       } catch (error) {
         captionError = error;
+        retryReason = error instanceof Error ? error.message : String(error);
         const spent = error instanceof CaptionError ? error.spent : undefined;
         if (spent) await recordCaptionCost(db, job.id, job.mode, spent);
         log('caption_failed', { jobId: job.id, attempt, error: error instanceof Error ? error.message : String(error) });

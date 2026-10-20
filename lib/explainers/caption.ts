@@ -6,6 +6,7 @@ import {
   CAPTION_HOOK_PREVIEW,
   CAPTION_MAX_CHARS,
   CAPTION_MIN_BODY_CHARS,
+  heliosLine,
   hookPreviewLimit,
   parseCaption,
 } from '@/lib/explainers/caption-format';
@@ -47,9 +48,11 @@ export {
 // v4 (social captions redesign, 2026-10-19): the caption closes on a builder's read that puts
 // the episode's concept in a real business and names Helios once; "we" is allowed only there.
 // Carries the shared Helios context and caption rules. The padding gates are loosened.
-export const CAPTION_VERSION = 'explainer-caption-v4';
+// v5 (per-format comps, 2026-10-19): the hook names the viewer's problem; then the why, a save
+// prompt or "which would you use first" question, and the Helios line last, before the hashtags.
+export const CAPTION_VERSION = 'explainer-caption-v5';
 
-export const CAPTION_INSTRUCTIONS = `You write the Instagram caption for one finished Helios Explainer Reel, an AI Brain Break episode that teaches one AI concept. This is the post text under the video, the same job a strong social caption does for any Reel: stop the scroll, make the idea stick, show where it turns up in a real business, and give the viewer a reason to save or send it.
+export const CAPTION_INSTRUCTIONS = `You write the Instagram caption for one finished Helios Explainer Reel, an AI Brain Break episode that teaches one AI concept. This is the post text under the video, the job a strong tips caption does on any AI page: name a problem the viewer already has, make the idea stick, and give them a reason to save it or to say which option they would use first.
 
 Do not write an episode title or an episode number. Code adds the line "AI Brain Break Episode N:" when the reel publishes.
 
@@ -57,28 +60,31 @@ ${HELIOS_CONTEXT}
 
 ${CAPTION_SHARED_RULES}
 
-An explainer teaches a concept; it does not report news. Read the shared rules that way: the factual part is the concept as the reel taught it, and the builder's read says where that concept shows up in a real business.
+An explainer teaches a concept; it does not report news. Read the shared rules that way: the factual part is the concept as the reel taught it, and the Helios line says where that concept shows up in a real business.
 
 HARD CONSTRAINTS. Every one is required.
-1. Return JSON matching the schema. The caption field is the body of the post, nothing else. No episode line. The builder_read field repeats the builder's read paragraph from the caption, word for word.
-2. The first paragraph is the hook, one or two short sentences. After code adds the episode line and a blank line, that opening plus the hook must stay within ${CAPTION_HOOK_PREVIEW} characters. Keep the hook under ${hookPreviewLimit()} characters so episode 999 still fits. The hook makes sense with no video playing. It is not the spoken thesis copied out, and it is not a description of the frames.
-3. Short paragraphs with a blank line between them, in this order: the hook, a body paragraph or two when the idea needs them, the builder's read, the call to action, then the hashtags. One block is a failed caption. The body before the hashtags is at least ${CAPTION_MIN_BODY_CHARS} characters. Say the idea once and well. Do not pad to reach a length.
-4. The body makes the idea useful in the viewer's world. Use the reel's curiosity gap, analogy, example, and the place they will meet this. Do not walk the eight beats in order, and do not stop after one restatement of the thesis. Then the builder's read, one short paragraph just before the call to action: pick one kind of business from the Helios context and show where this episode's concept turns up in its marketing, sales or operations, at the moment the concept helps or the moment it gets in the way. Name Helios once, lightly, in words that differ from the recent closings the task shows you. The read may say "we" and give an opinion. Everything it says about Helios comes from the Helios context, and it adds no new fact about the concept.
-5. One call to action, specific to this concept: save it for a named situation from the reel, or send it to the person who hits that situation. No "what do you think?", no "double tap", no "comment YES", no "DM us", and no list of services.
-6. 3 to 5 hashtags, only at the end. One or two broad, the rest specific to this concept. Each tag needs a reason in the post.
-7. No emoji. No URLs. Never "I". Outside the builder's read, address the viewer as "you" or write in the third person.
-8. Every number, name, and claim about the concept comes from the title, scope, script, storyboard, or source in the user message. Do not add one.
-9. Plain words. A reader at about a sixth-grade level gets every line on one read. Never talk down. No "not X, but Y". No one-line closer that repeats the paragraph before it. No dash used for drama.
-10. The caption, the call to action, and the hashtags together stay within ${CAPTION_MAX_CHARS} characters.
+1. Return JSON matching the schema. The caption field is the body of the post, nothing else. No episode line. The builder_read field repeats the Helios line from the caption, word for word.
+2. The first paragraph is the hook, one or two short sentences. It names a problem or situation the viewer has that this concept explains, in their words: a chat that forgets how it started, an answer that sounds sure and is wrong. After code adds the episode line and a blank line, that opening plus the hook must stay within ${CAPTION_HOOK_PREVIEW} characters. Keep the hook under ${hookPreviewLimit()} characters so episode 999 still fits. The hook makes sense with no video playing. It is not the spoken thesis copied out, and it is not a description of the frames.
+3. Short paragraphs with a blank line between them, in this order: the hook, two or three short paragraphs on why, the save prompt or question, the Helios line, then the hashtags. One block is a failed caption. The body before the hashtags, the Helios line included, is at least ${CAPTION_MIN_BODY_CHARS} characters. Say the idea once and well. Do not pad to reach a length.
+4. The paragraphs on why make the idea useful in the viewer's world. Use the reel's curiosity gap, analogy, example, and the place they will meet this. Do not walk the eight beats in order, and do not stop after one restatement of the thesis.
+5. Then one short paragraph that asks for one thing, specific to this concept: save it for a named situation from the reel, or a short question such as which of the reel's options they would use first. It can do both in two short sentences. No "what do you think?", no "double tap", no "comment YES", no "DM us", and no list of services.
+6. The Helios line is the last paragraph before the hashtags, one or two sentences. Pick one kind of business from the Helios context and show where this episode's concept turns up in its marketing, sales or operations, at the moment the concept helps or the moment it gets in the way. Name Helios once, here and nowhere else, in words that differ from the recent closings the task shows you. It may say "we" and give an opinion, and it may end by inviting the viewer to follow for the next episode. Everything it says about Helios comes from the Helios context, and it adds no new fact about the concept.
+7. 3 to 5 hashtags, only at the end. One or two broad, the rest specific to this concept. Each tag needs a reason in the post.
+8. No emoji. No URLs. Never "I". Outside the Helios line, address the viewer as "you" or write in the third person.
+9. Every number, name, and claim about the concept comes from the title, scope, script, storyboard, or source in the user message. Do not add one.
+10. Plain words. A reader at about a sixth-grade level gets every line on one read. Never talk down. No "not X, but Y". No one-line closer that repeats the paragraph before it. No dash used for drama.
+11. The whole caption, the hashtags included, stays within ${CAPTION_MAX_CHARS} characters.
 
 Shape:
-Hook that stands alone in the preview.
+Hook that names the viewer's problem and stands alone in the preview.
 
-What this is, in the viewer's world, with the reel's concrete example. Leave it out when the hook and the read already carry the idea.
+Why it happens, in the viewer's world, with the reel's concrete example.
 
-The builder's read: where this concept shows up in one kind of business, with Helios named once.
+One more short paragraph on why, when the idea needs it.
 
-Save this for the next time <the situation this reel is about>, or send it to the person who hits that situation.
+Save this for the next time <the situation this reel is about>. Or ask which of the reel's options they would try first.
+
+The Helios line: where this concept shows up in one kind of business, with Helios named once.
 
 #specific #specific #broad`;
 
@@ -87,11 +93,11 @@ const CAPTION_SCHEMA = {
   properties: {
     caption: {
       type: 'string',
-      description: "The Instagram caption body only: hook, paragraphs, builder's read, call to action, and hashtags. No episode line.",
+      description: 'The Instagram caption body only: hook, paragraphs, the save prompt or question, the Helios line, and hashtags. No episode line.',
     },
     builder_read: {
       type: 'string',
-      description: "The builder's read paragraph, copied word for word from the caption.",
+      description: 'The Helios line, the last paragraph before the hashtags, copied word for word from the caption.',
     },
   },
   required: ['caption', 'builder_read'],
@@ -108,7 +114,7 @@ export type CaptionFacts = {
 
 export type CaptionDraft = {
   text: string;
-  /** v4. The builder's read, one paragraph of `text`. Recorded as this caption's closing. */
+  /** v4. The builder's read; v5 the Helios line, the last paragraph before the hashtags. Recorded as this caption's closing. */
   builderRead: string;
   usd: number;
   model: string;
@@ -133,8 +139,11 @@ function clip(value: string | null, max: number): string {
   return value.length <= max ? value : `${value.slice(0, max)}\n…`;
 }
 
-/** Per-post caption inputs: they go in the user message, after the cache breakpoint. */
-export type CaptionOptions = { recent: RecentClosing[]; includeBuildLine: boolean };
+/**
+ * Per-post caption inputs: they go in the user message, after the cache breakpoint.
+ * `retryReason` is why the previous attempt for this reel was rejected, so the retry is not blind.
+ */
+export type CaptionOptions = { recent: RecentClosing[]; includeBuildLine: boolean; retryReason?: string };
 
 export function captionUserMessage(facts: CaptionFacts, opts: CaptionOptions): string {
   const closings = recentClosingsBlock(opts.recent);
@@ -155,6 +164,7 @@ export function captionUserMessage(facts: CaptionFacts, opts: CaptionOptions): s
     '',
     ...(closings ? [closings, ''] : []),
     buildLineInstruction(opts.includeBuildLine),
+    ...(opts.retryReason ? ['', `Your last caption for this reel was rejected: ${opts.retryReason.trim()} Fix that, and keep every other rule.`] : []),
   ].join('\n');
 }
 
@@ -189,15 +199,14 @@ function squash(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
 
-/** v4. The read is one paragraph of the caption and names Helios. Throws a reason the retry can use. */
+/** v5. The read is the Helios line, the caption's last paragraph before the hashtags, and names Helios. Throws a reason the retry can use. */
 export function checkBuilderRead(raw: unknown, caption: string): string {
   const read = typeof raw === 'string' ? raw.trim() : '';
-  if (!read) throw new Error("builder_read is empty. Return the builder's read paragraph word for word.");
-  const paragraphs = caption.split(/\n[ \t]*\n/).map(squash);
-  if (!paragraphs.includes(squash(read))) {
-    throw new Error("builder_read is not a paragraph of the caption. Put the read just before the call to action, word for word.");
+  if (!read) throw new Error('builder_read is empty. Return the Helios line word for word.');
+  if (squash(read) !== squash(heliosLine(caption))) {
+    throw new Error("builder_read is not the caption's last paragraph before the hashtags. End the caption on the Helios line and repeat it word for word.");
   }
-  if (!HELIOS.test(read)) throw new Error("builder_read does not name Helios. Name Helios once, lightly, in the read.");
+  if (!HELIOS.test(read)) throw new Error('builder_read does not name Helios. Name Helios once, lightly, in the Helios line.');
   return read;
 }
 
@@ -229,13 +238,14 @@ export async function writeExplainerCaption(
 /**
  * v4. The live build-fit question for one finished reel: Jev reads the title and
  * script against the Helios context. Null on any failure, which means no build line.
+ * `subjectId` keys the Jev log; the render job passes its job id.
  */
-export function liveExplainerBuildFit(ask: JevAsk = createJevAsk()): (facts: CaptionFacts) => Promise<number | null> {
-  return async (facts) => {
+export function liveExplainerBuildFit(ask: JevAsk = createJevAsk()): (facts: CaptionFacts, subjectId: string) => Promise<number | null> {
+  return async (facts, subjectId) => {
     try {
       const res = await ask(
         { state: buildFitState({ headline: facts.title, text: facts.script ?? facts.scope ?? '' }), questions: BUILD_FIT.questions },
-        { version: BUILD_FIT.version, subjectId: facts.title },
+        { version: BUILD_FIT.version, subjectId },
       );
       const value = res.answers.builds?.noul;
       return typeof value === 'number' && Number.isFinite(value) ? value : null;
