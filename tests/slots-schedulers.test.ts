@@ -261,6 +261,19 @@ test('3 AM template: an LFD day whose settings could not be read says so, not "p
   assert.doesNotMatch(unread.reason, /paused/);
 });
 
+test('3 AM template: a bad run_cap_usd on an LFD slot day runs nothing and gives the run-cap reason', () => {
+  const badCap = parseLfdSettings([{ key: 'auto_run', value: true }, { key: 'run_cap_usd', value: 'abc' }]);
+  const out = threeAmQueue('2026-10-21', badCap, true, true); // Wednesday LFD override
+  assert.equal(out.queue, 'none');
+  assert.match(out.reason, /run_cap_usd is not a positive number \("abc"\)/);
+  assert.equal(threeAmQueue('2026-10-20', badCap, true, false).queue, 'carousels', 'no LFD slot: the cap does not matter');
+});
+
+test('3 AM template: unreadable LFD settings on a day with no LFD slot leave the carousel run alone', () => {
+  assert.equal(threeAmQueue('2026-10-20', null, true, false).queue, 'carousels');
+  assert.equal(threeAmQueue('2026-10-20', null, false, false).queue, 'none');
+});
+
 // ---- Carousels and Last Few Days: the hub fixture (social, lfd and social_hub schemas) ----
 
 const WED = '2026-10-21';
