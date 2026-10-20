@@ -30,6 +30,11 @@ function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith('/api/watch/')) return true;
   // Local carousel template review (same as /social/render: no Auth.js session).
   if (pathname === '/api/social/template-reviews') return true;
+  // Local meme lab while Google sign-in is down. Production still requires a session.
+  if (
+    process.env.NODE_ENV === 'development'
+    && (pathname === '/memes' || pathname.startsWith('/memes/') || pathname.startsWith('/api/memes'))
+  ) return true;
   return false;
 }
 
@@ -60,6 +65,8 @@ function isProtectedPage(pathname: string): boolean {
     || pathname.startsWith('/carousels/')
     || pathname === '/last-few-days'
     || pathname.startsWith('/last-few-days/')
+    || pathname === '/memes'
+    || pathname.startsWith('/memes/')
     // Social Hub pages (the carousel render preview at /social/render stays as it was).
     || pathname === '/social'
     || (pathname.startsWith('/social/') && !pathname.startsWith('/social/render')
@@ -116,6 +123,8 @@ export const config = {
     '/stories/:path*',
     '/social',
     '/social/:path*',
+    '/memes',
+    '/memes/:path*',
     '/d/:path*',
     '/watch/:path*',
     '/api/:path*',

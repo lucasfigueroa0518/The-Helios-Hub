@@ -163,6 +163,20 @@ function LfdLogo({ src }: { src: string }) {
 }
 
 function LfdCoverSlide({ slide }: { slide: SlideCopy }) {
+  const meme = slide.lfdCover?.meme;
+  if (meme) {
+    return (
+      <div className="lfd-cover lfd-cover--meme">
+        <div className="lfd-cover-meme"><img className="lfd-meme" src={meme.url} alt="" data-photo-kind="meme" /></div>
+        <div className="lfd-brand-rule"><span>HELIOS</span></div>
+        <div className="lfd-cover-copy">
+          <h1 className="lfd-hook">{LFD_HOOK_LINES.map((line) => <span key={line}>{line}</span>)}</h1>
+          <p className="lfd-kicker">{LFD_KICKER}</p>
+        </div>
+        <LfdArrow />
+      </div>
+    );
+  }
   const photos = (slide.lfdCover?.photos ?? []).slice(0, 6);
   return (
     <div className="lfd-cover">
@@ -196,7 +210,14 @@ function LfdStorySlide({ slide }: { slide: SlideCopy }) {
           <Fit as="p" className="lfd-body" min={LFD_MIN.body}><LfdMarked text={s.body} highlight="" names={s.names} /></Fit>
         </div>
         <div className="lfd-media">
-          {slide.photoUrl && (slide.photoKind === 'logo' ? <LfdLogo src={slide.photoUrl} /> : <img className="lfd-img" src={slide.photoUrl} alt="" style={focusStyle(slide)} />)}
+          {slide.photoUrl &&
+            (slide.photoKind === 'logo' ? (
+              <LfdLogo src={slide.photoUrl} />
+            ) : slide.photoKind === 'meme' ? (
+              <div className="lfd-meme-plate"><img className="lfd-meme" src={slide.photoUrl} alt="" data-photo-kind="meme" /></div>
+            ) : (
+              <img className="lfd-img" src={slide.photoUrl} alt="" style={focusStyle(slide)} />
+            ))}
         </div>
       </div>
       <LfdArrow />

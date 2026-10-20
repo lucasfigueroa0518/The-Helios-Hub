@@ -3,7 +3,7 @@
  * hub read code may use it (tests/social-hub-scope.test.ts). Writes live in
  * lib/content-type/posting.ts.
  */
-import { DEFAULT_LFD_DAYS, DEFAULT_LFD_RUN_CAP_USD } from './config';
+import { DEFAULT_LFD_DAYS, DEFAULT_LFD_MEMES_CAP_USD, DEFAULT_LFD_RUN_CAP_USD } from './config';
 
 /** Any handle that runs SQL (HubQuery, SpineQuery, the social store's Query). */
 export type LfdQuery = (text: string, params?: unknown[]) => Promise<{ rows: any[] }>;
@@ -18,6 +18,10 @@ export type LfdSettings = {
   /** The run cap, or null when the stored value is not a positive number: a run then refuses to start. */
   runCapUsd: number | null;
   runCapRaw: unknown;
+  /** Memes in the post (lib/memes/lfd-post.ts): on unless set to false. */
+  memes: boolean;
+  /** The meme stage's own spend cap (briefs, meme runs, Jev), on top of the run cap. */
+  memesCapUsd: number;
 };
 
 export function parseLfdSettings(rows: ReadonlyArray<{ key: string; value: unknown }>): LfdSettings {
@@ -36,6 +40,8 @@ export function parseLfdSettings(rows: ReadonlyArray<{ key: string; value: unkno
     days,
     runCapUsd: typeof rawCap !== 'boolean' && rawCap !== null && Number.isFinite(cap) && cap > 0 ? cap : null,
     runCapRaw: rawCap,
+    memes: get('memes') !== false,
+    memesCapUsd: Number.isFinite(Number(get('memes_cap_usd'))) && Number(get('memes_cap_usd')) > 0 ? Number(get('memes_cap_usd')) : DEFAULT_LFD_MEMES_CAP_USD,
   };
 }
 

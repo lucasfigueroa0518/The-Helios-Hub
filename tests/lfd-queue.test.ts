@@ -8,7 +8,9 @@ import { adoptRun, claimRun, failRun, requestRun } from '@/lib/lfd/store';
 import { openHubTestDb } from './fixtures/social-hub/pglite';
 
 test('settings: defaults ship off, days fall back to Tue/Fri, a bad cap reads as null', () => {
-  assert.deepEqual(parseLfdSettings([]), { autoRun: false, publishingLive: false, requireApproval: true, days: [2, 5], runCapUsd: 1, runCapRaw: 1 });
+  assert.deepEqual(parseLfdSettings([]), { autoRun: false, publishingLive: false, requireApproval: true, days: [2, 5], runCapUsd: 1, runCapRaw: 1, memes: true, memesCapUsd: 1 });
+  assert.equal(parseLfdSettings([{ key: 'memes', value: false }]).memes, false, 'memes switch off only on an explicit false');
+  assert.equal(parseLfdSettings([{ key: 'memes_cap_usd', value: 'abc' }]).memesCapUsd, 1, 'a bad meme cap falls back to the default');
   const s = parseLfdSettings([
     { key: 'auto_run', value: true },
     { key: 'days', value: [5, 2, 2] },
