@@ -27,7 +27,7 @@ import { daySlots, monthModel, totalLabel, type DayCell, type DaySlot } from '@/
 import { displayName, plural, shortDate, whenInline } from '@/lib/social-hub/views/format';
 import { offerer } from '@/lib/social-hub/views/offer';
 import { minuteLabel, windowRange } from '@/lib/social-hub/views/plan';
-import { mondayOf, weekLabel, weekModel, type SwitchFacts, type WeekDayInput } from '@/lib/social-hub/views/week';
+import { boardModel, mondayOf, weekLabel, type SwitchFacts, type WeekDayInput } from '@/lib/social-hub/views/week';
 import type { MetricKey, Vertical } from '@/lib/social-hub/types';
 
 const METRICS: MetricKey[] = ['views', 'reach', 'shares', 'totalInteractions'];
@@ -73,7 +73,7 @@ function WeekScreen({ dataset, base, params, now, week }: { dataset: HubDataset;
   const dim = isVertical(params.type) ? params.type : null;
   const legacy = week.source === 'legacy';
   const canEdit = actionEnabled('editSlots') && !week.readOnly;
-  const model = weekModel({ mode: week.mode, days: week.days, posts: dataset.posts, now });
+  const model = boardModel({ mode: week.mode, days: week.days, posts: dataset.posts, now });
   return (
     <>
       <PageHead
